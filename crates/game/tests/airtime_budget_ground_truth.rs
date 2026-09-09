@@ -67,7 +67,7 @@ const RESPAWN_LEAD_TICKS: u64 = 120;
 /// counts as contaminating it - the fall completing into a respawn some time
 /// after the ground would otherwise have been under it.
 ///
-/// **Chosen, not measured, but not arbitrary either**: `race::recovery`'s own
+/// **Chosen, not measured, but not arbitrary either**: `oag_race::recovery`'s own
 /// `RESCUE_TICKS` (90) is how long a craft must dwell off its line before a
 /// respawn fires at all, so a fall's landing and the respawn it triggers can
 /// legitimately be 90 ticks apart with nothing wrong. An initial 30-tick

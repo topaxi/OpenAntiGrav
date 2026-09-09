@@ -3,12 +3,12 @@
 //! Its own file rather than more of `hud/tests.rs`, which is at 926 lines
 //! against the 1,000-line cap in `scripts/check-file-size.py`.
 //!
-//! The law the reticle follows is asserted in `crate::race::sight`; this is only
+//! The law the reticle follows is asserted in `oag_race::sight`; this is only
 //! about the five sprites it becomes - four instances of one model at four
 //! quarter turns, and one of another.
 
 use super::*;
-use crate::race::sight;
+use oag_race::sight;
 
 /// The `<Mode3D>` block the disc authors for the sights, cut to the Missile's
 /// five. Every attribute is as it appears in `Arcade_HUD.xml`, the shared

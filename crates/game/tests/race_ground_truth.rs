@@ -1957,7 +1957,7 @@ fn every_craft_starts_on_its_line_on_every_circuit() {
 ///
 /// Two of twelve until `Driver::index` was seeded from the spawn (see
 /// [`every_craft_starts_on_its_line_on_every_circuit`]), then five. Adding a
-/// rescue for a craft that leaves the circuit ([`race::RESCUE_HALF_WIDTHS`])
+/// rescue for a craft that leaves the circuit ([`oag_race::recovery::RESCUE_HALF_WIDTHS`])
 /// took *laps completed* to nine of twelve without moving *clean* laps at all,
 /// and that gap is the finding: the craft were not failing to drive round, they
 /// were driving off and never coming back, because a `Reset` volume cannot

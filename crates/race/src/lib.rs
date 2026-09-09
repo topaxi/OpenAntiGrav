@@ -31,6 +31,8 @@
 
 pub mod course;
 pub mod mode;
+pub mod recovery;
+pub mod sight;
 pub mod standing;
 pub mod state;
 pub mod zone;

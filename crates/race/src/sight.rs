@@ -16,7 +16,7 @@
 //!
 //! - **The gate.** The original guards its projection block with a condition
 //!   this project has read but not understood - see the page's "The gate is the
-//!   one part not read". [`Race`](super::Race) drives this from "the held weapon
+//!   one part not read". `oag_game::race::Race` drives this from "the held weapon
 //!   locks and something is lockable" instead, which is what the weapon plays
 //!   like, and says so.
 //! - **The screen-space sign convention.** The original computes
@@ -25,6 +25,15 @@
 //! - **Nothing else.** The extents, the rates, the `0.8`, the `0.7`, the four
 //!   rotations, the `0.4` inner clamp, the `250.0` range and the `w > 0` guard
 //!   are all read out of the function.
+//!
+//! # Why this lives in a gameplay crate
+//!
+//! It draws nothing. It is arithmetic over a view-projection matrix and a world
+//! position, and the pixels are `oag_game::hud::sight_draw`'s. Nothing here
+//! reaches `oag_render`, `oag_audio`, `oag_input`, `winit` or `wgpu`, which is
+//! what let it move down out of `oag-game` on 2026-09-09 - and moving it is
+//! what breaks the `hud -> race` module cycle that had `oag_game::hud`
+//! reaching back up into `oag_game::race` for these five types.
 
 use oag_core::math::{Mat4, Vec3, Vec4};
 
@@ -311,7 +320,7 @@ pub struct Piece {
 
 /// The reticle's live state for one player.
 ///
-/// Held on [`Race`](super::Race) rather than in `World`, for the reason
+/// Held on `oag_game::race::Race` rather than in `World`, for the reason
 /// `Race::exhaust` is: it is what the screen shows, it must not move a
 /// determinism hash, and the simulation does not know a renderer exists.
 #[derive(Debug, Clone, Copy, PartialEq)]

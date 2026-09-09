@@ -6,7 +6,7 @@
 //! instead of moving it too.
 
 use super::*;
-use oag_core::math::camera::look_at;
+use oag_core::math::camera::{look_at, perspective};
 
 const DT: f32 = 1.0 / 60.0;
 
@@ -165,7 +165,7 @@ fn the_inner_box_leads_the_brackets_and_is_clamped() {
 fn a_target_behind_the_camera_does_not_project() {
     // Looking down -Z from the origin, the standard right-handed setup.
     let view = look_at(Vec3::ZERO, Vec3::NEG_Z, Vec3::Y);
-    let projection = oag_render::camera::projection(1.0, 480.0 / 272.0, 0.1, 1000.0);
+    let projection = perspective(1.0, 480.0 / 272.0, 0.1, 1000.0);
     let view_projection = projection * view;
 
     let ahead = project(view, view_projection, Vec3::new(0.0, 0.0, -40.0), SCREEN);
@@ -182,7 +182,7 @@ fn a_target_behind_the_camera_does_not_project() {
 #[test]
 fn a_target_past_the_draw_range_does_not_project() {
     let view = look_at(Vec3::ZERO, Vec3::NEG_Z, Vec3::Y);
-    let projection = oag_render::camera::projection(1.0, 480.0 / 272.0, 0.1, 4000.0);
+    let projection = perspective(1.0, 480.0 / 272.0, 0.1, 4000.0);
     let view_projection = projection * view;
 
     assert!(project(view, view_projection, Vec3::new(0.0, 0.0, -249.0), SCREEN).is_some());
@@ -200,7 +200,7 @@ fn a_target_past_the_draw_range_does_not_project() {
 #[test]
 fn a_craft_dead_ahead_projects_to_the_middle_of_the_screen() {
     let view = look_at(Vec3::ZERO, Vec3::NEG_Z, Vec3::Y);
-    let projection = oag_render::camera::projection(1.0, 480.0 / 272.0, 0.1, 1000.0);
+    let projection = perspective(1.0, 480.0 / 272.0, 0.1, 1000.0);
     let projected =
         project(view, projection * view, Vec3::new(0.0, 0.0, -40.0), SCREEN).expect("ahead");
     assert!((projected.screen[0] - 240.0).abs() < 0.5, "{projected:?}");
@@ -211,7 +211,7 @@ fn a_craft_dead_ahead_projects_to_the_middle_of_the_screen() {
 #[test]
 fn a_craft_above_the_camera_draws_above_the_middle() {
     let view = look_at(Vec3::ZERO, Vec3::NEG_Z, Vec3::Y);
-    let projection = oag_render::camera::projection(1.0, 480.0 / 272.0, 0.1, 1000.0);
+    let projection = perspective(1.0, 480.0 / 272.0, 0.1, 1000.0);
     let projected = project(view, projection * view, Vec3::new(0.0, 8.0, -40.0), SCREEN)
         .expect("above and ahead");
     assert!(

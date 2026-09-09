@@ -263,7 +263,7 @@ fn vex_model_art(
 
     let mut wanted: Vec<&str> = Vec::new();
     for model in &layout.models {
-        let is_wanted = crate::race::sight::is_sight_widget(&model.name)
+        let is_wanted = oag_race::sight::is_sight_widget(&model.name)
             || icon_names.contains(&model.name.as_str());
         if !is_wanted || model.src.is_empty() {
             continue;

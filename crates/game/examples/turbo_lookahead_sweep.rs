@@ -78,7 +78,7 @@ struct RunStats {
     /// How many of those exceeded the real rescue threshold - the same one
     /// `Race::lost_off_the_circuit` (opponents) checks.
     escapes: u32,
-    /// [`race::RESCUE_HALF_WIDTHS`] resolved against this track, for scale -
+    /// [`oag_race::recovery::RESCUE_HALF_WIDTHS`] resolved against this track, for scale -
     /// same value on every seed, since it depends on the circuit alone.
     rescue_distance: f32,
 }
@@ -111,7 +111,8 @@ fn run(seeds: &[u64], track: &str, look_max: f32) -> RunStats {
         };
         world_race.set_ai_tuning(oag_ai::Difficulty::Ace.tune(&tuning));
 
-        let rescue_distance = world_race.spline().max_half_width() * race::RESCUE_HALF_WIDTHS;
+        let rescue_distance =
+            world_race.spline().max_half_width() * oag_race::recovery::RESCUE_HALF_WIDTHS;
         stats.rescue_distance = rescue_distance;
 
         // Per-slot: ticks left to watch, and the peak distance seen so far in

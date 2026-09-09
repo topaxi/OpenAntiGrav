@@ -63,7 +63,7 @@ impl Race {
     /// **Resets the reticle**, because its centre, its extent and its chase are
     /// all in the old grid's units. Called once before the first tick.
     pub fn set_sight_screen(&mut self, screen: (f32, f32)) {
-        self.sight = crate::race::sight::Sight::new([screen.0, screen.1]);
+        self.sight = oag_race::sight::Sight::new([screen.0, screen.1]);
     }
 
     /// The lock-on reticle, for whoever draws it.
@@ -71,13 +71,13 @@ impl Race {
     /// Render-only state - see [`Race::sight`] - so this returning a borrow
     /// rather than a copy costs nothing and cannot be mistaken for world state.
     #[must_use]
-    pub fn sight(&self) -> &crate::race::sight::Sight {
+    pub fn sight(&self) -> &oag_race::sight::Sight {
         &self.sight
     }
 
     /// What the reticle is doing, which is what `~ROCKLOCK` plays off.
     #[must_use]
-    pub fn sight_state(&self) -> crate::race::sight::State {
+    pub fn sight_state(&self) -> oag_race::sight::State {
         self.sight_state
     }
 

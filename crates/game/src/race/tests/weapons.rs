@@ -655,7 +655,7 @@ fn an_unguided_missile_fired_by_hand_ends_itself_on_time() {
 /// same three states.
 #[test]
 fn holding_a_missile_behind_a_craft_locks_it_after_the_recovered_hold() {
-    use crate::race::sight;
+    use oag_race::sight;
 
     let mut race = race_with_a_grid();
     race.weapons = Some(one_missile_table());
@@ -699,7 +699,7 @@ fn holding_a_missile_behind_a_craft_locks_it_after_the_recovered_hold() {
 /// reads distances for; a Rocket has no lock and must not borrow one.
 #[test]
 fn holding_a_rocket_draws_no_reticle() {
-    use crate::race::sight;
+    use oag_race::sight;
 
     let mut race = race_with_a_grid();
     race.weapons = Some(one_missile_table());

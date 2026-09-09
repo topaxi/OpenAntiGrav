@@ -712,7 +712,7 @@ impl Race {
     /// One tick of the lock-on reticle, and the tone state that goes with it.
     ///
     /// **Recovered** from `HudSight_Update` (`0x0881dbcc`) - the law itself is
-    /// in [`crate::race::sight`], and this is only what feeds it. See
+    /// in [`oag_race::sight`], and this is only what feeds it. See
     /// `docs/ghidra/functions/psp-pulse-usa/lock-sight.md`.
     ///
     /// # Which craft it points at

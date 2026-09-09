@@ -97,6 +97,11 @@ use oag_gameplay::{
 };
 use oag_physics::{CollisionWorld, Environment, Evaluated, Handling, SpeedClass};
 use oag_pulse::race::ships;
+use oag_race::recovery::{
+    PLAYER_RESCUE_HALF_WIDTHS, PLAYER_RESCUE_TICKS, RESCUE_HALF_WIDTHS, RESCUE_TICKS,
+    RESPAWN_COOLDOWN_TICKS, RESPAWN_GIVE_UP, STALL_SPEED, STALL_TICKS,
+};
+use oag_race::sight;
 use oag_race::{Course, Mode, RaceState};
 use oag_render::camera::chase::{Chase, ChaseParams, Target};
 use oag_render::camera::internal::InternalParams;
@@ -131,12 +136,10 @@ mod load;
 mod models;
 mod options;
 mod pads;
-mod recovery;
 mod respawn;
 mod results;
 mod scene;
 mod shadow;
-pub mod sight;
 mod spawn;
 mod spline;
 mod start;
@@ -155,10 +158,6 @@ pub use held_buttons::HeldButtons;
 pub use hud::hud_layout;
 pub use load::load;
 pub use options::{CameraOverride, Loaded, Options, PoseRequest, Setup};
-pub use recovery::{
-    PLAYER_RESCUE_HALF_WIDTHS, PLAYER_RESCUE_TICKS, RESCUE_HALF_WIDTHS, RESCUE_TICKS,
-    RESPAWN_COOLDOWN_TICKS, RESPAWN_GIVE_UP, STALL_SPEED, STALL_TICKS,
-};
 pub use scene::Scene;
 pub use spline::Spline;
 pub use telemetry::Telemetry;

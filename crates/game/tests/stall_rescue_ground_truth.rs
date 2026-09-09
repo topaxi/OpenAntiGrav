@@ -12,7 +12,7 @@
 //!
 //! # Why this needed a disc, and why it needed *this* circuit
 //!
-//! [`race::RESCUE_HALF_WIDTHS`] recovers a craft that has left the circuit. It
+//! [`oag_race::recovery::RESCUE_HALF_WIDTHS`] recovers a craft that has left the circuit. It
 //! cannot recover one that is still on it and going nowhere, because the question
 //! it asks - is this craft far from its line - has the same answer for a craft
 //! beached against the scenery as for one driving well.
@@ -35,7 +35,7 @@
 //! That closed the *sustained*, `3,634`-tick-shaped version of this file's
 //! original measurement - swept 2026-09-02, all twelve circuits at all four
 //! difficulties, Venom class, 12,000 ticks each: **no cell reaches
-//! [`race::STALL_TICKS`] (120) any more**, the closest being `07_Track` at
+//! [`oag_race::recovery::STALL_TICKS`] (120) any more**, the closest being `07_Track` at
 //! novice, 46.
 //!
 //! **It did not close the bounce-in-place gap the reversed-grid work found on
@@ -134,7 +134,7 @@ fn solo(level: oag_ai::Difficulty, track: &str, ticks: u64) -> Option<Solo> {
         // window rather than starting exactly at `COUNTDOWN_TICKS`.
         let stalled = ship.physics.thrust > 0.0
             && !ship.standing.finished()
-            && ship.physics.body.linear_velocity.length() < race::STALL_SPEED
+            && ship.physics.body.linear_velocity.length() < oag_race::recovery::STALL_SPEED
             && tick != oag_race::COUNTDOWN_TICKS;
         run = if stalled { run + 1 } else { 0 };
         solo.longest_stall = solo.longest_stall.max(run);
@@ -145,7 +145,7 @@ fn solo(level: oag_ai::Difficulty, track: &str, ticks: u64) -> Option<Solo> {
 }
 
 /// Every forward circuit on the disc at one difficulty, asserting the sustained
-/// dwell stays under [`race::STALL_TICKS`] on each, and returning the worst
+/// dwell stays under [`oag_race::recovery::STALL_TICKS`] on each, and returning the worst
 /// cell it saw so the caller can print it.
 ///
 /// Split out so the twelve-by-four matrix is four tests rather than four nested
@@ -170,11 +170,11 @@ fn no_circuit_sustains_a_stall_at(difficulty: oag_ai::Difficulty) {
             worst = Some((track, solo.longest_stall));
         }
         assert!(
-            solo.longest_stall < race::STALL_TICKS,
+            solo.longest_stall < oag_race::recovery::STALL_TICKS,
             "{difficulty:?} {track}: a craft sat stopped for {} ticks, past the {} \
              the rescue promises - a real sustained beaching is back",
             solo.longest_stall,
-            race::STALL_TICKS
+            oag_race::recovery::STALL_TICKS
         );
     }
     let (track, longest) = worst.expect("the track list is not empty");
@@ -193,7 +193,7 @@ fn no_circuit_sustains_a_stall_at(difficulty: oag_ai::Difficulty) {
 /// because that cell was the disc's worst *sustained* beaching - see this
 /// file's module doc for why that stopped being true. What is left to assert
 /// against real disc data is the negative: every circuit, at every
-/// difficulty, stays under [`race::STALL_TICKS`] on this one measure. The
+/// difficulty, stays under [`oag_race::recovery::STALL_TICKS`] on this one measure. The
 /// mechanism itself - that the dwell counter fires at the threshold and puts
 /// a craft back - is proven synthetically instead, in
 /// `crates/game/src/race/tests/respawn.rs`. Laps are printed rather than
@@ -242,7 +242,7 @@ fn no_circuit_sustains_a_stall_past_the_rescue_threshold_at_ace() {
 /// **The control: the rescue fires nowhere it is not needed.**
 ///
 /// The measurement this threshold was chosen from is that no healthy craft spends
-/// a *single* consecutive tick below [`race::STALL_SPEED`] - not a small number,
+/// a *single* consecutive tick below [`oag_race::recovery::STALL_SPEED`] - not a small number,
 /// zero - across all twelve circuits at all four difficulties. That is what buys
 /// the room between the healthy case and the beached one, and it is the property
 /// that would break first if the constant were ever raised.

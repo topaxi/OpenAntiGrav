@@ -121,7 +121,7 @@ pub(super) struct SfxVoices {
     /// loop. See [`Cue::Shield`].
     /// What the lock-on reticle was doing last frame, so its two blips fire on
     /// the transitions rather than every frame. See [`Cue::LockOn`].
-    sight: crate::race::sight::State,
+    sight: oag_race::sight::State,
     shield: Option<VoiceId>,
     /// Whether the shield has already been responded to for this activation.
     ///
@@ -177,7 +177,7 @@ impl Audio {
             let mut rng = Rng::new(SFX_SEED);
             SfxVoices {
                 engines: std::array::from_fn(|_| Engine::new(&mut rng)),
-                sight: crate::race::sight::State::Absent,
+                sight: oag_race::sight::State::Absent,
                 shield: None,
                 shield_open: false,
                 blowup: None,
@@ -315,9 +315,9 @@ impl Audio {
             let sight = race.sight_state();
             if sight != voices.sight {
                 let waveform = match sight {
-                    crate::race::sight::State::Absent => None,
-                    crate::race::sight::State::Seeking => Some(0),
-                    crate::race::sight::State::Locked => Some(1),
+                    oag_race::sight::State::Absent => None,
+                    oag_race::sight::State::Seeking => Some(0),
+                    oag_race::sight::State::Locked => Some(1),
                 };
                 // Only forward transitions blip. Falling back from locked to
                 // seeking - the target sliding off the nose - would otherwise
@@ -325,11 +325,11 @@ impl Audio {
                 let forward = matches!(
                     (voices.sight, sight),
                     (
-                        crate::race::sight::State::Absent,
-                        crate::race::sight::State::Seeking
+                        oag_race::sight::State::Absent,
+                        oag_race::sight::State::Seeking
                     ) | (
-                        crate::race::sight::State::Seeking,
-                        crate::race::sight::State::Locked
+                        oag_race::sight::State::Seeking,
+                        oag_race::sight::State::Locked
                     )
                 );
                 if let (Some(index), true) = (waveform, forward)
@@ -644,8 +644,8 @@ pub enum Cue {
     ///
     /// **This port fires them as two edges rather than as one parameterised
     /// voice**, because this mixer has no cue parameters: waveform `0` on
-    /// entering [`crate::race::sight::State::Seeking`] and waveform `1` on
-    /// entering [`crate::race::sight::State::Locked`]. With two 0.11 s
+    /// entering [`oag_race::sight::State::Seeking`] and waveform `1` on
+    /// entering [`oag_race::sight::State::Locked`]. With two 0.11 s
     /// non-looping waveforms the audible result is the same pair of blips; what
     /// is lost is the original's ability to switch mid-voice, which at that
     /// length it never gets to use. Recorded rather than smoothed over.

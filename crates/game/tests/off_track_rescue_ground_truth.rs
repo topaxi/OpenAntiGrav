@@ -11,7 +11,7 @@
 //!
 //! The authored `Reset` volumes recover a craft that falls *through* a floor.
 //! They do not recover one that leaves the circuit sideways into open space,
-//! because out there is nothing of any class to touch - `race::RESCUE_HALF_WIDTHS`
+//! because out there is nothing of any class to touch - `oag_race::recovery::RESCUE_HALF_WIDTHS`
 //! records the measurement on the opponents' side, and `docs/gameplay/ai.md` has
 //! the same drop taken by a human at the controls with no AI involved.
 //!
@@ -42,7 +42,7 @@ struct Solo {
     /// The furthest it ever got from the nearest spline sample.
     peak: f32,
     /// The circuit's widest half-width, which is the scale
-    /// [`race::PLAYER_RESCUE_HALF_WIDTHS`] is a multiple of.
+    /// [`oag_race::recovery::PLAYER_RESCUE_HALF_WIDTHS`] is a multiple of.
     half_width: f32,
     /// Laps reached.
     laps: u32,
@@ -91,7 +91,7 @@ fn solo_player(level: oag_ai::Difficulty, track: &str, ticks: u64) -> Option<Sol
         }
         let stopped = ship.physics.thrust > 0.0
             && !ship.standing.finished()
-            && ship.physics.body.linear_velocity.length() < race::STALL_SPEED;
+            && ship.physics.body.linear_velocity.length() < oag_race::recovery::STALL_SPEED;
         stall = if stopped { stall + 1 } else { 0 };
         solo.longest_stall = solo.longest_stall.max(stall);
     }
@@ -106,7 +106,7 @@ fn solo_player(level: oag_ai::Difficulty, track: &str, ticks: u64) -> Option<Sol
 /// driver: the craft leaves early in the first lap and, before this, never came
 /// back. The bound asserted is the one the mechanism guarantees rather than a
 /// fitted number - a craft cannot recede past the threshold for longer than
-/// [`race::PLAYER_RESCUE_TICKS`], so its distance is bounded by how far a falling
+/// [`oag_race::recovery::PLAYER_RESCUE_TICKS`], so its distance is bounded by how far a falling
 /// craft travels in three quarters of a second.
 #[test]
 #[ignore = "needs a disc image in data/images/"]
@@ -284,7 +284,7 @@ fn not_every_circuit_authors_reset_geometry() {
 
 /// **The control: the rescue fires nowhere it is not needed.**
 ///
-/// The margin [`race::PLAYER_RESCUE_HALF_WIDTHS`] rests on is that no healthy
+/// The margin [`oag_race::recovery::PLAYER_RESCUE_HALF_WIDTHS`] rests on is that no healthy
 /// craft on the disc gets three quarters of one half-width from the sample table,
 /// jumps included - `13_Track`, the circuit with the authored jump, peaks at 13.7
 /// units against a threshold of 140. This is that margin as a gate: a rescue that
@@ -298,7 +298,7 @@ fn a_healthy_player_is_never_recovered() {
         let Some(solo) = solo_player(oag_ai::Difficulty::Ace, &entry, 6_000) else {
             return;
         };
-        let threshold = solo.half_width * race::PLAYER_RESCUE_HALF_WIDTHS;
+        let threshold = solo.half_width * oag_race::recovery::PLAYER_RESCUE_HALF_WIDTHS;
         println!(
             "ace {track}: peak {:.1} against a threshold of {threshold:.1}, laps {}, respawns {}",
             solo.peak, solo.laps, solo.respawns

@@ -332,7 +332,7 @@ impl Sheet {
     /// *models* whose texture is embedded in the model, so there is no `.mip`
     /// for [`Image::decode`] to read - `oag_render::mesh` is what unpacks
     /// them, and it hands back pixels rather than a blob. See
-    /// `crate::race::sight` and `crate::race::hud::model_art`.
+    /// `oag_race::sight` and `crate::race::hud::model_art`.
     #[must_use]
     pub fn build_with(
         blobs: &[(String, Vec<u8>)],
