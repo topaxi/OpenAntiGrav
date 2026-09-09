@@ -21,12 +21,26 @@ Usage:
 Needs ImageMagick's `magick` on PATH and nothing else - deliberately, so it
 runs in a checkout with no Python packages installed.
 
-Reference figures on Talon's Junction, for whoever picks this up next:
+**Trim letterboxing before you compare anything.** This script measures the
+whole file, and the rpcs3 grabs are not all the same shape:
+`talons/00.png` is a 1278x718 frame on a 1600x1200 canvas, 52.2 % of it black,
+while `talons-fifo/00.png` is an untrimmed 1278x718. Padding dilutes the share
+directly - 8.056 % over that frame's own picture becomes 3.850 % over the
+canvas, and 8.056 * (1 - 0.522) = 3.851 closes the arithmetic. A `3.85-6.99 %`
+"band" derived from those two figures is comparing a padded grab against an
+unpadded one, and puts its real *upper* bound at the bottom.
 
-    data/reference/hd-capture/talons/00.png        3.85 %  mean 0.305
-    data/reference/hd-capture/talons-fifo/00.png   6.99 %  mean 0.623
-    ours, --race --ticks 0, bloom on   (2026-09-09) 9.86 %  mean 0.513
-    ours, --race --ticks 0, bloom off  (2026-09-09) 4.51 %  mean 0.485
+Reference figures on Talon's Junction, trimmed, for whoever picks this up next:
+
+    17 rpcs3 race grabs, trimmed        2.848-20.549 %  median 7.491
+      of those, on the grid              6.40-8.06 %
+      of those, in motion               14.41-20.55 %
+    ours, --race --ticks 0, bloom on   (2026-09-09)  9.86 %  mean 0.513
+    ours, --race --ticks 0, bloom off  (2026-09-09)  4.51 %  mean 0.485
+
+So at a standing start our bloom-on frame sits just above the original's own
+grid range and bloom-off sits just below it - not the "off is inside the band,
+on is far above it" the padded pair implied.
 
 `data/` is gitignored, so `rg` and `fd` return nothing under it with exit code
 0. Use `ls`/`find`, or `--no-ignore`.
