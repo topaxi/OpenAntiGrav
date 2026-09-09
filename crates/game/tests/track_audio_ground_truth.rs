@@ -40,20 +40,7 @@ const DENSEST: &str = r"Data\Environments\14_Track\track.vex";
 const TICK_CAP: usize = 60 * 180;
 
 fn image(name: &str) -> Option<PathBuf> {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .join("data/images")
-        .join(name);
-    if path.exists() {
-        return Some(path);
-    }
-    assert!(
-        std::env::var_os("OAG_REQUIRE_GAME_DATA").is_none(),
-        "OAG_REQUIRE_GAME_DATA is set but {} is missing",
-        path.display()
-    );
-    println!("skipping: {} not present", path.display());
-    None
+    oag_testdata::image(name)
 }
 
 /// One circuit, loaded, with the player flown by the racing line.

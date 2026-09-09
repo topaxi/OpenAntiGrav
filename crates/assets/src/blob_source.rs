@@ -7,11 +7,18 @@
 //! decompression, so this is the layer that keeps both of them seeking.
 
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex};
 
 use oag_disc::DiscImage;
 
 use crate::archive::split_disc_spec;
 use crate::{Error, Result};
+
+/// What a poisoned lock means here: a *previous* read of this image panicked
+/// while holding it. The image is not corrupt - it is a read-only file handle -
+/// but the panic that got us here is the real failure and this is not the place
+/// to paper over it.
+pub(crate) const POISONED: &str = "a previous read of this disc image panicked";
 
 /// Where an archive's bytes come from.
 ///
@@ -23,7 +30,33 @@ pub(crate) enum BlobSource {
         len: u64,
     },
     Disc {
-        disc: Box<DiscImage>,
+        /// **Shared, so the containers of one disc are one open image.**
+        ///
+        /// `Archives::open` mounts two archives off a Pulse disc and eight off
+        /// a Wipeout HD one, and each used to own a `DiscImage` of its own: a
+        /// separate file handle, a separate ISO 9660 walk, and - the part that
+        /// costs - a separate single-hunk CHD cache, so a caller alternating
+        /// `Data.wad` and `FE.wad` thrashed two caches that never saw each
+        /// other's hunks. One image behind them all fixes both.
+        ///
+        /// Measured on `Archives::open`, five opens, best of, 2026-09-09:
+        ///
+        /// | image | before | after |
+        /// | --- | --- | --- |
+        /// | `pulse-ps2-eu.chd`, 3.7 GB | 47.2 ms | **17.9 ms** |
+        /// | `pulse-psp-eu.chd` | 27.5 ms | **10.0 ms** |
+        ///
+        /// Both on a CHD with no extract beside it, which is where this shows:
+        /// `oag_testdata::image` hands a test a raw `.iso` when one exists, and
+        /// a raw walk is 0.05 ms either way.
+        ///
+        /// `Arc<Mutex<_>>` rather than `Rc<RefCell<_>>`, and not by preference:
+        /// `oag_game::boot` sends an `Archives` into the thread it loads media
+        /// on, so this has to be `Send`. An uncontended lock is tens of
+        /// nanoseconds against a CHD hunk decompression, and the containers
+        /// sharing this are read one at a time from the one thread that owns
+        /// them, so it is uncontended in practice.
+        disc: Arc<Mutex<DiscImage>>,
         entry: oag_disc::Entry,
     },
 }
@@ -46,7 +79,10 @@ impl BlobSource {
                 file.read_exact(&mut buf)?;
                 Ok(buf)
             }
-            Self::Disc { disc, entry } => Ok(disc.read_entry_range(entry, offset, len)?),
+            Self::Disc { disc, entry } => Ok(disc
+                .lock()
+                .expect(POISONED)
+                .read_entry_range(entry, offset, len)?),
         }
     }
 
@@ -57,20 +93,8 @@ impl BlobSource {
     /// letters working.
     pub(crate) fn open(spec: &str) -> Result<Self> {
         if let Some((image, inner)) = split_disc_spec(spec) {
-            let mut disc = DiscImage::open(image)?;
-            let entry = disc
-                .entries()?
-                .iter()
-                .find(|e| !e.is_directory && e.path.eq_ignore_ascii_case(inner))
-                .cloned()
-                .ok_or_else(|| Error::NotOnDisc {
-                    image: image.to_string(),
-                    path: inner.to_string(),
-                })?;
-            return Ok(Self::Disc {
-                disc: Box::new(disc),
-                entry,
-            });
+            let disc = Arc::new(Mutex::new(DiscImage::open(image)?));
+            return Self::on_disc(&disc, image, inner);
         }
 
         let path = PathBuf::from(spec);
@@ -86,6 +110,29 @@ impl BlobSource {
 
     /// Opens a container file that is already known to be one, bypassing
     /// spec parsing. See [`crate::Archive::open_file`].
+    /// One entry of an image that is **already open**, sharing it.
+    ///
+    /// `image` is carried only to name the disc in [`Error::NotOnDisc`]; the
+    /// bytes all come from `disc`. See [`Self::Disc`]'s own docs for why the
+    /// sharing is the point.
+    pub(crate) fn on_disc(disc: &Arc<Mutex<DiscImage>>, image: &str, inner: &str) -> Result<Self> {
+        let entry = disc
+            .lock()
+            .expect(POISONED)
+            .entries()?
+            .iter()
+            .find(|e| !e.is_directory && e.path.eq_ignore_ascii_case(inner))
+            .cloned()
+            .ok_or_else(|| Error::NotOnDisc {
+                image: image.to_string(),
+                path: inner.to_string(),
+            })?;
+        Ok(Self::Disc {
+            disc: Arc::clone(disc),
+            entry,
+        })
+    }
+
     pub(crate) fn open_file(path: &Path) -> Result<Self> {
         let file = std::fs::File::open(path)?;
         let len = file.metadata()?.len();

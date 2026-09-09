@@ -21,7 +21,7 @@
 //! starting at `y=261.9` on a 272-tall screen. So the fix was real wrapping,
 //! not a bigger viewport or a smaller scale.
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use oag_game::font::Atlas;
 use oag_game::language::roles;
@@ -30,19 +30,7 @@ use oag_game::{boot, font, loading, screen};
 const PSP_USA: &str = "data/images/pulse-psp-usa.chd";
 
 fn image() -> Option<PathBuf> {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .join(PSP_USA);
-    if path.exists() {
-        return Some(path);
-    }
-    assert!(
-        std::env::var_os("OAG_REQUIRE_GAME_DATA").is_none(),
-        "OAG_REQUIRE_GAME_DATA is set but {} is missing",
-        path.display()
-    );
-    println!("skipping: {} not present", path.display());
-    None
+    oag_testdata::image(PSP_USA)
 }
 
 #[test]

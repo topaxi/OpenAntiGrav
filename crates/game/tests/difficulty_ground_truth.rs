@@ -17,25 +17,13 @@
 //! rewritten - see [`every_difficulty_is_quicker_than_the_one_below_it`] for why
 //! one seed could not carry it.
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use oag_game::race;
 
 /// The disc, or `None` on a checkout without one.
 fn image() -> Option<PathBuf> {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .join("data/images/pulse-psp-usa.chd");
-
-    if path.exists() {
-        return Some(path);
-    }
-    assert!(
-        std::env::var_os("OAG_REQUIRE_GAME_DATA").is_none(),
-        "OAG_REQUIRE_GAME_DATA is set but {} is missing",
-        path.display()
-    );
-    None
+    oag_testdata::image("data/images/pulse-psp-usa.chd")
 }
 
 /// Race seeds to average a difficulty over.

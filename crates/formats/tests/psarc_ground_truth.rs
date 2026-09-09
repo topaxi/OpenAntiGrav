@@ -34,7 +34,7 @@
 //! inflated bytes carry the magic its extension predicts is a check on the
 //! block walk and the block-width probe together.
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use oag_disc::{DiscImage, Entry};
 use oag_formats::psarc::{self, Directory, Header};
@@ -53,21 +53,7 @@ const ENTRY_COUNT: usize = 11_664;
 const TRACK_VEX: &str = "/data/environments/talons_junction/track.vex";
 
 fn image(name: &str) -> Option<PathBuf> {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .join("data/images")
-        .join(name);
-
-    if path.exists() {
-        return Some(path);
-    }
-    assert!(
-        std::env::var_os("OAG_REQUIRE_GAME_DATA").is_none(),
-        "OAG_REQUIRE_GAME_DATA is set but {} is missing",
-        path.display()
-    );
-    println!("skipping: {} not present", path.display());
-    None
+    oag_testdata::image(name)
 }
 
 /// One archive, read in place out of the image at the LBA the ISO walk reports.

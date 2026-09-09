@@ -47,7 +47,7 @@
 //! argument. So both tests below check whichever ending actually happened
 //! rather than assuming the player crossed the line.
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use oag_game::race;
 use oag_gameplay::InputSnapshot;
@@ -59,20 +59,7 @@ use oag_gameplay::InputSnapshot;
 const CAP: u64 = 30_000;
 
 fn image() -> Option<PathBuf> {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .join("data/images/pulse-psp-usa.chd");
-
-    if path.exists() {
-        return Some(path);
-    }
-    assert!(
-        std::env::var_os("OAG_REQUIRE_GAME_DATA").is_none(),
-        "OAG_REQUIRE_GAME_DATA is set but {} is missing",
-        path.display()
-    );
-    println!("skipping: {} not present", path.display());
-    None
+    oag_testdata::image("data/images/pulse-psp-usa.chd")
 }
 
 /// A single race on the default circuit, everyone driven, the player included.

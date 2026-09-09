@@ -39,7 +39,7 @@
 //! bytes. It is the list a reviewer wants when deciding what a screenshot
 //! should be re-checked against.
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use oag_disc::DiscImage;
 use oag_formats::vex::{self, texture_row_bytes, texture_row_stride};
@@ -57,20 +57,7 @@ const TEXEL_SIZE_AT: usize = 0x0c;
 const MIN_TEXTURES: usize = 2_000;
 
 fn image() -> Option<PathBuf> {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .join("data/images/pulse-psp-usa.chd");
-
-    if path.exists() {
-        return Some(path);
-    }
-    assert!(
-        std::env::var_os("OAG_REQUIRE_GAME_DATA").is_none(),
-        "OAG_REQUIRE_GAME_DATA is set but {} is missing",
-        path.display()
-    );
-    println!("skipping: {} not present", path.display());
-    None
+    oag_testdata::image("data/images/pulse-psp-usa.chd")
 }
 
 /// One `Texture` node, reduced to the five numbers this file is about.

@@ -38,6 +38,7 @@ Older pages, and [`goals.md`](../overview/goals.md)'s scope table, use
 | `oag-view` | `crates/view` | wgpu asset viewer. The first crate with a window. |
 | `oag-assets` | `crates/assets` | Runtime asset access: a WAD read from a path or straight out of a disc image, by index, name or name hash. |
 | `oag-trace` | `crates/trace` | Trace capture and comparison against the original. |
+| `oag-testdata` | `crates/testdata` | Test-only: locating the user-supplied disc images, and the `OAG_REQUIRE_GAME_DATA` skip contract. |
 | `oag-input` | `crates/input` | Input mapping and the per-tick input snapshot. |
 | `oag-physics` | `crates/physics` | Ship dynamics and collision. |
 | `oag-race` | `crates/race` | Race rules, lap timing, track progress. |
@@ -319,12 +320,13 @@ file: it has to start at t=0 or it *is* the tail.
 
 Re-measured 2026-09-09, same machine, same 16 cores:
 
-| | 2026-08-17 | 2026-09-09 | after the split below |
-| --- | --- | --- | --- |
-| tests | 2,323 | 4,101 | 4,114 |
-| test phase wall | 196s | **587s** | **379s** |
-| test CPU | 1,508s | 3,143s | 3,728s |
-| cores busy | 7.9 of 16 | **5.35 of 16** | **9.8 of 16** |
+| | 2026-08-17 | 2026-09-09 | after the split | after the shared image |
+| --- | --- | --- | --- | --- |
+| tests | 2,323 | 4,101 | 4,114 | 4,114 |
+| test phase wall | 196s | **587s** | 379s | **344s** |
+| test CPU | 1,508s | 3,143s | 3,728s | |
+| cores busy | 7.9 of 16 | **5.35 of 16** | 9.8 of 16 | |
+| slowest single test | | **525s** | 321s | **184s** |
 
 **CPU went up, deliberately.** Splitting a chained comparison into its pairwise
 links measures each interior tier twice, which is where most of that 585s came
@@ -363,12 +365,55 @@ a day spent discovering that six races could not carry it. Slicing the sample
 would have rebuilt the flake that was just removed. Merging its duplicate sweep
 still halved both its CPU and its wall clock.
 
+### Then the disc opens, which is worth less than it looks
+
+With the tail gone the suite is throughput-bound rather than tail-bound, so the
+next thing to cut is CPU. The obvious target is the disc: `Archives::open` used
+to walk the same image once per archive - `survey` opened it, walked the whole
+ISO 9660 tree, and **dropped** it, then every `Container::open` behind it opened
+and walked it again, twice over on a Pulse disc and eight times on a Wipeout HD
+one. Each container also carried its own single-hunk CHD cache, so a caller
+alternating `Data.wad` and `FE.wad` thrashed two caches that never saw each
+other's hunks.
+
+`survey` now hands its image back and every container mounts on it. Measured on
+`Archives::open`, five opens, best of:
+
+| image | before | after |
+| --- | --- | --- |
+| `pulse-ps2-eu.chd`, 3.7 GB | 47.2ms | **17.9ms** |
+| `pulse-psp-eu.chd` | 27.5ms | **10.0ms** |
+
+**Measure this sort of thing before spending a refactor on it.** The estimate
+that motivated the work was that the disc-open path was a large fraction of
+3,728s of CPU. It is not: 889 disc-backed tests at tens of milliseconds an open
+is *single-digit percent*, and the suite was at 5.35 of 16 cores when it was
+first proposed, so it would have bought nothing at all until the tail was split.
+The measurement is the reason it is documented here as a modest win rather than
+sold as the fix.
+
+`oag_testdata::image` is the other half and is the larger one: a CHD is
+compressed, so every read decompresses a hunk, and `Archives::open` costs
+**31ms** against `pulse-psp-usa.chd` against **0.05ms** against the raw `.iso`
+that `just extract-isos` writes beside it. `DiscImage::open` sniffs by magic, so
+the two are interchangeable; the test helper prefers the extract when it exists
+and is no older than the image it came from. A stale extract would feed wrong
+bytes to 148 test files in silence, which is why the mtime check is not
+optional, and `oag_testdata::exact` exists for the two files where the *image*
+rather than its contents is the subject - `oag-disc`'s own ground truth diffs a
+CHD against its extract, and `launcher_ground_truth` reads the directory the
+images live in.
+
+Together: 379s to **344s**, and the slowest single test from 321s to 184s -
+mostly because less total CPU means less contention, not because that test got
+faster.
+
 ### The ratchet, because none of this was anybody's bad commit
 
 `ai_roll`'s 525s test budgeted its own cost honestly in a doc comment and passed
 review anyway. `scripts/check-test-budget.py` (`just check-test-budget`, run by
 `just test-data` itself) fails when the suite exceeds **450s** or a single test
-exceeds **400s**, as a ratchet over a `BASELINE` that may shrink and not grow.
+exceeds **300s**, as a ratchet over a `BASELINE` that may shrink and not grow.
 The ceiling is deliberately loose - a nextest duration is wall-per-test under
 load, not isolated CPU, which is why these durations sum to 4,639s against
 3,143s of real CPU - so it gates gross regressions rather than drift.

@@ -34,6 +34,7 @@ miniz_oxide.workspace = true
 # find them on a PSP or a PS2 pressing alike, which is exactly what a
 # corpus-wide measurement needs.
 [dev-dependencies]
+oag-testdata.workspace = true
 oag-assets.workspace = true
 oag-disc.workspace = true
 oag-pulse.workspace = true

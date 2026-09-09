@@ -35,18 +35,7 @@ fn root() -> PathBuf {
 }
 
 fn image(name: &str) -> Option<PathBuf> {
-    let path = root().join(name);
-    if path.exists() {
-        Some(path)
-    } else {
-        assert!(
-            std::env::var_os("OAG_REQUIRE_GAME_DATA").is_none(),
-            "OAG_REQUIRE_GAME_DATA is set but {} is missing",
-            path.display()
-        );
-        println!("skipping: {} not present", path.display());
-        None
-    }
+    oag_testdata::image(name)
 }
 
 fn load(options: race::Options) -> race::Loaded {

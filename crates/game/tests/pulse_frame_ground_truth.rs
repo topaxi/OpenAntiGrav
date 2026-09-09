@@ -15,7 +15,7 @@
 //! ways, off the raw XML and off `oag_game::menu::read_frame`'s own output,
 //! and checks they agree.
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use oag_formats::fexml;
 use oag_game::frontend::{Draw, Space};
@@ -23,19 +23,7 @@ use oag_game::screen::Screens;
 use oag_game::sprite::Sheet;
 
 fn image() -> Option<PathBuf> {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .join("data/images/pulse-psp-usa.chd");
-    if path.exists() {
-        return Some(path);
-    }
-    assert!(
-        std::env::var_os("OAG_REQUIRE_GAME_DATA").is_none(),
-        "OAG_REQUIRE_GAME_DATA is set but {} is missing",
-        path.display()
-    );
-    eprintln!("skipping: {} is not present", path.display());
-    None
+    oag_testdata::image("data/images/pulse-psp-usa.chd")
 }
 
 /// The texture every widget in this frame samples its own patch of.

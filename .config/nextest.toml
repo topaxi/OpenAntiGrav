@@ -13,7 +13,7 @@
 # whole tail.** On 2026-09-09 only 62s of a 587s run was not overlapped with a
 # single 525s test, so nothing schedulable here could have helped: the fix was
 # splitting that test. See `scripts/check-test-budget.py`, which fails the run
-# when a single test passes 180s, and `docs/architecture/workspace-layout.md`
+# when a single test passes 300s, and `docs/architecture/workspace-layout.md`
 # for the measurements.
 #
 # Priority runs from -100 to 100 and higher goes first.

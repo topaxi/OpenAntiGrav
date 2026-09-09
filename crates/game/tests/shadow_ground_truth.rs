@@ -19,24 +19,13 @@
 //! that does not reach, a normal read off the wrong surface. None of that
 //! shows up in synthetic data.
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use oag_core::math::Vec3;
 use oag_game::race;
 
 fn image() -> Option<PathBuf> {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .join("data/images/pulse-psp-usa.chd");
-    if path.exists() {
-        return Some(path);
-    }
-    assert!(
-        std::env::var("OAG_REQUIRE_GAME_DATA").is_err(),
-        "OAG_REQUIRE_GAME_DATA is set and {} is missing",
-        path.display()
-    );
-    None
+    oag_testdata::image("data/images/pulse-psp-usa.chd")
 }
 
 /// A full grid on the default circuit, so every slot's cast is exercised

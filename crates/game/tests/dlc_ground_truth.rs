@@ -52,17 +52,7 @@ fn workspace(relative: &str) -> PathBuf {
 }
 
 fn image() -> Option<String> {
-    let path = workspace("data/images").join(IMAGE);
-    if path.exists() {
-        return Some(path.display().to_string());
-    }
-    assert!(
-        std::env::var_os("OAG_REQUIRE_GAME_DATA").is_none(),
-        "OAG_REQUIRE_GAME_DATA is set but {} is missing",
-        path.display()
-    );
-    println!("skipping: {} not present", path.display());
-    None
+    oag_testdata::image(IMAGE).map(|path| path.display().to_string())
 }
 
 /// The DLC directory, or `None` when this checkout has no packs.

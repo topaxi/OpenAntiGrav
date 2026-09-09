@@ -27,26 +27,13 @@
 //! surfaces the *geometry* singles out, and it is a useful cross-check. This
 //! one pins the mechanism that actually draws.
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use oag_render::mesh::{self, Model};
 use oag_render::mesh_render::TexAnims;
 
 fn image() -> Option<PathBuf> {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .join("data/images/pulse-psp-usa.chd");
-
-    if path.exists() {
-        return Some(path);
-    }
-    assert!(
-        std::env::var_os("OAG_REQUIRE_GAME_DATA").is_none(),
-        "OAG_REQUIRE_GAME_DATA is set but {} is missing",
-        path.display()
-    );
-    println!("skipping: {} not present", path.display());
-    None
+    oag_testdata::image("data/images/pulse-psp-usa.chd")
 }
 
 fn track(archives: &mut oag_assets::Archives, circuit: &str) -> Model {

@@ -256,8 +256,9 @@ file does not need to carry its own.
   `cargo nextest` parallelises across tests, so each ran on one core. They are
   split now, and `just test-data` runs `scripts/check-test-budget.py` over its
   own log afterwards so the next one fails at review: **450s for the suite,
-  400s for any single test** (both under-load durations - see that script).
-  The split took it to **379s**. When that fires, re-profile the tail rather than
+  300s for any single test** (both under-load durations - see that script).
+  The split took it to 379s, and sharing one open `DiscImage` across a
+  source's archives to **344s**. When that fires, re-profile the tail rather than
   adding a `BASELINE` row - CLAUDE.md's "Commands" section has the four-step
   recipe and the worked examples of which splits keep which assertions. **The four `oag-trace` failures this bullet used to warn
   about are gone**: the disc-backed `oag-game` and `oag-formats` suites are

@@ -28,7 +28,7 @@ just check-size   # ratchet on file length (1k lines) and on inline #[cfg(test)]
 just check-names  # every names.tsv row still matches its evidence page, offline (scripts/check-ghidra-names.py)
 just check-handover # HANDOVER.md stays under 256 KiB, the Read tool's own ceiling (scripts/check-handover-size.py)
 just check-strings # every menu.toml row/title has a string_id and its english.toml text, ratchet over pre-existing debt (scripts/check-strings.py)
-just check-test-budget # no test-data suite over 450s and no single test over 400s, ratchet (scripts/check-test-budget.py)
+just check-test-budget # no test-data suite over 450s and no single test over 300s, ratchet (scripts/check-test-budget.py)
 just build        # cargo build --workspace
 just docs         # cargo doc --workspace --no-deps --document-private-items
 just audit-leakage # asserts no tracked game content or reproduction (scripts/check-leakage.py)
@@ -38,12 +38,14 @@ Single test: `cargo nextest run -p oag-core some_test_name` (nextest, not `cargo
 Ground-truth tests (in `crates/*/tests/*ground_truth*.rs`) are `#[ignore]`d because they
 need a real disc image under `data/images/`; they never run in CI, only via `just test-data`.
 
-**`just test-data` tees its run to `target/test-data.log` and then checks it against
-`scripts/check-test-budget.py`, which fails when the suite exceeds 450 s or a single test
-exceeds 400 s.** Both are durations *under load* - a test competing with 4,100 others on
-sixteen cores reports about 2.8x its isolated cost, so 400 s is really "no test over ~140 s
-of its own work".** When it fires, **stop and re-profile the tail before adding more tests** -
-that is what the ceiling is for, and it is not a formality to baseline past:
+**`just test-data` runs 4,114 tests in about 344s, tees the run to
+`target/test-data.log`, and then checks it against `scripts/check-test-budget.py` - which
+fails when the suite exceeds 450s or any single test exceeds 300s.** Both are durations
+*under load*: a test competing with 4,100 others for sixteen cores reports well over its
+isolated cost, so these gate gross regressions rather than drift.
+
+When it fires, **stop and re-profile the tail before adding more tests** - that is what
+the ceiling is for, and it is not a formality to baseline past:
 
 1. Sort the log: `grep -E '^\s+(PASS|FAIL)\s+\[' target/test-data.log | sed -E 's/^\s+\w+\s+\[\s*([0-9.]+)s\].*\)\s+/\1 /' | sort -rn | head -20`.
 2. Look at what the slowest test *is*. It is almost always a matrix - N circuits by M
@@ -173,6 +175,7 @@ Existing crates:
 | `oag-trace` | `crates/trace` | Per-tick trace capture and comparison against the original: `oag-trace show\|run\|compare\|script\|drive\|track`. The reading half of the M3 verification harness. |
 | `oag-audio` | `crates/audio` | Mixing and playback: a hardware-free voice pool and sample loop, a `cpal` stream or none at all, and a WAV writer so a headless run is checkable. Cues are a per-tick *output* of the simulation, never `World` state. See [ADR-0018](docs/architecture/adr/0018-audio-mixer-architecture.md). |
 | `oag-game` | `crates/game` | Composition root; boots the front end. A thin `[[bin]]` over `[lib]` so boot logic is testable headlessly. |
+| `oag-testdata` | `crates/testdata` | **A dev-dependency, never a runtime one.** Where a test finds the disc images this project does not ship, and the `OAG_REQUIRE_GAME_DATA` skip-or-fail contract, in one place instead of 130 copies. Holds no game knowledge at all - no image names, no archive names, no title. |
 
 Later crates (`oag-weapons`,
 `oag-ui`, `oag-replay`, `oag-net`) are

@@ -53,20 +53,7 @@ const CIRCUITS: &[(&str, &str)] = &[
 ];
 
 fn image() -> Option<PathBuf> {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .join("data/images")
-        .join(PS3_IMAGE);
-    if path.exists() {
-        return Some(path);
-    }
-    assert!(
-        std::env::var_os("OAG_REQUIRE_GAME_DATA").is_none(),
-        "OAG_REQUIRE_GAME_DATA is set but {} is missing",
-        path.display()
-    );
-    println!("skipping: {} not present", path.display());
-    None
+    oag_testdata::image(PS3_IMAGE)
 }
 
 fn build(image: &Path, archive: &str, path: &str) -> Option<mesh::Model> {

@@ -89,7 +89,7 @@
 //! than deleting. The PS2 tests read [`PS2_TEAMS`], all twelve, because that
 //! disc ships all twelve outright.
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use oag_formats::vex;
 use oag_pulse as pulse;
@@ -126,21 +126,7 @@ fn image() -> Option<PathBuf> {
 }
 
 fn image_named(file: &str) -> Option<PathBuf> {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .join("data/images")
-        .join(file);
-
-    if path.exists() {
-        return Some(path);
-    }
-    assert!(
-        std::env::var_os("OAG_REQUIRE_GAME_DATA").is_none(),
-        "OAG_REQUIRE_GAME_DATA is set but {} is missing",
-        path.display()
-    );
-    println!("skipping: {} not present", path.display());
-    None
+    oag_testdata::image(file)
 }
 
 /// The eight teams the PSP disc actually ships a `Ship.vex` for - see this

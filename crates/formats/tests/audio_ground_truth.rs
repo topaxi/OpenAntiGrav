@@ -27,7 +27,7 @@
 //!   every track, and it is *not* if the probe is misaligned by one sample,
 //!   which is how the alignment was caught in the first place.
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use oag_disc::DiscImage;
 use oag_formats::ps2_music::{self, Directory};
@@ -62,21 +62,7 @@ const PSP_ARCHIVES: [&str; 2] = ["PSP_GAME/USRDIR/FE.wad", "PSP_GAME/USRDIR/Data
 const MIN_BANKS: usize = 30;
 
 fn image(name: &str) -> Option<PathBuf> {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .join("data/images")
-        .join(name);
-
-    if path.exists() {
-        return Some(path);
-    }
-    assert!(
-        std::env::var_os("OAG_REQUIRE_GAME_DATA").is_none(),
-        "OAG_REQUIRE_GAME_DATA is set but {} is missing",
-        path.display()
-    );
-    println!("skipping: {} not present", path.display());
-    None
+    oag_testdata::image(name)
 }
 
 /// Mean absolute difference between samples `lag` apart.

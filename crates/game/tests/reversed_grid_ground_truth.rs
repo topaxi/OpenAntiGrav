@@ -24,27 +24,14 @@
 //! this project's grid has ever been measured against. See
 //! `docs/ghidra/functions/psp-pulse-usa/grid.md#reversed-grids-the-straight-line-ran-off-the-curve`.
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use oag_core::math::Vec3;
 use oag_game::race;
 use oag_physics::Raycaster;
 
 fn image() -> Option<PathBuf> {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .join("data/images/pulse-psp-usa.chd");
-
-    if path.exists() {
-        return Some(path);
-    }
-    assert!(
-        std::env::var_os("OAG_REQUIRE_GAME_DATA").is_none(),
-        "OAG_REQUIRE_GAME_DATA is set but {} is missing",
-        path.display()
-    );
-    println!("skipping: {} not present", path.display());
-    None
+    oag_testdata::image("data/images/pulse-psp-usa.chd")
 }
 
 #[test]

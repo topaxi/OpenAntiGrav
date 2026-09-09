@@ -20,27 +20,13 @@
 //! naming the disc's serial and the title it belongs to, before any archive
 //! matching runs.
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use oag_assets::Error;
 use oag_pulse as pulse;
 
 fn image(name: &str) -> Option<PathBuf> {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .join("data/images")
-        .join(name);
-
-    if path.exists() {
-        return Some(path);
-    }
-    assert!(
-        std::env::var_os("OAG_REQUIRE_GAME_DATA").is_none(),
-        "OAG_REQUIRE_GAME_DATA is set but {} is missing",
-        path.display()
-    );
-    println!("skipping: {} not present", path.display());
-    None
+    oag_testdata::image(name)
 }
 
 #[test]

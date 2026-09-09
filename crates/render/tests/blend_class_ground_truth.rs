@@ -36,26 +36,14 @@
 //! them** - that path is implemented from the decode and is untested by
 //! content, which is asserted below so the day one appears is not silent.
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use oag_formats::vex::BlendClass;
 use oag_pulse as pulse;
 use oag_render::mesh;
 
 fn image() -> Option<PathBuf> {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .join("data/images/pulse-psp-usa.chd");
-    if path.exists() {
-        return Some(path);
-    }
-    assert!(
-        std::env::var_os("OAG_REQUIRE_GAME_DATA").is_none(),
-        "OAG_REQUIRE_GAME_DATA is set but {} is missing",
-        path.display()
-    );
-    println!("skipping: {} not present", path.display());
-    None
+    oag_testdata::image("data/images/pulse-psp-usa.chd")
 }
 
 /// Counts per class for one model, as `(alpha_over, additive, unblended, unset)`.

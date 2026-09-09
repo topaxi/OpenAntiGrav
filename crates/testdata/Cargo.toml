@@ -1,0 +1,14 @@
+[package]
+name = "oag-testdata"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "Locating this project's user-supplied game data from a test, and nothing else."
+publish = false
+
+[dependencies]
+
+[lints]
+workspace = true

@@ -14,7 +14,7 @@
 //! magic is not one.
 
 use crate::blob_source::BlobSource;
-use crate::{Archive, Result, psarc};
+use crate::{Archive, Error, Result, psarc};
 
 /// One open archive, of whichever kind the bytes turned out to be.
 #[derive(Debug)]
@@ -34,6 +34,27 @@ impl Container {
     /// The source not opening, or the archive's own directory not parsing.
     pub fn open(spec: &str) -> Result<Self> {
         Self::from_source(BlobSource::open(spec)?, spec.to_string())
+    }
+
+    /// As [`Container::open`], on a disc image that is **already open**.
+    ///
+    /// The one caller is [`Archives::open_with_packs`](crate::Archives), which
+    /// has surveyed the image already and would otherwise re-open and re-walk
+    /// it once per archive - eight times over on a Wipeout HD disc. `spec` is
+    /// still the full `<image>:<path>`, so error messages name the disc the way
+    /// every other path does.
+    ///
+    /// # Errors
+    ///
+    /// As [`Container::open`]. `spec` not being a disc spec at all is
+    /// [`Error::BadSpec`].
+    pub(crate) fn open_on(
+        disc: &std::sync::Arc<std::sync::Mutex<oag_disc::DiscImage>>,
+        spec: &str,
+    ) -> Result<Self> {
+        let (image, inner) = crate::archive::split_disc_spec(spec)
+            .ok_or_else(|| Error::BadSpec(spec.to_string()))?;
+        Self::from_source(BlobSource::on_disc(disc, image, inner)?, spec.to_string())
     }
 
     /// Opens a file that is already known to be one, bypassing spec parsing.

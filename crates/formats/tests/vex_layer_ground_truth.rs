@@ -28,7 +28,7 @@
 //! nothing. The census is what tells those two apart, and it is the gate the
 //! renderer work was put behind rather than assumed past.
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use oag_disc::DiscImage;
 use oag_formats::vex;
@@ -43,20 +43,7 @@ const PSP_DATA: &str = "PSP_GAME/USRDIR/Data.wad";
 const MIN_MESHES: usize = 5_000;
 
 fn image() -> Option<PathBuf> {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .join("data/images/pulse-psp-usa.chd");
-
-    if path.exists() {
-        return Some(path);
-    }
-    assert!(
-        std::env::var_os("OAG_REQUIRE_GAME_DATA").is_none(),
-        "OAG_REQUIRE_GAME_DATA is set but {} is missing",
-        path.display()
-    );
-    println!("skipping: {} not present", path.display());
-    None
+    oag_testdata::image("data/images/pulse-psp-usa.chd")
 }
 
 /// Every version-6 `.vex` blob in `Data.wad`, decompressed, with its entry index.

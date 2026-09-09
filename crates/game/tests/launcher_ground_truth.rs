@@ -9,25 +9,19 @@
 //!
 //! `#[ignore]`d: needs real images under `data/images/`. `just test-data`.
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use oag_game::launcher::{self, State};
 
+/// **`exact`, not `image`.** Every test here is about the image *files* rather
+/// than their contents: one asserts the serial each named pressing carries, and
+/// the other reads the directory the images live in and expects a row per file.
+/// `oag_testdata::image` substitutes `data/cache/<stem>.iso` for a CHD when an
+/// extract is present, which points both of those at the wrong file - the
+/// second at `data/cache` entire, which is movies and audio and no images at
+/// all.
 fn image(name: &str) -> Option<PathBuf> {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .join("data/images")
-        .join(name);
-    if path.exists() {
-        return Some(path);
-    }
-    assert!(
-        std::env::var_os("OAG_REQUIRE_GAME_DATA").is_none(),
-        "OAG_REQUIRE_GAME_DATA is set but {} is missing",
-        path.display()
-    );
-    eprintln!("skipping: {} is not present", path.display());
-    None
+    oag_testdata::exact(name)
 }
 
 /// Every row is labelled off the disc, not off its file name.

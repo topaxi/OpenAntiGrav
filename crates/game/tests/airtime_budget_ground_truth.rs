@@ -45,7 +45,7 @@
 //! for the same reason a respawn-contaminated one is: it is a truncated
 //! duration, not a real one.
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use oag_game::{catalogue, race};
 
@@ -95,20 +95,7 @@ const RESPAWN_TRAIL_TICKS: u64 = 150;
 const MAX_PLAUSIBLE_TICKS: u64 = 300;
 
 fn image() -> Option<PathBuf> {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .join("data/images/pulse-psp-usa.chd");
-
-    if path.exists() {
-        return Some(path);
-    }
-    assert!(
-        std::env::var_os("OAG_REQUIRE_GAME_DATA").is_none(),
-        "OAG_REQUIRE_GAME_DATA is set but {} is missing",
-        path.display()
-    );
-    println!("skipping: {} not present", path.display());
-    None
+    oag_testdata::image("data/images/pulse-psp-usa.chd")
 }
 
 /// One `PI_Track` entry: its id, the WAD entry name a race loads, the

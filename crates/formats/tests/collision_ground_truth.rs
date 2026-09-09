@@ -31,7 +31,7 @@
 //! every triangle index naming a vertex.
 
 use std::collections::BTreeMap;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use oag_disc::DiscImage;
 use oag_formats::collision::{self, CollisionNode, PAYLOAD_ALIGN, SurfaceKind};
@@ -58,21 +58,7 @@ const PS2_NODES: usize = 189;
 const COORD_LIMIT: f32 = 1.0e5;
 
 fn image(name: &str) -> Option<PathBuf> {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .join("data/images")
-        .join(name);
-
-    if path.exists() {
-        return Some(path);
-    }
-    assert!(
-        std::env::var_os("OAG_REQUIRE_GAME_DATA").is_none(),
-        "OAG_REQUIRE_GAME_DATA is set but {} is missing",
-        path.display()
-    );
-    println!("skipping: {} not present", path.display());
-    None
+    oag_testdata::image(name)
 }
 
 /// What a survey of one archive found.

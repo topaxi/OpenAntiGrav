@@ -49,7 +49,7 @@
 //! vertices are padding. A `v` texcoord that is binary on every ship hull and
 //! every circuit is not a texture coordinate at all.
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use oag_disc::DiscImage;
 use oag_formats::vex::{self, VertexLayout};
@@ -81,20 +81,7 @@ const PAD_OFFSETS: [usize; 5] = [2, 3, 11, 18, 19];
 const HEADER_SMALL: usize = 0x40;
 
 fn image() -> Option<PathBuf> {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .join("data/images/pulse-psp-usa.chd");
-
-    if path.exists() {
-        return Some(path);
-    }
-    assert!(
-        std::env::var_os("OAG_REQUIRE_GAME_DATA").is_none(),
-        "OAG_REQUIRE_GAME_DATA is set but {} is missing",
-        path.display()
-    );
-    println!("skipping: {} not present", path.display());
-    None
+    oag_testdata::image("data/images/pulse-psp-usa.chd")
 }
 
 /// Every version-6 `.vex` blob in `Data.wad`, decompressed, with its entry index.

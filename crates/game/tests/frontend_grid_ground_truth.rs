@@ -38,7 +38,7 @@
 //! this file is the second, independent instance of it.
 
 use std::collections::BTreeMap;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use oag_formats::fexml;
 
@@ -54,19 +54,7 @@ const PS2: &str = "data/images/pulse-ps2-eu.chd";
 type Coords = BTreeMap<String, f32>;
 
 fn image(name: &str) -> Option<PathBuf> {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .join(name);
-    if path.exists() {
-        return Some(path);
-    }
-    assert!(
-        std::env::var_os("OAG_REQUIRE_GAME_DATA").is_none(),
-        "OAG_REQUIRE_GAME_DATA is set but {} is missing",
-        path.display()
-    );
-    println!("skipping: {} not present", path.display());
-    None
+    oag_testdata::image(name)
 }
 
 /// Reads and expands one XML entry off a disc.

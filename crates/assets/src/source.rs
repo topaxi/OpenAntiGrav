@@ -14,6 +14,8 @@
 //!
 //! [ADR-0022]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0022-title-packages.md
 
+use std::sync::{Arc, Mutex};
+
 use oag_disc::DiscImage;
 use oag_title::Title;
 
@@ -21,6 +23,7 @@ use oag_title::Title;
 /// field should not have to depend on `oag-disc` to name what it read.
 pub use oag_disc::Platform;
 
+use crate::blob_source::POISONED;
 use crate::{Container, Error, Result};
 
 /// `Err(Error::WrongTitle)` when `serial` is positively known to belong to some
@@ -98,7 +101,21 @@ impl Layout {
     /// [`Error::NoArchive`] when nothing in the source matches any candidate,
     /// naming every candidate looked for. Reading the source itself propagates.
     pub fn resolve(source: &str, title: &Title) -> Result<Self> {
-        let (mut platform, files) = survey(source, title)?;
+        Ok(Self::resolve_on(source, title)?.0)
+    }
+
+    /// As [`Layout::resolve`], also handing back the disc image it walked so
+    /// the caller's archives can be mounted on it rather than on images of
+    /// their own. `None` for a directory source. See [`survey`].
+    ///
+    /// # Errors
+    ///
+    /// As [`Layout::resolve`].
+    pub(crate) fn resolve_on(
+        source: &str,
+        title: &Title,
+    ) -> Result<(Self, Option<Arc<Mutex<DiscImage>>>)> {
+        let (mut platform, files, disc) = survey(source, title)?;
 
         let data = pick(source, &files, title.archives.data).ok_or_else(|| Error::NoArchive {
             looked_in: source.to_string(),
@@ -116,12 +133,15 @@ impl Layout {
             platform = data.1;
         }
 
-        Ok(Self {
-            platform,
-            data: data.0,
-            fe: fe.map(|(spec, _)| spec),
-            extra,
-        })
+        Ok((
+            Self {
+                platform,
+                data: data.0,
+                fe: fe.map(|(spec, _)| spec),
+                extra,
+            },
+            disc,
+        ))
     }
 
     /// One line for a load report: what was found and what it was found on.
@@ -223,13 +243,20 @@ impl Archives {
         title: &Title,
         packs: Vec<crate::dlc::Pack>,
     ) -> Result<Self> {
-        let layout = Layout::resolve(source, title)?;
-        let data = Container::open(&layout.data)?;
-        let fe = layout.fe.as_deref().map(Container::open).transpose()?;
+        let (layout, disc) = Layout::resolve_on(source, title)?;
+        // On a disc source every archive is mounted on the one image `survey`
+        // already opened and walked; a directory source has no image and each
+        // archive is a file of its own. `mount` is the only difference.
+        let mount = |spec: &str| match &disc {
+            Some(disc) => Container::open_on(disc, spec),
+            None => Container::open(spec),
+        };
+        let data = mount(&layout.data)?;
+        let fe = layout.fe.as_deref().map(&mount).transpose()?;
         let extra = layout
             .extra
             .iter()
-            .map(|spec| Container::open(spec))
+            .map(|spec| mount(spec))
             .collect::<Result<Vec<_>>>()?;
 
         let mut manifests = Vec::new();
@@ -652,7 +679,7 @@ pub fn read_loose_file(source: &str, candidates: &[&str]) -> Result<Option<(Stri
 /// is walked and identified from the files it turned out to hold - it carries
 /// no disc serial to check, which is intentional: ADR-0004's "load from your
 /// own already-unpacked originals" workflow stays permitted unconditionally.
-fn survey(source: &str, title: &Title) -> Result<(Platform, Vec<String>)> {
+fn survey(source: &str, title: &Title) -> Result<Surveyed> {
     let path = std::path::Path::new(source);
     if path.is_dir() {
         let mut files = Vec::new();
@@ -661,22 +688,33 @@ fn survey(source: &str, title: &Title) -> Result<(Platform, Vec<String>)> {
         // way on every filesystem, rather than in readdir order.
         files.sort();
         let platform = platform_of(&files);
-        return Ok((platform, files));
+        return Ok((platform, files, None));
     }
 
-    let mut disc = DiscImage::open(source)?;
-    let info = disc.identify()?;
+    let disc = Arc::new(Mutex::new(DiscImage::open(source)?));
+    let info = disc.lock().expect(POISONED).identify()?;
     if let Some(serial) = &info.serial {
         reject_foreign_title(source, serial, title)?;
     }
     let files = disc
+        .lock()
+        .expect(POISONED)
         .entries()?
         .iter()
         .filter(|entry| !entry.is_directory)
         .map(|entry| entry.path.clone())
         .collect();
-    Ok((info.platform, files))
+    // **Handed back rather than dropped here.** This walk is the expensive part
+    // of opening a source, and dropping the image threw away both the entry
+    // list it just built and the CHD hunk it warmed - so every archive mounted
+    // behind it paid for the walk again. `Archives::open_with_packs` mounts two
+    // on a Pulse disc and eight on a Wipeout HD one.
+    Ok((info.platform, files, Some(disc)))
 }
+
+/// What [`survey`] found: the platform, the files, and the disc image it walked
+/// them out of - `None` for a directory source, which has no image to share.
+type Surveyed = (Platform, Vec<String>, Option<Arc<Mutex<DiscImage>>>);
 
 /// Every file under `dir`, as paths relative to the walk's root.
 ///

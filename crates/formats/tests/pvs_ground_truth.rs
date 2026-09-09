@@ -85,7 +85,7 @@
 //! figure is printed rather than asserted.
 
 use std::collections::BTreeMap;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use oag_disc::DiscImage;
 use oag_formats::pvs::{self, MAX_SECTIONS, TrackPvs};
@@ -116,21 +116,7 @@ const PSP_PULSE_SECTIONS: usize = 2272;
 const PS2_PULSE_SECTIONS: usize = 3049;
 
 fn image(name: &str) -> Option<PathBuf> {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .join("data/images")
-        .join(name);
-
-    if path.exists() {
-        return Some(path);
-    }
-    assert!(
-        std::env::var_os("OAG_REQUIRE_GAME_DATA").is_none(),
-        "OAG_REQUIRE_GAME_DATA is set but {} is missing",
-        path.display()
-    );
-    println!("skipping: {} not present", path.display());
-    None
+    oag_testdata::image(name)
 }
 
 /// One decoded `.vex` file's worth of raw bytes.

@@ -35,7 +35,7 @@
 //! The table this produced, the criterion it was read with and the value chosen
 //! are on `oag_ai::Tuning::curvature_span`, next to the constant they set.
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use oag_game::{catalogue, race};
 
@@ -49,20 +49,7 @@ const TICKS: u64 = 18_000;
 const LONE: usize = 1;
 
 fn image() -> Option<PathBuf> {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .join("data/images/pulse-psp-usa.chd");
-
-    if path.exists() {
-        return Some(path);
-    }
-    assert!(
-        std::env::var_os("OAG_REQUIRE_GAME_DATA").is_none(),
-        "OAG_REQUIRE_GAME_DATA is set but {} is missing",
-        path.display()
-    );
-    println!("skipping: {} not present", path.display());
-    None
+    oag_testdata::image("data/images/pulse-psp-usa.chd")
 }
 
 /// What one lone craft managed on one circuit.

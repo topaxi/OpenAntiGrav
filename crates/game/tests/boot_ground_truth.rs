@@ -24,7 +24,7 @@
 //! It runs with `no_video`, so it never invokes `ffmpeg` and never writes a
 //! cache. What it is testing is the sequencing and the data, not the transcode.
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use oag_game::boot;
 use oag_game::frontend::states;
@@ -32,20 +32,7 @@ use oag_game::input::{Button, Input};
 use oag_pulse as pulse;
 
 fn image() -> Option<PathBuf> {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .join("data/images/pulse-psp-usa.chd");
-
-    if path.exists() {
-        return Some(path);
-    }
-    assert!(
-        std::env::var_os("OAG_REQUIRE_GAME_DATA").is_none(),
-        "OAG_REQUIRE_GAME_DATA is set but {} is missing",
-        path.display()
-    );
-    println!("skipping: {} not present", path.display());
-    None
+    oag_testdata::image("data/images/pulse-psp-usa.chd")
 }
 
 fn load() -> Option<boot::Boot> {

@@ -36,7 +36,7 @@
 //! and, since that table has now been read to its terminator, it doesn't. See
 //! `oag_formats::vex::CLASS_TRACK_WALL_COLLISION`.
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use oag_core::math::Vec3;
 use oag_formats::collision::{self, CollisionNode, SurfaceKind};
@@ -100,21 +100,7 @@ const APPROACH_SPEED: f32 = 150.0;
 const UPRIGHT: f32 = 0.5;
 
 fn image() -> Option<PathBuf> {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .join("data/images")
-        .join(PS3_IMAGE);
-
-    if path.exists() {
-        return Some(path);
-    }
-    assert!(
-        std::env::var_os("OAG_REQUIRE_GAME_DATA").is_none(),
-        "OAG_REQUIRE_GAME_DATA is set but {} is missing",
-        path.display()
-    );
-    println!("skipping: {} not present", path.display());
-    None
+    oag_testdata::image(PS3_IMAGE)
 }
 
 /// One circuit file, straight out of its archive.

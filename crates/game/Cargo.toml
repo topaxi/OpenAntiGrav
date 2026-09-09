@@ -119,3 +119,6 @@ perf-probe = ["oag-render/perf-probe"]
 
 [lints]
 workspace = true
+
+[dev-dependencies]
+oag-testdata.workspace = true

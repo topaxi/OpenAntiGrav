@@ -1969,6 +1969,7 @@ dependencies = [
  "oag-disc",
  "oag-formats",
  "oag-pulse",
+ "oag-testdata",
  "oag-title",
  "thiserror 2.0.19",
 ]
@@ -1999,6 +2000,7 @@ name = "oag-disc"
 version = "0.1.0"
 dependencies = [
  "chd",
+ "oag-testdata",
  "thiserror 2.0.19",
 ]
 
@@ -2011,6 +2013,7 @@ dependencies = [
  "oag-disc",
  "oag-pulse",
  "oag-pure",
+ "oag-testdata",
  "re_rav1d",
 ]
 
@@ -2043,6 +2046,7 @@ dependencies = [
  "oag-pure",
  "oag-race",
  "oag-render",
+ "oag-testdata",
  "oag-title",
  "oag-trace",
  "pollster",
@@ -2076,6 +2080,7 @@ dependencies = [
  "oag-formats",
  "oag-pulse",
  "oag-pure",
+ "oag-testdata",
  "oag-title",
 ]
 
@@ -2113,6 +2118,7 @@ dependencies = [
  "oag-disc",
  "oag-formats",
  "oag-pulse",
+ "oag-testdata",
  "oag-title",
 ]
 
@@ -2134,9 +2140,14 @@ dependencies = [
  "oag-core",
  "oag-formats",
  "oag-pulse",
+ "oag-testdata",
  "pollster",
  "wgpu",
 ]
+
+[[package]]
+name = "oag-testdata"
+version = "0.1.0"
 
 [[package]]
 name = "oag-title"

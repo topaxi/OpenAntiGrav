@@ -42,7 +42,7 @@
 //! blobs with almost no variation either way.
 
 use std::collections::BTreeMap;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use oag_disc::DiscImage;
 use oag_formats::ps2_texture::{self, Layout};
@@ -55,21 +55,7 @@ const PS2_ARCHIVES: [&str; 2] = ["54748/WADS2.WAD", "54748/WADSP.WAD"];
 const MIN_TEXTURES: usize = 5000;
 
 fn image(name: &str) -> Option<PathBuf> {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .join("data/images")
-        .join(name);
-
-    if path.exists() {
-        return Some(path);
-    }
-    assert!(
-        std::env::var_os("OAG_REQUIRE_GAME_DATA").is_none(),
-        "OAG_REQUIRE_GAME_DATA is set but {} is missing",
-        path.display()
-    );
-    println!("skipping: {} not present", path.display());
-    None
+    oag_testdata::image(name)
 }
 
 #[derive(Default)]

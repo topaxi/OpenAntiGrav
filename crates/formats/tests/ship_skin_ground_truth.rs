@@ -24,7 +24,7 @@
 //! `pulse-psp-usa.chd:PSP_GAME/USRDIR/Data.wad`, 26,912 bytes, header
 //! `Assegai\0` then the `ms` residue the page's own investigation explains.
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use oag_formats::ship_skin;
 
@@ -32,19 +32,7 @@ use oag_formats::ship_skin;
 const SKIN: &str = r"Data\Ships\Assegai\ship_alt.dat";
 
 fn image() -> Option<PathBuf> {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .join("data/images/pulse-psp-usa.chd");
-    if path.exists() {
-        return Some(path);
-    }
-    assert!(
-        std::env::var_os("OAG_REQUIRE_GAME_DATA").is_none(),
-        "OAG_REQUIRE_GAME_DATA is set but {} is missing",
-        path.display()
-    );
-    println!("skipping: {} not present", path.display());
-    None
+    oag_testdata::image("data/images/pulse-psp-usa.chd")
 }
 
 fn skin() -> Option<Vec<u8>> {

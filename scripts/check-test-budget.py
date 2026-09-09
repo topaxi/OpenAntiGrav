@@ -70,16 +70,18 @@ from pathlib import Path
 # **This is a duration under load, not an isolated cost, and the two differ by a
 # lot.** The six `ai_roll` grid tests measure 95-114 s each run on their own and
 # 154-321 s in a full `test-data` run, because 4,100 other tests are competing
-# for the same sixteen cores - a factor of about 2.8 on this machine. So 400 s
-# here is roughly "no test over 140 s of its own work", which is the bar that
-# was actually chosen; the tail before the 2026-09-09 split was 525 s.
-CEILING = 400.0
+# for the same sixteen cores. The factor is not fixed either - it fell with the
+# suite's total CPU, and the slowest test went from 321 s to 184 s without that
+# test changing at all. So this is set from the measured full-run maximum with
+# room over it, not from an isolated timing; the tail before the 2026-09-09
+# split was 525 s.
+CEILING = 300.0
 
 # The suite's own wall clock, from nextest's `Summary` line, and the gate that
 # does most of the work: a test can only be slow at the suite's expense.
-# Measured at 379 s on 2026-09-09 after the split, against 587 s before it, so
-# this leaves about a fifth of headroom - enough that ordinary growth does not
-# trip it and little enough that a second 500 s test does.
+# Measured at 344 s on 2026-09-09, against 587 s before that day's work, so this
+# leaves about a third of headroom - enough that ordinary growth does not trip
+# it and little enough that a second 500 s test does.
 SUITE_CEILING = 450.0
 
 # How far over a recorded baseline a run may land before it counts as growth

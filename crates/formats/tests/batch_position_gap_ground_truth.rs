@@ -21,7 +21,7 @@
 //! Its neighbour `+0x10` *is* decoded, and the second test here holds up the
 //! file-side invariant the runtime's read of it depends on.
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use oag_disc::DiscImage;
 use oag_formats::vex;
@@ -33,19 +33,7 @@ const PSP_DATA: &str = "PSP_GAME/USRDIR/Data.wad";
 const POSITION_DIVISOR: f32 = 32768.0;
 
 fn image() -> Option<PathBuf> {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .join("data/images/pulse-psp-usa.chd");
-    if path.exists() {
-        return Some(path);
-    }
-    assert!(
-        std::env::var_os("OAG_REQUIRE_GAME_DATA").is_none(),
-        "OAG_REQUIRE_GAME_DATA is set but {} is missing",
-        path.display()
-    );
-    println!("skipping: {} not present", path.display());
-    None
+    oag_testdata::image("data/images/pulse-psp-usa.chd")
 }
 
 /// Every version-6 `.vex` blob in `Data.wad`, decompressed. Same walk as
