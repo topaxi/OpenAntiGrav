@@ -158,6 +158,30 @@ pub struct Params {
     pub tone_maximum_brightness: f32,
 }
 
+/// Whether this chain's glow reaches the resolve.
+///
+/// The player's `[graphics] bloom` switch, which until now reached only
+/// `crate::post::bloom` - the PSP chain - and so did nothing at all on
+/// Wipeout HD, the one title whose bloom this module draws. Measured on the
+/// Talon's Junction grid: the switch moved a Pulse frame's clipped-white
+/// share from 2.07 % to 0.41 % and left an HD frame **byte-identical**.
+///
+/// [`Suppressed`](Self::Suppressed) skips the gate and the two blurs and
+/// leaves the resolve's bloom input cleared. **It does not skip the chain**:
+/// the downsample ladder feeds the luminance adaptation, and the exposure
+/// resolve is what encodes HD's linear scene target for the surface at all -
+/// switching that off would hand back an unencoded frame rather than an
+/// unbloomed one. So nothing here is a magnitude: every constant the enabled
+/// path reads off the disc is still read, and the disabled path reads none of
+/// them differently, it just adds zero.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Glow {
+    /// The gate, the blurs and the additive resolve all run.
+    Drawn,
+    /// The exposure resolve runs and the bloom summand is zero.
+    Suppressed,
+}
+
 /// A scratch colour buffer: sampled by the next pass, drawn into by this one.
 #[derive(Debug)]
 struct Target {
@@ -279,6 +303,7 @@ struct Sized {
 #[derive(Debug)]
 pub struct Chain {
     params: Params,
+    glow: Glow,
     copy: wgpu::RenderPipeline,
     adapt: wgpu::RenderPipeline,
     /// The adapt pipeline with the lerp rate forced to 1, run once: the
@@ -314,6 +339,7 @@ impl Chain {
         surface_format: wgpu::TextureFormat,
         size: (u32, u32),
         params: Params,
+        glow: Glow,
     ) -> Result<Self> {
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("hd bloom"),
@@ -409,6 +435,7 @@ impl Chain {
         let sized = Self::sized(device, &layout, &sampler, size, params);
         Ok(Self {
             params,
+            glow,
             copy,
             adapt,
             adapt_jump,
@@ -730,9 +757,12 @@ impl Chain {
             None => (None, None),
         };
 
+        // `pipeline` is an `Option` for one caller: the suppressed glow below
+        // needs the resolve's bloom input *cleared*, which is this same pass
+        // with its draw left off rather than a second copy of the descriptor.
         let mut pass =
             |label: &str,
-             pipeline: &wgpu::RenderPipeline,
+             pipeline: Option<&wgpu::RenderPipeline>,
              stage: &Pass,
              target: Option<&wgpu::TextureView>,
              load: wgpu::LoadOp<wgpu::Color>,
@@ -754,6 +784,7 @@ impl Chain {
                     occlusion_query_set: None,
                     multiview_mask: None,
                 });
+                let Some(pipeline) = pipeline else { return };
                 pass.set_pipeline(pipeline);
                 pass.set_viewport(0.0, 0.0, rect.0 as f32, rect.1 as f32, 0.0, 1.0);
                 pass.set_bind_group(0, &stage.group, &[]);
@@ -766,7 +797,7 @@ impl Chain {
         for stage in &self.sized.downsamples {
             pass(
                 "hd bloom downsample",
-                &self.copy,
+                Some(&self.copy),
                 stage,
                 None,
                 clear,
@@ -781,41 +812,58 @@ impl Chain {
         };
         pass(
             "hd bloom adapt",
-            adapt_pipeline,
+            Some(adapt_pipeline),
             &self.sized.adapt[current],
             None,
             clear,
             None,
         );
-        pass(
-            "hd bloom gate",
-            &self.gate,
-            &self.sized.gate[current],
-            None,
-            clear,
-            None,
-        );
-        pass(
-            "hd bloom blur-v",
-            &self.blur,
-            &self.sized.blur_vertical,
-            None,
-            clear,
-            None,
-        );
-        pass(
-            "hd bloom blur-h",
-            &self.blur,
-            &self.sized.blur_horizontal,
-            None,
-            clear,
-            None,
-        );
+        match self.glow {
+            Glow::Drawn => {
+                pass(
+                    "hd bloom gate",
+                    Some(&self.gate),
+                    &self.sized.gate[current],
+                    None,
+                    clear,
+                    None,
+                );
+                pass(
+                    "hd bloom blur-v",
+                    Some(&self.blur),
+                    &self.sized.blur_vertical,
+                    None,
+                    clear,
+                    None,
+                );
+                pass(
+                    "hd bloom blur-h",
+                    Some(&self.blur),
+                    &self.sized.blur_horizontal,
+                    None,
+                    clear,
+                    None,
+                );
+            }
+            // The resolve reads `blur_horizontal`'s target as its bloom
+            // input, so clearing it is what makes the summand zero. A pass
+            // that loads-clear and draws nothing, rather than a skipped one:
+            // the texture holds the previous frame's glow otherwise, and the
+            // first frame after a resize holds whatever the allocation did.
+            Glow::Suppressed => pass(
+                "hd bloom suppressed",
+                None,
+                &self.sized.blur_horizontal,
+                None,
+                clear,
+                None,
+            ),
+        }
         // The closing write, on the chain's genuinely last pass - see
         // [`ChainTimestamps`].
         pass(
             "hd encode",
-            &self.encode,
+            Some(&self.encode),
             &self.sized.encode[current],
             Some(view),
             clear,
