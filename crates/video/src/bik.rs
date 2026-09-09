@@ -32,10 +32,11 @@
 //! **This is the one thing about the file a reader of this repository will
 //! expect to be wrong.** Every other HD payload is Pulse's format
 //! byte-swapped - `XXEV` against `VEXX`, `WOtd` against `dtOW` - and
-//! [`crate::byte_order`] exists to carry that. A `.bik` is not: `+0x14` reads
+//! `oag_formats::byte_order` exists to carry that. A `.bik` is not: `+0x14` reads
 //! `80 07 00 00` and the picture really is 1920 pixels wide, not 0x80070000.
 //! The container is the authoring tool's, written once on a PC and shipped
-//! unchanged, so this module takes no [`crate::ByteOrder`] and never will.
+//! unchanged, so this module takes no `oag_formats::ByteOrder` and never will -
+//! which is why this crate does not depend on `oag-formats` at all.
 //!
 //! # What is measured
 //!

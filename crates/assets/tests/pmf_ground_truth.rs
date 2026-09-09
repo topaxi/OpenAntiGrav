@@ -1,4 +1,4 @@
-//! Validates the [`pmf`](oag_formats::pmf) parser and demuxer against every
+//! Validates the [`pmf`](oag_video::pmf) parser and demuxer against every
 //! movie on a real disc.
 //!
 //! **`#[ignore]`d and never run in CI.** It needs game content, which this
@@ -29,8 +29,8 @@
 use std::path::PathBuf;
 
 use oag_assets::Archive;
-use oag_formats::pmf;
 use oag_pulse as pulse;
+use oag_video::pmf;
 
 /// How many `.PMF` blobs the USA disc holds. Fewer means the scan missed some.
 const EXPECTED_MOVIES: usize = 17;

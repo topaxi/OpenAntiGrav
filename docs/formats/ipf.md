@@ -1,7 +1,7 @@
 # PS2 IPU video (`.IPF`)
 
 **Status: understood.** Container parsed in
-[`oag-formats::ipf`](../../crates/formats/src/ipf.rs) and validated against both
+[`oag-video::ipf`](../../crates/video/src/ipf.rs) and validated against both
 files on the PS2 disc; the video inside is IPU - the PS2 Image Processing Unit's
 intra-only MPEG-2 - and is [transcoded out of process](../architecture/adr/0008-av1-movie-cache.md)
 rather than decoded here, exactly like `.PMF` and `.PSS` video.

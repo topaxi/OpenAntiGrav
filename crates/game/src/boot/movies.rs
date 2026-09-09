@@ -133,8 +133,8 @@ pub(super) fn load_movie(
     if options.no_video {
         // The header alone is 2048 bytes, so this reads kilobytes rather than
         // megabytes when there is no picture to make.
-        let head = data.peek(index, oag_formats::pmf::HEADER_LEN as u64)?;
-        let header = oag_formats::pmf::Header::parse(&head)
+        let head = data.peek(index, oag_video::pmf::HEADER_LEN as u64)?;
+        let header = oag_video::pmf::Header::parse(&head)
             .map_err(|e| anyhow::anyhow!("parsing {movie_name}: {e}"))?;
         let video = header.video.context("the movie declares no video stream")?;
         report.push(format!(
@@ -204,7 +204,7 @@ pub(super) fn load_movie(
 /// Shorter than [`load_movie`] because three of that function's four
 /// complications do not exist here. There is no loose-file fallback (HD keeps
 /// every `.bik` inside an archive), no `hash:` spelling to accept, and no
-/// `peek`-the-header shortcut for `--no-video`: [`oag_formats::bik`] reads a
+/// `peek`-the-header shortcut for `--no-video`: [`oag_video::bik`] reads a
 /// header out of a blob rather than off a container, and a PSARC entry is
 /// compressed in blocks, so there is no cheap prefix to peek at anyway. The
 /// whole entry is read and `movie::open` is asked for a picture-less movie,
@@ -324,7 +324,7 @@ pub(super) fn load_loose_movie(
 
     // Named from the blob's own magic, the same way `movie::open` dispatches,
     // so the report cannot claim a container the decoder did not take.
-    let container = if blob.starts_with(&oag_formats::ipf::MAGIC) {
+    let container = if blob.starts_with(&oag_video::ipf::MAGIC) {
         "IPU video"
     } else {
         "MPEG-2 program stream"

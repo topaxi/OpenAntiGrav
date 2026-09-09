@@ -335,7 +335,7 @@ fn the_logo_step_and_the_logo_widget_both_name_a_bik() {
 
     for name in [named, &widget.entry_name()] {
         let blob = archives.read_name(name).expect("the reel reads");
-        let header = oag_formats::bik::parse(&blob).expect("and parses");
+        let header = oag_video::bik::parse(&blob).expect("and parses");
         assert_eq!((header.width, header.height), (1920, 1080));
     }
 }

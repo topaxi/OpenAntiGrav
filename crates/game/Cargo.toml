@@ -44,9 +44,10 @@ oag-disc.workspace = true
 # nothing below plays audio. See the workspace manifest for why this codec does
 # not go through `ffmpeg` the way ATRAC3+ does.
 symphonia.workspace = true
+oag-formats.workspace = true
 # `av1` decodes the movie cache; the composition root is the only crate that
 # plays video. See docs/architecture/adr/0008-av1-movie-cache.md.
-oag-formats = { workspace = true, features = ["av1"] }
+oag-video = { workspace = true, features = ["av1"] }
 oag-gameplay.workspace = true
 oag-input.workspace = true
 oag-physics.workspace = true

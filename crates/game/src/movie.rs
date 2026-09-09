@@ -1,7 +1,7 @@
 //! Movie playback: demux here, transcode out of process, decode in process.
 //!
 //! A `.PMF` holds H.264 video and ATRAC3+ audio. Demuxing it is ours to do and
-//! lives in [`oag_formats::pmf`]. Decoding **H.264** is not: per
+//! lives in [`oag_video::pmf`]. Decoding **H.264** is not: per
 //! `docs/architecture/adr/0004-asset-pipeline.md`, the original is converted
 //! once and cached, and the conversion runs out of process through `ffmpeg`, so
 //! no H.264 decoder ships in the workspace.
@@ -9,7 +9,7 @@
 //! What the cache holds is **lossless AV1 in an IVF container**, not raw
 //! frames: see `docs/architecture/adr/0008-av1-movie-cache.md`. Lossless, so
 //! the picture is bit-for-bit what the raw cache used to hold and ADR-0004's
-//! fidelity rule is untouched; AV1, because [`oag_formats::av1`] decodes it in
+//! fidelity rule is untouched; AV1, because [`oag_video::av1`] decodes it in
 //! process with no C toolchain. The intro's cache goes from 48.8 MiB to
 //! 1.17 MiB that way.
 //!
@@ -46,7 +46,7 @@ use std::sync::{Arc, Condvar, Mutex};
 
 use anyhow::{Context, Result, anyhow, bail};
 use log::{info, warn};
-use oag_formats::{av1, bik, ipf, pmf};
+use oag_video::{av1, bik, ipf, pmf};
 
 use crate::at3;
 
@@ -1341,7 +1341,7 @@ pub(crate) const PS2_DISPLAY_ASPECT: (u32, u32) = (480, 272);
 
 /// Makes a PS2 `.IPF` backdrop's frames available, transcoding if it must.
 ///
-/// The container is [`oag_formats::ipf`]: fixed-size slots around one IPU
+/// The container is [`oag_video::ipf`]: fixed-size slots around one IPU
 /// frame each. `ffmpeg` has an IPU decoder and a demuxer for Sony's own `ipum`
 /// wrapper, so the transcode input is the slots stripped off and that wrapper
 /// put on - see [`ipum`].

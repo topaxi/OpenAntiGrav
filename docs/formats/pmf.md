@@ -1,7 +1,7 @@
 # PSP movie files (`.PMF`)
 
 **Status: understood.** Header and demuxer implemented in
-[`oag-formats::pmf`](../../crates/formats/src/pmf.rs) and validated against all
+[`oag-video::pmf`](../../crates/video/src/pmf.rs) and validated against all
 17 movies on the PSP Pulse disc.
 
 Decoding is deliberately **not** implemented here. See
@@ -35,7 +35,7 @@ audio (0xbd)  +0x0e u8    channels         +0x0f u8    frequency code
 ```
 
 Frequency code `2` means 44,100 Hz. No other code appears, so
-[`AudioStream::frequency_hz`](../../crates/formats/src/pmf.rs) returns `None` for
+[`AudioStream::frequency_hz`](../../crates/video/src/pmf.rs) returns `None` for
 anything else rather than guessing.
 
 The entry-point map is at the offset the video descriptor gives, 10 bytes per

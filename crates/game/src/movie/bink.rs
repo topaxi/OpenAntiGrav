@@ -2,7 +2,7 @@
 //!
 //! The third console and the fourth container, and the one that arrives with
 //! the least new machinery behind it: the header is read by
-//! [`oag_formats::bik`] and everything after that is the cache
+//! [`oag_video::bik`] and everything after that is the cache
 //! [ADR-0008](../../../../docs/architecture/adr/0008-av1-movie-cache.md) already
 //! built. Like [`super::mpeg2_ps`] and unlike the `.PMF` and `.IPF` paths,
 //! nothing here demuxes: `ffmpeg` reads the container itself, so the transcode
@@ -31,7 +31,7 @@
 //!   assumed.
 //!
 //! The container header is a different question from the codec and is read
-//! here, the way `.PMF`'s and `.IPF`'s are: see [`oag_formats::bik`]'s own docs
+//! here, the way `.PMF`'s and `.IPF`'s are: see [`oag_video::bik`]'s own docs
 //! for why that is not the rejected category-2 case, and for what a file that
 //! has no `ffmpeg` to hand still knows about itself.
 
@@ -70,9 +70,9 @@ pub(super) fn open(
         );
     }
     // The invariant that validates the header's variable middle - see
-    // `oag_formats::bik::first_frame_offset`. Reported rather than fatal:
+    // `oag_video::bik::first_frame_offset`. Reported rather than fatal:
     // a file this project has not seen is worth looking at, not refusing.
-    if let Some(first) = oag_formats::bik::first_frame_offset(blob, &header)
+    if let Some(first) = oag_video::bik::first_frame_offset(blob, &header)
         && first != header.header_len
     {
         warn!(

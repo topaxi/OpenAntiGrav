@@ -1,23 +1,13 @@
 [package]
 name = "oag-formats"
-description = "Identification and parsing of Wipeout asset container formats"
+description = "Wipeout asset containers: identification, archives, compression and console byte layout"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
 
-[features]
-# AV1 decoding, for the movie cache. Off by default so that the tools which
-# only parse Wipeout containers keep building with no dependencies at all.
-av1 = ["dep:re_rav1d"]
-
 [dependencies]
-# `default-features = false` drops the `asm` feature, which needs `nasm` at
-# build time. A 480x272 movie decodes around 900fps without it - thirty times
-# faster than playback. `bitdepth_8` is all the 8-bit I420 path needs.
-re_rav1d = { workspace = true, optional = true }
-
 # Inflate, for `psarc`. See the workspace manifest for why this one format is
 # not hand-rolled like the rest.
 miniz_oxide.workspace = true

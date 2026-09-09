@@ -1,7 +1,7 @@
 # `.bik`: Bink video, which is what Wipeout HD's movies are
 
 **Status: container understood, codec deliberately not implemented.** The
-header is read by [`oag_formats::bik`] and validated against all 37 files on the
+header is read by [`oag_video::bik`] and validated against all 37 files on the
 disc; the pictures inside are decoded out of process by `ffmpeg` into the
 [AV1 cache](../architecture/adr/0008-av1-movie-cache.md), which is where `.PMF`
 and `.IPF` video already goes.
@@ -85,7 +85,7 @@ picture really is 1920 pixels wide.
 
 The reason is that Bink is not Sony's or Studio Liverpool's. It is the authoring
 tool's container, written once on a PC by RAD's encoder and shipped unchanged,
-so `oag_formats::bik` takes no byte order and never will. Confidence **92**:
+so `oag_video::bik` takes no byte order and never will. Confidence **92**:
 read the other way, every field on every one of the 37 files is nonsense
 (`0x80070000` pixels wide), and the three invariants below could not close.
 
@@ -247,4 +247,4 @@ paths and has no hash to address, so `boot::movies` branches on the container.
 - [ADR-0008](../architecture/adr/0008-av1-movie-cache.md) - the cache itself
 - [ADR-0024](../architecture/adr/0024-in-process-codecs-and-ffmpeg-as-a-last-resort.md) - the rule this page applies
 
-[`oag_formats::bik`]: https://github.com/topaxi/OpenAntiGrav/blob/main/crates/formats/src/bik.rs
+[`oag_video::bik`]: https://github.com/topaxi/OpenAntiGrav/blob/main/crates/video/src/bik.rs

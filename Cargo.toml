@@ -21,6 +21,7 @@ members = [
   "crates/title",
   "crates/tools",
   "crates/trace",
+  "crates/video",
   "crates/view",
 ]
 
@@ -50,6 +51,7 @@ oag-render = { path = "crates/render" }
 oag-testdata = { path = "crates/testdata" }
 oag-title = { path = "crates/title" }
 oag-trace = { path = "crates/trace" }
+oag-video = { path = "crates/video" }
 
 anyhow = "1"
 thiserror = "2"
@@ -174,4 +176,10 @@ opt-level = 2
 [profile.dev.package.oag-formats]
 opt-level = 2
 [profile.dev.package.oag-assets]
+opt-level = 2
+
+# The video path: demuxing a `.PMF`/`IPUF`/`.bik` and, with `av1` on, decoding
+# the movie cache. `re_rav1d` is reached by `package."*"` above; this entry is
+# for the demuxers around it, which walk a whole file a packet at a time.
+[profile.dev.package.oag-video]
 opt-level = 2

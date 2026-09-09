@@ -1,4 +1,4 @@
-//! Validates the [`ipf`](oag_formats::ipf) container and its decode route
+//! Validates the [`ipf`](oag_video::ipf) container and its decode route
 //! against both `.IPF` files on the real PS2 disc.
 //!
 //! **`#[ignore]`d and never run in CI.** It needs game content, which this
@@ -31,8 +31,8 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use oag_formats::ipf;
 use oag_game::movie;
+use oag_video::ipf;
 
 /// Every `.IPF` the PS2 disc ships, with what its header must declare.
 ///
