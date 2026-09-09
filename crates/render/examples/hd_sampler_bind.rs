@@ -56,7 +56,7 @@ fn main() -> anyhow::Result<()> {
                         .entry(path.clone())
                         .or_insert_with(|| {
                             let blob = container.read_entry(path).ok()?;
-                            let parsed = oag_formats::gtf::Gtf::parse(&blob).ok()?;
+                            let parsed = oag_texture::gtf::Gtf::parse(&blob).ok()?;
                             parsed.only().map(|t| t.level_size(0))
                         })
                         .to_owned();

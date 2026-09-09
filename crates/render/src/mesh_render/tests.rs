@@ -48,7 +48,7 @@ fn an_empty_model_captures_a_frame_instead_of_panicking() {
     // Checked through the PNG header rather than the pixels: reaching this
     // line at all is the regression, since the old code panicked inside the
     // render pass and never wrote a file. Byte length carries no signal -
-    // `oag_formats::png` emits stored deflate blocks, so every 64x64 frame
+    // `oag_texture::png` emits stored deflate blocks, so every 64x64 frame
     // is the same ~16 KB whatever is in it.
     let bytes = std::fs::read(&path).expect("reading the capture back");
     assert_eq!(&bytes[..8], b"\x89PNG\r\n\x1a\n", "not a PNG");

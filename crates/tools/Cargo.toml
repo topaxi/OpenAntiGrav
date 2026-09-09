@@ -16,6 +16,7 @@ name = "oag-wad"
 path = "src/bin/oag-wad.rs"
 
 [dependencies]
+oag-texture.workspace = true
 oag-tables.workspace = true
 oag-assets.workspace = true
 oag-disc.workspace = true

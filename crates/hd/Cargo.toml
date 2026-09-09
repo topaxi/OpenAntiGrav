@@ -19,6 +19,7 @@ oag-title.workspace = true
 
 [dev-dependencies]
 oag-testdata.workspace = true
+oag-texture.workspace = true
 oag-tables.workspace = true
 oag-formats.workspace = true
 oag-pulse.workspace = true

@@ -921,7 +921,7 @@ change how this list should be read:
       [`envsettings`](../formats/envsettings.md). **The sky and the fog are
       still not drawn**, and on HD that is total rather than partial: its
       circuits author no `Skycube` node, so an HD race has no sky and no fog at
-      all, and the sky's own `sky.gtf` is a cubemap `oag_formats::gtf` refuses.
+      all, and the sky's own `sky.gtf` is a cubemap `oag_texture::gtf` refuses.
 - [~] `AmbientLight` `0x12c`, `DirectionalLight` `0x131`, `PointLight` `0x132` -
       **decoded and investigated; not built as a render feature.** All three
       payloads are parsed (`crates/formats/src/lighting.rs`,

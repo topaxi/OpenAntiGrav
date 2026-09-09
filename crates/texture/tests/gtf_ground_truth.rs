@@ -15,7 +15,7 @@
 //!
 //! # Why the sweep is the test
 //!
-//! [`oag_formats::gtf::Gtf::parse`] refuses a blob whose declared texel length
+//! [`oag_texture::gtf::Gtf::parse`] refuses a blob whose declared texel length
 //! is not what its own descriptor implies, and that length is a function of the
 //! format, both dimensions, the mip count, the cubemap flag and the pitch. So
 //! "all 7,333 parse" is not a claim that nothing crashed: it is five independent
@@ -26,12 +26,12 @@
 //! for pixels. [`the_dxt_endpoints_are_little_endian_inside_a_big_endian_file`]
 //! decodes both readings of a large sample and compares how smooth each comes
 //! out - the test that settles the question, and the same one
-//! `oag_formats::ps2_texture` uses for its swizzle permutation.
+//! `oag_texture::ps2_texture` uses for its swizzle permutation.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-use oag_formats::gtf::{self, Format, Gtf};
+use oag_texture::gtf::{self, Format, Gtf};
 
 const ARCHIVES: &[&str] = &[
     "PS3_GAME/USRDIR/DATA00.PSARC",

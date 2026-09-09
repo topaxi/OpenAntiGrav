@@ -104,7 +104,7 @@
 //!
 //! **Closed, 2026-08-27.** Until that day a sweep of every distinct diffuse
 //! `.gxt` 950 files' materials name (6,135 textures) found **15 decode**;
-//! 6,037 of the rest were `PVRTII4BPP`, which [`crate::gxt`] refused. That
+//! 6,037 of the rest were `PVRTII4BPP`, which `oag_texture::gxt` refused. That
 //! module now decodes it - see `oag_formats::pvrtc` - so a resolved binding paints
 //! real texels. The two gaps were independent and both had to close before
 //! anything was visible in a race; this note stays because "the binding is

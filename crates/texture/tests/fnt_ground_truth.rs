@@ -30,9 +30,10 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 use oag_disc::DiscImage;
-use oag_formats::fnt::{self, Font};
-use oag_formats::texture::{self, Texture};
+use oag_formats::swizzle;
 use oag_formats::wad::{self, Compression, Directory};
+use oag_texture::fnt::{self, Font};
+use oag_texture::texture::Texture;
 
 /// The PSP archive that holds the fonts.
 const FE_WAD: &str = "PSP_GAME/USRDIR/FE.wad";
@@ -317,12 +318,12 @@ fn mip_textures_honour_the_swizzle_flag() {
         let bpp = usize::from(parsed.bits_per_pixel);
         let row_bytes = w * bpp / 8;
         // `unknown[2]` is `+0x07`, whose bit 0 is the swizzle flag.
-        let is_swizzled = parsed.unknown[2] & texture::FLAG_SWIZZLED != 0;
+        let is_swizzled = parsed.unknown[2] & swizzle::FLAG_SWIZZLED != 0;
         flagged += usize::from(is_swizzled);
 
         // One block column makes the swizzle the identity, so a texture that
         // narrow cannot tell the two readings apart at all.
-        if row_bytes <= texture::SWIZZLE_BLOCK_BYTES {
+        if row_bytes <= swizzle::SWIZZLE_BLOCK_BYTES {
             continue;
         }
         discriminating += 1;
@@ -336,8 +337,8 @@ fn mip_textures_honour_the_swizzle_flag() {
             }
         };
         let linear = expand(stored);
-        let unswizzled = expand(&texture::unswizzle(stored, row_bytes, h));
-        let block_pixels = texture::SWIZZLE_BLOCK_BYTES * 8 / bpp;
+        let unswizzled = expand(&swizzle::unswizzle(stored, row_bytes, h));
+        let block_pixels = swizzle::SWIZZLE_BLOCK_BYTES * 8 / bpp;
 
         let as_linear = seam_ratio(&linear, w, h, block_pixels);
         let as_unswizzled = seam_ratio(&unswizzled, w, h, block_pixels);

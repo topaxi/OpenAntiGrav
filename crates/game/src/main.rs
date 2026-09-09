@@ -176,7 +176,7 @@ fn main() -> Result<()> {
             height,
             pixels,
         } = oag_game::icon::rasterize(cli.icon_size);
-        let png = oag_formats::png::encode_rgba(width, height, &pixels);
+        let png = oag_texture::png::encode_rgba(width, height, &pixels);
         std::fs::write(path, png).with_context(|| format!("writing {}", path.display()))?;
         println!("wrote {}x{} {}", width, height, path.display());
         return Ok(());

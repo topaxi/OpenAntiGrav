@@ -1,4 +1,4 @@
-//! Overlays an [`oag_formats::ship_skin::Skin`] onto an already-built
+//! Overlays an [`oag_texture::ship_skin::Skin`] onto an already-built
 //! [`super::Model`]'s texture slots.
 //!
 //! **What selects a skin for a race is not decided yet**: nothing collects a
@@ -21,7 +21,7 @@
 
 use std::sync::Arc;
 
-use oag_formats::ship_skin;
+use oag_texture::ship_skin;
 
 use super::{Model, ModelTexture};
 

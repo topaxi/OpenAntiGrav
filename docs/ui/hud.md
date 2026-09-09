@@ -106,7 +106,7 @@ what that module exists for. See its documentation for the evidence and
 it rather than asserting the constant against itself. **Confidence 90.**
 
 The atlas's flag byte at `+0x07` is `2`, so `FLAG_SWIZZLED` is **clear** and it
-takes the linear path in [`texture.rs`](../../crates/formats/src/texture.rs) - it
+takes the linear path in [`texture.rs`](../../crates/texture/src/texture.rs) - it
 is one of the 7 of 13 `FE.wad` textures that are *not* pre-swizzled, unlike the
 five `.fnt` atlases, which all are. Size arithmetic closes exactly:
 `16 + 256*4 + 256*256 = 66576`.

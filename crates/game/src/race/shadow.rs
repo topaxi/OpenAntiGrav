@@ -186,7 +186,7 @@ const FALLOFF_SIZE: u32 = 64;
 /// forces alpha opaque, so the coverage arrives in the red channel exactly as
 /// `shadow.wgsl` reads it. See `docs/formats/gtf.md`.
 fn decode_silhouette(blob: &[u8]) -> Option<shadow::Silhouette> {
-    let gtf = oag_formats::gtf::Gtf::parse(blob).ok()?;
+    let gtf = oag_texture::gtf::Gtf::parse(blob).ok()?;
     let texture = gtf.only()?;
     let rgba = texture.to_rgba(blob).ok()?;
     let (width, height) = texture.level_size(0);

@@ -500,7 +500,7 @@ for (u32 i = 0; i < levels; i++)                      // TEXADDR/TEXBUFWIDTH/TEX
 ```
 
 That `+0x05` is the same field [`psp-texture.md`](../../../formats/psp-texture.md)
-records at `.mip` header `+0x06` and `oag_formats::texture` exposes as
+records at `.mip` header `+0x06` and `oag_texture::texture` exposes as
 `Texture::mip_count`. So **the asset decides the chain depth, and the GE never
 samples below the level the artists shipped.** Measured on the two textures
 this mattered for: `pulse_boost2_ADD` (embedded in `shipboost.vex`) declares

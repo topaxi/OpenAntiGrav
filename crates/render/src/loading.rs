@@ -298,7 +298,7 @@ pub struct GpuVertex {
 /// Six vertices - two triangles - for one [`Quad`].
 ///
 /// `v` runs 0 at the quad's top edge to 1 at its bottom, because
-/// [`oag_formats::texture::Texture::to_rgba`] is row-major from the top left
+/// [`oag_texture::texture::Texture::to_rgba`] is row-major from the top left
 /// and the strip is uploaded in that order. Wound as an explicit triangle list
 /// rather than a strip, matching the rest of the crate.
 fn quad_vertices(quad: &Quad) -> [GpuVertex; 6] {
@@ -389,12 +389,12 @@ impl GlowStrip {
     ///
     /// # Errors
     ///
-    /// Propagates whatever [`oag_formats::texture::Texture::parse`] rejects,
-    /// when [`oag_formats::ps2_texture::parse`] will not take the blob either.
+    /// Propagates whatever [`oag_texture::texture::Texture::parse`] rejects,
+    /// when [`oag_texture::ps2_texture::parse`] will not take the blob either.
     /// The size arithmetic in both is exact, so a failure means the blob is not
     /// a texture rather than that it is a damaged one.
     pub fn decode(blob: &[u8]) -> Result<Self> {
-        let psp = match oag_formats::texture::Texture::parse(blob) {
+        let psp = match oag_texture::texture::Texture::parse(blob) {
             Ok(texture) => {
                 return Ok(Self {
                     width: u32::from(texture.width),
@@ -404,7 +404,7 @@ impl GlowStrip {
             }
             Err(e) => e,
         };
-        if let Ok(texture) = oag_formats::ps2_texture::parse(blob) {
+        if let Ok(texture) = oag_texture::ps2_texture::parse(blob) {
             return Ok(Self {
                 width: u32::from(texture.width),
                 height: u32::from(texture.height),

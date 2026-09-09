@@ -14,7 +14,7 @@
 //! shader code and is largely not read - so *which* of a material's two
 //! textures the shader samples for what is unknown in general, and only the
 //! first is painted. The textures themselves are read: [`Material::texture`]
-//! names a `.gtf` and `oag_formats::gtf` decodes it, which is where a surface's
+//! names a `.gtf` and `oag_texture::gtf` decodes it, which is where a surface's
 //! **alpha** comes from and why [`Blend`] can be drawn at all.
 //!
 //! **Two things have since come off that pile.** The *values* a material
@@ -320,7 +320,7 @@ pub enum Transparency {
 /// an alpha-over blend paints exactly the opaque pixels while losing depth
 /// ordering and an additive one blows a glass panel white.
 ///
-/// `oag_formats::gtf` closed that: [`Material::texture`] names a `.gtf`, its
+/// `oag_texture::gtf` closed that: [`Material::texture`] names a `.gtf`, its
 /// `to_rgba` carries the alpha, and `oag_render::mesh::rcs` draws these surfaces
 /// blended with the equation below.
 ///

@@ -2,7 +2,7 @@
 
 **Status: understood, including the ship and track lookup and all three
 transfer shapes.** Located, decoded, implemented in
-[`oag-formats::ps2_texture`](../../crates/formats/src/ps2_texture.rs); every
+[`oag-texture::ps2_texture`](../../crates/texture/src/ps2_texture.rs); every
 ship on the roster now draws in its own livery in `just play pulse-ps2`
 itself, not only through `oag-view --mesh ... --textures ...` naming an entry
 by hand, and so does every circuit's own `track.vex` - all 32, since
@@ -313,7 +313,7 @@ just view 'data/images/pulse-ps2-eu.chd:54748/WADS2.WAD' \
 ```
 
 The ground-truth test is
-[`crates/formats/tests/ps2_texture_ground_truth.rs`](../../crates/formats/tests/ps2_texture_ground_truth.rs).
+[`crates/texture/tests/ps2_texture_ground_truth.rs`](../../crates/texture/tests/ps2_texture_ground_truth.rs).
 It walks both PS2 archives and reports:
 
 ```text

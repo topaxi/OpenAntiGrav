@@ -49,7 +49,8 @@
 
 use std::path::{Path, PathBuf};
 
-use oag_formats::{gtf, rcsmodel, vex};
+use oag_formats::{rcsmodel, vex};
+use oag_texture::gtf;
 
 /// The decrypted PS3 image.
 const PS3_IMAGE: &str = "hdfury-ps3-eu-dec.iso";

@@ -1028,7 +1028,7 @@ believed refuted**: a plain `GL_GREATER`/`0.5` alpha-test cutout.
 **The refutation itself was the error, not the hypothesis.** It rested on
 `crowd_avatars_22x4.gtf`'s alpha running `0..255` at a mean of `120` and
 concluded a `0.5` threshold "discards most of it". Histogramming the same
-texture end to end (`oag_formats::gtf`) shows why the mean was the wrong
+texture end to end (`oag_texture::gtf`) shows why the mean was the wrong
 statistic: **52.9% of texels sit at alpha `0`, 47.1% at `255`, nothing
 between.** `GL_GREATER` against `0.5` keeps exactly the 47.1% - the crowd
 figures - and drops the transparent background, which is correct cutout
@@ -1206,7 +1206,7 @@ Every material of both models names a first texture - 4 of 4 on Assegai, 442 of
 442 on Talon's Junction - and they are the right ones by inspection:
 `WindscreenShape`'s material names `assegai_glass.gtf`, the circuit's name
 `talons_support_struts.gtf` and `tunnel_fx_diffuse.gtf`. Drawn through
-[`oag_formats::gtf`](hd-status.md#what-is-genuinely-new), all 442 of the
+[`oag_texture::gtf`](hd-status.md#what-is-genuinely-new), all 442 of the
 circuit's decode.
 
 **The second slot is not one thing, and the first sample said it was.** Assegai

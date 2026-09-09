@@ -974,7 +974,7 @@ stride over the node's declared mip levels reproduces that number for **5,017 of
 the ones where the padding happens to be a no-op. **509 of the 5,017 have a
 padded base level**, i.e. are textures a back-to-back reader builds out of the
 wrong bytes. Measured by
-`crates/formats/tests/texture_stride_ground_truth.rs`.
+`crates/texture/tests/texture_stride_ground_truth.rs`.
 
 Confirmed directly as padding rather than as some other packing: dumping
 `col_arrows1_GLOW_ADD.tga` (16x64, 4-bit, so 8 picture bytes in a 16-byte row)

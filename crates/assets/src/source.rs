@@ -475,7 +475,7 @@ impl Archives {
     /// The two builds differ and the file itself says which is which: a PSP
     /// `.fnt` carries its atlas inside it, a PS2 `.fnt` stops where the atlas
     /// would begin and keeps the glyph sheet in the **next archive entry**, as
-    /// a [`PSMT4`](oag_formats::ps2_texture::Layout::Psmt4) texture. So the
+    /// a [`PSMT4`](oag_texture::ps2_texture::Layout::Psmt4) texture. So the
     /// embedded atlas is tried first and the following entry is only read when
     /// there is none, which means a PSP source never touches the fallback and
     /// this needs no platform test.
@@ -485,8 +485,8 @@ impl Archives {
     /// [`Error::NoSuchEntry`] when `name` is not on this source, and
     /// [`Error::Font`] when the metrics, or the atlas the following entry is
     /// supposed to hold, do not decode.
-    pub fn read_font(&mut self, name: &str) -> Result<oag_formats::fnt::Font> {
-        use oag_formats::{fnt, ps2_texture};
+    pub fn read_font(&mut self, name: &str) -> Result<oag_texture::fnt::Font> {
+        use oag_texture::{fnt, ps2_texture};
 
         let blob = self.read_name(name)?;
         let metrics = fnt::Metrics::parse(&blob).map_err(|source| Error::Font {

@@ -306,7 +306,7 @@ it covers 0.2 % of Pure's geometry, so nothing depends on it.
 > it are *not* font atlases - they are ship liveries, glass, engine and
 > environment maps across EGX, Feisar, Goteki, Piranha, Triakis and Zone, plus
 > the mine, bomb and shuriken effects. See
-> `crates/formats/tests/texture_swizzle_flag_ground_truth.rs`, which measures
+> `crates/texture/tests/texture_swizzle_flag_ground_truth.rs`, which measures
 > and pins the distribution.
 >
 > The consequence is the part that matters: **making `vex::textures` read
@@ -807,7 +807,7 @@ at 2064 bytes it is far too small to be a 480x128 texture and is something
 else entirely.
 
 **The scan.** Every entry across all three PSP archives was extracted and
-tried against `oag_formats::texture::Texture::parse` (`oag-wad extract --png`):
+tried against `oag_texture::texture::Texture::parse` (`oag-wad extract --png`):
 
 | Archive | Entries | Decoded as `.mip` |
 | --- | ---: | ---: |

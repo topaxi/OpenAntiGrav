@@ -1,9 +1,9 @@
 //! Scratch probe: does a `PVRTII4BPP` texture's declared texel length close on
 //! the same "one 8-byte word per 4x4 block, tightly packed mip chain"
-//! arithmetic `oag_formats::gxt` already checks for `UBC2`?
+//! arithmetic `oag_texture::gxt` already checks for `UBC2`?
 //!
 //! This is the question that has to be answered *before* teaching
-//! [`oag_formats::gxt::Format`] the format byte: the moment it knows the block
+//! [`oag_texture::gxt::Format`] the format byte: the moment it knows the block
 //! size, `Gxt::parse` starts length-checking all 8,430 of them, and a formula
 //! that is off by one clamp rejects the corpus rather than decoding it.
 //!
@@ -21,7 +21,7 @@
 
 use std::collections::BTreeMap;
 
-use oag_formats::gxt;
+use oag_texture::gxt;
 
 const PACKAGES: [&str; 3] = [
     "data/extracted/vita/PCSF00007/base/PSP2/data.psarc",

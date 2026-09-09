@@ -13,8 +13,8 @@
 //! `docs/formats/` recording the evidence for the layout, so the documentation
 //! and the implementation stay in step.
 //!
-//! Every *Wipeout* format here is hand-rolled, and so are the two checksums
-//! [`png`] needs and the MD5 [`psarc`] checks its directory with. The one
+//! Every *Wipeout* format here is hand-rolled, and so is the MD5 [`psarc`]
+//! checks its directory with. The one
 //! third-party dependency is `miniz_oxide`, for the deflate streams a
 //! [`psarc`] block carries: a published standard whose failure mode is silent
 //! garbage, and not a Wipeout format at all. It is the *only* one, in every
@@ -22,37 +22,29 @@
 //! bought - see
 //! [ADR-0050](../../../docs/architecture/adr/0050-format-crates-split-by-format-family.md).
 
-mod bcn;
 pub mod byte_order;
 pub mod collision;
 pub mod coverage;
 pub mod entropy;
-pub mod fnt;
 pub mod fog;
-pub mod gtf;
 pub mod gxp;
-pub mod gxt;
 pub mod hd_pvs;
 pub mod kdcol;
 pub mod lighting;
 pub mod lzss;
 pub mod pads;
-pub mod png;
 pub mod pob;
 pub mod ps2_music;
-pub mod ps2_texture;
 pub mod psarc;
 pub mod pure_dlc;
-mod pvrtc;
 pub mod pvs;
 pub mod rcsmaterial;
 pub mod rcsmodel;
 pub mod sblk;
 pub mod shadow_occluder;
-pub mod ship_skin;
 pub mod signature;
 pub mod sound_emitters;
-pub mod texture;
+pub mod swizzle;
 pub mod track;
 pub mod vex;
 pub mod vif;

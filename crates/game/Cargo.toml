@@ -16,6 +16,7 @@ name = "oag-game"
 path = "src/main.rs"
 
 [dependencies]
+oag-texture.workspace = true
 oag-tables.workspace = true
 oag-pulse.workspace = true
 # Only for the boot sequence's title fallback (crate::boot::open_source) - a

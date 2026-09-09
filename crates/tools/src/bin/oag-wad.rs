@@ -39,10 +39,11 @@ use anyhow::{Context, Result, bail};
 use clap::{Parser, Subcommand};
 
 use oag_assets::Archive;
-use oag_formats::texture::Texture;
 use oag_formats::wad::{self, Blob, Compression, Directory};
-use oag_formats::{lzss, png, ps2_texture, sblk};
+use oag_formats::{lzss, sblk};
 use oag_tables::fexml;
+use oag_texture::texture::Texture;
+use oag_texture::{png, ps2_texture};
 use oag_tools::humanise;
 
 /// How much of a blob to read when only its type tag is wanted.

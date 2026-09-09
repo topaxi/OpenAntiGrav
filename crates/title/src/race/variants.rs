@@ -138,7 +138,7 @@ impl VariantJoin {
 /// disc-shipped, not a DLC pack's**: every one of its eight base teams
 /// declares `PI_TeamModel name="Normal"` (`Ship.vex`, plus two nested
 /// `PI_ModelSkin`s that are a texture swap on this same hull - see
-/// `oag_formats::ship_skin` - not a second one) and `PI_TeamModel
+/// `oag_texture::ship_skin` - not a second one) and `PI_TeamModel
 /// name="Concept"` (`Values location="extra"`), each `Unlock`-gated. Confirmed
 /// against the archive: `extra.vex` resolves for all eight.
 /// `crates/game/examples/pulse_variant_probe.rs` reproduces both counts and

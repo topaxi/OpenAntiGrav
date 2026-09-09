@@ -76,7 +76,7 @@ pub enum Texels {
     /// One entry per mip level, each tightly packed - a texture declaring a
     /// pitch takes the [`Self::Rgba8`] path instead, which is 5 files on the
     /// whole HD disc. An adapter without `TEXTURE_COMPRESSION_BC` decodes the
-    /// base level back through [`oag_formats::gtf::decode_level`] rather than
+    /// base level back through [`oag_texture::gtf::decode_level`] rather than
     /// drawing nothing.
     Blocks {
         format: BlockFormat,
@@ -102,22 +102,22 @@ pub enum BlockFormat {
 impl BlockFormat {
     /// The one this file format names, or `None` for an uncompressed one.
     #[must_use]
-    pub const fn of_gtf(format: oag_formats::gtf::Format) -> Option<Self> {
+    pub const fn of_gtf(format: oag_texture::gtf::Format) -> Option<Self> {
         match format {
-            oag_formats::gtf::Format::Dxt1 => Some(Self::Bc1),
-            oag_formats::gtf::Format::Dxt23 => Some(Self::Bc2),
-            oag_formats::gtf::Format::Dxt45 => Some(Self::Bc3),
+            oag_texture::gtf::Format::Dxt1 => Some(Self::Bc1),
+            oag_texture::gtf::Format::Dxt23 => Some(Self::Bc2),
+            oag_texture::gtf::Format::Dxt45 => Some(Self::Bc3),
             _ => None,
         }
     }
 
     /// The `.gtf` format byte this came from, for a decode back to RGBA8.
     #[must_use]
-    pub const fn as_gtf(self) -> oag_formats::gtf::Format {
+    pub const fn as_gtf(self) -> oag_texture::gtf::Format {
         match self {
-            Self::Bc1 => oag_formats::gtf::Format::Dxt1,
-            Self::Bc2 => oag_formats::gtf::Format::Dxt23,
-            Self::Bc3 => oag_formats::gtf::Format::Dxt45,
+            Self::Bc1 => oag_texture::gtf::Format::Dxt1,
+            Self::Bc2 => oag_texture::gtf::Format::Dxt23,
+            Self::Bc3 => oag_texture::gtf::Format::Dxt45,
         }
     }
 
@@ -162,7 +162,7 @@ impl ModelTexture {
     /// choice is a property of [`Texels`], and a second caller now wants it.
     #[must_use]
     pub fn from_gtf(label: &str, blob: &[u8]) -> Option<Self> {
-        let parsed = oag_formats::gtf::Gtf::parse(blob).ok()?;
+        let parsed = oag_texture::gtf::Gtf::parse(blob).ok()?;
         let texture = parsed.only()?;
         let (width, height) = texture.level_size(0);
         let texels = match Self::gtf_blocks(texture, blob) {
@@ -190,12 +190,12 @@ impl ModelTexture {
     /// - a chain the file authors (`mip_levels > 1`), because a single-level
     ///   upload would leave the surface with no minification filter at all;
     /// - a tight pitch, since a declared one is a *base*-level row repeated
-    ///   down the chain (see `oag_formats::gtf`) and only 5 files on the disc
+    ///   down the chain (see `oag_texture::gtf`) and only 5 files on the disc
     ///   declare one;
     /// - base dimensions on the block grid, which WebGPU requires of a
     ///   compressed texture and 15 files miss.
     #[must_use]
-    pub fn gtf_blocks(texture: &oag_formats::gtf::Texture, blob: &[u8]) -> Option<Texels> {
+    pub fn gtf_blocks(texture: &oag_texture::gtf::Texture, blob: &[u8]) -> Option<Texels> {
         let format = BlockFormat::of_gtf(texture.format)?;
         if texture.cubemap || texture.mip_levels < 2 || texture.pitch != 0 {
             return None;
@@ -253,7 +253,7 @@ impl ModelTexture {
     /// the `hd_*` probes under `crates/render/examples`, which measure a
     /// texture's own colours rather than binding it. Allocates only on the
     /// block path; `None` there for a layout
-    /// [`oag_formats::gtf::decode_level`] refuses.
+    /// [`oag_texture::gtf::decode_level`] refuses.
     #[must_use]
     pub fn to_rgba(&self) -> Option<std::borrow::Cow<'_, [u8]>> {
         match &self.texels {
@@ -262,7 +262,7 @@ impl ModelTexture {
                 // `linear` is inert here: `Texels::Blocks` only ever wraps a
                 // block-compressed `format`, which the decoder does not
                 // consult the flag for.
-                let decoded = oag_formats::gtf::decode_level(
+                let decoded = oag_texture::gtf::decode_level(
                     format.as_gtf(),
                     levels.first()?,
                     self.width,

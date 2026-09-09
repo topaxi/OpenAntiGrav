@@ -8,6 +8,7 @@ repository.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+oag-texture.workspace = true
 oag-tables.workspace = true
 oag-disc.workspace = true
 oag-formats.workspace = true

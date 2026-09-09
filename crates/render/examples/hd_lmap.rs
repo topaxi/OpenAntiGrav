@@ -2,8 +2,8 @@
 //! how its texels are distributed - the question being whether a lightmap this
 //! renderer samples as hard-edged white blocks is that way in the file.
 
-use oag_formats::gtf;
 use oag_render::mesh;
+use oag_texture::gtf;
 
 fn main() -> anyhow::Result<()> {
     let spec = std::env::args()
@@ -46,7 +46,7 @@ fn main() -> anyhow::Result<()> {
         "  alpha octaves %: {:?}",
         alpha.map(|b| (100.0 * b as f32 / total).round())
     );
-    std::fs::write(&out, oag_formats::png::encode_rgba(width, height, &rgba))?;
+    std::fs::write(&out, oag_texture::png::encode_rgba(width, height, &rgba))?;
     println!("wrote {out}");
     Ok(())
 }

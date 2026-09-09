@@ -2,7 +2,7 @@
 //!
 //! 2048's DLC re-ships Wipeout HD/Fury's circuits and its whole roster, so the
 //! *same authored texture* exists twice: as a `.gtf` on the PS3 disc, in a BC
-//! format `oag_formats::gtf` has decoded and rendered since before this pass,
+//! format `oag_texture::gtf` has decoded and rendered since before this pass,
 //! and as a `.gxt` in the Vita package, in the `PVRTII4BPP` this pass added.
 //! Two lossy compressions of one source image do not agree bit for bit, but
 //! they agree *closely* - and a wrong decode does not agree at all.
@@ -153,7 +153,7 @@ fn main() -> anyhow::Result<()> {
             let Ok(blob) = archive.read_path(&entry) else {
                 continue;
             };
-            let Ok(parsed) = oag_formats::gtf::Gtf::parse(&blob) else {
+            let Ok(parsed) = oag_texture::gtf::Gtf::parse(&blob) else {
                 continue;
             };
             let Some(texture) = parsed.textures.first() else {
@@ -198,7 +198,7 @@ fn main() -> anyhow::Result<()> {
             let Ok(blob) = archive.read_path(&entry) else {
                 continue;
             };
-            let Ok(parsed) = oag_formats::gxt::Gxt::parse(&blob) else {
+            let Ok(parsed) = oag_texture::gxt::Gxt::parse(&blob) else {
                 continue;
             };
             let Some(texture) = parsed.only() else {

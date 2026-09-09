@@ -182,11 +182,11 @@ pub fn textures(data: &[u8]) -> Result<Vec<Option<EmbeddedTexture>>> {
         // unambiguous.
         let swizzled = matches!(classes.version, 0..=4)
             && p.get(6)
-                .is_some_and(|flags| flags & crate::texture::FLAG_SWIZZLED != 0);
+                .is_some_and(|flags| flags & crate::swizzle::FLAG_SWIZZLED != 0);
         let linear;
         let texels = if swizzled {
             linear =
-                crate::texture::unswizzle(&data[at + clut_size..end], stride, usize::from(height));
+                crate::swizzle::unswizzle(&data[at + clut_size..end], stride, usize::from(height));
             &linear[..]
         } else {
             &data[at + clut_size..end]

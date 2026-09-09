@@ -71,7 +71,7 @@ fn images() -> Vec<(&'static str, PathBuf, Family)> {
         ("pure-psp-eu", "data/images/pure-psp-eu.chd", Family::Pure),
         ("pure-psp-usa", "data/images/pure-psp-usa.chd", Family::Pure),
         // The decrypted PS3 image, and it only earns a place here now that
-        // `oag_formats::fnt` reads a big-endian header: before that every one of
+        // `oag_texture::fnt` reads a big-endian header: before that every one of
         // HD's 33 fonts failed the magic check and this would have asserted the
         // fallback rather than the face.
         (

@@ -348,7 +348,7 @@ against every material's identity and against its own still-uninterpreted
 through the binding regardless (`oag_render::mesh::rcs::psp2::build` now
 takes a texture-loading closure and does this), but neither the raced craft
 (`feisar2048\3`, 6 materials) nor the circuit (`altima`, 527) is that model.
-Second: even a resolved binding would meet `oag_formats::gxt` refusing to
+Second: even a resolved binding would meet `oag_texture::gxt` refusing to
 decode the pixel format almost every 2048 texture is stored in - a sweep of
 every distinct diffuse `.gxt` the corpus's materials name (6,135) found 15
 decode; 6,037 of the rest are `PVRTII4BPP`, which `docs/formats/gxt.md`
@@ -380,7 +380,7 @@ with legible grandstand advertising, the overhead gantry banner, a panelled
 road surface, and the Feisar craft in its livery with its wordmark readable on
 the tail.
 
-**`PVRTII4BPP` decodes** - `oag_formats::pvrtc`, confidence 92, 85% of every
+**`PVRTII4BPP` decodes** - `oag_texture::pvrtc`, confidence 92, 85% of every
 `.gxt` on the disc. Three things are worth carrying:
 
 - **The reference had to be the right one.** The public PowerVR SDK
@@ -580,7 +580,7 @@ TITLE entry rather than showing them under 2048 - see
   above - but it was found by measurement, and the function that actually
   consumes it is still unlocated, which is the same gap `tangent` needs.
 - ~~**The pixel format almost every 2048 texture is stored in is not
-  decoded.**~~ Closed 2026-08-27 - `oag_formats::pvrtc`, confidence 92, see
+  decoded.**~~ Closed 2026-08-27 - `oag_texture::pvrtc`, confidence 92, see
   the section above. What is *not* closed in that module: `UBC1`, `UBC3` and
   the two uncompressed format bytes (1,110 textures between them, none reached
   by anything a race loads), and PVRTC-II's local-palette path, which is
@@ -670,7 +670,7 @@ TITLE entry rather than showing them under 2048 - see
    search keyed on a target's identity is structurally blind to one. Two
    fields in this container are still unplaced (`tangent`'s type nibble, the
    64-bit hash) and both have so far been searched for by identity.
-9. ~~**`PVRTII4BPP` decode.**~~ Done 2026-08-27 - `oag_formats::pvrtc`,
+9. ~~**`PVRTII4BPP` decode.**~~ Done 2026-08-27 - `oag_texture::pvrtc`,
    confidence 92, see the section above.
 10. **What is worth doing next, now that a race draws textured.** In order of
     what a screenshot would gain: ~~`.envsettings` (the sun direction, colour,

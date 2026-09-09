@@ -24,8 +24,8 @@
 
 use anyhow::Result;
 
-use oag_formats::gxt;
 use oag_formats::rcsmodel::psp2;
+use oag_texture::gxt;
 
 use super::Textures;
 use crate::mesh::{Bounds, DrawCall, GpuVertex, Model, ModelTexture};

@@ -490,7 +490,7 @@ texture `data/billboards/hd_adverts/321go/321_go_64.gtf`.
 
 ### The texture is Pulse's staircase, scaled up and DXT-compressed - confidence 88
 
-`321_go_64.gtf` decodes (`oag_formats::gtf`, format `Dxt45`) to **64x128** -
+`321_go_64.gtf` decodes (`oag_texture::gtf`, format `Dxt45`) to **64x128** -
 exactly 4x Pulse's 16x32 in both dimensions - and a full-texel opaque-white
 scan (every texel with alpha > 200 and RGB > 200) finds:
 

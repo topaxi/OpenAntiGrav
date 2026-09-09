@@ -1,8 +1,8 @@
 # GXT: the Vita's texture container
 
 **Status: `UBC2` decodes at confidence 85, `PVRTII4BPP` at 92, `U8U8U8U8` at
-80 - together 89.8% of the corpus.** `oag_formats::gxt` for the container,
-`oag_formats::pvrtc` for the PowerVR codec. Measured on
+80 - together 89.8% of the corpus.** `oag_texture::gxt` for the container,
+`oag_texture::pvrtc` for the PowerVR codec. Measured on
 `data/extracted/vita/PCSF00007` (Wipeout 2048, EU, patch v1.04), 2026-08-26,
 2026-08-27 and 2026-08-28.
 
@@ -63,11 +63,11 @@ files the base package ships:
 | `0x0c` | `U8U8U8U8` | `0x0c001000` | 99 | **yes** |
 | `0x98` | `U8U8U8` | `0x98001000` | 13 | no |
 
-`UBC2` decodes through `oag_formats::bcn::dxt23` - the same BC2 block math
-[`.gtf`](gtf.md) uses, moved into a shared `oag_formats::bcn` module on
+`UBC2` decodes through `oag_texture::bcn::dxt23` - the same BC2 block math
+[`.gtf`](gtf.md) uses, moved into a shared `oag_texture::bcn` module on
 2026-08-26 since the block layout is a hardware standard rather than something
 either console's container defines. `PVRTII4BPP` decodes through
-`oag_formats::pvrtc`, added 2026-08-27; the section below is its evidence.
+`oag_texture::pvrtc`, added 2026-08-27; the section below is its evidence.
 `UBC1`/`UBC3` are the same BC family as `UBC2` and would each be a small
 addition to `bcn`'s existing `dxt1`/`dxt45` if a texture reaching them needed
 one; none measured here does. **The last two rows' raw `format` carries
@@ -89,7 +89,7 @@ carries the *same* swizzle (`ARGB`, `0x001000`), not a mix. **Decoded as of
 
 ## `U8U8U8U8`: no block structure, twiddled at texel granularity
 
-**Confidence 80.** `oag_formats::gxt::Format::Argb8888`, `unit_len` 4 bytes,
+**Confidence 80.** `oag_texture::gxt::Format::Argb8888`, `unit_len` 4 bytes,
 one texel. Unlike the two compressed formats, `U8U8U8U8` has no block
 structure to quantise a mip level's storage to - `Texture::level_len` reads
 each level as the plain `width * height * 4`, with no `MIN_LEVEL_LEN` floor,
@@ -115,7 +115,7 @@ multi-valued gradient. Composited over a checkerboard the mask reads as a
 thin horizontal band whose *shape* escalates across the stage ladder (solid
 at stage 0, increasingly dashed by 7 and 14) while its *area* does not - see
 `the_zone_track_art_decodes_to_a_shape_that_escalates_across_stages` in
-`crates/formats/tests/gxt_ground_truth.rs`, whose renders this rests on, and
+`crates/texture/tests/gxt_ground_truth.rs`, whose renders this rests on, and
 `data/shots/2048_zone_track_stage{0,7,14}.png`.
 
 **Why 80 and not higher**: the escalating-shape check is real evidence but a
@@ -135,7 +135,7 @@ keeps this above the two undecoded rows.
 every texture a `.rcsmodel` material names, so until 2026-08-27
 [2048-status.md](2048-status.md)'s "the circuit and the craft draw,
 untextured" had two independent causes and this was one of them. See
-`crates/formats/src/pvrtc.rs`, whose module doc carries the bit layout.
+`crates/texture/src/pvrtc.rs`, whose module doc carries the bit layout.
 
 **It is not a block codec, and treating it as one produces a picture that is
 wrong rather than obviously broken.** A word is 8 bytes over 4x4 texels but
@@ -169,7 +169,7 @@ reference's, though; it is what was measured here against it.
 **The strongest evidence this decode has**, and it exists because 2048's DLC
 re-ships HD/Fury's circuits and its whole fourteen-team roster: 2,284 textures
 exist twice, as a `.gtf` on the PS3 disc in a BC format
-[`oag_formats::gtf`](gtf.md) decoded long before this, and as a `PVRTII4BPP`
+[`oag_texture::gtf`](gtf.md) decoded long before this, and as a `PVRTII4BPP`
 `.gxt` here. The same HD-as-ground-truth method that settled the `WO Track`
 point tail, 2048's vertex normal and its `Uv1`
 ([2048-rcsmodel.md](2048-rcsmodel.md)).
@@ -223,7 +223,7 @@ measured rule: **a mip level occupies at least 16 bytes.**
 The shortfall is exactly one word, on exactly those chains that bottom out at
 a single-word (4x4) level; every level with two words or more is stored at the
 plain figure. Free for `UBC2`, whose one block is already 16 bytes.
-`oag_formats::gxt::MIN_LEVEL_LEN` carries it.
+`oag_texture::gxt::MIN_LEVEL_LEN` carries it.
 
 ### What is implemented but unexercised
 
@@ -258,7 +258,7 @@ dashed bracket ring, a filled circle backdrop, a thin dashed ring, a
 crosshair with a dashed arc) and `hud_2048.gxt` (1024x512, the non-square
 case) renders a full, legible sprite sheet - weapon pickup icons, position
 chevrons, a warning triangle, a speed-bar gradient ellipse, all right way up.
-See `crates/formats/tests/gxt_ground_truth.rs`, which is where those renders
+See `crates/texture/tests/gxt_ground_truth.rs`, which is where those renders
 come from and re-runs on demand.
 
 **Corroborated externally**: `ClassiCube`'s own Vita port computes the same
@@ -266,7 +266,7 @@ even/odd bit-interleave masks (`TwiddleCalcFactors`) to write
 `sceGxmTextureInitSwizzled` textures - this is Sony's documented hardware
 tiling scheme, not a guess that happened to render something.
 
-`oag_formats::gxt::twiddle` implements the general (non-square) algorithm:
+`oag_texture::gxt::twiddle` implements the general (non-square) algorithm:
 `bx` bits in the odd positions and `by` in the even ones while both
 dimensions have more than one step left, then the remaining bits of whichever
 dimension is larger are appended **linearly** once the smaller one is
@@ -294,6 +294,6 @@ yet regardless.
 ## See also
 
 - [gtf](gtf.md) - the PS3 sibling this module's doc comments compare against
-  throughout, and the source of the shared `oag_formats::bcn` block math
+  throughout, and the source of the shared `oag_texture::bcn` block math
 - [2048-hud](2048-hud.md) - what this format unblocks and what it does not
 - [2048-status](2048-status.md) - where this fits in the wider probe

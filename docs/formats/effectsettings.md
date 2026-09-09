@@ -667,7 +667,7 @@ but no shader has been read and no runtime trace taken.
   what the parameters do to it is not.** The "general" `zonemode{0..14}.gtf`
   set is a red herring: all fifteen are **byte-identical** (one 87,552 B
   DXT4/5 256x256 file, `md5sum` confirms it) and decode
-  (`oag_formats::gtf`) to flat, uniform `[255, 255, 255, 255]` on every one
+  (`oag_texture::gtf`) to flat, uniform `[255, 255, 255, 255]` on every one
   of the 65,536 texels of every one of the fifteen files - no picture at
   all. **The "Track" `zonemodetrack{0..14}.gtf` set is where the real art
   is**: fifteen genuinely distinct DXT4/5 files (confirmed both by decoded

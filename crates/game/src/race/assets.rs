@@ -176,7 +176,7 @@ fn authored_ribbon(
     let pixels = archives
         .read_name(noise)
         .map_err(|e| format!("{noise}: named by {model}'s material but not in the set ({e})"))?;
-    let gtf = oag_formats::gtf::Gtf::parse(&pixels)
+    let gtf = oag_texture::gtf::Gtf::parse(&pixels)
         .map_err(|e| format!("{noise}: {} bytes, does not parse ({e})", pixels.len()))?;
     let texture = gtf
         .only()
@@ -245,7 +245,7 @@ fn decode_gtf(
     let pixels = archives
         .read_name(name)
         .map_err(|e| format!("{name}: not in the archive set ({e})"))?;
-    let gtf = oag_formats::gtf::Gtf::parse(&pixels)
+    let gtf = oag_texture::gtf::Gtf::parse(&pixels)
         .map_err(|e| format!("{name}: {} bytes, does not parse ({e})", pixels.len()))?;
     let texture = gtf
         .only()
@@ -354,7 +354,7 @@ pub(super) fn exhaust_texture(
 /// disc from a PS2 one in the load report, and the two reach this point by
 /// different names.
 fn decode_either(name: &str, blob: &[u8]) -> std::result::Result<(FlareTexture, String), String> {
-    match oag_formats::texture::Texture::parse(blob) {
+    match oag_texture::texture::Texture::parse(blob) {
         Ok(texture) => Ok((
             FlareTexture {
                 width: u32::from(texture.width),
@@ -366,7 +366,7 @@ fn decode_either(name: &str, blob: &[u8]) -> std::result::Result<(FlareTexture, 
                 texture.width, texture.height, texture.mip_levels
             ),
         )),
-        Err(psp) => match oag_formats::ps2_texture::parse(blob) {
+        Err(psp) => match oag_texture::ps2_texture::parse(blob) {
             Ok(texture) => Ok((
                 FlareTexture {
                     width: u32::from(texture.width),

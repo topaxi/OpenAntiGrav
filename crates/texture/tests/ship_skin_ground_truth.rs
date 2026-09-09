@@ -1,4 +1,4 @@
-//! Validates the [`ship_skin`](oag_formats::ship_skin) decoder against a real
+//! Validates the [`ship_skin`](oag_texture::ship_skin) decoder against a real
 //! shipped skin file.
 //!
 //! **`#[ignore]`d and never run in CI.** It needs game content, which this
@@ -26,7 +26,7 @@
 
 use std::path::PathBuf;
 
-use oag_formats::ship_skin;
+use oag_texture::ship_skin;
 
 /// The one file `ship-skin.md` names directly.
 const SKIN: &str = r"Data\Ships\Assegai\ship_alt.dat";

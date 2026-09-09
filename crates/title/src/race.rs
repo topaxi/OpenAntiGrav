@@ -243,7 +243,7 @@ pub struct RaceDefaults {
 /// # Two sets, and only one of them is a picture
 ///
 /// HD/Fury ships **two** fifteen-entry sets, and they are not
-/// interchangeable. Decoded through `oag_formats::gtf`, all fifteen of the
+/// interchangeable. Decoded through `oag_texture::gtf`, all fifteen of the
 /// "general" set are byte-identical to each other and hold a flat, uniform
 /// white with nothing in it; all fifteen of the "track" set are mutually
 /// distinct and hold a greyscale image whose alpha pattern visibly changes

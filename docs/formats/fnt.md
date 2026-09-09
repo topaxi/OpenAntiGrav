@@ -1,7 +1,7 @@
 # Bitmap fonts (`.fnt`)
 
 **Status: understood.** Metrics and the glyph atlas are both decoded,
-implemented in [`oag-formats::fnt`](../../crates/formats/src/fnt.rs) and
+implemented in [`oag-texture::fnt`](../../crates/texture/src/fnt.rs) and
 validated across all five fonts: 863 glyphs, and every atlas renders as a
 recognisable character set - digits, upper and lower case, the accented Latin-1
 capitals the five shipped languages need, and the PSP button glyphs.
@@ -108,7 +108,7 @@ The first four bytes are the version and magic written as a single constant in
 the file's own order - `01 46 4e 54` (`\x01FNT`) on the PSP and PS2, `54 4e 46
 01` (`TNF\x01`) on the PS3. Every other field follows the same order, with
 nothing moved and nothing resized:
-[`fnt::byte_order`](../../crates/formats/src/fnt.rs) sniffs the magic and the
+[`fnt::byte_order`](../../crates/texture/src/fnt.rs) sniffs the magic and the
 rest of the parser is unchanged, the same rule
 [`vex::byte_order`](vex.md) already follows.
 
@@ -151,7 +151,7 @@ nothing to re-run and needs no disc: it rewrites a hand-built fixture field by
 field - the magic as one word, the codepoint table as `u16`s, the offset table
 as `u32`s, a glyph record as the mixture it is, and the palette and texels not
 at all - and asserts the two parse to the identical
-[`Font`](../../crates/formats/src/fnt.rs).
+[`Font`](../../crates/texture/src/fnt.rs).
 
 The role names come from HD's own language plugins - see
 [hd-frontend.md](hd-frontend.md) - and `pulsehud.fnt` and `small.fnt` really are
@@ -210,7 +210,7 @@ tile the file to the byte, the atlas block closes exactly on
 128, and `flags` is 0. 19,936 glyphs decode, worst per-font edge-ink rate 0.953.
 Not higher because no code in HD's own executable has been read to confirm the
 header is loaded this way; the evidence is entirely the shipped data. Pinned by
-[`crates/formats/tests/fnt_hd_ground_truth.rs`](../../crates/formats/tests/fnt_hd_ground_truth.rs).
+[`crates/texture/tests/fnt_hd_ground_truth.rs`](../../crates/texture/tests/fnt_hd_ground_truth.rs).
 
 ## Layout
 
@@ -360,7 +360,7 @@ solid box; that is measured rather than hypothesised, and it is what
 [`oag_game::font`](../../crates/game/src/font.rs) did until this was found. See
 [the HUD](../ui/hud.md).
 
-`oag_formats::fnt::Font::luma_at` and `Font::is_outlined` expose this, and
+`oag_texture::fnt::Font::luma_at` and `Font::is_outlined` expose this, and
 `fnt_ground_truth` asserts that **exactly two** of the five fonts are outlined.
 
 **The default outline, settled by a reference frame.** 57 of the 84 HUD-font
@@ -431,7 +431,7 @@ agreement plus static reading rather than a runtime trace, which caps at 94.
 ## Reproducing
 
 ```sh
-just test-data      # runs crates/formats/tests/fnt_ground_truth.rs
+just test-data      # runs crates/texture/tests/fnt_ground_truth.rs
 oag-wad extract 'data/images/pulse-psp-usa.chd:PSP_GAME/USRDIR/FE.wad' -o /tmp/fe
 ```
 

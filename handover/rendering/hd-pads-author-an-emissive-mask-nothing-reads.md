@@ -179,7 +179,7 @@ Three things the disc authors that this project does not touch:
    circuits, and **the alpha channel of each is a mask over exactly the pad's
    light bars** - the little rectangles along the chevron and the cross, and
    nothing else. Reproduce: decode the `.gtf` through
-   `oag_formats::gtf::Texture::to_rgba` and write the alpha channel out as
+   `oag_texture::gtf::Texture::to_rgba` and write the alpha channel out as
    grey.
 2. **Two standalone pad materials per circuit**,
    `materials/speedup_material.rcsmaterial` and `materials/weapon_pads.rcsmaterial`,

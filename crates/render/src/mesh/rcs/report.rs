@@ -74,7 +74,7 @@ pub struct Report {
     pub cutout_unread: usize,
     /// Materials whose `.gtf` this build could not paint with - no path in the
     /// record, no such entry in the archive, or a container
-    /// `oag_formats::gtf::Texture::to_rgba` refuses.
+    /// `oag_texture::gtf::Texture::to_rgba` refuses.
     ///
     /// **The one to watch**, because its failure mode is the one this module
     /// has spent the most effort removing: a draw call with no texture binds

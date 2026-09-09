@@ -62,7 +62,7 @@
 //! # Alpha is 0-128, not 0-255
 //!
 //! The GS treats 128 as full intensity through the texture-modulate path, the
-//! same convention [`crate::vex`] documents for vertex colour. [`Ps2Texture`]
+//! same convention `oag_formats::vex` documents for vertex colour. [`Ps2Texture`]
 //! keeps the palette exactly as stored and [`Ps2Texture::to_rgba`] doubles it,
 //! so a caller that wants the raw bytes still has them.
 

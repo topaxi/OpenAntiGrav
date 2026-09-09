@@ -45,8 +45,8 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 use oag_disc::DiscImage;
-use oag_formats::ps2_texture::{self, Layout};
 use oag_formats::wad::{self, Compression, Directory};
+use oag_texture::ps2_texture::{self, Layout};
 
 /// The PS2 archives that hold textures.
 const PS2_ARCHIVES: [&str; 2] = ["54748/WADS2.WAD", "54748/WADSP.WAD"];

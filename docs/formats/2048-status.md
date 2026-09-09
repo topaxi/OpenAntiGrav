@@ -103,7 +103,7 @@ the start line and runs the simulation. What it does **not** do, and why:
 - **The HUD layouts are read, the textures decode, and no sprite draws yet.**
   All 25 non-split-screen HUD roots compose with nothing missing and nothing
   skipped, the played skin is known (`2048_hud\`, not the bare root previously
-  guessed at), the reticle is `Sights::Concentric`, and `oag_formats::gxt` now
+  guessed at), the reticle is `Sights::Concentric`, and `oag_texture::gxt` now
   reads the Vita's texture container - swept against 9,910 files, real HUD
   icons render correctly. See [2048-hud.md](2048-hud.md). What is still
   unread is which widgets a race actually shows: `ALWAYS_ON` is empty, and

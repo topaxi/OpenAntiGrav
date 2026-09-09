@@ -406,7 +406,7 @@ fn a_skin_repaints_the_players_own_hull_and_nobody_elses() {
     let blob = archives
         .read_name(r"Data\Ships\Assegai\ship_alt.dat")
         .expect("the skin the definition names");
-    let skin = oag_formats::ship_skin::parse(&blob).expect("it parses");
+    let skin = oag_texture::ship_skin::parse(&blob).expect("it parses");
     assert_eq!(
         skin.team_name, "Assegai",
         "the resolved path must be this team's own skin, not some other team's"

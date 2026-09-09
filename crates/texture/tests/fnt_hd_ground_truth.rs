@@ -43,7 +43,7 @@
 use std::path::PathBuf;
 
 use oag_formats::ByteOrder;
-use oag_formats::fnt::{self, Font};
+use oag_texture::fnt::{self, Font};
 
 /// The decrypted PS3 image.
 const PS3_IMAGE: &str = "hdfury-ps3-eu-dec.iso";

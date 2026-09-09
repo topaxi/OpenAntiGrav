@@ -72,7 +72,7 @@ impl Ps2TextureSet {
                 }
                 wad::Compression::Zlib => continue,
             };
-            let Ok(texture) = oag_formats::ps2_texture::parse(&decompressed) else {
+            let Ok(texture) = oag_texture::ps2_texture::parse(&decompressed) else {
                 continue;
             };
             by_hash.insert(

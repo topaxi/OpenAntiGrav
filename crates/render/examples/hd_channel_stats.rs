@@ -5,7 +5,7 @@ use oag_assets::Container;
 use oag_render::mesh;
 
 fn stats(name: &str, blob: &[u8]) -> anyhow::Result<()> {
-    let parsed = oag_formats::gtf::Gtf::parse(blob)?;
+    let parsed = oag_texture::gtf::Gtf::parse(blob)?;
     let Some(texture) = parsed.only() else {
         println!("{name}: not one texture");
         return Ok(());
@@ -19,7 +19,7 @@ fn stats(name: &str, blob: &[u8]) -> anyhow::Result<()> {
     if std::env::var("OAG_DUMP_PNG").is_ok() {
         let out = format!("/tmp/{}.png", name.replace(['/', ' '], "_"));
         let flat: Vec<u8> = rgba.iter().flatten().copied().collect();
-        std::fs::write(&out, oag_formats::png::encode_rgba(w, h, &flat))?;
+        std::fs::write(&out, oag_texture::png::encode_rgba(w, h, &flat))?;
         println!("  wrote {out}");
     }
     for (c, label) in ["r", "g", "b", "a"].iter().enumerate() {

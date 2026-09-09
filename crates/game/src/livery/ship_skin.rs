@@ -4,7 +4,7 @@
 //! **A skin is a texture swap on the same geometry**, so this is not a second
 //! model load: the hull is built exactly as it always was, and four of its
 //! texture slots are then replaced from a `.dat` the *definition* names. The
-//! format half is [`oag_formats::ship_skin`] and the applier half is
+//! format half is [`oag_texture::ship_skin`] and the applier half is
 //! [`oag_render::mesh::ship_skin::apply`]; both landed with unit and
 //! ground-truth coverage and neither had a caller until this module. See
 //! `docs/ghidra/functions/psp-pulse-usa/ship-skin.md`.
@@ -161,7 +161,7 @@ pub(super) fn apply(
             return;
         }
     };
-    let skin = match oag_formats::ship_skin::parse(&blob) {
+    let skin = match oag_texture::ship_skin::parse(&blob) {
         Ok(skin) => skin,
         Err(error) => {
             report.push(format!("{entry}: {error} - the craft keeps its own paint"));

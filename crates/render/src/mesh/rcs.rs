@@ -14,7 +14,7 @@
 //! **Textured, lit, and blended where the material says so**, all of it out of
 //! the disc: positions, triangle indices and vertex normals from the
 //! `.rcsmodel`, the texture coordinate from the last four bytes of each vertex,
-//! and the `.gtf` each material names through [`oag_formats::gtf`]. Nothing is
+//! and the `.gtf` each material names through [`oag_texture::gtf`]. Nothing is
 //! substituted - a made-up normal or an invented alpha would light a model
 //! wrongly rather than visibly failing, which is the failure mode `CLAUDE.md`
 //! names.
@@ -262,7 +262,7 @@ fn declares_no_texcoord(mesh: &rcsmodel::Mesh) -> bool {
 /// # `.gtf` is what turned the see-through chunks back on
 ///
 /// **The alpha a blend needs is in the texture and nowhere else**, and until
-/// `oag_formats::gtf` was read this module had none - so a see-through chunk was
+/// `oag_texture::gtf` was read this module had none - so a see-through chunk was
 /// *left out* rather than blended, because alpha-over at `alpha = 1.0` paints
 /// exactly the opaque pixels while dropping depth write and additive blows a
 /// glass panel to white. That stopgap is gone: `Texture::to_rgba` returns RGBA,

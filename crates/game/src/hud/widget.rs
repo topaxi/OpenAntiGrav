@@ -93,7 +93,7 @@ impl VertAlign {
 /// by that entry's placement rather than by a single per-frame origin. The
 /// packer and the shader already handle several images in one sheet; nothing
 /// about them is in the way. `oag_render` also has no `.gtf` upload path, which
-/// is the second problem and not the first: [`oag_formats::gtf`] decodes all
+/// is the second problem and not the first: [`oag_texture::gtf`] decodes all
 /// twelve as of 2026-08-17.
 ///
 /// Deliberately **not** done speculatively. A `texture: usize` with one caller

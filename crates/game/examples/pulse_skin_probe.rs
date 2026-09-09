@@ -57,7 +57,7 @@ fn main() -> anyhow::Result<()> {
             let path = format!("{out}/{team}-{stem}-{which}.png");
             std::fs::write(
                 &path,
-                oag_formats::png::encode_rgba(texture.width, texture.height, rgba),
+                oag_texture::png::encode_rgba(texture.width, texture.height, rgba),
             )?;
             println!("{path}: {}x{}", texture.width, texture.height);
             written += 1;

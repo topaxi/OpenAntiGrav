@@ -5,8 +5,8 @@
 //! actual numbers - the check that decides whether the maintainer's "light up
 //! red" report is the `_ne` file's own paint or comes from somewhere else.
 
-use oag_formats::gtf;
 use oag_render::mesh;
+use oag_texture::gtf;
 
 fn report(spec: &str, path: &str) -> anyhow::Result<()> {
     let blob = mesh::read_blob(spec, path)?;

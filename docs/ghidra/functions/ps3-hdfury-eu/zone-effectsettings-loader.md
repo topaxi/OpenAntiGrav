@@ -242,7 +242,7 @@ errors (if the *placeholder* itself failed to load) or warns and recursively
 calls `Resource_GetOrCreateByName` with the placeholder's own name instead;
 found falls through to construct the real resource via a chain of indirect
 (vtable) calls ending in GCM-texture-shaped bit-packed flags
-(`0x2000000 | 0x1e80`-style constants, the same family `oag_formats::gtf`
+(`0x2000000 | 0x1e80`-style constants, the same family `oag_texture::gtf`
 (`docs/formats/gtf.md`) already decodes from this title's own `.gtf` files)
 and a refcount increment. **Renamed, in
 `names.tsv`**: `Texture_LoadWithFallback` (80) - and

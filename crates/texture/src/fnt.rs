@@ -23,7 +23,7 @@
 //! nothing moved and nothing resized. The first four bytes are one `u32`
 //! constant written in the file's own order - `\x01FNT` on the PSP and PS2,
 //! `TNF\x01` on the PS3 - so [`byte_order`] sniffs it and no caller passes a
-//! platform in, exactly as [`vex::byte_order`](crate::vex::byte_order) does.
+//! platform in, exactly as `oag_formats::vex::byte_order` does.
 //!
 //! This is not a word swap, and the distinction is checkable: HD's codepoint
 //! table reads `00 20 00 21 00 22` - ascending as big-endian `u16`s, where a
@@ -45,7 +45,7 @@
 //! # The atlas header is 64 bytes, and that was the whole problem
 //!
 //! It is not a [`crate::texture`] `.mip` header. It is the same **`Texture`
-//! node payload** a [`crate::vex`] model embeds, and the data does not start
+//! node payload** a `oag_formats::vex` model embeds, and the data does not start
 //! until `+0x40`:
 //!
 //! ```text
@@ -117,9 +117,9 @@ pub const GLYPH_LEN: usize = 18;
 /// Bytes of atlas header before the palette.
 pub const ATLAS_HEADER_LEN: usize = 0x40;
 
-pub use crate::texture::{FLAG_SWIZZLED, SWIZZLE_BLOCK_BYTES, SWIZZLE_BLOCK_ROWS};
+pub use oag_formats::swizzle::{FLAG_SWIZZLED, SWIZZLE_BLOCK_BYTES, SWIZZLE_BLOCK_ROWS};
 
-use crate::ByteOrder;
+use oag_formats::ByteOrder;
 
 /// Something wrong with a font.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -248,7 +248,7 @@ pub struct Font {
 ///
 /// The first four bytes are one `u32` constant written in the file's own order:
 /// `\x01FNT` little-endian, `TNF\x01` big-endian. Nothing else is consulted -
-/// the same rule [`vex::byte_order`](crate::vex::byte_order) follows, and the
+/// the same rule `oag_formats::vex::byte_order` follows, and the
 /// reason no caller passes a platform in.
 #[must_use]
 pub fn byte_order(data: &[u8]) -> Option<ByteOrder> {
@@ -438,7 +438,7 @@ impl Font {
             {
                 return Err(Error::UnswizzleableAtlas { width, height });
             }
-            crate::texture::unswizzle(texels, row_bytes, usize::from(height))
+            oag_formats::swizzle::unswizzle(texels, row_bytes, usize::from(height))
         };
 
         // Low nibble first: pixel 0 is the low half of byte 0, as in `.mip`.

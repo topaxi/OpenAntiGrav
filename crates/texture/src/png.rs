@@ -92,7 +92,7 @@ fn zlib_stored(data: &[u8]) -> Vec<u8> {
 /// CRC-32 as PNG uses it: reflected, polynomial `0xEDB88320`, initialised to
 /// all ones.
 ///
-/// Note this differs from [`crate::wad::hash_name`] only in its initial value,
+/// Note this differs from `oag_formats::wad::hash_name` only in its initial value,
 /// which is exactly the kind of near-miss worth stating out loud.
 struct Crc32(u32);
 

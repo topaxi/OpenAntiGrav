@@ -15,7 +15,7 @@
 //! `crates/game/tests/hd_hud_ground_truth.rs` has a check
 //! (`every_sprite_s_source_rectangle_fits_inside_the_texture_it_names`) that
 //! decodes every texture a layout names and checks the composed sprite
-//! rectangles fit inside it. `oag_formats::gxt` can do the equivalent now -
+//! rectangles fit inside it. `oag_texture::gxt` can do the equivalent now -
 //! see `crates/formats/tests/gxt_ground_truth.rs`, which decodes real HUD
 //! textures and renders them - but composing this title's rectangles against
 //! decoded `.gxt` dimensions is not written here yet. This file stops at

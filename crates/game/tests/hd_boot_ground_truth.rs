@@ -397,13 +397,13 @@ fn the_front_end_font_is_a_big_endian_fnt_and_it_is_the_one_loaded() {
     let name = r"Data\FE\Fonts\helv.fnt";
     let blob = archives.read_name(name).expect("HD's body face reads");
     assert_eq!(
-        oag_formats::fnt::byte_order(&blob),
+        oag_texture::fnt::byte_order(&blob),
         Some(oag_formats::ByteOrder::Big),
         "a PS3 .fnt is the PSP layout with its words the other way round"
     );
     assert_eq!(&blob[..4], b"TNF\x01", "the magic is a swapped word");
 
-    let font = oag_formats::fnt::Font::parse(&blob).expect("and it parses");
+    let font = oag_texture::fnt::Font::parse(&blob).expect("and it parses");
     assert_eq!((font.width, font.height), (1024, 512));
     assert_eq!(font.line_height, 33);
     assert_eq!(font.glyphs.len(), 243);
@@ -424,7 +424,7 @@ fn the_front_end_font_is_a_big_endian_fnt_and_it_is_the_one_loaded() {
 ///
 /// `sprite::Image::decode` tried the PSP `.mip` parser and then the PS2 one, so
 /// a `.gtf` was reported as `zero-sized texture 1281x0` - a complaint about a
-/// format the file is not - and the sheet came out 1x1. `oag_formats::gtf` had
+/// format the file is not - and the sheet came out 1x1. `oag_texture::gtf` had
 /// decoded these since long before the front end asked for one.
 ///
 /// The sizes are the disc's and are what tells a decoded sheet from a plausible

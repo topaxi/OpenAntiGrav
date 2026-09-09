@@ -574,7 +574,7 @@ fn a_capture_for_eyeballing() {
     let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data/cache");
     std::fs::create_dir_all(&dir).expect("creating data/cache");
     let path = dir.join("loading-wave.png");
-    std::fs::write(&path, oag_formats::png::encode_rgba(width, height, &pixels))
+    std::fs::write(&path, oag_texture::png::encode_rgba(width, height, &pixels))
         .expect("writing the capture");
     eprintln!("wrote {}", path.display());
 }
@@ -660,7 +660,7 @@ fn the_games_own_glow_strip_reaches_the_shader() {
     let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data/cache");
     std::fs::create_dir_all(&dir).expect("creating data/cache");
     let out = dir.join("loading-wave-real.png");
-    std::fs::write(&out, oag_formats::png::encode_rgba(width, height, &pixels))
+    std::fs::write(&out, oag_texture::png::encode_rgba(width, height, &pixels))
         .expect("writing the capture");
     eprintln!("wrote {}", out.display());
 }

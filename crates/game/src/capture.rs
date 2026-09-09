@@ -693,7 +693,7 @@ fn write_png(path: &std::path::Path, width: u32, height: u32, pixels: &[u8]) -> 
     // straight from the readback writes a fully transparent PNG.
     let mut pixels = pixels.to_vec();
     oag_render::capture::make_opaque(&mut pixels);
-    let png = oag_formats::png::encode_rgba(width, height, &pixels);
+    let png = oag_texture::png::encode_rgba(width, height, &pixels);
     std::fs::write(path, png).with_context(|| format!("writing {}", path.display()))?;
     println!("wrote {} ({width}x{height})", path.display());
     Ok(())

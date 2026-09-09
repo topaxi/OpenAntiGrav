@@ -596,7 +596,7 @@ fn the_atlas_and_both_hud_fonts_are_readable() {
     let atlas = archives
         .read_name(oag_pulse::hud::ATLAS)
         .unwrap_or_else(|e| panic!("reading {}: {e}", oag_pulse::hud::ATLAS));
-    let texture = oag_formats::texture::Texture::parse(&atlas)
+    let texture = oag_texture::texture::Texture::parse(&atlas)
         .unwrap_or_else(|e| panic!("decoding {}: {e}", oag_pulse::hud::ATLAS));
     println!(
         "{}: {}x{}, {} bpp, {} palette entry(s), {} index(es)",
@@ -621,7 +621,7 @@ fn the_atlas_and_both_hud_fonts_are_readable() {
             .read_name(name)
             .unwrap_or_else(|e| panic!("reading {name}: {e}"));
         let font =
-            oag_formats::fnt::Font::parse(&blob).unwrap_or_else(|e| panic!("decoding {name}: {e}"));
+            oag_texture::fnt::Font::parse(&blob).unwrap_or_else(|e| panic!("decoding {name}: {e}"));
         println!(
             "{name}: {}x{} atlas, {} glyph(s), line height {}",
             font.width,

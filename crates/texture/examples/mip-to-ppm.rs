@@ -9,7 +9,7 @@ fn main() {
         .nth(1)
         .expect("usage: mip-to-ppm <file.mip>");
     let data = std::fs::read(&path).expect("reading the texture");
-    let texture = oag_formats::texture::Texture::parse(&data).expect("parsing the texture");
+    let texture = oag_texture::texture::Texture::parse(&data).expect("parsing the texture");
     let rgba = texture.to_rgba();
     let (w, h) = (texture.width as usize, texture.height as usize);
     let mut out = std::io::stdout().lock();

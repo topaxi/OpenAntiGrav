@@ -32,8 +32,8 @@
 
 use std::path::PathBuf;
 
-use oag_formats::{ps2_texture, texture};
 use oag_pulse as pulse;
+use oag_texture::{ps2_texture, texture};
 
 /// How much of the silhouette has to agree before two images are the same
 /// picture. The three real pairs score 0.9946 to 0.9999 and the best

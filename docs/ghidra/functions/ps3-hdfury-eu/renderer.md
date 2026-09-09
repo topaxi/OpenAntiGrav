@@ -3561,7 +3561,7 @@ uVar3 = (uint)param_7;
 **`param_7` is one packed `(format << 16) | remap` word**, and its low
 seventeen bits - the sixteen-bit remap plus the `order` bit above it - go to
 one slot of their own. `& 0x1f00` on the high half is the same low-five-bits
-format extraction `oag_formats::gtf::Format::from_byte` does.
+format extraction `oag_texture::gtf::Format::from_byte` does.
 
 **The engine constructs these words in code, it does not only copy them out of
 files.** Searching the whole binary for the three values a `.gtf` carries:

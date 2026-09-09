@@ -32,7 +32,7 @@
 //! that reads exactly like a whole-disc one.
 //!
 //! What actually kept HD in 5x7 was that
-//! [`oag_formats::fnt`] read the header little-endian, so all 33 failed the
+//! [`oag_texture::fnt`] read the header little-endian, so all 33 failed the
 //! magic check with `not a .fnt`. The report said so accurately the whole time;
 //! nothing here had to change for the fonts to appear, only the parser.
 

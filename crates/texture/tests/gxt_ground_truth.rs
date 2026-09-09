@@ -11,10 +11,10 @@
 //!
 //! # Why the sweep is the test
 //!
-//! [`oag_formats::gxt::Gxt::parse`] refuses a texture whose declared texel
+//! [`oag_texture::gxt::Gxt::parse`] refuses a texture whose declared texel
 //! length is not what its own width, height, format and mip count imply - the
 //! same "the length is a function of everything else in the descriptor"
-//! argument [`oag_formats::gtf::Gtf::parse`] rests its own confidence on, in
+//! argument [`oag_texture::gtf::Gtf::parse`] rests its own confidence on, in
 //! `gtf_ground_truth.rs`. `oag_2048::hud::ART`'s reticle only reaches the nine
 //! `.gxt` files [`docs/formats/2048-hud.md`] names, and this sweeps the whole
 //! corpus rather than just those nine.
@@ -22,13 +22,13 @@
 //! **That check only runs on a format this crate knows the unit size of**, so
 //! teaching it `PVRTII4BPP` put 8,430 more textures under it in this package
 //! alone - and they only pass because a mip level is floored at
-//! [`oag_formats::gxt::MIN_LEVEL_LEN`] bytes, which is measured rather than
+//! [`oag_texture::gxt::MIN_LEVEL_LEN`] bytes, which is measured rather than
 //! assumed. See that constant.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-use oag_formats::gxt::{Format, Gxt};
+use oag_texture::gxt::{Format, Gxt};
 
 fn package() -> Option<PathBuf> {
     let path = Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -109,7 +109,7 @@ fn survey(check: &mut impl FnMut(&str, &Gxt, &[u8])) -> Survey {
 /// trusted. Now every one of them has to satisfy the same arithmetic, and
 /// does. `Argb8888`'s 99 are smaller in count but exercise a different edge:
 /// no `MIN_LEVEL_LEN` floor applies to them at all (see
-/// `oag_formats::gxt::Texture::level_len`), and all nine distinct
+/// `oag_texture::gxt::Texture::level_len`), and all nine distinct
 /// `(width, height, mip count)` shapes in the corpus - down to a chain that
 /// bottoms out at one 4x4 level - agree with the unfloored formula.
 #[test]
@@ -155,7 +155,7 @@ fn every_shipped_gxt_parses_and_every_known_format_decodes() {
 /// the check is "does the picture look like something a game would ship".
 ///
 /// `.gxt`'s block grid is **twiddled (Morton/Z-order), not raster** - see
-/// `oag_formats::gxt::blocks`'s own doc comment for how that was measured.
+/// `oag_texture::gxt::blocks`'s own doc comment for how that was measured.
 /// This test is what the measurement rests on: a checkerboard-composited
 /// render of the wrong block order was noise with an anomalous clean band;
 /// the current, twiddled order renders four recognisable reticle pieces
@@ -194,7 +194,7 @@ fn render_checkerboard(
         }
         packed.push(255);
     }
-    let png = oag_formats::png::encode_rgba(width, height, &packed);
+    let png = oag_texture::png::encode_rgba(width, height, &packed);
 
     let out = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../..")
@@ -485,7 +485,7 @@ fn the_pvrtc_decode_agrees_with_wipeout_hd_s_own_copy_of_the_same_art() {
             let Ok(blob) = open.read_path(&path) else {
                 continue;
             };
-            let Ok(parsed) = oag_formats::gtf::Gtf::parse(&blob) else {
+            let Ok(parsed) = oag_texture::gtf::Gtf::parse(&blob) else {
                 continue;
             };
             let Some(texture) = parsed.textures.first() else {

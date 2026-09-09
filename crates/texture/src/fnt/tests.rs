@@ -7,7 +7,7 @@
 //! and `fnt_hd_ground_truth.rs`.
 
 use super::*;
-use crate::ByteOrder;
+use oag_formats::ByteOrder;
 
 /// Builds a font by hand. No game data in any test.
 fn font(width: u16, height: u16, glyphs: &[(u16, u8, u8, u16, u16, u16, u16)]) -> Vec<u8> {

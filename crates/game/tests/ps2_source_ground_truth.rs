@@ -253,7 +253,7 @@ fn a_ship_spawns_and_steps_on_the_ps2_disc() {
 /// says its own shape in its name.
 ///
 /// **What this does not assert** is that the pixels match. The two builds
-/// palette their textures differently (see `oag_formats::ps2_texture` on the
+/// palette their textures differently (see `oag_texture::ps2_texture` on the
 /// GS's 0-128 alpha), and comparing shipped art across the two releases is the
 /// kind of thing `docs/comparisons/pulse-psp-vs-ps2.md` keeps out of the
 /// repository on purpose.

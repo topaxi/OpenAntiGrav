@@ -105,7 +105,7 @@ adds to it. `docs/formats/rcsmodel.md` recorded that routing `Transparency::Mode
 through a plain `0.5` alpha-test cutout "erases the crowd entirely", reasoning
 from `crowd_avatars_22x4.gtf`'s alpha channel running `0..255` at a mean of
 `120`. Histogramming the same texture
-(`oag_formats::gtf`, ad hoc) shows the mean is not the shape: **52.9% of
+(`oag_texture::gtf`, ad hoc) shows the mean is not the shape: **52.9% of
 texels sit at alpha `0` and 47.1% at alpha `255`, nothing between.**
 `GL_GREATER` against `0.5` keeps the 47.1% - the crowd figures - and drops
 the transparent background between them, which is what a cutout does

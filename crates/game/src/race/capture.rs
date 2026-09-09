@@ -855,7 +855,7 @@ pub fn capture(
     // not coverage - see `oag_render::capture::make_opaque` - so encoding it
     // straight from the readback writes a fully transparent PNG.
     oag_render::capture::make_opaque(&mut pixels);
-    let png = oag_formats::png::encode_rgba(width, height, &pixels);
+    let png = oag_texture::png::encode_rgba(width, height, &pixels);
     std::fs::write(&options.path, png)
         .with_context(|| format!("writing {}", options.path.display()))?;
     println!("wrote {} ({width}x{height})", options.path.display());

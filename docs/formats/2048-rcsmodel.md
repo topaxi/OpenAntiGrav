@@ -447,7 +447,7 @@ The other 6,120 failed with `gxt::Error::Unsupported` - 6,037 of them format
 neither was a follow-on to the other: the binding above, and the pixel format
 almost everything is compressed in.
 
-**Both are closed.** `oag_formats::pvrtc` decodes `PVRTII4BPP` at confidence
+**Both are closed.** `oag_texture::pvrtc` decodes `PVRTII4BPP` at confidence
 92, validated against Wipeout HD's own `.gtf` copies of 2,284 shared textures -
 see [gxt.md](gxt.md).
 

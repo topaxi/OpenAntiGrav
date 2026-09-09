@@ -714,7 +714,7 @@ The `display+0x5df4` bias computation and the meaning of the two keys beyond
 | `Data\Tex\EngineFlare\grabbedEngineFlare128x64x8.mip` | `0x08a84c80` | `g_engine_flare_texture` `0x08b62908` | `0x08905210` |
 | `Data\Tex\engineFlare\Engine_noise.mip` | `0x08a889e4` | `0x08b657c0`/`c4`/`c8` | `0x0892a5a4` |
 
-Both are `.mip`, decoded by `crates/formats/src/texture.rs`. Both paths are
+Both are `.mip`, decoded by `crates/texture/src/texture.rs`. Both paths are
 **literal strings in the executable**, so the WAD lookup is an exact
 `wad::hash_name` CRC-32 hit rather than a mined candidate.
 

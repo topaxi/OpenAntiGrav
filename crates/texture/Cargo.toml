@@ -1,0 +1,25 @@
+[package]
+name = "oag-texture"
+description = "Every pixel format the Wipeout originals ship, decoded to RGBA8888"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+# `oag-formats` for the GE block swizzle, which is byte layout rather than
+# pixel format and so stays at the container layer. Nothing else.
+[dependencies]
+oag-formats.workspace = true
+
+# Ground-truth tests read real textures out of a disc image. Tests only: the
+# decoders themselves know nothing about discs. See `crates/tables/Cargo.toml`
+# for why a dev-dependency back onto a crate that depends on this one is
+# permitted and does not breach the boundary gate.
+[dev-dependencies]
+oag-assets.workspace = true
+oag-disc.workspace = true
+oag-pulse.workspace = true
+
+[lints]
+workspace = true

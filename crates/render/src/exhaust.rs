@@ -1119,7 +1119,7 @@ impl Pipeline {
     ///
     /// `flare` is RGBA8, normally
     /// `Data\Tex\EngineFlare\grabbedEngineFlare128x64x8.mip` decoded by
-    /// `oag_formats::texture`. `format` must match the caller's render pass and
+    /// `oag_texture::texture`. `format` must match the caller's render pass and
     /// `sample_count` its multisample state - see `mesh_render::build`.
     #[allow(clippy::too_many_arguments)]
     pub fn new(
