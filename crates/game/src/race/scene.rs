@@ -133,7 +133,7 @@ pub struct Scene {
     /// The shield seen from **inside** the cockpit: one sphere, not one per
     /// craft, because only the player's camera can ever be inside one.
     ///
-    /// Drawn *instead of* the player's entry in [`Self::shield`] while
+    /// Drawn *instead of* the player's entry in [`RaceView::shield`] while
     /// `Race::draws_own_ship` is false, which is exactly the branch
     /// `ShipShield_Update` takes on `craft+0x6d`. `None` on a source that does
     /// not carry `Data\Weapons\vr_shield_cockpit.vex`.
@@ -179,7 +179,7 @@ pub struct Scene {
     /// that `queue` already accepts through a shared reference. The borrow is
     /// taken and released inside `render` with nothing re-entrant in between.
     exhaust: std::cell::RefCell<exhaust::Pipeline>,
-    /// Collision sparks. `RefCell` for the same reason [`Self::exhaust`] is.
+    /// Collision sparks. `RefCell` for the same reason [`RaceView::exhaust`] is.
     sparks: std::cell::RefCell<sparks::Pipeline>,
     /// The `blob` shadow tier: one ground-aligned quad per craft, drawn after
     /// the track and before the hulls.
@@ -188,12 +188,12 @@ pub struct Scene {
     /// for the reason [`Self::motion_blur`] is: the tier is read fresh every
     /// frame so the setting applies live, and at `off` nothing is uploaded and
     /// the draw returns immediately. `RefCell` for the reason
-    /// [`Self::exhaust`] is one. See `oag_render::shadow` and
+    /// [`RaceView::exhaust`] is one. See `oag_render::shadow` and
     /// [`crate::race::shadow`], which split what is the disc's from what is
     /// ours.
     shadow: std::cell::RefCell<oag_render::shadow::Pipeline>,
     /// The `original` tier's shadow map on Wipeout HD: what the craft cast
-    /// into and the track samples. `RefCell` for the reason [`Self::exhaust`]
+    /// into and the track samples. `RefCell` for the reason [`RaceView::exhaust`]
     /// is - its pass is encoded inside `render`'s `&self`.
     ///
     /// Built for every race and bound by every drawable, because the setting
@@ -216,7 +216,7 @@ pub struct Scene {
     /// allocated 1.18 MB a frame with a full grid; cleared and refilled they
     /// reach their high-water mark once and stay there.
     ///
-    /// `RefCell` for the reason [`Self::exhaust`] is one: [`Scene::render`]
+    /// `RefCell` for the reason [`RaceView::exhaust`] is one: [`Scene::render`]
     /// takes `&self`, and this is per-frame scratch rather than scene state -
     /// nothing reads it between frames, and [`Scratch::clear`] is the first
     /// thing done with it.
@@ -241,7 +241,7 @@ pub struct Scene {
     /// setting is a *strength* [`Scene::render`] reads fresh every frame -
     /// the row applies live, per `docs/rendering/motion-blur.md`'s design -
     /// and at `off` the pass simply never encodes anything. `RefCell` for
-    /// the reason [`Self::exhaust`] is: its scratch targets resize inside
+    /// the reason [`RaceView::exhaust`] is: its scratch targets resize inside
     /// `render`'s `&self`.
     ///
     /// It reads [`Self::velocity`] and the depth attachment; under MSAA both
@@ -259,7 +259,7 @@ pub struct Scene {
     velocity: wgpu::Texture,
     /// The previous tick's camera and model matrices, for the `prev_mvp`
     /// every drawable's velocity is measured against - see
-    /// [`motion::MotionState`]. `RefCell` for the reason [`Self::exhaust`]
+    /// [`motion::MotionState`]. `RefCell` for the reason [`RaceView::exhaust`]
     /// is: promoting a tick's snapshot is per-frame state `render`'s `&self`
     /// has to move.
     motion: std::cell::RefCell<Option<motion::MotionState>>,

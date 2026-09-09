@@ -178,7 +178,7 @@ impl Race {
         // and bulges the shell. The original's contact loop takes exactly this
         // branch instead of its hull-damage call.
         if evaluated.shield.absorbed {
-            self.shield[0].hit();
+            self.view.shield[0].hit();
         }
         // Eliminator's own kill-attribution rule, applied here for the same
         // reason the shield edges above are: a wall contact that actually
@@ -221,7 +221,7 @@ impl Race {
         );
         for (slot, hit) in absorbed.iter().enumerate() {
             if *hit {
-                self.shield[slot].hit();
+                self.view.shield[slot].hit();
             }
         }
         // After `projectile::step`, so a flare rides where its rocket
@@ -241,7 +241,7 @@ impl Race {
         // After the craft have moved, so a flare sits on this tick's nozzle
         // rather than the last one's.
         self.advance_engine_flares();
-        self.stage.advance(self.dt, &mut self.stage_rng);
+        self.view.stage.advance(self.dt, &mut self.view.stage_rng);
 
         self.respawn_cooldown[0] = self.respawn_cooldown[0].saturating_sub(1);
         // Unconditionally and before the `||`, so the dwell sees every tick -
@@ -394,7 +394,9 @@ impl Race {
         self.capture_results();
 
         let target = target_of(&self.world.ships[0]);
-        self.camera.advance(target, &self.chase_params, self.dt);
+        self.view
+            .camera
+            .advance(target, &self.view.chase_params, self.dt);
 
         // Advanced here, on the fixed tick, and not in the frame loop. That is
         // what makes the headless `capture` path - which calls only `tick` -
@@ -413,19 +415,19 @@ impl Race {
         // `pad_timer` rather than from the exhaust, because the exhaust's boost
         // is a `max` that other things may one day also arm and this must follow
         // the pad specifically.
-        if self.boost_fov_kick != oag_display::display::BoostFovKick::OFF {
+        if self.view.boost_fov_kick != oag_display::display::BoostFovKick::OFF {
             let boosting = self.world.ships[0].physics.pad_timer > 0.0;
             let (target, rate) = if boosting {
                 (1.0, BOOST_FOV_OPEN_RATE)
             } else {
                 (0.0, BOOST_FOV_CLOSE_RATE)
             };
-            self.boost_kick += (target - self.boost_kick) * rate * self.dt;
+            self.view.boost_kick += (target - self.view.boost_kick) * rate * self.dt;
             // Snapped, so a closed kick is *exactly* zero and `projection` takes
             // its bit-identical path rather than an `atan(tan(x))` round trip
             // that never quite settles.
-            if !boosting && self.boost_kick < 1.0e-3 {
-                self.boost_kick = 0.0;
+            if !boosting && self.view.boost_kick < 1.0e-3 {
+                self.view.boost_kick = 0.0;
             }
         }
 
@@ -442,7 +444,7 @@ impl Race {
         // raw input, so a flap follows the airbrake the ship actually has.
         //
         // **The rates are on the airbrake's own `0..=100` scale**, per second,
-        // which is why `self.flaps` holds a level rather than an angle. Not
+        // which is why `self.view.flaps` holds a level rather than an angle. Not
         // read out of the binary - no consumer of `<AirbrakeGraphics>` was
         // located - but not a coin flip either: every team authors
         // `up_speed = 500` against a `down_speed` of 80 to 120, and on this
@@ -454,15 +456,16 @@ impl Race {
         // the same scale, one element away.
         let ship = &self.world.ships[0].physics;
         for (flap, level) in self
+            .view
             .flaps
             .iter_mut()
             .zip([ship.airbrake_left, ship.airbrake_right])
         {
             let target = level.clamp(0.0, 100.0);
             let (rate, rising) = if target > *flap {
-                (self.flap_graphics.up_speed, true)
+                (self.view.flap_graphics.up_speed, true)
             } else {
-                (self.flap_graphics.down_speed, false)
+                (self.view.flap_graphics.down_speed, false)
             };
             let step = rate * self.dt;
             *flap = if rising {
@@ -482,7 +485,7 @@ impl Race {
         // Decays every tick regardless of contact, the same as
         // `Camera_ArmShake`'s own `shake_timer` - see
         // `oag_render::camera::shake`.
-        self.shake.advance(self.dt);
+        self.view.shake.advance(self.dt);
 
         // After every writer of the shield pool this tick has run - the wall
         // contact above, the weapon damage inside `projectile::step`, and the
@@ -494,10 +497,10 @@ impl Race {
         // Cooldown-gated, not edge-triggered - see `Self::sparks_cooldown`'s
         // doc comment for why a sustained scrape must re-fire periodically
         // rather than spawn once and go silent.
-        self.sparks_cooldown = (self.sparks_cooldown - self.dt).max(0.0);
+        self.view.sparks_cooldown = (self.view.sparks_cooldown - self.dt).max(0.0);
         // The trigger rule runs whether or not the disc's own effect
         // loaded - see `Setup::effects`. Only the pool needs it.
-        let effect = self.effects.get(sparks::DAMAGE_EFFECT).cloned();
+        let effect = self.view.effects.get(sparks::DAMAGE_EFFECT).cloned();
         // Two trigger modes, chosen by the effect's own flag and never by the
         // platform. A `LOOPING` emitter has no countdown, so an owner must let
         // go of it; a burst ends itself and the cooldown is only there to
@@ -520,22 +523,22 @@ impl Race {
         // and differ in shape: a one-shot on this edge, a held voice on the
         // level the edge starts. The level half is `Race::shield_is_up`, read
         // by the audio layer; the edge is here, with every other cue edge.
-        if shielded && !self.shield_was_up {
+        if shielded && !self.view.shield_was_up {
             self.cues.push(crate::audio::sfx::CueEvent::new(
                 crate::audio::sfx::Cue::ShieldActive,
                 0,
             ));
         }
-        self.shield_was_up = shielded;
+        self.view.shield_was_up = shielded;
         let can_fire = !shielded
             && if attached_effect {
                 // Ignite once per contact, not once per cooldown: re-arming
                 // would leave a chattering scrape with no sparks for up to
                 // `COLLISION_COOLDOWN` at a time, which a burst never suffers
                 // because it has already finished by then.
-                evaluated.wall.impact && !self.sparks_attached
+                evaluated.wall.impact && !self.view.sparks_attached
             } else {
-                evaluated.wall.impact && self.sparks_cooldown <= 0.0
+                evaluated.wall.impact && self.view.sparks_cooldown <= 0.0
             };
         // The two contact sounds; the reasoning is on the helper, which the
         // opponents' own step calls with their slots.
@@ -559,6 +562,7 @@ impl Race {
             // surface point itself is mapped into model space so it still
             // rides the hull with rotation.
             let anchor_model = self
+                .view
                 .collision_fx
                 .iter()
                 .copied()
@@ -568,9 +572,9 @@ impl Race {
                     da.total_cmp(&db)
                 })
                 .unwrap_or_else(|| model_matrix.inverse().transform_point3(surface));
-            self.sparks_anchor = Some(anchor_model);
+            self.view.sparks_anchor = Some(anchor_model);
             if let Some(effect) = effect.as_deref() {
-                self.sparks.ignite(
+                self.view.sparks.ignite(
                     effect,
                     surface,
                     sparks::severity(evaluated.wall.impact_speed),
@@ -600,10 +604,12 @@ impl Race {
                 oag_render::camera::shake::Side::Elsewhere
             };
             let shake_severity = sparks::clamped_intensity(evaluated.wall.impact_speed);
-            self.shake.arm(shake_severity, side, &mut self.shake_rng);
-            self.sparks_ignitions += 1;
-            self.sparks_cooldown = sparks::COLLISION_COOLDOWN;
-            self.sparks_attached = attached_effect;
+            self.view
+                .shake
+                .arm(shake_severity, side, &mut self.view.shake_rng);
+            self.view.sparks_ignitions += 1;
+            self.view.sparks_cooldown = sparks::COLLISION_COOLDOWN;
+            self.view.sparks_attached = attached_effect;
         }
         // Releasing on "no contact at all" rather than on `impact` going false
         // keeps the fountain alive through a gentle slide after the hit -
@@ -616,9 +622,9 @@ impl Race {
         // rule does not generalise to the four HD effects that mix `LOOPING`
         // with clear siblings - it would truncate the siblings. None of the
         // four is wired to this trigger.
-        if self.sparks_attached && evaluated.wall.resolved.is_none() {
-            self.sparks.stop();
-            self.sparks_attached = false;
+        if self.view.sparks_attached && evaluated.wall.resolved.is_none() {
+            self.view.sparks.stop();
+            self.view.sparks_attached = false;
         }
         // Unconditional, like the exhaust: the emitters keep trickling and
         // already-live particles keep ageing even on a tick with no fresh
@@ -626,13 +632,15 @@ impl Race {
         // *current* transform, the way the original's scene-graph node rides
         // the craft.
         let anchor = self
+            .view
             .sparks_anchor
             .map_or(self.ship().physics.body.position, |local| {
                 model_matrix.transform_point3(local)
             });
         if let Some(effect) = effect.as_deref() {
-            self.sparks
-                .advance(effect, self.dt, anchor, &mut self.sparks_rng);
+            self.view
+                .sparks
+                .advance(effect, self.dt, anchor, &mut self.view.sparks_rng);
         }
 
         evaluated

@@ -400,7 +400,7 @@ impl Race {
             // this is unreachable today and is here because the alternative is a
             // rival shield that silently has no visual the day it arrives.
             if evaluated.shield.absorbed {
-                self.shield[slot].hit();
+                self.view.shield[slot].hit();
             }
             // Eliminator's own kill-attribution rule, the opponents' half of
             // the one `Race::tick` applies to the player - see

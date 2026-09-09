@@ -544,7 +544,7 @@ fn a_shielded_scrape_bulges_the_shell_and_throws_no_sparks() {
     let mut race = Race::start(setup);
 
     race.world.ships[0].physics.shield_pickup_timer = 1.0;
-    race.shield[0].activate();
+    race.view.shield[0].activate();
     let resting = race.shield_of(0).scale();
 
     let body = &mut race.world.ships[0].physics.body;

@@ -22,12 +22,13 @@ impl Race {
     /// How far each airbrake flap has swung, left then right, in **radians**.
     ///
     /// Read by the renderer once a frame. Render-only state - see
-    /// [`Self::flaps`], which holds the same thing on the airbrake's `0..=100`
+    /// [`RaceView::flaps`], which holds the same thing on the airbrake's `0..=100`
     /// scale, and note the rates driving it are **not** the force law's.
     #[must_use]
     pub fn airbrake_flaps(&self) -> [f32; 2] {
-        self.flaps
-            .map(|level| self.flap_graphics.amount * level / 100.0)
+        self.view
+            .flaps
+            .map(|level| self.view.flap_graphics.amount * level / 100.0)
     }
 
     /// Which scheme this race is being driven with.
@@ -46,10 +47,10 @@ impl Race {
     /// bit-identical to what it returned before the effect existed.
     /// The field of view the picture is being drawn at, for the lock-on reticle.
     ///
-    /// See [`Race::sight_fov`]. Cheap and idempotent, so the frame loop may set
+    /// See [`RaceView::sight_fov`]. Cheap and idempotent, so the frame loop may set
     /// it every frame rather than tracking whether the setting moved.
     pub fn set_sight_fov(&mut self, fov: oag_display::display::Fov) {
-        self.sight_fov = fov;
+        self.view.sight_fov = fov;
     }
 
     /// Which grid the lock-on reticle's coordinates are in.
@@ -63,28 +64,28 @@ impl Race {
     /// **Resets the reticle**, because its centre, its extent and its chase are
     /// all in the old grid's units. Called once before the first tick.
     pub fn set_sight_screen(&mut self, screen: (f32, f32)) {
-        self.sight = oag_race::sight::Sight::new([screen.0, screen.1]);
+        self.view.sight = oag_race::sight::Sight::new([screen.0, screen.1]);
     }
 
     /// The lock-on reticle, for whoever draws it.
     ///
-    /// Render-only state - see [`Race::sight`] - so this returning a borrow
+    /// Render-only state - see [`RaceView::sight`] - so this returning a borrow
     /// rather than a copy costs nothing and cannot be mistaken for world state.
     #[must_use]
     pub fn sight(&self) -> &oag_race::sight::Sight {
-        &self.sight
+        &self.view.sight
     }
 
     /// What the reticle is doing, which is what `~ROCKLOCK` plays off.
     #[must_use]
     pub fn sight_state(&self) -> oag_race::sight::State {
-        self.sight_state
+        self.view.sight_state
     }
 
     pub fn set_boost_fov_kick(&mut self, kick: oag_display::display::BoostFovKick) {
-        self.boost_fov_kick = kick;
+        self.view.boost_fov_kick = kick;
         if kick == oag_display::display::BoostFovKick::OFF {
-            self.boost_kick = 0.0;
+            self.view.boost_kick = 0.0;
         }
     }
 
@@ -93,7 +94,7 @@ impl Race {
     /// `Race::start` and does not track the settings file afterwards.
     #[must_use]
     pub fn boost_fov_kick(&self) -> oag_display::display::BoostFovKick {
-        self.boost_fov_kick
+        self.view.boost_fov_kick
     }
 
     /// Chooses which of the three perspectives to render from. `[graphics]
@@ -114,26 +115,26 @@ impl Race {
     /// it keeps a separate previous-eye per rig, so it does neither, and
     /// reproducing that needs a second [`Chase`] rather than a decision here.
     pub fn set_camera_view(&mut self, view: oag_display::display::CameraView) {
-        if view == self.view {
+        if view == self.view.camera_view {
             return;
         }
-        self.view = view;
-        self.chase_params = match view {
-            oag_display::display::CameraView::Close => self.chase_close,
+        self.view.camera_view = view;
+        self.view.chase_params = match view {
+            oag_display::display::CameraView::Close => self.view.chase_close,
             // The cockpit view does not use these, but leaving the *far* block
             // installed means a cycle back out of the cockpit lands on the block
             // the next external view will want anyway.
             oag_display::display::CameraView::Internal | oag_display::display::CameraView::Far => {
-                self.chase_far
+                self.view.chase_far
             }
         };
-        self.camera = Chase::snapped(target_of(self.ship()), &self.chase_params);
+        self.view.camera = Chase::snapped(target_of(self.ship()), &self.view.chase_params);
     }
 
     /// Which perspective this race is rendering from.
     #[must_use]
     pub fn camera_view(&self) -> oag_display::display::CameraView {
-        self.view
+        self.view.camera_view
     }
 
     /// Whether the player's own hull should be drawn this frame.
@@ -150,7 +151,7 @@ impl Race {
     /// off screen anyway rather than visibly wrong.
     #[must_use]
     pub fn draws_own_ship(&self) -> bool {
-        self.view.draws_own_ship()
+        self.view.camera_view.draws_own_ship()
     }
 
     /// How many times a `Reset` contact has respawned the player this race.

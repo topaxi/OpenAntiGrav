@@ -37,11 +37,11 @@ impl Race {
     /// The results, once there are any.
     ///
     /// `None` for the whole race and `Some` from the finishing tick on. The
-    /// table is taken at that instant and never revised - see [`Race::results`]'s
+    /// table is taken at that instant and never revised - see [`RaceView::results`]'s
     /// field for why that matters.
     #[must_use]
     pub fn results(&self) -> Option<&Board> {
-        self.results.as_ref()
+        self.view.results.as_ref()
     }
 
     /// Takes the board, on the tick the race finishes and only then.
@@ -49,7 +49,7 @@ impl Race {
     /// Called at the end of [`Race::tick`], after the standings have been
     /// advanced, so the last crossing is already in the table it reads.
     pub(super) fn capture_results(&mut self) {
-        if !self.finished() || self.results.is_some() {
+        if !self.finished() || self.view.results.is_some() {
             return;
         }
         let places = self.places();
@@ -77,7 +77,7 @@ impl Race {
                 }
             })
             .collect();
-        self.results = Some(scoreboard::build(
+        self.view.results = Some(scoreboard::build(
             &crafts,
             self.world.race.laps_target,
             self.world.tick,

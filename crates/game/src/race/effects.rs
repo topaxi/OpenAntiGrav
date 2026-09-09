@@ -120,17 +120,22 @@ impl Race {
             };
             let speed = ship.body.linear_velocity.length();
             let back = -ship.body.forward();
-            self.exhaust[slot].advance(self.dt, thrust, speed, &mut self.exhaust_rng[slot]);
-            if self.hd_trail_active {
+            self.view.exhaust[slot].advance(
+                self.dt,
+                thrust,
+                speed,
+                &mut self.view.exhaust_rng[slot],
+            );
+            if self.view.hd_trail_active {
                 // HD's flame blends: the boost side opens on the same 0.2
                 // gate the plume reveal reads - HD's own `DAT_008b2ff4` is
                 // the PSP's `BOOST_GATE` value exactly.
-                self.hd_flame[slot].advance(
+                self.view.hd_flame[slot].advance(
                     thrust > 0.0,
-                    self.exhaust[slot].boost_timer() > exhaust::BOOST_GATE,
+                    self.view.exhaust[slot].boost_timer() > exhaust::BOOST_GATE,
                 );
-                let rng = &mut self.exhaust_rng[slot];
-                self.hd_sprite[slot].advance(|| rng.next_f32());
+                let rng = &mut self.view.exhaust_rng[slot];
+                self.view.hd_sprite[slot].advance(|| rng.next_f32());
             }
             if let Some(nozzle) = self.nozzle_of(slot) {
                 // How far this hull reaches from its own origin, in world
@@ -138,19 +143,23 @@ impl Race {
                 // HD hands its SPU job. Taken here because the nozzle is
                 // already in hand and it is the one authored point on the hull
                 // this engine knows the world position of.
-                self.hull_reach[slot] = (nozzle - position).length();
-                self.exhaust[slot].push_trail(nozzle, back);
-                if self.hd_trail_active {
+                self.view.hull_reach[slot] = (nozzle - position).length();
+                self.view.exhaust[slot].push_trail(nozzle, back);
+                if self.view.hd_trail_active {
                     // HD's tube wants the craft's *up* (fin 0's axis) and the
                     // normalised speed its scroll and stretch ride on. The
                     // throttle share of `speed01` is authored against a 0..1
                     // throttle; this engine's thrust input is effectively
                     // binary, so on/off is the whole of it here.
                     let s01 = exhaust::hd::speed01(
-                        self.exhaust[slot].speed_kmh(),
+                        self.view.exhaust[slot].speed_kmh(),
                         if thrust > 0.0 { 1.0 } else { 0.0 },
                     );
-                    self.hd_trail[slot].push(nozzle, self.world.ships[slot].physics.body.up(), s01);
+                    self.view.hd_trail[slot].push(
+                        nozzle,
+                        self.world.ships[slot].physics.body.up(),
+                        s01,
+                    );
                 }
             }
         }
@@ -168,7 +177,7 @@ impl Race {
     /// engine's**, named rather than buried:
     ///
     /// 1. **The test.** A craft counts as in a trail when its centre comes
-    ///    within its own [`Race::hull_reach`] plus the ribbon's measured
+    ///    within its own [`RaceView::hull_reach`] plus the ribbon's measured
     ///    half-width of that trail's centre line
     ///    ([`exhaust::hd::Tube::nearest`]). Both terms are measured - the
     ///    reach from the craft's own authored nozzle locator, the half-width
@@ -214,12 +223,12 @@ impl Race {
     /// A craft is never tested against its own trail: its nozzle *is* the head
     /// sample, so it would be permanently inside it.
     pub(super) fn advance_trail_hits(&mut self) {
-        if !self.hd_trail_active {
+        if !self.view.hd_trail_active {
             return;
         }
         self.force_trail_sparks();
         for owner in 0..self.world.ship_count as usize {
-            if !self.world.ships[owner].active || !self.hd_trail[owner].ready() {
+            if !self.world.ships[owner].active || !self.view.hd_trail[owner].ready() {
                 continue;
             }
             for intruder in 0..self.world.ship_count as usize {
@@ -230,17 +239,17 @@ impl Race {
                 let hit = self.trail_touches(intruder, owner);
                 let bit = 1u8 << intruder;
                 if hit {
-                    self.trail_inside[owner] |= bit;
+                    self.view.trail_inside[owner] |= bit;
                 } else {
-                    self.trail_inside[owner] &= !bit;
+                    self.view.trail_inside[owner] &= !bit;
                     continue;
                 }
-                let name = if self.hd_trail_red[intruder] > 0.5 {
+                let name = if self.view.hd_trail_red[intruder] > 0.5 {
                     TRAIL_HITSHIP_RED_EFFECT
                 } else {
                     TRAIL_HITSHIP_EFFECT
                 };
-                let Some(effect) = self.effects.get(name).cloned() else {
+                let Some(effect) = self.view.effects.get(name).cloned() else {
                     continue;
                 };
                 // **On the hull, not on the ribbon.** The original parents the
@@ -252,15 +261,17 @@ impl Race {
                 // takes the point on the craft's own bounding sphere facing the
                 // contact - the place the nearest of ten hull nodes would be -
                 // and re-spawns it every tick, which is what makes it follow.
-                let contact = self.hd_trail[owner].nearest(at).map_or(at, |(on, _)| on);
-                let point = self
-                    .spark_anchor_of(intruder, owner)
-                    .unwrap_or_else(|| hull_contact_point(at, contact, self.hull_reach[intruder]));
+                let contact = self.view.hd_trail[owner]
+                    .nearest(at)
+                    .map_or(at, |(on, _)| on);
+                let point = self.spark_anchor_of(intruder, owner).unwrap_or_else(|| {
+                    hull_contact_point(at, contact, self.view.hull_reach[intruder])
+                });
                 // Neutral severity, as the rocket blast uses: the scale the
                 // collision sparks derive from an impulse has no counterpart
                 // here, and the float the original carries into the spawner
                 // (`+0x11dc`) is unread.
-                self.stage.play(&effect, point, 1.0);
+                self.view.stage.play(&effect, point, 1.0);
             }
         }
     }
@@ -274,7 +285,7 @@ impl Race {
     /// played and drew nothing.
     ///
     /// Everything but the *placement* is the real path - the same effect, the
-    /// same rate, the same [`hd_trail_red`](Race::hd_trail_red) colour select.
+    /// same rate, the same [`hd_trail_red`](RaceView::hd_trail_red) colour select.
     /// The placement is the one thing chosen rather than derived: two units
     /// above the player's nozzle, which is on screen and clear of the exhaust
     /// plume. Three alternatives were measured and each looks like nothing or
@@ -285,7 +296,7 @@ impl Race {
     /// hundred units behind. **So this placement is for looking at, and says
     /// nothing about where a real hit lands.**
     fn force_trail_sparks(&mut self) {
-        if !self.trail_sparks {
+        if !self.view.trail_sparks {
             return;
         }
         // The same gate the real path has: a craft with no nozzle locator has
@@ -303,17 +314,17 @@ impl Race {
         // hull exactly as a real hit is and still clear of the exhaust plume.
         let above = body.position + body.up() * 10.0;
         let probe = self.spark_anchor_of(0, 0).unwrap_or_else(|| {
-            hull_contact_point(body.position, above, self.hull_reach[0].max(1.0))
+            hull_contact_point(body.position, above, self.view.hull_reach[0].max(1.0))
         });
-        let name = if self.hd_trail_red[0] > 0.5 {
+        let name = if self.view.hd_trail_red[0] > 0.5 {
             TRAIL_HITSHIP_RED_EFFECT
         } else {
             TRAIL_HITSHIP_EFFECT
         };
-        let Some(effect) = self.effects.get(name).cloned() else {
+        let Some(effect) = self.view.effects.get(name).cloned() else {
             return;
         };
-        self.stage.play(&effect, probe, 1.0);
+        self.view.stage.play(&effect, probe, 1.0);
     }
 
     /// Whether any of the craft's own authored hull points is inside the
@@ -321,7 +332,7 @@ impl Race {
     ///
     /// **The hull's own points, not a sphere around it.** This first tested the
     /// craft's centre against the ribbon within
-    /// [`Race::hull_reach`] + [`FIN_HALF_WIDTH`](exhaust::hd::FIN_HALF_WIDTH),
+    /// [`RaceView::hull_reach`] + [`FIN_HALF_WIDTH`](exhaust::hd::FIN_HALF_WIDTH),
     /// and a player reported the sparks firing before the craft touched the
     /// trail: that reach is the origin-to-nozzle distance, about half a hull
     /// *length*, so as a radius it reaches well past a hull that is far
@@ -335,19 +346,19 @@ impl Race {
         self.trail_touches(slot, owner)
     }
 
-    /// [`Self::hull_reach`] for one slot, for the test that measures how much
+    /// [`RaceView::hull_reach`] for one slot, for the test that measures how much
     /// tighter the anchor test is than the sphere it replaced.
     #[doc(hidden)]
     #[must_use]
     pub fn hull_reach_for_tests(&self, slot: usize) -> f32 {
-        self.hull_reach[slot]
+        self.view.hull_reach[slot]
     }
 
     fn trail_touches(&self, slot: usize, owner: usize) -> bool {
-        let tube = &self.hd_trail[owner];
+        let tube = &self.view.hd_trail[owner];
         let at = self.world.ships[slot].physics.body.position;
-        let Some(anchors) = self.spark_anchors.get(slot).filter(|a| !a.is_empty()) else {
-            let reach = self.hull_reach[slot] + exhaust::hd::FIN_HALF_WIDTH;
+        let Some(anchors) = self.view.spark_anchors.get(slot).filter(|a| !a.is_empty()) else {
+            let reach = self.view.hull_reach[slot] + exhaust::hd::FIN_HALF_WIDTH;
             return tube.nearest(at).is_some_and(|(_, away)| away <= reach);
         };
         let matrix = model_matrix_of(&self.world.ships[slot]);
@@ -375,21 +386,21 @@ impl Race {
     ///
     /// **So the contact is taken at the hull's leading edge**, where a craft
     /// driving forward meets a trail. That point is derived - the nose, as the
-    /// mirror of the authored nozzle offset in [`Race::hull_reach`] - because
+    /// mirror of the authored nozzle offset in [`RaceView::hull_reach`] - because
     /// the point the original measures its ten nodes against is one the
     /// decompiler lost. Everything else is the disc's: the anchors, and the
     /// nearest-of rule. The `Ship Collision Fx` locators are the
     /// original's own hull spark anchors and very likely the same ten nodes -
     /// see `docs/ghidra/functions/ps3-hdfury-eu/engine-trail.md`. Two placements were tried before this and both were wrong on
     /// screen: the contact point itself put the sparks on the *trail*, and a
-    /// point at [`Race::hull_reach`] along the direction of the contact put
+    /// point at [`RaceView::hull_reach`] along the direction of the contact put
     /// them anchored to the craft but floating clear of the hull, because that
     /// reach is about half a hull *length* and the direction, when a craft is
     /// inside a ribbon, is a near-arbitrary perpendicular offset amplified to
     /// five units. An authored anchor has neither problem.
     #[must_use]
     pub fn spark_anchor_of(&self, slot: usize, owner: usize) -> Option<Vec3> {
-        let anchors = self.spark_anchors.get(slot)?;
+        let anchors = self.view.spark_anchors.get(slot)?;
         let matrix = model_matrix_of(&self.world.ships[slot]);
         // Where the craft *drives into* the ribbon: the point on it nearest the
         // hull's leading edge, not nearest the hull's centre. A craft already
@@ -398,8 +409,8 @@ impl Race {
         // pick among anchors is a coin toss - which is how Assegai ended up
         // sparking from its own exhaust.
         let body = self.world.ships[slot].physics.body;
-        let nose = body.position + body.forward() * self.hull_reach[slot];
-        let contact = self.hd_trail[owner].nearest(nose)?.0;
+        let nose = body.position + body.forward() * self.view.hull_reach[slot];
+        let contact = self.view.hd_trail[owner].nearest(nose)?.0;
         anchors
             .iter()
             .map(|local| matrix.transform_point3(*local))
@@ -433,10 +444,10 @@ impl Race {
         out: &mut Vec<oag_render::mesh::GpuVertex>,
         slot: usize,
     ) {
-        if !self.hd_trail_active {
+        if !self.view.hd_trail_active {
             return;
         }
-        let exhaust = &self.exhaust[slot];
+        let exhaust = &self.view.exhaust[slot];
         // HD's ramp, not Pulse's: the gained speed field saturates it near
         // 400 km/h, so a craft at pace trails at or near full brightness -
         // see `hd::speed_ramp` and the live table on engine-trail.md.
@@ -445,19 +456,24 @@ impl Race {
             exhaust.speed_kmh(),
             if exhaust.engine_on() { 1.0 } else { 0.0 },
         );
-        self.hd_trail[slot].extend_vertices(out, brightness, s01, self.hd_trail_red[slot]);
+        self.view.hd_trail[slot].extend_vertices(
+            out,
+            brightness,
+            s01,
+            self.view.hd_trail_red[slot],
+        );
     }
 
     /// Whether this race draws HD's trail tube instead of the PSP ribbon.
     #[must_use]
     pub fn hd_trail_active(&self) -> bool {
-        self.hd_trail_active
+        self.view.hd_trail_active
     }
 
     /// One craft's HD flame blends, for the flare model's group scales.
     #[must_use]
     pub fn hd_flame_of(&self, slot: usize) -> &exhaust::hd::Flame {
-        &self.hd_flame[slot]
+        &self.view.hd_flame[slot]
     }
 
     /// One craft's sprite-flare quad: `Engine_Flare_Rich.gtf` at the nozzle,
@@ -470,13 +486,13 @@ impl Race {
         right: Vec3,
         up: Vec3,
     ) -> Vec<oag_render::mesh::GpuVertex> {
-        if !self.hd_trail_active {
+        if !self.view.hd_trail_active {
             return Vec::new();
         }
         let Some(nozzle) = self.nozzle_of(slot) else {
             return Vec::new();
         };
-        let sprite = &self.hd_sprite[slot];
+        let sprite = &self.view.hd_sprite[slot];
         // `sprite.radius()` is the tuning file's own `Flare Radius`
         // (`exhaust::hd::SPRITE_RADIUS`), authored in the same model space as
         // the hull it sits on - `nozzle` above already carries the craft's
@@ -518,16 +534,16 @@ impl Race {
     pub(super) fn advance_shields(&mut self) {
         for slot in 0..MAX_SHIPS {
             if self.world.ships[slot].physics.shield_pickup_timer <= 0.0 {
-                self.shield[slot].deactivate();
+                self.view.shield[slot].deactivate();
             }
-            self.shield[slot].advance(self.dt);
+            self.view.shield[slot].advance(self.dt);
         }
     }
 
     /// One craft's shield shell, by slot.
     #[must_use]
     pub fn shield_of(&self, slot: usize) -> &ShipShield {
-        &self.shield[slot]
+        &self.view.shield[slot]
     }
 
     /// The **player's** exhaust animation state.
@@ -537,7 +553,7 @@ impl Race {
     /// the field.
     #[must_use]
     pub fn exhaust(&self) -> &Exhaust {
-        &self.exhaust[0]
+        &self.view.exhaust[0]
     }
 
     /// One craft's exhaust animation state.
@@ -553,7 +569,7 @@ impl Race {
     /// If `slot` is not a ship slot.
     #[must_use]
     pub fn exhaust_of(&self, slot: usize) -> &Exhaust {
-        &self.exhaust[slot]
+        &self.view.exhaust[slot]
     }
 
     /// Held throttle on the original's `0..=100` scale, for
@@ -639,7 +655,7 @@ impl Race {
         // **The player's, and only the player's.** A pose comparison is against
         // one captured craft; posing the whole field would put seven opponents
         // into a boost the capture says nothing about.
-        let (player, rng) = (&mut self.exhaust[0], &mut self.exhaust_rng[0]);
+        let (player, rng) = (&mut self.view.exhaust[0], &mut self.view.exhaust_rng[0]);
         for _ in 0..(ticks.floor() as u32) {
             player.advance(self.dt, Self::FULL_THRUST, speed, rng);
         }
@@ -674,20 +690,20 @@ impl Race {
         // `Race::tick`.
         if let Some(nozzle) = self.nozzle() {
             let back = -self.ship().physics.body.forward();
-            self.exhaust[0].clear_trail();
+            self.view.exhaust[0].clear_trail();
             for k in (0..exhaust::TRAIL_SAMPLES).rev() {
                 let behind = back * (speed * self.dt * k as f32);
-                self.exhaust[0].push_trail(nozzle + behind, back);
+                self.view.exhaust[0].push_trail(nozzle + behind, back);
             }
             // The HD tube on the same straight-line terms, when it is the
             // ribbon this race draws.
-            if self.hd_trail_active {
+            if self.view.hd_trail_active {
                 let up = self.ship().physics.body.up();
-                let s01 = exhaust::hd::speed01(self.exhaust[0].speed_kmh(), 1.0);
-                self.hd_trail[0].clear();
+                let s01 = exhaust::hd::speed01(self.view.exhaust[0].speed_kmh(), 1.0);
+                self.view.hd_trail[0].clear();
                 for k in (0..exhaust::hd::SAMPLES).rev() {
                     let behind = back * (speed * self.dt * k as f32);
-                    self.hd_trail[0].push(nozzle + behind, up, s01);
+                    self.view.hd_trail[0].push(nozzle + behind, up, s01);
                 }
             }
         }
@@ -706,10 +722,11 @@ impl Race {
         right: Vec3,
         up: Vec3,
     ) {
-        let Some(effect) = self.effects.get(sparks::DAMAGE_EFFECT) else {
+        let Some(effect) = self.view.effects.get(sparks::DAMAGE_EFFECT) else {
             return;
         };
-        self.sparks
+        self.view
+            .sparks
             .extend_vertices(additive, alpha_over, effect, right, up);
     }
 
@@ -726,13 +743,15 @@ impl Race {
         right: Vec3,
         up: Vec3,
     ) {
-        self.stage.extend_vertices(additive, alpha_over, right, up);
+        self.view
+            .stage
+            .extend_vertices(additive, alpha_over, right, up);
     }
 
     /// The pool the rocket effects play in.
     #[must_use]
     pub fn stage(&self) -> &psys::Stage {
-        &self.stage
+        &self.view.stage
     }
 
     /// Whether this source authors an engine flare as a particle effect, and
@@ -746,22 +765,22 @@ impl Race {
     /// neither of those has an authored counterpart on either disc.
     #[must_use]
     pub fn engine_flare_effect(&self) -> bool {
-        self.effects.get(ENGINE_FLARE_EFFECT).is_some()
+        self.view.effects.get(ENGINE_FLARE_EFFECT).is_some()
     }
 
     /// How many spark bursts the contact rule has triggered.
     ///
     /// Independent of whether an effect was loaded to play them - see
-    /// [`Self::sparks_ignitions`].
+    /// [`RaceView::sparks_ignitions`].
     #[must_use]
     pub fn spark_ignitions(&self) -> u32 {
-        self.sparks_ignitions
+        self.view.sparks_ignitions
     }
 
     /// The collision sparks' current particle pool.
     #[must_use]
     pub fn sparks(&self) -> &psys::System {
-        &self.sparks
+        &self.view.sparks
     }
 
     /// Raises `ABSORB` or `.COLLISIONS` for one craft, on that craft's own
@@ -771,7 +790,7 @@ impl Race {
     /// lives on the effect the *craft* owns, so eight hulls scraping eight
     /// walls make eight sounds rather than sharing one 0.8-second window.
     ///
-    /// It cannot share [`Race::sparks_cooldown`] either: a shielded contact
+    /// It cannot share [`RaceView::sparks_cooldown`] either: a shielded contact
     /// never ignites, so that timer would sit at zero and `ABSORB` would fire
     /// sixty times a second through a scrape.
     ///
@@ -824,25 +843,25 @@ impl Race {
     /// The decoded sound banks this race loaded.
     #[must_use]
     pub fn sounds(&self) -> &crate::audio::sfx::Banks {
-        &self.sounds
+        &self.view.sounds
     }
 
     /// The circuit's own authored sound emitters, as this race loaded them.
     #[must_use]
     pub fn track_emitters(&self) -> &crate::audio::sfx::TrackEmitters {
-        &self.track_emitters
+        &self.view.track_emitters
     }
 
     /// The decoded Zone milestone announcer this race loaded.
     #[must_use]
     pub fn announcer(&self) -> &crate::audio::sfx::Announcer {
-        &self.announcer
+        &self.view.announcer
     }
 
     /// Raises a Zone milestone announcement, to be drained the same tick.
     ///
     /// Whether `milestone` actually names a loaded cue is
-    /// [`Self::announcer`]'s question, not this call's - see
+    /// [`RaceView::announcer`]'s question, not this call's - see
     /// [`Self::drain_announcements`] for why the split is the same one
     /// [`Self::raise_contact_cue`] and [`Banks::pick`](crate::audio::sfx::Banks::pick)
     /// already keep.
@@ -859,13 +878,13 @@ impl Race {
     /// The decoded Zone speed-class announcer this race loaded.
     #[must_use]
     pub fn class_announcer(&self) -> &crate::audio::sfx::ClassAnnouncer {
-        &self.class_announcer
+        &self.view.class_announcer
     }
 
     /// Raises a Zone speed-class announcement, to be drained the same tick.
     ///
     /// Whether `stage` actually names a loaded cue is
-    /// [`Self::class_announcer`]'s question, not this call's - same split as
+    /// [`RaceView::class_announcer`]'s question, not this call's - same split as
     /// [`Self::push_announcement`].
     pub(super) fn push_class_announcement(&mut self, stage: u32) {
         self.class_announcements.push(stage);
@@ -964,7 +983,7 @@ impl Race {
     /// scales the flame about a point hundreds of units away.
     #[must_use]
     pub fn nozzle_local_of(&self, slot: usize) -> Option<Vec3> {
-        self.nozzles.get(slot).copied().flatten()
+        self.view.nozzles.get(slot).copied().flatten()
     }
 }
 

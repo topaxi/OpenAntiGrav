@@ -28,7 +28,7 @@ impl Race {
     /// **Render-only state is not here** - the exhaust, the sparks, the boost
     /// kick, the airbrake flaps and the blast flashes all have their own
     /// generators and none of them may reach the simulation. See
-    /// [`Self::boost_kick`].
+    /// [`RaceView::boost_kick`].
     #[must_use]
     pub fn state_hash(&self) -> u64 {
         let mut hasher = oag_core::hash::StateHasher::new();

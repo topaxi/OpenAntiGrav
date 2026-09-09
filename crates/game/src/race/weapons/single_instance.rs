@@ -65,7 +65,7 @@ impl Race {
         );
         for (slot, hit) in absorbed.iter().enumerate() {
             if *hit {
-                self.shield[slot].hit();
+                self.view.shield[slot].hit();
             }
         }
         self.world.quake = Some(wave);
@@ -92,9 +92,9 @@ impl Race {
         let report = beam.advance(&mut self.world.ships, self.world.ship_count, rules, self.dt);
         // A swallowed hit is the only thing that makes the target's shell
         // visibly react - the same out-parameter `Race::advance_quake` spends
-        // on `self.shield[slot].hit()`, narrowed to the beam's one victim.
+        // on `self.view.shield[slot].hit()`, narrowed to the beam's one victim.
         if report.absorbed
-            && let Some(shell) = self.shield.get_mut(beam.target as usize)
+            && let Some(shell) = self.view.shield.get_mut(beam.target as usize)
         {
             shell.hit();
         }

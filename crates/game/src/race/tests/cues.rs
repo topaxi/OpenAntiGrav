@@ -33,7 +33,10 @@ fn crossing_a_pad_raises_its_cue_on_the_tick_the_flare_is_armed() {
     // `ExhaustFlare_OnSpeedupPad` and `Sound_Play("SPEEDUPPAD")` from one
     // branch, so a port where the flare arms and the cue does not is wired
     // wrong however good the sound is.
-    assert!(race.exhaust[0].boost_timer() > 0.0, "the flare did not arm");
+    assert!(
+        race.view.exhaust[0].boost_timer() > 0.0,
+        "the flare did not arm"
+    );
     assert!(
         race.pending_cues().iter().any(|e| e.cue == Cue::SpeedupPad),
         "the flare armed and the cue did not: {:?}",

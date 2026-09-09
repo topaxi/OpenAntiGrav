@@ -165,8 +165,8 @@ impl Race {
             // unconditionally rather than gated here - the brackets are watched
             // opening again after a target is lost, which a gate on "has a
             // target" would cut off.
-            sight: Some(self.sight),
-            shield_flashing: self.shield_flash_timer > 0.0,
+            sight: Some(self.view.sight),
+            shield_flashing: self.view.shield_flash_timer > 0.0,
         }
     }
 
@@ -187,13 +187,13 @@ impl Race {
         let current =
             oag_physics::damage::percent(ship.physics.shield, ship.handling.dimensions.shield);
         let (timer, prev) = shield_flash_step(
-            self.shield_flash_timer,
-            self.shield_flash_prev,
+            self.view.shield_flash_timer,
+            self.view.shield_flash_prev,
             current,
             self.dt,
         );
-        self.shield_flash_timer = timer;
-        self.shield_flash_prev = prev;
+        self.view.shield_flash_timer = timer;
+        self.view.shield_flash_prev = prev;
     }
 }
 

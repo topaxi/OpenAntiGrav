@@ -147,7 +147,7 @@ impl Race {
                     // boost. Not recovered for this path - no capture of a fired
                     // Turbo exists - so it is the plume being reused rather than
                     // a reading of what the original shows.
-                    self.exhaust[0].boost(exhaust::BOOST_SECONDS);
+                    self.view.exhaust[0].boost(exhaust::BOOST_SECONDS);
                 }
                 oag_tables::weapons::Weapon::Shield => {
                     let Some(simple) = weapons.simple(weapon) else {
@@ -168,7 +168,7 @@ impl Race {
                     // nothing having happened, and here something did.
                     if self.world.ships[0].physics.shield_pickup_timer <= 0.0 {
                         self.world.ships[0].physics.shield_pickup_timer = simple.time;
-                        self.shield[0].activate();
+                        self.view.shield[0].activate();
                     }
                 }
                 oag_tables::weapons::Weapon::Autopilot => {
@@ -744,7 +744,7 @@ impl Race {
     /// which is what the weapon plays like.
     pub(super) fn update_sight(&mut self) {
         if let Some(held) = self.sight_held() {
-            self.sight.set_held(held);
+            self.view.sight.set_held(held);
         }
         let target = self.sight_target();
         let projected = target.and_then(|slot| {
@@ -760,17 +760,17 @@ impl Race {
             //
             // Off the reticle rather than off a constant, because Wipeout HD
             // authors its HUD in 1920x1080 and the PSP titles in 480x272.
-            let screen = self.sight.screen();
+            let screen = self.view.sight.screen();
             let aspect = screen[0] / screen[1];
             let view = self.view();
             // The far plane is irrelevant here - the reticle's own 250-unit
             // range test runs in eye space, before the projection - so this
             // takes a value large enough never to clip a craft the sight would
             // otherwise draw.
-            let projection = self.projection(aspect, SIGHT_FAR, self.sight_fov);
+            let projection = self.projection(aspect, SIGHT_FAR, self.view.sight_fov);
             sight::project(view, projection * view, world, screen)
         });
-        self.sight_state = self.sight.update(self.dt, projected);
+        self.view.sight_state = self.view.sight.update(self.dt, projected);
     }
 
     /// Which of the two lockable weapons the player is holding, or `None`.
@@ -871,7 +871,7 @@ impl Race {
     /// `entity+0x860 & 1` is set, and that bit is written by `HudSight_Update`
     /// alone - the reticle, which this project has found no evidence runs for
     /// anything but the craft the HUD is drawn for. So the craft that owns the
-    /// reticle (`slot == 0`) additionally needs [`Self::sight`] to say
+    /// reticle (`slot == 0`) additionally needs [`RaceView::sight`] to say
     /// [`sight::Sight::locked`] - held on screen past [`sight::HOLD_SECONDS`] -
     /// before its candidate is passed through; every other slot's candidate is
     /// used as soon as `lock` finds one, exactly as before this gate landed.
@@ -924,7 +924,7 @@ impl Race {
         // brackets close still fires, same as an opponent's shot always does;
         // it just carries no candidate through.
         let target = if slot == 0 {
-            candidate.filter(|_| self.sight.locked())
+            candidate.filter(|_| self.view.sight.locked())
         } else {
             candidate
         };

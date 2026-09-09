@@ -551,13 +551,16 @@ fn a_projectile_takes_a_flare_slot_and_hands_it_back() {
     // No disc in a headless fixture, so no effect loaded and no instance
     // is taken - the trigger still has to run, and still has to be a
     // no-op rather than a panic.
-    assert!(race.effects.is_empty(), "the fixture loaded no effects");
-    assert_eq!(race.projectile_flare[0], None);
+    assert!(
+        race.view.effects.is_empty(),
+        "the fixture loaded no effects"
+    );
+    assert_eq!(race.view.projectile_flare[0], None);
 
     // With the slot vacated the bookkeeping must clear either way, or the
     // next projectile in that slot inherits a flare it never started.
     race.world.projectiles.slots[0].kind = None;
     race.advance_projectile_flares();
-    assert_eq!(race.projectile_flare[0], None);
+    assert_eq!(race.view.projectile_flare[0], None);
     assert_eq!(race.stage().playing_count(), 0);
 }
