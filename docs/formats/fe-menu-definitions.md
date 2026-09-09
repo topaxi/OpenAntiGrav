@@ -1,11 +1,12 @@
 # Front-end menu definitions
 
-**Status: read, not implemented.** These are the disc's own menu screens. This
-project draws [its own menu tree](../architecture/menus.md) and takes only
-[presentation](../ui/menus-original.md) from them, so nothing here is built -
-but reading them is what settled the presentation, and
-[the menus](../architecture/menus.md) already said this page was where the
-answer belonged.
+**Status: read, and one screen's shape now feeds a page.** These are the
+disc's own menu screens. This project draws
+[its own menu tree](../architecture/menus.md) and takes only
+[presentation](../ui/menus-original.md) from them, so most of this is read
+but not built - reading them is what settled the presentation - **with one
+exception**: `RecordGrid_Definition.xml`'s own per-class table is the shape
+the RECORDS page draws from, see that section below.
 
 They are [front-end XML](fexml.md), the `<code>`-shortened dialect, and every
 trap on that page applies: the dictionary is per file, nothing is escaped, and
@@ -50,6 +51,59 @@ are a hex grid whose state name stays `Cell Selection` across every cell". Both
 halves are true of *a* screen and neither is true of the main menu: the hex grid
 is `CellMode_Definition.xml`'s `Grid Selection`, reached from `RACE CAMPAIGN`
 via `TournamentLoad`. **The main menu is a plain left-aligned vertical list.**
+
+## `RecordGrid_Definition.xml` is four record screens, one per mode
+
+**Read 2026-09-09, for the RECORDS page - see
+[the menus](../architecture/menus.md)'s own RECORDS section for what this
+project builds from it.** `Data\Plugins\PI001\GUI\RecordGrid_Definition.xml`
+is a `Screen type="FE_Default" name="Record Grid"` holding four child
+screens, each carrying a `RecordsController` naming the task it shows:
+
+| Screen | `RecordsController` task | Shape |
+| --- | --- | --- |
+| `Speed Lap Records` | `Speed Lap` | A `Track` list, no class picker - four rows, one per speed class (`Venom`/`Flash`/`Rapier`/`Phantom`), columns `PRO_TIME`/`PRO_TAG`/`ER_TEAM` plus a boost icon |
+| `Time Trial Records` | `Time Trial` | `Track` and `Class` lists, six rows (`IG_HUD_1ST`..`IG_HUD_5TH`, `IG_HUD_TOTAL`), same three columns plus a perfect-lap icon per row |
+| `Race Records` | `Race` | Identical shape to Time Trial Records |
+| `Zone Records` | `Zone` | A `Track` list only, four rows (`IG_HUD_1ST`..`IG_HUD_4TH`), columns `PRO_POS`/`PRO_TAG`/`IG_HUD_ZONES`/`PRO_STATS_PZONE`/`IG_HUD_SCORE` |
+
+Extracted with `oag-wad cat <image>:PSP_GAME/USRDIR/Data.wad
+"Data\Plugins\PI001\GUI\RecordGrid_Definition.xml" --expand`, confirmed
+against both `pulse-psp-usa.chd` and read for structure only (no bytes
+reproduced here) - confidence 92: the screen names, the `RecordsController`
+task strings and the column layout are read directly off the file, and the
+only inference is what `PRO_TIME`/`PRO_TAG`/`ER_TEAM`/`PRO_POS`/
+`PRO_STATS_PZONE` mean, which is not settled beyond what their names and
+column position suggest.
+
+**Two facts drive this project's own RECORDS page, and both are about what
+the disc's shape assumes that this project's own persisted schema does not
+have:**
+
+- **Speed Lap's shape - one row per class under a single track picker - is
+  the one whose data this project actually has**, since
+  `oag_game::records::Record` is already one row per `(track, mode, class)`.
+  Time Trial/Race's own richer shape - a *chosen* class and six ranked rows
+  - implies either several attempts per key or a multi-entrant board; this
+  project's schema keeps exactly one best lap and one best total per key, no
+  ranking and no per-lap breakdown. So RECORDS draws Speed Lap's shape
+  (track picker, one row per class) for every mode, picking whichever of
+  `best_lap_ticks`/`best_total_ticks` fits the mode - see
+  `crate::records_page`'s own module doc in `crates/game/src/main/
+  records_page.rs`.
+- **TAG, TEAM and the boost/perfect-lap icons are left off entirely**, since
+  nothing in this project's persisted schema carries a pilot identity, a
+  per-lap breakdown or a boost/perfect-lap flag - `oag_game::records::Record`
+  and its own module doc say so directly. Drawing invented values in those
+  columns would be exactly the "plausible-looking stand-in" `CLAUDE.md`'s own
+  rule forbids; the honest choice is the column not appearing at all.
+
+`Stats_Definition.xml` was extracted the same way and is a `screen type=
+"FE_Default" name="stats holder"` with a `PRO_STATS` title - not read past
+that title, since nothing in this project's schema yet has anything to put
+on a stats screen (`oag_game::records::Record` carries no aggregate count a
+"stats" page would show, career or otherwise). Left for whoever grows that
+schema next.
 
 ## `Top FE Screen->FE Screen` is the one exception
 

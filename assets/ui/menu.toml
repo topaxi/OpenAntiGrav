@@ -69,6 +69,12 @@ target = "remix"
 
 [[page.entry]]
 kind = "submenu"
+label = "RECORDS"
+string_id = "OAG_MENU_RECORDS"
+target = "records"
+
+[[page.entry]]
+kind = "submenu"
 label = "OPTIONS"
 string_id = "OAG_MENU_OPTIONS"
 target = "options"
@@ -275,6 +281,50 @@ kind = "action"
 label = "START"
 string_id = "OAG_RACE_START"
 action = "launch_remix"
+
+[[page.entry]]
+kind = "back"
+label = "BACK"
+string_id = "OAG_MENU_BACK"
+
+# **The disc authors this screen too, and this page follows its shape rather
+# than inventing one.** `Data\Plugins\PI001\GUI\RecordGrid_Definition.xml`
+# (in `Data.wad`, on the same `Skin.xml` `LoadXML` list `docs/formats/
+# fe-menu-definitions.md` already named but had not read) is a "Record Grid"
+# screen with four sub-screens - Speed Lap, Time Trial, Race and Zone
+# Records - each a track picker over a table with one row per speed class
+# and a TIME column. See `docs/architecture/menus.md`'s own RECORDS section
+# for the read, the confidence score, and exactly which columns this page
+# draws against which it leaves out.
+#
+# MODE stands in for the disc's four separate sub-screens - **that
+# collapsing is ours**, since this project's own persisted schema
+# (`oag_game::records::Record`) is one row per (track, mode, class), not four
+# hand-authored layouts. TRACK and the four per-class rows below it are the
+# disc's own shape.
+#
+# **Shares `race.mode`/`race.track` with the RACE page, and that is all** -
+# the same precedent RACE REMIX's own MODE row already set: browsing here
+# moves what a launched race would use, which is a feature, not a leak - see
+# that page's own comment above.
+[[page]]
+id = "records"
+title = "RACE RECORDS"
+title_string_id = "OAG_RECORDS_PAGE_TITLE"
+
+[[page.entry]]
+kind = "choice"
+label = "MODE"
+string_id = "OAG_RACE_MODE"
+setting = "race.mode"
+values_from = "race_modes"
+
+[[page.entry]]
+kind = "choice"
+label = "TRACK"
+string_id = "OAG_RACE_TRACK"
+setting = "race.track"
+values_from = "tracks"
 
 [[page.entry]]
 kind = "back"

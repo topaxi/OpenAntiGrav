@@ -106,14 +106,61 @@ touches `crates/game/src/hud/**` or feeds a campaign medal into
 different things, by design - see `records.rs`'s own `Medal` doc comment for
 why it round-trips as a word rather than the HUD's own ordinal.
 
+2026-09-09 (this change): a RECORDS page landed - `assets/ui/menu.toml`'s
+`records` page (MODE, TRACK, BACK), reachable from the main menu, drawing a
+live per-class table below its rows. **It follows the disc's own shape, not
+an invented one**: `Data\Plugins\PI001\GUI\RecordGrid_Definition.xml`'s
+"Speed Lap Records" screen is a track picker over a table with one row per
+speed class and a time column, and this project's own persisted schema
+(`oag_game::records::Record`, one row per `(track, mode, class)`) can back
+exactly that shape and no richer one - see
+`docs/architecture/menus.md`'s new RECORDS section and
+`docs/formats/fe-menu-definitions.md`'s new section on the file, confidence
+92. TAG, TEAM and the boost/perfect-lap columns the disc's screen also
+carries are left off entirely, since nothing in this project's schema backs
+them - drawing invented values there would be exactly the
+"plausible-looking stand-in" `CLAUDE.md`'s own root doc forbids.
+`crates/game/src/main/records_page.rs` is the module; six unit tests over
+its pure half (`held_text`/`show_total`/`build_table`) in
+`crates/game/src/main/records_page/tests.rs`. **The page itself was
+captured and read back off `pulse-psp-eu.chd`** via `--menu-page records
+--screenshot`: title "RACE RECORDS", MODE/TRACK/BACK all render correctly,
+nothing overlapping the footer. **The live per-class table was not seen on
+screen** - `--menu-page` draws one page statically with no `Menu::update`
+and calls nothing in `records_page`, and `--screenshot`'s ordinary sequence
+capture (`crates/game/src/capture.rs`) always hands `Launch Game` off to a
+race rather than opening the real menus at all, so there is no headless
+route to it: reaching the real Main Menu and navigating to RECORDS needs a
+real window (`oag-game data/images/pulse-psp-eu.chd --press start,cross`,
+no `--screenshot`), which this sandbox cannot confirm - see "Still open"
+above for the identical wall `Session::escape` hit on this same thread.
+**`--menu-page records` is not wired to show the table** - only `MODE`/
+`TRACK` - since `crates/game/src/capture/menu_page.rs` builds its own draw
+list independently of the live session's `MenuStage::render` and nothing
+there calls `records_page::table_for`; wiring that in is a small, separate
+change for whoever next touches that file.
+
 ## Next Steps
 
-1. A records browser (circuit list plus best times) is a bigger, separate
-   piece - probably its own `menu.toml` page, which *would* need string ids
-   (unlike the results table's own free text). Not started.
-2. If `campaign`'s cell-selection thread lands, feed a real
+1. ~~A records browser (circuit list plus best times)~~ - **done, this
+   change.**
+2. **Runtime-verify the live per-class table on a real desktop** - the one
+   thing this change could not confirm itself, for the same reason
+   `Session::escape` below could not: no headless route reaches it. `oag-game
+   data/images/pulse-psp-eu.chd --press start,cross` (real window, no
+   `--screenshot`) reaches Main Menu; MAIN -> RECORDS -> read the table.
+3. Wire `crates/game/src/capture/menu_page.rs`'s own `"records"` page draw
+   so `--menu-page records --screenshot` shows the per-class table too, not
+   only the MODE/TRACK rows - mirrors the `"pilots"` arm already there for
+   `pilots::axis_preview_for`.
+4. If this project's persisted schema ever grows a pilot tag, a team, or a
+   per-lap breakdown (see `docs/architecture/persistence.md`'s "where a
+   career system attaches"), `RecordGrid_Definition.xml`'s Time Trial/Race/
+   Zone sub-screens are the shape to draw *those* rows in - not authored
+   yet because the data to fill them is not either.
+5. If `campaign`'s cell-selection thread lands, feed a real
    `campaign_medal` into `RaceStage::observation` and the `BEST MEDAL` line
    starts drawing in a real session with no further change to
    `records.rs`/`scoreboard.rs` - both already carry the value end to end.
-3. Runtime-verify `Session::escape`'s capture site on a real desktop, per
+6. Runtime-verify `Session::escape`'s capture site on a real desktop, per
    "Still open" above - this sandbox cannot deliver the keypress.

@@ -330,6 +330,13 @@ impl MenuStage {
         // note would use; see `oag_ui::prompt::axis_preview_draw`'s own
         // doc for why that is not `message_draw`'s modal shape.
         axis_preview: Option<&str>,
+        // The RECORDS page's own per-class table, off `Session::draw`'s call
+        // site the same way `axis_preview` is - this stage holds no
+        // `records::Store` either. Empty off any page but RECORDS; see
+        // `crate::records_page::table_for`'s own doc for why this is several
+        // lines rather than the single one `axis_preview` occupies, and
+        // `oag_ui::prompt::record_row_draw` for how each pair is drawn.
+        records_table: &[(String, String)],
     ) -> Result<()> {
         let shown = match (&mut self.backdrop, feed) {
             (Some(backdrop), Some(feed)) => {
@@ -433,6 +440,26 @@ impl MenuStage {
                 )))
                 .collect(),
             _ => list,
+        };
+        // The RECORDS page's own per-class table, off `Session::draw`'s call
+        // site - see `records_table`'s own doc. Skipped mid-transition for
+        // the same reason `axis_preview` above is: the row list it lines up
+        // against is a zoomed, fading picture during a tween.
+        let list: Vec<Draw> = if self.change.is_none() {
+            list.into_iter()
+                .chain(
+                    records_table
+                        .iter()
+                        .enumerate()
+                        .flat_map(|(index, (label, value))| {
+                            oag_ui::prompt::record_row_draw(
+                                &self.menu, &self.skin, index, label, value,
+                            )
+                        }),
+                )
+                .collect()
+        } else {
+            list
         };
         // The pause overlay, drawn under the rows and over everything else:
         // first in the list, since the list paints back to front. Ahead of
