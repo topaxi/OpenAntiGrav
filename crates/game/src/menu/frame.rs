@@ -33,11 +33,12 @@ use crate::sprite::Sheet;
 /// One title's menu frame, split by what may come between the two halves.
 ///
 /// A menu can have a looping movie behind it *and* a frame around it, and the
-/// two interleave: the clear is under the movie and the marks are over it. No
-/// title carries both today - Wipeout HD has the frame and no movie, both PSP
-/// titles the reverse - so the interleaving is arranged rather than observed,
-/// and keeping the halves apart is what lets [`super::draw_list`] put the movie
-/// where it belongs without either half having to know it exists.
+/// two interleave - **Pulse carries both**, its `FE Screen` authoring the
+/// looping `Data\Movies\Backdrop` and four `<Image>` widgets over the same
+/// screen. So the interleaving is not arranged any more, it is the thing
+/// [`Self::backdrops`] has to get right, and keeping the halves apart is what
+/// lets [`super::draw_list`] put the movie between them without either half
+/// having to know it exists.
 #[derive(Debug, Default, Clone)]
 pub struct Frame {
     /// What the screen clears to, as one screen-filling [`Draw::Fill`].
@@ -81,37 +82,53 @@ impl Frame {
         self.clear.is_none() && self.marks.is_empty()
     }
 
-    /// This frame's own clear/marks layer, with anything covering the whole
-    /// screen left out when `race_behind` - a parked race's own picture, or
-    /// [`super::MenuStage`]'s pause overlay over it.
+    /// This frame's own clear/marks layer, with the movie between its two
+    /// halves and anything covering the whole screen left out when
+    /// `race_behind` - a parked race's own picture, or [`super::MenuStage`]'s
+    /// pause overlay over it.
     ///
-    /// **Reachable on Pulse, not hypothetical.** `FE_SCREEN`'s own images
-    /// open with one that is `[0, 0, space.size.0, space.size.1]` - a plain
-    /// `<Image>`, not a `<ScreenClear>` - ahead of the top bar and the two
-    /// footer strips `content_bottom` already reads; `Session::escape`'s own
-    /// pause overlay draws its translucent fill *before* this layer in
-    /// [`super::draw_list`]'s own paint order, so an unfiltered call here
-    /// draws this mark straight over both the overlay and the parked race
-    /// underneath it - confirmed live, not read off the source alone: a real
-    /// `Escape` from a running race, instrumented end to end, showed every
-    /// value upstream of this call was correct and the presented picture was
-    /// still the plain undimmed menu until this filter existed. See
+    /// # A full-screen mark is a backdrop, not chrome
+    ///
+    /// Pulse's `FE_SCREEN` opens its images with `gameshare_backdrop.mip` at
+    /// `[0, 0, space.size.0, space.size.1]` - a plain `<Image>`, not a
+    /// `<ScreenClear>` - ahead of the top bar and the two footer strips
+    /// [`Self::content_bottom`] already reads. Drawn with the rest of the
+    /// marks it painted straight over the looping movie every frame, and the
+    /// menu background read as one frozen still of the backdrop: the still is
+    /// a picture of the same ship reel, so the movie looked stopped rather
+    /// than covered. Confirmed rather than reasoned about - the playhead, the
+    /// feed's ring and the uploaded frame index were all instrumented live
+    /// and all advancing, and a `--menu-page` capture under `--no-video` came
+    /// out visually identical to one with the movie playing.
+    ///
+    /// So a mark covering the whole screen goes **under** the movie, where a
+    /// game-share session with no reel to play still gets its background, and
+    /// only the structural marks stay over it. `race_behind` then drops that
+    /// whole under-the-movie group - the clear, `MenuSkin::background` and the
+    /// full-screen marks alike - which is one rule rather than the two this
+    /// used to carry: a parked race's picture, or the pause overlay's own
+    /// `Draw::Fill` under it, is what shows through instead. Before that
+    /// filter existed a real `Escape` from a running race showed the plain
+    /// undimmed menu with every value upstream of this call correct; see
     /// `docs/architecture/menus.md`'s "backing into the menus..." paragraph.
     ///
-    /// `video` is the movie quad, already built - this type does not know how
-    /// to play one - and it stays *between* the clear and the marks, exactly
-    /// where it always sat: `draw_list` used to build this same three-part
-    /// order inline, and the order is what makes Pulse's own top bar and
-    /// footers paint over the movie rather than under it.
+    /// **Ordered by geometry, because the disc's own order is not kept.**
+    /// [`crate::screen::Screen`] holds `images` and `movies` in two vectors,
+    /// so which of an `<Image>` and the screen's movie is authored first is
+    /// lost by the time this runs. What settles it is not the XML anyway: a
+    /// player who has run the original reports the reel playing behind the
+    /// menus, which a full-screen still over it makes impossible. Recovering
+    /// the sibling order would make this readable off the data rather than
+    /// inferred from a rect, and is the change to make if a title ever
+    /// authors a full-screen mark it means to draw *over* its movie.
     ///
-    /// `clear` and [`oag_title::MenuSkin::background`] (`skin_background`,
-    /// passed in rather than read here - this type does not hold a `Skin`)
-    /// are always full-screen by construction, so they drop outright rather
-    /// than by a rect comparison; a mark is judged by its own rect against
-    /// `space` (the same parameter [`Self::content_bottom`] already takes,
-    /// for the same reason: this type holds no `Space` of its own), since a
-    /// title's frame can carry both full-screen chrome and small structural
-    /// marks (Pulse's own top bar and footers) that must stay.
+    /// `video` is the movie quad, already built - this type does not know how
+    /// to play one. `clear` and [`oag_title::MenuSkin::background`]
+    /// (`skin_background`, passed in rather than read here - this type does
+    /// not hold a `Skin`) are always full-screen by construction, so they join
+    /// that group without a rect comparison; a mark is judged by its own rect
+    /// against `space`, the same parameter [`Self::content_bottom`] already
+    /// takes and for the same reason: this type holds no `Space` of its own.
     #[must_use]
     pub(super) fn backdrops(
         &self,
@@ -121,21 +138,23 @@ impl Frame {
         race_behind: bool,
     ) -> Vec<Draw> {
         let full_screen = [0.0, 0.0, space.size.0, space.size.1];
-        let mut out: Vec<Draw> = self
-            .clear
-            .clone()
-            .or(skin_background)
-            .filter(|_| !race_behind)
-            .into_iter()
-            .collect();
+        let covers_screen =
+            |mark: &Draw| matches!(mark, Draw::Sprite { rect, .. } if *rect == full_screen);
+        let mut out: Vec<Draw> = Vec::new();
+        if !race_behind {
+            out.extend(self.clear.clone().or(skin_background));
+            out.extend(
+                self.marks
+                    .iter()
+                    .filter(|mark| covers_screen(mark))
+                    .cloned(),
+            );
+        }
         out.extend(video);
         out.extend(
             self.marks
                 .iter()
-                .filter(|mark| {
-                    !race_behind
-                        || !matches!(mark, Draw::Sprite { rect, .. } if *rect == full_screen)
-                })
+                .filter(|mark| !covers_screen(mark))
                 .cloned(),
         );
         out

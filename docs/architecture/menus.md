@@ -61,7 +61,13 @@ what keeps it right when the disc says something unexpected: HD's `HD_*` palette
 turned out to be its **FE style**, black-and-red in one archive and
 white-and-teal in another, and a frame read at runtime resolves to whichever
 archive the boot served rather than to whichever one a person happened to open.
-Both PSP titles' frames are unread, so their menus draw exactly as they did.
+**Pulse's frame is read too**, since `oag_pulse::FRONT_END` started naming
+`FE Screen`: a top bar at `y=0`, two footer strips at `y=236`/`y=249`, and -
+first in document order - a full-screen `gameshare_backdrop.mip`. That last one
+is a *background*, not chrome, which is what
+[the ordering rule below](#a-full-screen-mark-is-a-backdrop-not-chrome) exists
+to say. Wipeout Pure names the same screen; Wipeout HD's is the `FE Screen`
+described above.
 
 ## What still comes off the disc
 
@@ -796,6 +802,38 @@ the menu stage so a menu -> race -> menu round trip did not pay for a second
 decoder; the front end's `Show Logo` borrows that same feed on the way *in*.
 Nothing about the menus' own use of it changed, and the page's `Draw::Video` now
 carries `source: Backdrop` to say which of the front end's two movies it means.
+
+### A full-screen mark is a backdrop, not chrome
+
+`FE Screen` authors both the movie and four `<Image>` widgets, and the first of
+those images covers the whole grid: `Data\FE\Images\gameshare_backdrop.mip`, a
+still of the same ship reel the movie plays. Drawn with the rest of the marks -
+which is what `Frame::backdrops` did when Pulse's frame was first wired - it
+painted over the movie on every frame, and because the still *is* a picture of
+the reel, the menu background read as the loop having stopped rather than as
+something covering it.
+
+That is the failure worth recording, not the fix: every measurement pointed at
+the player. The playhead advanced, the feed's ring stayed full, the frame index
+uploaded to the planes tracked the playhead, and `--menu-page` captures looked
+correct - a still capture cannot tell a moving picture from a covered one. What
+settled it was capturing the same page under `--no-video`: visually identical.
+
+So `Frame::backdrops` layers by rect - the clear, `MenuSkin::background` and any
+mark covering the whole screen first, then the movie, then everything else - and
+a race behind the menus drops that whole first group rather than filtering it
+twice. **Ordered by geometry because the disc's own order is not kept**:
+`crate::screen::Screen` holds `images` and `movies` in two vectors, so whether
+the `<Image>` or the `<movie>` is authored first is lost by the time the frame is
+read. What settles it is not the XML anyway - a player who has run the original
+reports the reel playing behind the menus, which a full-screen still over it
+makes impossible. Recovering the sibling order is the change to make if a title
+ever authors a full-screen mark it means to draw *over* its movie.
+
+One consequence, and it is the right one: with no movie at all (`--no-video`, no
+`ffmpeg`, a source that carries none) the still now shows instead of black,
+which is exactly the case it exists for - a game-share client has no UMD to play
+a reel off.
 
 ### One playback, not one per screen
 

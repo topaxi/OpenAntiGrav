@@ -305,15 +305,13 @@ impl MenuStage {
         // the aspect bars outside it are exactly as black as they would be
         // from this stage's own clear on an ordinary frame.
         //
-        // **A known gap this does not cover**: a title whose frame authors a
-        // `<ScreenClear>`, or whose `MenuSkin` carries a `background` (only
-        // Pure's does, per `Skin::background`'s own doc), still draws that
-        // as an opaque `Draw::Fill` first in `menu::draw_list`'s own
-        // `backdrops` layer regardless of `frozen_race` - hiding the parked
-        // race outright rather than dimming it. Both PSP titles' frames are
-        // unread and neither authors a `MenuSkin::background`, so this is
-        // invisible on the two titles this build actually plays, but it is
-        // real and undocumented anywhere else; see this thread's `## Open`.
+        // **The gap this used to leave is closed**: a `<ScreenClear>`, a
+        // `MenuSkin::background` and any mark covering the whole screen are
+        // one group in `menu::Frame::backdrops` - everything that sits under
+        // the movie - and `race_behind` drops the group rather than filtering
+        // its members one at a time. So none of the three can paint over the
+        // parked race any more, which the two tests in
+        // `menu/tests/frame.rs` pin directly.
         frozen_race: bool,
         // The CONTROLS page's key-capture prompt, already resolved to text
         // and off `Session::awaiting_binding` - `Session::draw`'s call site

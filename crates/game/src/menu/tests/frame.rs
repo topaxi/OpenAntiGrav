@@ -273,3 +273,53 @@ fn backdrops_drops_the_clear_behind_a_race_too() {
     );
     assert_eq!(frame.backdrops(space, None, None, false), vec![clear]);
 }
+
+/// The movie goes **over** a full-screen mark and **under** the structural
+/// ones, which is the whole of what makes Pulse's menu backdrop move.
+///
+/// `FE_SCREEN`'s first image is `gameshare_backdrop.mip` at the full grid - a
+/// still of the same ship reel the movie plays - so drawn with the rest of the
+/// marks it covered the movie with a picture that looks exactly like a frozen
+/// frame of it. The playhead, the feed's ring and the uploaded frame index
+/// were all instrumented live and all advancing while the screen sat still;
+/// what was wrong was only this order. The top bar and the footers still paint
+/// over the movie, as they always did.
+#[test]
+fn backdrops_puts_the_movie_between_a_full_screen_mark_and_the_chrome() {
+    let space = crate::frontend::Space::PSP;
+    let full_screen = Draw::Sprite {
+        rect: [0.0, 0.0, space.size.0, space.size.1],
+        uv: [0.0, 0.0, 480.0, 256.0],
+        color: [1.0, 1.0, 1.0, 1.0],
+    };
+    let footer = Draw::Sprite {
+        rect: [12.0, 236.0, 454.0, 14.0],
+        uv: [0.0, 257.0, 454.0, 14.0],
+        color: [1.0, 1.0, 1.0, 1.0],
+    };
+    let video = Draw::Video {
+        rect: [0.0, 0.0, space.size.0, space.size.1],
+        frame: 7,
+        position: 7,
+        source: crate::frontend::Video::Backdrop,
+    };
+    let frame = Frame {
+        marks: vec![full_screen.clone(), footer.clone()],
+        ..Frame::default()
+    };
+
+    assert_eq!(
+        frame.backdrops(space, None, Some(video.clone()), false),
+        vec![full_screen, video.clone(), footer.clone()],
+        "the still is a backdrop under the movie; the footer is chrome over it"
+    );
+
+    // A parked race takes the whole under-the-movie group with it, the movie
+    // included: `MenuStage::render` passes `None` for the video there, so this
+    // is only the mark's half of that rule.
+    assert_eq!(
+        frame.backdrops(space, None, None, true),
+        vec![footer],
+        "nothing full-screen survives a race behind the menus"
+    );
+}
