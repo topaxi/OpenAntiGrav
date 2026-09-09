@@ -576,6 +576,35 @@ fn the_ps2_front_end_either_boots_or_says_what_it_could_not_find() {
 /// **A transcode reports its frame counter while it runs**, which is what the
 /// loading screen draws over the minute `ffmpeg` takes on `INTRO512.PSS`.
 ///
+/// A transcode scratch directory this test does not share with anything.
+///
+/// **Both transcode tests in this file open the same `INTRO512.PSS` with the
+/// same cache key and `refresh: true`, so one shared directory has them writing
+/// and reading one set of files at the same time.** `nextest` runs them as
+/// parallel processes, so the race is reachable in a single ordinary
+/// `just test-data` with nothing else on the machine; a second run in another
+/// worktree collides with both on top of that.
+///
+/// That is the mechanism behind the two symptoms `HANDOVER.md` recorded for
+/// `an_uncapped_transcode_still_reports_a_total_to_divide_by` across three
+/// separate days: `movie.frames == None`, the output clobbered mid-write, and
+/// `ffprobe: Invalid data found`, the `.pss` read while the other test was
+/// still extracting it. The failure correlated with machine load because load
+/// changes the interleaving - the quick capped test stops reliably finishing
+/// its extraction before the slow uncapped one reaches the same files - not
+/// because anything was starving.
+///
+/// `CARGO_TARGET_TMPDIR` rather than `std::env::temp_dir()`: Cargo hands each
+/// package its own directory under that worktree's `target/`, which makes the
+/// path per-worktree for free and keeps this off the 32 GiB `/tmp` tmpfs, where
+/// a 63 MiB reel per run is not free. The per-test leaf is what closes the race
+/// *within* one run.
+fn transcode_scratch(test: &str) -> std::path::PathBuf {
+    std::path::Path::new(env!("CARGO_TARGET_TMPDIR"))
+        .join("ps2-progress-ground-truth")
+        .join(test)
+}
+
 /// The plumbing under this is easy to break silently and impossible to notice
 /// from a unit test: `movie::Watch` is threaded through five functions, the
 /// counts come out of `ffmpeg -progress pipe:1` in a format this workspace does
@@ -595,6 +624,9 @@ fn the_ps2_front_end_either_boots_or_says_what_it_could_not_find() {
 /// Capped to a couple of dozen frames to stay quick. The **uncapped** case has a
 /// test of its own next door and costs a minute, because that is the one that
 /// was actually broken.
+///
+/// Scratch space comes from [`transcode_scratch`], not a shared `/tmp` path -
+/// see that function for the race it exists to prevent.
 #[test]
 #[ignore = "needs data/images/ and ffmpeg"]
 fn a_transcode_reports_its_frames_as_it_encodes_them() {
@@ -626,7 +658,7 @@ fn a_transcode_reports_its_frames_as_it_encodes_them() {
     let movie = oag_game::movie::open(
         &blob,
         &format!("{}-{}", path.replace(['/', '\\'], "_"), blob.len()),
-        &std::env::temp_dir().join("oag-ps2-progress-ground-truth"),
+        &transcode_scratch("a_transcode_reports_its_frames_as_it_encodes_them"),
         oag_game::movie::Extent::Frames(FRAMES),
         oag_game::movie::Decode {
             no_video: false,
@@ -724,7 +756,7 @@ fn an_uncapped_transcode_still_reports_a_total_to_divide_by() {
     let movie = oag_game::movie::open(
         &blob,
         &format!("{}-{}", path.replace(['/', '\\'], "_"), blob.len()),
-        &std::env::temp_dir().join("oag-ps2-progress-ground-truth"),
+        &transcode_scratch("an_uncapped_transcode_still_reports_a_total_to_divide_by"),
         // The whole reel: the case that was broken.
         oag_game::movie::Extent::Whole,
         oag_game::movie::Decode {
