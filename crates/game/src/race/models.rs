@@ -83,13 +83,13 @@ impl Race {
     /// If `slot` is not a ship slot.
     #[must_use]
     pub fn ship_model_matrix_of(&self, slot: usize) -> Mat4 {
-        model_matrix_of(&self.world.ships[slot])
+        model_matrix_of(&self.sim.world.ships[slot])
     }
 
     /// How many craft are in play, the player included.
     #[must_use]
     pub fn ship_count(&self) -> u8 {
-        self.world.ship_count
+        self.sim.world.ship_count
     }
 
     /// Whether the craft in this slot is still racing.
@@ -112,7 +112,7 @@ impl Race {
     /// If `slot` is not a ship slot.
     #[must_use]
     pub fn ship_active(&self, slot: usize) -> bool {
-        self.world.ships[slot].active
+        self.sim.world.ships[slot].active
     }
 
     /// One model matrix per craft in play, the player's first.
@@ -122,10 +122,11 @@ impl Race {
     /// [`Race::start`].
     #[must_use]
     pub fn ship_model_matrices(&self) -> Vec<Mat4> {
-        self.world
+        self.sim
+            .world
             .ships
             .iter()
-            .take(self.world.ship_count as usize)
+            .take(self.sim.world.ship_count as usize)
             .filter(|ship| ship.active)
             .map(model_matrix_of)
             .collect()

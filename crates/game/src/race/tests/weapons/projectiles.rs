@@ -46,9 +46,13 @@ fn a_thrown_shuriken_leaves_at_the_recovered_angle() {
     race.tick(&buttons.tick(SQUARE));
 
     assert_eq!(race.ship_pickup(), None, "throwing must spend the pickup");
-    assert_eq!(race.world.projectiles.live(), 1, "one press is one blade");
+    assert_eq!(
+        race.sim.world.projectiles.live(),
+        1,
+        "one press is one blade"
+    );
 
-    let blade = race.world.projectiles.slots[0];
+    let blade = race.sim.world.projectiles.slots[0];
     assert_eq!(blade.kind, Some(oag_tables::weapons::Weapon::Shuriken));
     // The fuse, not the ten-second safety net every other flier gets. Measured
     // one tick after the throw - the blade is spawned and then flown inside the
@@ -99,12 +103,12 @@ fn a_shurikens_side_is_drawn_and_both_sides_come_up() {
 
     let mut sides = (0, 0);
     for _ in 0..10 {
-        race.world.projectiles.clear();
-        race.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Shuriken);
+        race.sim.world.projectiles.clear();
+        race.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Shuriken);
         let mut buttons = Buttons::new();
         buttons.tick(0);
         race.tick(&buttons.tick(SQUARE));
-        let blade = race.world.projectiles.slots[0];
+        let blade = race.sim.world.projectiles.slots[0];
         assert_eq!(blade.kind, Some(oag_tables::weapons::Weapon::Shuriken));
         if blade.velocity.dot(right) > 0.0 {
             sides.0 += 1;
@@ -142,7 +146,11 @@ fn a_fired_plasma_puts_exactly_one_projectile_in_the_air() {
         race.ship_pickup(),
         Some(oag_tables::weapons::Weapon::Plasma)
     );
-    assert_eq!(race.world.projectiles.live(), 0, "nothing before firing");
+    assert_eq!(
+        race.sim.world.projectiles.live(),
+        0,
+        "nothing before firing"
+    );
 
     let before = race.ship().physics.body.position;
     let forward = race.ship().physics.body.forward();
@@ -150,12 +158,12 @@ fn a_fired_plasma_puts_exactly_one_projectile_in_the_air() {
 
     assert_eq!(race.ship_pickup(), None, "firing must spend the pickup");
     assert_eq!(
-        race.world.projectiles.live(),
+        race.sim.world.projectiles.live(),
         1,
         "one press is one bolt, not a volley"
     );
 
-    let bolt = race.world.projectiles.slots[0];
+    let bolt = race.sim.world.projectiles.slots[0];
     assert_eq!(bolt.kind, Some(oag_tables::weapons::Weapon::Plasma));
     assert_eq!(bolt.owner, 0);
     assert!(
@@ -207,7 +215,11 @@ fn a_fired_rocket_puts_three_projectiles_in_the_air() {
         race.ship_pickup(),
         Some(oag_tables::weapons::Weapon::Rocket)
     );
-    assert_eq!(race.world.projectiles.live(), 0, "nothing before firing");
+    assert_eq!(
+        race.sim.world.projectiles.live(),
+        0,
+        "nothing before firing"
+    );
 
     let before = race.ship().physics.body.position;
     let forward = race.ship().physics.body.forward();
@@ -215,13 +227,13 @@ fn a_fired_rocket_puts_three_projectiles_in_the_air() {
 
     assert_eq!(race.ship_pickup(), None, "firing must spend the pickup");
     assert_eq!(
-        race.world.projectiles.live(),
+        race.sim.world.projectiles.live(),
         oag_gameplay::projectile::ROCKET_SHOTS,
         "one press is a volley of three"
     );
 
     for slot in 0..oag_gameplay::projectile::ROCKET_SHOTS {
-        let rocket = race.world.projectiles.slots[slot];
+        let rocket = race.sim.world.projectiles.slots[slot];
         assert_eq!(rocket.kind, Some(oag_tables::weapons::Weapon::Rocket));
         assert_eq!(rocket.owner, 0);
         assert!(
@@ -250,7 +262,7 @@ fn a_fired_rocket_puts_three_projectiles_in_the_air() {
     // which the count alone would not catch.
     let right = race.ship().physics.body.right();
     let lateral: Vec<f32> = (0..oag_gameplay::projectile::ROCKET_SHOTS)
-        .map(|slot| race.world.projectiles.slots[slot].velocity.dot(right))
+        .map(|slot| race.sim.world.projectiles.slots[slot].velocity.dot(right))
         .collect();
     assert!(
         lateral.iter().any(|&l| l > 1.0) && lateral.iter().any(|&l| l < -1.0),

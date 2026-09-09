@@ -456,7 +456,7 @@ fn every_grid_in_archive_lands_on_the_track(archive: &str) {
         let colliders = loaded.setup.collision.clone();
         let bound = loaded.setup.spline.max_half_width() * 2.0;
         let race = race::Race::start(loaded.setup);
-        let ships: Vec<_> = race.world.ships.iter().filter(|s| s.active).collect();
+        let ships: Vec<_> = race.sim.world.ships.iter().filter(|s| s.active).collect();
         assert_eq!(ships.len(), 8, "{circuit}/{file} should field a full grid");
 
         let allowed_short = KNOWN_SHORT

@@ -60,7 +60,7 @@ fn a_fired_autopilot_flies_the_craft_for_its_authored_duration() {
     assert_eq!(race.ship_pickup(), None, "firing must spend the pickup");
     assert!(race.flown_for_the_player(), "the craft was not handed over");
     // The authored `time` less the one tick the countdown has already run.
-    let armed = race.world.ships[0].autopilot_timer;
+    let armed = race.sim.world.ships[0].autopilot_timer;
     assert!(
         (armed - (FIXTURE_AUTOPILOT_TIME - race.dt())).abs() < 1e-5,
         "expected {FIXTURE_AUTOPILOT_TIME} less one tick, got {armed}"
@@ -68,7 +68,7 @@ fn a_fired_autopilot_flies_the_craft_for_its_authored_duration() {
 
     // It ends, and the operator's flag is untouched by any of it.
     let mut ticks: u32 = 1;
-    while race.world.ships[0].autopilot_timer > 0.0 {
+    while race.sim.world.ships[0].autopilot_timer > 0.0 {
         race.tick(&buttons.tick(CROSS));
         ticks += 1;
         assert!(ticks < 600, "the autopilot never let go");
@@ -152,7 +152,7 @@ fn firing_under_autopilot_cancels_it_and_keeps_the_pickup() {
     // entry and the craft is already standing on this one. A fixture, like the
     // shield timer two tests up, not a grant.
     let held = Some(oag_tables::weapons::Weapon::Rocket);
-    race.world.ships[0].pickup.weapon = held;
+    race.sim.world.ships[0].pickup.weapon = held;
     assert!(
         race.flown_for_the_player(),
         "it let go before the test began"

@@ -12,7 +12,7 @@ use super::*;
 /// every filled slot active and nothing clears one afterward - so this is set
 /// by hand, the shape a future elimination takes.
 fn deactivate(race: &mut Race, slot: usize) {
-    race.world.ships[slot].active = false;
+    race.sim.world.ships[slot].active = false;
 }
 
 /// `ship_active` reports exactly the slot flipped, and nothing else - the

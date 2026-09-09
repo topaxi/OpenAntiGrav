@@ -39,9 +39,9 @@ impl Race {
     /// shadow at its last known height.
     #[must_use]
     pub fn shadow_placements(&self) -> Vec<Placement> {
-        let mut out = Vec::with_capacity(self.world.ship_count as usize);
-        for slot in 0..self.world.ship_count as usize {
-            let ship = &self.world.ships[slot];
+        let mut out = Vec::with_capacity(self.sim.world.ship_count as usize);
+        for slot in 0..self.sim.world.ship_count as usize {
+            let ship = &self.sim.world.ships[slot];
             if !ship.active {
                 continue;
             }
@@ -71,7 +71,7 @@ impl Race {
             // so there is no self-hit to avoid. See `race::tick`, which leaves
             // `Environment::self_collider` at its default for the same reason.
             let mut hits = [None; MAX_HITS];
-            let found = self.collision.raycast_all(ray, None, false, &mut hits);
+            let found = self.sim.collision.raycast_all(ray, None, false, &mut hits);
             // Nearest *hoverable* hit, not nearest hit. `raycast_all` returns
             // storage order rather than a distance sort - deliberately, see
             // its own docs - so the minimum is taken here.

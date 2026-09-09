@@ -341,7 +341,7 @@ pub fn capture(
         if race.finished() {
             println!(
                 "the race finished on tick {} of the {} asked for; the rest are not driven",
-                race.world.tick, options.ticks
+                race.sim.world.tick, options.ticks
             );
             finished_early = true;
             break;
@@ -564,7 +564,7 @@ pub fn capture(
     }
     println!(
         "after {} tick(s): {}",
-        race.world.tick,
+        race.sim.world.tick,
         describe(&race.telemetry())
     );
 
@@ -654,7 +654,7 @@ pub fn capture(
         None,
         None,
     );
-    oag_render::perfprobe::report_frame(race.world.tick);
+    oag_render::perfprobe::report_frame(race.sim.world.tick);
 
     // The HUD, into the same target. Without this a race screenshot would show
     // the track and no HUD at all, because unlike the front end's capture this
@@ -730,16 +730,16 @@ pub fn capture(
                 // has no `RaceStage` to call it on, and `crate::records` is
                 // deliberately free of a dependency on `Race` itself - see
                 // that module's own doc.
-                let standing = &race.world.ships[0].standing;
+                let standing = &race.sim.world.ships[0].standing;
                 let observation = crate::records::Observation {
                     finished: race.finished(),
                     place: Some(race.places()[0]),
                     laps_completed: crate::records::laps_completed(
                         standing.lap,
                         race.finished(),
-                        race.world.race.laps_target,
+                        race.sim.world.race.laps_target,
                     ),
-                    tick: standing.finish_tick.unwrap_or(race.world.tick),
+                    tick: standing.finish_tick.unwrap_or(race.sim.world.tick),
                     best_lap_ticks: standing.best_lap_ticks,
                     // No campaign cell is selected for a headless capture
                     // either - see `RaceStage::observation`'s own doc.
@@ -904,9 +904,9 @@ fn advance_one_tick(
     let snapshot = held.snapshot();
     // Before the tick, so `spend_pickup` can fire it on this tick's edge.
     if let Some(weapon) = options.give
-        && race.world.ships[0].pickup.weapon.is_none()
+        && race.sim.world.ships[0].pickup.weapon.is_none()
     {
-        race.world.ships[0].pickup.weapon = Some(weapon);
+        race.sim.world.ships[0].pickup.weapon = Some(weapon);
     }
     race.tick(&snapshot);
     // The race's own voices, on the tick that raised them - the same call
@@ -930,7 +930,13 @@ fn advance_one_tick(
     // is running, and this one is the only loop a machine with no window has.
     audio.output().report_health();
     audio.output().flush_tap();
-    if options.log_every > 0 && race.world.tick.is_multiple_of(u64::from(options.log_every)) {
+    if options.log_every > 0
+        && race
+            .sim
+            .world
+            .tick
+            .is_multiple_of(u64::from(options.log_every))
+    {
         println!("{}", describe(&race.telemetry()));
     }
 }

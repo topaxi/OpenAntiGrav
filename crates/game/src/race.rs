@@ -140,6 +140,7 @@ mod respawn;
 mod results;
 mod scene;
 mod shadow;
+mod sim;
 mod spawn;
 mod spline;
 mod start;
@@ -160,6 +161,7 @@ pub use hud::hud_layout;
 pub use load::load;
 pub use options::{CameraOverride, Loaded, Options, PoseRequest, Setup};
 pub use scene::Scene;
+pub use sim::RaceSim;
 pub use spline::Spline;
 pub use telemetry::Telemetry;
 pub use view::RaceView;
@@ -441,252 +443,31 @@ const ALONGSIDE_WIDTH: f32 = 12.0;
 pub use oag_gameplay::spawn::{box_inertia, spawn_height};
 
 /// A race in progress: the world, the track it is on, and the camera behind it.
+///
+/// **Two halves and nothing else.** [`RaceSim`] decides what happens;
+/// [`RaceView`] exists so it can be seen and heard. Until 2026-09-09 this was
+/// one struct of ninety-seven fields in which the two were interleaved, and the
+/// only thing keeping a renderer handle out of the simulation was that nobody
+/// had put one there. The eighteen `impl Race` blocks are unchanged and stay
+/// here: most of them read both halves - drawing an exhaust needs a ship's
+/// position, and raising a cue needs the bank - and that is what `Race` is for.
+/// The one that did not, [`RaceSim::state_hash`], moved.
+///
+/// Neither half is a crate yet. See [`sim`] for the two fields standing between
+/// `RaceSim` and being one.
 #[derive(Debug)]
 pub struct Race {
-    /// The simulation state.
-    pub world: World,
-    collision: CollisionWorld,
-    spline: Spline,
-    /// The authored racing line, as the opponents' drivers want it.
+    /// Everything that decides what happens next: the world, the track, the
+    /// opponents and the rules.
     ///
-    /// Built once from [`Self::spline`] and **index-parallel to [`Self::ai_order`]**,
-    /// so a driver's place on the line is also its place in that table and no
-    /// craft pays for two searches. Track data rather than world state, which is
-    /// why it is here and the drivers themselves are on the ships. See
-    /// [`racing_line`] and `docs/gameplay/ai.md`.
-    racing_line: oag_ai::Line,
-    /// Which spline sample each racing-line index is, in lap order.
-    ///
-    /// The identity permutation on nine of the disc's twelve circuits. See
-    /// [`ai_order`], and [`Self::ai_sample`] for the lookup itself.
-    ai_order: Vec<u32>,
-    /// What the opponents' drivers are flown with. One set for the whole field:
-    /// per-craft variation is the skill work, and this is the basic driver.
-    ai_tuning: oag_ai::Tuning,
-    /// Which pilot each grid slot is flying.
-    ///
-    /// Not world state: it is read-only for the whole race and drawn from the
-    /// race seed, so it reproduces without being carried. Slot 0 is the
-    /// player's, and is read only while [`Self::flown_for_the_player`] is -
-    /// by [`Self::set_ai_pilot`] (`--autopilot-pilot`) or the Autopilot
-    /// pickup - otherwise inert.
-    ai_pilots: [oag_ai::Pilot; oag_gameplay::MAX_SHIPS],
-    /// [`Self::autopilot_controls`]'s own tuning, for `--autopilot-skill`.
-    ///
-    /// `None` outside that flag - every ordinary race, and every existing
-    /// `Race::set_autopilot(true)` call - which is what lets
-    /// [`Self::autopilot_controls`] fall back to [`Self::ai_tuning`], the
-    /// field's own. See [`Self::set_autopilot_tuning`] for why this is a
-    /// second field rather than a call to [`Self::set_ai_tuning`].
-    autopilot_tuning: Option<oag_ai::Tuning>,
-    /// The lap counter's ring, or `None` on a track whose chain does not close.
-    course: Option<Course>,
-    /// Zone mode's three numbers, off the disc. `None` outside Zone mode, and on
-    /// a source whose `handlingstats.xml` carries no `<Global><Zone/>`.
-    zone: Option<oag_tables::handling::Zone>,
-    dt: f32,
-    /// Ticks left before a `Reset` contact can respawn each craft again.
-    ///
-    /// See [`RESPAWN_COOLDOWN_TICKS`].
-    ///
-    /// **Per slot, and all four of these are, which is not tidiness.** One
-    /// shared set of counters would let an opponent stuck in a corner exhaust
-    /// [`RESPAWN_GIVE_UP`] and switch off the *player's* recovery, and a
-    /// cooldown armed by one craft would strand another that fell off in the
-    /// same half second. Indexed by ship slot, like [`RaceView::exhaust`].
-    respawn_cooldown: [u32; oag_gameplay::MAX_SHIPS],
-    /// How many respawns each craft has had back to back, for
-    /// [`RESPAWN_GIVE_UP`].
-    respawns_in_a_row: [u32; oag_gameplay::MAX_SHIPS],
-    /// Set once respawning has given up on a craft, so the complaint is printed
-    /// once.
-    respawn_disabled: [bool; oag_gameplay::MAX_SHIPS],
-    /// How many times each craft has been respawned this race, for tests and
-    /// for the load report.
-    respawns: [u32; oag_gameplay::MAX_SHIPS],
-    /// The kill count that ends an Eliminator event - see
-    /// [`Setup::eliminator_kill_target`].
-    eliminator_kill_target: u32,
-    /// The slot that last struck each craft with a direct weapon hit,
-    /// `None` once nobody has (or the last hit was a wall, which credits
-    /// nobody). Eliminator-only bookkeeping - see `crate::race::eliminator`.
-    last_damager: [Option<u8>; oag_gameplay::MAX_SHIPS],
-    /// Seconds left before an Eliminated craft returns to the race, once it
-    /// has reached that state - see `crate::race::eliminator`.
-    eliminator_respawn_timer: [f32; oag_gameplay::MAX_SHIPS],
-    /// How many barrel rolls each craft has armed this race, and what they
-    /// cost it.
-    ///
-    /// **Bookkeeping, not simulation state**, which is why it is here rather
-    /// than on `Ship`: nothing reads it back into the race and it is outside
-    /// `Race::state_hash` deliberately. It exists because the deviation our AI
-    /// carries - opponents that barrel-roll, which the original's never do -
-    /// has to be *measurable* on the disc's own circuits, and the thing that
-    /// would say it had gone wrong is a tier rolling itself down to single-digit
-    /// shield. See `crates/game/tests/ai_roll_ground_truth.rs`.
-    rolls_armed: [u32; oag_gameplay::MAX_SHIPS],
-    /// The shield those rolls cost, in pool units.
-    rolls_spent: [f32; oag_gameplay::MAX_SHIPS],
-    /// How many consecutive ticks each craft has spent away from the track.
-    ///
-    /// **The two halves of the grid measure "away" differently and share this
-    /// counter.** An opponent's distance is to the sample its own driver believes
-    /// it is on, over [`RESCUE_TICKS`]; the player's is the true distance to the
-    /// nearest spline sample, over [`PLAYER_RESCUE_TICKS`]. Nobody steers the player's
-    /// craft for them, so there is no believed index to compare against - see
-    /// [`Self::lost_off_the_track`].
-    lost_ticks: [u32; oag_gameplay::MAX_SHIPS],
-    /// How many consecutive ticks each opponent has spent stopped while asking to
-    /// move. See [`STALL_TICKS`].
-    ///
-    /// A **second** dwell rather than a widening of [`Self::lost_ticks`], because
-    /// the two measure different failures and share only their response: one
-    /// craft has left the circuit, the other is still on it and going nowhere.
-    /// Slot 0's entry is never written, for the reason [`Self::lost_ticks`] gives.
-    stalled_ticks: [u32; oag_gameplay::MAX_SHIPS],
-    /// [`RESCUE_HALF_WIDTHS`] in track units, resolved once against this
-    /// circuit's widest half-width rather than folded over the sample table
-    /// every tick.
-    rescue_distance: f32,
-    /// [`PLAYER_RESCUE_HALF_WIDTHS`] in track units, resolved once the same way
-    /// [`Self::rescue_distance`] is.
-    ///
-    /// Zero on a track whose samples author no width at all, which switches the
-    /// player's rescue off rather than making every position "off the track":
-    /// the threshold is a scale read from the circuit, and a circuit that states
-    /// no scale has not stated one.
-    player_rescue_distance: f32,
-    /// The last spline sample the player was within [`Self::player_rescue_distance`]
-    /// of, and therefore where [`Self::respawn`] puts them back.
-    ///
-    /// **Latched rather than reconstructed at the respawn.** By the time the
-    /// dwell expires the craft is hundreds of units below the circuit, where the
-    /// nearest sample can belong to a different part of it - recovering there
-    /// would silently teleport the player across the lap counter.
-    /// `docs/gameplay/ai.md` records the same trap on the opponents' side under
-    /// "the rescue index, reconstructed backwards".
-    ///
-    /// Seeded at [`Self::start`] from where the craft is placed, not at zero, for
-    /// the reason `Self::set_autopilot` gives about `Driver::index`: on a circuit
-    /// whose grid sits at sample 2,791, zero is a different piece of track.
-    last_on_track: u32,
-    /// This title's own zone-to-speed-class ladder, straight out of
-    /// [`Setup::zone_stages`] - what [`RaceView::class_announcer`] fires against.
-    zone_stages: Option<&'static oag_title::ZoneStages>,
-    /// The per-class grounded-gravity scale - see [`Setup::class_gravity_scale`].
-    class_gravity_scale: f32,
-    /// The track's speed-pad trigger volumes - see [`Setup::speedup_pads`].
-    speedup_pads: Vec<oag_vex::pads::PadVolume>,
-    /// Distance from the ship to each pad, one entry per pad, in track units.
-    ///
-    /// The original's `pad+0x1d0`, reimplemented as a broadphase rather than as
-    /// the latch `docs/formats/track.md` used to guess it was: `Pad_SweptTest`
-    /// (`0x0888686c`) subtracts how far the craft moved from each entry every
-    /// tick and only runs the real containment test on entries that reach zero,
-    /// then stores the freshly measured distance back. A ship 900 units from a pad
-    /// moving 2 units a tick is skipped for 450 ticks for the cost of one
-    /// subtraction.
-    ///
-    /// **One row per racer**, as the original keeps: a broadphase cache is a
-    /// statement about where *a* craft is, and eight craft sharing one row would
-    /// skip pads for each other.
-    pad_distance: [Vec<f32>; MAX_SHIPS],
-    /// Which pad the ship was inside last tick, the original's `craft+0x1d0`.
-    ///
-    /// `None` outside every pad. Only a *change* of value counts as entering a new
-    /// pad, which is what gates the Zone score - standing still on one pad does
-    /// not pay repeatedly. One per racer.
-    pad_current: [Option<usize>; MAX_SHIPS],
-    /// The track's weapon-pad trigger volumes - see [`Setup::weapon_pads`].
-    ///
-    /// **Empty unless the mode arms them.** A weapons-off race in the original
-    /// does not skip the trigger, it zeroes the list's own count
-    /// (`World_CollectNodeLists`), and emptying this reproduces that at the same
-    /// layer rather than adding a mode test to every tick.
-    weapon_pads: Vec<oag_vex::pads::PadVolume>,
-    /// Distance from the ship to each weapon pad. The speed pads'
-    /// [`Self::pad_distance`], one class over, and the same broadphase.
-    weapon_pad_distance: [Vec<f32>; MAX_SHIPS],
-    /// Which weapon pad the ship was inside last tick.
-    ///
-    /// The edge this changes on is what grants a pickup, exactly as
-    /// [`Self::pad_current`]'s edge is what pays the Zone score. Two pads
-    /// overlapping on one tick is one entry. One per racer.
-    weapon_pad_current: [Option<usize>; MAX_SHIPS],
-    /// Seconds each weapon pad has left before it can be triggered again.
-    ///
-    /// The original's `pad+0x1a0`, stamped by `WeaponPads_TestCraft` with
-    /// `<WeaponPad refresh_time>` and counted back down by
-    /// `WeaponPad_UpdateRefreshTimer` (`0x0892c034`) - see
-    /// [`oag_tables::handling::WeaponPad`]. Per pad rather than per craft,
-    /// which is what makes it a property of the track rather than of the racer.
-    ///
-    /// **Deliberately outside the determinism hash**, unlike
-    /// `ShipState::turbo_timer`. It is genuine simulation state and a replay of
-    /// a single race would need it; it is not hashed because the hash covers
-    /// `ShipState` and the tick, and widening that is a change to the gate
-    /// rather than a change to this feature. Recorded here so the gap is a known
-    /// one - see `docs/gameplay/pickups.md`.
-    weapon_pad_refresh_left: Vec<f32>,
-    /// How long a stamped weapon pad stays inert - see
-    /// [`Setup::weapon_pad_refresh`].
-    weapon_pad_refresh: f32,
-    /// This race's weapon table - see [`Setup::weapons`].
-    weapons: Option<oag_tables::weapons::WeaponStats>,
-    /// The speed class, which indexes the pickup odds - see [`Setup::class`].
-    ///
-    /// The disc's own spelling, so a title whose ladder is not Pulse's - Pure,
-    /// with `VECTOR` - selects its own row.
-    class: String,
-    /// Which control scheme maps the snapshot. `[controls] scheme`.
-    ///
-    /// On `Race` and not on the input layer because the schemes differ in which
-    /// *gesture* a sideshift takes, and the gesture is read by the simulation
-    /// out of `ShipControls` - so this is what decides which of
-    /// `ship_controls`' two field groups gets filled. See
-    /// `docs/ghidra/functions/psp-pulse-usa/input-bindings.md`.
-    scheme: ControlScheme,
-    /// Where the ship was at the end of last tick, for the swept test.
-    ///
-    /// `None` on the first tick, which is the original's own "no previous
-    /// position" case in `Pads_TestCraft` and takes the single-point path. One
-    /// per racer.
-    pad_previous_position: [Option<Vec3>; MAX_SHIPS],
-    /// Whether slot 0 is being driven by its own [`oag_ai::Driver`] instead of
-    /// by the input snapshot. See [`Self::set_autopilot`].
-    autopilot: bool,
-    /// One-shot sound cues this tick asked for, awaiting a drain.
-    ///
-    /// **A per-tick output, never state** - the shape ADR-0018 requires, and
-    /// deliberately absent from [`Self::state_hash`]: a race that made no sound
-    /// and one that made every sound must hash alike. See [`Self::drain_cues`].
-    cues: Vec<crate::audio::sfx::CueEvent>,
-    /// Zone milestone numbers reached this tick, awaiting a drain.
-    ///
-    /// Kept apart from [`Self::cues`] rather than folded into [`Cue`](crate::audio::sfx::Cue):
-    /// the milestone ladder is per-title data
-    /// ([`oag_title::ZoneAnnouncer`]), not one of the engine's own fixed,
-    /// statically-named cues, so there is no `Cue` variant for it to be. Same
-    /// per-tick-output shape as `cues` and the same exclusion from
-    /// [`Self::state_hash`].
-    announcements: Vec<u16>,
-    /// Speed-class stages reached this tick, awaiting a drain. Same shape as
-    /// [`Self::announcements`]; kept apart because the two ladders are
-    /// separate title axes that happen to raise on related but distinct
-    /// edges - see [`Self::push_class_announcement`].
-    class_announcements: Vec<u32>,
-    /// Seconds before a wall contact may raise a sound cue again.
-    ///
-    /// Its own timer rather than [`RaceView::sparks_cooldown`], because a shielded
-    /// contact raises `ABSORB` and ignites no sparks - so that timer would
-    /// never re-arm. Render-side state, and out of the hash for the same
-    /// reason. See [`Self::tick`], where the two are set side by side.
-    contact_cue_cooldown: [f32; oag_gameplay::MAX_SHIPS],
+    /// `pub` because `world` was, and a caller reaching a ship reaches it the
+    /// same way it always did with one more hop. See [`sim`].
+    pub sim: RaceSim,
     /// Everything this race carries only so it can be shown or heard.
     ///
     /// The camera, the particles, the exhaust, the sound banks and the reticle,
     /// in one place instead of interleaved with the world above. Nothing in
-    /// here reaches [`Self::state_hash`], and nothing above it may be reached
+    /// here reaches [`RaceSim::state_hash`], and nothing above it may be reached
     /// *from* here - see [`view`] for the argument.
     view: RaceView,
 }

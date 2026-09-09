@@ -276,67 +276,69 @@ impl Race {
         let camera = Chase::snapped(target_of(&world.ships[0]), &chase);
 
         let race = Self {
-            racing_line: line,
-            ai_order: order,
-            // **Degraded from the measured tuning**, never boosted toward it -
-            // see `oag_ai::Difficulty`. At the top level this is the
-            // measurement unchanged.
-            ai_tuning: difficulty.tune(&oag_ai::Tuning::default()),
-            ai_pilots,
-            // `--autopilot-skill` sets this after `Self::start` returns - see
-            // `Self::set_autopilot_tuning`. Every race starts with the two
-            // tunings agreeing.
-            autopilot_tuning: None,
-            world,
-            collision,
-            spline,
-            course,
-            // Only Zone reads these, so the other two modes carry `None` and the
-            // engine keeps its ordinary throttle path.
-            zone: zone.filter(|_| mode == Mode::Zone),
-            // ADR-0007: 60 Hz, from the clock rather than from a literal, so there
-            // is one place the rate is decided.
-            dt: TickClock::new(TickRate::DEFAULT).rate().dt(),
-            respawn_cooldown: [0; oag_gameplay::MAX_SHIPS],
-            respawns_in_a_row: [0; oag_gameplay::MAX_SHIPS],
-            respawn_disabled: [false; oag_gameplay::MAX_SHIPS],
-            respawns: [0; oag_gameplay::MAX_SHIPS],
-            eliminator_kill_target: eliminator_kill_target
-                .unwrap_or(Mode::ELIMINATOR_KILL_TARGET_DEFAULT),
-            last_damager: [None; oag_gameplay::MAX_SHIPS],
-            eliminator_respawn_timer: [0.0; oag_gameplay::MAX_SHIPS],
-            rolls_armed: [0; oag_gameplay::MAX_SHIPS],
-            rolls_spent: [0.0; oag_gameplay::MAX_SHIPS],
-            lost_ticks: [0; oag_gameplay::MAX_SHIPS],
-            stalled_ticks: [0; oag_gameplay::MAX_SHIPS],
-            rescue_distance,
-            player_rescue_distance,
-            last_on_track,
-            zone_stages,
-            autopilot: false,
-            cues: Vec::new(),
-            announcements: Vec::new(),
-            class_announcements: Vec::new(),
-            contact_cue_cooldown: [0.0; oag_gameplay::MAX_SHIPS],
-            // Every pad starts due for a real test. `Pad_Bind` zeroes the same
-            // cache at load, so the first tick measures rather than trusting a
-            // distance nothing has computed yet.
-            pad_distance: std::array::from_fn(|_| vec![0.0; speedup_pads.len()]),
-            speedup_pads,
-            // The same broadphase, and the same "due for a real test" start.
-            weapon_pad_distance: std::array::from_fn(|_| vec![0.0; weapon_pads.len()]),
-            // Every pad starts collectable. The original's `+0x1a0` is zero
-            // until something stamps it, and nothing stamps it at load.
-            weapon_pad_refresh_left: vec![0.0; weapon_pads.len()],
-            weapon_pads,
-            weapon_pad_current: [None; MAX_SHIPS],
-            weapon_pad_refresh,
-            weapons,
-            class,
-            class_gravity_scale,
-            pad_current: [None; MAX_SHIPS],
-            pad_previous_position: [None; MAX_SHIPS],
-            scheme: ControlScheme::default(),
+            sim: RaceSim {
+                racing_line: line,
+                ai_order: order,
+                // **Degraded from the measured tuning**, never boosted toward it -
+                // see `oag_ai::Difficulty`. At the top level this is the
+                // measurement unchanged.
+                ai_tuning: difficulty.tune(&oag_ai::Tuning::default()),
+                ai_pilots,
+                // `--autopilot-skill` sets this after `Self::start` returns - see
+                // `Self::set_autopilot_tuning`. Every race starts with the two
+                // tunings agreeing.
+                autopilot_tuning: None,
+                world,
+                collision,
+                spline,
+                course,
+                // Only Zone reads these, so the other two modes carry `None` and the
+                // engine keeps its ordinary throttle path.
+                zone: zone.filter(|_| mode == Mode::Zone),
+                // ADR-0007: 60 Hz, from the clock rather than from a literal, so there
+                // is one place the rate is decided.
+                dt: TickClock::new(TickRate::DEFAULT).rate().dt(),
+                respawn_cooldown: [0; oag_gameplay::MAX_SHIPS],
+                respawns_in_a_row: [0; oag_gameplay::MAX_SHIPS],
+                respawn_disabled: [false; oag_gameplay::MAX_SHIPS],
+                respawns: [0; oag_gameplay::MAX_SHIPS],
+                eliminator_kill_target: eliminator_kill_target
+                    .unwrap_or(Mode::ELIMINATOR_KILL_TARGET_DEFAULT),
+                last_damager: [None; oag_gameplay::MAX_SHIPS],
+                eliminator_respawn_timer: [0.0; oag_gameplay::MAX_SHIPS],
+                rolls_armed: [0; oag_gameplay::MAX_SHIPS],
+                rolls_spent: [0.0; oag_gameplay::MAX_SHIPS],
+                lost_ticks: [0; oag_gameplay::MAX_SHIPS],
+                stalled_ticks: [0; oag_gameplay::MAX_SHIPS],
+                rescue_distance,
+                player_rescue_distance,
+                last_on_track,
+                zone_stages,
+                autopilot: false,
+                cues: Vec::new(),
+                announcements: Vec::new(),
+                class_announcements: Vec::new(),
+                contact_cue_cooldown: [0.0; oag_gameplay::MAX_SHIPS],
+                // Every pad starts due for a real test. `Pad_Bind` zeroes the same
+                // cache at load, so the first tick measures rather than trusting a
+                // distance nothing has computed yet.
+                pad_distance: std::array::from_fn(|_| vec![0.0; speedup_pads.len()]),
+                speedup_pads,
+                // The same broadphase, and the same "due for a real test" start.
+                weapon_pad_distance: std::array::from_fn(|_| vec![0.0; weapon_pads.len()]),
+                // Every pad starts collectable. The original's `+0x1a0` is zero
+                // until something stamps it, and nothing stamps it at load.
+                weapon_pad_refresh_left: vec![0.0; weapon_pads.len()],
+                weapon_pads,
+                weapon_pad_current: [None; MAX_SHIPS],
+                weapon_pad_refresh,
+                weapons,
+                class,
+                class_gravity_scale,
+                pad_current: [None; MAX_SHIPS],
+                pad_previous_position: [None; MAX_SHIPS],
+                scheme: ControlScheme::default(),
+            },
             view: RaceView {
                 chase_params: chase,
                 chase_far: chase,

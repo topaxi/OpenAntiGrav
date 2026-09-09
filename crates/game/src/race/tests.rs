@@ -262,7 +262,7 @@ fn pad_at(at: Vec3, half: f32) -> oag_vex::pads::PadVolume {
 /// Applied to the fixtures that drive rather than to `setup`, so a test *about*
 /// the rescue still gets one - see `race/tests/respawn.rs`.
 fn without_player_rescue(mut race: Race) -> Race {
-    race.player_rescue_distance = f32::INFINITY;
+    race.sim.player_rescue_distance = f32::INFINITY;
     race
 }
 

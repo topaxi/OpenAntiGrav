@@ -31,7 +31,7 @@ impl Race {
     /// them however long they run. See [`oag_race::Mode::laps_target`].
     #[must_use]
     pub fn finished(&self) -> bool {
-        self.world.race.finished
+        self.sim.world.race.finished
     }
 
     /// The results, once there are any.
@@ -62,9 +62,9 @@ impl Race {
         // cut. That table is what the HUD's own position readout comes from,
         // and a scoreboard that renumbered would contradict the number the
         // player was just looking at.
-        let crafts: Vec<Craft> = (0..usize::from(self.world.ship_count))
+        let crafts: Vec<Craft> = (0..usize::from(self.sim.world.ship_count))
             .map(|slot| {
-                let ship = &self.world.ships[slot];
+                let ship = &self.sim.world.ships[slot];
                 Craft {
                     slot: u8::try_from(slot).unwrap_or(u8::MAX),
                     place: places[slot],
@@ -79,8 +79,8 @@ impl Race {
             .collect();
         self.view.results = Some(scoreboard::build(
             &crafts,
-            self.world.race.laps_target,
-            self.world.tick,
+            self.sim.world.race.laps_target,
+            self.sim.world.tick,
         ));
     }
 }

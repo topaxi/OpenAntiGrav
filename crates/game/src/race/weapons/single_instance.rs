@@ -42,23 +42,23 @@ impl Race {
     /// the same "this tick, not last tick's stale reading" rule every other
     /// per-craft weapon update in this module follows.
     pub(in crate::race) fn advance_quake(&mut self) {
-        let Some(course) = self.course.as_ref() else {
+        let Some(course) = self.sim.course.as_ref() else {
             return;
         };
-        let Some(mut wave) = self.world.quake else {
+        let Some(mut wave) = self.sim.world.quake else {
             return;
         };
         let length = course.length();
-        wave.advance(length, self.dt);
+        wave.advance(length, self.sim.dt);
         if wave.expired() {
-            self.world.quake = None;
+            self.sim.world.quake = None;
             return;
         }
-        let rules = oag_gameplay::damage_rules(self.world.race.mode);
+        let rules = oag_gameplay::damage_rules(self.sim.world.race.mode);
         let mut absorbed = [false; MAX_SHIPS];
         wave.apply_hits(
-            &mut self.world.ships,
-            self.world.ship_count,
+            &mut self.sim.world.ships,
+            self.sim.world.ship_count,
             length,
             rules,
             &mut absorbed,
@@ -68,7 +68,7 @@ impl Race {
                 self.view.shield[slot].hit();
             }
         }
-        self.world.quake = Some(wave);
+        self.sim.world.quake = Some(wave);
     }
 
     /// One tick of the single LeachBeam link: age it, test it, drain it, retire
@@ -85,11 +85,16 @@ impl Race {
     /// last tick's stale reading" rule every other per-craft weapon update in
     /// this module follows.
     pub(in crate::race) fn advance_leach_beam(&mut self) {
-        let Some(mut beam) = self.world.leach_beam else {
+        let Some(mut beam) = self.sim.world.leach_beam else {
             return;
         };
-        let rules = oag_gameplay::damage_rules(self.world.race.mode);
-        let report = beam.advance(&mut self.world.ships, self.world.ship_count, rules, self.dt);
+        let rules = oag_gameplay::damage_rules(self.sim.world.race.mode);
+        let report = beam.advance(
+            &mut self.sim.world.ships,
+            self.sim.world.ship_count,
+            rules,
+            self.sim.dt,
+        );
         // A swallowed hit is the only thing that makes the target's shell
         // visibly react - the same out-parameter `Race::advance_quake` spends
         // on `self.view.shield[slot].hit()`, narrowed to the beam's one victim.
@@ -98,6 +103,6 @@ impl Race {
         {
             shell.hit();
         }
-        self.world.leach_beam = if report.retired { None } else { Some(beam) };
+        self.sim.world.leach_beam = if report.retired { None } else { Some(beam) };
     }
 }

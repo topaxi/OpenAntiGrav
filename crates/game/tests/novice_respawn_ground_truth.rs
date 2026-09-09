@@ -123,12 +123,12 @@ fn run(
         race.set_ai_tuning(tuning);
     }
     for slot in 2..8 {
-        race.world.ships[slot].active = false;
+        race.sim.world.ships[slot].active = false;
     }
-    race.world.ships[0].active = false;
+    race.sim.world.ships[0].active = false;
 
     let mut best: Option<u64> = None;
-    let mut lap = race.world.ships[LONE].standing.lap;
+    let mut lap = race.sim.world.ships[LONE].standing.lap;
     let mut started = 0u64;
     let mut recovered_this_lap = false;
     let mut respawn_indices = Vec::new();
@@ -139,13 +139,13 @@ fn run(
 
     for tick in 0..TICKS {
         let before = race.respawns_of(LONE);
-        let index_before = race.world.ships[LONE].driver.index;
+        let index_before = race.sim.world.ships[LONE].driver.index;
         race.tick(&oag_gameplay::InputSnapshot::default());
         if race.respawns_of(LONE) != before {
             recovered_this_lap = true;
             respawn_indices.push(index_before);
         }
-        let now = race.world.ships[LONE].standing.lap;
+        let now = race.sim.world.ships[LONE].standing.lap;
         if now != lap {
             if lap > 1 && !recovered_this_lap {
                 let taken = tick - started;
@@ -156,8 +156,8 @@ fn run(
             recovered_this_lap = false;
         }
 
-        let airborne_now = race.world.ships[LONE].physics.time_airborne > 0.0;
-        let index_now = race.world.ships[LONE].driver.index;
+        let airborne_now = race.sim.world.ships[LONE].physics.time_airborne > 0.0;
+        let index_now = race.sim.world.ships[LONE].driver.index;
         if airborne_now && !was_airborne {
             window_start_index = index_now;
             window_ticks = 0;
@@ -179,8 +179,8 @@ fn run(
         respawn_indices,
         laps: lap,
         respawns: race.respawns_of(LONE),
-        shield: race.world.ships[LONE].physics.shield,
-        capacity: race.world.ships[LONE].handling.dimensions.shield,
+        shield: race.sim.world.ships[LONE].physics.shield,
+        capacity: race.sim.world.ships[LONE].handling.dimensions.shield,
         best,
         airborne,
         line_len: race.racing_line().len() as u32,

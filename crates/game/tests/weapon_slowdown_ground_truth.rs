@@ -110,7 +110,7 @@ fn plasma_blast(race: &race::Race) -> BlastStats {
 
 /// Slot 0's forward speed.
 fn speed(race: &race::Race) -> f32 {
-    let body = &race.world.ships[0].physics.body;
+    let body = &race.sim.world.ships[0].physics.body;
     body.linear_velocity.dot(body.forward())
 }
 
@@ -133,19 +133,25 @@ fn speed(race: &race::Race) -> f32 {
 /// specific craft on a real circuit is a flight test rather than a slowdown
 /// one. `plasma_ground_truth.rs` covers the flight.
 fn detonate_behind_the_player(race: &mut race::Race, stats: &BlastStats) {
-    let body = &race.world.ships[0].physics.body;
+    let body = &race.sim.world.ships[0].physics.body;
     let point = body.position - body.forward() * (stats.radius * 0.999);
-    let count = race.world.ship_count as usize;
-    let rules = oag_gameplay::damage_rules(race.world.race.mode);
-    let reached = blast(&mut race.world.ships[..count], point, stats, rules, &mut []);
+    let count = race.sim.world.ship_count as usize;
+    let rules = oag_gameplay::damage_rules(race.sim.world.race.mode);
+    let reached = blast(
+        &mut race.sim.world.ships[..count],
+        point,
+        stats,
+        rules,
+        &mut [],
+    );
     assert!(reached > 0, "the blast reached nobody, including the craft");
 }
 
 /// Tops slot 0's energy back up, so the blast below cannot destroy the craft
 /// and turn the whole measurement into one about a wreck.
 fn refill_energy(race: &mut race::Race) {
-    let max = race.world.ships[0].handling.dimensions.shield;
-    race.world.ships[0].physics.shield = max;
+    let max = race.sim.world.ships[0].handling.dimensions.shield;
+    race.sim.world.ships[0].physics.shield = max;
 }
 
 /// A hit Plasma costs the craft its engine, and the craft gets it back.
@@ -181,7 +187,7 @@ fn a_plasma_hit_costs_a_craft_its_engine_and_it_recovers() {
     let stats = plasma_blast(&hit);
     detonate_behind_the_player(&mut hit, &stats);
     assert!(
-        hit.world.ships[0].pending_slowdown > 0.0,
+        hit.sim.world.ships[0].pending_slowdown > 0.0,
         "the blast credited no slowdown, so the disc's `slowdown_time` is not \
          reaching `projectile::blast`"
     );
@@ -190,13 +196,13 @@ fn a_plasma_hit_costs_a_craft_its_engine_and_it_recovers() {
     let evaluated = hit.tick(&throttle);
     control.tick(&throttle);
     assert_eq!(
-        hit.world.ships[0].pending_slowdown, 0.0,
+        hit.sim.world.ships[0].pending_slowdown, 0.0,
         "the pending slot was not drained"
     );
-    let armed = hit.world.ships[0].physics.slowdown_timer;
+    let armed = hit.sim.world.ships[0].physics.slowdown_timer;
     assert!(armed > 0.0, "the timer was not armed: {armed}");
     assert_eq!(
-        hit.world.ships[0].physics.craft_state,
+        hit.sim.world.ships[0].physics.craft_state,
         oag_physics::CraftState::Racing,
         "the blast destroyed the craft, so what follows measures a wreck"
     );
@@ -217,14 +223,14 @@ fn a_plasma_hit_costs_a_craft_its_engine_and_it_recovers() {
     // *negative* rather than at zero, which is the original's own shape - so
     // the exit test is `> 0.0` and the assertion afterwards is `<= 0.0`.
     let mut ticks_slowed = 1;
-    while hit.world.ships[0].physics.slowdown_timer > 0.0 {
+    while hit.sim.world.ships[0].physics.slowdown_timer > 0.0 {
         hit.tick(&throttle);
         control.tick(&throttle);
         ticks_slowed += 1;
         assert!(ticks_slowed < 600, "the timer never expired");
     }
     assert!(
-        hit.world.ships[0].physics.slowdown_timer <= 0.0,
+        hit.sim.world.ships[0].physics.slowdown_timer <= 0.0,
         "the loop exited with the timer still running"
     );
     assert!(
@@ -303,7 +309,7 @@ fn a_second_plasma_inside_the_window_does_not_extend_the_timer() {
 
     detonate_behind_the_player(&mut race, &stats);
     race.tick(&throttle);
-    let after_one = race.world.ships[0].physics.slowdown_timer;
+    let after_one = race.sim.world.ships[0].physics.slowdown_timer;
     assert!(
         after_one <= limit,
         "one hit put {after_one} on the timer, past the authored ceiling"
@@ -318,7 +324,7 @@ fn a_second_plasma_inside_the_window_does_not_extend_the_timer() {
     refill_energy(&mut race);
     detonate_behind_the_player(&mut race, &stats);
     race.tick(&throttle);
-    let after_two = race.world.ships[0].physics.slowdown_timer;
+    let after_two = race.sim.world.ships[0].physics.slowdown_timer;
     println!("one hit left {after_one}, two left {after_two}, ceiling {limit}");
     assert!(
         after_two <= limit,

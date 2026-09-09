@@ -875,7 +875,7 @@ pub fn listener_of(race: &crate::race::Race) -> oag_audio::Listener {
 /// per cue, because eight cues from one craft must all agree on where it was.
 fn craft_positions(race: &crate::race::Race) -> [Option<(Vec3, f32)>; oag_gameplay::MAX_SHIPS] {
     std::array::from_fn(|slot| {
-        let ship = race.world.ships.get(slot)?;
+        let ship = race.sim.world.ships.get(slot)?;
         (slot < race.ship_count() as usize && ship.active).then(|| {
             (
                 ship.physics.body.position,

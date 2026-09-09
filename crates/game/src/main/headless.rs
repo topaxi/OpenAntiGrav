@@ -261,11 +261,11 @@ pub(crate) fn write_trace(
     // Built from the world rather than from `Telemetry`, which carries a summary
     // for the console and not the columns a comparison needs.
     let frame_of = |race: &race::Race, dt: f32| {
-        let ship = &race.world.ships[0].physics;
+        let ship = &race.sim.world.ships[0].physics;
         let body = &ship.body;
         let exhaust = race.exhaust();
         Frame {
-            tick: race.world.tick,
+            tick: race.sim.world.tick,
             dt,
             grounded: ship.grounded,
             throttle: ship.thrust,

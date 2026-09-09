@@ -24,7 +24,7 @@ impl Race {
         let mut controls = if self.flown_for_the_player() {
             self.autopilot_controls()
         } else {
-            ship_controls(snapshot, self.scheme)
+            ship_controls(snapshot, self.sim.scheme)
         };
         // The start-line countdown: measured, not authored - see
         // `RaceState::thrust_gated` for the live capture this reproduces. Only
@@ -32,7 +32,7 @@ impl Race {
         // live through the countdown, which is unmeasured either way but costs
         // nothing to leave alone. Autopilot is gated too - the capture measured
         // the engine's own gate, not a distinction between input sources.
-        if RaceState::thrust_gated(self.world.tick) {
+        if RaceState::thrust_gated(self.sim.world.tick) {
             controls.thrust = 0.0;
         }
 
@@ -42,7 +42,7 @@ impl Race {
         // the tick `RaceState::thrust_gated` first reads `false` for; see
         // `Race::grant_free_turbo` for the mode, full-slot and missing-table
         // gates that make this safe to call unconditionally here.
-        if self.world.tick == oag_race::state::COUNTDOWN_TICKS {
+        if self.sim.world.tick == oag_race::state::COUNTDOWN_TICKS {
             self.grant_free_turbo();
         }
 
@@ -55,8 +55,8 @@ impl Race {
         // flown by slot 0's branch or the field's. See
         // `oag_gameplay::slowdown::drain`.
         oag_gameplay::slowdown::drain(
-            &mut self.world,
-            self.weapons.as_ref().map(|table| table.slowdown_limit),
+            &mut self.sim.world,
+            self.sim.weapons.as_ref().map(|table| table.slowdown_limit),
         );
 
         // Before the force law, so a Turbo fired this tick boosts this tick.
@@ -83,8 +83,9 @@ impl Race {
         // "where am I and what is next" pair at this crate's resolution. Off a
         // magstrip nothing consumes them, so a track without one is unaffected.
         let nearest = self
+            .sim
             .spline
-            .nearest(self.world.ships[0].physics.body.position);
+            .nearest(self.sim.world.ships[0].physics.body.position);
         let index = nearest.map(|(index, _, _)| index);
         // The same scan, read a third way: how far off the sample table the craft
         // is, which is the player's own off-track trigger below. Taken from here
@@ -104,21 +105,21 @@ impl Race {
         // equivalent goes through [`Self::ai_sample`] instead, because a driver
         // is asking a lap question. See [`ai_order`].
         let track_sample_next = index
-            .and_then(|index| self.spline.sample(index + 1))
+            .and_then(|index| self.sim.spline.sample(index + 1))
             .map(Spline::track_sample);
 
         // **Latched on the distance itself**, not on the counters below, so where
         // the craft is put back cannot depend on the order the two are updated
-        // in. See [`Race::last_on_track`].
+        // in. See [`RaceSim::last_on_track`].
         if let (Some(index), Some(distance)) = (index, spline_distance)
-            && distance <= self.player_rescue_distance
+            && distance <= self.sim.player_rescue_distance
         {
             // Zero on an index that will not fit, matching `Race::start` - the
             // arm is unreachable on any real table, and the value it writes is
             // read back as a sample index, so it has to be a *valid* one. A
             // saturating `u32::MAX` here would make `Race::respawn` find no
             // sample and return having recovered nothing, silently.
-            self.last_on_track = u32::try_from(index).unwrap_or(0);
+            self.sim.last_on_track = u32::try_from(index).unwrap_or(0);
         }
 
         if let Some(index) = index {
@@ -128,17 +129,17 @@ impl Race {
             // that keeps no note of where it was is the thing that has to be replaced
             // when the brute-force scan does. Converting the one into the other needs
             // a lap-counting convention nobody has recovered.
-            self.world.ships[0].segment = u16::try_from(index).unwrap_or(u16::MAX);
+            self.sim.world.ships[0].segment = u16::try_from(index).unwrap_or(u16::MAX);
         }
 
         // Zone's auto-speed, from the zone the run has reached. Read before the
         // step, from the zone the last tick left behind, because that is the
         // order the original runs in: `Zone_Update` assigns the counter into the
         // craft and `Ship_UpdateEngine` reads it on the following craft update.
-        let auto_speed = self
-            .zone
-            .map(|zone| oag_race::zone::thrust(zone.start, zone.increment, self.world.race.zone));
-        let before = self.world.ships[0].physics.body.position;
+        let auto_speed = self.sim.zone.map(|zone| {
+            oag_race::zone::thrust(zone.start, zone.increment, self.sim.world.race.zone)
+        });
+        let before = self.sim.world.ships[0].physics.body.position;
         // Step 15's input, measured before the step because that is when the
         // original measures it: `Ship_ApplySpeedupPad` runs inside the same craft
         // update as the other fourteen terms, all of them against the position the
@@ -150,19 +151,19 @@ impl Race {
         // and this one returns nothing, because a pickup is an event rather than
         // a per-tick force.
         self.test_weapon_pads(0, before, moved, &sweep);
-        let ship = &mut self.world.ships[0];
+        let ship = &mut self.sim.world.ships[0];
         let env = Environment {
             track_sample,
             track_sample_next,
             auto_speed,
             pad_hit,
-            class_gravity_scale: self.class_gravity_scale,
+            class_gravity_scale: self.sim.class_gravity_scale,
             // The mode's own `Weapons`/`Damage` defaults, which decide both what
             // a wall costs the energy pool and whether it recovers - a time trial
             // and a speed lap run with both off, so their pool floors at 20 and
             // regenerates, exactly as the disc's manual text describes. See
             // `oag_gameplay::damage_rules`.
-            damage_rules: oag_gameplay::damage_rules(self.world.race.mode),
+            damage_rules: oag_gameplay::damage_rules(self.sim.world.race.mode),
             ..Environment::default()
         };
         let evaluated = oag_physics::step(
@@ -170,8 +171,8 @@ impl Race {
             &controls,
             &ship.handling,
             &env,
-            &self.collision,
-            self.dt,
+            &self.sim.collision,
+            self.sim.dt,
         );
         // The contact half of the same edge as the blast one below, and the one
         // a player meets first: scraping a wall behind a shield costs nothing
@@ -186,7 +187,7 @@ impl Race {
         // death that follows credits nobody rather than the shot from
         // earlier. See `crate::race::eliminator`'s module doc comment.
         if evaluated.shield.lost > 0.0 {
-            self.last_damager[0] = None;
+            self.sim.last_damager[0] = None;
         }
 
         // **After the craft moved and before the race rules.** A rocket fired
@@ -198,7 +199,7 @@ impl Race {
         // blast this tick is blown up before the lap counter reads it.
         // The whole table rather than the Rocket's block: a blast is looked up by
         // the weapon that made it now that more than one weapon can make one.
-        let damage_rules = oag_gameplay::damage_rules(self.world.race.mode);
+        let damage_rules = oag_gameplay::damage_rules(self.sim.world.race.mode);
         // One flag per slot for a craft whose shield swallowed a blast. The
         // *only* thing that makes a shell visibly react is an absorbed hit -
         // see `oag_render::shield::ShipShield::hit` - so a blast that a shield
@@ -209,13 +210,13 @@ impl Race {
         // never stops a projectile, so it never reaches `impacts` and the
         // only way to see one is to compare this counter before and after.
         let bounces_before: [u8; oag_gameplay::projectile::MAX_PROJECTILES] =
-            std::array::from_fn(|slot| self.world.projectiles.slots[slot].bounces);
+            std::array::from_fn(|slot| self.sim.world.projectiles.slots[slot].bounces);
         let impacts = oag_gameplay::projectile::step(
-            &mut self.world,
-            self.dt,
-            &self.collision,
-            self.weapons.as_ref(),
-            &self.class,
+            &mut self.sim.world,
+            self.sim.dt,
+            &self.sim.collision,
+            self.sim.weapons.as_ref(),
+            &self.sim.class,
             damage_rules,
             &mut absorbed,
         );
@@ -233,7 +234,7 @@ impl Race {
             // it did not directly strike is not credited, which this project
             // labels a chosen simplification rather than a recovery.
             if let Some(struck) = impact.struck {
-                self.last_damager[struck as usize] = Some(impact.owner);
+                self.sim.last_damager[struck as usize] = Some(impact.owner);
             }
             self.ignite_blast(impact.kind, impact.point, impact.struck.map(usize::from));
         }
@@ -241,9 +242,11 @@ impl Race {
         // After the craft have moved, so a flare sits on this tick's nozzle
         // rather than the last one's.
         self.advance_engine_flares();
-        self.view.stage.advance(self.dt, &mut self.view.stage_rng);
+        self.view
+            .stage
+            .advance(self.sim.dt, &mut self.view.stage_rng);
 
-        self.respawn_cooldown[0] = self.respawn_cooldown[0].saturating_sub(1);
+        self.sim.respawn_cooldown[0] = self.sim.respawn_cooldown[0].saturating_sub(1);
         // Unconditionally and before the `||`, so the dwell sees every tick -
         // the same argument `step_opponents` makes for its two counters.
         let off_the_track = self.lost_off_the_track(spline_distance);
@@ -253,11 +256,11 @@ impl Race {
             // trigger is where it left. `index` - the nearest sample to wherever
             // the craft is now - would be that same place for the first and a
             // sample on some other part of the circuit for the second.
-            self.respawn(0, Some(self.last_on_track as usize));
-        } else if self.respawn_cooldown[0] == 0 {
+            self.respawn(0, Some(self.sim.last_on_track as usize));
+        } else if self.sim.respawn_cooldown[0] == 0 {
             // Clear of the trigger with the cooldown expired: whatever run of
             // back-to-back respawns was happening is over.
-            self.respawns_in_a_row[0] = 0;
+            self.sim.respawns_in_a_row[0] = 0;
         }
 
         self.step_opponents();
@@ -270,7 +273,7 @@ impl Race {
         // the lap counter to read. See `crate::race::eliminator`.
         self.tick_eliminator();
 
-        self.world.tick += 1;
+        self.sim.world.tick += 1;
 
         // The race rules run last of the simulation, on the position the step
         // produced and the tick it produced it on. Running them before the step
@@ -294,9 +297,9 @@ impl Race {
         // `Racing` one via a respawn, before this read - see
         // `crate::race::eliminator`'s own doc comment for why the mode's own
         // text rules out `RaceState::eliminate` as its ending.
-        if self.world.race.mode != Mode::Eliminator
-            && self.world.ships[0].physics.craft_state == oag_physics::CraftState::Eliminated
-            && self.world.race.eliminate()
+        if self.sim.world.race.mode != Mode::Eliminator
+            && self.sim.world.ships[0].physics.craft_state == oag_physics::CraftState::Eliminated
+            && self.sim.world.race.eliminate()
         {
             // The original plays `~BLOWUP`, hides the HUD and swings the camera
             // into its mode 5 on the way here. **The sound is built** and is
@@ -307,24 +310,27 @@ impl Race {
             // `oag_physics::damage::CraftState`.
         }
 
-        if let Some(course) = &self.course {
-            let position = self.world.ships[0].physics.body.position;
+        if let Some(course) = &self.sim.course {
+            let position = self.sim.world.ships[0].physics.body.position;
             // The same flag the collision sparks fire on, so "the HUD says that
             // zone was not clean" and "sparks came off the hull" cannot disagree.
             let contact = evaluated.wall.impact;
-            let outcome =
-                self.world
-                    .race
-                    .update(course, position, self.world.tick, self.dt, contact);
+            let outcome = self.sim.world.race.update(
+                course,
+                position,
+                self.sim.world.tick,
+                self.sim.dt,
+                contact,
+            );
 
             // A zone survived without touching anything pays shield back, clamped
             // to the ship's own pool. `Ship_SetShield` (`0x0883e6f4`) does the
             // same clamp against the stat block's maximum, so a full ship gains
             // nothing and the bar cannot overfill.
             if outcome.perfect_zone
-                && let Some(zone) = self.zone
+                && let Some(zone) = self.sim.zone
             {
-                let ship = &mut self.world.ships[0];
+                let ship = &mut self.sim.world.ships[0];
                 let max = ship.handling.dimensions.shield;
                 ship.physics.shield = (ship.physics.shield + zone.recharge).min(max);
             }
@@ -335,7 +341,7 @@ impl Race {
             // anything to say" split `raise_contact_cue` and `Banks::pick`
             // already keep. See `oag_title::ZoneAnnouncer`.
             if outcome.zone_advanced {
-                self.push_announcement(self.world.race.zone);
+                self.push_announcement(self.sim.world.race.zone);
             }
 
             // The speed-class announcer's own trigger, on a title whose
@@ -348,9 +354,9 @@ impl Race {
             // announcing a class on every zone survived. See
             // `oag_title::ZoneStages` and `oag_title::ZoneClassAnnouncer`.
             if outcome.zone_advanced
-                && let Some(stages) = self.zone_stages
+                && let Some(stages) = self.sim.zone_stages
             {
-                let after = self.world.race.zone;
+                let after = self.sim.world.race.zone;
                 let before = after.saturating_sub(1);
                 if let Some(stage_after) = stages.stage_for(after)
                     && Some(stage_after) != stages.stage_for(before)
@@ -393,10 +399,10 @@ impl Race {
         // [`Race::capture_results`].
         self.capture_results();
 
-        let target = target_of(&self.world.ships[0]);
+        let target = target_of(&self.sim.world.ships[0]);
         self.view
             .camera
-            .advance(target, &self.view.chase_params, self.dt);
+            .advance(target, &self.view.chase_params, self.sim.dt);
 
         // Advanced here, on the fixed tick, and not in the frame loop. That is
         // what makes the headless `capture` path - which calls only `tick` -
@@ -416,13 +422,13 @@ impl Race {
         // is a `max` that other things may one day also arm and this must follow
         // the pad specifically.
         if self.view.boost_fov_kick != oag_display::display::BoostFovKick::OFF {
-            let boosting = self.world.ships[0].physics.pad_timer > 0.0;
+            let boosting = self.sim.world.ships[0].physics.pad_timer > 0.0;
             let (target, rate) = if boosting {
                 (1.0, BOOST_FOV_OPEN_RATE)
             } else {
                 (0.0, BOOST_FOV_CLOSE_RATE)
             };
-            self.view.boost_kick += (target - self.view.boost_kick) * rate * self.dt;
+            self.view.boost_kick += (target - self.view.boost_kick) * rate * self.sim.dt;
             // Snapped, so a closed kick is *exactly* zero and `projection` takes
             // its bit-identical path rather than an `atan(tan(x))` round trip
             // that never quite settles.
@@ -454,7 +460,7 @@ impl Race {
         // two milliseconds and the parameter would not be worth authoring.
         // It is also the convention `<Airbrake gain/falloff>` already uses on
         // the same scale, one element away.
-        let ship = &self.world.ships[0].physics;
+        let ship = &self.sim.world.ships[0].physics;
         for (flap, level) in self
             .view
             .flaps
@@ -467,7 +473,7 @@ impl Race {
             } else {
                 (self.view.flap_graphics.down_speed, false)
             };
-            let step = rate * self.dt;
+            let step = rate * self.sim.dt;
             *flap = if rising {
                 (*flap + step).min(target)
             } else {
@@ -485,7 +491,7 @@ impl Race {
         // Decays every tick regardless of contact, the same as
         // `Camera_ArmShake`'s own `shake_timer` - see
         // `oag_render::camera::shake`.
-        self.view.shake.advance(self.dt);
+        self.view.shake.advance(self.sim.dt);
 
         // After every writer of the shield pool this tick has run - the wall
         // contact above, the weapon damage inside `projectile::step`, and the
@@ -497,7 +503,7 @@ impl Race {
         // Cooldown-gated, not edge-triggered - see `Self::sparks_cooldown`'s
         // doc comment for why a sustained scrape must re-fire periodically
         // rather than spawn once and go silent.
-        self.view.sparks_cooldown = (self.view.sparks_cooldown - self.dt).max(0.0);
+        self.view.sparks_cooldown = (self.view.sparks_cooldown - self.sim.dt).max(0.0);
         // The trigger rule runs whether or not the disc's own effect
         // loaded - see `Setup::effects`. Only the pool needs it.
         let effect = self.view.effects.get(sparks::DAMAGE_EFFECT).cloned();
@@ -516,7 +522,7 @@ impl Race {
         // shell's own bulge is what a shielded contact shows instead, which is
         // the whole design: sparks are the hull being hurt and the hull is not
         // being hurt. See `docs/.../shield-pickup.md`.
-        let shielded = self.world.ships[0].physics.shield_pickup_timer > 0.0;
+        let shielded = self.sim.world.ships[0].physics.shield_pickup_timer > 0.0;
         // The announcer, on the shield coming up and not on it being up.
         // `Shield_Activate` plays `"shieldactive"` one line above the
         // `Sound_PlayLooping` that opens `~SHIELD`, so the two share an instant
@@ -524,7 +530,7 @@ impl Race {
         // level the edge starts. The level half is `Race::shield_is_up`, read
         // by the audio layer; the edge is here, with every other cue edge.
         if shielded && !self.view.shield_was_up {
-            self.cues.push(crate::audio::sfx::CueEvent::new(
+            self.sim.cues.push(crate::audio::sfx::CueEvent::new(
                 crate::audio::sfx::Cue::ShieldActive,
                 0,
             ));
@@ -640,7 +646,7 @@ impl Race {
         if let Some(effect) = effect.as_deref() {
             self.view
                 .sparks
-                .advance(effect, self.dt, anchor, &mut self.view.sparks_rng);
+                .advance(effect, self.sim.dt, anchor, &mut self.view.sparks_rng);
         }
 
         evaluated

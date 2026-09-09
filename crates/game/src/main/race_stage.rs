@@ -153,16 +153,16 @@ impl RaceStage {
     /// agree with `oag_game::records` in one place. See that module's own
     /// doc for why it takes primitives rather than a `&Race`.
     pub(crate) fn observation(&self) -> oag_game::records::Observation {
-        let standing = &self.race.world.ships[0].standing;
+        let standing = &self.race.sim.world.ships[0].standing;
         oag_game::records::Observation {
             finished: self.race.finished(),
             place: Some(self.race.places()[0]),
             laps_completed: oag_game::records::laps_completed(
                 standing.lap,
                 self.race.finished(),
-                self.race.world.race.laps_target,
+                self.race.sim.world.race.laps_target,
             ),
-            tick: standing.finish_tick.unwrap_or(self.race.world.tick),
+            tick: standing.finish_tick.unwrap_or(self.race.sim.world.tick),
             best_lap_ticks: standing.best_lap_ticks,
             // No campaign cell is selected for any race yet - that is
             // frontend wiring (`Cell Selection`/`Grid Selection`), out of

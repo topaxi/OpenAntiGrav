@@ -6,6 +6,8 @@
 
 use super::*;
 
+mod cues;
+
 /// Where a trail-hit burst sits on a struck craft: on its hull, facing the
 /// contact.
 ///
@@ -107,13 +109,13 @@ impl Race {
     /// force law is already using to decide whether the auto-speed thrust applies
     /// this tick.
     pub(super) fn advance_exhausts(&mut self) {
-        for slot in 0..self.world.ship_count as usize {
-            if !self.world.ships[slot].active {
+        for slot in 0..self.sim.world.ship_count as usize {
+            if !self.sim.world.ships[slot].active {
                 continue;
             }
-            let ship = &self.world.ships[slot].physics;
+            let ship = &self.sim.world.ships[slot].physics;
             let position = ship.body.position;
-            let thrust = if self.zone.is_some() && ship.grounded > 0.0 {
+            let thrust = if self.sim.zone.is_some() && ship.grounded > 0.0 {
                 oag_physics::controls::CONTROL_MAX
             } else {
                 ship.thrust
@@ -121,7 +123,7 @@ impl Race {
             let speed = ship.body.linear_velocity.length();
             let back = -ship.body.forward();
             self.view.exhaust[slot].advance(
-                self.dt,
+                self.sim.dt,
                 thrust,
                 speed,
                 &mut self.view.exhaust_rng[slot],
@@ -157,7 +159,7 @@ impl Race {
                     );
                     self.view.hd_trail[slot].push(
                         nozzle,
-                        self.world.ships[slot].physics.body.up(),
+                        self.sim.world.ships[slot].physics.body.up(),
                         s01,
                     );
                 }
@@ -227,15 +229,15 @@ impl Race {
             return;
         }
         self.force_trail_sparks();
-        for owner in 0..self.world.ship_count as usize {
-            if !self.world.ships[owner].active || !self.view.hd_trail[owner].ready() {
+        for owner in 0..self.sim.world.ship_count as usize {
+            if !self.sim.world.ships[owner].active || !self.view.hd_trail[owner].ready() {
                 continue;
             }
-            for intruder in 0..self.world.ship_count as usize {
-                if intruder == owner || !self.world.ships[intruder].active {
+            for intruder in 0..self.sim.world.ship_count as usize {
+                if intruder == owner || !self.sim.world.ships[intruder].active {
                     continue;
                 }
-                let at = self.world.ships[intruder].physics.body.position;
+                let at = self.sim.world.ships[intruder].physics.body.position;
                 let hit = self.trail_touches(intruder, owner);
                 let bit = 1u8 << intruder;
                 if hit {
@@ -308,7 +310,7 @@ impl Race {
         // hull, facing straight up, so it is on screen and clear of the exhaust
         // plume. What appears under the flag is therefore anchored exactly as a
         // real hit is - see [`hull_contact_point`].
-        let body = self.world.ships[0].physics.body;
+        let body = self.sim.world.ships[0].physics.body;
         // The real placement with only the contact *direction* chosen: the
         // craft's own topmost authored spark anchor, so the burst is on the
         // hull exactly as a real hit is and still clear of the exhaust plume.
@@ -356,12 +358,12 @@ impl Race {
 
     fn trail_touches(&self, slot: usize, owner: usize) -> bool {
         let tube = &self.view.hd_trail[owner];
-        let at = self.world.ships[slot].physics.body.position;
+        let at = self.sim.world.ships[slot].physics.body.position;
         let Some(anchors) = self.view.spark_anchors.get(slot).filter(|a| !a.is_empty()) else {
             let reach = self.view.hull_reach[slot] + exhaust::hd::FIN_HALF_WIDTH;
             return tube.nearest(at).is_some_and(|(_, away)| away <= reach);
         };
-        let matrix = model_matrix_of(&self.world.ships[slot]);
+        let matrix = model_matrix_of(&self.sim.world.ships[slot]);
         anchors.iter().any(|local| {
             let world = matrix.transform_point3(*local);
             tube.nearest(world)
@@ -401,14 +403,14 @@ impl Race {
     #[must_use]
     pub fn spark_anchor_of(&self, slot: usize, owner: usize) -> Option<Vec3> {
         let anchors = self.view.spark_anchors.get(slot)?;
-        let matrix = model_matrix_of(&self.world.ships[slot]);
+        let matrix = model_matrix_of(&self.sim.world.ships[slot]);
         // Where the craft *drives into* the ribbon: the point on it nearest the
         // hull's leading edge, not nearest the hull's centre. A craft already
         // inside a trail has the ribbon running through it end to end, so a
         // contact taken at the centre is equidistant from nose and tail and the
         // pick among anchors is a coin toss - which is how Assegai ended up
         // sparking from its own exhaust.
-        let body = self.world.ships[slot].physics.body;
+        let body = self.sim.world.ships[slot].physics.body;
         let nose = body.position + body.forward() * self.view.hull_reach[slot];
         let contact = self.view.hd_trail[owner].nearest(nose)?.0;
         anchors
@@ -533,10 +535,10 @@ impl Race {
     /// mid-fade shell for a craft that comes back.
     pub(super) fn advance_shields(&mut self) {
         for slot in 0..MAX_SHIPS {
-            if self.world.ships[slot].physics.shield_pickup_timer <= 0.0 {
+            if self.sim.world.ships[slot].physics.shield_pickup_timer <= 0.0 {
                 self.view.shield[slot].deactivate();
             }
-            self.view.shield[slot].advance(self.dt);
+            self.view.shield[slot].advance(self.sim.dt);
         }
     }
 
@@ -651,22 +653,22 @@ impl Race {
         // principle this function is built on - because a shortened step is
         // something the original's own variable timestep does anyway.
         let target = entry_intensity.unwrap_or(1.0).clamp(0.0, 1.0);
-        let ticks = target / exhaust::INTENSITY_RISE / self.dt;
+        let ticks = target / exhaust::INTENSITY_RISE / self.sim.dt;
         // **The player's, and only the player's.** A pose comparison is against
         // one captured craft; posing the whole field would put seven opponents
         // into a boost the capture says nothing about.
         let (player, rng) = (&mut self.view.exhaust[0], &mut self.view.exhaust_rng[0]);
         for _ in 0..(ticks.floor() as u32) {
-            player.advance(self.dt, Self::FULL_THRUST, speed, rng);
+            player.advance(self.sim.dt, Self::FULL_THRUST, speed, rng);
         }
-        let remainder = (ticks - ticks.floor()) * self.dt;
+        let remainder = (ticks - ticks.floor()) * self.sim.dt;
         if remainder > 0.0 {
             player.advance(remainder, Self::FULL_THRUST, speed, rng);
         }
         player.boost(exhaust::BOOST_SECONDS);
-        let aged = (age / self.dt).round() as u32;
+        let aged = (age / self.sim.dt).round() as u32;
         for _ in 0..aged {
-            player.advance(self.dt, Self::FULL_THRUST, speed, rng);
+            player.advance(self.sim.dt, Self::FULL_THRUST, speed, rng);
         }
 
         // **A posed frame otherwise has no ribbon at all, and that silently
@@ -692,7 +694,7 @@ impl Race {
             let back = -self.ship().physics.body.forward();
             self.view.exhaust[0].clear_trail();
             for k in (0..exhaust::TRAIL_SAMPLES).rev() {
-                let behind = back * (speed * self.dt * k as f32);
+                let behind = back * (speed * self.sim.dt * k as f32);
                 self.view.exhaust[0].push_trail(nozzle + behind, back);
             }
             // The HD tube on the same straight-line terms, when it is the
@@ -702,7 +704,7 @@ impl Race {
                 let s01 = exhaust::hd::speed01(self.view.exhaust[0].speed_kmh(), 1.0);
                 self.view.hd_trail[0].clear();
                 for k in (0..exhaust::hd::SAMPLES).rev() {
-                    let behind = back * (speed * self.dt * k as f32);
+                    let behind = back * (speed * self.sim.dt * k as f32);
                     self.view.hd_trail[0].push(nozzle + behind, up, s01);
                 }
             }
@@ -783,119 +785,6 @@ impl Race {
         &self.view.sparks
     }
 
-    /// Raises `ABSORB` or `.COLLISIONS` for one craft, on that craft's own
-    /// re-arm.
-    ///
-    /// **The timer is per craft**, because the original's gate is: the cooldown
-    /// lives on the effect the *craft* owns, so eight hulls scraping eight
-    /// walls make eight sounds rather than sharing one 0.8-second window.
-    ///
-    /// It cannot share [`RaceView::sparks_cooldown`] either: a shielded contact
-    /// never ignites, so that timer would sit at zero and `ABSORB` would fire
-    /// sixty times a second through a scrape.
-    ///
-    /// `ShipCollisionFx_Trigger` plays `"COLLISIONS"` once per call that gets
-    /// past its own 0.8-second gate, which is the same 0.8 seconds
-    /// `oag_render::sparks::COLLISION_COOLDOWN` carries - one constant in the
-    /// original, read twice here. `"ABSORB"` comes from `FUN_08840640`, which
-    /// **bypasses** that gate and staggers its own ten instances by 0.1 s; how
-    /// often the game calls it is not recovered, so it is re-armed on the same
-    /// 0.8 s and that is a stated approximation rather than a reading. See
-    /// `docs/.../contact-response.md`.
-    pub(super) fn raise_contact_cue(&mut self, slot: usize, impact: bool, shielded: bool) {
-        let Some(cooldown) = self.contact_cue_cooldown.get_mut(slot) else {
-            return;
-        };
-        *cooldown = (*cooldown - self.dt).max(0.0);
-        if !impact || *cooldown > 0.0 {
-            return;
-        }
-        *cooldown = oag_render::sparks::COLLISION_COOLDOWN;
-        let cue = if shielded {
-            crate::audio::sfx::Cue::Absorb
-        } else {
-            crate::audio::sfx::Cue::Collision
-        };
-        self.cues.push(crate::audio::sfx::CueEvent::new(cue, slot));
-    }
-
-    /// Takes the one-shot sound cues this tick raised, leaving the queue empty.
-    ///
-    /// The seam ADR-0018 asks for: cues are a per-tick *output*, so the caller
-    /// that owns the mixer drains them **inside the fixed-step loop**, next to
-    /// the tick that raised them. Draining once per frame instead would
-    /// coalesce or duplicate them on a frame that stepped twice or none.
-    ///
-    /// A caller with no audio need never call this. The queue is one `Vec` and
-    /// a race that is never drained grows it by at most a handful of entries a
-    /// second, all of them fixed-size - but the composition root does drain it,
-    /// and a headless test that does not is bounded by its own tick count.
-    pub fn drain_cues(&mut self) -> Vec<crate::audio::sfx::CueEvent> {
-        std::mem::take(&mut self.cues)
-    }
-
-    /// The cues raised so far and not yet drained, for tests.
-    #[must_use]
-    pub fn pending_cues(&self) -> &[crate::audio::sfx::CueEvent] {
-        &self.cues
-    }
-
-    /// The decoded sound banks this race loaded.
-    #[must_use]
-    pub fn sounds(&self) -> &crate::audio::sfx::Banks {
-        &self.view.sounds
-    }
-
-    /// The circuit's own authored sound emitters, as this race loaded them.
-    #[must_use]
-    pub fn track_emitters(&self) -> &crate::audio::sfx::TrackEmitters {
-        &self.view.track_emitters
-    }
-
-    /// The decoded Zone milestone announcer this race loaded.
-    #[must_use]
-    pub fn announcer(&self) -> &crate::audio::sfx::Announcer {
-        &self.view.announcer
-    }
-
-    /// Raises a Zone milestone announcement, to be drained the same tick.
-    ///
-    /// Whether `milestone` actually names a loaded cue is
-    /// [`RaceView::announcer`]'s question, not this call's - see
-    /// [`Self::drain_announcements`] for why the split is the same one
-    /// [`Self::raise_contact_cue`] and [`Banks::pick`](crate::audio::sfx::Banks::pick)
-    /// already keep.
-    pub(super) fn push_announcement(&mut self, milestone: u16) {
-        self.announcements.push(milestone);
-    }
-
-    /// Takes the Zone milestone numbers this tick raised, leaving the queue
-    /// empty. Same per-tick-output shape as [`Self::drain_cues`].
-    pub fn drain_announcements(&mut self) -> Vec<u16> {
-        std::mem::take(&mut self.announcements)
-    }
-
-    /// The decoded Zone speed-class announcer this race loaded.
-    #[must_use]
-    pub fn class_announcer(&self) -> &crate::audio::sfx::ClassAnnouncer {
-        &self.view.class_announcer
-    }
-
-    /// Raises a Zone speed-class announcement, to be drained the same tick.
-    ///
-    /// Whether `stage` actually names a loaded cue is
-    /// [`RaceView::class_announcer`]'s question, not this call's - same split as
-    /// [`Self::push_announcement`].
-    pub(super) fn push_class_announcement(&mut self, stage: u32) {
-        self.class_announcements.push(stage);
-    }
-
-    /// Takes the speed-class stages this tick raised, leaving the queue
-    /// empty. Same per-tick-output shape as [`Self::drain_announcements`].
-    pub fn drain_class_announcements(&mut self) -> Vec<u32> {
-        std::mem::take(&mut self.class_announcements)
-    }
-
     /// Whether the player's craft is mid-explosion.
     ///
     /// A *level*, like [`Self::shield_is_up`] and for the same reason:
@@ -910,7 +799,7 @@ impl Race {
     /// line that changes.
     #[must_use]
     pub fn craft_is_exploding(&self) -> bool {
-        self.world.ships[0].physics.craft_state == oag_physics::CraftState::Destroyed
+        self.sim.world.ships[0].physics.craft_state == oag_physics::CraftState::Destroyed
     }
 
     /// Whether the player's shield pickup is currently up.
@@ -922,7 +811,7 @@ impl Race {
     /// [`Self::tick`] - so "the shell is up" is one fact read in two places.
     #[must_use]
     pub fn shield_is_up(&self) -> bool {
-        self.world.ships[0].physics.shield_pickup_timer > 0.0
+        self.sim.world.ships[0].physics.shield_pickup_timer > 0.0
     }
 
     /// The track's speed-pad trigger volumes.
@@ -931,7 +820,7 @@ impl Race {
     /// a failure - see [`Setup::speedup_pads`].
     #[must_use]
     pub fn speedup_pads(&self) -> &[oag_vex::pads::PadVolume] {
-        &self.speedup_pads
+        &self.sim.speedup_pads
     }
 
     /// Seconds each weapon pad has left before it can hand out another
@@ -946,7 +835,7 @@ impl Race {
     /// here with that list's `i`-th vertex range.
     #[must_use]
     pub fn weapon_pad_refresh_left(&self) -> &[f32] {
-        &self.weapon_pad_refresh_left
+        &self.sim.weapon_pad_refresh_left
     }
 
     /// The player's `engine_flare` locator in **world** space, or `None` when the
@@ -974,7 +863,7 @@ impl Race {
     #[must_use]
     pub fn nozzle_of(&self, slot: usize) -> Option<Vec3> {
         let local = self.nozzle_local_of(slot)?;
-        Some(model_matrix_of(&self.world.ships[slot]).transform_point3(local))
+        Some(model_matrix_of(&self.sim.world.ships[slot]).transform_point3(local))
     }
 
     /// The `engine_flare` locator in **model space** - the pivot a transform

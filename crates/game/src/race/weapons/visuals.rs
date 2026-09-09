@@ -38,10 +38,10 @@ impl Race {
     pub(in crate::race) fn advance_leach_beam_visual(&mut self) {
         // The charge: up exactly while slot 0 holds a LeachBeam, which is the
         // whole of `FUN_0883f540`'s own gate. Nothing chosen here.
-        let holding = self.world.ships[0].pickup.weapon
+        let holding = self.sim.world.ships[0].pickup.weapon
             == Some(oag_tables::weapons::Weapon::LeachBeam)
-            && self.world.ships[0].active;
-        let holder = self.world.ships[0].physics.body.position;
+            && self.sim.world.ships[0].active;
+        let holder = self.sim.world.ships[0].physics.body.position;
         match (
             holding.then(|| self.view.effects.get(LEACHBEAM_CHARGING_EFFECT).cloned()),
             self.view.leach_charge_effect,
@@ -64,6 +64,7 @@ impl Race {
         // draining. A disconnected beam in its linger window draws nothing,
         // matching the original clearing the link before the pool retires it.
         let connected = self
+            .sim
             .world
             .leach_beam
             .filter(oag_gameplay::projectile::leach_beam::Beam::connected);
@@ -73,7 +74,10 @@ impl Race {
             }
             return;
         };
-        let target = self.world.ships[beam.target as usize].physics.body.position;
+        let target = self.sim.world.ships[beam.target as usize]
+            .physics
+            .body
+            .position;
         match (
             self.view.effects.get(LEACHBEAM_ENERGY_EFFECT).cloned(),
             self.view.leach_beam_effect,
@@ -89,8 +93,8 @@ impl Race {
     /// Keeps [`QUAKE_EFFECT`] and its own transform riding the travelling
     /// wave, one instance for the whole race.
     ///
-    /// Needs `self.course` (to place the wave along the ring) and
-    /// `self.spline` (to read the track's own width there), which is why this
+    /// Needs `self.sim.course` (to place the wave along the ring) and
+    /// `self.sim.spline` (to read the track's own width there), which is why this
     /// cannot live in `oag_gameplay::projectile::quake` at all - see that
     /// module's own doc comment on the split.
     ///
@@ -112,17 +116,17 @@ impl Race {
     /// so this draws the effect axis-aligned at the recovered position and
     /// scale alone, which is **chosen, not measured; no confidence score**.
     ///
-    /// Detaches the instance the tick the wave goes away (`self.world.quake`
+    /// Detaches the instance the tick the wave goes away (`self.sim.world.quake`
     /// becomes `None`), the same "hand the slot back, let the particles fade"
     /// shape [`Race::advance_projectile_flares`] already takes.
     pub(in crate::race) fn advance_quake_visual(&mut self) {
-        let Some(wave) = self.world.quake else {
+        let Some(wave) = self.sim.world.quake else {
             if let Some(playing) = self.view.quake_effect.take() {
                 self.view.stage.detach(playing);
             }
             return;
         };
-        let Some(course) = self.course.as_ref() else {
+        let Some(course) = self.sim.course.as_ref() else {
             return;
         };
         let Some(index) = course_index_near_progress(course, wave.progress) else {
@@ -131,7 +135,7 @@ impl Race {
         let Some(position) = course.position(index) else {
             return;
         };
-        let Some((_, sample, _)) = self.spline.nearest(position) else {
+        let Some((_, sample, _)) = self.sim.spline.nearest(position) else {
             return;
         };
         let lateral = Vec3::from_array(sample.lateral);
@@ -241,9 +245,9 @@ impl Race {
     ) -> Option<(&'static str, Vec3)> {
         match kind {
             oag_tables::weapons::Weapon::Rocket => Some(match struck {
-                Some(slot) if self.world.ships[slot].active => (
+                Some(slot) if self.sim.world.ships[slot].active => (
                     CRAFT_BLAST_EFFECT,
-                    self.world.ships[slot].physics.body.position - Vec3::Y * CRAFT_BLAST_DROP,
+                    self.sim.world.ships[slot].physics.body.position - Vec3::Y * CRAFT_BLAST_DROP,
                 ),
                 // A craft that has gone inactive since the hit falls back to
                 // the impact point rather than reading a stale pose - still
@@ -289,7 +293,7 @@ impl Race {
         &mut self,
         before: &[u8; oag_gameplay::projectile::MAX_PROJECTILES],
     ) {
-        for (slot, projectile) in self.world.projectiles.slots.iter().enumerate() {
+        for (slot, projectile) in self.sim.world.projectiles.slots.iter().enumerate() {
             if !bounced_this_tick(projectile.kind, before[slot], projectile.bounces) {
                 continue;
             }
@@ -330,7 +334,7 @@ impl Race {
             return;
         };
         for slot in 0..MAX_SHIPS {
-            let nozzle = self.world.ships[slot]
+            let nozzle = self.sim.world.ships[slot]
                 .active
                 .then(|| self.nozzle_of(slot))
                 .flatten();
@@ -387,7 +391,7 @@ impl Race {
     /// **Called after `projectile::step`**, so a flare is anchored where its
     /// weapon ended the tick.
     pub(in crate::race) fn advance_projectile_flares(&mut self) {
-        for (slot, projectile) in self.world.projectiles.slots.iter().enumerate() {
+        for (slot, projectile) in self.sim.world.projectiles.slots.iter().enumerate() {
             let name = flare_effect_for(projectile.kind);
             let (primary, orbiting) = if projectile.kind
                 == Some(oag_tables::weapons::Weapon::Missile)
@@ -450,7 +454,7 @@ impl Race {
         modelled: impl Fn(oag_tables::weapons::Weapon) -> bool,
     ) -> Vec<oag_render::mesh::GpuVertex> {
         let mut vertices = Vec::new();
-        for projectile in &self.world.projectiles.slots {
+        for projectile in &self.sim.world.projectiles.slots {
             let Some(kind) = projectile.kind else {
                 continue;
             };
@@ -632,7 +636,8 @@ impl Race {
     /// mesh view cannot settle; `Pulse_Bomb.vex` was not separately viewed.
     #[must_use]
     fn projectile_model_matrices(&self, kind: oag_tables::weapons::Weapon) -> Vec<Mat4> {
-        self.world
+        self.sim
+            .world
             .projectiles
             .slots
             .iter()

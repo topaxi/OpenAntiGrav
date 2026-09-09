@@ -85,7 +85,8 @@ fn held(button: Button) -> oag_gameplay::InputSnapshot {
 
 /// Every Cannon round slot 0 has fired and still has in the air.
 fn rounds(race: &race::Race) -> Vec<oag_gameplay::projectile::Projectile> {
-    race.world
+    race.sim
+        .world
         .projectiles
         .slots
         .iter()
@@ -145,7 +146,7 @@ fn a_held_fire_button_is_what_fires_a_cannon() {
         return;
     };
     let cannon = race.cannon_stats().expect("the disc authors a Cannon");
-    race.world.ships[0].pickup.weapon = Some(Weapon::Cannon);
+    race.sim.world.ships[0].pickup.weapon = Some(Weapon::Cannon);
 
     // Long enough that a self-firing countdown would have gone off many times
     // over, with fire never held. Nothing may leave the barrel. A flat
@@ -197,7 +198,11 @@ fn a_held_fire_button_is_what_fires_a_cannon() {
     );
 
     let round = rounds(&race)[0];
-    let speed = race.world.ships[0].physics.body.linear_velocity.length();
+    let speed = race.sim.world.ships[0]
+        .physics
+        .body
+        .linear_velocity
+        .length();
     assert!(
         round.velocity.length() > speed,
         "the round is slower than the craft that fired it: {:.1} against \
@@ -256,11 +261,11 @@ fn an_opponent_holding_a_cannon_fires_it_with_no_button_anywhere() {
     let Some((mut race, throttle)) = moving() else {
         return;
     };
-    let count = usize::from(race.world.ship_count);
+    let count = usize::from(race.sim.world.ship_count);
     assert!(count > 1, "a single race should grid more than one craft");
     let cannon = race.cannon_stats().expect("the disc authors a Cannon");
     for slot in 1..count {
-        race.world.ships[slot].pickup.weapon = Some(Weapon::Cannon);
+        race.sim.world.ships[slot].pickup.weapon = Some(Weapon::Cannon);
     }
 
     // `throttle` holds CROSS and never SQUARE, so nothing the player does can
@@ -272,6 +277,7 @@ fn an_opponent_holding_a_cannon_fires_it_with_no_button_anywhere() {
     for _ in 0..ticks {
         race.tick(&throttle);
         for round in race
+            .sim
             .world
             .projectiles
             .slots
@@ -315,14 +321,14 @@ fn an_opponent_with_nobody_ahead_does_not_fire_its_cannon() {
     let Some((mut race, throttle)) = moving() else {
         return;
     };
-    let count = usize::from(race.world.ship_count);
+    let count = usize::from(race.sim.world.ship_count);
     // Whoever is out front right now: `Field::ahead` is empty for it, so
     // `Driver::holds_fire` has nothing to aim at.
     let places = race.places();
     let leader = (1..count)
         .min_by_key(|&slot| places[slot])
         .expect("a grid of more than one");
-    race.world.ships[leader].pickup.weapon = Some(Weapon::Cannon);
+    race.sim.world.ships[leader].pickup.weapon = Some(Weapon::Cannon);
 
     for _ in 0..300 {
         race.tick(&throttle);
@@ -332,7 +338,8 @@ fn an_opponent_with_nobody_ahead_does_not_fire_its_cannon() {
             break;
         }
         assert!(
-            race.world
+            race.sim
+                .world
                 .projectiles
                 .slots
                 .iter()

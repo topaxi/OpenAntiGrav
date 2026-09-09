@@ -243,7 +243,7 @@ fn every_projectile_is_drawn_and_the_worst_case_fits_the_buffer() {
 
     // The worst case: every slot in the air at once.
     for slot in 0..oag_gameplay::projectile::MAX_PROJECTILES {
-        race.world.projectiles.spawn(
+        race.sim.world.projectiles.spawn(
             oag_tables::weapons::Weapon::Rocket,
             Vec3::Z * slot as f32,
             Vec3::Z,
@@ -289,7 +289,7 @@ fn a_modelled_rocket_points_where_it_is_going() {
     );
 
     let heading = Vec3::new(1.0, 0.0, 2.0).normalize();
-    race.world.projectiles.spawn(
+    race.sim.world.projectiles.spawn(
         oag_tables::weapons::Weapon::Rocket,
         Vec3::X,
         heading * 600.0,
@@ -339,13 +339,13 @@ fn a_modelled_rocket_points_where_it_is_going() {
 fn a_rocket_and_a_missile_in_flight_do_not_share_a_model_slot() {
     let mut race =
         race_with_weapon_table(Mode::SingleRace, enveloping_pad(), 1.0, one_rocket_table());
-    race.world.projectiles.spawn(
+    race.sim.world.projectiles.spawn(
         oag_tables::weapons::Weapon::Rocket,
         Vec3::X,
         Vec3::Z * 600.0,
         0,
     );
-    race.world.projectiles.spawn(
+    race.sim.world.projectiles.spawn(
         oag_tables::weapons::Weapon::Missile,
         Vec3::Y,
         Vec3::Z * 600.0,
@@ -380,10 +380,12 @@ fn a_laid_mine_or_bomb_keeps_the_pose_it_landed_in() {
     let mut race =
         race_with_weapon_table(Mode::SingleRace, enveloping_pad(), 1.0, one_rocket_table());
     let pose = Quat::from_rotation_y(std::f32::consts::FRAC_PI_2);
-    race.world
+    race.sim
+        .world
         .projectiles
         .lay(oag_tables::weapons::Weapon::Mine, Vec3::X, 0, 5.0, pose);
-    race.world
+    race.sim
+        .world
         .projectiles
         .lay(oag_tables::weapons::Weapon::Bomb, Vec3::Y, 0, 20.0, pose);
 
@@ -406,7 +408,7 @@ fn a_laid_mine_or_bomb_keeps_the_pose_it_landed_in() {
 fn a_rocket_flying_along_world_up_does_not_collapse_its_basis() {
     let mut race =
         race_with_weapon_table(Mode::SingleRace, enveloping_pad(), 1.0, one_rocket_table());
-    race.world.projectiles.spawn(
+    race.sim.world.projectiles.spawn(
         oag_tables::weapons::Weapon::Rocket,
         Vec3::ZERO,
         Vec3::NEG_Y * 600.0,
@@ -457,9 +459,9 @@ fn a_hull_blast_sits_under_the_craft_and_a_track_blast_where_it_struck() {
     );
 
     let struck = 1;
-    race.world.ships[struck].active = true;
+    race.sim.world.ships[struck].active = true;
     let craft = Vec3::new(-20.0, 4.0, 11.0);
-    race.world.ships[struck].physics.body.position = craft;
+    race.sim.world.ships[struck].physics.body.position = craft;
     assert_eq!(
         race.blast_for(Weapon::Rocket, impact, Some(struck)),
         Some((CRAFT_BLAST_EFFECT, craft - Vec3::Y * CRAFT_BLAST_DROP)),
@@ -544,7 +546,8 @@ fn a_cannon_round_sparks_on_a_wall_and_silently_on_a_craft() {
 fn a_projectile_takes_a_flare_slot_and_hands_it_back() {
     let mut race =
         race_with_weapon_table(Mode::SingleRace, enveloping_pad(), 1.0, one_rocket_table());
-    race.world
+    race.sim
+        .world
         .projectiles
         .spawn(oag_tables::weapons::Weapon::Rocket, Vec3::ZERO, Vec3::Z, 0);
     race.advance_projectile_flares();
@@ -559,7 +562,7 @@ fn a_projectile_takes_a_flare_slot_and_hands_it_back() {
 
     // With the slot vacated the bookkeeping must clear either way, or the
     // next projectile in that slot inherits a flare it never started.
-    race.world.projectiles.slots[0].kind = None;
+    race.sim.world.projectiles.slots[0].kind = None;
     race.advance_projectile_flares();
     assert_eq!(race.view.projectile_flare[0], None);
     assert_eq!(race.stage().playing_count(), 0);

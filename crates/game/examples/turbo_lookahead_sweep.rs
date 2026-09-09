@@ -123,7 +123,7 @@ fn run(seeds: &[u64], track: &str, look_max: f32) -> RunStats {
         for _ in 0..3_600u32 {
             world_race.tick(&oag_gameplay::InputSnapshot::default());
             for slot in 1..8 {
-                let ship = &world_race.world.ships[slot];
+                let ship = &world_race.sim.world.ships[slot];
                 let turbo = ship.physics.turbo_timer;
                 let speed = ship
                     .physics

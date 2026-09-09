@@ -479,7 +479,7 @@ fn the_engine_sounds_while_a_race_runs_and_stops_when_it_finishes() {
     // Forced rather than driven: reaching a real finish is a lap of real
     // circuit, and what is under test is the frame loop's finished-race arm,
     // not the lap counter. This is the same flag `Race::finished` reads.
-    race.world.race.finished = true;
+    race.sim.world.race.finished = true;
     for _ in 0..600 {
         // Deliberately **not** calling `race.tick` - that is exactly what the
         // finished arm does not do.
@@ -546,7 +546,7 @@ fn a_destroyed_craft_sounds_and_stops_sounding() {
     // Set directly - reaching zero shield honestly is `oag_physics`'s business
     // and needs a wall this fixture has no reason to build. What is under test
     // is the audio layer reading the state.
-    race.world.ships[0].physics.craft_state = oag_physics::CraftState::Destroyed;
+    race.sim.world.ships[0].physics.craft_state = oag_physics::CraftState::Destroyed;
     audio.race_tick(&mut race);
     audio.tick();
     assert!(
@@ -562,7 +562,7 @@ fn a_destroyed_craft_sounds_and_stops_sounding() {
     // later either way. A second of audio separates the two answers - a
     // one-shot is 0.37 s and has ended, and a loop that was not released never
     // will.
-    race.world.ships[0].physics.craft_state = oag_physics::CraftState::Eliminated;
+    race.sim.world.ships[0].physics.craft_state = oag_physics::CraftState::Eliminated;
     for _ in 0..60 {
         audio.race_tick(&mut race);
         audio.tick();
@@ -652,7 +652,7 @@ fn the_whole_grid_is_audible_and_not_all_from_one_place() {
     // the same kind of fixture `race::tests::cues` uses for its wall.
     let camera = race.view().inverse();
     let right = camera.x_axis.truncate().normalize();
-    race.world.ships[1].physics.body.position = camera.w_axis.truncate() + right * 10.0;
+    race.sim.world.ships[1].physics.body.position = camera.w_axis.truncate() + right * 10.0;
     audio.race_tick(&mut race);
 
     let (left, right) = audio.output().with_mixer(|mixer| {
@@ -721,7 +721,7 @@ fn the_shield_opens_a_held_voice_and_closes_it_when_the_pickup_expires() {
     // Set directly: this is the field `oag_physics::damage` drives and the one
     // `Race::shield_is_up` reads, and granting a real pickup would be testing
     // the pad table instead.
-    race.world.ships[0].physics.shield_pickup_timer = 1.0;
+    race.sim.world.ships[0].physics.shield_pickup_timer = 1.0;
     race.tick(&oag_gameplay::InputSnapshot::default());
     audio.race_tick(&mut race);
     assert!(
@@ -746,7 +746,7 @@ fn the_shield_opens_a_held_voice_and_closes_it_when_the_pickup_expires() {
         "the shield loop is being re-triggered every tick"
     );
 
-    race.world.ships[0].physics.shield_pickup_timer = 0.0;
+    race.sim.world.ships[0].physics.shield_pickup_timer = 0.0;
     race.tick(&oag_gameplay::InputSnapshot::default());
     audio.race_tick(&mut race);
     assert_eq!(

@@ -142,7 +142,7 @@ impl Scene {
         // to cover trackside objects *moving* as well as surfaces scrolling. A
         // still-frame comparison wants a chosen time, not a freeze; a stale
         // `false` in a settings file wants nothing at all.
-        let seconds = anim_seconds.unwrap_or(race.world.tick as f32 / 60.0);
+        let seconds = anim_seconds.unwrap_or(race.sim.world.tick as f32 / 60.0);
         // Fog, sampled where the eye is. `oag_vex::fog::sample` reimplements
         // `FogCube_Sample`: the camera is transformed into the volume's space,
         // rejected if outside, and all six parameters interpolated across the

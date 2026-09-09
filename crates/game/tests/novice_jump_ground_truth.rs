@@ -100,9 +100,9 @@ fn what_the_jumps_approach_looks_like() {
         let mut race = race::Race::start(loaded.setup.clone());
         race.set_ai_tuning(tuning);
         for slot in 2..8 {
-            race.world.ships[slot].active = false;
+            race.sim.world.ships[slot].active = false;
         }
-        race.world.ships[0].active = false;
+        race.sim.world.ships[0].active = false;
 
         let mut seen = [false; 30];
         let mut logged = 0usize;
@@ -115,7 +115,7 @@ fn what_the_jumps_approach_looks_like() {
         println!("\ngrip_believed {grip}: speed by index, first pass through 0..26:");
         for _tick in 0..18_000 {
             race.tick(&oag_gameplay::InputSnapshot::default());
-            let ship = &race.world.ships[LONE];
+            let ship = &race.sim.world.ships[LONE];
             let index = ship.driver.index as usize;
             if index < 5 {
                 started = true;
@@ -154,16 +154,16 @@ fn run_grip(setup: &race::Setup, grip: f32) -> (u32, u32, f32, u32) {
     let mut race = race::Race::start(setup.clone());
     race.set_ai_tuning(tuning);
     for slot in 2..8 {
-        race.world.ships[slot].active = false;
+        race.sim.world.ships[slot].active = false;
     }
-    race.world.ships[0].active = false;
+    race.sim.world.ships[0].active = false;
 
     let mut liftoff_speed = -1.0f32;
     let mut landing_index = 0u32;
     let mut was_airborne = false;
     for _tick in 0..18_000u32 {
         race.tick(&oag_gameplay::InputSnapshot::default());
-        let ship = &race.world.ships[LONE];
+        let ship = &race.sim.world.ships[LONE];
         let airborne_now = ship.physics.time_airborne > 0.0;
         if airborne_now && !was_airborne && liftoff_speed < 0.0 {
             let forward = ship.physics.body.forward();
@@ -179,7 +179,7 @@ fn run_grip(setup: &race::Setup, grip: f32) -> (u32, u32, f32, u32) {
     }
     (
         race.respawns_of(LONE),
-        race.world.ships[LONE].standing.lap,
+        race.sim.world.ships[LONE].standing.lap,
         liftoff_speed,
         landing_index,
     )

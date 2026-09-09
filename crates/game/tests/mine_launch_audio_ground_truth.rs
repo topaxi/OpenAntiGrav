@@ -82,7 +82,11 @@ fn laying_a_mine_sounds_minelaunch_and_writes_it_out() {
     for _ in 0..WARM_UP_TICKS {
         race.tick(&throttle);
     }
-    let speed = race.world.ships[0].physics.body.linear_velocity.length();
+    let speed = race.sim.world.ships[0]
+        .physics
+        .body
+        .linear_velocity
+        .length();
     assert!(
         speed > 10.0,
         "the craft is barely moving at {speed:.1} units/s"
@@ -101,8 +105,8 @@ fn laying_a_mine_sounds_minelaunch_and_writes_it_out() {
         false,
     );
 
-    race.world.ships[0].pickup.weapon = Some(Weapon::Mine);
-    race.world.ships[0]
+    race.sim.world.ships[0].pickup.weapon = Some(Weapon::Mine);
+    race.sim.world.ships[0]
         .pickup
         .begin_drop(oag_gameplay::projectile::mine::CLUSTER);
 

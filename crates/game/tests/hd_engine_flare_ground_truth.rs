@@ -443,11 +443,11 @@ fn a_craft_inside_a_trail_sparks_from_its_leading_half() {
     }
     // Sit slot 1 squarely inside slot 0's ribbon, pointing the same way: the
     // geometry the complaint was about.
-    let lead = race.world.ships[0].physics.body;
-    race.world.ships[1].physics.body.orientation = lead.orientation;
-    race.world.ships[1].physics.body.position = lead.position - lead.forward() * 12.0;
+    let lead = race.sim.world.ships[0].physics.body;
+    race.sim.world.ships[1].physics.body.orientation = lead.orientation;
+    race.sim.world.ships[1].physics.body.position = lead.position - lead.forward() * 12.0;
 
-    let craft = race.world.ships[1].physics.body;
+    let craft = race.sim.world.ships[1].physics.body;
     let anchor = race
         .spark_anchor_of(1, 0)
         .expect("slot 1 authors spark anchors and slot 0 has a ribbon");
@@ -476,13 +476,13 @@ fn the_anchor_test_fires_later_than_the_sphere_it_replaced() {
     for _ in 0..300 {
         race.tick(&oag_gameplay::InputSnapshot::default());
     }
-    let lead = race.world.ships[0].physics.body;
-    race.world.ships[1].physics.body.orientation = lead.orientation;
+    let lead = race.sim.world.ships[0].physics.body;
+    race.sim.world.ships[1].physics.body.orientation = lead.orientation;
 
     let mut anchor_edge = 0.0_f32;
     for step in 0..200 {
         let across = step as f32 * 0.1;
-        race.world.ships[1].physics.body.position =
+        race.sim.world.ships[1].physics.body.position =
             lead.position - lead.forward() * 12.0 + lead.up() * across;
         if race.spark_anchor_of(1, 0).is_some() && race.trail_touches_for_tests(1, 0) {
             anchor_edge = across;

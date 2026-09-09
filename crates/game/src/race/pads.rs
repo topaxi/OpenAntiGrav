@@ -43,7 +43,7 @@ impl Race {
     /// jump both fall through to the single point: interpolating a zero-length
     /// step adds nothing, and interpolating a long one does not close the gap.
     pub(super) fn pad_sweep(&mut self, slot: usize, position: Vec3) -> (f32, Vec<Vec3>) {
-        let previous = self.pad_previous_position[slot].replace(position);
+        let previous = self.sim.pad_previous_position[slot].replace(position);
         let moved = previous.map_or(f32::INFINITY, |from| position.distance(from));
         let sweep = match previous {
             Some(from) if (0.0..Self::PAD_SWEEP_LIMIT).contains(&moved) && moved > 0.0 => (1
@@ -77,23 +77,23 @@ impl Race {
         moved: f32,
         sweep: &[Vec3],
     ) -> Option<Vec3> {
-        if self.speedup_pads.is_empty() {
+        if self.sim.speedup_pads.is_empty() {
             return None;
         }
 
         let mut hit = None;
-        for (index, pad) in self.speedup_pads.iter().enumerate() {
+        for (index, pad) in self.sim.speedup_pads.iter().enumerate() {
             // The broadphase. Spend the distance travelled, and skip until it is
             // used up. `moved` is infinite on the first tick, so every pad is
             // measured once before any of them is skipped.
-            self.pad_distance[slot][index] -= moved;
-            if self.pad_distance[slot][index] > 0.0 {
+            self.sim.pad_distance[slot][index] -= moved;
+            if self.sim.pad_distance[slot][index] > 0.0 {
                 continue;
             }
 
             // Measured from the destination, which is where the cache has to be
             // correct from for the next tick's subtraction to mean anything.
-            self.pad_distance[slot][index] = pad.distance(position.to_array());
+            self.sim.pad_distance[slot][index] = pad.distance(position.to_array());
 
             // First pad wins. The cache above is still updated for every pad whose
             // turn it was, or a skipped one would keep a stale distance forever.
@@ -110,13 +110,13 @@ impl Race {
         // original's single `craft+0x1d0` slot and its single `DAT_08b3435c` flag,
         // which `Zone_Update` (`0x0882f5cc`) consumes and clears once per tick.
         let entered = hit.map(|(index, _)| index);
-        if entered != self.pad_current[slot] {
-            self.pad_current[slot] = entered;
+        if entered != self.sim.pad_current[slot] {
+            self.sim.pad_current[slot] = entered;
             if entered.is_some() {
                 // Zone mode only. `Ship_ApplySpeedupPad` raises its flag under
                 // the mode selector `zone-mode.md` identifies.
-                if slot == 0 && self.world.race.mode == Mode::Zone {
-                    self.world.race.score += oag_race::zone::SPEEDUP_PAD_SCORE;
+                if slot == 0 && self.sim.world.race.mode == Mode::Zone {
+                    self.sim.world.race.score += oag_race::zone::SPEEDUP_PAD_SCORE;
                 }
                 // The visual, on the same edge and with the same **fixed**
                 // duration the original uses. `ExhaustFlare_OnSpeedupPad`
@@ -148,7 +148,7 @@ impl Race {
                 // layer decides how to place it now. See
                 // `crate::audio::sfx::Placement::CraftUnlessPlayer`, which
                 // carries the one hypothesis that split rides on.
-                self.cues.push(crate::audio::sfx::CueEvent::new(
+                self.sim.cues.push(crate::audio::sfx::CueEvent::new(
                     crate::audio::sfx::Cue::SpeedupPad,
                     slot,
                 ));
@@ -196,7 +196,7 @@ impl Race {
         moved: f32,
         sweep: &[Vec3],
     ) {
-        if self.weapon_pads.is_empty() {
+        if self.sim.weapon_pads.is_empty() {
             return;
         }
 
@@ -208,18 +208,18 @@ impl Race {
         // the first craft through it is the one that runs the countdown and the
         // other seven read what it left. Slot 0 is stepped first, every tick.
         if slot == 0 {
-            for left in &mut self.weapon_pad_refresh_left {
-                *left = (*left - self.dt).max(0.0);
+            for left in &mut self.sim.weapon_pad_refresh_left {
+                *left = (*left - self.sim.dt).max(0.0);
             }
         }
 
         let mut hit = None;
-        for (index, pad) in self.weapon_pads.iter().enumerate() {
-            self.weapon_pad_distance[slot][index] -= moved;
-            if self.weapon_pad_distance[slot][index] > 0.0 {
+        for (index, pad) in self.sim.weapon_pads.iter().enumerate() {
+            self.sim.weapon_pad_distance[slot][index] -= moved;
+            if self.sim.weapon_pad_distance[slot][index] > 0.0 {
                 continue;
             }
-            self.weapon_pad_distance[slot][index] = pad.distance(position.to_array());
+            self.sim.weapon_pad_distance[slot][index] = pad.distance(position.to_array());
 
             if hit.is_none() && sweep.iter().any(|point| pad.contains(point.to_array())) {
                 hit = Some(index);
@@ -228,33 +228,33 @@ impl Race {
 
         // The edge, outside the loop for the same reason the speed pad's is: two
         // pads overlapping on one tick is one entry.
-        if hit == self.weapon_pad_current[slot] {
+        if hit == self.sim.weapon_pad_current[slot] {
             return;
         }
-        self.weapon_pad_current[slot] = hit;
+        self.sim.weapon_pad_current[slot] = hit;
         let Some(index) = hit else {
             return;
         };
 
         // Point 1 above. Unconditional, and before the grant, so a pad that
         // hands nothing over is still spent.
-        if self.weapon_pad_refresh_left[index] > 0.0 {
+        if self.sim.weapon_pad_refresh_left[index] > 0.0 {
             // Still cooling down. The stamp is not refreshed - re-stamping would
             // make a craft parked on a pad hold it inert forever, and the
             // original cannot reach this branch at all: its timer is what
             // `Pad_ContainsPoint` is asked about before the hit is reported.
             return;
         }
-        self.weapon_pad_refresh_left[index] = self.weapon_pad_refresh;
+        self.sim.weapon_pad_refresh_left[index] = self.sim.weapon_pad_refresh;
 
         // Points 2 and 3.
-        if !self.world.ships[slot].pickup.is_empty() {
+        if !self.sim.world.ships[slot].pickup.is_empty() {
             return;
         }
-        let Some(weapons) = self.weapons.as_ref() else {
+        let Some(weapons) = self.sim.weapons.as_ref() else {
             return;
         };
-        let Some(table) = oag_gameplay::pickup::table_for(weapons, &self.class) else {
+        let Some(table) = oag_gameplay::pickup::table_for(weapons, &self.sim.class) else {
             return;
         };
         // **The `human` column for slot 0 and the `ai` column for the rest**, and
@@ -266,15 +266,15 @@ impl Race {
         let who = if slot == 0 {
             oag_gameplay::pickup::Driver::Human {
                 place: self.player_place(),
-                field: self.world.ship_count,
+                field: self.sim.world.ship_count,
             }
         } else {
             oag_gameplay::pickup::Driver::Ai
         };
-        let last = self.world.ships[slot].pickup.last;
-        let drawn = oag_gameplay::pickup::draw(&mut self.world.rng, table, who, last);
+        let last = self.sim.world.ships[slot].pickup.last;
+        let drawn = oag_gameplay::pickup::draw(&mut self.sim.world.rng, table, who, last);
         if let Some(weapon) = drawn {
-            self.world.ships[slot].pickup.grant(weapon);
+            self.sim.world.ships[slot].pickup.grant(weapon);
         }
     }
 }

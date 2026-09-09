@@ -89,7 +89,7 @@ fn hand_out_once(weapon: Weapon, ticks: usize) -> Option<(usize, usize)> {
     let opponents = 1..usize::from(race.ship_count());
     let count = opponents.len();
     for slot in opponents.clone() {
-        race.world.ships[slot].pickup.weapon = Some(weapon);
+        race.sim.world.ships[slot].pickup.weapon = Some(weapon);
     }
 
     // Watched every tick rather than only at the end, because a projectile is
@@ -98,7 +98,7 @@ fn hand_out_once(weapon: Weapon, ticks: usize) -> Option<(usize, usize)> {
     let mut fired = std::collections::BTreeSet::new();
     for _ in 0..ticks {
         race.tick(&oag_gameplay::InputSnapshot::default());
-        for projectile in &race.world.projectiles.slots {
+        for projectile in &race.sim.world.projectiles.slots {
             if projectile.kind == Some(weapon) && projectile.owner != 0 {
                 fired.insert(usize::from(projectile.owner));
             }
@@ -107,7 +107,7 @@ fn hand_out_once(weapon: Weapon, ticks: usize) -> Option<(usize, usize)> {
 
     let accounted = opponents
         .filter(|&slot| {
-            fired.contains(&slot) || race.world.ships[slot].pickup.weapon == Some(weapon)
+            fired.contains(&slot) || race.sim.world.ships[slot].pickup.weapon == Some(weapon)
         })
         .count();
     Some((count, accounted))
@@ -265,7 +265,7 @@ fn a_field_racing_with_real_pads_does_not_mine_itself_to_death() {
         let mut race = race::Race::start(loaded.setup);
 
         let opponents = 1..usize::from(race.ship_count());
-        let full: f32 = race.world.ships[1].handling.dimensions.shield;
+        let full: f32 = race.sim.world.ships[1].handling.dimensions.shield;
         assert!(full > 0.0, "the fixture has no energy pool to measure");
 
         // A minute of racing, untouched: real pads, real refresh timers, the
@@ -274,7 +274,7 @@ fn a_field_racing_with_real_pads_does_not_mine_itself_to_death() {
         let mut seen = std::collections::BTreeSet::new();
         for _ in 0..3_600 {
             race.tick(&oag_gameplay::InputSnapshot::default());
-            for projectile in &race.world.projectiles.slots {
+            for projectile in &race.sim.world.projectiles.slots {
                 if matches!(projectile.kind, Some(Weapon::Mine | Weapon::Bomb))
                     && seen.insert(projectile.position.x.to_bits())
                 {
@@ -285,15 +285,15 @@ fn a_field_racing_with_real_pads_does_not_mine_itself_to_death() {
 
         let depleted = opponents
             .clone()
-            .filter(|&slot| race.world.ships[slot].physics.shield <= 0.0)
+            .filter(|&slot| race.sim.world.ships[slot].physics.shield <= 0.0)
             .count();
         let mean: f32 = opponents
             .clone()
-            .map(|slot| race.world.ships[slot].physics.shield)
+            .map(|slot| race.sim.world.ships[slot].physics.shield)
             .sum::<f32>()
             / opponents.len() as f32;
         let worst = opponents
-            .map(|slot| race.world.ships[slot].physics.shield)
+            .map(|slot| race.sim.world.ships[slot].physics.shield)
             .fold(f32::INFINITY, f32::min);
         println!(
             "seed {seed}: {laid} charges laid, mean energy {mean:.0} of {full:.0}, \

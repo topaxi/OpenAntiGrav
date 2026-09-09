@@ -209,7 +209,7 @@ impl Race {
     pub fn visibility_sections(&self) -> (u8, u8) {
         // The player's, because this places the player's camera. An opponent
         // recovering across the circuit must not blank the shot.
-        if self.respawn_cooldown[0] > 0 {
+        if self.sim.respawn_cooldown[0] > 0 {
             return (UNPLACED, UNPLACED);
         }
         let ship = self.ship();
@@ -220,28 +220,28 @@ impl Race {
         // `u16::MAX` is the never-located sentinel, and it is out of range of
         // any real table, so the bounds check covers both.
         let index = usize::from(ship.segment);
-        if index >= self.spline.len() {
+        if index >= self.sim.spline.len() {
             return (UNPLACED, UNPLACED);
         }
         let craft = self.section_of(index, ship.physics.body.position);
         // The camera is a chase spring a few units behind, so it is a few
         // samples away in the same table. See `Spline::nearest_within` for why
         // a local search is allowed to miss.
-        let camera =
-            match self
-                .spline
-                .nearest_within(self.camera_position(), index, CAMERA_SEARCH_SAMPLES)
-            {
-                Some((camera_index, _, _)) => self.section_of(camera_index, self.camera_position()),
-                None => UNPLACED,
-            };
+        let camera = match self.sim.spline.nearest_within(
+            self.camera_position(),
+            index,
+            CAMERA_SEARCH_SAMPLES,
+        ) {
+            Some((camera_index, _, _)) => self.section_of(camera_index, self.camera_position()),
+            None => UNPLACED,
+        };
         (craft, camera)
     }
 
     /// The section of the sample at `index`, or [`UNPLACED`] when `position` is
     /// too far from it to trust. See [`Self::visibility_sections`].
     pub(super) fn section_of(&self, index: usize, position: Vec3) -> u8 {
-        let Some(sample) = self.spline.sample(index) else {
+        let Some(sample) = self.sim.spline.sample(index) else {
             return UNPLACED;
         };
         let distance = (Vec3::from_array(sample.pos) - position).length();

@@ -1,4 +1,4 @@
-//! [`Race::state_hash`]: the race-level half of the determinism hash, over the
+//! [`RaceSim::state_hash`]: the race-level half of the determinism hash, over the
 //! state that lives outside the world snapshot.
 //!
 //! Split out of `race.rs` under the 1,000-line rule in
@@ -7,7 +7,7 @@
 
 use super::*;
 
-impl Race {
+impl RaceSim {
     /// One 64-bit fingerprint of everything this race carries from tick to tick.
     ///
     /// [`oag_gameplay::hash::hash_world`] plus the pad state, which lives here
@@ -87,14 +87,14 @@ impl Race {
         }
         // Not a dwell but the same argument: this is *where* the player's next
         // recovery puts them, so two machines that disagree on it produce
-        // different races the moment one is needed. See [`Race::last_on_track`].
+        // different races the moment one is needed. See [`RaceSim::last_on_track`].
         hasher.write_u32(self.last_on_track);
 
         hasher.finish()
     }
 }
 
-/// A pad index for [`Race::state_hash`], with a discriminant byte.
+/// A pad index for [`RaceSim::state_hash`], with a discriminant byte.
 ///
 /// Or "not on a pad" hashes the same as "on pad zero", which is precisely the
 /// edge the trigger is built on.

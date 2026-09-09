@@ -16,7 +16,7 @@ impl Race {
     /// set once before the first tick and not touched again - a scheme swapped
     /// mid-race would leave a half-finished gesture armed in `ShipState`.
     pub fn set_control_scheme(&mut self, scheme: ControlScheme) {
-        self.scheme = scheme;
+        self.sim.scheme = scheme;
     }
 
     /// How far each airbrake flap has swung, left then right, in **radians**.
@@ -34,7 +34,7 @@ impl Race {
     /// Which scheme this race is being driven with.
     #[must_use]
     pub fn control_scheme(&self) -> ControlScheme {
-        self.scheme
+        self.sim.scheme
     }
 
     /// Sets how strong the boost's field-of-view kick is. `[graphics]
@@ -157,7 +157,7 @@ impl Race {
     /// How many times a `Reset` contact has respawned the player this race.
     #[must_use]
     pub fn respawns(&self) -> u32 {
-        self.respawns[0]
+        self.sim.respawns[0]
     }
 
     /// The same, for any craft on the grid.
@@ -167,7 +167,7 @@ impl Race {
     /// question and the answer is "none".
     #[must_use]
     pub fn respawns_of(&self, slot: usize) -> u32 {
-        self.respawns.get(slot).copied().unwrap_or(0)
+        self.sim.respawns.get(slot).copied().unwrap_or(0)
     }
 
     /// How many barrel rolls an **opponent** has armed this race.
@@ -181,25 +181,25 @@ impl Race {
     /// not counted here.
     #[must_use]
     pub fn rolls_armed_of(&self, slot: usize) -> u32 {
-        self.rolls_armed.get(slot).copied().unwrap_or(0)
+        self.sim.rolls_armed.get(slot).copied().unwrap_or(0)
     }
 
     /// What those rolls cost it, in shield-pool units.
     #[must_use]
     pub fn roll_shield_spent_of(&self, slot: usize) -> f32 {
-        self.rolls_spent.get(slot).copied().unwrap_or(0.0)
+        self.sim.rolls_spent.get(slot).copied().unwrap_or(0.0)
     }
 
     /// The fixed timestep, from [`TickRate::DEFAULT`].
     #[must_use]
     pub fn dt(&self) -> f32 {
-        self.dt
+        self.sim.dt
     }
 
     /// The player's ship.
     #[must_use]
     pub fn ship(&self) -> &Ship {
-        &self.world.ships[0]
+        &self.sim.world.ships[0]
     }
 
     /// What the player's craft is carrying, if anything.
@@ -209,13 +209,13 @@ impl Race {
     /// [`Ship`] is not.
     #[must_use]
     pub fn ship_pickup(&self) -> Option<oag_tables::weapons::Weapon> {
-        self.world.ships[0].pickup.weapon
+        self.sim.world.ships[0].pickup.weapon
     }
 
     /// The resampled spline, for a caller that wants to measure against it.
     #[must_use]
     pub fn spline(&self) -> &Spline {
-        &self.spline
+        &self.sim.spline
     }
 }
 
@@ -229,7 +229,8 @@ impl Race {
     /// the library and so cannot see the field.
     #[must_use]
     pub fn missile_stats(&self) -> Option<oag_tables::weapons::MissileStats> {
-        self.weapons
+        self.sim
+            .weapons
             .as_ref()
             .and_then(oag_tables::weapons::WeaponStats::missile)
     }
@@ -244,7 +245,8 @@ impl Race {
     /// answer differs across the three.
     #[must_use]
     pub fn leach_beam_stats(&self) -> Option<oag_tables::weapons::LeachBeamStats> {
-        self.weapons
+        self.sim
+            .weapons
             .as_ref()
             .and_then(oag_tables::weapons::WeaponStats::leach_beam)
     }
@@ -256,7 +258,8 @@ impl Race {
     /// `crates/game/tests/mine_ground_truth.rs`.
     #[must_use]
     pub fn mine_stats(&self) -> Option<oag_tables::weapons::MineStats> {
-        self.weapons
+        self.sim
+            .weapons
             .as_ref()
             .and_then(oag_tables::weapons::WeaponStats::mine)
     }
@@ -268,7 +271,8 @@ impl Race {
     /// `crates/game/tests/shuriken_ground_truth.rs`.
     #[must_use]
     pub fn shuriken_stats(&self) -> Option<oag_tables::weapons::ShurikenStats> {
-        self.weapons
+        self.sim
+            .weapons
             .as_ref()
             .and_then(oag_tables::weapons::WeaponStats::shuriken)
     }
@@ -282,7 +286,8 @@ impl Race {
     /// twice.
     #[must_use]
     pub fn rocket_stats(&self) -> Option<oag_tables::weapons::RocketStats> {
-        self.weapons
+        self.sim
+            .weapons
             .as_ref()
             .and_then(oag_tables::weapons::WeaponStats::rocket)
     }
@@ -294,7 +299,8 @@ impl Race {
     /// `crates/game/tests/plasma_ground_truth.rs`.
     #[must_use]
     pub fn plasma_stats(&self) -> Option<oag_tables::weapons::PlasmaStats> {
-        self.weapons
+        self.sim
+            .weapons
             .as_ref()
             .and_then(oag_tables::weapons::WeaponStats::plasma)
     }
@@ -306,7 +312,8 @@ impl Race {
     /// `crates/game/tests/cannon_ground_truth.rs`.
     #[must_use]
     pub fn cannon_stats(&self) -> Option<oag_tables::weapons::CannonStats> {
-        self.weapons
+        self.sim
+            .weapons
             .as_ref()
             .and_then(oag_tables::weapons::WeaponStats::cannon)
     }
@@ -321,14 +328,15 @@ impl Race {
     /// craft's timer is asserted *against* rather than a value to assert.
     #[must_use]
     pub fn slowdown_limit(&self) -> Option<f32> {
-        self.weapons.as_ref().map(|table| table.slowdown_limit)
+        self.sim.weapons.as_ref().map(|table| table.slowdown_limit)
     }
 
     /// The Bomb's authored `<Stats>`, or `None` when the table did not load or
     /// authors no Bomb.
     #[must_use]
     pub fn bomb_stats(&self) -> Option<oag_tables::weapons::BombStats> {
-        self.weapons
+        self.sim
+            .weapons
             .as_ref()
             .and_then(oag_tables::weapons::WeaponStats::bomb)
     }

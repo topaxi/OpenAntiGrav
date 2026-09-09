@@ -23,14 +23,14 @@ fn a_pad_refresh_timer_one_tick_out_moves_the_race_hash() {
     for _ in 0..30 {
         race.tick(&buttons.tick(CROSS));
     }
-    let before = race.state_hash();
+    let before = race.sim.state_hash();
 
     // The craft has not moved and nothing it carries has changed - only how
     // long the pad has left to cool down.
-    race.weapon_pad_refresh_left[0] -= race.dt();
+    race.sim.weapon_pad_refresh_left[0] -= race.dt();
     assert_ne!(
         before,
-        race.state_hash(),
+        race.sim.state_hash(),
         "a pad timer moved by one tick was invisible to the gate, which is \
          exactly the hole this hash exists to close"
     );
@@ -42,9 +42,9 @@ fn a_pad_refresh_timer_one_tick_out_moves_the_race_hash() {
 fn the_pad_distance_cache_moves_the_race_hash() {
     let mut race = race_with_weapon_pads(Mode::SingleRace, enveloping_pad(), 1.0);
     race.tick(&InputSnapshot::default());
-    let before = race.state_hash();
-    race.weapon_pad_distance[0][0] += 1.0;
-    assert_ne!(before, race.state_hash());
+    let before = race.sim.state_hash();
+    race.sim.weapon_pad_distance[0][0] += 1.0;
+    assert_ne!(before, race.sim.state_hash());
 }
 
 /// **Both recovery dwells are simulation state**, for the reason the pad
@@ -63,18 +63,18 @@ fn both_recovery_dwells_move_the_race_hash() {
     // Slot 1 rather than 0: the player's entry in either counter is never
     // written, so a test on slot 0 would assert the hash sees a field the
     // simulation never moves.
-    let before = race.state_hash();
-    race.lost_ticks[1] += 1;
-    let after_lost = race.state_hash();
+    let before = race.sim.state_hash();
+    race.sim.lost_ticks[1] += 1;
+    let after_lost = race.sim.state_hash();
     assert_ne!(
         before, after_lost,
         "the away-from-the-line dwell was invisible to the gate"
     );
 
-    race.stalled_ticks[1] += 1;
+    race.sim.stalled_ticks[1] += 1;
     assert_ne!(
         after_lost,
-        race.state_hash(),
+        race.sim.state_hash(),
         "the stopped-on-the-circuit dwell was invisible to the gate"
     );
 }
@@ -99,8 +99,8 @@ fn two_identical_races_agree_on_the_race_hash_every_tick() {
         a.tick(&a_buttons.tick(mask));
         b.tick(&b_buttons.tick(mask));
         assert_eq!(
-            a.state_hash(),
-            b.state_hash(),
+            a.sim.state_hash(),
+            b.sim.state_hash(),
             "two identical races diverged on tick {tick}"
         );
     }
@@ -115,7 +115,7 @@ fn the_race_hash_sees_a_pickup_being_spent() {
     race.tick(&buttons.tick(CROSS));
     assert!(race.ship_pickup().is_some(), "nothing to spend");
 
-    let held = race.state_hash();
+    let held = race.sim.state_hash();
     race.tick(&buttons.tick(CROSS | SQUARE));
-    assert_ne!(held, race.state_hash());
+    assert_ne!(held, race.sim.state_hash());
 }

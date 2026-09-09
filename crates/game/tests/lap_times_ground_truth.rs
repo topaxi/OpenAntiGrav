@@ -86,9 +86,9 @@ fn clocks(track: &str, ticks: u64) -> Option<Vec<Clock>> {
         // n-th call carries tick n+1 - and reconstructing that offset from out
         // here is how a one-tick error gets built into a test rather than caught
         // by one.
-        let tick = race.world.tick;
+        let tick = race.sim.world.tick;
         for (slot, clock) in clocks.iter_mut().enumerate() {
-            let standing = &race.world.ships[slot].standing;
+            let standing = &race.sim.world.ships[slot].standing;
             if clock.started.is_none() {
                 clock.started = standing.lap_start_tick;
             }

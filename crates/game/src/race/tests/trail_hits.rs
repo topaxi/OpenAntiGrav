@@ -26,7 +26,7 @@ fn race_with_a_trail() -> Race {
 
 /// Sits slot 1 at `at` and runs one tick of the trigger.
 fn place_and_step(race: &mut Race, at: Vec3) {
-    race.world.ships[1].physics.body.position = at;
+    race.sim.world.ships[1].physics.body.position = at;
     race.advance_trail_hits();
 }
 
@@ -87,7 +87,7 @@ fn the_mask_tracks_presence_every_tick_rather_than_only_its_edge() {
 #[test]
 fn a_craft_is_never_inside_its_own_trail() {
     let mut race = race_with_a_trail();
-    race.world.ships[0].physics.body.position = Vec3::ZERO;
+    race.sim.world.ships[0].physics.body.position = Vec3::ZERO;
     race.advance_trail_hits();
     assert_eq!(race.view.trail_inside[0] & 0b1, 0);
 }

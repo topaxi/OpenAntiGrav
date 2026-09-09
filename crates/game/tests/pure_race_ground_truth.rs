@@ -218,7 +218,7 @@ fn a_craft_under_power_drives_a_pure_circuit_and_a_wall_stops_it() {
         let loaded = load(&image, oag_pure::race::DEFAULT_TRACK);
         let mut race = race::Race::start(loaded.setup);
         for slot in 1..oag_gameplay::MAX_SHIPS {
-            race.world.ships[slot].active = false;
+            race.sim.world.ships[slot].active = false;
         }
 
         // Cross is thrust; see `oag_gameplay::controls`.
@@ -227,12 +227,12 @@ fn a_craft_under_power_drives_a_pure_circuit_and_a_wall_stops_it() {
             .buttons
             .begin_frame(oag_gameplay::input::Button::Cross.bit());
 
-        let start = race.world.ships[0].physics.body.position;
+        let start = race.sim.world.ships[0].physics.body.position;
         let mut furthest_from_spline = 0.0f32;
         let mut travelled = 0.0f32;
         for _ in 0..1_200 {
             race.tick(&input);
-            let at = race.world.ships[0].physics.body.position;
+            let at = race.sim.world.ships[0].physics.body.position;
             // Distance to the spline is the honest measure of "on the circuit":
             // these tracks climb and bank, so comparing height against the start
             // would read a hill as a fall.
@@ -241,7 +241,7 @@ fn a_craft_under_power_drives_a_pure_circuit_and_a_wall_stops_it() {
             }
             travelled = travelled.max(at.distance(start));
         }
-        let resting = race.world.ships[0].physics.body.position;
+        let resting = race.sim.world.ships[0].physics.body.position;
 
         println!(
             "{label}: travelled {travelled:.0} units, furthest from the spline \

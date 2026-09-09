@@ -464,7 +464,7 @@ impl Session {
                     // tops the slot up the way a pad grant would, and only when
                     // the slot is already empty, so firing still spends it.
                     if let Some(weapon) = self.give {
-                        let ship = &mut stage.race.world.ships[0];
+                        let ship = &mut stage.race.sim.world.ships[0];
                         if ship.pickup.weapon.is_none() {
                             ship.pickup.weapon = Some(weapon);
                         }
@@ -475,7 +475,8 @@ impl Session {
                     // stepped once, twice or not at all. See
                     // `audio::Audio::race_tick`.
                     self.audio.race_tick(&mut stage.race);
-                    if self.log_every > 0 && stage.race.world.tick % u64::from(self.log_every) == 0
+                    if self.log_every > 0
+                        && stage.race.sim.world.tick % u64::from(self.log_every) == 0
                     {
                         println!("{}", race::describe(&stage.race.telemetry()));
                     }

@@ -93,7 +93,8 @@ fn held(button: Button) -> oag_gameplay::InputSnapshot {
 
 /// Every charge of one kind slot 0 has laid, in the order the array holds them.
 fn laid_of(race: &race::Race, kind: Weapon) -> Vec<oag_gameplay::projectile::Projectile> {
-    race.world
+    race.sim
+        .world
         .projectiles
         .slots
         .iter()
@@ -148,16 +149,20 @@ fn one_press_lays_a_cluster_spread_along_the_track() {
     }
 
     let stats = race.mine_stats().expect("the disc authors a Mine");
-    let speed = race.world.ships[0].physics.body.linear_velocity.length();
+    let speed = race.sim.world.ships[0]
+        .physics
+        .body
+        .linear_velocity
+        .length();
     assert!(
         speed > 10.0,
         "the craft is barely moving at {speed:.1} units/s, so a cluster could not \
          spread even if the drop worked"
     );
 
-    let before = race.world.ships[0].physics.body.position;
-    race.world.ships[0].pickup.weapon = Some(Weapon::Mine);
-    race.world.ships[0]
+    let before = race.sim.world.ships[0].physics.body.position;
+    race.sim.world.ships[0].pickup.weapon = Some(Weapon::Mine);
+    race.sim.world.ships[0]
         .pickup
         .begin_drop(oag_gameplay::projectile::mine::CLUSTER);
 
@@ -176,7 +181,7 @@ fn one_press_lays_a_cluster_spread_along_the_track() {
     println!(
         "laid {} mines over {:.1} units of track at {speed:.1} units/s",
         mines.len(),
-        (race.world.ships[0].physics.body.position - before).length()
+        (race.sim.world.ships[0].physics.body.position - before).length()
     );
     assert_eq!(
         mines.len(),
@@ -242,10 +247,10 @@ fn a_cluster_is_laid_behind_the_craft() {
     }
     race.mine_stats().expect("the disc authors a Mine");
 
-    let origin = race.world.ships[0].physics.body.position;
-    let forward = race.world.ships[0].physics.body.forward();
-    race.world.ships[0].pickup.weapon = Some(Weapon::Mine);
-    race.world.ships[0]
+    let origin = race.sim.world.ships[0].physics.body.position;
+    let forward = race.sim.world.ships[0].physics.body.forward();
+    race.sim.world.ships[0].pickup.weapon = Some(Weapon::Mine);
+    race.sim.world.ships[0]
         .pickup
         .begin_drop(oag_gameplay::projectile::mine::CLUSTER);
     // One tick, so exactly the first mine is out and the craft has barely moved -
@@ -285,8 +290,8 @@ fn a_cluster_trips_on_a_rival_and_not_on_its_own_dropper() {
     }
     let stats = race.mine_stats().expect("the disc authors a Mine");
 
-    race.world.ships[0].pickup.weapon = Some(Weapon::Mine);
-    race.world.ships[0]
+    race.sim.world.ships[0].pickup.weapon = Some(Weapon::Mine);
+    race.sim.world.ships[0]
         .pickup
         .begin_drop(oag_gameplay::projectile::mine::CLUSTER);
     for _ in 0..40 {
@@ -297,21 +302,21 @@ fn a_cluster_trips_on_a_rival_and_not_on_its_own_dropper() {
         !mines.is_empty(),
         "nothing was laid, so nothing can be tripped"
     );
-    let dropper_shield = race.world.ships[0].physics.shield;
+    let dropper_shield = race.sim.world.ships[0].physics.shield;
 
     // Put a rival on top of one of them. Slot 1 rather than slot 0, and its
     // position is written directly: driving a craft onto a mine takes a lap and
     // this is a test about the trip, not about the AI's line.
     let victim = 1;
     assert!(
-        race.world.ships[victim].active,
+        race.sim.world.ships[victim].active,
         "the grid has no second craft to trip a mine with"
     );
-    let before = race.world.ships[victim].physics.shield;
-    race.world.ships[victim].physics.body.position = mines[0].position;
+    let before = race.sim.world.ships[victim].physics.shield;
+    race.sim.world.ships[victim].physics.body.position = mines[0].position;
     race.tick(&throttle);
 
-    let after = race.world.ships[victim].physics.shield;
+    let after = race.sim.world.ships[victim].physics.shield;
     println!(
         "slot {victim} took {:.1} energy off an authored {:.1} damage inside a \
          {:.1} trigger radius",
@@ -329,7 +334,7 @@ fn a_cluster_trips_on_a_rival_and_not_on_its_own_dropper() {
         "the mine that went off is still in the array"
     );
     assert_eq!(
-        race.world.ships[0].physics.shield, dropper_shield,
+        race.sim.world.ships[0].physics.shield, dropper_shield,
         "the craft that laid the cluster was hurt by a mine it drove away from"
     );
 }
@@ -361,9 +366,9 @@ fn a_bomb_is_one_static_charge_behind_the_craft() {
     let bomb = race.mine_stats().expect("a Mine");
     let stats = race.bomb_stats().expect("the disc authors a Bomb");
 
-    let origin = race.world.ships[0].physics.body.position;
-    let forward = race.world.ships[0].physics.body.forward();
-    race.world.ships[0].pickup.weapon = Some(Weapon::Bomb);
+    let origin = race.sim.world.ships[0].physics.body.position;
+    let forward = race.sim.world.ships[0].physics.body.forward();
+    race.sim.world.ships[0].pickup.weapon = Some(Weapon::Bomb);
     let mut buttons = oag_gameplay::input::Input::new();
     buttons.begin_frame(Button::Cross.bit());
     let press = oag_gameplay::InputSnapshot {
@@ -419,7 +424,7 @@ fn a_bomb_is_one_static_charge_behind_the_craft() {
     let still = laid_of(&race, Weapon::Bomb);
     assert_eq!(still.len(), 1, "the bomb went off with nobody near it");
     let moved = (still[0].position - placed).length();
-    let travelled = (race.world.ships[0].physics.body.position - placed).length();
+    let travelled = (race.sim.world.ships[0].physics.body.position - placed).length();
     println!("after a second the craft is {travelled:.1} away and the bomb moved {moved:.3}");
     assert!(
         moved < 1e-3,
@@ -443,31 +448,31 @@ fn a_bomb_hits_harder_than_a_mine_at_the_same_spot() {
     race.bomb_stats().expect("the disc authors a Bomb");
     let victim = 1;
     assert!(
-        race.world.ships[victim].active,
+        race.sim.world.ships[victim].active,
         "no second craft on the grid"
     );
 
     let mut taken = Vec::new();
     for kind in [Weapon::Mine, Weapon::Bomb] {
-        race.world.ships[0].pickup.weapon = Some(kind);
-        race.world.ships[0].pickup.begin_drop(1);
+        race.sim.world.ships[0].pickup.weapon = Some(kind);
+        race.sim.world.ships[0].pickup.begin_drop(1);
         race.tick(&throttle);
 
         let charges = laid_of(&race, kind);
         assert!(!charges.is_empty(), "{kind:?}: nothing was laid");
-        let before = race.world.ships[victim].physics.shield;
-        race.world.ships[victim].physics.body.position = charges[0].position;
+        let before = race.sim.world.ships[victim].physics.shield;
+        race.sim.world.ships[victim].physics.body.position = charges[0].position;
         race.tick(&throttle);
-        taken.push(before - race.world.ships[victim].physics.shield);
+        taken.push(before - race.sim.world.ships[victim].physics.shield);
 
         // Put the victim back out of the way and heal it, so the second
         // measurement starts from the same place the first did.
-        race.world.ships[victim].physics.shield =
-            race.world.ships[victim].handling.dimensions.shield;
-        race.world.ships[victim].physics.body.position =
-            race.world.ships[0].physics.body.position + forward_of(&race, 0) * 500.0;
-        race.world.ships[0].pickup.weapon = None;
-        race.world.ships[0].pickup.begin_drop(0);
+        race.sim.world.ships[victim].physics.shield =
+            race.sim.world.ships[victim].handling.dimensions.shield;
+        race.sim.world.ships[victim].physics.body.position =
+            race.sim.world.ships[0].physics.body.position + forward_of(&race, 0) * 500.0;
+        race.sim.world.ships[0].pickup.weapon = None;
+        race.sim.world.ships[0].pickup.begin_drop(0);
     }
 
     println!("mine took {:.1}, bomb took {:.1}", taken[0], taken[1]);
@@ -486,5 +491,5 @@ fn a_bomb_hits_harder_than_a_mine_at_the_same_spot() {
 
 /// One craft's forward axis, for the arithmetic above.
 fn forward_of(race: &race::Race, slot: usize) -> oag_core::math::Vec3 {
-    race.world.ships[slot].physics.body.forward()
+    race.sim.world.ships[slot].physics.body.forward()
 }

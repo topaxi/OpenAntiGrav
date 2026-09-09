@@ -83,16 +83,16 @@ impl MotionState {
             None => {
                 let now = Snapshot::take(race, view_projection, drawn);
                 *state = Some(Self {
-                    tick: race.world.tick,
+                    tick: race.sim.world.tick,
                     prev: now.clone(),
                     cur: now.clone(),
                 });
                 now
             }
-            Some(state) if state.tick != race.world.tick => {
+            Some(state) if state.tick != race.sim.world.tick => {
                 let now = Snapshot::take(race, view_projection, drawn);
                 state.prev = std::mem::replace(&mut state.cur, now);
-                state.tick = race.world.tick;
+                state.tick = race.sim.world.tick;
                 state.prev.clone()
             }
             // The same tick re-rendered - a frame rate above 60 Hz - keeps
@@ -167,14 +167,14 @@ impl CutWatch {
     /// so a caller that never checks the result still keeps the watch
     /// current for the frame after.
     ///
-    /// **The player's own respawn count, not the field's** - [`Race::respawns`]
+    /// **The player's own respawn count, not the field's** - [`RaceSim::respawns`]
     /// rather than `respawns_of` - because the camera being watched is the
     /// player's, and only the player's respawn moves it: an opponent
     /// recovering elsewhere on the circuit is not a cut in *this* shot, the
     /// same distinction `race/tests/respawn.rs`'s
     /// `a_respawn_in_flight_makes_everything_visible` draws for the PVS.
     ///
-    /// [`Race::respawns`]: crate::race::Race::respawns
+    /// [`RaceSim::respawns`]: crate::race::RaceSim::respawns
     pub(super) fn observe(
         &mut self,
         view: oag_display::display::CameraView,
@@ -237,7 +237,7 @@ impl super::Scene {
     /// depth transform is sensitive to; see its own documentation.
     ///
     /// `view` and `respawns` are the race's own [`oag_display::display::CameraView`]
-    /// and [`crate::race::Race::respawns`] this frame - passed rather than
+    /// and [`crate::race::RaceSim::respawns`] this frame - passed rather than
     /// read off a `&Race` here, because [`CutWatch`] is the only thing that
     /// needs them and a parameter is cheaper to keep honest than a second
     /// borrow this function would otherwise take just to read two getters.
