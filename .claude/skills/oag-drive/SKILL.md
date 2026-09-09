@@ -69,11 +69,76 @@ the work in isolated worktrees.
     `OAG_REQUIRE_GAME_DATA=1 just test-data` when behaviour could move
   - docs/handover only -> `just check-docs`, `check-names` if `names.tsv` moved,
     `check-handover`, `check-captures` if captures moved
+- **But do not re-run a gate the member already ran on identical content.**
+  See "Who runs which gate" below - this is the single largest source of wasted
+  CPU on this skill.
 - **Reap**: `git worktree remove <path> -f -f` then `git branch -d <branch>`.
   Only after the work is merged.
 - **Never reap a worktree whose agent may still resume.** A `completed`
   notification is not terminal - the same agent can be resumed and will find its
-  Bash unusable. Merge first, then reap; check `ListAgents` if unsure.
+  Bash unusable. Merge first, then reap. **`ListAgents` cannot tell you this** -
+  a finished, merged, fully-reaped lane still showed there as `pane` an hour
+  later, indistinguishable from the live members beside it. The member's own
+  report is the ending signal; `git worktree list` and
+  `git log --oneline main..<branch>` are the ground truth.
+
+## Who runs which gate
+
+**The gate is the most expensive thing this skill does, and it was running
+twice for every merge.** One session produced two merges and *four* full
+`test-data` runs - each member gated its own tree, then the lead re-gated the
+merge on content that had not changed. `test-data` is minutes of 16-core work
+each time.
+
+The split is asymmetric, and both halves matter:
+
+- **The member always runs the full gate on its own tree**, before reporting.
+  Do not move this to the lead. A member that does not gate reports untested
+  work, and the breakage then surfaces *after* it is in `main` - which is
+  strictly worse than finding it in a worktree that can be fixed without
+  touching the mainline.
+- **The lead re-gates after merge only when the merge actually combined
+  behaviour.** Check `git log --oneline <branch-point>..main` first. If `main`
+  has not moved since the member branched, the merge is content-identical to
+  the tree the member already gated green and re-running proves nothing - say
+  so in the report instead of burning the cycles. If `main` *has* moved and the
+  two changes touch crates that interact, re-gate: that combination has been
+  tested nowhere.
+
+**Prefer `nice -n 10 ionice -c 3` for the lead's own gate.** The lead's run is
+never on the critical path - members are the ones blocked on their own results.
+
+## Serialise gates with `flock`
+
+Four members each running `just` plus `OAG_REQUIRE_GAME_DATA=1 just test-data`
+put a 16-core machine at load average 40 with six concurrent `nextest`
+processes. Wrap every gate invocation in a shared lock:
+
+```sh
+flock "$HOME/.cache/oag/gate.lock" just
+flock "$HOME/.cache/oag/gate.lock" env OAG_REQUIRE_GAME_DATA=1 just test-data
+```
+
+Three things about this that are easy to get wrong:
+
+- **The lockfile must live outside every worktree** so all members contend on
+  one inode. A path inside the repo gives each worktree its own lock and
+  serialises nothing.
+- **`flock` must wrap the outermost `just`.** `check:` is a dependency-list
+  recipe, not a `#!/usr/bin/env bash` one, so a `flock` placed inside a recipe
+  body does not hold across the recipe's other lines.
+- **Put in every brief that waiting on the lock is not a hang.** A member
+  blocked here looks exactly like the "ended a turn waiting for a background
+  job" failure that has now hit sixteen members. Tell them the gate may sit
+  for several minutes before it starts, and that this is correct.
+
+**Do not solve this with a dedicated gate-runner member** - it costs one of
+four slots and needs cross-agent request/response plumbing invented for
+something one line of `flock` already does. **Do not cap per-member `-j` as the
+primary fix** either: `.config/nextest.toml` documents that `test-data` is
+*tail-bound* - 2,323 tests finish in about the time the single slowest test
+takes - so fewer threads would slow the throughput-bound compile phase without
+touching the tail that actually sets the wall clock.
 
 ## Drawing threads
 
@@ -107,6 +172,11 @@ Members inherit none of your context. Every brief needs:
 5. **The hard rules** that apply (see below).
 6. **The gate and the current baseline failure count**, so a member can tell its
    own breakage from inherited red. State the exact expected failures by name.
+   **Give them the `flock`-wrapped commands, not the bare ones** (see
+   "Serialise gates with `flock`"), and say in the brief that the gate may sit
+   for minutes before it starts because another member holds the lock - that is
+   correct behaviour, not a hang, and they must wait it out rather than
+   reaching for a bare `just`.
 7. **Commit early and often; do not merge to main - the coordinator merges.**
 8. **Do not end a turn waiting for a background job to notify you.** This has
    happened to sixteen members and not one was ever woken; every case needed a
