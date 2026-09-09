@@ -84,125 +84,104 @@ label column nor running off the value column's own right edge.
 `cargo nextest run -p oag-game` (1064 tests) and the full `just` gate both
 pass; nothing here is a game-data test, so `just test-data` was not run.
 
+## The pause overlay did not actually show, and now does (2026-09-09)
+
+**Found and fixed in one pass, on a live run - not read off the source.**
+Every prior "landed"/"verified" note above this section was checked against
+either an isolated render primitive
+(`render::tests::a_translucent_fill_blends_over_whatever_load_kept`) or the
+unrelated CONTROLS-page binding prompt; nothing had ever driven a real
+`Escape` from a real running race and looked at the frame. No headless
+capture path can reach that state: `--race` (`main.rs`'s `cli.race` branch)
+always takes the headless `run_race` leg regardless of `--screenshot`, and
+`--menu-page` builds a `menu::Menu` from scratch with no `Session` and no
+parked race behind it. So this pass drove it live instead - Xvfb, real
+keyboard input, a real physical `Escape` key - and the picture on screen was
+the ordinary undimmed root menu, not the parked race.
+
+**In-process instrumentation (three sites, `session/draw.rs` and
+`menu_stage.rs`) proved the state machine itself was already entirely
+correct**: `suspended_race` genuinely `Some`, `frozen_race` genuinely `true`
+on every frame, the `PAUSE_OVERLAY` `Draw::Fill` genuinely in the draw list
+at a non-degenerate full-space rect, no `Draw::Video`, `LoadOp::Load`
+genuinely used. And the presented picture was still pixel-indistinguishable
+from the ordinary, un-parked menu.
+
+**The actual cause: a full-screen mark drawn unconditionally, on top of the
+overlay.** Dumping every `Draw` in the list found `Draw::Sprite
+rect=[0.0, 0.0, 480.0, 272.0]` sitting right after the overlay `Fill`, in
+both the frozen and the ordinary case - and it traced to `frame.marks[0]`,
+one of Pulse's own `FE_SCREEN` images, read at boot because
+`crates/pulse/src/lib.rs`'s `menu_frame: Some(FE_SCREEN)` **is** set.
+`docs/architecture/menus.md`'s "Both PSP titles' frames are unread" (still
+true when the "the page is drawn inside the disc's own frame" paragraph was
+written) is now stale - flagged there, not edited, since that file is
+`docs/architecture/`, not this thread's `docs/frontend/` lane. `draw_list`
+drew every one of `frame.marks` regardless of `frozen_race`, so this one
+full-screen image painted straight over both the overlay and the parked
+race underneath it, every frame - the same shape as the `<ScreenClear>` /
+`MenuSkin::background` gap already named below, except reachable on Pulse
+itself through an ordinary `<Image>` widget, not a `<ScreenClear>`.
+
+**The fix: `Frame::backdrops`** (`crates/game/src/menu/frame.rs`) assembles
+the clear/video/marks layer `draw_list` used to build inline, and drops
+`clear`/`MenuSkin::background` outright and any mark whose rect covers the
+whole screen when `race_behind` - while keeping small structural marks
+(Pulse's own top bar and its two footer strips) exactly as before. This
+closes the `<ScreenClear>`/`MenuSkin::background` line below too, in the
+same fix - the two are the same problem at two different widget types.
+`draw_list` takes the new `race_behind: bool`; its three real call sites
+(`MenuStage::render`, the page-change snapshot in `session/frame.rs`,
+`--menu-page`'s capture path) and eleven test call sites pass it through.
+Landed as `bb7ef573`.
+
+Two GPU-free tests in `menu/tests/frame.rs` assert the drop/keep split
+directly against fixture `Frame`s. Live-reproduced both before and after
+under Xvfb with the recipe below: before, the plain undimmed menu; after,
+the dimmed track and HUD clearly visible behind the rows. Full `just` gate
+green, including `race_ground_truth::a_lone_craft_gets_round_the_circuits_
+it_is_known_to_get_round` re-run under `OAG_REQUIRE_GAME_DATA=1` (this fix
+touches no physics or AI).
+
+**Repro recipe**, since none of this project's own test/capture
+infrastructure reaches this state - useful for verifying the fix on real
+hardware, since this pass only had Xvfb/llvmpipe software rendering to check
+it against:
+
+```sh
+Xvfb :99 -screen 0 1440x816x24 &
+unset WAYLAND_DISPLAY   # winit prefers Wayland when both are set; this
+                        # aims the window at Xvfb's X11 instead - see the
+                        # "Independently verified on a live capture,
+                        # 2026-08-19" paragraph above.
+DISPLAY=:99 cargo run -p oag-game --features native-video -- \
+    data/images/pulse-psp-eu.chd &
+# No window manager runs on Xvfb, so X input focus never lands on the
+# window on its own - one explicit XSetInputFocus (raw Xlib, python-xlib
+# is enough) before any xdotool key reaches it. Then, all through
+# `DISPLAY=:99 xdotool key --window <id> ...`:
+#   space              # skip the intro
+#   Return             # accept the default language
+#   space              # START at the title screen, opens this build's menus
+#   Return             # RACE row
+#   Down x6, Return     # down to the RACE page's START row, launch it
+#   (wait for the loading screen to clear and the race to be visibly running)
+#   Escape             # the real physical key, not a mapped abstract button -
+#                      # Session::escape's "in a race, it hands the window
+#                      # back to the menus" landing
+DISPLAY=:99 import -window root shot.png
+```
+
 ## Open
 
-- **A player who actually pauses does not see the dimmed race - they see the
-  ordinary undimmed menu backdrop, exactly as if nothing were parked at all
-  (2026-09-09).** This contradicts the "landed 2026-09-05" claim above: that
-  entry's own "Verified headlessly" evidence is `render::tests::
-  a_translucent_fill_blends_over_whatever_load_kept`, which pins the
-  `LoadOp::Load` + translucent-`Draw::Fill` **primitive** in isolation, and
-  the `--menu-page --menu-prompt binding` screenshots, which are the
-  *rebinding* prompt, not this overlay - **nothing in this project's test
-  suite or prior verification actually drove a live `Escape` from a running
-  race and looked at the frame**, because no headless capture path can reach
-  it: `--race` (`main.rs`, `cli.race` branch) always takes the headless
-  `run_race` leg regardless of `--screenshot`, and `--menu-page` builds a
-  `menu::Menu` from scratch with no `Session` and no parked race behind it
-  (`crate::capture::menu_page::menu_page` calls `menu::draw_list` directly,
-  never `MenuStage::render`, so `frozen_race` cannot be exercised that way
-  either). The only way to reach `Session::escape` while `Stage::Race` holds
-  something is a real windowed run with real input.
-
-  **Reproduced live, with a GPU window, real keyboard input and in-process
-  instrumentation** (worktree `worktree-pause`, 2026-09-09) - recipe below.
-  Instrumented three sites across the two files this thread owns and none
-  outside them:
-
-  - `session/draw.rs`, where `has_scene` is computed: confirmed
-    `suspended_race.is_some()=true`, `stage_is_menu=true`, `has_scene=true`,
-    on every one of dozens of consecutive frames after a real `Escape` from a
-    running race, and `reconstruction=Off` on **both** the live-race and the
-    parked-menu frames (ruling out an FSR3-to-FSR1 `resolve_scene` fallback
-    rung as the cause - it is off on this run regardless of stage).
-  - `menu_stage.rs`, where `frozen_race` arrives: confirmed `true`, every
-    frame, and `overlay_rect(...)=[0.0, 0.0, 480.0, 272.0]` against
-    `viewport=(0.0, 0.0, 1440.0, 816.0)` - the full skin space, not a
-    degenerate or off-screen rect.
-  - `menu_stage.rs`, right before `render_with`: confirmed the draw list
-    (`list.len()=10`) carries the `PAUSE_OVERLAY`-coloured `Draw::Fill`
-    (`has_pause_fill=true`), carries **no** `Draw::Video` (`has_video=false`,
-    so the disc backdrop movie is correctly left out of the list), and
-    `load_is_load=true` (`LoadOp::Load`, not a clear).
-
-  **Every value this thread's own code computes is exactly what the design
-  doc says it should be, on every single frame, and the presented picture
-  still does not show it.** The picture that actually reaches the window is
-  pixel-indistinguishable from the ordinary, undimmed, un-parked root menu
-  (`compare -metric AE` on an earlier pass of this same repro:  202 of
-  1,175,040 pixels differ, i.e. a different point in the same looping movie,
-  not a different picture) - meaning either `resolve_scene` is not actually
-  carrying the parked race's scene into the presentation target this frame,
-  or something between that and `Framebuffer::composite` is showing stale
-  content from before the race ever launched, despite `render_with` being
-  called with the right list and the right `LoadOp` against that same
-  target. That is downstream of every file this thread owns:
-  `Framebuffer::resolve_scene`/`composite` live in `crates/game/src/
-  upscale.rs`, and the scene draw itself is `race::Scene::render` in
-  `crates/game/src/race.rs` - both out of this thread's lane (`race.rs`/
-  `race/` explicitly so; `upscale.rs` is unclaimed but is rendering-pipeline
-  code, not menu/session code). Per this thread's own brief: reported here
-  rather than fixed.
-
-  **`docs/architecture/menus.md`'s "And backing into the menus over a parked
-  race now draws it, dimmed..." paragraph (around line 679) is currently
-  wrong** for the same reason - it was written against the isolated render
-  test, not a live run. Out of this thread's lane (`docs/architecture/`, not
-  `docs/frontend/`) - flagged, not edited.
-
-  **Repro recipe**, since none of this project's own test/capture
-  infrastructure reaches this state:
-
-  ```sh
-  Xvfb :99 -screen 0 1440x816x24 &
-  unset WAYLAND_DISPLAY   # winit prefers Wayland when both are set; this
-                          # aims the window at Xvfb's X11 instead - see the
-                          # "Independently verified on a live capture,
-                          # 2026-08-19" paragraph above.
-  DISPLAY=:99 cargo run -p oag-game --features native-video -- \
-      data/images/pulse-psp-eu.chd &
-  # No window manager runs on Xvfb, so X input focus never lands on the
-  # window on its own - one explicit XSetInputFocus (raw Xlib, python-xlib
-  # is enough) before any xdotool key reaches it. Then, all through
-  # `DISPLAY=:99 xdotool key --window <id> ...`:
-  #   space              # skip the intro
-  #   Return             # accept the default language
-  #   space              # START at the title screen, opens this build's menus
-  #   Return             # RACE row
-  #   Down x6, Return     # down to the RACE page's START row, launch it
-  #   (wait for the loading screen to clear and the race to be visibly running)
-  #   Escape             # the real physical key, not a mapped abstract button -
-  #                      # Session::escape's "in a race, it hands the window
-  #                      # back to the menus" landing
-  DISPLAY=:99 import -window root shot.png
-  ```
-
-  Screenshots and the full instrumented log from the pass above are at
-  `/home/topaxi/oag-scratch/1-race-running.png`,
-  `/home/topaxi/oag-scratch/2-post-escape.png` and
-  `/home/topaxi/oag-scratch/app.log` (grep `DEBUG`) - not committed, since
-  `handover/` may not be linked into from outside itself and these are not
-  reproducible build artifacts anyway.
-
-- The pause overlay does not suppress a title's own `<ScreenClear>` /
-  `MenuSkin::background` fill, so a title that authors one would show an
-  opaque menu background over the parked race rather than a dimmed picture
-  of it. Still real, still moot on both titles this build plays - unchanged
-  from the entry below.
+- The `<ScreenClear>`/`MenuSkin::background` case the fix above also closes
+  is now verified fixed only for the `<Image>`-mark shape Pulse actually
+  authors. No title this build plays authors a `<ScreenClear>` or a
+  `MenuSkin::background` to exercise that half live - `Frame::backdrops`'s
+  own unit test covers it directly instead (`backdrops_drops_the_clear_
+  behind_a_race_too`), which is why it is listed as covered rather than
+  reproduced on a real title.
 
 ## Next Steps
 
-- **Find why the parked race's resolved scene does not reach the
-  presentation target a real `Escape` composites from**, even though every
-  value this thread's own code (`session/draw.rs`, `menu_stage.rs`) computes
-  for that frame is correct - see the instrumentation above. The search
-  starts in `Framebuffer::resolve_scene`/`composite` (`crates/game/src/
-  upscale.rs`) and `race::Scene::render` (`crates/game/src/race.rs`), neither
-  of which this thread owns. Whoever picks this up should re-run the repro
-  recipe above with a GPU and a real display (this sandbox's Xvfb/llvmpipe
-  path proved the *state machine* correct but cannot itself rule out a
-  software-renderer artifact in the compositor step - the coordinator should
-  verify on real hardware before assuming the same fault reproduces there).
-- The `<ScreenClear>`/`MenuSkin::background` gap two entries up still has no
-  actionable next step: unreachable on Pulse or Pure, revisit if a third
-  title's menus get wired up.
+None currently open.
