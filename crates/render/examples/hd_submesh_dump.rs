@@ -22,7 +22,7 @@ fn main() -> anyhow::Result<()> {
     let data = mesh::read_blob(&spec, &name)?;
     let geometry = mesh::rcs::sibling_geometry(&spec, &name, &data)
         .ok_or_else(|| anyhow::anyhow!("{name}: no sibling .rcsmodel"))?;
-    let model = oag_formats::rcsmodel::Model::parse(&geometry)?;
+    let model = oag_rcs::rcsmodel::Model::parse(&geometry)?;
     let word = |at: usize| {
         u32::from_be_bytes([
             geometry[at],

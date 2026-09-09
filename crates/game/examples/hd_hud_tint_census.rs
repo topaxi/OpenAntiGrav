@@ -49,7 +49,7 @@ fn main() -> anyhow::Result<()> {
 
     for file in &all_files {
         let Some(blob) = read(file) else { continue };
-        let Ok(xml) = oag_formats::fexml::text(&blob) else {
+        let Ok(xml) = oag_tables::fexml::text(&blob) else {
             continue;
         };
         for name in WATCH {

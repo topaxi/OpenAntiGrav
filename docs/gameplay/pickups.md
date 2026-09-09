@@ -214,7 +214,7 @@ the right icon look like it needed something unrecovered.
 It does not. `Arcade_HUD.xml` authors **thirteen**, and names each after its
 weapon's own `type` string: `TurboIcon`, `ShieldIcon`, `RocketIcon`,
 `LeachBeamIcon` and `RepulserIcon` misspellings included. That is exactly
-`oag_formats::weapons::Weapon::ALL`, so the lookup is
+`oag_tables::weapons::Weapon::ALL`, so the lookup is
 `format!("{}Icon", weapon.as_type())` and nothing else -
 `oag_game::hud::pickup_icon_name`. Pinned against the shipped file for all
 thirteen by `every_weapon_has_an_icon_widget_named_after_it`.
@@ -347,7 +347,7 @@ own executable strings carry `WO_DISRUPTOR_EXPLO` alongside every other
 weapon's explosion effect name, so this is not a second spelling of `Cannon` -
 `Cannon` has no icon in either layout, and Pure's ten omit `LeachBeam`,
 `Repulser` and `Shuriken` from Pulse's thirteen as well. `Weapon`
-(`crates/formats/src/weapons.rs`) is scoped to Pulse's own weapon table, so a
+(`crates/tables/src/weapons.rs`) is scoped to Pulse's own weapon table, so a
 per-title roster difference like this is expected rather than a gap to
 reconcile by guessing a mapping - see `crates/pure/src/hud.rs`'s module doc
 for the full accounting.
@@ -511,7 +511,7 @@ weapons the *pool* would hand out and the authored *odds* never do.
   `Ship_AcquireLock` for held weapon ids `1` and `10` and no others.
   `oag_gameplay::projectile::leach_beam` holds the single link a race ever
   has - a whole-race pool cursor, the strictest gate any weapon here has -
-  and `oag_formats::weapons::LeachBeamStats` now decodes all nine attributes.
+  and `oag_tables::weapons::LeachBeamStats` now decodes all nine attributes.
   **One half is deliberately not wired**: `slowShipFactor` lands on
   `craft+0x31c`, the one-shot thrust scale `oag_physics::engine` documents and
   does not implement, so a craft under a beam is not yet throttled. See
@@ -563,7 +563,7 @@ read rather than a traced call site.
 
 **The code does not need a fix for this - it already reads correctly.**
 `pickup::draw_once` skips any weapon whose weight is `<= 0.0`, and
-`oag_formats::weapons::{RACE_ENTRY, ELIMINATION_ENTRY}` already name both
+`oag_tables::weapons::{RACE_ENTRY, ELIMINATION_ENTRY}` already name both
 files. What needs saying is that `IMPLEMENTED`'s list is misleading read
 alone: `Shuriken` is on it, and `SingleRace` - the only mode with weapon pads
 armed at all, per the table above - loads `RACE_ENTRY`, where `Shuriken`'s
@@ -780,7 +780,7 @@ PSP executable on 2026-09-06 - `Ship_AddSlowdown` (`0x08848690`) adds a hit's
 `<Global slowdown_limit>`, which is therefore a **ceiling on seconds of slowdown
 outstanding**, not a speed floor; while that timer runs the victim gets no
 engine thrust, a zeroed throttle and no lateral grip, and its hover target
-height is lowered. `oag_formats::weapons` decodes `slowdown_time` on all six
+height is lowered. `oag_tables::weapons` decodes `slowdown_time` on all six
 decoded blocks as of the same day. What is *not* built is the physics half - a
 craft hit by a mine, rocket or missile does not slow down yet. See
 [engine.md](../ghidra/functions/psp-pulse-usa/engine.md). `Ship_Damage`'s `weapon_kind`
@@ -854,7 +854,7 @@ the original does: the stamp is unconditional and the grant is not.
   is in.
 - **The Bomb's `damageradius`.** Authored, the only second radius any weapon
   has, and no consumer found - so it is decoded nowhere and spent nowhere. See
-  `oag_formats::weapons::BombStats`.
+  `oag_tables::weapons::BombStats`.
 - **A mine or a bomb draws nothing.** `Pulse_Mine.vex` and `Pulse_Bomb.vex` are
   both named and located and no renderer reads either, so a laid charge is
   invisible.

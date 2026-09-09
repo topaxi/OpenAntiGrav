@@ -39,8 +39,8 @@
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
-use oag_formats::vex;
 use oag_render::mesh::{self, Model};
+use oag_vex::vex;
 
 fn image() -> Option<PathBuf> {
     oag_testdata::image("data/images/pulse-psp-usa.chd")

@@ -16,11 +16,16 @@ members = [
   "crates/pulse",
   "crates/pure",
   "crates/race",
+  "crates/rcs",
   "crates/render",
+  "crates/tables",
   "crates/testdata",
+  "crates/texture",
   "crates/title",
   "crates/tools",
   "crates/trace",
+  "crates/video",
+  "crates/vex",
   "crates/view",
 ]
 
@@ -46,10 +51,15 @@ oag-physics = { path = "crates/physics" }
 oag-pulse = { path = "crates/pulse" }
 oag-pure = { path = "crates/pure" }
 oag-race = { path = "crates/race" }
+oag-rcs = { path = "crates/rcs" }
 oag-render = { path = "crates/render" }
 oag-testdata = { path = "crates/testdata" }
+oag-tables = { path = "crates/tables" }
+oag-texture = { path = "crates/texture" }
 oag-title = { path = "crates/title" }
 oag-trace = { path = "crates/trace" }
+oag-vex = { path = "crates/vex" }
+oag-video = { path = "crates/video" }
 
 anyhow = "1"
 thiserror = "2"
@@ -174,4 +184,30 @@ opt-level = 2
 [profile.dev.package.oag-formats]
 opt-level = 2
 [profile.dev.package.oag-assets]
+opt-level = 2
+
+# The video path: demuxing a `.PMF`/`IPUF`/`.bik` and, with `av1` on, decoding
+# the movie cache. `re_rav1d` is reached by `package."*"` above; this entry is
+# for the demuxers around it, which walk a whole file a packet at a time.
+[profile.dev.package.oag-video]
+opt-level = 2
+
+# The XML tables. A `handlingstats.xml` sweep parses every row on the disc, and
+# the parser is a character-at-a-time walk with no allocation to hide behind.
+[profile.dev.package.oag-tables]
+opt-level = 2
+
+# The pixel formats: the GS and GE palette walks, and the S3TC/PVRTC block
+# decoders under `gtf` and `gxt`. Per-texel loops over a whole disc's worth.
+[profile.dev.package.oag-texture]
+opt-level = 2
+
+# The `.vex` node walk: a whole circuit's tree, every payload in it, and
+# the PS2 VIF1 packets under the batch headers.
+[profile.dev.package.oag-vex]
+opt-level = 2
+
+# The RCSMODEL geometry walk: vertex declarations decoded per stream, and
+# the material fragment programs beside them.
+[profile.dev.package.oag-rcs]
 opt-level = 2

@@ -131,7 +131,7 @@ object, initialises it from `0x002be7d0`
 literal, the slot count and the call shape all match the PSP page.
 
 Pulling the two rewritten names out of `WADS2.WAD` and decoding them with
-`oag_formats::ps2_texture` gives 64x64 at 8 bpp and 128x64 at 8 bpp -
+`oag_texture::ps2_texture` gives 64x64 at 8 bpp and 128x64 at 8 bpp -
 **the PSP's dimensions exactly**, and `grabbedEngineFlare128x64x8` states its
 own shape in its name.
 

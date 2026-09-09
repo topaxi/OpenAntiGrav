@@ -25,8 +25,8 @@
 //! treat this PNG as a measured fact, and see `pads.md` for the full set of
 //! open readings.
 
-use oag_formats::gtf;
 use oag_render::mesh;
+use oag_texture::gtf;
 
 fn decode(spec: &str, path: &str) -> anyhow::Result<(u32, u32, Vec<[u8; 4]>)> {
     let blob = mesh::read_blob(spec, path)?;
@@ -54,7 +54,7 @@ fn composite(cs_path: &str, ne_path: &str, spec: &str, out: &str) -> anyhow::Res
         }
     }
     let flat: Vec<u8> = out_rgba.into_iter().flatten().collect();
-    let png = oag_formats::png::encode_rgba(cw, ch, &flat);
+    let png = oag_texture::png::encode_rgba(cw, ch, &flat);
     std::fs::write(out, png)?;
     println!("wrote {out}");
     Ok(())

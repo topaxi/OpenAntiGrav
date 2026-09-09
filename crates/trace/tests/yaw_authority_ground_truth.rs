@@ -22,13 +22,13 @@
 //! `docs/architecture/adr/0006-no-copyrighted-content.md`.
 
 use oag_core::math::Vec3;
-use oag_formats::handling;
 use oag_gameplay::handling_for;
 use oag_physics::engine::steering;
 use oag_physics::forces::YAW_INVERSE_INERTIA;
 use oag_physics::passive::YAW_DAMPING;
 use oag_physics::{Handling, ShipState};
 use oag_pulse as pulse;
+use oag_tables::handling;
 
 const IMAGE: &str = "data/images/pulse-psp-usa.chd";
 

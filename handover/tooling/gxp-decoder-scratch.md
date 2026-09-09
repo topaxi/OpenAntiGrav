@@ -1,8 +1,8 @@
 # GXP decoder - full findings (scratchpad, 2026-09-02)
 
 Scratchpad named at the start of the task. The durable results are in
-`docs/formats/gxp.md`, `scripts/vita-gxp.py`, `crates/formats/src/gxp.rs`,
-`crates/formats/tests/gxp_ground_truth.rs` and
+`docs/formats/gxp.md`, `scripts/vita-gxp.py`, `crates/rcs/src/gxp.rs`,
+`crates/rcs/tests/gxp_ground_truth.rs` and
 `handover/tooling/2048s-gxp-containers-decode-the-usse-stream.md`. This file records
 the route, including the wrong turns, and can be deleted with the thread.
 

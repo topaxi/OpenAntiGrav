@@ -223,7 +223,7 @@ rings, so about 2.3 MB on the PS2 while the intro is playing.
 Recorded as candidates, in rough order of how much they would repay. **None of
 this is implemented**, and none of it should be bundled with a movie change:
 
-- **Texture decode** (`oag_formats::texture`, `ps2_texture`, `.mip` palette
+- **Texture decode** (`oag_texture::texture`, `ps2_texture`, `.mip` palette
   expansion). Happens during a load rather than in a frame loop today, so it costs
   stall time and not frame time - which makes it lower priority than it looks, but
   it is embarrassingly parallel across textures and would shorten every load.

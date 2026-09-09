@@ -39,9 +39,9 @@
 //! `WO_CANNON_HIT_SHIP` entry for the PS2-only asset this does not settle.
 
 use oag_core::math::Vec3;
-use oag_formats::weapons::CannonStats;
 use oag_physics::ShipState;
 use oag_physics::params::Dimensions;
+use oag_tables::weapons::CannonStats;
 
 use super::KMH_PER_UNIT_PER_SECOND;
 
@@ -155,7 +155,7 @@ pub fn direct_hit(
 /// there is no radius to fall back to sweeping.
 pub fn apply_impact(
     ships: &mut [crate::world::Ship],
-    weapons: Option<&oag_formats::weapons::WeaponStats>,
+    weapons: Option<&oag_tables::weapons::WeaponStats>,
     impact: &super::Impact,
     rules: oag_physics::DamageRules,
     absorbed: &mut [bool],
@@ -163,7 +163,7 @@ pub fn apply_impact(
     let Some(struck) = impact.struck else {
         return;
     };
-    let Some(cannon) = weapons.and_then(oag_formats::weapons::WeaponStats::cannon) else {
+    let Some(cannon) = weapons.and_then(oag_tables::weapons::WeaponStats::cannon) else {
         return;
     };
     direct_hit(ships, struck as usize, &cannon, rules, absorbed);

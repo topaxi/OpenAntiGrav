@@ -118,7 +118,7 @@ records for `fogColour`.
 ## The values are on the disc, in the model's own material record
 
 **The `.rcsmaterial` declares the parameters; the `.rcsmodel` supplies the
-numbers.** Past everything `oag_formats::rcsmodel::material` used to read, a
+numbers.** Past everything `oag_rcs::rcsmodel::material` used to read, a
 material record carries a table of named values:
 
 ```text
@@ -189,7 +189,7 @@ rather than worked around.
 file it was read from: 20,445 parameters across 9,757 materials of 643
 `.rcsmodel`s, and every one of them is a finite float of ordinary magnitude,
 which a walk that was one field out could not be. Pinned by
-`crates/formats/tests/rcsmodel_material_ground_truth.rs`.
+`crates/rcs/tests/rcsmodel_material_ground_truth.rs`.
 
 **Confidence 88 on the arithmetic**: the instructions are the program's own and
 the patch chain is resolved, but the block was read once and the two unnamed

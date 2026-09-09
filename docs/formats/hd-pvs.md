@@ -5,8 +5,8 @@
 the renderer. A trailing region on twelve files is measured, shown to be
 unreachable by the retail loader, and deliberately left alone.
 
-Parser: [`oag_formats::hd_pvs`](../../crates/formats/src/hd_pvs.rs).
-Ground truth: `crates/formats/tests/hd_pvs_ground_truth.rs`.
+Parser: [`oag_rcs::hd_pvs`](../../crates/rcs/src/hd_pvs.rs).
+Ground truth: `crates/rcs/tests/hd_pvs_ground_truth.rs`.
 Consumer: `oag_render::pvs::ChunkSet`, wired in
 `crates/game/src/race/visibility.rs`. Toggle a run with `--pvs true|false`.
 

@@ -92,7 +92,7 @@ fn main() -> anyhow::Result<()> {
         // so a PNG straight off the readback is fully transparent.
         let mut rgba = pixels.clone();
         make_opaque(&mut rgba);
-        std::fs::write(&path, oag_formats::png::encode_rgba(WIDTH, HEIGHT, &rgba))?;
+        std::fs::write(&path, oag_texture::png::encode_rgba(WIDTH, HEIGHT, &rgba))?;
         println!("  wrote {path}");
     }
     Ok(())

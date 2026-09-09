@@ -43,9 +43,9 @@
 
 use std::path::PathBuf;
 
-use oag_formats::weapons::Weapon;
 use oag_game::race;
 use oag_gameplay::input::{Button, Input};
+use oag_tables::weapons::Weapon;
 
 /// Past the start-line countdown, not merely "a while" - see
 /// `plasma_ground_truth.rs`'s twin for why a flat tick count is the wrong
@@ -123,7 +123,7 @@ fn the_discs_cannon_block_decodes() {
     );
 
     // The schema's own shape: no speed of any kind, unlike every other
-    // projectile weapon here - see `oag_formats::weapons::CannonStats`'s own
+    // projectile weapon here - see `oag_tables::weapons::CannonStats`'s own
     // doc comment. Nothing to assert positively; recorded so a future reader
     // of this file does not go looking for a `speed_for` this weapon has no
     // reason to carry.

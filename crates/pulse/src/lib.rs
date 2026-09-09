@@ -462,7 +462,7 @@ pub mod hashes {
 /// # This was a table, and it is now evidence
 ///
 /// The PS2 release keeps its raster images as ordinary PS2 textures (see
-/// `oag_formats::ps2_texture`) in `WADS2.WAD`, and for a long time this crate
+/// `oag_texture::ps2_texture`) in `WADS2.WAD`, and for a long time this crate
 /// held no way to reach them: `Data\HUD\Textures\PulseHUD.mip` hashes to
 /// `57d37d8c`, which is in neither archive, and 60 candidates across path shape,
 /// case and extension were hashed against all 7,393 entry hashes and every one

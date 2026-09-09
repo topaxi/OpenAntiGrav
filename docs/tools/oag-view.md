@@ -316,7 +316,7 @@ input cannot be raw world space; nothing about the picture is affected either wa
 This view reads geometry and surface class only. It does not read restitution and
 does not simulate anything; `oag-render` cannot, by
 [the dependency rules](../architecture/workspace-layout.md). It also does **not**
-go through `oag-gameplay`: it decodes with `oag_formats::collision` directly, so
+go through `oag-gameplay`: it decodes with `oag_vex::collision` directly, so
 the viewer does not pull a gameplay crate in to draw a triangle. The one rule it
 copies from `collision_world` is the cage exclusion above.
 

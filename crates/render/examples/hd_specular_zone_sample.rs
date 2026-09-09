@@ -25,9 +25,9 @@
 //! thread's dated history entry, per this project's "record the evidence"
 //! rule.
 
-use oag_formats::rcsmaterial;
-use oag_formats::rcsmaterial::RcsMaterial;
-use oag_formats::rcsmaterial::fragment::{Instruction, Program, Source};
+use oag_rcs::rcsmaterial;
+use oag_rcs::rcsmaterial::RcsMaterial;
+use oag_rcs::rcsmaterial::fragment::{Instruction, Program, Source};
 
 /// Ported from `hd_specular_unresolved_trace.rs` - see that module's own doc
 /// comment for why the lane-aware, clobber-checked read is necessary and

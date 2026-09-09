@@ -4,7 +4,7 @@
 tunables, the disturber effects and the pickup distribution are **authored XML on
 the disc**, not a table compiled into the executable.
 
-**Partly implemented since 2026-08-11.** `oag_formats::weapons` decodes the three
+**Partly implemented since 2026-08-11.** `oag_tables::weapons` decodes the three
 `absorb`/`time` weapons, `absorb` for all thirteen, `<Pickupodds>` in full and
 `<Global> slowdown_limit`; a race reads the file, a `Weapon Pad` draws from the
 odds and Turbo is the one weapon with an effect. See
@@ -92,7 +92,7 @@ a union:
 | `Global` | `0x0880dab0` | `slowdown_limit` |
 | **`Rocket`** | **`0x0880c058`** | **`absorb blastforce blastradius damage slowdown_time venomspeed flashspeed rapierspeed phantomspeed launchSpeed`**, plus `spread` |
 | **`Missile`** | `0x0880c31c` | the rocket's, less `spread`, plus `lock_max_dist lock_min_dist` - **decoded**, offsets and all, on [missile.md](../ghidra/functions/psp-pulse-usa/missile.md) |
-| **`Quake`** | `0x0880c60c` | **`absorb damage radius slowdown_time`** - offsets `+0x60`..`+0x6c` measured, see [engine.md](../ghidra/functions/psp-pulse-usa/engine.md) - **decoded** in full as `oag_formats::weapons::QuakeStats`, `radius` now the hit-latch's own proximity gate per [cannon-quake-leachbeam.md](../ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md) |
+| **`Quake`** | `0x0880c60c` | **`absorb damage radius slowdown_time`** - offsets `+0x60`..`+0x6c` measured, see [engine.md](../ghidra/functions/psp-pulse-usa/engine.md) - **decoded** in full as `oag_tables::weapons::QuakeStats`, `radius` now the hit-latch's own proximity gate per [cannon-quake-leachbeam.md](../ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md) |
 | **`Cannon`** | `0x0880c774` | **`absorb rounds rate damage_per_bullet slowdown_time`** - **decoded** in full, offsets read 2026-09-07: `rounds` `+0x70` **as an `int`**, `absorb` `+0x74`, `rate` `+0x78` **stored as `1.0 / value`**, `damage_per_bullet` `+0x7c`, `slowdown_time` `+0x80`. The reciprocal is the whole reason the weapon fired once every twenty seconds until then - see [cannon-quake-leachbeam.md](../ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md) |
 | **`Turbo`** | **`0x0880c92c`** | **`absorb time`** |
 | **`Shield`** | **`0x0880ca2c`** | **`absorb time`** |
@@ -100,11 +100,11 @@ a union:
 | **`Plasma`** | **`0x0880cc2c`** | the rocket's, less `spread`, plus `charge_time` - **decoded**, offsets and all, on [plasma.md](../ghidra/functions/psp-pulse-usa/plasma.md) |
 | `Bomb` | `0x0880cef0` | `absorb blastforce blastradius damage damageradius slowdown_time trigger_radius timetodie` |
 | `Mine` | `0x0880d124` | the bomb's, less `damageradius` |
-| **`LeachBeam`** | `0x0880d328` | `repair absorb damage lock_max_dist lock_min_dist slowShipFactor range active_time energy_multiplier` - **`absorb` and the lock window decoded**, nothing else, as `oag_formats::weapons::LeachBeamStats`. The window is the second pair `Ship_AcquireLock` reads (`stats+0x114`/`+0x118`, against the Missile's `+0x50`/`+0x54`) and its consumer is the reticle; see [lock-sight.md](../ghidra/functions/psp-pulse-usa/lock-sight.md). **This block authors no `slowdown_time`** - the only one of the seven that does not |
+| **`LeachBeam`** | `0x0880d328` | `repair absorb damage lock_max_dist lock_min_dist slowShipFactor range active_time energy_multiplier` - **`absorb` and the lock window decoded**, nothing else, as `oag_tables::weapons::LeachBeamStats`. The window is the second pair `Ship_AcquireLock` reads (`stats+0x114`/`+0x118`, against the Missile's `+0x50`/`+0x54`) and its consumer is the reticle; see [lock-sight.md](../ghidra/functions/psp-pulse-usa/lock-sight.md). **This block authors no `slowdown_time`** - the only one of the seven that does not |
 | `Repulser` | `0x0880d58c` | `blastforce blastradius absorb damage slowdown_time blast_time wave_time` |
 | **`Shuriken`** | **`0x0880d790`** | `absorb rhicochetForce blastForce blastradius rhicochetdamage blastdamage slowdown_time <class>speed launchSpeed fuse` - **decoded** but for the ricochet pair and `slowdown_time`, offsets and all, on [shuriken.md](../ghidra/functions/psp-pulse-usa/shuriken.md) |
 
-**Bold rows are decoded by `oag_formats::weapons`**; the rest are named here and
+**Bold rows are decoded by `oag_tables::weapons`**; the rest are named here and
 read no further, because [nothing consumes them](../gameplay/pickups.md) and a
 field decoded with no consumer is a field nobody has checked. The Rocket is
 partly bold for the same reason: `oag_gameplay::projectile` reads nine of its
@@ -171,7 +171,7 @@ and **no `launchSpeed` on either**. So a Pure craft flies every class's weapons
 at the same speed, which is a property of the disc rather than of this reading -
 there is no per-class figure to have lost.
 
-`oag_formats::weapons` accepts both: the per-class spelling wins where present,
+`oag_tables::weapons` accepts both: the per-class spelling wins where present,
 one `speed` folds into all four, and `launchSpeed` defaults to zero when the
 file does not carry it. A file with neither spelling is still an error.
 
@@ -233,7 +233,7 @@ each of which stores a class index of 0/1/2/3. So the executable carries a fifth
 name with nothing behind it.
 
 The shipped race table authors **four** blocks and no `Vector`, which is measured
-rather than inferred: `crates/formats/tests/weapons_ground_truth.rs` asserts both
+rather than inferred: `crates/tables/tests/weapons_ground_truth.rs` asserts both
 halves. This page said the opposite for the length of one draft, having read the
 parser and not the file - the ground-truth test is what caught it, which is what
 it is for.

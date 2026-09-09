@@ -7,7 +7,7 @@
 //! speed rises every ten seconds, and both titles that ship an
 //! `.effectSettings` table ship it so the *look* rises with the speed: one
 //! full palette per speed class, layered over whichever circuit is racing.
-//! [`oag_formats::effectsettings`] reads the file; this is where a stage of it
+//! [`oag_tables::effectsettings`] reads the file; this is where a stage of it
 //! reaches the renderer, on the same path
 //! `crate::race::load::environment::envsettings_fog` already drives from a
 //! circuit's own `.envsettings`.
@@ -65,8 +65,8 @@
 
 use std::sync::Arc;
 
-use oag_formats::effectsettings::{EffectSettings, StagePalette};
 use oag_render::{mesh::ModelTexture, mesh_render};
+use oag_tables::effectsettings::{EffectSettings, StagePalette};
 
 /// The three fields HD/Fury's own runtime keeps per entity, and no others.
 ///
@@ -82,7 +82,7 @@ pub struct StageBlend {
     pub requested: u32,
     /// `+0x18`: the current stage's own share of the cross-fade, `1.0` for the
     /// current stage alone and `0.0` for the stage before it - the convention
-    /// [`oag_formats::effectsettings::cross_fade_rgba8`] documents.
+    /// [`oag_tables::effectsettings::cross_fade_rgba8`] documents.
     ///
     /// **The direction is open.** That function's own recovered doc reads
     /// `1.0` "at the moment a stage becomes current", while the commit

@@ -193,7 +193,7 @@ mod merge_tests {
                 chunk: None,
                 blend: None,
                 blend_state: None,
-                layer: oag_formats::vex::LAYER_DEFAULT,
+                layer: oag_vex::vex::LAYER_DEFAULT,
                 culled: false,
                 range: 0..vertices as u32,
                 texture: (textures > 0).then_some(0),

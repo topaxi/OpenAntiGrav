@@ -1,7 +1,7 @@
 # PSP indexed texture
 
 **Status: understood.** Header, palette and pixel layout are decoded,
-implemented in [`oag-formats::texture`](../../crates/formats/src/texture.rs),
+implemented in [`oag-texture::texture`](../../crates/texture/src/texture.rs),
 and confirmed visually: decoded textures render as the Wipeout Pulse logo and
 front-end icon sheets. Three header bytes remain unidentified but do not affect
 decoding.
@@ -212,7 +212,7 @@ alignment - so the two are the same constant rather than a coincidence.
 the evidence rather than the hardware: no observed texture has a level-0 row under
 16 bytes, so the question is untested there, and leaving it alone keeps the
 single-level arithmetic byte-identical to what the 346-entry corpus was verified
-against. If a narrow single-level texture ever fails to identify, try this first. `oag_formats::texture` now reads the count, validates
+against. If a narrow single-level texture ever fails to identify, try this first. `oag_texture::texture` now reads the count, validates
 the whole chain and decodes **level 0 only**, so `indices` stays exactly
 `width * height` long - `png::encode_rgba` asserts that. The change only widens
 what parses: at one level the arithmetic is unchanged, and all 346 previously

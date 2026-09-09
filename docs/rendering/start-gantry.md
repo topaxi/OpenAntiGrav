@@ -102,7 +102,7 @@ cols 12, 14   full-height red and green columns, unused by this node
 ```
 
 The material's own texture-transform block - the `TEXOFFSET` keyframe track
-[`formats/vex.md`](../formats/vex.md) documents and `oag_formats::vex::mesh_tex_transforms`
+[`formats/vex.md`](../formats/vex.md) documents and `oag_vex::vex::mesh_tex_transforms`
 already parses - then slides one shared offset across it:
 
 ```text
@@ -310,7 +310,7 @@ lines after its root close naming `Checkered_StartFinish.vex` and
 would have held is in the timeline above. They are the fossil of a three-file
 design that got folded into one, and reading them made `14_Track` look like the
 one Pulse circuit whose `num` is not unique. It is not - see
-`oag_formats::trackstartup`.
+`oag_tables::trackstartup`.
 
 ## Which model a mode selects on Pulse: none. Confidence 85
 
@@ -355,7 +355,7 @@ eight race circuits, four Classics and four Zone circuits; each race circuit's
 carries none at all. Across the eight that do, slot numbers run 1 to 7 -
 `12_Sol_2`'s manifest is the one that reaches 7 - and never 8, model or
 colour. This is the exact schema Pulse's own `14_Track` debris pointed at, and
-`crates/formats/tests/start_gantry_pure_ground_truth.rs` reproduces the count:
+`crates/tables/tests/start_gantry_pure_ground_truth.rs` reproduces the count:
 42 billboards over 16 circuits, 0 naming a `location`.
 
 **Pure's `<Billboard>` schema is not Pulse's schema, either.** Every one of
@@ -469,7 +469,7 @@ open which copy (if either alone) a race reaches.
 ### The geometry moved out of the `.vex`; the mechanism has to be looked for beside it
 
 Every HD `Mesh` node's own payload is a bounding box and a hash, nothing else
-- `oag_formats::rcsmodel` is where the real vertices, indices, texture
+- `oag_rcs::rcsmodel` is where the real vertices, indices, texture
 coordinates and material table for a PS3 model live (see that module's own
 doc comment, and `docs/rendering/scenery-animation.md`). `321go_startfinish.vex`
 is exactly that shape: 43 nodes, 19 of them `Mesh`, and reading any of their
@@ -490,7 +490,7 @@ texture `data/billboards/hd_adverts/321go/321_go_64.gtf`.
 
 ### The texture is Pulse's staircase, scaled up and DXT-compressed - confidence 88
 
-`321_go_64.gtf` decodes (`oag_formats::gtf`, format `Dxt45`) to **64x128** -
+`321_go_64.gtf` decodes (`oag_texture::gtf`, format `Dxt45`) to **64x128** -
 exactly 4x Pulse's 16x32 in both dimensions - and a full-texel opaque-white
 scan (every texel with alpha > 200 and RGB > 200) finds:
 
@@ -559,12 +559,12 @@ same trap a first pass at Pulse's own test fell into sorting by `x` instead of
 
 **The material's `uvOffset`/`uvScale` are a static value, not a keyframe
 track, and this is a fact about the format, not an inference from one
-file.** `oag_formats::rcsmodel::material::parameters` decodes a material
+file.** `oag_rcs::rcsmodel::material::parameters` decodes a material
 record's parameter table as a name-hashed array of `{value: [f32; 4], quads:
 u32}` entries with no time axis at all - a `quads` above one would be a longer
 vector the shader indexes, not a sequence of keys, and every parameter this
 material carries reports `quads == 1`. Feeding this exact node's payload
-through `oag_formats::vex::mesh_tex_transforms` - the same parser that
+through `oag_vex::vex::mesh_tex_transforms` - the same parser that
 recovers Pulse's `TEXOFFSET` track and is proven title-agnostic on HD's own
 byte order (`docs/rendering/scenery-animation.md`) - returns `None` for every
 material on the node: there is no texture-transform block here for it to
@@ -684,7 +684,7 @@ name yet because nothing here loads `321go_startfinish.vex` at all.
 
 **Read on `data/extracted/vita/PCSF00007`** (the decrypted EU package: base,
 the 1.04 patch, and both DLC packages), with
-`crates/formats/tests/start_gantry_2048_ground_truth.rs` (9 tests) and
+`crates/rcs/tests/start_gantry_2048_ground_truth.rs` (9 tests) and
 `crates/hd/tests/start_gantry_hd_ground_truth.rs`'s own added sixth test as
 the executable form of every claim below. No Ghidra and no emulator - the
 same `oag-wad`-equivalent reading (`scripts/psarc.py` for the archive census,
@@ -711,7 +711,7 @@ and a `start_light_background1` locator, all static `Transform` nodes, no
 easy to miss on a first pass precisely because it carries nothing to find.
 Every one of the seven glyph files that *does* have geometry, plus `fx350.vex`
 itself, has a sibling `.rcsmodel`, and every sibling opens as
-`oag_formats::rcsmodel::psp2`'s container (`0 unpaired_pointers` on all eight)
+`oag_rcs::rcsmodel::psp2`'s container (`0 unpaired_pointers` on all eight)
 - **2048 re-exported HD's own four glyph files (and `fx350.vex`) into its own
 Vita container rather than shipping the PS3 bytes verbatim**, a measured fact
 about the pipeline, not an assumption.
@@ -824,7 +824,7 @@ this whole positional mapping carries.
 ### Why node-to-submesh correlation is positional here, not addressed
 
 **This container has no hash, no name, nothing to address a chunk by at
-all** - `oag_formats::rcsmodel::psp2`'s own module doc states this plainly:
+all** - `oag_rcs::rcsmodel::psp2`'s own module doc states this plainly:
 every HD chunk is found through a `Mesh` node's `+0x30` hash, and 2048's
 format simply has no equivalent field. So unlike
 `start_gantry_hd_ground_truth.rs`, which resolves `pasted__Go_HD_start_light_321go`

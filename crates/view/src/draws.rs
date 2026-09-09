@@ -7,8 +7,8 @@
 //! guessed at from a texture name. `--only` then hides everything else, which
 //! is what turns an attribution into a confirmation.
 
-use oag_formats::vex;
 use oag_render::mesh::{DrawCall, Model};
+use oag_vex::vex;
 
 /// Which of [`Model`]'s three lists a draw came from, and therefore which
 /// pipeline `mesh_render::build` draws it through.

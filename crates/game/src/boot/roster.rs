@@ -209,7 +209,7 @@ fn raceable(
         ))
         .is_some()
         && archives
-            .locate(&oag_formats::handling::entry_name_in(handling_dir, id))
+            .locate(&oag_tables::handling::entry_name_in(handling_dir, id))
             .is_some()
 }
 

@@ -29,8 +29,8 @@
 
 use std::path::PathBuf;
 
-use oag_formats::{fnt, ps2_texture};
 use oag_pulse as pulse;
+use oag_texture::{fnt, ps2_texture};
 
 /// The five fonts, by the names hashed into both discs' archives.
 const FONTS: [&str; 5] = [

@@ -45,7 +45,7 @@ fn main() -> anyhow::Result<()> {
             let Ok(blob) = archive.read_path(&entry) else {
                 continue;
             };
-            let Ok(parsed) = oag_formats::gtf::Gtf::parse(&blob) else {
+            let Ok(parsed) = oag_texture::gtf::Gtf::parse(&blob) else {
                 continue;
             };
             let Some(texture) = parsed.textures.first() else {
@@ -84,7 +84,7 @@ fn main() -> anyhow::Result<()> {
             let Ok(blob) = archive.read_path(&entry) else {
                 continue;
             };
-            let Ok(parsed) = oag_formats::gxt::Gxt::parse(&blob) else {
+            let Ok(parsed) = oag_texture::gxt::Gxt::parse(&blob) else {
                 continue;
             };
             let Some(texture) = parsed.only() else {

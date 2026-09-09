@@ -30,7 +30,7 @@ any title. Recorded here so the next person does not re-derive it, and so that
 "Pure has five" is not mistaken for an answer about Pulse.
 
 **One decoder change worth knowing about, also not an answer (2026-09-05).**
-Making Pure's rung raceable meant `oag_formats::handling::global_classes` had
+Making Pure's rung raceable meant `oag_tables::handling::global_classes` had
 to stop *discarding* an unrecognised `<GlobalClass>`; it now keeps it in
 `Global::extra`. So **Pulse's own `VECTOR` global block is parsed and retained
 in this build** where it used to be dropped on the floor. That is a change to

@@ -39,9 +39,9 @@
 
 use std::path::PathBuf;
 
-use oag_formats::weapons::Weapon;
 use oag_game::race;
 use oag_gameplay::input::{Button, Input};
+use oag_tables::weapons::Weapon;
 
 fn image() -> Option<PathBuf> {
     oag_testdata::image("data/images/pulse-psp-usa.chd")
@@ -315,7 +315,7 @@ fn a_pad_can_hand_out_a_missile_and_firing_one_spends_it() {
     let weapons = loaded.setup.weapons.clone();
     let stats = weapons
         .as_ref()
-        .and_then(oag_formats::weapons::WeaponStats::missile)
+        .and_then(oag_tables::weapons::WeaponStats::missile)
         .expect("the disc authors a Missile");
 
     let table = weapons

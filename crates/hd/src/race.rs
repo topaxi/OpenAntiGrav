@@ -10,7 +10,7 @@
 //! incompatible. They are not, because
 //! [`oag_assets::psarc::Archive`](oag_assets::psarc) folds separators, case and
 //! a leading `/` before it looks a path up. So
-//! `oag_formats::handling::entry_name("assegai")` produces
+//! `oag_tables::handling::entry_name("assegai")` produces
 //! `Data\Ships\assegai\handlingstats.xml`, which normalises to
 //! `data/ships/assegai/handlingstats.xml`, which is what the manifest stores -
 //! and `handling::GLOBAL_ENTRY`'s `Data\XML\HandlingStats.xml` reaches
@@ -337,7 +337,7 @@ pub const ZONE_SHIP: &str = "zone";
 /// ordinary circuit as well as on the four dedicated ones - the arrangement
 /// [`oag_title::ZoneCircuit::Separate`]'s own `also_race_circuits` flag
 /// already asserts for this title. 21,160 bytes, fifteen stages named `Start`
-/// through `Supersonic`, parsed by `oag_formats::effectsettings` and checked
+/// through `Supersonic`, parsed by `oag_tables::effectsettings` and checked
 /// against the disc in `effectsettings_ground_truth.rs`.
 ///
 /// **This is the base revision, not `zonemodedlc3.effectsettings`.** That file

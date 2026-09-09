@@ -43,8 +43,8 @@ fn boot_legal_wraps_to_two_lines_that_clear_the_screen() {
     let blob = archives
         .read_name(oag_pulse::names::FRONTEND_ROOT)
         .expect("Skin.xml");
-    let xml = if oag_formats::fexml::is_fexml(&blob) {
-        oag_formats::fexml::expand(&blob).expect("expanding Skin.xml")
+    let xml = if oag_tables::fexml::is_fexml(&blob) {
+        oag_tables::fexml::expand(&blob).expect("expanding Skin.xml")
     } else {
         String::from_utf8(blob).expect("Skin.xml is text")
     };

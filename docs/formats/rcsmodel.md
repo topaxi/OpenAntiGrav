@@ -6,12 +6,12 @@
 `Mesh` node's payload *is* its geometry; on the PS3 that payload is a
 bounding-box pair and a 32-bit word, and the vertices are here.
 
-Implemented in [`oag_formats::rcsmodel`](../../crates/formats/src/rcsmodel.rs),
+Implemented in [`oag_rcs::rcsmodel`](../../crates/rcs/src/rcsmodel.rs),
 drawn by [`oag_render::mesh::rcs`](../../crates/render/src/mesh/rcs.rs), and
 checked against the disc by
-[`rcsmodel_ground_truth.rs`](../../crates/formats/tests/rcsmodel_ground_truth.rs)
+[`rcsmodel_ground_truth.rs`](../../crates/rcs/tests/rcsmodel_ground_truth.rs)
 for the container and
-[`rcsmodel_vertex_ground_truth.rs`](../../crates/formats/tests/rcsmodel_vertex_ground_truth.rs)
+[`rcsmodel_vertex_ground_truth.rs`](../../crates/rcs/tests/rcsmodel_vertex_ground_truth.rs)
 for what a vertex holds.
 
 ```sh
@@ -77,7 +77,7 @@ chunks, which declare nothing.
 The four bytes between the normal and it are partly identified; see below.
 
 **A material record carries the shipped values of its shader's parameters**,
-added 2026-08-23 and read by `oag_formats::rcsmodel::material::parameters`.
+added 2026-08-23 and read by `oag_rcs::rcsmodel::material::parameters`.
 Past `+0x38` - the tail this page used to describe as unread, records being 96
 to 768 bytes where the shortest holds everything else - two words name a table:
 `+0x30` an entry count and `+0x34` its offset, each entry `0x20` bytes of
@@ -309,9 +309,9 @@ vertices of one mesh; across 484,328 they are 0.55.
 ## The chunk declares its vertex layout, at the word `+0x58` points at
 
 **Confidence 92**, measured 2026-08-18 over every `.rcsmodel` on the disc.
-Read by [`rcsmodel::vertex_decl`](../../crates/formats/src/rcsmodel/vertex_decl.rs)
+Read by [`rcsmodel::vertex_decl`](../../crates/rcs/src/rcsmodel/vertex_decl.rs)
 and checked by
-[`rcsmodel_decl_ground_truth.rs`](../../crates/formats/tests/rcsmodel_decl_ground_truth.rs).
+[`rcsmodel_decl_ground_truth.rs`](../../crates/rcs/tests/rcsmodel_decl_ground_truth.rs).
 
 **Everything two sections of this page describe as unrecoverable is written
 down in the file.** The stride, the byte offset of each attribute, its type and
@@ -331,7 +331,7 @@ wrong, and both are visible in a frame:
   which drew nothing at all. **Fixed 2026-08-25**: `rcsmodel::STRIDES` now
   carries all seven, widening the disc's read coverage from 96.06% to 97.69%
   and cutting undecodable surfaces from 371 to 115 - see
-  [`rcsmodel_stride_ground_truth.rs`](../../crates/formats/tests/rcsmodel_stride_ground_truth.rs),
+  [`rcsmodel_stride_ground_truth.rs`](../../crates/rcs/tests/rcsmodel_stride_ground_truth.rs),
   which pins the invariant that broke. The remaining 115 have no declaration
   either and are concentrated in the `fe/` track previews, unchased.
 
@@ -513,7 +513,7 @@ coordinate at all**; those are counted rather than given a substitute.
 **And the section title used to end "is not in the file", which was wrong: it is
 in the file, in a block the submesh descriptor points to rather than holds.** See
 [the chunk declares its vertex layout](#the-chunk-declares-its-vertex-layout-at-the-word-0x58-points-at). Everything below stands as measured and is kept because it is what the search
-`oag_formats::rcsmodel::stride` still rests on - the searches are how an
+`oag_rcs::rcsmodel::stride` still rests on - the searches are how an
 [inline](#a-chunk-comes-in-two-layouts-and-byte-0x06-says-which) chunk's stride
 is found, since those declare nothing - and because the negative result is
 exact: the descriptor really does not carry the stride. Looking there was not
@@ -761,7 +761,7 @@ declaration disagreeing with an authored box rather than a width nothing can
 read. A drop from 1,377 to 324 is a reading that got better, not one that is
 finished.
 
-[`Mesh::solve_stride`]: ../../crates/formats/src/rcsmodel/stride.rs
+[`Mesh::solve_stride`]: ../../crates/rcs/src/rcsmodel/stride.rs
 
 ## Wipeout HD's road is not in the `.vex`
 
@@ -1017,7 +1017,7 @@ separated the two modes - 211 of 212 mode-2 materials share mode 1's
 mechanism.
 
 **And the values turn out to be constants, not per-material authoring.**
-Extending `oag_formats::rcsmodel::Material` with the two fields and sweeping
+Extending `oag_rcs::rcsmodel::Material` with the two fields and sweeping
 every material name across all 16 circuits and all three `PSARC` archives:
 `alpha_ref` is `0.5` everywhere, and `alpha_func` takes exactly two values
 disc-wide, `0x0201`/`GL_LESS` and `0x0204`/`GL_GREATER` - every one of the
@@ -1028,7 +1028,7 @@ believed refuted**: a plain `GL_GREATER`/`0.5` alpha-test cutout.
 **The refutation itself was the error, not the hypothesis.** It rested on
 `crowd_avatars_22x4.gtf`'s alpha running `0..255` at a mean of `120` and
 concluded a `0.5` threshold "discards most of it". Histogramming the same
-texture end to end (`oag_formats::gtf`) shows why the mean was the wrong
+texture end to end (`oag_texture::gtf`) shows why the mean was the wrong
 statistic: **52.9% of texels sit at alpha `0`, 47.1% at `255`, nothing
 between.** `GL_GREATER` against `0.5` keeps exactly the 47.1% - the crowd
 figures - and drops the transparent background, which is correct cutout
@@ -1129,7 +1129,7 @@ RSX inherits from OpenGL. Four distinct values landing on four meaningful
 members of a published enum is strong, but nothing here has read the code that
 consumes them, so it is short of what an executed branch would carry.
 
-`oag_formats::rcsmodel::Material::blend` returns **both** factors, each as a
+`oag_rcs::rcsmodel::Material::blend` returns **both** factors, each as a
 `Factor` member naming one of those four values. A value outside the four would
 come back `Blend::Unmapped`; **none is**, on all 15,762 materials
 (`every_factor_the_disc_uses_is_one_of_the_four_named_ones`).
@@ -1206,7 +1206,7 @@ Every material of both models names a first texture - 4 of 4 on Assegai, 442 of
 442 on Talon's Junction - and they are the right ones by inspection:
 `WindscreenShape`'s material names `assegai_glass.gtf`, the circuit's name
 `talons_support_struts.gtf` and `tunnel_fx_diffuse.gtf`. Drawn through
-[`oag_formats::gtf`](hd-status.md#what-is-genuinely-new), all 442 of the
+[`oag_texture::gtf`](hd-status.md#what-is-genuinely-new), all 442 of the
 circuit's decode.
 
 **The second slot is not one thing, and the first sample said it was.** Assegai
@@ -1332,7 +1332,7 @@ they were.
 
 ### What the disc says
 
-Pinned by `crates/formats/tests/rcsmodel_surface_ground_truth.rs`, over all 643
+Pinned by `crates/rcs/tests/rcsmodel_surface_ground_truth.rs`, over all 643
 models and 41,861 chunks:
 
 | | |
@@ -1402,7 +1402,7 @@ its world position; a node-local one's is near the origin. Over
 a unit.
 
 Pinned by `the_space_byte_separates_world_baked_geometry_from_node_local` in
-`crates/formats/tests/rcsmodel_surface_ground_truth.rs`.
+`crates/rcs/tests/rcsmodel_surface_ground_truth.rs`.
 
 ### It replaces a heuristic this project invented, and the heuristic was wrong
 
@@ -1749,7 +1749,7 @@ near-black, alpha-0 band at its bottom.
 blocks flip and **none** of `track_surface`'s 64 do; across the whole circuit
 exactly **one of 283 resolved variants** flips. Flipping unconditionally makes
 the walls right and every surface that was already right wrong, so
-`oag_formats::rcsmaterial::vertex::Program::flips` reads it out of the resolved
+`oag_rcs::rcsmaterial::vertex::Program::flips` reads it out of the resolved
 block and `mesh::rcs::skin::flips` asks per slot.
 
 What the fix moves, measured on the repro frame: pixels crushed to near-black

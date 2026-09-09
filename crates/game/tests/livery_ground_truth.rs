@@ -199,7 +199,7 @@ fn slot_zero_is_the_team_the_options_asked_for() {
     let blob = archives
         .read_name(oag_pulse::names::GAME_PLUGIN_DEFINITION)
         .expect("the game plugin definition");
-    let definition = oag_formats::fexml::expand(&blob).expect("expanding it");
+    let definition = oag_tables::fexml::expand(&blob).expect("expanding it");
     let teams = oag_game::catalogue::teams(&definition);
     assert!(teams.len() > 1, "the disc declares more than one team");
 
@@ -406,7 +406,7 @@ fn a_skin_repaints_the_players_own_hull_and_nobody_elses() {
     let blob = archives
         .read_name(r"Data\Ships\Assegai\ship_alt.dat")
         .expect("the skin the definition names");
-    let skin = oag_formats::ship_skin::parse(&blob).expect("it parses");
+    let skin = oag_texture::ship_skin::parse(&blob).expect("it parses");
     assert_eq!(
         skin.team_name, "Assegai",
         "the resolved path must be this team's own skin, not some other team's"

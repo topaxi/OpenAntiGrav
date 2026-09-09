@@ -1,8 +1,10 @@
 //! Scratch probe: which `.rcsmodel` on the disc carries the chunks Talon's
 //! Junction's prop nodes address and its own model does not.
 
-use oag_formats::{rcsmodel, vex};
+use oag_rcs::rcsmodel;
+
 use oag_render::mesh;
+use oag_vex::vex;
 
 fn main() -> anyhow::Result<()> {
     let image = std::env::args()

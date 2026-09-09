@@ -36,9 +36,9 @@ out exactly like HD's own circuits (`track.vex`, `track.rcsmodel`,
 `track_col.col`, `stats.xml`, `start_grid.vex`, `TrackStartup.xml`, `track.pvs`).
 
 **Every HD-derived handling file decodes with the existing parser, unchanged.**
-`oag_formats::handling::from_blob` on `data/art/published/hdships/AG_Systems/handlingstats.xml`
+`oag_tables::handling::from_blob` on `data/art/published/hdships/AG_Systems/handlingstats.xml`
 returns the expected four classes (`VENOM`/`FLASH`/`RAPIER`/`PHANTOM`).
-`oag_formats::handling::global_from_blob` on `data/xml/handlingstats.xml` (the
+`oag_tables::handling::global_from_blob` on `data/xml/handlingstats.xml` (the
 `GLOBAL_ENTRY` analogue) returns a fully sane `Global` block - zone
 start/increment/recharge, four classes' worth of speedup-pad and gravity
 tunables, weapon-pad refresh times - so the shared `<Global>` schema is
@@ -92,7 +92,7 @@ once the two formats below are readable: the heuristic needs a third answer
 alongside `Big`/`Little`, or a Vita-specific override.
 
 **The `.rcsmodel` beside it is not HD's container**, and this one needed
-Ghidra, not a stride search: `oag_formats::rcsmodel`'s header read is
+Ghidra, not a stride search: `oag_rcs::rcsmodel`'s header read is
 `ByteOrder::Big.u32(data, 0)`, unconditionally, and expects `0x000a0000`;
 `environments/altima/track.rcsmodel`'s first four bytes are `ed ad 5c ca` read
 either way - not a byte-swap of the expected constant, a different value
@@ -163,7 +163,7 @@ into, and it is worth recording precisely:
   and `flags` moved from `0x60`/`0x61` to **`0x5c`/`0x5d`**. Confidence 95 for
   the floats, 90/92 for `section_id`/`flags`, 80 for `racing_line` (HD authors
   zero everywhere, so the pairing cannot distinguish it - it rests on the
-  layout either side of it being confirmed). `crates/formats/src/track.rs`
+  layout either side of it being confirmed). `crates/vex/src/track.rs`
   carries this as `point_len(version)` plus a version-gated tail offset, and
   all fourteen circuits in 2048's base package now parse with
   `encoded_len()` landing on the payload length to the byte. Full evidence -
@@ -256,7 +256,7 @@ runs the simulation. What landed to get there:
 
 ## The collision is in, and the craft flies
 
-`track_col.col` is decoded whole - `oag_formats::kdcol`, validated over **all 26
+`track_col.col` is decoded whole - `oag_vex::kdcol`, validated over **all 26
 shipped files** with every byte accounted for. `just play 2048 --race` now
 reports `4 collision node(s) -> 4 collider(s), 15986 triangle(s)` on Altima and
 the craft accelerates to 125 units/s down the circuit, `grounded 1.0` every
@@ -348,7 +348,7 @@ against every material's identity and against its own still-uninterpreted
 through the binding regardless (`oag_render::mesh::rcs::psp2::build` now
 takes a texture-loading closure and does this), but neither the raced craft
 (`feisar2048\3`, 6 materials) nor the circuit (`altima`, 527) is that model.
-Second: even a resolved binding would meet `oag_formats::gxt` refusing to
+Second: even a resolved binding would meet `oag_texture::gxt` refusing to
 decode the pixel format almost every 2048 texture is stored in - a sweep of
 every distinct diffuse `.gxt` the corpus's materials name (6,135) found 15
 decode; 6,037 of the rest are `PVRTII4BPP`, which `docs/formats/gxt.md`
@@ -380,7 +380,7 @@ with legible grandstand advertising, the overhead gantry banner, a panelled
 road surface, and the Feisar craft in its livery with its wordmark readable on
 the tail.
 
-**`PVRTII4BPP` decodes** - `oag_formats::pvrtc`, confidence 92, 85% of every
+**`PVRTII4BPP` decodes** - `oag_texture::pvrtc`, confidence 92, 85% of every
 `.gxt` on the disc. Three things are worth carrying:
 
 - **The reference had to be the right one.** The public PowerVR SDK
@@ -455,7 +455,7 @@ None of it is a format any more; it is fields inside one, and presentation:
   index-exact oracle, mean dot 0.994, and 33,335,682 of 33,335,682 normals
   unit-length across the full corpus**
   ([2048-rcsmodel.md](../../docs/formats/2048-rcsmodel.md#the-normal-is-cracked-three-signed-bytes-not-a-packed-word)).
-  Implemented in `oag_formats::rcsmodel::psp2::unpack_normal`, wired into
+  Implemented in `oag_rcs::rcsmodel::psp2::unpack_normal`, wired into
   `oag_render::mesh::rcs::psp2::build`, and `just play 2048 --race` now draws
   Altima lit off the file's own normals. What is still missing is the texture
   coordinate's own type nibble (`t8`) and the material/texture binding - that
@@ -580,7 +580,7 @@ TITLE entry rather than showing them under 2048 - see
   above - but it was found by measurement, and the function that actually
   consumes it is still unlocated, which is the same gap `tangent` needs.
 - ~~**The pixel format almost every 2048 texture is stored in is not
-  decoded.**~~ Closed 2026-08-27 - `oag_formats::pvrtc`, confidence 92, see
+  decoded.**~~ Closed 2026-08-27 - `oag_texture::pvrtc`, confidence 92, see
   the section above. What is *not* closed in that module: `UBC1`, `UBC3` and
   the two uncompressed format bytes (1,110 textures between them, none reached
   by anything a race loads), and PVRTC-II's local-palette path, which is
@@ -651,7 +651,7 @@ TITLE entry rather than showing them under 2048 - see
    cross-checked, see "What is left" above.
 6. ~~`normal`'s encoding~~ - cracked the same session, see "Open" above:
    three signed bytes, `byte/127.0`, x/y/z in file order, 4th byte padding.
-   Implemented in `oag_formats::rcsmodel::psp2::unpack_normal` and wired into
+   Implemented in `oag_rcs::rcsmodel::psp2::unpack_normal` and wired into
    `oag_render::mesh::rcs::psp2::build`; `just play 2048 --race` now draws
    Altima lit off real normals. The index-exact correspondence built to get
    there (`crates/game/examples/vita_rcsmodel_exact.rs`, 1,504 vertices, zero
@@ -670,7 +670,7 @@ TITLE entry rather than showing them under 2048 - see
    search keyed on a target's identity is structurally blind to one. Two
    fields in this container are still unplaced (`tangent`'s type nibble, the
    64-bit hash) and both have so far been searched for by identity.
-9. ~~**`PVRTII4BPP` decode.**~~ Done 2026-08-27 - `oag_formats::pvrtc`,
+9. ~~**`PVRTII4BPP` decode.**~~ Done 2026-08-27 - `oag_texture::pvrtc`,
    confidence 92, see the section above.
 10. **What is worth doing next, now that a race draws textured.** In order of
     what a screenshot would gain: ~~`.envsettings` (the sun direction, colour,
@@ -691,7 +691,7 @@ every title's `.envsettings`/`.EnvSettings` against HD's own key constants
 ambient color"`), which is why 2048 always reported *"no usable sun
 direction, colour and ambient; lighting with the stand-in rig"* even though
 every circuit ships a `track.EnvSettings` in the identical syntax
-`oag_formats::envsettings::EnvSettings::parse` already reads.
+`oag_tables::envsettings::EnvSettings::parse` already reads.
 
 **Confirmed from the executable, not guessed from the file.**
 `Environment_RegisterLightingSchema` (`0x810175fc` in
@@ -701,7 +701,7 @@ registers every key a `track.EnvSettings` can carry, in the file's own order,
 and spells the ambient term `"Lighting.Constant ambient colour"` (British) and
 splits HD's single sun colour into `"Lighting.Sun diffuse colour"` +
 `"Lighting.Sun specular colour"` - genuinely different keys, not a
-reformatting. `oag_formats::envsettings::PSP2_AMBIENT_COLOUR`/
+reformatting. `oag_tables::envsettings::PSP2_AMBIENT_COLOUR`/
 `PSP2_SUN_DIFFUSE_COLOUR` are the new constants; `envsettings_light` and
 `environment::staging` pick between HD's and 2048's key sets on a new
 `GeometryKind` (replacing the `ps3_geometry: bool` that used to conflate

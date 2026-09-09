@@ -17,7 +17,7 @@
 //! cargo run -q --release -p oag-game --example vita_gxt_pvrtc_smoothness
 //! ```
 
-use oag_formats::gxt;
+use oag_texture::gxt;
 
 const PACKAGE: &str = "data/extracted/vita/PCSF00007/base/PSP2/data.psarc";
 
@@ -43,7 +43,7 @@ fn roughness(rgba: &[[u8; 4]], width: usize, height: usize) -> f64 {
 }
 
 /// The Morton word index `(x, y)` reads from - the same bit-scatter
-/// `oag_formats::gxt::twiddle` implements, restated here because this probe
+/// `oag_texture::gxt::twiddle` implements, restated here because this probe
 /// needs to *undo* it and that function is crate-private.
 fn twiddle(x: u32, y: u32, across: u32, down: u32) -> u32 {
     let (mut w, mut h) = (across, down);

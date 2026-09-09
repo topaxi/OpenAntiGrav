@@ -41,7 +41,7 @@
 //! See `docs/formats/pure-status.md` and `crates/pure/src/race.rs`'s `ships`
 //! module.
 
-use oag_formats::fexml;
+use oag_tables::fexml;
 
 const PURE_USA: &str = "data/images/pure-psp-usa.chd";
 const PURE_EU: &str = "data/images/pure-psp-eu.chd";

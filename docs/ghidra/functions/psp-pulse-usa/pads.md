@@ -7,7 +7,7 @@ in `engine.md`; this page is the trigger side.
 
 The data side - the payload layout and what the shipped tracks author - is
 [`docs/formats/pads.md`](../../../formats/pads.md). The reimplementation is
-`crates/formats/src/pads.rs`.
+`crates/vex/src/pads.rs`.
 
 | Address | Name | Confidence |
 | --- | --- | --- |
@@ -72,7 +72,7 @@ Checked rather than assumed: all 544 `Speedup Pad` boxes on the 40 PSP track
 files come out between **9.55 and 9.71 units wide**, which is a craft's width and
 one authored size. A quantisation scale would vary per mesh and would put these
 orders of magnitude out. Asserted in
-`crates/formats/tests/pads_ground_truth.rs`.
+`crates/vex/tests/pads_ground_truth.rs`.
 
 ## `Pad_ContainsPoint` (`0x088866bc`)
 
@@ -187,7 +187,7 @@ disassembly, both classes' slots decode without a decompiler needed:
   `[210,210,121]`, `[140,216,216]`, `[216,140,216]` - a rainbow cycle,
   reproduced in `oag_render::weapon_pad`.
 
-`crates/formats/src/pads.rs` can drop "carries the term inert" - the term is
+`crates/vex/src/pads.rs` can drop "carries the term inert" - the term is
 identified, just still unconsumed because there is no pickup system yet (see
 "What is not implemented" below).
 

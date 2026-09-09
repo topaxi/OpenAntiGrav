@@ -1,5 +1,5 @@
 //! The magstrip hold's per-tick locator: a track's spline, resampled into the
-//! `oag_formats::track::Sample` table `oag_trace::replay`'s `replay`/`drive`/
+//! `oag_vex::track::Sample` table `oag_trace::replay`'s `replay`/`drive`/
 //! `drive_with` and `oag_trace::plan::to_gate` all take now.
 //!
 //! Its own file rather than another `main.rs` function: that file already sits
@@ -7,8 +7,8 @@
 //! feature rather than a fix to something already there. See Task #33.
 
 use anyhow::Result;
-use oag_formats::track;
 use oag_race::Course;
+use oag_vex::track;
 
 use crate::{load_ai, resample};
 

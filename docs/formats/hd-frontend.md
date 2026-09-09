@@ -57,7 +57,7 @@ disc.
 Two things that surfaced only once something walked this data: HD ships **no
 Latin `.fnt` this build can read**, so its whole front end draws in the built-in
 5x7 glyphs (its language plugins name `helv.fnt`, which is present and fails
-`oag_formats::fnt`'s magic check - unread, and probably the byte-order story
+`oag_texture::fnt`'s magic check - unread, and probably the byte-order story
 again); and its `<Image>` widgets are `.gtf`, so they draw nothing and say so -
 `0 of 3 front-end image(s) decoded into a 1x1 sheet`.
 
@@ -66,7 +66,7 @@ distinction arrived with the merge: [`gtf.md`](gtf.md) reads the PS3's texture
 container, and HD's HUD samples ten `.gtf` textures through it. What still does
 not is `boot::load_sprites`, which offers a front-end image to the PSP `.mip`
 path alone and gets `zero-sized texture 1281x0` for its trouble. Routing it
-through `oag_formats::gtf` is a small change nobody has made, and it is what
+through `oag_texture::gtf` is a small change nobody has made, and it is what
 would put `saveIcons`, `line` and `Title_Arrow_HD` on screen.
 
 ### The sixteen language plugins, and the three that lie about themselves
@@ -236,7 +236,7 @@ above are the reason to expect it is.
 
 `Data\FE\Images\saveIcons.gtf` (256x128), `line.gtf` (8x8) and
 `Title_Arrow_HD.gtf` (32x32) are every image the front-end root names. All three
-are ordinary [`.gtf`](gtf.md) and decode with no new work - `oag_formats::gtf`
+are ordinary [`.gtf`](gtf.md) and decode with no new work - `oag_texture::gtf`
 had handled them since long before the front end asked for one.
 
 **What was missing was a branch, and the error named the wrong format.**
@@ -955,7 +955,7 @@ assumed - every blob of the named archives was extracted and searched, and the
 | `hdfury-ps3-eu-dec.iso` | `DATA06`'s front-end tree | 29 | 18 | **8** |
 
 A string search finds a shortened element because the PSP dialect writes the
-full name into each file's own `<code>` dictionary - see `oag_formats::fexml`.
+full name into each file's own `<code>` dictionary - see `oag_tables::fexml`.
 The PS2 pressing's other two archives, `PRERACE.WAD` and `PS2MUSIC.WAD`, are
 swept too (2026-09-01) and also come back **0** for both columns - but not
 because the vocabulary is absent from them. Both are `oag_formats::ps2_music`-
@@ -1324,7 +1324,7 @@ material ships - and **not** one of the 121 engine-owned `_vp`/`_fp` names
 `renderer.md`'s shader-registry census reads out of `EBOOT.elf`, `FEBackgroundAnim*`
 among them. It carries exactly one variant: class `RigidBody`, feature set
 `HalfBrightAmbientSunSpot0SVC0` - the plain sun-plus-ambient lit-race
-permutation [`oag_formats::rcsmaterial::Features::chunk_word`]'s own doctest
+permutation [`oag_rcs::rcsmaterial::Features::chunk_word`]'s own doctest
 names for "no lightmap coordinate, no vertex colour set" (`LIT_RACE_PASS`,
 `decl: None`), despite the file's own name promising a vertex-driven emissive
 term. Read together, this favours a different picture than "a style-specific

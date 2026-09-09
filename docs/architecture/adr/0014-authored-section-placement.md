@@ -49,7 +49,7 @@ facts, all measured from the disc:
 
 **1. A draw call belongs to the single section governing its scene node.**
 
-`oag_formats::pvs::governing_sections` derives the per-node section by the
+`oag_vex::pvs::governing_sections` derives the per-node section by the
 sibling-group rule (a `section` node governs its parent's whole subtree);
 each `DrawCall` carries its source node and gets that section's one bit.
 A draw call with no node, no governing section, or a governing section the

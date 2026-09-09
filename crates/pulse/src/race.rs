@@ -152,7 +152,7 @@ pub const DEFAULT_TEAM: &str = "Assegai";
 /// The eight teams the base disc ships, one `handlingstats.xml` and one ship
 /// directory each. **Not the whole roster** - see [`DLC_TEAMS`].
 ///
-/// **Moved from `oag_formats::handling::TEAMS`, 2026-09-01.** A format crate
+/// **Moved from `oag_tables::handling::TEAMS`, 2026-09-01.** A format crate
 /// describing a game's own roster by name was the ADR-0022 smell, named and
 /// never acted on; `oag_hd::names::TEAMS` already keeps HD's roster the same
 /// way this keeps Pulse's. All eight files were located by hashing candidate

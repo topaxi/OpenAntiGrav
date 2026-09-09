@@ -4,7 +4,7 @@ Read 2026-08-31, cold - no material/RSX-state function was named in this
 database before this pass. Resolves what separates `Transparency::Mode2`
 from `Transparency::Blended`, the open question in
 [rcsmodel.md](../../../formats/rcsmodel.md#the-low-two-bits-of-the-state-word-gate-the-blend-factors).
-`oag_formats::rcsmodel::material` implements what this page measures.
+`oag_rcs::rcsmodel::material` implements what this page measures.
 
 ## Finding the lead
 
@@ -57,7 +57,7 @@ to a material record. Its single caller, `0x005d72b8`, passes it a pointer
 read out of `*(int*)(this+0xcc)`-indexed array - the per-chunk material
 lookup [rcsmodel.md](../../../formats/rcsmodel.md#where-it-is) already
 documents structurally ("a chunk's `+0x20` is the material index"). Reading
-`param_2` (the material pointer) at the offsets `oag_formats::rcsmodel`
+`param_2` (the material pointer) at the offsets `oag_rcs::rcsmodel`
 already decodes:
 
 ```text
@@ -75,7 +75,7 @@ test and leaves blend off - two different fixed-function GPU features
 selected by the same two bits, which is exactly why the blend equation alone
 (211 of 212 mode-2 materials share mode 1's `0302`/`0303` pair) never
 separated them. **Confidence 90** for the whole chain: every offset the
-decompile reads is one `oag_formats::rcsmodel::Material` already parses
+decompile reads is one `oag_rcs::rcsmodel::Material` already parses
 independently and had already been corroborated against real files, so this
 is two independent readings of the same struct agreeing, not one reading
 alone.
@@ -87,7 +87,7 @@ reference into the register's 8-bit range.
 
 ## `alpha_func`/`alpha_ref` are disc-wide constants, not per-material tuning
 
-Extending `oag_formats::rcsmodel::Material` with the two new fields and
+Extending `oag_rcs::rcsmodel::Material` with the two new fields and
 sweeping all three `PSARC` archives and all 16 circuits
 (`crates/render/examples/hd_state_census.rs`'s census pattern, run ad hoc):
 **`alpha_ref` is exactly `0.5` on every material measured, and `alpha_func`
@@ -105,13 +105,13 @@ adds to it. `docs/formats/rcsmodel.md` recorded that routing `Transparency::Mode
 through a plain `0.5` alpha-test cutout "erases the crowd entirely", reasoning
 from `crowd_avatars_22x4.gtf`'s alpha channel running `0..255` at a mean of
 `120`. Histogramming the same texture
-(`oag_formats::gtf`, ad hoc) shows the mean is not the shape: **52.9% of
+(`oag_texture::gtf`, ad hoc) shows the mean is not the shape: **52.9% of
 texels sit at alpha `0` and 47.1% at alpha `255`, nothing between.**
 `GL_GREATER` against `0.5` keeps the 47.1% - the crowd figures - and drops
 the transparent background between them, which is what a cutout does
 correctly. The mean-based reading assumed a distribution a hand-authored
 cutout texture is specifically built not to have. `nr_crowd_bustle`'s
-fragment microcode (`crates/formats/src/rcsmodel/material.rs`'s sibling
+fragment microcode (`crates/rcs/src/rcsmodel/material.rs`'s sibling
 reading, `scripts/ps3-microcode.py fp-file`) confirms the texture in
 question really is what reaches output alpha: block `#3`'s `TEX H4, R2.zwzz
 unit1` samples the sampler hash `0x11cb4f74`, and `Material::texture_sampler`

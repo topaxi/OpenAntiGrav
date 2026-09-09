@@ -8,6 +8,8 @@ repository.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+oag-texture.workspace = true
+oag-tables.workspace = true
 oag-disc.workspace = true
 oag-formats.workspace = true
 oag-title.workspace = true
@@ -18,5 +20,9 @@ workspace = true
 
 [dev-dependencies]
 oag-testdata.workspace = true
+oag-vex.workspace = true
 miniz_oxide.workspace = true
 oag-pulse.workspace = true
+# `tests/pmf_ground_truth.rs` demuxes a real `.PMF` off the disc. Tests only:
+# the registry itself never looks inside a movie, it just hands out the bytes.
+oag-video.workspace = true

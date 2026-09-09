@@ -1,80 +1,48 @@
-//! Identification and parsing of the asset formats used by Wipeout titles.
+//! Asset containers, and what every decoder needs before it can start.
 //!
-//! Two layers live here.
+//! Given a blob off a disc: say what it is, get it out of the archive it lives
+//! in, decompress it, and undo the console's byte layout. What the bytes then
+//! *mean* is somebody else's job - see below.
 //!
 //! [`signature`] and [`entropy`] are the triage layer: given a pile of files
 //! pulled off a disc, say what is obviously identifiable, what is compressed,
 //! and what clusters together and therefore probably shares a format.
 //!
-//! [`wad`] is the first decoded Wipeout format: the archive container used by
-//! Pure and Pulse on both PSP and PS2.
+//! [`wad`] is the archive container Pure and Pulse use on PSP and PS2, and
+//! [`psarc`] the one Wipeout HD uses on PS3; [`lzss`] is the compression a PS2
+//! WAD entry carries and [`pure_dlc`] the encryption a Pure PSN pack does.
+//! [`sblk`] and [`ps2_music`] are archives too - of sound rather than of files.
 //!
-//! Parsers land here as they are recovered. Each one gets a page under
-//! `docs/formats/` recording the evidence for the layout, so the documentation
-//! and the implementation stay in step.
+//! [`byte_order`] and [`swizzle`] are the layer under all of them: which end of
+//! a word comes first, and where in memory a texel actually sits. Both are byte
+//! *layout*, which is why they are here and not with the decoders that consume
+//! them - three different crates undo the same swizzle.
 //!
-//! [`ivf`] and `av1` are the exception to all of the above: they are not
-//! Wipeout formats but the container and codec the project's **own** movie
-//! cache uses, holding what `.PMF` video is transcoded into. They live here so
-//! the whole video path stays in one crate. `av1` is behind the `av1` cargo
-//! feature, off by default. It is not linked above because the link would not
-//! resolve with the feature off, which is how this crate is documented by
-//! default.
+//! The decoders themselves live in sibling crates, split by format family per
+//! [ADR-0050](../../../docs/architecture/adr/0050-format-crates-split-by-format-family.md):
+//! `oag-vex` for the `.vex` scene tree and its payloads, `oag-rcs` for the
+//! `RCSMODEL` scene, `oag-texture` for pixel formats, `oag-tables` for the XML
+//! a title authors, and `oag-video` for movie containers. Each keeps its
+//! evidence page under `docs/formats/`.
 //!
-//! Every *Wipeout* format here is hand-rolled, and so are the two checksums
-//! [`png`] needs and the MD5 [`psarc`] checks its directory with. The one
-//! third-party dependency in the default build is `miniz_oxide`, for the
-//! deflate streams a [`psarc`] block carries: a published standard whose
-//! failure mode is silent garbage, and not a Wipeout format at all.
+//! Every *Wipeout* format here is hand-rolled, and so is the MD5 [`psarc`]
+//! checks its directory with. The one third-party dependency is `miniz_oxide`,
+//! for the deflate streams a [`psarc`] block carries: a published standard
+//! whose failure mode is silent garbage, and not a Wipeout format at all. It is
+//! the only one in *every* feature combination, this crate having no features
+//! at all - which is what moving the video path out bought.
 
-#[cfg(feature = "av1")]
-pub mod av1;
-mod bcn;
-pub mod bik;
 pub mod byte_order;
-pub mod collision;
 pub mod coverage;
-pub mod effectsettings;
 pub mod entropy;
-pub mod envsettings;
-pub mod fexml;
-pub mod fnt;
-pub mod fog;
-pub mod gtf;
-pub mod gxp;
-pub mod gxt;
-pub mod handling;
-pub mod hd_pvs;
-pub mod ipf;
-pub mod ivf;
-pub mod kdcol;
-pub mod lighting;
 pub mod lzss;
-pub mod pads;
-pub mod pmf;
-pub mod png;
-pub mod pob;
 pub mod ps2_music;
-pub mod ps2_texture;
 pub mod psarc;
 pub mod pure_dlc;
-mod pvrtc;
-pub mod pvs;
-pub mod race_campaign;
-pub mod rcsmaterial;
-pub mod rcsmodel;
 pub mod sblk;
-pub mod shadow_occluder;
-pub mod ship_skin;
 pub mod signature;
-pub mod sound_emitters;
-pub mod texture;
-pub mod track;
-pub mod trackstartup;
-pub mod vex;
-pub mod vif;
+pub mod swizzle;
 pub mod wad;
-pub mod weapons;
 
 pub use byte_order::ByteOrder;
 pub use signature::{Signature, identify};

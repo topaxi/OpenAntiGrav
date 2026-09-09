@@ -162,7 +162,7 @@ fn a_one_texel_falloff_does_not_divide_by_zero() {
 /// A tetrahedron built as a decoded hull rather than as bytes: this crate
 /// draws an `Occluder`, and how one is parsed is `oag_formats`' own business.
 fn hull() -> Occluder {
-    use oag_formats::shadow_occluder::{Face, NO_NEIGHBOUR};
+    use oag_vex::shadow_occluder::{Face, NO_NEIGHBOUR};
     let faces = [
         ([0.0, -1.0, 0.0], [0, 1, 2], [2, 3, 1]),
         ([-1.0, 0.0, 0.0], [0, 2, 3], [0, 3, 2]),

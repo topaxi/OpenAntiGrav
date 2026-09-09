@@ -61,8 +61,8 @@ fn main() -> anyhow::Result<()> {
             let Ok(blob) = archives.read_name(root) else {
                 continue;
             };
-            let xml = oag_formats::fexml::text(&blob)?;
-            let node = oag_formats::fexml::parse(&xml);
+            let xml = oag_tables::fexml::text(&blob)?;
+            let node = oag_tables::fexml::parse(&xml);
             let layout = hud::Layout::from_tree(&node);
             dump_labels(mode, &layout);
         }

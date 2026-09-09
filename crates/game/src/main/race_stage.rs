@@ -165,7 +165,7 @@ impl RaceStage {
             best_lap_ticks: standing.best_lap_ticks,
             // No campaign cell is selected for any race yet - that is
             // frontend wiring (`Cell Selection`/`Grid Selection`), out of
-            // scope here. `oag_formats::race_campaign::Cell::evaluate_medal`
+            // scope here. `oag_tables::race_campaign::Cell::evaluate_medal`
             // and `oag_game::records::Medal` are ready for whoever wires it:
             // see `Observation::campaign_medal`'s own doc and the `campaign`
             // handover thread.

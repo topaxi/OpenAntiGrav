@@ -824,11 +824,11 @@ Data.wad entry -> pmf::demux -> H.264 elementary stream -> ffmpeg -> lossless AV
 
 | Step | Where | Why there |
 | --- | --- | --- |
-| Header parse and demux | [`oag-formats::pmf`](../../crates/formats/src/pmf.rs) | Ours to do, testable without a GPU, no dependencies |
+| Header parse and demux | [`oag-video::pmf`](../../crates/video/src/pmf.rs) | Ours to do, testable without a GPU, no dependencies |
 | H.264 decode | `ffmpeg`, out of process | An in-workspace decoder is a large non-Rust dependency or a year of work, to show a logo |
 | AV1 encode | `ffmpeg`'s `libaom-av1`, lossless | Once per movie. Lossless, so the picture is bit-for-bit what the H.264 decoder produced |
-| Container | [`oag-formats::ivf`](../../crates/formats/src/ivf.rs) | 32-byte header, 12 bytes per frame. Cheaper to parse by hand than to pull in an MP4 demuxer |
-| AV1 decode | [`oag-formats::av1`](../../crates/formats/src/av1.rs), in process | `re_rav1d` is pure Rust, so no C toolchain enters the build |
+| Container | [`oag-video::ivf`](../../crates/video/src/ivf.rs) | 32-byte header, 12 bytes per frame. Cheaper to parse by hand than to pull in an MP4 demuxer |
+| AV1 decode | [`oag-video::av1`](../../crates/video/src/av1.rs), in process | `re_rav1d` is pure Rust, so no C toolchain enters the build |
 | Colour conversion | [`video.wgsl`](../../crates/game/src/video.wgsl) | Free on the GPU, and keeps the decoded frame at 1.5 bytes per pixel |
 
 The cache lives in `data/cache/movies/`, already gitignored, keyed on the entry's

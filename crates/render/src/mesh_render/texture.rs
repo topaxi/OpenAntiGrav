@@ -145,7 +145,7 @@ pub(super) fn upload(
             // `linear` is inert here: `format.as_gtf()` is always one of the
             // three block-compressed formats this arm exists for, which the
             // decoder does not consult the flag for.
-            oag_formats::gtf::decode_level(
+            oag_texture::gtf::decode_level(
                 format.as_gtf(),
                 base,
                 texture.width,
@@ -212,7 +212,7 @@ pub(super) fn upload(
             texels,
             // Block rows, not texel rows: a compressed level is
             // `ceil(w/4) x ceil(h/4)` blocks of `block_len()` bytes, which is
-            // what `oag_formats::gtf::Texture::level_len` sliced out.
+            // what `oag_texture::gtf::Texture::level_len` sliced out.
             wgpu::TexelCopyBufferLayout {
                 offset: 0,
                 bytes_per_row: Some(width / 4 * format.block_len()),

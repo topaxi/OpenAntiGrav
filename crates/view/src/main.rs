@@ -30,9 +30,9 @@ use std::sync::Arc;
 // live in `oag-render`, so the game draws through the same code. What is left
 // here is the viewer: the CLI, the window and the texture browser.
 use oag_assets::Archive;
-use oag_formats::vex;
 use oag_render::mesh_render::Anisotropy;
 use oag_render::{collision, mesh, mesh_render, track};
+use oag_vex::vex;
 
 use winit::application::ApplicationHandler;
 use winit::event::{ElementState, WindowEvent};
@@ -257,7 +257,7 @@ fn hexdump(bytes: &[u8], limit: usize) {
 ///
 /// The census is the part worth reading: a count per class says what a file *is*
 /// in one screen, and an unnamed class ID is a prompt to go back to the table in
-/// [`oag_formats::vex::class_name`] rather than a defect.
+/// [`oag_vex::vex::class_name`] rather than a defect.
 fn report_nodes(data: &[u8], label: &str, only: Option<u32>, payload: Option<usize>) -> Result<()> {
     let nodes = vex::nodes(data).with_context(|| format!("walking {label}"))?;
     println!("{label}: {} node(s)", nodes.len());
@@ -325,7 +325,7 @@ fn report_nodes(data: &[u8], label: &str, only: Option<u32>, payload: Option<usi
 /// produced found seven of sixteen tracks reaching past ±1024 but not one
 /// spanning more than 2,048, so a flagged reach is a finding about the packing's
 /// origin, not about the file.
-fn report_collision(nodes: &[oag_formats::collision::CollisionNode]) {
+fn report_collision(nodes: &[oag_vex::collision::CollisionNode]) {
     for k in collision::stats(nodes) {
         let collidable = if collision::is_collidable(k.kind) {
             ""
@@ -490,7 +490,7 @@ fn main() -> Result<()> {
                 // strips whose box is only as tall as the wall, while the ribbon
                 // raises the racing line and corridor by `track::HOVER_LIFT`, so
                 // a wall-only y comparison reports a failure on correct data.
-                let slack = [1.0, oag_formats::track::HOVER_LIFT * 4.0, 1.0];
+                let slack = [1.0, oag_vex::track::HOVER_LIFT * 4.0, 1.0];
                 let within = (0..3).all(|i| {
                     soup.0[i] - slack[i] <= spline.0[i] && spline.1[i] <= soup.1[i] + slack[i]
                 });

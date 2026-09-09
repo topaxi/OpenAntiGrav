@@ -68,7 +68,7 @@ fn load_track(track: Option<&str>) -> Option<race::Loaded> {
 fn assert_pads_drawn_where_they_trigger(
     label: &str,
     model: &mesh::Model,
-    volumes: &[oag_formats::pads::PadVolume],
+    volumes: &[oag_vex::pads::PadVolume],
 ) {
     assert!(!model.indices.is_empty(), "{label}: no geometry drawn");
     assert!(!volumes.is_empty(), "{label}: the track decodes no volumes");

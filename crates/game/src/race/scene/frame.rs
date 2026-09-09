@@ -143,7 +143,7 @@ impl Scene {
         // still-frame comparison wants a chosen time, not a freeze; a stale
         // `false` in a settings file wants nothing at all.
         let seconds = anim_seconds.unwrap_or(race.world.tick as f32 / 60.0);
-        // Fog, sampled where the eye is. `oag_formats::fog::sample` reimplements
+        // Fog, sampled where the eye is. `oag_vex::fog::sample` reimplements
         // `FogCube_Sample`: the camera is transformed into the volume's space,
         // rejected if outside, and all six parameters interpolated across the
         // box's local Z. Outside every volume - or on a track with none - this
@@ -181,7 +181,7 @@ impl Scene {
         // slot in bind group 2 that carries a position - so it is kept current
         // even when the fog itself is static or off.
         eye_fog.camera = eye.to_array();
-        let fog = oag_formats::fog::sample(&self.fog_volumes, eye.to_array())
+        let fog = oag_vex::fog::sample(&self.fog_volumes, eye.to_array())
             .map_or(eye_fog, |p| mesh_render::Fog::new(&p, eye.to_array()));
         // The circuit's own light rig where it authors one - Wipeout HD does,
         // in `track.envsettings` - and `mesh.wgsl`'s stand-in where it does
@@ -649,10 +649,10 @@ impl Scene {
         // Shuriken, which has none at all - the flare around a modelled kind is
         // an asset now, through the particle pipeline below with everything else.
         vertices.extend(race.projectile_sprites(right, up, |kind| match kind {
-            oag_formats::weapons::Weapon::Rocket => !self.rockets.is_empty(),
-            oag_formats::weapons::Weapon::Mine => !self.mines.is_empty(),
-            oag_formats::weapons::Weapon::Bomb => !self.bombs.is_empty(),
-            oag_formats::weapons::Weapon::Cannon => !self.cannon_rounds.is_empty(),
+            oag_tables::weapons::Weapon::Rocket => !self.rockets.is_empty(),
+            oag_tables::weapons::Weapon::Mine => !self.mines.is_empty(),
+            oag_tables::weapons::Weapon::Bomb => !self.bombs.is_empty(),
+            oag_tables::weapons::Weapon::Cannon => !self.cannon_rounds.is_empty(),
             _ => false,
         }));
         oag_render::perfprobe::mark("exhaust-gather");

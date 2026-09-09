@@ -41,7 +41,7 @@ fn entry_for(id: &str) -> Option<String> {
     let blob = archives
         .read_name(oag_pulse::names::GAME_PLUGIN_DEFINITION)
         .expect("the game plugin definition");
-    let definition = oag_formats::fexml::expand(&blob).expect("expanding it");
+    let definition = oag_tables::fexml::expand(&blob).expect("expanding it");
     catalogue::tracks(&definition)
         .into_iter()
         .filter(|track| !track.reversed)

@@ -22,8 +22,8 @@ titles, that this engine has never opened.
 | HD/Fury | `/data/environments/detonatormode.effectsettings` | 43,240 B | Same mechanism, Detonator mode. |
 | HD/Fury | `/data/environments/detonatormodedlc3.effectsettings` | 43,230 B | Detonator's DLC3 revision - not listed in this thread's first pass, found while writing the ground truth for the parser below. |
 
-**2026-08-28, later the same day: a parser landed.** `oag_formats::effectsettings`
-([`effectsettings.rs`](../../crates/formats/src/effectsettings.rs),
+**2026-08-28, later the same day: a parser landed.** `oag_tables::effectsettings`
+([`effectsettings.rs`](../../crates/tables/src/effectsettings.rs),
 [docs/formats/effectsettings.md](../../docs/formats/effectsettings.md)) reads all
 five files above plus 2048's ten identical copies, validated against the real
 disc/PSARC in `effectsettings_ground_truth.rs`. It reuses `EnvSettings::parse`
@@ -44,7 +44,7 @@ sections below). What remains is two narrow render questions - the sphere
 radius and `zoneAnisoPalette` - not a missing trigger; see Open and Next
 Steps.
 
-Plain text, same `"Key.Subkey"=float [float...]` shape `oag_formats::envsettings`
+Plain text, same `"Key.Subkey"=float [float...]` shape `oag_tables::envsettings`
 already parses for `.envsettings` - just never pointed at this extension.
 `hd-status.md` already listed `.effectsettings` among HD's "genuinely new,
 unread" formats; this session is the first time anything read the bytes.
@@ -93,7 +93,7 @@ first `psarc.py list` sweep that built the file table above.
 (2048's own table only names 13 stages - see Open). **The two sets are not
 equivalent, decoded from HD's own art**: all fifteen `zonemode*.gtf` are
 byte-identical to each other (`md5sum` confirms it) and decode
-(`oag_formats::gtf`) to a flat, uniform white texture with nothing in it -
+(`oag_texture::gtf`) to a flat, uniform white texture with nothing in it -
 every one of 65,536 texels on every one of the fifteen files. All fifteen
 `zonemodetrack*.gtf` are **distinct** from each other, both by `md5sum` and
 by decoded content: a greyscale image with a varying alpha channel whose
@@ -786,7 +786,7 @@ no longer disagree.
 - **Which texture is `Growing Texture` is settled for HD; what the
   parameters do to it is not.** The "general" `zonemode{0..14}.gtf` set is a
   red herring - all fifteen byte-identical, all decoding
-  (`oag_formats::gtf`) to a flat white texture with nothing in it. **The
+  (`oag_texture::gtf`) to a flat white texture with nothing in it. **The
   "Track" `zonemodetrack{0..14}.gtf` set is where the real art is**: fifteen
   distinct files (by `md5sum` and by decoded content), a greyscale image
   with a varying alpha channel that visibly changes shape across the sampled
@@ -813,7 +813,7 @@ no longer disagree.
   same value that told the `UBC2` reticle nothing and had to be settled by
   decoding both ways and looking at the picture).
 
-  **2026-08-28, later the same day: decoded.** `oag_formats::gxt::Format::Argb8888`,
+  **2026-08-28, later the same day: decoded.** `oag_texture::gxt::Format::Argb8888`,
   confidence 80. Twiddle order settled the same way, at texel rather than
   4x4-block granularity - raster order on `zoneModeTrack{0,7,14}.gxt` decodes
   to the same horizontal-banded noise `UBC2`'s wrong-order control gives;
@@ -826,7 +826,7 @@ no longer disagree.
   *shape* escalates across the stage ladder (solid at stage 0, increasingly
   dashed by 7 and 14) while its *area* holds fixed at exactly 2,048 of 65,536
   texels on every sampled stage. See `docs/formats/gxt.md`'s new `U8U8U8U8`
-  section and `crates/formats/tests/gxt_ground_truth.rs`'s
+  section and `crates/texture/tests/gxt_ground_truth.rs`'s
   `the_zone_track_art_decodes_to_a_shape_that_escalates_across_stages`, whose
   renders (`data/shots/2048_zone_track_stage{0,7,14}.png`) this rests on.
   **Still open**: what the shader does with `Growing Texture.Colour`/`.Scale
@@ -953,7 +953,7 @@ no longer disagree.
   specifically.** `oag_title::ZonePalette` names where each title keeps its
   table (`TitleWide` on HD, `BesideCircuit` on 2048, `None` on Pulse and
   Pure, which were searched rather than assumed);
-  `oag_formats::effectsettings::StagePalette`/`blended_palette` read one
+  `oag_tables::effectsettings::StagePalette`/`blended_palette` read one
   stage and cross-fade it against the stage before it; and
   `oag_game::race::zone_grade::ZoneGrade` holds the recovered struct's own
   three fields (`+0x00` current, `+0x04` requested, `+0x18` weight) with a
@@ -972,7 +972,7 @@ no longer disagree.
   keys the three blended runtime fields actually are, which is also what
   decides whether the byte-domain blend should apply to keys this build fades
   in floats.
-- ~~Add `SceGxmTextureBaseFormat` `U8U8U8U8` to `oag_formats::gxt`~~ **Done,
+- ~~Add `SceGxmTextureBaseFormat` `U8U8U8U8` to `oag_texture::gxt`~~ **Done,
   2026-08-28** - see the Open section above and `docs/formats/gxt.md`'s
   `U8U8U8U8` section. What is left from this step is the shader side: what
   `Growing Texture.Colour`/`.Scale Bias`/`.Factors` do with this art, which
@@ -1395,7 +1395,7 @@ no longer disagree.
   `oag_title::ZoneStages`, `oag_2048::race::ZONE_STAGES`,
   `ZoneGrade::show_zone` (driven once a frame from `Scene::sync_zone_grade`,
   the way `Zone_UpdateStage` is driven from 2048's render update), plus
-  2048's own key spellings in `oag_formats::effectsettings` - that file has
+  2048's own key spellings in `oag_tables::effectsettings` - that file has
   no density key at all and packs the density into the fourth lane of
   `Fog.Environment Fog Colour`, confidence 74. `zone_grade_ground_truth.rs`'s
   `a_2048_zone_race_escalates_on_the_recovered_ladder` drives a real

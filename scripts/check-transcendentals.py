@@ -57,7 +57,14 @@ ROOT = Path(__file__).resolve().parent.parent
 # time - and CLAUDE.md's claim ("no platform transcendental reaches simulation
 # code") was already the broader of the two. It carries one live call, which
 # ALLOWED names.
-SCANNED_CRATES = ("core", "physics", "gameplay", "ai", "race", "formats")
+# `video` is here because `formats` was, and the split under ADR-0050 must not
+# quietly narrow what this gate covers: every crate carved out of `oag-formats`
+# joins this tuple on the way out, whether or not its arithmetic looks like it
+# could reach a hash. Narrowing the list is a separate, argued change.
+SCANNED_CRATES = (
+    "core", "physics", "gameplay", "ai", "race", "formats", "video", "tables",
+    "texture", "vex", "rcs",
+)
 
 # Not required by IEEE-754 to be correctly rounded, so not portable. `sqrt` is
 # absent on purpose - it *is* required, and glam's `length`/`normalize` are

@@ -39,28 +39,28 @@ fn split_track() -> AiTrack {
     AiTrack {
         version: base.version,
         paths: vec![
-            oag_formats::track::Path {
+            oag_vex::track::Path {
                 entry: Some(0),
                 exit: Some(1),
                 ..path.clone()
             },
-            oag_formats::track::Path {
+            oag_vex::track::Path {
                 entry: Some(0),
                 exit: Some(1),
                 ..path.clone()
             },
-            oag_formats::track::Path {
+            oag_vex::track::Path {
                 entry: Some(1),
                 exit: Some(0),
                 ..path
             },
         ],
         junctions: vec![
-            oag_formats::track::Junction {
+            oag_vex::track::Junction {
                 prev: [Some(2), None],
                 next: [Some(0), Some(1)],
             },
-            oag_formats::track::Junction {
+            oag_vex::track::Junction {
                 prev: [Some(0), Some(1)],
                 next: [Some(2), None],
             },

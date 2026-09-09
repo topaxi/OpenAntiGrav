@@ -8,7 +8,8 @@
 //! ([`referenced`]). A move, with no behaviour change.
 
 use oag_core::math::{Mat4, Vec3};
-use oag_formats::{rcsmodel, vex};
+use oag_rcs::rcsmodel;
+use oag_vex::vex;
 
 /// The bounding box and chunk hash a PS3 `Mesh` node's payload carries.
 ///

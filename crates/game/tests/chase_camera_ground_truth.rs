@@ -122,12 +122,12 @@ fn close_params() -> Option<oag_render::camera::chase::ChaseParams> {
     }
     let mut archives =
         oag_pulse::open(&image.display().to_string()).expect("opening the PSP archives");
-    let name = oag_formats::handling::entry_name(TEAM);
+    let name = oag_tables::handling::entry_name(TEAM);
     let blob = archives
         .read_name(&name)
         .unwrap_or_else(|e| panic!("reading {name}: {e}"));
     let stats =
-        oag_formats::handling::from_blob(&blob).unwrap_or_else(|e| panic!("parsing {name}: {e}"));
+        oag_tables::handling::from_blob(&blob).unwrap_or_else(|e| panic!("parsing {name}: {e}"));
     Some(race::chase_params(stats.external_camera_close))
 }
 

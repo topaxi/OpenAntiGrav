@@ -2,7 +2,7 @@
 //! actually occur, and how many decode? Found while checking that the new
 //! render-side texture binding (`vita_rcsmodel_render_e2e_check.rs`) works
 //! end to end: every single-material model sampled hit the same
-//! `Unsupported { format: 0x83010200 }` - `oag_formats::gxt`'s own docs
+//! `Unsupported { format: 0x83010200 }` - `oag_texture::gxt`'s own docs
 //! already name `0x83` (`PVRTII4BPP`) as undecoded. Is that the whole
 //! picture, or does something decode?
 //!
@@ -12,7 +12,8 @@
 
 use std::collections::{BTreeMap, HashSet};
 
-use oag_formats::{gxt, rcsmodel::psp2};
+use oag_rcs::rcsmodel::psp2;
+use oag_texture::gxt;
 
 const PACKAGES: [&str; 3] = [
     "data/extracted/vita/PCSF00007/base/PSP2/data.psarc",

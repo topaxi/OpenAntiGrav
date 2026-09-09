@@ -72,7 +72,7 @@
 //!   one.
 
 use crate::world::{MAX_SHIPS, Ship};
-use oag_formats::weapons::LeachBeamStats;
+use oag_tables::weapons::LeachBeamStats;
 
 /// Seconds a beam fired with no lock lasts before it gives up.
 ///

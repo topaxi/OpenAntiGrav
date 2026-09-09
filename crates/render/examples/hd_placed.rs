@@ -2,8 +2,10 @@
 //! the sibling `.rcsmodel` - which node class, which offset, and whether the
 //! mesh pass would draw it (mesh node, offset 0x30) or nothing does.
 
-use oag_formats::{rcsmodel, vex};
+use oag_rcs::rcsmodel;
+
 use oag_render::mesh;
+use oag_vex::vex;
 
 fn main() -> anyhow::Result<()> {
     let spec = std::env::args()

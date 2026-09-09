@@ -56,7 +56,7 @@ pub const SCREEN: [f32; 2] = [480.0, 272.0];
 /// **It is a code literal, not an authored one**, which is worth saying here
 /// because the LeachBeam's block authors a `range` attribute at the very same
 /// figure. That is a coincidence of tuning, not the same number twice, and
-/// `oag_formats::weapons::LeachBeamStats` deliberately does not decode it.
+/// `oag_tables::weapons::LeachBeamStats` deliberately does not decode it.
 pub const DRAW_RANGE: f32 = 250.0;
 
 /// How long a target must stay on screen before the lock takes, in seconds.

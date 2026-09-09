@@ -3,8 +3,10 @@
 //! is authored in node space (extent near the origin, transform needed) or
 //! baked in world space (extent already at the node's position).
 
-use oag_formats::{rcsmodel, vex};
+use oag_rcs::rcsmodel;
+
 use oag_render::mesh;
+use oag_vex::vex;
 
 fn main() -> anyhow::Result<()> {
     let spec = std::env::args()

@@ -489,7 +489,7 @@ nothing until now.
   **The plumbing now exists.** `Mode::laps_target` takes the speed class and
   indexes `Mode::SINGLE_RACE_LAPS_BY_CLASS`; `RaceState::new` takes it too, so
   no construction site can default it silently. The class reaches `oag_race` as
-  `oag_formats::handling::SpeedClass` - a crate it already depends on - and the
+  `oag_tables::handling::SpeedClass` - a crate it already depends on - and the
   disc's own spelling of the class name is resolved onto that enum one layer
   out, in `oag_game::race::Race::start`, which is the layer that already carries
   the name. Wipeout Pure's `VECTOR` rung has no measured lap count of its own
@@ -499,7 +499,7 @@ nothing until now.
 
   **This table is the fallback, not the authority.** A race launched from the
   campaign should take the lap count from its *own* cell -
-  `oag_formats::race_campaign::Cell` already parses `laps: Option<u32>` - and
+  `oag_tables::race_campaign::Cell` already parses `laps: Option<u32>` - and
   the cell's value should win over the table the moment a campaign launch can be
   wired, which is the same retirement clause `Mode::ELIMINATOR_KILL_TARGET_DEFAULT`
   carries. What keeps the table necessary is that nothing selects a cell yet,
@@ -599,7 +599,7 @@ status:
 - **Pads refresh an order of magnitude faster.** `<WeaponPad
   elimination_refresh_time>` is `0.05` seconds against the ordinary
   `refresh_time`'s `0.55` on both shipped PSP discs -
-  `oag_formats::handling::global::WeaponPad`'s own doc comment already named
+  `oag_tables::handling::global::WeaponPad`'s own doc comment already named
   Eliminator by name before this mode existed to read it. `race::load` selects
   it the same way it selects the weapon table above, falling back to the
   ordinary figure for a title with none. See [pickups](pickups.md#the-refresh-timer-is-a-debounce-not-a-respawn).

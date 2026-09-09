@@ -79,7 +79,7 @@
 //!   frame-counted constant is kept frame-counted here.
 //! - **`oag-trace` gained a locator, and a real lap now measures it (Task
 //!   #33, closed).** `replay`/`drive`/`drive_with` and `plan::to_gate` all
-//!   take an `Option<&[oag_formats::track::Sample]>` now, located fresh
+//!   take an `Option<&[oag_vex::track::Sample]>` now, located fresh
 //!   every tick the same way `oag_game::race::Race::tick` locates the
 //!   player; see `crate::replay::locate` and its own doc comment for why
 //!   the resampling is duplicated here rather than shared.
@@ -130,7 +130,7 @@ pub const HEIGHT_MISMATCH_LIMIT: f32 = 5.0;
 /// The loader does `pos -= 3.0 * down`, so the running game's spline sits three
 /// units above the surface the exporter wrote, and this function subtracts the
 /// same three units back off to recover the surface point. The constant is a
-/// literal in both places; `oag_formats::track::HOVER_LIFT` is the same number on
+/// literal in both places; `oag_vex::track::HOVER_LIFT` is the same number on
 /// the format side, and this crate cannot see that crate.
 pub const SPLINE_LIFT: f32 = 3.0;
 
@@ -159,7 +159,7 @@ pub struct TrackSample {
     /// The spline position as the running game holds it, i.e. **lifted**
     /// [`SPLINE_LIFT`] units off the surface.
     ///
-    /// `oag_formats::track::Sample::pos` is the *unlifted* disc value; a caller
+    /// `oag_vex::track::Sample::pos` is the *unlifted* disc value; a caller
     /// converts with `pos - HOVER_LIFT * down`, which is what the loader does, and
     /// this module subtracts it back off along the normalised axis exactly as the
     /// original does.

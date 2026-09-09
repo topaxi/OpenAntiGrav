@@ -7,7 +7,7 @@
 //! carry that.
 //!
 //! Recovered from each title's own executable. Pulse's two names are in
-//! `oag_formats::weapons`' own constants, taken off `BOOT.BIN`'s string table;
+//! `oag_tables::weapons`' own constants, taken off `BOOT.BIN`'s string table;
 //! Pure's is `Data\XML\weaponstats.xml` at `0x08a445a0` in
 //! `/psp-pure-usa/BOOT.BIN`, three strings before the `"WeaponStats"` and
 //! `"Weapon"` element names the parser matches - which is what says it is the

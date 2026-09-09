@@ -25,8 +25,8 @@
 //! of a grid from the one authored slot would be a guess dressed as code.
 
 use oag_core::math::{Mat3, Quat, Vec3, quat_from_axis_angle};
-use oag_formats::track::{Sample, StartPosition};
 use oag_physics::Handling;
+use oag_vex::track::{Sample, StartPosition};
 
 use crate::world::Ship;
 
@@ -99,7 +99,7 @@ impl Pose {
 
     /// A pose from the track's own authored grid slot, lifted off the surface.
     ///
-    /// [`oag_formats::track::StartPosition`] is where the exporter put a ship and
+    /// [`oag_vex::track::StartPosition`] is where the exporter put a ship and
     /// which way it faces, after the bind handler's fix-up - a recovered value
     /// rather than an index into a resampled spline, which is what makes this the
     /// one to prefer when a track has such a node.
@@ -244,7 +244,7 @@ impl Ship {
 /// a ship starts at changes the first second of every race, so the choice is written
 /// down here rather than left as a number in a constructor.
 ///
-/// - [`oag_formats::track::HOVER_LIFT`] is where the load pass puts the **AI line**,
+/// - [`oag_vex::track::HOVER_LIFT`] is where the load pass puts the **AI line**,
 ///   by lifting each control point three units off the surface. It says nothing
 ///   about ships. Starting there leaves the suspension compressed by the difference,
 ///   and on the observed data one frame of the spring at that compression throws the
@@ -434,7 +434,7 @@ pub fn box_inertia() -> Vec3 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use oag_formats::track::Sample;
+    use oag_vex::track::Sample;
 
     /// A flat piece of track running along `-Z`, which is the identity pose.
     fn level_sample() -> Sample {

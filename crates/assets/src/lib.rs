@@ -137,7 +137,7 @@ pub enum Error {
         /// The entry name asked for.
         name: String,
         /// What the font parser said.
-        source: oag_formats::fnt::Error,
+        source: oag_texture::fnt::Error,
     },
 
     /// A PS2 `.fnt`'s glyph atlas - the entry following it - did not decode.
@@ -150,7 +150,7 @@ pub enum Error {
         /// The entry name asked for.
         name: String,
         /// What the texture parser said.
-        source: oag_formats::ps2_texture::Error,
+        source: oag_texture::ps2_texture::Error,
     },
 
     /// The archive's own directory did not parse.

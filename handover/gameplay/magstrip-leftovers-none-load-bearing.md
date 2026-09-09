@@ -21,7 +21,7 @@ change.
 **The magstrip's own animation is closed, 2026-08-25: there is none.**
 Neither magstrip material carries the texture-transform gate
 (`flags & 0x10`), and both come back with no keyframe block at all from
-`oag_formats::vex::mesh_tex_transforms` -
+`oag_vex::vex::mesh_tex_transforms` -
 `crates/render/tests/magstrip_ground_truth.rs`'s
 `the_magstrip_material_carries_no_texture_transform`. The mechanism this was
 asking about (material `+0x10`'s flag driving `FUN_0892733c`'s texture-matrix
@@ -35,7 +35,7 @@ decode from it. Left as an unexplained authoring idiosyncrasy, not a lead.
 
 **Batch `+0x14` is narrowed but still open, 2026-08-25.** It is not padding:
 censused across all 65,279 non-VIF PSP batches on `Data.wad`
-(`crates/formats/tests/batch_position_gap_ground_truth.rs`), read as an
+(`crates/vex/tests/batch_position_gap_ground_truth.rs`), read as an
 `f32` it is nonzero, positive and finite on every one. It does not track the
 batch's own `scale` at a fixed ratio, but sits in a loose band (median 1.46,
 10th-90th percentile 1.10-2.65) against half the batch's own bounding-box

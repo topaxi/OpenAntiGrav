@@ -13,7 +13,7 @@
 
 use std::collections::{BTreeMap, HashMap};
 
-use oag_formats::collision::{self, SurfaceKind};
+use oag_vex::collision::{self, SurfaceKind};
 
 const HD_DIR: &str = "data/extracted/ps3/hdfury-eu/PS3_GAME/USRDIR";
 const VITA_DLC: [&str; 2] = [

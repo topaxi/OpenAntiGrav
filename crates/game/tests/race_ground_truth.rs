@@ -900,7 +900,7 @@ fn the_field_spreads_across_the_ai_corridor() {
             .expect("the driver stands on a sample");
         let lateral = Vec3::from_array(sample.lateral).normalize_or_zero();
         let line = Vec3::from_array(sample.pos)
-            - oag_formats::track::HOVER_LIFT * Vec3::from_array(sample.down)
+            - oag_vex::track::HOVER_LIFT * Vec3::from_array(sample.down)
             + sample.racing_line * lateral;
         offsets.push((ship.physics.body.position - line).dot(lateral));
         room = room
@@ -1094,7 +1094,7 @@ fn our_grid_is_the_originals_grid() {
 /// The weapon pads are drawn where they trigger.
 ///
 /// Two independent decodes of the same nodes have to agree: `mesh::build_weapon_pads`
-/// reads them as geometry through the mesh path, and `oag_formats::pads::volumes`
+/// reads them as geometry through the mesh path, and `oag_vex::pads::volumes`
 /// reads them as trigger boxes through the payload path. Neither knows about the
 /// other, so a transform applied in one and not the other shows up here and
 /// nowhere else - and it is exactly the mistake that is easy to make, because a
@@ -1222,7 +1222,7 @@ fn a_weapon_pad_on_the_disc_hands_out_a_pickup_in_a_single_race() {
     let turbo_seed = (0..64u64).find(|&seed| {
         let mut race = race_at_pad_seeded(oag_race::Mode::SingleRace, Some(seed));
         race.tick(&Default::default());
-        race.ship_pickup() == Some(oag_formats::weapons::Weapon::Turbo)
+        race.ship_pickup() == Some(oag_tables::weapons::Weapon::Turbo)
     });
     let turbo_seed = turbo_seed.expect(
         "no seed in 0..64 drew a Turbo from this class's authored odds - either \
@@ -1353,7 +1353,7 @@ fn a_rocket_fired_on_a_real_track_flies_and_detonates() {
         .find(|&seed| {
             let mut race = race_at_pad(seed);
             race.tick(&Default::default());
-            race.ship_pickup() == Some(oag_formats::weapons::Weapon::Rocket)
+            race.ship_pickup() == Some(oag_tables::weapons::Weapon::Rocket)
         })
         .expect(
             "no seed in 0..64 drew a Rocket from this class's authored odds - either the \
@@ -1375,7 +1375,7 @@ fn a_rocket_fired_on_a_real_track_flies_and_detonates() {
     race.tick(&snapshot(&mut buttons, 0));
     assert_eq!(
         race.ship_pickup(),
-        Some(oag_formats::weapons::Weapon::Rocket)
+        Some(oag_tables::weapons::Weapon::Rocket)
     );
 
     let muzzle = race.ship().physics.body.position;
@@ -1636,7 +1636,7 @@ fn an_opponent_fires_at_a_craft_ahead_on_a_real_circuit() {
     for _ in 0..7_200 {
         for slot in 1..8 {
             if race.world.ships[slot].pickup.weapon.is_none() {
-                race.world.ships[slot].pickup.weapon = Some(oag_formats::weapons::Weapon::Rocket);
+                race.world.ships[slot].pickup.weapon = Some(oag_tables::weapons::Weapon::Rocket);
             }
         }
         let before = race
@@ -1818,7 +1818,7 @@ fn solo_laps_tuned(
     let blob = archives
         .read_name(oag_pulse::names::GAME_PLUGIN_DEFINITION)
         .expect("the game plugin definition");
-    let definition = oag_formats::fexml::expand(&blob).expect("expanding it");
+    let definition = oag_tables::fexml::expand(&blob).expect("expanding it");
 
     catalogue::tracks(&definition)
         .into_iter()
@@ -1905,7 +1905,7 @@ fn every_craft_starts_on_its_line_on_every_circuit() {
     let blob = archives
         .read_name(oag_pulse::names::GAME_PLUGIN_DEFINITION)
         .expect("the game plugin definition");
-    let definition = oag_formats::fexml::expand(&blob).expect("expanding it");
+    let definition = oag_tables::fexml::expand(&blob).expect("expanding it");
 
     let mut checked = 0;
     for track in catalogue::tracks(&definition)
@@ -1931,7 +1931,7 @@ fn every_craft_starts_on_its_line_on_every_circuit() {
                 .expect("the driver stands on a sample");
             let lateral = Vec3::from_array(sample.lateral).normalize_or_zero();
             let line = Vec3::from_array(sample.pos)
-                - oag_formats::track::HOVER_LIFT * Vec3::from_array(sample.down)
+                - oag_vex::track::HOVER_LIFT * Vec3::from_array(sample.down)
                 + sample.racing_line * lateral;
             let off = (ship.physics.body.position - line).length();
             // A grid is staggered across and along the track, so this is
@@ -2104,7 +2104,7 @@ fn the_racing_line_has_track_under_it_where_it_is_known_to() {
     let blob = archives
         .read_name(oag_pulse::names::GAME_PLUGIN_DEFINITION)
         .expect("the game plugin definition");
-    let definition = oag_formats::fexml::expand(&blob).expect("expanding it");
+    let definition = oag_tables::fexml::expand(&blob).expect("expanding it");
 
     let mut measured: Vec<(String, usize)> = Vec::new();
     for track in catalogue::tracks(&definition)

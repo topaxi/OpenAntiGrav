@@ -79,7 +79,7 @@ fn the_disc_declares_twelve_teams_under_hds_own_plugin_name() {
     let blob = archives
         .read_name(name)
         .expect("the game plugin definition");
-    let definition = oag_formats::fexml::text(&blob).expect("reading it as text");
+    let definition = oag_tables::fexml::text(&blob).expect("reading it as text");
 
     let teams = oag_game::catalogue::teams(&definition);
     assert_eq!(
@@ -106,7 +106,7 @@ fn the_disc_declares_twelve_teams_under_hds_own_plugin_name() {
         );
         assert!(
             archives
-                .locate(&oag_formats::handling::entry_name(&team.id))
+                .locate(&oag_tables::handling::entry_name(&team.id))
                 .is_some(),
             "{}: declared and no handling stats",
             team.id
@@ -232,7 +232,7 @@ fn slot_zero_is_the_team_the_options_asked_for() {
     let blob = archives
         .read_name(oag_hd::TITLE.plugin_definition)
         .expect("the game plugin definition");
-    let definition = oag_formats::fexml::text(&blob).expect("reading it as text");
+    let definition = oag_tables::fexml::text(&blob).expect("reading it as text");
     let teams = oag_game::catalogue::teams(&definition);
     assert!(teams.len() > 1, "the disc declares more than one team");
 

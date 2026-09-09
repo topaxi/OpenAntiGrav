@@ -34,7 +34,7 @@
 //! a ship on the shortcut still projects onto the ring at a sensible distance.
 
 use oag_core::math::Vec3;
-use oag_formats::track::AiTrack;
+use oag_vex::track::AiTrack;
 
 /// A track walked into a closed ring, with cumulative distance along it.
 ///

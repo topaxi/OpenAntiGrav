@@ -196,7 +196,7 @@ now.
 
 So on HD the answer to "derive it from the assets" is **yes**, at confidence 90,
 and the loader for it is already written. What is *not* read is the
-`.rcsmaterial`'s parameters - `oag_formats::rcsmaterial` currently decodes the
+`.rcsmaterial`'s parameters - `oag_rcs::rcsmaterial` currently decodes the
 shader-variant table "and nothing else yet" - so scroll rates, widths and taper
 would still have to come from somewhere.
 
@@ -232,7 +232,7 @@ sweep did not find, or nothing at all. Do not read this section as settling it.
 ### The blend, and three independent sources agreeing
 
 The material's factor pair is `src 0x0302`, `dst 0x0001` -
-`GL_SRC_ALPHA`/`GL_ONE`, through `oag_formats::rcsmodel`'s already-recovered
+`GL_SRC_ALPHA`/`GL_ONE`, through `oag_rcs::rcsmodel`'s already-recovered
 `Factor` enum rather than a second reading of the same bytes. That is
 `mesh_render::ADDITIVE_BLEND` exactly.
 
@@ -353,7 +353,7 @@ per-livery file.
 
 **The limit on that claim**: the sweep read the material records embedded in
 `.rcsmodel` files, not standalone `.rcsmaterial` ones, which
-`oag_formats::rcsmaterial` decodes only in part. So what is earned is *no
+`oag_rcs::rcsmaterial` decodes only in part. So what is earned is *no
 `.rcsmodel` material on the disc names them*, which is enough to keep them
 unwired and not enough to say nothing does.
 

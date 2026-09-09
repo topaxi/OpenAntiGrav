@@ -40,8 +40,8 @@
 
 use std::path::PathBuf;
 
-use oag_formats::weapons::Weapon;
 use oag_game::race;
+use oag_tables::weapons::Weapon;
 
 fn image() -> Option<PathBuf> {
     oag_testdata::image("data/images/pulse-psp-usa.chd")

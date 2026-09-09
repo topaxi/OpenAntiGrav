@@ -5,7 +5,7 @@
 //! `seconds_per_key` and `flags` match what Pulse's evaluators were read
 //! against. A non-zero `flags` anywhere means the decode does not apply.
 
-use oag_formats::vex;
+use oag_vex::vex;
 
 /// All seven of the disc's archives - the same list `oag_hd::archives::ALL`
 /// holds, spelled here because `oag-render` does not depend on `oag-hd`.

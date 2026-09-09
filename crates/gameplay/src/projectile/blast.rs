@@ -11,7 +11,7 @@
 //! the same tick.
 
 use oag_core::math::Vec3;
-use oag_formats::weapons::{Weapon, WeaponStats};
+use oag_tables::weapons::{Weapon, WeaponStats};
 
 use super::cannon;
 
@@ -38,7 +38,7 @@ pub struct BlastStats {
     /// victim's timer rather than on its body, it is credited whether or not a
     /// shield is up (the gate is at the drain), and the whole law is in
     /// `oag_physics::slowdown`. Decoded on all six blocks and authored on all
-    /// four shipped PSP tables - see `oag_formats::weapons`.
+    /// four shipped PSP tables - see `oag_tables::weapons`.
     pub slowdown_time: f32,
 }
 
@@ -50,7 +50,7 @@ pub struct BlastStats {
 /// impact with no authored numbers is a bug upstream in
 /// [`crate::pickup::IMPLEMENTED`], not something to paper over with a default.
 pub(super) fn blast_stats(
-    weapons: Option<&oag_formats::weapons::WeaponStats>,
+    weapons: Option<&oag_tables::weapons::WeaponStats>,
     kind: Weapon,
 ) -> Option<BlastStats> {
     let weapons = weapons?;
@@ -76,7 +76,7 @@ pub(super) fn blast_stats(
         // **`blastdamage` and `blastForce`, not the ricochet pair.** The
         // Shuriken is the only weapon authoring a second damage and a second
         // force, and nothing read says when those are spent - see
-        // `oag_formats::weapons::ShurikenStats`, which leaves both undecoded
+        // `oag_tables::weapons::ShurikenStats`, which leaves both undecoded
         // rather than picking one.
         Weapon::Shuriken => weapons.shuriken().map(|s| BlastStats {
             radius: s.blastradius,
@@ -93,7 +93,7 @@ pub(super) fn blast_stats(
         // **`blastradius`, not `damageradius`.** The Bomb is the only weapon
         // that authors a second radius and the only blast path read at
         // instruction level spends `blastradius` for both halves; see
-        // `oag_formats::weapons::BombStats`, which is explicit about the one
+        // `oag_tables::weapons::BombStats`, which is explicit about the one
         // authored attribute this engine leaves unspent.
         Weapon::Bomb => weapons.bomb().map(|s| BlastStats {
             radius: s.blastradius,

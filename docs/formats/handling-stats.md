@@ -1,7 +1,7 @@
 # Handling stats
 
 **Status: decoded.** Implemented in
-[`oag-formats::handling`](../../crates/formats/src/handling.rs). Ship handling is
+[`oag-tables::handling`](../../crates/tables/src/handling.rs). Ship handling is
 **data, not code**. Every tunable lives in
 `Data\Ships\<Team>\handlingstats.xml` inside `Data.wad`, one file per team,
 with a block per speed class.
@@ -38,7 +38,7 @@ from the user's own disc.
 The distinction matters and is worth stating: a field name is a description of
 the format, a tuning table is the content itself.
 
-This holds for the code as well. `oag_formats::handling` and
+This holds for the code as well. `oag_tables::handling` and
 `oag_physics::Handling` name every field and ship no value; the unit-test fixtures
 count 1, 2, 3 ... in document order, which is about as obviously synthetic as data
 gets. The ground-truth tests assert shapes and signs, never magnitudes.
@@ -80,7 +80,7 @@ presentation only and need not agree with the physics.
 
 ## What is decoded
 
-`oag_formats::handling` parses the whole schema above. Every element and every
+`oag_tables::handling` parses the whole schema above. Every element and every
 attribute the table lists has a typed field:
 
 | Element | Type | Confidence |
@@ -136,7 +136,7 @@ because they were confirmed twice - see the cross-check below.
 
 ### The XML tree parser is shared
 
-The parser reads its tree through `oag_formats::fexml::parse`, which is where the
+The parser reads its tree through `oag_tables::fexml::parse`, which is where the
 hand-rolled walker that used to live in `oag-game`'s `screen.rs` now lives. Two
 schemas, one format, one tag scanner. Same reasoning as the disc-to-blob
 consolidation in [workspace layout](../architecture/workspace-layout.md).
@@ -244,9 +244,9 @@ nothing has been observed loading a file at runtime. Full reading and addresses:
 **One caveat, narrower than it was.** The PS2 page flags that the *PSP binary*
 was not re-checked for a `<Misc>` parser, leaving open whether the element is
 PS2-only. On the data side that is settled: all eight PSP team files carry
-`<Misc>` with all six attributes, because `oag_formats::handling` requires the
+`<Misc>` with all six attributes, because `oag_tables::handling` requires the
 element and every attribute with no defaults, and
-`crates/formats/tests/handling_ground_truth.rs` parses all eight - re-run this
+`crates/tables/tests/handling_ground_truth.rs` parses all eight - re-run this
 session, 8 teams and 32 parameter sets on each disc. What is still open is *which
 PSP function* writes `0x78`..`0x90`; see the question added below.
 
@@ -257,7 +257,7 @@ byte, and a parse one structure out cannot. Text has no such check: a wrong
 reading of XML does not overrun a buffer, it just misses something.
 
 The checkable prediction for this format is **completeness** instead, and
-`crates/formats/tests/handling_ground_truth.rs` asserts it:
+`crates/tables/tests/handling_ground_truth.rs` asserts it:
 
 - All eight team files resolve in the archive by name hash, **on both releases**.
   Eight, not "at least N": the interesting half of the claim is that none is
@@ -290,7 +290,7 @@ as a third corpus and is **deliberately not counted**: it carries
 `Data\Ships\<Team>\handlingstats.xml` at the same addresses, in plain
 (unshortened) XML, with the same element names, attribute names and
 `<Stats team>` / `<Class name>` nesting - **eleven** ship directories rather than
-eight - but `oag_formats::handling::parse` still refuses ten of them. Pure's
+eight - but `oag_tables::handling::parse` still refuses ten of them. Pure's
 whole element diff has since been enumerated in one pass, and every difference
 runs the same way: Pure has a **fifth speed class** below the four Pulse ships,
 and it lacks `<Class><pitch>`, `<Stats><FE>`, `<Airbrake sideshift>`,
@@ -370,7 +370,7 @@ modifiers.
 **Which file carries which is measured rather than assumed.** All sixteen shipped
 per-team files - eight teams on each of the PSP and PS2 discs - hold `<Stats>` and
 nothing else, asserted by `which_top_level_elements_handlingstats_carries` in
-`crates/formats/tests/handling_ground_truth.rs`. So `oag_formats::handling::parse`
+`crates/tables/tests/handling_ground_truth.rs`. So `oag_tables::handling::parse`
 does not look for `<Global>`; `global_from_blob` reads it out of the global file.
 
 Two parts are decoded, because they are the two with consumers:
@@ -406,7 +406,7 @@ Two consequences worth having in one place:
   table's confidence goes from 78 to **90**: it now has a read writer and two read
   readers. See the subsection below, because the attribute's name is misleading.
 - **`<Special speedpad_jump>` fills `0x08b36bec`**, and is decoded, as
-  [`Special`](../../crates/formats/src/handling.rs). It is the magnitude of the
+  [`Special`](../../crates/tables/src/handling.rs). It is the magnitude of the
   speed-pad boost's tilt toward the hull's up axis while d-pad Up is held - a
   5.71-degree tilt and 0.5 % more force at the shipped `0.1`, **not** a jump. Read
   the same way `<SpeedupPads>` is, verbatim with no load-time scale. See
@@ -534,7 +534,7 @@ because `VECTOR` comes first. Confidence **88**.
 **This holds only while `VECTOR` is authored first.** Authored last it would
 corrupt `PHANTOM` in the original and not here.
 
-`oag_formats::handling::global_classes` used to *skip* unrecognised names, which
+`oag_tables::handling::global_classes` used to *skip* unrecognised names, which
 reproduced that outcome without reproducing the accident. **Since 2026-09-05 it
 keeps them**, in `Global::extra`, and the four arrays are unchanged - so Pulse's
 four rungs still read exactly what they always did. The block is kept because

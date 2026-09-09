@@ -17,7 +17,7 @@
 //! block ever patch the same code slot, over every pair of every block
 //! reached here.
 
-use oag_formats::{rcsmaterial, rcsmodel};
+use oag_rcs::{rcsmaterial, rcsmodel};
 use oag_render::mesh;
 
 const CIRCUITS: &[(&str, &str)] = &[

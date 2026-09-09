@@ -91,9 +91,6 @@ use anyhow::{Context, Result};
 use oag_core::math::frustum::Frustum;
 use oag_core::math::{Mat4, Quat, Vec3};
 use oag_core::{Rng, TickClock, TickRate};
-use oag_formats::handling;
-use oag_formats::track::{AiTrack, Sample, StartPosition};
-use oag_formats::vex;
 use oag_gameplay::{
     ControlScheme, GRID_SLOTS, InputSnapshot, MAX_SHIPS, Pose, Ship, World, collision_world,
     handling_for, ship_controls,
@@ -113,6 +110,9 @@ use oag_render::pvs::{
 };
 use oag_render::sparks;
 use oag_render::{mesh, mesh_render, shield::ShipShield, track as track_render};
+use oag_tables::handling;
+use oag_vex::track::{AiTrack, Sample, StartPosition};
+use oag_vex::vex;
 
 mod access;
 mod assets;
@@ -482,7 +482,7 @@ pub struct Race {
     course: Option<Course>,
     /// Zone mode's three numbers, off the disc. `None` outside Zone mode, and on
     /// a source whose `handlingstats.xml` carries no `<Global><Zone/>`.
-    zone: Option<oag_formats::handling::Zone>,
+    zone: Option<oag_tables::handling::Zone>,
     /// The external block the chase camera is currently flying, which is
     /// whichever of [`Self::chase_far`] / [`Self::chase_close`]
     /// [`Self::camera_view`] names. Kept as its own field rather than looked up
@@ -756,7 +756,7 @@ pub struct Race {
     /// The per-class grounded-gravity scale - see [`Setup::class_gravity_scale`].
     class_gravity_scale: f32,
     /// The track's speed-pad trigger volumes - see [`Setup::speedup_pads`].
-    speedup_pads: Vec<oag_formats::pads::PadVolume>,
+    speedup_pads: Vec<oag_vex::pads::PadVolume>,
     /// Distance from the ship to each pad, one entry per pad, in track units.
     ///
     /// The original's `pad+0x1d0`, reimplemented as a broadphase rather than as
@@ -783,7 +783,7 @@ pub struct Race {
     /// does not skip the trigger, it zeroes the list's own count
     /// (`World_CollectNodeLists`), and emptying this reproduces that at the same
     /// layer rather than adding a mode test to every tick.
-    weapon_pads: Vec<oag_formats::pads::PadVolume>,
+    weapon_pads: Vec<oag_vex::pads::PadVolume>,
     /// Distance from the ship to each weapon pad. The speed pads'
     /// [`Self::pad_distance`], one class over, and the same broadphase.
     weapon_pad_distance: [Vec<f32>; MAX_SHIPS],
@@ -798,7 +798,7 @@ pub struct Race {
     /// The original's `pad+0x1a0`, stamped by `WeaponPads_TestCraft` with
     /// `<WeaponPad refresh_time>` and counted back down by
     /// `WeaponPad_UpdateRefreshTimer` (`0x0892c034`) - see
-    /// [`oag_formats::handling::WeaponPad`]. Per pad rather than per craft,
+    /// [`oag_tables::handling::WeaponPad`]. Per pad rather than per craft,
     /// which is what makes it a property of the track rather than of the racer.
     ///
     /// **Deliberately outside the determinism hash**, unlike
@@ -812,7 +812,7 @@ pub struct Race {
     /// [`Setup::weapon_pad_refresh`].
     weapon_pad_refresh: f32,
     /// This race's weapon table - see [`Setup::weapons`].
-    weapons: Option<oag_formats::weapons::WeaponStats>,
+    weapons: Option<oag_tables::weapons::WeaponStats>,
     /// The speed class, which indexes the pickup odds - see [`Setup::class`].
     ///
     /// The disc's own spelling, so a title whose ladder is not Pulse's - Pure,
@@ -870,7 +870,7 @@ pub struct Race {
     /// does.
     sparks_anchor: Option<Vec3>,
     /// Whether the sparks are currently *attached* to a wall contact, for the
-    /// effects that author [`oag_formats::pob::flags::LOOPING`].
+    /// effects that author [`oag_vex::pob::flags::LOOPING`].
     ///
     /// A looping emitter has no countdown -
     /// `oag_render::psys::EmitterSpec::run_ticks` is infinite and

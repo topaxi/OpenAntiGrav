@@ -3,7 +3,7 @@
 use anyhow::{Context, Result, bail};
 use oag_assets::Container;
 use oag_core::math::Mat4;
-use oag_formats::vex;
+use oag_vex::vex;
 
 /// How many distinct texture-transform tracks one model may carry, matching
 /// `mesh.wgsl`'s `TexAnims` array.
@@ -179,7 +179,7 @@ pub struct Model {
     /// Pure batch is tagged `is_alpha_tested()` in its own `pass_mask` (see
     /// [`build_with_textures`]) and carries no reference of its own; a Wipeout
     /// HD chunk is here because its material is
-    /// `oag_formats::rcsmodel::Transparency::Mode2`, and *does* carry one -
+    /// `oag_rcs::rcsmodel::Transparency::Mode2`, and *does* carry one -
     /// see [`Self::alpha_test_ref`] and `mesh::rcs::cutout`.
     pub alpha_tested_draws: Vec<DrawCall>,
     /// Batches tagged `is_transparent()` (see [`build_with_textures`]),
@@ -196,7 +196,7 @@ pub struct Model {
     /// [`Self::textures`], under whatever role it plays there.
     ///
     /// Named for the common case, not the only one: most of the time this is
-    /// the circuit's baked lighting atlas (`oag_formats::rcsmodel::Material::lightmap`),
+    /// the circuit's baked lighting atlas (`oag_rcs::rcsmodel::Material::lightmap`),
     /// but it is loaded whenever the material names one at all, and
     /// [`Self::material_slots`] is what says which role a given entry
     /// actually plays - see `mesh::rcs::skin::skin` and [`slots`].
@@ -221,7 +221,7 @@ pub struct Model {
     ///
     /// Empty for every title but Wipeout HD, the only one with a shader
     /// table to read this from. See `mesh::rcs::skin::roles` and
-    /// `oag_formats::rcsmaterial::fragment::Program::specular_exponent`.
+    /// `oag_rcs::rcsmaterial::fragment::Program::specular_exponent`.
     pub material_specular_exponent: Vec<f32>,
     /// Which shader variant each material slot resolves to, positionally
     /// beside [`Self::textures`], or `None` where the material could not be
@@ -231,8 +231,8 @@ pub struct Model {
     /// way; this is what a per-material path would key on, and what
     /// `mesh/rcs.rs`'s report counts so a reading that reaches most of a
     /// circuit can be told from one that does not. Empty on every title but
-    /// Wipeout HD - see `oag_formats::rcsmaterial`.
-    pub material_variants: Vec<Option<oag_formats::rcsmaterial::Variant>>,
+    /// Wipeout HD - see `oag_rcs::rcsmaterial`.
+    pub material_variants: Vec<Option<oag_rcs::rcsmaterial::Variant>>,
     /// Whether [`GpuVertex::colour`] holds a **baked light** rather than a tint.
     ///
     /// True only for a Wipeout HD `.rcsmodel`, whose fragment programs *add*
@@ -254,7 +254,7 @@ pub struct Model {
     /// against, when the model's own materials author one.
     ///
     /// **The disc's number, not this renderer's.** A Wipeout HD material in
-    /// `oag_formats::rcsmodel::Transparency::Mode2` carries an
+    /// `oag_rcs::rcsmodel::Transparency::Mode2` carries an
     /// `alpha_func`/`alpha_ref` pair the RSX programs into
     /// `NV4097_SET_ALPHA_FUNC`/`SET_ALPHA_REF`, and every one of the disc's is
     /// `GL_GREATER`/`0.5` - see `mesh::rcs::cutout`, which reads it and
@@ -285,7 +285,7 @@ pub struct Model {
     /// the same file byte-identical.
     pub anim_tracks: Vec<vex::TexTransform>,
     /// One vertex range per node of the class this model was built for, in
-    /// the same node-file order [`oag_formats::pads::volumes`] walks the same
+    /// the same node-file order [`oag_vex::pads::volumes`] walks the same
     /// file with the same class id - [`Flap::vertices`] generalised from two
     /// fixed slots to however many nodes a class authors, for a caller that
     /// wants trigger *i*'s own geometry and has only its position to reach it
@@ -438,7 +438,7 @@ pub fn build_sky(label: &str, data: &[u8], external: Option<&Ps2TextureSet>) -> 
 /// A [`vex::CLASS_SPEEDUP_PAD`] node's payload is a mesh payload for the same
 /// reason a `Skycube`'s is (the pad's bind handler calls the `Mesh` bind first),
 /// so this is [`build_with_textures`] pointed at a third class, not a third
-/// decoder. See [`oag_formats::pads`] for the trigger volume that shares those
+/// decoder. See [`oag_vex::pads`] for the trigger volume that shares those
 /// bytes.
 ///
 /// Separate from [`build`]'s track model on purpose, and not because it is a

@@ -164,7 +164,7 @@ pub struct Title {
     ///
     /// An axis because the answers differ in shape: Pulse and Wipeout HD ship
     /// two tables and choose between them by race mode, Pure ships one. Until
-    /// 2026-08-26 every caller reached for `oag_formats::weapons::RACE_ENTRY`,
+    /// 2026-08-26 every caller reached for `oag_tables::weapons::RACE_ENTRY`,
     /// which is Pulse's spelling - so a Pure race found no table, parsed no
     /// weapons and handed out no pickups, silently, with only a report line to
     /// say so.

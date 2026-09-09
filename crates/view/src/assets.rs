@@ -5,9 +5,9 @@
 
 use anyhow::{Context, Result, bail};
 use oag_assets::Archive;
-use oag_formats::ps2_texture;
-use oag_formats::texture::Texture;
 use oag_formats::wad;
+use oag_texture::ps2_texture;
+use oag_texture::texture::Texture;
 
 /// One decoded texture, ready to upload.
 pub struct Asset {

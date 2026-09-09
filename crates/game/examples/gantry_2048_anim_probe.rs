@@ -20,7 +20,7 @@
 //!     polySurface7 pasted__Final_Lap pasted__Go_HD_start_light_321go
 //! ```
 
-use oag_formats::vex;
+use oag_vex::vex;
 
 const DEFAULT_VEX: &str = "data/billboards/hd_adverts/321go/321go_2048.vex";
 

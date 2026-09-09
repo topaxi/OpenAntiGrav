@@ -4,7 +4,7 @@
 //! and `02` for a reason nothing here has distinguished". The engine branches
 //! on it. This asks the disc what else differs between the two populations.
 
-use oag_formats::rcsmodel;
+use oag_rcs::rcsmodel;
 
 #[derive(Default, Debug)]
 struct Tally {

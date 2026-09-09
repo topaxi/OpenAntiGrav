@@ -616,7 +616,7 @@ impl Renderer {
                     // reaching here, so it draws as it did rather than being
                     // invented an equation.
                     mode: match blend {
-                        Some(oag_formats::vex::BlendClass::Additive) => MODE_SPRITE_ADDITIVE,
+                        Some(oag_vex::vex::BlendClass::Additive) => MODE_SPRITE_ADDITIVE,
                         _ => MODE_SPRITE,
                     },
                     rotation: *rotation,

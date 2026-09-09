@@ -5,7 +5,7 @@
 //! The association is on the disc after all: **a `section` node governs its
 //! parent's whole subtree** - a track is authored as sibling groups, one
 //! transform per group with the `section` as one child and the group's
-//! geometry as the rest. [`oag_formats::pvs::governing_sections`] derives it;
+//! geometry as the rest. [`oag_vex::pvs::governing_sections`] derives it;
 //! each draw call carries its source node
 //! ([`crate::mesh::DrawCall::node`]), so its mask is the single bit of its
 //! group's section. A draw call whose node no section governs - or that has
@@ -50,8 +50,8 @@
 
 use oag_core::math::Vec3;
 use oag_core::math::frustum::Frustum;
-use oag_formats::pvs::{ALL_VISIBLE, MAX_SECTIONS, TrackPvs};
-use oag_formats::track::AiTrack;
+use oag_vex::pvs::{ALL_VISIBLE, MAX_SECTIONS, TrackPvs};
+use oag_vex::track::AiTrack;
 
 use crate::mesh::{DrawCall, Model};
 
@@ -65,7 +65,7 @@ pub const ALWAYS: u64 = u64::MAX;
 /// A section id no track declares, meaning "do not trust this position".
 ///
 /// Outside the `0..64` a mask can address on purpose: the value is not a
-/// section, and [`oag_formats::pvs::TrackPvs::visible_from`] answers
+/// section, and [`oag_vex::pvs::TrackPvs::visible_from`] answers
 /// [`ALL_VISIBLE`] for it, which is what turns an unlocatable craft or camera
 /// into *draw everything*.
 pub const UNPLACED: u8 = u8::MAX;
@@ -116,7 +116,7 @@ impl PlacementStats {
 impl DrawSections {
     /// Places every draw call of `model` in its authored section.
     ///
-    /// `governing` is [`oag_formats::pvs::governing_sections`] over the same
+    /// `governing` is [`oag_vex::pvs::governing_sections`] over the same
     /// file the model was built from: the section id governing each scene
     /// node, by the sibling-group rule. A draw call maps to the single bit of
     /// its node's section; one with no node, no governing section, or a
@@ -276,7 +276,7 @@ impl SwapConflicts {
             if at.count_ones() < 2 {
                 continue;
             }
-            let bits: Vec<u8> = oag_formats::pvs::set_bits(at).collect();
+            let bits: Vec<u8> = oag_vex::pvs::set_bits(at).collect();
             for (i, &a) in bits.iter().enumerate() {
                 for &b in &bits[i + 1..] {
                     *shared.entry((a, b)).or_default() += 1;
@@ -311,7 +311,7 @@ impl SwapConflicts {
         if mask == ALL_VISIBLE {
             return 0;
         }
-        oag_formats::pvs::set_bits(mask).fold(0, |acc, id| acc | self.partners[usize::from(id)])
+        oag_vex::pvs::set_bits(mask).fold(0, |acc, id| acc | self.partners[usize::from(id)])
     }
 
     /// How many swap pairs were found, for the load report.
@@ -363,7 +363,7 @@ impl VisibleSet {
     ///   *becomes* current has to have been drawn on the frame before. That is
     ///   what the adjacency padding buys.
     /// - **Either section may be unknown**, in which case
-    ///   [`oag_formats::pvs::TrackPvs::visible_from`] answers all-ones and this
+    ///   [`oag_vex::pvs::TrackPvs::visible_from`] answers all-ones and this
     ///   degrades to drawing everything.
     ///
     /// **The union is ordered, and later sources cannot override an authored
@@ -440,20 +440,20 @@ impl VisibleSet {
     }
 }
 
-/// The load-time padding table, wrapping [`oag_formats::pvs::SectionAdjacency`].
+/// The load-time padding table, wrapping [`oag_vex::pvs::SectionAdjacency`].
 ///
 /// Thin on purpose: the interesting part is that adjacency comes from the
 /// authored spline rather than from arithmetic on ids, and that lives in
 /// `oag-formats` next to the data it reads.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SectionPadding {
-    inner: oag_formats::pvs::SectionAdjacency,
+    inner: oag_vex::pvs::SectionAdjacency,
 }
 
 impl Default for SectionPadding {
     fn default() -> Self {
         Self {
-            inner: oag_formats::pvs::SectionAdjacency::none(),
+            inner: oag_vex::pvs::SectionAdjacency::none(),
         }
     }
 }
@@ -473,7 +473,7 @@ impl SectionPadding {
     #[must_use]
     pub fn from_track(track: &AiTrack) -> Self {
         Self {
-            inner: oag_formats::pvs::SectionAdjacency::from_track(track, Self::HOPS),
+            inner: oag_vex::pvs::SectionAdjacency::from_track(track, Self::HOPS),
         }
     }
 
@@ -513,7 +513,7 @@ pub const CHUNK_TRUST_RADIUS: f32 = 64.0;
 ///
 /// **A bitmap rather than a mask, because HD partitions by chunk and not by
 /// section.** `track.pvs` carries one bit per `.rcsmodel` chunk per cell (see
-/// [`oag_formats::hd_pvs`]), which is 983 to 1,902 bits rather than the PSP's
+/// [`oag_rcs::hd_pvs`]), which is 983 to 1,902 bits rather than the PSP's
 /// 64, so there is no mask to `and` against and the per-draw test is a byte
 /// load and a shift instead. Everything else about the two tiers is the same,
 /// including that this one runs first.
@@ -533,7 +533,7 @@ impl ChunkSet {
     /// by mutual exclusion the way Moa Therma's sections do, so subtracting
     /// anything would be a rule invented rather than found.
     #[must_use]
-    pub fn around(pvs: &oag_formats::hd_pvs::Pvs, craft: Vec3, camera: Vec3) -> Option<Self> {
+    pub fn around(pvs: &oag_rcs::hd_pvs::Pvs, craft: Vec3, camera: Vec3) -> Option<Self> {
         let mut bits: Option<Vec<u8>> = None;
         for point in [craft, camera] {
             let Some(nearest) = pvs.nearest_cell(point.to_array()) else {
@@ -577,7 +577,7 @@ impl ChunkSet {
     pub fn allows(&self, draw: &DrawCall) -> bool {
         match draw.chunk {
             None => true,
-            Some(chunk) => oag_formats::hd_pvs::allows(&self.bits, chunk as usize),
+            Some(chunk) => oag_rcs::hd_pvs::allows(&self.bits, chunk as usize),
         }
     }
 

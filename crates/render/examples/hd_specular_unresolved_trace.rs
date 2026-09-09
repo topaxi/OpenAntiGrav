@@ -61,9 +61,9 @@
 //! opcode to 2 operands, so the second operand this prints for one may not
 //! be real hardware behaviour - flagged, not resolved, by this pass.
 
-use oag_formats::rcsmaterial;
-use oag_formats::rcsmaterial::RcsMaterial;
-use oag_formats::rcsmaterial::fragment::{Instruction, Program, Source};
+use oag_rcs::rcsmaterial;
+use oag_rcs::rcsmaterial::RcsMaterial;
+use oag_rcs::rcsmaterial::fragment::{Instruction, Program, Source};
 
 const ARCHIVES: &[&str] = &[
     "DATA00", "DATA01", "DATA02", "DATA03", "DATA04", "DATA05", "DATA06",

@@ -197,7 +197,7 @@ fn a_2048_track_races_with_a_pure_craft() {
 /// not just that its handling-stats entry resolves (`team_variants_probe`
 /// checks that alone), but that the whole race loads: the model, the livery,
 /// the HUD too, since a combined id feeds all of them through the same
-/// `dir\team\file` join `oag_formats::handling::entry_name_in` and
+/// `dir\team\file` join `oag_tables::handling::entry_name_in` and
 /// `race/assets.rs::ship_entry_name` both use. Neither of these two ids is
 /// `DEFAULT_TEAM` for its title - HD's is plain `assegai`, no suffix; 2048's
 /// is `feisar2048\3` already, a different team and variant than either

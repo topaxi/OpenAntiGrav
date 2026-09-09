@@ -19,7 +19,7 @@
 //! this crate drew every one of them alpha-over until that was recovered. The
 //! change is only worth its blast radius if real content actually mixes the
 //! classes, so that is what this measures rather than asserting the decode in
-//! the abstract (`oag_formats::vex`'s own unit tests already cover the bit
+//! the abstract (`oag_vex::vex`'s own unit tests already cover the bit
 //! arithmetic).
 //!
 //! Measured when this was written, and the reason the change shipped:
@@ -38,9 +38,9 @@
 
 use std::path::PathBuf;
 
-use oag_formats::vex::BlendClass;
 use oag_pulse as pulse;
 use oag_render::mesh;
+use oag_vex::vex::BlendClass;
 
 fn image() -> Option<PathBuf> {
     oag_testdata::image("data/images/pulse-psp-usa.chd")

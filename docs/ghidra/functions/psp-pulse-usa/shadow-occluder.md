@@ -2,7 +2,7 @@
 
 Step 4 of [`docs/rendering/shadows.md`](../../../rendering/shadows.md)'s plan
 decoded the `0x3c3` payload's two record arrays
-(`crates/formats/tests/shadow_occluder_ground_truth.rs`) but left one thing
+(`crates/vex/tests/shadow_occluder_ground_truth.rs`) but left one thing
 the data alone cannot answer: how the hull is *projected* into a shadow. This
 page reads the function that does it.
 
@@ -42,7 +42,7 @@ was found by computing the unrelocated form (`0x089038c8 - 0x08804000 =
 
 `Shadow_RenderOccluderVolume(void *self)` reads a structure pointer at
 `self+0x50`. Three of the fields it reads from what that pointer points to
-match [`shadow_occluder_ground_truth.rs`](../../../../crates/formats/tests/shadow_occluder_ground_truth.rs)'s
+match [`shadow_occluder_ground_truth.rs`](../../../../crates/vex/tests/shadow_occluder_ground_truth.rs)'s
 already-pinned payload layout exactly, at the same byte offsets, independent
 of this reading:
 
@@ -107,12 +107,12 @@ farthest AABB corner along the projection direction, so a floored `min.y`
 changes the answer only when the light-facing direction has a negative Y
 component) before trusting either version further. See
 `PSP_OCCLUDERS_WITH_PADDED_BBOX`'s doc comment in
-[`shadow_occluder_ground_truth.rs`](../../../../crates/formats/tests/shadow_occluder_ground_truth.rs)
+[`shadow_occluder_ground_truth.rs`](../../../../crates/vex/tests/shadow_occluder_ground_truth.rs)
 for the full numbers; not pinned as an assertion there, since the split
 
 ### File/build-version, checked and ruled out; the world-space population does differ on X/Z
 
-2026-09-04, [`shadow_padding_probe.rs`](../../../../crates/formats/examples/shadow_padding_probe.rs)
+2026-09-04, [`shadow_padding_probe.rs`](../../../../crates/vex/examples/shadow_padding_probe.rs)
 (`cargo run -q -p oag-formats --example shadow_padding_probe`) walked all 32
 mismatching nodes by archive path and directory index to check the two
 remaining Open items directly, rather than guess further.
@@ -197,7 +197,7 @@ test.
    triangle's declared normal agrees with the geometry of the three vertices it
    indexes to 0.028 degrees, so the boundary this step walks is a lookup per
    edge. See [`shadows.md`](../../../rendering/shadows.md#the-16-bytes-at-0x10-are-the-edge-graph-and-it-closes-on-itself)
-   and `oag_formats::shadow_occluder`.
+   and `oag_vex::shadow_occluder`.
 6. **Draws**, through a short run of calls whose shape matches a stencil
    pass: a state/matrix select, a draw call using the edge-list vertex/index
    buffers just built, and calls bracketing it that read as enabling and
@@ -401,7 +401,7 @@ So the class the census recorded as inert is inert *in the shipped data* and
 not in the code: it is a scene node whose job is to point every shadow
 somewhere else. `shadow` `0x3cb` is authored **zero times across all 415
 `.vex` files on the Pulse disc**
-([`shadow_occluder_ground_truth.rs`](../../../../crates/formats/tests/shadow_occluder_ground_truth.rs)),
+([`shadow_occluder_ground_truth.rs`](../../../../crates/vex/tests/shadow_occluder_ground_truth.rs)),
 so the count is zero in any scene the disc can build and every shadow projects
 along the constant.
 

@@ -4,8 +4,8 @@
 this repository had a PS3 fragment-microcode decoder and no Vita equivalent,
 so not one of 2048's shader programs could be read. The container half is now
 done - [`docs/formats/gxp.md`](../../docs/formats/gxp.md),
-[`scripts/vita-gxp.py`](../../scripts/vita-gxp.py), `oag_formats::gxp`,
-`crates/formats/tests/gxp_ground_truth.rs` - at **97,899 of 97,899 programs
+[`scripts/vita-gxp.py`](../../scripts/vita-gxp.py), `oag_rcs::gxp`,
+`crates/rcs/tests/gxp_ground_truth.rs` - at **97,899 of 97,899 programs
 decoding over 22,056 files**, header, code extents, tables and the parameter
 table with its names.
 
@@ -130,5 +130,5 @@ both together.
   parameters fit anywhere. The closure that separates them - the last name's
   NUL landing on the declared size - decides it 3,540 to 0. `is_ok()` proves
   nothing here for exactly the reason
-  `crates/formats/tests/shadow_occluder_ground_truth.rs` says it proves
+  `crates/vex/tests/shadow_occluder_ground_truth.rs` says it proves
   nothing there.

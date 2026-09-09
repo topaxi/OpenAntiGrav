@@ -1,7 +1,7 @@
 //! The collision query surface the ship dynamics are written against.
 //!
 //! The types here are pinned deliberately: the geometry that answers these
-//! queries is decoded in [`oag_formats::collision`](../../../formats/src/collision.rs)
+//! queries is decoded in [`oag_vex::collision`](../../../formats/src/collision.rs)
 //! and the code that asks them lives in [`crate::ship`], and neither should have
 //! to wait for the other. A [`Raycaster`] is whatever can answer "what does this
 //! segment hit", which in tests is a single hand-written triangle and in a race
@@ -69,7 +69,7 @@ impl Surface {
     /// speed loss a scraping craft suffers. See
     /// `docs/ghidra/functions/psp-pulse-usa/contact-response.md`.
     ///
-    /// This deliberately duplicates `oag_formats::collision::SurfaceKind::
+    /// This deliberately duplicates `oag_vex::collision::SurfaceKind::
     /// friction`, because this crate must not depend on `oag-formats` - the
     /// same reason [`Surface`] itself is duplicated.
     /// `oag_gameplay::collision` owns the test that the two agree.
@@ -449,7 +449,7 @@ impl TriangleSoup {
 
     /// One triangle's three world-space corners, or `None` if out of range.
     ///
-    /// Mirrors `oag_formats::collision::CollisionMesh::triangle`. Exists so a
+    /// Mirrors `oag_vex::collision::CollisionMesh::triangle`. Exists so a
     /// test can aim a ship at a *real* piece of track geometry rather than at a
     /// hand-written plane - which is the only way to find out whether a shipped
     /// wall's winding, scale and normal survive the response law.

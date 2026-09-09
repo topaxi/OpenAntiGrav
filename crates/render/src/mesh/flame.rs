@@ -7,7 +7,7 @@
 //! `docs/ghidra/functions/ps3-hdfury-eu/engine-flare.md`; the *values* it
 //! patches into its inline constants are in the material record inside each
 //! craft's own `engineflare.rcsmodel`, which
-//! [`oag_formats::rcsmodel::material::parameters`] decodes.
+//! [`oag_rcs::rcsmodel::material::parameters`] decodes.
 //!
 //! The whole program, with the patch chain resolved (`fslot` -> entry index ->
 //! code slot) so each constant is attributed rather than guessed:
@@ -63,7 +63,7 @@
 //! `docs/ghidra/functions/ps3-hdfury-eu/engine-flare.md`: a race capture
 //! recurs exactly at 0.5 s, which is `1 / Speed`.
 
-use oag_formats::rcsmodel;
+use oag_rcs::rcsmodel;
 
 /// `!crc32("power1")` - the rim exponent.
 pub const POWER1: u32 = 0xaa5e_39a1;

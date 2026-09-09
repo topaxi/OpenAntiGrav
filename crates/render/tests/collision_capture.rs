@@ -14,8 +14,8 @@
 //! straight corridor with a floor between two walls, which must look like a
 //! corridor.
 
-use oag_formats::collision::{CollisionGeometry, CollisionMesh, CollisionNode, SurfaceKind};
 use oag_render::collision::{self, Style};
+use oag_vex::collision::{CollisionGeometry, CollisionMesh, CollisionNode, SurfaceKind};
 
 /// A quad as two triangles, from four corners in order.
 fn quad(a: [f32; 3], b: [f32; 3], c: [f32; 3], d: [f32; 3]) -> CollisionMesh {

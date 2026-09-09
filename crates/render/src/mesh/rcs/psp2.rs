@@ -24,8 +24,8 @@
 
 use anyhow::Result;
 
-use oag_formats::gxt;
-use oag_formats::rcsmodel::psp2;
+use oag_rcs::rcsmodel::psp2;
+use oag_texture::gxt;
 
 use super::Textures;
 use crate::mesh::{Bounds, DrawCall, GpuVertex, Model, ModelTexture};
@@ -205,7 +205,7 @@ pub fn build(label: &str, model_blob: &[u8], textures: Textures<'_>) -> Result<(
             culled: false,
             blend: None,
             blend_state: None,
-            layer: oag_formats::vex::LAYER_DEFAULT,
+            layer: oag_vex::vex::LAYER_DEFAULT,
             node: None,
             chunk: None,
         });

@@ -7,7 +7,7 @@
 //!
 //! # Why this is not the format's own type
 //!
-//! `oag_formats::handling` parses the XML, cameras and front-end bars included,
+//! `oag_tables::handling` parses the XML, cameras and front-end bars included,
 //! and its types describe the *document*. This one describes what the force law
 //! consumes, and it exists separately so that `oag-physics` depends on nothing
 //! but `oag-core` - a schema change cannot reach the simulation without someone
@@ -39,7 +39,7 @@
 //! (`HandlingXml_ParseEngine` at `0x0883945c` and friends).
 //!
 //! **Applying those factors is `oag-gameplay`'s job, not this crate's and not
-//! `oag_formats::handling`'s**, which deliberately returns the document's raw
+//! `oag_tables::handling`'s**, which deliberately returns the document's raw
 //! values. Applying them twice is the most likely integration bug in this area,
 //! and it would be silent: the ship would simply be sluggish.
 //!
@@ -58,7 +58,7 @@
 //! | Where it comes from | Lives in | Example |
 //! | --- | --- | --- |
 //! | The player's disc, per team and speed class | this file's types, filled at load | every field here |
-//! | The player's disc, engine-wide | `oag_formats::handling::Global` | `<SpeedupPads>`, `<GravityMul>` |
+//! | The player's disc, engine-wide | `oag_tables::handling::Global` | `<SpeedupPads>`, `<GravityMul>` |
 //! | The original's **code**, recovered by reading it | a `pub const` beside the law that uses it | `crate::passive::DRAG_GROUND` |
 //!
 //! The third row is the one the split has to be careful about. Those constants
@@ -255,7 +255,7 @@ pub struct Dimensions {
     ///
     /// `<Misc>` authors three slots and the original indexes them with the
     /// `SkillLevel` race option; picking the slot is
-    /// `oag_formats::handling::Misc::shield_for`, and what arrives here is its
+    /// `oag_tables::handling::Misc::shield_for`, and what arrives here is its
     /// answer. This crate never sees the ladder, because the force law has no
     /// business knowing what difficulty the race is on - it only needs the
     /// number that bounds the pool.

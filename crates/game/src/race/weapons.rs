@@ -75,12 +75,12 @@ impl Race {
         if self
             .weapons
             .as_ref()
-            .and_then(|w| w.simple(oag_formats::weapons::Weapon::Turbo))
+            .and_then(|w| w.simple(oag_tables::weapons::Weapon::Turbo))
             .is_none()
         {
             return;
         }
-        self.world.ships[0].pickup.weapon = Some(oag_formats::weapons::Weapon::Turbo);
+        self.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Turbo);
     }
 
     /// Fires or absorbs whatever the craft is holding.
@@ -135,7 +135,7 @@ impl Race {
                 return;
             }
             match weapon {
-                oag_formats::weapons::Weapon::Turbo => {
+                oag_tables::weapons::Weapon::Turbo => {
                     let Some(simple) = weapons.simple(weapon) else {
                         // The file authors no Turbo. Nothing to fire *with*, so
                         // the pickup is kept rather than spent on nothing.
@@ -149,7 +149,7 @@ impl Race {
                     // a reading of what the original shows.
                     self.exhaust[0].boost(exhaust::BOOST_SECONDS);
                 }
-                oag_formats::weapons::Weapon::Shield => {
+                oag_tables::weapons::Weapon::Shield => {
                     let Some(simple) = weapons.simple(weapon) else {
                         // As above: nothing to raise a shield *for*, so the
                         // pickup is kept rather than spent on nothing.
@@ -171,7 +171,7 @@ impl Race {
                         self.shield[0].activate();
                     }
                 }
-                oag_formats::weapons::Weapon::Autopilot => {
+                oag_tables::weapons::Weapon::Autopilot => {
                     let Some(simple) = weapons.simple(weapon) else {
                         // As the two arms above: nothing to hand the craft over
                         // *for*, so the pickup is kept rather than spent.
@@ -192,7 +192,7 @@ impl Race {
                     // it does for the operator's flag.
                     self.locate_player_driver();
                 }
-                oag_formats::weapons::Weapon::Rocket => {
+                oag_tables::weapons::Weapon::Rocket => {
                     let Some(stats) = weapons.rocket() else {
                         // No authored rocket, so nothing to put in the air.
                         return;
@@ -221,7 +221,7 @@ impl Race {
                     let mut fired = 0;
                     for (position, velocity) in shots {
                         if self.world.projectiles.spawn(
-                            oag_formats::weapons::Weapon::Rocket,
+                            oag_tables::weapons::Weapon::Rocket,
                             position,
                             velocity,
                             0,
@@ -236,7 +236,7 @@ impl Race {
                         return;
                     }
                 }
-                oag_formats::weapons::Weapon::Plasma => {
+                oag_tables::weapons::Weapon::Plasma => {
                     let Some(stats) = weapons.plasma() else {
                         // As the Rocket: nothing to put in the air.
                         return;
@@ -255,7 +255,7 @@ impl Race {
                         return;
                     };
                     if !self.world.projectiles.spawn(
-                        oag_formats::weapons::Weapon::Plasma,
+                        oag_tables::weapons::Weapon::Plasma,
                         position,
                         velocity,
                         0,
@@ -266,7 +266,7 @@ impl Race {
                         return;
                     }
                 }
-                oag_formats::weapons::Weapon::Shuriken => {
+                oag_tables::weapons::Weapon::Shuriken => {
                     let Some(stats) = weapons.shuriken() else {
                         // As the Rocket: nothing to put in the air.
                         return;
@@ -312,7 +312,7 @@ impl Race {
                         return;
                     }
                 }
-                oag_formats::weapons::Weapon::Missile => {
+                oag_tables::weapons::Weapon::Missile => {
                     let Some(stats) = weapons.missile() else {
                         // As the Rocket: nothing to put in the air.
                         return;
@@ -330,7 +330,7 @@ impl Race {
                     // ballistically and goes off on its own timer.
                     self.fire_missile(0, &stats);
                 }
-                oag_formats::weapons::Weapon::Mine | oag_formats::weapons::Weapon::Bomb => {
+                oag_tables::weapons::Weapon::Mine | oag_tables::weapons::Weapon::Bomb => {
                     let Some(drop) =
                         oag_gameplay::projectile::mine::Drop::for_weapon(weapon, weapons)
                     else {
@@ -362,7 +362,7 @@ impl Race {
                     self.world.ships[0].pickup.begin_drop(drop.count);
                     return;
                 }
-                oag_formats::weapons::Weapon::LeachBeam => {
+                oag_tables::weapons::Weapon::LeachBeam => {
                     let Some(stats) = weapons.leach_beam() else {
                         // As the Rocket: nothing to fasten onto anybody.
                         return;
@@ -395,7 +395,7 @@ impl Race {
                         None => oag_gameplay::projectile::leach_beam::Beam::unlocked(0, &stats),
                     });
                 }
-                oag_formats::weapons::Weapon::Quake => {
+                oag_tables::weapons::Weapon::Quake => {
                     let Some(stats) = weapons.quake() else {
                         // No authored Quake, so nothing to launch - the same
                         // "keep the pickup" rule the Rocket's and the
@@ -441,7 +441,7 @@ impl Race {
                         &stats,
                     ));
                 }
-                oag_formats::weapons::Weapon::Cannon => {
+                oag_tables::weapons::Weapon::Cannon => {
                     // **Recovered as a non-event *on this path*, not an
                     // oversight.** `Weapon_RequestFire`'s bit `0x2000` - the
                     // Cannon's own - is dispatched by nothing in
@@ -562,7 +562,7 @@ impl Race {
             // calls the play function at all - see `Cue::MineLaunch`'s own
             // doc comment. Both weapons share this loop because they are one
             // mechanism in this engine, but the cue is the Mine's alone.
-            if weapon == oag_formats::weapons::Weapon::Mine {
+            if weapon == oag_tables::weapons::Weapon::Mine {
                 self.cues.push(crate::audio::sfx::CueEvent::new(
                     crate::audio::sfx::Cue::MineLaunch,
                     slot,
@@ -626,7 +626,7 @@ impl Race {
         let Some(cannon) = self
             .weapons
             .as_ref()
-            .and_then(oag_formats::weapons::WeaponStats::cannon)
+            .and_then(oag_tables::weapons::WeaponStats::cannon)
         else {
             // No table, or the table authors no Cannon - Pure's does not.
             // Nothing to arm with no `rounds`/`rate` to read.
@@ -670,9 +670,9 @@ impl Race {
 
     /// One craft's Cannon countdown, and the round it puts in the air when the
     /// countdown reaches zero. See [`Self::advance_cannons`] for the gate.
-    fn advance_one_cannon(&mut self, slot: usize, cannon: &oag_formats::weapons::CannonStats) {
+    fn advance_one_cannon(&mut self, slot: usize, cannon: &oag_tables::weapons::CannonStats) {
         if !self.world.ships[slot].active
-            || self.world.ships[slot].pickup.weapon != Some(oag_formats::weapons::Weapon::Cannon)
+            || self.world.ships[slot].pickup.weapon != Some(oag_tables::weapons::Weapon::Cannon)
         {
             return;
         }
@@ -702,7 +702,7 @@ impl Race {
         // spent, so a Cannon held by a craft in a saturated pool simply
         // stops putting anything in the air until a slot frees up.
         self.world.projectiles.spawn(
-            oag_formats::weapons::Weapon::Cannon,
+            oag_tables::weapons::Weapon::Cannon,
             position,
             velocity,
             slot as u8,
@@ -782,8 +782,8 @@ impl Race {
     pub(super) fn sight_held(&self) -> Option<sight::Held> {
         let stats = self.weapons.as_ref()?;
         match self.world.ships[0].pickup.weapon? {
-            oag_formats::weapons::Weapon::Missile => stats.missile().map(|_| sight::Held::Missile),
-            oag_formats::weapons::Weapon::LeachBeam => {
+            oag_tables::weapons::Weapon::Missile => stats.missile().map(|_| sight::Held::Missile),
+            oag_tables::weapons::Weapon::LeachBeam => {
                 stats.leach_beam().map(|_| sight::Held::LeachBeam)
             }
             _ => None,
@@ -898,11 +898,7 @@ impl Race {
     /// is visible to one. `oag-game` is the composition root and
     /// `scripts/check-dependency-rules.py` forbids anything depending on it, so
     /// `pub` here reaches the tests and the binary and nothing else.
-    pub fn fire_missile(
-        &mut self,
-        slot: usize,
-        stats: &oag_formats::weapons::MissileStats,
-    ) -> bool {
+    pub fn fire_missile(&mut self, slot: usize, stats: &oag_tables::weapons::MissileStats) -> bool {
         let count = self.world.ship_count as usize;
         let ship = &self.world.ships[slot];
         let (position, velocity, launch_kmh) = oag_gameplay::projectile::missile::launch(
@@ -936,7 +932,7 @@ impl Race {
         // original's null pointer, and `Missile_Update` skips its whole guidance
         // block on it rather than treating it as an error.
         self.world.projectiles.spawn_guided(
-            oag_formats::weapons::Weapon::Missile,
+            oag_tables::weapons::Weapon::Missile,
             position,
             velocity,
             slot as u8,

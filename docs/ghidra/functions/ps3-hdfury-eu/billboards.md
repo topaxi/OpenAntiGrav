@@ -4,7 +4,7 @@ Binary: `PS3_GAME/USRDIR/EBOOT.BIN` from `hdfury-ps3-eu-dec.iso`, as
 `/ps3-hdfury-eu/EBOOT.elf` in Ghidra.
 
 The file's own layout - what `trackstartup.xml` declares, and the survey over
-all 16 circuits - is [`oag_formats::trackstartup`](../../../../crates/formats/src/trackstartup.rs),
+all 16 circuits - is [`oag_tables::trackstartup`](../../../../crates/tables/src/trackstartup.rs),
 also summarised in [`docs/formats/README.md`](../../../formats/README.md)'s
 "HD track startup" row. This page is the executable's side: what it reads out
 of a `<Billboard>`, where it stores each one, and the one place a manifest's
@@ -77,7 +77,7 @@ the whole image finds exactly 16 `trackstartup.xml` entries total, split across
 `DATA00.PSARC` and `DATA02.PSARC` with no duplicate elsewhere, and
 `scripts/psarc.py extract` pulled all 16. None authors `Colour` (the UK
 spelling alone) or `Glow`, so this gap costs nothing on the shipped disc - the
-reader in `oag_formats::trackstartup` is right to skip both.
+reader in `oag_tables::trackstartup` is right to skip both.
 
 **A sibling element, `<Render>`, is recognised and then does nothing.**
 Reached the same way `Billboard` is (`disp -0x5408`), the name comparison
@@ -136,7 +136,7 @@ case-insensitively, and branches - `.vex` allocates a 0x2080-byte object
 through a generic resource loader (`FUN_002c1ec8`, called with a magic
 `0xfdb2` and a type tag `0x3e9`), `.mip` allocates a 0x100-byte object through
 a different one (`FUN_002de5c8`). **`0x3e9` (1001) is not one of the 30 vex
-node classes `oag_formats::vex` names** - checked directly against the
+node classes `oag_vex::vex` names** - checked directly against the
 `CLASS_*` table, which runs `0x3bb`-`0x3e5` with no member at `0x3e9` - so this
 is a tag in some other, unidentified resource-type enum, not a vex class; do
 not assume otherwise. **The `.mip` arm is implemented and unexercised on this

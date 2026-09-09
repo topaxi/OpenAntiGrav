@@ -1,6 +1,6 @@
 //! The front end's own images, decoded once into a single texture.
 //!
-//! An `Image` widget names a `.mip` entry, and [`oag_formats::texture`] decodes
+//! An `Image` widget names a `.mip` entry, and [`oag_texture::texture`] decodes
 //! that to RGBA. Everything referenced is put in **one** texture so the renderer
 //! keeps one bind group, the same way text and solid fills already share the
 //! glyph atlas.
@@ -11,8 +11,9 @@
 //! three images. When a screen needs enough of them for the waste to show, the
 //! lookup below is already in pixels, so only this file has to change.
 
-use oag_formats::texture::Texture;
-use oag_formats::{gtf, gxt, ps2_texture, vex};
+use oag_texture::texture::Texture;
+use oag_texture::{gtf, gxt, ps2_texture};
+use oag_vex::vex;
 
 /// One decoded image, from any of the four sources' texture formats.
 ///
@@ -43,7 +44,7 @@ impl Image {
     /// parsers here the `.mip` one got there first, read a `.gtf`'s big-endian
     /// header as a `.mip`'s little-endian one and came back with a zero-sized
     /// texture - so all three failed, the sheet came out 1x1, and the error
-    /// blamed a format the file is not. [`oag_formats::gtf`] has decoded these
+    /// blamed a format the file is not. [`oag_texture::gtf`] has decoded these
     /// since well before the front end asked for one; nothing was missing but
     /// the branch.
     ///
@@ -80,7 +81,7 @@ impl Image {
     /// parser's complaint for anything none of the three recognise, and a `.gtf`
     /// error on a file that was never a `.gtf` is the misdirection this whole
     /// function exists to avoid. A `.gtf` that parses and then will not
-    /// convert - the sky cubemaps [`oag_formats::gtf::Texture::to_rgba`]
+    /// convert - the sky cubemaps [`oag_texture::gtf::Texture::to_rgba`]
     /// refuses - takes the same route out, which is the honest one: the sheet
     /// reports the image as undecoded rather than drawing a substitute for it.
     fn decode_gtf(blob: &[u8]) -> Option<Self> {
@@ -110,7 +111,7 @@ impl Image {
             // craft inverted, and reversed it matches the original's own
             // loading screen exactly. See `docs/formats/hd-loading.md`.
             //
-            // **Here and not in [`oag_formats::gtf`]**, which is the part that
+            // **Here and not in [`oag_texture::gtf`]**, which is the part that
             // took measuring. Every other consumer of that decoder is a *3D*
             // one - `mesh::rcs::skin`, `mesh::sky_cube`,
             // `race::assets`'s trail noise - and those are already right: the
@@ -234,7 +235,7 @@ pub struct Placed {
     ///
     /// **Read, never chosen.** All three of Pulse's lock-on sight models
     /// declare `pass_mask 0x120e`, whose `0x0200` bit is
-    /// [`oag_formats::vex::BlendClass::Additive`], and their embedded textures
+    /// [`oag_vex::vex::BlendClass::Additive`], and their embedded textures
     /// carry a black background with alpha pinned at 250/255 - so drawing them
     /// with an ordinary alpha blend puts each bracket on an opaque black tile.
     /// Carrying the declared class here is what lets the draw honour it
@@ -242,7 +243,7 @@ pub struct Placed {
     /// treatment from the same reading the day a Pure disc is present to read
     /// them from. See `docs/ui/hud.md` and
     /// `docs/ghidra/functions/psp-pulse-usa/mesh-draw.md`.
-    pub blend: Option<oag_formats::vex::BlendClass>,
+    pub blend: Option<oag_vex::vex::BlendClass>,
 }
 
 /// Every front-end image, in one RGBA buffer.
@@ -302,7 +303,7 @@ pub struct DecodedImage {
     /// Becomes [`Placed::quad_extent`].
     pub quad_extent: Option<[f32; 2]>,
     /// Becomes [`Placed::blend`].
-    pub blend: Option<oag_formats::vex::BlendClass>,
+    pub blend: Option<oag_vex::vex::BlendClass>,
 }
 
 impl Sheet {
@@ -450,7 +451,7 @@ impl Sheet {
     /// backdrop is the only one so far - where naming the entry again to look it
     /// up would mean carrying the name beside the sheet for no other reason.
     /// `None` for a sheet with none or several, so a caller cannot silently get
-    /// "the first of many". Mirrors `oag_formats::gtf::Gtf::only`.
+    /// "the first of many". Mirrors `oag_texture::gtf::Gtf::only`.
     #[must_use]
     pub fn only(&self) -> Option<(&str, Placed)> {
         match self.placed.as_slice() {
@@ -498,7 +499,7 @@ mod tests {
         out.extend_from_slice(&width.to_le_bytes());
         out.extend_from_slice(&height.to_le_bytes());
         out.push(8);
-        out.resize(oag_formats::texture::HEADER_LEN, 0);
+        out.resize(oag_texture::texture::HEADER_LEN, 0);
         for index in 0..256u32 {
             let level = u8::try_from(index).unwrap_or(255);
             out.extend_from_slice(&[level, level, level, 255]);

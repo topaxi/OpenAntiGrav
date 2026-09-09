@@ -66,7 +66,7 @@ fn main() -> anyhow::Result<()> {
         let data = mesh::read_blob(&spec, &name)?;
         let geometry = mesh::rcs::sibling_geometry(&spec, &name, &data)
             .ok_or_else(|| anyhow::anyhow!("no sibling"))?;
-        let m = oag_formats::rcsmodel::Model::parse(&geometry)?;
+        let m = oag_rcs::rcsmodel::Model::parse(&geometry)?;
         let mut count: std::collections::BTreeMap<u32, usize> = Default::default();
         for mesh in &m.meshes {
             *count.entry(mesh.material).or_default() += 1;

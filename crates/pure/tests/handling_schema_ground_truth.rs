@@ -36,7 +36,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use oag_formats::fexml::{self, Node};
+use oag_tables::fexml::{self, Node};
 
 /// Pure's disc. Serial `UCUS-98612`.
 const PURE_IMAGE: &str = "data/images/pure-psp-usa.chd";
@@ -413,7 +413,7 @@ fn difference(left: &Schema, right: &Schema) -> Vec<(String, Vec<String>)> {
 #[test]
 #[ignore = "needs data/images/pure-psp-usa.chd"]
 fn pures_zone_mode_file_authors_its_blocks_outside_any_class() {
-    use oag_formats::handling;
+    use oag_tables::handling;
 
     let Some(source) = image(PURE_IMAGE) else {
         return;
@@ -481,7 +481,7 @@ fn pures_zone_mode_file_authors_its_blocks_outside_any_class() {
 #[test]
 #[ignore = "needs data/images/pure-psp-usa.chd and pulse-psp-usa.chd"]
 fn the_global_handling_file_is_on_both_discs_and_differs_in_two_places() {
-    use oag_formats::handling;
+    use oag_tables::handling;
 
     let Some((pure, pulse)) = both_images() else {
         return;

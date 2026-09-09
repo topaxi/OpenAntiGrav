@@ -24,12 +24,12 @@
 //! the pickup system is left to `just test-data`.
 
 use oag_core::math::Vec3;
-use oag_formats::weapons::Weapon;
 use oag_gameplay::hash::hash_world;
 use oag_gameplay::projectile;
 use oag_gameplay::world::World;
 use oag_physics::params::Dimensions;
 use oag_physics::{CollisionWorld, DamageRules, Surface, TriangleSoup};
+use oag_tables::weapons::Weapon;
 
 /// Our own fixed timestep. ADR-0007.
 const TICK: f32 = 1.0 / 60.0;
@@ -62,8 +62,8 @@ fn corridor() -> CollisionWorld {
 /// the thing the reference is measuring. A Missile that never flies would move no
 /// hash either, but the next person to add a projectile to this scenario should
 /// have to think about it rather than find one already half-wired.
-fn weapon_stats() -> oag_formats::weapons::WeaponStats {
-    oag_formats::weapons::parse(
+fn weapon_stats() -> oag_tables::weapons::WeaponStats {
+    oag_tables::weapons::parse(
         r#"<WeaponStats>
              <Weapon type="Global"><Stats slowdown_limit="0"/></Weapon>
              <Weapon type="Rocket"><Stats absorb="1" blastforce="20" blastradius="30"

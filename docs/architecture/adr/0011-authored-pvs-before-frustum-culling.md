@@ -11,7 +11,7 @@ authored set, the spline adjacency and the unknown-means-everything fallback
 all stand.
 
 Built and on by default. The authored set is decoded and validated
-([`oag_formats::pvs`](../../../crates/formats/src/pvs.rs)), the draw-call
+([`oag_vex::pvs`](../../../crates/vex/src/pvs.rs)), the draw-call
 association and two-tier test live in
 ([`oag_render::pvs`](../../../crates/render/src/pvs.rs)), and the race loop runs
 both tiers under `[graphics] pvs_culling` and `[graphics] frustum_culling`.
@@ -337,8 +337,8 @@ outside the first tier entirely, which is safe: they draw.
 
 - [`docs/formats/track.md`](../../formats/track.md) - the `section` payload and
   its confidence scores
-- [`crates/formats/src/pvs.rs`](../../../crates/formats/src/pvs.rs) - the decoder
-- [`crates/formats/tests/pvs_ground_truth.rs`](../../../crates/formats/tests/pvs_ground_truth.rs) -
+- [`crates/vex/src/pvs.rs`](../../../crates/vex/src/pvs.rs) - the decoder
+- [`crates/vex/tests/pvs_ground_truth.rs`](../../../crates/vex/tests/pvs_ground_truth.rs) -
   the validation, and where every figure above comes from
 - [`crates/render/src/pvs.rs`](../../../crates/render/src/pvs.rs) - the
   association rule and the two-tier test

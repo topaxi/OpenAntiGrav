@@ -90,7 +90,7 @@ Two things kept it off the screen entirely, and each hid the other:
 shortened while its `Data\XML\*_HUD.xml` are not, so a reader that calls
 `fexml::expand` unconditionally rejects a perfectly good layout with "no
 `<code>` dictionary element" and the whole HUD goes with it.
-[`fexml::text`](../../crates/formats/src/fexml.rs) decides from the blob's own
+[`fexml::text`](../../crates/tables/src/fexml.rs) decides from the blob's own
 first bytes instead.
 
 The atlas is an ordinary [PS2 texture](../formats/ps2-texture.md) that the
@@ -106,7 +106,7 @@ what that module exists for. See its documentation for the evidence and
 it rather than asserting the constant against itself. **Confidence 90.**
 
 The atlas's flag byte at `+0x07` is `2`, so `FLAG_SWIZZLED` is **clear** and it
-takes the linear path in [`texture.rs`](../../crates/formats/src/texture.rs) - it
+takes the linear path in [`texture.rs`](../../crates/texture/src/texture.rs) - it
 is one of the 7 of 13 `FE.wad` textures that are *not* pre-swizzled, unlike the
 five `.fnt` atlases, which all are. Size arithmetic closes exactly:
 `16 + 256*4 + 256*256 = 66576`.
@@ -619,7 +619,7 @@ TurboIcon ShieldIcon AutopilotIcon RocketIcon MissileIcon QuakeIcon CannonIcon
 PlasmaIcon BombIcon MineIcon LeachBeamIcon RepulserIcon ShurikenIcon
 ```
 
-That is exactly `oag_formats::weapons::Weapon::ALL`, misspellings (`LeachBeam`,
+That is exactly `oag_tables::weapons::Weapon::ALL`, misspellings (`LeachBeam`,
 `Repulser`) included, so the lookup is `format!("{}Icon", weapon.as_type())` -
 `oag_game::hud::pickup_icon_name` - and needs nothing recovered. Pinned against
 the shipped file for all thirteen by

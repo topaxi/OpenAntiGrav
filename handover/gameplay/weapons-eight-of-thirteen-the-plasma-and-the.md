@@ -91,7 +91,7 @@ the Mine's from nothing but attribute counts, putting the Plasma at
 run, after Turbo's `+0x84` and Shield's `+0x8c`. The arithmetic can now be
 trusted for the Quake's four and the Cannon's five as well.
 
-**Two files split rather than baselined** (`crates/formats/src/weapons.rs`,
+**Two files split rather than baselined** (`crates/tables/src/weapons.rs`,
 `crates/game/src/race/field.rs`), and the second surfaced the *same* fault the
 last split did: a stranded doc comment. `fire_opponent_rocket`'s paragraphs sat
 above `fire_opponent_missile` and the Rocket carried none, exactly as
@@ -309,7 +309,7 @@ both corrected in the same change.
 
 Built straight off the same day's evidence page, with no further Ghidra
 session - the page's own "buildable now" claim held. `Weapon::Cannon` joins
-`oag_gameplay::pickup::IMPLEMENTED`; `oag_formats::weapons::CannonStats`
+`oag_gameplay::pickup::IMPLEMENTED`; `oag_tables::weapons::CannonStats`
 decodes the block whole (`absorb rounds rate damage_per_bullet
 slowdown_time`); `Race::advance_cannons` is the per-craft, per-tick port of
 `Cannon_UpdateReload` - every craft holding one fires itself, twin barrels
@@ -878,7 +878,7 @@ this the longest single test in the suite.
 ## Answered 2026-09-07: Pulse's Quake is fire, **Pure's** is the concrete one
 
 The maintainer's *"like a concrete wave"* is a real memory of a real effect -
-just not Pulse's. Every colour below was parsed with `oag_formats::pob`, not
+just not Pulse's. Every colour below was parsed with `oag_vex::pob`, not
 transcribed by hand.
 
 | title | `WO_QUAKE.POB` emitters | reads as |
@@ -1009,7 +1009,7 @@ that is what the port spends.
 
 Built the same session, from that page and this thread in full:
 
-- `oag_formats::weapons::QuakeStats` - the four authored attributes.
+- `oag_tables::weapons::QuakeStats` - the four authored attributes.
 - `oag_gameplay::projectile::quake::Wave` - the single travelling instance,
   tracked as a plain `f32` distance-along-course in
   `oag_race::Standing::progress`'s own convention rather than the original's

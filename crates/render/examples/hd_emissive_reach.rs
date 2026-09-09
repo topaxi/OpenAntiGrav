@@ -23,7 +23,7 @@
 //! cargo run -p oag-render --example hd_emissive_reach
 //! ```
 
-use oag_formats::rcsmaterial::{self, fragment};
+use oag_rcs::rcsmaterial::{self, fragment};
 use oag_render::mesh::{self, slots};
 
 const ARCHIVES: &[&str] = &[
@@ -65,7 +65,7 @@ fn main() -> anyhow::Result<()> {
             else {
                 continue;
             };
-            let Ok(geometry_model) = oag_formats::rcsmodel::Model::parse(&geometry) else {
+            let Ok(geometry_model) = oag_rcs::rcsmodel::Model::parse(&geometry) else {
                 continue;
             };
 

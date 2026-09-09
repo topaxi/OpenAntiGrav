@@ -19,7 +19,7 @@ fn main() -> anyhow::Result<()> {
             oag_assets::Container::open(&format!("{spec}:PSP_GAME/USRDIR/Data.wad"))
                 .and_then(|mut c| c.read_entry(&name))
         })?;
-    let nodes = oag_formats::vex::nodes(&data)?;
+    let nodes = oag_vex::vex::nodes(&data)?;
 
     let mut by_class: std::collections::BTreeMap<u32, usize> = Default::default();
     for node in &nodes {

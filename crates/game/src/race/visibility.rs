@@ -60,7 +60,7 @@ impl SceneStats {
 /// `docs/architecture/adr/0011-authored-pvs-before-frustum-culling.md`.
 #[derive(Debug)]
 pub struct TrackVisibility {
-    pub(super) pvs: oag_formats::pvs::TrackPvs,
+    pub(super) pvs: oag_vex::pvs::TrackPvs,
     padding: SectionPadding,
     pub(super) sections: DrawSections,
     /// Mask-exclusive section pairs with overlapping geometry - authored
@@ -78,9 +78,9 @@ pub struct TrackVisibility {
     /// coexist - a `.vex` with `section` nodes has no chunks and a PS3
     /// circuit has no `section` nodes - so this sits beside the PSP fields
     /// rather than in an enum with them, and whichever is populated is the
-    /// tier that runs. See [`oag_formats::hd_pvs`] and
+    /// tier that runs. See [`oag_rcs::hd_pvs`] and
     /// `docs/formats/hd-pvs.md`.
-    chunks: Option<oag_formats::hd_pvs::Pvs>,
+    chunks: Option<oag_rcs::hd_pvs::Pvs>,
 }
 
 impl TrackVisibility {
@@ -91,8 +91,8 @@ impl TrackVisibility {
     /// The caller then draws with no first tier, exactly as before.
     #[must_use]
     pub fn build(model: &Model, blob: &[u8], ai: &AiTrack) -> Option<Self> {
-        let nodes = oag_formats::vex::nodes(blob).ok()?;
-        let pvs = oag_formats::pvs::TrackPvs::from_nodes(blob, &nodes).ok()?;
+        let nodes = oag_vex::vex::nodes(blob).ok()?;
+        let pvs = oag_vex::pvs::TrackPvs::from_nodes(blob, &nodes).ok()?;
         if pvs.is_empty() {
             return None;
         }
@@ -100,7 +100,7 @@ impl TrackVisibility {
         // whole subtree, so each draw call inherits its scene node's group.
         // This is what hides a far-LOD copy of the track while racing on the
         // real one - see `oag_render::pvs`.
-        let governing = oag_formats::pvs::governing_sections(blob, &nodes).ok()?;
+        let governing = oag_vex::pvs::governing_sections(blob, &nodes).ok()?;
         let (sections, placement) = DrawSections::place(model, &governing, &pvs);
         let swaps = SwapConflicts::find(&pvs, &sections, model);
         Some(Self {
@@ -139,7 +139,7 @@ impl TrackVisibility {
                 return None;
             }
         };
-        let pvs = match oag_formats::hd_pvs::Pvs::parse(&blob) {
+        let pvs = match oag_rcs::hd_pvs::Pvs::parse(&blob) {
             Ok(pvs) => pvs,
             Err(e) => {
                 report.push(format!("{name}: {e} - drawing every chunk"));
@@ -156,7 +156,7 @@ impl TrackVisibility {
             },
         ));
         Some(Self {
-            pvs: oag_formats::pvs::TrackPvs::empty(),
+            pvs: oag_vex::pvs::TrackPvs::empty(),
             padding: SectionPadding::default(),
             sections: DrawSections::default(),
             swaps: SwapConflicts::none(),
@@ -167,7 +167,7 @@ impl TrackVisibility {
 
     /// The circuit's chunk partition, when it has one.
     #[must_use]
-    pub fn chunks(&self) -> Option<&oag_formats::hd_pvs::Pvs> {
+    pub fn chunks(&self) -> Option<&oag_rcs::hd_pvs::Pvs> {
         self.chunks.as_ref()
     }
 

@@ -2,7 +2,7 @@
 //! names that carry it.
 //!
 //! Only the low two bits of `Material::state` are read today
-//! (`oag_formats::rcsmodel::Transparency`). This tabulates the rest, so a bit
+//! (`oag_rcs::rcsmodel::Transparency`). This tabulates the rest, so a bit
 //! that separates the cutout materials from the rest can be found by what
 //! carries it rather than guessed.
 
@@ -54,7 +54,7 @@ fn main() -> anyhow::Result<()> {
             let Some(geometry) = mesh::rcs::sibling_geometry(&spec, &name, &data) else {
                 continue;
             };
-            let Ok(model) = oag_formats::rcsmodel::Model::parse(&geometry) else {
+            let Ok(model) = oag_rcs::rcsmodel::Model::parse(&geometry) else {
                 continue;
             };
             for material in &model.materials {

@@ -1,0 +1,23 @@
+[package]
+name = "oag-video"
+description = "Video containers: what the originals wrap a bitstream in, and this project's own movie cache"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[features]
+# AV1 decoding, for the movie cache. Off by default so that the tools which
+# only demux the originals' containers keep building with no dependencies at
+# all - which, with `av1` off, this crate has none of.
+av1 = ["dep:re_rav1d"]
+
+[dependencies]
+# `default-features = false` drops the `asm` feature, which needs `nasm` at
+# build time. A 480x272 movie decodes around 900fps without it - thirty times
+# faster than playback. `bitdepth_8` is all the 8-bit I420 path needs.
+re_rav1d = { workspace = true, optional = true }
+
+[lints]
+workspace = true

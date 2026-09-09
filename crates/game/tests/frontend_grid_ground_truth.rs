@@ -40,7 +40,7 @@
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
-use oag_formats::fexml;
+use oag_tables::fexml;
 
 /// The USA PSP pressing - **the one the PS2 layout was derived from**, which
 /// [`the_two_psp_pressings_differ_in_exactly_one_coordinate`] is here to show.

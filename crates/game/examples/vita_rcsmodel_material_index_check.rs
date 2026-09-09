@@ -16,7 +16,7 @@
 
 use std::collections::BTreeMap;
 
-use oag_formats::rcsmodel::psp2;
+use oag_rcs::rcsmodel::psp2;
 
 const PACKAGE: &str = "data/extracted/vita/PCSF00007/base/PSP2/data.psarc";
 

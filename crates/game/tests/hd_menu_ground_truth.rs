@@ -24,7 +24,7 @@
 
 use std::path::{Path, PathBuf};
 
-use oag_formats::fexml;
+use oag_tables::fexml;
 
 /// The decrypted HD/Fury image, if it is there.
 fn image() -> Option<PathBuf> {

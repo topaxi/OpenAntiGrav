@@ -3,9 +3,9 @@
 **Status: decoded and validated.** The chunked triangle-soup payload parses on
 **every collision node on both discs** - 130 on the PSP disc and 189 on the PS2
 one - with every byte accounted for, and is implemented in
-[`oag_formats::collision`](../../crates/formats/src/collision.rs). The checks are
+[`oag_vex::collision`](../../crates/vex/src/collision.rs). The checks are
 kept as tests
-([`collision_ground_truth.rs`](../../crates/formats/tests/collision_ground_truth.rs)),
+([`collision_ground_truth.rs`](../../crates/vex/tests/collision_ground_truth.rs)),
 not as prose.
 
 Collision geometry lives in the track's [`.vex`](vex.md) file as ordinary scene
@@ -163,7 +163,7 @@ the average `-0.475`, and a negative never reaches the response - which matters,
 because a negative coefficient in that response would *add* velocity instead of
 removing it.
 
-`oag_formats::collision` therefore models it as `Option<f32>`, where `None` means
+`oag_vex::collision` therefore models it as `Option<f32>`, where `None` means
 "no effect", and `combine_friction` is the rule rather than a comment.
 Confidence **88**, unchanged from the Ghidra reading: this is decompilation
 evidence, and no shipped byte bears on it.

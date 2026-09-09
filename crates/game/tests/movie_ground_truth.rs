@@ -118,7 +118,7 @@ fn intro_elementary_stream(image: &Path) -> Vec<u8> {
     let blob = archives
         .read_name(pulse::names::INTRO_MOVIE)
         .expect("reading the intro movie out of its archive");
-    let demuxed = oag_formats::pmf::demux(&blob).expect("demuxing the intro's program stream");
+    let demuxed = oag_video::pmf::demux(&blob).expect("demuxing the intro's program stream");
     demuxed.video
 }
 

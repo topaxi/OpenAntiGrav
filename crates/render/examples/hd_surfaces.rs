@@ -4,7 +4,7 @@
 //! See `docs/formats/rcsmodel.md`, "A chunk names one material here and the
 //! engine reads several".
 
-use oag_formats::rcsmodel;
+use oag_rcs::rcsmodel;
 
 fn main() -> anyhow::Result<()> {
     let image = std::env::args()

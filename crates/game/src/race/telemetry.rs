@@ -32,7 +32,7 @@ pub struct Telemetry {
     /// Here so `--race --screenshot`'s own log answers "did the pad grant
     /// anything" without a debugger. It is the question every weapon capture
     /// starts with, and a HUD icon in a screenshot is a poor way to ask it.
-    pub pickup: Option<oag_formats::weapons::Weapon>,
+    pub pickup: Option<oag_tables::weapons::Weapon>,
     /// How many projectiles are in the air.
     pub projectiles: usize,
 }

@@ -72,7 +72,7 @@ use crate::ship::ShipState;
 /// nothing.
 ///
 /// `limit` comes from `<Weapon type="Global"><Stats slowdown_limit/>` by way of
-/// `oag_formats::weapons::WeaponStats::slowdown_limit`. It is a parameter rather
+/// `oag_tables::weapons::WeaponStats::slowdown_limit`. It is a parameter rather
 /// than a constant here for the reason this crate takes every authored number as
 /// one: it is the player's disc that says what it is.
 ///

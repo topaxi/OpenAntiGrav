@@ -97,7 +97,7 @@ Two things worth carrying forward from doing it:
   not shadow another. Whether that is worth a real stencil volume is a
   question about how it looks in motion, which nobody has seen.
 - ~~The `m` face-to-vertex index mapping's exact byte layout~~ **Read
-  2026-09-04**, and the parser is `oag_formats::shadow_occluder`: `u16[4]` of
+  2026-09-04**, and the parser is `oag_vex::shadow_occluder`: `u16[4]` of
   per-edge adjacent faces at `+0x10`, `u16[4]` of vertex indices at `+0x18`,
   the fourth repeating the first on a triangle. Reciprocal on **14,328 of
   14,328** edges disc-wide, every index in range on 4,381 of 4,381 faces, and

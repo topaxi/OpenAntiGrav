@@ -10,8 +10,8 @@ use std::path::Path;
 use std::sync::{Arc, Mutex};
 
 use anyhow::{Context, Result};
-use oag_formats::fexml;
 use oag_pulse as pulse;
+use oag_tables::fexml;
 
 use crate::title::open_source;
 

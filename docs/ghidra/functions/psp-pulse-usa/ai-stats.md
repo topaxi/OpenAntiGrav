@@ -275,7 +275,7 @@ from sound cues and lock distances - plus the five it left as bare numbers:
 `Bomb` at id 8 is read out of the image directly (`0x08a7be64` is
 `42 6f 6d 62 00`), because Ghidra had not typed it as a string.
 
-**This disagrees with `oag_formats::weapons::Weapon::ALL` at three positions**,
+**This disagrees with `oag_tables::weapons::Weapon::ALL` at three positions**,
 and the enum is the one that is wrong about ids: it has `Cannon, Turbo, Shield`
 at 3/4/5 where the id space has `Turbo, Shield, Cannon`. The enum's order is the
 *string-pool layout* order at `0x08a78c00`, which is a different thing and is

@@ -698,7 +698,7 @@ seen from the authoring side.
       really is in the bank they name. `speaker` `0x3cc` has a registered class
       and no instance on the disc at all. See
       [track-sound-emitters.md](../ghidra/functions/psp-pulse-usa/track-sound-emitters.md);
-      `oag_formats::sound_emitters` parses them and **nothing plays them yet**.
+      `oag_vex::sound_emitters` parses them and **nothing plays them yet**.
       **What is still not placed**: the emitter cone (recovered,
       defaulted off, and nothing found turns it on), the doppler term
       (`-(dd/dt) * scale * 1536`, read but in the unrecovered pitch unit), and
@@ -866,7 +866,7 @@ change how this list should be read:
       A genuine live switch needs the same per-frame camera mechanism as
       frustum culling below, and is not built
 - [x] **PVS culling** off the track's own `section` `0x3c9` payload. The
-      payload is now [decoded](../formats/track.md) (`oag_formats::pvs`,
+      payload is now [decoded](../formats/track.md) (`oag_vex::pvs`,
       validated against every track file on both discs) and drawn with:
       `oag_render::pvs` intersects each draw call's bounding sphere with the
       authored section boxes at load, and the race loop tests that mask against
@@ -921,10 +921,10 @@ change how this list should be read:
       [`envsettings`](../formats/envsettings.md). **The sky and the fog are
       still not drawn**, and on HD that is total rather than partial: its
       circuits author no `Skycube` node, so an HD race has no sky and no fog at
-      all, and the sky's own `sky.gtf` is a cubemap `oag_formats::gtf` refuses.
+      all, and the sky's own `sky.gtf` is a cubemap `oag_texture::gtf` refuses.
 - [~] `AmbientLight` `0x12c`, `DirectionalLight` `0x131`, `PointLight` `0x132` -
       **decoded and investigated; not built as a render feature.** All three
-      payloads are parsed (`crates/formats/src/lighting.rs`,
+      payloads are parsed (`crates/vex/src/lighting.rs`,
       [`lighting.md`](../formats/lighting.md)); a Ghidra pass
       ([`lighting.md`](../ghidra/functions/psp-pulse-eu/lighting.md)) found
       `PointLight` has no `Vex_RegisterClass` call site at all, and
@@ -1009,7 +1009,7 @@ change how this list should be read:
       and `Gu_Fog`, in
       [`fog.md`](../ghidra/functions/psp-pulse-usa/fog.md) - including that the
       two parameter sets are the ends of a lerp across the volume's local Z.
-      `oag_formats::fog` parses it, `race::load` reports what a circuit authors
+      `oag_vex::fog` parses it, `race::load` reports what a circuit authors
       ("1 volume(s), 500 units across, 450..1850 at the near end" on
       `16_Track`), the camera samples the lerp per frame and `mesh.wgsl`'s
       `fogged()` applies the linear ramp `Gu_Fog` defines. A track that authors

@@ -82,7 +82,7 @@ fn triangle_model() -> Model {
             moving: false,
             blend: None,
             blend_state: None,
-            layer: oag_formats::vex::LAYER_DEFAULT,
+            layer: oag_vex::vex::LAYER_DEFAULT,
             culled: false,
             range: 0..3,
             texture: None,

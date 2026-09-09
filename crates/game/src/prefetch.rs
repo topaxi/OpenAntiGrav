@@ -495,7 +495,7 @@ fn plan(options: &Options) -> Result<Plan> {
                 continue;
             };
 
-            if head.starts_with(oag_formats::pmf::MAGIC) {
+            if head.starts_with(oag_video::pmf::MAGIC) {
                 let key = format!("{hash:08x}-{size}");
                 // The question is not asked at all under `--refresh-video`: the
                 // point of that flag is to convert the ones that *are* cached,
@@ -605,10 +605,10 @@ fn movie_is_cached(
     key: &str,
     existing: &[String],
 ) -> bool {
-    let Ok(head) = archive.peek(index, oag_formats::pmf::HEADER_LEN as u64) else {
+    let Ok(head) = archive.peek(index, oag_video::pmf::HEADER_LEN as u64) else {
         return false;
     };
-    let Ok(header) = oag_formats::pmf::Header::parse(&head) else {
+    let Ok(header) = oag_video::pmf::Header::parse(&head) else {
         return false;
     };
     let Some(video) = header.video else {

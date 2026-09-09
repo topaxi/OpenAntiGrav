@@ -1,6 +1,6 @@
 //! Building a queryable collision world out of decoded collision nodes.
 //!
-//! The same layering as [`crate::handling`]: `oag_formats::collision` describes
+//! The same layering as [`crate::handling`]: `oag_vex::collision` describes
 //! what is on the disc, `oag_physics::CollisionWorld` is what the force law
 //! queries, and this is the only bridge. Neither side knows about the other.
 //!
@@ -17,8 +17,8 @@
 //!   the format's count field permits more than 65,535 triangles per mesh even
 //!   though nothing observed uses that many.
 
-use oag_formats::collision::{CollisionNode, SurfaceKind};
 use oag_physics::{CollisionWorld, Surface, TriangleSoup};
+use oag_vex::collision::{CollisionNode, SurfaceKind};
 
 /// Turns decoded collision nodes into a world the ship can cast rays against.
 ///
@@ -82,7 +82,7 @@ pub fn surface_for(kind: SurfaceKind) -> Option<Surface> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use oag_formats::collision::{CollisionGeometry, CollisionMesh};
+    use oag_vex::collision::{CollisionGeometry, CollisionMesh};
 
     fn mesh() -> CollisionMesh {
         CollisionMesh {
@@ -168,7 +168,7 @@ mod tests {
             );
         }
         assert_eq!(
-            oag_formats::collision::WALL_FRICTION,
+            oag_vex::collision::WALL_FRICTION,
             oag_physics::WALL_FRICTION
         );
 
@@ -177,7 +177,7 @@ mod tests {
         // negative.
         for a in [Some(oag_physics::WALL_FRICTION), None] {
             for b in [Some(oag_physics::WALL_FRICTION), None] {
-                let formats = oag_formats::collision::combine_friction(a, b);
+                let formats = oag_vex::collision::combine_friction(a, b);
                 assert_eq!(formats, oag_physics::combine_friction(a, b));
                 assert!(formats >= 0.0, "friction went negative: {a:?} {b:?}");
             }

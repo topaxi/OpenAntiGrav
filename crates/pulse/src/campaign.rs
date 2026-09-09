@@ -2,7 +2,7 @@
 //! and the sixteen `grid_NN.xml` files it lists, all inside `Data.wad`.
 //!
 //! **Names only, no decoding.** How a `PI_Grid`/`PI_Cell` document parses is
-//! `oag_formats::race_campaign`'s job - a property of the file's own shape,
+//! `oag_tables::race_campaign`'s job - a property of the file's own shape,
 //! not of this release - and per [ADR-0022] this crate carries no engine-side
 //! type for it either: only the USA PSP pressing has been checked for this
 //! path (`docs/ghidra/functions/psp-pulse-usa/race-campaign.md`), and item 4
@@ -13,11 +13,11 @@
 //!
 //! ```no_run
 //! use oag_assets::Archive;
-//! use oag_formats::race_campaign;
+//! use oag_tables::race_campaign;
 //!
 //! let mut archive = Archive::open("data/images/pulse-psp-usa.chd:PSP_GAME/USRDIR/Data.wad")?;
 //! let definition = archive.read_name(oag_pulse::campaign::DEFINITION_ENTRY)?;
-//! let expanded = oag_formats::fexml::text(&definition)?;
+//! let expanded = oag_tables::fexml::text(&definition)?;
 //! for src in race_campaign::definition_entries(&expanded) {
 //!     let blob = archive.read_name(&src)?;
 //!     let grid = race_campaign::from_blob(&blob)?;
@@ -42,7 +42,7 @@ pub const DEFINITION_ENTRY: &str = r"Data\Plugins\grids\Definition.xml";
 ///
 /// **A measurement of one disc, not a promise about every release.** Reading
 /// [`DEFINITION_ENTRY`] itself (via
-/// [`oag_formats::race_campaign::definition_entries`](../../oag_formats/race_campaign/fn.definition_entries.html))
+/// [`oag_tables::race_campaign::definition_entries`](../../oag_formats/race_campaign/fn.definition_entries.html))
 /// is what a caller wanting a release-agnostic count should do; this constant
 /// exists so a test can assert this disc still says sixteen without decoding
 /// the file, and so [`entry_name`] has a range to check `index` against.

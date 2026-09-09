@@ -45,7 +45,7 @@ use gstreamer::prelude::*;
 use gstreamer::{self as gst};
 use gstreamer_app as gst_app;
 use gstreamer_video::{self as gst_video, VideoFrameExt};
-use oag_formats::av1;
+use oag_video::av1;
 
 use super::{PixelFormat, VideoDecoder, VideoFrame};
 

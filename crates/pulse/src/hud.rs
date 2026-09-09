@@ -242,7 +242,7 @@ pub const PICKUP_BACKDROP_COLOUR: &str = "HudBGColour";
 /// than estimate it from a screen-space neighbour, which is what the `Turbo`
 /// anomaly above needs to resolve either way. See `docs/gameplay/pickups.md`.
 ///
-/// Positional rather than keyed by `oag_formats::weapons::Weapon`: this crate
+/// Positional rather than keyed by `oag_tables::weapons::Weapon`: this crate
 /// is deliberately tables only, with no non-test edge to `oag-formats` (see
 /// this file's `Cargo.toml`), so the index is a data contract with
 /// `oag_game::hud` - which does own that dependency - the same way

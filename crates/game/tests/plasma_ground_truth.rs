@@ -43,9 +43,9 @@
 
 use std::path::PathBuf;
 
-use oag_formats::weapons::Weapon;
 use oag_game::race;
 use oag_gameplay::input::{Button, Input};
+use oag_tables::weapons::Weapon;
 
 /// Long enough that the craft is genuinely up to speed before a test measures
 /// anything.
@@ -139,7 +139,7 @@ fn the_discs_plasma_block_decodes_as_a_projectile() {
     // Four separately authored class speeds, ascending - which is the file's own
     // design rather than a scaling this engine applies, and is what says the
     // four offsets were read in the right order rather than all landing on one.
-    let speeds: Vec<f32> = oag_formats::handling::SpeedClass::ALL
+    let speeds: Vec<f32> = oag_tables::handling::SpeedClass::ALL
         .into_iter()
         .map(|class| plasma.speed_for(class))
         .collect();
@@ -234,7 +234,7 @@ fn a_plasma_fired_on_a_real_track_is_one_bolt_and_it_flies() {
          {speed:.1} units/s"
     );
     let authored =
-        (plasma.speed_for(oag_formats::handling::SpeedClass::Venom) + plasma.launch_speed) / 3.6;
+        (plasma.speed_for(oag_tables::handling::SpeedClass::Venom) + plasma.launch_speed) / 3.6;
     assert!(
         (bolt_speed - authored).abs() < 1.0,
         "the bolt is doing {bolt_speed:.1} units/s where the disc's own Venom \

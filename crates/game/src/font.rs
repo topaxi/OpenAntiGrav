@@ -3,7 +3,7 @@
 //!
 //! # Two sources, one shape
 //!
-//! [`Atlas::from_font`] builds this from a decoded [`oag_formats::fnt::Font`] -
+//! [`Atlas::from_font`] builds this from a decoded [`oag_texture::fnt::Font`] -
 //! the disc's real glyphs, real boxes and real advances. [`Atlas::build`] is the
 //! fallback: 5x7, uppercase only, written for this project, and meant to look
 //! like the approximation it is.
@@ -64,7 +64,7 @@
 
 use std::collections::BTreeMap;
 
-use oag_formats::fnt;
+use oag_texture::fnt;
 
 /// Glyph width in pixels.
 pub const GLYPH_WIDTH: u32 = 5;

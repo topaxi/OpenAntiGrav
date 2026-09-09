@@ -73,7 +73,7 @@ row." See [Pushing it further](#pushing-it-further-and-what-it-is-actually-block
 
 Measured across all 382 version-6 `.vex` files in every `.wad` on
 `pulse-psp-usa.chd`, and asserted by
-[`shadow_occluder_ground_truth.rs`](../../crates/formats/tests/shadow_occluder_ground_truth.rs).
+[`shadow_occluder_ground_truth.rs`](../../crates/vex/tests/shadow_occluder_ground_truth.rs).
 
 | Class | Count | Note |
 | --- | --- | --- |
@@ -153,7 +153,7 @@ Edge `s` runs from vertex slot `s` to slot `s + 1`, wrapping, so the loop is
 closed whatever the count and the runtime can walk four edges unconditionally.
 Measured across all 129 nodes and 4,381 faces on `pulse-psp-usa.chd`, and
 asserted by
-[`shadow_occluder_ground_truth.rs`](../../crates/formats/tests/shadow_occluder_ground_truth.rs)'s
+[`shadow_occluder_ground_truth.rs`](../../crates/vex/tests/shadow_occluder_ground_truth.rs)'s
 `the_face_records_index_the_vertex_array_and_each_other`:
 
 - **Adjacency is reciprocal on 14,328 of 14,328 edges.** The face named across
@@ -184,10 +184,10 @@ costs it anything.
 `Data.wad#840` `shadowShape` face 13 of 110 winds against its own normal, and
 `Data.wad#744` `shadowShape` face 9 of 18 has no area. Refusing them would
 refuse two whole hulls over two faces, and only a caller building a volume can
-decide what to do with a reversed face - `oag_formats::shadow_occluder`'s
+decide what to do with a reversed face - `oag_vex::shadow_occluder`'s
 `Face::winding` is how it asks.
 
-The parser is [`oag_formats::shadow_occluder`](../../crates/formats/src/shadow_occluder.rs),
+The parser is [`oag_vex::shadow_occluder`](../../crates/vex/src/shadow_occluder.rs),
 whose `Occluder::silhouette` is the edge walk this layout exists for: an edge is
 on the silhouette when exactly one of the two faces meeting there faces the
 projection direction, which the `+0x10` array answers in one lookup instead of a
@@ -665,9 +665,9 @@ Until all three move, this stays a paragraph and not a row.
 Each step is a landing that can be reviewed on its own.
 
 1. **Make the census durable - done, 2026-09-02.**
-   [`shadow_occluder_ground_truth.rs`](../../crates/formats/tests/shadow_occluder_ground_truth.rs),
+   [`shadow_occluder_ground_truth.rs`](../../crates/vex/tests/shadow_occluder_ground_truth.rs),
    four `#[ignore]`d tests on the model of
-   [`skycube_ground_truth.rs`](../../crates/formats/tests/skycube_ground_truth.rs),
+   [`skycube_ground_truth.rs`](../../crates/vex/tests/skycube_ground_truth.rs),
    pinning the counts above, the `0x50 + 32n + 16m` closure on 129/129, the two
    constants, the unit-vector record heads, the 97/129 padded box, the 119/10
    split and Pure's zero. Every number on this page is asserted there, so the

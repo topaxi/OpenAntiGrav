@@ -20,7 +20,7 @@ fn main() -> anyhow::Result<()> {
     let mut archives = oag_pulse::open(&path).or_else(|_| oag_pure::open(&path))?;
 
     let blob = archives.read_name(r"Data\Plugins\PI001\Definition.xml")?;
-    let xml = oag_formats::fexml::text(&blob)?;
+    let xml = oag_tables::fexml::text(&blob)?;
     println!(
         "{path}: PI_TeamModel {}, PI_ModelSkin {}",
         xml.matches("PI_TeamModel").count(),

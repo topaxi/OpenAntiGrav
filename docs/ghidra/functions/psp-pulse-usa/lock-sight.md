@@ -67,7 +67,7 @@ a fifth. **Where the LeachBeam's four go is inferred, not read** - see
 [Who places the LeachBeam's four is unrecovered](#who-places-the-leachbeams-four-is-unrecovered). `oag_game::race::sight::Held` carries which of the two is up and
 `oag_title::hud::Sights::Brackets` carries the names, its `leach` field `None`
 for a title that authors no such widget. What had kept the LeachBeam's four dark
-was entirely upstream - `oag_formats::weapons` parsed no
+was entirely upstream - `oag_tables::weapons` parsed no
 `<Weapon type="LeachBeam">`, so `Ship_AcquireLock`'s second pair of offsets had
 nothing behind them. See [The LeachBeam's own window](#the-leachbeams-own-window).
 
@@ -94,13 +94,13 @@ four, and its **far bound is shorter on all four**. So the LeachBeam reaches
 less far than the Missile does and its reticle takes a target later. No value is
 quoted here or asserted anywhere, per
 [ADR-0006](../../../architecture/adr/0006-no-copyrighted-content.md); the
-*relation* is what `crates/formats/tests/weapons_ground_truth.rs` pins, and it
+*relation* is what `crates/tables/tests/weapons_ground_truth.rs` pins, and it
 is the assertion that would catch a decoder reading one block for both.
 
 Two further things the block says:
 
 - **It authors no `slowdown_time`**, alone among the blocks
-  `oag_formats::weapons` decodes, on all four tables. A weapon that fastens onto
+  `oag_tables::weapons` decodes, on all four tables. A weapon that fastens onto
   a craft and drains it is not one that charges a fixed slowdown on impact, so
   the absence reads as design; recorded because the module's own docs had
   claimed the attribute was universal.

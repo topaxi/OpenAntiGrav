@@ -20,9 +20,9 @@
 //! (6,464 of 10,087, 64%) is a real consequence of the fix reaching more rim
 //! chains, not a filter bug.
 
-use oag_formats::rcsmaterial;
-use oag_formats::rcsmaterial::RcsMaterial;
-use oag_formats::rcsmaterial::fragment::Program;
+use oag_rcs::rcsmaterial;
+use oag_rcs::rcsmaterial::RcsMaterial;
+use oag_rcs::rcsmaterial::fragment::Program;
 
 const ARCHIVES: &[&str] = &[
     "DATA00", "DATA01", "DATA02", "DATA03", "DATA04", "DATA05", "DATA06",

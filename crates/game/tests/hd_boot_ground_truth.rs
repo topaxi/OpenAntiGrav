@@ -146,7 +146,7 @@ fn the_menus_offer_the_twelve_teams_this_disc_declares() {
         12,
         "the roster should be the disc's twelve, not the eight-team stand-in: {teams:?}"
     );
-    // The stand-in was `oag_formats::handling::TEAMS` (now `oag_pulse::race::TEAMS`),
+    // The stand-in was `oag_tables::handling::TEAMS` (now `oag_pulse::race::TEAMS`),
     // the PSP roster, which has no Fury team in it. It is gone rather than fixed - see
     // `roster_declared_ground_truth` - and naming a Fury team directly is still
     // what tells the two cases apart when the count is right for the wrong
@@ -335,7 +335,7 @@ fn the_logo_step_and_the_logo_widget_both_name_a_bik() {
 
     for name in [named, &widget.entry_name()] {
         let blob = archives.read_name(name).expect("the reel reads");
-        let header = oag_formats::bik::parse(&blob).expect("and parses");
+        let header = oag_video::bik::parse(&blob).expect("and parses");
         assert_eq!((header.width, header.height), (1920, 1080));
     }
 }
@@ -397,13 +397,13 @@ fn the_front_end_font_is_a_big_endian_fnt_and_it_is_the_one_loaded() {
     let name = r"Data\FE\Fonts\helv.fnt";
     let blob = archives.read_name(name).expect("HD's body face reads");
     assert_eq!(
-        oag_formats::fnt::byte_order(&blob),
+        oag_texture::fnt::byte_order(&blob),
         Some(oag_formats::ByteOrder::Big),
         "a PS3 .fnt is the PSP layout with its words the other way round"
     );
     assert_eq!(&blob[..4], b"TNF\x01", "the magic is a swapped word");
 
-    let font = oag_formats::fnt::Font::parse(&blob).expect("and it parses");
+    let font = oag_texture::fnt::Font::parse(&blob).expect("and it parses");
     assert_eq!((font.width, font.height), (1024, 512));
     assert_eq!(font.line_height, 33);
     assert_eq!(font.glyphs.len(), 243);
@@ -424,7 +424,7 @@ fn the_front_end_font_is_a_big_endian_fnt_and_it_is_the_one_loaded() {
 ///
 /// `sprite::Image::decode` tried the PSP `.mip` parser and then the PS2 one, so
 /// a `.gtf` was reported as `zero-sized texture 1281x0` - a complaint about a
-/// format the file is not - and the sheet came out 1x1. `oag_formats::gtf` had
+/// format the file is not - and the sheet came out 1x1. `oag_texture::gtf` had
 /// decoded these since long before the front end asked for one.
 ///
 /// The sizes are the disc's and are what tells a decoded sheet from a plausible

@@ -6,7 +6,7 @@
 //! among the loaders that call it.
 
 use anyhow::Result;
-use oag_formats::fexml;
+use oag_tables::fexml;
 
 /// Reads a front-end XML as text, expanding the name dictionary if it has one.
 ///

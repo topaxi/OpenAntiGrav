@@ -30,8 +30,8 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use oag_formats::bik;
 use oag_game::movie;
+use oag_video::bik;
 
 /// The decrypted HD/Fury image, if it is there.
 ///

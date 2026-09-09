@@ -38,8 +38,8 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 
-use oag_formats::fexml::{self, Node};
 use oag_game::hud;
+use oag_tables::fexml::{self, Node};
 
 fn image() -> Option<PathBuf> {
     oag_testdata::image("data/images/hdfury-ps3-eu-dec.iso")
@@ -373,7 +373,7 @@ fn every_sprite_s_source_rectangle_fits_inside_the_texture_it_names() {
                     let blob = archives
                         .read_name(&entry)
                         .unwrap_or_else(|e| panic!("{} -> {entry}: {e}", sprite.src));
-                    let parsed = oag_formats::gtf::Gtf::parse(&blob)
+                    let parsed = oag_texture::gtf::Gtf::parse(&blob)
                         .unwrap_or_else(|e| panic!("{entry}: {e}"));
                     let texture = parsed.only().expect("one texture");
                     let size = (f32::from(texture.width), f32::from(texture.height));

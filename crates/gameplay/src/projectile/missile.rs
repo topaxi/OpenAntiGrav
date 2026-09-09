@@ -42,9 +42,9 @@
 //!   being in a `Copy` world snapshot.
 
 use oag_core::math::Vec3;
-use oag_formats::weapons::MissileStats;
 use oag_physics::ShipState;
 use oag_physics::params::Dimensions;
+use oag_tables::weapons::MissileStats;
 
 /// How far the unit heading may swing in one second, as a chord length.
 ///
@@ -396,7 +396,7 @@ pub fn lock(
 /// Missile's spelling of it and is what every existing caller uses.
 ///
 /// The LeachBeam's window is authored shorter at the far end than the Missile's
-/// on both shipped tables - see `oag_formats::weapons::LeachBeamStats`, which is
+/// on both shipped tables - see `oag_tables::weapons::LeachBeamStats`, which is
 /// where that finding lives.
 #[must_use]
 pub fn lock_window(

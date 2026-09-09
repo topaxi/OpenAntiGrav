@@ -339,7 +339,7 @@ fn centred_makes_the_position_the_middle_of_the_rectangle() {
 /// with no known mapping, and they are simply named after the weapons.
 #[test]
 fn a_weapons_icon_widget_is_named_after_the_weapon() {
-    use oag_formats::weapons::Weapon;
+    use oag_tables::weapons::Weapon;
     assert_eq!(pickup_icon_name(Weapon::Turbo), "TurboIcon");
     // The two the game misspells. Whatever the file says is what the layout
     // says, which is the whole reason this can be a rule at all.
@@ -351,7 +351,7 @@ fn a_weapons_icon_widget_is_named_after_the_weapon() {
 /// something draws exactly its own - not every icon the layout carries.
 #[test]
 fn the_pickup_widgets_are_drawn_only_for_what_is_held() {
-    use oag_formats::weapons::Weapon;
+    use oag_tables::weapons::Weapon;
     let layout = Layout::from_xml(SAMPLE);
 
     let empty = pickup_sprites(&layout, Weapon::Turbo, oag_pulse::hud::ART);
@@ -385,7 +385,7 @@ fn the_pickup_widgets_are_drawn_only_for_what_is_held() {
 /// hexagon with nothing visible on it.
 #[test]
 fn the_pickup_backdrop_takes_its_weapons_own_colour_and_the_icon_keeps_its_authored_one() {
-    use oag_formats::weapons::Weapon;
+    use oag_tables::weapons::Weapon;
     let layout = Layout::from_xml(SAMPLE);
 
     // The premise, asserted rather than assumed: if a future layout stopped
@@ -434,7 +434,7 @@ fn the_pickup_backdrop_takes_its_weapons_own_colour_and_the_icon_keeps_its_autho
 /// has no frame to draw them in.
 #[test]
 fn a_weapon_with_no_measured_colour_falls_back_to_the_single_substitute() {
-    use oag_formats::weapons::Weapon;
+    use oag_tables::weapons::Weapon;
     let layout = Layout::from_xml(SAMPLE);
 
     assert_eq!(

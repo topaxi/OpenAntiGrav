@@ -27,9 +27,9 @@
 //! only thing that settles it. See `docs/tools/autopilot-planning.md`.
 
 use oag_core::math::Vec3;
-use oag_formats::track::{HOVER_LIFT, Sample};
 use oag_gameplay::input::Button;
 use oag_physics::{Environment, Handling, Raycaster, ShipState};
+use oag_vex::track::{HOVER_LIFT, Sample};
 
 use crate::replay::{DriveOptions, Held, drive_with};
 use crate::trace::Trace;
@@ -263,7 +263,7 @@ pub struct PlanOptions {
     /// The steering law's tunables.
     pub tuning: Tuning,
     /// A pad trigger box to test containment against, when the gate came from one.
-    pub volume: Option<oag_formats::pads::PadVolume>,
+    pub volume: Option<oag_vex::pads::PadVolume>,
 }
 
 impl Default for PlanOptions {

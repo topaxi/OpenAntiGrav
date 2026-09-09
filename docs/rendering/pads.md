@@ -272,7 +272,7 @@ to cover exactly the bars, the cheapest open question was whether the same
 file's RGB is red - which would make the lit state just this additive layer
 at a red texel, drawn at the module's own white default tint. **It is not
 red.** Decoded `12_sol_2`'s `ds_weaponup_ne.gtf` and `ds_speedup_ne.gtf`
-through `oag_formats::gtf::Texture::to_rgba`
+through `oag_texture::gtf::Texture::to_rgba`
 (`crates/render/examples/hd_pad_ne_colour_probe.rs`):
 
 | File | Whole-texture RGB mean | Alpha-selected (bars) RGB mean | Alpha>0 coverage |

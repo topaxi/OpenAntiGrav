@@ -12,7 +12,7 @@
 //! composition. The capture seam has no tests here at all.
 
 use super::*;
-use oag_formats::track;
+use oag_vex::track;
 
 mod autopilot;
 mod camera;
@@ -233,7 +233,7 @@ fn setup(handling: Handling) -> Setup {
 ///
 /// The identity basis is what makes the push direction readable: row 2 of an
 /// identity matrix is `+z`, so the boost the assertions look for is `+z`.
-fn pad_at(at: Vec3, half: f32) -> oag_formats::pads::PadVolume {
+fn pad_at(at: Vec3, half: f32) -> oag_vex::pads::PadVolume {
     let mut to_world = [0.0f32; 16];
     to_world[0] = 1.0;
     to_world[5] = 1.0;
@@ -242,7 +242,7 @@ fn pad_at(at: Vec3, half: f32) -> oag_formats::pads::PadVolume {
     to_world[12] = at.x;
     to_world[13] = at.y;
     to_world[14] = at.z;
-    oag_formats::pads::PadVolume {
+    oag_vex::pads::PadVolume {
         to_world,
         min: [-half; 3],
         max: [half; 3],
@@ -268,7 +268,7 @@ fn without_player_rescue(mut race: Race) -> Race {
 
 /// A race whose ship is inside a pad from its first tick, and one that is
 /// nowhere near one, so a test can difference them.
-fn race_with_pads(mode: Mode, pads: Vec<oag_formats::pads::PadVolume>) -> Race {
+fn race_with_pads(mode: Mode, pads: Vec<oag_vex::pads::PadVolume>) -> Race {
     let mut handling = hulled_handling();
     // Invented, and large enough that the boost is unmistakable against the
     // rest of the force law rather than lost in it. Deliberately **not** a
@@ -286,7 +286,7 @@ fn race_with_pads(mode: Mode, pads: Vec<oag_formats::pads::PadVolume>) -> Race {
 
 /// A pad big enough to hold the ship wherever `spawn_pose` puts it, so the
 /// test is about the trigger rather than about the spawn.
-fn enveloping_pad() -> Vec<oag_formats::pads::PadVolume> {
+fn enveloping_pad() -> Vec<oag_vex::pads::PadVolume> {
     vec![pad_at(Vec3::ZERO, 1.0e6)]
 }
 
@@ -296,7 +296,7 @@ fn enveloping_pad() -> Vec<oag_formats::pads::PadVolume> {
 pub(super) fn race_with_a_grid() -> Race {
     let mut setup = setup(hulled_handling());
     setup.mode = Mode::SingleRace;
-    setup.start_position = Some(oag_formats::track::StartPosition {
+    setup.start_position = Some(oag_vex::track::StartPosition {
         position: [0.0, 0.0, 0.0],
         left: [0.0, 0.0, -1.0],
         up: [0.0, 1.0, 0.0],
@@ -320,8 +320,8 @@ pub(super) fn race_with_a_grid() -> Race {
 /// not in this repository. `absorb` and `time` are deliberately different
 /// from each other and from every other constant here, so a test that
 /// confused them would fail rather than pass by coincidence.
-fn one_turbo_table() -> oag_formats::weapons::WeaponStats {
-    oag_formats::weapons::parse(
+fn one_turbo_table() -> oag_tables::weapons::WeaponStats {
+    oag_tables::weapons::parse(
         r#"<WeaponStats>
              <Weapon type="Global"><Stats slowdown_limit="0"/></Weapon>
              <Weapon type="Turbo"><Stats absorb="23" time="0.75"/></Weapon>
@@ -339,8 +339,8 @@ fn one_turbo_table() -> oag_formats::weapons::WeaponStats {
 /// The two lock distances are the shipped shape - a window a long way down the
 /// nose - so a test on an empty grid is provably unable to lock rather than
 /// merely unlucky.
-fn one_missile_table() -> oag_formats::weapons::WeaponStats {
-    oag_formats::weapons::parse(
+fn one_missile_table() -> oag_tables::weapons::WeaponStats {
+    oag_tables::weapons::parse(
         r#"<WeaponStats>
              <Weapon type="Global"><Stats slowdown_limit="0"/></Weapon>
              <Weapon type="Missile"><Stats absorb="23" blastforce="10"
@@ -384,11 +384,7 @@ const CIRCLE: u32 = oag_gameplay::input::Button::Circle.bit();
 
 /// A race with weapon pads, the mode that arms them, and a table to draw
 /// from. `refresh` is `<WeaponPad refresh_time>`.
-fn race_with_weapon_pads(
-    mode: Mode,
-    pads: Vec<oag_formats::pads::PadVolume>,
-    refresh: f32,
-) -> Race {
+fn race_with_weapon_pads(mode: Mode, pads: Vec<oag_vex::pads::PadVolume>, refresh: f32) -> Race {
     race_with_weapon_table(mode, pads, refresh, one_turbo_table())
 }
 
@@ -398,9 +394,9 @@ fn race_with_weapon_pads(
 /// - which is also what keeps their draws stable as `IMPLEMENTED` grows.
 fn race_with_weapon_table(
     mode: Mode,
-    pads: Vec<oag_formats::pads::PadVolume>,
+    pads: Vec<oag_vex::pads::PadVolume>,
     refresh: f32,
-    table: oag_formats::weapons::WeaponStats,
+    table: oag_tables::weapons::WeaponStats,
 ) -> Race {
     let mut handling = hulled_handling();
     // `Handling::ZERO` gives an engine that produces no thrust and a hull
@@ -431,8 +427,8 @@ fn race_with_weapon_table(
 /// angle in radians now that `Weapon_FireRocket` is read, so the arbitrary
 /// `17` this fixture used while the attribute was undecoded is 974 degrees
 /// and fires two of the three rockets backwards. A plausible fan instead.
-fn one_rocket_table() -> oag_formats::weapons::WeaponStats {
-    oag_formats::weapons::parse(
+fn one_rocket_table() -> oag_tables::weapons::WeaponStats {
+    oag_tables::weapons::parse(
         r#"<WeaponStats>
              <Weapon type="Global"><Stats slowdown_limit="0"/></Weapon>
              <Weapon type="Rocket"><Stats absorb="11" blastforce="12" blastradius="13"
@@ -448,8 +444,8 @@ fn one_rocket_table() -> oag_formats::weapons::WeaponStats {
 
 /// The Mine's own fixture, for the tests about the drop path and its cue.
 /// Invented numbers, all distinct from the Rocket fixture's.
-fn one_mine_table() -> oag_formats::weapons::WeaponStats {
-    oag_formats::weapons::parse(
+fn one_mine_table() -> oag_tables::weapons::WeaponStats {
+    oag_tables::weapons::parse(
         r#"<WeaponStats>
              <Weapon type="Global"><Stats slowdown_limit="0"/></Weapon>
              <Weapon type="Mine"><Stats absorb="17" blastforce="18" blastradius="19"
@@ -471,8 +467,8 @@ fn one_mine_table() -> oag_formats::weapons::WeaponStats {
 /// `charge_time` is present and unread on purpose - the file authors it, this
 /// build spends it nowhere, and a fixture that omitted it would stop looking
 /// like the document.
-fn one_plasma_table() -> oag_formats::weapons::WeaponStats {
-    oag_formats::weapons::parse(
+fn one_plasma_table() -> oag_tables::weapons::WeaponStats {
+    oag_tables::weapons::parse(
         r#"<WeaponStats>
              <Weapon type="Global"><Stats slowdown_limit="0"/></Weapon>
              <Weapon type="Plasma"><Stats absorb="21" blastforce="22" blastradius="23"
@@ -496,8 +492,8 @@ fn one_plasma_table() -> oag_formats::weapons::WeaponStats {
 /// and a link that outlives every one of them cannot exercise its own expiry.
 /// `energy_multiplier` is `1` rather than the disc's `50` so the first tick is
 /// not a special case in a test measuring the steady rate.
-fn one_leach_beam_table() -> oag_formats::weapons::WeaponStats {
-    oag_formats::weapons::parse(
+fn one_leach_beam_table() -> oag_tables::weapons::WeaponStats {
+    oag_tables::weapons::parse(
         r#"<WeaponStats>
              <Weapon type="Global"><Stats slowdown_limit="0"/></Weapon>
              <Weapon type="LeachBeam"><Stats absorb="41" damage="42" repair="43"
@@ -518,8 +514,8 @@ fn one_leach_beam_table() -> oag_formats::weapons::WeaponStats {
 /// `fuse` is short (`0.5`) on purpose where the disc authors `2`: these tests
 /// drive tens of ticks, not hundreds, and a blade that outlives every one of
 /// them cannot exercise the expiry.
-fn one_shuriken_table() -> oag_formats::weapons::WeaponStats {
-    oag_formats::weapons::parse(
+fn one_shuriken_table() -> oag_tables::weapons::WeaponStats {
+    oag_tables::weapons::parse(
         r#"<WeaponStats>
              <Weapon type="Global"><Stats slowdown_limit="0"/></Weapon>
              <Weapon type="Shuriken"><Stats absorb="31" rhicochetForce="32"

@@ -5,8 +5,10 @@
 //! makes the world-space pass draw a *second* copy on top of one the node
 //! pass already drew, rather than replacing an absence.
 
-use oag_formats::{rcsmodel, vex};
+use oag_rcs::rcsmodel;
+
 use oag_render::mesh;
+use oag_vex::vex;
 
 const CIRCUITS: &[(&str, &str)] = &[
     ("DATA02.PSARC", "/data/environments/12_sol_2/track.vex"),

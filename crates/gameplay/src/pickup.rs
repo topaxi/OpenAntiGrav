@@ -155,7 +155,7 @@
 //! and it is preferred to handing out a mine that cannot be dropped.
 
 use oag_core::Rng;
-use oag_formats::weapons::{PickupTable, Weapon, WeaponStats};
+use oag_tables::weapons::{PickupTable, Weapon, WeaponStats};
 
 /// The weapons a pad in this engine can hand out.
 ///
@@ -425,7 +425,7 @@ impl Held {
     /// doc comment for why a self-arming counter is what lets a pad
     /// crossing, `--give` and a test all fill this the same way. `rate` is
     /// the same block's `<Stats rate>`, read the literal way
-    /// `oag_formats::weapons::CannonStats::rate` argues for.
+    /// `oag_tables::weapons::CannonStats::rate` argues for.
     ///
     /// The returned count is the magazine **after** this round is spent,
     /// because that is the order `Weapon_FireCannon` reads it in:
@@ -626,8 +626,8 @@ fn draw_once(rng: &mut Rng, table: &PickupTable, driver: Driver) -> Option<Weapo
 /// type; Pulse authors four and no `Vector`, so a `Vector` lookup there is
 /// `None` - the same honest absence any unauthored rung gets.
 ///
-/// [`SpeedClass`]: oag_formats::handling::SpeedClass
-/// [`SpeedClass::as_str`]: oag_formats::handling::SpeedClass::as_str
+/// [`SpeedClass`]: oag_tables::handling::SpeedClass
+/// [`SpeedClass::as_str`]: oag_tables::handling::SpeedClass::as_str
 #[must_use]
 pub fn table_for<'a>(stats: &'a WeaponStats, class: &str) -> Option<&'a PickupTable> {
     stats

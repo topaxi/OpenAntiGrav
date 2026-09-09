@@ -61,7 +61,7 @@ is how it was caught (see [exhaust.md](exhaust.md)).
 (Renamed from the literal decompile for readability; `batch[flags_byte]` is
 `*(byte *)((int)batch + 3)`, `GU_CULL_FACE` = state index `5` per the PSP SDK's
 standard `sceGuEnable` constants, already load-bearing for
-[`Batch::is_culled`](../../../../crates/formats/src/vex.rs) reading `*batch &
+[`Batch::is_culled`](../../../../crates/vex/src/vex.rs) reading `*batch &
 0x20` - though **not** matching it: the bit set takes the `Gu_Disable` branch,
 so the predicate is its negation. See "The plume is two-sided" below.)
 
@@ -82,18 +82,18 @@ as `GU_ADD, GU_SRC_ALPHA, GU_FIX` per [`exhaust.md`](exhaust.md), pinning
   branch (a zero destination factor and a disabled blend stage both just leave
   `src`).
 
-`oag_formats::vex::Batch::is_additive_blend()` decodes this bit; see that
+`oag_vex::vex::Batch::is_additive_blend()` decodes this bit; see that
 function's own doc comment for the exact bit and confidence.
 
 ## `param_2` is the on-disk batch header, not a `Material`
 
 Both callers pass a pointer that is walked exactly like
-`oag_formats::vex::mesh_batches`' own loop over the on-disk batch list:
+`oag_vex::vex::mesh_batches`' own loop over the on-disk batch list:
 
 - `FUN_0890db54` iterates `param_3`, advancing it by `param_3[6] + 0x40` or
   `+0x80` (`+0x40` byte offset in the alternate-header case) depending on
   `*(byte *)(param_3+3) & 0x40`. That is `u16_at(header, +0x0c) + header_size`
-  - **byte-identical stride arithmetic** to `oag_formats::vex::mesh_batches`'
+  - **byte-identical stride arithmetic** to `oag_vex::vex::mesh_batches`'
   own `step = header_size + payload_size` (`payload_size` is the same
   `u16_at(payload, at + 0x0c)`). The runtime walks the on-disk batch array *in
   place*, with the same stride formula reading the same offsets - the
@@ -117,7 +117,7 @@ holds regardless of which bits any particular batch sets.
 
 **Not established: whether the loader touches this byte after load.**
 Materials *are* repacked at load time (runtime stride `0x14` per material,
-versus the packed on-disk layout `oag_formats::vex` parses), so the loader
+versus the packed on-disk layout `oag_vex::vex` parses), so the loader
 demonstrably restructures some fields between disc and runtime. Nothing here
 rules out the loader poking batch-header `+3` in place; no write to that
 offset has been searched for.
@@ -500,7 +500,7 @@ for (u32 i = 0; i < levels; i++)                      // TEXADDR/TEXBUFWIDTH/TEX
 ```
 
 That `+0x05` is the same field [`psp-texture.md`](../../../formats/psp-texture.md)
-records at `.mip` header `+0x06` and `oag_formats::texture` exposes as
+records at `.mip` header `+0x06` and `oag_texture::texture` exposes as
 `Texture::mip_count`. So **the asset decides the chain depth, and the GE never
 samples below the level the artists shipped.** Measured on the two textures
 this mattered for: `pulse_boost2_ADD` (embedded in `shipboost.vex`) declares
@@ -553,7 +553,7 @@ uses to pick between its two compile-side helpers (`FUN_0890cf84`/
 
 ## Measured: every real transparent batch sampled reads as additive
 
-Read directly off `pulse-psp-usa.chd` through `oag_formats::vex::mesh_batches`
+Read directly off `pulse-psp-usa.chd` through `oag_vex::vex::mesh_batches`
 (no live capture needed, given the byte-identity evidence above): every
 team's `shipboost.vex` (3 teams sampled, 4 transparent batches each), a
 `Ship.vex` per team (1 transparent batch each), and both `01_Track` (142
@@ -628,7 +628,7 @@ white board, and because a `col_banners2_ADD.tga` sign sits beside it the fault
 was recorded as a candidate symptom of the blend question above. It was not.
 The white board is `billboard8.tga`, an 8x8 4-bit texture, drawn by an
 **opaque** batch - no blending involved on either side - and it was white
-because `oag_formats::vex::textures` read its rows back to back where the
+because `oag_vex::vex::textures` read its rows back to back where the
 format pads each row to 16 bytes. Fixed there; see
 [`vex.md`](../../../formats/vex.md#texture-rows-are-padded-to-16-bytes).
 Recorded here so the blend question is neither credited with it nor reopened
@@ -998,7 +998,7 @@ two-sided**. `& 0x1000` was undecoded when this paragraph was written
 worth" further down this page, decoded 2026-08-18. It is the plume's draw-layer
 bit, set here as on every batch whose mesh-level key already resolves to
 `0x45000000`. Read off
-`data/images/pulse-psp-usa.chd` through `oag_formats::vex::mesh_batches`. The
+`data/images/pulse-psp-usa.chd` through `oag_vex::vex::mesh_batches`. The
 same dump shows the authored normals are already unit to within the 8-bit
 quantisation (`|n|` in `[0.9923, 1.0000]` across all 32 batches), so the
 `normalize` in the equation above is close to a no-op on real plume data - it
@@ -1052,7 +1052,7 @@ is `GU_CULL_FACE` from `Gu_SetState`'s literal table (confidence 95, above). So
 a batch with the bit set is drawn with **culling off - two-sided**. Every one of
 the plume's 32 batches has it set.
 
-`oag_formats::vex::Batch::is_culled` **was** `pass_mask & 0x0020 != 0`, with a
+`oag_vex::vex::Batch::is_culled` **was** `pass_mask & 0x0020 != 0`, with a
 doc comment reading "whether back-face culling is enabled; clear means
 two-sided". That is inverted against the GE call: the bit set means culling
 *disabled*. Confidence **90**; the branch is read at instruction level and the
@@ -1428,7 +1428,7 @@ void Mesh_RegisterBatches(int mesh) {
 The two terminators are `pass_mask & 1` for the head at `mesh_header+0x04` and
 `pass_mask & 2` for the head at `mesh_header+0x08`, which is exactly the rule
 [`../../../formats/vex.md`](../../../formats/vex.md) states and
-`oag_formats::vex::mesh_batches` implements. The `|=` only touches the low 16
+`oag_vex::vex::mesh_batches` implements. The `|=` only touches the low 16
 bits, so it cannot disturb the layer byte the classification tests read out of
 the top 12. Confidence 80 - the body is a direct read, the texture field at
 `+0xb4` is not.
@@ -1458,7 +1458,7 @@ vaddr = batch + header_size + (batch->0x28 ? batch->0x0e : 0);
 
 Three things this pins, at confidence 88, that
 [`../../../formats/vex.md`](../../../formats/vex.md) and
-`crates/formats/src/vex.rs` had inferred rather than read:
+`crates/vex/src/vex.rs` had inferred rather than read:
 
 - **`use_alternate = u16_at(payload, at + 6) != 0`** in `vex.rs` is bit-for-bit
   the original's rule. It was a hypothesis; it is now a read.
@@ -1995,8 +1995,8 @@ else flags & 0x1000                     -> 0x45000000
 else                                    -> 0x4a000000
 ```
 
-`oag_formats::vex::mesh_layer` is this, and
-`crates/formats/tests/vex_layer_ground_truth.rs` censuses it over `Data.wad`:
+`oag_vex::vex::mesh_layer` is this, and
+`crates/vex/tests/vex_layer_ground_truth.rs` censuses it over `Data.wad`:
 **21,055 mesh nodes, 66.4 % on `0x45` and 33.6 % on `0x4a`**, with the `0x31`
 branch never firing on this disc. Of 5,610 transparent batches, 63.7 % / 36.3 %.
 So the rule separates a real two-thirds/one-third split rather than naming a

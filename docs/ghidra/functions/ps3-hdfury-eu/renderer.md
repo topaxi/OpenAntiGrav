@@ -2093,7 +2093,7 @@ frame out - measured, before the mistake was caught.
 
 The applicable form is the other one the same vertex programs carry:
 `MOV o[TC1].xyz, v[N].xyzx`, the colour set moved across unchanged. That is
-what `oag_formats::rcsmodel::Mesh::vertex_light` reads and `mesh.wgsl` now
+what `oag_rcs::rcsmodel::Mesh::vertex_light` reads and `mesh.wgsl` now
 adds into its authored sum, and it restores the ship livery, the grandstands
 and the track's contrast that the sun removal had flattened: clipped white
 **10.20 %** against the reference's 5.8 %, mean **0.497** against 0.585.
@@ -2231,7 +2231,7 @@ ports the sweep: an `LG2`/`MUL`/`EX2` chain whose `LG2` reads a register a
 saturated `DP3` most recently wrote (the `N.H`/`N.L` idiom every specular and
 sun-diffuse read on this page shares), returned only when the chain's result
 reaches the program's output colour (the same "last colour write" rule
-[`output_lit_by`'s `taint`](../../../../crates/formats/src/rcsmaterial/fragment.rs)
+[`output_lit_by`'s `taint`](../../../../crates/rcs/src/rcsmaterial/fragment.rs)
 already uses). Verified against the ship's own worked example
 (`pow(N.H, 40)`, `@0x40`/`@0x43`/`@0x46` above) and against a synthetic case
 built from `track_surface`'s own lightmap curve, which the bare instruction
@@ -2303,7 +2303,7 @@ that specific value keeps reading as `SpecularPower` patched at draw time
 method was trustworthy - all four kept in this history rather than silently
 corrected away, per this project's own evidence rule.**
 `Program::specular_exponent_dp3()` now names the winning chain's own `DP3`
-(`crates/formats/src/rcsmaterial/fragment.rs`), so
+(`crates/rcs/src/rcsmaterial/fragment.rs`), so
 `crates/render/examples/hd_specular_unresolved_trace.rs` can print its two
 operands rather than only the chain's value - the piece the paragraph above
 left unread. Two things had to be fixed to look at the right population
@@ -2479,7 +2479,7 @@ also checked the assumption `patches` rests on: no two distinct declared
 parameters of a resolved block ever patch the same code slot, over 4,586
 resolved blocks, so asking "does `SpecularPower` patch this slot" has no
 ambiguous second answer. Pinned as a disc invariant by
-`crates/formats/tests/specular_power_ground_truth.rs`, over the three models
+`crates/rcs/tests/specular_power_ground_truth.rs`, over the three models
 `rcsmodel_common::PAIRS` already shares with the other `.rcsmodel`
 ground-truth binaries.
 
@@ -2817,7 +2817,7 @@ on 41 % of vertices. Removing the term measured better (16.5 % -> 10.2 %
 clipped) because unmasked sun was worse than none; the faithful fix was to
 decode the colour set's alpha as the mask and restore the sun behind it.
 
-**Wired 2026-08-20, same day.** `oag_formats::rcsmodel::Mesh::vertex_light`
+**Wired 2026-08-20, same day.** `oag_rcs::rcsmodel::Mesh::vertex_light`
 now reads all four bytes (`[r, g, b, mask]`), a new
 `oag_render::mesh::GpuVertex::sun_mask` field carries it into the shader
 (not `colour.a`, which is already the PSP/PS2 boost plume's baked falloff and
@@ -2891,7 +2891,7 @@ Three more settle open readings elsewhere in this tree at a stroke:
 `directionalLight0Colour` (`0x2dba643d`) were this page's own 75-confidence
 guess for the sun's two constants and are now read; `positionScale`
 (`0x9cc5ab3a`) and `positionBias` (`0xa4972b78`) are the chunk dequantisation
-`oag_formats::rcsmodel` reads at a chunk header's `+0x40` and `+0x30`, named by
+`oag_rcs::rcsmodel` reads at a chunk header's `+0x40` and `+0x30`, named by
 the engine in the same terms.
 
 The whole table, in file order:
@@ -3561,7 +3561,7 @@ uVar3 = (uint)param_7;
 **`param_7` is one packed `(format << 16) | remap` word**, and its low
 seventeen bits - the sixteen-bit remap plus the `order` bit above it - go to
 one slot of their own. `& 0x1f00` on the high half is the same low-five-bits
-format extraction `oag_formats::gtf::Format::from_byte` does.
+format extraction `oag_texture::gtf::Format::from_byte` does.
 
 **The engine constructs these words in code, it does not only copy them out of
 files.** Searching the whole binary for the three values a `.gtf` carries:

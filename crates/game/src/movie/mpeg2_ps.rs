@@ -6,7 +6,7 @@
 //! renames are the two below. What holds it together is the thing that makes
 //! this container different from the other three: **`ffmpeg` reads it by
 //! itself**. A `.PMF` and an `.IPF` are demuxed here first - by
-//! [`oag_formats::pmf`] and [`oag_formats::ipf`] - and only their elementary
+//! [`oag_video::pmf`] and [`oag_video::ipf`] - and only their elementary
 //! streams reach the transcoder, so those paths stay in `movie.rs` beside the
 //! machinery they share. This one and [`super::bink`] hand the file over
 //! unaltered, container and all.

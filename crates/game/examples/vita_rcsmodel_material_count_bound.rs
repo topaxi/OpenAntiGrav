@@ -4,7 +4,7 @@
 //!
 //! # The count and table pointer were right; the cap on them was not
 //!
-//! `oag_formats::rcsmodel::psp2::material::read` rejects a file-level
+//! `oag_rcs::rcsmodel::psp2::material::read` rejects a file-level
 //! material count over `MAX_COUNT`, calibrated at 64 from a census that only
 //! sampled small props and a 16-submesh craft. Reading altima's own `+0x44`/
 //! `+0x48` raw (this probe) gives count `527`, table `0x6f2c0` - and every
@@ -17,7 +17,7 @@
 //! cargo run -q -p oag-game --example vita_rcsmodel_material_count_bound
 //! ```
 
-use oag_formats::rcsmodel::psp2;
+use oag_rcs::rcsmodel::psp2;
 
 const TRACK: &str = "data/extracted/vita/PCSF00007/base/PSP2/data.psarc";
 const TRACK_PATH: &str = "Data/art/published/environments/altima/track.rcsmodel";

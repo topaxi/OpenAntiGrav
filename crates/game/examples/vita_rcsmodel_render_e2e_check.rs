@@ -9,7 +9,7 @@
 //! cargo run -q -p oag-game --example vita_rcsmodel_render_e2e_check
 //! ```
 
-use oag_formats::rcsmodel::psp2;
+use oag_rcs::rcsmodel::psp2;
 use oag_render::mesh;
 
 const BASE: &str = "data/extracted/vita/PCSF00007/base/PSP2/data.psarc";
@@ -44,7 +44,7 @@ fn main() -> anyhow::Result<()> {
         match archive.read_path(diffuse) {
             Ok(tex_blob) => {
                 println!("  read_path ok, {} byte(s)", tex_blob.len());
-                match oag_formats::gxt::Gxt::parse(&tex_blob) {
+                match oag_texture::gxt::Gxt::parse(&tex_blob) {
                     Ok(parsed) => {
                         println!("  gxt parses, {} texture(s)", parsed.textures.len());
                         match parsed.only() {

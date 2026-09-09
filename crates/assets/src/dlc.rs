@@ -36,7 +36,7 @@
 
 use std::path::{Path, PathBuf};
 
-use oag_formats::fexml;
+use oag_tables::fexml;
 
 use crate::Archive;
 

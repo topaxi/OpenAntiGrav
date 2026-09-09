@@ -73,13 +73,14 @@
 //! `#[ignore]`d and never run in CI: it needs a disc image under `data/images/`.
 //! Run it with `just test-data`.
 
-use oag_formats::{collision, handling};
 use oag_gameplay::{collision_world, handling_for};
 use oag_physics::{Environment, Handling, hover};
 use oag_pulse as pulse;
+use oag_tables::handling;
 use oag_trace::Trace;
 use oag_trace::replay::{Basis, initial_state};
 use oag_trace::trace::AngularReading;
+use oag_vex::collision;
 
 const IMAGE: &str = "data/images/pulse-psp-usa.chd";
 const TRACK: &str = r"Data\Environments\16_Track\track.vex";

@@ -33,7 +33,7 @@
 //! goes is testable on a machine with no graphics driver.
 
 use oag_core::math::{Mat4, Vec3};
-use oag_formats::shadow_occluder::Occluder;
+use oag_vex::shadow_occluder::Occluder;
 
 use crate::mesh::GpuVertex;
 

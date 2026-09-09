@@ -47,7 +47,7 @@ fn main() -> anyhow::Result<()> {
             let Some(geometry) = mesh::rcs::sibling_geometry(&spec, &name, &data) else {
                 continue;
             };
-            let Ok(model) = oag_formats::rcsmodel::Model::parse(&geometry) else {
+            let Ok(model) = oag_rcs::rcsmodel::Model::parse(&geometry) else {
                 continue;
             };
             for material in &model.materials {

@@ -281,7 +281,7 @@ fn the_archive_that_forced_the_extra_role_still_holds_four_teams_and_no_circuit(
 /// The whole point: the default circuit and the default team both read through
 /// `Archives`, by the names the table gives, with no HD-specific spelling.
 ///
-/// **The handling path is `oag_formats::handling::entry_name`'s Pulse-shaped
+/// **The handling path is `oag_tables::handling::entry_name`'s Pulse-shaped
 /// one**, backslashes and all, resolving on a PSARC because
 /// `oag_assets::psarc` normalises before it looks up. That is the claim
 /// `crates/hd/src/race.rs`'s module doc makes, and this is where it is checked.

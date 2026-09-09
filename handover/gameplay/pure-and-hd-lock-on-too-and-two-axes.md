@@ -62,7 +62,7 @@ title showing the reticle over a craft ahead.
   Nothing of HD's HUD code has been disassembled; `MissileSightBG` being a
   backdrop and the `LockedOn` pair being additive are both readings.
 - **HD's four `LeachBeamSight*` are unwired**, and Pure authors none - the
-  LeachBeam is a Pulse weapon and `oag_formats::weapons` parses no
+  LeachBeam is a Pulse weapon and `oag_tables::weapons` parses no
   `<Weapon type="LeachBeam">` block on any title.
 - **Pure's Eliminator tuning is one file, and nothing reads the axis's second
   row.** `oag_title::weapons::Weapons::elimination` is carried and unread:

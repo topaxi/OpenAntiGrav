@@ -36,9 +36,9 @@
 
 use std::path::PathBuf;
 
-use oag_formats::weapons::Weapon;
 use oag_game::race;
 use oag_gameplay::input::{Button, Input};
+use oag_tables::weapons::Weapon;
 
 /// Long enough that the craft is genuinely up to speed before a test measures
 /// anything.
@@ -151,7 +151,7 @@ fn the_discs_shuriken_block_decodes_with_its_blast_pair() {
         "a zero fuse would reap a blade on the tick it was thrown"
     );
 
-    let speeds: Vec<f32> = oag_formats::handling::SpeedClass::ALL
+    let speeds: Vec<f32> = oag_tables::handling::SpeedClass::ALL
         .into_iter()
         .map(|class| shuriken.speed_for(class))
         .collect();

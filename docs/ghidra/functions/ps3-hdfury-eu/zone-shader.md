@@ -5,7 +5,7 @@ EBOOT's own 121-name shader census. Zone is a set of compiled **variants
 inside the materials themselves**, which is why every search of the executable
 for a "Zone shader" came back empty: there is nothing there to find. The
 measured scale is **20,214 Zone-bearing fragment blocks**, asserted against the
-image by `crates/formats/tests/zone_shader_census_ground_truth.rs`.
+image by `crates/rcs/tests/zone_shader_census_ground_truth.rs`.
 
 **A file count that stood here has been removed rather than corrected**, and
 the reason is worth more than the number was. It read "1,467 of the disc's
@@ -219,7 +219,7 @@ Every fragment block on the disc that *fetches* `zoneTexVis` - 18,050 of them
 | anything else | **0** |
 
 Confidence **88** on the count, which is mechanical
-(`crates/formats/tests/zone_shader_census_ground_truth.rs`'s
+(`crates/rcs/tests/zone_shader_census_ground_truth.rs`'s
 `the_visualiser_glow_is_gated_to_up_facing_surfaces_everywhere`, re-derived
 off `hdfury-ps3-eu-dec.iso` on every `just test-data`).
 
@@ -295,7 +295,7 @@ minority that happens to carry no `zoneTex*`. Reading three of them and
 concluding "never" was sampling the exception.
 
 **Counted mechanically off the disc image, and asserted rather than reported**:
-`crates/formats/tests/zone_shader_census_ground_truth.rs` re-derives every
+`crates/rcs/tests/zone_shader_census_ground_truth.rs` re-derives every
 number in this table from `data/images/hdfury-ps3-eu-dec.iso` on each
 `just test-data` run, so the table cannot quietly drift from the disc.
 Confidence **88** on the census.

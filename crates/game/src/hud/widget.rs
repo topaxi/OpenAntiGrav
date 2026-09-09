@@ -93,7 +93,7 @@ impl VertAlign {
 /// by that entry's placement rather than by a single per-frame origin. The
 /// packer and the shader already handle several images in one sheet; nothing
 /// about them is in the way. `oag_render` also has no `.gtf` upload path, which
-/// is the second problem and not the first: [`oag_formats::gtf`] decodes all
+/// is the second problem and not the first: [`oag_texture::gtf`] decodes all
 /// twelve as of 2026-08-17.
 ///
 /// Deliberately **not** done speculatively. A `texture: usize` with one caller
@@ -124,7 +124,7 @@ pub struct Sprite {
     /// column, and `ZonePlusLight0`-`10` author `±0.385` down to `0`, the small
     /// per-row tilts that make the ladder read as an arc rather than a straight
     /// list. Two spellings ship, `rotationTheta` and `RotationTheta`, and
-    /// [`oag_formats::fexml::Node::value`] folds case.
+    /// [`oag_tables::fexml::Node::value`] folds case.
     ///
     /// **The sign convention is passed through, not verified.** The angle is
     /// handed to [`crate::frontend::Draw::RotatedSprite`], whose own doc reads it

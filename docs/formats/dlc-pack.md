@@ -169,7 +169,7 @@ Two consequences worth stating plainly, because both cost time otherwise:
 `PACKn_UI1.edat`, not in the main archive - as shortened XML in the documented
 [handling-stats](handling-stats.md) schema, with all four speed classes and
 every attribute the parser requires - which is a real constraint rather than a
-lenient read, because `oag_formats::handling` has no defaults and rejects a file
+lenient read, because `oag_tables::handling` has no defaults and rejects a file
 missing any of them. `crates/game/tests/dlc_ground_truth.rs` loads all four
 teams in all four speed classes.
 

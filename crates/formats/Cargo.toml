@@ -1,23 +1,13 @@
 [package]
 name = "oag-formats"
-description = "Identification and parsing of Wipeout asset container formats"
+description = "Wipeout asset containers: identification, archives, compression and console byte layout"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
 
-[features]
-# AV1 decoding, for the movie cache. Off by default so that the tools which
-# only parse Wipeout containers keep building with no dependencies at all.
-av1 = ["dep:re_rav1d"]
-
 [dependencies]
-# `default-features = false` drops the `asm` feature, which needs `nasm` at
-# build time. A 480x272 movie decodes around 900fps without it - thirty times
-# faster than playback. `bitdepth_8` is all the 8-bit I420 path needs.
-re_rav1d = { workspace = true, optional = true }
-
 # Inflate, for `psarc`. See the workspace manifest for why this one format is
 # not hand-rolled like the rest.
 miniz_oxide.workspace = true
@@ -25,20 +15,19 @@ miniz_oxide.workspace = true
 # Ground-truth tests read real tracks out of a disc image. These are
 # dev-dependencies only: the library itself knows nothing about discs.
 #
-# `oag-assets`, `oag-pulse` and `oag-pure` all depend back on this crate, so
-# these lines close a cycle. Cargo permits it - a dev-dependency edge is not
-# part of the normal dependency graph, so the library still builds on its own -
-# and `scripts/check-dependency-rules.py` walks only normal edges, so the
-# boundary gate is unaffected. What they buy is that a sweep does not have to
-# hard-code where a release keeps its archives: `oag_pulse::open`/`oag_pure::open`
-# find them on a PSP or a PS2 pressing alike, which is exactly what a
-# corpus-wide measurement needs.
+# `oag-assets` depends back on this crate, so this closes a cycle. Cargo permits
+# it - a dev-dependency edge is not part of the normal dependency graph, so the
+# library still builds on its own - and `scripts/check-dependency-rules.py`
+# walks only normal edges, so the boundary gate is unaffected.
+#
+# The `oag-pulse`/`oag-pure` edges this list used to carry went with the
+# decoders under ADR-0050: the tests that needed a title package to find an
+# archive live in `oag-tables`, `oag-vex` and `oag-texture` now. What is left
+# here reads a container, and a container is found by path.
 [dev-dependencies]
 oag-testdata.workspace = true
 oag-assets.workspace = true
 oag-disc.workspace = true
-oag-pulse.workspace = true
-oag-pure.workspace = true
 
 [lints]
 workspace = true

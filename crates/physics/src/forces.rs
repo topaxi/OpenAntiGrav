@@ -315,7 +315,7 @@ pub struct Environment {
     /// **The XML attribute is named `airborne` and this scales the *grounded*
     /// term.** The gravity site's VFPU pair chain puts the table value on the lane
     /// carrying `normal_gravity * grounded` and a literal `1.0` on the airborne
-    /// lane; see `oag_formats::handling::GravityMul`, which reads the chain out
+    /// lane; see `oag_tables::handling::GravityMul`, which reads the chain out
     /// instruction by instruction. Do not "fix" this onto `flight_gravity`.
     ///
     /// An input rather than something this crate looks up, for the same reason
@@ -355,7 +355,7 @@ pub struct Environment {
     ///
     /// An input rather than something this crate derives, for the same reason
     /// [`Self::auto_speed`] is: finding it means owning the track's pad volumes,
-    /// and this crate does not know tracks exist. `oag_formats::pads` does the
+    /// and this crate does not know tracks exist. `oag_vex::pads` does the
     /// geometry and `oag_game::race` runs the test.
     pub pad_hit: Option<Vec3>,
     /// The race's `Weapons` and `Damage` options, which decide what a wall costs

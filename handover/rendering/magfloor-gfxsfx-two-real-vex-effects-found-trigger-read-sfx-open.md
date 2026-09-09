@@ -15,7 +15,7 @@ with the trigger itself on [`engine.md`](../../docs/ghidra/functions/psp-pulse-u
 Two real `.vex` models ship on the disc, `Data\visual_effects\MagEffect1.vex`
 and `MagEffect2.vex` (entries 1079/1080 of `Data.wad`, hashes `ba9996ee`/
 `fd39ec3e`), preloaded every race alongside the weapon effects. Extracted,
-parsed with `oag_formats::vex`, and rendered with `just view --mesh` -
+parsed with `oag_vex::vex`, and rendered with `just view --mesh` -
 additive-looking purple/blue streak geometry, matching the maintainer's
 description well enough to be the effect. `Ship_CastHoverProbes` edge-detects
 the mag-floor contact bool it already computes and calls `Ship_MagFloorEnter`/

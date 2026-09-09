@@ -1,14 +1,14 @@
 use super::*;
-use oag_formats::rcsmodel::material::Parameter;
+use oag_rcs::rcsmodel::material::Parameter;
 
 /// Every named constant is the hash of the name it claims, so a typo in a
 /// literal is a failing test rather than a parameter that is silently never
 /// found.
 #[test]
 fn the_named_hashes_are_the_hashes_of_their_names() {
-    assert_eq!(oag_formats::rcsmaterial::name_hash("power1"), POWER1);
-    assert_eq!(oag_formats::rcsmaterial::name_hash("scale1"), SCALE1);
-    assert_eq!(oag_formats::rcsmaterial::name_hash("min1"), MIN1);
+    assert_eq!(oag_rcs::rcsmaterial::name_hash("power1"), POWER1);
+    assert_eq!(oag_rcs::rcsmaterial::name_hash("scale1"), SCALE1);
+    assert_eq!(oag_rcs::rcsmaterial::name_hash("min1"), MIN1);
 }
 
 fn material(parameters: Vec<Parameter>) -> rcsmodel::Material {

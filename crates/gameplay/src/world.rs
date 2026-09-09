@@ -43,7 +43,7 @@ pub struct Ship {
     /// merely ignore a crossing, it empties the trigger list.
     ///
     /// **Here rather than on `ShipState`**, because it is an
-    /// `oag_formats::weapons::Weapon` and `oag-physics` depends on nothing but
+    /// `oag_tables::weapons::Weapon` and `oag-physics` depends on nothing but
     /// `oag-core`. The consequence is that it is *not* covered by
     /// `oag_physics::probe::hash_state`'s compile-time enforcement - what a held
     /// pickup does to the simulation reaches the hash through

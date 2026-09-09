@@ -41,7 +41,7 @@
 //! The overlay is not an effect: it is the track's **far-LOD copy**, and the
 //! original hides it with the authored PVS. The copy's meshes live in a
 //! sibling group governed by their `section` node
-//! ([`oag_formats::pvs::governing_sections`]) - id 62 on this track, named
+//! ([`oag_vex::pvs::governing_sections`]) - id 62 on this track, named
 //! `_59_TRACK_07_LOD` - and no section the craft races through lists 62 in
 //! its visibility mask; only four distant vantage sections do. Our renderer
 //! used to place draw calls in sections *geometrically*, and the copy sits
@@ -54,8 +54,8 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-use oag_formats::vex;
 use oag_render::mesh::{self, Model};
+use oag_vex::vex;
 
 /// The magstrip surface texture, by artist-given label. PSP embeds labels;
 /// the PS2 build's textures are nameless (external texture sets), so PS2
@@ -497,8 +497,8 @@ fn far_lod_sections() {
     let mut archives = open(&psp);
     let (blob, model) = track(&mut archives, MOA_THERMA).expect("reading Moa Therma");
     let nodes = vex::nodes(&blob).expect("decoding nodes");
-    let pvs = oag_formats::pvs::TrackPvs::from_nodes(&blob, &nodes).expect("parsing sections");
-    let governing = oag_formats::pvs::governing_sections(&blob, &nodes).expect("governance");
+    let pvs = oag_vex::pvs::TrackPvs::from_nodes(&blob, &nodes).expect("parsing sections");
+    let governing = oag_vex::pvs::governing_sections(&blob, &nodes).expect("governance");
 
     // Every overlay batch's node is governed by one section; the base strip's
     // nodes are governed by others.
@@ -570,7 +570,7 @@ fn far_lod_sections() {
     // includes the detail) just before the loop, and while the craft leads
     // the camera across that boundary a plain union of their masks shows
     // both halves of the swap. The swap table keeps the craft's side.
-    let governing = oag_formats::pvs::governing_sections(&blob, &nodes).expect("governance");
+    let governing = oag_vex::pvs::governing_sections(&blob, &nodes).expect("governance");
     let (sections, _) = oag_render::pvs::DrawSections::place(&model, &governing, &pvs);
     let swaps = oag_render::pvs::SwapConflicts::find(&pvs, &sections, &model);
     println!("{} LOD-swap pair(s) on this track", swaps.pair_count());

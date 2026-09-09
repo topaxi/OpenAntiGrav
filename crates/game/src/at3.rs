@@ -18,7 +18,7 @@
 //! | Input | Where it comes from | What happens |
 //! | --- | --- | --- |
 //! | RIFF-wrapped `.at3` | A `Data.wad` entry | Handed to `ffmpeg` unaltered |
-//! | Bare ATRAC3+ frames | [`oag_formats::pmf::Demuxed::audio`] | Wrapped by [`riff`] first |
+//! | Bare ATRAC3+ frames | [`oag_video::pmf::Demuxed::audio`] | Wrapped by [`riff`] first |
 //!
 //! The second shape exists because `ffmpeg`'s `mpegps` demuxer cannot see a
 //! `.PMF`'s audio track at all - probed to 50 MB on `Intro.PMF`, only the H.264

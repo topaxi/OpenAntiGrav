@@ -2,7 +2,7 @@
 //! what a four-byte normalised one actually holds - the question being whether
 //! the disc bakes per-vertex light into a colour set the mesh reader drops.
 
-use oag_formats::rcsmodel;
+use oag_rcs::rcsmodel;
 use oag_render::mesh;
 
 fn main() -> anyhow::Result<()> {

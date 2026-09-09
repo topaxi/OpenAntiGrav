@@ -10,7 +10,7 @@
 //!
 //! # What this is for
 //!
-//! [`oag_formats::pob::ParticleSystem::emitters`] reads an emitter record at
+//! [`oag_vex::pob::ParticleSystem::emitters`] reads an emitter record at
 //! fixed offsets and follows three pointer fields into a tree, all straight
 //! out of the file's own bytes. Both halves of that are unverifiable from a
 //! single hand-checked file:
@@ -37,7 +37,7 @@
 use std::path::PathBuf;
 
 use oag_assets::Archive;
-use oag_formats::pob::{self, ChannelMode, Emitter, ParticleSystem};
+use oag_vex::pob::{self, ChannelMode, Emitter, ParticleSystem};
 
 /// `.pob` blobs on the PSP disc, per `docs/formats/pob.md`.
 const PSP_SYSTEMS: usize = 35;

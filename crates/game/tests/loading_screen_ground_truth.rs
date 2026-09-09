@@ -86,7 +86,7 @@ fn every_feature_illustration_is_on_the_disc_in_both_stylings() {
             let blob = archives
                 .read_name(feature.image)
                 .unwrap_or_else(|e| panic!("{} {}: {e}", style.name, feature.image));
-            let gtf = oag_formats::gtf::Gtf::parse(&blob)
+            let gtf = oag_texture::gtf::Gtf::parse(&blob)
                 .unwrap_or_else(|e| panic!("{} {}: {e}", style.name, feature.image));
             let texture = gtf.only().expect("one texture per file");
             assert!(

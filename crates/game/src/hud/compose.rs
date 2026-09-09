@@ -45,7 +45,7 @@
 
 use std::collections::BTreeSet;
 
-use oag_formats::fexml::{self, Node};
+use oag_tables::fexml::{self, Node};
 
 use super::Layout;
 

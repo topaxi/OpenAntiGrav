@@ -102,7 +102,7 @@ fn pure_pickup_context<'a>(
 /// on Pure's: the XML already carries the final colour.
 #[test]
 fn pure_draws_the_backdrop_grid_and_the_held_weapons_own_coloured_icon() {
-    use oag_formats::weapons::Weapon;
+    use oag_tables::weapons::Weapon;
     let layout = Layout::from_xml(PURE_PICKUP_ICONS);
     let strings = strings();
     let sheet = pure_pickup_sheet();
@@ -163,7 +163,7 @@ fn pure_draws_the_backdrop_grid_and_the_held_weapons_own_coloured_icon() {
 /// coloured, but the fallback exists in the code and needs its own coverage.
 #[test]
 fn an_icon_model_with_no_authored_colour_draws_white() {
-    use oag_formats::weapons::Weapon;
+    use oag_tables::weapons::Weapon;
     let layout = Layout::from_xml(PURE_PICKUP_ICONS);
     let strings = strings();
     let sheet = pure_pickup_sheet();
@@ -184,7 +184,7 @@ fn an_icon_model_with_no_authored_colour_draws_white() {
 /// race and not a corner nobody reaches.
 #[test]
 fn a_weapon_with_no_icon_model_still_draws_the_backdrop_and_nothing_else() {
-    use oag_formats::weapons::Weapon;
+    use oag_tables::weapons::Weapon;
     let layout = Layout::from_xml(PURE_PICKUP_ICONS);
     let strings = strings();
     let sheet = pure_pickup_sheet();
@@ -205,7 +205,7 @@ fn a_weapon_with_no_icon_model_still_draws_the_backdrop_and_nothing_else() {
 /// fires.
 #[test]
 fn a_title_with_no_icon_model_table_draws_nothing_through_this_path() {
-    use oag_formats::weapons::Weapon;
+    use oag_tables::weapons::Weapon;
     let layout = Layout::default();
     let strings = strings();
     let sheet = crate::sprite::Sheet::default();

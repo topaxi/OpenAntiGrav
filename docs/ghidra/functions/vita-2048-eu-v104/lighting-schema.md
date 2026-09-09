@@ -2,7 +2,7 @@
 
 Function in `eboot.elf` (WipEout 2048, Vita, `PCSF00007` patch v1.04), image
 base `0x81000000`. **The name here is applied**, from [names.tsv](names.tsv).
-Found while chasing why `oag_formats::envsettings`'s HD-keyed accessors
+Found while chasing why `oag_tables::envsettings`'s HD-keyed accessors
 (`SUN_COLOUR`, `AMBIENT_COLOUR`) never resolve a light rig against a Wipeout
 2048 `track.EnvSettings` - see
 [`docs/formats/envsettings.md`](../../../formats/envsettings.md#wipeout-2048-authors-the-same-shape-under-different-key-names)
@@ -96,7 +96,7 @@ anyone chasing a consumer next:
 Left open rather than guessed at, per `CLAUDE.md`'s rule against wiring a
 plausible-looking key on a name match alone -
 [`docs/formats/envsettings.md`](../../../formats/envsettings.md) and
-[`crates/formats/src/envsettings.rs`](../../../../crates/formats/src/envsettings.rs)
+[`crates/tables/src/envsettings.rs`](../../../../crates/tables/src/envsettings.rs)
 both say so at the point a caller would otherwise reach for `"Sun color"`.
 
 ## Open

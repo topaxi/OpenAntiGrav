@@ -393,7 +393,7 @@ pub mod names {
     /// frames of 1920x1080 at 59.94 Hz, 8.86 s, resolving out of black to a
     /// card reading `STUDIO Liverpool`. This doc comment used to record that
     /// the file was Bink, that nothing here decoded it, and that the name was
-    /// therefore the whole of the evidence; [`oag_formats::bik`] and
+    /// therefore the whole of the evidence; `oag_video::bik` and
     /// `crates/game/tests/hd_movie_ground_truth.rs` are what replaced that. See
     /// [`bik.md`].
     ///

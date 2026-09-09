@@ -23,7 +23,7 @@
 //! Nothing here describes how an HD file decodes. Byte order is read from each
 //! file's own magic inside `oag-formats` (`VEXX` against `XXEV`, `dtOW` against
 //! `WOtd`), never from the console it came off, which is why this crate needs no
-//! `ByteOrder` constant and why `oag_formats::track::parse` takes no argument.
+//! `ByteOrder` constant and why `oag_vex::track::parse` takes no argument.
 //!
 //! Nothing here names a `.rcsmodel` beyond what the disc's own files name, and
 //! a table of paths into a format nothing reads would be a list of names rather
@@ -218,7 +218,7 @@ pub mod archives {
 ///
 /// The paths are stored lowercase with a leading `/`, and
 /// `oag_assets::psarc::Archive` folds separators and case - so
-/// `oag_formats::handling::entry_name`'s `Data\Ships\<team>\handlingstats.xml`
+/// `oag_tables::handling::entry_name`'s `Data\Ships\<team>\handlingstats.xml`
 /// resolves here unchanged. That is why the race path needed no HD-specific
 /// spelling of a handling file, and it is worth knowing before adding one.
 pub mod names {

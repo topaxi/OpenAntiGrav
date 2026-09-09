@@ -65,7 +65,7 @@ orderings and they are not the same list. All three are read here:
 1. **The pool order**, the class-name strings at `0x08a78c00`: `Rocket`,
    `Missile`, `Quake`, `Cannon`, `Turbo`, `Shield`, `Autopilot`, `Plasma`,
    `Bomb`, `Mine`, `LeachBeam`, `Repulser`, `Shuriken`. This is what
-   `oag_formats::weapons::Weapon::ALL` already held; it is the order
+   `oag_tables::weapons::Weapon::ALL` already held; it is the order
    `WeaponStats_Parse` (`0x0880db7c`) tries the fourteen `type` strings in, and
    it is also **the `<Stats>` struct's own layout order** - the Mine's block
    below lands exactly where pool order predicts, and
@@ -197,7 +197,7 @@ in particular resisted one: it is not a defined function in the Ghidra database,
 `.text` (it reads `.rodata` normally). So the Bomb's own offsets are **not
 established here** - only its parser's address and name, which come from
 `WeaponStats_Parse`'s dispatch chain and its unambiguous `type`-string pointers.
-Nothing in this project needs those offsets: `oag_formats::weapons` matches
+Nothing in this project needs those offsets: `oag_tables::weapons` matches
 attributes by name.
 
 `WeaponStats_Parse`'s dispatch chain names all fourteen parsers in one read; the
@@ -494,7 +494,7 @@ second page would be nine tenths this one.
 - ~~**`slowdown_time`**, which shares the unspent `<Global slowdown_limit>`
   mechanic's fate on every other weapon.~~ **Recovered 2026-09-06**: the
   mechanic's law is on [engine.md](engine.md), `Ship_AddSlowdown`
-  (`0x08848690`) is its clamp, and `oag_formats::weapons` decodes the
+  (`0x08848690`) is its clamp, and `oag_tables::weapons` decodes the
   attribute.
 
 ## 2026-09-06: `MINELAUNCH` is a plain, positional, craft-emitter cue - `MINERADAR` is not

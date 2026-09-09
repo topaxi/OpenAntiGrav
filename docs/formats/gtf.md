@@ -6,9 +6,9 @@ by volume - and it is Sony's own container rather than anything Studio Liverpool
 invented: a twelve-byte header, a count, and one `CellGcmTexture` descriptor per
 texture written out verbatim.
 
-Implemented in [`oag_formats::gtf`](../../crates/formats/src/gtf.rs); swept
+Implemented in [`oag_texture::gtf`](../../crates/texture/src/gtf.rs); swept
 against the whole disc by
-[`crates/formats/tests/gtf_ground_truth.rs`](../../crates/formats/tests/gtf_ground_truth.rs).
+[`crates/texture/tests/gtf_ground_truth.rs`](../../crates/texture/tests/gtf_ground_truth.rs).
 Measured 2026-08-17 on `hdfury-ps3-eu-dec.iso`, serial `BCES-00664`.
 
 ```sh
@@ -163,7 +163,7 @@ craft in soft silhouette - Feisar's delta with its tailfin, Qirex's blunt oval
 - and read in raster order each is horizontal banding. Morton is also 1.6x to
 2.5x smoother on every one of the nine, but the picture is the evidence and
 the number is what
-[`the_single_channel_textures_are_ship_shadows_and_read_in_morton_order`](../../crates/formats/tests/gtf_ground_truth.rs)
+[`the_single_channel_textures_are_ship_shadows_and_read_in_morton_order`](../../crates/texture/tests/gtf_ground_truth.rs)
 pins.
 
 **These are also the only textures on the disc that exercise `morton_index`'s

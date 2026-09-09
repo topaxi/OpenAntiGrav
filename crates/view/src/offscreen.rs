@@ -102,7 +102,7 @@ pub fn capture(asset: &Asset, path: &Path) -> Result<()> {
     drop(mapped);
     readback.unmap();
 
-    let png = oag_formats::png::encode_rgba(asset.width, asset.height, &pixels);
+    let png = oag_texture::png::encode_rgba(asset.width, asset.height, &pixels);
     std::fs::write(path, png).with_context(|| format!("writing {}", path.display()))?;
     Ok(())
 }

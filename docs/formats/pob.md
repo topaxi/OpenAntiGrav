@@ -4,7 +4,7 @@
 container, the slot table (including the pointer fixup it drives at load
 time, confirmed live), the name field, and **the emitter tree** are all
 decoded, implemented in
-[`oag-formats::pob`](../../crates/formats/src/pob.rs) and validated against
+[`oag-vex::pob`](../../crates/vex/src/pob.rs) and validated against
 all 35 `.pob` files on the PSP disc, all 41 on the PS2 disc and all 88 across
 HD's seven PSARC archives. What is
 **not** decoded is the record layout at a *slot-resolved* target: 43% of
@@ -96,7 +96,7 @@ fixup_site = resource_base + slots[i]
 target     = resource_base + read_u32(fixup_site)   // read *before* the add
 ```
 
-[`ParticleSystem::resolve_slot`](../../crates/formats/src/pob.rs) replays
+[`ParticleSystem::resolve_slot`](../../crates/vex/src/pob.rs) replays
 this arithmetic entirely from the file's own bytes.
 
 This closes the question the previous pass left open ("slot 0 is exactly
@@ -455,7 +455,7 @@ the per-emitter parameter semantics (they inherit the table above).
 
 The table above was, until now, transcribed by hand into
 `oag_render::sparks::EMITTERS` for one file. It is now **parsed**:
-[`ParticleSystem::emitters`](../../crates/formats/src/pob.rs) reads an
+[`ParticleSystem::emitters`](../../crates/vex/src/pob.rs) reads an
 `Emitter` per record and follows `+0x944`/`+0x948`/`+0x94c` into a tree,
 returning it depth-first with the root first and the two child fields as
 indices into the same vector. Nothing is converted on the way out - speeds
@@ -754,7 +754,7 @@ pass at all - readable straight from disk with no runtime needed.
 - **Static.** Extracting the same resource
   (`WO_SHIP_COLL_SPARK_DAMAGE.POB`, PSP `Data.wad` entry `0xeff1f331`, see
   "Reproducing" above) and computing `resource_base = HEADER_LEN +
-  slots.len() * SLOT_LEN` with [`ParticleSystem::parse`](../../crates/formats/src/pob.rs)
+  slots.len() * SLOT_LEN` with [`ParticleSystem::parse`](../../crates/vex/src/pob.rs)
   lands on bytes that spell out the same name, and all six fields at
   `resource_base + {0x34, 0x38, 0x40, 0x48, 0x4c, 0x74}` read back **exactly**
   the values the live capture saw: `0.0144`, `-0.00035750002`, `0.0`,
@@ -794,7 +794,7 @@ between `+0x4c` and `+0x74`, is unstarted.
 [WAD container](wad.md) as PSP) carries **41** `SYSP` blobs. Scanning it
 in-memory with `oag_assets::Archive` (no extraction needed - decompressing
 each candidate entry through the crate's own LZSS path and checking the
-first four bytes) and running the unmodified `oag_formats::pob` parser
+first four bytes) and running the unmodified `oag_vex::pob` parser
 against every one, with no code changes:
 
 - **41 of 41 parse.** Same magic, same header shape, same two constant
@@ -975,7 +975,7 @@ just wad cat 'data/images/pulse-psp-usa.chd:PSP_GAME/USRDIR/Data.wad' 0xeff1f331
 # space-constrained /tmp
 ```
 
-`oag_formats::pob::ParticleSystem::parse`, `resolve_slot` and `emitters`
+`oag_vex::pob::ParticleSystem::parse`, `resolve_slot` and `emitters`
 recover the name, slot table, every fixup target and the whole emitter tree
 from any of the 35 PSP or 41 PS2 blobs. Per
 [ADR-0006](../architecture/adr/0006-no-copyrighted-content.md) only
@@ -1011,7 +1011,7 @@ collision-spark values against the hand transcription they replaced.
   signifies** beyond "these channels fall back to the same default."
 - **The two constant header words at `+0x0a` and `+0x0c`.** Always 1 across
   both the PSP and PS2 corpora; whether that is a version, a type tag, or
-  something else is unknown. [`ParticleSystem::parse`](../../crates/formats/src/pob.rs)
+  something else is unknown. [`ParticleSystem::parse`](../../crates/vex/src/pob.rs)
   refuses any other value rather than silently accepting an unrecognised
   header, the same choice `sblk.rs` makes for its own version field.
 - **Where the interpreter that reads a resolved record lives in the

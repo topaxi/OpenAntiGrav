@@ -144,9 +144,9 @@ pub fn load(options: &Options) -> Result<Loaded> {
     // or, worse, find the wrong node type. An id this project has not recovered
     // for this version comes back `None`, and each site below says what it does
     // with that rather than substituting version 6's answer. See
-    // `oag_formats::vex::classes`.
+    // `oag_vex::vex::classes`.
     let track_classes =
-        oag_formats::vex::classes_of(&track_blob).map_err(|e| anyhow::anyhow!("{}: {e}", track))?;
+        oag_vex::vex::classes_of(&track_blob).map_err(|e| anyhow::anyhow!("{}: {e}", track))?;
     let speedup_pad_class = track_classes.speedup_pad;
     let weapon_pad_class = track_classes.weapon_pad;
     let start_position = start_position_of(&track_blob);
@@ -187,10 +187,10 @@ pub fn load(options: &Options) -> Result<Loaded> {
     // is the number anyone testing a pad needs and there is nowhere else to get
     // it: a pad is a plate on the track surface with nothing to distinguish it
     // in a screenshot.
-    let speedup_pads = oag_formats::vex::nodes(&track_blob)
+    let speedup_pads = oag_vex::vex::nodes(&track_blob)
         .map(|nodes| {
             speedup_pad_class
-                .map(|class| oag_formats::pads::volumes(&track_blob, &nodes, class))
+                .map(|class| oag_vex::pads::volumes(&track_blob, &nodes, class))
                 .unwrap_or_default()
         })
         .unwrap_or_default();
@@ -219,10 +219,10 @@ pub fn load(options: &Options) -> Result<Loaded> {
     // the tree - it only suppresses what a *weapons-off* mode does with the
     // result afterward, which is what `weapon_pad_model`'s own report line
     // below says plainly rather than repeating here.
-    let weapon_pads = oag_formats::vex::nodes(&track_blob)
+    let weapon_pads = oag_vex::vex::nodes(&track_blob)
         .map(|nodes| {
             weapon_pad_class
-                .map(|class| oag_formats::pads::volumes(&track_blob, &nodes, class))
+                .map(|class| oag_vex::pads::volumes(&track_blob, &nodes, class))
                 .unwrap_or_default()
         })
         .unwrap_or_default();
@@ -470,8 +470,8 @@ pub fn load(options: &Options) -> Result<Loaded> {
     let fog_volumes = if !vex_geometry {
         Vec::new()
     } else {
-        let nodes = oag_formats::vex::nodes(&track_blob).unwrap_or_default();
-        let volumes = oag_formats::fog::volumes(&track_blob, &nodes);
+        let nodes = oag_vex::vex::nodes(&track_blob).unwrap_or_default();
+        let volumes = oag_vex::fog::volumes(&track_blob, &nodes);
         report.push(match volumes.first() {
             None => "the track authors no fogCube; the race is unfogged".to_string(),
             Some(v) => format!(
@@ -628,7 +628,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
     // unwired rather than put somewhere plausible. **Slot 8 is not a hoarding
     // and is no longer among them**: it is the start gantry, and the circuit's
     // own track geometry authors the surface it stands on. See
-    // `oag_formats::trackstartup` and `docs/rendering/start-gantry.md`.
+    // `oag_tables::trackstartup` and `docs/rendering/start-gantry.md`.
     //
     // **Not HD-only.** Pulse ships the same file per circuit, `fexml`-shortened
     // rather than plain - `TrackStartup::parse` expands either form - so this
@@ -646,7 +646,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         && let Ok(blob) = archives.read_name(&name)
     {
         let manifest =
-            oag_formats::trackstartup::TrackStartup::parse(&String::from_utf8_lossy(&blob));
+            oag_tables::trackstartup::TrackStartup::parse(&String::from_utf8_lossy(&blob));
         let models = manifest
             .billboards
             .iter()

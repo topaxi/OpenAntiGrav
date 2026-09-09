@@ -73,7 +73,7 @@ nothing new: the d-pad and the steering axis are already on it, exactly as the
 sideshift's own port found. `oag-physics` is determinism-bound (`f32`, no
 `mul_add`, no reassociating, `TickClock` only).
 
-The four tunables come through `oag_formats::handling::global::Special`, which
+The four tunables come through `oag_tables::handling::global::Special`, which
 parsed **only** `speedpad_jump` when this thread opened. Adding `roll_cost`,
 `roll_speed` and `roll_turbotime` there was the first step, and its
 ground-truth test asserts against the disc rather than a literal - done, see

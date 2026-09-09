@@ -19,7 +19,7 @@ pub(super) struct Drawable {
     blend_pipeline: [wgpu::RenderPipeline; 2],
     /// The other two recovered transparent blend classes. Selected per draw
     /// call, because a single model mixes them - see
-    /// `oag_formats::vex::Batch::blend_class`.
+    /// `oag_vex::vex::Batch::blend_class`.
     additive_pipeline: [wgpu::RenderPipeline; 2],
     unblended_pipeline: [wgpu::RenderPipeline; 2],
     /// One pair per equation this model's own file authors - see
@@ -629,7 +629,7 @@ impl Drawable {
         // ways - `0x100` alpha-over, `0x200` additive, `0x400` unblended - and
         // a single model mixes them, so the pipeline is chosen per draw call.
         // This crate drew every one of them alpha-over until that was
-        // recovered. See `oag_formats::vex::Batch::blend_class` and
+        // recovered. See `oag_vex::vex::Batch::blend_class` and
         // `mesh_render::ADDITIVE_BLEND`.
         //
         // Switched only when the class changes rather than grouped by class

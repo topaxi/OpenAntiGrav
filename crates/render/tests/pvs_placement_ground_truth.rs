@@ -22,7 +22,7 @@
 //! The unknown one is ours: **what fraction of a track's draw calls a
 //! section governs.** Placement is authored - a `section` node governs its
 //! parent's whole subtree, and a draw call inherits its scene node's group
-//! (see `oag_formats::pvs::governing_sections`). A draw call outside every
+//! (see `oag_vex::pvs::governing_sections`). A draw call outside every
 //! group is deliberately never culled, so it passes tier one and still costs
 //! a frustum test. If the governed fraction were small, the ordering argument
 //! would be sound and the saving would still be nearly nothing - the first
@@ -44,10 +44,10 @@
 
 use std::path::{Path, PathBuf};
 
-use oag_formats::pvs::TrackPvs;
-use oag_formats::{track, vex};
 use oag_render::mesh::{self, Lod};
 use oag_render::pvs::{DrawSections, SectionPadding, SwapConflicts, UNPLACED, VisibleSet};
+use oag_vex::pvs::TrackPvs;
+use oag_vex::{track, vex};
 
 /// Track directories to probe. Named the way the front end names them, via the
 /// `location` attribute plus the binary's `%s\%strack%s.vex` template - see
@@ -118,7 +118,7 @@ fn sweep(image: &Path, minimum: usize) {
             let padding = SectionPadding::from_track(&ai);
 
             let governing =
-                oag_formats::pvs::governing_sections(&blob, &nodes).expect("deriving governance");
+                oag_vex::pvs::governing_sections(&blob, &nodes).expect("deriving governance");
             let (sections, placement) = DrawSections::place(&model, &governing, &pvs);
             let swaps = SwapConflicts::find(&pvs, &sections, &model);
             let lists = [
@@ -155,7 +155,7 @@ fn sweep(image: &Path, minimum: usize) {
                 together_total += survivors(&VisibleSet::around(&pvs, &padding, &swaps, id, id));
                 // The camera trails into a neighbour: the lowest-numbered section
                 // adjacent to this one that is not itself.
-                let neighbour = oag_formats::pvs::set_bits(padding.near(id) & !(1u64 << id))
+                let neighbour = oag_vex::pvs::set_bits(padding.near(id) & !(1u64 << id))
                     .next()
                     .unwrap_or(id);
                 let apart = survivors(&VisibleSet::around(&pvs, &padding, &swaps, id, neighbour));
@@ -193,7 +193,7 @@ fn sweep(image: &Path, minimum: usize) {
                 placement.placed_fraction() > 0.5,
                 "{name}: authored groups govern only {:.1}% of draw calls, so PVS \
              culling would barely reduce what the frustum test sees - the \
-             sibling-group rule in oag_formats::pvs::governing_sections needs \
+             sibling-group rule in oag_vex::pvs::governing_sections needs \
              revisiting",
                 placement.placed_fraction() * 100.0
             );

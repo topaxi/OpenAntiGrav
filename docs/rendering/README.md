@@ -53,7 +53,7 @@
   [`skycube.md`](../formats/skycube.md) and drawn camera-centred and out of depth
   by `oag_render::mesh::build_sky`). `fogCube` is **done** too - the runtime is
   recovered in [`fog.md`](../ghidra/functions/psp-pulse-usa/fog.md) and applied by
-  `oag_formats::fog` plus `mesh.wgsl`'s own bind group. The cloud and sea classes
+  `oag_vex::fog` plus `mesh.wgsl`'s own bind group. The cloud and sea classes
   are not implemented
 - Particle effects: thrust (**done** - the `Engine Flare` class plus its
   `Trail` ribbon and the `<Team>boost.vex` plume a speed pad reveals, all

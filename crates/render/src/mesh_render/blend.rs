@@ -8,7 +8,7 @@
 //! instead of naming a class.
 
 /// The blend for a transparent batch of class
-/// [`oag_formats::vex::BlendClass::AlphaOver`] - `pass_mask & 0x100`.
+/// [`oag_vex::vex::BlendClass::AlphaOver`] - `pass_mask & 0x100`.
 ///
 /// **Recovered.** `Gfx_BuildBatchStateList`'s `0x100` branch programs
 /// `Gu_Enable(GU_BLEND)` with `Gu_BlendFunc(GU_ADD, GU_SRC_ALPHA,
@@ -16,7 +16,7 @@
 /// factors here are that call. This constant's doc used to say the opposite -
 /// "not recovered ... a plausible reading" - and it happened to be right; what
 /// was wrong was applying it to **every** transparent batch. See
-/// [`ADDITIVE_BLEND`] and [`oag_formats::vex::BlendClass`].
+/// [`ADDITIVE_BLEND`] and [`oag_vex::vex::BlendClass`].
 ///
 /// **The alpha factors are still ours**, and deliberately unchanged: PSP
 /// blending is RGB-only, so the original's call says nothing about the alpha
@@ -34,7 +34,7 @@ pub const TRANSPARENT_BLEND: wgpu::BlendState = wgpu::BlendState {
     },
 };
 
-/// The blend for a transparent batch of class [`oag_formats::vex::BlendClass::Additive`] -
+/// The blend for a transparent batch of class [`oag_vex::vex::BlendClass::Additive`] -
 /// `pass_mask & 0x200`.
 ///
 /// **Recovered, and identical to [`crate::exhaust::BLEND`].**
@@ -106,9 +106,9 @@ impl<'a> TransparentPipelines<'a> {
                 .find(|(seen, _)| *seen == state)
                 .map_or(self.alpha_over, |(_, pipelines)| pipelines),
             None => match draw.blend {
-                Some(oag_formats::vex::BlendClass::Additive) => self.additive,
-                Some(oag_formats::vex::BlendClass::None) => self.unblended,
-                Some(oag_formats::vex::BlendClass::AlphaOver) | None => self.alpha_over,
+                Some(oag_vex::vex::BlendClass::Additive) => self.additive,
+                Some(oag_vex::vex::BlendClass::None) => self.unblended,
+                Some(oag_vex::vex::BlendClass::AlphaOver) | None => self.alpha_over,
             },
         };
         &set[usize::from(draw.culled)]

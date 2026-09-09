@@ -1,6 +1,6 @@
 //! Scratch probe: every vertex attribute declared by every `.rcsmodel` on the
 //! disc, so a selector written against one circuit can be checked against all.
-use oag_formats::rcsmodel;
+use oag_rcs::rcsmodel;
 fn main() -> anyhow::Result<()> {
     let dir = std::env::args().nth(1).unwrap_or_else(|| "models".into());
     let mut census: std::collections::BTreeMap<(u32, u8, u8), usize> = Default::default();

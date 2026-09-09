@@ -131,7 +131,7 @@ pub enum Draw {
     /// **What declares it is the file.** Pulse's three lock-on sight models -
     /// `missile_sight_outer.vex`, `missile_sight_inner.vex` and
     /// `leachbeam_sight.vex` - all carry `pass_mask 0x120e`, whose `0x0200` bit
-    /// is [`oag_formats::vex::BlendClass::Additive`], and their embedded
+    /// is [`oag_vex::vex::BlendClass::Additive`], and their embedded
     /// textures put the bracket in the colour channels over black with alpha
     /// pinned at 250/255. Drawn with the ordinary alpha blend every other
     /// sprite uses, each piece of the reticle sat on an opaque black tile; the
@@ -153,7 +153,7 @@ pub enum Draw {
         /// The class the model's own batch declared, or `None` for a model
         /// whose batches are opaque - which composites exactly as
         /// [`Self::Sprite`] does.
-        blend: Option<oag_formats::vex::BlendClass>,
+        blend: Option<oag_vex::vex::BlendClass>,
     },
     /// A line of text with its baseline-less top-left at `x, y`.
     Text {

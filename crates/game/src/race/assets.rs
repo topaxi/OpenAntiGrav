@@ -159,7 +159,7 @@ fn authored_ribbon(
     let blob = archives
         .read_name(model)
         .map_err(|e| format!("{model}: not in the archive set ({e})"))?;
-    let parsed = oag_formats::rcsmodel::Model::parse(&blob)
+    let parsed = oag_rcs::rcsmodel::Model::parse(&blob)
         .map_err(|e| format!("{model}: {} bytes, does not parse ({e})", blob.len()))?;
     let material = parsed
         .materials
@@ -176,7 +176,7 @@ fn authored_ribbon(
     let pixels = archives
         .read_name(noise)
         .map_err(|e| format!("{noise}: named by {model}'s material but not in the set ({e})"))?;
-    let gtf = oag_formats::gtf::Gtf::parse(&pixels)
+    let gtf = oag_texture::gtf::Gtf::parse(&pixels)
         .map_err(|e| format!("{noise}: {} bytes, does not parse ({e})", pixels.len()))?;
     let texture = gtf
         .only()
@@ -189,7 +189,7 @@ fn authored_ribbon(
     // bytes: `Material::blend` names the factors and `rcs::blend_state` turns
     // that pair into a pipeline state, and both already draw every HD surface.
     let authored = material.blend();
-    let oag_formats::rcsmodel::Blend::Factors { src, dst } = authored else {
+    let oag_rcs::rcsmodel::Blend::Factors { src, dst } = authored else {
         return Err(format!(
             "{model}: its material's blend is {authored:?} rather than a factor pair"
         ));
@@ -245,7 +245,7 @@ fn decode_gtf(
     let pixels = archives
         .read_name(name)
         .map_err(|e| format!("{name}: not in the archive set ({e})"))?;
-    let gtf = oag_formats::gtf::Gtf::parse(&pixels)
+    let gtf = oag_texture::gtf::Gtf::parse(&pixels)
         .map_err(|e| format!("{name}: {} bytes, does not parse ({e})", pixels.len()))?;
     let texture = gtf
         .only()
@@ -354,7 +354,7 @@ pub(super) fn exhaust_texture(
 /// disc from a PS2 one in the load report, and the two reach this point by
 /// different names.
 fn decode_either(name: &str, blob: &[u8]) -> std::result::Result<(FlareTexture, String), String> {
-    match oag_formats::texture::Texture::parse(blob) {
+    match oag_texture::texture::Texture::parse(blob) {
         Ok(texture) => Ok((
             FlareTexture {
                 width: u32::from(texture.width),
@@ -366,7 +366,7 @@ fn decode_either(name: &str, blob: &[u8]) -> std::result::Result<(FlareTexture, 
                 texture.width, texture.height, texture.mip_levels
             ),
         )),
-        Err(psp) => match oag_formats::ps2_texture::parse(blob) {
+        Err(psp) => match oag_texture::ps2_texture::parse(blob) {
             Ok(texture) => Ok((
                 FlareTexture {
                     width: u32::from(texture.width),
@@ -397,7 +397,7 @@ fn decode_either(name: &str, blob: &[u8]) -> std::result::Result<(FlareTexture, 
 /// pads" would close a question that is still open. See
 /// `docs/formats/pure-status.md`.
 pub(super) fn unrecovered_or_absent(
-    classes: oag_formats::vex::classes::Classes,
+    classes: oag_vex::vex::classes::Classes,
     id: Option<u32>,
     what: &str,
     consequence: &str,
@@ -651,7 +651,7 @@ pub(super) fn zone_handling_note(mode: Mode, team: &str) -> Option<String> {
 
 /// The weapon table this title tunes its weapons from, or `None`.
 ///
-/// **The title's own entry name, not `oag_formats::weapons::RACE_ENTRY`.** That
+/// **The title's own entry name, not `oag_tables::weapons::RACE_ENTRY`.** That
 /// constant is Pulse's spelling and Wipeout HD answers it too, but Pure names one
 /// lower-cased `Data\XML\weaponstats.xml` and ships no Eliminator variant - so
 /// until 2026-08-26 a Pure race found no table, parsed no weapons and handed out
@@ -674,13 +674,13 @@ pub(super) fn zone_handling_note(mode: Mode, team: &str) -> Option<String> {
 /// already uses.
 ///
 /// Two failures, two lines, and a third kind that is neither - see
-/// `oag_formats::weapons::WeaponStats::skipped`.
+/// `oag_tables::weapons::WeaponStats::skipped`.
 pub(super) fn load_weapons(
     archives: &mut oag_assets::Archives,
     title: &'static oag_title::Title,
     mode: Mode,
     report: &mut Vec<String>,
-) -> Option<oag_formats::weapons::WeaponStats> {
+) -> Option<oag_tables::weapons::WeaponStats> {
     let entry = if mode == Mode::Eliminator {
         match title.weapons.elimination {
             Some(entry) => entry,
@@ -706,7 +706,7 @@ pub(super) fn load_weapons(
             return None;
         }
     };
-    let stats = match oag_formats::weapons::from_blob(&blob) {
+    let stats = match oag_tables::weapons::from_blob(&blob) {
         Ok(stats) => stats,
         Err(e) => {
             report.push(format!("{entry}: {e}"));

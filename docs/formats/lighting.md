@@ -30,7 +30,7 @@ unfound. So, as with
 | `AmbientLight`'s decoded colour never reaches the one global its only two known consumers read - confirmed inert | **live-verified** |
 | `DirectionalLight` is live-verified collected into a 4-entry list at track load, matching real authored data exactly - the reader is still unfound | **live-verified (collection); reader not recovered** |
 
-Validated by `crates/formats/tests/lighting_ground_truth.rs` against every
+Validated by `crates/vex/tests/lighting_ground_truth.rs` against every
 `.vex` file in the PSP disc's `Data.wad` (1142 entries, `just test-data`).
 
 ## Why 88/86, not the 90-95 `Skycube`/`fogCube` reached
@@ -101,7 +101,7 @@ the identity for any node that is not itself a `Transform`, the same source
 16- or 32-byte light payload, it sees a non-empty payload under 64 bytes,
 decodes nothing, and the light is silently dropped from the result. The
 failure mode is not a wrong matrix, it is every light on every track going
-missing at once - `crates/formats/src/lighting.rs`'s module docs name this
+missing at once - `crates/vex/src/lighting.rs`'s module docs name this
 explicitly, because it is the trap this format falls into if approached the
 way `Skycube` was.
 

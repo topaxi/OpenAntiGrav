@@ -23,7 +23,7 @@
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 
-use oag_formats::rcsmodel::psp2;
+use oag_rcs::rcsmodel::psp2;
 
 const PACKAGES: [&str; 3] = [
     "data/extracted/vita/PCSF00007/base/PSP2/data.psarc",

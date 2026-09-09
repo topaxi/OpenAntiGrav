@@ -5,7 +5,7 @@ Binary: `PSP_GAME/SYSDIR/BOOT.BIN` from `pulse-psp-usa.chd` (`UCUS-98712`), as
 
 This is the PSP side of the same question
 [HD/Fury's `billboards.md`](../ps3-hdfury-eu/billboards.md) answers for that
-platform, and [`oag_formats::trackstartup`](../../../../crates/formats/src/trackstartup.rs)
+platform, and [`oag_tables::trackstartup`](../../../../crates/tables/src/trackstartup.rs)
 is the shared file-format reader both binaries feed. Where HD's page is
 capped at 84 (static reading of one binary, per
 [visibility.md](../ps3-hdfury-eu/visibility.md)'s own rule), this one is not:
@@ -368,7 +368,7 @@ tag `0x280bf0`, and the method-table pointer `0x2cd18c` - the exact three
 fields every instance this getter tags also carries at those offsets.
 **Class `0xf7` is `"Camera"`** in the already-established, ground-truthed
 Maya class-ID table this project carries in
-[`crates/formats/src/vex/class_names.rs:287`](../../../../crates/formats/src/vex/class_names.rs)
+[`crates/vex/src/vex/class_names.rs:287`](../../../../crates/vex/src/vex/class_names.rs)
 and documents in [`exhaust.md`](exhaust.md) at confidence 95 (self-validating
 against ten independently-placed IDs). `0x08901764` (`Camera_Construct_q`)
 is this class's own instance constructor - the only other caller that
@@ -380,7 +380,7 @@ child" constructor.
 
 **`0x08908aec` closes an independent loop**: it registers a *different*
 class, id `0x3dd` - `"gridCamera"` in the same table
-([`crates/formats/src/vex/class_names.rs:897`](../../../../crates/formats/src/vex/class_names.rs))
+([`crates/vex/src/vex/class_names.rs:897`](../../../../crates/vex/src/vex/class_names.rs))
 - and copies `func_0x00267b30()`'s value onto that class's own descriptor
 before a second block does the same with a sibling getter
 (`func_0x00267ba8`, real address `0x08a6bba8`, independently disassembled
@@ -473,7 +473,7 @@ rather than at the world origin - without it, "instantiated" is settled and
 seventh pass (above) resolved what `param_1+0x40` holds - the loaded mesh's
 own authored `Camera` node, not a placement mount point - which narrows the
 search by retiring a candidate rather than by finding the writer.
-[`crates/formats/src/trackstartup.rs:173`](../../../../crates/formats/src/trackstartup.rs)
+[`crates/tables/src/trackstartup.rs:173`](../../../../crates/tables/src/trackstartup.rs)
 carries the same "literal identity matrix" wording this page used to (not
 edited here - out of this lane's scope - flagged for whoever owns that
 crate).

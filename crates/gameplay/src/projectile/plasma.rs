@@ -13,9 +13,9 @@
 //! fall when the probe finds nothing, the same detonate on a wall.
 
 use oag_core::math::Vec3;
-use oag_formats::weapons::PlasmaStats;
 use oag_physics::ShipState;
 use oag_physics::params::Dimensions;
+use oag_tables::weapons::PlasmaStats;
 
 use super::KMH_PER_UNIT_PER_SECOND;
 

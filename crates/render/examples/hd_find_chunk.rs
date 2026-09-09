@@ -5,7 +5,7 @@
 //! is absent from the disc or merely absent from *this* file.
 
 use oag_assets::Container;
-use oag_formats::rcsmodel;
+use oag_rcs::rcsmodel;
 
 fn main() -> anyhow::Result<()> {
     let mut args = std::env::args().skip(1);

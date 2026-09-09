@@ -29,12 +29,12 @@
 //! gets a `write_*` of its own; reading `foo.bar` off one is the shape to
 //! notice.
 //!
-//! [`Weapon`]: oag_formats::weapons::Weapon
+//! [`Weapon`]: oag_tables::weapons::Weapon
 //! [`Mode`]: oag_race::Mode
 
 use oag_core::hash::StateHasher;
-use oag_formats::weapons::Weapon;
 use oag_race::{LapGate, Mode, RaceState};
+use oag_tables::weapons::Weapon;
 
 use crate::pickup::Held;
 use crate::projectile::leach_beam::{Beam, Kind as BeamKind};

@@ -178,7 +178,7 @@ into a sprite sheet draws the craft upside down, and reversed it matches the
 screenshot exactly.
 
 **The decoder is not what is wrong.** Every other consumer of
-`oag_formats::gtf` is a 3D one - `mesh::rcs::skin`, `mesh::sky_cube`,
+`oag_texture::gtf` is a 3D one - `mesh::rcs::skin`, `mesh::sky_cube`,
 `race::assets`'s trail noise - and those are already right: the hull lettering
 on an HD craft reads the correct way up, which is the check
 [rcsmodel.md](rcsmodel.md) used to confirm the texture coordinate in the first

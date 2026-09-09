@@ -8,6 +8,9 @@ repository.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+oag-rcs.workspace = true
+oag-vex.workspace = true
+oag-texture.workspace = true
 oag-assets.workspace = true
 oag-core.workspace = true
 oag-formats.workspace = true
@@ -32,4 +35,5 @@ perf-probe = []
 workspace = true
 
 [dev-dependencies]
+oag-tables.workspace = true
 oag-testdata.workspace = true

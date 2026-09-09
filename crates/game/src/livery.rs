@@ -50,9 +50,9 @@
 
 use anyhow::{Context, Result};
 use oag_core::math::Vec3;
-use oag_formats::vex;
 use oag_race::Mode;
 use oag_render::mesh::{self, Model};
+use oag_vex::vex;
 
 use crate::race::{boost_entry_name, ps2_texture_set, ship_entry_name};
 

@@ -11,8 +11,8 @@
 //! which is exactly what happened to the texture-transform port's first
 //! attempt.
 
-use oag_formats::vex;
 use oag_render::mesh::{AnimNode, Bounds, DrawCall, GpuVertex, Model};
+use oag_vex::vex;
 
 /// A quad, in the space of an `Anim Transform` that slides it along `z`.
 ///

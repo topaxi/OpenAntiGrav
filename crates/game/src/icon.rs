@@ -24,7 +24,7 @@ use resvg::{tiny_skia, usvg};
 const SOURCE: &[u8] = include_bytes!("../../../assets/icons/64x64.svg");
 
 /// A rasterised RGBA8 icon, straight ARGB-free and premultiplied-free -
-/// `winit::window::Icon::from_rgba` and `oag_formats::png::encode_rgba` both
+/// `winit::window::Icon::from_rgba` and `oag_texture::png::encode_rgba` both
 /// want the same thing: `width * height * 4` bytes, row-major, unassociated
 /// alpha.
 #[derive(Debug)]

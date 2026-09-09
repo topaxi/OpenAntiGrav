@@ -3,7 +3,7 @@
 //! Its own module because the test grew a second half when Wipeout 2048
 //! arrived, and because [`super`] is at this project's 1,000-line ceiling.
 
-use oag_formats::vex;
+use oag_vex::vex;
 
 /// Whether this `.vex`'s render geometry lives outside the file.
 ///

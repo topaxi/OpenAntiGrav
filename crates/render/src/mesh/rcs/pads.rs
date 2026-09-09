@@ -23,12 +23,13 @@
 //! `Drawable::tint_weapon_pads` has nothing to zip
 //! against. [`build_pads`]/[`build_weapon_pads`] draw the excluded chunks
 //! through [`build_pad_class`] instead: one node-ordered pass per class,
-//! walking [`oag_formats::pads::volumes`]'s own node order so
+//! walking [`oag_vex::pads::volumes`]'s own node order so
 //! `oag_game::race::load`'s trigger list and this module's vertex ranges
 //! stay lined up one entry each.
 
 use anyhow::{Context, Result, bail};
-use oag_formats::{rcsmodel, vex};
+use oag_rcs::rcsmodel;
+use oag_vex::vex;
 
 use super::{
     Geometry, MaterialSetup, Model, Report, Textures, anim_node, authored, bounding_sphere,
@@ -82,7 +83,7 @@ pub fn build_pads(
 /// chunks in **file** order, with no node identity attached, into one shared
 /// buffer with every other track chunk. `Drawable::tint_weapon_pads` needs
 /// the opposite: one [`Model::node_vertex_ranges`] entry per pad **node**, in
-/// the same **tree** order [`oag_formats::pads::volumes`] walks to build the
+/// the same **tree** order [`oag_vex::pads::volumes`] walks to build the
 /// trigger list `oag_game::race::Race` drives ready/cooling state from - see
 /// that function and `crates/game/src/race/pads.rs`. So this is a second,
 /// dedicated pass over exactly the nodes of one pad class.
@@ -91,7 +92,7 @@ pub fn build_pads(
 /// pushed **unconditionally**, empty for a node whose chunk does not resolve
 /// or decode. That is the same "never skip a slot" rule
 /// `super::super::build_class` uses, and it is what keeps the array lined up
-/// with [`oag_formats::pads::volumes`]'s own count, one entry each.
+/// with [`oag_vex::pads::volumes`]'s own count, one entry each.
 ///
 /// Positions are already in world space - a `Weapon Pad`/`Speedup Pad`
 /// chunk's coordinates ignore its node the same way every other world-baked

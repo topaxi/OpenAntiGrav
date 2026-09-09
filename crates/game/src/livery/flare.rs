@@ -163,7 +163,7 @@ pub(super) fn per_team(
 /// **The material record carries the values, not the `.rcsmaterial`.** The
 /// shader file declares that the program takes a `power1` and a `scale1`; what
 /// they *are* is authored per model, in the table
-/// [`oag_formats::rcsmodel::material::parameters`] reads. Every craft on the
+/// [`oag_rcs::rcsmodel::material::parameters`] reads. Every craft on the
 /// disc ships the same six, and they are read per craft anyway - a shared value
 /// that is read is a fact about the data, and a shared value that is assumed is
 /// a constant in disguise.
@@ -172,7 +172,7 @@ pub(super) fn per_team(
 /// and the report says so: see [`mesh::Flame::from_material`] for why the set
 /// is all-or-nothing.
 fn shading(model: &mut Model, geometry: &[u8], report: &mut Vec<String>) {
-    let Ok(parsed) = oag_formats::rcsmodel::Model::parse(geometry) else {
+    let Ok(parsed) = oag_rcs::rcsmodel::Model::parse(geometry) else {
         return;
     };
     let Some(material) = parsed.materials.first() else {

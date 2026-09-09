@@ -10,7 +10,7 @@
 //! cargo run -p oag-render --example sight_alpha_probe
 //! ```
 
-use oag_formats::vex;
+use oag_vex::vex;
 
 const ENTRIES: &[&str] = &[
     "Data\\HUD\\missile_sight_outer.vex",

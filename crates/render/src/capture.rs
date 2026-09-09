@@ -61,7 +61,7 @@ pub fn capture_from(
     seconds: f32,
 ) -> Result<()> {
     let pixels = capture_pixels_from(model, width, height, yaw, pitch, anisotropy, seconds)?;
-    std::fs::write(path, oag_formats::png::encode_rgba(width, height, &pixels))
+    std::fs::write(path, oag_texture::png::encode_rgba(width, height, &pixels))
         .with_context(|| format!("writing {}", path.display()))
 }
 

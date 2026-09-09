@@ -78,7 +78,7 @@ fn circuits(image: &Path) -> Vec<catalogue::Track> {
     let blob = archives
         .read_name(oag_pure::names::GAME_PLUGIN_DEFINITION)
         .expect("the game plugin definition");
-    let xml = oag_formats::fexml::text(&blob).expect("Pure's XML is not shortened");
+    let xml = oag_tables::fexml::text(&blob).expect("Pure's XML is not shortened");
     catalogue::tracks(&xml)
 }
 
