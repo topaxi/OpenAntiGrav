@@ -201,14 +201,14 @@ pub struct RaceState {
 }
 
 impl Default for RaceState {
-    /// A Venom time trial: the mode the menu opens on, in the class
-    /// `oag_game::race::Options`'s own default names.
+    /// A Venom time trial: the mode the menu opens on, in the slowest rung
+    /// every measured title's ladder shares.
     ///
-    /// Venom rather than "the first variant" because it is the default the
-    /// rest of the engine already picks, and because it is the one rung whose
-    /// lap count is `3` - which is what the pre-per-class build produced for
-    /// every class, and so what keeps a default-path state hash unchanged
-    /// across this method growing a second argument.
+    /// Venom rather than "the first variant" because it is the rung the rest of
+    /// the engine already defaults to, and because it is the one whose lap
+    /// count is `3` - which is what the pre-per-class build produced for every
+    /// class, and so what keeps a default-path state hash unchanged across
+    /// [`Self::new`] growing a second argument.
     fn default() -> Self {
         Self::new(Mode::TimeTrial, SpeedClass::Venom)
     }
