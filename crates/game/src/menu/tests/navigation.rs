@@ -87,6 +87,7 @@ fn a_zoom_moves_the_body_and_not_the_chrome() {
         &measure,
         None,
         &Frame::default(),
+        false,
     );
     let chrome_before = first_text_at(&settled.chrome);
     let body_before = first_text_at(&settled.body);
@@ -118,6 +119,7 @@ fn a_zoom_fades_both_layers() {
         &measure,
         None,
         &Frame::default(),
+        false,
     )
     .zoomed((0.0, 0.0), 1.0, 0.25);
     for draw in faded.chrome.iter().chain(faded.body.iter()) {

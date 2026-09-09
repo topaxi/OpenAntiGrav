@@ -77,6 +77,7 @@ fn hds_root_page_runs_left_to_right_from_its_own_anchor() {
         &measure,
         None,
         &frame_with_fills(),
+        false,
     )
     .flatten();
 
@@ -189,6 +190,7 @@ fn every_entry_is_the_same_text_colour_selected_or_not() {
         &measure,
         None,
         &frame_with_fills(),
+        false,
     )
     .flatten();
 
@@ -220,7 +222,7 @@ fn the_selected_tab_is_the_frames_accent_and_the_rest_are_its_ink() {
     menu.set_strip_layout(true);
     let skin = hd_skin();
     let frame = frame_with_fills();
-    let list = draw_list(&menu, &skin, &no_bindings, &measure, None, &frame).flatten();
+    let list = draw_list(&menu, &skin, &no_bindings, &measure, None, &frame, false).flatten();
 
     // Four entries, two fills each (the cut band and the rest of the tab -
     // see `strip::draw`), plus one underline.
@@ -269,6 +271,7 @@ fn the_tab_corner_is_a_45_degree_cut_followed_by_a_flat_landing() {
         &measure,
         None,
         &frame_with_fills(),
+        false,
     )
     .flatten();
 
@@ -354,6 +357,7 @@ fn a_tab_narrower_than_the_landing_collapses_its_band_rather_than_inverting_it()
         &hairline,
         None,
         &frame_with_fills(),
+        false,
     )
     .flatten();
 
@@ -393,6 +397,7 @@ fn with_no_frame_colours_nothing_but_the_text_draws() {
         &measure,
         None,
         &Frame::default(),
+        false,
     )
     .flatten();
 
@@ -432,6 +437,7 @@ fn a_page_with_a_value_column_stays_a_column() {
         &measure,
         None,
         &Frame::default(),
+        false,
     )
     .flatten();
     let rows: Vec<_> = labels(&list)

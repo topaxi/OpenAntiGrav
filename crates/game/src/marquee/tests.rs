@@ -75,6 +75,7 @@ fn a_row_that_fits_is_left_exactly_as_drawn() {
         &measure,
         None,
         &crate::menu::Frame::default(),
+        false,
     )
     .flatten();
     let (after, clip) = apply(before.clone(), &menu, &skin(), &measure, 5.0);
@@ -97,6 +98,7 @@ fn an_overflowing_row_slides_and_reports_where_to_clip() {
         &measure,
         None,
         &crate::menu::Frame::default(),
+        false,
     )
     .flatten();
     let (after, clip) = apply(before.clone(), &menu, &skin(), &measure, 5.0);
@@ -134,8 +136,16 @@ fn a_framed_page_still_clips_the_value_and_not_the_frame() {
         ink: Some([1.0, 1.0, 1.0, 1.0]),
         tab_selected: None,
     };
-    let before =
-        crate::menu::draw_list(&menu, &skin(), &|_| Vec::new(), &measure, None, &framed).flatten();
+    let before = crate::menu::draw_list(
+        &menu,
+        &skin(),
+        &|_| Vec::new(),
+        &measure,
+        None,
+        &framed,
+        false,
+    )
+    .flatten();
     let (after, clip) = apply(before, &menu, &skin(), &measure, 5.0);
     let Some((index, _, _)) = clip else {
         panic!("an overflowing value needs a clip window");
@@ -163,6 +173,7 @@ fn an_unfocused_overflowing_row_is_still_clipped_though_not_scrolled() {
         &measure,
         None,
         &crate::menu::Frame::default(),
+        false,
     )
     .flatten();
     let (after, clip) = apply(before.clone(), &menu, &skin(), &measure, 5.0);

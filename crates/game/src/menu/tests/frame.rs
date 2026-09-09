@@ -213,3 +213,63 @@ fn content_bottom_is_none_with_nothing_below_the_midline() {
         "the one mark is above the midline"
     );
 }
+
+/// [`Frame::backdrops`] with a race behind the menus: the full-screen mark
+/// (Pulse's own `FE_SCREEN` authors exactly this shape ahead of its top bar
+/// and its two footer strips) is dropped so the parked race's picture, or
+/// the pause overlay over it, shows through - but the small top-bar mark
+/// stays, because it is structural chrome rather than a background.
+///
+/// Live-reproduced, not only asserted here - a real `Escape` from a running
+/// race, before and after this fix, screenshotted either side of it.
+#[test]
+fn backdrops_drops_a_full_screen_mark_but_keeps_a_small_one_behind_a_race() {
+    let space = crate::frontend::Space::PSP;
+    let full_screen = Draw::Sprite {
+        rect: [0.0, 0.0, space.size.0, space.size.1],
+        uv: [0.0, 0.0, 480.0, 256.0],
+        color: [1.0, 1.0, 1.0, 1.0],
+    };
+    let top_bar = Draw::Sprite {
+        rect: [20.0, 0.0, 224.0, 24.0],
+        uv: [0.0, 257.0, 224.0, 24.0],
+        color: [1.0, 1.0, 1.0, 1.0],
+    };
+    let frame = Frame {
+        marks: vec![full_screen.clone(), top_bar.clone()],
+        ..Frame::default()
+    };
+
+    let behind = frame.backdrops(space, None, None, true);
+    assert_eq!(behind, vec![top_bar.clone()], "only the small mark stays");
+
+    let ordinary = frame.backdrops(space, None, None, false);
+    assert_eq!(
+        ordinary,
+        vec![full_screen, top_bar],
+        "both marks draw exactly as `draw_list` always has, race or not"
+    );
+}
+
+/// The same drop applies to the frame's own `<ScreenClear>` (or, absent one,
+/// [`oag_title::MenuSkin::background`], passed in the same way) - it is
+/// always full-screen by construction, so `backdrops` need not compare its
+/// rect the way it does for a mark.
+#[test]
+fn backdrops_drops_the_clear_behind_a_race_too() {
+    let space = crate::frontend::Space::PSP;
+    let clear = Draw::Fill {
+        rect: [0.0, 0.0, space.size.0, space.size.1],
+        color: [0.1, 0.1, 0.1, 1.0],
+    };
+    let frame = Frame {
+        clear: Some(clear.clone()),
+        ..Frame::default()
+    };
+
+    assert!(
+        frame.backdrops(space, None, None, true).is_empty(),
+        "the clear alone would hide the race just as the mark did"
+    );
+    assert_eq!(frame.backdrops(space, None, None, false), vec![clear]);
+}

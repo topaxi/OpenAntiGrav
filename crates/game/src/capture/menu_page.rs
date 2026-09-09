@@ -227,6 +227,10 @@ pub(super) fn menu_page(
         measure,
         backdrop,
         frame,
+        // `--menu-page` builds this `Menu` from scratch with no `Session`
+        // behind it, so there is never a parked race to show through - see
+        // `crate::menu::draw_list`'s own doc for the parameter.
+        false,
     );
     // What the `AXIS` row currently means, read live off `model`'s own rows -
     // `None` off any page but AI PILOTS. The one function the live session
