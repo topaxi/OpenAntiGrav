@@ -503,6 +503,16 @@ impl Session {
                 stage.result_saved = true;
                 let key = stage.result_key.clone();
                 let observation = stage.observation();
+                // Read before `self.records.record` below folds `observation`
+                // into the row: `PersonalBest::compare` wants the row as it
+                // stood *before* this race, and `Store::record` mutates it in
+                // place - so this is the last point the "before" value can
+                // still be read. See `crate::scoreboard`'s own "personal
+                // best" line, the one reader of this field.
+                stage.personal_best = Some(records::PersonalBest::compare(
+                    self.records.get(&key),
+                    &observation,
+                ));
                 self.records.record(key, observation);
                 if let Err(e) = records::save(&self.records) {
                     error!("could not save race records: {e:#}");

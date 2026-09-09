@@ -116,6 +116,43 @@ Both sites build the same `oag_game::records::Observation` off the same
 helper, `RaceStage::observation` (`crates/game/src/main/race_stage.rs`), so
 the field list only has to agree with `oag_game::records` in one place.
 
+**Only `Session::frame`'s finish arm also builds a
+`oag_game::records::PersonalBest`** - see "the results table" below - because
+that is the one site whose race actually has a `scoreboard::Board` for it to
+be drawn on; `Session::escape` leaves before a results table exists on the
+two modes it alone captures.
+
+## The results table
+
+`crate::scoreboard::draw_list` draws up to two extra lines under the `RACE
+TIME` footer, in the same all-caps convention every other label on the panel
+already uses:
+
+- `PERSONAL BEST LAP <time>`, shown whenever the row's own comparison has a
+  best lap to report at all - which, after the very first race on a key, is
+  always, since `Store::record`'s "seeded from itself" rule means a first
+  race sets its own best lap.
+- `BEST MEDAL <GOLD|SILVER|BRONZE>`, shown only when the row carries one -
+  which, per "where a career system attaches" above, is never yet, since
+  nothing selects a campaign cell for a real race.
+
+Either line highlights in the same colour the player's own standings row
+already uses (`scoreboard::PLAYER`) and appends `- NEW!` when *this* race is
+the one that set the figure - `oag_game::records::PersonalBest::compare`'s
+`lap_improved`/`medal_improved` flags, not re-derived by the drawing code.
+`PersonalBest::compare` is a pure function of a `Record` (or none) and an
+`Observation`, mirroring `Store::record`'s own best-of rule without calling
+it - `Session::frame`'s finish arm reads the row `Store::get` returns
+*before* folding this race's `Observation` in, because `Store::record`
+mutates the row in place and the comparison needs "before" and "after" both.
+
+A `--race --screenshot` capture (`crates/game/src/race/capture.rs`,
+`crate::capture::run`) draws the same line, reading (never writing)
+whatever `records.toml` already holds for the key it resolves the same way
+`Stage::build_race_stage` does - see
+`race::CaptureOptions::previous_best`'s own doc for why that path stays
+read-only.
+
 ## The key: resolved once, at load, never re-derived
 
 `RaceStage::result_key` is built once, in `Stage::build_race_stage`
@@ -164,12 +201,11 @@ still additive, neither needing `Key`, `parse` or `Store::record` to change:
 
 ## What is not built yet
 
-There is no on-screen row showing a stored best lap or a personal-best
-comparison during or after a race - today's surface is the persisted file
-itself, plus whatever a future session prints or draws from it. Wiring a
-"personal best" line into the results table, or a records browser of its own,
-is left for whoever picks this up next; the storage and the two capture sites
-are the part of this that does not change shape underneath it.
+There is still no records **browser** - a circuit list plus every stored best
+time, reachable from the menus rather than only shown after a race just run
+on that circuit. That is a bigger, separate piece, probably its own
+`menu.toml` page (which, unlike the results table's own free text, *would*
+need `string_id`s - see `scripts/check-strings.py`). Not started.
 
 **Nor is there any wiring from a real race to a campaign cell.** The medal
 law is implemented and unit-tested

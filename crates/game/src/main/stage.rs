@@ -535,6 +535,7 @@ impl Stage {
             scoreboard,
             countdown,
             result_key,
+            personal_best: None,
             result_saved: false,
         }))
     }

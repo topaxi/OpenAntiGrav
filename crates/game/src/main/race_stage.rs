@@ -28,6 +28,15 @@ pub(crate) struct RaceStage {
     /// escaped race any other way. See `Session::frame`'s finish-transition
     /// arm and `Session::escape`, the only two readers.
     pub(crate) result_key: oag_game::records::Key,
+    /// This race's own personal-best comparison, computed once at the finish
+    /// transition and drawn on the results table alongside
+    /// [`oag_game::scoreboard::Board`] - see [`RaceStage::draw_hud`].
+    ///
+    /// `None` until the finish arm sets it, and forever `None` on a race that
+    /// is escaped rather than finished: [`oag_game::race::Race::results`] is
+    /// `None` on that path too, so there is no table for it to be drawn on.
+    /// See `Session::frame`'s finish-transition arm, the only writer.
+    pub(crate) personal_best: Option<oag_game::records::PersonalBest>,
     /// Whether this race's result has already been folded into
     /// `Session::records` and saved **since this stage last became live** -
     /// not "ever", which is why `Session::resume_race` clears it back to
@@ -202,10 +211,15 @@ impl RaceStage {
         target_size: (u32, u32),
     ) {
         match self.race.results() {
-            Some(board) => {
-                self.scoreboard
-                    .draw(&gpu.device, &gpu.queue, encoder, view, board, viewport)
-            }
+            Some(board) => self.scoreboard.draw(
+                &gpu.device,
+                &gpu.queue,
+                encoder,
+                view,
+                board,
+                self.personal_best.as_ref(),
+                viewport,
+            ),
             None => {
                 if let Some(hud) = &mut self.hud {
                     let mut readout = self.race.readout();

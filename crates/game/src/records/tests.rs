@@ -432,6 +432,129 @@ fn best_points_matches_the_medal_it_was_earned_by() {
     assert_eq!(store.get(&key("16_track")).unwrap().best_points, Some(2));
 }
 
+/// The first race on a key has nothing to compare against, and still counts
+/// as the one that set the row - the same "seeded from itself" rule
+/// [`Store::record`]'s own first test carries, mirrored here for the
+/// comparison rather than the merge.
+#[test]
+fn personal_best_credits_the_first_race_on_a_key_with_setting_it() {
+    let pb = PersonalBest::compare(None, &observation_with_medal(None));
+    assert_eq!(pb.best_lap_ticks, Some(1900));
+    assert!(pb.lap_improved);
+    assert_eq!(pb.best_total_ticks, Some(6000));
+    assert!(pb.total_improved);
+}
+
+/// A race slower than the standing best does not move it, and is not the one
+/// that set it - the comparison's own mirror of
+/// `a_slower_race_does_not_erase_the_standing_best`.
+#[test]
+fn personal_best_does_not_credit_a_slower_race() {
+    let previous = Record {
+        best_lap_ticks: Some(1900),
+        best_total_ticks: Some(6000),
+        ..Record::default()
+    };
+    let obs = Observation {
+        finished: true,
+        place: Some(3),
+        laps_completed: 3,
+        tick: 6500,
+        best_lap_ticks: Some(2100),
+        campaign_medal: None,
+    };
+    let pb = PersonalBest::compare(Some(&previous), &obs);
+    assert_eq!(pb.best_lap_ticks, Some(1900), "the standing lap survives");
+    assert!(!pb.lap_improved);
+    assert_eq!(
+        pb.best_total_ticks,
+        Some(6000),
+        "the standing total survives"
+    );
+    assert!(!pb.total_improved);
+}
+
+/// The opposite direction: a faster race both moves the standing bests and is
+/// credited with having done it.
+#[test]
+fn personal_best_credits_a_faster_race() {
+    let previous = Record {
+        best_lap_ticks: Some(2100),
+        best_total_ticks: Some(6500),
+        ..Record::default()
+    };
+    let obs = Observation {
+        finished: true,
+        place: Some(1),
+        laps_completed: 3,
+        tick: 6000,
+        best_lap_ticks: Some(1900),
+        campaign_medal: None,
+    };
+    let pb = PersonalBest::compare(Some(&previous), &obs);
+    assert_eq!(pb.best_lap_ticks, Some(1900));
+    assert!(pb.lap_improved);
+    assert_eq!(pb.best_total_ticks, Some(6000));
+    assert!(pb.total_improved);
+}
+
+/// An abandoned race can still improve the lap and never the total - the
+/// comparison's mirror of
+/// `an_unfinished_race_can_still_set_a_best_lap_but_never_a_best_total`.
+#[test]
+fn personal_best_never_credits_an_unfinished_race_with_the_total() {
+    let previous = Record {
+        best_total_ticks: Some(9000),
+        ..Record::default()
+    };
+    let obs = Observation {
+        finished: false,
+        place: Some(1),
+        laps_completed: 4,
+        tick: 3000,
+        best_lap_ticks: Some(1800),
+        campaign_medal: None,
+    };
+    let pb = PersonalBest::compare(Some(&previous), &obs);
+    assert_eq!(pb.best_lap_ticks, Some(1800));
+    assert!(pb.lap_improved, "the first lap ever recorded on this row");
+    assert_eq!(
+        pb.best_total_ticks,
+        Some(9000),
+        "the standing total is untouched, not overwritten by an in-progress tick"
+    );
+    assert!(!pb.total_improved);
+}
+
+/// A medal that ties the standing one - a later gold against an earlier gold
+/// - is not "improved": [`Medal`]'s own `Ord` makes the comparison strict.
+#[test]
+fn personal_best_does_not_credit_a_medal_that_only_ties() {
+    let previous = Record {
+        best_medal: Some(Medal::Gold),
+        best_points: Some(3),
+        ..Record::default()
+    };
+    let pb = PersonalBest::compare(Some(&previous), &observation_with_medal(Some(Medal::Gold)));
+    assert_eq!(pb.best_medal, Some(Medal::Gold));
+    assert!(!pb.medal_improved);
+}
+
+/// The medal mirror of `no_campaign_cell_leaves_the_standing_medal_untouched`:
+/// no campaign cell in play this race is not evidence the standing medal
+/// should be forgotten, nor is it this race's own doing.
+#[test]
+fn personal_best_leaves_the_standing_medal_untouched_with_no_campaign_cell() {
+    let previous = Record {
+        best_medal: Some(Medal::Silver),
+        best_points: Some(2),
+        ..Record::default()
+    };
+    let pb = PersonalBest::compare(Some(&previous), &observation_with_medal(None));
+    assert_eq!(pb.best_medal, Some(Medal::Silver));
+    assert!(!pb.medal_improved);
+}
+
 /// The reason [`Medal`] carries its own `Serialize`/`Deserialize` rather
 /// than deriving through its ordinal: a bare integer in the file would be
 /// exactly the kind of value the in-race HUD's *opposite*-direction medal

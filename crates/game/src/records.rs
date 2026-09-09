@@ -367,6 +367,91 @@ impl Record {
     }
 }
 
+/// What a finish transition's own results-table comparison looks like: the
+/// row's standing bests, and whether the race that just ran is the one that
+/// set them - read once, at the same capture site that persists an
+/// [`Observation`] into a [`Store`], and drawn by `crate::scoreboard`.
+///
+/// **A pure function of a `Record` and an `Observation`, on purpose.** It
+/// mirrors [`Store::record`]'s own best-of rule rather than calling it, so a
+/// caller can compare *before* merging without a second, mutated `Store` to
+/// read back - `Session::frame`'s finish arm needs exactly that: the row as
+/// it stood before this race, to say whether this race is the one that moved
+/// it. Testable with no disc, no GPU and no `Store` at all, the same
+/// guarantee [`laps_completed`] and [`Observation`] itself already keep.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct PersonalBest {
+    /// The best lap on this row once this race is folded in - this race's own
+    /// lap when it improved on what stood before, the standing one otherwise.
+    /// `None` only when neither this race nor any before it ever completed
+    /// one.
+    pub best_lap_ticks: Option<u32>,
+    /// Whether *this* race is the one that set [`Self::best_lap_ticks`] -
+    /// `true` for the first race ever run on a row, the same "seeded from
+    /// itself" rule [`Store::record`]'s own tests carry.
+    pub lap_improved: bool,
+    /// The best finished time on this row once this race is folded in. `None`
+    /// when no race on this row, including this one, has ever finished.
+    pub best_total_ticks: Option<u64>,
+    /// Whether this race is the one that set [`Self::best_total_ticks`].
+    /// Always `false` when `obs.finished` was `false`: an abandoned race has
+    /// no total to compare, so it cannot be the one that set it.
+    pub total_improved: bool,
+    /// The best campaign medal ever earned on this row once this race is
+    /// folded in. `None` until a race here - this one or an earlier one -
+    /// carries a medal at all, which today is never: see
+    /// [`Observation::campaign_medal`]'s own doc.
+    pub best_medal: Option<Medal>,
+    /// Whether this race is the one that set [`Self::best_medal`].
+    pub medal_improved: bool,
+}
+
+impl PersonalBest {
+    /// Compares `obs` against `previous` - the row [`Store::get`] returned
+    /// for this key *before* `obs` was folded into the store, or `None` for a
+    /// key with no row yet.
+    ///
+    /// **Every "improved" flag means "this race", not "ever".** A previous
+    /// [`Medal::Gold`] and this race's own [`Medal::Silver`] leaves
+    /// `best_medal` at gold and `medal_improved` at `false` - the standing
+    /// medal did not move, whatever this particular race scored.
+    #[must_use]
+    pub fn compare(previous: Option<&Record>, obs: &Observation) -> Self {
+        let previous_lap = previous.and_then(|record| record.best_lap_ticks);
+        let (best_lap_ticks, lap_improved) = match (previous_lap, obs.best_lap_ticks) {
+            (None, new) => (new, new.is_some()),
+            (Some(prev), None) => (Some(prev), false),
+            (Some(prev), Some(new)) => (Some(prev.min(new)), new < prev),
+        };
+
+        let previous_total = previous.and_then(|record| record.best_total_ticks);
+        let (best_total_ticks, total_improved) = if obs.finished {
+            match previous_total {
+                None => (Some(obs.tick), true),
+                Some(prev) => (Some(prev.min(obs.tick)), obs.tick < prev),
+            }
+        } else {
+            (previous_total, false)
+        };
+
+        let previous_medal = previous.and_then(|record| record.best_medal);
+        let (best_medal, medal_improved) = match (previous_medal, obs.campaign_medal) {
+            (None, new) => (new, new.is_some()),
+            (Some(prev), None) => (Some(prev), false),
+            (Some(prev), Some(new)) => (Some(prev.better(new)), new < prev),
+        };
+
+        Self {
+            best_lap_ticks,
+            lap_improved,
+            best_total_ticks,
+            total_improved,
+            best_medal,
+            medal_improved,
+        }
+    }
+}
+
 /// Every row [`load`] found or [`Store::record`] has added since, in one
 /// file.
 ///

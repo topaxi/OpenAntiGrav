@@ -403,6 +403,19 @@ pub(crate) fn run_race(
             None => None,
         };
         cli.apply_render_overrides(&mut render_profile, render_scale);
+        // The same key `main::stage::build_race_stage` resolves for a real
+        // session - see `oag_game::records::Key::track`'s own doc for why the
+        // fallback order matters - read here only to look a row up, never to
+        // write one back. See `race::CaptureOptions::previous_best`'s own doc
+        // for why this capture never calls `oag_game::records::save`.
+        let previous_best = oag_game::records::load()
+            .get(&oag_game::records::Key::new(
+                loaded.title.name,
+                options.track.as_deref().or(Some(loaded.title.race.track)),
+                loaded.setup.mode.name(),
+                &loaded.setup.class,
+            ))
+            .cloned();
         race::capture(
             loaded,
             &race::CaptureOptions {
@@ -454,6 +467,7 @@ pub(crate) fn run_race(
                     },
                 }),
                 zone_spectrum_test: cli.zone_spectrum_test,
+                previous_best,
             },
             &mut audio,
         )?;
