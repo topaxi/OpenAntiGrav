@@ -63,7 +63,7 @@ fn the_movie_is_paced_by_its_sound_rather_than_by_the_tick() {
 fn the_backdrop_ignores_the_movies_audio_clock() {
     let run = |playhead: Option<f64>| {
         let mut frontend = frontend(300);
-        frontend.set_backdrop(270, crate::movie::FRAME_RATE, (480, 272));
+        frontend.set_backdrop(270, crate::frontend::FRAME_RATE, (480, 272));
         let mut input = Input::new();
         for tick in 0..400 {
             input.begin_frame(0);
@@ -89,7 +89,7 @@ fn the_backdrops_draw_carries_a_position_that_outgrows_its_own_loop() {
     // gone back to 0 - and a draw carrying only `frame` takes nothing from
     // it from that moment on, which froze the picture nine seconds in.
     let mut frontend = frontend(300);
-    frontend.set_backdrop(270, crate::movie::FRAME_RATE, (480, 272));
+    frontend.set_backdrop(270, crate::frontend::FRAME_RATE, (480, 272));
     let mut input = Input::new();
     pick_a_language(&mut frontend, &mut input);
     assert!(frontend.machine().is(states::SHOW_LOGO));
@@ -139,7 +139,7 @@ fn the_screens_after_the_intro_all_sit_on_the_backdrop() {
         states::LAUNCH_GAME,
     ] {
         let mut frontend = frontend(300);
-        frontend.set_backdrop(270, crate::movie::FRAME_RATE, (480, 272));
+        frontend.set_backdrop(270, crate::frontend::FRAME_RATE, (480, 272));
         let mut input = Input::new();
         if state == states::LANGUAGE_SELECTION {
             // START skips the movie, and the redirect that follows it
@@ -187,7 +187,7 @@ fn the_backdrops_playhead_is_handed_on_rather_than_left_behind() {
     // Whoever opens the menus takes this player as it stands; anything that
     // rebuilt it would put the picture back to the start of the loop.
     let mut frontend = frontend(300);
-    frontend.set_backdrop(270, crate::movie::FRAME_RATE, (480, 272));
+    frontend.set_backdrop(270, crate::frontend::FRAME_RATE, (480, 272));
     let mut input = Input::new();
     pick_a_language(&mut frontend, &mut input);
     for _ in 0..500 {

@@ -123,7 +123,11 @@ BASELINE = {
     "crates/game/tests/race_ground_truth.rs": 2266,
     "crates/vex/src/vex.rs": 1758,
     "crates/game/src/boot.rs": 1784,
-    "crates/game/src/movie.rs": 1981,
+    # Ratcheted down from 1,981 when `Player`, `FRAME_RATE` and
+    # `PS2_DISPLAY_ASPECT` moved to `crates/game/src/frontend/player.rs` -
+    # prep for the `oag-ui` extraction, which cannot name a type that lives in
+    # the composition root.
+    "crates/game/src/movie.rs": 1756,
     # Ratcheted down from 2,005 when the two drawing idioms split out into
     # `menu/rows.rs` and `menu/strip.rs`; `draw_list` picks between them and
     # draws nothing itself. Ratcheted down again from 1,785 to 1,276 when

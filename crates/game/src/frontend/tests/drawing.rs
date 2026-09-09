@@ -196,7 +196,7 @@ fn two_images_sharing_a_texture_sample_their_own_sub_rects() {
     );
     let placements = vec![(
         r"Data\FE\Images\FETextures_startscreen.mip".to_string(),
-        crate::sprite::Placed {
+        crate::frontend::Placed {
             x: 100,
             y: 50,
             width: 128,

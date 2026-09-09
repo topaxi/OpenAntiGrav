@@ -2,7 +2,7 @@
 
 use anyhow::{Result, bail};
 
-use oag_game::frontend::Draw;
+use oag_game::frontend::{self, Draw};
 use oag_game::input::Button;
 use oag_game::render::{Renderer, letterbox_in};
 use oag_game::{font, marquee, menu, movie, pilots};
@@ -96,7 +96,7 @@ pub(crate) struct PageChange {
 
 /// The looping menu picture: a player, where it goes, and which frame is up.
 pub(crate) struct Backdrop {
-    pub(crate) player: movie::Player,
+    pub(crate) player: frontend::Player,
     pub(crate) rect: [f32; 4],
     /// Which frame is **actually in the renderer's planes**, or `None` while none
     /// is.
@@ -136,7 +136,7 @@ pub(crate) struct Backdrop {
 /// `Data\Movies\Backdrop`, not two playbacks of it: `Show Logo` is a child of
 /// the `FE Screen` that owns the movie, so on hardware pressing START changes
 /// which widgets are drawn over a loop that never stops. Building a
-/// [`movie::Player`] here instead put the picture back at frame zero on that
+/// [`frontend::Player`] here instead put the picture back at frame zero on that
 /// press, which is the jump a player who has run the original reported. So the
 /// front end hands its playhead over - see
 /// [`frontend::Frontend::take_backdrop`] - and this passes it straight through,
@@ -169,16 +169,16 @@ pub(crate) struct Backdrop {
 /// feed's first frame, which is a different bug from the one this section
 /// argues about.
 pub(crate) fn menu_playhead(
-    carried: Option<movie::Player>,
+    carried: Option<frontend::Player>,
     frames: usize,
     frame_rate: (u64, u64),
-) -> movie::Player {
+) -> frontend::Player {
     carried.unwrap_or_else(|| {
         // `repeat`, which is the whole difference between this movie and the
         // intro: `FE Screen` sits under it for as long as a player is in the
         // menus, so it wraps rather than finishing on its last frame. See
-        // `movie::Player`.
-        movie::Player::new(frames, true, frame_rate)
+        // `frontend::Player`.
+        frontend::Player::new(frames, true, frame_rate)
     })
 }
 

@@ -203,7 +203,7 @@ impl Session {
             // measurement - where the sound had got to at the end of the
             // previous tick - rather than differing by one tick depending on
             // which side of `tick` each happened to sit. See
-            // `movie::Player::follow`.
+            // `frontend::Player::follow`.
             let movie_playhead = self.audio.movie_playhead();
             self.audio.tick();
             // The in-race camera cycle, read off the shared `Input` and consumed,

@@ -72,12 +72,12 @@ pub enum Draw {
         /// Which frame of the movie to show, counting from zero.
         ///
         /// Wraps on a movie that loops, so this is what a caller holding the
-        /// whole movie - a headless capture reading a [`crate::movie::FrameStore`] - asks for.
+        /// whole movie - a headless capture reading a `crate::movie::FrameStore` - asks for.
         frame: usize,
         /// How far playback has got, counting every loop.
         ///
-        /// The same number [`crate::movie::Player::position`] reports, and the
-        /// **only** one a [`crate::movie::Feed`] can be asked with: a feed
+        /// The same number [`crate::frontend::Player::position`] reports, and the
+        /// **only** one a `crate::movie::Feed` can be asked with: a feed
         /// decodes forward forever, so on the second time round a 270-frame
         /// loop it holds positions 270..274 while `frame` has gone back to 0.
         /// Asking it with `frame` takes nothing from that point on and the
@@ -138,7 +138,7 @@ pub enum Draw {
     /// sprite uses, each piece of the reticle sat on an opaque black tile; the
     /// blend the model asks for is what makes the black field vanish. Pure's
     /// icon models reach this the same way, off their own reading. See
-    /// [`crate::sprite::Placed::blend`] and
+    /// [`crate::frontend::Placed::blend`] and
     /// [hud.md](../../../docs/ui/hud.md).
     BlendedSprite {
         /// Where it goes: `[x, y, width, height]`, `x`/`y` being the top-left of

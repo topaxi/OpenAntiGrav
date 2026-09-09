@@ -26,10 +26,9 @@
 //! An image the sprite sheet has no placement for is skipped, so a frame whose
 //! textures did not decode is a missing rule rather than a wrong one.
 
-use crate::frontend::Draw;
+use crate::frontend::{Draw, Placed};
 
 use crate::screen::{Screens, argb_to_rgba, parse_argb};
-use crate::sprite::Sheet;
 use oag_display::space::Space;
 
 /// One title's menu frame, split by what may come between the two halves.
@@ -249,10 +248,15 @@ impl Frame {
 /// `None` on a title with no strip - looked up in `screens`' globals
 /// directly rather than off this screen's marks, since it is resolved
 /// independently of whether a frame screen exists at all.
+///
+/// `sprites` looks a widget's image up by name rather than naming
+/// `crate::sprite::Sheet` directly - `Sheet` decodes real texture data, which
+/// is one level above this crate. `crate::sprite::Sheet::get` already returns
+/// exactly this signature, so a real caller passes `&|name| sheet.get(name)`.
 #[must_use]
 pub fn read(
     screens: &Screens,
-    sprites: &Sheet,
+    sprites: &impl Fn(&str) -> Option<Placed>,
     space: Space,
     name: Option<&str>,
     selected_fill: Option<&str>,
@@ -276,7 +280,7 @@ pub fn read(
 
     let mut marks = Vec::new();
     for image in &screen.images {
-        let Some(placed) = sprites.get(&image.src) else {
+        let Some(placed) = sprites(&image.src) else {
             continue;
         };
         // The widget's own size when it states one, the texture's otherwise -

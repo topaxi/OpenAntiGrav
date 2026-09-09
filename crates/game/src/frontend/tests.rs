@@ -160,7 +160,7 @@ fn hd(frames: usize, has_picture: bool) -> Frontend {
                     state: hd_states::STUDIO_LOGO,
                     movie: MoviePlan {
                         frames,
-                        frame_rate: crate::movie::FRAME_RATE,
+                        frame_rate: FRAME_RATE,
                         aspect: GRID,
                         has_picture,
                     },
@@ -200,7 +200,7 @@ fn pure(fmv_frames: usize) -> Frontend {
                     state: pure_states::FMV_INTRO,
                     movie: MoviePlan {
                         frames: fmv_frames,
-                        frame_rate: crate::movie::FRAME_RATE,
+                        frame_rate: FRAME_RATE,
                         aspect: GRID,
                         has_picture: fmv_frames > 0,
                     },
@@ -257,7 +257,7 @@ fn reel(frames: usize) -> Frontend {
                     state: states::INTRO_MOVIE,
                     movie: MoviePlan {
                         frames,
-                        frame_rate: crate::movie::FRAME_RATE,
+                        frame_rate: FRAME_RATE,
                         aspect: GRID,
                         has_picture: false,
                     },

@@ -196,7 +196,7 @@ fn the_storage_warning_is_worded_for_a_machine_with_storage() {
 #[test]
 fn no_screen_ever_draws_two_videos_at_once() {
     for (what, mut frontend) in [("pulse", frontend(300)), ("pure", pure(60))] {
-        frontend.set_backdrop(270, crate::movie::FRAME_RATE, (480, 272));
+        frontend.set_backdrop(270, crate::frontend::FRAME_RATE, (480, 272));
         let mut input = Input::new();
         let mut seen = 0;
         // Every state the leg walks, the backdrop present throughout.
@@ -292,7 +292,7 @@ fn show_logo_waits_and_ignores_every_button_but_start() {
 fn show_logo_draws_the_backdrop_under_its_own_widgets() {
     let mut frontend = frontend(300);
     // 270 frames at the PSP's own rate, which is what `Backdrop.PMF` is.
-    frontend.set_backdrop(270, crate::movie::FRAME_RATE, (480, 272));
+    frontend.set_backdrop(270, crate::frontend::FRAME_RATE, (480, 272));
     let mut input = Input::new();
     pick_a_language(&mut frontend, &mut input);
     assert!(frontend.machine().is(states::SHOW_LOGO));
@@ -325,7 +325,7 @@ fn the_backdrop_is_already_running_by_the_time_show_logo_is_reached() {
     // It is `autostart` on a screen the boot opens long before this build
     // draws it, so it must not be sitting at frame zero when it appears.
     let mut frontend = frontend(300);
-    frontend.set_backdrop(270, crate::movie::FRAME_RATE, (480, 272));
+    frontend.set_backdrop(270, crate::frontend::FRAME_RATE, (480, 272));
     let mut input = Input::new();
 
     for _ in 0..200 {

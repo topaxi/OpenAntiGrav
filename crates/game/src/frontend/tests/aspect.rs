@@ -75,7 +75,7 @@ fn the_display_aspect_undoes_the_anamorphic_stretch() {
 ///
 /// The PS2's own movies are that case: `INTRO512.PSS` decodes to a square
 /// 512x512 and declares 4:3, and is neither - it is cut to fill the frame, so
-/// [`crate::movie::PS2_DISPLAY_ASPECT`] is the frame's own numbers and this
+/// [`crate::frontend::PS2_DISPLAY_ASPECT`] is the frame's own numbers and this
 /// returns the whole screen.
 #[test]
 fn a_picture_of_the_screens_own_shape_is_not_boxed() {
@@ -83,7 +83,7 @@ fn a_picture_of_the_screens_own_shape_is_not_boxed() {
         pillarbox_in(Space::PSP, (480, 272)),
         [0.0, 0.0, 480.0, 272.0]
     );
-    let ps2 = pillarbox_in(Space::PS2, crate::movie::PS2_DISPLAY_ASPECT);
+    let ps2 = pillarbox_in(Space::PS2, crate::frontend::PS2_DISPLAY_ASPECT);
     assert!(
         (ps2[2] - 640.0).abs() < 0.01 && (ps2[3] - 448.0).abs() < 0.01,
         "a cut of the frame's own shape fills it: {ps2:?}"

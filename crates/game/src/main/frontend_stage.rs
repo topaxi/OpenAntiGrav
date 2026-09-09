@@ -203,7 +203,7 @@ impl FrontendStage {
         // Copied out before the renderer is touched, both being fields of
         // `self`, and because the pump below runs on frames whose draw list
         // names no movie at all.
-        let playhead = self.frontend.backdrop().map(movie::Player::position);
+        let playhead = self.frontend.backdrop().map(frontend::Player::position);
 
         let has_backdrop = backdrop.is_some();
         if let (Some(feed), Some(position)) = (backdrop, playhead) {

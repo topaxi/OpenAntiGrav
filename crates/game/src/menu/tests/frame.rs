@@ -8,7 +8,6 @@
 use super::*;
 
 use crate::screen::Screens;
-use crate::sprite::Sheet;
 
 /// A frame screen shaped like Wipeout HD's, in plain XML.
 ///
@@ -38,7 +37,7 @@ fn screens() -> Screens {
 fn the_clear_is_read_and_resolved() {
     let frame = crate::menu::read_frame(
         &screens(),
-        &Sheet::default(),
+        &(|_: &str| None),
         oag_display::space::Space::HD,
         Some("Frame"),
         None,
@@ -63,7 +62,7 @@ fn the_clear_is_read_and_resolved() {
 fn an_image_the_sheet_has_no_placement_for_is_skipped() {
     let frame = crate::menu::read_frame(
         &screens(),
-        &Sheet::default(),
+        &(|_: &str| None),
         oag_display::space::Space::HD,
         Some("Frame"),
         None,
@@ -78,11 +77,11 @@ fn an_image_the_sheet_has_no_placement_for_is_skipped() {
 #[test]
 fn no_name_and_a_wrong_name_both_read_as_no_frame() {
     let space = oag_display::space::Space::HD;
-    let unnamed = crate::menu::read_frame(&screens(), &Sheet::default(), space, None, None);
+    let unnamed = crate::menu::read_frame(&screens(), &(|_: &str| None), space, None, None);
     assert!(unnamed.is_empty());
     let missing = crate::menu::read_frame(
         &screens(),
-        &Sheet::default(),
+        &(|_: &str| None),
         space,
         Some("A Screen This Disc Has Not Got"),
         None,
@@ -100,7 +99,7 @@ fn no_name_and_a_wrong_name_both_read_as_no_frame() {
 fn the_selected_fill_is_read_from_the_globals_table_by_name() {
     let frame = crate::menu::read_frame(
         &screens(),
-        &Sheet::default(),
+        &(|_: &str| None),
         oag_display::space::Space::HD,
         Some("Frame"),
         Some("Ink"),
@@ -115,7 +114,7 @@ fn the_selected_fill_is_read_from_the_globals_table_by_name() {
 
     let no_name = crate::menu::read_frame(
         &screens(),
-        &Sheet::default(),
+        &(|_: &str| None),
         oag_display::space::Space::HD,
         Some("Frame"),
         None,
@@ -124,7 +123,7 @@ fn the_selected_fill_is_read_from_the_globals_table_by_name() {
 
     let unknown_name = crate::menu::read_frame(
         &screens(),
-        &Sheet::default(),
+        &(|_: &str| None),
         oag_display::space::Space::HD,
         Some("Frame"),
         Some("HD_Blue"),
@@ -148,7 +147,7 @@ fn the_frames_text_widgets_are_left_alone() {
 
     let frame = crate::menu::read_frame(
         &screens,
-        &Sheet::default(),
+        &(|_: &str| None),
         oag_display::space::Space::HD,
         Some("Frame"),
         None,

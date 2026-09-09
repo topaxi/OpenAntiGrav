@@ -83,6 +83,11 @@ use crate::language::{Language, StringTable};
 use crate::screen::{Screen, Screens, Text, argb_to_rgba, parse_argb};
 use crate::state_machine::{Event, StateMachine};
 
+mod placement;
+mod player;
+pub use placement::Placed;
+pub use player::{FRAME_RATE, PS2_DISPLAY_ASPECT, Player};
+
 use oag_display::space::{SCREEN, Space, pillarbox_in};
 use oag_hd::frontend::states as hd_states;
 /// The reel's frame counts and every state name: `oag_pulse::frontend`.
@@ -243,7 +248,7 @@ impl MoviePlan {
     pub fn none(aspect: (u32, u32)) -> Self {
         Self {
             frames: 0,
-            frame_rate: crate::movie::FRAME_RATE,
+            frame_rate: FRAME_RATE,
             aspect,
             has_picture: false,
         }
@@ -333,8 +338,8 @@ pub struct Frontend {
     /// The sheet's pixels live in the renderer; the model only needs to know
     /// each image's size and offset, which is what turns an `Image` widget into
     /// a rectangle. A `Vec` keeps the order the screens declared.
-    placements: Vec<(String, crate::sprite::Placed)>,
-    player: crate::movie::Player,
+    placements: Vec<(String, Placed)>,
+    player: Player,
     /// The first boot movie, as the sequence needs to know it.
     ///
     /// Every *other* screen's movie is looked up from [`Self::steps`] by
@@ -352,7 +357,7 @@ pub struct Frontend {
     /// goes on screen. `None` on a source that has no backdrop, under
     /// `--no-video`, and when its plane geometry does not match the intro's -
     /// see [`Frontend::set_backdrop`], which is the only thing that sets it.
-    backdrop: Option<(crate::movie::Player, [f32; 4])>,
+    backdrop: Option<(Player, [f32; 4])>,
     /// Whether to draw the frame counter over the intro.
     overlay: bool,
     hold: Hold,
@@ -398,7 +403,7 @@ impl Frontend {
         screens: Screens,
         strings: StringTable,
         languages: Vec<Language>,
-        placements: Vec<(String, crate::sprite::Placed)>,
+        placements: Vec<(String, Placed)>,
         movie_frames: usize,
         has_picture: bool,
     ) -> Self {
@@ -411,7 +416,7 @@ impl Frontend {
                         state: states::LOGO_FMV,
                         movie: MoviePlan {
                             frames: movie_frames,
-                            frame_rate: crate::movie::FRAME_RATE,
+                            frame_rate: FRAME_RATE,
                             aspect: screen,
                             has_picture,
                         },
@@ -441,7 +446,7 @@ impl Frontend {
         screens: Screens,
         strings: StringTable,
         languages: Vec<Language>,
-        placements: Vec<(String, crate::sprite::Placed)>,
+        placements: Vec<(String, Placed)>,
     ) -> Self {
         let start = sequence.start();
         let first = sequence.steps[0].movie;
@@ -512,7 +517,7 @@ impl Frontend {
             auto_confirm: false,
             placements,
             space: Space::PSP,
-            player: crate::movie::Player::new(frames, false, first.frame_rate),
+            player: Player::new(frames, false, first.frame_rate),
             first,
             backdrop: None,
             // Without a picture the movie is a black screen for as long as it
@@ -597,8 +602,7 @@ impl Frontend {
         };
         self.notes.push(format!("{why}, firing {}", step.state));
         if step.movie.frames > 0 {
-            self.player =
-                crate::movie::Player::new(step.movie.frames, false, step.movie.frame_rate);
+            self.player = Player::new(step.movie.frames, false, step.movie.frame_rate);
         }
         self.on_screen_for = 0.0;
         self.machine.fire(step.state);
@@ -666,14 +670,14 @@ impl Frontend {
             return;
         }
         self.backdrop = Some((
-            crate::movie::Player::new(frames, true, frame_rate),
+            Player::new(frames, true, frame_rate),
             pillarbox_in(self.space, aspect),
         ));
     }
 
     /// The backdrop's playhead, for tests and for whoever is pumping its feed.
     #[must_use]
-    pub fn backdrop(&self) -> Option<&crate::movie::Player> {
+    pub fn backdrop(&self) -> Option<&Player> {
         self.backdrop.as_ref().map(|(player, _)| player)
     }
 
@@ -688,13 +692,13 @@ impl Frontend {
     /// who has run the original reported as wrong.
     ///
     /// Whoever takes it also takes the obligation the sequence had: keep
-    /// advancing it, and keep asking the one [`crate::movie::Feed`] for frames
+    /// advancing it, and keep asking the one `crate::movie::Feed` for frames
     /// at its position. Nothing restarts the feed on this path - the two share
     /// an origin already, and a restart is what would put them back at odds.
     ///
     /// Called once, when the menus open. The sequence draws no backdrop
     /// afterwards, which is correct: it is over.
-    pub fn take_backdrop(&mut self) -> Option<crate::movie::Player> {
+    pub fn take_backdrop(&mut self) -> Option<Player> {
         self.backdrop.take().map(|(player, _)| player)
     }
 
@@ -754,7 +758,7 @@ impl Frontend {
 
     /// The movie player, for tests.
     #[must_use]
-    pub fn player(&self) -> &crate::movie::Player {
+    pub fn player(&self) -> &Player {
         &self.player
     }
 

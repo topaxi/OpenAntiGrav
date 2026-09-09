@@ -642,7 +642,7 @@ pub fn load_shell(
     // rather than a mystery. See [`crate::menu::frame`].
     let frame = crate::menu::read_frame(
         &screens,
-        &sprites,
+        &|name| sprites.get(name),
         space,
         front_end.menu_frame,
         front_end.menu.strip.and_then(|strip| strip.selected_fill),

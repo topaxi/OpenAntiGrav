@@ -563,7 +563,7 @@ fn a_dump_is_exactly_as_long_as_the_ticks_it_was_given() {
 /// Run through the real pieces rather than a model of them - a real
 /// [`Sound`] in a real mixer, pulled by [`Audio::tick`] at the fixed 60 Hz,
 /// with the playhead read exactly where both tick loops read it and handed
-/// to [`crate::movie::Player::follow`]. Drift is what audio clocking exists
+/// to [`crate::frontend::Player::follow`]. Drift is what audio clocking exists
 /// to prevent and it is cumulative, so measuring it over one tick would
 /// measure nothing; 2,402 ticks is the whole intro.
 ///
@@ -603,8 +603,8 @@ fn the_picture_stays_within_a_frame_of_the_sound_for_a_whole_reel() {
     };
     assert!(audio.start_movie(sound), "a free voice");
 
-    let (num, den) = crate::movie::FRAME_RATE;
-    let mut player = crate::movie::Player::new(1200, false, crate::movie::FRAME_RATE);
+    let (num, den) = crate::frontend::FRAME_RATE;
+    let mut player = crate::frontend::Player::new(1200, false, crate::frontend::FRAME_RATE);
     let mut worst = 0.0f64;
 
     for tick in 0..(60 * 41) {
