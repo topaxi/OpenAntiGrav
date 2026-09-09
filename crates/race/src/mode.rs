@@ -88,10 +88,11 @@ impl Mode {
     /// all - launched once per rung under PPSSPP (`pulse-psp-usa.chd`, Talon's
     /// Junction White) reads `Lap 1 of 3` on Venom, `Lap 1 of 4` on Flash,
     /// `Lap 1 of 4` on Rapier and `Lap 1 of 5` on Phantom - one screenshot per
-    /// rung, all four matching the census exactly. Confidence **88**: four live
-    /// captures agreeing with a 47-cell census is one notch below
-    /// [`Self::SINGLE_RACE_LAPS_BY_CLASS`]'s 90 only because the census itself
-    /// is the harder evidence there; here the live captures are doing the work.
+    /// rung, all four matching the census exactly. Confidence **90**, level with
+    /// [`Self::SINGLE_RACE_LAPS_BY_CLASS`]: that table rests on a larger census
+    /// (236 cells against 47) plus one live point; this one rests on a smaller
+    /// census plus a live point at every rung it has, which is the stronger
+    /// half of the same trade.
     ///
     /// A run that passes the last lap starts a fresh attempt with the best time
     /// cleared rather than ending outright - see
@@ -231,18 +232,26 @@ impl Mode {
     /// all.
     ///
     /// **`None` for Speed Lap, and the reason is now settled rather than
-    /// merely asserted.** The census reads `Speed Lap` as `7` on all 42 of its
-    /// cells, and a Custom Race shows exactly that: `Lap 1 of 7`, live, on
-    /// Venom, under PPSSPP - so the `7` is real and is not campaign-only
-    /// either. It still does not end the race. Speed Lap's own in-race pause
-    /// menu carries an **`END SESSION`** item that Time Trial's identical menu
-    /// (same screen, same six other rows) does not - confirmed by screenshot,
-    /// 2026-09-09 - and a mode whose own pause menu offers a way to
+    /// merely asserted, confidence 75.** The census reads `Speed Lap` as `7`
+    /// on all 42 of its cells, and a Custom Race shows exactly that: `Lap 1
+    /// of 7`, live, on Venom, under PPSSPP - so the `7` is real and is not
+    /// campaign-only either. It still does not end the race. Speed Lap's own
+    /// in-race pause menu carries a seventh row, `END SESSION`, that neither
+    /// Time Trial's nor [`Mode::SingleRace`]'s pause menu has - both are
+    /// otherwise identical, six rows each, and both are modes that *do* end
+    /// on their own lap count, checked as the falsifier this claim needs
+    /// rather than assumed safe to skip. Three modes, screenshotted,
+    /// 2026-09-09: the one row present exactly where the mode's own text says
+    /// it never ends. A mode whose own pause menu offers a dedicated way to
     /// deliberately conclude an open-ended run is a mode that does not
-    /// conclude one on its own. That is independent of, and agrees with,
-    /// `MSC_EVENT_SL`'s text: *"never ends, escape leaves"*. The `7` is
-    /// display convention shared with Time Trial's own `Lap X of Y` widget,
-    /// not a target this method should report.
+    /// conclude one on its own - independent of, and agreeing with,
+    /// `MSC_EVENT_SL`'s text: *"never ends, escape leaves"*. 75 rather than
+    /// higher because this is still a correlated UI signal standing in for a
+    /// lap-8 crossing nobody watched directly - an open-loop scripted replay
+    /// could not complete even one lap of Talon's Junction in nine real-time
+    /// minutes to check it the direct way. The `7` itself is display
+    /// convention shared with Time Trial's own `Lap X of Y` widget, not a
+    /// target this method should report.
     ///
     /// **`None` for Zone too**, on `MSC_EVENT_ZONE`'s identical wording; the
     /// census's `0` there reads as `laps` not being the applicable field for a

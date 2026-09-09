@@ -689,9 +689,10 @@ of `HUD_lap_times.xml` checked (root, `2048_hud`, `2097_hud`, `wo3_hud` -
 2048's `data.psarc` ships one identical to HD's, byte for byte) composes
 exactly `Lap1Image` through `Lap4Image` and no fifth row, so the array is
 sized to the one consumer that exists rather than to a guess. A lap beyond the
-fourth stops being recorded, and a Phantom single race - five laps, per
-[`Mode::SINGLE_RACE_LAPS_BY_CLASS`] - is the case that reaches it: the fifth lap
-is still counted and still ends the race, only its split time is dropped.
+fourth stops being recorded, and a Phantom single race or time trial - both
+five laps, per [`Mode::SINGLE_RACE_LAPS_BY_CLASS`] and
+[`Mode::TIME_TRIAL_LAPS_BY_CLASS`] - are the cases that reach it: the fifth
+lap is still counted and still ends the race, only its split time is dropped.
 Widening the array would invent a fifth row no measured title authors, and would
 change `World`'s size and so the committed state hash to store a number nothing
 can display.
@@ -748,6 +749,7 @@ build reads, the two PSP titles simply never authored a per-lap history
 widget.
 
 [`Mode::SINGLE_RACE_LAPS_BY_CLASS`]: ../../crates/race/src/mode.rs
+[`Mode::TIME_TRIAL_LAPS_BY_CLASS`]: ../../crates/race/src/mode.rs
 [`oag_hd::hud::ALWAYS_ON`]: ../../crates/hd/src/hud.rs
 
 ## What is not done

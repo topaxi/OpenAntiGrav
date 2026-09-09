@@ -111,7 +111,11 @@ at all - read `Lap 1 of 3`/`4`/`4`/`5` in that order, matching
 question this page used to leave open: the census was not campaign-only, and
 the flat `3` this crate used to carry for every class was right for Venom and
 wrong for the other three, the same shape [single race](#single-race)'s own fix
-already had. `Mode::TIME_TRIAL_LAPS_BY_CLASS`, confidence 88.
+already had. `Mode::TIME_TRIAL_LAPS_BY_CLASS`, confidence **90**, level with
+[single race](#single-race)'s own table: that one rests on a bigger census
+(236 cells against this one's 47) plus a single live point, this one on a
+smaller census plus a live point at every rung it has - the stronger half of
+the same trade.
 
 A run that drives past the last lap starts a fresh attempt with the best time
 cleared rather than ending outright - see
@@ -135,23 +139,26 @@ Chasing one fast lap; it never ends on its own and escape leaves.
 `Mode::laps_target` returns `None`.
 
 **The census's `7` is real outside the campaign too, and it still does not end
-the race - both halves checked live, 2026-09-09, rather than assumed.** A
-Custom Race speed lap - no campaign cell in play - reads `Lap 1 of 7` on Venom
-under PPSSPP, the same `Lap X of Y` widget Time Trial uses, so the `42`-cell
-campaign census (all reading `7`) was never a campaign peculiarity. But Speed
-Lap's own in-race pause menu carries a seventh row, `END SESSION`, that Time
-Trial's identical pause menu (same six other rows, same screen) does not -
-screenshotted on both - and a mode whose pause menu offers a dedicated way to
-deliberately conclude an open run is a mode that does not conclude one on its
-own. That agrees with, and now sits alongside, `MSC_EVENT_SL`'s text: *"never
-ends, escape leaves."* Driving far enough past lap 7 to watch the race
-actually end or not was tried and abandoned: open-loop script replay could not
-complete even one lap of Talon's Junction in nine minutes of real time under
-PPSSPP, the same drift this project's own verification-protocol notes already
-name as fatal past one lap - so the pause-menu reading is the evidence this
-page rests on, not a lap-8 crossing. `Zone`'s `0` is left as before: read as
-the attribute's "not applicable" spelling for a mode that counts zones
-instead, untested either way.
+the race - both halves checked live, 2026-09-09, rather than assumed. Confidence
+75.** A Custom Race speed lap - no campaign cell in play - reads `Lap 1 of 7`
+on Venom under PPSSPP, the same `Lap X of Y` widget Time Trial uses, so the
+`42`-cell campaign census (all reading `7`) was never a campaign peculiarity.
+But Speed Lap's own in-race pause menu carries a seventh row, `END SESSION`,
+that neither Time Trial's nor [single race](#single-race)'s pause menu has -
+both are otherwise identical, six rows each, and both are modes that *do* end
+on their own lap count. That is the falsifier this claim needs, checked rather
+than assumed safe to skip: three modes screenshotted, and the one extra row
+sits exactly on the mode whose own text says it never ends. A pause menu that
+offers a dedicated way to deliberately conclude an open run is a mode that
+does not conclude one on its own - agreeing with `MSC_EVENT_SL`'s text: *"never
+ends, escape leaves."* 75 rather than higher because this is a correlated UI
+signal standing in for a lap-8 crossing nobody watched directly: driving far
+enough past lap 7 to watch the race actually end or not was tried and
+abandoned - open-loop script replay could not complete even one lap of Talon's
+Junction in nine minutes of real time under PPSSPP, the same drift this
+project's own verification-protocol notes already name as fatal past one lap.
+`Zone`'s `0` is left as before: read as the attribute's "not applicable"
+spelling for a mode that counts zones instead, untested either way.
 
 **This mode is not documented anywhere in the original's data that has been read.**
 It appears in no mode enumeration in this repository's notes and has no HUD layout
