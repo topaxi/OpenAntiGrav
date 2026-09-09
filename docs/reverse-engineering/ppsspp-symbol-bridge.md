@@ -97,7 +97,25 @@ Two things intentionally *not* carried across:
   from data the table does carry, not a fabricated size, and the same
   heuristic `PpssppExportSymFile.py` itself uses
   (`getBody().getFirstRange().getLength()`, its own comment calling it "not
-  ideal but should cover most cases"). See
+  ideal but should cover most cases").
+
+  **Confirmed live, 2026-09-09, after the reasoning above rather than instead
+  of it.** Two halves, on a fresh `PPSSPPHeadless` against
+  `pulse-psp-usa.chd`. (1) `Wad_HashName` at `0x08940d0c` (exported size
+  `01A4`, 420 bytes): `hle.func.rename` then `memory.disasm` returns
+  `"function": "Wad_HashName"` on the entry instruction - the name comes back.
+  (2) The size question directly: `hle.func.add` with an explicit 32-byte size
+  inside an existing function's body registers a new function whose
+  `memory.disasm` `function` field spans all 32 bytes and is `null` at
+  `address+32` - it groups the body and stops at the boundary, which is
+  exactly what `size=0` could not do.
+
+  **Why a websocket test is equivalent evidence to loading a real `.sym`**, and
+  this was byte-verified against PPSSPP's source with `curl` rather than a
+  summarised fetch: `Qt/mainwindow.cpp`'s "Load .SYM" action calls
+  `LoadNocashSym`, which for any line whose size is not `1` calls the identical
+  `g_symbolMap->AddFunction(...)` that the `hle.func.add` handler's success path
+  calls. The two entry points converge before anything observable. See
   [ppsspp-debugger.md](ppsspp-debugger.md#naming-a-function-live-with-hlefuncaddrename-and-a-crash-to-avoid)
   for the worked example that found this, live, over `hle.func.rename`.
 
