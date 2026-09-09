@@ -540,9 +540,23 @@ fn run(ticks: u32) -> (u64, u64) {
 ///   `0x3917_5149_7ee8_d198` at 60 ticks and `0xb9c2_9ac6_b8fe_010b` /
 ///   `0x34c7_a5fa_88c8_357d` at 600 - reproduced bit for bit, and
 ///   [`REFERENCE_VOLLEY`]'s did too.
+///
+/// - **Moved 2026-09-09**, for the Plasma's recovered wind-up.
+///   `projectile::Projectile` gained `charge: f32` - the seconds a bolt is
+///   held on the firing craft's nose before it flies, from `Plasma_Init`'s
+///   `+0x50` - so `hash::write_projectile` writes four more bytes per slot per
+///   tick. Neither scenario here fires a Plasma; both fire Rockets, whose
+///   `charge` is a constant `0.0` for every slot on every tick of both runs.
+///   Nothing about either scenario's flight, blast or inventory changed.
+///
+///   **Isolated the way this comment requires.** With `write_f32(*charge)`
+///   removed from `write_projectile` and nothing else touched - the whole
+///   charging branch in `Projectiles::advance` still in place, both Plasma
+///   call sites still on `charge_up` - the constants this commit replaces
+///   reproduced bit for bit at both tick counts and for both scenarios.
 const REFERENCE: &[(u32, u64, u64)] = &[
-    (60, 0x4963_1808_d962_2738, 0xe4d8_473d_f658_1912),
-    (600, 0x901c_b152_e506_3551, 0x5f3b_9d57_fee0_358f),
+    (60, 0xf3aa_6cce_9139_99e8, 0x6f71_5c3a_c11d_3de2),
+    (600, 0x9290_5461_4434_9d81, 0xd773_b51b_1a49_815f),
 ];
 
 /// The volley scenario: a craft at an angle fires a real fanned Rocket volley
@@ -724,9 +738,14 @@ fn run_volley(ticks: u32) -> (u64, u64) {
 ///   `0xf488_c189_693d_c7c4` at 60 ticks and `0x4872_7a5a_3abb_9c2b` /
 ///   `0x189c_0e36_01b8_688a` at 600. No isolation repeated here -
 ///   [`REFERENCE`]'s entry ran it for both scenarios at once.
+///
+/// - **Moved 2026-09-09**, the same `Projectile::charge` addition
+///   [`REFERENCE`]'s own history records, inherited through the same four
+///   extra bytes per slot per tick. No isolation repeated here -
+///   [`REFERENCE`]'s entry ran it for both scenarios at once.
 const REFERENCE_VOLLEY: &[(u32, u64, u64)] = &[
-    (60, 0x8430_6c4a_253e_6ae4, 0x1941_4fc9_a94c_5504),
-    (600, 0x94aa_9286_21bf_5eeb, 0x61ab_2992_4820_54ca),
+    (60, 0xdc64_65d2_7fd2_6484, 0xd117_eae7_9d96_90a4),
+    (600, 0x0afa_f530_c285_b40b, 0x5993_a507_fd8b_40ca),
 ];
 
 #[test]
