@@ -37,81 +37,16 @@
 
 use serde::{Deserialize, Serialize};
 
+mod aspect;
 mod motion_blur;
 mod msaa;
 mod reconstruction;
 mod shadows;
 
-pub use {motion_blur::MotionBlur, msaa::Msaa, reconstruction::Reconstruction, shadows::Shadows};
-
-/// The shape the game is drawn at inside its window.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum Aspect {
-    /// 480x272, the PSP's own framebuffer, and the shape every camera value on
-    /// the disc was authored for.
-    ///
-    /// The default, and not merely out of deference: `<ExternalCameraFar>`'s
-    /// field of view is only defined at this ratio, so it is the one shape where
-    /// what a player sees is what the original framed. See
-    /// `oag_game::race::AUTHORED_ASPECT`.
-    #[default]
-    Psp,
-    /// 4:3, the PS2's television - not the shape its own artwork wants.
-    Ps2,
-    /// Whatever the window is.
-    ///
-    /// **The field of view does not widen with it.** `Race::projection` caps at
-    /// the authored aspect and fits the view inside anything wider, so a wide
-    /// window shows the same amount of track rather than more of it. That is a
-    /// deliberate reading of "free" as *fill the window* and not as *see more* -
-    /// nothing on the disc says what the original would have done with a 21:9
-    /// screen, and inventing a wider field of view would be inventing gameplay.
-    Free,
-}
-
-impl Aspect {
-    /// The ratio this shape asks for, or `None` for [`Aspect::Free`], which asks
-    /// for whatever it is given.
-    #[must_use]
-    pub fn ratio(self) -> Option<f32> {
-        match self {
-            Self::Psp => Some(crate::space::SCREEN.0 / crate::space::SCREEN.1),
-            Self::Ps2 => Some(4.0 / 3.0),
-            Self::Free => None,
-        }
-    }
-
-    /// The spelling used in a settings file and on a menu row.
-    #[must_use]
-    pub fn name(self) -> &'static str {
-        match self {
-            Self::Psp => "psp",
-            Self::Ps2 => "ps2",
-            Self::Free => "free",
-        }
-    }
-
-    /// Every shape, for the menus and for error messages.
-    pub const ALL: [Self; 3] = [Self::Psp, Self::Ps2, Self::Free];
-}
-
-impl std::str::FromStr for Aspect {
-    type Err = String;
-
-    fn from_str(text: &str) -> Result<Self, Self::Err> {
-        Self::ALL
-            .into_iter()
-            .find(|aspect| aspect.name().eq_ignore_ascii_case(text))
-            .ok_or_else(|| format!("{text:?} is not an aspect ratio; try psp, ps2 or free"))
-    }
-}
-
-impl std::fmt::Display for Aspect {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(self.name())
-    }
-}
+pub use {
+    aspect::Aspect, motion_blur::MotionBlur, msaa::Msaa, reconstruction::Reconstruction,
+    shadows::Shadows,
+};
 
 /// What kind of window the game asks the compositor for.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]

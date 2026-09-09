@@ -190,13 +190,18 @@ fn migration_leaves_a_file_that_needs_none_alone() {
 
 /// A bad value in the moved key has to be reported against the key, not
 /// swallowed by the migration - a typo should be visible.
+///
+/// The example used to be `16:9`, which stopped being malformed when `Aspect`
+/// grew a free-form `w:h` shape. `21:nine` is the same test with a value that
+/// is still wrong: it has the separator and fails on the number, so it proves
+/// the error comes from parsing the aspect rather than from the key's shape.
 #[test]
 fn a_malformed_moved_key_is_still_an_error() {
-    let mut table: toml::Table = "[graphics]\naspect = \"16:9\"\n".parse().expect("parse");
+    let mut table: toml::Table = "[graphics]\naspect = \"21:nine\"\n".parse().expect("parse");
     migrate(&mut table);
     let error = table
         .try_into::<Settings>()
-        .expect_err("16:9 is not an aspect");
+        .expect_err("21:nine is not an aspect");
     assert!(error.to_string().contains("aspect"), "{error}");
 }
 
