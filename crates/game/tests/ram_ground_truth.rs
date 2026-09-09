@@ -89,7 +89,7 @@ fn image() -> Option<PathBuf> {
 /// Where a craft sits across the AI corridor, in the corridor's own lateral
 /// axis, and how far the corridor reaches either side of the line there.
 fn across(race: &race::Race, slot: usize) -> Option<(f32, f32, f32)> {
-    let ship = &race.world.ships[slot];
+    let ship = &race.sim.world.ships[slot];
     let aim = race.racing_line().aim(ship.driver.index as usize, 0.0);
     let frame = aim.corridor?;
     let offset = (ship.physics.body.position - aim.point).dot(frame.lateral);
@@ -150,7 +150,7 @@ fn watch_one_race(image: &Path, seed: u64) -> Vec<Shift> {
         }
 
         for slot in 0..ships {
-            let ship = &race.world.ships[slot];
+            let ship = &race.sim.world.ships[slot];
             let on = ship.physics.sideshift_timers.iter().any(|t| *t > 0.0);
             if on && !shifting[slot] {
                 // Which way it went, from the timer that armed. Index 1 is the

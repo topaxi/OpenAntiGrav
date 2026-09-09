@@ -16,32 +16,32 @@ use super::*;
 #[test]
 fn two_overlapping_craft_are_pushed_apart() {
     let mut race = race_with_a_grid();
-    let where_it_was = race.world.ships[0].physics.body.position;
+    let where_it_was = race.sim.world.ships[0].physics.body.position;
     // Well inside the hull radius, and **not** coincident: two bodies at
     // exactly one point have no normal, which `pair::overlap` refuses.
-    race.world.ships[1].physics.body.position = where_it_was + Vec3::new(0.0, 0.0, 1.0);
+    race.sim.world.ships[1].physics.body.position = where_it_was + Vec3::new(0.0, 0.0, 1.0);
     // Closing, or the separating gate refuses the pair.
-    race.world.ships[0].physics.body.linear_velocity = Vec3::new(0.0, 0.0, 8.0);
-    race.world.ships[1].physics.body.linear_velocity = Vec3::new(0.0, 0.0, -8.0);
-    let before = race.world.ships[0]
+    race.sim.world.ships[0].physics.body.linear_velocity = Vec3::new(0.0, 0.0, 8.0);
+    race.sim.world.ships[1].physics.body.linear_velocity = Vec3::new(0.0, 0.0, -8.0);
+    let before = race.sim.world.ships[0]
         .physics
         .body
         .position
-        .distance(race.world.ships[1].physics.body.position);
+        .distance(race.sim.world.ships[1].physics.body.position);
 
     race.resolve_craft_pairs();
 
-    let after = race.world.ships[0]
+    let after = race.sim.world.ships[0]
         .physics
         .body
         .position
-        .distance(race.world.ships[1].physics.body.position);
+        .distance(race.sim.world.ships[1].physics.body.position);
     assert!(
         after > before,
         "two overlapping craft went from {before:.3} apart to {after:.3}"
     );
     assert!(
-        race.world.ships[0].physics.body.linear_velocity.z < 8.0,
+        race.sim.world.ships[0].physics.body.linear_velocity.z < 8.0,
         "the closing craft was not slowed"
     );
 }
@@ -52,11 +52,11 @@ fn two_overlapping_craft_are_pushed_apart() {
 #[test]
 fn coincident_craft_are_refused_rather_than_dividing_by_zero() {
     let mut race = race_with_a_grid();
-    let where_it_was = race.world.ships[0].physics.body.position;
-    race.world.ships[1].physics.body.position = where_it_was;
+    let where_it_was = race.sim.world.ships[0].physics.body.position;
+    race.sim.world.ships[1].physics.body.position = where_it_was;
     race.resolve_craft_pairs();
-    assert!(race.world.ships[0].physics.body.position.is_finite());
-    assert!(race.world.ships[1].physics.body.position.is_finite());
+    assert!(race.sim.world.ships[0].physics.body.position.is_finite());
+    assert!(race.sim.world.ships[1].physics.body.position.is_finite());
 }
 
 /// The pair pass must not touch craft that are nowhere near each other, or
@@ -65,6 +65,7 @@ fn coincident_craft_are_refused_rather_than_dividing_by_zero() {
 fn craft_that_are_not_touching_are_left_alone() {
     let mut race = race_with_a_grid();
     let before: Vec<_> = race
+        .sim
         .world
         .ships
         .iter()
@@ -73,7 +74,7 @@ fn craft_that_are_not_touching_are_left_alone() {
     race.resolve_craft_pairs();
     for (slot, was) in before.iter().enumerate() {
         assert_eq!(
-            race.world.ships[slot].physics.body.position, *was,
+            race.sim.world.ships[slot].physics.body.position, *was,
             "slot {slot} was moved by a contact it is not in"
         );
     }
@@ -100,13 +101,13 @@ fn craft_that_are_not_touching_are_left_alone() {
 #[test]
 fn an_opponents_rocket_is_owned_by_the_slot_that_fired_it() {
     let mut race = race_with_a_grid();
-    race.weapons = Some(one_rocket_table());
+    race.sim.weapons = Some(one_rocket_table());
     // **A straight to shoot down.** The synthetic test track is a loop of
     // about seven units' radius, so `wants_to_fire`'s "is the road between
     // here and there straight enough" gate refuses every shot on it - which
     // is the gate working, not a bug, but it makes this fixture useless for
     // asking who owns the rocket.
-    race.racing_line = oag_ai::Line::new(
+    race.sim.racing_line = oag_ai::Line::new(
         (0..64)
             .map(|step| Vec3::new(0.0, 0.0, -10.0 * step as f32))
             .collect(),
@@ -114,7 +115,7 @@ fn an_opponents_rocket_is_owned_by_the_slot_that_fired_it() {
     // A driver that will take any shot it is offered, and a target dead
     // ahead and in range.
     let firing = 3usize;
-    race.ai_pilots[firing] = oag_ai::Pilot {
+    race.sim.ai_pilots[firing] = oag_ai::Pilot {
         trigger: oag_ai::Span::fixed(1.0),
         ..oag_ai::Pilot::BALANCED
     };
@@ -136,9 +137,9 @@ fn an_opponents_rocket_is_owned_by_the_slot_that_fired_it() {
     // before it spends its pickup - so in a race the two are the same tick.
     // This fixture calls `fire_opponent_rocket` directly and has to advance the
     // clock itself. See `oag_ai::Reflex`.
-    let latency = race.ai_tuning.reaction_ticks;
+    let latency = race.sim.ai_tuning.reaction_ticks;
     for _ in 0..=latency {
-        race.world.ships[firing]
+        race.sim.world.ships[firing]
             .driver
             .reflex
             .advance(&field, latency);
@@ -147,8 +148,8 @@ fn an_opponents_rocket_is_owned_by_the_slot_that_fired_it() {
     // Sweep the phase so the trigger roll lands, then check who owns what.
     let mut fired = false;
     for phase in 0..2_000u32 {
-        race.world.ships[firing].driver.phase = phase;
-        race.world.projectiles = oag_gameplay::projectile::Projectiles::default();
+        race.sim.world.ships[firing].driver.phase = phase;
+        race.sim.world.projectiles = oag_gameplay::projectile::Projectiles::default();
         if race.fire_opponent_rocket(firing, &field) {
             fired = true;
             break;
@@ -157,6 +158,7 @@ fn an_opponents_rocket_is_owned_by_the_slot_that_fired_it() {
     assert!(fired, "the driver never took a shot to check the owner of");
 
     let owners: Vec<u8> = race
+        .sim
         .world
         .projectiles
         .slots
@@ -178,7 +180,7 @@ fn an_opponents_rocket_is_owned_by_the_slot_that_fired_it() {
 #[test]
 fn a_craft_on_a_track_with_no_ring_sees_an_empty_field() {
     let mut race = race_with_a_grid();
-    race.course = None;
+    race.sim.course = None;
     for slot in 0..8 {
         assert_eq!(
             race.field_for(slot, &race.places()),
@@ -201,7 +203,7 @@ fn the_field_a_driver_sees_never_includes_itself() {
         {
             assert_ne!(rival.slot as usize, slot, "slot {slot} saw itself");
             assert!(
-                race.world.ships[rival.slot as usize].active,
+                race.sim.world.ships[rival.slot as usize].active,
                 "slot {slot} saw an inactive craft"
             );
         }
@@ -279,7 +281,7 @@ fn the_opponents_are_driven_rather_than_parked() {
     }
 
     for slot in 1..8 {
-        let ship = &race.world.ships[slot];
+        let ship = &race.sim.world.ships[slot];
         assert_eq!(
             ship.physics.thrust,
             oag_physics::controls::CONTROL_RANGE,
@@ -307,8 +309,8 @@ fn an_opponent_that_flies_off_the_circuit_is_put_back_on_it() {
 
     // Straight up and far away, which no reset volume in this fixture
     // covers - the point being that geometry cannot catch this.
-    let away = race.world.ships[1].physics.body.position + Vec3::Y * 100_000.0;
-    race.world.ships[1].physics.body.position = away;
+    let away = race.sim.world.ships[1].physics.body.position + Vec3::Y * 100_000.0;
+    race.sim.world.ships[1].physics.body.position = away;
 
     // Not on the first tick: a craft is only lost once it stays lost, or a
     // leap over a gap would teleport it mid-flight.
@@ -326,7 +328,7 @@ fn an_opponent_that_flies_off_the_circuit_is_put_back_on_it() {
         if race.respawns_of(1) > 0 {
             break;
         }
-        race.world.ships[1].physics.body.position = away;
+        race.sim.world.ships[1].physics.body.position = away;
         race.tick(&InputSnapshot::default());
     }
     assert_eq!(race.respawns_of(1), 1, "the craft was never recovered");
@@ -334,14 +336,14 @@ fn an_opponent_that_flies_off_the_circuit_is_put_back_on_it() {
     // Back on the line, and - the part that is easy to get wrong - its
     // driver knows where it was put. A driver left pointing at the old index
     // steers at the piece of track the craft fell off.
-    let ship = &race.world.ships[1];
+    let ship = &race.sim.world.ships[1];
     let residual = ship
         .physics
         .body
         .position
         .distance(race.racing_line().point(ship.driver.index as usize));
     assert!(
-        residual < race.rescue_distance,
+        residual < race.sim.rescue_distance,
         "recovered {residual} from where its driver thinks it is"
     );
 
@@ -359,13 +361,13 @@ fn an_opponent_that_flies_off_the_circuit_is_put_back_on_it() {
 #[test]
 fn giving_up_on_one_craft_leaves_the_others_recoverable() {
     let mut race = race_with_a_grid();
-    race.respawn_disabled[1] = true;
-    race.respawns_in_a_row[1] = RESPAWN_GIVE_UP;
+    race.sim.respawn_disabled[1] = true;
+    race.sim.respawns_in_a_row[1] = RESPAWN_GIVE_UP;
 
-    let away = race.world.ships[2].physics.body.position + Vec3::Y * 100_000.0;
+    let away = race.sim.world.ships[2].physics.body.position + Vec3::Y * 100_000.0;
     for _ in 0..=RESCUE_TICKS {
-        race.world.ships[1].physics.body.position += Vec3::Y * 100_000.0;
-        race.world.ships[2].physics.body.position = away;
+        race.sim.world.ships[1].physics.body.position += Vec3::Y * 100_000.0;
+        race.sim.world.ships[2].physics.body.position = away;
         race.tick(&InputSnapshot::default());
     }
 
@@ -375,7 +377,10 @@ fn giving_up_on_one_craft_leaves_the_others_recoverable() {
         1,
         "giving up on craft 1 switched off craft 2's recovery"
     );
-    assert!(!race.respawn_disabled[0], "the player's was switched off");
+    assert!(
+        !race.sim.respawn_disabled[0],
+        "the player's was switched off"
+    );
 }
 
 /// A wreck must not go on racing. A single race runs with `Damage` on, so an
@@ -392,19 +397,19 @@ fn a_destroyed_opponent_stops_driving() {
         race.tick(&InputSnapshot::default());
     }
     assert_eq!(
-        race.world.ships[1].physics.thrust,
+        race.sim.world.ships[1].physics.thrust,
         oag_physics::controls::CONTROL_RANGE
     );
 
-    race.world.ships[1].physics.craft_state = oag_physics::CraftState::Destroyed;
+    race.sim.world.ships[1].physics.craft_state = oag_physics::CraftState::Destroyed;
     race.tick(&InputSnapshot::default());
     assert_eq!(
-        race.world.ships[1].physics.thrust, 0.0,
+        race.sim.world.ships[1].physics.thrust, 0.0,
         "a destroyed opponent is still holding throttle"
     );
     // The rest of the field is unaffected: this is per craft, not a mode.
     assert_eq!(
-        race.world.ships[2].physics.thrust,
+        race.sim.world.ships[2].physics.thrust,
         oag_physics::controls::CONTROL_RANGE
     );
 }
@@ -422,7 +427,7 @@ fn every_driver_locates_itself_on_the_line() {
     race.tick(&InputSnapshot::default());
     for slot in 1..8 {
         assert!(
-            race.world.ships[slot].driver.index > 0,
+            race.sim.world.ships[slot].driver.index > 0,
             "opponent {slot}'s driver is still on the line's first point"
         );
     }
@@ -437,7 +442,7 @@ fn the_ai_never_touches_the_players_craft() {
     for _ in 0..120 {
         race.tick(&InputSnapshot::default());
     }
-    let player = &race.world.ships[0];
+    let player = &race.sim.world.ships[0];
     assert_eq!(player.physics.thrust, 0.0);
     assert_eq!(player.driver, oag_ai::Driver::default());
 }

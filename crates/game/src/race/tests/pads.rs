@@ -40,7 +40,7 @@ fn a_speed_pad_boosts_every_craft_and_not_only_the_player() {
 
     for slot in 0..8 {
         assert!(
-            race.world.ships[slot].physics.pad_timer > 0.0,
+            race.sim.world.ships[slot].physics.pad_timer > 0.0,
             "slot {slot} crossed the pad and was not boosted"
         );
     }
@@ -57,19 +57,19 @@ fn a_speed_pad_boosts_every_craft_and_not_only_the_player() {
 fn one_craft_s_pad_row_does_not_move_another_s() {
     let mut race = grid_on_a_speed_pad();
     race.tick(&InputSnapshot::default());
-    assert_eq!(race.pad_distance.len(), MAX_SHIPS);
+    assert_eq!(race.sim.pad_distance.len(), MAX_SHIPS);
 
-    let others: Vec<_> = (1..8).map(|slot| race.pad_distance[slot][0]).collect();
-    race.pad_distance[0][0] += 1234.0;
+    let others: Vec<_> = (1..8).map(|slot| race.sim.pad_distance[slot][0]).collect();
+    race.sim.pad_distance[0][0] += 1234.0;
     for (index, slot) in (1..8).enumerate() {
         assert_eq!(
-            race.pad_distance[slot][0], others[index],
+            race.sim.pad_distance[slot][0], others[index],
             "moving slot 0's row moved slot {slot}'s"
         );
     }
     for slot in 0..8 {
         assert_eq!(
-            race.pad_current[slot],
+            race.sim.pad_current[slot],
             Some(0),
             "slot {slot} does not know it is on the pad"
         );
@@ -134,7 +134,7 @@ fn the_boost_outlives_the_pad_and_then_expires() {
     assert!(race.ship().physics.pad_timer > 0.0);
 
     // Take the pad away, which is the same to the trigger as driving off it.
-    race.speedup_pads.clear();
+    race.sim.speedup_pads.clear();
     let mut boosted_ticks = 0;
     for _ in 0..120 {
         if race.tick(&InputSnapshot::default()).speedup_pad != Vec3::ZERO {
@@ -227,7 +227,7 @@ fn the_flare_outlives_the_force_and_ignores_the_class_tunable() {
         exhaust::BOOST_SECONDS
     );
 
-    race.speedup_pads.clear();
+    race.sim.speedup_pads.clear();
     let mut force_ticks = 0;
     let mut flare_ticks = 0;
     for _ in 0..120 {
@@ -254,7 +254,7 @@ fn zone_scores_once_for_entering_a_pad_and_not_again_while_inside() {
         bare.tick(&InputSnapshot::default());
     }
     assert_eq!(
-        padded.world.race.score - bare.world.race.score,
+        padded.sim.world.race.score - bare.sim.world.race.score,
         oag_race::zone::SPEEDUP_PAD_SCORE,
         "a pad held for {TICKS} ticks must pay exactly once"
     );
@@ -273,6 +273,6 @@ fn only_zone_mode_scores_for_a_speed_pad() {
             race.ship().physics.pad_timer > 0.0,
             "{mode:?}: the pad did not fire at all, so the score assertion proves nothing"
         );
-        assert_eq!(race.world.race.score, 0, "{mode:?} scored for a pad");
+        assert_eq!(race.sim.world.race.score, 0, "{mode:?} scored for a pad");
     }
 }

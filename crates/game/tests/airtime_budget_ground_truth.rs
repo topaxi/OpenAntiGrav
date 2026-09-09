@@ -67,7 +67,7 @@ const RESPAWN_LEAD_TICKS: u64 = 120;
 /// counts as contaminating it - the fall completing into a respawn some time
 /// after the ground would otherwise have been under it.
 ///
-/// **Chosen, not measured, but not arbitrary either**: `race::recovery`'s own
+/// **Chosen, not measured, but not arbitrary either**: `oag_race::recovery`'s own
 /// `RESCUE_TICKS` (90) is how long a craft must dwell off its line before a
 /// respawn fires at all, so a fall's landing and the respawn it triggers can
 /// legitimately be 90 ticks apart with nothing wrong. An initial 30-tick
@@ -223,11 +223,11 @@ fn measure_airtime(
     // Everyone but one opponent off the track, so every airborne window
     // measured is this craft's own driving, with no traffic in the way of it.
     for slot in 2..8 {
-        race.world.ships[slot].active = false;
+        race.sim.world.ships[slot].active = false;
     }
-    race.world.ships[0].active = false;
+    race.sim.world.ships[0].active = false;
 
-    let mut lap = race.world.ships[LONE].standing.lap;
+    let mut lap = race.sim.world.ships[LONE].standing.lap;
     let mut recovered_this_lap = false;
     let mut clean_laps = 0u32;
 
@@ -248,7 +248,7 @@ fn measure_airtime(
             recovered_this_lap = true;
         }
 
-        let now_lap = race.world.ships[LONE].standing.lap;
+        let now_lap = race.sim.world.ships[LONE].standing.lap;
         if now_lap != lap {
             // The same convention `ai_roll_ground_truth.rs::rolls_on` uses for
             // its own "best lap" figure: the first lap segment is the run-up
@@ -260,7 +260,7 @@ fn measure_airtime(
             recovered_this_lap = false;
         }
 
-        let airborne = race.world.ships[LONE].physics.time_airborne;
+        let airborne = race.sim.world.ships[LONE].physics.time_airborne;
         if airborne > 0.0 {
             if !was_airborne {
                 start_tick = tick;

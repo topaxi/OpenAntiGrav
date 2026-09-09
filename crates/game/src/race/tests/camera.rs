@@ -52,7 +52,7 @@ fn the_boost_kick_widens_the_view_and_turning_it_off_changes_nothing() {
     // together.
     let body = &off.ship().physics.body;
     let expected_deg =
-        off.chase_params.fov + SPEED_FOV_GAIN_DEG * body.forward().dot(body.linear_velocity);
+        off.view.chase_params.fov + SPEED_FOV_GAIN_DEG * body.forward().dot(body.linear_velocity);
     let expected = oag_render::camera::projection(
         oag_render::camera::fit_vertical_fov(
             expected_deg.to_radians(),
@@ -73,8 +73,8 @@ fn the_boost_kick_widens_the_view_and_turning_it_off_changes_nothing() {
     // *exactly* the un-kicked matrix rather than to something near it. Both
     // races are still in lockstep, so `off` is the right reference at
     // whatever speed they have both decayed to.
-    kicked.speedup_pads.clear();
-    off.speedup_pads.clear();
+    kicked.sim.speedup_pads.clear();
+    off.sim.speedup_pads.clear();
     for _ in 0..600 {
         kicked.tick(&InputSnapshot::default());
         off.tick(&InputSnapshot::default());
@@ -106,7 +106,7 @@ fn the_field_widens_with_forward_speed_and_narrows_when_moving_backwards() {
     }
 
     let mut race = race_with_pads(Mode::TimeTrial, enveloping_pad());
-    let authored = race.chase_params.fov;
+    let authored = race.view.chase_params.fov;
     assert!(
         (vertical_fov_deg(&race) - authored).abs() < 1.0e-3,
         "at rest the field must be the authored one, got {}",
@@ -114,7 +114,7 @@ fn the_field_widens_with_forward_speed_and_narrows_when_moving_backwards() {
     );
 
     for speed in [40.0_f32, 100.0, 150.0] {
-        let body = &mut race.world.ships[0].physics.body;
+        let body = &mut race.sim.world.ships[0].physics.body;
         body.linear_velocity = body.forward() * speed;
         let expected = authored + SPEED_FOV_GAIN_DEG * speed;
         assert!(
@@ -126,7 +126,7 @@ fn the_field_widens_with_forward_speed_and_narrows_when_moving_backwards() {
 
     // The discriminating case, measured on the running original: a sample at
     // negative forward velocity read 54.26 degrees against an authored 60.
-    let body = &mut race.world.ships[0].physics.body;
+    let body = &mut race.sim.world.ships[0].physics.body;
     body.linear_velocity = body.forward() * -76.5;
     assert!(
         vertical_fov_deg(&race) < authored - 5.0,
@@ -186,7 +186,7 @@ fn cycling_the_camera_changes_no_simulation_state() {
     fn hash(race: &Race) -> u64 {
         let mut hasher = StateHasher::new();
         hash_state(&mut hasher, &race.ship().physics);
-        hasher.write_u64(race.world.tick);
+        hasher.write_u64(race.sim.world.tick);
         hasher.finish()
     }
 
@@ -216,7 +216,7 @@ fn cycling_the_camera_changes_no_simulation_state() {
         // separate ones `Race` keeps for the exhaust and the sparks - would
         // desynchronise every later tick, and this catches it on the first.
         assert_eq!(
-            control.world.rng, cycled.world.rng,
+            control.sim.world.rng, cycled.sim.world.rng,
             "the simulation's generator moved at tick {tick}"
         );
     }
@@ -437,7 +437,7 @@ fn the_field_of_view_setting_widens_the_projection_and_defaults_to_the_authored_
     // And the untouched setting is the matrix the fit alone produces.
     let unchanged = oag_render::camera::projection(
         oag_render::camera::fit_vertical_fov(
-            race.chase_params.fov.to_radians(),
+            race.view.chase_params.fov.to_radians(),
             AUTHORED_ASPECT,
             aspect,
         ),
@@ -462,7 +462,7 @@ fn an_active_shake_never_moves_the_camera_eye() {
     let mut race = Race::start(setup(Handling::default()));
     let before = race.camera_position();
 
-    race.shake.arm(
+    race.view.shake.arm(
         1.0,
         oag_render::camera::shake::Side::Ahead,
         &mut Rng::new(1),
@@ -475,7 +475,7 @@ fn an_active_shake_never_moves_the_camera_eye() {
 
     // And through the decay, not only at the moment of arming.
     for _ in 0..20 {
-        race.shake.advance(1.0 / 60.0);
+        race.view.shake.advance(1.0 / 60.0);
         let during = race.camera_position();
         assert!(
             (before - during).length() < 1e-4,
@@ -492,7 +492,7 @@ fn an_active_shake_does_rotate_the_view() {
     let mut race = Race::start(setup(Handling::default()));
     let level = race.view();
 
-    race.shake.arm(
+    race.view.shake.arm(
         1.0,
         oag_render::camera::shake::Side::Elsewhere,
         &mut Rng::new(1),

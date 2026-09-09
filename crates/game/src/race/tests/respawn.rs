@@ -12,16 +12,16 @@ use super::*;
 #[test]
 fn a_respawn_in_flight_makes_everything_visible() {
     let mut race = Race::start(setup(Handling::default()));
-    race.respawn_cooldown[0] = 1;
+    race.sim.respawn_cooldown[0] = 1;
     assert_eq!(race.visibility_sections(), (UNPLACED, UNPLACED));
 
     // And an opponent recovering across the circuit does not blank the
     // shot: the camera is the player's, and only the player's respawn can
     // make it untrustworthy.
-    race.respawn_cooldown[0] = 0;
-    race.respawn_cooldown[3] = 1;
+    race.sim.respawn_cooldown[0] = 0;
+    race.sim.respawn_cooldown[3] = 1;
     assert_ne!(race.visibility_sections(), (UNPLACED, UNPLACED));
-    race.respawn_cooldown[0] = 1;
+    race.sim.respawn_cooldown[0] = 1;
 
     // And the resulting set really is everything, not merely two unknown
     // ids - this is the property the whole conservative path exists for.
@@ -52,7 +52,7 @@ fn a_ship_that_falls_through_a_reset_plane_is_put_back_on_the_track() {
     // Throw it off the track. No gravity in this fixture, so nothing else can
     // move it and the only thing under test is the reset path.
     {
-        let body = &mut race.world.ships[0].physics.body;
+        let body = &mut race.sim.world.ships[0].physics.body;
         body.position = Vec3::new(20.0, -20.0, 0.0);
         body.linear_velocity = Vec3::new(0.0, -600.0, 0.0);
     }
@@ -63,7 +63,7 @@ fn a_ship_that_falls_through_a_reset_plane_is_put_back_on_the_track() {
 
     assert_eq!(race.respawns(), 1, "the reset plane never triggered");
 
-    let body = race.world.ships[0].physics.body;
+    let body = race.sim.world.ships[0].physics.body;
     // Back on the track: near a spline sample, above it, and stopped.
     let distance = race.spline().distance_to(body.position).expect("a sample");
     assert!(distance < 20.0, "respawned {distance} from the spline");
@@ -83,7 +83,7 @@ fn falling_through_any_other_class_does_not_respawn() {
         let setup = setup_with(hulled_handling(), vec![plane(1, -40.0, surface, 0)]);
         let mut race = Race::start(setup);
         {
-            let body = &mut race.world.ships[0].physics.body;
+            let body = &mut race.sim.world.ships[0].physics.body;
             body.position = Vec3::new(20.0, -20.0, 0.0);
             body.linear_velocity = Vec3::new(0.0, -600.0, 0.0);
         }
@@ -105,22 +105,22 @@ fn a_player_that_leaves_the_circuit_is_put_back_after_the_dwell() {
     // Well past the threshold and nowhere near anything: this fixture has no
     // colliders at all, so no reset volume can be what puts the craft back.
     let away = Vec3::new(20.0, 6.0, 400.0);
-    race.world.ships[0].physics.body.position = away;
+    race.sim.world.ships[0].physics.body.position = away;
     assert!(
-        race.spline().distance_to(away).expect("a sample") > race.player_rescue_distance,
+        race.spline().distance_to(away).expect("a sample") > race.sim.player_rescue_distance,
         "the fixture does not put the craft off the track"
     );
 
     // One short of the dwell: still out there, still not touched.
     for _ in 0..PLAYER_RESCUE_TICKS - 1 {
         race.tick(&InputSnapshot::default());
-        race.world.ships[0].physics.body.position = away;
+        race.sim.world.ships[0].physics.body.position = away;
     }
     assert_eq!(race.respawns(), 0, "recovered before the dwell elapsed");
 
     race.tick(&InputSnapshot::default());
     assert_eq!(race.respawns(), 1, "the dwell elapsed and nothing happened");
-    let position = race.world.ships[0].physics.body.position;
+    let position = race.sim.world.ships[0].physics.body.position;
     let distance = race.spline().distance_to(position).expect("a sample");
     assert!(distance < 20.0, "recovered {distance} from the spline");
 }
@@ -133,9 +133,9 @@ fn a_player_that_leaves_the_circuit_is_put_back_after_the_dwell() {
 #[test]
 fn a_player_inside_the_threshold_is_left_alone() {
     let mut race = Race::start(setup(hulled_handling()));
-    let inside = Vec3::new(20.0, 6.0, race.player_rescue_distance - 1.0);
+    let inside = Vec3::new(20.0, 6.0, race.sim.player_rescue_distance - 1.0);
     for _ in 0..PLAYER_RESCUE_TICKS * 3 {
-        race.world.ships[0].physics.body.position = inside;
+        race.sim.world.ships[0].physics.body.position = inside;
         race.tick(&InputSnapshot::default());
     }
     assert_eq!(race.respawns(), 0, "a craft on the track was recovered");
@@ -163,7 +163,7 @@ fn a_player_inside_the_threshold_is_left_alone() {
 #[test]
 fn a_stopped_opponent_is_flagged_after_the_dwell() {
     let mut race = Race::start(setup(hulled_handling()));
-    let ship = &mut race.world.ships[1];
+    let ship = &mut race.sim.world.ships[1];
     ship.physics.craft_state = oag_physics::CraftState::Racing;
     ship.physics.thrust = 100.0;
     ship.physics.body.linear_velocity = Vec3::ZERO;
@@ -180,7 +180,7 @@ fn a_stopped_opponent_is_flagged_after_the_dwell() {
 #[test]
 fn an_opponent_holding_no_throttle_never_stalls() {
     let mut race = Race::start(setup(hulled_handling()));
-    let ship = &mut race.world.ships[1];
+    let ship = &mut race.sim.world.ships[1];
     ship.physics.craft_state = oag_physics::CraftState::Racing;
     ship.physics.thrust = 0.0;
     ship.physics.body.linear_velocity = Vec3::ZERO;
@@ -206,19 +206,19 @@ fn the_recovery_pose_is_the_last_place_the_craft_was_on_the_track() {
     // On the line, at the far end of the straight: this is the sample the latch
     // has to keep.
     let left_from = Vec3::new(60.0, 6.0, 0.0);
-    race.world.ships[0].physics.body.position = left_from;
+    race.sim.world.ships[0].physics.body.position = left_from;
     race.tick(&InputSnapshot::default());
 
     // And now out beyond the *near* end, so the nearest sample to the craft is
     // sample zero rather than anything it drove past.
     let away = Vec3::new(0.0, -400.0, 0.0);
     for _ in 0..PLAYER_RESCUE_TICKS {
-        race.world.ships[0].physics.body.position = away;
+        race.sim.world.ships[0].physics.body.position = away;
         race.tick(&InputSnapshot::default());
     }
     assert_eq!(race.respawns(), 1, "the craft was never recovered");
 
-    let position = race.world.ships[0].physics.body.position;
+    let position = race.sim.world.ships[0].physics.body.position;
     assert!(
         position.x > 40.0,
         "recovered at {position:?}, which is the end of the straight the craft \
@@ -253,7 +253,7 @@ fn a_sustained_scrape_spawns_sparks_once_not_every_tick() {
     // Reset to an inbound approach before every tick, so each one sees a
     // fresh impact rather than the ship bouncing away after the first.
     let push_toward_wall = |race: &mut Race| {
-        let body = &mut race.world.ships[0].physics.body;
+        let body = &mut race.sim.world.ships[0].physics.body;
         body.position = Vec3::new(20.0, -39.7, 0.0);
         body.linear_velocity = Vec3::new(0.0, -50.0, 0.0);
     };
@@ -302,7 +302,7 @@ fn a_sustained_scrape_refires_after_the_cooldown_elapses() {
     let dt = race.dt();
 
     let push_toward_wall = |race: &mut Race| {
-        let body = &mut race.world.ships[0].physics.body;
+        let body = &mut race.sim.world.ships[0].physics.body;
         body.position = Vec3::new(20.0, -39.7, 0.0);
         body.linear_velocity = Vec3::new(0.0, -50.0, 0.0);
     };
@@ -434,7 +434,7 @@ fn race_with_spark_effect(blob: &[u8]) -> Race {
 }
 
 fn push_toward_wall(race: &mut Race) {
-    let body = &mut race.world.ships[0].physics.body;
+    let body = &mut race.sim.world.ships[0].physics.body;
     body.position = Vec3::new(20.0, -39.7, 0.0);
     body.linear_velocity = Vec3::new(0.0, -50.0, 0.0);
 }
@@ -484,8 +484,8 @@ fn a_looping_spark_effect_stops_when_the_contact_does() {
     // Let go. Emission stops at once; the particles already alive finish
     // their own lives, so the system drains rather than blinking out.
     for _ in 0..90 {
-        race.world.ships[0].physics.body.position = Vec3::new(20.0, 0.0, 0.0);
-        race.world.ships[0].physics.body.linear_velocity = Vec3::ZERO;
+        race.sim.world.ships[0].physics.body.position = Vec3::new(20.0, 0.0, 0.0);
+        race.sim.world.ships[0].physics.body.linear_velocity = Vec3::ZERO;
         race.tick(&InputSnapshot::default());
     }
     assert!(
@@ -508,8 +508,8 @@ fn a_burst_spark_effect_is_not_cut_short_by_letting_go() {
 
     // One tick clear of the wall: the burst is still going, because nothing
     // owns it and its 4-tick schedule has not run out.
-    race.world.ships[0].physics.body.position = Vec3::new(20.0, 0.0, 0.0);
-    race.world.ships[0].physics.body.linear_velocity = Vec3::ZERO;
+    race.sim.world.ships[0].physics.body.position = Vec3::new(20.0, 0.0, 0.0);
+    race.sim.world.ships[0].physics.body.linear_velocity = Vec3::ZERO;
     race.tick(&InputSnapshot::default());
     assert!(
         race.sparks().is_running(),
@@ -543,11 +543,11 @@ fn a_shielded_scrape_bulges_the_shell_and_throws_no_sparks() {
     );
     let mut race = Race::start(setup);
 
-    race.world.ships[0].physics.shield_pickup_timer = 1.0;
-    race.shield[0].activate();
+    race.sim.world.ships[0].physics.shield_pickup_timer = 1.0;
+    race.view.shield[0].activate();
     let resting = race.shield_of(0).scale();
 
-    let body = &mut race.world.ships[0].physics.body;
+    let body = &mut race.sim.world.ships[0].physics.body;
     body.position = Vec3::new(20.0, -39.7, 0.0);
     body.linear_velocity = Vec3::new(0.0, -50.0, 0.0);
     let evaluated = race.tick(&InputSnapshot::default());

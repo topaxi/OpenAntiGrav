@@ -41,12 +41,12 @@ impl Race {
         field: &oag_ai::Field,
     ) -> bool {
         let context = oag_ai::Context {
-            line: &self.racing_line,
-            tuning: &self.ai_tuning,
-            pilot: &self.ai_pilots[slot],
+            line: &self.sim.racing_line,
+            tuning: &self.sim.ai_tuning,
+            pilot: &self.sim.ai_pilots[slot],
             field,
         };
-        if self.world.ships[slot]
+        if self.sim.world.ships[slot]
             .driver
             .wants_to_fire(&context)
             .is_none()
@@ -54,6 +54,7 @@ impl Race {
             return false;
         }
         let Some(stats) = self
+            .sim
             .weapons
             .as_ref()
             .and_then(oag_tables::weapons::WeaponStats::missile)
@@ -80,12 +81,12 @@ impl Race {
         field: &oag_ai::Field,
     ) -> bool {
         let context = oag_ai::Context {
-            line: &self.racing_line,
-            tuning: &self.ai_tuning,
-            pilot: &self.ai_pilots[slot],
+            line: &self.sim.racing_line,
+            tuning: &self.sim.ai_tuning,
+            pilot: &self.sim.ai_pilots[slot],
             field,
         };
-        if self.world.ships[slot]
+        if self.sim.world.ships[slot]
             .driver
             .wants_to_fire(&context)
             .is_none()
@@ -93,13 +94,14 @@ impl Race {
             return false;
         }
         let Some(stats) = self
+            .sim
             .weapons
             .as_ref()
             .and_then(oag_tables::weapons::WeaponStats::rocket)
         else {
             return false;
         };
-        let ship = &self.world.ships[slot];
+        let ship = &self.sim.world.ships[slot];
         // `None` where the weapon table authors a speed per class and this
         // race's rung is outside them - the shot does not happen rather than
         // flying at a rung it was not tuned for.
@@ -107,13 +109,13 @@ impl Race {
             &ship.physics,
             &ship.handling.dimensions,
             &stats,
-            &self.class,
+            &self.sim.class,
         ) else {
             return false;
         };
         let mut fired = 0;
         for (position, velocity) in shots {
-            if self.world.projectiles.spawn(
+            if self.sim.world.projectiles.spawn(
                 oag_tables::weapons::Weapon::Rocket,
                 position,
                 velocity,
@@ -141,16 +143,16 @@ impl Race {
     /// is nothing more to decide, and a second invented gate would be
     /// inventing a difference rather than recovering one.
     fn fire_opponent_quake(&mut self, slot: usize, field: &oag_ai::Field) -> bool {
-        if self.world.quake.is_some() {
+        if self.sim.world.quake.is_some() {
             return false;
         }
         let context = oag_ai::Context {
-            line: &self.racing_line,
-            tuning: &self.ai_tuning,
-            pilot: &self.ai_pilots[slot],
+            line: &self.sim.racing_line,
+            tuning: &self.sim.ai_tuning,
+            pilot: &self.sim.ai_pilots[slot],
             field,
         };
-        if self.world.ships[slot]
+        if self.sim.world.ships[slot]
             .driver
             .wants_to_fire(&context)
             .is_none()
@@ -158,13 +160,14 @@ impl Race {
             return false;
         }
         let Some(stats) = self
+            .sim
             .weapons
             .as_ref()
             .and_then(oag_tables::weapons::WeaponStats::quake)
         else {
             return false;
         };
-        let ship = &self.world.ships[slot];
+        let ship = &self.sim.world.ships[slot];
         let Some(progress) = ship.standing.progress else {
             return false;
         };
@@ -174,10 +177,10 @@ impl Race {
         let forward_dot_tangent = ship
             .standing
             .course_index
-            .and_then(|index| self.course.as_ref()?.tangent(index as usize))
+            .and_then(|index| self.sim.course.as_ref()?.tangent(index as usize))
             .map(|tangent| tangent.dot(ship.physics.body.forward()))
             .unwrap_or(1.0);
-        self.world.quake = Some(oag_gameplay::projectile::quake::Wave::launch(
+        self.sim.world.quake = Some(oag_gameplay::projectile::quake::Wave::launch(
             slot as u8,
             progress,
             forward_dot_tangent,
@@ -212,16 +215,16 @@ impl Race {
     /// to it until it can actually use it makes it a threat instead of a
     /// nuisance. No confidence score, because nothing was measured.
     fn fire_opponent_leach_beam(&mut self, slot: usize, field: &oag_ai::Field) -> bool {
-        if self.world.leach_beam.is_some() {
+        if self.sim.world.leach_beam.is_some() {
             return false;
         }
         let context = oag_ai::Context {
-            line: &self.racing_line,
-            tuning: &self.ai_tuning,
-            pilot: &self.ai_pilots[slot],
+            line: &self.sim.racing_line,
+            tuning: &self.sim.ai_tuning,
+            pilot: &self.sim.ai_pilots[slot],
             field,
         };
-        if self.world.ships[slot]
+        if self.sim.world.ships[slot]
             .driver
             .wants_to_fire(&context)
             .is_none()
@@ -229,29 +232,30 @@ impl Race {
             return false;
         }
         let Some(stats) = self
+            .sim
             .weapons
             .as_ref()
             .and_then(oag_tables::weapons::WeaponStats::leach_beam)
         else {
             return false;
         };
-        let count = self.world.ship_count as usize;
-        let ship = &self.world.ships[slot];
+        let count = self.sim.world.ship_count as usize;
+        let ship = &self.sim.world.ships[slot];
         // The same window `Race::sight_target` runs for the player, from the
         // craft's own position - the LeachBeam has no recovered launch offset to
         // measure from, so neither path invents one.
         let Some(target) = oag_gameplay::projectile::missile::lock_window(
-            &self.world.ships[..count],
+            &self.sim.world.ships[..count],
             slot as u8,
             ship.physics.body.position,
             ship.physics.body.forward(),
             stats.lock_min_dist,
             stats.lock_max_dist,
-            self.course.as_ref().map(oag_race::Course::length),
+            self.sim.course.as_ref().map(oag_race::Course::length),
         ) else {
             return false;
         };
-        self.world.leach_beam = Some(oag_gameplay::projectile::leach_beam::Beam::locked(
+        self.sim.world.leach_beam = Some(oag_gameplay::projectile::leach_beam::Beam::locked(
             slot as u8, target, &stats,
         ));
         true
@@ -275,12 +279,12 @@ impl Race {
     /// rather than recovering one.
     fn fire_opponent_plasma(&mut self, slot: usize, field: &oag_ai::Field) -> bool {
         let context = oag_ai::Context {
-            line: &self.racing_line,
-            tuning: &self.ai_tuning,
-            pilot: &self.ai_pilots[slot],
+            line: &self.sim.racing_line,
+            tuning: &self.sim.ai_tuning,
+            pilot: &self.sim.ai_pilots[slot],
             field,
         };
-        if self.world.ships[slot]
+        if self.sim.world.ships[slot]
             .driver
             .wants_to_fire(&context)
             .is_none()
@@ -288,22 +292,23 @@ impl Race {
             return false;
         }
         let Some(stats) = self
+            .sim
             .weapons
             .as_ref()
             .and_then(oag_tables::weapons::WeaponStats::plasma)
         else {
             return false;
         };
-        let ship = &self.world.ships[slot];
+        let ship = &self.sim.world.ships[slot];
         let Some((position, velocity)) = oag_gameplay::projectile::plasma::launch(
             &ship.physics,
             &ship.handling.dimensions,
             &stats,
-            &self.class,
+            &self.sim.class,
         ) else {
             return false;
         };
-        self.world.projectiles.spawn(
+        self.sim.world.projectiles.spawn(
             oag_tables::weapons::Weapon::Plasma,
             position,
             velocity,
@@ -327,12 +332,12 @@ impl Race {
     /// holding a Shuriken this tick.
     fn throw_opponent_shuriken(&mut self, slot: usize, field: &oag_ai::Field) -> bool {
         let context = oag_ai::Context {
-            line: &self.racing_line,
-            tuning: &self.ai_tuning,
-            pilot: &self.ai_pilots[slot],
+            line: &self.sim.racing_line,
+            tuning: &self.sim.ai_tuning,
+            pilot: &self.sim.ai_pilots[slot],
             field,
         };
-        if self.world.ships[slot]
+        if self.sim.world.ships[slot]
             .driver
             .wants_to_fire(&context)
             .is_none()
@@ -340,27 +345,29 @@ impl Race {
             return false;
         }
         let Some(stats) = self
+            .sim
             .weapons
             .as_ref()
             .and_then(oag_tables::weapons::WeaponStats::shuriken)
         else {
             return false;
         };
-        if self.world.projectiles.live() >= oag_gameplay::projectile::MAX_PROJECTILES {
+        if self.sim.world.projectiles.live() >= oag_gameplay::projectile::MAX_PROJECTILES {
             return false;
         }
-        let physics = self.world.ships[slot].physics;
-        let dimensions = self.world.ships[slot].handling.dimensions;
+        let physics = self.sim.world.ships[slot].physics;
+        let dimensions = self.sim.world.ships[slot].handling.dimensions;
         let Some((position, velocity)) = oag_gameplay::projectile::shuriken::launch(
             &physics,
             &dimensions,
             &stats,
-            &self.class,
-            &mut self.world.rng,
+            &self.sim.class,
+            &mut self.sim.world.rng,
         ) else {
             return false;
         };
-        self.world
+        self.sim
+            .world
             .projectiles
             .throw(position, velocity, slot as u8, stats.fuse)
     }
@@ -429,13 +436,14 @@ impl Race {
         controls: &oag_physics::ShipControls,
         field: &oag_ai::Field,
     ) {
-        let Some(weapon) = self.world.ships[slot].pickup.weapon else {
+        let Some(weapon) = self.sim.world.ships[slot].pickup.weapon else {
             return;
         };
         // Looked up and copied out before the branches, so the borrow of
-        // `self.weapons` ends here: the Rocket arm needs `&mut self` to put
+        // `self.sim.weapons` ends here: the Rocket arm needs `&mut self` to put
         // anything in the air, and every one of these returns an owned value.
         let Some((simple, absorb)) = self
+            .sim
             .weapons
             .as_ref()
             .map(|weapons| (weapons.simple(weapon), weapons.absorb(weapon)))
@@ -481,7 +489,7 @@ impl Race {
             {
                 return;
             }
-            let ship = &self.world.ships[slot];
+            let ship = &self.sim.world.ships[slot];
             let speed = ship
                 .physics
                 .body
@@ -490,9 +498,9 @@ impl Race {
                 .max(0.0);
             let boosted = speed * TURBO_SPEED_RATIO;
             let context = oag_ai::Context {
-                line: &self.racing_line,
-                tuning: &self.ai_tuning,
-                pilot: &self.ai_pilots[slot],
+                line: &self.sim.racing_line,
+                tuning: &self.sim.ai_tuning,
+                pilot: &self.sim.ai_pilots[slot],
                 field,
             };
             if !ship
@@ -501,11 +509,11 @@ impl Race {
             {
                 return;
             }
-            self.world.ships[slot].physics.turbo_timer = simple.time;
+            self.sim.world.ships[slot].physics.turbo_timer = simple.time;
             // And its own plume, the same reuse the player's Turbo makes of it -
             // an opponent's boost has to be visible from behind, or the field
             // gains speed with nothing on screen saying why.
-            self.exhaust[slot].boost(exhaust::BOOST_SECONDS);
+            self.view.exhaust[slot].boost(exhaust::BOOST_SECONDS);
         } else if weapon == oag_tables::weapons::Weapon::Rocket {
             // **The `if` is inside the arm, not `&&`ed onto its condition**, and
             // that is the whole of finding an opponent that never fired. As an
@@ -580,20 +588,20 @@ impl Race {
             // Eliminator refuses absorption for an opponent exactly as it
             // does for the player - see `Race::spend_pickup` and
             // `Mode::pickups_absorb`.
-            if !self.world.race.mode.pickups_absorb() {
+            if !self.sim.world.race.mode.pickups_absorb() {
                 return;
             }
             let Some(amount) = absorb else {
                 return;
             };
-            let dimensions = self.world.ships[slot].handling.dimensions;
-            oag_physics::damage::add(&mut self.world.ships[slot].physics, &dimensions, amount);
+            let dimensions = self.sim.world.ships[slot].handling.dimensions;
+            oag_physics::damage::add(&mut self.sim.world.ships[slot].physics, &dimensions, amount);
         }
         // `Held::take` for the same reason `Race::spend_pickup` uses it: the
         // Mine/Bomb arm above always returns before here, so this is
         // defensive rather than reachable today, but a direct field write
         // would silently stop being safe the day that stops being true.
-        self.world.ships[slot].pickup.take();
+        self.sim.world.ships[slot].pickup.take();
     }
 }
 
@@ -619,7 +627,7 @@ impl Race {
         slot: usize,
         field: &oag_ai::Field,
     ) -> bool {
-        let Some(weapons) = self.weapons.as_ref() else {
+        let Some(weapons) = self.sim.weapons.as_ref() else {
             return false;
         };
         let Some(drop) = oag_gameplay::projectile::mine::Drop::for_weapon(weapon, weapons) else {
@@ -628,11 +636,11 @@ impl Race {
             // that cannot be spent.
             return false;
         };
-        let ship = &self.world.ships[slot];
+        let ship = &self.sim.world.ships[slot];
         let context = oag_ai::Context {
-            line: &self.racing_line,
-            tuning: &self.ai_tuning,
-            pilot: &self.ai_pilots[slot],
+            line: &self.sim.racing_line,
+            tuning: &self.sim.ai_tuning,
+            pilot: &self.sim.ai_pilots[slot],
             field,
         };
         if ship.driver.wants_to_drop(&context).is_none() {
@@ -643,7 +651,7 @@ impl Race {
             // the whole action.
             return false;
         }
-        self.world.ships[slot].pickup.begin_drop(drop.count);
+        self.sim.world.ships[slot].pickup.begin_drop(drop.count);
         true
     }
 }
@@ -687,14 +695,14 @@ impl Race {
         forward: oag_core::math::Vec3,
         right: oag_core::math::Vec3,
     ) -> Option<oag_ai::Hazard> {
-        let radii = oag_gameplay::projectile::TriggerRadii::from_table(self.weapons.as_ref());
-        let origin = self.world.ships[slot].physics.body.position;
+        let radii = oag_gameplay::projectile::TriggerRadii::from_table(self.sim.weapons.as_ref());
+        let origin = self.sim.world.ships[slot].physics.body.position;
         // Half the hull's width, so a charge the craft would clip with a wingtip
         // counts as much as one it would drive over.
-        let half_width = self.world.ships[slot].handling.dimensions.width * 0.5;
+        let half_width = self.sim.world.ships[slot].handling.dimensions.width * 0.5;
 
         let mut best: Option<oag_ai::Hazard> = None;
-        for charge in &self.world.projectiles.slots {
+        for charge in &self.sim.world.projectiles.slots {
             let Some(kind) = charge.kind else { continue };
             if charge.owner as usize == slot {
                 continue;

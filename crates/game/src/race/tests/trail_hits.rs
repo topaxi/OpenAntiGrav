@@ -16,17 +16,17 @@ use super::*;
 /// A grid whose trails are HD's, with slot 0's ribbon laid along +X.
 fn race_with_a_trail() -> Race {
     let mut race = race_with_a_grid();
-    race.hd_trail_active = true;
-    race.hull_reach = [2.0; oag_gameplay::MAX_SHIPS];
+    race.view.hd_trail_active = true;
+    race.view.hull_reach = [2.0; oag_gameplay::MAX_SHIPS];
     for k in 0..oag_render::exhaust::hd::SAMPLES {
-        race.hd_trail[0].push(Vec3::new(k as f32 * -4.0, 0.0, 0.0), Vec3::Y, 0.0);
+        race.view.hd_trail[0].push(Vec3::new(k as f32 * -4.0, 0.0, 0.0), Vec3::Y, 0.0);
     }
     race
 }
 
 /// Sits slot 1 at `at` and runs one tick of the trigger.
 fn place_and_step(race: &mut Race, at: Vec3) {
-    race.world.ships[1].physics.body.position = at;
+    race.sim.world.ships[1].physics.body.position = at;
     race.advance_trail_hits();
 }
 
@@ -35,11 +35,11 @@ fn a_craft_inside_the_ribbon_is_marked_and_one_outside_is_not() {
     let mut race = race_with_a_trail();
     // Well clear: 20 units off a ribbon of half-width 0.5 plus a 2.0 hull.
     place_and_step(&mut race, Vec3::new(-40.0, 20.0, 0.0));
-    assert_eq!(race.trail_inside[0] & 0b10, 0);
+    assert_eq!(race.view.trail_inside[0] & 0b10, 0);
     // On the line, between two stored samples - the case a sample-wise test
     // would miss and the segment-wise one catches.
     place_and_step(&mut race, Vec3::new(-42.0, 0.0, 0.0));
-    assert_ne!(race.trail_inside[0] & 0b10, 0);
+    assert_ne!(race.view.trail_inside[0] & 0b10, 0);
 }
 
 /// The **fallback** only - a hull that authors no `Ship Collision Fx` locators,
@@ -50,9 +50,9 @@ fn the_fallback_reach_is_the_hull_reach_plus_the_measured_half_width() {
     let mut race = race_with_a_trail();
     let reach = 2.0 + oag_render::exhaust::hd::FIN_HALF_WIDTH;
     place_and_step(&mut race, Vec3::new(-40.0, reach - 0.01, 0.0));
-    assert_ne!(race.trail_inside[0] & 0b10, 0, "just inside");
+    assert_ne!(race.view.trail_inside[0] & 0b10, 0, "just inside");
     place_and_step(&mut race, Vec3::new(-40.0, reach + 0.01, 0.0));
-    assert_eq!(race.trail_inside[0] & 0b10, 0, "just outside");
+    assert_eq!(race.view.trail_inside[0] & 0b10, 0, "just outside");
 }
 
 /// **The rate, pinned.** The burst follows the mask every tick rather than its
@@ -68,13 +68,17 @@ fn the_fallback_reach_is_the_hull_reach_plus_the_measured_half_width() {
 fn the_mask_tracks_presence_every_tick_rather_than_only_its_edge() {
     let mut race = race_with_a_trail();
     place_and_step(&mut race, Vec3::new(-40.0, 0.0, 0.0));
-    assert_ne!(race.trail_inside[0] & 0b10, 0, "entered");
+    assert_ne!(race.view.trail_inside[0] & 0b10, 0, "entered");
     place_and_step(&mut race, Vec3::new(-36.0, 0.0, 0.0));
-    assert_ne!(race.trail_inside[0] & 0b10, 0, "still inside, still set");
+    assert_ne!(
+        race.view.trail_inside[0] & 0b10,
+        0,
+        "still inside, still set"
+    );
     place_and_step(&mut race, Vec3::new(-36.0, 50.0, 0.0));
-    assert_eq!(race.trail_inside[0] & 0b10, 0, "left, so cleared");
+    assert_eq!(race.view.trail_inside[0] & 0b10, 0, "left, so cleared");
     place_and_step(&mut race, Vec3::new(-36.0, 0.0, 0.0));
-    assert_ne!(race.trail_inside[0] & 0b10, 0, "back inside");
+    assert_ne!(race.view.trail_inside[0] & 0b10, 0, "back inside");
 }
 
 /// A craft is never in its own trail, however close the ring is - its nozzle
@@ -83,18 +87,18 @@ fn the_mask_tracks_presence_every_tick_rather_than_only_its_edge() {
 #[test]
 fn a_craft_is_never_inside_its_own_trail() {
     let mut race = race_with_a_trail();
-    race.world.ships[0].physics.body.position = Vec3::ZERO;
+    race.sim.world.ships[0].physics.body.position = Vec3::ZERO;
     race.advance_trail_hits();
-    assert_eq!(race.trail_inside[0] & 0b1, 0);
+    assert_eq!(race.view.trail_inside[0] & 0b1, 0);
 }
 
 /// Off HD the whole path is inert, so no other title pays for it.
 #[test]
 fn a_non_hd_race_tests_nothing() {
     let mut race = race_with_a_trail();
-    race.hd_trail_active = false;
+    race.view.hd_trail_active = false;
     place_and_step(&mut race, Vec3::new(-40.0, 0.0, 0.0));
-    assert_eq!(race.trail_inside[0], 0);
+    assert_eq!(race.view.trail_inside[0], 0);
 }
 
 /// **The burst sits on the hull, at `reach` from the centre - never on the
@@ -133,17 +137,17 @@ fn the_burst_sits_on_the_hull_facing_the_contact() {
 fn an_authored_anchor_decides_the_hit_and_the_sphere_does_not() {
     let mut race = race_with_a_trail();
     // One anchor, on the craft's centreline. The ribbon runs along -X at y = 0.
-    race.spark_anchors = vec![Vec::new(); oag_gameplay::MAX_SHIPS];
-    race.spark_anchors[1] = vec![Vec3::ZERO];
+    race.view.spark_anchors = vec![Vec::new(); oag_gameplay::MAX_SHIPS];
+    race.view.spark_anchors[1] = vec![Vec3::ZERO];
     // Two units off the ribbon: inside the 2.0 + 0.5 sphere the fallback would
     // use, and well outside the ribbon's own 0.5 half-width.
     place_and_step(&mut race, Vec3::new(-40.0, 2.0, 0.0));
     assert_eq!(
-        race.trail_inside[0] & 0b10,
+        race.view.trail_inside[0] & 0b10,
         0,
         "the sphere would have fired here and the hull has not touched anything"
     );
     // On it, and it fires.
     place_and_step(&mut race, Vec3::new(-40.0, 0.2, 0.0));
-    assert_ne!(race.trail_inside[0] & 0b10, 0);
+    assert_ne!(race.view.trail_inside[0] & 0b10, 0);
 }

@@ -56,7 +56,7 @@ impl Scene {
     /// `Environment_UpdateStageBlend`'s own consumer is still unfound. Worth
     /// knowing before a title with both ever loads.
     pub fn sync_zone_grade(&mut self, race: &Race) -> bool {
-        let zone = race.world.race.zone;
+        let zone = race.sim.world.race.zone;
         let Some(grade) = self.zone_grade.as_mut() else {
             return false;
         };

@@ -8,7 +8,7 @@
 //! PSP titles against concentric `<Image>` sprites on HD - so it is the natural
 //! second thing to lift out.
 //!
-//! The law it draws is `crate::race::sight`; this is only the pixels. See
+//! The law it draws is `oag_race::sight`; this is only the pixels. See
 //! `docs/ghidra/functions/psp-pulse-usa/lock-sight.md`.
 
 use super::Draw;
@@ -20,7 +20,7 @@ use super::draw::Context;
 /// `<Mode3D>` model four times at the corners of a box and rotate each a quarter
 /// turn on; Wipeout HD draws concentric `<Image>` sprites at one centre and
 /// rotates nothing. Where the centre goes and when the lock is taken is the same
-/// recovered law either way - see `crate::race::sight` and
+/// recovered law either way - see `oag_race::sight` and
 /// `docs/ghidra/functions/psp-pulse-usa/lock-sight.md`. Which shape a title
 /// authors is [`oag_title::hud::Sights`].
 ///
@@ -28,11 +28,11 @@ use super::draw::Context;
 /// of the named widgets, or when their art did not decode - the last being this
 /// project's rule for an asset it cannot play: draw nothing, and the loader
 /// report already said why.
-pub(super) fn sight_draws(cx: &Context<'_>, sight: &crate::race::sight::Sight) -> Vec<Draw> {
+pub(super) fn sight_draws(cx: &Context<'_>, sight: &oag_race::sight::Sight) -> Vec<Draw> {
     // **Visibility alone.** The seeking blink is a *tint* - the original writes
     // a colour on both of its phases and drops the draw on neither - so gating
     // on it here would strobe the reticle off every 0.1 s. See
-    // [`crate::race::sight::Sight::tint`].
+    // [`oag_race::sight::Sight::tint`].
     if !sight.visible() {
         return Vec::new();
     }
@@ -52,7 +52,7 @@ pub(super) fn sight_draws(cx: &Context<'_>, sight: &crate::race::sight::Sight) -
             // **Off the reticle's own held weapon, never off its target.** The
             // reticle belongs to what is in the player's pickup slot; a craft
             // ahead is the same craft whichever weapon found it. See
-            // `crate::race::sight::Held`.
+            // `oag_race::sight::Held`.
             //
             // The LeachBeam's set is four arrowheads and **no inner** - only the
             // Missile's nine-widget bind gets a closed box. A title that authors
@@ -60,8 +60,8 @@ pub(super) fn sight_draws(cx: &Context<'_>, sight: &crate::race::sight::Sight) -
             // answer for art it does not have rather than lending it the
             // Missile's.
             let (names, inner) = match sight.held() {
-                crate::race::sight::Held::Missile => (Some(*brackets), Some(*inner)),
-                crate::race::sight::Held::LeachBeam => (*leach, None),
+                oag_race::sight::Held::Missile => (Some(*brackets), Some(*inner)),
+                oag_race::sight::Held::LeachBeam => (*leach, None),
             };
             match names {
                 Some(names) => bracket_draws(cx, sight, names, inner, tint, alpha),
@@ -74,7 +74,7 @@ pub(super) fn sight_draws(cx: &Context<'_>, sight: &crate::race::sight::Sight) -
         // *does* author a `<Weapon type="LeachBeam">` with a lock window - it is
         // pinned by `only_pulse_and_hd_author_a_leachbeam_block` in
         // `crates/game/tests/lock_sight_ground_truth.rs` - so
-        // `crate::race::sight::Held::LeachBeam` is reachable on this title and
+        // `oag_race::sight::Held::LeachBeam` is reachable on this title and
         // would otherwise put the wrong weapon's reticle on screen.
         //
         // HD authors four `LeachBeamSight*` sprites of its own off
@@ -84,7 +84,7 @@ pub(super) fn sight_draws(cx: &Context<'_>, sight: &crate::race::sight::Sight) -
         // project's answer for art it cannot place. See
         // `docs/ghidra/functions/psp-pulse-usa/lock-sight.md`.
         oag_title::hud::Sights::Concentric { .. }
-            if sight.held() == crate::race::sight::Held::LeachBeam =>
+            if sight.held() == oag_race::sight::Held::LeachBeam =>
         {
             Vec::new()
         }
@@ -110,7 +110,7 @@ pub(super) fn sight_draws(cx: &Context<'_>, sight: &crate::race::sight::Sight) -
 /// whole nine and it belongs to the Missile.
 fn bracket_draws(
     cx: &Context<'_>,
-    sight: &crate::race::sight::Sight,
+    sight: &oag_race::sight::Sight,
     brackets: [&'static str; 4],
     inner: Option<&'static str>,
     tint: f32,
@@ -118,7 +118,7 @@ fn bracket_draws(
 ) -> Vec<Draw> {
     let colour = [tint, tint, tint, alpha];
     let mut out = Vec::new();
-    let mut place = |name: &str, piece: crate::race::sight::Piece| {
+    let mut place = |name: &str, piece: oag_race::sight::Piece| {
         let Some(placed) = model_art(cx, name) else {
             return;
         };
@@ -166,7 +166,7 @@ fn bracket_draws(
 /// copy of one asset for a rotation to differentiate.
 fn concentric_draws<'a>(
     cx: &Context<'_>,
-    sight: &crate::race::sight::Sight,
+    sight: &oag_race::sight::Sight,
     names: impl Iterator<Item = &'a &'static str>,
     tint: f32,
     alpha: f32,

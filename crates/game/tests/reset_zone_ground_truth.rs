@@ -105,7 +105,7 @@ fn fly_through_first_reset(setup: race::Setup) -> Option<f32> {
     // Clear of the trigger and straight through it. Which side it starts on does
     // not matter: the swept ray crosses the plane either way.
     {
-        let body = &mut race.world.ships[0].physics.body;
+        let body = &mut race.sim.world.ships[0].physics.body;
         body.position = centroid + normal * 20.0;
         body.linear_velocity = -normal * 600.0;
         body.angular_velocity = Vec3::ZERO;
@@ -275,7 +275,7 @@ fn touching_a_real_reset_volume_respawns_the_ship() {
     // of the triangle it starts on does not matter: the swept ray crosses the
     // plane either way.
     {
-        let body = &mut race.world.ships[0].physics.body;
+        let body = &mut race.sim.world.ships[0].physics.body;
         body.position = centroid + normal * 20.0;
         body.linear_velocity = -normal * 600.0;
         body.angular_velocity = Vec3::ZERO;

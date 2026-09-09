@@ -38,24 +38,24 @@ impl Race {
     pub(in crate::race) fn advance_leach_beam_visual(&mut self) {
         // The charge: up exactly while slot 0 holds a LeachBeam, which is the
         // whole of `FUN_0883f540`'s own gate. Nothing chosen here.
-        let holding = self.world.ships[0].pickup.weapon
+        let holding = self.sim.world.ships[0].pickup.weapon
             == Some(oag_tables::weapons::Weapon::LeachBeam)
-            && self.world.ships[0].active;
-        let holder = self.world.ships[0].physics.body.position;
+            && self.sim.world.ships[0].active;
+        let holder = self.sim.world.ships[0].physics.body.position;
         match (
-            holding.then(|| self.effects.get(LEACHBEAM_CHARGING_EFFECT).cloned()),
-            self.leach_charge_effect,
+            holding.then(|| self.view.effects.get(LEACHBEAM_CHARGING_EFFECT).cloned()),
+            self.view.leach_charge_effect,
         ) {
             (Some(Some(effect)), None) => {
-                self.leach_charge_effect = self.stage.attach(&effect, holder, 1.0);
+                self.view.leach_charge_effect = self.view.stage.attach(&effect, holder, 1.0);
             }
-            (Some(Some(_)), Some(playing)) => self.stage.follow(playing, holder),
+            (Some(Some(_)), Some(playing)) => self.view.stage.follow(playing, holder),
             // Not holding one any more (or the file never loaded): tear the
             // instance down, the same way the original despawns it the moment
             // its own two-part gate stops holding.
             (None, Some(playing)) | (Some(None), Some(playing)) => {
-                self.stage.detach(playing);
-                self.leach_charge_effect = None;
+                self.view.stage.detach(playing);
+                self.view.leach_charge_effect = None;
             }
             (None, None) | (Some(None), None) => {}
         }
@@ -64,24 +64,28 @@ impl Race {
         // draining. A disconnected beam in its linger window draws nothing,
         // matching the original clearing the link before the pool retires it.
         let connected = self
+            .sim
             .world
             .leach_beam
             .filter(oag_gameplay::projectile::leach_beam::Beam::connected);
         let Some(beam) = connected else {
-            if let Some(playing) = self.leach_beam_effect.take() {
-                self.stage.detach(playing);
+            if let Some(playing) = self.view.leach_beam_effect.take() {
+                self.view.stage.detach(playing);
             }
             return;
         };
-        let target = self.world.ships[beam.target as usize].physics.body.position;
+        let target = self.sim.world.ships[beam.target as usize]
+            .physics
+            .body
+            .position;
         match (
-            self.effects.get(LEACHBEAM_ENERGY_EFFECT).cloned(),
-            self.leach_beam_effect,
+            self.view.effects.get(LEACHBEAM_ENERGY_EFFECT).cloned(),
+            self.view.leach_beam_effect,
         ) {
             (Some(effect), None) => {
-                self.leach_beam_effect = self.stage.attach(&effect, target, 1.0);
+                self.view.leach_beam_effect = self.view.stage.attach(&effect, target, 1.0);
             }
-            (Some(_), Some(playing)) => self.stage.follow(playing, target),
+            (Some(_), Some(playing)) => self.view.stage.follow(playing, target),
             (None, _) => {}
         }
     }
@@ -89,8 +93,8 @@ impl Race {
     /// Keeps [`QUAKE_EFFECT`] and its own transform riding the travelling
     /// wave, one instance for the whole race.
     ///
-    /// Needs `self.course` (to place the wave along the ring) and
-    /// `self.spline` (to read the track's own width there), which is why this
+    /// Needs `self.sim.course` (to place the wave along the ring) and
+    /// `self.sim.spline` (to read the track's own width there), which is why this
     /// cannot live in `oag_gameplay::projectile::quake` at all - see that
     /// module's own doc comment on the split.
     ///
@@ -112,17 +116,17 @@ impl Race {
     /// so this draws the effect axis-aligned at the recovered position and
     /// scale alone, which is **chosen, not measured; no confidence score**.
     ///
-    /// Detaches the instance the tick the wave goes away (`self.world.quake`
+    /// Detaches the instance the tick the wave goes away (`self.sim.world.quake`
     /// becomes `None`), the same "hand the slot back, let the particles fade"
     /// shape [`Race::advance_projectile_flares`] already takes.
     pub(in crate::race) fn advance_quake_visual(&mut self) {
-        let Some(wave) = self.world.quake else {
-            if let Some(playing) = self.quake_effect.take() {
-                self.stage.detach(playing);
+        let Some(wave) = self.sim.world.quake else {
+            if let Some(playing) = self.view.quake_effect.take() {
+                self.view.stage.detach(playing);
             }
             return;
         };
-        let Some(course) = self.course.as_ref() else {
+        let Some(course) = self.sim.course.as_ref() else {
             return;
         };
         let Some(index) = course_index_near_progress(course, wave.progress) else {
@@ -131,7 +135,7 @@ impl Race {
         let Some(position) = course.position(index) else {
             return;
         };
-        let Some((_, sample, _)) = self.spline.nearest(position) else {
+        let Some((_, sample, _)) = self.sim.spline.nearest(position) else {
             return;
         };
         let lateral = Vec3::from_array(sample.lateral);
@@ -141,13 +145,16 @@ impl Race {
         let midpoint = (left + right) * 0.5;
         let scale = (right - left).length() / 50.0;
 
-        match (self.effects.get(QUAKE_EFFECT).cloned(), self.quake_effect) {
+        match (
+            self.view.effects.get(QUAKE_EFFECT).cloned(),
+            self.view.quake_effect,
+        ) {
             (Some(effect), None) => {
-                self.quake_effect = self.stage.attach(&effect, midpoint, scale);
+                self.view.quake_effect = self.view.stage.attach(&effect, midpoint, scale);
             }
             (Some(_), Some(playing)) => {
-                self.stage.follow(playing, midpoint);
-                self.stage.rescale(playing, scale);
+                self.view.stage.follow(playing, midpoint);
+                self.view.stage.rescale(playing, scale);
             }
             (None, _) => {}
         }
@@ -174,7 +181,7 @@ impl Race {
     /// every kind of impact, mine and missile included, because [`blast_for`]
     /// took no `kind` at all.
     ///
-    /// [`Race::sparks`] is deliberately not reused for it: that system
+    /// [`RaceView::sparks`] is deliberately not reused for it: that system
     /// re-anchors to the hull every tick, so a burst ignited at an impact
     /// would emit from the craft instead. It is one hull-mounted emitter, and
     /// this is why the stage exists alongside it.
@@ -189,13 +196,13 @@ impl Race {
         let Some((name, at)) = self.blast_for(kind, point, struck) else {
             return;
         };
-        let Some(effect) = self.effects.get(name).cloned() else {
+        let Some(effect) = self.view.effects.get(name).cloned() else {
             return;
         };
         // Neutral severity: the field the collision sparks derive from an
         // impulse is the *hull's*, and nothing on the rocket path has been
         // read as feeding it. See `oag_render::sparks::severity`.
-        self.stage.play(&effect, at, 1.0);
+        self.view.stage.play(&effect, at, 1.0);
     }
 
     /// Which explosion a hit plays and where, or `None` for a weapon with no
@@ -238,9 +245,9 @@ impl Race {
     ) -> Option<(&'static str, Vec3)> {
         match kind {
             oag_tables::weapons::Weapon::Rocket => Some(match struck {
-                Some(slot) if self.world.ships[slot].active => (
+                Some(slot) if self.sim.world.ships[slot].active => (
                     CRAFT_BLAST_EFFECT,
-                    self.world.ships[slot].physics.body.position - Vec3::Y * CRAFT_BLAST_DROP,
+                    self.sim.world.ships[slot].physics.body.position - Vec3::Y * CRAFT_BLAST_DROP,
                 ),
                 // A craft that has gone inactive since the hit falls back to
                 // the impact point rather than reading a stale pose - still
@@ -286,7 +293,7 @@ impl Race {
         &mut self,
         before: &[u8; oag_gameplay::projectile::MAX_PROJECTILES],
     ) {
-        for (slot, projectile) in self.world.projectiles.slots.iter().enumerate() {
+        for (slot, projectile) in self.sim.world.projectiles.slots.iter().enumerate() {
             if !bounced_this_tick(projectile.kind, before[slot], projectile.bounces) {
                 continue;
             }
@@ -295,12 +302,12 @@ impl Race {
             // [`bounce_effect_for`]. A weapon whose file did not load plays
             // nothing and does not fall back to the other's.
             let Some(effect) = bounce_effect_for(projectile.kind)
-                .and_then(|name| self.effects.get(name))
+                .and_then(|name| self.view.effects.get(name))
                 .cloned()
             else {
                 continue;
             };
-            self.stage.play(&effect, projectile.position, 1.0);
+            self.view.stage.play(&effect, projectile.position, 1.0);
         }
     }
 
@@ -323,22 +330,24 @@ impl Race {
     /// transform, the same point the procedural flare uses, so the two are
     /// interchangeable rather than merely similar.
     pub(in crate::race) fn advance_engine_flares(&mut self) {
-        let Some(effect) = self.effects.get(ENGINE_FLARE_EFFECT).cloned() else {
+        let Some(effect) = self.view.effects.get(ENGINE_FLARE_EFFECT).cloned() else {
             return;
         };
         for slot in 0..MAX_SHIPS {
-            let nozzle = self.world.ships[slot]
+            let nozzle = self.sim.world.ships[slot]
                 .active
                 .then(|| self.nozzle_of(slot))
                 .flatten();
-            match (nozzle, self.engine_flare[slot]) {
-                (Some(at), Some(playing)) => self.stage.follow(playing, at),
-                (Some(at), None) => self.engine_flare[slot] = self.stage.attach(&effect, at, 1.0),
+            match (nozzle, self.view.engine_flare[slot]) {
+                (Some(at), Some(playing)) => self.view.stage.follow(playing, at),
+                (Some(at), None) => {
+                    self.view.engine_flare[slot] = self.view.stage.attach(&effect, at, 1.0)
+                }
                 // Gone or never had a locator: hand the instance back and
                 // let its particles fade rather than cutting them.
                 (None, Some(playing)) => {
-                    self.stage.detach(playing);
-                    self.engine_flare[slot] = None;
+                    self.view.stage.detach(playing);
+                    self.view.engine_flare[slot] = None;
                 }
                 (None, None) => {}
             }
@@ -382,7 +391,7 @@ impl Race {
     /// **Called after `projectile::step`**, so a flare is anchored where its
     /// weapon ended the tick.
     pub(in crate::race) fn advance_projectile_flares(&mut self) {
-        for (slot, projectile) in self.world.projectiles.slots.iter().enumerate() {
+        for (slot, projectile) in self.sim.world.projectiles.slots.iter().enumerate() {
             let name = flare_effect_for(projectile.kind);
             let (primary, orbiting) = if projectile.kind
                 == Some(oag_tables::weapons::Weapon::Missile)
@@ -394,22 +403,22 @@ impl Race {
                 (projectile.position, None)
             };
             advance_one_flare(
-                &mut self.stage,
-                &self.effects,
+                &mut self.view.stage,
+                &self.view.effects,
                 name,
                 primary,
-                &mut self.projectile_flare[slot],
+                &mut self.view.projectile_flare[slot],
             );
             // The Missile's second, orbiting anchor - see `missile_flare_anchors`.
             // `orbiting` is `None` for every other kind, so this rides nothing
             // and only ever tears down a leftover instance from a slot that
             // was a Missile last tick.
             advance_one_flare(
-                &mut self.stage,
-                &self.effects,
+                &mut self.view.stage,
+                &self.view.effects,
                 orbiting.and(name),
                 orbiting.unwrap_or(primary),
-                &mut self.projectile_flare_orbit[slot],
+                &mut self.view.projectile_flare_orbit[slot],
             );
         }
     }
@@ -423,7 +432,7 @@ impl Race {
     /// caller is already drawing it as a mesh - [`ROCKET_MODEL_ENTRY`],
     /// [`MINE_MODEL_ENTRY`] or [`BOMB_MODEL_ENTRY`] - in which case this draws
     /// **nothing** for that one: the glow around a modelled rocket is
-    /// [`ROCKET_FLARE_EFFECT`], played off the disc through [`Race::stage`],
+    /// [`ROCKET_FLARE_EFFECT`], played off the disc through [`RaceView::stage`],
     /// and a billboard on top of it would be a second invented one. What is
     /// left here is the case where a kind's own model did not load, or a kind
     /// (the Missile, the Plasma, the Shuriken) has no model at all, and a
@@ -445,7 +454,7 @@ impl Race {
         modelled: impl Fn(oag_tables::weapons::Weapon) -> bool,
     ) -> Vec<oag_render::mesh::GpuVertex> {
         let mut vertices = Vec::new();
-        for projectile in &self.world.projectiles.slots {
+        for projectile in &self.sim.world.projectiles.slots {
             let Some(kind) = projectile.kind else {
                 continue;
             };
@@ -627,7 +636,8 @@ impl Race {
     /// mesh view cannot settle; `Pulse_Bomb.vex` was not separately viewed.
     #[must_use]
     fn projectile_model_matrices(&self, kind: oag_tables::weapons::Weapon) -> Vec<Mat4> {
-        self.world
+        self.sim
+            .world
             .projectiles
             .slots
             .iter()
@@ -694,7 +704,7 @@ pub(in crate::race) fn flare_effect_for(
 ///
 /// A free function taking the stage and the library by reference rather than
 /// a `&mut Race` method, so the caller can hold two `&mut Option<Playing>`
-/// slots - [`Race::projectile_flare`] and [`Race::projectile_flare_orbit`] -
+/// slots - [`RaceView::projectile_flare`] and [`RaceView::projectile_flare_orbit`] -
 /// live at once without a second borrow of `self`.
 fn advance_one_flare(
     stage: &mut psys::Stage,

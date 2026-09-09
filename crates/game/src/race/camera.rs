@@ -123,7 +123,7 @@ impl Race {
     /// everywhere at once, and a consumer that read the chase camera directly
     /// instead would silently miss the override.
     ///
-    /// [`Self::shake`] applies to both the external and the internal view and
+    /// [`RaceView::shake`] applies to both the external and the internal view and
     /// not to an override: `Camera_ArmShake`'s `camera` argument is the
     /// per-craft camera object both tripods share, not a property of one view,
     /// but an override exists to reproduce a captured pose exactly and the
@@ -140,25 +140,25 @@ impl Race {
     /// its basis at the top of the same function that then rotates it.
     #[must_use]
     pub fn view(&self) -> Mat4 {
-        if let Some(over) = &self.camera_override {
+        if let Some(over) = &self.view.camera_override {
             // A view matrix is the inverse of the camera's world transform.
             return Mat4::from_rotation_translation(over.orientation, over.eye).inverse();
         }
         let target = target_of(self.ship());
-        let base = if self.view == oag_display::display::CameraView::Internal {
+        let base = if self.view.camera_view == oag_display::display::CameraView::Internal {
             // Rigid, so there is no per-tick state to advance and nothing to
             // snap: the cockpit is bolted to the hull. The roll phase rides
             // along so the cockpit view rolls with the manoeuvre too - see
             // `oag_render::camera::internal::view`.
             oag_render::camera::internal::view(
                 target,
-                &self.internal_params,
+                &self.view.internal_params,
                 self.ship().physics.roll_phase,
             )
         } else {
-            self.camera.view(target, &self.chase_params)
+            self.view.camera.view(target, &self.view.chase_params)
         };
-        if self.shake.active() {
+        if self.view.shake.active() {
             // A view matrix is the inverse of the camera's world transform, so
             // rotating the camera's own basis by `Q` post-multiplies `Q` into
             // that transform and pre-multiplies `Q`'s inverse into its
@@ -166,7 +166,7 @@ impl Race {
             // for what the rotation itself reproduces.
             let row1 = base.row(1).truncate();
             let row2 = base.row(2).truncate();
-            Mat4::from_quat(self.shake.rotation(row1, row2).inverse()) * base
+            Mat4::from_quat(self.view.shake.rotation(row1, row2).inverse()) * base
         } else {
             base
         }
@@ -209,7 +209,7 @@ impl Race {
     pub fn visibility_sections(&self) -> (u8, u8) {
         // The player's, because this places the player's camera. An opponent
         // recovering across the circuit must not blank the shot.
-        if self.respawn_cooldown[0] > 0 {
+        if self.sim.respawn_cooldown[0] > 0 {
             return (UNPLACED, UNPLACED);
         }
         let ship = self.ship();
@@ -220,28 +220,28 @@ impl Race {
         // `u16::MAX` is the never-located sentinel, and it is out of range of
         // any real table, so the bounds check covers both.
         let index = usize::from(ship.segment);
-        if index >= self.spline.len() {
+        if index >= self.sim.spline.len() {
             return (UNPLACED, UNPLACED);
         }
         let craft = self.section_of(index, ship.physics.body.position);
         // The camera is a chase spring a few units behind, so it is a few
         // samples away in the same table. See `Spline::nearest_within` for why
         // a local search is allowed to miss.
-        let camera =
-            match self
-                .spline
-                .nearest_within(self.camera_position(), index, CAMERA_SEARCH_SAMPLES)
-            {
-                Some((camera_index, _, _)) => self.section_of(camera_index, self.camera_position()),
-                None => UNPLACED,
-            };
+        let camera = match self.sim.spline.nearest_within(
+            self.camera_position(),
+            index,
+            CAMERA_SEARCH_SAMPLES,
+        ) {
+            Some((camera_index, _, _)) => self.section_of(camera_index, self.camera_position()),
+            None => UNPLACED,
+        };
         (craft, camera)
     }
 
     /// The section of the sample at `index`, or [`UNPLACED`] when `position` is
     /// too far from it to trust. See [`Self::visibility_sections`].
     pub(super) fn section_of(&self, index: usize, position: Vec3) -> u8 {
-        let Some(sample) = self.spline.sample(index) else {
+        let Some(sample) = self.sim.spline.sample(index) else {
             return UNPLACED;
         };
         let distance = (Vec3::from_array(sample.pos) - position).length();
@@ -291,7 +291,7 @@ impl Race {
     /// residual of 0.0007 degrees over 19 samples. See
     /// `docs/rendering/projection-vs-the-original.md`.
     ///
-    /// [`Self::boost_kick`] is a different thing and is **not** a port of it:
+    /// [`RaceView::boost_kick`] is a different thing and is **not** a port of it:
     /// the original's term is present with no boost at all, is driven by speed
     /// rather than by a pad, and adds degrees where `BoostFovKick` multiplies a
     /// tangent. The two compose, in that order.
@@ -315,12 +315,13 @@ impl Race {
         // the live one is whichever perspective is being rendered - a cockpit
         // framed with the chase view's field would be the wrong picture with the
         // right camera.
-        let view_fov = if self.view == oag_display::display::CameraView::Internal {
-            self.internal_params.fov
+        let view_fov = if self.view.camera_view == oag_display::display::CameraView::Internal {
+            self.view.internal_params.fov
         } else {
-            self.chase_params.fov
+            self.view.chase_params.fov
         };
         let authored_fov = self
+            .view
             .camera_override
             .as_ref()
             .and_then(|over| over.fov_deg)
@@ -348,10 +349,10 @@ impl Race {
         // The zero case returns the input untouched rather than through
         // `atan(tan(x))`, for the reason `Fov::apply` gives: every capture taken
         // before this effect existed has to stay bit-identical.
-        let kicked = if self.boost_kick == 0.0 {
+        let kicked = if self.view.boost_kick == 0.0 {
             authored
         } else {
-            let widen = 1.0 + self.boost_kick * self.boost_fov_kick.gain();
+            let widen = 1.0 + self.view.boost_kick * self.view.boost_fov_kick.gain();
             2.0 * ((authored * 0.5).tan() * widen).atan()
         };
         let fov = oag_render::camera::fit_vertical_fov(kicked, AUTHORED_ASPECT, aspect);

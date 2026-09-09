@@ -114,12 +114,12 @@ fn rolls_on(level: oag_ai::Difficulty, track: &str, pilot: Option<oag_ai::Pilot>
     // anybody else - the same isolation `race_ground_truth.rs`'s solo benchmark
     // makes, and for the same reason.
     for slot in 2..8 {
-        race.world.ships[slot].active = false;
+        race.sim.world.ships[slot].active = false;
     }
-    race.world.ships[0].active = false;
+    race.sim.world.ships[0].active = false;
 
     let mut best: Option<u64> = None;
-    let mut lap = race.world.ships[LONE].standing.lap;
+    let mut lap = race.sim.world.ships[LONE].standing.lap;
     let mut started = 0u64;
     let mut recovered_this_lap = false;
     let mut airborne_windows = 0u32;
@@ -132,7 +132,7 @@ fn rolls_on(level: oag_ai::Difficulty, track: &str, pilot: Option<oag_ai::Pilot>
         if race.respawns_of(LONE) != before {
             recovered_this_lap = true;
         }
-        let now = race.world.ships[LONE].standing.lap;
+        let now = race.sim.world.ships[LONE].standing.lap;
         if now != lap {
             if lap > 1 && !recovered_this_lap {
                 let taken = tick - started;
@@ -142,7 +142,7 @@ fn rolls_on(level: oag_ai::Difficulty, track: &str, pilot: Option<oag_ai::Pilot>
             lap = now;
             recovered_this_lap = false;
         }
-        let airborne = race.world.ships[LONE].physics.time_airborne;
+        let airborne = race.sim.world.ships[LONE].physics.time_airborne;
         if airborne > 0.0 {
             airborne_ticks += 1;
             if !was_airborne {
@@ -156,8 +156,8 @@ fn rolls_on(level: oag_ai::Difficulty, track: &str, pilot: Option<oag_ai::Pilot>
     Some(Rolls {
         armed: race.rolls_armed_of(LONE),
         spent: race.roll_shield_spent_of(LONE),
-        shield: race.world.ships[LONE].physics.shield,
-        capacity: race.world.ships[LONE].handling.dimensions.shield,
+        shield: race.sim.world.ships[LONE].physics.shield,
+        capacity: race.sim.world.ships[LONE].handling.dimensions.shield,
         laps: lap,
         respawns: race.respawns_of(LONE),
         best,
@@ -284,7 +284,7 @@ fn measure_grid(race: &mut race::Race, slots: &[usize]) -> Option<Vec<Rolls>> {
     let width = slots.iter().copied().max().map_or(0, |m| m + 1);
     let mut lap = vec![0u32; width];
     for &slot in slots {
-        lap[slot] = race.world.ships[slot].standing.lap;
+        lap[slot] = race.sim.world.ships[slot].standing.lap;
     }
     let mut started = vec![0u64; width];
     let mut recovered_this_lap = vec![false; width];
@@ -301,7 +301,7 @@ fn measure_grid(race: &mut race::Race, slots: &[usize]) -> Option<Vec<Rolls>> {
             if race.respawns_of(slot) != before[i] {
                 recovered_this_lap[slot] = true;
             }
-            let now = race.world.ships[slot].standing.lap;
+            let now = race.sim.world.ships[slot].standing.lap;
             if now != lap[slot] {
                 if lap[slot] > 1 && !recovered_this_lap[slot] {
                     let taken = tick - started[slot];
@@ -311,7 +311,7 @@ fn measure_grid(race: &mut race::Race, slots: &[usize]) -> Option<Vec<Rolls>> {
                 lap[slot] = now;
                 recovered_this_lap[slot] = false;
             }
-            let airborne = race.world.ships[slot].physics.time_airborne;
+            let airborne = race.sim.world.ships[slot].physics.time_airborne;
             if airborne > 0.0 {
                 airborne_ticks[slot] += 1;
                 if !was_airborne[slot] {
@@ -329,8 +329,8 @@ fn measure_grid(race: &mut race::Race, slots: &[usize]) -> Option<Vec<Rolls>> {
             .map(|&slot| Rolls {
                 armed: race.rolls_armed_of(slot),
                 spent: race.roll_shield_spent_of(slot),
-                shield: race.world.ships[slot].physics.shield,
-                capacity: race.world.ships[slot].handling.dimensions.shield,
+                shield: race.sim.world.ships[slot].physics.shield,
+                capacity: race.sim.world.ships[slot].handling.dimensions.shield,
                 laps: lap[slot],
                 respawns: race.respawns_of(slot),
                 best: best[slot],

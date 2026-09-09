@@ -13,7 +13,7 @@
 //!
 //! # What only real data can say here
 //!
-//! The unit tests in `oag_game::race::sight` assert the recovered *law* and the
+//! The unit tests in `oag_race::sight` assert the recovered *law* and the
 //! ones in `oag_game::hud::reticle_tests` assert the five sprites it becomes,
 //! both against fixtures written by hand. Neither can say the thing that
 //! actually broke every previous attempt at this widget: **that the art is
@@ -62,7 +62,7 @@ fn single_race() -> Option<race::Loaded> {
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn the_arcade_layout_authors_nine_sight_widgets_over_three_models() {
-    use oag_game::race::sight;
+    use oag_race::sight;
 
     let Some(loaded) = single_race() else { return };
     let layout = loaded
@@ -125,7 +125,7 @@ fn the_arcade_layout_authors_nine_sight_widgets_over_three_models() {
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn the_sight_art_decodes_out_of_the_models_into_the_hud_sheet() {
-    use oag_game::race::sight;
+    use oag_race::sight;
 
     let Some(loaded) = single_race() else { return };
     let layout = loaded
@@ -169,7 +169,7 @@ fn the_sight_art_decodes_out_of_the_models_into_the_hud_sheet() {
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn a_missile_in_hand_locks_a_craft_on_a_real_circuit() {
-    use oag_game::race::sight;
+    use oag_race::sight;
 
     let Some(loaded) = single_race() else { return };
     let mut race = race::Race::start(loaded.setup);
@@ -178,7 +178,7 @@ fn a_missile_in_hand_locks_a_craft_on_a_real_circuit() {
     for _ in 0..30 {
         race.tick(&oag_gameplay::InputSnapshot::default());
     }
-    race.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Missile);
+    race.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Missile);
 
     let mut seeking = false;
     let mut locked_at = None;
@@ -221,7 +221,7 @@ fn a_missile_in_hand_locks_a_craft_on_a_real_circuit() {
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn the_leachbeams_four_widgets_share_one_model_and_have_no_inner() {
-    use oag_game::race::sight;
+    use oag_race::sight;
 
     let Some(loaded) = single_race() else { return };
     let layout = loaded
@@ -298,14 +298,14 @@ fn the_leachbeams_four_widgets_share_one_model_and_have_no_inner() {
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn a_leachbeam_in_hand_locks_a_craft_on_a_real_circuit() {
-    use oag_game::race::sight;
+    use oag_race::sight;
 
     let Some(loaded) = single_race() else { return };
     let mut race = race::Race::start(loaded.setup);
     for _ in 0..30 {
         race.tick(&oag_gameplay::InputSnapshot::default());
     }
-    race.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::LeachBeam);
+    race.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::LeachBeam);
 
     let mut seeking = false;
     let mut locked_at = None;
@@ -350,7 +350,7 @@ fn a_leachbeam_in_hand_locks_a_craft_on_a_real_circuit() {
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn pure_locks_a_craft_and_draws_the_psp_reticle() {
-    use oag_game::race::sight;
+    use oag_race::sight;
 
     let Some(image) = image_named("pure-psp-usa.chd") else {
         return;
@@ -499,7 +499,7 @@ fn hd_authors_four_leachbeam_sight_sprites_that_nothing_draws() {
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn hd_locks_a_craft_and_draws_its_own_concentric_reticle() {
-    use oag_game::race::sight;
+    use oag_race::sight;
 
     let Some(image) = image_named("hdfury-ps3-eu-dec.iso") else {
         return;
@@ -566,12 +566,12 @@ fn hd_locks_a_craft_and_draws_its_own_concentric_reticle() {
 
 /// Hands slot 0 a Missile and races until the reticle locks something.
 fn locks_within(race: &mut race::Race, ticks: u32) -> bool {
-    use oag_game::race::sight;
+    use oag_race::sight;
 
     for _ in 0..30 {
         race.tick(&oag_gameplay::InputSnapshot::default());
     }
-    race.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Missile);
+    race.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Missile);
     for _ in 0..ticks {
         race.tick(&oag_gameplay::InputSnapshot::default());
         if race.sight_state() == sight::State::Locked {

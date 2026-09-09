@@ -570,8 +570,8 @@ pub struct Readout {
     /// rectangles here, so [`draw_list`] can resolve each piece against the
     /// layout's own `<Mode3D>` models - which is where the art comes from and
     /// what makes the four brackets one model drawn four ways. See
-    /// [`crate::race::sight`].
-    pub sight: Option<crate::race::sight::Sight>,
+    /// [`oag_race::sight`].
+    pub sight: Option<oag_race::sight::Sight>,
     /// Whether the shield bar is inside its ~1 s post-hit flash window this
     /// frame.
     ///

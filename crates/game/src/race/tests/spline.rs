@@ -131,14 +131,14 @@ fn an_ai_index_reads_the_sample_the_lap_puts_there() {
         course: Course::from_track(&ai, None),
         ..setup(hulled_handling())
     });
-    race.world.ships[0].active = true;
+    race.sim.world.ships[0].active = true;
 
     let length = race.racing_line().len();
     assert!(length > 0);
     let walked: Vec<u16> = (0..length)
         .map(|ai_index| {
             let sample = race.sample_index_of(ai_index).expect("a sample index");
-            race.spline.path_of(sample).expect("a path")
+            race.sim.spline.path_of(sample).expect("a path")
         })
         .collect();
     assert!(

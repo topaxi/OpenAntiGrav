@@ -95,7 +95,8 @@ fn held(button: Button) -> oag_gameplay::InputSnapshot {
 
 /// Every plasma bolt slot 0 has in the air.
 fn bolts(race: &race::Race) -> Vec<oag_gameplay::projectile::Projectile> {
-    race.world
+    race.sim
+        .world
         .projectiles
         .slots
         .iter()
@@ -186,15 +187,19 @@ fn a_plasma_fired_on_a_real_track_is_one_bolt_and_it_flies() {
         return;
     };
     let plasma = race.plasma_stats().expect("the disc authors a Plasma");
-    let speed = race.world.ships[0].physics.body.linear_velocity.length();
+    let speed = race.sim.world.ships[0]
+        .physics
+        .body
+        .linear_velocity
+        .length();
     assert!(
         speed > 10.0,
         "the craft is barely moving at {speed:.1} units/s"
     );
 
-    let origin = race.world.ships[0].physics.body.position;
-    let forward = race.world.ships[0].physics.body.forward();
-    race.world.ships[0].pickup.weapon = Some(Weapon::Plasma);
+    let origin = race.sim.world.ships[0].physics.body.position;
+    let forward = race.sim.world.ships[0].physics.body.forward();
+    race.sim.world.ships[0].pickup.weapon = Some(Weapon::Plasma);
 
     let mut buttons = Input::new();
     buttons.begin_frame(0);

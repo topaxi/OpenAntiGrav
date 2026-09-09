@@ -79,7 +79,7 @@ fn opponents_are_held_at_the_line_through_the_gated_span() {
         race.tick(&InputSnapshot::default());
         for slot in 1..race.ship_count() as usize {
             assert_eq!(
-                race.world.ships[slot].physics.thrust, 0.0,
+                race.sim.world.ships[slot].physics.thrust, 0.0,
                 "opponent {slot} was moving on tick {tick}, before the gate released"
             );
         }
@@ -87,7 +87,7 @@ fn opponents_are_held_at_the_line_through_the_gated_span() {
     race.tick(&InputSnapshot::default());
     for slot in 1..race.ship_count() as usize {
         assert_eq!(
-            race.world.ships[slot].physics.thrust,
+            race.sim.world.ships[slot].physics.thrust,
             oag_physics::controls::CONTROL_RANGE,
             "opponent {slot} did not release at the same tick as the player"
         );

@@ -31,17 +31,17 @@ impl Race {
     /// them however long they run. See [`oag_race::Mode::laps_target`].
     #[must_use]
     pub fn finished(&self) -> bool {
-        self.world.race.finished
+        self.sim.world.race.finished
     }
 
     /// The results, once there are any.
     ///
     /// `None` for the whole race and `Some` from the finishing tick on. The
-    /// table is taken at that instant and never revised - see [`Race::results`]'s
+    /// table is taken at that instant and never revised - see [`RaceView::results`]'s
     /// field for why that matters.
     #[must_use]
     pub fn results(&self) -> Option<&Board> {
-        self.results.as_ref()
+        self.view.results.as_ref()
     }
 
     /// Takes the board, on the tick the race finishes and only then.
@@ -49,7 +49,7 @@ impl Race {
     /// Called at the end of [`Race::tick`], after the standings have been
     /// advanced, so the last crossing is already in the table it reads.
     pub(super) fn capture_results(&mut self) {
-        if !self.finished() || self.results.is_some() {
+        if !self.finished() || self.view.results.is_some() {
             return;
         }
         let places = self.places();
@@ -62,9 +62,9 @@ impl Race {
         // cut. That table is what the HUD's own position readout comes from,
         // and a scoreboard that renumbered would contradict the number the
         // player was just looking at.
-        let crafts: Vec<Craft> = (0..usize::from(self.world.ship_count))
+        let crafts: Vec<Craft> = (0..usize::from(self.sim.world.ship_count))
             .map(|slot| {
-                let ship = &self.world.ships[slot];
+                let ship = &self.sim.world.ships[slot];
                 Craft {
                     slot: u8::try_from(slot).unwrap_or(u8::MAX),
                     place: places[slot],
@@ -77,10 +77,10 @@ impl Race {
                 }
             })
             .collect();
-        self.results = Some(scoreboard::build(
+        self.view.results = Some(scoreboard::build(
             &crafts,
-            self.world.race.laps_target,
-            self.world.tick,
+            self.sim.world.race.laps_target,
+            self.sim.world.tick,
         ));
     }
 }

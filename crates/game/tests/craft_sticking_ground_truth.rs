@@ -207,7 +207,7 @@ fn measure_sticking(image: &Path) -> Sticking {
     .expect("loading the race");
     let mut race = race::Race::start(loaded.setup);
 
-    let count = usize::from(race.world.ship_count);
+    let count = usize::from(race.sim.world.ship_count);
     let mut streak = vec![0u32; count * count];
     let mut longest = vec![0u32; count * count];
     let mut pair_ticks = 0u32;
@@ -217,12 +217,12 @@ fn measure_sticking(image: &Path) -> Sticking {
         race.tick(&oag_gameplay::InputSnapshot::default());
         for a in 0..count {
             for b in (a + 1)..count {
-                if !race.world.ships[a].active || !race.world.ships[b].active {
+                if !race.sim.world.ships[a].active || !race.sim.world.ships[b].active {
                     streak[a * count + b] = 0;
                     continue;
                 }
-                let ship_a = &race.world.ships[a];
-                let ship_b = &race.world.ships[b];
+                let ship_a = &race.sim.world.ships[a];
+                let ship_b = &race.sim.world.ships[b];
                 let overlapping = oag_physics::pair::overlap(
                     &ship_a.physics.body,
                     &ship_a.handling.dimensions,

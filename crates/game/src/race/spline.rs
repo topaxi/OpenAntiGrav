@@ -29,7 +29,7 @@ use super::*;
 /// property and narrows where the artists narrowed it. See
 /// `docs/gameplay/ai.md`.
 ///
-/// Index-parallel to [`ai_order`] on purpose - see [`Race::racing_line`].
+/// Index-parallel to [`ai_order`] on purpose - see [`RaceSim::racing_line`].
 #[must_use]
 pub(super) fn racing_line(spline: &Spline, order: &[u32]) -> oag_ai::Line {
     let samples: Vec<_> = order

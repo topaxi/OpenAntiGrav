@@ -108,7 +108,8 @@ fn held(button: Button) -> oag_gameplay::InputSnapshot {
 
 /// Every blade slot 0 has in the air.
 fn blades(race: &race::Race) -> Vec<oag_gameplay::projectile::Projectile> {
-    race.world
+    race.sim
+        .world
         .projectiles
         .slots
         .iter()
@@ -216,20 +217,24 @@ fn a_thrown_blade_bounces_off_a_real_circuit_and_dies_on_its_fuse() {
     // player's own launch trajectory on this track to take a direct hit on
     // the blade's first tick of flight, which correctly detonates it - not a
     // bug, but not what this test measures either.
-    for ship in &mut race.world.ships[1..] {
+    for ship in &mut race.sim.world.ships[1..] {
         ship.active = false;
     }
     let shuriken = race.shuriken_stats().expect("the disc authors a Shuriken");
-    let speed = race.world.ships[0].physics.body.linear_velocity.length();
+    let speed = race.sim.world.ships[0]
+        .physics
+        .body
+        .linear_velocity
+        .length();
     assert!(
         speed > 10.0,
         "the craft is barely moving at {speed:.1} units/s"
     );
 
-    let forward = race.world.ships[0].physics.body.forward();
-    let up = race.world.ships[0].physics.body.up();
+    let forward = race.sim.world.ships[0].physics.body.forward();
+    let up = race.sim.world.ships[0].physics.body.up();
     let right = forward.cross(up);
-    race.world.ships[0].pickup.weapon = Some(Weapon::Shuriken);
+    race.sim.world.ships[0].pickup.weapon = Some(Weapon::Shuriken);
 
     let mut buttons = Input::new();
     buttons.begin_frame(0);

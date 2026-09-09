@@ -4,8 +4,12 @@
 //! Split out of `race.rs` under the 1,000-line rule in
 //! `scripts/check-file-size.py`; a move, with no behaviour change. They sit
 //! together because they are one mechanism read from three angles - `off the
-//! track`, `not moving`, and `put it back` - and `race/respawn.rs` and
-//! `race/field.rs` are what consume all eight.
+//! track`, `not moving`, and `put it back` - and `oag_game`'s
+//! `race/respawn.rs` and `race/field.rs` are what consume all eight.
+//!
+//! Moved out of `oag-game` into this crate on 2026-09-09: eight `f32`/`u32`
+//! constants with no renderer, audio or input contact at all, so they belong
+//! with the race rules rather than above the composition root.
 //!
 //! Each carries its own evidence, as it did in `race.rs`. What is authored and
 //! what is this project's is stated per constant; nothing here was renamed or

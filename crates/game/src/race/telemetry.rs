@@ -43,20 +43,20 @@ impl Race {
     pub fn telemetry(&self) -> Telemetry {
         let ship = self.ship();
         let position = ship.physics.body.position;
-        let (spline_distance, height_above_spline) =
-            self.spline
-                .nearest(position)
-                .map_or((f32::NAN, f32::NAN), |(_, sample, distance)| {
-                    let up = (-Vec3::from_array(sample.down)).normalize_or_zero();
-                    (distance, (position - Vec3::from_array(sample.pos)).dot(up))
-                });
+        let (spline_distance, height_above_spline) = self.sim.spline.nearest(position).map_or(
+            (f32::NAN, f32::NAN),
+            |(_, sample, distance)| {
+                let up = (-Vec3::from_array(sample.down)).normalize_or_zero();
+                (distance, (position - Vec3::from_array(sample.pos)).dot(up))
+            },
+        );
 
         Telemetry {
-            tick: self.world.tick,
+            tick: self.sim.world.tick,
             position,
             speed: ship.physics.body.linear_velocity.length(),
             pickup: ship.pickup.weapon,
-            projectiles: self.world.projectiles.live(),
+            projectiles: self.sim.world.projectiles.live(),
             grounded: ship.physics.grounded,
             spline_distance,
             height_above_spline,
@@ -81,7 +81,7 @@ impl Race {
     #[must_use]
     pub fn wrong_way(&self) -> bool {
         let ship = self.ship();
-        let Some((_, sample, _)) = self.spline.nearest(ship.physics.body.position) else {
+        let Some((_, sample, _)) = self.sim.spline.nearest(ship.physics.body.position) else {
             return false;
         };
         let tangent = Vec3::from_array(sample.tangent).normalize_or_zero();
@@ -98,11 +98,11 @@ impl Race {
     #[must_use]
     pub fn readout(&self) -> crate::hud::Readout {
         let ship = self.ship();
-        let race = &self.world.race;
+        let race = &self.sim.world.race;
         // Zero still means "unknown", and a track with no closed ring still has
         // no lap counter - the widget is omitted rather than reading 1 of 3 on a
         // course that cannot tell.
-        let counted = self.course.is_some();
+        let counted = self.sim.course.is_some();
         crate::hud::Readout {
             speed_kmh: ship.physics.body.linear_velocity.length()
                 * oag_render::exhaust::SPEED_TO_KMH,
@@ -130,17 +130,17 @@ impl Race {
             // race on a track with no authored `Start Position` node. `1 / 1` is
             // arithmetic rather than a standing, and the widget group is omitted
             // the same way the lap group is on a track that cannot count.
-            place: if counted && self.world.ship_count > 1 {
+            place: if counted && self.sim.world.ship_count > 1 {
                 u32::from(self.player_place())
             } else {
                 0
             },
-            ships: u32::from(self.world.ship_count),
-            race_ticks: self.world.tick,
+            ships: u32::from(self.sim.world.ship_count),
+            race_ticks: self.sim.world.tick,
             lap_ticks: if counted {
-                race.lap_ticks(self.world.tick)
+                race.lap_ticks(self.sim.world.tick)
             } else {
-                self.world.tick
+                self.sim.world.tick
             },
             best_lap_ticks: race.best_lap_ticks,
             // Gated the same as `lap`/`laps` above: a track with no closed ring
@@ -165,8 +165,8 @@ impl Race {
             // unconditionally rather than gated here - the brackets are watched
             // opening again after a target is lost, which a gate on "has a
             // target" would cut off.
-            sight: Some(self.sight),
-            shield_flashing: self.shield_flash_timer > 0.0,
+            sight: Some(self.view.sight),
+            shield_flashing: self.view.shield_flash_timer > 0.0,
         }
     }
 
@@ -187,13 +187,13 @@ impl Race {
         let current =
             oag_physics::damage::percent(ship.physics.shield, ship.handling.dimensions.shield);
         let (timer, prev) = shield_flash_step(
-            self.shield_flash_timer,
-            self.shield_flash_prev,
+            self.view.shield_flash_timer,
+            self.view.shield_flash_prev,
             current,
-            self.dt,
+            self.sim.dt,
         );
-        self.shield_flash_timer = timer;
-        self.shield_flash_prev = prev;
+        self.view.shield_flash_timer = timer;
+        self.view.shield_flash_prev = prev;
     }
 }
 

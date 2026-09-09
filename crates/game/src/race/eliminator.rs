@@ -16,7 +16,7 @@
 //! **Chosen, and said so where it happens**: which craft's weapon gets
 //! credited for a kill. Nothing in the read executable was traced for a kill
 //! *attribution* mechanism - only that the count exists at `entity+0x8d8` -
-//! so [`Race::last_damager`] is this build's own rule: the most recent craft
+//! so [`RaceSim::last_damager`] is this build's own rule: the most recent craft
 //! to land a direct weapon hit on the one that died, cleared the moment a
 //! wall or another cause deals damage instead so a stale hit is never
 //! credited for an unrelated death. A death with no recent weapon hit (wall
@@ -26,7 +26,7 @@
 //! Also chosen: the respawn pose. [`Race::respawn`] is the off-track/`Reset`
 //! recovery this file reuses rather than a pipeline of its own - same
 //! confidence 40 caveat that method's own doc comment already carries, and
-//! sharing it means [`Race::respawns`]'s count now mixes "put back after
+//! sharing it means [`RaceSim::respawns`]'s count now mixes "put back after
 //! leaving the circuit" with "put back after dying", which a future reader
 //! should not read as two different figures agreeing by coincidence.
 
@@ -58,40 +58,41 @@ impl Race {
     /// that respawns this tick is placed where it is *put*, not where the
     /// explosion left it.
     pub(super) fn tick_eliminator(&mut self) {
-        if self.world.race.mode != Mode::Eliminator {
+        if self.sim.world.race.mode != Mode::Eliminator {
             return;
         }
 
-        for slot in 0..self.world.ship_count as usize {
-            if !self.world.ships[slot].active {
+        for slot in 0..self.sim.world.ship_count as usize {
+            if !self.sim.world.ships[slot].active {
                 continue;
             }
-            if self.world.ships[slot].physics.craft_state != oag_physics::CraftState::Eliminated {
+            if self.sim.world.ships[slot].physics.craft_state != oag_physics::CraftState::Eliminated
+            {
                 // Not currently down - the countdown has nothing to run and
                 // must not carry over into the *next* death, which would
                 // shorten it.
-                self.eliminator_respawn_timer[slot] = 0.0;
+                self.sim.eliminator_respawn_timer[slot] = 0.0;
                 continue;
             }
 
-            if self.eliminator_respawn_timer[slot] <= 0.0 {
-                self.eliminator_respawn_timer[slot] = ELIMINATOR_RESPAWN_DELAY;
+            if self.sim.eliminator_respawn_timer[slot] <= 0.0 {
+                self.sim.eliminator_respawn_timer[slot] = ELIMINATOR_RESPAWN_DELAY;
             }
-            self.eliminator_respawn_timer[slot] -= self.dt;
-            if self.eliminator_respawn_timer[slot] > 0.0 {
+            self.sim.eliminator_respawn_timer[slot] -= self.sim.dt;
+            if self.sim.eliminator_respawn_timer[slot] > 0.0 {
                 // Still down.
                 continue;
             }
 
-            self.world.ships[slot].standing.deaths += 1;
+            self.sim.world.ships[slot].standing.deaths += 1;
             // A kill only counts against a *different* craft with a recent
             // hit on record - see this module's own doc comment for why a
             // stale or absent damager credits nobody.
-            if let Some(killer) = self.last_damager[slot].take()
+            if let Some(killer) = self.sim.last_damager[slot].take()
                 && killer as usize != slot
-                && self.world.ships[killer as usize].active
+                && self.sim.world.ships[killer as usize].active
             {
-                self.world.ships[killer as usize].standing.kills += 1;
+                self.sim.world.ships[killer as usize].standing.kills += 1;
             }
 
             // **A full refill, chosen rather than recovered.** The original
@@ -99,30 +100,30 @@ impl Race {
             // computes `clamp(shield - 1, 0, 5)`, and what consumes that
             // figure is unread - see `oag_physics::damage`'s own module doc.
             // A full pool is the un-punitive reading, not a measurement.
-            let dimensions = self.world.ships[slot].handling.dimensions;
-            oag_physics::damage::reset(&mut self.world.ships[slot].physics, &dimensions);
+            let dimensions = self.sim.world.ships[slot].handling.dimensions;
+            oag_physics::damage::reset(&mut self.sim.world.ships[slot].physics, &dimensions);
 
             // The player's own last-known-good sample is latched separately
-            // ([`Race::last_on_track`]); an opponent's is read off its own
+            // ([`RaceSim::last_on_track`]); an opponent's is read off its own
             // driver, the same lookup `Race::step_opponents` uses for its own
             // recovery.
             let sample_index = if slot == 0 {
-                Some(self.last_on_track as usize)
+                Some(self.sim.last_on_track as usize)
             } else {
-                let index = self.world.ships[slot].driver.index as usize;
+                let index = self.sim.world.ships[slot].driver.index as usize;
                 self.sample_index_of(index)
             };
             self.respawn(slot, sample_index);
         }
 
-        let target = self.eliminator_kill_target;
-        let kills = self.world.ships[..self.world.ship_count as usize]
+        let target = self.sim.eliminator_kill_target;
+        let kills = self.sim.world.ships[..self.sim.world.ship_count as usize]
             .iter()
             .filter(|ship| ship.active)
             .map(|ship| ship.standing.kills)
             .max()
             .unwrap_or(0);
-        self.world.race.eliminator_finished(target, kills);
+        self.sim.world.race.eliminator_finished(target, kills);
     }
 
     /// Refills a craft's shield to full on a completed lap, Eliminator only.
@@ -134,10 +135,10 @@ impl Race {
     /// measured, and easy to find the day a real figure turns up. See
     /// [`Mode::pickups_absorb`] for the sentence's other half.
     pub(super) fn eliminator_lap_health_refill(&mut self, slot: usize) {
-        if self.world.race.mode != Mode::Eliminator {
+        if self.sim.world.race.mode != Mode::Eliminator {
             return;
         }
-        let dimensions = self.world.ships[slot].handling.dimensions;
-        self.world.ships[slot].physics.shield = dimensions.shield;
+        let dimensions = self.sim.world.ships[slot].handling.dimensions;
+        self.sim.world.ships[slot].physics.shield = dimensions.shield;
     }
 }

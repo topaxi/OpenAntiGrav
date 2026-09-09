@@ -76,7 +76,7 @@ fn measure(name: &str, race: &mut race::Race, emitters: &TrackEmitters) -> usize
     let mut histogram = vec![0usize; total_emitters + 1];
     let mut ever = vec![false; total_emitters];
     let mut ticks = 0usize;
-    while ticks < TICK_CAP && race.world.race.laps_completed() < 1 {
+    while ticks < TICK_CAP && race.sim.world.race.laps_completed() < 1 {
         race.tick(&oag_gameplay::InputSnapshot::default());
         let listener = listener_of(race);
         let mut live = 0;

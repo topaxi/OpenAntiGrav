@@ -51,11 +51,11 @@ fn leader_distance(level: oag_ai::Difficulty, seed: u64) -> Option<(f32, usize)>
 
     let course = race.course().expect("a closed ring");
     let distance = (1..8)
-        .map(|slot| race.world.ships[slot].standing.distance(course))
+        .map(|slot| race.sim.world.ships[slot].standing.distance(course))
         .fold(f32::NEG_INFINITY, f32::max);
     let wrecked = (1..8)
         .filter(|slot| {
-            race.world.ships[*slot].physics.craft_state != oag_physics::CraftState::Racing
+            race.sim.world.ships[*slot].physics.craft_state != oag_physics::CraftState::Racing
         })
         .count();
     Some((distance, wrecked))

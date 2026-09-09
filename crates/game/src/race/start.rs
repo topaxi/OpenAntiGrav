@@ -276,138 +276,142 @@ impl Race {
         let camera = Chase::snapped(target_of(&world.ships[0]), &chase);
 
         let race = Self {
-            racing_line: line,
-            ai_order: order,
-            // **Degraded from the measured tuning**, never boosted toward it -
-            // see `oag_ai::Difficulty`. At the top level this is the
-            // measurement unchanged.
-            ai_tuning: difficulty.tune(&oag_ai::Tuning::default()),
-            ai_pilots,
-            // `--autopilot-skill` sets this after `Self::start` returns - see
-            // `Self::set_autopilot_tuning`. Every race starts with the two
-            // tunings agreeing.
-            autopilot_tuning: None,
-            world,
-            collision,
-            spline,
-            course,
-            // Only Zone reads these, so the other two modes carry `None` and the
-            // engine keeps its ordinary throttle path.
-            zone: zone.filter(|_| mode == Mode::Zone),
-            chase_params: chase,
-            chase_far: chase,
-            chase_close,
-            internal_params: internal,
-            // The default rather than the settings file's value, for the reason
-            // `set_boost_fov_kick` gives: `Setup` is what a *headless* race
-            // needs and a display preference must not be in front of a caller
-            // with no screen. `set_camera_view` is what applies the player's.
-            view: oag_display::display::CameraView::default(),
-            camera,
-            shake: oag_render::camera::shake::Shake::new(),
-            shake_rng: Rng::new(SHAKE_SEED),
-            camera_override,
-            // ADR-0007: 60 Hz, from the clock rather than from a literal, so there
-            // is one place the rate is decided.
-            dt: TickClock::new(TickRate::DEFAULT).rate().dt(),
-            respawn_cooldown: [0; oag_gameplay::MAX_SHIPS],
-            respawns_in_a_row: [0; oag_gameplay::MAX_SHIPS],
-            respawn_disabled: [false; oag_gameplay::MAX_SHIPS],
-            respawns: [0; oag_gameplay::MAX_SHIPS],
-            eliminator_kill_target: eliminator_kill_target
-                .unwrap_or(Mode::ELIMINATOR_KILL_TARGET_DEFAULT),
-            last_damager: [None; oag_gameplay::MAX_SHIPS],
-            eliminator_respawn_timer: [0.0; oag_gameplay::MAX_SHIPS],
-            rolls_armed: [0; oag_gameplay::MAX_SHIPS],
-            rolls_spent: [0.0; oag_gameplay::MAX_SHIPS],
-            lost_ticks: [0; oag_gameplay::MAX_SHIPS],
-            stalled_ticks: [0; oag_gameplay::MAX_SHIPS],
-            rescue_distance,
-            player_rescue_distance,
-            last_on_track,
-            // Cold, then snapped on the first tick. A race starts from a standing
-            // start with no thrust, so there is nothing to snap *to* here.
-            //
-            // A cold `Exhaust` has an empty trail ring and `Exhaust::trail_ready`
-            // gates the ribbon on a *full* one, so no craft draws a ribbon across
-            // the track from the origin to its grid slot on the opening ticks.
-            exhaust: [Exhaust::new(); MAX_SHIPS],
-            exhaust_rng: std::array::from_fn(|slot| Rng::new(exhaust_seed(slot))),
-            // Cold and empty for the same standing-start reason as `exhaust`
-            // above: `hd::Tube::ready` gates on a full ring too.
-            hd_trail: [exhaust::hd::Tube::new(); MAX_SHIPS],
-            hd_trail_active: hd_trail.is_some(),
-            hd_trail_red: hd_trail.unwrap_or([0.0; MAX_SHIPS]),
-            hull_reach: [0.0; MAX_SHIPS],
-            trail_sparks,
-            trail_inside: [0; MAX_SHIPS],
-            hd_flame: [exhaust::hd::Flame::new(); MAX_SHIPS],
-            hd_sprite: [exhaust::hd::Sprite::new(); MAX_SHIPS],
-            shield: [ShipShield::new(); MAX_SHIPS],
-            nozzles,
-            spark_anchors,
-            collision_fx,
-            sparks: psys::System::new(),
-            effects,
-            sounds,
-            track_emitters,
-            announcer,
-            class_announcer,
-            zone_stages,
-            stage: psys::Stage::new(),
-            engine_flare: [None; MAX_SHIPS],
-            projectile_flare: [None; oag_gameplay::projectile::MAX_PROJECTILES],
-            projectile_flare_orbit: [None; oag_gameplay::projectile::MAX_PROJECTILES],
-            quake_effect: None,
-            leach_beam_effect: None,
-            leach_charge_effect: None,
-            stage_rng: Rng::new(STAGE_SEED),
-            sparks_ignitions: 0,
-            sparks_rng: Rng::new(SPARKS_SEED),
-            // No sync frame to be mid-scrape on, so the first tick's contact -
-            // if any - is always read as a fresh impact.
-            sparks_cooldown: 0.0,
-            sparks_anchor: None,
-            sparks_attached: false,
-            autopilot: false,
-            results: None,
-            cues: Vec::new(),
-            announcements: Vec::new(),
-            class_announcements: Vec::new(),
-            contact_cue_cooldown: [0.0; oag_gameplay::MAX_SHIPS],
-            shield_was_up: false,
-            // `0.0`, not `1.0`: the pool is `0.0` until `<Misc>` loads (see
-            // `Readout::shield_fraction`'s own zero-guard), and a full-pool
-            // reading here would arm the flash on a false "drop" from 100%
-            // to whatever the first real tick measures.
-            shield_flash_prev: 0.0,
-            shield_flash_timer: 0.0,
-            sight: sight::Sight::default(),
-            sight_state: sight::State::Absent,
-            sight_fov: oag_display::display::Fov::AUTHORED,
-            // Every pad starts due for a real test. `Pad_Bind` zeroes the same
-            // cache at load, so the first tick measures rather than trusting a
-            // distance nothing has computed yet.
-            pad_distance: std::array::from_fn(|_| vec![0.0; speedup_pads.len()]),
-            speedup_pads,
-            // The same broadphase, and the same "due for a real test" start.
-            weapon_pad_distance: std::array::from_fn(|_| vec![0.0; weapon_pads.len()]),
-            // Every pad starts collectable. The original's `+0x1a0` is zero
-            // until something stamps it, and nothing stamps it at load.
-            weapon_pad_refresh_left: vec![0.0; weapon_pads.len()],
-            weapon_pads,
-            weapon_pad_current: [None; MAX_SHIPS],
-            weapon_pad_refresh,
-            weapons,
-            class,
-            class_gravity_scale,
-            pad_current: [None; MAX_SHIPS],
-            pad_previous_position: [None; MAX_SHIPS],
-            boost_kick: 0.0,
-            boost_fov_kick: oag_display::display::BoostFovKick::DEFAULT,
-            flaps: [0.0, 0.0],
-            flap_graphics: setup.airbrake_graphics,
-            scheme: ControlScheme::default(),
+            sim: RaceSim {
+                racing_line: line,
+                ai_order: order,
+                // **Degraded from the measured tuning**, never boosted toward it -
+                // see `oag_ai::Difficulty`. At the top level this is the
+                // measurement unchanged.
+                ai_tuning: difficulty.tune(&oag_ai::Tuning::default()),
+                ai_pilots,
+                // `--autopilot-skill` sets this after `Self::start` returns - see
+                // `Self::set_autopilot_tuning`. Every race starts with the two
+                // tunings agreeing.
+                autopilot_tuning: None,
+                world,
+                collision,
+                spline,
+                course,
+                // Only Zone reads these, so the other two modes carry `None` and the
+                // engine keeps its ordinary throttle path.
+                zone: zone.filter(|_| mode == Mode::Zone),
+                // ADR-0007: 60 Hz, from the clock rather than from a literal, so there
+                // is one place the rate is decided.
+                dt: TickClock::new(TickRate::DEFAULT).rate().dt(),
+                respawn_cooldown: [0; oag_gameplay::MAX_SHIPS],
+                respawns_in_a_row: [0; oag_gameplay::MAX_SHIPS],
+                respawn_disabled: [false; oag_gameplay::MAX_SHIPS],
+                respawns: [0; oag_gameplay::MAX_SHIPS],
+                eliminator_kill_target: eliminator_kill_target
+                    .unwrap_or(Mode::ELIMINATOR_KILL_TARGET_DEFAULT),
+                last_damager: [None; oag_gameplay::MAX_SHIPS],
+                eliminator_respawn_timer: [0.0; oag_gameplay::MAX_SHIPS],
+                rolls_armed: [0; oag_gameplay::MAX_SHIPS],
+                rolls_spent: [0.0; oag_gameplay::MAX_SHIPS],
+                lost_ticks: [0; oag_gameplay::MAX_SHIPS],
+                stalled_ticks: [0; oag_gameplay::MAX_SHIPS],
+                rescue_distance,
+                player_rescue_distance,
+                last_on_track,
+                zone_stages,
+                autopilot: false,
+                cues: Vec::new(),
+                announcements: Vec::new(),
+                class_announcements: Vec::new(),
+                contact_cue_cooldown: [0.0; oag_gameplay::MAX_SHIPS],
+                // Every pad starts due for a real test. `Pad_Bind` zeroes the same
+                // cache at load, so the first tick measures rather than trusting a
+                // distance nothing has computed yet.
+                pad_distance: std::array::from_fn(|_| vec![0.0; speedup_pads.len()]),
+                speedup_pads,
+                // The same broadphase, and the same "due for a real test" start.
+                weapon_pad_distance: std::array::from_fn(|_| vec![0.0; weapon_pads.len()]),
+                // Every pad starts collectable. The original's `+0x1a0` is zero
+                // until something stamps it, and nothing stamps it at load.
+                weapon_pad_refresh_left: vec![0.0; weapon_pads.len()],
+                weapon_pads,
+                weapon_pad_current: [None; MAX_SHIPS],
+                weapon_pad_refresh,
+                weapons,
+                class,
+                class_gravity_scale,
+                pad_current: [None; MAX_SHIPS],
+                pad_previous_position: [None; MAX_SHIPS],
+                scheme: ControlScheme::default(),
+            },
+            view: RaceView {
+                chase_params: chase,
+                chase_far: chase,
+                chase_close,
+                internal_params: internal,
+                // The default rather than the settings file's value, for the reason
+                // `set_boost_fov_kick` gives: `Setup` is what a *headless* race
+                // needs and a display preference must not be in front of a caller
+                // with no screen. `set_camera_view` is what applies the player's.
+                camera_view: oag_display::display::CameraView::default(),
+                camera,
+                shake: oag_render::camera::shake::Shake::new(),
+                shake_rng: Rng::new(SHAKE_SEED),
+                camera_override,
+                // Cold, then snapped on the first tick. A race starts from a standing
+                // start with no thrust, so there is nothing to snap *to* here.
+                //
+                // A cold `Exhaust` has an empty trail ring and `Exhaust::trail_ready`
+                // gates the ribbon on a *full* one, so no craft draws a ribbon across
+                // the track from the origin to its grid slot on the opening ticks.
+                exhaust: [Exhaust::new(); MAX_SHIPS],
+                exhaust_rng: std::array::from_fn(|slot| Rng::new(exhaust_seed(slot))),
+                // Cold and empty for the same standing-start reason as `exhaust`
+                // above: `hd::Tube::ready` gates on a full ring too.
+                hd_trail: [exhaust::hd::Tube::new(); MAX_SHIPS],
+                hd_trail_active: hd_trail.is_some(),
+                hd_trail_red: hd_trail.unwrap_or([0.0; MAX_SHIPS]),
+                hull_reach: [0.0; MAX_SHIPS],
+                trail_sparks,
+                trail_inside: [0; MAX_SHIPS],
+                hd_flame: [exhaust::hd::Flame::new(); MAX_SHIPS],
+                hd_sprite: [exhaust::hd::Sprite::new(); MAX_SHIPS],
+                shield: [ShipShield::new(); MAX_SHIPS],
+                nozzles,
+                spark_anchors,
+                collision_fx,
+                sparks: psys::System::new(),
+                effects,
+                sounds,
+                track_emitters,
+                announcer,
+                class_announcer,
+                stage: psys::Stage::new(),
+                engine_flare: [None; MAX_SHIPS],
+                projectile_flare: [None; oag_gameplay::projectile::MAX_PROJECTILES],
+                projectile_flare_orbit: [None; oag_gameplay::projectile::MAX_PROJECTILES],
+                quake_effect: None,
+                leach_beam_effect: None,
+                leach_charge_effect: None,
+                stage_rng: Rng::new(STAGE_SEED),
+                sparks_ignitions: 0,
+                sparks_rng: Rng::new(SPARKS_SEED),
+                // No sync frame to be mid-scrape on, so the first tick's contact -
+                // if any - is always read as a fresh impact.
+                sparks_cooldown: 0.0,
+                sparks_anchor: None,
+                sparks_attached: false,
+                results: None,
+                shield_was_up: false,
+                // `0.0`, not `1.0`: the pool is `0.0` until `<Misc>` loads (see
+                // `Readout::shield_fraction`'s own zero-guard), and a full-pool
+                // reading here would arm the flash on a false "drop" from 100%
+                // to whatever the first real tick measures.
+                shield_flash_prev: 0.0,
+                shield_flash_timer: 0.0,
+                sight: sight::Sight::default(),
+                sight_state: sight::State::Absent,
+                sight_fov: oag_display::display::Fov::AUTHORED,
+                boost_kick: 0.0,
+                boost_fov_kick: oag_display::display::BoostFovKick::DEFAULT,
+                flaps: [0.0, 0.0],
+                flap_graphics: setup.airbrake_graphics,
+            },
         };
         // The free Turbo is granted at the release edge, not here - see
         // `Race::tick`'s own `COUNTDOWN_TICKS` check for the mode, full-slot

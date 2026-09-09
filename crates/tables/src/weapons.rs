@@ -62,7 +62,7 @@
 //!   window and `absorb` alone for as long as the only consumer was the
 //!   reticle - the LeachBeam being the *other* weapon `Ship_AcquireLock` reads
 //!   distances for, at `stats+0x114`/`+0x118` against the Missile's
-//!   `+0x50`/`+0x54`, which is what `oag_game::race::sight` draws the four
+//!   `+0x50`/`+0x54`, which is what `oag_race::sight` draws the four
 //!   `leachbeam_sight_*` widgets off. `repair`, `damage`, `slowShipFactor`,
 //!   `range`, `active_time` and `energy_multiplier` stayed named and unread
 //!   because nothing drained a craft's energy or held an attachment open.

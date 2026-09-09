@@ -137,6 +137,7 @@ fn agreement(source: &Path, track: &str) -> (Vec<f32>, f32) {
     };
 
     let craft = race
+        .sim
         .world
         .ships
         .iter()
@@ -389,6 +390,7 @@ fn the_ps2s_stale_slot_is_corrected_to_what_the_psps_own_file_authors() {
 
     // What the PS2 craft now points along, against what the PSP file authors.
     let corrected = race::Race::start(on_ps2.setup)
+        .sim
         .world
         .ships
         .iter()

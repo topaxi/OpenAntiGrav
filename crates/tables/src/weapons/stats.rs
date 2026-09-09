@@ -822,7 +822,7 @@ pub struct LeachBeamStats {
     ///
     /// **The trap this attribute used to carry is now resolved rather than
     /// avoided.** It is authored at the same figure as
-    /// `oag_game::race::sight::DRAW_RANGE`, a *code* literal in
+    /// `oag_race::sight::DRAW_RANGE`, a *code* literal in
     /// `HudSight_Update` with nothing to do with this weapon, and this block
     /// left `range` undecoded rather than manufacture a finding out of that
     /// coincidence. What settles it is not the value but the parser: the

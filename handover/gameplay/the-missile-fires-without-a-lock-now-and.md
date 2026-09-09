@@ -56,7 +56,7 @@ the four quarter-turn rotations the original writes to `widget+0xac`, an inner b
 that leads them by at most `0.4` of the extent, an extent easing between `30`
 (idle), `9.6` (seeking) and `6.0` (locked) times `clamp(30/dist, 1, 5)`, a chase
 whose vertical counts `0.7`, a `w > 0` behind-camera guard and a `250`-unit draw
-range. All ported into `oag_game::race::sight`, all asserted.
+range. All ported into `oag_race::sight`, all asserted.
 
 **The art is nine widgets over three models**, and the distinction is the finding:
 `missile_sight_1` … `_4` all instance `missile_sight_outer.vex` - a single corner
@@ -125,7 +125,7 @@ reticle is render-only state on `Race`.
 - **Where the LeachBeam's four widgets go is inferred, not read.**
   `HudSight_Update` is read end to end and writes **five** widgets - the
   Missile's four plus its inner. Nothing yet read writes the bind's
-  `+0x108` … `+0x114`. `oag_game::race::sight` gives the LeachBeam's four the
+  `+0x108` … `+0x114`. `oag_race::sight` gives the LeachBeam's four the
   Missile's corners and rotations, which is **chosen, not measured** and carries
   no confidence score: the grounds are that the two sets are the same shape and
   that one arrowhead makes four corners no other way. A capture checks the

@@ -706,12 +706,14 @@ fn the_ai_drives_the_field_along_the_track() {
     );
 
     let start: Vec<_> = race
+        .sim
         .world
         .ships
         .iter()
         .map(|ship| ship.physics.body.position)
         .collect();
     let heading: Vec<_> = race
+        .sim
         .world
         .ships
         .iter()
@@ -725,7 +727,7 @@ fn the_ai_drives_the_field_along_the_track() {
     }
 
     for slot in 1..8 {
-        let ship = &race.world.ships[slot];
+        let ship = &race.sim.world.ships[slot];
         let moved = ship.physics.body.position - start[slot];
 
         assert!(
@@ -893,7 +895,7 @@ fn the_field_spreads_across_the_ai_corridor() {
     let mut offsets = Vec::new();
     let mut room = f32::INFINITY;
     for slot in 1..8 {
-        let ship = &race.world.ships[slot];
+        let ship = &race.sim.world.ships[slot];
         let sample = race
             .spline()
             .sample(ship.driver.index as usize)
@@ -945,12 +947,12 @@ fn a_driven_field_replays_identically() {
 
     for slot in 0..8 {
         assert_eq!(
-            first.world.ships[slot].physics.body.position,
-            second.world.ships[slot].physics.body.position,
+            first.sim.world.ships[slot].physics.body.position,
+            second.sim.world.ships[slot].physics.body.position,
             "slot {slot} diverged between two runs of the same race"
         );
         assert_eq!(
-            first.world.ships[slot].driver, second.world.ships[slot].driver,
+            first.sim.world.ships[slot].driver, second.sim.world.ships[slot].driver,
             "slot {slot}'s driver diverged between two runs of the same race"
         );
     }
@@ -967,7 +969,7 @@ fn the_whole_grid_lands_on_the_track() {
     let race = race::Race::start(loaded.setup);
 
     assert_eq!(race.ship_count(), 8, "16_Track should field a full grid");
-    let ships: Vec<_> = race.world.ships.iter().filter(|s| s.active).collect();
+    let ships: Vec<_> = race.sim.world.ships.iter().filter(|s| s.active).collect();
     assert_eq!(ships.len(), 8);
 
     // The player is array index 0 and grid slot 8, so it is the rearmost. Every
@@ -1071,6 +1073,7 @@ fn our_grid_is_the_originals_grid() {
     let slot_of = |index: usize| if index == 0 { 8 } else { index };
     let mut worst = 0.0f32;
     for (index, ship) in race
+        .sim
         .world
         .ships
         .iter()
@@ -1290,7 +1293,7 @@ fn a_weapon_pad_on_the_disc_hands_out_a_pickup_in_a_single_race() {
         oag_race::Mode::Zone,
     ] {
         let mut race = race_at_pad(mode);
-        race.world.ships[0].pickup.weapon = None;
+        race.sim.world.ships[0].pickup.weapon = None;
         for _ in 0..120 {
             race.tick(&Default::default());
         }
@@ -1382,7 +1385,7 @@ fn a_rocket_fired_on_a_real_track_flies_and_detonates() {
     race.tick(&snapshot(&mut buttons, SQUARE));
     assert_eq!(race.ship_pickup(), None, "firing must spend the pickup");
     assert_eq!(
-        race.world.projectiles.live(),
+        race.sim.world.projectiles.live(),
         oag_gameplay::projectile::ROCKET_SHOTS,
         "firing a rocket on a real track did not put a full volley in the air"
     );
@@ -1394,7 +1397,7 @@ fn a_rocket_fired_on_a_real_track_flies_and_detonates() {
     // three copies of one shot look identical in a screenshot.
     let right = race.ship().physics.body.right();
     let lateral: Vec<f32> = (0..oag_gameplay::projectile::ROCKET_SHOTS)
-        .map(|slot| race.world.projectiles.slots[slot].velocity.dot(right))
+        .map(|slot| race.sim.world.projectiles.slots[slot].velocity.dot(right))
         .collect();
     println!("lateral velocity components off the disc's own spread: {lateral:?}");
     assert!(
@@ -1423,18 +1426,18 @@ fn a_rocket_fired_on_a_real_track_flies_and_detonates() {
     let mut last_alive = [0usize; oag_gameplay::projectile::ROCKET_SHOTS];
     let mut furthest = 0.0f32;
     let mut travelled = 0.0f32;
-    let mut previous = race.world.projectiles.slots[0].position;
-    while race.world.projectiles.live() > 0 {
+    let mut previous = race.sim.world.projectiles.slots[0].position;
+    while race.sim.world.projectiles.live() > 0 {
         // Slot 0 is the middle rocket, the one that flies straight - the outer
         // two may detonate a tick either side of it.
-        let flying = race.world.projectiles.slots[0].position;
-        if race.world.projectiles.slots[0].kind.is_some() {
+        let flying = race.sim.world.projectiles.slots[0].position;
+        if race.sim.world.projectiles.slots[0].kind.is_some() {
             furthest = furthest.max((flying - muzzle).length());
             travelled += (flying - previous).length();
             previous = flying;
         }
         for (slot, alive) in last_alive.iter_mut().enumerate() {
-            if race.world.projectiles.slots[slot].kind.is_some() {
+            if race.sim.world.projectiles.slots[slot].kind.is_some() {
                 *alive = ticks;
             }
         }
@@ -1513,10 +1516,10 @@ fn the_field_is_placed_by_how_far_round_it_is() {
     let course = race.course().expect("16_Track closes");
     let furthest = (0..8)
         .max_by(|&a, &b| {
-            race.world.ships[a]
+            race.sim.world.ships[a]
                 .standing
                 .distance(course)
-                .total_cmp(&race.world.ships[b].standing.distance(course))
+                .total_cmp(&race.sim.world.ships[b].standing.distance(course))
         })
         .expect("eight craft");
     assert_eq!(
@@ -1557,7 +1560,7 @@ fn the_players_place_reaches_the_hud() {
     let course = race.course().expect("16_Track closes");
     let places = race.places();
     for (slot, place) in places.iter().enumerate() {
-        let standing = race.world.ships[slot].standing;
+        let standing = race.sim.world.ships[slot].standing;
         println!(
             "slot {slot}: place {place}, lap {}, progress {:?}, distance {:.1}",
             standing.lap,
@@ -1635,11 +1638,13 @@ fn an_opponent_fires_at_a_craft_ahead_on_a_real_circuit() {
     // question is only ever whether the driver wants to use it.
     for _ in 0..7_200 {
         for slot in 1..8 {
-            if race.world.ships[slot].pickup.weapon.is_none() {
-                race.world.ships[slot].pickup.weapon = Some(oag_tables::weapons::Weapon::Rocket);
+            if race.sim.world.ships[slot].pickup.weapon.is_none() {
+                race.sim.world.ships[slot].pickup.weapon =
+                    Some(oag_tables::weapons::Weapon::Rocket);
             }
         }
         let before = race
+            .sim
             .world
             .projectiles
             .slots
@@ -1647,12 +1652,13 @@ fn an_opponent_fires_at_a_craft_ahead_on_a_real_circuit() {
             .filter(|p| p.kind.is_some())
             .count();
         race.tick(&oag_gameplay::InputSnapshot::default());
-        for projectile in race.world.projectiles.slots.iter() {
+        for projectile in race.sim.world.projectiles.slots.iter() {
             if projectile.kind.is_some() && projectile.owner != 0 {
                 owners.insert(projectile.owner);
             }
         }
         let after = race
+            .sim
             .world
             .projectiles
             .slots
@@ -1738,24 +1744,24 @@ fn solo_lap_tuned(level: oag_ai::Difficulty, track: &str, tuning: Option<oag_ai:
     // Everyone but one opponent off the track, so nothing it does is about
     // anybody else.
     for slot in 2..8 {
-        race.world.ships[slot].active = false;
+        race.sim.world.ships[slot].active = false;
     }
-    race.world.ships[0].active = false;
+    race.sim.world.ships[0].active = false;
 
     let mut best: Option<u64> = None;
-    let mut lap = race.world.ships[1].standing.lap;
+    let mut lap = race.sim.world.ships[1].standing.lap;
     let mut started = 0u64;
     let mut recovered_this_lap = false;
     let mut lost_at = Vec::new();
     for tick in 0..18_000u64 {
         let before = race.respawns_of(1);
-        let was_at = race.world.ships[1].driver.index;
+        let was_at = race.sim.world.ships[1].driver.index;
         race.tick(&oag_gameplay::InputSnapshot::default());
         if race.respawns_of(1) != before {
             recovered_this_lap = true;
             lost_at.push(was_at);
         }
-        let now = race.world.ships[1].standing.lap;
+        let now = race.sim.world.ships[1].standing.lap;
         if now != lap {
             // The first lap is the standing start, and a lap the craft had to
             // be recovered during is not a lap it drove.
@@ -1925,7 +1931,7 @@ fn every_craft_starts_on_its_line_on_every_circuit() {
         checked += 1;
 
         for slot in 1..race.ship_count() as usize {
-            let ship = &race.world.ships[slot];
+            let ship = &race.sim.world.ships[slot];
             let sample = race
                 .ai_sample(ship.driver.index as usize)
                 .expect("the driver stands on a sample");
@@ -1957,7 +1963,7 @@ fn every_craft_starts_on_its_line_on_every_circuit() {
 ///
 /// Two of twelve until `Driver::index` was seeded from the spawn (see
 /// [`every_craft_starts_on_its_line_on_every_circuit`]), then five. Adding a
-/// rescue for a craft that leaves the circuit ([`race::RESCUE_HALF_WIDTHS`])
+/// rescue for a craft that leaves the circuit ([`oag_race::recovery::RESCUE_HALF_WIDTHS`])
 /// took *laps completed* to nine of twelve without moving *clean* laps at all,
 /// and that gap is the finding: the craft were not failing to drive round, they
 /// were driving off and never coming back, because a `Reset` volume cannot

@@ -33,7 +33,10 @@ fn crossing_a_pad_raises_its_cue_on_the_tick_the_flare_is_armed() {
     // `ExhaustFlare_OnSpeedupPad` and `Sound_Play("SPEEDUPPAD")` from one
     // branch, so a port where the flare arms and the cue does not is wired
     // wrong however good the sound is.
-    assert!(race.exhaust[0].boost_timer() > 0.0, "the flare did not arm");
+    assert!(
+        race.view.exhaust[0].boost_timer() > 0.0,
+        "the flare did not arm"
+    );
     assert!(
         race.pending_cues().iter().any(|e| e.cue == Cue::SpeedupPad),
         "the flare armed and the cue did not: {:?}",
@@ -139,13 +142,13 @@ fn every_cue_has_something_that_raises_it() {
         // A shield, put up mid-race and taken down again, so the rising edge,
         // the level and the shielded-contact branch are all exercised. Set
         // outside `tick` on purpose - this is a fixture, not a pickup grant.
-        race.world.ships[0].physics.shield_pickup_timer =
+        race.sim.world.ships[0].physics.shield_pickup_timer =
             if (60..180).contains(&tick) { 1.0 } else { 0.0 };
         // An Autopilot armed once, long enough to reach its own one-second
         // warning inside this run. Set directly for the same reason the shield
         // above is: this is a fixture reaching an edge, not a pickup grant.
         if tick == 0 {
-            race.world.ships[0].autopilot_timer = 2.0;
+            race.sim.world.ships[0].autopilot_timer = 2.0;
         }
         // A Mine, dropped once - after the wall business above has already
         // had its first pass, so the impulse this leaves on `physics.shield`
@@ -153,14 +156,14 @@ fn every_cue_has_something_that_raises_it() {
         // the pickup path, for the same reason the shield and Autopilot above
         // are set directly.
         if tick == 200 {
-            race.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Mine);
-            race.world.ships[0]
+            race.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Mine);
+            race.sim.world.ships[0]
                 .pickup
                 .begin_drop(oag_gameplay::projectile::mine::CLUSTER);
         }
         // Re-aimed at the wall every tick, so each one sees a fresh inbound
         // contact rather than the ship bouncing away after the first.
-        let body = &mut race.world.ships[0].physics.body;
+        let body = &mut race.sim.world.ships[0].physics.body;
         body.position = Vec3::new(20.0, -39.7, 0.0);
         body.linear_velocity = Vec3::new(0.0, -50.0, 0.0);
         saw_impact |= race.tick(&InputSnapshot::default()).wall.impact;
@@ -197,7 +200,7 @@ fn the_shield_announcer_fires_on_the_edge_and_not_on_the_level() {
     let mut race = grid_on_a_speed_pad();
     let mut announcements = 0;
     for tick in 0..180 {
-        race.world.ships[0].physics.shield_pickup_timer = if tick >= 30 { 1.0 } else { 0.0 };
+        race.sim.world.ships[0].physics.shield_pickup_timer = if tick >= 30 { 1.0 } else { 0.0 };
         race.tick(&InputSnapshot::default());
         announcements += race
             .drain_cues()
@@ -246,9 +249,9 @@ fn the_class_announcer_fires_on_a_stage_step_and_not_on_every_zone() {
         raised.extend(race.drain_class_announcements());
     }
     assert!(
-        race.world.race.zone >= 2,
+        race.sim.world.race.zone >= 2,
         "sanity: 1300 ticks should survive at least two zones, got {}",
-        race.world.race.zone
+        race.sim.world.race.zone
     );
     assert_eq!(
         raised,
@@ -276,7 +279,7 @@ fn a_title_with_no_zone_stages_never_raises_a_class_announcement() {
         raised.extend(race.drain_class_announcements());
     }
     assert!(
-        race.world.race.zone >= 2,
+        race.sim.world.race.zone >= 2,
         "sanity: the zone counter itself does not need a ladder to step"
     );
     assert!(
@@ -294,9 +297,9 @@ fn a_title_with_no_zone_stages_never_raises_a_class_announcement() {
 #[test]
 fn laying_a_mine_raises_its_launch_cue_once_per_charge() {
     let mut race = race_with_a_grid();
-    race.weapons = Some(one_mine_table());
-    race.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Mine);
-    race.world.ships[0]
+    race.sim.weapons = Some(one_mine_table());
+    race.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Mine);
+    race.sim.world.ships[0]
         .pickup
         .begin_drop(oag_gameplay::projectile::mine::CLUSTER);
 
@@ -325,7 +328,7 @@ fn laying_a_mine_raises_its_launch_cue_once_per_charge() {
 #[test]
 fn dropping_a_bomb_raises_no_mine_launch_cue() {
     let mut race = race_with_a_grid();
-    race.weapons = Some(
+    race.sim.weapons = Some(
         oag_tables::weapons::parse(
             r#"<WeaponStats>
              <Weapon type="Global"><Stats slowdown_limit="0"/></Weapon>
@@ -339,8 +342,8 @@ fn dropping_a_bomb_raises_no_mine_launch_cue() {
         )
         .expect("the fixture table must parse"),
     );
-    race.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Bomb);
-    race.world.ships[0].pickup.begin_drop(1);
+    race.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Bomb);
+    race.sim.world.ships[0].pickup.begin_drop(1);
 
     let mut raised = Vec::new();
     for _ in 0..30 {
@@ -370,5 +373,5 @@ fn raising_a_cue_does_not_move_the_race_hash() {
     }
     assert!(!without.pending_cues().is_empty(), "nothing was queued");
     assert!(with.pending_cues().is_empty());
-    assert_eq!(with.state_hash(), without.state_hash());
+    assert_eq!(with.sim.state_hash(), without.sim.state_hash());
 }

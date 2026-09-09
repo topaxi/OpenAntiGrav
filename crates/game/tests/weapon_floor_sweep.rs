@@ -65,22 +65,22 @@ fn field_run(seed: u64, tuning: oag_ai::Tuning) -> Option<FieldRun> {
     let mut race = race::Race::start(loaded.setup);
     race.set_ai_tuning(level.tune(&tuning));
     let opponents = 1..usize::from(race.ship_count());
-    let full = race.world.ships[1].handling.dimensions.shield;
+    let full = race.sim.world.ships[1].handling.dimensions.shield;
     for _ in 0..3_600 {
         race.tick(&oag_gameplay::InputSnapshot::default());
     }
     let depleted = opponents
         .clone()
-        .filter(|&slot| race.world.ships[slot].physics.shield <= 0.0)
+        .filter(|&slot| race.sim.world.ships[slot].physics.shield <= 0.0)
         .count();
     let mean: f32 = opponents
         .clone()
-        .map(|slot| race.world.ships[slot].physics.shield)
+        .map(|slot| race.sim.world.ships[slot].physics.shield)
         .sum::<f32>()
         / opponents.len() as f32
         / full;
     let worst = opponents
-        .map(|slot| race.world.ships[slot].physics.shield)
+        .map(|slot| race.sim.world.ships[slot].physics.shield)
         .fold(f32::INFINITY, f32::min)
         / full;
     Some(FieldRun {
@@ -125,11 +125,11 @@ fn lap_completion_run(seed: u64, tuning: oag_ai::Tuning) -> Option<(usize, usize
         race.tick(&oag_gameplay::InputSnapshot::default());
     }
     let lapped: Vec<usize> = (1..usize::from(race.ship_count()))
-        .filter(|&slot| race.world.ships[slot].standing.lap >= 2)
+        .filter(|&slot| race.sim.world.ships[slot].standing.lap >= 2)
         .collect();
     let untimed = lapped
         .iter()
-        .filter(|&&slot| race.world.ships[slot].standing.best_lap_ticks.is_none())
+        .filter(|&&slot| race.sim.world.ships[slot].standing.best_lap_ticks.is_none())
         .count();
     Some((lapped.len(), untimed))
 }

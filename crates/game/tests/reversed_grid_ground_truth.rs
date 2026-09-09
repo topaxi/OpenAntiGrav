@@ -57,7 +57,7 @@ fn the_reversed_grid_lands_on_the_track_too() {
         8,
         "16_Track reversed should field a full grid"
     );
-    let ships: Vec<_> = race.world.ships.iter().filter(|s| s.active).collect();
+    let ships: Vec<_> = race.sim.world.ships.iter().filter(|s| s.active).collect();
     assert_eq!(ships.len(), 8);
 
     let player = ships[0].physics.body;

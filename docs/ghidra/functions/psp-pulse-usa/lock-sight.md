@@ -64,7 +64,7 @@ batches rather than by looking. What makes them a reticle is the texture:
 **Both sets are driven as of 2026-09-07**, and the difference between them is
 the whole of what a title has to author: four names and, for the Missile alone,
 a fifth. **Where the LeachBeam's four go is inferred, not read** - see
-[Who places the LeachBeam's four is unrecovered](#who-places-the-leachbeams-four-is-unrecovered). `oag_game::race::sight::Held` carries which of the two is up and
+[Who places the LeachBeam's four is unrecovered](#who-places-the-leachbeams-four-is-unrecovered). `oag_race::sight::Held` carries which of the two is up and
 `oag_title::hud::Sights::Brackets` carries the names, its `leach` field `None`
 for a title that authors no such widget. What had kept the LeachBeam's four dark
 was entirely upstream - `oag_tables::weapons` parsed no
@@ -118,7 +118,7 @@ read writes the bind's `+0x108` … `+0x114`**, so what moves the LeachBeam's fo
 and at what angles is not recovered, and this page should not be read as saying
 it is.
 
-`oag_game::race::sight` gives them the Missile's four corners and the Missile's
+`oag_race::sight` gives them the Missile's four corners and the Missile's
 four quarter-turn rotations. That is **chosen, not measured**, and carries no
 confidence score. The grounds are structural rather than read: the two sets are
 the same shape - four widgets, one model each, one shared `(-240, 136)`

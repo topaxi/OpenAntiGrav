@@ -16,24 +16,25 @@ impl Race {
     /// set once before the first tick and not touched again - a scheme swapped
     /// mid-race would leave a half-finished gesture armed in `ShipState`.
     pub fn set_control_scheme(&mut self, scheme: ControlScheme) {
-        self.scheme = scheme;
+        self.sim.scheme = scheme;
     }
 
     /// How far each airbrake flap has swung, left then right, in **radians**.
     ///
     /// Read by the renderer once a frame. Render-only state - see
-    /// [`Self::flaps`], which holds the same thing on the airbrake's `0..=100`
+    /// [`RaceView::flaps`], which holds the same thing on the airbrake's `0..=100`
     /// scale, and note the rates driving it are **not** the force law's.
     #[must_use]
     pub fn airbrake_flaps(&self) -> [f32; 2] {
-        self.flaps
-            .map(|level| self.flap_graphics.amount * level / 100.0)
+        self.view
+            .flaps
+            .map(|level| self.view.flap_graphics.amount * level / 100.0)
     }
 
     /// Which scheme this race is being driven with.
     #[must_use]
     pub fn control_scheme(&self) -> ControlScheme {
-        self.scheme
+        self.sim.scheme
     }
 
     /// Sets how strong the boost's field-of-view kick is. `[graphics]
@@ -46,10 +47,10 @@ impl Race {
     /// bit-identical to what it returned before the effect existed.
     /// The field of view the picture is being drawn at, for the lock-on reticle.
     ///
-    /// See [`Race::sight_fov`]. Cheap and idempotent, so the frame loop may set
+    /// See [`RaceView::sight_fov`]. Cheap and idempotent, so the frame loop may set
     /// it every frame rather than tracking whether the setting moved.
     pub fn set_sight_fov(&mut self, fov: oag_display::display::Fov) {
-        self.sight_fov = fov;
+        self.view.sight_fov = fov;
     }
 
     /// Which grid the lock-on reticle's coordinates are in.
@@ -63,28 +64,28 @@ impl Race {
     /// **Resets the reticle**, because its centre, its extent and its chase are
     /// all in the old grid's units. Called once before the first tick.
     pub fn set_sight_screen(&mut self, screen: (f32, f32)) {
-        self.sight = crate::race::sight::Sight::new([screen.0, screen.1]);
+        self.view.sight = oag_race::sight::Sight::new([screen.0, screen.1]);
     }
 
     /// The lock-on reticle, for whoever draws it.
     ///
-    /// Render-only state - see [`Race::sight`] - so this returning a borrow
+    /// Render-only state - see [`RaceView::sight`] - so this returning a borrow
     /// rather than a copy costs nothing and cannot be mistaken for world state.
     #[must_use]
-    pub fn sight(&self) -> &crate::race::sight::Sight {
-        &self.sight
+    pub fn sight(&self) -> &oag_race::sight::Sight {
+        &self.view.sight
     }
 
     /// What the reticle is doing, which is what `~ROCKLOCK` plays off.
     #[must_use]
-    pub fn sight_state(&self) -> crate::race::sight::State {
-        self.sight_state
+    pub fn sight_state(&self) -> oag_race::sight::State {
+        self.view.sight_state
     }
 
     pub fn set_boost_fov_kick(&mut self, kick: oag_display::display::BoostFovKick) {
-        self.boost_fov_kick = kick;
+        self.view.boost_fov_kick = kick;
         if kick == oag_display::display::BoostFovKick::OFF {
-            self.boost_kick = 0.0;
+            self.view.boost_kick = 0.0;
         }
     }
 
@@ -93,7 +94,7 @@ impl Race {
     /// `Race::start` and does not track the settings file afterwards.
     #[must_use]
     pub fn boost_fov_kick(&self) -> oag_display::display::BoostFovKick {
-        self.boost_fov_kick
+        self.view.boost_fov_kick
     }
 
     /// Chooses which of the three perspectives to render from. `[graphics]
@@ -114,26 +115,26 @@ impl Race {
     /// it keeps a separate previous-eye per rig, so it does neither, and
     /// reproducing that needs a second [`Chase`] rather than a decision here.
     pub fn set_camera_view(&mut self, view: oag_display::display::CameraView) {
-        if view == self.view {
+        if view == self.view.camera_view {
             return;
         }
-        self.view = view;
-        self.chase_params = match view {
-            oag_display::display::CameraView::Close => self.chase_close,
+        self.view.camera_view = view;
+        self.view.chase_params = match view {
+            oag_display::display::CameraView::Close => self.view.chase_close,
             // The cockpit view does not use these, but leaving the *far* block
             // installed means a cycle back out of the cockpit lands on the block
             // the next external view will want anyway.
             oag_display::display::CameraView::Internal | oag_display::display::CameraView::Far => {
-                self.chase_far
+                self.view.chase_far
             }
         };
-        self.camera = Chase::snapped(target_of(self.ship()), &self.chase_params);
+        self.view.camera = Chase::snapped(target_of(self.ship()), &self.view.chase_params);
     }
 
     /// Which perspective this race is rendering from.
     #[must_use]
     pub fn camera_view(&self) -> oag_display::display::CameraView {
-        self.view
+        self.view.camera_view
     }
 
     /// Whether the player's own hull should be drawn this frame.
@@ -150,13 +151,13 @@ impl Race {
     /// off screen anyway rather than visibly wrong.
     #[must_use]
     pub fn draws_own_ship(&self) -> bool {
-        self.view.draws_own_ship()
+        self.view.camera_view.draws_own_ship()
     }
 
     /// How many times a `Reset` contact has respawned the player this race.
     #[must_use]
     pub fn respawns(&self) -> u32 {
-        self.respawns[0]
+        self.sim.respawns[0]
     }
 
     /// The same, for any craft on the grid.
@@ -166,7 +167,7 @@ impl Race {
     /// question and the answer is "none".
     #[must_use]
     pub fn respawns_of(&self, slot: usize) -> u32 {
-        self.respawns.get(slot).copied().unwrap_or(0)
+        self.sim.respawns.get(slot).copied().unwrap_or(0)
     }
 
     /// How many barrel rolls an **opponent** has armed this race.
@@ -180,25 +181,25 @@ impl Race {
     /// not counted here.
     #[must_use]
     pub fn rolls_armed_of(&self, slot: usize) -> u32 {
-        self.rolls_armed.get(slot).copied().unwrap_or(0)
+        self.sim.rolls_armed.get(slot).copied().unwrap_or(0)
     }
 
     /// What those rolls cost it, in shield-pool units.
     #[must_use]
     pub fn roll_shield_spent_of(&self, slot: usize) -> f32 {
-        self.rolls_spent.get(slot).copied().unwrap_or(0.0)
+        self.sim.rolls_spent.get(slot).copied().unwrap_or(0.0)
     }
 
     /// The fixed timestep, from [`TickRate::DEFAULT`].
     #[must_use]
     pub fn dt(&self) -> f32 {
-        self.dt
+        self.sim.dt
     }
 
     /// The player's ship.
     #[must_use]
     pub fn ship(&self) -> &Ship {
-        &self.world.ships[0]
+        &self.sim.world.ships[0]
     }
 
     /// What the player's craft is carrying, if anything.
@@ -208,13 +209,13 @@ impl Race {
     /// [`Ship`] is not.
     #[must_use]
     pub fn ship_pickup(&self) -> Option<oag_tables::weapons::Weapon> {
-        self.world.ships[0].pickup.weapon
+        self.sim.world.ships[0].pickup.weapon
     }
 
     /// The resampled spline, for a caller that wants to measure against it.
     #[must_use]
     pub fn spline(&self) -> &Spline {
-        &self.spline
+        &self.sim.spline
     }
 }
 
@@ -228,7 +229,8 @@ impl Race {
     /// the library and so cannot see the field.
     #[must_use]
     pub fn missile_stats(&self) -> Option<oag_tables::weapons::MissileStats> {
-        self.weapons
+        self.sim
+            .weapons
             .as_ref()
             .and_then(oag_tables::weapons::WeaponStats::missile)
     }
@@ -243,7 +245,8 @@ impl Race {
     /// answer differs across the three.
     #[must_use]
     pub fn leach_beam_stats(&self) -> Option<oag_tables::weapons::LeachBeamStats> {
-        self.weapons
+        self.sim
+            .weapons
             .as_ref()
             .and_then(oag_tables::weapons::WeaponStats::leach_beam)
     }
@@ -255,7 +258,8 @@ impl Race {
     /// `crates/game/tests/mine_ground_truth.rs`.
     #[must_use]
     pub fn mine_stats(&self) -> Option<oag_tables::weapons::MineStats> {
-        self.weapons
+        self.sim
+            .weapons
             .as_ref()
             .and_then(oag_tables::weapons::WeaponStats::mine)
     }
@@ -267,7 +271,8 @@ impl Race {
     /// `crates/game/tests/shuriken_ground_truth.rs`.
     #[must_use]
     pub fn shuriken_stats(&self) -> Option<oag_tables::weapons::ShurikenStats> {
-        self.weapons
+        self.sim
+            .weapons
             .as_ref()
             .and_then(oag_tables::weapons::WeaponStats::shuriken)
     }
@@ -281,7 +286,8 @@ impl Race {
     /// twice.
     #[must_use]
     pub fn rocket_stats(&self) -> Option<oag_tables::weapons::RocketStats> {
-        self.weapons
+        self.sim
+            .weapons
             .as_ref()
             .and_then(oag_tables::weapons::WeaponStats::rocket)
     }
@@ -293,7 +299,8 @@ impl Race {
     /// `crates/game/tests/plasma_ground_truth.rs`.
     #[must_use]
     pub fn plasma_stats(&self) -> Option<oag_tables::weapons::PlasmaStats> {
-        self.weapons
+        self.sim
+            .weapons
             .as_ref()
             .and_then(oag_tables::weapons::WeaponStats::plasma)
     }
@@ -305,7 +312,8 @@ impl Race {
     /// `crates/game/tests/cannon_ground_truth.rs`.
     #[must_use]
     pub fn cannon_stats(&self) -> Option<oag_tables::weapons::CannonStats> {
-        self.weapons
+        self.sim
+            .weapons
             .as_ref()
             .and_then(oag_tables::weapons::WeaponStats::cannon)
     }
@@ -320,14 +328,15 @@ impl Race {
     /// craft's timer is asserted *against* rather than a value to assert.
     #[must_use]
     pub fn slowdown_limit(&self) -> Option<f32> {
-        self.weapons.as_ref().map(|table| table.slowdown_limit)
+        self.sim.weapons.as_ref().map(|table| table.slowdown_limit)
     }
 
     /// The Bomb's authored `<Stats>`, or `None` when the table did not load or
     /// authors no Bomb.
     #[must_use]
     pub fn bomb_stats(&self) -> Option<oag_tables::weapons::BombStats> {
-        self.weapons
+        self.sim
+            .weapons
             .as_ref()
             .and_then(oag_tables::weapons::WeaponStats::bomb)
     }
