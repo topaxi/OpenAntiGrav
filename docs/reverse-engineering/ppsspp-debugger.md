@@ -442,8 +442,9 @@ Two things a first race capture found:
 | `memory.read` / `read_u32` | `read` returns `base64`; `read_u32` returns `value` (**not** `uintValue`). |
 | `memory.disasm` | Address plus count, with PPSSPP's own symbol names for calls. |
 | `hle.thread.list` | Thread names, pcs and wait states. `Main thread`'s entry is `Game_Bootstrap`. |
-| `hle.func.list` | Every function PPSSPP's analysis found, with address and size. Useful for finding which function contains an address. |
+| `hle.func.list` | Every function PPSSPP's analysis found, with address, name and size. Useful for finding which function contains an address, and for harvesting what PPSSPP autodetected - see [ppsspp-symbol-bridge.md](ppsspp-symbol-bridge.md). Works right after boot, before reaching any menu: module analysis runs at load time. |
 | `hle.module.list` | Confirms the module base: `WO_Game` at `0x08804000`, size `0x391800`. |
+| `hle.func.add` / `.remove` / `.rename` / `.scan` | Present in the binary (`strings PPSSPPHeadless \| grep hle.func`) but not exercised here - a live-session alternative to loading a `.sym` through the Debug menu, unverified. |
 | `input.buttons.send` / `.press` / `input.analog.send` | Scripted input. `press` takes a duration in frames; `send` sets held state. Names are `cross`, `circle`, `square`, `triangle`, `start`, `select`, `up`, `down`, `left`, `right`, **`ltrigger`, `rtrigger`** - *not* `l` and `r`, see below. |
 | `gpu.stats.get` | Actual and target fps, vblank rate. |
 
