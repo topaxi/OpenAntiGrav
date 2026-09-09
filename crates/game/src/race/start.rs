@@ -69,7 +69,31 @@ impl Race {
         };
 
         let mut world = World::new(seed);
-        world.race = RaceState::new(mode);
+        // The lap count is per speed class, not per mode - the campaign's 236
+        // authored `PI_Cell` records carry `laps` as exactly 3 Venom, 4 Flash,
+        // 4 Rapier, 5 Phantom, confidence 90 (`race-campaign.md`). `oag_race`
+        // matches on the class; resolving the disc's own spelling of it onto
+        // that enum is this layer's job, because this is the layer that already
+        // carries the name.
+        //
+        // **An unresolved rung falls back to Venom's count and says so.** The
+        // one case that reaches it is Wipeout Pure's `VECTOR`, the rung it
+        // authors below Venom - `oag_title::SpeedClasses::VECTOR` explains at
+        // length why nothing grows a fifth enum variant for it. No Pure
+        // campaign census has been read, so there is no measured lap count for
+        // that rung at all; taking the slowest measured one is **chosen, not
+        // measured**, and carries no confidence score. The warning is the point
+        // - a silent Venom is how three of four classes raced short in the
+        // first place.
+        let lap_class = oag_race::SpeedClass::from_name(&class).unwrap_or_else(|| {
+            warn!(
+                "speed class {class:?} is not one of the four the lap census covers - \
+                 lap count falls back to {venom}'s, which is chosen, not measured",
+                venom = oag_race::SpeedClass::Venom,
+            );
+            oag_race::SpeedClass::Venom
+        });
+        world.race = RaceState::new(mode, lap_class);
         let ship = &mut world.ships[0];
         ship.active = true;
         ship.handling = handling;

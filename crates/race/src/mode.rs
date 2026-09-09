@@ -12,6 +12,8 @@
 //! which is which - see `docs/gameplay/race-modes.md` for the evidence and the
 //! confidence score behind every one.
 
+pub use oag_formats::handling::SpeedClass;
+
 /// One of the race modes this crate implements.
 ///
 /// The variants are ordered as the menu offers them.
@@ -83,16 +85,44 @@ impl Mode {
     /// trial was seen configured with, not a limit of the format.
     pub const TIME_TRIAL_LAPS: u32 = 3;
 
-    /// Laps in a single race.
+    /// Laps in a single race, per speed class, slowest rung first.
     ///
-    /// **Ours, and the weakest number in this module.** The setup format's
-    /// `laps="%d"` says the original configures this per event rather than
-    /// fixing it, and no single race has been watched long enough to read what
-    /// a *Custom Race* is configured with. Three is [`Self::TIME_TRIAL_LAPS`]
-    /// carried over because a race has to end somewhere; it is not a
-    /// measurement, and one screenshot of the original's own lap counter on a
-    /// SINGLE RACE would replace it.
-    pub const SINGLE_RACE_LAPS: u32 = 3;
+    /// **Measured, confidence 90, and it replaced this module's weakest
+    /// number.** This used to be a flat `SINGLE_RACE_LAPS = 3` that said of
+    /// itself that it was a guess carried over from
+    /// [`Self::TIME_TRIAL_LAPS`]. The campaign's own authored content settled
+    /// it: `Data\Plugins\grids\grid_00.xml` .. `grid_15.xml` inside
+    /// `Data.wad` hold **236 `PI_Cell` records**, each carrying a `laps`
+    /// attribute, and across all 236 that attribute is *exactly* **3 for
+    /// Venom, 4 for Flash, 4 for Rapier and 5 for Phantom**, with no
+    /// exception. A flat census over 236 authored records - see
+    /// [`race-campaign.md`](../../../docs/ghidra/functions/psp-pulse-usa/race-campaign.md).
+    ///
+    /// **A table rather than a transcription.** The rule `CLAUDE.md` states -
+    /// never hand-transcribe what the assets author - is about one record read
+    /// by hand standing in for a population. Here the census *is* the
+    /// measurement and this array is its shape: four entries because the
+    /// attribute varies along exactly one axis, the speed class, and along no
+    /// other. The guess it replaced was right for Venom and wrong for the
+    /// other three, which is why three of four classes raced short.
+    ///
+    /// **Indexed by [`SpeedClass`], and the order is that enum's own.**
+    /// `SpeedClass::ALL` is slowest-first and its position is the
+    /// discriminant, which is what the four-wide handling tables already rely
+    /// on; a fifth rung is deliberately not representable, for the reason
+    /// `oag_title::SpeedClasses::VECTOR` gives at length. Resolving a title's
+    /// class *name* onto this enum is the caller's job and happens in
+    /// `oag_game::race::Race::start`, where the name already lives.
+    ///
+    /// **This table is the fallback, not the authority.** A race launched from
+    /// the campaign should take the lap count from *its own* cell -
+    /// `oag_formats::race_campaign::Cell` already parses `laps: Option<u32>` -
+    /// and the cell's value wins over this array the moment a campaign launch
+    /// can be wired, the same retirement clause
+    /// [`Self::ELIMINATOR_KILL_TARGET_DEFAULT`] carries. What keeps the array
+    /// necessary is that nothing selects a cell yet, and a Custom Race started
+    /// outside the campaign has no cell to read at all.
+    pub const SINGLE_RACE_LAPS_BY_CLASS: [u32; SpeedClass::ALL.len()] = [3, 4, 4, 5];
 
     /// Kills that end an Eliminator event, **when nothing more specific is
     /// available**.
@@ -153,18 +183,50 @@ impl Mode {
         Self::ALL.into_iter().find(|mode| mode.name() == name)
     }
 
-    /// Laps the mode finishes after, or `None` when it never ends on its own.
+    /// Laps the mode finishes after in `class`, or `None` when it never ends
+    /// on its own.
+    ///
+    /// **The class arrives as a parameter rather than as a crate dependency.**
+    /// The lap count is per speed class - see
+    /// [`Self::SINGLE_RACE_LAPS_BY_CLASS`] - so this method needs the class,
+    /// and [`SpeedClass`] comes from `oag-formats`, which this crate already
+    /// depends on for [`crate::Course`]'s own track types. `oag-title`, where a
+    /// title's *ladder* is measured, is deliberately not added: that crate
+    /// carries class **names** because a ladder's length is per-title data, and
+    /// a race-rules crate has no business resolving a name. The caller
+    /// resolves; this method matches.
+    ///
+    /// **Only [`Mode::SingleRace`] varies with the class today, and that
+    /// asymmetry is deliberate.** The same 236-record census reads `Time
+    /// Trial`'s 47 cells as following the identical 3/4/4/5 table, but
+    /// [`Self::TIME_TRIAL_LAPS`] has independent evidence of its own - the
+    /// original's live counter reading `Lap 1 of 3` - and the two are
+    /// consistent rather than contradictory, because Venom is the default
+    /// class and Venom's census value *is* 3. Reconciling a live observation
+    /// against the census is its own job with its own confidence argument, so
+    /// time trial takes the parameter and ignores it. Same shape as Speed
+    /// Lap's `7`-against-`None` below. See `docs/gameplay/race-modes.md`.
     ///
     /// **`None` for Eliminator, measured rather than assumed from "no lap
     /// target here either".** `MSC_EVENT_ELIM` says outright: *"The lap count
     /// is not fixed, and the race will end when the kill count is reached"* -
     /// a kill count ends it instead, and that ending is not this method's to
-    /// report; see [`crate::RaceState::eliminator_finished`].
+    /// report; see [`crate::RaceState::eliminator_finished`]. The census agrees
+    /// from the data side: an `Elimination` cell carries no `laps` attribute at
+    /// all.
+    ///
+    /// **`None` for Speed Lap and Zone, and the census disagrees with the first
+    /// of those.** It reads `Speed Lap` as `7` on all 42 of its cells and
+    /// `Zone` as `0` on all 16, while the evidence for `None` here is separate
+    /// and specific: `MSC_EVENT_SL`/`MSC_EVENT_ZONE` describe a race that does
+    /// not end on laps. Those genuinely conflict and reconciling them is a
+    /// different job, recorded in `docs/gameplay/race-modes.md` rather than
+    /// guessed at here.
     #[must_use]
-    pub const fn laps_target(self) -> Option<u32> {
+    pub const fn laps_target(self, class: SpeedClass) -> Option<u32> {
         match self {
             Self::TimeTrial => Some(Self::TIME_TRIAL_LAPS),
-            Self::SingleRace => Some(Self::SINGLE_RACE_LAPS),
+            Self::SingleRace => Some(Self::SINGLE_RACE_LAPS_BY_CLASS[class as usize]),
             Self::SpeedLap | Self::Zone | Self::Eliminator => None,
         }
     }
@@ -311,7 +373,7 @@ impl Mode {
 
 #[cfg(test)]
 mod tests {
-    use super::Mode;
+    use super::{Mode, SpeedClass};
 
     #[test]
     fn every_mode_round_trips_through_its_token() {
@@ -349,14 +411,52 @@ mod tests {
 
     #[test]
     fn only_the_two_unlimited_modes_never_end_on_laps() {
-        assert_eq!(Mode::TimeTrial.laps_target(), Some(3));
-        assert_eq!(Mode::SingleRace.laps_target(), Some(3));
-        assert_eq!(Mode::SpeedLap.laps_target(), None);
-        assert_eq!(Mode::Zone.laps_target(), None);
+        assert_eq!(Mode::TimeTrial.laps_target(SpeedClass::Venom), Some(3));
+        assert_eq!(Mode::SingleRace.laps_target(SpeedClass::Venom), Some(3));
+        assert_eq!(Mode::SpeedLap.laps_target(SpeedClass::Venom), None);
+        assert_eq!(Mode::Zone.laps_target(SpeedClass::Venom), None);
         // Eliminator has no lap target either, and for a different reason
         // from Speed Lap's or Zone's: it has one, a kill count, that this
         // method does not report. See `Mode::ELIMINATOR_KILL_TARGET_DEFAULT`.
-        assert_eq!(Mode::Eliminator.laps_target(), None);
+        assert_eq!(Mode::Eliminator.laps_target(SpeedClass::Venom), None);
+    }
+
+    /// The census, reproduced as an assertion: 3 Venom, 4 Flash, 4 Rapier, 5
+    /// Phantom across all 236 authored `PI_Cell` records. The whole point of
+    /// the change that introduced it is that three of these four are *not* 3.
+    #[test]
+    fn a_single_race_runs_the_campaigns_own_per_class_lap_count() {
+        assert_eq!(Mode::SingleRace.laps_target(SpeedClass::Venom), Some(3));
+        assert_eq!(Mode::SingleRace.laps_target(SpeedClass::Flash), Some(4));
+        assert_eq!(Mode::SingleRace.laps_target(SpeedClass::Rapier), Some(4));
+        assert_eq!(Mode::SingleRace.laps_target(SpeedClass::Phantom), Some(5));
+    }
+
+    /// Every rung the enum has must have a row, or a class would index past
+    /// the table. Cheap here, and the alternative is a panic mid-race.
+    #[test]
+    fn every_speed_class_has_a_lap_count() {
+        for (index, class) in SpeedClass::ALL.into_iter().enumerate() {
+            assert_eq!(index, class as usize, "{class} is not at its own index");
+            assert_eq!(
+                Mode::SingleRace.laps_target(class),
+                Some(Mode::SINGLE_RACE_LAPS_BY_CLASS[index]),
+            );
+        }
+    }
+
+    /// The class parameter is taken and ignored by every mode except a single
+    /// race - see `laps_target`'s own docs for why time trial in particular
+    /// does not vary yet, and `docs/gameplay/race-modes.md` for what would
+    /// change it.
+    #[test]
+    fn only_a_single_race_varies_with_the_speed_class() {
+        for class in SpeedClass::ALL {
+            assert_eq!(Mode::TimeTrial.laps_target(class), Some(3));
+            assert_eq!(Mode::SpeedLap.laps_target(class), None);
+            assert_eq!(Mode::Zone.laps_target(class), None);
+            assert_eq!(Mode::Eliminator.laps_target(class), None);
+        }
     }
 
     #[test]
