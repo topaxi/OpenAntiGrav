@@ -816,8 +816,27 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     // resolved `texel.a`: the microcode's `H0.wwww` is the unit-0 fetch's own
     // fourth channel, before any of the role bits above choose where the
     // output's alpha comes from.
-    let glow = glow_sample.rgb * glow_tint_offset.rgb * first.a
-        * select(0.0, 1.0, (in.slots & 256u) != 0u);
+    let glow_gate = first.a * select(0.0, 1.0, (in.slots & 256u) != 0u);
+    let glow = glow_sample.rgb * glow_tint_offset.rgb * glow_gate;
+    // **The same layer in the linear domain, for the authored path**, which
+    // adds it below. The sample is sRGB-decoded and the tint is not, on the
+    // terms the albedo already sets on that path: `glow_sample` is a picture -
+    // a sign, a tube, a light cone - authored in the space every other texture
+    // on the disc is, and `glow_tint_offset.rgb` is a shader constant, an
+    // authored magnitude like `light.sun`. `first.a` is an alpha, and alphas
+    // never decode.
+    //
+    // **Neither domain reproduces the RSX**, which multiplies raw 8-bit
+    // throughout and sRGB-decodes nothing - renderer.md, "Per-texture
+    // sRGB/`GAMMA` decode: settled negative". What a domain can preserve is
+    // the glow's magnitude *relative to the albedo it is added to*, and only
+    // the decoded form does that: undecoded, a 0.5 sample lands at 0.5 beside
+    // an albedo that decoded to 0.22, so the layer arrives at about twice the
+    // weight the disc gives it. Both were measured - `scripts/hd-glow-sweep.py`
+    // and the table in renderer.md - and the principle rather than the
+    // brightness is what chose.
+    let glow_linear =
+        pow(glow_sample.rgb, vec3<f32>(2.2)) * glow_tint_offset.rgb * glow_gate;
 
     // The Zone surface, in both domains, from one sample. See `zone_sample`.
     //
@@ -879,11 +898,27 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     // mix weight: it is 0.0 for every draw that is not a Zone race with all
     // its inputs resolved, and there this is `texel_linear` unchanged.
     let surface_linear = mix(texel_linear, zone_linear, scene.zone.enabled);
-    // `colour = light * surface + glow` - the microcode's own order. The
-    // visualiser glow is not itself lit, on the same terms the HD-emissive
-    // `glow` below is added after the light multiply rather than folded into
-    // it.
-    let lit_linear = surface_linear * authored + specular + zone_glow_term;
+    // `colour = light * surface + glow` - the microcode's own order, and
+    // **both glows are on the far side of the multiply because that is where
+    // the disc puts them**. Read off `uvanim_diffuse_emissive`'s lit fragment
+    // block on Amphiseum, block #3, with `scripts/ps3-microcode.py`:
+    //
+    //     @0x22  MUL H4.xyz, H0, H4      ; albedo * (prelit + ambient + ndl*sun)
+    //     @0x23  MAD H0.xyz, H0.wwww, H1, H4   ; + diffuse alpha * tinted glow
+    //
+    // Its unlit block #2 (`MUL` at 0x0b, `MAD` at 0x0f) and its second lit
+    // block #4 (0x23, 0x25) have the same pair in the same order. Three
+    // variants, no exceptions - so the accumulate reads a value the light has
+    // already multiplied, and a glow is not itself lit.
+    //
+    // **`glow_linear` belongs here and used to reach only `plain`**, which is
+    // what made HD's emissive layer very nearly invisible: this fragment
+    // resolves `mix(plain_rgb, authored_rgb, enabled * in.lit)` and HD's rig is
+    // always enabled, so every `in.lit == 1` chunk - the track, the tubes, the
+    // signs, everything near the camera - dropped it. Only the far background
+    // and the hull ever saw it.
+    let lit_linear =
+        surface_linear * authored + specular + zone_glow_term + glow_linear;
     let encoded = pow(
         clamp(lit_linear, vec3<f32>(0.0), vec3<f32>(1.0)),
         vec3<f32>(1.0 / 2.2),
