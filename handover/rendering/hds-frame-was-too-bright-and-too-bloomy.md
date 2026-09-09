@@ -66,19 +66,69 @@ reaches at most 3.60 % of the frame, the far background and the hull.
 mounted DLC pack. The sweep was HD's sixteen base environments and the numbers
 above are Talon's Junction.
 
+2026-09-09, later the same day: **the defect filed above is fixed, and the
+reference band it was going to be judged against was wrong.** The RE, the
+tables and the sweep are in
+[renderer.md](../../docs/ghidra/functions/ps3-hdfury-eu/renderer.md) - "The
+emissive glow belongs on the lit path, and the reference band was padding".
+What lives only here:
+
+**`data/reference/hd-capture/talons/00.png` is 52.2 % black padding** - a
+1278x718 frame on a 1600x1200 canvas. Its 3.850 % is a share over the canvas;
+over its own picture it is **8.056 %**. So the "3.85 %" this row published
+above as the band's *lower* bound is really its upper one, and the pair's
+1.8x disagreement had a mechanical cause the whole time. Trimmed, the
+seventeen rpcs3 race grabs span **2.848-20.549 %, median 7.491 %**, and they
+split by speed rather than by grab: 6.40-8.06 % on the grid, 14.41-20.55 % in
+motion. **`scripts/clipped-white.py`'s docstring still carries the old pair**
+and was left alone deliberately - it belongs to another lane - so read the
+band off `scripts/hd-glow-sweep.py reference`, which trims before it measures.
+
+**The harness is committed this time**: `scripts/hd-glow-sweep.py`, both a
+`reference` and a `sweep` subcommand, writing its own `settings.toml` into a
+scratch `XDG_CONFIG_HOME` so a run never reads or edits the machine's own
+configuration. Its baseline column reproduces this row's 2026-09-09 sweep
+exactly (`04_chenghou_project` 1.319 %, `12_sol_2` 18.463 %), which is what
+says it is the same instrument rather than a second one that agrees.
+
+**Two negatives and one surprise, so nobody re-runs them.** (1) The filed
+"at most 3.60 % of the frame" **does not reproduce**: forcing the pre-fix
+layer to flat red against a build with it zeroed changes **0 pixels** on
+Talon's Junction and **1** on Amphiseum. The layer reached nothing, which is
+what this row's own "zeroing the glow moves the frame 0.000" always said.
+Post-fix it reaches 10.1-10.4 %. (2) The decoded and undecoded domains for the
+glow sample differ by 0.02-0.27 points on four of five circuits, so the
+measurement does not choose between them and the consistency argument did -
+**chosen, not measured**, no confidence score. (3) **Zone 1 gets darker** when
+the term is added - and the discriminator is in the same table: bloom **on**
+goes 18.490 -> 18.047 %, bloom **off** goes 13.138 -> 13.146 %, *up*. The
+darkening exists only where the chain runs, so it is the ladder feeding the
+luminance adaptation. Adding light to this chain is not monotonic in the
+output.
+
+**Unexplained and not this change's doing**: **eleven** of the sixteen
+circuits measure identically with `[graphics] bloom` on and off, on the
+baseline build as well as the fixed one. The five that respond are the four
+named environments plus Zone 1. **The obvious hypothesis is already dead** -
+six of the eleven moved under this change (`01_vineta_k`, `03_track`,
+`04_chenghou_project`, `05_ubermall`, `10_sebenco_climb`, `15_anulpha_pass`),
+so they do reach `lit_linear` and take the authored path, and still do not
+respond to the switch.
+
 ## Open
 
 - Whether the 8-bit surfaces hold linear or gamma light is undetermined (confidence 70 against ADR-0026, not acted on) - still open, unchanged by the above
 - What the colour set's fourth byte gates is unknown - `0x1aaf7631` is declared by no `SHO` shader block, so the only place left to check is per-material microcode
 - `shadowMapTex` is projected by the disc and unimplemented here
 - `hd_bloom.wgsl`'s `fs_blur` adds its tap offset after `drawn()`, so the sub-rectangle clamp does not constrain the taps - inert at native, wrong under DRS/FSR
-- `mesh.wgsl` sums HD's emissive `glow` into `plain` and not `lit_linear`, so on HD it reaches only prelit chunks - at most 3.60 % of a race frame
-- Which two rpcs3 grabs the 5.8/7.3 % reference pair came from is unrecoverable; the band re-derived from `data/reference/hd-capture/` is 3.85-6.99 %
-- Fury's own circuits and the DLC packs have never been measured on this metric
+- `scripts/clipped-white.py`'s docstring still publishes the 3.85/6.99 pair, and 3.85 % is a padded canvas rather than a frame - another lane owns that file, so the correction lives in `scripts/hd-glow-sweep.py` and renderer.md instead
+- Why **eleven** of the sixteen circuits measure identically with `[graphics] bloom` on and off, on the baseline build as much as the fixed one - and six of those eleven do take the authored path, so "they never light" is refuted
+- Amphiseum, Fury's circuits and the DLC packs have no rpcs3 grab to be read against at all
 
 ## Next Steps
 
 - Sweep per-material microcode (`scripts/ps3-microcode.py`) for a read of `0x1aaf7631`'s fourth byte, to settle what it gates
 - `shadowMapTex` remains unread; locate what projects it and whether the disc's shadow map is reachable from data already on disc
-- Put HD's emissive glow on the authored path and measure the result against the rpcs3 grabs before keeping it - it makes the frame brighter, which is the direction the 2026-08-20 work was pushing against
 - Re-derive the reference band from a fresh rpcs3 grab at a framing our `--pose` can reproduce, so the next comparison is not aggregates-at-a-distance
+- Grab Amphiseum on rpcs3: it is the circuit the emissive layer is busiest on (+1.70 points at the grid, 4.84 % of the frame over 8/255) and the only one whose fix has no reference at all to be read against
+- Find why `[graphics] bloom` is inert on eleven of the sixteen circuits - `scripts/hd-glow-sweep.py sweep --bloom both` is the reproducer, the four named environments plus Zone 1 are the five that do respond, and six of the inert eleven measurably take the authored path so the obvious hypothesis is already refuted

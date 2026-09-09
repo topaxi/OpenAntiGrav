@@ -1892,6 +1892,195 @@ and `0x3b7334` are the two sides of the `bne` at `0x3b5090` - and one,
 `0x3b5350`, is a loop body. The bind census below is what settles the two
 extra, and it is *not* a coarser blur level.
 
+### The emissive glow belongs on the lit path, and the reference band was padding (2026-09-09)
+
+The defect the section below filed and deliberately did not fix, taken to a
+measurement. **Two findings, and the second is the bigger one**: the glow's
+destination is settled by the disc and is unambiguous, and the reference band
+this subsystem has been judged against since 2026-08-20 was **an artefact of
+image padding** rather than a reading of the original's frame.
+
+**The band first, because it reframes everything else.**
+`data/reference/hd-capture/talons/00.png` is a **1600x1200 canvas holding a
+1278x718 frame at +322+24**, and the remaining 52.2 % is black. Clipped-white
+share is a *share*, so the padding drags it down by the padding fraction and
+nothing else: measured whole the grab reads **3.850 %**, and measured over its
+own picture it reads **8.056 %**. The 3.85 % is the number this project
+carried as the *lower* bound of its reference band. It is the higher of the
+two grabs that band was built from, not the lower, and the 1.8x disagreement
+between the pair - the thing that made the band look wide and made our frame
+look bright at either end of it - was measurable all along.
+
+Trimmed and re-measured, all seventeen rpcs3 **race** grabs under
+`data/reference/hd-capture/` (`scripts/hd-glow-sweep.py reference`):
+
+| grab | canvas | clipped white | mean |
+| --- | --- | --- | --- |
+| `anulpha/00.png` | 1278x718 | 2.848 % | 0.4686 |
+| `anulpha/01.png` | 1278x718 | 7.491 % | 0.6541 |
+| `anulpha/02.png` | 1278x718 | 3.710 % | 0.5410 |
+| `talons/00.png` | 1600x1200 **padded** | **8.056 %** (3.850 % whole) | 0.6390 |
+| `talons/01.png` | 1600x1200 **padded** | **15.649 %** | 0.7215 |
+| `talons-fifo/00..02` | 1278x718 | 6.994 / 7.030 / 7.021 % | 0.623 |
+| `talons-fifo2/00..02` | 1278x718 | 6.966 / 15.796 / 15.472 % | 0.622-0.735 |
+| `talons-fifo3/00..02` | 1278x718 | 6.923 / 15.980 / 14.414 % | 0.623-0.727 |
+| `talons-heap/00`, `/01` | 1278x718 | 6.396 / **20.549 %** | 0.622 / 0.798 |
+| `talons-rm/00.png` | 1278x718 | 7.895 % | 0.6343 |
+
+**The band is 2.848 % to 20.549 %, median 7.491 %**, and it splits by what the
+frame is doing rather than by which grab it is: a **grid** frame (0 km/h) reads
+6.40-8.06 % on Talon's Junction, and an **in-motion** frame reads
+14.41-20.55 %. `talons-heap/01.png` at 556 km/h is the 20.549 %, and it is the
+original itself dissolving the track into white - so a frame of ours near 20 %
+at speed is in character, not blown. `talons/00.png` and `/01.png` and the
+four under `flare-size/` are the padded ones; every other grab in that tree is
+a clean 1278x718.
+
+**`scripts/clipped-white.py`'s own docstring still carries the 3.85/6.99 pair**
+as its reference figures. It is not wrong about what those two files measure
+whole - it is wrong that the whole file is the frame. Read the table above
+instead, or `hd-glow-sweep.py reference`, which trims before it measures.
+
+**The destination, read off the disc.** `uvanim_diffuse_emissive`'s fragment
+blocks on Amphiseum, `scripts/ps3-microcode.py fp-file`, block #3 (lit, fogged):
+
+```text
+@0x14  TEX H0, f[TC4] unit0            ; albedo
+@0x18  TEX H1.xyz, R0.zwzz unit1       ; the glow sample, at (u, (v+a)*b + time)
+@0x19  MUL H1.xyz, H1, {const}         [<- 0xe8bcd7f5, the tint]
+@0x1c  MAD H6.xyz, H1.wwww, {const}, H6   ; H6 = ambient + ndl * sun
+@0x1e  ADD H4.xyz, R2, H6              ; + prelit -> the light sum
+@0x22  MUL H4.xyz, H0, H4              ; albedo * light
+@0x23  MAD H0.xyz, H0.wwww, H1, H4     ; + diffuse alpha * tinted glow
+@0x28  MAD H0.xyz, R2.wwww, H0, R2     ; the fog lerp, after the glow
+```
+
+The accumulate at `0x23` reads `H4`, which the light has already multiplied.
+Its unlit block #2 (`MUL` at `0x0b`, `MAD` at `0x0f`) and its second lit block
+#4 (`MUL` at `0x23`, `MAD` at `0x25`) are the same pair in the same order.
+**Three variants, no exceptions, confidence 95** - the ordering is read
+straight off the microcode and needs no inference. `rcsmaterial.md`'s
+line-1424 excerpt is block #2's and stops at the `MAD`, which is why the
+ordering read as ambiguous from that page alone.
+
+So `lit_linear` was the correct destination and `plain`-only was a straight
+defect - `mesh.wgsl`'s own comment above the sum already described the
+behaviour the code did not implement.
+
+**The reach, and it was total.** The filed figure was "at most 3.60 % of the
+frame, the far background and the hull". Re-measured by forcing the layer to
+flat red and diffing against a build with it zeroed - three builds, so the
+comparison is layer-against-nothing rather than red-against-real:
+
+| circuit | pre-fix (`plain` only) | post-fix (both paths) |
+| --- | --- | --- |
+| Talon's Junction, grid | **0 px, byte-identical** | 122,038 px (10.386 %); 16,656 (1.417 %) over 8/255 |
+| Amphiseum, grid | **1 px** | 118,675 px (10.100 %); 56,855 (4.839 %) over 8/255 |
+
+**The pre-fix layer reached nothing at all**, which does not reproduce the
+3.60 % but does reproduce the section below's own "zeroing HD's emissive
+`glow` moves the frame 0.000" - two statements that were never consistent with
+each other. Post-fix it reaches about a tenth of the frame on both.
+
+**The domain is a choice, and the principle chose rather than the brightness.**
+The RSX multiplies raw 8-bit throughout and sRGB-decodes no texture (see
+"Per-texture sRGB/`GAMMA` decode: settled negative"), so *neither* domain
+reproduces it; what a domain can preserve is the glow's magnitude relative to
+the albedo it is added to. The authored path already decodes that albedo, so
+the sample is decoded with it and the tint - a shader constant, an authored
+magnitude - is not. The stand-in path keeps the undecoded form, its whole
+point being that it is gamma. Both were measured, bloom on, `--ticks 0`:
+
+| circuit | baseline | decoded (shipped) | undecoded |
+| --- | --- | --- | --- |
+| `amphiseum` | 6.515 % | 8.219 % | 8.490 % |
+| `talons_junction` | 9.860 % | 9.889 % | 9.944 % |
+| `15_anulpha_pass` | 6.776 % | 6.871 % | 6.919 % |
+| `10_sebenco_climb` | 10.373 % | 10.438 % | 10.455 % |
+| `zone_1` | 18.490 % | 18.047 % | 15.499 % |
+
+The two are 0.02-0.27 points apart on four of the five, so the measurement
+does not decide it and was never going to. **This is chosen, not measured**,
+on the consistency argument above, and it carries no confidence score.
+
+**The sweep, sixteen circuits, `--ticks 0` at 1440x816**
+(`scripts/hd-glow-sweep.py sweep`). The baseline column reproduces the
+2026-09-09 sweep exactly where that sweep was recorded - `04_chenghou_project`
+1.319 %, `12_sol_2` 18.463 % - which is what says the harness is the same
+instrument:
+
+| circuit | baseline, bloom on | fixed, bloom on | baseline, off | fixed, off |
+| --- | --- | --- | --- | --- |
+| `amphiseum` | 6.515 % | **8.219 %** | 1.631 % | **3.737 %** |
+| `modesto_heights` | 4.416 % | 4.416 % | 4.329 % | 4.329 % |
+| `talons_junction` | 9.860 % | 9.889 % | 4.507 % | 4.509 % |
+| `tech_de_ra` | 5.215 % | 5.215 % | 4.694 % | 4.694 % |
+| `zone_1` | 18.490 % | **18.047 %** | 13.138 % | 13.146 % |
+| `zone_2` / `zone_3` / `zone_4` | 0.488 / 0.486 / 0.492 % | unchanged | same | same |
+| `01_vineta_k` | 1.410 % | 1.455 % | 1.410 % | 1.455 % |
+| `02_track` | 2.657 % | 2.657 % | 2.657 % | 2.657 % |
+| `03_track` | 10.640 % | 10.643 % | 10.640 % | 10.643 % |
+| `04_chenghou_project` | 1.319 % | 1.331 % | 1.319 % | 1.331 % |
+| `05_ubermall` | 12.815 % | 12.817 % | 12.815 % | 12.817 % |
+| `10_sebenco_climb` | 10.373 % | 10.438 % | 10.373 % | 10.438 % |
+| `12_sol_2` | 18.463 % | 18.463 % | 18.463 % | 18.463 % |
+| `15_anulpha_pass` | 6.776 % | 6.871 % | 6.776 % | 6.871 % |
+| **median** | 6.515 % | **6.871 %** | 4.507 % | 4.509 % |
+
+The median moves 6.515 -> 6.871 % against a reference median of 7.491 %.
+**That pair is the weakest comparison on this page and should not be leaned
+on**: fourteen of the seventeen reference grabs are Talon's Junction and most
+of them are in motion, against sixteen circuits of ours at the grid, so the
+two medians are not drawn from the same population. **The matched comparison
+is narrower and is the one to cite** - Talon's Junction at the grid, ours
+**9.889 %** against that circuit's own grid range of **6.396-8.056 %**. We
+were above it before the fix (9.860 %) and are still above it after, by 0.029
+points, which is inside the noise of this measurement. So the honest statement
+is that the fix **does not move the frame out of anything it was inside**, not
+that it closes a gap.
+
+Where the move is real is the circuit the layer is busiest on: Amphiseum's
+arena floodlights, dull streaks across the roof before, now read as light
+banks, and its `AG-SYS` hoarding lights up.
+
+**Two things in that table are worth their own line.** Zone 1 gets *darker*,
+and the table itself says why rather than leaving it asserted: with the bloom
+**on** it goes 18.490 -> 18.047 % and with the bloom **off** it goes 13.138 ->
+13.146 %, up. The darkening exists only where the chain runs, so it is the
+blur ladder feeding the luminance adaptation - a brighter scene buys a lower
+exposure and the resolve gives some of it back. **Adding light to this chain
+is not monotonic in the output** and a term cannot be judged by its sign.
+
+And **eleven of the sixteen circuits read identically with `[graphics] bloom`
+on and off**, which is not this change's doing - it holds on the baseline
+build too - and is unexplained. The five that do respond are the four named
+environments plus Zone 1. **The obvious hypothesis is already dead**: six of
+the eleven *did* move under this change (`01_vineta_k`, `03_track`,
+`04_chenghou_project`, `05_ubermall`, `10_sebenco_climb`, `15_anulpha_pass`),
+so they reach `lit_linear` and take the authored path and still do not respond
+to the switch. Whatever it is, it is not "those circuits never light".
+
+**On circuit, where the signs and tubes are**, `--autopilot --ticks 900`:
+
+| circuit | baseline | fixed | the original, in motion |
+| --- | --- | --- | --- |
+| `talons_junction` | 15.904 % | **19.519 %** | 14.414-20.549 % |
+| `amphiseum` | 4.798 % | 4.881 % | not grabbed |
+
+Talon's Junction at 540 km/h is the largest move measured, +3.6 points, and it
+lands inside the original's own in-motion range rather than past it. Read as a
+player: the tunnel's ceiling strips and its right-hand wall panels light into
+a continuous bar where they were broken and dull, and the yellow hoarding at
+top left washes toward white - which is what `talons-heap/01.png` at 556 km/h
+does to its own signs too.
+
+**Verdict: shipped.** The disc settles the destination, the layer went from
+zero pixels to a tenth of the frame, and the frame moved toward the reference
+rather than past it once the reference was measured over its own picture.
+
+**Not measured**: Fury's circuits, any mounted DLC pack, and Amphiseum in
+motion against a grab there is none of.
+
 ### The chain was unswitchable, and how bright it actually is (2026-09-09)
 
 A regression hunt, opened on a from-play report that HD/Fury's bloom "seemed
