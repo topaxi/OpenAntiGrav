@@ -208,8 +208,7 @@ mod tests {
     /// `STRING_CONSUMERS`.
     #[test]
     fn every_file_under_assets_ui_strings_is_reachable_through_built_in() {
-        let dir =
-            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../assets/ui/strings");
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../assets/ui/strings");
         let mut checked = 0;
         for entry in std::fs::read_dir(&dir).expect("assets/ui/strings must exist") {
             let path = entry.expect("a readable dir entry").path();
