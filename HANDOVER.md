@@ -201,10 +201,17 @@ file does not need to carry its own.
     them; the recorded absence there is now the whole account) and the DLC
     key table is a maintainer-supplied credential this repo cannot regenerate
     at all, not an investigation with a next step.
-  - **1 of 13 is deterministically red, traced to a same-day commit, not
-    fixed** (per this file's own standing rule: a red ground-truth test
-    usually encodes a real disagreement, so "make it green" is the wrong
-    instinct without understanding why first):
+  - **1 of 13 *was* deterministically red and is now green. There is no
+    inherited red in this suite.** The diagnosis is kept below because it is
+    the useful part, and because of this file's own standing rule: a red
+    ground-truth test usually encodes a real disagreement, so "make it green"
+    is the wrong instinct without understanding why first. **Re-confirmed
+    2026-09-09** against `main` at `1328d108`, unmodified - `PASS [0.812s]`,
+    plus two independent full `test-data` runs green the same day on unrelated
+    branches. **Do not hand a member "expect one inherited failure" as a
+    baseline**: this row's opening line said "not fixed" for a day after its
+    own body said "Resolved", and a member given that figure will dismiss a
+    real regression as inherited. The test and its history:
     `shuriken_ground_truth::a_thrown_blade_bounces_off_a_real_circuit_and_dies_on_its_fuse`
     (one press throws zero blades - **not** `0c78c477`, that attribution is
     refuted; bisected to `cc395862`, the countdown-hold fix, which correctly
