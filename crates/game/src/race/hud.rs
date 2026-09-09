@@ -456,10 +456,10 @@ fn read_hud_texture(
 /// `HUDFont.fnt` is outlined the same way has not been measured.
 pub(super) fn hud_font(
     archives: &mut oag_assets::Archives,
-    languages: &[crate::language::Language],
+    languages: &[oag_ui::language::Language],
     role: &str,
     report: &mut Vec<String>,
-) -> crate::font::Atlas {
+) -> oag_ui::font::Atlas {
     let Some(name) = languages
         .iter()
         .find_map(|language| language.font(role))
@@ -468,7 +468,7 @@ pub(super) fn hud_font(
         report.push(format!(
             "no language plugin names a {role:?} font on this source; drawing with 5x7"
         ));
-        return crate::font::Atlas::build();
+        return oag_ui::font::Atlas::build();
     };
     match archives.read_font(&name).map_err(|e| e.to_string()) {
         Ok(font) => {
@@ -479,13 +479,13 @@ pub(super) fn hud_font(
                 font.glyphs.len(),
                 font.line_height
             ));
-            crate::font::Atlas::from_font(&font)
+            oag_ui::font::Atlas::from_font(&font)
         }
         Err(why) => {
             report.push(format!(
                 "HUD font {name} (role {role:?}) unavailable ({why}); drawing with 5x7"
             ));
-            crate::font::Atlas::build()
+            oag_ui::font::Atlas::build()
         }
     }
 }
