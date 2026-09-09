@@ -214,6 +214,20 @@ pub struct CaptureOptions {
     /// `--zone-stage` exists to make the colour grade itself checkable
     /// without a live race to drive it there.
     pub zone_spectrum_test: bool,
+    /// The row [`crate::records::Store`] already held for this circuit/mode/
+    /// class before this capture, if any - read by the caller, off the same
+    /// `<config dir>/oag/records.toml` a real session would, so a
+    /// `--race --screenshot` of the results table shows the same "personal
+    /// best" line a player would actually see. `None` on a fresh install with
+    /// no such row yet.
+    ///
+    /// **Read-only, on purpose.** This capture never calls
+    /// [`crate::records::save`] - `crate::records`'s own module doc names
+    /// exactly two capture sites, `Session::frame`'s finish-transition arm
+    /// and `Session::escape`, and a verification aid writing a player's real
+    /// save data on every `--screenshot` run would be a third one nobody
+    /// asked for.
+    pub previous_best: Option<crate::records::Record>,
 }
 
 /// [`Presented`] with the scene size worked out.
@@ -711,12 +725,37 @@ pub fn capture(
     match race.results() {
         Some(board) => match crate::scoreboard::Overlay::new(&device, &queue, format, &hud) {
             Ok(mut overlay) => {
+                // The same conversion `RaceStage::observation` makes for the
+                // real session, duplicated rather than shared: this capture
+                // has no `RaceStage` to call it on, and `crate::records` is
+                // deliberately free of a dependency on `Race` itself - see
+                // that module's own doc.
+                let standing = &race.world.ships[0].standing;
+                let observation = crate::records::Observation {
+                    finished: race.finished(),
+                    place: Some(race.places()[0]),
+                    laps_completed: crate::records::laps_completed(
+                        standing.lap,
+                        race.finished(),
+                        race.world.race.laps_target,
+                    ),
+                    tick: standing.finish_tick.unwrap_or(race.world.tick),
+                    best_lap_ticks: standing.best_lap_ticks,
+                    // No campaign cell is selected for a headless capture
+                    // either - see `RaceStage::observation`'s own doc.
+                    campaign_medal: None,
+                };
+                let personal_best = crate::records::PersonalBest::compare(
+                    options.previous_best.as_ref(),
+                    &observation,
+                );
                 overlay.draw(
                     &device,
                     &queue,
                     &mut encoder,
                     &hud_view,
                     board,
+                    Some(&personal_best),
                     hud_viewport,
                 );
             }

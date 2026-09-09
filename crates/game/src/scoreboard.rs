@@ -39,6 +39,7 @@
 
 use crate::frontend::{Align, Draw};
 use crate::hud::{Precision, format_lap_time};
+use crate::records;
 
 #[cfg(test)]
 mod tests;
@@ -195,19 +196,58 @@ const CAPTION: [f32; 4] = [0.62, 0.68, 0.78, 1.0];
 /// own, or a glyph fills as a solid box - see `crate::font::Atlas::luma`.
 const BORDER: [f32; 4] = [0.0, 0.0, 0.0, 1.0];
 
+/// What the craft column's own words are for a medal: the disc-inspired,
+/// all-caps convention every other label on this panel already uses (`POS`,
+/// `LAPS`, `YOU`). See [`records::Medal`] for the law behind which tier a
+/// race earns - nothing here recomputes it, only names it.
+fn medal_label(medal: records::Medal) -> &'static str {
+    match medal {
+        records::Medal::Gold => "GOLD",
+        records::Medal::Silver => "SILVER",
+        records::Medal::Bronze => "BRONZE",
+    }
+}
+
+/// How many extra footer lines [`draw_list`] owes [`PersonalBest`] - zero,
+/// one or two, depending on which of its two rows have anything to show.
+/// Read before the panel height is fixed, so a race with no stored lap yet
+/// and no medal in play draws exactly the panel [`crate::scoreboard`] always
+/// drew, with nothing tacked on underneath it - see the do-not-invent rule in
+/// `CLAUDE.md`: an absent personal best is a shorter panel, never a blank or
+/// placeholder line.
+///
+/// [`PersonalBest`]: crate::records::PersonalBest
+fn personal_best_lines(personal_best: Option<&records::PersonalBest>) -> usize {
+    let Some(pb) = personal_best else {
+        return 0;
+    };
+    usize::from(pb.best_lap_ticks.is_some()) + usize::from(pb.best_medal.is_some())
+}
+
 /// Builds the draw list for a board, in the 480x272 grid every other overlay
 /// here draws in.
 ///
 /// `line_height` is the font's own, so the table spaces itself to whatever face
 /// the source supplied - the disc's `HUDSmall` where there is one, the built-in
 /// 5x7 set where there is not.
+///
+/// `personal_best` is `Session::frame`'s finish-transition arm's own
+/// [`records::PersonalBest::compare`], read once at the same capture site
+/// that persists a race's `Observation` into `records::Store` - never
+/// recomputed here. `None` on every path that has no `records::Store` to
+/// compare against at all, which draws the panel exactly as it did before
+/// this existed.
 #[must_use]
-pub fn draw_list(board: &Board, line_height: f32) -> Vec<Draw> {
+pub fn draw_list(
+    board: &Board,
+    line_height: f32,
+    personal_best: Option<&records::PersonalBest>,
+) -> Vec<Draw> {
     let line = (line_height + 2.0).max(10.0);
     let header_y = PANEL_Y + PAD + line * 1.6;
     let first_row_y = header_y + line * 1.4;
     let footer_y = first_row_y + board.rows.len() as f32 * line + PAD;
-    let hint_y = footer_y + line;
+    let hint_y = footer_y + line * (1 + personal_best_lines(personal_best)) as f32;
     let panel_h = hint_y + line + PAD - PANEL_Y;
 
     let mut out = vec![Draw::Fill {
@@ -312,6 +352,43 @@ pub fn draw_list(board: &Board, line_height: f32) -> Vec<Draw> {
             format_lap_time(board.tick, Precision::Hundredths)
         ),
     ));
+
+    // The personal-best lines, one row under the race time and above the
+    // hint - present only for what `personal_best` actually has to say, per
+    // [`personal_best_lines`]. Highlighted in the same colour a player's own
+    // row already uses when this race is the one that set the figure, so
+    // "new" reads the same way here as it does in the standings above.
+    let mut y = footer_y + line;
+    if let Some(pb) = personal_best {
+        if let Some(ticks) = pb.best_lap_ticks {
+            out.push(text(
+                PANEL_X + PAD,
+                y,
+                Align::Left,
+                if pb.lap_improved { PLAYER } else { CAPTION },
+                format!(
+                    "PERSONAL BEST LAP {}{}",
+                    format_lap_time(u64::from(ticks), Precision::Hundredths),
+                    if pb.lap_improved { " - NEW!" } else { "" }
+                ),
+            ));
+            y += line;
+        }
+        if let Some(medal) = pb.best_medal {
+            out.push(text(
+                PANEL_X + PAD,
+                y,
+                Align::Left,
+                if pb.medal_improved { PLAYER } else { CAPTION },
+                format!(
+                    "BEST MEDAL {}{}",
+                    medal_label(medal),
+                    if pb.medal_improved { " - NEW!" } else { "" }
+                ),
+            ));
+        }
+    }
+
     out.push(text(
         PANEL_X + PANEL_W / 2.0,
         hint_y,
@@ -385,6 +462,10 @@ impl Overlay {
 
     /// Draws the board, over the frame and inside the same target the HUD is
     /// composited into.
+    ///
+    /// `personal_best` is [`draw_list`]'s own parameter of the same name -
+    /// `None` on every caller with no `records::Store` to compare against.
+    #[allow(clippy::too_many_arguments)]
     pub fn draw(
         &mut self,
         device: &wgpu::Device,
@@ -392,9 +473,10 @@ impl Overlay {
         encoder: &mut wgpu::CommandEncoder,
         view: &wgpu::TextureView,
         board: &Board,
+        personal_best: Option<&records::PersonalBest>,
         viewport: (f32, f32, f32, f32),
     ) {
-        let list = draw_list(board, self.line_height);
+        let list = draw_list(board, self.line_height, personal_best);
         self.renderer
             .overlay(device, queue, encoder, view, &list, viewport);
     }

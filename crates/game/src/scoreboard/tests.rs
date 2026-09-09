@@ -107,7 +107,7 @@ fn texts(list: &[Draw]) -> Vec<String> {
 #[test]
 fn the_list_draws_a_panel_a_heading_and_one_line_per_craft() {
     let board = board();
-    let list = draw_list(&board, 12.0);
+    let list = draw_list(&board, 12.0, None);
     assert!(matches!(list.first(), Some(Draw::Fill { .. })));
     let texts = texts(&list);
     assert!(texts.contains(&TITLE.to_string()));
@@ -121,13 +121,13 @@ fn the_list_draws_a_panel_a_heading_and_one_line_per_craft() {
 
 #[test]
 fn a_craft_that_did_not_finish_has_no_time() {
-    let list = draw_list(&build(&[racer(0, 1, 2)], Some(3), 600), 12.0);
+    let list = draw_list(&build(&[racer(0, 1, 2)], Some(3), 600), 12.0, None);
     assert!(texts(&list).contains(&"-".to_string()));
 }
 
 #[test]
 fn a_finisher_shows_its_crossing_as_a_race_time() {
-    let list = draw_list(&build(&[finisher(0, 1, 3_600)], Some(3), 3_600), 12.0);
+    let list = draw_list(&build(&[finisher(0, 1, 3_600)], Some(3), 3_600), 12.0, None);
     // 3,600 ticks at 60 Hz is one minute exactly, written the way the original
     // writes a time.
     assert!(texts(&list).contains(&"1.00.00".to_string()));
@@ -135,14 +135,14 @@ fn a_finisher_shows_its_crossing_as_a_race_time() {
 
 #[test]
 fn the_footer_reports_the_race_time() {
-    let texts = texts(&draw_list(&board(), 12.0));
+    let texts = texts(&draw_list(&board(), 12.0, None));
     assert!(texts.iter().any(|text| text.starts_with("RACE TIME 2.36.")));
 }
 
 /// Each craft's own quickest lap, not the player's eight times.
 #[test]
 fn every_row_carries_its_own_best_lap() {
-    let texts = texts(&draw_list(&board(), 12.0));
+    let texts = texts(&draw_list(&board(), 12.0, None));
     // The finisher's 3,001 ticks and the three racers' 3,100, 3,102 and 3,103.
     for expected in ["0.50.01", "0.51.66", "0.51.70", "0.51.71"] {
         assert!(
@@ -157,7 +157,7 @@ fn every_row_carries_its_own_best_lap() {
 fn a_craft_with_no_completed_lap_has_no_best_one() {
     let board = build(&[racer(0, 1, 1)], Some(3), 10);
     assert_eq!(board.rows[0].best_lap_ticks, None);
-    assert!(texts(&draw_list(&board, 12.0)).contains(&"-".to_string()));
+    assert!(texts(&draw_list(&board, 12.0, None)).contains(&"-".to_string()));
 }
 
 /// A time trial, a speed lap and a Zone run grid the player alone, and `1 of 1`
@@ -167,7 +167,7 @@ fn a_craft_with_no_completed_lap_has_no_best_one() {
 fn a_field_of_one_shows_no_place_at_all() {
     let board = build(&[finisher(0, 1, 3_000)], Some(3), 3_000);
     assert!(!board.shows_place());
-    let texts = texts(&draw_list(&board, 12.0));
+    let texts = texts(&draw_list(&board, 12.0, None));
     assert!(!texts.contains(&"POS".to_string()));
     assert!(!texts.contains(&"1".to_string()));
     // Everything else it has to say is still there.
@@ -179,7 +179,7 @@ fn a_field_of_one_shows_no_place_at_all() {
 fn a_field_of_more_than_one_shows_every_place() {
     let board = board();
     assert!(board.shows_place());
-    let texts = texts(&draw_list(&board, 12.0));
+    let texts = texts(&draw_list(&board, 12.0, None));
     assert!(texts.contains(&"POS".to_string()));
     for place in 1..=4 {
         assert!(texts.contains(&format!("{place}")), "no place {place}");
@@ -194,7 +194,7 @@ fn a_full_grid_fits_the_screen() {
         .map(|slot| racer(slot, slot + 1, 3))
         .collect::<Vec<_>>();
     let board = build(&crafts, Some(3), 12_000);
-    let list = draw_list(&board, 12.0);
+    let list = draw_list(&board, 12.0, None);
     let Some(Draw::Fill { rect, .. }) = list.first() else {
         panic!("the panel is the first draw");
     };
@@ -213,4 +213,96 @@ fn a_full_grid_fits_the_screen() {
             );
         }
     }
+}
+
+/// `None` draws exactly what every test above already asserted - no personal
+/// best means no extra line, not a blank or placeholder one. Named
+/// separately from `the_list_draws_a_panel_a_heading_and_one_line_per_craft`
+/// so a future change to that count is not the one place this guarantee is
+/// pinned.
+#[test]
+fn no_personal_best_draws_no_extra_line() {
+    let with_none = texts(&draw_list(&board(), 12.0, None));
+    assert!(!with_none.iter().any(|t| t.contains("PERSONAL BEST")));
+    assert!(!with_none.iter().any(|t| t.contains("BEST MEDAL")));
+}
+
+/// A stored lap this race did not beat draws in the ordinary caption colour
+/// and carries no "new" - `lap_improved: false` is the whole reason
+/// `PersonalBest::compare` has two fields for this rather than one.
+#[test]
+fn a_personal_best_lap_that_was_not_beaten_draws_plainly() {
+    let pb = records::PersonalBest {
+        best_lap_ticks: Some(3_000),
+        lap_improved: false,
+        ..records::PersonalBest::default()
+    };
+    let texts = texts(&draw_list(&board(), 12.0, Some(&pb)));
+    assert!(texts.contains(&"PERSONAL BEST LAP 0.50.00".to_string()));
+    assert!(!texts.iter().any(|t| t.contains("NEW")));
+}
+
+/// The race that sets the personal best says so, on the same line.
+#[test]
+fn a_personal_best_lap_just_beaten_says_so() {
+    let pb = records::PersonalBest {
+        best_lap_ticks: Some(2_900),
+        lap_improved: true,
+        ..records::PersonalBest::default()
+    };
+    let texts = texts(&draw_list(&board(), 12.0, Some(&pb)));
+    assert!(texts.contains(&"PERSONAL BEST LAP 0.48.33 - NEW!".to_string()));
+}
+
+/// The medal line is independent of the lap line - a race can carry one
+/// without the other, and each is judged on its own `_improved` flag.
+#[test]
+fn a_standing_medal_draws_with_its_own_label_and_no_lap_line() {
+    let pb = records::PersonalBest {
+        best_medal: Some(records::Medal::Silver),
+        medal_improved: false,
+        ..records::PersonalBest::default()
+    };
+    let texts = texts(&draw_list(&board(), 12.0, Some(&pb)));
+    assert!(texts.contains(&"BEST MEDAL SILVER".to_string()));
+    assert!(!texts.iter().any(|t| t.contains("PERSONAL BEST LAP")));
+}
+
+/// A medal this race itself earned is highlighted the same way a beaten lap
+/// is.
+#[test]
+fn a_medal_just_earned_says_so() {
+    let pb = records::PersonalBest {
+        best_medal: Some(records::Medal::Gold),
+        medal_improved: true,
+        ..records::PersonalBest::default()
+    };
+    let texts = texts(&draw_list(&board(), 12.0, Some(&pb)));
+    assert!(texts.contains(&"BEST MEDAL GOLD - NEW!".to_string()));
+}
+
+/// Both lines at once still fit the 480x272 grid - the panel height has to
+/// grow by exactly the two extra rows, not stay pinned at the no-personal-best
+/// size.
+#[test]
+fn both_lines_together_still_fit_the_screen() {
+    let pb = records::PersonalBest {
+        best_lap_ticks: Some(2_900),
+        lap_improved: true,
+        best_medal: Some(records::Medal::Bronze),
+        medal_improved: false,
+        ..records::PersonalBest::default()
+    };
+    let list = draw_list(&board(), 12.0, Some(&pb));
+    let Some(Draw::Fill { rect, .. }) = list.first() else {
+        panic!("the panel is the first draw");
+    };
+    assert!(
+        rect[1] + rect[3] <= crate::frontend::SCREEN.1,
+        "panel bottom {} is off the 272-line screen",
+        rect[1] + rect[3]
+    );
+    let texts = texts(&list);
+    assert!(texts.contains(&"PERSONAL BEST LAP 0.48.33 - NEW!".to_string()));
+    assert!(texts.contains(&"BEST MEDAL BRONZE".to_string()));
 }

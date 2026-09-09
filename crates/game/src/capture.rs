@@ -351,6 +351,20 @@ pub fn run(
             .get(title.name)
             .cloned()
             .unwrap_or_default();
+        // Read-only, off whatever `<config dir>/oag/records.toml` already
+        // holds - see `race::CaptureOptions::previous_best`'s own doc for why
+        // this never writes one back.
+        let previous_best = crate::records::load()
+            .get(&crate::records::Key::new(
+                loaded.title.name,
+                race_options
+                    .track
+                    .as_deref()
+                    .or(Some(loaded.title.race.track)),
+                loaded.setup.mode.name(),
+                &loaded.setup.class,
+            ))
+            .cloned();
         return race::capture(
             loaded,
             &race::CaptureOptions {
@@ -398,6 +412,7 @@ pub fn run(
                 // `zone_stage` already has here - see `main/headless.rs` for
                 // the one capture path that does.
                 zone_spectrum_test: false,
+                previous_best,
             },
             audio,
         );
