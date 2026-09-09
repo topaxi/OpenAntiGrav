@@ -65,7 +65,10 @@ This subsystem is unusually mixed, so the split comes before anything else.
 | **A Plasma press puts exactly one in the air**, where a Rocket puts three | **recovered** | 88 |
 | **A plasma bolt flies the Rocket's own floor-following path** - `Plasma_Update` is `Rocket_Update` | **recovered** | 85 |
 | The bolt rides `WO_PLASMA_HEAD` and fires the `PLASMA` cue, both read out of `.rodata` | **recovered** | 90 |
-| **What `<Plasma charge_time>` does** - authored, no consumer found, and play says there is one | **unread** | - |
+| **A plasma bolt winds up for 1.0 s on the nose before it flies** - `Plasma_Init`'s `+0x4c`/`+0x50`, spent by `Plasmas_Update` | **recovered** | 90 |
+| **A bolt is reaped at 10.0 s** by the pool walker, a hardcoded ceiling and not an authored `timetodie` | **recovered** | 90 |
+| The bolt's detonation is `WO_PLASMA_FLASH`, off `Plasma_SpawnDetonation` in the pool teardown | **recovered** | 88 |
+| **What `<Plasma charge_time>` does** - authored on three tables, and a calibrated sweep of both PSP executables says **nothing reads it** | **recovered (negative)** | 90 |
 | `<Shuriken>`: ten of thirteen, at measured offsets `+0x144`..`+0x174` | **recovered** | 92 |
 | **A Shuriken press throws exactly one blade**, at `±0.349066` rad - `20` degrees - on a coin | **recovered** | 88 |
 | A blade carries the **throwing craft's own speed** on top of the class speed | **recovered** | 88 |
@@ -840,18 +843,20 @@ the original does: the stamp is unconditional and the grant is not.
   `damage_per_bullet` to whatever it struck directly with no splash - the
   schema's own shape, since the Cannon authors neither `blastforce` nor
   `blastradius`.
-- **The Plasma's `charge_time`.** Authored on all three shipped tables, the only
-  weapon that carries it, and no consumer found on a path that was read end to
-  end - and **a maintainer who plays Pulse says the weapon does wind up before
-  it fires**. So this is a gap in the read rather than a vestigial attribute,
-  and it is the one place the port is knowingly at odds with a from-play report.
-  This build fires instantly, which is what the read code does. See
-  [plasma.md](../ghidra/functions/psp-pulse-usa/plasma.md#charge_time-is-authored-and-nothing-read-spends-it).
-- **The Plasma's detonation effect.** `Race::blast_for` returns `None` for it:
-  the pool teardown that would spawn one is unread, and `WO_PLASMA_FLASH` is
-  authored on the disc with no located call site. The blast's damage and impulse
-  still land - what is missing is the picture, which is the same state the Bomb
-  is in.
+- **The Plasma's `charge_time` is dead data, and the wind-up it looks like it
+  describes is real anyway.** Both closed 2026-09-09, and they are separate
+  facts. The weapon *does* wind up before it fires - one second, held on the
+  firing craft's nose, from `Plasma_Init`'s `+0x4c`/`+0x50` and the pool
+  walker `Plasmas_Update` (`0x0886b490`) that spends them - so the from-play
+  report was right and the earlier read had followed the wrong four functions.
+  But the duration is a hardcoded `1.0f` in `.rodata` (`0x08a7c098`), not the
+  `charge_time="3"` the file authors: a sweep of all 69 functions that reach
+  the weapon-stats table finds **zero** accesses at `charge_time`'s `+0x9c`
+  against fourteen at the `venomspeed` control offset, and **Pure hard-codes
+  the same second in the same two stores**. The attribute earns no field in
+  `oag_tables::weapons::PlasmaStats` for the usual reason, and this build now
+  holds the shot for `oag_gameplay::projectile::plasma::CHARGE_SECONDS`. See
+  [plasma.md](../ghidra/functions/psp-pulse-usa/plasma.md#the-charge-is-real-and-it-is-not-charge_time).
 - **The Bomb's `damageradius`.** Authored, the only second radius any weapon
   has, and no consumer found - so it is decoded nowhere and spent nowhere. See
   `oag_tables::weapons::BombStats`.

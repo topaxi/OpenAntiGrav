@@ -473,6 +473,7 @@ fn write_projectile(hasher: &mut StateHasher, projectile: &Projectile) {
         target,
         bounces,
         launch_speed_kmh,
+        charge,
         // Deliberately excluded. `orientation` is a laid charge's frozen
         // drawing pose - `Projectile::orientation`'s own doc comment - and
         // nothing in this crate reads it back on a later tick, so it cannot
@@ -492,6 +493,13 @@ fn write_projectile(hasher: &mut StateHasher, projectile: &Projectile) {
     hasher.write_vec3(*velocity);
     hasher.write_u8(*owner);
     hasher.write_f32(*lifetime);
+    // A plasma bolt's wind-up decides the tick it starts flying on and
+    // therefore where it is on every tick after that, so it is simulation
+    // state - unlike `orientation` below. `0.0` for every other weapon and for
+    // a bolt already in the air, so this only moves the reference for a race
+    // that actually fires a Plasma. See
+    // `crate::projectile::plasma::CHARGE_SECONDS`.
+    hasher.write_f32(*charge);
     // The surface being ridden decides which way next tick probes, so it is
     // simulation state and not a cached convenience.
     hasher.write_vec3(*surface);

@@ -230,6 +230,13 @@ impl Race {
     ///   `struck` here (`FUN_088579a8`/`FUN_08857f2c`) applies damage and a
     ///   sound cue but never spawns a particle effect. See
     ///   `oag_gameplay::projectile::cannon`'s module doc for the full read.
+    /// - **`Plasma`**: [`PLASMA_BLAST_EFFECT`] always, whatever it struck, the
+    ///   same shape as the Missile's and the Mine's. `Plasmas_Update`
+    ///   (`0x0886b490`) runs one teardown pass over every bolt carrying the
+    ///   destroy bit and calls `Plasma_SpawnDetonation` (`0x0886ac88`) with the
+    ///   bolt's own position for each - a wall hit and a timed-out bolt reach
+    ///   it identically, so there is no split to mirror. Wired 2026-09-09; it
+    ///   returned `None` before, when the teardown was unread.
     /// - **`Bomb`, and everything else**: `None`. The Bomb's own teardown -
     ///   a distinct function from the Mine's, per its own separate pool
     ///   cursor - is not chased, so whether it reaches `Mine_SpawnExplosion`
@@ -261,6 +268,7 @@ impl Race {
             oag_tables::weapons::Weapon::Cannon if struck.is_none() => {
                 Some((CANNON_SPARKS_EFFECT, point))
             }
+            oag_tables::weapons::Weapon::Plasma => Some((PLASMA_BLAST_EFFECT, point)),
             _ => None,
         }
     }

@@ -72,6 +72,7 @@
 
 mod blast;
 pub mod cannon;
+mod geometry;
 pub mod leach_beam;
 pub mod mine;
 pub mod missile;
@@ -80,12 +81,14 @@ pub mod quake;
 mod rocket;
 pub mod shuriken;
 
+pub use geometry::hull_radius;
+use geometry::nearest_hit;
+
 pub use blast::{BlastStats, blast};
 pub use mine::TriggerRadii;
 pub use rocket::{ROCKET_SHOTS, launch};
 
 use oag_core::math::{Quat, Vec3};
-use oag_physics::params::Dimensions;
 use oag_physics::{Ray, Raycaster};
 use oag_tables::weapons::Weapon;
 
@@ -214,6 +217,20 @@ pub struct Projectile {
     /// `Quat::IDENTITY` for a flying projectile, which draws from
     /// [`Self::velocity`] instead. See [`mine::frozen_pose`].
     pub orientation: Quat,
+    /// Seconds of wind-up left before this one leaves the craft that fired it,
+    /// and `0.0` for anything already flying.
+    ///
+    /// **Only the Plasma ever holds one, and it is recovered** - see
+    /// [`plasma::CHARGE_SECONDS`] for the two functions that carry it. A bolt
+    /// with a charge left occupies its pool slot and rides the firing craft's
+    /// nose; it does not fly, sweep, collide or age. That is the original's
+    /// own shape: `Weapon_FirePlasma` (`0x0886a868`) takes the slot and
+    /// `Plasma_Init` (`0x0885bd18`) marks it charging in the same breath, so a
+    /// second press while one is winding up finds the pool one entry fuller.
+    ///
+    /// Hashed, unlike [`Self::orientation`]: it decides *when* a bolt starts
+    /// flying and therefore where it is on every later tick.
+    pub charge: f32,
 }
 
 /// What a projectile did when it stopped.
@@ -332,6 +349,7 @@ impl Projectiles {
                 bounces: 0,
                 launch_speed_kmh: 0.0,
                 orientation: Quat::IDENTITY,
+                charge: 0.0,
             }; MAX_PROJECTILES],
         }
     }
@@ -423,6 +441,35 @@ impl Projectiles {
             .is_some()
     }
 
+    /// Fires one plasma bolt, held on the firing craft's nose for its wind-up
+    /// before it flies.
+    ///
+    /// **A fifth entry point, for [`Self::throw`]'s reason** - a rocket and a
+    /// missile must keep landing in the same slot with the same fields they
+    /// always did.
+    ///
+    /// `charge` is [`plasma::CHARGE_SECONDS`]; while it lasts the slot is
+    /// taken and the bolt is reseated on the craft every tick by
+    /// [`Self::advance`], so the shot leaves along wherever that craft is
+    /// pointing when the wind-up ends rather than where it pointed when the
+    /// button went down. `velocity` is therefore read for its **length** while
+    /// charging and for its direction only once the hold is over.
+    pub fn charge_up(&mut self, position: Vec3, velocity: Vec3, owner: u8, charge: f32) -> bool {
+        let Some(slot) = self.place(
+            Weapon::Plasma,
+            position,
+            velocity,
+            owner,
+            None,
+            0.0,
+            MAX_FLIGHT_SECONDS,
+        ) else {
+            return false;
+        };
+        slot.charge = charge;
+        true
+    }
+
     /// Lays one mine or bomb, with its own authored fuse instead of the safety
     /// net.
     ///
@@ -481,6 +528,11 @@ impl Projectiles {
             target,
             bounces: 0,
             launch_speed_kmh,
+            // Flying from this tick on. `Projectiles::charge_up` is the one
+            // entry point that raises it, for `Self::lay`'s reason: every
+            // other weapon must keep landing in the same slot with the same
+            // fields it always did.
+            charge: 0.0,
         };
         Some(slot)
     }
@@ -519,6 +571,29 @@ impl Projectiles {
                 continue;
             };
             let guided = kind == Weapon::Missile;
+
+            // **A charging bolt does not fly**, and the Plasma is the only
+            // weapon that has one. `Plasmas_Update` (`0x0886b490`) branches on
+            // the entity's own `+0x4c` flag: charging entities take
+            // `Plasma_UpdateCharge` (`0x0885c170`) and the countdown at
+            // `+0x50`, flying ones take `Plasma_Update`. Nothing else in the
+            // tick reaches a charging bolt - no probe, no sweep, no hull test,
+            // and no ageing, because the age at `+0x54` is `Plasma_Update`'s
+            // to advance. See [`plasma::CHARGE_SECONDS`].
+            if projectile.charge > 0.0 {
+                // The order is the original's: reseat, *then* count down, so
+                // the tick the hold ends still puts the bolt where the craft
+                // is now. `Plasma_Launch` (`0x0885bf84`) re-reads the craft's
+                // node matrix anyway, which is the same thing said twice.
+                if let Some(ship) = ships.get(projectile.owner as usize) {
+                    let (position, heading) =
+                        plasma::muzzle(&ship.physics, &ship.handling.dimensions);
+                    projectile.position = position;
+                    projectile.velocity = heading * projectile.velocity.length();
+                }
+                projectile.charge = (projectile.charge - dt).max(0.0);
+                continue;
+            }
 
             // **The two rear weapons are the things here that do not fly**, so
             // they take none of what follows: no surface probe, no fall, no
@@ -750,57 +825,6 @@ impl Projectiles {
     }
 }
 
-/// The nearest of the geometry hit and the hull hits along one tick's step.
-fn nearest_hit<R: Raycaster + ?Sized>(
-    from: Vec3,
-    to: Vec3,
-    distance: f32,
-    raycaster: &R,
-    ships: &[crate::world::Ship],
-    owner: u8,
-) -> Option<(Vec3, Option<u8>, Vec3)> {
-    let direction = (to - from) / distance;
-
-    // `include_reset` is false: a `Reset Collision` volume is a respawn trigger
-    // rather than a surface, and a rocket detonating on one would blow up in
-    // mid-air over the run-off.
-    //
-    // **Only a face-on hit stops it.** A projectile riding the track clips the
-    // floor constantly - that is what riding it means - and detonating on those
-    // is exactly the bug this model exists to fix: before it, three rockets
-    // died in the tick they were fired. A grazing hit is the floor and is
-    // ignored here, having already been handled by the surface probe; a hit the
-    // projectile runs *into* is a wall and stops it. See [`WALL_FACING`].
-    let mut best = Raycaster::raycast(raycaster, Ray::new(from, direction, distance), None, false)
-        .filter(|hit| -hit.normal.dot(direction) > WALL_FACING)
-        .map(|hit| (hit.distance, hit.point, None, hit.normal));
-
-    for (slot, ship) in ships.iter().enumerate() {
-        if !ship.active || slot as u8 == owner {
-            continue;
-        }
-        let radius = hull_radius(&ship.handling.dimensions);
-        let Some(t) = segment_sphere(from, to, ship.physics.body.position, radius) else {
-            continue;
-        };
-        let travelled = t * distance;
-        if best.is_none_or(|(nearest, _, _, _)| travelled < nearest) {
-            // A hull hit carries the incoming direction reversed where a geometry
-            // hit carries a surface normal. Nothing reads it - a hull hit always
-            // detonates, never bounces - and it is here so the tuple has one
-            // shape rather than an `Option` nobody unwraps.
-            best = Some((
-                travelled,
-                from + direction * travelled,
-                Some(slot as u8),
-                -direction,
-            ));
-        }
-    }
-
-    best.map(|(_, point, struck, normal)| (point, struck, normal))
-}
-
 /// Flies the world's projectiles and detonates whatever stopped, in one call.
 ///
 /// The seam a race loop wants: `oag-gameplay` owns both halves - the array and
@@ -862,76 +886,6 @@ pub fn step<R: Raycaster + ?Sized>(
     );
 
     impacts
-}
-
-/// The sphere a craft is tested against.
-///
-/// **Ours.** `<Misc>` authors a `length`, a `width` and a `height` and the
-/// physics builds a box from them (`oag_physics::wall::hull_extent`), but
-/// nothing has been read about what a *projectile* is tested against.
-///
-/// Half the largest dimension is the sphere that **circumscribes** the box's
-/// longest axis, and it is worth being exact about which way that errs. A hull
-/// of `length 4, width 2, height 1` has half-extents `(2.0, 1.0, 0.5)` and a
-/// radius of `2.0`, so the sphere matches the box nose-to-tail and **bulges
-/// past it on the other two axes**: a rocket passing 1.8 units to the side hits,
-/// where the box would have missed. So this is the *generous* reading, not the
-/// conservative one - it favours the shooter, and a near miss can register as a
-/// hit.
-///
-/// That is a defensible placeholder rather than the right answer: the smallest
-/// half-extent (`0.5` here) would be conservative and would make most visually
-/// solid hits miss, which reads as a broken weapon. Sizing to the hull's length
-/// keeps a craft-sized target. Whoever recovers what the original tests should
-/// replace the whole function rather than tune this number.
-///
-/// Reusing the box would mean a segment-vs-oriented-box test for a mechanic
-/// where nothing is known about the original's own shape, which is precision
-/// with no evidence under it.
-#[must_use]
-pub fn hull_radius(dimensions: &Dimensions) -> f32 {
-    0.5 * dimensions
-        .length
-        .max(dimensions.width)
-        .max(dimensions.height)
-}
-
-/// Where a segment first enters a sphere, as a fraction of the segment.
-///
-/// `None` when it misses, or when both roots lie outside `0..=1`. A segment that
-/// *starts* inside returns `0.0`, which is the answer a launch that overlaps a
-/// hull needs.
-fn segment_sphere(p0: Vec3, p1: Vec3, centre: Vec3, radius: f32) -> Option<f32> {
-    let d = p1 - p0;
-    let m = p0 - centre;
-    let a = d.dot(d);
-    if a <= 0.0 {
-        return None;
-    }
-    let b = m.dot(d);
-    let c = m.dot(m) - radius * radius;
-
-    // Already inside. Not folded into the quadratic below: with `c <= 0` the
-    // near root is negative and would be rejected, which would let a projectile
-    // spawned inside a hull fly out through it.
-    if c <= 0.0 {
-        return Some(0.0);
-    }
-    // Heading away, and outside.
-    if b >= 0.0 {
-        return None;
-    }
-
-    let discriminant = b * b - a * c;
-    if discriminant < 0.0 {
-        return None;
-    }
-    let t = (-b - discriminant.sqrt()) / a;
-    if (0.0..=1.0).contains(&t) {
-        Some(t)
-    } else {
-        None
-    }
 }
 
 /// How many km/h one world unit per second is, for the authored weapon speeds.

@@ -255,11 +255,18 @@ impl Race {
                     ) else {
                         return;
                     };
-                    if !self.sim.world.projectiles.spawn(
-                        oag_tables::weapons::Weapon::Plasma,
+                    // **Held for a second before it flies.** `Plasma_Init`
+                    // (`0x0885bd18`) marks the fresh pool entry charging and
+                    // the pool walker holds it on the nose until the countdown
+                    // runs out - see
+                    // `oag_gameplay::projectile::plasma::CHARGE_SECONDS`, which
+                    // also records why the wind-up is one second and not the
+                    // `charge_time="3"` the file authors.
+                    if !self.sim.world.projectiles.charge_up(
                         position,
                         velocity,
                         0,
+                        oag_gameplay::projectile::plasma::CHARGE_SECONDS,
                     ) {
                         // Every slot was taken. Keep the pickup rather than
                         // spend it on a shot that never left - the same rule

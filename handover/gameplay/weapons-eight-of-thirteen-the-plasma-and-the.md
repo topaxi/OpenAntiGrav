@@ -367,41 +367,69 @@ which is the whole point of the weapon.
 
 ## Open
 
-- **`<Plasma charge_time>` is authored and nothing read spends it, and play
-  says something should.** This is the one place the port is knowingly at odds
-  with a from-play report, so it is first on this list. The whole press-to-flight
-  path was read - `Ship_FireHeldWeapon` (`0x08844ae8`) -> `Weapon_RequestFire`
-  (`0x08862d9c`) -> `Weapon_FirePlasma` (`0x0886a868`) -> `Plasma_Update`
-  (`0x0885c6cc`) - and **none of the four holds a shot back**; `Plasma_Update`
-  reads `+0x54` as a plain age. A maintainer who plays Pulse, asked cold, says
-  the Plasma winds up before it fires, and that oracle has been right twice on
-  this subsystem already. **Two places to look that this session did not
-  follow**: the *second* fourteen-entry jump table at `0x08a7bc90`, which
-  `Ship_FireHeldWeapon` dispatches through by `weapon_id + 1` **after**
-  `Weapon_RequestFire` returns, and `WO_PLASMA_FLASH`'s absent call site.
-  **The first of those two is now read and closed**: `0x08a7bc90` is a computed
-  goto inside `Ship_FireHeldWeapon`, not a call table, and its Plasma arm is
-  five instructions that increment a per-weapon "times fired" tally and branch
-  to the shared exit. No arm holds a timer. What is left is
-  `WO_PLASMA_FLASH`'s call site and the HUD - a charging weapon usually has a
-  meter, and `Arcade_HUD.xml` is fully parsed. `PlasmaStats` carries no field
-  for the attribute meanwhile, the same treatment `damageradius` gets.
-- **A trap that will cost somebody an hour, left behind by that read.** The
-  tally above sits at **`+0x1ac` on the object at `0x00057fdc`**, and
-  `weapon-fire.md` and `mine.md` both record two failed sweeps for what writes
-  **`craft+0x1ac`**, the Mine's round counter. The offsets collide exactly and
-  the objects are different. Whoever finds this increment while hunting that
-  writer will think they have it; they have not, and it is incremented here
-  where `Weapon_DropMines` decrements.
-- **The Plasma draws no detonation.** `Race::blast_for` returns `None`: the pool
-  teardown that consumes `Plasma_Update`'s destroy bit was not followed, and
-  `WO_PLASMA_FLASH` is authored with no located call site. `FUN_08867370` is the
-  template - find the Plasma-pool equivalent (cursor `+0xa4`, array `+0x64`, cap
-  16) and see what it calls at teardown. The damage and impulse land; only the
-  picture is missing.
-- **`0x0885c5a4`, the Plasma's speed lookup, is deliberately unnamed.** It was
-  not decompiled; a name off a structural analogy with `Rocket_SpeedForClass`
-  alone is what the rubric's 50-70 band is for.
+- ~~**`<Plasma charge_time>` is authored and nothing read spends it, and play
+  says something should.**~~ ~~**A trap that will cost somebody an hour.**~~
+  ~~**The Plasma draws no detonation.**~~ **All three closed 2026-09-09** -
+  see the section at the bottom of this file and
+  [plasma.md](../../docs/ghidra/functions/psp-pulse-usa/plasma.md). Short
+  version: the wind-up is real (the from-play oracle was right), it is a
+  hardcoded 1.0 s in both PSP titles, `charge_time` is dead data in both, and
+  `WO_PLASMA_FLASH` is the detonation. The `+0x1ac` trap still stands and is
+  still worth reading before hunting the Mine's round counter.
+- ~~**`0x0885c5a4`, the Plasma's speed lookup, is deliberately unnamed.**~~
+  **Decompiled and named 2026-09-09** (`Plasma_SpeedForClass`, 88). Its twin
+  `FUN_0885c650` - the same four offsets, no ramp - inherits the old state and
+  stays unnamed for the same reason.
+- **The Plasma's launch-speed ramp is read and not implemented.**
+  `Plasma_SpeedForClass` blends `entity+0x48` (the craft's own speed plus
+  `launchspeed`) into the class speed over the bolt's first second of flight;
+  this engine flies at `class + launchspeed` throughout, which is
+  `oag_gameplay::projectile::launch`'s shared choice. Deliberate, so the Rocket
+  and the Plasma cannot drift apart - worth revisiting only alongside the
+  Rocket's own.
+- **The Plasma blast's three models are recovered and not drawn.**
+  `PlasmaBlast_Construct` (`0x0885fd90`) loads
+  `Data\Weapons\pulse_plasma_halo1.vex` and two
+  `pulse_plasma_hemisphere*.vex`, orients them to the located track surface and
+  animates three ramps over them. This engine plays `WO_PLASMA_FLASH` and draws
+  none of the three. Nothing is substituted for them.
+- **A plasma bolt that times out is reaped silently here and detonates in the
+  original.** `Plasmas_Update` (`0x0886b490`) raises the destroy bit on
+  `age > 10.0` and the *same* teardown pass then runs - so a bolt that never
+  hits anything still reaches `Plasma_SpawnDetonation`. This engine's
+  `Projectiles::advance` frees an expired slot with no `Impact` at all, which
+  is the Rocket's behaviour ported across. Wiring it is not free: an `Impact`
+  is what carries the blast, so producing one on expiry would apply damage and
+  impulse too, and whether the original's expiry path reaches
+  `Weapon_PostBlastImpulse` was not followed. **Read the teardown's other two
+  calls before changing this** - `Psys_Release_q` and `FUN_0886b898` - because
+  one of them is where that answer is.
+- **A player mashing fire lays plasma bolts the same way they lay mines**, and
+  the array fills: `--give plasma --press square` puts **128** bolts in the
+  air inside 260 ticks and holds there, and in `single_race` the craft is dead
+  by tick 100 against tick 582 on the same command with `--give rocket`. This
+  is the `Race::spend_pickup` re-press bug this thread already records for the
+  Mine (one shot per press-edge, no `is_dropping` guard) reaching a second
+  weapon - **not** something the wind-up introduced, since each bolt still
+  releases one second after its own press and they stay staggered. Recorded so
+  the next person driving weapons with `--give` does not read it as new.
+- **The charging glow rides the nose already; its ramp does not.** Checked
+  rather than assumed, and the first draft of this row had it backwards.
+  `Race::flare_effect_for` maps `Weapon::Plasma` to `WO_PLASMA_HEAD` and
+  `advance_projectile_flares` follows *every* live projectile's position - and
+  a charging bolt is a live projectile reseated on the craft's nose every
+  tick, so the glow sits on the nose for the wind-up and leaves with the bolt,
+  which is what the original's re-parenting does, arrived at from the other
+  end. What is **not** ported is `Plasma_UpdateCharge`'s
+  `(1.0 - remaining) * 0.75` scale: the glow does not grow as the shot
+  charges. That needs a per-instance scale on a *riding* flare, which
+  `advance_one_flare` does not currently carry - `Stage::rescale` exists (the
+  Quake uses it) but the flare path never calls it.
+- **`Data\Weapons\Bomb_Shockwave.vex` is a located string with no read call
+  site.** It sits immediately before the plasma blast's own models in the same
+  `.rodata` run (`0x08a7c190`), found while reading `PlasmaBlast_Construct`. A
+  neighbour reading and nothing more - but it is the first concrete thing
+  anyone opening the Bomb's unread teardown has to go on.
 - **How many mines a press lays is invented.** `oag_gameplay::projectile::mine::CLUSTER`
   is `5`. Two independent sweeps for what writes the original's counter at
   `craft+0x1ac` found only the handler's own decrement, and no `<Stats>`
@@ -743,6 +771,64 @@ dropping the monotonicity claim, and re-baselining the tier ordering.
 **Cost**: 350 s in a debug build, against the 17 s the single-circuit version
 took. `just test-data` runs debug, so that is the number that counts; it makes
 this the longest single test in the suite.
+
+## 2026-09-09: the charge is real, the detonation is found, `charge_time` is dead
+
+**The three items above closed in one pass, and the pass was one function
+long.** `get_xrefs_to Plasma_Update` resolves to two callers; the second,
+`FUN_0886b490`, is the Plasma pool walker (`Plasmas_Update`, confidence 90),
+and it holds everything the 2026-09-02 read had gone looking for in the fire
+path. The lesson worth keeping: **the fire handler was never going to hold the
+timer, because in this engine the pool walker is where a weapon's per-tick
+state machine lives**. `FUN_08867370` is the Mine's equivalent and this thread
+had already named it as the template - the mistake was reading it as "the
+teardown" rather than "the update".
+
+**1. The wind-up is real, one second, and hardcoded.** `Plasma_Init` sets
+`entity+0x4c = 1` (charging) and `entity+0x50 = _DAT_08a7c098` = `0x3f800000`
+= 1.0f. `Plasmas_Update` branches on `+0x4c`: a charging entity gets
+`Plasma_UpdateCharge` (`0x0885c170`), which copies the firing craft's own
+weapon-node world matrix onto the bolt every tick and scales the riding
+`WO_PLASMA_HEAD` by `(1.0 - remaining) * 0.75`; `Plasma_Launch` (`0x0885bf84`)
+fires it when the countdown reaches zero, reading the node matrix **fresh**, so
+the shot leaves along the heading the craft has at release rather than at
+press. Cross-checked from a path read for another reason: the netcode's
+`Plasma_SpawnRemote` (`0x0886a920`) calls `Plasma_Init` then `Plasma_Launch`
+back to back before fast-forwarding, which only makes sense if `Init` leaves
+the bolt held.
+
+**2. `charge_time` is still spent nowhere, and now that is measured rather
+than "not found yet".** A calibrated sweep - every load and store at a stats
+offset across all 69 functions in `psp-pulse-usa` that reach the weapon-stats
+table - finds **zero** at `charge_time`'s `+0x9c` against **fourteen** at the
+`venomspeed` control `+0xac`, including the known consumer. **Pure hard-codes
+the same 1.0f in the same two stores** (`FUN_0885df98`), from a function whose
+allocator tag is the original source path
+`c:/Work/Wipeout/Code/Backend/Weapons/Plasma.cpp`. So the authored `3` is
+three times the shipped wind-up in both titles.
+
+**Both halves matter and they point opposite ways.** The from-play report was
+right about the behaviour and would have been wrong about the number: a
+three-second charge added to match the attribute would have tripled it. This
+is the case the falsification clause exists for, and the way through it was to
+find the consumer rather than to argue about the recollection.
+
+**3. `WO_PLASMA_FLASH` is the detonation.** The walker's teardown pass calls
+`Plasma_SpawnDetonation` (`0x0886ac88`) at the bolt's position;
+`PlasmaBlast_Construct` (`0x0885fd90`) spawns the file with the fourcc `PLFL`
+and **also loads three models** - `pulse_plasma_halo1.vex` and two
+`pulse_plasma_hemisphere*.vex` - orienting them to the track. `Race::blast_for`
+plays the particle system; **the three models are recorded and not drawn**, and
+that is the honest partial rather than a substitute.
+
+**Two incidental recoveries.** A bolt is reaped at a hardcoded **10.0 s**
+(the walker, not an authored `timetodie`), and `Plasma_SpeedForClass`
+(`0x0885c5a4`) - now decompiled, so no longer deliberately unnamed - blends the
+craft's own launch speed into the class speed over the bolt's **first second**
+of flight. This engine does not implement that ramp: it flies at
+`class + launchspeed` throughout, which is `projectile::launch`'s shared
+choice, kept so the Rocket and the Plasma cannot drift apart. Worth revisiting
+only alongside the Rocket's own.
 
 ## Next Steps
 

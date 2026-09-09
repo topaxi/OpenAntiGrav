@@ -49,9 +49,68 @@ pub fn launch(
     stats: &PlasmaStats,
     class: &str,
 ) -> Option<(Vec3, Vec3)> {
-    let forward = state.body.forward();
-    let nose = state.body.position
-        + forward * oag_physics::wall::hull_extent(&state.body, dimensions, forward);
+    let (nose, forward) = muzzle(state, dimensions);
     let speed = (stats.speed_for_named(class)? + stats.launch_speed) / KMH_PER_UNIT_PER_SECOND;
     Some((nose, forward * speed))
 }
+
+/// Where a bolt sits on the craft, and which way it is pointing, right now.
+///
+/// Split out of [`launch`] because a charging bolt needs the same two values
+/// every tick of its wind-up and must not re-resolve a speed to get them - see
+/// [`CHARGE_SECONDS`] and [`super::Projectiles::advance`]'s charging branch.
+/// The offset is [`super::launch`]'s own choice, shared with the Rocket so the
+/// two weapons cannot drift apart.
+#[must_use]
+pub fn muzzle(state: &ShipState, dimensions: &Dimensions) -> (Vec3, Vec3) {
+    let forward = state.body.forward();
+    let nose = state.body.position
+        + forward * oag_physics::wall::hull_extent(&state.body, dimensions, forward);
+    (nose, forward)
+}
+
+/// How long a plasma bolt winds up on the nose before it flies, in seconds.
+///
+/// **Recovered, confidence 90, and it is a literal rather than an authored
+/// number.** `Plasma_Init` (`0x0885bd18`) marks the fresh pool entry charging
+/// and seeds its countdown in two adjacent stores:
+///
+/// ```text
+/// *(undefined1 *)(entity + 0x4c) = 1;              // charging
+/// *(undefined4 *)(entity + 0x50) = _DAT_08a7c098;  // 0x3f800000 == 1.0f
+/// ```
+///
+/// `0x08a7c098` was read straight out of `.rodata` as `0x3f800000`. The
+/// consumer is the pool walker `Plasmas_Update` (`0x0886b490`), which for a
+/// charging entity calls `Plasma_UpdateCharge` (`0x0885c170`) - copying the
+/// firing craft's own weapon-node world matrix onto the bolt, so it rides the
+/// nose - subtracts `dt` from `+0x50`, and calls `Plasma_Launch`
+/// (`0x0885bf84`) the tick that reaches zero. `Plasma_Launch` clears `+0x4c`
+/// and builds the velocity from the craft's forward, which is why the shot
+/// leaves along the *current* heading.
+///
+/// **Wipeout Pure hard-codes the same second**, in the same two stores, from
+/// the file its own allocator names: `Plasma_Init` there is `FUN_0885df98` and
+/// it writes an immediate `0x3f800000`, with
+/// `c:/Work/Wipeout/Code/Backend/Weapons/Plasma.cpp` line 63 as its allocation
+/// tag. Two titles, one literal.
+///
+/// # This is **not** `<Plasma charge_time>`, and that is the finding
+///
+/// The file authors `charge_time="3"` - on Pulse's `WeaponStats_Race.xml`, on
+/// its `WeaponStats_Elimination.xml` and on Pure's `weaponstats.xml`, the only
+/// weapon that authors it at all - and **nothing reads it in either
+/// executable**. `WeaponStats_ParsePlasma` (`0x0880cc2c`) stores it at
+/// `stats+0x9c` and that offset is never loaded again: across all 69 functions
+/// in `psp-pulse-usa` that reach the weapon-stats table
+/// (`*(int *)(&DAT_08b32420 + DAT_08b32428 * 4)`), a sweep of every load and
+/// store at `+0x9c` finds **zero**, while the same sweep at the `venomspeed`
+/// control offset `+0xac` finds fourteen including the known consumer
+/// `Plasma_SpeedForClass` (`0x0885c5a4`). The sweep works; the negative is
+/// real. So the wind-up is three times shorter than the authored attribute
+/// suggests, and this constant is the measured one rather than the plausible
+/// one. See `docs/ghidra/functions/psp-pulse-usa/plasma.md`.
+pub const CHARGE_SECONDS: f32 = 1.0;
+
+#[cfg(test)]
+mod tests;

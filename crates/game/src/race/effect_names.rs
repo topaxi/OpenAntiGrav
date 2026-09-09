@@ -54,15 +54,62 @@ pub const MISSILE_FLARE_EFFECT: &str = "WO_MISSILE_HEAD";
 /// inferred from a plausible name. It sits one entry away from the `PLASMA`
 /// cue name at `0x08a7c0ac`, which the same constructor plays.
 ///
-/// **One instance, at the bolt's own position.** `Plasma_Init` makes a single
-/// spawn call, unlike the Missile's pair - so nothing here needs the orbiting
-/// second anchor `weapons::missile_flare_anchors` derives.
+/// **One instance, and it rides the craft before it rides the bolt.**
+/// `Plasma_Init` makes a single spawn call, unlike the Missile's pair - so
+/// nothing here needs the orbiting second anchor
+/// `weapons::missile_flare_anchors` derives. It is spawned **parented to the
+/// firing craft's own weapon node** (`Psys_Spawn_q(.., 0, 0x10, node)`), and
+/// `Plasma_Launch` (`0x0885bf84`) re-parents it to the bolt at release. That
+/// is the charge-up glow: for the wind-up second the instance sits on the
+/// nose and `Plasma_UpdateCharge` (`0x0885c170`) scales it by the charge
+/// fraction.
 ///
-/// `WO_PLASMA_FLASH` is authored on the same disc and is **not** wired: no
-/// read call site plays it, so whether it is the muzzle flash, the detonation
-/// or something else is open. See
-/// `docs/ghidra/functions/psp-pulse-usa/plasma.md`.
+/// **This engine gets the riding half of that for free, and does not get the
+/// scale ramp.** [`Race::advance_projectile_flares`] attaches this to every
+/// live projectile whose kind maps here and follows its position each tick;
+/// a charging bolt *is* a live projectile, reseated on the craft's nose every
+/// tick by `Projectiles::advance`'s charging branch, so the glow rides the
+/// craft through the wind-up and the bolt after release - which is what
+/// re-parenting does in the original, arrived at from the other end. What is
+/// **not** ported is `Plasma_UpdateCharge`'s `(1.0 - remaining) * 0.75`
+/// scale, so the glow does not grow as the shot charges; it is played at
+/// [`psys::Stage`]'s neutral scale throughout.
+///
+/// Corrected 2026-09-09; the earlier "one instance, at the bolt's own
+/// position" reading was written before `Plasma_Init`'s `+0x4c`/`+0x50`
+/// charge fields were read.
 pub const PLASMA_FLARE_EFFECT: &str = "WO_PLASMA_HEAD";
+
+/// The explosion a plasma bolt plays when it goes off.
+///
+/// **Recovered, confidence 88, direct instruction-level read, 2026-09-09.**
+/// The Plasma pool walker `Plasmas_Update` (`0x0886b490`) runs a teardown pass
+/// over every entity whose destroy bit (`+0x3c & 4`) is set - raised by
+/// `Plasma_Update`'s wall branch and by the walker's own hard
+/// [`oag_gameplay::projectile::plasma::MAX_FLIGHT_SECONDS`] reap - and that
+/// pass calls `Plasma_SpawnDetonation` (`0x0886ac88`) with the bolt's own
+/// position (`entity+0xa0`). That function allocates a `0x170`-byte blast
+/// object and constructs it with `PlasmaBlast_Construct` (`0x0885fd90`),
+/// whose only `Psys_Spawn_q` call spawns **this** file with the fourcc
+/// `0x4c464c50` = `PLFL`; the name string at `0x08a7c22c` was read straight
+/// out of `.rodata` rather than inferred, the `Mine_SpawnExplosion` standard.
+/// The same teardown stops the `~PLASMATVL` travel loop and plays a
+/// `PLASMAHITWALL` cue (`0x08a7c99b`).
+///
+/// **One file for every ending**, as the Missile's is: the one teardown pass
+/// runs for a wall hit and for a timed-out bolt alike, so there is no
+/// track/craft split to mirror the Rocket's.
+///
+/// **The blast's three models are recovered and are not drawn here.**
+/// `PlasmaBlast_Construct` also loads `Data\Weapons\pulse_plasma_halo1.vex`,
+/// `Data\Weapons\pulse_plasma_hemisphere1.vex` and
+/// `Data\Weapons\pulse_plasma_hemisphere2.vex` (`0x08a7c1b0`, `0x08a7c200`,
+/// `0x08a7c1d4`), orients the whole thing to the track surface through
+/// `AiTrack_LocatePosition` and animates three ramps over them. This engine
+/// plays the particle system and **draws none of the three models**, which is
+/// an honest partial rather than a substitute: nothing is invented in their
+/// place. See `docs/ghidra/functions/psp-pulse-usa/plasma.md`.
+pub const PLASMA_BLAST_EFFECT: &str = "WO_PLASMA_FLASH";
 
 /// The effect the original attaches to every blade at launch.
 ///
