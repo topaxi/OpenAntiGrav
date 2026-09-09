@@ -38,7 +38,7 @@ Single test: `cargo nextest run -p oag-core some_test_name` (nextest, not `cargo
 Ground-truth tests (in `crates/*/tests/*ground_truth*.rs`) are `#[ignore]`d because they
 need a real disc image under `data/images/`; they never run in CI, only via `just test-data`.
 
-**`just test-data` runs 4,114 tests in about 344s, tees the run to
+**`just test-data` runs 4,117 tests in about 415s on an idle machine, tees the run to
 `target/test-data.log`, and then checks it against `scripts/check-test-budget.py` - which
 fails when the suite exceeds 450s or any single test exceeds 300s.** Both are durations
 *under load*: a test competing with 4,100 others for sixteen cores reports well over its
@@ -65,6 +65,14 @@ The history this exists for: the suite went from 3:17 to 9:47 between 2026-08-17
 2026-09-09 with no commit that looked wrong, and one test that landed on 2026-09-06 was
 525 s of a 587 s wall clock on its own. See `docs/architecture/workspace-layout.md` for
 the measurements.
+
+**Wall clock here is contended, so measure it on an idle machine or not at all.** The
+same tree measured 456 s, 402 s and 415 s at load averages of 21, 17 and 2, with four,
+two and one tests over the per-test ceiling and a *different* test each time. Two agents
+independently read a contended run as a regression on the same afternoon. The two `ai_roll`
+grid tests that trip it measure 76-79 s in isolation, against the 95-114 s recorded when
+the ceiling was set - they got faster, and the full-run number is telling you about the
+machine.
 
 **The full `just` gate is not required for a change that touches only `docs/`, `handover/`,
 `HANDOVER.md`, `.claude/`, or doc comments inside a `.rs` file (no code logic changed).**
