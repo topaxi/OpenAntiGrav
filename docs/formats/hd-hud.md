@@ -689,9 +689,12 @@ of `HUD_lap_times.xml` checked (root, `2048_hud`, `2097_hud`, `wo3_hud` -
 2048's `data.psarc` ships one identical to HD's, byte for byte) composes
 exactly `Lap1Image` through `Lap4Image` and no fifth row, so the array is
 sized to the one consumer that exists rather than to a guess. A lap beyond the
-fourth stops being recorded; nothing shipped needs a fifth slot today, both of
-this crate's lap targets ([`Mode::TIME_TRIAL_LAPS`], [`Mode::SINGLE_RACE_LAPS`])
-being `3`.
+fourth stops being recorded, and a Phantom single race - five laps, per
+[`Mode::SINGLE_RACE_LAPS_BY_CLASS`] - is the case that reaches it: the fifth lap
+is still counted and still ends the race, only its split time is dropped.
+Widening the array would invent a fifth row no measured title authors, and would
+change `World`'s size and so the committed state hash to store a number nothing
+can display.
 
 Each `<Image name="Lap{n}Image">` carries two `<Text>` children,
 `Lap{n}Text` and `Lap{n}Time`, both authored `string=""` in every copy - so
@@ -744,8 +747,7 @@ layouts (`Arcade`, `Elimination`, `TimeTrial`, `Zone`, `MPTag`) and Pure's
 build reads, the two PSP titles simply never authored a per-lap history
 widget.
 
-[`Mode::TIME_TRIAL_LAPS`]: ../../crates/race/src/mode.rs
-[`Mode::SINGLE_RACE_LAPS`]: ../../crates/race/src/mode.rs
+[`Mode::SINGLE_RACE_LAPS_BY_CLASS`]: ../../crates/race/src/mode.rs
 [`oag_hd::hud::ALWAYS_ON`]: ../../crates/hd/src/hud.rs
 
 ## What is not done
