@@ -33,12 +33,19 @@ and **which two grabs those numbers came from is now unrecoverable**. Treat
 **The switch, which is the finding.** `race::Scene` gated the bloom on
 `bloom_enabled && hd.is_none()`, so `[graphics] bloom` reached only the PSP
 chain. Flipping it moved a Pulse frame 2.069 % -> 0.408 % and left an HD frame
-**byte-identical**. The settings file defaults it to `false`, so the likeliest
-reading of the report is a player who had bloom off everywhere else and
-suddenly had it on - HD's front end only became walkable on 2026-09-05, which
-is when racing HD through the menus became the normal way in. That last step is
-a **hypothesis, not a measurement**; what is measured is that the switch was
-inert. Fixed in `9f6a1be3` via `hd_bloom::Glow`, which suppresses the summand
+**byte-identical**. **The key defaults to `false`**
+(`settings::default_bloom`), so this was never one player's configuration: HD/
+Fury was the only title that bloomed out of the box. Nothing about anyone's
+settings changed - what changed is that HD races became reachable through the
+menus, its front end having become walkable on 2026-09-05. That last step is a
+**hypothesis, not a measurement**; what is measured is that the switch was
+inert.
+
+Two traps for the next bisect across this window: a build at `5189f942^` **dies
+with SIGKILL on the real audio path** and needs `--dump-audio` (the null
+backend) to run headless at all - peak RSS 57 MB, so not OOM; and
+`--dump-audio` is **pixel-neutral**, byte-identical at tick 0, so a run that
+needs it is still comparable with one that does not. Fixed in `9f6a1be3` via `hd_bloom::Glow`, which suppresses the summand
 and leaves the exposure resolve running - no read constant moves.
 
 **Three negatives, so nobody re-runs them.** (1) The glow-mask alpha ablation

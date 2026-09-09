@@ -1949,9 +1949,10 @@ Wipeout HD - the only title *this* chain draws for - bloomed regardless.
 | Wipeout Pulse, autopilot tick 900 | 2.069 % -> 0.408 % |
 | Wipeout HD, grid | **byte-identical** |
 
-The settings file defaults that key to `false` and says why in
-`Graphics::bloom`'s own doc comment, so a player who has never opened the row
-still has it off - and on HD/Fury was getting a full-strength bloom anyway.
+`settings::default_bloom` returns `false` and `Graphics::bloom`'s doc comment
+says why, so **the switch is off unless a player turned it on** - which makes
+HD/Fury the only title that bloomed out of the box, not a quirk of one
+configuration.
 `hd_bloom::Glow::Suppressed` now skips the gate and both blurs and clears the
 resolve's bloom input. It does **not** skip the chain: the ladder feeds the
 luminance adaptation and the exposure resolve is what encodes the linear scene
