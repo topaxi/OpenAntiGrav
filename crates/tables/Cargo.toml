@@ -29,6 +29,7 @@ rust-version.workspace = true
 # a `handlingstats.xml` has to be pulled out of a WAD before it can be parsed,
 # and pulling it out is `oag-formats`' job, not this crate's.
 [dev-dependencies]
+oag-testdata.workspace = true
 oag-assets.workspace = true
 oag-disc.workspace = true
 oag-formats.workspace = true

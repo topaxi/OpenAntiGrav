@@ -1969,8 +1969,12 @@ dependencies = [
  "oag-disc",
  "oag-formats",
  "oag-pulse",
+ "oag-tables",
  "oag-testdata",
+ "oag-texture",
  "oag-title",
+ "oag-vex",
+ "oag-video",
  "thiserror 2.0.19",
 ]
 
@@ -2011,10 +2015,7 @@ dependencies = [
  "miniz_oxide",
  "oag-assets",
  "oag-disc",
- "oag-pulse",
- "oag-pure",
  "oag-testdata",
- "re_rav1d",
 ]
 
 [[package]]
@@ -2045,10 +2046,15 @@ dependencies = [
  "oag-pulse",
  "oag-pure",
  "oag-race",
+ "oag-rcs",
  "oag-render",
+ "oag-tables",
  "oag-testdata",
+ "oag-texture",
  "oag-title",
  "oag-trace",
+ "oag-vex",
+ "oag-video",
  "pollster",
  "resvg",
  "serde",
@@ -2070,6 +2076,8 @@ dependencies = [
  "oag-formats",
  "oag-physics",
  "oag-race",
+ "oag-tables",
+ "oag-vex",
 ]
 
 [[package]]
@@ -2080,8 +2088,12 @@ dependencies = [
  "oag-formats",
  "oag-pulse",
  "oag-pure",
+ "oag-rcs",
+ "oag-tables",
  "oag-testdata",
+ "oag-texture",
  "oag-title",
+ "oag-vex",
 ]
 
 [[package]]
@@ -2118,8 +2130,10 @@ dependencies = [
  "oag-disc",
  "oag-formats",
  "oag-pulse",
+ "oag-tables",
  "oag-testdata",
  "oag-title",
+ "oag-vex",
 ]
 
 [[package]]
@@ -2128,6 +2142,20 @@ version = "0.1.0"
 dependencies = [
  "oag-core",
  "oag-formats",
+ "oag-tables",
+ "oag-vex",
+]
+
+[[package]]
+name = "oag-rcs"
+version = "0.1.0"
+dependencies = [
+ "oag-assets",
+ "oag-disc",
+ "oag-formats",
+ "oag-tables",
+ "oag-texture",
+ "oag-vex",
 ]
 
 [[package]]
@@ -2140,14 +2168,41 @@ dependencies = [
  "oag-core",
  "oag-formats",
  "oag-pulse",
+ "oag-rcs",
+ "oag-tables",
  "oag-testdata",
+ "oag-texture",
+ "oag-vex",
  "pollster",
  "wgpu",
 ]
 
 [[package]]
+name = "oag-tables"
+version = "0.1.0"
+dependencies = [
+ "oag-assets",
+ "oag-disc",
+ "oag-formats",
+ "oag-pulse",
+ "oag-pure",
+ "oag-testdata",
+]
+
+[[package]]
 name = "oag-testdata"
 version = "0.1.0"
+
+[[package]]
+name = "oag-texture"
+version = "0.1.0"
+dependencies = [
+ "oag-assets",
+ "oag-disc",
+ "oag-formats",
+ "oag-pulse",
+ "oag-testdata",
+]
 
 [[package]]
 name = "oag-title"
@@ -2165,6 +2220,8 @@ dependencies = [
  "oag-assets",
  "oag-disc",
  "oag-formats",
+ "oag-tables",
+ "oag-texture",
 ]
 
 [[package]]
@@ -2183,8 +2240,29 @@ dependencies = [
  "oag-physics",
  "oag-pulse",
  "oag-race",
+ "oag-tables",
  "oag-title",
+ "oag-vex",
  "thiserror 2.0.19",
+]
+
+[[package]]
+name = "oag-vex"
+version = "0.1.0"
+dependencies = [
+ "oag-assets",
+ "oag-disc",
+ "oag-formats",
+ "oag-pulse",
+ "oag-testdata",
+ "oag-texture",
+]
+
+[[package]]
+name = "oag-video"
+version = "0.1.0"
+dependencies = [
+ "re_rav1d",
 ]
 
 [[package]]
@@ -2199,6 +2277,8 @@ dependencies = [
  "oag-assets",
  "oag-formats",
  "oag-render",
+ "oag-texture",
+ "oag-vex",
  "pollster",
  "wgpu",
  "winit",

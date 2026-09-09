@@ -17,6 +17,7 @@ oag-formats.workspace = true
 # for why a dev-dependency back onto a crate that depends on this one is
 # permitted and does not breach the boundary gate.
 [dev-dependencies]
+oag-testdata.workspace = true
 oag-assets.workspace = true
 oag-disc.workspace = true
 oag-pulse.workspace = true

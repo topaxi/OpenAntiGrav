@@ -32,6 +32,7 @@
 //!
 //! See `docs/formats/pure-status.md` and `docs/formats/collision.md`.
 
+use oag_tables::fexml;
 use oag_vex::{collision, fog, track, vex};
 
 const PURE: &str = "data/images/pure-psp-usa.chd";
