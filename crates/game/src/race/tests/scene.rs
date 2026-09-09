@@ -505,6 +505,35 @@ fn each_weapon_plays_only_its_own_recovered_explosion() {
     );
 }
 
+/// A Cannon round throws a spark on a wall it hits, and nothing on a craft.
+///
+/// **The original's own split, not a simplification.** `Cannon_UpdateRound`
+/// (`0x0886593c`) only calls `Psys_Spawn_q` off its own world-collision
+/// raycast; the separate craft-proximity test that produces `struck: Some`
+/// (`FUN_088579a8`/`FUN_08857f2c`) applies damage and a sound cue but never
+/// spawns a particle. Playing [`CANNON_SPARKS_EFFECT`] on a craft hit too
+/// would be exactly the kind of plausible-looking invention `CLAUDE.md`
+/// forbids - see `oag_gameplay::projectile::cannon`'s module doc for the
+/// full read.
+#[test]
+fn a_cannon_round_sparks_on_a_wall_and_silently_on_a_craft() {
+    use oag_formats::weapons::Weapon;
+
+    let race = race_with_weapon_table(Mode::SingleRace, enveloping_pad(), 1.0, one_rocket_table());
+    let point = Vec3::new(4.0, 0.5, -1.0);
+
+    assert_eq!(
+        race.blast_for(Weapon::Cannon, point, None),
+        Some((CANNON_SPARKS_EFFECT, point)),
+        "no craft struck means the wall/track spark, at the impact point"
+    );
+    assert_eq!(
+        race.blast_for(Weapon::Cannon, point, Some(1)),
+        None,
+        "a craft hit applies damage and a sound cue but throws no spark"
+    );
+}
+
 /// A rocket in the air carries a flare, and gives it back when it is gone.
 ///
 /// `Rocket_Init` attaches `WO_ROCKET_FLARE` at launch and it rides the

@@ -55,6 +55,15 @@ produced it and the one that replaces it.
 | `0x08864b00` | `Cannon_LoadTextures` | 85 (new 2026-09-08) |
 | `0x08b3bf80` | `g_cannon_bolt_texture` (data) | 85 (new 2026-09-08) |
 | `0x08b3bf84` | `g_cannon_muzzle_flash_texture` (data) | 85 (new 2026-09-08) |
+| `0x0886593c` | `Cannon_UpdateRound` | 82 (new 2026-09-09) |
+| `0x088582b0` | `CannonPool_Update` | 88 (new 2026-09-09) |
+| `0x088579a8` | `Cannon_TestCraftHit_q` | 60 (new 2026-09-09) |
+| `0x08857f2c` | `Cannon_MarkCraftHit` | 85 (new 2026-09-09) |
+| `0x08857e90` | `Cannon_ApplyCraftDamage` | 88 (new 2026-09-09) |
+| `0x08864af4` | `Cannon_BaseSpeedKmh` | 92 (new 2026-09-09) |
+| `0x0886545c` | `Cannon_DrawRound` | 88 (new 2026-09-09) |
+| `0x08864cd0` | `Cannon_BuildBoltList` | 85 (new 2026-09-09) |
+| `0x08864dc4` | `Cannon_BuildMuzzleFlashList` | 85 (new 2026-09-09) |
 
 Read [weapon-fire.md](weapon-fire.md) first for the two traps every reading below
 depends on: `entity+0x1b8` is the fire-request word, and every `jal` operand and
@@ -124,12 +133,12 @@ already reads for the per-frame contact loop) and converted to km/h - the same
 **The pool cap (60) is a live-count guard, not a magazine size** - same shape as
 `Weapon_FirePlasma`'s `pool->live < 0x10`. `Cannon_Init` (`0x088648ec`) is the
 actual constructor: it copies the emitter matrix as the round's pose, computes
-`speed = speed_kmh_arg + <a per-class base speed from 0x00060af4, unread>`,
-builds velocity as `forward * speed`, and copies the *firing craft's own*
-cached track-locator record (`entity+0xad8..+0xae4`, the same fields
+`speed = speed_kmh_arg + Cannon_BaseSpeedKmh()` - a flat `500.0`, see "`func_0x00060af4`
+decompiled" below, not per class - builds velocity as `forward * speed`, and
+copies the *firing craft's own* cached track-locator record
+(`entity+0xad8..+0xae4`, the same fields
 [Quake_Init](#quake_init-0x08874b14-locates-the-firing-craft-on-the-track) reads)
-onto the round before playing a fire cue. Confidence **80** - direct decompile,
-the base-speed lookup and the hit/damage path are not chased.
+onto the round before playing a fire cue. Confidence **80** - direct decompile.
 
 ### What actually fires it: the fire button, held, driving a reload countdown
 
@@ -196,9 +205,9 @@ different base, no relation. Worth naming next to the `craft+0x1ac`/`+0x1ac`
 trap the handover thread already records for the Mine.
 
 **Buildable now**: the whole fire-rate-and-burst mechanism is read at
-instruction level. Not chased: the per-class base speed
-(`func_0x00060af4`), and what a round does on hitting a craft or wall (no
-`Cannon_HitCraft`-style function was located this pass).
+instruction level. The base speed (`func_0x00060af4`) and what a round does
+on hitting a craft or wall are both read too, as of 2026-09-09 - see
+"`Cannon_UpdateRound` read" below.
 
 ### The gate is the fire button, held, not a track pad flag
 
@@ -541,9 +550,129 @@ matrix on each live round. **The mesh is named `muzzleflash` and is the bolt**:
 triangles, spanning `1.200 x 1.200 x 3.599` - a dart, longest along the +Z the
 matrix aims down the velocity, which is not the shape of a flash at a barrel.
 
-**The two display lists are not drawn**, because which of them is the bolt and
-which the flash is unread and a guess would be an invention. That is an honest
-absence per CLAUDE.md, and it is bounded: the round itself is now visible.
+**The two display lists are still not drawn** - see "Which display list is the
+bolt and which the flash: settled" below for why the *identification* is no
+longer the open question - because drawing them for real needs a
+textured-billboard path this pass's own file ownership does not extend to.
+That is still an honest absence per CLAUDE.md, and it is bounded: the round
+itself is visible, and its impact now throws a spark.
+
+### 2026-09-09: `Cannon_UpdateRound` read - the hit path, `WO_CANNON_SPARKS`'s real trigger, and the base speed corrected
+
+**Read with the Ghidra bridge on both `psp-pulse-usa` and `psp-pulse-eu`,
+cross-checked with `diff_functions` at every step - every USA/EU pair below
+came back exact-body-equal (0 added, 0 removed instructions) except for
+relocated immediate operands, the same signature
+[`exact-hash-transfer.md`](../psp-pulse-eu/exact-hash-transfer.md) already
+established as this project's strongest match category.** This closes the
+thread's three remaining "Open" items from 2026-09-08.
+
+#### `Cannon_UpdateRound` (`0x0886593c`, EU `0x08865798`) is the per-round per-tick update, and it is what calls `Psys_Spawn_q`
+
+Confidence 82 (571 instructions, VFPU-dense; the world-collision branch and
+the spark spawn are read at instruction level, the "else" reflect/bounce
+branch only at the shape of its arithmetic - a `v' = v - 2(v·n)n` mirror
+about the surface normal, which is why this stops short of the 85+ this
+page's smaller reads carry). Called once per live round from
+`CannonPool_Update` (`0x088582b0`, EU `0x0885813c`, confidence 88): it
+raycasts the round from its previous position to its new one against the
+track's own collision mesh through `FUN_0883198c` - the same query
+`Rocket_Update`, `Missile_Update`, `Plasma_Update`, `Shuriken_Update` and
+`Camera_UpdatePlayerView` all call, confirmed by `get_function_xrefs` on that
+address - and branches on the returned hit-type code:
+
+- **`0x7f`**: no hit. The round keeps flying.
+- **`0` or `4`**: a world/track hit. The round's own `+0x3c` flags gain
+  `0x14` (general-hit `0x4`, wall `0x10`), and `Psys_Spawn_q` is called with
+  the string at `0x08a7c890` (USA) / `0x08a7c0e0` (EU) - `WO_CANNON_SPARKS`,
+  confirmed by direct string read on both pressings - and a basis built from
+  the hit normal (a `vcrsp_t` cross product chain identical in shape to the
+  camera-facing basis builds elsewhere on this page). **This is the recovered
+  trigger**: a Cannon round throws `WO_CANNON_SPARKS` exactly when it hits
+  track geometry, oriented to what it hit, at the point it hit it.
+- **anything else**: a glancing hit. The round's velocity is reflected about
+  the surface normal and its position is nudged off the surface by `3.0` units
+  along it - a bounce, not a stop, and no effect is spawned for it.
+
+`+0xc8` is a second, independent timer this same function advances by `dt`
+every tick (distinct from `+0x48`, which `Cannon_DrawRound` reads for the
+round's own two textured quads - see below) - not consumed here, only
+carried forward.
+
+#### The craft hit is a wholly separate path, and it never calls `Psys_Spawn_q` at all
+
+**This is the missing half `weapon-fire.md`'s 2026-09-07 entry flagged as
+"no `Cannon_HitCraft`-style function was located this pass" - it exists, it
+is three functions, and none of them touch the particle system.**
+`CannonPool_Update` runs a second per-round pass after `Cannon_UpdateRound`:
+`Cannon_TestCraftHit_q` (`0x088579a8`, EU `0x08857834`, confidence 60 - a
+314-instruction VFPU cylinder-distance sweep against every live craft, read
+for its shape and its `6.0`-unit threshold but not down to every register)
+finds the round within range of a craft's own capsule and calls
+`Cannon_MarkCraftHit` (`0x08857f2c`, EU `0x08857db8`, confidence 85), which
+ORs the round's `+0x3c` flags with `0x24` - general-hit `0x4` again, plus
+`0x20`, the **ship** bit, distinct from the wall's `0x10` above - and, only
+if the round had not already recorded a hit this tick, calls
+`Cannon_ApplyCraftDamage` (`0x08857e90`, EU `0x08857d1c`, confidence 88).
+That function is three stores: the struck craft's own damage accumulator
+(`+0x120`) gains `ActiveCannonStats()->damage_per_bullet` (`stats+0x7c`, per
+`WeaponStats_ParseCannon`'s own offsets above), a second accumulator
+(`+0x130`) gains `stats+0x80` (`slowdown_time`), and `+0x138`/`+0x13c` record
+a hit-source tag (`3`) and the attacker's own craft index. **Neither this nor
+either of the two functions that reach it calls `Psys_Spawn_q`.** So on the
+PSP, a craft hit applies damage and (through `CannonPool_Update`'s own
+despawn pass, which reads the `0x10`/`0x20` split to choose `CANNONEXPLSHIP`
+over `CANNONEXPLWALL`) plays a sound, but throws no spark at all - only a
+wall hit does.
+
+This is exactly what `oag_gameplay::projectile::cannon::direct_hit` already
+did before this pass read the handler: apply `damage_per_bullet` and
+`slowdown_time` unconditionally on a craft hit. The handler confirms the
+shape rather than changing it.
+
+#### Which display list is the bolt and which the flash: settled, confidence 88
+
+**Not from the archive's entry-adjacency cross-check this page proposed on
+2026-09-08 and never spent - from something stronger.** `Cannon_DrawRound`
+(`0x0886545c`, EU `0x088652b8`, confidence 88) is the per-round per-frame
+draw call `Cannon_Construct`'s two list-builders were always going to be
+*replayed* from, and it binds a texture immediately before each
+`Gu_CallList`:
+
+```c
+Gfx_BindTexture(DAT_08b3bf80);              // g_cannon_bolt_texture
+... rebuilds the two quads at +0x100/+0x160 every frame ...
+Gu_CallList(param_1 + 0x240);               // Cannon_BuildBoltList's own list
+
+if (*(float *)(param_1 + 200) < 0.1) {      // +0xc8: age since spawn, seconds
+    Gfx_BindTexture(DAT_08b3bf84);           // g_cannon_muzzle_flash_texture
+    ... rebuilds the one quad at +0x1c0, random size and RGB each time ...
+    Gu_CallList(param_1 + 0x440);            // Cannon_BuildMuzzleFlashList's own list
+}
+```
+
+So **`Cannon_BuildBoltList` (`0x08864cd0`, EU `0x08864b2c`) is the bolt** -
+drawn every frame a round is alive, as a streak between its previous and
+current position - and **`Cannon_BuildMuzzleFlashList` (`0x08864dc4`, EU
+`0x08864c20`) is the muzzle flash** - drawn only for the round's first tenth
+of a second, sized and coloured at random each time
+(`Psys_RandIntRange(0x96,0xff)` per channel). This confirms the "obvious
+guess" the 2026-09-08 entry logged at confidence 40 and refused to lean on;
+it does not overturn it. Both list-builder functions themselves (`0x08864cd0`/
+`0x08864dc4`, 61 and 55 instructions) are unchanged from that entry's read -
+`Gu` state setup and a `Vex`-style texture tag, no literal texture bind
+inside either - the binding this section reads is entirely in the caller.
+
+#### `func_0x00060af4` decompiled: it is not per-class, it is a flat `500.0`
+
+`Cannon_BaseSpeedKmh` (`0x08864af4`, EU `0x08864950`) is three instructions
+on both pressings - `lui a0,0x43fa`; `mtc1 a0,f0`; `jr ra` - and never reads
+its own argument. `Cannon_Init` calls it as `FUN_08864af4(param_2)` and adds
+the result to `speed_kmh`, so the earlier "per-class base speed" framing this
+page and `oag_gameplay::projectile::cannon::BASE_SPEED_KMH`'s doc comment
+both carried was wrong about the shape, not the existence: it is a real,
+disc-authored constant, just the same one for every craft. `BASE_SPEED_KMH`
+is now `500.0`, not the `400.0` chosen placeholder.
 
 ## The Quake: a travelling point on the track's own spline, and nothing that touches a mesh
 
@@ -1135,8 +1264,9 @@ stand-ins.
   table entry `func_0x000ec0c0` dispatches to - none resolved this pass, and
   the string-literal trap makes any of them a bad use of time before the
   reimport lands.
-- **The per-class base speed `Cannon_Init` reads (`0x00060af4`) is unread**, and
-  so is whatever a Cannon round's collision does on a hit.
+- ~~The base speed `Cannon_Init` reads (`0x00060af4`) is unread, and so is
+  whatever a Cannon round's collision does on a hit.~~ Both read 2026-09-09 -
+  see "`Cannon_UpdateRound` read" under the Cannon section above.
 
 ## The LeachBeam: a resolved link to a pre-locked target, drained every tick it holds
 
@@ -1485,13 +1615,15 @@ reused whole" above.
 
 ## What is buildable now and what still is not
 
-- **The Cannon is buildable.** Its whole fire-rate mechanism - the reload
-  countdown gated on `craft+0x1bc == 3`, the round/rate attributes, the
+- **The Cannon is buildable, end to end.** Its whole fire-rate mechanism - the
+  reload countdown gated on `craft+0x1bc == 3`, the round/rate attributes, the
   twin-muzzle alternation, the craft-speed-inherited round, the round-robin
-  spawn pool - is read at instruction level end to end. Missing only the
-  per-class base speed and the round's own hit/collision behaviour, neither of
-  which blocks a first pass (every other weapon here ships with at least a
-  placeholder blast/impact).
+  spawn pool - is read at instruction level, and so, as of 2026-09-09, is its
+  base speed (`Cannon_BaseSpeedKmh`, a flat `500.0`) and its own hit/collision
+  behaviour: a world hit throws `WO_CANNON_SPARKS` and stops the round, a
+  craft hit applies `damage_per_bullet`/`slowdown_time` and stops it without a
+  spark, and anything else bounces. See "`Cannon_UpdateRound` read" above for
+  all three.
 - **The Quake is buildable for its hit/damage/slowdown half**, which reuses the
   Missile's and Mine/Bomb's own shared pending-hit channel outright - nothing
   new to build there beyond wiring the Quake's own `damage`/`slowdown_time` and

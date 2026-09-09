@@ -781,3 +781,12 @@
 0x08ab067c	data	g_class_name_table	92	race-campaign.md
 0x08925ff4	function	VexSoundCone_Init	90	track-sound-emitters.md
 0x08925bec	function	VexSound_Tick	85	track-sound-emitters.md
+0x0886593c	function	Cannon_UpdateRound	82	cannon-quake-leachbeam.md
+0x088582b0	function	CannonPool_Update	88	cannon-quake-leachbeam.md
+0x088579a8	function	Cannon_TestCraftHit	60	cannon-quake-leachbeam.md
+0x08857f2c	function	Cannon_MarkCraftHit	85	cannon-quake-leachbeam.md
+0x08857e90	function	Cannon_ApplyCraftDamage	88	cannon-quake-leachbeam.md
+0x08864af4	function	Cannon_BaseSpeedKmh	92	cannon-quake-leachbeam.md
+0x0886545c	function	Cannon_DrawRound	88	cannon-quake-leachbeam.md
+0x08864cd0	function	Cannon_BuildBoltList	85	cannon-quake-leachbeam.md
+0x08864dc4	function	Cannon_BuildMuzzleFlashList	85	cannon-quake-leachbeam.md

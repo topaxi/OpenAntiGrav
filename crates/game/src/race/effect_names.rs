@@ -215,6 +215,30 @@ pub const QUAKE_EFFECT: &str = "WO_QUAKE";
 /// `docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md`.
 pub const LEACHBEAM_ENERGY_EFFECT: &str = "WO_LEACHBEAM_ENERGY";
 
+/// The spark burst a Cannon round throws when it hits **track geometry**.
+///
+/// **Recovered, confidence 85.** `Cannon_UpdateRound` (`0x0886593c`, EU
+/// `0x08865798`) raycasts each round against the track's own collision mesh
+/// every tick (`FUN_0883198c`, shared with the Rocket's, Missile's,
+/// Plasma's and Shuriken's own updates) and, only when that raycast's hit
+/// type is `0` or `4`, spawns this file with `Psys_Spawn_q`, oriented to the
+/// hit basis and positioned at the hit point - the name string sits at
+/// `0x08a7c890` on USA, `0x08a7c0e0` on EU, both confirmed by a direct memory
+/// read rather than inferred.
+///
+/// **A craft hit does not reach this call at all.** See
+/// `oag_gameplay::projectile::cannon`'s own module doc, "The wall hit spawns
+/// a spark effect; the craft hit does not", for the separate cylinder-test
+/// path that applies damage and a sound cue but never calls `Psys_Spawn_q`.
+/// [`Race::blast_for`] mirrors that split: `Weapon::Cannon` only reaches this
+/// effect when `struck` is `None`.
+///
+/// **A burst, not a riding instance** - played through [`Race::ignite_blast`],
+/// the same one-shot [`psys::Stage::play`] every other weapon's detonation
+/// burst uses, because a Cannon round's impact is a moment, not something to
+/// follow.
+pub const CANNON_SPARKS_EFFECT: &str = "WO_CANNON_SPARKS";
+
 /// What a craft *holding* a LeachBeam draws, before it fires anything.
 ///
 /// **The disc's own, with a fully recovered trigger** - `FUN_0883f540`

@@ -85,13 +85,9 @@ const NO_TRIGGER_RECOVERED: &[(&str, &str)] = &[
          than assumed, the Mine_Init standard - see \
          docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md.",
     ),
-    (
-        "WO_CANNON_SPARKS",
-        "the Cannon is in the weapon table and fires nothing - its fire bit \
-         `0x2000` is set by `Weapon_RequestFire` and dispatched by nothing in \
-         `Weapons_DispatchFire`, across all sixteen bits rather than the five \
-         that used to be read.",
-    ),
+    // **Not `WO_CANNON_SPARKS`** - that one is wired, off `Cannon_UpdateRound`
+    // (`0x0886593c`), on the wall/track hit path only. The Cannon landed
+    // 2026-09-08 (round + model), the sparks 2026-09-09.
     // **Not `WO_PLASMA_HEAD`** - that one is wired, off `Plasma_Init`
     // (`0x0885bd18`), and this list is the *untriggered* half. The Plasma
     // landed 2026-09-02.
@@ -164,7 +160,15 @@ const NO_TRIGGER_RECOVERED: &[(&str, &str)] = &[
 const PS2_EXTRA_NO_TRIGGER: &[(&str, &str)] = &[
     (
         "WO_CANNON_HIT_SHIP",
-        "the Cannon fires nothing (see `WO_CANNON_SPARKS`).",
+        "the PSP craft-hit path (`FUN_08857f2c`/`FUN_08857e90`, reached from \
+         `Cannon_UpdateRound`'s own `CannonPool_Update`) applies damage and a \
+         `CANNONEXPLSHIP` sound cue but calls no `Psys_Spawn_q` at all - see \
+         `WO_CANNON_SPARKS` above, which is the wall/track hit's own effect. \
+         No string reference to this name exists in either the PSP or the PS2 \
+         executable (`search_strings` on both came back empty), so unlike \
+         every other name in this file it cannot be chased from a string xref; \
+         whether the PS2 port fires it on a ship hit by a numeric class id \
+         instead is open.",
     ),
     (
         "WO_DAMAGE_PLUME",
