@@ -22,7 +22,7 @@
 //! gated on a per-craft latch (`entity+0x860 & 0x40`) that this project found
 //! 2026-09-07 to be a smoothed-proximity test - see [`Self::progress_delta`]'s
 //! doc comment for the recovered mechanism and the authored [`radius`
-//! substitution](oag_formats::weapons::QuakeStats::radius) this port makes
+//! substitution](oag_tables::weapons::QuakeStats::radius) this port makes
 //! for it.
 //!
 //! **Ours.** The exact representation: this crate tracks the wave's position
@@ -48,7 +48,7 @@
 //! only read at the shape level. **Chosen, not measured.**
 
 use crate::world::{MAX_SHIPS, Ship};
-use oag_formats::weapons::QuakeStats;
+use oag_tables::weapons::QuakeStats;
 
 /// World units of track the wave crosses every second.
 ///

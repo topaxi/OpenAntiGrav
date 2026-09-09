@@ -101,7 +101,7 @@ shipped data rather than a runtime trace.
   see [the runtime page](../ghidra/functions/psp-pulse-usa/pads.md). It is a
   **debounce** rather than the pickup-respawn timer this entry guessed at -
   `0.55` seconds for every speed class, less than a craft takes to clear a pad.
-  Parsed by `oag_formats::handling::WeaponPad`.
+  Parsed by `oag_tables::handling::WeaponPad`.
 - ~~**Whether `Weapon Pad` shares more than the payload**~~ - the geometry, the
   volumes and the trigger are all shared with `Speedup Pad`; what differs is only
   what happens on a hit. See [pickups](../gameplay/pickups.md).

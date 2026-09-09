@@ -390,7 +390,7 @@ fn the_string_table_names_the_race_modes() {
     let blob = archives
         .read_name(&entries)
         .expect("the English string table");
-    let xml = oag_formats::fexml::expand(&blob).expect("expands");
+    let xml = oag_tables::fexml::expand(&blob).expect("expands");
 
     let wanted = [
         "time trial",

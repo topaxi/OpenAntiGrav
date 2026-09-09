@@ -168,7 +168,7 @@ Data\Environments\01_Track\trackstartup.xml
 Data\Environments\01_Track\BASILICO_ENV.bnk        253,664 bytes, self-name `basilic`
 ```
 
-`oag_formats::trackstartup` already read that element; what was missing was
+`oag_tables::trackstartup` already read that element; what was missing was
 where the file it names sits. **`Data\Sound\BASILICO_ENV.bnk` hashes to nothing
 on `pulse-psp-usa`** - which is why an earlier guess by analogy with
 `Data\Sound\ZONE_ENV.bnk` above missed - and the circuit's own directory

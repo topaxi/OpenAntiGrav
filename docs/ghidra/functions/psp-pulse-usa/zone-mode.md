@@ -392,7 +392,7 @@ lives in the one at `0x0894f6a8`, which passes the literal
 files carry `<Stats>` and nothing else - measured across all sixteen shipped files,
 eight teams on each of the PSP and PS2 discs, by
 `which_top_level_elements_handlingstats_carries` in
-`crates/formats/tests/handling_ground_truth.rs`. See
+`crates/tables/tests/handling_ground_truth.rs`. See
 [handling stats](../../../formats/handling-stats.md).
 
 ## The shield recharge

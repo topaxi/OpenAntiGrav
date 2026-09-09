@@ -49,7 +49,7 @@
 //! `MINE_icon`/`BOMB_icon` (`0xffffc040`) - a four-colour scheme, not
 //! thirteen distinct ones, the same shape Pulse's own measured table has.
 //!
-//! **`DISRUPTOR_icon` names a weapon `oag_formats::weapons::Weapon` has no
+//! **`DISRUPTOR_icon` names a weapon `oag_tables::weapons::Weapon` has no
 //! variant for** (prose, not a link - this crate does not depend on
 //! `oag-formats` outside tests, for the same "tables only" reason
 //! [ADR-0022] gives). Pure's own executable strings carry `WO_DISRUPTOR_EXPLO`

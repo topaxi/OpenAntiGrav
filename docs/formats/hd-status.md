@@ -507,7 +507,7 @@ The XML is not [name-shortened](fexml.md) the way Pulse's is - it is ordinary
 UTF-8 with a declaration and CRLF line endings, so it needs no dictionary.
 
 **`ships/<team>/handlingstats.xml`** is the same schema
-[`oag_formats::handling`](handling-stats.md) parses, element for element -
+[`oag_tables::handling`](handling-stats.md) parses, element for element -
 `easyshield` and `weight_distribution` included, both of which Pulse authors and
 the parser already reads:
 `<Misc height length shield easyshield width weight_distribution>`,
@@ -697,7 +697,7 @@ causes produce that picture and neither raised an error:
    already record for the PS2 in-race HUD.
 
 The front end had the same first cause with a different ending: `load_teams`
-used to fall back to `oag_formats::handling::TEAMS` (moved to
+used to fall back to `oag_tables::handling::TEAMS` (moved to
 `oag_pulse::race::TEAMS`, 2026-09-01) when nothing was declared, so HD's
 menus offered **eight** teams off a list this project held rather than twelve
 off the disc. The fallback is gone, not moved - see

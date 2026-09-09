@@ -9,7 +9,7 @@ use super::*;
 
 /// The far chase rig, the close one, and the cockpit, with their report lines.
 pub(super) fn resolve(
-    stats: &oag_formats::handling::Stats,
+    stats: &oag_tables::handling::Stats,
     stats_name: &str,
     options: &Options,
     handling: &oag_physics::params::Handling,

@@ -243,7 +243,7 @@ pub enum Fill {
     ///
     /// Stored with the file's own backslashes turned into forward slashes and
     /// a leading slash added, which is the spelling `oag_assets` matches on -
-    /// see [`crate::psarc`]'s `normalise`.
+    /// see `oag_formats::psarc`'s `normalise`.
     Model(String),
     /// `color="red"`, verbatim. A name rather than a value, and the disc uses
     /// five: `red`, `blue`, `green`, `grey`, `white`. What they resolve to is

@@ -14,8 +14,8 @@ const FIXTURE_AUTOPILOT_TIME: f32 = 3.5;
 
 /// The Autopilot's own fixture, with `time` unlike the Turbo's and the
 /// Shield's for the reason [`one_shield_table`] gives.
-fn one_autopilot_table() -> oag_formats::weapons::WeaponStats {
-    oag_formats::weapons::parse(
+fn one_autopilot_table() -> oag_tables::weapons::WeaponStats {
+    oag_tables::weapons::parse(
         r#"<WeaponStats>
              <Weapon type="Global"><Stats slowdown_limit="0"/></Weapon>
              <Weapon type="Autopilot"><Stats absorb="4" time="3.5"/></Weapon>
@@ -49,7 +49,7 @@ fn a_fired_autopilot_flies_the_craft_for_its_authored_duration() {
     race.tick(&buttons.tick(CROSS));
     assert_eq!(
         race.ship_pickup(),
-        Some(oag_formats::weapons::Weapon::Autopilot)
+        Some(oag_tables::weapons::Weapon::Autopilot)
     );
     assert!(
         !race.flown_for_the_player(),
@@ -151,7 +151,7 @@ fn firing_under_autopilot_cancels_it_and_keeps_the_pickup() {
     // A second pickup put in the slot directly - the pad only grants on a *new*
     // entry and the craft is already standing on this one. A fixture, like the
     // shield timer two tests up, not a grant.
-    let held = Some(oag_formats::weapons::Weapon::Rocket);
+    let held = Some(oag_tables::weapons::Weapon::Rocket);
     race.world.ships[0].pickup.weapon = held;
     assert!(
         race.flown_for_the_player(),

@@ -80,8 +80,8 @@ impl SpeedClasses {
     ///
     /// Instead a race carries the rung's **name** and resolves it against the
     /// file that authored it -
-    /// `oag_formats::handling::Stats::class_named`,
-    /// `oag_formats::handling::Global::class_named` and
+    /// `oag_tables::handling::Stats::class_named`,
+    /// `oag_tables::handling::Global::class_named` and
     /// `oag_gameplay::pickup::table_for`. A title that authors four is asked
     /// for four and grows nothing; Pure is asked for five and answers with
     /// five. `oag_physics::SpeedClass` still has exactly four variants and its

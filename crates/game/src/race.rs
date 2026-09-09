@@ -91,7 +91,6 @@ use anyhow::{Context, Result};
 use oag_core::math::frustum::Frustum;
 use oag_core::math::{Mat4, Quat, Vec3};
 use oag_core::{Rng, TickClock, TickRate};
-use oag_formats::handling;
 use oag_formats::track::{AiTrack, Sample, StartPosition};
 use oag_formats::vex;
 use oag_gameplay::{
@@ -113,6 +112,7 @@ use oag_render::pvs::{
 };
 use oag_render::sparks;
 use oag_render::{mesh, mesh_render, shield::ShipShield, track as track_render};
+use oag_tables::handling;
 
 mod access;
 mod assets;
@@ -482,7 +482,7 @@ pub struct Race {
     course: Option<Course>,
     /// Zone mode's three numbers, off the disc. `None` outside Zone mode, and on
     /// a source whose `handlingstats.xml` carries no `<Global><Zone/>`.
-    zone: Option<oag_formats::handling::Zone>,
+    zone: Option<oag_tables::handling::Zone>,
     /// The external block the chase camera is currently flying, which is
     /// whichever of [`Self::chase_far`] / [`Self::chase_close`]
     /// [`Self::camera_view`] names. Kept as its own field rather than looked up
@@ -798,7 +798,7 @@ pub struct Race {
     /// The original's `pad+0x1a0`, stamped by `WeaponPads_TestCraft` with
     /// `<WeaponPad refresh_time>` and counted back down by
     /// `WeaponPad_UpdateRefreshTimer` (`0x0892c034`) - see
-    /// [`oag_formats::handling::WeaponPad`]. Per pad rather than per craft,
+    /// [`oag_tables::handling::WeaponPad`]. Per pad rather than per craft,
     /// which is what makes it a property of the track rather than of the racer.
     ///
     /// **Deliberately outside the determinism hash**, unlike
@@ -812,7 +812,7 @@ pub struct Race {
     /// [`Setup::weapon_pad_refresh`].
     weapon_pad_refresh: f32,
     /// This race's weapon table - see [`Setup::weapons`].
-    weapons: Option<oag_formats::weapons::WeaponStats>,
+    weapons: Option<oag_tables::weapons::WeaponStats>,
     /// The speed class, which indexes the pickup odds - see [`Setup::class`].
     ///
     /// The disc's own spelling, so a title whose ladder is not Pulse's - Pure,

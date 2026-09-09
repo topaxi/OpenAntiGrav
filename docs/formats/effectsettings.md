@@ -13,9 +13,9 @@ race is currently on and layered over whichever circuit is racing. Detonator
 mode ships the same mechanism under its own file name.
 
 Implemented in
-[`oag_formats::effectsettings`](../../crates/formats/src/effectsettings.rs),
+[`oag_tables::effectsettings`](../../crates/tables/src/effectsettings.rs),
 checked against the disc by
-[`effectsettings_ground_truth.rs`](../../crates/formats/tests/effectsettings_ground_truth.rs).
+[`effectsettings_ground_truth.rs`](../../crates/tables/tests/effectsettings_ground_truth.rs).
 **Wired into a Zone race since 2026-08-30, driven by an explicit stage index
 and blend weight and by nothing else** - see [What is read and what is
 not](#what-is-read-and-what-is-not). The cross-fade `cross_fade_rgba8`
@@ -155,7 +155,7 @@ same `mesh_render::Fog`/`Light` path
 | Piece | Where |
 | --- | --- |
 | Where each title keeps its table | `oag_title::ZonePalette` - `TitleWide` on HD/Fury, `BesideCircuit` on 2048, `None` on Pulse and Pure |
-| One stage's palette, and the blend of two | `oag_formats::effectsettings::{StagePalette, EffectSettings::blended_palette}` |
+| One stage's palette, and the blend of two | `oag_tables::effectsettings::{StagePalette, EffectSettings::blended_palette}` |
 | The runtime stage state, and what it does to fog and rig | `oag_game::race::zone_grade::{StageBlend, ZoneGrade}` |
 | Read at race load, applied per frame | `oag_game::race::load::environment::staging`, `race/scene/frame.rs` |
 | Checked against the real image | `crates/game/tests/zone_grade_ground_truth.rs` |
@@ -220,7 +220,7 @@ all** (`grep -ci density` over a shipped `ZoneMode2048.effectSettings`
 returns `0`, checked directly). The fourth lane reads `0.0025`/`0.0015` on
 the environment block and a flat `0.007` on the track block, the same
 magnitude as HD's own `0.0021` and nothing like an alpha. So the fourth lane
-is this file's density; `oag_formats::effectsettings` reads it from there,
+is this file's density; `oag_tables::effectsettings` reads it from there,
 **confidence 74** - three converging reads (missing key, odd arity,
 magnitude), no traced consumer in 2048's executable. The sky pair differs
 only in spelling (`Sky.Horizon Colour` against `Sky horizon colour`) and is

@@ -16,7 +16,7 @@ fn main() -> anyhow::Result<()> {
             };
             let text = String::from_utf8_lossy(&blob);
             let head: String = text.lines().take(4).collect::<Vec<_>>().join(" ");
-            let stats = oag_formats::handling::from_blob(&blob);
+            let stats = oag_tables::handling::from_blob(&blob);
             println!(
                 "{team}/{n}: {} | {}",
                 match &stats {

@@ -6,7 +6,7 @@
 
 use std::path::{Path, PathBuf};
 
-use oag_formats::effectsettings::EffectSettings;
+use oag_tables::effectsettings::EffectSettings;
 
 /// HD's own 15-stage speed-class ladder, `zonemode.effectsettings`'s own
 /// order - shared verbatim by all four HD files measured here.
@@ -208,7 +208,7 @@ fn twok48_title_wide_keys_read_with_no_stage() {
 #[test]
 #[ignore]
 fn hd_stage_zero_and_stage_one_are_two_different_authored_palettes() {
-    use oag_formats::effectsettings::StagePalette;
+    use oag_tables::effectsettings::StagePalette;
 
     let Some(image) = hd_image() else { return };
     let spec = format!("{}:PS3_GAME/USRDIR/DATA00.PSARC", image.display());

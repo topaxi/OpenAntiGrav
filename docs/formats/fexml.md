@@ -1,7 +1,7 @@
 # Front-end XML
 
 **Status: understood.** Implemented in
-[`oag-formats::fexml`](../../crates/formats/src/fexml.rs).
+[`oag-tables::fexml`](../../crates/tables/src/fexml.rs).
 
 Screens, widgets, 3D model previews, menu transitions and
 [handling stats](handling-stats.md) are all XML. The front end is data-driven,

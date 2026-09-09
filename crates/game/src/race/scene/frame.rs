@@ -649,10 +649,10 @@ impl Scene {
         // Shuriken, which has none at all - the flare around a modelled kind is
         // an asset now, through the particle pipeline below with everything else.
         vertices.extend(race.projectile_sprites(right, up, |kind| match kind {
-            oag_formats::weapons::Weapon::Rocket => !self.rockets.is_empty(),
-            oag_formats::weapons::Weapon::Mine => !self.mines.is_empty(),
-            oag_formats::weapons::Weapon::Bomb => !self.bombs.is_empty(),
-            oag_formats::weapons::Weapon::Cannon => !self.cannon_rounds.is_empty(),
+            oag_tables::weapons::Weapon::Rocket => !self.rockets.is_empty(),
+            oag_tables::weapons::Weapon::Mine => !self.mines.is_empty(),
+            oag_tables::weapons::Weapon::Bomb => !self.bombs.is_empty(),
+            oag_tables::weapons::Weapon::Cannon => !self.cannon_rounds.is_empty(),
             _ => false,
         }));
         oag_render::perfprobe::mark("exhaust-gather");

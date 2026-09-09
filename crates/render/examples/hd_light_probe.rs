@@ -11,8 +11,8 @@
 //! area and a vertex histogram does not: a handful of large triangles on a
 //! dark patch of an atlas outvote a dense strip on a light one.
 
-use oag_formats::envsettings::{self, EnvSettings};
 use oag_render::mesh::{self, ModelTexture, slots};
+use oag_tables::envsettings::{self, EnvSettings};
 
 /// Bilinear-free point sample, the way `hd_shade_probe` reads a texel.
 fn sample(texture: &ModelTexture, rgba: &[u8], [u, v]: [f32; 2]) -> [f32; 4] {

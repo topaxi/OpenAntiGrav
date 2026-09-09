@@ -348,7 +348,7 @@ impl Global {
 ///
 /// A literal in the executable at `0x08a8a270`, passed to `Handling_ParseStats`
 /// by `0x0894f6a8`. Being a literal means the WAD lookup is an exact
-/// [`wad::hash_name`](crate::wad::hash_name) hit rather than a mined candidate.
+/// `oag_formats::wad::hash_name` hit rather than a mined candidate.
 pub const GLOBAL_ENTRY: &str = r"Data\XML\HandlingStats.xml";
 
 /// Reads `<Handling><Global>` out of an **already expanded** document.

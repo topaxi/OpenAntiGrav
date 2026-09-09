@@ -6,11 +6,11 @@ state the sun, the ambient, the fog and the tonemapper for the circuit they sit
 beside.
 
 Implemented in
-[`oag_formats::envsettings`](../../crates/formats/src/envsettings.rs), read into
+[`oag_tables::envsettings`](../../crates/tables/src/envsettings.rs), read into
 a race by [`oag_game::race::load`](../../crates/game/src/race/load.rs), drawn
 through [`oag_render::mesh_render::Light`](../../crates/render/src/mesh_render.rs),
 and checked against the disc by
-[`envsettings_ground_truth.rs`](../../crates/formats/tests/envsettings_ground_truth.rs).
+[`envsettings_ground_truth.rs`](../../crates/tables/tests/envsettings_ground_truth.rs).
 
 ```sh
 just psarc cat data/images/hdfury-ps3-eu-dec.iso:PS3_GAME/USRDIR/DATA00.PSARC \
@@ -261,7 +261,7 @@ do with a circuit.
 Every base and DLC circuit ships a `track.EnvSettings` (capitalised
 differently, read case-insensitively the same way every other sibling-path
 lookup in this project is) in the identical `"Key.Subkey"=float [float...]`
-syntax - no format change, so `oag_formats::envsettings::EnvSettings::parse`
+syntax - no format change, so `oag_tables::envsettings::EnvSettings::parse`
 reads it unmodified. **The key names differ, confirmed from the executable's
 own registrar rather than guessed from the file**:
 `Environment_RegisterLightingSchema` (`0x810175fc` in
@@ -281,7 +281,7 @@ title's file indiscriminately, so a Wipeout 2048 race always reported *"no
 usable sun direction, colour and ambient; lighting with the stand-in rig"* -
 not because the file was missing or malformed, but because none of its real
 keys matched the constants being asked for.
-[`oag_formats::envsettings::PSP2_AMBIENT_COLOUR`](../../crates/formats/src/envsettings.rs)
+[`oag_tables::envsettings::PSP2_AMBIENT_COLOUR`](../../crates/tables/src/envsettings.rs)
 and `PSP2_SUN_DIFFUSE_COLOUR` are 2048's own spellings, and
 `crate::race::load::environment::envsettings_light` picks between the two
 key sets on whether the circuit's geometry is `psp2` (`mesh::rcs::psp2::is_psp2`).

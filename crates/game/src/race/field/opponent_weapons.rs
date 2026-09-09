@@ -56,7 +56,7 @@ impl Race {
         let Some(stats) = self
             .weapons
             .as_ref()
-            .and_then(oag_formats::weapons::WeaponStats::missile)
+            .and_then(oag_tables::weapons::WeaponStats::missile)
         else {
             return false;
         };
@@ -95,7 +95,7 @@ impl Race {
         let Some(stats) = self
             .weapons
             .as_ref()
-            .and_then(oag_formats::weapons::WeaponStats::rocket)
+            .and_then(oag_tables::weapons::WeaponStats::rocket)
         else {
             return false;
         };
@@ -114,7 +114,7 @@ impl Race {
         let mut fired = 0;
         for (position, velocity) in shots {
             if self.world.projectiles.spawn(
-                oag_formats::weapons::Weapon::Rocket,
+                oag_tables::weapons::Weapon::Rocket,
                 position,
                 velocity,
                 slot as u8,
@@ -160,7 +160,7 @@ impl Race {
         let Some(stats) = self
             .weapons
             .as_ref()
-            .and_then(oag_formats::weapons::WeaponStats::quake)
+            .and_then(oag_tables::weapons::WeaponStats::quake)
         else {
             return false;
         };
@@ -231,7 +231,7 @@ impl Race {
         let Some(stats) = self
             .weapons
             .as_ref()
-            .and_then(oag_formats::weapons::WeaponStats::leach_beam)
+            .and_then(oag_tables::weapons::WeaponStats::leach_beam)
         else {
             return false;
         };
@@ -290,7 +290,7 @@ impl Race {
         let Some(stats) = self
             .weapons
             .as_ref()
-            .and_then(oag_formats::weapons::WeaponStats::plasma)
+            .and_then(oag_tables::weapons::WeaponStats::plasma)
         else {
             return false;
         };
@@ -304,7 +304,7 @@ impl Race {
             return false;
         };
         self.world.projectiles.spawn(
-            oag_formats::weapons::Weapon::Plasma,
+            oag_tables::weapons::Weapon::Plasma,
             position,
             velocity,
             slot as u8,
@@ -342,7 +342,7 @@ impl Race {
         let Some(stats) = self
             .weapons
             .as_ref()
-            .and_then(oag_formats::weapons::WeaponStats::shuriken)
+            .and_then(oag_tables::weapons::WeaponStats::shuriken)
         else {
             return false;
         };
@@ -443,7 +443,7 @@ impl Race {
             return;
         };
 
-        if weapon == oag_formats::weapons::Weapon::Turbo {
+        if weapon == oag_tables::weapons::Weapon::Turbo {
             // Full throttle means the speed target is not asking it to slow for
             // anything it can see, which is the only "is this a straight?" this
             // engine has. **The controls the driver chose this tick**, not
@@ -506,7 +506,7 @@ impl Race {
             // an opponent's boost has to be visible from behind, or the field
             // gains speed with nothing on screen saying why.
             self.exhaust[slot].boost(exhaust::BOOST_SECONDS);
-        } else if weapon == oag_formats::weapons::Weapon::Rocket {
+        } else if weapon == oag_tables::weapons::Weapon::Rocket {
             // **The `if` is inside the arm, not `&&`ed onto its condition**, and
             // that is the whole of finding an opponent that never fired. As an
             // `&&` a declined shot made the *condition* false and fell through to
@@ -522,29 +522,29 @@ impl Race {
                 // early returns and always did.
                 return;
             }
-        } else if weapon == oag_formats::weapons::Weapon::Missile {
+        } else if weapon == oag_tables::weapons::Weapon::Missile {
             if !self.fire_opponent_missile(slot, field) {
                 return;
             }
-        } else if weapon == oag_formats::weapons::Weapon::Plasma {
+        } else if weapon == oag_tables::weapons::Weapon::Plasma {
             if !self.fire_opponent_plasma(slot, field) {
                 return;
             }
-        } else if weapon == oag_formats::weapons::Weapon::Shuriken {
+        } else if weapon == oag_tables::weapons::Weapon::Shuriken {
             if !self.throw_opponent_shuriken(slot, field) {
                 return;
             }
-        } else if weapon == oag_formats::weapons::Weapon::Quake {
+        } else if weapon == oag_tables::weapons::Weapon::Quake {
             if !self.fire_opponent_quake(slot, field) {
                 return;
             }
-        } else if weapon == oag_formats::weapons::Weapon::LeachBeam {
+        } else if weapon == oag_tables::weapons::Weapon::LeachBeam {
             if !self.fire_opponent_leach_beam(slot, field) {
                 return;
             }
         } else if matches!(
             weapon,
-            oag_formats::weapons::Weapon::Mine | oag_formats::weapons::Weapon::Bomb
+            oag_tables::weapons::Weapon::Mine | oag_tables::weapons::Weapon::Bomb
         ) {
             // **Neither branch spends the pickup here.** A drop that starts keeps
             // the weapon in the slot until the last charge is laid, which is
@@ -552,7 +552,7 @@ impl Race {
             // So this arm returns either way.
             self.drop_opponent_mines(weapon, slot, field);
             return;
-        } else if weapon == oag_formats::weapons::Weapon::Cannon {
+        } else if weapon == oag_tables::weapons::Weapon::Cannon {
             // **Named here rather than left to fall through to absorb, and
             // for a different reason than the Autopilot's.** The Cannon is the
             // one weapon that does not fire off the press edge at all - not for
@@ -615,7 +615,7 @@ impl Race {
     /// weapon's with the aiming taken out.
     fn drop_opponent_mines(
         &mut self,
-        weapon: oag_formats::weapons::Weapon,
+        weapon: oag_tables::weapons::Weapon,
         slot: usize,
         field: &oag_ai::Field,
     ) -> bool {

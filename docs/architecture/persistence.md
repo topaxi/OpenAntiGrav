@@ -51,7 +51,7 @@ on that row, whatever it says - better or worse than the standing best,
 because "last" is a different question than "best".
 
 `best_medal`, `best_points` and `last_medal` are the campaign medal fields,
-added 2026-09-09 once `oag_formats::race_campaign::Cell::evaluate_medal`
+added 2026-09-09 once `oag_tables::race_campaign::Cell::evaluate_medal`
 reimplemented `Cell_EvaluateMedal`'s law - see
 [`docs/formats/race-campaign.md`](../formats/race-campaign.md). `Medal` is
 serialized as a lowercase word, never the bare ordinal the original's own
@@ -188,7 +188,7 @@ actually asserts.
 ## Where a career system attaches
 
 `Record` now also carries a best-ever campaign medal and its points, and the
-most recent race's own medal - `oag_formats::race_campaign::Cell::evaluate_medal`
+most recent race's own medal - `oag_tables::race_campaign::Cell::evaluate_medal`
 reimplements the law that produces one (`Cell_EvaluateMedal`); still absent
 is an unlock or a tournament standing. Two ways to grow this file further,
 still additive, neither needing `Key`, `parse` or `Store::record` to change:
@@ -209,7 +209,7 @@ need `string_id`s - see `scripts/check-strings.py`). Not started.
 
 **Nor is there any wiring from a real race to a campaign cell.** The medal
 law is implemented and unit-tested
-(`crates/formats/src/race_campaign/tests.rs`,
+(`crates/tables/src/race_campaign/tests.rs`,
 `crates/game/tests/campaign_medal.rs`), and `Observation::campaign_medal`
 and `Record::best_medal`/`best_points`/`last_medal` are ready to carry a
 result through to disk - but `RaceStage::observation`, the one place an

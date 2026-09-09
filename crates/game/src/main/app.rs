@@ -46,7 +46,7 @@ pub(crate) struct App {
     /// `--pick-language`: show the picker even when the settings name one.
     pub(crate) pick_language: bool,
     /// `--give`, resolved to a weapon at startup. See the CLI field.
-    pub(crate) give: Option<oag_formats::weapons::Weapon>,
+    pub(crate) give: Option<oag_tables::weapons::Weapon>,
     /// `--autopilot`: whether the player's craft is flown for them. A
     /// verification aid - see `race::Race::set_autopilot`.
     pub(crate) autopilot: bool,

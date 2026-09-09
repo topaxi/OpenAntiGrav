@@ -76,7 +76,7 @@
 //! points, and the most recent race's own medal - the law behind them
 //! (`Cell_EvaluateMedal`/`Cell_MedalPoints`) was a sibling member's own
 //! finding, recovered and reimplemented as
-//! `oag_formats::race_campaign::Cell::evaluate_medal`, not guessed at here;
+//! `oag_tables::race_campaign::Cell::evaluate_medal`, not guessed at here;
 //! see `docs/ghidra/functions/psp-pulse-usa/race-campaign.md`. What is
 //! **still** not here: no unlock, no tournament standing, and no wiring
 //! that selects *which* campaign cell a real race was run against -
@@ -172,10 +172,10 @@ impl Key {
     }
 }
 
-/// A campaign medal tier, [`oag_formats::race_campaign::Cell::evaluate_medal`]'s
+/// A campaign medal tier, [`oag_tables::race_campaign::Cell::evaluate_medal`]'s
 /// own three-value law restated here rather than imported - see that
 /// function's doc for `Cell_EvaluateMedal` (`0x088bf620`) and
-/// [`oag_formats::race_campaign::Medal::points`] for `Cell_MedalPoints`
+/// [`oag_tables::race_campaign::Medal::points`] for `Cell_MedalPoints`
 /// (`0x088bf530`), gold 3 / silver 2 / bronze 1.
 ///
 /// **Duplicated, not imported, on purpose.** [`Observation`]'s own doc
@@ -256,7 +256,7 @@ pub struct Observation {
     /// never finished one.
     pub best_lap_ticks: Option<u32>,
     /// This race's own campaign medal, already evaluated by
-    /// `oag_formats::race_campaign::Cell::evaluate_medal` and converted to
+    /// `oag_tables::race_campaign::Cell::evaluate_medal` and converted to
     /// this module's own [`Medal`] by the caller - this module knows
     /// nothing about a campaign cell's targets or mode, and never computes
     /// this itself. `None` both when the race was not run against a

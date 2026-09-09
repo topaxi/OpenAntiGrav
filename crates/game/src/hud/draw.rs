@@ -417,7 +417,7 @@ pub(super) const PICKUP_BACKGROUND: &str = "PickupBackground";
 /// The numeric ids are still real - `0x0883b3b8` forces one - and are simply not
 /// needed to draw the right icon.
 #[must_use]
-pub fn pickup_icon_name(weapon: oag_formats::weapons::Weapon) -> String {
+pub fn pickup_icon_name(weapon: oag_tables::weapons::Weapon) -> String {
     format!("{}Icon", weapon.as_type())
 }
 
@@ -433,7 +433,7 @@ pub fn pickup_icon_name(weapon: oag_formats::weapons::Weapon) -> String {
 /// same pixels.
 pub(super) fn pickup_sprites(
     layout: &Layout,
-    weapon: oag_formats::weapons::Weapon,
+    weapon: oag_tables::weapons::Weapon,
     art: &oag_title::HudArt,
 ) -> Vec<Sprite> {
     let icon = pickup_icon_name(weapon);
@@ -491,7 +491,7 @@ pub(super) fn pickup_sprites(
 /// icon sits on it.
 pub(super) fn pickup_model_draws(
     cx: &Context<'_>,
-    weapon: oag_formats::weapons::Weapon,
+    weapon: oag_tables::weapons::Weapon,
 ) -> Vec<Draw> {
     let Some(models) = cx.art.pickup_icon_models else {
         return Vec::new();

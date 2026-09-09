@@ -3,7 +3,7 @@
 2026-09-06. Reported from play: a craft hit by a mine, rocket or missile did not
 slow down. It was **missing, not mistuned** - nothing armed the timer. The law
 is recovered end to end and written up on
-[engine.md](../../docs/ghidra/functions/psp-pulse-usa/engine.md); `oag_formats::weapons`
+[engine.md](../../docs/ghidra/functions/psp-pulse-usa/engine.md); `oag_tables::weapons`
 decodes `slowdown_time` on all six decoded blocks as of the same day, with a
 ground-truth test that asserts every weapon's figure sits at or under the global
 cap on both shipped tables.

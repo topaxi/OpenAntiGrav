@@ -56,8 +56,8 @@ pub(super) fn hd_sky_model(
     let rotation = envsettings_name(track)
         .and_then(|name| archives.read_name(&name).ok())
         .and_then(|blob| String::from_utf8(blob).ok())
-        .and_then(|text| oag_formats::envsettings::EnvSettings::parse(&text).ok())
-        .and_then(|env| env.scalar(oag_formats::envsettings::SKY_ROTATION))
+        .and_then(|text| oag_tables::envsettings::EnvSettings::parse(&text).ok())
+        .and_then(|env| env.scalar(oag_tables::envsettings::SKY_ROTATION))
         .unwrap_or(0.0);
     match mesh::sky_cube::build(&name, &blob, rotation) {
         Ok(sky) => {
@@ -247,7 +247,7 @@ pub(super) fn envsettings_fog(
     track: &str,
     report: &mut Vec<String>,
 ) -> Option<mesh_render::Fog> {
-    use oag_formats::envsettings::{EnvSettings, FOG_COLOUR, FOG_DENSITY};
+    use oag_tables::envsettings::{EnvSettings, FOG_COLOUR, FOG_DENSITY};
     let name = envsettings_name(track)?;
     let blob = archives.read_name(&name).ok()?;
     let text = String::from_utf8(blob).ok()?;
@@ -285,7 +285,7 @@ pub(super) fn envsettings_bloom(
     track: &str,
     report: &mut Vec<String>,
 ) -> Option<oag_render::post::hd_bloom::Params> {
-    use oag_formats::envsettings::{
+    use oag_tables::envsettings::{
         BLOOM_ADAPTION_BOOST, BLOOM_ADAPTION_RATE, BLOOM_ALPHA_CONTRIBUTION,
         BLOOM_FRAME_CONTRIBUTION, BLOOM_FRAME_EXPONENT, BLOOM_HORIZONTAL_SIZE, BLOOM_VERTICAL_SIZE,
         EnvSettings, TONE_ADAPTION_BOOST, TONE_DARKENING_CLAMP, TONE_MAXIMUM_BRIGHTNESS,
@@ -357,7 +357,7 @@ pub(super) fn envsettings_bloom(
 /// **`psp2` picks the key spelling, not the file.** Wipeout 2048 ships the
 /// same `"Key.Subkey"=float [float...]` syntax beside its own `track.vex`, but
 /// its registrar spells the ambient and sun-diffuse terms differently from
-/// HD's - see `oag_formats::envsettings`'s "Wipeout 2048 authors the same
+/// HD's - see `oag_tables::envsettings`'s "Wipeout 2048 authors the same
 /// shape under different key names". Reading HD's keys against a 2048 file
 /// resolves nothing and falls back to the stand-in rig silently wrong about
 /// why; this is what tells the two schemas apart.
@@ -380,14 +380,14 @@ pub(super) fn envsettings_light(
             return mesh_render::Light::stand_in();
         }
     };
-    let env = match oag_formats::envsettings::EnvSettings::parse(&text) {
+    let env = match oag_tables::envsettings::EnvSettings::parse(&text) {
         Ok(env) => env,
         Err(e) => {
             report.push(format!("{name}: {e}; lighting with the stand-in rig"));
             return mesh_render::Light::stand_in();
         }
     };
-    use oag_formats::envsettings::{
+    use oag_tables::envsettings::{
         AMBIENT_COLOUR, PRELIT_POWER, PRELIT_SCALE, PSP2_AMBIENT_COLOUR, PSP2_SUN_DIFFUSE_COLOUR,
         SUN_COLOUR, SUN_DIRECTION, SUN_SPECULAR_SCALE,
     };
@@ -635,7 +635,7 @@ pub(super) fn zone_grade(
     track: &str,
     report: &mut Vec<String>,
 ) -> Option<crate::race::zone_grade::ZoneGrade> {
-    use oag_formats::effectsettings::EffectSettings;
+    use oag_tables::effectsettings::EffectSettings;
 
     if mode != oag_race::Mode::Zone {
         return None;

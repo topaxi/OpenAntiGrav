@@ -9,7 +9,7 @@
 
 use std::path::{Path, PathBuf};
 
-use oag_formats::fexml;
+use oag_tables::fexml;
 
 fn image(name: &str) -> Option<PathBuf> {
     oag_testdata::image(name)

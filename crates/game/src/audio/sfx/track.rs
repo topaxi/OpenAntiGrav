@@ -364,7 +364,7 @@ fn circuit_bank_entry(archives: &mut Archives, track: &str) -> Option<String> {
     let manifest = archives
         .read_name(&format!("{directory}{separator}trackstartup.xml"))
         .ok()?;
-    let file = oag_formats::trackstartup::TrackStartup::parse(&String::from_utf8_lossy(&manifest))
+    let file = oag_tables::trackstartup::TrackStartup::parse(&String::from_utf8_lossy(&manifest))
         .sound_bank?;
     Some(format!("{directory}{separator}{file}"))
 }

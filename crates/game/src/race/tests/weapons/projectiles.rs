@@ -38,7 +38,7 @@ fn a_thrown_shuriken_leaves_at_the_recovered_angle() {
     race.tick(&buttons.tick(0));
     assert_eq!(
         race.ship_pickup(),
-        Some(oag_formats::weapons::Weapon::Shuriken)
+        Some(oag_tables::weapons::Weapon::Shuriken)
     );
 
     let forward = race.ship().physics.body.forward();
@@ -49,7 +49,7 @@ fn a_thrown_shuriken_leaves_at_the_recovered_angle() {
     assert_eq!(race.world.projectiles.live(), 1, "one press is one blade");
 
     let blade = race.world.projectiles.slots[0];
-    assert_eq!(blade.kind, Some(oag_formats::weapons::Weapon::Shuriken));
+    assert_eq!(blade.kind, Some(oag_tables::weapons::Weapon::Shuriken));
     // The fuse, not the ten-second safety net every other flier gets. Measured
     // one tick after the throw - the blade is spawned and then flown inside the
     // same `tick`, so it has already spent `dt` of its own fuse by the time a
@@ -100,12 +100,12 @@ fn a_shurikens_side_is_drawn_and_both_sides_come_up() {
     let mut sides = (0, 0);
     for _ in 0..10 {
         race.world.projectiles.clear();
-        race.world.ships[0].pickup.weapon = Some(oag_formats::weapons::Weapon::Shuriken);
+        race.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Shuriken);
         let mut buttons = Buttons::new();
         buttons.tick(0);
         race.tick(&buttons.tick(SQUARE));
         let blade = race.world.projectiles.slots[0];
-        assert_eq!(blade.kind, Some(oag_formats::weapons::Weapon::Shuriken));
+        assert_eq!(blade.kind, Some(oag_tables::weapons::Weapon::Shuriken));
         if blade.velocity.dot(right) > 0.0 {
             sides.0 += 1;
         } else {
@@ -140,7 +140,7 @@ fn a_fired_plasma_puts_exactly_one_projectile_in_the_air() {
     race.tick(&buttons.tick(0));
     assert_eq!(
         race.ship_pickup(),
-        Some(oag_formats::weapons::Weapon::Plasma)
+        Some(oag_tables::weapons::Weapon::Plasma)
     );
     assert_eq!(race.world.projectiles.live(), 0, "nothing before firing");
 
@@ -156,7 +156,7 @@ fn a_fired_plasma_puts_exactly_one_projectile_in_the_air() {
     );
 
     let bolt = race.world.projectiles.slots[0];
-    assert_eq!(bolt.kind, Some(oag_formats::weapons::Weapon::Plasma));
+    assert_eq!(bolt.kind, Some(oag_tables::weapons::Weapon::Plasma));
     assert_eq!(bolt.owner, 0);
     assert!(
         (bolt.position - before).dot(forward) > 0.0,
@@ -205,7 +205,7 @@ fn a_fired_rocket_puts_three_projectiles_in_the_air() {
     race.tick(&buttons.tick(0));
     assert_eq!(
         race.ship_pickup(),
-        Some(oag_formats::weapons::Weapon::Rocket)
+        Some(oag_tables::weapons::Weapon::Rocket)
     );
     assert_eq!(race.world.projectiles.live(), 0, "nothing before firing");
 
@@ -222,7 +222,7 @@ fn a_fired_rocket_puts_three_projectiles_in_the_air() {
 
     for slot in 0..oag_gameplay::projectile::ROCKET_SHOTS {
         let rocket = race.world.projectiles.slots[slot];
-        assert_eq!(rocket.kind, Some(oag_formats::weapons::Weapon::Rocket));
+        assert_eq!(rocket.kind, Some(oag_tables::weapons::Weapon::Rocket));
         assert_eq!(rocket.owner, 0);
         assert!(
             (rocket.position - before).dot(forward) > 0.0,

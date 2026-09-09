@@ -106,7 +106,7 @@ pub struct Options {
     /// every race team's `handlingstats.xml`, in its engine-wide
     /// `<GlobalClass>` table and in its pickup odds; Pulse and HD author four.
     /// The name is resolved against the file that authored it, by
-    /// `oag_formats::handling::Stats::class_named` and its siblings, so a title
+    /// `oag_tables::handling::Stats::class_named` and its siblings, so a title
     /// that authors four never grows a fabricated fifth entry.
     ///
     /// Matched case-insensitively wherever it is resolved. See
@@ -335,7 +335,7 @@ pub struct Setup {
     /// The spline resampled for locating a ship, and for placing it.
     pub spline: Spline,
     /// Zone mode's speed law and recharge, when the source carries them.
-    pub zone: Option<oag_formats::handling::Zone>,
+    pub zone: Option<oag_tables::handling::Zone>,
     /// The same graph walked into a closed ring, for lap counting.
     ///
     /// `None` when the primary chain does not close, which means this track gets
@@ -485,13 +485,13 @@ pub struct Setup {
     /// `None` when the file is absent or unreadable, which means a pad hands
     /// nothing out rather than handing out an invented weapon - the same choice
     /// [`Setup::speedup_pads`]' tunables make. See `docs/formats/weapon-stats.md`.
-    pub weapons: Option<oag_formats::weapons::WeaponStats>,
+    pub weapons: Option<oag_tables::weapons::WeaponStats>,
     /// Seconds a weapon pad is inert for after it is crossed, for this race's
     /// speed class.
     ///
     /// `<WeaponPad refresh_time>` out of the same `<GlobalClass>` block the
     /// speed-pad tunables come from, stamped onto the pad by the original's
-    /// `WeaponPads_TestCraft` - see [`oag_formats::handling::WeaponPad`], which
+    /// `WeaponPads_TestCraft` - see [`oag_tables::handling::WeaponPad`], which
     /// records why it is a debounce rather than a respawn. Zero when the global
     /// file could not be read.
     pub weapon_pad_refresh: f32,

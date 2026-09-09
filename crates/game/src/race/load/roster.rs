@@ -67,7 +67,7 @@ pub(super) fn available(
     let declared = archives
         .read_name(definition)
         .map_err(|error| error.to_string())
-        .and_then(|blob| oag_formats::fexml::text(&blob).map_err(|error| error.to_string()))
+        .and_then(|blob| oag_tables::fexml::text(&blob).map_err(|error| error.to_string()))
         .map(|xml| crate::catalogue::teams(&xml));
     let declared = match declared {
         Ok(declared) => {

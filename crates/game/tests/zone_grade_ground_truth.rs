@@ -247,7 +247,7 @@ fn the_2048_branch_resolves_its_per_circuit_table() {
         .read_name(&name)
         .unwrap_or_else(|e| panic!("{name}: {e}"));
     let text = String::from_utf8(blob).expect("UTF-8");
-    let table = oag_formats::effectsettings::EffectSettings::parse(&text).expect("it parses");
+    let table = oag_tables::effectsettings::EffectSettings::parse(&text).expect("it parses");
     // 2048's own thirteen-stage ladder: HD's fifteen with `Sub Venom` and
     // `Venom` dropped.
     assert_eq!(table.stages.len(), 13);
@@ -276,7 +276,7 @@ fn a_2048_zone_race_escalates_on_the_recovered_ladder() {
         .entry_for(oag_2048::race::DEFAULT_TRACK)
         .expect("the circuit's own directory");
     let text = String::from_utf8(archives.read_name(&name).expect("the table")).expect("UTF-8");
-    let table = oag_formats::effectsettings::EffectSettings::parse(&text).expect("it parses");
+    let table = oag_tables::effectsettings::EffectSettings::parse(&text).expect("it parses");
     let mut grade = race::zone_grade::ZoneGrade::new(
         name,
         table,
@@ -324,7 +324,7 @@ fn a_2048_zone_race_escalates_on_the_recovered_ladder() {
     //   "Zone 12 Supersonic.Fog.Environment Fog Colour"
     //       =0.129412 0.968627 1.000000 0.002500
     // The fourth lane is the density this file has no separate key for - see
-    // `oag_formats::effectsettings::key::ENVIRONMENT_FOG_COLOUR_2048`.
+    // `oag_tables::effectsettings::key::ENVIRONMENT_FOG_COLOUR_2048`.
     assert_eq!(opening.fog_colour, Some([0.592_157; 3]));
     assert_eq!(opening.fog_density, Some(0.001_5));
     grade.show_zone(70);

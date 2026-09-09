@@ -199,7 +199,7 @@ fn slot_zero_is_the_team_the_options_asked_for() {
     let blob = archives
         .read_name(oag_pulse::names::GAME_PLUGIN_DEFINITION)
         .expect("the game plugin definition");
-    let definition = oag_formats::fexml::expand(&blob).expect("expanding it");
+    let definition = oag_tables::fexml::expand(&blob).expect("expanding it");
     let teams = oag_game::catalogue::teams(&definition);
     assert!(teams.len() > 1, "the disc declares more than one team");
 

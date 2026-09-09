@@ -46,7 +46,7 @@
 //! content in this repository; see
 //! [ADR-0006](../../../docs/architecture/adr/0006-no-copyrighted-content.md).
 
-use oag_formats::fexml::{Node, parse};
+use oag_tables::fexml::{Node, parse};
 
 /// One thing a player can pick on the Race page.
 #[derive(Debug, Clone, PartialEq, Eq)]

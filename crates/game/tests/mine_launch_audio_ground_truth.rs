@@ -24,9 +24,9 @@
 
 use std::path::{Path, PathBuf};
 
-use oag_formats::weapons::Weapon;
 use oag_game::race;
 use oag_gameplay::input::{Button, Input};
+use oag_tables::weapons::Weapon;
 
 /// Past the start-line countdown, the same reasoning `mine_ground_truth.rs`
 /// gives at length: a stationary craft is not what a `MINELAUNCH` fired from a

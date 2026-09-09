@@ -17,6 +17,7 @@ members = [
   "crates/pure",
   "crates/race",
   "crates/render",
+  "crates/tables",
   "crates/testdata",
   "crates/title",
   "crates/tools",
@@ -49,6 +50,7 @@ oag-pure = { path = "crates/pure" }
 oag-race = { path = "crates/race" }
 oag-render = { path = "crates/render" }
 oag-testdata = { path = "crates/testdata" }
+oag-tables = { path = "crates/tables" }
 oag-title = { path = "crates/title" }
 oag-trace = { path = "crates/trace" }
 oag-video = { path = "crates/video" }
@@ -182,4 +184,9 @@ opt-level = 2
 # the movie cache. `re_rav1d` is reached by `package."*"` above; this entry is
 # for the demuxers around it, which walk a whole file a packet at a time.
 [profile.dev.package.oag-video]
+opt-level = 2
+
+# The XML tables. A `handlingstats.xml` sweep parses every row on the disc, and
+# the parser is a character-at-a-time walk with no allocation to hide behind.
+[profile.dev.package.oag-tables]
 opt-level = 2

@@ -38,8 +38,8 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 
-use oag_formats::fexml::{self, Node};
 use oag_game::hud;
+use oag_tables::fexml::{self, Node};
 
 fn image() -> Option<PathBuf> {
     oag_testdata::image("data/images/hdfury-ps3-eu-dec.iso")

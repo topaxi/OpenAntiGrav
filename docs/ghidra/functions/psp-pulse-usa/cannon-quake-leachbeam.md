@@ -312,7 +312,7 @@ above, so the file's `rate="20"` is **twenty rounds per second** and the
 countdown reloads with `0.05` seconds. Both shipped tables author `rate="20"`
 beside `rounds="30"`: a second and a half of continuous fire, not the one round
 every twenty seconds a literal reading gives. That literal reading is what
-`oag_formats::weapons::CannonStats::rate` carried until this pass, and it
+`oag_tables::weapons::CannonStats::rate` carried until this pass, and it
 shipped - a player holding fire for a whole race would have seen about twenty
 rounds leave, which is indistinguishable from a broken weapon.
 
@@ -1443,7 +1443,7 @@ This **closes "`ActiveLeachBeamStats+0x11c`'s attribute name is unmeasured"**:
 | `+0x124` | `energy_multiplier` | `50.0` | `50.0` |
 
 Values are this repository's own parser reading `pulse-psp-usa.chd`, which is
-why the whole block is now `oag_formats::weapons::LeachBeamStats`. Confidence
+why the whole block is now `oag_tables::weapons::LeachBeamStats`. Confidence
 **90** on the offset map - a direct decompile with no VFPU on the path, each arm
 unambiguous.
 
@@ -1648,7 +1648,7 @@ reused whole" above.
   `energy_multiplier`; both accumulators' consumers are found
   (`Ship_ApplyPendingWeaponDamage` and `Ship_ApplyPendingWeaponRepair`); the
   lifetime is the authored `active_time`; and the whole nine-attribute
-  `<Stats>` block is decoded as `oag_formats::weapons::LeachBeamStats`. The one
+  `<Stats>` block is decoded as `oag_tables::weapons::LeachBeamStats`. The one
   half deliberately **not** wired is `slowShipFactor`, which needs the one-shot
   thrust scale at `craft+0x31c` that `oag_physics::engine` documents and does
   not implement.

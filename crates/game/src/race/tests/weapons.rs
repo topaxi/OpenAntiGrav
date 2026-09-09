@@ -23,8 +23,8 @@ const FIXTURE_SHIELD_ABSORB: f32 = 7.0;
 /// number invented per ADR-0006, and `absorb` and `time` deliberately unlike
 /// each other and unlike the Turbo table's, so a test that confused any two
 /// of the four fails rather than passes by coincidence.
-fn one_shield_table() -> oag_formats::weapons::WeaponStats {
-    oag_formats::weapons::parse(
+fn one_shield_table() -> oag_tables::weapons::WeaponStats {
+    oag_tables::weapons::parse(
         r#"<WeaponStats>
              <Weapon type="Global"><Stats slowdown_limit="0"/></Weapon>
              <Weapon type="Shield"><Stats absorb="7" time="1.25"/></Weapon>
@@ -48,10 +48,7 @@ fn crossing_a_weapon_pad_grants_the_pickup_its_class_weights() {
         "a race must start empty-handed"
     );
     race.tick(&InputSnapshot::default());
-    assert_eq!(
-        race.ship_pickup(),
-        Some(oag_formats::weapons::Weapon::Turbo)
-    );
+    assert_eq!(race.ship_pickup(), Some(oag_tables::weapons::Weapon::Turbo));
 }
 
 /// The mode gate, and it is the one thing about a weapon pad that *is*
@@ -188,7 +185,7 @@ fn a_fired_turbo_multiplies_thrust_for_its_authored_duration() {
     plain.tick(&plain_buttons.tick(CROSS));
     assert_eq!(
         fired.ship_pickup(),
-        Some(oag_formats::weapons::Weapon::Turbo)
+        Some(oag_tables::weapons::Weapon::Turbo)
     );
 
     let boosted = fired.tick(&fired_buttons.tick(CROSS | SQUARE));
@@ -267,7 +264,7 @@ fn a_fired_shield_arms_the_timer_for_its_authored_duration() {
     race.tick(&buttons.tick(CROSS));
     assert_eq!(
         race.ship_pickup(),
-        Some(oag_formats::weapons::Weapon::Shield),
+        Some(oag_tables::weapons::Weapon::Shield),
         "a table weighting Shield alone must hand out a Shield"
     );
 
@@ -325,7 +322,7 @@ fn a_shield_fired_into_a_running_one_is_wasted_rather_than_stacked() {
     // so a pad-driven second Shield would take an unbounded number of ticks and
     // the timer would be most of the way down by then.
     race.tick(&buttons.tick(CROSS));
-    race.world.ships[0].pickup.weapon = Some(oag_formats::weapons::Weapon::Shield);
+    race.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Shield);
     race.tick(&buttons.tick(CROSS | SQUARE));
 
     assert_eq!(
@@ -355,7 +352,7 @@ fn absorbing_a_shield_pays_the_shields_own_absorb() {
     race.tick(&buttons.tick(0));
     assert_eq!(
         race.ship_pickup(),
-        Some(oag_formats::weapons::Weapon::Shield)
+        Some(oag_tables::weapons::Weapon::Shield)
     );
     // Spend the pool first, or the payment lands against a full one and the
     // recovered clamp hides it.
@@ -385,7 +382,7 @@ fn absorbing_a_shield_pays_the_shields_own_absorb() {
 /// does to a slot that is already full.
 #[test]
 fn only_the_two_solo_modes_are_given_a_free_turbo_and_never_two_at_once() {
-    use oag_formats::weapons::Weapon;
+    use oag_tables::weapons::Weapon;
 
     for mode in [Mode::TimeTrial, Mode::SpeedLap] {
         let mut race = race_with_weapon_pads(mode, Vec::new(), 1.0);
@@ -431,7 +428,7 @@ fn only_the_two_solo_modes_are_given_a_free_turbo_and_never_two_at_once() {
 /// via a `Race::start` call this fix removed).
 #[test]
 fn a_fresh_time_trial_or_speed_lap_holds_no_turbo_until_the_countdown_releases() {
-    use oag_formats::weapons::Weapon;
+    use oag_tables::weapons::Weapon;
 
     for mode in [Mode::TimeTrial, Mode::SpeedLap] {
         let mut race = race_with_weapon_pads(mode, Vec::new(), 1.0);
@@ -473,10 +470,7 @@ fn a_fresh_time_trial_or_speed_lap_holds_no_turbo_until_the_countdown_releases()
 fn absorbing_pays_the_pool_and_never_past_its_maximum() {
     let mut race = race_with_weapon_pads(Mode::SingleRace, enveloping_pad(), 1.0);
     race.tick(&InputSnapshot::default());
-    assert_eq!(
-        race.ship_pickup(),
-        Some(oag_formats::weapons::Weapon::Turbo)
-    );
+    assert_eq!(race.ship_pickup(), Some(oag_tables::weapons::Weapon::Turbo));
 
     // The pool starts full, so absorbing into it must add nothing at all -
     // which is the clamp under test rather than a missing absorb.
@@ -524,7 +518,7 @@ fn absorbing_pays_the_pool_and_never_past_its_maximum() {
 /// should have been: growing the list fails here, with the sites named.
 #[test]
 fn every_implemented_weapon_has_a_fire_arm_on_both_paths() {
-    use oag_formats::weapons::Weapon;
+    use oag_tables::weapons::Weapon;
 
     // The Autopilot's opponent answer is **absorption, deliberately**: the
     // pickup hands a craft to its driver and an opponent already has one, so
@@ -576,7 +570,7 @@ fn a_missile_with_nothing_to_lock_is_fired_unguided_and_spent() {
     let mut race =
         race_with_weapon_table(Mode::SingleRace, enveloping_pad(), 1.0, one_missile_table());
     race.tick(&InputSnapshot::default());
-    race.world.ships[0].pickup.weapon = Some(oag_formats::weapons::Weapon::Missile);
+    race.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Missile);
 
     let mut buttons = Buttons::new();
     buttons.tick(0);
@@ -592,7 +586,7 @@ fn a_missile_with_nothing_to_lock_is_fired_unguided_and_spent() {
         .projectiles
         .slots
         .iter()
-        .find(|p| p.kind == Some(oag_formats::weapons::Weapon::Missile))
+        .find(|p| p.kind == Some(oag_tables::weapons::Weapon::Missile))
         .copied()
         .expect("a missile is in the air");
     assert_eq!(
@@ -623,7 +617,7 @@ fn an_unguided_missile_fired_by_hand_ends_itself_on_time() {
     let mut race =
         race_with_weapon_table(Mode::SingleRace, enveloping_pad(), 1.0, one_missile_table());
     race.tick(&InputSnapshot::default());
-    race.world.ships[0].pickup.weapon = Some(oag_formats::weapons::Weapon::Missile);
+    race.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Missile);
 
     let mut buttons = Buttons::new();
     buttons.tick(0);
@@ -673,7 +667,7 @@ fn holding_a_missile_behind_a_craft_locks_it_after_the_recovered_hold() {
     let forward = race.world.ships[0].physics.body.forward();
     let ahead = race.world.ships[0].physics.body.position + forward * 60.0;
 
-    race.world.ships[0].pickup.weapon = Some(oag_formats::weapons::Weapon::Missile);
+    race.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Missile);
 
     let mut states = Vec::new();
     for _ in 0..180 {
@@ -711,7 +705,7 @@ fn holding_a_rocket_draws_no_reticle() {
     race.weapons = Some(one_missile_table());
     let forward = race.world.ships[0].physics.body.forward();
     let ahead = race.world.ships[0].physics.body.position + forward * 60.0;
-    race.world.ships[0].pickup.weapon = Some(oag_formats::weapons::Weapon::Rocket);
+    race.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Rocket);
 
     for _ in 0..180 {
         race.world.ships[1].physics.body.position = ahead;
@@ -792,8 +786,8 @@ fn the_cockpit_view_swaps_the_shield_shell_for_its_sphere() {
 #[test]
 fn an_opponent_that_declines_a_shot_does_not_absorb_the_pickup() {
     for weapon in [
-        oag_formats::weapons::Weapon::Rocket,
-        oag_formats::weapons::Weapon::Mine,
+        oag_tables::weapons::Weapon::Rocket,
+        oag_tables::weapons::Weapon::Mine,
     ] {
         let mut race = race_with_a_grid();
         race.weapons = Some(rear_and_forward_table());
@@ -826,8 +820,8 @@ fn an_opponent_that_declines_a_shot_does_not_absorb_the_pickup() {
 /// A table authoring one forward weapon and one rear one, both weighted, for
 /// the test above - which needs a weapon of each shape to show that the
 /// fallthrough is the chain's and not one arm's.
-fn rear_and_forward_table() -> oag_formats::weapons::WeaponStats {
-    oag_formats::weapons::parse(
+fn rear_and_forward_table() -> oag_tables::weapons::WeaponStats {
+    oag_tables::weapons::parse(
         r#"<WeaponStats>
              <Weapon type="Global"><Stats slowdown_limit="0"/></Weapon>
              <Weapon type="Rocket"><Stats absorb="23" blastforce="3" blastradius="4" damage="5" slowdown_time="0.5" venomspeed="100" flashspeed="200" rapierspeed="300" phantomspeed="400" launchSpeed="7" spread="0.1"/></Weapon>
@@ -860,7 +854,7 @@ fn a_leach_beam_fired_at_nobody_is_spent_and_expires_on_its_own_clock() {
         one_leach_beam_table(),
     );
     race.tick(&InputSnapshot::default());
-    race.world.ships[0].pickup.weapon = Some(oag_formats::weapons::Weapon::LeachBeam);
+    race.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::LeachBeam);
 
     let mut buttons = Buttons::new();
     buttons.tick(0);
@@ -905,20 +899,20 @@ fn a_second_leach_beam_press_while_one_is_up_keeps_the_pickup() {
         one_leach_beam_table(),
     );
     race.tick(&InputSnapshot::default());
-    race.world.ships[0].pickup.weapon = Some(oag_formats::weapons::Weapon::LeachBeam);
+    race.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::LeachBeam);
 
     let mut buttons = Buttons::new();
     buttons.tick(0);
     race.tick(&buttons.tick(SQUARE));
     assert!(race.world.leach_beam.is_some());
 
-    race.world.ships[0].pickup.weapon = Some(oag_formats::weapons::Weapon::LeachBeam);
+    race.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::LeachBeam);
     race.tick(&buttons.tick(0));
     race.tick(&buttons.tick(SQUARE));
 
     assert_eq!(
         race.ship_pickup(),
-        Some(oag_formats::weapons::Weapon::LeachBeam),
+        Some(oag_tables::weapons::Weapon::LeachBeam),
         "a press into somebody else's live beam must keep the pickup"
     );
 }

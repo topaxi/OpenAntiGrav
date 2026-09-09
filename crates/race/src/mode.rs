@@ -12,7 +12,7 @@
 //! which is which - see `docs/gameplay/race-modes.md` for the evidence and the
 //! confidence score behind every one.
 
-pub use oag_formats::handling::SpeedClass;
+pub use oag_tables::handling::SpeedClass;
 
 /// One of the race modes this crate implements.
 ///
@@ -116,7 +116,7 @@ impl Mode {
     ///
     /// **This table is the fallback, not the authority.** A race launched from
     /// the campaign should take the lap count from *its own* cell -
-    /// `oag_formats::race_campaign::Cell` already parses `laps: Option<u32>` -
+    /// `oag_tables::race_campaign::Cell` already parses `laps: Option<u32>` -
     /// and the cell's value wins over this array the moment a campaign launch
     /// can be wired, the same retirement clause
     /// [`Self::ELIMINATOR_KILL_TARGET_DEFAULT`] carries. What keeps the array

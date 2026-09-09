@@ -15,9 +15,9 @@
 
 use oag_core::Rng;
 use oag_core::math::Vec3;
-use oag_formats::weapons::ShurikenStats;
 use oag_physics::ShipState;
 use oag_physics::params::Dimensions;
+use oag_tables::weapons::ShurikenStats;
 
 use super::KMH_PER_UNIT_PER_SECOND;
 

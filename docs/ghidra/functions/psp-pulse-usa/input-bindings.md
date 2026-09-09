@@ -537,7 +537,7 @@ Same chain, same `+0x84 + index*4`, same global - `_DAT_000578ac` is the naive
 form of `0x08b31044`. So whatever the index selects, the roll costs
 **`roll_cost`% of exactly the number that bounds the shield pool**, which is
 `oag_physics::params::Dimensions::shield` in this project (already resolved for
-the race's skill level by `oag_formats::handling::Misc::shield_for`). The same
+the race's skill level by `oag_tables::handling::Misc::shield_for`). The same
 function's HUD call divides by the same expression to get a percentage.
 
 `g_skill_level` (`0x08b31044`) is `0x08b30f90 + 0xb4`, one slot along from the

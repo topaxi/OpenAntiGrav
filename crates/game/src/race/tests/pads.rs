@@ -159,7 +159,7 @@ fn the_boost_outlives_the_pad_and_then_expires() {
 /// **grounded** half of it.
 ///
 /// The name says airborne and the VFPU pair chain puts it on the grounded
-/// lane - see `oag_formats::handling::GravityMul`. So this asserts the
+/// lane - see `oag_tables::handling::GravityMul`. So this asserts the
 /// counter-intuitive half: a heavier scale changes a ship resting on the
 /// ground, and the identity leaves the term exactly as it was before the
 /// value was decoded.

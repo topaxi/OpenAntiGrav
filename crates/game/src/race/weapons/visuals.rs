@@ -39,7 +39,7 @@ impl Race {
         // The charge: up exactly while slot 0 holds a LeachBeam, which is the
         // whole of `FUN_0883f540`'s own gate. Nothing chosen here.
         let holding = self.world.ships[0].pickup.weapon
-            == Some(oag_formats::weapons::Weapon::LeachBeam)
+            == Some(oag_tables::weapons::Weapon::LeachBeam)
             && self.world.ships[0].active;
         let holder = self.world.ships[0].physics.body.position;
         match (
@@ -182,7 +182,7 @@ impl Race {
     /// [`blast_for`]: Race::blast_for
     pub(in crate::race) fn ignite_blast(
         &mut self,
-        kind: oag_formats::weapons::Weapon,
+        kind: oag_tables::weapons::Weapon,
         point: Vec3,
         struck: Option<usize>,
     ) {
@@ -232,12 +232,12 @@ impl Race {
     ///   invention `CLAUDE.md` forbids.
     pub(in crate::race) fn blast_for(
         &self,
-        kind: oag_formats::weapons::Weapon,
+        kind: oag_tables::weapons::Weapon,
         point: Vec3,
         struck: Option<usize>,
     ) -> Option<(&'static str, Vec3)> {
         match kind {
-            oag_formats::weapons::Weapon::Rocket => Some(match struck {
+            oag_tables::weapons::Weapon::Rocket => Some(match struck {
                 Some(slot) if self.world.ships[slot].active => (
                     CRAFT_BLAST_EFFECT,
                     self.world.ships[slot].physics.body.position - Vec3::Y * CRAFT_BLAST_DROP,
@@ -249,9 +249,9 @@ impl Race {
                 Some(_) => (CRAFT_BLAST_EFFECT, point),
                 None => (TRACK_BLAST_EFFECT, point),
             }),
-            oag_formats::weapons::Weapon::Missile => Some((MISSILE_EXPLO_EFFECT, point)),
-            oag_formats::weapons::Weapon::Mine => Some((MINE_EXPLO_EFFECT, point)),
-            oag_formats::weapons::Weapon::Cannon if struck.is_none() => {
+            oag_tables::weapons::Weapon::Missile => Some((MISSILE_EXPLO_EFFECT, point)),
+            oag_tables::weapons::Weapon::Mine => Some((MINE_EXPLO_EFFECT, point)),
+            oag_tables::weapons::Weapon::Cannon if struck.is_none() => {
                 Some((CANNON_SPARKS_EFFECT, point))
             }
             _ => None,
@@ -385,7 +385,7 @@ impl Race {
         for (slot, projectile) in self.world.projectiles.slots.iter().enumerate() {
             let name = flare_effect_for(projectile.kind);
             let (primary, orbiting) = if projectile.kind
-                == Some(oag_formats::weapons::Weapon::Missile)
+                == Some(oag_tables::weapons::Weapon::Missile)
             {
                 let age = oag_gameplay::projectile::MAX_FLIGHT_SECONDS - projectile.lifetime;
                 let (a, b) = missile_flare_anchors(projectile.position, projectile.velocity, age);
@@ -442,7 +442,7 @@ impl Race {
         &self,
         right: Vec3,
         up: Vec3,
-        modelled: impl Fn(oag_formats::weapons::Weapon) -> bool,
+        modelled: impl Fn(oag_tables::weapons::Weapon) -> bool,
     ) -> Vec<oag_render::mesh::GpuVertex> {
         let mut vertices = Vec::new();
         for projectile in &self.world.projectiles.slots {
@@ -512,7 +512,7 @@ impl Race {
     /// script replayed through `oag-trace run --script`.
     #[must_use]
     pub fn rocket_model_matrices(&self) -> Vec<Mat4> {
-        self.projectile_model_matrices(oag_formats::weapons::Weapon::Rocket)
+        self.projectile_model_matrices(oag_tables::weapons::Weapon::Rocket)
     }
 
     /// Where each live mine is, and the pose it landed in, for the model draw.
@@ -527,7 +527,7 @@ impl Race {
     /// chosen rather than measured.
     #[must_use]
     pub fn mine_model_matrices(&self) -> Vec<Mat4> {
-        self.projectile_model_matrices(oag_formats::weapons::Weapon::Mine)
+        self.projectile_model_matrices(oag_tables::weapons::Weapon::Mine)
     }
 
     /// Where each live bomb is, for the model draw - the Mine's, one size up.
@@ -539,7 +539,7 @@ impl Race {
     /// happens there, and nothing rules it out either.
     #[must_use]
     pub fn bomb_model_matrices(&self) -> Vec<Mat4> {
-        self.projectile_model_matrices(oag_formats::weapons::Weapon::Bomb)
+        self.projectile_model_matrices(oag_tables::weapons::Weapon::Bomb)
     }
 
     /// Where each live Cannon round is, for the model draw.
@@ -588,7 +588,7 @@ impl Race {
     /// orientation to read.
     #[must_use]
     pub fn cannon_model_matrices(&self) -> Vec<Mat4> {
-        self.projectile_model_matrices(oag_formats::weapons::Weapon::Cannon)
+        self.projectile_model_matrices(oag_tables::weapons::Weapon::Cannon)
     }
 
     /// Where each live projectile of one `kind` is and how it is oriented, for
@@ -626,7 +626,7 @@ impl Race {
     /// [`Body::orientation`]'s convention, a coarser question a single static
     /// mesh view cannot settle; `Pulse_Bomb.vex` was not separately viewed.
     #[must_use]
-    fn projectile_model_matrices(&self, kind: oag_formats::weapons::Weapon) -> Vec<Mat4> {
+    fn projectile_model_matrices(&self, kind: oag_tables::weapons::Weapon) -> Vec<Mat4> {
         self.world
             .projectiles
             .slots
@@ -676,13 +676,13 @@ impl Race {
 /// method's doc comment for the reading.
 #[must_use]
 pub(in crate::race) fn flare_effect_for(
-    kind: Option<oag_formats::weapons::Weapon>,
+    kind: Option<oag_tables::weapons::Weapon>,
 ) -> Option<&'static str> {
     match kind? {
-        oag_formats::weapons::Weapon::Rocket => Some(ROCKET_FLARE_EFFECT),
-        oag_formats::weapons::Weapon::Missile => Some(MISSILE_FLARE_EFFECT),
-        oag_formats::weapons::Weapon::Plasma => Some(PLASMA_FLARE_EFFECT),
-        oag_formats::weapons::Weapon::Shuriken => Some(SHURIKEN_FLARE_EFFECT),
+        oag_tables::weapons::Weapon::Rocket => Some(ROCKET_FLARE_EFFECT),
+        oag_tables::weapons::Weapon::Missile => Some(MISSILE_FLARE_EFFECT),
+        oag_tables::weapons::Weapon::Plasma => Some(PLASMA_FLARE_EFFECT),
+        oag_tables::weapons::Weapon::Shuriken => Some(SHURIKEN_FLARE_EFFECT),
         _ => None,
     }
 }
@@ -807,7 +807,7 @@ pub(in crate::race) fn missile_flare_anchors(
 /// never read as a bounce.
 #[must_use]
 pub(in crate::race) fn bounced_this_tick(
-    kind: Option<oag_formats::weapons::Weapon>,
+    kind: Option<oag_tables::weapons::Weapon>,
     before: u8,
     now: u8,
 ) -> bool {
@@ -824,11 +824,11 @@ pub(in crate::race) fn bounced_this_tick(
 /// weapon's file for the other is the bug that shipped as a mine riding the
 /// Rocket's flare.
 pub(in crate::race) fn bounce_effect_for(
-    kind: Option<oag_formats::weapons::Weapon>,
+    kind: Option<oag_tables::weapons::Weapon>,
 ) -> Option<&'static str> {
     match kind? {
-        oag_formats::weapons::Weapon::Missile => Some(MISSILE_BOUNCE_EFFECT),
-        oag_formats::weapons::Weapon::Shuriken => Some(SHURIKEN_BOUNCE_EFFECT),
+        oag_tables::weapons::Weapon::Missile => Some(MISSILE_BOUNCE_EFFECT),
+        oag_tables::weapons::Weapon::Shuriken => Some(SHURIKEN_BOUNCE_EFFECT),
         _ => None,
     }
 }

@@ -21,6 +21,7 @@ path = "src/main.rs"
 # second copy of the ring walk. The comparison engine itself still has no
 # notion of a lap.
 [dependencies]
+oag-tables.workspace = true
 oag-pulse.workspace = true
 oag-assets.workspace = true
 oag-ai.workspace = true

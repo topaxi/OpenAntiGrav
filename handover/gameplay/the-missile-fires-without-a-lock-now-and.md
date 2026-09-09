@@ -182,7 +182,7 @@ slot 0 and not only against the opponents. The other three needed no change -
 neither fires expecting a *specific* lock outcome from slot 0's shot.
 
 **The LeachBeam's reticle landed on 2026-09-07** and its four widgets are
-driven off its own authored window. `oag_formats::weapons::LeachBeamStats`
+driven off its own authored window. `oag_tables::weapons::LeachBeamStats`
 decodes `absorb` and the lock pair at `stats+0x114`/`+0x118` and nothing else -
 the beam's other six attributes have no consumer, and `range` is deliberately
 left alone because it is authored at the same figure as `HudSight_Update`'s own

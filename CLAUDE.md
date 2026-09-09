@@ -159,6 +159,7 @@ Existing crates:
 | `oag-core` | `crates/core` | Deterministic math (`f32`, no SIMD), `TickClock`, seeded `Rng`, state hashing. Depended on by everything. |
 | `oag-disc` | `crates/disc` | CHD and raw ISO readers, ISO 9660 walker, platform identification. |
 | `oag-formats` | `crates/formats` | Asset container identification and parsing (WAD, PSARC, LZSS, sound banks, console byte layout). Being split by format family per [ADR-0050](docs/architecture/adr/0050-format-crates-split-by-format-family.md). |
+| `oag-tables` | `crates/tables` | The tables titles author as XML: handling, weapons, campaign grids, load manifests, lighting rigs. Zero dependencies - the crate the simulation reads its numbers from has no path to a texture decoder. |
 | `oag-video` | `crates/video` | Video containers: `.PMF` (PSP), `IPUF` (PS2), Bink (HD), plus the IVF/AV1 movie cache this project writes. Depends on nothing in the workspace. |
 | `oag-assets` | `crates/assets` | Runtime asset access: `Archive` reads a WAD by path or straight out of a disc image, by index/name/hash. |
 | `oag-title` | `crates/title` | The `Title` type and its three axes: archive candidates, entry names, foreign-serial deny-list. Types only, no title's data. |

@@ -1971,7 +1971,6 @@ dependencies = [
  "oag-pulse",
  "oag-testdata",
  "oag-title",
- "oag-video",
  "thiserror 2.0.19",
 ]
 
@@ -2015,6 +2014,7 @@ dependencies = [
  "oag-pulse",
  "oag-pure",
  "oag-testdata",
+ "re_rav1d",
 ]
 
 [[package]]
@@ -2049,7 +2049,6 @@ dependencies = [
  "oag-testdata",
  "oag-title",
  "oag-trace",
- "oag-video",
  "pollster",
  "resvg",
  "serde",
@@ -2186,13 +2185,6 @@ dependencies = [
  "oag-race",
  "oag-title",
  "thiserror 2.0.19",
-]
-
-[[package]]
-name = "oag-video"
-version = "0.1.0"
-dependencies = [
- "re_rav1d",
 ]
 
 [[package]]

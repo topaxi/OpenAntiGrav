@@ -5,7 +5,7 @@ Binary: `PSP_GAME/SYSDIR/BOOT.BIN` from `pulse-psp-usa.chd` (`UCUS-98712`), as
 
 This is the PSP side of the same question
 [HD/Fury's `billboards.md`](../ps3-hdfury-eu/billboards.md) answers for that
-platform, and [`oag_formats::trackstartup`](../../../../crates/formats/src/trackstartup.rs)
+platform, and [`oag_tables::trackstartup`](../../../../crates/tables/src/trackstartup.rs)
 is the shared file-format reader both binaries feed. Where HD's page is
 capped at 84 (static reading of one binary, per
 [visibility.md](../ps3-hdfury-eu/visibility.md)'s own rule), this one is not:
@@ -473,7 +473,7 @@ rather than at the world origin - without it, "instantiated" is settled and
 seventh pass (above) resolved what `param_1+0x40` holds - the loaded mesh's
 own authored `Camera` node, not a placement mount point - which narrows the
 search by retiring a candidate rather than by finding the writer.
-[`crates/formats/src/trackstartup.rs:173`](../../../../crates/formats/src/trackstartup.rs)
+[`crates/tables/src/trackstartup.rs:173`](../../../../crates/tables/src/trackstartup.rs)
 carries the same "literal identity matrix" wording this page used to (not
 edited here - out of this lane's scope - flagged for whoever owns that
 crate).

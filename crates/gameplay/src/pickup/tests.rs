@@ -6,7 +6,7 @@
 //! as a gate.
 
 use super::*;
-use oag_formats::weapons::PickupOdds;
+use oag_tables::weapons::PickupOdds;
 
 fn table(odds: &[(Weapon, f32, f32)]) -> PickupTable {
     PickupTable {
@@ -381,7 +381,7 @@ fn taking_a_pickup_mid_drop_clears_the_drop_state_too() {
 fn every_rear_weapon_can_be_laid_and_tripped() {
     use crate::projectile::mine::{Drop, TriggerRadii};
 
-    let table = oag_formats::weapons::parse(
+    let table = oag_tables::weapons::parse(
         r#"<WeaponStats>
              <Weapon type="Global"><Stats slowdown_limit="0"/></Weapon>
              <Weapon type="Mine"><Stats absorb="1" blastforce="2" blastradius="3" damage="4" timetodie="5" trigger_radius="6"/></Weapon>

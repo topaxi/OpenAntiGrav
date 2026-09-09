@@ -33,6 +33,7 @@ Older pages, and [`goals.md`](../overview/goals.md)'s scope table, use
 | `oag-core` | `crates/core` | Deterministic math, fixed-timestep clock, seeded PRNG, state hashing. Depended on by everything. |
 | `oag-disc` | `crates/disc` | CHD and raw ISO readers, ISO 9660 walker, console identification. |
 | `oag-formats` | `crates/formats` | Asset container identification and parsing. Being split by format family per [ADR-0050](adr/0050-format-crates-split-by-format-family.md). |
+| `oag-tables` | `crates/tables` | Every table a title authors as XML, and the tag reader underneath them. The only crate in the workspace with no dependencies at all. |
 | `oag-video` | `crates/video` | Video containers - what the originals wrap a bitstream in, plus this project's own movie cache. The first crate carved off `oag-formats`, and the one with no workspace dependencies at all. |
 | `oag-tools` | `crates/tools` | Command line tools: `oag-unpack`, `oag-wad`. |
 | `oag-render` | `crates/render` | The wgpu renderer: mesh pipeline, track-ribbon builder, cameras. Owns no window, so the viewer and the game can each keep their own. |
@@ -67,7 +68,7 @@ crate created before its shape is understood tends to get the wrong shape.
 **`oag-weapons` is a plan this project did not follow, and the reason is the
 warning above it.** Pickups landed on 2026-08-11 and projectiles the same day,
 and they went into the crates that already had what they needed:
-`oag_formats::weapons` for the table, `oag_gameplay::pickup` for the draw and
+`oag_tables::weapons` for the table, `oag_gameplay::pickup` for the draw and
 the inventory, `oag_gameplay::projectile` for flight and blasts,
 `oag_game::race` for the trigger and the fire buttons, and
 `oag_physics::damage` for what a hit costs. A new crate would have needed
@@ -254,7 +255,7 @@ split is by what the loop is, not by crate ownership:
 | optimised | left at `opt-level = 0` |
 | --- | --- |
 | `oag-core`, `oag-physics`, `oag-ai`, `oag-race`, `oag-gameplay` - the sim, driven for thousands of ticks per behavioural test | `oag-render`, `oag-game`, `oag-view`, `oag-input`, `oag-audio` |
-| `oag-disc`, `oag-formats`, `oag-assets` - LZSS, the GS and GE texture swizzles, the `.vex` node walk, and the sector-at-a-time read under them; `oag-video` - demuxing a whole movie a packet at a time | `oag-title`, `oag-pulse`, `oag-pure`, `oag-hd`, `oag-trace`, `oag-tools` |
+| `oag-disc`, `oag-formats`, `oag-assets` - LZSS, the GS and GE texture swizzles, the `.vex` node walk, and the sector-at-a-time read under them; `oag-video` - demuxing a whole movie a packet at a time; `oag-tables` - a character-at-a-time XML walk over every row on the disc | `oag-title`, `oag-pulse`, `oag-pure`, `oag-hd`, `oag-trace`, `oag-tools` |
 
 The right-hand column is where a debugger actually gets pointed, so it keeps the
 debuggability the paragraph above is about.

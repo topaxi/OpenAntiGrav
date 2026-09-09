@@ -4,7 +4,7 @@
 
 **Status:** **read and built.** Five functions and the whole `<Stats>` block are
 recovered; `oag_gameplay::projectile::shuriken` and
-`oag_formats::weapons::ShurikenStats` are the port. The reading was done on 2026-09-02
+`oag_tables::weapons::ShurikenStats` are the port. The reading was done on 2026-09-02
 alongside the Plasma's, once [plasma.md](plasma.md)'s dispatch table handed over
 the handler address.
 
@@ -231,7 +231,7 @@ The Shuriken is the only weapon of the thirteen authoring **two** damages and
 blade reaches a craft, which is the weapon's effect and is built.
 `rhicochetdamage`/`rhicochetForce` are **not decoded**: a glancing hit off a
 craft is the obvious reading and it is a reading, so
-`oag_formats::weapons::ShurikenStats` leaves both out rather than picking one.
+`oag_tables::weapons::ShurikenStats` leaves both out rather than picking one.
 The engine's own bounce path only ever fires off *geometry* - a hull hit ends
 the blade - so there is currently no moment at which a ricochet number would be
 spent even if it were decoded.

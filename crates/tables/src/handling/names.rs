@@ -9,7 +9,7 @@
 /// directory this title keeps its roster in.
 ///
 /// Assembled the way the loader assembles it, with backslashes, which is what
-/// [`wad::hash_name`](crate::wad::hash_name) needs to find the entry. `dir`
+/// `oag_formats::wad::hash_name` needs to find the entry. `dir`
 /// comes from `oag_title::RaceDefaults::ship_dir`, because which directory a
 /// title's ships live under is a title fact and this crate must not know which
 /// title it is reading.

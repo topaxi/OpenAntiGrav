@@ -103,7 +103,7 @@ fn pulse_refuses_pures_disc_by_serial() {
 #[test]
 #[ignore = "needs data/images/pure-psp-usa.chd"]
 fn pures_handlingstats_is_read_up_to_its_next_schema_difference() {
-    use oag_formats::handling;
+    use oag_tables::handling;
 
     let Some(source) = image() else { return };
     let mut archives = oag_pure::open(&source).expect("Pure's disc opens");

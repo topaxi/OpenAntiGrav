@@ -282,10 +282,10 @@ fn circuits(archives: &mut oag_assets::Archives, definition: &str) -> Vec<String
     let Ok(blob) = archives.read_name(definition) else {
         return Vec::new();
     };
-    let Ok(xml) = oag_formats::fexml::text(&blob) else {
+    let Ok(xml) = oag_tables::fexml::text(&blob) else {
         return Vec::new();
     };
-    let root = oag_formats::fexml::parse(&xml);
+    let root = oag_tables::fexml::parse(&xml);
     let mut out = Vec::new();
     collect_tracks(&root, &mut out);
     out.sort();
@@ -293,7 +293,7 @@ fn circuits(archives: &mut oag_assets::Archives, definition: &str) -> Vec<String
     out
 }
 
-fn collect_tracks(node: &oag_formats::fexml::Node, out: &mut Vec<String>) {
+fn collect_tracks(node: &oag_tables::fexml::Node, out: &mut Vec<String>) {
     if node.name.eq_ignore_ascii_case("PI_Track") {
         for child in &node.children {
             if let Some(location) = child.value("location") {

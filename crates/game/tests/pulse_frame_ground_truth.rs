@@ -17,10 +17,10 @@
 
 use std::path::PathBuf;
 
-use oag_formats::fexml;
 use oag_game::frontend::{Draw, Space};
 use oag_game::screen::Screens;
 use oag_game::sprite::Sheet;
+use oag_tables::fexml;
 
 fn image() -> Option<PathBuf> {
     oag_testdata::image("data/images/pulse-psp-usa.chd")

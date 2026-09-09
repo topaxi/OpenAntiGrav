@@ -211,5 +211,5 @@ fn plugin_xml(
     let blob = archives
         .read_name(definition)
         .with_context(|| format!("reading {definition} out of {source}"))?;
-    oag_formats::fexml::text(&blob).map_err(|e| anyhow::anyhow!("{definition}: {e}"))
+    oag_tables::fexml::text(&blob).map_err(|e| anyhow::anyhow!("{definition}: {e}"))
 }

@@ -12,11 +12,11 @@
 
 use super::*;
 
-use oag_formats::weapons::Weapon;
+use oag_tables::weapons::Weapon;
 
 /// A stats block with a wide, unambiguous lock window.
 fn stats() -> MissileStats {
-    oag_formats::weapons::parse(
+    oag_tables::weapons::parse(
         r#"<WeaponStats>
              <Weapon type="Global"><Stats slowdown_limit="0"/></Weapon>
              <Weapon type="Missile"><Stats absorb="1" blastforce="10" blastradius="12"

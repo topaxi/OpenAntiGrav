@@ -549,7 +549,7 @@ state machine was not traced.
   `Zone`-mode cell in `grid_00.xml` .. `grid_15.xml` carries the literal
   `class="Zone"` (e.g. `grid0_4_2`), not one of `Venom`/`Flash`/`Rapier`/
   `Phantom` - found by
-  [`crates/formats/src/race_campaign.rs`](../../../../crates/formats/src/race_campaign.rs)'s
+  [`crates/tables/src/race_campaign.rs`](../../../../crates/tables/src/race_campaign.rs)'s
   parser against the real disc, not re-read in Ghidra. Either the table has a
   fifth entry this pass missed, or `PI_Cell_ParseElement` leaves an
   unrecognised `class=` string in the field rather than rejecting it - both

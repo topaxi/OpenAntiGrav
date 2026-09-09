@@ -7,10 +7,11 @@
 
 use anyhow::{Context, Result};
 use log::{info, warn};
-use oag_formats::{collision, handling};
+use oag_formats::collision;
 use oag_gameplay::{collision_world, handling_for};
 use oag_physics::{CollisionWorld, Handling};
 use oag_pulse as pulse;
+use oag_tables::handling;
 
 /// Spell-checks `--class` against every measured ladder.
 ///

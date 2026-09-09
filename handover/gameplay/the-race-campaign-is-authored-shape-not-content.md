@@ -110,7 +110,7 @@ The law, all decompiled and all in `race-campaign.md`:
 ## Next Steps
 
 - ~~Implement the medal law and persist it.~~ **Done, 2026-09-09.**
-  `oag_formats::race_campaign::Cell::evaluate_medal` reimplements
+  `oag_tables::race_campaign::Cell::evaluate_medal` reimplements
   `Cell_EvaluateMedal` directly on `Cell` (three-way threshold compare,
   direction flipped for `Zone`/`Elimination`, `Medal::points` for
   `Cell_MedalPoints`), tested against three cases chosen to fail if the flip
@@ -138,9 +138,9 @@ The law, all decompiled and all in `race-campaign.md`:
   next pass starts from a shorter list. Closing it unblocks `hud.md`'s medal
   target item, which has been blocked on RE since the HUD work.
 - ~~Parse the grid files properly rather than by hand.~~ **Done, 2026-09-08.**
-  `oag_formats::race_campaign` parses `PI_Grid`/`PI_Cell` off the existing
+  `oag_tables::race_campaign` parses `PI_Grid`/`PI_Cell` off the existing
   `fexml` reader, `oag_pulse::campaign` carries the sixteen entry names, and
-  `crates/formats/tests/race_campaign_ground_truth.rs` (`#[ignore]`d,
+  `crates/tables/tests/race_campaign_ground_truth.rs` (`#[ignore]`d,
   `just test-data`) reproduces every count this thread's own summary above
   cites against the real USA PSP disc: 16 grids, 236 cells, the exact
   per-class lap census, the mode census (Race 59 / Time Trial 47 / Speed Lap

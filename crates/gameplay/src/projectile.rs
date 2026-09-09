@@ -85,9 +85,9 @@ pub use mine::TriggerRadii;
 pub use rocket::{ROCKET_SHOTS, launch};
 
 use oag_core::math::{Quat, Vec3};
-use oag_formats::weapons::Weapon;
 use oag_physics::params::Dimensions;
 use oag_physics::{Ray, Raycaster};
+use oag_tables::weapons::Weapon;
 
 /// The most projectiles that can be in the air at once.
 ///
@@ -417,7 +417,7 @@ impl Projectiles {
     /// `Shuriken_Update` only counts `+0x48` up and the teardown that would read
     /// it was not followed. `WO_SHURIKEN_EXPIRE` is authored on the disc and
     /// stays unwired for the same reason. See
-    /// `oag_formats::weapons::ShurikenStats`.
+    /// `oag_tables::weapons::ShurikenStats`.
     pub fn throw(&mut self, position: Vec3, velocity: Vec3, owner: u8, fuse: f32) -> bool {
         self.place(Weapon::Shuriken, position, velocity, owner, None, 0.0, fuse)
             .is_some()
@@ -508,7 +508,7 @@ impl Projectiles {
         dt: f32,
         raycaster: &R,
         ships: &[crate::world::Ship],
-        missile: Option<&oag_formats::weapons::MissileStats>,
+        missile: Option<&oag_tables::weapons::MissileStats>,
         trigger_radii: TriggerRadii,
         class: &str,
     ) -> [Option<Impact>; MAX_PROJECTILES] {
@@ -837,13 +837,13 @@ pub fn step<R: Raycaster + ?Sized>(
     world: &mut crate::World,
     dt: f32,
     raycaster: &R,
-    weapons: Option<&oag_formats::weapons::WeaponStats>,
+    weapons: Option<&oag_tables::weapons::WeaponStats>,
     class: &str,
     rules: oag_physics::DamageRules,
     absorbed: &mut [bool],
 ) -> [Option<Impact>; MAX_PROJECTILES] {
     let count = world.ship_count as usize;
-    let missile_stats = weapons.and_then(oag_formats::weapons::WeaponStats::missile);
+    let missile_stats = weapons.and_then(oag_tables::weapons::WeaponStats::missile);
     let impacts = world.projectiles.advance(
         dt,
         raycaster,

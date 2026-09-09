@@ -30,7 +30,7 @@ pub struct Scene {
     /// direction, a sun colour and a constant ambient in the `.envsettings`
     /// beside its `track.vex`, and `CLAUDE.md`'s rule about not inventing what
     /// the assets already author is why that is read rather than approximated.
-    /// See [`oag_formats::envsettings`].
+    /// See [`oag_tables::envsettings`].
     light: mesh_render::Light,
     /// The track's authored fog volumes, sampled at the camera each frame.
     ///

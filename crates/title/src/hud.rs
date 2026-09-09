@@ -253,7 +253,7 @@ pub struct HudArt {
     /// for the slots this title has actually measured, or `None` for a title
     /// that has measured none.
     ///
-    /// Indexed in `oag_formats::weapons::Weapon::ALL`'s declared order -
+    /// Indexed in `oag_tables::weapons::Weapon::ALL`'s declared order -
     /// `[Rocket, Missile, Quake, Cannon, Turbo, Shield, Autopilot, Plasma,
     /// Bomb, Mine, LeachBeam, Repulser, Shuriken]` - rather than carrying that
     /// type, the same reason this crate is `oag-disc` and nothing heavier per

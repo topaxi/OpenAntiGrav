@@ -64,7 +64,7 @@
 /// Not a default so much as the value three of the four titles hold; Wipeout
 /// 2048 is the one that does not. See [`RaceDefaults::ship_dir`].
 ///
-/// **Restated in `oag_formats::handling`**, which cannot see this crate - a
+/// **Restated in `oag_tables::handling`**, which cannot see this crate - a
 /// format reader must not know which title it is reading, so the constant sits
 /// on both sides of that boundary rather than being threaded across it. The
 /// axis is this field; that one is the spelling its three-title convenience
@@ -119,7 +119,7 @@ pub struct RaceDefaults {
     ///
     /// Carried here rather than in `oag-formats` because a format crate must
     /// not know which title it is reading; the directory is passed *in* to
-    /// [`oag_formats::handling::entry_name_in`] and its siblings.
+    /// `oag_tables::handling::entry_name_in` and its siblings.
     ///
     /// [ADR-0022]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0022-title-packages.md
     pub ship_dir: &'static str,

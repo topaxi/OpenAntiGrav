@@ -651,7 +651,7 @@ pub struct ShipState {
     /// reason [`Self::shield`] is: it is written by gameplay and read by the
     /// force law, and a simulation field the determinism gate cannot see is a
     /// replay divergence nobody notices. The *inventory* - which pickup is held,
-    /// if any - is not here, because it is an `oag_formats::weapons::Weapon` and
+    /// if any - is not here, because it is an `oag_tables::weapons::Weapon` and
     /// this crate deliberately depends on nothing but `oag-core`.
     pub turbo_timer: f32,
     /// Seconds left on a fired Shield pickup.

@@ -320,8 +320,8 @@ pub(super) fn race_with_a_grid() -> Race {
 /// not in this repository. `absorb` and `time` are deliberately different
 /// from each other and from every other constant here, so a test that
 /// confused them would fail rather than pass by coincidence.
-fn one_turbo_table() -> oag_formats::weapons::WeaponStats {
-    oag_formats::weapons::parse(
+fn one_turbo_table() -> oag_tables::weapons::WeaponStats {
+    oag_tables::weapons::parse(
         r#"<WeaponStats>
              <Weapon type="Global"><Stats slowdown_limit="0"/></Weapon>
              <Weapon type="Turbo"><Stats absorb="23" time="0.75"/></Weapon>
@@ -339,8 +339,8 @@ fn one_turbo_table() -> oag_formats::weapons::WeaponStats {
 /// The two lock distances are the shipped shape - a window a long way down the
 /// nose - so a test on an empty grid is provably unable to lock rather than
 /// merely unlucky.
-fn one_missile_table() -> oag_formats::weapons::WeaponStats {
-    oag_formats::weapons::parse(
+fn one_missile_table() -> oag_tables::weapons::WeaponStats {
+    oag_tables::weapons::parse(
         r#"<WeaponStats>
              <Weapon type="Global"><Stats slowdown_limit="0"/></Weapon>
              <Weapon type="Missile"><Stats absorb="23" blastforce="10"
@@ -400,7 +400,7 @@ fn race_with_weapon_table(
     mode: Mode,
     pads: Vec<oag_formats::pads::PadVolume>,
     refresh: f32,
-    table: oag_formats::weapons::WeaponStats,
+    table: oag_tables::weapons::WeaponStats,
 ) -> Race {
     let mut handling = hulled_handling();
     // `Handling::ZERO` gives an engine that produces no thrust and a hull
@@ -431,8 +431,8 @@ fn race_with_weapon_table(
 /// angle in radians now that `Weapon_FireRocket` is read, so the arbitrary
 /// `17` this fixture used while the attribute was undecoded is 974 degrees
 /// and fires two of the three rockets backwards. A plausible fan instead.
-fn one_rocket_table() -> oag_formats::weapons::WeaponStats {
-    oag_formats::weapons::parse(
+fn one_rocket_table() -> oag_tables::weapons::WeaponStats {
+    oag_tables::weapons::parse(
         r#"<WeaponStats>
              <Weapon type="Global"><Stats slowdown_limit="0"/></Weapon>
              <Weapon type="Rocket"><Stats absorb="11" blastforce="12" blastradius="13"
@@ -448,8 +448,8 @@ fn one_rocket_table() -> oag_formats::weapons::WeaponStats {
 
 /// The Mine's own fixture, for the tests about the drop path and its cue.
 /// Invented numbers, all distinct from the Rocket fixture's.
-fn one_mine_table() -> oag_formats::weapons::WeaponStats {
-    oag_formats::weapons::parse(
+fn one_mine_table() -> oag_tables::weapons::WeaponStats {
+    oag_tables::weapons::parse(
         r#"<WeaponStats>
              <Weapon type="Global"><Stats slowdown_limit="0"/></Weapon>
              <Weapon type="Mine"><Stats absorb="17" blastforce="18" blastradius="19"
@@ -471,8 +471,8 @@ fn one_mine_table() -> oag_formats::weapons::WeaponStats {
 /// `charge_time` is present and unread on purpose - the file authors it, this
 /// build spends it nowhere, and a fixture that omitted it would stop looking
 /// like the document.
-fn one_plasma_table() -> oag_formats::weapons::WeaponStats {
-    oag_formats::weapons::parse(
+fn one_plasma_table() -> oag_tables::weapons::WeaponStats {
+    oag_tables::weapons::parse(
         r#"<WeaponStats>
              <Weapon type="Global"><Stats slowdown_limit="0"/></Weapon>
              <Weapon type="Plasma"><Stats absorb="21" blastforce="22" blastradius="23"
@@ -496,8 +496,8 @@ fn one_plasma_table() -> oag_formats::weapons::WeaponStats {
 /// and a link that outlives every one of them cannot exercise its own expiry.
 /// `energy_multiplier` is `1` rather than the disc's `50` so the first tick is
 /// not a special case in a test measuring the steady rate.
-fn one_leach_beam_table() -> oag_formats::weapons::WeaponStats {
-    oag_formats::weapons::parse(
+fn one_leach_beam_table() -> oag_tables::weapons::WeaponStats {
+    oag_tables::weapons::parse(
         r#"<WeaponStats>
              <Weapon type="Global"><Stats slowdown_limit="0"/></Weapon>
              <Weapon type="LeachBeam"><Stats absorb="41" damage="42" repair="43"
@@ -518,8 +518,8 @@ fn one_leach_beam_table() -> oag_formats::weapons::WeaponStats {
 /// `fuse` is short (`0.5`) on purpose where the disc authors `2`: these tests
 /// drive tens of ticks, not hundreds, and a blade that outlives every one of
 /// them cannot exercise the expiry.
-fn one_shuriken_table() -> oag_formats::weapons::WeaponStats {
-    oag_formats::weapons::parse(
+fn one_shuriken_table() -> oag_tables::weapons::WeaponStats {
+    oag_tables::weapons::parse(
         r#"<WeaponStats>
              <Weapon type="Global"><Stats slowdown_limit="0"/></Weapon>
              <Weapon type="Shuriken"><Stats absorb="31" rhicochetForce="32"

@@ -25,6 +25,7 @@ miniz_oxide.workspace = true
 # corpus-wide measurement needs.
 [dev-dependencies]
 oag-testdata.workspace = true
+oag-tables.workspace = true
 oag-assets.workspace = true
 oag-disc.workspace = true
 oag-pulse.workspace = true

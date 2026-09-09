@@ -1,5 +1,5 @@
 //! Proves the join this pass exists for, end to end: a campaign cell's own
-//! law (`oag_formats::race_campaign::Cell::evaluate_medal`) evaluates a
+//! law (`oag_tables::race_campaign::Cell::evaluate_medal`) evaluates a
 //! race's result, the caller converts the answer into
 //! `oag_game::records::Medal`, `Store::record` merges it into a row, and a
 //! `save`/`parse` round trip through the exact bytes `records.toml` would
@@ -14,8 +14,8 @@
 //! `docs/architecture/adr/0006-no-copyrighted-content.md`, the same rule
 //! `race_campaign`'s own unit tests already follow.
 
-use oag_formats::race_campaign::{Cell, Mode};
 use oag_game::records::{Key, Medal, Observation, Store};
+use oag_tables::race_campaign::{Cell, Mode};
 
 /// A `Zone` cell, chosen deliberately over a `Race` one: it is the mode the
 /// direction flip applies to, so a join test that used a non-counting mode
@@ -45,16 +45,16 @@ fn zone_cell() -> Cell {
     }
 }
 
-/// Converts `oag_formats::race_campaign::Medal` to `oag_game::records::Medal`,
+/// Converts `oag_tables::race_campaign::Medal` to `oag_game::records::Medal`,
 /// a plain match rather than a shared type or a trait impl on purpose: see
 /// `records.rs`'s own module doc for why it stays free of an `oag-formats`
 /// import. This is exactly the conversion a real call site (once one
 /// selects a campaign cell) would write.
-fn to_records_medal(medal: oag_formats::race_campaign::Medal) -> Medal {
+fn to_records_medal(medal: oag_tables::race_campaign::Medal) -> Medal {
     match medal {
-        oag_formats::race_campaign::Medal::Gold => Medal::Gold,
-        oag_formats::race_campaign::Medal::Silver => Medal::Silver,
-        oag_formats::race_campaign::Medal::Bronze => Medal::Bronze,
+        oag_tables::race_campaign::Medal::Gold => Medal::Gold,
+        oag_tables::race_campaign::Medal::Silver => Medal::Silver,
+        oag_tables::race_campaign::Medal::Bronze => Medal::Bronze,
     }
 }
 
@@ -66,7 +66,7 @@ fn a_zone_cells_medal_evaluates_persists_and_round_trips() {
     // the same guard case `race_campaign`'s own tests cover, evaluated here
     // through the exact path a real capture would use.
     let medal = cell.evaluate_medal(16).expect("16 zones clears bronze");
-    assert_eq!(medal, oag_formats::race_campaign::Medal::Bronze);
+    assert_eq!(medal, oag_tables::race_campaign::Medal::Bronze);
 
     let mut store = Store::default();
     let key = Key::new("pulse", cell.track.as_deref(), "zone", "zone");
@@ -110,7 +110,7 @@ fn a_zone_cells_medal_evaluates_persists_and_round_trips() {
 fn a_gold_zone_run_persists_as_gold_not_bronze() {
     let cell = zone_cell();
     let medal = cell.evaluate_medal(20).expect("20 zones is gold");
-    assert_eq!(medal, oag_formats::race_campaign::Medal::Gold);
+    assert_eq!(medal, oag_tables::race_campaign::Medal::Gold);
 
     let mut store = Store::default();
     let key = Key::new("pulse", cell.track.as_deref(), "zone", "zone");

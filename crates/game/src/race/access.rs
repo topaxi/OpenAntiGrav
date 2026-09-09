@@ -207,7 +207,7 @@ impl Race {
     /// reads: which pickup is held is presentation-facing in a way the rest of
     /// [`Ship`] is not.
     #[must_use]
-    pub fn ship_pickup(&self) -> Option<oag_formats::weapons::Weapon> {
+    pub fn ship_pickup(&self) -> Option<oag_tables::weapons::Weapon> {
         self.world.ships[0].pickup.weapon
     }
 
@@ -227,10 +227,10 @@ impl Race {
     /// outside. Read by `crates/game/tests/missile_ground_truth.rs`, which links
     /// the library and so cannot see the field.
     #[must_use]
-    pub fn missile_stats(&self) -> Option<oag_formats::weapons::MissileStats> {
+    pub fn missile_stats(&self) -> Option<oag_tables::weapons::MissileStats> {
         self.weapons
             .as_ref()
-            .and_then(oag_formats::weapons::WeaponStats::missile)
+            .and_then(oag_tables::weapons::WeaponStats::missile)
     }
 
     /// The LeachBeam's authored `<Stats>`, or `None` when the table did not
@@ -242,10 +242,10 @@ impl Race {
     /// reticle can be driven for the second lockable weapon at all, and the
     /// answer differs across the three.
     #[must_use]
-    pub fn leach_beam_stats(&self) -> Option<oag_formats::weapons::LeachBeamStats> {
+    pub fn leach_beam_stats(&self) -> Option<oag_tables::weapons::LeachBeamStats> {
         self.weapons
             .as_ref()
-            .and_then(oag_formats::weapons::WeaponStats::leach_beam)
+            .and_then(oag_tables::weapons::WeaponStats::leach_beam)
     }
 
     /// The Mine's authored `<Stats>`, or `None` when the table did not load or
@@ -254,10 +254,10 @@ impl Race {
     /// An accessor for [`Self::missile_stats`]'s reason. Read by
     /// `crates/game/tests/mine_ground_truth.rs`.
     #[must_use]
-    pub fn mine_stats(&self) -> Option<oag_formats::weapons::MineStats> {
+    pub fn mine_stats(&self) -> Option<oag_tables::weapons::MineStats> {
         self.weapons
             .as_ref()
-            .and_then(oag_formats::weapons::WeaponStats::mine)
+            .and_then(oag_tables::weapons::WeaponStats::mine)
     }
 
     /// The Shuriken's authored `<Stats>`, or `None` when the table did not load
@@ -266,10 +266,10 @@ impl Race {
     /// An accessor for [`Self::missile_stats`]'s reason. Read by
     /// `crates/game/tests/shuriken_ground_truth.rs`.
     #[must_use]
-    pub fn shuriken_stats(&self) -> Option<oag_formats::weapons::ShurikenStats> {
+    pub fn shuriken_stats(&self) -> Option<oag_tables::weapons::ShurikenStats> {
         self.weapons
             .as_ref()
-            .and_then(oag_formats::weapons::WeaponStats::shuriken)
+            .and_then(oag_tables::weapons::WeaponStats::shuriken)
     }
 
     /// The Rocket's authored `<Stats>`, or `None` when the table did not load or
@@ -280,10 +280,10 @@ impl Race {
     /// blocks against each other to prove they are two rather than one read
     /// twice.
     #[must_use]
-    pub fn rocket_stats(&self) -> Option<oag_formats::weapons::RocketStats> {
+    pub fn rocket_stats(&self) -> Option<oag_tables::weapons::RocketStats> {
         self.weapons
             .as_ref()
-            .and_then(oag_formats::weapons::WeaponStats::rocket)
+            .and_then(oag_tables::weapons::WeaponStats::rocket)
     }
 
     /// The Plasma's authored `<Stats>`, or `None` when the table did not load or
@@ -292,10 +292,10 @@ impl Race {
     /// An accessor for [`Self::missile_stats`]'s reason. Read by
     /// `crates/game/tests/plasma_ground_truth.rs`.
     #[must_use]
-    pub fn plasma_stats(&self) -> Option<oag_formats::weapons::PlasmaStats> {
+    pub fn plasma_stats(&self) -> Option<oag_tables::weapons::PlasmaStats> {
         self.weapons
             .as_ref()
-            .and_then(oag_formats::weapons::WeaponStats::plasma)
+            .and_then(oag_tables::weapons::WeaponStats::plasma)
     }
 
     /// The Cannon's authored `<Stats>`, or `None` when the table did not load or
@@ -304,10 +304,10 @@ impl Race {
     /// An accessor for [`Self::missile_stats`]'s reason. Read by
     /// `crates/game/tests/cannon_ground_truth.rs`.
     #[must_use]
-    pub fn cannon_stats(&self) -> Option<oag_formats::weapons::CannonStats> {
+    pub fn cannon_stats(&self) -> Option<oag_tables::weapons::CannonStats> {
         self.weapons
             .as_ref()
-            .and_then(oag_formats::weapons::WeaponStats::cannon)
+            .and_then(oag_tables::weapons::WeaponStats::cannon)
     }
 
     /// `<Weapon type="Global"><Stats slowdown_limit>`, or `None` when the table
@@ -326,9 +326,9 @@ impl Race {
     /// The Bomb's authored `<Stats>`, or `None` when the table did not load or
     /// authors no Bomb.
     #[must_use]
-    pub fn bomb_stats(&self) -> Option<oag_formats::weapons::BombStats> {
+    pub fn bomb_stats(&self) -> Option<oag_tables::weapons::BombStats> {
         self.weapons
             .as_ref()
-            .and_then(oag_formats::weapons::WeaponStats::bomb)
+            .and_then(oag_tables::weapons::WeaponStats::bomb)
     }
 }

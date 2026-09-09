@@ -372,7 +372,7 @@ In short:
   underlying trap (a VFPU quadword transfer decompiling as four separate scalar loads with
   no marker that they are one unit) is now recorded in
   [`workflow.md`](../../docs/ghidra/workflow.md) since it will bite again on any other matrix
-  write in this binary. `crates/formats/src/trackstartup.rs:173` carries the same stale
+  write in this binary. `crates/tables/src/trackstartup.rs:173` carries the same stale
   wording and is outside this pass's lane (`crates/formats`) - flagged, not edited.
 - **Two structural negatives, checked directly rather than assumed**:
   `Billboard_ConstructResource_q`'s own `param_3` is declared and never read in its body,

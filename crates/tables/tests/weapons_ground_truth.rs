@@ -1,4 +1,4 @@
-//! Validates the [`weapons`](oag_formats::weapons) decoder against the real
+//! Validates the [`weapons`](oag_tables::weapons) decoder against the real
 //! tables.
 //!
 //! **`#[ignore]`d and never run in CI.** It needs game content, which this
@@ -41,7 +41,7 @@ use std::path::PathBuf;
 
 use oag_disc::DiscImage;
 use oag_formats::wad::{self, Compression, Directory};
-use oag_formats::weapons::{self, Weapon};
+use oag_tables::weapons::{self, Weapon};
 
 const PSP_IMAGE: &str = "pulse-psp-usa.chd";
 const PSP_ARCHIVE: &str = "PSP_GAME/USRDIR/Data.wad";
@@ -154,7 +154,7 @@ fn the_three_simple_weapons_are_authored_in_both_tables() {
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn the_rocket_authors_a_speed_for_every_class() {
-    use oag_formats::handling::SpeedClass;
+    use oag_tables::handling::SpeedClass;
 
     let Some(tables) = tables() else { return };
     for (name, blob) in &tables {
@@ -209,7 +209,7 @@ fn the_rocket_authors_a_speed_for_every_class() {
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn the_missile_authors_a_lock_window_and_its_own_speeds() {
-    use oag_formats::handling::SpeedClass;
+    use oag_tables::handling::SpeedClass;
 
     let Some(tables) = tables() else { return };
     for (name, blob) in &tables {

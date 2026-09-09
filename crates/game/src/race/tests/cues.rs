@@ -153,7 +153,7 @@ fn every_cue_has_something_that_raises_it() {
         // the pickup path, for the same reason the shield and Autopilot above
         // are set directly.
         if tick == 200 {
-            race.world.ships[0].pickup.weapon = Some(oag_formats::weapons::Weapon::Mine);
+            race.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Mine);
             race.world.ships[0]
                 .pickup
                 .begin_drop(oag_gameplay::projectile::mine::CLUSTER);
@@ -295,7 +295,7 @@ fn a_title_with_no_zone_stages_never_raises_a_class_announcement() {
 fn laying_a_mine_raises_its_launch_cue_once_per_charge() {
     let mut race = race_with_a_grid();
     race.weapons = Some(one_mine_table());
-    race.world.ships[0].pickup.weapon = Some(oag_formats::weapons::Weapon::Mine);
+    race.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Mine);
     race.world.ships[0]
         .pickup
         .begin_drop(oag_gameplay::projectile::mine::CLUSTER);
@@ -326,7 +326,7 @@ fn laying_a_mine_raises_its_launch_cue_once_per_charge() {
 fn dropping_a_bomb_raises_no_mine_launch_cue() {
     let mut race = race_with_a_grid();
     race.weapons = Some(
-        oag_formats::weapons::parse(
+        oag_tables::weapons::parse(
             r#"<WeaponStats>
              <Weapon type="Global"><Stats slowdown_limit="0"/></Weapon>
              <Weapon type="Bomb"><Stats absorb="30" blastforce="31" blastradius="32"
@@ -339,7 +339,7 @@ fn dropping_a_bomb_raises_no_mine_launch_cue() {
         )
         .expect("the fixture table must parse"),
     );
-    race.world.ships[0].pickup.weapon = Some(oag_formats::weapons::Weapon::Bomb);
+    race.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Bomb);
     race.world.ships[0].pickup.begin_drop(1);
 
     let mut raised = Vec::new();

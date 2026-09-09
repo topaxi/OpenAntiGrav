@@ -178,7 +178,7 @@ fn a_missile_in_hand_locks_a_craft_on_a_real_circuit() {
     for _ in 0..30 {
         race.tick(&oag_gameplay::InputSnapshot::default());
     }
-    race.world.ships[0].pickup.weapon = Some(oag_formats::weapons::Weapon::Missile);
+    race.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Missile);
 
     let mut seeking = false;
     let mut locked_at = None;
@@ -305,7 +305,7 @@ fn a_leachbeam_in_hand_locks_a_craft_on_a_real_circuit() {
     for _ in 0..30 {
         race.tick(&oag_gameplay::InputSnapshot::default());
     }
-    race.world.ships[0].pickup.weapon = Some(oag_formats::weapons::Weapon::LeachBeam);
+    race.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::LeachBeam);
 
     let mut seeking = false;
     let mut locked_at = None;
@@ -571,7 +571,7 @@ fn locks_within(race: &mut race::Race, ticks: u32) -> bool {
     for _ in 0..30 {
         race.tick(&oag_gameplay::InputSnapshot::default());
     }
-    race.world.ships[0].pickup.weapon = Some(oag_formats::weapons::Weapon::Missile);
+    race.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Missile);
     for _ in 0..ticks {
         race.tick(&oag_gameplay::InputSnapshot::default());
         if race.sight_state() == sight::State::Locked {

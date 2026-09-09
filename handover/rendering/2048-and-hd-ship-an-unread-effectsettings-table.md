@@ -22,8 +22,8 @@ titles, that this engine has never opened.
 | HD/Fury | `/data/environments/detonatormode.effectsettings` | 43,240 B | Same mechanism, Detonator mode. |
 | HD/Fury | `/data/environments/detonatormodedlc3.effectsettings` | 43,230 B | Detonator's DLC3 revision - not listed in this thread's first pass, found while writing the ground truth for the parser below. |
 
-**2026-08-28, later the same day: a parser landed.** `oag_formats::effectsettings`
-([`effectsettings.rs`](../../crates/formats/src/effectsettings.rs),
+**2026-08-28, later the same day: a parser landed.** `oag_tables::effectsettings`
+([`effectsettings.rs`](../../crates/tables/src/effectsettings.rs),
 [docs/formats/effectsettings.md](../../docs/formats/effectsettings.md)) reads all
 five files above plus 2048's ten identical copies, validated against the real
 disc/PSARC in `effectsettings_ground_truth.rs`. It reuses `EnvSettings::parse`
@@ -44,7 +44,7 @@ sections below). What remains is two narrow render questions - the sphere
 radius and `zoneAnisoPalette` - not a missing trigger; see Open and Next
 Steps.
 
-Plain text, same `"Key.Subkey"=float [float...]` shape `oag_formats::envsettings`
+Plain text, same `"Key.Subkey"=float [float...]` shape `oag_tables::envsettings`
 already parses for `.envsettings` - just never pointed at this extension.
 `hd-status.md` already listed `.effectsettings` among HD's "genuinely new,
 unread" formats; this session is the first time anything read the bytes.
@@ -953,7 +953,7 @@ no longer disagree.
   specifically.** `oag_title::ZonePalette` names where each title keeps its
   table (`TitleWide` on HD, `BesideCircuit` on 2048, `None` on Pulse and
   Pure, which were searched rather than assumed);
-  `oag_formats::effectsettings::StagePalette`/`blended_palette` read one
+  `oag_tables::effectsettings::StagePalette`/`blended_palette` read one
   stage and cross-fade it against the stage before it; and
   `oag_game::race::zone_grade::ZoneGrade` holds the recovered struct's own
   three fields (`+0x00` current, `+0x04` requested, `+0x18` weight) with a
@@ -1395,7 +1395,7 @@ no longer disagree.
   `oag_title::ZoneStages`, `oag_2048::race::ZONE_STAGES`,
   `ZoneGrade::show_zone` (driven once a frame from `Scene::sync_zone_grade`,
   the way `Zone_UpdateStage` is driven from 2048's render update), plus
-  2048's own key spellings in `oag_formats::effectsettings` - that file has
+  2048's own key spellings in `oag_tables::effectsettings` - that file has
   no density key at all and packs the density into the fourth lane of
   `Fog.Environment Fog Colour`, confidence 74. `zone_grade_ground_truth.rs`'s
   `a_2048_zone_race_escalates_on_the_recovered_ladder` drives a real

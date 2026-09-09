@@ -337,7 +337,7 @@ include - and nothing added; every line `DATA02` has, `DATA00` also has.
 `<aLoadXML>`/`</aLoadXML>` instead of `<LoadXML>`/`</LoadXML>` - a
 one-character-per-tag change that accounts for `DATA05`'s extra 2 bytes
 exactly. `LoadXML_Item`'s reader keys on the literal tag name (see this page's
-own `Open` history and `oag_formats::fexml`), so a renamed tag is not a
+own `Open` history and `oag_tables::fexml`), so a renamed tag is not a
 fragment that fails to resolve - it is a fragment that is never looked for at
 all, authored to be skipped without deleting the reference. This project has
 not previously documented this project's own disc doing that as a way to

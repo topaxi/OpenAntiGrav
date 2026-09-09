@@ -13,7 +13,7 @@
 //! prints one.
 //!
 //! That is worth stating because it was got wrong first: the absence of a HUD
-//! element from [`oag_formats::fexml`]'s known-element table was read as
+//! element from [`oag_tables::fexml`]'s known-element table was read as
 //! evidence that the HUD was drawn from code, and a whole plan was built on
 //! recovering rectangles out of the decompiler. The layouts were there the
 //! whole time. **Negative evidence from a table of what a parser happens to
@@ -43,7 +43,7 @@
 
 use std::collections::HashMap;
 
-use oag_formats::fexml::{self, Node};
+use oag_tables::fexml::{self, Node};
 
 mod assets;
 mod compose;
@@ -133,9 +133,9 @@ impl Layout {
     /// Reads one of the disc's HUD layouts.
     ///
     /// Takes the **expanded** XML - the shortened form has to go through
-    /// [`oag_formats::fexml::expand`] first, which the archive reader does.
+    /// [`oag_tables::fexml::expand`] first, which the archive reader does.
     ///
-    /// Deliberately forgiving in the same way [`oag_formats::fexml::parse`] is:
+    /// Deliberately forgiving in the same way [`oag_tables::fexml::parse`] is:
     /// a widget missing an attribute takes a documented default rather than
     /// failing the whole layout, because a HUD that loses one readout is far
     /// better than a race with no HUD. What it will not do is lose a widget
@@ -563,7 +563,7 @@ pub struct Readout {
     ///
     /// `None` on every tick of a race with weapons off, which is every mode but
     /// the single race - see `oag_race::Mode::weapons_enabled`.
-    pub pickup: Option<oag_formats::weapons::Weapon>,
+    pub pickup: Option<oag_tables::weapons::Weapon>,
     /// The lock-on reticle, or `None` for a caller that has none to draw.
     ///
     /// `Copy` state off `Race`, passed whole rather than reduced to five

@@ -24,7 +24,7 @@ exactly those four values, no exception.
 `Mode::laps_target` takes a speed class and indexes
 `Mode::SINGLE_RACE_LAPS_BY_CLASS`; `RaceState::new(mode, class)` takes it too,
 so a construction site has to answer rather than defaulting silently. The class
-arrives as `oag_formats::handling::SpeedClass`, which `oag-race` already depends
+arrives as `oag_tables::handling::SpeedClass`, which `oag-race` already depends
 on - `oag-title` was deliberately **not** added, because it carries class
 *names* (a ladder's length is per-title measured data) and resolving a name is
 not a race-rules crate's job. The resolution happens one layer out, in
@@ -55,7 +55,7 @@ that absence plainly instead of claiming every bounded mode fits.
   disagree; `race-modes.md`'s Speed lap section records the tension and the
   likeliest (untested) shape.
 - **The table is a fallback, not the authority.** A campaign race should read
-  its own cell's `laps` - `oag_formats::race_campaign::Cell` already parses it -
+  its own cell's `laps` - `oag_tables::race_campaign::Cell` already parses it -
   and that value should win over the array. Nothing selects a cell yet, which is
   the same blocker `Mode::ELIMINATOR_KILL_TARGET_DEFAULT` carries and the same
   launch-path tracing the race-campaign thread names as its own next step.

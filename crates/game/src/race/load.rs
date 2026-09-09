@@ -628,7 +628,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
     // unwired rather than put somewhere plausible. **Slot 8 is not a hoarding
     // and is no longer among them**: it is the start gantry, and the circuit's
     // own track geometry authors the surface it stands on. See
-    // `oag_formats::trackstartup` and `docs/rendering/start-gantry.md`.
+    // `oag_tables::trackstartup` and `docs/rendering/start-gantry.md`.
     //
     // **Not HD-only.** Pulse ships the same file per circuit, `fexml`-shortened
     // rather than plain - `TrackStartup::parse` expands either form - so this
@@ -646,7 +646,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         && let Ok(blob) = archives.read_name(&name)
     {
         let manifest =
-            oag_formats::trackstartup::TrackStartup::parse(&String::from_utf8_lossy(&blob));
+            oag_tables::trackstartup::TrackStartup::parse(&String::from_utf8_lossy(&blob));
         let models = manifest
             .billboards
             .iter()

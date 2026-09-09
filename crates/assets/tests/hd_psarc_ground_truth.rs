@@ -34,7 +34,8 @@
 use std::path::PathBuf;
 
 use oag_assets::psarc::Archive;
-use oag_formats::{ByteOrder, collision, handling, pads, pvs, track, vex};
+use oag_formats::{ByteOrder, collision, pads, pvs, track, vex};
+use oag_tables::handling;
 
 /// The decrypted PS3 image.
 const PS3_IMAGE: &str = "hdfury-ps3-eu-dec.iso";

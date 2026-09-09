@@ -1,7 +1,7 @@
 # Race campaign: `PI_Grid`/`PI_Cell`, `Data\Plugins\grids\grid_00.xml`..`grid_15.xml`
 
 **Status: understood.** Implemented in
-[`oag_formats::race_campaign`](../../crates/formats/src/race_campaign.rs), with
+[`oag_tables::race_campaign`](../../crates/tables/src/race_campaign.rs), with
 the sixteen entry names in
 [`oag_pulse::campaign`](../../crates/pulse/src/campaign.rs) per
 [ADR-0022](../architecture/adr/0022-title-packages.md) - the file's shape is a
@@ -20,7 +20,7 @@ Sixteen files, `Data\Plugins\grids\grid_00.xml` through `grid_15.xml`, listed
 by `Data\Plugins\grids\Definition.xml`, all inside `Data.wad`. Each is one
 `PI_Grid` holding 8-16 `PI_Cell` records - **236 cells in total on the USA PSP
 pressing**, confirmed by
-`crates/formats/tests/race_campaign_ground_truth.rs` (`#[ignore]`d, run with
+`crates/tables/tests/race_campaign_ground_truth.rs` (`#[ignore]`d, run with
 `just test-data`). Every number that ground-truth test asserts was measured by
 the Ghidra pass and is reproduced here rather than re-derived:
 
@@ -47,7 +47,7 @@ unrecognised name rather than being rejected; either way it is real, authored
 text and not a parser artefact.
 
 `race_campaign::Cell::class` is therefore the **raw** string, never forced
-into `oag_formats::handling::SpeedClass`. `Cell::speed_class` does the
+into `oag_tables::handling::SpeedClass`. `Cell::speed_class` does the
 fallible mapping and returns `None` for `"Zone"` - an unrecognised value is
 not an error, per this project's own established lesson that a parser must
 not fail on a field it does not understand.
@@ -63,7 +63,7 @@ of `value` against the cell's own gold/silver/bronze targets, ordinal
 `Cell_MedalPoints` (`0x088bf530`): gold 3, silver 2, bronze 1. Both are
 covered by unit tests against the invented fixture, including three cases
 chosen specifically to fail if the direction flip is dropped or wrongly
-applied to a non-counting mode - see `crates/formats/src/race_campaign/tests.rs`.
+applied to a non-counting mode - see `crates/tables/src/race_campaign/tests.rs`.
 
 `evaluate_medal` treats `value <= 0` as "no result yet", alongside the
 original's own literal `0xFFFF_FFFF` unset-`u32` sentinel. **The `<= 0`

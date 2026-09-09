@@ -23,8 +23,8 @@ use crate::input::button_from_name;
 // next to the dictionary expander, so the front end and the handling-stats
 // decoder share one copy rather than growing two. Re-exported because this
 // module is where the rest of the crate reaches for it.
-pub use oag_formats::fexml::{Node, parse};
 use oag_gameplay::input::Button;
+pub use oag_tables::fexml::{Node, parse};
 
 /// Container extensions a `Movie` widget's `src` may already carry.
 ///

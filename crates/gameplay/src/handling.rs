@@ -1,6 +1,6 @@
 //! Mapping the on-disc handling schema onto the physics parameter set.
 //!
-//! Two types describe the same numbers: [`oag_formats::handling::Stats`] is the
+//! Two types describe the same numbers: [`oag_tables::handling::Stats`] is the
 //! **document**, cameras and front-end bars included, and
 //! [`oag_physics::Handling`] is what the **force law consumes**. They are
 //! deliberately separate so `oag-physics` depends on nothing but `oag-core`, and
@@ -34,7 +34,7 @@
 //! So there are genuinely two forms of these numbers - the document's and the
 //! one the craft code reads - and the conversion has to happen somewhere. It
 //! happens here, at the same point in the pipeline the original does it, which
-//! leaves `oag_formats::handling` describing the document faithfully (its
+//! leaves `oag_tables::handling` describing the document faithfully (its
 //! ground-truth test asserts `slidegrip` lies in `0..=100`, which is the XML
 //! range) and `oag_physics::Handling` holding the in-memory form the force law
 //! expects.
@@ -66,11 +66,11 @@
 //!
 //! [ADR-0022]: ../../../docs/architecture/adr/0022-title-packages.md
 
-use oag_formats::handling::{self as fmt, SpeedClass as FmtClass};
 use oag_physics::params::{
     Airbrake, Antigrav, Brakes, Dimensions, Engine, Handling, Physical, Pitch, SpeedClass,
     SpeedupPads, Turning,
 };
+use oag_tables::handling::{self as fmt, SpeedClass as FmtClass};
 
 /// Load-time factor applied to `<Engine amount>`.
 ///
@@ -191,7 +191,7 @@ pub fn airbrake_graphics_for(stats: &fmt::Stats) -> AirbrakeGraphics {
 /// **A constant rather than a parameter, deliberately.** Nothing selects a skill
 /// level yet: there is no menu row for it and no race option carrying it, so a
 /// parameter would be four call sites all passing the same literal. Wiring the
-/// option is the follow-up, and `oag_formats::handling::Misc::shield_for` already
+/// option is the follow-up, and `oag_tables::handling::Misc::shield_for` already
 /// takes the index so that when it lands, only this line moves.
 pub const DEFAULT_SKILL_LEVEL: u8 = 1;
 

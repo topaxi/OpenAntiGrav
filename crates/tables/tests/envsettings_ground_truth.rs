@@ -6,7 +6,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 
-use oag_formats::envsettings::{self, EnvSettings};
+use oag_tables::envsettings::{self, EnvSettings};
 
 /// Every archive on the disc.
 const ARCHIVES: &[&str] = &[

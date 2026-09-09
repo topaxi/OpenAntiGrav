@@ -218,7 +218,7 @@ pub mod archives {
 ///
 /// The paths are stored lowercase with a leading `/`, and
 /// `oag_assets::psarc::Archive` folds separators and case - so
-/// `oag_formats::handling::entry_name`'s `Data\Ships\<team>\handlingstats.xml`
+/// `oag_tables::handling::entry_name`'s `Data\Ships\<team>\handlingstats.xml`
 /// resolves here unchanged. That is why the race path needed no HD-specific
 /// spelling of a handling file, and it is worth knowing before adding one.
 pub mod names {

@@ -173,7 +173,7 @@ is. Recorded at **65**.
   `Ship_FireHeldWeapon` both test the bit and neither is it.
 - **The duration itself is not a constant here.** It is
   `<Weapon type="Autopilot"><Stats time>` off the disc, which
-  `oag_formats::weapons` already parses; no code literal stands in for it.
+  `oag_tables::weapons` already parses; no code literal stands in for it.
 - **`Weapons_DispatchFire`'s own structure.** It tests a long run of bits on
   `craft+0x1b8`; this page assumes the `0x800` test at `0x08861c40` is what calls
   `Autopilot_Update`, by analogy with the Shield's pair, and did not verify it.

@@ -31,7 +31,7 @@
 
 use std::path::PathBuf;
 
-use oag_formats::trackstartup::TrackStartup;
+use oag_tables::trackstartup::TrackStartup;
 
 /// Every circuit Pure's `Data\Plugins\PI001\Definition.xml` declares a
 /// `<Values location="...">` for, race, classic and Zone alike - 16 in total,

@@ -1045,7 +1045,7 @@ or stop while a boost runs on behind the pad; baking it into the stored directio
 when the pad arms the boost would be a different behaviour.
 
 **Applied 2026-08-08** as `oag_physics::engine::speedup_pad`, with the value read
-off the player's own disc through `oag_formats::handling::Special`. One judgement
+off the player's own disc through `oag_tables::handling::Special`. One judgement
 call, and it is documented at the constant rather than buried: the original tests
 a **bit**, and `oag_physics::ShipControls` is normalised by contract, so
 `SPEEDPAD_JUMP_THRESHOLD` (`0.5`, this project's own number) stands in.

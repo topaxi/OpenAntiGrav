@@ -60,9 +60,9 @@
 
 use super::{Impact, Projectile};
 use oag_core::math::{Quat, Vec3};
-use oag_formats::weapons::{BombStats, MineStats, Weapon};
 use oag_physics::ShipState;
 use oag_physics::params::Dimensions;
+use oag_tables::weapons::{BombStats, MineStats, Weapon};
 
 /// What one press of a rear weapon lays: how many, and with what fuse and trip.
 ///
@@ -118,7 +118,7 @@ impl Drop {
     /// be tripped. `every_rear_weapon_can_be_laid_and_tripped` in
     /// [`crate::pickup::tests`] is what makes the pair fail together.
     #[must_use]
-    pub fn for_weapon(weapon: Weapon, weapons: &oag_formats::weapons::WeaponStats) -> Option<Self> {
+    pub fn for_weapon(weapon: Weapon, weapons: &oag_tables::weapons::WeaponStats) -> Option<Self> {
         match weapon {
             Weapon::Mine => weapons.mine().as_ref().map(Self::mine),
             Weapon::Bomb => weapons.bomb().as_ref().map(Self::bomb),
@@ -299,7 +299,7 @@ impl TriggerRadii {
     /// Both, out of a weapon table, or both `None` for a table that did not
     /// load.
     #[must_use]
-    pub fn from_table(weapons: Option<&oag_formats::weapons::WeaponStats>) -> Self {
+    pub fn from_table(weapons: Option<&oag_tables::weapons::WeaponStats>) -> Self {
         let Some(weapons) = weapons else {
             return Self::default();
         };

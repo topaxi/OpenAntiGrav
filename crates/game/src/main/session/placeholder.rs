@@ -238,7 +238,7 @@ fn raceable_teams(
                 &id,
                 oag_pulse::race::ships::HULL,
             );
-            let handling = oag_formats::handling::entry_name_in(oag_2048::race::HANDLING_DIR, &id);
+            let handling = oag_tables::handling::entry_name_in(oag_2048::race::HANDLING_DIR, &id);
             let raceable = archives.locate(&ship).is_some() && archives.locate(&handling).is_some();
             raceable.then(|| {
                 let label = team.name.unwrap_or(team.id);
@@ -274,8 +274,8 @@ fn plugin_documents(archives: &mut oag_assets::Archives, names: &[&str]) -> Vec<
 /// name on the other. Reimplemented rather than reached for: that function is
 /// `pub(crate)` to the library crate, and this module is the `[[bin]]` one.
 fn decode(blob: &[u8]) -> String {
-    if oag_formats::fexml::is_fexml(blob)
-        && let Ok(text) = oag_formats::fexml::expand(blob)
+    if oag_tables::fexml::is_fexml(blob)
+        && let Ok(text) = oag_tables::fexml::expand(blob)
     {
         return text;
     }
@@ -340,7 +340,7 @@ mod tests {
         let declared = oag_game::catalogue::all_teams(&documents);
         assert!(!declared.is_empty(), "2048 ships a real roster");
         // Pins the crash a plain `PI_Team` id produced: `--race`'s own default,
-        // `feisar2048\3`, resolving via `oag_formats::handling::entry_name_in`
+        // `feisar2048\3`, resolving via `oag_tables::handling::entry_name_in`
         // is what a chosen row must also resolve to.
         let teams = raceable_teams(&archives, declared);
         assert!(!teams.is_empty(), "the native five should all be raceable");
@@ -354,7 +354,7 @@ mod tests {
                 id.ends_with(r"\3"),
                 "{id} should carry the speed craft's number"
             );
-            let entry = oag_formats::handling::entry_name_in(oag_2048::race::HANDLING_DIR, id);
+            let entry = oag_tables::handling::entry_name_in(oag_2048::race::HANDLING_DIR, id);
             archives
                 .read_name(&entry)
                 .unwrap_or_else(|e| panic!("{entry} should actually read: {e}"));

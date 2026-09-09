@@ -184,7 +184,7 @@ same ids, giving `3 Turbo`, `4 Shield`, `5 Cannon`, `8 Bomb`, `9 Mines` for the
 five left as numbers above. See
 [ai-stats.md](ai-stats.md#it-confirms-the-weapon-id-space-from-a-second-direction),
 which also records that this **disagrees** with
-`oag_formats::weapons::Weapon::ALL`'s order at three positions - that enum follows
+`oag_tables::weapons::Weapon::ALL`'s order at three positions - that enum follows
 the string-pool layout, not the ids.
 
 **And it opens a conflict rather than closing one.** Id 8 being the Bomb puts bit

@@ -67,7 +67,7 @@ pub struct CaptureOptions {
     ///
     /// Written **outside** [`Race::tick`], only when the slot is already empty,
     /// so firing still spends it and nothing here reaches a determinism hash.
-    pub give: Option<oag_formats::weapons::Weapon>,
+    pub give: Option<oag_tables::weapons::Weapon>,
     /// The shape to draw at inside the frame, leaving bars.
     ///
     /// A capture is a picture of a window, so it letterboxes the way a window
@@ -950,7 +950,7 @@ pub fn describe(telemetry: &Telemetry) -> String {
         match (telemetry.pickup, telemetry.projectiles) {
             (None, 0) => String::new(),
             (held, count) => {
-                let held = held.map_or("-", oag_formats::weapons::Weapon::as_type);
+                let held = held.map_or("-", oag_tables::weapons::Weapon::as_type);
                 format!("  holding {held}  in the air {count}")
             }
         },

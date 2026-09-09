@@ -346,7 +346,7 @@ impl Fog {
 /// **`mesh.wgsl`'s two-light rig is a stand-in and says so**, with invented
 /// directions chosen so geometry reads clearly. Wipeout HD authors the real
 /// thing in plain text, one file per circuit - see
-/// [`oag_formats::envsettings`] - and `CLAUDE.md`'s rule about not inventing
+/// `oag_tables::envsettings` - and `CLAUDE.md`'s rule about not inventing
 /// what the assets already author applies directly.
 ///
 /// # What is the disc's and what is this project's
@@ -427,7 +427,7 @@ impl Light {
     /// The rig a circuit authors.
     ///
     /// `direction` must already be normalised;
-    /// [`oag_formats::envsettings::EnvSettings::direction`] does it and answers
+    /// `oag_tables::envsettings::EnvSettings::direction` does it and answers
     /// `None` for the degenerate triples four circuits write, which is why this
     /// takes a direction rather than a settings file.
     ///

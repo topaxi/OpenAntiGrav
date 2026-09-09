@@ -70,7 +70,7 @@ fn race_circuits(archives: &mut oag_assets::Archives, definition: &str) -> Vec<c
     let blob = archives
         .read_name(definition)
         .expect("the game plugin definition");
-    let xml = oag_formats::fexml::text(&blob).expect("the definition is not shortened");
+    let xml = oag_tables::fexml::text(&blob).expect("the definition is not shortened");
     catalogue::tracks(&xml)
 }
 
@@ -93,7 +93,7 @@ fn zone_circuits(
     let blob = archives
         .read_name(definition)
         .expect("the game plugin definition");
-    let xml = oag_formats::fexml::text(&blob).expect("the definition is not shortened");
+    let xml = oag_tables::fexml::text(&blob).expect("the definition is not shortened");
     let race_tracks = catalogue::tracks(&xml);
     zone.menu_tracks(
         &race_tracks,
@@ -433,7 +433,7 @@ fn pures_zone_craft_is_a_team_the_definition_declares() {
             "{name}: {hull} should be on the disc"
         );
 
-        let stats = oag_formats::handling::entry_name(team);
+        let stats = oag_tables::handling::entry_name(team);
         let blob = archives
             .read_name(&stats)
             .unwrap_or_else(|e| panic!("{name}: reading {stats}: {e}"));
@@ -844,12 +844,12 @@ fn every_titles_zone_handling_is_one_classless_block() {
         let source = path.display().to_string();
         let mut opened = oag_game::title::open_source(&source, Vec::new(), Vec::new())
             .expect("opening the source");
-        let entry = oag_formats::handling::entry_name(directory);
+        let entry = oag_tables::handling::entry_name(directory);
         let blob = opened
             .archives
             .read_name(&entry)
             .unwrap_or_else(|e| panic!("{name}: reading {entry}: {e}"));
-        let stats = oag_formats::handling::from_blob(&blob)
+        let stats = oag_tables::handling::from_blob(&blob)
             .unwrap_or_else(|e| panic!("{name}: parsing {entry}: {e}"));
 
         assert_eq!(

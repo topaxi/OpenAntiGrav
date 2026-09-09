@@ -5,8 +5,9 @@
 //! cargo run -q -p oag-game --example vita_probe -- <psarc path>
 //! ```
 
-use oag_formats::{collision, handling, vex};
+use oag_formats::{collision, vex};
 use oag_render::mesh;
+use oag_tables::handling;
 
 fn main() -> anyhow::Result<()> {
     let path = std::env::args()

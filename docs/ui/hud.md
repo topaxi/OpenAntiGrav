@@ -90,7 +90,7 @@ Two things kept it off the screen entirely, and each hid the other:
 shortened while its `Data\XML\*_HUD.xml` are not, so a reader that calls
 `fexml::expand` unconditionally rejects a perfectly good layout with "no
 `<code>` dictionary element" and the whole HUD goes with it.
-[`fexml::text`](../../crates/formats/src/fexml.rs) decides from the blob's own
+[`fexml::text`](../../crates/tables/src/fexml.rs) decides from the blob's own
 first bytes instead.
 
 The atlas is an ordinary [PS2 texture](../formats/ps2-texture.md) that the
@@ -619,7 +619,7 @@ TurboIcon ShieldIcon AutopilotIcon RocketIcon MissileIcon QuakeIcon CannonIcon
 PlasmaIcon BombIcon MineIcon LeachBeamIcon RepulserIcon ShurikenIcon
 ```
 
-That is exactly `oag_formats::weapons::Weapon::ALL`, misspellings (`LeachBeam`,
+That is exactly `oag_tables::weapons::Weapon::ALL`, misspellings (`LeachBeam`,
 `Repulser`) included, so the lookup is `format!("{}Icon", weapon.as_type())` -
 `oag_game::hud::pickup_icon_name` - and needs nothing recovered. Pinned against
 the shipped file for all thirteen by

@@ -36,9 +36,9 @@ out exactly like HD's own circuits (`track.vex`, `track.rcsmodel`,
 `track_col.col`, `stats.xml`, `start_grid.vex`, `TrackStartup.xml`, `track.pvs`).
 
 **Every HD-derived handling file decodes with the existing parser, unchanged.**
-`oag_formats::handling::from_blob` on `data/art/published/hdships/AG_Systems/handlingstats.xml`
+`oag_tables::handling::from_blob` on `data/art/published/hdships/AG_Systems/handlingstats.xml`
 returns the expected four classes (`VENOM`/`FLASH`/`RAPIER`/`PHANTOM`).
-`oag_formats::handling::global_from_blob` on `data/xml/handlingstats.xml` (the
+`oag_tables::handling::global_from_blob` on `data/xml/handlingstats.xml` (the
 `GLOBAL_ENTRY` analogue) returns a fully sane `Global` block - zone
 start/increment/recharge, four classes' worth of speedup-pad and gravity
 tunables, weapon-pad refresh times - so the shared `<Global>` schema is
@@ -691,7 +691,7 @@ every title's `.envsettings`/`.EnvSettings` against HD's own key constants
 ambient color"`), which is why 2048 always reported *"no usable sun
 direction, colour and ambient; lighting with the stand-in rig"* even though
 every circuit ships a `track.EnvSettings` in the identical syntax
-`oag_formats::envsettings::EnvSettings::parse` already reads.
+`oag_tables::envsettings::EnvSettings::parse` already reads.
 
 **Confirmed from the executable, not guessed from the file.**
 `Environment_RegisterLightingSchema` (`0x810175fc` in
@@ -701,7 +701,7 @@ registers every key a `track.EnvSettings` can carry, in the file's own order,
 and spells the ambient term `"Lighting.Constant ambient colour"` (British) and
 splits HD's single sun colour into `"Lighting.Sun diffuse colour"` +
 `"Lighting.Sun specular colour"` - genuinely different keys, not a
-reformatting. `oag_formats::envsettings::PSP2_AMBIENT_COLOUR`/
+reformatting. `oag_tables::envsettings::PSP2_AMBIENT_COLOUR`/
 `PSP2_SUN_DIFFUSE_COLOUR` are the new constants; `envsettings_light` and
 `environment::staging` pick between HD's and 2048's key sets on a new
 `GeometryKind` (replacing the `ps3_geometry: bool` that used to conflate

@@ -579,7 +579,7 @@ Three consequences, and the first is the interesting one:
 - **Nothing is runtime-verified.** All of the above is static analysis.
 - **The parameter scaling boundary.** Four fields are pre-scaled at load
   (`Engine.amount` x0.001, `Brakes.amount` x-0.01, `Airbrake.amount` x1e-4,
-  `Airbrake.slidegrip` x1e-4). `oag_formats::handling` returns the document's raw values,
+  `Airbrake.slidegrip` x1e-4). `oag_tables::handling` returns the document's raw values,
   `oag_physics::Handling` holds the scaled in-memory form, and `oag-gameplay` applies the
   factors between them. **Applying them twice is the most likely integration bug here**
   and it would be silent: the ship would simply be sluggish.

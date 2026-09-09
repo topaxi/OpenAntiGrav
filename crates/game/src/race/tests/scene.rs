@@ -244,7 +244,7 @@ fn every_projectile_is_drawn_and_the_worst_case_fits_the_buffer() {
     // The worst case: every slot in the air at once.
     for slot in 0..oag_gameplay::projectile::MAX_PROJECTILES {
         race.world.projectiles.spawn(
-            oag_formats::weapons::Weapon::Rocket,
+            oag_tables::weapons::Weapon::Rocket,
             Vec3::Z * slot as f32,
             Vec3::Z,
             0,
@@ -290,7 +290,7 @@ fn a_modelled_rocket_points_where_it_is_going() {
 
     let heading = Vec3::new(1.0, 0.0, 2.0).normalize();
     race.world.projectiles.spawn(
-        oag_formats::weapons::Weapon::Rocket,
+        oag_tables::weapons::Weapon::Rocket,
         Vec3::X,
         heading * 600.0,
         0,
@@ -340,13 +340,13 @@ fn a_rocket_and_a_missile_in_flight_do_not_share_a_model_slot() {
     let mut race =
         race_with_weapon_table(Mode::SingleRace, enveloping_pad(), 1.0, one_rocket_table());
     race.world.projectiles.spawn(
-        oag_formats::weapons::Weapon::Rocket,
+        oag_tables::weapons::Weapon::Rocket,
         Vec3::X,
         Vec3::Z * 600.0,
         0,
     );
     race.world.projectiles.spawn(
-        oag_formats::weapons::Weapon::Missile,
+        oag_tables::weapons::Weapon::Missile,
         Vec3::Y,
         Vec3::Z * 600.0,
         0,
@@ -382,10 +382,10 @@ fn a_laid_mine_or_bomb_keeps_the_pose_it_landed_in() {
     let pose = Quat::from_rotation_y(std::f32::consts::FRAC_PI_2);
     race.world
         .projectiles
-        .lay(oag_formats::weapons::Weapon::Mine, Vec3::X, 0, 5.0, pose);
+        .lay(oag_tables::weapons::Weapon::Mine, Vec3::X, 0, 5.0, pose);
     race.world
         .projectiles
-        .lay(oag_formats::weapons::Weapon::Bomb, Vec3::Y, 0, 20.0, pose);
+        .lay(oag_tables::weapons::Weapon::Bomb, Vec3::Y, 0, 20.0, pose);
 
     let mine = race.mine_model_matrices();
     assert_eq!(mine.len(), 1);
@@ -407,7 +407,7 @@ fn a_rocket_flying_along_world_up_does_not_collapse_its_basis() {
     let mut race =
         race_with_weapon_table(Mode::SingleRace, enveloping_pad(), 1.0, one_rocket_table());
     race.world.projectiles.spawn(
-        oag_formats::weapons::Weapon::Rocket,
+        oag_tables::weapons::Weapon::Rocket,
         Vec3::ZERO,
         Vec3::NEG_Y * 600.0,
         0,
@@ -444,7 +444,7 @@ fn a_rocket_flying_along_world_up_does_not_collapse_its_basis() {
 /// headless fixture with no disc to load either file from.
 #[test]
 fn a_hull_blast_sits_under_the_craft_and_a_track_blast_where_it_struck() {
-    use oag_formats::weapons::Weapon;
+    use oag_tables::weapons::Weapon;
 
     let mut race =
         race_with_weapon_table(Mode::SingleRace, enveloping_pad(), 1.0, one_rocket_table());
@@ -482,7 +482,7 @@ fn a_hull_blast_sits_under_the_craft_and_a_track_blast_where_it_struck() {
 /// is worse than drawing nothing: it is a wrong, confident-looking answer.
 #[test]
 fn each_weapon_plays_only_its_own_recovered_explosion() {
-    use oag_formats::weapons::Weapon;
+    use oag_tables::weapons::Weapon;
 
     let race = race_with_weapon_table(Mode::SingleRace, enveloping_pad(), 1.0, one_rocket_table());
     let point = Vec3::new(1.0, 2.0, 3.0);
@@ -517,7 +517,7 @@ fn each_weapon_plays_only_its_own_recovered_explosion() {
 /// full read.
 #[test]
 fn a_cannon_round_sparks_on_a_wall_and_silently_on_a_craft() {
-    use oag_formats::weapons::Weapon;
+    use oag_tables::weapons::Weapon;
 
     let race = race_with_weapon_table(Mode::SingleRace, enveloping_pad(), 1.0, one_rocket_table());
     let point = Vec3::new(4.0, 0.5, -1.0);
@@ -546,7 +546,7 @@ fn a_projectile_takes_a_flare_slot_and_hands_it_back() {
         race_with_weapon_table(Mode::SingleRace, enveloping_pad(), 1.0, one_rocket_table());
     race.world
         .projectiles
-        .spawn(oag_formats::weapons::Weapon::Rocket, Vec3::ZERO, Vec3::Z, 0);
+        .spawn(oag_tables::weapons::Weapon::Rocket, Vec3::ZERO, Vec3::Z, 0);
     race.advance_projectile_flares();
     // No disc in a headless fixture, so no effect loaded and no instance
     // is taken - the trigger still has to run, and still has to be a

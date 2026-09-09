@@ -74,11 +74,11 @@ pub type Argb = u32;
 /// The census is a string search on purpose: the PSP dialect shortens element
 /// names per file and writes the full name into that file's own `<code>`
 /// dictionary, so a `HorizMenu` anywhere would put the literal `HorizMenu` in
-/// the blob that used it. See `oag_formats::fexml`. **The PS2 pressing's other
+/// the blob that used it. See `oag_tables::fexml`. **The PS2 pressing's other
 /// two archives, `PRERACE.WAD` and `PS2MUSIC.WAD`, are swept too** (2026-09-01),
 /// with zero hits for `Menu` or `HorizMenu` either, but not because the
 /// vocabulary is absent: both are `oag_formats::ps2_music`-shaped raw-PCM
-/// containers, not `oag_formats::fexml` at all, so neither can hold an XML
+/// containers, not `oag_tables::fexml` at all, so neither can hold an XML
 /// widget by format. `WADSP.WAD`/`WADS2.WAD` are the whole of that disc's
 /// front end.
 ///

@@ -8,12 +8,32 @@
 //! `#[ignore]`d because it needs `data/images/hdfury-ps3-eu-dec.iso`; run with
 //! `just test-data`.
 
-mod rcsmodel_common;
-
 use std::collections::{BTreeMap, BTreeSet};
+use std::path::{Path, PathBuf};
 
-use oag_formats::trackstartup::TrackStartup;
-use rcsmodel_common::image;
+use oag_tables::trackstartup::TrackStartup;
+
+/// The decrypted HD/Fury image, if it is there.
+///
+/// A local copy rather than a shared helper: `rcsmodel_common` lives with the
+/// `RCSMODEL` tests in `oag-rcs`, and a manifest is not a model. Every other
+/// disc-backed test in this crate carries its own locator for the same reason.
+fn image() -> Option<PathBuf> {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../..")
+        .join("data/images/hdfury-ps3-eu-dec.iso");
+
+    if path.exists() {
+        return Some(path);
+    }
+    assert!(
+        std::env::var_os("OAG_REQUIRE_GAME_DATA").is_none(),
+        "OAG_REQUIRE_GAME_DATA is set but {} is missing",
+        path.display()
+    );
+    println!("skipping: {} not present", path.display());
+    None
+}
 
 const ARCHIVES: &[&str] = &[
     "DATA00", "DATA01", "DATA02", "DATA03", "DATA04", "DATA05", "DATA06",
@@ -74,7 +94,7 @@ fn every_billboard_a_circuit_names_is_present() {
             slots += 1;
             let Some(location) = billboard.location() else {
                 colours += 1;
-                if let oag_formats::trackstartup::Fill::Colour(name) = &billboard.fill {
+                if let oag_tables::trackstartup::Fill::Colour(name) = &billboard.fill {
                     colour_names.insert(name.clone());
                 }
                 continue;

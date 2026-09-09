@@ -66,7 +66,8 @@
 
 use std::path::{Path, PathBuf};
 
-use oag_formats::{trackstartup::TrackStartup, vex};
+use oag_formats::vex;
+use oag_tables::trackstartup::TrackStartup;
 
 const ARCHIVE: &str = "base/PSP2/data.psarc";
 const ARCHIVE_DLC1: &str = "dlc1/PSP2/dlc1.psarc";

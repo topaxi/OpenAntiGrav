@@ -413,7 +413,7 @@ fn attributes(body: &str) -> Vec<(String, String)> {
 ///
 /// The front-end XML is the richest source of real asset names in the game,
 /// because most names are built at runtime and never appear in the executable.
-/// Feeding these to [`crate::wad::hash_name`] resolves archive entries that
+/// Feeding these to `oag_formats::wad::hash_name` resolves archive entries that
 /// binary strings alone cannot.
 ///
 /// Values are recognised as paths by containing a separator and an extension,

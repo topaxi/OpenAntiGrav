@@ -4,7 +4,7 @@ use super::*;
 
 /// `Start` and `Sub Venom`, verbatim from
 /// `/data/environments/zonemode.effectsettings` - the same excerpt
-/// `oag_formats::effectsettings`'s own tests blend, and the same numbers
+/// `oag_tables::effectsettings`'s own tests blend, and the same numbers
 /// `effectsettings_ground_truth.rs` asserts straight off the disc image.
 const HD_TWO_STAGES: &str = concat!(
     "\"0 Start.Lighting.Sun colour\"=1.000000 1.000000 1.000000 0.000000\n",

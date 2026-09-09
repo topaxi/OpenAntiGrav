@@ -651,7 +651,7 @@ pub(super) fn zone_handling_note(mode: Mode, team: &str) -> Option<String> {
 
 /// The weapon table this title tunes its weapons from, or `None`.
 ///
-/// **The title's own entry name, not `oag_formats::weapons::RACE_ENTRY`.** That
+/// **The title's own entry name, not `oag_tables::weapons::RACE_ENTRY`.** That
 /// constant is Pulse's spelling and Wipeout HD answers it too, but Pure names one
 /// lower-cased `Data\XML\weaponstats.xml` and ships no Eliminator variant - so
 /// until 2026-08-26 a Pure race found no table, parsed no weapons and handed out
@@ -674,13 +674,13 @@ pub(super) fn zone_handling_note(mode: Mode, team: &str) -> Option<String> {
 /// already uses.
 ///
 /// Two failures, two lines, and a third kind that is neither - see
-/// `oag_formats::weapons::WeaponStats::skipped`.
+/// `oag_tables::weapons::WeaponStats::skipped`.
 pub(super) fn load_weapons(
     archives: &mut oag_assets::Archives,
     title: &'static oag_title::Title,
     mode: Mode,
     report: &mut Vec<String>,
-) -> Option<oag_formats::weapons::WeaponStats> {
+) -> Option<oag_tables::weapons::WeaponStats> {
     let entry = if mode == Mode::Eliminator {
         match title.weapons.elimination {
             Some(entry) => entry,
@@ -706,7 +706,7 @@ pub(super) fn load_weapons(
             return None;
         }
     };
-    let stats = match oag_formats::weapons::from_blob(&blob) {
+    let stats = match oag_tables::weapons::from_blob(&blob) {
         Ok(stats) => stats,
         Err(e) => {
             report.push(format!("{entry}: {e}"));

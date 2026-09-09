@@ -1,4 +1,4 @@
-//! Validates [`race_campaign`](oag_formats::race_campaign) against the real
+//! Validates [`race_campaign`](oag_tables::race_campaign) against the real
 //! campaign: `Data\Plugins\grids\grid_00.xml` .. `grid_15.xml` inside
 //! `Data.wad` on the USA PSP pressing.
 //!
@@ -25,8 +25,8 @@
 use std::path::PathBuf;
 
 use oag_assets::Archive;
-use oag_formats::race_campaign::{self, Mode};
 use oag_pulse::campaign::{self, DEFINITION_ENTRY};
+use oag_tables::race_campaign::{self, Mode};
 
 fn image(name: &str) -> Option<PathBuf> {
     oag_testdata::image(name)
@@ -50,7 +50,7 @@ fn read_all_grids(archive: &mut Archive) -> Vec<race_campaign::Grid> {
         .read_name(DEFINITION_ENTRY)
         .unwrap_or_else(|e| panic!("{DEFINITION_ENTRY}: {e}"));
     let expanded =
-        oag_formats::fexml::text(&definition).unwrap_or_else(|e| panic!("{DEFINITION_ENTRY}: {e}"));
+        oag_tables::fexml::text(&definition).unwrap_or_else(|e| panic!("{DEFINITION_ENTRY}: {e}"));
     let entries = race_campaign::definition_entries(&expanded);
 
     entries
@@ -93,7 +93,7 @@ fn entry_name_agrees_with_definition_xml() {
     };
 
     let definition = archive.read_name(DEFINITION_ENTRY).expect("Definition.xml");
-    let expanded = oag_formats::fexml::text(&definition).expect("expand");
+    let expanded = oag_tables::fexml::text(&definition).expect("expand");
     let entries = race_campaign::definition_entries(&expanded);
 
     assert_eq!(entries.len(), usize::from(campaign::GRID_COUNT));
@@ -122,10 +122,10 @@ fn lap_counts_match_the_class_exactly_with_no_exception() {
             match cell.mode {
                 Mode::Race | Mode::Tournament | Mode::Head2Head => {
                     let expected = match cell.speed_class() {
-                        Some(oag_formats::handling::SpeedClass::Venom) => 3,
-                        Some(oag_formats::handling::SpeedClass::Flash) => 4,
-                        Some(oag_formats::handling::SpeedClass::Rapier) => 4,
-                        Some(oag_formats::handling::SpeedClass::Phantom) => 5,
+                        Some(oag_tables::handling::SpeedClass::Venom) => 3,
+                        Some(oag_tables::handling::SpeedClass::Flash) => 4,
+                        Some(oag_tables::handling::SpeedClass::Rapier) => 4,
+                        Some(oag_tables::handling::SpeedClass::Phantom) => 5,
                         None => panic!(
                             "{}: {} cell has no recognised speed class ({:?})",
                             grid.name, cell.name, cell.class

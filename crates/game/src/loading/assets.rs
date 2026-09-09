@@ -7,7 +7,7 @@
 //! resolves strings, and everything left in the parent draws. Nothing here
 //! knows a screen coordinate and nothing there opens a file.
 
-use oag_formats::fexml;
+use oag_tables::fexml;
 
 use crate::language::StringTable;
 

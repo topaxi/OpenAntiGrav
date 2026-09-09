@@ -332,7 +332,7 @@ incremented here where `Weapon_DropMines` decrements a craft field.
 What is left to try is `WO_PLASMA_FLASH`'s absent call site, and the HUD - a
 charging weapon usually has a meter, and `Arcade_HUD.xml` is fully parsed.
 
-`oag_formats::weapons::PlasmaStats` therefore carries **no** `charge_time`
+`oag_tables::weapons::PlasmaStats` therefore carries **no** `charge_time`
 field, under the module's own rule that an attribute earns a field when
 something reads it - the same treatment `BombStats` gives `damageradius`. The
 engine fires instantly, which is what the read code does. This is the one place

@@ -310,7 +310,7 @@ lines after its root close naming `Checkered_StartFinish.vex` and
 would have held is in the timeline above. They are the fossil of a three-file
 design that got folded into one, and reading them made `14_Track` look like the
 one Pulse circuit whose `num` is not unique. It is not - see
-`oag_formats::trackstartup`.
+`oag_tables::trackstartup`.
 
 ## Which model a mode selects on Pulse: none. Confidence 85
 

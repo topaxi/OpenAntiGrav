@@ -333,5 +333,5 @@ fn read_definition(archives: &mut oag_assets::Archives) -> String {
     let blob = archives
         .read_name(oag_pulse::names::GAME_PLUGIN_DEFINITION)
         .expect("the game plugin definition");
-    oag_formats::fexml::expand(&blob).expect("expanding it")
+    oag_tables::fexml::expand(&blob).expect("expanding it")
 }

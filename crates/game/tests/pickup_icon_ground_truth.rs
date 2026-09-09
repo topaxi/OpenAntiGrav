@@ -130,13 +130,13 @@ fn a_held_turbo_draws_its_own_authored_green_on_a_real_race() {
         .expect("Pure's arcade layout parses; a context is buildable");
 
     let mut race = race::Race::start(loaded.setup);
-    race.world.ships[0].pickup.weapon = Some(oag_formats::weapons::Weapon::Turbo);
+    race.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Turbo);
     race.tick(&oag_gameplay::InputSnapshot::default());
 
     let readout = race.readout();
     assert_eq!(
         readout.pickup,
-        Some(oag_formats::weapons::Weapon::Turbo),
+        Some(oag_tables::weapons::Weapon::Turbo),
         "the readout must carry the held weapon for the draw list to find it"
     );
     let frame = oag_game::hud::draw_list(&context, &readout);

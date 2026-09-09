@@ -315,7 +315,7 @@ pub struct Environment {
     /// **The XML attribute is named `airborne` and this scales the *grounded*
     /// term.** The gravity site's VFPU pair chain puts the table value on the lane
     /// carrying `normal_gravity * grounded` and a literal `1.0` on the airborne
-    /// lane; see `oag_formats::handling::GravityMul`, which reads the chain out
+    /// lane; see `oag_tables::handling::GravityMul`, which reads the chain out
     /// instruction by instruction. Do not "fix" this onto `flight_gravity`.
     ///
     /// An input rather than something this crate looks up, for the same reason

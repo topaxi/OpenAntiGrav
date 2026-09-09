@@ -447,7 +447,7 @@ fn a_shielded_craft_keeps_its_energy_and_still_gets_shoved() {
 /// being right on its own.
 #[test]
 fn a_rocket_fired_at_a_parked_craft_takes_its_energy() {
-    let stats = oag_formats::weapons::parse(
+    let stats = oag_tables::weapons::parse(
         r#"<WeaponStats>
                  <Weapon type="Global"><Stats slowdown_limit="0"/></Weapon>
                  <Weapon type="Rocket"><Stats absorb="1" blastforce="10" blastradius="12"
@@ -608,7 +608,7 @@ fn a_launch_fires_three_fanned_about_the_craft_forward() {
         ..Dimensions::default()
     };
     // `spread` of 0.25 rad is about 14 degrees to each side.
-    let stats = oag_formats::weapons::parse(
+    let stats = oag_tables::weapons::parse(
         r#"<WeaponStats>
                  <Weapon type="Global"><Stats slowdown_limit="0"/></Weapon>
                  <Weapon type="Rocket"><Stats absorb="1" blastforce="2" blastradius="3"
@@ -672,7 +672,7 @@ fn a_launch_fires_three_fanned_about_the_craft_forward() {
 /// an error - and not a crash from normalising a zero.
 #[test]
 fn a_zero_spread_still_fires_three() {
-    let stats = oag_formats::weapons::parse(
+    let stats = oag_tables::weapons::parse(
         r#"<WeaponStats>
                  <Weapon type="Global"><Stats slowdown_limit="0"/></Weapon>
                  <Weapon type="Rocket"><Stats absorb="1" blastforce="2" blastradius="3"
@@ -699,8 +699,8 @@ fn a_zero_spread_still_fires_three() {
 }
 
 /// A Missile's stats, with a wide lock window. Every number invented, ADR-0006.
-fn missile_stats() -> oag_formats::weapons::MissileStats {
-    oag_formats::weapons::parse(
+fn missile_stats() -> oag_tables::weapons::MissileStats {
+    oag_tables::weapons::parse(
         r#"<WeaponStats>
              <Weapon type="Global"><Stats slowdown_limit="0"/></Weapon>
              <Weapon type="Missile"><Stats absorb="1" blastforce="10" blastradius="12"
@@ -947,7 +947,7 @@ fn a_self_detonating_missile_damages_nobody_standing_in_it() {
         ship.physics.body.position = position;
     }
 
-    let table = oag_formats::weapons::parse(
+    let table = oag_tables::weapons::parse(
         r#"<WeaponStats>
              <Weapon type="Global"><Stats slowdown_limit="0"/></Weapon>
              <Weapon type="Missile"><Stats absorb="1" blastforce="10" blastradius="12"

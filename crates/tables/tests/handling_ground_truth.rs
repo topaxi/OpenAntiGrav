@@ -1,4 +1,4 @@
-//! Validates the [`handling`](oag_formats::handling) decoder against real ships.
+//! Validates the [`handling`](oag_tables::handling) decoder against real ships.
 //!
 //! **`#[ignore]`d and never run in CI.** It needs game content, which this
 //! project does not ship. See `docs/architecture/adr/0006-no-copyrighted-content.md`.
@@ -40,9 +40,9 @@
 use std::path::PathBuf;
 
 use oag_disc::DiscImage;
-use oag_formats::handling::{self, SpeedClass};
 use oag_formats::wad::{self, Compression, Directory};
 use oag_pulse::race::TEAMS;
+use oag_tables::handling::{self, SpeedClass};
 
 /// Where each release keeps the archive holding the ship data.
 ///
@@ -197,7 +197,7 @@ fn every_psp_team_carries_a_complete_set_of_four_speed_classes() {
     // document than expected.
     for (name, blob) in &blobs {
         assert!(
-            oag_formats::fexml::is_fexml(blob),
+            oag_tables::fexml::is_fexml(blob),
             "{name} is not shortened front-end XML on PSP"
         );
     }
@@ -222,7 +222,7 @@ fn every_ps2_team_carries_the_same_complete_set() {
 
     for (name, blob) in &blobs {
         assert!(
-            !oag_formats::fexml::is_fexml(blob),
+            !oag_tables::fexml::is_fexml(blob),
             "{name} is shortened on PS2, which PSP's storage form was thought to be alone in"
         );
         // Leading whitespace is real: the PS2 files begin with a space, and the
@@ -261,17 +261,17 @@ fn which_top_level_elements_handlingstats_carries() {
         };
 
         for (name, blob) in &blobs {
-            let expanded = if oag_formats::fexml::is_fexml(blob) {
-                oag_formats::fexml::expand(blob).expect("expands")
+            let expanded = if oag_tables::fexml::is_fexml(blob) {
+                oag_tables::fexml::expand(blob).expect("expands")
             } else {
                 String::from_utf8_lossy(blob).into_owned()
             };
-            let root = oag_formats::fexml::parse(&expanded);
+            let root = oag_tables::fexml::parse(&expanded);
 
             fn find<'a>(
-                node: &'a oag_formats::fexml::Node,
+                node: &'a oag_tables::fexml::Node,
                 want: &str,
-            ) -> Option<&'a oag_formats::fexml::Node> {
+            ) -> Option<&'a oag_tables::fexml::Node> {
                 if node.name.eq_ignore_ascii_case(want) {
                     return Some(node);
                 }
@@ -514,7 +514,7 @@ fn the_barrel_roll_tunables_agree_on_both_psp_pressings() {
     println!("{checked} PSP pressing(s) agree on the barrel roll's tunables");
 }
 
-/// The finding `oag_formats::handling::global_classes` is shaped around: the
+/// The finding `oag_tables::handling::global_classes` is shaped around: the
 /// shipped file authors a **fifth** `<GlobalClass>`, named `VECTOR`, and it is
 /// **first**.
 ///
@@ -533,8 +533,8 @@ fn the_global_file_authors_a_fifth_class_and_authors_it_first() {
         let Some(blob) = global_blob(image_name, archive) else {
             continue;
         };
-        let expanded = if oag_formats::fexml::is_fexml(&blob) {
-            oag_formats::fexml::expand(&blob).expect("expands")
+        let expanded = if oag_tables::fexml::is_fexml(&blob) {
+            oag_tables::fexml::expand(&blob).expect("expands")
         } else {
             String::from_utf8_lossy(&blob).into_owned()
         };

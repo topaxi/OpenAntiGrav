@@ -61,7 +61,9 @@ ROOT = Path(__file__).resolve().parent.parent
 # quietly narrow what this gate covers: every crate carved out of `oag-formats`
 # joins this tuple on the way out, whether or not its arithmetic looks like it
 # could reach a hash. Narrowing the list is a separate, argued change.
-SCANNED_CRATES = ("core", "physics", "gameplay", "ai", "race", "formats", "video")
+SCANNED_CRATES = (
+    "core", "physics", "gameplay", "ai", "race", "formats", "video", "tables",
+)
 
 # Not required by IEEE-754 to be correctly rounded, so not portable. `sqrt` is
 # absent on purpose - it *is* required, and glam's `length`/`normalize` are

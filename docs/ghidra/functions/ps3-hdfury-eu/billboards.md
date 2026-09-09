@@ -4,7 +4,7 @@ Binary: `PS3_GAME/USRDIR/EBOOT.BIN` from `hdfury-ps3-eu-dec.iso`, as
 `/ps3-hdfury-eu/EBOOT.elf` in Ghidra.
 
 The file's own layout - what `trackstartup.xml` declares, and the survey over
-all 16 circuits - is [`oag_formats::trackstartup`](../../../../crates/formats/src/trackstartup.rs),
+all 16 circuits - is [`oag_tables::trackstartup`](../../../../crates/tables/src/trackstartup.rs),
 also summarised in [`docs/formats/README.md`](../../../formats/README.md)'s
 "HD track startup" row. This page is the executable's side: what it reads out
 of a `<Billboard>`, where it stores each one, and the one place a manifest's
@@ -77,7 +77,7 @@ the whole image finds exactly 16 `trackstartup.xml` entries total, split across
 `DATA00.PSARC` and `DATA02.PSARC` with no duplicate elsewhere, and
 `scripts/psarc.py extract` pulled all 16. None authors `Colour` (the UK
 spelling alone) or `Glow`, so this gap costs nothing on the shipped disc - the
-reader in `oag_formats::trackstartup` is right to skip both.
+reader in `oag_tables::trackstartup` is right to skip both.
 
 **A sibling element, `<Render>`, is recognised and then does nothing.**
 Reached the same way `Billboard` is (`disp -0x5408`), the name comparison

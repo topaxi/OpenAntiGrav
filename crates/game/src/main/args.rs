@@ -221,15 +221,15 @@ pub(crate) fn parse_size(text: &str) -> Result<(u32, u32)> {
 /// exactly like the flag working and the weapon never being drawn, which is the
 /// failure mode the flag exists to remove. The error lists what the weapon table
 /// actually holds, so a typo is one read away from fixed.
-pub(crate) fn give_weapon(name: Option<&str>) -> Result<Option<oag_formats::weapons::Weapon>> {
+pub(crate) fn give_weapon(name: Option<&str>) -> Result<Option<oag_tables::weapons::Weapon>> {
     let Some(name) = name else { return Ok(None) };
-    let found = oag_formats::weapons::Weapon::ALL
+    let found = oag_tables::weapons::Weapon::ALL
         .into_iter()
         .find(|weapon| weapon.as_type().eq_ignore_ascii_case(name));
     match found {
         Some(weapon) => Ok(Some(weapon)),
         None => {
-            let known: Vec<&str> = oag_formats::weapons::Weapon::ALL
+            let known: Vec<&str> = oag_tables::weapons::Weapon::ALL
                 .iter()
                 .map(|weapon| weapon.as_type())
                 .collect();

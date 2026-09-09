@@ -78,7 +78,7 @@ pub struct Options {
     pub log_every: u32,
     /// `--give`: keep the player's pickup slot topped up. See
     /// `race::CaptureOptions::give`.
-    pub give: Option<oag_formats::weapons::Weapon>,
+    pub give: Option<oag_tables::weapons::Weapon>,
     /// `--autopilot`: fly the race this hands off to with an opponent's
     /// driver. See `race::CaptureOptions::autopilot`.
     pub autopilot: bool,

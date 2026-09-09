@@ -955,7 +955,7 @@ assumed - every blob of the named archives was extracted and searched, and the
 | `hdfury-ps3-eu-dec.iso` | `DATA06`'s front-end tree | 29 | 18 | **8** |
 
 A string search finds a shortened element because the PSP dialect writes the
-full name into each file's own `<code>` dictionary - see `oag_formats::fexml`.
+full name into each file's own `<code>` dictionary - see `oag_tables::fexml`.
 The PS2 pressing's other two archives, `PRERACE.WAD` and `PS2MUSIC.WAD`, are
 swept too (2026-09-01) and also come back **0** for both columns - but not
 because the vocabulary is absent from them. Both are `oag_formats::ps2_music`-

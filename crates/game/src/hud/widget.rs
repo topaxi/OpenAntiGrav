@@ -124,7 +124,7 @@ pub struct Sprite {
     /// column, and `ZonePlusLight0`-`10` author `±0.385` down to `0`, the small
     /// per-row tilts that make the ladder read as an arc rather than a straight
     /// list. Two spellings ship, `rotationTheta` and `RotationTheta`, and
-    /// [`oag_formats::fexml::Node::value`] folds case.
+    /// [`oag_tables::fexml::Node::value`] folds case.
     ///
     /// **The sign convention is passed through, not verified.** The angle is
     /// handed to [`crate::frontend::Draw::RotatedSprite`], whose own doc reads it

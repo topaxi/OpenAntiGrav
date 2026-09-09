@@ -126,8 +126,7 @@ fn layout_of(archives: &mut oag_assets::Archives, entry: &str) -> Layout {
     let blob = archives
         .read_name(entry)
         .unwrap_or_else(|e| panic!("reading {entry}: {e}"));
-    let xml =
-        oag_formats::fexml::expand(&blob).unwrap_or_else(|e| panic!("expanding {entry}: {e}"));
+    let xml = oag_tables::fexml::expand(&blob).unwrap_or_else(|e| panic!("expanding {entry}: {e}"));
     Layout::from_xml(&xml)
 }
 
@@ -138,8 +137,8 @@ fn layout_of_either(archives: &mut oag_assets::Archives, entry: &str) -> Layout 
     let blob = archives
         .read_name(entry)
         .unwrap_or_else(|e| panic!("reading {entry}: {e}"));
-    let xml = if oag_formats::fexml::is_fexml(&blob) {
-        oag_formats::fexml::expand(&blob).unwrap_or_else(|e| panic!("expanding {entry}: {e}"))
+    let xml = if oag_tables::fexml::is_fexml(&blob) {
+        oag_tables::fexml::expand(&blob).unwrap_or_else(|e| panic!("expanding {entry}: {e}"))
     } else {
         String::from_utf8(blob).unwrap_or_else(|e| panic!("{entry} is not UTF-8 text: {e}"))
     };
@@ -528,7 +527,7 @@ fn no_two_live_widgets_share_an_anchor_on_any_shipped_layout() {
         wrong_way: true,
         zone: 4,
         score: 1234,
-        pickup: Some(oag_formats::weapons::Weapon::Rocket),
+        pickup: Some(oag_tables::weapons::Weapon::Rocket),
         ..hud::Readout::blank()
     };
     let strings = oag_game::language::StringTable::default();
@@ -666,7 +665,7 @@ fn the_atlas_and_both_hud_fonts_are_readable() {
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn every_weapon_has_an_icon_widget_named_after_it() {
-    use oag_formats::weapons::Weapon;
+    use oag_tables::weapons::Weapon;
 
     let Some(mut archives) = open() else {
         return;
@@ -789,7 +788,7 @@ fn the_layouts_name_at_most_one_texture() {
                 println!("{label}: {entry} is not on this disc, skipped");
                 continue;
             };
-            let Ok(xml) = oag_formats::fexml::text(&blob) else {
+            let Ok(xml) = oag_tables::fexml::text(&blob) else {
                 continue;
             };
             let layout = hud::Layout::from_xml(&xml);

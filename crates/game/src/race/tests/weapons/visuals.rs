@@ -22,7 +22,7 @@ use super::*;
 /// rather than the attach, is what is tested here).
 #[test]
 fn each_projectile_rides_only_its_own_flare() {
-    use oag_formats::weapons::Weapon;
+    use oag_tables::weapons::Weapon;
 
     for weapon in Weapon::ALL {
         let expected = match weapon {
@@ -52,7 +52,7 @@ fn each_projectile_rides_only_its_own_flare() {
 #[test]
 fn only_a_missiles_own_rising_counter_is_a_bounce() {
     use crate::race::weapons::bounced_this_tick;
-    use oag_formats::weapons::Weapon;
+    use oag_tables::weapons::Weapon;
 
     assert!(
         bounced_this_tick(Some(Weapon::Missile), 1, 2),
@@ -152,7 +152,7 @@ fn a_missile_flying_straight_up_gets_a_finite_basis() {
 #[test]
 fn each_bouncing_weapon_plays_its_own_burst() {
     use crate::race::weapons::bounce_effect_for;
-    use oag_formats::weapons::Weapon;
+    use oag_tables::weapons::Weapon;
 
     for weapon in Weapon::ALL {
         let expected = match weapon {
@@ -178,7 +178,7 @@ fn each_bouncing_weapon_plays_its_own_burst() {
 #[test]
 fn a_weapon_that_cannot_bounce_never_reads_as_bouncing() {
     use crate::race::weapons::bounced_this_tick;
-    use oag_formats::weapons::Weapon;
+    use oag_tables::weapons::Weapon;
 
     assert!(bounced_this_tick(Some(Weapon::Shuriken), 3, 4));
     assert!(!bounced_this_tick(Some(Weapon::Shuriken), 4, 4));
