@@ -374,6 +374,19 @@ pub struct Frontend {
     /// How long the current screen has been on, for the ones that leave on a
     /// timer rather than on a press. See [`Frontend::update_timed`].
     on_screen_for: f64,
+    /// The title's own measured menu colours, for the language picker's
+    /// selected-row ink. `None` on every fixture in this file's own tests and
+    /// until [`Self::set_menu_skin`] is called - the picker falls back to its
+    /// old row-colour-and-highlight behaviour in that case, unchanged.
+    ///
+    /// **Deliberately not threaded through [`Self::new`]/[`Self::booting`]'s
+    /// signature**, the same way [`Self::set_space`]/[`Self::set_backdrop`]
+    /// are not: `crate::race::hud`, `crate::race::load` and every test
+    /// fixture here construct a `Frontend` without one, and a constructor
+    /// change would touch all of them for a value only the picker reads. See
+    /// `docs/formats/pure-status.md`'s `Language Selection has no highlight
+    /// band at all` finding.
+    menu_skin: Option<&'static oag_title::MenuSkin>,
 }
 
 impl Frontend {
@@ -517,6 +530,7 @@ impl Frontend {
             steps,
             backdrop_parent,
             on_screen_for: 0.0,
+            menu_skin: None,
         };
         frontend.machine.transition_to(start);
         frontend
@@ -603,6 +617,18 @@ impl Frontend {
     /// afterwards leaves a PSP-shaped rect on a PS2 screen.
     pub fn set_space(&mut self, space: Space) {
         self.space = space;
+    }
+
+    /// Gives the sequence the title's own measured menu colours.
+    ///
+    /// Optional and title-agnostic on purpose: a source with no measured
+    /// `selected` colour, or one whose `selected` pulses rather than swaps
+    /// (`selected_pulse_period_secs` is `Some`, Pulse's own shape - see
+    /// `oag_title::MenuSkin::selected_pulse_period_secs`), leaves the picker
+    /// drawing exactly as it did before this existed. Only a title with a
+    /// *static* measured `selected` (Pure's, confidence 65) changes anything.
+    pub fn set_menu_skin(&mut self, skin: &'static oag_title::MenuSkin) {
+        self.menu_skin = Some(skin);
     }
 
     /// The grid this sequence's draw rects are in.
