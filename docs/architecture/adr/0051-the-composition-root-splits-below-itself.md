@@ -113,10 +113,11 @@ simulation boundary without either side linking the other's machinery.
 
 **Bad, and worth stating plainly.**
 
-*The gate is not faster.* Same as ADR-0050, for the same reason, now measured
-twice on two different crates. The honest statement is that this project's
-build cost is dominated by integration-test linking, and no crate boundary
-addresses that.
+*The gate is not faster to build.* Same as ADR-0050, for the same reason, now
+measured twice on two different crates: this project's *build* cost is dominated
+by integration-test linking, and no crate boundary addresses that. **See the
+amendment below - the gate did get faster, by a route this decision did not
+anticipate.**
 
 *The `Race` split is a redesign, not a move,* and it carries regression risk a
 file move does not. The evidence it is behaviour-preserving is that
@@ -155,3 +156,45 @@ path-keyed row in `check-file-size.py`'s `BASELINE`. Adding `display` to
 `SCANNED_CRATES` immediately found a `tan` in `Fov::apply` that had never been
 scanned - allowed, with the reason recorded, but it had been invisible for as
 long as it lived in `oag-game`.
+
+## Amendment, 2026-09-09: the splits made `just test-data` 15% faster, and the reason was in the build profile all along
+
+The Consequences above say the gate is not faster, on the strength of two
+compile-and-link measurements. That was the wrong measurement to stop at.
+Running the full `just test-data` suite on an idle machine, everything
+pre-built, either side of the day's work:
+
+| commit | tests | suite wall clock |
+| --- | --- | --- |
+| `6120c207`, before the splits | 4,114 | **488s** |
+| `7983eda3`, after them | 4,117 | **415s** |
+
+**Three more tests, 73 seconds faster.** The mechanism is not subtle once seen,
+and it is not the one this ADR or ADR-0050 reasoned about: `oag-game` is
+deliberately left at `opt-level = 0` (see the build-profile table in
+[workspace-layout](../workspace-layout.md)), and the roughly 18,000 lines that
+moved out of it into `oag-ui`, `oag-display` and `oag-race` are all in crates
+that are `opt-level = 2`. Code that leaves the composition root gets optimised.
+
+So the general statement is sharper than either ADR made it. Splitting a crate
+buys nothing in compile or link time, because the test binaries link wherever
+they live. Splitting the **composition root specifically** buys test *runtime*,
+in proportion to how much executable code leaves an unoptimised crate - and in a
+suite that is tail-bound on a handful of long simulation tests, that is the cost
+that was actually being paid.
+
+This does not change the decision. It changes what the decision is worth, and it
+means the "approximately zero" framing carried forward from ADR-0050 should not
+be quoted for the composition root without this table beside it.
+
+Two collateral corrections, both recorded in `scripts/check-test-budget.py`:
+
+- **The 344s figure that CLAUDE.md and this project's ceilings were calibrated
+  against is not reproducible.** The pre-split commit measures 488s idle on the
+  machine in question. The ceilings now cite the two runs above.
+- **Suite wall clock is contended and must be measured on an idle machine.** The
+  same tree measured 456s, 402s and 415s at load averages of 21, 17 and 2, with
+  four, two and one tests over the per-test ceiling and a *different* test each
+  time. Two agents independently read a contended run as a regression on the
+  same afternoon; the tests involved measure 76-79s in isolation, against the
+  95-114s recorded when the ceiling was set.

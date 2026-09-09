@@ -65,6 +65,25 @@ import re
 import sys
 from pathlib import Path
 
+# **Measured on 2026-09-09, after the ADR-0050/ADR-0051 crate splits, on an
+# idle machine with everything pre-built:**
+#
+#   commit 6120c207 (before the splits)   4,114 tests   488 s
+#   commit 7983eda3 (after them)          4,117 tests   415 s
+#
+# The suite got **15% faster with three more tests in it**, and the mechanism is
+# worth stating because it is not the one either ADR predicted. `oag-game` is
+# deliberately `opt-level = 0` - see the build-profile table in
+# `docs/architecture/workspace-layout.md` - so the ~18,000 lines that moved out
+# of it into `oag-ui`, `oag-display` and `oag-race` are now compiled at
+# `opt-level = 2` when the tests run them. Both ADRs argued the splits buy no
+# build time, which is true of *compiling and linking*; neither noticed that
+# moving code out of the composition root optimises it.
+#
+# The `344 s` figure that CLAUDE.md and the ceilings below were once calibrated
+# against is **not reproducible on this machine** - the pre-split commit measures
+# 488 s idle. Treat the numbers here as calibrated against the two runs above.
+
 # Seconds a single test may take before it has to be split or baselined.
 #
 # **This is a duration under load, not an isolated cost, and the two differ by a
@@ -92,11 +111,28 @@ TOLERANCE = 1.2
 # measured on the day they were baselined and why they are here. A row is
 # deleted the moment its test fits.
 BASELINE: dict[str, float] = {
-    # Empty, and worth keeping that way. The one candidate is
+    # Measured 305 s on 2026-09-09, on an idle machine, in a run whose suite
+    # total was 415 s. It is here rather than split because **the split would
+    # change what is asserted**, which is the one reason this file accepts.
+    #
+    # The assertion is a *total* over every forward circuit: a higher tier arms
+    # no fewer rolls than a lower one, summed. Per-circuit is a strictly
+    # stronger claim and not the one the AI is tuned to - a tier can legitimately
+    # roll less on one track and more overall - so making the circuit the test
+    # axis would not be a split, it would be a different test.
+    #
+    # Its five siblings measured 212-244 s in the same run and need no row. That
+    # spread is the point: these six do identical work and land 90 s apart
+    # depending on what they overlap with, so `CEILING` sits inside their band
+    # and whichever one draws the short straw is the one that trips. If a
+    # sibling starts tripping too, the answer is not five more rows - it is that
+    # `CEILING` no longer reflects what these cost, and should be re-derived
+    # from a measured run the way its own comment describes.
+    "oag-game::ai_roll_ground_truth a_full_grid_of_skilled_arms_no_fewer_rolls_"
+    "than_novice_at_the_held_out_seed": 305.0,
     # `ps2_source_ground_truth`'s uncapped transcode - 950 frames of the PS2
     # intro, with `refresh: true` load-bearing for what it asserts, so the work
-    # cannot be cached away - and at 160 s in the 2026-09-09 run it does not
-    # need a row.
+    # cannot be cached away - measured 160 s on 2026-09-09 and needs no row.
 }
 
 # `PASS [   1.234s] (  12/4101) crate::binary test_name`
