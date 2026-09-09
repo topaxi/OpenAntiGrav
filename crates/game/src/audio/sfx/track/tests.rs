@@ -16,7 +16,27 @@ fn omni(position: [f32; 3], radius: f32) -> Authored {
     }
 }
 
-/// The decoded node an [`Authored`] wraps.
+/// A directional emitter, facing `+Z`, with the given half-angle in degrees.
+///
+/// `placed_emitter` reads the axis off row `1` of the world matrix
+/// (`to_world[4..7]`) - `node`'s own identity matrix puts `+Y` there, so this
+/// overwrites it to `+Z` rather than relying on the default.
+fn cone(position: [f32; 3], radius: f32, half_angle_degrees: f32) -> Authored {
+    let mut emitter = node(position, radius);
+    emitter.to_world[4] = 0.0;
+    emitter.to_world[5] = 0.0;
+    emitter.to_world[6] = 1.0;
+    emitter.cone = Some(oag_formats::sound_emitters::Cone {
+        angle_a: half_angle_degrees.to_radians(),
+        angle_b: 40.0_f32.to_radians(),
+    });
+    Authored {
+        emitter,
+        sound: None,
+    }
+}
+
+/// The decoded node an [`Authored`] wraps, facing `+Z`.
 fn node(position: [f32; 3], radius: f32) -> SoundEmitter {
     let mut to_world = [0.0; 16];
     to_world[0] = 1.0;
@@ -41,7 +61,7 @@ fn node(position: [f32; 3], radius: f32) -> SoundEmitter {
 fn a_vex_with_no_node_table_reports_rather_than_panicking() {
     let parsed = TrackEmitters::parse("nowhere.vex", b"not a vex at all");
     assert!(parsed.omni.is_empty());
-    assert_eq!(parsed.cones, 0);
+    assert!(parsed.directional.is_empty());
     assert!(
         parsed
             .report
@@ -63,12 +83,12 @@ fn only_what_is_inside_its_own_radius_is_counted() {
             // Far away but authored wide enough to still reach.
             omni([500.0, 0.0, 0.0], 600.0),
         ],
-        cones: 0,
+        directional: Vec::new(),
         report: Vec::new(),
     };
     let listener = oag_audio::Listener::at_origin();
-    assert_eq!(emitters.in_range(&listener, 0.0), 3);
-    let placed: Vec<_> = emitters.placed(&listener, 0.0).collect();
+    assert_eq!(emitters.in_range(&listener), 3);
+    let placed: Vec<_> = emitters.placed(&listener).collect();
     assert_eq!(
         placed.iter().map(|(at, _)| *at).collect::<Vec<_>>(),
         [0, 1, 3]
@@ -79,11 +99,11 @@ fn only_what_is_inside_its_own_radius_is_counted() {
 fn the_near_field_is_flat_and_the_far_field_falls_off() {
     let emitters = TrackEmitters {
         omni: vec![omni([10.0, 0.0, 0.0], 100.0), omni([90.0, 0.0, 0.0], 100.0)],
-        cones: 0,
+        directional: Vec::new(),
         report: Vec::new(),
     };
     let listener = oag_audio::Listener::at_origin();
-    let placed: Vec<_> = emitters.placed(&listener, 0.0).map(|(_, p)| p).collect();
+    let placed: Vec<_> = emitters.placed(&listener).map(|(_, p)| p).collect();
     // Inside `0.2 * radius`, so the 1.25 clamp puts it at full level.
     assert!(
         (placed[0].gain - 1.0).abs() < 1e-6,
@@ -99,23 +119,49 @@ fn the_near_field_is_flat_and_the_far_field_falls_off() {
 }
 
 #[test]
-fn a_cone_is_counted_and_never_placed() {
-    let mut cone = node([0.0, 0.0, 0.0], 100.0);
-    cone.cone = Some(oag_formats::sound_emitters::Cone {
-        angle_a: 1.0,
-        angle_b: 0.7,
-    });
-    // `parse` is the only thing that splits them, so this asserts the split's
-    // consequence rather than the split: a `TrackEmitters` built by hand can
-    // only hold omnidirectional nodes.
+fn a_cone_is_placed_after_the_omni_nodes_and_only_inside_its_angle() {
+    // `cone`'s axis is row 1 of its world matrix, `+Z` - and, per
+    // `oag_audio::spatial`'s own law, a listener at the cone's `-Z` is the
+    // on-axis side (the law reads `-axis` as the audible direction, the same
+    // way the original's own `e[0x10]`/`-row1` dot product does).
+    let listener = oag_audio::Listener {
+        position: [0.0, 0.0, -10.0],
+        right: [1.0, 0.0, 0.0],
+    };
     let emitters = TrackEmitters {
-        omni: Vec::new(),
-        cones: 1,
+        omni: vec![omni([0.0, 0.0, 0.0], 5.0)],
+        directional: vec![cone([0.0, 0.0, 0.0], 100.0, 20.0)],
         report: Vec::new(),
     };
-    assert_eq!(emitters.in_range(&oag_audio::Listener::at_origin(), 0.0), 0);
-    assert_eq!(emitters.cones, 1);
-    assert!(cone.cone.is_some());
+    // Index 0 is the omni node (out of its own 5-unit radius at distance 10)
+    // and index 1 is the cone, placed because the listener sits on its axis.
+    let placed: Vec<_> = emitters.placed(&listener).collect();
+    assert_eq!(
+        placed.iter().map(|(at, _)| *at).collect::<Vec<_>>(),
+        [1],
+        "the omni node is past its own radius; the cone is on-axis and in range"
+    );
+}
+
+#[test]
+fn a_cone_outside_its_half_angle_is_silent_rather_than_dim() {
+    // The listener is on `+X`, 90 degrees off the cone's `+Z` axis - well past
+    // a 20-degree half-angle. Still inside the radius, so this is `place`
+    // returning a zero-gain `Placed`, not a refusal: the original's own
+    // `d > radius` gate is the only thing that returns "not in range" at all,
+    // exactly as `oag_audio::spatial`'s own header documents.
+    let listener = oag_audio::Listener {
+        position: [10.0, 0.0, 0.0],
+        right: [0.0, 0.0, 1.0],
+    };
+    let emitters = TrackEmitters {
+        omni: Vec::new(),
+        directional: vec![cone([0.0, 0.0, 0.0], 100.0, 20.0)],
+        report: Vec::new(),
+    };
+    let placed: Vec<_> = emitters.placed(&listener).collect();
+    assert_eq!(placed.len(), 1, "past the radius entirely, not off-angle");
+    assert_eq!(placed[0].1.gain, 0.0, "90 degrees off a 20-degree cone");
 }
 
 /// One decoded waveform, `frames` long, with the loop flag the caller wants.
@@ -139,7 +185,7 @@ fn cue(frames: usize, looping: bool) -> Loaded {
 fn a_finished_one_shot_is_not_restarted_while_its_emitter_is_in_range() {
     let mut emitters = TrackEmitters {
         omni: vec![omni([0.0, 0.0, 0.0], 100.0)],
-        cones: 0,
+        directional: Vec::new(),
         report: Vec::new(),
     };
     emitters.omni[0].sound = Some(cue(64, false));
@@ -150,15 +196,13 @@ fn a_finished_one_shot_is_not_restarted_while_its_emitter_is_in_range() {
     let mut rng = oag_core::Rng::new(1);
     let mut out = vec![0.0; 2 * 256];
 
-    ambience.tick(&mut mixer, &emitters, &listener, 0.0, &mut rng);
+    ambience.tick(&mut mixer, &emitters, &listener, &mut rng);
     assert_eq!(mixer.active_voices(), 1, "the cue never opened a voice");
 
     // Long enough to run the 64-frame sample out several times over.
-    for tick in 1..10 {
+    for _ in 1..10 {
         mixer.render(&mut out);
-        #[expect(clippy::cast_precision_loss, reason = "a tick count")]
-        let frame = tick as f32;
-        ambience.tick(&mut mixer, &emitters, &listener, frame, &mut rng);
+        ambience.tick(&mut mixer, &emitters, &listener, &mut rng);
     }
     assert_eq!(
         mixer.active_voices(),
@@ -177,7 +221,7 @@ fn a_finished_one_shot_is_not_restarted_while_its_emitter_is_in_range() {
 fn a_looping_cue_keeps_one_voice_for_as_long_as_it_is_in_range() {
     let mut emitters = TrackEmitters {
         omni: vec![omni([0.0, 0.0, 0.0], 100.0)],
-        cones: 0,
+        directional: Vec::new(),
         report: Vec::new(),
     };
     emitters.omni[0].sound = Some(cue(64, true));
@@ -188,10 +232,8 @@ fn a_looping_cue_keeps_one_voice_for_as_long_as_it_is_in_range() {
     let mut rng = oag_core::Rng::new(1);
     let mut out = vec![0.0; 2 * 256];
 
-    for tick in 0..10 {
-        #[expect(clippy::cast_precision_loss, reason = "a tick count")]
-        let frame = tick as f32;
-        ambience.tick(&mut mixer, &emitters, &listener, frame, &mut rng);
+    for _ in 0..10 {
+        ambience.tick(&mut mixer, &emitters, &listener, &mut rng);
         mixer.render(&mut out);
     }
     assert_eq!(mixer.active_voices(), 1, "the loop stopped or was doubled");
@@ -202,8 +244,8 @@ fn a_looping_cue_keeps_one_voice_for_as_long_as_it_is_in_range() {
         position: [1000.0, 0.0, 0.0],
         right: [1.0, 0.0, 0.0],
     };
-    ambience.tick(&mut mixer, &emitters, &far, 10.0, &mut rng);
+    ambience.tick(&mut mixer, &emitters, &far, &mut rng);
     assert_eq!(ambience.playing(&mixer), 0, "the latch did not close it");
-    ambience.tick(&mut mixer, &emitters, &listener, 11.0, &mut rng);
+    ambience.tick(&mut mixer, &emitters, &listener, &mut rng);
     assert_eq!(ambience.playing(&mixer), 1, "coming back opened nothing");
 }

@@ -25,15 +25,37 @@
 //! sample zero on each pass rather than being sampled mid-loop, which is worth
 //! knowing before anyone compares a capture against the original.
 //!
-//! # The cone is deliberately absent
+//! # The cone is wired
 //!
-//! `soundcone` `0x3e9` carries two authored angles and its own enable byte, and
-//! **which of them reaches the emitter's `+0x40` half-angle is unread** -
-//! `soundcone`'s own init has not been found. Per `CLAUDE.md`, an effect whose
-//! trigger is unrecovered stays unwired: a cone played as a sphere would be a
-//! stand-in for something the disc already specifies, audible and plausible and
-//! wrong. [`TrackEmitters::cones`] counts them so the absence is a number in
-//! the load report rather than a silence.
+//! `soundcone` `0x3e9` carries two authored angles and its own enable byte.
+//! **Which of them reaches the emitter's `+0x40` half-angle is read**:
+//! `VexSoundCone_Init` (`0x08925ff4`,
+//! `docs/ghidra/functions/psp-pulse-usa/track-sound-emitters.md`'s own
+//! section) is a four-line wrapper around `VexSound_Init` that copies the
+//! node's own `+0x00` there - `Cone::wide()`, never smaller than the other
+//! authored angle on any of the 134 nodes. [`TrackEmitters::directional`]
+//! carries them, placed by [`oag_audio::Emitter::cone`], the same law
+//! [`TrackEmitters::omni`] already used.
+//!
+//! **A cone's radius is `SoundEmitter::radius`, not `sample_radius`.**
+//! `VexSound_Update` - the only function that ever resamples the radius
+//! curve - has exactly two static call sites in the executable, both gated on
+//! the payload's own `+0x3c`, which is `0` on all 1,298 authored nodes. So the
+//! curve is never actually driven for anything Pulse ships, which is what
+//! explains a cone's own curve value key reading `0` on all 134 of them: it is
+//! dead data, not a second bug. Reading it as the radius would silence every
+//! cone; reading `+0x10` - what `Init` actually writes into the emitter and
+//! what stays there - plays the authored value.
+//!
+//! **A cone inside its radius but outside its angle still holds a voice, at
+//! zero gain.** That is a straight read of the law, not a choice made here:
+//! `oag_audio::spatial::Emitter::place` only refuses past the radius, and the
+//! angle term is a multiplier that can reach zero without the emitter ever
+//! becoming "out of range" - the same distinction
+//! `docs/.../positional-audio.md` draws for the radius-only case. So
+//! [`Ambience::tick`] opens and holds a silent voice for a cone the listener
+//! never enters the angle of, which is real cost against the 32-voice pool
+//! and not yet measured against it the way the omnidirectional census was.
 
 use std::collections::BTreeMap;
 
@@ -75,17 +97,17 @@ pub struct Authored {
     pub sound: Option<Loaded>,
 }
 
-/// A circuit's authored emitters, split by what this port can honestly play.
+/// A circuit's authored emitters, split by shape rather than by what plays.
 #[derive(Debug, Default, Clone)]
 pub struct TrackEmitters {
     /// The omnidirectional `sound` `0x3e1` nodes, in authored order.
     pub omni: Vec<Authored>,
-    /// How many `soundcone` `0x3e9` nodes the circuit authors.
+    /// The directional `soundcone` `0x3e9` nodes, in authored order.
     ///
-    /// Counted and not played, for the reason this module's own doc comment
-    /// gives. A count rather than a list because nothing downstream may act on
-    /// one; what it is for is the load report.
-    pub cones: usize,
+    /// Split from [`Self::omni`] because [`Ambience::tick`] needs to know
+    /// which law to place each one under, not because either is treated as
+    /// more real than the other - both are played.
+    pub directional: Vec<Authored>,
     /// What parsing did, for the race's own report.
     pub report: Vec<String>,
 }
@@ -112,24 +134,22 @@ impl TrackEmitters {
             };
         };
         let authored = sound_emitters::emitters(blob, &nodes);
-        let cones = authored.iter().filter(|e| e.cone.is_some()).count();
-        let omni: Vec<_> = authored
-            .into_iter()
-            .filter(|e| e.cone.is_none())
-            .map(|emitter| Authored {
-                emitter,
-                sound: None,
-            })
-            .collect();
+        let (directional, omni): (Vec<_>, Vec<_>) =
+            authored.into_iter().partition(|e| e.cone.is_some());
+        let wrap = |emitter| Authored {
+            emitter,
+            sound: None,
+        };
+        let omni: Vec<_> = omni.into_iter().map(wrap).collect();
+        let directional: Vec<_> = directional.into_iter().map(wrap).collect();
         report.push(format!(
-            "track audio: {track} authors {} omnidirectional emitter(s) and {cones} cone(s); \
-             the cones are not played, because which of a cone's two authored angles reaches \
-             the emitter's half-angle is unread",
+            "track audio: {track} authors {} omnidirectional emitter(s) and {} cone(s)",
             omni.len(),
+            directional.len(),
         ));
         Self {
             omni,
-            cones,
+            directional,
             report,
         }
     }
@@ -218,7 +238,10 @@ impl TrackEmitters {
         // `track-sound-emitters.md` calls a dangling reference.
         let mut cache: BTreeMap<(String, String), Result<Loaded, String>> = BTreeMap::new();
         let mut unplayed: BTreeMap<(String, String), (usize, String)> = BTreeMap::new();
-        for node in &mut parsed.omni {
+        // Both lists, together: a cone names a bank and a cue exactly the way
+        // a plain `sound` does, and the resolution and its failure modes are
+        // the same code either way.
+        for node in parsed.omni.iter_mut().chain(&mut parsed.directional) {
             let key = (node.emitter.bank.clone(), node.emitter.cue.clone());
             let loaded = cache
                 .entry(key.clone())
@@ -243,10 +266,15 @@ impl TrackEmitters {
             }
         }
 
-        let playing = parsed.omni.iter().filter(|n| n.sound.is_some()).count();
+        let total = parsed.omni.len() + parsed.directional.len();
+        let playing = parsed
+            .omni
+            .iter()
+            .chain(&parsed.directional)
+            .filter(|n| n.sound.is_some())
+            .count();
         parsed.report.push(format!(
-            "track audio: {playing} of {} emitter(s) resolved to a cue",
-            parsed.omni.len()
+            "track audio: {playing} of {total} emitter(s) resolved to a cue"
         ));
         // Reported per reference rather than as a total, so a decode that broke
         // a *different* reference could not hide behind breaking as many as it
@@ -262,7 +290,8 @@ impl TrackEmitters {
         parsed
     }
 
-    /// How many emitters the listener is inside the radius of, this tick.
+    /// How many emitters the listener is inside the radius (and cone, where
+    /// there is one) of, this tick.
     ///
     /// The budget question, answered off the recovered law rather than
     /// estimated: `SoundEmitter_ServiceRequests` refuses to touch a request
@@ -270,32 +299,50 @@ impl TrackEmitters {
     /// cues that want a voice. See
     /// `docs/ghidra/functions/psp-pulse-usa/positional-audio.md`.
     #[must_use]
-    pub fn in_range(&self, listener: &oag_audio::Listener, frame: f32) -> usize {
-        self.placed(listener, frame).count()
+    pub fn in_range(&self, listener: &oag_audio::Listener) -> usize {
+        self.placed(listener).count()
     }
 
-    /// Every in-range emitter, as its index and where it is heard from.
-    ///
-    /// `frame` is the emitter's age in curve ticks - the circuit's own tick
-    /// count since load, because `VexSound_Update` (`0x08925c4c`) resamples the
-    /// radius curve into the emitter every frame rather than reading the `f32`
-    /// beside it. Pulse authors one key on all 1,298 nodes so the two agree
-    /// today; `sample_radius` is still the honest call and the `f32` the
-    /// shortcut.
+    /// Every emitter, [`Self::omni`] then [`Self::directional`], in that
+    /// concatenated order - the order [`Ambience`] indexes its voices by.
+    fn all(&self) -> impl Iterator<Item = &Authored> {
+        self.omni.iter().chain(&self.directional)
+    }
+
+    /// Every in-range emitter, as its index into [`Self::all`] and where it is
+    /// heard from.
     pub fn placed<'a>(
         &'a self,
         listener: &'a oag_audio::Listener,
-        frame: f32,
     ) -> impl Iterator<Item = (usize, oag_audio::Placed)> + 'a {
-        self.omni.iter().enumerate().filter_map(move |(at, node)| {
-            let emitter = oag_audio::Emitter {
-                position: node.emitter.position(),
-                radius: node.emitter.sample_radius(frame),
-            };
+        self.all().enumerate().filter_map(move |(at, node)| {
             // The volume `Sound_Play` is handed at every recovered call site,
             // and `VexSound_Init`'s is no exception - it passes `1.0f`.
-            Some((at, emitter.place(listener, 1.0)?))
+            Some((at, placed_emitter(&node.emitter).place(listener, 1.0)?))
         })
+    }
+}
+
+/// Builds the `oag_audio::Emitter` a node's own decode already specifies.
+///
+/// **The radius is [`SoundEmitter::radius`], not
+/// [`SoundEmitter::sample_radius`]** - see this module's own header for why:
+/// `VexSound_Update`'s curve resample has two static call sites, both gated on
+/// a payload byte that is `0` on every one of the 1,298 authored nodes, so the
+/// curve is never actually driven for anything Pulse ships and `+0x10` is the
+/// one radius that plays. Using the curve here would be silently wrong for a
+/// `soundcone` in particular: its own value key is `0` on all 134 of them.
+fn placed_emitter(node: &SoundEmitter) -> oag_audio::Emitter {
+    oag_audio::Emitter {
+        position: node.position(),
+        radius: node.radius,
+        cone: node.cone.map(|cone| oag_audio::Cone {
+            // Row `1` of the emitter's own world matrix, raw - see
+            // `oag_audio::spatial`'s own header for why this is not
+            // renormalised.
+            axis: [node.to_world[4], node.to_world[5], node.to_world[6]],
+            half_angle: cone.wide(),
+        }),
     }
 }
 
@@ -328,8 +375,8 @@ fn circuit_bank_entry(archives: &mut Archives, track: &str) -> Option<String> {
 /// of them once, at load. See this module's own header.
 #[derive(Debug, Default)]
 pub struct Ambience {
-    /// Index-parallel to [`TrackEmitters::omni`]; [`None`] where the emitter is
-    /// out of range and so has no voice at all.
+    /// Index-parallel to [`TrackEmitters::all`], `omni` then `directional`;
+    /// [`None`] where the emitter is out of range and so has no voice at all.
     voices: Vec<Option<oag_audio::VoiceId>>,
 }
 
@@ -373,16 +420,12 @@ impl Ambience {
         mixer: &mut oag_audio::Mixer,
         emitters: &TrackEmitters,
         listener: &oag_audio::Listener,
-        frame: f32,
         rng: &mut oag_core::Rng,
     ) {
-        self.voices.resize(emitters.omni.len(), None);
-        for (node, held) in emitters.omni.iter().zip(&mut self.voices) {
-            let placed = oag_audio::Emitter {
-                position: node.emitter.position(),
-                radius: node.emitter.sample_radius(frame),
-            }
-            .place(listener, 1.0);
+        self.voices
+            .resize(emitters.omni.len() + emitters.directional.len(), None);
+        for (node, held) in emitters.all().zip(&mut self.voices) {
+            let placed = placed_emitter(&node.emitter).place(listener, 1.0);
             match (placed, *held) {
                 // In range with a voice open: this is the per-frame
                 // `SoundInstance_UpdateSpatial`, minus the doppler term. An

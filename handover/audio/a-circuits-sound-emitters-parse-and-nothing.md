@@ -34,9 +34,33 @@ taste, and are the reason it is worth doing properly rather than quickly:**
    and the `f32` is the shortcut, and the difference will matter the moment
    another title in the lineage animates one.
 
-**2026-09-08: Next Steps 1 and 3 both closed this pass; Step 2 (`soundcone`'s
-init) stays out of scope, unattempted - it needs the Ghidra bridge, which is
-`quake`'s.**
+**2026-09-09: `soundcone`'s init is found and the 134 cones are wired and
+audible; Pure's `woSound` class ID is found too, without needing the Ghidra
+bridge.** Full evidence on
+[track-sound-emitters.md](../../docs/ghidra/functions/psp-pulse-usa/track-sound-emitters.md#vexsoundcone_init-2026-09-09-which-angle-reaches-0x40-is-read)
+and
+[pure-status.md](../../docs/formats/pure-status.md#a-circuits-own-ambience-wosound-is-class-0x393-found-without-ghidra) -
+**not requoted here**, per this thread's own rule. Short version:
+`VexSoundCone_Init` (`0x08925ff4`, EU `0x08925ad0`, confidence 90) is a
+four-line wrapper around `VexSound_Init` that writes the node's `+0x00` angle
+to the emitter's `+0x40` half-angle - settling which of the two authored
+angles is the one `oag_audio::spatial` now attenuates by, no guess between
+them. Tracing that also found *why* `+0x42` reads `0` on every cone
+(confidence 85): `VexSound_Update`, the only function that ever resamples the
+radius curve, has exactly two static call sites in the executable and both are
+gated on the payload's own `+0x3c`, which is `0` on all 1,298 authored nodes -
+so the curve never actually runs, for a `sound` or a `soundcone`, and `+0x10`
+is the one radius any node ever plays. `oag_game::audio::sfx::track` now
+places both `TrackEmitters::omni` and `TrackEmitters::directional` (the new
+name for what used to be a bare `cones: usize` count) through
+`oag_audio::spatial::Emitter::cone`, sourcing the radius from `+0x10` rather
+than the (provably dead) curve. Pure's own `woSound` class turned out not to
+need Ghidra at all: `oag_formats::vex::Node` already carries the class ID and
+scene name together, and a `woSoundN` name belongs to a `Transform` parent
+whose one child, `woSoundNShape`, is class `0x393` on all 129 nodes sampled
+across three circuits - and none of them shows a cone-split signature,
+corroborating the prior pass's name-based negative on the payload's own
+bytes.
 
 **Step 1: Pure and the PS2 both author these nodes.** Full method and evidence
 on
@@ -113,7 +137,25 @@ changed in `crates/audio` or `crates/game/src/audio` this pass.
 Captures: `/home/topaxi/oag-scratch/race_ambience_8craft.wav` (whole mix),
 `/home/topaxi/oag-scratch/race_sfx_only_8craft.wav` (music muted).
 
-**Gate**: no `.rs` file changed. `just check-docs` passes.
+**Gate, 2026-09-08 pass**: no `.rs` file changed. `just check-docs` passes.
+
+**Gate, 2026-09-09 pass**: `.rs` files changed in `crates/formats/src/sound_emitters.rs`,
+`crates/audio/src/spatial.rs` (+`lib.rs`), `crates/game/src/audio/sfx.rs` and
+`crates/game/src/audio/sfx/track.rs`, plus their tests. Ran `just fmt`,
+`just lint` (one `clippy::neg_cmp_op_on_partial_ord` fix), `just test`
+(3368 passed, 0 failed), `just check-docs`, `just check-deps`,
+`just check-determinism`, `just check-size`, `just check-names`,
+`just check-strings` - all green - and
+`OAG_REQUIRE_GAME_DATA=1 just test-data`, watched to completion:
+**4071 tests run: 4071 passed (26 slow), 0 skipped**, exit code 0, including
+`race_ground_truth::a_lone_craft_gets_round_the_circuits_it_is_known_to_get_round`
+(106.259 s) and every `sound_emitter_ground_truth`/`track_audio_ground_truth`
+test. `the_densest_circuit_on_the_disc_fits_in_the_pool_too` (`14_Track`, the
+circuit with 9 of the 12 circuits' cones) now reports "97 omnidirectional
+emitter(s) and 9 cone(s)" and "92 of 106 emitter(s) resolved to a cue" -
+106, not 97, is the give-away that cones are in the resolve pass now. A
+60 s, 8-craft headless render of `14_Track` (`/home/topaxi/oag-scratch/soundcone-14track.wav`)
+plays without a crash or a silent buffer (99.98% non-zero samples).
 
 ## Open
 
@@ -127,22 +169,36 @@ Captures: `/home/topaxi/oag-scratch/race_ambience_8craft.wav` (whole mix),
   `1.0` `VexSound_Init` passes and `Mixer::starved` stays at zero, so this is
   the sum's headroom rather than a voice budget. Nothing here invents a gain to
   hide it.
-- **Which cone angle is which.** Unchanged: `soundcone`'s own init has not been
-  found, so which of the two authored angles reaches the emitter's `+0x40`
-  half-angle is unread, and `+0x42` reading `0` on all 134 cones is
-  unexplained. **A cone stays unwired until that is read**, and 134 nodes are
-  waiting on it - 32 of them on `07_Track` reversed alone.
+- ~~**Which cone angle is which.**~~ **Resolved 2026-09-09**, see the top-of-file
+  entry and `track-sound-emitters.md`'s own `VexSoundCone_Init` section.
+- **A cone inside its radius but outside its angle still holds a silent
+  voice.** New from this pass, not previously possible to observe: the angle
+  term is a multiplier that can reach zero without the emitter's own
+  radius-only "out of range" latch ever tripping, so `Ambience::tick` opens
+  and holds a voice for it anyway - real cost against the 32-voice pool, only
+  measured for `01_Track` (no cones) and `14_Track` (peak still 8, so not yet
+  a problem there) so far. See `crates/game/src/audio/sfx/track.rs`'s own
+  header for the reasoning; not fixed here because nothing read says the
+  original does anything different for this case, and no invented gate should
+  fill that gap.
 - ~~**Whether Pure and the PS2 author the same node.**~~ **Resolved
   2026-09-08: both do.** See the top-of-file entry and
   [track-sound-emitters.md](../../docs/ghidra/functions/psp-pulse-usa/track-sound-emitters.md#census).
   Kept here, struck rather than deleted, so the "unknown either way" framing
-  is not read as still current. **What is genuinely still open**: Pure's own
+  is not read as still current. ~~**What is genuinely still open**: Pure's own
   class ID for its `woSound` nodes, and whether it splits into a cone/speaker
-  equivalent - both need the Ghidra bridge.
+  equivalent - both need the Ghidra bridge.~~ **Resolved 2026-09-09, and it
+  turned out not to need the Ghidra bridge** - see the top-of-file entry and
+  `pure-status.md`'s own section. Pure's own field layout past the class ID
+  (the bank string sits at a different payload offset than Pulse's) is
+  unread and is genuinely new open ground, not a repeat of this bullet.
 - **`emitter+0x3c`.** Unchanged: written from payload `+0x0c` by `VexSound_Init`
   and absent from `positional-audio.md`'s three-way-pinned emitter table, so
   nothing observed reads it back. It is `25.0` on every cone and equal to the
   radius on every `sound`.
+- **`emitter+0x44`.** New, 2026-09-09, same standing as `+0x3c` immediately
+  above: `VexSoundCone_Init` writes the node's `+0x04` angle (`40` degrees on
+  every cone) here, and nothing found so far reads it back.
 
 **2026-09-08: opcode `0x14` is decoded - a bare no-op, corroborated on
 `ps3-hdfury-eu` at the same slot (`Scream_OpNop14`/`Scream_DoGrainNop14`,
@@ -165,23 +221,27 @@ table read.
 ## Next Steps
 
 1. ~~**Sweep `pure-psp-usa` and `pulse-ps2-eu` for the three classes.**~~ Done
-   2026-09-08 - see the top-of-file entry. The follow-on it named (finding
-   Pure's circuit banks) turned out to be trivial; what remains is Pure's own
-   class ID for `woSound`, which needs the Ghidra bridge.
-2. **Find `soundcone`'s init**, which is the only thing standing between 134
-   authored directional emitters and being played. Everything else they need is
-   in place: the payload decodes, the emitter record has the half-angle at
-   `+0x40` and the enable byte at `+0x4c`, and `SoundEmitter_ComputeVolumeAndAngle`
-   already multiplies the cone falloff in. Needs the Ghidra bridge; out of
-   scope for a pass without it.
+   2026-09-08 - see the top-of-file entry.
+2. ~~**Find `soundcone`'s init**~~ Done 2026-09-09 - `VexSoundCone_Init`,
+   134 cones wired and audible. See the top-of-file entry.
 3. ~~**Decide whether the mix wants headroom.**~~ Decided 2026-09-08, chosen
    rather than measured: no invented limiter, for now - see the top-of-file
    entry for the fresh clip-rate numbers and what would revisit this.
-4. **Find Pure's own `woSound` class ID** (new, 2026-09-08, split out of the
-   old Next Step 1 now that the node-level question is answered). Same
-   table-index technique `pure-status.md` used for the collision classes, or
-   Pure's own registration function if it is immediate-coded the way Pulse's
-   three are - either way needs the Ghidra bridge. Whether Pure distinguishes
-   a `soundcone`/`speaker` equivalent at all is the sharper form of the
-   question: no `woSoundCone` or `woSpeaker` node name turned up in the three
-   circuits checked, so that may be a Pulse-only split.
+4. ~~**Find Pure's own `woSound` class ID**~~ Done 2026-09-09, and without the
+   Ghidra bridge the earlier framing of this step expected to need - `0x393`.
+   See the top-of-file entry.
+5. **Whether a cone's off-angle-but-in-radius voice is worth budgeting for**
+   (new, 2026-09-09). `Ambience::tick` opens one anyway - see the "Open"
+   bullet above - and neither circuit measured here (`01_Track`, no cones;
+   `14_Track`, 9 of them, still peaking at 8 in-range) has shown it mattering
+   yet. The other ten circuits, and especially `07_Track` reversed (32 cones,
+   the densest cone count on the disc) are unmeasured.
+6. **Derive Pure's own payload field layout for `woSound`** (new, 2026-09-09,
+   split out of the old Next Step 4 now that the class ID is answered). The
+   bank string sits at `+0x08` here, not Pulse's `+0x14`, so nothing about the
+   rest of the 80-byte shape - the radius, the curve, the cone-enable
+   equivalent if one exists - was re-derived; this pass read only enough to
+   confirm the class and the no-cone-split negative. Needs the Ghidra bridge
+   if Pure's own `VexSound_Init`-equivalent is to be read directly, or more
+   `just view --payload` sampling if a byte-offset invariant (equal fields,
+   fixed constants) can pin it the way this page's own Pulse table did.

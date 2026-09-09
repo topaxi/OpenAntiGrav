@@ -1113,6 +1113,51 @@ Verified end to end: `pure-psp-eu.chd` under `--race --autopilot --ticks 600
 --dump-audio` reports all six cues loading and writes ten seconds of audio
 peaking at 0.83 with three silent ticks at the head.
 
+### A circuit's own ambience: `woSound` is class `0x393`, found without Ghidra
+
+`docs/ghidra/functions/psp-pulse-usa/track-sound-emitters.md`'s own Pure
+section (2026-09-08) found the *nodes* by name alone - a text scan of a raw
+extracted `track.vex` turned up `woSound1`..`woSoundN`, each carrying a
+bank/cue pair - but left the class ID unfound, expecting the table-index
+technique above to be needed.
+
+**It was not.** `oag_formats::vex::Node` already carries the class ID *and*
+the scene name for every node; `just view '<pure image>:.../Data.wad' --nodes
+'<track.vex>'` prints both with no Ghidra bridge at all. That is enough: a
+`woSoundN` name is not itself the sound class - it names a `Transform`
+(Pure's renumbered `0x6d`) that parents one child named `woSoundNShape`, and
+**every one of those children is class `0x393`**, an 80-byte payload whose
+bytes read the same shape `track-sound-emitters.md` documents for Pulse's
+`sound` - a bank label and a `~`-prefixed cue name as ASCII text, a `u16`
+count and two relocatable curve-array offsets past them. Confirmed by content,
+not just position: `VINETTA`, `GENTRAK`, `~TRACKLIGHT`, `~CROWD`, `~TRAIN` all
+read straight out of the payload bytes, the same names the bank census above
+already established.
+
+129 `0x393` nodes were read across the three circuits this pass checked - 48
+on `01_Vineta_K`, 28 on `10_Sebenco_Climb`, 53 on `04_Chenghou_Project` - and
+**the first two `f32`s of every one of the 129 are bit-equal**, the same
+no-cone-split signature `track-sound-emitters.md`'s text scan already read
+off the node names (no `woSoundCone`/`woSpeaker` name anywhere). So this
+corroborates that finding on a different axis - the payload's own bytes,
+not what the scene graph calls the node - rather than merely repeating it.
+**Whether Pure distinguishes a cone at all stays a real "no" now, not just an
+absent name.**
+
+The circuit counts here are roughly half the thread's own 48/56/106 text-scan
+figures on the latter two circuits (Vineta K matches exactly). Read as: that
+scan most likely matched both a parent's `woSoundN` name and its child's
+`woSoundNShape` name as two separate hits on some circuits and not others,
+depending on how its pattern anchored - **48 is confirmed exactly by both
+methods**, so this is a discrepancy in the older count, not in this one,
+which is counting actual class-`0x393` nodes rather than name-string matches.
+Not chased further, since the node count was never this pass's own question.
+
+Pure's own field layout is a different shape from Pulse's (the bank string
+starts at payload `+0x08` here, not `+0x14`, so nothing beyond the class ID
+and the no-cone-split negative was read) and a full derivation is future
+work - what this settles is only what the thread's Next Step asked for.
+
 ## Reported elsewhere
 
 The `WO Track` result belongs on [track data](track.md) and was handed over

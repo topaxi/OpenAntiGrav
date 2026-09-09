@@ -221,11 +221,83 @@ fn a_zero_radius_emitter_is_refused_rather_than_dividing_by_zero() {
     let silent = Emitter {
         position: [0.0; 3],
         radius: 0.0,
+        cone: None,
     };
     assert!(silent.place(&ears(), 1.0).is_none());
     let nonsense = Emitter {
         position: [0.0; 3],
         radius: f32::NAN,
+        cone: None,
     };
     assert!(nonsense.place(&ears(), 1.0).is_none());
+}
+
+#[test]
+fn dead_ahead_of_the_cone_is_unattenuated_by_it() {
+    // The axis points at `+Z`; a source on `+Z` from the emitter is on-axis,
+    // so the cone term is `1 - 0/half_angle == 1` and changes nothing.
+    let cone = Emitter {
+        position: [0.0, 0.0, 10.0],
+        radius: 200.0,
+        cone: Some(Cone {
+            axis: [0.0, 0.0, 1.0],
+            half_angle: std::f32::consts::FRAC_PI_4,
+        }),
+    };
+    let omni = Emitter {
+        position: [0.0, 0.0, 10.0],
+        radius: 200.0,
+        cone: None,
+    };
+    assert_eq!(
+        cone.place(&ears(), 1.0).unwrap().gain,
+        omni.place(&ears(), 1.0).unwrap().gain,
+        "on-axis, a cone should match the same emitter with none"
+    );
+}
+
+#[test]
+fn outside_the_cones_half_angle_it_is_silent() {
+    // The axis points at `+Z`; the listener sits on `+X`, 90 degrees off-axis,
+    // well past a 45-degree half-angle. `1 - angle/half_angle` goes negative
+    // and the clamp inside `volume_curve` is what turns that into zero.
+    let cone = Emitter {
+        position: [10.0, 0.0, 0.0],
+        radius: 200.0,
+        cone: Some(Cone {
+            axis: [0.0, 0.0, 1.0],
+            half_angle: std::f32::consts::FRAC_PI_4,
+        }),
+    };
+    assert_eq!(cone.place(&ears(), 1.0).unwrap().gain, 0.0);
+}
+
+#[test]
+fn a_wider_cone_is_still_audible_where_a_narrower_one_is_not() {
+    // The axis points at `+Z`; the listener sits 30 degrees off it, so a
+    // 10-degree half-angle cone misses and an 80-degree one does not.
+    let angle = 30.0_f32.to_radians();
+    let listener = Listener {
+        position: [-angle.sin() * 20.0, 0.0, -angle.cos() * 20.0],
+        right: [1.0, 0.0, 0.0],
+    };
+    let axis = [0.0, 0.0, 1.0];
+    let narrow = Emitter {
+        position: [0.0; 3],
+        radius: 200.0,
+        cone: Some(Cone {
+            axis,
+            half_angle: 10.0_f32.to_radians(),
+        }),
+    };
+    let wide = Emitter {
+        position: [0.0; 3],
+        radius: 200.0,
+        cone: Some(Cone {
+            axis,
+            half_angle: 80.0_f32.to_radians(),
+        }),
+    };
+    assert_eq!(narrow.place(&listener, 1.0).unwrap().gain, 0.0);
+    assert!(wide.place(&listener, 1.0).unwrap().gain > 0.0);
 }

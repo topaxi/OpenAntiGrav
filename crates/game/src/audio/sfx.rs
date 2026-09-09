@@ -137,14 +137,6 @@ pub(super) struct SfxVoices {
     /// The circuit's own ambience: one held voice per authored emitter that is
     /// currently in range. See [`TrackEmitters`].
     ambience: track::Ambience,
-    /// Ticks since the race's voices were built, which is the age every
-    /// authored emitter's radius curve is sampled at.
-    ///
-    /// Its own counter rather than the world's tick: `stop_race_sfx` drops the
-    /// whole `SfxVoices` at every race launch, so this restarts with the
-    /// emitters it drives, and nothing audio does may read simulation state it
-    /// could then be tempted to write.
-    ambience_ticks: u32,
     rng: Rng,
 }
 
@@ -177,6 +169,7 @@ impl Audio {
             && race.announcer().is_empty()
             && race.class_announcer().is_empty()
             && race.track_emitters().omni.is_empty()
+            && race.track_emitters().directional.is_empty()
         {
             return;
         }
@@ -190,7 +183,6 @@ impl Audio {
                 blowup: None,
                 blowup_open: false,
                 ambience: track::Ambience::default(),
-                ambience_ticks: 0,
                 rng: Rng::new(SFX_SEED),
             }
         });
@@ -407,12 +399,9 @@ impl Audio {
             // choice and is written down as one. Measured on the two circuits
             // `track_audio_ground_truth` flies, the peak is eight against
             // `oag_audio::mixer::MAX_VOICES`, so it has not yet mattered.
-            #[expect(clippy::cast_precision_loss, reason = "a tick count")]
-            let frame = voices.ambience_ticks as f32;
             voices
                 .ambience
-                .tick(mixer, emitters, &listener, frame, &mut voices.rng);
-            voices.ambience_ticks = voices.ambience_ticks.saturating_add(1);
+                .tick(mixer, emitters, &listener, &mut voices.rng);
         });
     }
 
@@ -452,7 +441,6 @@ impl Audio {
                 }
                 voices.blowup_open = false;
                 voices.ambience.stop(mixer);
-                voices.ambience_ticks = 0;
             });
         }
         self.sfx = None;

@@ -44,5 +44,5 @@ pub mod wav;
 
 pub use mixer::{Bus, Mixer, Play, Sound, VoiceId};
 pub use output::{MIN_BUFFER, Output, Tap, TapSpec};
-pub use spatial::{Emitter, Listener, Placed};
+pub use spatial::{Cone, Emitter, Listener, Placed};
 pub use spectrum::{BANDS, Spectrum};

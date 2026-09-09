@@ -47,24 +47,44 @@
 //! position - music, a movie, an announcer line - is left alone rather than
 //! being quietly pulled down 3 dB by a law that was never applied to it.
 //!
-//! # The cone is recovered and deliberately absent
+//! # The cone, wired
 //!
 //! The emitter record carries a cone: a half-angle at `+0x40` defaulting to
 //! `pi/2`, the angle to the listener at `+0x48`, an enable byte at `+0x4c`, and
-//! the attenuation multiplies by `1 - angle / half_angle` when it is set.
+//! the attenuation multiplies by `1 - angle / half_angle` when it is set,
+//! **before** the `1.25` near-field boost - so a source outside its cone is
+//! not merely dimmed, the multiply can and does go negative and the final
+//! `volume_curve` clamp (below) is what turns that into silence, exactly the
+//! way `SoundManager_VolumeCurve`'s own `[0,1]` clamp does for the original.
 //!
-//! **`soundcone` `0x3e9` is the class that carries the flag, and it is read
-//! now** - 134 nodes
+//! **`soundcone` `0x3e9` is the class that carries the flag** - 134 nodes
 //! across eight circuits, each carrying two angles that are whole degrees and a
 //! `u8` at `+0x08` that is `1` on every cone and `0` on all 1,164 plain
 //! `sound` nodes. `speaker` `0x3cc` has a registered class and **no instance
 //! anywhere on the Pulse disc**, so it is not a suspect for anything.
 //! `docs/ghidra/functions/psp-pulse-usa/track-sound-emitters.md` has the
-//! layout. What is still missing is which authored angle feeds the emitter's
-//! `+0x40`, and nothing has been shown to write `+0x4c` either: `VexSound_Init`
-//! writes the emitter's `+0x38`, `+0x3c` and `+0x50` and not its enable byte,
-//! and `soundcone`'s own init has not been found. So the cone stays unwired
-//! here rather than being turned on against a guess.
+//! layout.
+//!
+//! **Which authored angle feeds `+0x40` is now read.** `VexSoundCone_Init`
+//! (`0x08925ff4`, see the evidence page's own section) is a four-line wrapper
+//! around `VexSound_Init`: it calls it unchanged and then writes the node's
+//! own `+0x00` (the varying angle, `40` to `120` degrees) to the emitter's
+//! `+0x40` half-angle and `+0x08` (the enable byte) to `+0x4c`. So
+//! [`oag_formats::sound_emitters::Cone::angle_a`] - already `Cone::wide()`,
+//! since it is never smaller than `angle_b` on any of the 134 authored cones -
+//! is the half-angle this module now uses, not a guess between the two.
+//!
+//! `angle_b` (`+0x04`, `40` degrees on every cone) writes to the emitter's
+//! `+0x44` - a field this project has not seen anything read back, the same
+//! standing as the already-documented `+0x3c` - so it is decoded and named,
+//! not used here.
+//!
+//! The cone's own axis is the emitter's world matrix, raw and unnormalised,
+//! exactly as `SoundEmitter_Update` (`0x08939720`) reads it: `node[0x10..0x1c]`,
+//! row `1` of the same 64-byte matrix [`oag_formats::sound_emitters::SoundEmitter::to_world`]
+//! already carries. Nothing here renormalises it - the original does not,
+//! either, and `positional-audio.md`'s own law clamps the resulting dot
+//! product into `-1..=1` rather than trusting the row's length.
 
 /// Where the ears are.
 ///
@@ -106,6 +126,28 @@ pub struct Emitter {
     pub position: [f32; 3],
     /// How far away it can still be heard. Past this it is silent, not quiet.
     pub radius: f32,
+    /// The directional cone, where the node authors one.
+    ///
+    /// `None` for every craft, engine flare and omnidirectional `sound` node -
+    /// `SoundEmitter_Init`'s own default is cone-disabled, and nothing but a
+    /// `soundcone` node ever sets the enable byte. See this module's own
+    /// header for the law and where the two angles come from.
+    pub cone: Option<Cone>,
+}
+
+/// A `soundcone` node's directional falloff.
+///
+/// See this module's own header for the law and the evidence.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Cone {
+    /// The cone's axis, as the emitter's own world matrix carries it - row `1`
+    /// of [`oag_formats::sound_emitters::SoundEmitter::to_world`], raw and
+    /// unnormalised. The dot product this feeds is clamped, not the vector.
+    pub axis: [f32; 3],
+    /// Half-angle, radians. `VexSoundCone_Init` writes the node's own `+0x00`
+    /// angle here - the wider of the two authored, `Cone::wide()` in
+    /// [`oag_formats::sound_emitters::Cone`].
+    pub half_angle: f32,
 }
 
 impl Emitter {
@@ -129,6 +171,7 @@ impl Emitter {
         Self {
             position,
             radius: Self::CRAFT_RADIUS,
+            cone: None,
         }
     }
 
@@ -138,6 +181,7 @@ impl Emitter {
         Self {
             position,
             radius: Self::ENGINE_RADIUS,
+            cone: None,
         }
     }
 
@@ -163,8 +207,14 @@ impl Emitter {
         if self.radius.is_nan() || self.radius <= 0.0 || distance > self.radius {
             return None;
         }
-        // `(radius - d) / radius`, then the 1.25 that flattens the near fifth.
-        let atten = ((self.radius - distance) / self.radius * NEAR_FIELD_BOOST).min(1.0);
+        // `(radius - d) / radius`, the cone term where there is one, and only
+        // then the 1.25 that flattens the near fifth - in that order, matching
+        // `SoundEmitter_ComputeVolumeAndAngle`'s own sequence.
+        let mut atten = (self.radius - distance) / self.radius;
+        if let Some(cone) = self.cone {
+            atten *= cone_factor(to_source, distance, cone);
+        }
+        let atten = (atten * NEAR_FIELD_BOOST).min(1.0);
         Some(Placed {
             gain: volume_curve(atten * volume),
             pan: pan_of(to_source, listener.right),
@@ -256,6 +306,33 @@ fn pan_of(to_source: [f32; 3], right: [f32; 3]) -> f32 {
 
 fn dot(a: [f32; 3], b: [f32; 3]) -> f32 {
     a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
+}
+
+/// `1 - angle / half_angle`, unclamped - the caller's own `min(1.0)` and
+/// [`volume_curve`]'s `[0,1]` clamp are what turn a source outside the cone
+/// into silence, the same way the original's own arithmetic does.
+///
+/// `to_source` is `emitter - listener`, the opposite sign of
+/// `SoundEmitter_Update`'s own `e[0x10]` (`listener - emitter`); the law reads
+/// `dot(normalize(e[0x10]), -axis)`, and the two negations cancel, so this
+/// takes `dot(normalize(to_source), axis)` directly.
+fn cone_factor(to_source: [f32; 3], distance: f32, cone: Cone) -> f32 {
+    if cone.half_angle.is_nan() || cone.half_angle <= 0.0 {
+        // Not authored on this disc - every one of the 134 cones is `40` to
+        // `120` degrees - but a zero or negative half-angle would otherwise
+        // divide into `NaN`/`inf` rather than a value a mixer can clamp.
+        return 1.0;
+    }
+    let angle = if distance <= 0.0 {
+        // On top of the emitter there is no direction to measure the cone
+        // from - dead centre of every cone there is.
+        0.0
+    } else {
+        let inv = 1.0 / distance;
+        let direction = [to_source[0] * inv, to_source[1] * inv, to_source[2] * inv];
+        oag_core::math::acos(dot(direction, cone.axis).clamp(-1.0, 1.0))
+    };
+    1.0 - angle / cone.half_angle
 }
 
 /// `Scream_PanVolumePair`'s four terms, and the extra gain they contribute on

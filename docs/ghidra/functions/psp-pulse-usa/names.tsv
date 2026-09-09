@@ -779,3 +779,5 @@
 0x088d68d8	function	CellSelection_PopulateDetail	85	race-campaign.md
 0x08ab062c	data	g_mode_name_table	92	race-campaign.md
 0x08ab067c	data	g_class_name_table	92	race-campaign.md
+0x08925ff4	function	VexSoundCone_Init	90	track-sound-emitters.md
+0x08925bec	function	VexSound_Tick	85	track-sound-emitters.md
