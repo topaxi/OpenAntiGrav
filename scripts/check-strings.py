@@ -41,8 +41,10 @@ binary:
    a marked one is not. See `assets/ui/strings/english.toml`'s own doc
    comment for why the second is honest and the first is not, and never
    machine-translate to clear a row here - that is worse than the gap it
-   would hide. No second language file exists yet, so this rule is written
-   for the one that lands next rather than proven against one today.
+   would hide. `assets/ui/strings/french.toml` is the first language file to
+   exercise this rule for real: a real translation for the ids the
+   maintainer could translate with confidence, and the rest named under its
+   own `[untranslated]`.
 
 `STRING_CONSUMERS` is deliberately a short, hand-maintained list rather than
 a scan of every `.rs` file in the tree: this project's own env vars
