@@ -72,6 +72,7 @@
 
 mod blast;
 pub mod cannon;
+mod geometry;
 pub mod leach_beam;
 pub mod mine;
 pub mod missile;
@@ -80,12 +81,14 @@ pub mod quake;
 mod rocket;
 pub mod shuriken;
 
+pub use geometry::hull_radius;
+use geometry::nearest_hit;
+
 pub use blast::{BlastStats, blast};
 pub use mine::TriggerRadii;
 pub use rocket::{ROCKET_SHOTS, launch};
 
 use oag_core::math::{Quat, Vec3};
-use oag_physics::params::Dimensions;
 use oag_physics::{Ray, Raycaster};
 use oag_tables::weapons::Weapon;
 
@@ -822,57 +825,6 @@ impl Projectiles {
     }
 }
 
-/// The nearest of the geometry hit and the hull hits along one tick's step.
-fn nearest_hit<R: Raycaster + ?Sized>(
-    from: Vec3,
-    to: Vec3,
-    distance: f32,
-    raycaster: &R,
-    ships: &[crate::world::Ship],
-    owner: u8,
-) -> Option<(Vec3, Option<u8>, Vec3)> {
-    let direction = (to - from) / distance;
-
-    // `include_reset` is false: a `Reset Collision` volume is a respawn trigger
-    // rather than a surface, and a rocket detonating on one would blow up in
-    // mid-air over the run-off.
-    //
-    // **Only a face-on hit stops it.** A projectile riding the track clips the
-    // floor constantly - that is what riding it means - and detonating on those
-    // is exactly the bug this model exists to fix: before it, three rockets
-    // died in the tick they were fired. A grazing hit is the floor and is
-    // ignored here, having already been handled by the surface probe; a hit the
-    // projectile runs *into* is a wall and stops it. See [`WALL_FACING`].
-    let mut best = Raycaster::raycast(raycaster, Ray::new(from, direction, distance), None, false)
-        .filter(|hit| -hit.normal.dot(direction) > WALL_FACING)
-        .map(|hit| (hit.distance, hit.point, None, hit.normal));
-
-    for (slot, ship) in ships.iter().enumerate() {
-        if !ship.active || slot as u8 == owner {
-            continue;
-        }
-        let radius = hull_radius(&ship.handling.dimensions);
-        let Some(t) = segment_sphere(from, to, ship.physics.body.position, radius) else {
-            continue;
-        };
-        let travelled = t * distance;
-        if best.is_none_or(|(nearest, _, _, _)| travelled < nearest) {
-            // A hull hit carries the incoming direction reversed where a geometry
-            // hit carries a surface normal. Nothing reads it - a hull hit always
-            // detonates, never bounces - and it is here so the tuple has one
-            // shape rather than an `Option` nobody unwraps.
-            best = Some((
-                travelled,
-                from + direction * travelled,
-                Some(slot as u8),
-                -direction,
-            ));
-        }
-    }
-
-    best.map(|(_, point, struck, normal)| (point, struck, normal))
-}
-
 /// Flies the world's projectiles and detonates whatever stopped, in one call.
 ///
 /// The seam a race loop wants: `oag-gameplay` owns both halves - the array and
@@ -934,76 +886,6 @@ pub fn step<R: Raycaster + ?Sized>(
     );
 
     impacts
-}
-
-/// The sphere a craft is tested against.
-///
-/// **Ours.** `<Misc>` authors a `length`, a `width` and a `height` and the
-/// physics builds a box from them (`oag_physics::wall::hull_extent`), but
-/// nothing has been read about what a *projectile* is tested against.
-///
-/// Half the largest dimension is the sphere that **circumscribes** the box's
-/// longest axis, and it is worth being exact about which way that errs. A hull
-/// of `length 4, width 2, height 1` has half-extents `(2.0, 1.0, 0.5)` and a
-/// radius of `2.0`, so the sphere matches the box nose-to-tail and **bulges
-/// past it on the other two axes**: a rocket passing 1.8 units to the side hits,
-/// where the box would have missed. So this is the *generous* reading, not the
-/// conservative one - it favours the shooter, and a near miss can register as a
-/// hit.
-///
-/// That is a defensible placeholder rather than the right answer: the smallest
-/// half-extent (`0.5` here) would be conservative and would make most visually
-/// solid hits miss, which reads as a broken weapon. Sizing to the hull's length
-/// keeps a craft-sized target. Whoever recovers what the original tests should
-/// replace the whole function rather than tune this number.
-///
-/// Reusing the box would mean a segment-vs-oriented-box test for a mechanic
-/// where nothing is known about the original's own shape, which is precision
-/// with no evidence under it.
-#[must_use]
-pub fn hull_radius(dimensions: &Dimensions) -> f32 {
-    0.5 * dimensions
-        .length
-        .max(dimensions.width)
-        .max(dimensions.height)
-}
-
-/// Where a segment first enters a sphere, as a fraction of the segment.
-///
-/// `None` when it misses, or when both roots lie outside `0..=1`. A segment that
-/// *starts* inside returns `0.0`, which is the answer a launch that overlaps a
-/// hull needs.
-fn segment_sphere(p0: Vec3, p1: Vec3, centre: Vec3, radius: f32) -> Option<f32> {
-    let d = p1 - p0;
-    let m = p0 - centre;
-    let a = d.dot(d);
-    if a <= 0.0 {
-        return None;
-    }
-    let b = m.dot(d);
-    let c = m.dot(m) - radius * radius;
-
-    // Already inside. Not folded into the quadratic below: with `c <= 0` the
-    // near root is negative and would be rejected, which would let a projectile
-    // spawned inside a hull fly out through it.
-    if c <= 0.0 {
-        return Some(0.0);
-    }
-    // Heading away, and outside.
-    if b >= 0.0 {
-        return None;
-    }
-
-    let discriminant = b * b - a * c;
-    if discriminant < 0.0 {
-        return None;
-    }
-    let t = (-b - discriminant.sqrt()) / a;
-    if (0.0..=1.0).contains(&t) {
-        Some(t)
-    } else {
-        None
-    }
 }
 
 /// How many km/h one world unit per second is, for the authored weapon speeds.
