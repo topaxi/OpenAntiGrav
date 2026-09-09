@@ -24,6 +24,7 @@ fn a_drawn_page_has_a_title_a_row_each_and_one_highlight() {
         &measure,
         None,
         &Frame::default(),
+        false,
     )
     .flatten();
 

@@ -81,6 +81,66 @@ impl Frame {
         self.clear.is_none() && self.marks.is_empty()
     }
 
+    /// This frame's own clear/marks layer, with anything covering the whole
+    /// screen left out when `race_behind` - a parked race's own picture, or
+    /// [`super::MenuStage`]'s pause overlay over it.
+    ///
+    /// **Reachable on Pulse, not hypothetical.** `FE_SCREEN`'s own images
+    /// open with one that is `[0, 0, space.size.0, space.size.1]` - a plain
+    /// `<Image>`, not a `<ScreenClear>` - ahead of the top bar and the two
+    /// footer strips `content_bottom` already reads; `Session::escape`'s own
+    /// pause overlay draws its translucent fill *before* this layer in
+    /// [`super::draw_list`]'s own paint order, so an unfiltered call here
+    /// draws this mark straight over both the overlay and the parked race
+    /// underneath it - confirmed live, not read off the source alone: a real
+    /// `Escape` from a running race, instrumented end to end, showed every
+    /// value upstream of this call was correct and the presented picture was
+    /// still the plain undimmed menu until this filter existed. See
+    /// `docs/architecture/menus.md`'s "backing into the menus..." paragraph.
+    ///
+    /// `video` is the movie quad, already built - this type does not know how
+    /// to play one - and it stays *between* the clear and the marks, exactly
+    /// where it always sat: `draw_list` used to build this same three-part
+    /// order inline, and the order is what makes Pulse's own top bar and
+    /// footers paint over the movie rather than under it.
+    ///
+    /// `clear` and [`oag_title::MenuSkin::background`] (`skin_background`,
+    /// passed in rather than read here - this type does not hold a `Skin`)
+    /// are always full-screen by construction, so they drop outright rather
+    /// than by a rect comparison; a mark is judged by its own rect against
+    /// `space` (the same parameter [`Self::content_bottom`] already takes,
+    /// for the same reason: this type holds no `Space` of its own), since a
+    /// title's frame can carry both full-screen chrome and small structural
+    /// marks (Pulse's own top bar and footers) that must stay.
+    #[must_use]
+    pub(super) fn backdrops(
+        &self,
+        space: Space,
+        skin_background: Option<Draw>,
+        video: Option<Draw>,
+        race_behind: bool,
+    ) -> Vec<Draw> {
+        let full_screen = [0.0, 0.0, space.size.0, space.size.1];
+        let mut out: Vec<Draw> = self
+            .clear
+            .clone()
+            .or(skin_background)
+            .filter(|_| !race_behind)
+            .into_iter()
+            .collect();
+        out.extend(video);
+        out.extend(
+            self.marks
+                .iter()
+                .filter(|mark| {
+                    !race_behind
+                        || !matches!(mark, Draw::Sprite { rect, .. } if *rect == full_screen)
+                })
+                .cloned(),
+        );
+        out
+    }
+
     /// Where this frame's own chrome begins, measured up from the bottom of
     /// `space`: the smallest `y` among the marks sitting in the screen's
     /// lower half.

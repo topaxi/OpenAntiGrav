@@ -1220,17 +1220,17 @@ pub fn draw_list(
     measure: &dyn Fn(&str) -> f32,
     backdrop: Option<Backdrop>,
     frame: &Frame,
+    // A parked race showing through instead of this frame's own
+    // clear/background/marks - see `Frame::backdrops`. Needed alongside
+    // `backdrop: None`, which an ordinary no-movie title reaches too.
+    race_behind: bool,
 ) -> Layers {
     let page = menu.page();
     let (title_x, title_y, title_scale) = skin.title_at();
 
-    // The frame's clear or, absent one, `skin.background()` - see
-    // [`oag_title::MenuSkin::background`] - then the movie, then the frame's
-    // marks. No title carries both a frame and a movie, so the interleaving
-    // is arranged and not observed.
-    let clear = frame.clear.clone().or(skin.background());
-    let mut backdrops: Vec<Draw> = clear.into_iter().collect();
-    backdrops.extend(backdrop.map(|backdrop| Draw::Video {
+    // Frame::backdrops's own clear/video/marks order - see its doc for why a
+    // race behind the menus drops anything covering the whole screen.
+    let video = backdrop.map(|backdrop| Draw::Video {
         rect: backdrop.rect,
         frame: backdrop.frame,
         position: backdrop.position,
@@ -1238,8 +1238,8 @@ pub fn draw_list(
         // the same playhead: the menus are where the disc's own
         // `FE Screen` was going anyway.
         source: crate::frontend::Video::Backdrop,
-    }));
-    backdrops.extend(frame.marks.iter().cloned());
+    });
+    let backdrops = frame.backdrops(skin.space(), skin.background(), video, race_behind);
 
     let mut layers = Layers {
         backdrop: backdrops,

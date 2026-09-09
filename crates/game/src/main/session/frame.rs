@@ -364,6 +364,11 @@ impl Session {
                         &|text| font::measure(&stage.text_atlas, text),
                         None,
                         &stage.frame,
+                        // The same fact `Session::draw`'s own call reads off
+                        // `suspended_race` - a page change mid-pause has to
+                        // drop this snapshot's own full-screen chrome too, or
+                        // the outgoing half of the tween flashes it back on.
+                        self.suspended_race.is_some(),
                     );
                     // Off the raw `Input`, ahead of `Menu::update` - see
                     // `Session::maybe_begin_binding`'s own doc comment for why

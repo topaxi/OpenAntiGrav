@@ -84,18 +84,104 @@ label column nor running off the value column's own right edge.
 `cargo nextest run -p oag-game` (1064 tests) and the full `just` gate both
 pass; nothing here is a game-data test, so `just test-data` was not run.
 
+## The pause overlay did not actually show, and now does (2026-09-09)
+
+**Found and fixed in one pass, on a live run - not read off the source.**
+Every prior "landed"/"verified" note above this section was checked against
+either an isolated render primitive
+(`render::tests::a_translucent_fill_blends_over_whatever_load_kept`) or the
+unrelated CONTROLS-page binding prompt; nothing had ever driven a real
+`Escape` from a real running race and looked at the frame. No headless
+capture path can reach that state: `--race` (`main.rs`'s `cli.race` branch)
+always takes the headless `run_race` leg regardless of `--screenshot`, and
+`--menu-page` builds a `menu::Menu` from scratch with no `Session` and no
+parked race behind it. So this pass drove it live instead - Xvfb, real
+keyboard input, a real physical `Escape` key - and the picture on screen was
+the ordinary undimmed root menu, not the parked race.
+
+**In-process instrumentation (three sites, `session/draw.rs` and
+`menu_stage.rs`) proved the state machine itself was already entirely
+correct**: `suspended_race` genuinely `Some`, `frozen_race` genuinely `true`
+on every frame, the `PAUSE_OVERLAY` `Draw::Fill` genuinely in the draw list
+at a non-degenerate full-space rect, no `Draw::Video`, `LoadOp::Load`
+genuinely used. And the presented picture was still pixel-indistinguishable
+from the ordinary, un-parked menu.
+
+**The actual cause: a full-screen mark drawn unconditionally, on top of the
+overlay.** Dumping every `Draw` in the list found `Draw::Sprite
+rect=[0.0, 0.0, 480.0, 272.0]` sitting right after the overlay `Fill`, in
+both the frozen and the ordinary case - and it traced to `frame.marks[0]`,
+one of Pulse's own `FE_SCREEN` images, read at boot because
+`crates/pulse/src/lib.rs`'s `menu_frame: Some(FE_SCREEN)` **is** set.
+`docs/architecture/menus.md`'s "Both PSP titles' frames are unread" (still
+true when the "the page is drawn inside the disc's own frame" paragraph was
+written) is now stale - flagged there, not edited, since that file is
+`docs/architecture/`, not this thread's `docs/frontend/` lane. `draw_list`
+drew every one of `frame.marks` regardless of `frozen_race`, so this one
+full-screen image painted straight over both the overlay and the parked
+race underneath it, every frame - the same shape as the `<ScreenClear>` /
+`MenuSkin::background` gap already named below, except reachable on Pulse
+itself through an ordinary `<Image>` widget, not a `<ScreenClear>`.
+
+**The fix: `Frame::backdrops`** (`crates/game/src/menu/frame.rs`) assembles
+the clear/video/marks layer `draw_list` used to build inline, and drops
+`clear`/`MenuSkin::background` outright and any mark whose rect covers the
+whole screen when `race_behind` - while keeping small structural marks
+(Pulse's own top bar and its two footer strips) exactly as before. This
+closes the `<ScreenClear>`/`MenuSkin::background` line below too, in the
+same fix - the two are the same problem at two different widget types.
+`draw_list` takes the new `race_behind: bool`; its three real call sites
+(`MenuStage::render`, the page-change snapshot in `session/frame.rs`,
+`--menu-page`'s capture path) and eleven test call sites pass it through.
+Landed as `bb7ef573`.
+
+Two GPU-free tests in `menu/tests/frame.rs` assert the drop/keep split
+directly against fixture `Frame`s. Live-reproduced both before and after
+under Xvfb with the recipe below: before, the plain undimmed menu; after,
+the dimmed track and HUD clearly visible behind the rows. Full `just` gate
+green, including `race_ground_truth::a_lone_craft_gets_round_the_circuits_
+it_is_known_to_get_round` re-run under `OAG_REQUIRE_GAME_DATA=1` (this fix
+touches no physics or AI).
+
+**Repro recipe**, since none of this project's own test/capture
+infrastructure reaches this state - useful for verifying the fix on real
+hardware, since this pass only had Xvfb/llvmpipe software rendering to check
+it against:
+
+```sh
+Xvfb :99 -screen 0 1440x816x24 &
+unset WAYLAND_DISPLAY   # winit prefers Wayland when both are set; this
+                        # aims the window at Xvfb's X11 instead - see the
+                        # "Independently verified on a live capture,
+                        # 2026-08-19" paragraph above.
+DISPLAY=:99 cargo run -p oag-game --features native-video -- \
+    data/images/pulse-psp-eu.chd &
+# No window manager runs on Xvfb, so X input focus never lands on the
+# window on its own - one explicit XSetInputFocus (raw Xlib, python-xlib
+# is enough) before any xdotool key reaches it. Then, all through
+# `DISPLAY=:99 xdotool key --window <id> ...`:
+#   space              # skip the intro
+#   Return             # accept the default language
+#   space              # START at the title screen, opens this build's menus
+#   Return             # RACE row
+#   Down x6, Return     # down to the RACE page's START row, launch it
+#   (wait for the loading screen to clear and the race to be visibly running)
+#   Escape             # the real physical key, not a mapped abstract button -
+#                      # Session::escape's "in a race, it hands the window
+#                      # back to the menus" landing
+DISPLAY=:99 import -window root shot.png
+```
+
 ## Open
 
-- The pause overlay does not suppress a title's own `<ScreenClear>` /
-  `MenuSkin::background` fill, so a title that authors one would show an
-  opaque menu background over the parked race rather than a dimmed picture
-  of it
+- The `<ScreenClear>`/`MenuSkin::background` case the fix above also closes
+  is now verified fixed only for the `<Image>`-mark shape Pulse actually
+  authors. No title this build plays authors a `<ScreenClear>` or a
+  `MenuSkin::background` to exercise that half live - `Frame::backdrops`'s
+  own unit test covers it directly instead (`backdrops_drops_the_clear_
+  behind_a_race_too`), which is why it is listed as covered rather than
+  reproduced on a real title.
 
 ## Next Steps
 
-None currently open. The `<ScreenClear>`/`MenuSkin::background` gap above has
-no actionable next step of its own yet: it cannot fire on either title this
-build plays today - reproducing it needs a live run against a title whose
-`MenuSkin` carries a `background` or whose frame authors a `<ScreenClear>`,
-which neither Pulse nor Pure does. Revisit if a third title's own menus are
-wired up and turn out to author either.
+None currently open.

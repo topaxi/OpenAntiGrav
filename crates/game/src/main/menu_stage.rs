@@ -383,6 +383,7 @@ impl MenuStage {
             // movie playing underneath it.
             if frozen_race { None } else { shown },
             &self.frame,
+            frozen_race,
         );
         let (list, clip) = match &self.change {
             // The page being left grows and fades out; the one arriving grows
