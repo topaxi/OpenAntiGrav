@@ -2257,6 +2257,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "oag-ui"
+version = "0.1.0"
+dependencies = [
+ "oag-assets",
+ "oag-display",
+ "oag-gameplay",
+ "oag-hd",
+ "oag-pulse",
+ "oag-pure",
+ "oag-race",
+ "oag-render",
+ "oag-tables",
+ "oag-testdata",
+ "oag-texture",
+ "oag-title",
+ "oag-vex",
+ "serde",
+]
+
+[[package]]
 name = "oag-vex"
 version = "0.1.0"
 dependencies = [

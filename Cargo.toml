@@ -25,6 +25,7 @@ members = [
   "crates/title",
   "crates/tools",
   "crates/trace",
+  "crates/ui",
   "crates/video",
   "crates/vex",
   "crates/view",
@@ -60,6 +61,7 @@ oag-tables = { path = "crates/tables" }
 oag-texture = { path = "crates/texture" }
 oag-title = { path = "crates/title" }
 oag-trace = { path = "crates/trace" }
+oag-ui = { path = "crates/ui" }
 oag-vex = { path = "crates/vex" }
 oag-video = { path = "crates/video" }
 
@@ -221,4 +223,9 @@ opt-level = 2
 # The RCSMODEL geometry walk: vertex declarations decoded per stream, and
 # the material fragment programs beside them.
 [profile.dev.package.oag-rcs]
+opt-level = 2
+
+# The front end: `menu_layout_ground_truth.rs` and `menu_skin.rs` decode a real
+# sprite sheet and parse a whole title's front-end XML per test.
+[profile.dev.package.oag-ui]
 opt-level = 2

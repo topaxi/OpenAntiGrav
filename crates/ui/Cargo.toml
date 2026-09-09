@@ -1,0 +1,50 @@
+[package]
+name = "oag-ui"
+description = "The front end: boot movies, menus, the HUD's font, and the strings a screen draws"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+# `oag_render`, `wgpu`, `winit` and `oag_input` are all legal here in principle -
+# menus draw, so this crate may one day link a renderer directly - but nothing
+# below draws today; every one of these is read-only vocabulary or a pure
+# state machine. See `NOT_TITLE_PACKAGES` in `scripts/check-dependency-rules.py`
+# for why this crate is classified there rather than as a gameplay crate: the
+# classification is what makes linking a renderer *legal* here without ever
+# becoming legal for anything gameplay depends on.
+[dependencies]
+oag-display.workspace = true
+oag-gameplay.workspace = true
+# Only for the boot sequence's title fallback and its front-end table, the same
+# reason `oag-game` carries it: a Pure disc's intro and menu have to be
+# reachable through the same [`frontend::Frontend`] Pulse uses. See roadmap M8.
+oag-hd.workspace = true
+oag-pulse.workspace = true
+oag-pure.workspace = true
+# `menu::mode_label` falls back to `oag_race::Mode::fallback_label` and offers
+# every mode a race allows - the vocabulary a menu row picks from, not the
+# simulation itself.
+oag-race.workspace = true
+oag-tables.workspace = true
+oag-texture.workspace = true
+oag-title.workspace = true
+# `frontend::draw::Sprite`'s blend field names `oag_vex::vex::BlendClass`: the
+# blend mode a `.vex` material authors, which a menu widget can share without
+# this crate reading a `.vex` file itself.
+oag-vex.workspace = true
+serde.workspace = true
+
+[lints]
+workspace = true
+
+[dev-dependencies]
+# `menu/tests/definition.rs` constructs an `oag_render::mesh_render::Anisotropy`
+# to round-trip a settings row through the menu definition parser - the one
+# real edge this cluster has to a renderer, and it is test-only: `oag-render`
+# never appears in this crate's own `src/`.
+oag-render.workspace = true
+# `tests/menu_layout_ground_truth.rs` reads a real archive off a disc image.
+oag-assets.workspace = true
+oag-testdata.workspace = true
