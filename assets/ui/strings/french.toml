@@ -42,9 +42,10 @@
 #     after `race_keys`/`shell_keys`); translating the suffix alone while its
 #     sentence stays English would read as broken French, not as progress.
 #
-# See `docs/architecture/frontend-boot.md` and
-# `handover/frontend/invented-ui-text-has-no-translation-and-the.md` for how
-# this file reaches the screen.
+# See `docs/architecture/frontend-boot.md` for how this file reaches the
+# screen: `strings::built_in` embeds it, `strings::overlay`/
+# `strings::project_table` merge it, and `boot::load_strings` calls
+# `overlay` after reading the disc's own `entries.xml`.
 
 [strings]
 
