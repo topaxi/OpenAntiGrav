@@ -801,6 +801,26 @@ simulation it took **254 seconds and failed**, panicking on
 rather than the wrong ones. Verified in both directions on the same tree: failed
 twice under load, passed alone at 103 s.
 
+**Reproduced a third time on 2026-09-09, at a much higher load, which sharpens
+the "tracks load" reading into something close to a dose-response.** Four
+members were each running their own `just` and `just test-data` in separate
+worktrees: 16 cores at load average **40**, six concurrent `nextest` processes.
+The same test took **558 s and failed** with the identical `expect("a picture")`
+panic - against 254 s under the 2026-09-08 load and ~100 s quiet - then
+**passed alone at 121 s** on the same tree minutes later. Three points now line
+up monotonically (100 s pass, 254 s fail, 558 s fail), so whatever the mechanism
+is, wall-clock starvation predicts it. The merge under test touched a lap-count
+constant and the audio spatial law; neither goes anywhere near
+`oag_game::movie`.
+
+**The mitigation now exists, so a recurrence means something new.**
+`.claude/skills/oag-drive/SKILL.md` serialises every member's gate through
+`flock "$HOME/.cache/oag/gate.lock"`, precisely so concurrent `test-data` runs
+stop overlapping. This test is the suite's canary for that contention - it is
+the longest test and `.config/nextest.toml` gives it priority 100 so it starts
+first, which is also what makes it the first to starve. If it goes red again
+*with* the lock held, that is a genuinely new signal rather than this trap.
+
 **So a red here is not automatically yours.** Before chasing it, re-run it on its
 own:
 
