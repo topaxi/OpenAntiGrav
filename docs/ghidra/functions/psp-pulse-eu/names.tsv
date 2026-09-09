@@ -485,3 +485,5 @@
 # established. The other fourteen named that pass had no exact-hash match on
 # this binary; see race-box-screens.md's own history note.
 0x0888e0c4	function	Definition_IsUnlocked	67	../psp-pulse-usa/race-box-screens.md
+0x08925ad0	function	VexSoundCone_Init	90	../psp-pulse-usa/track-sound-emitters.md
+0x089256c8	function	VexSound_Tick	85	../psp-pulse-usa/track-sound-emitters.md

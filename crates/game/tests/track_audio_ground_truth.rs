@@ -85,16 +85,15 @@ fn lap(image: &Path, track: &str) -> Option<(race::Race, TrackEmitters)> {
 /// `assert!` is a number nobody reads, and this one is the input to a design
 /// decision - `oag_audio::mixer::MAX_VOICES` is 32.
 fn measure(name: &str, race: &mut race::Race, emitters: &TrackEmitters) -> usize {
-    let mut histogram = vec![0usize; emitters.omni.len() + 1];
-    let mut ever = vec![false; emitters.omni.len()];
+    let total_emitters = emitters.omni.len() + emitters.directional.len();
+    let mut histogram = vec![0usize; total_emitters + 1];
+    let mut ever = vec![false; total_emitters];
     let mut ticks = 0usize;
     while ticks < TICK_CAP && race.world.race.laps_completed() < 1 {
         race.tick(&oag_gameplay::InputSnapshot::default());
         let listener = listener_of(race);
-        #[expect(clippy::cast_precision_loss, reason = "a tick count, well under 2^24")]
-        let frame = ticks as f32;
         let mut live = 0;
-        for (at, _) in emitters.placed(&listener, frame) {
+        for (at, _) in emitters.placed(&listener) {
             ever[at] = true;
             live += 1;
         }
@@ -121,8 +120,7 @@ fn measure(name: &str, race: &mut race::Race, emitters: &TrackEmitters) -> usize
 
     println!(
         "{name}, one lap of {ticks} ticks: {floor}..={peak} emitters in range per tick, \
-         mean {mean:.1}; {heard} of {} were in range at some point",
-        emitters.omni.len()
+         mean {mean:.1}; {heard} of {total_emitters} were in range at some point"
     );
     for (count, ticks_at) in histogram.iter().enumerate() {
         if *ticks_at > 0 {
@@ -150,7 +148,7 @@ fn a_lap_of_vineta_k_says_how_many_emitters_want_a_voice_at_once() {
         86,
         "01_Track authors 86 omnidirectional emitters"
     );
-    assert_eq!(emitters.cones, 0, "01_Track authors no cone");
+    assert_eq!(emitters.directional.len(), 0, "01_Track authors no cone");
 
     let peak = measure("01_Track", &mut race, &emitters);
 
@@ -169,8 +167,8 @@ fn a_lap_of_vineta_k_says_how_many_emitters_want_a_voice_at_once() {
 ///
 /// `01_Track` alone would leave the budget resting on the circuit the thread
 /// happened to name. `14_Track` is the disc's densest, and its nine cones are
-/// the largest set this port deliberately does not play, so the gap between
-/// what is authored and what sounds is at its widest here.
+/// the largest single-circuit set of them, so the budget question is at its
+/// sharpest here now that both classes hold a voice.
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn the_densest_circuit_on_the_disc_fits_in_the_pool_too() {
@@ -184,7 +182,11 @@ fn the_densest_circuit_on_the_disc_fits_in_the_pool_too() {
         println!("{line}");
     }
     assert_eq!(emitters.omni.len(), 97, "14_Track authors 97 of them");
-    assert_eq!(emitters.cones, 9, "and nine cones this port does not play");
+    assert_eq!(
+        emitters.directional.len(),
+        9,
+        "and nine cones this port now plays too"
+    );
 
     let peak = measure("14_Track", &mut race, &emitters);
     assert!(

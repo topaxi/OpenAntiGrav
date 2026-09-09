@@ -278,8 +278,16 @@ fn every_stored_radius_key_matches_the_executables_encoding() {
             emitter.radius_curve.seconds_per_tick
         );
         if emitter.cone.is_some() {
-            // A cone stores no radius key at all, which is the open question the
-            // evidence page ends on. Pinned so that it changing is visible.
+            // A cone stores no radius key at all - explained, not just pinned,
+            // as of `VexSoundCone_Init`'s own decode: the curve mechanism that
+            // would ever read this back (`VexSound_Update`) has exactly two
+            // static call sites in the executable and both are gated on the
+            // payload's own `+0x3c`, which is `0` on every one of the 1,298
+            // authored nodes - so no cone (and no plain `sound` either) is
+            // ever actually resampled, and this field is free to be `0`. See
+            // `docs/ghidra/functions/psp-pulse-usa/track-sound-emitters.md`'s
+            // own section on `VexSoundCone_Init`. Pinned so a title that did
+            // exercise the curve would fail loudly here instead of silently.
             assert_eq!(emitter.radius_curve.values[0], 0, "{name}: {}", emitter.cue);
             continue;
         }
@@ -336,10 +344,13 @@ fn every_authored_cue_but_the_disc_s_own_five_bugs_resolves_in_its_bank() {
 /// The ordering that licenses `Cone::wide` and `Cone::narrow` being derived.
 ///
 /// `+0x04` is `40` degrees on every authored cone and `+0x00` is never below it.
-/// Without this the module's naming is a census nobody re-runs, and a title that
-/// authored the two the other way round would decode swapped in silence - the
-/// evidence page scores "which angle is which" at 75 precisely because the write
-/// site is unread, so the ordering is all there is to hold onto.
+/// **`+0x00` is also the one `VexSoundCone_Init` writes to the emitter's
+/// `+0x40` half-angle** (confidence 90 - the write site is read now, see
+/// `track-sound-emitters.md`), so `Cone::wide()` is not just an ordering this
+/// module derives for its own naming - it is the half-angle the game
+/// attenuates by. This test still pins the ordering itself: without it a
+/// title that authored the two the other way round would decode swapped in
+/// silence.
 #[test]
 #[ignore = "needs a disc image under data/images/"]
 fn every_cone_authors_forty_degrees_at_0x04_and_no_less_at_0x00() {

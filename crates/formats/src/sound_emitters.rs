@@ -183,15 +183,24 @@ impl SoundEmitter {
 
 /// A `soundcone`'s two authored angles, in radians.
 ///
-/// **Which one reaches the emitter's `+0x40` half-angle is not read** -
-/// `soundcone`'s own init has not been found - so the two are kept as the
-/// offsets they came from rather than as an inner/outer pair. What the disc
-/// settles is only an ordering: on all 134 authored cones [`Cone::angle_b`] is
-/// `40` degrees and [`Cone::angle_a`] is one of eight whole-degree values from
-/// `40` to `120`, so [`Cone::wide`] and [`Cone::narrow`] are derived rather than
-/// stored. A title that authored them the other way round would decode
-/// unswapped here and would fail
-/// `sound_emitter_ground_truth`'s ordering check rather than passing silently.
+/// **Which one reaches the emitter's `+0x40` half-angle is read.**
+/// `VexSoundCone_Init` (`0x08925ff4`, confidence 90 - see
+/// `docs/ghidra/functions/psp-pulse-usa/track-sound-emitters.md`'s own
+/// section) is the class's init: a four-line wrapper that calls
+/// `VexSound_Init` unchanged and then copies the node's own `+0x00` to the
+/// emitter's `+0x40` half-angle and `+0x08` to `+0x4c` (the enable byte,
+/// already known). So [`Cone::angle_a`] - `+0x00`, always the wider of the two
+/// on this disc - is the half-angle `oag_audio::spatial` now attenuates by,
+/// read off the decompile rather than inferred from the ordering. The two are
+/// still kept as the offsets they came from: on all 134 authored cones
+/// [`Cone::angle_b`] is `40` degrees and [`Cone::angle_a`] is one of eight
+/// whole-degree values from `40` to `120`, so [`Cone::wide`] and
+/// [`Cone::narrow`] are derived rather than stored, and `wide()` is exactly
+/// `angle_a` on every node this corpus authors.
+///
+/// **`angle_b` (`+0x04`) also writes somewhere - the emitter's `+0x44`** - a
+/// field this project has not seen anything read back, the same standing as
+/// the already-documented `+0x3c`. Decoded and named, not used.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Cone {
     /// Payload `+0x00`, radians.

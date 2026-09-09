@@ -10,15 +10,17 @@ All three are one 80-byte node payload, and it decodes whole. The evidence is
 two-sided throughout: the executable says which offset it reads, and the disc's
 own 1,298 authored nodes say what is in it.
 
-**They are played now.** `oag_game::audio::sfx::TrackEmitters` opens a held
-looping voice for each `sound` `0x3e1` node the moment the listener comes inside
-its radius and stops it when the listener leaves, off the law on
-[`positional-audio.md`](positional-audio.md). A `soundcone` stays unwired for
-the reason [below](#what-a-soundcone-is-and-what-is-still-a-hypothesis-about-it).
-Two numbers came out of doing it, and neither had been measured: **at most eight
-emitters are inside their radius at once** on a real lap of `01_Track` (peak 7)
-or `14_Track` (peak 8), against a 32-voice pool; and 38 nodes name a cue that
-resolves and binds no waveform - see
+**They are played now, both classes.** `oag_game::audio::sfx::TrackEmitters`
+opens a held looping voice for each `sound` `0x3e1` node the moment the
+listener comes inside its radius and stops it when the listener leaves, off
+the law on [`positional-audio.md`](positional-audio.md). A `soundcone` `0x3e9`
+node joined it 2026-09-09, once [`VexSoundCone_Init`](#what-a-soundcone-is)
+settled which authored angle is its half-angle - see that section for the
+find and its own open ends. Two numbers came out of wiring `sound` first, and
+neither had been measured: **at most eight emitters are inside their radius at
+once** on a real lap of `01_Track` (peak 7) or `14_Track` (peak 8), against a
+32-voice pool; and 38 nodes name a cue that resolves and binds no waveform -
+see
 ["A second, larger set"](#a-second-larger-set-resolves-and-still-cannot-be-played-38-nodes-on-eight-circuits).
 
 ## The three classes are registered, and one of them is never authored
@@ -309,7 +311,7 @@ rather than filtering the race one.
 Reproduce with `just view '<image>:PSP_GAME/USRDIR/DATA.WAD' --nodes
 'Data\Environments\01_Track\track.vex' --class 0x3e1 --payload --payload-bytes 0`.
 
-## What a `soundcone` is, and what is still a hypothesis about it
+## What a `soundcone` is
 
 A `soundcone` is a **self-contained directional emitter**, not a modifier
 attached to a `sound`: same 80-byte payload, its own bank, cue and radii, its own
@@ -326,15 +328,111 @@ fields:
 
 Two angles in radians that are whole degrees on every node is not a coincidence,
 and the emitter has a cone half-angle at `+0x40` and a cone-enabled `u8` at
-`+0x4c` that `SoundEmitter_Init` defaults to `pi/2` and `0`. **Which authored
-angle feeds which emitter field is not read**, so `+0x00` and `+0x04` are
-scored 75 and left unnamed beyond "cone angle": the write site is not in
-`VexSound_Init`, and `soundcone`'s own init has not been found.
+`+0x4c` that `SoundEmitter_Init` defaults to `pi/2` and `0`.
 
-`+0x42` reading `0` on every cone is the sharper open question. On a `sound` that
-would be a zero radius, and the update writes the sampled curve into
-`emitter+0x38` every frame - so either a cone's update is a different function,
-or a cone's radius comes from `+0x0c`/`+0x10` by a path this page has not read.
+### `VexSoundCone_Init`, 2026-09-09: which angle reaches `+0x40` is read
+
+**`0x08925ff4`** (`psp-pulse-eu`: `0x08925ad0`, byte-identical decompile).
+Confidence **90**. Found by decompiling `VexSound_Init` in full rather than the
+three-line excerpt this page previously quoted - its own tail (below) calls
+`VexSound_Update` behind a gate this page had already named but not traced -
+and then searching `get_xrefs_to` on `VexSound_Init` itself, which this
+import's usual unrelocated-constants xref-blindness (see
+[`positional-audio.md`](positional-audio.md#read-this-before-trusting-an-address-on-this-page))
+turned out **not** to block here: `VexSound_Init` has exactly one caller, and
+this is it.
+
+```c
+undefined4 VexSoundCone_Init(int instance)
+{
+    int emitter;
+    if (VexSound_Init(instance) != 0) {
+        emitter = *(int *)(instance + 100);           /* instance+0x64 */
+        *(undefined4 *)(emitter + 0x40) = **(undefined4 **)(instance + 0x60);
+        *(undefined4 *)(emitter + 0x44) =  *(undefined4 *)(*(int *)(instance + 0x60) + 4);
+        *(undefined1 *)(emitter + 0x4c) =  *(undefined1 *)(*(int *)(instance + 0x60) + 8);
+    }
+    return 1;
+}
+```
+
+Four lines: call `VexSound_Init` unchanged - which already does everything a
+plain `sound` does, including the radius copy and `Sound_Play` - then patch
+three emitter fields off the same payload pointer (`instance+0x60`) `VexSound_Init`
+itself keeps:
+
+- **`+0x00` (the varying angle) to the emitter's `+0x40` half-angle.** This is
+  the answer: `Cone::wide()` in `oag_formats::sound_emitters`, never smaller
+  than `+0x04` on any of the 134 nodes, is what
+  `SoundEmitter_ComputeVolumeAndAngle`'s `atten *= 1 - e[0x48]/e[0x40]` divides
+  by - not a guess between the two, a decompiled assignment.
+- **`+0x04` (the constant `40` degrees) to the emitter's `+0x44`** - a field
+  nothing in this project's reading of `SoundEmitter_Update` or
+  `SoundEmitter_ComputeVolumeAndAngle` reads back. Same standing as `+0x3c`
+  below: decoded and named, not consumed by anything found so far.
+- **`+0x08` (the enable byte) to the emitter's `+0x4c`**, already known from the
+  disc-wide split; this is the write site for it.
+
+`instance+100` (`0x64`) is the emitter pointer `VexSound_Init` itself stores -
+a field this page had not previously named, alongside the already-known
+`instance+0x60` payload pointer.
+
+**Cross-checked two ways.** Decompiled identically on `psp-pulse-usa` and
+`psp-pulse-eu` (the two functions differ only in their internal call
+addresses, which is expected of two separate compilations), and the address on
+each disc is the sole static reference to the disc's own `VexSound_Init`
+(`search_byte_patterns` for the address as a raw pointer finds it once, inside
+the disc's own class-descriptor table at `0x08ad2040`/EU `0x08acfc78` - the
+table entry sitting in the same slot `sound`'s own table holds `VexSound_Init`
+in, at `0x08ad1fb8`/EU equivalent).
+
+### Why `+0x42` reads `0` on every cone: `VexSound_Update` never runs on this disc
+
+`VexSound_Init` and `VexSoundCone_Init`'s own tail (the lines this page had not
+previously quoted) both end the same way:
+
+```c
+if (payload[0x3c] != 0) {                    /* already documented as "0 on all 1,298" */
+    /* ... computes a loop-end-derived duration into instance+0xb0 ... */
+    VexSound_Update(instance);
+}
+```
+
+and **`VexSound_Tick`** (`0x08925bec`, EU `0x089256c8`, confidence 85 -
+undocumented until now, found from `Vex_UpdateNodeWorldMatrix`'s own
+`get_xrefs_to` list rather than from either `Init` - it is the only caller in
+this address range and the shape matches a per-node tick: advance elapsed
+time, conditionally resample, always re-point the emitter at the node's
+current world matrix) repeats the identical gate before its own call to
+`VexSound_Update`:
+
+```c
+if (payload[0x3c] != 0) {
+    instance[0x40] = wrap_time(instance[0x40] + dt, instance[0xb0]);
+    VexSound_Update(instance);
+}
+Vex_UpdateNodeWorldMatrix(instance);
+```
+
+**`get_xrefs_to` on `VexSound_Update` returns exactly these two call sites on
+both `psp-pulse-usa` and `psp-pulse-eu`, and both are gated on the same
+byte.** `+0x3c` is `0` on all 1,298 authored nodes (already established), so
+**`VexSound_Update`'s curve resample never executes for anything Pulse
+ships** - not for a `sound`, and not for a `soundcone`. That is what settles
+this page's other open question: a cone's `+0x42` (the curve's one value key)
+is free to read `0` because nothing ever samples it. The `+0x10` scalar
+`Init` copies into the emitter's `+0x38` at construction is therefore the one
+radius any authored node ever actually plays, cone or otherwise - not merely
+the "shortcut" this page previously called it beside `sample_radius`.
+
+Confidence **85**: two call sites found on each of two independent
+compilations, both gated the same way, and the gate byte's value is a
+disc-wide, independently-verified fact rather than an assumption. Short of
+100 because this is two call sites read by hand, not an exhaustive
+disassembly-wide search for every possible tail-call or table-dispatched
+entry into `VexSound_Update` - the same caveat this page's own
+`VexSound_Update` row already carried before this pass, now narrowed rather
+than removed.
 
 ## Confidence summary
 
@@ -346,9 +444,12 @@ or a cone's radius comes from `+0x0c`/`+0x10` by a path this page has not read.
 | The radius is a one-key animation curve | 92 | evaluator read end to end |
 | `+0x30`/`+0x34` are relocated offsets, not values | 92 | the fixup is the first thing `Init` does |
 | `+0x0c` reaches the emitter's unmapped `+0x3c` | 92 | one assignment, read directly |
+| `VexSoundCone_Init` and which angle reaches `+0x40` | 90 | full decompile, sole caller of `VexSound_Init`, corroborated on two discs |
 | `soundcone` is a directional emitter, `+0x08` its flag | 80 | disc-wide split, 134 against 1,164, no counterexample |
 | `outpostf~AIR_CON_FAN` never plays | 80 | field width and the bank format agree; the comparison itself is unread |
-| Which cone angle is inner and which outer | 75 | shape only - both are whole degrees, neither write site read |
+| `VexSound_Update` never executes for any authored node | 85 | two call sites on two discs, both gated on the same always-`0` byte; not an exhaustive whole-binary search |
+| `VexSound_Tick` is the per-node per-frame tick | 85 | full decompile, one of `VexSound_Update`'s two call sites, only caller of `Vex_UpdateNodeWorldMatrix` in this address range |
+| Pure's `woSound` is class `0x393` | 88 | payload bytes read the same shape as Pulse's `sound` and name real Pure banks/cues, on 129 nodes across three circuits - no static reading, so capped below a Ghidra-sourced finding |
 | Three words are exporter leakage | 70 | vary between two exports of one scene, no semantic dependence |
 | `speaker` is unused by Pulse | 95 | zero instances in 33 `.vex` files |
 
@@ -362,8 +463,14 @@ or a cone's radius comes from `+0x0c`/`+0x10` by a path this page has not read.
 - **`emitter+0x3c` has no meaning.** It is written from `+0x0c` and
   `positional-audio.md`'s three-way-pinned emitter table does not list it, so
   nothing observed so far reads it back.
-- **`soundcone`'s init and update are not found**, which is what leaves the two
-  angles at 75 and `+0x42` unexplained on cones.
+- ~~**`soundcone`'s init and update are not found**, which is what leaves the two
+  angles at 75 and `+0x42` unexplained on cones.~~ **Answered, 2026-09-09.**
+  `VexSoundCone_Init` is found and read - see its own section above - which
+  settles which angle reaches `+0x40` (confidence 90) and, as a consequence of
+  tracing `VexSound_Update`'s own call sites to answer it, why `+0x42` reads
+  `0` on every cone (confidence 85). `angle_b`'s own destination
+  (emitter `+0x44`) is decoded but nothing has been shown to read it back -
+  the same open standing `emitter+0x3c` already has, immediately below.
 - ~~**The PS2 and Pure equivalents are unchecked.**~~ **Answered, 2026-09-08, for
   both, by different methods.**
 
@@ -405,8 +512,20 @@ or a cone's radius comes from `+0x0c`/`+0x10` by a path this page has not read.
   **So the follow-on this page's Next Steps used to name - "find where Pure's
   circuit banks live, because it ships no `trackstartup.xml`" - turns out not
   to be the hard part.** The banks are trivially named, the same way Pulse's
-  are (`oag-wad sounds`, one per circuit). What is still unfound is Pure's own
-  class ID for `woSound` (and whether a cone/speaker split exists under it at
-  all) - the same table-index or registration-function technique
-  `pure-status.md` used for the collision classes would answer it, and needs
-  the Ghidra bridge this pass did not have.
+  are (`oag-wad sounds`, one per circuit).
+
+  **Pure's class ID for `woSound` is found, 2026-09-09, without the Ghidra
+  bridge.** A `woSoundN` name belongs to a `Transform` (Pure's renumbered
+  `0x6d`), not to the sound node itself - its one child, named
+  `woSoundNShape`, is the payload, and every one sampled is class **`0x393`**.
+  Found by reading `oag_formats::vex::Node`'s own class ID and name off
+  `just view '<pure image>:.../Data.wad' --nodes '<track.vex>'`, not by the
+  table-index technique this page used to name as the way in - the node
+  already carries both facts, so no exporter class-name table was needed.
+  129 nodes across the three circuits, all `0x393`, all still carrying the
+  same two-equal-`f32`s shape noted above - **no cone-split signature on any
+  of them**, corroborating the no-`woSoundCone`-name finding on the payload's
+  own bytes rather than repeating it. See
+  [`pure-status.md`](../../../formats/pure-status.md#a-circuits-own-ambience-wosound-is-class-0x393-found-without-ghidra)
+  for the full count and the field-layout caveat (Pure's bank string sits at
+  a different payload offset than Pulse's, and that was not re-derived here).
