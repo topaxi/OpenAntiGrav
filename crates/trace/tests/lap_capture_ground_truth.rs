@@ -31,7 +31,7 @@
 //! the capture's own coordinates and its own `speed`.
 
 use oag_formats::{track, vex};
-use oag_race::{Course, Mode, RaceState};
+use oag_race::{Course, Mode, RaceState, SpeedClass};
 use oag_trace::Trace;
 
 const IMAGE: &str = "data/images/pulse-psp-usa.chd";
@@ -160,8 +160,11 @@ fn the_capture_stalls_and_reverses_rather_than_completing_a_lap() {
     };
 
     // Speed lap: no lap target, so a capture that did contain laps reports all of
-    // them instead of stopping at three.
-    let mut state = RaceState::new(Mode::SpeedLap);
+    // them instead of stopping at three. The speed class is immaterial here for
+    // exactly that reason - `Mode::SpeedLap.laps_target` is `None` whatever it
+    // is - so Venom is the engine's own default rather than a choice this test
+    // depends on.
+    let mut state = RaceState::new(Mode::SpeedLap, SpeedClass::Venom);
     let mut laps = Vec::new();
     let mut furthest_forward = 0.0f32;
     let mut reversed_past_the_line = false;

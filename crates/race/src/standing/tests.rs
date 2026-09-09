@@ -243,7 +243,7 @@ fn the_standings_clock_agrees_with_the_players() {
     let course = course();
     // Unlimited laps, so neither clock stops at a target and several laps are
     // comparable rather than one.
-    let mut player = crate::RaceState::new(crate::Mode::SpeedLap);
+    let mut player = crate::RaceState::new(crate::Mode::SpeedLap, crate::SpeedClass::Venom);
     let mut standing = Standing::default();
 
     let mut laps = 0u32;

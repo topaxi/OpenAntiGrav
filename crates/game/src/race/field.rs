@@ -444,8 +444,13 @@ impl Race {
     /// Slot order, and slot order only: this feeds the finishing order, which is
     /// simulation state. See `docs/architecture/determinism.md`.
     ///
-    /// **`laps_target` comes from the player's race**, because it is the mode's
-    /// number rather than a craft's - all eight are running the same event.
+    /// **`laps_target` comes from the player's race**, because it is the
+    /// *event's* number rather than a craft's - all eight are running the same
+    /// mode in the same speed class. That reasoning used to say "the mode's
+    /// number", which stopped being exact when the lap count became per speed
+    /// class (`oag_race::Mode::SINGLE_RACE_LAPS_BY_CLASS`); the conclusion is
+    /// unchanged, because a race is run in one class and every craft on the
+    /// grid is in it.
     pub(super) fn update_standings(&mut self) {
         // A free function so the `course` and `world` borrows stay disjoint -
         // cloning a `Course` once a tick to satisfy the borrow checker would be
@@ -618,8 +623,10 @@ impl Race {
 /// Slot order, and slot order only: this feeds the finishing order, which is
 /// simulation state. See `docs/architecture/determinism.md`.
 ///
-/// `laps_target` comes from the player's race because it is the *mode's* number
-/// rather than a craft's - all eight are running the same event.
+/// `laps_target` comes from the player's race because it is the *event's*
+/// number rather than a craft's - all eight are running the same mode in the
+/// same speed class. See [`Field::update_standings`] for why that is still the
+/// right reading now that the lap count varies with the class.
 pub(super) fn advance_standings(world: &mut World, course: &Course) {
     let tick = world.tick;
     let target = world.race.laps_target;

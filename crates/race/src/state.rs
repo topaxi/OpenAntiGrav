@@ -7,7 +7,7 @@
 //!
 //! [ADR-0003]: ../../../docs/architecture/adr/0003-no-ecs.md
 
-use crate::{Course, Mode, zone};
+use crate::{Course, Mode, SpeedClass, zone};
 use oag_core::math::Vec3;
 
 /// Everything the race layer knows, for one ship.
@@ -75,12 +75,24 @@ pub const COUNTDOWN_TICKS: u64 = 272;
 /// `World`, sized to the one consumer that exists rather than to a guess at how
 /// long a race could run. See `docs/formats/hd-hud.md`.
 ///
-/// Both of this crate's current lap targets ([`Mode::TIME_TRIAL_LAPS`],
-/// [`Mode::SINGLE_RACE_LAPS`]) are `3`, so every bounded mode today fits with a
-/// row to spare; a lap beyond the fourth - reachable only in an unbounded mode
-/// like Speed Lap or Zone, or a longer configured race once one exists - simply
-/// stops being recorded, the same way the original's own four rows would have
-/// nowhere left to draw it.
+/// **A Phantom race's fifth lap goes unrecorded, and that is deliberate.**
+/// This paragraph used to say that every bounded mode fit with a row to spare,
+/// because both lap targets were `3`; that stopped being true when
+/// [`Mode::SINGLE_RACE_LAPS_BY_CLASS`] landed the campaign's measured per-class
+/// counts (3 Venom, 4 Flash, 4 Rapier, **5 Phantom**). A Phantom single race
+/// now runs one lap past the last row this array has, and its fifth split is
+/// dropped rather than stored.
+///
+/// **The array is not widened to five, for the reason it is four in the first
+/// place**: four is what the disc authors. Widening it to fit a lap the
+/// original's own layout has nowhere to draw would be inventing a row no
+/// measured title has, and it would change [`RaceState`]'s size - a `World`
+/// size change, and therefore a movement of the committed state hash - to store
+/// a number nothing can display. An honest, documented absence is the better
+/// trade: the fifth lap is still *counted* (it is [`RaceState::lap`] that ends
+/// the race, not this array), only its split time is not kept. The same
+/// dropping already applied to any lap past the fourth in an unbounded mode
+/// like Speed Lap or Zone.
 ///
 /// [ADR-0003]: ../../../docs/architecture/adr/0003-no-ecs.md
 pub const MAX_RECORDED_LAPS: usize = 4;
@@ -189,19 +201,34 @@ pub struct RaceState {
 }
 
 impl Default for RaceState {
+    /// A Venom time trial: the mode the menu opens on, in the class
+    /// `oag_game::race::Options`'s own default names.
+    ///
+    /// Venom rather than "the first variant" because it is the default the
+    /// rest of the engine already picks, and because it is the one rung whose
+    /// lap count is `3` - which is what the pre-per-class build produced for
+    /// every class, and so what keeps a default-path state hash unchanged
+    /// across this method growing a second argument.
     fn default() -> Self {
-        Self::new(Mode::TimeTrial)
+        Self::new(Mode::TimeTrial, SpeedClass::Venom)
     }
 }
 
 impl RaceState {
     /// A race about to start, on lap 1, with the clock at zero.
+    ///
+    /// **`class` is taken rather than defaulted** because
+    /// [`Mode::laps_target`] needs it and a silently-defaulted class is
+    /// exactly the bug this argument exists to fix: three of the four rungs
+    /// raced short for as long as the lap count was a single constant. Taking
+    /// it here makes every construction site a compile error until it answers,
+    /// which is the same reason [`Mode::ALL`] is a fixed-size array.
     #[must_use]
-    pub fn new(mode: Mode) -> Self {
+    pub fn new(mode: Mode, class: SpeedClass) -> Self {
         Self {
             mode,
             lap: 1,
-            laps_target: mode.laps_target(),
+            laps_target: mode.laps_target(class),
             progress: None,
             lap_start_tick: 0,
             best_lap_ticks: None,
@@ -509,12 +536,12 @@ mod tests;
 #[cfg(test)]
 mod elimination_tests {
     use super::RaceState;
-    use crate::Mode;
+    use crate::{Mode, SpeedClass};
 
     /// The edge, which is what a caller hangs a sound or an end screen on.
     #[test]
     fn eliminating_a_craft_ends_the_race_once() {
-        let mut state = RaceState::new(Mode::Zone);
+        let mut state = RaceState::new(Mode::Zone, SpeedClass::Venom);
         assert!(!state.finished);
         assert!(state.eliminate(), "the first call should end the race");
         assert!(state.finished);
@@ -527,7 +554,7 @@ mod elimination_tests {
     /// A race already over for another reason is not ended twice.
     #[test]
     fn a_finished_race_is_not_eliminated_again() {
-        let mut state = RaceState::new(Mode::TimeTrial);
+        let mut state = RaceState::new(Mode::TimeTrial, SpeedClass::Venom);
         state.finished = true;
         assert!(!state.eliminate());
     }
@@ -535,7 +562,7 @@ mod elimination_tests {
     #[test]
     fn eliminator_ends_when_a_craft_reaches_the_given_target() {
         let target = 7; // one of the real, non-flat cell values - see `Mode`.
-        let mut state = RaceState::new(Mode::Eliminator);
+        let mut state = RaceState::new(Mode::Eliminator, SpeedClass::Venom);
         assert!(!state.eliminator_finished(target, target - 1));
         assert!(!state.finished);
         assert!(state.eliminator_finished(target, target));
@@ -551,7 +578,7 @@ mod elimination_tests {
     /// a future caller cannot end the wrong mode by passing a stray number.
     #[test]
     fn a_kill_count_does_not_end_a_different_mode() {
-        let mut state = RaceState::new(Mode::SingleRace);
+        let mut state = RaceState::new(Mode::SingleRace, SpeedClass::Venom);
         assert!(!state.eliminator_finished(10, 10));
         assert!(!state.finished);
     }
