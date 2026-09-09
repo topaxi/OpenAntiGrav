@@ -245,6 +245,20 @@ flag, in which case the byte offsets map to different screen positions. The
 three offsets and the stride are certain; which corner each lands in is
 conditional on that.
 
+**The shipped assets corroborate the linear reading without settling it.**
+2026-09-09, measured off `pulse-psp-usa.chd` by
+`crates/game/examples/pulse_skin_probe.rs`: Assegai's *own* `texture4.tga`,
+the 64x64 slot the composite would replace, is itself a quarter atlas -
+three quadrants of hull panels and a near-black top-right (channel mean 16.7
+against 154.4, 149.0 and 148.9 for the other three). The `Alternative` skin's
+stored block 4 has the same shape (42.6 against 193.5, 187.7 and 182.4). So
+the *authored* data is laid out exactly the way the composite is read here,
+empty corner included, which is what a linear layout with an unwritten
+top-right predicts. It is corroboration and not proof: a swizzle that happened
+to map the unwritten tile onto the same corner would look identical from the
+outside. The caveat stands and the composite is still not reproduced - see
+"What this build does" below.
+
 **What the composite is for is not traced.** The natural reading is a
 distant-ship / LOD sheet - one small texture in place of three large ones - and
 the asset side is consistent with it: `Data\Ships\Assegai\Ship.vex`, the race
@@ -294,16 +308,53 @@ never consults an unlock.
 Both `0x000578b0` (the `0x12` comparison) and the per-slot record array at
 `0x00057c44` fall *inside* `.text` (`0x0` to `0x272a3c`), which is HANDOVER's
 own tell that the relocation base is wrong for them - the same shape as the
-`&DAT_0005abb0` and `&DAT_00057778` that `Vex_LoadModel` shows. They are most
-likely `$gp`-relative; see
-[the `$gp` thread](../../../../HANDOVER.md)'s entry for that addressing mode.
-The structural claim above does not depend on either address.
+`&DAT_0005abb0` and `&DAT_00057778` that `Vex_LoadModel` shows.
+
+**They are not `$gp`-relative, and that earlier hypothesis is retracted**: this
+binary never uses `$gp` as a load/store base. They need the segment-1 base, and
+`scripts/psp-relocate.py resolve <instruction-address>` reads it straight off
+the relocation record rather than deriving it. That is the first thing to try;
+tracing the six non-lobby callers listed under "Callers" below settles the same
+question without either address if the resolve comes back empty. The structural
+claim above does not depend on either address.
+
+## What this build does, and it is chosen rather than measured
+
+**This build has the player name the skin, and paints the player's craft
+alone.** `--skin Alternative` / `--skin Eliminator` on `oag-game`, resolved
+against what the team's own `PI_ModelSkin` declares and applied to grid slot 0
+only. **No confidence score, because nothing was measured to arrive at it** -
+it is a stand-in on the same footing `crates/game/src/livery.rs`'s
+`teams_for_slots` already stands on, and it is labelled so in the load report
+every run prints.
+
+**No unlock is checked either.** What `loyalty` accumulates is untraced -
+per-save or per-team, and what the `Team="any"` tier changes about the check -
+so every declared skin is offered rather than gated on a number nothing can
+interpret yet.
+
+What would replace the choice, in order of cheapness:
+
+1. `scripts/psp-relocate.py resolve <instruction-address>` on the `0x12`
+   comparison, to name the global and then find what writes it.
+2. Tracing the six non-lobby callers of `Skin_ApplyToModel` under "Callers".
+
+Until one of those lands, a mode gate built on `0x12` would be a guess dressed
+as a reproduction, which is exactly what the confidence rubric exists to stop.
+
+**The composite fourth slot is not reproduced**: the *stored* block 4 is
+uploaded instead, which is the applier's own non-zero-flag path and needs no
+answer to the swizzle question above. The shipped block 4 is already a quarter
+atlas (see the measurement under "The fourth slot is composed"), so this is
+disc data on the hull rather than a substitute for it.
 
 ## Callers
 
 `Skin_ApplyToModel` has seven `jal` callers, found by the naive-target scan:
 `0x08825638`, `0x088256b8`, `0x08828398`, `0x0882885c`, `0x08843804`,
-`0x088b3af4` and `0x088eaa84`. Only the last-but-one is in
+`0x088b3af4` and `0x088eaa84`. The six that are **not** the lobby's -
+`0x08825638`, `0x088256b8`, `0x08828398`, `0x0882885c`, `0x08843804` and
+`0x088eaa84` - are the ones a trace should start from. Only the last-but-one is in
 `MPLobby_UpdateShipPreview_q`, so skin application is a general facility and
 not a lobby-only path - which is why the format page, not the lobby, is where
 this belongs. Tracing the other six is what would settle the mode-vs-unlock

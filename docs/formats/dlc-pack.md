@@ -294,14 +294,17 @@ See [ADR-0021](../architecture/adr/0021-region-independent-dlc.md).
 
 - **`downloadNN.xml`**, entry 1 of each main archive: the pack's `PI_Grid`
   championship ladder. Parsed by nothing; progression is a later milestone.
-- **`PI_TeamModel` / `PI_ModelSkin`**, the concept, zone and unlockable
-  liveries. **The XML schema is read and documented above** (2026-09-02), and
-  the `.dat` payload format is decoded too (2026-09-05, see above) - what is
-  left is a parser for it and a drawing path that selects a livery.
-  `catalogue::Team` deliberately still does not collect these fields, for the
-  same reason it never did: nothing consumes them yet, and a public field no
-  caller reads is worse than one that appears when it is needed. See
-  `HANDOVER.md`'s open threads for the in-flight work.
+- **`PI_TeamModel`'s `Unlock` pair.** Every other part of the team-model
+  schema is read now. `PI_TeamModel`'s own Normal/Concept **hull** axis is
+  `oag_title::race::HullVariant`, wired through `--variant`; the
+  `PI_ModelSkin`s under `Normal` are `catalogue::Team::skins` and reach a race
+  through `--skin` (2026-09-09). What is **deliberately** not collected is the
+  `Unlock` pair each carries: **what `loyalty` accumulates is untraced** -
+  per-save or per-team, and what the `Team="any"` tier changes about the check
+  - so a field holding it would be a number no caller could interpret. Every
+  declared skin is offered instead, which is part of what
+  `docs/ghidra/functions/psp-pulse-usa/ship-skin.md` labels **chosen rather
+  than measured** on this axis.
 - **`PARAM.pbp`**, and the `.edat` files' relationship to the PSN download that
   produced them.
 
