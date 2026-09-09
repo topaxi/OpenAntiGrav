@@ -895,7 +895,7 @@ mechanic fires in a real race** - see the full-grid measurement below.
 #### Does it fire on a full grid, not just in isolation?
 
 Everything above isolates one craft. `crates/game/tests/ai_roll_ground_truth.rs`'s
-`a_full_grid_still_rolls_and_a_higher_tier_rolls_no_less` and
+`a_full_grid_of_*_arms_no_fewer_rolls_than_*` pair-and-seed tests and
 `an_ace_pilot_rolls_more_than_a_novice_pilot_in_the_same_race` run `09_Track` -
 the worst-case circuit above - with nothing switched off: seven opponents,
 each drawing its own pilot, weapons and traffic live.

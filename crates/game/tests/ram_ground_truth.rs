@@ -205,8 +205,11 @@ fn watch_the_field() -> Option<Vec<Shift>> {
     Some(all)
 }
 
-/// The gate itself, on real geometry: a craft never throws a shift toward an
-/// edge it is already up against.
+/// Both readings of the ram, over one shared sweep of [`RACES`] seeded races.
+///
+/// # The gate itself, on real geometry
+///
+/// A craft never throws a shift toward an edge it is already up against.
 ///
 /// **This is the one that would have caught the bug it was written for.**
 /// `Driver::ram` used to ask `Frame::room`, which answers how far the *line*
@@ -214,9 +217,34 @@ fn watch_the_field() -> Option<Vec<Shift>> {
 /// shove it took would read the corridor's own width and fire into the wall.
 /// Measured before the fix, on this scenario: a shove fired with 3.13 units of
 /// corridor to its left while the craft was already 11.67 units past that edge.
+///
+/// # And the outcome, as a bound rather than a property
+///
+/// See the module docs for why it cannot be one.
+///
+/// # Why the two readings share one test rather than one helper
+///
+/// They used to be two `#[test]` functions that both called
+/// [`watch_the_field`]. `cargo nextest` runs **every test in its own process**,
+/// so nothing is shared between them and those forty races ran *twice*.
+///
+/// It cost more than the doubled CPU, which is the part worth knowing: on
+/// 2026-09-09 the two reported **226 s and 206 s** for one sweep's worth of
+/// work, because they ran side by side and contended for the same cores. Merged
+/// into one test the same sweep measures **116 s** - so removing the duplicate
+/// halved the CPU *and* halved the wall clock, in a suite whose whole wall clock
+/// was 587 s.
+///
+/// **And the sweep must not be split further**, which is the tempting next move
+/// and the wrong one: the bound below is a *ratio*, and [`RACES`]'s own doc
+/// comment records the 2026-09-08 day spent discovering that a sample of six
+/// races could not carry it. Slicing forty races into blocks would rebuild
+/// exactly the small-denominator flake that was just removed. The clearance
+/// reading alone would slice cleanly - it is a `min` - but there is nothing to
+/// gain by slicing half of a sweep the other half still needs whole.
 #[test]
 #[ignore = "needs a disc image in data/images/"]
-fn a_ram_never_fires_toward_an_edge_the_craft_has_no_room_for() {
+fn a_ram_fires_only_where_there_is_room_and_rarely_throws_the_rammer_out() {
     let Some(shifts) = watch_the_field() else {
         return;
     };
@@ -225,6 +253,7 @@ fn a_ram_never_fires_toward_an_edge_the_craft_has_no_room_for() {
         "no opponent shifted at all in {RACES} races, so this asserts nothing - \
          the gate is either closed or unreachable"
     );
+
     // A tenth of a unit of slack and no more: `room` is read on the tick before
     // the timer armed, and a craft covers about two units downtrack in one.
     let worst = shifts
@@ -236,16 +265,7 @@ fn a_ram_never_fires_toward_an_edge_the_craft_has_no_room_for() {
         "a shift fired with {worst:.2} units of room on the side it went, \
          against a clearance of {CLEARANCE}"
     );
-}
 
-/// And the outcome, as a bound rather than a property - see the module docs for
-/// why it cannot be one.
-#[test]
-#[ignore = "needs a disc image in data/images/"]
-fn a_ram_rarely_throws_the_rammer_out_of_the_corridor() {
-    let Some(shifts) = watch_the_field() else {
-        return;
-    };
     let outside = shifts.iter().filter(|shift| shift.past_edge > 0.0).count();
     println!(
         "{outside} of {} shifts ended outside the corridor",

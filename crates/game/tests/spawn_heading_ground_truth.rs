@@ -184,16 +184,35 @@ fn agreement(source: &Path, track: &str) -> (Vec<f32>, f32) {
 }
 
 /// Claim 1 on HD, and claim 2: every craft faces the right way, and exactly the
-/// nine known files needed help to get there.
-#[test]
-#[ignore = "needs a disc image in data/images/"]
-fn every_hd_craft_spawns_facing_the_way_its_circuit_runs() {
+/// known files needed help to get there - over the circuit files of one
+/// direction.
+///
+/// # Forward and reversed are one test each, asserting what one loop did
+///
+/// The per-craft claim is per circuit, so any partition of [`HD_CIRCUITS`]
+/// asserts the same 28 things. The list claim is `assert_eq!` against
+/// [`HD_STALE_SLOTS`] *in file order*, and both constants are grouped
+/// forward-then-reversed, so filtering each by direction keeps that order and
+/// keeps the assertion exact rather than merely equivalent.
+///
+/// Direction is also the axis the finding itself is about: eight of the nine
+/// stale slots are `track_reversed`, which is the pattern the correction was
+/// derived from, so the two tests read as the two halves of the claim rather
+/// than as an arbitrary chunking.
+///
+/// The reason to split is wall clock. `cargo nextest` parallelises across
+/// tests, one process each, so all 28 circuit files ran on a single core:
+/// **147 s** on 2026-09-09, in a suite whose whole wall clock was 587 s. The
+/// two halves run side by side at the same total CPU.
+fn hd_craft_spawn_facing_their_circuit(file_kind: &str) {
     let Some(image) = image("hdfury-ps3-eu-dec.iso") else {
         return;
     };
 
     let mut stale = Vec::new();
-    for (circuit, file) in HD_CIRCUITS {
+    let mut seen = 0usize;
+    for (circuit, file) in HD_CIRCUITS.iter().filter(|(_, f)| *f == file_kind) {
+        seen += 1;
         let track = format!("/data/environments/{circuit}/{file}.vex");
         let (craft, authored) = agreement(&image, &track);
         assert_eq!(craft.len(), 8, "{circuit}/{file} should field a full grid");
@@ -207,15 +226,41 @@ fn every_hd_craft_spawns_facing_the_way_its_circuit_runs() {
             stale.push((*circuit, *file));
         }
     }
+    // A renamed file kind would otherwise leave this passing over an empty
+    // list, with an empty expectation to match it.
+    assert!(
+        seen > 0,
+        "no circuit in HD_CIRCUITS is a {file_kind} file, so this asserted nothing"
+    );
 
+    let expected: Vec<(&str, &str)> = HD_STALE_SLOTS
+        .iter()
+        .filter(|(_, f)| *f == file_kind)
+        .copied()
+        .collect();
     assert_eq!(
-        stale, HD_STALE_SLOTS,
-        "the disc's own stale slots, in file order"
+        stale, expected,
+        "the disc's own stale {file_kind} slots, in file order"
     );
 }
 
-/// Every other source in hand, swept the same way: 64 more circuit files, one
-/// of which is stale, and it is the one that corroborates the whole correction.
+/// The sixteen forward circuit files - see
+/// [`hd_craft_spawn_facing_their_circuit`].
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn every_forward_hd_craft_spawns_facing_the_way_its_circuit_runs() {
+    hd_craft_spawn_facing_their_circuit("track");
+}
+
+/// The twelve reversed ones, which carry eight of the nine stale slots - see
+/// [`hd_craft_spawn_facing_their_circuit`].
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn every_reversed_hd_craft_spawns_facing_the_way_its_circuit_runs() {
+    hd_craft_spawn_facing_their_circuit("track_reversed");
+}
+
+/// One non-HD source in hand, swept the same way as the HD pair above.
 ///
 /// **Pulse's PS2 pressing carries a misauthored slot the PSP's does not**, and
 /// the pair is what makes this more than a repair. `09_Track`'s slot has a
@@ -232,62 +277,81 @@ fn every_hd_craft_spawns_facing_the_way_its_circuit_runs() {
 ///
 /// Pure and the PSP's own 24 need no correction at all, by between `+0.920` and
 /// `+1.000`, so nothing on either PSP disc moves.
+///
+/// # One test per source
+///
+/// The three sources were one loop over 64 circuit files and measured **106 s**
+/// on 2026-09-09. Each source's claim is entirely its own - its circuit count
+/// and its own stale list - so a test per source asserts exactly what the loop
+/// did, and the PS2's 32 files on a 3.7 GB image no longer hold up the two PSP
+/// discs behind them.
+fn a_source_is_swept_for_stale_slots(name: &str, count: usize, known_stale: &[&str]) {
+    let Some(image) = image(name) else { return };
+
+    let (shell, _, _) = oag_game::boot::load_shell(&oag_game::boot::Options {
+        source: image.display().to_string(),
+        language: None,
+        dlc: Vec::new(),
+        leg: oag_game::frontend::Leg::LogoFmv,
+        movie: None,
+        cache: std::env::temp_dir().join("oag-spawn-heading-ground-truth"),
+        audio_cache: oag_game::boot::default_audio_cache_dir(),
+        extent: oag_game::movie::Extent::Frames(1),
+        // Every assertion here is about a spawn; nothing pays for a transcode.
+        no_video: true,
+        refresh_video: false,
+        prefer_av1_cache: false,
+    })
+    .unwrap_or_else(|e| panic!("{name}: opening the front end: {e:#}"));
+
+    // Swept off the source's own plugin rather than a numbered guess: the PS2
+    // pressing ships eight circuit files the PSP EU disc does not, and a
+    // hardcoded list would have missed them and looked complete.
+    assert_eq!(shell.tracks.len(), count, "{name}'s circuit count");
+
+    let mut stale = Vec::new();
+    for track in &shell.tracks {
+        let entry = track.entry_name();
+        let (craft, authored) = agreement(&image, &entry);
+        for (slot, dot) in craft.iter().enumerate() {
+            assert!(
+                *dot > AGREES,
+                "{name} {entry}: slot {slot} faces {dot:+.3} along its own track"
+            );
+        }
+        if authored <= AGREES {
+            stale.push(entry);
+        }
+    }
+    let stale: Vec<&str> = stale.iter().map(String::as_str).collect();
+    assert_eq!(stale, known_stale, "{name}'s own stale slots");
+}
+
+/// The PSP EU pressing's 24 circuit files, none of them stale - see
+/// [`a_source_is_swept_for_stale_slots`].
 #[test]
 #[ignore = "needs a disc image in data/images/"]
-fn every_other_source_is_swept_and_only_the_ps2_carries_a_stale_slot() {
-    /// `(image, circuit files it ships, the ones whose slot is stale)`.
-    const SOURCES: &[(&str, usize, &[&str])] = &[
-        ("pulse-psp-eu.chd", 24, &[]),
-        ("pure-psp-eu.chd", 8, &[]),
-        (
-            "pulse-ps2-eu.chd",
-            32,
-            &[r"Data\Environments\09_Track\track.vex"],
-        ),
-    ];
+fn the_psp_pulse_pressing_carries_no_stale_slot() {
+    a_source_is_swept_for_stale_slots("pulse-psp-eu.chd", 24, &[]);
+}
 
-    for (name, count, known_stale) in SOURCES {
-        let Some(image) = image(name) else { continue };
+/// Pure's eight, none of them stale - see [`a_source_is_swept_for_stale_slots`].
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn the_pure_pressing_carries_no_stale_slot() {
+    a_source_is_swept_for_stale_slots("pure-psp-eu.chd", 8, &[]);
+}
 
-        let (shell, _, _) = oag_game::boot::load_shell(&oag_game::boot::Options {
-            source: image.display().to_string(),
-            language: None,
-            dlc: Vec::new(),
-            leg: oag_game::frontend::Leg::LogoFmv,
-            movie: None,
-            cache: std::env::temp_dir().join("oag-spawn-heading-ground-truth"),
-            audio_cache: oag_game::boot::default_audio_cache_dir(),
-            extent: oag_game::movie::Extent::Frames(1),
-            // Every assertion here is about a spawn; nothing pays for a
-            // transcode.
-            no_video: true,
-            refresh_video: false,
-            prefer_av1_cache: false,
-        })
-        .unwrap_or_else(|e| panic!("{name}: opening the front end: {e:#}"));
-
-        // Swept off the source's own plugin rather than a numbered guess: the
-        // PS2 pressing ships eight circuit files the PSP EU disc does not, and a
-        // hardcoded list would have missed them and looked complete.
-        assert_eq!(shell.tracks.len(), *count, "{name}'s circuit count");
-
-        let mut stale = Vec::new();
-        for track in &shell.tracks {
-            let entry = track.entry_name();
-            let (craft, authored) = agreement(&image, &entry);
-            for (slot, dot) in craft.iter().enumerate() {
-                assert!(
-                    *dot > AGREES,
-                    "{name} {entry}: slot {slot} faces {dot:+.3} along its own track"
-                );
-            }
-            if authored <= AGREES {
-                stale.push(entry);
-            }
-        }
-        let stale: Vec<&str> = stale.iter().map(String::as_str).collect();
-        assert_eq!(stale, *known_stale, "{name}'s own stale slots");
-    }
+/// The PS2 pressing's 32, one of which is the stale slot that corroborates the
+/// whole correction - see [`a_source_is_swept_for_stale_slots`].
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn only_the_ps2_pressing_carries_a_stale_slot() {
+    a_source_is_swept_for_stale_slots(
+        "pulse-ps2-eu.chd",
+        32,
+        &[r"Data\Environments\09_Track\track.vex"],
+    );
 }
 
 /// The PS2's stale slot and the PSP's maintained one are the same slot, and the

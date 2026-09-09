@@ -76,8 +76,33 @@ test:
 # enough to stop it at 138 of 3,300, which reads as a far worse tree than it is
 # and hides the rest entirely. Six pre-existing reds sat documented as one
 # because of exactly that; see HANDOVER.md's "Read this first".
+#
+# The run is teed to `target/test-data.log` and handed to `check-test-budget`,
+# which is the only place the suite's own cost is measured - see that script for
+# why a per-test ceiling catches what a total cannot.
+#
+# Both exit codes are kept, and a red test wins: the budget report is worth
+# printing either way - a run that failed still measured every test that
+# passed - but "the suite is red" is the more urgent of the two things to say,
+# so it is the one this recipe exits on.
 test-data:
-    cargo nextest run --workspace --run-ignored all --no-fail-fast
+    #!/usr/bin/env bash
+    set -uo pipefail
+    mkdir -p target
+    cargo nextest run --workspace --run-ignored all --no-fail-fast 2>&1 \
+        | tee target/test-data.log
+    tests=${PIPESTATUS[0]}
+    budget=0
+    just check-test-budget || budget=$?
+    [ "$tests" -ne 0 ] && exit "$tests"
+    exit "$budget"
+
+# The ratchet on how long `just test-data` takes, per test and in total.
+#
+# Not in the default `just` gate: that runs `test`, which skips every
+# `#[ignore]`d test, so there would be nothing to measure.
+check-test-budget log="target/test-data.log":
+    python3 scripts/check-test-budget.py {{log}}
 
 # Symlinks the main checkout's data/ subdirectories into this worktree.
 # `data/` is gitignored, so it does not travel into a `git worktree add` and

@@ -28,6 +28,7 @@ just check-size   # ratchet on file length (1k lines) and on inline #[cfg(test)]
 just check-names  # every names.tsv row still matches its evidence page, offline (scripts/check-ghidra-names.py)
 just check-handover # HANDOVER.md stays under 256 KiB, the Read tool's own ceiling (scripts/check-handover-size.py)
 just check-strings # every menu.toml row/title has a string_id and its english.toml text, ratchet over pre-existing debt (scripts/check-strings.py)
+just check-test-budget # no test-data suite over 450s and no single test over 400s, ratchet (scripts/check-test-budget.py)
 just build        # cargo build --workspace
 just docs         # cargo doc --workspace --no-deps --document-private-items
 just audit-leakage # asserts no tracked game content or reproduction (scripts/check-leakage.py)
@@ -36,6 +37,32 @@ just audit-leakage # asserts no tracked game content or reproduction (scripts/ch
 Single test: `cargo nextest run -p oag-core some_test_name` (nextest, not `cargo test`).
 Ground-truth tests (in `crates/*/tests/*ground_truth*.rs`) are `#[ignore]`d because they
 need a real disc image under `data/images/`; they never run in CI, only via `just test-data`.
+
+**`just test-data` tees its run to `target/test-data.log` and then checks it against
+`scripts/check-test-budget.py`, which fails when the suite exceeds 450 s or a single test
+exceeds 400 s.** Both are durations *under load* - a test competing with 4,100 others on
+sixteen cores reports about 2.8x its isolated cost, so 400 s is really "no test over ~140 s
+of its own work".** When it fires, **stop and re-profile the tail before adding more tests** -
+that is what the ceiling is for, and it is not a formality to baseline past:
+
+1. Sort the log: `grep -E '^\s+(PASS|FAIL)\s+\[' target/test-data.log | sed -E 's/^\s+\w+\s+\[\s*([0-9.]+)s\].*\)\s+/\1 /' | sort -rn | head -20`.
+2. Look at what the slowest test *is*. It is almost always a matrix - N circuits by M
+   tiers by K seeds - in nested `for` loops inside one `#[test]`. `cargo nextest` runs
+   every test in its own process and parallelises across **tests**, so that matrix runs on
+   one core while the other fifteen idle.
+3. Make the matrix the test axis rather than the loop body, choosing a split the assertion
+   survives: `max` over a partition is `max` over the whole (`stall_rescue_ground_truth.rs`),
+   an ordered `assert_eq!` filters with its list (`spawn_heading_ground_truth.rs`), and a
+   chained ordering is its own pairwise links (`ai_roll_ground_truth.rs`).
+4. Add a `BASELINE` row **only** when the split would change what is asserted, and say why
+   in the row's comment. `ram_ground_truth.rs` is the worked example of a genuine one: its
+   bound is a *ratio*, and slicing the sample rebuilds the small-denominator flake that
+   `RACES`'s own doc comment records a day being spent on.
+
+The history this exists for: the suite went from 3:17 to 9:47 between 2026-08-17 and
+2026-09-09 with no commit that looked wrong, and one test that landed on 2026-09-06 was
+525 s of a 587 s wall clock on its own. See `docs/architecture/workspace-layout.md` for
+the measurements.
 
 **The full `just` gate is not required for a change that touches only `docs/`, `handover/`,
 `HANDOVER.md`, `.claude/`, or doc comments inside a `.rs` file (no code logic changed).**
