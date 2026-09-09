@@ -127,6 +127,34 @@ build:
 docs:
     cargo doc --workspace --no-deps --document-private-items
 
+# Workspace-internal crate dependency graph (normal deps only - dev-deps like
+# oag-testdata's fan-out into nearly every crate are excluded) as SVG. Built
+# straight from `cargo metadata` and `dot` (graphviz), no cargo-depgraph
+# install needed. A PNG is a one-liner from the SVG if a raster is ever
+# wanted: `dot -Tpng target/deps.dot -o deps.png` (this recipe keeps the
+# intermediate .dot file next to the .svg for that).
+crate-graph out="target/deps.svg":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    out={{out}}
+    mkdir -p "$(dirname "$out")"
+    dotfile="${out%.svg}.dot"
+    {
+        echo 'digraph oag {'
+        echo '  rankdir=LR; node [shape=box, fontname="Helvetica", fontsize=11];'
+        cargo metadata --format-version=1 --no-deps | jq -r '
+          .packages as $pkgs
+          | ($pkgs | map(.name)) as $names
+          | .packages[] | .name as $from | .dependencies[]
+          | select(.kind == null)
+          | select(.name as $d | $names | index($d))
+          | "  \"\($from)\" -> \"\(.name)\";"
+        ' | sort -u
+        echo '}'
+    } > "$dotfile"
+    dot -Tsvg "$dotfile" -o "$out"
+    echo "wrote $out (and $dotfile)"
+
 unpack *ARGS:
     cargo run -q -p oag-tools --bin oag-unpack -- {{ARGS}}
 
