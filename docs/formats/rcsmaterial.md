@@ -1426,7 +1426,28 @@ fragment block on Amphiseum, disassembled with `scripts/ps3-microcode.py`:
 
 So unit 1 is sampled at `(u, (v + a) * b + time)` where `a` and `b` are the
 material's own authored floats and `time` is engine-supplied, and its result
-is **added** to the diffuse, gated by the diffuse alpha. On Talon's Junction's
+is **added** to the diffuse, gated by the diffuse alpha.
+
+**That excerpt is block #2, the *unlit* variant, and it stops at the `MAD` -
+which is what made the layer's position in the shade ambiguous for a year.**
+Read block #3, the lit and fogged one, and the position is not ambiguous at
+all:
+
+```text
+@0x1c  MAD H6.xyz, H1.wwww, {const}, H6   [<- 0x2dba643d]  ; ambient + ndl*sun
+@0x1e  ADD H4.xyz, R2, H6                                  ; + prelit
+@0x22  MUL H4.xyz, H0, H4                                  ; albedo * light
+@0x23  MAD H0.xyz, H0.wwww, H1, H4                         ; + alpha * tinted glow
+```
+
+**The accumulate reads a value the light has already multiplied, so a glow is
+not itself lit.** Block #4 (`MUL` at `0x23`, `MAD` at `0x25`) is the same pair
+in the same order, and block #2's own `MUL H0.xyz, H0, H2` at `0x0b` puts its
+one light term on the same side. Three variants, no exceptions; confidence 95,
+the ordering being read rather than inferred. `mesh.wgsl` adds the layer after
+its own light multiply on both of its paths for this reason - see
+[renderer.md](../ghidra/functions/ps3-hdfury-eu/renderer.md), "The emissive
+glow belongs on the lit path". On Talon's Junction's
 `mt_uvanim_diffuse_emissive2` those floats are `a = 0` and `b = -1`, so the
 emissive layer scrolls one texture unit per second in `-v`.
 
