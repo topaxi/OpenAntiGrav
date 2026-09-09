@@ -102,7 +102,7 @@ impl Scene {
     /// What this scene's pipelines were actually built with, for the restart
     /// note - see [`Self::msaa_color`].
     #[must_use]
-    pub fn msaa(&self) -> crate::display::Msaa {
+    pub fn msaa(&self) -> oag_display::display::Msaa {
         self.msaa
     }
 

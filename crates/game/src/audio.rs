@@ -35,7 +35,7 @@ use oag_disc::{DiscImage, Platform};
 use oag_formats::ps2_music;
 use serde::{Deserialize, Serialize};
 
-use crate::display::percentage;
+use oag_display::percentage;
 
 pub mod sfx;
 
@@ -46,7 +46,7 @@ use race_music::{PendingSwitch, locate};
 /// A bus volume, as a percentage of unattenuated.
 ///
 /// Zero is off and 100 is the samples as they were stored. Unlike
-/// [`crate::display::Brightness`] there is no floor: a player who wants no
+/// [`oag_display::display::Brightness`] there is no floor: a player who wants no
 /// music should be able to say so, and unlike a black screen a silent one is
 /// not a state they cannot navigate back out of.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

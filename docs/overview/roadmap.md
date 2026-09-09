@@ -1169,7 +1169,7 @@ recipe and its three traps.
       blocked one.) The settings are split into `[display]` and
       `[graphics]` to match the two menu pages, with an older `[graphics]`-only
       file migrated on load. See [menus](../architecture/menus.md) and
-      `oag_game::display`.
+      `oag_display::display`.
       **Frame pacing is in too**: a three-way vsync (off, on, or `smooth` - the mailbox present mode, which is triple buffering done properly), an **unlocked or limited frame rate**
       (unlimited, or up to 1000), and a performance overlay that shows the rate,
       the mean, the 99th percentile and a per-frame graph - because an average

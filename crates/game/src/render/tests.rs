@@ -4,7 +4,7 @@ use super::*;
 ///
 /// The difference is 24%, it is a horizontal squeeze of the entire front
 /// end, and it is invisible on the PSP because there the two numbers agree.
-/// See `crate::frontend::Space` and `docs/ps2/aspect-ratio.md`.
+/// See `oag_display::space::Space` and `docs/ps2/aspect-ratio.md`.
 #[test]
 fn a_ps2_screen_is_letterboxed_by_what_it_is_shown_as() {
     // A window of the shape the artwork was stretched for: it fills.

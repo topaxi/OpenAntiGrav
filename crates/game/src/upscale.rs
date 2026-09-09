@@ -2,7 +2,7 @@
 //!
 //! A **race** draws into an offscreen colour texture rather than straight onto
 //! the surface, and [`Framebuffer::resolve_scene`] afterwards stretches that
-//! texture into the [`display::viewport`](crate::display::viewport) rectangle.
+//! texture into the [`display::viewport`](oag_display::display::viewport) rectangle.
 //! Below 100 % that is the usual internal-resolution knob; above it, it is
 //! supersampling.
 //!
@@ -34,7 +34,7 @@
 //! # What it is measured against
 //!
 //! The **viewport rectangle**, not the surface. So the scale means the same
-//! thing whatever [`Aspect`](crate::display::Aspect) is set to - at 50 % on a
+//! thing whatever [`Aspect`](oag_display::display::Aspect) is set to - at 50 % on a
 //! pillarboxed 4:3 window, the game is drawn at half the 4:3 area rather than
 //! half a window it was never using. The bars are drawn by the blit pass
 //! clearing the surface, so they cost no offscreen pixels at all.
@@ -72,7 +72,7 @@ use log::{info, warn};
 
 use oag_render::post::{fsr1, fsr3, fullscreen_layout, fxaa, smaa};
 
-use crate::display::{Brightness, Gamma, Reconstruction, Scale};
+use oag_display::display::{Brightness, Gamma, Reconstruction, Scale};
 
 /// Everything the blit needs that a player chose, gathered so the window's
 /// frame loop and a capture can be handed the same thing.

@@ -18,7 +18,7 @@ use super::*;
 fn hd_skin() -> Skin {
     Skin::new(
         oag_hd::frontend::MENU_SKIN,
-        crate::frontend::Space::HD,
+        oag_display::space::Space::HD,
         22.0,
     )
 }
@@ -136,9 +136,9 @@ fn hds_root_page_runs_left_to_right_from_its_own_anchor() {
     let (last_x, _, _, last) = rows.last().expect("a strip has entries");
     let right = last_x + measure(last);
     assert!(
-        right < crate::frontend::Space::HD.size.0,
+        right < oag_display::space::Space::HD.size.0,
         "the strip ends at {right}, past the {}-wide frame",
-        crate::frontend::Space::HD.size.0
+        oag_display::space::Space::HD.size.0
     );
 }
 

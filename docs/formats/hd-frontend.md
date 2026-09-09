@@ -2063,7 +2063,7 @@ crate existed. What consumes the page today:
 | the `<HorizMenu>` | `oag_title::MenuStrip` and `oag_game::menu::strip`, pinned by `crates/game/tests/hd_menu_ground_truth.rs` |
 | `FE Screen`'s frame | `oag_title::FrontEnd::menu_frame` names the screen; `oag_game::menu::frame` reads it, same test |
 | `BootProfile`, declared | `oag_hd::frontend::BOOT`, pinned by `crates/game/tests/hd_boot_ground_truth.rs` |
-| the 1920x1080 grid | `oag_game::frontend::Space::HD` |
+| the 1920x1080 grid | `oag_display::space::Space::HD` |
 | the sixteen language plugins | `oag_hd::frontend::LANGUAGE_PLUGINS` |
 
 [ADR-0025]: ../architecture/adr/0025-a-boot-chain-carries-its-provenance.md

@@ -93,7 +93,7 @@ pub(super) fn menu_page(
     // not invent a monitor this machine may not have.
     model.supply(
         crate::menu::ValueSource::Monitors,
-        &crate::display::Monitor::offered(
+        &oag_display::display::Monitor::offered(
             &settings
                 .display
                 .monitor
@@ -113,7 +113,7 @@ pub(super) fn menu_page(
     // page they can actually use.
     model.supply(
         crate::menu::ValueSource::Renderers,
-        &crate::display::Renderer::offered(
+        &oag_display::display::Renderer::offered(
             &settings
                 .graphics
                 .renderer
@@ -405,8 +405,11 @@ mod tests {
     /// running the flag and reading the error.
     #[test]
     fn every_prompt_the_flag_names_draws_something_and_an_unknown_one_errors() {
-        let skin =
-            crate::menu::Skin::new(oag_pulse::FRONT_END.menu, crate::frontend::Space::PSP, 22.0);
+        let skin = crate::menu::Skin::new(
+            oag_pulse::FRONT_END.menu,
+            oag_display::space::Space::PSP,
+            22.0,
+        );
         let strings = crate::language::StringTable::default();
         for kind in [
             "rename",

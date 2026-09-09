@@ -145,7 +145,7 @@ impl Race {
             return Mat4::from_rotation_translation(over.orientation, over.eye).inverse();
         }
         let target = target_of(self.ship());
-        let base = if self.view == crate::display::CameraView::Internal {
+        let base = if self.view == oag_display::display::CameraView::Internal {
             // Rigid, so there is no per-tick state to advance and nothing to
             // snap: the cockpit is bolted to the hull. The roll phase rides
             // along so the cockpit view rolls with the manoeuvre too - see
@@ -274,7 +274,7 @@ impl Race {
     /// *before* the fit, so the two compose in the order a reader would expect:
     /// the player widens the field the disc asked for, and the result is then
     /// fitted to whatever shape the window is. At
-    /// [`Fov::AUTHORED`](crate::display::Fov::AUTHORED) - the default - nothing
+    /// [`Fov::AUTHORED`](oag_display::display::Fov::AUTHORED) - the default - nothing
     /// is applied at all and this is the projection every capture under
     /// `data/traces/` was taken with.
     ///
@@ -304,7 +304,7 @@ impl Race {
     /// comparison taken before 2026-08-09 is misregistered by 1.12-1.26x
     /// depending on the tick's speed and has to be re-taken.
     #[must_use]
-    pub fn projection(&self, aspect: f32, far: f32, setting: crate::display::Fov) -> Mat4 {
+    pub fn projection(&self, aspect: f32, far: f32, setting: oag_display::display::Fov) -> Mat4 {
         // An overridden fov stands in for the authored one and still passes
         // through the player's setting, whose default is identity; it exists to
         // match a captured frame's own field exactly, so it must sit at the
@@ -315,7 +315,7 @@ impl Race {
         // the live one is whichever perspective is being rendered - a cockpit
         // framed with the chase view's field would be the wrong picture with the
         // right camera.
-        let view_fov = if self.view == crate::display::CameraView::Internal {
+        let view_fov = if self.view == oag_display::display::CameraView::Internal {
             self.internal_params.fov
         } else {
             self.chase_params.fov

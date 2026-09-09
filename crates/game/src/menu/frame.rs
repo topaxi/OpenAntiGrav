@@ -26,9 +26,11 @@
 //! An image the sprite sheet has no placement for is skipped, so a frame whose
 //! textures did not decode is a missing rule rather than a wrong one.
 
-use crate::frontend::{Draw, Space};
+use crate::frontend::Draw;
+
 use crate::screen::{Screens, argb_to_rgba, parse_argb};
 use crate::sprite::Sheet;
+use oag_display::space::Space;
 
 /// One title's menu frame, split by what may come between the two halves.
 ///

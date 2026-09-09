@@ -622,7 +622,7 @@ answer: **nothing else in the binary can move the projection's fov.**
 
 **None of this is owed a port, and the reason is worth stating so the next
 pass does not treat it as one.**
-[`crates/game/src/display.rs`](../../../../crates/game/src/display.rs)'s
+[`crates/display/src/display.rs`](../../../../crates/display/src/display.rs)'s
 `BoostFovKick` is a **deliberate invention of this project** - a boost reads
 better with a fov kick, and that is the whole justification. It is not a
 reimplementation of anything above, it is not being fitted to the original,

@@ -618,7 +618,7 @@ fn a_sprite_is_offset_by_its_own_texture() {
 
 #[test]
 fn inside_screen_rejects_what_falls_off_the_edge() {
-    let psp = crate::frontend::Space::PSP.size;
+    let psp = oag_display::space::Space::PSP.size;
     assert!(inside_screen([0.0, 0.0, 480.0, 272.0], psp));
     assert!(!inside_screen([0.0, 0.0, 481.0, 272.0], psp));
     assert!(!inside_screen([-1.0, 0.0, 10.0, 10.0], psp));
@@ -626,12 +626,12 @@ fn inside_screen_rejects_what_falls_off_the_edge() {
 
 // A PSP rect at x=480 is off the PSP's own screen and inside the PS2's 640x448
 // - the whole reason `inside_screen` takes a `screen` parameter rather than
-// assuming `crate::frontend::SCREEN`.
+// assuming `oag_display::space::SCREEN`.
 #[test]
 fn inside_screen_takes_the_source_grid_it_is_given() {
     let rect = [480.0, 0.0, 10.0, 10.0];
-    assert!(!inside_screen(rect, crate::frontend::Space::PSP.size));
-    assert!(inside_screen(rect, crate::frontend::Space::PS2.size));
+    assert!(!inside_screen(rect, oag_display::space::Space::PSP.size));
+    assert!(inside_screen(rect, oag_display::space::Space::PS2.size));
 }
 
 pub(super) fn strings() -> crate::language::StringTable {

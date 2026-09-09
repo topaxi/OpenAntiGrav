@@ -32,7 +32,11 @@ fn fixture(value: &str) -> Menu {
 }
 
 fn skin() -> Skin {
-    Skin::new(oag_pulse::FRONT_END.menu, crate::frontend::Space::PSP, 22.0)
+    Skin::new(
+        oag_pulse::FRONT_END.menu,
+        oag_display::space::Space::PSP,
+        22.0,
+    )
 }
 
 /// Two rows, cursor on the first: `RENDERER` (the second) overflows

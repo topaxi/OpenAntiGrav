@@ -271,7 +271,7 @@ fn no_shipped_page_draws_a_row_off_the_bottom_of_the_screen() {
                     // row is drawn with; see `crate::font::Atlas`.
                     let bottom = y + 25.0 * scale;
                     assert!(
-                        bottom <= crate::frontend::SCREEN.1,
+                        bottom <= oag_display::space::SCREEN.1,
                         "page {id:?} draws to {bottom} with the cursor on row {}",
                         menu.selected()
                     );

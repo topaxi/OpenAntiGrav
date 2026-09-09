@@ -230,7 +230,7 @@ fn our_first_row_y(skin: &Skin) -> f32 {
 pub struct Skin {
     skin: &'static oag_title::MenuSkin,
     /// The grid the rows are drawn in: the source's own, not the PSP's.
-    space: crate::frontend::Space,
+    space: oag_display::space::Space,
     /// What multiplies a number written in this build's own 480x272 units to
     /// put it in [`Self::space`]. Exactly `(1.0, 1.0)` on a PSP source, which is
     /// why every layout figure pinned by this module's tests is unchanged there.
@@ -295,7 +295,7 @@ impl Skin {
     ///
     /// So both sides convert, each from its own grid, and a PS2 menu comes out
     /// in the same proportions the PSP one always had. **On the PS2 that
-    /// scaling is an approximation and says so**: `crate::frontend::Space`
+    /// scaling is an approximation and says so**: `oag_display::space::Space`
     /// records that 30 of the 43 coordinates the two `Skin.xml` files share land
     /// within a pixel of the ratio and 13 do not, so the disc's own PS2
     /// `FEGlobals` would settle it and nothing here has read them.
@@ -312,14 +312,14 @@ impl Skin {
     #[must_use]
     pub fn new(
         skin: &'static oag_title::MenuSkin,
-        space: crate::frontend::Space,
+        space: oag_display::space::Space,
         line_height: f32,
     ) -> Self {
         let into = |from: (f32, f32)| (space.size.0 / from.0, space.size.1 / from.1);
         Self {
             skin,
             space,
-            from_ours: into(crate::frontend::SCREEN),
+            from_ours: into(oag_display::space::SCREEN),
             from_theirs: into(skin.space),
             line_height,
             pulse_elapsed: 0.0,
@@ -339,7 +339,7 @@ impl Skin {
     /// The grid these numbers are in, for whoever has to set a `screen` uniform
     /// from it.
     #[must_use]
-    pub fn space(&self) -> crate::frontend::Space {
+    pub fn space(&self) -> oag_display::space::Space {
         self.space
     }
 
@@ -739,7 +739,7 @@ mod tests {
     };
 
     fn skin() -> Skin {
-        Skin::new(&PULSING, crate::frontend::Space::PSP, 22.0)
+        Skin::new(&PULSING, oag_display::space::Space::PSP, 22.0)
     }
 
     /// The trough: a fresh clock has not moved, so the pulse starts exactly
@@ -784,7 +784,7 @@ mod tests {
             selected_pulse_period_secs: None,
             ..PULSING
         };
-        let mut skin = Skin::new(&FLAT, crate::frontend::Space::PSP, 22.0);
+        let mut skin = Skin::new(&FLAT, oag_display::space::Space::PSP, 22.0);
         let at_rest = skin.selected();
         skin.tick_pulse(10.0);
         assert_eq!(skin.selected(), at_rest);

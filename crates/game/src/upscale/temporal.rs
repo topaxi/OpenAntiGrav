@@ -6,7 +6,7 @@
 //! the difference between reconstructing from several frames and resampling
 //! one, which is the whole distinction `Upscaler::is_temporal` names.
 
-use crate::display::Reconstruction;
+use oag_display::display::Reconstruction;
 use oag_render::post::fsr3;
 
 /// What a temporal upscaler needs that a spatial one does not.

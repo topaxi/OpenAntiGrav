@@ -56,7 +56,7 @@ fn measure(text: &str) -> f32 {
 fn skin() -> Skin {
     Skin::new(
         oag_pulse::FRONT_END.menu,
-        crate::frontend::Space::PSP,
+        oag_display::space::Space::PSP,
         PULSE_MENU_LINE_HEIGHT,
     )
 }

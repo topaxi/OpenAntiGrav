@@ -127,7 +127,7 @@ pub(super) fn load_hud(
         // layout read in it lands every widget four times oversized and a
         // quarter of the way into the picture. Same call `boot::load_shell`
         // makes for the front end.
-        space: crate::frontend::Space::of(archives.layout.platform),
+        space: oag_display::space::Space::of(archives.layout.platform),
         art: title.hud_art,
     }
 }

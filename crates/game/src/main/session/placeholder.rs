@@ -32,7 +32,7 @@
 use anyhow::{Context, Result};
 use log::info;
 
-use oag_game::{catalogue, font, frontend, language, loading, menu, placeholder, sprite, strings};
+use oag_game::{catalogue, font, language, loading, menu, placeholder, sprite, strings};
 
 use crate::hints;
 use crate::session::Shell;
@@ -173,7 +173,7 @@ impl Session {
             font: font::Atlas::build(),
             sprites: sprite::Sheet::default(),
             menu_skin: &placeholder::MENU_SKIN,
-            space: frontend::Space::default(),
+            space: oag_display::space::Space::default(),
             menu_font: None,
             frame: menu::Frame::default(),
             strings,

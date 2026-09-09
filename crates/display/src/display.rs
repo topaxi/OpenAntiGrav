@@ -26,7 +26,7 @@
 //! **These are the types, not the menu pages.** The menus split them across
 //! DISPLAY and GRAPHICS and the settings file across `[display]` and
 //! `[graphics]`; this module is one place to define what each value may be and
-//! how it is spelled, and that split is [`crate::settings`]'s business.
+//! how it is spelled, and that split is `oag_game::settings`'s business.
 //!
 //! The arithmetic is [`viewport`], a pure function with tests, because none of
 //! this is checkable from the gate: it is all window and GPU, and a screenshot
@@ -37,81 +37,16 @@
 
 use serde::{Deserialize, Serialize};
 
+mod aspect;
 mod motion_blur;
 mod msaa;
 mod reconstruction;
 mod shadows;
 
-pub use {motion_blur::MotionBlur, msaa::Msaa, reconstruction::Reconstruction, shadows::Shadows};
-
-/// The shape the game is drawn at inside its window.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum Aspect {
-    /// 480x272, the PSP's own framebuffer, and the shape every camera value on
-    /// the disc was authored for.
-    ///
-    /// The default, and not merely out of deference: `<ExternalCameraFar>`'s
-    /// field of view is only defined at this ratio, so it is the one shape where
-    /// what a player sees is what the original framed. See
-    /// [`crate::race::AUTHORED_ASPECT`].
-    #[default]
-    Psp,
-    /// 4:3, the PS2's television - not the shape its own artwork wants.
-    Ps2,
-    /// Whatever the window is.
-    ///
-    /// **The field of view does not widen with it.** `Race::projection` caps at
-    /// the authored aspect and fits the view inside anything wider, so a wide
-    /// window shows the same amount of track rather than more of it. That is a
-    /// deliberate reading of "free" as *fill the window* and not as *see more* -
-    /// nothing on the disc says what the original would have done with a 21:9
-    /// screen, and inventing a wider field of view would be inventing gameplay.
-    Free,
-}
-
-impl Aspect {
-    /// The ratio this shape asks for, or `None` for [`Aspect::Free`], which asks
-    /// for whatever it is given.
-    #[must_use]
-    pub fn ratio(self) -> Option<f32> {
-        match self {
-            Self::Psp => Some(crate::frontend::SCREEN.0 / crate::frontend::SCREEN.1),
-            Self::Ps2 => Some(4.0 / 3.0),
-            Self::Free => None,
-        }
-    }
-
-    /// The spelling used in a settings file and on a menu row.
-    #[must_use]
-    pub fn name(self) -> &'static str {
-        match self {
-            Self::Psp => "psp",
-            Self::Ps2 => "ps2",
-            Self::Free => "free",
-        }
-    }
-
-    /// Every shape, for the menus and for error messages.
-    pub const ALL: [Self; 3] = [Self::Psp, Self::Ps2, Self::Free];
-}
-
-impl std::str::FromStr for Aspect {
-    type Err = String;
-
-    fn from_str(text: &str) -> Result<Self, Self::Err> {
-        Self::ALL
-            .into_iter()
-            .find(|aspect| aspect.name().eq_ignore_ascii_case(text))
-            .ok_or_else(|| format!("{text:?} is not an aspect ratio; try psp, ps2 or free"))
-    }
-}
-
-impl std::fmt::Display for Aspect {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(self.name())
-    }
-}
+pub use {
+    aspect::Aspect, motion_blur::MotionBlur, msaa::Msaa, reconstruction::Reconstruction,
+    shadows::Shadows,
+};
 
 /// What kind of window the game asks the compositor for.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
@@ -276,7 +211,7 @@ impl std::fmt::Display for Monitor {
 }
 
 /// Which adapter the game draws with: `default`, or one by the name
-/// [`crate::adapter::label`] gives it.
+/// `oag_game::adapter::label` gives it.
 ///
 /// [`Monitor`]'s shape, for [`Monitor`]'s reasons, against a different piece of
 /// hardware - a name rather than an index, and a name this machine no longer
@@ -285,8 +220,8 @@ impl std::fmt::Display for Monitor {
 ///
 /// The one thing it does not share is that the names it holds are *this
 /// project's* spelling and not the platform's: a driver reports a name that is
-/// only unique within its backend, so [`crate::adapter::label`] qualifies it.
-/// That matters here because [`crate::menu::Menu::seed`] matches the stored
+/// only unique within its backend, so `oag_game::adapter::label` qualifies it.
+/// That matters here because `oag_game::menu::Menu::seed` matches the stored
 /// string exactly and silently shows the first row when it does not - a
 /// duplicate would put the player on an adapter they did not pick and persist
 /// it on their first nudge.
@@ -487,10 +422,12 @@ impl From<Size> for String {
 /// of thing that drifts one edit at a time. Each type still declares its own
 /// `RANGE`, `OFFERED` and neutral value, which is all that actually differs.
 ///
-/// Re-exported below for [`crate::audio::Volume`], which is the same shape and
-/// is not a display setting: a percentage row is a percentage row wherever the
-/// value ends up, and a second copy of this body in another module is exactly
-/// the drift the macro exists to prevent.
+/// Exported for `oag_game::audio::Volume`, which is the same shape and is not a
+/// display setting: a percentage row is a percentage row wherever the value
+/// ends up, and a second copy of this body in another module is exactly the
+/// drift the macro exists to prevent. That cross-crate reader is why it is
+/// `pub` rather than `pub(crate)` since the split.
+#[macro_export]
 macro_rules! percentage {
     ($type:ident, $neutral:ident, $what:literal) => {
         impl Default for $type {
@@ -564,7 +501,7 @@ pub struct Sharpness(u32);
 /// This shipped as a bare `f32` for one commit, so a file written by that build
 /// holds `upscale_sharpness = 0.2` and would otherwise fail to load with
 /// "invalid type: floating point". The same twenty lines, and the same
-/// reasoning, as [`crate::perf::Vsync`]'s: the canonical rewrite normalises it
+/// reasoning, as `oag_game::perf::Vsync`'s: the canonical rewrite normalises it
 /// to a string on the next run, so the compatibility does not accumulate.
 #[derive(Deserialize)]
 #[serde(untagged)]
@@ -656,7 +593,7 @@ impl From<Sharpness> for String {
 ///
 /// Below 100 this is the usual internal-resolution knob; above it, it is
 /// supersampling. A percentage rather than an absolute resolution because a
-/// percentage has no invalid values - see [`crate::upscale`] for the argument.
+/// percentage has no invalid values - see `oag_game::upscale` for the argument.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(try_from = "u32", into = "u32")]
 pub struct Scale(u32);
@@ -670,7 +607,7 @@ impl Scale {
     /// Not preferences: below the floor a 480-wide viewport renders at 120
     /// pixels and the menus stop being readable at all, and above the ceiling
     /// the target runs past what an adapter will allocate on an ordinary
-    /// window. [`crate::upscale::target_size`] clamps the actual pixels too,
+    /// window. `oag_game::upscale::target_size` clamps the actual pixels too,
     /// because the ceiling here is not a per-device answer.
     pub const RANGE: std::ops::RangeInclusive<u32> = 25..=200;
 
@@ -704,7 +641,7 @@ impl Scale {
 /// leaves a race at night looking like a race in fog, and the thing a player
 /// reaches for this setting to fix - a track they cannot see into - is a
 /// midtone problem [`Gamma`] handles better anyway. Both are applied in the
-/// blit pass, so both cover every stage; see [`crate::upscale`].
+/// blit pass, so both cover every stage; see `oag_game::upscale`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(try_from = "u32", into = "u32")]
 pub struct Brightness(u32);
@@ -801,7 +738,7 @@ impl Gamma {
 /// original reason was that `<ExternalCameraFar fov>`'s unit was unrecovered, so
 /// a row letting a player type `90` would assert a unit this project had not
 /// established. **That reason expired on 2026-08-09**: the unit is vertical
-/// degrees at confidence 94 (see [`crate::race::Race::projection`]).
+/// degrees at confidence 94 (see `oag_game::race::Race::projection`).
 ///
 /// The row stays a percentage on a different and weaker argument, recorded so
 /// the next reader can overrule it rather than assume it was never revisited:
@@ -867,8 +804,6 @@ impl Fov {
     }
 }
 
-pub(crate) use percentage;
-
 percentage!(Scale, FULL, "render scale");
 percentage!(Brightness, NEUTRAL, "brightness");
 percentage!(Gamma, NEUTRAL, "gamma");
@@ -907,8 +842,8 @@ percentage!(Fov, AUTHORED, "field of view");
 /// a calibration instruction ("the measured original sits nearest the 32
 /// tier") and that reading is withdrawn.
 ///
-/// See `crate::race::Race::projection` for where it is applied and
-/// `crate::race::BOOST_FOV_OPEN_RATE`/`BOOST_FOV_CLOSE_RATE` for how it moves.
+/// See `oag_game::race::Race::projection` for where it is applied and
+/// `oag_game::race::BOOST_FOV_OPEN_RATE`/`BOOST_FOV_CLOSE_RATE` for how it moves.
 ///
 /// **A number, the same idiom as [`Fov`] itself**, rather than a named tier:
 /// there is nothing to name that "twice as wide" does not already say. 8 was
@@ -922,7 +857,7 @@ percentage!(Fov, AUTHORED, "field of view");
 pub struct BoostFovKick(u32);
 
 impl BoostFovKick {
-    /// No kick at all. [`crate::race::Race::projection`] returns the input
+    /// No kick at all. `oag_game::race::Race::projection` returns the input
     /// bit-identical here, the same escape hatch [`Fov::AUTHORED`] is.
     pub const OFF: Self = Self(0);
 
@@ -941,7 +876,7 @@ impl BoostFovKick {
     /// The tiers the menus offer: off, then three doublings.
     pub const OFFERED: [Self; 4] = [Self::OFF, Self::SUBTLE, Self::DEFAULT, Self(32)];
 
-    /// The multiplier [`crate::race::Race::projection`] widens the tangent by
+    /// The multiplier `oag_game::race::Race::projection` widens the tangent by
     /// at full boost.
     #[must_use]
     pub fn gain(self) -> f32 {
@@ -980,7 +915,7 @@ percentage!(BoostFovKick, DEFAULT, "boost field-of-view kick");
 /// This does not enter `oag_gameplay::World` and nothing hashed reads it, so
 /// cycling the view cannot move a determinism hash or a replay. That is asserted
 /// rather than argued: see
-/// `crate::race::tests::cycling_the_camera_changes_no_simulation_state`.
+/// `oag_game::race::tests::cycling_the_camera_changes_no_simulation_state`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum CameraView {

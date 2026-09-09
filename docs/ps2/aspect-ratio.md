@@ -212,7 +212,7 @@ An `IPUF` backdrop declares no aspect at all and inherits this reading with it.
 
 ## What this project does about it
 
-`oag_game::frontend::Space::PS2` now carries `display_aspect = 480/272` rather
+`oag_display::space::Space::PS2` now carries `display_aspect = 480/272` rather
 than `4/3`, so the front end, the menus and the in-race HUD are all fitted the
 way the artwork was built. **There is no setting for it**: the original's option
 exists because a PS2 could be plugged into either kind of television, and this

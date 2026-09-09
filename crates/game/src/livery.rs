@@ -702,7 +702,7 @@ fn shell(
 /// `.vex`/`.rcsmodel` pair.
 ///
 /// **`ShipShield_Update` chooses between the two on `craft+0x6d`**, the same
-/// byte `crate::display::CameraView::draws_own_ship` reads - see that function,
+/// byte `oag_display::display::CameraView::draws_own_ship` reads - see that function,
 /// whose confidence-70 note this is a second consumer for.
 pub(crate) fn cockpit_shield(
     archives: &mut oag_assets::Archives,

@@ -7,6 +7,7 @@ members = [
   "crates/audio",
   "crates/core",
   "crates/disc",
+  "crates/display",
   "crates/formats",
   "crates/game",
   "crates/gameplay",
@@ -43,6 +44,7 @@ oag-assets = { path = "crates/assets" }
 oag-audio = { path = "crates/audio" }
 oag-core = { path = "crates/core" }
 oag-disc = { path = "crates/disc" }
+oag-display = { path = "crates/display" }
 oag-formats = { path = "crates/formats" }
 oag-gameplay = { path = "crates/gameplay" }
 oag-hd = { path = "crates/hd" }
@@ -62,6 +64,10 @@ oag-vex = { path = "crates/vex" }
 oag-video = { path = "crates/video" }
 
 anyhow = "1"
+# Two crates now: `oag-display` defines the settings vocabulary and `oag-game`
+# reads and writes the file it lands in.
+serde = { version = "1", features = ["derive"] }
+toml = "1"
 thiserror = "2"
 
 # Diagnostics. Everything that used to be a bare `println!`/`eprintln!` note
@@ -180,6 +186,11 @@ opt-level = 2
 # The asset decode path: LZSS, the GS and GE texture swizzles, the `.vex` node
 # walk, and the sector-at-a-time read under all of them.
 [profile.dev.package.oag-disc]
+opt-level = 2
+
+# The picture vocabulary. Small, but every settings round-trip and every menu
+# row reads it, so it is on the path of the front-end tests rather than off it.
+[profile.dev.package.oag-display]
 opt-level = 2
 [profile.dev.package.oag-formats]
 opt-level = 2

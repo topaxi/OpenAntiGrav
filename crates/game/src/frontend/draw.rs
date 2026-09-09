@@ -20,6 +20,7 @@
 //! unchanged.
 
 use super::*;
+use oag_display::space::pillarbox_in;
 
 /// One thing to draw, in the PSP's 480x272 screen space.
 #[derive(Debug, Clone, PartialEq)]

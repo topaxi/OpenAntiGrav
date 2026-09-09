@@ -549,7 +549,59 @@ fn modes_and_aspects_round_trip_through_their_names() {
         assert_eq!(aspect.name().parse::<Aspect>(), Ok(aspect));
     }
     assert!("exclusive".parse::<WindowMode>().is_err());
-    assert!("16:9".parse::<Aspect>().is_err());
+}
+
+#[test]
+fn a_free_form_ratio_round_trips_and_is_the_shape_it_names() {
+    let wide = "21:9".parse::<Aspect>().expect("a w:h shape parses");
+    assert_eq!(wide, Aspect::Ratio(21, 9));
+    assert_eq!(wide.name(), "21:9");
+    assert_eq!(wide.name().parse::<Aspect>(), Ok(wide));
+    let ratio = wide.ratio().expect("a named ratio has one");
+    assert!((ratio - 21.0 / 9.0).abs() < 1e-6, "{ratio}");
+}
+
+/// Zero on either side is not a picture, and letting one through would hand
+/// `viewport` an `inf` or a `NaN` to divide by rather than a shape.
+#[test]
+fn a_ratio_with_a_zero_side_is_refused() {
+    assert!("0:9".parse::<Aspect>().is_err());
+    assert!("16:0".parse::<Aspect>().is_err());
+    assert!("16:".parse::<Aspect>().is_err());
+    assert!(":9".parse::<Aspect>().is_err());
+    assert!("sixteen:nine".parse::<Aspect>().is_err());
+}
+
+/// The measurement the enum is shaped around: the Vita's panel is the PSP's
+/// panel doubled, so it is the same *shape*, and a separate variant for it
+/// would have been a second name for one number.
+#[test]
+fn the_vita_panel_is_exactly_the_psp_shape_and_wide_is_not() {
+    let psp = Aspect::Psp.ratio().expect("psp has a ratio");
+    let vita = "960:544"
+        .parse::<Aspect>()
+        .expect("parses")
+        .ratio()
+        .expect("has a ratio");
+    assert!((psp - vita).abs() < 1e-6, "psp {psp}, vita {vita}");
+
+    // 720p and 1080p are one shape, and it is not the PSP's.
+    let wide = Aspect::Wide.ratio().expect("wide has a ratio");
+    for spelling in ["1280:720", "1920:1080"] {
+        let named = spelling
+            .parse::<Aspect>()
+            .expect("parses")
+            .ratio()
+            .expect("has a ratio");
+        assert!(
+            (wide - named).abs() < 1e-6,
+            "{spelling} is {named}, wide is {wide}"
+        );
+    }
+    assert!(
+        (wide - psp).abs() > 1e-3,
+        "wide {wide} must not collapse into psp {psp}"
+    );
 }
 
 #[test]

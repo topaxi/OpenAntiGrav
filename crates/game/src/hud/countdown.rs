@@ -129,7 +129,7 @@ use oag_render::mesh_render::{
     TexAnims, TransparentPipelines, UNIFORMS_SIZE, Velocity, build, write_uniforms_raw,
 };
 
-use crate::frontend::SCREEN;
+use oag_display::space::SCREEN;
 
 /// The GPU half of the countdown overlay: one model, one small pass with its
 /// own depth buffer, drawn after the HUD's ordinary sprite pass.

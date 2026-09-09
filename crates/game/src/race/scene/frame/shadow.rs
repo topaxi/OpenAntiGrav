@@ -66,7 +66,7 @@ impl super::super::Scene {
     pub(super) fn shadow_geometry(
         &self,
         race: &Race,
-        shadows: crate::display::Shadows,
+        shadows: oag_display::display::Shadows,
     ) -> (Vec<Placement>, Vec<GpuVertex>) {
         // The blob shadows, gathered here with the rest of the per-frame
         // geometry and uploaded whether or not the tier is on - `upload` with
@@ -86,7 +86,7 @@ impl super::super::Scene {
         // `oag_render::shadow::hull_triangles`, and
         // `oag_pulse::shadow::AUTHORED_AXIS` for the direction.
         let mut hull_vertices = Vec::new();
-        if shadows == crate::display::Shadows::Original {
+        if shadows == oag_display::display::Shadows::Original {
             for placement in &placements {
                 let Some(Some(hull)) = self.shadow_hulls.get(placement.silhouette) else {
                     continue;
@@ -106,7 +106,7 @@ impl super::super::Scene {
         }
         // At `original` the quads are not drawn at all: the two tiers are
         // alternatives, not layers.
-        let quads: &[Placement] = if shadows == crate::display::Shadows::Blob {
+        let quads: &[Placement] = if shadows == oag_display::display::Shadows::Blob {
             &placements
         } else {
             &[]
@@ -124,11 +124,11 @@ impl super::super::Scene {
     /// did before the map existed.
     pub(super) fn shadow_uniform(
         &self,
-        shadows: crate::display::Shadows,
+        shadows: oag_display::display::Shadows,
     ) -> oag_render::mesh_render::ShadowMap {
         let map = self.shadow_map.borrow();
         match shadows {
-            crate::display::Shadows::Original if map.casters() > 0 => {
+            oag_display::display::Shadows::Original if map.casters() > 0 => {
                 oag_render::mesh_render::ShadowMap {
                     matrix: map.matrix().to_cols_array_2d(),
                     strength: MAP_STRENGTH,
@@ -137,7 +137,7 @@ impl super::super::Scene {
                     _pad: 0.0,
                 }
             }
-            crate::display::Shadows::Mapped if map.depth_casters() > 0 => {
+            oag_display::display::Shadows::Mapped if map.depth_casters() > 0 => {
                 oag_render::mesh_render::ShadowMap {
                     matrix: map.depth_matrix().to_cols_array_2d(),
                     strength: MAPPED_STRENGTH,
@@ -168,16 +168,16 @@ impl super::super::Scene {
         queue: &wgpu::Queue,
         encoder: &mut wgpu::CommandEncoder,
         race: &Race,
-        shadows: crate::display::Shadows,
+        shadows: oag_display::display::Shadows,
     ) -> usize {
         let mut map = self.shadow_map.borrow_mut();
-        if shadows == crate::display::Shadows::Mapped {
+        if shadows == oag_display::display::Shadows::Mapped {
             return self.render_depth_map(&mut map, queue, encoder, race);
         }
         // A hull the craft authors is Pulse's mechanism; if any slot has one,
         // this title shadows that way and not this one.
         let hulls = self.shadow_hulls.iter().any(Option::is_some);
-        if shadows != crate::display::Shadows::Original || hulls {
+        if shadows != oag_display::display::Shadows::Original || hulls {
             map.render(queue, encoder, &default_fit(), &[]);
             map.render_depth(queue, encoder, &default_fit(), &[]);
             return 0;

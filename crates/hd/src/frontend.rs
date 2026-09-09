@@ -92,7 +92,7 @@ pub const MENU_SKIN: &oag_title::MenuSkin = &oag_title::MenuSkin {
     //
     // Confidence 95: `skin.xml` declares a `<Movie>` at `Width="1920"
     // height="1080"` and places widgets out to `y="994"`, and all six copies
-    // agree. See `oag_game::frontend::Space`.
+    // agree. See `oag_display::space::Space`.
     space: (1920.0, 1080.0),
     // `FEGlobals->MenuXOffset`.
     menu_x: 800.0,

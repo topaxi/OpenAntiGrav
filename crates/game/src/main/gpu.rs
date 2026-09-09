@@ -5,7 +5,9 @@ use std::sync::Arc;
 use anyhow::{Context, Result};
 use log::{info, warn};
 
-use oag_game::{adapter, display, perf, settings, strings};
+use oag_game::{adapter, perf, settings, strings};
+
+use oag_display::display;
 
 use winit::event_loop::ActiveEventLoop;
 use winit::window::Window;

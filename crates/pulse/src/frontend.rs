@@ -140,7 +140,7 @@ pub const MENU_SKIN: &oag_title::MenuSkin = &oag_title::MenuSkin {
     // other; see `oag_title::MenuSkin::space`.
     //
     // Reading the PS2 `Skin.xml`'s own `FEGlobals` would settle whether that
-    // scaling is what the disc does - `oag_game::frontend::Space` records that
+    // scaling is what the disc does - `oag_display::space::Space` records that
     // 30 of the 43 coordinates the two files share land within a pixel of the
     // ratio and 13 do not, so it is an approximation and not a derivation.
     space: (480.0, 272.0),

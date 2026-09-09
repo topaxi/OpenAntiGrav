@@ -442,7 +442,7 @@ pub fn run(
         (Some(page), _) => {
             let showing = backdrop.as_ref().filter(|movie| movie.frames.is_some());
             let frame = showing.map(|movie| crate::menu::Backdrop {
-                rect: crate::frontend::pillarbox_in(space, movie.display_aspect),
+                rect: oag_display::space::pillarbox_in(space, movie.display_aspect),
                 frame: 0,
                 // Position zero with the frame, there being no playhead here to
                 // have got anywhere: a capture reads the frame straight out of
@@ -592,7 +592,7 @@ pub fn run(
         &mut encoder,
         &view,
         &list,
-        crate::display::viewport((width, height), options.settings.display.aspect),
+        oag_display::display::viewport((width, height), options.settings.display.aspect),
         // A capture is one static frame with no `MenuStage` clock behind it,
         // so there is nothing here for a value marquee to be mid-scroll of.
         None,
@@ -726,9 +726,9 @@ pub struct LoadingOptions {
     /// doing - `--loading-step`. Stated for the same reason `progress` is.
     pub phase: crate::loading::Phase,
     /// Which adapter to draw with, from `[graphics] renderer`.
-    pub renderer: crate::display::Renderer,
+    pub renderer: oag_display::display::Renderer,
     /// The shape the game is drawn in, from `[display] aspect`.
-    pub aspect: crate::display::Aspect,
+    pub aspect: oag_display::display::Aspect,
 }
 
 /// Draws the loading screen once and writes it, without a window or a worker.
@@ -807,7 +807,7 @@ pub fn loading(
 
     let target = offscreen(&device, format, width, height);
     let view = target.create_view(&wgpu::TextureViewDescriptor::default());
-    let viewport = crate::display::viewport((width, height), options.aspect);
+    let viewport = oag_display::display::viewport((width, height), options.aspect);
 
     let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
         label: Some("loading screen"),

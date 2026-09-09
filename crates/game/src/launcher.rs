@@ -45,7 +45,9 @@ use oag_disc::{DiscImage, Platform};
 use oag_gameplay::input::{Button, Input};
 use oag_title::Title;
 
-use crate::frontend::{Align, Draw, SCREEN};
+use crate::frontend::{Align, Draw};
+
+use oag_display::space::SCREEN;
 
 /// One disc image the chooser offers.
 #[derive(Debug, Clone)]

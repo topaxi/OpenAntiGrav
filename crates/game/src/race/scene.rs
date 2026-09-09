@@ -293,7 +293,7 @@ pub struct Scene {
     /// every pipeline's `multisample` state is fixed at the moment it is
     /// built, so changing this setting mid-race would need every pipeline
     /// above rebuilt, not just this texture. See
-    /// [`crate::display::AntiAliasing::msaa_samples`].
+    /// `oag_display::display::AntiAliasing::msaa_samples`.
     msaa_color: Option<wgpu::Texture>,
     /// The three attachment views the race pass binds, held rather than made
     /// each frame.
@@ -308,7 +308,7 @@ pub struct Scene {
     attachment_views: Attachments,
     /// What this scene's pipelines were actually built with, for the
     /// GRAPHICS menu's restart note - see `Session::open_menus` in `main.rs`.
-    msaa: crate::display::Msaa,
+    msaa: oag_display::display::Msaa,
     /// Where the far plane goes, from the track's own extent.
     far: f32,
 }
@@ -348,7 +348,7 @@ impl Scene {
         anisotropy: Anisotropy,
         bloom_enabled: bool,
         visibility: Option<TrackVisibility>,
-        msaa: crate::display::Msaa,
+        msaa: oag_display::display::Msaa,
         fog_volumes: Vec<oag_vex::fog::FogVolume>,
         light: mesh_render::Light,
         authored_fog: Option<mesh_render::Fog>,

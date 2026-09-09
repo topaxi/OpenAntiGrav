@@ -42,9 +42,9 @@ authored hull projected onto the road can read *worse* than a soft circle on a
 track whose floor curves under the craft.
 
 So this follows
-[`Reconstruction`](../../crates/game/src/display/reconstruction.rs) - variants
+[`Reconstruction`](../../crates/display/src/display/reconstruction.rs) - variants
 named for the technique - and not
-[`MotionBlur`](../../crates/game/src/display/motion_blur.rs), whose "strength,
+[`MotionBlur`](../../crates/display/src/display/motion_blur.rs), whose "strength,
 not technique" framing works only because every one of its tiers is one shutter
 fraction of one tick.
 
@@ -674,7 +674,7 @@ Each step is a landing that can be reviewed on its own.
    design below rests on something `just test-data` can re-check rather than on
    a survey nobody can reproduce.
 2. **The setting, with only `off` and `blob` live - done, 2026-09-04.**
-   [`crates/game/src/display/shadows.rs`](../../crates/game/src/display/shadows.rs),
+   [`crates/display/src/display/shadows.rs`](../../crates/display/src/display/shadows.rs),
    its own file from the start since `display.rs` is already why
    `reconstruction.rs` and `motion_blur.rs` were split out; tests in
    `display/tests.rs` naming `original` and `mapped` as values that must

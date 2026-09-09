@@ -6,8 +6,8 @@
 //! temporal resolve from a spatial one at the call site, which is that it does
 //! not want a spatial pass in front of it.
 
-use crate::display::{Brightness, Gamma, Reconstruction};
 use crate::upscale::{Framebuffer, Presentation, Temporal};
+use oag_display::display::{Brightness, Gamma, Reconstruction};
 
 /// A frame FSR 3.1 resolved must never have built an FXAA or SMAA pass.
 ///

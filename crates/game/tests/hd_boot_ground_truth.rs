@@ -353,7 +353,7 @@ fn the_front_end_grid_is_1920_by_1080() {
 
     assert_eq!(shell.space.size, (1920.0, 1080.0));
     assert!((shell.space.display_aspect - 16.0 / 9.0).abs() < 1e-6);
-    assert_eq!(shell.space, frontend::Space::HD);
+    assert_eq!(shell.space, oag_display::space::Space::HD);
     assert!(
         oag_hd::frontend::MENU_SKIN.menu_x < shell.space.size.0,
         "the menu column lands on screen in this grid"

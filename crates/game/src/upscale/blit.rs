@@ -6,7 +6,7 @@
 
 use anyhow::{Context, Result};
 
-use crate::display::{Brightness, Gamma};
+use oag_display::display::{Brightness, Gamma};
 
 /// What the blit does to the picture on its way onto the surface, as the
 /// shader's uniform expects it.

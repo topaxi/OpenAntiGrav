@@ -379,16 +379,21 @@ setting = "display.window_size"
 values = ["960x544", "1280x720", "1440x816", "1600x900", "1920x1080", "2560x1440"]
 
 # The shape the game is drawn at inside whatever window it got, with the
-# leftover left black. `psp` is 480x272, the shape every camera value on the
-# disc was authored for; `ps2` is 4:3; `free` fills the window without widening
-# the field of view, because nothing on the disc says what the original would
-# have shown on a 21:9 screen.
+# leftover left black. These name *shapes*, not machines: `psp` is 30:17, which
+# is the PSP's 480x272 and the Vita's 960x544 both - the same ratio exactly -
+# and the shape every camera value on the disc was authored for; `ps2` is 4:3;
+# `wide` is 16:9, which is 720p, 1080p and Wipeout HD's own 1920x1080; `free`
+# fills the window without widening the field of view, because nothing on the
+# disc says what the original would have shown on a 21:9 screen.
+#
+# A settings file or `--aspect` may also spell any shape as `w:h`. That is not
+# offered here because there is no finite list of them to offer.
 [[page.entry]]
 kind = "choice"
 label = "ASPECT RATIO"
 string_id = "OAG_DISPLAY_ASPECT_RATIO"
 setting = "display.aspect"
-values = ["psp", "ps2", "free"]
+values = ["psp", "ps2", "wide", "free"]
 
 # Which of the source's own front-end stylings to draw. The values are the
 # *disc's*, not this build's: Wipeout HD's `OPT_FE_STYLE` offers `HD` and

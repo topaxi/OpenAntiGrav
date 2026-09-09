@@ -8,7 +8,7 @@ and this file is what is left**, which is step 5.
 
 ## What landed
 
-- **The setting.** `oag_game::display::Shadows`, `off` and `blob`, in
+- **The setting.** `oag_display::display::Shadows`, `off` and `blob`, in
   `[render_profiles.<title>] shadows`; a `SHADOWS` row on the GRAPHICS page;
   `--shadows` as a per-run override. `original` and `mapped` are refused by
   `FromStr`, and `display/tests.rs` names both so whoever lands one deletes

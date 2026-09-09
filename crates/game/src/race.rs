@@ -243,10 +243,10 @@ pub const MODEL_YAW: f32 = std::f32::consts::PI;
 ///
 /// The PSP renders into 480x272 and nothing else, so an authored field of view is
 /// only defined at this aspect ratio. [`Race::projection`] is where that matters.
-/// Taken from [`crate::frontend::SCREEN`] rather than written again, because it is
+/// Taken from [`oag_display::space::SCREEN`] rather than written again, because it is
 /// the same screen: the front end lays its widgets out in it and the camera was
 /// framed for it.
-pub const AUTHORED_ASPECT: f32 = crate::frontend::SCREEN.0 / crate::frontend::SCREEN.1;
+pub const AUTHORED_ASPECT: f32 = oag_display::space::SCREEN.0 / oag_display::space::SCREEN.1;
 
 /// Degrees of extra field of view per unit/s of **forward** speed.
 ///
@@ -267,7 +267,7 @@ pub const AUTHORED_ASPECT: f32 = crate::frontend::SCREEN.0 / crate::frontend::SC
 /// Three things about the shape of it, each of which was a wrong guess first:
 ///
 /// - **Additive degrees, not a tangent multiplier.** It does not compose the way
-///   [`display::BoostFovKick`](crate::display::BoostFovKick) does.
+///   [`display::BoostFovKick`](oag_display::display::BoostFovKick) does.
 /// - **Driven by `dot(fwd, vel)`, not by speed.** The two are the same number
 ///   whenever the craft goes where it points, and a live sample at *negative*
 ///   forward velocity drove the fov to `54.26` - **below** the authored 60,
@@ -500,9 +500,9 @@ pub struct Race {
     /// rather than in `World` for the same reason [`Self::exhaust`] is - and here
     /// it is load-bearing rather than tidy: cycling the view mid-race must not
     /// move a determinism hash or a replay by a single bit. See
-    /// [`crate::display::CameraView`] and
+    /// [`oag_display::display::CameraView`] and
     /// `tests::cycling_the_camera_changes_no_simulation_state`.
-    view: crate::display::CameraView,
+    view: oag_display::display::CameraView,
     camera: Chase,
     /// The player's camera shake, armed by a hard wall hit. Render-only, for
     /// the same reason [`Self::camera`] is - see
@@ -821,12 +821,12 @@ pub struct Race {
     /// How far the boost's field-of-view kick has opened, `0.0` to `1.0`.
     ///
     /// Render-only state, on `Race` rather than in `World` for the same reason
-    /// [`Self::exhaust`] is. See [`crate::display::BoostFovKick`], which is
+    /// [`Self::exhaust`] is. See [`oag_display::display::BoostFovKick`], which is
     /// where the "authored, not recovered" argument for the whole effect
     /// lives.
     boost_kick: f32,
     /// How strong the kick is, `0` off. `[graphics] boost_fov_kick`.
-    boost_fov_kick: crate::display::BoostFovKick,
+    boost_fov_kick: oag_display::display::BoostFovKick,
     /// How far each airbrake flap has swung, left then right, on `0..=100`.
     ///
     /// The airbrake's own scale rather than an angle, because that is the
@@ -982,14 +982,14 @@ pub struct Race {
     /// unlike the kick it is read by [`Self::update_sight`] rather than by the
     /// camera, because a reticle drawn with the authored field while the player
     /// widened theirs sits off the craft it is supposed to be over. Defaults to
-    /// [`crate::display::Fov::AUTHORED`], which is the identity.
-    sight_fov: crate::display::Fov,
+    /// [`oag_display::display::Fov::AUTHORED`], which is the identity.
+    sight_fov: oag_display::display::Fov,
 }
 
 /// How fast the kick opens, per second, as an exponential approach.
 ///
 /// Faster than [`BOOST_FOV_CLOSE_RATE`] on purpose: the boost should arrive as a
-/// shove and let go slowly. Authored, like [`crate::display::BoostFovKick`].
+/// shove and let go slowly. Authored, like [`oag_display::display::BoostFovKick`].
 pub const BOOST_FOV_OPEN_RATE: f32 = 9.0;
 
 /// How fast the kick closes again, per second. See [`BOOST_FOV_OPEN_RATE`].

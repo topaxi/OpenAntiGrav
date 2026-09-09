@@ -199,9 +199,9 @@ fn a_full_grid_fits_the_screen() {
         panic!("the panel is the first draw");
     };
     assert!(rect[0] >= 0.0 && rect[1] >= 0.0);
-    assert!(rect[0] + rect[2] <= crate::frontend::SCREEN.0);
+    assert!(rect[0] + rect[2] <= oag_display::space::SCREEN.0);
     assert!(
-        rect[1] + rect[3] <= crate::frontend::SCREEN.1,
+        rect[1] + rect[3] <= oag_display::space::SCREEN.1,
         "panel bottom {} is off the 272-line screen",
         rect[1] + rect[3]
     );
@@ -298,7 +298,7 @@ fn both_lines_together_still_fit_the_screen() {
         panic!("the panel is the first draw");
     };
     assert!(
-        rect[1] + rect[3] <= crate::frontend::SCREEN.1,
+        rect[1] + rect[3] <= oag_display::space::SCREEN.1,
         "panel bottom {} is off the 272-line screen",
         rect[1] + rect[3]
     );
