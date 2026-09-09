@@ -60,6 +60,11 @@ python3 scripts/export-ppsspp-sym.py psp-pulse-usa
 # -> data/ghidra/psp-pulse-usa.sym (686 functions)
 ```
 
+Output goes under gitignored `data/ghidra/` by default (`--out` overrides) -
+generated from `names.tsv`, never a second copy of it, the same as
+`data/ghidra/psp-imports.tsv` (`just resolve-imports`'s own output, likewise
+never committed).
+
 Then in PPSSPP: **Debug menu -> Load symbol map...** and pick the file. Only
 the four PSP binaries are accepted - `psp-pulse-usa`, `psp-pulse-eu`,
 `psp-pure-usa`, `psp-pure-eu` - the other three `names.tsv` directories
@@ -75,13 +80,26 @@ Two things intentionally *not* carried across:
   tell PPSSPP's disassembly view something false. `psp-pulse-usa` alone has
   80 of these; the script counts and reports them rather than silently
   skipping.
-- **Size is always written as `0000`.** `names.tsv` carries no size column at
-  all (`address kind name confidence evidence`), and inventing one - the gap
-  to the next function's address, say - would claim knowledge the table does
-  not have. A zero-size symbol is still a correctly named point in PPSSPP's
-  disassembly view; this project already refuses that kind of stand-in
-  elsewhere (CLAUDE.md, "never invent what the assets already author"), and
-  the same rule applies here even though a size is not an asset.
+- **Size is the gap to the next row's address, not a real measurement.**
+  `names.tsv` carries no size column at all (`address kind name confidence
+  evidence`). The first version of this exporter wrote `0000` on the
+  reasoning that a zero-size symbol is "still a correctly named point" and
+  inventing a size would claim knowledge the table doesn't have - checked
+  against PPSSPP v1.20.4's own `SymbolMap.cpp` and found wrong: `AddFunction`
+  always calls `AddLabel` too, so the entry address gets a name via the
+  exact-match `GetLabelName` lookup regardless of size, but `GetFunctionStart`
+  (the range lookup `memory.disasm`'s per-instruction `function` field uses)
+  checks `start <= address && start+size > address` - at `size=0` that is
+  false for *every* address, including the start address itself. A `0000`
+  size names exactly one address per function and nothing else in its body.
+  So the exporter now uses the gap to the next row's address (function or
+  `data`, whichever `names.tsv` places next) - a real upper bound derived
+  from data the table does carry, not a fabricated size, and the same
+  heuristic `PpssppExportSymFile.py` itself uses
+  (`getBody().getFirstRange().getLength()`, its own comment calling it "not
+  ideal but should cover most cases"). See
+  [ppsspp-debugger.md](ppsspp-debugger.md#naming-a-function-live-with-hlefuncaddrename-and-a-crash-to-avoid)
+  for the worked example that found this, live, over `hle.func.rename`.
 
 The `_q` suffix carries across exactly as `apply-ghidra-names.py` derives it
 (the export script imports that module rather than restating the threshold,
@@ -106,28 +124,22 @@ PPSSPPHeadless data/cache/pulse-psp-usa.iso --debugger=47800 --graphics=software
 uv run --with websocket-client scripts/harvest-ppsspp-symbols.py psp-pulse-usa --port 47800
 ```
 
-Measured against PPSSPP v1.20.4, 2026-09-09, both PSP Pulse pressings:
+**The honest headline: 60 real, useful names out of 13,372 functions PPSSPP
+finds - and the useful 60 are dominated by the transcendental math routines
+`just check-determinism` already cares about.** Measured against PPSSPP
+v1.20.4, 2026-09-09, both PSP Pulse pressings:
 
-| Binary | Total functions PPSSPP found | Named (not `z_un_`) | `zz_`-prefixed HLE stubs | Real detections |
-| --- | --- | --- | --- | --- |
-| `psp-pulse-usa` | 13,372 | 408 | 335 | 73 |
-| `psp-pulse-eu` | 13,364 | 407 | 334 | 73 |
+| Binary | Total functions PPSSPP found | Named (not `z_un_`) | `zz_`-prefixed HLE stubs | Real detections | Real detections `names.tsv` doesn't already have |
+| --- | --- | --- | --- | --- | --- |
+| `psp-pulse-usa` | 13,372 | 408 | 335 | 73 | 60 |
+| `psp-pulse-eu` | 13,364 | 407 | 334 | 73 | 63 |
 
-**306 of the 335 `zz_`-prefixed stubs on USA already duplicate
-`data/ghidra/psp-imports.tsv`** (the NID-based table `just resolve-imports`
-produces, applied at confidence 99) - these are the HLE syscall trampolines,
-and `resolve-imports` already names them more precisely, from the NID table
-rather than a generic stub signature. The `zz_` prefix itself is PPSSPP's own
-convention for "this is a syscall stub, not a real function" - **do not
-confuse it with this project's `_q` confidence suffix**, they mean unrelated
-things.
-
-**The 73 real, non-stub detections are libc/newlib, soft-float helpers, and -
-the interesting part for this project - transcendental math routines**:
-`sinf`, `cosf`, `tanf`, `atanf`, `atan2f`, `acos`, `sqrtf`, `pow`, `powf`,
-`expf`, `logf`, `fmodf`, `scalbn`/`scalbnf`, `copysign`/`copysignf`,
-`isnan`/`isnanf`, `finitef`, `rint`, plus a handful of `sceGu*`/`sceGup*`
-graphics-library calls and one PPSSPP-specific hack entry,
+**The 73 real, non-stub detections per binary are libc/newlib, soft-float
+helpers, and - the interesting part for this project - the transcendental
+math routines**: `sinf`, `cosf`, `tanf`, `atanf`, `atan2f`, `acos`, `sqrtf`,
+`pow`, `powf`, `expf`, `logf`, `fmodf`, `scalbn`/`scalbnf`,
+`copysign`/`copysignf`, `isnan`/`isnanf`, `finitef`, `rint`, plus a handful of
+`sceGu*`/`sceGup*` graphics-library calls and one PPSSPP-specific hack entry,
 `expensive_wipeout_pulse` at `0x08833edc` (a game-specific optimisation
 PPSSPP itself carries a name for - not investigated further here). Knowing
 which original addresses **are** `sinf`/`cosf`/etc is directly useful:
@@ -136,17 +148,32 @@ simulation code, and this is independent confirmation of which functions in
 the *original* binary are the platform's own libm, as opposed to something
 game-specific that merely resembles one.
 
+The remaining 335/334 `zz_`-prefixed entries are PPSSPP's own HLE syscall
+trampolines - **306 of USA's 335 already duplicate the addresses in a live
+Ghidra session's `data/ghidra/psp-imports.tsv`** (`just resolve-imports`'s
+own generated, gitignored output, applied at confidence 99 from the NID
+table, more precise than a generic stub signature match). That comparison is
+a measurement made against whatever happened to be sitting in this checkout's
+`data/ghidra/` at the time, not a committed fact - `psp-imports.tsv` is
+regenerated by `just resolve-imports` and never tracked, so treat "306 of
+335" as illustrative of the overlap's shape rather than a number to cite
+verbatim elsewhere. The `zz_` prefix itself is PPSSPP's own convention for
+"this is a syscall stub, not a real function" - **do not confuse it with this
+project's `_q` confidence suffix**, they mean unrelated things.
+
 Only 13 of USA's 73 real detections (10 of EU's) land on an address
 `names.tsv` already names - see the overwrite-risk table below. The harvest
-itself is committed at `scripts/ppsspp-detected-psp-pulse-usa.tsv` and
-`scripts/ppsspp-detected-psp-pulse-eu.tsv`, in the same spirit as
-`scripts/psp-import-names.txt`: a name from a mechanical source, with its own
-provenance header, **never merged into `names.tsv`**. `psp-pure-usa` and
-`psp-pure-eu` were not harvested - Pure's `names.tsv` is thin (60/43 rows,
-`oag-pure` is deliberately thinner than `oag-pulse`) and PPSSPP's detections
-are dominated by newlib/libm, which do not depend on the game; the Pulse
-harvest already answers "what does PPSSPP know that we do not" for that
-shared code.
+itself is committed at `docs/ghidra/captures/psp-pulse-usa/ppsspp-detected.tsv`
+and `docs/ghidra/captures/psp-pulse-eu/ppsspp-detected.tsv` - a sibling of
+that directory's Ghidra-capture files (`functions.tsv` etc.), never merged
+into them; see `docs/ghidra/captures/README.md`. Provenance is its own
+`source` column (`ppsspp-hle.func.list`) rather than `names.tsv`'s
+evidence-page mechanism or the real captures' Ghidra `SourceType` column -
+**never merged into `names.tsv`**. `psp-pure-usa` and `psp-pure-eu` were not
+harvested - Pure's `names.tsv` is thin (60/43 rows, `oag-pure` is
+deliberately thinner than `oag-pulse`) and PPSSPP's detections are dominated
+by newlib/libm, which do not depend on the game; the Pulse harvest already
+answers "what does PPSSPP know that we do not" for that shared code.
 
 ## Import: `names.tsv` -> Ghidra, via PPSSPP's own `.sym`
 
@@ -182,16 +209,23 @@ no bridge needed:
   Seven of the thirteen are a real downgrade (a documented, game-specific
   name replaced by PPSSPP's generic one); six are no-ops because the names
   already agree. EU has the same six-real/four-identical shape at its own
-  ten addresses (see `scripts/ppsspp-detected-psp-pulse-eu.tsv` against
-  `docs/ghidra/functions/psp-pulse-eu/names.tsv`).
+  ten addresses (see `docs/ghidra/captures/psp-pulse-eu/ppsspp-detected.tsv`
+  against `docs/ghidra/functions/psp-pulse-eu/names.tsv`).
 - **The fix, when someone does run it with a Ghidra bridge:** import first
   (bringing in the 395 addresses - USA count; 397 for EU - PPSSPP found that
-  `names.tsv` does not have anything for, mostly the 73-per-binary real
-  detections above plus whatever `zz_` stubs `psp-imports.tsv` missed), then
-  immediately re-run `just apply-names` - it applies every `names.tsv` row
-  unconditionally, so it repairs exactly the seven real collisions above
-  without anyone hand-tracking which ones PPSSPP touched. Running
-  `apply-names` second is the safety net the maintainer's own note gestures
-  at ("your work can only get overwritten if you've renamed one of the
-  autodetected functions") - it can be overwritten, but only until the next
-  `apply-names`.
+  `names.tsv` does not have anything for, mostly the 60/63-per-binary real
+  detections above plus whatever `zz_` stubs a freshly regenerated
+  `psp-imports.tsv` missed), then immediately re-run `just apply-names` - it
+  applies every `names.tsv` row unconditionally, so it repairs exactly the
+  seven real collisions above without anyone hand-tracking which ones PPSSPP
+  touched. Running `apply-names` second is the safety net the maintainer's
+  own note gestures at ("your work can only get overwritten if you've
+  renamed one of the autodetected functions") - it can be overwritten, but
+  only until the next `apply-names`.
+- **Or skip the file round trip and the crash risk entirely: `hle.func.rename`
+  live, one address at a time.** [`ppsspp-debugger.md`](ppsspp-debugger.md#naming-a-function-live-with-hlefuncaddrename-and-a-crash-to-avoid)
+  confirms it renames a `z_un_...`/PPSSPP-detected entry in place, correctly,
+  for the whole function body, with no Ghidra bridge involved at all - it
+  just doesn't touch the Ghidra database the way a real `PpssppImportSymFile`
+  run would, so it's a way to get a *running PPSSPP* readable, not a way to
+  get Ghidra's copy of `names.tsv` updated with what PPSSPP found.

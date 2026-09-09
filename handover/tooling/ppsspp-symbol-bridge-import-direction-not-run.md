@@ -10,15 +10,24 @@ Ghidra and PPSSPP's Debug menu. Two of the three directions are done:
   All four PSP binaries tested (`psp-pulse-usa` 686 functions,
   `psp-pulse-eu` 411, `psp-pure-usa` 14, `psp-pure-eu` 9), evidence-checked,
   every line hand-verified to parse under `PpssppImportSymFile.py`'s own
-  splitting logic.
+  splitting logic. Size is the gap to the next `names.tsv` row's address, not
+  `0000` - a live test plus PPSSPP's own `SymbolMap.cpp` source confirmed a
+  `size=0` entry gets a name at its exact start address only, with zero
+  function-body grouping in `memory.disasm`, so a real (if approximate)
+  extent was worth deriving instead. See the doc's "Export" section.
 - **Harvest** (what PPSSPP's own analysis already knows, live over the
   websocket debugger, no GUI): `scripts/harvest-ppsspp-symbols.py`, run
   against both PSP Pulse pressings and committed as
-  `scripts/ppsspp-detected-psp-pulse-usa.tsv` /
-  `...-psp-pulse-eu.tsv`. 408/407 named functions each, 335/334 of which
-  duplicate `psp-imports.tsv`'s NID-based stubs; the ~73 real detections per
-  binary are libc/newlib plus the transcendental math routines
-  (`sinf`/`cosf`/`atan2f`/`sqrtf`/`pow`/... - see the doc for the full list).
+  `docs/ghidra/captures/psp-pulse-usa/ppsspp-detected.tsv` /
+  `psp-pulse-eu/ppsspp-detected.tsv` - a sibling of that directory's
+  Ghidra-capture files, never merged into them (they're PPSSPP state, not
+  Ghidra state). 408/407 named functions each, 335/334 of which are `zz_`
+  HLE stubs (306 of USA's overlapping a live `psp-imports.tsv`, itself
+  gitignored so that count is illustrative, not a fact to cite verbatim); the
+  73 real detections per binary are libc/newlib plus the transcendental math
+  routines (`sinf`/`cosf`/`atan2f`/`sqrtf`/`pow`/... - directly useful since
+  `just check-determinism` polices exactly that set), of which 60 (USA) / 63
+  (EU) are addresses `names.tsv` doesn't already have a row for.
 
 **The import direction (PPSSPP's `.sym` -> Ghidra, i.e. actually running
 `PpssppImportSymFile`) was not run.** The Ghidra bridge was another lane's
@@ -47,10 +56,9 @@ bridge:
   "libc/newlib/math, not gameplay code" - it's possible a handful are worth a
   closer look (the one PPSSPP-specific hack entry,
   `expensive_wipeout_pulse` at `0x08833edc`, was noticed but not chased).
-- `hle.func.add`/`.remove`/`.rename`/`.scan` exist in the PPSSPP binary
-  (confirmed via `strings`, listed in `ppsspp-debugger.md`'s table) but were
-  never exercised - a live-session alternative to the file-based Debug-menu
-  round trip, unverified.
+- `hle.func.scan` exists in the PPSSPP binary (confirmed via `strings`,
+  listed in `ppsspp-debugger.md`'s table) but was never exercised - unlike
+  `.add`/`.remove`/`.rename`, which now are: see the next bullet.
 
 ## Next Steps
 
@@ -64,6 +72,11 @@ bridge:
 3. `scripts/audit-ghidra-names.py --binary <binary>` afterward, the same
    safety net `the-eu-name-gap-...md` already used after its own
    bulk-apply pass.
-4. Optional: try `hle.func.add`/`.rename` live over the debugger as a
-   file-free alternative to the Debug-menu round trip, and record whether it
-   actually works.
+4. Already done, live over the debugger this session: `hle.func.rename`
+   works as a file-free, per-address alternative to the Debug-menu round
+   trip - confirmed to rename correctly with full function-body grouping in
+   `memory.disasm`. **`hle.func.remove` immediately followed by
+   `hle.func.add` at the same address crashes PPSSPP**, reproduced twice
+   independently (`.../stl_vector.h:1253` assertion). See
+   `ppsspp-debugger.md`'s "Naming a function live" section for the exact
+   call shapes and the crash repro - don't repeat that sequence live.

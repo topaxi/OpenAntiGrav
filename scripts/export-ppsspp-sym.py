@@ -36,13 +36,32 @@ prints to stderr, never into the `.sym` body.
   `getFunctionManager().getFunctions()` - there is no data-symbol counterpart
   in the format it produces. Emitting a `data` row as a "function" would tell
   PPSSPP's disassembly view something false about it, so `data` rows are
-  counted and reported, never exported.
-- **Size is always `0000`.** `names.tsv` has no size column - address, kind,
-  name, confidence, evidence, nothing else - and inventing one (say, from the
-  gap to the next row's address) would claim knowledge the table does not
-  carry, the same reason this project refuses a stand-in asset elsewhere. A
-  zero-size symbol is still a correctly named point in PPSSPP's disassembly
-  view; it just does not claim to know where the function ends.
+  counted and reported, never exported. `docs/ghidra/captures/<binary>/labels.tsv`
+  is the natural home if a data-row export is ever wanted - that file already
+  carries non-function `USER_DEFINED` symbols in the captures convention this
+  project uses elsewhere; this script doesn't reach for it because none of
+  the four PSP binaries' `data` rows are gameplay-relevant enough yet to be
+  worth the second output format.
+- **Size is the gap to the next row's address, not `0000`.** `names.tsv` has
+  no size column, so a size still has to come from somewhere, and this was
+  originally `0000` on the reasoning that a zero-size symbol is "still a
+  correctly named point." That turned out to be wrong in a way worth
+  recording: read directly from PPSSPP v1.20.4's own `SymbolMap.cpp`,
+  `AddFunction` always also calls `AddLabel`, so the entry address gets a
+  name via the *exact-match* `GetLabelName` lookup regardless of size - but
+  `GetFunctionStart`, the *range* lookup `memory.disasm`'s per-instruction
+  `function` field uses, checks `start <= address && start+size > address`.
+  At `size=0` that is never true for *any* address, including the start
+  address itself (`start+0 > start` is false). So a `0000`-size import would
+  have named exactly one address per function and shown nothing for every
+  other instruction inside it - not "an honest point", a body with no
+  function context at all. The gap to the next known address (function or
+  data, whichever names.tsv places next) is a real upper bound rather than a
+  fabricated one - the same heuristic `PpssppExportSymFile.py` itself uses
+  (`getBody().getFirstRange().getLength()`, its own comment calling it "not
+  ideal but should cover most cases"). The last function in a binary has no
+  next row to bound it and keeps `0000`, honestly, since there is nothing to
+  compute it from.
 
 ## Matching the pressing
 
@@ -95,14 +114,24 @@ def load_applier():
 
 
 def export_sym(rows, applier) -> list[str]:
-    """Render `function` rows as PPSSPP `.sym` lines, sorted by address."""
+    """Render `function` rows as PPSSPP `.sym` lines, sorted by address.
+
+    Size is the gap to the next row's address - function or data, whichever
+    `names.tsv` places next - regardless of whether that neighbour itself
+    ends up exported. That address is real information the table carries
+    (something else is known to start there), so the gap is a genuine upper
+    bound, not a guess; see the module docstring for why `0000` doesn't work.
+    """
+    ordered = sorted(rows, key=lambda r: int(r.address, 16))
     lines = []
-    for row in sorted(rows, key=lambda r: int(r.address, 16)):
+    for i, row in enumerate(ordered):
         if row.kind != "function":
             continue
         if row.confidence < applier.QUALIFIED_MIN:
             continue  # ADR-0005: below 50, no name was ever written for this row
-        lines.append("%08X %s,%04X" % (int(row.address, 16), row.symbol, 0))
+        address = int(row.address, 16)
+        size = int(ordered[i + 1].address, 16) - address if i + 1 < len(ordered) else 0
+        lines.append("%08X %s,%04X" % (address, row.symbol, size))
     return lines
 
 

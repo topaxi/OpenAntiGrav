@@ -29,6 +29,19 @@ found `psp-pure-usa/rocket-visuals.md` on the first run: a comment in the Pure
 database pointed at a page that does not exist, and nothing else in the project
 could have told us.
 
+**One file per binary directory is not a Ghidra capture at all:
+`ppsspp-detected.tsv`.** `scripts/harvest-ppsspp-symbols.py` writes it,
+straight from PPSSPP's own websocket debugger, not from a Ghidra database -
+see that script's docstring and `docs/reverse-engineering/ppsspp-symbol-bridge.md`.
+It sits beside the real captures because the column shape and the
+structural checks below (parses, right column count, well-formed address)
+are the same, and a second validator for one file would be more code than
+the difference is worth. It is still exempt from every capture-specific
+check past structure: it does not need an evidence tree the way a *Ghidra*
+capture does (`ppsspp-hle.func.list` is not `names.tsv`-eligible in the
+first place, so there is nothing for it to be orphaned from), and it never
+appears in the README's Ghidra measurement table.
+
 **What it does not assert: agreement with `names.tsv`.** A capture records what
 a database held on a date, and a name in `names.tsv` may legitimately be
 corrected afterwards. Failing the gate because a snapshot disagrees with
@@ -59,6 +72,16 @@ SCHEMA = {
     "comments.tsv": 4,
     "signatures.tsv": 4,
     "variables.tsv": 6,
+    # Not a Ghidra capture - PPSSPP's own auto-detected symbols, harvested by
+    # scripts/harvest-ppsspp-symbols.py. Structure only: `source` here is
+    # never Ghidra's SourceType (see that script's docstring), so it is not
+    # held to the same vocabulary the real captures' `source` columns are.
+    # Every other check below is either directory-scoped (the evidence-tree
+    # check, which this file's own binary directory already satisfies) or
+    # keyed to a specific real-capture filename (the README table, the
+    # comments.tsv doc-reference check), so nothing further has to name this
+    # file to leave it out of what only applies to Ghidra state.
+    "ppsspp-detected.tsv": 4,
 }
 
 # A path anywhere under `docs/` or `handover/`, tolerating the `\n` escape a

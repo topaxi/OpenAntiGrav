@@ -17,10 +17,28 @@ purpose-built listing rather than a disasm-scrape of the same information.
 evidence page whose text still contains the address and the name -
 `just check-names` refuses a row that doesn't. A name PPSSPP's hash database
 recognised has no such page: nobody here read the function and wrote why it
-is `sinf`, PPSSPP's own signature matcher decided it silently. So this writes
-a separate table with its own provenance column, the same shape
-`scripts/psp-import-names.txt` already established for "a name from a
-mechanical source, not a documented reading."
+is `sinf`, PPSSPP's own signature matcher decided it silently.
+
+Output lives at `docs/ghidra/captures/<binary>/ppsspp-detected.tsv` - a
+*sibling* of that directory's `functions.tsv`/`labels.tsv`/`comments.tsv`
+capture files, never merged into any of them. Those files are a snapshot of
+what a *Ghidra* database held (`ADR-0047`, `docs/ghidra/captures/README.md`);
+this is a snapshot of what *PPSSPP's own analysis* found, which is a
+different tool and a different kind of claim, even though the two conventions
+share a directory and a four-column, tab-separated shape for the reason below.
+`scripts/check-ghidra-captures.py` validates it structurally (column count,
+address form) the same way it validates the Ghidra captures - see its
+`SCHEMA` dict's `ppsspp-detected.tsv` entry - but does not, and should not,
+treat it as Ghidra state.
+
+The `source` column reuses the *position* `functions.tsv` already has for
+provenance, not its *vocabulary*: that file's `source` spells Ghidra's own
+`SourceType` enum (today always `USER_DEFINED`), which has no member for "a
+different emulator's signature matcher decided this". Every row here instead
+names the exact API call that produced it (`ppsspp-hle.func.list`) - the
+column's job (say where a name came from) carried over, the specific values
+invented fresh because reusing `USER_DEFINED` or `ANALYSIS` would misrepresent
+whose analysis this is.
 
 PPSSPP also skips unresolved addresses under a `z_un_<addr>` placeholder
 (the same convention `PpssppImportSymFile.py` filters with `skipZun`); this
@@ -49,6 +67,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from ppsspp_debugger import Debugger  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
+CAPTURES = ROOT / "docs" / "ghidra" / "captures"
 
 # The four PSP binaries PPSSPP can run - the same set export-ppsspp-sym.py
 # accepts, for the same reason: the other three names.tsv binaries are not
@@ -70,16 +89,18 @@ def write_table(rows: list[dict], binary: str, ppsspp_version: str, out: Path) -
         f"# {ppsspp_version}, {date.today().isoformat()}.",
         "#",
         "# Provenance: PPSSPP's own HLE-syscall detection and hash-matched",
-        "# function-replacement database, not a documented reading. **These rows",
-        "# have no evidence page and MUST NOT be merged into names.tsv** - see",
-        "# scripts/harvest-ppsspp-symbols.py's own docstring and",
-        "# docs/reverse-engineering/ppsspp-symbol-bridge.md.",
+        "# function-replacement database, not a documented reading, and NOT a",
+        "# capture of Ghidra state the way this directory's other files are",
+        "# (ADR-0047) - a sibling with the same shape, never merged into them.",
+        "# These rows have no evidence page and MUST NOT be merged into",
+        "# names.tsv - see scripts/harvest-ppsspp-symbols.py's own docstring",
+        "# and docs/reverse-engineering/ppsspp-symbol-bridge.md.",
         "#",
         "# address\tname\tsize\tsource",
     ]
     for row in sorted(rows, key=lambda r: r["address"]):
         lines.append(
-            "0x%08x\t%s\t%d\tppsspp-hle.func.list" % (row["address"], row["name"], row["size"])
+            "%08x\t%s\t%d\tppsspp-hle.func.list" % (row["address"], row["name"], row["size"])
         )
     out.write_text("\n".join(lines) + "\n")
 
@@ -90,7 +111,7 @@ def main() -> int:
     ap.add_argument("--port", type=int, default=47800)
     ap.add_argument(
         "--out", type=Path, default=None,
-        help="output table path (default scripts/ppsspp-detected-<binary>.tsv)",
+        help="output table path (default docs/ghidra/captures/<binary>/ppsspp-detected.tsv)",
     )
     args = ap.parse_args()
 
@@ -106,7 +127,7 @@ def main() -> int:
     finally:
         dbg.close()
 
-    out = args.out or (ROOT / "scripts" / f"ppsspp-detected-{args.binary}.tsv")
+    out = args.out or (CAPTURES / args.binary / "ppsspp-detected.tsv")
     write_table(rows, args.binary, "PPSSPP v1.20.4", out)
 
     zz = sum(1 for r in rows if r["name"].startswith("zz_"))
