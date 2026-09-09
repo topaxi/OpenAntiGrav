@@ -164,9 +164,7 @@ pub(super) fn apply(
     let skin = match oag_formats::ship_skin::parse(&blob) {
         Ok(skin) => skin,
         Err(error) => {
-            report.push(format!(
-                "{entry}: {error} - the craft keeps its own paint"
-            ));
+            report.push(format!("{entry}: {error} - the craft keeps its own paint"));
             return;
         }
     };

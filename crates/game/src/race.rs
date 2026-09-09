@@ -86,7 +86,7 @@
 use std::path::PathBuf;
 
 use crate::language::roles;
-use crate::livery::{self, Livery};
+use crate::livery::Livery;
 use anyhow::{Context, Result};
 use oag_core::math::frustum::Frustum;
 use oag_core::math::{Mat4, Quat, Vec3};

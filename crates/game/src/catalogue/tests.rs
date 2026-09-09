@@ -159,7 +159,9 @@ fn a_team_carries_the_skins_its_normal_model_declares() {
     assert_eq!(skins[0].location, r"Data\Ships\Ersatz\ship_alt.dat");
     assert_eq!(skins[1].name, "Eliminator");
     assert_eq!(
-        teams[0].skin("ELIMINATOR").map(|skin| skin.location.as_str()),
+        teams[0]
+            .skin("ELIMINATOR")
+            .map(|skin| skin.location.as_str()),
         Some(r"Data\Ships\Ersatz\ship_eliminator.dat"),
         "the name a player types is matched case-insensitively"
     );

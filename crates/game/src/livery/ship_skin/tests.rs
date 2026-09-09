@@ -62,9 +62,14 @@ fn the_name_is_matched_case_insensitively() {
 #[test]
 fn a_team_that_declares_no_skin_is_reported_and_races_the_baseline() {
     let mut report = Vec::new();
-    assert_eq!(declared(&documents(), "Beta", "Alternative", &mut report), None);
+    assert_eq!(
+        declared(&documents(), "Beta", "Alternative", &mut report),
+        None
+    );
     assert!(
-        report.iter().any(|line| line.contains("Beta") && line.contains("none")),
+        report
+            .iter()
+            .any(|line| line.contains("Beta") && line.contains("none")),
         "{report:?}"
     );
 }
@@ -83,8 +88,14 @@ fn an_unknown_skin_name_lists_what_the_team_does_declare() {
 #[test]
 fn an_unknown_team_resolves_to_nothing() {
     let mut report = Vec::new();
-    assert_eq!(declared(&documents(), "Gamma", "Alternative", &mut report), None);
-    assert!(report.iter().any(|line| line.contains("Gamma")), "{report:?}");
+    assert_eq!(
+        declared(&documents(), "Gamma", "Alternative", &mut report),
+        None
+    );
+    assert!(
+        report.iter().any(|line| line.contains("Gamma")),
+        "{report:?}"
+    );
 }
 
 /// A pack's manifest is read on the same terms as the disc's own definition,

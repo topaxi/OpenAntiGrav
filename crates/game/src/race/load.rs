@@ -316,38 +316,19 @@ pub fn load(options: &Options) -> Result<Loaded> {
         &options.opponent_teams,
         &mut report,
     );
-    // The player's own paint job, resolved against what the definition
-    // declares for their team - see `livery::ship_skin`, and note that
-    // *which* skin a race flies is this project's choice rather than the
-    // original's.
-    let skin = livery::ship_skin::resolve(
+    let roster::Grid {
+        slot_teams,
+        hd_trail_red,
+        liveries,
+    } = roster::grid(
         craft_of(&mut craft, &mut archives),
         craft_title,
+        options,
         &team,
-        options.skin.as_deref(),
-        options.mode,
-        &mut report,
-    );
-    let slot_teams = livery::teams_for_slots(&team, &available, oag_gameplay::MAX_SHIPS);
-    let hd_trail_red = roster::hd_trail_red(&slot_teams);
-    let liveries = livery::load(
-        craft_of(&mut craft, &mut archives),
-        &slot_teams,
-        &livery::LoadContext {
-            race: craft_title.race,
-            mode: options.mode,
-            flare: craft_title.flare,
-            lod: options.lod,
-        },
+        &available,
         hull_variant,
-        skin.as_deref(),
         &mut report,
     )?;
-    report.push(format!(
-        "grid liveries: {} - which team flies which slot is this project's, not \
-         the original's (livery.rs)",
-        slot_teams.join(", ")
-    ));
     let (shadows, shadow_hulls) = super::shadow::assets(
         craft_of(&mut craft, &mut archives),
         &slot_teams,

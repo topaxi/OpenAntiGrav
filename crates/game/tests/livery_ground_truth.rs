@@ -465,7 +465,11 @@ fn a_skin_repaints_the_players_own_hull_and_nobody_elses() {
             .collect()
     };
     let (before, after) = (texels(&baseline, 0), texels(&painted, 0));
-    assert_eq!(before.len(), after.len(), "the same hull, so the same slots");
+    assert_eq!(
+        before.len(),
+        after.len(),
+        "the same hull, so the same slots"
+    );
     let mut differing = 0u64;
     let mut total = 0u64;
     for ((label, before), (_, after)) in before.iter().zip(&after) {
@@ -474,8 +478,10 @@ fn a_skin_repaints_the_players_own_hull_and_nobody_elses() {
         }
         assert_eq!(before.len(), after.len(), "{label}: same size either way");
         differing += before
-            .chunks_exact(4)
-            .zip(after.chunks_exact(4))
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .zip(after.as_chunks::<4>().0)
             .filter(|(a, b)| a != b)
             .count() as u64;
         total += (before.len() / 4) as u64;
