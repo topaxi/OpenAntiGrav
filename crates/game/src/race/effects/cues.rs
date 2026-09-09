@@ -93,7 +93,7 @@ impl Race {
     /// Raises a Zone milestone announcement, to be drained the same tick.
     ///
     /// Whether `milestone` actually names a loaded cue is
-    /// [`RaceView::announcer`]'s question, not this call's - see
+    /// [`Self::announcer`]'s question, not this call's - see
     /// [`Self::drain_announcements`] for why the split is the same one
     /// [`Self::raise_contact_cue`] and [`Banks::pick`](crate::audio::sfx::Banks::pick)
     /// already keep.
@@ -116,7 +116,7 @@ impl Race {
     /// Raises a Zone speed-class announcement, to be drained the same tick.
     ///
     /// Whether `stage` actually names a loaded cue is
-    /// [`RaceView::class_announcer`]'s question, not this call's - same split as
+    /// [`Self::class_announcer`]'s question, not this call's - same split as
     /// [`Self::push_announcement`].
     pub(in crate::race) fn push_class_announcement(&mut self, stage: u32) {
         self.sim.class_announcements.push(stage);

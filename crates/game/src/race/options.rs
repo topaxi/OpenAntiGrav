@@ -423,7 +423,7 @@ pub struct Setup {
     pub effects: psys::Library,
     /// The decoded sound cues, out of `Data\Sound\*.bnk`.
     ///
-    /// The audio counterpart of [`RaceView::effects`] and held to the same rule: a
+    /// The audio counterpart of [`Self::effects`] and held to the same rule: a
     /// cue that would not resolve is **silent** rather than substituted, and a
     /// source that ships no sound banks at all - Wipeout Pure - loads an empty
     /// library and races without effects. Headless tests that build a `Race` by
@@ -437,7 +437,7 @@ pub struct Setup {
     /// The circuit's **own** authored sound emitters, the ambience that belongs
     /// to the track rather than to any craft.
     ///
-    /// Beside [`RaceView::sounds`] for the same reason it is here: decoded data
+    /// Beside [`Self::sounds`] for the same reason it is here: decoded data
     /// with nothing device-shaped in it. Empty on a Zone circuit, which authors
     /// none of the three `.vex` audio classes at all, and on any title whose
     /// circuits have never been swept for them.
@@ -446,17 +446,17 @@ pub struct Setup {
     /// `oag_title::ZoneAnnouncer` when it has one.
     ///
     /// Empty on every other mode and on a title with no recovered ladder -
-    /// [`RaceView::sounds`]'s rule applies unchanged: a milestone that will not
+    /// [`Self::sounds`]'s rule applies unchanged: a milestone that will not
     /// resolve plays nothing rather than a substitute.
     pub announcer: crate::audio::sfx::Announcer,
-    /// Zone mode's speed-class announcer, [`RaceView::announcer`]'s sibling,
+    /// Zone mode's speed-class announcer, [`Self::announcer`]'s sibling,
     /// decoded from this title's own `oag_title::ZoneClassAnnouncer` when it
     /// has one.
     pub class_announcer: crate::audio::sfx::ClassAnnouncer,
     /// This title's own zone-number-to-speed-class ladder, when it is
     /// recovered - the same [`oag_title::ZoneStages`]
     /// [`crate::race::zone_grade::ZoneGrade`] carries, copied here so
-    /// [`RaceView::class_announcer`] can be triggered off the same edge without
+    /// [`Self::class_announcer`] can be triggered off the same edge without
     /// reaching into the render-facing scene state to get it. `None` on every
     /// title but HD/Fury, which is `oag_title::ZoneStages`' own standing today.
     pub zone_stages: Option<&'static oag_title::ZoneStages>,
