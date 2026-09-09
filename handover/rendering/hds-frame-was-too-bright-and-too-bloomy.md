@@ -100,14 +100,20 @@ Post-fix it reaches 10.1-10.4 %. (2) The decoded and undecoded domains for the
 glow sample differ by 0.02-0.27 points on four of five circuits, so the
 measurement does not choose between them and the consistency argument did -
 **chosen, not measured**, no confidence score. (3) **Zone 1 gets darker** when
-the term is added, and 6.5 % darker on the undecoded variant: the ladder feeds
-the luminance adaptation, so a brighter scene buys a lower exposure. Adding
-light to this chain is not monotonic in the output.
+the term is added - and the discriminator is in the same table: bloom **on**
+goes 18.490 -> 18.047 %, bloom **off** goes 13.138 -> 13.146 %, *up*. The
+darkening exists only where the chain runs, so it is the ladder feeding the
+luminance adaptation. Adding light to this chain is not monotonic in the
+output.
 
-**Unexplained and not this change's doing**: ten of the sixteen circuits
-measure identically with `[graphics] bloom` on and off, on the baseline build
-as well as the fixed one. The six that respond are the four named
-environments plus Zone 1.
+**Unexplained and not this change's doing**: **eleven** of the sixteen
+circuits measure identically with `[graphics] bloom` on and off, on the
+baseline build as well as the fixed one. The five that respond are the four
+named environments plus Zone 1. **The obvious hypothesis is already dead** -
+six of the eleven moved under this change (`01_vineta_k`, `03_track`,
+`04_chenghou_project`, `05_ubermall`, `10_sebenco_climb`, `15_anulpha_pass`),
+so they do reach `lit_linear` and take the authored path, and still do not
+respond to the switch.
 
 ## Open
 
@@ -116,7 +122,7 @@ environments plus Zone 1.
 - `shadowMapTex` is projected by the disc and unimplemented here
 - `hd_bloom.wgsl`'s `fs_blur` adds its tap offset after `drawn()`, so the sub-rectangle clamp does not constrain the taps - inert at native, wrong under DRS/FSR
 - `scripts/clipped-white.py`'s docstring still publishes the 3.85/6.99 pair, and 3.85 % is a padded canvas rather than a frame - another lane owns that file, so the correction lives in `scripts/hd-glow-sweep.py` and renderer.md instead
-- Why ten of the sixteen circuits measure identically with `[graphics] bloom` on and off, on the baseline build as much as the fixed one
+- Why **eleven** of the sixteen circuits measure identically with `[graphics] bloom` on and off, on the baseline build as much as the fixed one - and six of those eleven do take the authored path, so "they never light" is refuted
 - Amphiseum, Fury's circuits and the DLC packs have no rpcs3 grab to be read against at all
 
 ## Next Steps
@@ -125,4 +131,4 @@ environments plus Zone 1.
 - `shadowMapTex` remains unread; locate what projects it and whether the disc's shadow map is reachable from data already on disc
 - Re-derive the reference band from a fresh rpcs3 grab at a framing our `--pose` can reproduce, so the next comparison is not aggregates-at-a-distance
 - Grab Amphiseum on rpcs3: it is the circuit the emissive layer is busiest on (+1.70 points at the grid, 4.84 % of the frame over 8/255) and the only one whose fix has no reference at all to be read against
-- Find why `[graphics] bloom` is inert on ten of the sixteen circuits - `scripts/hd-glow-sweep.py sweep --bloom both` is the reproducer, and the four named environments plus Zone 1 are the ones that do respond
+- Find why `[graphics] bloom` is inert on eleven of the sixteen circuits - `scripts/hd-glow-sweep.py sweep --bloom both` is the reproducer, the four named environments plus Zone 1 are the five that do respond, and six of the inert eleven measurably take the authored path so the obvious hypothesis is already refuted

@@ -2027,19 +2027,38 @@ instrument:
 | `15_anulpha_pass` | 6.776 % | 6.871 % | 6.776 % | 6.871 % |
 | **median** | 6.515 % | **6.871 %** | 4.507 % | 4.509 % |
 
-**The median moves 6.515 -> 6.871 % against a reference median of 7.491 %** -
-toward the original, not past it. And on the circuit where the layer is
-busiest the move is real: Amphiseum's arena floodlights, dull streaks across
-the roof before, now read as light banks, and its `AG-SYS` hoarding lights up.
+The median moves 6.515 -> 6.871 % against a reference median of 7.491 %.
+**That pair is the weakest comparison on this page and should not be leaned
+on**: fourteen of the seventeen reference grabs are Talon's Junction and most
+of them are in motion, against sixteen circuits of ours at the grid, so the
+two medians are not drawn from the same population. **The matched comparison
+is narrower and is the one to cite** - Talon's Junction at the grid, ours
+**9.889 %** against that circuit's own grid range of **6.396-8.056 %**. We
+were above it before the fix (9.860 %) and are still above it after, by 0.029
+points, which is inside the noise of this measurement. So the honest statement
+is that the fix **does not move the frame out of anything it was inside**, not
+that it closes a gap.
+
+Where the move is real is the circuit the layer is busiest on: Amphiseum's
+arena floodlights, dull streaks across the roof before, now read as light
+banks, and its `AG-SYS` hoarding lights up.
 
 **Two things in that table are worth their own line.** Zone 1 gets *darker*,
-6.5 % darker on the undecoded variant: the blur ladder feeds the luminance
-adaptation, so a brighter scene buys a lower exposure and the resolve gives
-some of it back. Adding light to this chain is not monotonic in the output and
-a term cannot be judged by its sign. And **ten of the sixteen circuits read
-identically with `[graphics] bloom` on and off**, which is not this change's
-doing - it holds on the baseline too - and is unexplained; the six that do
-respond are the four named environments plus Zone 1.
+and the table itself says why rather than leaving it asserted: with the bloom
+**on** it goes 18.490 -> 18.047 % and with the bloom **off** it goes 13.138 ->
+13.146 %, up. The darkening exists only where the chain runs, so it is the
+blur ladder feeding the luminance adaptation - a brighter scene buys a lower
+exposure and the resolve gives some of it back. **Adding light to this chain
+is not monotonic in the output** and a term cannot be judged by its sign.
+
+And **eleven of the sixteen circuits read identically with `[graphics] bloom`
+on and off**, which is not this change's doing - it holds on the baseline
+build too - and is unexplained. The five that do respond are the four named
+environments plus Zone 1. **The obvious hypothesis is already dead**: six of
+the eleven *did* move under this change (`01_vineta_k`, `03_track`,
+`04_chenghou_project`, `05_ubermall`, `10_sebenco_climb`, `15_anulpha_pass`),
+so they reach `lit_linear` and take the authored path and still do not respond
+to the switch. Whatever it is, it is not "those circuits never light".
 
 **On circuit, where the signs and tubes are**, `--autopilot --ticks 900`:
 
