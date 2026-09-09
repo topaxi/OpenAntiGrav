@@ -435,12 +435,12 @@ fn a_scale_above_full_supersamples() {
 #[test]
 fn the_scale_follows_the_rectangle_rather_than_the_window() {
     let free = target_size(
-        crate::display::viewport((1920, 1080), crate::display::Aspect::Free),
+        oag_display::display::viewport((1920, 1080), oag_display::display::Aspect::Free),
         Scale::FULL,
         LIMIT,
     );
     let ps2 = target_size(
-        crate::display::viewport((1920, 1080), crate::display::Aspect::Ps2),
+        oag_display::display::viewport((1920, 1080), oag_display::display::Aspect::Ps2),
         Scale::FULL,
         LIMIT,
     );
@@ -493,8 +493,9 @@ fn a_degenerate_rectangle_still_gives_a_creatable_texture() {
 /// Everything else in the row is the scene's own red. Returns `None` on a
 /// machine with no adapter, which is what CI's runners are.
 fn composited(brightness: Brightness, gamma: Gamma) -> Option<[[u8; 4]; 8]> {
-    use crate::frontend::{Draw, SCREEN};
+    use crate::frontend::Draw;
     use crate::render::Renderer;
+    use oag_display::space::SCREEN;
 
     // What the window surface and every capture target are since ADR-0020.
     let format = wgpu::TextureFormat::Rgba8Unorm;
@@ -761,8 +762,9 @@ fn the_hud_is_graded_with_the_scene_and_the_performance_overlay_is_not() {
 ///    exercises, and it is where an off-by-a-rectangle would hide.
 #[test]
 fn a_ui_only_stage_reaches_the_surface_and_its_own_clear_draws_the_bars() {
-    use crate::frontend::{Draw, SCREEN};
+    use crate::frontend::Draw;
     use crate::render::Renderer;
+    use oag_display::space::SCREEN;
 
     let format = wgpu::TextureFormat::Rgba8Unorm;
     let instance = wgpu::Instance::default();

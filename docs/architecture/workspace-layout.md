@@ -32,6 +32,7 @@ Older pages, and [`goals.md`](../overview/goals.md)'s scope table, use
 | --- | --- | --- |
 | `oag-core` | `crates/core` | Deterministic math, fixed-timestep clock, seeded PRNG, state hashing. Depended on by everything. |
 | `oag-disc` | `crates/disc` | CHD and raw ISO readers, ISO 9660 walker, console identification. |
+| `oag-display` | `crates/display` | The picture's configuration vocabulary, and the grid a source authors in. Extracted from `oag-game` because it was the most-named module in the composition root, and a shared vocabulary living inside one of its own consumers is not shared. |
 | `oag-formats` | `crates/formats` | Asset containers, compression, triage, and console byte layout - what every decoder needs before it can start. Split by format family per [ADR-0050](adr/0050-format-crates-split-by-format-family.md). |
 | `oag-rcs` | `crates/rcs` | The `RCSMODEL` scene. `rcsmodel` and `rcsmaterial` reference each other, so they are one crate by necessity as well as by subject; `rcsmodel::psp2` stays inside it, because the console is not a code axis. |
 | `oag-vex` | `crates/vex` | The `.vex` scene tree and its class-tagged payloads. They are chunks of one tree rather than neighbouring formats, which is why they are one crate. |

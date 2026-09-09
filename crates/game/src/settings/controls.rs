@@ -44,7 +44,7 @@ pub struct Controls {
     /// How hard a trigger has to be pulled for a given amount of airbrake.
     ///
     /// **Typed rather than a token**, unlike the two above, for the reason
-    /// [`crate::display::Brightness`] is typed: this one is a number, and a
+    /// [`oag_display::display::Brightness`] is typed: this one is a number, and a
     /// number out of range is a file that fails to load with a message rather
     /// than a control discovered by feel to do nothing.
     #[serde(default)]
@@ -100,7 +100,7 @@ impl Controls {
 /// How much airbrake a given amount of trigger travel asks for, as a
 /// percentage. 100 is a linear pull.
 ///
-/// The same shape as [`crate::display::Gamma`], and for the same reason: an
+/// The same shape as [`oag_display::display::Gamma`], and for the same reason: an
 /// exponent curve is the honest way to say "the same travel, distributed
 /// differently", and a percentage is the only way to say it that the menus can
 /// render - their entry kinds are `action`, `back`, `binding`, `choice` and

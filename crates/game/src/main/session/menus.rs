@@ -3,8 +3,9 @@
 use anyhow::{Context, Result};
 use log::{error, info, warn};
 
+use oag_display::display;
 use oag_game::render::{Renderer, VideoFormat};
-use oag_game::{audio, catalogue, display, marquee, menu, movie, pilots, settings, strings};
+use oag_game::{audio, catalogue, marquee, menu, movie, pilots, settings, strings};
 use oag_physics::SpeedClass;
 
 use crate::frontend_stage::HeldFrame;

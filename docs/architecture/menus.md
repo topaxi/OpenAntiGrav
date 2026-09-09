@@ -81,7 +81,7 @@ the release rather than of this project:
 | TEAM | `values_from = "teams"` - the roster [`boot::load_teams`](../../crates/game/src/boot/roster.rs) read off the open source's own declared definition plus any mounted pack, not a repository list |
 | SPEED CLASS | `values_from = "speed_classes"` - the booted title's own per-team `handlingstats.xml` ladder, off `oag_title::SpeedClasses`, **narrowed to `is_offered_outside_remix`**: four rungs, always, even on a Wipeout Pure boot whose own ladder authors five. On the RACE REMIX page it is `values_from = "remix_speed_classes"` instead: the **union** across every title this machine can open a source for, filtered only by `is_selectable`. Four rungs on Pulse and HD, **five on Wipeout Pure**, whose `VECTOR` sits below `VENOM` - so the remix row is five exactly when a Pure source is mounted, and no flag implements that. See [below](#speed-class-vector-is-confined-to-race-remix) for why the two pages disagree |
 | MONITOR | winit's own monitor list, read every time the menus open |
-| WINDOW MODE / SIZE / ASPECT / RENDER SCALE / RECONSTRUCTION / MSAA / UPSCALER SHARPNESS / BRIGHTNESS / GAMMA / FIELD OF VIEW | `oag_game::display`, pinned to its own `ALL`/`OFFERED` lists by a test |
+| WINDOW MODE / SIZE / ASPECT / RENDER SCALE / RECONSTRUCTION / MSAA / UPSCALER SHARPNESS / BRIGHTNESS / GAMMA / FIELD OF VIEW | `oag_display::display`, pinned to its own `ALL`/`OFFERED` lists by a test |
 | PERFORMANCE OVERLAY / FRAME LIMIT / VSYNC | `oag_game::perf`, pinned the same way |
 
 MONITOR is the one supplied row that is a property of **the desk** rather than
@@ -1137,7 +1137,7 @@ without that a player who had set borderless at 120 Hz would have opened the
 game windowed at 240 with no message and nothing wrong in the file.
 
 The value types all still live in one module,
-[`crates/game/src/display.rs`](../../crates/game/src/display.rs). That module is
+[`crates/display/src/display.rs`](../../crates/display/src/display.rs). That module is
 the vocabulary, not the page list: `Scale` sits next to `Aspect` there and they
 are on different pages, and that is fine. What each value may be and how it is
 spelled is one question; which page a player finds it on is another.

@@ -331,12 +331,12 @@ fn a_race_hands_the_hud_hds_own_grid_rather_than_the_psps() {
     .expect("loading the race");
     assert_eq!(
         loaded.hud.space,
-        oag_game::frontend::Space::HD,
+        oag_display::space::Space::HD,
         "an HD source authors its HUD in 1920x1080"
     );
     assert_ne!(
         loaded.hud.space,
-        oag_game::frontend::Space::PSP,
+        oag_display::space::Space::PSP,
         "the PSP's 480x272 is the default a `Renderer` starts at, and drawing \
          HD's layouts in it is the bug this test exists for"
     );

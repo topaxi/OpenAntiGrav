@@ -569,7 +569,7 @@ pub(crate) struct Shell {
     /// a property of the source, settled while the archives were still open, and
     /// re-deriving it when the menus open would mean asking the disc a question
     /// it has already answered. See `boot::Shell::space`.
-    pub(crate) space: oag_game::frontend::Space,
+    pub(crate) space: oag_display::space::Space,
     /// The face menu rows are drawn in, which is a bigger one than the rest
     /// of the front end uses. `None` draws them in `font`.
     pub(crate) menu_font: Option<oag_game::font::Atlas>,

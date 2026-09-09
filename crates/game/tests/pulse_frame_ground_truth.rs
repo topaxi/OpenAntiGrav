@@ -17,7 +17,9 @@
 
 use std::path::PathBuf;
 
-use oag_game::frontend::{Draw, Space};
+use oag_game::frontend::Draw;
+
+use oag_display::space::Space;
 use oag_game::screen::Screens;
 use oag_game::sprite::Sheet;
 use oag_tables::fexml;

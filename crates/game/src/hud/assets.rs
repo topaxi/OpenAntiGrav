@@ -46,8 +46,8 @@ pub struct Assets {
     /// confidence 90). Left at the default, HD's lap counter drew four times
     /// oversized in the middle of the picture instead of in its panel at the
     /// top-left corner - a yellow slab that reads as scenery rather than as a
-    /// digit. See [`crate::frontend::Space`].
-    pub space: crate::frontend::Space,
+    /// digit. See [`oag_display::space::Space`].
+    pub space: oag_display::space::Space,
     /// How this title's HUD sprites reach the screen: which of them are up
     /// whenever the HUD is, and the one colour this build substitutes.
     ///

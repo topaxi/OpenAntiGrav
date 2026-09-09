@@ -1989,7 +1989,7 @@ Recorded rather than fixed, so the next pass starts from the measurement:
   (`0x0890486c`, read as a view depth).
 - The class table's `id == -1` terminator, and therefore its extent.
 - ~~What widens the fov during a boost~~ - **not an open question, and never
-  was an RE one. Withdrawn 2026-08-08.** `crates/game/src/display.rs`'s
+  was an RE one. Withdrawn 2026-08-08.** `crates/display/src/display.rs`'s
   `BoostFovKick` is a **deliberate invention of this project**, added because
   a boost reads better with it, and the 2026-08-07 entry that listed it here
   as unrecovered original behaviour mis-stated its status. It is ours by

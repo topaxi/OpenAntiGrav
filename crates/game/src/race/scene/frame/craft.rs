@@ -17,7 +17,7 @@ use crate::race::Race;
 /// `ShipShield_Update` branches on `craft+0x6d` and draws the shell for an
 /// external camera or the sphere for an internal one, clearing the other's draw
 /// flag - so exactly one is up per craft. `craft+0x6d` is the same byte
-/// [`crate::display::CameraView::draws_own_ship`] reads, which is why that is
+/// [`oag_display::display::CameraView::draws_own_ship`] reads, which is why that is
 /// the test here rather than a second source of truth.
 ///
 /// Only slot 0 can take the cockpit branch: the byte is set for the local

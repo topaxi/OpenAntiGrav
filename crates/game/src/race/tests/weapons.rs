@@ -734,7 +734,7 @@ fn holding_a_rocket_draws_no_reticle() {
 /// `docs/ghidra/functions/psp-pulse-usa/shield-pickup.md`.
 #[test]
 fn the_cockpit_view_swaps_the_shield_shell_for_its_sphere() {
-    use crate::display::CameraView;
+    use oag_display::display::CameraView;
 
     let mut race =
         race_with_weapon_table(Mode::SingleRace, enveloping_pad(), 1.0, one_shield_table());

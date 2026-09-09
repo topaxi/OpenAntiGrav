@@ -54,11 +54,11 @@ fn the_two_ways_of_getting_a_default_agree() {
     // The three settings this split added, so a fresh install is the game
     // as its data authors framed it and as the renderer drew it.
     assert!(fresh.monitor.is_default());
-    assert_eq!(fresh.brightness, crate::display::Brightness::NEUTRAL);
-    assert_eq!(fresh.gamma, crate::display::Gamma::NEUTRAL);
+    assert_eq!(fresh.brightness, oag_display::display::Brightness::NEUTRAL);
+    assert_eq!(fresh.gamma, oag_display::display::Gamma::NEUTRAL);
     assert_eq!(
         Graphics::default().fov,
-        crate::display::Fov::AUTHORED,
+        oag_display::display::Fov::AUTHORED,
         "the default field of view has to be the disc's own"
     );
 }
@@ -110,14 +110,14 @@ perf_overlay = \"fps\"
     );
 
     // Moved.
-    assert_eq!(settings.display.aspect, crate::display::Aspect::Free);
+    assert_eq!(settings.display.aspect, oag_display::display::Aspect::Free);
     assert_eq!(
         settings.display.window_mode,
-        crate::display::WindowMode::Borderless
+        oag_display::display::WindowMode::Borderless
     );
     assert_eq!(
         settings.display.window_size,
-        crate::display::Size::new(1920, 1080)
+        oag_display::display::Size::new(1920, 1080)
     );
     assert_eq!(settings.display.vsync, crate::perf::Vsync::Smooth);
     assert_eq!(settings.display.frame_limit.hz(), Some(120));
@@ -137,13 +137,16 @@ perf_overlay = \"fps\"
     }
     // Added, so they come out as their defaults rather than as an error.
     assert!(settings.display.monitor.is_default());
-    assert_eq!(settings.graphics.fov, crate::display::Fov::AUTHORED);
+    assert_eq!(settings.graphics.fov, oag_display::display::Fov::AUTHORED);
 
     // And the file written back is in the new shape, with nothing left in
     // the old table to be migrated a second time.
     let written = toml::to_string_pretty(&settings).expect("serialise");
     let round_tripped = read(&written);
-    assert_eq!(round_tripped.display.aspect, crate::display::Aspect::Free);
+    assert_eq!(
+        round_tripped.display.aspect,
+        oag_display::display::Aspect::Free
+    );
     assert_eq!(round_tripped.display.frame_limit.hz(), Some(120));
 }
 
@@ -161,11 +164,11 @@ aspect = \"free\"
 window_mode = \"borderless\"
 ",
     );
-    assert_eq!(settings.display.aspect, crate::display::Aspect::Ps2);
+    assert_eq!(settings.display.aspect, oag_display::display::Aspect::Ps2);
     // The key that only the old table had still moves across.
     assert_eq!(
         settings.display.window_mode,
-        crate::display::WindowMode::Borderless
+        oag_display::display::WindowMode::Borderless
     );
 }
 
@@ -288,13 +291,13 @@ motion_blur = \"medium\"
         // RESAMPLE`. The upscaler wins because it was what carried the frame.
         assert_eq!(
             profile.reconstruction,
-            crate::display::Reconstruction::Fsr1,
+            oag_display::display::Reconstruction::Fsr1,
             "{title}"
         );
-        assert_eq!(profile.msaa, crate::display::Msaa::Off, "{title}");
+        assert_eq!(profile.msaa, oag_display::display::Msaa::Off, "{title}");
         assert_eq!(
             profile.motion_blur,
-            crate::display::MotionBlur::Medium,
+            oag_display::display::MotionBlur::Medium,
             "{title}"
         );
     }
@@ -394,14 +397,17 @@ motion_blur = \"high\"
     );
     let profile = &settings.render_profiles[oag_hd::TITLE.name];
     // The lossless case: the two really were orthogonal, so both survive.
-    assert_eq!(profile.reconstruction, crate::display::Reconstruction::Fsr3);
-    assert_eq!(profile.msaa, crate::display::Msaa::X4);
+    assert_eq!(
+        profile.reconstruction,
+        oag_display::display::Reconstruction::Fsr3
+    );
+    assert_eq!(profile.msaa, oag_display::display::Msaa::X4);
     // Untouched keys are still untouched - the fold removes two and inserts
     // two, and a migration that also reset a neighbour would be invisible here
     // without this.
     assert_eq!(profile.render_scale.percent(), 150);
     assert_eq!(profile.target_fps.hz(), Some(120));
-    assert_eq!(profile.motion_blur, crate::display::MotionBlur::High);
+    assert_eq!(profile.motion_blur, oag_display::display::MotionBlur::High);
 
     // The lossy case, argued in `migrate_reconstruction`: a pairing the new
     // axis cannot express, and one the menus already warned about. The
@@ -414,8 +420,11 @@ anti_aliasing = \"fxaa\"
 ",
     );
     let profile = &settings.render_profiles[oag_hd::TITLE.name];
-    assert_eq!(profile.reconstruction, crate::display::Reconstruction::Fsr1);
-    assert_eq!(profile.msaa, crate::display::Msaa::Off);
+    assert_eq!(
+        profile.reconstruction,
+        oag_display::display::Reconstruction::Fsr1
+    );
+    assert_eq!(profile.msaa, oag_display::display::Msaa::Off);
 
     // No upscaler, so the spatial pass was what resolved the frame and it is
     // what carries over.
@@ -426,8 +435,11 @@ anti_aliasing = \"smaa\"
 ",
     );
     let profile = &settings.render_profiles[oag_hd::TITLE.name];
-    assert_eq!(profile.reconstruction, crate::display::Reconstruction::Smaa);
-    assert_eq!(profile.msaa, crate::display::Msaa::Off);
+    assert_eq!(
+        profile.reconstruction,
+        oag_display::display::Reconstruction::Smaa
+    );
+    assert_eq!(profile.msaa, oag_display::display::Msaa::Off);
 
     // A file already on this side of the split is left entirely alone, which
     // is what stops the fold running twice and resetting `msaa` to off on the
@@ -440,8 +452,11 @@ msaa = \"4x\"
 ",
     );
     let profile = &settings.render_profiles[oag_hd::TITLE.name];
-    assert_eq!(profile.reconstruction, crate::display::Reconstruction::Fsr3);
-    assert_eq!(profile.msaa, crate::display::Msaa::X4);
+    assert_eq!(
+        profile.reconstruction,
+        oag_display::display::Reconstruction::Fsr3
+    );
+    assert_eq!(profile.msaa, oag_display::display::Msaa::X4);
 }
 
 /// `Bindings`'s own tests prove it round-trips through a `BTreeMap`; this is

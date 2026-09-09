@@ -83,6 +83,7 @@ use crate::language::{Language, StringTable};
 use crate::screen::{Screen, Screens, Text, argb_to_rgba, parse_argb};
 use crate::state_machine::{Event, StateMachine};
 
+use oag_display::space::{SCREEN, Space, pillarbox_in};
 use oag_hd::frontend::states as hd_states;
 /// The reel's frame counts and every state name: `oag_pulse::frontend`.
 ///
@@ -294,11 +295,9 @@ pub enum Video {
 }
 
 mod draw;
-mod space;
 mod updates;
 
 pub use draw::Draw;
-pub use space::{SCREEN, Space, pillarbox, pillarbox_in};
 
 /// How the intro state is getting on.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

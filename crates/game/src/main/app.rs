@@ -7,10 +7,11 @@ use anyhow::{Context, Result};
 use log::{error, info};
 use oag_core::{TickClock, TickRate};
 
+use oag_display::display;
 use oag_game::render::Renderer;
 use oag_game::{
-    audio, boot, display, launcher, loading, perf, pilots, prefetch, race, settings, source,
-    strings, upscale,
+    audio, boot, launcher, loading, perf, pilots, prefetch, race, settings, source, strings,
+    upscale,
 };
 use oag_gameplay::ControlScheme;
 use oag_input::Controls;

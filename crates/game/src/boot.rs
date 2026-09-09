@@ -334,7 +334,7 @@ pub struct Shell {
     /// The grid this source authors its widgets in, read off the archives'
     /// own platform while they are still in hand - [`assemble`] has no
     /// archives to ask by the time it needs this.
-    pub space: crate::frontend::Space,
+    pub space: oag_display::space::Space,
     /// This title's own boot table, selected from the serial before any XML was
     /// parsed. Carried so the later phases ask it rather than the screens.
     pub profile: &'static oag_title::BootProfile,
@@ -632,7 +632,7 @@ pub fn load_shell(
     // The grid this source authors in, needed before the front end is built so
     // that a boot with no movie falls back to the *source's* shape rather than
     // to the PSP's. `frontend.set_space` takes the same value.
-    let space = crate::frontend::Space::of(archives.layout.platform);
+    let space = oag_display::space::Space::of(archives.layout.platform);
     // The frame the menus are drawn inside, off the screen this title names -
     // built here because this is where the parsed XML, the sheet and the grid
     // are all in hand, and **reported** because which archive served the root
@@ -1095,7 +1095,7 @@ pub fn assemble(shell: Shell, media: Media) -> Boot {
     // places widgets in a 640x448 grid rather than the PSP's 480x272, so every widget
     // on that disc landed off the bottom-right of a screen a third too small, leaving
     // `Show Logo` blank. Set from the archives' own platform, not sniffed - the layout
-    // resolved one to open them. See `crate::frontend::Space`.
+    // resolved one to open them. See `oag_display::space::Space`.
     frontend.set_space(space);
     report.push(format!(
         "front-end grid {}x{}, shown as {:.3}",

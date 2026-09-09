@@ -521,7 +521,7 @@ impl MenuStage {
 /// whole_viewport` below re-derives `Renderer`'s own clip-space mapping
 /// independently and checks the four edges land at exactly `-1.0`/`1.0`,
 /// not merely close.
-fn overlay_rect(space: oag_game::frontend::Space, viewport: (f32, f32, f32, f32)) -> [f32; 4] {
+fn overlay_rect(space: oag_display::space::Space, viewport: (f32, f32, f32, f32)) -> [f32; 4] {
     let (width, height) = space.size;
     let [scale_x, scale_y] =
         letterbox_in((viewport.2 as u32, viewport.3 as u32), space.display_aspect);
@@ -557,7 +557,7 @@ mod tests {
     /// aspect a player's ASPECT row (`Free` included) can produce.
     #[test]
     fn a_mismatched_aspect_still_covers_the_whole_viewport() {
-        let space = oag_game::frontend::Space::PSP;
+        let space = oag_display::space::Space::PSP;
         for viewport in [
             // Matched: `viewport`'s own aspect equals the PSP's own.
             (0.0, 0.0, 480.0, 272.0),

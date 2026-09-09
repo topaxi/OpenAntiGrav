@@ -73,7 +73,7 @@ pub struct CaptureOptions {
     /// A capture is a picture of a window, so it letterboxes the way a window
     /// does. At the default `--size`, which is the PSP's own shape, every value
     /// of this fills the frame and nothing changes.
-    pub aspect: crate::display::Aspect,
+    pub aspect: oag_display::display::Aspect,
     /// Anisotropic filtering level for the track and ship textures.
     pub anisotropy: Anisotropy,
     /// Whether the recovered bloom runs - see `crate::settings::Graphics::bloom`,
@@ -87,10 +87,10 @@ pub struct CaptureOptions {
     ///
     /// There is no surface here, so an adapter that could not present is still
     /// eligible - which is the one way this list can be wider than the menu's.
-    pub renderer: crate::display::Renderer,
+    pub renderer: oag_display::display::Renderer,
     /// The field-of-view setting, for the same reason `aspect` is here: a
     /// capture should frame what a player at these settings would have seen.
-    pub fov: crate::display::Fov,
+    pub fov: oag_display::display::Fov,
     /// Whether the view frustum culls before the frame is drawn.
     ///
     /// Honoured rather than forced off, so that the screenshot comparison this
@@ -120,19 +120,19 @@ pub struct CaptureOptions {
     /// How strong the boost's field-of-view kick is. Honoured for a sharper
     /// version of the same reason: the effect is **authored**, so a capture meant
     /// to be compared against the running original wants it at
-    /// [`crate::display::BoostFovKick::OFF`], and that comparison is the only
+    /// [`oag_display::display::BoostFovKick::OFF`], and that comparison is the only
     /// way anyone will find out whether the original has something like it.
-    pub boost_fov_kick: crate::display::BoostFovKick,
+    pub boost_fov_kick: oag_display::display::BoostFovKick,
     /// Which of the three perspectives to render from.
     ///
     /// Honoured because a headless capture is the **only** way to get a frame of
     /// the cockpit view without a window, and therefore the only way anyone
     /// checks it: `--camera-view internal --screenshot`. `[graphics] camera_view`.
-    pub camera_view: crate::display::CameraView,
+    pub camera_view: oag_display::display::CameraView,
     /// How many samples the rasterizer takes. Honoured for the same reason
     /// the two culling tiers are: a capture is how `msaa` gets compared
     /// against itself off and against the running original.
-    pub msaa: crate::display::Msaa,
+    pub msaa: oag_display::display::Msaa,
     /// Offset the camera by a sub-pixel each frame. `--camera-jitter`.
     ///
     /// Honoured here because a capture is the only way to *see* that jitter is
@@ -191,14 +191,14 @@ pub struct CaptureOptions {
     /// previous-transform cache it seeds), runs the final tick, and renders
     /// the frame that is written out. See `oag_render::post::motion_blur` and
     /// `docs/rendering/motion-blur.md`.
-    pub motion_blur: crate::display::MotionBlur,
+    pub motion_blur: oag_display::display::MotionBlur,
     /// What casts a shadow in the captured frame: `--shadows`.
     ///
     /// Honoured the same way [`Self::motion_blur`] is, and here for the same
     /// reason: two captures differing only by this flag are how the tier gets
     /// compared against itself off. Unlike the blur it needs no primer frame -
     /// a blob is placed from the tick's own pose, with no history.
-    pub shadows: crate::display::Shadows,
+    pub shadows: oag_display::display::Shadows,
     /// Replaces the live audio spectrum with a fixed synthetic ramp before
     /// the frame is drawn. `--zone-spectrum-test`.
     ///
@@ -241,7 +241,7 @@ struct PresentedState {
 #[derive(Debug, Clone, Copy)]
 pub struct Presented {
     /// What fraction of the aspect rectangle the scene is drawn at.
-    pub render_scale: crate::display::Scale,
+    pub render_scale: oag_display::display::Scale,
     /// The upscaler, its sharpness, and the grade.
     pub presentation: crate::upscale::Presentation,
 }
@@ -325,7 +325,7 @@ pub fn capture(
     // delta against the previous tick, so the primer frame below has to be
     // rendered at the tick-before-last pose before that tick runs. Every
     // other capture drives all its ticks here, exactly as before.
-    let deferred_tick = (options.motion_blur != crate::display::MotionBlur::Off
+    let deferred_tick = (options.motion_blur != oag_display::display::MotionBlur::Off
         && options.ticks > 0)
         .then(|| options.ticks - 1);
     let driven = deferred_tick.unwrap_or(options.ticks);
@@ -378,7 +378,7 @@ pub fn capture(
     // otherwise is the whole capture.
     let presented = options.presented.map(|state| PresentedState {
         scene_size: crate::upscale::target_size(
-            crate::display::viewport((width, height), options.aspect),
+            oag_display::display::viewport((width, height), options.aspect),
             state.render_scale,
             device.limits().max_texture_dimension_2d,
         ),
@@ -477,7 +477,7 @@ pub fn capture(
     // would have seen at that size rather than a differently-cropped picture.
     // Presented, the offscreen target *is* that rectangle and the bars are what
     // the blit clears around it, so the scene fills its target instead.
-    let rect = crate::display::viewport((width, height), options.aspect);
+    let rect = oag_display::display::viewport((width, height), options.aspect);
     let viewport = match presented {
         Some(state) => (
             0.0,
@@ -498,7 +498,7 @@ pub fn capture(
     // jitter. See `upscale::jitter_phases`.
     let camera_jitter = crate::upscale::jitter_phases(
         options.camera_jitter,
-        presented.map_or(crate::display::Reconstruction::Off, |state| {
+        presented.map_or(oag_display::display::Reconstruction::Off, |state| {
             state.presentation.reconstruction
         }),
         temporal_supported,

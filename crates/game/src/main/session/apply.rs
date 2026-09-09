@@ -1,8 +1,9 @@
 //! Applying a changed setting to the live window, device and race.
 
 use log::{error, warn};
+use oag_display::display;
 use oag_game::settings::TriggerSensitivity;
-use oag_game::{audio, display, drs, input, menu, perf, settings};
+use oag_game::{audio, drs, input, menu, perf, settings};
 use oag_gameplay::ControlScheme;
 use oag_input::Controls;
 use oag_input::pad::TriggerMode;

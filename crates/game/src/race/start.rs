@@ -302,7 +302,7 @@ impl Race {
             // `set_boost_fov_kick` gives: `Setup` is what a *headless* race
             // needs and a display preference must not be in front of a caller
             // with no screen. `set_camera_view` is what applies the player's.
-            view: crate::display::CameraView::default(),
+            view: oag_display::display::CameraView::default(),
             camera,
             shake: oag_render::camera::shake::Shake::new(),
             shake_rng: Rng::new(SHAKE_SEED),
@@ -384,7 +384,7 @@ impl Race {
             shield_flash_timer: 0.0,
             sight: sight::Sight::default(),
             sight_state: sight::State::Absent,
-            sight_fov: crate::display::Fov::AUTHORED,
+            sight_fov: oag_display::display::Fov::AUTHORED,
             // Every pad starts due for a real test. `Pad_Bind` zeroes the same
             // cache at load, so the first tick measures rather than trusting a
             // distance nothing has computed yet.
@@ -404,7 +404,7 @@ impl Race {
             pad_current: [None; MAX_SHIPS],
             pad_previous_position: [None; MAX_SHIPS],
             boost_kick: 0.0,
-            boost_fov_kick: crate::display::BoostFovKick::DEFAULT,
+            boost_fov_kick: oag_display::display::BoostFovKick::DEFAULT,
             flaps: [0.0, 0.0],
             flap_graphics: setup.airbrake_graphics,
             scheme: ControlScheme::default(),

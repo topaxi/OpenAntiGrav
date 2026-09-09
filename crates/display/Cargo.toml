@@ -1,0 +1,25 @@
+[package]
+name = "oag-display"
+description = "The vocabulary the picture is configured in: which screen, what shape, how big, how bright"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+# `serde` only, because every type here is also a row in `settings.toml`. No
+# workspace crate at all: a vocabulary that named a renderer would stop being
+# usable from the side of the boundary that cannot see one.
+[dependencies]
+# `space::Space::of` maps a `Platform` onto the grid that console authors in.
+oag-disc.workspace = true
+serde.workspace = true
+
+# `display/tests.rs` round-trips every setting through the file format it will
+# actually be written in. Tests only: the crate itself defines the vocabulary,
+# it never reads or writes the file.
+[dev-dependencies]
+toml.workspace = true
+
+[lints]
+workspace = true

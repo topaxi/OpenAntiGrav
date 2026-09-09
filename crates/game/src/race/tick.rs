@@ -413,7 +413,7 @@ impl Race {
         // `pad_timer` rather than from the exhaust, because the exhaust's boost
         // is a `max` that other things may one day also arm and this must follow
         // the pad specifically.
-        if self.boost_fov_kick != crate::display::BoostFovKick::OFF {
+        if self.boost_fov_kick != oag_display::display::BoostFovKick::OFF {
             let boosting = self.world.ships[0].physics.pad_timer > 0.0;
             let (target, rate) = if boosting {
                 (1.0, BOOST_FOV_OPEN_RATE)

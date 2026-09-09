@@ -5,6 +5,7 @@
 //! `scripts/check-file-size.py`.
 
 use super::*;
+use oag_display::space::{Space, pillarbox, pillarbox_in};
 
 /// The coordinates that *do* scale land on this grid and no other.
 ///

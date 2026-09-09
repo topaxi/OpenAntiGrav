@@ -9,7 +9,7 @@
 use anyhow::Result;
 
 use super::{Grade, Output, bind, grade_buffer};
-use crate::display::{Brightness, Gamma};
+use oag_display::display::{Brightness, Gamma};
 
 /// Builds the presentation-sized target and the bind group that reads it.
 ///

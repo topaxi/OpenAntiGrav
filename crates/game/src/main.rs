@@ -47,9 +47,8 @@
 use anyhow::{Context, Result, ensure};
 use clap::Parser;
 use log::warn;
-
 use oag_game::frontend;
-use oag_game::{audio, display, launcher, loading, race, settings, source};
+use oag_game::{audio, launcher, loading, race, settings, source};
 
 use winit::event_loop::{ControlFlow, EventLoop};
 
@@ -195,7 +194,7 @@ fn main() -> Result<()> {
     // is chosen, which is not what typing the flag once means.
     let render_scale = match cli.render_scale {
         Some(percent) => Some(
-            crate::display::Scale::try_from(percent)
+            oag_display::display::Scale::try_from(percent)
                 .map_err(|why| anyhow::anyhow!("--render-scale {percent}: {why}"))?,
         ),
         None => None,

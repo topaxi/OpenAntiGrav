@@ -227,7 +227,7 @@ impl Stage {
         // The sequence's rects are in its source's grid, and the renderer maps
         // rects onto the viewport - so it has to be told which grid, or a PS2
         // screen's widgets are drawn a third again too big. See
-        // `frontend::Space`.
+        // `oag_display::space::Space`.
         let mut renderer = renderer;
         renderer.set_space(loaded.frontend.space());
         // The store moves onto its own thread and the `Movie` around it is done

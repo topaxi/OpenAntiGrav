@@ -6,7 +6,7 @@
 
 use clap::Parser;
 
-use oag_game::display;
+use oag_display::display;
 use oag_gameplay::ControlScheme;
 use oag_render::mesh_render::Anisotropy;
 
@@ -705,7 +705,7 @@ pub(crate) struct Cli {
     /// somebody to edit a settings file between them is how a comparison ends
     /// up differing by something else as well.
     #[arg(long)]
-    pub(crate) reconstruction: Option<crate::display::Reconstruction>,
+    pub(crate) reconstruction: Option<oag_display::display::Reconstruction>,
 
     /// What percentage of the displayed size the game is rendered at, 25 to
     /// 200.
@@ -754,7 +754,7 @@ pub(crate) struct Cli {
     /// `--reconstruction` is: two `--presented` captures differing only by this
     /// flag are how the levels get compared.
     #[arg(long)]
-    pub(crate) msaa: Option<crate::display::Msaa>,
+    pub(crate) msaa: Option<oag_display::display::Msaa>,
 
     /// Motion blur strength: off, low, medium or high.
     ///
@@ -766,7 +766,7 @@ pub(crate) struct Cli {
     /// rendering a primer frame at the tick-before-last camera first - see
     /// `race::CaptureOptions::motion_blur`.
     #[arg(long)]
-    pub(crate) motion_blur: Option<crate::display::MotionBlur>,
+    pub(crate) motion_blur: Option<oag_display::display::MotionBlur>,
 
     /// What casts a shadow: off or blob.
     ///
@@ -778,7 +778,7 @@ pub(crate) struct Cli {
     /// it, and two captures differing only by it are how it gets compared
     /// against itself off.
     #[arg(long)]
-    pub(crate) shadows: Option<crate::display::Shadows>,
+    pub(crate) shadows: Option<oag_display::display::Shadows>,
 
     /// Start the craft at this world position instead of on its grid slot:
     /// `x,y,z` or `x,y,z,yaw`, `yaw` in degrees off the track's own direction
@@ -965,7 +965,7 @@ impl Cli {
     pub(crate) fn apply_render_overrides(
         &self,
         profile: &mut crate::settings::RenderProfile,
-        render_scale: Option<crate::display::Scale>,
+        render_scale: Option<oag_display::display::Scale>,
     ) {
         if let Some(render_scale) = render_scale {
             profile.render_scale = render_scale;

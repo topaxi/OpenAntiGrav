@@ -110,7 +110,7 @@ expensive tier. The cost is one `Rg16Float` write per fragment.
 **The setting is strength, not technique.** `off | low | medium | high`, mapping
 to a shutter fraction of the tick. Offering `camera` and `full` as user-facing
 values would ship a value with no implementation behind it, which
-`crates/game/src/display.rs` and ADR-0013 both refuse: *a row for infrastructure
+`crates/display/src/display.rs` and ADR-0013 both refuse: *a row for infrastructure
 that is not there is worse than no row*. It also means that if the cheap tier is
 ever shipped first as a stepping stone, it can be replaced underneath the same
 row without a settings migration.
@@ -306,7 +306,7 @@ never fires in a race. The tap count is the next lever and it is a
 picture-changing one, so it wants a from-play judgement rather than a patch.
 
 **The setting** follows `AntiAliasing` exactly, because it is the fullest
-worked example in the tree: an enum in `oag_game::display` with `name()`,
+worked example in the tree: an enum in `oag_display::display` with `name()`,
 `ALL`, `FromStr`, `Display` and the `TryFrom<String>` / `Into<String>` serde
 pair; a field on `Graphics`; a tuple in `menu_seeds`; a `kind = "choice"` row in
 `assets/ui/menu.toml` whose `values` are exactly `ALL`, in order; an arm in

@@ -35,7 +35,7 @@
 //!
 //! # Screen space
 //!
-//! Everything is in the PSP's 480x272 space ([`crate::frontend::SCREEN`]), which is what the XML's
+//! Everything is in the PSP's 480x272 space ([`oag_display::space::SCREEN`]), which is what the XML's
 //! coordinates are in, and the renderer letterboxes that into whatever the window
 //! is. A widget inside an `<Item>` is positioned relative to that group's
 //! `OffsetX`/`OffsetY`; this module resolves those to absolute coordinates at
@@ -707,10 +707,10 @@ pub fn format_lap_time(ticks: u64, precision: Precision) -> String {
 ///
 /// Used by the layout tests rather than by the renderer: a widget that lands
 /// outside is a parser bug, and the parser is the thing under test. `screen`
-/// is the source's own grid - [`crate::frontend::Space::PSP`]`.size` for a PSP
-/// layout, [`crate::frontend::Space::PS2`]`.size` for a PS2 one - because the
+/// is the source's own grid - [`oag_display::space::Space::PSP`]`.size` for a PSP
+/// layout, [`oag_display::space::Space::PS2`]`.size` for a PS2 one - because the
 /// PS2 release authors the same five layouts in its own 640x448 grid rather
-/// than the PSP's 480x272 ([`crate::frontend::SCREEN`]).
+/// than the PSP's 480x272 ([`oag_display::space::SCREEN`]).
 ///
 /// # The PS2 grid is not a flat scaling of the raw attributes, and that turns
 /// out not to matter here

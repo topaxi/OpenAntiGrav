@@ -35,9 +35,10 @@
 use oag_render::loading::{Quad, Wave};
 
 use crate::font::{self, Atlas};
-use crate::frontend::{Align, Draw, SCREEN};
+use crate::frontend::{Align, Draw};
 use crate::language::StringTable;
 use crate::prefetch::Progress;
+use oag_display::space::SCREEN;
 
 /// Pulse's own two entries, re-exported for the tests and reports that name
 /// them.

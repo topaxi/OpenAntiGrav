@@ -39,7 +39,7 @@ fn the_upscaler_warns_at_exactly_the_scales_it_does_nothing_at() {
     assert_eq!(
         own.values,
         vec![Value::Text(
-            crate::display::Reconstruction::Fsr1.to_string()
+            oag_display::display::Reconstruction::Fsr1.to_string()
         )]
     );
     let scales = warning
@@ -48,7 +48,7 @@ fn the_upscaler_warns_at_exactly_the_scales_it_does_nothing_at() {
         .find(|c| c.setting == "graphics.render_scale")
         .expect("the warning must name the scales");
 
-    let warned: Vec<crate::display::Scale> = scales
+    let warned: Vec<oag_display::display::Scale> = scales
         .values
         .iter()
         .map(|value| value.to_string().parse().unwrap_or_else(|e| panic!("{e}")))
@@ -57,7 +57,7 @@ fn the_upscaler_warns_at_exactly_the_scales_it_does_nothing_at() {
     // when a 1000-wide rectangle rendered at that scale is not smaller than
     // the rectangle, and unwarned when it is.
     let rect = (1000, 1000);
-    for scale in crate::display::Scale::OFFERED {
+    for scale in oag_display::display::Scale::OFFERED {
         let scene = crate::upscale::target_size((0.0, 0.0, 1000.0, 1000.0), scale, 8192);
         let magnifies = crate::upscale::magnifies(scene, rect);
         assert_eq!(
@@ -96,7 +96,7 @@ fn anti_aliasing_also_warns_that_it_is_redundant_on_top_of_the_ceiling_render_sc
         .iter()
         .find(|c| c.setting == "graphics.reconstruction")
         .expect("the warning must name the reconstruction's own offending values");
-    let warned_modes: Vec<crate::display::Reconstruction> = own
+    let warned_modes: Vec<oag_display::display::Reconstruction> = own
         .values
         .iter()
         .map(|value| value.to_string().parse().unwrap_or_else(|e| panic!("{e}")))
@@ -104,7 +104,7 @@ fn anti_aliasing_also_warns_that_it_is_redundant_on_top_of_the_ceiling_render_sc
     // Every value named must actually be a spatial post-process pass, and
     // every spatial post-process pass must be named - not a subset either
     // way, or the warning would mislead about an upscaler or miss FXAA/SMAA.
-    for mode in crate::display::Reconstruction::ALL {
+    for mode in oag_display::display::Reconstruction::ALL {
         assert_eq!(
             mode.is_spatial_post_process(),
             warned_modes.contains(&mode),
@@ -117,7 +117,7 @@ fn anti_aliasing_also_warns_that_it_is_redundant_on_top_of_the_ceiling_render_sc
         .iter()
         .find(|c| c.setting == "graphics.render_scale")
         .expect("the warning must name the redundant render scale");
-    let top = *crate::display::Scale::OFFERED
+    let top = *oag_display::display::Scale::OFFERED
         .last()
         .expect("render scale offers at least one value");
     assert_eq!(
@@ -151,9 +151,12 @@ fn the_floor_warns_at_exactly_the_scales_it_cannot_fall_below() {
         .expect("nothing edits graphics.minimum_resolution");
 
     // What the TOML says: floor -> the scales it is warned against.
-    let mut declared: Vec<(crate::display::Scale, Vec<crate::display::Scale>)> = Vec::new();
+    let mut declared: Vec<(
+        oag_display::display::Scale,
+        Vec<oag_display::display::Scale>,
+    )> = Vec::new();
     for warning in entry.warnings() {
-        let parse = |c: &Condition| -> Vec<crate::display::Scale> {
+        let parse = |c: &Condition| -> Vec<oag_display::display::Scale> {
             c.values
                 .iter()
                 .map(|value| value.to_string().parse().unwrap_or_else(|e| panic!("{e}")))
@@ -175,8 +178,8 @@ fn the_floor_warns_at_exactly_the_scales_it_cannot_fall_below() {
         declared.push((floor[0], scales));
     }
 
-    for floor in crate::display::Scale::OFFERED {
-        let conflicting: Vec<crate::display::Scale> = crate::display::Scale::OFFERED
+    for floor in oag_display::display::Scale::OFFERED {
+        let conflicting: Vec<oag_display::display::Scale> = oag_display::display::Scale::OFFERED
             .into_iter()
             .filter(|ceiling| ceiling.percent() <= floor.percent())
             .collect();
@@ -194,7 +197,7 @@ fn the_floor_warns_at_exactly_the_scales_it_cannot_fall_below() {
     }
     assert_eq!(
         declared.len(),
-        crate::display::Scale::OFFERED.len(),
+        oag_display::display::Scale::OFFERED.len(),
         "every offered floor conflicts with at least itself, so every one warns"
     );
 }
@@ -263,7 +266,7 @@ fn names_reconstruction(warning: &Warning, wanted: &[&str]) -> bool {
 }
 
 /// Every scale in a condition, parsed.
-fn scales_of(condition: &Condition) -> Vec<crate::display::Scale> {
+fn scales_of(condition: &Condition) -> Vec<oag_display::display::Scale> {
     condition
         .values
         .iter()
@@ -304,14 +307,14 @@ fn a_warning_about_the_drawn_size_reads_the_floor_and_not_the_ceiling() {
     // which it does nothing, because a floor *is* a render scale - the two
     // rows offer the same list for that reason.
     let rect = (1000, 1000);
-    let dead: Vec<crate::display::Scale> = crate::display::Scale::OFFERED
+    let dead: Vec<oag_display::display::Scale> = oag_display::display::Scale::OFFERED
         .into_iter()
         .filter(|scale| {
             let scene = crate::upscale::target_size((0.0, 0.0, 1000.0, 1000.0), *scale, 8192);
             !crate::upscale::magnifies(scene, rect)
         })
         .collect();
-    assert!(!dead.is_empty() && dead.len() < crate::display::Scale::OFFERED.len());
+    assert!(!dead.is_empty() && dead.len() < oag_display::display::Scale::OFFERED.len());
 
     let reconstruction = entry("graphics.reconstruction");
     let floored = floor_variant(&reconstruction, |w| names_reconstruction(w, &["fsr1"]));
@@ -342,7 +345,7 @@ fn a_warning_about_the_drawn_size_reads_the_floor_and_not_the_ceiling() {
     let redundant = floor_variant(&reconstruction, |w| {
         names_reconstruction(w, &["fxaa", "smaa"])
     });
-    let top = *crate::display::Scale::OFFERED
+    let top = *oag_display::display::Scale::OFFERED
         .last()
         .expect("render scale offers at least one value");
     for setting in ["graphics.render_scale", "graphics.minimum_resolution"] {

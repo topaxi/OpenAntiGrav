@@ -4,7 +4,6 @@
 use anyhow::Result;
 use log::{error, info, warn};
 
-use oag_game::frontend::{self};
 use oag_game::render::VideoFormat;
 use oag_game::{audio, boot, loading, movie, prefetch, race, strings};
 
@@ -271,7 +270,7 @@ impl Session {
                     // not the PSP's shape: an `.IPF` declares its own display
                     // aspect. The PSP's `.PMF` is already 480x272, so this is the
                     // full screen there and changes nothing.
-                    rect: frontend::pillarbox_in(space, movie.display_aspect),
+                    rect: oag_display::space::pillarbox_in(space, movie.display_aspect),
                 };
                 let (width, height) = (movie.width, movie.height);
                 // No frames is no backdrop, and then there is no shape to keep

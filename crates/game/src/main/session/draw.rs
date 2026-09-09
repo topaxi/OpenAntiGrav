@@ -17,7 +17,9 @@
 use anyhow::Result;
 use log::{debug, info};
 
-use oag_game::{display, drs, movie, perf, pilots, upscale};
+use oag_game::{drs, movie, perf, pilots, upscale};
+
+use oag_display::display;
 
 use crate::stage::Stage;
 
@@ -468,7 +470,7 @@ impl Session {
             // back, and four of those end measurement for the run. Claim less,
             // always resolve.
             let will_upscale_temporally = temporal.is_some()
-                && presentation.reconstruction == crate::display::Reconstruction::Fsr3
+                && presentation.reconstruction == oag_display::display::Reconstruction::Fsr3
                 && self.framebuffer.temporal_upscaler_viable();
             if will_upscale_temporally {
                 super::timing::claim_upscale(

@@ -10,7 +10,7 @@
 //!
 //! # Why this file exists
 //!
-//! `oag_game::frontend::Space::PS2` says the PS2 front end authors in a 640x448
+//! `oag_display::space::Space::PS2` says the PS2 front end authors in a 640x448
 //! grid. That conclusion is right, and the sentence that used to justify it was
 //! not: it said the PS2 layout *is* the PSP's scaled by exactly the resolution
 //! ratio, at confidence 95, on the strength of three samples and the file's two
@@ -128,8 +128,8 @@ fn walk(node: &fexml::Node, path: &str, out: &mut Coords, seen: &mut BTreeMap<St
 /// What the grid ratio predicts a PSP coordinate becomes on the PS2.
 fn predicted(key: &str, value: f32) -> f32 {
     let (psp, ps2) = (
-        oag_game::frontend::Space::PSP.size,
-        oag_game::frontend::Space::PS2.size,
+        oag_display::space::Space::PSP.size,
+        oag_display::space::Space::PS2.size,
     );
     if key.ends_with("@x") {
         value * ps2.0 / psp.0
@@ -380,8 +380,8 @@ fn the_ps2_draws_the_psps_own_textures_stretched_by_the_grid_ratio() {
     let entries = [oag_pulse::names::FRONTEND_ROOT, HUD];
 
     let (psp_space, ps2_space) = (
-        oag_game::frontend::Space::PSP,
-        oag_game::frontend::Space::PS2,
+        oag_display::space::Space::PSP,
+        oag_display::space::Space::PS2,
     );
     let (want_x, want_y) = (
         ps2_space.size.0 / psp_space.size.0,

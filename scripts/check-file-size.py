@@ -139,7 +139,7 @@ BASELINE = {
     # uploaded from.
     "crates/render/src/exhaust.rs": 1430,
     "crates/physics/tests/ship_dynamics.rs": 1366,
-    "crates/game/src/display.rs": 1110,
+    "crates/display/src/display.rs": 1108,
     "crates/formats/tests/audio_ground_truth.rs": 1226,
     "crates/view/src/main.rs": 1152,
     "crates/ai/tests/closed_loop.rs": 1146,

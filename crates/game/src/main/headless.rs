@@ -397,7 +397,7 @@ pub(crate) fn run_race(
             .unwrap_or_default();
         let render_scale = match cli.render_scale {
             Some(percent) => Some(
-                crate::display::Scale::try_from(percent)
+                oag_display::display::Scale::try_from(percent)
                     .map_err(|why| anyhow::anyhow!("--render-scale {percent}: {why}"))?,
             ),
             None => None,

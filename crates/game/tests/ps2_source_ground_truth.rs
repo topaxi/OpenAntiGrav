@@ -297,8 +297,8 @@ fn the_exhaust_textures_decode_off_both_discs() {
 #[ignore = "needs a disc image in data/images/"]
 fn each_pressing_hands_the_hud_its_own_coordinate_grid() {
     for (source, expected) in [
-        (PS2_IMAGE, oag_game::frontend::Space::PS2),
-        (PSP_IMAGE, oag_game::frontend::Space::PSP),
+        (PS2_IMAGE, oag_display::space::Space::PS2),
+        (PSP_IMAGE, oag_display::space::Space::PSP),
     ] {
         let Some(loaded) = load(source) else {
             continue;

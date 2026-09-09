@@ -158,7 +158,7 @@ pub(super) fn velocity_texture(
 /// sync with [`Scene::record_frame`]'s own `phase == 0`.
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub(super) struct CutWatch {
-    last: Option<(crate::display::CameraView, u32)>,
+    last: Option<(oag_display::display::CameraView, u32)>,
 }
 
 impl CutWatch {
@@ -175,7 +175,11 @@ impl CutWatch {
     /// `a_respawn_in_flight_makes_everything_visible` draws for the PVS.
     ///
     /// [`Race::respawns`]: crate::race::Race::respawns
-    pub(super) fn observe(&mut self, view: crate::display::CameraView, respawns: u32) -> bool {
+    pub(super) fn observe(
+        &mut self,
+        view: oag_display::display::CameraView,
+        respawns: u32,
+    ) -> bool {
         let cut = self.last != Some((view, respawns));
         self.last = Some((view, respawns));
         cut
@@ -185,7 +189,7 @@ impl CutWatch {
 #[cfg(test)]
 mod cut_watch_tests {
     use super::CutWatch;
-    use crate::display::CameraView;
+    use oag_display::display::CameraView;
 
     #[test]
     fn the_first_observation_is_always_a_cut() {
@@ -232,7 +236,7 @@ impl super::Scene {
     /// answer to the same question. Its one lossy term, `far`, is not one the
     /// depth transform is sensitive to; see its own documentation.
     ///
-    /// `view` and `respawns` are the race's own [`crate::display::CameraView`]
+    /// `view` and `respawns` are the race's own [`oag_display::display::CameraView`]
     /// and [`crate::race::Race::respawns`] this frame - passed rather than
     /// read off a `&Race` here, because [`CutWatch`] is the only thing that
     /// needs them and a parameter is cheaper to keep honest than a second
@@ -241,7 +245,7 @@ impl super::Scene {
         &self,
         phases: Option<u32>,
         projection: Mat4,
-        view: crate::display::CameraView,
+        view: oag_display::display::CameraView,
         respawns: u32,
     ) {
         let phase = self.frame_index.get();

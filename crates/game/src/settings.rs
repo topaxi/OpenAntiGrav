@@ -171,7 +171,7 @@ impl Default for Ai {
 ///
 /// One row today, and the buses are `oag_audio::Bus`'s own - so this section
 /// grows an entry per bus rather than per sound. A typed percentage rather than
-/// a bare `u32` for the reason [`crate::display::Brightness`] is one: a value
+/// a bare `u32` for the reason [`oag_display::display::Brightness`] is one: a value
 /// out of range is a file that fails to load with a message, not a gain of 4000
 /// discovered by ear.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -286,25 +286,25 @@ pub struct Source {
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Display {
     /// Which screen to open on: `default`, or a monitor by name. See
-    /// [`crate::display::Monitor`].
+    /// [`oag_display::display::Monitor`].
     ///
     /// A name this machine does not have falls back to the default with a note
     /// rather than failing, because the usual way to get one is to unplug a
     /// screen.
     #[serde(default)]
-    pub monitor: crate::display::Monitor,
-    /// `windowed` or `borderless`. See [`crate::display::WindowMode`].
+    pub monitor: oag_display::display::Monitor,
+    /// `windowed` or `borderless`. See [`oag_display::display::WindowMode`].
     #[serde(default)]
-    pub window_mode: crate::display::WindowMode,
+    pub window_mode: oag_display::display::WindowMode,
     /// How big a *windowed* window is, spelled `1440x816`.
     ///
     /// Means nothing in borderless, where the display decides.
     #[serde(default)]
-    pub window_size: crate::display::Size,
+    pub window_size: oag_display::display::Size,
     /// The shape the game is drawn at inside its window: `psp`, `ps2` or
-    /// `free`. See [`crate::display::Aspect`].
+    /// `free`. See [`oag_display::display::Aspect`].
     #[serde(default)]
-    pub aspect: crate::display::Aspect,
+    pub aspect: oag_display::display::Aspect,
     /// Which of a source's own front-end stylings to draw: `HD` or `FURY` on
     /// Wipeout HD, which is the only title in hand that has two.
     ///
@@ -341,13 +341,13 @@ pub struct Display {
     #[serde(default)]
     pub frame_limit: crate::perf::FrameLimit,
     /// What the finished picture is multiplied by, as a percentage. See
-    /// [`crate::display::Brightness`].
+    /// [`oag_display::display::Brightness`].
     #[serde(default)]
-    pub brightness: crate::display::Brightness,
+    pub brightness: oag_display::display::Brightness,
     /// The midtone curve applied to the finished picture, as a percentage of
-    /// 1.0. See [`crate::display::Gamma`].
+    /// 1.0. See [`oag_display::display::Gamma`].
     #[serde(default)]
-    pub gamma: crate::display::Gamma,
+    pub gamma: oag_display::display::Gamma,
 }
 
 fn default_frustum_culling() -> bool {
@@ -370,7 +370,7 @@ pub struct Graphics {
     /// system has a software driver installed, and then it is on this list like
     /// any other adapter.
     #[serde(default)]
-    pub renderer: crate::display::Renderer,
+    pub renderer: oag_display::display::Renderer,
     /// Anisotropic filtering level for track and ship textures: `off`, `2x`,
     /// `4x`, `8x` or `16x`.
     ///
@@ -381,9 +381,9 @@ pub struct Graphics {
     #[serde(with = "AnisotropyDef", default)]
     pub anisotropy: Anisotropy,
     /// How wide the camera's field of view is, as a percentage of the one the
-    /// disc's own data authored. See [`crate::display::Fov`].
+    /// disc's own data authored. See [`oag_display::display::Fov`].
     #[serde(default)]
-    pub fov: crate::display::Fov,
+    pub fov: oag_display::display::Fov,
     /// The performance overlay: `off`, `fps`, `pacing` or `dev`.
     ///
     /// Off by default, because it is a diagnostic and not decoration. See
@@ -509,12 +509,12 @@ pub struct Graphics {
     pub bloom: bool,
     /// How much crossing a speed pad widens the field of view for a moment.
     ///
-    /// **[`crate::display::BoostFovKick::DEFAULT`] by default, and an authored
+    /// **[`oag_display::display::BoostFovKick::DEFAULT`] by default, and an authored
     /// effect rather than a recovered one.** The force it rides on *is*
     /// recovered; this exists so the player can feel it, and it is not being
     /// fitted to the original. It is a magnitude rather than a constant
     /// precisely because it is invented - somebody comparing against a capture
-    /// of the original wants [`crate::display::BoostFovKick::OFF`], and
+    /// of the original wants [`oag_display::display::BoostFovKick::OFF`], and
     /// somebody who finds the default too subtle wants a stronger tier.
     ///
     /// The original's own field of view is *not* static: it carries
@@ -524,11 +524,11 @@ pub struct Graphics {
     /// That widen is recovered and **ported**, as `crate::race::SPEED_FOV_GAIN_DEG`.
     ///
     /// This setting is the other thing: a boost-gated tangent multiplier that is
-    /// ours by choice, composed on top. [`crate::display::BoostFovKick::OFF`] is
+    /// ours by choice, composed on top. [`oag_display::display::BoostFovKick::OFF`] is
     /// still the setting for a comparison against the original, because it takes
     /// *our* effect out while leaving the recovered one in.
     #[serde(default = "default_boost_fov_kick")]
-    pub boost_fov_kick: crate::display::BoostFovKick,
+    pub boost_fov_kick: oag_display::display::BoostFovKick,
 
     /// Which of the original's three in-race camera perspectives to fly with.
     ///
@@ -541,24 +541,24 @@ pub struct Graphics {
     ///
     /// The order the button cycles is recovered at confidence 88; **which view a
     /// fresh install starts on is not**, and
-    /// [`crate::display::CameraView::default`] documents that choice.
+    /// [`oag_display::display::CameraView::default`] documents that choice.
     #[serde(default = "default_camera_view")]
-    pub camera_view: crate::display::CameraView,
+    pub camera_view: oag_display::display::CameraView,
 }
 
-/// See [`Graphics::boost_fov_kick`]: **[`crate::display::BoostFovKick::DEFAULT`]**,
+/// See [`Graphics::boost_fov_kick`]: **[`oag_display::display::BoostFovKick::DEFAULT`]**,
 /// so the boost is felt. Off is for comparing against a capture of the
 /// original, which does not have *this* effect.
-fn default_boost_fov_kick() -> crate::display::BoostFovKick {
-    crate::display::BoostFovKick::DEFAULT
+fn default_boost_fov_kick() -> oag_display::display::BoostFovKick {
+    oag_display::display::BoostFovKick::DEFAULT
 }
 
 /// See [`Graphics::camera_view`]: the further of the two chase views, which is
 /// what the game rendered before the other two existed and what every capture
 /// under `data/traces/` was taken with. A choice, not a reading - see
-/// [`crate::display::CameraView`].
-fn default_camera_view() -> crate::display::CameraView {
-    crate::display::CameraView::default()
+/// [`oag_display::display::CameraView`].
+fn default_camera_view() -> oag_display::display::CameraView {
+    oag_display::display::CameraView::default()
 }
 
 /// See [`Graphics::bloom`]: **off** until its magnitude is calibrated.
@@ -569,9 +569,9 @@ fn default_bloom() -> bool {
 impl Default for Graphics {
     fn default() -> Self {
         Self {
-            renderer: crate::display::Renderer::default(),
+            renderer: oag_display::display::Renderer::default(),
             anisotropy: Anisotropy::default(),
-            fov: crate::display::Fov::default(),
+            fov: oag_display::display::Fov::default(),
             perf_overlay: crate::perf::Overlay::default(),
             frustum_culling: default_frustum_culling(),
             pvs_culling: default_pvs_culling(),

@@ -282,7 +282,7 @@ fn every_widget_lands_on_screen() {
         return;
     };
 
-    let psp = oag_game::frontend::Space::PSP.size;
+    let psp = oag_display::space::Space::PSP.size;
     let mut checked = 0usize;
     for &(entry, ..) in EXPECTED {
         let layout = layout_of(&mut archives, entry);
@@ -349,7 +349,7 @@ fn every_widget_lands_on_screen_on_the_ps2() {
         return;
     };
 
-    let ps2 = oag_game::frontend::Space::PS2.size;
+    let ps2 = oag_display::space::Space::PS2.size;
     let mut checked = 0usize;
     for &(entry, ..) in EXPECTED {
         let layout = layout_of_either(&mut archives, entry);

@@ -468,7 +468,7 @@ fn the_anisotropy_row_offers_only_levels_that_parse() {
 /// does nothing".
 #[test]
 fn the_two_settings_pages_offer_only_values_that_parse() {
-    use crate::display::{
+    use oag_display::display::{
         Aspect, BoostFovKick, Brightness, CameraView, Fov, Gamma, Size, WindowMode,
     };
     let definition = built_in();
@@ -503,43 +503,44 @@ fn the_two_settings_pages_offer_only_values_that_parse() {
     }
     assert_eq!(modes.len(), WindowMode::ALL.len());
 
-    let scales: Vec<crate::display::Scale> = values("graphics.render_scale")
+    let scales: Vec<oag_display::display::Scale> = values("graphics.render_scale")
         .iter()
         .map(|name| name.parse().unwrap_or_else(|e| panic!("{e}")))
         .collect();
     assert_eq!(
         scales,
-        crate::display::Scale::OFFERED,
+        oag_display::display::Scale::OFFERED,
         "the render-scale rows and `Scale::OFFERED` must be one list"
     );
 
-    let reconstructions: Vec<crate::display::Reconstruction> = values("graphics.reconstruction")
-        .iter()
-        .map(|name| name.parse().unwrap_or_else(|e| panic!("{e}")))
-        .collect();
+    let reconstructions: Vec<oag_display::display::Reconstruction> =
+        values("graphics.reconstruction")
+            .iter()
+            .map(|name| name.parse().unwrap_or_else(|e| panic!("{e}")))
+            .collect();
     assert_eq!(
         reconstructions,
-        crate::display::Reconstruction::ALL,
+        oag_display::display::Reconstruction::ALL,
         "the reconstruction rows and `Reconstruction::ALL` must be one list"
     );
 
-    let sharpness: Vec<crate::display::Sharpness> = values("graphics.upscale_sharpness")
+    let sharpness: Vec<oag_display::display::Sharpness> = values("graphics.upscale_sharpness")
         .iter()
         .map(|name| name.parse().unwrap_or_else(|e| panic!("{e}")))
         .collect();
     assert_eq!(
         sharpness,
-        crate::display::Sharpness::OFFERED,
+        oag_display::display::Sharpness::OFFERED,
         "the sharpness rows and `Sharpness::OFFERED` must be one list"
     );
 
-    let msaa: Vec<crate::display::Msaa> = values("graphics.msaa")
+    let msaa: Vec<oag_display::display::Msaa> = values("graphics.msaa")
         .iter()
         .map(|name| name.parse().unwrap_or_else(|e| panic!("{e}")))
         .collect();
     assert_eq!(
         msaa,
-        crate::display::Msaa::ALL,
+        oag_display::display::Msaa::ALL,
         "the MSAA rows and `Msaa::ALL` must be one list"
     );
 

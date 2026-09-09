@@ -1334,7 +1334,7 @@ fn backdrop_frame_rate(width: u32) -> (u64, u64) {
 /// draws that texture and 4.23 with the film scaled to 16:9, against 3.14 at
 /// the declared 4:3. The PS2 draws its `Movie` widget with no size of its own
 /// over a `640x448` black `Image`, so the film fills the frame - and spelling
-/// this `(480, 272)` says whose frame: [`crate::frontend::Space::PS2`]'s. An
+/// this `(480, 272)` says whose frame: [`oag_display::space::Space::PS2`]'s. An
 /// `IPUF` declares no aspect and takes this as it takes its rate. See
 /// `docs/ps2/aspect-ratio.md`.
 pub(crate) const PS2_DISPLAY_ASPECT: (u32, u32) = (480, 272);

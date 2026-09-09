@@ -63,7 +63,7 @@ ROOT = Path(__file__).resolve().parent.parent
 # could reach a hash. Narrowing the list is a separate, argued change.
 SCANNED_CRATES = (
     "core", "physics", "gameplay", "ai", "race", "formats", "video", "tables",
-    "texture", "vex", "rcs",
+    "texture", "vex", "rcs", "display",
 )
 
 # Not required by IEEE-754 to be correctly rounded, so not portable. `sqrt` is
@@ -110,6 +110,17 @@ ALLOWED = {
         "the determinism probe calls `sin` deliberately, so a platform whose "
         "libm differs shows up as a failing gate rather than as a mystery "
         "desync - see determinism.md"
+    ),
+    "crates/display/src/display.rs": (
+        "`Fov::apply` scales the tangent of the half-angle, because the "
+        "tangent is what a projection matrix is built from - the setting has "
+        "to mean the same fraction of the screen at every field width. This "
+        "reaches a **pixel**, never a hash: `Fov` appears in no simulation "
+        "crate at all (`oag-core`, `oag-physics`, `oag-gameplay`, `oag-race`, "
+        "`oag-ai` name it nowhere), and the camera it configures is downstream "
+        "of the tick rather than an input to it. Surfaced when ADR-0050's "
+        "sibling split moved `display` into its own crate and this scan "
+        "covered it for the first time"
     ),
     "crates/formats/src/entropy.rs": (
         "Shannon entropy over a byte histogram, and the decision it is: this "

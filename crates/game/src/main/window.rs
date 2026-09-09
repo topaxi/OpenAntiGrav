@@ -5,7 +5,8 @@
 //! every time it is changed - see `Session::apply_window`.
 
 use log::warn;
-use oag_game::{display, icon, perf};
+use oag_display::display;
+use oag_game::{icon, perf};
 
 /// The window's Wayland `app_id` and X11 `WM_CLASS` - the same field on both
 /// backends' shared `PlatformSpecificWindowAttributes`, so one call to

@@ -14,7 +14,7 @@ use super::*;
 /// capture of the original.
 #[test]
 fn the_boost_kick_widens_the_view_and_turning_it_off_changes_nothing() {
-    use crate::display::{BoostFovKick, Fov};
+    use oag_display::display::{BoostFovKick, Fov};
 
     fn x_scale(m: Mat4) -> f32 {
         m.to_cols_array()[0]
@@ -95,7 +95,7 @@ fn the_boost_kick_widens_the_view_and_turning_it_off_changes_nothing() {
 /// the authored value and the original demonstrably does.
 #[test]
 fn the_field_widens_with_forward_speed_and_narrows_when_moving_backwards() {
-    use crate::display::Fov;
+    use oag_display::display::Fov;
 
     fn vertical_fov_deg(race: &Race) -> f32 {
         // m11 = 1 / tan(fov/2) at the authored aspect, which this window is.
@@ -141,7 +141,7 @@ fn the_field_widens_with_forward_speed_and_narrows_when_moving_backwards() {
 /// differently labelled.
 #[test]
 fn a_stronger_tier_widens_the_view_further() {
-    use crate::display::{BoostFovKick, Fov};
+    use oag_display::display::{BoostFovKick, Fov};
 
     fn x_scale(m: Mat4) -> f32 {
         m.to_cols_array()[0]
@@ -223,7 +223,10 @@ fn cycling_the_camera_changes_no_simulation_state() {
 
     // The cycle really did move: otherwise this test passes by doing nothing,
     // which is the failure mode a test of this shape is prone to.
-    assert_eq!(control.camera_view(), crate::display::CameraView::default());
+    assert_eq!(
+        control.camera_view(),
+        oag_display::display::CameraView::default()
+    );
     assert_ne!(cycled.camera_view(), control.camera_view());
     // And the two cameras really are looking at different things, so the
     // hashes above are equal despite a genuinely different picture.
@@ -235,7 +238,7 @@ fn cycling_the_camera_changes_no_simulation_state() {
 /// here.
 #[test]
 fn each_view_frames_the_craft_from_its_own_block() {
-    use crate::display::{CameraView, Fov};
+    use oag_display::display::{CameraView, Fov};
 
     let mut race = Race::start(setup(Handling::default()));
     let mut eyes = Vec::new();
@@ -382,7 +385,7 @@ fn a_camera_override_moves_the_view_and_the_derived_eye_together() {
 /// setting and the same aspect fit.
 #[test]
 fn a_camera_fov_override_stands_in_for_the_authored_fov() {
-    use crate::display::Fov;
+    use oag_display::display::Fov;
 
     let mut with_override = setup(Handling::default());
     with_override.camera_override = Some(CameraOverride {
@@ -410,7 +413,7 @@ fn a_camera_fov_override_stands_in_for_the_authored_fov() {
 /// ground-truth captures under `data/traces/` were taken against it.
 #[test]
 fn the_field_of_view_setting_widens_the_projection_and_defaults_to_the_authored_one() {
-    use crate::display::Fov;
+    use oag_display::display::Fov;
 
     let race = Race::start(setup(Handling::default()));
     let aspect = AUTHORED_ASPECT;

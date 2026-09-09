@@ -42,13 +42,13 @@ impl Race {
     /// A setter rather than a [`Setup`] field because the kick is a display
     /// choice and `Setup` is what a headless race needs; threading a graphics
     /// setting through the loader would put it in front of every caller that has
-    /// no screen. [`crate::display::BoostFovKick::OFF`] leaves [`Race::projection`]
+    /// no screen. [`oag_display::display::BoostFovKick::OFF`] leaves [`Race::projection`]
     /// bit-identical to what it returned before the effect existed.
     /// The field of view the picture is being drawn at, for the lock-on reticle.
     ///
     /// See [`Race::sight_fov`]. Cheap and idempotent, so the frame loop may set
     /// it every frame rather than tracking whether the setting moved.
-    pub fn set_sight_fov(&mut self, fov: crate::display::Fov) {
+    pub fn set_sight_fov(&mut self, fov: oag_display::display::Fov) {
         self.sight_fov = fov;
     }
 
@@ -81,9 +81,9 @@ impl Race {
         self.sight_state
     }
 
-    pub fn set_boost_fov_kick(&mut self, kick: crate::display::BoostFovKick) {
+    pub fn set_boost_fov_kick(&mut self, kick: oag_display::display::BoostFovKick) {
         self.boost_fov_kick = kick;
-        if kick == crate::display::BoostFovKick::OFF {
+        if kick == oag_display::display::BoostFovKick::OFF {
             self.boost_kick = 0.0;
         }
     }
@@ -92,7 +92,7 @@ impl Race {
     /// restart note - see `Self::set_boost_fov_kick`, which is called once at
     /// `Race::start` and does not track the settings file afterwards.
     #[must_use]
-    pub fn boost_fov_kick(&self) -> crate::display::BoostFovKick {
+    pub fn boost_fov_kick(&self) -> oag_display::display::BoostFovKick {
         self.boost_fov_kick
     }
 
@@ -113,17 +113,17 @@ impl Race {
     /// Whether the original springs or snaps between them is **not recovered**:
     /// it keeps a separate previous-eye per rig, so it does neither, and
     /// reproducing that needs a second [`Chase`] rather than a decision here.
-    pub fn set_camera_view(&mut self, view: crate::display::CameraView) {
+    pub fn set_camera_view(&mut self, view: oag_display::display::CameraView) {
         if view == self.view {
             return;
         }
         self.view = view;
         self.chase_params = match view {
-            crate::display::CameraView::Close => self.chase_close,
+            oag_display::display::CameraView::Close => self.chase_close,
             // The cockpit view does not use these, but leaving the *far* block
             // installed means a cycle back out of the cockpit lands on the block
             // the next external view will want anyway.
-            crate::display::CameraView::Internal | crate::display::CameraView::Far => {
+            oag_display::display::CameraView::Internal | oag_display::display::CameraView::Far => {
                 self.chase_far
             }
         };
@@ -132,7 +132,7 @@ impl Race {
 
     /// Which perspective this race is rendering from.
     #[must_use]
-    pub fn camera_view(&self) -> crate::display::CameraView {
+    pub fn camera_view(&self) -> oag_display::display::CameraView {
         self.view
     }
 
@@ -140,7 +140,7 @@ impl Race {
     ///
     /// False in the cockpit view alone. Read by [`Scene::render`], which skips
     /// the draw call rather than moving the model: see
-    /// [`crate::display::CameraView::draws_own_ship`] for the evidence and its
+    /// [`oag_display::display::CameraView::draws_own_ship`] for the evidence and its
     /// confidence.
     ///
     /// **The exhaust plume, the boost plume and the collision sparks are still

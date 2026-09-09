@@ -379,7 +379,7 @@ pub struct Setup {
     /// The chase camera's seven values, from `<ExternalCameraFar>`.
     pub chase: ChaseParams,
     /// The same seven from `<ExternalCameraClose>`: the nearer of the two
-    /// external views [`crate::display::CameraView`] cycles.
+    /// external views [`oag_display::display::CameraView`] cycles.
     pub chase_close: ChaseParams,
     /// The cockpit view's five values, from `<InternalCamera>`.
     pub internal: InternalParams,

@@ -47,7 +47,7 @@ pub enum Reconstruction {
     Off,
     /// Fast Approximate Anti-Aliasing: one lightweight fullscreen pass that
     /// blurs along detected edges. Cheapest of the lot, softens the image the
-    /// most. See [`oag_render::post::fxaa`].
+    /// most. See `oag_render::post::fxaa`.
     ///
     /// **Only ever right when nothing else is reconstructing**, which is why
     /// it is a value here rather than a toggle beside this row. Before
@@ -58,7 +58,7 @@ pub enum Reconstruction {
     /// Subpixel Morphological Anti-Aliasing: edge detection, then blending
     /// weights from a precomputed area/search lookup, then a neighbourhood
     /// blend. Three fullscreen passes against FXAA's one, and keeps detail
-    /// FXAA would soften away. See [`oag_render::post::smaa`].
+    /// FXAA would soften away. See `oag_render::post::smaa`.
     Smaa,
     /// AMD FidelityFX Super Resolution 1: EASU, then RCAS.
     ///
@@ -66,7 +66,7 @@ pub enum Reconstruction {
     /// renderer - no motion vectors, no jitter, no history. **A magnifier**:
     /// `upscale::magnifies` declines to run it where the frame is not drawn
     /// smaller than it is presented, because asked to minify its taps
-    /// undersample. See [`oag_render::post::fsr1`].
+    /// undersample. See `oag_render::post::fsr1`.
     Fsr1,
     /// AMD FidelityFX Super Resolution 3.1: the temporal upscaler, and this
     /// row's anti-aliaser.
@@ -78,7 +78,7 @@ pub enum Reconstruction {
     /// here that reaches back into the renderer: depth, per-object motion
     /// vectors and camera jitter are all inputs, and the jitter is turned on
     /// *by this setting* rather than independently. See
-    /// [`oag_render::post::fsr3`] and [fsr3.md](../../../../docs/rendering/fsr3.md).
+    /// `oag_render::post::fsr3` and [fsr3.md](../../../../docs/rendering/fsr3.md).
     ///
     /// **Greys the MSAA row**, per ADR-0041: it anti-aliases the same frame,
     /// and MSAA on top costs a rasterization pass and a resolve for a
@@ -113,7 +113,7 @@ impl Reconstruction {
     /// camera jittered and the history kept.
     ///
     /// The one question the rest of the game asks about the choice - see
-    /// `crate::upscale::jitter_phases`. A spatial resampler must *not* be
+    /// `oag_game::upscale::jitter_phases`. A spatial resampler must *not* be
     /// handed a jittered frame: it has no history to resolve the offset
     /// against, so the offset is just a wobble
     /// ([ADR-0039](../../../../docs/architecture/adr/0039-camera-jitter-post-multiplies-onto-the-view-projection.md)).

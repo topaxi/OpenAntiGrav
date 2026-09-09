@@ -23,7 +23,7 @@
 //! with lavapipe installed is offered it by name, and a machine without it is
 //! not offered anything. `force_fallback_adapter` would have made a row that
 //! errors on most machines, which is the same mistake
-//! [`crate::display::WindowMode::ALL`] declines to make about exclusive
+//! [`oag_display::display::WindowMode::ALL`] declines to make about exclusive
 //! fullscreen.
 //!
 //! Expect a software adapter to be a *diagnostic* path rather than a way to
@@ -33,7 +33,7 @@
 use anyhow::{Context, Result};
 use log::warn;
 
-use crate::display::Renderer;
+use oag_display::display::Renderer;
 
 /// The backends an adapter may be offered from.
 ///

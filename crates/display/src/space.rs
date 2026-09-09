@@ -22,17 +22,17 @@
 /// this per-source would have produced a second, weaker `Space`.
 ///
 /// What was per-source and hardcoded here got routed through [`Space`] instead:
-/// the menu backdrop's rect in `crate::main` and `crate::capture`, and the
-/// no-movie aspect fallback in `crate::boot`. See [`pillarbox_in`].
+/// the menu backdrop's rect in `oag_game::main` and `oag_game::capture`, and the
+/// no-movie aspect fallback in `oag_game::boot`. See [`pillarbox_in`].
 ///
 /// The remaining readers are console facts under
 /// [ADR-0004](../../../docs/architecture/adr/0004-asset-pipeline.md) rather than
 /// title ones, which is why none of them moved to a title package either:
 ///
-/// - `crate::loading`, whose layout this project authored, in these pixels;
+/// - `oag_game::loading`, whose layout this project authored, in these pixels;
 /// - `oag_race::AUTHORED_ASPECT`, where the original's authored field of view is
 ///   only defined at the PSP's aspect;
-/// - [`crate::hud::inside_screen`]'s own tests, which still exercise the PSP's
+/// - `oag_game::hud::inside_screen`'s own tests, which still exercise the PSP's
 ///   480x272 by name even though the function itself takes a `screen`
 ///   parameter and checks the PS2's 640x448 grid just as well - see its doc
 ///   comment for the coordinate-by-coordinate measurement of why the raw XML
@@ -102,7 +102,7 @@ pub const SCREEN: (f32, f32) = (480.0, 272.0);
 /// byte-identical across the consoles. Extremes cannot see an exception in the
 /// middle - the same reading, of `Arcade_HUD.xml`, was wrong the same way. The
 /// measurement is `crates/game/tests/frontend_grid_ground_truth.rs`, and
-/// [`crate::hud::inside_screen`] is where the mixed meaning of `x` matters.
+/// `oag_game::hud::inside_screen` is where the mixed meaning of `x` matters.
 ///
 /// One trap that measurement pins: the PRESS START text is at `y=220` on the
 /// **USA** PSP pressing and `y=230` on the EU one, and the PS2's 362 scales
@@ -211,7 +211,7 @@ impl Default for Space {
 /// quad this always drew. The PS2's containers report the frame they were cut
 /// to fill rather than their decoded size, so they fill it too; a movie that
 /// genuinely disagreed with its screen is what the boxing is here for. See
-/// `crate::movie::Movie::display_aspect`.
+/// `oag_game::movie::Movie::display_aspect`.
 pub fn pillarbox(screen: (f32, f32), aspect: (u32, u32)) -> [f32; 4] {
     pillarbox_in(
         Space {

@@ -30,11 +30,11 @@ pub(super) const KNOWN_TITLES: &[&str] = &[
 /// See [`RenderProfile::minimum_resolution`]: **50 %**.
 ///
 /// Its own function rather than `Default::default()`, which for a
-/// [`crate::display::Scale`] is 100 - a floor equal to the ceiling, which is
+/// [`oag_display::display::Scale`] is 100 - a floor equal to the ceiling, which is
 /// the one value that means "the controller has nowhere to go" and would fire
 /// the menu's own warning out of the box.
-fn default_minimum_resolution() -> crate::display::Scale {
-    crate::display::Scale::OFFERED[0]
+fn default_minimum_resolution() -> oag_display::display::Scale {
+    oag_display::display::Scale::OFFERED[0]
 }
 
 /// The render-cost-sensitive slice of [`super::Graphics`], persisted one per
@@ -47,9 +47,9 @@ pub struct RenderProfile {
     /// Below 100 is the usual internal-resolution knob; above it is
     /// supersampling. Measured against the aspect rectangle rather than the
     /// window, so it means the same thing whatever `display.aspect` is. See
-    /// [`crate::display::Scale`].
+    /// [`oag_display::display::Scale`].
     #[serde(default)]
-    pub render_scale: crate::display::Scale,
+    pub render_scale: oag_display::display::Scale,
     /// The frame rate a resolution controller aims for, or `off`.
     ///
     /// The target *is* the enable, so there is no second key that can disagree
@@ -69,12 +69,12 @@ pub struct RenderProfile {
     /// A percentage of the aspect rectangle, exactly as `render_scale` is, so
     /// the two are directly comparable and a floor at or above the ceiling
     /// means the controller has nowhere to go. Ignored while
-    /// `target_fps` is `off`. See [`crate::display::Scale`].
+    /// `target_fps` is `off`. See [`oag_display::display::Scale`].
     ///
     /// **Defaults to 50 %**, the lowest value the render-scale row itself
     /// offers, so the floor and the ceiling read against the same list.
     #[serde(default = "default_minimum_resolution")]
-    pub minimum_resolution: crate::display::Scale,
+    pub minimum_resolution: oag_display::display::Scale,
     /// What resolves the frame onto the surface: `off`, `fxaa`, `smaa`,
     /// `fsr1` or `fsr3`.
     ///
@@ -91,13 +91,13 @@ pub struct RenderProfile {
     /// **`fsr1` only has an effect below 100 % `render_scale`.** FSR 1 is a
     /// magnifier; asked to minify it undoes the supersampling it was handed.
     /// See `crate::upscale::magnifies`. `fsr3` has something to do at every
-    /// scale. See [`crate::display::Reconstruction`].
+    /// scale. See [`oag_display::display::Reconstruction`].
     #[serde(default)]
-    pub reconstruction: crate::display::Reconstruction,
+    pub reconstruction: oag_display::display::Reconstruction,
     /// How hard FSR 1's RCAS pass sharpens, in stops: 0 is maximum and each
     /// whole step halves it. Ignored unless `upscaler` is `fsr1`.
     #[serde(default)]
-    pub upscale_sharpness: crate::display::Sharpness,
+    pub upscale_sharpness: oag_display::display::Sharpness,
     /// How many samples the rasterizer takes: `off` or `4x`.
     ///
     /// **Its own axis since ADR-0041**, because it is a property of the
@@ -107,10 +107,10 @@ pub struct RenderProfile {
     ///
     /// **Baked into the scene's pipelines when a race starts**, so moving it
     /// takes effect the next time a race is launched rather than the frame it
-    /// was chosen on. See [`crate::display::Msaa`] and
+    /// was chosen on. See [`oag_display::display::Msaa`] and
     /// `docs/architecture/adr/0013-anti-aliasing-architecture.md`.
     #[serde(default)]
-    pub msaa: crate::display::Msaa,
+    pub msaa: oag_display::display::Msaa,
     /// How hard the finished frame is smeared along the camera's own motion:
     /// `off`, `low`, `medium` or `high`.
     ///
@@ -130,7 +130,7 @@ pub struct RenderProfile {
     /// fresh every frame, so the row applies live, MSAA included: the
     /// blur's prepare stage reads sample 0 of the multisampled attachments.
     #[serde(default)]
-    pub motion_blur: crate::display::MotionBlur,
+    pub motion_blur: oag_display::display::MotionBlur,
     /// What casts a shadow, and what draws it: `off` or `blob`.
     ///
     /// **In this per-title table rather than flat in `[graphics]`** for both
@@ -143,27 +143,27 @@ pub struct RenderProfile {
     /// shared value could not carry that.
     ///
     /// Defaults to `off` on every title and stays there until `original`
-    /// exists - see [`crate::display::Shadows::Off`] for why a generated
+    /// exists - see [`oag_display::display::Shadows::Off`] for why a generated
     /// falloff is not a default this project may take. Read fresh every
     /// frame, so the setting applies live.
     #[serde(default)]
-    pub shadows: crate::display::Shadows,
+    pub shadows: oag_display::display::Shadows,
 }
 
 impl Default for RenderProfile {
     fn default() -> Self {
         Self {
-            render_scale: crate::display::Scale::default(),
+            render_scale: oag_display::display::Scale::default(),
             target_fps: crate::drs::Target::default(),
             // The one field whose default is not its type's - see
             // `default_minimum_resolution`, and the reason this impl is
             // written out rather than derived.
             minimum_resolution: default_minimum_resolution(),
-            reconstruction: crate::display::Reconstruction::default(),
-            upscale_sharpness: crate::display::Sharpness::default(),
-            msaa: crate::display::Msaa::default(),
-            motion_blur: crate::display::MotionBlur::default(),
-            shadows: crate::display::Shadows::default(),
+            reconstruction: oag_display::display::Reconstruction::default(),
+            upscale_sharpness: oag_display::display::Sharpness::default(),
+            msaa: oag_display::display::Msaa::default(),
+            motion_blur: oag_display::display::MotionBlur::default(),
+            shadows: oag_display::display::Shadows::default(),
         }
     }
 }

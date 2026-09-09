@@ -15,7 +15,8 @@
 use anyhow::{Context, Result};
 
 use crate::font::{self, Atlas};
-use crate::frontend::{Align, Draw, SCREEN, Space};
+use crate::frontend::{Align, Draw};
+use oag_display::space::{SCREEN, Space};
 
 mod text;
 
@@ -169,8 +170,7 @@ pub struct Renderer {
     quads: Vec<Quad>,
     /// The grid the draw lists it is given are in, and what that grid is shown
     /// as. [`Space::PSP`] until someone says otherwise, which is what every
-    /// caller that draws our own layouts - the loading screen, the menus, the
-    /// HUD - wants. See `crate::frontend::Space`.
+    /// caller that draws our own layouts - the loading screen, the menus, the HUD.
     space: Space,
 }
 
@@ -558,7 +558,7 @@ impl Renderer {
         // Where the movie sits in screen space - not always all of it, since a
         // PS2 `.PSS`'s own display aspect pillarboxes inside [`SCREEN`] rather
         // than filling it the way a `.PMF` always has. See
-        // `crate::frontend::pillarbox`.
+        // `oag_display::space::pillarbox`.
         let mut video_rect = [0.0, 0.0, self.space.size.0, self.space.size.1];
         for (index, draw) in list.iter().enumerate() {
             match draw {
@@ -672,7 +672,7 @@ impl Renderer {
                 // The **grid**, not the display aspect: this maps a draw's rect
                 // onto the viewport, and the rects are in grid coordinates.
                 // `letterbox_in` above is the one that wants the other number.
-                // See `crate::frontend::Space`.
+                // See `oag_display::space::Space`.
                 screen: [self.space.size.0, self.space.size.1],
                 atlas: [self.atlas.width as f32, self.atlas.height as f32],
                 sprites: [self.sprites.0 as f32, self.sprites.1 as f32],
@@ -1039,7 +1039,7 @@ pub fn letterbox(target: (u32, u32)) -> [f32; 2] {
 ///
 /// `screen_aspect` is a **display** aspect, not a grid one - the PS2's 640x448
 /// grid is shown at the PSP's own 480/272, and fitting 640/448 into the window
-/// instead would squeeze the whole front end. See `crate::frontend::Space`.
+/// instead would squeeze the whole front end. See `oag_display::space::Space`.
 #[must_use]
 pub fn letterbox_in(target: (u32, u32), screen_aspect: f32) -> [f32; 2] {
     let (width, height) = (target.0.max(1) as f32, target.1.max(1) as f32);

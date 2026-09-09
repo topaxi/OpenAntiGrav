@@ -39,7 +39,7 @@ fn the_clear_is_read_and_resolved() {
     let frame = crate::menu::read_frame(
         &screens(),
         &Sheet::default(),
-        crate::frontend::Space::HD,
+        oag_display::space::Space::HD,
         Some("Frame"),
         None,
     );
@@ -64,7 +64,7 @@ fn an_image_the_sheet_has_no_placement_for_is_skipped() {
     let frame = crate::menu::read_frame(
         &screens(),
         &Sheet::default(),
-        crate::frontend::Space::HD,
+        oag_display::space::Space::HD,
         Some("Frame"),
         None,
     );
@@ -77,7 +77,7 @@ fn an_image_the_sheet_has_no_placement_for_is_skipped() {
 /// that is not on this source.
 #[test]
 fn no_name_and_a_wrong_name_both_read_as_no_frame() {
-    let space = crate::frontend::Space::HD;
+    let space = oag_display::space::Space::HD;
     let unnamed = crate::menu::read_frame(&screens(), &Sheet::default(), space, None, None);
     assert!(unnamed.is_empty());
     let missing = crate::menu::read_frame(
@@ -101,7 +101,7 @@ fn the_selected_fill_is_read_from_the_globals_table_by_name() {
     let frame = crate::menu::read_frame(
         &screens(),
         &Sheet::default(),
-        crate::frontend::Space::HD,
+        oag_display::space::Space::HD,
         Some("Frame"),
         Some("Ink"),
     );
@@ -116,7 +116,7 @@ fn the_selected_fill_is_read_from_the_globals_table_by_name() {
     let no_name = crate::menu::read_frame(
         &screens(),
         &Sheet::default(),
-        crate::frontend::Space::HD,
+        oag_display::space::Space::HD,
         Some("Frame"),
         None,
     );
@@ -125,7 +125,7 @@ fn the_selected_fill_is_read_from_the_globals_table_by_name() {
     let unknown_name = crate::menu::read_frame(
         &screens(),
         &Sheet::default(),
-        crate::frontend::Space::HD,
+        oag_display::space::Space::HD,
         Some("Frame"),
         Some("HD_Blue"),
     );
@@ -149,7 +149,7 @@ fn the_frames_text_widgets_are_left_alone() {
     let frame = crate::menu::read_frame(
         &screens,
         &Sheet::default(),
-        crate::frontend::Space::HD,
+        oag_display::space::Space::HD,
         Some("Frame"),
         None,
     );
@@ -182,7 +182,7 @@ fn content_bottom_is_the_lowest_mark_below_the_midline() {
         ..Frame::default()
     };
     assert_eq!(
-        frame.content_bottom(crate::frontend::Space::PSP),
+        frame.content_bottom(oag_display::space::Space::PSP),
         Some(236.0),
         "the higher of the two footer strips, not the top bar"
     );
@@ -195,7 +195,7 @@ fn content_bottom_is_the_lowest_mark_below_the_midline() {
 #[test]
 fn content_bottom_is_none_with_nothing_below_the_midline() {
     assert_eq!(
-        Frame::default().content_bottom(crate::frontend::Space::PSP),
+        Frame::default().content_bottom(oag_display::space::Space::PSP),
         None,
         "no marks at all"
     );
@@ -208,7 +208,7 @@ fn content_bottom_is_none_with_nothing_below_the_midline() {
         ..Frame::default()
     };
     assert_eq!(
-        top_bar_only.content_bottom(crate::frontend::Space::PSP),
+        top_bar_only.content_bottom(oag_display::space::Space::PSP),
         None,
         "the one mark is above the midline"
     );
@@ -224,7 +224,7 @@ fn content_bottom_is_none_with_nothing_below_the_midline() {
 /// race, before and after this fix, screenshotted either side of it.
 #[test]
 fn backdrops_drops_a_full_screen_mark_but_keeps_a_small_one_behind_a_race() {
-    let space = crate::frontend::Space::PSP;
+    let space = oag_display::space::Space::PSP;
     let full_screen = Draw::Sprite {
         rect: [0.0, 0.0, space.size.0, space.size.1],
         uv: [0.0, 0.0, 480.0, 256.0],
@@ -257,7 +257,7 @@ fn backdrops_drops_a_full_screen_mark_but_keeps_a_small_one_behind_a_race() {
 /// rect the way it does for a mark.
 #[test]
 fn backdrops_drops_the_clear_behind_a_race_too() {
-    let space = crate::frontend::Space::PSP;
+    let space = oag_display::space::Space::PSP;
     let clear = Draw::Fill {
         rect: [0.0, 0.0, space.size.0, space.size.1],
         color: [0.1, 0.1, 0.1, 1.0],
@@ -286,7 +286,7 @@ fn backdrops_drops_the_clear_behind_a_race_too() {
 /// over the movie, as they always did.
 #[test]
 fn backdrops_puts_the_movie_between_a_full_screen_mark_and_the_chrome() {
-    let space = crate::frontend::Space::PSP;
+    let space = oag_display::space::Space::PSP;
     let full_screen = Draw::Sprite {
         rect: [0.0, 0.0, space.size.0, space.size.1],
         uv: [0.0, 0.0, 480.0, 256.0],

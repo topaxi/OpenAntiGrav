@@ -13,7 +13,11 @@ fn tick(buttons: &[Button]) -> Input {
 /// Pulse's own menu table against the 22-pixel face its menus name, the same
 /// skin `menu/tests.rs` draws with.
 fn skin() -> Skin {
-    Skin::new(oag_pulse::FRONT_END.menu, crate::frontend::Space::PSP, 22.0)
+    Skin::new(
+        oag_pulse::FRONT_END.menu,
+        oag_display::space::Space::PSP,
+        22.0,
+    )
 }
 
 fn keyboard(initial: &str) -> Keyboard {

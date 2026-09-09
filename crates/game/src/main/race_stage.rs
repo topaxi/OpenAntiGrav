@@ -1,7 +1,8 @@
 //! The race stage: a loaded track, and the scene that draws it.
 
 use log::warn;
-use oag_game::{display, race, upscale};
+use oag_display::display;
+use oag_game::{race, upscale};
 
 use crate::gpu::Gpu;
 

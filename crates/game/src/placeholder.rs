@@ -34,7 +34,7 @@ use oag_title::MenuSkin;
 /// parallel set of fallbacks invented here.
 pub const MENU_SKIN: MenuSkin = MenuSkin {
     // The PSP's own grid, and the one the renderer defaults to with no
-    // source's own space to set instead - see `oag_game::frontend::Space`.
+    // source's own space to set instead - see `oag_display::space::Space`.
     space: (480.0, 272.0),
     menu_x: 40.0,
     menu_scale: 1.0,

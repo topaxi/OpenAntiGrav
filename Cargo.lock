@@ -2009,6 +2009,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "oag-display"
+version = "0.1.0"
+dependencies = [
+ "oag-disc",
+ "serde",
+ "toml",
+]
+
+[[package]]
 name = "oag-formats"
 version = "0.1.0"
 dependencies = [
@@ -2038,6 +2047,7 @@ dependencies = [
  "oag-audio",
  "oag-core",
  "oag-disc",
+ "oag-display",
  "oag-formats",
  "oag-gameplay",
  "oag-hd",
