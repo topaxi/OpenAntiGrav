@@ -123,14 +123,18 @@ BASELINE = {
     "crates/game/tests/race_ground_truth.rs": 2266,
     "crates/vex/src/vex.rs": 1758,
     "crates/game/src/boot.rs": 1784,
-    "crates/game/src/movie.rs": 1981,
+    # Ratcheted down from 1,981 when `Player`, `FRAME_RATE` and
+    # `PS2_DISPLAY_ASPECT` moved to `crates/game/src/frontend/player.rs` -
+    # prep for the `oag-ui` extraction, which cannot name a type that lives in
+    # the composition root.
+    "crates/game/src/movie.rs": 1756,
     # Ratcheted down from 2,005 when the two drawing idioms split out into
     # `menu/rows.rs` and `menu/strip.rs`; `draw_list` picks between them and
     # draws nothing itself. Ratcheted down again from 1,785 to 1,276 when
     # `Definition`, `Error`, the raw TOML shape and the parse/check functions
     # split out into `menu/definition.rs` - the seam `string_id` resolution
     # needs, and the file had zero lines of headroom to grow it in place.
-    "crates/game/src/menu.rs": 1274,
+    "crates/ui/src/menu.rs": 1274,
     "crates/render/src/psys.rs": 1956,
     "crates/game/src/audio.rs": 1798,
     "crates/trace/src/main.rs": 1543,
@@ -144,7 +148,7 @@ BASELINE = {
     "crates/view/src/main.rs": 1152,
     "crates/ai/tests/closed_loop.rs": 1146,
     "crates/physics/src/hover.rs": 1103,
-    "crates/game/src/font.rs": 1094,
+    "crates/ui/src/font.rs": 1094,
     "crates/game/src/render.rs": 1055,
     "crates/trace/src/compare.rs": 1038,
 }

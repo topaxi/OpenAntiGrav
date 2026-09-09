@@ -33,9 +33,9 @@
 use std::path::{Path, PathBuf};
 
 use oag_game::boot;
-use oag_game::frontend::states;
 use oag_game::input::{Button, Input};
 use oag_pure::frontend::states as pure_states;
+use oag_ui::frontend::states;
 
 /// Every Pure pressing present, as `(label, path)`.
 ///
@@ -74,7 +74,7 @@ fn load(image: &Path) -> boot::Boot {
         language: None,
         source: image.display().to_string(),
         dlc: Vec::new(),
-        leg: oag_game::frontend::Leg::LogoFmv,
+        leg: oag_ui::frontend::Leg::LogoFmv,
         movie: None,
         cache: std::env::temp_dir().join("oag-pure-boot-ground-truth"),
         audio_cache: oag_game::boot::default_audio_cache_dir(),
@@ -373,7 +373,7 @@ fn the_reel_flag_opens_the_screen_the_disc_itself_plays_it_on() {
             language: None,
             source: image.display().to_string(),
             dlc: Vec::new(),
-            leg: oag_game::frontend::Leg::DevPubReel,
+            leg: oag_ui::frontend::Leg::DevPubReel,
             movie: None,
             cache: std::env::temp_dir().join("oag-pure-boot-ground-truth"),
             audio_cache: oag_game::boot::default_audio_cache_dir(),
@@ -528,19 +528,19 @@ fn the_memory_stick_warnings_two_stripes_keep_their_own_rects() {
             .screens()
             .globals
             .get("MSWarningColour1")
-            .and_then(|v| oag_game::screen::parse_argb(v))
+            .and_then(|v| oag_ui::screen::parse_argb(v))
             .unwrap_or_else(|| panic!("{label}: MSWarningColour1 must resolve to a real colour"));
         assert_eq!(
             screen.fills,
             vec![
-                oag_game::screen::Fill {
+                oag_ui::screen::Fill {
                     x: 0.0,
                     y: 10.0,
                     width: Some(480.0),
                     height: Some(1.0),
                     color,
                 },
-                oag_game::screen::Fill {
+                oag_ui::screen::Fill {
                     x: 0.0,
                     y: 240.0,
                     width: Some(480.0),
@@ -576,11 +576,11 @@ fn title_screens_frame_lines_keep_their_own_rects_and_share_one_colour() {
             .screens()
             .globals
             .get("FrameLineColor")
-            .and_then(|v| oag_game::screen::parse_argb(v))
+            .and_then(|v| oag_ui::screen::parse_argb(v))
             .unwrap_or_else(|| panic!("{label}: FrameLineColor must resolve to a real colour"));
         assert_eq!(
             color,
-            oag_game::screen::parse_argb(
+            oag_ui::screen::parse_argb(
                 oag_pure::frontend::FALLBACK_GLOBALS
                     .iter()
                     .find(|(name, _)| *name == "FrameLineColor")
@@ -590,14 +590,14 @@ fn title_screens_frame_lines_keep_their_own_rects_and_share_one_colour() {
             .unwrap(),
             "{label}: the disc leaves FrameLineColor undeclared, so this is the measured fallback"
         );
-        let rect = |x: f32, y: f32, width: f32, height: f32| oag_game::screen::Fill {
+        let rect = |x: f32, y: f32, width: f32, height: f32| oag_ui::screen::Fill {
             x,
             y,
             width: Some(width),
             height: Some(height),
             color,
         };
-        let white_background = oag_game::screen::Fill {
+        let white_background = oag_ui::screen::Fill {
             x: 0.0,
             y: 0.0,
             width: Some(480.0),

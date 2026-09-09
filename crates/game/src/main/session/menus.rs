@@ -5,8 +5,9 @@ use log::{error, info, warn};
 
 use oag_display::display;
 use oag_game::render::{Renderer, VideoFormat};
-use oag_game::{audio, catalogue, marquee, menu, movie, pilots, settings, strings};
+use oag_game::{audio, catalogue, movie, pilots, settings};
 use oag_physics::SpeedClass;
+use oag_ui::{marquee, menu, strings};
 
 use crate::frontend_stage::HeldFrame;
 use crate::hints;

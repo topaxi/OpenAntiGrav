@@ -8,9 +8,10 @@
 use anyhow::{Context, Result};
 use log::{info, warn};
 
-use oag_game::{audio, boot, capture, loading, prefetch, race, settings, strings};
+use oag_game::{audio, boot, capture, loading, prefetch, race, settings};
 use oag_gameplay::ControlScheme;
 use oag_render::mesh_render::Anisotropy;
+use oag_ui::strings;
 
 use winit::event_loop::{ControlFlow, EventLoop};
 

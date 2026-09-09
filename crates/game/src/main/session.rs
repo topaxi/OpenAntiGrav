@@ -9,12 +9,12 @@ use oag_core::TickClock;
 
 use oag_game::render::Renderer;
 use oag_game::{
-    audio, catalogue, drs, loading, menu, movie, perf, pilots, prefetch, race, records, settings,
-    upscale,
+    audio, catalogue, drs, loading, movie, perf, pilots, prefetch, race, records, settings, upscale,
 };
 use oag_gameplay::ControlScheme;
 use oag_input::Controls;
 use oag_render::mesh_render::Anisotropy;
+use oag_ui::menu;
 
 use crate::gpu::Gpu;
 use crate::race_stage::RaceStage;
@@ -533,7 +533,7 @@ pub(crate) struct Shell {
     /// disc after boot: swapping the loading screen's styling needs the
     /// feature's strings again, and they were resolved once with the archives
     /// open. See `Session::reload_loading_assets`.
-    pub(crate) strings: oag_game::language::StringTable,
+    pub(crate) strings: oag_ui::language::StringTable,
     /// The chosen language's table entry, for the same reload. See
     /// `boot::Shell::entries`.
     pub(crate) entries: Option<String>,
@@ -551,7 +551,7 @@ pub(crate) struct Shell {
     /// circuits are: the strings do not change while the game runs, and the
     /// string table is not kept past boot.
     pub(crate) modes: Vec<menu::Choice>,
-    pub(crate) font: oag_game::font::Atlas,
+    pub(crate) font: oag_ui::font::Atlas,
     pub(crate) sprites: oag_game::sprite::Sheet,
     /// How this title lays its menus out and colours them, carried from the
     /// serial that identified the source. See `boot::Shell::menu_skin`.
@@ -572,7 +572,7 @@ pub(crate) struct Shell {
     pub(crate) space: oag_display::space::Space,
     /// The face menu rows are drawn in, which is a bigger one than the rest
     /// of the front end uses. `None` draws them in `font`.
-    pub(crate) menu_font: Option<oag_game::font::Atlas>,
+    pub(crate) menu_font: Option<oag_ui::font::Atlas>,
     /// The disc's own frame around every menu page, read off the front-end XML
     /// while it was still in hand.
     ///
@@ -581,7 +581,7 @@ pub(crate) struct Shell {
     /// game runs, and building it needs the parsed screens - which the boot
     /// shell has and a running session does not. Empty for a title whose frame
     /// is unread, which draws the menus exactly as they were drawn before this
-    /// existed. See `oag_game::menu::read_frame`.
+    /// existed. See `oag_ui::menu::read_frame`.
     pub(crate) frame: menu::Frame,
 }
 

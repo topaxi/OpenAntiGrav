@@ -19,10 +19,10 @@
 
 use anyhow::Context;
 
-use crate::menu;
 use crate::title::Opened;
 use oag_assets::{Result, dlc::Pack};
 use oag_title::Title;
+use oag_ui::menu;
 
 /// A race's track and craft source, together.
 #[derive(Debug)]

@@ -62,13 +62,13 @@ fn the_menus_open_on_the_playhead_the_front_end_was_running() {
     // that was 400 frames into its loop and the menus started a new one at
     // zero, so the picture jumped back to the start of the movie the instant
     // START was pressed.
-    let mut running = movie::Player::new(270, true, movie::FRAME_RATE);
+    let mut running = frontend::Player::new(270, true, frontend::FRAME_RATE);
     for _ in 0..400 {
         running.update(BACKDROP_FRAME);
     }
     assert_eq!(running.position(), 400);
 
-    let opened = menu_playhead(Some(running), 270, movie::FRAME_RATE);
+    let opened = menu_playhead(Some(running), 270, frontend::FRAME_RATE);
     assert_eq!(
         opened.position(),
         400,
@@ -82,11 +82,11 @@ fn the_menus_open_on_the_playhead_the_front_end_was_running() {
 fn a_playhead_carried_across_keeps_running_from_where_it_was() {
     // Not just the position at the handoff: the next frame after it has to
     // be the next frame of the same playback, wrap included.
-    let mut running = movie::Player::new(270, true, movie::FRAME_RATE);
+    let mut running = frontend::Player::new(270, true, frontend::FRAME_RATE);
     for _ in 0..269 {
         running.update(BACKDROP_FRAME);
     }
-    let mut opened = menu_playhead(Some(running), 270, movie::FRAME_RATE);
+    let mut opened = menu_playhead(Some(running), 270, frontend::FRAME_RATE);
     opened.update(BACKDROP_FRAME);
     assert_eq!(opened.position(), 270);
     assert_eq!(opened.frame(), 0, "it wraps rather than ending");
@@ -96,7 +96,7 @@ fn a_playhead_carried_across_keeps_running_from_where_it_was() {
 fn with_nothing_to_carry_the_menus_start_the_loop_themselves() {
     // Leaving a race: the stage that owned the playhead is gone, and
     // `open_menus` restarts the feed to match this. See `menu_playhead`.
-    let fresh = menu_playhead(None, 270, movie::FRAME_RATE);
+    let fresh = menu_playhead(None, 270, frontend::FRAME_RATE);
     assert_eq!(fresh.position(), 0);
     assert_eq!(fresh.frames(), 270);
     assert!(!fresh.is_finished(), "270 frames of loop are not an ending");

@@ -5,7 +5,8 @@ use anyhow::Result;
 use log::{error, info, warn};
 
 use oag_game::render::VideoFormat;
-use oag_game::{audio, boot, loading, movie, prefetch, race, strings};
+use oag_game::{audio, boot, loading, movie, prefetch, race};
+use oag_ui::strings;
 
 use crate::hints;
 use crate::loading_stage::RaceBuildError;

@@ -279,7 +279,7 @@ fn a_source_is_swept_for_stale_slots(name: &str, count: usize, known_stale: &[&s
         source: image.display().to_string(),
         language: None,
         dlc: Vec::new(),
-        leg: oag_game::frontend::Leg::LogoFmv,
+        leg: oag_ui::frontend::Leg::LogoFmv,
         movie: None,
         cache: std::env::temp_dir().join("oag-spawn-heading-ground-truth"),
         audio_cache: oag_game::boot::default_audio_cache_dir(),

@@ -147,7 +147,7 @@ fn a_held_turbo_draws_its_own_authored_green_on_a_real_race() {
     let icon_draw = frame
         .sprites
         .iter()
-        .find(|draw| matches!(draw, oag_game::frontend::Draw::BlendedSprite { color, .. } if *color == expected_color))
+        .find(|draw| matches!(draw, oag_ui::frontend::Draw::BlendedSprite { color, .. } if *color == expected_color))
         .unwrap_or_else(|| {
             panic!(
                 "no sprite drew in TURBO_icon's own colour {expected_color:?}; \
@@ -161,7 +161,7 @@ fn a_held_turbo_draws_its_own_authored_green_on_a_real_race() {
     // - which is exactly why the class is read off each model rather than
     // tabulated per widget. Pinned so a change to that reading has to say so
     // here.
-    let oag_game::frontend::Draw::BlendedSprite { blend, .. } = icon_draw else {
+    let oag_ui::frontend::Draw::BlendedSprite { blend, .. } = icon_draw else {
         unreachable!("found by that pattern");
     };
     assert_eq!(

@@ -34,11 +34,11 @@
 
 use oag_render::loading::{Quad, Wave};
 
-use crate::font::{self, Atlas};
-use crate::frontend::{Align, Draw};
-use crate::language::StringTable;
 use crate::prefetch::Progress;
 use oag_display::space::SCREEN;
+use oag_ui::font::{self, Atlas};
+use oag_ui::frontend::{Align, Draw};
+use oag_ui::language::StringTable;
 
 /// Pulse's own two entries, re-exported for the tests and reports that name
 /// them.
@@ -166,7 +166,7 @@ pub struct Screen {
     /// **This layout is in the PSP's 480x272 and the font is the source's.**
     /// Drawn at the same nominal scale on every disc, Wipeout HD's heading
     /// spanned the whole frame and its tip line ran off both edges - the
-    /// loading screen's own version of the bug `oag_game::menu::Skin` fixed for
+    /// loading screen's own version of the bug `oag_ui::menu::Skin` fixed for
     /// the menus, where HD's authored `menu_x: 800` put every label 320 pixels
     /// off a 480-wide screen.
     ///
@@ -198,7 +198,7 @@ pub struct Screen {
     /// This project's own strings, layered over nothing: this screen runs
     /// before any disc's language plugin is read - `heading`'s "READING THE
     /// ARCHIVES" case fires while that read is still in flight - so there is
-    /// no disc-merged table to build this from, only [`crate::strings::project_table`].
+    /// no disc-merged table to build this from, only [`oag_ui::strings::project_table`].
     /// Built once, here, rather than per line: the same reason
     /// `prepare::definition` builds its own copy once rather than at every
     /// `resolve()` call.
@@ -218,7 +218,7 @@ impl Screen {
     /// see the `strings` field's own doc - and is `Option<&str>` rather than a
     /// [`StringTable`] so a caller with no disc open yet (every caller of this
     /// constructor) does not have to build one itself; `None` falls back to
-    /// English, [`crate::strings::project_table`]'s own fallback.
+    /// English, [`oag_ui::strings::project_table`]'s own fallback.
     #[must_use]
     pub fn new(assets: &Assets, line_height: f32, draw: u64, language: Option<&str>) -> Self {
         // **One feature, drawn.** The original picks a feature every time this
@@ -271,7 +271,7 @@ impl Screen {
             },
             frames: 0,
             fade: 0,
-            strings: crate::strings::project_table(language),
+            strings: oag_ui::strings::project_table(language),
         }
     }
 
@@ -832,7 +832,7 @@ const AUTHORED_LINE_HEIGHT: f32 = 13.0;
 /// screen wraps to a column three words across. So the panels keep the
 /// original's *relationship* (picture left, prose right of it, bar under both)
 /// at proportions that stay readable here. That is this build's layout decision
-/// and is the same kind `oag_game::menu::Skin` makes.
+/// and is the same kind `oag_ui::menu::Skin` makes.
 const PANEL_X: f32 = 47.0;
 
 /// The right-hand edge every panel and rule stops at.

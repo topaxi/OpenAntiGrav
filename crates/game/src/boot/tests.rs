@@ -19,7 +19,7 @@ fn the_picture_flags_reach_the_movie_loaders_independently() {
         source: String::new(),
         dlc: Vec::new(),
         language: None,
-        leg: crate::frontend::Leg::LogoFmv,
+        leg: oag_ui::frontend::Leg::LogoFmv,
         movie: None,
         cache: std::path::PathBuf::new(),
         audio_cache: std::path::PathBuf::new(),

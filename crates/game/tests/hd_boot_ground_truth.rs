@@ -33,7 +33,8 @@
 
 use std::path::{Path, PathBuf};
 
-use oag_game::{boot, frontend};
+use oag_game::boot;
+use oag_ui::frontend;
 
 /// The decrypted HD/Fury image, if it is there.
 fn image() -> Option<PathBuf> {
@@ -362,7 +363,7 @@ fn the_front_end_grid_is_1920_by_1080() {
 
 /// The skin says which grid it was read in, and it is this disc's own.
 ///
-/// The pair the menus are reconciled from: `oag_game::menu::Skin::new` uses the
+/// The pair the menus are reconciled from: `oag_ui::menu::Skin::new` uses the
 /// *source's* grid to draw in and the *title's* to convert from, and on this
 /// title they are the same 1920x1080. A table whose `space` drifted from the
 /// grid it was read in would put the label column somewhere plausible and wrong,
@@ -530,7 +531,7 @@ fn all_sixteen_languages_load_including_the_latin_1_one() {
 /// The served table is left alone and still holds the old numbering, asserted
 /// below so this fails rather than passes if the whole table is ever swapped:
 /// that would be a much larger change than this one, and it should not happen
-/// quietly. See `oag_game::language::CircuitNames`.
+/// quietly. See `oag_ui::language::CircuitNames`.
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn a_circuit_is_named_off_the_copy_that_agrees_with_the_circuit_list() {

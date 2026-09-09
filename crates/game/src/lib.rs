@@ -25,7 +25,6 @@
 //! `docs/architecture/adr/0019-atrac3plus-out-of-process.md`.
 
 pub mod adapter;
-pub mod anim;
 pub mod at3;
 pub mod audio;
 pub mod boot;
@@ -33,44 +32,36 @@ pub mod capture;
 pub mod catalogue;
 pub mod dlc;
 pub mod drs;
-pub mod font;
-pub mod frontend;
 pub mod hud;
 pub mod icon;
 /// The abstract button layer, which lives in `oag-gameplay` because the
 /// simulation owns the input snapshot type and everything that produces one
-/// depends on it. Re-exported here so the front end's own call sites read the
-/// same as they did when it was a module of this crate.
+/// depends on it. Re-exported here so call sites that predate `oag-ui`
+/// (`main/*`, and this crate's own modules) still read `crate::input`;
+/// `oag-ui` itself names `oag_gameplay::input` directly, since it has no
+/// `oag-game` re-export to reach through.
 pub use oag_gameplay::input;
 /// Keyboard mapping, which lives in `oag-input` for the mirror-image reason: it
 /// is a device concern, and the front end is one of its consumers rather than
 /// its owner.
 pub use oag_input::keys;
-pub mod language;
 pub mod launcher;
 pub mod livery;
 pub mod loading;
-pub mod marquee;
-pub mod menu;
 pub mod movie;
 pub mod mp3;
 pub mod music;
 pub mod perf;
 pub mod pilots;
-pub mod placeholder;
 pub mod prefetch;
-pub mod prompt;
 pub mod race;
 pub mod records;
 pub mod remix;
 pub mod render;
 pub mod scoreboard;
-pub mod screen;
 pub mod settings;
 pub mod source;
 pub mod sprite;
-pub mod state_machine;
-pub mod strings;
 pub mod title;
 pub mod upscale;
 
@@ -82,19 +73,19 @@ use log::info;
 /// never needs more than this however long the entry it is pointed at. The
 /// `LogoFMV` leg has no such cap and converts everything; `--movie-frames` sets
 /// one by hand.
-pub const INTRO_FRAMES_NEEDED: usize = frontend::FINISH_FRAME + 1;
+pub const INTRO_FRAMES_NEEDED: usize = oag_ui::frontend::FINISH_FRAME + 1;
 
 /// Logs transitions, always for entries and only under `trace` for exits.
 ///
 /// Both at `info` rather than the exits at `debug`: `trace` is `--trace`, and a
 /// level that hid what the flag was asked for would make the flag do nothing at
 /// the default filter.
-pub fn report(events: &[state_machine::Event], trace: bool) {
+pub fn report(events: &[oag_ui::state_machine::Event], trace: bool) {
     for event in events {
         match event {
-            state_machine::Event::Enter(name) => info!("-> {name}"),
-            state_machine::Event::Exit(name) if trace => info!("<- {name}"),
-            state_machine::Event::Exit(_) => {}
+            oag_ui::state_machine::Event::Enter(name) => info!("-> {name}"),
+            oag_ui::state_machine::Event::Exit(name) if trace => info!("<- {name}"),
+            oag_ui::state_machine::Event::Exit(_) => {}
         }
     }
 }

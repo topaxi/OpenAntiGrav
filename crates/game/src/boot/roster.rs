@@ -222,7 +222,7 @@ fn raceable(
 /// otherwise served are different files. The rest of the menus keep the served
 /// table - the two copies differ on 42 shared keys in english and 72 in german,
 /// and none of those differences is about a circuit - so this changes the RACE
-/// page and nothing else. [`crate::language::CircuitNames`] carries the
+/// page and nothing else. [`oag_ui::language::CircuitNames`] carries the
 /// measurement and the reasoning.
 ///
 /// `language` is the same one [`super::load_strings`] chose, passed in rather
@@ -236,11 +236,11 @@ fn raceable(
 /// never simply `strings.get(&track.id)`, on Wipeout HD least of all.
 pub(crate) fn load_circuit_names(
     archives: &mut oag_assets::Archives,
-    language: Option<&crate::language::Language>,
-    strings: &crate::language::StringTable,
+    language: Option<&oag_ui::language::Language>,
+    strings: &oag_ui::language::StringTable,
     tracks: &[crate::catalogue::Track],
     report: &mut Vec<String>,
-) -> crate::language::CircuitNames {
+) -> oag_ui::language::CircuitNames {
     let names = choose_circuit_names(archives, language, tracks, report);
     if tracks.is_empty() {
         return names;
@@ -268,11 +268,11 @@ pub(crate) fn load_circuit_names(
 /// Which copy of the table names them all, and what it says.
 fn choose_circuit_names(
     archives: &mut oag_assets::Archives,
-    language: Option<&crate::language::Language>,
+    language: Option<&oag_ui::language::Language>,
     tracks: &[crate::catalogue::Track],
     report: &mut Vec<String>,
-) -> crate::language::CircuitNames {
-    use crate::language::{CircuitNames, StringTable};
+) -> oag_ui::language::CircuitNames {
+    use oag_ui::language::{CircuitNames, StringTable};
 
     let Some(entries) = language.and_then(|l| l.entries.as_deref()) else {
         return CircuitNames::default();

@@ -9,7 +9,8 @@
 
 use log::{error, info, warn};
 
-use oag_game::{catalogue, menu, remix, strings};
+use oag_game::{catalogue, remix};
+use oag_ui::{menu, strings};
 
 use crate::hints;
 use crate::stage::Stage;

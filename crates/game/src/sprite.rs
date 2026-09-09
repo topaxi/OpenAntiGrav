@@ -205,46 +205,14 @@ struct Staged {
 /// the backdrop stacked over it.
 const GUTTER: u32 = 1;
 
-/// Where one image sits in the sheet, in pixels.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct Placed {
-    /// Left edge in the sheet.
-    pub x: u32,
-    /// Top edge in the sheet.
-    pub y: u32,
-    /// The image's own width.
-    pub width: u32,
-    /// The image's own height.
-    pub height: u32,
-    /// A `.vex` model's own quad, in the `<Mode3D>` overlay's own units - `None`
-    /// for anything that is not a model, and `None` for a model whose caller
-    /// did not measure one.
-    ///
-    /// Read off the model's own vertex positions rather than authored
-    /// anywhere, since a `.vex` carries no "this is N units wide" attribute,
-    /// only the vertices themselves - so a caller that wants a screen size at
-    /// draw time reads it here instead of a hand-measured constant per mesh.
-    /// The lock-on reticle predates this field and still carries its own
-    /// hand-measured `SIGHT_SIZE` rather than reading it - see that
-    /// constant's own doc for why unifying the two was left alone rather
-    /// than guessed at.
-    pub quad_extent: Option<[f32; 2]>,
-    /// How a `.vex` model's own batch asked to be composited, straight off its
-    /// `pass_mask` - `None` for anything that is not a model, and `None` for a
-    /// model whose batch is not in the transparent class at all.
-    ///
-    /// **Read, never chosen.** All three of Pulse's lock-on sight models
-    /// declare `pass_mask 0x120e`, whose `0x0200` bit is
-    /// [`oag_vex::vex::BlendClass::Additive`], and their embedded textures
-    /// carry a black background with alpha pinned at 250/255 - so drawing them
-    /// with an ordinary alpha blend puts each bracket on an opaque black tile.
-    /// Carrying the declared class here is what lets the draw honour it
-    /// without any per-model table; Pure's ten icon models get the same
-    /// treatment from the same reading the day a Pure disc is present to read
-    /// them from. See `docs/ui/hud.md` and
-    /// `docs/ghidra/functions/psp-pulse-usa/mesh-draw.md`.
-    pub blend: Option<oag_vex::vex::BlendClass>,
-}
+// `Placed` moved to `oag_ui::frontend::placement`: it is pure data, and the
+// front end needs to name it without pulling in this module's decode step.
+// `pub use` rather than a private import: `crate::race::hud` names
+// `crate::sprite::Placed::quad_extent`/`::blend` in its own doc comments, and
+// this keeps that path resolving without editing a file this change does not
+// otherwise touch. Safe to drop once `crate::race::hud`'s doc links are
+// repointed at `oag_ui::frontend::Placed` directly.
+pub use oag_ui::frontend::Placed;
 
 /// Every front-end image, in one RGBA buffer.
 ///
@@ -443,6 +411,17 @@ impl Sheet {
             .iter()
             .find(|(name, _)| name == src)
             .map(|(_, placed)| *placed)
+    }
+
+    /// Every placement this sheet holds, name and rectangle together.
+    ///
+    /// The same shape `crate::frontend::Frontend`'s own `placements` field
+    /// is - `crate::menu::frame::read` takes this rather than `&Sheet`
+    /// itself, so it can look widgets up the same way `Frontend` already
+    /// looks its own up, without `oag-ui` naming this crate's decode type.
+    #[must_use]
+    pub fn entries(&self) -> &[(String, Placed)] {
+        &self.placed
     }
 
     /// The one image this sheet holds, when it holds exactly one.

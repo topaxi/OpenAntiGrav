@@ -13,7 +13,7 @@
 //! hand-transcribed-table mistake `CLAUDE.md` warns about, just for code
 //! instead of data.
 //!
-//! [`Draw::Text`]: crate::frontend::Draw::Text
+//! [`Draw::Text`]: oag_ui::frontend::Draw::Text
 
 use super::*;
 use crate::loading::wrap;
@@ -34,7 +34,7 @@ impl Renderer {
         border: [f32; 4],
         align: Align,
         text: &str,
-        clip: Option<(f32, f32)>, // a value marquee's window; see `crate::marquee`
+        clip: Option<(f32, f32)>, // a value marquee's window; see `oag_ui::marquee`
     ) {
         let width = font::measure(&self.atlas, text) * scale;
         let mut pen = match align {
@@ -94,7 +94,7 @@ impl Renderer {
     /// multi-line paragraph, not a scrolling single line, so nothing has
     /// needed the two together yet.
     ///
-    /// [`Draw::Text`]: crate::frontend::Draw::Text
+    /// [`Draw::Text`]: oag_ui::frontend::Draw::Text
     #[expect(
         clippy::too_many_arguments,
         reason = "a line of text is this many independent properties"

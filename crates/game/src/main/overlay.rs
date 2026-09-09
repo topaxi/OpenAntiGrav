@@ -1,7 +1,7 @@
 //! What a modal prompt over the menus is **for**, and the two lines that keep
 //! that out of [`crate::menu_stage`].
 //!
-//! [`oag_game::prompt`] is the model: a grid of keys, a buffer, a yes/no, and
+//! [`oag_ui::prompt`] is the model: a grid of keys, a buffer, a yes/no, and
 //! no idea what any of it will be used for. This is the other half - which
 //! pilot is being renamed, which file is about to be deleted - and it lives on
 //! the binary side because only the composition root knows.
@@ -12,10 +12,10 @@
 //! keyboard accepted against the purpose left over from the last time it was
 //! opened, renaming a pilot the player is no longer looking at.
 
-use oag_game::frontend::Draw;
 use oag_game::input::Input;
-use oag_game::menu::Skin;
-use oag_game::prompt::{Confirm, Keyboard, Outcome};
+use oag_ui::frontend::Draw;
+use oag_ui::menu::Skin;
+use oag_ui::prompt::{Confirm, Keyboard, Outcome};
 
 /// What to do with a prompt the player accepted.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -33,7 +33,7 @@ pub(crate) enum Purpose {
     },
 }
 
-/// Which of [`oag_game::prompt`]'s two models is on screen.
+/// Which of [`oag_ui::prompt`]'s two models is on screen.
 #[derive(Debug, Clone)]
 pub(crate) enum Model {
     /// Typing something.

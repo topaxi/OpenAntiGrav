@@ -12,17 +12,17 @@
 //! grouping containers `Screens::collect_widgets` did not used to recurse
 //! into, so they were silently dropped rather than drawn wrong. This is the
 //! test that would have caught that: it reads the same three widgets two
-//! ways, off the raw XML and off `oag_game::menu::read_frame`'s own output,
+//! ways, off the raw XML and off `oag_ui::menu::read_frame`'s own output,
 //! and checks they agree.
 
 use std::path::PathBuf;
 
-use oag_game::frontend::Draw;
+use oag_ui::frontend::Draw;
 
 use oag_display::space::Space;
-use oag_game::screen::Screens;
 use oag_game::sprite::Sheet;
 use oag_tables::fexml;
+use oag_ui::screen::Screens;
 
 fn image() -> Option<PathBuf> {
     oag_testdata::image("data/images/pulse-psp-usa.chd")
@@ -138,9 +138,9 @@ fn the_frame_samples_its_own_patch_of_the_shared_sheet() {
     let placed = sheet.get(SHEET_TEXTURE).expect("it decoded");
 
     let space = Space::of(oag_disc::Platform::Psp);
-    let frame = oag_game::menu::read_frame(
+    let frame = oag_ui::menu::read_frame(
         &screens,
-        &sheet,
+        sheet.entries(),
         space,
         Some(oag_pulse::frontend::states::FE_SCREEN),
         None,

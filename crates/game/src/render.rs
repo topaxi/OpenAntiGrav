@@ -14,9 +14,9 @@
 
 use anyhow::{Context, Result};
 
-use crate::font::{self, Atlas};
-use crate::frontend::{Align, Draw};
 use oag_display::space::{SCREEN, Space};
+use oag_ui::font::{self, Atlas};
+use oag_ui::frontend::{Align, Draw};
 
 mod text;
 
@@ -48,7 +48,7 @@ struct Quad {
     /// Only the atlas path reads it, and only for a font that bakes an outline -
     /// the two HUD ones. Everywhere else the atlas's mask is a constant 255, so
     /// the mix collapses to `color` and this is never visible. See
-    /// `crate::font::Atlas::luma`.
+    /// `oag_ui::font::Atlas::luma`.
     border: [f32; 4],
     /// Which texture `uv` indexes: [`MODE_ATLAS`] or [`MODE_SPRITE`].
     ///
@@ -477,7 +477,7 @@ impl Renderer {
     ///
     /// What a stage does: it owns the frame, so it starts from black and the
     /// bars outside `viewport` are what it leaves uncovered. `clip` is
-    /// `(index, left, right)` for a marquee row - see `crate::marquee`.
+    /// `(index, left, right)` for a marquee row - see `oag_ui::marquee`.
     #[expect(clippy::too_many_arguments, reason = "clip is one more fact")]
     pub fn render(
         &mut self,
@@ -996,7 +996,7 @@ fn upload_rgba(
 ///
 /// `r` is the body/outline mask and `g` is coverage. Interleaved here rather than
 /// kept as two textures because one sample is cheaper than two and the bind group
-/// stays the size it was. See `crate::font::Atlas`.
+/// stays the size it was. See `oag_ui::font::Atlas`.
 fn upload_rg8(
     device: &wgpu::Device,
     queue: &wgpu::Queue,

@@ -5,14 +5,14 @@ recovered from a Wipeout Pulse executable or a Wipeout Pulse asset. This one
 describes a thing this project invented, and says why inventing it was the right
 call rather than a shortcut.
 
-Implemented in [`crates/game/src/menu.rs`](../../crates/game/src/menu.rs), with
+Implemented in [`crates/game/src/menu.rs`](../../crates/ui/src/menu.rs), with
 the tree itself in [`assets/ui/menu.toml`](../../assets/ui/menu.toml) and the
 disc-side lists in [`crates/game/src/catalogue.rs`](../../crates/game/src/catalogue.rs).
 
 ## Why not the front-end XML
 
 The disc carries `Data\Plugins\PI001\GUI\MainMenu_Definition.xml`, and
-[`screen.rs`](../../crates/game/src/screen.rs) already parses that dialect - the
+[`screen.rs`](../../crates/ui/src/screen.rs) already parses that dialect - the
 language picker is drawn from it. Reproducing the main menu from it is
 technically the shorter path, and it is still the wrong one.
 
@@ -329,7 +329,7 @@ of mistake the format check cannot see:
   spelled team would fail deep inside an archive lookup at race load, with a
   message about a missing WAD entry rather than about a menu; see
   `the_race_page_offers_only_teams_and_classes_the_game_accepts` in
-  [`crates/game/src/menu/tests/definition.rs`](../../crates/game/src/menu/tests/definition.rs).
+  [`crates/game/src/menu/tests/definition.rs`](../../crates/game/tests/menu_definition_settings.rs).
 - Every value on DISPLAY and GRAPHICS must parse, and each list must *be* its
   type's own `ALL`/`OFFERED`. A value that does not parse is ignored at runtime
   with a message on stderr, which a player meets as "this row does nothing".
@@ -593,7 +593,7 @@ accounted for `frame.marks`, so any future warning or restart note on a page
 that scrolled to exactly its own `visible_rows` would have found the same
 mark waiting in the same place.
 
-**That general fix has landed.** [`Frame::content_bottom`](../../crates/game/src/menu/frame.rs)
+**That general fix has landed.** [`Frame::content_bottom`](../../crates/ui/src/menu/frame.rs)
 reads the lowest mark in the screen's lower half - Pulse's footer sits at
 `y=236` of 272 - and `menu::visible_rows` clears *that*, not the screen's own
 edge. A page whose rows can carry a note reserves one line's worth of room

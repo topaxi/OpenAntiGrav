@@ -48,7 +48,7 @@
 //!
 //! - **`HeadToHeadBar` is an `<Image>` with no `Src`.** It carries a `Color` and
 //!   `height="0"`, so it is a solid bar whose length is a runtime quantity - the
-//!   same colour-only convention `crate::screen` already uses for front-end
+//!   same colour-only convention `oag_ui::screen` already uses for front-end
 //!   backdrops. Read as a sprite it is a widget with no texture, and the parser
 //!   dropped it.
 //! - **`PlrTag0`-`PlrTag7` carry no authored `x`/`y` at all** (`MPTag_HUD.xml`,
@@ -483,7 +483,7 @@ fn every_sprite_samples_the_hud_atlas_and_every_constant_resolves() {
         // names one silently goes white.
         for (name, value) in &layout.constants {
             assert!(
-                oag_game::screen::parse_argb(value).is_some(),
+                oag_ui::screen::parse_argb(value).is_some(),
                 "{entry}: constant {name} = {value:?} is not an ARGB literal"
             );
         }
@@ -530,7 +530,7 @@ fn no_two_live_widgets_share_an_anchor_on_any_shipped_layout() {
         pickup: Some(oag_tables::weapons::Weapon::Rocket),
         ..hud::Readout::blank()
     };
-    let strings = oag_game::language::StringTable::default();
+    let strings = oag_ui::language::StringTable::default();
 
     let mut checked = 0usize;
     for &(entry, ..) in EXPECTED {
@@ -556,7 +556,7 @@ fn no_two_live_widgets_share_an_anchor_on_any_shipped_layout() {
 
         let mut anchors: Vec<(String, f32, f32)> = Vec::new();
         for draw in frame.hud_text.iter().chain(frame.small_text.iter()) {
-            let oag_game::frontend::Draw::Text { x, y, text, .. } = draw else {
+            let oag_ui::frontend::Draw::Text { x, y, text, .. } = draw else {
                 continue;
             };
             if let Some((other, ..)) = anchors

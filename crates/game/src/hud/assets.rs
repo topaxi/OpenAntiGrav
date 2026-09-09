@@ -32,11 +32,11 @@ pub struct Assets {
     /// loader's business and `oag_title::HudArt::texture_extension`'s rule.
     pub sheet: crate::sprite::Sheet,
     /// The `HUD` font, or the built-in 5x7 set when the disc's is unreadable.
-    pub font: crate::font::Atlas,
+    pub font: oag_ui::font::Atlas,
     /// The `HUDSmall` font, likewise.
-    pub small_font: crate::font::Atlas,
+    pub small_font: oag_ui::font::Atlas,
     /// The language's string table, for the `IG_HUD_*` captions.
-    pub strings: crate::language::StringTable,
+    pub strings: oag_ui::language::StringTable,
     /// The grid this layout's coordinates are in, and what it is shown as.
     ///
     /// **The source's, not the PSP's.** A HUD layout carries bare numbers and

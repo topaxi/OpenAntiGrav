@@ -493,9 +493,9 @@ fn a_degenerate_rectangle_still_gives_a_creatable_texture() {
 /// Everything else in the row is the scene's own red. Returns `None` on a
 /// machine with no adapter, which is what CI's runners are.
 fn composited(brightness: Brightness, gamma: Gamma) -> Option<[[u8; 4]; 8]> {
-    use crate::frontend::Draw;
     use crate::render::Renderer;
     use oag_display::space::SCREEN;
+    use oag_ui::frontend::Draw;
 
     // What the window surface and every capture target are since ADR-0020.
     let format = wgpu::TextureFormat::Rgba8Unorm;
@@ -523,7 +523,7 @@ fn composited(brightness: Brightness, gamma: Gamma) -> Option<[[u8; 4]; 8]> {
         &queue,
         format,
         None,
-        crate::font::Atlas::build(),
+        oag_ui::font::Atlas::build(),
         &crate::sprite::Sheet::default(),
     )
     .expect("the ui pipeline");
@@ -532,7 +532,7 @@ fn composited(brightness: Brightness, gamma: Gamma) -> Option<[[u8; 4]; 8]> {
         &queue,
         format,
         None,
-        crate::font::Atlas::build(),
+        oag_ui::font::Atlas::build(),
         &crate::sprite::Sheet::default(),
     )
     .expect("the overlay pipeline");
@@ -762,9 +762,9 @@ fn the_hud_is_graded_with_the_scene_and_the_performance_overlay_is_not() {
 ///    exercises, and it is where an off-by-a-rectangle would hide.
 #[test]
 fn a_ui_only_stage_reaches_the_surface_and_its_own_clear_draws_the_bars() {
-    use crate::frontend::Draw;
     use crate::render::Renderer;
     use oag_display::space::SCREEN;
+    use oag_ui::frontend::Draw;
 
     let format = wgpu::TextureFormat::Rgba8Unorm;
     let instance = wgpu::Instance::default();
@@ -787,7 +787,7 @@ fn a_ui_only_stage_reaches_the_surface_and_its_own_clear_draws_the_bars() {
         &queue,
         format,
         None,
-        crate::font::Atlas::build(),
+        oag_ui::font::Atlas::build(),
         &crate::sprite::Sheet::default(),
     )
     .expect("the ui pipeline");

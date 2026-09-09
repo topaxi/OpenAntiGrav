@@ -16,14 +16,14 @@
 
 use std::path::PathBuf;
 
-use oag_game::screen::Screens;
 use oag_tables::fexml;
+use oag_ui::screen::Screens;
 
 fn image() -> Option<PathBuf> {
     oag_testdata::image("data/images/pure-psp-usa.chd")
 }
 
-fn fe_screen() -> Option<oag_game::screen::Screens> {
+fn fe_screen() -> Option<oag_ui::screen::Screens> {
     let path = image()?;
     let mut archives = oag_assets::Archives::open(&path.to_string_lossy(), oag_pure::TITLE)
         .expect("the archives open");

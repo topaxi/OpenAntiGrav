@@ -58,6 +58,9 @@ oag-input.workspace = true
 oag-physics.workspace = true
 oag-race.workspace = true
 oag-render.workspace = true
+# The front end: boot movies, menus, the HUD's font, the strings a screen
+# draws. `render.rs` rasterises the `Draw` list this crate emits.
+oag-ui.workspace = true
 # The composition root is allowed to read a captured trace: `--pose-from`
 # renders one of our frames from a row of the original's capture, and the
 # column conventions live in one place, `oag-trace`, rather than twice.

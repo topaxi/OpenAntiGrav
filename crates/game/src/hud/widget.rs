@@ -6,12 +6,12 @@
 //! [`super::Layout::from_tree`]'s. Split out of [`super`] so the model, the
 //! parser and the draw list are three files rather than one.
 
-use crate::frontend::Align;
+use oag_ui::frontend::Align;
 
 /// Which of the disc's fonts a widget draws in.
 ///
 /// The role names are the language plugin's, and the mapping to `.fnt` files is
-/// in [`crate::frontend`]'s line-height table and
+/// in [`oag_ui::frontend`]'s line-height table and
 /// [`oag_pulse::names::fonts`]: `HUD` is `PulseHud.fnt` at 25 px,
 /// `HUDSmall` is `small.fnt` at 10 px, `Default` is `pulse_text.fnt` at 13 px.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -127,7 +127,7 @@ pub struct Sprite {
     /// [`oag_tables::fexml::Node::value`] folds case.
     ///
     /// **The sign convention is passed through, not verified.** The angle is
-    /// handed to [`crate::frontend::Draw::RotatedSprite`], whose own doc reads it
+    /// handed to [`oag_ui::frontend::Draw::RotatedSprite`], whose own doc reads it
     /// clockwise; nothing recovered says which way the original turns a widget,
     /// and the one authored value big enough to see - `ZoneBG`'s quarter turn -
     /// covers the same pixels either way, differing only by a half turn of the
@@ -175,7 +175,7 @@ pub struct Label {
 /// One `<Image>` with **no** `Src`: a solid rectangle rather than a cut-out.
 ///
 /// The same convention the front end's screens use, where
-/// [`crate::screen::Screen::fills`] holds the colour-only kind. Exactly one HUD
+/// [`oag_ui::screen::Screen::fills`] holds the colour-only kind. Exactly one HUD
 /// widget is of this kind, `HeadToHeadBar` in the arcade and eliminator layouts,
 /// and it is authored `width="5" height="0"` - a zero-height bar, so its length
 /// is supplied at runtime and the authored height is a floor rather than a size.

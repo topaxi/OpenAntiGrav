@@ -8,7 +8,7 @@
 //! gate.
 
 use super::*;
-use crate::language::StringTable;
+use oag_ui::language::StringTable;
 
 /// A screen carrying `tips` and nothing else this source authors.
 ///

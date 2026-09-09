@@ -204,7 +204,7 @@ pub(super) fn resolved_source(
 /// axis EASU then steps exactly one input texel per output texel, which is the
 /// one-to-one case - it reconstructs nothing there, but it also cannot produce
 /// the undersampling artefact above, which needs a step *greater* than one.
-pub(crate) fn magnifies(scene: (u32, u32), rect: (u32, u32)) -> bool {
+pub fn magnifies(scene: (u32, u32), rect: (u32, u32)) -> bool {
     scene.0 < rect.0 || scene.1 < rect.1
 }
 

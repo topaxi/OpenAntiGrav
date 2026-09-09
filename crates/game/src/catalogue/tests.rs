@@ -321,14 +321,14 @@ fn an_entry_with_nothing_to_load_is_skipped() {
 #[test]
 fn a_reversed_circuit_named_the_same_as_its_twin_gets_the_discs_reverse_marker() {
     let tracks = tracks(DEFINITION);
-    let strings = crate::language::StringTable::from_xml(
+    let strings = oag_ui::language::StringTable::from_xml(
         r#"<StringTable>
              <Entry ID="16_Track" String="VINETA K"/>
              <Entry ID="32_Track" String="VINETA K"/>
              <Entry ID="FE_REVERSE" String="RÜCKWÄRTS"/>
            </StringTable>"#,
     );
-    let names = crate::language::CircuitNames::default();
+    let names = oag_ui::language::CircuitNames::default();
 
     assert_eq!(label(&tracks[0], &names, &strings, &tracks), "VINETA K");
     assert_eq!(
@@ -344,14 +344,14 @@ fn a_reversed_circuit_named_the_same_as_its_twin_gets_the_discs_reverse_marker()
 #[test]
 fn a_reversed_circuit_with_a_name_of_its_own_is_left_alone() {
     let tracks = tracks(DEFINITION);
-    let strings = crate::language::StringTable::from_xml(
+    let strings = oag_ui::language::StringTable::from_xml(
         r#"<StringTable>
              <Entry ID="16_Track" String="Talon's Junction White"/>
              <Entry ID="32_Track" String="Talon's Junction Black"/>
              <Entry ID="FE_REVERSE" String="REVERSE"/>
            </StringTable>"#,
     );
-    let names = crate::language::CircuitNames::default();
+    let names = oag_ui::language::CircuitNames::default();
 
     assert_eq!(
         label(&tracks[1], &names, &strings, &tracks),
@@ -363,8 +363,8 @@ fn a_reversed_circuit_with_a_name_of_its_own_is_left_alone() {
 #[test]
 fn an_unnamed_circuit_shows_its_id() {
     let tracks = tracks(DEFINITION);
-    let strings = crate::language::StringTable::default();
-    let names = crate::language::CircuitNames::default();
+    let strings = oag_ui::language::StringTable::default();
+    let names = oag_ui::language::CircuitNames::default();
 
     assert_eq!(label(&tracks[0], &names, &strings, &tracks), "16_Track");
     // The two ids differ, so the twin check does not fire - and even if it did,
@@ -377,15 +377,15 @@ fn an_unnamed_circuit_shows_its_id() {
 #[test]
 fn a_chosen_copy_beats_the_served_table() {
     let tracks = tracks(DEFINITION);
-    let served = crate::language::StringTable::from_xml(
+    let served = oag_ui::language::StringTable::from_xml(
         r#"<StringTable><Entry ID="16_Track" String="THE WRONG ONE"/></StringTable>"#,
     );
-    let chosen = crate::language::StringTable::from_xml(
+    let chosen = oag_ui::language::StringTable::from_xml(
         r#"<StringTable><entry id="16_TRACK" string="VINETA K"/>
                         <entry id="32_TRACK" string="VINETA K"/></StringTable>"#,
     );
     let ids: Vec<String> = tracks.iter().map(|track| track.id.clone()).collect();
-    let names = crate::language::CircuitNames::choose(&[("DATA06".to_string(), chosen)], &ids)
+    let names = oag_ui::language::CircuitNames::choose(&[("DATA06".to_string(), chosen)], &ids)
         .expect("that copy names both circuits, case folded");
 
     assert_eq!(label(&tracks[0], &names, &served, &tracks), "VINETA K");
@@ -401,7 +401,7 @@ fn a_chosen_copy_beats_the_served_table() {
 /// answer, which is Wipeout Pure.
 #[test]
 fn a_team_label_prefers_the_table_then_the_declared_name_then_the_folder() {
-    let strings = crate::language::StringTable::from_xml(
+    let strings = oag_ui::language::StringTable::from_xml(
         r#"<Screen name="Top"><Entry ID="Mantis" String="Mirage"/></Screen>"#,
     );
     let team = |id: &str, name: Option<&str>| Team {

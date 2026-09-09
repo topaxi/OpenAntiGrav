@@ -147,7 +147,7 @@ pub(super) fn load_movie(
             frame_count: header.expected_frame_count() as usize,
             width: u32::from(video.width),
             height: u32::from(video.height),
-            frame_rate: movie::FRAME_RATE,
+            frame_rate: oag_ui::frontend::FRAME_RATE,
             display_aspect: (u32::from(video.width), u32::from(video.height)),
             header: Some(header),
             frames: None,

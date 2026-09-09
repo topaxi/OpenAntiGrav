@@ -63,7 +63,7 @@ ROOT = Path(__file__).resolve().parent.parent
 # could reach a hash. Narrowing the list is a separate, argued change.
 SCANNED_CRATES = (
     "core", "physics", "gameplay", "ai", "race", "formats", "video", "tables",
-    "texture", "vex", "rcs", "display",
+    "texture", "vex", "rcs", "display", "ui",
 )
 
 # Not required by IEEE-754 to be correctly rounded, so not portable. `sqrt` is
@@ -131,6 +131,23 @@ ALLOWED = {
         "disagreement between two platforms' `log2` would at worst move a "
         "printed number. It is f64 as well, which nothing in the simulation "
         "may be"
+    ),
+    "crates/ui/src/frontend/draw.rs": (
+        "`pulse_alpha`'s `sin` shapes the PRESS START text's fade-in/pulse "
+        "curve, and `menu/skin.rs`'s `cos` (below) shapes a selected row's "
+        "highlight the same way. Both return an `f32` alpha or colour channel "
+        "consumed only by `Draw::Text`/`Skin::selected`'s own drawing - the "
+        "same 'reaches a pixel, never a hash' argument `crates/display/src/"
+        "display.rs`'s `Fov::apply` entry above makes. Neither function "
+        "appears in `oag-core`, `oag-physics`, `oag-gameplay`, `oag-race` or "
+        "`oag-ai`, and both are downstream of the tick rather than an input "
+        "to it. Surfaced when `oag-ui` joined `SCANNED_CRATES` on extraction "
+        "from `oag-game`, which this scan never covered"
+    ),
+    "crates/ui/src/menu/skin.rs": (
+        "See `crates/ui/src/frontend/draw.rs`'s entry above - `Skin::selected`'s "
+        "`cos` is the same presentation-only pulse, just for a menu row's "
+        "highlight colour rather than a text alpha"
     ),
 }
 

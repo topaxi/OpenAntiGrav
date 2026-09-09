@@ -8,6 +8,7 @@
 //! gate.
 
 use super::*;
+use oag_ui::frontend::Player;
 
 /// One frame at 30000/1001 Hz, to the nanosecond.
 const FRAME: f64 = 1001.0 / 30_000.0;

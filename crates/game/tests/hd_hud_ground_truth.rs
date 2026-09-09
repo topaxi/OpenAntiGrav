@@ -476,8 +476,8 @@ fn a_drawn_sprite_lands_inside_the_texture_its_own_layout_names() {
             // `RotatedSprite`, and Zone's thirteen do. The uv is the same
             // composition either way, which is what this checks.
             let uv = match hud::sprite_draw(sprite, &sheet) {
-                Some(oag_game::frontend::Draw::Sprite { uv, .. })
-                | Some(oag_game::frontend::Draw::RotatedSprite { uv, .. }) => uv,
+                Some(oag_ui::frontend::Draw::Sprite { uv, .. })
+                | Some(oag_ui::frontend::Draw::RotatedSprite { uv, .. }) => uv,
                 _ => panic!("{root}: {} draws nothing", sprite.name),
             };
             let placed = sheet.get(&sprite.src).expect("just built");
@@ -718,9 +718,8 @@ fn a_zone_race_draws_the_ladder_and_numbers_it_from_the_current_zone() {
     let blob = archives
         .read_name(r"Data\Plugins\Languages\English\entries.xml")
         .expect("English entries.xml");
-    let strings = oag_game::language::StringTable::from_xml(
-        &fexml::text(&blob).expect("entries.xml is text"),
-    );
+    let strings =
+        oag_ui::language::StringTable::from_xml(&fexml::text(&blob).expect("entries.xml is text"));
 
     let blobs: Vec<(String, Vec<u8>)> = layout
         .textures()
@@ -759,7 +758,7 @@ fn a_zone_race_draws_the_ladder_and_numbers_it_from_the_current_zone() {
         .iter()
         .chain(&frame.small_text)
         .filter_map(|draw| match draw {
-            oag_game::frontend::Draw::Text { text, .. } => Some(text.clone()),
+            oag_ui::frontend::Draw::Text { text, .. } => Some(text.clone()),
             _ => None,
         })
         .collect();
@@ -787,7 +786,7 @@ fn a_zone_race_draws_the_ladder_and_numbers_it_from_the_current_zone() {
         },
     );
     let named = unnamed.hud_text.iter().chain(&unnamed.small_text).any(
-        |draw| matches!(draw, oag_game::frontend::Draw::Text { text, .. } if text == "SUB-VENOM"),
+        |draw| matches!(draw, oag_ui::frontend::Draw::Text { text, .. } if text == "SUB-VENOM"),
     );
     assert!(!named, "rung 0 named a speed class");
 
@@ -796,7 +795,7 @@ fn a_zone_race_draws_the_ladder_and_numbers_it_from_the_current_zone() {
     let rotated = frame
         .sprites
         .iter()
-        .filter(|d| matches!(d, oag_game::frontend::Draw::RotatedSprite { .. }))
+        .filter(|d| matches!(d, oag_ui::frontend::Draw::RotatedSprite { .. }))
         .count();
     // `ZoneBG`'s quarter turn plus ten tilted ticks; `ZonePlusLight5` authors no
     // `RotationTheta` at all, being the row on the arc's own axis.
@@ -832,9 +831,8 @@ fn the_zone_eight_frame_is_reproduced_row_for_row() {
     let blob = archives
         .read_name(r"Data\Plugins\Languages\English\entries.xml")
         .expect("English entries.xml");
-    let strings = oag_game::language::StringTable::from_xml(
-        &fexml::text(&blob).expect("entries.xml is text"),
-    );
+    let strings =
+        oag_ui::language::StringTable::from_xml(&fexml::text(&blob).expect("entries.xml is text"));
     let mut notes = Vec::new();
     let sheet = oag_game::sprite::Sheet::build(&[], &mut notes);
     let cx = hud::Context {
@@ -865,7 +863,7 @@ fn the_zone_eight_frame_is_reproduced_row_for_row() {
         .iter()
         .chain(&frame.small_text)
         .filter_map(|draw| match draw {
-            oag_game::frontend::Draw::Text { text, x, y, .. } => Some((text.clone(), *x, *y)),
+            oag_ui::frontend::Draw::Text { text, x, y, .. } => Some((text.clone(), *x, *y)),
             _ => None,
         })
         .collect();
@@ -915,7 +913,7 @@ fn the_ladder_before_the_first_zone_is_the_layouts_own_placeholders() {
         return;
     };
     let layout = composed(&mut archives, oag_hd::hud::layouts::ZONE).layout;
-    let strings = oag_game::language::StringTable::default();
+    let strings = oag_ui::language::StringTable::default();
     let mut notes = Vec::new();
     let sheet = oag_game::sprite::Sheet::build(&[], &mut notes);
     let cx = hud::Context {
@@ -933,7 +931,7 @@ fn the_ladder_before_the_first_zone_is_the_layouts_own_placeholders() {
         .iter()
         .chain(&frame.small_text)
         .filter_map(|draw| match draw {
-            oag_game::frontend::Draw::Text { text, .. }
+            oag_ui::frontend::Draw::Text { text, .. }
                 if text.chars().all(|c| c.is_ascii_digit()) =>
             {
                 Some(text.clone())

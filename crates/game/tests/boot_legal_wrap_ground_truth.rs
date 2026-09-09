@@ -23,9 +23,10 @@
 
 use std::path::PathBuf;
 
-use oag_game::font::Atlas;
-use oag_game::language::roles;
-use oag_game::{boot, font, loading, screen};
+use oag_game::{boot, loading};
+use oag_ui::font::Atlas;
+use oag_ui::language::roles;
+use oag_ui::{font, screen};
 
 const PSP_USA: &str = "data/images/pulse-psp-usa.chd";
 
@@ -106,7 +107,7 @@ fn boot_legal_wraps_to_two_lines_that_clear_the_screen() {
 
     // **This is the near miss, measured rather than assumed.** By the
     // atlas's own nominal `line_height` (17px, the same 17 every other
-    // `font="small"` role uses - `crate::frontend::font_line_height`) two
+    // `font="small"` role uses - `oag_ui::frontend::font_line_height`) two
     // lines from `y=250` end at 273.8, half a pixel past the PSP's 272-tall
     // screen. Real glyph ink is shorter than the line box a proportional
     // font reserves, though: the tallest cell this exact string actually

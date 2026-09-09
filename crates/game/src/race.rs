@@ -85,7 +85,6 @@
 
 use std::path::PathBuf;
 
-use crate::language::roles;
 use crate::livery::Livery;
 use anyhow::{Context, Result};
 use oag_core::math::frustum::Frustum;
@@ -116,6 +115,7 @@ use oag_render::pvs::{
 use oag_render::sparks;
 use oag_render::{mesh, mesh_render, shield::ShipShield, track as track_render};
 use oag_tables::handling;
+use oag_ui::language::roles;
 use oag_vex::track::{AiTrack, Sample, StartPosition};
 use oag_vex::vex;
 

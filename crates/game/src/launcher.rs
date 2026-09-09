@@ -31,7 +31,7 @@
 //! encrypted one staring at a list their disc is not on. So it is listed,
 //! marked, skipped by the cursor, and carries the fix.
 //!
-//! # This is not a [`crate::menu`]
+//! # This is not a [`oag_ui::menu`]
 //!
 //! The menus are a definition of pages and entries, drawn with a title's own
 //! [`oag_title::MenuSkin`] and its own font. This screen runs *before* a title
@@ -45,7 +45,7 @@ use oag_disc::{DiscImage, Platform};
 use oag_gameplay::input::{Button, Input};
 use oag_title::Title;
 
-use crate::frontend::{Align, Draw};
+use oag_ui::frontend::{Align, Draw};
 
 use oag_display::space::SCREEN;
 
@@ -255,7 +255,7 @@ impl Launcher {
 
     /// Moves and selects, returning the source picked when one is.
     ///
-    /// Edges are consumed the way [`crate::menu::Menu::update`] consumes them,
+    /// Edges are consumed the way [`oag_ui::menu::Menu::update`] consumes them,
     /// and for the same reason: one press is one press whichever device saw it,
     /// and a held key must not walk the list.
     pub fn update(&mut self, input: &mut Input) -> Option<String> {

@@ -11,7 +11,7 @@
 //!
 //! **All four rows are read live off the menu itself, never cached on
 //! [`Session`].** `Entry::chosen` already answers "what is this row
-//! currently set to" - see `oag_game::menu::Entry::chosen` - so there is no
+//! currently set to" - see `oag_ui::menu::Entry::chosen` - so there is no
 //! second copy of "the pending edit" to keep in step with the rows a player
 //! is looking at.
 //!
@@ -29,10 +29,10 @@
 
 use log::{error, info};
 
-use oag_game::language::StringTable;
-use oag_game::menu::{self, Value};
 use oag_game::pilots;
-use oag_game::prompt::{self, Outcome};
+use oag_ui::language::StringTable;
+use oag_ui::menu::{self, Value};
+use oag_ui::prompt::{self, Outcome};
 
 use crate::menu_stage::MenuStage;
 use crate::overlay::{Finished, Prompt, Purpose};
@@ -46,10 +46,10 @@ use super::Session;
 /// entry** - an id for text this project invented rather than an override of
 /// a disc idstring. Every label the pilot prompts draw goes through here, so
 /// the prompt models themselves hold no table and no English: see
-/// `oag_game::prompt`'s own module doc on that seam.
+/// `oag_ui::prompt`'s own module doc on that seam.
 ///
 /// The fallback is not politeness. A language with no file yet overlays
-/// nothing (`crate::strings::built_in` ships English alone today), so an id
+/// nothing (`oag_ui::strings::built_in` ships English alone today), so an id
 /// that resolves to nothing has to read as English rather than as a blank
 /// line - the same rule `menu::definition::resolve` applies to a row's own
 /// `string_id`.

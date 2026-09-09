@@ -24,7 +24,7 @@ use super::{Assets, Context, Layout, Readout, draw_list};
 /// rather than absent - see `crate::render`.
 pub struct Overlay {
     layout: Layout,
-    strings: crate::language::StringTable,
+    strings: oag_ui::language::StringTable,
     /// Every texture the layout names, packed into one sheet. Held rather than
     /// reduced to one origin, because a layout may name six - see
     /// [`Assets::sheet`].

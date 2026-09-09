@@ -40,7 +40,7 @@ fn image() -> Option<PathBuf> {
 type Widget<'a> = (&'a str, f32, f32, Option<f32>, Option<f32>, u32);
 
 /// [`Widget`] from a parsed image.
-fn widget(image: &oag_game::screen::Image) -> Widget<'_> {
+fn widget(image: &oag_ui::screen::Image) -> Widget<'_> {
     (
         image.src.as_str(),
         image.x,
@@ -239,7 +239,7 @@ fn shell(image: &Path) -> oag_game::boot::Shell {
         language: None,
         source: image.display().to_string(),
         dlc: Vec::new(),
-        leg: oag_game::frontend::Leg::LogoFmv,
+        leg: oag_ui::frontend::Leg::LogoFmv,
         movie: None,
         cache: std::env::temp_dir().join("oag-hd-menu-ground-truth"),
         audio_cache: oag_game::boot::default_audio_cache_dir(),
@@ -328,7 +328,7 @@ fn hds_menus_are_framed_by_its_own_screen() {
         .marks
         .iter()
         .map(|draw| match draw {
-            oag_game::frontend::Draw::Sprite { rect, .. } => rect[2],
+            oag_ui::frontend::Draw::Sprite { rect, .. } => rect[2],
             other => panic!("a mark is a sprite: {other:?}"),
         })
         .collect();
@@ -366,7 +366,7 @@ fn the_hd_palette_is_the_fe_style_and_the_archives_disagree() {
             .read_entry(oag_hd::frontend::names::FRONTEND_ROOT)
             .unwrap_or_else(|error| panic!("DATA{index:02}: {error}"));
         let xml = fexml::text(&blob).expect("it is text");
-        let screens = oag_game::screen::Screens::from_xml(&xml);
+        let screens = oag_ui::screen::Screens::from_xml(&xml);
         ["HD_BG", "HD_Grey", "HD_Blue"].map(|name| {
             screens
                 .globals

@@ -36,8 +36,8 @@
 
 use std::path::{Path, PathBuf};
 
-use oag_game::language::StringTable;
 use oag_game::loading::Assets;
+use oag_ui::language::StringTable;
 
 fn image(name: &str) -> Option<PathBuf> {
     oag_testdata::image(name)
@@ -184,7 +184,7 @@ fn hd_draws_a_feature_and_a_caption_and_no_wave() {
 
     // **Two of the five descriptions are in one copy of the string table
     // only**, and it is the same copy that carries all 28 circuit names - the
-    // finding `oag_game::language::CircuitNames` records, arriving a second
+    // finding `oag_ui::language::CircuitNames` records, arriving a second
     // time from a different direction. Pinned both ways: the served table has
     // three of the five, and the loader still offers five.
     let missing: Vec<&str> = ["FE_ABSORB_INST", "FE_FLIP_INST"]
