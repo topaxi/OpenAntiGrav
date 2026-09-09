@@ -509,6 +509,7 @@ Each is a real, named next step, one file per thread under [`handover/`](handove
 - [Streaming decode for audio would break seek, and nothing forces the change yet](handover/audio/streaming-decode-for-audio-would-break-seek-and.md)
 - [HD's cues end loud and were cut dead, and its `.COLLISIONS` is a flattened tree](handover/audio/hd-collisions-flatten-a-severity-tree.md)
 - [The audio queue is ours now, and the frame stalls are what is left](handover/audio/the-device-queue-is-sized-off-the-configured-cap.md)
+- [A reported skip is not in the mix we render, and the jump counter cannot see it](handover/audio/a-reported-skip-is-not-in-the-mix-we-render.md) - the PS-ADPCM run-out block was played once per loop and is now trimmed; the reporter can no longer hear the skip, though it was never reproduced under an instrument - `--tap-audio` from a windowed run is what would settle it if it returns
 - [A circuit's billboard slots are a 9-entry array on the engine side, and slot 7 is not what it says it is](handover/rendering/a-circuits-billboard-slots-are-a-9-entry.md)
 - [A parser cannot fail on a field it does not know about, so coverage is now measured](handover/tooling/a-parser-cannot-fail-on-a-field-it.md)
 - [A chunk header is 0x20 bytes and then a *surface* record, and the byte after the layout says which space it is in](handover/tooling/a-chunk-header-is-0x20-bytes-and-then.md)

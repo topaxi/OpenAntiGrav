@@ -286,7 +286,12 @@ pub(super) fn load_named_cue(bank: &sblk::Bank, name: &str) -> anyhow::Result<(L
         // voice type, 16-bit PCM behind a 16-byte header. See
         // `oag_formats::sblk::{NOT_ADPCM_FLAG, decode_pcm16}`.
         let pcm = if sound.is_adpcm() {
-            sblk::decode_adpcm(data)
+            // **The span's run-out block is not played.** The encoder appends
+            // one past the block it flagged as the end, and the hardware stops
+            // at the flag; a looping voice that decodes the whole span replays
+            // that block once per loop instead of never. See
+            // `oag_formats::sblk::adpcm_played`.
+            sblk::decode_adpcm(sblk::adpcm_played(data))
         } else {
             sblk::decode_pcm16(data)
         };

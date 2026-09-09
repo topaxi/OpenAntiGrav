@@ -738,6 +738,58 @@ pub fn adpcm_flag_is_defined(block: &[u8]) -> bool {
     block.len() > 1 && block[1] < 8
 }
 
+/// The part of a PS-ADPCM span a voice ever plays: everything up to and
+/// including its terminator block.
+///
+/// **A span is longer than its audio.** The encoder flags the last block it
+/// wrote and then appends a block of run-out, so the bytes the command table
+/// hands over end one block past the sound - see
+/// [`psp-audio.md`](../../../docs/formats/psp-audio.md#the-codecs-own-terminator-agrees),
+/// where 595 of 595 spans carry their terminator on the last block or the one
+/// before it and none carries one earlier. The hardware stops at the
+/// terminator, so the run-out is never heard on a console.
+///
+/// It is heard here if nothing trims it, and on a **looping** waveform it is
+/// heard once per loop rather than once. Measured on `pulse-psp-eu.chd`, over
+/// every waveform a Talon's Junction race loads: all 18 looping ones are
+/// flagged `[(1, 6), (n-2, 3), (n-1, 255)]` and all 25 one-shots
+/// `[(n-2, 1), (n-1, 7)]` - so the run-out is always present, and on a loop it
+/// carries `255`, which is not one of the eight defined flag values at all
+/// ([`adpcm_flag_is_defined`]). What it decodes to is not silence either:
+/// `~hum`'s run-out peaks at 0.474 of full scale and `~FLUID_PUMP`'s at 0.365,
+/// against a `~hum` loop period of 128 ms.
+///
+/// Surveyed across all four PSP images this checkout holds - Pulse EU and USA
+/// at 595 spans each, Pure EU and USA at 395 each - **1,980 spans carry their
+/// terminator on the last block or the one before it, none earlier and none
+/// absent.** The PS2 and PS3 discs were not surveyed for this, which is why
+/// the trim only ever looks at those last two blocks: anything else is
+/// returned whole rather than acted on.
+#[must_use]
+pub fn adpcm_played(data: &[u8]) -> &[u8] {
+    let blocks = data.as_chunks::<ADPCM_BLOCK_LEN>().0;
+    // **Only the last two blocks are looked at**, which is the shape every
+    // measured span has and not a general rule about PS-ADPCM. A terminator
+    // earlier than that would mean a span longer than the sound by more than
+    // its run-out - something no disc surveyed here does - and trimming on one
+    // would silently shorten a cue to a tick. Left whole instead, so an
+    // unmeasured disc keeps exactly today's behaviour.
+    for (index, block) in blocks
+        .iter()
+        .enumerate()
+        .skip(blocks.len().saturating_sub(2))
+    {
+        // 1 end, 3 loop end, 5 start and end, 7 end and mute - the four
+        // defined values with the low bit set. Matched by value rather than by
+        // that bit, because the run-out block's own `255` has it set too and
+        // is not a terminator.
+        if matches!(block[1], 1 | 3 | 5 | 7) {
+            return &data[..(index + 1) * ADPCM_BLOCK_LEN];
+        }
+    }
+    data
+}
+
 /// Decodes PS-ADPCM into 16-bit samples.
 ///
 /// `data` is a whole number of 16-byte blocks; a trailing partial block is

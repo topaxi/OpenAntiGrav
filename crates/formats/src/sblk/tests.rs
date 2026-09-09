@@ -290,3 +290,41 @@ fn the_spec_checks_agree_with_the_ranges_they_document() {
     assert!(adpcm_flag_is_defined(&[0, 7]));
     assert!(!adpcm_flag_is_defined(&[0, 8]));
 }
+
+/// Builds `flags.len()` PS-ADPCM blocks, each carrying one of them.
+fn blocks(flags: &[u8]) -> Vec<u8> {
+    let mut out = Vec::with_capacity(flags.len() * ADPCM_BLOCK_LEN);
+    for &flag in flags {
+        out.push(0x09);
+        out.push(flag);
+        out.extend_from_slice(&[0u8; ADPCM_BLOCK_LEN - 2]);
+    }
+    out
+}
+
+#[test]
+fn a_spans_run_out_block_is_not_played() {
+    // The shape every looping waveform on the Pulse discs has: loop start on
+    // block 1, loop end on the block before last, run-out after it.
+    let data = blocks(&[0, 6, 2, 3, 255]);
+    assert_eq!(adpcm_played(&data).len(), 4 * ADPCM_BLOCK_LEN);
+    // ...and the one-shot's: end, then a block of end-and-mute run-out.
+    let data = blocks(&[0, 0, 1, 7]);
+    assert_eq!(adpcm_played(&data).len(), 3 * ADPCM_BLOCK_LEN);
+}
+
+#[test]
+fn a_span_with_no_terminator_is_played_whole() {
+    let data = blocks(&[0, 2, 6, 2]);
+    assert_eq!(adpcm_played(&data).len(), data.len());
+    // ...and so is one whose terminator is earlier than a run-out block can
+    // explain, which is a shape no surveyed disc has.
+    let data = blocks(&[0, 1, 2, 2, 2]);
+    assert_eq!(adpcm_played(&data).len(), data.len());
+    assert_eq!(adpcm_played(&[]).len(), 0);
+    // A trailing partial block cannot carry a flag and is not trimmed to,
+    // which is `decode_adpcm`'s own rule for one.
+    let mut data = blocks(&[0, 2]);
+    data.push(0x09);
+    assert_eq!(adpcm_played(&data).len(), data.len());
+}

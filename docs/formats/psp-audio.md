@@ -398,6 +398,52 @@ would drop a terminator into the middle of its neighbour, and none of the
 595 does. That is the codec and the command table, two things with no knowledge
 of each other, agreeing on the same 595 boundaries.
 
+### The run-out block is not audio, and playback has to trim it
+
+The consequence of the paragraph above, written out because it took a
+misdiagnosed fault to notice: **a span is one block longer than its sound.**
+The hardware stops at the terminator, so what the encoder wrote after it is
+never heard on a console - but a decoder that walks the whole span plays it,
+and a *looping* voice plays it once per loop rather than once.
+
+Measured on `pulse-psp-eu.chd`, over every waveform a Talon's Junction race
+loads, printing each block's flag byte:
+
+- All 18 looping waveforms are flagged `[(1, 6), (n-2, 3), (n-1, 255)]`.
+- All 25 one-shots are flagged `[(n-2, 1), (n-1, 7)]`.
+
+So the run-out is always present, and on a loop it carries `255` - not one of
+the eight defined flag values at all, which is a second, independent reason to
+read it as something other than samples.
+
+Widened to every span on every PSP image this project has, by running the
+census above against each in turn: **Pulse EU 595 spans, Pulse USA 595, Pure EU
+395, Pure USA 395 - 1,980 in total, every one terminated on the last block or
+the one before it, none earlier and none absent.** The PS2 and PS3 discs were
+not surveyed for it, which is why `adpcm_played` only ever looks at those last
+two blocks and returns anything else whole: on an unmeasured disc the trim is a
+no-op rather than a guess.
+
+It does not decode to silence. `~hum`'s run-out peaks at 0.474 of full scale
+and `~FLUID_PUMP`'s at 0.365, against a `~hum` loop period of 128 ms - so an
+untrimmed `~hum` emitter fires a 0.6 ms burst of it about eight times a second.
+Trimming to the terminator also moves the loop seam onto the one the hardware
+has: `~hum`'s wrap step falls from 0.256 to 0.095, `~FLUID_PUMP`'s from 0.201
+to 0.065, `~SHIELD`'s from 0.132 to 0.003.
+
+`oag_formats::sblk::adpcm_played` is the trim, and
+`oag_game::audio::sfx::banks::load_named_cue` is the one playback path that
+applies it. `decode_adpcm` itself still decodes whatever it is handed: the
+surveys on this page measure spans as authored, and moving the trim into the
+decoder would silently change what they report.
+
+**What is still not modelled** is the loop *start*. The hardware loops back to
+the block flagged `6`, which is block 1 on every one of the 18, while
+`oag_audio::Mixer` wraps to sample 0 - so this port replays block 0's 28
+samples on every loop. Every one of the 18 begins at exactly 0.000 and the
+measured seam lands within 0.03 of the hardware's own on all but two, so the
+gap is small; it is a gap all the same.
+
 ### The audio survives extraction
 
 Each span is decoded on its own and measured with the same mean-step-over-RMS
