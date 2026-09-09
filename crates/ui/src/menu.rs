@@ -1192,7 +1192,7 @@ impl Default for Transition {
 /// `bindings` answers "what is this button bound to" and is passed in rather
 /// than looked up, because a keyboard is a device concern: `oag_input::keys`
 /// owns the mapping, this crate owns the layout, and neither has to know how
-/// the other works. `main.rs` hands over [`oag_input::keys::bound_keys`].
+/// the other works. `main.rs` hands over `oag_input::keys::bound_keys`.
 ///
 /// `measure` is the width of a string in the face the entries will be drawn in,
 /// on the same seam and for the same reason: the atlas is the renderer's and the

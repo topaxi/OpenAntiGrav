@@ -448,7 +448,7 @@ fn read_hud_texture(
 /// Kept separate only so the report line says which font is being talked about.
 ///
 /// A source whose plugins fill in no such slot draws in 5x7 and says which role
-/// went unanswered - see [`crate::language::roles`] for what each disc fills in.
+/// went unanswered - see `oag_ui::language::roles` for what each disc fills in.
 ///
 /// Both HUD fonts are pre-outlined on both Pulse pressings - six distinct greys,
 /// alpha covering glyph *plus* border - so `Atlas::from_font`'s body/outline

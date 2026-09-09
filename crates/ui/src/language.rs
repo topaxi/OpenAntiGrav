@@ -342,7 +342,7 @@ impl CircuitNames {
     ///
     /// `copies` is `(archive label, table)` in mount order, so a tie - every
     /// copy covering the list, which is what a single-copy source looks like -
-    /// keeps the copy [`oag_assets::Archives::read_name`] would have served.
+    /// keeps the copy `oag_assets::Archives::read_name` would have served.
     ///
     /// `None` when no copy covers the list. That leaves every circuit showing
     /// its id, which is what this build did before the copies were counted: an
