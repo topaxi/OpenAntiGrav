@@ -89,9 +89,9 @@ so the flag is the only way in on that path.
 
 | | Time trial | Speed lap | Zone | Single race | Eliminator |
 | --- | --- | --- | --- | --- | --- |
-| Laps | 3 | unlimited | unlimited | 3, **ours** | unlimited |
+| Laps | 3/4/4/5, per class | unlimited | unlimited | 3/4/4/5, per class | unlimited |
 | Throttle | the player's | the player's | the mode's | the player's | the player's |
-| Ends by itself | after lap 3 | never | **not implemented** - see below | after lap 3 | on a kill count - see below |
+| Ends by itself | after the class's own last lap | never | **not implemented** - see below | after the class's own last lap | on a kill count - see below |
 | Weapons | off | off | off | **on** | **on, scaled up** |
 | Free turbo a lap | **yes** | **yes** | no | no | no |
 | HUD layout | `TimeTrial_HUD.xml` | `TimeTrial_HUD.xml` | `Zone_HUD.xml` | `Arcade_HUD.xml` | `Elimination_HUD.xml` |
@@ -103,49 +103,55 @@ shortcut: there is no `SpeedLap_HUD.xml`, which is why
 
 ## Time trial
 
-**Three laps.** Observed rather than invented: the original's own counter reads
-`Lap 1 of 3`, and a run that drives past the third lap starts a fresh attempt with
-the best time cleared. See
-[the PPSSPP debugger notes](../reverse-engineering/ppsspp-debugger.md).
+**Per speed class, and confirmed live at all four rungs, 2026-09-09: 3 Venom, 4
+Flash, 4 Rapier, 5 Phantom.** A Custom Race launched once per class under
+PPSSPP - `pulse-psp-usa.chd`, Talon's Junction White, no campaign cell in play
+at all - read `Lap 1 of 3`/`4`/`4`/`5` in that order, matching
+[single race](#single-race)'s own 3/4/4/5 census exactly. That settles the
+question this page used to leave open: the census was not campaign-only, and
+the flat `3` this crate used to carry for every class was right for Venom and
+wrong for the other three, the same shape [single race](#single-race)'s own fix
+already had. `Mode::TIME_TRIAL_LAPS_BY_CLASS`, confidence 88.
+
+A run that drives past the last lap starts a fresh attempt with the best time
+cleared rather than ending outright - see
+[the PPSSPP debugger notes](../reverse-engineering/ppsspp-debugger.md) - which
+this crate still approximates as an ending; see
+[what happens when a race ends](#what-happens-when-a-race-ends).
 
 The count is *configuration* in the original rather than a constant - the
-race-setup format string carries `laps="%d"` - so three is what a time trial was
-seen configured with, not a limit of the format. `Mode::TIME_TRIAL_LAPS`.
-
-**Open, and not to be dropped: the census reads a time trial as per-class too.**
-The campaign's 47 `Time Trial` cells carry the same 3/4/4/5 `laps` table the
-[single race](#single-race) now runs on, while `Mode::TIME_TRIAL_LAPS` stays a
-flat `3`. The two are *consistent* rather than contradictory - Venom is the
-default class and Venom's census value is 3, which is exactly what was watched
-live - so nothing here is known to be wrong. What is missing is a live time
-trial in Flash, Rapier or Phantom to confirm the census applies to the mode
-outside the campaign. `Mode::laps_target` already takes the speed class, so
-this is one match arm and a screenshot, not a design change.
+race-setup format string carries `laps="%d"`.
 
 Weapons and AI fall out of the mode rather than being set: selecting TIME TRIAL on
 the original's Custom Race screen flips WEAPONS to OFF and AI DIFFICULTY to N/A on
 its own. Neither exists here yet, so nothing had to be turned off.
 
 **Not implemented:** the fresh-attempt-behind-you behaviour. The run stops at the
-end of lap 3.
+end of the class's own last lap.
 
 ## Speed lap
 
-Unlimited laps, chasing one fast lap; it never ends on its own and escape leaves.
-Everything about it is the time trial without the lap target, which is how it is
-implemented - `Mode::laps_target` returns `None`.
+Chasing one fast lap; it never ends on its own and escape leaves.
+`Mode::laps_target` returns `None`.
 
-**Open, and a genuine conflict rather than a gap.** The campaign census reads
-`laps` as `7` on all 42 `Speed Lap` cells and `0` on all 16 `Zone` cells - see
-[race-campaign.md](../ghidra/functions/psp-pulse-usa/race-campaign.md) - while
-the evidence for `None` here is separate and specific: `MSC_EVENT_SL` and
-`MSC_EVENT_ZONE` describe races that do not end on laps. Both readings are
-sourced and they disagree, so reconciling them is its own job. The likeliest
-shape - untested, and written down only so the next pass does not start from
-zero - is that a *campaign* speed lap is a bounded 7-lap event while a Custom
-Race speed lap is unbounded, and that `Zone`'s `0` is the attribute's "not
-applicable" spelling rather than a lap count. Neither was checked, and neither
-changed anything here.
+**The census's `7` is real outside the campaign too, and it still does not end
+the race - both halves checked live, 2026-09-09, rather than assumed.** A
+Custom Race speed lap - no campaign cell in play - reads `Lap 1 of 7` on Venom
+under PPSSPP, the same `Lap X of Y` widget Time Trial uses, so the `42`-cell
+campaign census (all reading `7`) was never a campaign peculiarity. But Speed
+Lap's own in-race pause menu carries a seventh row, `END SESSION`, that Time
+Trial's identical pause menu (same six other rows, same screen) does not -
+screenshotted on both - and a mode whose pause menu offers a dedicated way to
+deliberately conclude an open run is a mode that does not conclude one on its
+own. That agrees with, and now sits alongside, `MSC_EVENT_SL`'s text: *"never
+ends, escape leaves."* Driving far enough past lap 7 to watch the race
+actually end or not was tried and abandoned: open-loop script replay could not
+complete even one lap of Talon's Junction in nine minutes of real time under
+PPSSPP, the same drift this project's own verification-protocol notes already
+name as fatal past one lap - so the pause-menu reading is the evidence this
+page rests on, not a lap-8 crossing. `Zone`'s `0` is left as before: read as
+the attribute's "not applicable" spelling for a mode that counts zones
+instead, untested either way.
 
 **This mode is not documented anywhere in the original's data that has been read.**
 It appears in no mode enumeration in this repository's notes and has no HUD layout
@@ -703,8 +709,8 @@ page](../ui/hud.md#eliminator).
 
 **The flag is the player's own last crossing.** `RaceState::finished` is set by
 the lap counter when the player wraps past `laps_target`, which is the same rule
-that counts every other lap - so a time trial ends after lap 3, a single race
-ends after its speed class's own count (3/4/4/5, see
+that counts every other lap - so a time trial and a single race both end after
+their speed class's own count (3/4/4/5, see [time trial](#time-trial) and
 [single race](#single-race)), and a speed lap and a Zone run have no target and
 never end this way. An
 opponent crossing ahead takes a `Standing::finish_tick` and stops being ordered
