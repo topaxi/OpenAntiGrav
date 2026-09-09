@@ -4,8 +4,10 @@
 //! reads - and say whether it is an inline record or names a separate
 //! `.rcsmaterial` file the chunk's own samplers do not carry.
 
-use oag_formats::{rcsmaterial, rcsmodel, vex};
+use oag_formats::{rcsmaterial, rcsmodel};
+
 use oag_render::mesh;
+use oag_vex::vex;
 
 /// The sampler-name hash both pad `_ne` files bind to, measured off
 /// `12_sol_2`'s own material records (see the dump this prints).

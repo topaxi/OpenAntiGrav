@@ -14,7 +14,7 @@ fn grid_on_a_speed_pad() -> Race {
     let mut setup = setup(hulled_handling());
     setup.mode = Mode::SingleRace;
     setup.speedup_pads = enveloping_pad();
-    setup.start_position = Some(oag_formats::track::StartPosition {
+    setup.start_position = Some(oag_vex::track::StartPosition {
         position: [0.0, 0.0, 0.0],
         left: [0.0, 0.0, -1.0],
         up: [0.0, 1.0, 0.0],

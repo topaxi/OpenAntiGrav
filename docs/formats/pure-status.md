@@ -113,7 +113,7 @@ from the exporter's own class-name ordering instead - see
 
 **The consequence for the code is smaller than it looks.** `CLASS_MESH`,
 `CLASS_TEXTURE`, `CLASS_TRANSFORM` in
-[`oag-formats::vex`](../../crates/formats/src/vex.rs) and `CLASS_WO_TRACK` in
+[`oag-vex::vex`](../../crates/vex/src/vex.rs) and `CLASS_WO_TRACK` in
 [`oag-render::track`](../../crates/render/src/track.rs) are the only places a
 class ID is compared. Every other line of the geometry path is title-agnostic
 already. Deliberately **not changed here**: an ADR-0009 probe records where a
@@ -255,7 +255,7 @@ table the way Pulse's was read is what would take this to 100.
 arithmetic gives `0x377`, and `Anim Transform` at index 8 gives `0x372` - both
 checked against Pure's own files now (six ships and all 16 circuits
 respectively; see the table above), and both in
-[`vex::classes::V4`](../../crates/formats/src/vex.rs). `crates/render/src/mesh.rs`
+[`vex::classes::V4`](../../crates/vex/src/vex.rs). `crates/render/src/mesh.rs`
 already reads `classes.airbrake` to animate a ship's flap geometry, so this is
 not bookkeeping: before it, a Pure ship's flaps rendered in their base pose
 with no deflection at all, on every team, because the field it needed was
@@ -328,7 +328,7 @@ On Pure it is set on model textures too: the Feisar ship's five embedded
 textures read flags `0x61`, where Pulse's eight read `0xe4`.
 
 **Implemented 2026-08-12, gated on the version word.**
-[`vex::textures`](../../crates/formats/src/vex.rs) now reads `+0x06` and
+[`vex::textures`](../../crates/vex/src/vex.rs) now reads `+0x06` and
 unswizzles through `texture::unswizzle` when bit 0 is set **and the file's
 version is 4 or below**. That is the generation where the evidence is
 unambiguous, and the gate is what keeps the correction above from becoming a
@@ -1166,7 +1166,7 @@ extracted `track.vex` turned up `woSound1`..`woSoundN`, each carrying a
 bank/cue pair - but left the class ID unfound, expecting the table-index
 technique above to be needed.
 
-**It was not.** `oag_formats::vex::Node` already carries the class ID *and*
+**It was not.** `oag_vex::vex::Node` already carries the class ID *and*
 the scene name for every node; `just view '<pure image>:.../Data.wad' --nodes
 '<track.vex>'` prints both with no Ghidra bridge at all. That is enough: a
 `woSoundN` name is not itself the sound class - it names a `Transform`

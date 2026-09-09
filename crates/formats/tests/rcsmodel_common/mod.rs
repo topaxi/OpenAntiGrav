@@ -10,7 +10,7 @@
 
 use std::path::{Path, PathBuf};
 
-use oag_formats::vex;
+use oag_vex::vex;
 
 /// The decrypted PS3 image.
 pub const PS3_IMAGE: &str = "hdfury-ps3-eu-dec.iso";

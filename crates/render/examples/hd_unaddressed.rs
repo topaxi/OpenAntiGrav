@@ -1,8 +1,10 @@
 //! Scratch probe: list the mesh nodes of an HD track whose chunk hash the
 //! `.rcsmodel` beside it does not carry, with names and world-space boxes.
 
-use oag_formats::{rcsmodel, vex};
+use oag_formats::rcsmodel;
+
 use oag_render::mesh;
+use oag_vex::vex;
 
 fn main() -> anyhow::Result<()> {
     let spec = std::env::args()

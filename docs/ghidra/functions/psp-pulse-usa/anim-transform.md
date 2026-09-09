@@ -210,7 +210,7 @@ int AnimTransform_Update(node *n) {
 **So `LoopEnd` is the wrap period, applied as `fmodf`, and that is read rather
 than inferred - confidence 90.** An earlier revision of this page put the wrap
 *site* at 55 and said only the attribute was evidenced; that caveat is
-withdrawn. `oag_formats::vex::AnimTransform::sample` wraps by
+withdrawn. `oag_vex::vex::AnimTransform::sample` wraps by
 `loop_seconds` and matches, with one difference worth stating: the original
 integrates `dt` into a per-node clock while this project evaluates
 `race_seconds % loop` directly. The two agree while a node starts at zero and is
@@ -423,7 +423,7 @@ Both time attributes default to `6000.0 / seconds_per_key` key units, which at
 1/60 is **6,000 seconds** - long enough that nothing on the disc reaches it,
 which is what makes "no `LoopEnd`" mean "does not loop".
 
-**This settles the `unk_0x0e` field of `oag_formats::vex::Node`.** Its doc
+**This settles the `unk_0x0e` field of `oag_vex::vex::Node`.** Its doc
 recorded the meaning as unestablished, with the observation that where it is set
 "the values are small and round (24, 36, 48, 56, 68, 368) and look like byte
 counts". They are byte counts, of exactly this attribute list.

@@ -9,7 +9,7 @@
 //! Two things it is deliberately not:
 //!
 //! - It does not depend on `oag-gameplay` or `oag-physics`. Everything here
-//!   comes out of `oag_formats::collision`, so the viewer does not drag a
+//!   comes out of `oag_vex::collision`, so the viewer does not drag a
 //!   gameplay crate in to draw a triangle. The one rule it does copy from
 //!   `collision_world` is that [`SurfaceKind::Cage`] is not collidable, so by
 //!   default it is not drawn either - the picture is what physics sees, not what
@@ -31,7 +31,7 @@
 //! cosmetic and not worth a de-duplication pass.
 
 use anyhow::{Context, Result};
-use oag_formats::collision::{self, CollisionNode, SurfaceKind};
+use oag_vex::collision::{self, CollisionNode, SurfaceKind};
 
 use crate::mesh::{Bounds, DrawCall, GpuVertex, Model};
 
@@ -260,7 +260,7 @@ pub fn build_model(
         blend: None,
         blend_state: None,
         // Synthetic: no mesh, so no derived layer.
-        layer: oag_formats::vex::LAYER_DEFAULT,
+        layer: oag_vex::vex::LAYER_DEFAULT,
         culled: false,
         range: 0..indices_len(&indices),
         texture: None,
@@ -343,10 +343,7 @@ fn indices_len(indices: &[u32]) -> u32 {
 /// all 1.78 million of them - so this only ever skips on a corrupt file, and it
 /// skips rather than panicking because a viewer that dies on one bad triangle
 /// cannot show you the bad triangle.
-fn corners_of(
-    mesh: &oag_formats::collision::CollisionMesh,
-    tri: [u16; 3],
-) -> Option<[[f32; 3]; 3]> {
+fn corners_of(mesh: &oag_vex::collision::CollisionMesh, tri: [u16; 3]) -> Option<[[f32; 3]; 3]> {
     Some([
         *mesh.vertices.get(usize::from(tri[0]))?,
         *mesh.vertices.get(usize::from(tri[1]))?,
@@ -500,7 +497,7 @@ fn frame(vertices: &[GpuVertex]) -> ([f32; 3], f32) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use oag_formats::collision::{CollisionGeometry, CollisionMesh};
+    use oag_vex::collision::{CollisionGeometry, CollisionMesh};
 
     fn mesh() -> CollisionMesh {
         CollisionMesh {

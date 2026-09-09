@@ -8,7 +8,7 @@
 //! cargo run -p oag-render --example ready_go_census
 //! ```
 
-use oag_formats::vex;
+use oag_vex::vex;
 
 const ENTRIES: &[&str] = &[
     "Data\\HUD\\Pulse_Ready_Go.vex",

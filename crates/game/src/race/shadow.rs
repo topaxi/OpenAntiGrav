@@ -11,10 +11,10 @@
 //! `docs/architecture/determinism.md`.
 
 use oag_formats::ByteOrder;
-use oag_formats::shadow_occluder::Occluder;
-use oag_formats::vex;
 use oag_physics::collide::{Ray, Raycaster, Surface};
 use oag_render::shadow::{self, Placement};
+use oag_vex::shadow_occluder::Occluder;
+use oag_vex::vex;
 
 use super::Race;
 

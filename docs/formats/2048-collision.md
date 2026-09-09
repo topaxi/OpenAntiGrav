@@ -7,8 +7,8 @@ node instances at all** and ships a separate `track_col.col` beside each
 `track.vex`: a k-d tree over one triangle soup, with a surface byte per
 triangle.
 
-Read by `oag_formats::kdcol`, validated by
-`crates/formats/tests/kdcol_ground_truth.rs` over **all 26 files** the three EU
+Read by `oag_vex::kdcol`, validated by
+`crates/vex/tests/kdcol_ground_truth.rs` over **all 26 files** the three EU
 packages ship. Three scratch probes reproduce the measurements below:
 `crates/game/examples/vita_surface.rs` (the Wipeout HD pairing and the winding
 check), `vita_colcorpus.rs` (the surface-byte census and the facing statistic)
@@ -180,7 +180,7 @@ the first is the one that fails visibly.
 
 The **k-d tree itself**. This engine casts rays against an
 `oag_physics::TriangleSoup` of its own and has no use for the original's
-acceleration structure, so `oag_formats::kdcol` parses the node array, checks
+acceleration structure, so `oag_vex::kdcol` parses the node array, checks
 it, and hands the caller the soup. It is read anyway because a format page that
 cannot be checked against the file is a format page that rots - the leaf-tiling
 invariant above is what that buys.
@@ -191,7 +191,7 @@ a constant and it is carried rather than named.
 
 ## What a race does with it
 
-`oag_formats::kdcol::collision_nodes` groups the soup into the same
+`oag_vex::kdcol::collision_nodes` groups the soup into the same
 `CollisionNode` values the `.vex` path produces, one per surface kind, in
 `SurfaceKind::ALL` order - never in the order a map happens to iterate, because
 a collider's index *is* its identity to

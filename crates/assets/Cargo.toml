@@ -20,6 +20,7 @@ workspace = true
 
 [dev-dependencies]
 oag-testdata.workspace = true
+oag-vex.workspace = true
 miniz_oxide.workspace = true
 oag-pulse.workspace = true
 # `tests/pmf_ground_truth.rs` demuxes a real `.PMF` off the disc. Tests only:

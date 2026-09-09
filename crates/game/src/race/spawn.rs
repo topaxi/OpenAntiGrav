@@ -150,7 +150,7 @@ const SLOT_AGREES_WITH_THE_SPLINE: f32 = 0.5;
 ///
 /// # The replacement is levelled, because the bind levels the authored one
 ///
-/// `oag_formats::track::start_position` drops the authored forward's `y` before
+/// `oag_vex::track::start_position` drops the authored forward's `y` before
 /// normalising it - the bind handler at `0x08926ae8` forces the up row to world
 /// `(0, 1, 0)` and re-orthonormalises around it, so **every** slot on **every**
 /// track yields an exactly horizontal heading. A spline tangent is not
@@ -459,5 +459,5 @@ pub(super) fn start_position_of(blob: &[u8]) -> Option<StartPosition> {
     // the spline instead - which `load`'s own report line already describes.
     let class = vex::classes_of(blob).ok()?.start_position?;
     let node = nodes.iter().find(|node| node.class_id == class)?;
-    oag_formats::track::start_position(blob.get(node.payload())?, vex::byte_order(blob))
+    oag_vex::track::start_position(blob.get(node.payload())?, vex::byte_order(blob))
 }

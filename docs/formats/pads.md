@@ -3,8 +3,8 @@
 `Speedup Pad` (`0x3bd`) and `Weapon Pad` (`0x3be`): the plates on the track
 surface that boost a craft or hand it a pickup.
 
-Decoded by `crates/formats/src/pads.rs`, drawn by `oag_render::mesh::build_pads`,
-asserted against the disc by `crates/formats/tests/pads_ground_truth.rs`. The
+Decoded by `crates/vex/src/pads.rs`, drawn by `oag_render::mesh::build_pads`,
+asserted against the disc by `crates/vex/tests/pads_ground_truth.rs`. The
 runtime side - bind, containment, the swept test - is
 [`docs/ghidra/functions/psp-pulse-usa/pads.md`](../ghidra/functions/psp-pulse-usa/pads.md);
 the force is in [`engine.md`](../ghidra/functions/psp-pulse-usa/engine.md).

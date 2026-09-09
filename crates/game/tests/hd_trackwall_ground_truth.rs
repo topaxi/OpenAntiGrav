@@ -34,15 +34,15 @@
 //!
 //! What none of them establish is that Pulse's own class table names this ID -
 //! and, since that table has now been read to its terminator, it doesn't. See
-//! `oag_formats::vex::CLASS_TRACK_WALL_COLLISION`.
+//! `oag_vex::vex::CLASS_TRACK_WALL_COLLISION`.
 
 use std::path::PathBuf;
 
 use oag_core::math::Vec3;
-use oag_formats::collision::{self, CollisionNode, SurfaceKind};
 use oag_game::race;
 use oag_gameplay::collision_world;
 use oag_physics::{Body, Environment, ShipControls, ShipState, Surface, step};
+use oag_vex::collision::{self, CollisionNode, SurfaceKind};
 
 /// The decrypted PS3 image.
 const PS3_IMAGE: &str = "hdfury-ps3-eu-dec.iso";

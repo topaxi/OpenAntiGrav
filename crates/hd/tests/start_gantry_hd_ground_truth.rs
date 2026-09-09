@@ -49,8 +49,10 @@
 
 use std::path::{Path, PathBuf};
 
-use oag_formats::{rcsmodel, vex};
+use oag_formats::rcsmodel;
+
 use oag_texture::gtf;
+use oag_vex::vex;
 
 /// The decrypted PS3 image.
 const PS3_IMAGE: &str = "hdfury-ps3-eu-dec.iso";
@@ -271,7 +273,7 @@ fn the_texture_is_a_scaled_diagonal_staircase() {
 }
 
 /// **Claim 4, the negative that matters most.** Neither the material's own
-/// parameter table nor `oag_formats::vex::mesh_tex_transforms` finds a
+/// parameter table nor `oag_vex::vex::mesh_tex_transforms` finds a
 /// keyframe track anywhere on this node - a fact about the format the same
 /// parser that recovers Pulse's authored `TEXOFFSET` track confirms, not an
 /// absence assumed from silence.

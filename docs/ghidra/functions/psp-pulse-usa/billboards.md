@@ -368,7 +368,7 @@ tag `0x280bf0`, and the method-table pointer `0x2cd18c` - the exact three
 fields every instance this getter tags also carries at those offsets.
 **Class `0xf7` is `"Camera"`** in the already-established, ground-truthed
 Maya class-ID table this project carries in
-[`crates/formats/src/vex/class_names.rs:287`](../../../../crates/formats/src/vex/class_names.rs)
+[`crates/vex/src/vex/class_names.rs:287`](../../../../crates/vex/src/vex/class_names.rs)
 and documents in [`exhaust.md`](exhaust.md) at confidence 95 (self-validating
 against ten independently-placed IDs). `0x08901764` (`Camera_Construct_q`)
 is this class's own instance constructor - the only other caller that
@@ -380,7 +380,7 @@ child" constructor.
 
 **`0x08908aec` closes an independent loop**: it registers a *different*
 class, id `0x3dd` - `"gridCamera"` in the same table
-([`crates/formats/src/vex/class_names.rs:897`](../../../../crates/formats/src/vex/class_names.rs))
+([`crates/vex/src/vex/class_names.rs:897`](../../../../crates/vex/src/vex/class_names.rs))
 - and copies `func_0x00267b30()`'s value onto that class's own descriptor
 before a second block does the same with a sibling getter
 (`func_0x00267ba8`, real address `0x08a6bba8`, independently disassembled

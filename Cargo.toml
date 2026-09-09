@@ -24,6 +24,7 @@ members = [
   "crates/tools",
   "crates/trace",
   "crates/video",
+  "crates/vex",
   "crates/view",
 ]
 
@@ -55,6 +56,7 @@ oag-tables = { path = "crates/tables" }
 oag-texture = { path = "crates/texture" }
 oag-title = { path = "crates/title" }
 oag-trace = { path = "crates/trace" }
+oag-vex = { path = "crates/vex" }
 oag-video = { path = "crates/video" }
 
 anyhow = "1"
@@ -196,4 +198,9 @@ opt-level = 2
 # The pixel formats: the GS and GE palette walks, and the S3TC/PVRTC block
 # decoders under `gtf` and `gxt`. Per-texel loops over a whole disc's worth.
 [profile.dev.package.oag-texture]
+opt-level = 2
+
+# The `.vex` node walk: a whole circuit's tree, every payload in it, and
+# the PS2 VIF1 packets under the batch headers.
+[profile.dev.package.oag-vex]
 opt-level = 2

@@ -497,7 +497,7 @@ impl Material {
     /// The blend equation this material asks for, **both factors**.
     ///
     /// This used to key on the destination alone and drop the source, on the
-    /// reasoning that `oag_formats::vex::BlendClass` - Pulse's three recovered
+    /// reasoning that `oag_vex::vex::BlendClass` - Pulse's three recovered
     /// classes - has no member for the distinction. That was the right thing to
     /// say about `BlendClass` and the wrong thing to do with the data: the
     /// source factor is measured, it is not constant, and dropping it silently

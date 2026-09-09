@@ -25,7 +25,7 @@ fn a_respawn_in_flight_makes_everything_visible() {
 
     // And the resulting set really is everything, not merely two unknown
     // ids - this is the property the whole conservative path exists for.
-    let pvs = oag_formats::pvs::TrackPvs::empty();
+    let pvs = oag_vex::pvs::TrackPvs::empty();
     let padding = SectionPadding::default();
     let (craft, camera) = race.visibility_sections();
     assert!(
@@ -385,9 +385,9 @@ fn a_respawn_is_not_repeated_on_the_very_next_tick() {
 /// Hand-laid bytes, no game content: the container's header, an empty slot
 /// table, and a single record at the resource base carrying the smallest set
 /// of fields `oag_render::psys::Effect::parse` needs to accept it. Field
-/// offsets are the ones `oag_formats::pob::Emitter` documents.
+/// offsets are the ones `oag_vex::pob::Emitter` documents.
 fn one_emitter_pob(name: &str, flags: u32) -> Vec<u8> {
-    use oag_formats::pob::{EMITTER_LEN, HEADER_LEN, MAGIC, NAME_LEN};
+    use oag_vex::pob::{EMITTER_LEN, HEADER_LEN, MAGIC, NAME_LEN};
 
     let mut record = vec![0u8; EMITTER_LEN];
     let take = name.len().min(NAME_LEN - 1);
@@ -451,7 +451,7 @@ fn push_toward_wall(race: &mut Race) {
 /// from the next by one bit of authored data and nothing else.
 #[test]
 fn a_looping_spark_effect_stops_when_the_contact_does() {
-    use oag_formats::pob::flags;
+    use oag_vex::pob::flags;
 
     let mut race = race_with_spark_effect(&one_emitter_pob("WO_TEST_SPARK", flags::LOOPING));
 

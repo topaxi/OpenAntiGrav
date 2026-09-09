@@ -1,8 +1,8 @@
 # `.vex` scene format
 
 **Status: understood.** Implemented in
-[`oag-formats::vex`](../../crates/formats/src/vex.rs), with `WO Track` payloads in
-[`oag-formats::track`](../../crates/formats/src/track.rs). A whole track now
+[`oag-vex::vex`](../../crates/vex/src/vex.rs), with `WO Track` payloads in
+[`oag-vex::track`](../../crates/vex/src/track.rs). A whole track now
 assembles: `oag-view --mesh` places all 482 drawable meshes of `01_Track` from
 composed `Transform` matrices, and the outline it draws matches the one the
 [spline](track.md) draws independently.
@@ -82,7 +82,7 @@ batch header, vertex-type encoding and per-batch scale, over 20,832 batches and
 **What does not carry across is the class-ID table below.** Pure renumbers it
 wholesale - `Transform` is `0x6d` there, `Mesh` is `0x11e`, `Texture` is
 `0x373` - so the IDs on this page are Pulse's, and the constants in
-`oag-formats::vex` are Pulse-only by construction. Full mapping, plus the
+`oag-vex::vex` are Pulse-only by construction. Full mapping, plus the
 version-3 batch-header difference and Pure's pre-swizzled embedded textures, in
 the [Pure probe](pure-status.md#the-class-id-space-is-renumbered).
 
@@ -94,7 +94,7 @@ find so far for M1 and M4.
 
 The IDs below were read out of the table in 2026-07, and the decode is
 **self-validating at confidence 95**: ten of them were already in
-`crates/formats/src/vex.rs` from unrelated evidence, and every one agrees -
+`crates/vex/src/vex.rs` from unrelated evidence, and every one agrees -
 including the two most easily confused, `Mag Floor Collision 0x3e6` and
 `Cage Collision 0x3e7`. Mirrored in that file's `CLASS_NAMES`.
 
@@ -130,12 +130,12 @@ Three properties of the table itself, all needed to read it correctly:
   **`0x3ec` (`wingtip`), `0x3ed` (`Track Wall Collision`) and `0x3ee`
   (`absorb`) are absent from Pulse's own table** - its game-class ids run
   `0x3b9`..`0x3eb` and stop there, three short of HD's 866-record table
-  (`crates/formats/src/vex/class_names.rs`), which is exactly the three ids
+  (`crates/vex/src/vex/class_names.rs`), which is exactly the three ids
   above. This settles the question [hd-status.md](hd-status.md#0x3ed-is-the-barrier-along-the-road)
   left open: Pulse's PSP binary does not name `0x3ed` at all, so
   `classes::V6::CLASS_TRACK_WALL_COLLISION` is a version-6 format id carried
   over from HD, not a Pulse-attested one - consistent with Pulse authoring no
-  node of that class ([`collision_ground_truth.rs`](../../crates/formats/tests/collision_ground_truth.rs)).
+  node of that class ([`collision_ground_truth.rs`](../../crates/vex/tests/collision_ground_truth.rs)).
 - **`0x3e3` has no entry**, and the ids are not strictly ordered (`0x3d0`,
   `0x3e9`, `0x3eb` all sit out of sequence), so a gap is not evidence of a missing
   class.
@@ -383,7 +383,7 @@ claim about the game.
 ### The vertex type is not misdeclared, and `u8` texcoords really are one byte each
 
 **Confidence: 95.** Checked by
-[`crates/formats/tests/vex_batch_layout_ground_truth.rs`](../../crates/formats/tests/vex_batch_layout_ground_truth.rs).
+[`crates/vex/tests/vex_batch_layout_ground_truth.rs`](../../crates/vex/tests/vex_batch_layout_ground_truth.rs).
 
 `shipboost.vex` raised the question. Its two short batches decode to a *single*
 texture coordinate - all 9 (or 10) of their vertices carry `u` `0.0078`, `v`
@@ -434,9 +434,9 @@ texture coordinate across every vertex, at every vertex count from 3 upward.
 ### PS2: the vertex type still names the attributes, but the data is a VIF packet
 
 **Status: decoded.** Implemented in
-[`oag-formats::vif`](../../crates/formats/src/vif.rs) and the PS2 path of
+[`oag-vex::vif`](../../crates/vex/src/vif.rs) and the PS2 path of
 `vex::mesh_batches`; validated by
-`crates/formats/tests/vex_ps2_ground_truth.rs`.
+`crates/vex/tests/vex_ps2_ground_truth.rs`.
 
 The PS2 build declares vertex types **outside** the twelve GU combinations
 above - `0x1b9` is the one that first refused to decode - and the reason is one
@@ -622,7 +622,7 @@ safe only because the data is uniform.** The original looks at exactly one
 batch's copy and applies it to the whole mesh, so a file whose batches
 disagreed would be drawn at one of the two sizes with no complaint.
 `every_batch_in_a_mesh_carries_the_same_position_scale`
-(`crates/formats/tests/batch_position_gap_ground_truth.rs`) holds that up:
+(`crates/vex/tests/batch_position_gap_ground_truth.rs`) holds that up:
 **21,055 meshes and 65,279 batches on `Data.wad`, with not one mesh whose
 batches disagree** about `+0x10` bit-for-bit.
 
@@ -764,7 +764,7 @@ unless the step flag is set) and the result reaches the GE as
 `TEXSCALE`/`TEXOFFSET` words in the material's five-word list, gated on the
 material's `& 0x10` flag.
 
-`oag_formats::vex::mesh_tex_transforms` parses the array and
+`oag_vex::vex::mesh_tex_transforms` parses the array and
 `TexTransform::sample` reproduces the evaluator;
 `oag_render::mesh_render::TexAnims` is what draws through it.
 `crates/render/tests/authored_uv_ground_truth.rs` pins both against the disc.
@@ -804,7 +804,7 @@ sit at offsets reachable from both `list_a_off` and `list_b_off`), but a large
 number of other meshes have **zero** list-A batches and are made up entirely
 of list-B ones - skipping list B does not avoid a duplicate for these, it
 drops their geometry completely. A world-space reconstruction of every batch
-(via `oag_formats::vex::world_transforms`, `mesh_batches` and
+(via `oag_vex::vex::world_transforms`, `mesh_batches` and
 `transform_point`, list A and list-B-only plotted separately) shows the
 list-B-only geometry sitting on the track's own route, not off to the side -
 among it, a dense cluster of panels (materials resolving to a flat tint, a
@@ -929,7 +929,7 @@ carries the `Z:/` authoring path in it. A **track's** `Texture` nodes use the
 short 32-byte header with the name field zeroed, so `Node::name` is `None` for
 every one of them: the runtime path at `+0x38` is the only name a track texture
 has. Both forms carry `+0x38`, so it is the field to match a texture by.
-Implemented as `oag_formats::vex::EmbeddedTexture::asset_path` and
+Implemented as `oag_vex::vex::EmbeddedTexture::asset_path` and
 `vex::texture_asset_path`; `oag-view --nodes --class 0x3c1` prints it, which is
 why a track's texture list is readable at all.
 
@@ -1042,7 +1042,7 @@ PSP-shaped `clut_size`/`texel_size` fields including mip chains, and they
 disagree with the texture the game actually loads - the Feisar ship's node 0
 says 512x512 8bpp with 6 mips against a 256x256 single-level entry. Reading them
 as if PSP's packing applied walks off the end of the file, so
-`oag_formats::vex::textures` checks the header's declared length before touching
+`oag_vex::vex::textures` checks the header's declared length before touching
 a node's fields, with a synthetic-fixture test
 (`a_zero_length_texture_block_returns_none_for_every_slot`) rather than a second
 real disc image, per [the legal policy](../overview/legal.md) on test fixtures.
@@ -1061,7 +1061,7 @@ A batch's `material_index` selects an entry here, which then selects a texture.
 The mapping is confirmed semantically as well as structurally: the mesh named
 `underbrake_flashrightShape` resolves to `colours_flashing_GLOW.tga`.
 
-All three fields are read, as `oag_formats::vex::Material`.
+All three fields are read, as `oag_vex::vex::Material`.
 
 ### `+0x0c..0x14` is empty, and `flags` is render state
 
@@ -1122,7 +1122,7 @@ different node class (`0x3eb`/`0x3e2`) entirely, not `Mesh` (`0x125`), and are
 not part of a ship's own draw list at all. Dumping every ship's actual `Mesh`
 node names and the **texture each one's material resolves to**
 (`--nodes 'Data\Ships\<team>\Ship.vex' --class 0x125`, cross-checked against
-`oag_formats::vex::mesh_materials`/`textures`) turns up a single, consistent
+`oag_vex::vex::mesh_materials`/`textures`) turns up a single, consistent
 picture instead:
 
 - Every one of the 8 playable teams carries a mesh named `glowingShape` whose
@@ -1368,7 +1368,7 @@ sliding a coordinate under it. Every Pulse circuit authors it - **393 nodes over
 the twelve, with 474 meshes below them** - and the class is read whole:
 registration, binder and all three channel evaluators are in
 [`anim-transform.md`](../ghidra/functions/psp-pulse-usa/anim-transform.md), which
-is also where the field map's evidence lives. `oag_formats::vex::anim_transform`
+is also where the field map's evidence lives. `oag_vex::vex::anim_transform`
 parses it and `oag_render::mesh::AnimNode` plays it.
 
 The payload is a `0x50`-byte header followed by six key arrays - translation,
@@ -1398,7 +1398,7 @@ Three of them are read by this class's binder, through a list the header
 declares - and finding it settles a field that had been recorded as unknown.
 The `u16` at header `+0x0e` is the **list's length in bytes**, which is why its
 values were "small and round (24, 36, 48, 56, 68, 368)"; header `+0x06` is the
-offset to the first entry. `oag_formats::vex::node_attributes` walks it.
+offset to the first entry. `oag_vex::vex::node_attributes` walks it.
 
 | Attribute | Effect |
 | --- | --- |
@@ -1488,7 +1488,7 @@ Applied, from
 - Batch `+0x14`'s exact meaning, and the `.x`/`.z` components of the s16
   bounding box. **Ruled out, 2026-08-25: it is not padding.** Censused across
   all 65,279 non-VIF PSP batches on `Data.wad`
-  (`crates/formats/tests/batch_position_gap_ground_truth.rs`): read as an
+  (`crates/vex/tests/batch_position_gap_ground_truth.rs`): read as an
   `f32`, it is nonzero, positive and finite on every one of them - the
   signature of a real value, not an unused gap. Its magnitude does not track
   the batch's own `scale` (the ratio to `scale` spans 0.0004 to 2.0 with no

@@ -324,7 +324,7 @@ fn a_ship_over_nothing_falls_and_stays_finite() {
 #[test]
 fn a_slot_facing_back_down_its_own_track_is_turned_round() {
     let mut setup = setup(hulled_handling());
-    setup.start_position = Some(oag_formats::track::StartPosition {
+    setup.start_position = Some(oag_vex::track::StartPosition {
         position: [0.0, 0.0, 0.0],
         left: [0.0, 0.0, 1.0],
         up: [0.0, 1.0, 0.0],
@@ -361,7 +361,7 @@ fn a_solo_mode_starts_on_slot_one_not_slot_eight() {
         !setup.mode.has_opponents(),
         "the fixture's default mode must be a solo one for this test to mean anything"
     );
-    setup.start_position = Some(oag_formats::track::StartPosition {
+    setup.start_position = Some(oag_vex::track::StartPosition {
         position: [0.0, 0.0, 0.0],
         left: [0.0, 0.0, 1.0],
         up: [0.0, 1.0, 0.0],
@@ -384,7 +384,7 @@ fn a_solo_mode_starts_on_slot_one_not_slot_eight() {
 fn a_full_grid_still_starts_the_player_on_slot_eight() {
     let mut setup = setup(hulled_handling());
     setup.mode = Mode::SingleRace;
-    setup.start_position = Some(oag_formats::track::StartPosition {
+    setup.start_position = Some(oag_vex::track::StartPosition {
         position: [0.0, 0.0, 0.0],
         left: [0.0, 0.0, 1.0],
         up: [0.0, 1.0, 0.0],
@@ -409,7 +409,7 @@ fn a_full_grid_still_starts_the_player_on_slot_eight() {
 /// that angle. Every circuit file on both PSP discs is in this state.
 #[test]
 fn a_slot_that_agrees_keeps_its_own_heading() {
-    let angled = oag_formats::track::StartPosition {
+    let angled = oag_vex::track::StartPosition {
         position: [0.0, 0.0, 0.0],
         left: [0.0, 0.0, 1.0],
         up: [0.0, 1.0, 0.0],

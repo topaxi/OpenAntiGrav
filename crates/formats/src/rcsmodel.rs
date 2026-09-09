@@ -1,7 +1,7 @@
 //! `.rcsmodel`: where Wipeout HD keeps the geometry that used to be in the
 //! `.vex`.
 //!
-//! On the PSP and PS2 a [`Mesh`](crate::vex) node's payload *is* its geometry.
+//! On the PSP and PS2 a `oag_vex::vex`'s `Mesh` node's payload *is* its geometry.
 //! On the PS3 that payload is a bounding-box pair and a 32-bit word, and the
 //! vertices live in a `.rcsmodel` beside the `.vex` - 643 files and 686 MiB on
 //! the HD disc, against 72 MiB of `.vex`. Nothing above this module could draw

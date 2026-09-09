@@ -42,11 +42,11 @@ Two structural facts that earlier readings had wrong, both load-bearing:
   terminator on 2026-08-26**: it sits at `0x08ab4be4`, giving 863 real records
   (`(0x08ab4be4 - 0x08ab2370) / 12`). Game-class ids run `0x3b9`..`0x3eb` and
   stop - `0x3ec`/`0x3ed`/`0x3ee`, present in HD's 866-record table
-  (`crates/formats/src/vex/class_names.rs`), are absent from Pulse's own copy.
+  (`crates/vex/src/vex/class_names.rs`), are absent from Pulse's own copy.
   See [`vex.md`](../../../formats/vex.md#node-types).
 
 Confidence **95**, and the reason is that the decode is self-validating: ten IDs
-already sit in `crates/formats/src/vex.rs:64-103`, put there by earlier passes
+already sit in `crates/vex/src/vex.rs:64-103`, put there by earlier passes
 from unrelated evidence, and every one lands exactly where this read puts it -
 including the two most easily confused, `Mag Floor Collision 0x3e6` and
 `Cage Collision 0x3e7`.
@@ -1167,7 +1167,7 @@ body is `sceGuDepthRange(ref * 6 + lo, ref * 6 + hi)`, a per-batch depth bias.
 [mesh-draw.md](mesh-draw.md) is corrected.
 
 **The authored alpha is not a fade.** Read out of `shipboost.vex` through
-`oag_formats::vex::mesh_batches`, on every batch of all eight PSP teams, the
+`oag_vex::vex::mesh_batches`, on every batch of all eight PSP teams, the
 vertex colours take exactly **two** values:
 
 | Colour | Alpha | Count in a 51-vertex batch |
@@ -1499,7 +1499,7 @@ hull dimensions into the collider, the initial body height and both camera rigs
 - see [camera.md](camera.md). If the original also scales the drawn mesh by it,
 the craft is scaled twice where this project scales it never. **The second site
 was searched for and not found**; `Ship_LoadModel` and `FUN_0884dab4` are the
-two unopened calls in `Craft_Construct_q` that could set a node scale. Our own per-batch position scale in `oag_formats::vex`
+two unopened calls in `Craft_Construct_q` that could set a node scale. Our own per-batch position scale in `oag_vex::vex`
 (`s16 / 32768 * scale`, the `f32` at batch `+0x10`) was the third candidate and
 **is now excluded** - see below. More practically: the chase camera is separately known
 not to frame the craft the way the original's does and is being worked on, and a
@@ -1552,7 +1552,7 @@ craft is oversized, and it is oversized *relative to a track that matches*.
 > [projection-vs-the-original.md](../../../rendering/projection-vs-the-original.md).
 
 That excludes the most attractive candidate: **our per-batch position scale in
-`oag_formats::vex` is shared by every mesh including the track**, so a misread
+`oag_vex::vex` is shared by every mesh including the track**, so a misread
 there would make the track wrong as well. It does not. Every remaining candidate
 is specific to the craft path - a second scale on the craft's own node (the two
 unopened calls in `Craft_Construct_q`, `Ship_LoadModel` and `FUN_0884dab4`), or
@@ -1730,7 +1730,7 @@ environment mapping has real normals to vary with.
 uses in the binary: `FUN_0892e8f0` emits it as GE command `0x12` and
 `FUN_0890d3ac` tests its `& 0x60` (normal format) and `& 0x1c` (colour format).
 **And the reading is now pinned disc-wide rather than on this one model**, by
-`crates/formats/tests/vex_batch_layout_ground_truth.rs`: every batch's declared
+`crates/vex/tests/vex_batch_layout_ground_truth.rs`: every batch's declared
 payload size is reproduced by `count * stride` with the stride derived from the
 vertex type alone, across eleven different strides, and `GU_TEXTURE_16BIT` never
 appears anywhere on the disc - which is what rules out the competing reading of
@@ -2195,7 +2195,7 @@ Recorded rather than fixed, so the next pass starts from the measurement:
   > `pass_mask = 0x1232` to
   > `Gu_BlendFunc(GU_ADD, GU_SRC_ALPHA, GU_FIX 0xffffff)`, i.e.
   > `src.rgb * src.a + dst`. The branch is selected by `pass_mask & 0x200`,
-  > which [`oag_formats::vex::BlendClass`] has documented as "additive and
+  > which [`oag_vex::vex::BlendClass`] has documented as "additive and
   > source-alpha weighted" since the format pass.
   >
   > **The `GU_FIX`/`GU_FIX` reading this paragraph assumed came from

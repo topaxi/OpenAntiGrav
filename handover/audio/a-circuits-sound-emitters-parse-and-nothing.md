@@ -10,10 +10,10 @@ opens a held looping voice for every `sound` `0x3e1` node inside its radius
 and stops it when the listener leaves, and a headless lap renders to a WAV.
 What is left is what wiring the 1,298 authored emitters turned up, below.
 
-What exists to build on: `oag_formats::sound_emitters::emitters(data, nodes)`
+What exists to build on: `oag_vex::sound_emitters::emitters(data, nodes)`
 returns each node's bank label, cue name, radius curve, optional cone and world
 matrix, and five `#[ignore]`d ground-truth tests in
-`crates/formats/tests/sound_emitter_ground_truth.rs` hold that decode against
+`crates/vex/tests/sound_emitter_ground_truth.rs` hold that decode against
 `pulse-psp-usa`. `oag_audio::spatial` already has the volume/pan law these want
 to feed, and `oag_audio::sblk` already reads the banks the cues live in.
 
@@ -55,7 +55,7 @@ places both `TrackEmitters::omni` and `TrackEmitters::directional` (the new
 name for what used to be a bare `cones: usize` count) through
 `oag_audio::spatial::Emitter::cone`, sourcing the radius from `+0x10` rather
 than the (provably dead) curve. Pure's own `woSound` class turned out not to
-need Ghidra at all: `oag_formats::vex::Node` already carries the class ID and
+need Ghidra at all: `oag_vex::vex::Node` already carries the class ID and
 scene name together, and a `woSoundN` name belongs to a `Transform` parent
 whose one child, `woSoundNShape`, is class `0x393` on all 129 nodes sampled
 across three circuits - and none of them shows a cone-split signature,
@@ -139,7 +139,7 @@ Captures: `/home/topaxi/oag-scratch/race_ambience_8craft.wav` (whole mix),
 
 **Gate, 2026-09-08 pass**: no `.rs` file changed. `just check-docs` passes.
 
-**Gate, 2026-09-09 pass**: `.rs` files changed in `crates/formats/src/sound_emitters.rs`,
+**Gate, 2026-09-09 pass**: `.rs` files changed in `crates/vex/src/sound_emitters.rs`,
 `crates/audio/src/spatial.rs` (+`lib.rs`), `crates/game/src/audio/sfx.rs` and
 `crates/game/src/audio/sfx/track.rs`, plus their tests. Ran `just fmt`,
 `just lint` (one `clippy::neg_cmp_op_on_partial_ord` fix), `just test`

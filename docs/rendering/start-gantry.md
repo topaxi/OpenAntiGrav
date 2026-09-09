@@ -102,7 +102,7 @@ cols 12, 14   full-height red and green columns, unused by this node
 ```
 
 The material's own texture-transform block - the `TEXOFFSET` keyframe track
-[`formats/vex.md`](../formats/vex.md) documents and `oag_formats::vex::mesh_tex_transforms`
+[`formats/vex.md`](../formats/vex.md) documents and `oag_vex::vex::mesh_tex_transforms`
 already parses - then slides one shared offset across it:
 
 ```text
@@ -355,7 +355,7 @@ eight race circuits, four Classics and four Zone circuits; each race circuit's
 carries none at all. Across the eight that do, slot numbers run 1 to 7 -
 `12_Sol_2`'s manifest is the one that reaches 7 - and never 8, model or
 colour. This is the exact schema Pulse's own `14_Track` debris pointed at, and
-`crates/formats/tests/start_gantry_pure_ground_truth.rs` reproduces the count:
+`crates/tables/tests/start_gantry_pure_ground_truth.rs` reproduces the count:
 42 billboards over 16 circuits, 0 naming a `location`.
 
 **Pure's `<Billboard>` schema is not Pulse's schema, either.** Every one of
@@ -564,7 +564,7 @@ record's parameter table as a name-hashed array of `{value: [f32; 4], quads:
 u32}` entries with no time axis at all - a `quads` above one would be a longer
 vector the shader indexes, not a sequence of keys, and every parameter this
 material carries reports `quads == 1`. Feeding this exact node's payload
-through `oag_formats::vex::mesh_tex_transforms` - the same parser that
+through `oag_vex::vex::mesh_tex_transforms` - the same parser that
 recovers Pulse's `TEXOFFSET` track and is proven title-agnostic on HD's own
 byte order (`docs/rendering/scenery-animation.md`) - returns `None` for every
 material on the node: there is no texture-transform block here for it to

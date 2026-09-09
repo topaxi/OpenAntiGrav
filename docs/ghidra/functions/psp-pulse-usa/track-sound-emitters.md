@@ -362,7 +362,7 @@ three emitter fields off the same payload pointer (`instance+0x60`) `VexSound_In
 itself keeps:
 
 - **`+0x00` (the varying angle) to the emitter's `+0x40` half-angle.** This is
-  the answer: `Cone::wide()` in `oag_formats::sound_emitters`, never smaller
+  the answer: `Cone::wide()` in `oag_vex::sound_emitters`, never smaller
   than `+0x04` on any of the 134 nodes, is what
   `SoundEmitter_ComputeVolumeAndAngle`'s `atten *= 1 - e[0x48]/e[0x40]` divides
   by - not a guess between the two, a decompiled assignment.
@@ -518,7 +518,7 @@ than removed.
   bridge.** A `woSoundN` name belongs to a `Transform` (Pure's renumbered
   `0x6d`), not to the sound node itself - its one child, named
   `woSoundNShape`, is the payload, and every one sampled is class **`0x393`**.
-  Found by reading `oag_formats::vex::Node`'s own class ID and name off
+  Found by reading `oag_vex::vex::Node`'s own class ID and name off
   `just view '<pure image>:.../Data.wad' --nodes '<track.vex>'`, not by the
   table-index technique this page used to name as the way in - the node
   already carries both facts, so no exporter class-name table was needed.

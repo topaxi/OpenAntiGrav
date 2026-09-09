@@ -11,6 +11,7 @@ rust-version.workspace = true
 # and the input system depends on it, not the other way round. So is every
 # renderer, audio and windowing crate. See docs/architecture/workspace-layout.md.
 [dependencies]
+oag-vex.workspace = true
 oag-tables.workspace = true
 oag-ai.workspace = true
 oag-core.workspace = true

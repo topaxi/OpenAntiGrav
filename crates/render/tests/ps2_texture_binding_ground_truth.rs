@@ -42,8 +42,10 @@
 
 use std::path::PathBuf;
 
-use oag_formats::{vex, wad};
+use oag_formats::wad;
+
 use oag_render::mesh;
+use oag_vex::vex;
 
 const PS2_IMAGE: &str = "pulse-ps2-eu.chd";
 

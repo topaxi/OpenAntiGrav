@@ -31,7 +31,7 @@ fn main() -> anyhow::Result<()> {
     let mut between: std::collections::BTreeMap<(&str, &str), (usize, u64)> = Default::default();
     let mut worst: Vec<(usize, String)> = Vec::new();
     for (path, blob) in &blobs {
-        let seen = oag_formats::vex::coverage(blob);
+        let seen = oag_vex::vex::coverage(blob);
         if seen.is_empty() {
             continue;
         }
@@ -61,7 +61,7 @@ fn main() -> anyhow::Result<()> {
         let Some((_, blob)) = blobs.iter().find(|(p, _)| p == path) else {
             continue;
         };
-        let seen = oag_formats::vex::coverage(blob);
+        let seen = oag_vex::vex::coverage(blob);
         let mut gaps = seen.gaps(min);
         gaps.sort_by_key(|g| std::cmp::Reverse(g.len));
         let Some(gap) = gaps.first() else { continue };

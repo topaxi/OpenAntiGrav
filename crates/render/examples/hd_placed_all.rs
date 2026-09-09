@@ -2,8 +2,10 @@
 //! that the mesh pass does not draw - the set a narrowed `referenced()` would
 //! newly hand to the world-space pass - with node class and material.
 
-use oag_formats::{rcsmodel, vex};
+use oag_formats::rcsmodel;
+
 use oag_render::mesh;
+use oag_vex::vex;
 
 fn main() -> anyhow::Result<()> {
     let image = std::env::args()

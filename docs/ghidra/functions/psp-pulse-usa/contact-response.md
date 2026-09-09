@@ -536,7 +536,7 @@ table is relative to (see
 [pob.md](../../../formats/pob.md#the-slot-table-is-a-pointer-fixup-table)).
 Extracting the resource file and reading the same six offsets from raw bytes
 (`resource_base = HEADER_LEN + slots.len() * SLOT_LEN`, computed with
-[`ParticleSystem::parse`](../../../../crates/formats/src/pob.rs)) reproduced
+[`ParticleSystem::parse`](../../../../crates/vex/src/pob.rs)) reproduced
 the live-captured values exactly: `0.0144`, `-0.00035750002`, `0.0`,
 `0.048`, `0.0`, `-0.011232` at `+0x34/+0x38/+0x40/+0x48/+0x4c/+0x74`. These
 are plain authored floats sitting in the file, never touched by the

@@ -146,7 +146,7 @@ fn agreement(source: &Path, track: &str) -> (Vec<f32>, f32) {
             let forward = body.forward();
             // **Level, on every craft on every circuit.** The bind handler
             // forces the slot's up row to world `(0, 1, 0)`, so
-            // `oag_formats::track::start_position` drops the authored
+            // `oag_vex::track::start_position` drops the authored
             // forward's `y` and every authored heading is exactly horizontal.
             // A spline tangent is not, so the correction has to flatten what it
             // substitutes or the nine circuits it fires on would start in a

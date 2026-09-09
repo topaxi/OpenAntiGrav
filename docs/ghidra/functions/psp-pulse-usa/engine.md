@@ -2045,7 +2045,7 @@ Three things fall out, and each corrects something:
 
 The function does not stop at writing `craft+0x240`, the byte flag documented
 above. It reads the *old* value first, casts a fourth probe restricted to
-surface type 3 (the mag floor - matches `oag_formats::collision::SurfaceKind::MagFloor`'s
+surface type 3 (the mag floor - matches `oag_vex::collision::SurfaceKind::MagFloor`'s
 `surface_type() == Some(3)`), writes the new value, and then edge-detects:
 
 ```c

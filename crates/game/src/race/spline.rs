@@ -41,7 +41,7 @@ pub(super) fn racing_line(spline: &Spline, order: &[u32]) -> oag_ai::Line {
         .map(|sample| {
             let down = Vec3::from_array(sample.down);
             let lateral = Vec3::from_array(sample.lateral);
-            Vec3::from_array(sample.pos) - oag_formats::track::HOVER_LIFT * down
+            Vec3::from_array(sample.pos) - oag_vex::track::HOVER_LIFT * down
                 + sample.racing_line * lateral
         })
         .collect();
@@ -179,7 +179,7 @@ impl Spline {
     pub fn track_sample(sample: &Sample) -> oag_physics::TrackSample {
         let down = Vec3::from_array(sample.down);
         oag_physics::TrackSample {
-            position: Vec3::from_array(sample.pos) - down * oag_formats::track::HOVER_LIFT,
+            position: Vec3::from_array(sample.pos) - down * oag_vex::track::HOVER_LIFT,
             down,
         }
     }

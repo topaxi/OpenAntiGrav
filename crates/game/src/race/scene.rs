@@ -36,7 +36,7 @@ pub struct Scene {
     ///
     /// Empty for a track that authors no `fogCube` - four of the forty - and the
     /// race then renders unfogged, which is what the original does too.
-    fog_volumes: Vec<oag_formats::fog::FogVolume>,
+    fog_volumes: Vec<oag_vex::fog::FogVolume>,
     /// Wipeout HD's authored distance fog, static for the whole race.
     ///
     /// What binds when no `fogCube` volume covers the camera - which on HD is
@@ -166,7 +166,7 @@ pub struct Scene {
     /// **Per slot, because the plumes are.** Every team read so far carries
     /// the identical track, so sharing one would be invisible today and wrong
     /// the moment a team did not.
-    boost_uv_transforms: Vec<Option<oag_formats::vex::TexTransform>>,
+    boost_uv_transforms: Vec<Option<oag_vex::vex::TexTransform>>,
     /// The collision soup overlay, present only when `Options::collision` asked
     /// for it. Drawn with the identity transform, same as the track: the
     /// collision geometry is already in world space.
@@ -204,7 +204,7 @@ pub struct Scene {
     /// the craft's model carries one. CPU-side: it is projected afresh every
     /// frame against the surface under the craft, so there is nothing to
     /// upload until then. See [`crate::race::shadow::hulls`].
-    shadow_hulls: Vec<Option<oag_formats::shadow_occluder::Occluder>>,
+    shadow_hulls: Vec<Option<oag_vex::shadow_occluder::Occluder>>,
     /// The four vertex lists [`Scene::render`] gathers each frame, kept so
     /// their capacity is.
     ///
@@ -349,13 +349,13 @@ impl Scene {
         bloom_enabled: bool,
         visibility: Option<TrackVisibility>,
         msaa: crate::display::Msaa,
-        fog_volumes: Vec<oag_formats::fog::FogVolume>,
+        fog_volumes: Vec<oag_vex::fog::FogVolume>,
         light: mesh_render::Light,
         authored_fog: Option<mesh_render::Fog>,
         hd_bloom: Option<oag_render::post::hd_bloom::Params>,
         zone_grade: Option<crate::race::zone_grade::ZoneGrade>,
         shadows: Vec<oag_render::shadow::Silhouette>,
-        shadow_hulls: Vec<Option<oag_formats::shadow_occluder::Occluder>>,
+        shadow_hulls: Vec<Option<oag_vex::shadow_occluder::Occluder>>,
     ) -> Result<Self> {
         // The far plane comes from the track's own bounding sphere: a track is
         // hundreds of units across, and a fixed guess would either clip it away or

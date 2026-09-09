@@ -455,7 +455,7 @@ In short:
   across six functions were found program-wide via `search_instructions`, working
   around the `get_xrefs_to` no-PSP-relocation gap.
 - **Class id `0xf7` is `"Camera"`**, per this project's own already-ground-truthed Maya
-  class-ID table (`crates/formats/src/vex/class_names.rs`, confidence 95 in
+  class-ID table (`crates/vex/src/vex/class_names.rs`, confidence 95 in
   `exhaust.md`) - reached by identifying `func_0x00104eb8` as `Vex_RegisterClass`
   itself and reading its class-id argument off one of the seven callers, a static
   initialiser shaped exactly like this project's own

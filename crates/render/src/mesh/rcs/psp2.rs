@@ -205,7 +205,7 @@ pub fn build(label: &str, model_blob: &[u8], textures: Textures<'_>) -> Result<(
             culled: false,
             blend: None,
             blend_state: None,
-            layer: oag_formats::vex::LAYER_DEFAULT,
+            layer: oag_vex::vex::LAYER_DEFAULT,
             node: None,
             chunk: None,
         });

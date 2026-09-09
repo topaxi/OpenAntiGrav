@@ -28,7 +28,6 @@ use anyhow::{Context, Result, bail};
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use log::{info, warn};
 use oag_core::math::Vec3;
-use oag_formats::{track, vex};
 use oag_gameplay::ControlScheme;
 use oag_gameplay::Ship;
 use oag_gameplay::input::button_from_name;
@@ -40,6 +39,7 @@ use oag_trace::compare::Tolerances;
 use oag_trace::replay::{Basis, DeltaSource, DriveOptions, Held, Inputs, Options};
 use oag_trace::trace::AngularReading;
 use oag_trace::{Script, Trace, compare, plan, replay};
+use oag_vex::{track, vex};
 
 /// The track a recording is assumed to have been taken on unless another is
 /// named. The same default `oag-game` races on, and the directory the reference
@@ -855,7 +855,7 @@ fn plan_scenario(args: PlanArgs) -> Result<()> {
     let (gate, volume) = match (args.pad, args.gate) {
         (Some(index), _) => {
             let nodes = vex::nodes(&blob).context("walking the node tree")?;
-            let volumes = oag_formats::pads::volumes(&blob, &nodes, vex::CLASS_SPEEDUP_PAD);
+            let volumes = oag_vex::pads::volumes(&blob, &nodes, vex::CLASS_SPEEDUP_PAD);
             let pad = volumes.get(index).copied().with_context(|| {
                 format!(
                     "{} has {} speed pad(s), so there is no pad {index}",
@@ -1209,7 +1209,7 @@ pub(crate) fn resample(ai: &track::AiTrack, steps: usize) -> Vec<(usize, track::
 /// consumer computes them the same way and one of them is easy to get backwards:
 ///
 /// - `lift_*` is the sample lifted off the surface by
-///   [`oag_formats::track::HOVER_LIFT`], which is where ships actually fly.
+///   [`oag_vex::track::HOVER_LIFT`], which is where ships actually fly.
 /// - `line_*` is that point moved across the track by `racing_line` along
 ///   `lateral`, which is the authored line itself.
 ///
@@ -1309,7 +1309,7 @@ fn dump_pads(source: &str, name: &str, before: &[f32]) -> Result<()> {
     ];
     let mut total = 0usize;
     for (label, class_id) in classes {
-        let volumes = oag_formats::pads::volumes(&blob, &nodes, class_id);
+        let volumes = oag_vex::pads::volumes(&blob, &nodes, class_id);
         for (index, pad) in volumes.iter().enumerate() {
             let centre = Vec3::from_array(pad.centre());
             let direction = pad.direction().unwrap_or([0.0; 3]);

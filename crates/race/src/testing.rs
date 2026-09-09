@@ -4,7 +4,7 @@
 //! tested without a disc, a GPU or a track file: a lap counter that only works
 //! against real data cannot be debugged when it disagrees with real data.
 
-use oag_formats::track::{AiTrack, Junction, Path, SplinePoint};
+use oag_vex::track::{AiTrack, Junction, Path, SplinePoint};
 
 /// A control point at `pos`, with a unit frame and a two-unit half width.
 #[must_use]

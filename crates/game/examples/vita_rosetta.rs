@@ -13,7 +13,9 @@
 
 use std::collections::BTreeSet;
 
-use oag_formats::{ByteOrder, track, vex};
+use oag_formats::ByteOrder;
+
+use oag_vex::{track, vex};
 
 const HD_DIR: &str = "data/extracted/ps3/hdfury-eu/PS3_GAME/USRDIR";
 const VITA_DLC: [&str; 2] = [

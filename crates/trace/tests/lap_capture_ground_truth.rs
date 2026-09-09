@@ -30,9 +30,9 @@
 //! `position` column, not in anything computed here - the assertions below read
 //! the capture's own coordinates and its own `speed`.
 
-use oag_formats::{track, vex};
 use oag_race::{Course, Mode, RaceState, SpeedClass};
 use oag_trace::Trace;
+use oag_vex::{track, vex};
 
 const IMAGE: &str = "data/images/pulse-psp-usa.chd";
 /// Talon's Junction. The environment every capture under `data/traces/` was taken

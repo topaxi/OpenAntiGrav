@@ -5,7 +5,7 @@
 //! [`Model`](super::Model), and these are what a build produces one of per
 //! material run.
 
-use oag_formats::vex;
+use oag_vex::vex;
 
 /// A world-space bounding sphere, for frustum culling.
 ///
@@ -53,7 +53,7 @@ pub struct DrawCall {
     /// batches, where a back face is not hidden by the depth test but blended
     /// a second time: 119 of `01_Track`'s 142 transparent batches are
     /// single-sided in the original, so drawing them two-sided doubles their
-    /// contribution. See [`oag_formats::vex::Batch::is_culled`].
+    /// contribution. See [`oag_vex::vex::Batch::is_culled`].
     pub culled: bool,
     /// Which blend equation this batch asked for, or `None` when it is not a
     /// transparent batch at all.
@@ -63,7 +63,7 @@ pub struct DrawCall {
     /// until it was recovered.** `0x100` is an ordinary alpha blend, `0x200`
     /// is additive and source-alpha weighted, `0x400` is unblended. Carried
     /// per draw call rather than per model because a single mesh mixes them.
-    /// See [`oag_formats::vex::Batch::blend_class`].
+    /// See [`oag_vex::vex::Batch::blend_class`].
     pub blend: Option<vex::BlendClass>,
     /// The blend equation this batch's **own file** authors, when the file
     /// authors one rather than naming a class.
@@ -83,10 +83,10 @@ pub struct DrawCall {
     /// sort key the original submits it to its one render queue with.
     ///
     /// **Lower draws first**, and [`Model::sort_by_layer`] is what acts on it.
-    /// See [`oag_formats::vex::mesh_layer`] for the derivation and
+    /// See [`oag_vex::vex::mesh_layer`] for the derivation and
     /// `docs/rendering/draw-order.md` for the ordering model as a whole. A draw
     /// with no mesh behind it - a ribbon, a collision overlay, a PS3 chunk -
-    /// carries [`oag_formats::vex::LAYER_DEFAULT`], which is uniform and so
+    /// carries [`oag_vex::vex::LAYER_DEFAULT`], which is uniform and so
     /// leaves the stable sort holding its list in the order it was built.
     pub layer: u32,
     /// Index of the scene-tree node this draw call came from, into the

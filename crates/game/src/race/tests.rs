@@ -12,7 +12,7 @@
 //! composition. The capture seam has no tests here at all.
 
 use super::*;
-use oag_formats::track;
+use oag_vex::track;
 
 mod autopilot;
 mod camera;
@@ -233,7 +233,7 @@ fn setup(handling: Handling) -> Setup {
 ///
 /// The identity basis is what makes the push direction readable: row 2 of an
 /// identity matrix is `+z`, so the boost the assertions look for is `+z`.
-fn pad_at(at: Vec3, half: f32) -> oag_formats::pads::PadVolume {
+fn pad_at(at: Vec3, half: f32) -> oag_vex::pads::PadVolume {
     let mut to_world = [0.0f32; 16];
     to_world[0] = 1.0;
     to_world[5] = 1.0;
@@ -242,7 +242,7 @@ fn pad_at(at: Vec3, half: f32) -> oag_formats::pads::PadVolume {
     to_world[12] = at.x;
     to_world[13] = at.y;
     to_world[14] = at.z;
-    oag_formats::pads::PadVolume {
+    oag_vex::pads::PadVolume {
         to_world,
         min: [-half; 3],
         max: [half; 3],
@@ -268,7 +268,7 @@ fn without_player_rescue(mut race: Race) -> Race {
 
 /// A race whose ship is inside a pad from its first tick, and one that is
 /// nowhere near one, so a test can difference them.
-fn race_with_pads(mode: Mode, pads: Vec<oag_formats::pads::PadVolume>) -> Race {
+fn race_with_pads(mode: Mode, pads: Vec<oag_vex::pads::PadVolume>) -> Race {
     let mut handling = hulled_handling();
     // Invented, and large enough that the boost is unmistakable against the
     // rest of the force law rather than lost in it. Deliberately **not** a
@@ -286,7 +286,7 @@ fn race_with_pads(mode: Mode, pads: Vec<oag_formats::pads::PadVolume>) -> Race {
 
 /// A pad big enough to hold the ship wherever `spawn_pose` puts it, so the
 /// test is about the trigger rather than about the spawn.
-fn enveloping_pad() -> Vec<oag_formats::pads::PadVolume> {
+fn enveloping_pad() -> Vec<oag_vex::pads::PadVolume> {
     vec![pad_at(Vec3::ZERO, 1.0e6)]
 }
 
@@ -296,7 +296,7 @@ fn enveloping_pad() -> Vec<oag_formats::pads::PadVolume> {
 pub(super) fn race_with_a_grid() -> Race {
     let mut setup = setup(hulled_handling());
     setup.mode = Mode::SingleRace;
-    setup.start_position = Some(oag_formats::track::StartPosition {
+    setup.start_position = Some(oag_vex::track::StartPosition {
         position: [0.0, 0.0, 0.0],
         left: [0.0, 0.0, -1.0],
         up: [0.0, 1.0, 0.0],
@@ -384,11 +384,7 @@ const CIRCLE: u32 = oag_gameplay::input::Button::Circle.bit();
 
 /// A race with weapon pads, the mode that arms them, and a table to draw
 /// from. `refresh` is `<WeaponPad refresh_time>`.
-fn race_with_weapon_pads(
-    mode: Mode,
-    pads: Vec<oag_formats::pads::PadVolume>,
-    refresh: f32,
-) -> Race {
+fn race_with_weapon_pads(mode: Mode, pads: Vec<oag_vex::pads::PadVolume>, refresh: f32) -> Race {
     race_with_weapon_table(mode, pads, refresh, one_turbo_table())
 }
 
@@ -398,7 +394,7 @@ fn race_with_weapon_pads(
 /// - which is also what keeps their draws stable as `IMPLEMENTED` grows.
 fn race_with_weapon_table(
     mode: Mode,
-    pads: Vec<oag_formats::pads::PadVolume>,
+    pads: Vec<oag_vex::pads::PadVolume>,
     refresh: f32,
     table: oag_tables::weapons::WeaponStats,
 ) -> Race {

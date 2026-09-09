@@ -262,7 +262,7 @@ decodes for the blend classes, so **the flag is readable from shipped data
 today**. Confidence 85.
 
 **And a census says no shipped mesh uses it at all.** Measured through
-`oag_formats::vex::mesh_batches` on the European disc, over the four tracks
+`oag_vex::vex::mesh_batches` on the European disc, over the four tracks
 whose `Data\Environments\<n>_Track\track.vex` resolves plus a ship and its
 plume:
 

@@ -32,8 +32,7 @@
 //!
 //! See `docs/formats/pure-status.md` and `docs/formats/collision.md`.
 
-use oag_formats::{collision, fog, track, vex};
-use oag_tables::fexml;
+use oag_vex::{collision, fog, track, vex};
 
 const PURE: &str = "data/images/pure-psp-usa.chd";
 const PULSE: &str = "data/images/pulse-psp-usa.chd";
@@ -390,7 +389,7 @@ fn the_predicted_classes_are_in_pures_own_files() {
     ] {
         let nodes_of = count(class);
         assert!(nodes_of > 0, "{label}: no nodes under the predicted class");
-        let volumes = oag_formats::pads::volumes(&blob, &nodes, class.expect("checked"));
+        let volumes = oag_vex::pads::volumes(&blob, &nodes, class.expect("checked"));
         assert_eq!(
             volumes.len(),
             nodes_of,
@@ -529,7 +528,7 @@ fn airbrake_and_lod_group_are_on_every_reachable_pure_ship() {
 /// `fogcube`, structurally recovered (2026-09-03): also outside the string
 /// run. Every fogcube instance across every circuit that authors one decodes
 /// to [`fog::PAYLOAD_LEN`] bytes with `edge == 500.0` - the exact figure
-/// `oag_formats::fog`'s own doc comment already records for Pulse.
+/// `oag_vex::fog`'s own doc comment already records for Pulse.
 #[test]
 #[ignore = "needs data/images/pure-psp-usa.chd"]
 fn fogcube_decodes_to_the_same_edge_length_pulse_authors() {

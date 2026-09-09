@@ -470,7 +470,7 @@ pub struct Setup {
     /// Nothing consumes these yet - the boost is the next milestone - but they
     /// belong to the simulation half rather than to [`Loaded`], because a
     /// headless race has to be able to trigger a pad without a GPU.
-    pub speedup_pads: Vec<oag_formats::pads::PadVolume>,
+    pub speedup_pads: Vec<oag_vex::pads::PadVolume>,
     /// The track's weapon pads, as trigger volumes.
     ///
     /// Everything [`Self::speedup_pads`] says applies, one class over. Consumed
@@ -479,7 +479,7 @@ pub struct Setup {
     /// `the_weapon_pads_are_drawn_where_they_trigger` check the geometry against
     /// them. Two independent decodes of the same nodes agreeing is worth more
     /// than either alone.
-    pub weapon_pads: Vec<oag_formats::pads::PadVolume>,
+    pub weapon_pads: Vec<oag_vex::pads::PadVolume>,
     /// The weapon table for this race, out of `WeaponStats_Race.xml`.
     ///
     /// `None` when the file is absent or unreadable, which means a pad hands
@@ -585,7 +585,7 @@ pub struct Loaded {
     pub collision_model: Option<Model>,
     /// The track's authored `fogCube` volumes, for [`Scene`] to sample per
     /// frame at the camera.
-    pub fog_volumes: Vec<oag_formats::fog::FogVolume>,
+    pub fog_volumes: Vec<oag_vex::fog::FogVolume>,
     /// The circuit's own light rig, out of its `.envsettings`.
     ///
     /// [`mesh_render::Light::stand_in`] for every title that authors none,
@@ -682,7 +682,7 @@ pub struct Loaded {
     /// `None` where it does not, and the load report says which - a craft with
     /// no `Dynamic Shadow Occluder` casts no `original` shadow rather than
     /// borrowing another team's. See [`crate::race::shadow::hulls`].
-    pub shadow_hulls: Vec<Option<oag_formats::shadow_occluder::Occluder>>,
+    pub shadow_hulls: Vec<Option<oag_vex::shadow_occluder::Occluder>>,
     /// Lines worth printing once, describing what was found.
     pub report: Vec<String>,
 }

@@ -21,7 +21,8 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use anyhow::{Context, Result};
-use oag_formats::{vex, wad};
+use oag_formats::wad;
+use oag_vex::vex;
 
 use super::ModelTexture;
 

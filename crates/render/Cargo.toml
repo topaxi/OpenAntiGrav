@@ -8,6 +8,7 @@ repository.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+oag-vex.workspace = true
 oag-texture.workspace = true
 oag-assets.workspace = true
 oag-core.workspace = true

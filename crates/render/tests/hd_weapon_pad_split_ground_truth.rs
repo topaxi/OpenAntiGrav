@@ -40,8 +40,8 @@
 
 use std::path::PathBuf;
 
-use oag_formats::vex;
 use oag_render::mesh;
+use oag_vex::vex;
 
 fn image() -> Option<PathBuf> {
     oag_testdata::image("data/images/hdfury-ps3-eu-dec.iso")

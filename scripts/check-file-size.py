@@ -121,7 +121,7 @@ BASELINE = {
     # right way round: a disc-backed fix needed twelve lines in a file already
     # at its ceiling, and a ceiling only ever lowers.
     "crates/game/tests/race_ground_truth.rs": 2266,
-    "crates/formats/src/vex.rs": 1758,
+    "crates/vex/src/vex.rs": 1758,
     "crates/game/src/boot.rs": 1784,
     "crates/game/src/movie.rs": 1981,
     # Ratcheted down from 2,005 when the two drawing idioms split out into

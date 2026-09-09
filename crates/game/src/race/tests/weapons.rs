@@ -36,7 +36,7 @@ fn one_shield_table() -> oag_tables::weapons::WeaponStats {
     .expect("the fixture table must parse")
 }
 
-/// The whole grant chain: containment in `oag_formats::pads`, the entry
+/// The whole grant chain: containment in `oag_vex::pads`, the entry
 /// edge, the weighted draw out of the authored odds, and the inventory. One
 /// test for the same reason the speed pad's is one - every link is worthless
 /// without the others.
@@ -125,7 +125,7 @@ fn a_pad_re_entered_within_its_cooldown_hands_out_nothing() {
 
     // Moves the pad under the ship or a long way from it, invalidating the
     // broadphase either way.
-    let place = |race: &mut Race, pad: oag_formats::pads::PadVolume| {
+    let place = |race: &mut Race, pad: oag_vex::pads::PadVolume| {
         race.weapon_pads[0] = pad;
         // Slot 0's row: these tests fly the player.
         race.weapon_pad_distance[0][0] = 0.0;

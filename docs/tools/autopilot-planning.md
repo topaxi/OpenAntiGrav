@@ -60,7 +60,7 @@ kept agreeing.
 ### What it aims at
 
 `--pad N` takes everything off the disc: the pad's box centre, its push axis
-(row 2 of its transform - see [`oag_formats::pads`](../formats/track.md)) and
+(row 2 of its transform - see [`oag_vex::pads`](../formats/track.md)) and
 half its box width. The pad's own `Pad_ContainsPoint` box is tested as well as
 the plane, so the report says whether the pad would actually have fired rather
 than only whether the craft passed the right plane. `--gate x,y,z` aims at an

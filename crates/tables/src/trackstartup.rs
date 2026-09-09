@@ -67,7 +67,7 @@
 //! **Nothing is placed here still.** An advert's chunks are node-local with a
 //! bias near the origin, so the circuit must supply a transform, and **where
 //! that comes from is unrecovered**: HD's circuits use 30 node classes and
-//! `oag_formats::vex` already names all 30, so there is no dedicated slot
+//! `oag_vex::vex` already names all 30, so there is no dedicated slot
 //! class; and searching every circuit for a node named exactly
 //! `Billboard<digits>` finds one on `02_track` and one on `05_ubermall` and
 //! nothing anywhere else, so the artists' names are not the convention either.

@@ -581,7 +581,7 @@ impl Session {
 
                 // Third pipeline group, same pass: transparent batches,
                 // blended, with the equation the batch's own `pass_mask` asks
-                // for - see `oag_formats::vex::Batch::blend_class`. The viewer
+                // for - see `oag_vex::vex::Batch::blend_class`. The viewer
                 // selects per draw call exactly as the game does, because it
                 // is only useful as a reference if it renders the same way.
                 let pipelines = mesh_render::TransparentPipelines {

@@ -12,9 +12,9 @@
 /// a fixture's `data` has to be a file rather than a bare run of payloads -
 /// which is what that parameter has always been documented as.
 fn vex_header() -> Vec<u8> {
-    let mut header = vec![0u8; oag_formats::vex::FILE_HEADER_LEN];
+    let mut header = vec![0u8; oag_vex::vex::FILE_HEADER_LEN];
     header[0..4].copy_from_slice(&6u32.to_le_bytes());
-    header[0x0c..0x10].copy_from_slice(oag_formats::vex::MAGIC);
+    header[0x0c..0x10].copy_from_slice(oag_vex::vex::MAGIC);
     header
 }
 
@@ -26,7 +26,7 @@ fn draw_at(centre: [f32; 3], radius: f32) -> DrawCall {
         moving: false,
         blend: None,
         blend_state: None,
-        layer: oag_formats::vex::LAYER_DEFAULT,
+        layer: oag_vex::vex::LAYER_DEFAULT,
         culled: false,
         range: 0..3,
         texture: None,
@@ -41,8 +41,8 @@ fn pvs(boxes: &[(u8, [f32; 3], [f32; 3])]) -> TrackPvs {
     let mut data = vex_header();
     let mut nodes = Vec::new();
     for &(index, min, max) in boxes {
-        nodes.push(oag_formats::vex::Node {
-            class_id: oag_formats::vex::CLASS_SECTION,
+        nodes.push(oag_vex::vex::Node {
+            class_id: oag_vex::vex::CLASS_SECTION,
             offset: data.len(),
             header_size: 0,
             data_size: 0x30,
@@ -73,7 +73,7 @@ fn draw_of_node(node: Option<u32>) -> DrawCall {
         chunk: None,
         blend: None,
         blend_state: None,
-        layer: oag_formats::vex::LAYER_DEFAULT,
+        layer: oag_vex::vex::LAYER_DEFAULT,
         culled: false,
         range: 0..3,
         texture: None,
@@ -201,7 +201,7 @@ fn the_visible_set_unions_the_craft_and_the_camera() {
 /// Padding pulls in the neighbours' *masks*, not merely the neighbours.
 #[test]
 fn padding_draws_the_neighbours_but_not_what_they_see() {
-    use oag_formats::track::{AiTrack, Path, SplinePoint};
+    use oag_vex::track::{AiTrack, Path, SplinePoint};
     let point = |section_id| SplinePoint {
         pos: [0.0; 3],
         tangent: [0.0, 0.0, 1.0],
@@ -347,8 +347,8 @@ fn pvs_with_masks(sections: &[(u8, u64)]) -> TrackPvs {
     let mut data = vex_header();
     let mut nodes = Vec::new();
     for &(index, mask) in sections {
-        nodes.push(oag_formats::vex::Node {
-            class_id: oag_formats::vex::CLASS_SECTION,
+        nodes.push(oag_vex::vex::Node {
+            class_id: oag_vex::vex::CLASS_SECTION,
             offset: data.len(),
             header_size: 0,
             data_size: 0x10,

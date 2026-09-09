@@ -104,7 +104,7 @@ specific texture and both are still negatives:**
   shared albedo sampler already uses `Linear`/`Linear`/`Linear` at
   `Anisotropy::X16` by default - same state, not a candidate.
 - **Mip chain depth**: `Texture::mip_count` (the PSP `.vex` texture object's
-  own `+0x05` byte) was parsed by `oag_formats::vex::textures` but silently
+  own `+0x05` byte) was parsed by `oag_vex::vex::textures` but silently
   dropped by every consumer - `mesh_render`'s uploader always synthesised a
   full box-filtered chain down to 1x1 regardless of what the asset declared.
   **Wired through** (`ModelTexture::mip_count: Option<u32>`, threaded from

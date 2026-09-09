@@ -139,7 +139,7 @@ case where sorting *across* sources is right rather than an over-reach, because
 the original's queue is global.
 
 Measured over `Data.wad`, by
-[`vex_layer_ground_truth.rs`](../../crates/formats/tests/vex_layer_ground_truth.rs):
+[`vex_layer_ground_truth.rs`](../../crates/vex/tests/vex_layer_ground_truth.rs):
 
 | | `0x45000000` | `0x4a000000` | `0x31000000` |
 | --- | ---: | ---: | ---: |

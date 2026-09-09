@@ -47,11 +47,11 @@
 use std::num::NonZeroUsize;
 
 use oag_core::math::{Mat3, Quat, Vec3};
-use oag_formats::track;
 use oag_gameplay::input::{Button, Input};
 use oag_gameplay::{ControlScheme, InputSnapshot, Ship, World, ship_controls};
 use oag_physics::controls::CONTROL_RANGE;
 use oag_physics::{Environment, Handling, Raycaster, ShipState, TrackSample};
+use oag_vex::track;
 
 use crate::trace::{AngularReading, Frame, Trace};
 

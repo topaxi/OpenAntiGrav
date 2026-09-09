@@ -134,7 +134,7 @@ just hd-survey data/images/hdfury-ps3-eu-dec.iso data/images/pulse-psp-usa.chd
 
 ### The class IDs are Pulse's, and one is not
 
-Every class HD authors resolves against `oag_formats::vex::classes::V6` except
+Every class HD authors resolves against `oag_vex::vex::classes::V6` except
 one. Over the 40 files, by count:
 
 | Count | ID | Class | | Count | ID | Class |
@@ -202,7 +202,7 @@ to its terminator at `0x08ab4be4` - 863 real records, game-class ids `0x3b9`
 through `0x3eb` only. `0x3ec`/`0x3ed`/`0x3ee` are the exact three missing
 against HD's 866-record table, not a coincidence of count. Pulse authors no
 node of this class either way - the survey in
-[`collision_ground_truth.rs`](../../crates/formats/tests/collision_ground_truth.rs)
+[`collision_ground_truth.rs`](../../crates/vex/tests/collision_ground_truth.rs)
 walks every `.vex` on both its discs and finds no sixth class carrying a
 collision payload - so listing the ID in `classes::V6` changes nothing Pulse
 decodes, and version 6 is a format generation rather than a title.
@@ -267,7 +267,7 @@ Track` payload cannot say which way round it is and that a parser has to be told
 by its container. Measured on the shipped files, `16_Track` opens `64 74 4f 57`
 (`dtOW`) and `talons_junction` opens `57 4f 74 64` (`WOtd`) - the same word
 `0x574f7464`, written on hosts of opposite endianness, exactly like
-`VEXX`/`XXEV`. So `oag_formats::track::parse` sniffs it and reads a Wipeout HD
+`VEXX`/`XXEV`. So `oag_vex::track::parse` sniffs it and reads a Wipeout HD
 circuit with no argument and no caller change; `track::byte_order` is the sniff,
 and `a_big_endian_payload_parses_to_the_same_spline_as_its_little_endian_twin`
 pins it.
@@ -286,7 +286,7 @@ Across all 28 circuits:
 
 ### Two fields nobody reads, in either game
 
-`oag_formats::track::SplinePoint` names fields up to `+0x61`. Two regions outside
+`oag_vex::track::SplinePoint` names fields up to `+0x61`. Two regions outside
 it carry data:
 
 | Where | Pulse | HD |
@@ -321,7 +321,7 @@ an object count, then three chunks per object in the order 1, 3, 2 with strides
 collision nodes across the 28 circuits consume their payload down to its 16-byte
 alignment padding, which is the invariant that settled the layout on the PSP.
 
-**`oag_formats::collision::from_vex` reads it byte-swapped as of 2026-08-17**,
+**`oag_vex::collision::from_vex` reads it byte-swapped as of 2026-08-17**,
 taking the order from the containing `.vex`'s magic - a collision payload cannot
 declare its own, its header word being the palindrome `0xffffffff`. The counts
 in the table below are reproduced exactly by that reader in
@@ -347,7 +347,7 @@ where Pulse's `16_Track` authors none - which is worth knowing next to
 **This is the one place a mechanical byte-order pass produces silent garbage**,
 so it is worth more space than its size deserves.
 
-[`oag_formats::pvs`](track.md) reads the `section` `0x3c9` payload's 64-bit
+[`oag_vex::pvs`](track.md) reads the `section` `0x3c9` payload's 64-bit
 visibility mask as two `u32`s, `pvs_mask_lo` at `+0x08` and `pvs_mask_hi` at
 `+0x0c`. On a little-endian file that is identical to reading the eight bytes as
 one `u64`. **On a big-endian file it is not**, and swapping each word in place -
@@ -378,7 +378,7 @@ Pulse's `01_Track` hits exactly.
 So: **HD authors real PVS data and `[graphics] pvs_culling` has something to
 read**, provided the mask is read as one 64-bit quantity rather than as a pair.
 
-**`oag_formats::pvs` reads it that way as of 2026-08-17.** The `pvs_mask_lo` /
+**`oag_vex::pvs` reads it that way as of 2026-08-17.** The `pvs_mask_lo` /
 `pvs_mask_hi` pair is gone, replaced by one `ByteOrder::u64` at `+0x08` -
 identical on a little-endian file by construction, so the Pulse and Pure ground
 truth is unmoved and the "one bit in fifty" figure above still holds. Talon's
@@ -399,7 +399,7 @@ measure `(-4.66, 1.33, -4.66)` to `(4.66, 1.33, 4.66)`.
 **Which is why the pads survive the change that stops `--mesh` drawing
 anything.** A pad's payload *is* a `Mesh` payload, and the box pair is precisely
 the part of a `Mesh` payload that stayed behind when the geometry left for
-`.rcsmodel`. `oag_formats::pads::volumes` reads Talon's Junction's **18 speedup
+`.rcsmodel`. `oag_vex::pads::volumes` reads Talon's Junction's **18 speedup
 and 9 weapon pads** off the PS3 disc today, every one within a half-width of the
 spline horizontally - which is a check on the *transform chain* rather than on
 the payload, since a pad's own box is in local space and only the parent chain
@@ -576,7 +576,7 @@ Pulse does not have.
 ## `.pob` reads byte-swapped, and the parser reads it
 
 **Confidence 93.** The [container](pob.md) is byte-swapped: the magic reads
-`PSYS` where Pulse writes `SYSP`. `oag_formats::pob` takes a byte order and
+`PSYS` where Pulse writes `SYSP`. `oag_vex::pob` takes a byte order and
 reads all 88 with no offset changed, checked against the disc by
 `crates/assets/tests/pob_ground_truth.rs`. Over all **88** effects:
 
@@ -614,7 +614,7 @@ would have failed on all 76 Pulse files. The script is fixed and now reports
 
 ## A hull's locators are in a file of their own - 2026-08-18
 
-**Confidence 90**, measured with `oag_formats::vex::class_world_transforms` on
+**Confidence 90**, measured with `oag_vex::vex::class_world_transforms` on
 the disc and asserted in
 `crates/game/tests/livery_ground_truth.rs::an_hd_hull_takes_its_locators_from_the_file_beside_it`.
 

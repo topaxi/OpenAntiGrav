@@ -900,7 +900,7 @@ fn the_field_spreads_across_the_ai_corridor() {
             .expect("the driver stands on a sample");
         let lateral = Vec3::from_array(sample.lateral).normalize_or_zero();
         let line = Vec3::from_array(sample.pos)
-            - oag_formats::track::HOVER_LIFT * Vec3::from_array(sample.down)
+            - oag_vex::track::HOVER_LIFT * Vec3::from_array(sample.down)
             + sample.racing_line * lateral;
         offsets.push((ship.physics.body.position - line).dot(lateral));
         room = room
@@ -1094,7 +1094,7 @@ fn our_grid_is_the_originals_grid() {
 /// The weapon pads are drawn where they trigger.
 ///
 /// Two independent decodes of the same nodes have to agree: `mesh::build_weapon_pads`
-/// reads them as geometry through the mesh path, and `oag_formats::pads::volumes`
+/// reads them as geometry through the mesh path, and `oag_vex::pads::volumes`
 /// reads them as trigger boxes through the payload path. Neither knows about the
 /// other, so a transform applied in one and not the other shows up here and
 /// nowhere else - and it is exactly the mistake that is easy to make, because a
@@ -1931,7 +1931,7 @@ fn every_craft_starts_on_its_line_on_every_circuit() {
                 .expect("the driver stands on a sample");
             let lateral = Vec3::from_array(sample.lateral).normalize_or_zero();
             let line = Vec3::from_array(sample.pos)
-                - oag_formats::track::HOVER_LIFT * Vec3::from_array(sample.down)
+                - oag_vex::track::HOVER_LIFT * Vec3::from_array(sample.down)
                 + sample.racing_line * lateral;
             let off = (ship.physics.body.position - line).length();
             // A grid is staggered across and along the track, so this is

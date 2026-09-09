@@ -33,7 +33,7 @@
 //! The spline is the right reference and world `+y` is not, because these
 //! circuits bank, climb and in Pulse's case invert - a world-up test would call
 //! a banked floor a wall. The spline axis is decoded from the track's own
-//! `WO Track` payload, which reads on Pure already ([`oag_formats::track`]).
+//! `WO Track` payload, which reads on Pure already ([`oag_vex::track`]).
 //!
 //! # Calibrated before it is trusted
 //!
@@ -55,7 +55,7 @@
 
 use std::path::PathBuf;
 
-use oag_formats::{collision, track, vex};
+use oag_vex::{collision, track, vex};
 
 /// The three Pure class ids whose payloads decode as collision geometry.
 ///

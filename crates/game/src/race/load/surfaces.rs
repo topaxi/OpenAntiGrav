@@ -9,8 +9,8 @@
 //! Its own module because `super` is at this project's 1,000-line ceiling.
 
 use oag_assets::Archives;
-use oag_formats::collision::{self, CollisionNode};
-use oag_formats::kdcol;
+use oag_vex::collision::{self, CollisionNode};
+use oag_vex::kdcol;
 
 /// Every collidable surface a circuit authors, from wherever it authors them.
 ///
@@ -53,7 +53,7 @@ pub(super) fn of_track(
             for (byte, count) in unplaced {
                 report.push(format!(
                     "{sibling}: surface byte {byte} is not placed - {count} triangle(s) are \
-                     not collidable; see oag_formats::kdcol::class_of"
+                     not collidable; see oag_vex::kdcol::class_of"
                 ));
             }
             Ok(from_kdtree)

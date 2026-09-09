@@ -136,7 +136,7 @@ case-insensitively, and branches - `.vex` allocates a 0x2080-byte object
 through a generic resource loader (`FUN_002c1ec8`, called with a magic
 `0xfdb2` and a type tag `0x3e9`), `.mip` allocates a 0x100-byte object through
 a different one (`FUN_002de5c8`). **`0x3e9` (1001) is not one of the 30 vex
-node classes `oag_formats::vex` names** - checked directly against the
+node classes `oag_vex::vex` names** - checked directly against the
 `CLASS_*` table, which runs `0x3bb`-`0x3e5` with no member at `0x3e9` - so this
 is a tag in some other, unidentified resource-type enum, not a vex class; do
 not assume otherwise. **The `.mip` arm is implemented and unexercised on this

@@ -81,14 +81,14 @@ pub const TEX_ANIMS_SIZE: u64 = std::mem::size_of::<TexAnims>() as u64;
 #[derive(Debug, Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct NodeAnims {
     /// One column-major world matrix per node. The layout
-    /// `oag_formats::vex` already uses - see `mesh.wgsl`'s own note.
+    /// `oag_vex::vex` already uses - see `mesh.wgsl`'s own note.
     pub transform: [[f32; 16]; crate::mesh::NODE_ANIM_LIMIT],
 }
 
 impl Default for NodeAnims {
     fn default() -> Self {
         Self {
-            transform: [oag_formats::vex::IDENTITY; crate::mesh::NODE_ANIM_LIMIT],
+            transform: [oag_vex::vex::IDENTITY; crate::mesh::NODE_ANIM_LIMIT],
         }
     }
 }

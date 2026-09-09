@@ -1,0 +1,27 @@
+[package]
+name = "oag-vex"
+description = "The .vex scene tree and everything authored inside or alongside it"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+# `oag-formats` for `ByteOrder`, the parser-coverage instrumentation and the GE
+# block swizzle. Notably *not* `oag-texture`: a `.vex` embeds texture payloads
+# but only ever unswizzles them, and unswizzling is byte layout.
+[dependencies]
+oag-formats.workspace = true
+
+# Ground-truth tests read real scenes out of a disc image. Tests only: the
+# parsers themselves know nothing about discs. See `crates/tables/Cargo.toml`
+# for why a dev-dependency back onto a crate that depends on this one is
+# permitted and does not breach the boundary gate.
+[dev-dependencies]
+oag-assets.workspace = true
+oag-disc.workspace = true
+oag-pulse.workspace = true
+oag-texture.workspace = true
+
+[lints]
+workspace = true

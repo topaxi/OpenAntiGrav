@@ -6,7 +6,7 @@
 use super::{Course, primary_ring};
 use crate::testing::square_track;
 use oag_core::math::Vec3;
-use oag_formats::track::{AiTrack, Junction, Path};
+use oag_vex::track::{AiTrack, Junction, Path};
 
 #[test]
 fn a_two_path_ring_walks_in_travel_order() {

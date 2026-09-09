@@ -7,9 +7,9 @@ Recovered 2026-08-18. This is the same table Pulse's PSP `BOOT.BIN` carries at
 extent unknown, and this one closes it.
 
 Implemented as
-[`oag_formats::vex::class_names`](../../../../crates/formats/src/vex/class_names.rs),
+[`oag_vex::vex::class_names`](../../../../crates/vex/src/vex/class_names.rs),
 checked against every disc by
-[`vex_class_ground_truth.rs`](../../../../crates/formats/tests/vex_class_ground_truth.rs).
+[`vex_class_ground_truth.rs`](../../../../crates/vex/tests/vex_class_ground_truth.rs).
 
 ## The record
 
@@ -102,7 +102,7 @@ class.
 ### The three corrections it makes
 
 Bolded above, and all three were live defects in
-`oag_formats::vex::CLASS_NAMES`:
+`oag_vex::vex::CLASS_NAMES`:
 
 - **`0x3d5` and `0x3d6` were swapped** - `sea` and `seaweed`, adjacent ids with
   adjacent names, which is exactly the error a single-title read cannot catch.

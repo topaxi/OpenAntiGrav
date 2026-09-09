@@ -91,9 +91,9 @@
 
 use std::path::PathBuf;
 
-use oag_formats::vex;
 use oag_pulse as pulse;
 use oag_render::mesh;
+use oag_vex::vex;
 
 /// The PS2 release, Europe-only, `SCES-54748` - the same image
 /// `ps2_source_ground_truth.rs` reads.

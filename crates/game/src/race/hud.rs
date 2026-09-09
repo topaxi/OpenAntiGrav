@@ -336,7 +336,7 @@ fn vex_model_art(
 /// is a single flat quad, so "the model's blend" is well defined: whatever its
 /// one transparent batch put in `pass_mask`. All three of Pulse's sight models
 /// declare `0x120e`, whose `0x0200` bit is
-/// [`oag_formats::vex::BlendClass::Additive`] - and their textures are named
+/// [`oag_vex::vex::BlendClass::Additive`] - and their textures are named
 /// `gunsight_ADD.tga`, `gunsightdot_ADD.tga` and `LeachBeamSight_ADD_nomip.tga`
 /// with alpha pinned at 250/255, so the shape lives in the *colour* channels
 /// over a black field and an ordinary alpha blend can only draw it on a black
@@ -353,8 +353,8 @@ fn quad_blend(
     src: &str,
     model: &oag_render::mesh::Model,
     report: &mut Vec<String>,
-) -> Option<oag_formats::vex::BlendClass> {
-    let mut declared: Vec<oag_formats::vex::BlendClass> = Vec::new();
+) -> Option<oag_vex::vex::BlendClass> {
+    let mut declared: Vec<oag_vex::vex::BlendClass> = Vec::new();
     for draw in model
         .draws
         .iter()

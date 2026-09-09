@@ -12,6 +12,7 @@ name = "oag-view"
 path = "src/main.rs"
 
 [dependencies]
+oag-vex.workspace = true
 oag-texture.workspace = true
 oag-assets.workspace = true
 oag-formats.workspace = true

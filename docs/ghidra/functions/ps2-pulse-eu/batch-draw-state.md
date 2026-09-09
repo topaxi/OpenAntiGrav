@@ -24,7 +24,7 @@ Gfx_BuildBatchStateList(renderer,
                         *(u8 *)((int)batch + 0x19));
 ```
 
-That call shape is what ties the arguments to the fields `oag_formats::vex`
+That call shape is what ties the arguments to the fields `oag_vex::vex`
 already decodes: argument 2 is `Batch::pass_mask` and argument 3 is
 `Batch::header_flags`, read at the offsets that crate reads them at.
 

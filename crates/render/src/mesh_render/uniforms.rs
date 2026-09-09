@@ -297,10 +297,10 @@ impl Fog {
         }
     }
 
-    /// Fog from one sampled [`oag_formats::fog::FogParams`] and the eye it was
+    /// Fog from one sampled [`oag_vex::fog::FogParams`] and the eye it was
     /// sampled at.
     #[must_use]
-    pub fn new(params: &oag_formats::fog::FogParams, camera: [f32; 3]) -> Self {
+    pub fn new(params: &oag_vex::fog::FogParams, camera: [f32; 3]) -> Self {
         Self {
             colour: params.colour,
             near: params.near,

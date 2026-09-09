@@ -3,7 +3,7 @@
 use anyhow::{Context, Result, bail};
 use oag_assets::Container;
 use oag_core::math::Mat4;
-use oag_formats::vex;
+use oag_vex::vex;
 
 /// How many distinct texture-transform tracks one model may carry, matching
 /// `mesh.wgsl`'s `TexAnims` array.
@@ -285,7 +285,7 @@ pub struct Model {
     /// the same file byte-identical.
     pub anim_tracks: Vec<vex::TexTransform>,
     /// One vertex range per node of the class this model was built for, in
-    /// the same node-file order [`oag_formats::pads::volumes`] walks the same
+    /// the same node-file order [`oag_vex::pads::volumes`] walks the same
     /// file with the same class id - [`Flap::vertices`] generalised from two
     /// fixed slots to however many nodes a class authors, for a caller that
     /// wants trigger *i*'s own geometry and has only its position to reach it
@@ -438,7 +438,7 @@ pub fn build_sky(label: &str, data: &[u8], external: Option<&Ps2TextureSet>) -> 
 /// A [`vex::CLASS_SPEEDUP_PAD`] node's payload is a mesh payload for the same
 /// reason a `Skycube`'s is (the pad's bind handler calls the `Mesh` bind first),
 /// so this is [`build_with_textures`] pointed at a third class, not a third
-/// decoder. See [`oag_formats::pads`] for the trigger volume that shares those
+/// decoder. See [`oag_vex::pads`] for the trigger volume that shares those
 /// bytes.
 ///
 /// Separate from [`build`]'s track model on purpose, and not because it is a

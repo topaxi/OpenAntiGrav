@@ -1,4 +1,4 @@
-//! `Model::node_vertex_ranges`' `i`-th entry is `oag_formats::pads::volumes`'
+//! `Model::node_vertex_ranges`' `i`-th entry is `oag_vex::pads::volumes`'
 //! `i`-th trigger's own geometry - a positional correspondence the render
 //! side leans on to recolour a `Weapon Pad` by whether it currently hands
 //! out a pickup (`Drawable::tint_weapon_pads`, `oag_game::race::drawable`).
@@ -14,8 +14,8 @@
 use std::path::PathBuf;
 
 use oag_assets::Archive;
-use oag_formats::vex;
 use oag_render::mesh;
+use oag_vex::vex;
 
 fn image() -> Option<PathBuf> {
     oag_testdata::image("data/images/pulse-psp-usa.chd")
@@ -46,7 +46,7 @@ fn every_weapon_pad_trigger_sits_inside_its_own_indexed_vertex_range() {
         let classes = vex::classes_of(&blob).expect("class table");
         let class_id = classes.weapon_pad.expect("weapon_pad id recovered for v6");
 
-        let volumes = oag_formats::pads::volumes(&blob, &nodes, class_id);
+        let volumes = oag_vex::pads::volumes(&blob, &nodes, class_id);
         let model =
             mesh::build_weapon_pads(name, &blob, None).unwrap_or_else(|e| panic!("{name}: {e}"));
 

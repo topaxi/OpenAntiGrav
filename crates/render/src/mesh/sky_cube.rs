@@ -16,8 +16,8 @@
 //! downstream tells the two apart.
 
 use anyhow::{Context, Result, bail};
-use oag_formats::vex;
 use oag_texture::gtf;
+use oag_vex::vex;
 
 use super::{Bounds, DrawCall, GpuVertex, Model, ModelTexture};
 

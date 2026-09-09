@@ -400,7 +400,7 @@ chosen rates was a departure from the original rather than a reproduction of
 it.
 
 ***(2026-08-11: done, and the default is now on.)*** The renderer reads the
-authored blocks: `oag_formats::vex::mesh_tex_transforms` parses the
+authored blocks: `oag_vex::vex::mesh_tex_transforms` parses the
 per-material array, `TexTransform::sample` reproduces
 `TexAnim_UpdateTransform`'s wrap-divide-clamp-lerp, and
 `oag_render::mesh_render::TexAnims` samples every track of a model once a frame
@@ -438,7 +438,7 @@ driver `FUN_0890e160` walks the materials whenever `mesh+0x40` differs from
 
 So the mechanism is a genuine per-material keyframed UV transform. **What is
 missing is any authored track to feed it.** Measured through
-`oag_formats::vex` on the European disc, over the on-disc material record's
+`oag_vex::vex` on the European disc, over the on-disc material record's
 `+0x0c..0x14`:
 
 | File | materials | with `& 0x10` | with a non-zero track |

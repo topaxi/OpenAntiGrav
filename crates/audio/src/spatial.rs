@@ -70,7 +70,7 @@
 //! around `VexSound_Init`: it calls it unchanged and then writes the node's
 //! own `+0x00` (the varying angle, `40` to `120` degrees) to the emitter's
 //! `+0x40` half-angle and `+0x08` (the enable byte) to `+0x4c`. So
-//! [`oag_formats::sound_emitters::Cone::angle_a`] - already `Cone::wide()`,
+//! `oag_vex::sound_emitters::Cone::angle_a` - already `Cone::wide()`,
 //! since it is never smaller than `angle_b` on any of the 134 authored cones -
 //! is the half-angle this module now uses, not a guess between the two.
 //!
@@ -81,7 +81,7 @@
 //!
 //! The cone's own axis is the emitter's world matrix, raw and unnormalised,
 //! exactly as `SoundEmitter_Update` (`0x08939720`) reads it: `node[0x10..0x1c]`,
-//! row `1` of the same 64-byte matrix [`oag_formats::sound_emitters::SoundEmitter::to_world`]
+//! row `1` of the same 64-byte matrix `oag_vex::sound_emitters::SoundEmitter::to_world`
 //! already carries. Nothing here renormalises it - the original does not,
 //! either, and `positional-audio.md`'s own law clamps the resulting dot
 //! product into `-1..=1` rather than trusting the row's length.
@@ -141,12 +141,12 @@ pub struct Emitter {
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Cone {
     /// The cone's axis, as the emitter's own world matrix carries it - row `1`
-    /// of [`oag_formats::sound_emitters::SoundEmitter::to_world`], raw and
+    /// of `oag_vex::sound_emitters::SoundEmitter::to_world`, raw and
     /// unnormalised. The dot product this feeds is clamped, not the vector.
     pub axis: [f32; 3],
     /// Half-angle, radians. `VexSoundCone_Init` writes the node's own `+0x00`
     /// angle here - the wider of the two authored, `Cone::wide()` in
-    /// [`oag_formats::sound_emitters::Cone`].
+    /// `oag_vex::sound_emitters::Cone`.
     pub half_angle: f32,
 }
 

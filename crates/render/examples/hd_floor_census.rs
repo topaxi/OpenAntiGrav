@@ -16,8 +16,10 @@
 //!     data/images/hdfury-ps3-eu-dec.iso
 //! ```
 
-use oag_formats::{rcsmodel, vex};
+use oag_formats::rcsmodel;
+
 use oag_render::mesh;
+use oag_vex::vex;
 
 /// One `(archive, .vex path)` pair per circuit direction, read straight off
 /// `scripts/psarc.py list`'s output on the decrypted EU disc image - the

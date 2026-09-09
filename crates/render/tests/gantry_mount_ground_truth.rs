@@ -28,9 +28,9 @@
 use std::path::PathBuf;
 
 use oag_core::math::{Mat4, Vec3};
-use oag_formats::vex;
 use oag_render::gantry::{self, BACKPLATE_TEXTURE, SLOT8_TEXTURE};
 use oag_render::mesh::{self, Lod};
+use oag_vex::vex;
 
 /// The gantry model slot 8 names on every circuit that authors a manifest.
 const GANTRY: &str = r"Data\Environments\321_Go\321Go_StartFinish.vex";
@@ -351,9 +351,9 @@ fn node_names(blob: &[u8]) -> Vec<(u32, String)> {
         .unwrap_or_default()
 }
 
-fn start_position(blob: &[u8]) -> Option<oag_formats::track::StartPosition> {
+fn start_position(blob: &[u8]) -> Option<oag_vex::track::StartPosition> {
     let nodes = vex::nodes(blob).ok()?;
     let class = vex::classes_of(blob).ok()?.start_position?;
     let node = nodes.iter().find(|node| node.class_id == class)?;
-    oag_formats::track::start_position(blob.get(node.payload())?, vex::byte_order(blob))
+    oag_vex::track::start_position(blob.get(node.payload())?, vex::byte_order(blob))
 }

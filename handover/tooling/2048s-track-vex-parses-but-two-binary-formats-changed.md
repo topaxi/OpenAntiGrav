@@ -163,7 +163,7 @@ into, and it is worth recording precisely:
   and `flags` moved from `0x60`/`0x61` to **`0x5c`/`0x5d`**. Confidence 95 for
   the floats, 90/92 for `section_id`/`flags`, 80 for `racing_line` (HD authors
   zero everywhere, so the pairing cannot distinguish it - it rests on the
-  layout either side of it being confirmed). `crates/formats/src/track.rs`
+  layout either side of it being confirmed). `crates/vex/src/track.rs`
   carries this as `point_len(version)` plus a version-gated tail offset, and
   all fourteen circuits in 2048's base package now parse with
   `encoded_len()` landing on the payload length to the byte. Full evidence -
@@ -256,7 +256,7 @@ runs the simulation. What landed to get there:
 
 ## The collision is in, and the craft flies
 
-`track_col.col` is decoded whole - `oag_formats::kdcol`, validated over **all 26
+`track_col.col` is decoded whole - `oag_vex::kdcol`, validated over **all 26
 shipped files** with every byte accounted for. `just play 2048 --race` now
 reports `4 collision node(s) -> 4 collider(s), 15986 triangle(s)` on Altima and
 the craft accelerates to 125 units/s down the circuit, `grounded 1.0` every

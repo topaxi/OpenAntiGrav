@@ -23,7 +23,7 @@
 //! The container is byte-swapped **whole**, a `u32` at a time, so on HD the
 //! magic arrives as `klBS` and every field reads big-endian. The order is
 //! sniffed off the magic ([`byte_order_of`]) rather than passed in, the same
-//! way [`crate::vex::byte_order`] does it; nothing above this module needs to
+//! way `oag_vex::vex::byte_order` does it; nothing above this module needs to
 //! know which disc a blob came from.
 //!
 //! The `SBlk` block opens with a 64-byte header:
@@ -319,7 +319,7 @@ pub fn looks_like_bank(data: &[u8]) -> bool {
 
 /// Which byte order this blob's `SBlk` container is written in, if either.
 ///
-/// Sniffed rather than passed in, the same way [`crate::vex::byte_order`]
+/// Sniffed rather than passed in, the same way `oag_vex::vex::byte_order`
 /// does it, because the magic is a `u32` constant and so tells the two apart
 /// by itself: `SBlk` little-endian, `klBS` big-endian.
 #[must_use]

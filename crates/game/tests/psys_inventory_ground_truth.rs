@@ -39,8 +39,8 @@ use std::collections::BTreeSet;
 use std::path::PathBuf;
 
 use oag_assets::Archive;
-use oag_formats::pob::{self, ParticleSystem};
 use oag_game::race::RACE_EFFECTS;
+use oag_vex::pob::{self, ParticleSystem};
 
 /// `.pob` blobs on the PSP disc, per `docs/formats/pob.md`.
 const SYSTEMS: usize = 35;
@@ -432,8 +432,8 @@ mod hd {
     use std::collections::BTreeMap;
     use std::path::{Path, PathBuf};
 
-    use oag_formats::pob::ParticleSystem;
     use oag_game::race::RACE_EFFECTS;
+    use oag_vex::pob::ParticleSystem;
 
     /// Distinct system names across all seven archives.
     ///

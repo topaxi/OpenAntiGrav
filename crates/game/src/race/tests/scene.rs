@@ -112,7 +112,7 @@ fn each_craft_s_exhaust_follows_its_own_throttle() {
 fn every_craft_lays_its_own_ribbon() {
     let mut setup = setup(hulled_handling());
     setup.mode = Mode::SingleRace;
-    setup.start_position = Some(oag_formats::track::StartPosition {
+    setup.start_position = Some(oag_vex::track::StartPosition {
         position: [0.0, 0.0, 0.0],
         left: [0.0, 0.0, -1.0],
         up: [0.0, 1.0, 0.0],

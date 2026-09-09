@@ -5,9 +5,9 @@
 //! cargo run -q -p oag-game --example vita_probe -- <psarc path>
 //! ```
 
-use oag_formats::{collision, vex};
 use oag_render::mesh;
 use oag_tables::handling;
+use oag_vex::{collision, vex};
 
 fn main() -> anyhow::Result<()> {
     let path = std::env::args()
@@ -38,7 +38,7 @@ fn main() -> anyhow::Result<()> {
             println!("{track_path}: node walk ERROR");
             continue;
         };
-        let Some(node) = oag_formats::track::find_node(&blob, &nodes) else {
+        let Some(node) = oag_vex::track::find_node(&blob, &nodes) else {
             println!("{track_path}: no WO Track node");
             continue;
         };
@@ -160,7 +160,7 @@ fn main() -> anyhow::Result<()> {
 
     if let Ok(blob) = archive.read_path(track) {
         let nodes = vex::nodes(&blob).expect("node walk");
-        let node = oag_formats::track::find_node(&blob, &nodes).expect("WO Track node");
+        let node = oag_vex::track::find_node(&blob, &nodes).expect("WO Track node");
         let payload = &blob[node.payload()];
         let u32_le = |at: usize| u32::from_le_bytes(payload[at..at + 4].try_into().unwrap());
         let u32_be = |at: usize| u32::from_be_bytes(payload[at..at + 4].try_into().unwrap());

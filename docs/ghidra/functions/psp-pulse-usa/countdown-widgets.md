@@ -172,7 +172,7 @@ widget would be correct - the mesh would already put the glyph in the middle
 of the screen, and the widget offset would just add nothing extra.
 
 Checked directly, off `crates/render/examples/ready_go_census.rs`'s
-groundwork plus `oag_formats::vex::mesh_batches` read for both batch lists
+groundwork plus `oag_vex::vex::mesh_batches` read for both batch lists
 (`0` and `1` - these glyphs are transparent-only, list `0` alone returns
 nothing):
 

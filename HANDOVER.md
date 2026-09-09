@@ -421,7 +421,7 @@ docs page with the evidence - **do not requote from this file**:
   closing frame pair on all three. **Nothing is placed on any title** - slot
   8's transform is unrecovered on Pulse and HD and untried on 2048.
   [start-gantry.md](docs/rendering/start-gantry.md), one page for all four
-  titles; `crates/formats/tests/start_gantry_ground_truth.rs` (4/4, Pulse),
+  titles; `crates/vex/tests/start_gantry_ground_truth.rs` (4/4, Pulse),
   `start_gantry_pure_ground_truth.rs` (2/2, Pure),
   `crates/game/tests/start_gantry_report_pure_ground_truth.rs` (1/1, Pure),
   `crates/hd/tests/start_gantry_hd_ground_truth.rs` (6/6, HD),

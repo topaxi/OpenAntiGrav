@@ -397,7 +397,7 @@ fn decode_either(name: &str, blob: &[u8]) -> std::result::Result<(FlareTexture, 
 /// pads" would close a question that is still open. See
 /// `docs/formats/pure-status.md`.
 pub(super) fn unrecovered_or_absent(
-    classes: oag_formats::vex::classes::Classes,
+    classes: oag_vex::vex::classes::Classes,
     id: Option<u32>,
     what: &str,
     consequence: &str,

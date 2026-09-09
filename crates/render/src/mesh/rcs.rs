@@ -3,7 +3,7 @@
 //!
 //! The PS3 counterpart of [`super::build_class`], and deliberately a separate
 //! function rather than a branch inside it. The two share the *scene* - node
-//! tree, class table, world transforms, all read by `oag_formats::vex` exactly
+//! tree, class table, world transforms, all read by `oag_vex::vex` exactly
 //! as before - and share nothing at all below that: a PSP mesh's geometry is a
 //! batch list in its own payload, and a PS3 mesh's is a chunk in another file,
 //! addressed by hash and quantised through a bias and scale. Threading that
@@ -30,7 +30,8 @@
 
 use anyhow::{Context, Result, bail};
 use oag_core::math::{Mat4, Vec3};
-use oag_formats::{rcsmodel, vex};
+use oag_formats::rcsmodel;
+use oag_vex::vex;
 
 use super::{Bounds, DrawCall, GpuVertex, Model, ModelTexture, TextureSlots, anim_node, slots};
 

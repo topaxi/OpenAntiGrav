@@ -878,7 +878,7 @@ this the longest single test in the suite.
 ## Answered 2026-09-07: Pulse's Quake is fire, **Pure's** is the concrete one
 
 The maintainer's *"like a concrete wave"* is a real memory of a real effect -
-just not Pulse's. Every colour below was parsed with `oag_formats::pob`, not
+just not Pulse's. Every colour below was parsed with `oag_vex::pob`, not
 transcribed by hand.
 
 | title | `WO_QUAKE.POB` emitters | reads as |

@@ -9,17 +9,16 @@
 //!
 //! `oag_assets::source::Layout` states the rule and names the single existing
 //! exception to it. A `.vex` obeys it for free: the magic at `+0x0c` is `VEXX`
-//! on the PSP and PS2 and `XXEV` on the PS3, so [`vex::byte_order`] sniffs it.
+//! on the PSP and PS2 and `XXEV` on the PS3, so `oag_vex::vex::byte_order`
+//! sniffs it.
 //! A payload *inside* that file cannot - a `WO Track` payload's magic reads
 //! `WOtd` in both games - so those parsers take the order their container
 //! sniffed, which is still data and not a platform branch.
 //!
-//! [`vex::byte_order`]: crate::vex::byte_order
-//!
 //! # The trap this type exists to prevent
 //!
 //! Swapping each field in place is not the same as reading the file
-//! big-endian, and the difference is silent. `oag_formats::pvs` reads a 64-bit
+//! big-endian, and the difference is silent. `oag_vex::pvs` reads a 64-bit
 //! visibility mask as two `u32`s, which is identical to one `u64` on a
 //! little-endian file and **wrong** on a big-endian one: the halves come out
 //! the other way round. Measured, that reading is 100 % dangling on 15 of

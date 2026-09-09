@@ -11,9 +11,9 @@
 //! three images. When a screen needs enough of them for the waste to show, the
 //! lookup below is already in pixels, so only this file has to change.
 
-use oag_formats::vex;
 use oag_texture::texture::Texture;
 use oag_texture::{gtf, gxt, ps2_texture};
+use oag_vex::vex;
 
 /// One decoded image, from any of the four sources' texture formats.
 ///
@@ -235,7 +235,7 @@ pub struct Placed {
     ///
     /// **Read, never chosen.** All three of Pulse's lock-on sight models
     /// declare `pass_mask 0x120e`, whose `0x0200` bit is
-    /// [`oag_formats::vex::BlendClass::Additive`], and their embedded textures
+    /// [`oag_vex::vex::BlendClass::Additive`], and their embedded textures
     /// carry a black background with alpha pinned at 250/255 - so drawing them
     /// with an ordinary alpha blend puts each bracket on an opaque black tile.
     /// Carrying the declared class here is what lets the draw honour it
@@ -243,7 +243,7 @@ pub struct Placed {
     /// treatment from the same reading the day a Pure disc is present to read
     /// them from. See `docs/ui/hud.md` and
     /// `docs/ghidra/functions/psp-pulse-usa/mesh-draw.md`.
-    pub blend: Option<oag_formats::vex::BlendClass>,
+    pub blend: Option<oag_vex::vex::BlendClass>,
 }
 
 /// Every front-end image, in one RGBA buffer.
@@ -303,7 +303,7 @@ pub struct DecodedImage {
     /// Becomes [`Placed::quad_extent`].
     pub quad_extent: Option<[f32; 2]>,
     /// Becomes [`Placed::blend`].
-    pub blend: Option<oag_formats::vex::BlendClass>,
+    pub blend: Option<oag_vex::vex::BlendClass>,
 }
 
 impl Sheet {

@@ -3,7 +3,7 @@
 Functions in `eboot.elf` (WipEout 2048, Vita, `PCSF00007` patch v1.04), image
 base `0x81000000`. **The names here are applied**, from [names.tsv](names.tsv).
 Found while chasing why `oag_render::mesh::rcs::build_scene` and
-`oag_formats::collision::parse_chunks` do not read this title's
+`oag_vex::collision::parse_chunks` do not read this title's
 `track.rcsmodel` and `track_col.col` unmodified.
 
 ## `RcsModel_Load` - `0x812f15b2`
@@ -204,7 +204,7 @@ Evidence:
   loop that follows widens each one.
 - **The index buffer is allocated at `6 * T` and read at `stride * T`**, so any
   stride but 6 is a heap overflow in the real game rather than a layout the
-  format permits. `oag_formats::kdcol` refuses one for that reason.
+  format permits. `oag_vex::kdcol` refuses one for that reason.
 - **The surface array is allocated at exactly `T` bytes**, one per triangle -
   and `SimpleMesh_Construct` (`0x8118f9bc`) allocates the same three arrays at
   `V << 4`, `T * 6` and `T` from its own two count arguments, which is the same
@@ -216,7 +216,7 @@ Evidence:
 - Checked against all 26 shipped `track_col.col` files, not one: every one of
   them ends **exactly** on its final `"----"` under this layout, with the
   surface-byte count equal to the triangle count on every file. See
-  `crates/formats/tests/kdcol_ground_truth.rs`.
+  `crates/vex/tests/kdcol_ground_truth.rs`.
 
 ## `SimpleMesh_Construct` - `0x8118f9bc`
 
@@ -233,7 +233,7 @@ sizes: `vertices << 4`, `triangles * 6`, `triangles * 1`. It is the constructor
 **Confidence: 88**
 
 **The function that names the surface bytes.** Walks a `.vex` node's collision
-payload - the same chunk format `oag_formats::collision::parse_chunks` reads,
+payload - the same chunk format `oag_vex::collision::parse_chunks` reads,
 recognisable by its three chunk types (`1` vertices at 12 bytes, `2` triangles
 at 6, `3` scalars at 4) - and hands the geometry to the mesh builder with one
 byte chosen from the node's own class ID:
@@ -251,12 +251,12 @@ byte chosen from the node's own class ID:
 Evidence:
 
 - **The class IDs are this project's own, unchanged.** Six of the seven
-  constants in `crates/formats/src/vex/classes.rs` appear as literals in one
+  constants in `crates/vex/src/vex/classes.rs` appear as literals in one
   `if`/`else if` chain, which is not a coincidence a wrong reading produces.
 - **`0x3e7` is branched past before any byte is chosen** - the decompiler
   renders the guard as `if (iVar7 != 999)`, and `999 == 0x3e7 ==
   CLASS_CAGE_COLLISION`. That independently reproduces the behaviour
-  `oag_formats::collision::SurfaceKind::Cage` already documents from Pulse's
+  `oag_vex::collision::SurfaceKind::Cage` already documents from Pulse's
   own loader: cage geometry is parsed and then skipped.
 - **`0x3f2` is a class only 2048 declares**, and its name comes from that
   title's own class-name table: the record at `0x81521f8c` pairs `0x3f2` with
@@ -287,7 +287,7 @@ never per triangle.
   [`2048-rcsmodel.md`](../../../formats/2048-rcsmodel.md).
 - 2026-08-26 (second pass): `SimpleMesh_Load` 92, `SimpleMesh_Construct` 88 and
   `TrackCollision_MeshFromNode` 88 named, which finishes `track_col.col` -
-  `oag_formats::kdcol` reads all 26 shipped files with every byte accounted for.
+  `oag_vex::kdcol` reads all 26 shipped files with every byte accounted for.
   The bounds correction above landed in the same pass. `RcsModel_Load`'s three
   sections are still unread inside.
 - 2026-08-26: 85 / 87, first RE pass on either function. Decompilation,

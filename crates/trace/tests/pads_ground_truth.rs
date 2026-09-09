@@ -9,8 +9,8 @@
 //! here rather than assumed.
 
 use oag_core::math::Vec3;
-use oag_formats::{pads, track, vex};
 use oag_race::Course;
+use oag_vex::{pads, track, vex};
 
 const IMAGE: &str = "data/images/pulse-psp-usa.chd";
 /// Talon's Junction, the environment every capture under `data/traces/` was

@@ -24,8 +24,8 @@
 //! mirrored guess would only swap the two widths.
 
 use anyhow::{Context, Result, bail};
-use oag_formats::track::{self, AiTrack, Sample};
-use oag_formats::vex;
+use oag_vex::track::{self, AiTrack, Sample};
+use oag_vex::vex;
 
 use crate::mesh::{Bounds, DrawCall, GpuVertex, Model};
 

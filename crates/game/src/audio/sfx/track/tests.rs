@@ -3,7 +3,7 @@
 //! The disc-backed half is `crates/game/tests/track_audio_ground_truth.rs`.
 
 use super::*;
-use oag_formats::sound_emitters::RadiusCurve;
+use oag_vex::sound_emitters::RadiusCurve;
 
 /// An emitter at `position` with a constant radius, no cone and no audio.
 ///
@@ -26,7 +26,7 @@ fn cone(position: [f32; 3], radius: f32, half_angle_degrees: f32) -> Authored {
     emitter.to_world[4] = 0.0;
     emitter.to_world[5] = 0.0;
     emitter.to_world[6] = 1.0;
-    emitter.cone = Some(oag_formats::sound_emitters::Cone {
+    emitter.cone = Some(oag_vex::sound_emitters::Cone {
         angle_a: half_angle_degrees.to_radians(),
         angle_b: 40.0_f32.to_radians(),
     });

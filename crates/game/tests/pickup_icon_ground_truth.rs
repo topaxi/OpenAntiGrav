@@ -166,7 +166,7 @@ fn a_held_turbo_draws_its_own_authored_green_on_a_real_race() {
     };
     assert_eq!(
         *blend,
-        Some(oag_formats::vex::BlendClass::AlphaOver),
+        Some(oag_vex::vex::BlendClass::AlphaOver),
         "TURBO_icon's own model declares this blend"
     );
     println!("{icon_draw:?}");

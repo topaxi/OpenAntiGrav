@@ -4,7 +4,7 @@
 //! ([`super::draw::model_draw`]) - those flatten a model into one static
 //! quad, baked once. This asset cannot take that shortcut: its four glyph
 //! nodes (`Jons321go:x3`, `x2`, `x1`, `GO`) each carry their own
-//! [`oag_formats::vex::CLASS_ANIM_TRANSFORM`] scale-burst track and their own
+//! [`oag_vex::vex::CLASS_ANIM_TRANSFORM`] scale-burst track and their own
 //! per-material `TEXOFFSET` alpha sweep - real animation, not a fixed
 //! picture - so it is drawn through the same mesh pipeline the race scene
 //! uses, with its own small orthographic pass rather than a baked sprite.

@@ -22,7 +22,7 @@ scores below are about *what the data is*, not about how the original draws it.
 | `Data\Defaults\Skycube.vex` is an unreferenced version-4 legacy asset | **90** |
 | How the original draws either one | **not recovered** |
 
-Validated by `crates/formats/tests/skycube_ground_truth.rs` against all 40
+Validated by `crates/vex/tests/skycube_ground_truth.rs` against all 40
 `Skycube` and 36 `fogCube` nodes on the PSP disc (`just test-data`).
 
 ## `Skycube` is a `Mesh`
@@ -116,7 +116,7 @@ as a *plausible* keyframe block often enough to be dangerous, so a sky picking
 one up is exactly what a mis-parse looks like. What separates the two is the
 material's `& 0x10` flag, which is the engine's own gate
 (`Mesh_UpdateTextureTransforms`, `0x0890e160`) and which
-`oag_formats::vex::mesh_tex_transform` now applies:
+`oag_vex::vex::mesh_tex_transform` now applies:
 `crates/render/tests/authored_uv_ground_truth.rs` asserts that no *other* sky
 animates and that this one's period stays in cloud-layer territory rather than
 sliding the horizon.
@@ -185,7 +185,7 @@ obvious and is wrong:
   [ADR-0011](../architecture/adr/0011-authored-pvs-before-frustum-culling.md)
   already assumed for a skybox.
 
-Fog **is** implemented. `oag_formats::fog` decodes the volumes and reimplements
+Fog **is** implemented. `oag_vex::fog` decodes the volumes and reimplements
 `FogCube_Sample`; `race::Scene` samples them at the camera each frame and writes
 `oag_render::mesh_render::Fog` into bind group 2, which `mesh.wgsl` applies as
 the same linear ramp `Gu_Fog` sends. The sky is deliberately left unfogged - it

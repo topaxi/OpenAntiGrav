@@ -23,7 +23,7 @@
 //! nothing moved and nothing resized. The first four bytes are one `u32`
 //! constant written in the file's own order - `\x01FNT` on the PSP and PS2,
 //! `TNF\x01` on the PS3 - so [`byte_order`] sniffs it and no caller passes a
-//! platform in, exactly as `oag_formats::vex::byte_order` does.
+//! platform in, exactly as `oag_vex::vex::byte_order` does.
 //!
 //! This is not a word swap, and the distinction is checkable: HD's codepoint
 //! table reads `00 20 00 21 00 22` - ascending as big-endian `u16`s, where a
@@ -45,7 +45,7 @@
 //! # The atlas header is 64 bytes, and that was the whole problem
 //!
 //! It is not a [`crate::texture`] `.mip` header. It is the same **`Texture`
-//! node payload** a `oag_formats::vex` model embeds, and the data does not start
+//! node payload** a `oag_vex::vex` model embeds, and the data does not start
 //! until `+0x40`:
 //!
 //! ```text
@@ -248,7 +248,7 @@ pub struct Font {
 ///
 /// The first four bytes are one `u32` constant written in the file's own order:
 /// `\x01FNT` little-endian, `TNF\x01` big-endian. Nothing else is consulted -
-/// the same rule `oag_formats::vex::byte_order` follows, and the
+/// the same rule `oag_vex::vex::byte_order` follows, and the
 /// reason no caller passes a platform in.
 #[must_use]
 pub fn byte_order(data: &[u8]) -> Option<ByteOrder> {

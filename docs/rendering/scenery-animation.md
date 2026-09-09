@@ -28,7 +28,7 @@ The second half was the gap this page was written to record, and the sentence
 that stood here - "what is missing is the class that makes scenery move" - is
 answered rather than merely amended: the class is read at instruction level in
 [`anim-transform.md`](../ghidra/functions/psp-pulse-usa/anim-transform.md) and
-replayed by `oag_formats::vex::anim_transform` and
+replayed by `oag_vex::vex::anim_transform` and
 `oag_render::mesh::AnimNode`.
 
 **One recommendation this page used to make is withdrawn.** It said to recover
@@ -151,7 +151,7 @@ survey of them.
 
 ### It cost placement, not only motion - and that was the live defect
 
-`oag_formats::vex::world_transforms` composed the `Transform` class and
+`oag_vex::vex::world_transforms` composed the `Transform` class and
 contributed the identity for every other class. That is correct for a `Mesh` or
 a `Skycube` and **was wrong** for `Anim Transform`: **245 meshes composed to the
 world origin**, measured from the composed matrices themselves and needing no

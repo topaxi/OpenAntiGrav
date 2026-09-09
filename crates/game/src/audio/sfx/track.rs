@@ -5,7 +5,7 @@
 //! This is the other half of what a circuit sounds like: 1,298 `sound` and
 //! `soundcone` nodes authored across the twelve Pulse circuits, each naming a
 //! bank, a cue and a radius, each placed by the transform chain.
-//! `oag_formats::sound_emitters` decodes them and
+//! `oag_vex::sound_emitters` decodes them and
 //! `docs/ghidra/functions/psp-pulse-usa/track-sound-emitters.md` is the
 //! evidence; this module is only the wiring above it.
 //!
@@ -62,14 +62,14 @@ use std::collections::BTreeMap;
 use log::info;
 use oag_assets::source::Archives;
 use oag_formats::sblk;
-use oag_formats::sound_emitters::{self, SoundEmitter};
+use oag_vex::sound_emitters::{self, SoundEmitter};
 
 use super::{Loaded, load_named_cue};
 
 /// One authored emitter, with the audio its cue names where it resolves.
 #[derive(Debug, Clone)]
 pub struct Authored {
-    /// The node, as `oag_formats::sound_emitters` decoded it.
+    /// The node, as `oag_vex::sound_emitters` decoded it.
     pub emitter: SoundEmitter,
     /// The cue's waveforms, or [`None`] where the reference does not resolve.
     ///
@@ -126,7 +126,7 @@ impl TrackEmitters {
     #[must_use]
     pub fn parse(track: &str, blob: &[u8]) -> Self {
         let mut report = Vec::new();
-        let Ok(nodes) = oag_formats::vex::nodes(blob) else {
+        let Ok(nodes) = oag_vex::vex::nodes(blob) else {
             report.push(format!("track audio: {track} has no readable node table"));
             return Self {
                 report,

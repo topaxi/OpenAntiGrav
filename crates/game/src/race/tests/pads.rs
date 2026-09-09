@@ -21,7 +21,7 @@ fn grid_on_a_speed_pad() -> Race {
     let mut setup = setup(handling);
     setup.mode = Mode::SingleRace;
     setup.speedup_pads = enveloping_pad();
-    setup.start_position = Some(oag_formats::track::StartPosition {
+    setup.start_position = Some(oag_vex::track::StartPosition {
         position: [0.0, 0.0, 0.0],
         left: [0.0, 0.0, -1.0],
         up: [0.0, 1.0, 0.0],
@@ -107,7 +107,7 @@ fn a_track_with_no_pads_never_boosts() {
     assert_eq!(race.ship().physics.pad_timer, 0.0);
 }
 
-/// The whole chain, end to end: containment in `oag_formats::pads`, the
+/// The whole chain, end to end: containment in `oag_vex::pads`, the
 /// direction off the pad's matrix, `Environment::pad_hit`, and the force term
 /// in `oag_physics`. It is deliberately one test, because each link is
 /// worthless without the others and a failure anywhere reads the same way.

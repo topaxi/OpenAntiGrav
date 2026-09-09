@@ -2,7 +2,7 @@
 //! byte marks?
 //!
 //! The `WO Track` spline is authored *on the track surface* - see
-//! `oag_formats::track`'s module docs - so a drivable floor sits directly under
+//! `oag_vex::track`'s module docs - so a drivable floor sits directly under
 //! it, within the half-width the spline itself carries. Scenery does not. This
 //! is the measurement that separates the three surface bytes only 2048's own
 //! circuits use from the six the ported ones settle.
@@ -13,7 +13,7 @@
 
 use std::collections::BTreeMap;
 
-use oag_formats::{track, vex};
+use oag_vex::{track, vex};
 
 const BASE: &str = "data/extracted/vita/PCSF00007/base/PSP2/data.psarc";
 

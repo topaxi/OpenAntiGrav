@@ -14,7 +14,7 @@ mod rcsmodel_common;
 use std::collections::{BTreeMap, BTreeSet};
 
 use oag_formats::rcsmodel::{self, Blend, Transparency};
-use oag_formats::vex;
+use oag_vex::vex;
 use rcsmodel_common::{PAIRS, image, pair};
 
 /// Every archive on the disc that holds `.rcsmodel` files.

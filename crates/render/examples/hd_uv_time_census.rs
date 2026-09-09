@@ -1,7 +1,7 @@
 //! Which of Wipeout HD's surfaces scroll their texture off the engine clock.
 //!
 //! HD has no per-material texture-transform *keyframe* block - the mechanism
-//! `oag_formats::vex::mesh_tex_transform` reads on the PSP, whose home is the
+//! `oag_vex::vex::mesh_tex_transform` reads on the PSP, whose home is the
 //! mesh payload HD emptied out. It scrolls in the **fragment program**
 //! instead, off an engine-supplied `time` parameter
 //! (`~crc32("time") == 0x906b67ba`, a preimage over `EBOOT.elf`).

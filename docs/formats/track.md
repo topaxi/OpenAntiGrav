@@ -2,9 +2,9 @@
 
 **Status: decoded and validated.** The `WO Track` spline graph parses on all 40
 track files on the PSP disc with **zero bytes unaccounted for**, and is
-implemented in [`oag_formats::track`](../../crates/formats/src/track.rs). The
+implemented in [`oag_vex::track`](../../crates/vex/src/track.rs). The
 visibility `section` payload is now decoded too, in
-[`oag_formats::pvs`](../../crates/formats/src/pvs.rs), and validated against
+[`oag_vex::pvs`](../../crates/vex/src/pvs.rs), and validated against
 both discs - see [below](#implemented-and-what-running-it-against-the-discs-corrected).
 
 Two things that sound like they should be the same are not:
@@ -144,9 +144,9 @@ corroborated by the data: no control point on any of the 40 track files carries 
 
 ### Implemented, and what running it against the discs corrected
 
-Decoded by [`oag_formats::pvs`](../../crates/formats/src/pvs.rs) and validated
+Decoded by [`oag_vex::pvs`](../../crates/vex/src/pvs.rs) and validated
 against every track file on both Pulse discs by
-[`pvs_ground_truth.rs`](../../crates/formats/tests/pvs_ground_truth.rs): 2,268
+[`pvs_ground_truth.rs`](../../crates/vex/tests/pvs_ground_truth.rs): 2,268
 sections over 40 PSP track files and 3,045 over 59 PS2 ones, cross-checked
 against 84,479 spline control points. See
 [ADR-0011](../architecture/adr/0011-authored-pvs-before-frustum-culling.md) for
@@ -213,7 +213,7 @@ governs - and the sibling-group rule assigns a governing section to 97-100%
 of the draw calls of all 40 PSP track files
 ([`pvs_placement_ground_truth.rs`](../../crates/render/tests/pvs_placement_ground_truth.rs)).
 Implemented as
-[`oag_formats::pvs::governing_sections`](../../crates/formats/src/pvs.rs).
+[`oag_vex::pvs::governing_sections`](../../crates/vex/src/pvs.rs).
 
 Confidence **75**: the tree shape and coverage are measured on every PSP
 track, and behaviour matches - hiding by group is the only rule that
@@ -299,11 +299,11 @@ The payload has to close. With the reserved block included:
 points. A parser that is one structure out cannot make that come out even on one
 file, let alone forty, so this is a determination rather than a plausible
 reading. It is kept as a test
-([`track_ground_truth.rs`](../../crates/formats/tests/track_ground_truth.rs))
+([`track_ground_truth.rs`](../../crates/vex/tests/track_ground_truth.rs))
 rather than a claim, and [`AiTrack::encoded_len`] exists so anything else can
 run the same check.
 
-[`AiTrack::encoded_len`]: ../../crates/formats/src/track.rs
+[`AiTrack::encoded_len`]: ../../crates/vex/src/track.rs
 
 Confidence **94**: the layout is confirmed by both the parser's cursor
 arithmetic and the data. Not 95+, because nothing has been run under an emulator;
@@ -523,7 +523,7 @@ mechanism depends on the `+0x20` axis being what this page says it is.
 ## `Start Position`
 
 **Status: decoded, and the spawn path uses it.**
-[`oag_formats::track::start_position`](../../crates/formats/src/track.rs) reads
+[`oag_vex::track::start_position`](../../crates/vex/src/track.rs) reads
 it and `oag_gameplay::spawn::Pose::from_start_position` places a ship on it.
 
 Grid slots are **named resources**, not an array. The bind formats
@@ -623,7 +623,7 @@ agree to within **0.01 units**, which nothing arranged.
 How a ship is assigned a slot number is still **not** determined.
 
 Every claim in this section is asserted in
-`crates/formats/tests/track_ground_truth.rs` and
+`crates/vex/tests/track_ground_truth.rs` and
 `crates/game/tests/race_ground_truth.rs`, against the disc rather than in prose.
 
 ### The heading is authored, and on Wipeout HD it is sometimes stale
@@ -736,7 +736,7 @@ the circuits anyone has looked at, in either game.
 
 ### The 64-bit `section` mask has to be read as one quantity
 
-[`oag_formats::pvs`](#section-visibility-not-geometry) reads the visibility mask
+[`oag_vex::pvs`](#section-visibility-not-geometry) reads the visibility mask
 as `pvs_mask_lo` at `+0x08` and `pvs_mask_hi` at `+0x0c`. On a little-endian
 file that is the same thing as reading the eight bytes as one `u64`. **On a
 big-endian file it is not**, and a byte-order pass that swaps each word where it

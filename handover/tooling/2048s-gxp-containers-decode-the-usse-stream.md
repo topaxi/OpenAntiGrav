@@ -130,5 +130,5 @@ both together.
   parameters fit anywhere. The closure that separates them - the last name's
   NUL landing on the declared size - decides it 3,540 to 0. `is_ok()` proves
   nothing here for exactly the reason
-  `crates/formats/tests/shadow_occluder_ground_truth.rs` says it proves
+  `crates/vex/tests/shadow_occluder_ground_truth.rs` says it proves
   nothing there.

@@ -73,7 +73,7 @@ pub struct GpuVertex {
     /// [`Self::lightmap_texcoord`] gives: this struct's order *is* the
     /// attribute array's order.
     ///
-    /// See `oag_formats::vex::anim_anchors` for the split, and
+    /// See `oag_vex::vex::anim_anchors` for the split, and
     /// `docs/rendering/scenery-animation.md` for why the class cannot simply be
     /// folded into the bake.
     pub xform: u32,
