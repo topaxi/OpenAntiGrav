@@ -249,14 +249,16 @@ impl Frame {
 /// directly rather than off this screen's marks, since it is resolved
 /// independently of whether a frame screen exists at all.
 ///
-/// `sprites` looks a widget's image up by name rather than naming
-/// `crate::sprite::Sheet` directly - `Sheet` decodes real texture data, which
-/// is one level above this crate. `crate::sprite::Sheet::get` already returns
-/// exactly this signature, so a real caller passes `&|name| sheet.get(name)`.
+/// `sprites` is a decoded sheet's own placements, name and rectangle
+/// together - not `crate::sprite::Sheet` itself, which decodes real texture
+/// data one level above this crate and so may not be named here. The same
+/// shape `crate::frontend::Frontend`'s own `placements` field already is;
+/// `crate::sprite::Sheet::entries` returns exactly this, so a real caller
+/// passes `sheet.entries()`.
 #[must_use]
 pub fn read(
     screens: &Screens,
-    sprites: &impl Fn(&str) -> Option<Placed>,
+    sprites: &[(String, Placed)],
     space: Space,
     name: Option<&str>,
     selected_fill: Option<&str>,
@@ -280,7 +282,11 @@ pub fn read(
 
     let mut marks = Vec::new();
     for image in &screen.images {
-        let Some(placed) = sprites(&image.src) else {
+        let Some(placed) = sprites
+            .iter()
+            .find(|(src, _)| *src == image.src)
+            .map(|(_, placed)| *placed)
+        else {
             continue;
         };
         // The widget's own size when it states one, the texture's otherwise -

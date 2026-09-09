@@ -642,7 +642,7 @@ pub fn load_shell(
     // rather than a mystery. See [`oag_ui::menu::frame`].
     let frame = oag_ui::menu::read_frame(
         &screens,
-        &|name| sprites.get(name),
+        sprites.entries(),
         space,
         front_end.menu_frame,
         front_end.menu.strip.and_then(|strip| strip.selected_fill),

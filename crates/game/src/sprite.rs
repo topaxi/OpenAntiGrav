@@ -413,6 +413,17 @@ impl Sheet {
             .map(|(_, placed)| *placed)
     }
 
+    /// Every placement this sheet holds, name and rectangle together.
+    ///
+    /// The same shape `crate::frontend::Frontend`'s own `placements` field
+    /// is - `crate::menu::frame::read` takes this rather than `&Sheet`
+    /// itself, so it can look widgets up the same way `Frontend` already
+    /// looks its own up, without `oag-ui` naming this crate's decode type.
+    #[must_use]
+    pub fn entries(&self) -> &[(String, Placed)] {
+        &self.placed
+    }
+
     /// The one image this sheet holds, when it holds exactly one.
     ///
     /// For a sheet built to carry a single picture - the loading screen's

@@ -140,7 +140,7 @@ fn the_frame_samples_its_own_patch_of_the_shared_sheet() {
     let space = Space::of(oag_disc::Platform::Psp);
     let frame = oag_ui::menu::read_frame(
         &screens,
-        &|name| sheet.get(name),
+        sheet.entries(),
         space,
         Some(oag_pulse::frontend::states::FE_SCREEN),
         None,
