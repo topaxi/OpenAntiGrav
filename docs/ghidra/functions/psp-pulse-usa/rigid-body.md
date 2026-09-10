@@ -312,9 +312,12 @@ call and it is not a fitted one either: its free three-parameter fit returns
 `(15.600, 21.600, 15.600)` on every capture - `Body_SetBoxInertia`'s own
 code-literal box tensor, recovered to five figures from a column it was never
 compared against. The other two rows are the same models with the same number of
-parameters, so the residuals are directly comparable. Confidence **92**:
-instruction-level derivation with each frame pinned by a term whose frames were
-already settled, plus an exact numerical identity on independent data.
+parameters, so the residuals are directly comparable. Confidence **92**, the
+[rubric](../../../reverse-engineering/confidence-rubric.md)'s 85-94 band on its
+second leg - the reading makes an arithmetic invariant come out **exactly**
+across many real captures, and it recovers a code literal it was never given.
+The band caps at 94 without a second binary agreeing; PS2 `Body_Integrate`
+(`0x0015d088`) is unread on this point and is what would raise it.
 
 **Why the mislabel survived: a `diag(a, b, a)` tensor is invariant under yaw.**
 `15.6` on right *and* forward means conjugating by a heading change is the
@@ -328,8 +331,11 @@ script).
 
 **This closes the "quirk" both contact denominators were written around.**
 `Body_ResolveContact` and `Body_ResolveContactPair` apply `+0x40..0x70` to a
-world-space `r x n` with no rotation (`0x0884f3a8`-`0x0884f3d0` on the pair
-path), which read as a literal-but-wrong transcription and reproduced the
+world-space `r x n` with no rotation - `0x0884ebc0`-`0x0884ebe8` on the one-body
+path and `0x0884f3a8`-`0x0884f3d0` on the pair path, both re-read this pass
+rather than inherited, and neither has a `+0xc0` rotation anywhere between the
+`vcrsp.t` that builds the cross product and the `vtfm4.q` that consumes it.
+That read as a literal-but-wrong transcription and reproduced the
 original's `j` anyway. It is neither: `+0x40` **is** the world-space inverse
 inertia as this engine uses it, so the resolvers are consistent with the
 integrator rather than in spite of it. Nothing in
@@ -347,8 +353,8 @@ correct treatment and not this one. Under yaw the two agree exactly; under pitch
 and roll they do not, and
 [cornering-ground-truth.md](../../../physics/cornering-ground-truth.md) records
 the basis rotating `0.231x` and `0.647x` of what the momentum column accounts for
-on precisely those two axes. Whether that gap is this is unmeasured -
-see the handover thread.
+on precisely those two axes, closing at `0.970x` on yaw. Whether that gap is this
+is unmeasured, and that page is where the answer belongs.
 
 ### Answered: `Body_SetBoxInertia` (`0x0884e1ac`) writes `body+0x40`
 
@@ -386,7 +392,12 @@ is the textbook solid-box inertia:
 0884e22c  _swc1  f12,0x68(a0)       ; I^-1 [2][2]
 ```
 
-`I_xx = m (y^2 + z^2) / 12` is the solid rectangular cuboid. Note the tensor is
+`I_xx = m (y^2 + z^2) / 12` is the solid rectangular cuboid. **Those three
+numbers are authored from the hull's *body*-axis extents and applied by the
+engine in *world* axes** - the two statements sit next to each other and are both
+true; see [the section above](#corrected-2026-09-10-the-inverse-inertia-is-a-world-axis-diagonal-and-0x80-is-its-body-space-copy).
+Nothing in this constructor changes: `<Misc>` is read on `(right, up, forward)`
+and the diagonal is written in that order. Note the tensor is
 zeroed rather than set to identity - the constant at `0x08a907e0` was read and is
 64 bytes of `0x00` - so the result is purely diagonal with `[3][3] = 0`.
 
