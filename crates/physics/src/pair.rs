@@ -298,6 +298,12 @@ pub fn resolve(
 /// yaw in one tick, which a maintainer reported from play as far more spin
 /// than any of the originals. The original produces none.
 ///
+/// **This is the pair path only.** A craft against the *track* goes through
+/// `Body_ResolveContact` and [`crate::wall`], which pass the real contact
+/// point (`0x0884eea4: move a1,s1`) and so do spin the craft, at the `0.1`
+/// angular share `wall::ANGULAR_IMPULSE_SCALE` carries. Nothing here reaches
+/// that path; "a pair hit never spins" is not "nothing spins on impact".
+///
 /// **What the lever arm still does**: the denominator `D` carries the full
 /// angular compliance about the contact point - so `j` is solved as though
 /// all of the resulting spin were going to be applied, and then none of it
