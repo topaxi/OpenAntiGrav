@@ -533,8 +533,9 @@ and their order in the archive is an independent cross-check on which global is
 which, should anyone read the two display lists; and the mesh sits well away from
 them at 1048, matching its separate load path through `Vex_LoadModel`.
 
-To re-run or extend the method - single backslashes through `cargo run` directly,
-doubled if going through `just`, which eats one layer:
+To re-run or extend the method - single backslashes either way, through `cargo
+run` directly or through `just wad`/`just unpack` (both now hand `*ARGS`
+through unmangled; see `justfile`'s own `positional-arguments` comment):
 
 ```sh
 cargo run -q -p oag-tools --bin oag-wad -- hash 'Data\Weapons\Textures\Cannon_bolt.mip'

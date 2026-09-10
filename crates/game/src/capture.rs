@@ -134,7 +134,19 @@ pub struct Options {
 ///
 /// The boot movie is forty seconds, and the `--reel` leg is eight plus three
 /// two-second holds, so a minute of simulated time covers either and is still
-/// bounded.
+/// bounded. **That arithmetic only holds under the tick clock.** On a machine
+/// with a real audio device, an `--until` capture with nothing skipping the
+/// movie is audio-clocked per ADR-0019 (see
+/// `crate::audio::Audio::movie_playhead`): the headless loop runs far faster
+/// than real time, so the movie's real-time position barely advances inside
+/// this many ticks and the run never leaves `LogoFMV`. Confirmed directly -
+/// the same capture that fails here reaches `Language Selection` in 2,403
+/// ticks with `--no-audio`, matching this arithmetic. Pass `--no-audio` (or
+/// run somewhere with no device, which is what CI does) for a capture whose
+/// `--until` target is only reached by letting a movie play out; one that
+/// also holds or presses a skip button reaches its target long before the
+/// movie's own clock matters. Raising this ceiling would not fix an
+/// audio-clocked run - it would only make every capture slower.
 const MAX_TICKS: u32 = 60 * 60;
 
 /// Runs the sequence and writes one frame.

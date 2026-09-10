@@ -667,10 +667,12 @@ of which the code draws the one being carried. **Confidence 95** for the
 coincidence - it is measured, and reproducible with
 
 ```sh
-# The backslashes are doubled on purpose: `just` runs the recipe through a shell,
-# which eats one layer. Single backslashes here hash to a name no archive has, and
-# the error reads `no entry named DataXMLArcade_HUD.xml`.
-just wad cat --expand <image>:PSP_GAME/USRDIR/Data.wad 'Data\\XML\\Arcade_HUD.xml'
+# Single-quote the path so your own shell's quoting reaches `just` intact -
+# `wad` now hands its arguments through unmangled (see justfile's own
+# `positional-arguments` comment); a *doubled* backslash used to be needed to
+# survive an unquoted `{{ARGS}}` interpolation eating one layer, and would
+# now reach the archive as a literal double backslash and fail to hash.
+just wad cat --expand <image>:PSP_GAME/USRDIR/Data.wad 'Data\XML\Arcade_HUD.xml'
 ```
 
 **The place is the one that wins, and the original was asked.** Confidence **95**,
