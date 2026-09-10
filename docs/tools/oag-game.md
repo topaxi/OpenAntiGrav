@@ -128,6 +128,8 @@ ticks, and the ship is correspondingly slower than under `--hold cross`.
 | `--collision` | Overlay the collision soup - the geometry the physics world is actually made of, the same view [`oag-view --collision`](oag-view.md#collision) draws - on top of whichever track model was chosen above. |
 | `--log-every <n>` | Print a telemetry line every `n` ticks. `0` for none. |
 | `--size <WxH>` | With `--screenshot`, the image's size. Default `1440x816`. |
+| `--trace-out <file.csv>` | Simulation only, no window: write our per-tick state to a CSV in the capture's own columns, for `oag-trace compare` against one from `scripts/psp-trace.py`. Refused together with `--screenshot`. |
+| `--input-script <file.inputs>` | With `--screenshot` or `--trace-out`: drive the run from a committed `.inputs` file instead of `--hold`/`--press` - see [the verification protocol](../reverse-engineering/verification-protocol.md). |
 | `--dry-run` | Report what was loaded and exit. |
 
 All of them apply to a race started from the front end as well, since it is the same

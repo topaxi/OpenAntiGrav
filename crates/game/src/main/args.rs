@@ -4,7 +4,7 @@
 //! the type the rest of the run wants. Together they are what [`crate::cli`]
 //! declares and nothing interprets.
 
-use anyhow::{Result, ensure};
+use anyhow::{Context, Result, ensure};
 use log::warn;
 
 use oag_game::input;
@@ -239,6 +239,22 @@ pub(crate) fn give_weapon(name: Option<&str>) -> Result<Option<oag_tables::weapo
             )
         }
     }
+}
+
+/// Reads and parses `--input-script`'s file, for whichever leg is driving a
+/// race from one - `--race --screenshot` and `--trace-out` both go through
+/// this, so the two cannot drift the way they did before it existed: one read
+/// `cli.input_script`, the other silently never did. See
+/// `oag_trace::script::Script`.
+pub(crate) fn input_script(
+    path: Option<&std::path::Path>,
+) -> Result<Option<oag_trace::script::Script>> {
+    let Some(path) = path else { return Ok(None) };
+    let text =
+        std::fs::read_to_string(path).with_context(|| format!("reading {}", path.display()))?;
+    oag_trace::script::Script::parse(&text)
+        .map(Some)
+        .map_err(|e| anyhow::anyhow!("parsing {}: {e}", path.display()))
 }
 
 /// Resolves `--autopilot-pilot`'s spelling to a pilot, against the same
