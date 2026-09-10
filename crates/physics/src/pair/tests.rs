@@ -4,7 +4,7 @@
 //! modules; see `scripts/check-file-size.py`.
 
 use super::*;
-use oag_core::math::Quat;
+use oag_core::math::{Mat3, Quat};
 
 fn hull() -> Dimensions {
     Dimensions {
@@ -194,18 +194,132 @@ fn the_argument_order_does_not_change_the_outcome() {
     assert_eq!(b1.body.position, b2.body.position);
 }
 
-/// A glancing hit spins the craft, or a race is bumper cars on rails.
+/// A glancing hit does not spin either craft - the original applies the pair
+/// impulse at each body's own centre, so the lever arm is zero by
+/// construction (see [`respond`]). This test used to assert the opposite, and
+/// the opposite was `-267` degrees per second on a fast first contact.
 #[test]
-fn an_off_centre_hit_produces_spin() {
+fn an_off_centre_hit_spins_neither_craft() {
     let mut a = craft(
         Vec3::new(hull().width * HULL_SCALE * 0.7, 0.0, 2.0),
         Vec3::new(-20.0, 0.0, 0.0),
     );
     let mut b = craft(Vec3::ZERO, Vec3::ZERO);
-    resolve(&mut a, &hull(), &mut b, &hull()).expect("they overlap");
+    let contact = resolve(&mut a, &hull(), &mut b, &hull()).expect("they overlap");
+    assert!(contact.impulse > 0.0, "the hit was resolved: {contact:?}");
+    assert_eq!(a.body.angular_velocity, Vec3::ZERO);
+    assert_eq!(b.body.angular_velocity, Vec3::ZERO);
+}
+
+/// A body as PPSSPP read it: the original's basis rows `(up x forward, up,
+/// forward)` become this crate's `orientation` through the frame mapping
+/// [`contact_velocity`] documents - `right = -row0`, `orientation * Z = -row2`.
+fn captured(
+    position: [f32; 3],
+    velocity: [f32; 3],
+    omega: [f32; 3],
+    rows: [[f32; 3]; 3],
+) -> ShipState {
+    let row = |r: [f32; 3]| Vec3::from_array(r);
+    let basis = Mat3::from_cols(-row(rows[0]), row(rows[1]), -row(rows[2]));
+    ShipState {
+        body: Body {
+            position: Vec3::from_array(position),
+            orientation: Quat::from_mat3(&basis),
+            linear_velocity: Vec3::from_array(velocity),
+            angular_velocity: Vec3::from_array(omega),
+            mass: 1.0,
+            inertia: Vec3::new(15.6, 21.6, 15.6),
+            ..Body::default()
+        },
+        ..ShipState::default()
+    }
+}
+
+/// Two contacts the original was caught resolving, 2026-09-10, PPSSPP
+/// v1.20.4, an eight-craft SINGLE RACE on `pulse-psp-usa.chd`: every input
+/// read off both bodies and the contact record at the `jal` into
+/// `Body_ApplyImpulseAtPoint`, and `j` read back from the impulse vector on
+/// the stack (`s4`). `scripts/psp-pair-capture.py` is the recipe.
+///
+/// The first is a staged rear-end hit at `vn = -78.5`. The second is a craft
+/// tumbling at 84 rad/s with its basis well off level, which is the case
+/// that separates `v + cross(r, R^T omega)` from `v + omega x r` (`0.184`
+/// against `-0.085`) and the literal body-tensor denominator from the
+/// rotated one (`0.18440` against `0.18398`). The tolerances are set between
+/// those alternatives, not at float noise.
+#[test]
+fn the_response_reproduces_two_contacts_the_original_was_caught_resolving() {
+    let mut a = captured(
+        [-220.81857, -50.145325, -581.0928],
+        [-65.15091, 0.51419795, 60.969162],
+        [0.003608909, -0.0074495664, -0.03581129],
+        [
+            [0.6698566, -0.050424457, 0.7407764],
+            [0.037723415, 0.9987142, 0.03387033],
+            [-0.74153185, 0.005256349, 0.6708975],
+        ],
+    );
+    let mut b = captured(
+        [-227.55688, -50.293213, -574.8641],
+        [-7.265_033, -5.7860765, 6.084974],
+        [-7.874016, -0.43041557, -51.043682],
+        [
+            [0.68709743, -0.36553824, 0.6279159],
+            [0.2958006, 0.9300953, 0.21777053],
+            [-0.66362506, 0.03610833, 0.7471925],
+        ],
+    );
+    let contact = respond(
+        &mut a,
+        &mut b,
+        Vec3::new(0.74153167, -0.005256348, -0.6708973),
+        Vec3::new(-224.18773, -50.21927, -577.97845),
+        0.8196907,
+    )
+    .expect("a rear-end hit at 80 units/s resolves");
     assert!(
-        b.body.angular_velocity.length() > 0.0,
-        "an off-centre impulse must produce angular velocity"
+        (contact.impulse - 43.16971).abs() < 0.01,
+        "rear-end j {} against the original's 43.16971",
+        contact.impulse
+    );
+    assert_eq!(
+        a.body.angular_velocity,
+        Vec3::new(0.003608909, -0.0074495664, -0.03581129)
+    );
+
+    let mut a = captured(
+        [-121.563614, -49.78744, -193.69652],
+        [119.600815, -0.6304198, -0.16429144],
+        [-0.006623617, 0.0322605, 0.025514752],
+        [
+            [0.004427044, -0.007387802, -0.9999629],
+            [0.0046109925, 0.9999623, -0.0073673837],
+            [0.9999796, -0.0045782058, 0.004460942],
+        ],
+    );
+    let mut b = captured(
+        [-119.225075, -49.789764, -193.641],
+        [-99.24166, 1.3238686, -0.4299373],
+        [56.963963, -0.11366701, 62.044594],
+        [
+            [-0.082835935, -0.3124286, 0.9463227],
+            [0.29989827, 0.8977535, 0.32264495],
+            [-0.950368, 0.31052715, 0.019330546],
+        ],
+    );
+    let contact = respond(
+        &mut a,
+        &mut b,
+        Vec3::new(0.004427044, -0.007387802, -0.9999629),
+        Vec3::new(-120.39435, -49.788605, -193.66876),
+        4.3339205,
+    )
+    .expect("the tumbling pair resolves");
+    assert!(
+        (contact.impulse - 0.18440).abs() < 2.0e-4,
+        "tumbling j {} against the original's 0.18440",
+        contact.impulse
     );
 }
 

@@ -81,23 +81,60 @@ closing speed and a genuinely fast first contact - not a sign error, not a
 bad inertia, not tuned, and **not changed this pass** per the coordinator's
 explicit instruction not to touch the physics.
 
-## Open - needs Ghidra/PPSSPP, another member holds both this pass
+## Resolved 2026-09-10: the original never spins a craft on a craft-to-craft hit
 
-**Whether the original produces a comparable yaw rate at a comparable `vn`
-(-146 to -157 units/s) on a genuine fast near-head-on craft-craft hit is
-unread.** This port's own physics say it should, by the same recovered
-formula, and there is no continuous collision detection in either build (a
-fast enough closing speed is caught late and deep by construction in the
-original's own discrete per-tick `Collision_BoxAgainstBox` too) - but that is
-an inference, not a capture. Whoever gets Ghidra/PPSSPP next: stage two craft
-for a fast, steep-angle, near-head-on hit (closing speed on the order of 150
-units/s) and read the struck craft's angular velocity the tick contact
-resolves. If the original shows a comparably large yaw, this closes clean. If
-it does not, the divergence is somewhere this pass could not reach without
-a live capture - possibly the original's queue/deferred-impulse path
-(`Body_QueueDeferredImpulse`, PS2) doing something the PSP's direct
-`Body_ResolveContactPair` does not, which `contact-response.md` has not yet
-compared at a high `vn`.
+The Ghidra/PPSSPP measurement this section used to ask for was run, and the
+answer is **no** - the original produces no yaw at all at any `vn`, and the
+mechanism is one register. `Body_ResolveContactPair` passes each body's **own
+position** (`body+0x30`) as the "point" argument of both
+`Body_ApplyImpulseAtPoint` calls, so the applier's lever arm is exactly zero
+and its angular half never fires. The lever arm to the contact point is used
+only in the *denominator*. Read at instruction level, corroborated in the PS2
+twin, and caught live in PPSSPP on six real contacts - including a staged
+rear-end hit at 99 units/s closing (`vn = -78.5`, `j = 43.17`) whose struck
+craft's angular velocity was bit-identical across the call and peaked at
+6.4 deg/s over the next 30 ticks, all of it steering. Full evidence, the
+instruction listing and the per-contact table:
+`docs/ghidra/functions/psp-pulse-usa/contact-response.md`, section "Live,
+2026-09-10". Recipe: `scripts/psp-pair-capture.py`.
+
+`oag_physics::pair::respond` now applies the impulse through
+`Body::apply_impulse` alone. The `-267`/`-276` deg/s first contacts above are
+gone by construction. **This is a fidelity fix, not a tuning**: the maintainer's
+"too much spin" report from play was right, and it was right about all three
+originals because the lineage shares this resolver.
+
+Two smaller things the same capture settled, both now in `pair.rs` and pinned
+by a test that reproduces the original's `j` from the raw captured inputs to
+five figures:
+
+- the point velocity the gate and `vn` are built from is `v + cross(r, R^T
+  omega)` - lever arm on the *left* of the cross product, and the world-space
+  `omega` spuriously rotated through the body's basis rows - not the textbook
+  `v + omega x r`. On a level craft yawing about `up` the two differ only in
+  the sign of a small term, which is why nothing noticed;
+- the denominator applies the body-space diagonal to the world-space `r x n`
+  without rotating it, the same quirk the one-body path was already read to
+  have.
+
+Measured on this tree, same weapons-live `SingleRace` as
+`craft_sticking_ground_truth`: overlapped pair-ticks **1,558 -> 1,134**,
+sustained (streak > 10) **1,032 -> 808**. Both moved the right way without
+anything being tuned toward them - a craft that is not spun into its neighbour
+by the first touch does not stay in contact as long. `race_ground_truth`'s
+twelve-circuit guard is unchanged: all twelve clean, `01_Track` 1 respawn at
+`[794]`, before and after. `crates/ai/tests/determinism.rs` did **not** move:
+`oag-ai`'s harness has no pair resolver in it (the pair pass lives in
+`oag_game::race::Field::resolve_craft_pairs`), so its `Field` rows never
+touched this code.
+
+**Still open from the capture**: `Body_ResolveContact` - the *wall* path -
+builds its point velocity by the same `cross(r, R^T omega)` idiom
+(`0x0884ea58`/`0x0884ea9c`), and `crates/physics/src/wall.rs` computes the
+textbook `omega x r` there. On a craft yawing at 0.8 rad/s with a 5-unit lever
+arm that moves `vn` by up to 8 units/s. Unmeasured on that path; the capture
+script's approach (stop at the `jal`, read everything, recompute `j` offline)
+transfers directly to `0x0884eea8`.
 
 ## Next steps
 
@@ -106,7 +143,8 @@ compared at a high `vn`.
   personality-independent collision-avoidance floor - which was deliberately
   left out of scope this pass (a bigger design decision than "read a channel
   this term already had access to").
-- The Ghidra/PPSSPP item above.
+- ~~The Ghidra/PPSSPP item above.~~ Done 2026-09-10; the wall-path point
+  velocity is the follow-up it left.
 
 ## 2026-09-09: a correctness fix reopened the sticking question
 
@@ -151,5 +189,6 @@ the pathology has never been re-measured against a correct Cannon.
   reverting `oag_ai::Driver::social`'s `alongside`/`CONTACT_FLOOR` fix for one
   run. That restores the like-for-like pair the bound's original rule needed,
   and would say whether 2,000 is generous, tight, or meaningless.
-- The residual ~46-tick sticking and the Ghidra/PPSSPP capture item, both
-  unchanged, above.
+- The residual neutral-personality sticking, above. The Ghidra/PPSSPP
+  capture item is closed (2026-09-10 section); what it left open is the wall
+  path's point velocity.

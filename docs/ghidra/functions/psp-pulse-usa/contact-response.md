@@ -737,9 +737,15 @@ unread; a craft against track geometry takes the single-body path.
 
 **Read 2026-08-11.** This page listed it under "Not determined" until then, as the
 one thing standing between the engine and craft-to-craft collision. Confidence
-**80**: the arithmetic is unambiguous and every VFPU step is accounted for, but it
-is decompilation of one function with no runtime leg and no second binary, which
-the [rubric](../../../reverse-engineering/confidence-rubric.md) caps at 84.
+was **80** on that reading - the arithmetic is unambiguous and every VFPU step is
+accounted for, but decompilation of one function with no runtime leg and no
+second binary, which the
+[rubric](../../../reverse-engineering/confidence-rubric.md) caps at 84. **Raised
+to 95 on 2026-09-10**: six live contacts caught at the resolver's own `jal`
+sites with every input and the applied impulse read back, `j` reproduced
+offline to five significant figures, and the PS2 twin agreeing on the one
+thing the static reading had wrong - see
+[the pair impulse is applied at the body's own position](#live-2026-09-10-the-pair-impulse-is-applied-at-the-bodys-own-position-not-the-contact-point).
 
 Signature, as the narrowphase calls it (see [collision.md](collision.md)):
 `(contact, bodyB, bodyA)`. The contact record is read at three rows - the contact
@@ -784,8 +790,13 @@ Two things to take from it:
 
 ### What it does with the impulse
 
-Equal and opposite, at the contact point, through the named
-`Body_ApplyImpulseAtPoint` (`0x0884d64c`): `+j*n` to A and `-j*n` to B.
+Equal and opposite, through the named `Body_ApplyImpulseAtPoint`
+(`0x0884d64c`): `+j*n` to A and `-j*n` to B. **Not at the contact point** - this
+page said so until 2026-09-10 and was wrong: the "point" argument of both calls
+is the body's *own position*, `body+0x30`, so the applier's lever arm is zero
+and no angular velocity results. The section below has the instructions and the
+live capture; the consequence for `crates/physics` is that a craft-to-craft hit
+never spins either craft.
 
 Then a **symmetric positional correction**: each body is moved along the normal
 by `±0.25 * s`, where `s` is the contact row-3 scalar (penetration depth by
@@ -1772,14 +1783,134 @@ that), and the contact is **one per pair**, matching `pair::overlap`'s shape.
 
 ### Still not determined
 
-- **What the live session confirmed is the write, not yet the read.** The
-  2026-09-07 session verified that `Collision_BoxAgainstBox` writes a contact
-  for two craft; it did not separately breakpoint `Body_ResolveContactPair`
-  (`0x0884ef30`) to catch it consuming that exact contact with two real craft
-  bodies. That `Body_StepWorld`'s pass 6 is what reads the array
-  `Collision_BoxAgainstBox` just filled is still `collision.md`'s static
-  frame-order reading, not independently live-verified this pass - a
-  breakpoint on `0x0884ef30` during the same forced-overlap setup would close
-  that gap directly. `Collision_DispatchPair`'s own broadphase pairing is
-  likewise unchanged from what `collision.md` already documents, not
-  re-verified here.
+- ~~**What the live session confirmed is the write, not yet the read.**~~
+  **Closed 2026-09-10**: `Body_ResolveContactPair` was breakpointed at its
+  own `jal` sites during a live eight-craft race and caught consuming real
+  contacts between real craft bodies six times, including a staged one - the
+  section below. `Collision_DispatchPair`'s own broadphase pairing is still
+  unchanged from what `collision.md` already documents, not re-verified.
+
+## Live, 2026-09-10: the pair impulse is applied at the body's own position, not the contact point
+
+**Why this was looked at.** A maintainer who plays all of the originals reported
+craft-to-craft collision in this port as "too much spin on a hit" against Pulse
+PSP, HD/Fury and 2048 alike. The port's `oag_physics::pair` applied the pair
+impulse at the contact point with the full angular half, and a real eight-craft
+race had logged two first contacts at `vn = -146` and `-157` units/s producing
+`-267` and `-276` degrees per second of yaw in one tick. Whether the original
+did the same at a comparable `vn` was the open question.
+
+**It does not, and the reason is one register.** `Body_ResolveContactPair`'s
+tail, at instruction level:
+
+```text
+0884efdc  addiu s3,s0,0x30        ; s3 = bodyA + 0x30   (bodyA.position)
+0884f178  addiu a1,s1,0x30        ; a1 = bodyB + 0x30   (bodyB.position) - never rewritten
+...
+0884f62c  move  a0,s1
+0884f630  jal   Body_ApplyImpulseAtPoint      ; (bodyB, &bodyB.position, -j*n)
+0884f634  _move a2,s5
+...
+0884f674  move  a0,s0
+0884f678  move  a1,s3
+0884f67c  jal   Body_ApplyImpulseAtPoint      ; (bodyA, &bodyA.position, +j*n)
+0884f680  _move a2,s4
+```
+
+`Body_ApplyImpulseAtPoint` builds its lever arm as `*a1 - body+0x30`
+(`0x0884d6dc`-`0x0884d6f8`), so on the pair path `r == 0` exactly, `cross(r, p)`
+is zero, `body+0x160` is left as it was, and `body+0x150` is recomputed from the
+unchanged momentum. **A craft-to-craft contact imparts no angular velocity at
+all in the original.** The one-body path is different: `Body_ResolveContact`
+passes the *contact* as `a1` (`0x0884eea4: move a1,s1`), so a wall hit has a
+real lever arm and the `0.1`-scaled angular half described above. Only the pair
+path is centred.
+
+The denominator still uses the contact point: `r` for the angular compliance
+term is `contact.point - body+0x30` on both bodies (`0x0884ef88`-`0x0884ef94`,
+`0x0884f124`-`0x0884f130`). So `j` is solved as though the spin were going to
+happen, and then it is not applied - the pair-path form of the soft-in-translation
+split.
+
+**The PS2 twin does the same.** `Body_ResolveContactPair` (`0x0015e600`,
+`SCES_547.48`) calls its applier as `FUN_0015d980(body, body + 0x30, impulse)`
+for both bodies - `pauVar1 + 3` on a 16-byte-stride pointer in the decompile.
+
+### The capture
+
+PPSSPP v1.20.4, `pulse-psp-usa.chd`, an eight-craft SINGLE RACE, the player's
+craft left on the grid. `scripts/psp-pair-capture.py` arms `0x0884f630`, reads
+the registers, the contact record and both bodies, moves the breakpoint to the
+return (`0x0884f638`) and reads body B again, then to `0x0884f684` for body A,
+and finally follows both bodies' `+0x150` through 20-30 `Ship_UpdateCraft` ticks.
+Six contacts: four natural grid-start touches, and two staged by writing the
+player's body into a rival's path (the same write `psp-drive.py place` uses).
+
+| contact | `vn` (original's form) | `j` | lever `|contact - body+0x30|` | `a1 == bodyB+0x30` | `omega` delta, both bodies | struck rival's peak `|omega|` over the next 20-30 ticks |
+| --- | --- | --- | --- | --- | --- | --- |
+| grid 0 | -1.10 | 0.591 | 4.98 | yes | `0.00000` on every axis | 1.1 deg/s |
+| grid 1 | -1.10 | 0.534 | 5.27 | yes | `0.00000` | 8.4 deg/s |
+| grid 2 | -1.49 | 0.794 | 4.87 | yes | `0.00000` | 18.6 deg/s |
+| grid 3 | -0.66 | 0.345 | 4.99 | yes | `0.00000` | 12.8 deg/s |
+| staged, tumbling | -0.36 | 0.184 | 1.17 | yes | `0.00000` | 22.6 deg/s |
+| staged, rear-end at 99 units/s closing | **-78.5** | **43.17** | 4.59 | yes | `0.00000` | **6.4 deg/s** |
+
+The rear-end row is the measurement the thread asked for: a rival doing 89
+units/s ran into a placed craft doing 10 the same way, took `j = 43.17` (its
+speed went 89 to 46 in the tick), and its angular velocity did not move across
+the call - `(0.0036, -0.0074, -0.0358)` before and after, bit for bit - and
+peaked at 6.4 deg/s over the following 30 ticks, all of it the driver steering.
+The follow-up peaks in the other rows are cornering yaw from the AI's own
+steering (they rise linearly over ten ticks, not in a step), not a reaction to
+the contact. `d(v)` equalled `j` exactly on every row, `invMass` being `1`.
+
+The staging itself has a trap worth writing down: the placed craft tumbled at
+51-84 rad/s within a tick of the write, whether it faced the rival or drove the
+same way. `psp-drive.py place` never showed that on a craft already racing, so
+it reads as the un-launched player craft on the grid fighting the write, not a
+property of the write. It did not matter for the measurement - the rival is the
+struck craft either way - and it produced the one sample that settles the next
+point.
+
+### `j` reproduced offline, and what that fixes about the point velocity
+
+With the basis rows (`+0x00..0x30`) and the inverse-inertia block (`+0x40..0x70`)
+recorded alongside, the original's `j` recomputes from its own inputs. Three
+candidate conventions for the point velocity, against the two staged rows:
+
+| point velocity | tumbling `j` | rear-end `j` |
+| --- | --- | --- |
+| `v + cross(r, R^T omega)` (**the original**) | **0.18440** | **43.1697** |
+| `v + omega x r` (textbook) | -0.0850 | 46.180 |
+| `v + cross(r, R omega)` | 22.30 | 40.81 |
+| recorded | 0.18440 | 43.16971 |
+
+`R` is the basis-rows block, `R^T omega` the `vtfm4.q C000,E100,C200` at
+`0x0884f038` applied to a world-space `omega` (it *is* world-space: `+0x150`
+equals the world inverse inertia at `+0x80` times `+0x160` on the tumbling
+body, and not the body-space one), and the `vcrsp.t` at `0x0884f078` has the
+lever arm on the **left**. Both the operand order and the rotation are the
+original's, and the tumbling row is what makes them visible - on a level craft
+yawing about `up`, `R^T omega == omega` and the two orders differ only in sign
+on a term that is small.
+
+The denominator, on the same row: the body-space diagonal applied to the
+**world-space** `r x n` without rotation (`0x0884f3a8`-`0x0884f3d0`) gives
+`0.18440`; the textbook rotated form gives `0.18398`; the world tensor at
+`+0x80` gives `0.18341`. The literal reading wins by the same margin the
+one-body denominator above was already read to use.
+
+`crates/physics/src/pair.rs` now applies the impulse through
+`Body::apply_impulse` alone (no angular half), builds `vn` from
+`v + cross(r, R^T omega)`, and applies the body-space diagonal to the
+world-space cross product; `pair/tests.rs` pins both staged rows' `j` from the
+raw captured inputs, with tolerances set between the candidate conventions.
+Confidence **95** on `Body_ResolveContactPair` as a whole: runtime trace on the
+predicted addresses, `j` reproduced to five figures, and the PS2 twin agreeing on
+the centred application.
+
+**Still open from this pass**: `Body_ResolveContact`'s one-body point velocity
+is built by the same idiom (`vtfm4.q E100` at `0x0884ea58`, `vcrsp.t` with `r`
+on the left at `0x0884ea9c`), and `crates/physics/src/wall.rs` computes the
+textbook `omega x r` there. Unmeasured on that path; on a craft yawing at
+0.8 rad/s with a 5-unit lever arm it moves `vn` by up to 8 units/s.

@@ -518,7 +518,7 @@
 0x08836084	function	AiStats_ParsePosBalancing	88	ai-stats.md
 0x088361f0	function	AiStats_ParseSkillScale	88	ai-stats.md
 0x08836548	function	AiStats_ParseController	88	ai-stats.md
-0x0884ef30	function	Body_ResolveContactPair	80	contact-response.md
+0x0884ef30	function	Body_ResolveContactPair	95	contact-response.md
 
 0x0880c058	function	WeaponStats_ParseRocket	88	weapon-fire.md
 0x08861814	function	Weapons_DispatchFire	80	weapon-fire.md
