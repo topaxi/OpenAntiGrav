@@ -12,12 +12,14 @@
 # its body's trailing `{{ARGS}}` changed to `"$@"` to actually pick this up.
 #
 # A recipe with named parameters *before* `*ARGS` (the `launch-*`, `rpcs3-*`
-# and `pcsx2-*` families) was deliberately left alone: `$1` there is the first
-# *declared parameter*, not the first extra argument, so `"$@"` would
-# re-include the image path a line already names via `{{image}}`. Fixing those
-# needs a `#!/usr/bin/env sh` body plus `shift N` for the right `N`, which is a
-# real edit with no WAD-path bug behind it - none of them take a WAD-internal
-# path, only an image path or an emulator flag - so it stays undone here.
+# and `pcsx2-*` families, plus `scripted-sim`, `scripted-emu`, `frame-shot`
+# and `capture-ghidra-state`) was deliberately left alone: `$1` there is the
+# first *declared parameter*, not the first extra argument, so `"$@"` would
+# re-include whatever that parameter already names via its own `{{...}}`
+# interpolation. Fixing those needs a `#!/usr/bin/env sh` body plus `shift N`
+# for the right `N`, which is a real edit with no WAD-path bug behind it -
+# none of them take a WAD-internal path, only an image, a scenario file or an
+# emulator flag - so it stays undone here.
 set positional-arguments
 
 default: check
