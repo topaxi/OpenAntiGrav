@@ -442,6 +442,26 @@ identical convention (`docs/formats/track.md`), but the *rotation* case -
 a `Ship Collision Fx` locator that authors something other than identity -
 has not been observed in the corpus, only prepared for.
 
+**The banking half of this composition is now screenshot-verified, not just
+proven algebraically.** `verification/scenarios/steer-left.inputs` (a
+constant left lock from the grid, `just play --race --no-audio
+--input-script verification/scenarios/steer-left.inputs --screenshot ...
+--ticks N`) puts the craft into Talon's Junction's wall at tick 309, banked
+2.45° at its peak (tick 320) - measured with a temporary debug print of
+`race::tick`'s own `up` variable after normalising it, not read off a
+screenshot by eye. Forcing that same `up` to `Vec3::Y` (the pre-fix
+arithmetic) and re-rendering the identical tick produces a pixel-identical
+frame outside the spark burst and a measurably different one inside it -
+`compare -metric AE` finds 300-500 differing pixels at ticks 313/317,
+entirely inside the burst's own streaks. So the composition is doing real,
+render-affecting work and not just carrying dead weight. At 2.45° the
+difference is real but subtle: legible in a same-tick diff, marginal to spot
+in either frame on its own. No scenario tried (`steer-left`, `steer-both-ways`,
+`airbrake-asymmetric`, the `talons-junction-inverted-section` autopilot replay)
+produced a wall contact banked much past 3° - this reduces the honest claim
+from "unverified past the algebra" to "verified, and subtle at the bank
+angles this project's scenarios reach," not to "dramatically confirmed."
+
 An earlier state of this project aimed the collision-spark cone along the
 wall contact normal instead of any of the above. That was retired
 2026-08-10 (`1f7f4e67`), before the frame-vs-locator distinction here was
