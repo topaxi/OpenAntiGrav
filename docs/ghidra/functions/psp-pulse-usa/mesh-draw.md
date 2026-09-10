@@ -1843,10 +1843,14 @@ against a live capture.
    section above measures them inert on this content. They are worth adding only
    if the renderer ever wants the original's fill-rate behaviour, which it does
    not.
-5. `is_alpha_tested()`'s `0x800` bit now has operational evidence and a
+5. ~~`is_alpha_tested()`'s `0x800` bit now has operational evidence and a
    per-batch alpha reference behind it (`0x7f`, `0`, `0x10`); if the renderer
    ever implements alpha-tested batches, that reference is where it comes
-   from.
+   from.~~ - **done 2026-09-10.** The selector is read, the reference is
+   plumbed per draw call, and the pixel cost is measured. See
+   ["The alpha-test reference's selector, and the pad that
+   discriminates"](#the-alpha-test-references-selector-and-the-pad-that-discriminates)
+   below.
 
 ### Still open here
 
@@ -2036,3 +2040,133 @@ section keeps it out of the racing view), so the layer split was never what
 resolved the z-fight - authored-section placement was, already landed. The
 bit's role elsewhere (splitting a real 66.4/33.6 mesh population) stands
 independently of what it happens to do for this one asset.
+
+## The alpha-test reference's selector, and the pad that discriminates
+
+**2026-09-10, confidence 86.** `Gfx_BuildBatchStateList` programs one of three
+alpha references and this page recorded all three without saying what chooses
+between them. It is two bits of the batch's own header, and the chain that
+proves they *are* the batch's own header is three functions long with no
+transform in it.
+
+### The branch
+
+Inside the opaque class (`param_2 & 0x700 == 0`) and outside the
+`header_flags & 0x10` branch that disables the test:
+
+```c
+if ((param_2 & 0x800) == 0) {                 // not alpha-tested
+    Gu_Enable(0); Gu_AlphaFunc(1, 0, 0xff);   // GU_ALWAYS - no test
+} else {
+    Gu_Enable(0);
+    if ((param_3 & 0x20) == 0) {
+        if ((param_2 & 0x80) == 0) { Gu_DepthFunc(6); Gu_AlphaFunc(6, 0x7f, 0xff); }
+        else                       { Gu_DepthFunc(6); Gu_AlphaFunc(6, 0,    0xff); }
+    } else {                         Gu_DepthFunc(7); Gu_AlphaFunc(6, 0x10, 0xff); }
+}
+```
+
+Two selector bits, then: **`header_flags & 0x20`** picks `0x10`, and within its
+clear side **`pass_mask & 0x80`** picks `0` over `0x7f`. `header_flags & 0x20`
+moves `Gu_DepthFunc` as well (`7` rather than `6`), so the bit marks a material
+class and not only a stricter cutout - independent corroboration that it is a
+real distinction and not a decompiler artefact.
+
+### Why `param_2` and `param_3` are the on-disk `pass_mask` and byte 3
+
+`Mesh_InitBatch` (`0x0890e8b4`), at load, once per batch:
+
+```c
+Gfx_AcquireBatchStateList(g_display, *batch, *(u8 *)(batch + 3),
+                          mesh->0xcc, mesh->0xd0, *(u8 *)(batch + 0x29));
+```
+
+`Gfx_AcquireBatchStateList` (`0x0891df48`) interns that tuple into a 150-entry,
+stride-`0x1c` table, and `Gfx_CompileDirtyBatchStateLists` (`0x0891e054`)
+replays the entry's `+0x08` (u16), `+0x0a` (u8), `+0x00`, `+0x04` and `+0x0b`
+into `Gfx_BuildBatchStateList` in that order. **Nothing between the file and
+the builder changes either word**, which is what makes the reference a pure
+function of two fields `oag_vex::vex::Batch` already parses.
+
+A side answer to this page's own open question, and only a partial one:
+`Mesh_InitBatch` writes `batch+0x28` and `batch+0x29` and **not** `+0x00` or
+`+0x03`. So the batch's own init path does not touch the two selector words;
+that is not proof nothing else does.
+
+### The disc says three of the four combinations occur, and the third one settles it
+
+Censused over every `.vex` on three discs - mesh nodes and `Speedup
+Pad`/`Weapon Pad` nodes alike, since a pad's payload is a mesh payload
+(`crates/vex/tests/alpha_test_reference_ground_truth.rs`):
+
+| `pass_mask & 0x880` | `header_flags & 0x30` | reference | PSP Pulse | PSP Pure | PS2 Pulse |
+| --- | --- | --- | ---: | ---: | ---: |
+| `0x0800` | `0x00` | `0x7f` | 1,500 | 956 | 1,313 |
+| `0x0880` | `0x00` | `0` | - | 349 | 20 |
+| `0x0880` | `0x20` | `0x10` | 7,823 | 1,749 | 14,046 |
+
+The middle row is the one worth the space. It is the only combination where the
+recovered branch and the obvious rival - "`header_flags & 0x20` alone selects,
+`pass_mask & 0x80` is unrelated" - give different answers: `0` here, `0x7f`
+there. Those 349 Pure batches are its **`Speedup Pad`s**, whose glow texture
+tops out at alpha `58/255`; under the rival reading every one of them discards
+whole and the pads render nothing, which is the exact failure
+`crates/render/tests/pad_alpha_test_ground_truth.rs` was written for in
+2026-08-17. It renders them and counts lit pixels, and they draw.
+
+**86 rather than 84** for that reason: the decompile alone is the rubric's
+"decompilation only, consistent call sites" ceiling, and what lifts it is that
+the shipped data separates this reading from its rival and the separation is
+rendered rather than merely counted. **Not 90**, because none of it is a
+runtime trace: no breakpoint has seen the GE programmed this way.
+
+### What it costs on screen
+
+`crates/render/examples/threshold_probe.rs` renders a circuit offscreen at
+1024x1024 at four yaws, once with each batch's own reference and once with the
+old flat `1/255`:
+
+| Circuit | lit before -> after, 4 frames | pixels differing |
+| --- | --- | ---: |
+| `01_Track` | 85,249 -> 85,102 | 1,298 |
+| `16_Track` | 522,427 -> 522,342 | 6,170 |
+
+**Nothing structural leaves the picture** - the two frames read as the same
+circuit at every angle - and the lit count moves *up* at two of the eight
+framings, which is the signature the change predicts rather than a
+contradiction of it: the cutout pipeline returns alpha `1.0` and writes depth,
+so a texel that cleared `1/255` was painted **solid** and occluded what was
+behind it. Discarding it reveals brighter geometry.
+
+**Which bucket the delta comes from is worth stating, because the texel census
+predicts the wrong one.** Rendering the `0x7f` batches alone against the old
+threshold reproduces the delta *exactly* - 1,298 and 6,170, the same numbers -
+so all of it is the bucket that discards **zero** texels of the decoded
+texture. There is no conflict: the shader samples that texture filtered and
+mipped, a `{0, 255}` cutout edge arrives at the alpha test as a ramp, and
+`0x7f` cuts it at half coverage where `1/255` cut it at any. A leaf tightens by
+about a pixel. The original's own sampler filters the same way, which is
+presumably why the strict reference is authored on exactly this kind of
+texture.
+
+So **the census's "the `0x7f` bucket discards no texels" is a statement about
+the decoded image and not about the picture**, and is flagged as such where it
+is asserted. The `0x10` bucket's 431,576 texels are alpha `1..=16` on surfaces
+too small at whole-circuit framing to move a pixel there - but they are the
+half that can occlude, and Pure's `Z3_whiteblue_cloud_GLOW.tga` is the case
+with no ambiguity: a uniform alpha of 3 across 4,096 texels on 13 batches,
+drawn as solid cloud until now, discarded outright by the reference the file
+itself asks for.
+
+### Still open here
+
+- The branch **order** between the two bits is untestable on Pulse's PSP disc,
+  where they are always set together; it is Pure's and PS2's pads that separate
+  them, and only in the one direction the discs happen to author. Nothing on
+  any disc sets `header_flags & 0x20` with `pass_mask & 0x80` clear.
+- The selector was read in the PSP Pulse executable only. Pure's and PS2's
+  executables author the same patterns in the same fields and neither has been
+  read.
+- `header_flags & 0x10`, which disables the test outright, is authored by **no
+  batch on any of the three discs**. The branch is real in the decompile and
+  dead in the data.

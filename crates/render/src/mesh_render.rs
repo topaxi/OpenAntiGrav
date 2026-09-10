@@ -28,6 +28,9 @@ pub use velocity::{VELOCITY_FORMAT, Velocity};
 /// size ceiling - see [`crate::capture`] for both functions' own docs.
 pub use crate::capture::{capture_from, capture_pixels_from};
 
+mod cutout;
+pub use cutout::CutoutPipelines;
+
 mod target;
 pub use target::{fragment_options, is_linear_target, linear_constants};
 
@@ -110,6 +113,11 @@ pub struct Built {
     /// the shader's default, which is the PSP reference `mesh.wgsl`'s own
     /// `ALPHA_TEST_THRESHOLD` carries the evidence for.
     pub alpha_test_pipeline: wgpu::RenderPipeline,
+    /// One cutout pipeline per alpha-test reference the model's own batches
+    /// ask for, in first-seen order - see [`cutout`] for the recovery and the
+    /// measured cost, and [`CutoutPipelines::select`] for the pick. Empty for
+    /// a model built from anything but a `.vex`.
+    pub cutout_pipelines: Vec<(f32, wgpu::RenderPipeline)>,
     /// Blended pass: depth write off, the `blend` the caller passed to
     /// [`build`] - [`TRANSPARENT_BLEND`] for ordinary scene geometry. Draws
     /// [`Model::transparent_draws`] last, as a third `set_pipeline` in the
@@ -641,59 +649,75 @@ pub fn build(
     // pipeline (a cutout is meant to occlude and be occluded exactly like
     // opaque geometry), except the fragment shader discards pixels below a
     // threshold instead of always returning alpha 1.0.
-    let alpha_test_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-        label: Some("mesh alpha test"),
-        layout: Some(&pipeline_layout),
-        vertex: wgpu::VertexState {
-            module: &shader,
-            entry_point: Some("vs_main"),
-            buffers: &[Some(wgpu::VertexBufferLayout {
-                array_stride: std::mem::size_of::<GpuVertex>() as u64,
-                step_mode: wgpu::VertexStepMode::Vertex,
-                attributes: &wgpu::vertex_attr_array![
-                    0 => Float32x3, 1 => Float32x3, 2 => Float32x4, 3 => Float32x2,
-                    4 => Float32, 5 => Uint32, 6 => Float32x2, 7 => Uint32, 8 => Float32,
-                    9 => Uint32, 10 => Float32
-                ],
-            })],
-            compilation_options: Default::default(),
-        },
-        fragment: Some(wgpu::FragmentState {
-            module: &shader,
-            entry_point: Some(velocity.entry("fs_main_alpha_test", "fs_main_alpha_test_velocity")),
-            // Alpha is the bloom's glow mask - see [`GlowMask`]. A cutout
-            // writes depth like the opaque pipeline, so it writes real
-            // velocity too.
-            targets: &velocity_targets(
-                wgpu::ColorTargetState {
-                    format,
-                    blend: None,
-                    write_mask: glow.writes(),
+    let make_cutout = |label: &str, reference: Option<f32>| {
+        // A per-batch reference overrides the model-level one already in
+        // `constants`; `wgpu` rejects a duplicate key, so it replaces rather
+        // than shadows.
+        let mut constants = constants.to_vec();
+        if let Some(reference) = reference {
+            constants.retain(|(name, _)| *name != "alpha_test_ref");
+            constants.push(("alpha_test_ref", f64::from(reference)));
+        }
+        device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some(label),
+            layout: Some(&pipeline_layout),
+            vertex: wgpu::VertexState {
+                module: &shader,
+                entry_point: Some("vs_main"),
+                buffers: &[Some(wgpu::VertexBufferLayout {
+                    array_stride: std::mem::size_of::<GpuVertex>() as u64,
+                    step_mode: wgpu::VertexStepMode::Vertex,
+                    attributes: &wgpu::vertex_attr_array![
+                        0 => Float32x3, 1 => Float32x3, 2 => Float32x4, 3 => Float32x2,
+                        4 => Float32, 5 => Uint32, 6 => Float32x2, 7 => Uint32, 8 => Float32,
+                        9 => Uint32, 10 => Float32
+                    ],
+                })],
+                compilation_options: Default::default(),
+            },
+            fragment: Some(wgpu::FragmentState {
+                module: &shader,
+                entry_point: Some(
+                    velocity.entry("fs_main_alpha_test", "fs_main_alpha_test_velocity"),
+                ),
+                // Alpha is the bloom's glow mask - see [`GlowMask`]. A cutout
+                // writes depth like the opaque pipeline, so it writes real
+                // velocity too.
+                targets: &velocity_targets(
+                    wgpu::ColorTargetState {
+                        format,
+                        blend: None,
+                        write_mask: glow.writes(),
+                    },
+                    velocity.target(false),
+                ),
+                compilation_options: wgpu::PipelineCompilationOptions {
+                    constants: &constants,
+                    ..Default::default()
                 },
-                velocity.target(false),
-            ),
-            compilation_options: wgpu::PipelineCompilationOptions {
-                constants,
+            }),
+            primitive: wgpu::PrimitiveState {
+                cull_mode: None,
                 ..Default::default()
             },
-        }),
-        primitive: wgpu::PrimitiveState {
-            cull_mode: None,
-            ..Default::default()
-        },
-        depth_stencil: Some(wgpu::DepthStencilState {
-            format: DEPTH_FORMAT,
-            depth_write_enabled: Some(depth_write),
-            depth_compare: Some(depth_compare),
-            stencil: Default::default(),
-            bias: Default::default(),
-        }),
-        multisample: wgpu::MultisampleState {
-            count: sample_count,
-            ..Default::default()
-        },
-        multiview_mask: None,
-        cache: None,
+            depth_stencil: Some(wgpu::DepthStencilState {
+                format: DEPTH_FORMAT,
+                depth_write_enabled: Some(depth_write),
+                depth_compare: Some(depth_compare),
+                stencil: Default::default(),
+                bias: Default::default(),
+            }),
+            multisample: wgpu::MultisampleState {
+                count: sample_count,
+                ..Default::default()
+            },
+            multiview_mask: None,
+            cache: None,
+        })
+    };
+    let alpha_test_pipeline = make_cutout("mesh alpha test", None);
+    let cutout_pipelines = cutout::pipelines(&model.alpha_tested_draws, |label, reference| {
+        make_cutout(label, Some(reference))
     });
 
     // Third pipeline for `Model::transparent_draws` (list B): same shader
@@ -950,6 +974,7 @@ pub fn build(
         zone_vis_texture: zone_resources.vis_texture,
         pipeline,
         alpha_test_pipeline,
+        cutout_pipelines,
         blend_pipeline,
         additive_pipeline,
         unblended_pipeline,

@@ -121,6 +121,7 @@ pub fn merge(label: &str, models: Vec<Model>) -> Model {
             layer: d.layer,
             culled: d.culled,
             moving: d.moving,
+            alpha_test_ref: d.alpha_test_ref,
         };
         out.draws.extend(model.draws.into_iter().map(rebase));
         out.alpha_tested_draws
@@ -202,6 +203,7 @@ mod merge_tests {
                     radius: 1.0,
                 },
                 node: None,
+                alpha_test_ref: None,
             }],
             alpha_tested_draws: Vec::new(),
             transparent_draws: Vec::new(),

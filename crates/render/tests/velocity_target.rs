@@ -53,6 +53,7 @@ fn triangle_model() -> Model {
             },
             node: None,
             chunk: None,
+            alpha_test_ref: None,
         }],
         alpha_tested_draws: Vec::new(),
         transparent_draws: Vec::new(),

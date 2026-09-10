@@ -186,6 +186,8 @@ pub fn build(label: &str, blob: &[u8], rotation_degrees: f32) -> Result<Model> {
             layer: vex::LAYER_DEFAULT,
             node: None,
             chunk: None,
+            // Synthetic geometry: no batch to read one from.
+            alpha_test_ref: None,
         });
     }
 

@@ -150,6 +150,8 @@ pub fn build_model(label: &str, ai: &AiTrack) -> Model {
         },
         node: None,
         chunk: None,
+        // Synthetic: no batch, so no authored alpha-test reference.
+        alpha_test_ref: None,
     }];
 
     Model {

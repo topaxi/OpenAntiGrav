@@ -830,6 +830,14 @@ fn build_class(
                         blend: batch.blend_class(),
                         // A PSP batch names a class and no factor pair.
                         blend_state: None,
+                        // The reference the batch's own two flag bits ask for,
+                        // recovered from `Gfx_BuildBatchStateList` - see
+                        // `vex::Batch::alpha_test_reference`. Read for every
+                        // batch and not only the cutout ones, because the
+                        // method already answers `None` for a batch the
+                        // original draws with the test off; the cutout
+                        // pipeline is the only one that reads it.
+                        alpha_test_ref: batch.alpha_test_reference().map(|r| f32::from(r) / 255.0),
                         layer,
                         node: Some(index as u32),
                         // Not a `.rcsmodel` chunk - see `DrawCall::chunk`.

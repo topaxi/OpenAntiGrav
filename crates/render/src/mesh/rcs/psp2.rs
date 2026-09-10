@@ -208,6 +208,8 @@ pub fn build(label: &str, model_blob: &[u8], textures: Textures<'_>) -> Result<(
             layer: oag_vex::vex::LAYER_DEFAULT,
             node: None,
             chunk: None,
+            // A Vita material authors no PSP-style reference.
+            alpha_test_ref: None,
         });
         report.submeshes += 1;
         report.triangles += submesh.triangle_count();

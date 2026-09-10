@@ -138,6 +138,7 @@ fn two_draws(a: f32, b: f32) -> Model {
         layer: 0,
         node: None,
         chunk: None,
+        alpha_test_ref: None,
     };
     model.transparent_draws = vec![draw(0..3), draw(3..6)];
     model
@@ -227,6 +228,7 @@ fn textured_draws(placeholder_label: &str) -> Model {
         layer: 0,
         node: Some(74),
         chunk: None,
+        alpha_test_ref: None,
     };
     model.draws = vec![draw(0..3, 0), draw(3..6, 1)];
     model

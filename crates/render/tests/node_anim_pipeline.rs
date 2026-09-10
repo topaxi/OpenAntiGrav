@@ -68,6 +68,7 @@ fn moving_quad(xform: u32) -> Model {
             layer: vex::LAYER_DEFAULT,
             node: None,
             chunk: None,
+            alpha_test_ref: None,
         }],
         alpha_tested_draws: Vec::new(),
         transparent_draws: Vec::new(),

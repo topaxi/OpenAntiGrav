@@ -1064,37 +1064,35 @@ fn fs_main_blend(in: VertexOutput) -> @location(0) vec4<f32> {
     );
 }
 
-// The GE's real alpha-test call **is** recovered now:
-// `docs/ghidra/functions/psp-pulse-usa/mesh-draw.md` ("Four `_q` names in
-// this path are wrong") reads `is_alpha_tested()`'s branch as
-// `Gu_AlphaFunc(GU_GREATER, ref, 0xff)` with `ref` one of `0x7f`, `0` or
-// `0x10` depending on the batch - a per-batch reference whose selector that
-// page leaves unresolved.
+// **The default, for a draw whose file authors no reference of its own.**
 //
-// `0.5` (~`0x80`) was this project's own placeholder for the unrecovered
-// case, and it is wrong on real data: Wipeout Pure's `Speedup Pad` glow
-// texture (`speedup_GLOW_KEY.tga`, `Data\Environments\01_Vineta_K\track.vex`)
-// decodes to an alpha histogram of exactly `{0: background, 57..58: glow
-// interior}` - its brightest texel is ~0.23, so `0.5` discards the whole
-// batch and the pad renders nothing. `0` is the value to use instead:
-// it is one of the three recovered references, it is the same value the
-// same function programs unconditionally on every *transparent* batch, and
-// it is the most permissive of the three, so a batch actually authored for
-// `0x7f` or `0x10` shows a few extra near-zero-alpha texels rather than this
-// project hiding geometry the original drew.
+// Every PSP and PS2 cutout batch now authors one:
+// `oag_vex::vex::Batch::alpha_test_reference` reads the selector out of
+// `pass_mask` and `header_flags`, `mesh::DrawCall::alpha_test_ref` carries it,
+// and `mesh_render::cutout` builds one pipeline per distinct value - so a
+// `.vex` draw overrides this constant rather than falling back to it. What
+// still lands here is a PS3 chunk (Wipeout HD authors per *material* instead,
+// through `Model::alpha_test_ref` below), a Vita submesh, and every synthetic
+// draw this crate makes up.
 //
-// **Pulse's own corpus was not immune either** - the earlier "safe against
-// `01_Track`/`16_Track`" claim here only ever measured *vertex* alpha
-// (`docs/formats/vex.md`'s census), never the *texture* alpha `shaded.a`
-// actually tests. That census itself records alpha-tested textures whose
-// range is a partial band like `58-78` - up to 0.306, still under the old
-// `0.5`. Measured directly (`crates/render/examples/threshold_probe.rs`, a
-// 1024x1024 capture of each full track model, lit pixels = channel sum >
-// 100): `01_Track` 16,159 -> 16,156 (noise, at the edge-antialiasing scale),
-// `16_Track` 369,534 -> 370,987, **+1,453 pixels (+0.4%)** newly drawn rather
-// than discarded. Small, and in the direction the fix predicts: the old
-// threshold was already hiding a sliver of real Pulse content, not only
-// Pure's pad.
+// `1/255` rather than `0.5` for those, and that is measured rather than
+// inherited. `0.5` was this project's own placeholder for the unrecovered
+// case and it was wrong on real data: Wipeout Pure's `Speedup Pad` glow
+// texture (`speedup_GLOW_KEY.tga`) decodes to an alpha histogram of exactly
+// `{0: background, 57..58: glow interior}` - its brightest texel is ~0.23, so
+// `0.5` discards the whole batch and the pad renders nothing.
+//
+// **The pad now gets that reference from its own file, and the value it asks
+// for is `0`.** Its 349 batches are the one selector pattern that separates the
+// recovered branch from its rival (`pass_mask & 0x80` set, `header_flags &
+// 0x20` clear) - see `oag_vex::vex::Batch::alpha_test_reference`. So the pad no
+// longer depends on this constant at all, and `pad_alpha_test_ground_truth`
+// now guards the recovered value rather than the placeholder.
+//
+// The constant still stands for the paths that do reach it, on the same
+// argument it always had - the most permissive of the recovered references, so
+// a draw whose real reference is unknown shows a few extra near-zero-alpha
+// texels rather than this project hiding geometry.
 const ALPHA_TEST_THRESHOLD: f32 = 1.0 / 255.0;
 
 // **Wipeout HD authors its own reference**, and this is where it arrives:

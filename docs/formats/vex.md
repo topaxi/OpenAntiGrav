@@ -858,20 +858,30 @@ flag set), `alpha_tested_draws` (`is_alpha_tested()`), `transparent_draws`
   `TRANSPARENT_BLEND`, drawn last so the opaque and cutout geometry's depth is
   already resolved.
 
-**The comparison function is recovered, the reference value only partly.**
-[`mesh-draw.md`](../ghidra/functions/psp-pulse-usa/mesh-draw.md#four-_q-names-in-this-path-are-wrong-and-three-of-them-mattered)
+**Both halves are recovered, and the reference is per batch.** Confidence 86,
+2026-09-10.
+[`mesh-draw.md`](../ghidra/functions/psp-pulse-usa/mesh-draw.md#the-alpha-test-references-selector-and-the-pad-that-discriminates)
 reads `is_alpha_tested()`'s branch of `Gfx_BuildBatchStateList` as
-`Gu_AlphaFunc(GU_GREATER, ref, 0xff)`, with `ref` one of `0x7f`, `0` or
-`0x10` depending on the batch - so the function is `GU_GREATER`, always, and
-the reference is per-batch with no recovered selector. `ALPHA_TEST_THRESHOLD`
-(`1.0 / 255.0`, in `mesh.wgsl`) uses `0`, the most permissive of the three
-recovered values: real evidence found it necessary (Wipeout Pure's `Speedup
-Pad` glow texture, `speedup_GLOW_KEY.tga`, tops out at alpha 58/255 and was
-rendering nothing at all under this project's earlier `0.5` guess), and it is
-the same reference the same function programs unconditionally on every
-*transparent* batch, so it is not a fresh invention. What is still open is the
-per-batch selector between `0x7f`, `0` and `0x10` - revise `ALPHA_TEST_THRESHOLD`
-to read it once that selector is found.
+`Gu_AlphaFunc(GU_GREATER, ref, 0xff)` - so the function is `GU_GREATER`,
+always - and the selector between `0x7f`, `0` and `0x10` is two bits of the
+batch's own header, `pass_mask & 0x80` and `header_flags & 0x20`.
+[`vex::Batch::alpha_test_reference`](../../crates/vex/src/vex/batch_flags.rs)
+is that branch; `mesh::DrawCall::alpha_test_ref` carries it and
+`mesh_render::cutout` builds one pipeline per distinct value, because a
+circuit is one `Model` and mixes them.
+
+Censused over three discs (`crates/vex/tests/alpha_test_reference_ground_truth.rs`),
+three of the four bit combinations occur, and the third settles the branch
+order: Wipeout Pure's `Speedup Pad`, 349 batches, is the only place
+`pass_mask & 0x80` is set with `header_flags & 0x20` clear, and its glow
+texture (`speedup_GLOW_KEY.tga`) tops out at alpha 58/255 - so the recovered
+`0` keeps it and the rival reading's `0x7f` would discard it whole. It renders,
+and `crates/render/tests/pad_alpha_test_ground_truth.rs` is what checks that it
+does.
+
+`ALPHA_TEST_THRESHOLD` (`1.0 / 255.0`, in `mesh.wgsl`) is now only the default
+for a draw whose file authors no reference - a PS3 chunk, a Vita submesh, or
+synthetic geometry this crate makes up.
 
 **This was not only a Pure fix.** The earlier `0.5` was checked against
 *vertex* alpha alone (the census two paragraphs up), never the *texture*
@@ -883,6 +893,22 @@ alpha-tested textures whose range is a partial band like `58-78`, up to
 pixels newly drawn (+0.4%)**. Small, and in the direction the fix predicts -
 the old threshold was already discarding a sliver of real Pulse geometry too,
 not only Pure's pad.
+
+**And moving from that flat `1/255` to the per-batch reference costs less than
+it sounds like it should.** The same instrument, rebuilt as
+`crates/render/examples/threshold_probe.rs` and run at four yaws rather than
+one: `01_Track` 85,249 -> 85,102 lit over four frames with 1,298 pixels
+differing, `16_Track` 522,427 -> 522,342 with 6,170. Nothing structural leaves
+the picture, and the lit count moves *up* at two of the eight framings -
+because a cutout draw returns alpha `1.0` and writes depth, so a texel that
+cleared `1/255` was painted solid and occluded what was behind it.
+
+**All of that delta is the `0x7f` bucket, which discards no texels at all**;
+isolating it reproduces both numbers exactly. The census's texel counts are
+about the decoded image, and the shader samples it filtered and mipped - a
+binary cutout's edge reaches the alpha test as a ramp, so `0x7f` cuts it at
+half coverage where `1/255` cut at any, and a leaf tightens by about a pixel.
+Do not quote a texel count as a claim about the picture.
 
 **Geometry is never indexed** — the index argument to `sceGuDrawArray` is always
 zero. The material array is reached through `mesh+0x5c` at runtime, stride 0x14,

@@ -71,6 +71,7 @@ fn model_with_nodes(nodes: &[u32]) -> Model {
         model.draws.push(DrawCall {
             moving: false,
             chunk: None,
+            alpha_test_ref: None,
             range: start..start + 3,
             texture: None,
             bounds: Bounds {

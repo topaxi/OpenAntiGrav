@@ -618,7 +618,6 @@ Each is a real, named next step, one file per thread under [`handover/`](handove
 - [`Anim Transform` `0x3c0` is read and played, and closing it fixed a placement defect](handover/rendering/anim-transform-0x3c0-is-read-and-played-and.md)
 - [The PS3 Ghidra path works; the cspec-only fork is done, `lvlx` is what's left](handover/tooling/the-ps3-ghidra-path-works-two-improvements-to.md)
 - [Wipeout HD Fury's executable is 26,100 functions with 26 of them named, and no gameplay behaviour yet](handover/tooling/wipeout-hd-furys-executable-is-26100-functions-with.md)
-- [The alpha-test cutout reference is recovered as three values, not one, and the per-batch selector is not](handover/rendering/the-alpha-test-cutout-reference-is-recovered-as.md)
 - [Players should be able to build pilots in game, and a naive editor would eat their comments](handover/frontend/players-should-be-able-to-edit-pilots-in-game.md) - **requested by the maintainer 2026-09-06**: in-game CRUD over the pilot `.toml` files, and **all five operations have now landed**. List, edit, save and create-from-template first; then rename and delete, once `crate::prompt` gave this project the text entry it had none of. Both traps were paid: `set_axis` goes through `toml_edit` so a hand-written comment survives an edit, and `rename_pilot` is a *move*, so the file arrives at its new name byte for byte. **Deleting `aggressive.toml` restores the built-in rather than removing a pilot**, and the confirm says so by name. What is left in the thread is the axis preview, `string_id` for the remaining rows, and the one-axis-at-a-time silence pinned by a test
 - [Pulse authors its own text entry, and it is not a keyboard](handover/frontend/pulse-authors-its-own-text-entry-and-it-is-not-a-keyboard.md) - a **positive** result found while checking whether the disc had a keyboard to play before this project drew its own. It has no keyboard and no key glyphs, and the standing `sceUtilityOsk` assumption is **refuted at 92** - all four OSK NIDs are absent from both Pulse executables, while Pure links them. What Pulse has instead is a `<TagInput>`: a row of `length` character cells scrolled one glyph at a time, 15 instances in `Data.wad` (entry **#1083**, hash `b94fe6f9`, name unresolved), geometry authored per screen, and a **70-character alphabet in `BOOT.BIN`** at file offset 2,808,976 / vaddr `0x08AB1C10`, at 85. Nothing renders it yet; `docs/formats/fexml.md` has no `TagInput` row. Open at 65: the input mapping, one PPSSPP capture away
 - [Five reference traces are missing here, and the silent skip is why nobody noticed](handover/tooling/five-reference-traces-are-gone-and-the-skip-hid-it.md) - five of the six trace captures the ground-truth tests name do not exist in this checkout, and their absence never turned a build red because a missing reference **skips**. `just test-data` reports 2 failures; the same suite under `OAG_REQUIRE_GAME_DATA=1` reports 14, eleven of them missing-file panics rather than behaviour. [ADR-0046](docs/architecture/adr/0046-test-referenced-traces-are-tracked-in-git.md) now tracks a trace a test names, per file by name, so this cannot recur - it does not recover the five. Open: removing the skip path, recapturing, and two docs that assert a capture this checkout cannot demonstrate
@@ -1306,6 +1305,15 @@ is the check that would have caught this, and neither ran until the picture
 was asked for directly. Fixed by lowering `ALPHA_TEST_THRESHOLD` to `1/255`
 (`0`, one of three real GE references `docs/ghidra/functions/psp-pulse-usa/mesh-draw.md`
 recovered for this branch) - see `docs/formats/vex.md`'s materials section.
+
+**Since 2026-09-10 the reference is per batch and read off the file, and the
+pad's own value turns out to be that same `0`** - it is the one selector
+pattern that separates the recovered branch from the obvious rival reading, so
+the pad went from "saved by a permissive default" to "the case that settles the
+branch". Selector, census over three discs and the measured pixel cost:
+`mesh-draw.md`, "The alpha-test reference's selector, and the pad that
+discriminates", confidence 86. The trap above is unchanged and still the point:
+a decode that reports a plausible triangle count is not evidence a model draws.
 
 **A one-seed race comparison cannot resolve two adjacent difficulties, and the
 test that did it read as a regression on an improvement.** 2026-08-17.

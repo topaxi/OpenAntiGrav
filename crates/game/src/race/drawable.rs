@@ -16,6 +16,10 @@ pub(super) struct Drawable {
     model: Model,
     pipeline: wgpu::RenderPipeline,
     alpha_test_pipeline: wgpu::RenderPipeline,
+    /// One per alpha-test reference this model's own batches ask for - see
+    /// `oag_vex::vex::Batch::alpha_test_reference`. Empty on anything but a
+    /// `.vex` model.
+    cutout_pipelines: Vec<(f32, wgpu::RenderPipeline)>,
     blend_pipeline: [wgpu::RenderPipeline; 2],
     /// The other two recovered transparent blend classes. Selected per draw
     /// call, because a single model mixes them - see
@@ -96,6 +100,7 @@ impl Drawable {
         let mesh_render::Built {
             pipeline,
             alpha_test_pipeline,
+            cutout_pipelines,
             blend_pipeline,
             additive_pipeline,
             unblended_pipeline,
@@ -165,6 +170,7 @@ impl Drawable {
             model,
             pipeline,
             alpha_test_pipeline,
+            cutout_pipelines,
             blend_pipeline,
             additive_pipeline,
             unblended_pipeline,
@@ -592,10 +598,21 @@ impl Drawable {
             pass.draw_indexed(draw.range.clone(), 0, 0..1);
         }
 
-        // Second pipeline, same pass: alpha-tested batches, cutout. See
-        // `mesh_render::Built::alpha_test_pipeline`.
-        oag_render::perfprobe::pipeline_set();
-        pass.set_pipeline(&self.alpha_test_pipeline);
+        // Second pipeline group, same pass: alpha-tested batches, cutout.
+        //
+        // **The alpha-test reference is the batch's own, not the model's.**
+        // `Gfx_BuildBatchStateList` picks between `0x7f`, `0x10` and `0` from
+        // two of the batch's flag bits, and a circuit mixes them, so the
+        // pipeline is chosen per draw call the same way the blend class is
+        // below. This crate drew every cutout at `1/255` until that was
+        // recovered, which painted a 3/255 texel solid rather than discarding
+        // it. See `oag_vex::vex::Batch::alpha_test_reference` and
+        // `mesh_render::cutout`.
+        let cutouts = mesh_render::CutoutPipelines {
+            default: &self.alpha_test_pipeline,
+            by_reference: &self.cutout_pipelines,
+        };
+        let mut cutout_set: Option<&wgpu::RenderPipeline> = None;
         for (index, draw) in self.model.alpha_tested_draws.iter().enumerate() {
             if !visible(
                 draw,
@@ -609,6 +626,14 @@ impl Drawable {
             }
             stats.draws_submitted += 1;
             stats.triangles += (draw.range.end - draw.range.start) / 3;
+            // Switched only when the reference changes, so a model naming one
+            // (or none) still pays for a single `set_pipeline`.
+            let cutout = cutouts.select(draw);
+            if !cutout_set.is_some_and(|set| std::ptr::eq(set, cutout)) {
+                oag_render::perfprobe::pipeline_set();
+                pass.set_pipeline(cutout);
+                cutout_set = Some(cutout);
+            }
             let slot = draw
                 .texture
                 .map_or(0, |t| t + 1)
