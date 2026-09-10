@@ -148,7 +148,7 @@ pub struct RaceView {
     pub(super) spark_anchors: Vec<Vec<Vec3>>,
     /// The `Ship Collision Fx` locators in model space - see
     /// [`Setup::collision_fx`].
-    pub(super) collision_fx: Vec<Vec3>,
+    pub(super) collision_fx: Vec<crate::livery::SparkAnchor>,
     /// Collision sparks' particle pool, advanced on the simulation tick.
     ///
     /// Here rather than in `World`, for the same reason [`Self::exhaust`] is -
@@ -233,9 +233,19 @@ pub struct RaceView {
     /// locator nearest the last impact, or the contact point itself mapped
     /// into model space when the model authors no locators. Transformed
     /// through the ship's current matrix every tick, so the burst rides the
-    /// hull - rotation included - the way the original's scene-graph node
-    /// does.
+    /// hull - position and spawn direction both - the way the original's
+    /// scene-graph node does. See [`Self::sparks_anchor_up`] for the other
+    /// half of that transform.
     pub(super) sparks_anchor: Option<Vec3>,
+    /// The chosen locator's own authored `+Y`, **model space** - paired with
+    /// [`Self::sparks_anchor`] and read the same tick. `None` alongside it.
+    ///
+    /// `oag_render::psys::System::advance` takes the *world*-space direction
+    /// this maps to, every tick, the same way [`Self::sparks_anchor`]'s
+    /// position is re-transformed every tick rather than baked once: a craft
+    /// banking mid-scrape tilts the spray with it, not just the point it
+    /// comes from.
+    pub(super) sparks_anchor_up: Option<Vec3>,
     /// Whether the sparks are currently *attached* to a wall contact, for the
     /// effects that author [`oag_vex::pob::flags::LOOPING`].
     ///

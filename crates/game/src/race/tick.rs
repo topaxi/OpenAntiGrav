@@ -563,22 +563,26 @@ impl Race {
             // to push the hull back out to the surface.
             let surface = contact.point + contact.normal * contact.depth;
             // The original triggers the `Ship Collision Fx` locator nearest
-            // the contact and the burst emits from that node from then on
-            // (`Ship_DispatchCollisionFx`); with no locators authored, the
-            // surface point itself is mapped into model space so it still
-            // rides the hull with rotation.
-            let anchor_model = self
+            // the contact and the burst emits from that node - and along its
+            // authored `+Y` - from then on (`Ship_DispatchCollisionFx`); with
+            // no locators authored, the surface point itself is mapped into
+            // model space, aimed along world up, so it still rides the hull
+            // with rotation.
+            let (anchor_model, up_model) = self
                 .view
                 .collision_fx
                 .iter()
-                .copied()
                 .min_by(|a, b| {
-                    let da = (model_matrix.transform_point3(*a) - surface).length_squared();
-                    let db = (model_matrix.transform_point3(*b) - surface).length_squared();
+                    let da = (model_matrix.transform_point3(a.position) - surface).length_squared();
+                    let db = (model_matrix.transform_point3(b.position) - surface).length_squared();
                     da.total_cmp(&db)
                 })
-                .unwrap_or_else(|| model_matrix.inverse().transform_point3(surface));
+                .map_or_else(
+                    || (model_matrix.inverse().transform_point3(surface), Vec3::Y),
+                    |anchor| (anchor.position, anchor.up),
+                );
             self.view.sparks_anchor = Some(anchor_model);
+            self.view.sparks_anchor_up = Some(up_model);
             if let Some(effect) = effect.as_deref() {
                 self.view.sparks.ignite(
                     effect,
@@ -636,17 +640,25 @@ impl Race {
         // already-live particles keep ageing even on a tick with no fresh
         // impact. The anchor is the chosen hull locator under the ship's
         // *current* transform, the way the original's scene-graph node rides
-        // the craft.
+        // the craft - and so is the direction its authored `+Y` maps to: a
+        // craft banking mid-scrape tilts the spray with it rather than
+        // spraying along a fixed world up. `transform_vector3` rather than
+        // `transform_point3`: it is a direction, not a point, so only the
+        // matrix's rotation applies and not its translation.
         let anchor = self
             .view
             .sparks_anchor
             .map_or(self.ship().physics.body.position, |local| {
                 model_matrix.transform_point3(local)
             });
+        let up = self
+            .view
+            .sparks_anchor_up
+            .map_or(Vec3::Y, |local| model_matrix.transform_vector3(local));
         if let Some(effect) = effect.as_deref() {
             self.view
                 .sparks
-                .advance(effect, self.sim.dt, anchor, &mut self.view.sparks_rng);
+                .advance(effect, self.sim.dt, anchor, up, &mut self.view.sparks_rng);
         }
 
         evaluated

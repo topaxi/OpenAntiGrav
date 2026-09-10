@@ -55,7 +55,7 @@ fn effect(name: &str, looping: bool, duration_ticks: f32) -> std::sync::Arc<Effe
 
 fn run(system: &mut System, effect: &Effect, ticks: usize, rng: &mut Rng) {
     for _ in 0..ticks {
-        system.advance(effect, DT, Vec3::ZERO, rng);
+        system.advance(effect, DT, Vec3::ZERO, Vec3::Y, rng);
     }
 }
 

@@ -648,6 +648,10 @@ pub struct System {
     /// never particle counts.
     scale: f32,
     anchor: Vec3,
+    /// World-space direction the emitter frame's authored `+Y` currently
+    /// maps to - see [`System::advance`]'s own `up` parameter. Always a unit
+    /// vector; `new()`'s default is world up, unrotated.
+    up: Vec3,
     ignitions: u32,
 }
 
@@ -666,6 +670,7 @@ impl System {
             emitters: [EmitterState::IDLE; MAX_EMITTER_STATES],
             scale: 1.0,
             anchor: Vec3::ZERO,
+            up: Vec3::Y,
             ignitions: 0,
         }
     }
@@ -726,10 +731,24 @@ impl System {
     /// original's emitter node rides whatever it is parented to, so moving
     /// it is the caller's job and a burst from a moving scrape strings out
     /// along the hull's path. Child instances keep their own anchors.
-    pub fn advance(&mut self, effect: &Effect, dt: f32, anchor: Vec3, rng: &mut Rng) {
+    ///
+    /// `up` is the world-space direction the emitter frame's authored `+Y`
+    /// currently maps to - what [`Direction::Aimed`]'s elevation is measured
+    /// from, [`Direction::Cone`]'s axis, and the component
+    /// [`Direction::Radial`]'s hemisphere forces positive. Like `anchor`, a
+    /// caller supplies it fresh every tick rather than once at
+    /// [`System::ignite`]: nothing spawns before the first `advance`, and an
+    /// attach point that rotates (a banking hull) needs the *live* frame, not
+    /// the one it had when the emitter first fired. `Vec3::Y` is the
+    /// original's own default - every `Ship Collision Fx` locator measured
+    /// authors an identity rotation (`docs/formats/pob.md`, "the authored
+    /// emitter-node frame") - and is what every caller but the collision
+    /// sparks passes.
+    pub fn advance(&mut self, effect: &Effect, dt: f32, anchor: Vec3, up: Vec3, rng: &mut Rng) {
         let dt_ticks = dt * TICK_HZ;
         let moved = anchor - self.anchor;
         self.anchor = anchor;
+        self.up = up.try_normalize().unwrap_or(Vec3::Y);
 
         self.emit(effect, dt_ticks, moved, rng);
         self.integrate(effect, dt, dt_ticks, rng);
@@ -855,7 +874,7 @@ impl System {
         rng: &mut Rng,
     ) -> Option<(usize, Vec3, Vec3)> {
         let spec = &effect.emitters[usize::from(spec_index)];
-        let direction = direction_for(spec.direction, rng);
+        let direction = direction_for(spec.direction, self.up, rng);
         // `centre + spread * U(-1, 1)`, the original's `Psys_RandSpread`,
         // units per tick converted to per second once.
         let speed = (spec.speed_per_tick.0 + spec.speed_per_tick.1 * signed_unit(rng))
@@ -1338,6 +1357,11 @@ impl Stage {
     }
 
     /// Advances every playing instance by `dt` seconds.
+    ///
+    /// Always world up - no [`Stage`]-driven effect (a rocket's flare, a
+    /// detonation) is parented to a locator whose live attitude matters the
+    /// way the collision sparks' is; see [`System::advance`]'s own `up`
+    /// parameter for the caller that does pass a live one.
     pub fn advance(&mut self, dt: f32, rng: &mut Rng) {
         for instance in &mut self.instances {
             let Some(effect) = instance.effect.as_deref() else {
@@ -1346,7 +1370,9 @@ impl Stage {
             if !instance.attached && !instance.system.is_running() {
                 continue;
             }
-            instance.system.advance(effect, dt, instance.anchor, rng);
+            instance
+                .system
+                .advance(effect, dt, instance.anchor, Vec3::Y, rng);
         }
     }
 
@@ -1482,16 +1508,28 @@ fn expendable_slot(particles: &[Particle]) -> usize {
     best
 }
 
-/// One spawn direction for a [`Direction`] law.
-fn direction_for(direction: Direction, rng: &mut Rng) -> Vec3 {
+/// One spawn direction for a [`Direction`] law, in an emitter frame whose
+/// authored `+Y` maps to world-space `up`.
+///
+/// `up` is `Vec3::Y` for every caller but the collision sparks - see
+/// [`System::advance`]'s own doc comment - in which case every branch below
+/// reduces to exactly the world-axis arithmetic this function used before
+/// `up` existed: [`horizontal_basis`] returns `(Vec3::X, Vec3::Z)` for that
+/// input bit-for-bit, and reflecting a hemisphere sample across `Vec3::Y` is
+/// the same float operations `d.y = d.y.abs()` was.
+fn direction_for(direction: Direction, up: Vec3, rng: &mut Rng) -> Vec3 {
     match direction {
         Direction::Radial { hemisphere } | Direction::Tangent { hemisphere } => {
             let mut d = sphere_direction(rng);
             if hemisphere {
                 // `ParticleSystem_EmitSphere`'s shape-7 branch: `abs()` on
-                // the emitter-local up. The emitter frames this project
-                // plays are identity-rotated, so that is world up.
-                d.y = d.y.abs();
+                // the emitter-local up - i.e. reflect the sample across the
+                // plane the `up` axis is normal to, whenever it landed on
+                // the wrong side.
+                let along = d.dot(up);
+                if along < 0.0 {
+                    d -= up * (2.0 * along);
+                }
             }
             if matches!(direction, Direction::Tangent { .. }) {
                 // Mode 2 builds a random tangent to the spawn direction.
@@ -1509,12 +1547,14 @@ fn direction_for(direction: Direction, rng: &mut Rng) -> Vec3 {
             // `ParticleSystem_AimedVelocity`: `y = sin(elevation ± jitter)`,
             // horizontal components scaled by the matching cosine, heading
             // taken from the spawn direction's - uniform here - rotated by
-            // the authored azimuth, which uniform absorbs.
+            // the authored azimuth, which uniform absorbs. `y` here is the
+            // component along `up`, not necessarily world `Y`.
             let elev = elevation + jitter * signed_unit(rng);
             let heading = rng.next_f32() * std::f32::consts::TAU + azimuth;
             let (sin_e, cos_e) = elev.sin_cos();
             let (sin_a, cos_a) = heading.sin_cos();
-            Vec3::new(cos_a * cos_e, sin_e, sin_a * cos_e)
+            let (right, forward) = horizontal_basis(up);
+            right * (cos_a * cos_e) + up * sin_e + forward * (sin_a * cos_e)
         }
         Direction::Cone { half_angle } => {
             // `ParticleSystem_ConeVelocity` draws `U(-a, a)` off the
@@ -1524,9 +1564,34 @@ fn direction_for(direction: Direction, rng: &mut Rng) -> Vec3 {
             let heading = rng.next_f32() * std::f32::consts::TAU;
             let (sin_t, cos_t) = tilt.sin_cos();
             let (sin_a, cos_a) = heading.sin_cos();
-            Vec3::new(sin_t * cos_a, cos_t, sin_t * sin_a)
+            let (right, forward) = horizontal_basis(up);
+            right * (sin_t * cos_a) + up * cos_t + forward * (sin_t * sin_a)
         }
     }
+}
+
+/// Two vectors that, with `up`, form a right-handed orthonormal basis - the
+/// horizontal reference [`Direction::Aimed`] and [`Direction::Cone`] spread
+/// their uniformly-sampled azimuth around.
+///
+/// Which particular horizontal directions these are does not matter to
+/// either caller: azimuth is drawn from a full `U(0, tau)` in both, so the
+/// distribution this basis is built from is invariant to which perpendicular
+/// pair is picked. What matters is that `up == Vec3::Y` reduces to exactly
+/// `(Vec3::X, Vec3::Z)` - the world axes [`direction_for`] used before a
+/// caller could supply anything else - so every effect that still passes
+/// `Vec3::Y` (everything but the collision sparks) samples bit-identically
+/// to before.
+fn horizontal_basis(up: Vec3) -> (Vec3, Vec3) {
+    // A second axis to cross against, picked away from `up` so the cross
+    // product never degenerates: `Vec3::Z` for every `up` that is not itself
+    // close to `Vec3::Z`, `Vec3::Y` there instead. World up (`Vec3::Y`) hits
+    // the ordinary `Z` branch, which is what keeps that case exact - see the
+    // module doc above.
+    let helper = if up.z.abs() > 0.9 { Vec3::Y } else { Vec3::Z };
+    let right = up.cross(helper).try_normalize().unwrap_or(Vec3::X);
+    let forward = right.cross(up);
+    (right, forward)
 }
 
 /// `U(-1, 1)`.

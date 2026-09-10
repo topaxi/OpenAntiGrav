@@ -408,9 +408,10 @@ pub struct Setup {
     /// The original attaches up to 10 and `Ship_DispatchCollisionFx`
     /// (`docs/ghidra/functions/psp-pulse-usa/contact-response.md`) triggers the
     /// one **nearest the contact**; the spark burst then emits from that
-    /// node as it rides the hull. Empty means the model authors none, and
-    /// the burst falls back to anchoring at the contact point itself.
-    pub collision_fx: Vec<Vec3>,
+    /// node, and along its authored `+Y`, as it rides the hull. Empty means
+    /// the model authors none, and the burst falls back to anchoring at the
+    /// contact point itself, aimed along world up.
+    pub collision_fx: Vec<crate::livery::SparkAnchor>,
     /// Every [`RACE_EFFECTS`] entry that loaded, parsed from the disc's own
     /// `Data\Psys\*.POB`.
     ///

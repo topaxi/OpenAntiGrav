@@ -341,12 +341,12 @@ fn a_collision_burst_fills_the_pool_and_both_blend_classes() {
     system.ignite(&effect, Vec3::ZERO, sparks::severity(80.0));
     // The first tick is every emitter's first emission: 1 smoke + 3 sparks
     // + 2 bits + 1 ember.
-    system.advance(&effect, dt, Vec3::ZERO, &mut rng);
+    system.advance(&effect, dt, Vec3::ZERO, Vec3::Y, &mut rng);
     assert_eq!(system.alive_count(), 7);
 
     let mut peak = 0;
     for _ in 0..4 {
-        system.advance(&effect, dt, Vec3::ZERO, &mut rng);
+        system.advance(&effect, dt, Vec3::ZERO, Vec3::Y, &mut rng);
         peak = peak.max(system.alive_count());
     }
     let (additive, alpha_over) = system.vertices(&effect, Vec3::X, Vec3::Y);
@@ -362,14 +362,14 @@ fn a_collision_burst_fills_the_pool_and_both_blend_classes() {
     let (mut r1, mut r2) = (Rng::new(7), Rng::new(7));
     gentle.ignite(&effect, Vec3::ZERO, sparks::severity(0.0));
     hard.ignite(&effect, Vec3::ZERO, sparks::severity(1e6));
-    gentle.advance(&effect, dt, Vec3::ZERO, &mut r1);
-    hard.advance(&effect, dt, Vec3::ZERO, &mut r2);
+    gentle.advance(&effect, dt, Vec3::ZERO, Vec3::Y, &mut r1);
+    hard.advance(&effect, dt, Vec3::ZERO, Vec3::Y, &mut r2);
     assert_eq!(gentle.alive_count(), hard.alive_count());
 
     // And the whole burst drains: 32 emitting ticks plus the longest
     // lifetime, with margin.
     for _ in 0..120 {
-        system.advance(&effect, dt, Vec3::ZERO, &mut rng);
+        system.advance(&effect, dt, Vec3::ZERO, Vec3::Y, &mut rng);
     }
     assert!(!system.is_running(), "the burst never ended");
     assert!(peak > 7, "the pool never grew past the first emission");
@@ -410,7 +410,7 @@ fn every_effect_on_the_disc_plays_without_panicking() {
             // A moving anchor, so the root emitters exercise the
             // follow-the-caller path rather than sitting still.
             let anchor = Vec3::new(tick as f32 * 0.1, 0.0, 0.0);
-            system.advance(&effect, dt, anchor, &mut rng);
+            system.advance(&effect, dt, anchor, Vec3::Y, &mut rng);
             if system.alive_count() > busiest.0 {
                 busiest = (system.alive_count(), effect.name.clone());
             }
@@ -489,7 +489,7 @@ fn every_hd_effect_translates_or_is_refused_by_name() {
             system.ignite(&effect, Vec3::ZERO, 1.0);
             for tick in 0..240 {
                 let anchor = Vec3::new(tick as f32 * 0.1, 0.0, 0.0);
-                system.advance(&effect, dt, anchor, &mut rng);
+                system.advance(&effect, dt, anchor, Vec3::Y, &mut rng);
                 let (additive, alpha_over) = system.vertices(&effect, Vec3::X, Vec3::Y);
                 assert!((additive.len() + alpha_over.len()) % 6 == 0);
             }

@@ -408,6 +408,49 @@ byte-exact live; single-file corpus, and the rows marked unknown are
 unknown. See [particle-system.md](../ghidra/functions/psp-pulse-usa/particle-system.md)
 for the per-function evidence.
 
+### The authored emitter-node frame lives outside the `.pob`, in the hull's own locator
+
+`+0x50`/`+0x54`/`+0x58` above are angles *relative to a frame*, and that
+frame is not itself a field of this container - there is no rotation
+anywhere in an emitter record. [particle-system.md](../ghidra/functions/psp-pulse-usa/particle-system.md)'s
+"The emit frame and the velocity dispatch, settled" section already
+identified where it comes from instead: `ShipCollisionFx_Trigger` parents
+the spawned instance to the nearest `Ship Collision Fx` locator on the hull,
+and that locator's own node carries the frame - the same 64-byte,
+row-major-with-translation-in-row-3 payload every locator class in a `.vex`
+carries (`oag_vex::vex::transform`), with row 1 the up axis. All six nodes
+checked on Assegai's `Ship.vex`, and spot-checks elsewhere, author a pure
+translation: row 1 reads `(0, 1, 0)`, so the emitter's local `+Y` is world
+up **there**.
+
+That "there" is doing real work: a locator's own matrix places it in the
+*hull's* model space, not the world's, and the hull itself keeps turning as
+a craft flies. `oag_render::livery::SparkAnchor` (`crates/game/src/livery.rs`)
+carries both halves of the same locator matrix an earlier revision of this
+engine read only the translation from - `position` (row 3) and `up` (row
+1) - and `oag_render::psys::System::advance` composes `up` with the ship's
+*current* attitude every tick, the same way the position was already
+recomposed every tick to ride a moving hull. So a spray fired while banking
+hard into a wall tilts with the hull rather than assuming the craft is
+level; on the measured corpus, where every locator is an identity rotation,
+this reduces to "the emitter's `+Y` is the hull's own live up axis," which
+is the general statement the previous "world up, unrotated" reading was a
+special case of without saying so. Confidence **85**, the same figure the
+emitter table above carries and for the same reason: the locator's own
+byte layout is read directly and corroborated by `Start Position`'s
+identical convention (`docs/formats/track.md`), but the *rotation* case -
+a `Ship Collision Fx` locator that authors something other than identity -
+has not been observed in the corpus, only prepared for.
+
+An earlier state of this project aimed the collision-spark cone along the
+wall contact normal instead of any of the above. That was retired
+2026-08-10 (`1f7f4e67`), before the frame-vs-locator distinction here was
+written down, which is why a later work-tracking pass mis-filed "still uses
+the contact normal" as an open approximation: the contact normal has not
+driven a spawn direction since that commit, and the honest gap left behind
+was narrower than that later note's own wording - "world up, unrotated"
+instead of "the hull's live up," not "the wall's normal."
+
 ### The collision-spark file is a four-emitter tree
 
 `+0x94c` chains **nested sibling emitter records inside the same file**,

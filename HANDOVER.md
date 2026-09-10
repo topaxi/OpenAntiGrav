@@ -574,7 +574,6 @@ Each is a real, named next step, one file per thread under [`handover/`](handove
 - [Projectiles follow the floor, and the km/h fix - both now landed](handover/gameplay/projectiles-follow-the-floor-and-the-km-h.md)
 - [Both lockable weapons draw their reticle now, and the black background behind it is gone](handover/gameplay/the-missile-fires-without-a-lock-now-and.md)
 - [Pure and HD lock on too, and it cost two axes rather than any new recovery](handover/gameplay/pure-and-hd-lock-on-too-and-two-axes.md)
-- [The hull sparks are approximated in two remaining ways](handover/rendering/the-hull-sparks-are-approximated-in-three-named.md)
 - [The camera shake on impact reproduces its two-rotation shape now; two composition details are open](handover/rendering/the-originals-camera-hud-shake-on-impact-is.md)
 - [PVS culling: three ceilings, one of them invented](handover/rendering/pvs-culling-three-ceilings-one-of-them-invented.md)
 - [The HUD's four remaining items](handover/frontend/the-huds-four-remaining-items.md)

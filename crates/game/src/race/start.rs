@@ -395,6 +395,7 @@ impl Race {
                 // if any - is always read as a fresh impact.
                 sparks_cooldown: 0.0,
                 sparks_anchor: None,
+                sparks_anchor_up: None,
                 sparks_attached: false,
                 results: None,
                 shield_was_up: false,
