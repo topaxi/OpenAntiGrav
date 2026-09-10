@@ -355,6 +355,70 @@ fn a_contact_off_the_centre_of_mass_yaws_the_ship() {
     assert_eq!(response.angular_velocity_delta, omega);
 }
 
+/// The point velocity is the plain textbook `v + omega x r`, and this is the
+/// test that stops it being "corrected" into `v + cross(r, R^T omega)`.
+///
+/// Every other test in this file starts at `omega == 0`, where the point
+/// velocity is just `v` and no convention is exercised at all. That gap cost a
+/// day: `Body_ResolveContact` visibly rotates `body+0x150` through the basis
+/// rows (`vtfm4.q C000,E100,C200`, `0x0884ea58`) and crosses with the lever arm
+/// on the **left** (`vcrsp.t`, `0x0884ea9c`), which reads as a non-textbook
+/// idiom and was implemented as one. It is not. `body+0x150` holds the rotation
+/// rate **negated and in body coordinates** - `scripts/omega-column-reading-fit.py`
+/// fits it against the rotation the recorded basis performs at a 2 % residual
+/// where a world-space reading gives 200 % - so `R^T` is the body-local to world
+/// unrotation and `R^T(body+0x150) == -omega`, making the whole expression
+/// `v + omega x r` exactly. See [`Body::velocity_at`] and
+/// `docs/ghidra/functions/psp-pulse-usa/contact-response.md`.
+///
+/// Same geometry as the two tests above, with a 1 rad/s yaw added:
+///
+/// ```text
+/// r        = (0.75, 0, -0.375)         the right flank point
+/// n        = (-1, 0, 0)
+/// v_p      = (10, 0, 0) + cross((0, 1, 0), r) = (9.625, 0, -0.75)
+/// vn       = -9.625
+/// j        = 1.4 * 9.625 / 1.006510 = 13.3879
+/// v_t      = (0, 0, -0.75)
+/// p        = (-13.3879, 0, 0.02625)
+/// ```
+///
+/// Reading `body+0x150` as world-space instead gives `vn = -10.375`,
+/// `j = 14.431`, and a `z` term of the opposite sign, so both assertions below
+/// fail under it - which is the point of pinning `z` at all. It also costs
+/// `07_Track` its clean lap in `race_ground_truth`.
+#[test]
+fn the_point_velocity_of_a_yawing_craft_is_textbook_and_that_is_the_originals() {
+    let mut state = ship_at(1.0, 10.0);
+    state.body.angular_velocity = Vec3::new(0.0, 1.0, 0.0);
+
+    let response = resolve(
+        &mut state,
+        &handling(),
+        &Environment::default(),
+        &narrow_wall(1.6, Surface::Wall),
+        Vec3::new(1.0, 0.0, 0.0),
+    );
+
+    assert_eq!(response.contacts, 1, "{response:?}");
+    let velocity = state.body.linear_velocity;
+    assert!(
+        (velocity.x - -3.3878).abs() < 5e-3,
+        "reading +0x150 as world-space would give -4.4310: {velocity:?}"
+    );
+    assert!(
+        velocity.z > 0.0 && (velocity.z - 0.02625).abs() < 5e-4,
+        "the tangential term's sign is the other half of the read: {velocity:?}"
+    );
+    // The yaw feeds back into itself through the lever arm, so the craft leaves
+    // the contact turning slightly faster than it arrived.
+    assert!(
+        (state.body.angular_velocity.y - 1.023151).abs() < 2e-3,
+        "{:?}",
+        state.body.angular_velocity
+    );
+}
+
 /// A sample point more than [`MAX_CONTACT_DEPTH`] behind a surface produces
 /// **no contact**, which is `Collision_AddContact`'s `d <= -2.0` reject.
 ///

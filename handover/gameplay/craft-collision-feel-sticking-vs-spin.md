@@ -109,10 +109,13 @@ by a test that reproduces the original's `j` from the raw captured inputs to
 five figures:
 
 - the point velocity the gate and `vn` are built from is `v + cross(r, R^T
-  omega)` - lever arm on the *left* of the cross product, and the world-space
-  `omega` spuriously rotated through the body's basis rows - not the textbook
-  `v + omega x r`. On a level craft yawing about `up` the two differ only in
-  the sign of a small term, which is why nothing noticed;
+  omega)` - lever arm on the *left* of the cross product, `omega` rotated
+  through the body's basis rows. **Correct as arithmetic on the original's own
+  bytes, and the wrong thing to write against this crate's state**: `+0x150` is
+  negated body-local, not world-space, so `R^T` is an unrotation and the whole
+  expression is the textbook `v + omega x r`. Measured 2026-09-10, see the
+  section below and
+  `handover/gameplay/pair-vn-uses-the-wrong-omega-convention.md`;
 - the denominator applies the body-space diagonal to the world-space `r x n`
   without rotating it, the same quirk the one-body path was already read to
   have.
@@ -128,13 +131,28 @@ twelve-circuit guard is unchanged: all twelve clean, `01_Track` 1 respawn at
 `oag_game::race::Field::resolve_craft_pairs`), so its `Field` rows never
 touched this code.
 
-**Still open from the capture**: `Body_ResolveContact` - the *wall* path -
-builds its point velocity by the same `cross(r, R^T omega)` idiom
-(`0x0884ea58`/`0x0884ea9c`), and `crates/physics/src/wall.rs` computes the
-textbook `omega x r` there. On a craft yawing at 0.8 rad/s with a 5-unit lever
-arm that moves `vn` by up to 8 units/s. Unmeasured on that path; the capture
-script's approach (stop at the `jal`, read everything, recompute `j` offline)
-transfers directly to `0x0884eea8`.
+**Closed 2026-09-10, and it inverted**: `Body_ResolveContact` - the *wall*
+path - does build its point velocity by the same `cross(r, R^T omega)` idiom
+(`0x0884ea58`/`0x0884ea9c`), confirmed by a full read of the function, **and
+that is the same thing as the textbook `omega x r` `crates/physics/src/wall.rs`
+already computed.** `+0x150` holds the rotation rate negated and in body
+coordinates, fitted against the rotation the recorded basis performs at a 2 %
+residual on four captures where a world-space reading gives 200 %
+(`scripts/omega-column-reading-fit.py`), so `R^T` is the body-local to world
+unrotation and `R^T(+0x150) == -omega`.
+
+Implementing the literal reading against this crate's own `angular_velocity`
+was tried first and both measurements rejected it: a median 8.2-11.0 units/s of
+`vn` error on the recorded laps, and `race_ground_truth` dropping from twelve
+clean laps to eleven with `07_Track` losing its clean lap. `wall.rs` is
+unchanged; `wall::tests` now pins the yawing case, which no wall test did.
+Evidence: `docs/ghidra/functions/psp-pulse-usa/contact-response.md`, section
+"`+0x150` is negated body-local". The same read confirmed the one-body path
+applies its impulse at the real contact point (`0x0884eea4: move a1,s1`) and
+corrected `rigid-body.md`'s argument order for the function.
+
+**What it left**: `pair.rs` has the defect `wall.rs` was thought to have -
+`handover/gameplay/pair-vn-uses-the-wrong-omega-convention.md`.
 
 ## Next steps
 
@@ -143,8 +161,10 @@ transfers directly to `0x0884eea8`.
   personality-independent collision-avoidance floor - which was deliberately
   left out of scope this pass (a bigger design decision than "read a channel
   this term already had access to").
-- ~~The Ghidra/PPSSPP item above.~~ Done 2026-09-10; the wall-path point
-  velocity is the follow-up it left.
+- ~~The Ghidra/PPSSPP item above.~~ Done 2026-09-10. ~~The wall-path point
+  velocity is the follow-up it left.~~ Also done 2026-09-10, with a negative
+  result that reopened the *pair* path instead - see
+  `handover/gameplay/pair-vn-uses-the-wrong-omega-convention.md`.
 
 ## 2026-09-09: a correctness fix reopened the sticking question
 
@@ -190,5 +210,6 @@ the pathology has never been re-measured against a correct Cannon.
   run. That restores the like-for-like pair the bound's original rule needed,
   and would say whether 2,000 is generous, tight, or meaningless.
 - The residual neutral-personality sticking, above. The Ghidra/PPSSPP
-  capture item is closed (2026-09-10 section); what it left open is the wall
-  path's point velocity.
+  capture item is closed (2026-09-10 section), and so is the wall path's point
+  velocity; what is open now is `pair.rs`'s own `vn` convention, in its own
+  thread.

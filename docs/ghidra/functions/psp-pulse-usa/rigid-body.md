@@ -444,13 +444,25 @@ been read, and it is the mechanism.**
 
 ### `Body_ResolveContact` (`0x0884e968`)
 
-Signature `void Body_ResolveContact(RigidBody *body /* a0 */, Contact *c /* a1 */)`.
+Signature `void Body_ResolveContact(Contact *c /* a0 */, RigidBody *body /* a1 */)`.
+**The contact comes first**, corrected 2026-09-10 from a full read of the
+function: `0x0884e978`-`0x0884e97c` is `move s1,a0` / `move s0,a1`, and it is
+`s0` that carries the restitution (`+0x388`, `0x0884eb28`) and the inverse mass
+(`+0x378`, `0x0884eb74`) while `s1` carries the friction (`+0x34`), the depth
+(`+0x30`) and the flags (`+0x20`). The call `Body_ApplyImpulseAtPoint(a0 = s0,
+a1 = s1, ...)` at `0x0884eea0` agrees, `body` being that function's first
+argument. Nothing about the physics below changes; only the argument order was
+written down backwards.
+
 Reconstructed from the instruction stream:
 
 ```c
 r       = c->point(+0x00) - body->position(+0x30);
-wWorld  = basis(+0x00..+0x30) * body->angular(+0x150);   /* vtfm4.q, 0884ea58 */
-vPoint  = body->velocity(+0x140) + cross(r, wWorld);     /* vcrsp.t + vadd.q  */
+/* `-omega` in world coordinates, not `wWorld`: `+0x150` is negated body-local,
+   so this vtfm4.q is the unrotation. See the note under the block. */
+wSpun   = basis(+0x00..+0x30) * body->angular(+0x150);   /* vtfm4.q, 0884ea58 */
+vPoint  = body->velocity(+0x140) + cross(r, wSpun);      /* vcrsp.t + vadd.q  */
+        /* == body->velocity + cross(omega, r), the textbook form */
 n       = c->normal(+0x10);
 vn      = dot(vPoint, n);                                /* vdot.t, 0884eb1c  */
 
