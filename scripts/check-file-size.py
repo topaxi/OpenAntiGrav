@@ -121,7 +121,7 @@ BASELINE = {
     # right way round: a disc-backed fix needed twelve lines in a file already
     # at its ceiling, and a ceiling only ever lowers.
     "crates/game/tests/race_ground_truth.rs": 2266,
-    "crates/vex/src/vex.rs": 1758,
+    "crates/vex/src/vex.rs": 1651,
     "crates/game/src/boot.rs": 1784,
     # Ratcheted down from 1,981 when `Player`, `FRAME_RATE` and
     # `PS2_DISPLAY_ASPECT` moved to `crates/game/src/frontend/player.rs` -

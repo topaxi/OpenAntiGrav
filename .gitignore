@@ -117,3 +117,4 @@ __pycache__/
 *.rep/
 *.gpr
 *.lock
+scratch-*.md
