@@ -525,7 +525,6 @@ Each is a real, named next step, one file per thread under [`handover/`](handove
 - [The PS2 boost plume draws, and the PS2 file is not the PSP file wearing the same name](handover/rendering/the-ps2-boost-plume-draws-and-the-ps2.md)
 - [HD's frame was too bright and too bloomy; the bloom chain was not what was wrong](handover/rendering/hds-frame-was-too-bright-and-too-bloomy.md)
 - [HD needs a per-material shader path, and two general rules for finding one have been refuted](handover/rendering/hd-needs-a-per-material-shader-path-and.md)
-- [HD's specular-exponent population needs re-measuring after the `dp3_feeding` fix](handover/rendering/hd-specular-exponent-population-needs-re-measuring.md)
 - [A PS3 title now boots, drives and screenshots from a script - and its savestates are not worth adopting](handover/tooling/a-ps3-title-now-boots-drives-and-screenshots.md)
 - [Reversed grids were putting craft off the track; fixed by walking the spline instead of extrapolating a straight line](handover/gameplay/reversed-grids-were-putting-craft-off-the-track.md)
 - [HD's sky, fog and lighting draw from the disc's own statements - three holds remain, each named where it lives](handover/rendering/hds-sky-fog-and-lighting-draw-from-the.md)
