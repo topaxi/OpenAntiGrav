@@ -733,6 +733,138 @@ unread; a craft against track geometry takes the single-body path.
   `0x08815ccc` is still a stub; `Collision_BoxAgainstBox` is not, and whether
   it fires for a pair of craft is now the open question in that section.
 
+## `+0x150` is negated body-local, so `R^T` is an unrotation and the point velocity is textbook
+
+**Read and measured 2026-09-10.** The open item above asked whether
+`Body_ResolveContact`'s point velocity diverges from the textbook form the way
+the pair path's was believed to. The answer is that **neither diverges**, and the
+`v + cross(r, R^T omega)` reading above - correct as arithmetic on the
+original's bytes - is not what a reimplementation should write against its own
+state.
+
+### The full read of `Body_ResolveContact` (`0x0884e968`)
+
+Confirmed at instruction level, and byte-identical to the pair path's idiom:
+
+```text
+0884e9ac  lv.q   C300,0x0(s1)      ; contact+0x00, the point
+0884e9b8  vsub.q C320,C300,C310    ; r = contact.point - body+0x30      -> sp+0x10
+0884ea20  lv.q   C400,0x0(a1)      ; a1 == body+0x150                   -> sp+0x670
+0884ea34  lv.q   C100,0x0(a1)      ; sp+0x20 == body+0x00   \
+0884ea3c  lv.q   C110,0x0(a1)      ; sp+0x30 == body+0x10    | the basis rows,
+0884ea44  lv.q   C120,0x0(a1)      ; sp+0x40 == body+0x20    | w components zeroed
+0884ea4c  lv.q   C130,0x0(a1)      ; sp+0x50 == 0x08a90a10  /  at 0884ea0c-0884ea14
+0884ea58  vtfm4.q C000,E100,C200   ; R^T * body+0x150                   -> sp+0x60
+0884ea98  vmov.q C320,C300         ; preserve w across the 3-component cross
+0884ea9c  vcrsp.t C320,C300,C310   ; cross(r, that)   -- r on the LEFT  -> sp+0x70
+0884eae0  vadd.q C220,C200,C210    ; + body+0x140                       -> sp+0x0
+0884eb50  vdot.t S220,C200,C210    ; vn = dot(v_p, contact+0x10)
+```
+
+`0x08a90a00` (which seeds `sp+0x0` and the denominator accumulator at `sp+0xe0`)
+and `0x08a90a10` (the basis matrix's fourth row) are both `(0, 0, 0, 1)`, so
+neither `vtfm4.q` nor the denominator carries a constant or a translation term.
+The `vdot.t` at `0x0884eb1c` writes `sp+0x280`, which nothing reads - `vn` is the
+second one - dead like the `-1.0` scale at `0x0884ed0c` already recorded above.
+
+### What `body+0x150` holds, fitted against the basis's own rotation
+
+A `data/traces/*.csv` capture records the basis rows **and** the column every
+tick, so the question needs no emulator: the rotation the recorded basis
+performs between two ticks is `omega_true = 0.5 * sum_i cross(row_i,
+d(row_i)/dt)`, and each candidate reading predicts a different column from it.
+Median residual against the recorded column, in rad/s
+(`scripts/omega-column-reading-fit.py`):
+
+| trace | tick pairs | median \|omega_true\| | World | NegatedWorld | Local | **NegatedLocal** |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| `talons-junction-time-trial-lap` | 3145 | 1.0333 | 2.0533 | 0.1778 | 2.0634 | **0.0205** |
+| `talons-junction-clean-lap` | 2976 | 1.5435 | 2.8725 | 0.3165 | 3.0417 | **0.0330** |
+| `talons-junction-autopilot` | 3019 | 1.5968 | 2.9687 | 0.3118 | 3.1387 | **0.0332** |
+| `talons-junction-standing-start` | 299 | 0.1075 | 0.1711 | 0.0992 | 0.2151 | **0.0028** |
+
+`NegatedLocal` is a 2 % residual against a 1.0-1.6 rad/s signal where `World` is
+a 200 % one, on four captures including one taken at a tenth the rotation rate.
+So
+
+```text
++0x150      = -R * omega_true
+R^T(+0x150) = -R^T R omega_true = -omega_true
+v_p         = v + cross(r, -omega_true) = v + omega_true x r
+```
+
+and `R^T` is the **body-local to world unrotation**, not a spurious rotation of
+an already-world vector. This reproduces independently what `crates/trace`'s
+`Frame::angular_rate` doc comment records as a per-axis fit of `-1.0011`,
+`-0.9999`, `-0.9993`, and it is the `w_game = -w_physics` contract
+`crates/physics/src/integrate.rs` states as a whole-crate rule - the same
+substitution that already explains `Body_AddForceAtPoint` computing torque as
+`F x r` and the surface alignment being `-400 * cross(up, avgNormal)`.
+Confidence **92**: four independent captures, three of them whole laps, against
+a kinematic identity with no fitted scale in it, agreeing with two conventions
+already established in the tree for other reasons.
+
+### What that cost, measured both ways
+
+`crates/physics/src/wall.rs` was changed to `cross(r, R^T omega)` against this
+crate's own `Body::angular_velocity` before the fit above was run, and both
+available measurements rejected it:
+
+- **Offline, from the original's own state.** Over the ten box sample points
+  `Collider_BoxSamplePoints` builds and a lateral (wall) normal, the difference
+  between the two expressions on the recorded laps runs a median of **8.2 to
+  11.0 units/s** of `vn`, p95 16-23, worst 24-30. For a level craft yawing about
+  `up` the two are *opposite in sign* on the dominant mode, so the error is twice
+  the angular contribution rather than a small rotation. That figure is the size
+  of the mistake, not of a fidelity gain.
+- **In the simulation.** `race_ground_truth`'s
+  `a_lone_craft_gets_round_the_circuits_it_is_known_to_get_round` went from
+  twelve clean laps to eleven: `07_Track` lost its clean lap (2 laps in budget,
+  down from 4 at 48.4s), `06_Track` went 43.8s to 61.5s, `09_Track` 50.0s to
+  54.9s, all with **zero** extra respawns - a craft losing more speed per wall
+  contact, which is exactly what a sign-flipped `vn` does through the ungated
+  normal impulse. `01_Track` held at 1 respawn at `[794]` throughout.
+
+`wall.rs` is unchanged as a result. `wall::tests`'s
+`the_point_velocity_of_a_yawing_craft_is_textbook_and_that_is_the_originals`
+pins the case with a 1 rad/s yaw, tightly enough to fail under the other
+reading; every other wall test starts at `omega == 0`, where the two forms agree,
+which is why nothing caught this either way.
+
+### The application point, from a dedicated read
+
+`0x0884eea0`-`0x0884eeac` is `move a0,s0` / `move a1,s1` / `jal 0x0884d64c`, and
+`s1` is the contact struct whose `+0x00` is the very point `r` was built from at
+`0x0884e9ac`. **So the one-body path really does apply its impulse at the real
+contact point, with no subtlety** - this page recorded that from the pair
+investigation looking sideways, and it now has a read of its own. The lever arm
+is real, `cross(r, p)` is non-zero, and a wall hit spins a craft at the
+`0.1`-scaled share, unlike a craft-to-craft hit.
+
+### What is now open instead
+
+- **`crates/physics/src/pair.rs` has the defect `wall.rs` was thought to have.**
+  `pair::contact_velocity` feeds this crate's `Body::angular_velocity` - which is
+  `omega_true` - through `orientation * (-omega.x, omega.y, -omega.z)`, which is
+  only `R^T(+0x150)` if the field held the original's raw negated-body-local
+  bytes. In the running simulation it does not, so `vn`'s angular contribution
+  has the wrong sign there. The pinned test passes because `pair/tests.rs`'s
+  `captured()` fixture puts the raw `+0x150` triple straight into
+  `angular_velocity`, building a `Body` the simulation would never produce. The
+  correction is self-checking: set the fixture's `angular_velocity` to
+  `-R^T(raw)` and use the textbook form, and `j` must still be `43.16971` and
+  `0.18440`, because `omega_ours == -R^T omega_raw` makes `omega_ours x r`
+  identically `cross(r, R^T omega_raw)`. **The pair path's headline finding is
+  unaffected**: the impulse is still applied at each body's own centre, so a
+  craft-to-craft hit still imparts no angular velocity.
+- **The `+0x80` reading wants re-deriving.** The claim that `+0x150` is
+  world-space rested on `+0x150 == inverse(I_world) * +0x160`. The fit above
+  contradicts the conclusion, so either the `+0x80` block's own convention or
+  that identity is misread - and the *denominator* findings on both paths (the
+  body-space diagonal at `+0x40..0x70` applied to a world-space `r x n`) sit next
+  to the same block. Those findings are not disturbed by anything measured here,
+  but they are now the neighbours of a known misreading.
+
 ## `Body_ResolveContactPair` (`0x0884ef30`): the two-body path
 
 **Read 2026-08-11.** This page listed it under "Not determined" until then, as the
@@ -1886,10 +2018,16 @@ candidate conventions for the point velocity, against the two staged rows:
 | recorded | 0.18440 | 43.16971 |
 
 `R` is the basis-rows block, `R^T omega` the `vtfm4.q C000,E100,C200` at
-`0x0884f038` applied to a world-space `omega` (it *is* world-space: `+0x150`
-equals the world inverse inertia at `+0x80` times `+0x160` on the tumbling
-body, and not the body-space one), and the `vcrsp.t` at `0x0884f078` has the
-lever arm on the **left**. Both the operand order and the rotation are the
+`0x0884f038`, and the `vcrsp.t` at `0x0884f078` has the lever arm on the
+**left**. **This pass called `+0x150` world-space, on the grounds that it equals
+the world inverse inertia at `+0x80` times `+0x160` on the tumbling body rather
+than the body-space one. That is wrong** - see [the section
+below](#0x150-is-negated-body-local-so-rt-is-an-unrotation-and-the-point-velocity-is-textbook),
+where the column is fitted against the rotation the recorded basis performs and
+comes out negated body-local by two orders of magnitude. The arithmetic in the
+table above is untouched by that: it recomputes `j` from the original's own bytes
+and reproduces it. What changes is the *interpretation*, and therefore what a
+reimplementation should write against its own state. Both the operand order and the rotation are the
 original's, and the tumbling row is what makes them visible - on a level craft
 yawing about `up`, `R^T omega == omega` and the two orders differ only in sign
 on a term that is small.
@@ -1909,8 +2047,8 @@ Confidence **95** on `Body_ResolveContactPair` as a whole: runtime trace on the
 predicted addresses, `j` reproduced to five figures, and the PS2 twin agreeing on
 the centred application.
 
-**Still open from this pass**: `Body_ResolveContact`'s one-body point velocity
-is built by the same idiom (`vtfm4.q E100` at `0x0884ea58`, `vcrsp.t` with `r`
-on the left at `0x0884ea9c`), and `crates/physics/src/wall.rs` computes the
-textbook `omega x r` there. Unmeasured on that path; on a craft yawing at
-0.8 rad/s with a 5-unit lever arm it moves `vn` by up to 8 units/s.
+**Closed 2026-09-10, with a negative result**: `Body_ResolveContact`'s one-body
+point velocity is built by the same idiom (`vtfm4.q E100` at `0x0884ea58`,
+`vcrsp.t` with `r` on the left at `0x0884ea9c`), and `crates/physics/src/wall.rs`
+computes the textbook `omega x r` there - **which is the same thing**. The
+section below is the read and the measurement.

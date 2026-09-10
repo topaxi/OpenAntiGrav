@@ -126,6 +126,35 @@ impl Body {
     }
 
     /// Velocity of a world-space point rigidly attached to the body.
+    ///
+    /// # This textbook form *is* what both of the original's contact resolvers use
+    ///
+    /// Not obviously: `Body_ResolveContact` (`0x0884e968`) and
+    /// `Body_ResolveContactPair` (`0x0884ef30`) both build the point velocity by
+    /// rotating `body+0x150` through the basis rows at `body+0x00..0x30`
+    /// (`vtfm4.q C000,E100,C200`, at `0x0884ea58` and `0x0884f038`) and then
+    /// crossing with the lever arm on the **left** (`vcrsp.t`, `0x0884ea9c` and
+    /// `0x0884f078`) - `v + cross(r, R^T omega)`, which reads as a non-textbook
+    /// idiom and is not one.
+    ///
+    /// `body+0x150` holds the rotation rate **negated and in body coordinates**,
+    /// so `R^T` is the body-local to world unrotation and
+    /// `R^T(body+0x150) == -omega`, which makes the whole expression
+    /// `v + cross(r, -omega) == v + omega x r` - this function. The reading is
+    /// measured, not assumed: `scripts/omega-column-reading-fit.py` fits the
+    /// recorded column against the rotation the recorded basis actually performs
+    /// over four captures and `NegatedLocal` wins by two orders of magnitude
+    /// (a 2 % residual against 200 % for a world-space reading). It is also the
+    /// `w_game = -w_physics` contract [`crate::integrate`] states as a
+    /// whole-crate rule, and `crates/trace`'s `Frame::angular_rate` records the
+    /// same fit per axis.
+    ///
+    /// **So do not "correct" a resolver to `cross(r, R^T omega)` against our own
+    /// `angular_velocity`** - that inserts a sign flip on the dominant mode,
+    /// worth a median 8-11 units/s of `vn` on a recorded lap, and it costs
+    /// `07_Track` its clean lap in `race_ground_truth`. `wall::tests` pins the
+    /// case with a yawing craft; every other wall test starts at `omega == 0`,
+    /// where no convention is exercised.
     #[must_use]
     pub fn velocity_at(&self, point: Vec3) -> Vec3 {
         self.linear_velocity + self.angular_velocity.cross(point - self.position)
