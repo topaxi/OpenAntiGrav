@@ -1,4 +1,10 @@
-# Weapons: nine of thirteen, and the dispatch table read whole
+# Weapons: thirteen of thirteen less the deferred Repulser, and the dispatch table read whole
+
+**Retitled 2026-09-10 (thread audit note): the title and every index line
+citing it said "nine of thirteen" through the Cannon (ten, 2026-09-07), the
+Quake (twelve, same day) and the LeachBeam (thirteen less Repulser,
+2026-09-08) landing in this same file without the title ever being updated -
+the single most stale header found in this pass.**
 
 2026-09-02, [plasma.md](../../docs/ghidra/functions/psp-pulse-usa/plasma.md),
 [mine.md](../../docs/ghidra/functions/psp-pulse-usa/mine.md) and
@@ -570,10 +576,11 @@ which is the whole point of the weapon.
   `Race::spend_pickup`'s Mine arm calls `begin_drop(drop.count)` on every
   press with no `pickup.is_dropping()` guard, so a re-press mid-cluster
   re-arms the drop and lays immediately rather than being ignored until the
-  cluster finishes. **Not fixed here** - it moves mine positions and
-  therefore the world hash, so it needs a change (and a hash regen) of its
-  own; recorded so the next person driving weapons with `--give` does not
-  mistake it for their own bug.
+  cluster finishes. ~~**Not fixed here**~~ **Fixed, later and unlinked commit
+  (thread audit note, 2026-09-10): `crates/gameplay/src/pickup.rs`'s
+  `begin_drop` is now a no-op while `is_dropping()` is already true - no
+  `Race::spend_pickup`-side guard needed after all. Confirmed in current
+  source; this bullet was never struck through when the fix landed.**
 
 **Fixed 2026-08-26: a laid mine or bomb rode the Rocket's flare from the
 moment it landed.** Reported from play as "the mines are animating the

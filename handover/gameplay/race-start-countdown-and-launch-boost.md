@@ -624,19 +624,14 @@ In short:
 - The billboard thread's own top open item - the mode-descriptor pointer replacing
   `Num==7`'s mesh, traced to one of the four `321Go_*.vex` shapes - still doubles as
   this thread's Zone-display-variant question and is still open in both places.
-- **Slot 8's own world transform - the gantry-placement blocker - is still not
-  recovered**, after a fifth pass (2026-09-06) and a seventh pass (2026-09-06, above)
-  both aimed squarely at it. What they add: a corrected static reading of the one
-  transform construction does write (fixed local offset, not identity), three
-  ruled-out leads (`start_grid.vex`, the parent/ownership alloc chain, and now
-  `param_1+0x40` itself - resolved to the mesh's own authored `Camera` node, not a
-  placement mount point) - all in
-  [billboards.md](../../docs/ghidra/functions/psp-pulse-usa/billboards.md). A live PPSSPP
-  capture was attempted to settle the fifth pass's own question directly and did not
-  complete in four tries; see that page's own account of why, including a
-  `timeout`/`uv run` trap worth avoiding next time. **No static lead remains untried**;
-  the concrete next step is a live breakpoint on the child-list insert
-  (`func_0x00140bd4`, `0x08944bd4`) during an actual track load.
+- ~~**Slot 8's own world transform - the gantry-placement blocker - is still not
+  recovered.**~~ **Closed by the ninth pass, same day (2026-09-06), below - never struck
+  through here (thread audit note, 2026-09-10).** See "the gantry is placed, drawn, and
+  playing the countdown": `crates/render/src/gantry.rs`,
+  `crates/render/tests/gantry_mount_ground_truth.rs` and
+  [`docs/rendering/start-gantry.md`](../../docs/rendering/start-gantry.md) confirm it
+  landed on the mount the track itself authors, not off a live breakpoint on the
+  child-list insert as this bullet's own next step still named.
 - ~~No screenshot comparison of a Zone countdown against a circuit-race countdown~~
   **Done for HD's gantry mesh content, off the disc via `oag-view`** - see the fourth
   pass above. **Still open**: an actual in-game screenshot (this session rendered
