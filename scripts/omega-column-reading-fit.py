@@ -19,7 +19,7 @@ recorded basis performs between two ticks is
 and each candidate reading predicts a different column from it. Run it over any
 capture that has the `right_*`/`up_*`/`fwd_*`/`omega_*` columns:
 
-    uv run scripts/omega-column-reading-fit.py data/traces/talons-junction-*.csv
+    python3 scripts/omega-column-reading-fit.py data/traces/talons-junction-*.csv
 
 Median residual against the recorded column, in rad/s, on three whole Talon's
 Junction laps (2026-09-10):
