@@ -212,16 +212,16 @@ the pathology has never been re-measured against a correct Cannon.
   reverting `oag_ai::Driver::social`'s `alongside`/`CONTACT_FLOOR` fix for one
   run. That restores the like-for-like pair the bound's original rule needed,
   and would say whether 2,000 is generous, tight, or meaningless.
-- The residual neutral-personality sticking, above. The Ghidra/PPSSPP
-  capture item is closed (2026-09-10 section), so is the wall path's point
-  velocity, and so is `pair.rs`'s own `vn` convention: `respond` now builds the
-  point velocity with `Body::velocity_at`, reproducing the original's `j` from
-  its captured bytes **bit-identically** (`43.1697235107`, `0.1843950450`) with
-  the fixture's raw `+0x150` triple mapped to `-R^T(raw)`. It moved this
-  thread's own metric the right way and untuned: overlapped pair-ticks
-  **1,134 -> 1,052**, sustained **808 -> 625**, longest single streak
-  **172 -> 107**. `race_ground_truth` unchanged - twelve clean laps,
-  `01_Track` 1 respawn at `[794]` either side. So the sustained figure the
-  first Open bullet calls 97 % of the pathology is now **625 against 1,062**,
-  and it got there without a bound being touched; the play-session check that
-  bullet asks for is still the discriminating one.
+- The residual neutral-personality sticking, above, is still open. ~~The
+  Ghidra/PPSSPP capture item~~, ~~the wall path's point velocity~~, and
+  ~~`pair.rs`'s own `vn` convention~~ are all closed, 2026-09-10: `respond` now
+  builds the point velocity with `Body::velocity_at`, reproducing the
+  original's `j` from its captured bytes **bit-identically**
+  (`43.1697235107`, `0.1843950450`) with the fixture's raw `+0x150` triple
+  mapped to `-R^T(raw)`. Current weapons-live numbers: overlapped pair-ticks
+  **1,052** (was 1,134 before this fix), sustained **625** (was 808), longest
+  single streak **107** (was 172). `race_ground_truth` unchanged - twelve
+  clean laps, `01_Track` 1 respawn at `[794]` either side. The sustained
+  figure the first Open bullet calls 97 % of the pathology is now **625
+  against 1,062**, and got there without a bound being touched; the
+  play-session check that bullet asks for is still the discriminating one.
