@@ -123,6 +123,61 @@ def table(title, header, xs_by_axis, ys_by_axis, expected):
     return ratios
 
 
+def to_body(basis_rows, world):
+    """`R w`: the components of a world vector along the three basis rows."""
+    return tuple(sum(basis_rows[i][k] * world[k] for k in range(3)) for i in range(3))
+
+
+def to_world(basis_rows, body):
+    """`R^T v`: a body-coordinate triple back out along the basis rows."""
+    return tuple(sum(body[i] * basis_rows[i][k] for i in range(3)) for k in range(3))
+
+
+def world_axis_map(basis_rows, body_rate):
+    """`L = R (I (x) R^T w)` - the engine's own map, per `trace-inertia-frame-fit.py`.
+
+    Both columns are stored body-local and negated, so the two rotations are
+    only the trip in and out of the frame the fields are written in; what the
+    map itself does is multiply a **world** vector by a diagonal fixed in
+    **world** axes. Model `F` of `scripts/trace-inertia-frame-fit.py`, which
+    explains 100.00 % of the momentum column on all three Talon's Junction
+    captures against 91-95 % for the body-local reading.
+    """
+    world = to_world(basis_rows, body_rate)
+    return to_body(basis_rows, tuple(INERTIA[i] * world[i] for i in range(3)))
+
+
+def report_world_axis(rows, usable, basis, omega, avel):
+    """(A) and (C) again, with the diagonal applied in world axes instead.
+
+    The comparison is narrow and worth stating: the world-axis reading is a
+    statement about **(A)**, the momentum-to-rate map, and (A) is the half of
+    the composite that already roughly held. (B) is a fit of one recorded
+    column against another with no tensor anywhere in it, so no reading of the
+    tensor's frame can move it - and (B) is what carries the pitch and roll
+    failure. This measures that rather than asserting it.
+    """
+    rows_basis = [(rows[i]["_right"], rows[i]["_up"], rows[i]["_fwd"]) for i in usable]
+    predicted_a = [world_axis_map(b, o) for b, o in zip(rows_basis, omega)]
+    predicted_c = [
+        world_axis_map(b, tuple(-x for x in w)) for b, w in zip(rows_basis, basis)
+    ]
+    table(
+        "(A_F) avel(+0x160) = R (I (x) R^T omega(+0x150)) - the world-axis map:",
+        "avel/pred ",
+        [[p[k] for p in predicted_a] for k in range(3)],
+        [[a[k] for a in avel] for k in range(3)],
+        (1.0, 1.0, 1.0),
+    )
+    table(
+        "(C_F) avel(+0x160) = R (I (x) R^T -omega(basis)) - the composite, world-axis:",
+        "avel/pred ",
+        [[p[k] for p in predicted_c] for k in range(3)],
+        [[a[k] for a in avel] for k in range(3)],
+        (1.0, 1.0, 1.0),
+    )
+
+
 def report_by_bank(basis, omega, avel, ups):
     """Both identities partitioned by how far the craft is from level.
 
@@ -291,6 +346,14 @@ def main():
         "that would take the ship's `up` onto the track's own surface normal.",
     )
     parser.add_argument(
+        "--world-axis",
+        action="store_true",
+        help="repeat (A) and (C) with the inertia diagonal applied in world axes "
+        "- `L = R (I (x) R^T w)`, the map `scripts/trace-inertia-frame-fit.py` "
+        "measures the engine using - instead of body-locally. Additive: the "
+        "default output is unchanged.",
+    )
+    parser.add_argument(
         "--smooth",
         type=int,
         default=21,
@@ -339,6 +402,9 @@ def main():
         [[a[k] for a in avel] for k in range(3)],
         tuple(-i for i in INERTIA),
     )
+
+    if args.world_axis:
+        report_world_axis(rows, usable, basis, omega, avel)
 
     print(
         "\nresidual of (B), i.e. the rotation the recorded angular velocity does not\n"

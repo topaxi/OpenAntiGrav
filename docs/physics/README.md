@@ -692,8 +692,12 @@ Three consequences, and the first is the interesting one:
   **22x** too strong. Dividing by the control range "fixes" it to 4.7x too weak. See
   [engine.md](../ghidra/functions/psp-pulse-usa/engine.md#steering) for the instruction-level
   reading and `oag_physics::forces::YAW_INVERSE_INERTIA` for what closes it -
-  **the yaw entry of the body's inverse inertia tensor**, recovered from
-  `Body_SetBoxInertia`, applied to the whole body-local yaw axis because the
+  **the yaw entry of the inverse inertia tensor**, recovered from
+  `Body_SetBoxInertia` (a diagonal fixed in *world* axes, corrected 2026-09-10 -
+  on a level craft the world and body readings of a `diag(a, b, a)` tensor are
+  identical, see
+  [cornering-ground-truth.md](cornering-ground-truth.md#the-tensor-is-a-world-axis-diagonal-and-that-answers-a-not-c)),
+  applied to the whole yaw axis because the
   bank-to-yaw coupling recorded above shares the same accumulator and therefore
   the same factor.
 - **Whether the two angular accumulators hold torque or angular acceleration.** Nothing in

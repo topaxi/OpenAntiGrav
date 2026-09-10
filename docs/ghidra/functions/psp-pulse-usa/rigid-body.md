@@ -347,14 +347,21 @@ layout. One data point in passing: the 100.00 % fit is against a strictly
 diagonal `+0x40`, over 6,423 ticks of three captures, so the off-diagonal terms
 were zero throughout those captures.
 
-**And it opens one.** `crates/physics/src/integrate.rs` applies the inertia as a
-**body**-space diagonal (`R^T (I^-1 (x) (R tau)))`), which is the physically
-correct treatment and not this one. Under yaw the two agree exactly; under pitch
-and roll they do not, and
-[cornering-ground-truth.md](../../../physics/cornering-ground-truth.md) records
-the basis rotating `0.231x` and `0.647x` of what the momentum column accounts for
-on precisely those two axes, closing at `0.970x` on yaw. Whether that gap is this
-is unmeasured, and that page is where the answer belongs.
+**And it opened one, which has since been measured and closed.**
+`crates/physics/src/integrate.rs` applies the inertia as a **body**-space
+diagonal (`R^T (I^-1 (x) (R tau)))`). Under yaw the two agree exactly; under
+pitch and roll they do not, and
+[cornering-ground-truth.md](../../../physics/cornering-ground-truth.md) recorded
+the basis rotating `0.231x` and `0.647x` of what the momentum column accounts
+for on precisely those two axes, closing at `0.970x` on yaw. **That gap is not
+this**: measured on 2026-09-10 with
+`scripts/trace-omega-identity.py --world-axis`, the world-axis map explains the
+momentum-to-rate identity to `100.00 %` on every axis and moves the composite
+only from `0.2533`/`0.6643` to `0.2963`/`0.6314` - because the pitch and roll
+failure is in the basis-versus-column identity, which has no tensor in it at
+all. The crate keeps its body-space diagonal deliberately, **chosen, not
+measured**; the decision, its three reasons and the condition to revisit it are
+[on that page](../../../physics/cornering-ground-truth.md#the-crate-keeps-its-body-space-diagonal-chosen-not-measured).
 
 ### Answered: `Body_SetBoxInertia` (`0x0884e1ac`) writes `body+0x40`
 
