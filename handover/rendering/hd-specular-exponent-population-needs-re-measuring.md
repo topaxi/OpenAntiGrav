@@ -85,24 +85,46 @@ to still hold.
   survive review before `fragment.rs` states them as fact. The "not pinned to a disc-wide
   population count" placeholder stays accurate and is left in place.
 
+- **2026-09-10: all three remaining Next Steps closed in one disc-wide sweep**
+  (`crates/render/examples/hd_specular_orthogonality_sweep.rs`, 1,632 `.rcsmaterial` files,
+  76,358 variants, 0 unparsed). Full numbers in `renderer.md`'s own 2026-09-10 dated entry under
+  "Ships have no Lambert diffuse either" - summarised here:
+  - The two `NoSingleWriter` operands trace to `nitro_perspex_new.rcsmaterial` being written by
+    *two* instructions rather than none: `op3B R2.xyz, ...` fully covers the three lanes the
+    winning `DP3` reads, then a later `MOV R2.z, R2.xyzw` - read literally, a self-copy of `.z`
+    onto itself - trips the clobber check. Plausibly a no-op that leaves `op3B` as the real
+    single source (mechanically indistinguishable from the `Normalize` cases elsewhere in this
+    file), but not applied as a fix: confirming a `MOV` with an identical source and destination
+    register is genuinely a no-op on this hardware is a semantic judgement `classify()`
+    deliberately doesn't make. Rate confirmed at 2 of 344 (0.6%), not investigated further.
+  - Orthogonality is settled disc-wide: of 1,467 files whose own variants include both a
+    Zone-declaring and a non-Zone one, 287 have a non-Zone variant that still resolves a
+    specular exponent (at `0`/`32`/`40`/`300`, across every circuit sampled by hand before).
+    `01_normal_diffuse_specularonalpha.rcsmaterial` itself is not one of the 287 - it stays a
+    real exception - but the Zone flag and `specular_exponent()` resolving are now confirmed
+    orthogonal as a disc-wide property, not left open on one ambiguous file.
+  - The four-parameter cluster's dominance was checked in a full census (42,028 Zone-declaring
+    variants, not a 13-material sample) rather than a bigger hand read: it holds in every raced
+    circuit and in the front end (82.6% between the cluster and its seven-parameter superset),
+    but **not** in the four dedicated Zone-mode arenas (`zone_1`-`zone_4`, outside the 16 raced
+    circuits), whose dominant sets are different (missing `zoneEffectInner` in the top two, plus
+    a `zoneAnisoPower`-bearing family found nowhere else) - a genuine circuit-*type* difference,
+    not a sampling artefact.
+  - Confidence held at **85, not raised** - the widened sample moves the orthogonality and
+    cluster-dominance claims from "13 materials" to "disc-wide measured", but the mechanism axis
+    (the per-variant Zone toggle inferred from one file's pattern, not confirmed against the
+    game's own render-path/variant-selection code) is untouched and still needs Ghidra - left
+    open below, not attempted this pass.
+  - `fragment.rs`'s `specular_exponent` doc comment now carries the disc-wide population and the
+    orthogonality result in place of the "not pinned to a population count" placeholder. Nothing
+    in `dp3_feeding`'s own doc comment needed updating - it never carried that placeholder.
+
 ## Next Steps
 
-- Trace what the two new `NoSingleWriter` operands (out of 344, in the `200`/`250`/`260`/`35`
-  re-run) actually resolve to - a genuinely new gap in `hd_specular_unresolved_trace.rs`'s own
-  method, not present in the pre-fix 168-operand tally.
-- Extend the by-hand Zone-declaring read beyond the current 13 materials (all sampled from
-  amphiseum, 05_ubermall, 01_vineta_k plus its DLC copy, and one front-end medal) to more
-  circuits, to check whether the "Zone-mode-variant flag, not a rim chain" finding holds
-  disc-wide or is itself circuit-specific. Confirming the per-variant toggle against the game's
-  own render-path/variant-selection code (rather than inferring it from one file's variant
-  pattern alone) would raise this past its current 85.
-- Settle the orthogonality question directly: find a material with at least one
-  `declares_zone=false` variant that still resolves a specular exponent.
-  `01_normal_diffuse_specularonalpha.rcsmaterial` could not answer this on its own - all four of
-  its resolving variants happen to sit on the Zone-declaring side, so it is equally consistent
-  with "unrelated" and with "only Zone variants resolve here". A material with a resolving
-  non-Zone variant would close this cleanly; one without would instead be worth investigating for
-  why non-Zone variants of this shader family never resolve at all.
-- Once both of the above are closed, fold the settled numbers into `fragment.rs`'s
-  `specular_exponent`/`dp3_feeding` doc comments in place of the "not pinned to a population
-  count, see renderer.md" placeholder text.
+- Confirm the per-variant Zone-mode toggle (`01_normal_diffuse_specularonalpha.rcsmaterial`'s
+  0-14/15-34/35-49/50-69 pattern) against the game's own render-path/variant-selection code,
+  rather than inferring it from one file's variant pattern alone. This is the only thing that
+  would raise the 85 - it needs a Ghidra bridge and was explicitly out of scope for the pass that
+  closed everything else above.
+- This thread's other three Next Steps are closed (2026-09-10 entry above); nothing else is
+  currently open on the specular-exponent population itself.

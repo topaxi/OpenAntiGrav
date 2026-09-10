@@ -517,9 +517,9 @@ impl Program {
     ///
     /// Confidence 80: the pattern is instruction shape, not block meaning, so
     /// a non-specular power fed by a saturated dot product and reaching the
-    /// output would read as this method's answer too. **Not pinned to a
-    /// disc-wide population count** - [`Self::dp3_feeding`]'s 2026-09-04 fix
-    /// moved every number this page had published; see its own doc comment.
+    /// output would read as this method's answer too. **Re-measured
+    /// disc-wide 2026-09-10, and orthogonal to `declares_zone`** (287/1,467
+    /// toggling files resolve non-Zone) - `renderer.md`'s 2026-09-10 entry.
     #[must_use]
     pub fn specular_exponent(&self) -> Option<f32> {
         self.specular_exponent_chain().map(|(value, ..)| value)

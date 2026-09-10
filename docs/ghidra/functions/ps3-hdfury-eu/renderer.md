@@ -2928,6 +2928,104 @@ round); a fourth was found premature and deliberately not taken.**
    wording stays accurate and is left as-is rather than replaced with
    numbers that might move again.
 
+**Re-measured 2026-09-10, the handover thread's three remaining Next Steps,
+all closed in one disc walk**
+(`crates/render/examples/hd_specular_orthogonality_sweep.rs` - 1,632
+`.rcsmaterial` files, 76,358 variants parsed, 0 failed to parse).
+
+1. **The two `NoSingleWriter` operands are not "no writer" - they are two
+   writers to the same register, and the tool's single-instruction rule
+   can't see past that.** Both belong to `nitro_perspex_new.rcsmaterial`
+   (`260`, ship, non-Zone, two variants sharing identical code shape). Their
+   winning `DP3` (`DP3_SAT R1.w, R2.xyzw, R3.xyzw`) reads `R2.xyz`; a
+   per-lane writer search (new - walks every prior instruction touching any
+   part of the register, rather than requiring one that covers all three
+   lanes in a single write) finds `op3B R2.xyz, R2.xyzw, R0.zzzz` fully
+   covering `x`/`y`/`z`, five instructions later followed by
+   `MOV R2.z, R2.xyzw` - a write to `.z` alone that trips the clobber check.
+   Read literally the source operand of that `MOV` is `R2` itself with an
+   identity swizzle, so the value it writes to `.z` is whatever `.z` already
+   held - **a no-op self-copy, not a real overwrite**, on the reading this
+   page's own swizzle convention gives every other instruction. If that
+   reading holds, `op3B` is still the value's true and only origin and the
+   operand is mechanically indistinguishable from every other `Normalize`
+   case (`op3B` reading the un-normalized vector against a scalar in a
+   different register) - the same shape as the sibling `260` variants
+   already classify. **Not applied as a fix**: recognising a self-copy as a
+   no-op is a semantic judgement (does the compiler ever emit a genuinely
+   redundant `MOV`, or does this hardware's `MOV` do something a bare
+   identity read doesn't capture, e.g. a precision or format conversion
+   between `R2` read and `R2` write) this pass didn't verify, and
+   `classify()`/`last_writer` are deliberately structural, per their own doc
+   comments. Reported as what was found, not silently patched into the
+   tool. Rate: 2 of 344 operands (0.6%) in the `200`/`250`/`260`/`35`
+   population - a small, now-explained gap, not a sign the method is
+   unsound elsewhere.
+2. **Orthogonality is settled, disc-wide, with a direct sweep rather than one
+   file's ambiguous variants.** Plain reading first: `declares_zone=false`
+   resolves specular exponents at `0` (1,965), `32` (1,444), `260` (84),
+   `200` (52), `40` (32), `35` (24), `300` (14), `250` (8) - `200`/`260`/`35`
+   are **entirely** non-Zone, confirming the 2026-09-05 entry's read of those
+   three buckets. The sharper, file-scoped question
+   `01_normal_diffuse_specularonalpha.rcsmaterial` left open - does *that
+   file's own* non-Zone side ever resolve - is answered by restricting to
+   files whose own variants include both a Zone-declaring and a non-Zone one
+   (1,467 of 1,632 files, i.e. most files on the disc toggle): **287 of
+   those 1,467 have a non-Zone variant that resolves**, spanning `0`, `32`,
+   `40`, `300` and every circuit sampled by hand before (amphiseum,
+   modesto_heights, talons_junction, tech_de_ra and more), including
+   ordinary `track_surface`/`constantdiffuse_specular_normal`-family
+   materials. `01_normal_diffuse_specularonalpha.rcsmaterial` itself is
+   *not* one of the 287 - its own non-Zone variants still never resolve,
+   consistent with the 2026-09-05 entry, but it is now confirmed to be the
+   exception rather than the rule: the Zone-declaring flag and
+   `specular_exponent()` resolving are orthogonal disc-wide, even though
+   they happen to be coupled in that one file. Confidence on the
+   orthogonality claim itself raised to disc-wide-measured (287 independent
+   counter-examples); this does not touch the separate rim-control finding
+   the 85 rests on, addressed next.
+3. **The four-parameter cluster is the dominant declared set almost
+   everywhere, and the by-hand read's 13 materials undersold one genuine
+   exception.** A census of every Zone-declaring variant's exact declared
+   subset of the 16 known `zone*` names, grouped by circuit, covers all 16
+   circuits `hd_specular_patch_census.rs` already walks plus the four
+   stand-alone Zone-mode arenas (`zone_1`-`zone_4`, absent from that list -
+   these are not raced circuits) and the front-end/HUD/rank-medal
+   `lambert*` family, 42,028 Zone-declaring variants total. In every
+   ordinary circuit and in `fe`/`hud`, the top two sets are the
+   already-published four-parameter cluster
+   (`zoneColourTint`/`zoneEffectInner`/`zoneBaseInner`/`zoneBaseAltInner`)
+   and its seven-parameter superset (adding the three `*Outer` siblings,
+   `lambertshine`'s own shape from the 2026-09-05 sample) - together 34,712
+   of 42,028 (82.6%), and a further 6,876 (16.4%) split between a
+   `zoneBaseInner`/`zoneBaseAltInner`-only pair and its five-parameter
+   `*Outer` superset (missing `zoneColourTint`/`zoneEffectInner`). **The four
+   Zone-mode arenas break the pattern**: their top two sets are the
+   `zoneBaseInner`/`zoneBaseAltInner` pair and its five-parameter superset,
+   not the four-/seven-parameter cluster, plus a `zoneAnisoPower`-bearing
+   family (also `zoneColourTint`/`zoneEffectInner`) present in no ordinary
+   circuit's top sets at all - a real circuit-*type* difference, not a
+   sampling artefact, and the "holds disc-wide" reading needs that
+   qualifier: it holds for every raced circuit and the front end, not for
+   the four dedicated Zone-mode arenas. `zoneAnisoPower` is not one of the
+   85-confidence finding's four-parameter cluster and was not read by hand
+   this pass - named here as what the arenas' distinct top set actually is,
+   not interpreted further.
+
+**What these three do and do not move.** All three are structural counts -
+which instruction wrote a lane, which parameter set a block declares, which
+variants resolve - exactly as the 2026-09-05 entry's own operand-shape work
+was, and the same caution applies: none of this is evidence about whether
+`200`/`250`/`260`/`35` are real shininess values, only about the two
+questions the thread's Next Steps actually asked (the `NoSingleWriter` gap,
+and orthogonality). **Confidence held at 85, not raised**: items 2 and 3
+widen the sample the orthogonality and cluster-dominance claims rest on (13
+materials to a full census) but do not touch the mechanism axis the 85
+already priced in - the per-variant Zone toggle is still inferred from
+`01_normal_diffuse_specularonalpha.rcsmaterial`'s own variant pattern, not
+confirmed against the game's own render-path/variant-selection code, which
+still needs Ghidra and is explicitly not attempted here.
+
 ### The sun is real and it is masked (2026-08-20)
 
 Seven of Talon's Junction's materials were read variant by variant, naming what
