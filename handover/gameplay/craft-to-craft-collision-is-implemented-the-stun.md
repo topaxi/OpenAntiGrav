@@ -74,9 +74,12 @@ gap an earlier version of this row named. Bisecting the three ported
 narrowphase differences individually shows it takes the edge-axis exclusion
 and the midpoint contact point *together* to reproduce the failure - neither
 alone does, and the "up axis needs half the depth" bias is confirmed inert
-in this specific race. See
-`handover/gameplay/the-corrected-craft-pair-narrowphase-moves-a-full-grids-trajectories.md`
-for the full numbers. Read as a butterfly-effect consequence of a physics fix
+in this specific race. Full numbers were in the thread that owned this finding
+(deleted 2026-09-10 as fully closed - both its questions, whether the kill
+reflects anything systematic and whether the single-seed regression floor was
+the right shape, were answered by `41ee19c2`'s multi-seed sweep, now pinned in
+`crates/game/tests/opponent_weapons_ground_truth.rs`'s own doc comment). Read
+as a butterfly-effect consequence of a physics fix
 verified correct at instruction level, not a demonstrated bug here or in
 `crates/ai` - left for that test's and that crate's owners to weigh rather
 than patched here.
