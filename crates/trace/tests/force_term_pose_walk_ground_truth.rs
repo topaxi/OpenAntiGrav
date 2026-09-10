@@ -571,7 +571,11 @@ fn the_pose_walk_attributes_the_crest_approach_s_velocity_residual() {
     // Bridge the per-tick residual to a position-error yardstick at the
     // crest: a velocity residual injected at tick `t` (t < RECORDED_LIFTOFF)
     // has the remaining time to the crest to become a position error, so its
-    // weight is the *sum of dt* from `t` to the crest, not one tick's worth.
+    // weight is the *sum of dt* over the ticks strictly between `t` and the
+    // crest, not one tick's worth. `remaining` must only ever accumulate `dt`
+    // for a tick that is itself before the crest - ticks at or after
+    // RECORDED_LIFTOFF are skipped outright, not merely excluded from the sum,
+    // or their `dt` would leak into every earlier tick's weight.
     // Computed twice - over every sample, which is what actually happened,
     // and over the clean subset alone, which is what a force-law fix could
     // ever reach - so the dirty tick's own share of the total is visible
@@ -580,7 +584,10 @@ fn the_pose_walk_attributes_the_crest_approach_s_velocity_residual() {
         let mut accumulated = Vec3::ZERO;
         let mut remaining = 0.0f32;
         for sample in samples.iter().rev() {
-            if sample.tick < RECORDED_LIFTOFF && (include_dirty || sample.clean) {
+            if sample.tick >= RECORDED_LIFTOFF {
+                continue;
+            }
+            if include_dirty || sample.clean {
                 accumulated += sample.residual * sample.dt * remaining;
             }
             remaining += sample.dt;
@@ -589,22 +596,31 @@ fn the_pose_walk_attributes_the_crest_approach_s_velocity_residual() {
     };
     let error_with_dirty = weighted_error(true);
     let error_clean_only = weighted_error(false);
-    let speed_at_crest = trace
-        .frames
-        .iter()
-        .find(|f| f.tick == RECORDED_LIFTOFF - 1)
-        .map_or(0.0, |f| f.speed_cached);
+
+    // The yardstick is a scalar along-track distance, so the weighted error -
+    // a 3D vector - is projected onto the along-track axis (the recorded
+    // velocity direction one tick before the crest) before the two are
+    // compared. Quoting the raw 3D magnitude against a 1D budget would credit
+    // a lateral or vertical component of the residual for a timing shift it
+    // cannot cause.
+    let crest_frame = trace.frames.iter().find(|f| f.tick == RECORDED_LIFTOFF - 1);
+    let along_track = crest_frame.map_or(Vec3::ZERO, |f| f.velocity.normalize_or_zero());
+    let speed_at_crest = crest_frame.map_or(0.0, |f| f.speed_cached);
     let ticks_of_lag = 8.0;
     let mean_dt = 1.0 / 59.94;
     let yardstick = speed_at_crest * ticks_of_lag * mean_dt;
     println!("\naccumulated position error implied by the residual, weighted to the crest:");
     println!(
-        "  every tick (incl. the tick-1583 wall event): {error_with_dirty:?} (|.| = {:.4})",
-        error_with_dirty.length()
+        "  every tick (incl. the tick-1583 event): {error_with_dirty:?} \
+         (|.| = {:.4}, along-track = {:.4})",
+        error_with_dirty.length(),
+        error_with_dirty.dot(along_track),
     );
     println!(
-        "  clean ticks only:                            {error_clean_only:?} (|.| = {:.4})",
-        error_clean_only.length()
+        "  clean ticks only:                       {error_clean_only:?} \
+         (|.| = {:.4}, along-track = {:.4})",
+        error_clean_only.length(),
+        error_clean_only.dot(along_track),
     );
     println!(
         "yardstick for an eight-tick liftoff shift at {speed_at_crest:.1} units/s: {yardstick:.4} units"
