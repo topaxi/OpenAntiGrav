@@ -1148,8 +1148,15 @@ Fixed 60 Hz, per [ADR-0007](adr/0007-fixed-timestep-vs-original.md), driven by
 `oag_core::TickClock`. The movie advances at 30000/1001 Hz inside that, so a
 2-second hold is 59.94 ticks and the reel's 260th frame arrives on tick 519.
 
-The headless capture uses the same fixed step with no clock at all, so
-`--until` and `--ticks` are reproducible.
+The headless capture uses the same fixed step, and is reproducible **so long
+as the movie itself is tick-clocked rather than audio-clocked.** Per [ADR-0019](adr/0019-atrac3plus-out-of-process.md), a machine with a real
+audio device paces a playing movie against real time
+instead, and a headless run finishes in far less real time than a movie takes
+to play - so an `--until` capture that has to wait one out, with nothing
+holding or pressing a skip button, may never reach its target inside
+`MAX_TICKS` (`crates/game/src/capture.rs`). `--no-audio` (or no device at
+all, which is what CI has) forces the tick-clocked path and makes `--until`
+and `--ticks` reproducible again.
 
 ## Crates
 
