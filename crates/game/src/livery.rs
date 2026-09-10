@@ -100,7 +100,7 @@ pub struct Livery {
     /// Per team for the same reason [`Self::nozzle`] is: the hulls are
     /// different models, so a locator set belongs to the one it was authored
     /// on.
-    pub collision_fx: Vec<Vec3>,
+    pub collision_fx: Vec<SparkAnchor>,
     /// The plume's own authored texture-transform animation.
     ///
     /// **Per team, and this is not a formality.** Eight per-team plumes sampled
@@ -108,6 +108,28 @@ pub struct Livery {
     /// plausibly. Every team read so far carries the identical track, which
     /// makes it *currently* invisible and is not a reason to share one.
     pub boost_uv: Option<vex::TexTransform>,
+}
+
+/// One `Ship Collision Fx` locator, in its hull's own model space: where a
+/// spark burst spawns, and which way its authored `+Y` points.
+///
+/// Both fields come off the same 4x4 payload
+/// [`oag_vex::vex::class_world_transforms`] decodes - `position` is the
+/// matrix's row 3, `up` its row 1 (see `oag_vex::vex::transform`'s own doc
+/// comment for the row convention). Composing `up` with the hull's own live
+/// matrix, the way `position` already is every tick, is what lets a burst's
+/// spray direction follow a banking craft instead of assuming world up -
+/// see `oag_render::psys::System::advance`.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct SparkAnchor {
+    /// The locator's own position, model space.
+    pub position: Vec3,
+    /// The locator's authored `+Y` axis, model space. `(0, 1, 0)` on every
+    /// locator measured so far - see `docs/formats/pob.md`'s "the authored
+    /// emitter-node frame" section - but read from the file rather than
+    /// assumed, so a hull whose locator is not a pure translation is still
+    /// played correctly rather than silently flattened to world up.
+    pub up: Vec3,
 }
 
 /// Which team flies each grid slot, the player first.
@@ -435,7 +457,7 @@ fn locators(
     hull_name: &str,
     blob: &[u8],
     report: &mut Vec<String>,
-) -> (Option<Vec3>, Vec<Vec3>) {
+) -> (Option<Vec3>, Vec<SparkAnchor>) {
     let mut source = hull_name.to_string();
     let mut nozzle = engine_flare(blob);
     let mut collision_fx = collision_fx_locators(blob);
@@ -503,10 +525,12 @@ fn engine_flare(ship_blob: &[u8]) -> Option<Vec3> {
     Some(Vec3::new(m[12], m[13], m[14]))
 }
 
-/// Every `Ship Collision Fx` locator's position in a hull's own model space -
-/// the same 4x4-payload decode as [`engine_flare`], kept all rather than first:
-/// the original picks the nearest to each contact.
-fn collision_fx_locators(ship_blob: &[u8]) -> Vec<Vec3> {
+/// Every `Ship Collision Fx` locator in a hull's own model space - the same
+/// 4x4-payload decode as [`engine_flare`], kept all rather than first: the
+/// original picks the nearest to each contact. [`SparkAnchor::up`] is read
+/// off the same matrix `engine_flare` discards the rotation of, rather than
+/// assumed - see [`SparkAnchor`]'s own doc comment.
+fn collision_fx_locators(ship_blob: &[u8]) -> Vec<SparkAnchor> {
     // Version-keyed, on the same terms as [`engine_flare`].
     let Ok(Some(class)) = vex::classes_of(ship_blob).map(|classes| classes.ship_collision_fx)
     else {
@@ -517,7 +541,10 @@ fn collision_fx_locators(ship_blob: &[u8]) -> Vec<Vec3> {
     };
     vex::class_world_transforms(ship_blob, &nodes, class)
         .into_iter()
-        .map(|m| Vec3::new(m[12], m[13], m[14]))
+        .map(|m| SparkAnchor {
+            position: Vec3::new(m[12], m[13], m[14]),
+            up: Vec3::new(m[4], m[5], m[6]),
+        })
         .collect()
 }
 
