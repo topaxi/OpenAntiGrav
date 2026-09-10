@@ -38,7 +38,7 @@ What the texture carries instead, measured on the discs:
 | Title | Entry | What it paints |
 | --- | --- | --- |
 | Pulse | `flicker1nonalpha_GLOW.tga`, over `whitenonalpha.tga` | the gold chevron |
-| Pure | `speedup_GLOW_KEY.tga` | the same, and see [`HANDOVER.md`](../../HANDOVER.md)'s alpha-test note |
+| Pure | `speedup_GLOW_KEY.tga` | the same; its batches ask for alpha reference `0`, which is what keeps the glow visible - see [`vex.md`](../formats/vex.md#a-batchs-own-attributes-decide-its-pipeline-not-which-list-it-came-from) |
 | HD / Fury | `ds_speedup_cs.gtf`, 1024x1024 | a grey plate with a **blue** chevron outline |
 
 Pulse's pad vertices carry a flat white (`255,255,255,255` on PSP, `253` on
