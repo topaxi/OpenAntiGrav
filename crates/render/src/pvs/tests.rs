@@ -33,6 +33,7 @@ fn draw_at(centre: [f32; 3], radius: f32) -> DrawCall {
         bounds: Bounds { centre, radius },
         node: None,
         chunk: None,
+        alpha_test_ref: None,
     }
 }
 
@@ -82,6 +83,7 @@ fn draw_of_node(node: Option<u32>) -> DrawCall {
             radius: 1.0,
         },
         node,
+        alpha_test_ref: None,
     }
 }
 

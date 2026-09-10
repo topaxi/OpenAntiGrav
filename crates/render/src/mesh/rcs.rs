@@ -589,6 +589,10 @@ fn emit(
         layer: vex::LAYER_DEFAULT,
         node,
         chunk,
+        // A PS3 material's own reference is per *material* and reaches the
+        // shader through `Model::alpha_test_ref` instead - see
+        // `mesh::rcs::cutout`. `None` here leaves that path alone.
+        alpha_test_ref: None,
     });
 }
 

@@ -134,6 +134,7 @@ pub fn capture_pixels_from(
     let Built {
         pipeline,
         alpha_test_pipeline,
+        cutout_pipelines,
         blend_pipeline,
         additive_pipeline,
         unblended_pipeline,
@@ -299,10 +300,27 @@ pub fn capture_pixels_from(
                 pass.draw_indexed(draw.range.clone(), 0, 0..1);
             }
 
-            // Second pipeline, same pass: `Model::alpha_tested_draws` wants a
-            // cutout, not a hardcoded alpha of 1.0 - see `fs_main_alpha_test`.
-            pass.set_pipeline(&alpha_test_pipeline);
+            // Second pipeline group, same pass: `Model::alpha_tested_draws`
+            // wants a cutout, not a hardcoded alpha of 1.0 - see
+            // `fs_main_alpha_test`.
+            //
+            // **One `set_pipeline` per distinct reference, because the batch's
+            // own flag bits pick it** - a `.vex` batch authors `0x10` or
+            // `0x7f` and a circuit mixes them, exactly as the transparent
+            // classes below do. Switched only when it changes, so a model with
+            // one reference (or none, which is every PS3 model) pays for a
+            // single call as before. See `mesh_render::cutout`.
+            let cutouts = crate::mesh_render::CutoutPipelines {
+                default: &alpha_test_pipeline,
+                by_reference: &cutout_pipelines,
+            };
+            let mut current: Option<&wgpu::RenderPipeline> = None;
             for draw in &model.alpha_tested_draws {
+                let pipeline = cutouts.select(draw);
+                if !current.is_some_and(|set| std::ptr::eq(set, pipeline)) {
+                    pass.set_pipeline(pipeline);
+                    current = Some(pipeline);
+                }
                 pass.set_bind_group(1, bind(draw), &[]);
                 pass.draw_indexed(draw.range.clone(), 0, 0..1);
             }

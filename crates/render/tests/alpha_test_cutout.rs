@@ -78,6 +78,7 @@ fn model(albedo: Arc<ModelTexture>, reference: Option<f32>) -> Model {
             },
             node: None,
             chunk: None,
+            alpha_test_ref: None,
         }],
         transparent_draws: Vec::new(),
         textures: vec![Some(albedo)],

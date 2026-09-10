@@ -156,28 +156,44 @@ impl Batch {
     /// the `0x100`/`0x200`/`0x400` nest, so every blended batch in the game
     /// shares them.
     ///
-    /// # Confidence: 84
+    /// # Confidence: 86
     ///
-    /// Static decompilation with consistent call sites, which is exactly the
-    /// rubric's ceiling for that evidence - `Gfx_BuildBatchStateList` has one
-    /// argument-supplying chain and it does not transform either word. Not
-    /// runtime-verified, so capped below 85.
+    /// The decompile is unambiguous and `Gfx_BuildBatchStateList` has exactly
+    /// one argument-supplying chain, which transforms neither word - that much
+    /// alone is the rubric's 84 for "decompilation only, consistent call
+    /// sites". What lifts it two points is that the shipped data separates this
+    /// reading from its obvious rival, and the separation is *rendered*, not
+    /// only counted:
     ///
-    /// **The disc census does not raise it, and must not be cited as though it
-    /// does.** Across PSP Pulse (8,561 cutout batches), PSP Pure (2,705) and
-    /// PS2 Pulse (14,247), `pass_mask & 0x80` and `header_flags & 0x20` are
-    /// *always set together and always clear together* - only `0x0800`/`0x00`
-    /// and `0x0880`/`0x20` ever occur. That is agreement, not a test: were the
-    /// selector `pass_mask & 0x80` alone, or the branch order reversed, the
-    /// census would read identically. It does say the reading is
-    /// self-consistent on every corpus this project can reach, and it leaves
-    /// the branch **order** untestable here - a title that separated the two
-    /// bits would settle it.
+    /// Every corpus authors three of the four selector-bit combinations, and
+    /// the third one - `pass_mask & 0x80` set with `header_flags & 0x20`
+    /// **clear** - is what the two readings disagree about. This branch gives
+    /// it `0`; a selector keyed on `header_flags & 0x20` alone gives it `0x7f`.
+    /// The batches carrying it are Wipeout Pure's `Speedup Pad`, 349 of them,
+    /// and the pad's glow texture tops out at alpha `58/255` - so the rival
+    /// reading discards the pad whole, which is precisely the regression
+    /// `crates/render/tests/pad_alpha_test_ground_truth.rs` catches by counting
+    /// lit pixels in a real capture. It draws.
+    ///
+    /// Still short of 90 because none of it is a runtime trace of the original:
+    /// what is measured is that the recovered branch is the one consistent with
+    /// what the discs author and with what the pads have to look like, not that
+    /// a breakpoint saw the GE programmed this way.
+    ///
+    /// The **counts** by pattern, and their agreement across three corpora, are
+    /// frozen in `crates/vex/tests/alpha_test_reference_ground_truth.rs`:
+    ///
+    /// | `pass_mask & 0x880` | `header_flags & 0x30` | reference | PSP Pulse | PSP Pure | PS2 Pulse |
+    /// | --- | --- | --- | ---: | ---: | ---: |
+    /// | `0x0800` | `0x00` | `0x7f` | 1,500 | 956 | 1,313 |
+    /// | `0x0880` | `0x00` | `0` | - | 349 | 20 |
+    /// | `0x0880` | `0x20` | `0x10` | 7,823 | 1,749 | 14,046 |
     ///
     /// The selector was read in the **PSP Pulse** executable only. PS2 Pulse
-    /// and PSP Pure author the same two bit patterns in the same fields, which
-    /// is why this method is not gated by platform, but neither of their
-    /// executables has been read.
+    /// and PSP Pure author the same patterns in the same fields, which is why
+    /// this method is not gated by platform, but neither of their executables
+    /// has been read.
+    ///
     #[must_use]
     pub fn alpha_test_reference(&self) -> Option<u8> {
         if self.header_flags & 0x10 != 0 {

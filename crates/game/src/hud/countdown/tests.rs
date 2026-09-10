@@ -73,6 +73,7 @@ fn one_triangle_model(label: &str) -> Model {
         layer: oag_vex::vex::LAYER_DEFAULT,
         node: None,
         chunk: None,
+        alpha_test_ref: None,
     }];
     model
 }

@@ -93,6 +93,9 @@ fn main() {
     let mut textured_batches: BTreeMap<&'static str, usize> = BTreeMap::new();
     let mut vanishing_names: BTreeMap<String, usize> = BTreeMap::new();
     #[allow(clippy::type_complexity)]
+    let mut every_texture: BTreeMap<(&'static str, String), (usize, BTreeMap<u8, u64>)> =
+        BTreeMap::new();
+    #[allow(clippy::type_complexity)]
     let mut per_texture: BTreeMap<
         (&'static str, String),
         (u64, u64, usize, BTreeMap<u8, u64>),
@@ -120,10 +123,16 @@ fn main() {
                     .collect()
             })
             .unwrap_or_default();
-        let Some(mesh_class) = vex::classes_of(bytes).ok().and_then(|c| c.mesh) else {
+        let Ok(classes) = vex::classes_of(bytes) else {
             continue;
         };
-        for node in nodes.iter().filter(|n| n.class_id == mesh_class) {
+        // A pad node's payload is a mesh payload - see `mesh::build_pads` -
+        // and the pads are where the third selector pattern lives.
+        let drawn: Vec<u32> = [classes.mesh, classes.speedup_pad, classes.weapon_pad]
+            .into_iter()
+            .flatten()
+            .collect();
+        for node in nodes.iter().filter(|n| drawn.contains(&n.class_id)) {
             let range = node.payload();
             if range.end > bytes.len() {
                 continue;
@@ -139,6 +148,20 @@ fn main() {
                     batches += 1;
                     let k = bucket(b.pass_mask, b.header_flags);
                     *all.entry(k).or_default() += 1;
+                    // Every batch, whatever bucket, so a named texture can be
+                    // located rather than only counted where it is a cutout.
+                    if let Some(Some((hist, name))) = materials
+                        .get(usize::from(b.material_index))
+                        .copied()
+                        .flatten()
+                        .map(|m| m.texture as usize)
+                        .and_then(|t| tex_alpha.get(t))
+                    {
+                        let e = every_texture
+                            .entry((k, name.clone().unwrap_or_else(|| "<unnamed>".into())))
+                            .or_insert((0usize, hist.clone()));
+                        e.0 += 1;
+                    }
                     if !b.is_transparent() && b.is_alpha_tested() {
                         *cutout.entry(k).or_default() += 1;
                         *cutout_bits
@@ -249,11 +272,11 @@ fn main() {
     }
     if let Ok(want) = std::env::var("OAG_PROBE_TEX") {
         println!("\n== textures matching {want:?} ==");
-        for ((k, name), (drawn, discarded, batches, hist)) in &per_texture {
+        for ((k, name), (batches, hist)) in &every_texture {
             if !name.contains(&want) {
                 continue;
             }
-            println!("  {k}  {name}  {batches} batches, {drawn} drawn, {discarded} discarded");
+            println!("  {k}  {name}  {batches} batches");
             println!("    alpha histogram: {hist:?}");
         }
     }

@@ -187,6 +187,9 @@ struct Session {
     depth_view: wgpu::TextureView,
     pipeline: wgpu::RenderPipeline,
     alpha_test_pipeline: wgpu::RenderPipeline,
+    /// One per alpha-test reference this model's own batches ask for - see
+    /// `mesh_render::Built::cutout_pipelines`.
+    cutout_pipelines: Vec<(f32, wgpu::RenderPipeline)>,
     blend_pipeline: [wgpu::RenderPipeline; 2],
     additive_pipeline: [wgpu::RenderPipeline; 2],
     unblended_pipeline: [wgpu::RenderPipeline; 2],
@@ -275,6 +278,7 @@ impl Session {
         let mesh_render::Built {
             pipeline,
             alpha_test_pipeline,
+            cutout_pipelines,
             blend_pipeline,
             additive_pipeline,
             unblended_pipeline,
@@ -339,6 +343,7 @@ impl Session {
             depth_view,
             pipeline,
             alpha_test_pipeline,
+            cutout_pipelines,
             blend_pipeline,
             additive_pipeline,
             unblended_pipeline,
@@ -566,10 +571,21 @@ impl Session {
                     pass.draw_indexed(draw.range.clone(), 0, 0..1);
                 }
 
-                // Second pipeline, same pass: alpha-tested batches, cutout. See
-                // `mesh_render::Built::alpha_test_pipeline`.
-                pass.set_pipeline(&self.alpha_test_pipeline);
+                // Second pipeline group, same pass: alpha-tested batches,
+                // cutout. One pipeline per reference the batches themselves
+                // ask for, switched only when it changes - see
+                // `mesh_render::cutout`.
+                let cutouts = mesh_render::CutoutPipelines {
+                    default: &self.alpha_test_pipeline,
+                    by_reference: &self.cutout_pipelines,
+                };
+                let mut cutout_set: Option<&wgpu::RenderPipeline> = None;
                 for draw in &self.model.alpha_tested_draws {
+                    let cutout = cutouts.select(draw);
+                    if !cutout_set.is_some_and(|set| std::ptr::eq(set, cutout)) {
+                        pass.set_pipeline(cutout);
+                        cutout_set = Some(cutout);
+                    }
                     let slot = draw.texture.map_or(0, |t| t + 1);
                     pass.set_bind_group(
                         1,

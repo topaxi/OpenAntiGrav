@@ -21,8 +21,9 @@ use oag_display::space::Space;
 use oag_render::camera::orbit::Orbit;
 use oag_render::mesh::Model;
 use oag_render::mesh_render::{
-    Anisotropy, Built, DEPTH_FORMAT, Depth, GlowMask, NodeAnims, ShadowReceiver, TRANSPARENT_BLEND,
-    TexAnims, TransparentPipelines, UNIFORMS_SIZE, Velocity, build, write_uniforms,
+    Anisotropy, Built, CutoutPipelines, DEPTH_FORMAT, Depth, GlowMask, NodeAnims, ShadowReceiver,
+    TRANSPARENT_BLEND, TexAnims, TransparentPipelines, UNIFORMS_SIZE, Velocity, build,
+    write_uniforms,
 };
 use oag_ui::picker::slideshow::Slideshow;
 
@@ -382,8 +383,19 @@ impl Preview {
             pass.set_bind_group(1, bind(draw), &[]);
             pass.draw_indexed(draw.range.clone(), 0, 0..1);
         }
-        pass.set_pipeline(&self.built.alpha_test_pipeline);
+        // One pipeline per alpha-test reference the model's batches ask for,
+        // switched only when it changes - see `mesh_render::cutout`.
+        let cutouts = CutoutPipelines {
+            default: &self.built.alpha_test_pipeline,
+            by_reference: &self.built.cutout_pipelines,
+        };
+        let mut cutout_set: Option<&wgpu::RenderPipeline> = None;
         for draw in &self.model.alpha_tested_draws {
+            let cutout = cutouts.select(draw);
+            if !cutout_set.is_some_and(|set| std::ptr::eq(set, cutout)) {
+                pass.set_pipeline(cutout);
+                cutout_set = Some(cutout);
+            }
             pass.set_bind_group(1, bind(draw), &[]);
             pass.draw_indexed(draw.range.clone(), 0, 0..1);
         }

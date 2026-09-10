@@ -18,9 +18,15 @@
 //!
 //! Three things are measured here, on every corpus this project can reach:
 //!
-//! 1. **The census is bimodal, and the same two patterns on all three.** Only
-//!    `pass_mask & 0x880 == 0x0800` with `header_flags & 0x30 == 0x00`, and
-//!    `0x0880` with `0x20`, ever occur. Nothing authors the other two.
+//! 1. **Three of the four selector-bit combinations occur, and the third one
+//!    discriminates.** `(0x0800, 0x00)` and `(0x0880, 0x20)` are the bulk, and
+//!    every corpus also authors `(0x0880, 0x00)` - `pass_mask & 0x80` set with
+//!    `header_flags & 0x20` clear. That is the case the two candidate readings
+//!    disagree on: the recovered branch gives it `0`, and a selector keyed on
+//!    `header_flags & 0x20` alone would give it `0x7f`. It is Wipeout Pure's
+//!    `Speedup Pad`, whose glow texture tops out at `58/255` - so the wrong
+//!    reading discards the pad entirely, which is the exact regression
+//!    `crates/render/tests/pad_alpha_test_ground_truth.rs` renders and catches.
 //! 2. **Nothing vanishes.** No cutout batch's texture is discarded whole by
 //!    the reference the batch itself asks for, on Pulse either platform.
 //! 3. **The `0x7f` bucket is inert on Pulse and near-inert on Pure.** Its
@@ -29,7 +35,7 @@
 //!
 //! The counts are frozen rather than merely bounded because they are what a
 //! future reading has to move *deliberately*: a parser change that silently
-//! reclassifies 7,061 batches is exactly what this catches.
+//! reclassifies 7,823 batches is exactly what this catches.
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;
@@ -100,9 +106,17 @@ fn census(blobs: &[Vec<u8>]) -> Census {
         let Ok(nodes) = vex::nodes(bytes) else {
             continue;
         };
-        let Some(mesh_class) = vex::classes_of(bytes).ok().and_then(|c| c.mesh) else {
+        let Ok(classes) = vex::classes_of(bytes) else {
             continue;
         };
+        // A `Speedup Pad`/`Weapon Pad` node's payload is a mesh payload - see
+        // `oag_render::mesh::build_pads` - and the pads are where the third
+        // selector pattern lives, so leaving them out of the walk is what made
+        // an earlier version of this file report only two.
+        let drawn: Vec<u32> = [classes.mesh, classes.speedup_pad, classes.weapon_pad]
+            .into_iter()
+            .flatten()
+            .collect();
         // Each texture's alpha histogram, decoded once per file.
         let alpha: Vec<Option<BTreeMap<u8, u64>>> = vex::textures(bytes)
             .map(|ts| {
@@ -120,7 +134,7 @@ fn census(blobs: &[Vec<u8>]) -> Census {
             })
             .unwrap_or_default();
 
-        for node in nodes.iter().filter(|n| n.class_id == mesh_class) {
+        for node in nodes.iter().filter(|n| drawn.contains(&n.class_id)) {
             let range = node.payload();
             if range.end > bytes.len() {
                 continue;
@@ -189,13 +203,14 @@ fn psp_pulses_cutout_batches_split_two_ways_and_the_strict_reference_hides_nothi
     };
     assert_eq!(
         c.cutout,
-        BTreeMap::from([(0x10, 7_061), (0x7f, 1_500)]),
+        BTreeMap::from([(0x10, 7_823), (0x7f, 1_500)]),
         "the disc's own cutout population, by the reference each batch asks for"
     );
     assert_eq!(
         c.bits,
-        BTreeMap::from([((0x0800, 0x00), 1_500), ((0x0880, 0x20), 7_061)]),
-        "only two of the four selector-bit combinations are ever authored"
+        BTreeMap::from([((0x0800, 0x00), 1_500), ((0x0880, 0x20), 7_823)]),
+        "Pulse's PSP build authors only two of the four combinations - the \
+         discriminating third is Pure's, below"
     );
     assert_eq!(
         c.texels.get(&0x7f),
@@ -204,7 +219,7 @@ fn psp_pulses_cutout_batches_split_two_ways_and_the_strict_reference_hides_nothi
     );
     assert_eq!(
         c.texels.get(&0x10),
-        Some(&(15_444_647, 431_576)),
+        Some(&(17_005_223, 431_576)),
         "the 0x10 batches lose their sub-16 fringe, which the cutout pipeline was drawing fully opaque"
     );
     assert_eq!(
@@ -214,7 +229,7 @@ fn psp_pulses_cutout_batches_split_two_ways_and_the_strict_reference_hides_nothi
     );
 }
 
-/// **PSP Pure, a second title.** The same two patterns, from a different
+/// **PSP Pure, a second title, and the discriminating case.** From a different
 /// executable and a different `.vex` version - so the authoring convention is
 /// not a Pulse-only accident.
 ///
@@ -225,14 +240,24 @@ fn psp_pulses_cutout_batches_split_two_ways_and_the_strict_reference_hides_nothi
 /// solid. Discarding it is the fix, not the regression.
 #[test]
 #[ignore = "needs data/images/pure-psp-usa.chd"]
-fn psp_pure_authors_the_same_two_patterns() {
+fn psp_pure_authors_the_discriminating_third_pattern_on_its_speedup_pads() {
     let Some(c) = of("data/images/pure-psp-usa.chd", "PSP_GAME/USRDIR/Data.wad") else {
         return;
     };
-    assert_eq!(c.cutout, BTreeMap::from([(0x10, 1_749), (0x7f, 956)]));
+    assert_eq!(
+        c.cutout,
+        BTreeMap::from([(0, 349), (0x10, 1_749), (0x7f, 956)])
+    );
     assert_eq!(
         c.bits,
-        BTreeMap::from([((0x0800, 0x00), 956), ((0x0880, 0x20), 1_749)])
+        BTreeMap::from([
+            ((0x0800, 0x00), 956),
+            // The discriminating pattern: `pass_mask & 0x80` set, `header_flags
+            // & 0x20` clear. Pure's `Speedup Pad`, and the reason the branch
+            // order is not a free choice.
+            ((0x0880, 0x00), 349),
+            ((0x0880, 0x20), 1_749),
+        ])
     );
     assert_eq!(
         c.texels.get(&0x7f),
@@ -253,14 +278,21 @@ fn psp_pure_authors_the_same_two_patterns() {
 /// have derived differently.
 #[test]
 #[ignore = "needs data/images/pulse-ps2-eu.chd"]
-fn ps2_pulse_authors_the_same_two_patterns() {
+fn ps2_pulse_authors_the_same_three_patterns() {
     let Some(c) = of("data/images/pulse-ps2-eu.chd", "WADS2.WAD") else {
         return;
     };
-    assert_eq!(c.cutout, BTreeMap::from([(0x10, 12_934), (0x7f, 1_313)]));
+    assert_eq!(
+        c.cutout,
+        BTreeMap::from([(0, 20), (0x10, 14_046), (0x7f, 1_313)])
+    );
     assert_eq!(
         c.bits,
-        BTreeMap::from([((0x0800, 0x00), 1_313), ((0x0880, 0x20), 12_934)])
+        BTreeMap::from([
+            ((0x0800, 0x00), 1_313),
+            ((0x0880, 0x00), 20),
+            ((0x0880, 0x20), 14_046),
+        ])
     );
     assert_eq!(
         c.vanishing,

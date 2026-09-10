@@ -89,6 +89,22 @@ pub struct DrawCall {
     /// carries [`oag_vex::vex::LAYER_DEFAULT`], which is uniform and so
     /// leaves the stable sort holding its list in the order it was built.
     pub layer: u32,
+    /// The alpha-test reference this batch's own file authors, normalised to
+    /// `0.0..=1.0`, or `None` for a draw whose file authors none.
+    ///
+    /// **`Some` only on `Model::alpha_tested_draws`**, and only for a `.vex`
+    /// batch: `oag_vex::vex::Batch::alpha_test_reference` derives it from
+    /// `pass_mask` and `header_flags`, and every corpus authors exactly two
+    /// values - `0x10` and `0x7f`. Carried per draw call rather than per model
+    /// for the reason [`Self::blend`] is: a single mesh mixes them, and a
+    /// circuit is one `Model`.
+    ///
+    /// `None` keeps the pipeline-level reference, which is `Model::alpha_test_ref`
+    /// where a Wipeout HD material authored one and `mesh.wgsl`'s own
+    /// `ALPHA_TEST_THRESHOLD` otherwise. So the two families compose without
+    /// either overriding the other: HD authors per material and lands on the
+    /// pipeline, PSP/PS2 author per batch and land here.
+    pub alpha_test_ref: Option<f32>,
     /// Index of the scene-tree node this draw call came from, into the
     /// `vex::nodes` of the file the model was built from, or `None` for
     /// synthetic geometry (ribbons, collision overlays, fixtures).
