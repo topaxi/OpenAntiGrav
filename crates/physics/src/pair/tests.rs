@@ -212,8 +212,18 @@ fn an_off_centre_hit_spins_neither_craft() {
 }
 
 /// A body as PPSSPP read it: the original's basis rows `(up x forward, up,
-/// forward)` become this crate's `orientation` through the frame mapping
-/// [`contact_velocity`] documents - `right = -row0`, `orientation * Z = -row2`.
+/// forward)` become this crate's `orientation`, and its raw `body+0x150` triple
+/// becomes this crate's `angular_velocity`.
+///
+/// **Both mappings are frame changes, and the second one is the whole point of
+/// this fixture.** The rows map by `right = -row0`, `orientation * Z = -row2`,
+/// so `R^T v` - the `vtfm4.q C000,E100,C200` the resolvers apply to `+0x150` -
+/// is `orientation * (-v.x, v.y, -v.z)` in this crate's terms. And `+0x150`
+/// holds the rotation rate **negated and in body coordinates**
+/// ([`Body::velocity_at`]), so the world rate this crate stores is
+/// `-R^T(raw)`. Putting the raw triple straight into `angular_velocity` builds
+/// a `Body` the simulation would never produce, which is exactly how
+/// `respond`'s sign error survived a green test.
 fn captured(
     position: [f32; 3],
     velocity: [f32; 3],
@@ -222,12 +232,13 @@ fn captured(
 ) -> ShipState {
     let row = |r: [f32; 3]| Vec3::from_array(r);
     let basis = Mat3::from_cols(-row(rows[0]), row(rows[1]), -row(rows[2]));
+    let orientation = Quat::from_mat3(&basis);
     ShipState {
         body: Body {
             position: Vec3::from_array(position),
-            orientation: Quat::from_mat3(&basis),
+            orientation,
             linear_velocity: Vec3::from_array(velocity),
-            angular_velocity: Vec3::from_array(omega),
+            angular_velocity: -(orientation * Vec3::new(-omega[0], omega[1], -omega[2])),
             mass: 1.0,
             inertia: Vec3::new(15.6, 21.6, 15.6),
             ..Body::default()
@@ -243,11 +254,22 @@ fn captured(
 /// the stack (`s4`). `scripts/psp-pair-capture.py` is the recipe.
 ///
 /// The first is a staged rear-end hit at `vn = -78.5`. The second is a craft
-/// tumbling at 84 rad/s with its basis well off level, which is the case
-/// that separates `v + cross(r, R^T omega)` from `v + omega x r` (`0.184`
-/// against `-0.085`) and the literal body-tensor denominator from the
-/// rotated one (`0.18440` against `0.18398`). The tolerances are set between
-/// those alternatives, not at float noise.
+/// tumbling at 84 rad/s with its basis well off level, which is the case that
+/// separates the original's point velocity from the same expression fed this
+/// crate's own `angular_velocity` unmapped (`0.184` against `-0.085`) and the
+/// world-diagonal denominator from the rotated one (`0.18440` against
+/// `0.18398`). The tolerances are set between those alternatives, not at float
+/// noise.
+///
+/// **The frame mapping in [`captured`] is what these two numbers check.**
+/// `omega_ours == -R^T(raw)` makes `omega_ours x r` identically
+/// `cross(r, R^T raw)` - the same two products, subtracted the other way round,
+/// which IEEE-754 gives back bit for bit. So the corrected `respond` reproduces
+/// the original's `j` from the original's own bytes exactly as the literal
+/// transcription did; if either number moves, the mapping is wrong and the
+/// mapping is the thing to fix. It did not move: `43.1697235107` and
+/// `0.1843950450` before the correction and after it, to the last printed
+/// digit.
 #[test]
 fn the_response_reproduces_two_contacts_the_original_was_caught_resolving() {
     let mut a = captured(
@@ -270,6 +292,10 @@ fn the_response_reproduces_two_contacts_the_original_was_caught_resolving() {
             [-0.66362506, 0.03610833, 0.7471925],
         ],
     );
+    // The original's `+0x150` did not move across the call, bit for bit. Read
+    // back against what `captured()` built rather than a literal triple: the
+    // claim is "the pair impulse changed nothing", not "it holds these bytes".
+    let spin_before = a.body.angular_velocity;
     let contact = respond(
         &mut a,
         &mut b,
@@ -283,10 +309,7 @@ fn the_response_reproduces_two_contacts_the_original_was_caught_resolving() {
         "rear-end j {} against the original's 43.16971",
         contact.impulse
     );
-    assert_eq!(
-        a.body.angular_velocity,
-        Vec3::new(0.003608909, -0.0074495664, -0.03581129)
-    );
+    assert_eq!(a.body.angular_velocity, spin_before);
 
     let mut a = captured(
         [-121.563614, -49.78744, -193.69652],

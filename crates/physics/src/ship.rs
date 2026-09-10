@@ -52,10 +52,21 @@ pub struct Body {
     pub torque: Vec3,
     /// Mass, from `<Physical mass/>`.
     pub mass: f32,
-    /// Diagonal of the body-space inertia tensor.
+    /// Diagonal of the inertia tensor, on the body's own axes.
     ///
     /// [`crate::forces::ship_inertia`], `(15.6, 21.6, 15.6)` on
     /// `(right, up, forward)`, and that is also what [`Body::default`] carries.
+    ///
+    /// **This crate applies it in body axes and the original applies the same
+    /// three numbers in world axes** - measured 2026-09-10, exactly, on three
+    /// captures (`scripts/trace-inertia-frame-fit.py` and
+    /// `docs/ghidra/functions/psp-pulse-usa/rigid-body.md`). `15.6` on right
+    /// *and* forward makes the tensor yaw-invariant, so the two agree on a level
+    /// craft and diverge only under pitch and roll. Deliberately not changed
+    /// here: it would move the simulation, and whether it improves it is
+    /// unmeasured. The **contact denominators are a separate question and are
+    /// already right** - [`crate::pair`] and [`crate::wall`] apply this diagonal
+    /// to a world-space `r x n` because that is what the original does.
     ///
     /// **The default is the ship's tensor rather than [`Vec3::ONE`] on purpose,
     /// and the purpose is a footgun.** Every craft in the game shares this tensor,

@@ -193,9 +193,15 @@ The `I * w` reading above was an inference from a fit. It is now read out of
   earlier does scale by `invMass`. That asymmetry only makes sense for `dL/dt`.
 - **`body+0x150` is the angular velocity**, and it is what turns the basis
   (`0x0884e2f8`-`0x0884e334`).
-- **The map between them is `basis^T * (body+0x40) * basis`**
-  (`0x0884e380`-`0x0884e39c`), a tensor change of basis, so **`body+0x40` is the
-  body-space inverse inertia tensor**.
+- **The map between them is a tensor change of basis built from `body+0x40`**
+  (`0x0884e380`-`0x0884e39c`), so **`body+0x40` is the inverse inertia tensor**.
+  Which way that change of basis runs was corrected on 2026-09-10: it is
+  `R (body+0x40) R^T`, so `+0x40` is the diagonal the engine applies in **world**
+  axes and `+0x80` is its body-space copy, not the other way round. It does not
+  disturb anything this page fits - both columns are in body coordinates either
+  way, which is what the per-axis factor below is a factor of. See
+  [rigid-body.md](../ghidra/functions/psp-pulse-usa/rigid-body.md#corrected-2026-09-10-the-inverse-inertia-is-a-world-axis-diagonal-and-0x80-is-its-body-space-copy)
+  and `scripts/trace-inertia-frame-fit.py`.
 
 So the per-axis factor this page fitted is the diagonal of `I`, the negative sign
 is the `w_game = -w_physics` convention, and the roadmap's "do the angular

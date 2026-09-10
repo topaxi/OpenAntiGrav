@@ -215,8 +215,13 @@ would need one. So the accumulators at `+0x120` and `+0x130` hold **torque**, an
 
 `E600 = basis^T * (body+0x40) * basis` is the textbook change of basis for a
 tensor, rebuilt from scratch every sub-step because the basis moves. Therefore
-**`body+0x40..0x70` is the body-space inverse inertia tensor `I^-1`**, and
-`w = I^-1_world * L` is exactly what `0x0884e39c` computes. Confidence **88**.
+**`body+0x40..0x70` is the inverse inertia tensor** and `0x0884e39c` maps a
+momentum to a rate. Confidence **88**.
+
+**Which way round that change of basis runs was re-derived on 2026-09-10, and it
+is the opposite of what this section first said** - see [the tensor blocks'
+convention](#corrected-2026-09-10-the-inverse-inertia-is-a-world-axis-diagonal-and-0x80-is-its-body-space-copy)
+below. The instructions are unchanged; the labels on `+0x40` and `+0x80` swap.
 
 **And the result is cached where the impulse path expects it.** After the loop
 `E600` is stored to `body+0x80..0xb0` (`0x0884e3f4`-`0x0884e404`) and the basis
@@ -228,11 +233,11 @@ anything. The four fields are one consistent scheme:
 
 | Offset | Meaning |
 | --- | --- |
-| `+0x40..0x70` | inverse inertia tensor, **body space** - **but see the open contradiction below** |
-| `+0x80..0xb0` | inverse inertia tensor, **world space** (derived, cached per sub-step) |
+| `+0x40..0x70` | inverse inertia tensor, **world axes** - corrected 2026-09-10, was "body space"; and see the storage-layout contradiction below |
+| `+0x80..0xb0` | the same tensor in **body coordinates** (derived, cached per sub-step) - corrected 2026-09-10, was "world space" |
 | `+0xc0..0xf0` | basis transpose (derived, cached per sub-step) |
-| `+0x150` | angular velocity, the quantity that turns the basis |
-| `+0x160` | **angular momentum**, body frame, what torque integrates into |
+| `+0x150` | angular velocity, **negated and in body coordinates** - the quantity that turns the basis |
+| `+0x160` | **angular momentum**, negated and in body coordinates, what torque integrates into |
 
 **Open contradiction, 2026-08-19, not resolved here - and a follow-up check
 sharpened it rather than closing it.** A live check in
@@ -259,6 +264,97 @@ element of the matrix at `body+0x40`. The "missing 22x yaw factor" is not a
 missing force term or a calibration; it is the tensor this engine has had all
 along. The writer is read in the next section, and the crate's constant is now
 `oag_physics::forces::YAW_INVERSE_INERTIA`.
+
+### Corrected 2026-09-10: the inverse inertia is a world-axis diagonal, and `+0x80` is its body-space copy
+
+The section above read `E600 = basis^T * (body+0x40) * basis` as taking a
+*body*-space tensor out to world space. It runs the other way, and the whole
+angular scheme falls out simpler once it does:
+
+**`omega_world = (body+0x40) * L_world`. The engine's inverse inertia is a fixed
+diagonal in world axes.** Everything else is frame bookkeeping.
+
+Worked from the instructions, with `R` the matrix whose rows are the basis rows
+at `body+0x00..0x30` (the craft's world-space axes), so `R` maps world to body:
+
+- `lv.q C200,0x0(a0)` and its two neighbours load the three basis rows into the
+  *columns* of matrix register 2, so `E200` applies `R^T` (body to world) and
+  `M200` applies `R`. Fixed by a term whose frames are already known:
+  `0x0884e344` sends the **local** force accumulator `body+0x110` through `E200`
+  before adding it to the world velocity, and `0x0884e35c` sends the **world**
+  torque `body+0x130` - the one `Body_AddForceAtPoint` writes through
+  `Body_AddTorqueWorld` - through `M200` before adding it to `body+0x160`. So
+  `+0x160` is in body coordinates.
+- `0x0884e380`-`0x0884e394` build `C60i = R ((body+0x40) e_i)`, and `E600`
+  applies `sum_i x_i C60i`, so `0x0884e39c` computes
+  `body+0x150 = R (body+0x40) R^T (body+0x160)`. In world terms that is
+  `omega_world = (body+0x40) * L_world`, with `R` and `R^T` doing nothing but
+  entering and leaving the body frame the two fields are stored in.
+- `Body_ApplyImpulseAtPoint` redoes the same map from the cache:
+  `0x0884d808`'s `vtfm4.q C000,E100,C200` applies `+0x80..0xb0` (loaded
+  column-wise, so `E100` is the same access pattern as `E600`) to `+0x160` and
+  stores the result to `+0x150` at `0x0884d824`.
+
+**Measured, on three captures and 6,423 ticks.** A capture records both columns
+and the basis, so the map is checkable with no derivative and no emulator. Fit
+`I` under each candidate pairing of frames, predicting the recorded `+0x160`
+from the recorded `+0x150`:
+
+| model | prediction | time-trial lap | clean lap | standing start |
+| --- | --- | ---: | ---: | ---: |
+| both body-local, diagonal | `L = I (x) w` | 95.17 % | 91.34 % | 95.44 % |
+| `L` world, `w` body | `L = R^T (I (x) R w)` | 94.87 % | 92.39 % | 93.49 % |
+| **`L = R (I (x) R^T w)`** | **the reading above** | **100.00 %** | **100.00 %** | **100.00 %** |
+
+(`scripts/trace-inertia-frame-fit.py`, which is the whole measurement; "%
+explained" is `1 - |residual| / |column|`.) The winning row is not a close
+call and it is not a fitted one either: its free three-parameter fit returns
+`(15.600, 21.600, 15.600)` on every capture - `Body_SetBoxInertia`'s own
+code-literal box tensor, recovered to five figures from a column it was never
+compared against. The other two rows are the same models with the same number of
+parameters, so the residuals are directly comparable. Confidence **92**, the
+[rubric](../../../reverse-engineering/confidence-rubric.md)'s 85-94 band on its
+second leg - the reading makes an arithmetic invariant come out **exactly**
+across many real captures, and it recovers a code literal it was never given.
+The band caps at 94 without a second binary agreeing; PS2 `Body_Integrate`
+(`0x0015d088`) is unread on this point and is what would raise it.
+
+**Why the mislabel survived: a `diag(a, b, a)` tensor is invariant under yaw.**
+`15.6` on right *and* forward means conjugating by a heading change is the
+identity, so on a level craft the two readings are indistinguishable - which is
+also why the engine gets away with it. The difference is real only while the
+craft is pitched or rolled, and the two wrong rows above lose most of their 5-9 %
+on exactly those ticks (restricted to `up_y < 0.9` on the clean lap, the
+body-local row falls to 76.19 % against the code-literal tensor while the
+winning row stays at 100.00 % - `--off-level --code-literal` on the same
+script).
+
+**This closes the "quirk" both contact denominators were written around.**
+`Body_ResolveContact` and `Body_ResolveContactPair` apply `+0x40..0x70` to a
+world-space `r x n` with no rotation - `0x0884ebc0`-`0x0884ebe8` on the one-body
+path and `0x0884f3a8`-`0x0884f3d0` on the pair path, both re-read this pass
+rather than inherited, and neither has a `+0xc0` rotation anywhere between the
+`vcrsp.t` that builds the cross product and the `vtfm4.q` that consumes it.
+That read as a literal-but-wrong transcription and reproduced the
+original's `j` anyway. It is neither: `+0x40` **is** the world-space inverse
+inertia as this engine uses it, so the resolvers are consistent with the
+integrator rather than in spite of it. Nothing in
+`crates/physics/src/pair.rs` or `crates/physics/src/wall.rs` changes.
+
+**What it does not settle**: the `body+0x50` storage contradiction recorded
+above is untouched - this section is about the blocks' *convention*, not their
+layout. One data point in passing: the 100.00 % fit is against a strictly
+diagonal `+0x40`, over 6,423 ticks of three captures, so the off-diagonal terms
+were zero throughout those captures.
+
+**And it opens one.** `crates/physics/src/integrate.rs` applies the inertia as a
+**body**-space diagonal (`R^T (I^-1 (x) (R tau)))`), which is the physically
+correct treatment and not this one. Under yaw the two agree exactly; under pitch
+and roll they do not, and
+[cornering-ground-truth.md](../../../physics/cornering-ground-truth.md) records
+the basis rotating `0.231x` and `0.647x` of what the momentum column accounts for
+on precisely those two axes, closing at `0.970x` on yaw. Whether that gap is this
+is unmeasured, and that page is where the answer belongs.
 
 ### Answered: `Body_SetBoxInertia` (`0x0884e1ac`) writes `body+0x40`
 
@@ -296,7 +392,12 @@ is the textbook solid-box inertia:
 0884e22c  _swc1  f12,0x68(a0)       ; I^-1 [2][2]
 ```
 
-`I_xx = m (y^2 + z^2) / 12` is the solid rectangular cuboid. Note the tensor is
+`I_xx = m (y^2 + z^2) / 12` is the solid rectangular cuboid. **Those three
+numbers are authored from the hull's *body*-axis extents and applied by the
+engine in *world* axes** - the two statements sit next to each other and are both
+true; see [the section above](#corrected-2026-09-10-the-inverse-inertia-is-a-world-axis-diagonal-and-0x80-is-its-body-space-copy).
+Nothing in this constructor changes: `<Misc>` is read on `(right, up, forward)`
+and the diagonal is written in that order. Note the tensor is
 zeroed rather than set to identity - the constant at `0x08a907e0` was read and is
 64 bytes of `0x00` - so the result is purely diagonal with `[3][3] = 0`.
 

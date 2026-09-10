@@ -64,10 +64,19 @@ use crate::params::Handling;
 use crate::ship::{ShipControls, ShipState};
 use crate::{controls, engine, passive};
 
-/// The body-space box the ship's inverse inertia tensor is built from, `x`.
+/// The box the ship's inverse inertia tensor is built from, `x`, on the body's
+/// own right axis.
 ///
 /// See [`YAW_INVERSE_INERTIA`]. A code literal in the ship-entity constructor, not
 /// authored data: the same three numbers for every craft in the game.
+///
+/// **The extents are the hull's body-axis ones; the original applies the
+/// resulting diagonal in *world* axes** (`0x0884e380`-`0x0884e39c`, measured
+/// exactly - `scripts/trace-inertia-frame-fit.py`). This crate applies it in body
+/// axes, which is the physically correct treatment and differs from the original
+/// only while a craft is pitched or rolled, a `diag(a, b, a)` tensor being
+/// yaw-invariant. Unmeasured against play; see
+/// `docs/ghidra/functions/psp-pulse-usa/rigid-body.md`.
 pub const INERTIA_BOX_X: f32 = 12.0;
 
 /// The body-space inertia box, `y`. See [`INERTIA_BOX_X`].
@@ -233,7 +242,8 @@ pub const INERTIA_MASS: f32 = 0.9;
 pub const YAW_INVERSE_INERTIA: f32 =
     12.0 / (INERTIA_MASS * (INERTIA_BOX_X * INERTIA_BOX_X + INERTIA_BOX_Z * INERTIA_BOX_Z));
 
-/// The pitch entry of the ship's body-space inverse inertia tensor, `1 / I_xx`.
+/// The pitch entry of the ship's inverse inertia tensor, `1 / I_xx`, on the
+/// body's right axis.
 ///
 /// The same `Body_SetBoxInertia` computation as [`YAW_INVERSE_INERTIA`], on the
 /// two extents perpendicular to the body's right axis: `12 / (m * (y^2 + z^2))`,

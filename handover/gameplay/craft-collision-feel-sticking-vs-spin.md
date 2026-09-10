@@ -115,10 +115,13 @@ five figures:
   negated body-local, not world-space, so `R^T` is an unrotation and the whole
   expression is the textbook `v + omega x r`. Measured 2026-09-10, see the
   section below and
-  `handover/gameplay/pair-vn-uses-the-wrong-omega-convention.md`;
-- the denominator applies the body-space diagonal to the world-space `r x n`
-  without rotating it, the same quirk the one-body path was already read to
-  have.
+  its own thread. **Fixed 2026-09-10**, and the numbers are in the Open
+  section below;
+- the denominator applies the `+0x40..0x70` diagonal to the world-space
+  `r x n` without rotating it, the same shape the one-body path was already
+  read to have. **Not a quirk, 2026-09-10**: that block is the inverse inertia
+  in *world* axes, so both resolvers agree with the integrator rather than in
+  spite of it (`docs/ghidra/functions/psp-pulse-usa/rigid-body.md`).
 
 Measured on this tree, same weapons-live `SingleRace` as
 `craft_sticking_ground_truth`: overlapped pair-ticks **1,558 -> 1,134**,
@@ -151,8 +154,8 @@ Evidence: `docs/ghidra/functions/psp-pulse-usa/contact-response.md`, section
 applies its impulse at the real contact point (`0x0884eea4: move a1,s1`) and
 corrected `rigid-body.md`'s argument order for the function.
 
-**What it left**: `pair.rs` has the defect `wall.rs` was thought to have -
-`handover/gameplay/pair-vn-uses-the-wrong-omega-convention.md`.
+**What it left**: `pair.rs` had the defect `wall.rs` was thought to have,
+fixed 2026-09-10 - `docs/ghidra/functions/psp-pulse-usa/contact-response.md`.
 
 ## Next steps
 
@@ -163,8 +166,8 @@ corrected `rigid-body.md`'s argument order for the function.
   this term already had access to").
 - ~~The Ghidra/PPSSPP item above.~~ Done 2026-09-10. ~~The wall-path point
   velocity is the follow-up it left.~~ Also done 2026-09-10, with a negative
-  result that reopened the *pair* path instead - see
-  `handover/gameplay/pair-vn-uses-the-wrong-omega-convention.md`.
+  result that reopened the *pair* path instead - ~~and that is fixed too, same
+  day~~, see the last Open bullet for its numbers.
 
 ## 2026-09-09: a correctness fix reopened the sticking question
 
@@ -210,6 +213,15 @@ the pathology has never been re-measured against a correct Cannon.
   run. That restores the like-for-like pair the bound's original rule needed,
   and would say whether 2,000 is generous, tight, or meaningless.
 - The residual neutral-personality sticking, above. The Ghidra/PPSSPP
-  capture item is closed (2026-09-10 section), and so is the wall path's point
-  velocity; what is open now is `pair.rs`'s own `vn` convention, in its own
-  thread.
+  capture item is closed (2026-09-10 section), so is the wall path's point
+  velocity, and so is `pair.rs`'s own `vn` convention: `respond` now builds the
+  point velocity with `Body::velocity_at`, reproducing the original's `j` from
+  its captured bytes **bit-identically** (`43.1697235107`, `0.1843950450`) with
+  the fixture's raw `+0x150` triple mapped to `-R^T(raw)`. It moved this
+  thread's own metric the right way and untuned: overlapped pair-ticks
+  **1,134 -> 1,052**, sustained **808 -> 625**, longest single streak
+  **172 -> 107**. `race_ground_truth` unchanged - twelve clean laps,
+  `01_Track` 1 respawn at `[794]` either side. So the sustained figure the
+  first Open bullet calls 97 % of the pathology is now **625 against 1,062**,
+  and it got there without a bound being touched; the play-session check that
+  bullet asks for is still the discriminating one.
