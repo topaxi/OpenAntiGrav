@@ -24,6 +24,22 @@
 //! `docs/formats/vex.md` and `docs/overview/roadmap.md` carry the fuller
 //! writeup; this file is the guard that keeps the fix from silently reverting
 //! - a wrong threshold does not fail to compile, it fails to draw.
+//!
+//! # And the guard that a lit-pixel count alone does not give
+//!
+//! The count above is one-sided, and the second failure this file now pins
+//! walked straight past it: `mesh.wgsl` discarded at `shaded.a <
+//! alpha_test_ref`, which is `GEQUAL` and not the `GU_GREATER` the GE
+//! programs. That is invisible while the only reference is Wipeout HD's
+//! `0.5`, and fatal at the `0` Pure's pad asks for - `a < 0.0` is true of no
+//! fragment, so the alpha test became a no-op and the pad painted its
+//! texture's transparent background as a solid plate. **A square instead of a
+//! pad, and `lit > 100` passed harder than before**, because a filled quad is
+//! strictly more lit pixels than a cutout of it.
+//!
+//! So the pad is captured twice: once as its file asks, and once with the
+//! test forced off. A cutout that keeps every fragment is the regression, and
+//! only the comparison sees it.
 
 use std::path::Path;
 
@@ -81,23 +97,46 @@ fn a_pure_speedup_pad_draws_visible_pixels() {
          regression - re-check the track name against oag-pure's own circuit list"
     );
 
-    let pixels =
-        mesh_render::capture_pixels_from(&model, 1024, 1024, 0.9, 1.4, Anisotropy::default(), 0.0)
-            .expect("capturing the pad model");
-
+    let pixels = capture(&model);
     let lit = lit_pixel_count(&pixels);
     println!("{name}: {lit} lit pixel(s) of {}", pixels.len() / 4);
     // Measured at this exact framing: 0 before the `ALPHA_TEST_THRESHOLD` fix,
-    // 321 after. The bound below sits well under that with headroom for a
+    // 310 after. The bound below sits well under that with headroom for a
     // different adapter's rasterization, and well over the handful of stray
     // pixels a bug unrelated to this one could produce.
     assert!(
         lit > 100,
-        "{name}: only {lit} lit pixel(s) of 1,048,576 (a real pad draws ~321 here) - the \
+        "{name}: only {lit} lit pixel(s) of 1,048,576 (a real pad draws ~310 here) - the \
          pad geometry decoded but drew (almost) nothing, which is exactly the \
          `ALPHA_TEST_THRESHOLD` regression this test exists to catch. See mesh.wgsl's \
          `ALPHA_TEST_THRESHOLD` doc comment."
     );
+
+    // The same model with every cutout draw's reference below any alpha a
+    // texel can carry, so `fs_main_alpha_test` keeps every fragment: what the
+    // pad looks like when the alpha test does nothing. 425 lit pixels here
+    // against the 310 above, the difference being the glow texture's
+    // transparent background painted as a solid plate.
+    let mut untested = model.clone();
+    for draw in &mut untested.alpha_tested_draws {
+        draw.alpha_test_ref = Some(-1.0);
+    }
+    let unfiltered = lit_pixel_count(&capture(&untested));
+    println!("{name}: {unfiltered} lit pixel(s) with the alpha test forced off");
+    assert!(
+        (lit as f32) < 0.9 * unfiltered as f32,
+        "{name}: the cutout pipeline kept {lit} of the {unfiltered} lit pixel(s) it draws \
+         with the alpha test forced off, so the test is discarding (almost) nothing. At \
+         the reference this pad's own file asks for - `0` - that is what a discard \
+         written `shaded.a < alpha_test_ref` does instead of the GE's `GU_GREATER`, and \
+         the pad renders as a square plate. See mesh.wgsl's `alpha_test_ref`."
+    );
+}
+
+/// The framing the Pure counts above are measured at.
+fn capture(model: &mesh::Model) -> Vec<u8> {
+    mesh_render::capture_pixels_from(model, 1024, 1024, 0.9, 1.4, Anisotropy::default(), 0.0)
+        .expect("capturing the pad model")
 }
 
 /// **The same guard for Wipeout HD, and for a second reason.**

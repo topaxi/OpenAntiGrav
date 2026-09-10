@@ -94,10 +94,16 @@ pub struct DrawCall {
     ///
     /// **`Some` only on `Model::alpha_tested_draws`**, and only for a `.vex`
     /// batch: `oag_vex::vex::Batch::alpha_test_reference` derives it from
-    /// `pass_mask` and `header_flags`, and every corpus authors exactly two
-    /// values - `0x10` and `0x7f`. Carried per draw call rather than per model
-    /// for the reason [`Self::blend`] is: a single mesh mixes them, and a
-    /// circuit is one `Model`.
+    /// `pass_mask` and `header_flags`, and the corpora author three values
+    /// between them - `0`, `0x10` and `0x7f`, the census in
+    /// `crates/vex/tests/alpha_test_reference_ground_truth.rs`. Carried per
+    /// draw call rather than per model for the reason [`Self::blend`] is: a
+    /// single mesh mixes them, and a circuit is one `Model`.
+    ///
+    /// **The `0` is why `mesh.wgsl` discards at `<=` and not `<`.** The GE's
+    /// test is `GU_GREATER`, so a reference of `0` keeps every texel above
+    /// fully transparent and discards the rest; under `<` it discards nothing
+    /// at all, and Pure's `Speedup Pad` draws as a solid square.
     ///
     /// `None` keeps the pipeline-level reference, which is `Model::alpha_test_ref`
     /// where a Wipeout HD material authored one and `mesh.wgsl`'s own

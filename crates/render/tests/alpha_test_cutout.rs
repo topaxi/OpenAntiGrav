@@ -9,8 +9,9 @@
 //! name has to match `mesh.wgsl`'s `override`, and the entry point has to
 //! compare against the override rather than against the constant it defaults
 //! to. Each of those failures leaves Wipeout HD's mode-2 surfaces testing at
-//! the PSP reference of `1/255` - which keeps almost every texel and so looks
-//! like a working cutout while reproducing nothing the disc asked for.
+//! `mesh.wgsl`'s own default of `0` - which keeps every texel above fully
+//! transparent and so looks like a working cutout while reproducing nothing
+//! the disc asked for.
 //!
 //! So this draws the same quad twice against the same two textures, once with
 //! the disc's `0.5` and once with no reference at all, and asserts the two
@@ -31,8 +32,8 @@ const SIZE: u32 = 64;
 /// The reference every `Transparency::Mode2` material on the HD disc authors.
 const AUTHORED_REF: f32 = 0.5;
 
-/// Either side of [`AUTHORED_REF`], and both well above the `1/255` a model
-/// with no reference of its own falls back to.
+/// Either side of [`AUTHORED_REF`], and both well above the `0` a model with
+/// no reference of its own falls back to.
 const BELOW: u8 = 100;
 const ABOVE: u8 = 200;
 
@@ -144,12 +145,13 @@ fn the_authored_reference_cuts_where_the_material_says_and_not_where_the_default
     // pipeline, both would answer the same here.
     assert!(
         drawn(BELOW, None),
-        "a model with no reference of its own keeps the shader's PSP default \
-         of 1/255, which alpha {BELOW}/255 clears"
+        "a model with no reference of its own keeps the shader's own default \
+         of 0, which alpha {BELOW}/255 clears"
     );
     assert!(
         drawn(ABOVE, None),
-        "and so does one above it - the default discards near-zero alpha alone"
+        "and so does one above it - the default discards the fully transparent \
+         texel alone"
     );
 }
 
