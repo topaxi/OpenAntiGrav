@@ -163,7 +163,9 @@ pub fn run(
         after_language_movie_sound,
         backdrop,
         font,
-        sprites,
+        // `mut`: the track-select still extends it with the circuit's own
+        // cards before the renderer is built from it, below.
+        mut sprites,
         menu_skin,
         // Renamed on the way in: `frame` is taken in this function by the
         // *movie* frame a backdrop is showing, and two things called `frame` in
@@ -474,19 +476,47 @@ pub fn run(
                 // The selected circuit's lap, off the disc - the number the
                 // live screen's worker measures. One read; a capture with
                 // no source to open keeps the dash.
-                let distance = match (kind, options.race.as_ref().map(open_for_previews)) {
-                    (oag_ui::picker::Kind::Track, Some(Ok(mut archives))) => tracks
-                        .iter()
-                        .find(|track| track.id == options.settings.race.track)
-                        .and_then(|track| archives.read_name(&track.entry_name()).ok())
-                        .and_then(|blob| race::circuit_length(&blob).ok()),
-                    (_, Some(Err(error))) => {
-                        log::warn!("{error:#} - no distance measured");
+                let mut archives = match options.race.as_ref().map(open_for_previews) {
+                    Some(Ok(archives)) => Some(archives),
+                    Some(Err(error)) => {
+                        log::warn!("{error:#} - no distance measured, no slideshow");
                         None
                     }
+                    None => None,
+                };
+                let selected = tracks
+                    .iter()
+                    .find(|track| track.id == options.settings.race.track);
+                let distance = match (kind, archives.as_mut(), selected) {
+                    (oag_ui::picker::Kind::Track, Some(archives), Some(track)) => archives
+                        .read_name(&track.entry_name())
+                        .ok()
+                        .and_then(|blob| race::circuit_length(&blob).ok()),
                     _ => None,
                 };
-                let (list, request) = picker_page(
+                // The selected circuit's stills, on the front end's sheet
+                // extended the way the live screen extends it, at the
+                // moment the screen opens: the first card alone. See
+                // `oag_game::preview::slideshow`.
+                let mut stills: Vec<Draw> = Vec::new();
+                if let (oag_ui::picker::Kind::Track, Some(archives), Some(track)) =
+                    (kind, archives.as_mut(), selected)
+                {
+                    let zone = oag_race::Mode::from_name(&options.settings.race.mode)
+                        == Some(oag_race::Mode::Zone);
+                    let mut report = Vec::new();
+                    match crate::preview::slideshow(archives, &track.location, zone, &mut report) {
+                        Ok((show, blobs)) => {
+                            sprites = sprites.extended(&blobs, &mut report);
+                            stills = show.draws(0.0, &|src| sprites.get(src));
+                        }
+                        Err(error) => log::warn!("{error:#} - the hexagonal window draws nothing"),
+                    }
+                    for line in report {
+                        log::info!("{line}");
+                    }
+                }
+                let (mut list, request) = picker_page(
                     kind,
                     layout,
                     &options.settings,
@@ -501,13 +531,14 @@ pub fn run(
                     &|text| oag_ui::font::measure(menu_font.as_ref().unwrap_or(&font), text),
                     distance,
                 );
+                list.extend(stills);
                 preview_request = request;
                 (backdrop, format, list, space)
             } else {
                 let list = menu_page(
                     &options.settings,
                     options.anisotropy,
-                    title.name,
+                    title,
                     page,
                     &tracks,
                     &teams,

@@ -683,6 +683,7 @@ pub fn load_shell(
         &strings,
         &font,
         menu_font.as_ref(),
+        space,
         &mut report,
     );
     report.push(steps.describe("the boot's first half"));

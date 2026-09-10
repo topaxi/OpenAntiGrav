@@ -168,7 +168,11 @@ pub use view::RaceView;
 pub use visibility::{SceneStats, TrackVisibility};
 pub use worker::LoadWorker;
 
-pub(crate) use assets::ps2_texture_set;
+// `pub`, not `pub(crate)`: the selection screens' previews are built by the
+// composition root's own `picker_stage`, which is the `[[bin]]` over this
+// `[lib]` and draws a PS2 circuit's outline and craft through the same
+// texture-set rule a race does.
+pub use assets::ps2_texture_set;
 // The two exhaust names are re-exported so a ground-truth test can assert the
 // report line each one produces without spelling the literal a second time -
 // the names are the executable's, and one copy of them is the point.

@@ -40,6 +40,7 @@ impl Session {
         };
         let mode = self.race_mode();
         let title = shell.title;
+        let zone = mode == oag_race::Mode::Zone;
         let (entries, sources): (Vec<Entry>, Vec<PreviewSource>) = shell
             .tracks_for(mode)
             .iter()
@@ -55,6 +56,7 @@ impl Session {
                     PreviewSource::Track {
                         location: track.location.clone(),
                         reversed: track.reversed,
+                        zone,
                     },
                 )
             })
@@ -65,6 +67,17 @@ impl Session {
             Some(self.settings.race.track.as_str()),
             None,
         );
+        // The setting follows the screen from the moment it opens: a stored
+        // circuit this mode's list does not hold - a race circuit after MODE
+        // moved to Zone - lands the screen on its first entry, and that is
+        // what a confirm without moving launches. The RACE page's own TRACK
+        // row used to settle this; it is not on the page any more on a title
+        // with these screens (`menu::Definition::drop_rows_picked_on_screen`).
+        if let Some(entry) = model.selected()
+            && entry.id != self.settings.race.track
+        {
+            self.settings.race.track = entry.id.clone();
+        }
         // The lap lengths, measured off each circuit's own file on a worker
         // - the selected circuit first, then the rest of the list in order
         // - and copied onto the panel as they land. A 4 MB read and a
@@ -232,6 +245,14 @@ impl Session {
             Some(self.settings.race.team.as_str()),
             Some(livery),
         );
+        // As `open_track_picker` does for the circuit: the screen's own
+        // selection is the setting, from the first frame.
+        if let Some(entry) = model.selected()
+            && entry.id != self.settings.race.team
+        {
+            self.settings.race.team = entry.id.clone();
+            self.resupply_race_variant();
+        }
         self.open_picker(model, layout, axis, sources, None)
     }
 
@@ -289,6 +310,11 @@ impl Session {
                 return false;
             }
         };
+        let base = self
+            .shell
+            .as_ref()
+            .map(|shell| shell.sprites.clone())
+            .unwrap_or_default();
         let Stage::Menu(stage) = &mut self.stage else {
             return false;
         };
@@ -300,6 +326,7 @@ impl Session {
             archives,
             distances,
             self.anisotropy,
+            base,
         );
         picker.refresh_preview(&self.gpu);
         picker.refresh_info();

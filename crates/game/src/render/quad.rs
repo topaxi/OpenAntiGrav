@@ -38,6 +38,7 @@ impl Renderer {
             mode: MODE_ATLAS,
             rotation: 0.0,
             chamfer,
+            tile: [0.0, 0.0],
         });
     }
 
@@ -53,6 +54,7 @@ impl Renderer {
             mode: MODE_GRADIENT,
             rotation: 0.0,
             chamfer: 0.0,
+            tile: [0.0, 0.0],
         });
     }
 }

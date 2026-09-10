@@ -140,6 +140,28 @@ pub enum Draw {
         /// Clockwise turn about the rectangle's centre, in radians.
         rotation: f32,
     },
+    /// A sprite **repeated** across its rectangle rather than stretched over
+    /// it.
+    ///
+    /// What an `Image` widget whose `TxtrWidth`/`TxtrHeight` exceed the
+    /// texture's own size asks for: the selection screens' `Infohexgrid` is
+    /// a 32x16 `hex_bg.mip` drawn as `TxtrWidth="340" TxtrHeight="120"` in a
+    /// 170x60 rect - ten and a half tiles across, seven and a half down, at
+    /// half size - and sampled off a sheet that way it reads the neighbours
+    /// in the sheet instead of the tile again. A separate variant rather
+    /// than a field on [`Self::Sprite`] for the reason [`Self::RotatedSprite`]
+    /// is: one widget needs it and the rest would carry a `[1.0, 1.0]`.
+    TiledSprite {
+        /// Where it goes.
+        rect: [f32; 4],
+        /// The **one tile** in the sheet, in sheet pixels.
+        uv: [f32; 4],
+        /// How many tiles fit across and down `rect`. Fractional is fine: the
+        /// last tile is cut where the rectangle ends.
+        repeat: [f32; 2],
+        /// Modulating colour.
+        color: [f32; 4],
+    },
     /// A `<Mode3D><Model>` widget's quad, composited the way the **model's own
     /// `pass_mask`** asks rather than the way every other sprite is.
     ///
@@ -900,99 +922,4 @@ fn pulse_alpha(text: &Text, elapsed: f64) -> f32 {
     settled * cycles.min(1.0)
 }
 
-impl Draw {
-    /// The colour this draw is modulated by, when it has one.
-    ///
-    /// `None` for [`Self::Video`] alone: a movie frame has no alpha channel to
-    /// fade and is never part of a page.
-    ///
-    /// **It exists so a new variant is one edit rather than three.** The menu's
-    /// zoom and fade helpers each used to spell the variant list out, so adding
-    /// [`Self::RotatedSprite`] meant remembering both - and forgetting one is a
-    /// widget that silently does not fade with the page it is on.
-    pub fn colour_mut(&mut self) -> Option<&mut [f32; 4]> {
-        match self {
-            Self::Text { color, .. }
-            | Self::Fill { color, .. }
-            | Self::ChamferedFill { color, .. }
-            | Self::Sprite { color, .. }
-            | Self::RotatedSprite { color, .. }
-            | Self::BlendedSprite { color, .. } => Some(color),
-            // The left edge's, which is the one a caller reading "the colour"
-            // of a rule that fades in from the left would expect. Fading
-            // both edges is [`Self::fade`]'s job, not this accessor's.
-            Self::GradientFill { left, .. } => Some(left),
-            Self::Video { .. } => None,
-        }
-    }
-
-    /// Scales this draw about a point and multiplies its alpha.
-    ///
-    /// The whole of the menu's page-change effect - see
-    /// [`crate::menu::Layers::zoomed`], which calls it once per body draw.
-    /// **It lives here rather than beside its one caller** for the reason
-    /// [`Self::colour_mut`] does: it spells the variant list out, so a new
-    /// variant that is not added here silently does not move with the page it
-    /// is on. Next to the type, that is one file to check.
-    ///
-    /// No variant needed adding for any of it: `Text`, `Fill` and `Sprite`
-    /// already carry a position, a size or a scale, and a colour whose fourth
-    /// channel is the alpha.
-    pub fn zoom(&mut self, origin: (f32, f32), scale: f32, alpha: f32) {
-        let about = |value: f32, from: f32| from + (value - from) * scale;
-        // The chamfer before the match, so the two fill variants stay one arm.
-        // It scales with its own quad: a fixed-size cut left on a shrinking
-        // corner would eat more of the tab the smaller the tab got.
-        if let Self::ChamferedFill { chamfer, .. } = self {
-            *chamfer *= scale;
-        }
-        match self {
-            Self::Text {
-                x,
-                y,
-                scale: size,
-                color,
-                ..
-            } => {
-                *x = about(*x, origin.0);
-                *y = about(*y, origin.1);
-                *size *= scale;
-                color[3] *= alpha;
-            }
-            Self::Fill { rect, color }
-            | Self::ChamferedFill { rect, color, .. }
-            | Self::Sprite { rect, color, .. }
-            | Self::RotatedSprite { rect, color, .. }
-            | Self::BlendedSprite { rect, color, .. } => {
-                rect[0] = about(rect[0], origin.0);
-                rect[1] = about(rect[1], origin.1);
-                rect[2] *= scale;
-                rect[3] *= scale;
-                color[3] *= alpha;
-            }
-            Self::GradientFill { rect, left, right } => {
-                rect[0] = about(rect[0], origin.0);
-                rect[1] = about(rect[1], origin.1);
-                rect[2] *= scale;
-                rect[3] *= scale;
-                left[3] *= alpha;
-                right[3] *= alpha;
-            }
-            // A movie has no alpha channel to fade and is never part of a page.
-            Self::Video { .. } => {}
-        }
-    }
-
-    /// Multiplies this draw's alpha, leaving it where it is.
-    ///
-    /// Both edges of a [`Self::GradientFill`], which is the one variant
-    /// [`Self::colour_mut`] cannot fade on its own.
-    pub fn fade(&mut self, alpha: f32) {
-        if let Self::GradientFill { left, right, .. } = self {
-            left[3] *= alpha;
-            right[3] *= alpha;
-        } else if let Some(color) = self.colour_mut() {
-            color[3] *= alpha;
-        }
-    }
-}
+mod transform;

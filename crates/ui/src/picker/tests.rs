@@ -1,5 +1,8 @@
 use super::*;
 use crate::frontend::Draw;
+
+/// The PSP's own grid, which the miniature XML is authored in.
+const PSP: [f32; 2] = [480.0, 272.0];
 use crate::menu::{Frame, Skin};
 use oag_gameplay::input::Input;
 
@@ -128,7 +131,14 @@ fn left_and_right_move_the_livery_only_when_there_is_one_to_move_to() {
 #[test]
 fn the_layout_sums_offsets_and_resolves_strings() {
     let screens = Screens::from_xml(XML);
-    let layout = Layout::read(&screens, Kind::Track, &strings(), FaceScales::default()).unwrap();
+    let layout = Layout::read(
+        &screens,
+        Kind::Track,
+        &strings(),
+        FaceScales::default(),
+        PSP,
+    )
+    .unwrap();
     assert_eq!(layout.title, "TRACK SELECT");
     assert_eq!(layout.panel, [290.0, 26.0, 170.0, 200.0]);
     let distance = layout
@@ -159,7 +169,14 @@ fn the_layout_sums_offsets_and_resolves_strings() {
 #[test]
 fn the_body_names_the_selected_entry_and_counts_the_list() {
     let screens = Screens::from_xml(XML);
-    let layout = Layout::read(&screens, Kind::Track, &strings(), FaceScales::default()).unwrap();
+    let layout = Layout::read(
+        &screens,
+        Kind::Track,
+        &strings(),
+        FaceScales::default(),
+        PSP,
+    )
+    .unwrap();
     let picker = Picker::new(Kind::Track, entries(), Some("18_Track"), None);
     let skin = Skin::new(
         oag_pulse::FRONT_END.menu,
@@ -219,7 +236,14 @@ fn the_body_names_the_selected_entry_and_counts_the_list() {
 #[test]
 fn a_long_name_wraps_into_the_three_line_block() {
     let screens = Screens::from_xml(XML);
-    let layout = Layout::read(&screens, Kind::Track, &strings(), FaceScales::default()).unwrap();
+    let layout = Layout::read(
+        &screens,
+        Kind::Track,
+        &strings(),
+        FaceScales::default(),
+        PSP,
+    )
+    .unwrap();
     let lines = wrap_name("Talon's Junction White", &layout, &|text| {
         text.len() as f32 * 11.0
     });
@@ -228,4 +252,116 @@ fn a_long_name_wraps_into_the_three_line_block() {
         text.len() as f32 * 11.0
     });
     assert_eq!(lines, vec!["Moa Therma", "White"]);
+}
+
+#[test]
+fn the_hex_grid_tiles_rather_than_reading_past_its_sprite() {
+    let screens = Screens::from_xml(
+        r#"<Screen name="Top"><Screen type="TrackSelection" name="Track Creation">
+<Text idstring="RB_TRACK_SEL" font="Title" x="50" y="0"></Text>
+<Text name="honey" String="1/1" x="135" y="213"></Text>
+<Image name="Infogradient" x="290" y="26" width="170" height="200" Color1="0x2f000000" Color2="0x2f000000" Color3="0x2f000000" Color4="0x2f000000"></Image>
+<Image name="Infohexgrid" x="290" y="26" width="170" height="60" U="0" V="0" TxtrWidth="340" TxtrHeight="120" color="0x7fffffff" src="Data\FE\Images\hex_bg.mip"></Image>
+</Screen></Screen>"#,
+    );
+    let layout = Layout::read(
+        &screens,
+        Kind::Track,
+        &strings(),
+        FaceScales::default(),
+        PSP,
+    )
+    .unwrap();
+    let picker = Picker::new(Kind::Track, entries(), None, None);
+    let skin = Skin::new(
+        oag_pulse::FRONT_END.menu,
+        oag_display::space::Space::PSP,
+        22.0,
+    );
+    let tile = Placed {
+        x: 0,
+        y: 300,
+        width: 32,
+        height: 16,
+        quad_extent: None,
+        blend: None,
+    };
+    let layers = draw_list(
+        &picker,
+        &layout,
+        &skin,
+        &Frame::default(),
+        None,
+        false,
+        &|_| Some(tile),
+        &|text| text.len() as f32 * 8.0,
+    );
+    let tiled: Vec<&Draw> = layers
+        .body
+        .iter()
+        .filter(|draw| matches!(draw, Draw::TiledSprite { .. }))
+        .collect();
+    assert_eq!(
+        tiled,
+        vec![&Draw::TiledSprite {
+            rect: [290.0, 26.0, 170.0, 60.0],
+            uv: [0.0, 300.0, 32.0, 16.0],
+            repeat: [340.0 / 32.0, 120.0 / 16.0],
+            color: argb_to_rgba(0x7fff_ffff),
+        }],
+        "340x120 of a 32x16 tile is the tile ten and a half times across"
+    );
+}
+
+#[test]
+fn the_ps2s_player_index_is_dropped_off_team_selections_widgets() {
+    // The PS2 pressing suffixes every widget on `Team Selection` with the
+    // player it belongs to; `Track Creation`'s are bare on both discs.
+    let screens = Screens::from_xml(
+        r#"<Screen name="Top"><Screen type="TeamSelection" name="Team Selection">
+<Text idstring="RC_SHIPSEL" font="Title" x="50" y="0"></Text>
+<Text name="honey0" String="1/1" x="180" y="351"></Text>
+<Image name="Infogradient0" x="387" y="76" width="227" height="267" Color1="0x2f000000" Color2="0x2f000000" Color3="0x2f000000" Color4="0x2f000000"></Image>
+<Image name="Speed Bar0" x="493" y="155" width="77" height="16" U="437" V="1" TxtrWidth="58" TxtrHeight="10" src="Data\FE\Images\pulse_assets.mip"></Image>
+<Text name="Speed0" String="10" x="599" y="150"></Text>
+<Text name="line bg10" String="x" x="1" y="1"></Text>
+</Screen></Screen>"#,
+    );
+    let layout = Layout::read(
+        &screens,
+        Kind::Ship,
+        &strings(),
+        FaceScales::default(),
+        [640.0, 448.0],
+    )
+    .unwrap();
+    assert_eq!(
+        layout.panel,
+        [387.0, 76.0, 227.0, 267.0],
+        "found under its bare name"
+    );
+    let names: Vec<&str> = layout
+        .screen
+        .texts
+        .iter()
+        .chain(std::iter::empty())
+        .filter_map(|text| text.name.as_deref())
+        .collect();
+    assert!(names.contains(&"honey"), "{names:?}");
+    assert!(names.contains(&"Speed"), "{names:?}");
+    assert!(names.contains(&"line bg1"), "{names:?}");
+    assert!(
+        layout
+            .screen
+            .images
+            .iter()
+            .any(|image| image.name.as_deref() == Some("Speed Bar")),
+        "{:?}",
+        layout.screen.images
+    );
+    assert!((layout.scale[0] - 4.0 / 3.0).abs() < 1e-5);
+    assert!(
+        (layout.preview[0] - 10.0 * 4.0 / 3.0).abs() < 1e-3,
+        "the PSP's 10 scaled"
+    );
 }

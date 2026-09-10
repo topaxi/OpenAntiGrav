@@ -81,6 +81,7 @@ impl Renderer {
                 mode: MODE_ATLAS,
                 rotation: 0.0,
                 chamfer: 0.0,
+                tile: [0.0, 0.0],
             });
             pen += cell.advance * scale;
         }

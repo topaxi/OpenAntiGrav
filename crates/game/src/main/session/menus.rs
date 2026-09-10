@@ -483,7 +483,6 @@ impl Session {
                 // asking about a page that is no longer on screen.
                 prompt: None,
                 picker: None,
-                placements: shell.sprites.entries().to_vec(),
                 backdrop: shape.map(|shape| Backdrop {
                     player: menu_playhead(carried, frames, shape.frame_rate),
                     rect: shape.rect,

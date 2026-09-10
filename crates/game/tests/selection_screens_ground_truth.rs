@@ -228,5 +228,166 @@ fn the_track_picker_draws_the_discs_own_rows() {
         .iter()
         .filter(|draw| matches!(draw, oag_ui::frontend::Draw::Sprite { .. }))
         .count();
-    assert_eq!(sprites, 3, "up arrow, down arrow, hex grid");
+    assert_eq!(sprites, 2, "up arrow, down arrow");
+    // The hex grid is the 32x16 tile repeated, not a patch of the sheet.
+    let tiled: Vec<[f32; 2]> = layers
+        .body
+        .iter()
+        .filter_map(|draw| match draw {
+            oag_ui::frontend::Draw::TiledSprite { repeat, .. } => Some(*repeat),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(tiled, vec![[340.0 / 32.0, 120.0 / 16.0]], "{tiled:?}");
+}
+
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn the_circuits_own_screen_xml_is_the_slideshow_behind_the_window() {
+    let Some(path) = image() else {
+        return;
+    };
+    let mut archives = oag_assets::Archives::open(&path.to_string_lossy(), oag_pulse::TITLE)
+        .expect("the archives open");
+    let mut report = Vec::new();
+    let (show, blobs) = oag_game::preview::slideshow(
+        &mut archives,
+        r"Data\Environments\16_Track",
+        false,
+        &mut report,
+    )
+    .expect("16_Track authors a screen.xml with an Info chain");
+    assert!(report.is_empty(), "{report:?}");
+    // Info -> Info2 -> Info3 -> Info4 -> Info3 Close -> Info2 Close, two
+    // seconds apiece, one card deeper per step and back - see
+    // `docs/ui/selection-screens.md`.
+    let names: Vec<&str> = show.states().iter().map(|s| s.name.as_str()).collect();
+    assert_eq!(
+        names,
+        [
+            "Top",
+            "Info",
+            "Info2",
+            "Info2 Close",
+            "Info3",
+            "Info3 Close",
+            "Info4"
+        ]
+    );
+    assert_eq!(show.at(0.0).images.len(), 1);
+    assert_eq!(show.at(7.0).name, "Info4");
+    assert_eq!(show.at(7.0).images.len(), 7, "four cards and three shadows");
+    assert_eq!(show.at(12.5).name, "Info");
+    // Four cards and the shadow, every one on the disc and 256x128 / 128x64.
+    assert_eq!(blobs.len(), 5, "{:?}", show.sources());
+    let sheet = oag_game::sprite::Sheet::build(&blobs, &mut report);
+    let card = sheet
+        .get(r"Data\Environments\16_Track\FE\image_01.mip")
+        .expect("the first card decodes");
+    assert_eq!((card.width, card.height), (256, 128));
+    let shadow = sheet
+        .get(r"Data\FE\Images\track_sel_shadow.mip")
+        .expect("the shadow decodes");
+    assert_eq!((shadow.width, shadow.height), (128, 64));
+    // And the same file places the outline: the disc's own pose, carried.
+    let model = show.model.as_ref().expect("the Mode3D model reads");
+    assert_eq!(model.src, r"Data\Environments\16_Track\FE\forward.vex");
+    assert_eq!(model.position, [0.0, -300.0, -3700.0]);
+    // Zone mode has its own file and its own chain.
+    let (zone, _) = oag_game::preview::slideshow(
+        &mut archives,
+        r"Data\Environments\16_Track",
+        true,
+        &mut report,
+    )
+    .expect("16_Track authors a screen_zone.xml");
+    assert_eq!(zone.at(0.0).name, "Zone");
+    assert!(
+        zone.sources()[0].ends_with(r"\FE\zone_01.mip"),
+        "{:?}",
+        zone.sources()
+    );
+}
+
+/// The PS2 pressing: the same screens on its own grid, `Team Selection`'s
+/// widgets read under the PSP's names, both previews textured off their
+/// sibling sets, and a five-card slideshow with the Zone chain in the same
+/// file. See `docs/ui/selection-screens.md`'s PS2 section.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn the_ps2_pressing_reads_the_same_screens_on_its_own_grid() {
+    let Some(path) = oag_testdata::image("data/images/pulse-ps2-eu.chd") else {
+        return;
+    };
+    let shell = shell(&path);
+    let track = shell.track_select.as_ref().expect("Track Creation reads");
+    let ship = shell.ship_select.as_ref().expect("Team Selection reads");
+    // `<Item OffsetX="387" OffsetY="41">` on `Track Creation`, `OffsetY="74"`
+    // on `Team Selection` - the PSP's 290/25 and 290/45 scaled.
+    assert_eq!(track.panel, [387.0, 43.0, 227.0, 329.0]);
+    assert_eq!(ship.panel, [387.0, 76.0, 227.0, 267.0]);
+    assert!(
+        (track.scale[0] - 4.0 / 3.0).abs() < 1e-5,
+        "{:?}",
+        track.scale
+    );
+    // `honey0`, `Speed Bar0`, `Infogradient0` on the disc; bare here.
+    assert!(
+        ship.screen
+            .texts
+            .iter()
+            .any(|t| t.name.as_deref() == Some("honey"))
+    );
+    assert!(
+        ship.screen
+            .images
+            .iter()
+            .any(|i| i.name.as_deref() == Some("Speed Bar"))
+    );
+    assert!(
+        !ship
+            .screen
+            .texts
+            .iter()
+            .any(|t| t.name.as_deref().is_some_and(|n| n.ends_with('0'))),
+        "{:?}",
+        ship.screen
+            .texts
+            .iter()
+            .filter_map(|t| t.name.clone())
+            .collect::<Vec<_>>()
+    );
+
+    let mut archives = oag_assets::Archives::open(&path.to_string_lossy(), oag_pulse::TITLE)
+        .expect("the archives open");
+    for entry in [
+        r"Data\Environments\16_Track\FE\forward.vex",
+        r"Data\Ships\Assegai\ship_FE.vex",
+    ] {
+        let model = oag_game::preview::model(&mut archives, entry).expect(entry);
+        assert!(!model.textures.is_empty(), "{entry} names textures");
+        assert!(
+            model.textures.iter().any(Option::is_some),
+            "{entry}: no texture resolved off the sibling set - it would draw white"
+        );
+    }
+    let mut report = Vec::new();
+    let (show, blobs) = oag_game::preview::slideshow(
+        &mut archives,
+        r"Data\Environments\16_Track",
+        false,
+        &mut report,
+    )
+    .expect("the PS2 16_Track authors a screen.xml");
+    assert!(report.is_empty(), "{report:?}");
+    assert_eq!(show.at(9.0).name, "Info5", "five cards on the PS2");
+    assert_eq!(blobs.len(), 6, "{:?}", show.sources());
+    let (zone, _) = oag_game::preview::slideshow(
+        &mut archives,
+        r"Data\Environments\16_Track",
+        true,
+        &mut report,
+    )
+    .expect("the Zone chain is in the same file");
+    assert_eq!(zone.at(0.0).name, "Zone");
 }

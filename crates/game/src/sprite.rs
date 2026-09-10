@@ -404,6 +404,63 @@ impl Sheet {
         }
     }
 
+    /// This sheet with `blobs` decoded and stacked **under** it.
+    ///
+    /// Every placement this sheet already holds keeps its rectangle - the
+    /// new images go below the last gutter, and the sheet only ever gets
+    /// wider - so a renderer that swaps to the extended sheet
+    /// (`crate::render::Renderer::set_sprites`) keeps drawing every widget
+    /// it already drew, and nothing has to be swapped back. What the
+    /// selection screens need: their stills are per circuit and read when
+    /// the circuit is selected, long after the front end's own sheet was
+    /// built at boot. A `src` this sheet already holds is not added twice;
+    /// an image that will not decode is reported and skipped, as
+    /// [`Self::build`] does.
+    #[must_use]
+    pub fn extended(&self, blobs: &[(String, Vec<u8>)], report: &mut Vec<String>) -> Self {
+        let fresh: Vec<(String, Vec<u8>)> = blobs
+            .iter()
+            .filter(|(src, _)| self.get(src).is_none())
+            .cloned()
+            .collect();
+        if fresh.is_empty() {
+            return self.clone();
+        }
+        // An empty sheet is one transparent texel with nothing placed in it,
+        // so there is nothing to keep.
+        if self.placed.is_empty() {
+            return Self::build(&fresh, report);
+        }
+        let below = Self::build(&fresh, report);
+        if below.placed.is_empty() {
+            return self.clone();
+        }
+        let width = self.width.max(below.width);
+        let height = self.height + below.height;
+        let mut rgba = vec![0u8; (width * height * 4) as usize];
+        let copy_rows = |rgba: &mut Vec<u8>, from: &Self, at: u32| {
+            for row in 0..from.height {
+                let src = (row * from.width * 4) as usize;
+                let dst = ((at + row) * width * 4) as usize;
+                rgba[dst..dst + (from.width * 4) as usize]
+                    .copy_from_slice(&from.rgba[src..src + (from.width * 4) as usize]);
+            }
+        };
+        copy_rows(&mut rgba, self, 0);
+        copy_rows(&mut rgba, &below, self.height);
+        let mut placed = self.placed.clone();
+        placed.extend(below.placed.into_iter().map(|(src, mut at)| {
+            at.y += self.height;
+            (src, at)
+        }));
+        Self {
+            width,
+            height,
+            rgba,
+            placed,
+        }
+    }
+
     /// Where `src` sits, if it was loaded.
     #[must_use]
     pub fn get(&self, src: &str) -> Option<Placed> {
@@ -520,6 +577,38 @@ mod tests {
                 .iter()
                 .all(|&b| b == 0),
             "the gutter must not carry either image's pixels"
+        );
+    }
+
+    #[test]
+    fn an_extended_sheet_keeps_every_placement_it_had() {
+        let mut report = Vec::new();
+        let base = Sheet::build(&[("a".to_string(), mip(4, 2, 10))], &mut report);
+        let extended = base.extended(
+            &[
+                ("b".to_string(), mip(8, 3, 20)),
+                ("a".to_string(), mip(2, 2, 30)),
+            ],
+            &mut report,
+        );
+        assert_eq!(base.get("a"), extended.get("a"), "a keeps its rectangle");
+        assert_eq!(extended.width, 8, "the wider new image widens the sheet");
+        let b = extended.get("b").expect("b");
+        assert_eq!(
+            (b.x, b.y, b.width, b.height),
+            (0, base.height, 8, 3),
+            "b starts where the old sheet ended, past its own last gutter"
+        );
+        assert_eq!(extended.len(), 2, "a is not added twice");
+        // The old pixels are where they were, re-strided to the new width.
+        let old_row = &base.rgba[0..4 * 4];
+        let new_row = &extended.rgba[0..4 * 4];
+        assert_eq!(old_row, new_row);
+        // Extending with nothing new is a copy.
+        let same = extended.extended(&[("a".to_string(), mip(1, 1, 1))], &mut report);
+        assert_eq!(
+            (same.width, same.height, same.len()),
+            (8, extended.height, 2)
         );
     }
 

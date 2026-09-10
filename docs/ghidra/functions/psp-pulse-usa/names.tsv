@@ -798,3 +798,5 @@
 0x0886545c	function	Cannon_DrawRound	88	cannon-quake-leachbeam.md
 0x08864cd0	function	Cannon_BuildBoltList	85	cannon-quake-leachbeam.md
 0x08864dc4	function	Cannon_BuildMuzzleFlashList	85	cannon-quake-leachbeam.md
+0x088c4410	function	TrackDefinition_EnterScreenState	78	race-box-screens.md
+0x08891448	function	StateMachine_LoadXml	72	race-box-screens.md

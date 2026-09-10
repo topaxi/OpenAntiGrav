@@ -1,14 +1,19 @@
 # The race box's selection screens
 
-**Status: both of Pulse's screens are read off the disc and drawn - the
-panel, its rows, the arrows, the counter, the rating bars, the livery row
-on the disc's own skin axis, the lap distance measured off each circuit,
-and both preview meshes. Two things are known and unbuilt: the circuit
-flythrough and the `Loyalty` bar.** Implemented in
+**Status: both of Pulse's screens are read off the disc and drawn, on both
+pressings - the panel, its hex grid, its rows, the arrows, the counter, the
+rating bars, the livery row on the disc's own skin axis, the lap distance
+measured off each circuit, both preview meshes, and (since 2026-09-10) the
+slideshow of the circuit's own stills behind the hexagonal window. One
+thing is known and unbuilt: the `Loyalty` bar.** Implemented in
 [`oag_ui::picker`](../../crates/ui/src/picker.rs) (model, layout, draw),
-[`oag_game::preview`](../../crates/game/src/preview.rs) (the 3D pass) and
-`crates/game/src/main/session/picker.rs` (the flow). Captured headlessly
-with `--menu-page track-select` / `--menu-page ship-select`.
+[`oag_ui::picker::slideshow`](../../crates/ui/src/picker/slideshow.rs)
+(the window's state machine),
+[`oag_game::preview`](../../crates/game/src/preview.rs) (the 3D pass and
+the slideshow's loader) and `crates/game/src/main/session/picker.rs` (the
+flow). Captured headlessly with `--menu-page track-select` /
+`--menu-page ship-select`, on `pulse-psp-usa`, `pulse-psp-eu` and
+`pulse-ps2-eu` alike.
 
 This page is the *picture* half of [race-setup.md](../formats/race-setup.md):
 that page reads the XML and the executable, this one says what the screens
@@ -41,7 +46,7 @@ content, and every number below is a reading off them.
 | circuit outline | between the name block and the first rule | **not a widget** - a mesh, see below |
 | three stat rows | y = 166/181/196, title at x=304, value at x=399 | `Info1..3 Title` (`IG_HUD_DISTANCE`, `IG_HUD_LAP_REC`, `ER_RR`), `Info1..3`, `default` face |
 | rules | 85x1 white fades at y=25 and y=201; 85x14 `0x3f` fades under each stat row | two mirrored gradient halves each - see below |
-| hex window | left, roughly (45..270, 55..200) | **not a widget** - the flythrough's frame |
+| hex window | left, cards at (50,70), (43,65), (36,60), (29,55), 256x128 each | **not on this XML** - the circuit's own `screen.xml`, see below |
 
 **The circuit name wraps into whichever `Info Track N.x` block has the
 right line count.** `Talon's Junction White` is three lines, `Moa Therma
@@ -50,6 +55,16 @@ the group's 14 on each side) reproduces both, which is what
 `oag_ui::picker::wrap_name` does. Confidence 80 that this is the rule and not
 only the result: two names is a small sample, and the executable's own
 `Info Track %d.%d` formatter has not been read.
+
+**The hex grid is a 32x16 tile, repeated.** `hex_bg.mip` is 32x16 on
+both discs (the PS2's `hex_bg.pct` too - `HANDOVER.md`'s "a texture
+resolution not yet listed" was this), and `Infohexgrid` samples
+`TxtrWidth="340" TxtrHeight="120"` of it into a 170x60 rect: ten and a
+half tiles across, seven and a half down, at half size. Off a sprite sheet
+that read the sheet's neighbours instead of the tile again, which is why
+the grid was missing from this build's panel until 2026-09-10 -
+[`Draw::TiledSprite`](../../crates/ui/src/frontend/draw.rs) wraps the
+tile in the fragment stage now. Confidence 95.
 
 **The rules are gradients, and the XML says so.** Every horizontal line on
 both screens is two 85-wide `<Image>` halves with `Color1`/`Color2` at one
@@ -72,14 +87,59 @@ marks at the same two places. **So the `FE\<run>.vex` file the
 scene; the size (18 KB against the circuit's 4.25 MB) was the tell, and
 rendering it settled it. Confidence 95.
 
-The flythrough behind the hexagonal window - detailed architecture, the
-camera moving down the corridor - is therefore the **real circuit scene**,
-or a purpose-built one this project has not located. It is not built here:
-a track load is seconds of work per selection and belongs on a worker, which
-is the shape `race::LoadWorker` already has and the picker does not yet use.
-**The hex window draws nothing and the panel says nothing about it**, per
-the rule for an asset that will not play. The frame image the window sits in
-is not on this screen's XML either, so it is not drawn.
+### The hexagonal window is a slideshow, authored per circuit
+
+**There is no flythrough.** What the window shows is a chain of the
+circuit's own stills, and the file that authors it is on the disc beside
+the circuit: `Data\Environments\16_Track\screen.xml`, which
+`TrackDefinition_EnterScreenState` loads into the selected definition's
+own state machine and enters at `Info` - the code is in
+[race-box-screens.md](../ghidra/functions/psp-pulse-usa/race-box-screens.md#the-hexagonal-window-is-a-per-circuit-screenxml-and-it-shows-stills).
+The file is six states two seconds apart, each nested one card deeper:
+
+```text
+Info -> Info2 -> Info3 -> Info4 -> Info3 Close -> Info2 Close -> Info
+  1        2        3        4          3             2         cards
+```
+
+The cards are `<location>\FE\image_01.mip` .. `image_04.mip`, 256x128,
+**each already a hexagon** - the crop and the white border are in the
+pixels, not in a frame drawn over them - at (50,70), (43,65), (36,60),
+(29,55), and each card after the first sits on a `track_sel_shadow.mip`
+(128x64 drawn 226x128 from a 113x64 sub-rect, `0xCF000000`) four units
+down and right of it. So the picture stacks up over eight seconds and
+back down over four, and the "stack of frames" the second capture on
+Talon's Junction shows is the chain three deep. The two captures a second
+apart that [race-setup.md](../formats/race-setup.md) once read as "the
+camera visibly further along the corridor" were two different stills.
+Confidence 95: the file's own content, drawn, against the capture.
+
+**The slideshow restarts on every selection**, as the original's
+`TransitionTo("Info")` does, and runs off the picker's own fixed-tick
+clock, so `--menu-page track-select` is always the first card. Read by
+[`oag_ui::picker::slideshow`](../../crates/ui/src/picker/slideshow.rs),
+loaded by `oag_game::preview::slideshow`, and drawn off the front end's own
+sprite sheet **extended** with the circuit's cards
+(`crate::sprite::Sheet::extended`) - every widget the menus already placed
+keeps its rectangle, so nothing is swapped back when the screen closes.
+
+Zone mode enters `Zone` rather than `Info`, off `screen_zone.xml` on the
+PSP (`zone_01.mip` ..) and off the same `screen.xml` on the PS2, which
+authors both chains in one file and five cards to the PSP's four. A
+circuit with no `screen.xml` draws an empty window and says so in the log.
+
+The same file's `<Screen name="Top">` carries the `<Mode3D><Model
+name="Ship">` the outline ribbon is loaded into, with an authored pose
+(`x=0 y=-300 z=-3700 RotX=1.5 RotY=0.1`, `OriginX=-145 OriginY=13
+nearZ=1000 farZ=5000`). **Read and carried
+(`slideshow::Model`), not yet drawn from**: the outline is still framed by
+the capture-read orbit in `oag_game::preview::orbit_for`, because turning
+those numbers into a camera needs the `Mode3D` projection understood
+first. Open, below.
+
+**The cards slide in on the original and appear here.** Every `LeftLayer`
+on the screen carries a `transition`, and the second capture shows a card
+mid-arrival; nothing here reads that attribute yet. Open, below.
 
 ### What this build draws differently, and why
 
@@ -151,23 +211,57 @@ by design.
 counter the profile keeps and this build does not, and an empty bar would
 read as a loyalty of zero rather than as an absence.
 
+## The PS2 pressing
+
+The same two screens, in the same `Selection_Definition.xml`, on the PS2's
+own 640x448 grid - every position scaled by (4/3, 448/272), the way the
+whole PS2 front end is ([aspect-ratio.md](../ps2/aspect-ratio.md)). Three
+things differ, and all three are handled rather than special-cased:
+
+- **`Team Selection`'s widgets carry a player index**: `honey0`,
+  `Speed Bar0`, `skin0` and so on, one set per split-screen player, where
+  the PSP's are bare (`Track Creation`'s are bare on both). Read under the
+  PSP's names by stripping the `0` when a screen has a `honey0` and no
+  `honey` (`picker::strip_player_suffix`); the `1` set only exists on
+  `Team SelectionSplit`, a screen this build does not open.
+- **Both previews need the circuit's or the craft's sibling texture set**,
+  the same rule a race applies (`race::ps2_texture_set`); without it the
+  outline and the hull both drew flat white.
+- **The cards are `.pct`**, found through `oag_pulse::read_image`'s rewrite
+  like every other PS2 image, and the PS2 `screen.xml` is plain XML rather
+  than dictionary-compressed.
+
+The handful of numbers this module measured off the PSP capture rather
+than read out of a widget - the panel's fallback rect, the craft's
+viewport, the name block's inset - are multiplied by the grid ratio
+(`Layout::scale`) rather than copied.
+
 ## The flow
 
 `RACE` page `START` -> Track Select -> Ship Select -> the race. The same
 three pages Pulse walks (`Single Player` -> `Track Creation` -> `Team
-Selection`), with the RACE page keeping its rows: each picker writes the
-setting its row reads, so a circuit picked on the screen is the one the row
-shows afterwards and the one the race loads. Zone skips Ship Select, since
-the mode forces the Zone hull. Back from Track Select is the RACE page;
-back from Ship Select is Track Select. A title that authors neither screen
-(`oag_title::FrontEnd::race_box` is `None` - Pure, HD, 2048 today) launches
-from `START` as before.
+Selection`), **and the RACE page has the rows `Single Player` has**: on a
+title that authors these screens its TEAM, VARIANT and TRACK rows are
+dropped (`oag_ui::menu::Definition::drop_rows_picked_on_screen`), since
+every one of the three is picked on the screens with its preview, its
+ratings and its livery. Each picker writes the setting the row used to, so
+the circuit picked is the one the race loads and the one RECORDS looks up.
+A stored circuit the mode's list does not hold - a race circuit after MODE
+moved to Zone - lands the screen on its first entry and writes that, so a
+confirm without moving launches what is on screen. Zone skips Ship Select,
+since the mode forces the Zone hull. Back from Track Select is the RACE
+page; back from Ship Select is Track Select. A title that authors neither
+screen (`oag_title::FrontEnd::race_box` is `None` - Pure, HD, 2048 today)
+keeps all three rows and launches from `START` as before.
 
 ## Open
 
-- The flythrough, above. Needs the circuit scene on a worker and a camera on
-  its spline; `race::LoadWorker` and `oag_trace track`'s spline reader are the
-  two halves.
+- The cards' arrival transition, and the `Mode3D` pose of the outline -
+  both authored in the circuit's `screen.xml` and read, neither acted on.
+- The PS2 screens are captured headlessly against the PSP's live capture
+  only: no PCSX2 walk of the PS2's own race box exists yet to read the
+  card sizes (256x128 on a 640x448 grid, smaller than the PSP's) or the
+  `0`-set placement against.
 - Which curve the original's `Distance(m)` sums - see above.
 - The `Loyalty` counter, once anything keeps one.
 - The `Track Help` / `Team Help` overlays and `Pre Race Music Select`: read

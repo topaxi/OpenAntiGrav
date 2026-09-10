@@ -765,3 +765,60 @@ fn the_frame_limit_is_disabled_by_classic_vsync_alone() {
         );
     }
 }
+
+/// The RACE page's TEAM, VARIANT and TRACK rows exist only on a title whose
+/// front end has no selection screens of its own. Wipeout Pulse's race box
+/// picks all three on `Track Creation` and `Team Selection`
+/// (`docs/ui/selection-screens.md`), so its RACE page keeps MODE, SPEED
+/// CLASS, AI DIFFICULTY, START and BACK and nothing that those screens
+/// already ask. Pure and HD have no such screens read yet and keep the rows.
+#[test]
+fn the_rows_the_selection_screens_pick_are_dropped_on_a_title_that_has_them() {
+    let settings_on_race = |definition: &Definition| -> Vec<String> {
+        definition
+            .pages
+            .iter()
+            .filter(|page| page.id == "race")
+            .flat_map(|page| page.entries.iter())
+            .filter_map(|entry| entry.setting().map(str::to_string))
+            .collect()
+    };
+
+    let mut pulse = built_in();
+    pulse.drop_rows_picked_on_screen(oag_pulse::TITLE);
+    let kept = settings_on_race(&pulse);
+    for gone in ["race.team", "race.variant", "race.track"] {
+        assert!(
+            !kept.contains(&gone.to_string()),
+            "{gone} stays on Pulse: {kept:?}"
+        );
+    }
+    for stays in ["race.mode", "race.class"] {
+        assert!(
+            kept.contains(&stays.to_string()),
+            "{stays} dropped on Pulse: {kept:?}"
+        );
+    }
+    // RECORDS and RACE REMIX keep their own circuit rows.
+    let elsewhere = pulse
+        .pages
+        .iter()
+        .filter(|page| page.id != "race")
+        .flat_map(|page| page.entries.iter())
+        .filter(|entry| entry.setting() == Some("race.track"))
+        .count();
+    assert!(elsewhere >= 1, "RECORDS keeps its race.track row");
+
+    let mut pure = built_in();
+    pure.drop_rows_picked_on_screen(oag_pure::TITLE);
+    let kept = settings_on_race(&pure);
+    for stays in ["race.team", "race.track"] {
+        assert!(
+            kept.contains(&stays.to_string()),
+            "{stays} dropped on Pure: {kept:?}"
+        );
+    }
+    let mut hd = built_in();
+    hd.drop_rows_picked_on_screen(oag_hd::TITLE);
+    assert!(settings_on_race(&hd).contains(&"race.variant".to_string()));
+}

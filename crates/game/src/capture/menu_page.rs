@@ -20,9 +20,10 @@ pub(super) fn menu_page(
     anisotropy: Anisotropy,
     // Which title's own `[render_profiles.<title>]` the RENDER SCALE / UPSCALER
     // / SHARPNESS / ANTI-ALIASING / MOTION BLUR rows read - see
-    // `crate::settings::menu_seeds`. There is exactly one title open in a
-    // capture, the same as in a live session, so this is never a choice.
-    title: &str,
+    // `crate::settings::menu_seeds` - and whose front end decides which RACE
+    // page rows exist at all. There is exactly one title open in a capture,
+    // the same as in a live session, so this is never a choice.
+    title: &'static oag_title::Title,
     page: &str,
     tracks: &[crate::catalogue::Track],
     teams: &[crate::catalogue::Team],
@@ -47,8 +48,12 @@ pub(super) fn menu_page(
     // otherwise appear on this path at all.
     prompt: Option<&str>,
 ) -> Result<Vec<oag_ui::frontend::Draw>> {
-    let definition = oag_ui::menu::Definition::parse(oag_ui::menu::BUILT_IN, strings)
+    let mut definition = oag_ui::menu::Definition::parse(oag_ui::menu::BUILT_IN, strings)
         .context("parsing the built-in menu definition")?;
+    // The same two trims `crate::prepare` makes before a live menu opens, so
+    // a captured RACE page has the rows a player's has.
+    definition.drop_unavailable_race_variant(title);
+    definition.drop_rows_picked_on_screen(title);
     if definition.page(page).is_none() {
         anyhow::bail!(
             "no menu page named {page:?}; this definition has {}",
@@ -152,7 +157,7 @@ pub(super) fn menu_page(
     // draw one frame with. Supplying the settings value would draw a note that
     // is silent by construction; supplying this capture's adapter would say a
     // player had changed something they have not touched.
-    for (key, value) in crate::settings::menu_seeds(settings, anisotropy, title) {
+    for (key, value) in crate::settings::menu_seeds(settings, anisotropy, title.name) {
         model.seed(key, &value);
     }
     // The AI PILOTS page's own three sources. Read off the player's real
@@ -606,8 +611,7 @@ pub(super) fn draw_preview(
     anisotropy: Anisotropy,
 ) {
     let built = open_for_previews(race).and_then(|mut archives| {
-        let blob = archives.read_name(&request.entry)?;
-        let mut model = oag_render::mesh::build(&request.entry, &blob)?;
+        let mut model = crate::preview::model(&mut archives, &request.entry)?;
         // The chosen paint, the same swap the live screen and a race make;
         // a skin that will not read leaves the hull's own and says so.
         if let Some(entry) = &request.skin {

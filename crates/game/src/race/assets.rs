@@ -546,7 +546,7 @@ pub fn shield_entry_names(ship_dir: &str, team: &str) -> [String; 2] {
 ///
 /// See [`oag_assets::Archives::read_preceding`] for the rule itself and the
 /// evidence behind it.
-pub(crate) fn ps2_texture_set(
+pub fn ps2_texture_set(
     archives: &mut oag_assets::Archives,
     entry_name: &str,
 ) -> Option<mesh::Ps2TextureSet> {

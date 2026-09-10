@@ -714,7 +714,10 @@ impl Screens {
         })
     }
 
-    fn image_from_node(&self, node: &Node, src: &str, offset: (f32, f32)) -> Image {
+    /// An `Image` widget off its node, `offset` added to its position.
+    /// `pub(crate)` for [`crate::picker::slideshow`], which walks a screen
+    /// tree of its own and wants its images read the same way.
+    pub(crate) fn image_from_node(&self, node: &Node, src: &str, offset: (f32, f32)) -> Image {
         Image {
             name: node.attr("name").map(str::to_string),
             src: src.to_string(),

@@ -120,6 +120,14 @@ string_id = "OAG_RACE_SPEED_CLASS"
 setting = "race.class"
 values_from = "speed_classes"
 
+# **TEAM, VARIANT and TRACK are dropped on a title whose front end authors its
+# own selection screens** - Wipeout Pulse, where START opens Track Select and
+# then Ship Select and all three are picked there, preview and all. The rows
+# stay for Pure, HD and 2048, which have no such screens read yet, and START
+# launches straight off them. See
+# `oag_ui::menu::Definition::drop_rows_picked_on_screen` and
+# `docs/ui/selection-screens.md`.
+#
 # The roster comes from the source for the same reason the circuits below do,
 # and one more: it is not fixed. A player who owns a downloadable pack has teams
 # no list in this repository could have named, and `values_from = "teams"` reads

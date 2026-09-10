@@ -126,16 +126,21 @@ likely to be guessed wrong: a selection screen with a circuit on it invites the
 reading "a flat 2D map" or "a prerendered image", and on every title where the
 question is resolved it is neither.
 
-**Corrected 2026-09-09: `Track Creation` shows *two* meshes, and the
-`%s\FE\%s.vex` file is the small one.** `16_Track\FE\forward.vex` decodes
+**Corrected 2026-09-09: `Track Creation` shows *one* mesh, and the
+`%s\FE\%s.vex` file is it.** `16_Track\FE\forward.vex` decodes
 to a single 364-vertex ribbon with a bounding radius of 805 - the circuit's
 plan shape at the circuit's own scale - and rendered it is the glowing
-outline on the info panel, not the corridor flythrough in the hexagonal
-window. The flythrough is the real circuit scene or a preview scene this
-project has not located; what this section below calls "the preview scene
-fed the `.vex` path" is the outline's. Both screens are now drawn by this
-build from these files - see [selection-screens.md](../ui/selection-screens.md)
-for the capture, the widget-by-widget reading and what is left out.
+outline on the info panel. **Corrected again 2026-09-10: the hexagonal
+window is not a flythrough and not a mesh at all.** It is a slideshow of
+four hex-cropped stills, `<location>\FE\image_01.mip` .. `image_04.mip`,
+authored as a two-second state chain in the circuit's own
+`<location>\screen.xml` - the file `TrackDefinition_EnterScreenState`
+loads into the definition's state machine, and the file `Top->Ship` is a
+node of. The "camera visibly further along the corridor" reading below was
+two different stills a second apart. See
+[race-box-screens.md](../ghidra/functions/psp-pulse-usa/race-box-screens.md#the-hexagonal-window-is-a-per-circuit-screenxml-and-it-shows-stills)
+for the code and [selection-screens.md](../ui/selection-screens.md) for the
+file, the capture and what this build draws. Confidence 95.
 
 **Also settled the same day: the per-craft rating record is authored, in
 `Definition.xml`.** Each `PI_Team` carries `<FE speed=".." thrust=".."
@@ -255,17 +260,19 @@ of straight through to `InGame`, since the ordinary walk never stops there.
 Screenshots are game content and were not committed; described here with
 measurements instead.
 
-**Both previews are confirmed live, animated 3D renders, not stills.** Two
-screenshots taken one second apart on the same track show the same static
-architecture with the camera visibly further along the corridor and the
-motion-blur streak in a different position; the same pair on the ship preview
-shows the identical craft rotated a few degrees further round its own turntable.
-That is what raises the confidence at the top of this section from
-string-archaeology to directly observed.
+**The craft preview is a live, animated 3D render; the track preview is
+not.** *(Corrected 2026-09-10: this paragraph read both as live renders.)*
+Two screenshots taken one second apart on the ship preview show the
+identical craft rotated a few degrees further round its own turntable. The
+same pair on a track show two *different* stills of the circuit - the
+"camera visibly further along the corridor" was card two of the slideshow
+over card one, and the "motion-blur streak" is baked into the still. The
+file that says so is `<location>\screen.xml`, read above.
 
-**`Track Creation`'s preview is a first-person flythrough down the circuit's
-own corridor, framed in a hexagonal window - never a top-down map and never a
-ship.** Confirmed across all three reachable circuits and after pressing
+**`Track Creation`'s preview is a first-person *still* of the circuit's
+own corridor - four of them, cycled - each cropped to a hexagon, never a
+top-down map and never a ship.** *(The word here was "flythrough" until
+2026-09-10.)* Confirmed across all three reachable circuits and after pressing
 `square`, `triangle` and `select` on the screen (the first is inert here,
 the other two open a `Track Help` overlay): no ship model, silhouette or
 top-down framing appeared under any of them, which agrees with the code now

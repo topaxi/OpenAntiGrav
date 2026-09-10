@@ -372,6 +372,40 @@ impl Definition {
                 .retain(|entry| entry.setting() != Some("race.variant"));
         }
     }
+
+    /// Drops the RACE page's TEAM, VARIANT and TRACK rows on a title whose
+    /// front end authors its own selection screens
+    /// ([`oag_title::FrontEnd::race_box`]) - Wipeout Pulse, on both
+    /// pressings - where START opens Track Select and Ship Select and every
+    /// one of the three is picked there, with its preview, its ratings and
+    /// its livery row. The rows would be the same choice twice, and the
+    /// original's own `Single Player` page carries none of them
+    /// (`docs/formats/race-setup.md`). Dropped from the definition for the
+    /// reason [`Self::drop_unavailable_race_variant`] drops its row: once,
+    /// before anything reads the page, so the row count, the scroll window
+    /// and the cursor all agree.
+    ///
+    /// A title with no such screens - Pure, HD, 2048 today - keeps all
+    /// three, and START launches off the rows as before. RACE REMIX and
+    /// RECORDS keep their own `race.track`/`remix.*` rows either way: the
+    /// first mixes titles and the second browses records, neither of which
+    /// the selection screens do.
+    pub fn drop_rows_picked_on_screen(&mut self, title: &oag_title::Title) {
+        let picks_on_screen = title
+            .front_end
+            .is_some_and(|front_end| front_end.race_box.is_some());
+        if !picks_on_screen {
+            return;
+        }
+        if let Some(page) = self.pages.iter_mut().find(|page| page.id == "race") {
+            page.entries.retain(|entry| {
+                !matches!(
+                    entry.setting(),
+                    Some("race.team" | "race.variant" | "race.track")
+                )
+            });
+        }
+    }
 }
 
 /// Looks `string_id` up in `strings`, falling back to `literal` when it names

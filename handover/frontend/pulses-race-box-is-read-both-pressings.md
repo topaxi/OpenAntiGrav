@@ -1,6 +1,6 @@
 # Pulse's race box is read on both pressings, and the code side is unblocked
 
-2026-09-05, updated 2026-09-08. The Pulse half of the race-box investigation,
+2026-09-05, updated 2026-09-10. The Pulse half of the race-box investigation,
 PSP and PS2 together because the PS2 is a delta rather than an independent
 measurement. The permanent write-up is
 [`docs/formats/race-setup.md`](../../docs/formats/race-setup.md), with the
@@ -82,12 +82,40 @@ summed, `Color1..4` gradients dropped) and `LeftLayer`'s `OffsetX` is an
 origin, settled. Full reading and the remaining gaps:
 [`docs/ui/selection-screens.md`](../../docs/ui/selection-screens.md).
 
+**2026-09-10: the hexagonal window is built, and it was never a
+flythrough.** `TrackSelection_ApplySelection`'s call into `FUN_088c4410` -
+now `TrackDefinition_EnterScreenState` - loads the circuit's own
+`<location>\screen.xml` and enters `Info`: a two-second chain of six
+states stacking four hex-cropped stills (`FE\image_01..04.mip`) and
+walking back down. Read by `oag_ui::picker::slideshow`, loaded through the
+front end's sheet extended per selection, drawn on both pressings. On the
+way: the hex grid is a 32x16 tile the sheet could not repeat
+(`Draw::TiledSprite`), the PS2's `Team Selection` widgets carry a `0`
+player suffix, the PS2 previews needed `race::ps2_texture_set`, and the
+RACE page's TEAM/VARIANT/TRACK rows are dropped on a title with these
+screens (`Definition::drop_rows_picked_on_screen`). Docs:
+[`selection-screens.md`](../../docs/ui/selection-screens.md),
+[`race-box-screens.md`](../../docs/ghidra/functions/psp-pulse-usa/race-box-screens.md).
+
 ## Open
 
-- **The flythrough behind the hex window is not built.** It is the real
-  circuit scene (or an unlocated preview scene), not the `FE\*.vex` file -
-  needs the track on a worker (`race::LoadWorker`'s shape) and a camera on
-  the spline. Until then the window draws nothing.
+- **The cards arrive without their transition, and the outline is framed
+  off the capture rather than off `screen.xml`'s own `Mode3D` pose** -
+  both read (`slideshow::Model`, the `transition` attributes), neither
+  acted on. The pose needs the `Mode3D` projection understood
+  (`OriginX/OriginY` are in an unmeasured space: `-145,13` on the PSP,
+  `193,-21` on the PS2).
+- **Split screen is not built, and the PS2 authors it here.** The `0`/`1`
+  widget suffixes are player indices - `Team Selection` carries the `0`
+  set alone, `Team SelectionSplit` both, and `Track CreationSplit` sits
+  beside it with `MP_Screen.xml` as its per-circuit slideshow. This build
+  strips the `0` and opens only the single-player screens
+  (`picker::strip_player_suffix`); when split screen arrives, that strip
+  becomes "read set N" and the `*Split` screens are the ones to open.
+- **The PS2 screens have no capture of their own to read against** - both
+  are drawn off the PSP reading scaled to 640x448, with the PS2's own card
+  sizes (256x128 on the larger grid) and `0`-set placement unverified on
+  PCSX2.
 - **Distance is measured on a worker and reads ~2% under the original**
   (`5094` vs `5178`, `5228` vs `5350`, `4330` vs `4419`) - not sampling,
   the figure is stable from one to sixty-four steps per segment. The
@@ -127,10 +155,6 @@ origin, settled. Full reading and the remaining gaps:
 - **`RB_YG` is a dead idstring** - referenced by a redirect in
   `Selection_Definition.xml`, on no menu anywhere.
 
-- `hex_bg.pct` at `WADS2.WAD` entry 3410 looks like a texture resolution not
-  yet listed in `docs/formats/ps2-texture.md`, falling straight out of that
-  page's own `.mip` -> `.pct` rule. Unverified by eye.
-
 - **The locked-circuit info panel is confirmed unreachable from `Track
   Creation` itself** (the wrapping list only ever holds the three ungated
   tracks), but still genuinely unanswered: reaching one needs `Tournament C`
@@ -164,8 +188,9 @@ origin, settled. Full reading and the remaining gaps:
    match, per this project's EU-preference. A single-address fuzzy check
    already came back too weak to act on; a broader sweep may still turn up
    real matches the same way the physics-code pass found 115.
-3. Decode `WADS2.WAD` entry 3410 and confirm it is `hex_bg`, then add the row
-   to `docs/formats/ps2-texture.md`. Five minutes.
+3. Walk the PS2's race box on PCSX2 the way `scripts/psp-frontend-capture.py`
+   walks the PSP's, and read the two screens' PS2 captures against
+   `--menu-page track-select`/`ship-select` on `pulse-ps2-eu.chd`.
 4. HD's equivalent screen-population code is still unfound - see
    `docs/ghidra/functions/ps3-hdfury-eu/track-selection-screen.md` - and
    solving it there would let the two titles' readings corroborate each

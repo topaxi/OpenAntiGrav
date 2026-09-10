@@ -32,6 +32,14 @@ use crate::menu::{Backdrop, Frame, Layers, Skin};
 use crate::screen::{Fill, Image, Screen, Screens, Text, argb_to_rgba};
 use oag_gameplay::input::{Button, Input};
 
+pub mod slideshow;
+
+/// The grid the selection screens are authored in on the PSP, which every
+/// number this module carries of its own was read against. A PS2 layout is
+/// the same screens scaled onto its 640x448 grid, so a constant measured
+/// here is scaled the same way - see [`Layout::read`]'s `grid`.
+const PSP_GRID: [f32; 2] = [480.0, 272.0];
+
 /// Which of the two screens a [`Picker`] is.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Kind {
@@ -122,6 +130,10 @@ pub struct Picker {
     index: usize,
     variant: usize,
     seconds: f32,
+    /// Seconds since the selection last moved - the slideshow's clock,
+    /// which the original restarts on every selection (`TrackSelection_ApplySelection`
+    /// transitions the new circuit's own state machine to `Info` afresh).
+    since_selection: f32,
 }
 
 impl Picker {
@@ -144,6 +156,7 @@ impl Picker {
             index,
             variant: 0,
             seconds: 0.0,
+            since_selection: 0.0,
         };
         out.variant = variant
             .and_then(|id| out.variants().iter().position(|(v, _)| v == id))
@@ -192,9 +205,17 @@ impl Picker {
         self.seconds
     }
 
+    /// Seconds since the selection last moved, or since the screen opened.
+    /// See [`slideshow::Slideshow::at`].
+    #[must_use]
+    pub fn since_selection(&self) -> f32 {
+        self.since_selection
+    }
+
     /// Advances the screen's own clock by one fixed tick.
     pub fn tick(&mut self, dt: f32) {
         self.seconds += dt;
+        self.since_selection += dt;
     }
 
     /// Rewrites one info row of a circuit entry - how a distance measured on
@@ -224,11 +245,13 @@ impl Picker {
         if input.take(Button::Down) && count > 0 {
             self.index = (self.index + 1) % count;
             self.variant = 0;
+            self.since_selection = 0.0;
             out.push(Event::Moved);
         }
         if input.take(Button::Up) && count > 0 {
             self.index = (self.index + count - 1) % count;
             self.variant = 0;
+            self.since_selection = 0.0;
             out.push(Event::Moved);
         }
         let variants = self.variants().len();
@@ -300,6 +323,10 @@ pub struct Layout {
     /// name block and the counter are laid out against.
     pub panel: [f32; 4],
     pub faces: FaceScales,
+    /// How much larger this screen's grid is than the PSP's, per axis -
+    /// `[1, 1]` on the PSP, `[4/3, 448/272]` on the PS2. Every number this
+    /// module measured off the PSP capture is multiplied by it.
+    pub scale: [f32; 2],
 }
 
 impl Layout {
@@ -310,18 +337,26 @@ impl Layout {
     /// not author one, or a Pulse boot whose `Selection_Definition.xml`
     /// failed to load - which leaves the caller with no picker rather than
     /// an empty one.
+    ///
+    /// `grid` is the screen space the XML is authored in - the PSP's 480x272
+    /// or the PS2's 640x448. The widgets carry their own positions either
+    /// way; what it scales is the handful of numbers this module measured
+    /// off the PSP capture rather than read out of a widget.
     #[must_use]
     pub fn read(
         screens: &Screens,
         kind: Kind,
         strings: &StringTable,
         faces: FaceScales,
+        grid: [f32; 2],
     ) -> Option<Self> {
         let name = match kind {
             Kind::Track => "Track Creation",
             Kind::Ship => "Team Selection",
         };
+        let scale = [grid[0] / PSP_GRID[0], grid[1] / PSP_GRID[1]];
         let mut screen = screens.by_name(name)?.clone();
+        strip_player_suffix(&mut screen);
         for text in &mut screen.texts {
             if let Some(id) = text.idstring.as_deref()
                 && let Some(resolved) = strings.get(id)
@@ -344,14 +379,22 @@ impl Layout {
             .fills
             .iter()
             .find(|fill| fill.name.as_deref() == Some("Infogradient"))
-            .map_or([290.0, 25.0, 170.0, 200.0], |fill| {
+            .map_or(
                 [
-                    fill.x,
-                    fill.y,
-                    fill.width.unwrap_or(170.0),
-                    fill.height.unwrap_or(200.0),
-                ]
-            });
+                    290.0 * scale[0],
+                    25.0 * scale[1],
+                    170.0 * scale[0],
+                    200.0 * scale[1],
+                ],
+                |fill| {
+                    [
+                        fill.x,
+                        fill.y,
+                        fill.width.unwrap_or(170.0 * scale[0]),
+                        fill.height.unwrap_or(200.0 * scale[1]),
+                    ]
+                },
+            );
         // The first rule under the name block is the top of the stat rows;
         // the outline sits between the two. Measured on the capture at
         // panel y+40 to the first `line bg`, and the craft on the left
@@ -359,7 +402,12 @@ impl Layout {
         let first_rule = screen
             .fills
             .iter()
-            .filter(|fill| fill.gradient.is_some() && fill.height == Some(14.0))
+            .filter(|fill| {
+                fill.gradient.is_some()
+                    && fill
+                        .height
+                        .is_some_and(|height| (height - 14.0 * scale[1]).abs() < 1.5)
+            })
             .map(|fill| fill.y)
             .fold(f32::INFINITY, f32::min);
         let preview = match kind {
@@ -377,7 +425,7 @@ impl Layout {
                     })
                     .map(|text| text.y)
                     .fold(panel[1], f32::max)
-                    + 24.0;
+                    + 24.0 * scale[1];
                 let bottom = if first_rule.is_finite() {
                     first_rule
                 } else {
@@ -390,7 +438,12 @@ impl Layout {
                     (bottom - name_bottom).max(1.0),
                 ]
             }
-            Kind::Ship => [10.0, 40.0, panel[0] - 20.0, 190.0],
+            Kind::Ship => [
+                10.0 * scale[0],
+                40.0 * scale[1],
+                panel[0] - 20.0 * scale[0],
+                190.0 * scale[1],
+            ],
         };
         Some(Self {
             title,
@@ -398,6 +451,7 @@ impl Layout {
             preview,
             panel,
             faces,
+            scale,
         })
     }
 
@@ -545,13 +599,37 @@ fn body(
         }
         let width = image.width.unwrap_or(placed.width as f32);
         let height = image.height.unwrap_or(placed.height as f32);
+        let sampled = [
+            image.texture_width.unwrap_or(placed.width as f32),
+            image.texture_height.unwrap_or(placed.height as f32),
+        ];
+        // A sub-rect larger than the texture is the texture repeated:
+        // `Infohexgrid` samples 340x120 of a 32x16 tile. Anything else is
+        // the ordinary one-patch sprite.
+        if sampled[0] > placed.width as f32 + 0.5 || sampled[1] > placed.height as f32 + 0.5 {
+            out.push(Draw::TiledSprite {
+                rect: [image.x, image.y, width * fraction, height],
+                uv: [
+                    placed.x as f32,
+                    placed.y as f32,
+                    placed.width as f32,
+                    placed.height as f32,
+                ],
+                repeat: [
+                    sampled[0] * fraction / placed.width.max(1) as f32,
+                    sampled[1] / placed.height.max(1) as f32,
+                ],
+                color,
+            });
+            continue;
+        }
         out.push(Draw::Sprite {
             rect: [image.x, image.y, width * fraction, height],
             uv: [
                 placed.x as f32 + image.u.unwrap_or(0.0),
                 placed.y as f32 + image.v.unwrap_or(0.0),
-                image.texture_width.unwrap_or(placed.width as f32) * fraction,
-                image.texture_height.unwrap_or(placed.height as f32),
+                sampled[0] * fraction,
+                sampled[1],
             ],
             color,
         });
@@ -639,8 +717,8 @@ fn body(
             .find(|text| text.name.as_deref() == Some("skin"))
             .map_or([1.0, 1.0, 1.0, 1.0], |text| argb_to_rgba(text.color));
         out.push(Draw::Text {
-            x: layout.panel[0] + 14.0,
-            y: layout.panel[1] + 3.0,
+            x: layout.panel[0] + 14.0 * layout.scale[0],
+            y: layout.panel[1] + 3.0 * layout.scale[1],
             scale: 1.0,
             color,
             border: None,
@@ -660,7 +738,7 @@ fn body(
 /// two, which is what a greedy wrap at the panel's 142 usable units in the
 /// `Menu` face produces.
 fn wrap_name(label: &str, layout: &Layout, measure: &dyn Fn(&str) -> f32) -> Vec<String> {
-    let inner = layout.panel[2] - 2.0 * 14.0;
+    let inner = layout.panel[2] - 2.0 * 14.0 * layout.scale[0];
     let mut lines: Vec<String> = Vec::new();
     for word in label.split_whitespace() {
         let full = lines.len() == 3;
@@ -676,6 +754,56 @@ fn wrap_name(label: &str, layout: &Layout, measure: &dyn Fn(&str) -> f32) -> Vec
         lines.push(label.to_string());
     }
     lines
+}
+
+/// Drops the PS2's player index off every widget name.
+///
+/// The PS2 pressing authors `Team Selection` for split screen, so every
+/// widget on it is `honey0`/`honey1`, `Speed Bar0`/`Speed Bar1` and so on -
+/// one set per player - where the PSP's are bare (`docs/formats/race-setup.md`).
+/// This build draws one player and has no split screen, so the `0` set is
+/// read under the PSP's own names; the `1` set only exists on
+/// `Team SelectionSplit`, a screen nothing opens yet. When split screen
+/// arrives this becomes "read set N" rather than "strip the zero".
+/// Keyed on the counter: a screen with a `honey0` and no `honey` is one
+/// authored that way, and a screen with a bare `honey` (`Track Creation` on
+/// both discs) is left alone, `Info Track 1.1` and `line bg10` included.
+fn strip_player_suffix(screen: &mut Screen) {
+    let suffixed = |name: &Option<String>, want: &str| {
+        name.as_deref()
+            .is_some_and(|n| n.len() == want.len() + 1 && n.starts_with(want) && n.ends_with('0'))
+    };
+    let has_counter = screen
+        .texts
+        .iter()
+        .any(|text| suffixed(&text.name, "honey"));
+    let has_bare = screen
+        .texts
+        .iter()
+        .any(|text| text.name.as_deref() == Some("honey"));
+    if !has_counter || has_bare {
+        return;
+    }
+    let strip = |name: &mut Option<String>| {
+        if let Some(n) = name
+            && n.len() > 1
+            && n.ends_with('0')
+        {
+            n.pop();
+        }
+    };
+    screen
+        .texts
+        .iter_mut()
+        .for_each(|text| strip(&mut text.name));
+    screen
+        .images
+        .iter_mut()
+        .for_each(|image| strip(&mut image.name));
+    screen
+        .fills
+        .iter_mut()
+        .for_each(|fill| strip(&mut fill.name));
 }
 
 /// Whether a widget is the screen's title: the one text in the `Title` face.

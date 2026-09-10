@@ -221,6 +221,9 @@ impl Pending {
         // race defaults declare no variant axis at all - see
         // `menu::Definition::drop_unavailable_race_variant`.
         definition.drop_unavailable_race_variant(title);
+        // And the three rows the race box's own screens pick, on a title
+        // that authors them - see `menu::Definition::drop_rows_picked_on_screen`.
+        definition.drop_rows_picked_on_screen(title);
         let shell = Shell {
             definition,
             title,

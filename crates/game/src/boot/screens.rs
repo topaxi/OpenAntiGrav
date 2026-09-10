@@ -92,6 +92,7 @@ pub(super) fn selection_layouts(
     strings: &oag_ui::language::StringTable,
     font: &oag_ui::font::Atlas,
     menu_font: Option<&oag_ui::font::Atlas>,
+    space: oag_display::space::Space,
     report: &mut Vec<String>,
 ) -> (
     Option<oag_ui::picker::Layout>,
@@ -104,10 +105,22 @@ pub(super) fn selection_layouts(
         ..oag_ui::picker::FaceScales::default()
     };
     let track_select = race_box.and_then(|included| {
-        oag_ui::picker::Layout::read(included, oag_ui::picker::Kind::Track, strings, faces)
+        oag_ui::picker::Layout::read(
+            included,
+            oag_ui::picker::Kind::Track,
+            strings,
+            faces,
+            [space.size.0, space.size.1],
+        )
     });
     let ship_select = race_box.and_then(|included| {
-        oag_ui::picker::Layout::read(included, oag_ui::picker::Kind::Ship, strings, faces)
+        oag_ui::picker::Layout::read(
+            included,
+            oag_ui::picker::Kind::Ship,
+            strings,
+            faces,
+            [space.size.0, space.size.1],
+        )
     });
     report.push(format!(
         "selection screens: track {}, ship {}",

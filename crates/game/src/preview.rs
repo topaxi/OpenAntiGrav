@@ -16,7 +16,7 @@
 //! does (`oag_render::mesh_render::write_uniforms`), and confines the pass
 //! to a rectangle given in the screen's own grid.
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use oag_display::space::Space;
 use oag_render::camera::orbit::Orbit;
 use oag_render::mesh::Model;
@@ -24,6 +24,7 @@ use oag_render::mesh_render::{
     Anisotropy, Built, DEPTH_FORMAT, Depth, GlowMask, NodeAnims, ShadowReceiver, TRANSPARENT_BLEND,
     TexAnims, TransparentPipelines, UNIFORMS_SIZE, Velocity, build, write_uniforms,
 };
+use oag_ui::picker::slideshow::Slideshow;
 
 use crate::render::letterbox_in;
 
@@ -49,6 +50,98 @@ pub fn orbit_for(kind: oag_ui::picker::Kind, seconds: f32) -> Orbit {
             ..Orbit::default()
         },
     }
+}
+
+/// One still of a slideshow as read off the disc: its entry name and its
+/// bytes, the pair `crate::sprite::Sheet::extended` takes.
+pub type Still = (String, Vec<u8>);
+
+/// A circuit's slideshow - the stills behind `Track Creation`'s hexagonal
+/// window - read off the disc, with every still it names as bytes.
+///
+/// `Data\Environments\<dir>\screen.xml` is what
+/// `TrackDefinition_EnterScreenState` loads into the selected circuit's own
+/// state machine; in Zone mode on a circuit that is `availableInZone` it
+/// loads `screen_zone.xml` and enters `Zone` instead of `Info`. The PS2
+/// authors both chains in the one `screen.xml`, which the fallback below
+/// reads the same way: the Zone file first when Zone is asked for, then the
+/// plain file, and within it the Zone chain if it has one. See
+/// [`oag_ui::picker::slideshow`].
+///
+/// The stills are read through [`oag_pulse::read_image`], which is what
+/// finds a PS2 disc's `.pct` under a `.mip` name. One that is missing is
+/// reported and left out, and the card it would have been on is left empty
+/// rather than substituted; a file that is missing altogether is an error
+/// the caller logs.
+///
+/// # Errors
+///
+/// No `screen.xml` (or `screen_zone.xml`) for this circuit, or one with no
+/// `Info`/`Zone` chain in it.
+pub fn slideshow(
+    archives: &mut oag_assets::Archives,
+    location: &str,
+    zone: bool,
+    report: &mut Vec<String>,
+) -> Result<(Slideshow, Vec<Still>)> {
+    let read = |archives: &mut oag_assets::Archives, file: &str, start: &str| {
+        let entry = format!(r"{location}\{file}");
+        let blob = archives.read_name(&entry).ok()?;
+        let xml = if oag_tables::fexml::is_fexml(&blob) {
+            oag_tables::fexml::expand(&blob).ok()?
+        } else {
+            String::from_utf8(blob).ok()?
+        };
+        Slideshow::read(&xml, location, start)
+    };
+    let show = if zone {
+        read(archives, "screen_zone.xml", "Zone")
+            .or_else(|| read(archives, "screen.xml", "Zone"))
+            .or_else(|| read(archives, "screen.xml", "Info"))
+    } else {
+        read(archives, "screen.xml", "Info")
+    }
+    .with_context(|| format!(r"{location}\screen.xml: no slideshow chain to read"))?;
+    let mut blobs = Vec::new();
+    for src in show.sources() {
+        match oag_pulse::read_image(archives, &src) {
+            Ok(blob) => blobs.push((src, blob)),
+            Err(error) => report.push(format!("{src}: {error} - that card draws nothing")),
+        }
+    }
+    Ok((show, blobs))
+}
+
+/// Reads and decodes a preview mesh off the disc - the outline ribbon or
+/// the front-end hull - with a PS2 disc's sibling texture set resolved the
+/// way a race resolves its own hull's and circuit's
+/// ([`crate::race::ps2_texture_set`]): only when the model's own texture
+/// slots exist and are all empty, which is that disc's signature and never
+/// a PSP model's. Without it both PS2 previews draw flat white. One
+/// function so the live screen and the headless capture cannot disagree.
+///
+/// # Errors
+///
+/// The entry is missing, or will not decode as a mesh.
+pub fn model(archives: &mut oag_assets::Archives, entry: &str) -> Result<Model> {
+    let blob = archives
+        .read_name(entry)
+        .with_context(|| format!("reading the preview mesh {entry}"))?;
+    let model = oag_render::mesh::build(entry, &blob)
+        .with_context(|| format!("decoding the preview mesh {entry}"))?;
+    if !model.textures.is_empty()
+        && model.textures.iter().all(Option::is_none)
+        && let Some(external) = crate::race::ps2_texture_set(archives, entry)
+    {
+        return oag_render::mesh::build_with_textures(
+            entry,
+            &blob,
+            Some(&external),
+            oag_render::mesh::Lod::Both,
+        )
+        .with_context(|| format!("decoding the preview mesh {entry} with its texture set"));
+    }
+    Ok(model)
 }
 
 /// One preview model and the GPU state that draws it.

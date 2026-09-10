@@ -19,7 +19,13 @@ use oag_ui::font::{self, Atlas};
 use oag_ui::frontend::{Align, Draw};
 
 mod quad;
+mod resources;
 mod text;
+
+use resources::{
+    blank_r8, sampler_entry, sampler_kind, texture_entry, ui_bind_group, uniform_entry, upload_rg8,
+    upload_rgba,
+};
 
 use quad::{MODE_ATLAS, MODE_SPRITE, MODE_SPRITE_ADDITIVE};
 
@@ -81,6 +87,13 @@ struct Quad {
     /// A general pentagon would need a vertex count change, and the shape this
     /// draws is not a pentagon - see [`Draw::ChamferedFill`].
     chamfer: f32,
+    /// How many times `uv` repeats across and down the quad - `[0, 0]` for
+    /// every quad but a [`Draw::TiledSprite`], whose `uv` is one tile of the
+    /// sheet rather than the whole patch. Read by the fragment stage, which
+    /// wraps its own texture coordinate rather than relying on a sampler
+    /// address mode: the tile is a patch *inside* the sheet, so the sampler's
+    /// repeat would wrap the sheet, not the patch.
+    tile: [f32; 2],
 }
 
 /// What a glyph's baked outline is drawn in when nothing supplies a colour.
@@ -150,6 +163,14 @@ impl VideoFormat {
 pub struct Renderer {
     ui_pipeline: wgpu::RenderPipeline,
     ui_bind_group: wgpu::BindGroup,
+    /// What [`Self::ui_bind_group`] was built against, kept so
+    /// [`Self::set_sprites`] can rebuild it around a new sheet without
+    /// touching the atlas half.
+    ui_layout: wgpu::BindGroupLayout,
+    atlas_view: wgpu::TextureView,
+    atlas_sampler: wgpu::Sampler,
+    sprite_sampler: wgpu::Sampler,
+    sprite_format: wgpu::TextureFormat,
     uniform_buffer: wgpu::Buffer,
     quad_buffer: wgpu::Buffer,
     quad_capacity: usize,
@@ -292,32 +313,15 @@ impl Renderer {
             ],
         });
 
-        let ui_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("ui"),
-            layout: &ui_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: uniform_buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::TextureView(&atlas_view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 2,
-                    resource: wgpu::BindingResource::Sampler(&atlas_sampler),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 3,
-                    resource: wgpu::BindingResource::TextureView(&sprite_view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 4,
-                    resource: wgpu::BindingResource::Sampler(&sprite_sampler),
-                },
-            ],
-        });
+        let ui_bind_group = ui_bind_group(
+            device,
+            &ui_layout,
+            &uniform_buffer,
+            &atlas_view,
+            &atlas_sampler,
+            &sprite_view,
+            &sprite_sampler,
+        );
 
         let ui_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("ui"),
@@ -346,7 +350,8 @@ impl Renderer {
                         3 => Float32x4,
                         4 => Float32,
                         5 => Float32,
-                        6 => Float32
+                        6 => Float32,
+                        7 => Float32x2
                     ],
                 })],
                 compilation_options: Default::default(),
@@ -389,6 +394,11 @@ impl Renderer {
         Ok(Self {
             ui_pipeline,
             ui_bind_group,
+            ui_layout,
+            atlas_view,
+            atlas_sampler,
+            sprite_sampler,
+            sprite_format,
             uniform_buffer,
             quad_buffer,
             quad_capacity: INITIAL_QUADS,
@@ -398,6 +408,43 @@ impl Renderer {
             quads: Vec::new(),
             space: Space::PSP,
         })
+    }
+
+    /// Replaces the sprite sheet every later draw samples.
+    ///
+    /// What the selection screens need: their stills are per circuit, read
+    /// when a circuit is selected rather than at boot, and a sheet is one
+    /// texture. The caller hands over a sheet that **extends** the one this
+    /// was built with (`crate::sprite::Sheet::extended`), so every placement
+    /// the menus already hold stays where it was and nothing has to be
+    /// restored when the screen closes. One texture upload and one bind
+    /// group; the pipeline, the atlas and the uniforms are untouched.
+    pub fn set_sprites(
+        &mut self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        sprites: &crate::sprite::Sheet,
+    ) {
+        let sprite_texture = upload_rgba(
+            device,
+            queue,
+            "sprite sheet",
+            self.sprite_format,
+            sprites.width,
+            sprites.height,
+            &sprites.rgba,
+        );
+        let sprite_view = sprite_texture.create_view(&wgpu::TextureViewDescriptor::default());
+        self.ui_bind_group = ui_bind_group(
+            device,
+            &self.ui_layout,
+            &self.uniform_buffer,
+            &self.atlas_view,
+            &self.atlas_sampler,
+            &sprite_view,
+            &self.sprite_sampler,
+        );
+        self.sprites = (sprites.width, sprites.height);
     }
 
     /// The plane geometry the video pipeline was built for.
@@ -575,6 +622,22 @@ impl Renderer {
                     mode: MODE_SPRITE,
                     rotation: 0.0,
                     chamfer: 0.0,
+                    tile: [0.0, 0.0],
+                }),
+                Draw::TiledSprite {
+                    rect,
+                    uv,
+                    repeat,
+                    color,
+                } => self.quads.push(Quad {
+                    rect: *rect,
+                    uv: *uv,
+                    color: *color,
+                    border: *color,
+                    mode: MODE_SPRITE,
+                    rotation: 0.0,
+                    chamfer: 0.0,
+                    tile: *repeat,
                 }),
                 Draw::RotatedSprite {
                     rect,
@@ -589,6 +652,7 @@ impl Renderer {
                     mode: MODE_SPRITE,
                     rotation: *rotation,
                     chamfer: 0.0,
+                    tile: [0.0, 0.0],
                 }),
                 Draw::BlendedSprite {
                     rect,
@@ -614,6 +678,7 @@ impl Renderer {
                     },
                     rotation: *rotation,
                     chamfer: 0.0,
+                    tile: [0.0, 0.0],
                 }),
                 Draw::Text {
                     x,
@@ -840,169 +905,6 @@ impl Video {
             format,
         })
     }
-}
-
-fn uniform_entry(binding: u32) -> wgpu::BindGroupLayoutEntry {
-    wgpu::BindGroupLayoutEntry {
-        binding,
-        visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
-        ty: wgpu::BindingType::Buffer {
-            ty: wgpu::BufferBindingType::Uniform,
-            has_dynamic_offset: false,
-            min_binding_size: None,
-        },
-        count: None,
-    }
-}
-
-fn texture_entry(binding: u32) -> wgpu::BindGroupLayoutEntry {
-    wgpu::BindGroupLayoutEntry {
-        binding,
-        visibility: wgpu::ShaderStages::FRAGMENT,
-        ty: wgpu::BindingType::Texture {
-            sample_type: wgpu::TextureSampleType::Float { filterable: true },
-            view_dimension: wgpu::TextureViewDimension::D2,
-            multisampled: false,
-        },
-        count: None,
-    }
-}
-
-/// The binding type a sampler of the chosen filter mode needs.
-fn sampler_kind(filtering: bool) -> wgpu::SamplerBindingType {
-    if filtering {
-        wgpu::SamplerBindingType::Filtering
-    } else {
-        wgpu::SamplerBindingType::NonFiltering
-    }
-}
-
-fn sampler_entry(binding: u32, kind: wgpu::SamplerBindingType) -> wgpu::BindGroupLayoutEntry {
-    wgpu::BindGroupLayoutEntry {
-        binding,
-        visibility: wgpu::ShaderStages::FRAGMENT,
-        ty: wgpu::BindingType::Sampler(kind),
-        count: None,
-    }
-}
-
-/// A single-channel texture, for a movie's Y, U and V planes.
-///
-/// Kept separate from [`blank_rg8`] rather than folded into it: the glyph atlas
-/// needs two channels and a movie plane needs one, and a plane created with two
-/// makes `upload_frame`'s `bytes_per_row` half a row - which wgpu rejects as
-/// "number of bytes per row is less than the number of bytes in a complete row",
-/// an error that names the symptom and not the cause.
-fn blank_r8(device: &wgpu::Device, label: &str, width: u32, height: u32) -> wgpu::Texture {
-    device.create_texture(&wgpu::TextureDescriptor {
-        label: Some(label),
-        size: wgpu::Extent3d {
-            width: width.max(1),
-            height: height.max(1),
-            depth_or_array_layers: 1,
-        },
-        mip_level_count: 1,
-        sample_count: 1,
-        dimension: wgpu::TextureDimension::D2,
-        format: wgpu::TextureFormat::R8Unorm,
-        usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
-        view_formats: &[],
-    })
-}
-
-/// A two-channel texture for the glyph atlas: body/outline mask and coverage.
-fn blank_rg8(device: &wgpu::Device, label: &str, width: u32, height: u32) -> wgpu::Texture {
-    device.create_texture(&wgpu::TextureDescriptor {
-        label: Some(label),
-        size: wgpu::Extent3d {
-            width: width.max(1),
-            height: height.max(1),
-            depth_or_array_layers: 1,
-        },
-        mip_level_count: 1,
-        sample_count: 1,
-        dimension: wgpu::TextureDimension::D2,
-        format: wgpu::TextureFormat::Rg8Unorm,
-        usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
-        view_formats: &[],
-    })
-}
-
-fn upload_rgba(
-    device: &wgpu::Device,
-    queue: &wgpu::Queue,
-    label: &str,
-    format: wgpu::TextureFormat,
-    width: u32,
-    height: u32,
-    bytes: &[u8],
-) -> wgpu::Texture {
-    let texture = device.create_texture(&wgpu::TextureDescriptor {
-        label: Some(label),
-        size: wgpu::Extent3d {
-            width: width.max(1),
-            height: height.max(1),
-            depth_or_array_layers: 1,
-        },
-        mip_level_count: 1,
-        sample_count: 1,
-        dimension: wgpu::TextureDimension::D2,
-        format,
-        usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
-        view_formats: &[],
-    });
-    queue.write_texture(
-        texture.as_image_copy(),
-        bytes,
-        wgpu::TexelCopyBufferLayout {
-            offset: 0,
-            bytes_per_row: Some(width * 4),
-            rows_per_image: Some(height),
-        },
-        wgpu::Extent3d {
-            width,
-            height,
-            depth_or_array_layers: 1,
-        },
-    );
-    texture
-}
-
-/// Uploads the glyph atlas's two planes as one two-channel texture.
-///
-/// `r` is the body/outline mask and `g` is coverage. Interleaved here rather than
-/// kept as two textures because one sample is cheaper than two and the bind group
-/// stays the size it was. See `oag_ui::font::Atlas`.
-fn upload_rg8(
-    device: &wgpu::Device,
-    queue: &wgpu::Queue,
-    label: &str,
-    width: u32,
-    height: u32,
-    luma: &[u8],
-    coverage: &[u8],
-) -> wgpu::Texture {
-    let texture = blank_rg8(device, label, width, height);
-    let mut bytes = Vec::with_capacity(luma.len() * 2);
-    for (&l, &c) in luma.iter().zip(coverage) {
-        bytes.push(l);
-        bytes.push(c);
-    }
-    queue.write_texture(
-        texture.as_image_copy(),
-        &bytes,
-        wgpu::TexelCopyBufferLayout {
-            offset: 0,
-            bytes_per_row: Some(width * 2),
-            rows_per_image: Some(height),
-        },
-        wgpu::Extent3d {
-            width,
-            height,
-            depth_or_array_layers: 1,
-        },
-    );
-    texture
 }
 
 /// Scale that fits 480x272 inside `target` without distorting it.

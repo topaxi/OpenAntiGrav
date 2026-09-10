@@ -150,6 +150,81 @@ used for an actual ship (compare `TeamSelection`'s equivalent node, named
 `Info->Ship`, which *does* hold a craft) rather than describing what this
 screen puts in it.
 
+### The hexagonal window is a per-circuit `screen.xml`, and it shows stills
+
+Read 2026-09-10, off the same function. Every branch of
+`TrackSelection_ApplySelection` that changes the selection calls
+`FUN_088c4410` on the definition object it just installed at `+0xf0`:
+
+```c
+FUN_088c4410(old_definition, "", 0);          // teardown of the previous one
+...
+if (definition->availableInZone /*+0x16e*/ == 0 || mode != 6)
+    FUN_088c4410(definition, "Info", 0);
+else
+    FUN_088c4410(definition, "Zone", 0);
+```
+
+The strings at `0x08a84948`/`0x08a84950` are `Zone` and `Info`. The callee -
+now **`TrackDefinition_EnterScreenState`** (`0x088c4410`, confidence 78) -
+reads:
+
+1. if the definition has no state machine at `+0x168`, return;
+2. `StateMachine_FindState(+0x168, name)`; when the state is **not** there
+   and `name` is non-empty, load a file into the machine first:
+   `"%s\screen_zone.xml"` of the definition's `location` (`+0x94`) when
+   `availableInZone` (`+0x16e`) is set and the `Mode` global reads `6`,
+   `"%s\MP_Screen.xml"` when the third argument is set (split screen), and
+   `"%s\screen.xml"` otherwise - through `FUN_08891448`, now
+   **`StateMachine_LoadXml`** (`0x08891448`, 72: opens the file with
+   `Xml_OpenFile`, allocates a state under the named parent and feeds every
+   root element to `FUN_0889165c`);
+3. `StateMachine_TransitionTo(+0x168, name, ...)`.
+
+So the `Top->Ship` node of the previous section is a node of **that file**,
+and the file is on the disc: `Data\Environments\16_Track\screen.xml`
+(2,204 bytes on `pulse-psp-usa.chd`, dictionary-compressed like every other
+front-end XML), plus `screen_zone.xml` and `MP_Screen.xml` beside it. Its
+`<Screen name="Top">` holds the `<Mode3D><Model name="Ship">` the outline
+ribbon is loaded into (`Src="%s\FE\forward.vex"`, `x=0 y=-300 z=-3700
+RotX=1.5 RotY=0.1`, `OriginX=-145 OriginY=13 nearZ=1000 farZ=5000`) and,
+under it, **a chain of `Info` states two seconds apart, each one nested
+inside an anonymous `Screen` carrying one more `Image`**:
+
+```text
+Info -> Info2 -> Info3 -> Info4 -> Info3 Close -> Info2 Close -> Info
+  1        2        3        4          3             2         cards
+```
+
+The cards are `%s\FE\image_01.mip` .. `image_04.mip` at `(50,70)`,
+`(43,65)`, `(36,60)`, `(29,55)`, each card after the first over a
+`Data\FE\Images\track_sel_shadow.mip` four units down and right of it,
+`0xCF000000`. **The window shows stills, not a flythrough** - the reading
+`race-setup.md` recorded off two captures a second apart was two different
+stills, and the "stack of frames" visible in one of them is the chain three
+deep. The hexagon is the still's own shape: `image_01.mip` is 256x128, 8bpp,
+hex-cropped with its border baked in. Confidence 92 for the mechanism
+(decompiled, and the file it names is on the disc and reads as described)
+and 95 for what the window shows (the file's own content, drawn and
+compared against the capture). Implemented in
+`oag_ui::picker::slideshow`; see `docs/ui/selection-screens.md`.
+
+`FUN_088c4410` has four more callers (`FUN_088b09b4`, `FUN_088b12c8`,
+`FUN_088ecb54`, `FUN_088ed05c`) besides `TrackSelection_OnExit`'s teardown -
+untraced, presumably the tournament and split-screen track pickers, which
+`MP_Screen.xml` and the PS2's `Track CreationSplit` screen both suggest.
+
+The PS2 pressing's `screen.xml` (7,244 bytes, plain XML) is the same file
+scaled onto its 640x448 grid - cards at `(67,115)`, `(57,107)` .. and the
+shadow `301x211` - with **five** cards rather than four, and the `Zone`
+chain (`zone_01.mip` .. `zone_05.mip`) authored in the same file rather than
+in a `screen_zone.xml` of its own.
+
+| Address | Name | Conf | Role |
+| --- | --- | --- | --- |
+| `0x088c4410` | `TrackDefinition_EnterScreenState` | 78 | loads `<location>\screen.xml` (`screen_zone.xml`, `MP_Screen.xml`) into the definition's state machine on first use, then transitions to the named state |
+| `0x08891448` | `StateMachine_LoadXml` | 72 | opens a front-end XML file and adds its root elements as states under the named parent |
+
 ### The `Info Track %d.%d` layout hypothesis, still not settled either way
 
 `TrackSelection_ApplySelection` switches on the `Mode` value cached at
@@ -263,6 +338,9 @@ whoever picks EU coverage of this area up next.
 
 ## History
 
+- 2026-09-10: `FUN_088c4410` and `FUN_08891448` named, off
+  `TrackSelection_ApplySelection`'s own call; the per-circuit `screen.xml`
+  found and read on both pressings. The "flythrough" reading is retired.
 - 2026-09-08: first pass, immediately after the PSP relocation patch
   (`HANDOVER.md`, 2026-09-07) unblocked `get_xrefs_to` on both class-name
   strings. Confirmed live before decompiling anything:

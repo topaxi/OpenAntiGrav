@@ -52,6 +52,10 @@ struct Instance {
     // How far the top-right corner is pulled left, in screen units. Zero for
     // everything but HD's main-menu tab corner.
     @location(6) chamfer: f32,
+    // How many times `uv` - then one tile of the sheet, not a patch - repeats
+    // across and down the quad. Zero for everything but a tiled sprite: the
+    // selection screens' hex grid, a 32x16 tile drawn 340x120.
+    @location(7) tile: vec2<f32>,
 };
 
 struct VertexOut {
@@ -63,6 +67,13 @@ struct VertexOut {
     // triangle would make the middle of a sprite sample somewhere between the
     // two textures.
     @location(3) @interpolate(flat) mode: f32,
+    // The tile's own rect in the sheet, normalised, for a tiled sprite; a
+    // zero width for everything else, which is the flag the fragment stage
+    // reads.
+    @location(4) @interpolate(flat) tile_rect: vec4<f32>,
+    // Where this corner is in tiles: `corner * tile`, so `fract` of it walks
+    // the tile again every whole unit.
+    @location(5) tiles: vec2<f32>,
 };
 
 fn corner_of(index: u32) -> vec2<f32> {
@@ -129,6 +140,9 @@ fn vs_main(@builtin(vertex_index) index: u32, instance: Instance) -> VertexOut {
     let is_sheet = instance.mode > 0.5 && !is_gradient;
     let size = select(uniforms.atlas, uniforms.sprites, is_sheet);
     out.uv = (instance.uv.xy + corner * instance.uv.zw) / size;
+    let tiled = instance.tile.x > 0.0;
+    out.tile_rect = select(vec4<f32>(0.0), instance.uv / vec4<f32>(size, size), tiled);
+    out.tiles = corner * instance.tile;
     let graded = mix(instance.color, instance.border, corner.x);
     out.color = select(instance.color, graded, is_gradient);
     out.border = select(instance.border, graded, is_gradient);
@@ -145,7 +159,13 @@ fn fs_main(in: VertexOut) -> @location(0) vec4<f32> {
     // `r` is the body/outline mask, `g` the silhouette's coverage.
     let mask = glyph.r;
     let coverage = glyph.g;
-    let sprite = textureSample(sprite_texture, sprite_sampler, in.uv);
+    // A tiled quad samples its one tile again every whole unit of `tiles`;
+    // an ordinary one samples where the vertex stage said. `textureSample`
+    // stays unconditional, and the sheet has one mip level, so the seam in
+    // the wrapped coordinate's derivative costs nothing.
+    let wrapped = in.tile_rect.xy + fract(in.tiles) * in.tile_rect.zw;
+    let sprite_uv = select(in.uv, wrapped, in.tile_rect.z > 0.0);
+    let sprite = textureSample(sprite_texture, sprite_sampler, sprite_uv);
 
     // Body toward `color`, outline toward `border`. The alpha is mixed too, so a
     // translucent border colour - which is what the HUD authors, 0x40000000 -

@@ -84,11 +84,6 @@ pub(crate) struct MenuStage {
     /// tick's input whole while it is `Some`, and it is drawn instead of
     /// the rows rather than over them.
     pub(crate) picker: Option<crate::picker_stage::PickerStage>,
-    /// Where every front-end image sits in the sheet `renderer` was built
-    /// with, for the picker's own sprites - the arrows, the hex grid, the
-    /// bars. The menus' own rows never draw one, which is why this was not
-    /// here before the picker was.
-    pub(crate) placements: Vec<(String, oag_ui::frontend::Placed)>,
 }
 
 /// A page change part-way through.
@@ -392,21 +387,23 @@ impl MenuStage {
         // a 3D pass over the finished picture. No marquee, no page tween and
         // no prompt apply to it.
         if let Some(picker) = self.picker.as_mut() {
-            let layers = oag_ui::picker::draw_list(
+            // The circuit's stills live on a sheet of the screen's own -
+            // the front end's extended, so every placement below still
+            // holds - handed to the renderer once per selection.
+            if let Some(sheet) = picker.take_sheet() {
+                self.renderer.set_sprites(&gpu.device, &gpu.queue, sheet);
+            }
+            let mut layers = oag_ui::picker::draw_list(
                 &picker.model,
                 &picker.layout,
                 &self.skin,
                 &self.frame,
                 if frozen_race { None } else { shown },
                 frozen_race,
-                &|src| {
-                    self.placements
-                        .iter()
-                        .find(|(name, _)| name == src)
-                        .map(|(_, placed)| *placed)
-                },
+                &|src| picker.placed(src),
                 &|text| font::measure(&self.text_atlas, text),
             );
+            layers.body.extend(picker.slideshow_draws());
             let list: Vec<Draw> = if frozen_race {
                 std::iter::once(Draw::Fill {
                     rect: overlay_rect(self.skin.space(), viewport),

@@ -13,8 +13,11 @@ use std::sync::{Arc, Mutex};
 use anyhow::{Context, Result};
 use log::{info, warn};
 use oag_game::preview::Preview;
+use oag_game::sprite::Sheet;
 use oag_render::camera::orbit::Orbit;
 use oag_render::mesh_render::Anisotropy;
+use oag_ui::frontend::{Draw, Placed};
+use oag_ui::picker::slideshow::Slideshow;
 use oag_ui::picker::{self, Picker};
 
 use crate::gpu::Gpu;
@@ -23,9 +26,15 @@ use crate::gpu::Gpu;
 #[derive(Debug, Clone)]
 pub(crate) enum PreviewSource {
     /// `<location>\FE\forward.vex` or `\reverse.vex` - the circuit's outline
-    /// ribbon, which is what `Track Creation`'s info panel shows. See
-    /// `docs/formats/race-setup.md`.
-    Track { location: String, reversed: bool },
+    /// ribbon, which is what `Track Creation`'s info panel shows - and, in
+    /// the same folder, the `screen.xml` whose stills fill the hexagonal
+    /// window. `zone` picks the Zone chain of stills, the way the original
+    /// does for a Zone run. See `docs/formats/race-setup.md`.
+    Track {
+        location: String,
+        reversed: bool,
+        zone: bool,
+    },
     /// `<location>\ship_FE.vex`, the team's front-end hull, and the skins it
     /// declares as `(name, archive entry)` - the paint the livery row cycles.
     Ship {
@@ -37,7 +46,9 @@ pub(crate) enum PreviewSource {
 impl PreviewSource {
     fn entry_name(&self) -> String {
         match self {
-            Self::Track { location, reversed } => {
+            Self::Track {
+                location, reversed, ..
+            } => {
                 let run = if *reversed { "reverse" } else { "forward" };
                 format!(r"{location}\FE\{run}.vex")
             }
@@ -81,9 +92,27 @@ pub(crate) struct PickerStage {
     /// The worker's measurements, on a track picker; `None` on a ship one.
     distances: Option<Distances>,
     anisotropy: Anisotropy,
+    /// The selected circuit's slideshow, on a track picker whose circuit
+    /// authors one - see [`oag_game::preview::slideshow`]. `None` on a ship
+    /// picker, and on a circuit with no `screen.xml`, which draws an empty
+    /// window and says so in the log.
+    slideshow: Option<Slideshow>,
+    /// The front end's own sheet, as the menus were built with it.
+    base: Sheet,
+    /// [`Self::base`] extended with the selected circuit's stills - what the
+    /// renderer has to be drawing from for [`Self::slideshow_draws`] to show
+    /// anything - and whether the renderer has been handed it yet.
+    sheet: Option<Sheet>,
+    sheet_uploaded: bool,
 }
 
 impl PickerStage {
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "one call site, and each is a separate fact of the screen: the \
+                  model, its layout, its axis, its sources, the disc, the worker, \
+                  the filter and the sheet"
+    )]
     pub(crate) fn new(
         model: Picker,
         layout: picker::Layout,
@@ -92,6 +121,7 @@ impl PickerStage {
         archives: oag_assets::Archives,
         distances: Option<Distances>,
         anisotropy: Anisotropy,
+        base: Sheet,
     ) -> Self {
         Self {
             model,
@@ -103,7 +133,36 @@ impl PickerStage {
             built_for: None,
             distances,
             anisotropy,
+            slideshow: None,
+            base,
+            sheet: None,
+            sheet_uploaded: false,
         }
+    }
+
+    /// The sheet the renderer should draw this screen from, the first time
+    /// it changes: the front end's own plus the selected circuit's stills.
+    /// `None` once handed over, and on a screen with no stills of its own.
+    pub(crate) fn take_sheet(&mut self) -> Option<&Sheet> {
+        if self.sheet_uploaded {
+            return None;
+        }
+        self.sheet_uploaded = true;
+        self.sheet.as_ref()
+    }
+
+    /// Where an image sits in whichever sheet this screen draws from - its
+    /// own extended one, or the front end's when it has none.
+    pub(crate) fn placed(&self, src: &str) -> Option<Placed> {
+        self.sheet.as_ref().unwrap_or(&self.base).get(src)
+    }
+
+    /// The stills on screen this tick, timed from the last selection change
+    /// - see [`oag_ui::picker::slideshow::Slideshow::at`].
+    pub(crate) fn slideshow_draws(&self) -> Vec<Draw> {
+        self.slideshow.as_ref().map_or_else(Vec::new, |show| {
+            show.draws(self.model.since_selection(), &|src| self.placed(src))
+        })
     }
 
     /// Loads the selected entry's preview, in the selected livery, if it is
@@ -118,6 +177,10 @@ impl PickerStage {
         if self.built_for.as_ref() == Some(&key) {
             return;
         }
+        let entry_changed = self
+            .built_for
+            .as_ref()
+            .is_none_or(|(built, _)| *built != index);
         self.built_for = Some(key.clone());
         self.preview = match self.load_preview(gpu, index, key.1.as_deref()) {
             Ok(preview) => Some(preview),
@@ -126,6 +189,47 @@ impl PickerStage {
                 None
             }
         };
+        if entry_changed {
+            self.load_slideshow(index);
+        }
+    }
+
+    /// Reads the selected circuit's stills and puts them on a sheet of this
+    /// screen's own, for the renderer to pick up on its next frame. A ship
+    /// entry has no slideshow and keeps whatever sheet was there.
+    fn load_slideshow(&mut self, index: usize) {
+        let Some(PreviewSource::Track { location, zone, .. }) = self.sources.get(index).cloned()
+        else {
+            return;
+        };
+        let mut report = Vec::new();
+        let loaded = oag_game::preview::slideshow(&mut self.archives, &location, zone, &mut report);
+        for line in report {
+            warn!("{line}");
+        }
+        match loaded {
+            Ok((show, blobs)) => {
+                let mut report = Vec::new();
+                let sheet = self.base.extended(&blobs, &mut report);
+                for line in report {
+                    info!("slideshow {line}");
+                }
+                info!(
+                    "slideshow {location}: {} state(s), {} still(s) on a {}x{} sheet",
+                    show.states().len(),
+                    blobs.len(),
+                    sheet.width,
+                    sheet.height
+                );
+                self.slideshow = Some(show);
+                self.sheet = Some(sheet);
+                self.sheet_uploaded = false;
+            }
+            Err(error) => {
+                warn!("{error:#} - the hexagonal window draws nothing");
+                self.slideshow = None;
+            }
+        }
     }
 
     fn load_preview(&mut self, gpu: &Gpu, index: usize, skin: Option<&str>) -> Result<Preview> {
@@ -135,12 +239,7 @@ impl PickerStage {
             .with_context(|| format!("entry {index} has no preview source"))?
             .clone();
         let name = source.entry_name();
-        let blob = self
-            .archives
-            .read_name(&name)
-            .with_context(|| format!("reading the preview mesh {name}"))?;
-        let mut model = oag_render::mesh::build(&name, &blob)
-            .with_context(|| format!("decoding the preview mesh {name}"))?;
+        let mut model = oag_game::preview::model(&mut self.archives, &name)?;
         // The chosen paint over the hull's own texture slots - the same
         // swap a race makes (`crate::livery::ship_skin`), and the same
         // rule when it fails: the hull keeps its own paint, and the log
