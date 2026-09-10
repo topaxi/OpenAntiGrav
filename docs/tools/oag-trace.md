@@ -1241,6 +1241,13 @@ measurement that says *when* that gap bites, rather than that it exists.
 > by tick 432 the two craft are not on the same part of the track - and reading
 > it as a contact result is exactly the mistake the 2026-07-28 paragraph above
 > made in the other direction.
+>
+> **Narrowed 2026-09-10**: on this same capture's crest (ticks 1560-1600), a
+> pose walk of every term in `oag_physics::forces::evaluate` found no term
+> whose own residual accounts for the drift - the gap traces almost entirely to
+> one discrete wall/kerb contact around tick 1583, not to a miscalibrated force
+> law. See `docs/physics/README.md`, "The crest-phase drift traces to a wall
+> event, not a force term".
 
 **One reading trap in the table above, worth fixing in your head before you use
 it.** The `exceeded` column is `first_exceeded_tick` - **the tick of the first

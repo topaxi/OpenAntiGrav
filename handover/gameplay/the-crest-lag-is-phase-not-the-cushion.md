@@ -63,24 +63,36 @@ the `6.0` are untouched.
 
 ## Open
 
-- **Why the phase drifts eight ticks of crest in the 35 ticks after a reseed.**
-  This is the force-law drift [`oag-trace.md`](../../docs/tools/oag-trace.md)
-  already documents, now with a sharp instance attached to it: at `--reseed 60`
-  the craft reaches the crest late enough to move liftoff from 1595 to 1603,
-  while its *contact test* is exact. Nothing about the cushion will move it.
+- **Resolved 2026-09-10, and narrowed rather than closed.** The force-term pose
+  walk this thread's own "Next Steps" called for
+  (`crates/trace/tests/force_term_pose_walk_ground_truth.rs`) found that none
+  of `oag_physics::forces::evaluate`'s eleven terms, individually rescaled,
+  explains the crest-approach residual - the largest best fit (rolling
+  resistance) cuts 3.1% of the residual's own energy, every other term under
+  2%. The drift instead traces almost entirely to one discrete event: tick
+  1583's recorded velocity turns through a large angle at nearly constant
+  speed, the signature of a wall or kerb contact `oag_physics::wall::resolve`
+  resolves *after* the integrator, outside anything a pose walk of forces can
+  see. Weighted to the crest, that one tick alone accounts for 82% of the
+  position-error yardstick an eight-tick liftoff shift needs; the other 39
+  ticks in the window together account for under 3%. Full measurement, per-tick
+  table and the yardstick arithmetic: `docs/physics/README.md`, "The
+  crest-phase drift traces to a wall event, not a force term".
 - Unchanged from the previous pass, and still true: **do not read the
   single-seeded run as contact evidence.** There `grounded` is `1.0` on all 2,977
   ticks and every disagreement points one way, which is that same drift.
 
 ## Next Steps
 
-- **Attack the drift with the pose walk, not with a replay.** The technique that
-  settled this generalises: for any per-tick quantity that disagrees, walk the
-  recorded poses and evaluate our term there. It separates "our law is wrong"
-  from "our trajectory is elsewhere", which no reseed interval can. The obvious
-  next target is the force terms themselves - which of them, evaluated at the
-  original's own pose over ticks 1560-1600, integrates to the position error that
-  carries the crest phase.
+- **The next target is `oag_physics::wall::resolve` around tick 1583, not a
+  force term.** The same pose-walk technique generalises one step further:
+  walk the recorded poses and the recorded *wall* geometry around the
+  1571-1579 hop's landing and ask what `wall::resolve` does there, the same
+  way this pass asked what `forces::evaluate` does - separating "our wall
+  response is wrong" from "our trajectory is elsewhere" for a projection
+  rather than an accumulator term. Nothing about which geometry feature is
+  involved, or whether it is a kerb, a barrier or something else, has been
+  measured yet.
 - The `exceeded` column in `oag-trace run`'s field table is a **tick number, not
   a count** (`crates/trace/src/compare.rs:996-1014`); documented in
   [`docs/tools/oag-trace.md`](../../docs/tools/oag-trace.md) now. Cost the

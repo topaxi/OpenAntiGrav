@@ -211,6 +211,74 @@ Two things follow, and the second is the useful one:
   answers a question a whole-lap replay structurally cannot: a reseed restores
   position, not the phase of the feature the craft is crossing.
 
+### The crest-phase drift traces to a wall event, not a force term, 2026-09-10
+
+The pose walk above generalises past the contact flag: `crates/trace/tests/
+force_term_pose_walk_ground_truth.rs` walks the same capture's recorded poses
+over ticks 1560-1600 - the reseed boundary through the crest's own liftoff -
+and asks `oag_physics::forces::evaluate` what force it computes there, once
+per tick, with no integration in the loop. `evaluate` does not integrate (only
+`oag_physics::integrate::integrate` does), so `state.body.force` afterwards is
+exactly that tick's accumulated total, seeded from zero; dividing by mass gives
+a **predicted acceleration** with no accumulated trajectory error in it by
+construction. The recording's own `v(t + 1) - v(t)` over `dt` gives a
+**measured acceleration** from quantities the original actually held. The
+difference is what the force law fails to explain about the recording's own
+next velocity, fresh at every tick - getting tick 1594 right never depends on
+getting tick 1560 right.
+
+Every one of `forces::evaluate`'s eleven force terms (engine, lateral grip,
+brakes, the airbrake path, gravity, drag, the hover downforce, the two probes'
+own spring forces, rolling resistance, vertical damping, the speed-pad boost)
+is read directly off `Evaluated` and summed; the sum is asserted equal to
+`state.body.force` itself before anything is attributed to any of them, so a
+forgotten term cannot hide in the residual and get credited to whichever real
+term happens to be a similar size.
+
+**One tick in the window, 1583, has a residual over 400x any other**: the
+recording's own velocity goes from `(-65.6, -8.5, -86.2)` to `(-83.4, 4.0,
+-53.4)` in one tick while the recorded speed barely moves (108.6 to 108.8
+units/s) - a near-elastic redirect, not a smooth integration. That is exactly
+the signature of `oag_physics::wall::resolve`, which runs *after* the
+integrator on the position it produced and so is invisible to a pose walk of
+`forces::evaluate` by construction; the capture's own `stun_timer` cannot flag
+it either, because a track wall never arms it in this engine, only a weapon or
+rival contact does (`ShipState::stun_timer`'s own doc). Tick 1579, the landing
+tick of the smaller 1571-1579 airborne event, fires a penetration-escape
+teleport for the same reason - a discrete geometric correction, not a force.
+Both are excluded from the analysis below and reported on their own rather
+than averaged in.
+
+**On the 39 remaining ticks, no single term explains the residual.** The
+best-fit scalar `s` minimising `sum |residual - s * term|^2` over the clean
+ticks never accounts for more than a few percent of the residual's own energy
+for any term - rolling resistance is the largest at 3.1%, drag next at 1.6%,
+every other term under 1%. Scaling any one term up or down, by any amount,
+does not close this gap.
+
+**Bridged to a position-error yardstick, the wall event alone accounts for
+almost all of it.** A velocity residual injected at tick `t` has the remaining
+time to the crest to become a position error, so its weight is the *sum of
+`dt`* from `t` to liftoff, not one tick's worth. An eight-tick liftoff shift at
+the crest's own recorded speed (100.8 units/s) is worth about **13.5 units** of
+position error. Weighted the same way, the residual **over every tick,
+including 1583, comes to 11.0 units** - 82% of the yardstick. Restricted to the
+39 clean ticks alone, it collapses to **0.31 units** - under 3%.
+
+So the crest-phase drift this thread opened with is not a force-law
+calibration problem at all: it is one discrete wall or kerb contact around
+tick 1583, during the landing from the earlier 1571-1579 hop, that this
+engine's smooth force terms cannot represent by construction because the
+original does not resolve it as a force either - `wall::resolve` is a
+projection, run once per frame after the integrator, not an accumulator term.
+**Chosen, not measured, is the reading that this generalises past this one
+circuit and this one wall** - the technique (pose walk the recorded poses,
+sum every named term, assert the sum against the whole, fit each term's own
+scalar against the residual) is reusable on any capture, but the finding
+itself is this capture's own, and the next step it points at -
+`oag_physics::wall::resolve` on the recording's own poses around a landing,
+the same generalisation one step further - is unmeasured.
+
 ### The cross-product signs: a contradiction here, resolved
 
 This page originally recorded that term as `-400 * cross(up, avgNormal)` *and*, in
