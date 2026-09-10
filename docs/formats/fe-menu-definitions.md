@@ -186,9 +186,14 @@ And a palette Pure declares none of: `TextColor` `0xFF33A6B9`, `TitleColor`
 are Pulse's own values - **Pure's copies are not the same constants**, where
 measured: `TitleColor` is `0xFFED4896` on Pure against black here, so nothing
 in this table should be borrowed as a Pure default without checking.
-`crates/pure/src/frontend.rs`'s `FALLBACK_GLOBALS` carries Pure's own measured
-stand-ins for `TitleColor`, `DesignColor`, `TextColor` and `FrameLineColor` -
-each sampled off a real PPSSPP capture, not derived from this table.
+Pure authors its own four in the *style* skin its plugin definition activates
+beside the UI one (`Data\Skins\Default\Skin.xml`): `TitleColor` `0xFFED4796`,
+`DesignColor` `0xFF5FDBF6`, `TextColor` `0xFF11ACD0`, `FrameLineColor`
+`0xFE99C9D8`. Those were pixel-sampled stand-ins in
+`crates/pure/src/frontend.rs`'s `FALLBACK_GLOBALS` until 2026-09-10, and three
+of the four samples were wrong - see [race-setup.md](race-setup.md). **Zero
+declarations in a title's front-end root does not mean undeclared on the disc
+when that title is skinnable.**
 
 The mechanism that reads these is
 [fe-globals](../ghidra/functions/ps2-pulse-eu/fe-globals.md), including the trap

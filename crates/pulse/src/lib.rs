@@ -102,6 +102,9 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     // picture this build already draws.
     menu_frame: Some(frontend::states::FE_SCREEN),
     race_box: Some(names::RACE_BOX_DEFINITION),
+    // `<location>\FE\forward.vex` and `<location>\ship_FE.vex`, both
+    // resolving on both pressings - see `docs/formats/race-setup.md`.
+    preview_meshes: true,
 };
 
 /// The bulk archive's candidates, in the order they are tried.

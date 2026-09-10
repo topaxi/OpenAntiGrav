@@ -19,6 +19,7 @@ use oag_ui::frontend::Draw;
 mod menu_page;
 use menu_page::{
     PreviewRequest, draw_preview, menu_page, open_for_previews, picker_kind, picker_page,
+    picker_stills,
 };
 
 /// What to capture.
@@ -506,28 +507,16 @@ pub fn run(
                         .and_then(|blob| race::circuit_length(&blob).ok()),
                     _ => None,
                 };
-                // The selected circuit's stills, on the front end's sheet
-                // extended the way the live screen extends it, at the
-                // moment the screen opens: the first card alone. See
-                // `oag_game::preview::slideshow`.
-                let mut stills: Vec<Draw> = Vec::new();
-                if let (oag_ui::picker::Kind::Track, Some(archives), Some(track)) =
-                    (kind, archives.as_mut(), selected)
-                {
-                    let zone = oag_race::Mode::from_name(&options.settings.race.mode)
-                        == Some(oag_race::Mode::Zone);
-                    let mut report = Vec::new();
-                    match crate::preview::slideshow(archives, &track.location, zone, &mut report) {
-                        Ok((show, blobs)) => {
-                            sprites = sprites.extended(&blobs, &mut report);
-                            stills = show.draws(0.0, &|src| sprites.get(src));
-                        }
-                        Err(error) => log::warn!("{error:#} - the hexagonal window draws nothing"),
-                    }
-                    for line in report {
-                        log::info!("{line}");
-                    }
-                }
+                let stills = picker_stills(
+                    kind,
+                    &options.settings,
+                    selected,
+                    &tracks,
+                    &teams,
+                    archives.as_mut(),
+                    frontend.screens(),
+                    &mut sprites,
+                );
                 let (mut list, request) = picker_page(
                     kind,
                     layout,
@@ -544,7 +533,15 @@ pub fn run(
                     distance,
                 );
                 list.extend(stills);
-                preview_request = request;
+                // A title that previews with stills alone has no mesh to
+                // ask for, and asking would log a miss for a file that is
+                // not supposed to be there - see
+                // `oag_title::FrontEnd::preview_meshes`.
+                preview_request = title
+                    .front_end
+                    .is_some_and(|front_end| front_end.preview_meshes)
+                    .then_some(request)
+                    .flatten();
                 (backdrop, format, list, space)
             } else {
                 let list = menu_page(

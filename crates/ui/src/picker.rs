@@ -515,8 +515,72 @@ pub fn draw_list(
         text: layout.title.clone(),
         wrap_width: None,
     });
-    layers.body = body(picker, layout, sprites, measure);
+    layers.body = body(picker, layout, skin, sprites, measure);
     layers
+}
+
+/// The entry list, on a screen that lists rather than shows one at a time.
+///
+/// **The two titles disagree on the shape of a selection screen.** Pulse
+/// shows the *selected* entry alone, in named `<Text>` widgets its
+/// `Selection_Definition.xml` authors (`Info Track 1.1`, `Info1`, the stat
+/// bars) - so it has no `<Menu>` and this draws nothing. Pure authors one
+/// `<Menu name="Track">` / `<Menu name="Team">` per screen and no named text
+/// at all, and lists every entry down the left the way its own `Language
+/// Selection` lists languages.
+///
+/// The widget states its own x, y, scale, colour and alignment; **it states
+/// no row pitch**, so the step is one line of the widget's own font at the
+/// widget's own scale - exactly the rule `oag_ui::frontend::draw`'s
+/// `DisplayLanguages` block already infers for this same widget on this same
+/// title, and deliberately not [`Skin::row_pitch`], which is a menu *page*'s
+/// step and carries that page's leading and `MenuScale`. The selected row takes the title's own
+/// measured selected ink and no highlight band: a real capture of Pure's
+/// `Language Selection` has no band at all, and inventing one here would
+/// contradict a measurement already in the tree.
+///
+/// Coordinates are the widget's own and are **not** put through
+/// [`Layout::scale`]: that factor exists for this build's own constants, and
+/// a screen's widgets already arrive in the grid being drawn in - which is
+/// why the PS2 pressing's panel reads `387` where the PSP's reads `290`.
+/// Every other widget in [`body`] follows the same rule.
+///
+/// **This does not scroll.** The `<Menu>`'s `allocate` is a capacity, not a
+/// count - `16` on both of Pure's screens - and a source that offers more
+/// entries than fit runs off the bottom rather than paging. Pure's disc
+/// offers 12 circuits and 10 teams; **its downloadable packs add more**, and
+/// nothing here has counted a fully-packed roster against that 16.
+fn entry_rows(picker: &Picker, layout: &Layout, skin: &Skin) -> Vec<Draw> {
+    let Some(menu) = layout.screen.menu.as_ref() else {
+        return Vec::new();
+    };
+    let scale = layout.face_scale(&menu.font) * menu.scale;
+    let pitch = skin.line_height() * scale;
+    let align = Align::parse(&menu.align);
+    // The title's own measured pair, not the widget's `color` attribute -
+    // see `oag_ui::frontend::draw`'s `DisplayLanguages` block for why: on
+    // Pure that attribute resolves to `TextColor`, which is the *selected*
+    // row's ink, and using it for both loses the selection cue.
+    let normal = skin.normal();
+    picker
+        .entries()
+        .iter()
+        .enumerate()
+        .map(|(index, entry)| Draw::Text {
+            x: menu.x,
+            y: menu.y + index as f32 * pitch,
+            scale,
+            color: if index == picker.index() {
+                skin.selected()
+            } else {
+                normal
+            },
+            border: None,
+            align,
+            text: entry.label.clone(),
+            wrap_width: None,
+        })
+        .collect()
 }
 
 /// Everything under the title: the panel, its rows, the arrows and the
@@ -524,6 +588,7 @@ pub fn draw_list(
 fn body(
     picker: &Picker,
     layout: &Layout,
+    skin: &Skin,
     sprites: &dyn Fn(&str) -> Option<Placed>,
     measure: &dyn Fn(&str) -> f32,
 ) -> Vec<Draw> {
@@ -641,6 +706,8 @@ fn body(
             color,
         });
     }
+
+    out.extend(entry_rows(picker, layout, skin));
 
     let Some(entry) = picker.selected() else {
         return out;

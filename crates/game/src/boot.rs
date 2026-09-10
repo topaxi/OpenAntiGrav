@@ -512,6 +512,7 @@ pub fn load_shell(
     let screens = load_screens(
         &mut archives,
         front_end.root,
+        title.plugin_definition,
         profile.fallback_globals,
         profile.fallback_images,
         &mut report,

@@ -323,6 +323,29 @@ pub struct FrontEnd {
     /// dialect this build's picker does not yet read - `None`, a gap rather
     /// than a measurement.
     pub race_box: Option<&'static str>,
+    /// Whether this title's race-setup screens preview an entry with a
+    /// rendered mesh.
+    ///
+    /// **An axis because Pure disagrees with Pulse**, which is the bar
+    /// [ADR-0022] sets, and the disagreement is total rather than a change of
+    /// file name. Pulse draws `<location>\FE\forward.vex` for a circuit and
+    /// `<location>\ship_FE.vex` for a craft, and neither file exists on
+    /// Pure's disc at all: every preview on both of Pure's screens is a
+    /// pre-rendered still, authored in the entry's own `screen.xml` the same
+    /// way Pulse's hexagon-window stills are, and matched to the pixels the
+    /// original draws at RMSE 0 (`docs/formats/race-setup.md`). Pulse draws
+    /// *both* - a mesh and a still chain - so "does this entry author
+    /// stills?" cannot stand in for this, which is why it is stated here
+    /// rather than inferred from the data.
+    ///
+    /// `false` for HD, where it is inert: HD's [`Self::race_box`] is `None`,
+    /// so no picker opens and nothing reads this. HD authors `<Model
+    /// name="TrackModel">` / `<Model name="ShipModel">` widgets with a camera
+    /// stated, which is a third convention again, and reading it is what
+    /// would set this to `true`.
+    ///
+    /// [ADR-0022]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0022-title-packages.md
+    pub preview_meshes: bool,
 }
 
 /// The archive names a title's releases carry, in the order they are tried.

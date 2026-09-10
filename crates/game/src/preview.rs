@@ -69,6 +69,24 @@ pub type Still = (String, Vec<u8>);
 /// plain file, and within it the Zone chain if it has one. See
 /// [`oag_ui::picker::slideshow`].
 ///
+/// **`location` is a craft's as readily as a circuit's**, and on Pure it has
+/// to be: `Data\Ships\<team>\screen.xml` authors the three-still chain that
+/// *is* that title's craft preview. Pulse's and HD's craft files author the
+/// stat panel and no `<Image src=>` at all, so the same call returns an empty
+/// still list there and their mesh preview stands alone - measured on all
+/// three, not assumed.
+///
+/// **Pure names its Zone chain `screen_z.xml`** - the `%s\screen_z.xml`
+/// template in its own executable - and starts it at `Info` like every other
+/// chain, rather than at a `Zone` state. Its `screen_m.xml` and
+/// `screen_tt.xml` (split screen, time trial) are **not** read: choosing
+/// between them needs a race-mode parameter this function does not take, and
+/// on the circuit checked all three name the same three stills.
+///
+/// `globals` are the front end's own `FEGlobals` table: a per-entity
+/// `screen.xml` declares none and still names them for its stills' colour.
+/// See [`oag_ui::picker::slideshow::Slideshow::read`].
+///
 /// The stills are read through [`oag_pulse::read_image`], which is what
 /// finds a PS2 disc's `.pct` under a `.mip` name. One that is missing is
 /// reported and left out, and the card it would have been on is left empty
@@ -83,6 +101,7 @@ pub fn slideshow(
     archives: &mut oag_assets::Archives,
     location: &str,
     zone: bool,
+    globals: &[(&str, &str)],
     report: &mut Vec<String>,
 ) -> Result<(Slideshow, Vec<Still>)> {
     let read = |archives: &mut oag_assets::Archives, file: &str, start: &str| {
@@ -93,10 +112,11 @@ pub fn slideshow(
         } else {
             String::from_utf8(blob).ok()?
         };
-        Slideshow::read(&xml, location, start)
+        Slideshow::read(&xml, location, start, globals)
     };
     let show = if zone {
         read(archives, "screen_zone.xml", "Zone")
+            .or_else(|| read(archives, "screen_z.xml", "Info"))
             .or_else(|| read(archives, "screen.xml", "Zone"))
             .or_else(|| read(archives, "screen.xml", "Info"))
     } else {

@@ -497,13 +497,26 @@ fn pures_own_globals_are_merged_only_where_the_disc_leaves_them_out() {
                 "{label}: the disc declares {name}"
             );
         }
-        // And the three it does not, which `FALLBACK_GLOBALS` measures by
-        // sampling pixels - confidence 65, of the effect rather than the source.
-        for (name, value) in oag_pure::frontend::FALLBACK_GLOBALS {
+        // And the ones it does not: those come from the *style* skin
+        // `Data\Plugins\PI001\Definition.xml` activates beside it, whose own
+        // `Data\Skins\Default\Skin.xml` declares 41 globals - identically on
+        // both pressings. They were pixel-sampled into
+        // `oag_pure::frontend::FALLBACK_GLOBALS` at confidence 65 until
+        // 2026-09-10, and three of the four sampled values were wrong.
+        assert!(oag_pure::frontend::FALLBACK_GLOBALS.is_empty());
+        for (name, value) in [
+            ("TitleColor", "0xFFED4796"),
+            ("DesignColor", "0xFF5FDBF6"),
+            ("TextColor", "0xFF11ACD0"),
+            ("FrameLineColor", "0xFE99C9D8"),
+            // The two the selection screens tint their stills with.
+            ("ShipColor", "0xFF99D9E8"),
+            ("TrackColor", "0xFF99D9E8"),
+        ] {
             assert_eq!(
-                globals.get(*name).map(String::as_str),
-                Some(*value),
-                "{label}: {name} comes from the measured fallback table"
+                globals.get(name).map(String::as_str),
+                Some(value),
+                "{label}: {name} comes from the activated style skin"
             );
         }
     }
@@ -560,8 +573,8 @@ fn the_memory_stick_warnings_two_stripes_keep_their_own_rects() {
 /// `Title Screen`'s seventeen frame-line and corner-bracket widgets, every one
 /// `Color="FEGlobals->FrameLineColor"` and none of them full-screen - the
 /// widget this thread's own `Animation`/`Fill` work was for. `FrameLineColor`
-/// itself is undeclared on the disc (see `oag_pure::frontend::FALLBACK_GLOBALS`),
-/// so this also pins the measured fallback colour against what actually draws.
+/// is undeclared in the front-end root and **declared by the activated style
+/// skin**, so this also pins that the skin's own value is what draws.
 /// Rects read off `pure-psp-usa.chd`'s own `Skin.xml`, in document order,
 /// behind the white background `Fill` `Show Logo`-style backdrops already
 /// cover.
@@ -584,15 +597,8 @@ fn title_screens_frame_lines_keep_their_own_rects_and_share_one_colour() {
             .unwrap_or_else(|| panic!("{label}: FrameLineColor must resolve to a real colour"));
         assert_eq!(
             color,
-            oag_ui::screen::parse_argb(
-                oag_pure::frontend::FALLBACK_GLOBALS
-                    .iter()
-                    .find(|(name, _)| *name == "FrameLineColor")
-                    .expect("FrameLineColor is in the fallback table")
-                    .1
-            )
-            .unwrap(),
-            "{label}: the disc leaves FrameLineColor undeclared, so this is the measured fallback"
+            oag_ui::screen::parse_argb("0xFE99C9D8").unwrap(),
+            "{label}: Data\\Skins\\Default\\Skin.xml declares FrameLineColor"
         );
         let rect = |x: f32, y: f32, width: f32, height: f32| oag_ui::screen::Fill {
             name: None,

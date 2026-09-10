@@ -715,10 +715,14 @@ Pulse on every one they share:
 What it does **not** have matters as much, and is why `oag-pure`'s
 `MenuSkin` is mostly `None` rather than filled in from Pulse:
 
-- **No `TextColor` or `TitleColor`.** Both are already carried as measured
-  fallbacks - see `FALLBACK_GLOBALS`, confidence 65, pixel-sampled rather than
-  read - and Pure's `TitleColor` is pink where Pulse's is black, so borrowing
-  would have been wrong rather than merely unevidenced.
+- **No `TextColor` or `TitleColor` in this file.** Both are authored, in the
+  *style* skin `Data\Plugins\PI001\Definition.xml` activates beside the UI one
+  (`Data\Skins\Default\Skin.xml`, 41 globals, identical on both pressings) -
+  see [race-setup.md](race-setup.md). They were pixel-sampled into
+  `FALLBACK_GLOBALS` at confidence 65 until 2026-09-10, when the disc turned
+  out to author them; that table is now empty. Pure's `TitleColor` is pink
+  (`0xFFED4796`) where Pulse's is black, so borrowing would still have been
+  wrong.
 - **No `MainMenu_Definition.xml`.** Its `LoadXML` list names twelve other
   `*_Definition.xml` files instead. All twelve have now been read for row
   geometry: 19 of the 33 `<Menu>` widgets across them say `y="45"` and no other
@@ -837,8 +841,8 @@ opaque content lands a `335x80` box entirely inside the `480`-wide crop.
 Byte-identical on both pressings (`pure-psp-usa.chd`, `pure-psp-eu.chd`), same
 hash, same 66,576-byte entry (512x128, 8bpp indexed: `512*128 + 256*4 palette
 + 16 header`). Recorded as `oag_pure::hashes::TITLE_LOGO`, consulted through
-`oag_pure::frontend::FALLBACK_IMAGES` the same way `FALLBACK_GLOBALS` fills an
-undeclared colour - see that constant's own doc comment. Confidence **85**: a
+`oag_pure::frontend::FALLBACK_IMAGES` - the last stand-in of its kind on this
+title, `FALLBACK_GLOBALS` having been emptied once the style skin was found. Confidence **85**: a
 visual match to a captured frame, a crop that agrees with the widget's own
 authored `TxtrWidth`/`TxtrHeight`, and agreement across both pressings - short
 of 90 because the runtime mechanism that assigns hash `3af18d90` to

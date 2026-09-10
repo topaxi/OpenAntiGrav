@@ -555,6 +555,12 @@ pub(crate) struct Shell {
     pub(crate) modes: Vec<menu::Choice>,
     pub(crate) font: oag_ui::font::Atlas,
     pub(crate) sprites: oag_game::sprite::Sheet,
+    /// The front end's own `FEGlobals` table, carried from `boot::Shell`'s
+    /// parsed screens for the one thing that re-reads the disc's XML after
+    /// boot: a selection screen's per-entity `screen.xml` declares no globals
+    /// and still names them for its stills' colour. See
+    /// `oag_ui::picker::slideshow::Slideshow::read`.
+    pub(crate) globals: Vec<(String, String)>,
     /// How this title lays its menus out and colours them, carried from the
     /// serial that identified the source. See `boot::Shell::menu_skin`.
     pub(crate) menu_skin: &'static oag_title::MenuSkin,

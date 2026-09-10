@@ -90,9 +90,16 @@ impl Slideshow {
     /// Reads `xml` (already expanded) for the chain starting at `start` -
     /// `Info`, or `Zone` in Zone mode - with `location` substituted for
     /// every `%s`. `None` when the file authors no state of that name.
+    ///
+    /// `globals` are the front end's own, because a per-entity `screen.xml`
+    /// declares none and still refers to them: Pure's stills each carry
+    /// `Color="FEGlobals->ShipColor"` / `TrackColor`, and without the table
+    /// those resolve to nothing and the still is tinted white - which on
+    /// Pure's white front end is not a wrong colour but an invisible
+    /// picture. Pulse's stills name no colour and are unaffected.
     #[must_use]
-    pub fn read(xml: &str, location: &str, start: &str) -> Option<Self> {
-        let screens = Screens::from_xml(xml);
+    pub fn read(xml: &str, location: &str, start: &str, globals: &[(&str, &str)]) -> Option<Self> {
+        let screens = Screens::from_xml_with_fallback_globals(xml, globals);
         let root = parse(xml);
         let mut states = Vec::new();
         let mut model = None;

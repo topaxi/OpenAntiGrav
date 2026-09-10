@@ -653,6 +653,72 @@ pub(super) fn draw_preview(
     }
 }
 
+/// The selected entry's stills, on the front end's sheet extended the way the
+/// live screen extends it, at the moment the screen opens: the first card
+/// alone.
+///
+/// **A team's as well as a circuit's**, or a capture of Pure's `Team
+/// Selection` would show an empty panel where the live screen shows the
+/// craft. `screens` supplies the `FEGlobals` table the per-entity
+/// `screen.xml` tints its stills through. See `oag_game::preview::slideshow`.
+#[allow(
+    clippy::too_many_arguments,
+    reason = "the same argument picker_page makes: each is a separate thing the still needs \
+              - which screen, the settings, the two rosters, the disc, the globals and the sheet"
+)]
+pub(super) fn picker_stills(
+    kind: oag_ui::picker::Kind,
+    settings: &crate::settings::Settings,
+    track: Option<&crate::catalogue::Track>,
+    tracks: &[crate::catalogue::Track],
+    teams: &[crate::catalogue::Team],
+    archives: Option<&mut oag_assets::Archives>,
+    screens: &oag_ui::screen::Screens,
+    sprites: &mut crate::sprite::Sheet,
+) -> Vec<oag_ui::frontend::Draw> {
+    // The entry the *picker* selects, which falls back to the first when the
+    // setting names none this source offers - `Picker::new`'s own rule. A
+    // second lookup that stopped at `None` instead would leave a capture of
+    // another title's disc showing a highlighted row with no picture beside
+    // it, which is a disagreement with the live screen and not a finding.
+    let source = match kind {
+        oag_ui::picker::Kind::Track => track.or(tracks.first()).map(|track| {
+            (
+                track.location.clone(),
+                oag_race::Mode::from_name(&settings.race.mode) == Some(oag_race::Mode::Zone),
+            )
+        }),
+        oag_ui::picker::Kind::Ship => teams
+            .iter()
+            .find(|team| team.id == settings.race.team)
+            .or(teams.first())
+            .map(|team| (team.location.clone(), false)),
+    };
+    let (Some(archives), Some((location, zone))) = (archives, source) else {
+        return Vec::new();
+    };
+    let globals: Vec<(&str, &str)> = screens
+        .globals
+        .iter()
+        .map(|(key, value)| (key.as_str(), value.as_str()))
+        .collect();
+    let mut report = Vec::new();
+    let stills = match crate::preview::slideshow(archives, &location, zone, &globals, &mut report) {
+        Ok((show, blobs)) => {
+            *sprites = sprites.extended(&blobs, &mut report);
+            show.draws(0.0, &|src| sprites.get(src))
+        }
+        Err(error) => {
+            log::info!("{error:#} - {location} shows no stills");
+            Vec::new()
+        }
+    };
+    for line in report {
+        log::info!("{line}");
+    }
+    stills
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

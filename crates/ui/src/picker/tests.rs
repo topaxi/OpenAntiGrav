@@ -384,3 +384,132 @@ fn the_ps2s_player_index_is_dropped_off_team_selections_widgets() {
         "the PSP's 10 scaled"
     );
 }
+
+/// Pure's shape rather than Pulse's: one `<Menu>` widget and no named
+/// `<Text>` at all, so the screen lists every entry instead of showing the
+/// selected one.
+const LISTING_XML: &str = r#"
+<Screen name="Top">
+<Screen type="TeamSelection" name="Team Selection">
+<Text idstring="RB_TRACK_SEL" font="Title" x="21" y="20"></Text>
+<Viewport>
+<Menu name="Team" x="21" y="45" scale="2" color="0xff11acd0" align="left" font="Default" allocate="16"></Menu>
+</Viewport>
+</Screen>
+</Screen>
+"#;
+
+fn listing_layout() -> Layout {
+    Layout::read(
+        &Screens::from_xml(LISTING_XML),
+        Kind::Ship,
+        &strings(),
+        FaceScales::default(),
+        PSP,
+    )
+    .expect("the listing screen reads")
+}
+
+/// One row per entry, stepping by a line of the widget's own font at the
+/// widget's own scale - the widget states no pitch of its own.
+#[test]
+fn a_menu_widget_lists_every_entry_at_its_own_position_and_step() {
+    let layout = listing_layout();
+    let menu = layout.screen.menu.as_ref().expect("the Menu widget reads");
+    assert_eq!((menu.x, menu.y, menu.scale), (21.0, 45.0, 2.0));
+
+    let entries = vec![
+        Entry {
+            id: "Feisar".into(),
+            label: "FEISAR".into(),
+            details: Details::Ship {
+                rating: None,
+                variants: Vec::new(),
+            },
+        },
+        Entry {
+            id: "Qirex".into(),
+            label: "QIREX".into(),
+            details: Details::Ship {
+                rating: None,
+                variants: Vec::new(),
+            },
+        },
+        Entry {
+            id: "Auricom".into(),
+            label: "AURICOM".into(),
+            details: Details::Ship {
+                rating: None,
+                variants: Vec::new(),
+            },
+        },
+    ];
+    let picker = Picker::new(Kind::Ship, entries, Some("Qirex"), None);
+    // A 20-unit line height and `FaceScales::default().default` of 1.0, so
+    // the step is the widget's own `scale="2"`: 40.
+    let skin = Skin::new(
+        oag_pure::FRONT_END.menu,
+        oag_display::space::Space::PSP,
+        20.0,
+    );
+    let layers = draw_list(
+        &picker,
+        &layout,
+        &skin,
+        &Frame::default(),
+        None,
+        false,
+        &|_| None,
+        &|text| text.len() as f32 * 8.0,
+    );
+    let rows: Vec<(String, f32, f32, f32, [f32; 4])> = layers
+        .body
+        .iter()
+        .filter_map(|draw| match draw {
+            Draw::Text {
+                text,
+                x,
+                y,
+                scale,
+                color,
+                ..
+            } => Some((text.clone(), *x, *y, *scale, *color)),
+            _ => None,
+        })
+        // `body` also names the selected entry inside the panel, the way
+        // Pulse's screens do; the list is what sits at the widget's own `x`.
+        .filter(|row| (row.1 - 21.0).abs() < 1e-3)
+        .collect();
+    let step = 20.0 * FaceScales::default().default * 2.0;
+    assert_eq!(rows.len(), 3, "{rows:?}");
+    for (index, row) in rows.iter().enumerate() {
+        assert_eq!(row.0, ["FEISAR", "QIREX", "AURICOM"][index]);
+        assert!((row.1 - 21.0).abs() < 1e-3, "{row:?}");
+        assert!(
+            (row.2 - (45.0 + index as f32 * step)).abs() < 1e-3,
+            "{row:?}"
+        );
+    }
+    // The selected row takes the title's own measured ink, the rest its
+    // measured unselected one - **not** the widget's `color` attribute,
+    // which on Pure is `TextColor` and is the selected row's colour.
+    assert_eq!(rows[1].4, crate::screen::argb_to_rgba(0xFF16_AED1));
+    assert_eq!(rows[0].4, crate::screen::argb_to_rgba(0xFF88_D6E8));
+    assert_ne!(rows[0].4, rows[1].4, "the selection has to be visible");
+}
+
+/// Pulse's own selection screens author no `<Menu>`, so the listing draws
+/// nothing there and its single-entry display is untouched.
+#[test]
+fn pulses_selection_screens_list_nothing() {
+    let screens = Screens::from_xml(XML);
+    let layout = Layout::read(
+        &screens,
+        Kind::Track,
+        &strings(),
+        FaceScales::default(),
+        PSP,
+    )
+    .expect("Track Creation reads");
+    assert!(layout.screen.menu.is_none());
+}

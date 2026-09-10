@@ -318,6 +318,17 @@ impl Session {
         let Stage::Menu(stage) = &mut self.stage else {
             return false;
         };
+        let previews = crate::picker_stage::Previews {
+            meshes: self
+                .shell
+                .as_ref()
+                .and_then(|shell| shell.title.front_end)
+                .is_some_and(|front_end| front_end.preview_meshes),
+            globals: self
+                .shell
+                .as_ref()
+                .map_or_else(Vec::new, |shell| shell.globals.clone()),
+        };
         let mut picker = PickerStage::new(
             model,
             layout,
@@ -327,6 +338,7 @@ impl Session {
             distances,
             self.anisotropy,
             base,
+            previews,
         );
         picker.refresh_preview(&self.gpu);
         picker.refresh_info();
