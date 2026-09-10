@@ -1,3 +1,25 @@
+# Every WAD-internal path on these discs is authored with backslashes
+# (`Data\Ships\Feisar\ship.vex`). `just` interpolates a bare `{{ARGS}}` into the
+# shell command line unquoted, and an unquoted backslash is an escape
+# character to `sh` - it deletes the separators silently, with no error; the
+# failure surfaces later as "no such entry", which reads like a wrong path
+# rather than a mangled one. `positional-arguments` makes each recipe's own
+# parameters available as real, already-quoted shell arguments (`$1`, `$2`,
+# ... and `$@`), so a recipe body that references `"$@"` instead of `{{ARGS}}`
+# gets the argument text back exactly as typed. This setting alone changes
+# nothing - `{{ARGS}}` is still textually substituted unquoted wherever a
+# recipe still uses it - so every recipe below that only ever took `*ARGS` had
+# its body's trailing `{{ARGS}}` changed to `"$@"` to actually pick this up.
+#
+# A recipe with named parameters *before* `*ARGS` (the `launch-*`, `rpcs3-*`
+# and `pcsx2-*` families) was deliberately left alone: `$1` there is the first
+# *declared parameter*, not the first extra argument, so `"$@"` would
+# re-include the image path a line already names via `{{image}}`. Fixing those
+# needs a `#!/usr/bin/env sh` body plus `shift N` for the right `N`, which is a
+# real edit with no WAD-path bug behind it - none of them take a WAD-internal
+# path, only an image path or an emulator flag - so it stays undone here.
+set positional-arguments
+
 default: check
 
 # Emulator binaries used by the launch-* recipes below. Override per-invocation with
@@ -34,7 +56,7 @@ default_scenario := "verification/scenarios/talons-junction-time-trial-lap.input
 native_video_flags := if os() == "linux" { "--features native-video" } else { "" }
 
 # fmt + lint + test + docs + architecture rules, the gate every commit must pass
-check: fmt-check lint test check-docs check-deps check-determinism check-size check-names check-captures check-handover check-link-data check-strings
+check: fmt-check lint test check-docs check-deps check-determinism check-size check-names check-captures check-handover check-link-data check-strings check-just-args
 
 # Documentation is a deliverable, so its links are checked like any other build output
 check-docs:
@@ -45,6 +67,21 @@ check-docs:
 # see scripts/check-strings.py's own module doc for the baseline it freezes).
 check-strings:
     python3 scripts/check-strings.py
+
+# Fixture for check-just-args.py, never called directly: proves a `*ARGS`
+# recipe that references `"$@"` hands its arguments back exactly as typed -
+# backslashes, spaces and all - rather than mangled the way an unquoted
+# `{{ARGS}}` interpolation is. See the `positional-arguments` comment at the
+# top of this file. `_`-prefixed, so `just --list` does not offer it.
+_just-args-echo *ARGS:
+    printf '%s\n' "$@"
+
+# Regression test for the backslash-eating bug the `positional-arguments`
+# comment at the top of this file describes: every `*ARGS` recipe that was
+# switched to `"$@"` must hand its arguments back unmangled. No disc data
+# needed, so this runs in the plain gate.
+check-just-args:
+    python3 scripts/check-just-args.py
 
 # Proves scripts/link-worktree-data.sh's own guarantees (never clobber a real
 # file or directory, still reach an untracked entry beside a tracked one)
@@ -156,7 +193,7 @@ crate-graph out="target/deps.svg":
     echo "wrote $out (and $dotfile)"
 
 unpack *ARGS:
-    cargo run -q -p oag-tools --bin oag-unpack -- {{ARGS}}
+    cargo run -q -p oag-tools --bin oag-unpack -- "$@"
 
 # Report platform + serial for every image present in data/images/
 unpack-info:
@@ -268,7 +305,7 @@ hash-images:
 play *ARGS:
     #!/usr/bin/env bash
     set -euo pipefail
-    args=({{ARGS}})
+    args=("$@")
     first="${args[0]:-}"
     case "$first" in
         ""|--*)
@@ -350,25 +387,34 @@ play *ARGS:
 # encrypted `hdfury-ps3-eu.iso` sitting beside its decrypted twin is what that
 # is for; see `just ps3iso decrypt` and docs/formats/ps3-disc.md.
 launch *ARGS:
-    cargo run --release -p oag-game {{native_video_flags}} -- --launcher {{ARGS}}
+    cargo run --release -p oag-game {{native_video_flags}} -- --launcher "$@"
 
 # Same as `play`, but wrapped with MangoHud for an FPS/frametime overlay. Needs
 # `mangohud` installed; override the binary with `MANGOHUD_BIN`.
 play-mangohud *ARGS:
-    OAG_PLAY_WRAPPER={{mangohud_bin}} just play {{ARGS}}
+    OAG_PLAY_WRAPPER={{mangohud_bin}} just play "$@"
 
 # Capture the boot sequence, the menu and the race it launches, without a display
+#
+# `--no-audio` on every leg: a machine with a real device otherwise paces the
+# boot movie against wall-clock time (ADR-0019), and this headless run
+# finishes in far less real time than the movie takes to play. The two
+# `--until` legs below both hold or press a skip button, so they reach their
+# target long before that would matter - but a machine slow enough to miss the
+# skip's own timing window would silently start depending on it, so this pins
+# every leg to the tick clock rather than to whatever audio happens to be
+# attached. See `crates/game/src/capture.rs`'s `MAX_TICKS` doc comment.
 play-screenshots out="/tmp":
     #!/usr/bin/env bash
     set -euo pipefail
-    cargo run -q --release -p oag-game {{native_video_flags}} -- --screenshot "{{out}}/oag-intro.png" --ticks 400
+    cargo run -q --release -p oag-game {{native_video_flags}} -- --screenshot "{{out}}/oag-intro.png" --ticks 400 --no-audio
     cargo run -q --release -p oag-game {{native_video_flags}} -- --screenshot "{{out}}/oag-language.png" \
-        --until "Language Selection" --hold start
+        --until "Language Selection" --hold start --no-audio
     # Launch Game hands off to a race, so this one is a ship on a track that was
     # reached through the menus. `--press` pulses cross on alternating ticks, which
     # is what picks the language and then leaves the throttle on half of them.
     cargo run -q --release -p oag-game {{native_video_flags}} -- --screenshot "{{out}}/oag-launch.png" \
-        --until "Launch Game" --press start,cross --ticks 60
+        --until "Launch Game" --press start,cross --ticks 60 --no-audio
 
 # One race frame per upscaler, plus a supersampled reference, for judging a
 # resampler by looking rather than by counting. An aggregate statistic ranks a
@@ -408,7 +454,7 @@ compare-upscalers image scale="50" out="/tmp":
 
 # Package the game as one x86_64 AppImage, built against this machine's glibc
 appimage *ARGS:
-    ./scripts/build-appimage.sh {{ARGS}}
+    ./scripts/build-appimage.sh "$@"
 
 # The same package built in Debian bookworm, which is what a Steam Deck needs: a
 # native build links libm symbols an older glibc does not have and refuses to
@@ -418,27 +464,27 @@ appimage *ARGS:
 
 # Package the AppImage against an older glibc, so it also runs on a Steam Deck
 appimage-portable *ARGS:
-    ./scripts/build-appimage.sh --container {{ARGS}}
+    ./scripts/build-appimage.sh --container "$@"
 
 # Install a .desktop entry and icon for this checkout into ~/.local/share, so a
 # Wayland taskbar has something to resolve the window's app_id against - see
 # docs/tools/packaging.md and scripts/install-desktop-file.sh
 install-desktop-file *ARGS:
-    ./scripts/install-desktop-file.sh {{ARGS}}
+    ./scripts/install-desktop-file.sh "$@"
 
 # Build the portable AppImage and copy it, plus any data/images and data/dlc
 # you have, onto the Steam Deck (or any host reachable over ssh) - see
 # docs/tools/packaging.md#steam-deck and scripts/deploy-to-deck.sh
 deploy-deck *ARGS:
-    ./scripts/deploy-to-deck.sh {{ARGS}}
+    ./scripts/deploy-to-deck.sh "$@"
 
 # View assets straight from a disc image
 view *ARGS:
-    cargo run -q -p oag-view -- {{ARGS}}
+    cargo run -q -p oag-view -- "$@"
 
 # Read a WAD archive
 wad *ARGS:
-    cargo run -q -p oag-tools --bin oag-wad -- {{ARGS}}
+    cargo run -q -p oag-tools --bin oag-wad -- "$@"
 
 # Rebuild the WAD entry-name candidate list from a disc image
 mine-names image:
@@ -448,12 +494,12 @@ mine-names image:
 # plain-region `extract` need no key; `decrypt` needs the disc's own .dkey,
 # which is never committed. See docs/formats/ps3-disc.md.
 ps3iso *ARGS:
-    python3 scripts/ps3iso.py {{ARGS}}
+    python3 scripts/ps3iso.py "$@"
 
 # Read a PS3 .psarc archive in place inside a decrypted disc image:
 # info|list|cat|extract. See docs/formats/psarc.md.
 psarc *ARGS:
-    python3 scripts/psarc.py {{ARGS}}
+    python3 scripts/psarc.py "$@"
 
 # Re-derive every number on docs/formats/hd-status.md from the discs themselves.
 # The second argument is optional and only feeds the Pulse control column.
@@ -693,26 +739,26 @@ scripted-emu scenario=default_scenario out="data/traces/scripted-emu.csv" *ARGS:
 # with its websocket debugger enabled and the game already in a race; see
 # docs/reverse-engineering/ppsspp-debugger.md.
 trace *ARGS:
-    uv run --with websocket-client python scripts/psp-trace.py {{ARGS}}
+    uv run --with websocket-client python scripts/psp-trace.py "$@"
 
 # Put the original back on the start line, or send an input script at a
 # free-running emulator in real time. `just drive restart`, `just drive drive
 # --script F`; see docs/reverse-engineering/ppsspp-debugger.md.
 [doc("Restart a race, or send a script at a free-running emulator in real time")]
 drive *ARGS:
-    uv run --with websocket-client python scripts/psp-drive.py {{ARGS}}
+    uv run --with websocket-client python scripts/psp-drive.py "$@"
 
 # Fly the original round a lap, steering off the track's own spline, and write
 # down what it pressed. Needs `oag-trace track` output; see
 # docs/tools/oag-trace.md#a-whole-lap-and-where-it-came-from.
 [doc("Fly the original round a lap and record the input it took to do it")]
 autopilot *ARGS:
-    uv run --with websocket-client python scripts/psp-autopilot.py {{ARGS}}
+    uv run --with websocket-client python scripts/psp-autopilot.py "$@"
 
 # Compare our simulation against a captured trace: first divergent tick, and by
 # how much. See docs/tools/oag-trace.md.
 trace-compare *ARGS:
-    cargo run -q -p oag-trace -- {{ARGS}}
+    cargo run -q -p oag-trace -- "$@"
 
 # Where a track's speed/weapon pads are, with approach points for `just drive
 # place`. See docs/tools/frame-compare.md.
@@ -721,7 +767,7 @@ trace-compare *ARGS:
 #   just drive place --pads-csv /tmp/pads.csv --pad 3 --before 50 --speed 120
 [doc("Dump a track's pad trigger volumes, with approach points for teleports")]
 pads *ARGS:
-    cargo run -q -p oag-trace -- pads --source {{psp_image}} {{ARGS}}
+    cargo run -q -p oag-trace -- pads --source {{psp_image}} "$@"
 
 # One frame of ours, at PSP size, from a row of a capture: the ship pose always,
 # the recorded camera too when the capture was taken with `--camera`. The other
@@ -748,40 +794,40 @@ frame-compare theirs ours out="/tmp":
 # Build the Allegrex processor module against the installed Ghidra.
 # Stock Ghidra mis-decodes PSP vector code; see docs/psp/allegrex-vfpu.md.
 build-allegrex *ARGS:
-    ./scripts/build-ghidra-allegrex.sh {{ARGS}}
+    ./scripts/build-ghidra-allegrex.sh "$@"
 
 # Build a patched RPCS3 with working GDB write watchpoints (Z2/z2) - stock
 # RPCS3 never implemented them, confirmed against upstream master; see
 # docs/reverse-engineering/rpcs3-debugger.md ("A patched build exists").
 # Clones into data/tools/rpcs3-watchpoints (gitignored, several GiB).
 build-rpcs3-watchpoints *ARGS:
-    ./scripts/build-rpcs3-watchpoints.sh {{ARGS}}
+    ./scripts/build-rpcs3-watchpoints.sh "$@"
 
 # Build the Emotion Engine (PS2) processor module against the installed
 # Ghidra. Stock Ghidra mis-decodes R5900 code as MIPS Release 6; see
 # docs/reverse-engineering/toolchain.md. Needs build-allegrex to have run at
 # least once - this borrows its Gradle wrapper.
 build-emotionengine *ARGS:
-    ./scripts/build-ghidra-emotionengine.sh {{ARGS}}
+    ./scripts/build-ghidra-emotionengine.sh "$@"
 
 # Build the Ps3GhidraScripts extension against the installed Ghidra, with this
 # project's PS3 compiler-spec fix (scripts/ghidra-ps3-language/) added as a
 # second language. See docs/reverse-engineering/toolchain.md#ps3.
 build-ps3-scripts *ARGS:
-    ./scripts/build-ghidra-ps3-scripts.sh {{ARGS}}
+    ./scripts/build-ghidra-ps3-scripts.sh "$@"
 
 # Build the ELF/PRX loader for Vita binaries against the installed Ghidra.
 # Needs build-allegrex to have run at least once - this borrows its Gradle
 # wrapper too, same as build-emotionengine. Installation into Ghidra is
 # manual; this only builds the zip.
 build-vita-loader-redux *ARGS:
-    ./scripts/build-vita-loader-redux.sh {{ARGS}}
+    ./scripts/build-vita-loader-redux.sh "$@"
 
 # Build psvpfsparser, which decrypts a PS Vita PKG's PFS layer given its
 # zRIF or klicensee. pkg2zip alone only strips the outer AES-CTR layer - see
 # data/README.md#vita-pkgs-decrypt-in-three-steps-dataextractedvita-holds-the-result.
 build-psvpfstools *ARGS:
-    ./scripts/build-psvpfstools.sh {{ARGS}}
+    ./scripts/build-psvpfstools.sh "$@"
 
 # Add r2 to the unaffected list of Ghidra's PowerPC 64/32-addr compiler spec,
 # which PS3 PPU code needs to decompile correctly - r2 is the TOC pointer and a
@@ -791,7 +837,7 @@ build-psvpfstools *ARGS:
 # build-ps3-scripts` plus `scripts/import-ps3-eboot.sh --ps3-cspec` is an
 # alternative that does not touch the Ghidra install at all.
 patch-ppc-cspec *ARGS:
-    ./scripts/patch-ghidra-ppc-cspec.sh {{ARGS}}
+    ./scripts/patch-ghidra-ppc-cspec.sh "$@"
 
 # Resolve the PSP import stubs from the binary's own NID tables.
 #
@@ -808,20 +854,20 @@ resolve-imports boot="data/extracted/psp/PSP_GAME/SYSDIR/BOOT.BIN" out="data/ghi
 
 # Recover a Vita title's klicensee from its zRIF - see scripts/zrif-to-klicensee.py.
 zrif-to-klicensee *ARGS:
-    python3 scripts/zrif-to-klicensee.py {{ARGS}}
+    python3 scripts/zrif-to-klicensee.py "$@"
 
 # Decrypt a Vita retail SELF (eboot.bin/.suprx) to the plain ELF-PRX
 # VitaLoaderRedux can actually import - see scripts/vita-self-decrypt.py.
 vita-self-decrypt *ARGS:
-    python3 scripts/vita-self-decrypt.py {{ARGS}}
+    python3 scripts/vita-self-decrypt.py "$@"
 
 # Apply every documented symbol name to the open Ghidra program
 apply-names *ARGS: resolve-imports
-    python3 scripts/apply-ghidra-names.py {{ARGS}}
+    python3 scripts/apply-ghidra-names.py "$@"
 
 # Report names in the open Ghidra program that names.tsv does not sanction
 audit-names *ARGS:
-    python3 scripts/audit-ghidra-names.py {{ARGS}}
+    python3 scripts/audit-ghidra-names.py "$@"
 
 # Export a PSP binary's names.tsv as a PPSSPP .sym symbol map - no Ghidra, no
 # PPSSPP needed. Load the result in PPSSPP's Debug menu -> Load symbol map.
@@ -879,4 +925,4 @@ capture-ghidra-state raw *ARGS:
 # Three sessions each rediscovered the same empty relocation table by hand
 # before anything measured it - see docs/ghidra/workflow.md
 check-ghidra-import *ARGS:
-    python3 scripts/check-ghidra-import.py {{ARGS}}
+    python3 scripts/check-ghidra-import.py "$@"

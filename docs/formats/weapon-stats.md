@@ -24,17 +24,19 @@ records **attribute names and structure only**. The values are the game's tuning
 data; read them off your own disc with:
 
 ```sh
-cargo run -q -p oag-tools --bin oag-wad -- cat --expand \
-  <image>:PSP_GAME/USRDIR/Data.wad 'Data\XML\WeaponStats_Race.xml'
+just wad cat --expand <image>:PSP_GAME/USRDIR/Data.wad 'Data\XML\WeaponStats_Race.xml'
 ```
 
-**Call the binary directly, not through `just wad`.** `just`'s recipe body
-passes `{{ARGS}}` through the shell unquoted, which swallows the backslashes
-in the entry name before `oag-wad` ever sees them - `just wad cat --expand
-<image>:...Data.wad 'Data\XML\WeaponStats_Race.xml'` fails with `no entry
-named DataXMLWeaponStats_Race.xml`, not a missing-file error, which reads like
-the wrong path rather than a quoting trap. Confirmed directly: `cargo run`
-against the same string finds the entry every time.
+**`just wad` now hands the entry name through unmangled.** It used to pass
+`{{ARGS}}` through the shell unquoted, which swallowed the backslashes before
+`oag-wad` ever saw them - `just wad cat --expand <image>:...Data.wad
+'Data\XML\WeaponStats_Race.xml'` failed with `no entry named
+DataXMLWeaponStats_Race.xml`, not a missing-file error, which read like the
+wrong path rather than a quoting trap. `justfile` now sets
+`positional-arguments` and this recipe references `"$@"` instead, so the
+recipe above works as written; calling `cargo run -q -p oag-tools --bin
+oag-wad -- cat --expand <image>:PSP_GAME/USRDIR/Data.wad
+'Data\XML\WeaponStats_Race.xml'` directly still works too, unchanged.
 
 ## Two files, one schema
 
