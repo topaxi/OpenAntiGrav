@@ -245,11 +245,13 @@ pub struct MenuSkin {
     /// a screen this build used to clear to black for want of anything else.
     /// A captured `Main Menu` (`pure-psp-usa.chd`, PPSSPP 1.20.4, 2026-08-25)
     /// shows solid white behind the row list, so `0xFFFFFFFF` is what stands
-    /// in - the same "engine carries a compiled-in default this project has
-    /// not found" gap `oag_pure::frontend::FALLBACK_GLOBALS` already
-    /// documents for `TitleColor`/`DesignColor`/`TextColor`/`FrameLineColor`,
-    /// measured the same way. `None` for a title whose frame already
-    /// supplies its own clear, or that draws no frame at all.
+    /// in: an "engine carries a compiled-in default this project has not
+    /// found" gap. `oag_pure::frontend::FALLBACK_GLOBALS` used to document
+    /// four colours the same way and no longer does - the disc authored them
+    /// after all, in a *style* skin the front-end root does not include, so
+    /// **check for one before concluding a name is undeclared**. `None` for a
+    /// title whose frame already supplies its own clear, or that draws no
+    /// frame at all.
     pub background: Option<Argb>,
     /// The selected row. **Measured on Pulse; authored on Wipeout HD.**
     ///

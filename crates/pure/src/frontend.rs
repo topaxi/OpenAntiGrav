@@ -143,60 +143,30 @@ pub mod states {
     pub const FE_SCREEN: &str = "FE Screen";
 }
 
-/// `FEGlobals` colours Pure's own screens reference
-/// (`FEGlobals->TitleColor`, `FEGlobals->DesignColor`, `FEGlobals->TextColor`,
-/// `FEGlobals->FrameLineColor`) that `Data\Plugins\PI001\GUI\Skin.xml` never
-/// declares - the disc's own copy authors exactly nine globals (`TitleScale`,
-/// `TitleXOffset`, `TitleYOffset`, `MenuScale`, `MenuXOffset`,
-/// `MSWarningScale`, `MSWarningColour1`, `MSWarningColour2`,
-/// `FMVFrameCount`), confirmed by reading the file directly - zero of
-/// `FrameLineColor`'s own seventeen usages on `Title Screen` are backed by a
-/// declaration either, checked the same way. `TextColor` is the same gap
-/// `HANDOVER.md` already had on file, now with a measured value rather than
-/// only a citation; `TitleColor`/`DesignColor`/`FrameLineColor` are `Title
-/// Screen`'s own. Either an unmerged `LoadXML` base skin defines all four, or
-/// the original engine carries a compiled-in default table this project has
-/// not found. Neither is resolved; this is a **measured stand-in**, not a
-/// derivation.
+/// Colour globals Pure's front end names and its own `Skin.xml` never
+/// declares - **empty, because the disc authors every one of them after all.**
 ///
-/// **Measured by sampling pixels**, not read from any XML: driving
-/// `pure-psp-usa.chd` under PPSSPP (the same session `states::TITLE_SCREEN`
-/// was evidenced in) and reading the rendered text directly off captured
-/// frames. `TitleColor` (`Title Screen`'s "PRESS START BUTTON") samples solid
-/// at RGB(237, 72, 150); `DesignColor` (`Title Screen`'s "HOLD ON!") at
-/// RGB(100, 220, 246); `TextColor` (`Language Selection`'s unselected language
-/// rows, e.g. `ESPAÑOL`) at RGB(136, 214, 232). `DesignColor` is close enough
-/// to Pulse's own `DesignColor` (`0xFF5FDBF6`, from `pulse-psp-usa.chd`'s
-/// `Skin.xml`) that the two may be the same constant - unconfirmed, and not
-/// assumed here; every value below is Pure's own measurement, not borrowed
-/// from Pulse's. `TitleColor` does **not** match Pulse's own same-named
-/// global (`0xFF000000`, black) - the two titles genuinely differ here, so
-/// borrowing Pulse's table wholesale would have been wrong. Confidence
-/// **65**: a real, repeatable pixel measurement, but of the *effect* rather
-/// than of the *source* - the true value could differ slightly from what
-/// antialiasing and video compression left in a captured frame, and the
-/// mechanism that is supposed to supply it is still unknown.
+/// This table used to hold `TitleColor`, `DesignColor`, `TextColor` and
+/// `FrameLineColor`, sampled off captured PPSSPP frames at confidence 60-65
+/// because seventeen usages of `FEGlobals->FrameLineColor` had zero
+/// declarations in `Data\Plugins\PI001\GUI\Skin.xml`. They were being looked
+/// for in the wrong file. **Pure's front end is skinnable**: its plugin
+/// definition activates a second `PI_Skin` at `Data\Skins\Default`, whose own
+/// `Skin.xml` declares 41 globals including all four, identically on both
+/// pressings. See `oag_game`'s `boot::screens::style_skin_globals` and
+/// `docs/formats/race-setup.md`.
 ///
-/// **`FrameLineColor` is measured the same way, off `Title Screen`'s own
-/// corner-bracket lines around the `START` button, at confidence 60 rather
-/// than 65.** A screenshot at native `2x` resolution (`--xres 960 --yres
-/// 544`, eliminating the fractional-scale blending a windowed capture
-/// otherwise has) still shows every line as two rows, not one - `RGB(179,
-/// 215, 226)` and a lighter `RGB(229, 241, 245)` in equal counts across the
-/// whole visible line, which reads as the renderer's own sub-pixel placement
-/// rather than a scaling artefact, since exact `2x` has nothing left to blend
-/// with. The darker row is taken as the widget's own colour and the lighter
-/// as a partial-coverage edge; that split, not just the usual antialiasing
-/// margin, is the extra point of uncertainty the lower confidence covers.
+/// The disc disagrees with three of the four measurements: by a little on
+/// `TitleColor` (`0xFFED4796` against the sampled `0xFFED4896`) and
+/// `DesignColor` (`0xFF5FDBF6` against `0xFF64DCF6`), and by a lot on
+/// `TextColor` (`0xFF11ACD0` against `0xFF88D6E8`). That is what sampling the
+/// *effect* rather than the source costs, and why those values were only ever
+/// at 65.
 ///
-/// Consulted by `oag_game::boot::load`, merged in only for keys Pure's own
-/// `Skin.xml` left undeclared - a real declaration always wins.
-pub const FALLBACK_GLOBALS: &[(&str, &str)] = &[
-    ("TitleColor", "0xFFED4896"),
-    ("DesignColor", "0xFF64DCF6"),
-    ("TextColor", "0xFF88D6E8"),
-    ("FrameLineColor", "0xFFB3D7E2"),
-];
+/// Kept as an empty table rather than deleted, so a name that turns out to be
+/// genuinely undeclared has somewhere to go and this note stays attached to
+/// the mistake it records.
+pub const FALLBACK_GLOBALS: &[(&str, &str)] = &[];
 
 /// `Image` widgets Pure's own `Skin.xml` gives no `src` at all, matched by
 /// name to a content-scan hash - the same "assigned programmatically on the

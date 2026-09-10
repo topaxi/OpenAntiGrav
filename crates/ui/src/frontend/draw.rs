@@ -792,7 +792,21 @@ impl Frontend {
         let menu_y = menu.map_or(0.0, |m| m.y);
         let scale = menu.map_or(1.0, |m| m.scale).max(0.5);
         let align = Align::parse(menu.map_or("left", |m| m.align.as_str()));
-        let color = argb_to_rgba(menu.map_or(0xffff_ffff, |m| m.color));
+        // **The title's own measured unselected ink wins over the widget's
+        // `color`**, where it measured one. Pure's `<Menu>` says
+        // `color="FEGlobals->TextColor"`, and `TextColor` is `0xFF11ACD0` -
+        // which the Main Menu capture behind `MenuSkin::selected`
+        // (`0xFF16AED1`) shows is the *selected* row's ink, not an
+        // unselected one; its unselected rows sample `0xFF88D6E8`, lighter.
+        // Taking the widget's attribute literally paints both rows the same
+        // colour and the list loses its selection cue entirely. Until the
+        // style skin was read, `TextColor` resolved to the sampled
+        // `0xFF88D6E8` and the two agreed by accident.
+        let color = self
+            .menu_skin
+            .and_then(|skin| skin.text)
+            .or_else(|| menu.map(|m| m.color))
+            .map_or([1.0, 1.0, 1.0, 1.0], argb_to_rgba);
         let row = font_line_height(menu.map_or("Default", |m| m.font.as_str())) * scale;
 
         // The selected row's own ink, when this title carries a *static*

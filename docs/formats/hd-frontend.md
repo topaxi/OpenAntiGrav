@@ -1500,10 +1500,13 @@ any of the 32**.
 Four `<Menu>` widgets in `online_definition.xml` nevertheless say `font="menu"`,
 and two `ingame_definition.xml` widgets say `font="InGame"`. Both name slots
 that no plugin on this disc declares. Whether the engine falls back to `Default`
-or has a compiled-in table is unknown, and is the same open question Pure's
-`FALLBACK_GLOBALS` records for colours. So `None` here means "HD's rows are
+or has a compiled-in table is unknown. So `None` here means "HD's rows are
 drawn in the default face" *as a finding*, and the doc comment on the HD crate
-should say which of the two `None` meanings it is - Pure's precedent.
+should say which of the two `None` meanings it is. Pure used to be the
+precedent for a compiled-in colour table; it turned out its colours were
+authored in a *style* skin the front-end root does not include (see
+[race-setup.md](race-setup.md)), so before recording a name as undeclared,
+check whether the title activates a second `PI_Skin`. HD declares none.
 
 ### The `transition_secs` warning, read this before pasting
 

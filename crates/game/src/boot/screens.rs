@@ -32,13 +32,120 @@ pub(super) fn load_included_screens(
     Ok(Screens::from_xml_with_fallback_globals(&xml, &globals))
 }
 
+/// The globals every *activated* style skin declares, sorted by name.
+///
+/// **Pure's front end is skinnable and Pulse's is not**, and that is why its
+/// own `Data\Plugins\PI001\GUI\Skin.xml` declares 13 globals against Pulse's
+/// 56: the other 37 - every colour the selection screens, the stat panels and
+/// the title text draw in - live in `Data\Skins\Default\Skin.xml`, a second
+/// skin the plugin definition activates alongside the UI one:
+///
+/// ```xml
+/// <PI_Skin name="UI">      <Values location="Data\Plugins\PI001\GUI" activate="true"/>
+/// <PI_Skin name="Default"> <Values location="Data\Skins\Default" style="true" activate="true"/>
+/// <PI_Skin name="Hacker">  <Values location="Data\Skins\Hacker" style="true"/>
+/// ```
+///
+/// `Hacker` is the same file with a black background and is **not**
+/// activated, so it is not read - which is the whole reason to follow
+/// `activate` rather than load every `PI_Skin` on the disc.
+///
+/// Pulse declares exactly one `PI_Skin`, the UI one, whose `Skin.xml` is the
+/// front-end root already loaded - so this returns nothing there and changes
+/// nothing, measured on both pressings rather than assumed.
+///
+/// A skin that will not read is reported and skipped: a missing colour falls
+/// back the way it always did, which is a duller screen and not a dead one.
+fn style_skin_globals(
+    archives: &mut oag_assets::Archives,
+    plugin_definition: &str,
+    front_end_root: &str,
+    report: &mut Vec<String>,
+) -> Vec<(String, String)> {
+    let Ok(blob) = archives.read_name(plugin_definition) else {
+        return Vec::new();
+    };
+    let Ok(xml) = expand_front_end_xml(&blob) else {
+        return Vec::new();
+    };
+    let mut skins = Vec::new();
+    collect_skins(&fexml::parse(&xml), &mut skins);
+    let mut out: Vec<(String, String)> = Vec::new();
+    for location in skins {
+        let name = format!(r"{location}\Skin.xml");
+        // The UI skin is the front-end root, already loaded with its own
+        // globals; reading it again here would only shadow itself.
+        if name.eq_ignore_ascii_case(front_end_root) {
+            continue;
+        }
+        match archives
+            .read_name(&name)
+            .map_err(|e| e.to_string())
+            .and_then(|blob| expand_front_end_xml(&blob).map_err(|e| e.to_string()))
+        {
+            Ok(xml) => {
+                let globals = Screens::from_xml(&xml).globals;
+                report.push(format!("style skin {name}: {} globals", globals.len()));
+                out.extend(globals);
+            }
+            Err(error) => report.push(format!("{name}: {error} - its globals are unread")),
+        }
+    }
+    out.sort();
+    out
+}
+
+/// Every activated `PI_Skin`'s `location`, in document order.
+fn collect_skins(node: &fexml::Node, out: &mut Vec<String>) {
+    for skin in node.children_named("PI_Skin") {
+        if skin.flag("activate") == Some(true)
+            && let Some(location) = skin.value("location")
+        {
+            out.push(location.to_string());
+        }
+    }
+    for child in &node.children {
+        collect_skins(child, out);
+    }
+}
+
+/// Front-end XML is stored with its element and attribute names shortened
+/// through a per-file dictionary; files that begin `<?xml` are already plain.
+fn expand_front_end_xml(blob: &[u8]) -> Result<String> {
+    if fexml::is_fexml(blob) {
+        fexml::expand(blob).map_err(|e| anyhow::anyhow!("expanding the front-end XML: {e}"))
+    } else {
+        String::from_utf8(blob.to_vec()).context("the front-end XML is not text")
+    }
+}
+
+/// Reads the front-end root, with the activated style skins' globals seeded
+/// under the title's own measured stand-ins.
+///
+/// **The style skins first**, because on a skinnable front end most of the
+/// colours are the style's - see [`style_skin_globals`]. Both go in as
+/// *fallbacks*, so the root's own declarations win over either.
+///
+/// Which order they are in turns out not to matter on the one title that has
+/// a style skin: Pure's root declares 9 globals, its style skin 41, and the
+/// union is 50 - **the two files name no global in common**, measured rather
+/// than assumed. The precedence is stated anyway so that a title that does
+/// overlap resolves predictably rather than by whichever file was read last.
 pub(super) fn load_screens(
     archives: &mut oag_assets::Archives,
     root: &str,
+    plugin_definition: &str,
     fallback_globals: &[(&str, &str)],
     fallback_images: &[(&str, &str)],
     report: &mut Vec<String>,
 ) -> Result<Screens> {
+    let style = style_skin_globals(archives, plugin_definition, root, report);
+    let fallback_globals: Vec<(&str, &str)> = style
+        .iter()
+        .map(|(key, value)| (key.as_str(), value.as_str()))
+        .chain(fallback_globals.iter().copied())
+        .collect();
+    let fallback_globals = fallback_globals.as_slice();
     // The one piece with no degraded form: a front end with no screens is not a
     // front end. The message names the archives searched, because on a source
     // whose front-end root has never been located that is the useful half.
