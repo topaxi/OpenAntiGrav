@@ -328,6 +328,58 @@ the gating read (one team, one press, not an exhaustive test). `square` opened
 `triangle`/`select` both opened `Team Help` - both button bindings confirmed
 live.
 
+### Captured live in PPSSPP, 2026-09-10 (Pure)
+
+`pure-psp-eu.chd`, PPSSPP v1.20.4 SDL under Xvfb, a fresh profile, driven by
+blind `cross`/`down`/`right` taps with a screenshot after each rather than a
+state-name-verified walk - Pure's `G_STATE_MACHINE` address is unmeasured,
+unlike Pulse's, so `dbg.state_name()` cannot be used here yet. Screenshots
+are game content and were not committed.
+
+**Both `Track Selection` and `Team Selection` render a real 3D preview.**
+This corrects a working hypothesis from earlier the same session, drawn from
+a decompile of both screens' `ApplySelection` overrides that found no mesh
+composition in either - true of the overrides themselves, but the actual
+loading is one level further down (see
+[`race-box-screens.md`](../ghidra/functions/psp-pure-eu/race-box-screens.md)),
+and a screenshot settles what static reading alone got wrong.
+
+- **`Track Selection`** on Vineta K (Alpha league, first entry): a
+  wireframe-outline track spine in the same schematic style as the class
+  graph, plus a stat block - `RACE RECORD 0.00.00`, `LAP RECORD 0.00.00`,
+  `LENGTH 4446 M`, `HEIGHT 222 M` on a fresh profile. No hexagon-cropped
+  photo slideshow anywhere on this screen, unlike Pulse's `Track Creation` -
+  Pure's `screen.xml`/`screen_zone.xml` per circuit were not checked for
+  content this pass, but nothing in the XML (`Selection_Definition.xml`,
+  read above) references one the way Pulse's `TrackDefinition_EnterScreenState`
+  chain does.
+- **`Team Selection`** shows a distinct wireframe-outline ship per team -
+  checked on Feisar, Auricom and Qirex, three different silhouettes, agreeing
+  with their three different `Ship.vex` sizes on disc (60416/73920/61664
+  bytes) - plus `SPEED`/`HANDLING`/`SHIELD`/`THRUST` bars. The model appears
+  to turntable-rotate on its own, the same shape as Pulse's. No `Loyalty` bar
+  and no livery-name readout were visible on the entries checked, consistent
+  with Pure's two-state `Livery` `<MenuBitmap>` being a different, simpler
+  axis than Pulse's named-skin cycler.
+- **`Class Selection`, on this fresh profile, lists only `Vector` and
+  `Venom`** - `Flash`/`Rapier`/`Phantom` do not appear at all, confirming the
+  unlock gating this page's XML reading could not see (no `<Unlock>` element
+  anywhere in the file) is real and happens in code.
+- **A `sceIoOpen` breakpoint swept across `down`-triggered team and track
+  changes found no hits** (all four `zz_sceIoOpen` stub addresses armed via
+  the websocket debugger, 6 s window each). Assets stream from an
+  already-open archive rather than a discrete per-file open, so this
+  technique cannot localise which file backs either preview; a breakpoint on
+  the archive's own read primitive was not tried.
+
+**Net effect on this page's `PreviewSource` reading below**: both previews are
+confirmed real and per-entity, but the exact file each one loads was not
+pinned down by either decompilation or live tracing this pass.
+`<location>\Ship.vex` and `<location>\track.vex` are the only per-team/
+per-track files that exist on disc and visually match what renders (correct,
+distinct silhouette per entity) - wired at confidence ~70 on that basis, not
+on a located composer.
+
 ### HD/Fury authors its previews as widgets
 
 HD needs no string archaeology: `track_selection_definition.xml`'s first
@@ -758,14 +810,25 @@ Main Menu -> Single Player (mode only) -> Class Selection -> League | Tournament
 Zone short-circuits to `Zone Track Selection` and straight on to `Launch Game`,
 with no class, league or team step.
 
+- **The definition file is read, and it is Pulse's own file name.**
+  `Data\Plugins\PI001\GUI\Selection_Definition.xml` - not a localised entry,
+  resolves on `pure-psp-eu.chd` - holds `Class Selection`, `League Selection`,
+  `Tournament Selection`, `Track Selection`, `Zone Track Selection` and
+  `Team Selection` in full. Confidence 96 (direct read). This corrects an
+  earlier "these files are unread" note that had never actually been checked
+  against this exact path.
 - **Five speed classes** - Vector, Venom, Flash, Rapier, Phantom - against four
   everywhere else. Confidence 94. This does **not** establish that Pulse has a
   fifth; [handling-stats](handling-stats.md) records that question separately
   and it stays open.
 - **No AI difficulty row anywhere** in Pure's front-end XML. Confidence 94.
-- **No unlock machinery at all**: zero `<Unlock>`, zero `Grid=`, zero
-  `GSDisableEntriesBitField` across all eleven files. Confidence 94. Pure's
-  `Show Unlocks` subtree is a post-race reward reveal, not a gate.
+- **No unlock machinery authored in the XML** - zero `<Unlock>`, zero `Grid=`,
+  zero `GSDisableEntriesBitField` across all eleven files. Confidence 94.
+  Pure's `Show Unlocks` subtree is a post-race reward reveal, not a gate.
+  **Gating still happens, just in code rather than data**: a fresh profile's
+  `Class Selection` visibly lists only Vector and Venom (captured live in
+  PPSSPP, 2026-09-10, see below) - Flash/Rapier/Phantom are hidden until
+  something else unlocks them.
 - **Its one authored preview is a 2D stat graph on `Class Selection`** - a
   shared `class_background.mip` and `classgraph.mip` plus a per-class
   `<class>graph2.mip` / `graph3.mip` pair, inside five `<Watch watch="Class">`
@@ -775,7 +838,10 @@ with no class, league or team step.
 - Its variant axis is a two-state `<MenuBitmap name="Livery" maxItems="2">`
   toggle, against Pulse's four-way cycler.
 - `Track Selection` and `Team Selection` author an empty `<Menu allocate="16">`
-  and a `<Viewport>` and nothing else.
+  and a `<Viewport>` and nothing else **in the XML** - the 3D preview each one
+  draws is not authored there, the same way Pulse's two screens compose
+  theirs in code rather than XML. Confirmed by direct capture, not left as a
+  gap: see "Captured live in PPSSPP" below.
 
 ## The PS2 pressing's divergences
 
@@ -833,11 +899,17 @@ track-plus-class picker is the crossplay lobby vote.
   [`race-box-screens.md`](../ghidra/functions/psp-pulse-usa/race-box-screens.md#trackselection_populatelist-closes-what-populates-the-track-list-is-unread).
   HD's equivalent is still unfound - see
   [track-selection-screen](../ghidra/functions/ps3-hdfury-eu/track-selection-screen.md).
-- **Pure's track and craft previews are unresolved.** A craft candidate exists
-  (`%s\Phantom.vex` inside the `fe::TeamSelection_Screen` string span, with
-  `Data\Ships\Feisar\Phantom.vex` resolving) but no cross-reference was
-  recovered, so it rests on string adjacency alone: confidence 45, below this
-  project's floor for acting on.
+- **Pure's track and craft previews are confirmed real by live capture
+  (2026-09-10, see above), but the exact composing function is not
+  found.** `TeamSelection_ApplySelection`/`TrackSelection_ApplySelection`
+  are decompiled in full (`race-box-screens.md`) and neither composes the
+  *default* preview path; only `TeamSelection_ApplySelection`'s Phantom
+  special case does (`%s\Phantom.vex`/`%s\VR\Phantom.vex`, confidence 65
+  on when it actually fires - the gating flags trace to campaign-progress
+  and multiplayer-permission checks, not to the currently selected speed
+  class). `<location>\Ship.vex` and `<location>\track.vex` are wired as the
+  default convention on confidence ~70: real, resolving, and visually
+  matching, not a located composer.
 - **No screen class was renamed in Ghidra.** The strings prove the classes
   exist; they are not evidence of what any function does, and the rubric's
   floor is 50 to rename at all.

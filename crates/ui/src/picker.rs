@@ -350,10 +350,17 @@ impl Layout {
         faces: FaceScales,
         grid: [f32; 2],
     ) -> Option<Self> {
-        let name = match kind {
-            Kind::Track => "Track Creation",
-            Kind::Ship => "Team Selection",
+        // Two names for the track screen because the titles disagree and
+        // neither is a guess: Pulse's own is "Track Creation", Pure's is
+        // "Track Selection" (`docs/formats/race-setup.md`) - tried in order,
+        // the same shape `oag_game::race::shield_entry_names` uses for a
+        // title-divergent file name. Every title so far names its ship
+        // screen "Team Selection" alike, so that one needs no list.
+        let names: &[&str] = match kind {
+            Kind::Track => &["Track Creation", "Track Selection"],
+            Kind::Ship => &["Team Selection"],
         };
+        let name = names.iter().find(|n| screens.by_name(n).is_some())?;
         let scale = [grid[0] / PSP_GRID[0], grid[1] / PSP_GRID[1]];
         let mut screen = screens.by_name(name)?.clone();
         strip_player_suffix(&mut screen);

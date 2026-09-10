@@ -38,11 +38,18 @@ which is narrower than HD and closer to Pulse than the existing evidence got.
 
 ### The rest of Pure
 
+- **The definition file is read, 2026-09-10**:
+  `Data\Plugins\PI001\GUI\Selection_Definition.xml`, the same relative name
+  Pulse uses for its own race box, resolves on `pure-psp-eu.chd` and holds
+  every screen above. The "these files are unread" framing this thread opened
+  with had never actually been checked against this exact path.
 - **No AI difficulty anywhere in the front-end XML.** Confidence 94. So the
   "base settings like speed class, AI difficulty" shape is half true here.
-- **No unlock machinery at all**: zero `<Unlock>`, zero `Grid=`, zero
-  `GSDisableEntriesBitField` across all eleven files. `Show Unlocks` exists but
-  is a post-race reward reveal, not a gate.
+- **No unlock machinery authored in the XML** - zero `<Unlock>`, zero `Grid=`,
+  zero `GSDisableEntriesBitField` across all eleven files. `Show Unlocks`
+  exists but is a post-race reward reveal, not a gate. **Gating still
+  happens, in code**: a fresh profile's `Class Selection` visibly lists only
+  Vector and Venom (PPSSPP capture, 2026-09-10).
 - **The one authored preview is a 2D stat graph, and it previews the class** -
   four `<Image>` layers per class inside five `<Watch watch="Class">` blocks,
   all eleven `.mip`s resolved. This is the only flat-2D preview found in any
@@ -50,7 +57,9 @@ which is narrower than HD and closer to Pulse than the existing evidence got.
 - Its variant axis is a two-state `<MenuBitmap name="Livery">` toggle against
   Pulse's four-way `skin` cycler.
 - `Track Selection` and `Team Selection` author an empty `<Menu allocate="16">`
-  and a `<Viewport>` and nothing else. Code fills them.
+  and a `<Viewport>` and nothing else **in the XML**. Code fills them with a
+  real 3D preview each - confirmed live, not just inferred; see the Open item
+  below.
 
 ## 2048: the flow does not exist
 
@@ -68,9 +77,14 @@ it is the crossplay lobby vote.
 
 ## Open
 
-- **Pure's track and craft previews are unresolved.** The craft candidate
-  (`%s\Phantom.vex` inside the `fe::TeamSelection_Screen` string span) is
-  confidence 45 and must not be built on. Tracked in
+- **Pure's track and craft previews are confirmed real (PPSSPP capture,
+  2026-09-10) and the track/ship pickers are implemented**, reusing
+  `oag_ui::picker`/`oag_game::picker_stage` with `race_box: Some(...)` now set
+  and `<location>\Ship.vex` / `<location>\track.vex` wired as the preview
+  convention (confidence ~70 - real, resolving, visually matching, not a
+  located composer). The exact composing function and
+  `TeamSelection_ApplySelection`'s Phantom-model trigger (confidence 65,
+  campaign-progress-shaped) are still open. Tracked in
   `handover/rendering/the-race-setup-previews-are-meshes-and-nothing.md`.
 - **Pure's screen ordering is capped at 88** - it rests on `<Redirect>` targets
   only and has never been confirmed against a capture.
@@ -93,8 +107,11 @@ it is the crossplay lobby vote.
    Pure's `Class Selection` menu. Do not touch `handling-stats.md`'s
    conclusion. Ten minutes, and it is the highest-value item here because it
    feeds a thread someone is already on.
-2. Capture Pure's `Team Selection` and `Track Selection` under PPSSPP. That
-   settles both previews and the ordering cap in one session.
+2. **Done, 2026-09-10**: captured Pure's `Team Selection` and `Track
+   Selection` under PPSSPP. Settled that both previews are real; did not
+   settle the ordering cap (a fresh-profile walk never needed to prove the
+   chain order beyond what `<Redirect>` already states) or the exact file
+   each preview loads.
 3. Decide whether the localised-path rewrite is worth chasing. It blocks two
    files nobody currently needs, so probably not yet - but it will block the
    language work later, so note it there rather than losing it.
