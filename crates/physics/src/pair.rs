@@ -311,19 +311,25 @@ pub fn resolve(
 /// rotation" split `contact-response.md` records for the one-body path, and
 /// [`angular_term`] keeps it.
 ///
-/// # The point velocity the gate and `vn` are built from is not textbook
+/// # The point velocity the gate and `vn` are built from *is* textbook
 ///
 /// The original computes each body's velocity at the contact point as
-/// `v + cross(r, R^T omega)` (`vtfm4.q` through the body's own basis rows,
-/// then `vcrsp.t` with the lever arm on the *left*), where a textbook solver
-/// writes `v + omega x r`. Both the operand order and the spurious rotation
-/// of an already world-space `omega` are the original's, and they are what
-/// [`contact_velocity`] reproduces: recomputing `j` offline from a captured
-/// contact's raw inputs, this form matches the impulse the original applied
-/// to five significant figures on both captures (`43.1697` and `0.18440`),
-/// while `v + omega x r` gives `46.18` and `-0.085`. The second capture was
-/// a craft tumbling at 84 rad/s, which is what made the three candidate
-/// conventions separable at all.
+/// `v + cross(r, R^T omega)` (`vtfm4.q C000,E100,C200` at `0x0884f038` through
+/// the body's own basis rows, then `vcrsp.t` at `0x0884f078` with the lever arm
+/// on the *left*), where a textbook solver writes `v + omega x r`. **Those are
+/// the same expression**, because `body+0x150` holds the rotation rate negated
+/// and in body coordinates: `R^T(body+0x150) == -omega`, so
+/// `cross(r, -omega) == omega x r`. See [`Body::velocity_at`], which carries the
+/// measurement, and `docs/physics/angular-velocity-column.md`.
+///
+/// So this path uses [`Body::velocity_at`] like every other, and the two staged
+/// captures still pin it: recomputing `j` offline from the original's own raw
+/// `+0x150` bytes - which `tests.rs`'s `captured()` maps into this crate's
+/// convention as `-R^T(raw)` - reproduces `43.16971` and `0.18440` to the last
+/// bit. Feeding **this crate's** `angular_velocity` through the half-turn the
+/// raw bytes need was a sign flip on the dominant mode, corrected 2026-09-10;
+/// `wall.rs` was briefly given the same wound and it cost `07_Track` its clean
+/// lap, which is why [`Body::velocity_at`] carries the warning it does.
 pub fn respond(
     a: &mut ShipState,
     b: &mut ShipState,
@@ -333,8 +339,8 @@ pub fn respond(
 ) -> Option<PairContact> {
     let r_a = point - a.body.position;
     let r_b = point - b.body.position;
-    let velocity_a = contact_velocity(&a.body, r_a);
-    let velocity_b = contact_velocity(&b.body, r_b);
+    let velocity_a = a.body.velocity_at(point);
+    let velocity_b = b.body.velocity_at(point);
 
     // The gate. `vn` is positive while the two are separating, so a pair already
     // coming apart faster than the limit is left alone.
@@ -368,25 +374,6 @@ pub fn respond(
     })
 }
 
-/// `v + cross(r, R^T omega)`: the original's velocity at a lever arm `r`.
-///
-/// `R` is the basis-rows block at `body+0x00..0x30`, whose rows are the
-/// craft's world-space axes `(up x forward, up, forward)`. In this crate's
-/// frame `right = orientation * X` and `forward = orientation * -Z`, so the
-/// original's row 0 is `-right` and its row 2 is `-(orientation * Z)`, and
-/// `R^T omega = omega.x * row0 + omega.y * row1 + omega.z * row2` comes out as
-/// `orientation * (-omega.x, omega.y, -omega.z)`. The inertia tensor and the
-/// hull box are both symmetric under that half-turn about `up`, so this is
-/// the only place the two frames' handedness convention shows.
-///
-/// Not [`Body::velocity_at`] on purpose: that is the textbook `v + omega x r`,
-/// and the pair resolver measurably is not (see [`respond`]).
-fn contact_velocity(body: &Body, r: Vec3) -> Vec3 {
-    let omega = body.angular_velocity;
-    let spun = body.orientation * Vec3::new(-omega.x, omega.y, -omega.z);
-    body.linear_velocity + r.cross(spun)
-}
-
 fn inverse_mass(body: &Body) -> f32 {
     if body.mass <= f32::EPSILON {
         0.0
@@ -399,11 +386,21 @@ fn inverse_mass(body: &Body) -> f32 {
 /// **world-space** `r x n` directly, no rotation into the body frame.
 ///
 /// That is the literal reading of `0x0884f3a8`-`0x0884f3d0` (the `+0x40..0x70`
-/// block through `vtfm4.q` on a world-space cross product), the same quirk
+/// block through `vtfm4.q` on a world-space cross product), the same shape
 /// `contact-response.md` records for the one-body denominator - and on the
 /// 2026-09-10 tumbling-craft capture it is what reproduces the original's `j`
 /// (`0.18440` against `0.18398` for the rotated, textbook form). A quarter of
 /// a percent on one number, but the wrong quarter.
+///
+/// **It stopped being a quirk on 2026-09-10.** `body+0x40` is the inverse
+/// inertia the engine applies *in world axes*: `Body_Integrate` maps its body
+/// frame momentum to its body frame rate through `R (body+0x40) R^T`, which is
+/// `omega_world = (body+0x40) * L_world` written in body coordinates, and a
+/// three capture fit reproduces the recorded `+0x160` column from `+0x150` and
+/// the recorded basis at **100.00 %** with the constructor's own
+/// `(15.6, 21.6, 15.6)`. So applying that diagonal to a world-space `r x n`
+/// with no rotation is not a slip in the resolver - it is the same convention
+/// the rest of the engine uses. See `docs/ghidra/functions/psp-pulse-usa/rigid-body.md`.
 fn angular_term(body: &Body, r: Vec3, normal: Vec3) -> f32 {
     let torque = r.cross(normal);
     let inertia = body.inertia;

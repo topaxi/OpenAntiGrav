@@ -841,29 +841,44 @@ investigation looking sideways, and it now has a read of its own. The lever arm
 is real, `cross(r, p)` is non-zero, and a wall hit spins a craft at the
 `0.1`-scaled share, unlike a craft-to-craft hit.
 
-### What is now open instead
+### What was open instead, and is now closed (2026-09-10)
 
-- **`crates/physics/src/pair.rs` has the defect `wall.rs` was thought to have.**
-  `pair::contact_velocity` feeds this crate's `Body::angular_velocity` - which is
-  `omega_true` - through `orientation * (-omega.x, omega.y, -omega.z)`, which is
-  only `R^T(+0x150)` if the field held the original's raw negated-body-local
-  bytes. In the running simulation it does not, so `vn`'s angular contribution
-  has the wrong sign there. The pinned test passes because `pair/tests.rs`'s
-  `captured()` fixture puts the raw `+0x150` triple straight into
-  `angular_velocity`, building a `Body` the simulation would never produce. The
-  correction is self-checking: set the fixture's `angular_velocity` to
-  `-R^T(raw)` and use the textbook form, and `j` must still be `43.16971` and
-  `0.18440`, because `omega_ours == -R^T omega_raw` makes `omega_ours x r`
-  identically `cross(r, R^T omega_raw)`. **The pair path's headline finding is
-  unaffected**: the impulse is still applied at each body's own centre, so a
-  craft-to-craft hit still imparts no angular velocity.
-- **The `+0x80` reading wants re-deriving.** The claim that `+0x150` is
-  world-space rested on `+0x150 == inverse(I_world) * +0x160`. The fit above
-  contradicts the conclusion, so either the `+0x80` block's own convention or
-  that identity is misread - and the *denominator* findings on both paths (the
-  body-space diagonal at `+0x40..0x70` applied to a world-space `r x n`) sit next
-  to the same block. Those findings are not disturbed by anything measured here,
-  but they are now the neighbours of a known misreading.
+Both of these were opened by the paragraph above and both are settled; kept here
+because the reasoning is what the corrections rest on.
+
+- **`crates/physics/src/pair.rs` had the defect `wall.rs` was thought to have -
+  fixed.** `pair::contact_velocity` fed this crate's `Body::angular_velocity` -
+  which is `omega_true` - through `orientation * (-omega.x, omega.y, -omega.z)`,
+  which is only `R^T(+0x150)` if the field held the original's raw
+  negated-body-local bytes. In the running simulation it does not, so `vn`'s
+  angular contribution came out with the wrong sign. The pinned test passed
+  because `pair/tests.rs`'s `captured()` fixture put the raw `+0x150` triple
+  straight into `angular_velocity`, building a `Body` the simulation would never
+  produce. `respond` now calls `Body::velocity_at` like every other path and the
+  fixture maps the raw triple to `-R^T(raw)`; the correction is self-checking and
+  it checked out - `j` came back **bit-identical**, `43.1697235107` and
+  `0.1843950450` either side of it, because `omega_ours == -R^T omega_raw` makes
+  `omega_ours x r` the same two products as `cross(r, R^T omega_raw)` subtracted
+  the other way round. `race_ground_truth` is unmoved at twelve clean laps
+  (`01_Track` still 1 respawn at `[794]`) - a lone craft never touches another
+  craft - and `craft_sticking_ground_truth`'s pair-tick metric moved the way a
+  corrected `vn` should: 1134 overlapped pair-ticks to 1052, and 808 sustained
+  (streak > 10) to 625. **The pair path's headline finding is unaffected**: the
+  impulse is still applied at each body's own centre, so a craft-to-craft hit
+  still imparts no angular velocity.
+- **The `+0x80` reading was re-derived, and the labels swapped.** The claim that
+  `+0x150` is world-space rested on `+0x150 == inverse(I_world) * +0x160` with
+  `+0x80` read as the world tensor. The block is the **body**-space copy and
+  `+0x40` is the world-axis one: `body+0x150 = R (body+0x40) R^T (body+0x160)`,
+  which is `omega_world = (body+0x40) * L_world` written in the body coordinates
+  both fields are stored in. Derived at instruction level and confirmed by an
+  exact fit on three captures, in
+  [rigid-body.md](rigid-body.md#corrected-2026-09-10-the-inverse-inertia-is-a-world-axis-diagonal-and-0x80-is-its-body-space-copy).
+  **This makes both denominator findings stronger rather than weaker.** Applying
+  the `+0x40..0x70` diagonal to a world-space `r x n` with no rotation is not a
+  literal-but-wrong transcription that happens to reproduce `j`; `+0x40` is the
+  world-space inverse inertia as this engine uses it, so the resolvers agree with
+  the integrator. Neither `pair.rs`'s nor `wall.rs`'s denominator changes.
 
 ## `Body_ResolveContactPair` (`0x0884ef30`): the two-body path
 
@@ -2032,16 +2047,21 @@ original's, and the tumbling row is what makes them visible - on a level craft
 yawing about `up`, `R^T omega == omega` and the two orders differ only in sign
 on a term that is small.
 
-The denominator, on the same row: the body-space diagonal applied to the
+The denominator, on the same row: the `+0x40..0x70` diagonal applied to the
 **world-space** `r x n` without rotation (`0x0884f3a8`-`0x0884f3d0`) gives
-`0.18440`; the textbook rotated form gives `0.18398`; the world tensor at
-`+0x80` gives `0.18341`. The literal reading wins by the same margin the
-one-body denominator above was already read to use.
+`0.18440`; the rotated form gives `0.18398`; the `+0x80` block gives `0.18341`.
+The literal reading wins by the same margin the one-body denominator above was
+already read to use - and it is now known *why* it wins, rather than only that
+it does: `+0x40` is the inverse inertia in **world** axes and `+0x80` is its
+body-space copy, so applying `+0x40` to a world-space cross product is the
+engine's own convention. See
+[rigid-body.md](rigid-body.md#corrected-2026-09-10-the-inverse-inertia-is-a-world-axis-diagonal-and-0x80-is-its-body-space-copy).
 
 `crates/physics/src/pair.rs` now applies the impulse through
 `Body::apply_impulse` alone (no angular half), builds `vn` from
-`v + cross(r, R^T omega)`, and applies the body-space diagonal to the
-world-space cross product; `pair/tests.rs` pins both staged rows' `j` from the
+`Body::velocity_at` - which *is* `v + cross(r, R^T omega)` once `+0x150`'s
+convention is accounted for, corrected 2026-09-10 - and applies the world-axis
+diagonal to the world-space cross product; `pair/tests.rs` pins both staged rows' `j` from the
 raw captured inputs, with tolerances set between the candidate conventions.
 Confidence **95** on `Body_ResolveContactPair` as a whole: runtime trace on the
 predicted addresses, `j` reproduced to five figures, and the PS2 twin agreeing on
