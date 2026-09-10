@@ -15,7 +15,8 @@
 //! `mesh.wgsl` declares `alpha_test_ref` as an `override`, so this file does
 //! what [`super::TransparentPipelines`] already does for `DrawCall::blend`:
 //! build one pipeline per distinct value the model actually names, and pick
-//! between them per draw. Two, on every disc measured.
+//! between them per draw. Two on a Pulse circuit, and up to three where a
+//! model names the `0` as well - Pure's `Speedup Pad` does.
 //!
 //! # What the reference costs, measured
 //!

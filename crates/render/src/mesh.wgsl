@@ -1075,7 +1075,7 @@ fn fs_main_blend(in: VertexOutput) -> @location(0) vec4<f32> {
 // through `Model::alpha_test_ref` below), a Vita submesh, and every synthetic
 // draw this crate makes up.
 //
-// `1/255` rather than `0.5` for those, and that is measured rather than
+// `0` rather than `0.5` for those, and that is measured rather than
 // inherited. `0.5` was this project's own placeholder for the unrecovered
 // case and it was wrong on real data: Wipeout Pure's `Speedup Pad` glow
 // texture (`speedup_GLOW_KEY.tga`) decodes to an alpha histogram of exactly
@@ -1091,23 +1091,33 @@ fn fs_main_blend(in: VertexOutput) -> @location(0) vec4<f32> {
 //
 // The constant still stands for the paths that do reach it, on the same
 // argument it always had - the most permissive of the recovered references, so
-// a draw whose real reference is unknown shows a few extra near-zero-alpha
-// texels rather than this project hiding geometry.
-const ALPHA_TEST_THRESHOLD: f32 = 1.0 / 255.0;
+// a draw whose real reference is unknown keeps a few extra near-zero-alpha
+// texels rather than this project hiding geometry. Under the `<=` below that
+// is `0`, which discards exactly the fully transparent texel; it was written
+// `1/255` while the comparison was `<`, and those two say the same thing about
+// 8-bit alpha, so the paths that reach this constant keep the picture they
+// had.
+const ALPHA_TEST_THRESHOLD: f32 = 0.0;
 
 // **Wipeout HD authors its own reference**, and this is where it arrives:
 // a `Transparency::Mode2` material carries the `GL_GREATER`/`0.5` pair its
 // `Material_ApplyRenderState` programs into `NV4097_SET_ALPHA_FUNC` and
 // `SET_ALPHA_REF`, and `mesh_render::build` passes it here off
-// `Model::alpha_test_ref`. The default is the constant above, so every PSP
-// and PS2 model - which authors no reference this project has recovered -
-// keeps the picture it had. Only `GL_GREATER` is reproduced: the comparison
-// below is `<`, and `mesh::rcs::cutout` reports a material asking for
-// anything else instead of drawing it inverted.
+// `Model::alpha_test_ref`. The default is the constant above. Only
+// `GL_GREATER` is reproduced: the comparison below discards at `<=`, and
+// `mesh::rcs::cutout` reports a material asking for anything else instead of
+// drawing it inverted.
 //
-// `<` rather than `<=` for `GL_GREATER`'s "keep what is strictly above" is
-// exact on this data either way: the alpha is 8-bit, and `0.5` sits between
-// `127/255` and `128/255`, so no texel can land on the boundary.
+// **`<=` and not `<`, and the difference is not cosmetic.** Both `GL_GREATER`
+// here and the GE's `GU_ALPHA_GREATER` on the PSP/PS2 path keep what is
+// *strictly* above the reference, so the discard is `<=`; `<` is `GEQUAL`.
+// While Wipeout HD's `0.5` was the only reference in play the two were
+// interchangeable - the alpha is 8-bit and `0.5` sits between `127/255` and
+// `128/255`, so no texel could land on the boundary. Every reference recovered
+// off a `.vex` batch lands on one exactly (`0`, `0x10`, `0x7f`), and at `0`
+// the `<` form discards nothing at all: Pure's `Speedup Pad` painted its
+// texture's fully transparent background as a solid plate, a square instead of
+// a pad. See `crates/render/tests/pad_alpha_test_ground_truth.rs`.
 override alpha_test_ref: f32 = ALPHA_TEST_THRESHOLD;
 
 // Used only by the cutout pipeline - see
@@ -1121,13 +1131,13 @@ override alpha_test_ref: f32 = ALPHA_TEST_THRESHOLD;
 // cutout's solid pixels do draw. `shaded.a` is now the texture's alpha times
 // the vertex colour's, per `lit_texel` above; measured directly against every
 // alpha-tested batch on `01_Track`/`16_Track` that no vertex reference in
-// this path carries baked alpha below `ALPHA_TEST_THRESHOLD`, so this
+// this path carries baked alpha at or below `ALPHA_TEST_THRESHOLD`, so this
 // fold-in does not newly discard any fragment that used to pass on real
 // track data.
 @fragment
 fn fs_main_alpha_test(in: VertexOutput) -> @location(0) vec4<f32> {
     let shaded = lit_texel(in);
-    if shaded.a < alpha_test_ref {
+    if shaded.a <= alpha_test_ref {
         discard;
     }
     return vec4<f32>(
@@ -1157,7 +1167,7 @@ fn fs_main_velocity(in: VertexOutput) -> MrtOutput {
 @fragment
 fn fs_main_alpha_test_velocity(in: VertexOutput) -> MrtOutput {
     let shaded = lit_texel(in);
-    if shaded.a < alpha_test_ref {
+    if shaded.a <= alpha_test_ref {
         discard;
     }
     return MrtOutput(

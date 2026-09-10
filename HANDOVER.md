@@ -1310,6 +1310,28 @@ branch". Selector, census over three discs and the measured pixel cost:
 discriminates", confidence 86. The trap above is unchanged and still the point:
 a decode that reports a plausible triangle count is not evidence a model draws.
 
+**And the pad broke a second time the same day, from the other direction:
+`GU_GREATER` reproduced as `<` is `GEQUAL`, and at reference `0` that is no
+alpha test at all.** 2026-09-10, one commit later. `mesh.wgsl` had always
+discarded at `shaded.a < alpha_test_ref`, which was indistinguishable from the
+correct `<=` while Wipeout HD's `0.5` was the only reference in play - the
+alpha is 8-bit and `0.5` sits between `127/255` and `128/255`, so no texel
+could land on the boundary, and the shader's own comment said so. Every
+reference read off a `.vex` batch lands on a texel value exactly, and
+`a < 0.0` is true of no fragment: Pure's `Speedup Pad` painted its glow
+texture's transparent background as a **solid square plate**. Two lessons, and
+the second is the reusable one:
+
+- A comparison that is *exact either way on today's data* is a latent bug, not
+  a settled one. The rationale for `<` was true and load-bearing right up to
+  the commit that made it false, and nothing re-read it.
+- **`pad_alpha_test_ground_truth`'s `lit > 100` passed harder than before.** A
+  one-sided count cannot see a cutout that stopped cutting - a filled quad is
+  strictly *more* lit pixels than a cutout of it. The test now captures the pad
+  twice, once as authored and once with the reference forced below any alpha a
+  texel can carry, and asserts the first keeps materially fewer pixels than the
+  second. Measured 310 against 425; under the broken discard it was 425/425.
+
 **A one-seed race comparison cannot resolve two adjacent difficulties, and the
 test that did it read as a regression on an improvement.** 2026-08-17.
 `every_difficulty_is_quicker_than_the_one_below_it` ran one 3,600-tick race per

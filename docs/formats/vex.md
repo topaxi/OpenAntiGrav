@@ -879,9 +879,25 @@ texture (`speedup_GLOW_KEY.tga`) tops out at alpha 58/255 - so the recovered
 and `crates/render/tests/pad_alpha_test_ground_truth.rs` is what checks that it
 does.
 
-`ALPHA_TEST_THRESHOLD` (`1.0 / 255.0`, in `mesh.wgsl`) is now only the default
-for a draw whose file authors no reference - a PS3 chunk, a Vita submesh, or
-synthetic geometry this crate makes up.
+`ALPHA_TEST_THRESHOLD` (in `mesh.wgsl`) is now only the default for a draw
+whose file authors no reference - a PS3 chunk, a Vita submesh, or synthetic
+geometry this crate makes up.
+
+**And `GU_GREATER` has to be reproduced as `GU_GREATER`.** `mesh.wgsl`
+discarded at `shaded.a < alpha_test_ref`, which is `GEQUAL`, for as long as
+Wipeout HD's `0.5` was the only reference in play - and there the two are
+indistinguishable, because the alpha is 8-bit and `0.5` sits between `127/255`
+and `128/255` where no texel can land. Every reference recovered off a `.vex`
+batch lands on a texel value exactly, and at the `0` Pure's pad asks for the
+`<` form discards *nothing*: `a < 0.0` is true of no fragment. Pure's
+`Speedup Pad` painted its glow texture's fully transparent background as a
+solid plate - a square where the pad shape should be - between b1ce4086 and
+the fix. The discard is `<=` now, and `pad_alpha_test_ground_truth` captures
+the pad twice, once as authored and once with the test forced off, because a
+lit-pixel count on its own passes *harder* when a cutout stops cutting.
+`ALPHA_TEST_THRESHOLD` moved to `0` with it: under `<=` that discards exactly
+the fully transparent texel, which is what `1/255` under `<` did, so the
+default paths keep the picture they had.
 
 **This was not only a Pure fix.** The earlier `0.5` was checked against
 *vertex* alpha alone (the census two paragraphs up), never the *texture*
@@ -897,8 +913,9 @@ not only Pure's pad.
 **And moving from that flat `1/255` to the per-batch reference costs less than
 it sounds like it should.** The same instrument, rebuilt as
 `crates/render/examples/threshold_probe.rs` and run at four yaws rather than
-one: `01_Track` 85,249 -> 85,102 lit over four frames with 1,298 pixels
-differing, `16_Track` 522,427 -> 522,342 with 6,170. Nothing structural leaves
+one, and re-measured under the `<=` discard: `01_Track` 85,704 -> 85,619 lit
+over four frames with 1,681 pixels differing, `16_Track` 520,731 -> 520,690
+with 6,553. Nothing structural leaves
 the picture, and the lit count moves *up* at two of the eight framings -
 because a cutout draw returns alpha `1.0` and writes depth, so a texel that
 cleared `1/255` was painted solid and occluded what was behind it.

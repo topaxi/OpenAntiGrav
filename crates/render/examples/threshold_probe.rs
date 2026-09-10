@@ -63,11 +63,15 @@ fn main() -> anyhow::Result<()> {
         references
     );
 
-    // The old behaviour, reproduced exactly: every cutout back on the shader's
-    // own `ALPHA_TEST_THRESHOLD`.
+    // The old behaviour, reproduced exactly: every cutout back on the flat
+    // `1/255` this project compared against before the per-batch reference was
+    // recovered. Named rather than left `None`, because `None` takes
+    // `mesh.wgsl`'s `ALPHA_TEST_THRESHOLD`, which is `0` now that the discard
+    // is `<=` - the two are the same picture on 8-bit alpha but not on the
+    // sampler's filtered edges, and this probe measures edges.
     let mut flat = recovered.clone();
     for draw in &mut flat.alpha_tested_draws {
-        draw.alpha_test_ref = None;
+        draw.alpha_test_ref = Some(1.0 / 255.0);
     }
 
     // A third argument writes the pair of frames out, so the delta can be
@@ -83,7 +87,7 @@ fn main() -> anyhow::Result<()> {
     let mut strict_only = recovered.clone();
     for draw in &mut strict_only.alpha_tested_draws {
         if draw.alpha_test_ref.is_some_and(|r| r < 0.25) {
-            draw.alpha_test_ref = None;
+            draw.alpha_test_ref = Some(1.0 / 255.0);
         }
     }
 
