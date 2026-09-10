@@ -77,6 +77,38 @@ impl HeldButtons {
             }
         }
     }
+
+    /// One tick's input: the authored script if there is one, else `--press`
+    /// pulsed against `--held`.
+    ///
+    /// The branch every headless leg that can be script-driven needs, kept in
+    /// one place so two legs cannot read it two different ways again - see
+    /// `race::capture`'s `advance_one_tick`, which drove this out, and
+    /// `--trace-out`'s `write_trace`, which never had it at all until this
+    /// existed - a scripted `--trace-out` run used to write a plausible CSV
+    /// of a craft that never moved, with no error.
+    ///
+    /// **Only the script's `buttons` reach the keyboard path** - `stick_x`,
+    /// `stick_y` and the two `airbrake_*` fields a script can author are not
+    /// read here, the same gap `advance_one_tick` already had. A script
+    /// naming `stick_x=0.5` drives exactly as `left` does through this path,
+    /// where `oag-trace run`/`replay` (`crates/trace/src/replay.rs`) applies
+    /// the analog value directly. Not fixed here - the axes come out of
+    /// [`Self::snapshot`]'s keyboard mapping, which has no room for an
+    /// authored analog value at all.
+    pub fn advance(
+        &mut self,
+        script: Option<&oag_trace::script::Script>,
+        pressed: u32,
+        held: u32,
+        tick: u32,
+    ) {
+        if let Some(script) = script {
+            self.set_held(script.at(tick as usize).buttons);
+        } else {
+            self.pulse(pressed, held, tick.is_multiple_of(2));
+        }
+    }
 }
 
 /// A key that produces the given abstract button.

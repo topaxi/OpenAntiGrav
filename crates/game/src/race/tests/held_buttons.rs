@@ -8,6 +8,7 @@
 use super::*;
 use oag_gameplay::input::Button;
 use oag_input::keys::map_key;
+use oag_trace::script::Script;
 
 /// `HeldButtons::set_held` drives the keyboard path with per-tick levels:
 /// the axes derive exactly as a real player's would, and releasing shows
@@ -120,5 +121,41 @@ fn a_button_with_no_key_is_ignored() {
     assert_eq!(
         ship_controls(&held.snapshot(), ControlScheme::default()),
         oag_physics::ShipControls::default()
+    );
+}
+
+/// `advance` with a script drives `set_held`, not `pulse` - the whole point
+/// being that `--input-script` reaches the ship at all. This is the unit half
+/// of the fix pinning `--trace-out` to its script; the disc-backed half is
+/// `main::headless::tests`, which needs a real race to prove the wiring
+/// reaches `write_trace`'s own CSV.
+#[test]
+fn advance_with_a_script_drives_set_held() {
+    let script = Script::parse("1 cross left\n").expect("a one-line script parses");
+    let mut held = HeldButtons::new(0);
+    held.advance(Some(&script), 0, 0, 0);
+    let snap = held.snapshot();
+    assert!(snap.buttons.is_held(Button::Cross));
+    assert!(snap.stick_x < 0.0, "left must steer negative x");
+}
+
+/// With no script, `advance` must pulse **`pressed`**, not `held` - the
+/// two-argument order `capture::advance_one_tick` and `write_trace` both
+/// call it with. A swap would silently turn every `--press` into a no-op and
+/// every `--hold` into something that pulses, and nothing else here would
+/// catch it: `--hold`'s own tests build a `HeldButtons` straight off
+/// `HeldButtons::new`'s mask, never through `advance`.
+#[test]
+fn advance_with_no_script_pulses_pressed_and_leaves_held_alone() {
+    let mut held = HeldButtons::new(0);
+    held.advance(None, Button::Cross.bit(), Button::Left.bit(), 0);
+    let snap = held.snapshot();
+    assert!(
+        snap.buttons.is_held(Button::Cross),
+        "the pressed mask must be what pulses down"
+    );
+    assert!(
+        !snap.buttons.is_held(Button::Left),
+        "the held mask must not be pulsed by advance - only excluded from pulsing"
     );
 }

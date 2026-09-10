@@ -209,6 +209,24 @@ pub(crate) fn run_windowless(
 
 /// Our per-tick state, in the capture's own columns, written to `path`.
 ///
+/// # Driving the run
+///
+/// `--input-script` supersedes `--hold`/`--press` from tick 0, the same way
+/// `race::CaptureOptions::input_script` documents its own field: with a
+/// script, the two masks are read only for the ticks past its end.
+///
+/// **This loop used to read `cli.hold`/`cli.press` unconditionally and never
+/// look at `cli.input_script` at all**, so a scripted `--trace-out` run
+/// silently wrote a CSV of a craft sitting still - no error, right row count,
+/// right columns, `throttle`/`steer` zero throughout.
+/// `race::HeldButtons::advance` is the one place both this loop and
+/// `race::capture`'s tick loop make the script-or-mask choice now.
+///
+/// **Only the script's button mask reaches the ship** - `stick_x`, `stick_y`
+/// and the two `airbrake_*` analog fields a script can author are dropped
+/// here the same way `race::capture`'s tick loop already dropped them; see
+/// `HeldButtons::advance`'s own doc for why and what reads them instead.
+///
 /// # Which of our values stands for which recovered field
 ///
 /// This mapping is a **claim**, not a convenience: differencing two columns that
@@ -303,12 +321,14 @@ pub(crate) fn write_trace(
     let dt = oag_core::tick::TickRate::DEFAULT.dt();
     let mut trace = Trace::default();
     let mut held = race::HeldButtons::new(button_mask(cli.hold.as_deref()));
+    let script = crate::args::input_script(cli.input_script.as_deref())?;
     for tick in 0..cli.ticks {
         trace.frames.push(frame_of(&race, dt));
-        held.pulse(
+        held.advance(
+            script.as_ref(),
             button_mask(cli.press.as_deref()),
             button_mask(cli.hold.as_deref()),
-            tick.is_multiple_of(2),
+            tick,
         );
         let snapshot = held.snapshot();
         race.tick(&snapshot);
@@ -428,16 +448,7 @@ pub(crate) fn run_race(
                 ticks: cli.ticks,
                 held: button_mask(cli.hold.as_deref()),
                 pressed: button_mask(cli.press.as_deref()),
-                input_script: cli
-                    .input_script
-                    .as_deref()
-                    .map(|path| -> anyhow::Result<_> {
-                        let text = std::fs::read_to_string(path)
-                            .with_context(|| format!("reading {}", path.display()))?;
-                        oag_trace::script::Script::parse(&text)
-                            .map_err(|e| anyhow::anyhow!("parsing {}: {e}", path.display()))
-                    })
-                    .transpose()?,
+                input_script: crate::args::input_script(cli.input_script.as_deref())?,
                 scheme,
                 size: parse_size(&cli.size)?,
                 log_every: cli.log_every,
@@ -539,3 +550,13 @@ pub(crate) fn run_race(
     event_loop.run_app(&mut app)?;
     app.finish_audio()
 }
+
+// `#[path]` is needed here for the same reason `main.rs` gives for its own
+// `#[path]`ed children: this module was itself loaded via `#[path =
+// "main/headless.rs"]`, so a bare `mod tests;` would resolve *next to* it, at
+// `src/main/tests.rs` - which exists already, as `main.rs`'s own tests
+// module - rather than under it at `src/main/headless/tests.rs`, where this
+// one actually lives.
+#[cfg(test)]
+#[path = "headless/tests.rs"]
+mod tests;

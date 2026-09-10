@@ -896,11 +896,12 @@ fn advance_one_tick(
     options: &CaptureOptions,
     tick: u32,
 ) {
-    if let Some(script) = &options.input_script {
-        held.set_held(script.at(tick as usize).buttons);
-    } else {
-        held.pulse(options.pressed, options.held, tick.is_multiple_of(2));
-    }
+    held.advance(
+        options.input_script.as_ref(),
+        options.pressed,
+        options.held,
+        tick,
+    );
     let snapshot = held.snapshot();
     // Before the tick, so `spend_pickup` can fire it on this tick's edge.
     if let Some(weapon) = options.give

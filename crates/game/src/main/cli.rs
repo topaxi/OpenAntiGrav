@@ -884,11 +884,17 @@ pub(crate) struct Cli {
     #[arg(long, value_name = "UNITS_PER_S", requires = "pose_boost")]
     pub(crate) pose_speed: Option<f32>,
 
-    /// With `--race --screenshot`: drive the run from a committed `.inputs`
-    /// script (see `scripts/input_script.py` for the format) instead of
-    /// `--hold`/`--press` - the same file `scripts/psp-trace.py --script`
-    /// feeds the emulator, so one authored input produces both sides of a
-    /// visual comparison. Ticks past the script's end hold its last state.
+    /// With `--race --screenshot` or `--race --trace-out`: drive the run from
+    /// a committed `.inputs` script (see `scripts/input_script.py` for the
+    /// format) instead of `--hold`/`--press` - the same file
+    /// `scripts/psp-trace.py --script` feeds the emulator, so one authored
+    /// input produces both sides of a visual or CSV comparison. Ticks past
+    /// the script's end hold its last state.
+    ///
+    /// **`--trace-out` did not read this at all before 2026-09-10** - a run
+    /// combining the two produced a plausible-looking CSV of a craft that
+    /// never moved, with no error. `HeldButtons::advance` is where both legs
+    /// now make the same choice, so they cannot diverge on it again.
     #[arg(long, value_name = "FILE.inputs", requires = "race")]
     pub(crate) input_script: Option<std::path::PathBuf>,
 
@@ -917,6 +923,12 @@ pub(crate) struct Cli {
     /// data/traces/pad0-boost.csv ours.csv` puts a number on every column
     /// instead. Writes the eight `--flare` columns beside the ship state, so a
     /// capture taken with `psp-trace.py --flare` compares on all of them.
+    ///
+    /// Combine with `--input-script` to drive it from an authored `.inputs`
+    /// file instead of `--hold`/`--press` - a second, non-rendering way to
+    /// get a scripted run's full per-tick basis, more convenient than
+    /// `oag-trace run` for anyone already working against this binary's own
+    /// load path rather than a captured reference trace.
     ///
     /// Combining it with `--screenshot` is refused rather than ignored: the
     /// screenshot route renders through `race::capture`, and threading a writer
