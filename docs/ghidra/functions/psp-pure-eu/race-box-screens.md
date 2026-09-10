@@ -61,9 +61,12 @@ The function composes `"%s\\VR\\Phantom.vex"` or `"%s\\Phantom.vex"` (`%s`
 being `*(matched_record + 0x9c)`, read as the team's own `location` string by
 the same field-pair pattern used elsewhere in this codebase) and probes it
 with `0x0889e308` (a "does this resolve" check, not named). This is the
-craft candidate `the-race-setup-previews-are-meshes-and-nothing.md` already
-flagged at confidence 45→65 from string adjacency; this pass reproduces the
-same composition from a full decompile rather than adjacency alone.
+craft candidate [`race-setup.md`](../../../formats/race-setup.md) flagged at
+confidence 45→65 from string adjacency; this pass reproduces the same
+composition from a full decompile rather than adjacency alone. **It is also
+the only preview mesh this screen loads** - the default preview is a
+pre-rendered `FEData.wad` sprite, so the Phantom branch is a special case
+layered over an image, not one arm of a mesh-loading path.
 
 **That thread already correctly noted the gating flags (`+0xe1`, `+0xe2` on
 the screen object) are not the craft's speed class.** This pass traced where

@@ -79,13 +79,16 @@ it is the crossplay lobby vote.
 
 - **Pure's track and craft previews are confirmed real (PPSSPP capture,
   2026-09-10) and the track/ship pickers are implemented**, reusing
-  `oag_ui::picker`/`oag_game::picker_stage` with `race_box: Some(...)` now set
-  and `<location>\Ship.vex` / `<location>\track.vex` wired as the preview
-  convention (confidence ~70 - real, resolving, visually matching, not a
-  located composer). The exact composing function and
-  `TeamSelection_ApplySelection`'s Phantom-model trigger (confidence 65,
-  campaign-progress-shaped) are still open. Tracked in
-  `handover/rendering/the-race-setup-previews-are-meshes-and-nothing.md`.
+  `oag_ui::picker`/`oag_game::picker_stage` with `race_box: Some(...)` now set.
+  **Neither screen draws a preview yet, deliberately**: Pure's previews are
+  pre-rendered `FEData.wad` sprites, not meshes (RMSE-0 texture match,
+  2026-09-10), and which sprite index belongs to which circuit or team is
+  unrecovered. `<location>\Ship.vex` / `<location>\track.vex` were wired at
+  confidence ~70 on 2026-09-10 and removed the same day - they are the in-race
+  hull and the full racing circuit. `TeamSelection_ApplySelection`'s
+  Phantom-model trigger (confidence 65, campaign-progress-shaped) is still
+  open. Tracked in
+  `handover/rendering/the-race-setup-previews-differ-by-title.md`.
 - **Pure's screen ordering is capped at 88** - it rests on `<Redirect>` targets
   only and has never been confirmed against a capture.
 - **Two of Pure's twelve `LoadXML` entries do not resolve**, and they are

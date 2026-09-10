@@ -25,26 +25,23 @@ use crate::gpu::Gpu;
 /// Where an entry's preview mesh is on the disc.
 #[derive(Debug, Clone)]
 pub(crate) enum PreviewSource {
-    /// The circuit's outline preview - Pulse's is `<location>\FE\forward.vex`
-    /// / `\reverse.vex`, which is what `Track Creation`'s info panel shows;
-    /// Pure's is `<location>\track.vex` / `\track_reversed.vex`, confirmed
-    /// live in PPSSPP to be the same kind of picker preview rather than the
-    /// full racing track (see [`Self::entry_names`]). In the same folder,
-    /// `screen.xml` names the stills that fill Pulse's hexagonal window -
-    /// Pure's `Track Selection` has none. `zone` picks the Zone chain of
-    /// stills, the way the original does for a Zone run, and Pure's own
-    /// zone-prefixed mesh names. See `docs/formats/race-setup.md`.
+    /// The circuit's outline preview: `<location>\FE\forward.vex` /
+    /// `\reverse.vex`, which is what `Track Creation`'s info panel shows.
+    /// **Pulse only** - Pure's `Track Selection` draws a pre-rendered
+    /// sprite, not a mesh, and has no entry here (see
+    /// [`Self::entry_name`]). In the same folder, `screen.xml` names the
+    /// stills that fill Pulse's hexagonal window. `zone` picks the Zone
+    /// chain of stills, the way the original does for a Zone run. See
+    /// `docs/formats/race-setup.md`.
     Track {
         location: String,
         reversed: bool,
         zone: bool,
     },
     /// The team's front-end hull, and the skins it declares as `(name,
-    /// archive entry)` - the paint the livery row cycles. Pulse's hull is
-    /// `<location>\ship_FE.vex`; Pure's is `<location>\Ship.vex`, the same
-    /// file [`crate::livery`] loads in-race - see [`Self::entry_names`] for
-    /// why this is not certain to be Pure's own front-end convention, only
-    /// the closest evidenced guess.
+    /// archive entry)` - the paint the livery row cycles. The hull is
+    /// `<location>\ship_FE.vex`. **Pulse only**, for the same reason the
+    /// track preview is - see [`Self::entry_name`].
     Ship {
         location: String,
         skins: Vec<(String, String)>,
@@ -52,42 +49,33 @@ pub(crate) enum PreviewSource {
 }
 
 impl PreviewSource {
-    /// Candidate entry names for this preview, best evidence first.
+    /// The archive entry this preview's mesh is in.
     ///
-    /// **Two names, not one, because the titles disagree on the file name
-    /// and neither reading is a guess about the *other* title** - the same
-    /// shape `oag_game::race::shield_entry_names` uses for a title-divergent
-    /// file. A title's own convention resolves on the first candidate
-    /// [`PickerStage::load_preview`] can read; a different title's falls
-    /// through to the next, and a source that carries neither draws nothing
-    /// and says so, per this project's rule for an asset that will not
-    /// resolve.
+    /// **Pulse's names, and only Pulse's.** Pure's `Track Selection` and
+    /// `Team Selection` do not render a mesh at all: every preview on both
+    /// screens is a pre-rendered 256x128 sprite shipped in `FEData.wad`, and
+    /// a PPSSPP texture dump matches the pixels the screens draw to those
+    /// entries at RMSE 0 - see `docs/formats/race-setup.md`. Pure therefore
+    /// has no name to fall through to here, and its pickers draw no preview
+    /// until the sprite path exists; [`PickerStage::load_preview`] says so
+    /// rather than substituting a mesh, per this project's rule for an asset
+    /// that will not resolve.
     ///
-    /// Pure's candidates are confidence ~70, not ~95 like Pulse's: a PPSSPP
-    /// capture (2026-09-10) confirmed both screens draw a real per-entity 3D
-    /// preview, but the function that composes the path was not found - see
-    /// `docs/ghidra/functions/psp-pure-eu/race-box-screens.md`. `Ship.vex`
-    /// and `track.vex`/`track_reversed.vex` are the only per-team/per-track
-    /// files that exist on Pure's disc and visually match what renders.
-    fn entry_names(&self) -> Vec<String> {
+    /// This used to return two candidates, Pulse's then Pure's
+    /// (`<location>\Ship.vex`, `<location>\track.vex`), on the reading that
+    /// Pure drew a real per-entity 3D preview. That reading was wrong, and
+    /// the files it named were the in-race hull and the full 4 MB racing
+    /// circuit - a stand-in that looked legible, which is exactly how a
+    /// wrong picture survives review.
+    fn entry_name(&self) -> String {
         match self {
             Self::Track {
-                location,
-                reversed,
-                zone,
+                location, reversed, ..
             } => {
                 let run = if *reversed { "reverse" } else { "forward" };
-                let pure_run = if *reversed { "_reversed" } else { "" };
-                let pure_prefix = if *zone { "zone_track" } else { "track" };
-                vec![
-                    format!(r"{location}\FE\{run}.vex"),
-                    format!(r"{location}\{pure_prefix}{pure_run}.vex"),
-                ]
+                format!(r"{location}\FE\{run}.vex")
             }
-            Self::Ship { location, .. } => vec![
-                format!(r"{location}\ship_FE.vex"),
-                format!(r"{location}\Ship.vex"),
-            ],
+            Self::Ship { location, .. } => format!(r"{location}\ship_FE.vex"),
         }
     }
 }
@@ -273,20 +261,9 @@ impl PickerStage {
             .get(index)
             .with_context(|| format!("entry {index} has no preview source"))?
             .clone();
-        let candidates = source.entry_names();
-        let (name, mut model) = candidates
-            .iter()
-            .find_map(|name| {
-                oag_game::preview::model(&mut self.archives, name)
-                    .ok()
-                    .map(|model| (name.clone(), model))
-            })
-            .with_context(|| {
-                format!(
-                    "none of {} resolved as a preview mesh",
-                    candidates.join(", ")
-                )
-            })?;
+        let name = source.entry_name();
+        let mut model = oag_game::preview::model(&mut self.archives, &name)
+            .with_context(|| format!("{name} did not resolve as a preview mesh"))?;
         // The chosen paint over the hull's own texture slots - the same
         // swap a race makes (`crate::livery::ship_skin`), and the same
         // rule when it fails: the hull keeps its own paint, and the log
@@ -356,34 +333,29 @@ impl PickerStage {
 mod tests {
     use super::PreviewSource;
 
+    /// Pulse's name, and no fallthrough to Pure's - Pure's `Team Selection`
+    /// draws a `FEData.wad` sprite, not this hull. See [`PreviewSource::entry_name`].
     #[test]
-    fn ship_tries_pulses_name_before_pures() {
+    fn ship_names_pulses_front_end_hull() {
         let source = PreviewSource::Ship {
             location: r"Data\Ships\Feisar".to_string(),
             skins: Vec::new(),
         };
-        assert_eq!(
-            source.entry_names(),
-            vec![
-                r"Data\Ships\Feisar\ship_FE.vex".to_string(),
-                r"Data\Ships\Feisar\Ship.vex".to_string(),
-            ]
-        );
+        assert_eq!(source.entry_name(), r"Data\Ships\Feisar\ship_FE.vex");
     }
 
+    /// `zone` steers the still chain, not the mesh name: a Zone run previews
+    /// the same forward ribbon the ordinary run does.
     #[test]
-    fn track_candidates_follow_reversed_and_zone() {
+    fn track_name_follows_reversed_only() {
         let forward = PreviewSource::Track {
             location: r"Data\Environments\01_Vineta_K".to_string(),
             reversed: false,
             zone: false,
         };
         assert_eq!(
-            forward.entry_names(),
-            vec![
-                r"Data\Environments\01_Vineta_K\FE\forward.vex".to_string(),
-                r"Data\Environments\01_Vineta_K\track.vex".to_string(),
-            ]
+            forward.entry_name(),
+            r"Data\Environments\01_Vineta_K\FE\forward.vex"
         );
         let reversed = PreviewSource::Track {
             location: r"Data\Environments\01_Vineta_K".to_string(),
@@ -391,11 +363,8 @@ mod tests {
             zone: false,
         };
         assert_eq!(
-            reversed.entry_names(),
-            vec![
-                r"Data\Environments\01_Vineta_K\FE\reverse.vex".to_string(),
-                r"Data\Environments\01_Vineta_K\track_reversed.vex".to_string(),
-            ]
+            reversed.entry_name(),
+            r"Data\Environments\01_Vineta_K\FE\reverse.vex"
         );
         let zone = PreviewSource::Track {
             location: r"Data\Environments\01_Vineta_K".to_string(),
@@ -403,11 +372,8 @@ mod tests {
             zone: true,
         };
         assert_eq!(
-            zone.entry_names(),
-            vec![
-                r"Data\Environments\01_Vineta_K\FE\forward.vex".to_string(),
-                r"Data\Environments\01_Vineta_K\zone_track.vex".to_string(),
-            ]
+            zone.entry_name(),
+            r"Data\Environments\01_Vineta_K\FE\forward.vex"
         );
     }
 }

@@ -1268,6 +1268,38 @@ measured behaviours:
   `docs/tools/frame-compare.md` calibrates fov. A fast-moving per-tick capture
   could pin it exactly; nothing needed it yet.
 
+## Texture dumping settles sprite-vs-mesh, offline and bit-exact
+
+`DumpTextures = True` in the `--appendconfig` ini makes PPSSPP write every
+texture it decodes as a PNG under
+`~/.config/ppsspp/PSP/TEXTURES/<GAMEID>/new/`, named by VRAM address and
+content hash. It is the cheapest instrument on this page - no breakpoints, no
+websocket, no stepping - and it answers a question screenshots alone cannot:
+**is this thing on screen a rendered mesh, or an image the game shipped?**
+
+The method, and it closed a wrong reading of Pure's race-box previews on
+2026-09-10 (`docs/formats/race-setup.md`):
+
+1. Boot with `DumpTextures = True`, walk to the screen, and note which dumps
+   are new by mtime.
+2. Decode every entry of the candidate archive to PNG and compare. A **RMSE 0**
+   match between a dump and a shipped entry means the pixels on screen *are*
+   the shipped texture, and nothing rendered them.
+
+Two corollaries worth carrying:
+
+- **Per-entity distinctness proves nothing.** "A different silhouette per
+  team" is equally true of a per-team sprite. That observation was the whole
+  basis of the wrong reading it replaced.
+- **Raise the internal resolution and look again** for a 10-second version of
+  the same check. PPSSPP upscales geometry *and* render targets, but not a
+  fixed-size source image - so a preview that stays blurry at 5x is a sprite.
+  Anti-aliased edges and soft gradients say the same thing on their own: PSP
+  hardware produces neither.
+
+The dump directory is game content and is gitignored territory - cite
+measurements and entry indices, never commit the PNGs.
+
 ## Session hygiene
 
 Moved here from `HANDOVER.md` on 2026-08-09; the traps above are about the
