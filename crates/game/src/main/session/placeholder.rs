@@ -173,6 +173,7 @@ impl Session {
             front_end_styles: Vec::new(),
             font: font::Atlas::build(),
             sprites: sprite::Sheet::default(),
+            globals: Vec::new(),
             menu_skin: &placeholder::MENU_SKIN,
             space: oag_display::space::Space::default(),
             menu_font: None,

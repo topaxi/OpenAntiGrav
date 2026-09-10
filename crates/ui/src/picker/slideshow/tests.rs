@@ -42,7 +42,7 @@ const XML: &str = r#"
 const LOCATION: &str = r"Data\Environments\16_Track";
 
 fn show() -> Slideshow {
-    Slideshow::read(XML, LOCATION, "Info").expect("the Info chain reads")
+    Slideshow::read(XML, LOCATION, "Info", &[]).expect("the Info chain reads")
 }
 
 #[test]
@@ -131,12 +131,13 @@ fn a_card_draws_at_its_authored_place_and_the_shadow_scales_its_sub_rect() {
 
 #[test]
 fn a_chain_the_file_does_not_author_is_none() {
-    assert!(Slideshow::read(XML, LOCATION, "Zone").is_none());
+    assert!(Slideshow::read(XML, LOCATION, "Zone", &[]).is_none());
     // A file with a start state and no redirects is one terminal state.
     let lone = Slideshow::read(
         r#"<Screen><Image><Values x="1" y="2" Src="a.mip"></Values></Image><Screen name="Info"></Screen></Screen>"#,
         LOCATION,
         "Info",
+        &[],
     )
     .unwrap();
     assert_eq!(lone.at(100.0).name, "Info");

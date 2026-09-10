@@ -80,6 +80,22 @@ impl PreviewSource {
     }
 }
 
+/// What a title's front end says about how its selection screens preview an
+/// entry - the two facts [`PickerStage`] cannot read off the entry itself.
+#[derive(Debug, Clone, Default)]
+pub(crate) struct Previews {
+    /// Whether this title previews with a mesh at all - see
+    /// [`oag_title::FrontEnd::preview_meshes`]. `false` on Pure, whose two
+    /// screens preview with stills alone; no mesh is loaded and none is
+    /// logged as missing, because none is.
+    pub(crate) meshes: bool,
+    /// The front end's own `FEGlobals` table. A per-entity `screen.xml`
+    /// declares no globals and still names them for its stills' colour, so
+    /// without this Pure's stills tint white - invisible on its white front
+    /// end. See [`oag_ui::picker::slideshow::Slideshow::read`].
+    pub(crate) globals: Vec<(String, String)>,
+}
+
 /// Which axis the ship picker's livery row moves - see
 /// `session::picker::open_ship_picker`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -115,10 +131,14 @@ pub(crate) struct PickerStage {
     /// The worker's measurements, on a track picker; `None` on a ship one.
     distances: Option<Distances>,
     anisotropy: Anisotropy,
-    /// The selected circuit's slideshow, on a track picker whose circuit
-    /// authors one - see [`oag_game::preview::slideshow`]. `None` on a ship
-    /// picker, and on a circuit with no `screen.xml`, which draws an empty
-    /// window and says so in the log.
+    /// What this title's front end says about previews - see [`Previews`].
+    previews: Previews,
+    /// The selected entry's slideshow, when its own `screen.xml` authors
+    /// one; see [`oag_game::preview::slideshow`]. A circuit's is the picture
+    /// behind Pulse's hexagonal window and the whole of Pure's track
+    /// preview; a craft's is Pure's craft preview and empty on every other
+    /// title. `None` when the file is missing or names no chain, which draws
+    /// nothing and says so in the log.
     slideshow: Option<Slideshow>,
     /// The front end's own sheet, as the menus were built with it.
     base: Sheet,
@@ -134,7 +154,7 @@ impl PickerStage {
         clippy::too_many_arguments,
         reason = "one call site, and each is a separate fact of the screen: the \
                   model, its layout, its axis, its sources, the disc, the worker, \
-                  the filter and the sheet"
+                  the filter, the sheet and the title's own preview rules"
     )]
     pub(crate) fn new(
         model: Picker,
@@ -145,6 +165,7 @@ impl PickerStage {
         distances: Option<Distances>,
         anisotropy: Anisotropy,
         base: Sheet,
+        previews: Previews,
     ) -> Self {
         Self {
             model,
@@ -156,6 +177,7 @@ impl PickerStage {
             built_for: None,
             distances,
             anisotropy,
+            previews,
             slideshow: None,
             base,
             sheet: None,
@@ -205,28 +227,51 @@ impl PickerStage {
             .as_ref()
             .is_none_or(|(built, _)| *built != index);
         self.built_for = Some(key.clone());
-        self.preview = match self.load_preview(gpu, index, key.1.as_deref()) {
-            Ok(preview) => Some(preview),
-            Err(error) => {
-                warn!("{error:#} - the preview draws nothing");
-                None
-            }
-        };
         if entry_changed {
             self.load_slideshow(index);
         }
+        // A title that previews with stills alone has no mesh to fail to
+        // load, so there is nothing here to report as missing.
+        self.preview = if self.previews.meshes {
+            match self.load_preview(gpu, index, key.1.as_deref()) {
+                Ok(preview) => Some(preview),
+                Err(error) => {
+                    warn!("{error:#} - the preview draws nothing");
+                    None
+                }
+            }
+        } else {
+            None
+        };
     }
 
-    /// Reads the selected circuit's stills and puts them on a sheet of this
-    /// screen's own, for the renderer to pick up on its next frame. A ship
-    /// entry has no slideshow and keeps whatever sheet was there.
+    /// Reads the selected entry's stills and puts them on a sheet of this
+    /// screen's own, for the renderer to pick up on its next frame.
+    ///
+    /// **A craft entry as much as a circuit one**: Pure's craft preview is
+    /// its team's own `screen.xml` chain, and Pulse's and HD's craft files
+    /// author no stills, so asking costs an already-open archive read and
+    /// returns an empty list there.
     fn load_slideshow(&mut self, index: usize) {
-        let Some(PreviewSource::Track { location, zone, .. }) = self.sources.get(index).cloned()
-        else {
-            return;
+        let (location, zone) = match self.sources.get(index).cloned() {
+            Some(PreviewSource::Track { location, zone, .. }) => (location, zone),
+            Some(PreviewSource::Ship { location, .. }) => (location, false),
+            None => return,
         };
         let mut report = Vec::new();
-        let loaded = oag_game::preview::slideshow(&mut self.archives, &location, zone, &mut report);
+        let globals: Vec<(&str, &str)> = self
+            .previews
+            .globals
+            .iter()
+            .map(|(key, value)| (key.as_str(), value.as_str()))
+            .collect();
+        let loaded = oag_game::preview::slideshow(
+            &mut self.archives,
+            &location,
+            zone,
+            &globals,
+            &mut report,
+        );
         for line in report {
             warn!("{line}");
         }

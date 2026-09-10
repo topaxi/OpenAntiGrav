@@ -254,6 +254,7 @@ fn the_circuits_own_screen_xml_is_the_slideshow_behind_the_window() {
         &mut archives,
         r"Data\Environments\16_Track",
         false,
+        &[],
         &mut report,
     )
     .expect("16_Track authors a screen.xml with an Info chain");
@@ -298,6 +299,7 @@ fn the_circuits_own_screen_xml_is_the_slideshow_behind_the_window() {
         &mut archives,
         r"Data\Environments\16_Track",
         true,
+        &[],
         &mut report,
     )
     .expect("16_Track authors a screen_zone.xml");
@@ -331,6 +333,13 @@ fn the_ps2_pressing_reads_the_same_screens_on_its_own_grid() {
         "{:?}",
         track.scale
     );
+    // Neither pressing authors a `<Menu>` on a selection screen - Pulse shows
+    // the selected entry alone in named `<Text>` widgets, where Pure lists
+    // every entry. So `picker`'s entry list draws nothing on either, which is
+    // what keeps this shared machinery from putting a second list over
+    // Pulse's single-entry display.
+    assert!(track.screen.menu.is_none());
+    assert!(ship.screen.menu.is_none());
     // `honey0`, `Speed Bar0`, `Infogradient0` on the disc; bare here.
     assert!(
         ship.screen
@@ -376,6 +385,7 @@ fn the_ps2_pressing_reads_the_same_screens_on_its_own_grid() {
         &mut archives,
         r"Data\Environments\16_Track",
         false,
+        &[],
         &mut report,
     )
     .expect("the PS2 16_Track authors a screen.xml");
@@ -386,6 +396,7 @@ fn the_ps2_pressing_reads_the_same_screens_on_its_own_grid() {
         &mut archives,
         r"Data\Environments\16_Track",
         true,
+        &[],
         &mut report,
     )
     .expect("the Zone chain is in the same file");
@@ -394,13 +405,12 @@ fn the_ps2_pressing_reads_the_same_screens_on_its_own_grid() {
 
 /// Pure: same definition file name as Pulse's, different screen name for the
 /// track picker (`Track Selection`, not `Track Creation`), and **no preview
-/// mesh at all** - both screens draw a pre-rendered 256x128 sprite out of
-/// `FEData.wad`. See `docs/formats/race-setup.md`; this test pins the six
-/// entries a PPSSPP texture dump caught the screens drawing, since the
-/// entries carry no names and index is the only handle on them.
+/// mesh at all** - both screens preview with the stills the selected entry's
+/// own `screen.xml` authors, out of `FEData.wad`. See
+/// `docs/formats/race-setup.md`.
 #[test]
 #[ignore = "needs a disc image in data/images/"]
-fn pure_reads_its_own_screen_names_and_ships_sprite_previews() {
+fn pure_reads_its_own_screen_names_and_previews_with_stills() {
     let Some(path) = oag_testdata::image("data/images/pure-psp-eu.chd") else {
         return;
     };
@@ -409,30 +419,113 @@ fn pure_reads_its_own_screen_names_and_ships_sprite_previews() {
     let ship = shell.ship_select.as_ref().expect("Team Selection reads");
     assert_eq!(track.title, "Track Selection");
     assert_eq!(ship.title, "Team Selection");
+    // And Pure's own shape: one `<Menu>` per screen and no named `<Text>`, so
+    // it lists every entry where Pulse shows the selected one alone.
+    for (what, layout) in [("track", track), ("ship", ship)] {
+        let menu = layout
+            .screen
+            .menu
+            .as_ref()
+            .unwrap_or_else(|| panic!("{what} authors a Menu widget"));
+        assert_eq!((menu.x, menu.y), (21.0, 45.0), "{what}");
+        // `FEGlobals->MenuScale` and `FEGlobals->TextColor`, the latter out
+        // of the style skin.
+        assert!((menu.scale - 1.15).abs() < 1e-5, "{what}: {}", menu.scale);
+        assert_eq!(menu.color, 0xFF11_ACD0, "{what}");
+    }
+    // The title says it previews with stills, and that is what stops the
+    // pickers reaching for a `.vex` that is not on this disc.
+    assert!(!oag_pure::FRONT_END.preview_meshes);
+    assert!(oag_pulse::FRONT_END.preview_meshes);
 
-    let spec = format!("{}:PSP_GAME/USRDIR/FEData.wad", path.to_string_lossy());
-    let mut wad = oag_assets::archive::Archive::open(&spec).expect("FEData.wad opens");
-    // Ships 126/130/134/138, circuits 175/176/182/188/193/194 - every one
-    // matched a dumped VRAM texture at RMSE 0. The ships sit three to a
-    // group at stride 4 and the circuits three to a group at stride 6; the
-    // group members are different views of one entity, and which view a
-    // screen picks is not settled, so only the observed ones are pinned.
-    for index in [126, 130, 134, 138, 175, 176, 182, 188, 193, 194] {
-        let blob = wad.read(index).expect("the sprite entry reads");
-        let sprite = oag_texture::texture::Texture::parse(&blob).expect("it decodes");
+    // The style skin's globals, which is where every colour Pure's selection
+    // screens draw in lives - not in the front-end root the way Pulse's do.
+    // Without them the stills tint white on a white front end and the
+    // picture is not wrong but absent.
+    let globals: Vec<(&str, &str)> = shell
+        .screens
+        .globals
+        .iter()
+        .map(|(key, value)| (key.as_str(), value.as_str()))
+        .collect();
+    for (key, value) in [
+        ("ShipColor", "0xFF99D9E8"),
+        ("TrackColor", "0xFF99D9E8"),
+        ("TextColor", "0xFF11ACD0"),
+    ] {
         assert_eq!(
-            (sprite.width, sprite.height),
-            (256, 128),
-            "FEData.wad entry {index}"
+            shell.screens.globals.get(key).map(String::as_str),
+            Some(value),
+            "{key} comes from Data\\Skins\\Default\\Skin.xml"
         );
     }
+
+    let mut archives = oag_assets::Archives::open(&path.to_string_lossy(), oag_pure::TITLE)
+        .expect("the archives open");
+    // Three stills a piece, two seconds each, cycling - `Info` (a 3/4 view),
+    // `Side`, `Top`, then round again. That cycle is what a 2026-09-10 PPSSPP
+    // capture read as a rotating 3D model.
+    for (location, srcs) in [
+        (
+            r"Data\Ships\Feisar",
+            [
+                r"Data\Ships\Feisar\Images\feisar3D.mip",
+                r"Data\Ships\Feisar\Images\feisarside.mip",
+                r"Data\Ships\Feisar\Images\feisartop.mip",
+            ],
+        ),
+        (
+            r"Data\Environments\01_Vineta_K",
+            [
+                r"Data\Environments\01_Vineta_K\Images\Track_1.mip",
+                r"Data\Environments\01_Vineta_K\Images\Track_2.mip",
+                r"Data\Environments\01_Vineta_K\Images\Track_3.mip",
+            ],
+        ),
+    ] {
+        let mut report = Vec::new();
+        let (show, blobs) =
+            oag_game::preview::slideshow(&mut archives, location, false, &globals, &mut report)
+                .unwrap_or_else(|e| panic!("{location} authors a screen.xml chain: {e:#}"));
+        assert!(report.is_empty(), "{report:?}");
+        let names: Vec<&str> = show.states().iter().map(|s| s.name.as_str()).collect();
+        assert_eq!(names, ["Info", "Side", "Top"], "{location}");
+        assert_eq!(show.sources(), srcs, "{location}");
+        assert_eq!(show.at(0.0).name, "Info");
+        assert_eq!(show.at(2.5).name, "Side");
+        assert_eq!(show.at(4.5).name, "Top");
+        assert_eq!(show.at(6.5).name, "Info", "the chain closes on itself");
+        // One still at a time, unlike Pulse's stack of cards.
+        assert_eq!(show.at(0.0).images.len(), 1);
+        // Tinted out of the style skin, not left white.
+        assert_eq!(show.at(0.0).images[0].color, 0xFF99_D9E8);
+
+        assert_eq!(blobs.len(), 3);
+        let sheet = oag_game::sprite::Sheet::build(&blobs, &mut report);
+        for src in srcs {
+            let placed = sheet.get(src).unwrap_or_else(|| panic!("{src} decodes"));
+            assert_eq!((placed.width, placed.height), (256, 128), "{src}");
+        }
+    }
+
+    // Zone circuits name the chain `screen_z.xml` and still start it at
+    // `Info`, where Pulse's Zone chain is a `Zone` state in `screen_zone.xml`.
+    let mut report = Vec::new();
+    let (zone, blobs) = oag_game::preview::slideshow(
+        &mut archives,
+        r"Data\Zone\01_Zone",
+        true,
+        &globals,
+        &mut report,
+    )
+    .expect("01_Zone authors a screen_z.xml chain");
+    assert_eq!(zone.at(0.0).name, "Info");
+    assert_eq!(blobs.len(), 3);
 
     // The two files the previews were wrongly wired to until 2026-09-10 do
     // exist - that is why the mistake was plausible - but they are the
     // in-race hull and the full racing circuit, neither of which either
-    // screen draws.
-    let mut archives =
-        oag_assets::Archives::open(&path.to_string_lossy(), oag_pure::TITLE).expect("opens");
+    // screen draws, and neither is what the `screen.xml` chains name.
     assert!(
         archives
             .read_name(r"Data\Environments\01_Vineta_K\track.vex")
@@ -442,5 +535,17 @@ fn pure_reads_its_own_screen_names_and_ships_sprite_previews() {
     assert!(
         archives.read_name(r"Data\Ships\Feisar\Ship.vex").is_ok(),
         "the in-race hull is on disc, it is simply not the picker's preview"
+    );
+    // And Pulse's own two names are on neither of Pure's entries, which is
+    // why a fallthrough was the wrong shape rather than a harmless one.
+    assert!(
+        archives
+            .read_name(r"Data\Ships\Feisar\ship_FE.vex")
+            .is_err()
+    );
+    assert!(
+        archives
+            .read_name(r"Data\Environments\01_Vineta_K\FE\forward.vex")
+            .is_err()
     );
 }

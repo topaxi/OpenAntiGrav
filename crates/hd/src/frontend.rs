@@ -271,6 +271,8 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     // `team_selection_definition.xml` as `<Model>` widgets in its own
     // dialect, which `oag_ui::picker::Layout::read` does not yet read.
     race_box: None,
+    // Inert: `race_box` is `None`, so no picker opens to read this.
+    preview_meshes: false,
 };
 
 /// The sixteen plugins that carry a language, named rather than numbered.

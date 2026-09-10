@@ -367,10 +367,40 @@ shipped texture, unaltered:
   **not settled**.
 - the rest are record-label logos, the boot splash and ad banners.
 
-**Which index belongs to which circuit or team is unrecovered.** The entries
-carry no names, only hashes, and only 10 of the ~52 have been tied to
-anything at all. Group order is *not* evidence of list order; assuming it is
-would be the same invention this correction is undoing.
+**Which still belongs to which entry is authored, not inferred** - recovered
+the same day the sprite finding was, and entirely offline. Every entry's own
+`<location>\screen.xml` names its three stills by full path:
+
+```xml
+<Screen name="Info"> <Image transition="0.25"><Values x="246" y="45"
+    Color="FEGlobals->TrackColor"
+    src="Data\Environments\01_Vineta_K\Images\Track_1.mip"/></Image>
+  <Redirect delay="2"><Default goto="Side"/></Redirect> </Screen>
+<Screen name="Side"> ... Track_2.mip ... goto="Top"  </Screen>
+<Screen name="Top">  ... Track_3.mip ... goto="Info" </Screen>
+```
+
+`hash_name(r"Data\Environments\01_Vineta_K\Images\Track_1.mip")` is
+`0xd6404ac7`, which is `FEData.wad` entry 194 - and 193 and 192 are `Track_2`
+and `Track_3`. The two entries the capture caught on that circuit were
+`Track_2` and `Track_1`: **the screen is a three-state chain that cycles
+`Info -> Side -> Top -> Info` at two seconds a step**, and that cycle is what
+a pair of screenshots read as a rotating model.
+
+Craft are the same shape with different names, and **the names are not
+derivable from the team id**: `feisar3D.mip` / `feisarside.mip` /
+`feisartop.mip` are lowercase, `Medievil3D.mip` / `Medievilside.mip` /
+`Medieviltop.mip` are capitalised. A composed `format!` would have been
+wrong on the second team it met, which is the concrete reason the right
+answer is to read `screen.xml` and play what it names.
+
+Pure's Zone circuits name their chain `screen_z.xml` (the `%s\screen_z.xml`
+template in its own executable) and still start it at `Info`, where Pulse's
+Zone chain is a `Zone` state inside `screen_zone.xml`. `screen_m.xml` and
+`screen_tt.xml` (split screen, time trial) exist beside them and are **not
+read**: choosing between them needs a race-mode parameter
+`oag_game::preview::slideshow` does not take, and on the circuit checked all
+three name the same three stills.
 
 #### How the 3D reading went wrong
 
@@ -419,12 +449,71 @@ at confidence 65 - see
   sprite reading: `FEData.wad` is open for the life of the front end, and
   changing selection only re-uploads a texture already in memory.
 
-**Net effect on this page's `PreviewSource` reading below**: Pure has no
-entry in it. `oag_game`'s pickers draw no preview on Pure and say so, rather
-than substituting `Ship.vex` or `track.vex` - those are the in-race hull and
-the full 4.25 MB racing circuit, and wiring them was a plausible-looking
-stand-in of exactly the kind [CLAUDE.md's "never invent what the assets
-already author"](../../CLAUDE.md) forbids. Pulse's rows are unaffected.
+#### The colours are in a second skin, and Pure is the only title with one
+
+Pure's stills each carry `Color="FEGlobals->ShipColor"` / `TrackColor`, and
+**both of those live in `Data\Skins\Default\Skin.xml`, not in the front-end
+root**. Its `Data\Plugins\PI001\GUI\Skin.xml` declares 13 globals against
+Pulse's 56; the other 37 - every colour the selection screens, the stat
+panels and the title text draw in - are the *style skin's*, which
+`Data\Plugins\PI001\Definition.xml` activates alongside the UI one:
+
+```xml
+<PI_Skin name="UI">      <Values location="Data\Plugins\PI001\GUI" activate="true"/>
+<PI_Skin name="Default"> <Values location="Data\Skins\Default" style="true" activate="true"/>
+<PI_Skin name="Hacker">  <Values location="Data\Skins\Hacker" style="true"/>
+```
+
+`Hacker` is the same file with a black background and is **not** activated.
+Pulse declares exactly one `PI_Skin`, the UI one, whose `Skin.xml` is the
+front-end root already loaded - so following `activate` changes nothing there,
+measured on both pressings.
+
+This matters twice over. Without it a still tints white, and on Pure's white
+front end that is not a wrong colour but an absent picture. And four of the
+globals it authors - `TitleColor` `0xFFED4796`, `DesignColor` `0xFF5FDBF6`,
+`TextColor` `0xFF11ACD0`, `FrameLineColor` `0xFE99C9D8` - were being supplied
+by `oag_pure::frontend::FALLBACK_GLOBALS`, a table sampled off captured frames
+at confidence 60-65. The disc's own values differ from three of the four, most
+of all on `TextColor` (`0x11ACD0` against the sampled `0x88D6E8`).
+
+#### Pure lists, Pulse shows one
+
+The two titles disagree on the *shape* of a selection screen, not just on how
+it previews. Pulse's `Selection_Definition.xml` authors named `<Text>` widgets
+that show the **selected** entry alone (`Info Track 1.1`, `Info1`, the stat
+bars) and no `<Menu>` at all. Pure authors one `<Menu name="Track">` /
+`<Menu name="Team">` per screen, at `x=21 y=45 scale=1.15
+color="FEGlobals->TextColor" allocate="16"`, and no named text - it **lists
+every entry** down the left the way its own `Language Selection` lists
+languages. `oag_ui::picker` draws both shapes; each title's own XML decides
+which it gets.
+
+The widget states no row pitch, so the step is one line of its own font at its
+own scale - the rule `oag_ui::frontend::draw`'s `DisplayLanguages` block
+already used for this same widget on this title. **`allocate` is a capacity,
+not a count, and nothing pages**: a source offering more entries than fit runs
+off the bottom. The base disc's 8 circuits and 10 teams are inside 16; its DLC
+packs are uncounted.
+
+One trap the style skin exposed: **the `<Menu>`'s own `color` attribute is the
+*selected* row's ink on Pure, not the unselected one.** It resolves to
+`TextColor` `0xFF11ACD0`, and the Main Menu capture behind
+`oag_pure::MENU_SKIN` samples the selected row at `0xFF16AED1` and the
+unselected rows at `0xFF88D6E8` - lighter. While `TextColor` was the sampled
+`0xFF88D6E8` the two agreed by accident and the language list looked right;
+once the disc's real value arrived, taking the attribute literally painted
+every row the same colour and the list lost its selection cue. Both list
+drawers now take the title's measured pair.
+
+**Net effect on this page's `PreviewSource` reading below**: Pure has no entry
+in it, and needs none. `oag_game`'s pickers preview Pure with the entry's own
+`screen.xml` chain and Pulse with a mesh plus its hexagon-window chain -
+`oag_title::FrontEnd::preview_meshes` is the axis. Neither substitutes
+`Ship.vex` or `track.vex`, which are the in-race hull and the full 4.25 MB
+racing circuit; wiring those was a plausible-looking stand-in of exactly the
+kind [CLAUDE.md's "never invent what the assets already author"](../../CLAUDE.md)
+forbids.
 
 ### HD/Fury authors its previews as widgets
 
@@ -954,8 +1043,8 @@ track-plus-class picker is the crossplay lobby vote.
   at all (`%s\Phantom.vex`/`%s\VR\Phantom.vex`, confidence 65 on when it
   actually fires - the gating flags trace to campaign-progress and
   multiplayer-permission checks, not to the currently selected speed
-  class). **Still open: which sprite index belongs to which circuit or
-  team**, which nothing yet recovers.
+  class). Which still belongs to which entry is **authored** in the entry's
+  own `<location>\screen.xml` and needed no inference - see above.
 - **No screen class was renamed in Ghidra.** The strings prove the classes
   exist; they are not evidence of what any function does, and the rubric's
   floor is 50 to rename at all.

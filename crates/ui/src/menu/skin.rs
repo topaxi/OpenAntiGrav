@@ -471,6 +471,17 @@ impl Skin {
         (self.line_height + leading) * self.skin.menu_scale
     }
 
+    /// The menu face's own line height, in the grid being drawn in.
+    ///
+    /// For a widget that states its own scale and no pitch - a `<Menu>` on a
+    /// selection screen, say - and so has to step by a line of its own font
+    /// rather than by [`Self::row_pitch`], which is the *menu page's* step and
+    /// carries that page's leading and `MenuScale`.
+    #[must_use]
+    pub fn line_height(&self) -> f32 {
+        self.line_height
+    }
+
     /// The scale a row's text is drawn at. `FEGlobals->MenuScale`.
     #[must_use]
     pub fn row_scale(&self) -> f32 {
