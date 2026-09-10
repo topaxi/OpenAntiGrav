@@ -460,18 +460,32 @@ struct Applied {
 ///
 /// # The two asymmetries, both read rather than reasoned
 ///
-/// **The denominator uses the *body-space* inverse inertia on a *world-space*
-/// lever arm.** `0x0884ebc0`-`0x0884ebe8` loads the matrix at `body+0x40..0x70`
-/// and transforms `cross(r, n)` with it, and `body+0x40` is unambiguously the
-/// body-space tensor: `Body_SetBoxInertia` (`0x0884e1ac`) writes it from the
-/// hull box's own dimensions and nothing recomputes it, while the *world* copy
-/// the integrator derives every sub-step lives at `body+0x80` and is what
-/// `Body_ApplyImpulseAtPoint` reads. So the original skips the rotation here and
-/// only here. Reproduced literally, because `I` is `(15.6, 21.6, 15.6)` and the
-/// resulting error is a real 38 % on a pitched or rolled craft, not a rounding
-/// difference - and because inventing the textbook form would make this
-/// function disagree with the disassembly for no evidence at all. Confidence 88
+/// **The denominator applies `body+0x40` straight to a *world-space* lever
+/// arm.** `0x0884ebc0`-`0x0884ebe8` loads the matrix at `body+0x40..0x70` and
+/// transforms `cross(r, n)` with it, with no rotation either side. Reproduced
+/// literally, because `I` is `(15.6, 21.6, 15.6)` and the difference is a real
+/// 38 % on a pitched or rolled craft, not a rounding difference. Confidence 88
 /// on the field identification, 90 on the instructions.
+///
+/// **This was read as an asymmetry and it is not one - corrected 2026-09-10.**
+/// The reason recorded here was that `+0x40` is "unambiguously the body-space
+/// tensor", so the original was skipping a rotation "here and only here".
+/// `+0x40` is a diagonal fixed in **world** axes: `Body_Integrate`'s own
+/// `R (+0x40) R^T` is only the trip in and out of the body frame its two
+/// fields are stored in, and that reading explains `100.00 %` of the recorded
+/// momentum column on three captures where the body-local one manages 91-95 %.
+/// See
+/// `docs/ghidra/functions/psp-pulse-usa/rigid-body.md` and
+/// `docs/physics/cornering-ground-truth.md`. So a world-axis diagonal applied
+/// to a world lever arm is not the odd case - it is the engine's one
+/// convention, and this function was already right for a reason nobody had.
+/// The asymmetry that remains is **ours**: [`crate::integrate`] rotates and
+/// this does not, which is the deliberate divergence recorded under "The crate
+/// keeps its body-space diagonal" on that page. Anyone adopting the world-axis
+/// reading has to move all four sites at once - here, `body_frame_inverse_inertia`
+/// below, `crate::integrate` and `crate::forces::YAW_INVERSE_INERTIA` - because
+/// a tensor applied in two frames in one crate is the same "one convention, not
+/// three coincidences" trap the integrator's sign flip already documents.
 ///
 /// **The application is textbook, and scaled by [`ANGULAR_IMPULSE_SCALE`].**
 /// `Body_ApplyImpulseAtPoint` rotates `cross(r, p)` into the body frame through

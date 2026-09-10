@@ -100,7 +100,13 @@ pub const INERTIA_BOX_Z: f32 = 12.0;
 /// [`YAW_INVERSE_INERTIA`].
 pub const INERTIA_MASS: f32 = 0.9;
 
-/// The yaw entry of the ship's body-space inverse inertia tensor, `1 / I_yy`.
+/// The yaw entry of the ship's inverse inertia tensor, `1 / I_yy`.
+///
+/// The tensor is a diagonal fixed in **world** axes, not body axes - corrected
+/// 2026-09-10, see `docs/physics/cornering-ground-truth.md`. It makes no
+/// difference to this constant's value, only to the frame a caller applies it
+/// in; this crate applies it body-locally, deliberately, and that page records
+/// why.
 ///
 /// **Recovered, not fitted.** This replaces `YAW_DRIVE_CALIBRATION`, a fitted
 /// `0.0452` that stood here while the tensor's writer was unknown. It is a
@@ -262,7 +268,8 @@ pub const YAW_INVERSE_INERTIA: f32 =
 pub const PITCH_INVERSE_INERTIA: f32 =
     12.0 / (INERTIA_MASS * (INERTIA_BOX_Y * INERTIA_BOX_Y + INERTIA_BOX_Z * INERTIA_BOX_Z));
 
-/// The roll entry of the ship's body-space inverse inertia tensor, `1 / I_zz`.
+/// The roll entry of the ship's inverse inertia tensor, `1 / I_zz` (world axes;
+/// see [`YAW_INVERSE_INERTIA`]).
 ///
 /// `12 / (m * (x^2 + y^2))`. The box is square in plan (`x == z`), so this is
 /// numerically equal to [`PITCH_INVERSE_INERTIA`] - and it is written out rather

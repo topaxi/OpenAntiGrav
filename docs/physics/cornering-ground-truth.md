@@ -4,7 +4,10 @@
 term by term. The pitch/roll refutation is
 [scoped to one stretch of track](#the-refutation-is-scoped-the-inverted-section-was-carrying-it)
 by a second lap that records `body+0x150`, and what is left of it is localised
-rather than general.**
+rather than general. The inverse inertia's own frame was re-read on 2026-09-10
+and is a **world**-axis diagonal; that answers the momentum-to-rate identity
+exactly and the pitch/roll gap not at all, and the crate declines to follow it -
+[the section below](#the-tensor-is-a-world-axis-diagonal-and-that-answers-a-not-c).**
 
 [force-balance-ground-truth.md](force-balance-ground-truth.md) settled the
 forward axis on straight-line captures and closed on a wall-friction
@@ -446,11 +449,17 @@ excess is:
 
 1. It is not a frame or timing artefact. Pairing `omega` with the momentum at
    tick `i`, at `i + 1`, or with their mean changes the ratios by under 2 %.
-2. It is not a wrong change of basis. Four candidate maps were tried -
-   body-diagonal, world-diagonal, `M^T I^-1 M` and `M I^-1 M^T`, each against
-   both the body- and world-frame rotation. The body-frame diagonal is the best
-   of them; none rescues pitch or roll (the best world-frame model explains
-   `-24 %` and `-17 %`, i.e. worse than predicting zero).
+2. It is not a wrong change of basis - but the reason given here first time
+   round was wrong, and the correction is
+   [its own section below](#the-tensor-is-a-world-axis-diagonal-and-that-answers-a-not-c).
+   Four candidate maps were tried - body-diagonal, world-diagonal,
+   `M^T I^-1 M` and `M I^-1 M^T`, each against both the body- and world-frame
+   rotation - and this page recorded the body-frame diagonal as the best of
+   them. **It is not**: the engine's own map is a diagonal fixed in *world*
+   axes, `L = R (I (x) R^T w)`, and it explains the momentum column to
+   `100.00 %` on three captures. What survives, and is remeasured below, is the
+   narrower statement - **no reading of the tensor's frame rescues pitch or
+   roll**, because the failure is not in the tensor at all.
 3. It is not noise. The residual's lag-1 autocorrelation is `0.978` - it is a
    smooth, sustained rotation, not per-frame jitter, and the recorded basis is
    orthonormal to `1.1e-06`.
@@ -581,17 +590,151 @@ wrong: **it must not be modelled as a torque.** A torque would go through
 rotation is a kinematic rewrite of the basis. That is queued as a separate
 task rather than done here.
 
+## The tensor is a world-axis diagonal, and that answers (A), not (C)
+
+2026-09-10, and it is the correction to bullet 2 above. `Body_Integrate` maps
+`body+0x160` to `body+0x150` through `R (body+0x40) R^T`, and **both fields hold
+their quantity negated and in body coordinates**, so the two rotations are only
+the trip in and out of the frame the fields are written in. What the map itself
+does is multiply a *world* vector by a diagonal fixed in *world* axes, written
+once by `Body_SetBoxInertia`. The derivation, pinned to the instruction each
+frame is read off, is
+[rigid-body.md](../ghidra/functions/psp-pulse-usa/rigid-body.md);
+`scripts/trace-inertia-frame-fit.py` scores it against the body-local and mixed
+readings and it explains `100.00 %` of the recorded `+0x160` column on all three
+Talon's Junction captures, its free three-parameter fit returning
+`(15.600, 21.600, 15.600)` - `Body_SetBoxInertia`'s own code literal, out of a
+column it had never been compared against.
+
+`diag(a, b, a)` is invariant under yaw, so on a level craft the world-axis and
+body-axis readings are **identical**. They can only differ where the craft is
+banked or pitched - which is why the labels survived being the wrong way round
+for three weeks, and why the question this section exists to answer had to be
+measured rather than argued.
+
+**The question: does the world-axis map close the `0.231x`/`0.647x` pitch and
+roll gap?** `scripts/trace-omega-identity.py --world-axis` runs both identities
+under both readings on the same intervals. On `talons-junction-clean-lap.csv`,
+2,837 clean intervals of 2,977 ticks (the capture that reproduces this page's
+tables - see the note under the reproduce command below):
+
+| identity | reading | pitch | yaw | roll |
+| --- | --- | ---: | ---: | ---: |
+| (A) `avel = I * omega` | body-axis | `1.1667` (86.8 %) | `0.9693` (99.5 %) | `0.9304` (86.7 %) |
+| **(A_F)** `avel = R (I (x) R^T omega)` | **world-axis** | **`1.0000` (100.00 %)** | **`1.0000` (100.00 %)** | **`1.0000` (100.00 %)** |
+| (B) `omega = -omega(basis)` | no tensor in it | `0.2134` (21.9 %) | `0.9992` (99.9 %) | `0.6600` (62.4 %) |
+| (C) `avel = -I * omega(basis)` | body-axis | `0.2533` (19.7 %) | `0.9685` (99.5 %) | `0.6643` (63.2 %) |
+| (C_F) the same composite | world-axis | `0.2963` (30.6 %) | `0.9976` (99.9 %) | `0.6314` (63.7 %) |
+
+**No.** (A_F) is exact - ratio `1.0000` on every axis, rms `1e-4` against a
+column of order 3 - so the world-axis reading is *the* answer to (A), and (A)
+was never the broken half. (C) is (A) times (B), and (B) is a fit of one
+recorded column against another **with no tensor anywhere in it**: no reading of
+the tensor's frame can move it. The composite duly does not close - pitch goes
+`0.2533` to `0.2963`, roll `0.6643` to `0.6314`, residual rms `3.28` to `3.05`
+and `2.21` to `2.20`. Restricted to `up.y >= 0.85`, where this page already
+scoped the failure away, it is if anything slightly worse on both attitude axes:
+`0.7706`/`0.9285` body-axis against `0.7564`/`0.8918` world-axis, with yaw
+tightening from `0.9912` to `0.9992`.
+
+Reproduce with `--world-axis`, which is additive and leaves the default output
+untouched:
+
+```sh
+uv run scripts/trace-omega-identity.py \
+    data/traces/talons-junction-clean-lap.csv --world-axis
+uv run scripts/trace-omega-identity.py \
+    data/traces/talons-junction-clean-lap.csv --world-axis --min-up-y 0.85
+```
+
+### The crate keeps its body-space diagonal: chosen, not measured
+
+`crates/physics/src/integrate.rs` applies the inertia as a body-space diagonal,
+`R^T (I^-1 (x) (R tau))`, and **that stays**, knowingly diverging from the
+original. No confidence score attaches to this: it is a design decision, not a
+measurement, and the measurement it is decided against is the exact one above.
+
+Three things decide it, in order:
+
+1. **The payoff is absent.** The change was proposed to close the pitch and roll
+   gap. The gap is (B)'s, and (B) has no tensor in it.
+2. **The divergence that is left is real, and it is carried knowingly rather
+   than argued away.** Where the original holds a craft off level on a magstrip
+   it drives the attitude outside the momentum path entirely - the section
+   above measures `99.9 %` of the inverted stretch's tilt rotation bypassing
+   the angular-velocity column - and `oag_physics::maglock` reproduces that
+   rewrite kinematically, so both engines agree there for the same reason. But
+   the `up.y` table above also shows (B) roll at `1.005`, `0.980`, `0.869` down
+   to `up.y = 0.93` and the residual falling to `0.206x` outside the inverted
+   section: **at mild bank off a magstrip the original really is turning a
+   world-axis tensor through this path, and the crate is not.** What would
+   settle whether it is worth having is a capture with sustained bank and
+   `craft+0x280 == 0`, compared tick for tick against the crate; nothing in
+   `data/traces/` provides one, and `craft+0x280` is not in any capture's
+   column set either.
+3. **It is not free, and it is not one site.** The tensor is applied in four
+   places - `wall::inverse_inertia` (the contact denominator, already
+   world-axis and literal), `wall::body_frame_inverse_inertia` (the angular
+   impulse response, rotated), `integrate` (rotated) and
+   `forces::YAW_INVERSE_INERTIA` (the yaw drive's folded factor). Adopting the
+   world-axis reading means moving all four together or leaving one crate
+   applying one tensor in two frames, which is the trap `integrate.rs`'s own
+   sign-convention note already exists for. Measured on a throwaway branch with
+   `integrate`'s two rotations deleted (a constant world-axis diagonal makes
+   `R (I^-1 (x) R^T tau)` equal `I^-1 (x) tau` outright): `crates/physics`'s
+   `the_simulation_matches_the_committed_reference` moves on **all three
+   scripts, including `Corridor` at 600 ticks** - so it is not confined to
+   aerobatics, it reaches every tick the craft is not perfectly level.
+   `race_ground_truth::a_lone_craft_gets_round_the_circuits_it_is_known_to_get_round`
+   survives it - twelve of twelve clean either way, `01_Track` at 1 respawn at
+   `[794]` either way - with lap times moving by at most `0.3 s` (`16_Track`
+   `40.9 -> 41.2`, `01_Track` `38.8 -> 39.1`, `07_Track` `48.4 -> 48.6`). A
+   reference hash that moves across four sites for a change with no measured
+   payoff is the churn the golden-hash rule exists to make expensive.
+
+Two things this decision is **not**. It is not a claim that the crate's
+treatment is correct and the original's a bug: ours is a body-space diagonal
+evaluated once per frame from the starting orientation and carrying no
+gyroscopic `omega x (I omega)` term, which is an approximation of its own. And
+it is not permanent. **Revisit it the next time all four application sites are
+open anyway**, or as soon as a sustained-bank capture off a magstrip exists to
+measure it against - the case for adopting it is fidelity in that one regime,
+and today nothing can measure whether the crate is worse there.
+
+**One thing the correction does settle, at no cost.**
+`crates/physics/src/wall.rs` recorded its contact denominator - `body+0x40`
+applied straight to a world-space lever arm - as an *asymmetry*, a place where
+"the original skips the rotation here and only here", justified by `+0x40`
+being the body-space tensor. It is not an asymmetry: a world-axis diagonal
+applied to a world vector is the engine's one convention, and that site was
+already right for a reason nobody had. Its doc comment now says so. The
+asymmetry that remains is between that site and `integrate`, and it is
+this page's decision rather than the disc's behaviour.
+
 Reproduce all of it with, and note that no handling values are needed - every
 fit here is kinematic:
 
 ```sh
 cargo run -q -p oag-trace -- track --source data/images/pulse-psp-usa.chd > /tmp/spline.csv
 uv run scripts/trace-omega-identity.py \
-    data/traces/talons-junction-time-trial-lap-omega.csv --spline /tmp/spline.csv
+    data/traces/talons-junction-clean-lap.csv --spline /tmp/spline.csv
 uv run scripts/trace-omega-identity.py \
-    data/traces/talons-junction-time-trial-lap-omega.csv --spline /tmp/spline.csv \
+    data/traces/talons-junction-clean-lap.csv --spline /tmp/spline.csv \
     --min-up-y 0.85          # the same lap without the inverted section
 ```
+
+**The capture names above drifted, and were corrected on 2026-09-10.** The lap
+these sections' tables come from is `talons-junction-clean-lap.csv` today -
+2,977 ticks, 2,837 clean intervals (95.3 %), (C) reading `0.2533` / `0.9685` /
+`0.6643` against the `0.231` / `0.970` / `0.647` recorded above.
+`talons-junction-time-trial-lap-omega.csv` no longer exists under that name, and
+the `talons-junction-time-trial-lap.csv` in `data/traces/` today is a different
+capture from the one the
+[lateral and yaw fits](#the-capture-and-the-discipline-applied-to-it) were taken
+on: it carries the `omega_*` columns those fits predate, and reads 696 clean
+intervals of 3,146 ticks (22.1 %) with (C) at `1.35` / `0.99` / `1.01`. The
+provenance was not chased; read the earlier sections' reproduce command as
+naming a capture that is no longer in the tree under that name.
 
 ## What this page confirms, refutes and leaves open
 
@@ -610,7 +753,10 @@ uv run scripts/trace-omega-identity.py \
 | `I_yy = 21.6` from `Body_SetBoxInertia` | confirmed at racing speed, `0.970x` | 90 |
 | `avel = -I * omega` on pitch and roll, pooled over a whole lap | **refuted**, `0.231x` and `0.647x` - reproduced on a second lap at `0.231x` / `0.654x` | 88 |
 | ...but the refutation is general rather than localised | **refuted** by the `body+0x150` lap: outside the inverted section it reads `0.926x` and `0.918x` | 85 |
-| the break is between `body+0x150` and the basis, not in the momentum column | confirmed: (A) `1.19`/`0.97`/`0.93`, (B) `0.20`/`0.9994`/`0.64` | 88 |
+| the break is between `body+0x150` and the basis, not in the momentum column | confirmed: (A) `1.19`/`0.97`/`0.93`, (B) `0.20`/`0.9994`/`0.64`, and (A) is *exact* under the engine's own world-axis map | 92 |
+| the inverse inertia is a body-space diagonal | **refuted**: it is a diagonal fixed in **world** axes, `100.00 %` of the momentum column on three captures | 92 |
+| a world-axis tensor closes the pitch and roll gap | **refuted**: (C) `0.2533`/`0.6643` body-axis against `0.2963`/`0.6314` world-axis - the gap is (B)'s, and (B) has no tensor in it | 92 |
+| the crate should adopt the world-axis tensor | **declined - chosen, not measured**, see [above](#the-crate-keeps-its-body-space-diagonal-chosen-not-measured) | - |
 | the excess pitch/roll rotation is attitude alignment | open, and now measured against the track's own normal: `0.713x` its turn rate, 70 % explained; a misalignment spring explains 1.9 % | 75 |
 | the excess is a wrong frame, a pairing error, or noise | **refuted**: world-frame explains 0.1-0.9 %, pairing moves it under 1 % | 90 |
 | the weathervane coefficient is `-0.1` | open, fits at `0.40 +/- 0.14`, term too small to pin | 50 |

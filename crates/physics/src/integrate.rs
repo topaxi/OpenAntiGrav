@@ -122,11 +122,31 @@ pub fn clamp_dt(measured_dt: f32) -> f32 {
 ///
 /// # Angular integration
 ///
-/// Torque is world space and the inertia tensor is a body-space diagonal, so the
+/// Torque is world space and this crate treats the inertia tensor as a
+/// body-space diagonal (the original does not - see below), so the
 /// torque is rotated into the body, divided component-wise, and rotated back -
 /// once, using the frame's starting orientation. A zero inertia component
 /// contributes zero angular acceleration rather than an infinity, which is what
 /// makes a zeroed parameter set safe to integrate.
+///
+/// **The original's diagonal is fixed in world axes, not body axes, and this
+/// crate declines to follow it - chosen, not measured.** `Body_Integrate`'s
+/// `R I R^T` sandwich is only the trip in and out of the frame its two fields
+/// are stored in, so what the engine multiplies by is a world-axis constant;
+/// that reading explains `100.00 %` of the recorded momentum column on three
+/// captures. It is not adopted here because the gap it was proposed to close
+/// belongs to a different identity entirely - one with no tensor in it - and
+/// because adopting it is a four-site convention change ([`crate::wall`]'s
+/// contact denominator and angular response, here, and
+/// [`crate::forces::YAW_INVERSE_INERTIA`]) for no measured payoff, which moves
+/// the committed reference hash as early as tick 600 of `Corridor`. **It is a
+/// real divergence and it is carried knowingly**: at mild bank off a magstrip
+/// the original does drive attitude through this path, with a world-axis
+/// tensor. The measurement, the decision, what would settle it and the
+/// condition to revisit it are `docs/physics/cornering-ground-truth.md`, "The
+/// tensor is a world-axis diagonal". Note also that what is here is not the
+/// textbook treatment either: it carries no gyroscopic `omega x (I omega)`
+/// term and evaluates the rotation once per frame.
 ///
 /// The orientation advances by the linear quaternion derivative
 /// `q + 0.5 * (omega as a pure quaternion) * q * h` and is **renormalised every
