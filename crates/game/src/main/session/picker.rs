@@ -1,0 +1,381 @@
+//! The race box's flow: RACE page -> Track Select -> Ship Select -> race.
+//!
+//! The same three-page shape Pulse's own `Single Player` -> `Track Creation`
+//! -> `Team Selection` -> `Launch Game` takes (`docs/formats/race-setup.md`),
+//! with the RACE page standing in for `Single Player`. The START row opens
+//! the track picker where it used to launch outright; each picker writes the
+//! same `race.*` setting its RACE-page row does, so the row, the picker and
+//! the race that launches all read one value; and a title whose front end
+//! authors neither screen (`Shell::track_select` is `None`) launches from
+//! START exactly as before.
+//!
+//! **Zone skips the ship picker.** The mode forces the shared Zone hull
+//! whatever team is set - see `oag_game::race::ship_entry_name` - and the
+//! RACE page already greys its TEAM row for the same reason, so a picker
+//! there would offer a choice the race ignores.
+
+use std::sync::{Arc, Mutex};
+
+use log::{info, warn};
+use oag_game::catalogue;
+use oag_ui::picker::{self, Details, Entry, Event, Kind, Picker};
+
+use crate::picker_stage::{Distances, LiveryAxis, PickerStage, PreviewSource};
+use crate::session::menus::variant_choices;
+use crate::stage::Stage;
+
+use super::Session;
+
+impl Session {
+    /// Opens Track Select over the menus, on the circuit `race.track` names.
+    ///
+    /// `false` when this title has no such screen, which is the caller's cue
+    /// to launch straight away.
+    pub(crate) fn open_track_picker(&mut self) -> bool {
+        let Some(shell) = self.shell.as_ref() else {
+            return false;
+        };
+        let Some(layout) = shell.track_select.clone() else {
+            return false;
+        };
+        let mode = self.race_mode();
+        let title = shell.title;
+        let (entries, sources): (Vec<Entry>, Vec<PreviewSource>) = shell
+            .tracks_for(mode)
+            .iter()
+            .map(|(track, label)| {
+                (
+                    Entry {
+                        id: track.id.clone(),
+                        label: label.clone(),
+                        details: Details::Track {
+                            info: self.track_info(title.name, track, mode),
+                        },
+                    },
+                    PreviewSource::Track {
+                        location: track.location.clone(),
+                        reversed: track.reversed,
+                    },
+                )
+            })
+            .unzip();
+        let model = Picker::new(
+            Kind::Track,
+            entries,
+            Some(self.settings.race.track.as_str()),
+            None,
+        );
+        // The lap lengths, measured off each circuit's own file on a worker
+        // - the selected circuit first, then the rest of the list in order
+        // - and copied onto the panel as they land. A 4 MB read and a
+        // spline parse per circuit is too slow for the frame thread and
+        // too cheap to cache on disk.
+        let mut order: Vec<(String, String)> = shell
+            .tracks_for(mode)
+            .iter()
+            .map(|(track, _)| (track.id.clone(), track.entry_name()))
+            .collect();
+        let selected = model.index().min(order.len().saturating_sub(1));
+        if selected < order.len() {
+            order.rotate_left(selected);
+        }
+        let distances = self.spawn_distance_worker(order);
+        self.open_picker(model, layout, LiveryAxis::Variant, sources, distances)
+    }
+
+    /// Reads every circuit in `order` on its own thread and measures its lap
+    /// (see `oag_game::race::circuit_length`) into the map the picker reads
+    /// each tick. A circuit that will not read or measure is logged and its
+    /// row keeps its dash.
+    fn spawn_distance_worker(&self, order: Vec<(String, String)>) -> Option<Distances> {
+        let options = self.race_options.as_ref()?;
+        let source = options.source.clone();
+        let dlc = options.dlc.clone();
+        let distances: Distances = Arc::new(Mutex::new(std::collections::HashMap::new()));
+        let sink = Arc::clone(&distances);
+        let spawned = std::thread::Builder::new()
+            .name("circuit-lengths".into())
+            .spawn(move || {
+                let (packs, pure_packs, _) = oag_game::dlc::packs_from_defaults(
+                    &dlc,
+                    &oag_game::boot::default_dlc_cache_dir(),
+                );
+                let mut archives = match oag_game::title::open_source(&source, packs, pure_packs) {
+                    Ok(opened) => opened.archives,
+                    Err(error) => {
+                        warn!("cannot open {source} to measure its circuits: {error:#}");
+                        return;
+                    }
+                };
+                for (id, entry) in order {
+                    let measured = archives
+                        .read_name(&entry)
+                        .map_err(anyhow::Error::from)
+                        .and_then(|blob| oag_game::race::circuit_length(&blob));
+                    match measured {
+                        Ok(length) => {
+                            if let Ok(mut map) = sink.lock() {
+                                map.insert(id, length);
+                            }
+                        }
+                        Err(error) => warn!("{entry}: {error:#} - no distance for {id}"),
+                    }
+                }
+                info!("circuit lengths measured");
+            });
+        match spawned {
+            Ok(_) => Some(distances),
+            Err(error) => {
+                warn!("cannot start the circuit-length worker: {error}");
+                None
+            }
+        }
+    }
+
+    /// Opens Ship Select over the menus, on the team `race.team` names.
+    pub(crate) fn open_ship_picker(&mut self) -> bool {
+        let Some(shell) = self.shell.as_ref() else {
+            return false;
+        };
+        let Some(layout) = shell.ship_select.clone() else {
+            return false;
+        };
+        let title = shell.title;
+        let (entries, sources): (Vec<Entry>, Vec<PreviewSource>) = shell
+            .teams
+            .iter()
+            .map(|choice| {
+                let details = shell
+                    .team_details
+                    .iter()
+                    .find(|team| team.id == choice.value);
+                // The livery row: the team's own skins where it declares
+                // any - the original's `Classic`/`Alternative`, `Classic`
+                // being the disc's own string id for the baseline paint -
+                // and the title's variant table otherwise.
+                let skins: Vec<(String, String)> = details
+                    .map(|team| {
+                        team.skins
+                            .iter()
+                            .map(|skin| (skin.name.clone(), skin.location.clone()))
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                let variants: Vec<(String, String)> =
+                    if skins.is_empty() {
+                        variant_choices(title, &choice.value)
+                            .into_iter()
+                            .map(|variant| (variant.value, variant.label))
+                            .collect()
+                    } else {
+                        std::iter::once((
+                            String::new(),
+                            shell
+                                .strings
+                                .get_or_id(catalogue::BASELINE_SKIN)
+                                .to_string(),
+                        ))
+                        .chain(skins.iter().map(|(name, _)| {
+                            (name.clone(), shell.strings.get_or_id(name).to_string())
+                        }))
+                        .collect()
+                    };
+                (
+                    Entry {
+                        id: choice.value.clone(),
+                        label: choice.label.clone(),
+                        details: Details::Ship {
+                            rating: details.and_then(|team| team.rating).map(|rating| {
+                                picker::Rating {
+                                    speed: rating.speed,
+                                    thrust: rating.thrust,
+                                    handling: rating.handling,
+                                    shield: rating.shield,
+                                }
+                            }),
+                            variants,
+                        },
+                    },
+                    PreviewSource::Ship {
+                        location: details.map_or_else(
+                            || format!(r"Data\Ships\{}", choice.value),
+                            |team| team.location.clone(),
+                        ),
+                        skins,
+                    },
+                )
+            })
+            .unzip();
+        // One axis per screen, decided by the selected team's own entry so
+        // the row and the setting it writes agree: every Pulse team
+        // declares skins, no HD or 2048 team does.
+        let axis = match entries
+            .iter()
+            .find(|entry| entry.id == self.settings.race.team)
+            .or_else(|| entries.first())
+            .map(|entry| &entry.details)
+        {
+            Some(Details::Ship { variants, .. })
+                if variants.first().is_some_and(|(id, _)| id.is_empty()) =>
+            {
+                LiveryAxis::Skin
+            }
+            _ => LiveryAxis::Variant,
+        };
+        let livery = match axis {
+            LiveryAxis::Skin => self.settings.race.skin.as_str(),
+            LiveryAxis::Variant => self.settings.race.variant.as_str(),
+        };
+        let model = Picker::new(
+            Kind::Ship,
+            entries,
+            Some(self.settings.race.team.as_str()),
+            Some(livery),
+        );
+        self.open_picker(model, layout, axis, sources, None)
+    }
+
+    /// The three info rows for a circuit: distance, lap record, race
+    /// record. The records come off this build's own store, keyed the way
+    /// the RECORDS page keys them; the distance is **not known here** - the
+    /// original reads it off the loaded circuit, and this screen has not
+    /// loaded one - so it draws the same dash an unset record does rather
+    /// than a number nothing measured.
+    fn track_info(
+        &self,
+        title: &str,
+        track: &catalogue::Track,
+        mode: oag_race::Mode,
+    ) -> [String; 3] {
+        let key = oag_game::records::Key::new(
+            title,
+            Some(&track.entry_name()),
+            mode.name(),
+            self.settings.race.class.trim(),
+        );
+        let record = self.records.get(&key);
+        [
+            "-".to_string(),
+            oag_game::scoreboard::record_table_value(record, false),
+            oag_game::scoreboard::record_table_value(record, true),
+        ]
+    }
+
+    fn open_picker(
+        &mut self,
+        model: Picker,
+        layout: picker::Layout,
+        livery_axis: LiveryAxis,
+        sources: Vec<PreviewSource>,
+        distances: Option<Distances>,
+    ) -> bool {
+        let Some(options) = self.race_options.as_ref() else {
+            return false;
+        };
+        let (packs, pure_packs, problems) = oag_game::dlc::packs_from_defaults(
+            &options.dlc,
+            &oag_game::boot::default_dlc_cache_dir(),
+        );
+        for problem in problems {
+            warn!("{problem}");
+        }
+        let archives = match oag_game::title::open_source(&options.source, packs, pure_packs) {
+            Ok(opened) => opened.archives,
+            Err(error) => {
+                warn!(
+                    "cannot open {} for the selection screen's previews: {error:#}",
+                    options.source
+                );
+                return false;
+            }
+        };
+        let Stage::Menu(stage) = &mut self.stage else {
+            return false;
+        };
+        let mut picker = PickerStage::new(
+            model,
+            layout,
+            livery_axis,
+            sources,
+            archives,
+            distances,
+            self.anisotropy,
+        );
+        picker.refresh_preview(&self.gpu);
+        picker.refresh_info();
+        stage.picker = Some(picker);
+        true
+    }
+
+    /// One tick of an open picker: its input, and what came of it.
+    pub(crate) fn tick_picker(&mut self) {
+        let Stage::Menu(stage) = &mut self.stage else {
+            return;
+        };
+        let Some(picker) = stage.picker.as_mut() else {
+            return;
+        };
+        picker.refresh_info();
+        let events = picker.model.update(self.controls.buttons_mut());
+        for event in events {
+            self.handle_picker(event);
+        }
+    }
+
+    pub(crate) fn handle_picker(&mut self, event: Event) {
+        let Stage::Menu(stage) = &mut self.stage else {
+            return;
+        };
+        let Some(picker) = stage.picker.as_mut() else {
+            return;
+        };
+        let kind = picker.model.kind();
+        match (kind, event) {
+            (Kind::Track, Event::Moved) => {
+                if let Some(entry) = picker.model.selected() {
+                    self.settings.race.track = entry.id.clone();
+                }
+                picker.refresh_preview(&self.gpu);
+            }
+            (Kind::Ship, Event::Moved) => {
+                if let Some(entry) = picker.model.selected() {
+                    let team = entry.id.clone();
+                    let axis = picker.livery_axis;
+                    picker.refresh_preview(&self.gpu);
+                    self.settings.race.team = team;
+                    match axis {
+                        LiveryAxis::Skin => self.settings.race.skin = String::new(),
+                        LiveryAxis::Variant => self.settings.race.variant = String::new(),
+                    }
+                    self.resupply_race_variant();
+                }
+            }
+            (_, Event::VariantChanged) => {
+                if let Some((id, _)) = picker.model.variant() {
+                    let id = id.clone();
+                    match picker.livery_axis {
+                        LiveryAxis::Skin => self.settings.race.skin = id,
+                        LiveryAxis::Variant => self.settings.race.variant = id,
+                    }
+                }
+                picker.refresh_preview(&self.gpu);
+            }
+            (Kind::Track, Event::Confirmed) => {
+                stage.picker = None;
+                let zone = self.race_mode() == oag_race::Mode::Zone;
+                if zone || !self.open_ship_picker() {
+                    self.launch_from_settings();
+                }
+            }
+            (Kind::Ship, Event::Confirmed) => {
+                stage.picker = None;
+                self.launch_from_settings();
+            }
+            (Kind::Track, Event::Back) => stage.picker = None,
+            (Kind::Ship, Event::Back) => {
+                stage.picker = None;
+                self.open_track_picker();
+            }
+        }
+    }
+}

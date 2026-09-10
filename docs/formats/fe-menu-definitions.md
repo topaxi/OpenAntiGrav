@@ -123,7 +123,9 @@ question.
 | --- | --- |
 | `Menu` | a row list: `x`, `y`, `gap`, `align`, `font`, `color`, `focus`, `GSDisableEntriesBitField` |
 | `Entry` | one row, by `idstring` |
-| `LeftLayer` | a group with a `transition`, and sometimes an `OffsetX` of its own |
+| `LeftLayer` | a group with a `transition`, and sometimes an `OffsetX`/`OffsetY` of its own - an **origin** for its children, settled below |
+| `Item` | a bare positioned group: `OffsetX`/`OffsetY` and nothing else. `Selection_Definition.xml`'s info panel is one per stat row |
+| `Image` with `Color1`..`Color4` and no `src` | a gradient fill, the four being its corner colours (`1`/`2` left, `3`/`4` right); every rule on the selection screens is two mirrored halves of one |
 | `Redirect` | `item` / `equals` / `goto`, plus a `Default` |
 | `Watch` | a screen reacting to another screen's value |
 | `Dialog` | `Icon`, `TextID`, `NumOptions` |
@@ -213,7 +215,11 @@ platform.
 
 - The five files that do not resolve in `Data.wad`.
 - `RealGlow`, `enabletransition`, `GSDisableEntriesBitField`.
-- Whether `LeftLayer`'s `OffsetX` shifts an origin or a travel. It does not
-  arise on `Main Menu`, whose layer carries neither.
+- ~~Whether `LeftLayer`'s `OffsetX` shifts an origin or a travel.~~ **An
+  origin, settled 2026-09-09**: `Track Creation`'s `<LeftLayer OffsetX="290"
+  OffsetY="25">` holds an info panel whose own `x` is absent, and the panel
+  sits at x=290 on the capture - see
+  [selection-screens.md](../ui/selection-screens.md). Nested `Item`s add
+  theirs on top, and `oag_ui::screen::Screens` sums them.
 - What `gap` *is* for, given it demonstrably does not set the row pitch.
 - Pure's menu definitions, none of which have been read for geometry.

@@ -71,6 +71,17 @@ described above.
 
 ## What still comes off the disc
 
+**Two whole screens do, since 2026-09-09: the race box's Track Select and
+Ship Select.** They are not pages of the tree below - `menu.toml` does not
+name them - but the disc's own `Track Creation` and `Team Selection`, read
+off `Selection_Definition.xml` widget by widget and opened over the RACE
+page by its START row, each writing the same `race.*` setting its RACE-page
+row edits. The tree is still ours: which rows exist and where START leads is
+this file's call, and a title whose front end authors no such screen
+launches from START directly. See
+[selection-screens.md](../ui/selection-screens.md) for what they draw and
+[`oag_ui::picker`](../../crates/ui/src/picker.rs) for how.
+
 Not the *structure*, but the *contents*, wherever the contents are a property of
 the release rather than of this project:
 

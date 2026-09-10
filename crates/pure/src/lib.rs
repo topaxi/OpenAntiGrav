@@ -142,6 +142,10 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     // `frontend::states::FE_SCREEN`'s own doc and
     // `docs/formats/pure-status.md`.
     menu_frame: Some(frontend::states::FE_SCREEN),
+    // Pure's race box is a chain of screens (`Class Selection`, ...) whose
+    // definition files this build has not read - see
+    // `docs/formats/race-setup.md`'s Pure section.
+    race_box: None,
 };
 
 pub mod frontend;

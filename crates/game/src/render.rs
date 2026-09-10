@@ -18,7 +18,10 @@ use oag_display::space::{SCREEN, Space};
 use oag_ui::font::{self, Atlas};
 use oag_ui::frontend::{Align, Draw};
 
+mod quad;
 mod text;
+
+use quad::{MODE_ATLAS, MODE_SPRITE, MODE_SPRITE_ADDITIVE};
 
 /// Shared with both shaders.
 #[repr(C)]
@@ -86,19 +89,6 @@ struct Quad {
 /// `Draw::Text` arm in [`Renderer::render_with`] for why this rather than the body
 /// colour or an invented black.
 const TRANSPARENT: [f32; 4] = [0.0, 0.0, 0.0, 0.0];
-
-/// A quad whose `uv` is in glyph-atlas pixels, sampled for coverage.
-const MODE_ATLAS: f32 = 0.0;
-/// A quad whose `uv` is in sprite-sheet pixels, sampled as RGBA.
-const MODE_SPRITE: f32 = 1.0;
-/// [`MODE_SPRITE`], composited **additively** rather than over.
-///
-/// A third mode rather than a second pipeline, which keeps the draw list's own
-/// back-to-front order intact: the pass never splits. The pipeline blends
-/// *premultiplied* alpha, so an additive quad is one emitting an alpha of zero
-/// (see `ui.wgsl`'s `fs_main` and `Draw::BlendedSprite`). Both this and
-/// [`MODE_SPRITE`] index the sheet, so `mode > 0.5` still means "a sheet quad".
-const MODE_SPRITE_ADDITIVE: f32 = 2.0;
 
 /// How many quads the instance buffer holds before it is grown.
 const INITIAL_QUADS: usize = 1024;
@@ -568,6 +558,9 @@ impl Renderer {
                     chamfer,
                     color,
                 } => self.push_solid(*rect, *color, *chamfer),
+                Draw::GradientFill { rect, left, right } => {
+                    self.push_gradient(*rect, *left, *right)
+                }
                 Draw::Video { rect, .. } => {
                     video_at = Some(self.quads.len() as u32);
                     video_rect = *rect;
@@ -738,23 +731,6 @@ impl Renderer {
             pass.set_vertex_buffer(0, self.quad_buffer.slice(..));
             pass.draw(0..6, split..total);
         }
-    }
-
-    fn push_solid(&mut self, rect: [f32; 4], color: [f32; 4], chamfer: f32) {
-        let solid = self.atlas.solid;
-        self.quads.push(Quad {
-            rect,
-            // A single texel, sampled with nearest filtering, so the whole quad
-            // reads full coverage.
-            uv: [solid.x as f32 + 0.5, solid.y as f32 + 0.5, 0.0, 0.0],
-            color,
-            // A fill samples the solid patch, whose mask is all body, so the mix
-            // is a no-op and this only has to be a real value.
-            border: color,
-            mode: MODE_ATLAS,
-            rotation: 0.0,
-            chamfer,
-        });
     }
 }
 

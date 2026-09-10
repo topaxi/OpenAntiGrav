@@ -352,6 +352,18 @@ impl Session {
                 }
                 Stage::Menu(stage) => {
                     stage.tick(dt);
+                    // A selection screen takes the tick whole, the way a
+                    // modal prompt does below: the rows behind it are a
+                    // picture. Confirming may hand the window to a loading
+                    // screen, so the catch-up loop stops the same way it does
+                    // for a race the menu just started.
+                    if stage.picker.is_some() {
+                        self.tick_picker();
+                        if !matches!(self.stage, Stage::Menu(_)) {
+                            break;
+                        }
+                        continue;
+                    }
                     // Snapshotted *before* the input is consumed, because the
                     // page being left stops existing the moment the model
                     // moves. Compared by page id rather than by stack depth:

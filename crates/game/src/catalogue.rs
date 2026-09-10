@@ -316,6 +316,37 @@ pub struct Team {
     /// thing entirely: a texture swap on the same geometry, addressed by a
     /// full path the team declares for itself.
     pub skins: Vec<ModelSkin>,
+    /// The four ratings the front end's `Team Selection` bars show, off the
+    /// team's own `<FE speed=".." thrust=".." handling=".." shield="..">`
+    /// element. `None` for a definition that authors none.
+    ///
+    /// **This is the table `race-setup.md` recorded as unlocated** - the
+    /// per-craft record `TeamSelection_Update` reads through `FUN_08808664`
+    /// at `+0xb4..+0xc0` - and it was in the plugin definition all along,
+    /// under a child element named for the front end. Assegai's authored
+    /// `8/8/9/7`, Qirex's `8/7/8/9`, AG Systems' `7/9/9/8` and Piranha's
+    /// `10/6/6/9` are exactly the four bars a 2026-09-09 PPSSPP capture of the
+    /// screen shows (`docs/ui/selection-screens.md`), which is what settles
+    /// it as the source rather than a coincidence. Distinct from
+    /// `HandlingStats.xml`: these are the *advertised* ratings, not the
+    /// physics.
+    pub rating: Option<Rating>,
+}
+
+/// The disc's own string id for a team's baseline paint - `Classic` on
+/// Pulse's `Team Selection`, resolved through the language table like every
+/// other label and falling back to the id itself, which is the English
+/// spelling. What the livery row calls the entry that names no
+/// [`ModelSkin`].
+pub const BASELINE_SKIN: &str = "Classic";
+
+/// A team's four front-end ratings, each `0..=10`. See [`Team::rating`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Rating {
+    pub speed: u8,
+    pub thrust: u8,
+    pub handling: u8,
+    pub shield: u8,
 }
 
 /// One alternate paint job a team declares - a `PI_ModelSkin`.
@@ -435,6 +466,19 @@ fn read_team(node: &Node) -> Option<Team> {
         location,
         help_text: values.attr("helpText").map(str::to_string),
         skins: read_skins(node),
+        rating: read_rating(node),
+    })
+}
+
+/// The `<FE>` child's four ratings, or `None` unless all four are there.
+fn read_rating(team: &Node) -> Option<Rating> {
+    let fe = team.children_named("FE").next()?;
+    let number = |attr: &str| fe.attr(attr)?.trim().parse::<u8>().ok();
+    Some(Rating {
+        speed: number("speed")?,
+        thrust: number("thrust")?,
+        handling: number("handling")?,
+        shield: number("shield")?,
     })
 }
 

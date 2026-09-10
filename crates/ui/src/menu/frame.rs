@@ -131,7 +131,7 @@ impl Frame {
     /// against `space`, the same parameter [`Self::content_bottom`] already
     /// takes and for the same reason: this type holds no `Space` of its own.
     #[must_use]
-    pub(super) fn backdrops(
+    pub(crate) fn backdrops(
         &self,
         space: Space,
         skin_background: Option<Draw>,

@@ -11,7 +11,6 @@ use std::sync::{Arc, Mutex};
 
 use anyhow::{Context, Result};
 use oag_pulse as pulse;
-use oag_tables::fexml;
 
 use crate::title::open_source;
 
@@ -63,6 +62,9 @@ pub struct Boot {
     pub menu_skin: &'static oag_title::MenuSkin,
     /// The frame its menus are drawn inside. See [`Shell::frame`].
     pub frame: oag_ui::menu::Frame,
+    /// The race box's selection screens. See [`Shell::track_select`].
+    pub track_select: Option<oag_ui::picker::Layout>,
+    pub ship_select: Option<oag_ui::picker::Layout>,
     /// The face menu rows are drawn in. See [`Shell::menu_font`].
     pub menu_font: Option<oag_ui::font::Atlas>,
     /// The text atlas: the disc's own font when it decodes, ours when it does
@@ -358,6 +360,13 @@ pub struct Shell {
     /// all three are in hand. Empty for a title whose frame is unread, which
     /// draws the menus exactly as they were drawn before this existed.
     pub frame: oag_ui::menu::Frame,
+    /// The race box's two selection screens, read off the same XML the
+    /// frame was - `Track Creation` and `Team Selection` on Pulse - with
+    /// every string resolved. `None` on a title that authors neither, which
+    /// launches straight from the RACE page as before. See
+    /// [`oag_ui::picker`].
+    pub track_select: Option<oag_ui::picker::Layout>,
+    pub ship_select: Option<oag_ui::picker::Layout>,
     /// The face menu rows are drawn in, when the title names one and it
     /// reads. `None` falls the menus back to [`Self::font`].
     pub menu_font: Option<oag_ui::font::Atlas>,
@@ -508,6 +517,19 @@ pub fn load_shell(
         &mut report,
     )?;
     steps.lap("screens");
+    // The race box's own definition, when the title names one - parsed here,
+    // ahead of the sprite sheet, so its images (`hex_bg.mip`, the bars) go
+    // into the same sheet the skin's do. Its layouts are read further down,
+    // once the strings are in hand.
+    let race_box = front_end.race_box.and_then(|name| {
+        match load_included_screens(&mut archives, name, &screens) {
+            Ok(included) => Some(included),
+            Err(error) => {
+                report.push(format!("{name}: {error:#} - no selection screens"));
+                None
+            }
+        }
+    });
     let strings = load_strings(
         &mut archives,
         &languages,
@@ -538,7 +560,13 @@ pub fn load_shell(
         &mut report,
     );
     steps.lap("catalogue");
-    let sprites = load_sprites(&mut archives, &screens, &mut report);
+    let sprites = load_sprites(
+        &mut archives,
+        &std::iter::once(&screens)
+            .chain(race_box.as_ref())
+            .collect::<Vec<_>>(),
+        &mut report,
+    );
     steps.lap("sprites");
     // Which step the boot opens on, from this title's own chain. `--reel`
     // replaces the boot step rather than preceding it, and is refused by name on
@@ -650,6 +678,13 @@ pub fn load_shell(
     if let Some(name) = front_end.menu_frame {
         report.push(format!("menu frame {name}: {}", frame.describe()));
     }
+    let (track_select, ship_select) = selection_layouts(
+        race_box.as_ref(),
+        &strings,
+        &font,
+        menu_font.as_ref(),
+        &mut report,
+    );
     report.push(steps.describe("the boot's first half"));
 
     Ok((
@@ -671,6 +706,8 @@ pub fn load_shell(
             profile,
             menu_skin: front_end.menu,
             frame,
+            track_select,
+            ship_select,
             menu_font,
             walked,
             movie_name,
@@ -1018,6 +1055,8 @@ pub fn assemble(shell: Shell, media: Media) -> Boot {
         profile,
         menu_skin,
         frame,
+        track_select,
+        ship_select,
         menu_font,
         walked,
         movie_name: _,
@@ -1195,6 +1234,8 @@ pub fn assemble(shell: Shell, media: Media) -> Boot {
         entries,
         menu_skin,
         frame,
+        track_select,
+        ship_select,
         menu_font,
         languages: offered,
         strings,
@@ -1429,11 +1470,11 @@ fn load_second_movie(
 /// bytes, and a front-end image should come off the front end's own archive.
 fn load_sprites(
     archives: &mut oag_assets::Archives,
-    screens: &Screens,
+    sources: &[&Screens],
     report: &mut Vec<String>,
 ) -> crate::sprite::Sheet {
     let mut srcs: Vec<String> = Vec::new();
-    for screen in &screens.screens {
+    for screen in sources.iter().flat_map(|screens| &screens.screens) {
         for image in &screen.images {
             if !srcs.contains(&image.src) {
                 srcs.push(image.src.clone());
@@ -1495,55 +1536,6 @@ fn read_front_end_first(
         return Ok(blob);
     }
     oag_pulse::read_image(archives, name)
-}
-
-fn load_screens(
-    archives: &mut oag_assets::Archives,
-    root: &str,
-    fallback_globals: &[(&str, &str)],
-    fallback_images: &[(&str, &str)],
-    report: &mut Vec<String>,
-) -> Result<Screens> {
-    // The one piece with no degraded form: a front end with no screens is not a
-    // front end. The message names the archives searched, because on a source
-    // whose front-end root has never been located that is the useful half.
-    let blob = archives
-        .read_name(root)
-        .with_context(|| format!("reading {} out of {}", root, archives.layout.describe()))?;
-
-    // Front-end XML is stored with its element and attribute names shortened
-    // through a per-file dictionary. Files that begin `<?xml` are already plain.
-    let xml = if fexml::is_fexml(&blob) {
-        fexml::expand(&blob).map_err(|e| anyhow::anyhow!("expanding the front-end XML: {e}"))?
-    } else {
-        String::from_utf8(blob).context("the front-end XML is not text")?
-    };
-
-    // This title's own measured stand-ins, not every title's. Pure's table used
-    // to be handed to every source on the grounds that `or_insert` made it a
-    // no-op on Pulse - true, and true only for as long as no two titles measure a
-    // *different* value for one name. Pulse's own table is empty.
-    let screens = Screens::from_xml_with_fallbacks(&xml, fallback_globals, fallback_images);
-    report.push(format!(
-        "{}: {} screens, {} globals, {} LoadXML includes",
-        root,
-        screens.screens.len(),
-        screens.globals.len(),
-        screens.load_xml.len()
-    ));
-    for screen in screens.with_movies() {
-        // One line per widget. A screen with four of them used to report one,
-        // whichever the parser happened to keep last, which made the other three
-        // look absent from the disc.
-        for movie in &screen.movies {
-            report.push(format!(
-                "  screen {:?} plays {}",
-                screen.name,
-                movie.entry_name()
-            ));
-        }
-    }
-    Ok(screens)
 }
 
 /// Every language plugin this source carries.
@@ -1715,12 +1707,14 @@ mod images;
 mod movies;
 mod provenance;
 pub(crate) mod roster;
+mod screens;
 pub(crate) mod xml;
 
 use fonts::{load_font, load_menu_font};
 pub use movies::EntryRef;
 use movies::load_movie;
 use roster::{definitions, load_circuit_names, load_teams, load_tracks, load_zone_tracks};
+use screens::{load_included_screens, load_screens, selection_layouts};
 use xml::expand;
 
 /// The default movie cache directory: `data/cache/movies` in a repository

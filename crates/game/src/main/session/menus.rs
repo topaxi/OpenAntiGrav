@@ -156,7 +156,7 @@ pub(crate) fn backdrop_seed(
 
 #[path = "menus/variant.rs"]
 mod variant;
-pub(super) use variant::{combine_variant, variant_choices};
+pub(crate) use variant::{combine_variant, variant_choices};
 
 impl Session {
     /// Replaces the front end with the menus, seeded from the settings.
@@ -482,6 +482,8 @@ impl Session {
                 // open, and a prompt carried across a rebuild would be one
                 // asking about a page that is no longer on screen.
                 prompt: None,
+                picker: None,
+                placements: shell.sprites.entries().to_vec(),
                 backdrop: shape.map(|shape| Backdrop {
                     player: menu_playhead(carried, frames, shape.frame_rate),
                     rect: shape.rect,
@@ -527,7 +529,7 @@ impl Session {
     /// resolved [`oag_race::Options::mode`] instead, which additionally
     /// preserves an in-flight value across an unrecognised token rather than
     /// defaulting it.
-    fn race_mode(&self) -> oag_race::Mode {
+    pub(crate) fn race_mode(&self) -> oag_race::Mode {
         oag_race::Mode::from_name(&self.settings.race.mode).unwrap_or_default()
     }
 
@@ -579,145 +581,13 @@ impl Session {
         match event {
             menu::MenuEvent::Changed { setting, value } => self.apply_setting(setting, value),
             menu::MenuEvent::Fired(menu::Action::LaunchRace) => {
-                // The stored id names a *race*, and only this source can say
-                // which file that is.
-                //
-                // **A source that does not offer the stored circuit races the
-                // first one it *does* offer**, which is what the menu is already
-                // showing. Keeping the previous option instead - which is what
-                // this did - meant the menu displayed one circuit and the race
-                // loaded another: `Menu::supply` resets the visible row to index
-                // 0 when the stored id is gone, and nothing told the options.
-                // The failure was then a missing archive entry naming a circuit
-                // that was never on screen.
-                //
-                // Not a Pure bug, though Pure is where it became unmissable (no
-                // circuit id is shared between the titles, so *every* stored
-                // Pulse circuit misses): a settings file naming a pack circuit
-                // the player no longer has takes the same path on Pulse.
-                // Taken out and put back rather than reached through, so the
-                // settings below can be read while it is being written. There
-                // are no menus before a disc has been chosen, so the `None`
-                // here is unreachable in practice and says so rather than
-                // unwrapping.
-                let Some(mut race_options) = self.race_options.take() else {
-                    warn!("no disc image has been chosen yet, so there is nothing to race");
+                // Through the race box's own screens first - Track Select,
+                // then Ship Select - and only straight to the race on a title
+                // that authors neither. See `session::picker`.
+                if self.open_track_picker() {
                     return;
-                };
-                // Resolved before the circuit below, and out of its usual
-                // order beneath the class and difficulty rows: which list a
-                // stored circuit is checked against - the race one or the
-                // Zone one - depends on it, the same way the CIRCUIT row
-                // itself switches lists on this setting. An unrecognised
-                // token leaves the previous mode in place rather than
-                // substituting one, so a settings file from a build with a
-                // mode this one does not have still races - and still checks
-                // the circuit against whichever list that leftover mode
-                // implies.
-                if let Some(mode) = oag_race::Mode::from_name(&self.settings.race.mode) {
-                    race_options.mode = mode;
                 }
-                let chosen = self.shell.as_ref().and_then(|shell| {
-                    shell
-                        .track(race_options.mode, &self.settings.race.track)
-                        .or_else(|| {
-                            warn!(
-                                "this source does not offer {:?}; racing the first \
-                                 circuit it does offer, which is what the menu shows",
-                                self.settings.race.track
-                            );
-                            shell
-                                .tracks_for(race_options.mode)
-                                .first()
-                                .map(|(track, _)| track)
-                        })
-                        .map(catalogue::Track::entry_name)
-                });
-                match chosen {
-                    Some(entry) => race_options.track = Some(entry),
-                    None => warn!(
-                        "this source offers no circuit at all; racing whatever was \
-                         already selected"
-                    ),
-                }
-                // The same shape as the circuit above, and needed for the same
-                // reason now that the roster is what this source offers rather
-                // than a fixed list: a stored team can be one only a
-                // downloadable pack carries, and a boot that did not find the
-                // pack drops it. `Menu::supply` resets the row silently when
-                // that happens, so without this check the menu would show one
-                // team and the race would attempt another - failing at the
-                // archive with a message naming a team that is not on screen.
-                // `team` and `title` together, in the same call: VARIANT
-                // combines with whichever title's own axis this is.
-                let resolved_team = self.shell.as_ref().and_then(|shell| {
-                    shell
-                        .team(&self.settings.race.team)
-                        .map(|team| (shell.title, team.to_string()))
-                });
-                match resolved_team {
-                    Some((title, team)) => {
-                        let (combined, hull_variant, warning) =
-                            combine_variant(title, &team, &self.settings.race.variant);
-                        if let Some(warning) = warning {
-                            warn!("{warning}");
-                        }
-                        race_options.team = Some(combined);
-                        race_options.hull_variant = hull_variant.map(str::to_string);
-                    }
-                    None => warn!(
-                        "this source does not offer team {:?}, racing as {} instead",
-                        self.settings.race.team,
-                        race_options
-                            .team
-                            .as_deref()
-                            .unwrap_or("this source's own default"),
-                    ),
-                }
-                // Carried as a **name**, and checked against this page's own
-                // row - see [`resolve_race_page_class`] for why: `race.class`
-                // is one setting shared with RACE REMIX, so a class settled
-                // there (`VECTOR`, offered only in remix) can sit in storage
-                // while this page's row was never on it. An empty setting
-                // still leaves the previous class in place, as it always did.
-                if let Some(class) = resolve_race_page_class(
-                    self.shell.as_ref().map(|shell| shell.title),
-                    self.settings.race.class.trim(),
-                ) {
-                    race_options.class = class;
-                }
-                // The mode itself was already resolved above, before the
-                // circuit - see the comment there.
-                // Same shape again: an unrecognised level leaves the previous
-                // one in place rather than substituting a default mid-session.
-                if let Some(difficulty) =
-                    oag_ai::Difficulty::from_name(&self.settings.ai.difficulty)
-                {
-                    race_options.difficulty = difficulty;
-                }
-                info!(
-                    "loading {}",
-                    race_options
-                        .track
-                        .as_deref()
-                        .unwrap_or("this source's own default circuit")
-                );
-                // Back before the load, which reads it.
-                self.race_options = Some(race_options);
-                match self.launch_race() {
-                    Ok(()) => {
-                        let strings = strings::project_table(self.settings.language.as_deref());
-                        println!(
-                            "\n{}{}",
-                            hints::race_keys(&strings),
-                            hints::esc_to_menu(&strings)
-                        );
-                    }
-                    // Reported rather than fatal: leaving the menus on screen
-                    // lets the player pick something else, where a vanished
-                    // window would just look like a crash.
-                    Err(e) => error!("cannot start a race: {e:#}"),
-                }
+                self.launch_from_settings();
             }
             // The RACE REMIX page's own launch - see `menu::Action::LaunchRemix`'s
             // own doc comment for why it is not a second meaning for
@@ -762,6 +632,155 @@ impl Session {
     // `scripts/check-file-size.py`. A move, with no behaviour change; see
     // that file's own doc for why it is the natural seam, not an arbitrary
     // cut.
+}
+
+impl Session {
+    /// Starts the race the `race.*` settings describe - what the RACE page's
+    /// START row did outright before the selection screens sat between.
+    pub(crate) fn launch_from_settings(&mut self) {
+        // The stored id names a *race*, and only this source can say
+        // which file that is.
+        //
+        // **A source that does not offer the stored circuit races the
+        // first one it *does* offer**, which is what the menu is already
+        // showing. Keeping the previous option instead - which is what
+        // this did - meant the menu displayed one circuit and the race
+        // loaded another: `Menu::supply` resets the visible row to index
+        // 0 when the stored id is gone, and nothing told the options.
+        // The failure was then a missing archive entry naming a circuit
+        // that was never on screen.
+        //
+        // Not a Pure bug, though Pure is where it became unmissable (no
+        // circuit id is shared between the titles, so *every* stored
+        // Pulse circuit misses): a settings file naming a pack circuit
+        // the player no longer has takes the same path on Pulse.
+        // Taken out and put back rather than reached through, so the
+        // settings below can be read while it is being written. There
+        // are no menus before a disc has been chosen, so the `None`
+        // here is unreachable in practice and says so rather than
+        // unwrapping.
+        let Some(mut race_options) = self.race_options.take() else {
+            warn!("no disc image has been chosen yet, so there is nothing to race");
+            return;
+        };
+        // Resolved before the circuit below, and out of its usual
+        // order beneath the class and difficulty rows: which list a
+        // stored circuit is checked against - the race one or the
+        // Zone one - depends on it, the same way the CIRCUIT row
+        // itself switches lists on this setting. An unrecognised
+        // token leaves the previous mode in place rather than
+        // substituting one, so a settings file from a build with a
+        // mode this one does not have still races - and still checks
+        // the circuit against whichever list that leftover mode
+        // implies.
+        if let Some(mode) = oag_race::Mode::from_name(&self.settings.race.mode) {
+            race_options.mode = mode;
+        }
+        let chosen = self.shell.as_ref().and_then(|shell| {
+            shell
+                .track(race_options.mode, &self.settings.race.track)
+                .or_else(|| {
+                    warn!(
+                        "this source does not offer {:?}; racing the first \
+                                 circuit it does offer, which is what the menu shows",
+                        self.settings.race.track
+                    );
+                    shell
+                        .tracks_for(race_options.mode)
+                        .first()
+                        .map(|(track, _)| track)
+                })
+                .map(catalogue::Track::entry_name)
+        });
+        match chosen {
+            Some(entry) => race_options.track = Some(entry),
+            None => warn!(
+                "this source offers no circuit at all; racing whatever was \
+                         already selected"
+            ),
+        }
+        // The same shape as the circuit above, and needed for the same
+        // reason now that the roster is what this source offers rather
+        // than a fixed list: a stored team can be one only a
+        // downloadable pack carries, and a boot that did not find the
+        // pack drops it. `Menu::supply` resets the row silently when
+        // that happens, so without this check the menu would show one
+        // team and the race would attempt another - failing at the
+        // archive with a message naming a team that is not on screen.
+        // `team` and `title` together, in the same call: VARIANT
+        // combines with whichever title's own axis this is.
+        let resolved_team = self.shell.as_ref().and_then(|shell| {
+            shell
+                .team(&self.settings.race.team)
+                .map(|team| (shell.title, team.to_string()))
+        });
+        match resolved_team {
+            Some((title, team)) => {
+                let (combined, hull_variant, warning) =
+                    combine_variant(title, &team, &self.settings.race.variant);
+                if let Some(warning) = warning {
+                    warn!("{warning}");
+                }
+                race_options.team = Some(combined);
+                race_options.hull_variant = hull_variant.map(str::to_string);
+                // The livery Ship Select picked, by the skin's declared
+                // name - what `--skin` takes, resolved against the team's
+                // own `PI_ModelSkin`s at load. Empty is the baseline paint.
+                race_options.skin =
+                    Some(self.settings.race.skin.clone()).filter(|skin| !skin.trim().is_empty());
+            }
+            None => warn!(
+                "this source does not offer team {:?}, racing as {} instead",
+                self.settings.race.team,
+                race_options
+                    .team
+                    .as_deref()
+                    .unwrap_or("this source's own default"),
+            ),
+        }
+        // Carried as a **name**, and checked against this page's own
+        // row - see [`resolve_race_page_class`] for why: `race.class`
+        // is one setting shared with RACE REMIX, so a class settled
+        // there (`VECTOR`, offered only in remix) can sit in storage
+        // while this page's row was never on it. An empty setting
+        // still leaves the previous class in place, as it always did.
+        if let Some(class) = resolve_race_page_class(
+            self.shell.as_ref().map(|shell| shell.title),
+            self.settings.race.class.trim(),
+        ) {
+            race_options.class = class;
+        }
+        // The mode itself was already resolved above, before the
+        // circuit - see the comment there.
+        // Same shape again: an unrecognised level leaves the previous
+        // one in place rather than substituting a default mid-session.
+        if let Some(difficulty) = oag_ai::Difficulty::from_name(&self.settings.ai.difficulty) {
+            race_options.difficulty = difficulty;
+        }
+        info!(
+            "loading {}",
+            race_options
+                .track
+                .as_deref()
+                .unwrap_or("this source's own default circuit")
+        );
+        // Back before the load, which reads it.
+        self.race_options = Some(race_options);
+        match self.launch_race() {
+            Ok(()) => {
+                let strings = strings::project_table(self.settings.language.as_deref());
+                println!(
+                    "\n{}{}",
+                    hints::race_keys(&strings),
+                    hints::esc_to_menu(&strings)
+                );
+            }
+            // Reported rather than fatal: leaving the menus on screen
+            // lets the player pick something else, where a vanished
+            // window would just look like a crash.
+            Err(e) => error!("cannot start a race: {e:#}"),
+        }
+    }
 }
 
 #[cfg(test)]

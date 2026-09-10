@@ -83,6 +83,8 @@ mod loading_stage;
 mod menu_stage;
 #[path = "main/overlay.rs"]
 mod overlay;
+#[path = "main/picker_stage.rs"]
+mod picker_stage;
 #[path = "main/pose.rs"]
 mod pose;
 #[path = "main/prepare.rs"]

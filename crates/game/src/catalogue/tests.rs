@@ -17,6 +17,7 @@ const DEFINITION: &str = r#"
   </PI_Track>
   <PI_Team name="Assegai">
     <Values type="Race" soundregister="4" location="Data\Ships\Assegai" helpText="MSC_TEAMDES_ASS"/>
+    <FE speed="8" thrust="8" handling="9" shield="7"/>
   </PI_Team>
   <PI_Music name="A Piece Of Music">
     <Values location="Data\Music\SomeArtist"></Values>
@@ -117,6 +118,27 @@ fn the_id_is_not_the_directory() {
 #[test]
 fn nodes_that_are_not_tracks_are_left_alone() {
     assert!(tracks("<Screen name=\"Top\"><PI_Team name=\"Qirex\"/></Screen>").is_empty());
+}
+
+/// The `<FE>` element is the front end's own rating table - see
+/// `Team::rating` for why it is the source of the `Team Selection` bars.
+#[test]
+fn a_team_carries_the_four_ratings_its_fe_element_authors() {
+    let disc = teams(DEFINITION);
+    assert_eq!(
+        disc[0].rating,
+        Some(Rating {
+            speed: 8,
+            thrust: 8,
+            handling: 9,
+            shield: 7
+        })
+    );
+    let pack = teams(PACK_MANIFEST);
+    assert_eq!(
+        pack[0].rating, None,
+        "a manifest with no <FE> rates nothing"
+    );
 }
 
 #[test]
@@ -410,6 +432,7 @@ fn a_team_label_prefers_the_table_then_the_declared_name_then_the_folder() {
         location: format!(r"Data\Ships\{id}"),
         help_text: None,
         skins: Vec::new(),
+        rating: None,
     };
 
     // In the table and also carrying a declared name: the table still wins, or

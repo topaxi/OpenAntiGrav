@@ -601,6 +601,7 @@ impl Session {
                 binding_prompt.as_deref(),
                 axis_preview.as_deref(),
                 &records_table,
+                self.framebuffer.output_size(),
             )?;
         }
 

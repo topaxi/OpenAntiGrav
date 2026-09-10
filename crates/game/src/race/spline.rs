@@ -267,3 +267,46 @@ impl Spline {
         })
     }
 }
+
+/// The circuit's own length in world units: the lap
+/// [`oag_race::course::Course`] walks - every authored path in ring order,
+/// resampled, closed back to the start.
+///
+/// What `Track Creation`'s `Distance(m)` row shows on the original, one
+/// world unit being one metre (the HUD's own `speed * 3.6` km/h factor says
+/// so). Pulse's circuits author the lap as **two open paths joined at two
+/// junctions** - Talon's Junction's are 2,608 and 2,471 units long and the
+/// two links between them make up the rest - so a single path's own length
+/// is two thirds of a lap, and the ring is what the screen prints: `5094`,
+/// `5228` and `4330` here against the `5178`, `5350` and `4419` on screen
+/// for the three circuits a fresh profile offers. **That is 1.7 to 2.3 per
+/// cent short, and the gap is not sampling** - the figure is the same to a
+/// unit at one, four, sixteen and sixty-four steps per segment and from the
+/// raw control points - so the original sums a slightly different curve
+/// (the centreline rather than the racing line, most likely) or counts the
+/// junction links differently. Unread. Confidence 70 that the screen's
+/// number is a lap length at all in the sense measured here; this build
+/// prints its own measurement rather than a stand-in, and the test pins the
+/// gap at under three per cent so a change in either direction is noticed.
+/// See `crates/game/tests/circuit_length_ground_truth.rs`.
+///
+/// # Errors
+///
+/// A blob that is not a `.vex`, has no `WO Track` node, whose node does not
+/// parse, or whose paths do not close into a ring.
+pub fn circuit_length(blob: &[u8]) -> anyhow::Result<f32> {
+    use anyhow::Context;
+    anyhow::ensure!(
+        oag_vex::vex::has_magic(blob),
+        "not a .vex file (no VEXX magic)"
+    );
+    let nodes = oag_vex::vex::nodes(blob).context("walking the node tree")?;
+    let node = oag_vex::track::find_node(blob, &nodes).context("no WO Track node")?;
+    let payload = blob
+        .get(node.payload())
+        .context("the WO Track payload runs past the end of the file")?;
+    let ai = oag_vex::track::parse(payload).map_err(|e| anyhow::anyhow!("{e}"))?;
+    let course = oag_race::course::Course::from_track(&ai, None)
+        .context("the authored paths do not close into a lap")?;
+    Ok(course.length())
+}

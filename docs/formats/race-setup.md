@@ -126,6 +126,26 @@ likely to be guessed wrong: a selection screen with a circuit on it invites the
 reading "a flat 2D map" or "a prerendered image", and on every title where the
 question is resolved it is neither.
 
+**Corrected 2026-09-09: `Track Creation` shows *two* meshes, and the
+`%s\FE\%s.vex` file is the small one.** `16_Track\FE\forward.vex` decodes
+to a single 364-vertex ribbon with a bounding radius of 805 - the circuit's
+plan shape at the circuit's own scale - and rendered it is the glowing
+outline on the info panel, not the corridor flythrough in the hexagonal
+window. The flythrough is the real circuit scene or a preview scene this
+project has not located; what this section below calls "the preview scene
+fed the `.vex` path" is the outline's. Both screens are now drawn by this
+build from these files - see [selection-screens.md](../ui/selection-screens.md)
+for the capture, the widget-by-widget reading and what is left out.
+
+**Also settled the same day: the per-craft rating record is authored, in
+`Definition.xml`.** Each `PI_Team` carries `<FE speed=".." thrust=".."
+handling=".." shield="..">`, and the four values match the capture's bars
+digit for digit on every team checked (Assegai `8/8/9/7`, Qirex `8/7/8/9`,
+AG Systems `7/9/9/8`, Piranha `10/6/6/9`). That is the table
+[`race-box-screens.md`](../ghidra/functions/psp-pulse-usa/race-box-screens.md)
+reads through `FUN_08808664` at `+0xb4..+0xc0` and this page recorded as
+unlocated; `oag_game::catalogue::Team::rating` reads it. Confidence 95.
+
 Neither PSP screen authors a preview widget in XML, so the answer is in the
 screen classes. Those cannot be reached by cross-reference - see
 [Limits](#limits) - but each class's strings sit contiguously in `.rodata` and

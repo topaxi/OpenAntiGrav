@@ -512,7 +512,7 @@ impl Skin {
     /// title reaching this is a title whose frame authored a background
     /// widget and then left it with no way to resolve one.
     #[must_use]
-    pub(super) fn background(&self) -> Option<crate::frontend::Draw> {
+    pub(crate) fn background(&self) -> Option<crate::frontend::Draw> {
         self.skin
             .background
             .map(|color| crate::frontend::Draw::Fill {
@@ -540,7 +540,7 @@ impl Skin {
     /// The scale is dimensionless and stays as authored: it multiplies a face
     /// that already came off this source.
     #[must_use]
-    pub(super) fn title_at(&self) -> (f32, f32, f32) {
+    pub(crate) fn title_at(&self) -> (f32, f32, f32) {
         (
             self.skin.title_x * self.from_theirs.0,
             self.skin.title_y * self.from_theirs.1,
@@ -575,7 +575,7 @@ impl Skin {
     /// substitution's premise - nothing draws the bar - is gone, and the
     /// declared black wins as it would for any other title.
     #[must_use]
-    pub(super) fn title_color(&self, frame_ink: Option<[f32; 4]>) -> [f32; 4] {
+    pub(crate) fn title_color(&self, frame_ink: Option<[f32; 4]>) -> [f32; 4] {
         self.skin
             .title
             .map_or_else(|| frame_ink.unwrap_or(OUR_SELECTED), argb)

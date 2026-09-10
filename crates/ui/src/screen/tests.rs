@@ -439,11 +439,13 @@ fn a_colour_only_image_inside_an_animation_keeps_its_own_rect() {
     assert_eq!(
         screen.fills,
         vec![Fill {
+            name: None,
             x: 133.0,
             y: 262.0,
             width: Some(347.0),
             height: Some(1.0),
             color: 0xff3a_bcf2,
+            gradient: None,
         }]
     );
     assert!(
@@ -477,11 +479,13 @@ fn an_animation_wrapped_fill_resolves_a_feglobals_colour() {
     assert_eq!(
         screen.fills,
         vec![Fill {
+            name: None,
             x: 14.0,
             y: 240.0,
             width: Some(1.0),
             height: Some(16.0),
             color: 0xffff_ffff,
+            gradient: None,
         }]
     );
 }
@@ -513,11 +517,13 @@ fn collects_solid_colour_backdrops() {
     assert_eq!(
         screens.by_name("LogoFMV").unwrap().fills,
         vec![Fill {
+            name: None,
             x: 0.0,
             y: 0.0,
             width: Some(480.0),
             height: Some(272.0),
             color: 0xff00_0000,
+            gradient: None,
         }]
     );
 }

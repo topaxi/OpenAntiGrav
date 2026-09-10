@@ -162,7 +162,7 @@ pub use load::load;
 pub use options::{CameraOverride, Loaded, Options, PoseRequest, Setup};
 pub use scene::Scene;
 pub use sim::RaceSim;
-pub use spline::Spline;
+pub use spline::{Spline, circuit_length};
 pub use telemetry::Telemetry;
 pub use view::RaceView;
 pub use visibility::{SceneStats, TrackVisibility};

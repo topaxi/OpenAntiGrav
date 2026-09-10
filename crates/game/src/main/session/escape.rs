@@ -129,6 +129,12 @@ impl Session {
             }
         }
 
+        // A selection screen takes escape first, as Back - the same rule the
+        // modal prompt below follows, one layer up.
+        if matches!(&self.stage, Stage::Menu(stage) if stage.picker.is_some()) {
+            self.handle_picker(oag_ui::picker::Event::Back);
+            return;
+        }
         // Collected before anything else touches `self`: `handle_menu` takes
         // `&mut self` and the events borrow the stage.
         if let Stage::Menu(stage) = &mut self.stage {

@@ -79,6 +79,16 @@ pub(crate) struct MenuStage {
     /// rebuilt, so the loop never restarts on the handoff. See
     /// [`menu_playhead`].
     pub(crate) backdrop: Option<Backdrop>,
+    /// The race box's selection screen over this page, when one is open -
+    /// see [`crate::picker_stage`]. Like [`Self::prompt`], it takes the
+    /// tick's input whole while it is `Some`, and it is drawn instead of
+    /// the rows rather than over them.
+    pub(crate) picker: Option<crate::picker_stage::PickerStage>,
+    /// Where every front-end image sits in the sheet `renderer` was built
+    /// with, for the picker's own sprites - the arrows, the hex grid, the
+    /// bars. The menus' own rows never draw one, which is why this was not
+    /// here before the picker was.
+    pub(crate) placements: Vec<(String, oag_ui::frontend::Placed)>,
 }
 
 /// A page change part-way through.
@@ -222,6 +232,14 @@ impl MenuStage {
             reason = "a tick is milliseconds; f32 holds it exactly"
         )]
         self.skin.tick_pulse(dt as f32);
+        // The picker's own clock - the turntable - off the same fixed tick.
+        if let Some(picker) = &mut self.picker {
+            #[expect(
+                clippy::cast_possible_truncation,
+                reason = "a tick is milliseconds; f32 holds it exactly"
+            )]
+            picker.model.tick(dt as f32);
+        }
     }
 
     /// Starts a page change, snapshotting the page being left.
@@ -337,6 +355,10 @@ impl MenuStage {
         // lines rather than the single one `axis_preview` occupies, and
         // `oag_ui::prompt::record_row_draw` for how each pair is drawn.
         records_table: &[(String, String)],
+        // `view`'s own full size, which a pillarboxed window makes different
+        // from `viewport` - the picker's preview pass needs it for its depth
+        // attachment, the same reason `RaceStage::draw_hud` takes it.
+        target_size: (u32, u32),
     ) -> Result<()> {
         let shown = match (&mut self.backdrop, feed) {
             (Some(backdrop), Some(feed)) => {
@@ -365,6 +387,72 @@ impl MenuStage {
             // over the menu rather than a missing picture.
             _ => None,
         };
+        // A selection screen replaces the rows outright - it is the disc's
+        // own screen, drawn in the same frame - and its preview goes on last,
+        // a 3D pass over the finished picture. No marquee, no page tween and
+        // no prompt apply to it.
+        if let Some(picker) = self.picker.as_mut() {
+            let layers = oag_ui::picker::draw_list(
+                &picker.model,
+                &picker.layout,
+                &self.skin,
+                &self.frame,
+                if frozen_race { None } else { shown },
+                frozen_race,
+                &|src| {
+                    self.placements
+                        .iter()
+                        .find(|(name, _)| name == src)
+                        .map(|(_, placed)| *placed)
+                },
+                &|text| font::measure(&self.text_atlas, text),
+            );
+            let list: Vec<Draw> = if frozen_race {
+                std::iter::once(Draw::Fill {
+                    rect: overlay_rect(self.skin.space(), viewport),
+                    color: PAUSE_OVERLAY,
+                })
+                .chain(layers.flatten())
+                .collect()
+            } else {
+                layers.flatten()
+            };
+            let load = if frozen_race {
+                wgpu::LoadOp::Load
+            } else {
+                wgpu::LoadOp::Clear(wgpu::Color::BLACK)
+            };
+            self.renderer.render_with(
+                load,
+                &gpu.device,
+                &gpu.queue,
+                encoder,
+                view,
+                &list,
+                viewport,
+                None,
+            );
+            let (orbit, seconds, rect) = (
+                picker.orbit(),
+                picker.model.seconds(),
+                picker.layout.preview,
+            );
+            if let Some(preview) = picker.preview.as_mut() {
+                preview.draw(
+                    &gpu.device,
+                    &gpu.queue,
+                    encoder,
+                    view,
+                    viewport,
+                    target_size,
+                    self.skin.space(),
+                    rect,
+                    orbit,
+                    seconds,
+                );
+            }
+            return Ok(());
+        }
         // Refreshed every frame, off whichever page is current, rather than
         // once when the menus opened: a player can navigate to a page with a
         // different reservation need (AI PILOTS today, see

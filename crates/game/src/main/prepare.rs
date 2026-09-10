@@ -287,6 +287,9 @@ impl Pending {
             // The disc's own chrome, read by the boot itself - which is where
             // the parsed XML, the sheet and the grid were all in hand.
             frame: boot_shell.frame.clone(),
+            track_select: boot_shell.track_select.clone(),
+            ship_select: boot_shell.ship_select.clone(),
+            team_details: boot_shell.teams.clone(),
         };
 
         println!("\n{}", hints::menu_keys(&boot_shell.strings));

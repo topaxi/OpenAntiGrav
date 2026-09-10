@@ -610,6 +610,22 @@ profile, so that path runs once per install.
 
 ### Stopping *at* `Track Creation` or `Team Selection`, instead of walking through them
 
+**Scripted since 2026-09-09: `scripts/psp-frontend-capture.py`.** It does
+the whole of what this section describes and more - from wherever the
+emulator is, through the first-boot dialogs if any, it screenshots every
+row of `Main Menu`, `Racebox` and `Single Player`, every `RACE TYPE`, both
+selection screens per entry twice a second apart, and the `*_Help` and
+music-select overlays, then backs out to `Main Menu` without launching a
+race. 54 frames in about four minutes against the SDL build under Xvfb:
+
+```sh
+uv run --with websocket-client scripts/psp-frontend-capture.py --out data/cache/fe-capture
+```
+
+The reading of those frames is [selection-screens.md](../ui/selection-screens.md).
+The notes below are what the script was built from and still apply to a
+hand-driven capture.
+
 `menu()` is deliberately not reusable for this: it presses `cross`, `cross`
 straight through both screens into `InGame` with no stop in between, because
 finishing a race is the whole point of that function. Screenshotting the

@@ -17,7 +17,9 @@ use crate::render::{Renderer, VideoFormat};
 use oag_ui::frontend::Draw;
 
 mod menu_page;
-use menu_page::menu_page;
+use menu_page::{
+    PreviewRequest, draw_preview, menu_page, open_for_previews, picker_kind, picker_page,
+};
 
 /// What to capture.
 #[derive(Debug, Clone)]
@@ -167,6 +169,8 @@ pub fn run(
         // *movie* frame a backdrop is showing, and two things called `frame` in
         // one scope is how the wrong one gets passed.
         frame: menu_frame,
+        track_select,
+        ship_select,
         menu_font,
         ..
     } = loaded;
@@ -438,6 +442,9 @@ pub fn run(
     // the window, which is the divergence this module exists to prevent - so
     // this reads the same value `Session::open_menus` hands its renderer.
     let space = frontend.space();
+    // The selection screens' preview mesh, owed after the draw list - see
+    // `draw_preview`. `None` on every other page.
+    let mut preview_request: Option<PreviewRequest> = None;
     let (mut movie, video_format, list, space) = match (&options.menu_page, &options.screen) {
         (Some(page), _) => {
             let showing = backdrop.as_ref().filter(|movie| movie.frames.is_some());
@@ -450,31 +457,79 @@ pub fn run(
                 position: 0,
             });
             let format = showing.and_then(VideoFormat::of);
-            let list = menu_page(
-                &options.settings,
-                options.anisotropy,
-                title.name,
-                page,
-                &tracks,
-                &teams,
-                &languages,
-                &strings,
-                &options.music_discs,
-                frame,
-                // The face the rows are drawn in, not the front end's
-                // default: the pitch comes off its line height, so reading
-                // the wrong one spaces the rows for a font nothing draws.
-                &oag_ui::menu::Skin::new(
+            // The race box's two selection screens are not pages of our
+            // menu tree - they are the disc's own screens, opened over it -
+            // so they are drawn by their own builder, off the same boot.
+            if let Some(kind) = picker_kind(page) {
+                let layout = match kind {
+                    oag_ui::picker::Kind::Track => track_select.as_ref(),
+                    oag_ui::picker::Kind::Ship => ship_select.as_ref(),
+                }
+                .with_context(|| format!("{} authors no {kind:?} selection screen", title.name))?;
+                let skin = oag_ui::menu::Skin::new(
                     menu_skin,
                     space,
                     menu_font.as_ref().unwrap_or(&font).line_height,
-                ),
-                &|text| oag_ui::font::measure(menu_font.as_ref().unwrap_or(&font), text),
-                &menu_frame,
-                options.menu_anim_phase,
-                options.menu_prompt.as_deref(),
-            )?;
-            (backdrop, format, list, space)
+                );
+                // The selected circuit's lap, off the disc - the number the
+                // live screen's worker measures. One read; a capture with
+                // no source to open keeps the dash.
+                let distance = match (kind, options.race.as_ref().map(open_for_previews)) {
+                    (oag_ui::picker::Kind::Track, Some(Ok(mut archives))) => tracks
+                        .iter()
+                        .find(|track| track.id == options.settings.race.track)
+                        .and_then(|track| archives.read_name(&track.entry_name()).ok())
+                        .and_then(|blob| race::circuit_length(&blob).ok()),
+                    (_, Some(Err(error))) => {
+                        log::warn!("{error:#} - no distance measured");
+                        None
+                    }
+                    _ => None,
+                };
+                let (list, request) = picker_page(
+                    kind,
+                    layout,
+                    &options.settings,
+                    title,
+                    &tracks,
+                    &teams,
+                    &strings,
+                    frame,
+                    &skin,
+                    &menu_frame,
+                    &sprites,
+                    &|text| oag_ui::font::measure(menu_font.as_ref().unwrap_or(&font), text),
+                    distance,
+                );
+                preview_request = request;
+                (backdrop, format, list, space)
+            } else {
+                let list = menu_page(
+                    &options.settings,
+                    options.anisotropy,
+                    title.name,
+                    page,
+                    &tracks,
+                    &teams,
+                    &languages,
+                    &strings,
+                    &options.music_discs,
+                    frame,
+                    // The face the rows are drawn in, not the front end's
+                    // default: the pitch comes off its line height, so reading
+                    // the wrong one spaces the rows for a font nothing draws.
+                    &oag_ui::menu::Skin::new(
+                        menu_skin,
+                        space,
+                        menu_font.as_ref().unwrap_or(&font).line_height,
+                    ),
+                    &|text| oag_ui::font::measure(menu_font.as_ref().unwrap_or(&font), text),
+                    &menu_frame,
+                    options.menu_anim_phase,
+                    options.menu_prompt.as_deref(),
+                )?;
+                (backdrop, format, list, space)
+            }
         }
         (None, Some(name)) => {
             let list = frontend.draw_screen(name);
@@ -597,6 +652,20 @@ pub fn run(
         // so there is nothing here for a value marquee to be mid-scroll of.
         None,
     );
+    if let (Some(request), Some(race)) = (preview_request, &options.race) {
+        draw_preview(
+            &device,
+            &queue,
+            &mut encoder,
+            &view,
+            oag_display::display::viewport((width, height), options.settings.display.aspect),
+            (width, height),
+            space,
+            race,
+            &request,
+            options.anisotropy,
+        );
+    }
     let pixels = read_back(&device, &queue, encoder, &target, width, height)?;
     write_png(&options.path, width, height, &pixels)
 }

@@ -238,8 +238,11 @@ pub struct Image {
 /// into: `Demo_Definition.xml`, shared verbatim by both Pulse's and Pure's
 /// disc, wraps two colour-only `Image`s at `width="347" height="1"` and
 /// `width="151" height="1"` - a decorative underline, not a backdrop.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Fill {
+    /// Widget name, when it has one - `Infogradient` on the selection
+    /// screens' info panel, which is how a reader finds the panel's rect.
+    pub name: Option<String>,
     /// Left edge. Absent in the XML means zero, as it does for [`Image`].
     pub x: f32,
     /// Top edge.
@@ -253,7 +256,23 @@ pub struct Fill {
     pub height: Option<f32>,
     /// ARGB, resolved through `FEGlobals->` the same as every other colour
     /// this format authors.
+    ///
+    /// For a gradient widget - see [`Self::gradient`] - this is `Color1`, so
+    /// a reader that knows nothing about gradients still draws the left edge's
+    /// own colour rather than nothing.
     pub color: u32,
+    /// The four corner colours of a `Color1`..`Color4` gradient widget, ARGB,
+    /// in that order: **`Color1`/`Color2` are the left edge, `Color3`/`Color4`
+    /// the right.** `None` for a plain `color` fill.
+    ///
+    /// The reading is off `Selection_Definition.xml`'s own rules: every
+    /// horizontal rule on `Track Creation` and `Team Selection` is authored
+    /// as two 85-wide halves, the left one `Color1`=`Color2`=`0x00ffffff` and
+    /// `Color3`=`Color4`=`0xffffffff`, the right one the mirror image - a line
+    /// that fades in from the left and back out to the right, which is what
+    /// the capture shows. Which of the pair is top and which bottom is
+    /// unmeasured: no authored widget gives them different values.
+    pub gradient: Option<[u32; 4]>,
 }
 
 /// A `Menu` widget: a named, selectable list, and where/how its rows draw.
@@ -463,7 +482,7 @@ impl Screens {
         };
 
         for child in &node.children {
-            self.collect_widgets(&mut screen, child, None, fallback_images);
+            self.collect_widgets(&mut screen, child, None, (0.0, 0.0), fallback_images);
         }
 
         self.screens.push(screen);
@@ -521,13 +540,27 @@ impl Screens {
     /// colour-only `Image` draws at its own authored position the same as any
     /// other widget - which is the point: `Title Screen`'s own frame lines are
     /// authored exactly this way.
+    /// `offset` is the sum of every enclosing container's `OffsetX`/`OffsetY`,
+    /// added to each widget's own `x`/`y` so the positions recorded are
+    /// screen positions. The selection screens are where this matters:
+    /// `Selection_Definition.xml` authors its whole info panel under
+    /// `<Screen OffsetX="290" OffsetY="45">`, and each stat row under a
+    /// further `<Screen OffsetY="59">`, so a widget's own `y="3"` is
+    /// meaningless until the containers are summed. A container with no
+    /// offset contributes zero, which is every container the boot screens
+    /// use, so nothing already measured moves.
     fn collect_widgets(
         &self,
         screen: &mut Screen,
         child: &Node,
         viewport_width: Option<f32>,
+        offset: (f32, f32),
         fallback_images: &[(&str, &str)],
     ) {
+        let inner = (
+            offset.0 + self.number(child.value("OffsetX")).unwrap_or(0.0),
+            offset.1 + self.number(child.value("OffsetY")).unwrap_or(0.0),
+        );
         match child.name.to_ascii_lowercase().as_str() {
             "image" => match child.value("src").or_else(|| {
                 // A widget whose XML gives no `src` at all is assigned one
@@ -543,9 +576,9 @@ impl Screens {
                     .map(|(_, src)| *src)
             }) {
                 // A `src` names a texture; a bare colour is a [`Fill`].
-                Some(src) => screen.images.push(self.image_from_node(child, src)),
+                Some(src) => screen.images.push(self.image_from_node(child, src, offset)),
                 None => {
-                    if let Some(fill) = self.fill_from_node(child) {
+                    if let Some(fill) = self.fill_from_node(child, offset) {
                         screen.fills.push(fill);
                     }
                 }
@@ -563,27 +596,56 @@ impl Screens {
                 }
             }
             "movie" => screen.movies.push(Movie::from_node(child)),
-            "text" => screen
-                .texts
-                .push(self.text_from_node(child, viewport_width)),
+            "text" => {
+                screen
+                    .texts
+                    .push(self.text_from_node(child, viewport_width, offset));
+                // A `Text` can hold widgets of its own: `Team Selection`'s
+                // `skin` label carries its two livery arrows as child
+                // `Image`s. Its `Values` child is its own attributes, not a
+                // widget, and `collect_widgets` has no arm for it anyway.
+                for grandchild in &child.children {
+                    self.collect_widgets(
+                        screen,
+                        grandchild,
+                        viewport_width,
+                        inner,
+                        fallback_images,
+                    );
+                }
+            }
             "redirect" => screen.redirects.push(redirect_from_node(child)),
             "displaylanguages" => screen.display_languages = true,
-            "menu" => screen.menu = Some(self.menu_from_node(child)),
+            "menu" => screen.menu = Some(self.menu_from_node(child, offset)),
             "viewport" => {
                 let width = self.number(child.value("width"));
                 for grandchild in &child.children {
-                    self.collect_widgets(screen, grandchild, width, fallback_images);
+                    self.collect_widgets(screen, grandchild, width, inner, fallback_images);
                 }
             }
-            // Neither carries a `width` of its own to pass down - whatever the
+            // None carries a `width` of its own to pass down - whatever the
             // enclosing `Viewport` gave keeps applying inside. `BackgroundController`
             // is Pure's own case: its `Skin.xml` wraps `FE Screen`'s background art
             // in one (`<BackgroundController><Image name="BackgroundImage">...`),
             // and before this arm existed nothing walked through it either - the
             // same silent drop `Screen` below has, just one container earlier.
-            "animation" | "backgroundcontroller" => {
+            // `LeftLayer` is Pulse's selection screens' own: `Track Creation`
+            // and `Team Selection` author every widget but the footer under
+            // one, each with its own `transition`, and until 2026-09-09 all
+            // of them were dropped the same silent way.
+            // `Item` is the same idiom again - the selection screens' info
+            // panel groups every stat row as `<Item OffsetY="59">` - and
+            // carries the offsets that make its children's positions mean
+            // anything.
+            "animation" | "backgroundcontroller" | "leftlayer" | "item" => {
                 for grandchild in &child.children {
-                    self.collect_widgets(screen, grandchild, viewport_width, fallback_images);
+                    self.collect_widgets(
+                        screen,
+                        grandchild,
+                        viewport_width,
+                        inner,
+                        fallback_images,
+                    );
                 }
             }
             // An anonymous `Screen` is a grouping container, not a navigable
@@ -600,34 +662,64 @@ impl Screens {
             // left alone here - it collects its own widgets separately, the
             // next time [`Self::collect`] reaches it, and counting them twice
             // would draw a menu's own chrome on its parent's frame too.
-            "screen" if child.attr("name").is_none() => {
+            //
+            // **A named `Screen` that carries an `OffsetX`/`OffsetY` is a
+            // positioned group, not a destination**, and is walked through
+            // the same way: `Track Creation`'s three stat rules are
+            // `<Screen name="line bg1" OffsetY="142">` and so on, each
+            // holding two gradient halves and nothing a state machine could
+            // land on. [`Self::collect`] still lists it as a screen of its
+            // own, unchanged; what this adds is its widgets on the screen
+            // that encloses it, at the offset it authors.
+            "screen" if child.attr("name").is_none() || inner != offset => {
                 for grandchild in &child.children {
-                    self.collect_widgets(screen, grandchild, viewport_width, fallback_images);
+                    self.collect_widgets(
+                        screen,
+                        grandchild,
+                        viewport_width,
+                        inner,
+                        fallback_images,
+                    );
                 }
             }
             _ => {}
         }
     }
 
-    fn fill_from_node(&self, node: &Node) -> Option<Fill> {
-        let color = self
-            .resolve(node.value("color").unwrap_or_default())
-            .and_then(parse_argb)?;
+    /// A colour-only `Image`: a plain `color` fill, or a `Color1`..`Color4`
+    /// gradient. A widget with neither is not a fill and is dropped.
+    fn fill_from_node(&self, node: &Node, offset: (f32, f32)) -> Option<Fill> {
+        let argb = |attr: &str| {
+            self.resolve(node.value(attr).unwrap_or_default())
+                .and_then(parse_argb)
+        };
+        let gradient = match (
+            argb("Color1"),
+            argb("Color2"),
+            argb("Color3"),
+            argb("Color4"),
+        ) {
+            (Some(c1), Some(c2), Some(c3), Some(c4)) => Some([c1, c2, c3, c4]),
+            _ => None,
+        };
+        let color = argb("color").or_else(|| gradient.map(|corners| corners[0]))?;
         Some(Fill {
-            x: self.number(node.value("x")).unwrap_or(0.0),
-            y: self.number(node.value("y")).unwrap_or(0.0),
+            name: node.attr("name").map(str::to_string),
+            x: self.number(node.value("x")).unwrap_or(0.0) + offset.0,
+            y: self.number(node.value("y")).unwrap_or(0.0) + offset.1,
             width: self.number(node.value("width")),
             height: self.number(node.value("height")),
             color,
+            gradient,
         })
     }
 
-    fn image_from_node(&self, node: &Node, src: &str) -> Image {
+    fn image_from_node(&self, node: &Node, src: &str, offset: (f32, f32)) -> Image {
         Image {
             name: node.attr("name").map(str::to_string),
             src: src.to_string(),
-            x: self.number(node.value("x")).unwrap_or(0.0),
-            y: self.number(node.value("y")).unwrap_or(0.0),
+            x: self.number(node.value("x")).unwrap_or(0.0) + offset.0,
+            y: self.number(node.value("y")).unwrap_or(0.0) + offset.1,
             width: self.number(node.value("width")),
             height: self.number(node.value("height")),
             color: self
@@ -642,11 +734,11 @@ impl Screens {
         }
     }
 
-    fn menu_from_node(&self, node: &Node) -> Menu {
+    fn menu_from_node(&self, node: &Node, offset: (f32, f32)) -> Menu {
         Menu {
             name: node.attr("name").unwrap_or("Menu").to_string(),
-            x: self.number(node.value("x")).unwrap_or(0.0),
-            y: self.number(node.value("y")).unwrap_or(0.0),
+            x: self.number(node.value("x")).unwrap_or(0.0) + offset.0,
+            y: self.number(node.value("y")).unwrap_or(0.0) + offset.1,
             scale: self.number(node.value("scale")).unwrap_or(1.0),
             color: self
                 .resolve(node.value("color").unwrap_or_default())
@@ -657,14 +749,14 @@ impl Screens {
         }
     }
 
-    fn text_from_node(&self, node: &Node, viewport_width: Option<f32>) -> Text {
+    fn text_from_node(&self, node: &Node, viewport_width: Option<f32>, offset: (f32, f32)) -> Text {
         Text {
             name: node.attr("name").map(str::to_string),
             idstring: node.value("idstring").map(str::to_string),
             string: node.value("String").map(str::to_string),
             font: node.value("font").unwrap_or("Default").to_string(),
-            x: self.number(node.value("x")).unwrap_or(0.0),
-            y: self.number(node.value("y")).unwrap_or(0.0),
+            x: self.number(node.value("x")).unwrap_or(0.0) + offset.0,
+            y: self.number(node.value("y")).unwrap_or(0.0) + offset.1,
             scale: self.number(node.value("scale")).unwrap_or(1.0),
             color: self
                 .resolve(node.value("color").unwrap_or_default())

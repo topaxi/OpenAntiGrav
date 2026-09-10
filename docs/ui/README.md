@@ -5,7 +5,9 @@
 > [menus.md](../architecture/menus.md) for the tree, which is this project's
 > own, and [menus-original.md](menus-original.md) for the original's layout,
 > colours and page-change animation, which are measured and which this build
-> now draws with.
+> now draws with. The race box's own two screens - Track Select and Ship
+> Select - are read off the disc and drawn; see
+> [selection-screens.md](selection-screens.md).
 
 ## The HUD is authored data
 

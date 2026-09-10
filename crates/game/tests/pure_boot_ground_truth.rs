@@ -534,18 +534,22 @@ fn the_memory_stick_warnings_two_stripes_keep_their_own_rects() {
             screen.fills,
             vec![
                 oag_ui::screen::Fill {
+                    name: None,
                     x: 0.0,
                     y: 10.0,
                     width: Some(480.0),
                     height: Some(1.0),
                     color,
+                    gradient: None,
                 },
                 oag_ui::screen::Fill {
+                    name: None,
                     x: 0.0,
                     y: 240.0,
                     width: Some(480.0),
                     height: Some(1.0),
                     color,
+                    gradient: None,
                 },
             ],
             "{label}: two thin stripes, not a 480x272 wash"
@@ -591,18 +595,22 @@ fn title_screens_frame_lines_keep_their_own_rects_and_share_one_colour() {
             "{label}: the disc leaves FrameLineColor undeclared, so this is the measured fallback"
         );
         let rect = |x: f32, y: f32, width: f32, height: f32| oag_ui::screen::Fill {
+            name: None,
             x,
             y,
             width: Some(width),
             height: Some(height),
             color,
+            gradient: None,
         };
         let white_background = oag_ui::screen::Fill {
+            name: None,
             x: 0.0,
             y: 0.0,
             width: Some(480.0),
             height: Some(272.0),
             color: 0xffff_ffff,
+            gradient: None,
         };
         assert_eq!(
             screen.fills,

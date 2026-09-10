@@ -306,6 +306,20 @@ pub struct FrontEnd {
     /// was a guess made before the XML was actually read: on the disc it is
     /// one bar image, not three.
     pub menu_frame: Option<&'static str>,
+    /// The definition file that authors the race box's own selection
+    /// screens - `Track Creation` and `Team Selection` on Pulse - or `None`
+    /// for a title whose race box has not been read.
+    ///
+    /// Named here rather than found through the skin's `LoadXML` list
+    /// because the list is 23 files and reading every one at boot for two
+    /// screens is the wrong trade; and because which file holds them is a
+    /// fact about the title. Pulse: `Selection_Definition.xml` beside its
+    /// skin (`docs/formats/race-setup.md`). Pure splits its race box into a
+    /// chain of screens whose files are unread, and HD authors
+    /// `track_selection_definition.xml`/`team_selection_definition.xml` in a
+    /// dialect this build's picker does not yet read - both `None`, both a
+    /// gap rather than a measurement.
+    pub race_box: Option<&'static str>,
 }
 
 /// The archive names a title's releases carry, in the order they are tried.

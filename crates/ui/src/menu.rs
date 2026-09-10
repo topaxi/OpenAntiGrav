@@ -1140,9 +1140,7 @@ impl Layers {
 
 /// Multiplies one draw's alpha, leaving it where it is.
 fn fade(draw: &mut Draw, alpha: f32) {
-    if let Some(color) = draw.colour_mut() {
-        color[3] *= alpha;
-    }
+    draw.fade(alpha);
 }
 
 /// How a page change looks, in the terms [`Layers::zoomed`] takes.

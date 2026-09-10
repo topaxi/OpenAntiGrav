@@ -101,6 +101,7 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     // `<Screen>` levels down. Naming it puts that bar on screen and changes a
     // picture this build already draws.
     menu_frame: Some(frontend::states::FE_SCREEN),
+    race_box: Some(names::RACE_BOX_DEFINITION),
 };
 
 /// The bulk archive's candidates, in the order they are tried.
@@ -299,6 +300,10 @@ pub mod names {
     /// The front-end root: every boot screen, the `FEGlobals` variables, and
     /// the `LoadXML` list that pulls in the rest of the menus.
     pub const FRONTEND_ROOT: &str = r"Data\Plugins\PI001\GUI\Skin.xml";
+    /// The definition holding the race box's `Track Creation` and `Team
+    /// Selection` screens, one of [`FRONTEND_ROOT`]'s 23 `LoadXML` includes.
+    /// See `docs/formats/race-setup.md`.
+    pub const RACE_BOX_DEFINITION: &str = r"Data\Plugins\PI001\GUI\Selection_Definition.xml";
 
     /// The game plugin's own definition: which circuits, teams, ship models and
     /// music tracks this release carries.

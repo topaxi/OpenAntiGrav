@@ -16,6 +16,7 @@ pub mod frontend;
 pub mod language;
 pub mod marquee;
 pub mod menu;
+pub mod picker;
 pub mod placeholder;
 pub mod prompt;
 pub mod screen;

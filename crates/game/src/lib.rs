@@ -54,6 +54,7 @@ pub mod music;
 pub mod perf;
 pub mod pilots;
 pub mod prefetch;
+pub mod preview;
 pub mod race;
 pub mod records;
 pub mod remix;

@@ -65,6 +65,28 @@ pub enum Draw {
         /// Colour.
         color: [f32; 4],
     },
+    /// A solid rectangle whose colour runs from `left` at its left edge to
+    /// `right` at its right edge, interpolated across.
+    ///
+    /// What a `Color1`..`Color4` `<Image>` authors - see
+    /// [`crate::screen::Fill::gradient`]. Every one measured is a horizontal
+    /// rule that fades in from nothing and back out again, drawn as two
+    /// mirrored halves, which is why this carries two colours and not four:
+    /// the top and bottom of an edge never differ on any shipped widget, so
+    /// a vertical component would be an axis nothing authored.
+    ///
+    /// **A separate variant rather than a second colour on [`Self::Fill`]**,
+    /// for the reason [`Self::ChamferedFill`] is: fills are constructed in
+    /// dozens of places and every one would carry a duplicate colour for the
+    /// handful of rules that fade.
+    GradientFill {
+        /// Rectangle.
+        rect: [f32; 4],
+        /// Colour at the left edge.
+        left: [f32; 4],
+        /// Colour at the right edge.
+        right: [f32; 4],
+    },
     /// A movie's current frame, stretched to `rect`.
     Video {
         /// Rectangle.
@@ -896,6 +918,10 @@ impl Draw {
             | Self::Sprite { color, .. }
             | Self::RotatedSprite { color, .. }
             | Self::BlendedSprite { color, .. } => Some(color),
+            // The left edge's, which is the one a caller reading "the colour"
+            // of a rule that fades in from the left would expect. Fading
+            // both edges is [`Self::fade`]'s job, not this accessor's.
+            Self::GradientFill { left, .. } => Some(left),
             Self::Video { .. } => None,
         }
     }
@@ -944,8 +970,29 @@ impl Draw {
                 rect[3] *= scale;
                 color[3] *= alpha;
             }
+            Self::GradientFill { rect, left, right } => {
+                rect[0] = about(rect[0], origin.0);
+                rect[1] = about(rect[1], origin.1);
+                rect[2] *= scale;
+                rect[3] *= scale;
+                left[3] *= alpha;
+                right[3] *= alpha;
+            }
             // A movie has no alpha channel to fade and is never part of a page.
             Self::Video { .. } => {}
+        }
+    }
+
+    /// Multiplies this draw's alpha, leaving it where it is.
+    ///
+    /// Both edges of a [`Self::GradientFill`], which is the one variant
+    /// [`Self::colour_mut`] cannot fade on its own.
+    pub fn fade(&mut self, alpha: f32) {
+        if let Self::GradientFill { left, right, .. } = self {
+            left[3] *= alpha;
+            right[3] *= alpha;
+        } else if let Some(color) = self.colour_mut() {
+            color[3] *= alpha;
         }
     }
 }

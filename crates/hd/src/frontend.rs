@@ -267,6 +267,10 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     menu: MENU_SKIN,
     boot: BOOT,
     menu_frame: Some(states::FE_SCREEN),
+    // HD authors `track_selection_definition.xml` and
+    // `team_selection_definition.xml` as `<Model>` widgets in its own
+    // dialect, which `oag_ui::picker::Layout::read` does not yet read.
+    race_box: None,
 };
 
 /// The sixteen plugins that carry a language, named rather than numbered.

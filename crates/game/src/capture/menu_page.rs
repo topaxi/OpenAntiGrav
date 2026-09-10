@@ -394,6 +394,261 @@ fn prompt_draws(
     }
 }
 
+/// What `--menu-page track-select`/`ship-select` still owes the frame once
+/// its draw list is rendered: the preview mesh, which is a 3D pass rather
+/// than a draw - see [`crate::preview`].
+pub(super) struct PreviewRequest {
+    /// The mesh's archive entry name.
+    pub entry: String,
+    /// The skin `.dat` to paint it in, when the settings name one the team
+    /// declares.
+    pub skin: Option<String>,
+    /// Where it goes, in the screen's grid - [`oag_ui::picker::Layout::preview`].
+    pub rect: [f32; 4],
+    pub kind: oag_ui::picker::Kind,
+}
+
+/// Which selection screen a `--menu-page` name asks for, if either.
+#[must_use]
+pub(super) fn picker_kind(page: &str) -> Option<oag_ui::picker::Kind> {
+    match page {
+        "track-select" | "track_select" => Some(oag_ui::picker::Kind::Track),
+        "ship-select" | "ship_select" => Some(oag_ui::picker::Kind::Ship),
+        _ => None,
+    }
+}
+
+/// Draws one of the race box's selection screens on the settings' own
+/// selection, the same way the live session opens it - see
+/// `session::picker` for the flow this is the still of.
+///
+/// Every list is the source's: the circuits and teams off its definition,
+/// the labels off its string table, the ratings off each team's own `<FE>`
+/// element. The livery axis is the title's own variant table, which is
+/// empty on Pulse and draws no row there.
+#[allow(
+    clippy::too_many_arguments,
+    reason = "the same argument menu_page makes: each is a separate thing the page needs"
+)]
+pub(super) fn picker_page(
+    kind: oag_ui::picker::Kind,
+    layout: &oag_ui::picker::Layout,
+    settings: &crate::settings::Settings,
+    title: &'static oag_title::Title,
+    tracks: &[crate::catalogue::Track],
+    teams: &[crate::catalogue::Team],
+    strings: &oag_ui::language::StringTable,
+    backdrop: Option<oag_ui::menu::Backdrop>,
+    skin: &oag_ui::menu::Skin,
+    frame: &oag_ui::menu::Frame,
+    sprites: &crate::sprite::Sheet,
+    measure: &dyn Fn(&str) -> f32,
+    // The selected circuit's lap length, measured by the caller off the
+    // disc - `None` draws the dash an unmeasured one draws live.
+    distance: Option<f32>,
+) -> (Vec<oag_ui::frontend::Draw>, Option<PreviewRequest>) {
+    use oag_ui::picker::{Details, Entry, Kind, Picker};
+    let (entries, previews): (Vec<Entry>, Vec<String>) = match kind {
+        Kind::Track => tracks
+            .iter()
+            .map(|track| {
+                (
+                    Entry {
+                        id: track.id.clone(),
+                        label: strings.get_or_id(&track.id).to_string(),
+                        details: Details::Track {
+                            // A capture keeps no records store; the
+                            // distance is the caller's, for the selected
+                            // circuit only.
+                            info: [
+                                if track.id == settings.race.track {
+                                    distance.map_or_else(|| "-".to_string(), |d| format!("{d:.0}"))
+                                } else {
+                                    "-".to_string()
+                                },
+                                "-".into(),
+                                "-".into(),
+                            ],
+                        },
+                    },
+                    format!(
+                        r"{}\FE\{}.vex",
+                        track.location,
+                        if track.reversed { "reverse" } else { "forward" }
+                    ),
+                )
+            })
+            .unzip(),
+        Kind::Ship => teams
+            .iter()
+            .map(|team| {
+                // The same axis rule the live screen applies - see
+                // `session::picker::open_ship_picker`: the team's own skins
+                // where it declares any, the title's variants otherwise.
+                let variants: Vec<(String, String)> =
+                    if !team.skins.is_empty() {
+                        std::iter::once((
+                            String::new(),
+                            strings
+                                .get_or_id(crate::catalogue::BASELINE_SKIN)
+                                .to_string(),
+                        ))
+                        .chain(team.skins.iter().map(|skin| {
+                            (skin.name.clone(), strings.get_or_id(&skin.name).to_string())
+                        }))
+                        .collect()
+                    } else if let Some(team_variants) = title.race.team_variants_for(&team.id) {
+                        team_variants
+                            .variants
+                            .iter()
+                            .map(|variant| (variant.suffix.to_string(), variant.label.to_string()))
+                            .collect()
+                    } else {
+                        title
+                            .race
+                            .hull_variants
+                            .into_iter()
+                            .flatten()
+                            .map(|variant| (variant.stem.to_string(), variant.label.to_string()))
+                            .collect()
+                    };
+                (
+                    Entry {
+                        id: team.id.clone(),
+                        label: team.label(strings).to_string(),
+                        details: Details::Ship {
+                            rating: team.rating.map(|rating| oag_ui::picker::Rating {
+                                speed: rating.speed,
+                                thrust: rating.thrust,
+                                handling: rating.handling,
+                                shield: rating.shield,
+                            }),
+                            variants,
+                        },
+                    },
+                    format!(r"{}\ship_FE.vex", team.location),
+                )
+            })
+            .unzip(),
+    };
+    let skinned = teams
+        .iter()
+        .find(|team| team.id == settings.race.team)
+        .is_some_and(|team| !team.skins.is_empty());
+    let (selected, variant) = match kind {
+        Kind::Track => (settings.race.track.as_str(), None),
+        Kind::Ship if skinned => (
+            settings.race.team.as_str(),
+            Some(settings.race.skin.as_str()),
+        ),
+        Kind::Ship => (
+            settings.race.team.as_str(),
+            Some(settings.race.variant.as_str()),
+        ),
+    };
+    let picker = Picker::new(kind, entries, Some(selected), variant);
+    let skin_entry = match kind {
+        Kind::Ship => teams
+            .get(picker.index())
+            .and_then(|team| team.skin(&settings.race.skin))
+            .map(|skin| skin.location.clone()),
+        Kind::Track => None,
+    };
+    let request = previews.get(picker.index()).map(|entry| PreviewRequest {
+        entry: entry.clone(),
+        skin: skin_entry,
+        rect: layout.preview,
+        kind,
+    });
+    let layers = oag_ui::picker::draw_list(
+        &picker,
+        layout,
+        skin,
+        frame,
+        backdrop,
+        false,
+        &|src| sprites.get(src),
+        measure,
+    );
+    (layers.flatten(), request)
+}
+
+/// The source a capture's race options name, opened with its packs, for the
+/// selection screens' own reads.
+pub(super) fn open_for_previews(race: &crate::race::Options) -> Result<oag_assets::Archives> {
+    let (packs, pure_packs, problems) =
+        crate::dlc::packs_from_defaults(&race.dlc, &crate::boot::default_dlc_cache_dir());
+    for problem in problems {
+        log::warn!("{problem}");
+    }
+    Ok(crate::title::open_source(&race.source, packs, pure_packs)?.archives)
+}
+
+/// The selection screen's preview mesh, over the finished draw list - the
+/// same pass `MenuStage::render` runs live, at the screen's first tick.
+///
+/// A mesh that will not read or build is logged and draws nothing, per the
+/// rule for an asset that will not play; the rest of the capture stands.
+#[allow(
+    clippy::too_many_arguments,
+    reason = "one call site, each a separate fact of the frame"
+)]
+pub(super) fn draw_preview(
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    encoder: &mut wgpu::CommandEncoder,
+    view: &wgpu::TextureView,
+    viewport: (f32, f32, f32, f32),
+    target_size: (u32, u32),
+    space: oag_display::space::Space,
+    race: &crate::race::Options,
+    request: &PreviewRequest,
+    anisotropy: Anisotropy,
+) {
+    let built = open_for_previews(race).and_then(|mut archives| {
+        let blob = archives.read_name(&request.entry)?;
+        let mut model = oag_render::mesh::build(&request.entry, &blob)?;
+        // The chosen paint, the same swap the live screen and a race make;
+        // a skin that will not read leaves the hull's own and says so.
+        if let Some(entry) = &request.skin {
+            match archives
+                .read_name(entry)
+                .map_err(anyhow::Error::from)
+                .and_then(|blob| oag_texture::ship_skin::parse(&blob).map_err(anyhow::Error::from))
+            {
+                Ok(paint) => {
+                    oag_render::mesh::ship_skin::apply(&mut model, &paint);
+                }
+                Err(error) => {
+                    log::warn!("{entry}: {error:#} - the preview keeps the hull's own paint");
+                }
+            }
+        }
+        crate::preview::Preview::new(
+            device,
+            queue,
+            wgpu::TextureFormat::Rgba8Unorm,
+            anisotropy,
+            model,
+        )
+    });
+    match built {
+        Ok(mut preview) => preview.draw(
+            device,
+            queue,
+            encoder,
+            view,
+            viewport,
+            target_size,
+            space,
+            request.rect,
+            crate::preview::orbit_for(request.kind, 0.0),
+            0.0,
+        ),
+        Err(error) => log::warn!("{}: {error:#} - the preview draws nothing", request.entry),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

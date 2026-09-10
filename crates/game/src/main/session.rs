@@ -35,6 +35,8 @@ mod frame;
 mod load;
 #[path = "session/menus.rs"]
 pub(crate) mod menus;
+#[path = "session/picker.rs"]
+mod picker;
 // Named `pilot_editor`, not `pilots` - `oag_game::pilots` is already imported
 // unaliased above, and a sibling module of the same name would shadow it,
 // the same reason `remix_menu` below is not called `remix`.
@@ -583,6 +585,15 @@ pub(crate) struct Shell {
     /// is unread, which draws the menus exactly as they were drawn before this
     /// existed. See `oag_ui::menu::read_frame`.
     pub(crate) frame: menu::Frame,
+    /// The race box's two selection screens, read at boot - see
+    /// `oag_game::boot::Shell::track_select`. `None` launches straight from
+    /// the RACE page.
+    pub(crate) track_select: Option<oag_ui::picker::Layout>,
+    pub(crate) ship_select: Option<oag_ui::picker::Layout>,
+    /// Every team with what the ship picker shows for it - its ratings and
+    /// its skins - where [`Self::teams`] is only the id and the label the
+    /// RACE page's own row needs.
+    pub(crate) team_details: Vec<catalogue::Team>,
 }
 
 impl Shell {

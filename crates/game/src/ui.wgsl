@@ -40,8 +40,10 @@ struct Instance {
     // What the glyph's baked outline is drawn in. Only the atlas path reads it.
     @location(3) border: vec4<f32>,
     // 0 indexes the glyph atlas, 1 the sprite sheet, 2 the sprite sheet added
-    // rather than blended over. Every `> 0.5` test below is therefore still
-    // exactly "is this a sheet quad".
+    // rather than blended over, 3 a solid fill whose colour runs from `color`
+    // on the left to `border` on the right - which the vertex stage resolves
+    // into a plain mode-0 fill, so every `> 0.5` test in the fragment stage
+    // is still exactly "is this a sheet quad".
     @location(4) mode: f32,
     // Clockwise turn about the quad's own centre, in radians. Zero for
     // everything but the lock-on reticle's corner brackets, which are four
@@ -118,11 +120,19 @@ fn vs_main(@builtin(vertex_index) index: u32, instance: Instance) -> VertexOut {
     out.position = to_clip(instance.rect.xy + placed);
     // Normalised here rather than in the fragment shader, against whichever
     // texture this quad indexes.
-    let size = select(uniforms.atlas, uniforms.sprites, instance.mode > 0.5);
+    // A gradient fill is resolved here: its colour at this corner is the mix
+    // of its two edge colours by how far across the quad the corner sits, and
+    // what reaches the fragment stage is an ordinary atlas fill of that colour
+    // - both `color` and `border` carry it, so the solid texel's own mask mixes
+    // to the same value whichever way it reads.
+    let is_gradient = instance.mode > 2.5;
+    let is_sheet = instance.mode > 0.5 && !is_gradient;
+    let size = select(uniforms.atlas, uniforms.sprites, is_sheet);
     out.uv = (instance.uv.xy + corner * instance.uv.zw) / size;
-    out.color = instance.color;
-    out.border = instance.border;
-    out.mode = instance.mode;
+    let graded = mix(instance.color, instance.border, corner.x);
+    out.color = select(instance.color, graded, is_gradient);
+    out.border = select(instance.border, graded, is_gradient);
+    out.mode = select(instance.mode, 0.0, is_gradient);
     return out;
 }
 

@@ -64,7 +64,44 @@ what those functions do:
   code the earlier EU transfer pass covered. See `race-box-screens.md`'s own
   cross-platform section.
 
+**2026-09-09: both screens are built, and the capture that measured them
+is a script.** `scripts/psp-frontend-capture.py` walked the original from
+boot to `Team Selection` and screenshotted 54 frames (every row of `Main
+Menu`/`Racebox`/`Single Player`, every `RACE TYPE`, both selection screens
+per entry, the help and music overlays). Read against them, this build now
+opens Track Select and Ship Select from the RACE page's START row -
+`oag_ui::picker` (model, layout read off `Selection_Definition.xml`, draw),
+`oag_game::preview` (the 3D pass), `session/picker.rs` (the flow), with
+`--menu-page track-select`/`ship-select` for a headless still. Two
+corrections fell out: the `%s\FE\%s.vex` file is the **panel's outline
+ribbon** (364 vertices, radius 805), not the flythrough; and the per-craft
+rating record is `Definition.xml`'s own `<FE speed thrust handling shield>`
+under each `PI_Team`, matching the capture's bars digit for digit. Three
+parser gaps closed on the way (`LeftLayer`/`Item` not walked, offsets not
+summed, `Color1..4` gradients dropped) and `LeftLayer`'s `OffsetX` is an
+origin, settled. Full reading and the remaining gaps:
+[`docs/ui/selection-screens.md`](../../docs/ui/selection-screens.md).
+
 ## Open
+
+- **The flythrough behind the hex window is not built.** It is the real
+  circuit scene (or an unlocated preview scene), not the `FE\*.vex` file -
+  needs the track on a worker (`race::LoadWorker`'s shape) and a camera on
+  the spline. Until then the window draws nothing.
+- **Distance is measured on a worker and reads ~2% under the original**
+  (`5094` vs `5178`, `5228` vs `5350`, `4330` vs `4419`) - not sampling,
+  the figure is stable from one to sixty-four steps per segment. The
+  original sums a different curve or counts the junction links differently;
+  `circuit_length`'s doc has the numbers. Reading `TrackSelection`'s own
+  formatter would settle it.
+- **`Loyalty` is not drawn** - no counter to show. ~~The livery row cycles
+  the variant axis~~ - it is the skin axis now (`Classic` + each
+  `PI_ModelSkin`, `race.skin`), repainting the preview and reaching the
+  race; the variant axis stays for teams that declare no skin.
+- **The live flow is compile-checked and headless-captured, not played**:
+  no display on this machine for the windowed route. First thing for
+  whoever has one: START -> Track Select -> Ship Select -> race, then
+  Circle back through both.
 
 - **The nine unlock-predicate functions behind `Definition_IsUnlocked` are
   unnamed and untraced.** This is what "circuits gate on a named grid" and
