@@ -49,8 +49,8 @@ no such flow at all.
 | AI difficulty | 3 | 3 | **none** | 3 | n/a |
 | Weapons on/off | yes | yes | multiplayer only | yes | n/a |
 | Lap count selectable | **no** | **no** | **no** | **no** | n/a |
-| Track preview | mesh | mesh | unresolved | mesh | n/a |
-| Craft preview | mesh | mesh | unresolved | mesh | touch grid |
+| Track preview | mesh | mesh | **sprite** | mesh | n/a |
+| Craft preview | mesh | mesh | **sprite** | mesh | touch grid |
 
 ## Pulse - `Single Player`
 
@@ -336,49 +336,95 @@ state-name-verified walk - Pure's `G_STATE_MACHINE` address is unmeasured,
 unlike Pulse's, so `dbg.state_name()` cannot be used here yet. Screenshots
 are game content and were not committed.
 
-**Both `Track Selection` and `Team Selection` render a real 3D preview.**
-This corrects a working hypothesis from earlier the same session, drawn from
-a decompile of both screens' `ApplySelection` overrides that found no mesh
-composition in either - true of the overrides themselves, but the actual
-loading is one level further down (see
-[`race-box-screens.md`](../ghidra/functions/psp-pure-eu/race-box-screens.md)),
-and a screenshot settles what static reading alone got wrong.
+**Neither `Track Selection` nor `Team Selection` renders a mesh. Every
+preview on both screens is a pre-rendered 256x128 sprite shipped in
+`PSP_GAME/USRDIR/FEData.wad`.** Confidence 97. *(This paragraph read "both
+render a real 3D preview" until 2026-09-10; see ["How the 3D reading went
+wrong"](#how-the-3d-reading-went-wrong) below.)*
 
-- **`Track Selection`** on Vineta K (Alpha league, first entry): a
-  wireframe-outline track spine in the same schematic style as the class
-  graph, plus a stat block - `RACE RECORD 0.00.00`, `LAP RECORD 0.00.00`,
-  `LENGTH 4446 M`, `HEIGHT 222 M` on a fresh profile. No hexagon-cropped
-  photo slideshow anywhere on this screen, unlike Pulse's `Track Creation` -
-  Pure's `screen.xml`/`screen_zone.xml` per circuit were not checked for
-  content this pass, but nothing in the XML (`Selection_Definition.xml`,
-  read above) references one the way Pulse's `TrackDefinition_EnterScreenState`
-  chain does.
-- **`Team Selection`** shows a distinct wireframe-outline ship per team -
-  checked on Feisar, Auricom and Qirex, three different silhouettes, agreeing
-  with their three different `Ship.vex` sizes on disc (60416/73920/61664
-  bytes) - plus `SPEED`/`HANDLING`/`SHIELD`/`THRUST` bars. The model appears
-  to turntable-rotate on its own, the same shape as Pulse's. No `Loyalty` bar
-  and no livery-name readout were visible on the entries checked, consistent
-  with Pure's two-state `Livery` `<MenuBitmap>` being a different, simpler
-  axis than Pulse's named-skin cycler.
+The proof is offline and bit-exact. PPSSPP's `DumpTextures` wrote 12 textures
+for `UCES00001` while the two screens were up, every one 256x128 grayscale +
+alpha, at VRAM addresses `0x041c6940` / `0x041ced80` / `0x041d71c0`. Each one
+matches an `FEData.wad` entry at **RMSE 0** - the pixels on screen are the
+shipped texture, unaltered:
+
+| What it shows | `FEData.wad` entry |
+| --- | --- |
+| craft wireframes | 126, 130, 134, 138 |
+| circuit line art | 175, 176, 182, 188, 193, 194 |
+
+`FEData.wad` holds 242 entries, of which **137 decode as exactly 256x128**:
+
+- **~24 craft wireframes**, three consecutive indices per group at stride 4
+  (124-126, 128-130, 132-134, 136-138, 140-142, 144-146). Within a group the
+  three read as a top, a side and a 3/4 perspective view of one craft, and the
+  capture drew the **third** of each group.
+- **~28 circuit line-art images**, three per group at stride 6 (150-152,
+  156-158, 162-164, 168-170, 174-176, 180-182, 186-188, 192-194). Two
+  different members of one group were seen drawn (175 *and* 176; 193 *and*
+  194), so a screen shows more than one image per circuit - whether that is a
+  cycling slideshow, a rotation, or a selection change between screenshots is
+  **not settled**.
+- the rest are record-label logos, the boot splash and ad banners.
+
+**Which index belongs to which circuit or team is unrecovered.** The entries
+carry no names, only hashes, and only 10 of the ~52 have been tied to
+anything at all. Group order is *not* evidence of list order; assuming it is
+would be the same invention this correction is undoing.
+
+#### How the 3D reading went wrong
+
+The earlier pass described "a distinct wireframe-outline ship per team -
+Feisar, Auricom and Qirex, three different silhouettes" and read per-team
+distinctness as proof of a per-entity 3D render. **Per-team distinct
+*sprites* produce exactly that observation**, and the same is true of "the
+model appears to turntable-rotate on its own" against a cycling image set.
+Two tells were available and not taken:
+
+1. The art is anti-aliased, with soft grayscale gradients along the ribbon.
+   PSP hardware has no anti-aliasing; a 256x128 render target on real hardware
+   would be jagged. This is offline-rendered art, shipped as a texture.
+2. The preview stays blurry as PPSSPP's internal resolution is raised.
+   PPSSPP upscales geometry *and* render targets with internal resolution,
+   but not a fixed 256x128 source image. (This was the maintainer's own
+   observation, and it is the cheapest live check for the next case.)
+
+The correction also **closes** an open question rather than leaving one:
+neither `TeamSelection_ApplySelection` nor `TrackSelection_ApplySelection`
+composes a default preview mesh path because **there is no default preview
+mesh**. Hunting the record class that owns a mesh-loading virtual was
+chasing something that does not exist for this screen. The Phantom special
+case (`%s\Phantom.vex` / `%s\VR\Phantom.vex`) is unaffected and still stands
+at confidence 65 - see
+[`race-box-screens.md`](../ghidra/functions/psp-pure-eu/race-box-screens.md).
+
+- **`Track Selection`** on Vineta K (Alpha league, first entry): the circuit
+  line-art sprite plus a stat block - `RACE RECORD 0.00.00`, `LAP RECORD
+  0.00.00`, `LENGTH 4446 M`, `HEIGHT 222 M` on a fresh profile. No
+  hexagon-cropped photo slideshow anywhere on this screen, unlike Pulse's
+  `Track Creation` - nothing in `Selection_Definition.xml` references one the
+  way Pulse's `TrackDefinition_EnterScreenState` chain does.
+- **`Team Selection`** shows the craft wireframe sprite plus
+  `SPEED`/`HANDLING`/`SHIELD`/`THRUST` bars. No `Loyalty` bar and no
+  livery-name readout were visible on the entries checked, consistent with
+  Pure's two-state `Livery` `<MenuBitmap>` being a different, simpler axis
+  than Pulse's named-skin cycler.
 - **`Class Selection`, on this fresh profile, lists only `Vector` and
   `Venom`** - `Flash`/`Rapier`/`Phantom` do not appear at all, confirming the
   unlock gating this page's XML reading could not see (no `<Unlock>` element
   anywhere in the file) is real and happens in code.
 - **A `sceIoOpen` breakpoint swept across `down`-triggered team and track
   changes found no hits** (all four `zz_sceIoOpen` stub addresses armed via
-  the websocket debugger, 6 s window each). Assets stream from an
-  already-open archive rather than a discrete per-file open, so this
-  technique cannot localise which file backs either preview; a breakpoint on
-  the archive's own read primitive was not tried.
+  the websocket debugger, 6 s window each). That is consistent with the
+  sprite reading: `FEData.wad` is open for the life of the front end, and
+  changing selection only re-uploads a texture already in memory.
 
-**Net effect on this page's `PreviewSource` reading below**: both previews are
-confirmed real and per-entity, but the exact file each one loads was not
-pinned down by either decompilation or live tracing this pass.
-`<location>\Ship.vex` and `<location>\track.vex` are the only per-team/
-per-track files that exist on disc and visually match what renders (correct,
-distinct silhouette per entity) - wired at confidence ~70 on that basis, not
-on a located composer.
+**Net effect on this page's `PreviewSource` reading below**: Pure has no
+entry in it. `oag_game`'s pickers draw no preview on Pure and say so, rather
+than substituting `Ship.vex` or `track.vex` - those are the in-race hull and
+the full 4.25 MB racing circuit, and wiring them was a plausible-looking
+stand-in of exactly the kind [CLAUDE.md's "never invent what the assets
+already author"](../../CLAUDE.md) forbids. Pulse's rows are unaffected.
 
 ### HD/Fury authors its previews as widgets
 
@@ -899,17 +945,17 @@ track-plus-class picker is the crossplay lobby vote.
   [`race-box-screens.md`](../ghidra/functions/psp-pulse-usa/race-box-screens.md#trackselection_populatelist-closes-what-populates-the-track-list-is-unread).
   HD's equivalent is still unfound - see
   [track-selection-screen](../ghidra/functions/ps3-hdfury-eu/track-selection-screen.md).
-- **Pure's track and craft previews are confirmed real by live capture
-  (2026-09-10, see above), but the exact composing function is not
-  found.** `TeamSelection_ApplySelection`/`TrackSelection_ApplySelection`
-  are decompiled in full (`race-box-screens.md`) and neither composes the
-  *default* preview path; only `TeamSelection_ApplySelection`'s Phantom
-  special case does (`%s\Phantom.vex`/`%s\VR\Phantom.vex`, confidence 65
-  on when it actually fires - the gating flags trace to campaign-progress
-  and multiplayer-permission checks, not to the currently selected speed
-  class). `<location>\Ship.vex` and `<location>\track.vex` are wired as the
-  default convention on confidence ~70: real, resolving, and visually
-  matching, not a located composer.
+- **Pure's track and craft previews are sprites, not meshes** - 256x128
+  images in `FEData.wad`, matched to the drawn pixels at RMSE 0 (see
+  above). That is *why* neither `TeamSelection_ApplySelection` nor
+  `TrackSelection_ApplySelection` composes a default preview path: there is
+  no default preview mesh to compose. Only
+  `TeamSelection_ApplySelection`'s Phantom special case composes a `.vex`
+  at all (`%s\Phantom.vex`/`%s\VR\Phantom.vex`, confidence 65 on when it
+  actually fires - the gating flags trace to campaign-progress and
+  multiplayer-permission checks, not to the currently selected speed
+  class). **Still open: which sprite index belongs to which circuit or
+  team**, which nothing yet recovers.
 - **No screen class was renamed in Ghidra.** The strings prove the classes
   exist; they are not evidence of what any function does, and the rubric's
   floor is 50 to rename at all.

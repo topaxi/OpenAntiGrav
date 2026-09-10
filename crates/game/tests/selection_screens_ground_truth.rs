@@ -393,14 +393,14 @@ fn the_ps2_pressing_reads_the_same_screens_on_its_own_grid() {
 }
 
 /// Pure: same definition file name as Pulse's, different screen name for the
-/// track picker (`Track Selection`, not `Track Creation`), and a different
-/// preview-mesh convention - confirmed live in PPSSPP (2026-09-10, see
-/// `docs/formats/race-setup.md`) to be a real per-entity 3D preview on both
-/// screens, not the "unresolved"/"no preview" reading an earlier pass landed
-/// on from static code reading alone.
+/// track picker (`Track Selection`, not `Track Creation`), and **no preview
+/// mesh at all** - both screens draw a pre-rendered 256x128 sprite out of
+/// `FEData.wad`. See `docs/formats/race-setup.md`; this test pins the six
+/// entries a PPSSPP texture dump caught the screens drawing, since the
+/// entries carry no names and index is the only handle on them.
 #[test]
 #[ignore = "needs a disc image in data/images/"]
-fn pure_reads_its_own_screen_name_and_preview_convention() {
+fn pure_reads_its_own_screen_names_and_ships_sprite_previews() {
     let Some(path) = oag_testdata::image("data/images/pure-psp-eu.chd") else {
         return;
     };
@@ -410,20 +410,37 @@ fn pure_reads_its_own_screen_name_and_preview_convention() {
     assert_eq!(track.title, "Track Selection");
     assert_eq!(ship.title, "Team Selection");
 
+    let spec = format!("{}:PSP_GAME/USRDIR/FEData.wad", path.to_string_lossy());
+    let mut wad = oag_assets::archive::Archive::open(&spec).expect("FEData.wad opens");
+    // Ships 126/130/134/138, circuits 175/176/182/188/193/194 - every one
+    // matched a dumped VRAM texture at RMSE 0. The ships sit three to a
+    // group at stride 4 and the circuits three to a group at stride 6; the
+    // group members are different views of one entity, and which view a
+    // screen picks is not settled, so only the observed ones are pinned.
+    for index in [126, 130, 134, 138, 175, 176, 182, 188, 193, 194] {
+        let blob = wad.read(index).expect("the sprite entry reads");
+        let sprite = oag_texture::texture::Texture::parse(&blob).expect("it decodes");
+        assert_eq!(
+            (sprite.width, sprite.height),
+            (256, 128),
+            "FEData.wad entry {index}"
+        );
+    }
+
+    // The two files the previews were wrongly wired to until 2026-09-10 do
+    // exist - that is why the mistake was plausible - but they are the
+    // in-race hull and the full racing circuit, neither of which either
+    // screen draws.
     let mut archives =
         oag_assets::Archives::open(&path.to_string_lossy(), oag_pure::TITLE).expect("opens");
-    // The full racing track, not a small FE-only ribbon like Pulse's -
-    // Pure ships no `<location>\FE\forward.vex` equivalent at all.
-    let blob = archives
-        .read_name(r"Data\Environments\01_Vineta_K\track.vex")
-        .expect("the track mesh resolves");
-    let track_model = oag_render::mesh::build("track", &blob).expect("it decodes");
-    assert!(!track_model.vertices.is_empty());
-    // The in-race hull, reused for the picker rather than a dedicated
-    // `_FE.vex` - `crate::livery`'s own file, loaded a second time here.
-    let blob = archives
-        .read_name(r"Data\Ships\Feisar\Ship.vex")
-        .expect("the hull resolves");
-    let hull = oag_render::mesh::build("hull", &blob).expect("it decodes");
-    assert!(!hull.vertices.is_empty());
+    assert!(
+        archives
+            .read_name(r"Data\Environments\01_Vineta_K\track.vex")
+            .is_ok(),
+        "the racing circuit is on disc, it is simply not the picker's preview"
+    );
+    assert!(
+        archives.read_name(r"Data\Ships\Feisar\Ship.vex").is_ok(),
+        "the in-race hull is on disc, it is simply not the picker's preview"
+    );
 }

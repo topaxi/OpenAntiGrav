@@ -199,5 +199,5 @@ the ordinary `race` page, which are the hardcoded ones.
 4. Add the WEAPONS row - three titles author it, it is one `toggle` entry, and
    `oag_race` would need to carry it. **Still open.**
 5. Leave previews to
-   `handover/rendering/the-race-setup-previews-are-meshes-and-nothing.md`; they are
+   `handover/rendering/the-race-setup-previews-differ-by-title.md`; they are
    independent of all of the above.
