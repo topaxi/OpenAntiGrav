@@ -1241,6 +1241,19 @@ measurement that says *when* that gap bites, rather than that it exists.
 > by tick 432 the two craft are not on the same part of the track - and reading
 > it as a contact result is exactly the mistake the 2026-07-28 paragraph above
 > made in the other direction.
+>
+> **Narrowed 2026-09-10**: on this same capture's crest (ticks 1560-1600), a
+> pose walk of every term in `oag_physics::forces::evaluate` found no term
+> whose own residual accounts for the drift - rolling resistance, the largest,
+> explains 3.1% of the residual's energy. One discrete event at tick 1583
+> (near-constant speed, a large direction change - the signature of a
+> projection like `oag_physics::wall::resolve`, unconfirmed against the actual
+> collision geometry) dominates the raw residual over every other tick in the
+> window by two orders of magnitude, but bridged to a position-error yardstick
+> it accounts for only about 12% of the eight-tick shift, with the wrong sign -
+> so it does not close the gap on its own by this arithmetic. See
+> `docs/physics/README.md`, "The crest-phase drift traces to a wall event, not
+> a force term".
 
 **One reading trap in the table above, worth fixing in your head before you use
 it.** The `exceeded` column is `first_exceeded_tick` - **the tick of the first

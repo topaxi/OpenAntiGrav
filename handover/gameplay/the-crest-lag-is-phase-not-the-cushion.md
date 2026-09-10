@@ -63,24 +63,50 @@ the `6.0` are untouched.
 
 ## Open
 
-- **Why the phase drifts eight ticks of crest in the 35 ticks after a reseed.**
-  This is the force-law drift [`oag-trace.md`](../../docs/tools/oag-trace.md)
-  already documents, now with a sharp instance attached to it: at `--reseed 60`
-  the craft reaches the crest late enough to move liftoff from 1595 to 1603,
-  while its *contact test* is exact. Nothing about the cushion will move it.
+- **Measured 2026-09-10, and narrowed rather than closed.** The force-term pose
+  walk this thread's own "Next Steps" called for
+  (`crates/trace/tests/force_term_pose_walk_ground_truth.rs`) found that none
+  of `oag_physics::forces::evaluate`'s eleven terms, individually rescaled,
+  explains the crest-approach residual - the largest best fit (rolling
+  resistance) cuts 3.1% of the residual's own energy, every other term under
+  2%, on raw per-tick residuals with no weighting in it, so this part is
+  solid. One discrete event dominates what is left: tick 1583's recorded
+  velocity turns through a large angle at nearly constant speed - two orders
+  of magnitude past every other tick's residual in the window - the signature
+  of a projection like `oag_physics::wall::resolve` (unconfirmed against the
+  actual collision geometry; that call was never made). **It does not close
+  the gap on its own, though**: bridged to a position-error yardstick and
+  projected onto the along-track direction (the raw 3D magnitude is not
+  comparable to a 1D timing budget), that one tick accounts for only about
+  12% of what an eight-tick liftoff shift needs, and with the wrong sign; the
+  other 39 ticks together account for under 2%. So the force-term question is
+  settled (none of them), the tick-1583 event is the clear next thing to
+  chase, and whether it or something outside this window is what actually
+  closes the eight-tick gap is still open. Full measurement, per-tick table
+  and the yardstick arithmetic, including the caveat on the along-track
+  approximation: `docs/physics/README.md`, "The crest-phase drift traces to a
+  wall event, not a force term".
 - Unchanged from the previous pass, and still true: **do not read the
   single-seeded run as contact evidence.** There `grounded` is `1.0` on all 2,977
   ticks and every disagreement points one way, which is that same drift.
 
 ## Next Steps
 
-- **Attack the drift with the pose walk, not with a replay.** The technique that
-  settled this generalises: for any per-tick quantity that disagrees, walk the
-  recorded poses and evaluate our term there. It separates "our law is wrong"
-  from "our trajectory is elsewhere", which no reseed interval can. The obvious
-  next target is the force terms themselves - which of them, evaluated at the
-  original's own pose over ticks 1560-1600, integrates to the position error that
-  carries the crest phase.
+- **The next target is `oag_physics::wall::resolve` around tick 1583, not a
+  force term.** The same pose-walk technique generalises one step further:
+  walk the recorded poses and the recorded *wall* geometry around the
+  1571-1579 hop's landing and ask what `wall::resolve` does there, the same
+  way this pass asked what `forces::evaluate` does - separating "our wall
+  response is wrong" from "our trajectory is elsewhere" for a projection
+  rather than an accumulator term. Nothing about which geometry feature is
+  involved, or whether it is a kerb, a barrier or something else, has been
+  measured yet.
+- **The along-track bridge in this pass's own measurement only closes about
+  12% of the eight-tick yardstick, even crediting tick 1583 in full** - so
+  before spending more time on tick 1583 specifically, it is worth checking
+  whether the along-track approximation (one fixed heading held over the
+  whole 35-tick window) is hiding the rest, or whether part of the lag's
+  cause sits before tick 1560, outside this pass's window entirely.
 - The `exceeded` column in `oag-trace run`'s field table is a **tick number, not
   a count** (`crates/trace/src/compare.rs:996-1014`); documented in
   [`docs/tools/oag-trace.md`](../../docs/tools/oag-trace.md) now. Cost the
