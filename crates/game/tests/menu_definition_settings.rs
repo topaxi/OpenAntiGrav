@@ -771,7 +771,11 @@ fn the_frame_limit_is_disabled_by_classic_vsync_alone() {
 /// picks all three on `Track Creation` and `Team Selection`
 /// (`docs/ui/selection-screens.md`), so its RACE page keeps MODE, SPEED
 /// CLASS, AI DIFFICULTY, START and BACK and nothing that those screens
-/// already ask. Pure and HD have no such screens read yet and keep the rows.
+/// already ask. Pure's own `Track Selection`/`Team Selection` picked up the
+/// same treatment 2026-09-10, once `oag_pure::FRONT_END.race_box` was wired
+/// (`docs/formats/race-setup.md`); it never authored a VARIANT row to begin
+/// with (`RaceDefaults::has_team_variants`). HD has no such screens read yet
+/// and keeps all three rows.
 #[test]
 fn the_rows_the_selection_screens_pick_are_dropped_on_a_title_that_has_them() {
     let settings_on_race = |definition: &Definition| -> Vec<String> {
@@ -812,13 +816,26 @@ fn the_rows_the_selection_screens_pick_are_dropped_on_a_title_that_has_them() {
     let mut pure = built_in();
     pure.drop_rows_picked_on_screen(oag_pure::TITLE);
     let kept = settings_on_race(&pure);
-    for stays in ["race.team", "race.track"] {
+    for gone in ["race.team", "race.track"] {
+        assert!(
+            !kept.contains(&gone.to_string()),
+            "{gone} stays on Pure: {kept:?}"
+        );
+    }
+    for stays in ["race.mode", "race.class"] {
         assert!(
             kept.contains(&stays.to_string()),
             "{stays} dropped on Pure: {kept:?}"
         );
     }
+
     let mut hd = built_in();
     hd.drop_rows_picked_on_screen(oag_hd::TITLE);
-    assert!(settings_on_race(&hd).contains(&"race.variant".to_string()));
+    for stays in ["race.team", "race.track", "race.variant"] {
+        assert!(
+            settings_on_race(&hd).contains(&stays.to_string()),
+            "{stays} dropped on HD: {:?}",
+            settings_on_race(&hd)
+        );
+    }
 }

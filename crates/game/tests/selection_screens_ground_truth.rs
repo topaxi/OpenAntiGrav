@@ -391,3 +391,39 @@ fn the_ps2_pressing_reads_the_same_screens_on_its_own_grid() {
     .expect("the Zone chain is in the same file");
     assert_eq!(zone.at(0.0).name, "Zone");
 }
+
+/// Pure: same definition file name as Pulse's, different screen name for the
+/// track picker (`Track Selection`, not `Track Creation`), and a different
+/// preview-mesh convention - confirmed live in PPSSPP (2026-09-10, see
+/// `docs/formats/race-setup.md`) to be a real per-entity 3D preview on both
+/// screens, not the "unresolved"/"no preview" reading an earlier pass landed
+/// on from static code reading alone.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn pure_reads_its_own_screen_name_and_preview_convention() {
+    let Some(path) = oag_testdata::image("data/images/pure-psp-eu.chd") else {
+        return;
+    };
+    let shell = shell(&path);
+    let track = shell.track_select.as_ref().expect("Track Selection reads");
+    let ship = shell.ship_select.as_ref().expect("Team Selection reads");
+    assert_eq!(track.title, "Track Selection");
+    assert_eq!(ship.title, "Team Selection");
+
+    let mut archives =
+        oag_assets::Archives::open(&path.to_string_lossy(), oag_pure::TITLE).expect("opens");
+    // The full racing track, not a small FE-only ribbon like Pulse's -
+    // Pure ships no `<location>\FE\forward.vex` equivalent at all.
+    let blob = archives
+        .read_name(r"Data\Environments\01_Vineta_K\track.vex")
+        .expect("the track mesh resolves");
+    let track_model = oag_render::mesh::build("track", &blob).expect("it decodes");
+    assert!(!track_model.vertices.is_empty());
+    // The in-race hull, reused for the picker rather than a dedicated
+    // `_FE.vex` - `crate::livery`'s own file, loaded a second time here.
+    let blob = archives
+        .read_name(r"Data\Ships\Feisar\Ship.vex")
+        .expect("the hull resolves");
+    let hull = oag_render::mesh::build("hull", &blob).expect("it decodes");
+    assert!(!hull.vertices.is_empty());
+}

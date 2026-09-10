@@ -142,10 +142,16 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     // `frontend::states::FE_SCREEN`'s own doc and
     // `docs/formats/pure-status.md`.
     menu_frame: Some(frontend::states::FE_SCREEN),
-    // Pure's race box is a chain of screens (`Class Selection`, ...) whose
-    // definition files this build has not read - see
-    // `docs/formats/race-setup.md`'s Pure section.
-    race_box: None,
+    // Pure's race box is a chain of screens (`Class Selection`, `League
+    // Selection`, `Tournament Selection`, `Track Selection`,
+    // `Team Selection`, ...) authored in one file, read 2026-09-10 - see
+    // `docs/formats/race-setup.md`'s Pure section. Only `Track Selection`
+    // and `Team Selection` map onto `oag_ui::picker::Kind` and are wired as
+    // pickers here, the same two screens Pulse's own race box authors;
+    // `Class Selection`/`League Selection`/`Tournament Selection` are not -
+    // this build's RACE page settles mode/class the way it already does on
+    // Pulse.
+    race_box: Some(names::RACE_BOX_DEFINITION),
 };
 
 pub mod frontend;
@@ -259,6 +265,19 @@ pub mod names {
     /// match" is a measurement worth being able to see rather than an
     /// arrangement to depend on.
     pub const FRONTEND_ROOT: &str = r"Data\Plugins\PI001\GUI\Skin.xml";
+
+    /// The race box's own definition: `Class Selection`, `League Selection`,
+    /// `Tournament Selection`, `Track Selection`, `Zone Track Selection` and
+    /// `Team Selection`, all in one file.
+    ///
+    /// **The same relative path Pulse's own race box uses**, read directly off
+    /// `pure-psp-eu.chd` (`Data\Plugins\PI001\GUI\Skin.xml`'s own `LoadXML`
+    /// list names it, not a localised entry) - confirmed 2026-09-10, not
+    /// assumed from the name matching. See `docs/formats/race-setup.md`'s
+    /// "Pure differs in shape, not only in value" section for what the file
+    /// holds and [`oag_title::FrontEnd::race_box`] for why the path lives here
+    /// rather than being found through the full `LoadXML` list at boot.
+    pub const RACE_BOX_DEFINITION: &str = r"Data\Plugins\PI001\GUI\Selection_Definition.xml";
 
     /// The game plugin's own definition.
     ///

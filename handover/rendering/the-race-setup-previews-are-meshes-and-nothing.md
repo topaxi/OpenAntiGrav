@@ -34,36 +34,63 @@ assumed. See the docs page for the full evidence and the confidence scores.
 | Pulse PSP | `<location>\FE\forward.vex` / `reverse.vex` | `<team>\<variant>_FE.vex` |
 | Pulse PS2 | same names, own geometry | same names, own geometry |
 | HD / Fury | `<Model name="TrackModel">` | `<Model name="ShipModel">` |
-| Pure | unresolved | call site found 2026-09-08, camera/wiring still open |
+| Pure | `<location>\track.vex` - confirmed rendered live 2026-09-10, composer not located | `<location>\Ship.vex` - same |
+
+**Both Pure rows are "confirmed rendered, composer not located", not
+"resolved" the way Pulse's rows are** - a PPSSPP capture (2026-09-10) proved
+both screens draw a real per-entity 3D preview, but neither
+`TeamSelection_ApplySelection` nor `TrackSelection_ApplySelection`
+(`docs/ghidra/functions/psp-pure-eu/race-box-screens.md`) composes the
+*default* path in its own decompiled body, and a live `sceIoOpen` breakpoint
+swept nothing when changing selection (assets stream from an already-open
+archive). `<location>\Ship.vex` / `<location>\track.vex` are wired because
+they are the only per-entity files that exist on disc and visually match -
+confidence ~70, evidenced by existence-plus-appearance rather than by a
+located call site.
 
 ## Open
 
-- **Nothing in this build draws either preview.** `assets/ui/menu.toml`'s
-  `race` page has no preview at all, and neither does `remix`.
-- **Pure's craft preview call site is found, 2026-09-08** (spun off a
-  `wipeout-pure-races-on-pulses-physics-and-what.md` session that landed on it
-  while reading `psp-pure-eu`): `get_xrefs_to 0x08a76654` (the `%s\Phantom.vex`
-  copy beside `%s\VR\Phantom.vex` at `0x08a76664`) returns one caller,
-  `FUN_08951bd0`. It calls `Screen_FindElementByPath` (the same helper
-  `race-box-screens.md` already names on Pulse), matches the selection against
-  a list by `strcasecmp` on a `+0x7c` field, then composes `%s\VR\Phantom.vex`
-  or `%s\Phantom.vex` from `*(matched_record + 0x9c)` gated on two byte flags
-  on the *screen* object itself (`+0xe1`, `+0xe2`) - not on the craft's speed
-  class. **`+0x9c` being the team `location` string is inferred by the same
-  `+0x7c`/`+0x9c` field-pair pattern
-  `wipeout-pure-races-on-pulses-physics-and-what.md`'s session found on the
-  in-race side, not independently confirmed here with `read_memory`** -
-  confidence 65 pending that. If the file the screen composes doesn't resolve,
-  it falls back to unlock/livery UI (marks a `Livery` element's flags), not to
-  `Ship.vex` - a different fallback than the in-race loader
+- **Both previews now draw, on Pulse and on Pure**, through
+  `oag_ui::picker`/`oag_game::picker_stage` - `assets/ui/menu.toml`'s `race`
+  page still has none, and neither does `remix`, but that is a separate
+  screen from the pickers this thread is about.
+- **Pure's craft preview call site (`0x08951bd0`,
+  `TeamSelection_ApplySelection`) is fully decompiled, 2026-09-10** - see
+  [`race-box-screens.md`](../../docs/ghidra/functions/psp-pure-eu/race-box-screens.md).
+  It composes `%s\VR\Phantom.vex` or `%s\Phantom.vex` from
+  `*(matched_record + 0x9c)`, gated on two flags on the *screen* object
+  (`+0xe1`, `+0xe2`). **This session traced where those two flags come from**
+  (`0x08951e58`, the screen's own list-refresh routine): a
+  `"Championship"`-named record's tier byte compared against `3`, plus
+  multiplayer/tournament-permission lookups - **not the `Class` global at
+  all**, which that function never reads. So the earlier "not on the craft's
+  speed class" note was right, and the likelier reading is now "is
+  Phantom-class content available to this profile in this context", not
+  "is Phantom the selected class" - still confidence 60, still not settled
+  precisely, and still not wired. If the file the screen composes doesn't
+  resolve, it falls back to unlock/livery UI (marks a `Livery` element's
+  flags), not to `Ship.vex` - a different fallback than the in-race loader
   (`ship-models.md`) uses. **This is a different function from the in-race
   model loader** (`FUN_08927dac`/`FUN_08927694`, see that thread) - two
   separate Phantom-selection code paths, one per screen/context, not one
-  shared mechanism. Full decompile is not yet written up on any docs page -
-  re-run `get_xrefs_to 0x08a76654` on `psp-pure-eu` then `decompile_function`
-  on the one caller it returns to reproduce it, settle the `+0x9c` question
-  above, and write it up before wiring anything. For the track preview,
-  nothing was found at all.
+  shared mechanism.
+- **Neither `ApplySelection` override composes the *default* (non-Phantom)
+  path**, on either screen, on Pure. Both end by calling a shared base method
+  (`0x088b5700`) that turned out, on decompile, to be generic child-load-
+  progress bookkeeping with no file composition in it either. The actual
+  loader is one level further down - most likely triggered by the
+  selection-changed notification each override sends to the matched record
+  object, handled by a third class (the list record, not the screen) that
+  was not located. A live `sceIoOpen` breakpoint sweep across a
+  `down`-triggered selection change found no hits (assets stream from an
+  already-open archive, not a discrete per-file open), so this needs a
+  breakpoint on the archive's own read primitive to close, not attempted.
+- **The track preview is confirmed real by PPSSPP capture, 2026-09-10**,
+  correcting this thread's own working assumption from earlier in that same
+  session (a decompile of `TrackSelection_ApplySelection` alone, with no
+  capture yet, read as "nothing loads here" - true of that one function,
+  not true of the screen). See `docs/formats/race-setup.md`'s "Captured live
+  in PPSSPP, 2026-09-10 (Pure)" for the screenshot description.
 - **What camera the originals frame these meshes with is still unmeasured.**
   HD states its own (`OriginX="1220" OriginY="412" nearZ="1.0" z="-24.0"
   RotX="0.4" RotY="-0.5"` on `ShipModel`); the two PSP titles author no
@@ -85,21 +112,31 @@ assumed. See the docs page for the full evidence and the confidence scores.
 
 ## Next Steps
 
-1. **Decode one and look at it.** `oag-view` already opens a `.vex`:
-   `just view 'data/images/pulse-psp-usa.chd:PSP_GAME/USRDIR/Data.wad' --mesh 'Data\Environments\16_Track\FE\forward.vex' --screenshot /tmp/fe-fwd.png`
-   (single backslashes are correct when running `oag-wad`/`oag-view` through
-   cargo directly; `just` eats one layer and needs them doubled). That answers
-   "what is this mesh" in one command and is the cheapest next action here.
-2. Do the same for `Data\Ships\Assegai\ship_FE.vex`, and check whether
-   `Skin_ApplyToModel`'s four-slot texture swap
-   (`docs/ghidra/functions/psp-pulse-usa/ship-skin.md`) applies to it as it
-   does to the in-race hull. If it does, the livery cycler and the preview are
-   one mechanism.
-3. **Partly done, 2026-09-08**: the function referencing `0x08a76654`
-   (`FUN_08951bd0` on `psp-pure-eu`) is found and decompiled - see the Open
-   item above for what it shows and what's still unsettled (the `+0x9c` field
-   identity, a docs page). A PPSSPP capture of `Team Selection`
-   (`docs/reverse-engineering/ppsspp-debugger.md`) is still the cheaper way to
-   settle the *track* preview, which this session did not touch.
-4. Only then wire anything. A preview needs a camera, and the camera is the
-   part that is not yet measured on the PSP titles.
+1. **Done.** Both pickers are wired on Pure, reusing the same
+   `oag_ui::picker`/`oag_game::picker_stage`/`oag_game::preview` machinery
+   Pulse's do, with `<location>\Ship.vex` / `<location>\track.vex` as the
+   preview convention and the same `orbit_for` framing Pulse's screens use
+   (chosen, not measured, on both titles alike - see that function's own doc
+   comment).
+2. **Camera framing is still unmeasured on every PSP title**, Pure included
+   - `orbit_for`'s framing is this project's own pick, not the original's.
+   Settling it needs the same kind of live trace this session tried for the
+   mesh path and did not land (a breakpoint on whatever sets up the
+   preview-scene camera, not attempted).
+3. Find the record class that owns the mesh-loading virtual (see the Open
+   item above) to replace the existence-plus-appearance evidence for
+   `Ship.vex`/`track.vex` with a located composer. A breakpoint on the
+   archive's read primitive rather than `sceIoOpen` is the next thing to try,
+   not a re-read of the two `ApplySelection` overrides - those are fully
+   decompiled and confirmed not to hold it.
+4. Settle `TeamSelection_ApplySelection`'s Phantom-model trigger past
+   confidence 60: break at `0x08951bd0`, read `+0xe1`/`+0xe2` at the moment
+   the model would visibly change, on a save further into the campaign than
+   a fresh profile (a fresh profile may never make the flags true, which
+   would explain why nothing in this session's capture ever showed the
+   Phantom hull).
+5. Do the Pulse-side `Skin.vex` skin-swap check this list used to open with:
+   whether `Skin_ApplyToModel`'s four-slot texture swap
+   (`docs/ghidra/functions/psp-pulse-usa/ship-skin.md`) applies to
+   `ship_FE.vex` the way it does to the in-race hull. Still untouched by this
+   thread's Pure work.

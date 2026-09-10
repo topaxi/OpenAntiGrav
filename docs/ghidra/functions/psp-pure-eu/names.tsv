@@ -58,3 +58,12 @@
 # string-anchors.md for the fe:: class taxonomy the front-end XML is built
 # from, and for the open question of which hash keys the child lists.
 0x088b595c	function	Screen_FindElementByPath	84	string-anchors.md
+
+# Race box (2026-09-10). Decompiled directly, not corroborated from Pulse -
+# see race-box-screens.md for the vtable-slot comparison and what is still
+# open (the Phantom-model trigger, the record class that actually loads a
+# mesh). Confirmed live in PPSSPP that both screens draw a real per-entity
+# 3D preview, which the static reading alone had gotten wrong for
+# TrackSelection.
+0x08951bd0	function	TeamSelection_ApplySelection	78	race-box-screens.md
+0x08952fa4	function	TrackSelection_ApplySelection	78	race-box-screens.md

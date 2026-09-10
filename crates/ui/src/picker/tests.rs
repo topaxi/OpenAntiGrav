@@ -166,6 +166,25 @@ fn the_layout_sums_offsets_and_resolves_strings() {
     );
 }
 
+/// Pure names its track screen `Track Selection`, not Pulse's `Track
+/// Creation` - `Layout::read` has to find either, since which name a title
+/// uses is a fact about the title, not a guess. See
+/// `docs/formats/race-setup.md`.
+#[test]
+fn a_track_screen_named_track_selection_still_reads() {
+    let xml = XML.replace("Track Creation", "Track Selection");
+    let screens = Screens::from_xml(&xml);
+    let layout = Layout::read(
+        &screens,
+        Kind::Track,
+        &strings(),
+        FaceScales::default(),
+        PSP,
+    )
+    .unwrap();
+    assert_eq!(layout.panel, [290.0, 26.0, 170.0, 200.0]);
+}
+
 #[test]
 fn the_body_names_the_selected_entry_and_counts_the_list() {
     let screens = Screens::from_xml(XML);
