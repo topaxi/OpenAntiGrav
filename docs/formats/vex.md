@@ -900,8 +900,15 @@ it sounds like it should.** The same instrument, rebuilt as
 one: `01_Track` 85,249 -> 85,102 lit over four frames with 1,298 pixels
 differing, `16_Track` 522,427 -> 522,342 with 6,170. Nothing structural leaves
 the picture, and the lit count moves *up* at two of the eight framings -
-because a cutout draw returns alpha `1.0` and writes depth, so an alpha-3 texel
-that cleared `1/255` was painted solid and occluded what was behind it.
+because a cutout draw returns alpha `1.0` and writes depth, so a texel that
+cleared `1/255` was painted solid and occluded what was behind it.
+
+**All of that delta is the `0x7f` bucket, which discards no texels at all**;
+isolating it reproduces both numbers exactly. The census's texel counts are
+about the decoded image, and the shader samples it filtered and mipped - a
+binary cutout's edge reaches the alpha test as a ramp, so `0x7f` cuts it at
+half coverage where `1/255` cut at any, and a leaf tightens by about a pixel.
+Do not quote a texel count as a claim about the picture.
 
 **Geometry is never indexed** — the index argument to `sceGuDrawArray` is always
 zero. The material array is reached through `mesh+0x5c` at runtime, stride 0x14,

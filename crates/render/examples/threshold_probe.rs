@@ -74,6 +74,19 @@ fn main() -> anyhow::Result<()> {
     // looked at rather than only counted.
     let png_prefix = args.next();
 
+    // A third variant, to separate the two buckets' own costs: the strict
+    // `0x7f` batches keep their reference, the permissive `0x10` ones go back
+    // to the flat threshold. Rendered against `flat`, this isolates what the
+    // strict bucket alone does to the picture - which a texel census cannot
+    // answer, because the sampler filters and mips a binary-alpha cutout into
+    // intermediate alphas at every edge.
+    let mut strict_only = recovered.clone();
+    for draw in &mut strict_only.alpha_tested_draws {
+        if draw.alpha_test_ref.is_some_and(|r| r < 0.25) {
+            draw.alpha_test_ref = None;
+        }
+    }
+
     let mut total_before = 0usize;
     let mut total_after = 0usize;
     let mut total_changed = 0usize;
@@ -103,10 +116,31 @@ fn main() -> anyhow::Result<()> {
             .zip(after.as_chunks::<4>().0)
             .filter(|(a, b)| a != b)
             .count();
+        let strict = oag_render::mesh_render::capture_pixels_from(
+            &strict_only,
+            SIZE,
+            SIZE,
+            yaw,
+            0.35,
+            Anisotropy::default(),
+            0.0,
+        )?;
+        let strict_changed = before
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .zip(strict.as_chunks::<4>().0)
+            .filter(|(a, b)| a != b)
+            .count();
         let (lit_before, lit_after) = (lit(&before), lit(&after));
+        let lit_strict = lit(&strict);
         println!(
             "  yaw {yaw:.2}: lit {lit_before} -> {lit_after} ({:+}), {changed} pixel(s) differ",
             lit_after as i64 - lit_before as i64
+        );
+        println!(
+            "            0x7f bucket alone: lit {lit_strict} ({:+}), {strict_changed} pixel(s) differ",
+            lit_strict as i64 - lit_before as i64
         );
         if let Some(prefix) = &png_prefix {
             for (label, pixels) in [("before", &before), ("after", &after)] {

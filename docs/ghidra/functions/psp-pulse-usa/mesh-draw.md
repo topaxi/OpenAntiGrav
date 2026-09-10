@@ -2135,12 +2135,28 @@ old flat `1/255`:
 circuit at every angle - and the lit count moves *up* at two of the eight
 framings, which is the signature the change predicts rather than a
 contradiction of it: the cutout pipeline returns alpha `1.0` and writes depth,
-so a texel at alpha 3 that cleared `1/255` was painted **solid** and occluded
-what was behind it. Discarding it reveals brighter geometry.
+so a texel that cleared `1/255` was painted **solid** and occluded what was
+behind it. Discarding it reveals brighter geometry.
 
-Pure's `Z3_whiteblue_cloud_GLOW.tga` is the clean example: a uniform alpha of 3
-across 4,096 texels on 13 batches, drawn as solid cloud until now, discarded
-outright by the reference the file itself asks for.
+**Which bucket the delta comes from is worth stating, because the texel census
+predicts the wrong one.** Rendering the `0x7f` batches alone against the old
+threshold reproduces the delta *exactly* - 1,298 and 6,170, the same numbers -
+so all of it is the bucket that discards **zero** texels of the decoded
+texture. There is no conflict: the shader samples that texture filtered and
+mipped, a `{0, 255}` cutout edge arrives at the alpha test as a ramp, and
+`0x7f` cuts it at half coverage where `1/255` cut it at any. A leaf tightens by
+about a pixel. The original's own sampler filters the same way, which is
+presumably why the strict reference is authored on exactly this kind of
+texture.
+
+So **the census's "the `0x7f` bucket discards no texels" is a statement about
+the decoded image and not about the picture**, and is flagged as such where it
+is asserted. The `0x10` bucket's 431,576 texels are alpha `1..=16` on surfaces
+too small at whole-circuit framing to move a pixel there - but they are the
+half that can occlude, and Pure's `Z3_whiteblue_cloud_GLOW.tga` is the case
+with no ambiguity: a uniform alpha of 3 across 4,096 texels on 13 batches,
+drawn as solid cloud until now, discarded outright by the reference the file
+itself asks for.
 
 ### Still open here
 

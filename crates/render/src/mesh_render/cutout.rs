@@ -20,20 +20,40 @@
 //! # What the reference costs, measured
 //!
 //! It is a real change and not a formality, and it moves in the direction where
-//! things *vanish*, so the census is in
-//! `crates/vex/tests/alpha_test_reference_ground_truth.rs` and the numbers are
-//! these. On PSP Pulse, the 1,500 batches asking for `0x7f` are binary
-//! cutouts (leaves, crowds, railings) and the strictest reference discards
-//! **zero** of their texels; the 7,823 asking for `0x10` lose 431,576 of
-//! 17,005,223 (2.54 %), all of them alpha `1..=16`.
+//! things *vanish*, so it is measured twice - once in texels and once in
+//! pixels, because the two answer different questions and one of them is
+//! misleading on its own.
 //!
-//! **Those are texels this project was drawing fully opaque.** A cutout draw
-//! goes through `fs_main_alpha_test`, which returns alpha `1.0` and writes
-//! depth, so a texel at alpha 3 that clears the old `1/255` is not painted
-//! faintly - it is painted solid *and* occludes what is behind it. Pure's
-//! `Z3_whiteblue_cloud_GLOW.tga` is the clearest case: a uniform alpha of 3
-//! across 4,096 texels, 13 batches, drawn as solid cloud until now and
-//! discarded outright by the reference the file itself asks for.
+//! **In texels** (`crates/vex/tests/alpha_test_reference_ground_truth.rs`), on
+//! PSP Pulse: the 1,500 batches asking for `0x7f` are binary cutouts - leaves,
+//! crowds, railings - and the strictest reference discards **zero** of their
+//! texels; the 7,823 asking for `0x10` lose 431,576 of 17,005,223 (2.54 %),
+//! all alpha `1..=16`.
+//!
+//! **In pixels** (`crates/render/examples/threshold_probe.rs`, four yaws at
+//! 1024x1024, each bucket isolated), the picture is the other way round:
+//!
+//! | | `01_Track` | `16_Track` |
+//! | --- | ---: | ---: |
+//! | pixels differing, both buckets | 1,298 | 6,170 |
+//! | pixels differing, `0x7f` alone | 1,298 | 6,170 |
+//!
+//! **Every visible pixel of the change comes from the bucket that discards no
+//! texels at all**, and that is not a contradiction: the shader samples the
+//! texture *filtered and mipped*, so a `{0, 255}` edge arrives at the alpha
+//! test as a ramp, and `0x7f` cuts it at half coverage where `1/255` cut it at
+//! any. A leaf's silhouette tightens by about a pixel. The original's own
+//! sampler filters the same way, which is why the strict reference is
+//! authored on exactly this kind of texture.
+//!
+//! The `0x10` bucket's 431,576 texels are alpha `1..=16` on surfaces small
+//! enough at whole-circuit framing to move no pixel there - but they are not
+//! harmless, because a cutout draw goes through `fs_main_alpha_test`, which
+//! returns alpha `1.0` and **writes depth**. A texel at alpha 3 that cleared
+//! `1/255` was not painted faintly; it was painted solid and occluded what was
+//! behind it. Pure's `Z3_whiteblue_cloud_GLOW.tga` is the case with no
+//! ambiguity: uniform alpha 3 across 4,096 texels on 13 batches, drawn as
+//! solid cloud until now.
 
 use crate::mesh::DrawCall;
 

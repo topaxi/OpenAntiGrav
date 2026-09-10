@@ -29,9 +29,17 @@
 //!    `crates/render/tests/pad_alpha_test_ground_truth.rs` renders and catches.
 //! 2. **Nothing vanishes.** No cutout batch's texture is discarded whole by
 //!    the reference the batch itself asks for, on Pulse either platform.
-//! 3. **The `0x7f` bucket is inert on Pulse and near-inert on Pure.** Its
-//!    textures are binary cutouts - leaves, crowds, railings - so the strictest
-//!    of the three recovered references removes nothing a player can see.
+//! 3. **The `0x7f` bucket is inert in *texel* space, and that is not the same
+//!    as inert on screen.** Its textures are binary cutouts - leaves, crowds,
+//!    railings - so `> 0x7f` and `> 0` keep exactly the same texels of the
+//!    decoded image. The sampler does not read the decoded image: it filters
+//!    and mips it, which turns a `{0, 255}` edge into intermediate alphas, and
+//!    `0x7f` moves the cut there from "any coverage" to "half coverage". So a
+//!    leaf's silhouette tightens by a pixel or so. That is what the original's
+//!    own filtered sampler does too, and it is the whole of the measured
+//!    on-screen delta - see `crates/render/examples/threshold_probe.rs`, which
+//!    isolates the two buckets. **This assertion is a texel count and must not
+//!    be quoted as a claim about the picture.**
 //!
 //! The counts are frozen rather than merely bounded because they are what a
 //! future reading has to move *deliberately*: a parser change that silently
@@ -262,7 +270,7 @@ fn psp_pure_authors_the_discriminating_third_pattern_on_its_speedup_pads() {
     assert_eq!(
         c.texels.get(&0x7f),
         Some(&(2_751_124, 5_323)),
-        "0.19% - the strict bucket is near-inert on Pure too"
+        "0.19% of texels - see the module docs on what this does and does not say"
     );
     assert_eq!(
         c.vanishing,
