@@ -442,10 +442,25 @@ texture: slot site `0x4c4` →
 The per-emitter parameter values themselves are shipped tuning data; the
 table above transcribes the recovered
 *behavioural* constants the same way every other recovered constant in this
-project is recorded, but the 256-entry colour tables stay out per
+project is recorded, but the 256-entry colour tables stay out of both the
+table and the repository per
 [ADR-0006](../architecture/adr/0006-no-copyrighted-content.md) - the
-committed port samples their measured endpoints, and loading the real
-tables from the user's own disc at runtime is the recorded follow-up.
+"orange→ember" and "yellow→orange" columns above name only the two
+endpoints for a human reader. **The committed port reads all 256 of each
+emitter's own entries from the user's disc at runtime** (`crates/vex/src/pob.rs`,
+`+0xc4` below), the same as every other field in this table; nothing is
+committed and nothing is sampled down to two colours any more. This closes
+what used to be the recorded follow-up here (until 2026-08-12, the port
+really did sample only the measured endpoints, in
+`oag_render::sparks::Colour::Gradient`) - see
+`crates/render/tests/psys_ground_truth.rs`'s
+`the_collision_spark_palette_is_read_from_disc_not_two_endpoints` and its
+two neighbours for what the endpoints-only version got wrong: the smoke
+ramp is not linear (three quarters of its `RandomEntry` population spawn
+some shade of grey ember, not the uniform orange-to-grey mix two endpoints
+imply) and the bright spark's hue is not monotonic (it brightens toward
+yellow partway through its life before dimming to deep orange, which no
+two-point gradient can reproduce).
 
 Confidence **90** for the sibling-tree mechanism and the four emitters'
 schedules (file bytes plus two independent live captures agree); **85** for

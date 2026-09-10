@@ -181,6 +181,152 @@ fn the_collision_spark_effect_matches_the_values_it_replaced() {
     assert_eq!(embers.size.keys.len(), 6);
 }
 
+/// The collision spark's own 256-entry colour tables, against the
+/// two-endpoint approximation `oag_render::sparks` carried until
+/// 2026-08-12 and `docs/formats/pob.md` kept describing after that date.
+///
+/// # Why this exists
+///
+/// [`Effect::parse`] has read every entry of every emitter's real table off
+/// the disc since [`the_collision_spark_effect_matches_the_values_it_replaced`]
+/// landed - `crates/vex/src/pob.rs` decodes `+0xc4`'s 256 `u32`s, and
+/// `EmitterSpec::from_record` normalises all 256 by [`ColourScale`], not
+/// just two of them. What was missing was a test that looked past entry `0`
+/// and entry `255` to say so: the smoke and bright-spark endpoints below are
+/// exactly the ones the previous `Colour::Gradient` constant held, so a test
+/// that pinned only those two would pass whether or not the other 254 ever
+/// loaded.
+///
+/// # What the two endpoints alone get wrong
+///
+/// Both failures are visible, not rounding: they change what a player's eye
+/// actually samples.
+///
+/// - **The smoke ramp is not linear.** [`sparks::DAMAGE_EFFECT`]'s first
+///   emitter is [`ColourMode::RandomEntry`] - one of the 256 entries, drawn
+///   uniformly by *index* at spawn (`rng.next_u32() & 0xff`, see
+///   `crate::psys::System::spawn` in `oag_render`). A caller reasoning from
+///   two endpoints alone would assume that uniform index draw also puts a
+///   particle's *colour* somewhere uniform between orange and ember grey.
+///   It does not: the real table drops most of the way to grey in its first
+///   quarter and spends the remaining three quarters barely dimming further
+///   (`smoke_ramp_is_not_linear_between_its_endpoints`), so three particles
+///   in four spawn some shade of grey ember and only one in four spawns
+///   anywhere near the bright orange the two endpoints alone would suggest
+///   is half the population.
+/// - **The bright spark's hue is not monotonic.** [`sparks::DAMAGE_EFFECT`]'s
+///   second emitter runs `(255,194,29)` at entry `0` to `(255,123,0)` at
+///   entry `255` - both exactly what the retired `Colour::Gradient` held -
+///   but the green channel does not fall monotonically between them: it
+///   *rises* to `212` (brighter, more yellow, than either endpoint) around
+///   entry `107` before falling back through orange to the darker endpoint
+///   (`bright_spark_hue_is_not_monotonic_between_its_endpoints`). A
+///   two-point lerp can only ever dim toward the second colour; the real
+///   burst brightens toward yellow for roughly its first two-fifths first.
+///
+/// `bits`, the third emitter, is the control: its table really is one
+/// constant white RGBA(1,1,1,1) end to end, matching the retired
+/// `Colour::Constant([1.0; 3])` exactly - so this test is not "the old
+/// approximation was always wrong", only that two of its four colour
+/// sources hid a real curve behind two correctly-read endpoints.
+#[test]
+#[ignore = "needs data/images/pulse-psp-usa.chd"]
+fn the_collision_spark_palette_is_read_from_disc_not_two_endpoints() {
+    let Some(mut archive) = archive() else {
+        return;
+    };
+    let effect = effect(&mut archive, sparks::DAMAGE_EFFECT);
+
+    let smoke = &effect.emitters[0].palette;
+    let bright = &effect.emitters[1].palette;
+    let bits = &effect.emitters[2].palette;
+
+    // The endpoints themselves: exactly what `Colour::Gradient` held before
+    // 2026-08-12 (`git show 4ece5e9c:crates/render/src/sparks.rs`), so the
+    // two-point approximation was not a misread - only an undersampling.
+    assert!(close(smoke[0][0], 181.0 / 255.0));
+    assert!(close(smoke[0][1], 134.0 / 255.0));
+    assert!(close(smoke[0][2], 87.0 / 255.0));
+    assert!(close(smoke[255][0], 48.0 / 255.0));
+    assert!(close(smoke[255][1], 46.0 / 255.0));
+    assert!(close(smoke[255][2], 46.0 / 255.0));
+
+    assert!(close(bright[0][0], 1.0));
+    assert!(close(bright[0][1], 194.0 / 255.0));
+    assert!(close(bright[0][2], 29.0 / 255.0));
+    assert!(close(bright[255][0], 1.0));
+    assert!(close(bright[255][1], 123.0 / 255.0));
+    assert!(close(bright[255][2], 0.0));
+
+    // The control: really constant, not merely close to it.
+    for entry in bits.iter() {
+        assert_eq!(*entry, [1.0, 1.0, 1.0, 1.0]);
+    }
+}
+
+/// See [`the_collision_spark_palette_is_read_from_disc_not_two_endpoints`]'s
+/// doc comment for why this is a visible difference, not a rounding one.
+#[test]
+#[ignore = "needs data/images/pulse-psp-usa.chd"]
+fn smoke_ramp_is_not_linear_between_its_endpoints() {
+    let Some(mut archive) = archive() else {
+        return;
+    };
+    let effect = effect(&mut archive, sparks::DAMAGE_EFFECT);
+    let smoke = &effect.emitters[0].palette;
+
+    let (r0, r255) = (smoke[0][0], smoke[255][0]);
+    let linear_at = |index: usize| r0 + (r255 - r0) * (index as f32 / 255.0);
+
+    // A quarter of the way by index - a quarter of the RandomEntry
+    // population - the real table already reads as almost pure grey, while
+    // a straight line from the two endpoints is still two-thirds of the way
+    // to orange. Real 0.349 against linear's 0.579: an 0.23 gap on a 0..=1
+    // channel is a different colour, not a rounding error.
+    let real = smoke[64][0];
+    let linear = linear_at(64);
+    assert!(
+        real < 0.40,
+        "real r at 1/4 should already read as grey: {real}"
+    );
+    assert!(
+        linear - real > 0.15,
+        "the linear model should overshoot by a wide margin here: real {real}, linear {linear}"
+    );
+}
+
+/// See [`the_collision_spark_palette_is_read_from_disc_not_two_endpoints`]'s
+/// doc comment for why this is a visible difference, not a rounding one.
+#[test]
+#[ignore = "needs data/images/pulse-psp-usa.chd"]
+fn bright_spark_hue_is_not_monotonic_between_its_endpoints() {
+    let Some(mut archive) = archive() else {
+        return;
+    };
+    let effect = effect(&mut archive, sparks::DAMAGE_EFFECT);
+    let bright = &effect.emitters[1].palette;
+
+    let (g0, g255) = (bright[0][1], bright[255][1]);
+    // Both endpoints are already the brightest and darkest a monotonic ramp
+    // could produce; a real interior peak brighter than both is proof the
+    // curve is not one.
+    let peak = bright.iter().map(|entry| entry[1]).fold(f32::MIN, f32::max);
+    assert!(
+        peak > g0.max(g255) + 0.03,
+        "expected an interior peak clearly above both endpoints: peak {peak}, endpoints {g0}/{g255}"
+    );
+    // The peak sits inside the table, not at either end - roughly two
+    // fifths of the way through the RandomEntry population.
+    let peak_index = bright
+        .iter()
+        .position(|entry| entry[1] == peak)
+        .expect("the max we just computed came from this slice");
+    assert!(
+        (40..170).contains(&peak_index),
+        "expected the hue peak in the table's interior, found it at {peak_index}"
+    );
+}
+
 #[test]
 #[ignore = "needs data/images/pulse-psp-usa.chd"]
 fn a_collision_burst_fills_the_pool_and_both_blend_classes() {
