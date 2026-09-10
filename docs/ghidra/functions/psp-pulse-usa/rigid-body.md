@@ -601,6 +601,78 @@ that [ps2-pulse-eu/craft-update.md](../ps2-pulse-eu/craft-update.md) records - s
 relative-velocity-at-the-point construction, same `-(1 + e)` numerator, same
 invMass denominator, same deferred friction using the contact's `+0x34`.
 
+### Checked 2026-09-10: the hover probe is the third point-velocity site, and it also matches
+
+Three call sites in this engine build a rigid-body point velocity and hand it to
+`Body::velocity_at`'s textbook `v + omega x r`: `Body_ResolveContact` above,
+`Body_ResolveContactPair` (`0x0884ef30`), and `crates/physics/src/hover.rs`'s
+hover probe (`Body::velocity_at`, called at `hover.rs:786`, feeding the damper's
+`normal_velocity`). The first two were checked this week against the
+negated-body-local reading of `body+0x150` that
+[`scripts/omega-column-reading-fit.py`](../../../physics/angular-velocity-column.md)
+fits at a 0.0028-0.0332 rad/s median residual over four captures. The hover
+probe is the third and closes the set.
+
+It was already read once, independently of this week's threads, on 2026-07-28
+in `Ship_HoverTwoPoint` (`0x0884a658`) - see `engine.md`, "The damper's point
+velocity is the conventional `omega x r`" - and is reconfirmed here by
+re-disassembling `0x0884a954`-`0x0884aa28` live against the current Ghidra
+database; the bytes are unchanged from that read:
+
+```text
+0884a960  C300 = craft+0x120+0x10*i    ; the LOCAL probe offset r
+0884a968  C310 = body+0x150            ; -omega, body-local (0884a94c/50: a0 = *(craft+0x1cc)+0x150)
+0884a970  vcrsp.t C320,C300,C310       ; cross(r, -omega)
+0884a9b8  vtfm4.q C000,E100,C200       ; craft+0x80..0xb0 (E100) * that -> world
+0884a9d8  C400 = craft+0x190           ; the linear velocity
+0884a9f8  vadd.q C220,C200,C210        ; + linear velocity
+0884aa28  vdot.t S220,C200,C210        ; dot with the probe normal
+```
+
+`Ship_HoverTwoPoint` reads the transform through `craft+0x80..0xb0` and
+`craft+0x190`, not through the body pointer directly - so the frame and the
+velocity it uses are only the same ones `Body::velocity_at` uses if those
+craft fields really are the body's own, not a stale or reprocessed copy.
+**They are, checked directly rather than assumed**: `Ship_UpdateCraft`
+(`0x08849618`), which calls `Ship_HoverTwoPoint` later in the same tick,
+refreshes them a few instructions after stashing the body pointer at
+`craft+0x1cc` (`0x08849770`):
+
+```text
+088498b0  lv.q C400, 0x0(a0)      ; a0 = body+0x00           (row 0)
+088498b8  sv.q C400, 0x0(a1)      ; a1 = craft+0x80          craft+0x80  := body+0x00
+088498c4  lv.q C400, 0x10(a0)     ;      body+0x10           (row 1)
+088498c8  sv.q C400, 0x0(a2)      ; a2 = craft+0x90          craft+0x90  := body+0x10
+088498d4  lv.q C400, 0x20(a0)     ;      body+0x20           (row 2)
+088498d8  sv.q C400, 0x0(a2)      ; a2 = craft+0xa0          craft+0xa0  := body+0x20
+088498e4  lv.q C400, 0x30(a0)     ;      body+0x30           (position)
+088498e8  sv.q C400, 0x0(a2)      ; a2 = craft+0xb0          craft+0xb0  := body+0x30
+088498f8  lv.q C400, 0x0(a0)      ; a0 = body+0x140          (linear velocity)
+088498fc  sv.q C400, 0x0(a3)      ; a3 = craft+0x190         craft+0x190 := body+0x140
+```
+
+So `craft+0x80..0xb0` is the body's raw `+0x00..0x30` basis-plus-position - the
+same rows `Body_ResolveContact` reads directly off `body+0x00..0x30`, **not**
+the cached transpose at `+0xc0..0xf0` - and `craft+0x190` is exactly
+`body+0x140`, both refreshed this tick before the hover probe runs. Confidence
+**92**, same as `engine.md`'s existing "three body-axis copies" reading, which
+this extends to the two fields (`+0x80` and `+0x190`) that section's own table
+didn't cover.
+
+With that settled, `cross(r, -omega) == omega x r` by antisymmetry, and a pure
+rotation distributes over a cross product - `basis * (omega x r) ==
+(basis*omega) x (basis*r) == omega_world x r_world` - where `r_world` is
+exactly `hover.rs`'s `point - body.position`, since the probe's world point is
+built the same way (`body.position + body.orientation * local_offset`). So
+`Ship_HoverTwoPoint` computes `v + omega x r` at the probe, off the same body
+`Body::velocity_at` reads - textbook, and identical to the crate. Confidence
+**88** for the point-velocity shape itself, unchanged from the 2026-07-28
+read; this pass adds the field-provenance check above and changes nothing in
+`hover.rs`.
+
+All three sites that build a rigid-body point velocity now agree with
+`Body::velocity_at`. No code change follows from this entry.
+
 ### Why this is the missing `2.28 * fs`
 
 `Body_ApplyImpulseAtPoint` (`0x0884d64c`) opens with
