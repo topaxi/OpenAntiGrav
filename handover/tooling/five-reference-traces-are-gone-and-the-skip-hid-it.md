@@ -11,15 +11,14 @@ rather than fails.
 | `pad0-boost.csv` | **recovered from `vimes`**, tracked |
 | `talons-junction-standing-start.csv` | **recovered from `vimes`**, tracked |
 | `talons-junction-pitch-both-ways.csv` | **recaptured live, 2026-09-06**, tracked |
-| `talons-junction-time-trial-lap-omega.csv` | still missing |
-| `venom-straight.csv` | still missing |
+| `talons-junction-time-trial-lap-omega.csv` | **recovered, 2026-09-11**, tracked |
+| `venom-straight.csv` | **confirmed lost, 2026-09-11** |
 
 They were never deleted by a policy - `data/` is gitignored, so they only ever
-existed in whichever checkout captured them. **The maintainer has a second
-workstation and is checking it as of 2026-09-06**, so "gone" is the working
-assumption rather than an established fact; whichever way that lands, the five
-were one disk failure from being unrecoverable, which is the point ADR-0046
-answers.
+existed in whichever checkout captured them. **Update, 2026-09-11: all
+workstations have now been checked** (see the dated sections below for the
+outcome per file) - the five were one disk failure from being unrecoverable,
+which is the point ADR-0046 answers.
 
 [ADR-0046](../../docs/architecture/adr/0046-test-referenced-traces-are-tracked-in-git.md)
 fixes the recurrence: a trace a test names is now tracked in git, per file by
@@ -106,6 +105,69 @@ divergences past tick ~300 that `docs/physics/angular-velocity-column.md`
 already documents elsewhere - not a regression, and not this scenario's
 subject (it never leaves the start line).
 
+## Recovered, 2026-09-11
+
+`data/traces/talons-junction-time-trial-lap-omega.csv` appeared in the working
+tree, untracked (`.gitignore` already allowlists it per ADR-0046, so `git
+status` showed it as a plain new file rather than ignored). Its provenance -
+which workstation, which recapture run - was not recorded by whoever produced
+it; this thread only confirms what the file itself demonstrates.
+
+Header matches `crates/game/tests/maglock_ground_truth.rs`'s expectations
+exactly (`omega_x`, `right_x`/`up_x`/`fwd_x`, `pos_x`, `vel_x`, `dt`), 3,140
+data rows. Verified with `OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p
+oag-game --run-ignored all -E 'binary(maglock_ground_truth)'`: both tests
+pass, including `the_hold_reproduces_the_rotation_the_momentum_column_does_not`,
+which previously printed the skip message and returned `None` (this is the
+"one place in the workspace where `None` is still the honest answer" the test
+file's own doc comment names - it is no longer reached). Staged with `git add`;
+not yet committed.
+
+`venom-straight.csv` remains the only one of the six still missing.
+
+**This does not resolve the `## Open` doc-annotation question below - it
+adds to it.** `docs/physics/cornering-ground-truth.md` was itself corrected on
+2026-09-10 to say `talons-junction-time-trial-lap-omega.csv` "no longer exists
+under that name" (its tables were rebased onto `talons-junction-clean-lap.csv`
+instead). That statement is now stale in the other direction: the file exists
+again, under its original name, and the ground-truth test that names it is
+running instead of skipping. Nobody has checked whether the recovered bytes
+match what those sections' analysis was written against, or whether the
+tables should point back at it. Treat it as a distinct capture until someone
+verifies otherwise.
+
+## `venom-straight.csv` is confirmed lost, 2026-09-11
+
+The maintainer checked every workstation as of 2026-09-11: not present
+anywhere. This closes the "maintainer has a second workstation and is
+checking" line from the opening section - the check is done, and the file did
+not come back.
+
+**No live test currently names it**, so this loss does not skip or fail
+anything today: `yaw_authority_ground_truth.rs` moved off it in 2026-07-28
+(see the correction above), and nothing else in `crates/*/tests/` ever did.
+Its only remaining reference is the doc-comment example at the top of
+`crates/trace/src/main.rs` (`oag-trace show data/traces/venom-straight.csv`
+and two more lines like it), which now names a file that cannot exist again -
+not "missing", unrecoverable. That comment should point at a capture that is
+actually in the tree (`talons-junction-time-trial-lap.csv` is the obvious
+choice) rather than keep citing this one; not fixed here since it is
+docs-only and not this thread's main subject.
+
+**No recapture path exists either.** Unlike `talons-junction-pitch-both-ways.csv`,
+which came back live because its input script (`verification/scenarios/pitch-both-ways.inputs`)
+survived, nothing under `verification/scenarios/` reproduces a straight-line
+Venom run - checked directly, `2026-09-06`'s note above already found no
+matching `.inputs`. Recapturing it would mean reconstructing the scenario from
+scratch (team/class/track/inputs), not replaying a known recipe.
+
+With this, the six-capture table has a final shape: four tracked and present,
+`talons-junction-pitch-both-ways.csv` tracked as evidence for a doc comment
+rather than a live test, and `venom-straight.csv` gone for good with nothing
+depending on it. `.gitignore`'s allowlist still names it per ADR-0046 (that
+line is inert, not wrong - it just never matches a file); ADR-0046 itself is
+immutable so its own "missing" row for this file stays as written history.
+
 ## One of the six is not test-referenced, and ADR-0046's rule does not strictly cover it
 
 Established while recapturing, 2026-09-06. `talons-junction-pitch-both-ways.csv`
@@ -128,22 +190,35 @@ If the rule is ever restated, "a trace a test or a doc comment's evidence claim
 names" is the shape that matches practice. It is recorded here rather than
 edited into the ADR, which is immutable.
 
-**A grep over `crates/*/tests/` under-reports which traces are test-referenced**,
-because of those constructed paths - it puts `venom-straight.csv` at zero tests
-when two `yaw_authority_ground_truth` cases fail for its absence. Use a real run
-under `OAG_REQUIRE_GAME_DATA=1` to answer that question, not a grep.
+**A grep over `crates/*/tests/` under-reports which traces are test-referenced
+in general**, because of constructed paths like the `format!()` one
+`yaw_authority_ground_truth.rs` uses for `steer-left`/`-right`. That file used
+to be `venom-straight.csv`'s reason for counting as test-referenced too, but
+`8794b0f3` (2026-07-28, replacing `YAW_DRIVE_CALIBRATION` with the recovered
+`YAW_INVERSE_INERTIA`) moved it onto the `steer-left`/`-right` captures
+instead - checked directly, `rg venom crates/trace/tests/yaw_authority_ground_truth.rs`
+now matches nothing but a doc comment naming the scenario's team. So the
+grep-vs-real-run gap this paragraph originally warned about no longer applies
+to `venom-straight.csv` specifically; see the confirmed-lost section above for
+what does still name it. Use a real run under `OAG_REQUIRE_GAME_DATA=1` to
+answer this question for any other capture, not a grep.
 
 ## Open
 
-- **The docs assert captures this checkout cannot demonstrate.**
-  `docs/physics/cornering-ground-truth.md` states "That capture was taken" of
-  the `-omega` lap and `docs/physics/angular-velocity-column.md` builds an
-  argument on it. Both are honest about history and misleading about the
-  present. Whether to annotate them or leave them is a judgement call nobody
-  has made.
-- Which of the five are still *needed*, as opposed to named by a test that has
-  itself gone stale, has not been checked. Recapturing all five without asking
-  that first would be wasted work.
+- **The docs assert captures this checkout cannot demonstrate - and, for the
+  `-omega` lap, now assert the opposite of what the checkout has.**
+  `docs/physics/angular-velocity-column.md` still builds an argument on "that
+  capture was taken", while `docs/physics/cornering-ground-truth.md` was
+  corrected on 2026-09-10 to say the same file "no longer exists under that
+  name". As of the 2026-09-11 recovery above, it exists again and neither doc
+  has been reconciled against the recovered bytes. Whether to annotate them,
+  re-run the analysis against the recovered file, or leave them is a judgement
+  call nobody has made.
+- ~~Which of the five are still *needed*...~~ Resolved: all five are
+  accounted for. Four came back (`pad0-boost.csv`, `talons-junction-standing-start.csv`,
+  `talons-junction-pitch-both-ways.csv`, `talons-junction-time-trial-lap-omega.csv`),
+  one is confirmed permanently lost (`venom-straight.csv`, and nothing live
+  needs it - see above).
 
 ## Next Steps
 
@@ -151,11 +226,14 @@ under `OAG_REQUIRE_GAME_DATA=1` to answer that question, not a grep.
    makes absence impossible for a tracked trace, a missing one should break the
    build rather than reduce coverage quietly. This touches the ground-truth
    test helpers, so it wants a session that is not racing another member
-   through the same files.
-2. **Recapture, by the recipe in
-   [ppsspp-debugger.md](../../docs/reverse-engineering/ppsspp-debugger.md)** - the
-   same route that produced the sideshift capture. Take them one at a time and
-   commit each as it lands; `.gitignore` already names all six, so a recaptured
-   file is tracked the moment it appears.
-3. Decide the doc-annotation question in `## Open` above, ideally while
-   recapturing, since whoever does that will know which claims came back.
+   through the same files. `venom-straight.csv` is the one tracked-by-`.gitignore`
+   name this rule can never apply to - no test names it, so there is nothing
+   for the panic to guard.
+2. ~~Repoint `crates/trace/src/main.rs`'s doc-comment example off
+   `venom-straight.csv`~~ Done, 2026-09-11: now uses
+   `talons-junction-time-trial-lap.csv`, a capture actually in the tree.
+3. Decide the doc-annotation question in `## Open` above: reconcile
+   `docs/physics/cornering-ground-truth.md` and `angular-velocity-column.md`
+   against the recovered `-omega` capture.
+4. Commit `data/traces/talons-junction-time-trial-lap-omega.csv` (currently
+   staged, not committed - see "Recovered, 2026-09-11" above).

@@ -3,14 +3,14 @@
 //!
 //! ```sh
 //! # what is in a capture at all
-//! oag-trace show data/traces/venom-straight.csv
+//! oag-trace show data/traces/talons-junction-time-trial-lap.csv
 //!
 //! # replay it through our physics, on the track it was captured on
-//! oag-trace run data/traces/venom-straight.csv \
+//! oag-trace run data/traces/talons-junction-time-trial-lap.csv \
 //!     --source data/images/pulse-psp-usa.chd --hold cross --out /tmp/ours.csv
 //!
 //! # or diff two traces that already exist
-//! oag-trace compare data/traces/venom-straight.csv /tmp/ours.csv
+//! oag-trace compare data/traces/talons-junction-time-trial-lap.csv /tmp/ours.csv
 //! ```
 //!
 //! Traces are derived game data and live under `data/traces/`, which is
