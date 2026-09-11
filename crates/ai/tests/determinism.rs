@@ -173,24 +173,63 @@ use oag_ai::probe::{self, Scenario};
 ///   so the line is untouched and only the driver's response to contact moved.
 ///   `Driver::holds_fire`, added in the same change, cannot reach this file at
 ///   all - no weapon exists in [`oag_ai::probe`]'s scenarios.
+/// - **All three rows regenerated 2026-09-11**, for the differential
+///   airbrake's `Driver::peak_curvature` field and `driver::pace::trail`'s
+///   new gate built on it - see that function's own doc for the real-track
+///   measurement that replaced `speed < target`. **This is not a pure
+///   field-addition entry like the ones above it**: unlike
+///   `oag_gameplay`'s own determinism scenario, this one *does* call
+///   `Driver::drive` on every tick, so `trail`'s new gate genuinely changes
+///   what the differential does and every downstream position and velocity
+///   with it. **`Solo` moved this time**, unlike the two 2026-09-07/08
+///   `social` entries above: the differential is pure line-following
+///   arithmetic, reached by a lone craft on this scenario's own corners
+///   (curvature up to 0.026295), where `social` needs a rival `Solo` never
+///   carries.
+///
+///   **Isolated to confirm the field itself is not doing the work**: with
+///   `driver.peak_curvature`'s write commented out of `write_craft`,
+///   keeping the new gate logic, all three hashes reproduced
+///   `0x00ba_9d38_3cae_9ba4` / `0x7f2b_8f0b_f392_44fa` (`Solo`),
+///   `0x7a39_e5be_5990_378b` / `0x72cc_ce44_8811_242c` (`Field`/600) and
+///   `0xf426_db64_a7e7_393b` / `0x986a_1ec6_55d7_a781` (`Field`/1,800) -
+///   still moved from the pre-2026-09-11 constants, so the gate change alone
+///   accounts for the movement and the field's own bytes are not required to
+///   see it. `oag-core` and `oag-physics`'s gates are untouched (`trail` is
+///   `oag-ai` only), and
+///   [`the_scenario_still_exercises_corners_and_craft_that_drive`] still
+///   holds - the line did not change, only what a saturated driver does on
+///   it.
+/// - **All three rows regenerated again 2026-09-11, later the same day**, for
+///   [`oag_ai::Tuning::trail_deadband`], [`oag_ai::Tuning::trail_gain`] and
+///   [`oag_ai::Tuning::trail_saturation`] - reported from play: the gate above
+///   fixed *when* the differential fires, but a live `--race --autopilot` run
+///   showed it firing at a magnitude too small to see, because the old
+///   `trail_saturation` (`0.85`) left `trail_deadband` (`0.15`) almost no
+///   headroom to compute a command from. See
+///   [`oag_ai::Tuning::trail_saturation`]'s own doc for the three-point sweep
+///   against a real corner and the real seven-opponent field test that picked
+///   `0.7`/`0.05`/`3.0`. All three rows move again for the same reason the
+///   entry above gives: this scenario calls `Driver::drive`, so a differential
+///   that behaves differently is a driver that ends up somewhere different.
 const REFERENCE: [(u32, Scenario, u64, u64); 3] = [
     (
         600,
         Scenario::Solo,
-        0x65d7_0dd3_7566_c624,
-        0xb1f8_d6c8_1437_06ee,
+        0xcbb6_08ac_5da5_35db,
+        0x12c9_2d37_5898_4434,
     ),
     (
         600,
         Scenario::Field,
-        0x1a85_6b24_0c50_ee9b,
-        0x4dcf_51f5_eb9f_dfad,
+        0x5538_0690_94e7_78a7,
+        0xd556_34d7_2716_cd2d,
     ),
     (
         1_800,
         Scenario::Field,
-        0x6c6e_0024_0096_376d,
-        0x11a2_3f23_77dd_7b02,
+        0x05ce_bd25_5983_91c3,
+        0x7e84_2fc4_c927_3215,
     ),
 ];
 

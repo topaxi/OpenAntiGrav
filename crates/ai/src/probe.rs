@@ -580,4 +580,5 @@ fn write_craft(hasher: &mut StateHasher, state: &ShipState, driver: &Driver) {
     hasher.write_u32(u32::from(driver.provocation));
     hasher.write_u32(driver.pilot);
     hasher.write_u32(u32::from(driver.mistake));
+    hasher.write_u32(driver.peak_curvature);
 }

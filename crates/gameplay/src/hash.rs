@@ -151,6 +151,7 @@ fn write_driver(hasher: &mut StateHasher, driver: &oag_ai::Driver) {
         provocation,
         pilot,
         mistake,
+        peak_curvature,
         reflex,
         roll_decided,
     } = driver;
@@ -187,6 +188,13 @@ fn write_driver(hasher: &mut StateHasher, driver: &oag_ai::Driver) {
     // sailing through a braking point it should have taken is about to be
     // somewhere a driver that braked is not. See `oag_ai::Driver::mistake`.
     hasher.write_u32(u32::from(*mistake));
+    // **And the high-water mark that decides whether the differential
+    // airbrake reads a corner as still being entered or as opening up.** Two
+    // runs that agree on every position but disagree on this are about to
+    // spend the differential differently, which is a different yaw, a
+    // different grip, and a different line. See
+    // `oag_ai::Driver::peak_curvature`.
+    hasher.write_u32(*peak_curvature);
     // **And what it has noticed of the craft around it.** Reaction latency
     // holds a rival back for a few ticks after it arrives, so two runs that
     // agree on every position and disagree on which craft their drivers have

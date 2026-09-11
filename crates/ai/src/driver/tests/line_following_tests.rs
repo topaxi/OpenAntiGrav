@@ -161,6 +161,31 @@ fn a_saturated_driver_over_its_corner_speed_brakes_asymmetrically() {
     }
 }
 
+/// A curvature that reads as a real corner under `Tuning::default`'s
+/// [`Tuning::trail_curvature_floor`] - well clear of it, the way Talon's
+/// Junction's own bends measured. Used with itself as the peak, so the
+/// exit gate reads "still at the tightest point", not "opening up".
+const CORNER_CURVATURE: f32 = 0.02;
+
+/// [`track_peak_curvature`] holds the high-water mark through a dip - the
+/// chord estimate's own tick-to-tick noise, measured at ~5e-5 mid-corner on
+/// Talon's Junction - and only resets once the line actually goes straight.
+#[test]
+fn the_peak_curvature_holds_through_a_dip_and_resets_on_a_straight() {
+    let tuning = Tuning::default();
+    let rising = track_peak_curvature(CORNER_CURVATURE, 0.0, &tuning);
+    assert_eq!(rising, CORNER_CURVATURE, "a new high-water mark is kept");
+
+    let dipped = track_peak_curvature(CORNER_CURVATURE * 0.99, rising, &tuning);
+    assert_eq!(
+        dipped, rising,
+        "a small dip below the peak must not lower it"
+    );
+
+    let reset = track_peak_curvature(0.0, dipped, &tuning);
+    assert_eq!(reset, 0.0, "a genuine straight resets the mark");
+}
+
 /// The sign that `5ad69f3` shipped backwards for months. Positive rate
 /// error is a craft wanting to turn further right; a nose-right yaw needs
 /// `imbalance = L - R` negative, so the **right** side is braked.
@@ -175,13 +200,39 @@ fn the_differential_brakes_the_side_the_nose_is_turning_toward() {
         command: -1.0,
         rate_error: -1.0,
     };
-    // Over the target, so the overspeed gate is open.
-    assert!(trail(&hard_right, 100.0, 50.0, &tuning, &Personality::NEUTRAL) > 0.0);
-    assert!(trail(&hard_left, 100.0, 50.0, &tuning, &Personality::NEUTRAL) < 0.0);
+    // At the peak of a real corner, not recovering, so every gate but
+    // saturation and deadband is open.
+    assert!(
+        trail(
+            &hard_right,
+            CORNER_CURVATURE,
+            CORNER_CURVATURE,
+            false,
+            &tuning,
+            &Personality::NEUTRAL
+        ) > 0.0
+    );
+    assert!(
+        trail(
+            &hard_left,
+            CORNER_CURVATURE,
+            CORNER_CURVATURE,
+            false,
+            &tuning,
+            &Personality::NEUTRAL
+        ) < 0.0
+    );
 
     let (left, right) = airbrakes(
         0.0,
-        trail(&hard_right, 100.0, 50.0, &tuning, &Personality::NEUTRAL),
+        trail(
+            &hard_right,
+            CORNER_CURVATURE,
+            CORNER_CURVATURE,
+            false,
+            &tuning,
+            &Personality::NEUTRAL,
+        ),
         tuning.brake_floor,
     );
     assert!(right > left, "turning right brakes the right side");
@@ -197,8 +248,9 @@ fn the_differential_is_dead_inside_its_deadband() {
     assert_eq!(
         trail(
             &saturated_but_settled,
-            100.0,
-            50.0,
+            CORNER_CURVATURE,
+            CORNER_CURVATURE,
+            false,
             &tuning,
             &Personality::NEUTRAL
         ),
@@ -214,14 +266,48 @@ fn the_differential_waits_for_the_steering_loop_to_run_out_of_lock() {
         rate_error: 1.0,
     };
     assert_eq!(
-        trail(&unsaturated, 100.0, 50.0, &tuning, &Personality::NEUTRAL),
+        trail(
+            &unsaturated,
+            CORNER_CURVATURE,
+            CORNER_CURVATURE,
+            false,
+            &tuning,
+            &Personality::NEUTRAL
+        ),
         0.0
     );
 }
 
-/// Below the corner's target speed is corner exit, where the grip is wanted
-/// for accelerating. A straight has an infinite target, so this is also
-/// what keeps the differential off one.
+/// Curvature at or below [`Tuning::trail_curvature_floor`] is a straight,
+/// whatever the steering loop happens to be doing - see [`trail`]'s own doc
+/// for why `target` cannot tell a straight from a corner on real geometry.
+#[test]
+fn the_differential_never_acts_on_a_straight() {
+    let tuning = Tuning::default();
+    let hard = Steer {
+        command: 1.0,
+        rate_error: 1.0,
+    };
+    assert_eq!(
+        trail(
+            &hard,
+            tuning.trail_curvature_floor,
+            tuning.trail_curvature_floor,
+            false,
+            &tuning,
+            &Personality::NEUTRAL
+        ),
+        0.0
+    );
+    assert_eq!(
+        trail(&hard, 0.0, 0.0, false, &tuning, &Personality::NEUTRAL),
+        0.0
+    );
+}
+
+/// Curvature that has fallen well below its own recent peak is corner exit,
+/// where the grip is wanted for accelerating - see [`trail`]'s own doc for
+/// the real-track measurement this replaced `speed < target` with.
 #[test]
 fn the_differential_never_acts_on_corner_exit() {
     let tuning = Tuning::default();
@@ -229,12 +315,63 @@ fn the_differential_never_acts_on_corner_exit() {
         command: 1.0,
         rate_error: 1.0,
     };
+    let past_apex = CORNER_CURVATURE * tuning.trail_exit_decay * 0.9;
     assert_eq!(
-        trail(&hard, 49.0, 50.0, &tuning, &Personality::NEUTRAL),
+        trail(
+            &hard,
+            past_apex,
+            CORNER_CURVATURE,
+            false,
+            &tuning,
+            &Personality::NEUTRAL
+        ),
         0.0
     );
+}
+
+/// A craft coasting off a weapon hit is not steering into anything - see
+/// [`trail`]'s own doc for the real-track measurement that found this.
+#[test]
+fn the_differential_never_acts_while_recovering_from_a_hit() {
+    let tuning = Tuning::default();
+    let hard = Steer {
+        command: 1.0,
+        rate_error: 1.0,
+    };
     assert_eq!(
-        trail(&hard, 300.0, f32::INFINITY, &tuning, &Personality::NEUTRAL),
+        trail(
+            &hard,
+            CORNER_CURVATURE,
+            CORNER_CURVATURE,
+            true,
+            &tuning,
+            &Personality::NEUTRAL
+        ),
+        0.0
+    );
+}
+
+/// The bug this crate was rewritten to fix: a craft still measurably below
+/// the corner's modelled target speed, mid-entry, used to get no assistance
+/// at all. Reproduces the shape measured on Talon's Junction - saturated,
+/// past the deadband, curvature flat rather than falling - without a target
+/// or a speed anywhere in sight.
+#[test]
+fn the_differential_acts_on_corner_entry_even_though_speed_is_still_below_target() {
+    let tuning = Tuning::default();
+    let hard = Steer {
+        command: 1.0,
+        rate_error: 1.0,
+    };
+    assert_ne!(
+        trail(
+            &hard,
+            CORNER_CURVATURE,
+            CORNER_CURVATURE,
+            false,
+            &tuning,
+            &Personality::NEUTRAL
+        ),
         0.0
     );
 }
