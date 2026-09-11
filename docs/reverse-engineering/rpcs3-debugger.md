@@ -54,42 +54,59 @@ Measured on that path: `Main Menu` in about 45 seconds, a race running on
 Talon's Junction about 80 seconds after that, and screenshots that are real
 frames rather than black.
 
-**As of 2026-09-11 this page's boot path does not work on this machine, and
-the reason is not yet understood.** Measured that day, against the system
-`rpcs3-bin 0.0.42.19980` the morning's update installed *and* against the
-`0.0.42-19777` AppImage every capture above was taken with (still published:
-`gh release download build-3be5aa99ccadff085594ed0a738334fddd0ad4e3 -R
-RPCS3/rpcs3-binaries-linux -p '*.AppImage'`, extracted under
-`data/tools/rpcs3-19777/` with a two-line `bin/rpcs3` wrapper put first on
-`PATH` for the driving script, since `EMULATOR_BINARY` is looked up there):
+**Two things this path needs that an emulator update took away on 2026-09-11,
+and the way each failure reads.** The system `rpcs3-bin` went from
+`0.0.42-19777` (every capture above) to `19980` that morning, and the next
+`capture` sat for its whole timeout with `TROPHY: checking` as the last
+`TTY.log` line. Neither symptom was what it looked like:
 
-- **With `~/.config/rpcs3/dev_flash/` empty, both builds refuse the disc
-  outright** - a modal `Booting ... failed! Reason: Firmware is missing`
-  under `--no-gui`, `ppu_loader: PS3 firmware is not installed or the
-  installed firmware is invalid` in `RPCS3.log`. Every `race`/`capture` call
-  then waits on a screen that never comes, which reads exactly like a slow
-  boot. How the August captures booted with that directory empty (its mtime
-  is May 2024) is the open question; nothing in `config.yml` explains it.
-- **With the disc's own firmware installed** (`PS3_UPDATE/PS3UPDAT.PUP`,
-  version 2.76 - `DISPLAY=127.0.0.1:77 rpcs3 --installfw <pup>` on the
-  virtual display, `xdotool` clicking `Yes` on both of the GUI's prompts,
-  `Successfully installed PS3 firmware version 2.76` two minutes later)
-  **both builds boot and then hang the title at `TROPHY: checking`
-  forever**: `TrophyInitThread` gets one `sceNpTrophyRegisterContext`
-  callback (`trp_status=1` on a first boot, `3` after) and never the
-  processing sequence the game waits on - on ecryptfs and on tmpfs alike,
-  with or without a pre-generated `TROPUSR.DAT`. The docs' own quoted boot
-  print `TROPHY: Checking free disk space...` is the line this path never
-  reaches.
+1. **A firmware.** The new build refuses the disc without one - a modal
+   `Booting ... failed! Reason: Firmware is missing` under `--no-gui`,
+   `ppu_loader: PS3 firmware is not installed or the installed firmware is
+   invalid` in `RPCS3.log`. The disc carries its own
+   (`PS3_UPDATE/PS3UPDAT.PUP`, version 2.76): `File -> Install Firmware` in
+   the GUI, or `DISPLAY=127.0.0.1:77 rpcs3 --installfw <pup>` on the virtual
+   display with `xdotool` clicking `Yes` on both prompts (install?, then
+   "old firmware detected ... continue?"). `~/.config/rpcs3/dev_flash/`
+   then holds it and `RPCS3.log` says `Successfully installed PS3 firmware
+   version 2.76`. The emulator's own config directory, reversible by
+   deleting that folder; nothing in this tree. [toolchain.md](toolchain.md)'s
+   "no firmware install is needed" is about *decrypting* the `EBOOT`, which
+   is still true.
+2. **The pad profile.** `~/.config/rpcs3/input_configs/global/oag.yml` was
+   gone (only `Default.yml` left - whether the update or a GUI session
+   removed it is not known), so `RPCS3.log` said `Input configuration empty.
+   Adding default keyboard pad handler` and every press went to a keyboard
+   with no window. **`TROPHY: checking` is then simply the last line the
+   game prints before the `EpilepsyWarning` dialog**, which it sits on
+   forever waiting for a cross that never arrives - a screenshot of the
+   virtual display shows the health warning with `CONTINUE` highlighted. `uv
+   run --with evdev python3 scripts/rpcs3_pad.py install-config` writes the
+   profile back; `Pad 0: device='OpenAntiGrav Virtual Pad', handler=Evdev`
+   in the log is the confirmation. `preflight` checks for it, and would have
+   said so first - run it before a capture, not after one fails. And the
+   dialog needs the *pressing* wait: `capture`, `race`, `shot`, `boot` and
+   `record` all waited for `Main Menu` without pressing anything (only
+   `browse` pressed), which was fine while the firmware-less boot skipped
+   the dialog; they use `wait_for_screen_pressing` now.
+3. **`stop` has to know the process's real name.** `rpcs3-bin`'s `/opt/rpcs3`
+   layout runs `AppRun` (a script) that `exec`s `AppRun.wrapped ->
+   usr/bin/rpcs3`, so the surviving process is called `AppRun.wrapped` and
+   `pgrep -x rpcs3` finds nothing: `stop` reported only Xvfb stopped, the
+   orphaned emulator kept the GDB port bound, and the next two captures
+   timed out on `qSupported` - trap 2 of `rpcs3_debugger.py` reached without
+   any client ever disconnecting. `EMULATOR_PROCESS_NAMES` carries both names
+   now; `ss -ltnp | grep 2345` is the one-line check when a capture times out
+   on its first packet.
 
-The installed firmware is set aside as `~/.config/rpcs3/dev_flash.installed-2.76`
-(move it back to try again); it is the emulator's own config directory and
-none of it touches this tree. [toolchain.md](toolchain.md)'s "no firmware
-install is needed" is about *decrypting* the `EBOOT`, which is still true;
-this is about running it. **One trap from the same afternoon: write the
-`bin/rpcs3` wrapper as a file, never as a symlink to `AppRun`** - a `cat >`
-through a symlink overwrites the AppImage's own `AppRun` with a script that
-`exec`s itself, and the resulting fork loop looks like a boot that never
+Two afternoons of misreads worth not repeating: the trophy line was chased
+as an HLE hang (ecryptfs, tmpfs, seeded `TROPUSR.DAT`, the pinned `19777`
+AppImage now under `data/tools/rpcs3-19777/`) when a screenshot of the
+display would have shown the dialog in one step - **when a walk stalls,
+`import -window root` on `DISPLAY=127.0.0.1:77` before anything else.** And
+write any `bin/rpcs3` wrapper as a file, never as a symlink to `AppRun`: a
+`cat >` through a symlink overwrites the AppImage's own `AppRun` with a
+script that `exec`s itself, and the fork loop looks like a boot that never
 prints anything.
 
 **Run `stop` (or `just rpcs3-stop`) when the whole session is done, not just

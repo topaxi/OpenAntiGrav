@@ -209,10 +209,30 @@ def recordings(title_id="BCES00664"):
 #: `scripts/pcsx2-drive.py`'s identical `stop_emulator`, which this mirrors.
 EMULATOR_BINARY = "rpcs3"
 
+#: What the emulator's process is actually *called*, which is not always the
+#: binary it was launched as. The AppImage layout `rpcs3-bin` installs to
+#: `/opt/rpcs3` runs `AppRun` (a shell script) that `exec`s
+#: `AppRun.wrapped -> usr/bin/rpcs3`, so the surviving process's name is
+#: `AppRun.wrapped` and `pgrep -x rpcs3` finds nothing. Found 2026-09-11 the
+#: expensive way: `stop` reported only Xvfb stopped, the orphaned emulator
+#: kept the GDB port bound, and every later `capture` timed out on
+#: `qSupported` - trap 2 in `rpcs3_debugger.py`, reached without any client
+#: ever having disconnected.
+EMULATOR_PROCESS_NAMES = (EMULATOR_BINARY, "AppRun.wrapped")
+
 
 def emulator_running(binary=EMULATOR_BINARY):
-    return subprocess.run(["pgrep", "-x", binary],
-                          capture_output=True).returncode == 0
+    names = EMULATOR_PROCESS_NAMES if binary == EMULATOR_BINARY else (binary,)
+    return any(subprocess.run(["pgrep", "-x", name],
+                              capture_output=True).returncode == 0
+               for name in names)
+
+
+def _kill_emulator(binary, signal_flag=None):
+    names = EMULATOR_PROCESS_NAMES if binary == EMULATOR_BINARY else (binary,)
+    for name in names:
+        args = ["pkill"] + ([signal_flag] if signal_flag else []) + ["-x", name]
+        subprocess.run(args, capture_output=True)
 
 
 def stop_emulator(binary=EMULATOR_BINARY, quiet=False):
@@ -233,14 +253,14 @@ def stop_emulator(binary=EMULATOR_BINARY, quiet=False):
         if not quiet:
             print("no %s running" % binary)
         return False
-    subprocess.run(["pkill", "-x", binary], capture_output=True)
+    _kill_emulator(binary)
     for _ in range(20):
         time.sleep(0.5)
         if not emulator_running(binary):
             if not quiet:
                 print("%s stopped" % binary)
             return True
-    subprocess.run(["pkill", "-9", "-x", binary], capture_output=True)
+    _kill_emulator(binary, "-9")
     return True
 
 
@@ -262,7 +282,7 @@ def clear_stale_lock():
     Guarded on there being no live process, so this cannot pull the lock out
     from under a real one - a second instance is genuinely not supported.
     """
-    if subprocess.run(["pgrep", "-x", "rpcs3"], capture_output=True).returncode == 0:
+    if emulator_running():
         return False
     lock = Path(os.environ.get("XDG_CACHE_HOME")
                 or os.path.expanduser("~/.cache")) / "rpcs3" / "RPCS3.buf"
@@ -547,7 +567,7 @@ def cmd_boot(args):
     with Session(args.image, args.log_dir) as session:
         print("rpcs3 pid %d, waiting for the Main Menu" % session.proc.pid,
               flush=True)
-        if not session.wait_for_screen("Main Menu", args.timeout):
+        if not session.wait_for_screen_pressing("Main Menu", args.timeout):
             print("never reached the Main Menu (last screen: %s)"
                   % current_screen(), file=sys.stderr)
             return 1
@@ -591,7 +611,7 @@ def emulator_screenshots(title_id="BCES00664"):
 def cmd_race(args):
     with Session(args.image, args.log_dir) as session:
         print("rpcs3 pid %d" % session.proc.pid, flush=True)
-        if not session.wait_for_screen("Main Menu", args.timeout):
+        if not session.wait_for_screen_pressing("Main Menu", args.timeout):
             print("never reached the Main Menu (last screen: %s)"
                   % current_screen(), file=sys.stderr)
             return 1
@@ -746,7 +766,7 @@ def cmd_capture(args):
 
     with Session(args.image, args.log_dir) as session:
         print("rpcs3 pid %d" % session.proc.pid, flush=True)
-        if not session.wait_for_screen("Main Menu", args.timeout):
+        if not session.wait_for_screen_pressing("Main Menu", args.timeout):
             print("never reached the Main Menu (last screen: %s)"
                   % current_screen(), file=sys.stderr)
             return 1
@@ -1027,7 +1047,7 @@ def cmd_record(args):
     before = set(recordings())
     with Session(args.image, args.log_dir) as session:
         print("rpcs3 pid %d" % session.proc.pid, flush=True)
-        if not session.wait_for_screen("Main Menu", args.timeout):
+        if not session.wait_for_screen_pressing("Main Menu", args.timeout):
             print("never reached the Main Menu (last screen: %s)"
                   % current_screen(), file=sys.stderr)
             return 1

@@ -198,6 +198,48 @@ Two consequences:
   not draw, and `shadows.md`'s "plays the disc's own image" needs that
   qualifier.
 
+## Measured live, 2026-09-11 evening: the block, the sun and the craft
+
+Three `rpcs3-drive.py capture` runs on Talon's Junction with `--region
+0x8b6fb4@:0x600 --region 0xd19c44:0x80 --region 0xc86880:0x18000` (kept
+under `data/reference/hd-capture/talons-ships/`, `-env/`, `-shadow/`), read
+back with a twenty-line struct decoder:
+
+- **The global env block holds the circuit's own file mid-race.** At
+  `[0x8b6fb4]` during the race: sun `(-0.7776, 0.5815, -0.2391)`, fog
+  `(0.263, 0.216, 0.380)` at `0.001`, ambient `(0.404, 0.392, 0.510)`, sky
+  rotation `17` - every value `talons_junction/track.envsettings` authors,
+  unchanged. **No sign or axis transform between file and runtime**, which
+  closes the question the direction reading above left at "the loader was
+  not traced". The front end's own block is a separate object (`[0x9948ec]
+  + 0x60`, at `0x328d51d0` that run) holding `fe.envsettings`' values; one
+  earlier capture found those values in the *global* block too, in a run
+  that never pressed through the health warning, so the global is the FE's
+  until the race scene loads and the circuit's from then on.
+- **The model table is real and populated only mid-frame.** Count at
+  `0xd19c44` read `16` / `14` / `12` across three pauses (and `0` in a run
+  paused elsewhere in the frame), two entries per craft (`+0xe4` flags
+  `0x1c8b` and `0x0480`, same matrix), records `0x1b0` apart from
+  `0xc86880`. Every craft's world matrix has row lengths of exactly
+  **0.75** - HD carries the same global craft scale
+  `oag_render::exhaust::CRAFT_ROW_SCALE` recovered on Pulse - and `+0x30`
+  is the position.
+- **Hover height matches.** Raycasting the recorded positions against this
+  project's own Talon's track (`oag-game --pose x,y,z --ticks 1
+  --log-every 1`, height above the nearest spline sample): `3.88` and
+  `3.94` for two craft at speed on the straight, `4.33` and `2.76` on the
+  banked corner, against the `4.0` this simulation hovers at. The grid
+  reads `2.18`, but 9.65 units off the spline, so that one is the sample's
+  distance and not a height.
+
+So after the receiver's mirror was fixed, the cast direction, the sun's
+value and the craft's height above the road all agree with the original, and
+a plan-view render (`--camera-pose 10,-20,-195.9,0,-1,0,1,0,0`, +X
+up-screen) shows this renderer's shadow exactly where that sun puts it:
+ahead of the craft along `+X`, a little to `+Z`. The "shadow sits further
+behind than the captures show" note that opened this leg was a misreading of
+a chase-camera diff; withdrawn.
+
 ## What this changes for `oag-render`
 
 - The direction was right: `shadow::map::Fit::towards_light` from the

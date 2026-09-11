@@ -306,7 +306,9 @@ fn the_depth_pass_records_the_caster_and_clears_the_rest() {
 /// sun. So this caster sits above the fit's centre under a tilted light,
 /// which lands it well into the upper half of the map, and the assertion
 /// is that the receiver's formula picks a covered texel there while the
-/// mirrored row is clear.
+/// mirrored row is clear. The caster is offset sideways as well, so the
+/// column mapping is pinned the same way - a horizontal mirror would put a
+/// craft's shadow on the wrong side of it just as surely.
 #[test]
 fn the_receivers_lookup_reads_the_row_the_caster_landed_in() {
     let Some(adapter) = pollster::block_on(
@@ -343,7 +345,7 @@ fn the_receivers_lookup_reads_the_row_the_caster_landed_in() {
         radius: 4.0,
         towards_light: Vec3::new(0.3, 0.8, 0.2).normalize(),
     };
-    let model = Mat4::from_translation(Vec3::new(0.0, 2.5, 0.0));
+    let model = Mat4::from_translation(Vec3::new(2.5, 2.5, 0.0));
     let whole = 0..indices.len() as u32;
     let ranges = std::slice::from_ref(&whole);
     let caster = Caster {
@@ -363,24 +365,35 @@ fn the_receivers_lookup_reads_the_row_the_caster_landed_in() {
         let clip = matrix * model.transform_point3(Vec3::ZERO).extend(1.0);
         let ndc = clip.truncate() / clip.w;
         assert!(
-            ndc.y > 0.2,
+            ndc.y.abs() > 0.2,
             "the fixture has to land well off the centre line to test anything, got ndc.y {}",
             ndc.y
+        );
+        assert!(
+            ndc.x.abs() > 0.2,
+            "the fixture has to land well off the centre column too, got ndc.x {}",
+            ndc.x
         );
         let column = ((ndc.x * 0.5 + 0.5) * size as f32) as u32;
         let row = ((0.5 - ndc.y * 0.5) * size as f32) as u32;
         let mirrored = ((ndc.y * 0.5 + 0.5) * size as f32) as u32;
-        (column, row, mirrored, ndc.z)
+        let mirrored_column = ((0.5 - ndc.x * 0.5) * size as f32) as u32;
+        (column, row, mirrored, ndc.z, mirrored_column)
     };
 
     let texels = read_back(&device, &queue, &map);
-    let (column, row, mirrored, _) = lookup(map.matrix(), SIZE);
+    let (column, row, mirrored, _, mirrored_column) = lookup(map.matrix(), SIZE);
     let at = |x: u32, y: u32| texels[(y * SIZE + x) as usize];
+    assert_eq!(
+        at(mirrored_column, row),
+        0,
+        "the column mirrored about the centre is clear"
+    );
     assert_eq!(at(column, row), 0xff, "the receiver's row is covered");
     assert_eq!(at(column, mirrored), 0, "the mirrored row is clear");
 
     let depth = read_back_depth(&device, &queue, &map);
-    let (column, row, mirrored, z) = lookup(map.depth_matrix(), DEPTH_SIZE);
+    let (column, row, mirrored, z, _) = lookup(map.depth_matrix(), DEPTH_SIZE);
     let at = |x: u32, y: u32| depth[(y * DEPTH_SIZE + x) as usize];
     assert!(
         (at(column, row) - z).abs() < 1e-3,
