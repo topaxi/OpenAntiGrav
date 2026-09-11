@@ -361,9 +361,23 @@ pub struct Tuning {
     /// Keeps the differential out of the small-signal regime entirely, so the
     /// loop linearised about the line is the one `tests/closed_loop.rs`
     /// measured, unchanged.
+    ///
+    /// **Lowered from `0.15` to `0.05` on 2026-09-11**, alongside
+    /// [`Tuning::trail_gain`] and [`Tuning::trail_saturation`] - see the
+    /// latter's own doc for why the three move together. At the old value this
+    /// sat only `0.02` rad/s below the turn-rate error
+    /// [`Tuning::trail_saturation`] itself implies (`0.85 / rate_gain` = `0.17`
+    /// at the defaults), so the moment the gate opened there was almost no
+    /// `rate_error - trail_deadband` left to turn into a command: measured on
+    /// a live `--race --autopilot` run of Talon's Junction's own U-turn, the
+    /// differential peaked at **7.67** of the airbrake's `0..=100` range.
     pub trail_deadband: f32,
     /// Differential airbrake per radian per second of turn-rate error past
     /// [`Tuning::trail_deadband`].
+    ///
+    /// **Raised from `1.2` to `3.0` on 2026-09-11**, the other half of
+    /// [`Tuning::trail_deadband`]'s move - see that field's own doc for the
+    /// measurement neither alone explains.
     pub trail_gain: f32,
     /// Ceiling on the differential.
     pub trail_max: f32,
@@ -375,7 +389,63 @@ pub struct Tuning {
     /// that already has authority is precisely the oscillation this crate was
     /// rewritten to remove. Above it the loop has run out of lock and the yaw
     /// the differential adds is authority the loop cannot produce at all.
+    ///
+    /// **Lowered from `0.85` to `0.7` on 2026-09-11, alongside
+    /// [`Tuning::trail_deadband`] and [`Tuning::trail_gain`].** Reported from
+    /// play: with `driver::pace::trail`'s corner-entry gate fixed (see that
+    /// function's own doc), the differential fired on Talon's Junction's own
+    /// U-turn but was reported as imperceptible - measured at 19 engaged
+    /// ticks over the corner and a mean magnitude of 4.6 of the airbrake's
+    /// `0..=100` range, because `0.85`'s implied turn-rate threshold left
+    /// [`Tuning::trail_deadband`] almost no headroom to compute a command
+    /// from. Three points swept on the same live run and the same real-disc
+    /// regression that caught the original gate bug
+    /// (`opponent_weapons_ground_truth::a_field_racing_with_real_pads_does_not_mine_itself_to_death`):
+    ///
+    /// | `trail_saturation` | engaged ticks | mean magnitude | mean-of-means energy | depleted |
+    /// | --- | --- | --- | --- | --- |
+    /// | `0.85` (old) | 19 | 4.6 | 0.67 | 0 |
+    /// | `0.6` | 58 | 23.9 | 0.58 | 3 |
+    /// | **`0.7`** | **41** | **25.2** | **0.67** | **1** |
+    ///
+    /// `0.6` engages for longer and no stronger, but spends enough grip across
+    /// a full seven-opponent field with real weapons to measurably cost the
+    /// energy floor the field test guards - `0.7` is the point on this sweep
+    /// that gets back to more than double the old engagement with the old
+    /// energy margin intact. `trail_deadband` and `trail_gain` hold the
+    /// engaged magnitude in the 20s at every point on the sweep; only this
+    /// field decides how much of the corner reaches it. Zero respawns on the
+    /// live run at every point swept, including `0.6` - the corner was never
+    /// missed, only the field cost moved.
     pub trail_saturation: f32,
+    /// Curvature below which [`pace::trail`] treats the line as straight,
+    /// whatever [`pace::corner_target`] says about it.
+    ///
+    /// **Fitted, not derived**, against a real two-lap capture of Talon's
+    /// Junction - see `docs/gameplay/ai.md`, "Airbrakes, and what a
+    /// differential one actually does": curvature on its straights sat at
+    /// 0.0003-0.0005 (chord noise off three sampled points that are never
+    /// *quite* collinear), against 0.0056 and up everywhere the driver was
+    /// actually saturated fighting a real bend. `0.001` sits in the gap
+    /// between the two, well clear of either. This is what `!target.is_finite()`
+    /// was reaching for and could not get, because no disc track's `target` is
+    /// ever literally infinite - see [`pace::trail`].
+    ///
+    /// [`pace::trail`]: super::pace::trail
+    /// [`pace::corner_target`]: super::pace::corner_target
+    pub trail_curvature_floor: f32,
+    /// Fraction of [`Driver::peak_curvature`](crate::Driver::peak_curvature)
+    /// curvature may fall to before [`pace::trail`] reads it as corner exit.
+    ///
+    /// **Fitted against the same capture.** Past the apex of Talon's Junction's
+    /// tightest bend, curvature ran 0.0274 down to 0.0117 over 63 ticks as the
+    /// craft pulled away - a real decline, not the ~5e-5 tick-to-tick noise the
+    /// chord estimate carries mid-corner. `0.7` sits well inside that decline
+    /// and well outside the noise, so a corner has to have genuinely opened up
+    /// before this gates the differential back off.
+    ///
+    /// [`pace::trail`]: super::pace::trail
+    pub trail_exit_decay: f32,
     /// How often a driver misses a braking point, per tick, while it is at one.
     ///
     /// **Zero for a driver that never errs**, which is what the hardest
@@ -414,10 +484,12 @@ impl Default for Tuning {
             corridor_use: 0.6,
             brake_floor: 0.35,
             brake_gain: 2.0,
-            trail_deadband: 0.15,
-            trail_gain: 1.2,
+            trail_deadband: 0.05,
+            trail_gain: 3.0,
             trail_max: 0.6,
-            trail_saturation: 0.85,
+            trail_saturation: 0.7,
+            trail_curvature_floor: 0.001,
+            trail_exit_decay: 0.7,
             // **Zero, because this is the competent driver.** Erring is a
             // degradation, so the rate belongs to `Difficulty` and arrives by
             // `Difficulty::tune`; a default that errs would make every caller

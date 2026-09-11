@@ -30,7 +30,7 @@ use crate::noise::{roll, wobble};
 use crate::pilot::Pilot;
 
 pub use avoidance::LOOKAHEAD as AVOIDANCE_LOOKAHEAD;
-use pace::{airbrakes, corner_target, curvature_span, throttle, trail};
+use pace::{airbrakes, corner_target, curvature_span, throttle, track_peak_curvature, trail};
 pub use personality::Personality;
 pub use reflex::Reflex;
 pub use tuning::Tuning;
@@ -159,6 +159,17 @@ pub struct Driver {
     /// An integer, because this type is `Eq` and lives in the world snapshot,
     /// for the reason [`Self::provocation`] gives.
     pub mistake: u16,
+    /// The highest [`pace::corner_target`] curvature seen since the line last
+    /// went straight, as `f32::to_bits`.
+    ///
+    /// **What tells [`pace::trail`] the corner is opening up rather than still
+    /// being entered**, which `speed < target` used to and, measured on Talon's
+    /// Junction, does not - see that function's own doc for the two real-track
+    /// families this replaced it for. Bits rather than the float itself, for
+    /// the reason [`Self::provocation`] gives; `0` decodes to `0.0`, which is
+    /// the value a straight resets it to, so [`Driver::default`] needs nothing
+    /// special.
+    pub peak_curvature: u32,
     /// What this driver has noticed of the craft around it, and what it is
     /// still in the middle of noticing.
     ///
@@ -344,6 +355,9 @@ impl Driver {
         let window = look * tuning.brake_lookahead * personality.patience;
         let curvature = line.max_curvature(index, window, curvature_span(tuning, look));
         let target = corner_target(curvature, tuning, &personality);
+        // Every tick, saturated or not - see [`track_peak_curvature`]'s own doc.
+        self.peak_curvature =
+            track_peak_curvature(curvature, f32::from_bits(self.peak_curvature), tuning).to_bits();
         self.blunder(tuning, speed, target);
         let (thrust, brake) = if self.mistake > 0 {
             // Sailing through it. See [`Self::mistake`].
@@ -368,7 +382,19 @@ impl Driver {
             throttle(speed, target, tuning)
         };
         let thrust = thrust * self.caution(ctx, &personality);
-        let differential = trail(&steer, speed, target, tuning, &personality);
+        // Neither timer is a **momentary** hit flag: both are seconds still
+        // running, so a craft is "recovering" for as long as either does,
+        // which is exactly the window the differential buys nothing in - see
+        // `trail`'s own doc.
+        let recovering = state.slowdown_timer > 0.0 || state.stun_timer > 0.0;
+        let differential = trail(
+            &steer,
+            curvature,
+            f32::from_bits(self.peak_curvature),
+            recovering,
+            tuning,
+            &personality,
+        );
         let (airbrake_left, airbrake_right) = airbrakes(brake, differential, tuning.brake_floor);
 
         ShipControls {

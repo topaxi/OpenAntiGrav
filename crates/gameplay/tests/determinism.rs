@@ -554,9 +554,22 @@ fn run(ticks: u32) -> (u64, u64) {
 ///   charging branch in `Projectiles::advance` still in place, both Plasma
 ///   call sites still on `charge_up` - the constants this commit replaces
 ///   reproduced bit for bit at both tick counts and for both scenarios.
+///
+/// - **Moved 2026-09-11**, when `oag_ai::Driver::peak_curvature` joined the
+///   hash - the differential airbrake's new gate needs it, see
+///   `crates/ai/tests/determinism.rs`'s own history for the real-track
+///   measurement that added it. **Isolated the documented way**: with
+///   `peak_curvature` destructured as `peak_curvature: _` and its
+///   `write_u32` removed, and nothing else changed, the previous constants
+///   above reproduced bit for bit at both tick counts. So the whole movement
+///   is one more `u32` per ship per tick entering the stream, and no
+///   behaviour at all: **neither scenario here ever calls `Driver::drive`**
+///   either, for the same reason the `roll_decided` and `reflex` entries
+///   above give. Replaces `0xf3aa_6cce_9139_99e8` / `0x6f71_5c3a_c11d_3de2`
+///   at 60 ticks and `0x9290_5461_4434_9d81` / `0xd773_b51b_1a49_815f` at 600.
 const REFERENCE: &[(u32, u64, u64)] = &[
-    (60, 0xf3aa_6cce_9139_99e8, 0x6f71_5c3a_c11d_3de2),
-    (600, 0x9290_5461_4434_9d81, 0xd773_b51b_1a49_815f),
+    (60, 0xd98f_5ee7_45c1_2fd8, 0x59cb_0602_21c2_ccf2),
+    (600, 0xc88f_9c58_aa40_a211, 0x02af_2239_1229_462f),
 ];
 
 /// The volley scenario: a craft at an angle fires a real fanned Rocket volley
@@ -743,9 +756,16 @@ fn run_volley(ticks: u32) -> (u64, u64) {
 ///   [`REFERENCE`]'s own history records, inherited through the same four
 ///   extra bytes per slot per tick. No isolation repeated here -
 ///   [`REFERENCE`]'s entry ran it for both scenarios at once.
+///
+/// - **Moved 2026-09-11**, the same `oag_ai::Driver::peak_curvature` addition
+///   [`REFERENCE`]'s own history records, inherited through the same
+///   `write_driver` call and not re-isolated here for the same reason: this
+///   scenario never calls `Driver::drive` either. Replaces
+///   `0xdc64_65d2_7fd2_6484` / `0xd117_eae7_9d96_90a4` at 60 ticks and
+///   `0x0afa_f530_c285_b40b` / `0x5993_a507_fd8b_40ca` at 600.
 const REFERENCE_VOLLEY: &[(u32, u64, u64)] = &[
-    (60, 0xdc64_65d2_7fd2_6484, 0xd117_eae7_9d96_90a4),
-    (600, 0x0afa_f530_c285_b40b, 0x5993_a507_fd8b_40ca),
+    (60, 0x6b88_42dc_ab26_a704, 0x71ab_7df0_6e22_ba44),
+    (600, 0x1d58_0459_a503_3a6b, 0x1077_6477_39e6_016a),
 ];
 
 #[test]

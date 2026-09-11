@@ -2,15 +2,17 @@
 //!
 //! Split out of [`super`] under the 1,000-line rule in
 //! `scripts/check-file-size.py`, and the seam is a real one rather than a
-//! convenient cut: everything here is a **scalar** function of the road and the
-//! craft's speed, with no access to [`Driver`](crate::Driver)'s own state at all. That is why
-//! all five are testable without a craft, and why the steering loop above -
+//! convenient cut: everything here is a **pure** function of the road, the
+//! craft's speed, and whatever of [`Driver`](crate::Driver)'s own state the
+//! caller chooses to pass in - never [`Driver`](crate::Driver) itself. That is
+//! why all six are testable without a craft, and why the steering loop above -
 //! which is stateful, and closed on a rate - stays where it is.
 //!
 //! The chain runs [`curvature_span`] (what the estimator measures over) ->
 //! [`corner_target`] (how fast that corner allows) -> [`throttle`] (thrust and
-//! the both-sides brake) -> [`trail`] (the differential) -> [`airbrakes`] (the
-//! two commands the physics actually reads).
+//! the both-sides brake) -> [`track_peak_curvature`] (this tick's high-water
+//! mark, which the caller stores) -> [`trail`] (the differential) ->
+//! [`airbrakes`] (the two commands the physics actually reads).
 
 use super::{Personality, Steer, Tuning};
 
@@ -125,72 +127,86 @@ pub(super) fn throttle(speed: f32, target: f32, tuning: &Tuning) -> (f32, f32) {
 /// in grip**, which is why it is spent only where the steering loop has run out
 /// of authority of its own.
 ///
-/// Three gates, each doing a different job:
+/// # What used to gate this, and why it was replaced
 ///
-/// - **Saturation.** Below [`Tuning::trail_saturation`] of full lock the rate
-///   loop still has authority, and a second path in parallel with it is the
-///   oscillation this crate was rewritten to remove. Above it the loop is
-///   asking for more than the steering input can deliver.
-/// - **Deadband.** Keeps it out of the small-signal regime, so the loop
-///   linearised about the line is provably the one `tests/closed_loop.rs`
-///   measured.
-/// - **Overspeed.** Never below the corner's target speed, which is corner
-///   exit - where the grip is wanted for accelerating and where the forward
-///   slide term is at its largest. On a straight `target` is infinite and this
-///   gate is what keeps the differential off it.
+/// The original gate was `speed < target`: off below the corner's modelled
+/// target speed, meant to read as "corner exit, where the grip is wanted for
+/// accelerating". **Measured** on a real circuit (Talon's Junction, Pulse PSP)
+/// it instead gated out corner *entry* too - `command` pinned at `+-1.0`,
+/// `rate_error` 0.5-0.6 rad/s, for over ten consecutive ticks while speed
+/// collapsed from 111 to 39.5 units/s and `target` sat at 160-180 throughout,
+/// `speed < target` holding on every one of them. Replacing it with
+/// `!target.is_finite()` was tried and reverted: `target` is a real number
+/// everywhere on disc geometry - zero of 5,336 ticks over two laps of Talon's
+/// Junction were infinite, against 303 on `tests/closed_loop.rs`'s exactly
+/// collinear synthetic straights - so the replacement gated out nothing there
+/// and ground one opponent's shield to zero on
+/// `opponent_weapons_ground_truth::a_field_racing_with_real_pads_does_not_mine_itself_to_death`.
+/// Full account, including the attempt and its revert, in `docs/gameplay/ai.md`,
+/// "Airbrakes, and what a differential one actually does".
 ///
-/// # This also gates out corner *entry*, and that is a live, unfixed bug
+/// **What actually discriminates entry from exit, measured on the same real
+/// lap**: not `target`'s absolute value - two real segments, one still
+/// tightening into the corner and one already accelerating out of it, both
+/// held `speed` a similar fraction below `target` throughout, so no ratio of
+/// the two separates them either. What differs is `curvature`'s own *trend*:
+/// flat to rising while still working the corner, falling once the corner
+/// opens up on exit. [`Driver::peak_curvature`](crate::Driver::peak_curvature)
+/// tracks the high-water mark since the line last went straight, and
+/// `curvature` falling meaningfully below it is what exit looks like.
 ///
-/// Read literally, "never below the corner's target speed" sounds like it
-/// only ever excludes corner exit. It does not: `speed < target` fires for as
-/// long as the craft's speed has not yet crossed a target computed from
-/// [`Tuning::lateral_accel`] - a model of the grip available, not a
-/// measurement of it on this corner - which is equally true on the way *in*.
-/// A craft understeering hard enough to saturate the steering loop while
-/// still measurably below that assumed target gets no assistance at all:
-/// exactly the case the paragraph above says this exists for.
+/// A second, unrelated real-track failure mode surfaced by the same
+/// measurement: a weapon hit **halves a craft's speed in a single tick**
+/// (`ShipState::slowdown_timer` arms the tick after), which the pure-pursuit
+/// loop reads as exactly the shape of a genuine corner - `command` and
+/// `rate_error` both saturate correcting for the sudden mismatch between
+/// heading and velocity - on track geometry that is nearly straight the whole
+/// time. `oag_physics::forces::evaluate` already skips lateral grip entirely
+/// while the timer runs, so a differential spent there buys nothing and
+/// affects nothing the craft can use; gated out below, alongside
+/// [`ShipState::stun_timer`] for the same reason once something arms it.
 ///
-/// **Measured** on a real circuit (Talon's Junction, Pulse PSP): `command`
-/// pinned at `+-1.0`, `rate_error` 0.5-0.6 rad/s - both well past
-/// `trail_saturation`/`trail_deadband` - for over ten consecutive ticks while
-/// speed collapsed from 111 to 39.5 units/s and `target` sat at 160-180
-/// throughout. `speed < target` held on every one of those ticks, so the
-/// differential was zero on every one of them. See
-/// `docs/gameplay/ai.md#airbrakes-and-what-a-differential-one-actually-does`.
+/// Four gates now, each doing a different job:
 ///
-/// **Tried and reverted**: replacing the condition with `!target.is_finite()`,
-/// off only on a genuine straight where [`corner_target`] returns infinity
-/// rather than below-target anywhere. That passed every `tests/closed_loop.rs`
-/// case including the stability guard, because the `oval_of` fixture in
-/// `tests/closed_loop.rs` builds its
-/// straights from exactly collinear points and so they are genuinely
-/// infinite. **A real racing line's three sampled points are never exactly
-/// collinear**, so `target` is finite everywhere on a disc track - measured
-/// as zero `f32::INFINITY` targets over a full lap of Talon's Junction,
-/// against 303 on the closed-loop oval in the same run. The replacement gate
-/// was therefore inert on real geometry: the differential fired on every
-/// saturated tick anywhere, including off-line recovery mid-corner, which
-/// `tests/closed_loop.rs` cannot see because its own recoveries only happen
-/// on its exactly-straight segments. On a real seven-craft field
-/// (`opponent_weapons_ground_truth::a_field_racing_with_real_pads_does_not_mine_itself_to_death`)
-/// this ground one opponent's shield to zero over a minute of ordinary
-/// racing, against a `full * 0.45` floor the unmodified gate clears
-/// comfortably. A fix needs a threshold that actually discriminates on real
-/// track curvature - not a re-derivation of "is this a straight" - and that
-/// is a tuning question, not a logic one: see `HANDOVER.md`.
+/// - **Recovering.** [`ShipState::slowdown_timer`] or
+///   [`ShipState::stun_timer`] positive - the craft is not steering into
+///   anything, it is coasting off a hit with no lateral grip to spend the
+///   differential against.
+/// - **Curvature floor.** [`Tuning::trail_curvature_floor`] - below it this is
+///   a straight, or close enough that the chord estimate's own noise (~5e-5 on
+///   Talon's Junction) cannot be told from one. `!target.is_finite()`'s
+///   mistake was assuming a straight makes itself known this cleanly; it does
+///   not, curvature does.
+/// - **Exit.** `curvature < peak_curvature * `[`Tuning::trail_exit_decay`] -
+///   the corner has opened up enough since its tightest point that this reads
+///   as corner exit rather than still being fought through.
+/// - **Saturation and deadband.** The gate logic is unchanged from before:
+///   below [`Tuning::trail_saturation`] of full lock the rate loop still has
+///   authority of its own, and [`Tuning::trail_deadband`] keeps this out of
+///   the small-signal regime `tests/closed_loop.rs` linearised about. The
+///   *values* moved on the same date as the three gates above, for an
+///   unrelated reason - see [`Tuning::trail_saturation`]'s own doc.
 ///
 /// No slew limiting here, and none needed: this is a *target*, and
 /// `oag_physics::controls::update` ramps the airbrake states toward it at
-/// `Airbrake::gain`/`falloff`. The plant is the rate limiter, so the driver
-/// needs no state of its own to remember.
+/// `Airbrake::gain`/`falloff`. The plant is the rate limiter, so the caller's
+/// own state - [`Driver::peak_curvature`](crate::Driver::peak_curvature) -
+/// is the only memory this needs, and this function stays a pure scalar
+/// function of it.
+///
+/// [`ShipState::slowdown_timer`]: oag_physics::ShipState::slowdown_timer
+/// [`ShipState::stun_timer`]: oag_physics::ShipState::stun_timer
 pub(super) fn trail(
     steer: &Steer,
-    speed: f32,
-    target: f32,
+    curvature: f32,
+    peak_curvature: f32,
+    recovering: bool,
     tuning: &Tuning,
     personality: &Personality,
 ) -> f32 {
-    if speed < target
+    if recovering
+        || curvature <= tuning.trail_curvature_floor
+        || curvature < peak_curvature * tuning.trail_exit_decay
         || steer.command.abs() < tuning.trail_saturation
         || steer.rate_error.abs() <= tuning.trail_deadband
     {
@@ -207,6 +223,23 @@ pub(super) fn trail(
         magnitude
     } else {
         -magnitude
+    }
+}
+
+/// The next [`Driver::peak_curvature`](crate::Driver::peak_curvature): the
+/// high-water mark since the line last went straight, or `curvature` itself
+/// once it has.
+///
+/// Runs every tick regardless of saturation, so the mark is already current
+/// the moment a corner does saturate the steering loop - a craft that enters a
+/// bend below `trail_saturation` and only saturates near the apex must not
+/// read as "exiting" on its first saturated tick for want of a mark taken this
+/// tick.
+pub(super) fn track_peak_curvature(curvature: f32, previous_peak: f32, tuning: &Tuning) -> f32 {
+    if curvature <= tuning.trail_curvature_floor {
+        curvature
+    } else {
+        curvature.max(previous_peak)
     }
 }
 

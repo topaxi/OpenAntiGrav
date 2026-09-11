@@ -606,9 +606,11 @@ and a fifth fact settles it: `ShipState::brake`, which is the only thing that
 actually slows the craft, rises only while **both** inputs are positive. So a
 differential airbrake is **not a brake**. It is yaw authority bought with grip,
 and the driver spends it only where the steering loop has run out of authority
-of its own - `Tuning::trail_saturation`, plus a deadband that keeps it out of
-the small-signal regime and an overspeed gate that keeps it off corner exit,
-where the grip is wanted for accelerating and the forward slide term is largest.
+of its own - `Tuning::trail_saturation`, a deadband that keeps it out of the
+small-signal regime, a curvature floor and exit-decay check that keep it off
+straights and corner exit, and a check against the craft's own weapon-hit and
+collision timers. See "The corner-entry gate was wrong" below for what that
+replaced and why.
 
 The design deliberately does not lean on the forward term: `params::Airbrake`'s
 own doc records that whether `drag` accelerates or decelerates is unresolved, and
@@ -660,6 +662,135 @@ stepped with released controls rather than skipped, because the destroyed
 sequence runs inside the step and has to finish. Nothing reads its `Eliminated`
 state afterwards, so it coasts, settles and is passed - the explosion, the
 respawn and the elimination bookkeeping are all unbuilt.
+
+### The corner-entry gate was wrong, and what replaced it
+
+Reported from play: the AI and the autopilot did not appear to use the
+airbrakes at all, and clipped tight corners. Measured headlessly - `VENOM`/Ace,
+one craft solo, two laps of Talon's Junction (`oag_pulse::race::DEFAULT_TRACK`,
+5,336 ticks), a temporary `eprintln!` inside `Driver::drive` - and confirmed:
+`driver::pace::trail`'s gate, `speed < target`, is not an overspeed check on
+corner exit only, the way its own reasoning above assumed. `target` is a
+*modelled* limit from the corner ahead, and a craft can be saturated on the way
+**in** - full lock, large turn-rate error - while still measurably below it.
+On the corner that cost the most: `command` pinned at `±1.0`, `rate_error`
+0.5-0.6 rad/s, for over ten consecutive ticks while speed collapsed from 111 to
+39.5 units/s and `target` sat at 160-180 throughout. `speed < target` held on
+every one of those ticks, so the differential was zero on all of them - the one
+corner on the lap that needed it most.
+
+**The obvious fix does not survive contact with a real track.** Replacing the
+condition with `!target.is_finite()` - off only on a genuine straight, where
+`corner_target` returns infinity - passed every test in `tests/closed_loop.rs`,
+including the stability guard, because that file's `oval_of` fixture builds its
+straights from exactly collinear points and so `target` really is infinite
+there. **A real racing line's sampled points are never exactly collinear**:
+over the full two-lap Talon's Junction trace, `target` was infinite on **zero**
+of 5,336 ticks, against 303 on the closed-loop oval in the same length of run.
+So the replacement gated out nothing on disc geometry - it was equivalent to
+removing the gate outright - and on the real seven-opponent field
+(`opponent_weapons_ground_truth::a_field_racing_with_real_pads_does_not_mine_itself_to_death`,
+a real minute of racing with the disc's own pads) that ground one opponent's
+shield to zero, against a comfortable `full * 0.45` clear with the gate
+unmodified. The attempt was reverted in full.
+
+**What actually separates corner entry from corner exit, measured on the same
+lap, is not `speed` or `target` at all - it is curvature's own trend.** Two
+real saturated stretches, both holding `speed` a similar fraction below
+`target` throughout: one flat-to-rising in curvature (still working the
+corner), the other falling steadily (the corner opening up on exit, curvature
+0.0274 down to 0.0117 over 63 ticks as the craft pulled away). `speed`/`target`
+cannot tell these apart; curvature's trend can. `Driver::peak_curvature` tracks
+the high-water mark since the line last went straight, resetting only when
+curvature drops to a floor small enough to be chord noise rather than a bend -
+0.0003-0.0005 on Talon's Junction's own straights, against 0.0056 and up
+everywhere the driver was genuinely saturated on a real one. `0.001` sits in
+that gap. `trail` now reads exit as curvature having fallen to `0.7` of that
+peak, a threshold chosen well inside the measured decline and well outside the
+~5e-5 tick-to-tick noise the chord estimate carries mid-corner.
+
+**A second, unrelated failure surfaced by the same instrumentation, run over
+the seven-craft field test with the slowdown and stun timers logged
+alongside**: a weapon hit **halves a craft's speed in one tick**
+(`ShipState::slowdown_timer` arms the tick after), which the pure-pursuit loop
+reads as exactly the shape of a genuine corner - `command` and `rate_error`
+both saturate correcting the sudden mismatch between heading and velocity - on
+track geometry that is nearly straight throughout (curvature ~0.0026-0.0028 the
+whole episode, well under any real corner). `oag_physics::forces::evaluate`
+already skips lateral grip entirely while the timer runs, so a differential
+spent there buys nothing at all; `trail` now gates on `slowdown_timer` and
+`stun_timer` (the latter currently unarmed by anything in this codebase - see
+`ShipState::stun_timer`'s own doc - gated anyway, for when it is).
+
+**Consequence for the closed-loop suite**: `tests/closed_loop.rs`'s `oval_of`
+straights are exactly collinear and so cannot exercise the curvature floor the
+way disc geometry does - the same blind spot that let `!target.is_finite()`
+through. `tests/closed_loop_real_geometry.rs` adds a straight built with a
+small lateral wobble (0.001 units of curvature, inside the measured
+0.0003-0.0005 band) so three consecutive points are never exactly collinear,
+and asserts the differential still never fires on it.
+
+Net effect on the disc-backed suites: `opponent_weapons_ground_truth` and
+`race_ground_truth`'s solo and field benchmarks were re-run against the change
+(`just test-data`); see their own test bodies for the current numbers. The AI
+determinism reference (`crates/ai/tests/determinism.rs`) moved on all three
+rows, `Solo` included this time - unlike the `social` axis entries above, the
+differential is reached by a lone craft on the scenario's own corners, so a
+change here was always going to show there. `oag_gameplay`'s own reference
+moved too, but only mechanically: neither of its scenarios ever calls
+`Driver::drive`, so `Driver::peak_curvature` joining the hash is one more
+`u32` a tick and no behaviour, the same shape `roll_decided` and `reflex`
+moved it for before.
+
+### The gate was right, the magnitude was not - `--race --autopilot` found it
+
+Reported from play, the same day: with the gate above fixed, `--race
+--autopilot` (Pulse PSP EU, VENOM, Elite - the CLI's own defaults) still showed
+no visible airbrake through Talon's Junction's own U-turn, and the craft "takes
+a normal turn" through the one corner the differential most exists for.
+Instrumented the exact code path `--autopilot` runs
+(`Race::autopilot_controls`, which shares `ship.driver.drive` with every AI
+opponent) rather than the synthetic ovals: the gate **was** opening - 19 ticks
+of the corner engaged it - but the differential it computed peaked at **7.67**
+of the airbrake's `0..=100` range. Barely there against a symmetric brake
+already near its own ceiling.
+
+The cause was arithmetic, not logic: `Tuning::trail_saturation` (`0.85`)
+implies a turn-rate-error threshold of `0.85 / rate_gain` = `0.17` rad/s at the
+defaults, and `Tuning::trail_deadband` sat at `0.15` - `0.02` rad/s of headroom
+between "the gate is allowed to open" and "the magnitude computed from it is
+still zero". A driver saturated exactly at the gate's own threshold, which real
+corners spend most of their time doing rather than pinned at absolute full
+lock, computed almost nothing.
+
+Fitted against the same real corner, `Tuning::trail_saturation` swept alongside
+wider `trail_deadband`/`trail_gain` values, cross-checked on the real
+seven-opponent field test that caught the original gate's own regression:
+
+| `trail_saturation` | engaged ticks | mean magnitude | field energy (mean-of-means) | depleted craft |
+| --- | --- | --- | --- | --- |
+| `0.85` (old) | 19 | 4.6 | 0.67 | 0 |
+| `0.6` | 58 | 23.9 | 0.58 | 3 |
+| **`0.7`** (chosen) | **41** | **25.2** | **0.67** | **1** |
+
+`0.6` engages for the longest stretch of the corner and no stronger a
+differential than `0.7` - both `trail_deadband` (lowered to `0.05`) and
+`trail_gain` (raised to `3.0`) hold the *magnitude* wherever the gate is open,
+regardless of which of the three saturation values is doing the gating. What
+`0.6` costs, that `0.7` does not, is real: a full seven-opponent field over a
+minute of racing with the disc's own weapon pads spends measurably more grip
+fighting more of every corner, and the energy floor
+`opponent_weapons_ground_truth` guards reads that as three depleted craft
+instead of one and a mean-of-means back down near its own `0.5` floor rather
+than matching the pre-retune number. `0.7` is the point on this three-value
+sweep that keeps more than double the old engagement and the old field-energy
+margin at once. Zero respawns through the U-turn at every point swept,
+including `0.6` - the corner was never missed on this run at any of the three,
+only how much of the field's own grip it cost.
+
+See `Tuning::trail_saturation`'s own doc for the exact constants, and
+`crates/ai/tests/determinism.rs`'s history for why all three rows moved a
+second time the same day.
 
 ### The field is not one driver eight times
 
