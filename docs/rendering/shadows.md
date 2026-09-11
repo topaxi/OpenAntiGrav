@@ -823,7 +823,7 @@ comparison sampler.
 | what the map holds | coverage, per the microcode | the same |
 | who casts | models (`Job RenderModelShadowMaps`) | the craft |
 | who receives | the track surface, whose material declares `shadowMapTex` | the same, as a per-model pipeline constant |
-| the projection | `shadowMatrix`, built around the `.envsettings` sun | the same sun; the *fit* is ours |
+| the projection | `shadowMatrix`: **one orthographic map per ship**, looking from 70 units up `Lighting.Sun direction` at the ship, fitted to the ship's own bbox, near 1 / far 140 - read on 2026-09-11, [`shadow-model-maps.md`](../ghidra/functions/ps3-hdfury-eu/shadow-model-maps.md) | the same sun; one map fitted to the whole grid, which is ours |
 | the map's size | `shadowMapTexSize`, **value unread** | 1024, ours |
 | where `1 - shadow` lands | the fragment's **alpha**, which `ShadowToAlpha` names, consumed by a compositing pass that is **unread** | multiplied into colour, because this renderer's alpha is the bloom's glow mask |
 | how dark | whatever that unread pass does | `MAP_STRENGTH`, `0.5`, ours |
@@ -863,12 +863,21 @@ second pass with no casters clears it.
    **Two bugs found and fixed on the way, both of which shadowed *something* and
    so looked like they worked:**
 
-   - **The map lookup was mirrored vertically.** `oag_core::math::camera`'s
-     projections are glam's `rh::proj::directx` pair, which output **Y-down**
-     NDC; the receiver computed `uv.y = 0.5 - ndc.y * 0.5` as though it were
-     Y-up. A caster near the middle of its own map still lands near the middle
-     under a mirror, which is why HD's coverage tier appeared to work with the
-     same bug in it.
+   - ~~**The map lookup was mirrored vertically.**~~ **Retracted 2026-09-11 -
+     this "fix" was the mirror.** The claim was that glam's `rh::proj::directx`
+     projections output Y-down NDC; they are **Y-up** with a `0..1` depth,
+     which glam's own `camera/rh/proj.rs` states, and a wgpu render target
+     rasterises `ndc.y = +1` into texel row 0. So `uv.y = 0.5 - ndc.y * 0.5`
+     was right and the `ndc.y * 0.5 + 0.5` that replaced it read every map
+     mirrored about its horizontal axis. A caster near the middle of its own
+     map still lands near the middle under a mirror, which is exactly why
+     both tiers appeared to work with it: on HD the coverage tier put each
+     craft's shadow on the wrong side of the craft with its silhouette
+     turning the wrong way as the craft turned relative to the sun, and in
+     the `mapped` tier - whose box is centred `MAPPED_AHEAD` in front of the
+     player - the mirror threw the player's own shadow about twice that far
+     away, which is the "gap" recorded below. Pinned by an off-centre caster in
+     `shadow_map_coverage.rs`, read back through the receiver's own formula.
    - **The shadow term reached one fragment entry point of five.** `mesh.wgsl`
      has `fs_main`, `fs_main_blend`, `fs_main_alpha_test` and the two
      `_velocity` twins, and a **race draws through the `_velocity` pair** - so
@@ -877,7 +886,10 @@ second pass with no casters clears it.
      on the projection maths before the entry points were counted.
 
    **The gap, stated rather than tuned away: a craft's own shadow does not
-   appear on the road.** Scenery-on-scenery and the rest of the frame do
+   appear on the road.** *(2026-09-11: the mirrored lookup above is the
+   likely cause and is fixed; whether this closes the gap has not been
+   re-measured with a diff, so the paragraph stands until it is.)*
+   Scenery-on-scenery and the rest of the frame do
    shadow. What has been ruled out, each by a separate run: the depth pass
    writes depth (`shadow_map_coverage.rs` reads the texels back), the map has
    content at the road's own texels, the road computes a `uv` inside the map,

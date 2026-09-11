@@ -290,3 +290,117 @@ fn the_depth_pass_records_the_caster_and_clears_the_rest() {
     assert_eq!(at(0, 0), 1.0, "the corner");
     assert_eq!(at(middle, 4), 1.0, "the top border");
 }
+
+/// The receiver's lookup in `mesh.wgsl` - `uv = (ndc.x * 0.5 + 0.5, 0.5 -
+/// ndc.y * 0.5)` - reads the texel the caster pass actually wrote, in both
+/// maps.
+///
+/// **An off-centre caster, deliberately.** The two tests above put the
+/// caster at the map's own centre, and a centred caster cannot tell the
+/// right lookup from one mirrored about the map's horizontal axis: both read
+/// the middle. That mirror shipped on 2026-09-04 on the strength of a claim
+/// that glam's `rh::proj::directx` projections are Y-down (they are Y-up,
+/// with a `0..1` depth - glam's own `camera/rh/proj.rs` says so), and it
+/// put every Wipeout HD craft's shadow on the wrong side of the craft, with
+/// the silhouette turning the wrong way as the craft turned relative to the
+/// sun. So this caster sits above the fit's centre under a tilted light,
+/// which lands it well into the upper half of the map, and the assertion
+/// is that the receiver's formula picks a covered texel there while the
+/// mirrored row is clear.
+#[test]
+fn the_receivers_lookup_reads_the_row_the_caster_landed_in() {
+    let Some(adapter) = pollster::block_on(
+        wgpu::Instance::default().request_adapter(&wgpu::RequestAdapterOptions::default()),
+    )
+    .ok() else {
+        eprintln!("no GPU adapter: skipping");
+        return;
+    };
+    let (device, queue) =
+        pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default()))
+            .expect("requesting the device");
+    let mut map = Map::new(&device);
+    let (vertices, indices) = quad();
+    let vertex_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("caster vertices"),
+        size: std::mem::size_of_val(&vertices) as u64,
+        usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+        mapped_at_creation: false,
+    });
+    queue.write_buffer(&vertex_buffer, 0, bytemuck::cast_slice(&vertices));
+    let index_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("caster indices"),
+        size: std::mem::size_of_val(&indices) as u64,
+        usage: wgpu::BufferUsages::INDEX | wgpu::BufferUsages::COPY_DST,
+        mapped_at_creation: false,
+    });
+    queue.write_buffer(&index_buffer, 0, bytemuck::cast_slice(&indices));
+    // A tilted light, the shape of a circuit's own sun, and the caster
+    // lifted above the fit's centre: in the light's view that is a shift
+    // along the map's vertical axis, which is the axis the mirror flips.
+    let fit = Fit {
+        centre: Vec3::ZERO,
+        radius: 4.0,
+        towards_light: Vec3::new(0.3, 0.8, 0.2).normalize(),
+    };
+    let model = Mat4::from_translation(Vec3::new(0.0, 2.5, 0.0));
+    let whole = 0..indices.len() as u32;
+    let ranges = std::slice::from_ref(&whole);
+    let caster = Caster {
+        vertices: &vertex_buffer,
+        indices: &index_buffer,
+        ranges,
+        model,
+    };
+    let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+    map.render(&queue, &mut encoder, &fit, &[caster]);
+    map.render_depth(&queue, &mut encoder, &fit, &[caster]);
+    queue.submit([encoder.finish()]);
+
+    // The same arithmetic as `shadow_coverage` in `mesh.wgsl`, for the
+    // caster's own centre, against each map's own matrix and size.
+    let lookup = |matrix: Mat4, size: u32| {
+        let clip = matrix * model.transform_point3(Vec3::ZERO).extend(1.0);
+        let ndc = clip.truncate() / clip.w;
+        assert!(
+            ndc.y > 0.2,
+            "the fixture has to land well off the centre line to test anything, got ndc.y {}",
+            ndc.y
+        );
+        let column = ((ndc.x * 0.5 + 0.5) * size as f32) as u32;
+        let row = ((0.5 - ndc.y * 0.5) * size as f32) as u32;
+        let mirrored = ((ndc.y * 0.5 + 0.5) * size as f32) as u32;
+        (column, row, mirrored, ndc.z)
+    };
+
+    let texels = read_back(&device, &queue, &map);
+    let (column, row, mirrored, _) = lookup(map.matrix(), SIZE);
+    let at = |x: u32, y: u32| texels[(y * SIZE + x) as usize];
+    assert_eq!(at(column, row), 0xff, "the receiver's row is covered");
+    assert_eq!(at(column, mirrored), 0, "the mirrored row is clear");
+
+    let depth = read_back_depth(&device, &queue, &map);
+    let (column, row, mirrored, z) = lookup(map.depth_matrix(), DEPTH_SIZE);
+    let at = |x: u32, y: u32| depth[(y * DEPTH_SIZE + x) as usize];
+    assert!(
+        (at(column, row) - z).abs() < 1e-3,
+        "the receiver's row holds the caster's own depth: {} against {z}",
+        at(column, row)
+    );
+    assert_eq!(
+        at(column, mirrored),
+        1.0,
+        "the mirrored row is at the far plane"
+    );
+    // The receiver's own comparison for a surface that cast this very depth:
+    // `mesh.wgsl` lights a pixel when `ndc.z - depth_bias <= nearest`, and a
+    // caster has to come out lit against its own texel or the whole `mapped`
+    // tier is acne. The rasterizer's slope-scaled bias in `Map::new` is what
+    // pushes the written depth past `z`; this checks that it pushed it the
+    // right way, for the smallest shader-side bias the tier could use.
+    assert!(
+        z <= at(column, row),
+        "a caster's own surface reads shadowed against its own texel: z {z} against {}",
+        at(column, row)
+    );
+}

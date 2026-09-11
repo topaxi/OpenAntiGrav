@@ -97,6 +97,12 @@ Two structural facts to expect, both different from every other binary here:
   mechanism `.COLLISIONS`' severity and ship/wall split runs on, still
   undecoded past the opcode itself), and `0x19`'s alternate-selection
   handler - a random pick that never repeats the previous one.
+- [shadow-model-maps.md](shadow-model-maps.md) - `Job RenderModelShadowMaps`'s
+  run function and the per-ship matrix builder behind it: one map per ship,
+  looking from 70 units up `Lighting.Sun direction` at the ship, an
+  orthographic box fitted to the ship's own bbox with near 1 / far 140, and
+  the bias form that becomes `shadowMatrix`. Plus the lazily-initialised
+  env-settings block every `Lighting.*` key registers into.
 - [shadow-stencilvolume.md](shadow-stencilvolume.md) - the `LiveStencilShadow`
   shader technique's registration and its three named constants, the
   per-model flag bit that builds a fixed-named `shadow.stencilvolume` sibling

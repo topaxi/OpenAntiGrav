@@ -437,13 +437,19 @@ fn shadow_coverage(world: vec3<f32>) -> f32 {
     if ndc.z < 0.0 || ndc.z > 1.0 {
         return 0.0;
     }
-    // **`ndc.y` is already down.** `oag_core::math::camera`'s projections are
-    // glam's `rh::proj::directx` pair, which flip Y - the same convention the
-    // scene camera renders with. Writing the usual `0.5 - ndc.y * 0.5` here
-    // mirrors the lookup vertically about the map's own centre, which is a bug
-    // that hides itself: a caster near the middle still lands near the middle,
-    // and only a shadow far from it goes missing.
-    let uv = vec2<f32>(ndc.x * 0.5 + 0.5, ndc.y * 0.5 + 0.5);
+    // **`ndc.y` is up, and the map's row 0 is its top.** `oag_core::math::
+    // camera`'s projections are glam's `rh::proj::directx` pair, which is
+    // Y-up NDC with a `0..1` depth (glam's own `camera/rh/proj.rs` says so),
+    // and the caster pass rasterises `ndc.y = +1` into texel row 0 like any
+    // wgpu render target. So the lookup is `0.5 - ndc.y * 0.5`. The other
+    // sign mirrors the map about its own horizontal axis, and that is a bug
+    // that hides itself: a caster near the middle still lands near the
+    // middle, and only the *side* the shadow falls on is wrong - which, for
+    // a low sun, reads as the shadow sitting on the wrong side of the craft
+    // and its silhouette turning the wrong way as the craft turns. Pinned by
+    // `tests/shadow_map_coverage.rs`, which reads a caster's texel back
+    // through this same formula.
+    let uv = vec2<f32>(ndc.x * 0.5 + 0.5, 0.5 - ndc.y * 0.5);
     // Outside the map's own rectangle the clamped sampler would smear its
     // border across the whole circuit, so a receiver the map does not cover is
     // lit rather than edge-coloured.

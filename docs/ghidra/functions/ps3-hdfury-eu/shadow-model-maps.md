@@ -1,0 +1,155 @@
+# HD's model shadow maps: one map per ship, cast along the circuit's sun
+
+2026-09-11. Read because the `original` shadow tier on Wipeout HD put every
+craft's shadow on the wrong side of the craft, and the question "which way
+does HD's own `Job RenderModelShadowMaps` look" had never been answered from
+the code - [`shadows.md`](../../../rendering/shadows.md) carried "built around
+the `.envsettings` sun" as an assumption. It is now a reading. The bug itself
+turned out to be this project's receiver lookup and not the direction (the
+shader comment in `mesh.wgsl` and the test in
+`crates/render/tests/shadow_map_coverage.rs` record that), but the reading
+stands on its own.
+
+Static only, so every score here caps at 84 per the
+[confidence rubric](../../../reverse-engineering/confidence-rubric.md). Every
+TOC-relative load was resolved with `scripts/ps3-toc.py resolve` against the
+function's own OPD TOC rather than read off Ghidra's symbol names - see
+[memory.md](memory.md) for why that matters on this binary.
+
+## How the job was found
+
+`Job RenderModelShadowMaps` is the string at `0x007b1060`. Its one referrer
+(`ps3-toc.py attrib`) is `Scene_PrepareFrame` (`0x003aa888`), which
+constructs the job object at `0x003ae200..0x003ae268`: base vtable
+`TOC[-0x6278]` = `0x008621c8`, then after the base constructor
+`TOC[-0x6260]` = `0x0086c880`, then the most-derived `TOC[-0x6258]` =
+**`0x0086c898`**. Slot 3 of that vtable is the run function, the same slot
+[`rcsmaterial.md`](../../../formats/rcsmaterial.md#the-frames-pass-order)
+already used to reach `RenderModelShadowsOnTrack`: OPD `0x0088b838` ->
+trampoline `0x006cde70` -> **`0x003ed810`**.
+
+## The names
+
+| Address | Name | Confidence |
+| --- | --- | --- |
+| `0x003ed810` | `Shadow_RenderModelShadowMaps` | 82 |
+| `0x003ec3e8` | `Shadow_BuildShipShadowMatrices` | 80 |
+| `0x003a9520` | `EnvSettings_GetOrCreate` | 84 |
+
+### `Shadow_RenderModelShadowMaps` (`0x003ed810`)
+
+The job's run function. In order:
+
+1. `EnvSettings_GetOrCreate()`, then loads the vec4 at `+0x450` of the block
+   it returns and normalises it (`vrsqrtefp` plus one Newton step). That
+   field is **`Lighting.Sun direction`** - see the next function.
+2. Sets up the map target (`FUN_005c2380(ctx, 1,1,1,0)` / `FUN_005c2524`,
+   colour-mask and clear shapes; the identities are not read) and sets the
+   material-state flag word `+4 |= 0x4000`.
+3. Walks the ship table: count at `0xc86880 + 0x933c4`, index list at
+   `+0x933c8`, records `0x1b0` bytes apart. A ship is drawn when its byte
+   `+0x140` is non-zero and bit 0 of `+0xe4` is set - the same activity test
+   the other per-ship passes use.
+4. Per ship: `FUN_005a40f8(ctx, texture, ...)` (a target/viewport for that
+   ship's own map slot), then **`Shadow_BuildShipShadowMatrices(sun,
+   ship_world, bbox, ship+0x80, ship+0x40)`** where `bbox` is
+   `*(ship+0x128) + 0x20` or null. Then it points engine parameter **1
+   (`viewProj`)** at `ship+0x80` (`*(ctx+0xd8) + 0x38`, four vec4s) and runs
+   the ship's compiled draw ops at `ship+0x12c` through
+   `Render_RunCompiledOps`. So the *scene* camera is replaced by the light's
+   for the duration of the ship's own draw - the model draws itself into the
+   map with its ordinary vertex path.
+5. After the loop, restores `viewProj` from the camera (`FUN_003aa2c8()`)
+   and clears the `0x4000` flag.
+
+**One map per ship**, each fitted to that ship alone: there is no grid-wide
+fit and no shared box. `ship+0x40` is the matrix the receiving pass will
+later publish as engine parameter 40 (`shadowMatrix`) - it is the bias form
+of the same projection, below.
+
+Confidence 82: reached through the job's own vtable from its name string,
+every step is one contiguous function, and the per-ship loop's table and
+activity test match the other passes'. Not higher because nothing here has
+been watched under RPCS3.
+
+### `Shadow_BuildShipShadowMatrices` (`0x003ec3e8`)
+
+`(sun, ship_world, bbox_or_null, out_view_proj, out_shadow_matrix)`, `sun`
+already normalised. Read from the disassembly at `0x003ec3e8..0x003ec4a0`
+(the VMX prologue) and the decompilation past it:
+
+**The view.** With `M` the ship's world matrix (rows at `+0x00/+0x10/+0x20`,
+position at `+0x30`) and `c` the constant vec4 at `0x007b3220` =
+`(70.0, 0, 0, 0)`:
+
+```text
+eye    = M.pos + sun * 70.0
+target = M.pos
+up     = cross(sun, M.row2)          # lvsl/lvsr rotate + vmaddfp/vnmsubfp, the VMX cross-product idiom
+view   = FUN_005a2b18(eye, target, up)
+```
+
+`FUN_005a2b18` is a right-handed look-at: forward = normalise(eye - target),
+right = normalise(cross(up, forward)), up' = cross(forward, right), last row
+`-eye . axes`. So **the map looks from a point 70 units up the sun vector at
+the ship, along the sun**, and the sun vector points *towards* the light -
+the same sense `oag_render::mesh_render::Light::direction` carries.
+
+**The box.** The eight corners of `bbox` - or, when null, the fixed
+`(-6,-6,-6)..(6,6,6)` cube the function writes once into
+`0xc86880 + 0x97690` - go through `M * view`, and their x/y extents are the
+orthographic bounds:
+
+```text
+proj = FUN_005a2780(min_x, max_x, min_y, max_y, near = 1.0, far = 140.0)
+```
+
+`FUN_005a2780` is a GL-shaped orthographic (`2/(r-l)`, `2/(t-b)`, `2/(n-f)`,
+`-(r+l)/(r-l)`, `-(t+b)/(t-b)`, `(n+f)/(n-f)`), the near/far constants at
+`0x008b7de0` / `0x008b7e74`. With the eye 70 out, `1..140` is a slab 69
+units towards the light and 70 past the ship - which is where the road under
+it is.
+
+**The outputs.** `out_view_proj = view * proj` with the view's w column
+masked, and `out_shadow_matrix = out_view_proj * bias`, the bias built from
+`0x008b7e78` = `0.5` and `-0.5` in the usual `(0.5, -0.5, 0.5)` texture
+mapping shape, plus an offset read at runtime (`*0x008b7e70`, a pointer to
+`0x00f5b934`) added to `0.5` - a texel-centre term by shape, value unread.
+
+Confidence 80: the vector idioms (cross product, normalise, look-at,
+corner-extents) are each recognisable and the constants resolve, but the
+reading of which row of `M` feeds the `up` hint is from register tracing
+alone. It does not matter for the picture - an orthographic map's in-plane
+rotation cancels between caster and receiver - so it was not chased further.
+
+### `EnvSettings_GetOrCreate` (`0x003a9520`)
+
+Lazily initialises the global environment-settings block at `iRam008b6fb4`
+(flag at `+0x5c0`), writing every default and registering every key
+against its field: 90 calls to the four registrars (`FUN_005d3ec0` colour,
+`FUN_005d3cc8` vec3, `FUN_005d4418` float, `FUN_005d46b8` bool). The names
+are the `.envsettings` vocabulary
+[`envsettings.md`](../../../formats/envsettings.md) already lists - checked
+through this function's own TOC: `TOC[-0x63c8]` -> `0x007b02d0`
+`Lighting.Sun direction` (field `+0x450`), `TOC[-0x63c0]` `Lighting.Physical
+Sun direction` (`+0x470`), `TOC[-0x63ac]` `Lighting.Ambient false direction`
+(`+0x4a0`), `TOC[-0x6384]` `Lighting.Debug.Draw Ship Shadows` (`+0x508`,
+default 1).
+
+So the direction the shadow maps cast along is the same key this renderer
+already lights with, and nothing else: no separate shadow light exists in
+HD's vocabulary (2048 added one - see `shadows.md`).
+
+Confidence 84: unambiguous, and the one thing not proved is that the block's
+*runtime* value is the file's - the registrar is what the loader writes
+through, and the loader was not traced here.
+
+## What this changes for `oag-render`
+
+- The direction was right: `shadow::map::Fit::towards_light` from the
+  circuit's sun is what the original does.
+- The fit is not: the original fits **one map per ship to that ship's own
+  box**, where this renderer fits one map to the whole grid. That is a
+  resolution difference and a documented choice (`shadow::map::SIZE`), not
+  a placement one.
+- `shadowMapTexSize` stays unread - this job never touches it.

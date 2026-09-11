@@ -260,3 +260,6 @@
 0x0017acc0	function	Music_BuildFeshipTrackPath	78	sound.md
 0x006234c0	function	Scream_DoGrainNop14	82	sound.md
 0x006234c8	function	Scream_DoGrainNop15	82	sound.md
+0x003ed810	function	Shadow_RenderModelShadowMaps	82	shadow-model-maps.md
+0x003ec3e8	function	Shadow_BuildShipShadowMatrices	80	shadow-model-maps.md
+0x003a9520	function	EnvSettings_GetOrCreate	84	shadow-model-maps.md
