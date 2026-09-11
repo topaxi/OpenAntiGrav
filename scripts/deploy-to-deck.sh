@@ -96,7 +96,7 @@ dry_flag=()
 sync_file() {
     local src="$1" dest_dir="$2"
     if (( use_rsync )); then
-        rsync -avz "${dry_flag[@]}" "$src" "$host:$dest_dir/"
+        rsync -avzc "${dry_flag[@]}" "$src" "$host:$dest_dir/"
     elif (( dry_run )); then
         echo "would run: scp '$src' '$host:$dest_dir/'"
     else
