@@ -1,10 +1,10 @@
 //! Prints the driver determinism hashes for this machine.
 //!
-//! The third of its kind, after `oag-core`'s and `oag-physics`'s examples of the
-//! same name, and here for the same reason: CI runs it on every supported
-//! platform, so when `tests/determinism.rs` fails, each platform's log already
-//! carries the numbers and the divergent target is visible without re-running
-//! anything.
+//! The third of its kind, after `oag-core`'s `core_determinism_report` and
+//! `oag-physics`'s `physics_determinism_report`, and here for the same reason:
+//! CI runs it on every supported platform, so when `tests/determinism.rs`
+//! fails, each platform's log already carries the numbers and the divergent
+//! target is visible without re-running anything.
 //!
 //! It prints a row every hundred ticks as well as the totals, which is what
 //! makes a cross-platform failure localisable: diffing two CI logs dates the
@@ -13,7 +13,7 @@
 //! agrees over a scenario with no corners in it agrees about nothing.
 //!
 //! ```sh
-//! cargo run -q -p oag-ai --example determinism_report
+//! cargo run -q -p oag-ai --example ai_determinism_report
 //! ```
 
 use oag_ai::probe::{self, Scenario};

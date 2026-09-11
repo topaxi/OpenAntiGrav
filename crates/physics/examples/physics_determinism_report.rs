@@ -1,6 +1,6 @@
 //! Prints the simulation determinism hashes for this machine.
 //!
-//! The twin of `oag-core`'s example of the same name, over the real force law
+//! The twin of `oag-core`'s `core_determinism_report`, over the real force law
 //! rather than over the math probe. CI runs it on every supported platform, so
 //! when `tests/determinism.rs` fails the log for each platform already carries
 //! this output and the divergent target is visible without re-running anything.
@@ -11,7 +11,7 @@
 //! differently.
 //!
 //! ```sh
-//! cargo run -q -p oag-physics --example determinism_report
+//! cargo run -q -p oag-physics --example physics_determinism_report
 //! ```
 
 use oag_core::hash::StateHasher;

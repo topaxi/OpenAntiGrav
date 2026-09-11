@@ -2,7 +2,7 @@
 //!
 //! The twin of [`oag_core::probe`], and here for the same reason: the gate needs
 //! something to bite on that both `tests/determinism.rs` and
-//! `examples/determinism_report.rs` can call, so the test's committed hashes and
+//! `examples/physics_determinism_report.rs` can call, so the test's committed hashes and
 //! the report CI prints describe the same run rather than two runs that happen
 //! to look alike.
 //!

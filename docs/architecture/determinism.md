@@ -237,4 +237,5 @@ transcendental the simulation turns out to want goes in beside it.
 
 **When the determinism test fails, do not update the constants.** That converts
 a real bug into a silent one. The failure output names the platform, and each CI
-log already contains the `determinism_report` output for its platform.
+log already contains that gate's `*_determinism_report` example output for its
+platform.

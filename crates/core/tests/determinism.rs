@@ -9,7 +9,7 @@
 //!
 //! Do not update the constants to make it pass. That converts a real bug into a
 //! silent one. Work out which platform diverged, using the
-//! `determinism_report` example output already in each CI log, and fix the
+//! `core_determinism_report` example output already in each CI log, and fix the
 //! cause. Usual suspects, in order of likelihood:
 //!
 //! 1. A `mul_add` crept into the simulation path.
@@ -27,7 +27,7 @@
 //! is intended:
 //!
 //! ```sh
-//! cargo run -p oag-core --example determinism_report
+//! cargo run -p oag-core --example core_determinism_report
 //! ```
 
 use oag_core::probe;

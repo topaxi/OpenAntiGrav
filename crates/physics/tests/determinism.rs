@@ -44,7 +44,7 @@
 //! is intended - a change to the force law changes these hashes and *should*:
 //!
 //! ```sh
-//! cargo run -q -p oag-physics --example determinism_report
+//! cargo run -q -p oag-physics --example physics_determinism_report
 //! ```
 
 use oag_core::hash::StateHasher;

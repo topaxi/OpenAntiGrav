@@ -5,7 +5,7 @@
 //! target is visible without re-running anything.
 //!
 //! ```sh
-//! cargo run -p oag-core --example determinism_report
+//! cargo run -p oag-core --example core_determinism_report
 //! ```
 
 use oag_core::probe;

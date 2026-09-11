@@ -65,7 +65,7 @@
 //! intended:
 //!
 //! ```sh
-//! cargo run -q -p oag-ai --example determinism_report
+//! cargo run -q -p oag-ai --example ai_determinism_report
 //! ```
 
 use oag_ai::probe::{self, Scenario};

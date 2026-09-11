@@ -124,7 +124,7 @@ determinism reference (`crates/ai/tests/determinism.rs`) did not move.
    change - this is exactly the class of regression `closed_loop.rs` alone did
    not catch once already.
 4. Regenerate `crates/ai/tests/determinism.rs`'s `REFERENCE` deliberately
-   (`cargo run -q -p oag-ai --example determinism_report`), and say in the commit
+   (`cargo run -q -p oag-ai --example ai_determinism_report`), and say in the commit
    which scenarios moved and why - `Scenario::Solo` moving is expected this time,
    since a single craft alone on a corner reaches `trail` on every saturated
    tick.
