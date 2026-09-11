@@ -54,6 +54,44 @@ Measured on that path: `Main Menu` in about 45 seconds, a race running on
 Talon's Junction about 80 seconds after that, and screenshots that are real
 frames rather than black.
 
+**As of 2026-09-11 this page's boot path does not work on this machine, and
+the reason is not yet understood.** Measured that day, against the system
+`rpcs3-bin 0.0.42.19980` the morning's update installed *and* against the
+`0.0.42-19777` AppImage every capture above was taken with (still published:
+`gh release download build-3be5aa99ccadff085594ed0a738334fddd0ad4e3 -R
+RPCS3/rpcs3-binaries-linux -p '*.AppImage'`, extracted under
+`data/tools/rpcs3-19777/` with a two-line `bin/rpcs3` wrapper put first on
+`PATH` for the driving script, since `EMULATOR_BINARY` is looked up there):
+
+- **With `~/.config/rpcs3/dev_flash/` empty, both builds refuse the disc
+  outright** - a modal `Booting ... failed! Reason: Firmware is missing`
+  under `--no-gui`, `ppu_loader: PS3 firmware is not installed or the
+  installed firmware is invalid` in `RPCS3.log`. Every `race`/`capture` call
+  then waits on a screen that never comes, which reads exactly like a slow
+  boot. How the August captures booted with that directory empty (its mtime
+  is May 2024) is the open question; nothing in `config.yml` explains it.
+- **With the disc's own firmware installed** (`PS3_UPDATE/PS3UPDAT.PUP`,
+  version 2.76 - `DISPLAY=127.0.0.1:77 rpcs3 --installfw <pup>` on the
+  virtual display, `xdotool` clicking `Yes` on both of the GUI's prompts,
+  `Successfully installed PS3 firmware version 2.76` two minutes later)
+  **both builds boot and then hang the title at `TROPHY: checking`
+  forever**: `TrophyInitThread` gets one `sceNpTrophyRegisterContext`
+  callback (`trp_status=1` on a first boot, `3` after) and never the
+  processing sequence the game waits on - on ecryptfs and on tmpfs alike,
+  with or without a pre-generated `TROPUSR.DAT`. The docs' own quoted boot
+  print `TROPHY: Checking free disk space...` is the line this path never
+  reaches.
+
+The installed firmware is set aside as `~/.config/rpcs3/dev_flash.installed-2.76`
+(move it back to try again); it is the emulator's own config directory and
+none of it touches this tree. [toolchain.md](toolchain.md)'s "no firmware
+install is needed" is about *decrypting* the `EBOOT`, which is still true;
+this is about running it. **One trap from the same afternoon: write the
+`bin/rpcs3` wrapper as a file, never as a symlink to `AppRun`** - a `cat >`
+through a symlink overwrites the AppImage's own `AppRun` with a script that
+`exec`s itself, and the resulting fork loop looks like a boot that never
+prints anything.
+
 **Run `stop` (or `just rpcs3-stop`) when the whole session is done, not just
 after one race, and even if the driving script itself already exited.**
 `boot`/`race`/`shot`/`capture`/`browse`/`record` each stop their own RPCS3

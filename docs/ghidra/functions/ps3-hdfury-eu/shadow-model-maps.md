@@ -35,6 +35,16 @@ trampoline `0x006cde70` -> **`0x003ed810`**.
 | `0x003ed810` | `Shadow_RenderModelShadowMaps` | 82 |
 | `0x003ec3e8` | `Shadow_BuildShipShadowMatrices` | 80 |
 | `0x003a9520` | `EnvSettings_GetOrCreate` | 84 |
+| `0x003e4d50` | `Shadow_RenderModelAmbientShadowsOnTrack` | 80 |
+| `0x004053e0` | `Shadow_CompileShadowedTrackRedraw` | 75 |
+| `0x00402a88` | `Shadow_CompileAmbientShadowTrackRedraw` | 72 |
+
+The last three are from the second pass below: the ambient job's (empty)
+run function, and the two track-chunk compilers that bind `shadowMatrix`
+/ `shadowMapTex` and `ambientShadowMatrix` / `ambientShadowTex`
+respectively. 75 and 72 rather than higher because what the compiled stream
+*draws with* - the shader variant and its colour - is not read; the
+parameter slots, the blend state and the chunk cull are.
 
 ### `Shadow_RenderModelShadowMaps` (`0x003ed810`)
 
@@ -143,6 +153,50 @@ HD's vocabulary (2048 added one - see `shadows.md`).
 Confidence 84: unambiguous, and the one thing not proved is that the block's
 *runtime* value is the file's - the registrar is what the loader writes
 through, and the loader was not traced here.
+
+## The other three shadow jobs, read the same way (2026-09-11, later the same day)
+
+Each job object's most-derived vtable was reached exactly as above -
+`Scene_PrepareFrame` stores three vtables in turn, the last one wins - and
+slot 3 followed through its OPD trampoline:
+
+| Job (name string) | vtable | slot 3 -> run function | What it is |
+| --- | --- | --- | --- |
+| `Job RenderModelShadowsOnTrack` (`0x007b10f8`) | `0x0086c910` | `0x006cdf00` -> **`Shadow_DrawOccluderStencilVolumes`** (`0x003e6918`) | the stencil-volume pass [shadow-stencilvolume.md](shadow-stencilvolume.md) already traced |
+| `Job RenderModelAmbientShadowsOnTrack` (`0x007b1118`) | `0x0086c928` | `0x006cdf30` -> `Shadow_RenderModelAmbientShadowsOnTrack` (`0x003e4d50`), **an empty function** (`blr`) | **dead** |
+
+Two consequences:
+
+- **"On track" is the stencil pass.** `RenderModelShadowsOnTrack` does not
+  project the map by itself; it is the per-ship two-sided depth-fail stencil
+  over the shifted box, and its accumulate half (`Shadow_CompileShadowedTrackRedraw`, `FUN_004053e0`, called from
+  it with the ship's `+0x40` shadow matrix, its `+0xe0` map texture and the
+  `0x008b7e24` = **50.0** extrusion distance) is a track-chunk re-draw
+  compiler: it publishes the ship's matrix as engine parameter 40
+  (`shadowMatrix`, written at `*(ctx+0xd8)+0x518`) and its map as parameter
+  41 (`shadowMapTex`, `+0x53c`), then compiles the track chunks within that
+  radius of the ship into a command stream under blend `FUNC_ADD`,
+  `SRC_ALPHA / ONE_MINUS_SRC_ALPHA` (RSX `0x8006`, `0x302/0x303`). That is
+  the compositing pass `shadows.md` had as "unread": the road is drawn
+  again through its `ShadowToAlpha` variant, whose `1 - shadow` alpha
+  selects between the freshly-drawn (shadowed) colour and what is already in
+  the frame. What colour that variant computes - which is what decides *how
+  dark* - is still the fragment program's business and unread. The stencil
+  pass also reads the light from the same env block field, `+0x450`,
+  negated and taken into the ship's own frame, so it and the map agree on
+  the sun.
+- **HD/Fury never draws `ambient_shadow.gtf`.** The ambient job's run
+  function is empty, and its compiler twin `Shadow_CompileAmbientShadowTrackRedraw` (`FUN_00402a88`) - the same
+  track-chunk compiler bound to engine parameters 73/74/75
+  (`ambientShadowMatrix` at `+0x938`, `ambientShadowBlendFactor` at
+  `+0x958`, `ambientShadowTex` at `+0x97c`) under blend `ZERO /
+  ONE_MINUS_SRC_ALPHA`, a multiplicative darkening by the texture's alpha -
+  has **no reference anywhere in the image**: its OPD entry `0x0088cab0`
+  appears in no TOC and no code. So the nine per-team `ambient_shadow.gtf`
+  are shipped for a pass that is compiled in and never scheduled. The `blob`
+  tier that plays them is therefore a substitute the original itself does
+  not draw, and `shadows.md`'s "plays the disc's own image" needs that
+  qualifier.
 
 ## What this changes for `oag-render`
 

@@ -282,7 +282,11 @@ of this is already read and recorded:
 Those nine are the reason the `blob` tier is not an invention on HD: the disc
 ships the craft's soft silhouette as a texture, so `blob` **plays the disc's
 own image** and falls back to a generated circle only for a title that has no
-such asset. That is the narrow case the never-invent rule allows - a substitute
+such asset. **With one qualifier, read 2026-09-11**: HD/Fury itself never
+draws them - `Job RenderModelAmbientShadowsOnTrack`'s run function is empty
+and the compiler that would bind `ambientShadowTex` is unreferenced dead
+code ([`shadow-model-maps.md`](../ghidra/functions/ps3-hdfury-eu/shadow-model-maps.md)).
+The asset is the disc's; the decision to draw it is this project's. That is the narrow case the never-invent rule allows - a substitute
 for the missing asset alone, never an override of data we do have.
 
 ## What `mapped` actually changes, per title
@@ -825,7 +829,7 @@ comparison sampler.
 | who receives | the track surface, whose material declares `shadowMapTex` | the same, as a per-model pipeline constant |
 | the projection | `shadowMatrix`: **one orthographic map per ship**, looking from 70 units up `Lighting.Sun direction` at the ship, fitted to the ship's own bbox, near 1 / far 140 - read on 2026-09-11, [`shadow-model-maps.md`](../ghidra/functions/ps3-hdfury-eu/shadow-model-maps.md) | the same sun; one map fitted to the whole grid, which is ours |
 | the map's size | `shadowMapTexSize`, **value unread** | 1024, ours |
-| where `1 - shadow` lands | the fragment's **alpha**, which `ShadowToAlpha` names, consumed by a compositing pass that is **unread** | multiplied into colour, because this renderer's alpha is the bloom's glow mask |
+| where `1 - shadow` lands | the fragment's **alpha**, which `ShadowToAlpha` names, consumed by `RenderModelShadowsOnTrack`'s accumulate half: the track chunks within 50 units of the ship redrawn inside the stencil volume under `SRC_ALPHA / ONE_MINUS_SRC_ALPHA` - **found 2026-09-11**, the colour that variant computes still unread | multiplied into colour, because this renderer's alpha is the bloom's glow mask |
 | how dark | whatever that unread pass does | `MAP_STRENGTH`, `0.5`, ours |
 
 **Proved inert where it should be**: every pipeline binds the map and samples

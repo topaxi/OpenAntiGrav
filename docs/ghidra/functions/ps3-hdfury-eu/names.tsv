@@ -263,3 +263,6 @@
 0x003ed810	function	Shadow_RenderModelShadowMaps	82	shadow-model-maps.md
 0x003ec3e8	function	Shadow_BuildShipShadowMatrices	80	shadow-model-maps.md
 0x003a9520	function	EnvSettings_GetOrCreate	84	shadow-model-maps.md
+0x003e4d50	function	Shadow_RenderModelAmbientShadowsOnTrack	80	shadow-model-maps.md
+0x004053e0	function	Shadow_CompileShadowedTrackRedraw	75	shadow-model-maps.md
+0x00402a88	function	Shadow_CompileAmbientShadowTrackRedraw	72	shadow-model-maps.md
