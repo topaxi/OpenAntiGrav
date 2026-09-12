@@ -221,6 +221,15 @@ impl Race {
         self.sim.wall_damage.get(slot).copied().unwrap_or(0.0)
     }
 
+    /// How many ticks an opponent was still racing - the denominator
+    /// [`Self::wall_contact_ticks_of`] and [`Self::wall_shield_charged_of`] are
+    /// counted over. A wrecked craft is released and keeps being integrated, so
+    /// a row that died early covers fewer ticks than one that finished.
+    #[must_use]
+    pub fn racing_ticks_of(&self, slot: usize) -> u32 {
+        self.sim.wall_racing_ticks.get(slot).copied().unwrap_or(0)
+    }
+
     /// The fixed timestep, from [`TickRate::DEFAULT`].
     #[must_use]
     pub fn dt(&self) -> f32 {

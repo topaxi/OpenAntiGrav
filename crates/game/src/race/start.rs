@@ -311,6 +311,7 @@ impl Race {
                 wall_contact_ticks: [0; oag_gameplay::MAX_SHIPS],
                 wall_inbound_ticks: [0; oag_gameplay::MAX_SHIPS],
                 wall_damage: [0.0; oag_gameplay::MAX_SHIPS],
+                wall_racing_ticks: [0; oag_gameplay::MAX_SHIPS],
                 lost_ticks: [0; oag_gameplay::MAX_SHIPS],
                 stalled_ticks: [0; oag_gameplay::MAX_SHIPS],
                 rescue_distance,

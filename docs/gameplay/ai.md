@@ -3082,6 +3082,15 @@ excludes `Floor` and `MagFloor`, so a `WallResponse` contact can only be
 `Surface::Wall` or `Surface::Reset`. That is a surface-tag test and strictly
 stronger than the `|n.up|` near-zero geometric proxy a by-hand reading needs.
 
+**The counters are gated on the craft still racing.** `step_opponents`
+*releases* a wrecked opponent rather than skipping it, so `oag_physics::step`
+keeps integrating a hull settled against a wall, at a frozen `driver.index`.
+Ungated, `10_Track` at PHANTOM read 7,157 contact ticks against 328 after a
+change that *halved* what the walls charged it, and `07_Track` charged 122.05
+against a pool of 95.00 - both the wreck, not the driving. `racing_ticks_of` is
+the denominator, and `charged` saturates at the pool on a dead row, so it
+discriminates between living rows only.
+
 `Mode::SINGLE_RACE_LAPS_BY_CLASS` is `[3, 4, 4, 5]`, so a PHANTOM race is two
 laps longer than a VENOM one at a higher speed. Eighteen thousand ticks holds
 every class, but a craft that crosses its last line stops being `Racing` and
@@ -3138,21 +3147,21 @@ row of its sweep measured as worse.
 
 Board-wide, over all 48 rows:
 
-| class | wall-charged shield | end-of-run pool | respawns | eliminated |
-| --- | --- | --- | --- | --- |
-| VENOM | 260.5 -> 251.5 | 838.9 -> 908.0 | 1 -> 1 | 1 -> 1 |
-| FLASH | 488.1 -> 438.2 | 655.7 -> 684.7 | 1 -> 7 | 2 -> 2 |
-| RAPIER | 913.1 -> 776.5 | 255.9 -> 382.9 | 4 -> 13 | 5 -> 3 |
-| PHANTOM | 1334.3 -> 1049.9 | 101.4 -> 216.0 | 17 -> 14 | 4 -> 5 |
+| class | contact ticks | wall-charged | end-of-run pool | respawns | eliminated | racing ticks |
+| --- | --- | --- | --- | --- | --- | --- |
+| VENOM | 1,252 -> **1,154** | 256.1 -> **224.5** | 838.9 -> **908.0** | 1 -> 1 | 1 -> 1 | 210,968 -> **212,844** |
+| FLASH | 2,008 -> **3,305** | 477.9 -> **433.9** | 655.7 -> **684.7** | 1 -> **7** | 2 -> 2 | 205,552 -> **206,865** |
+| RAPIER | 3,124 -> **2,764** | 881.0 -> **753.7** | 255.9 -> **382.9** | 4 -> **13** | 5 -> **3** | 180,175 -> **195,135** |
+| PHANTOM | 4,627 -> **3,701** | 1296.2 -> **961.8** | 101.4 -> **216.0** | 17 -> **14** | 4 -> **5** | 185,171 -> **173,027** |
 
-Charged shield falls at every class (2,996 -> 2,516, a 16 % cut), the
-end-of-run pool rises at every class, and two more circuits reach **zero** wall
-contact at VENOM (`02` and `10` join `03`). **The price is lap time, 0.5-3.0 s
-a circuit, and respawns, which rise 23 -> 35 board-wide**: a craft that brakes
-earlier wedges at low speed and is rescued, where before it crashed at speed
-and was charged for it. Nothing on the board or in the gate asserts on lap
-time, so no measurement here separates "the AI is slower" from "the AI is
-correctly slower".
+Charged shield falls at every class (2,911 -> 2,374, an 18 % cut), the
+end-of-run pool rises at every class, contact ticks fall at three of four, and
+**zero-contact rows double, 2 -> 4**. Eliminations go 12 -> 11. **The price is
+lap time, 0.5-3.0 s a circuit, and respawns, which rise 23 -> 35 board-wide**: a
+craft that brakes earlier wedges at low speed and is rescued, where before it
+crashed at speed and was charged for it. Nothing on the board or in the gate
+asserts on lap time, so no measurement here separates "the AI is slower" from
+"the AI is correctly slower".
 
 `race_ground_truth::a_lone_craft_gets_round_the_circuits_it_is_known_to_get_round`
 stays twelve clean with `01_Track`'s single pre-existing respawn at driver
@@ -3161,8 +3170,8 @@ index 794, and both field ground-truth tests stay green.
 ### Where the board stands
 
 **Four of 48 rows meet the standard**: `03` at VENOM and FLASH, `02` and `10`
-at VENOM, each with zero wall contact. `07_Track` is the weakest row at every
-class and `13_Track` the second weakest. The full per-row table, the worst
+at VENOM, each with zero wall contact - up from two before the change.
+`07_Track` is the weakest row at every class and `13_Track` the second weakest. The full per-row table, the worst
 cluster on each row and the open residuals are in this thread's handover file
 rather than here, because they move every time the driver does.
 

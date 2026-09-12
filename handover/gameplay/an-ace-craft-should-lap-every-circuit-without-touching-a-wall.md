@@ -50,6 +50,17 @@ contact can only be `Surface::Wall` or `Surface::Reset`. That is a
 surface-**tag** test and strictly stronger than the `|n.up|` near-zero
 geometric proxy a by-hand reading had to use.
 
+**The counters are gated on the craft still racing, and that gate is the whole
+difference between a measurement and a fiction.** `step_opponents` *releases* a
+wrecked opponent rather than skipping it, so `oag_physics::step` keeps
+integrating a hull that has settled against a wall - at a frozen `driver.index`.
+Ungated, `10_Track` at PHANTOM read **7,157** contact ticks against 328 after a
+change that halved what the walls charged it, and `07_Track` charged **122.05**
+against a pool of **95.00**. Both numbers were the wreck, not the driving. The
+board's `racing ticks` column is the denominator, and it is printed because a
+row wrecked at tick 5,585 and a row that finished at 18,000 are not comparable
+without it.
+
 **Tick budget: 18,000 ticks holds every class, but not with room to spare.**
 `Mode::SINGLE_RACE_LAPS_BY_CLASS` is `[3, 4, 4, 5]`, and a craft that crosses
 its last line stops being `Racing` and coasts, so a row measured past the flag
@@ -124,20 +135,27 @@ now read different numbers.
 
 Board-wide, on the full 48 rows:
 
-| class | wall-charged shield | end-of-run pool | respawns | eliminated |
-| --- | --- | --- | --- | --- |
-| VENOM | 260.5 -> **251.5** | 838.9 -> **908.0** | 1 -> 1 | 1 -> 1 |
-| FLASH | 488.1 -> **438.2** | 655.7 -> **684.7** | 1 -> **7** | 2 -> 2 |
-| RAPIER | 913.1 -> **776.5** | 255.9 -> **382.9** | 4 -> **13** | 5 -> **3** |
-| PHANTOM | 1334.3 -> **1049.9** | 101.4 -> **216.0** | 17 -> 14 | 4 -> **5** |
+| class | contact ticks | wall-charged | end-of-run pool | respawns | eliminated | racing ticks |
+| --- | --- | --- | --- | --- | --- | --- |
+| VENOM | 1,252 -> **1,154** | 256.1 -> **224.5** | 838.9 -> **908.0** | 1 -> 1 | 1 -> 1 | 210,968 -> **212,844** |
+| FLASH | 2,008 -> **3,305** | 477.9 -> **433.9** | 655.7 -> **684.7** | 1 -> **7** | 2 -> 2 | 205,552 -> **206,865** |
+| RAPIER | 3,124 -> **2,764** | 881.0 -> **753.7** | 255.9 -> **382.9** | 4 -> **13** | 5 -> **3** | 180,175 -> **195,135** |
+| PHANTOM | 4,627 -> **3,701** | 1296.2 -> **961.8** | 101.4 -> **216.0** | 17 -> **14** | 4 -> **5** | 185,171 -> **173,027** |
 
-Charged shield falls at every class (2,996 -> 2,516, a 16 % cut) and the
-end-of-run pool rises at every class. **Two more circuits reach zero wall
-contact at VENOM** (`02` and `10` join `03`). The price is lap time, 0.5-3.0 s
-slower per circuit, and **respawns, which rise 23 -> 35 board-wide** - the
-craft brakes earlier, wedges at low speed and is rescued rather than crashing
-at speed. `01_Track` at RAPIER is the worst row: it stops being eliminated and
-starts taking ten recoveries with no clean lap at all.
+Charged shield falls at every class (2,911 -> 2,374, an 18 % cut), the
+end-of-run pool rises at every class, contact ticks fall at three of four, and
+**zero-contact rows double, 2 -> 4** (`02` and `10` at VENOM join `03` at VENOM
+and FLASH). Eliminations go 12 -> 11.
+
+The price is lap time, 0.5-3.0 s slower per circuit, and **respawns, which rise
+23 -> 35 board-wide** - the craft brakes earlier, wedges at low speed and is
+rescued rather than crashing at speed. `01_Track` at RAPIER is the worst row: it
+stops being eliminated and starts taking ten recoveries with no clean lap at
+all. Two rows die that did not: `05` at FLASH and `10` at PHANTOM.
+
+**`charged` saturates on a dead row.** Every eliminated row reads ~95, the whole
+pool, so it does not discriminate between them - `racing ticks` does, and lower
+is worse. That column is also the denominator the others are counted over.
 
 All three hard gates hold:
 `race_ground_truth::a_lone_craft_gets_round_the_circuits_it_is_known_to_get_round`
@@ -156,56 +174,56 @@ Read `charged` and `end` as different scales - and note that a row that dies
 early accumulates *fewer* contact ticks than one that survives grinding, so
 `ticks` alone ranks nothing.
 
-| circuit | class | clean lap | resp | state | contact ticks | charged | worst cluster | end |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 03 | VENOM | 43.8s | 0 | Racing | **0** | 0.00 | - | 95.00 |
-| 02 | VENOM | 43.5s | 0 | Racing | **0** | 0.00 | - | 95.00 |
-| 10 | VENOM | 38.4s | 0 | Racing | **0** | 0.00 | - | 87.40 |
-| 09 | VENOM | 51.5s | 0 | Racing | 11 | 1.81 | 3000-3049 @1.4 | 93.19 |
-| 14 | VENOM | 45.8s | 0 | Racing | 11 | 1.88 | 2400-2449 @1.9 | 93.12 |
-| 16 | VENOM | 42.1s | 0 | Racing | 57 | 10.50 | 3150-3199 @10.5 | 84.50 |
-| 05 | VENOM | 39.6s | 0 | Racing | 60 | 11.40 | 2400-2449 @9.3 | 83.60 |
-| 04 | VENOM | 39.3s | 0 | Racing | 84 | 14.70 | 950-999 @14.7 | 80.30 |
-| 06 | VENOM | 46.8s | 0 | Racing | 109 | 16.19 | 1350-1399 @14.7 | 78.81 |
-| 01 | VENOM | 43.6s | **1** | Racing | 121 | 24.38 | 500-549 @9.9 | 70.62 |
-| 13 | VENOM | 38.1s | 0 | Racing | 322 | 48.57 | 1600-1649 @25.5 | 46.43 |
-| **07** | VENOM | 50.7s | 0 | **Eliminated** | 3119 | 122.05 | 650-699 @37.7 | 0.00 |
-| 03 | FLASH | 39.8s | 0 | Racing | **0** | 0.00 | - | 95.00 |
-| 02 | FLASH | 40.1s | 0 | Racing | 23 | 3.89 | 50-99 @2.0 | 91.11 |
-| 10 | FLASH | 36.0s | 0 | Racing | 46 | 13.87 | 2550-2599 @5.6 | 81.13 |
-| 14 | FLASH | 40.7s | 0 | Racing | 75 | 15.59 | 2400-2449 @6.4 | 79.41 |
-| 04 | FLASH | 35.2s | 0 | Racing | 85 | 23.73 | 950-999 @18.2 | 71.27 |
-| 06 | FLASH | 43.6s | 0 | Racing | 93 | 17.93 | 1350-1399 @15.6 | 77.07 |
-| 16 | FLASH | 38.3s | 0 | Racing | 93 | 21.67 | 3150-3199 @14.6 | 73.33 |
-| 09 | FLASH | 47.2s | 0 | Racing | 49 | 11.10 | 3050-3099 @4.9 | 83.90 |
-| 01 | FLASH | 35.7s | **5** | Racing | 227 | 52.23 | 500-549 @14.8 | 27.57 |
-| 13 | FLASH | 34.4s | 0 | Racing | 474 | 90.12 | 1600-1649 @32.4 | 4.88 |
-| **05** | FLASH | 36.0s | **2** | **Eliminated** | 1799 | 87.46 | 600-649 @39.3 | 0.00 |
-| **07** | FLASH | 48.2s | 0 | **Eliminated** | 1337 | 100.61 | 2150-2199 @24.8 | 0.00 |
-| 03 | RAPIER | 36.4s | 0 | Racing | 14 | 4.44 | 2150-2199 @2.1 | 90.56 |
-| 02 | RAPIER | 37.2s | 0 | Racing | 92 | 21.24 | 50-99 @12.3 | 73.76 |
-| 06 | RAPIER | 41.2s | 0 | Racing | 151 | 33.76 | 1350-1399 @22.1 | 61.24 |
-| 05 | RAPIER | 32.0s | 0 | Racing | 162 | 43.71 | 2400-2449 @21.4 | 51.29 |
-| 10 | RAPIER | 32.1s | 0 | Racing | 175 | 63.87 | 2550-2599 @17.7 | 15.93 |
-| 16 | RAPIER | 34.7s | 0 | Racing | 188 | 59.22 | 3150-3199 @25.4 | 35.78 |
-| 09 | RAPIER | 43.3s | 0 | Racing | 207 | 45.23 | 3050-3099 @8.6 | 49.77 |
-| 04 | RAPIER | 31.2s | 0 | Racing | 315 | 82.81 | 950-999 @30.8 | 4.59 |
-| **01** | RAPIER | **none** | **10** | Racing | 411 | 123.05 | 500-549 @28.5 | 0.00 |
-| **14** | RAPIER | 36.2s | 0 | **Eliminated** | 2232 | 93.01 | 2400-2449 @36.6 | 0.00 |
-| **13** | RAPIER | 31.9s | **3** | **Eliminated** | 6110 | 104.85 | 700-749 @22.8 | 0.00 |
-| **07** | RAPIER | 45.5s | 0 | **Eliminated** | 4888 | 101.30 | 2150-2199 @19.2 | 0.00 |
-| 03 | PHANTOM | 34.9s | 0 | Racing | 77 | 24.46 | 3350-3399 @16.8 | 70.54 |
-| 02 | PHANTOM | 35.8s | 0 | Racing | 131 | 39.47 | 1100-1149 @16.9 | 55.53 |
-| 05 | PHANTOM | 29.6s | 0 | Racing | 202 | 61.46 | 2400-2449 @22.3 | 33.54 |
-| 16 | PHANTOM | 33.0s | 0 | Racing | 234 | 85.60 | 3150-3199 @30.9 | 9.40 |
-| 09 | PHANTOM | 41.7s | 0 | Racing | 285 | 72.44 | 1200-1249 @12.9 | 22.56 |
-| 06 | PHANTOM | 40.8s | 0 | Racing | 493 | 55.37 | 1350-1399 @19.4 | 24.43 |
-| **01** | PHANTOM | **none** | **10** | Racing | 810 | 204.06 | 2500-2549 @41.8 | 0.00 |
-| **04** | PHANTOM | 29.8s | 0 | **Eliminated** | 5513 | 111.42 | 2000-2049 @24.9 | 0.00 |
-| **14** | PHANTOM | 33.9s | 0 | **Eliminated** | 5995 | 106.84 | 2400-2449 @40.8 | 0.00 |
-| **10** | PHANTOM | 31.0s | 0 | **Eliminated** | 7157 | 87.99 | 700-749 @21.0 | 0.00 |
-| **13** | PHANTOM | **none** | **4** | **Eliminated** | 8903 | 105.00 | 2850-2899 @29.7 | 0.00 |
-| **07** | PHANTOM | **none** | 0 | **Eliminated** | 7523 | 95.76 | 750-799 @19.7 | 0.00 |
+| circuit | class | clean lap | resp | state | racing ticks | contact ticks | charged | worst cluster | end |
+| --- | --- | --- | --- | --- | ---: | ---: | ---: | --- | ---: |
+| 03 | VENOM | 43.8s | 0 | Racing | 18000 | 0 | 0.00 | - | 95.00 |
+| 02 | VENOM | 43.5s | 0 | Racing | 18000 | 0 | 0.00 | - | 95.00 |
+| 10 | VENOM | 38.4s | 0 | Racing | 18000 | 0 | 0.00 | - | 87.40 |
+| 09 | VENOM | 51.5s | 0 | Racing | 18000 | 11 | 1.81 | 3000-3049 @1.4 | 93.19 |
+| 14 | VENOM | 45.8s | 0 | Racing | 18000 | 11 | 1.88 | 2400-2449 @1.9 | 93.12 |
+| 16 | VENOM | 42.1s | 0 | Racing | 18000 | 57 | 10.50 | 3150-3199 @10.5 | 84.50 |
+| 05 | VENOM | 39.6s | 0 | Racing | 18000 | 60 | 11.40 | 2400-2449 @9.3 | 83.60 |
+| 04 | VENOM | 39.3s | 0 | Racing | 18000 | 84 | 14.70 | 950-999 @14.7 | 80.30 |
+| 06 | VENOM | 46.8s | 0 | Racing | 18000 | 109 | 16.19 | 1350-1399 @14.7 | 78.81 |
+| **01** | VENOM | **43.6s** | **1** | **Racing** | 18000 | 121 | 24.38 | 500-549 @9.9 | 70.62 |
+| 13 | VENOM | 38.1s | 0 | Racing | 18000 | 322 | 48.57 | 1600-1649 @25.5 | 46.43 |
+| **07** | VENOM | **50.7s** | **0** | **Eliminated** | 14844 | 379 | 95.11 | 2150-2199 @27.1 | 0.00 |
+| 03 | FLASH | 39.8s | 0 | Racing | 18000 | 0 | 0.00 | - | 95.00 |
+| 02 | FLASH | 40.1s | 0 | Racing | 18000 | 23 | 3.89 | 50-99 @2.0 | 91.11 |
+| 10 | FLASH | 36.0s | 0 | Racing | 18000 | 46 | 13.87 | 2550-2599 @5.6 | 81.13 |
+| 09 | FLASH | 47.2s | 0 | Racing | 18000 | 49 | 11.10 | 3050-3099 @4.9 | 83.90 |
+| 14 | FLASH | 40.7s | 0 | Racing | 18000 | 75 | 15.59 | 2400-2449 @6.4 | 79.41 |
+| 04 | FLASH | 35.2s | 0 | Racing | 18000 | 85 | 23.73 | 950-999 @18.2 | 71.27 |
+| 06 | FLASH | 43.6s | 0 | Racing | 18000 | 93 | 17.93 | 1350-1399 @15.6 | 77.07 |
+| 16 | FLASH | 38.3s | 0 | Racing | 18000 | 93 | 21.67 | 3150-3199 @14.6 | 73.33 |
+| **01** | FLASH | **35.7s** | **5** | **Racing** | 18000 | 227 | 52.23 | 500-549 @14.8 | 27.57 |
+| **07** | FLASH | **48.2s** | **0** | **Eliminated** | 10010 | 368 | 96.32 | 2150-2199 @24.8 | 0.00 |
+| 13 | FLASH | 34.4s | 0 | Racing | 18000 | 474 | 90.12 | 1600-1649 @32.4 | 4.88 |
+| **05** | FLASH | **36.0s** | **2** | **Eliminated** | 16855 | 1772 | 87.41 | 600-649 @39.3 | 0.00 |
+| 03 | RAPIER | 36.4s | 0 | Racing | 18000 | 14 | 4.44 | 2150-2199 @2.1 | 90.56 |
+| 02 | RAPIER | 37.2s | 0 | Racing | 18000 | 92 | 21.24 | 50-99 @12.3 | 73.76 |
+| 06 | RAPIER | 41.2s | 0 | Racing | 18000 | 151 | 33.76 | 1350-1399 @22.1 | 61.24 |
+| 05 | RAPIER | 32.0s | 0 | Racing | 18000 | 162 | 43.71 | 2400-2449 @21.4 | 51.29 |
+| 10 | RAPIER | 32.1s | 0 | Racing | 18000 | 175 | 63.87 | 2550-2599 @17.7 | 15.93 |
+| 16 | RAPIER | 34.7s | 0 | Racing | 18000 | 188 | 59.22 | 3150-3199 @25.4 | 35.78 |
+| 09 | RAPIER | 43.3s | 0 | Racing | 18000 | 207 | 45.23 | 3050-3099 @8.6 | 49.77 |
+| 04 | RAPIER | 31.2s | 0 | Racing | 18000 | 315 | 82.81 | 950-999 @30.8 | 4.59 |
+| **07** | RAPIER | **45.5s** | **0** | **Eliminated** | 7128 | 329 | 95.22 | 2150-2199 @19.2 | 0.00 |
+| **14** | RAPIER | **36.2s** | **0** | **Eliminated** | 16091 | 346 | 87.42 | 2400-2449 @36.6 | 0.00 |
+| **13** | RAPIER | **31.9s** | **3** | **Eliminated** | 10279 | 381 | 95.39 | 2850-2899 @20.5 | 0.00 |
+| **01** | RAPIER | **none** | **10** | **Racing** | 17637 | 404 | 121.36 | 500-549 @28.5 | 0.00 |
+| 03 | PHANTOM | 34.9s | 0 | Racing | 18000 | 77 | 24.46 | 3350-3399 @16.8 | 70.54 |
+| 02 | PHANTOM | 35.8s | 0 | Racing | 18000 | 131 | 39.47 | 1100-1149 @16.9 | 55.53 |
+| **10** | PHANTOM | **31.0s** | **0** | **Eliminated** | 10765 | 180 | 79.87 | 2550-2599 @14.9 | 0.00 |
+| 05 | PHANTOM | 29.6s | 0 | Racing | 18000 | 202 | 61.46 | 2400-2449 @22.3 | 33.54 |
+| 16 | PHANTOM | 33.0s | 0 | Racing | 18000 | 234 | 85.60 | 3150-3199 @30.9 | 9.40 |
+| **13** | PHANTOM | **none** | **4** | **Eliminated** | 9025 | 272 | 95.32 | 2850-2899 @20.0 | 0.00 |
+| 09 | PHANTOM | 41.7s | 0 | Racing | 18000 | 285 | 72.44 | 1200-1249 @12.9 | 22.56 |
+| **14** | PHANTOM | **33.9s** | **0** | **Eliminated** | 11045 | 327 | 95.16 | 2400-2449 @29.1 | 0.00 |
+| **04** | PHANTOM | **29.8s** | **0** | **Eliminated** | 11600 | 352 | 95.01 | 950-999 @23.4 | 0.00 |
+| **01** | PHANTOM | **none** | **10** | **Racing** | 17007 | 480 | 162.56 | 500-549 @33.3 | 0.00 |
+| 06 | PHANTOM | 40.8s | 0 | Racing | 18000 | 493 | 55.37 | 1350-1399 @19.4 | 24.43 |
+| **07** | PHANTOM | **none** | **0** | **Eliminated** | 5585 | 668 | 95.05 | 750-799 @19.0 | 0.00 |
 
 **Four of 48 rows meet the standard** - `03` at VENOM and FLASH, `02` and `10`
 at VENOM, all with zero wall contact. Every other row touches a wall.
@@ -250,18 +268,19 @@ find one.
   wedges at low speed and is rescued, where before it crashed at speed and was
   charged for it. Whether the answer is in the driver or in
   `Race::lost_off_the_circuit`/the stall rescue is unread.
-- **`07_Track` is still the weakest row on the board at every class**, and step
-  3 made its VENOM row *worse* on contact ticks (1,445 -> 3,119) while charging
-  it more (100.0 -> 122.1). Its worst cluster also moved, from 2,150-2,199 to
-  **650-699**, which is a stretch the Outpost 7 thread never decomposed. Its
-  named residual is unchanged: `corner_target`'s windowed curvature understates
-  the true local apex by 1.66x/1.85x even at `curvature_span = 11`. A different
-  *estimator* - the max over a short span rather than a chord over a long one -
-  is the untried idea, and it is real work of its own that has to hold both
-  field ground-truth tests green.
+- **`07_Track` is still the weakest row on the board at every class.** Step 3
+  moved it barely at all at VENOM - 375 -> 379 contact ticks, both rows charged
+  out at ~95 - but it does survive 1,876 ticks longer (12,968 -> 14,844) and it
+  is still destroyed. Its worst cluster is **2,150-2,199** at VENOM, FLASH and
+  RAPIER, which is exactly where Outpost 7 step 6 left it. Its named residual is
+  unchanged: `corner_target`'s windowed curvature understates the true local
+  apex by 1.66x/1.85x even at `curvature_span = 11`. A different *estimator* -
+  the max over a short span rather than a chord over a long one - is the untried
+  idea, and it is real work of its own that has to hold both field ground-truth
+  tests green.
 - **`13_Track` is the second-worst row at every class** and has never been
-  decomposed. Its VENOM cluster is 1,600-1,649; at RAPIER it moves to 700-749
-  and at PHANTOM to 2,850-2,899, so it is not one corner.
+  decomposed. Its VENOM and FLASH cluster is 1,600-1,649 and at RAPIER and
+  PHANTOM it moves to 2,850-2,899, so it is not one corner.
 - **`05_Track` at FLASH is a new elimination** that VENOM does not show, cluster
   600-649. `05` is also the circuit with 134 unsupported racing-line samples
   (161-211, 811-893) recorded in `race_ground_truth.rs` - a **different thread**,
@@ -275,16 +294,18 @@ find one.
 
 ## Next Steps
 
-1. **Attack `07_Track`'s 650-699 cluster**, which step 3 created or uncovered
-   and which no evidence page covers. It is the largest single bucket on the
-   board's worst row.
-2. **Then the estimator**, not the span: `corner_target` is fed
+1. **Attack `07_Track`'s 2,150-2,199 cluster.** It is the largest bucket on the
+   board's worst row at three of four classes, and it is the corner Outpost 7
+   step 6 already decomposed - so the next move there is the estimator below,
+   not another measurement of the same window.
+2. **The estimator**, not the span: `corner_target` is fed
    `Line::max_curvature(index, window, span)`, a chord long enough to dodge the
    seam bug and therefore long enough to average an apex down against its
    shoulders. Try the max over a short span. Hold both field ground-truth tests
    green - span 10 failed them for an unrelated craft-wedging reason, so a
    smaller number alone is not a guarantee.
 3. **Then the respawn residual**, which is now a larger board-wide loss than it
-   was.
+   was (23 -> 35), and the two rows that newly die: `05` at FLASH (cluster
+   600-649) and `10` at PHANTOM (cluster 2,550-2,599).
 4. Do **not** re-tune the wall response, `lateral_accel`, `grip_ground` or
    `grip_air` - Outpost 7 steps 1, 2 and 5 close all four.

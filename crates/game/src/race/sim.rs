@@ -161,6 +161,14 @@ pub struct RaceSim {
     /// `damage::subtract` clamps. Read it beside the end-of-run pool, never as
     /// a substitute for it.
     pub(super) wall_damage: [f32; oag_gameplay::MAX_SHIPS],
+    /// How many ticks each opponent was **still racing** - the denominator the
+    /// three counters above are measured over.
+    ///
+    /// A row that was wrecked at tick 4,000 has its walls counted over 4,000
+    /// ticks and a row that finished has them counted over 18,000, and reading
+    /// the two against each other without this is how a wreck resting on a wall
+    /// reads as the worst driver on the board.
+    pub(super) wall_racing_ticks: [u32; oag_gameplay::MAX_SHIPS],
     /// How many consecutive ticks each craft has spent away from the track.
     ///
     /// **The two halves of the grid measure "away" differently and share this

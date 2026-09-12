@@ -101,6 +101,11 @@ struct Solo {
     worst_cluster: Option<(u32, f32)>,
     /// The racing line's length, for reading [`Self::worst_cluster`] against.
     line_len: u32,
+    /// How many of [`TICKS`] the craft was still racing for - the denominator
+    /// every wall figure above is counted over. A wrecked craft is released and
+    /// keeps being integrated, so without this a hull settled against a wall
+    /// reads as the busiest driver on the board.
+    racing_ticks: u32,
 }
 
 /// One lone craft, one circuit, one class, one tuning.
@@ -202,6 +207,7 @@ fn solo_on(track: &str, class: &str, tuning: Option<oag_ai::Tuning>) -> Option<S
         wall_charged: charged,
         worst_cluster,
         line_len,
+        racing_ticks: race.racing_ticks_of(LONE),
     })
 }
 
@@ -256,12 +262,13 @@ fn row(id: &str, class: &str, solo: &Solo) -> String {
         |(index, charge)| format!("{index}-{}@{charge:.1}", index + CLUSTER - 1),
     );
     format!(
-        "{id:<10} {class:<8} {best:<8} {:<5} {:<4} {:<4} {:<10} {:<7} {:<7.2} {cluster:<16} \
-         {:<7.2} {}\n",
+        "{id:<10} {class:<8} {best:<8} {:<5} {:<4} {:<4} {:<10} {:<7} {:<7} {:<7.2} \
+         {cluster:<16} {:<7.2} {}\n",
         solo.respawns,
         solo.laps,
         if solo.finished { "yes" } else { "NO" },
         format!("{:?}", solo.state),
+        solo.racing_ticks,
         solo.contact_ticks,
         solo.wall_charged,
         solo.end_shield,
@@ -270,8 +277,8 @@ fn row(id: &str, class: &str, solo: &Solo) -> String {
 }
 
 fn header() -> String {
-    "circuit    class    best     resp  laps fin  state      ticks   charged worst cluster    \
-     end     per-lap shield\n"
+    "circuit    class    best     resp  laps fin  state      racing  ticks   charged \
+     worst cluster    end     per-lap shield\n"
         .to_string()
 }
 
