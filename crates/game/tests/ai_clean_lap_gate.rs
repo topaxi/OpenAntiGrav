@@ -548,10 +548,7 @@ fn print_baseline_source() {
             let lap_src = solo
                 .best
                 .map_or_else(|| "None".to_string(), |t| format!("Some({t})"));
-            eprintln!(
-                "// {id} {class}: {:.1}s wall",
-                elapsed.as_secs_f32()
-            );
+            eprintln!("// {id} {class}: {:.1}s wall", elapsed.as_secs_f32());
             println!(
                 "    Row {{ circuit: \"{id}\", class: \"{class}\", status: {status_src}, \
                  lap_ticks: {lap_src}, contact_ticks: {} }},",
