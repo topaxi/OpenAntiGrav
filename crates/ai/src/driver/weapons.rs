@@ -170,10 +170,12 @@ impl Driver {
         }
         let look = ctx.tuning.look_min + ctx.tuning.look_speed * target.range;
         let span = super::curvature_span(ctx.tuning, look);
-        if ctx
-            .line
-            .max_curvature(self.index as usize, target.range, span)
-            > WEAPON_CURVATURE
+        if ctx.line.max_curvature_stepped(
+            self.index as usize,
+            target.range,
+            super::pace::curvature_chord(ctx.tuning, span),
+            span,
+        ) > WEAPON_CURVATURE
         {
             return None;
         }

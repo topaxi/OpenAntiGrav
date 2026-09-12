@@ -369,7 +369,9 @@ impl Driver {
 
         let steer = self.steering(state, ctx, look, speed, &personality);
         let window = look * tuning.brake_lookahead * personality.patience;
-        let curvature = line.max_curvature(index, window, curvature_span(tuning, look));
+        let step = curvature_span(tuning, look);
+        let curvature =
+            line.max_curvature_stepped(index, window, pace::curvature_chord(tuning, step), step);
         let target = corner_target(curvature, tuning, &personality, ctx.yaw_ceiling);
         // Every tick, saturated or not - see [`track_peak_curvature`]'s own doc.
         self.peak_curvature =
@@ -444,8 +446,13 @@ impl Driver {
             return true;
         }
         let look = ctx.tuning.look_min + ctx.tuning.look_speed * speed;
-        let span = curvature_span(ctx.tuning, look);
-        let curvature = ctx.line.max_curvature(self.index as usize, distance, span);
+        let step = curvature_span(ctx.tuning, look);
+        let curvature = ctx.line.max_curvature_stepped(
+            self.index as usize,
+            distance,
+            pace::curvature_chord(ctx.tuning, step),
+            step,
+        );
         speed
             <= corner_target(
                 curvature,

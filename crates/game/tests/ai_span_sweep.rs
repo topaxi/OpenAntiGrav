@@ -203,6 +203,9 @@ fn field_run(cap: Option<f32>) -> Option<FieldRun> {
     let tuned = |level: oag_ai::Difficulty| {
         level.tune(&oag_ai::Tuning {
             curvature_span: cap,
+            curvature_chord: std::env::var("OAG_SWEEP_CHORD")
+                .ok()
+                .and_then(|v| v.trim().parse().ok()),
             ..oag_ai::Tuning::default()
         })
     };
@@ -294,6 +297,12 @@ fn sweep_curvature_span() {
     for cap in caps {
         let tuning = oag_ai::Tuning {
             curvature_span: cap,
+            // `OAG_SWEEP_CHORD` separates the chord from the walk step - the
+            // only untried axis on this estimator. See
+            // `oag_ai::Tuning::curvature_chord`.
+            curvature_chord: std::env::var("OAG_SWEEP_CHORD")
+                .ok()
+                .and_then(|v| v.trim().parse().ok()),
             ..oag_ai::Tuning::default()
         };
         let laps: Vec<(String, Solo)> = circuits
