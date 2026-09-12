@@ -160,6 +160,16 @@ pub struct RaceSim {
     /// craft at zero shield is charged the same and loses nothing, and
     /// `damage::subtract` clamps. Read it beside the end-of-run pool, never as
     /// a substitute for it.
+    ///
+    /// **[`Self::wall_racing_ticks`]'s gate stops a *wreck* accruing, not a
+    /// live craft at zero shield**, and the two are different states: a craft
+    /// that has emptied its pool but not yet been destroyed is still `Racing`,
+    /// still driven, and still charged here for every wall it finds. That is
+    /// why a row can read well over the pool - 162.56 against 95.00 on
+    /// `01_Track` at PHANTOM - and why any total taken across rows should cap
+    /// each row at its own `Dimensions::shield` first. Uncapped, the
+    /// clean-Ace board's own totals overstate a tuning improvement by five
+    /// percentage points.
     pub(super) wall_damage: [f32; oag_gameplay::MAX_SHIPS],
     /// How many ticks each opponent was **still racing** - the denominator the
     /// three counters above are measured over.

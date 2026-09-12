@@ -135,14 +135,23 @@ now read different numbers.
 
 Board-wide, on the full 48 rows:
 
-| class | contact ticks | wall-charged | end-of-run pool | respawns | eliminated | racing ticks |
+| class | contact ticks | wall-charged (capped) | end-of-run pool | respawns | eliminated | racing ticks |
 | --- | --- | --- | --- | --- | --- | --- |
-| VENOM | 1,252 -> **1,154** | 256.1 -> **224.5** | 838.9 -> **908.0** | 1 -> 1 | 1 -> 1 | 210,968 -> **212,844** |
-| FLASH | 2,008 -> **3,305** | 477.9 -> **433.9** | 655.7 -> **684.7** | 1 -> **7** | 2 -> 2 | 205,552 -> **206,865** |
-| RAPIER | 3,124 -> **2,764** | 881.0 -> **753.7** | 255.9 -> **382.9** | 4 -> **13** | 5 -> **3** | 180,175 -> **195,135** |
-| PHANTOM | 4,627 -> **3,701** | 1296.2 -> **961.8** | 101.4 -> **216.0** | 17 -> **14** | 4 -> **5** | 185,171 -> **173,027** |
+| VENOM | 1,252 -> **1,154** | 255.5 -> **224.4** (-12.2 %) | 838.9 -> **908.0** | 1 -> 1 | 1 -> 1 | 210,968 -> **212,844** |
+| FLASH | 2,008 -> **3,305** | 476.7 -> **432.5** (-9.3 %) | 655.7 -> **684.7** | 1 -> **7** | 2 -> 2 | 205,552 -> **206,865** |
+| RAPIER | 3,124 -> **2,764** | 869.6 -> **726.7** (-16.4 %) | 255.9 -> **382.9** | 4 -> **13** | 5 -> **3** | 180,175 -> **195,135** |
+| PHANTOM | 4,627 -> **3,701** | 1032.2 -> **893.7** (-13.4 %) | 101.4 -> **216.0** | 17 -> **14** | 4 -> **5** | 185,171 -> **173,027** |
 
-Charged shield falls at every class (2,911 -> 2,374, an 18 % cut), the
+**The totals above cap each row's charge at its own 95-unit pool, and the
+uncapped ones are different enough to matter.** The `Racing` gate stops a
+*wreck* accruing; it does not stop a craft that is still racing at **zero**
+shield, where `damage::subtract` clamps the loss to nothing while the counter
+keeps charging. Uncapped, the boards carry 277.3 and 96.5 units of over-pool
+charge and the cut reads 18.5 %; capped it is **13.5 %** (2,633.9 -> 2,277.3),
+and part of even that is fewer rows being ground alive at zero rather than fewer
+walls hit. Capped is the honest number.
+
+Charged shield falls at every class, the
 end-of-run pool rises at every class, contact ticks fall at three of four, and
 **zero-contact rows double, 2 -> 4** (`02` and `10` at VENOM join `03` at VENOM
 and FLASH). Eliminations go 12 -> 11.
@@ -155,7 +164,10 @@ all. Two rows die that did not: `05` at FLASH and `10` at PHANTOM.
 
 **`charged` saturates on a dead row.** Every eliminated row reads ~95, the whole
 pool, so it does not discriminate between them - `racing ticks` does, and lower
-is worse. That column is also the denominator the others are counted over.
+is worse. That column is also the denominator the others are counted over. A
+*live* row can read over 95 (`01` at RAPIER 121.36, at PHANTOM 162.56): that is
+the same clamp seen from the other side, and it is why the class totals are
+capped.
 
 All three hard gates hold:
 `race_ground_truth::a_lone_craft_gets_round_the_circuits_it_is_known_to_get_round`
@@ -313,6 +325,16 @@ of four classes - but that is an argument, not a measurement.
   and survives is better by this thread's standard and worse by a racer's; no
   measurement here separates "the AI is slower" from "the AI is correctly
   slower".
+- **`Tuning::curvature_span = 11` is no longer supported by the sweep that chose
+  it.** That table - and its criterion, "the best point in a band bounded by two
+  field tests going red at span 10" - was measured with `corner_target` capping
+  at 1.8. It now caps at 1.204-1.667 depending on team, so every row of it
+  measured a different function from the one shipping. Nothing is broken (both
+  field tests are green at 11 today), but the *choice* wants re-establishing,
+  and Next Step 2 has to do it anyway.
+- **The counters charge a live craft sitting at zero shield.** The `Racing` gate
+  stops a wreck, not that. Capping at the pool is the workaround the totals use;
+  a cleaner counter would gate on `physics.shield > 0.0` too.
 - Pure and HD are unmeasured at every class.
 
 ## Next Steps

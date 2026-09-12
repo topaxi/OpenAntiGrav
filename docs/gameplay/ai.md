@@ -3147,16 +3147,24 @@ row of its sweep measured as worse.
 
 Board-wide, over all 48 rows:
 
-| class | contact ticks | wall-charged | end-of-run pool | respawns | eliminated | racing ticks |
+| class | contact ticks | wall-charged (capped) | end-of-run pool | respawns | eliminated | racing ticks |
 | --- | --- | --- | --- | --- | --- | --- |
-| VENOM | 1,252 -> **1,154** | 256.1 -> **224.5** | 838.9 -> **908.0** | 1 -> 1 | 1 -> 1 | 210,968 -> **212,844** |
-| FLASH | 2,008 -> **3,305** | 477.9 -> **433.9** | 655.7 -> **684.7** | 1 -> **7** | 2 -> 2 | 205,552 -> **206,865** |
-| RAPIER | 3,124 -> **2,764** | 881.0 -> **753.7** | 255.9 -> **382.9** | 4 -> **13** | 5 -> **3** | 180,175 -> **195,135** |
-| PHANTOM | 4,627 -> **3,701** | 1296.2 -> **961.8** | 101.4 -> **216.0** | 17 -> **14** | 4 -> **5** | 185,171 -> **173,027** |
+| VENOM | 1,252 -> **1,154** | 255.5 -> **224.4** (-12.2 %) | 838.9 -> **908.0** | 1 -> 1 | 1 -> 1 | 210,968 -> **212,844** |
+| FLASH | 2,008 -> **3,305** | 476.7 -> **432.5** (-9.3 %) | 655.7 -> **684.7** | 1 -> **7** | 2 -> 2 | 205,552 -> **206,865** |
+| RAPIER | 3,124 -> **2,764** | 869.6 -> **726.7** (-16.4 %) | 255.9 -> **382.9** | 4 -> **13** | 5 -> **3** | 180,175 -> **195,135** |
+| PHANTOM | 4,627 -> **3,701** | 1032.2 -> **893.7** (-13.4 %) | 101.4 -> **216.0** | 17 -> **14** | 4 -> **5** | 185,171 -> **173,027** |
 
-Charged shield falls at every class (2,911 -> 2,374, an 18 % cut), the
-end-of-run pool rises at every class, contact ticks fall at three of four, and
-**zero-contact rows double, 2 -> 4**. Eliminations go 12 -> 11. **The price is
+**The totals above cap each row's charge at its own 95-unit pool, and the
+uncapped ones are different enough to matter.** The `Racing` gate stops a
+*wreck* accruing; it does not stop a craft that is still racing at **zero**
+shield, where `damage::subtract` clamps the loss to nothing while the counter
+keeps charging. Uncapped, the boards carry 277.3 and 96.5 units of over-pool
+charge and the cut reads 18.5 %; capped it is **13.5 %** (2,633.9 -> 2,277.3),
+and part of even that is fewer rows being ground alive at zero rather than fewer
+walls hit. Capped is the honest number.
+
+Charged shield falls at every class, the end-of-run pool rises at every class,
+contact ticks fall at three of four, and **zero-contact rows double, 2 -> 4**. Eliminations go 12 -> 11. **The price is
 lap time, 0.5-3.0 s a circuit, and respawns, which rise 23 -> 35 board-wide**: a
 craft that brakes earlier wedges at low speed and is rescued, where before it
 crashed at speed and was charged for it. Nothing on the board or in the gate
