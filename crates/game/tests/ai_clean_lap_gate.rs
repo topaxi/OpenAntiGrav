@@ -77,10 +77,10 @@
 //! same row produce bit-identical ticks, so a tolerance derived from
 //! repeat-run spread would be zero, which is an equality gate wearing a
 //! ceiling's clothes and exactly what the brief this file was built against
-//! forbids. **This is checked below, not assumed** - `print_baseline_source`
-//! was run twice on the same tree and the two outputs `diff`ed; see the
-//! commit that filled in [`BASELINE`] for the result of that comparison, done
-//! at the same time as generating the numbers themselves.
+//! forbids. **Checked, not assumed**: `print_baseline_source` was run twice on
+//! commit `8f5070ef` (158.9s, then 157.7s) and the two 48-row outputs `diff`
+//! byte-for-byte identical - every `lap_ticks` and every `contact_ticks`, not
+//! only the ones that made it into [`BASELINE`]. Spread was zero.
 //!
 //! So the tolerance is **chosen, not measured** (no confidence score - this is
 //! an engineering choice, not an RE claim), from what a *legitimate* AI change
@@ -106,18 +106,36 @@
 //!
 //! ```sh
 //! flock "$HOME/.cache/oag/gate.lock" env OAG_SWEEP=1 OAG_REQUIRE_GAME_DATA=1 \
-//!   cargo nextest run --release -p oag-game --run-ignored all \
+//!   cargo nextest run -p oag-game --run-ignored all \
 //!   --no-capture print_baseline_source
 //! ```
 //!
+//! **No `--release`, deliberately** - `just test-data` itself never passes it,
+//! `oag-game`'s `[profile.dev.package.*]` already carries `opt-level = 2` for
+//! every simulation crate this reaches, and generating under the same profile
+//! the gate actually runs under means no separate dev-vs-release cross-check
+//! is needed. It also turned out to be fast: all 48 rows in **158.9s**
+//! (`~3.3s` a row on average) on this run, well under the "fifteen seconds [a
+//! row] in release" `ai_clean_lap_board.rs`'s own doc comment states - either
+//! `opt-level = 2` without a full release build's LTO is close enough to
+//! release for this workload, or the machine's load happened to be lower for
+//! this particular run; not resolved further since it does not change any
+//! decision here.
+//!
 //! [`BASELINE`] below was generated this way on commit `8f5070ef` ("Merge: the
 //! two changes only pay together, and 05_Track's line blocks them"),
-//! 2026-09-12, and cross-checked against the table already recorded in
+//! 2026-09-12, and cross-checked field by field against the table already
+//! recorded in
 //! `handover/gameplay/an-ace-craft-should-lap-every-circuit-without-touching-a-wall.md`
-//! under "The board" - the two agree on every one of the 48 rows' status and
-//! `contact_ticks`(that table does not carry raw `lap_ticks`, only seconds
-//! rounded to one decimal, which is why this file has its own generator rather
-//! than transcribing the printed one).
+//! under "The board" (generated separately, by `ai_clean_lap_board.rs`'s own
+//! sweep, on an ancestor of the same commit) - **every one of the 48 rows
+//! agrees**: status, `contact_ticks` exactly, and `lap_ticks` to the second
+//! once divided by 60 (that table only prints seconds to one decimal, which is
+//! why this file has its own generator rather than transcribing the printed
+//! one). Two independent implementations of the same scenario landing on
+//! identical numbers is itself evidence the reimplementation in this file is
+//! measuring the same thing the existing board does, not a stronger
+//! determinism claim - that one is checked below in the tolerance section.
 
 use std::path::PathBuf;
 
@@ -262,7 +280,54 @@ struct Row {
 /// what "improve" means per field and how each is asserted.
 #[rustfmt::skip]
 const BASELINE: &[Row] = &[
-    Row { circuit: "03_Track", class: "VENOM",   status: Status::CleanLap,   lap_ticks: Some(0), contact_ticks: 0 },
+    Row { circuit: "16_Track",  class: "VENOM",    status: Status::CleanLap,    lap_ticks: Some(2525), contact_ticks: 57 },
+    Row { circuit: "03_Track",  class: "VENOM",    status: Status::CleanLap,    lap_ticks: Some(2630), contact_ticks: 0 },
+    Row { circuit: "02_Track",  class: "VENOM",    status: Status::CleanLap,    lap_ticks: Some(2607), contact_ticks: 0 },
+    Row { circuit: "10_Track",  class: "VENOM",    status: Status::CleanLap,    lap_ticks: Some(2305), contact_ticks: 0 },
+    Row { circuit: "05_Track",  class: "VENOM",    status: Status::CleanLap,    lap_ticks: Some(2374), contact_ticks: 60 },
+    Row { circuit: "04_Track",  class: "VENOM",    status: Status::CleanLap,    lap_ticks: Some(2356), contact_ticks: 84 },
+    Row { circuit: "09_Track",  class: "VENOM",    status: Status::CleanLap,    lap_ticks: Some(3092), contact_ticks: 11 },
+    Row { circuit: "14_Track",  class: "VENOM",    status: Status::CleanLap,    lap_ticks: Some(2745), contact_ticks: 11 },
+    Row { circuit: "01_Track",  class: "VENOM",    status: Status::CleanLap,    lap_ticks: Some(2616), contact_ticks: 121 },
+    Row { circuit: "13_Track",  class: "VENOM",    status: Status::CleanLap,    lap_ticks: Some(2287), contact_ticks: 322 },
+    Row { circuit: "06_Track",  class: "VENOM",    status: Status::CleanLap,    lap_ticks: Some(2808), contact_ticks: 109 },
+    Row { circuit: "07_Track",  class: "VENOM",    status: Status::Eliminated,  lap_ticks: Some(3042), contact_ticks: 379 },
+    Row { circuit: "16_Track",  class: "FLASH",    status: Status::CleanLap,    lap_ticks: Some(2298), contact_ticks: 93 },
+    Row { circuit: "03_Track",  class: "FLASH",    status: Status::CleanLap,    lap_ticks: Some(2388), contact_ticks: 0 },
+    Row { circuit: "02_Track",  class: "FLASH",    status: Status::CleanLap,    lap_ticks: Some(2408), contact_ticks: 23 },
+    Row { circuit: "10_Track",  class: "FLASH",    status: Status::CleanLap,    lap_ticks: Some(2162), contact_ticks: 46 },
+    Row { circuit: "05_Track",  class: "FLASH",    status: Status::Eliminated,  lap_ticks: Some(2157), contact_ticks: 1772 },
+    Row { circuit: "04_Track",  class: "FLASH",    status: Status::CleanLap,    lap_ticks: Some(2111), contact_ticks: 85 },
+    Row { circuit: "09_Track",  class: "FLASH",    status: Status::CleanLap,    lap_ticks: Some(2834), contact_ticks: 49 },
+    Row { circuit: "14_Track",  class: "FLASH",    status: Status::CleanLap,    lap_ticks: Some(2442), contact_ticks: 75 },
+    Row { circuit: "01_Track",  class: "FLASH",    status: Status::CleanLap,    lap_ticks: Some(2144), contact_ticks: 227 },
+    Row { circuit: "13_Track",  class: "FLASH",    status: Status::CleanLap,    lap_ticks: Some(2065), contact_ticks: 474 },
+    Row { circuit: "06_Track",  class: "FLASH",    status: Status::CleanLap,    lap_ticks: Some(2616), contact_ticks: 93 },
+    Row { circuit: "07_Track",  class: "FLASH",    status: Status::Eliminated,  lap_ticks: Some(2894), contact_ticks: 368 },
+    Row { circuit: "16_Track",  class: "RAPIER",   status: Status::CleanLap,    lap_ticks: Some(2083), contact_ticks: 188 },
+    Row { circuit: "03_Track",  class: "RAPIER",   status: Status::CleanLap,    lap_ticks: Some(2186), contact_ticks: 14 },
+    Row { circuit: "02_Track",  class: "RAPIER",   status: Status::CleanLap,    lap_ticks: Some(2229), contact_ticks: 92 },
+    Row { circuit: "10_Track",  class: "RAPIER",   status: Status::CleanLap,    lap_ticks: Some(1927), contact_ticks: 175 },
+    Row { circuit: "05_Track",  class: "RAPIER",   status: Status::CleanLap,    lap_ticks: Some(1920), contact_ticks: 162 },
+    Row { circuit: "04_Track",  class: "RAPIER",   status: Status::CleanLap,    lap_ticks: Some(1872), contact_ticks: 315 },
+    Row { circuit: "09_Track",  class: "RAPIER",   status: Status::CleanLap,    lap_ticks: Some(2596), contact_ticks: 207 },
+    Row { circuit: "14_Track",  class: "RAPIER",   status: Status::Eliminated,  lap_ticks: Some(2173), contact_ticks: 346 },
+    Row { circuit: "01_Track",  class: "RAPIER",   status: Status::NoCleanLap,  lap_ticks: None,     contact_ticks: 404 },
+    Row { circuit: "13_Track",  class: "RAPIER",   status: Status::Eliminated,  lap_ticks: Some(1916), contact_ticks: 381 },
+    Row { circuit: "06_Track",  class: "RAPIER",   status: Status::CleanLap,    lap_ticks: Some(2471), contact_ticks: 151 },
+    Row { circuit: "07_Track",  class: "RAPIER",   status: Status::Eliminated,  lap_ticks: Some(2732), contact_ticks: 329 },
+    Row { circuit: "16_Track",  class: "PHANTOM",  status: Status::CleanLap,    lap_ticks: Some(1981), contact_ticks: 234 },
+    Row { circuit: "03_Track",  class: "PHANTOM",  status: Status::CleanLap,    lap_ticks: Some(2093), contact_ticks: 77 },
+    Row { circuit: "02_Track",  class: "PHANTOM",  status: Status::CleanLap,    lap_ticks: Some(2148), contact_ticks: 131 },
+    Row { circuit: "10_Track",  class: "PHANTOM",  status: Status::Eliminated,  lap_ticks: Some(1860), contact_ticks: 180 },
+    Row { circuit: "05_Track",  class: "PHANTOM",  status: Status::CleanLap,    lap_ticks: Some(1774), contact_ticks: 202 },
+    Row { circuit: "04_Track",  class: "PHANTOM",  status: Status::Eliminated,  lap_ticks: Some(1786), contact_ticks: 352 },
+    Row { circuit: "09_Track",  class: "PHANTOM",  status: Status::CleanLap,    lap_ticks: Some(2504), contact_ticks: 285 },
+    Row { circuit: "14_Track",  class: "PHANTOM",  status: Status::Eliminated,  lap_ticks: Some(2034), contact_ticks: 327 },
+    Row { circuit: "01_Track",  class: "PHANTOM",  status: Status::NoCleanLap,  lap_ticks: None,     contact_ticks: 480 },
+    Row { circuit: "13_Track",  class: "PHANTOM",  status: Status::Eliminated,  lap_ticks: None,     contact_ticks: 272 },
+    Row { circuit: "06_Track",  class: "PHANTOM",  status: Status::CleanLap,    lap_ticks: Some(2448), contact_ticks: 493 },
+    Row { circuit: "07_Track",  class: "PHANTOM",  status: Status::Eliminated,  lap_ticks: None,     contact_ticks: 668 },
 ];
 
 /// Runs one row and asserts it against its frozen [`BASELINE`] entry.
@@ -342,20 +407,28 @@ fn check_named_row(circuit: &str, class: &str) {
     check_row(baseline);
 }
 
-/// One `#[test]` per `(circuit, class)` cell - 48 in total, not four tests of
-/// twelve rows each. `ai_clean_lap_board.rs`'s own doc records a row at
-/// "fifteen seconds in release", so twelve rows in one process is 180 s of
-/// single-core work with nothing else to overlap it - and `check-test-budget`'s
-/// own history (`ai_roll_ground_truth`, CLAUDE.md's worked example) is
-/// exactly this shape of test measuring 95-114 s isolated and 154-321 s under
-/// a loaded `test-data` run, well past a naive read of the 300 s ceiling.
-/// `cargo nextest` parallelises across tests, not across the loop body inside
-/// one, so the test *is* the unit CLAUDE.md's own "make the matrix the test
-/// axis" rule asks for - the brief that opened this file asked for four
-/// class-level tests instead, and this is the deviation from it, made on that
-/// evidence rather than on a measurement this file's own generator run could
-/// not safely wait to take (see the generator's own timing report in the
-/// commit that filled in `BASELINE`).
+/// One `#[test]` per `(circuit, class)` cell - 48 in total, not the four
+/// class-level tests (twelve rows each) the brief that opened this file
+/// asked for. The decision predates the measurement below and was made on
+/// `ai_clean_lap_board.rs`'s own doc comment - a row at "fifteen seconds in
+/// release" makes twelve rows in one process 180s of single-core work with
+/// nothing else to overlap it, and `scripts/check-test-budget.py`'s own
+/// history (`ai_roll_ground_truth`, CLAUDE.md's worked example) is exactly
+/// this failure shape: 95-114s isolated measuring 154-321s under a loaded
+/// `test-data` run. `cargo nextest` parallelises across tests, not across a
+/// loop body inside one, so the test *is* the unit CLAUDE.md's "make the
+/// matrix the test axis" rule asks for.
+///
+/// **The generator's own measurement, taken afterward, says a class-level
+/// design would also have fit**: 48 rows in one process took 158.9s and then
+/// 157.7s on repeat (`print_baseline_source`'s doc comment above), so a
+/// twelve-row class test would cost roughly a quarter of that - about 40s,
+/// comfortably under 300s even at the 2-3x load inflation `ai_roll` measured.
+/// The 48-test split is kept anyway: it is the design CLAUDE.md's own worked
+/// example asks for regardless of margin, and a failing row now names its own
+/// circuit and class instead of failing eleven unrelated ones alongside it.
+/// Reported here rather than silently overridden, since it means the
+/// decision no longer rests only on the pre-measurement reasoning above.
 macro_rules! row_test {
     ($name:ident, $circuit:expr, $class:expr) => {
         #[test]
