@@ -364,6 +364,55 @@ pub struct Tuning {
     /// do it is the estimator change the Outpost 7 thread's step 6 names -
     /// which has to re-sweep the span anyway.
     pub curvature_span: Option<f32>,
+    /// The chord each curvature reading averages over, where it should differ
+    /// from [`Self::curvature_span`] - which is otherwise both the chord and
+    /// the walk step. `None` keeps them equal, which is the shipped behaviour.
+    ///
+    /// **Separating them is the only untried axis on this estimator.** The
+    /// span's *value* has been swept three times - twice when the cap was
+    /// chosen and again on 2026-09-12 against the current tree, where `11`
+    /// remains the best solo total and the only span with twelve clean laps,
+    /// and `8` turns a committed field ground-truth test red. What has never
+    /// been measured is whether a short chord's cost is its **resolution** or
+    /// its **sampling density**: `Line::max_curvature` advances by the same
+    /// number it measures with, so shrinking it does both at once and every
+    /// circuit carries path seams a short chord reads badly.
+    ///
+    /// # Measured, and it does not help - both axes are now exhausted
+    ///
+    /// Swept 2026-09-12 on the current tree, `sweep_curvature_span` with its
+    /// field columns. Solo is twelve lone Ace circuits; `worst` is
+    /// `opponent_weapons_ground_truth`'s worst-opponent floor, which is `0.45`:
+    ///
+    /// | chord | step | solo total | respawns | clean | mean lap | field worst |
+    /// | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+    /// | **11** | **11** | **907.97** | **1** | **12** | 43.6s | 0.57 |
+    /// | 4 | 4 | 860.75 | 3 | 11 | 44.4s | 0.80 |
+    /// | 6 | 6 | 830.42 | 2 | 11 | 43.6s | 0.74 |
+    /// | 8 | 8 | 827.14 | 11 | 10 | 44.6s | **0.38** |
+    /// | 4 | 11 | 844.01 | 5 | 11 | 44.7s | 0.54 |
+    /// | 6 | 11 | 815.53 | 10 | 10 | 44.4s | 0.59 |
+    /// | 8 | 11 | 798.39 | 10 | 10 | 44.4s | 0.63 |
+    ///
+    /// **Every shortening is worse than `11`, coupled or decoupled**, and the
+    /// shipped span is the only one of the seven that keeps twelve clean laps.
+    /// So the short chord's cost is its **resolution**, not its sampling
+    /// density: holding the step at 11 and shortening only the chord scores
+    /// *below* shortening both (844.01 against 860.75 at 4, 815.53 against
+    /// 830.42 at 6, 798.39 against 827.14 at 8). Decoupling does repair one
+    /// thing - a chord of 8 at step 11 lifts the field floor from a red `0.38`
+    /// to `0.63` - but it buys nothing on the solo board.
+    ///
+    /// **This retires the chord-length theory of the estimator's
+    /// understatement.** The defect itself is real and measured - the windowed
+    /// reading is 1.66x/1.85x under the true local apex, and it reports a
+    /// hairpin as *opening* while a craft is at full lock into a wall - but
+    /// neither of the two knobs this estimator has can fix it without costing
+    /// more than it saves. What is left is a different estimator, not a
+    /// different number, and that is real work of its own.
+    ///
+    /// See `Line::max_curvature_stepped`.
+    pub curvature_chord: Option<f32>,
     /// Fraction over target at which the airbrakes come on, rather than merely
     /// lifting off.
     pub brake_margin: f32,
@@ -574,6 +623,7 @@ impl Default for Tuning {
             lateral_accel: 260.0,
             brake_lookahead: 2.5,
             curvature_span: Some(11.0),
+            curvature_chord: None,
             brake_margin: 0.05,
             corridor_use: 0.6,
             brake_floor: 0.35,

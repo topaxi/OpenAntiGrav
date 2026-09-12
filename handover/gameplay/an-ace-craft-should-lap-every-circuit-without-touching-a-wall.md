@@ -373,6 +373,59 @@ corner is opening up while the craft is at full lock hitting a wall. That is the
 and 1.85x the span-11 reading), now seen feeding a second consumer. The exit
 gate's logic is not wrong here; its input is.
 
+## Step 7 is done: the estimator's two knobs are both exhausted, measured
+
+Step 6 left the curvature estimator blocking **two** consumers - `corner_target`'s
+speed (1.66x/1.85x under the true apex) and `trail`'s exit gate (reporting a
+hairpin as *opening* while the craft is at full lock into a wall). Before
+building anything on top of it, both of its knobs were swept on the current
+tree with `sweep_curvature_span`, whose field columns are the guard a span of 10
+tripped in step 4.
+
+**Knob 1, the span's value.** Re-swept because the tree has moved a long way
+since step 4 - the seam fix, the per-craft yaw ceiling, `look_speed`:
+
+| span | solo total | respawns | clean | mean lap | field worst (floor 0.45) |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| 4 | 860.75 | 3 | 11 | 44.4s | 0.80 |
+| 6 | 830.42 | 2 | 11 | 43.6s | 0.74 |
+| 8 | 827.14 | 11 | 10 | 44.6s | **0.38** |
+| **11** | **907.97** | **1** | **12** | 43.6s | 0.57 |
+
+**`11` is still the best and still the only span with twelve clean laps**, and
+`8` still turns a committed field ground-truth test red. The value axis is
+exhausted for the third time, now against the current tree.
+
+**Knob 2, the estimator's shape - and this one had never been tried.**
+`Line::max_curvature` advances by the same number it measures with, so one
+constant sets both the **resolution** of each reading and the **density** of
+the sampling, and shrinking it does both at once. `Line::max_curvature_stepped`
+separates them and `Tuning::curvature_chord` reaches it:
+
+| chord | step | solo total | respawns | clean | mean lap | field worst |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 4 | 11 | 844.01 | 5 | 11 | 44.7s | 0.54 |
+| 6 | 11 | 815.53 | 10 | 10 | 44.4s | 0.59 |
+| 8 | 11 | 798.39 | 10 | 10 | 44.4s | 0.63 |
+
+**Decoupling does not help either, and it says which half the cost is.**
+Holding the step at 11 and shortening only the chord scores *below* shortening
+both, at every value tried - 844.01 against 860.75 at 4, 815.53 against 830.42
+at 6, 798.39 against 827.14 at 8. So the short chord's cost is its
+**resolution**, not its sampling density. Decoupling does repair one thing: a
+chord of 8 at step 11 lifts the field floor from a red `0.38` to `0.63`.
+
+`curvature_chord` ships at `None`, which makes
+`max_curvature_stepped(i, d, span, span)` bit-identical to the old
+`max_curvature`. It is kept because it is the apparatus this negative was
+measured with, and because the one repair it does make is worth knowing about.
+
+**What this retires**: the chord-length theory of the understatement. The defect
+is real and measured, and neither knob this estimator has can fix it without
+costing more than it saves. **What is left is a different estimator, not a
+different number** - and that is the open item, no longer a guess at which
+constant to move.
+
 ## The gate, as it stands on this branch
 
 `just` is green in full. `OAG_REQUIRE_GAME_DATA=1 just test-data` is **4,185
@@ -545,6 +598,21 @@ faster laps, and step 3 cost 0.5-3.0 s a circuit that this should give back.
 - **`Tuning::trail_peak_decay` ships at `1.0`, the latch**, because no leak
   value pays on the board. It becomes worth re-sweeping the moment
   `corner_target` banks the speed the differential buys.
+- **A different curvature estimator, not a different number.** Step 7 exhausts
+  both of this one's knobs. The shape still to try is one whose denominator is
+  the distance the turning actually happens over rather than the chord's own
+  length - a chord triple spreads a sharp apex's whole turned angle across
+  `3 * span` of travel, which is exactly the 1.66x.
+- **The planned differential is built and parked, not merged** - branch
+  `ai/planned-differential`, commit `93072bfc`. Measured against merged main it
+  is **0.9 s a lap faster at every class**, contact ticks -16 %, respawns -31 %,
+  and the airbrake finally fires through `07`'s hairpin (`R = 20.8`, correct
+  sign, from `0.0`). It costs eliminations, 11 -> 14, and 7 % of the end-of-run
+  pool: fewer contacts, harder ones. It is parked because it computes its extra
+  corner speed on the very curvature reading step 7 just confirmed is
+  understated, so it compounds a measurement error. All three hard gates pass on
+  it; the full `just` gate was killed mid-run by machine memory pressure and the
+  AI determinism reference will legitimately move.
 - **The curvature estimator now has two consumers it is wrong for**, not one:
   `corner_target`'s speed and `trail`'s exit gate. Through `07`'s hairpin it
   reports a falling curvature while the craft is at full lock into a wall.

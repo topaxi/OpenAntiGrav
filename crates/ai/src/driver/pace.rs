@@ -37,6 +37,13 @@ pub(super) fn curvature_span(tuning: &Tuning, look: f32) -> f32 {
     }
 }
 
+/// The chord a reading averages over, given the step
+/// [`curvature_span`] chose. `None` keeps the two equal - see
+/// [`Tuning::curvature_chord`].
+pub(super) fn curvature_chord(tuning: &Tuning, step: f32) -> f32 {
+    tuning.curvature_chord.map_or(step, |chord| chord.min(step))
+}
+
 /// The fastest the corner ahead can be taken, or infinity where there is no
 /// corner.
 ///

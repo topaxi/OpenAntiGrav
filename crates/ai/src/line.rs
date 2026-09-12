@@ -264,15 +264,46 @@ impl Line {
     /// window means a craft slows for the tightest thing it can see.
     #[must_use]
     pub fn max_curvature(&self, index: usize, distance: f32, span: f32) -> f32 {
-        if self.points.len() < 3 || span <= 0.0 {
+        self.max_curvature_stepped(index, distance, span, span)
+    }
+
+    /// The same, with the **chord** and the **walk step** separated.
+    ///
+    /// # They are the same number in [`Self::max_curvature`], and that is a
+    /// # coupling rather than a choice
+    ///
+    /// The walk above takes `curvature(at, span)` and then advances `span`, so
+    /// one constant sets two independent things: how long a chord each reading
+    /// averages over - its **resolution** - and how densely the window is
+    /// **sampled**. Shrinking it to resolve a sharp apex also multiplies the
+    /// number of readings taken, and every circuit on the disc carries path
+    /// seams a short chord reads badly, so the two effects arrive together and
+    /// cannot be told apart from the outside.
+    ///
+    /// That matters because the value axis is exhausted. Swept twice when the
+    /// cap was chosen and again on 2026-09-12 against the current tree: `11`
+    /// is still the best solo total (`907.97`, and the only span with twelve
+    /// clean laps) against `860.75` at 4, `830.42` at 6 and `827.14` at 8 -
+    /// and `8` turns `opponent_weapons_ground_truth`'s worst-opponent floor
+    /// red at `0.38` against `0.45`. **A shorter chord resolves the apex
+    /// better and costs more than it buys.** This entry point exists so the
+    /// two halves of that trade can be measured apart; see
+    /// `oag_ai::Tuning::curvature_chord`.
+    ///
+    /// `chord` is what each reading averages over; `step` is how far the walk
+    /// advances between readings. Passing the same value for both is exactly
+    /// [`Self::max_curvature`].
+    #[must_use]
+    pub fn max_curvature_stepped(&self, index: usize, distance: f32, chord: f32, step: f32) -> f32 {
+        if self.points.len() < 3 || chord <= 0.0 || step <= 0.0 {
             return 0.0;
         }
         let mut worst = 0.0f32;
         let mut at = index;
         let mut travelled = 0.0;
         while travelled < distance {
-            worst = worst.max(self.curvature(at, span));
-            let (next, _, stepped) = self.ahead(at, span);
+            worst = worst.max(self.curvature(at, chord));
+            let (next, _, stepped) = self.ahead(at, step);
             if stepped <= f32::EPSILON {
                 break;
             }
