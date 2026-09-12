@@ -421,3 +421,171 @@ fn inbound_ticks_are_not_contact_ticks() {
         solo.line_len,
     );
 }
+
+/// What a held airbrake is worth to the corner-speed ceiling, off the disc's
+/// own numbers.
+///
+/// **A table read and a closed-form evaluation, not a sweep** - the same shape
+/// as [`yaw_ceiling_by_team_and_class`], and for the same reason: it sizes an
+/// opportunity before any code is written for it.
+///
+/// # The mechanism, and why it is a curvature offset rather than a bigger ceiling
+///
+/// Two torques write `acc.local_angular.y` and they **add**:
+/// `oag_physics::engine::steering` is `-(steer * Turning.amount)`, speed
+/// *independent*, and `oag_physics::airbrake`'s is `speed * Airbrake.turn *
+/// imbalance * 0.001`, speed *proportional*. Through the same steady state
+/// [`hull_yaw_ceiling`](oag_ai::hull_yaw_ceiling) uses (`omega = torque / (5 *
+/// I_yy)`, and `5 * 21.6 = 108`):
+///
+/// ```text
+/// v * k = [S + v * T] / 108      S = 100 * Turning.amount
+///                                T = Airbrake.turn * imbalance * 0.001
+/// v     = (S / 108) / (k - C)    C = T / 108
+/// ```
+///
+/// So the airbrake **subtracts from the curvature** rather than adding to the
+/// ceiling, and the gain grows without bound as `k` approaches `C` - largest
+/// exactly at the tight apexes where the yaw term binds.
+///
+/// **The sign was checked rather than assumed**, because this project shipped it
+/// backwards for months in `5ad69f3`. `imbalance = left - right_brake` on the
+/// ramped `0..=100` states, so braking the right side harder makes it negative,
+/// and a negative `local_angular.y` is nose-**right** in this crate's frame -
+/// the same sign `engine::steering`'s `-(steer * amount)` gives a right steer.
+/// They add.
+///
+/// # The counter-term, which is the whole question
+///
+/// `pace::corner_target` is `min(v_grip, v_yaw)`. Holding an airbrake raises
+/// `v_yaw` **and lowers `v_grip`**: `oag_physics::airbrake`'s lateral-grip
+/// coefficient is `max(L, R) * (0.01 - slidegrip) - 1.0`, so grip retained at
+/// command `b` is `1 - b * (0.01 - slidegrip)` and `v_grip` scales as its square
+/// root. A pure differential of `d` sets both `max(L, R)` and `|imbalance|` to
+/// `d` - see `pace::airbrakes` with `brake = 0` - so one variable moves both
+/// terms in opposite directions.
+///
+/// **This prints the combined `min`, never the yaw half alone.** If the `min`
+/// does not rise, the mechanism is real in the physics and the driver cannot
+/// exploit it, and that is the finding.
+#[test]
+#[ignore = "a scratch table read: set OAG_SWEEP, read the table"]
+fn what_a_held_airbrake_is_worth_to_the_corner_ceiling() {
+    if std::env::var_os("OAG_SWEEP").is_none() {
+        return;
+    }
+    let Some(image) = image() else {
+        return;
+    };
+    let source = image.display().to_string();
+    let mut archives = oag_pulse::open(&source).expect("mounting the disc");
+    let blob = archives
+        .read_name(oag_pulse::names::GAME_PLUGIN_DEFINITION)
+        .expect("the game plugin definition");
+    let definition = oag_tables::fexml::expand(&blob).expect("expanding it");
+
+    let damping = -oag_physics::passive::YAW_DAMPING;
+    let i_yy = 1.0 / oag_physics::forces::YAW_INVERSE_INERTIA;
+    let denominator = damping * i_yy;
+    let steer = oag_physics::controls::CONTROL_RANGE;
+    let tuning = oag_ai::Tuning::default();
+    // `07_Track`'s binding apex, the one Outpost 7 step 2 measured: radius 21.
+    let k = 0.047f32;
+
+    let mut report = format!(
+        "\n=== what a held airbrake is worth, at 07_Track's binding k = {k} ===\n\
+         omega = (S + v*T) / {denominator}, so v = (S/{denominator}) / (k - C), C = T/{denominator}\n\n\
+         team           class    turn     slidegrip  C@d=100  C/k    v_yaw(0)  v_grip(0)  best min  at d   gain     k crossover\n"
+    );
+    for team in catalogue::teams(&definition) {
+        let title = oag_pulse::TITLE;
+        let name =
+            oag_tables::handling::entry_name_in(title.race.handling_dir_for(&team.id), &team.id);
+        let Ok(stats_blob) = archives.read_name(&name) else {
+            continue;
+        };
+        let Ok(stats) = oag_tables::handling::from_blob(&stats_blob) else {
+            continue;
+        };
+        for class in CLASSES {
+            let Some(block) = stats.class_named(class) else {
+                continue;
+            };
+            let s = steer * block.turning.amount;
+            let turn = block.airbrake.turn;
+            // **The scaled value, not the XML one.** `oag_tables` holds
+            // `<Airbrake slidegrip>` verbatim on `0..100` and
+            // `oag_gameplay::handling::SLIDEGRIP_SCALE` turns it into the
+            // `0..0.01` the grip coefficient's `(0.01 - slidegrip)` is written
+            // against. Reading the raw 80.0 makes `retained` come out at 8,000
+            // and the grip term never binds, which silently deletes the
+            // counter-term this whole table exists to weigh.
+            let slidegrip = block.airbrake.slidegrip * oag_gameplay::handling::SLIDEGRIP_SCALE;
+            let c_full = turn * steer * 0.001 / denominator;
+            let v_yaw_0 = s / denominator / k;
+            // The grip half at zero airbrake, on the driver's own belief - the
+            // same `lateral_accel * commitment` `corner_target` uses, at the
+            // neutral personality so the row is about the craft.
+            let v_grip_0 = (tuning.lateral_accel / k).sqrt();
+            // Sweep a pure differential and take the combined `min`, which is
+            // what `corner_target` would actually return.
+            let mut best = (v_yaw_0.min(v_grip_0), 0.0f32);
+            let mut d = 0.0f32;
+            while d <= steer {
+                let c = turn * d * 0.001 / denominator;
+                let v_yaw = if k - c > 1e-6 {
+                    s / denominator / (k - c)
+                } else {
+                    f32::INFINITY
+                };
+                let retained = 1.0 - d * (0.01 - slidegrip);
+                let v_grip = if retained > 0.0 {
+                    (tuning.lateral_accel * retained / k).sqrt()
+                } else {
+                    0.0
+                };
+                let combined = v_yaw.min(v_grip);
+                if combined > best.0 {
+                    best = (combined, d);
+                }
+                d += 1.0;
+            }
+            // Where the two terms cross under a **full** differential: above this
+            // curvature the yaw term still binds and the airbrake buys the whole
+            // multiplier; below it the grip term binds first and holding the brake
+            // is a net loss. Bisected rather than solved, so the expression stays
+            // the two `corner_target` halves verbatim instead of an algebra step
+            // that has to be re-derived if either moves.
+            let retained_full = 1.0 - steer * (0.01 - slidegrip);
+            let yaw_binds = |curvature: f32| {
+                let yaw = if curvature - c_full > 1e-6 {
+                    s / denominator / (curvature - c_full)
+                } else {
+                    f32::INFINITY
+                };
+                let grip = (tuning.lateral_accel * retained_full.max(0.0) / curvature).sqrt();
+                yaw <= grip
+            };
+            let (mut lo, mut hi) = (c_full + 1e-5, 0.2f32);
+            for _ in 0..60 {
+                let mid = 0.5 * (lo + hi);
+                if yaw_binds(mid) {
+                    hi = mid;
+                } else {
+                    lo = mid;
+                }
+            }
+            let crossover = hi;
+            report.push_str(&format!(
+                "{:<14} {class:<8} {turn:<8.3} {slidegrip:<10.6} {c_full:<8.5} {:<6.2} \
+                 {v_yaw_0:<9.1} {v_grip_0:<10.1} {:<9.1} {:<6.0} {:<8} {crossover:.4}\n",
+                team.id,
+                c_full / k,
+                best.0,
+                best.1,
+                format!("{:+.1}%", (best.0 / v_yaw_0.min(v_grip_0) - 1.0) * 100.0),
+            ));
+        }
+    }
+    println!("{report}");
+}
