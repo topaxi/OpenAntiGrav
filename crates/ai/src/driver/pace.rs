@@ -295,11 +295,38 @@ pub(super) fn trail(
 /// bend below `trail_saturation` and only saturates near the apex must not
 /// read as "exiting" on its first saturated tick for want of a mark taken this
 /// tick.
+///
+/// # The mark leaks, and before it did the gate below it almost never opened
+///
+/// "Since the line last went straight" was the intent and
+/// [`Tuning::trail_curvature_floor`] was the definition of straight - and
+/// **on this disc's geometry the line never goes straight by it.** Measured on
+/// `07_Track`, lone Ace, 6,000 ticks: the smallest windowed curvature seen all
+/// run is `0.00127` against a floor of `0.00100`, so the reset branch above
+/// fires **zero** times and the mark is a monotone running maximum over the
+/// whole race. It latches at `0.04566` on the circuit's tightest corner and
+/// stays there.
+///
+/// What that did to [`trail`]'s exit gate is the whole of a player report that
+/// the airbrake looked timid in hairpins. With the mark latched, `curvature <
+/// peak * trail_exit_decay` means "this is not the tightest corner seen so far
+/// this race", which after the first lap is true almost everywhere. Over the
+/// same 6,000 ticks the gate alone rejected **4,486** of them - 74.8 % - and
+/// the differential fired on **227**, or 3.78 %. Through `07`'s own
+/// 2,150-2,199 hairpin the steering sat at **full lock** with a rate error of
+/// 0.22 rad/s - exactly the state a differential exists for - against a
+/// windowed curvature of `0.0139` and a bound of `0.0320`, less than half.
+///
+/// [`Tuning::trail_peak_decay`] makes the mark a **leaky** high-water mark
+/// instead, so "exit" means the corner has opened up since its tightest point
+/// *recently* rather than since the start of the race. `1.0` is exactly the
+/// old behaviour, which is what lets the sweep that chose the value include
+/// the row it replaced.
 pub(super) fn track_peak_curvature(curvature: f32, previous_peak: f32, tuning: &Tuning) -> f32 {
     if curvature <= tuning.trail_curvature_floor {
         curvature
     } else {
-        curvature.max(previous_peak)
+        curvature.max(previous_peak * tuning.trail_peak_decay)
     }
 }
 

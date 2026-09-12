@@ -272,6 +272,107 @@ fires. It is the right next experiment once a row is found whose loss happens
 *with the brake on* - the board's `charged` column is now the thing that can
 find one.
 
+## Step 6 is done: the airbrake never fires in the hairpin at all, and the cause is a latch
+
+Opened on a player report from the user, watching the merged build:
+
+> I see airbrake usage more now, but for U-turns I'd still expect it to be used
+> more heavily, more akin to how one would "drift" in more classical racing
+> games
+
+**They are right, and it is worse than timid.** `what_the_airbrakes_do_through_a_hairpin`
+dumps the ramped `ShipState` airbrake values tick by tick through `07_Track`'s
+documented 2,150-2,199 cluster - the tightest corner on the board's worst row.
+Lone Ace, VENOM, on the merged tree:
+
+```
+tick   idx    speed   L      R      imbal  brake  steer   air    gnd   contact
+979    2150   99.6    0.0    0.0    0.0    0.0    86.2    0.000  1.00  WALL
+...
+991    2163   138.1   0.0    0.0    0.0    0.0    91.2    0.000  1.00
+992    2164   114.0   0.0    0.0    0.0    0.0    99.6    0.000  1.00  WALL
+```
+
+**`L = 0.0` and `R = 0.0` on every tick.** Not capped, not small - zero. The
+craft accelerates 99.6 -> 138.1 units/s into the corner on full thrust, at full
+lock, `grounded` 1.00 and `time_airborne` 0.000 throughout, and grinds the wall
+for the rest of the window. No airbrake of any kind is commanded.
+
+**`Tuning::trail_max` is therefore not the constraint.** It is a ceiling on a
+quantity that never leaves zero, and 0.6 versus 1.0 cannot matter to it. That
+was the first candidate and it is ruled out.
+
+### Which gate, measured
+
+Temporary instrumentation on `pace::trail`'s five gates (added, run, reverted -
+not committed), 6,000 ticks:
+
+| gate | rejects | share |
+| --- | ---: | ---: |
+| `recovering` | 0 | - |
+| `curvature <= trail_curvature_floor` | 0 | - |
+| **`curvature < peak * trail_exit_decay`** | **4,486** | **74.8 %** |
+| `steer.command < trail_saturation` | 1,287 | 21.5 % |
+| `rate_error <= trail_deadband` | 0 | - |
+| **fires** | **227** | **3.78 %** |
+
+Through the hairpin itself **four of the five gates pass**: `cmd = 1.000` -
+full lock - with `rate_error` 0.22-0.53 rad/s, which is exactly the state a
+differential exists for. The fifth rejects it: `k = 0.0139` against an exit
+bound of `0.0320`, less than half.
+
+### The root cause: the high-water mark never resets
+
+`pace::track_peak_curvature` resets the mark when the curvature falls to
+`Tuning::trail_curvature_floor` - "since the line last went straight". **On this
+disc's geometry the line never goes straight by that definition.** Over the same
+6,000 ticks the smallest windowed curvature seen is **0.00127** against a floor
+of **0.00100**, and the reset branch fires **zero** times. The mark is a monotone
+running maximum over the whole race - 81 distinct values, all increasing,
+latching at `0.04566` on the circuit's tightest corner.
+
+So the exit gate's real meaning is **"this is not the tightest corner seen so far
+this race"**, which after lap one is true almost everywhere. That is the whole of
+what the user is seeing.
+
+### The fix works as a mechanism and does not pay as a tuning
+
+`Tuning::trail_peak_decay` makes the mark leaky. At `0.99` on the same circuit
+the exit gate's share falls **74.8 % -> 24.2 %** and the differential fires
+**3.78 % -> 11.58 %**, three times as much airbrake. Board-wide, 48 rows, charge
+capped at each row's pool:
+
+| decay | contact ticks | charged | end pool | respawns | eliminated | clean laps | mean lap |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| **1.0 (latch)** | **10,924** | **2,277.3** | **2,191.6** | 35 | **11** | 44/48 | 38.88s |
+| 0.998 | 14,228 | 2,373.4 | 2,057.1 | 40 | 10 | 44/48 | 38.95s |
+| 0.995 | 13,902 | 2,317.3 | 2,129.6 | 34 | 12 | 43/48 | 38.76s |
+| 0.99 | 14,973 | 2,339.5 | 2,112.7 | 34 | 12 | 43/48 | 38.72s |
+| 0.95 | 13,917 | 2,302.2 | 2,181.8 | 34 | 11 | 45/48 | 38.72s |
+
+**Every leak value costs contact ticks and end-of-run shield and buys 0.16 s of
+mean lap.** Shipped at `1.0`, which changes nothing, with the sweep beside the
+constant.
+
+**Why it does not pay, which is the useful half.** `trail` spends the
+differential *reactively*, once `trail_saturation` says the steering loop has
+already run out of authority - and `trail`'s own doc records that it "cuts
+lateral grip exactly as hard as holding both sides would". Spending grip without
+**banking** the higher corner speed it permits is a pure loss, and the speed is
+only banked if `corner_target` raises its target *because* the differential is
+planned (`v = omega_steer / (k - C)`, step 5). It does not. **This is board
+evidence for the design change step 5 scoped out**, not an argument against it.
+
+### And a second reason the hairpin stays shut, which is already on the board
+
+Even with the leak, `07`'s hairpin is still exit-gated: `k = 0.0139` against a
+bound of `0.0170`. The windowed curvature **falls monotonically** through the
+whole window - `0.01387 -> 0.00770` - so the estimator tells the driver the
+corner is opening up while the craft is at full lock hitting a wall. That is the
+**same estimator understatement Outpost 7 step 6 named** (true local apex 1.66x
+and 1.85x the span-11 reading), now seen feeding a second consumer. The exit
+gate's logic is not wrong here; its input is.
+
 ## The gate, as it stands on this branch
 
 `just` is green in full. `OAG_REQUIRE_GAME_DATA=1 just test-data` is **4,185
@@ -439,7 +540,14 @@ faster laps, and step 3 cost 0.5-3.0 s a circuit that this should give back.
   stops a wreck, not that. Capping at the pool is the workaround the totals use;
   a cleaner counter would gate on `physics.shield > 0.0` too.
 - **The planned differential is unbuilt** - step 5 sizes it at +24.5 % corner
-  speed and names the three things that have to change; none of them is done.
+  speed and names the three things that have to change; none of them is done,
+  and step 6 is board evidence that the reactive half alone is a net loss.
+- **`Tuning::trail_peak_decay` ships at `1.0`, the latch**, because no leak
+  value pays on the board. It becomes worth re-sweeping the moment
+  `corner_target` banks the speed the differential buys.
+- **The curvature estimator now has two consumers it is wrong for**, not one:
+  `corner_target`'s speed and `trail`'s exit gate. Through `07`'s hairpin it
+  reports a falling curvature while the craft is at full lock into a wall.
 - **The airbrake arming distance is unmeasured.** `Airbrake.gain` decides how
   far before an apex the differential has to be armed for the steady-state
   ceiling step 5 computes to be real, and nothing has measured it.

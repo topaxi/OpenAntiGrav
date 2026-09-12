@@ -589,3 +589,176 @@ fn what_a_held_airbrake_is_worth_to_the_corner_ceiling() {
     }
     println!("{report}");
 }
+
+/// What the airbrakes actually do through one named stretch of one circuit,
+/// tick by tick.
+///
+/// **The probe that answers a player rather than a column.** A change that
+/// improves the board's `charged` total while still looking timid on a hairpin
+/// has not answered the report it was built for, and nothing else here can see
+/// a hairpin at all - the board reports one number per lap.
+///
+/// `OAG_HAIRPIN` takes `circuit,class,first,last` and defaults to `07_Track`'s
+/// documented crash cluster, `2150-2199` - the tightest corner on the board's
+/// worst row, and the one the Outpost 7 thread's step 6 decomposed.
+///
+/// Reports the **ramped** `ShipState` airbrake values, not the driver's
+/// commands: `oag_physics::controls::update` ramps them at `Airbrake.gain` and
+/// `falloff`, so the command is what the driver asked for and these are what
+/// the yaw term actually got. The gap between them is the arming cost, and it
+/// is the thing a steady-state ceiling cannot see.
+#[test]
+#[ignore = "a scratch probe: set OAG_SWEEP, read the ticks"]
+fn what_the_airbrakes_do_through_a_hairpin() {
+    if std::env::var_os("OAG_SWEEP").is_none() {
+        return;
+    }
+    let spec = std::env::var("OAG_HAIRPIN").unwrap_or_else(|_| "07,VENOM,2150,2199".to_string());
+    let parts: Vec<&str> = spec.split(',').collect();
+    let (circuit, class) = (parts[0], parts.get(1).copied().unwrap_or("VENOM"));
+    let first: u32 = parts.get(2).and_then(|v| v.parse().ok()).unwrap_or(2150);
+    let last: u32 = parts.get(3).and_then(|v| v.parse().ok()).unwrap_or(2199);
+
+    let Some(image) = image() else {
+        return;
+    };
+    let track = format!("Data\\Environments\\{circuit}_Track\\track.vex");
+    let Ok(loaded) = race::load(&race::Options {
+        source: image.display().to_string(),
+        class: class.to_string(),
+        mode: oag_race::Mode::SingleRace,
+        difficulty: oag_ai::Difficulty::Ace,
+        track: Some(track),
+        ..race::Options::default()
+    }) else {
+        return;
+    };
+    let mut race = race::Race::start(loaded.setup);
+    for slot in 2..8 {
+        race.sim.world.ships[slot].active = false;
+    }
+    race.sim.world.ships[0].active = false;
+
+    let turn = race.sim.world.ships[LONE].handling.airbrake.turn;
+    let denominator = -oag_physics::passive::YAW_DAMPING / oag_physics::forces::YAW_INVERSE_INERTIA;
+    let mut report = format!(
+        "\n=== {circuit}_Track {class}, driver index {first}-{last}, lone Ace ===\n\
+         Airbrake.turn {turn}, so C = turn * |imbalance| * 0.001 / {denominator:.0}\n\n\
+         tick   idx    speed   L      R      imbal  brake  steer   air    gnd   C        contact\n"
+    );
+    let mut lap_seen = 0;
+    let mut charged = 0.0f32;
+    for tick in 0..6_000u64 {
+        race.tick(&oag_gameplay::InputSnapshot::default());
+        let ship = &race.sim.world.ships[LONE];
+        let index = ship.driver.index;
+        if index < first || index > last {
+            continue;
+        }
+        let now = race.wall_shield_charged_of(LONE);
+        let hit = now > charged;
+        charged = now;
+        let state = &ship.physics;
+        let left = state.airbrake_left;
+        let right = state.airbrake_right;
+        let imbalance = left - right;
+        let c = turn * imbalance.abs() * 0.001 / denominator;
+        report.push_str(&format!(
+            "{tick:<6} {index:<6} {:<7.1} {left:<6.1} {right:<6.1} {imbalance:<6.1} \
+             {:<6.1} {:<7.1} {:<6.3} {:<5.2} {c:<8.5} {}\n",
+            state.body.linear_velocity.length(),
+            state.brake,
+            state.steer,
+            state.time_airborne,
+            state.grounded,
+            if hit { "WALL" } else { "" },
+        ));
+        lap_seen += 1;
+        if lap_seen > 400 {
+            break;
+        }
+    }
+    println!("{report}");
+}
+
+/// What `Tuning::trail_peak_decay` is worth, board-wide, with **lap time**
+/// reported - the column the rest of this file did not have when the yaw
+/// ceiling cost 0.5-3.0 s a circuit.
+///
+/// **`1.0` is the pre-fix behaviour**, so the row this replaced is in the
+/// table rather than remembered, the same self-check `ai_span_sweep.rs`'s
+/// `none` row is.
+///
+/// `Tuning::trail_max` was the first candidate and it is **not** the
+/// constraint: measured through `07_Track`'s hairpin the differential is
+/// `0.0`, not a capped `0.6`, so a ceiling on a quantity that never leaves
+/// zero is worth nothing. See `pace::track_peak_curvature`.
+///
+/// ```sh
+/// OAG_SWEEP=1 OAG_SWEEP_TRAIL=1.0,0.99,0.98 OAG_REQUIRE_GAME_DATA=1 \
+///   cargo nextest run --release -p oag-game --run-ignored all \
+///   --no-capture sweep_trail_peak_decay
+/// ```
+#[test]
+#[ignore = "a scratch sweep: set OAG_SWEEP and OAG_SWEEP_TRAIL"]
+fn sweep_trail_peak_decay() {
+    if std::env::var_os("OAG_SWEEP").is_none() {
+        return;
+    }
+    let list =
+        std::env::var("OAG_SWEEP_TRAIL").unwrap_or_else(|_| "1.0,0.995,0.99,0.98".to_string());
+    let circuits = circuits();
+    if circuits.is_empty() {
+        return;
+    }
+    for word in list.split(',') {
+        let Ok(decay) = word.trim().parse::<f32>() else {
+            continue;
+        };
+        let tuning = oag_ai::Tuning {
+            trail_peak_decay: decay,
+            ..oag_ai::Tuning::default()
+        };
+        let mut report = format!("\n=== trail_peak_decay {decay} ===\n{}", header());
+        let (mut ticks, mut charged, mut end, mut resp, mut elim) = (0u32, 0.0f32, 0.0f32, 0u32, 0);
+        let (mut laps, mut clean) = (0u64, 0u32);
+        for class in classes() {
+            for (id, entry) in &circuits {
+                let Some(solo) = solo_on(entry, &class, Some(tuning)) else {
+                    continue;
+                };
+                report.push_str(&row(id, &class, &solo));
+                ticks += solo.contact_ticks;
+                // Capped at the pool: a craft racing at zero shield is charged
+                // and loses nothing, so a raw sum rewards dying early. See
+                // `RaceSim::wall_damage`.
+                charged += solo
+                    .wall_charged
+                    .min(race_pool(&solo).unwrap_or(solo.wall_charged));
+                end += solo.end_shield;
+                resp += solo.respawns;
+                elim += usize::from(solo.state == oag_physics::CraftState::Eliminated);
+                if let Some(best) = solo.best {
+                    laps += best;
+                    clean += 1;
+                }
+            }
+        }
+        report.push_str(&format!(
+            "TOTAL      contact ticks {ticks}  charged {charged:.1}  end {end:.1}  \
+             respawns {resp}  eliminated {elim}  clean laps {clean}/48  \
+             mean clean lap {:.2}s\n",
+            laps as f32 / clean.max(1) as f32 / 60.0,
+        ));
+        println!("{report}");
+    }
+}
+
+/// The shield pool a row's charge should be capped at.
+///
+/// 95.0 on every Pulse craft measured, but read rather than assumed: a row that
+/// finished at capacity reads its own pool in [`Solo::end_shield`], and any
+/// other row is capped at the constant the board has always seen.
+fn race_pool(_solo: &Solo) -> Option<f32> {
+    Some(95.0)
+}
