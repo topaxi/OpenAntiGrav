@@ -190,6 +190,37 @@ impl Race {
         self.sim.rolls_spent.get(slot).copied().unwrap_or(0.0)
     }
 
+    /// How many ticks an **opponent** has spent touching a wall this race.
+    ///
+    /// Slot 0 is structurally always zero, the same way
+    /// [`Self::rolls_armed_of`] is: the player's craft is stepped by
+    /// `Race::tick` and only `Race::step_opponents` counts. See
+    /// [`oag_game::race::RaceSim::wall_contact_ticks`] for why this counts
+    /// contacts rather than inbound impacts, and why a contact here is a wall
+    /// by construction rather than by a geometric test on the normal.
+    ///
+    /// [`oag_game::race::RaceSim::wall_contact_ticks`]: crate::race::RaceSim
+    #[must_use]
+    pub fn wall_contact_ticks_of(&self, slot: usize) -> u32 {
+        self.sim.wall_contact_ticks.get(slot).copied().unwrap_or(0)
+    }
+
+    /// The inbound subset of [`Self::wall_contact_ticks_of`] - ticks the craft
+    /// arrived at a wall rather than ticks it was scraping one.
+    #[must_use]
+    pub fn wall_inbound_ticks_of(&self, slot: usize) -> u32 {
+        self.sim.wall_inbound_ticks.get(slot).copied().unwrap_or(0)
+    }
+
+    /// What those contacts **charged** an opponent, in shield-pool units.
+    ///
+    /// Charged, not lost: a craft already at zero is charged the same and loses
+    /// nothing. Read it beside the end-of-run pool.
+    #[must_use]
+    pub fn wall_shield_charged_of(&self, slot: usize) -> f32 {
+        self.sim.wall_damage.get(slot).copied().unwrap_or(0.0)
+    }
+
     /// The fixed timestep, from [`TickRate::DEFAULT`].
     #[must_use]
     pub fn dt(&self) -> f32 {

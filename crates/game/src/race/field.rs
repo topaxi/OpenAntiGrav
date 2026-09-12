@@ -386,6 +386,22 @@ impl Race {
             // below records - so `ABSORB`'s branch is unreachable here rather
             // than suppressed.
             self.raise_contact_cue(slot, evaluated.wall.impact, false);
+            // The wall counters, on the same footing as the roll ones below:
+            // bookkeeping, outside `state_hash`, and the only thing in this
+            // project that can see the standard an Ace is held to - lapping
+            // without touching a wall. `contacts` rather than
+            // `ShipState::wall_contact_prev` because the latter is the
+            // *inbound* test and a grind is not inbound; `impulse_sum` rather
+            // than a shield delta because the pool also moves for rolls and
+            // pads. See `RaceSim::wall_contact_ticks` for both arguments.
+            if evaluated.wall.contacts > 0 {
+                self.sim.wall_contact_ticks[slot] += 1;
+                if evaluated.wall.impact {
+                    self.sim.wall_inbound_ticks[slot] += 1;
+                }
+                self.sim.wall_damage[slot] +=
+                    oag_physics::damage::contact_damage(evaluated.wall.impulse_sum, damage_rules);
+            }
             // Bookkeeping for the deviation, not state the race reads back: our
             // opponents barrel-roll and the original's never do, so what an
             // opponent spends on them has to be countable on the disc's own
