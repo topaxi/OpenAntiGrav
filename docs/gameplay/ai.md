@@ -3047,6 +3047,125 @@ both sides of the line. The same runs are where the Turbo departure above was
 found, and where the claim that it is now one craft in 28 rather than zero comes
 from.
 
+## The clean-Ace board: every circuit, every speed class, wall contact counted
+
+Added 2026-09-12. Until then **every solo measurement this project had ever
+taken was at `VENOM`**, and nothing in the harness measured wall contact at all
+- `Solo` carried best lap, respawns, laps and `lost_at`, and no shield. The
+standard the board is written against is the user's own: an Ace should lap
+every circuit, in every class, alone, without touching a wall.
+
+The harness is `crates/game/tests/ai_clean_lap_board.rs` - `#[ignore]`d,
+`OAG_SWEEP`-gated, printing rather than asserting, for the reason `sweep_grip`
+and `sweep_curvature_span` both give. Forty-eight rows of five simulated
+minutes is 42 s of wall clock in release.
+
+### What it counts, and why not the obvious thing
+
+**Contacts, not inbound impacts.** `oag_physics::ShipState::wall_contact_prev`
+is `WallResponse::impact`, an inbound test (`normal_speed < 0.0`), and a craft
+grinding along a wall stops being inbound long before it stops being in
+contact. Measured on `07_Track` at VENOM: **1,445 contact ticks against 1,378
+inbound**, so the inbound reading undercounts by 5 %.
+
+**Charged damage, not a shield delta.** The pool also moves for barrel-roll
+charge and shield pads, which is exactly why `07_Track` was for a long time the
+only circuit whose wall attrition could be read by hand at all. `RaceSim`
+sums `oag_physics::damage::contact_damage(impulse_sum, rules)` - the quantity
+physics itself charges - so the wall's share is separated structurally rather
+than by subtraction. It is what the wall *charged*: a craft at zero shield is
+charged the same and loses nothing, so it is always reported beside the
+end-of-run pool and never instead of it.
+
+**A contact counted is a wall by construction.** `oag_physics::wall::responds`
+excludes `Floor` and `MagFloor`, so a `WallResponse` contact can only be
+`Surface::Wall` or `Surface::Reset`. That is a surface-tag test and strictly
+stronger than the `|n.up|` near-zero geometric proxy a by-hand reading needs.
+
+`Mode::SINGLE_RACE_LAPS_BY_CLASS` is `[3, 4, 4, 5]`, so a PHANTOM race is two
+laps longer than a VENOM one at a higher speed. Eighteen thousand ticks holds
+every class, but a craft that crosses its last line stops being `Racing` and
+coasts, so the board carries a `fin` column: a row measured past the flag is
+not comparable with one still racing.
+
+### The team axis, and the constant it retired from one of its two jobs
+
+`Tuning::max_turn_rate` was one global constant, `1.8`, doing two unrelated
+jobs: a clamp on the turn rate pure pursuit may *request* in `Driver::steering`,
+and the kinematic corner-speed limit `max_turn_rate / k` in
+`pace::corner_target`. The first is a permission. The second is a claim about
+what a hull can do, and it was wrong for **every craft on the disc**.
+
+The yaw axis's steady state is `omega = steer * Turning.amount / (damping *
+I_yy)`. `I_yy` is **not per-craft**: the inertia box `(12, 8, 12)` and the mass
+`0.9` are code literals at a single call site in the ship-entity constructor
+(see `oag_physics::forces::YAW_INVERSE_INERTIA`, which carries the
+disassembly), and `Misc` `width`/`length`/`height` reach the *collider*, not the
+tensor. So every craft has `I_yy = 21.6` and the only per-craft term is
+`<Turning amount>`. Read off `handlingstats.xml` for all eight teams and all
+four classes:
+
+| team | `Turning.amount` | ceiling (rad/s) | against 1.8 |
+| --- | ---: | ---: | ---: |
+| Feisar | 1.80 | 1.6667 | -7.4 % |
+| Assegai, AG Systems | 1.68 | 1.5556 | -13.6 % |
+| Qirex | 1.55 | 1.4352 | -20.3 % |
+| EGX, Goteki | 1.42 | 1.3148 | -27.0 % |
+| Triakis, Piranha | 1.30 | 1.2037 | -33.1 % |
+
+**`Turning.amount` is identical across the four speed classes** on all eight
+teams, so team and class are independent axes. And **no craft reaches 1.8** -
+the corner limit asked every one of them for a speed its hull could not rotate
+at, by 7 % on the best team and 33 % on the worst. The 1.5556 row is the one
+measured by hand on `07_Track`, and
+[engine.md](../ghidra/functions/psp-pulse-usa/engine.md) measures the
+*original* hull at 1.42-1.51 under full lock, so the arithmetic lands within a
+few per cent of the original's own behaviour.
+
+This settles the caveat `Tuning::max_turn_rate`'s own sweep table carries -
+that the curve "flattens either side of 1.8 rather than continuing to improve,
+which is the shape of a constraint that has stopped binding". **The constant
+was the wrong shape, not the wrong value.** That sweep measured the steering
+clamp, where 1.8 really has stopped binding; the same number was silently doing
+a second job where it could never bind correctly.
+
+So `Context::yaw_ceiling` now carries the flown craft's own number,
+`oag_ai::hull_yaw_ceiling` derives it, and `corner_target` takes `min(hull,
+tuning.max_turn_rate)` - the permission still caps, so `Difficulty::tune`'s
+ladder survives and a Novice does not corner like an Ace. `Driver::steering`'s
+clamp is deliberately left on `max_turn_rate`: lowering *that* is what the 1.2
+row of its sweep measured as worse.
+
+Board-wide, over all 48 rows:
+
+| class | wall-charged shield | end-of-run pool | respawns | eliminated |
+| --- | --- | --- | --- | --- |
+| VENOM | 260.5 -> 251.5 | 838.9 -> 908.0 | 1 -> 1 | 1 -> 1 |
+| FLASH | 488.1 -> 438.2 | 655.7 -> 684.7 | 1 -> 7 | 2 -> 2 |
+| RAPIER | 913.1 -> 776.5 | 255.9 -> 382.9 | 4 -> 13 | 5 -> 3 |
+| PHANTOM | 1334.3 -> 1049.9 | 101.4 -> 216.0 | 17 -> 14 | 4 -> 5 |
+
+Charged shield falls at every class (2,996 -> 2,516, a 16 % cut), the
+end-of-run pool rises at every class, and two more circuits reach **zero** wall
+contact at VENOM (`02` and `10` join `03`). **The price is lap time, 0.5-3.0 s
+a circuit, and respawns, which rise 23 -> 35 board-wide**: a craft that brakes
+earlier wedges at low speed and is rescued, where before it crashed at speed
+and was charged for it. Nothing on the board or in the gate asserts on lap
+time, so no measurement here separates "the AI is slower" from "the AI is
+correctly slower".
+
+`race_ground_truth::a_lone_craft_gets_round_the_circuits_it_is_known_to_get_round`
+stays twelve clean with `01_Track`'s single pre-existing respawn at driver
+index 794, and both field ground-truth tests stay green.
+
+### Where the board stands
+
+**Four of 48 rows meet the standard**: `03` at VENOM and FLASH, `02` and `10`
+at VENOM, each with zero wall contact. `07_Track` is the weakest row at every
+class and `13_Track` the second weakest. The full per-row table, the worst
+cluster on each row and the open residuals are in this thread's handover file
+rather than here, because they move every time the driver does.
+
 ## Where this sits
 
 The prerequisites were all done before this landed: the

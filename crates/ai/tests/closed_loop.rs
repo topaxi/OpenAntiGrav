@@ -389,12 +389,11 @@ fn drive_the_oval_as(
     for tick in 0..ticks {
         let controls = driver.drive(
             &state,
+            // `Context::new` already carries the empty field and the `None`
+            // hull ceiling this loop wants - see `Context::yaw_ceiling`.
             &oag_ai::Context {
-                line,
-                tuning: &tuning,
                 pilot,
-                field: &oag_ai::Field::EMPTY,
-                yaw_ceiling: None,
+                ..oag_ai::Context::new(line, &tuning)
             },
         );
         oag_physics::step(&mut state, &controls, &handling, &env, &Plane, dt);
@@ -1014,11 +1013,9 @@ fn drive_two_round_the_oval(ticks: usize, pilots: [&Pilot; 2]) -> Pair {
             let controls = drivers[craft].drive(
                 &states[craft],
                 &oag_ai::Context {
-                    line: &line,
-                    tuning: &tuning,
                     pilot: pilots[craft],
                     field: &fields[craft],
-                    yaw_ceiling: None,
+                    ..oag_ai::Context::new(&line, &tuning)
                 },
             );
             oag_physics::step(&mut states[craft], &controls, &handling, &env, &Plane, dt);
