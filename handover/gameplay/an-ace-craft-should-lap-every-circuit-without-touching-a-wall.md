@@ -260,6 +260,29 @@ fires. It is the right next experiment once a row is found whose loss happens
 *with the brake on* - the board's `charged` column is now the thing that can
 find one.
 
+## The gate, as it stands on this branch
+
+`just` is green in full. `OAG_REQUIRE_GAME_DATA=1 just test-data` is **4,185
+run, 4,137 passed, 48 failed, and all 48 are 2048/Vita or Pure-DLC** on a
+checkout that has neither image - `oag-rcs::start_gantry_2048` and
+`psp2_rcsmodel*`, `oag-game::vita_2048_*`, `race_remix`, `zone_grade`,
+`pure_dlc`, `oag-vex::kdcol`, `oag-texture::gxt`, `oag-rcs::gxp`,
+`oag-tables::effectsettings`, `oag-vex::shadow_occluder`. Nothing in AI,
+physics, race, weapons or lap times is red. `shuriken_ground_truth` and
+`stall_rescue_ground_truth`, which the handover expected to be red, both passed.
+
+**`check-test-budget` fired and it is not settled**: 710 s against the 450 s
+ceiling, five `ai_roll_ground_truth` grid tests reported at 545-578 s. The
+machine was never idle - load average 54 during the run, 68 and then 138 while
+the A/B was attempted - which is exactly the contended reading CLAUDE.md's own
+worked example for this ceiling describes, using these same tests. Re-measured
+in isolation at load 6.84 the test is **174.7 s**, under the 300 s per-test
+ceiling but still 2.2x CLAUDE.md's recorded 76-79 s. The A/B that would settle
+it (the same binary with `yaw_ceiling` back to `None`) was abandoned rather than
+reported from a load-138 machine. Mechanism argues against it being the yaw
+change - one `min()` per craft per tick, and contact ticks are *down* at three
+of four classes - but that is an argument, not a measurement.
+
 ## Open
 
 - **Respawns are the new residual.** Board-wide 23 -> 35 under step 3, with
