@@ -266,6 +266,18 @@ impl Race {
     /// parameter carrying two index spaces depending on the caller is the bug
     /// this pair of accessors exists to make impossible to write.
     #[must_use]
+    /// Which spline sample a racing-line index maps to, for a diagnostic that
+    /// needs the number rather than the sample.
+    ///
+    /// Public because `ai_order` being a *permutation* rather than the identity
+    /// is itself a failure mode - the `Course::path_order` splice that put
+    /// craft off the track on three circuits - and a test that cannot read it
+    /// cannot tell a spliced line from a merely unsupported one.
+    #[must_use]
+    pub fn ai_sample_index(&self, ai_index: usize) -> Option<usize> {
+        self.sample_index_of(ai_index)
+    }
+
     pub(super) fn sample_index_of(&self, ai_index: usize) -> Option<usize> {
         if self.sim.ai_order.is_empty() {
             return None;
