@@ -2329,6 +2329,14 @@ measuring interference.
 is its regression: on Talon's Junction a novice laps in 53.8s and an ace in
 42.3s.
 
+That single-track, single-class regression is now a board-wide one:
+`crates/game/tests/ai_clean_lap_gate.rs` freezes all 12 circuits x 4 speed
+classes as 48 individual tests, each checking status (clean lap / no clean
+lap / eliminated), clean-lap time and wall-contact ticks against a committed
+baseline. It runs under `just test-data`, not `just` - see the file's own
+doc comment for what a green board does and does not prove, and for why a
+row can be "clean" while still grinding a wall every lap.
+
 ### Difficulty
 
 Four levels - `novice`, `skilled`, `elite`, `ace` - chosen on the pre-race page
