@@ -733,16 +733,24 @@ faster laps, and step 3 cost 0.5-3.0 s a circuit that this should give back.
   the distance the turning actually happens over rather than the chord's own
   length - a chord triple spreads a sharp apex's whole turned angle across
   `3 * span` of travel, which is exactly the 1.66x.
-- **The planned differential is built and parked, not merged** - branch
-  `ai/planned-differential`, commit `93072bfc`. Measured against merged main it
-  is **0.9 s a lap faster at every class**, contact ticks -16 %, respawns -31 %,
-  and the airbrake finally fires through `07`'s hairpin (`R = 20.8`, correct
-  sign, from `0.0`). It costs eliminations, 11 -> 14, and 7 % of the end-of-run
-  pool: fewer contacts, harder ones. It is parked because it computes its extra
-  corner speed on the very curvature reading step 7 just confirmed is
-  understated, so it compounds a measurement error. All three hard gates pass on
-  it; the full `just` gate was killed mid-run by machine memory pressure and the
-  AI determinism reference will legitimately move.
+- **The planned differential is built and parked, not abandoned** - branch
+  `ai/planned-differential`, tip **`456b3b2a`**. Its tip carries the merge of
+  main, the attribution test and the chord sweep, so it is the branch to resume
+  from rather than re-derive. Measured against merged main with
+  `curvature_chord = 4` it is the best board this thread has produced -
+  eliminations 11 -> **8**, charged -11 %, end-of-run pool +9 %, respawns
+  35 -> 20, one more clean lap, at lap-time parity - and **it cannot ship until
+  the driver has a jump model**: with chord 4 as the default the twelve-clean-lap
+  gate goes red on `05_Track` at VENOM, because the sharper chord brakes the
+  craft into an authored jump and it falls short (step 9). Chord 6 fails the
+  same gate on `01_Track`; chord 8 clears it and is worth nothing. Do not
+  re-sweep those. **When it lands, the AI determinism reference in
+  `crates/ai/tests/determinism.rs` will legitimately move, and `Scenario::Solo`
+  is expected to move with it** - a lone craft brakes against `corner_target`,
+  which is what changes. Regenerate with
+  `cargo run -q -p oag-ai --example ai_determinism_report`, in a separate
+  commit, extending `REFERENCE`'s history block; a `Field`-only move would be
+  the alarm.
 - **The curvature estimator now has two consumers it is wrong for**, not one:
   `corner_target`'s speed and `trail`'s exit gate. Through `07`'s hairpin it
   reports a falling curvature while the craft is at full lock into a wall.
