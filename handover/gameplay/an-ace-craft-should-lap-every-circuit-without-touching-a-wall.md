@@ -498,6 +498,51 @@ available - worth eliminations 11 -> 8, charged -11 %, end-of-run pool +9 %,
 respawns 35 -> 20 and a clean lap, at lap-time parity. That is a far more
 specific next step than "try a third estimator".
 
+## Step 9 is done: `05_Track`'s line is not broken. It is a jump, and the driver has no jump model
+
+Step 8 left `05_Track` at VENOM as the blocker, and the working theory was that
+a sharp chord *reports* a kink a blunt one averages away - so the defect was in
+the line and the estimator was the messenger. **Measured, and falsified on every
+count.**
+
+`what_is_wrong_with_the_line` casts down each sample's own `down` axis from one
+probe reach above and prints the four things that separate the candidates. Over
+idx 195-232:
+
+| | finding |
+| --- | --- |
+| splice | **none** - `ai_order` is the identity, 195 -> 195, 232 -> 232 |
+| seam | **none** - spacing a uniform **1.50-1.51** units the whole run |
+| kink | **none** - `k4` is `0.0009-0.0020`, `k11` is `0.0015-0.0020`; the sharp chord sees what the blunt one sees, and both are tiny |
+| height | drop below the line climbs 2.7 -> 43.9 over 195-209, back to 2.3-3.0 by 213 |
+
+**And the craft is airborne.** `grounded` is `0.00` and `time_airborne` climbs
+from idx 151. This is an **authored jump**, and the 134 "unsupported" samples
+the committed cast records at 161-211 are that jump. The line is correct. There
+is nothing to fix in the geometry and nothing to invent.
+
+### What actually fails
+
+The driver has **no model of a jump**, and a sharper estimator exposes it. Lone
+Ace, `05_Track`, VENOM:
+
+| | entry speed at takeoff | airborne | speed while airborne | outcome |
+| --- | ---: | ---: | ---: | --- |
+| chord `None` | **118.1** | 0.93s / 166 ticks | 86.9-118.3 | lands, clean 39.6s lap |
+| chord 4 | **103.8** | **4.38s / 356 ticks** | **3.1**-103.8 | falls short, destroyed |
+
+`k4` is three to four times `k11` on the run-up at idx 150-151, so the driver
+targets a lower speed, takes off **14.3 units/s slower**, and does not clear the
+gap. `Driver::drive` already has an airborne branch that holds thrust and
+releases the brake - and its own doc names `13_Track`'s Novice jump pathology -
+but **nothing stops the driver braking *into* a takeoff**. That is the missing
+half.
+
+**This moves the blocker off the disc and into the driver**, which is the better
+outcome: the measured prize behind it (eliminations 11 -> 8, charged -11 %,
+end-of-run pool +9 %, respawns 35 -> 20, a clean lap, at lap-time parity) is
+reachable without touching authored data.
+
 ## The gate, as it stands on this branch
 
 `just` is green in full. `OAG_REQUIRE_GAME_DATA=1 just test-data` is **4,185
@@ -670,11 +715,18 @@ faster laps, and step 3 cost 0.5-3.0 s a circuit that this should give back.
 - **`Tuning::trail_peak_decay` ships at `1.0`, the latch**, because no leak
   value pays on the board. It becomes worth re-sweeping the moment
   `corner_target` banks the speed the differential buys.
-- **`05_Track`'s unsupported racing line is now this thread's blocker**, not a
-  neighbouring curiosity. Step 8 measures a change worth eliminations 11 -> 8
-  that is red *only* because a sharper estimator brakes into `05`'s broken
-  stretch at idx 200-249. Its own thread owns the fix; this thread owns the
-  measurement that makes it worth doing.
+- **A jump model is the blocker, and it is in the driver.** Step 9 retires the
+  line theory: `05`'s stretch is an authored jump with no kink, no seam and no
+  splice, and the craft is airborne through it. What is missing is a term that
+  stops the driver braking *into* a takeoff - `Driver::drive` already handles
+  being airborne and does nothing about arriving there too slow. Until that
+  exists, `curvature_chord = 4` cannot ship, and with it the whole measured
+  prize stays locked. `13_Track`'s Novice jump pathology, already named in
+  `Driver::drive`'s own doc, is very likely the same missing term.
+- **How far short the combination still falls.** Eliminations 8 against main's
+  11 is better and it is **not zero**, and the user's standard is a clean lap on
+  every circuit in every class. At the best measured configuration that is
+  45 of 48 clean and 8 craft destroyed. This thread is not close to done.
 - **A different curvature estimator is no longer the first move.** Step 7
   exhausts both of this one's knobs, but step 8 shows the existing one is good
   enough *when paired with the differential*. The shape still to try is one whose denominator is

@@ -37,6 +37,7 @@
 use std::path::PathBuf;
 
 use oag_game::{catalogue, race};
+use oag_physics::Raycaster;
 
 /// How long a measured run is: five minutes at 60 Hz, the same window
 /// `race_ground_truth.rs`'s solo benchmark and `ai_span_sweep.rs` use, so all
@@ -634,6 +635,17 @@ fn what_the_airbrakes_do_through_a_hairpin() {
         return;
     };
     let mut race = race::Race::start(loaded.setup);
+    // The same `OAG_SWEEP_CHORD` the board honours, so a stretch can be probed
+    // under the estimator that breaks it rather than only under the shipped one.
+    if let Some(chord) = std::env::var("OAG_SWEEP_CHORD")
+        .ok()
+        .and_then(|v| v.trim().parse::<f32>().ok())
+    {
+        race.set_ai_tuning(oag_ai::Difficulty::Ace.tune(&oag_ai::Tuning {
+            curvature_chord: Some(chord),
+            ..oag_ai::Tuning::default()
+        }));
+    }
     for slot in 2..8 {
         race.sim.world.ships[slot].active = false;
     }
@@ -761,4 +773,102 @@ fn sweep_trail_peak_decay() {
 /// other row is capped at the constant the board has always seen.
 fn race_pool(_solo: &Solo) -> Option<f32> {
     Some(95.0)
+}
+
+/// What is actually wrong with a stretch of a circuit's racing line.
+///
+/// **The blocker's own instrument.** A chord of 4 destroys `05_Track` at VENOM
+/// inside one lap, wedging at driver index 200-249, and that sits inside the
+/// run of 134 unsupported line samples `race_ground_truth::the_racing_line_has_track_under_it_where_it_is_known_to`
+/// records at 161-211. The question this answers is whether the sharper
+/// estimator is *causing* that failure or *reporting* it.
+///
+/// Per sample it prints what separates the candidate explanations:
+///
+/// - **`drop`**, how far below the sample the floor is, cast down the sample's
+///   own `down` axis from one probe reach above. A racing line running above
+///   the track reads as a steady positive drop; a genuine hole reads as `none`.
+/// - **`gap`**, the distance to the previous sample. A splice of two authored
+///   paths shows as a jump against the circuit's ordinary spacing.
+/// - **`order`**, the spline sample each racing-line index maps to through
+///   `RaceSim::ai_order`. Non-consecutive values are the path-order splice that
+///   `Course::path_order` exists to prevent - `05` was one of three circuits it
+///   put craft off the track on, and `crates/game/src/race/course.rs` carries
+///   the account.
+/// - **`k4`/`k11`**, the curvature at the two chords. A **kink** - geometry
+///   that is not a corner - shows as a `k4` spike the `k11` chord averages
+///   away; a genuine tight corner shows at both.
+/// - **`hw`**, the authored half-widths, and **`lat`**, where the racing line
+///   sits across the track.
+///
+/// ```sh
+/// OAG_SWEEP=1 OAG_LINE=05,140,280 OAG_REQUIRE_GAME_DATA=1 \
+///   cargo nextest run --release -p oag-game --run-ignored all \
+///   --no-capture -E 'test(what_is_wrong_with_the_line)'
+/// ```
+#[test]
+#[ignore = "a scratch probe: set OAG_SWEEP, read the samples"]
+fn what_is_wrong_with_the_line() {
+    if std::env::var_os("OAG_SWEEP").is_none() {
+        return;
+    }
+    let spec = std::env::var("OAG_LINE").unwrap_or_else(|_| "05,140,280".to_string());
+    let parts: Vec<&str> = spec.split(',').collect();
+    let circuit = parts[0];
+    let first: usize = parts.get(1).and_then(|v| v.parse().ok()).unwrap_or(140);
+    let last: usize = parts.get(2).and_then(|v| v.parse().ok()).unwrap_or(280);
+
+    let Some(image) = image() else {
+        return;
+    };
+    let Ok(loaded) = race::load(&race::Options {
+        source: image.display().to_string(),
+        class: "VENOM".to_string(),
+        mode: oag_race::Mode::SingleRace,
+        track: Some(format!("Data\\Environments\\{circuit}_Track\\track.vex")),
+        ..race::Options::default()
+    }) else {
+        return;
+    };
+    let reach = loaded.setup.handling.antigrav.ride_height;
+    let collision = loaded.setup.collision.clone();
+    let race = race::Race::start(loaded.setup);
+    let line = race.racing_line();
+
+    let mut report = format!(
+        "\n=== {circuit}_Track racing line, idx {first}-{last}, ride height {reach:.2} ===\n\
+         idx    order  gap    drop     surface  k4       k11      hwL    hwR    lat\n"
+    );
+    let mut previous: Option<oag_core::math::Vec3> = None;
+    for index in first..=last.min(line.len().saturating_sub(1)) {
+        let Some(sample) = race.ai_sample(index) else {
+            continue;
+        };
+        let point = line.point(index);
+        let up = (-oag_core::math::Vec3::from_array(sample.down)).normalize_or_zero();
+        let from = point + up * reach;
+        // Sixty reaches, the same deep cast the committed test uses to tell a
+        // line above the track from an authored jump with nothing under it.
+        let hit = collision.raycast(oag_physics::Ray::new(from, -up, reach * 60.0), None, false);
+        let gap = previous.map_or(0.0, |p| (point - p).length());
+        previous = Some(point);
+        let centre = oag_core::math::Vec3::from_array(sample.pos);
+        let lateral = oag_core::math::Vec3::from_array(sample.lateral).normalize_or_zero();
+        report.push_str(&format!(
+            "{index:<6} {:<6} {gap:<6.2} {:<8} {:<8} {:<8.5} {:<8.5} {:<6.2} {:<6.2} {:.2}\n",
+            race.ai_sample_index(index)
+                .map_or_else(|| "-".to_string(), |o| o.to_string()),
+            hit.map_or_else(
+                || "none".to_string(),
+                |h| format!("{:.2}", h.distance - reach)
+            ),
+            hit.map_or_else(|| "-".to_string(), |h| format!("{:?}", h.surface)),
+            line.curvature(index, 4.0),
+            line.curvature(index, 11.0),
+            sample.half_width_left,
+            sample.half_width_right,
+            (point - centre).dot(lateral),
+        ));
+    }
+    println!("{report}");
 }
