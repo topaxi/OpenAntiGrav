@@ -175,6 +175,15 @@ struct Solo {
 /// One craft, alone, on one circuit at one class, exactly the scenario
 /// `ai_clean_lap_board.rs::solo_on` measures. See that file for the fuller
 /// version with the driver-index clustering this gate does not need.
+///
+/// `track` must be a WAD entry name (`circuits()`'s second tuple element),
+/// **not** a bare circuit id - the same trap `ai_clean_lap_board.rs::solo_on`
+/// warns about. Passing a bare id used to fail `race::load` silently here:
+/// `.ok()?` turned that failure into the same `None` the "no disc image"
+/// skip returns, so every `row_test!` passed by never actually asserting
+/// anything - caught by running the tests, not by reading the code. `race::load`
+/// now panics loudly on any failure other than a missing image, so a load
+/// error can never again read as a green, empty test again.
 fn solo_on(track: &str, class: &str) -> Option<Solo> {
     let image = image()?;
     let loaded = race::load(&race::Options {
@@ -185,7 +194,7 @@ fn solo_on(track: &str, class: &str) -> Option<Solo> {
         track: Some(track.to_string()),
         ..race::Options::default()
     })
-    .ok()?;
+    .unwrap_or_else(|error| panic!("loading {track} at {class}: {error}"));
     let mut race = race::Race::start(loaded.setup);
     for slot in 2..8 {
         race.sim.world.ships[slot].active = false;
@@ -332,11 +341,14 @@ const BASELINE: &[Row] = &[
 
 /// Runs one row and asserts it against its frozen [`BASELINE`] entry.
 ///
+/// `entry` is the WAD entry name [`solo_on`] needs - see its own doc comment
+/// for why this takes one instead of resolving `baseline.circuit` itself.
+///
 /// Three assertions, in the order described in the file doc comment: `status`
 /// exactly, `lap_ticks` as a ceiling when the baseline has one, `contact_ticks`
 /// always as a ceiling.
-fn check_row(baseline: &Row) {
-    let Some(solo) = solo_on(baseline.circuit, baseline.class) else {
+fn check_row(baseline: &Row, entry: &str) {
+    let Some(solo) = solo_on(entry, baseline.class) else {
         return;
     };
     let status = Status::of(&solo);
@@ -385,26 +397,30 @@ fn check_row(baseline: &Row) {
     );
 }
 
-/// Looks a row up in [`BASELINE`] by name and runs [`check_row`] against it.
+/// Looks a row up in [`BASELINE`] by name, resolves its WAD entry name off
+/// the disc's own catalogue, and runs [`check_row`] against it.
 ///
-/// Also asserts the disc's own catalogue still has the circuit, so a track
-/// renamed or removed upstream fails here rather than silently skipping its
-/// row - `circuits()` filters to what the disc has, and a name that has
-/// drifted out of it would otherwise just never be checked.
+/// Resolving through `circuits()` rather than reconstructing the entry name
+/// from the id is deliberate: it is the same lookup `check_named_row`'s own
+/// membership assertion already needs, and it means a track renamed or
+/// removed upstream fails loudly here instead of `solo_on` silently loading
+/// nothing for a path that no longer exists.
 fn check_named_row(circuit: &str, class: &str) {
     let circuits = circuits();
     if circuits.is_empty() {
         return;
     }
-    assert!(
-        circuits.iter().any(|(id, _)| id == circuit),
-        "{circuit} is in BASELINE but not on the disc's own catalogue"
-    );
+    let entry = circuits
+        .iter()
+        .find(|(id, _)| id == circuit)
+        .unwrap_or_else(|| panic!("{circuit} is in BASELINE but not on the disc's own catalogue"))
+        .1
+        .clone();
     let baseline = BASELINE
         .iter()
         .find(|row| row.circuit == circuit && row.class == class)
         .unwrap_or_else(|| panic!("no BASELINE row for {circuit} {class}"));
-    check_row(baseline);
+    check_row(baseline, &entry);
 }
 
 /// One `#[test]` per `(circuit, class)` cell - 48 in total, not the four
@@ -429,6 +445,17 @@ fn check_named_row(circuit: &str, class: &str) {
 /// circuit and class instead of failing eleven unrelated ones alongside it.
 /// Reported here rather than silently overridden, since it means the
 /// decision no longer rests only on the pre-measurement reasoning above.
+///
+/// **A second measurement, of the 48 tests actually run this way**: all 48
+/// plus the generator, under `cargo nextest run`'s own default concurrency
+/// (no `--no-capture` forcing serial execution) on this machine at the time,
+/// individual rows landed at 9.4-12.5s each - three to four times the
+/// generator's serial 3.3s/row, which is contention between the 48 tests
+/// themselves rather than anything outside this file, and the total wall
+/// clock was 33.5s. Both numbers sit far under the ceilings that matter
+/// (300s a test, 450s the suite), with enough margin that neither the
+/// per-test contention seen here nor the further load `ai_roll_ground_truth`
+/// records elsewhere should threaten them.
 macro_rules! row_test {
     ($name:ident, $circuit:expr, $class:expr) => {
         #[test]
