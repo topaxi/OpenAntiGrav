@@ -485,6 +485,61 @@ pub struct Tuning {
     ///
     /// [`pace::trail`]: super::pace::trail
     pub trail_exit_decay: f32,
+    /// Per-tick leak on [`Driver::peak_curvature`](crate::Driver::peak_curvature),
+    /// the high-water mark [`trail_exit_decay`](Self::trail_exit_decay) is read
+    /// against.
+    ///
+    /// **`1.0` latches the mark for the whole race, which is what it used to do
+    /// and it was a bug.** `pace::track_peak_curvature` resets the mark when
+    /// the curvature falls to [`Self::trail_curvature_floor`], meaning "the
+    /// line went straight" - and measured on `07_Track` over 6,000 ticks the
+    /// smallest windowed curvature all run is `0.00127` against a floor of
+    /// `0.00100`, so **the reset never fires on this disc's geometry**. The
+    /// mark became a running maximum over the whole race, latching on the
+    /// circuit's tightest corner, and the exit gate it feeds then meant "this
+    /// is not the tightest corner seen so far" - true almost everywhere after
+    /// lap one. That gate alone rejected 74.8 % of ticks and the differential
+    /// fired on 3.78 %.
+    ///
+    /// A leak makes "exit" mean the corner has opened up since its tightest
+    /// point *recently*. The value is a half-life: at `0.99` the mark halves in
+    /// about 69 ticks, a little over a second, which is the scale of a corner.
+    ///
+    /// # And it is nonetheless shipped at `1.0`, which is the latch
+    ///
+    /// **The leak works as a mechanism and does not pay as a tuning.** Swept by
+    /// `sweep_trail_peak_decay` over the whole 48-row board, lone Ace, charge
+    /// capped at each row's pool:
+    ///
+    /// | decay | contact ticks | charged | end pool | respawns | eliminated | clean laps | mean lap |
+    /// | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+    /// | **1.0** | **10,924** | **2,277.3** | **2,191.6** | 35 | **11** | 44/48 | 38.88s |
+    /// | 0.998 | 14,228 | 2,373.4 | 2,057.1 | 40 | 10 | 44/48 | 38.95s |
+    /// | 0.995 | 13,902 | 2,317.3 | 2,129.6 | 34 | 12 | 43/48 | 38.76s |
+    /// | 0.99 | 14,973 | 2,339.5 | 2,112.7 | 34 | 12 | 43/48 | 38.72s |
+    /// | 0.95 | 13,917 | 2,302.2 | 2,181.8 | 34 | 11 | 45/48 | 38.72s |
+    ///
+    /// Every leak value costs contact ticks and end-of-run shield against the
+    /// latch, and buys **0.16 s** of mean lap. On `07_Track` the differential
+    /// goes from firing on 3.78 % of ticks to 11.58 % - three times as much
+    /// airbrake - and the board gets worse.
+    ///
+    /// **Why, and it is the useful half of the result**: the differential is
+    /// spent *reactively*, as a rescue once [`Self::trail_saturation`] says the
+    /// steering loop has already run out of authority. `pace::trail`'s own doc
+    /// records that it "cuts lateral grip exactly as hard as holding both sides
+    /// would", so spending it without also **banking** the higher corner speed
+    /// it permits is a pure loss of grip. The speed is only banked if
+    /// `pace::corner_target` raises its target *because* the differential is
+    /// planned - `v = omega_steer / (k - C)` - and it does not. Until it does,
+    /// more differential is more grip spent for nothing, which is what the table
+    /// measures.
+    ///
+    /// So `1.0` here is **not** an endorsement of the latch. It is the value
+    /// that changes no behaviour while the constant, the sweep and the
+    /// measurement exist for the pass that makes the differential a plan. See
+    /// `pace::track_peak_curvature` and `docs/gameplay/ai.md`.
+    pub trail_peak_decay: f32,
     /// How often a driver misses a braking point, per tick, while it is at one.
     ///
     /// **Zero for a driver that never errs**, which is what the hardest
@@ -529,6 +584,7 @@ impl Default for Tuning {
             trail_saturation: 0.7,
             trail_curvature_floor: 0.001,
             trail_exit_decay: 0.7,
+            trail_peak_decay: 1.0,
             // **Zero, because this is the competent driver.** Erring is a
             // degradation, so the rate belongs to `Difficulty` and arrives by
             // `Difficulty::tune`; a default that errs would make every caller
