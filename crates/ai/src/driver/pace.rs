@@ -78,13 +78,73 @@ pub(super) fn curvature_span(tuning: &Tuning, look: f32) -> f32 {
 /// Infinity rather than an option, because every caller wants "is this speed
 /// allowed", and `speed <= f32::INFINITY` is the right answer for a straight
 /// without a branch of its own.
-pub(super) fn corner_target(curvature: f32, tuning: &Tuning, personality: &Personality) -> f32 {
+pub(super) fn corner_target(
+    curvature: f32,
+    tuning: &Tuning,
+    personality: &Personality,
+    hull_yaw_ceiling: Option<f32>,
+) -> f32 {
     if curvature <= f32::EPSILON {
         return f32::INFINITY;
     }
     let grip = (tuning.lateral_accel * personality.commitment / curvature).sqrt();
-    let yaw = tuning.max_turn_rate / curvature;
+    // **The smaller of what the hull can do and what this driver is allowed**,
+    // and the two are different questions. See [`hull_yaw_ceiling`] for why the
+    // hull's number belongs here and [`Tuning::max_turn_rate`] for why the
+    // permission still caps it: `Difficulty::tune` scales the permission, and a
+    // Novice that read the hull directly would corner like an Ace.
+    let rate = hull_yaw_ceiling.map_or(tuning.max_turn_rate, |hull| hull.min(tuning.max_turn_rate));
+    let yaw = rate / curvature;
     grip.min(yaw)
+}
+
+/// The yaw rate a craft's own hull can actually sustain, in radians per second.
+///
+/// **Authored data, not a tuned constant**, which is the whole point: the
+/// steady state of `oag_physics`'s own yaw axis, evaluated on the craft being
+/// flown rather than on one global belief.
+///
+/// ```text
+/// omega = steer * Turning.amount / (damping * I_yy)
+/// ```
+///
+/// `oag_physics::engine::steering` is `steer * Turning.amount` as a body-local
+/// yaw drive with no speed factor; `oag_physics::passive::YAW_DAMPING` damps
+/// yaw *momentum* at `-5`; and `I_yy` is `1 /
+/// oag_physics::forces::YAW_INVERSE_INERTIA`. `steer` runs to
+/// `oag_physics::controls::CONTROL_RANGE`, so full lock is `100`.
+///
+/// # `I_yy` is global and `Turning.amount` is not
+///
+/// The inertia box `(12, 8, 12)` and the mass `0.9` it is built with are **code
+/// literals at a single call site** in the ship-entity constructor - `Misc`
+/// `width`/`length`/`height` reach the *collider*, not the tensor - so every
+/// craft in the game has the same `I_yy` of `21.6`. See
+/// [`oag_physics::forces::YAW_INVERSE_INERTIA`], which records the
+/// disassembly. The only per-craft term is `<Turning amount>`, and that one is
+/// **per team and constant across the four speed classes**, measured over the
+/// whole disc by `crates/game/tests/ai_clean_lap_board.rs`:
+///
+/// | team | `amount` | ceiling | against `Tuning::max_turn_rate` 1.8 |
+/// | --- | ---: | ---: | ---: |
+/// | Feisar | 1.80 | 1.667 | -7.4 % |
+/// | Assegai, AG Systems | 1.68 | 1.556 | -13.6 % |
+/// | Qirex | 1.55 | 1.435 | -20.3 % |
+/// | EGX, Goteki | 1.42 | 1.315 | -27.0 % |
+/// | Triakis, Piranha | 1.30 | 1.204 | -33.1 % |
+///
+/// **No craft on the disc can reach 1.8**, so the kinematic half of
+/// [`corner_target`] was asking every one of them for a corner speed its hull
+/// could not rotate at - by 7 % on the best team and 33 % on the worst. The
+/// 1.556 row is the one the Outpost 7 thread measured by hand, and
+/// `docs/ghidra/functions/psp-pulse-usa/engine.md` measures the *original*
+/// hull at 1.42-1.51 under full lock, so this arithmetic lands within a few per
+/// cent of the original's own behaviour.
+#[must_use]
+pub fn hull_yaw_ceiling(handling: &oag_physics::Handling) -> f32 {
+    let i_yy = 1.0 / oag_physics::forces::YAW_INVERSE_INERTIA;
+    oag_physics::controls::CONTROL_RANGE * handling.turning.amount
+        / (-oag_physics::passive::YAW_DAMPING * i_yy)
 }
 
 /// Thrust, and the brake held on **both** sides, from the speed the corner

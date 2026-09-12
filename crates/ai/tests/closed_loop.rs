@@ -394,6 +394,7 @@ fn drive_the_oval_as(
                 tuning: &tuning,
                 pilot,
                 field: &oag_ai::Field::EMPTY,
+                yaw_ceiling: None,
             },
         );
         oag_physics::step(&mut state, &controls, &handling, &env, &Plane, dt);
@@ -1017,6 +1018,7 @@ fn drive_two_round_the_oval(ticks: usize, pilots: [&Pilot; 2]) -> Pair {
                     tuning: &tuning,
                     pilot: pilots[craft],
                     field: &fields[craft],
+                    yaw_ceiling: None,
                 },
             );
             oag_physics::step(&mut states[craft], &controls, &handling, &env, &Plane, dt);

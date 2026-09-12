@@ -120,6 +120,7 @@ fn the_lean_reaches_the_steering_command() {
         tuning: &tuning,
         pilot: &pilot,
         field: &Field::EMPTY,
+        yaw_ceiling: None,
     };
     let mined = Context {
         field: &Field {

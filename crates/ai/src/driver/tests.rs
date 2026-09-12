@@ -39,6 +39,7 @@ fn stewing(driver: &mut Driver, line: &Line, field: &Field, personality: &Person
             tuning: &tuning,
             pilot: &Pilot::BALANCED,
             field,
+            yaw_ceiling: None,
         },
         personality,
     );
@@ -76,6 +77,7 @@ fn shove(driver: &Driver, state: &ShipState, line: &Line, field: &Field, ram: f3
             tuning: &tuning,
             pilot: &Pilot::BALANCED,
             field,
+            yaw_ceiling: None,
         },
         &Personality {
             ram,
@@ -111,6 +113,7 @@ fn across(personality: &Personality, line: &Line, field: &Field) -> f32 {
                 tuning: &tuning,
                 pilot: &Pilot::BALANCED,
                 field,
+                yaw_ceiling: None,
             },
             personality,
         )

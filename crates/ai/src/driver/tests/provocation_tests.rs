@@ -110,6 +110,7 @@ fn a_provoked_driver_covers_harder_than_a_calm_one() {
                     tuning: &tuning,
                     pilot: &Pilot::BALANCED,
                     field,
+                    yaw_ceiling: None,
                 },
                 &mean,
             )

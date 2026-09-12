@@ -215,6 +215,9 @@ impl Race {
         if ship.physics.craft_state != oag_physics::CraftState::Racing {
             return oag_physics::ShipControls::default();
         }
+        // The player's own hull, the same way an opponent gets its own. See
+        // `oag_ai::pace::hull_yaw_ceiling`.
+        let yaw_ceiling = oag_ai::hull_yaw_ceiling(&ship.handling);
         ship.driver.drive(
             &ship.physics,
             &oag_ai::Context {
@@ -222,6 +225,7 @@ impl Race {
                 tuning: &tuning,
                 pilot: &pilot,
                 field: &field,
+                yaw_ceiling: Some(yaw_ceiling),
             },
         )
     }
@@ -328,6 +332,13 @@ impl Race {
                         tuning: &self.sim.ai_tuning,
                         pilot: &pilot,
                         field: &field,
+                        // **This craft's own hull, not the field's average.**
+                        // `<Turning amount>` is authored per team and spans
+                        // 1.30 to 1.80 over the disc's eight, so a grid of
+                        // eight teams is eight different yaw ceilings and one
+                        // global belief was wrong for all of them. See
+                        // `oag_ai::hull_yaw_ceiling`.
+                        yaw_ceiling: Some(oag_ai::hull_yaw_ceiling(&handling)),
                     },
                 )
             } else {

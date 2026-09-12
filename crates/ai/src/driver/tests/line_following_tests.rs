@@ -418,7 +418,7 @@ fn a_differential_with_no_brake_engages_no_brake() {
 #[test]
 fn a_straight_has_no_speed_limit() {
     let tuning = Tuning::default();
-    let target = corner_target(0.0, &tuning, &Personality::NEUTRAL);
+    let target = corner_target(0.0, &tuning, &Personality::NEUTRAL, None);
     assert_eq!(target, f32::INFINITY);
     assert_eq!(throttle(500.0, target, &tuning), (1.0, 0.0));
 }
@@ -432,7 +432,7 @@ fn a_straight_has_no_speed_limit() {
 #[test]
 fn a_corner_tighter_than_the_hull_can_rotate_is_limited_by_the_yaw_rate() {
     let tuning = Tuning::default();
-    let target = corner_target(0.047, &tuning, &Personality::NEUTRAL);
+    let target = corner_target(0.047, &tuning, &Personality::NEUTRAL, None);
     let grip = (tuning.lateral_accel / 0.047f32).sqrt();
     let yaw = tuning.max_turn_rate / 0.047;
     assert!(
@@ -448,7 +448,7 @@ fn a_corner_tighter_than_the_hull_can_rotate_is_limited_by_the_yaw_rate() {
 fn an_open_corner_is_still_limited_by_the_grip() {
     let tuning = Tuning::default();
     // Under `max_turn_rate^2 / lateral_accel`, which is where the two cross.
-    let target = corner_target(0.008, &tuning, &Personality::NEUTRAL);
+    let target = corner_target(0.008, &tuning, &Personality::NEUTRAL, None);
     let grip = (tuning.lateral_accel / 0.008f32).sqrt();
     assert!((target - grip).abs() < 1.0e-2, "{target} against {grip}");
 }
@@ -456,7 +456,7 @@ fn an_open_corner_is_still_limited_by_the_grip() {
 #[test]
 fn a_corner_taken_too_fast_brakes_and_taken_slowly_does_not() {
     let tuning = Tuning::default();
-    let target = corner_target(0.01, &tuning, &Personality::NEUTRAL);
+    let target = corner_target(0.01, &tuning, &Personality::NEUTRAL, None);
     assert_eq!(throttle(target * 0.5, target, &tuning), (1.0, 0.0));
     assert_eq!(throttle(target * 2.0, target, &tuning), (0.0, 1.0));
 }

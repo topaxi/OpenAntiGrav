@@ -50,6 +50,21 @@ pub struct Context<'a> {
     pub pilot: &'a Pilot,
     /// What this craft can see of the rest of the grid.
     pub field: &'a Field,
+    /// The yaw rate **this craft's own hull** can sustain, or `None` to fall
+    /// back on [`Tuning::max_turn_rate`] alone.
+    ///
+    /// **The one per-craft number in here**, and the axis that decides whether
+    /// the AI accommodates each team: `Tuning` is one set of constants for the
+    /// whole grid, while `<Turning amount>` is authored per team and spans
+    /// 1.30 to 1.80 across the disc's eight. See
+    /// [`hull_yaw_ceiling`](pace::hull_yaw_ceiling) for the derivation and the
+    /// table, and [`pace::corner_target`] for how it combines with the
+    /// permission.
+    ///
+    /// `None` is exactly the behaviour from before this field existed, which is
+    /// what lets a caller with no craft to hand - a synthetic closed-loop test,
+    /// a probe - stay on the old reading rather than invent a hull.
+    pub yaw_ceiling: Option<f32>,
 }
 
 impl<'a> Context<'a> {
@@ -61,6 +76,7 @@ impl<'a> Context<'a> {
             tuning,
             pilot: &Pilot::BALANCED,
             field: &Field::EMPTY,
+            yaw_ceiling: None,
         }
     }
 }
@@ -354,7 +370,7 @@ impl Driver {
         let steer = self.steering(state, ctx, look, speed, &personality);
         let window = look * tuning.brake_lookahead * personality.patience;
         let curvature = line.max_curvature(index, window, curvature_span(tuning, look));
-        let target = corner_target(curvature, tuning, &personality);
+        let target = corner_target(curvature, tuning, &personality, ctx.yaw_ceiling);
         // Every tick, saturated or not - see [`track_peak_curvature`]'s own doc.
         self.peak_curvature =
             track_peak_curvature(curvature, f32::from_bits(self.peak_curvature), tuning).to_bits();
@@ -430,7 +446,13 @@ impl Driver {
         let look = ctx.tuning.look_min + ctx.tuning.look_speed * speed;
         let span = curvature_span(ctx.tuning, look);
         let curvature = ctx.line.max_curvature(self.index as usize, distance, span);
-        speed <= corner_target(curvature, ctx.tuning, &self.personality(ctx.pilot))
+        speed
+            <= corner_target(
+                curvature,
+                ctx.tuning,
+                &self.personality(ctx.pilot),
+                ctx.yaw_ceiling,
+            )
     }
 
     /// The steering command, as a turn-rate error.
@@ -908,6 +930,7 @@ impl Steer {
 
 mod avoidance;
 mod pace;
+pub use pace::hull_yaw_ceiling;
 mod personality;
 mod ram;
 mod reflex;

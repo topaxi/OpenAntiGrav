@@ -221,11 +221,11 @@ fn a_committed_driver_carries_more_speed_through_a_corner() {
         ..Personality::NEUTRAL
     };
     // A speed between the two targets: one lifts, the other does not.
-    let speed = corner_target(0.01, &tuning, &Personality::NEUTRAL);
+    let speed = corner_target(0.01, &tuning, &Personality::NEUTRAL, None);
     let (brave_thrust, brave_brake) =
-        throttle(speed, corner_target(0.01, &tuning, &brave), &tuning);
+        throttle(speed, corner_target(0.01, &tuning, &brave, None), &tuning);
     let (timid_thrust, timid_brake) =
-        throttle(speed, corner_target(0.01, &tuning, &timid), &tuning);
+        throttle(speed, corner_target(0.01, &tuning, &timid, None), &tuning);
     assert_eq!((brave_thrust, brave_brake), (1.0, 0.0));
     assert_eq!(timid_thrust, 0.0, "the timid driver is over its own target");
     assert!(timid_brake > 0.0, "and far enough over it to brake");

@@ -670,6 +670,7 @@ impl Race {
                         tuning: &self.sim.ai_tuning,
                         pilot: &self.sim.ai_pilots[slot],
                         field: &field,
+                        yaw_ceiling: None,
                     })
             };
             if !holds_fire {
