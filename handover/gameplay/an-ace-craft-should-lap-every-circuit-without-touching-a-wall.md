@@ -295,6 +295,109 @@ reported from a load-138 machine. Mechanism argues against it being the yaw
 change - one `min()` per craft per tick, and contact ticks are *down* at three
 of four classes - but that is an argument, not a measurement.
 
+## Step 5 is done: a held airbrake is worth +24.5 % corner speed, and the grip term does not take it back
+
+Measured 2026-09-12 by `what_a_held_airbrake_is_worth_to_the_corner_ceiling`, a
+table read and a closed-form evaluation rather than a sweep - the same shape as
+step 2, and for the same reason: it sizes an opportunity before any code is
+written for it. Opened on the user's own words, *"airbrakes should enable
+tighter turns and less slowdowns, and make laps faster if done correctly."*
+
+**The physics already models it, and step 3's ceiling models only half of it.**
+Two torques write `acc.local_angular.y` and they **add**:
+`engine::steering` is `-(steer * Turning.amount)`, speed *independent*, and
+`airbrake`'s is `speed * Airbrake.turn * imbalance * 0.001`, speed
+*proportional*. Through the same steady state:
+
+```text
+v * k = [S + v * T] / 108      S = 100 * Turning.amount
+                               T = Airbrake.turn * imbalance * 0.001
+v     = (S / 108) / (k - C)    C = T / 108
+```
+
+**The airbrake subtracts from the curvature rather than raising the ceiling**,
+so its gain grows as `k` approaches `C` - largest exactly at the tight apexes
+where the yaw term binds, which is where `07` and `13` lose their shield.
+
+**The sign was checked, not assumed**, because this project shipped it backwards
+for months in `5ad69f3`. `imbalance = left - right_brake` on the ramped `0..=100`
+states, so braking the right side harder makes it negative, and a negative
+`local_angular.y` is nose-**right** here - the same sign `-(steer *
+Turning.amount)` gives a right steer. **They add.**
+
+### The numbers, all eight teams
+
+| quantity | value | spread |
+| --- | --- | --- |
+| `Airbrake.turn` | **10.0** | **flat** across all 8 teams and all 4 classes |
+| `Airbrake.slidegrip` | 80 XML, **0.008** scaled | flat |
+| `C` at a full differential | 0.00926 | flat |
+| `C / k` at `07`'s binding `k = 0.047` | **0.20** | flat |
+| corner-speed multiplier there | **1.25x** | flat |
+
+**`Airbrake.turn` is not a team axis**, unlike `Turning.amount`. One number for
+the whole disc.
+
+### The counter-term does not swap, and that was the question
+
+`corner_target` is `min(v_grip, v_yaw)`, and a held airbrake raises `v_yaw`
+while cutting `v_grip` through `slidegrip`. **At `07`'s apex the yaw term binds
+by a factor of two to three and a full differential does not close the gap**:
+
+| | `v_yaw(0)` | `v_grip(0)` | `v_grip` at full | best combined `min` | gain |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Feisar | 35.5 | 74.4 | 66.5 | **44.2** | **+24.5 %** |
+| Assegai, AG Systems | 33.1 | 74.4 | 66.5 | **41.2** | **+24.5 %** |
+| Qirex | 30.5 | 74.4 | 66.5 | **38.0** | **+24.5 %** |
+| EGX, Goteki | 28.0 | 74.4 | 66.5 | **34.8** | **+24.5 %** |
+| Triakis, Piranha | 25.6 | 74.4 | 66.5 | **31.9** | **+24.5 %** |
+
+Grip retained at a full differential is `1 - 100 * (0.01 - 0.008)` = **0.80**, so
+`v_grip` only falls to `sqrt(0.8)` = 89.4 % of itself - still 1.5x above the yaw
+limit. The combined `min` takes the **whole** multiplier, at every team, at full
+differential. **The mechanism is real, it is exploitable, and the AI does not
+use it.**
+
+### The operating rule the measurement hands over
+
+The two terms cross, under a full differential, at:
+
+| team | crossover `k` |
+| --- | ---: |
+| Feisar | 0.0289 |
+| Assegai, AG Systems | 0.0270 |
+| Qirex | 0.0250 |
+| EGX, Goteki | 0.0231 |
+| Triakis, Piranha | 0.0215 |
+
+**Above its own crossover a craft should hold a full differential through the
+apex; below it, holding one is a net loss** because the grip term binds first.
+That is a per-craft number off authored data, exactly like
+`hull_yaw_ceiling`, and it is roughly 20x `Tuning::trail_curvature_floor`'s
+0.001 - so it is a genuinely different gate from the one `trail` uses today.
+
+### Why the driver change is *not* in this pass
+
+Deliberately scoped out and handed over, because it is a design change rather
+than an edit, and doing it badly is worse than not doing it:
+
+- **`corner_target` may only promise a speed the driver will actually buy.** If
+  it returns `(S/108)/(k - C)` and the craft arrives without the brake held, it
+  has picked a speed it cannot rotate at - which is precisely the wall contact
+  this whole thread is about, with extra steps.
+- **`trail` fires *reactively* today** - gated on `steer.command` saturating and
+  `rate_error` exceeding a deadband, i.e. once the steering loop has already run
+  out of authority. The corner speed above needs the differential armed
+  **before** the apex, as a *plan*, not as a rescue.
+- **`controls::update` ramps the airbrake states at `Airbrake.gain`/`falloff`**,
+  so the yaw is not available on the tick it is asked for. A steady-state
+  ceiling is the right first model, but the arming distance is a real cost and
+  nothing here has measured it.
+
+The board already reports clean lap time in its `clean lap` column, which is the
+column to read this change against when it is built - the user's stated goal is
+faster laps, and step 3 cost 0.5-3.0 s a circuit that this should give back.
+
 ## Open
 
 - **Respawns are the new residual.** Board-wide 23 -> 35 under step 3, with
@@ -335,6 +438,11 @@ of four classes - but that is an argument, not a measurement.
 - **The counters charge a live craft sitting at zero shield.** The `Racing` gate
   stops a wreck, not that. Capping at the pool is the workaround the totals use;
   a cleaner counter would gate on `physics.shield > 0.0` too.
+- **The planned differential is unbuilt** - step 5 sizes it at +24.5 % corner
+  speed and names the three things that have to change; none of them is done.
+- **The airbrake arming distance is unmeasured.** `Airbrake.gain` decides how
+  far before an apex the differential has to be armed for the steady-state
+  ceiling step 5 computes to be real, and nothing has measured it.
 - Pure and HD are unmeasured at every class.
 
 ## Next Steps
