@@ -176,6 +176,31 @@ pub struct Tuning {
     /// It flattens either side of 1.8 rather than continuing to improve, which
     /// is the shape of a constraint that has stopped binding: past it the limit
     /// is the hull, not the permission.
+    ///
+    /// # It used to do a second job, and that job is now the hull's
+    ///
+    /// Until 2026-09-12 this same constant was also the kinematic corner limit
+    /// in [`pace::corner_target`] - `max_turn_rate / curvature`, the fastest a
+    /// craft can hold a line it has to yaw along. **It was wrong there for
+    /// every craft on the disc.** The rate a hull achieves is `steer *
+    /// Turning.amount / (5 * I_yy)`; `I_yy` is a code literal shared by every
+    /// craft (see [`oag_physics::forces::YAW_INVERSE_INERTIA`]) and
+    /// `<Turning amount>` is authored per team, giving ceilings of **1.204 to
+    /// 1.667 rad/s** - none of them 1.8. So that limit was asking every craft
+    /// for a corner speed it could not rotate at, by 7 % on Feisar and 33 % on
+    /// Triakis and Piranha.
+    ///
+    /// [`pace::corner_target`] now reads
+    /// [`pace::hull_yaw_ceiling`](super::pace::hull_yaw_ceiling) and takes the
+    /// smaller of it and this, so **this is the permission and nothing else**:
+    /// it caps what a driver is *allowed* to want, which is what keeps
+    /// [`crate::Difficulty::tune`]'s ladder meaningful, and
+    /// [`Driver::steering`](crate::Driver::steering)'s clamp on the requested
+    /// rate is the one the sweep above measures. Read the flat table as
+    /// evidence about a permission that has stopped binding, **not** as
+    /// evidence that 1.8 was ever the right corner limit. The full table and
+    /// the board it was measured on are in `docs/gameplay/ai.md`, "The
+    /// clean-Ace board".
     pub max_turn_rate: f32,
     /// The lateral acceleration a craft is assumed to hold through a corner.
     ///
@@ -324,6 +349,20 @@ pub struct Tuning {
     ///
     /// `None` is kept rather than folded away so the uncapped row of that table
     /// stays re-runnable; it is the harness's own check on itself.
+    ///
+    /// # The sweep that chose eleven no longer measures the shipped function
+    ///
+    /// Recorded 2026-09-12. Every row of the table above was taken with
+    /// [`pace::corner_target`]'s kinematic limit evaluated at
+    /// [`Self::max_turn_rate`]'s 1.8. It is now evaluated at the flown craft's
+    /// own hull ceiling, 1.204-1.667 depending on team - so the sweep measured
+    /// a different function from the one shipping, and its criterion ("the best
+    /// point in a band bounded by two field tests going red at span 10") is no
+    /// longer supported by it. **Nothing is broken**: both field ground-truth
+    /// tests are green at eleven today, and that was checked rather than
+    /// assumed. But the *choice* wants re-establishing, and the work that would
+    /// do it is the estimator change the Outpost 7 thread's step 6 names -
+    /// which has to re-sweep the span anyway.
     pub curvature_span: Option<f32>,
     /// Fraction over target at which the airbrakes come on, rather than merely
     /// lifting off.

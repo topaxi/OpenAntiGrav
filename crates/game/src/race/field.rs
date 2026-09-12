@@ -215,6 +215,9 @@ impl Race {
         if ship.physics.craft_state != oag_physics::CraftState::Racing {
             return oag_physics::ShipControls::default();
         }
+        // The player's own hull, the same way an opponent gets its own. See
+        // `oag_ai::pace::hull_yaw_ceiling`.
+        let yaw_ceiling = oag_ai::hull_yaw_ceiling(&ship.handling);
         ship.driver.drive(
             &ship.physics,
             &oag_ai::Context {
@@ -222,6 +225,7 @@ impl Race {
                 tuning: &tuning,
                 pilot: &pilot,
                 field: &field,
+                yaw_ceiling: Some(yaw_ceiling),
             },
         )
     }
@@ -320,7 +324,11 @@ impl Race {
             let ship = &mut self.sim.world.ships[slot];
             let handling = ship.handling;
             let position = ship.physics.body.position;
-            let mut controls = if ship.physics.craft_state == oag_physics::CraftState::Racing {
+            // Captured before `oag_physics::step`, because `damage::advance_state`
+            // runs *inside* it: the wall counters below must not charge a craft
+            // for the tick it was wrecked on, nor for the thousands after.
+            let was_racing = ship.physics.craft_state == oag_physics::CraftState::Racing;
+            let mut controls = if was_racing {
                 ship.driver.drive(
                     &ship.physics,
                     &oag_ai::Context {
@@ -328,6 +336,13 @@ impl Race {
                         tuning: &self.sim.ai_tuning,
                         pilot: &pilot,
                         field: &field,
+                        // **This craft's own hull, not the field's average.**
+                        // `<Turning amount>` is authored per team and spans
+                        // 1.30 to 1.80 over the disc's eight, so a grid of
+                        // eight teams is eight different yaw ceilings and one
+                        // global belief was wrong for all of them. See
+                        // `oag_ai::hull_yaw_ceiling`.
+                        yaw_ceiling: Some(oag_ai::hull_yaw_ceiling(&handling)),
                     },
                 )
             } else {
@@ -386,6 +401,38 @@ impl Race {
             // below records - so `ABSORB`'s branch is unreachable here rather
             // than suppressed.
             self.raise_contact_cue(slot, evaluated.wall.impact, false);
+            // The wall counters, on the same footing as the roll ones below:
+            // bookkeeping, outside `state_hash`, and the only thing in this
+            // project that can see the standard an Ace is held to - lapping
+            // without touching a wall. `contacts` rather than
+            // `ShipState::wall_contact_prev` because the latter is the
+            // *inbound* test and a grind is not inbound; `impulse_sum` rather
+            // than a shield delta because the pool also moves for rolls and
+            // pads. See `RaceSim::wall_contact_ticks` for both arguments.
+            //
+            // **Gated on the craft still racing, and that gate is the whole
+            // difference between a measurement and a fiction.** A wrecked
+            // opponent is released rather than skipped - see the comment at the
+            // top of this loop - so `oag_physics::step` keeps integrating it and
+            // a hull settled against a wall accumulates contact ticks and
+            // charged damage for the rest of the run, at a frozen
+            // `driver.index`. Ungated, `10_Track` at PHANTOM read 7,157 contact
+            // ticks against 328 before a tuning change that *halved* what the
+            // walls charged it, and `07_Track` charged 122.05 against a pool of
+            // 95.00. Both are the wreck, not the driving.
+            if was_racing {
+                self.sim.wall_racing_ticks[slot] += 1;
+                if evaluated.wall.contacts > 0 {
+                    self.sim.wall_contact_ticks[slot] += 1;
+                    if evaluated.wall.impact {
+                        self.sim.wall_inbound_ticks[slot] += 1;
+                    }
+                    self.sim.wall_damage[slot] += oag_physics::damage::contact_damage(
+                        evaluated.wall.impulse_sum,
+                        damage_rules,
+                    );
+                }
+            }
             // Bookkeeping for the deviation, not state the race reads back: our
             // opponents barrel-roll and the original's never do, so what an
             // opponent spends on them has to be countable on the disc's own

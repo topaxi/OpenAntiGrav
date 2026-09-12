@@ -45,6 +45,7 @@ impl Race {
             tuning: &self.sim.ai_tuning,
             pilot: &self.sim.ai_pilots[slot],
             field,
+            yaw_ceiling: None,
         };
         if self.sim.world.ships[slot]
             .driver
@@ -85,6 +86,7 @@ impl Race {
             tuning: &self.sim.ai_tuning,
             pilot: &self.sim.ai_pilots[slot],
             field,
+            yaw_ceiling: None,
         };
         if self.sim.world.ships[slot]
             .driver
@@ -151,6 +153,7 @@ impl Race {
             tuning: &self.sim.ai_tuning,
             pilot: &self.sim.ai_pilots[slot],
             field,
+            yaw_ceiling: None,
         };
         if self.sim.world.ships[slot]
             .driver
@@ -223,6 +226,7 @@ impl Race {
             tuning: &self.sim.ai_tuning,
             pilot: &self.sim.ai_pilots[slot],
             field,
+            yaw_ceiling: None,
         };
         if self.sim.world.ships[slot]
             .driver
@@ -283,6 +287,7 @@ impl Race {
             tuning: &self.sim.ai_tuning,
             pilot: &self.sim.ai_pilots[slot],
             field,
+            yaw_ceiling: None,
         };
         if self.sim.world.ships[slot]
             .driver
@@ -341,6 +346,7 @@ impl Race {
             tuning: &self.sim.ai_tuning,
             pilot: &self.sim.ai_pilots[slot],
             field,
+            yaw_ceiling: None,
         };
         if self.sim.world.ships[slot]
             .driver
@@ -507,6 +513,7 @@ impl Race {
                 tuning: &self.sim.ai_tuning,
                 pilot: &self.sim.ai_pilots[slot],
                 field,
+                yaw_ceiling: None,
             };
             if !ship
                 .driver
@@ -647,6 +654,7 @@ impl Race {
             tuning: &self.sim.ai_tuning,
             pilot: &self.sim.ai_pilots[slot],
             field,
+            yaw_ceiling: None,
         };
         if ship.driver.wants_to_drop(&context).is_none() {
             // Nobody behind worth laying them for, or the trigger did not roll.

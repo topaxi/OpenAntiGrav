@@ -116,6 +116,69 @@ pub struct RaceSim {
     pub(super) rolls_armed: [u32; oag_gameplay::MAX_SHIPS],
     /// The shield those rolls cost, in pool units.
     pub(super) rolls_spent: [f32; oag_gameplay::MAX_SHIPS],
+    /// How many ticks each opponent has spent **in contact with a wall**.
+    ///
+    /// Kept here, and outside [`Race::state_hash`], for exactly the reason
+    /// [`Self::rolls_armed`] is: bookkeeping, not state the race reads back. It
+    /// exists because "an Ace should lap without wall contact" is the standard
+    /// the AI is measured against and nothing in the harness could see wall
+    /// contact at all - see `crates/game/tests/ai_clean_lap_board.rs`.
+    ///
+    /// **A contact counted here is a contact with a non-hoverable surface by
+    /// construction**, which is what makes this a wall count rather than a
+    /// count of everything the hull touches. `oag_physics::wall::responds`
+    /// excludes `Floor` and `MagFloor` - the hover spring owns those - so a
+    /// `WallResponse` contact can only be `Surface::Wall` or `Surface::Reset`.
+    /// That is a surface-*tag* test, and it is strictly stronger than the
+    /// `|n.up|` near zero geometric proxy a by-hand reading had to use.
+    ///
+    /// Counts `WallResponse::contacts`, **not**
+    /// `oag_physics::ShipState::wall_contact_prev`. The latter is `impact`, an
+    /// *inbound* test (`normal_speed < 0.0`), and a craft grinding along a wall
+    /// stops being inbound long before it stops being in contact.
+    /// [`Self::wall_inbound_ticks`] is that inbound subset, kept beside this so
+    /// the two can be compared rather than confused.
+    pub(super) wall_contact_ticks: [u32; oag_gameplay::MAX_SHIPS],
+    /// The inbound subset of [`Self::wall_contact_ticks`]: ticks on which
+    /// `WallResponse::impact` was set - a crash rather than a scrape.
+    pub(super) wall_inbound_ticks: [u32; oag_gameplay::MAX_SHIPS],
+    /// What those contacts **charged** each opponent, in shield-pool units.
+    ///
+    /// **Derived from the quantity physics charges, not differenced off the
+    /// pool.** `oag_physics::damage::contact_damage(impulse_sum, rules)` is the
+    /// whole of the wall's damage term, so summing it per tick gives the wall's
+    /// share with barrel-roll charge, shield pads and weapons structurally
+    /// excluded - the same argument [`Self::rolls_spent`] makes for its own
+    /// figure, and the reason a shield delta could never separate them.
+    ///
+    /// `WallResponse::impulse_sum`'s own doc warns it is derived state a caller
+    /// is told not to build on. That warning is about using it as *physics
+    /// input*; this is the diagnostic use it is summed for, and
+    /// `oag_physics::damage::wall` charges off the identical value.
+    ///
+    /// It is what the wall charged, which is not always what the pool lost: a
+    /// craft at zero shield is charged the same and loses nothing, and
+    /// `damage::subtract` clamps. Read it beside the end-of-run pool, never as
+    /// a substitute for it.
+    ///
+    /// **[`Self::wall_racing_ticks`]'s gate stops a *wreck* accruing, not a
+    /// live craft at zero shield**, and the two are different states: a craft
+    /// that has emptied its pool but not yet been destroyed is still `Racing`,
+    /// still driven, and still charged here for every wall it finds. That is
+    /// why a row can read well over the pool - 162.56 against 95.00 on
+    /// `01_Track` at PHANTOM - and why any total taken across rows should cap
+    /// each row at its own `Dimensions::shield` first. Uncapped, the
+    /// clean-Ace board's own totals overstate a tuning improvement by five
+    /// percentage points.
+    pub(super) wall_damage: [f32; oag_gameplay::MAX_SHIPS],
+    /// How many ticks each opponent was **still racing** - the denominator the
+    /// three counters above are measured over.
+    ///
+    /// A row that was wrecked at tick 4,000 has its walls counted over 4,000
+    /// ticks and a row that finished has them counted over 18,000, and reading
+    /// the two against each other without this is how a wreck resting on a wall
+    /// reads as the worst driver on the board.
+    pub(super) wall_racing_ticks: [u32; oag_gameplay::MAX_SHIPS],
     /// How many consecutive ticks each craft has spent away from the track.
     ///
     /// **The two halves of the grid measure "away" differently and share this

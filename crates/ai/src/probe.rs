@@ -517,6 +517,7 @@ pub fn run(scenario: Scenario, ticks: u32) -> RunResult {
                     tuning: &tuning,
                     pilot,
                     field: &fields[slot],
+                    yaw_ceiling: None,
                 },
             );
             oag_physics::step(

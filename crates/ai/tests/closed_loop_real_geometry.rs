@@ -265,6 +265,7 @@ fn drive_the_oval_as(
                 tuning: &tuning,
                 pilot,
                 field: &Field::EMPTY,
+                yaw_ceiling: None,
             },
         );
         oag_physics::step(&mut state, &controls, &handling, &env, &Plane, dt);
