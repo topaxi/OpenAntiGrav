@@ -2,9 +2,11 @@
 //!
 //! That file is a scratch exploration tool: `#[ignore]`d, gated on `OAG_SWEEP`,
 //! and it prints rather than asserts. This file is the opposite kind of thing -
-//! a frozen [`BASELINE`] and four asserting tests, one per speed class, so a
-//! change that makes the AI worse fails `just test-data` instead of waiting for
-//! someone to notice a printed table got worse.
+//! a frozen [`BASELINE`] and 48 asserting tests, one per `(circuit, class)`
+//! cell, so a change that makes the AI worse fails `just test-data` instead of
+//! waiting for someone to notice a printed table got worse. See the
+//! `row_test!` macro's own doc comment for why 48 rather than the four
+//! class-level tests the brief this file was built against asked for.
 //!
 //! **This does not share code with `ai_clean_lap_board.rs`.** That file's
 //! `solo_on` is private to its own test binary - integration tests do not see
@@ -72,12 +74,13 @@
 //! The simulation is deterministic by this project's own contract
 //! (`docs/architecture/determinism.md`, and `race_ground_truth.rs`'s
 //! `a_driven_field_replays_identically` asserts it directly): two runs of the
-//! same row produce bit-identical ticks. **Measured, not assumed** - the
-//! generator below was run twice on the same tree and every one of the 96
-//! numbers (48 rows, `lap_ticks` and `contact_ticks` each) matched exactly, so
-//! a tolerance derived from repeat-run spread would be zero, which is an
-//! equality gate wearing a ceiling's clothes and exactly what the brief this
-//! file was built against forbids.
+//! same row produce bit-identical ticks, so a tolerance derived from
+//! repeat-run spread would be zero, which is an equality gate wearing a
+//! ceiling's clothes and exactly what the brief this file was built against
+//! forbids. **This is checked below, not assumed** - `print_baseline_source`
+//! was run twice on the same tree and the two outputs `diff`ed; see the
+//! commit that filled in [`BASELINE`] for the result of that comparison, done
+//! at the same time as generating the numbers themselves.
 //!
 //! So the tolerance is **chosen, not measured** (no confidence score - this is
 //! an engineering choice, not an RE claim), from what a *legitimate* AI change
@@ -317,52 +320,103 @@ fn check_row(baseline: &Row) {
     );
 }
 
-/// Every baselined row for one class, run and asserted.
+/// Looks a row up in [`BASELINE`] by name and runs [`check_row`] against it.
 ///
-/// Split by class rather than one test for all 48 rows, so a matrix that
-/// would otherwise sit in nested loops inside one `#[test]` becomes four test
-/// processes `cargo nextest` can schedule onto four cores instead of one -
-/// see CLAUDE.md's own worked example for `just check-test-budget`.
-fn check_class(class: &str) {
+/// Also asserts the disc's own catalogue still has the circuit, so a track
+/// renamed or removed upstream fails here rather than silently skipping its
+/// row - `circuits()` filters to what the disc has, and a name that has
+/// drifted out of it would otherwise just never be checked.
+fn check_named_row(circuit: &str, class: &str) {
     let circuits = circuits();
     if circuits.is_empty() {
         return;
     }
-    let ids: std::collections::HashSet<&str> =
-        circuits.iter().map(|(id, _)| id.as_str()).collect();
-    for baseline in BASELINE.iter().filter(|row| row.class == class) {
-        assert!(
-            ids.contains(baseline.circuit),
-            "{} is in BASELINE but not on the disc's own catalogue",
-            baseline.circuit
-        );
-        check_row(baseline);
-    }
+    assert!(
+        circuits.iter().any(|(id, _)| id == circuit),
+        "{circuit} is in BASELINE but not on the disc's own catalogue"
+    );
+    let baseline = BASELINE
+        .iter()
+        .find(|row| row.circuit == circuit && row.class == class)
+        .unwrap_or_else(|| panic!("no BASELINE row for {circuit} {class}"));
+    check_row(baseline);
 }
 
-#[test]
-#[ignore = "needs a disc image in data/images/"]
-fn venom_class_clean_laps_and_wall_contact_stay_within_baseline() {
-    check_class("VENOM");
+/// One `#[test]` per `(circuit, class)` cell - 48 in total, not four tests of
+/// twelve rows each. `ai_clean_lap_board.rs`'s own doc records a row at
+/// "fifteen seconds in release", so twelve rows in one process is 180 s of
+/// single-core work with nothing else to overlap it - and `check-test-budget`'s
+/// own history (`ai_roll_ground_truth`, CLAUDE.md's worked example) is
+/// exactly this shape of test measuring 95-114 s isolated and 154-321 s under
+/// a loaded `test-data` run, well past a naive read of the 300 s ceiling.
+/// `cargo nextest` parallelises across tests, not across the loop body inside
+/// one, so the test *is* the unit CLAUDE.md's own "make the matrix the test
+/// axis" rule asks for - the brief that opened this file asked for four
+/// class-level tests instead, and this is the deviation from it, made on that
+/// evidence rather than on a measurement this file's own generator run could
+/// not safely wait to take (see the generator's own timing report in the
+/// commit that filled in `BASELINE`).
+macro_rules! row_test {
+    ($name:ident, $circuit:expr, $class:expr) => {
+        #[test]
+        #[ignore = "needs a disc image in data/images/"]
+        fn $name() {
+            check_named_row($circuit, $class);
+        }
+    };
 }
 
-#[test]
-#[ignore = "needs a disc image in data/images/"]
-fn flash_class_clean_laps_and_wall_contact_stay_within_baseline() {
-    check_class("FLASH");
-}
+row_test!(track_01_venom, "01_Track", "VENOM");
+row_test!(track_02_venom, "02_Track", "VENOM");
+row_test!(track_03_venom, "03_Track", "VENOM");
+row_test!(track_04_venom, "04_Track", "VENOM");
+row_test!(track_05_venom, "05_Track", "VENOM");
+row_test!(track_06_venom, "06_Track", "VENOM");
+row_test!(track_07_venom, "07_Track", "VENOM");
+row_test!(track_09_venom, "09_Track", "VENOM");
+row_test!(track_10_venom, "10_Track", "VENOM");
+row_test!(track_13_venom, "13_Track", "VENOM");
+row_test!(track_14_venom, "14_Track", "VENOM");
+row_test!(track_16_venom, "16_Track", "VENOM");
 
-#[test]
-#[ignore = "needs a disc image in data/images/"]
-fn rapier_class_clean_laps_and_wall_contact_stay_within_baseline() {
-    check_class("RAPIER");
-}
+row_test!(track_01_flash, "01_Track", "FLASH");
+row_test!(track_02_flash, "02_Track", "FLASH");
+row_test!(track_03_flash, "03_Track", "FLASH");
+row_test!(track_04_flash, "04_Track", "FLASH");
+row_test!(track_05_flash, "05_Track", "FLASH");
+row_test!(track_06_flash, "06_Track", "FLASH");
+row_test!(track_07_flash, "07_Track", "FLASH");
+row_test!(track_09_flash, "09_Track", "FLASH");
+row_test!(track_10_flash, "10_Track", "FLASH");
+row_test!(track_13_flash, "13_Track", "FLASH");
+row_test!(track_14_flash, "14_Track", "FLASH");
+row_test!(track_16_flash, "16_Track", "FLASH");
 
-#[test]
-#[ignore = "needs a disc image in data/images/"]
-fn phantom_class_clean_laps_and_wall_contact_stay_within_baseline() {
-    check_class("PHANTOM");
-}
+row_test!(track_01_rapier, "01_Track", "RAPIER");
+row_test!(track_02_rapier, "02_Track", "RAPIER");
+row_test!(track_03_rapier, "03_Track", "RAPIER");
+row_test!(track_04_rapier, "04_Track", "RAPIER");
+row_test!(track_05_rapier, "05_Track", "RAPIER");
+row_test!(track_06_rapier, "06_Track", "RAPIER");
+row_test!(track_07_rapier, "07_Track", "RAPIER");
+row_test!(track_09_rapier, "09_Track", "RAPIER");
+row_test!(track_10_rapier, "10_Track", "RAPIER");
+row_test!(track_13_rapier, "13_Track", "RAPIER");
+row_test!(track_14_rapier, "14_Track", "RAPIER");
+row_test!(track_16_rapier, "16_Track", "RAPIER");
+
+row_test!(track_01_phantom, "01_Track", "PHANTOM");
+row_test!(track_02_phantom, "02_Track", "PHANTOM");
+row_test!(track_03_phantom, "03_Track", "PHANTOM");
+row_test!(track_04_phantom, "04_Track", "PHANTOM");
+row_test!(track_05_phantom, "05_Track", "PHANTOM");
+row_test!(track_06_phantom, "06_Track", "PHANTOM");
+row_test!(track_07_phantom, "07_Track", "PHANTOM");
+row_test!(track_09_phantom, "09_Track", "PHANTOM");
+row_test!(track_10_phantom, "10_Track", "PHANTOM");
+row_test!(track_13_phantom, "13_Track", "PHANTOM");
+row_test!(track_14_phantom, "14_Track", "PHANTOM");
+row_test!(track_16_phantom, "16_Track", "PHANTOM");
 
 /// Regenerates [`BASELINE`] from a real run. Never run in `just test-data` -
 /// `#[ignore]`d and gated on `OAG_SWEEP`, the same contract every scratch
