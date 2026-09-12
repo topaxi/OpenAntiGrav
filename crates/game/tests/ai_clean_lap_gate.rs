@@ -10,8 +10,7 @@
 //!
 //! **This does not share code with `ai_clean_lap_board.rs`.** That file's
 //! `solo_on` is private to its own test binary - integration tests do not see
-//! each other's items - and it is owned by another thread besides
-//! (`handover/gameplay/an-ace-craft-should-lap-every-circuit-without-touching-a-wall.md`).
+//! each other's items - and it is owned by another, still-open thread.
 //! [`solo_on`] below is a second, deliberately smaller implementation against
 //! the same public `oag_game::race` surface: three fields instead of eleven,
 //! because a regression gate only needs what it asserts on.
@@ -124,18 +123,17 @@
 //!
 //! [`BASELINE`] below was generated this way on commit `8f5070ef` ("Merge: the
 //! two changes only pay together, and 05_Track's line blocks them"),
-//! 2026-09-12, and cross-checked field by field against the table already
-//! recorded in
-//! `handover/gameplay/an-ace-craft-should-lap-every-circuit-without-touching-a-wall.md`
-//! under "The board" (generated separately, by `ai_clean_lap_board.rs`'s own
-//! sweep, on an ancestor of the same commit) - **every one of the 48 rows
-//! agrees**: status, `contact_ticks` exactly, and `lap_ticks` to the second
-//! once divided by 60 (that table only prints seconds to one decimal, which is
-//! why this file has its own generator rather than transcribing the printed
-//! one). Two independent implementations of the same scenario landing on
-//! identical numbers is itself evidence the reimplementation in this file is
-//! measuring the same thing the existing board does, not a stronger
-//! determinism claim - that one is checked below in the tolerance section.
+//! 2026-09-12, and cross-checked field by field against a board printed
+//! separately by `ai_clean_lap_board.rs`'s own sweep on an ancestor of the
+//! same commit, recorded in the open thread that owns that file - **every
+//! one of the 48 rows agrees**: status, `contact_ticks` exactly, and
+//! `lap_ticks` to the second once divided by 60 (that board only prints
+//! seconds to one decimal, which is why this file has its own generator
+//! rather than transcribing the printed one). Two independent
+//! implementations of the same scenario landing on identical numbers is
+//! itself evidence the reimplementation in this file is measuring the same
+//! thing the existing board does, not a stronger determinism claim - that
+//! one is checked below in the tolerance section.
 
 use std::path::PathBuf;
 
