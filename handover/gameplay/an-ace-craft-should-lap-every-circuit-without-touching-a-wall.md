@@ -426,6 +426,78 @@ costing more than it saves. **What is left is a different estimator, not a
 different number** - and that is the open item, no longer a guess at which
 constant to move.
 
+## Step 8 is done: the two changes only pay together, and `05_Track`'s line blocks them
+
+Two cheap measurements before building a third estimator. One positive, one
+negative, and between them they replace "build a better estimator" with a named
+dependency.
+
+### The attribution test: positive, and larger than predicted
+
+The parked `ai/planned-differential` branch run with `curvature_chord = 4`.
+48 rows, charge capped at each row's pool:
+
+| | main | plan+hold | +chord 4 | +chord 6 | +chord 8 |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| contact ticks | 10,924 | 9,136 | 10,557 | **8,683** | 9,228 |
+| charged | 2,277.3 | 2,419.0 | **2,022.5** | 2,158.6 | 2,240.0 |
+| end-of-run pool | 2,191.6 | 2,036.4 | **2,394.0** | 2,325.4 | 2,206.2 |
+| respawns | 35 | 24 | **20** | 38 | 36 |
+| eliminated | 11 | 14 | **8** | 9 | 12 |
+| clean laps | 44/48 | 44/48 | **45/48** | 43/48 | 43/48 |
+| mean clean lap | 38.9s | **38.1s** | 39.0s | **38.1s** | 38.3s |
+
+Eliminations go 14 -> **8**, below main's 11, and chord 4 beats main on *every*
+safety column at lap-time parity.
+
+**The important part is not the numbers but the shape.** Chord 4 alone measured
+**worse** than the shipped span (step 7: 844.01 against 907.97). The planned
+differential alone measured **deadlier** (11 -> 14 eliminations). Together they
+are the best board this thread has produced. A sharper estimate tells the driver
+a corner is tighter; the planned differential is the yaw that makes acting on
+that reading possible. **Neither pays alone and both pay together**, which is
+why three separate sweeps of the estimator on its own kept coming back negative.
+
+### The ramp: negative, and the hypothesis is retired
+
+Widening the hairpin probe to idx 2,080-2,199 shows the differential already at
+its target `-20.8` and **steady from well before the apex**. The ramp climbs at
+**15.0 per tick** - 0 to 20.8 in 1.4 ticks, 0 to 100 in under 7 - so there is no
+arming-lead deficit to find. "Fewer contacts, harder ones" is not the ramp.
+
+### The arithmetic, corrected
+
+This thread previously wrote that a chord triple spreads the apex's turn across
+`3 * span` of travel. **That is wrong and the code says so**: `Line::curvature`
+divides by `(|into| + |out_of|) * 0.5`, roughly **one** span, and its own doc
+records that dividing by the whole travelled distance was a real bug worth
+1.41x. Backing the measured 1.66-1.85x out of a denominator near 11: **the
+apex's turn accumulates over about 6 units**, which at 0.89-1.77 units between
+samples is **4 to 7 samples**. A derived target for any minimum-interval knob,
+not a free parameter.
+
+### Why it cannot ship, and it is not its own fault
+
+With `curvature_chord = 4` as the default,
+`race_ground_truth::a_lone_craft_gets_round_the_circuits_it_is_known_to_get_round`
+goes **red**. `05_Track` at VENOM turns a clean 39.6s lap into a craft destroyed
+inside **one** lap - 2,314 contact ticks in 4,976 racing ticks, no clean lap,
+wedging at driver index **200-249**.
+
+That overlaps `05`'s recorded unsupported racing-line run at **161-211** (see
+`race_ground_truth.rs`'s own table, 134 samples over 161-211 and 811-893). The
+sharper chord resolves an apparent curvature spike in a stretch of line that is
+itself broken, and brakes into it. **A different thread's defect, and it is now
+this thread's blocker.** Chord 6 fails the same gate on `01_Track`; chord 8
+clears it and is worth almost nothing. Both field ground-truth tests stay green
+at every chord value tried.
+
+**So the prize is measured and the dependency is named**: fix `05_Track`'s
+unsupported racing line, and chord 4 plus the planned differential becomes
+available - worth eliminations 11 -> 8, charged -11 %, end-of-run pool +9 %,
+respawns 35 -> 20 and a clean lap, at lap-time parity. That is a far more
+specific next step than "try a third estimator".
+
 ## The gate, as it stands on this branch
 
 `just` is green in full. `OAG_REQUIRE_GAME_DATA=1 just test-data` is **4,185
@@ -598,8 +670,14 @@ faster laps, and step 3 cost 0.5-3.0 s a circuit that this should give back.
 - **`Tuning::trail_peak_decay` ships at `1.0`, the latch**, because no leak
   value pays on the board. It becomes worth re-sweeping the moment
   `corner_target` banks the speed the differential buys.
-- **A different curvature estimator, not a different number.** Step 7 exhausts
-  both of this one's knobs. The shape still to try is one whose denominator is
+- **`05_Track`'s unsupported racing line is now this thread's blocker**, not a
+  neighbouring curiosity. Step 8 measures a change worth eliminations 11 -> 8
+  that is red *only* because a sharper estimator brakes into `05`'s broken
+  stretch at idx 200-249. Its own thread owns the fix; this thread owns the
+  measurement that makes it worth doing.
+- **A different curvature estimator is no longer the first move.** Step 7
+  exhausts both of this one's knobs, but step 8 shows the existing one is good
+  enough *when paired with the differential*. The shape still to try is one whose denominator is
   the distance the turning actually happens over rather than the chord's own
   length - a chord triple spreads a sharp apex's whole turned angle across
   `3 * span` of travel, which is exactly the 1.66x.
