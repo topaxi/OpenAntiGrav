@@ -791,10 +791,10 @@ fn race_pool(_solo: &Solo) -> Option<f32> {
 /// - **`gap`**, the distance to the previous sample. A splice of two authored
 ///   paths shows as a jump against the circuit's ordinary spacing.
 /// - **`order`**, the spline sample each racing-line index maps to through
-///   `RaceSim::ai_order`. Non-consecutive values are the `Course::path_order`
-///   failure mode recorded in
-///   `handover/gameplay/the-ai-was-never-the-problem-four-contact.md`, which
-///   `05` was one of three circuits to hit.
+///   `RaceSim::ai_order`. Non-consecutive values are the path-order splice that
+///   `Course::path_order` exists to prevent - `05` was one of three circuits it
+///   put craft off the track on, and `crates/game/src/race/course.rs` carries
+///   the account.
 /// - **`k4`/`k11`**, the curvature at the two chords. A **kink** - geometry
 ///   that is not a corner - shows as a `k4` spike the `k11` chord averages
 ///   away; a genuine tight corner shows at both.

@@ -265,24 +265,25 @@ impl Race {
     /// from `Spline::nearest` and an opponent from its driver, and a single
     /// parameter carrying two index spaces depending on the caller is the bug
     /// this pair of accessors exists to make impossible to write.
-    #[must_use]
-    /// Which spline sample a racing-line index maps to, for a diagnostic that
-    /// needs the number rather than the sample.
     ///
-    /// Public because `ai_order` being a *permutation* rather than the identity
-    /// is itself a failure mode - the `Course::path_order` splice that put
-    /// craft off the track on three circuits - and a test that cannot read it
-    /// cannot tell a spliced line from a merely unsupported one.
-    #[must_use]
-    pub fn ai_sample_index(&self, ai_index: usize) -> Option<usize> {
-        self.sample_index_of(ai_index)
-    }
-
+    /// [`Self::ai_sample_index`] is the public half, for a diagnostic that
+    /// needs the number rather than the sample.
     pub(super) fn sample_index_of(&self, ai_index: usize) -> Option<usize> {
         if self.sim.ai_order.is_empty() {
             return None;
         }
         Some(self.sim.ai_order[ai_index % self.sim.ai_order.len()] as usize)
+    }
+
+    /// Which spline sample a racing-line index maps to.
+    ///
+    /// Public because `ai_order` being a *permutation* rather than the identity
+    /// is itself a failure mode - the path-order splice that put craft off the
+    /// track on three circuits - and a diagnostic that cannot read it cannot
+    /// tell a spliced racing line from a merely unsupported one.
+    #[must_use]
+    pub fn ai_sample_index(&self, ai_index: usize) -> Option<usize> {
+        self.sample_index_of(ai_index)
     }
 
     /// Drives and steps every craft that is not the player's.
