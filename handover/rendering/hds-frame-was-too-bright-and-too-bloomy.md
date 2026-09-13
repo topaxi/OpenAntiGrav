@@ -216,11 +216,54 @@ committed). `scripts/hd-frame-compare.py` gained `--pair-dir` for this,
 deriving `--track` from each pair's own JSON rather than a hardcoded
 Talon's-Junction constant.
 
+2026-09-13, later still (`lane-hd-material-curve`): **the letterbox-offset
+defect filed twice above is fixed, generally, and a per-material probe of
+the darkness gap ran - it does not locate a fixable term, and it finds the
+one lead it did check (the blanket `sun_diffuse`) pointing the wrong way.**
+Full account in [renderer.md](../../docs/ghidra/functions/ps3-hdfury-eu/renderer.md),
+"The letterbox strip is fixed at the engine level, and a per-material probe
+of the darkness gap is inconclusive". What lives only here:
+
+**The fix**: `oag_render::post::hd_bloom::Chain::run` and
+`oag_render::post::bloom::Bloom::render` both take the scene's own drawn
+`origin` now, threaded from `crates/game/src/race/scene/frame.rs`, and each
+chain's write-back-to-the-shared-canvas pass anchors there instead of at
+`(0, 0)`. Verified on a non-wide aspect at `--size 1280x720`: the right-edge
+strip goes from a 10px-wide, asymmetric black column to a symmetric ~5px
+margin either side, matching the expected letterbox math. A GPU unit test
+pins it. `hd-frame-compare.py`'s own pose-00 numbers do not move - it pins
+`aspect = "wide"` specifically so this was already zero there.
+
+**The probe found a confound before it found anything about the gap**: fog
+reaches `OAG_TINT_MATERIALS`'s unlit stand-in path, because `mesh.wgsl`
+calls `fogged()` unconditionally regardless of `lit`. A plain exact-match
+tint classifier therefore only ever attributed the nearest ~30-44% of the
+frame to a known material. `scripts/hd-material-probe.py`'s classifier now
+matches a pixel against the segment from its candidate's tint colour to the
+circuit's own `Fog.Fog Color` (read off `.envsettings`, not fitted),
+recovering 86-89% coverage - the remainder reads as fog-dominated far
+geometry a straight-line approximation cannot arbitrate, not a broken
+instrument.
+
+**On the gap itself**: 14 materials met a 500-pixel floor at pose `00`,
+every one `ref - ours` positive (+0.05 to +0.23), not clustering tightly by
+the `lightmap`/`ambient`/`sun` role bits `skin::roles` already carries (two
+materials sharing identical bits span 0.05 to 0.23). The one candidate this
+session could check against a known-different population -
+`track_surface`'s own microcode lacks the `N.L`/sun term every other
+material's blanket formula adds, so it should read *relatively* brighter
+here, over-lit by sun it should not receive - reads the other way instead:
+`track_surface` averages `+0.21` against `+0.12` for the rest, stably across
+tolerance settings. The probe is sensitive enough to separate the two
+populations; the separation argues against the one term it set out to
+check. **No fix applied** - this session does not have a second,
+disc-sourced candidate to check, and `CLAUDE.md`'s rule against a fitted
+constant rules out reaching for one from the table alone.
+
 ## Open
 
 - **The frame is measurably darker than the original at a matched camera, by 0.13-0.24 mean luminance on Talon's Junction and Sol 2, and the exposure/bloom post chain is ruled out as the cause** - open at `lane-ship-hull`'s files (`mesh.wgsl`, `crates/render/src/mesh/`, `sky_cube.rs`), not this lane's; **narrowed 2026-09-13 (twice)**: first, not a single offset/scale/curve (quantile-quantile evidence, confidence 80), and `.envsettings` plumbing is confirmed exact for Talon's Junction's core terms; second, **the gap is not a single global magnitude either** - Amphiseum measures the opposite sign (ours brighter by 0.04-0.19 luma), so what remains is a per-material or per-circuit-lighting-data cause, not a shared constant, with Amphiseum's own black-wall-panel defect (below) as one concrete, separately-diagnosable instance of "per-material"
 - Whether the 8-bit surfaces hold linear or gamma light is undetermined (confidence 70 against ADR-0026, not acted on) - still open, unchanged by the above
-- `oag_render::post::hd_bloom::Chain::run`'s caller drops the letterbox offset `oag_display::display::viewport` computes, leaving an unwritten strip at the canvas edge whenever `display.aspect` does not match the render's own size ratio - filed 2026-09-13 (renderer.md, same section), not fixed; worth checking whether `oag_render::post::bloom`'s matching call site (the non-HD chain) has the same shape live, not just unobserved in the one Pulse capture checked
 - Texture-decode brightness (candidate (c)) is not pixel-verified against a reference decoder - only that `oag-texture`'s `.gtf` path carries no gamma/sRGB logic of its own and its ground-truth test passes
 - What the colour set's fourth byte gates is unknown - `0x1aaf7631` is declared by no `SHO` shader block, so the only place left to check is per-material microcode
 - `shadowMapTex` is projected by the disc and unimplemented here
@@ -229,17 +272,16 @@ Talon's-Junction constant.
 - Fury's own circuits and the DLC packs still have no rpcs3 grab to be read against at all (Amphiseum now does - see 2026-09-13 above)
 - **New 2026-09-13**: Amphiseum's grid-start trackside wall panels draw unlit/flat-black in `oag-game` where the reference shows them brightly lit - a large, visible, localized gap, most likely the same emissive/second-texture material class as the `etched_glass_tech` item below rather than a new mechanism, not chased into a specific material or shader path this session
 - **New 2026-09-13**: what makes Amphiseum's opening seconds already 406-429 km/h at the same capture settings that gave Talon's Junction and Sol 2 a slow (70-74 km/h) grid pose is unread - a downhill start or a shorter countdown are guesses, not measured; means no Amphiseum pose isolates the lit-material path free of the speed-streak confound
+- `scripts/hd-material-probe.py`'s fog-segment classifier assumes the frame's exposure scalar is `1.0`, calibrated by eye against one unclipped near-camera channel rather than solved - a session that wants coverage past 89% or tighter per-slot deltas needs to actually solve for it (or read `k` off `.envsettings`' `Tone` family and the adapted-luminance state directly) rather than assume it
 
 ## Next Steps
 
-- Chase the darkness gap in `mesh.wgsl`'s lit material path against per-material microcode for materials beyond `track_surface` and `detonator_ship_rich_iridescent` - `.envsettings` plumbing for the core terms is now confirmed exact (2026-09-13), so a "value read short" in ambient/sun/prelit/specular is refuted and the remaining candidates are the still-unread terms below or a per-material branch this project's one shared lit path does not carry
-- Pixel-verify `oag-texture`'s `.gtf` decode against a reference decoder on a flat, evenly-lit Talon's Junction albedo (candidate (c), not reached 2026-09-13 - only that the decoder carries no gamma logic of its own and its ground-truth test passes, neither of which rules out a bit-level DXT/BC defect)
-- Give `oag_render::post::hd_bloom::Chain::run` (and check `oag_render::post::bloom`'s matching call) the letterbox offset `oag_display::display::viewport` computes, not just the fitted size - filed 2026-09-13, unwritten canvas-edge strip on any non-native-aspect HD/Fury render, negligible for the darkness reading but a real defect
-- Sweep per-material microcode (`scripts/ps3-microcode.py`) for a read of `0x1aaf7631`'s fourth byte, to settle what it gates
+- The per-material probe's own contradiction is the sharpest lead now: find why `track_surface` (no authored sun term) reads *more* deficient than the population that does get the blanket sun addition, not less - candidates worth checking against the disc before anything else: whether `track_surface`'s own `prelitScale`/`prelitPower` pair actually differs from the shared assumption, whether its lightmap texture decodes correctly, and whether its distinct `specular_exponent` (70, against the 32 the rest of the sampled population carries) points at a genuinely different `.rcsmaterial` row being read
+- Extend the per-material probe past pose `00`'s 14-material sample - run it against Anulpha Pass or another circuit with more materials in frame, and reproduce the same role-bucket/track_surface checks, to see whether the "no clean clustering by role bits" reading holds generally or is a small-sample artefact of the fourteen materials pose `00` happens to show
+- Pixel-verify `oag-texture`'s `.gtf` decode against a reference decoder on a flat, evenly-lit Talon's Junction albedo (candidate (c), not reached this session - only that the decoder carries no gamma logic of its own and its ground-truth test passes, neither of which rules out a bit-level DXT/BC defect)
 - Sweep per-material microcode (`scripts/ps3-microcode.py`) for a read of `0x1aaf7631`'s fourth byte, to settle what it gates
 - `shadowMapTex` remains unread; locate what projects it and whether the disc's shadow map is reachable from data already on disc
 - ~~Grab Amphiseum on rpcs3~~ **done 2026-09-13**: `data/reference/hd-capture/amphiseum-matched/` (3 matched-camera poses) - see the dated entry above for what it found (a black-wall-panel defect at the grid, and a sign-flipped whole-frame gap versus Talon's Junction/Sol 2)
 - Chase the Amphiseum grid-start wall-panel defect (flat black vs brightly lit cyan/white in the reference) to a specific material/shader path - likely the same emissive/second-texture class as `etched_glass_tech` below, not confirmed
 - Extend `hd-frame-compare.py`'s region boxes past the shared Talon's-Junction shape, or accept per-circuit `--dump-regions` verification as the standing process - Sol 2's grid pose lands `road surface` off-track, Amphiseum's `sky` box samples an indoor ceiling
 - Find why `[graphics] bloom` is inert on eleven of the sixteen circuits - `scripts/hd-glow-sweep.py sweep --bloom both` is the reproducer, the four named environments plus Zone 1 are the five that do respond, and six of the inert eleven measurably take the authored path so the obvious hypothesis is already refuted
-- `hd_bloom.wgsl`'s `fs_blur` tap-offset defect (previously listed here) is fixed - see renderer.md's own updated text for the change and its measured native-resolution footprint

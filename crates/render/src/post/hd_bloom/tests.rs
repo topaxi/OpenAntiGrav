@@ -98,7 +98,7 @@ fn time_the_chain(adapter: &wgpu::Adapter, name: &str) {
                 .half_writes(crate::timing::Half::End)
                 .expect("claimed above"),
         });
-        chain.run(&queue, &mut encoder, &view, size, timestamps);
+        chain.run(&queue, &mut encoder, &view, (0.0, 0.0), size, timestamps);
         timer.resolve(&mut encoder);
         queue.submit(Some(encoder.finish()));
 
@@ -210,7 +210,7 @@ fn resolve_a_white_scene(device: &wgpu::Device, queue: &wgpu::Queue, glow: Glow)
         occlusion_query_set: None,
         multiview_mask: None,
     });
-    chain.run(queue, &mut encoder, &view, size, None);
+    chain.run(queue, &mut encoder, &view, (0.0, 0.0), size, None);
     encoder.copy_texture_to_buffer(
         wgpu::TexelCopyTextureInfo {
             texture: &output,
@@ -248,4 +248,138 @@ fn resolve_a_white_scene(device: &wgpu::Device, queue: &wgpu::Queue, glow: Glow)
     drop(data);
     readback.unmap();
     mean
+}
+
+/// The "hd encode" pass writes at the scene's own letterbox offset, not
+/// always at the canvas's `(0, 0)`.
+///
+/// The scene target is uniformly white, so a correct and a buggy placement
+/// would resolve to the same *value* wherever each draws - only *where* they
+/// draw differs, which is what this pins. `viewport` (32x32) is drawn at
+/// `origin` (16, 8) inside a 64x64 canvas, so the pre-fix placement (always
+/// `(0, 0)`) and the correct one overlap on `[16, 32) x [8, 32)` and disagree
+/// on `[0, 16) x [0, 8)`: a pixel there reads bright under the bug (the
+/// misplaced draw lands on it) and stays at the pass's own clear colour once
+/// `origin` is honoured. See `oag_render::post::hd_bloom::Chain::run`'s own
+/// doc comment for the black-strip evidence this mirrors.
+#[test]
+fn the_encode_pass_honours_the_scenes_own_offset() {
+    let instance = wgpu::Instance::default();
+    let adapters = pollster::block_on(instance.enumerate_adapters(wgpu::Backends::PRIMARY));
+    if adapters.is_empty() {
+        eprintln!("no GPU adapter: skipping");
+        return;
+    }
+    let adapter = &adapters[0];
+    let (device, queue) = pollster::block_on(adapter.request_device(&Default::default()))
+        .expect("a device with no extra features");
+
+    let format = wgpu::TextureFormat::Rgba8Unorm;
+    let canvas = (64u32, 64u32);
+    let origin = (16.0f32, 8.0f32);
+    let viewport = (32u32, 32u32);
+    let chain =
+        Chain::new(&device, format, canvas, params(), Glow::Drawn).expect("the pipelines build");
+    let output = device.create_texture(&wgpu::TextureDescriptor {
+        label: Some("hd bloom offset test output"),
+        size: wgpu::Extent3d {
+            width: canvas.0,
+            height: canvas.1,
+            depth_or_array_layers: 1,
+        },
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format,
+        usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
+        view_formats: &[],
+    });
+    let view = output.create_view(&Default::default());
+    let bytes = u64::from(canvas.0) * u64::from(canvas.1) * 4;
+    let readback = device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("hd bloom offset test readback"),
+        size: bytes,
+        usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+        mapped_at_creation: false,
+    });
+
+    let mut encoder = device.create_command_encoder(&Default::default());
+    // The whole internal scene is white - only the resolve's *placement* is
+    // under test, not what it reads.
+    encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+        label: Some("hd bloom offset test scene"),
+        color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+            view: chain.scene_view(),
+            depth_slice: None,
+            resolve_target: None,
+            ops: wgpu::Operations {
+                load: wgpu::LoadOp::Clear(wgpu::Color::WHITE),
+                store: wgpu::StoreOp::Store,
+            },
+        })],
+        depth_stencil_attachment: None,
+        timestamp_writes: None,
+        occlusion_query_set: None,
+        multiview_mask: None,
+    });
+    chain.run(&queue, &mut encoder, &view, origin, viewport, None);
+    encoder.copy_texture_to_buffer(
+        wgpu::TexelCopyTextureInfo {
+            texture: &output,
+            mip_level: 0,
+            origin: wgpu::Origin3d::ZERO,
+            aspect: wgpu::TextureAspect::All,
+        },
+        wgpu::TexelCopyBufferInfo {
+            buffer: &readback,
+            layout: wgpu::TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(canvas.0 * 4),
+                rows_per_image: Some(canvas.1),
+            },
+        },
+        wgpu::Extent3d {
+            width: canvas.0,
+            height: canvas.1,
+            depth_or_array_layers: 1,
+        },
+    );
+    queue.submit(Some(encoder.finish()));
+    readback.slice(..).map_async(wgpu::MapMode::Read, |r| {
+        r.expect("the readback maps");
+    });
+    device
+        .poll(wgpu::PollType::wait_indefinitely())
+        .expect("the GPU");
+    let data = readback
+        .slice(..)
+        .get_mapped_range()
+        .expect("the buffer is mapped");
+    let red_at = |x: u32, y: u32| -> u8 { data[((y * canvas.0 + x) * 4) as usize] };
+    // Inside the true rectangle: the resolved white scene, unmistakably lit.
+    let inside = red_at(32, 24);
+    // Inside the pre-fix rectangle (`(0, 0)`-anchored) but outside the true
+    // one - bright only if the encode pass ignored `origin`.
+    let mislanded = red_at(4, 4);
+    // Outside both rectangles either way - a sanity check that nothing is
+    // drawing everywhere regardless of viewport.
+    let untouched = red_at(60, 60);
+    drop(data);
+    readback.unmap();
+
+    assert!(
+        inside > 50,
+        "the true rectangle ({inside}) should read the resolved white scene"
+    );
+    assert_eq!(
+        mislanded, 0,
+        "a pixel outside the true rectangle read {mislanded}, not 0 - the \
+         encode pass drew at the canvas origin instead of the scene's own \
+         offset"
+    );
+    assert_eq!(
+        untouched, 0,
+        "a pixel outside every candidate rectangle should stay at the \
+         pass's own clear colour"
+    );
 }

@@ -121,6 +121,17 @@ pub struct Frame<'a> {
     pub scene: &'a wgpu::TextureView,
     /// `scene`'s real dimensions - the allocation.
     pub size: (u32, u32),
+    /// Where the drawn rectangle sits inside `scene` - `(0.0, 0.0)` unless the
+    /// caller letterboxed the scene, in which case it is the fitted
+    /// rectangle's own top-left. Only the composite pass needs it: the bright
+    /// pass and the two blurs write into the fixed-size scratch buffers
+    /// `a`/`b`, whose own top-left is `(0, 0)` regardless of where the scene
+    /// sits in its own canvas. The composite is the one pass that writes back
+    /// into `scene` itself, at `viewport`'s size, so it has to start at the
+    /// same corner the scene was actually drawn at - see
+    /// `oag_render::post::hd_bloom::Chain::run`'s identical `origin` for the
+    /// bug this mirrors and the black-strip evidence that found it.
+    pub origin: (f32, f32),
     /// The rectangle of `scene` that was drawn, `<= size` on both axes. The
     /// bright pass reads exactly it and the composite writes exactly it.
     pub viewport: (u32, u32),
@@ -374,6 +385,7 @@ impl Bloom {
         let Frame {
             scene,
             size,
+            origin,
             viewport,
         } = frame;
 
@@ -418,6 +430,7 @@ impl Bloom {
                         group: &wgpu::BindGroup,
                         target: &wgpu::TextureView,
                         load: wgpu::LoadOp<wgpu::Color>,
+                        origin: (f32, f32),
                         rect: (u32, u32)| {
             let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some(label),
@@ -437,8 +450,8 @@ impl Bloom {
             });
             pass.set_pipeline(pipeline);
             pass.set_viewport(
-                0.0,
-                0.0,
+                origin.0,
+                origin.1,
                 rect.0.max(1) as f32,
                 rect.1.max(1) as f32,
                 0.0,
@@ -450,13 +463,15 @@ impl Bloom {
 
         let discard = wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT);
         // The three scratch passes fill their whole buffer, which is the fixed
-        // 240x136 whatever the scene is drawn at.
+        // 240x136 whatever the scene is drawn at - always at that buffer's own
+        // origin, whatever `origin` says about the scene's placement.
         pass(
             "bloom bright",
             &self.bright,
             &bright_group,
             &self.a.view,
             discard,
+            (0.0, 0.0),
             (BLOOM_WIDTH, BLOOM_HEIGHT),
         );
         pass(
@@ -465,6 +480,7 @@ impl Bloom {
             &self.blur_x,
             &self.b.view,
             discard,
+            (0.0, 0.0),
             (BLOOM_WIDTH, BLOOM_HEIGHT),
         );
         pass(
@@ -473,17 +489,20 @@ impl Bloom {
             &self.blur_y,
             &self.a.view,
             discard,
+            (0.0, 0.0),
             (BLOOM_WIDTH, BLOOM_HEIGHT),
         );
         // The only pass that keeps what is already there - it is adding to it -
-        // and the only one that writes at the scene's resolution, so the only
-        // one whose rectangle a controller moves.
+        // and the only one that writes at the scene's resolution, into `scene`
+        // itself rather than a scratch buffer, so the only one whose corner
+        // has to track where the scene was actually drawn.
         pass(
             "bloom composite",
             &self.composite,
             &self.composite_group,
             scene,
             wgpu::LoadOp::Load,
+            origin,
             viewport,
         );
     }

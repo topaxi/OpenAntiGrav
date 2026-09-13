@@ -715,11 +715,27 @@ impl Chain {
     /// and under a short extent the frame is the extent, so leaving the
     /// divisor on the resource would widen the glow as a fraction of the
     /// picture every time the scale fell.
+    ///
+    /// `origin` is where that rectangle sits inside `view` - `(0, 0)` unless
+    /// the caller letterboxed the scene, in which case it is the fitted
+    /// rectangle's own top-left. **Every internal stage ignores it**: the
+    /// downsample ladder, the adaptation, the gate and the two blurs all
+    /// target a dedicated scratch texture sized exactly to their own level,
+    /// so `(0, 0)` is already that texture's own top-left corner. Only the
+    /// last pass, "hd encode", writes into `view` itself - the same shared
+    /// canvas the scene pass drew the letterboxed rectangle into - and has to
+    /// start at the same corner the scene did, or it resolves a rectangle
+    /// shifted from the one that was actually drawn. Found the same way
+    /// `hd-frame-compare.py`'s own doc comment did: a black strip at the
+    /// canvas edge under a letterboxed aspect, present with bloom either on
+    /// or off, gone once `origin` is threaded here. See
+    /// `crates/game/src/race/scene/frame.rs`'s call site.
     pub fn run(
         &self,
         queue: &wgpu::Queue,
         encoder: &mut wgpu::CommandEncoder,
         view: &wgpu::TextureView,
+        origin: (f32, f32),
         viewport: (u32, u32),
         timestamps: Option<ChainTimestamps<'_>>,
     ) {
@@ -766,6 +782,12 @@ impl Chain {
              stage: &Pass,
              target: Option<&wgpu::TextureView>,
              load: wgpu::LoadOp<wgpu::Color>,
+             // `(0.0, 0.0)` for every internal stage: each targets a
+             // dedicated scratch texture sized exactly to its own level, so
+             // that texture's own top-left is already the right corner. Only
+             // "hd encode" passes the scene's real `origin` - see this
+             // method's own doc comment.
+             origin: (f32, f32),
              timestamp_writes: Option<wgpu::RenderPassTimestampWrites<'_>>| {
                 let rect = level_viewport(stage.level, viewport, scene);
                 let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -786,7 +808,7 @@ impl Chain {
                 });
                 let Some(pipeline) = pipeline else { return };
                 pass.set_pipeline(pipeline);
-                pass.set_viewport(0.0, 0.0, rect.0 as f32, rect.1 as f32, 0.0, 1.0);
+                pass.set_viewport(origin.0, origin.1, rect.0 as f32, rect.1 as f32, 0.0, 1.0);
                 pass.set_bind_group(0, &stage.group, &[]);
                 pass.draw(0..3, 0..1);
             };
@@ -801,6 +823,7 @@ impl Chain {
                 stage,
                 None,
                 clear,
+                (0.0, 0.0),
                 opening.take(),
             );
         }
@@ -816,6 +839,7 @@ impl Chain {
             &self.sized.adapt[current],
             None,
             clear,
+            (0.0, 0.0),
             None,
         );
         match self.glow {
@@ -826,6 +850,7 @@ impl Chain {
                     &self.sized.gate[current],
                     None,
                     clear,
+                    (0.0, 0.0),
                     None,
                 );
                 pass(
@@ -834,6 +859,7 @@ impl Chain {
                     &self.sized.blur_vertical,
                     None,
                     clear,
+                    (0.0, 0.0),
                     None,
                 );
                 pass(
@@ -842,6 +868,7 @@ impl Chain {
                     &self.sized.blur_horizontal,
                     None,
                     clear,
+                    (0.0, 0.0),
                     None,
                 );
             }
@@ -856,17 +883,21 @@ impl Chain {
                 &self.sized.blur_horizontal,
                 None,
                 clear,
+                (0.0, 0.0),
                 None,
             ),
         }
         // The closing write, on the chain's genuinely last pass - see
-        // [`ChainTimestamps`].
+        // [`ChainTimestamps`]. The only stage that writes into `view` (the
+        // caller's shared canvas) rather than a dedicated scratch texture, so
+        // it is the only one that needs `origin`.
         pass(
             "hd encode",
             Some(&self.encode),
             &self.sized.encode[current],
             Some(view),
             clear,
+            origin,
             closing.take(),
         );
         self.current.set(1 - current);

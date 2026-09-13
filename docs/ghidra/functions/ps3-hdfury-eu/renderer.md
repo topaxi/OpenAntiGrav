@@ -2416,6 +2416,118 @@ comparison against a reference decoder); and any missing term beyond what
 `scripts/hd-frame-compare.py --pose 00` (or `01`); the zero-pixel-share
 column is `zero_pct` in the per-region table above it.
 
+### The letterbox strip is fixed at the engine level, and a per-material probe of the darkness gap is inconclusive (2026-09-13, `lane-hd-material-curve`)
+
+Picking up the previous section's two "filed, not fixed" items.
+
+**The letterbox-offset drop is fixed, generally, at both call sites.**
+`oag_render::post::hd_bloom::Chain::run` and `oag_render::post::bloom::Bloom::render`
+now take the scene's own drawn `origin: (f32, f32)` alongside its size, and
+each chain's own final write-back pass (`hd_bloom`'s "hd encode", `bloom`'s
+"composite" - the only stage in either chain that writes into the caller's
+shared canvas rather than a dedicated scratch texture) anchors its
+`set_viewport` there instead of at `(0.0, 0.0)`. Verified directly rather
+than only against `hd-frame-compare.py`'s own aspect-pinned surface (which
+cannot see this by construction): rendering pose `00` at `--size 1280x720`
+with the project's own default (non-wide) aspect, before this fix the
+right-edge black column ran 10 px wide (`x=[1270,1280)`, matching the
+previous section's measurement) against a ~4 px left margin; after, both
+margins are a symmetric ~5 px, matching the expected
+`(1280 - 1270.6) / 2` letterbox math. Pinned with a GPU unit test
+(`post::hd_bloom::tests::the_encode_pass_honours_the_scenes_own_offset`)
+that draws a uniform scene into an offset sub-rectangle and asserts the
+resolved output lands there, confirmed to fail against the pre-fix code.
+**Confirms the previous section's own "negligible" reading**: `hd-frame-compare.py`
+pins `aspect = "wide"` specifically so this offset is already zero on its
+own comparison surface, so no pose-00 tone number in this file moves.
+
+**The per-material probe (`scripts/hd-material-probe.py`,
+`crates/render/examples/hd_material_probe_dump.rs`) ran, and it does not
+locate a single fixable term.** Method: `OAG_TINT_MATERIALS=1
+OAG_OPAQUE_ONLY=1` (`crates/render/src/mesh/rcs/isolate.rs`) renders pose
+`00` with every opaque material replaced by a flat, unlit colour keyed to
+its slot ordinal, segmenting the frame by material without touching the lit
+render at all; `hd_material_probe_dump` is the join key from slot to
+material path and to the role bits `mesh::rcs::skin::roles` already resolves
+(lightmap-lit, ambient-fed, sun-fed, second-texture glow).
+
+**First finding, and the reason the straightforward version of this probe
+does not work: fog reaches the tint diagnostic.** `mesh.wgsl`'s `fs_main`
+calls `fogged()` unconditionally, on every path including the unlit
+stand-in `lit == 0.0` takes under `OAG_TINT_MATERIALS` - confirmed directly:
+a material's flat tint colour drifts smoothly toward a single frame-wide
+colour as its on-screen distance from the camera grows, visible by eye in a
+vertical scan of the tint render, and that limit colour matches the
+circuit's own `Fog.Fog Color` (`0.263, 0.216, 0.380` linear, read off
+`talons_junction/track.envsettings` the same way `envsettings_fog` does) to
+within a handful of 8-bit units once gamma-encoded. A plain exact-match (or
+small-tolerance-to-nearest-colour) classifier therefore only ever attributed
+the closest ~30-44% of the frame to a known material - not a broken
+instrument, a correct reading of an assumption (`isolate::tint`'s "matched
+exactly" doc comment) that was never checked against a circuit that fogs.
+**Not fixed at the shader level on purpose**: `fogged()` is called the same
+way for every `lit` value already, so gating it off under
+`OAG_TINT_MATERIALS` would need a signal `fs_main` does not otherwise carry,
+and reaching for `in.lit == 0.0` instead would change production behaviour
+for every genuinely prelit chunk - a debug-only need is not a reason to move
+a bit real rendering reads. `classify_pixels` in the script instead matches a
+pixel against the **segment** from its candidate slot's own tint colour to
+the fog colour (both gamma-encoded, an exposure scalar `k = 1` assumed and
+calibrated once by eye against an unclipped, non-zero, near-camera channel -
+chosen, not measured, no confidence score), which recovers 86-89% coverage
+at a 10-12 unit perpendicular-distance tolerance without growing the number
+of distinct classified slots past what a 6-unit tolerance already found -
+read as the ceiling being fog-dominated far geometry a straight-line
+approximation of a curved true path cannot arbitrate, not classification
+degrading.
+
+**Second finding: every measured per-material delta is `ref - ours`
+positive (+0.05 to +0.23 mean luma, 14 slots meeting a 500-pixel floor at
+pose `00`), and it does not cluster tightly by the role bits available.**
+Two materials sharing identical `lightmap|no_ambient` role bits span 0.05 to
+0.23 - a 4x range within one bucket - which argues against "the whole
+lightmap-lit family is off by one shared term" and toward something
+per-material or per-texture. The per-slot affine/power-law fits mostly carry
+weak R^2 (0.001-0.73), consistent with this file's own reading that
+per-pixel correspondence at a matched *pose* is not a matched
+*rasterisation* - the per-material **mean** is the trustworthy statistic
+here, not the per-material curve.
+
+**Third finding, and the one this session cannot resolve: the instrument
+separates `track_surface` from the rest, but in the wrong direction.**
+`track_surface`'s own microcode (block #8/#9, no `N.L` or sun term) is the
+shader's documented exception to the blanket `sun_diffuse` this renderer
+applies to every material alike (previous section and `mesh.wgsl`'s own
+comment on `sun_diffuse`) - so `track_surface` should read *relatively*
+brighter here than the general population, artificially boosted by sun it
+should not have. It reads the other way: `track_surface`'s two classified
+slots average `+0.21` against `+0.12` for the other twelve, at every
+tolerance from 6 to 12 (stable once its own pixel count stops growing,
+so not a coverage artifact). The probe is sensitive enough to separate the
+two populations - which is what the check was for - but the separation
+contradicts the single-bug reading rather than confirming it: whatever
+makes `track_surface` measurably *darker* than the rest is not explained by
+the extra sun it incorrectly receives, and this session does not have a
+second, disc-sourced candidate for it. **No fix is applied**: per
+`CLAUDE.md`, a fix has to be a number sourced from the disc or the
+executable, and this probe's own result argues against the one candidate
+term (the blanket sun addition) it set out to check, without producing
+another one to check next. `docs/rendering/hd-ship-materials.md` carries the
+per-material reading this project has of Wipeout HD so far; the open thread
+itself is tracked separately, per this project's own work-in-flight
+convention (see `CLAUDE.md`'s documentation tree section). The per-slot
+table is `/tmp/oag-drive/material-probe-final.tsv` (not committed - a
+scratch artifact of one run, reproducible with
+`scripts/hd-material-probe.py`).
+
+Confidence 70 on "fog reaches the tint diagnostic and the segment model
+recovers most of the frame" - direct measurement of the render, the
+envsettings value and the coverage sweep, all reproducible, but the `k = 1`
+exposure assumption is calibrated by eye on one pixel rather than solved.
+No confidence score on the darkness-gap findings themselves: a probe that
+contradicts its own working hypothesis is evidence the hypothesis needs
+revision, not a claim about what the revision is.
+
 ### The 14 surface binds, read (2026-08-20)
 
 `FUN_005a40f8(ctx, depth, colour0, colour1, colour2, colour3)` takes **pointers
