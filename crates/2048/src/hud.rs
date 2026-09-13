@@ -124,6 +124,9 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     // `oag_2048::race::ZONE_STAGES`, which is a different shape from the
     // per-zone ladder this row carries. See `oag_title::ZoneSpeedClasses`.
     zone_speed_classes: None,
+    // Unmeasured on 2048; Pulse's own reading (`true`) carries over rather
+    // than guessing a change. See `oag_title::HudArt::shield_percent`.
+    shield_percent: true,
 };
 
 /// What a layout's texture reference becomes on this title.

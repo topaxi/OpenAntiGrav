@@ -752,6 +752,149 @@ widget.
 [`Mode::TIME_TRIAL_LAPS_BY_CLASS`]: ../../crates/race/src/mode.rs
 [`oag_hd::hud::ALWAYS_ON`]: ../../crates/hd/src/hud.rs
 
+## Three matched-state frames replace the one this page was written from
+
+**2026-09-13.** Every prior section above rests on one frame (speed lap,
+stationary on the grid) plus a separate Zone frame. `data/reference/hd-capture/
+talons-matched/{00,01,03}.png` are three new frames of the running original,
+1280x720, all the same team (Feisar, `concept1` hull) and circuit (Talon's
+Junction), all a Fury-campaign single race rather than speed lap: `00` at the
+grid (full shield, lap 1/3, position 8/8), `01` mid-race at 529 km/h (heavy
+motion blur, still lap 1/3, position 7/8), `03` mid-race and damaged (shield
+98, position 7/8, a weapon pickup held). Three findings came directly out of
+comparing them against this build's own render at the matching state.
+
+### Two widgets drew that no frame ever shows, and one dropped a suffix no frame ever carries
+
+`oag_game::hud::draw::text_for`'s fallback arm draws **any** widget carrying an
+`idstring` as a static caption, with no gate - right for a genuine always-on
+caption, wrong for two widgets this corpus never checked against a frame
+before:
+
+- **`PositionTxt2`.** `HUD_positions.xml` authors *two* widgets sharing
+  `idstring="IG_HUD_POS"`: `PositionTxt` (gated on `place_shown` already) and
+  `PositionTxt2`, buried inside the `PosTag0`-`7` head-to-head cluster whose
+  sprites (`VoiceCom0`-`7`) are already excluded from every title's
+  `ALWAYS_ON`. Nothing gated the *text* the same way, so every HD race drew a
+  second `POS` label floating beside the real one. No `talons-matched` frame
+  shows one.
+- **`PickupDamageTxt`/`PickupAbsorbTxt`** (`HUD_pickups.xml`, idstring
+  `MSC_DAMAGE`/`MSC_ABSORB`) - the `DAMAGE`/`Absorb` words flanking the shield
+  hexagon. `00.png`/`01.png` (full shield, no recent hit) show neither;
+  `03.png` (after a hit) shows both, each with a real number beside it
+  (`PickupDamage`/`PickupAbsorb`, both authored `string=""` and already
+  correctly drawing nothing - they carry no `idstring` so the catch-all never
+  reached them). Nothing in `oag_race::RaceState`/`Standing` tracks a recent
+  hit's damage-taken or damage-absorbed total, the same prerequisite gap the
+  per-lap history had before 2026-09-07, so both words are `None` outright now
+  rather than a half-wired gate - fixed for `00`/`01`, still open for `03`'s
+  populated state (see below).
+
+Fixed by naming both cases explicitly in `text_for` rather than widening or
+narrowing the catch-all, so no other idstring-bearing caption is affected.
+
+**`ShieldBarText` carried Pulse's `%` on a title that never shows one.** All
+three frames read a bare `100`/`100`/`98`, never `100%` - and Pulse's own
+reference frame is the one that reads `100%` in the first place, so this was
+Pulse's answer served to HD by default, the same shape this page's own
+"headline" section already found for the atlas, the always-on set and the
+pickup backdrop. `oag_title::HudArt::shield_percent: bool` is the new axis:
+`true` for Pulse/Pure/2048 (Pure and 2048 unmeasured, kept at Pulse's prior
+reading rather than guessed changed), `false` for HD. No widget authors a
+`%`-suffix companion the way `SpeedBarTextKMH` does for `SpeedBarText`'s unit,
+so this cannot be read off the layout - it has to be a title fact, checked in
+`oag_game::hud::draw::text_for`'s `the_shield_readout_drops_the_percent_on_a_
+title_that_measures_none` test.
+
+### `ShieldBarText`'s colour is sharper now, and still not implemented
+
+The ["what is not done"](#what-is-not-done) section below already recorded
+`ShieldBarText` as "translucent red authored, critical-threshold override
+unread." Sampling the actual rendered pixels of `00.png`'s `100` and `03.png`'s
+`98` - the two least-compressed, least-motion-blurred digit fills across all
+three frames - narrows that claim rather than closing it:
+
+| Frame | Shield | Dominant fill (RGB) |
+| --- | ---: | --- |
+| `00.png` | 100% | `(47, 109, 233)` |
+| `03.png` | 98% | `(42, 108, 231)` / `(40, 103, 228)` |
+
+Both are a consistent, near-opaque **blue**, not the authored translucent red
+(`0x94FF0000`, which alpha-blended over any plausible pill background would
+read as pink/orange, never blue) and not grey either. **This rules out "red
+whenever not full" outright** - 98% is not full and still draws blue - and
+narrows "grey only above a critical threshold" to "this colour is drawn at
+every shield level checked so far, full and near-full alike," which is a
+different claim than the prior section's "one frame at full shield cannot
+distinguish always-grey from critical-only" reasoning assumed.
+
+The hue is in the same family as the disc's own "HD blue," authored twice
+elsewhere in this exact composition: `HUD_pickups.xml`'s `PickupAbsorbTxt`/
+`PickupAbsorb` (`Color="0x941664FF"`, next to the `98` in the same `03.png`
+row) and `zone_hud.xml`'s alternate `DamageBar` state
+(`color="0xFF1664FF"`). This is more than a hue-family resemblance, checked
+with a same-frame control: an alpha-blend back-solve (observed colour, local
+background sample, the widget's own authored alpha) on `DAMAGE`/`15`
+(authored `0x94FF0000`) recovers `(188, ~0, ~0)` - pure red, confirming the
+method - and the same back-solve on `Absorb` (authored `0x941664FF`, `(22,
+100, 255)`) recovers `(0, 64, 188)`, undershooting R and G in the same
+direction and by a comparable margin. `Absorb`'s raw sample and `98`'s raw
+sample are both blue-dominant with the same channel ordering, in the same
+frame, same row, same font, same authored alpha (`0x94`) - and `98`'s raw
+sample sits *closer* to `0x1664FF` than `Absorb`'s own back-solve does,
+consistent with `98` sitting over a brighter backdrop than `Absorb`'s flat
+pill. Read together this is a specific, positive candidate - **the runtime
+most likely substitutes the disc's own `0x1664FF` for `ShieldBarText`** -
+not merely "somewhere in the blue family," though a clean isolate of `98`'s
+own backdrop (the striped `DamageBarBg` pattern plus the hexagon's glass glow,
+not a flat pill the way `PickupAbsorbTxt`'s is) was not possible from a
+screenshot alone, so this stops short of an exact-value confirmation.
+
+**Not implemented.** Recolouring `ShieldBarText` to `0x1664FF` on this
+evidence would still be tuning a colour to match a screenshot - the
+*substitution rule* (which widget, which state, why) is unread, and a
+specific candidate is not the same thing as a confirmed one. Recorded
+precisely (both frames' dominant samples, the same-frame control that
+validates the method, and the specific candidate it points to) so the next
+pass with the Ghidra bridge starts from "does the runtime substitute
+`0x1664FF` for `ShieldBarText` outright" rather than from "what colour is
+this."
+
+### `PosBar0`-`7`'s lit count tracks place; `LapBar0`-`6`'s is confounded
+
+Both rings' segments are `<Image>` widgets over `HUD_Components.gtf` with no
+`color=` attribute in any copy (established earlier on this page) - so a lit
+segment has always needed a runtime tint. What the three new frames add is the
+first cross-check of *how many* segments light, decoupled from *what colour*:
+
+- **`PosBar0`-`7`** (eight segments, `HUD_positions.xml`): `00.png` (place
+  8/8, last) shows **zero** lit; `01.png` and `03.png` (place 7/8) both show
+  **exactly one**, at the same screen position each time - the ring's
+  bottom-most segment. Two data points at one field size (8) cannot separate
+  `lit = ships - place` from any other monotone mapping, but they do
+  establish that the count moves with **place**, not with a static property
+  of the race (field size is 8 in both states).
+- **`LapBar0`-`6`** (seven segments, `HUD_lap_counters.xml`): all three
+  frames show the same **three** lit, and all three frames are lap 1 of 3
+  laps total - so this data cannot tell "encodes total laps" (constant 3,
+  unrelated to progress) from "encodes current lap" (constant 1, unrelated to
+  total) from coincidence. A frame on a different lap, or a race with a
+  different total, would settle it; recorded rather than guessed at.
+
+`cargo run -p oag-game --example hd_hud_bar_pixels -- data/images/
+hdfury-ps3-eu-dec.iso` decodes `HUD_Components.gtf` directly and averages the
+RGB inside each `PosBar*` widget's own authored `U`/`V`/`TxtrWidth`/
+`TxtrHeight` rectangle: every one comes back **pure white** `(255, 255, 255)`,
+confirming there is no baked-in colour a "lit" segment could just be a
+different sprite for - the tint is applied at runtime, to a segment that is
+always drawn. This means the lit-count finding above is not yet actionable
+either: adding `PosBar0`-`7` to `ALWAYS_ON` today draws eight white segments
+over an already-white ring outline and changes no pixel, so it would be
+landing untested logic rather than a visible fix. Left unimplemented, and
+recorded as the sharpest lead yet for whoever next holds the Ghidra bridge -
+sharper than the prior pass's "no frame shows the arcs lit at a known state"
+because two states now do.
+
 ## What is not done
 
 **Re-checked 2026-09-07, still true, and with a stronger negative result than

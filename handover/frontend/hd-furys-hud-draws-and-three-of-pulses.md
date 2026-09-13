@@ -22,16 +22,83 @@ any played race (only the demo-only bare-root `TimeTrial_HUD.xml` loads it);
 Pulse and Pure author no equivalent at all - both checked directly, not
 inferred. Three of the four original items remain open below.
 
+**2026-09-13, three matched-state frames landed** (`data/reference/hd-capture/
+talons-matched/{00,01,03}.png`: grid/full shield, mid-race, mid-race damaged -
+all Feisar `concept1` on Talon's Junction, a Fury campaign single race rather
+than speed lap). Full writeup: [hd-hud.md#three-matched-state-frames-replace-
+the-one-this-page-was-written-from](../../docs/formats/hd-hud.md#three-matched-state-frames-replace-the-one-this-page-was-written-from).
+Two of the four original items moved, one sharpened, one is still exactly
+where it was:
+
+- **Two widgets this build drew that no frame ever shows, now fixed**:
+  `PositionTxt2` (a second, unused `POS` caption) and `PickupDamageTxt`/
+  `PickupAbsorbTxt` (`DAMAGE`/`Absorb`, which drew unconditionally instead of
+  only after a hit). Both were the same bug - `text_for`'s idstring catch-all
+  has no gate - fixed by naming both explicitly. `ShieldBarText`'s `%` is also
+  fixed: all three frames read a bare number, never `100%`, so `oag_title::
+  HudArt::shield_percent` is a new per-title axis rather than a hardcoded
+  suffix.
+- **`ShieldBarText`'s colour is not settled, but the shape of the open
+  question changed.** The three frames rule out "always red" and "red only
+  when not full" outright - `03.png`'s 98% still draws blue, not red - and
+  narrow the live question to "does it ever draw red at all," rather than
+  "grey above a threshold, red below it." Pixel-sampled directly: a
+  consistent, near-opaque blue (~`#2C6BE7`) at both 100% and 98%. A same-frame
+  alpha-blend control (back-solving `DAMAGE`/`15`'s authored `0x94FF0000`
+  recovers pure red, validating the method; the identical back-solve on
+  `Absorb`'s authored `0x941664FF` undershoots R/G in a consistent direction)
+  points at a specific candidate rather than a mere hue family: **the runtime
+  most likely substitutes the disc's own `0x1664FF`** ("HD blue," authored
+  twice elsewhere in this exact composition) for `ShieldBarText`, though the
+  substitution rule itself - which widget, which state, why - is still
+  unread, so this stops short of confirmation. **Not implemented** - a
+  specific candidate is not a confirmed one, and this project's rule against
+  tuning a colour to a screenshot applies exactly here.
+- **`DamageBarBg`/lap-arc tints: narrowed, not closed.** `PosBar0`-`7`'s lit
+  count now measurably tracks *place* (0 lit at 8th, 1 lit at 7th, in both
+  `01.png` and `03.png`) rather than being a fixed decoration - but the
+  segments are baked pure white in `HUD_Components.gtf` (confirmed directly,
+  `cargo run -p oag-game --example hd_hud_bar_pixels`), so implementing the
+  count alone would draw white segments over an already-white ring and change
+  no pixel. Still needs the executable for the colour. `LapBar0`-`6` stayed
+  exactly where it was: all three new frames are lap 1 of 3, so the lit count
+  (3, constant) cannot separate "encodes total laps" from "encodes current
+  lap." **Still nobody has held the Ghidra bridge for this question
+  specifically** - three passes now with real frame evidence in hand and no
+  attempt at the executable.
+- **Per-lap time rows**: untouched by this pass. All three new frames are lap
+  1, so none of them can settle the still-open per-lap-rows question below.
+
 ## Open
 
-- `DamageBar` and the lap arcs are missing their runtime tints - confirmed to need the Ghidra bridge, not more data reading (checked archive-by-archive, not just through precedence); no bridge was available this pass. `arcade_hud.xml` also composes two same-named `DamageBar` widgets - resolve which one before wiring it.
-- `ShieldBarText` reads `100%` in red where the original reads plain `100` in grey - confirmed the red is HD's own authored colour, not a bug; the grey/no-`%` runtime override needs a second reference frame at low shield to separate "always grey" from "grey only above the critical threshold" before it can be implemented without guessing.
-- Comparison still covers only one state of one mode (speed lap) plus the separate Zone frame recorded elsewhere in `hd-hud.md`; a second race-state capture (mid-race, damaged) would settle the `ShieldBarText` question above.
-- The per-lap rows now draw, but on no reference frame at all: which digit `Lap{n}Text` shows and whether an unset row's background should be invisible (as implemented) rather than drawn empty are both inferred, confidence 70 against this page's usual 90 - see `hd-hud.md`'s new section for exactly what a two-or-more-lap capture would settle.
+- `DamageBar` and the lap arcs are missing their runtime tints. Sharper now
+  than "no frame shows them lit at a known state" - two do, and one
+  (`PosBar0`-`7`) gives an actual place-keyed count - but the colour itself is
+  still unread and still needs the Ghidra bridge. `arcade_hud.xml` also
+  composes two same-named `DamageBar` widgets - resolve which one before
+  wiring it.
+- `ShieldBarText` draws a consistent blue (~`#2C6BE7`) at both 100% and 98%
+  shield, never the authored translucent red at either level checked. Whether
+  it ever draws red (a lower, still-unchecked threshold) or the disc's own
+  `0x1664FF` is the runtime substitute are both open; a frame at low/critical
+  shield or the Ghidra bridge would settle either.
+- The per-lap rows still draw on no reference frame at all - none of the three
+  new captures completes a lap. Confidence 70 against this page's usual 90
+  stands; see `hd-hud.md`'s per-lap-history section for exactly what a
+  two-or-more-lap capture would settle.
 
 ## Next Steps
 
-- Take the Ghidra bridge (when free) and find what writes `DamageBarBg`'s tint and the lap-arc colours - `Hud_UpdateEnergyBar`'s analogue on `ps3-hdfury-eu`, if one exists under that name.
-- Get a second capture of the running original at low/critical shield (`just rpcs3-race`) to check whether `ShieldBarText` ever draws red, before writing any colour rule for it.
-- Get a capture of the running original with two or more laps completed on a mode that shows `Lap1Image`-`Lap4Image` (time trial, default skin) to check the digit-per-row reading and the "invisible until completed" gate against a real frame.
-- Whoever next holds `crates/2048`'s HUD reading: `HUD_lap_times.xml` ships in the `2048_hud` skin's archive but no played-race root loads it (`SpeedLap_TimeTrial_HUD.xml` loads `HUD_lap_counters.xml`/`HUD_target_time_total.xml` instead) - confirm that stays true once `oag_2048::hud::ALWAYS_ON` (currently empty) gets filled in, rather than assuming this cluster is reachable there.
+- Take the Ghidra bridge and find what writes `DamageBarBg`'s tint, the
+  lap-arc colours, and `ShieldBarText`'s colour - three related "which widget
+  gets a runtime colour override" questions now with frame evidence for each,
+  and (per the note above) still nobody has spent a pass on the executable
+  side of any of them.
+- Get a capture of the running original at low/critical shield to check
+  whether `ShieldBarText` ever draws red.
+- Get a capture with a different total lap count, or past lap 1, to separate
+  `LapBar0`-`6`'s "total laps" and "current lap" readings.
+- Get a capture with two or more laps completed on a mode that shows
+  `Lap1Image`-`Lap4Image` (time trial, default skin) to check the digit-per-row
+  reading and the "invisible until completed" gate against a real frame.
+- Whoever next holds `crates/2048`'s HUD reading: `HUD_lap_times.xml` ships in the `2048_hud` skin's archive but no played-race root loads it (`SpeedLap_TimeTrial_HUD.xml` loads `HUD_lap_counters.xml`/`HUD_target_time_total.xml` instead) - confirm that stays true once `oag_2048::hud::ALWAYS_ON` (currently empty) gets filled in, rather than assuming this cluster is reachable there. Separately: 2048's *unplayed* `wo3_hud`/`2097_hud`/bare-root skins do author `PickupDamageTxt`/`PickupAbsorbTxt`/`PositionTxt2` (checked directly, 2026-09-13) - moot today since nothing composes those skins, but worth knowing before assuming this thread's `None` fix needs revisiting there.

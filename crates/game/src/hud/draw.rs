@@ -78,7 +78,8 @@ pub(super) fn crop_horizontally(sprite: &Sprite, fraction: f32) -> Sprite {
 /// second, and [`SPEED_UNIT_WIDGET`] is why. `classes` is the third: what this
 /// title calls each rung of its Zone ladder, which is
 /// [`oag_title::HudArt::zone_speed_classes`] and `None` on a title whose ladder
-/// has not been read.
+/// has not been read. `shield_percent` is the fourth -
+/// [`oag_title::HudArt::shield_percent`], a title fact rather than a layout one.
 pub(super) fn text_for(
     label: &Label,
     readout: &Readout,
@@ -86,6 +87,7 @@ pub(super) fn text_for(
     place_shown: bool,
     speed_unit: bool,
     classes: Option<&oag_title::ZoneSpeedClasses>,
+    shield_percent: bool,
 ) -> Option<String> {
     // A literal in the XML wins for the widgets that have one: `LapOf`'s "/" is
     // the separator between lap and total, and it is authored rather than
@@ -99,9 +101,45 @@ pub(super) fn text_for(
             true => format!("{:.0} kmh", readout.speed_kmh.max(0.0)),
             false => format!("{:.0}", readout.speed_kmh.max(0.0)),
         }),
-        // A **percentage**, not the raw pool: the reference frame reads `100%` on
-        // an undamaged craft, and `<Misc shield/>` is a few hundred units.
-        "ShieldBarText" => Some(format!("{:.0}%", readout.shield_fraction() * 100.0)),
+        // A **percentage** on the titles that measure one - Pulse's own
+        // reference frame reads `100%` on an undamaged craft, and `<Misc
+        // shield/>` is a few hundred units. HD's three frames
+        // (`talons-matched/{00,01,03}.png`) all read a bare number instead -
+        // `100`, `100`, `98` - so [`oag_title::HudArt::shield_percent`] carries
+        // which.
+        "ShieldBarText" => Some(match shield_percent {
+            true => format!("{:.0}%", readout.shield_fraction() * 100.0),
+            false => format!("{:.0}", readout.shield_fraction() * 100.0),
+        }),
+        // **Drawn nothing, not always-on.** `HUD_pickups.xml`'s
+        // `PickupDamageTxt`/`PickupAbsorbTxt` (idstring `MSC_DAMAGE`/
+        // `MSC_ABSORB`) and the numbers beside them, `PickupDamage`/
+        // `PickupAbsorb`, are the "recent damage taken" / "recent damage
+        // absorbed" readout: `talons-matched/03.png` (mid-race, after a hit)
+        // shows `DAMAGE 15` and `Absorb 17` on them, and `00.png`/`01.png`
+        // (full shield, no recent hit) show neither word - the pill
+        // backgrounds (`PickupDamageBG`/`PickupAbsorbBG`, both already
+        // `ALWAYS_ON`) are up in all three frames with nothing drawn on top.
+        // Falling through to the catch-all's idstring lookup below drew the
+        // captions unconditionally, which is the "on in this state" for "on
+        // whenever the HUD is" confusion this module's own allow-list rule
+        // exists to prevent. Nothing here tracks a recent hit's damage/absorb
+        // total - that is a new `RaceState`/`Standing` field, the same
+        // prerequisite the per-lap history needed - so this is `None` outright
+        // rather than a half-wired gate, until that exists.
+        "PickupDamageTxt" | "PickupAbsorbTxt" | "PickupDamage" | "PickupAbsorb" => None,
+        // **Drawn nothing.** `HUD_positions.xml`'s `PositionTxt2` is the
+        // second of two widgets sharing `idstring="IG_HUD_POS"` - the first,
+        // `PositionTxt`, is this module's own `"PositionTxt"` arm below,
+        // gated on `place_shown`. `PositionTxt2` sits inside the `PosTag0`-`7`
+        // head-to-head cluster (`VoiceCom0`-`7` beside it, per-opponent tags),
+        // which every reference frame's own top-right corner shows only once -
+        // no `talons-matched` frame draws a second `POS` - and whose sprites
+        // are already excluded from every title's `ALWAYS_ON`. Falling
+        // through to the catch-all drew this one anyway, since text is not
+        // gated by `ALWAYS_ON` the way sprites are: a second `POS` label with
+        // nothing under it, floating beside the real one.
+        "PositionTxt2" => None,
         "Lap" => (readout.lap > 0).then(|| readout.lap.to_string()),
         "Lap Outof" => (readout.laps > 0).then(|| readout.laps.to_string()),
         "Position" => (readout.place > 0).then(|| readout.place.to_string()),
@@ -761,6 +799,7 @@ pub fn draw_list(cx: &Context<'_>, readout: &Readout) -> Frame {
             place_shown,
             speed_unit,
             cx.art.zone_speed_classes,
+            cx.art.shield_percent,
         ) else {
             continue;
         };
