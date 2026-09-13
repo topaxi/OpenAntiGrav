@@ -34,6 +34,69 @@ distinct screen on the way in so the next plan can be written from what is
 actually on them - nothing in this tree describes HD's menus, and `TTY.log`
 names a screen without saying what is on it.
 
+### The `Track Creation` carousel's order, read off the disc (2026-09-13)
+
+`scripts/rpcs3-drive.py browse --nav "Main Menu=right" --nav "Track
+Creation=right" --screen "Track Creation" --button right --steps 26`
+photographs every step; reading the screenshots names each `right` count.
+The first eleven base-game entries, `N` presses from the default highlight:
+
+| Presses | Circuit |
+| --- | --- |
+| 1 | Anulpha Pass |
+| 2 | Moa Therma |
+| 3 | Chenghou Project |
+| 4 | Metropia |
+| 5 | Sebenco Climb |
+| 6 | Ubermall |
+| 7 | Sol 2 |
+| 8 | Talon's Junction |
+| 9 | The Amphiseum |
+| 10 | Modesto Heights |
+| 11 | Tech De Ra |
+
+Not walked further this session (12-24 is the reverse-direction half of the
+same 24-entry wrap `hd-frontend.md`'s own carousel read already measured).
+**Moa Therma appears in this list** despite no `Data/Environments/*` folder
+on this disc naming it and no `.envsettings` file for it anywhere across all
+seven `DATAxx.PSARC` archives (checked: the disc's `.envsettings` count is
+exactly 33, matching `envsettings_ground_truth.rs`'s own count with no
+Moa Therma-named file among them) - the carousel entry, its preview video and
+its wireframe circuit model all render, so *something* on this disc backs it;
+what environment folder it actually loads is not read here (a capture with
+`--nav "Track Creation=right"` once would answer it for free via `TTY.log`'s
+`Loading track model` line, cheap for the next session that needs it).
+
+A plan reaches a chosen circuit by embedding the count directly, e.g. Sol 2:
+
+    --nav "Main Menu=right" \
+    --nav "Track Creation=right,right,right,right,right,right,right"
+
+`capture`'s own `walk_to_race` fires a screen's whole button list in one
+`navigate()` call the one time it sees that screen name as current, then the
+outer loop's own `cross` confirms - so this is the 7 `right`s followed by
+one confirm, not 7 separate confirms. Verify the result against the
+written pair's own `track` field (`TTY.log`'s line, free) rather than
+trusting the press count: a confirm dropped mid-transition would leave
+`Track Creation` current for a second outer-loop pass and double the
+plan's presses, landing on the wrong circuit silently.
+
+### Racebox races the same hull the Team Selection screen does not show
+
+**Confirmed, 2026-09-13.** Racebox's `Team Selection`/`Ship Select` screen
+shows Feisar's standard blue/white/yellow livery highlighted by default, on
+a fresh save, with every other slot in the "NAVIGATE TEAM" hull-variant
+column padlocked - reading that screen alone says the race will be the
+standard hull. It is not: the actual in-race craft in every `sol2-matched`
+and `amphiseum-matched` shot is the matte grey/orange `concept1` livery, the
+same one `talons-matched`'s own corroboration already established for the
+Fury-campaign default walk. So the Ship Select screen's own preview does not
+reflect the hull a Racebox race actually spawns with, on either route - a
+second, independent instance of the same "screen and race disagree" pattern
+`talons-matched`'s section above found once. `--team feisar_c1
+--hull-variant concept1` is therefore the right pairing to record for a
+Racebox capture too, without needing to select anything in that hex grid.
+
 **A screen must settle before it is photographed.** `TTY.log` names the new
 screen at the *start* of its transition, so a shot taken on the name change
 catches the animation: the first pass of this photographed two menus mid-flight

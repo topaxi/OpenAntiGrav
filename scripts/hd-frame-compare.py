@@ -1,19 +1,25 @@
 #!/usr/bin/env python3
 """Per-region tone/bloom/fog comparison on a matched-camera HD frame pair.
 
-Consumes `data/reference/hd-capture/talons-matched/NN.{png,json}` - the
+Consumes `data/reference/hd-capture/<pair-dir>/NN.{png,json}` - the
 camera-pick pairs `docs/reverse-engineering/rpcs3-capture.md`'s "The pick is
-fixed, and a rendered overlay confirms it" section produced (00, 01, 03; 02's
-camera pick was refused and has no pair). For each pair it renders
-`oag-game` at the recovered pose with this project's stated "comparison
-setting" (`RenderProfile::default()`: native size, no MSAA, no motion blur,
-no shadows, no upscaler) and reports per-region statistics a human can act
-on, instead of the single-number aggregates-at-a-distance the pre-camera-pick
-brightness threads were stuck with.
+fixed, and a rendered overlay confirms it" section produced. Default
+`--pair-dir` is `talons-matched` (00, 01, 03; 02's camera pick was refused
+and has no pair). For each pair it renders `oag-game` at the recovered pose,
+on the track the pair's own JSON names (`track_arg` - never the hardcoded
+constant an earlier version of this script carried, which would have
+silently rendered Talon's Junction against any other circuit's pair), with
+this project's stated "comparison setting" (`RenderProfile::default()`:
+native size, no MSAA, no motion blur, no shadows, no upscaler) and reports
+per-region statistics a human can act on, instead of the single-number
+aggregates-at-a-distance the pre-camera-pick brightness threads were stuck
+with.
 
-    scripts/hd-frame-compare.py                       # all three pairs
+    scripts/hd-frame-compare.py                       # all three talons-matched pairs
     scripts/hd-frame-compare.py --pose 01
     scripts/hd-frame-compare.py --game target/release/oag-game
+    scripts/hd-frame-compare.py --pair-dir data/reference/hd-capture/sol2-matched \
+        --pose 00 --pose 01 --dump-regions
 
 # What this measures, and what it deliberately does not
 
@@ -72,12 +78,16 @@ pose `03`'s already-documented flat-black floor panel.
 # The regions are chosen, not measured
 
 Five rectangles in normalized frame coordinates, picked by eye against the
-three pairs and shared across them (Talon's Junction's matched poses are all
-forward-facing tunnel/corridor framings, close enough in composition that one
-set of boxes is a legitimate shared window rather than a per-pose accident).
-**No confidence score** - this is a comparison instrument, not an RE claim.
-`--dump-regions` writes a visible overlay so the boxes can be checked by eye
-instead of trusted blind.
+three `talons-matched` pairs and shared across them (Talon's Junction's
+matched poses are all forward-facing tunnel/corridor framings, close enough
+in composition that one set of boxes is a legitimate shared window rather
+than a per-pose accident). **No confidence score** - this is a comparison
+instrument, not an RE claim. `--dump-regions` writes a visible overlay so the
+boxes can be checked by eye instead of trusted blind - **mandatory on a
+`--pair-dir` other than the default**, since nothing here re-derives the
+boxes per circuit and a box that lands on sky or wall on a differently
+framed pose would otherwise report a plausible-looking number under the
+wrong region name.
 
 # Needs
 
@@ -102,11 +112,26 @@ import numpy as np
 from PIL import Image, ImageDraw
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
-PAIR_DIR = ROOT / "data" / "reference" / "hd-capture" / "talons-matched"
-OUT_DIR = ROOT / "data" / "reference" / "hd-capture" / "talons-matched-compare"
+DEFAULT_PAIR_DIR = ROOT / "data" / "reference" / "hd-capture" / "talons-matched"
 IMAGE = ROOT / "data" / "images" / "hdfury-ps3-eu-dec.iso"
-TRACK = "/data/environments/talons_junction/track.vex"
 TEAM = "feisar_c1"
+
+
+def track_arg(meta_track):
+    """`meta['track']` (`Data\\Environments\\Name\\track.rcsmodel`, the disc's
+    own `TTY.log` spelling) to the `--track` this project's own loader wants
+    (`/data/environments/name/track.vex`).
+
+    **Derived per pair, not hardcoded**, because a pair off any circuit other
+    than the one this script shipped for (`talons_junction`) would otherwise
+    render the wrong track at the right camera - a silently plausible-looking
+    wrong comparison, not an obviously broken one. `TTY.log`'s own line is
+    what a capture already records `track` from
+    (`scripts/rpcs3-drive.py`'s `track_name()`), so this is a format
+    conversion, not a new read.
+    """
+    name = meta_track.replace("\\", "/").split("/")[-2]
+    return f"/data/environments/{name.lower()}/track.vex"
 
 # The comparison setting every HD/Fury frame comparison in this project uses
 # (`RenderProfile::default()`'s own doc comment names this combination):
@@ -322,7 +347,7 @@ def camera_pose_args(camera):
     return [f"--camera-pose={nums}", f"--camera-fov={camera['fov_y_deg']:.6f}"]
 
 
-def render(game, camera, out_path, bloom, cfg_root):
+def render(game, camera, track, out_path, bloom, cfg_root):
     """Renders one frame.
 
     `[graphics] bloom` has no CLI flag - it is a `[graphics]` settings key,
@@ -370,7 +395,7 @@ def render(game, camera, out_path, bloom, cfg_root):
         str(game),
         str(IMAGE),
         "--race",
-        "--track", TRACK,
+        "--track", track,
         "--team", TEAM,
         *COMPARISON_ARGS,
         *camera_pose_args(camera),
@@ -420,9 +445,9 @@ def format_hist(hist):
     return "".join(blocks[min(len(blocks) - 1, int(9 * v / scale))] for v in hist)
 
 
-def compare_one(game, pose, dump_regions, bloom, cfg_root):
-    json_path = PAIR_DIR / f"{pose}.json"
-    png_path = PAIR_DIR / f"{pose}.png"
+def compare_one(game, pair_dir, out_dir, pose, dump_regions, bloom, cfg_root):
+    json_path = pair_dir / f"{pose}.json"
+    png_path = pair_dir / f"{pose}.png"
     if not json_path.exists() or not png_path.exists():
         raise SystemExit(f"missing pair for pose {pose}: {json_path}")
     meta = json.loads(json_path.read_text())
@@ -431,10 +456,11 @@ def compare_one(game, pose, dump_regions, bloom, cfg_root):
         raise SystemExit(
             f"{json_path}: camera pick was refused ({meta.get('camera_reason')})"
         )
+    track = track_arg(meta["track"])
 
-    OUT_DIR.mkdir(parents=True, exist_ok=True)
-    ours_path = OUT_DIR / f"{pose}-ours-bloom-{'on' if bloom else 'off'}.png"
-    render(game, camera, ours_path, bloom, cfg_root)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    ours_path = out_dir / f"{pose}-ours-bloom-{'on' if bloom else 'off'}.png"
+    render(game, camera, track, ours_path, bloom, cfg_root)
 
     ref_img = Image.open(png_path).convert("RGB")
     ours_img = Image.open(ours_path).convert("RGB")
@@ -452,7 +478,7 @@ def compare_one(game, pose, dump_regions, bloom, cfg_root):
     masks, hud, craft = build_masks(shape)
 
     if dump_regions:
-        draw_regions(ref_img, masks, OUT_DIR / f"{pose}-regions.png")
+        draw_regions(ref_img, masks, out_dir / f"{pose}-regions.png")
 
     print(f"\n=== pose {pose} ({meta['track']}, fov {camera['fov_y_deg']:.2f} deg) ===")
     print(f"{'region':<28}{'side':<10}{'px':>9}{'mean R':>8}{'mean G':>8}"
@@ -515,7 +541,21 @@ def main():
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
     parser.add_argument("--pose", action="append", dest="poses",
-                         help="one of 00/01/03; repeatable. Default: all three.")
+                         help="a pose stem (e.g. 00/01/03) present in --pair-dir; "
+                              "repeatable. Default: 00, 01, 03 (talons-matched's own set - "
+                              "pass explicit --pose values for any other --pair-dir).")
+    parser.add_argument("--pair-dir", default=str(DEFAULT_PAIR_DIR),
+                         help="directory of NN.{png,json} capture pairs, e.g. "
+                              "data/reference/hd-capture/sol2-matched. The track "
+                              "rendered for comparison is read out of each pair's "
+                              "own JSON (`track_arg`), never assumed - a pair from "
+                              "any circuit is safe to point this at. Default: "
+                              "talons-matched. NOTE: HUD_BOX/CRAFT_BOX/SKY_BOX/"
+                              "ROAD_BOXES/DISTANT_BOX below are picked by eye "
+                              "against Talon's Junction's own forward-facing-tunnel "
+                              "framing - run --dump-regions on a pair from any other "
+                              "circuit before trusting a region's numbers, since a "
+                              "box may land on sky or wall there instead.")
     parser.add_argument("--game", default=str(ROOT / "target" / "debug" / "oag-game"))
     parser.add_argument("--dump-regions", action="store_true",
                          help="write an <NN>-regions.png mask overlay per pose")
@@ -531,11 +571,14 @@ def main():
     if not IMAGE.exists():
         raise SystemExit(f"{IMAGE} is missing - see data/README.md")
 
+    pair_dir = pathlib.Path(args.pair_dir).resolve()
+    out_dir = pair_dir.parent / f"{pair_dir.name}-compare"
     poses = args.poses or ["00", "01", "03"]
     with tempfile.TemporaryDirectory() as tmp:
         cfg_root = pathlib.Path(tmp)
         for pose in poses:
-            compare_one(game, pose, args.dump_regions, args.bloom == "on", cfg_root)
+            compare_one(game, pair_dir, out_dir, pose, args.dump_regions,
+                        args.bloom == "on", cfg_root)
 
 
 if __name__ == "__main__":

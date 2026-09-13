@@ -183,9 +183,42 @@ fixed here, since `Chain::run`'s signature is `lane-ship-hull`'s file. Its
 effect on the darkness reading is under 0.005 luma either way - real bugs,
 not the cause.
 
+2026-09-13 (`lane-hd-captures`): **the darkness gap does not reproduce with
+one sign or magnitude across circuits, which is new evidence the gap is
+per-material rather than global.** Two matched-camera pairs added, `Sol 2`
+(fog-heaviest circuit by `.envsettings` data) and `Amphiseum` (busiest
+emissive layer, previously ungrabbed), both via Racebox
+(`--team feisar_c1 --hull-variant concept1`, confirmed live rather than
+assumed - see `rpcs3-capture.md`'s new "Racebox races the same hull the Team
+Selection screen does not show"). Sol 2 corroborates Talon's Junction: ours
+darker by 0.15-0.33 whole-frame luma across its three poses, same sign and
+similar order of magnitude to the established 0.13-0.24. **Amphiseum
+reverses it**: ours reads *brighter* by 0.04-0.19 luma whole-frame - a sign
+flip a single global offset/scale/exposure-curve cannot produce. Part of
+Amphiseum's gap has an identified, distinct cause rather than being an
+unexplained tone shift: at the grid-start tunnel, `oag-game` draws the two
+angled trackside wall panels as flat unlit black where the reference frame
+shows them brightly lit cyan/white (`data/reference/hd-capture/
+amphiseum-matched/00.png` vs the paired `...-compare/00-ours-bloom-on.png`,
+gitignored) - visible without reading a number, and consistent with the
+already-open emissive/second-texture material gap below, now corroborated
+on a second circuit. Poses further into the Amphiseum lap do not show the
+black-panel defect and read close to the reference in lighting character,
+which is what pins it to that specific geometry rather than the whole
+circuit. Sol 2 also weakly corroborates "fog is off/imperceptible here" from
+the sibling thread: no distance-graded haze visible at its grid pose either,
+on the circuit with the heaviest authored `Fog.Fog Density` on the disc.
+Full per-region numbers, the region-box caveats measured this session (Sol
+2's `road surface` boxes land off-track at its grid pose; Amphiseum's `sky`
+box samples an indoor ceiling, not atmospheric sky) and the fog-density
+table are in `/tmp/oag-drive/lane-hd-captures-report.md` (scratch, not
+committed). `scripts/hd-frame-compare.py` gained `--pair-dir` for this,
+deriving `--track` from each pair's own JSON rather than a hardcoded
+Talon's-Junction constant.
+
 ## Open
 
-- **The frame is measurably darker than the original at a matched camera, by 0.13-0.24 mean luminance, and the exposure/bloom post chain is ruled out as the cause** - open at `lane-ship-hull`'s files (`mesh.wgsl`, `crates/render/src/mesh/`, `sky_cube.rs`), not this lane's; **narrowed 2026-09-13**: not a single offset/scale/curve (quantile-quantile evidence, confidence 80), and `.envsettings` plumbing is confirmed exact for Talon's Junction's core terms, so what remains is either a magnitude in a term already present or one of the still-unread terms below
+- **The frame is measurably darker than the original at a matched camera, by 0.13-0.24 mean luminance on Talon's Junction and Sol 2, and the exposure/bloom post chain is ruled out as the cause** - open at `lane-ship-hull`'s files (`mesh.wgsl`, `crates/render/src/mesh/`, `sky_cube.rs`), not this lane's; **narrowed 2026-09-13 (twice)**: first, not a single offset/scale/curve (quantile-quantile evidence, confidence 80), and `.envsettings` plumbing is confirmed exact for Talon's Junction's core terms; second, **the gap is not a single global magnitude either** - Amphiseum measures the opposite sign (ours brighter by 0.04-0.19 luma), so what remains is a per-material or per-circuit-lighting-data cause, not a shared constant, with Amphiseum's own black-wall-panel defect (below) as one concrete, separately-diagnosable instance of "per-material"
 - Whether the 8-bit surfaces hold linear or gamma light is undetermined (confidence 70 against ADR-0026, not acted on) - still open, unchanged by the above
 - `oag_render::post::hd_bloom::Chain::run`'s caller drops the letterbox offset `oag_display::display::viewport` computes, leaving an unwritten strip at the canvas edge whenever `display.aspect` does not match the render's own size ratio - filed 2026-09-13 (renderer.md, same section), not fixed; worth checking whether `oag_render::post::bloom`'s matching call site (the non-HD chain) has the same shape live, not just unobserved in the one Pulse capture checked
 - Texture-decode brightness (candidate (c)) is not pixel-verified against a reference decoder - only that `oag-texture`'s `.gtf` path carries no gamma/sRGB logic of its own and its ground-truth test passes
@@ -193,7 +226,9 @@ not the cause.
 - `shadowMapTex` is projected by the disc and unimplemented here
 - `scripts/clipped-white.py`'s docstring still publishes the 3.85/6.99 pair, and 3.85 % is a padded canvas rather than a frame - another lane owns that file, so the correction lives in `scripts/hd-glow-sweep.py` and renderer.md instead
 - Why **eleven** of the sixteen circuits measure identically with `[graphics] bloom` on and off, on the baseline build as much as the fixed one - and six of those eleven do take the authored path, so "they never light" is refuted
-- Amphiseum, Fury's circuits and the DLC packs have no rpcs3 grab to be read against at all
+- Fury's own circuits and the DLC packs still have no rpcs3 grab to be read against at all (Amphiseum now does - see 2026-09-13 above)
+- **New 2026-09-13**: Amphiseum's grid-start trackside wall panels draw unlit/flat-black in `oag-game` where the reference shows them brightly lit - a large, visible, localized gap, most likely the same emissive/second-texture material class as the `etched_glass_tech` item below rather than a new mechanism, not chased into a specific material or shader path this session
+- **New 2026-09-13**: what makes Amphiseum's opening seconds already 406-429 km/h at the same capture settings that gave Talon's Junction and Sol 2 a slow (70-74 km/h) grid pose is unread - a downhill start or a shorter countdown are guesses, not measured; means no Amphiseum pose isolates the lit-material path free of the speed-streak confound
 
 ## Next Steps
 
@@ -203,6 +238,8 @@ not the cause.
 - Sweep per-material microcode (`scripts/ps3-microcode.py`) for a read of `0x1aaf7631`'s fourth byte, to settle what it gates
 - Sweep per-material microcode (`scripts/ps3-microcode.py`) for a read of `0x1aaf7631`'s fourth byte, to settle what it gates
 - `shadowMapTex` remains unread; locate what projects it and whether the disc's shadow map is reachable from data already on disc
-- Grab Amphiseum on rpcs3: it is the circuit the emissive layer is busiest on (+1.70 points at the grid, 4.84 % of the frame over 8/255) and the only one whose fix has no reference at all to be read against
+- ~~Grab Amphiseum on rpcs3~~ **done 2026-09-13**: `data/reference/hd-capture/amphiseum-matched/` (3 matched-camera poses) - see the dated entry above for what it found (a black-wall-panel defect at the grid, and a sign-flipped whole-frame gap versus Talon's Junction/Sol 2)
+- Chase the Amphiseum grid-start wall-panel defect (flat black vs brightly lit cyan/white in the reference) to a specific material/shader path - likely the same emissive/second-texture class as `etched_glass_tech` below, not confirmed
+- Extend `hd-frame-compare.py`'s region boxes past the shared Talon's-Junction shape, or accept per-circuit `--dump-regions` verification as the standing process - Sol 2's grid pose lands `road surface` off-track, Amphiseum's `sky` box samples an indoor ceiling
 - Find why `[graphics] bloom` is inert on eleven of the sixteen circuits - `scripts/hd-glow-sweep.py sweep --bloom both` is the reproducer, the four named environments plus Zone 1 are the five that do respond, and six of the inert eleven measurably take the authored path so the obvious hypothesis is already refuted
 - `hd_bloom.wgsl`'s `fs_blur` tap-offset defect (previously listed here) is fixed - see renderer.md's own updated text for the change and its measured native-resolution footprint
