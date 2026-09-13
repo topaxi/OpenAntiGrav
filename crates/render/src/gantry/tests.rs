@@ -172,10 +172,28 @@ fn every_billboard_slot_name_is_a_placeholder_regardless_of_case() {
     for n in 1..=8 {
         assert!(is_slot_placeholder(&format!("billboard{n}.tga")));
         assert!(is_slot_placeholder(&format!("Billboard{n}.TGA")));
+        assert!(is_slot_placeholder(&format!("billboard{n}.gtf")));
+        assert!(is_slot_placeholder(&format!("Billboard{n}.GTF")));
     }
     assert!(!is_slot_placeholder("321backplate.tga"));
     assert!(!is_slot_placeholder("billboard9.tga"));
     assert!(!is_slot_placeholder("billboard.tga"));
+    assert!(!is_slot_placeholder("billboard9.gtf"));
+}
+
+#[test]
+fn a_full_archive_path_is_a_placeholder_by_its_own_file_name() {
+    // HD's own label shape: a material sampler's full path, not a bare file
+    // name - see `basename`'s own doc comment.
+    assert!(is_slot_placeholder(
+        "data/environments/talons_junction/textures/dds/billboard8.gtf"
+    ));
+    assert!(is_slot_placeholder(
+        r"data\environments\talons_junction\textures\dds\Billboard7.GTF"
+    ));
+    assert!(!is_slot_placeholder(
+        "data/environments/talons_junction/textures/dds/track_surface.gtf"
+    ));
 }
 
 /// A model with two textured draws - one bound to a placeholder slot, one to
@@ -249,6 +267,16 @@ fn strip_slot_placeholders_is_case_insensitive_and_leaves_real_art_alone() {
     let mut untouched = textured_draws("321backplate.tga");
     assert_eq!(strip_slot_placeholders(&mut untouched), 0);
     assert_eq!(untouched.draws.len(), 2);
+}
+
+#[test]
+fn mount_finds_hds_full_path_billboard8_label() {
+    // HD ships no `321backplate`-shaped second surface - see
+    // `HD_SLOT8_TEXTURE`'s own doc comment - so its stub alone has to resolve
+    // a mount, through the full archive path a PS3 material names it by.
+    let model = textured_draws("data/environments/talons_junction/textures/dds/billboard8.gtf");
+    let mount = mount(&model).expect("the HD spelling resolves a mount");
+    assert_eq!(mount.node, Some(74));
 }
 
 #[test]

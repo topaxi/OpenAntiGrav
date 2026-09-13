@@ -45,6 +45,7 @@
 use super::*;
 
 use oag_render::gantry::Mount;
+use oag_render::mesh::Bounds;
 
 /// Where the gantry's authored timeline is held, in seconds.
 ///
@@ -116,19 +117,70 @@ pub(super) fn place(
     let mut model = model;
     let parked = oag_render::gantry::clip_to_panel(&mut model, mount.width / 2.0, 0.0);
     let matrix = matrix(&mount, Vec3::from(start.forward));
+    place_bounds(&mut model, matrix);
     report.push(format!(
-        "start gantry {name} on node {:?}: centre {:?}, on a panel {:.1} x {:.1}, \
-         {:.0} units ahead of the Start Position - measured off this circuit's own \
-         geometry (docs/rendering/start-gantry.md). {parked} draw(s) parked outside \
-         the panel are not drawn: they are the FINAL LAP and chequered states, whose \
-         trigger is unrecovered",
+        "start gantry {name} on node {:?}: centre {:?}, on a {:.1} x {:.1} surface \
+         ({:.1} thick over {} vertices), {:.0} units ahead of the Start Position - \
+         measured off this circuit's own geometry (docs/rendering/start-gantry.md). \
+         {parked} draw(s) parked outside the panel are not drawn: they are the FINAL \
+         LAP and chequered states, whose trigger is unrecovered",
         mount.node,
         mount.centre.to_array().map(|v| (v * 10.0).round() / 10.0),
         mount.width,
         mount.height,
+        mount.thickness,
+        mount.vertices,
         (mount.centre - Vec3::from(start.position)).length(),
     ));
     Some(Placed { model, matrix })
+}
+
+/// Rewrites every draw's bounds into the space [`Placed::matrix`] actually
+/// draws it in.
+///
+/// # Why this is needed at all, and why Pulse never hit it
+///
+/// [`oag_render::pvs::visible`]'s frustum test reads [`DrawCall::bounds`]
+/// straight off the model and trusts it to already be in world space - true
+/// for the track, whose vertices are baked into world space at build time,
+/// and false for a standalone prop like this one, whose own bounds describe
+/// it centred near its own origin, before [`matrix`] ever moves it. A draw
+/// under an `Anim Transform` (`DrawCall::moving`) skips the frustum test
+/// outright for the identical reason - its own bounds are stale the moment
+/// the node animates - so this file's placement matrix is exactly one more
+/// case of the same problem the `moving` flag already exists for, just
+/// applied once at load rather than every frame.
+///
+/// **Pulse never needed this.** Every one of `321Go_StartFinish.vex`'s nine
+/// `Mesh` nodes sits under its own `Anim Transform`
+/// (`docs/rendering/start-gantry.md`'s node tree), so every Pulse gantry draw
+/// is already `moving` and the frustum test never ran on one. HD's own
+/// `321go_startfinish.vex` mixes animated and plain `Mesh` nodes - the digit
+/// board and the background panel both teleport at 6.000 s and are `moving`,
+/// but several smaller pieces are not - so this is the first gantry pass
+/// this bug had a draw left for it to cull. Left unfixed, every non-`moving`
+/// draw's local-space sphere is tested against a world-space frustum and
+/// fails everywhere except the world's own origin, which reads exactly like
+/// "the gantry never draws" and is not a placement bug at all.
+fn place_bounds(model: &mut Model, matrix: Mat4) {
+    // The placement matrix here is rotation, translation and a uniform scale
+    // (`matrix`'s own doc comment) - never a shear - so one axis's length is
+    // the scale every axis shares, and it is what a sphere's radius needs.
+    let scale = matrix.x_axis.truncate().length();
+    for draws in [
+        &mut model.draws,
+        &mut model.alpha_tested_draws,
+        &mut model.transparent_draws,
+    ] {
+        for draw in draws.iter_mut() {
+            draw.bounds = Bounds {
+                centre: matrix
+                    .transform_point3(Vec3::from(draw.bounds.centre))
+                    .to_array(),
+                radius: draw.bounds.radius * scale,
+            };
+        }
+    }
 }
 
 /// Reads the gantry model, trying the manifest's spelling and then the
@@ -146,11 +198,49 @@ fn load(archives: &mut oag_assets::Archives, name: &str, lod: mesh::Lod) -> Resu
     let mut error = None;
     for candidate in [name, &trimmed.replace('/', "\\"), trimmed] {
         match archives.read_name(candidate) {
-            Ok(blob) => return mesh::build_with_textures(name, &blob, None, lod),
+            Ok(blob) => return build(archives, name, candidate, &blob, lod),
             Err(e) => error = error.or(Some(e)),
         }
     }
     Err(error.map_or_else(|| anyhow::anyhow!("{name} is in no archive"), Into::into))
+}
+
+/// Builds the model once its blob is in hand - the PSP/PS2 path unchanged,
+/// and HD's own route through the `.rcsmodel` beside it.
+///
+/// **`321Go_StartFinish.vex` is shaped like a craft, not like the track.**
+/// Its own `Mesh` payloads are a bounding box and a hash - see
+/// `docs/rendering/start-gantry.md`'s "The geometry moved out of the `.vex`" -
+/// so [`mesh::build_with_textures`] bails on it outright
+/// (`"a PS3 .vex carries no render geometry"`). [`mesh::rcs::build`] is the
+/// same function a ship's own livery loads through
+/// (`oag_game::livery`/`livery::flare`), not [`mesh::rcs::build_scene`]:
+/// the gantry has no world-baked second pass of its own to catch a
+/// wrongly-skipped part, the same reasoning that function's own doc comment
+/// gives for every non-track caller.
+fn build(
+    archives: &mut oag_assets::Archives,
+    name: &str,
+    candidate: &str,
+    blob: &[u8],
+    lod: mesh::Lod,
+) -> Result<Model> {
+    if !mesh::geometry_is_external(blob) {
+        return mesh::build_with_textures(name, blob, None, lod);
+    }
+    let sibling = mesh::rcs::sibling_name(candidate)
+        .with_context(|| format!("{name}: a PS3 .vex with no .rcsmodel spelling"))?;
+    let geometry = archives
+        .read_name(&sibling)
+        .with_context(|| format!("{name}: the .rcsmodel beside it, {sibling}"))?;
+    let (model, _report) = mesh::rcs::build(
+        name,
+        blob,
+        &geometry,
+        &mut |path| archives.read_name(path).ok(),
+        |c| c.mesh,
+    )?;
+    Ok(model)
 }
 
 /// How far in front of the mount the gantry stands, in track units.
@@ -196,6 +286,21 @@ const CLEARANCE: f32 = 1.0;
 ///    is one of the pieces [`oag_render::gantry::clip_to_panel`] drops, so it
 ///    never reaches the screen. The claim is about the board being drawn, not
 ///    about the file's bounding box.
+///
+///    **HD's own board and mount fit at 1.0 too, measured separately rather
+///    than inherited from Pulse's numbers.** `pasted__Go_HD_start_light_321go`
+///    spans `x` -16.60..16.59 (33.2 units) against a mount measured 42.4-46.6
+///    wide on four HD circuits (Talon's Junction, Amphiseum, `01_Vineta_K`,
+///    `Tech_De_Ra`) - a different asset on a different mount, fitting with
+///    room to spare rather than by the same 1:1 coincidence Pulse's own
+///    numbers show. **HD's mount is not the flat stub Pulse's is, though**:
+///    its own [`Mount::thickness`] measures 1.9-3.0 across those four
+///    circuits, against Pulse's 0.000-0.100 - the `billboard8.gtf`-bound chunk
+///    is part of a real 3D structure (a boost-gate frame on Talon's Junction),
+///    not a thin placeholder quad, so [`CLEARANCE`] clears the digit board's
+///    own near-zero local depth but not a backing piece authored several
+///    units further into that structure - see `docs/rendering/start-gantry.md`'s
+///    "Implemented on HD" section.
 fn matrix(mount: &Mount, forward: Vec3) -> Mat4 {
     let facing = mount.facing(-forward);
     let mut placed = mount.matrix(-forward, Vec3::Z, 1.0);
