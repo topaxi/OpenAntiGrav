@@ -832,22 +832,33 @@ The hue is in the same family as the disc's own "HD blue," authored twice
 elsewhere in this exact composition: `HUD_pickups.xml`'s `PickupAbsorbTxt`/
 `PickupAbsorb` (`Color="0x941664FF"`, next to the `98` in the same `03.png`
 row) and `zone_hud.xml`'s alternate `DamageBar` state
-(`color="0xFF1664FF"`, this page's own ["what is not
-done"](#what-is-not-done) section). An alpha-blend back-solve against a local
-background sample was attempted to check for an exact match and did not land
-cleanly: `98`'s own backdrop is the striped `DamageBarBg` pattern plus the
-hexagon's glass glow, not a flat pill colour the way `PickupAbsorbTxt`'s is, so
-no clean isolate of the "pure" foreground colour was possible from a
-screenshot alone.
+(`color="0xFF1664FF"`). This is more than a hue-family resemblance, checked
+with a same-frame control: an alpha-blend back-solve (observed colour, local
+background sample, the widget's own authored alpha) on `DAMAGE`/`15`
+(authored `0x94FF0000`) recovers `(188, ~0, ~0)` - pure red, confirming the
+method - and the same back-solve on `Absorb` (authored `0x941664FF`, `(22,
+100, 255)`) recovers `(0, 64, 188)`, undershooting R and G in the same
+direction and by a comparable margin. `Absorb`'s raw sample and `98`'s raw
+sample are both blue-dominant with the same channel ordering, in the same
+frame, same row, same font, same authored alpha (`0x94`) - and `98`'s raw
+sample sits *closer* to `0x1664FF` than `Absorb`'s own back-solve does,
+consistent with `98` sitting over a brighter backdrop than `Absorb`'s flat
+pill. Read together this is a specific, positive candidate - **the runtime
+most likely substitutes the disc's own `0x1664FF` for `ShieldBarText`** -
+not merely "somewhere in the blue family," though a clean isolate of `98`'s
+own backdrop (the striped `DamageBarBg` pattern plus the hexagon's glass glow,
+not a flat pill the way `PickupAbsorbTxt`'s is) was not possible from a
+screenshot alone, so this stops short of an exact-value confirmation.
 
-**Not implemented.** Recolouring `ShieldBarText` to either the measured RGB or
-the disc's own `0x1664FF` on this evidence would be tuning a colour to match a
-screenshot - this project's rule against exactly that. Recorded precisely
-(both frames' dominant samples, both candidate authored blues, and why the
-back-solve did not close the gap) so the next pass with the Ghidra bridge does
-not have to re-derive the measurement, and can check a specific hypothesis
-(does the runtime substitute `0x1664FF` for `ShieldBarText` outright) rather
-than starting from "what colour is this."
+**Not implemented.** Recolouring `ShieldBarText` to `0x1664FF` on this
+evidence would still be tuning a colour to match a screenshot - the
+*substitution rule* (which widget, which state, why) is unread, and a
+specific candidate is not the same thing as a confirmed one. Recorded
+precisely (both frames' dominant samples, the same-frame control that
+validates the method, and the specific candidate it points to) so the next
+pass with the Ghidra bridge starts from "does the runtime substitute
+`0x1664FF` for `ShieldBarText` outright" rather than from "what colour is
+this."
 
 ### `PosBar0`-`7`'s lit count tracks place; `LapBar0`-`6`'s is confounded
 

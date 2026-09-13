@@ -43,10 +43,17 @@ where it was:
   when not full" outright - `03.png`'s 98% still draws blue, not red - and
   narrow the live question to "does it ever draw red at all," rather than
   "grey above a threshold, red below it." Pixel-sampled directly: a
-  consistent, near-opaque blue (~`#2C6BE7`) at both 100% and 98%, in the same
-  hue family as the disc's own `0x1664FF` ("HD blue," authored twice
-  elsewhere in this exact composition) but not confirmed as an exact match. **Not implemented** - this project's rule against tuning a colour to a
-  screenshot applies exactly here.
+  consistent, near-opaque blue (~`#2C6BE7`) at both 100% and 98%. A same-frame
+  alpha-blend control (back-solving `DAMAGE`/`15`'s authored `0x94FF0000`
+  recovers pure red, validating the method; the identical back-solve on
+  `Absorb`'s authored `0x941664FF` undershoots R/G in a consistent direction)
+  points at a specific candidate rather than a mere hue family: **the runtime
+  most likely substitutes the disc's own `0x1664FF`** ("HD blue," authored
+  twice elsewhere in this exact composition) for `ShieldBarText`, though the
+  substitution rule itself - which widget, which state, why - is still
+  unread, so this stops short of confirmation. **Not implemented** - a
+  specific candidate is not a confirmed one, and this project's rule against
+  tuning a colour to a screenshot applies exactly here.
 - **`DamageBarBg`/lap-arc tints: narrowed, not closed.** `PosBar0`-`7`'s lit
   count now measurably tracks *place* (0 lit at 8th, 1 lit at 7th, in both
   `01.png` and `03.png`) rather than being a fixed decoration - but the
