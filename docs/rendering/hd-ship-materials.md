@@ -171,6 +171,111 @@ consistent with a raw, blue-dominant tangent-space normal map added at full
 weight. Not a controlled A/B (no code changed this session to compare against),
 but the direction and location of the colour shift match the mechanism.
 
+## Finding 1, resolved: the fix reads the role of the texture `Pick::aux` actually loads
+
+**Fixed 2026-09-13, in `mesh::rcs::emissive::emissive`.** The prior section's
+"what a correct fix needs" prescribed resolving unit 1's declared-and-bound
+sampler by hash cross-reference against `Declared.samplers` (the same lookup
+`skin::units` performs) and deciding a role from that. **Measured and
+refuted before landing**: `tunnel_fx_noalpha` declares its *specular* map
+(`SpecularTexture`, `0x20c3e476`) at hardware unit 1 and its own emissive
+texture (`EmissiveTexture`, `0xb1f2a176`) at unit 2, while `Pick::aux` (no
+lightmap, an untraced alpha lane) resolves to ordinal 1 - the emissive one,
+the texture `Model::lightmaps[slot]` already holds and the one this material
+genuinely glows with. Asking "what sits at hardware unit 1" independently of
+`Pick::aux` would have refused that real, working glow - repeating, by a
+different route, the regression the first (`aux_traced`) attempt already hit.
+
+**The fix instead reads the role of `Pick::aux`'s own choice**:
+`material.samplers[pick.aux].0` - the same ordinal `skin::skin` already
+decoded into `seconds[slot]` - cross-referenced against a disc-measured
+table of sampler roles, not against "whatever the declaration says is at
+unit 1". Where that role is a normal or specular map, the accumulate is
+refused (`Report::emissive_surface_map_excluded`); where the role is a named
+glow, or cannot be settled at all, the material is left exactly as it drew
+before this fix (`Report::emissive_role_unresolved` for the second case).
+Confidence 90 on the mechanism and the fix (read directly in
+`crates/render/src/mesh/rcs/emissive.rs`, cross-checked against the disc-wide
+census below and guarded by `hd_hull_glow_role_ground_truth.rs`).
+
+**The role table itself is narrower than a preimage name suggests, and that
+is measured, not assumed.** Of the seven "Surface maps" preimages, only
+three (`NormalTexture`, `NormalTexture2`, `Normal`) bind zero counter-examples
+disc-wide; `SpecularTexture` binds a glow (`and_power_glow.gtf`) and a
+diffuse (`and_station4_diff.gtf`) somewhere on the disc, `SpecMap` binds an
+advert live on `scanlinetext` at Talon's Junction, and `Spec` binds an
+ambient-occlusion map - all three excluded from the table rather than
+trusted on the name alone. Four further, per-material-family hashes with no
+preimage at all (`0x436d3929`, `0xc8f18561`, `0x0617f872`, `0xc78c9866`) are
+included because each was independently measured to bind only a normal map,
+disc-wide, with zero exceptions. Full evidence table:
+`crates/render/src/mesh/rcs/emissive.rs`'s own doc comment and
+`crates/render/examples/hd_emissive_role_census.rs`.
+
+**The nitro_body_new claim above was itself measured off the wrong
+texture.** Resolving `nitro_body_new`'s ordinal 1 (`Pick::aux`'s naive
+choice, as the previous section's census did) lands on
+`auricom_tp_nolivery.gtf`, a base diffuse - which is what made the
+hash-exclude attempt look incomplete. But `nitro_body_new`'s **declared**
+unit-1 sampler is a different model-table entry (ordinal 2 in the
+`auricom_n1` case measured), and that entry is the ship's own normal map on
+every one of 13 distinct paths measured, disc-wide, with no exception -
+exactly the same shape as the other eight affected families. The two
+readings disagree because `Pick::aux`'s ordinal-1 default and the material's
+*declared* unit 1 are not always the same entry; `emissive()`'s fix reads
+`Pick::aux`'s own chosen entry (see above), and `nitro_body_new`'s
+`Pick::aux` happens to choose ordinal 1, `auricom_tp_nolivery.gtf` - so this
+family's real second texture stays unresolved and un-refused (see below),
+not because it is a genuine exception to "the hull adds its own normal map,"
+but because this project has no settled role for a plain diffuse.
+
+**Disc-wide, post-fix**: of **53** ship `ADD_SECOND` hits the real
+production pipeline (`mesh::rcs::build_scene`) produces today, **26** refuse
+(`diffuse_with_specular_from_alpha_n_vcol`, `diffuse_with_specular_from_alpha_n`,
+`detonator_diffuse_with_specular_from_alpha_n_vcol` - all resolve `Pick::aux`
+to the ship's own normal map) and **27** are left exactly as they drew
+before: `carbonfibre` (`Pick::aux` resolves to `carbon.gtf`, a plain
+diffuse, not a normal map - its actual normal map sits at a *different*
+ordinal this material's own microcode does not accumulate through),
+`nitro_body_new` (as above, `Pick::aux` resolves to a base diffuse texture
+even though its declared unit 1 is a normal map) and `glass_texture_n`
+(`Pick::aux` resolves to a real normal map, `assegai_glass_n.gtf`/
+`piranha_glass_n.gtf`, but its declared hash is the generic `Texture2`
+preimage, used elsewhere on the disc for a genuine picture, so this project
+does not guess at its role). The same shape recurs on **80** circuit slots
+(down from an unfixed 985 total), mostly window/glass materials
+(`windowsnormaldiffusespecular*`, `dc_diffusenormalspecular`,
+`j_rgb_colourtintnormalreflect`, `pb_window*`, `glass_reflect_seperateopacity_normal`)
+sharing the ship hull's own material family or a real normal map at
+`NormalTexture`.
+
+**Guarded, not just measured**: `hd_hull_glow_role_ground_truth.rs` pins
+`feisar_c1`'s `diffuse_with_specular_from_alpha_n_vcol` losing `ADD_SECOND`
+while its `carbonfibre` keeps it, and that `scroller_glow_v3`,
+`tunnel_fx_noalpha` and `mageffect08` - three of the ten families the first
+attempt regressed - all still carry `ADD_SECOND` on Talon's Junction.
+`scripts/hd-frame-compare.py --pair-dir talons-matched --pose 00` and
+`--pair-dir amphiseum-matched --pose 00` report the same per-region numbers
+before and after this fix (whole-frame luma 0.481 vs 0.481 on Talon's
+Junction, 0.423 vs 0.424 on Amphiseum, the latter a floating-point rounding
+difference, not a real one) - the fix reaches no circuit scenery at all,
+only ship hulls (and the handful of circuit materials sharing their shader
+family).
+
+**Player-eye, at `--race --team feisar_c1 --size 1280x720`, ticks 5 and
+300**: the wing-panel accents move from a purple/pink cast to yellow at both
+tick counts - the same direction the reference's warm khaki-olive/orange
+palette predicts, though not a full match. The top fuselage
+(`carbonfibre`) stays grey rather than warm, which is expected and separate:
+`carbonfibre`'s own **albedo** may independently be reading the wrong
+sampler entry (`picks()`'s colour-lane trace returns `Mixed` for this
+material, falling back to the first non-`NOT_A_PICTURE` entry - ordinal 0,
+which is `carbon_n.gtf`, the normal map, not `carbon.gtf`) - the same shape
+as the `EmissiveTexture` fix in `247114b6`, on a different binding
+(`picks.albedo` rather than `picks.aux`). Flagged for whoever picks this up
+next; not measured further here and not folded into this fix, which is
+`ADD_SECOND` only.
+
 ## Finding 2: unit 2's specular-from-alpha term is not achievable as written
 
 The handover brief named "wire the unit-2 specular-from-alpha binding" as the
@@ -240,5 +345,8 @@ component mask the write covers.
 for this hull by the table above - the "no per-material lighting branch"
 framing this thread's title carries is narrower than it reads: most of the
 per-material branching already exists and is already correctly wired for
-`feisar_c1`. What remains open is the ADD_SECOND misclassification (Finding
-1) and the TC0/TC1 question (Finding 3), not a missing branch structure.
+`feisar_c1`. The ADD_SECOND misclassification (Finding 1) is resolved as of
+2026-09-13 - see "Finding 1, resolved" above. What remains open is the
+TC0/TC1 question (Finding 3), the three ship-hull families with no settled
+`ADD_SECOND` role, and `carbonfibre`'s own possibly-wrong albedo pick, not a
+missing branch structure.

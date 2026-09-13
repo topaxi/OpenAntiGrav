@@ -1915,6 +1915,30 @@ consistent with the pair-level "Amphiseum reads +0.04..+0.19 brighter
 overall" reading already recorded as the circuit's own general darkness/
 brightness gap, not a symptom this material's own microcode was read for.
 
+## A ship hull's own normal map stopped glowing as an additive layer (2026-09-13)
+
+**`mesh::rcs::emissive::emissive` treated any material whose fragment program
+structurally accumulates hardware unit 1 as a glow, whatever texture
+`Pick::aux` actually loaded there.** On a ship hull that texture is
+routinely the ship's own normal map - its tangent-space unpack (`MAD dst,
+src.<component>, 2.0, -1.0`) trips the same self-referencing `MAD`/`ADD`
+register-reuse shape a real additive glow has, feeding ordinary Blinn-Phong
+lighting arithmetic rather than an accumulate. See
+[hd-ship-materials.md](../rendering/hd-ship-materials.md), "Finding 1,
+resolved", for the full mechanism, the disc-wide before/after counts, the
+guard test and the player-eye screenshots - not repeated here.
+
+**The one thing worth restating on this page**: the fix reads the role of
+the sampler `Pick::aux` *actually* resolved to
+(`material.samplers[pick.aux].0`), not of whatever a `Declared`
+cross-reference says sits at hardware unit 1 independently of `Pick::aux`.
+The two disagree on `tunnel_fx_noalpha` - it declares `SpecularTexture` at
+unit 1 and its own `EmissiveTexture` at unit 2, while `Pick::aux` (no
+lightmap, an untraced alpha lane) resolves to the emissive one, the texture
+this material genuinely glows with. Asking about hardware unit 1 there would
+have refused a real, working glow - measured before landing, not assumed.
+Confidence 90.
+
 ## Open
 
 - **87 of the 125 sampler hashes**, including the three commonest
