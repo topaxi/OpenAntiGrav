@@ -287,11 +287,19 @@ def packet_candidates(blob, base=0):
         at += 4
 
 
-#: The camera has to be the same value in at least `MIN_REGISTER_COUNT`
-#: distinct RSX registers within a frame - empirically `256` and `260` in
-#: every shot measured so far (`rpcs3-capture.md`'s "Picking the camera out:
-#: multiplicity, not a score") - to separate it from a degenerate matrix that
-#: a header match turns up in only one of them.
+#: The camera has to be the same value in both of these RSX registers within
+#: a frame - `256` and `260`, per `rpcs3-capture.md`'s "Picking the camera
+#: out: multiplicity, not a score" - to separate it from a degenerate matrix
+#: that a header match turns up in only one of them. **Not universal**: a
+#: `talons-matched` shot (2026-09-13, `data/reference/hd-capture/
+#: talons-matched/02-*.bin`) has a frame-unique, algebraically excellent
+#: candidate (`unit_error` 9.5e-08, a plausible moving eye) that is loaded
+#: into `256` only that frame, alongside a frame-unique but exact-`0.0`-error
+#: degenerate loaded into `260` only - so this filter refuses a frame where
+#: the real camera is actually identifiable, rather than risk widening it
+#: back into picking the degenerate. Recall, not precision: `pick_camera`
+#: never reports a wrong camera for this reason, only occasionally no camera
+#: at all.
 CAMERA_REGISTERS = frozenset({256, 260})
 
 
@@ -342,6 +350,24 @@ def pick_camera(frames):
     reason to widen the search and risk a `"finder"` label beside a wrong
     pose (`rpcs3-capture.md`'s "A packet-aware finder exists" section is the
     reasoning this followed).
+
+    Two known ways this refuses a frame that does have a real camera in it,
+    both a recall cost rather than a precision one - never a wrong pose, only
+    occasionally no pose:
+
+    - **A camera that does not move between two shots is indistinguishable
+      from a static constant here.** The cross-frame filter is bit-exact, so
+      a stationary camera (a paused frame, the pre-race grid) reads as
+      "recurs across frames" the same way a cube face does, and every frame
+      it appears in reports no camera. Not yet hit in practice - a driven
+      race moves the eye every interval measured so far - but a capture
+      taken without `cross` held would hit it immediately.
+    - **`CAMERA_REGISTERS`'s own doc comment**: the real camera is not
+      guaranteed to land in both `256` and `260` every frame. A
+      `talons-matched` shot (2026-09-13) has the real camera frame-unique and
+      algebraically clean in `256` alone, refused rather than picked because
+      its own frame's only dual-register survivor is a different, degenerate
+      value.
     """
     if len(frames) < 2:
         reason = ("the cross-frame discriminator needs at least 2 frames; "

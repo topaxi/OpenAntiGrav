@@ -387,10 +387,17 @@ measurement showed holds nothing but the seven static matrices.
 **The overlay is taken, and it lines up.** `talons-matched` (four shots,
 default Fury-campaign walk into Talon's Junction, `--team feisar_c1`
 matching the walk's own default - see below) picked a camera cleanly on
-three of its four shots and refused honestly on the fourth
-(`"no frame-unique value loaded into both register 256 and 260 this frame"`
-- an ordinary frame where the discriminator did not clear both bars, not a
-bug). Rendering `oag-game --race --track
+three of its four shots and refused honestly on the fourth. Checked directly
+rather than left unexplained: shot `02`'s dump does hold a frame-unique,
+algebraically clean candidate (`unit_error` 9.5e-08, a plausible eye) - it
+just lands in register `256` alone that frame, not both `256` and `260`, so
+`CAMERA_REGISTERS`' dual-register requirement refuses it alongside a
+different frame-unique but exact-`0.0`-error degenerate that hit `260`
+alone. A real, documented limitation of that filter (see its own doc
+comment in `ps3_pose.py`), not a wrong pick and not a mystery either -
+refusing here is `pick_camera` costing recall to keep its no-wrong-pose
+guarantee, on a frame this session happened to catch it doing so. Rendering
+`oag-game --race --track
 /data/environments/talons_junction/track.vex --team feisar_c1 --size
 1280x720 --camera-pose <9 numbers> --camera-fov <fov> --screenshot` from
 each of the three picks and blending 50/50 against the matching `NN.png`
