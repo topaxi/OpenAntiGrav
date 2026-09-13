@@ -2528,6 +2528,156 @@ No confidence score on the darkness-gap findings themselves: a probe that
 contradicts its own working hypothesis is evidence the hypothesis needs
 revision, not a claim about what the revision is.
 
+### The resolve's Fury circuits carry the front end's own Tone triple, and the plain variant is confirmed live (2026-09-13, `lane-hd-resolve-fill`)
+
+The two open threads this section closes: **which resolve program runs in a
+race** ("The correction variant's three extra colour parameters are photo
+mode" above answered this statically at confidence 85; this is the live
+corroboration), and **what feeds `scale` on a circuit whose own
+`.envsettings` does not author the whole `Tone` family** - unread until now.
+
+**Live, once: the correction switch reads 0 during an ordinary race.**
+Racebox into Sol 2 (`--team feisar_c1 --hull-variant concept1`, the same route
+`rpcs3-capture.md`'s matched-camera pairs use), paused mid-race,
+`g_RenderGlobals+0x3e0` (`0x00c81e60` at this boot - `g_RenderGlobals` itself
+sits at a fixed address, no pointer indirection, so the runtime address is
+the static one) reads `0x00`. `003e37a0 beq cr7,r0==0 -> plain resolve` -
+this is the exact byte the executable branches on, so a live zero here *is*
+"the plain variant is bound", not evidence toward it. Confidence 90: one
+live read, but it is a read of the discriminator itself, not a proxy for it,
+and it agrees with the static chain (setter -> trampoline -> `PhotoMode_Update`,
+no other caller) already at 85.
+
+**Live, same boot: Sol 2's own `Tone` triple reads `(20.0, 3.0, 4.0)` -
+identical to Talon's Junction's authored values - despite Sol 2's own
+`.envsettings` never authoring two of the three keys.** The settings
+singleton's storage pointer (`0x008b6fb4`) plus `+0x540` (12 bytes, the
+`Tone adaption boost`/`Tone darkening clamp`/`Tone maximum brightness` triple
+this page already located) reads `41a00000 40400000 40800000` big-endian -
+`20.0, 3.0, 4.0` - read live during the race, not at menu. Cross-checked
+against the disc: `data/environments/12_sol_2/track.envsettings` authors
+`"HDR and Bloom.Tone adaption boost"=20.000000` and **nothing else in the
+`Tone` family** - no `Tone darkening clamp`, no `Tone maximum brightness` -
+confirmed by a full dump of the file, not a grep miss.
+
+**A disc-wide survey explains where the other two numbers come from.**
+Every `.envsettings` on the image, by `Tone darkening clamp`/`Tone maximum
+brightness` presence (`scripts/psarc.py cat`, all thirteen circuits that
+author a `track.envsettings` at all, plus the two front-end files):
+
+| File | `Tone adaption boost` | `Tone darkening clamp` | `Tone maximum brightness` |
+| --- | --- | --- | --- |
+| `amphiseum`, `modesto_heights`, `talons_junction`, `tech_de_ra`, `zone_1` (DATA00, base HD) | 20 | 3 | 4 |
+| `01_vineta_k`, `02_track`, `03_track`, `04_chenghou_project`, `05_ubermall`, `10_sebenco_climb`, `12_sol_2`, `15_anulpha_pass` (DATA02, Fury/DLC) | 20 | (absent) | (absent) |
+| `zone_2`, `zone_3`, `zone_4` | no `track.envsettings` file at all | - | - |
+| `fe.track.envsettings` (DATA00) | 20 | 3 | 4 |
+| `fe.fury.track.envsettings` (DATA00) | 20 | 3 | 4 |
+| `fe.track.envsettings` (DATA02) | 20 | (absent) | (absent) |
+
+Every base-HD circuit and both front-end files agree on the same three
+numbers; every Fury/DLC circuit's own file omits exactly the same two keys,
+and DATA02's own front-end file omits them too. That is the shape of a
+**persistent, cumulative settings store**, not sixteen independent
+authorings: this page's own earlier reading of the registrar
+("lazily-constructed... first built... [`FUN_003a9520`] returning the same
+singleton", confidence 82) already says the storage is a single object built
+once, not reconstructed per circuit. What was not chased until now is
+*what a circuit's own file does to keys it does not mention* - and the live
+read above answers that directly: **a key an `.envsettings` file does not
+declare is left at whatever the store already held**, which for the whole
+Fury/DLC set is the front end's own `20/3/4`, carried forward rather than
+reset. Confidence 85 on the mechanism (persistence, confidence 82, plus one
+live read that lands exactly on the front end's own published constant
+rather than zero or noise); the write site itself - the text-line parser
+that walks a `.envsettings` file and calls into the registrar per key found -
+is not located this session, so "which function does the carrying" stays
+open.
+
+**Consequence for this project, found by reading `crates/game/src/race/load/environment.rs`
+rather than the disc (not a renderer change, so read-only this pass -
+`crates/` is another lane's tonight):** `envsettings_bloom` requires all ten
+`HDR and Bloom` keys present in the **circuit's own** file, and returns
+`None` - "no complete HDR and Bloom block; the race draws without the read
+bloom chain" - the moment one is missing. Confirmed by running the built
+game: `RUST_LOG=info oag-game --race --track
+'Data\Environments\12_Sol_2\track.vex' ...` logs exactly that line for Sol 2,
+and the parallel run on Talon's Junction and Amphiseum logs the full
+`exposure 4 - min(adapted x20, 3)` line instead. `scene.rs`'s own
+`hd_bloom.map(...).transpose()` then never constructs
+`oag_render::post::hd_bloom::Chain` at all for Sol 2 - not a bloom that runs
+unbloomed, but **no gate, no blur, no exposure resolve and no HDR encode
+pass of any kind**; the frame renders straight into the caller's own
+(non-linear) target. **This is the whole `hds-frame-was-too-bright-and-too-bloomy.md`
+thread's own "why do eleven of sixteen circuits read identically with
+`[graphics] bloom` on and off" answered mechanically rather than by a
+lit-material search**: the eleven are exactly `zone_2`/`zone_3`/`zone_4` (no
+`.envsettings` at all) plus the eight Fury/DLC circuits in the table above
+(missing two of the three `Tone` keys) - the five that *do* respond are
+exactly the five whose own file is complete. The switch has nothing to
+toggle on those eleven because the chain that would read it was never built.
+
+**The offline check (goal 3, `scripts/hd-resolve-probe.py`, new this
+session): applying the read exposure `scale` alone is a clean negative on
+all three matched-camera circuits, not only Talon's Junction.** The script
+takes an already-rendered `ours` frame from a `hd-frame-compare.py
+--pair-dir` run, decodes an approximate linear value (gamma 2.2 - **chosen,
+not measured, no confidence score**), multiplies by `scale = max - min(boost
+* adapted, clamp)` using the read circuit triple, re-encodes, and reports the
+region stats before/after against the reference. `adapted` is proxied as the
+frame's own mean linear luma over the non-HUD/non-craft region - also chosen,
+a single-frame stand-in for the real multi-frame adaptation lerp:
+
+| Circuit, pose 00 | proxy `adapted` | `scale` | whole-frame mean luma, before -> after | reference |
+| --- | --- | --- | --- | --- |
+| Talon's Junction | 0.265 | 1.000 (floor) | 0.474 -> 0.473 | 0.599 |
+| Amphiseum | 0.274 | 1.000 (floor) | 0.476 -> 0.475 | 0.229 |
+| Sol 2 | 0.307 | 1.000 (floor) | 0.475 -> 0.474 | 0.627 |
+
+`scale` saturates at exactly `max - clamp = 1.0` on all three - the proxy
+`adapted` never drops under the `clamp / boost = 0.15` threshold that would
+push it above 1 - so applying it moves every region by under 0.002 luma in
+every case. **This is a clean extension of the existing Talon's-Junction-only
+finding ("The exposure stage is already saturated at `scale = 1.0`") to all
+three matched circuits, including Sol 2 where the whole chain is currently
+skipped**: even if the missing chain were wired up exactly as read, the
+multiplicative exposure term by itself would not explain Sol 2's own
+darkness/under-clipping gap either, going by this proxy.
+
+**What is not settled, and is squarely the next lane's**: whether the
+missing *additive* bloom summand - never computed at all on Sol 2, since the
+whole chain is absent, not merely unscaled - would close more of the gap.
+Sol 2 authors `Bloom from frame contribution`=1.0 against Talon's Junction's
+0.03 (33x), but also `Bloom adaption boost`=15 against Talon's 5; by this
+page's own already-implemented gate formula (`contribution.y = (1 -
+min(adapted * boost * 0.25, 1)) * authored`), at `adapted ~ 0.3` that gate is
+`(1 - min(0.3*15*0.25, 1)) * 1.0 = (1 - 1) * 1.0 = 0` - the higher adaption
+boost may gate the stronger authored contribution back toward zero on a
+scene this bright. **This is a hypothesis read off the existing microcode
+reading, not a measurement** - it needs the real chain constructed and run,
+which is `crates/render`/`crates/game` work this lane does not touch.
+
+**The exact wiring for the next lane**, so it is a mechanical change: seed
+`environment::staging`'s call into `envsettings_bloom` (and, for consistency,
+`envsettings_fog`/`envsettings_light`, which read the same file and may have
+the same gap unread) from the title's own front-end `.envsettings`
+(`fe.track.envsettings` for an HD circuit, `fe.fury.track.envsettings` or
+DATA02's `fe.track.envsettings` for a Fury/DLC one - which of the two Fury
+files the real engine actually loads first is not settled this session, and
+does not matter for the Tone triple since both carry `20/3/4`) for every
+`HDR and Bloom` key, then let the circuit's own file override whichever keys
+it declares on top - mirroring the persistence measured live above, rather
+than requiring the circuit file alone to be complete. That turns Sol 2 (and
+the other seven Fury/DLC circuits) from "no chain at all" into "chain with
+the carried Tone triple and the circuit's own bloom-gate/blur authoring",
+which is what the disc itself runs.
+
+Confidence summary for this section: 90 on the live correction-switch read,
+85 on the live Tone-triple read and the persistence mechanism it implies, 82
+(unchanged, cited) on the registrar being a single persistent object, and no
+confidence score on the offline scale-check's chosen gamma/adapted proxy or
+on the bloom-gate hypothesis above - both are experiments on read numbers,
+not further reads themselves.
+
 ### The 14 surface binds, read (2026-08-20)
 
 `FUN_005a40f8(ctx, depth, colour0, colour1, colour2, colour3)` takes **pointers
