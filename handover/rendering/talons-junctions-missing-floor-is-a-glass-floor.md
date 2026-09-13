@@ -24,6 +24,21 @@
   with [hd-needs-a-per-material-shader-path-and.md](hd-needs-a-per-material-shader-path-and.md)'s
   "no route to draw it" finding. Not confirmed as the same chunk; see that
   thread's own note for the evidence paths (gitignored)
+- **Player report, 2026-09-13: the black panel is where a mag-strip section
+  and the glass floor coincide** - a case unique to this circuit, not the
+  general glass-floor gap. Treat it as a reliable oracle, and turn it into a
+  measurement before touching anything: (1) check whether the black chunk's
+  collision class is `MagFloor` (the `Floor`/`MagFloor` filter
+  `docs/rendering/shadows.md` already uses reaches it) and whether its
+  material is `etched_glass_tech` or a second, magstrip-specific material;
+  (2) if it is a distinct material, its variant may be declaring a class or
+  permutation the resolver never asks for (the same shape as the ship-hull
+  `VertexColour1` miss fixed in `432ec4aa`) - the load report's
+  "resolved to a shipped shader variant" line for `track.vex` says which;
+  (3) what would falsify the report: the same material drawing correctly on a
+  non-magstrip glass panel elsewhere on the circuit, which would make the
+  magstrip the trigger rather than a coincidence. A matched frame
+  (`data/reference/hd-capture/talons-matched/03`) already frames the panel
 
 ## Next Steps
 
