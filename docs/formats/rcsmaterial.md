@@ -1546,6 +1546,137 @@ previously said "the surfaces carrying one would tile wrongly first", and
 `crates/render/examples/hd_uv_transform_census.rs` is what withdrew it: reading
 these would move about fifty billboard surfaces, not a circuit.
 
+## The ship hull's dark materials: a wrong colour-set match, not a wrong vertex class (2026-09-13)
+
+**The diagnosed lead - `skin::variants()` always asking for `Class::Static`
+- is refuted for this symptom, measured rather than assumed.**
+`crates/render/examples/hd_ship_class_census.rs` walks every `/data/ships/
+*/ship.vex` on the disc (37 files, 178 drawn materials) and asks, per
+material, which `Class` the file's own table carries and which one the
+ordinary lit-race key resolves through. Trying every `Class` instead of only
+`Static` moves **zero** of the 78 materials `Static` misses: every ship
+material's table carries an identical `Static` and `RigidBody` row at every
+feature hash it ships, confirmed at the program level too -
+`crates/render/examples/hd_class_fragment_share_check.rs` checked every
+`.rcsmaterial` on the disc for a same-feature-hash pair across classes and
+found the **fragment** block byte-identical in all 36,257 cross-class pairs
+disc-wide (only the *vertex* program differs, and this project's own
+position/normal decode does not run it - see `oag_rcs::rcsmodel::Mesh::
+positions`). Confidence 92 (an exact arithmetic invariant across many real
+files, per the confidence rubric's ceiling for that evidence class).
+
+**The class hardcode is still a real, separate bug, just not this one's.** A
+material whose table ships *only* `RigidBody` and no `Static` row at all
+never resolves regardless of the fix above -
+`data/fe/frontendscene/frontendscene_hd_atg.vex`'s
+`basic_vertexemissive.rcsmaterial` (56 chunks) is exactly that case, a
+front-end consumer of the same gap tracked separately under `HANDOVER.md`'s
+open threads. `crates/render/src/mesh/rcs/skin.rs`'s `variants()` now tries
+every `Class`
+in `Class::ALL`'s order (`Static` first, since it is what most materials
+ship), which resolves that one material and, per the paragraph above, changes
+no ship's shading.
+
+**The actual cause: `VertexDecl::vertex_colour()` shape-matched a ship's
+`VertexColour1` attribute as HD's baked-light colour set.** Every one of the
+78 misses wants the `IleVertex` feature (`Features::chunk_word` sees "this
+chunk has a colour set" and asks for it), and no ship material on the disc
+ships that permutation under any class - `hd_ship_class_census.rs` reports
+this exactly, with the shipped feature hashes decoded to prove none of them
+carry `IleVertex`. `vertex_colour()` matched by shape (four normalised bytes,
+`RSX_UBYTE_NORM`, not named `tangent`) rather than by hash, and that shape
+also fits `VertexColour1` (`0x7493d450`) - Maya's own name for a **distinct**
+attribute from the `colorSet1`/unnamed-`0x1aaf7631` pair the shape rule was
+written for. `crates/render/examples/hd_ship_vcol_dump.rs` found this by
+dumping a ship chunk's full declaration; `hd_colour_attr_census.rs` then
+swept all 643 `.rcsmodel` files disc-wide and found the population the
+original rule's doc comment never saw, because it was measured over Talon's
+Junction alone, which has no ship file to carry `VertexColour1`:
+
+| Hash | Name | Chunk attributes disc-wide |
+| --- | --- | ---: |
+| `0x1aaf7631` | (unnamed) | 13,485 |
+| `0x7493d450` | `VertexColour1` | **2,595** |
+| `0xdbe5f417` | `tangent` | 5,535 |
+| `0xce5cd9d9` | `colorSet1` | 484 |
+| `0xed9a85ea` | (unnamed) | 18 |
+
+`VertexColour1` also appears on 10 **track** files sharing the same Maya
+authoring pipeline (`01_vineta_k`, `02_track`, `03_track`,
+`04_chenghou_project`, `05_ubermall`, `10_sebenco_climb`, `amphiseum`,
+`modesto_heights`, `tech_de_ra`, all four Zone circuits) - not on Talon's
+Junction, Anulpha Pass or Sol 2, so this page's other disc-wide chunk counts
+against those three circuits are unaffected. What `VertexColour1` actually
+holds is unread; only that it is not the light term is established.
+
+**Fixed by splitting the question in two, not by narrowing the one method -
+the first draft narrowed it and broke a second, real consumer.**
+`VertexDecl::vertex_colour()` is still the shape match (four normalised
+bytes, not `tangent`) it always was, because
+`oag_game::livery::flare::alpha_ramp` reads `VertexColour1` through exactly
+this method (via `Mesh::vertex_light`) for a real and unrelated purpose: the
+engine flame's own alpha ramp, `alpha = alpha_scale * (1 - f) *
+VertexColour1.w`, per
+[engine-flare.md](../ghidra/functions/ps3-hdfury-eu/engine-flare.md). A first
+version of this fix narrowed `vertex_colour()` itself to the two colour-set
+hashes and shipped green against every test run by hand - until `just
+test-data`'s full ground-truth suite caught `hd_engine_flare_ground_truth
+::the_flame_carries_an_opacity_ramp_in_its_vertex_alpha` failing with "the
+flame's ramp spans 1 to 1, so it is not a ramp": the same physical attribute
+is legitimately read for two different reasons, and narrowing the shared
+method for one broke the other silently everywhere `just` alone would not
+have shown it.
+
+The actual fix is a new method, `VertexDecl::light_colour_set()`, matching
+only the two hashes established to be the same colour-set attribute
+(`0x1aaf7631`, `colorSet1`), which `Features::chunk_word`/`for_chunk` now
+call instead of `vertex_colour()`. `vertex_colour()` itself is untouched, so
+the flame ramp keeps reading `VertexColour1` exactly as it did.
+`light_colour_set()` excludes it and the second unnamed `0xed9a85ea`
+(population too small to identify, excluded on the same "positive reading
+only" principle). Confidence 90: exact on the population that explains the
+78 misses (`hd_ship_class_census.rs` reports 0 misses left disc-wide after
+the fix, restated below), short of the top band because what `VertexColour1`
+actually encodes for a *hull* material - as opposed to the flame, where it is
+read - is still unread.
+
+**Measured before/after**: disc-wide, 178 drawn ship materials, 535 drawn
+chunks.
+
+| | Materials resolved | Chunks covered |
+| --- | ---: | ---: |
+| Before | 100 of 178 | 234 of 535 |
+| After | 178 of 178 | 535 of 535 |
+
+In the running game (`--race --team feisar_c1`), `Data\Ships\feisar_c1\
+Ship.vex` moves from "2 of 5 drawn material(s) resolved ... covering 3 of 12
+chunk(s)" to "5 of 5 ... covering 12 of 12 chunk(s)", and every other team's
+hull in the same frame reaches 100 % as well.
+
+**What resolving buys, and what it does not - read off the newly-resolved
+`diffuse_with_specular_from_alpha_n_vcol.rcsmaterial`'s microcode**
+(`crates/render/examples/hd_ship_material_dump.rs`, `Ambient` key, `Static`
+fragment `@0x3df0`). Its declaration does take `constantAmbientColour` and
+both `directionalLight0*` parameters - so once resolved it is no longer
+misclassified as emissive or ambient-only, and `mesh.wgsl`'s `NO_AMBIENT`/
+`NO_SUN` bits (previously left unset by default, because they are only ever
+set from a resolved declaration) are now the *read* answer instead of an
+accidental default that happened to agree. **But the material's own name is
+literal**: block `#49` is a third `TEX`, on **unit 2** -
+`TEX H1.zw, R1.zzzz unit2` - which is the specular-from-alpha sample the
+name promises, and `oag_render`'s `skin::picks`/`skin::roles` only ever bind
+a colour and an alpha lane off units 0 and 1 (`docs/formats/rcsmaterial.md`,
+"A texture slot names its sampler" above). So this material draws correctly
+lit by the constant ambient and the sun now, but its own specular-from-alpha
+term is not painted - a genuine, separate gap the fix does not close, not a
+place the fix under-delivers. Confidence 80 on the microcode read (decoded
+mechanically, one block, not cross-checked against a second material of the
+same family). `specular_exponent()` reads `0.0` on this block, unpatched by
+`SpecularPower` (not among the block's 8 declared parameters), so it falls to
+`mesh::DEFAULT_SPECULAR_EXPONENT` - consistent with `docs/ghidra/functions/
+ps3-hdfury-eu/renderer.md`'s "Ships have no Lambert diffuse either" bucket
+for a real, unexplained `0.0`.
+
 ## Open
 
 - **87 of the 125 sampler hashes**, including the three commonest
