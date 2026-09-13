@@ -1677,6 +1677,115 @@ same family). `specular_exponent()` reads `0.0` on this block, unpatched by
 ps3-hdfury-eu/renderer.md`'s "Ships have no Lambert diffuse either" bucket
 for a real, unexplained `0.0`.
 
+## Talon's Junction's magstrip floor was black because its material was never asked to resolve at all (2026-09-13)
+
+**The player report was exact**: the flat-black road panel a few dozen units
+ahead of `data/reference/hd-capture/talons-matched/03.png`'s camera is where a
+magstrip section's own floor material sits, and it is a **second, distinct**
+material from `etched_glass_tech` - `materials/mag_effect_loop_opaque.rcsmaterial`
+(the base, opaque pass) painted under `materials/mageffectloop.rcsmaterial`
+(a blended, `ALPHA_FROM_SECOND` glow on top), both naming
+`mag_emiss_floor_seethru_talons.gtf` as their primary texture and
+`dds/dc_iridescent_gradient.gtf` (the same ramp `etched_glass_tech` uses) as
+their second.
+
+**Identified by tint, confirmed by chunk-count.** `OAG_TINT_MATERIALS=1` at
+the matched pose decodes the black region's pixel (`(255, 3, 74)`) to material
+slot 330 at a squared error of 9.4 against a next-best candidate at 20.7 -
+`mag_effect_loop_opaque`. `crates/render/examples/hd_slot_check.rs` on that
+slot read **`no resolved variant`** and **`0 chunk(s)`**, even though a
+752-triangle opaque draw calling itself out by that exact texture sits 0.98
+units from the camera's forward ray (`hd_near_probe.rs`, `OAG_NEAREST=1`).
+
+**Why zero chunks: the chunk-counting pass never walks a chunk's extra
+surfaces.** `oag_rcs::rcsmodel::Mesh::extra_surfaces` is a second (or later)
+material painted over the *same* geometry as a chunk's own `.material` -
+`Mesh::surfaces()` is `once(self).chain(extra_surfaces.iter())`, and
+`mesh/rcs.rs`'s real emit loop already walks it ("Every surface, as the
+world-space pass does"), which is how the 752-tri opaque draw reaches the
+screen at all. But `mesh/rcs/skin.rs`'s `variants()` and `flips()` each built
+their own `chunks_of`/`decl_of` map by iterating `model.meshes` directly -
+only the *first* surface of every chunk - so a material that is exclusively
+an extra surface (never a chunk's own top-level `.material`, which
+`mag_effect_loop_opaque` is: `mageffectloop` is the chunk's primary surface,
+`mag_effect_loop_opaque` its extra one) reads as zero chunks and falls into
+`variants()`'s "declared and never drawn" branch, which skips resolving a
+variant for it - not a permutation the resolver asked for and missed, one it
+never asked for at all. `roles()`/`picks()` then answer for a slot with no
+resolved variant exactly the way they do for a genuinely-unused one: `packed
+= slots::DEFAULT`, `Pick::default()` (entries 0/1), no `ADD_SECOND` /
+`NO_AMBIENT` / alpha-channel reading - none of the material's own microcode
+runs.
+
+**Fixed**: both maps now walk `model.meshes.iter().flat_map(rcsmodel::Mesh::surfaces)`
+instead of `&model.meshes` (`crates/render/src/mesh/rcs/skin.rs`). This is a
+resolver-counting fix, not a shading addition - it lets `variants()` attempt
+the lookup it already knows how to do, using the class/feature fallback and
+`Static`-first order this page's "What selects a variant" section already
+established, for a slot that used to be skipped outright.
+
+**Measured, not just built.** `mag_effect_loop_opaque` now resolves to
+`fragment@0x6ae0`, decoding to `ADD_SECOND | NO_AMBIENT`, `alpha_channel=3`,
+`material_index=1` into `Model::emissive` - the second texture (the
+iridescent ramp) is a tinted glow **added** to the albedo, un-ambient-lit,
+still sun-lit. Disc-wide on this one circuit the fix moves Talon's Junction's
+own report line from **286 of 302** drawn materials resolved (929 of 983
+chunks) to **423 of 439** (1,759 of 1,813) - 137 more materials, because every
+extra surface anywhere on the circuit was subject to the identical bug, not
+only this one. A ship hull sample moved too (`feisar_c1/Ship.vex`: 12 of 12
+chunks covered → 16 of 16) with `variants_unshipped` still 0 both times - the
+bug existed on ships as well, it simply never left one of their materials
+unresolved because no ship hull sampled happens to have an extra surface
+whose material misses every fallback class.
+
+**Screenshot verdict**: rendering `oag-game` at the matched frame `03` pose
+before and after (`--camera-pose` from `03.json`'s own `render_with` line)
+turns the panel from flat, uniform black into a textured surface with a
+visible iridescent band where `ADD_SECOND`'s glow term is strong - closer to
+the reference's continuous lit grey/white grid, but **not a match**: the
+reference shows the whole panel lit, and this renders lit unevenly, still
+dark over most of its area. That gap is not this bug. `mag_effect_loop_opaque`'s
+resolved block (like `etched_glass_tech`'s own block #7, "Talon's Junction's
+missing floor is a glass floor" above) is a five-sampler reflective combine -
+units 0 through 4 - and this renderer's `skin::picks`/`skin::units` bind only
+two of them (`first_unit`/`second_unit`). The other three - a specular-style
+map at unit 3, the paraboloid-reflection-coordinate unit 2, a facing term at
+unit 4 - are read by the fragment decoder and not routed to a texture bind,
+the same "no route to draw it" gap this page already records for the glass
+family under "The glass family's second slot: traced, not solved" and
+"Talon's Junction's missing floor is a glass floor" above. **Not invented
+here**: no stand-in was added for the unbound units - draw nothing for a role
+nothing binds, per CLAUDE.md's rule.
+
+**The falsifier, answered.** Does `mag_effect_loop_opaque` (or the same
+extra-surface shape) draw correctly anywhere that is not a magstrip? Yes -
+the fix is general, not magstrip-specific: the resolved-material count moved
+on ship hulls too, which have no magstrip at all, so the *bug* is a plain
+resolver gap and the *symptom* (black exactly at a magstrip) is this
+particular circuit's own choice to author a magstrip floor as a two-surface
+chunk (opaque base + blended overlay) rather than a coincidence with
+`etched_glass_tech`'s separate, already-diagnosed glass-family gap. The two
+are related only in that both bottom out in the same missing sampler
+routing, not in cause.
+
+**Collision class**: not checked directly this session - `docs/rendering/shadows.md`'s
+`Floor`/`MagFloor` collision filter answers a physics query, not a draw-call
+question, and the render-side identification above (tint plus chunk-level
+geometry match, 0.98 units from the camera's own forward ray) already pins
+the chunk without it. Left for whoever routes the remaining sampler units, if
+it turns out to matter which collision class the same chunk carries.
+
+**Confidence 95** on the root cause and the fix (read directly in
+`crates/render/src/mesh/rcs/skin.rs`, confirmed by `hd_slot_check`'s
+before/after and by the disc-wide report-line count change, gated by
+`just`/`just test-data` both green - 3,452 and 4,242 tests, 0 failures,
+`hd_ship_hull_material_ground_truth` and
+`a_material_slot_never_needs_two_different_variants` both still pass). **Not
+95+**: this is a code-level finding about this project's own renderer, not an
+RE claim the confidence rubric's runtime-trace ceiling is written for, and
+the remaining sampler-routing gap was not itself re-measured against RPCS3
+pixel-for-pixel this session.
+
 ## Open
 
 - **87 of the 125 sampler hashes**, including the three commonest
