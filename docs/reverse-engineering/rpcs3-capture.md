@@ -355,8 +355,10 @@ tracked as an open item, not solved here.
 
 ## The pick is fixed, and a rendered overlay confirms it (2026-09-13)
 
-**Confidence 96** - verified against `talons-fifo3`'s own dumps and
-independently corroborated by three rendered overlays. `ps3_pose.pick_camera`
+**Confidence 96 for a pick once made** - verified against `talons-fifo3`'s
+own dumps and independently corroborated by three rendered overlays; coverage
+is separately limited, not covered by this number - see the two refusal
+modes a few paragraphs down. `ps3_pose.pick_camera`
 implements the cross-frame multiplicity discriminator the sections above
 name and never solve: build the set of frames each exact matrix value
 appears in, keep only the values unique to one frame (throws out every

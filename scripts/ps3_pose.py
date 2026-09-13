@@ -607,7 +607,7 @@ def self_test_pick():
             assert abs(got - want) < 1e-4, (camera["view_proj"], expected)
         assert camera["registers"] == [256, 260], camera["registers"]
     print("pick self test: recovered the camera in both frames, rejecting "
-          "the single-register degenerate in each")
+          "the planted single-register degenerate in each")
 
     # Within-frame repetition alone must not be enough: feeding a single
     # frame refuses rather than guessing, even though its own camera packet
