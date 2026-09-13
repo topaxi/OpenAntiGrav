@@ -11,6 +11,10 @@
 - [pickups](pickups.md) - what a `Weapon Pad` hands out and what a craft does
   with it. Read its first table before anything else: the machinery around the
   grant is recovered in detail and **the grant itself is ours**.
+- [projectile floor-following](projectile-floor.md) - how a rocket rides the
+  track, and why wall-versus-floor is the **surface class of the hit**, never
+  its angle. Read it before touching `Projectiles::advance`: the angle test it
+  replaced let a rocket leave the circuit through the barrier on both titles.
 - [lap counting](lap-counting.md) - how a lap is decided, and why that is **our
   convention** rather than a recovery.
 - [opponent AI](ai.md) - what drives the other seven craft in Pulse and Pure,

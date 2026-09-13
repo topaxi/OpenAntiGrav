@@ -205,11 +205,41 @@ the mesh work alone did not read as an improvement. After the change the same
 volley flies for about half a second, climbing with the track as it goes, and
 detonates on geometry.
 
-Two judgement calls are ours, because the original's query returns a *collision
-code* (`0` and `4` detonate, other non-zero values deflect) and this engine's
-raycaster returns a normal instead: **wall versus floor** is decided by how
-square-on the hit is, and **rideable versus too-steep** by how far the probed
-normal has turned. Both thresholds are named constants with their reasoning.
+**The code is the surface type, and this engine had it all along.**
+`FUN_0883198c` - the query itself, `Collision_SweepSegment` below - read at
+decompiler level 2026-09-13: it runs `Collision_RaycastWorld` over the segment
+with the Reset skip on, and on a mesh hit returns **the struck collider's
+`+0x6c` surface type** - the same `0` wall / `1` floor / `2` reset /
+`3` mag floor enum `collision.md` recovered at 92 and `oag_physics::Surface`
+carries. `0x7f` is its no-hit value, and `4` is a second query
+(`FUN_08831948`, the craft test at `self+0x114`) overriding whatever the mesh
+said. So the three arms above are: **no hit → fall; wall or craft → detonate;
+floor or mag floor → ride.** The same switch, verified in `Missile_Update`'s
+decompile the same day, reads `0`/`4` on the *probe* as nothing at all - no
+fall, no ride - and on the *travel segment* as bounce/detonate, with a floor
+code pushing the missile to `hit + normal * g_ride_height` and nothing more.
+
+Until 2026-09-13 `oag_gameplay::projectile` decided wall-versus-floor from the
+**angle** of the hit instead, under a comment claiming the raycaster returned no
+code, and that was a bug on every title: a wall met at under ~15 degrees was
+treated as floor clipping and ignored, so the rocket flew *through* the barrier
+and off the circuit, and a floor met steeply after a crest was treated as a
+wall and detonated. Measured and fixed in
+[`../../../gameplay/projectile-floor.md`](../../../gameplay/projectile-floor.md).
+One judgement call remains ours: on a floor hit across the travel segment the
+velocity is turned parallel with its speed kept, where `Rocket_Update` writes
+`(next - prev) / dt` and lets the next probe rescale it.
+
+| Address | Name | Confidence |
+| --- | --- | --- |
+| `0x0883198c` | `Collision_SweepSegment` | 85 |
+
+`Collision_SweepSegment(world, from, to, &point, &normal, bounds, flags)`: 85
+rather than higher because the second query's "craft" reading is inherited
+from `missile.md` at 55, and only the mesh-hit path (the `+0x6c` read through
+`world + index * 0xc + 0x2454`, the collider table `collision.md` describes) is
+read here at instruction level. Five callers, all the projectile updates plus
+`Camera_UpdatePlayerView`, per `cannon-quake-leachbeam.md`'s xref sweep.
 
 It moved the committed race hash, which is correct and was isolated in two steps
 before the constants were touched - see `crates/gameplay/tests/determinism.rs`,
