@@ -77,8 +77,9 @@ struct Fog {
 // stand-in below when nothing does. `enabled` is 0.0 or 1.0 rather than a
 // branch, for the reason `Fog::enabled` is: one pipeline, not two.
 //
-// The direction and the sun's hue are the disc's. The magnitude is not - see
-// `mesh_render::Light`.
+// The direction, the sun's colour and the ambient are all the disc's,
+// magnitude included - see `mesh_render::Light`. What is not the disc's is
+// the tonemap: this target saturates in its place.
 struct Light {
     direction: vec3<f32>,
     enabled: f32,
