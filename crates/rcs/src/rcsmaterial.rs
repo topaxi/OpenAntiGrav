@@ -327,7 +327,12 @@ impl Features {
     pub fn chunk_word(base: u32, decl: Option<&VertexDecl>) -> u32 {
         let field = match decl {
             Some(d) if d.lightmap_texcoord().is_some() => 2,
-            Some(d) if d.vertex_colour().is_some() => 1,
+            // `light_colour_set`, not `vertex_colour`: this asks which
+            // shader permutation the chunk needs, and a ship hull's
+            // `VertexColour1` needs `Ambient` like any other chunk with no
+            // baked light term - see `VertexDecl::light_colour_set`'s own
+            // doc comment for why the two questions are not one.
+            Some(d) if d.light_colour_set() => 1,
             // No lightmap coordinate and no colour set: `Ambient`, field zero.
             _ => 0,
         };
@@ -358,7 +363,7 @@ impl Features {
         };
         if decl.lightmap_texcoord().is_some() {
             base.with(Self::token("IleLightmap"))
-        } else if decl.vertex_colour().is_some() {
+        } else if decl.light_colour_set() {
             base.with(Self::token("IleVertex"))
         } else {
             base.with(Self::token("Ambient"))

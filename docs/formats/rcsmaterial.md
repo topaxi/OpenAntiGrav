@@ -1609,15 +1609,36 @@ Junction, Anulpha Pass or Sol 2, so this page's other disc-wide chunk counts
 against those three circuits are unaffected. What `VertexColour1` actually
 holds is unread; only that it is not the light term is established.
 
-**Fixed** in `crates/rcs/src/rcsmodel/vertex_decl.rs`: `vertex_colour()` now
-matches the two hashes established to be the same colour-set attribute
-(`0x1aaf7631`, `colorSet1`) rather than the shape alone, so `VertexColour1`
-and the second unnamed `0xed9a85ea` (population too small to identify, and
-excluded on the same "positive reading only" principle) no longer count.
-Confidence 90: exact on the population that explains the 78 misses (`hd_ship_
-class_census.rs` reports 0 misses left disc-wide after the fix, restated
-below), short of the top band because what `VertexColour1` actually encodes
-is still unread.
+**Fixed by splitting the question in two, not by narrowing the one method -
+the first draft narrowed it and broke a second, real consumer.**
+`VertexDecl::vertex_colour()` is still the shape match (four normalised
+bytes, not `tangent`) it always was, because
+`oag_game::livery::flare::alpha_ramp` reads `VertexColour1` through exactly
+this method (via `Mesh::vertex_light`) for a real and unrelated purpose: the
+engine flame's own alpha ramp, `alpha = alpha_scale * (1 - f) *
+VertexColour1.w`, per
+[engine-flare.md](../ghidra/functions/ps3-hdfury-eu/engine-flare.md). A first
+version of this fix narrowed `vertex_colour()` itself to the two colour-set
+hashes and shipped green against every test run by hand - until `just
+test-data`'s full ground-truth suite caught `hd_engine_flare_ground_truth
+::the_flame_carries_an_opacity_ramp_in_its_vertex_alpha` failing with "the
+flame's ramp spans 1 to 1, so it is not a ramp": the same physical attribute
+is legitimately read for two different reasons, and narrowing the shared
+method for one broke the other silently everywhere `just` alone would not
+have shown it.
+
+The actual fix is a new method, `VertexDecl::light_colour_set()`, matching
+only the two hashes established to be the same colour-set attribute
+(`0x1aaf7631`, `colorSet1`), which `Features::chunk_word`/`for_chunk` now
+call instead of `vertex_colour()`. `vertex_colour()` itself is untouched, so
+the flame ramp keeps reading `VertexColour1` exactly as it did.
+`light_colour_set()` excludes it and the second unnamed `0xed9a85ea`
+(population too small to identify, excluded on the same "positive reading
+only" principle). Confidence 90: exact on the population that explains the
+78 misses (`hd_ship_class_census.rs` reports 0 misses left disc-wide after
+the fix, restated below), short of the top band because what `VertexColour1`
+actually encodes for a *hull* material - as opposed to the flame, where it is
+read - is still unread.
 
 **Measured before/after**: disc-wide, 178 drawn ship materials, 535 drawn
 chunks.

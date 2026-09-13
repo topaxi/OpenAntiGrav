@@ -15,13 +15,18 @@
 //! which this project's own position/normal decode does not run anyway).
 //! The 78 misses are one single cause instead: every one wants the
 //! `IleVertex` feature and no class of the material ships it, because
-//! `Features::chunk_word` reads "the chunk has a colour set" off
+//! `Features::chunk_word` read "the chunk has a colour set" off
 //! `VertexDecl::vertex_colour()`, which shape-matches (4 components,
 //! `RSX_UBYTE_NORM`, not named `tangent`) rather than checking a hash - and a
 //! ship chunk's matching attribute is `VertexColour1` (`0x7493d450`), a
 //! **named, distinct** attribute from the `colorSet1`/`0x1aaf7631` pair
-//! `vertex_colour()`'s own doc comment measures. See
-//! `hd_ship_vcol_dump.rs` for the per-attribute dump that found this.
+//! `vertex_colour()`'s own doc comment measures. See `hd_ship_vcol_dump.rs`
+//! for the per-attribute dump that found this. **`Features::chunk_word` now
+//! calls a new `VertexDecl::light_colour_set()` instead**, hash-restricted to
+//! the colour-set pair - `vertex_colour()` itself stays the shape match,
+//! because `oag_game::livery::flare::alpha_ramp` reads `VertexColour1`
+//! through that exact method for the engine flame's own, unrelated alpha
+//! ramp, and narrowing it broke that ramp before this split was found.
 //!
 //! The class hardcode is still a real, separate bug for a table that ships
 //! *only* `RigidBody` rows and no `Static` row at all -

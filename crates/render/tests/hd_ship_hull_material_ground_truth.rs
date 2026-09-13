@@ -17,13 +17,15 @@
 //! `/data/ships/*/ship.vex`) never resolved a shader variant, and every hull
 //! drew part of itself through `mesh.wgsl`'s unresolved fallback. Measured
 //! and diagnosed in `crates/render/examples/hd_ship_class_census.rs`: the
-//! cause was `VertexDecl::vertex_colour()` shape-matching a ship's
-//! `VertexColour1` attribute as HD's baked-light colour set, so
-//! `Features::chunk_word` asked every one of those materials for the
-//! `IleVertex` shader permutation, which no ship material on the disc ships.
-//! Fixed in `crates/rcs/src/rcsmodel/vertex_decl.rs` by matching the two
-//! hashes established to be that colour set (`colorSet1`, the unnamed
-//! `0x1aaf7631`) rather than the shape alone.
+//! cause was `Features::chunk_word` treating a ship's `VertexColour1`
+//! attribute as HD's baked-light colour set, asking every one of those
+//! materials for the `IleVertex` shader permutation, which no ship material
+//! on the disc ships. Fixed in `crates/rcs/src/rcsmodel/vertex_decl.rs` with
+//! a new `light_colour_set()`, hash-restricted to the two hashes established
+//! to be that colour set (`colorSet1`, the unnamed `0x1aaf7631`) - kept
+//! separate from `vertex_colour()` itself, which stays a shape match because
+//! `oag_game::livery::flare::alpha_ramp` reads `VertexColour1` through it for
+//! the engine flame's own, unrelated alpha ramp.
 //!
 //! This test builds a sample of ship hulls through the real
 //! `mesh::rcs::build` path - the code path `oag_game::livery` uses - and

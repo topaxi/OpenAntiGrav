@@ -257,41 +257,63 @@ impl VertexDecl {
             .find(|a| a.is_texcoord() && a.name() == Some("lightmapUV"))
     }
 
-    /// The attribute HD bakes its **per-vertex light** into, shared-exponent.
+    /// The attribute a chunk carries its **per-vertex colour data** in,
+    /// whatever it means to the material that reads it.
     ///
-    /// **Matched by hash, not by shape, since 2026-09-13.** Five distinct
-    /// attributes disc-wide are four normalised bytes
+    /// **Shape, not hash: four normalised bytes, not `tangent`.** Five
+    /// distinct attributes disc-wide have that shape
     /// (`crates/render/examples/hd_colour_attr_census.rs`, walking all 643
     /// `.rcsmodel` files): the unnamed `0x1aaf7631` (13,485 chunk
     /// attributes), `VertexColour1` (2,595), `colorSet1` (484), `tangent`
-    /// (5,535) and a second unnamed `0xed9a85ea` (18). `tangent` was already
-    /// excluded by name; this now matches only the two established to be the
-    /// **same** attribute under two authoring names - `0x1aaf7631` and
-    /// `colorSet1` - and no longer `VertexColour1` or `0xed9a85ea`.
+    /// (5,535, excluded by name) and a second unnamed `0xed9a85ea` (18).
+    /// **Two different consumers read this method's answer for two different
+    /// reasons, and both need every non-`tangent` hash it can return:**
+    /// [`super::Mesh::vertex_light`] decodes the raw bytes for whatever the
+    /// caller does with them (HD's baked ambient light on a track chunk,
+    /// `oag_game::livery::flare`'s `alpha_ramp` repurposing the same
+    /// mechanism to pull `VertexColour1.w` as the engine flame's own alpha
+    /// ramp - see `docs/ghidra/functions/ps3-hdfury-eu/engine-flare.md` and
+    /// `crates/render/src/mesh/flame.rs`), while [`Self::light_colour_set`]
+    /// below answers the narrower, semantic question of whether the chunk
+    /// has the *specific* attribute a lit-race shader treats as a baked
+    /// light term. Narrowing this method to that same hash set once broke
+    /// the flame ramp outright - `hd_engine_flare_ground_truth.rs`'s
+    /// `the_flame_carries_an_opacity_ramp_in_its_vertex_alpha` caught it - so
+    /// the split exists precisely so a future narrowing of one does not
+    /// silently narrow the other.
+    #[must_use]
+    pub fn vertex_colour(&self) -> Option<&Attribute> {
+        self.attributes.iter().find(|a| {
+            a.components == 4 && a.rsx_type == RSX_UBYTE_NORM && a.name() != Some("tangent")
+        })
+    }
+
+    /// Whether a chunk carries the **specific** attribute a lit-race shader
+    /// treats as HD's baked per-vertex light - `colorSet1` or the unnamed
+    /// `0x1aaf7631`, and **not** `VertexColour1` or the second unnamed
+    /// `0xed9a85ea`.
     ///
-    /// **A shape match over-caught `VertexColour1` for a year.** The three
-    /// hashes this doc comment used to measure (`tangent`, `colorSet1`,
-    /// `0x1aaf7631`) came from Talon's Junction alone, which has no ship
-    /// file to declare `VertexColour1` on - so the measurement was honest and
-    /// still generalised wrongly the moment a ship chunk was asked. Every HD
-    /// ship hull material with a livery/paint attribute declares
-    /// `VertexColour1`, and reading it as HD's baked light term is a
-    /// **key**, not merely a shading, mistake: `Features::for_chunk`/
-    /// `chunk_word` see "this chunk has a colour set" and ask the material
-    /// for the `IleVertex` shader permutation, which no ship material on the
-    /// disc ships (`crates/render/examples/hd_ship_class_census.rs` - 78 of
-    /// 178 drawn ship materials missed this way, disc-wide, zero of which a
-    /// different `Class` would have resolved). `VertexColour1` is Maya's own
-    /// name for a distinct authored channel - what it actually holds is
-    /// unread - and until it is, [`super::Mesh::vertex_light`] must not
-    /// treat it as `f[TC1]`.
+    /// **Why this exists separately from [`Self::vertex_colour`], since
+    /// 2026-09-13.** `Features::chunk_word`/`Features::for_chunk` ask this
+    /// question to pick the `IleVertex` half of a material's shader-variant
+    /// key, and every HD ship hull material with a livery/paint attribute
+    /// declares `VertexColour1` - a **named, distinct** Maya attribute the
+    /// doc comment this replaced never saw, because it was measured only
+    /// over Talon's Junction, which has no ship file to carry it. Answering
+    /// "yes" for `VertexColour1` there asked every one of those materials
+    /// for a shader permutation no ship material on the disc ships under any
+    /// `Class`: 78 of 178 drawn ship materials disc-wide, none of which a
+    /// different `Class` would have resolved
+    /// (`crates/render/examples/hd_ship_class_census.rs`). `VertexColour1`
+    /// is a real, separately-used channel - the engine flame's own alpha
+    /// ramp reads it through [`Self::vertex_colour`] - just not this one.
     ///
     /// What makes `0x1aaf7631`/`colorSet1` a light rather than a tint is the
     /// shader that reads it: the vertex program moves it into `o[TC1]` and
     /// the fragment program **adds** `f[TC1]` to the lightmap term before
     /// multiplying the albedo - see
     /// `docs/ghidra/functions/ps3-hdfury-eu/renderer.md`, "The lit track
-    /// material". [`super::Mesh::vertex_light`] reads it.
+    /// material".
     ///
     /// **`0x1aaf7631` and `colorSet1` are treated as one attribute here, and
     /// that is an inference, not a read**: nothing seen so far ties the two
@@ -300,8 +322,8 @@ impl VertexDecl {
     /// and the exact complementarity with `lightmap_texcoord`, which no chunk
     /// declares alongside either.
     #[must_use]
-    pub fn vertex_colour(&self) -> Option<&Attribute> {
-        self.attributes.iter().find(|a| {
+    pub fn light_colour_set(&self) -> bool {
+        self.attributes.iter().any(|a| {
             a.components == 4
                 && a.rsx_type == RSX_UBYTE_NORM
                 && matches!(a.name_hash, 0x1aaf_7631 | 0xce5c_d9d9)
@@ -413,30 +435,46 @@ mod tests {
         out
     }
 
-    /// **The regression this fix exists for.** `VertexColour1` is a distinct,
-    /// named attribute from `colorSet1`/the unnamed `0x1aaf7631` - matching it
-    /// by shape alone (four normalised bytes, not `tangent`) made
-    /// `Features::chunk_word` ask a ship material for the `IleVertex`
-    /// permutation it never ships, failing every ship hull material with a
-    /// `VertexColour1` channel regardless of `Class`. See
+    /// **`vertex_colour()` still matches `VertexColour1` by shape - the
+    /// engine flame's own alpha ramp reads it through exactly this method**
+    /// (`oag_game::livery::flare::alpha_ramp`, via `Mesh::vertex_light`).
+    /// Narrowing this one to a hash allowlist is the regression
+    /// `hd_engine_flare_ground_truth.rs`'s
+    /// `the_flame_carries_an_opacity_ramp_in_its_vertex_alpha` caught: see
+    /// [`light_colour_set_does_not_match_vertex_colour1`] for the method
+    /// that *should* exclude it.
+    #[test]
+    fn vertex_colour_still_matches_vertex_colour1() {
+        let decl = VertexDecl::parse(&ship_stride_with_vertex_colour1(), 0).expect("a declaration");
+        let matched = decl
+            .vertex_colour()
+            .expect("VertexColour1 still matches by shape");
+        assert_eq!(matched.name_hash, 0x7493_d450);
+    }
+
+    /// **The regression `light_colour_set` exists for.** `VertexColour1` is a
+    /// distinct, named attribute from `colorSet1`/the unnamed `0x1aaf7631` -
+    /// answering "yes" for it by shape alone made `Features::chunk_word` ask
+    /// a ship material for the `IleVertex` permutation it never ships,
+    /// failing every ship hull material with a `VertexColour1` channel
+    /// regardless of `Class`. See
     /// `crates/render/examples/hd_ship_class_census.rs` and
     /// `hd_ship_vcol_dump.rs` for the disc-wide measurement.
     #[test]
-    fn vertex_colour_does_not_match_vertex_colour1() {
+    fn light_colour_set_does_not_match_vertex_colour1() {
         let decl = VertexDecl::parse(&ship_stride_with_vertex_colour1(), 0).expect("a declaration");
-        assert_eq!(decl.vertex_colour(), None);
+        assert!(!decl.light_colour_set());
     }
 
-    /// `colorSet1` still matches - the attribute this reading is actually
-    /// about.
+    /// `colorSet1` still answers `light_colour_set` - the attribute this
+    /// reading is actually about.
     #[test]
-    fn vertex_colour_matches_color_set_1() {
+    fn light_colour_set_matches_color_set_1() {
         let mut bytes = ship_stride_with_vertex_colour1();
         // Swap `VertexColour1`'s hash for `colorSet1`'s at its own record.
         bytes[4 + 3 * ATTRIBUTE_LEN..4 + 3 * ATTRIBUTE_LEN + 4]
             .copy_from_slice(&0xce5c_d9d9u32.to_be_bytes());
         let decl = VertexDecl::parse(&bytes, 0).expect("a declaration");
-        let matched = decl.vertex_colour().expect("colorSet1 matches");
-        assert_eq!(matched.name_hash, 0xce5c_d9d9);
+        assert!(decl.light_colour_set());
     }
 }
