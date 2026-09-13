@@ -82,6 +82,8 @@ fn the_report_names_both_kinds_of_absence() {
         variant_chunks: 300,
         variant_chunks_missed: 4,
         specular_exponent_unresolved: 12,
+        emissive_surface_map_excluded: 0,
+        emissive_role_unresolved: 0,
         isolated: 0,
     };
     let line = report.describe();

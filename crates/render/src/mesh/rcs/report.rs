@@ -165,6 +165,32 @@ pub struct Report {
     /// "mostly unlit" without checking either; unread, deliberately, rather
     /// than assumed.
     pub specular_exponent_unresolved: usize,
+    /// Materials whose fragment program structurally accumulates its second
+    /// texture (see [`crate::mesh::slots::ADD_SECOND`]) but whose *actually
+    /// loaded* second texture - `Pick::aux`'s own choice, the same one
+    /// [`Self::second_texture_loaded`] counts - is a sampler this project has
+    /// disc-measured to be a normal or specular map and never a picture.
+    ///
+    /// **The bug this counts.** A ship hull's raw ordinal fallback is
+    /// routinely its own normal map; adding that at full weight as a tinted
+    /// glow is what painted a blue-purple cast over `feisar_c1`'s hull. See
+    /// `mesh::rcs::emissive`'s own doc comment and
+    /// `docs/rendering/hd-ship-materials.md`, "a ship's own second texture is
+    /// added to the hull as a glow". Refused rather than drawn, so this
+    /// counts an absence the picture would otherwise show as a colour cast.
+    pub emissive_surface_map_excluded: usize,
+    /// Materials that structurally accumulate but whose loaded second
+    /// texture's own sampler hash this project has no disc-measured role
+    /// for - not a known glow, not a known surface map.
+    ///
+    /// **Kept on the pre-existing path, deliberately**: per `CLAUDE.md`'s
+    /// rule against inventing a role from a plausible-looking name alone, a
+    /// hash with no disc-wide binding census stays exactly as it drew before
+    /// this reading existed, so a real gap in this counter is invisible in
+    /// the picture rather than guessed at. See
+    /// [`Self::emissive_surface_map_excluded`] for the population this *is*
+    /// acted on.
+    pub emissive_role_unresolved: usize,
     /// Chunks a **diagnostic** environment filter took out of this build.
     ///
     /// Always zero in an ordinary run. Non-zero means `OAG_SKIP_MATERIAL` or
@@ -243,6 +269,18 @@ impl Report {
         } + &match self.specular_exponent_unresolved {
             0 => String::new(),
             n => format!(", {n} material(s) with no specular_exponent chain read (default used)"),
+        } + &match self.emissive_surface_map_excluded {
+            0 => String::new(),
+            n => format!(
+                ", {n} material(s) refused an additive glow whose second texture is a \
+                 known normal/specular map"
+            ),
+        } + &match self.emissive_role_unresolved {
+            0 => String::new(),
+            n => format!(
+                ", {n} accumulating material(s) with no disc-measured role for their \
+                 second texture (kept as before)"
+            ),
         } + &match self.isolated {
             0 => String::new(),
             n => format!(
