@@ -28,7 +28,7 @@ categories: [frontend, rendering]
 
 **A capture-driven correction landed alongside, not asked for by either original gap**: `Strip::color`/`MenuStrip::color` (the widget's own literal `0xff705070`) was read, since this thread's parent was opened, as overriding `TextColor` - "a widget declaring its own colour would otherwise be pointless" - and the capture shows that reasoning was wrong: text is `TextColor` regardless of this field. What the literal *is* for is still open (see below); the field stays, only the conclusion drawn from it changed. Tests, doc comments and `docs/formats/hd-frontend.md` all updated in the same change.
 
-**A visual defect surfaced by shipping the fill, not caused by it, and now resolved**: the first render of `--menu-page main --screenshot` against `hdfury-ps3-eu-dec.iso` showed this build's own chrome title ("OPENANTIGRAV") visibly overlapping the top of the now-solid `RACE` tab. The first write-up of this thread guessed a font-metrics cause - this build's chrome-title face rendering taller than HD's real "Title" face at the same nominal scale - which was never checked and turned out to be backwards: HD's `Title` role (`helvb.fnt`, line height `44`) is taller than the `Default` role this build actually draws chrome text in (`helv.fnt`, line height `33`), so the wrong-font theory predicts this build's title should render *shorter* than the real one, not taller. **The real cause was the ruler bug above**: `TAB_TOP_PAD` and `TAB_HEIGHT` were seven times too large, so the tab's own top edge sat roughly 68px higher than it should have - high enough to reach up into the title's own ink and overpaint it, since `layers.chrome` (the title) draws before `layers.body` (the tabs) in `Layers::flatten`'s paint order and whichever draws later wins the overlap. Fixed by the same re-render that fixed the tab shape; no title-specific change was needed at all. The font-role mismatch is real but unrelated - see Open.
+**A visual defect surfaced by shipping the fill, not caused by it, and now resolved**: the first render of `--menu-page main --screenshot` against `hdfury-ps3-eu-dec.iso` showed this build's own chrome title ("OPENANTIGRAV") visibly overlapping the top of the now-solid `RACE` tab. The first write-up of this thread guessed a font-metrics cause - this build's chrome-title face rendering taller than HD's real "Title" face at the same nominal scale - which was never checked and turned out to be backwards: HD's `Title` role (`helvb.fnt`, line height `44`) is taller than the `Default` role this build actually draws chrome text in (`helv.fnt`, line height `33`), so the wrong-font theory predicts this build's title should render *shorter* than the real one, not taller. **The real cause was the ruler bug above**: `TAB_TOP_PAD` and `TAB_HEIGHT` were seven times too large, so the tab's own top edge sat roughly 68px higher than it should have - high enough to reach up into the title's own ink and overpaint it, since `layers.chrome` (the title) draws before `layers.body` (the tabs) in `Layers::flatten`'s paint order and whichever draws later wins the overlap. Fixed by the same re-render that fixed the tab shape; no title-specific change was needed at all. The font-role mismatch was real but unrelated at the time - shipped 2026-09-13, see above.
 
 ## Still fully open
 
@@ -105,6 +105,46 @@ engine defaults, and hard-coding `296.88` would invent a constant the disc
 deliberately declines to state. This build still sizes a tab to its label, and
 the difference is recorded rather than papered over.
 
+## 2026-09-13: the chrome title's font role is wired
+
+**Shipped.** The Open item below - every menu text, chrome title included,
+drawing in the `Default` role regardless of a widget's own `font=` - is
+closed for HD, and only for HD. `oag_title::MenuSkin::title_font` is a new
+field, the same shape as `menu_font` one widget over; HD's own is
+`Some("Title")`, read off `MainMenu_Definition.xml`'s `<Text font="Title">`
+(see [hd-frontend.md](../../docs/formats/hd-frontend.md#the-titlecolor-caveat)).
+`boot::fonts::load_title_font` mirrors `load_menu_font`, and the renderer
+binds a second glyph texture (`MODE_FACE_ATLAS` in `ui.wgsl`, alongside the
+existing atlas and sprite-sheet textures in one bind group) so the chrome
+title can draw in `helvb.fnt` (44px) while the rest of the frame stays in
+`helv.fnt` (33px), in the same draw call. `oag_ui::frontend::Draw::FacedText`
+is a new variant rather than a field on `Draw::Text`, matching the project's
+own precedent for `ChamferedFill`/`RotatedSprite`/`TiledSprite`/`BlendedSprite`
+- `Text` is constructed at two dozen call sites and every one but the chrome
+title would carry a `None`.
+
+**Confirmed live**: `--menu-page main --screenshot --size 1920x1080` against
+`hdfury-ps3-eu-dec.iso` shows "OPENANTIGRAV" visibly bolder and larger than
+the strip tabs below it, where it previously matched their weight exactly.
+
+**Pulse's own `MainMenu_Definition.xml` authors the same thing, and this pass
+did not flip it.** `<b d="FE_MM" p="title" ...>` (`p` is `font` in that
+file's own tag dictionary) resolves case-insensitively to the same `Title`
+slot, landing on `Pulse_14.fnt` (17px) against `Default`'s 13px
+`pulse_text.fnt` - `TournamentLoad`'s own title says `font="Title"` too.
+`oag_title::MenuSkin::title_font`'s own doc has the full read. Left `None`
+deliberately: flipping it moves output `docs/ui/menus-original.md`'s Layout
+table already verified against a capture at confidence 95, and no capture
+has checked whether the taller face is what that capture actually shows -
+a separate, real pass, not a follow-on of this one. **Pure was not checked
+at all**: its `Main Menu` screen was not found at the archive path this
+session tried, and time-boxing stopped there rather than expanding the
+search.
+
+**Test**: `crates/game/tests/hd_boot_ground_truth.rs`'s
+`the_chrome_title_resolves_to_the_bold_face_not_the_body_one`, disc-backed
+like the rest of that file.
+
 ## Open, added 2026-09-05
 
 - **The label sits `8.7` authored units too low inside its tab** (real cap top
@@ -113,8 +153,9 @@ the difference is recorded rather than papered over.
   carries `9.46` units of ascender headroom above the cap. Correcting it in
   `TAB_TOP_PAD` alone needs `-1.19` authored units, a negative "pad" that is
   really "the authored inset minus this build's atlas headroom" and rots the
-  moment the atlas changes. It belongs with the `Default`-only font-role item
-  already below, not ahead of it.
+  moment the atlas changes. Unrelated to the chrome title's own font role
+  (shipped 2026-09-13, see above) - this is the strip row's face, which was
+  never in the `Default`-only gap that item closed.
 - **The main menu's title authors `random="true"`** - a character-scramble
   reveal - and this build draws it plain. Not previously written down.
 - **`transition_secs` is `0.5` where the widget authors `transition="0.4"`**
@@ -134,7 +175,6 @@ the difference is recorded rather than papered over.
 ## Open
 
 - **What `0xff705070` is for - narrowed 2026-09-02, not closed.** A wider sweep (all `frontend/gui/*.xml`, `DATA00`-`DATA06`) found it is not `<HorizMenu>`-specific: the same literal is the widget-own colour on eight `<HorizMenu>`/`<VertMenu>` `<Values>` blocks (`mainmenu`, `additional` x3, `manual` x4), and separately recurs fourteen times per copy of `online_definition.xml`, on five `<Menu>` widgets and six standalone `<Text>` status labels (`friendRequests`, `FriendInfo`, `SkinInfo`, `blockedInfo`, `statusInfo`, `pendingInfo`). Never reached through `FEGlobals->`, unlike every colour already confirmed live. On the menu-family widgets it is very likely inert the same way the captured strip case already is (confidence 70, generalised from one capture rather than independently checked per widget); on the standalone `<Text>` widgets it is a materially different draw in this build's own analogous code (`Frontend::draw_screen_at` reads a `Text`'s own colour directly, unlike a menu entry) and clusters entirely on info/status labels, so it reads as a real, deliberately-chosen secondary colour there rather than dead weight (confidence 55 - plausible, not verified; online screens aren't implemented in this project and no capture of them exists). Full detail on [hd-frontend.md](../../docs/formats/hd-frontend.md#the-fe-style-switch-is-live-works-and-is-not-an-archive-swap---confirmed-by-capture). Does not change any of this build's code - HD's online/community screens are out of this project's scope - so this stays a documentation-only close, not an implementation one.
-- **This build draws every menu text - the chrome title included - in the `Default` font role (`helv.fnt`, line height `33`) regardless of what a widget's own `font=` attribute names.** HD's main-menu title authors `font="Title"`, which its language plugins resolve to a distinct file (`helvb.fnt`, line height `44`) - see `docs/formats/fnt.md`'s font table. `crate::screen::Text::font` parses the role string already; nothing downstream reads it. `oag_title::MenuSkin` has no `title_font` field to carry HD's choice through, the way `menu_font` carries the row face. This is cosmetic only (the title renders in the wrong face, not the wrong place - see Shipped for why the overlap this exposed was a geometry bug, not this) and it is not new: `crate::frontend::font_line_height`'s own doc comment already names the general shape of the fix - "reading the height back off the atlas... which needs each role's `.fnt` actually loaded rather than only the `Default` one" - as real, left, future work. This is that gap's HD-title instance, not a new one.
 - Whether HD's style genuinely draws nothing behind the menu or draws something too subtle/slow to show in one capture (`ScreenSetting name="Main Menu" blur="0"` at least says the screen is meant to be sharp).
 - Which of the seven non-Fury `FEBackgroundAnim*` shader names (if any) the HD style resolves to - open, and now more likely a full-screen effect layered separately from `FrontEndScene_HD_ATG.vex` than a shader that draws that mesh, per the 2026-09-02 material finding above.
 - **New, 2026-09-02: `FrontEndScene_HD_ATG.vex`'s own material asks to be lit like ordinary in-race geometry (sun colour, sun direction, ambient), and a front-end screen has no `.envsettings` to supply any of the three.** Even a resolver that found its `(RigidBody, HalfBrightAmbientSunSpot0SVC0)` row would have nothing authored to feed it. Whether the real engine invents a default light for this case, borrows one from elsewhere, or the geometry draws unlit despite the variant key is unread - open on the executable side.
@@ -143,4 +183,5 @@ the difference is recorded rather than papered over.
 ## Next Steps
 
 - **The resolver-side blocker is gone; the light-source one is not.** `oag-render` now resolves `basic_vertexemissive.rcsmaterial`'s `(RigidBody, ...)` row (see Open, above), so this thread's own remaining question is live again on its own terms: which light source a front-end screen (no `.envsettings`) should feed it, and whether the result is what the Fury capture's motion actually is or a second, separate `FEBackgroundAnim*` effect on top. The per-material lighting/shading chain generally - reading which terms a resolved material's own microcode computes, rather than one shared `mesh.wgsl` formula - is still [hd-needs-a-per-material-shader-path-and.md](../rendering/hd-needs-a-per-material-shader-path-and.md)'s own open ground, not this thread's to build.
-- The `Default`-only font role, once multi-role `.fnt` loading is worth doing for its own reasons (it is a boot-path change, not a strip one) - not urgent on its own either, since the strip's own text is unaffected and only the title's face is wrong.
+- **Shipped 2026-09-13 for HD**, see above. Pulse's own chrome title authors the same `Title` role and was deliberately left unflipped - a capture-verification pass, not a continuation of this one - and Pure's `Main Menu` screen was not located in time to check at all. Both are `oag_title::MenuSkin::title_font`'s own open questions now, not this thread's.
+- The tab label's own `8.7`-unit vertical offset (noted above, added 2026-09-05) is unaffected: it is the strip's row face, not the chrome title's, and stays open on its own terms.

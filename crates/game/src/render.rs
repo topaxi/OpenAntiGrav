@@ -49,6 +49,10 @@ struct Uniforms {
     /// UVs - `ui.wgsl` alone reads this; `video.wgsl` does not declare the
     /// field at all, the same way it already stops short of `sprites`.
     face_atlas: [f32; 2],
+    /// Unread: WGSL rounds `ui.wgsl`'s `Uniforms` up to 64 bytes (`vec4`
+    /// alignment), and a 56-byte binding is a validation error, not a
+    /// truncated read.
+    _padding: [f32; 2],
 }
 
 /// One quad.
@@ -175,9 +179,8 @@ pub struct Renderer {
     ui_layout: wgpu::BindGroupLayout,
     atlas_view: wgpu::TextureView,
     atlas_sampler: wgpu::Sampler,
-    /// Kept for the same reason [`Self::atlas_view`] is: so
-    /// [`Self::set_face_atlas`] can rebuild [`Self::ui_bind_group`] without
-    /// losing the current sprite sheet.
+    /// Kept, like [`Self::atlas_view`], so [`Self::set_face_atlas`] can
+    /// rebuild [`Self::ui_bind_group`] without losing the sprite sheet.
     sprite_view: wgpu::TextureView,
     sprite_sampler: wgpu::Sampler,
     sprite_format: wgpu::TextureFormat,
@@ -185,8 +188,7 @@ pub struct Renderer {
     /// until [`Self::set_face_atlas`] loads a real one; see [`face`].
     face_view: wgpu::TextureView,
     face_sampler: wgpu::Sampler,
-    /// `Some` once a role has loaded; the placeholder [`Self::face_view`]
-    /// otherwise holds is never sampled - see [`Self::push_text`]'s `face`.
+    /// `Some` once a role has loaded; see [`Self::push_text`]'s `face`.
     face_atlas: Option<Atlas>,
     uniform_buffer: wgpu::Buffer,
     quad_buffer: wgpu::Buffer,
@@ -799,6 +801,7 @@ impl Renderer {
                 sprites: [self.sprites.0 as f32, self.sprites.1 as f32],
                 video_rect,
                 face_atlas: face_atlas_size(self.face_atlas.as_ref()),
+                _padding: [0.0, 0.0],
             }),
         );
 
