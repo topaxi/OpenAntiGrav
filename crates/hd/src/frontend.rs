@@ -100,6 +100,13 @@ pub const MENU_SKIN: &oag_title::MenuSkin = &oag_title::MenuSkin {
     title_x: 194.0,
     title_y: 62.0,
     title_scale: 1.0,
+    // `<Text idstring="FE_MM" font="Title" ...>` on `MainMenu_Definition.xml`'s
+    // own title widget - see `oag_title::MenuSkin::title_font`'s own doc for
+    // the full read and `docs/formats/hd-frontend.md`'s `TitleColor` section
+    // for the widget in context. Confidence 92, the same figure `strip`
+    // below carries: five of seven archives agree and nothing here has been
+    // seen to be *consumed* by the executable.
+    title_font: Some("Title"),
     // **Not authored, and the reason is the finding.** HD's main menu is a
     // `<HorizMenu>` - horizontal - so it has no first row to put a y on, and the
     // 17 vertical `<Menu>` widgets elsewhere in the tree do not converge on one

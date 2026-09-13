@@ -1,4 +1,7 @@
-//! What every [`Draw`] can do to itself: fade, zoom, hand out its colour.
+//! What every [`Draw`] can do to itself: fade, zoom, hand out its colour -
+//! plus [`Draw::title`], which builds one rather than transforming one, kept
+//! here anyway because it is a second place the variant list has to stay in
+//! step (see its own doc).
 //!
 //! Split out of `draw.rs` under the 1,000-line rule in
 //! `scripts/check-file-size.py`, a move with no behaviour change - and the
@@ -20,6 +23,7 @@ impl Draw {
     pub fn colour_mut(&mut self) -> Option<&mut [f32; 4]> {
         match self {
             Self::Text { color, .. }
+            | Self::FacedText { color, .. }
             | Self::Fill { color, .. }
             | Self::ChamferedFill { color, .. }
             | Self::Sprite { color, .. }
@@ -56,6 +60,13 @@ impl Draw {
         }
         match self {
             Self::Text {
+                x,
+                y,
+                scale: size,
+                color,
+                ..
+            }
+            | Self::FacedText {
                 x,
                 y,
                 scale: size,
@@ -102,6 +113,49 @@ impl Draw {
             right[3] *= alpha;
         } else if let Some(color) = self.colour_mut() {
             color[3] *= alpha;
+        }
+    }
+
+    /// A screen title: [`Self::FacedText`] when `role` is `Some`, the plain
+    /// [`Self::Text`] this build has always emitted otherwise.
+    ///
+    /// Shared by `crate::menu::draw_list` and `crate::picker::draw_list`,
+    /// whose title pushes were one `Draw::Text` literal each before this
+    /// variant existed and would otherwise now be two, one per role. Lives
+    /// in this module rather than beside either caller for the reason this
+    /// file exists at all: the variant list belongs with the type, not with
+    /// whichever call site reaches for it first.
+    #[must_use]
+    pub fn title(
+        role: Option<&'static str>,
+        x: f32,
+        y: f32,
+        scale: f32,
+        color: [f32; 4],
+        text: String,
+    ) -> Self {
+        match role {
+            None => Self::Text {
+                x,
+                y,
+                scale,
+                color,
+                border: None,
+                align: crate::frontend::Align::Left,
+                text,
+                wrap_width: None,
+            },
+            Some(role) => Self::FacedText {
+                role,
+                x,
+                y,
+                scale,
+                color,
+                border: None,
+                align: crate::frontend::Align::Left,
+                text,
+                wrap_width: None,
+            },
         }
     }
 }

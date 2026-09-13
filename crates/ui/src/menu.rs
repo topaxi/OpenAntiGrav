@@ -51,7 +51,10 @@
 //! is the composition root's business. Keeping that seam is what lets every test
 //! below run with no config directory, no disc and no window.
 
-use crate::frontend::{Align, Draw};
+use crate::frontend::Draw;
+// For the tests below, reached through `use super::*`.
+#[cfg(test)]
+use crate::frontend::Align;
 use oag_gameplay::input::{Button, Input};
 
 /// The menu tree this build ships with.
@@ -1242,18 +1245,18 @@ pub fn draw_list(
         backdrop: backdrops,
         ..Layers::default()
     };
-    layers.chrome.push(Draw::Text {
-        x: title_x,
-        y: title_y,
-        scale: title_scale,
-        // The disc's own declared colour, the frame's own ink, or this
-        // build's substitute - see `Skin::title_color` for the order and why.
-        color: skin.title_color(frame.ink),
-        border: None,
-        align: Align::Left,
-        text: page.title.clone(),
-        wrap_width: None,
-    });
+    // The disc's own declared colour, the frame's own ink, or this build's
+    // substitute (`Skin::title_color`), in whichever face `skin.title_font()`
+    // names - `None` on both PSP titles today, which is the plain `Draw::Text`
+    // this build has always emitted; see `oag_title::MenuSkin::title_font`.
+    layers.chrome.push(Draw::title(
+        skin.title_font(),
+        title_x,
+        title_y,
+        title_scale,
+        skin.title_color(frame.ink),
+        page.title.clone(),
+    ));
 
     // Which idiom a page is drawn in is the *title's* answer first and this
     // page's second: a strip needs a disc that authors one, and a page with

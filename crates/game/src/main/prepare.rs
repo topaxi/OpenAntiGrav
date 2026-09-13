@@ -286,6 +286,7 @@ impl Pending {
             menu_skin: boot_shell.menu_skin,
             space: boot_shell.space,
             menu_font: boot_shell.menu_font.clone(),
+            title_font: boot_shell.title_font.clone(),
             sprites: boot_shell.sprites.clone(),
             globals: boot_shell
                 .screens

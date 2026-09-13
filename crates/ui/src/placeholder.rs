@@ -41,6 +41,7 @@ pub const MENU_SKIN: MenuSkin = MenuSkin {
     title_x: 40.0,
     title_y: 8.0,
     title_scale: 1.0,
+    title_font: None,
     first_row_y: None,
     row_extra_leading: None,
     menu_font: None,

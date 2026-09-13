@@ -151,6 +151,17 @@ pub const MENU_SKIN: &oag_title::MenuSkin = &oag_title::MenuSkin {
     title_x: 50.0,
     title_y: 0.0,
     title_scale: 1.0,
+    // **Not `None` for want of evidence.** `MainMenu_Definition.xml`'s own
+    // title widget authors `font="title"` (`TournamentLoad`'s says
+    // `font="Title"`) - read directly off `Data.wad`, 2026-09-13 - which
+    // resolves case-insensitively to the same `Title` slot HD's chrome title
+    // now draws in, here landing on `Pulse_14.fnt` (17px) against `Default`'s
+    // 13px `pulse_text.fnt`. Left `None` anyway: flipping this moves output
+    // `docs/ui/menus-original.md`'s Layout table already verified against a
+    // capture at confidence 95, and nothing has re-checked that capture's
+    // title against the taller face. See `oag_title::MenuSkin::title_font`'s
+    // own doc for the full account; this is a scope cut, not a contradiction.
+    title_font: None,
     // `MainMenu_Definition.xml`'s menu widget, `y="32"`.
     first_row_y: Some(32.0),
     // Measured, not authored - see the field's own docs for the four menus this

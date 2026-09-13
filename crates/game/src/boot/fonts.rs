@@ -145,3 +145,38 @@ pub(super) fn load_menu_font(
         }
     }
 }
+
+/// Reads the face the screen title draws in, when this title names one.
+///
+/// The mirror of [`load_menu_font`], one widget over: the role comes from
+/// [`oag_title::MenuSkin::title_font`] rather than `menu_font`, and the file
+/// it resolves to still comes from the language plugin's own `<Font>` slots.
+/// `None` for a title whose chrome names no role of its own - both PSP
+/// titles today, deliberately, see `title_font`'s own doc - a plugin with no
+/// such slot, or an unreadable `.fnt`; the title then draws in whichever
+/// face the frame is already bound to, which is this build's original
+/// behaviour and not a fallback invented here.
+pub(super) fn load_title_font(
+    archives: &mut oag_assets::Archives,
+    languages: &[Language],
+    skin: &oag_title::MenuSkin,
+    report: &mut Vec<String>,
+) -> Option<oag_ui::font::Atlas> {
+    let role = skin.title_font?;
+    let name = role_font(languages, role)?;
+    match archives.read_font(&name) {
+        Ok(font) => {
+            report.push(format!(
+                "title font {name} (role {role:?}): line height {}",
+                font.line_height
+            ));
+            Some(oag_ui::font::Atlas::from_font(&font))
+        }
+        Err(why) => {
+            report.push(format!(
+                "title font {name} (role {role:?}) unavailable ({why}); the title draws in the frame's own face"
+            ));
+            None
+        }
+    }
+}

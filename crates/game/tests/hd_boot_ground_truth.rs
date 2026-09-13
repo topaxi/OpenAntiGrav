@@ -593,3 +593,40 @@ fn a_circuit_is_named_off_the_copy_that_agrees_with_the_circuit_list() {
         "the served copy is untouched and still disagrees"
     );
 }
+
+/// The chrome title resolves the `Title` role to `helvb.fnt`, not `helv.fnt`.
+///
+/// `oag_hd::frontend::MENU_SKIN::title_font` names `"Title"`, which every
+/// language plugin on this disc resolves to `helvb.fnt` (see
+/// `docs/formats/hd-frontend.md`'s `TitleColor` section) - a distinct,
+/// bolder-looking file from `Default`'s `helv.fnt`, both 1024x512 but 44px
+/// against 33px. Asserted the same way the body face already is: the `.fnt`
+/// itself decodes to the disc's own numbers, and `load_shell` has to have put
+/// that atlas on `shell.title_font` rather than leaving it `None`.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn the_chrome_title_resolves_to_the_bold_face_not_the_body_one() {
+    let Some(image) = image() else { return };
+    let mut archives = oag_hd::open(&image.display().to_string()).expect("opening the disc");
+
+    let name = r"Data\FE\Fonts\helvb.fnt";
+    let blob = archives.read_name(name).expect("HD's title face reads");
+    let font = oag_texture::fnt::Font::parse(&blob).expect("and it parses");
+    assert_eq!((font.width, font.height), (1024, 512));
+    assert_eq!(font.line_height, 44, "bolder and taller than helv.fnt's 33");
+
+    let (shell, _) = shell(&image);
+    let title_font = shell
+        .title_font
+        .as_ref()
+        .expect("MENU_SKIN::title_font names \"Title\" and it reads");
+    assert!(
+        (title_font.line_height - 44.0).abs() < f32::EPSILON,
+        "the chrome title's own atlas, not the 33px body one: {}",
+        title_font.line_height
+    );
+    assert!(
+        (title_font.line_height - shell.font.line_height).abs() > f32::EPSILON,
+        "helvb and helv must not be the same atlas"
+    );
+}

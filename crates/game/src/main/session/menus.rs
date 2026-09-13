@@ -427,6 +427,11 @@ impl Session {
         // same direction is exactly what made this invisible until a 1920-wide
         // source arrived.
         renderer.set_space(skin.space());
+        // The screen title's own face, when this title names a role for it -
+        // mirrors `rows_face` above, one widget over. `None` on both PSP
+        // titles today, a no-op here; see `capture::run`'s own call for why
+        // this has to happen on both the live and the headless path.
+        renderer.set_face_atlas(&self.gpu.device, &self.gpu.queue, shell.title_font.clone());
         // **The picture moves across as well as the playhead**, and it has to,
         // because the renderer does not. A fresh `Renderer` is fresh planes:
         // zeroed, which is green rather than black, so the first menu frame

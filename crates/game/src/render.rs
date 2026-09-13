@@ -18,16 +18,18 @@ use oag_display::space::{SCREEN, Space};
 use oag_ui::font::{self, Atlas};
 use oag_ui::frontend::{Align, Draw};
 
+mod face;
 mod quad;
 mod resources;
 mod text;
 
+use face::{face_atlas_size, face_sampler, upload_face};
 use resources::{
     blank_r8, sampler_entry, sampler_kind, texture_entry, ui_bind_group, uniform_entry, upload_rg8,
     upload_rgba,
 };
 
-use quad::{MODE_ATLAS, MODE_SPRITE, MODE_SPRITE_ADDITIVE};
+use quad::{MODE_ATLAS, MODE_FACE_ATLAS, MODE_SPRITE, MODE_SPRITE_ADDITIVE};
 
 /// Shared with both shaders.
 #[repr(C)]
@@ -43,6 +45,10 @@ struct Uniforms {
     /// `video.wgsl` reads this; `ui.wgsl` still declares the field so the two
     /// shaders agree on the buffer's layout.
     video_rect: [f32; 4],
+    /// The face atlas's size, for normalising `Draw::FacedText`'s pixel-space
+    /// UVs - `ui.wgsl` alone reads this; `video.wgsl` does not declare the
+    /// field at all, the same way it already stops short of `sprites`.
+    face_atlas: [f32; 2],
 }
 
 /// One quad.
@@ -169,8 +175,19 @@ pub struct Renderer {
     ui_layout: wgpu::BindGroupLayout,
     atlas_view: wgpu::TextureView,
     atlas_sampler: wgpu::Sampler,
+    /// Kept for the same reason [`Self::atlas_view`] is: so
+    /// [`Self::set_face_atlas`] can rebuild [`Self::ui_bind_group`] without
+    /// losing the current sprite sheet.
+    sprite_view: wgpu::TextureView,
     sprite_sampler: wgpu::Sampler,
     sprite_format: wgpu::TextureFormat,
+    /// The second glyph texture, for `Draw::FacedText` - a 1x1 placeholder
+    /// until [`Self::set_face_atlas`] loads a real one; see [`face`].
+    face_view: wgpu::TextureView,
+    face_sampler: wgpu::Sampler,
+    /// `Some` once a role has loaded; the placeholder [`Self::face_view`]
+    /// otherwise holds is never sampled - see [`Self::push_text`]'s `face`.
+    face_atlas: Option<Atlas>,
     uniform_buffer: wgpu::Buffer,
     quad_buffer: wgpu::Buffer,
     quad_capacity: usize,
@@ -302,6 +319,14 @@ impl Renderer {
         );
         let sprite_view = sprite_texture.create_view(&wgpu::TextureViewDescriptor::default());
 
+        // No title has loaded a role yet at construction - see
+        // `Self::set_face_atlas`, which every menu-drawing caller reaches
+        // once it knows whether this title named one. Always linear-filtered
+        // and always bound, the same way `sprite_sampler` is, so loading a
+        // real face later needs no layout change.
+        let face_view = upload_face(device, queue, None);
+        let face_sampler = face_sampler(device);
+
         let ui_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("ui"),
             entries: &[
@@ -310,6 +335,8 @@ impl Renderer {
                 sampler_entry(2, sampler_kind(atlas.is_real())),
                 texture_entry(3),
                 sampler_entry(4, wgpu::SamplerBindingType::Filtering),
+                texture_entry(5),
+                sampler_entry(6, wgpu::SamplerBindingType::Filtering),
             ],
         });
 
@@ -321,6 +348,8 @@ impl Renderer {
             &atlas_sampler,
             &sprite_view,
             &sprite_sampler,
+            &face_view,
+            &face_sampler,
         );
 
         let ui_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
@@ -397,8 +426,12 @@ impl Renderer {
             ui_layout,
             atlas_view,
             atlas_sampler,
+            sprite_view,
             sprite_sampler,
             sprite_format,
+            face_view,
+            face_sampler,
+            face_atlas: None,
             uniform_buffer,
             quad_buffer,
             quad_capacity: INITIAL_QUADS,
@@ -434,15 +467,17 @@ impl Renderer {
             sprites.height,
             &sprites.rgba,
         );
-        let sprite_view = sprite_texture.create_view(&wgpu::TextureViewDescriptor::default());
+        self.sprite_view = sprite_texture.create_view(&wgpu::TextureViewDescriptor::default());
         self.ui_bind_group = ui_bind_group(
             device,
             &self.ui_layout,
             &self.uniform_buffer,
             &self.atlas_view,
             &self.atlas_sampler,
-            &sprite_view,
+            &self.sprite_view,
             &self.sprite_sampler,
+            &self.face_view,
+            &self.face_sampler,
         );
         self.sprites = (sprites.width, sprites.height);
     }
@@ -703,12 +738,40 @@ impl Renderer {
                         // rather than threaded through every line.
                         Some(width) => {
                             self.push_wrapped_text(
-                                *x, *y, *scale, *color, border, *align, text, *width,
+                                false, *x, *y, *scale, *color, border, *align, text, *width,
                             );
                         }
-                        None => {
-                            self.push_text(*x, *y, *scale, *color, border, *align, text, bounds)
+                        None => self
+                            .push_text(false, *x, *y, *scale, *color, border, *align, text, bounds),
+                    }
+                }
+                Draw::FacedText {
+                    // The role is what chose which atlas `Self::set_face_atlas`
+                    // loaded, back when the boot sequence resolved it - nothing
+                    // here re-checks it against `role`, the same way `Draw::Text`
+                    // never carried a role to check in the first place. A title
+                    // whose chrome names a *second*, different role has no way
+                    // to draw both at once yet; none does today.
+                    role: _,
+                    x,
+                    y,
+                    scale,
+                    color,
+                    border,
+                    align,
+                    text,
+                    wrap_width,
+                } => {
+                    let border = border.unwrap_or(TRANSPARENT);
+                    let bounds = clip.filter(|(at, ..)| *at == index).map(|(_, l, r)| (l, r));
+                    match wrap_width {
+                        Some(width) => {
+                            self.push_wrapped_text(
+                                true, *x, *y, *scale, *color, border, *align, text, *width,
+                            );
                         }
+                        None => self
+                            .push_text(true, *x, *y, *scale, *color, border, *align, text, bounds),
                     }
                 }
             }
@@ -735,6 +798,7 @@ impl Renderer {
                 atlas: [self.atlas.width as f32, self.atlas.height as f32],
                 sprites: [self.sprites.0 as f32, self.sprites.1 as f32],
                 video_rect,
+                face_atlas: face_atlas_size(self.face_atlas.as_ref()),
             }),
         );
 

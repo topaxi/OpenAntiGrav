@@ -505,16 +505,16 @@ pub fn draw_list(
         backdrop: frame.backdrops(skin.space(), skin.background(), video, race_behind),
         ..Layers::default()
     };
-    layers.chrome.push(Draw::Text {
-        x: title_x,
-        y: title_y,
-        scale: title_scale,
-        color: skin.title_color(frame.ink),
-        border: None,
-        align: Align::Left,
-        text: layout.title.clone(),
-        wrap_width: None,
-    });
+    // See `crate::menu::draw_list`'s own title push - `Draw::title` is shared
+    // with it for exactly this pair of call sites.
+    layers.chrome.push(Draw::title(
+        skin.title_font(),
+        title_x,
+        title_y,
+        title_scale,
+        skin.title_color(frame.ink),
+        layout.title.clone(),
+    ));
     layers.body = body(picker, layout, skin, sprites, measure);
     layers
 }

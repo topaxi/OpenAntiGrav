@@ -23,8 +23,7 @@ use oag_ui::screen::Screens;
 pub struct Boot {
     /// Which title this is, carried from [`Shell::title`] by [`assemble`]
     /// rather than re-derived. `--menu-page` reads its `name` to resolve
-    /// `crate::settings::menu_seeds`' five per-title render-profile rows
-    /// against the one title open here.
+    /// `crate::settings::menu_seeds`' five per-title render-profile rows.
     pub title: &'static oag_title::Title,
     /// The sequence itself.
     pub frontend: Frontend,
@@ -65,8 +64,9 @@ pub struct Boot {
     /// The race box's selection screens. See [`Shell::track_select`].
     pub track_select: Option<oag_ui::picker::Layout>,
     pub ship_select: Option<oag_ui::picker::Layout>,
-    /// The face menu rows are drawn in. See [`Shell::menu_font`].
+    /// The row face and the title's own - see [`Shell::menu_font`]/[`Shell::title_font`].
     pub menu_font: Option<oag_ui::font::Atlas>,
+    pub title_font: Option<oag_ui::font::Atlas>,
     /// The text atlas: the disc's own font when it decodes, ours when it does
     /// not.
     pub font: oag_ui::font::Atlas,
@@ -370,6 +370,7 @@ pub struct Shell {
     /// The face menu rows are drawn in, when the title names one and it
     /// reads. `None` falls the menus back to [`Self::font`].
     pub menu_font: Option<oag_ui::font::Atlas>,
+    pub title_font: Option<oag_ui::font::Atlas>,
     /// The screens this boot walks, in the title's own order, already filtered
     /// to the ones this pressing carries and this build can drive.
     ///
@@ -377,11 +378,10 @@ pub struct Shell {
     /// media phase needs the answer to know which movies to read. See
     /// [ADR-0023](../../../docs/architecture/adr/0023-boot-sequence-as-title-data.md).
     pub walked: Vec<&'static oag_title::BootStep>,
-    /// Which entry the first movie in that chain is, if it has one.
-    ///
-    /// `None` for a boot that plays nothing anywhere - and **not** the same
-    /// question as "does the boot screen play something": on Pure neither movie is
-    /// on the boot step, so this names the reel that plays one screen later.
+    /// Which entry the first movie in that chain is, if it has one. `None`
+    /// for a boot that plays nothing anywhere - **not** the same question as
+    /// "does the boot screen play something": on Pure neither movie is on the
+    /// boot step, so this names the reel that plays one screen later.
     pub movie_name: Option<String>,
     /// The chain's second movie, on the same terms.
     pub second_movie_name: Option<&'static str>,
@@ -539,7 +539,8 @@ pub fn load_shell(
     );
     steps.lap("strings");
     let menu_font = load_menu_font(&mut archives, &languages, front_end.menu, &mut report);
-    steps.lap("menu font");
+    let title_font = load_title_font(&mut archives, &languages, front_end.menu, &mut report);
+    steps.lap("menu and title fonts");
     let definition = title.plugin_definition;
     let documents = definitions(&mut archives, definition, &mut report);
     let tracks = load_tracks(&mut archives, definition, &documents, &mut report);
@@ -711,6 +712,7 @@ pub fn load_shell(
             track_select,
             ship_select,
             menu_font,
+            title_font,
             walked,
             movie_name,
             second_movie_name,
@@ -1060,6 +1062,7 @@ pub fn assemble(shell: Shell, media: Media) -> Boot {
         track_select,
         ship_select,
         menu_font,
+        title_font,
         walked,
         movie_name: _,
         second_movie_name: _,
@@ -1239,6 +1242,7 @@ pub fn assemble(shell: Shell, media: Media) -> Boot {
         track_select,
         ship_select,
         menu_font,
+        title_font,
         languages: offered,
         strings,
         tracks,
@@ -1712,7 +1716,7 @@ pub(crate) mod roster;
 mod screens;
 pub(crate) mod xml;
 
-use fonts::{load_font, load_menu_font};
+use fonts::{load_font, load_menu_font, load_title_font};
 pub use movies::EntryRef;
 use movies::load_movie;
 use roster::{definitions, load_circuit_names, load_teams, load_tracks, load_zone_tracks};

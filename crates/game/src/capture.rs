@@ -187,6 +187,7 @@ pub fn run(
         track_select,
         ship_select,
         menu_font,
+        title_font,
         ..
     } = loaded;
 
@@ -661,6 +662,11 @@ pub fn run(
     };
     let mut renderer = Renderer::new(&device, &queue, format, video_format, face, &sprites)?;
     renderer.set_space(space);
+    // `None` on both PSP titles, and on any capture whose draw list never
+    // reaches `oag_ui::menu::draw_list`/`picker::draw_list` in the first
+    // place - a no-op either way, and unconditional so a menu-page capture
+    // and the live window (`session::menus`, below) build the same picture.
+    renderer.set_face_atlas(&device, &queue, title_font.clone());
 
     if let (Some(frames), Some(wanted)) = (
         movie.as_mut().and_then(|movie| movie.frames.as_mut()),
