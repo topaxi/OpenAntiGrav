@@ -947,8 +947,8 @@ impl Scene {
             // and the flare stamped and adding a blurred copy of the masked
             // colour back over the frame. `view` is the resolved image in both
             // the MSAA and the single-sample case, which is why this runs on
-            // it rather than on `attachment_view`. See
-            // `oag_render::post::bloom`.
+            // it rather than on `attachment_view`. See `oag_render::post::bloom` -
+            // its own `Frame` fields document `size`/`origin`/`viewport` in full.
             let size = self.depth.size();
             bloom.render(
                 device,
@@ -956,10 +956,6 @@ impl Scene {
                 encoder,
                 oag_render::post::bloom::Frame {
                     scene: view,
-                    // The attachments' dimensions, and then the rectangle
-                    // drawn into them - the split `motion_blur` below already
-                    // makes, and the reason a short render extent no longer
-                    // has the bright pass downsampling the region nobody drew.
                     size: (size.width, size.height),
                     origin: (viewport.0, viewport.1),
                     viewport: (viewport.2 as u32, viewport.3 as u32),

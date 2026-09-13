@@ -150,16 +150,6 @@ BASELINE = {
     "crates/physics/src/hover.rs": 1103,
     "crates/ui/src/font.rs": 1094,
     "crates/trace/src/compare.rs": 1038,
-    # New here, not ratcheted down from anything: threading the letterbox
-    # `origin` through to `hd_bloom::Chain::run` and `post::bloom::Bloom::render`
-    # (the fix for the black-strip defect `renderer.md`'s "The letterbox
-    # strip is fixed at the engine level" names) crossed the ceiling by two
-    # lines. The file already has a `frame/` sibling directory
-    # (`attachments.rs`, `shadow.rs`, `craft.rs`) from an earlier split; a
-    # further split for two lines is not proportionate, so this is the
-    # deliberate exception the script's own message allows rather than a
-    # split attempted and abandoned.
-    "crates/game/src/race/scene/frame.rs": 1002,
 }
 
 # Inline `#[cfg(test)]` modules over `TEST_LIMIT`, keyed `<file>::<module>`.
