@@ -652,10 +652,41 @@ pub(super) fn variants(
         // naming a permutation nothing ships. See `Features::chunk_word`.
         let word = rcsmaterial::Features::chunk_word(rcsmaterial::LIT_RACE_PASS, decl);
         let key = rcsmaterial::Features::from_pass_word(word);
-        // `Static` is what every world chunk uses; `StaticQuake` is the same
-        // programs with the Quake weapon's displacement in front, and nothing
-        // here fires that weapon.
-        match parsed.variant(rcsmaterial::Class::Static, key) {
+        // `Static` first, since it is what every world chunk uses and what
+        // most materials ship a row for. Falling through the rest of
+        // `Class::ALL` - `StaticQuake` (`Static`'s own programs with the
+        // Quake weapon's displacement in front, nothing here fires that
+        // weapon), `RigidBody` (a moving body's own class, ships and
+        // weapons) and `StaticUncompressed` - covers a material whose table
+        // ships only one of those, such as
+        // `data/materials/frontendscene/basic_vertexemissive.rcsmaterial`
+        // (`RigidBody` only) or a ship hull material for which `Static`'s
+        // key happens to miss.
+        //
+        // **This is a fallback across classes, not a search over the key**:
+        // `(class, features)` is still looked up exactly, one class at a
+        // time, and never relaxed. It is sound because the **fragment**
+        // program - the only half this renderer reads - is class-independent
+        // wherever both exist: `crates/render/examples/
+        // hd_class_fragment_share_check.rs` checked every `.rcsmaterial` on
+        // the disc for a same-feature-hash pair across classes and found
+        // **zero** of 36,257 with a different fragment block, only the
+        // vertex program (which encodes the vertex-class-specific position
+        // transform this project's own generic decoder does not run) ever
+        // differs. So whichever class's row happens to exist answers the
+        // same shading.
+        //
+        // **Measured before wiring**: this fallback moves the disc's `Static`
+        // misses by exactly one material
+        // (`frontendscene_hd_atg.vex`'s `basic_vertexemissive.rcsmaterial`,
+        // `RigidBody`-only) - not the ship hull's 78, which
+        // `crates/rcs/src/rcsmodel/vertex_decl.rs`'s `vertex_colour()` fix
+        // resolves instead (see `hd_ship_class_census.rs`'s own doc comment
+        // for the disc-wide count that settled which bug this actually was).
+        let variant = rcsmaterial::Class::ALL
+            .into_iter()
+            .find_map(|class| parsed.variant(class, key));
+        match variant {
             Some(v) => {
                 report.variants_resolved += 1;
                 report.variant_chunks += chunks;
