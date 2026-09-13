@@ -132,13 +132,21 @@ pub(super) fn skin(
 /// | `0x94b2b285` | 1 | `dc_iridescent_gradient.gtf` | 85 |
 /// | `0x739a786e` | 20 | `ds_floor_n_rh`, `ds_pit_box_n`, `ds_wall_n` | 88 |
 /// | `0x20c3e476` | 64 | `blue_metal_spec`, `tunnel_fx_spec`, `tunnel_fx_lights_spec` | 85 |
+/// | `0xb1f2a176` (`EmissiveTexture`) | 71 distinct path(s) | `*_emissive.gtf`, `*_e.gtf`, `advert_*.gtf`, `*glow*.gtf`, `dc_grad*.gtf` - never a plain diffuse | 90 |
 ///
 /// Every use of the first three is a texture 32 texels or less in one
 /// dimension - a ramp - and `0x94b2b285` is the one whose *coordinate* is
 /// traced outright: `etched_glass_tech`'s block #7 samples it at
 /// `dot(V, N)` (`DP3 R2.w, -R1, R2` then `TEX H2.xyz, -R2.wwww unit2`), the
 /// view-facing scalar. The last two never bind anything but a `*_n*.gtf` and
-/// a `*spec*.gtf` respectively.
+/// a `*spec*.gtf` respectively. `EmissiveTexture` is named rather than
+/// binding-inferred - it is one of the 38 preimages
+/// `docs/formats/rcsmaterial.md`'s "The sampler names, by preimage" table
+/// carries, grouped there under "Light" beside `lightmap` and
+/// `shadowMapTex` - and the binding census agrees with the name: swept
+/// disc-wide (`crates/render/examples/hd_emissive_texture_bind_census.rs`),
+/// every one of its 71 distinct bound paths reads as a glow, an advert or a
+/// gradient by name, never a plain diffuse.
 ///
 /// # What this list is for, and what it is not
 ///
@@ -149,11 +157,29 @@ pub(super) fn skin(
 /// welded to the surface. A ramp is not a picture; binding the entry that is
 /// one is closer to the file than binding the first entry blindly.
 ///
+/// **`EmissiveTexture` hit the same fallback from the opposite direction.**
+/// Amphiseum's `track_wall.rcsmaterial` (and, disc-wide, 25 lightmapped
+/// slots, all named `track_wall.rcsmaterial`, all on this one circuit's own
+/// forward and reversed `.rcsmodel` -
+/// `crates/render/examples/hd_emissive_first_census.rs`) name
+/// `EmissiveTexture` at entry 0 and the real diffuse - `Texture1`, per the
+/// same preimage table - at entry 1. [`picks`]'s lightmap branch does not
+/// read the microcode at all,
+/// so it took "first entry with a path" literally and bound the near-black
+/// glow decal as the wall's entire picture, leaving a trackside panel
+/// rendering solid black under a fully-resolved, correctly-lit variant - see
+/// `docs/formats/rcsmaterial.md`, "A trackside wall panel drew solid black
+/// because its picture was its glow decal". Excluding the hash here does not
+/// change anything for a material where `EmissiveTexture` is the *only*
+/// populated entry: `position` finds nothing past it, and `unwrap_or`
+/// answers entry 0 exactly as before.
+///
 /// **Nothing here samples these textures in their own role yet.** The facing
 /// ramp wants `dot(V, N)`, the normal map wants a tangent frame, the specular
-/// map wants the exponent chain - none of which this shader implements, and
-/// `CLAUDE.md`'s rule is that a role with no recovered shading stays unwired
-/// rather than guessed.
+/// map wants the exponent chain, `EmissiveTexture` wants the additive glow
+/// term `mesh::rcs::emissive` already reads separately - none of which this
+/// list wires, and `CLAUDE.md`'s rule is that a role with no recovered
+/// shading stays unwired rather than guessed.
 const NOT_A_PICTURE: &[u32] = &[
     rcsmaterial::LIGHTMAP_SAMPLER,
     0x3528_1c78,
@@ -161,6 +187,7 @@ const NOT_A_PICTURE: &[u32] = &[
     0x94b2_b285,
     0x739a_786e,
     0x20c3_e476,
+    0xb1f2_a176,
 ];
 
 /// Which of a material's sampler entries this renderer binds, out of however
