@@ -641,6 +641,32 @@ In short:
   structure, not Pulse's flat stub) and what is still open there (HD's glyph
   *walk* has no on-disk driver and stays unwired, and HD's own `Honey_Board`-shaped
   backing piece sits deeper in that structure than `CLEARANCE` currently clears).
+  **2026-09-13, a second pass the same day: a player reported "the HD gantry
+  doesn't show the numbers, and has a Wipeout symbol drawn in the middle of
+  the track."** The board's own placement was checked against
+  `data/reference/hd-capture/talons-ships/00.png` at the matching pose/tick
+  and found correct - the gate, and the board on it, line up pixel for pixel;
+  no change was made to `mount()`/`matrix()`. **The "Wipeout symbol" was seven
+  mesh nodes of slot 7's own borrowed `fx350_nomip.gtf` art embedded in slot
+  8's shared model**, three of them (`polySurface155/156/157`) sitting 33
+  units off the digit board's own display plane rather than beside it - so
+  once placed they land over the open road as a stray ring/logo shape, a
+  byte-for-byte match to the report. `oag_render::gantry::strip_fx350_art`
+  drops every draw bound to that texture; fixed and tested
+  (`crates/game/tests/start_gantry_hd_mount_ground_truth.rs`). **The "no
+  numbers" half is not fixed** - still the confidence-40 question above - but
+  a live RPCS3 capture through an actual countdown (`scripts/rpcs3-drive.py
+  capture`) now shows the board progressing from nothing to a lit `3` to `3`
+  and `2` together over real time, which is stronger evidence a runtime write
+  exists than the single earlier screenshot. A raw pushbuffer byte diff across
+  the five captures did not isolate the write - too much unrelated per-frame
+  data changes in the same regions - and the concrete next step is the same
+  one `billboards.md` already named: eleven unexamined `lwz 0x834(` call
+  sites, or a packet-aware read of the pushbuffer against the fragment
+  program's own patch-slot table. Full account in
+  `docs/rendering/start-gantry.md`'s "Implemented on HD" section (both new
+  subsections) and `docs/ghidra/functions/ps3-hdfury-eu/billboards.md`'s own
+  2026-09-13 section.
 - ~~No screenshot comparison of a Zone countdown against a circuit-race countdown~~
   **Done for HD's gantry mesh content, off the disc via `oag-view`** - see the fourth
   pass above. **Still open**: an actual in-game screenshot (this session rendered

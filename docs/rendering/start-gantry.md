@@ -1385,6 +1385,57 @@ rather than only the raw `.vex` track that section and
 `crates/game/tests/start_gantry_hd_mount_ground_truth.rs`'s own third test
 pins this.
 
+### Placement is confirmed correct; what was actually in the wrong place is borrowed slot-7 art
+
+2026-09-13. A player reported two defects together: "the HD gantry doesn't
+show the numbers, and has a Wipeout symbol drawn in the middle of the track."
+The first is the glyph-walk gap above; the second reads, before measuring
+anything, like a placement bug in [`Mount::matrix`](../../crates/render/src/gantry.rs) -
+and it is not one.
+
+**The board itself is placed right.** `data/reference/hd-capture/talons-ships/00.png`
+(the original, default chase camera, grid, `0.00.0`/`0 KM/H`) and this
+project's own render at the matching pose and tick (`--ticks 5`, same
+default chase framing) put the gate structure - the blue speed-pad loop, the
+green pipes either side, the grey gate frame - at the same screen position
+in both, pixel for pixel, and the countdown board's own backing panel sits
+inside that gate at the same height and horizontal centre in both. No change
+to `mount()` or `matrix()` was needed or made; changing either to chase this
+report would have been a regression against a board that already lines up.
+
+**What actually floats over the open road is seven mesh nodes carrying
+slot 7's own art, pasted into slot 8's shared model.** `321go_startfinish.vex`
+authors `polySurface151` through `polySurface157` bound to
+`fx350_nomip.gtf` - the "FX-350 Official A-G Racing League" checkered
+banner [`billboards.md`](../ghidra/functions/ps3-hdfury-eu/billboards.md#the-four-321go_vex-shapes-are-confirmed-as-genuinely-different-content-by-rendering-them)'s
+own rendering pass already found, not slot 8's own `321_go_64.gtf`
+staircase. Three of the seven, `polySurface155/156/157`, sit at local `z` ~=
+33 - a full panel-width off the digit board's own display plane (`z` = 0,
+the same plane [`clip_to_panel`](../../crates/render/src/gantry.rs)'s own
+doc comment measures this node's normal against), not beside it in `x` the
+way `Final_Lap`/chequered are, so the existing width-only clip never touched
+them. Once [`Mount::matrix`](../../crates/render/src/gantry.rs) faces the
+model at the grid, that trio lands roughly 33 units towards the camera, over
+the open road: three overlapping ring/ellipse shapes (`oag-view --only
+polySurface15 --screenshot`, autocontrasted to see past the standalone
+viewer's own unresolved shading) that render as a stray logo - a
+byte-for-byte match to "a Wipeout symbol drawn in the middle of the track."
+None of the seven nodes appears anywhere in `talons-ships/00.png`, at the
+gate or over the road, so the fix is not "move this trio" but "never draw
+any of the seven": `oag_render::gantry::strip_fx350_art` drops every draw
+bound to `fx350_nomip.gtf`, the same by-texture pattern
+[`strip_slot_placeholders`](../../crates/render/src/gantry.rs) already uses
+for the track's own billboard stubs, rather than a per-node coordinate that
+happens to explain one report. **Confidence 90** - read straight off the
+model's own node/texture bindings and confirmed by a matching-pose render,
+not decompiled or inferred.
+
+Rendered before and after, at `--ticks 5/120/180/240/300/400` on Talon's
+Junction: the ring cluster is gone at every tick and the gate/board region is
+pixel-identical to before the change (the fix only removes draws; it moves
+nothing). `crates/game/tests/start_gantry_hd_mount_ground_truth.rs`'s own
+second test now also asserts the report names `fx350_nomip.gtf` as stripped.
+
 ### The glyph walk stays unwired on HD, on purpose
 
 Pulse's countdown plays because its material's own authored `TEXOFFSET` track
@@ -1415,8 +1466,62 @@ from or raising the static confidence score itself, which is about the
 *format* having no on-disk track, not about whether the engine compensates
 for that at runtime.
 
+**2026-09-13, a live capture through an actual countdown makes this a
+progression, not a single frame - still not a resolution.** `scripts/rpcs3-drive.py
+capture --shots 5 --interval 1 --keep-dumps`, RPCS3 on a virtual display
+(`docs/reverse-engineering/rpcs3-capture.md`), Talon's Junction, five poses
+roughly a second of real thrust apart from the grid. The gantry board across
+the five: nothing, nothing, a faint red sliver at the panel's left edge, a
+clear white-on-red `3`, then `3` and `2` visible together (the fourth and
+fifth frames, cropped and read directly - `/tmp/oag-drive/glyphs/countdown-crop-{2,3,4}.png`
+in this pass's own scratch output). A static rest cell cannot produce a
+sequence; this is the board changing *while a race plays*, which is
+stronger than the single lit frame above and is new evidence a runtime write
+exists, not new evidence of what writes it.
+
+**The write itself was not isolated.** `Billboard_LoadModelAndBind`
+(`docs/ghidra/functions/ps3-hdfury-eu/billboards.md`) already names the
+carrier a write would take: a per-instance `uvOffset`/`uvScale` pair,
+initialised to identity `(0,0,0,0)`/`(1,1,1,1)` and bound as named fragment-program
+constants patched **straight into the shader microcode** (the `fslot` patch
+chain `scripts/ps3-microcode.py` documents), not a separate register - so a
+per-frame write would show up as a change to the uploaded fragment-program
+bytes in the RSX pushbuffer, not a constant-buffer upload. A raw byte diff
+between consecutive captures' pushbuffer dumps was tried first and is too
+noisy to read this way: one region (the RSX FIFO ring proper) changes by only
+a handful of bytes between any two frames, but the two larger regions carry
+every other draw's own per-frame data (camera, ship, scenery animation) and
+change in hundreds to thousands of places a frame apart, with no reliable
+way from raw bytes alone to tell "the gantry material's own patched constant"
+from "an unrelated draw's constant that happens to live nearby in the ring."
+A step-pattern scan (stable across the frames before the digit appears, then
+a clean jump) found four candidates, all of which reverted on the very next
+frame rather than continuing to step - consistent with ring-buffer command
+placement drifting frame to frame rather than with one stable, patched value.
+**Confidence 40 is unchanged**: this is new evidence a runtime write exists,
+not a location for it. The nearest concrete next step already on the page is
+[`billboards.md`](../ghidra/functions/ps3-hdfury-eu/billboards.md#the-slot-8-asymmetry-and-what-is-still-not-established)'s
+own named lead - eleven of the fourteen `lwz 0x834(` sites that read
+`table_base + 0x834`, the cached slot-8 texture-bind slot the loader stores
+and nothing was found reading, are unexamined. That is a *candidate* carrier,
+not a confirmed one: `table_base + 0x834` is the texture binding, not the
+`uvOffset`/`uvScale` pair above, and nothing on this page or `billboards.md`
+has traced either to the other. Either a semantic, packet-aware read of the
+pushbuffer against the fragment program's own patch-slot table (the raw diff
+above's own missing half), or opening those eleven call sites in Ghidra, is
+the next step - not another raw byte diff, which this pass already showed
+does not converge on its own.
+
 ### What is still open
 
+- **The runtime write for `uvOffset`/`uvScale`, if one exists, is still not
+  located** - a live RPCS3 capture now shows the board's own geometry lights
+  up over the course of an actual countdown (above), which is stronger
+  evidence a write happens than the single earlier screenshot, but a raw
+  pushbuffer diff across five captures did not isolate it. The concrete next
+  step is a semantic, packet-aware read of the pushbuffer against the
+  fragment program's own patch-slot table, or the eleven unexamined
+  `lwz 0x834(` call sites `billboards.md` already names.
 - **The backing pieces sit inside the mount's own thick structure.**
   `CLEARANCE` (1.0, unchanged, still Pulse's own measured order) clears the
   digit board's near-zero local depth but not `Honey_Board`'s HD analogue,

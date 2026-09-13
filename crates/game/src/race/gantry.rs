@@ -115,6 +115,7 @@ pub(super) fn place(
         }
     };
     let mut model = model;
+    let fx350 = oag_render::gantry::strip_fx350_art(&mut model);
     let parked = oag_render::gantry::clip_to_panel(&mut model, mount.width / 2.0, 0.0);
     let matrix = matrix(&mount, Vec3::from(start.forward));
     place_bounds(&mut model, matrix);
@@ -123,7 +124,9 @@ pub(super) fn place(
          ({:.1} thick over {} vertices), {:.0} units ahead of the Start Position - \
          measured off this circuit's own geometry (docs/rendering/start-gantry.md). \
          {parked} draw(s) parked outside the panel are not drawn: they are the FINAL \
-         LAP and chequered states, whose trigger is unrecovered",
+         LAP and chequered states, whose trigger is unrecovered. {fx350} draw(s) bound \
+         to slot 7's own fx350_nomip.gtf art are not drawn either: embedded in this \
+         model but never shown in a reference frame, on HD",
         mount.node,
         mount.centre.to_array().map(|v| (v * 10.0).round() / 10.0),
         mount.width,

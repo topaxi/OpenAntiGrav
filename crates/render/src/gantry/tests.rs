@@ -270,6 +270,23 @@ fn strip_slot_placeholders_is_case_insensitive_and_leaves_real_art_alone() {
 }
 
 #[test]
+fn strip_fx350_art_drops_only_the_borrowed_slot7_draw() {
+    let mut model = textured_draws("data/billboards/hd_adverts/321go/fx350_nomip.gtf");
+    assert_eq!(strip_fx350_art(&mut model), 1);
+    assert_eq!(model.draws.len(), 1);
+    assert_eq!(model.draws[0].texture, Some(1));
+}
+
+#[test]
+fn strip_fx350_art_is_case_insensitive_and_leaves_the_digit_boards_own_texture_alone() {
+    let mut model = textured_draws("Data/Billboards/HD_Adverts/321Go/FX350_NOMIP.GTF");
+    assert_eq!(strip_fx350_art(&mut model), 1);
+    let mut untouched = textured_draws("data/billboards/hd_adverts/321go/321_go_64.gtf");
+    assert_eq!(strip_fx350_art(&mut untouched), 0);
+    assert_eq!(untouched.draws.len(), 2);
+}
+
+#[test]
 fn mount_finds_hds_full_path_billboard8_label() {
     // HD ships no `321backplate`-shaped second surface - see
     // `HD_SLOT8_TEXTURE`'s own doc comment - so its stub alone has to resolve
