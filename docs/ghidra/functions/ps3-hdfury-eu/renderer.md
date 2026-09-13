@@ -2283,6 +2283,139 @@ on|off] [--dump-regions]`; region boxes are chosen by eye and shared across
 the three poses (documented in the script itself, no confidence score - a
 comparison window, not an RE claim).
 
+### The darkness gap does not reduce to an offset, a scale, or a single curve (2026-09-13, `lane-hd-dark-frame`)
+
+Following the section above's own "not this lane's" pointer: the shape is
+localised further, two comparison-harness defects are found and fixed, and
+the lit-material path itself stays open. All three candidates the previous
+session's own "Next Steps" ordered by cost are checked; none is a fix.
+
+**The harness's own per-pixel regression cannot discriminate an offset from a
+scale from a curve, and its R^2 says so** (0.01-0.26 across the three poses,
+one of them negative-slope) - it needs pixel correspondence at exact
+sub-pixel alignment, which a matched *pose* does not give a matched
+*rasterisation*. `scripts/hd-frame-compare.py` gained a sixth output,
+per-region quantile-quantile: `np.percentile` of each side's own luminance,
+independently sorted, so no pixel correspondence is needed at all - a
+near-constant `ref - ours` gap across ranks would say an offset, a gap
+growing in proportion to the value a scale, a gap concentrated at one end a
+curve. **None of those single shapes fits.** At pose `00`, `whole (excl HUD,
+craft)`, `ref - ours` goes `+0.071` (q1) `-> +0.134` (q50) `-> +0.229` (q75)
+`-> +0.009` (q95) `-> +0.000` (q99): the gap grows through the low-to-upper
+range and collapses back to zero at both true black and true white. A single
+power law would hold a constant exponent across that whole run; solving
+`ours^g = ref` pointwise instead gives `g` from 0.15 to 0.78 depending which
+two quantiles are used - not a constant, so **not a clean gamma/tonemap
+curve either**, contrary to what the convergence at both ends might suggest
+on its own. Pose `01` shows the same qualitative shape. **A single global transfer-
+function mismatch does not fit the whole-frame aggregate, confidence 80**
+(a direct, rank-matched, per-region measurement on two poses). That is
+narrower than "candidate (a) is refuted": a per-material mix of a correct
+and an incorrect encode path would produce exactly this kind of non-constant
+pointwise exponent too, and 275 of Talon's Junction's 301 drawn materials
+take a lit formula `track_surface`'s own microcode reading does not cover -
+so this does not clear any individual material family, only the aggregate-
+as-one-mechanism reading. Settling a per-material transfer-function defect
+needs the per-material probe (`hd_light_probe.rs` run per material, or a
+per-material `.envsettings` sweep), not this whole-region aggregate. The q1
+row is the residual worth carrying forward too: at pose `00` post-aspect-fix
+it is `ours 0.050, ref 0.078`, `+0.028` - a pure power law through the
+origin gives zero gap at the floor, and this one does not quite. This does
+not retire the ADR-0026 question itself - a scene this mixed-material need
+not show one global
+curve even if the disc's own encode is one - but it does mean the whole-frame
+gap here is not explained by reaching for one.
+
+**Candidate (b), `.envsettings` plumbing, is refuted for the core terms with
+an exact match.** Talon's Junction's raw `track.envsettings` (dumped with
+`scripts/psarc.py cat`) reads `"Lighting.Constant ambient color"=0.403922
+0.392157 0.509804`, `"Lighting.Sun color"=2.000000 1.827451 0.886275`,
+`"Lighting.Sun specular scale"=1.500000`, `"Lighting.Prelit ambient colour
+scale"=4.000000...`, `"...power"=2.000000...` - and `crates/render/examples/
+hd_light_probe.rs` (a pre-existing scratch probe, unmodified) echoes those
+same values back verbatim after the full read/parse/upload path. Nothing is
+read short, scaled, or byte/float-confused for this circuit's core light
+terms.
+
+**Two stale doc comments were found and fixed while checking (b), not the
+cause of anything.** `76d0f58e` (2026-08-18) removed `Light::authored`'s
+peak-divide and ambient clamp - the magnitude is uploaded as authored now,
+same as the direction - but `mesh_render::Light::sun`'s own field doc still
+said "with its magnitude divided out: the hue alone", and `mesh.wgsl`'s
+header comment still said "The magnitude is not [the disc's]". Both
+corrected to match what the code has done since that commit; no behaviour
+changed, `cargo build -p oag-game` confirms `sun: colour` and no such divide
+exists at either call site.
+
+**A harness confound, found by inspection: poses `01` and `03`'s reference
+frames are moving (529 km/h and 431 km/h, their own HUD says) and ours are
+posed statically.** `COMPARISON_ARGS` turns `--motion-blur off` for a
+like-for-like *setting*, but the reference is a real capture with the
+original's own speed streak baked into its pixels by construction, which no
+render setting can retroactively remove. At pose `01` this is broad white
+streaks across roughly the lower half of frame - visible by eye in
+`data/reference/hd-capture/talons-matched/01.png` - which no lighting fix at
+any value reproduces. Pose `00` (grid, 74 km/h) is the only one of the three
+that isolates the lit-material question from this; `01`/`03` corroborate the
+gap's *direction* only. `scripts/hd-frame-compare.py`'s own docstring now
+says so.
+
+**A second harness defect, found and fixed: the comparison rendered at the
+wrong aspect ratio, and a corner of the engine drops a viewport offset it
+should carry.** `render()` wrote only `[graphics] bloom` into its scratch
+`settings.toml`, leaving `display.aspect` at the project's own default,
+`Aspect::Psp` (30:17) - not `Aspect::Wide` (16:9), which
+`oag_display::display::aspect`'s own doc names as "Wipeout HD's own
+1920x1080". At `--size 1280x720` (16:9) that mismatch is only 0.7% - "small
+enough to look like a rounding error", the enum's own comment says of the
+same number - but it is not zero: `oag_display::display::viewport` fits a
+1270.6-wide rectangle centred in the 1280-wide canvas and hands the *fitted
+size* to `oag_render::post::hd_bloom::Chain::run` without its *offset*
+(`crates/game/src/race/scene/frame.rs`'s `hd.run(..., (viewport.2 as u32,
+viewport.3 as u32), ...)`, dropping `viewport.0`/`.1`). The chain's own final
+encode pass then writes `set_viewport(0.0, 0.0, rect.0, rect.1, ...)` -
+anchored at the canvas origin - while the scene was actually drawn centred,
+so the rightmost ~10 columns of the canvas are never written by that pass at
+all and read back as whatever `view` held before it (black). Measured: a
+100%-black, full-height, 10-column-wide strip at `x=[1270,1280)` on every one
+of the three poses, present with `--bloom` on and off alike, and **absent on
+a Pulse race screenshot at the same size** (`pulse-psp-eu.chd`, 7 of 7,200
+edge pixels zero - ordinary dark scene content, not a strip), which is what
+places it on the `hd_bloom` path specifically rather than the shared capture
+plumbing. Pinning `render()`'s settings.toml to `aspect = "wide"` (this
+script's own fix, verified: `zero_pct` in `road surface` goes 2.44% -> 0.00%
+at pose `00`, reproduced on all three) makes the letterbox offset zero and
+the defect inert, matching what a corrected `frame.rs` caller would draw at
+this exact canvas size. **Filed, not fixed, at the engine level**: the
+general case needs `Chain::run`'s signature to carry an offset alongside
+`(width, height)`, plus the same check against `oag_render::post::bloom`'s
+matching call in the same function (same drop-offset shape, not observed to
+manifest as a literal-black strip in the one Pulse capture checked, not
+independently verified clean either) - `lane-ship-hull`'s files
+(`crates/render/src/post/`, `crates/game/src/race/scene/frame.rs`), not a
+comparison script's.
+
+**Net effect on the darkness reading: negligible, as the strip's size
+predicts.** Re-running with the aspect fix moves pose `00`'s whole-frame
+mean luma 0.470 -> 0.474, pose `01` 0.346 -> 0.351, pose `03` 0.395 -> 0.394
+- each under 0.005 against gaps of 0.13-0.24, consistent with a ~0.8%-of-width
+edge strip rather than a frame-wide term. The two fixes land because they are
+correct and because the harness should not carry a confound irrespective of
+size, not because either explains the gap.
+
+**Still open, and this session's own candidate (c) and (d) are not newly
+checked here**: the texture-decode brightness question (`oag-texture`'s
+`.gtf` decoder itself carries no gamma/sRGB logic of its own -
+`rg`-confirmed absence in `crates/texture/src`- so a decode-side darkening
+would have to be a bit-level DXT/BC defect, and `gtf_ground_truth.rs` passing
+in this session's gate run is the only evidence checked, not a pixel
+comparison against a reference decoder); and any missing term beyond what
+`renderer.md`'s own "Left unread" line already names
+(`shadowMapTex`, `prelitBias`, the RGBE `k`/`b` for materials other than
+`track_surface`). Reproduce the quantile table with
+`scripts/hd-frame-compare.py --pose 00` (or `01`); the zero-pixel-share
+column is `zero_pct` in the per-region table above it.
+
 ### The 14 surface binds, read (2026-08-20)
 
 `FUN_005a40f8(ctx, depth, colour0, colour1, colour2, colour3)` takes **pointers
