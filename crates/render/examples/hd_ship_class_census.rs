@@ -3,8 +3,7 @@
 //! `Class::Static` - what `skin::variants` hardcodes today - resolves the
 //! ordinary lit-race key versus `Class::RigidBody`/`Class::StaticQuake`.
 //!
-//! `handover/rendering/hd-needs-a-per-material-shader-path-and.md`'s
-//! 2026-09-02 bullet names `variants()`'s `Class::Static` hardcode as the
+//! A handover thread named `variants()`'s `Class::Static` hardcode as the
 //! lead for the ship hull's unresolved materials. **Measured and refuted for
 //! that population**: across all 37 `ship.vex` files, 178 drawn materials,
 //! trying every `Class` moves **zero** of the 78 materials `Class::Static`
