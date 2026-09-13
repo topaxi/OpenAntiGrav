@@ -22,6 +22,12 @@ pub(super) const MODE_SPRITE_ADDITIVE: f32 = 2.0;
 /// two and then hands the fragment stage an ordinary [`MODE_ATLAS`] fill, so
 /// the pipeline stays one pass with one back-to-front order.
 pub(super) const MODE_GRADIENT: f32 = 3.0;
+/// A quad whose `uv` is in the **face atlas's** pixels - [`Draw::FacedText`],
+/// sampled from a second glyph texture bound alongside the main one rather
+/// than replacing it, the way [`MODE_SPRITE`] samples a second texture
+/// beside [`MODE_ATLAS`]. Only emitted once the role it names has actually
+/// loaded; see `Renderer::push_text`'s `face` parameter.
+pub(super) const MODE_FACE_ATLAS: f32 = 4.0;
 
 impl Renderer {
     pub(super) fn push_solid(&mut self, rect: [f32; 4], color: [f32; 4], chamfer: f32) {

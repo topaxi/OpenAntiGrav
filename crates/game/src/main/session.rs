@@ -581,6 +581,11 @@ pub(crate) struct Shell {
     /// The face menu rows are drawn in, which is a bigger one than the rest
     /// of the front end uses. `None` draws them in `font`.
     pub(crate) menu_font: Option<oag_ui::font::Atlas>,
+    /// The face the screen title is drawn in, when this title names a role
+    /// for it. `None` draws it in whichever face the frame is already bound
+    /// to - see `boot::Shell::title_font` and
+    /// `oag_title::MenuSkin::title_font`.
+    pub(crate) title_font: Option<oag_ui::font::Atlas>,
     /// The disc's own frame around every menu page, read off the front-end XML
     /// while it was still in hand.
     ///

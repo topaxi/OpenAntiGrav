@@ -234,6 +234,12 @@ pub const MENU_SKIN: &oag_title::MenuSkin = &oag_title::MenuSkin {
     title_x: 21.0,
     title_y: 20.0,
     title_scale: 0.97,
+    // Unchecked, not measured `None`: Pure's own screen titles' `font=` role
+    // was not read this pass - this title has no single `MainMenu_Definition.xml`
+    // the way Pulse does (see `first_row_y` below), and the same per-screen
+    // sweep that field needed was out of scope for wiring HD's title face.
+    // See `oag_title::MenuSkin::title_font`'s own doc.
+    title_font: None,
     // **Authored, and measured across the whole GUI tree rather than off one
     // screen.** Pure has no `MainMenu_Definition.xml` to read a single number
     // out of, so every `<Menu>` widget in `Skin.xml` and the twelve

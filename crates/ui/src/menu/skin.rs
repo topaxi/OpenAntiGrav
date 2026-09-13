@@ -559,6 +559,14 @@ impl Skin {
         )
     }
 
+    /// The font role the screen title is drawn in, or `None` to draw it in
+    /// whatever face the rest of the frame is already bound to - see
+    /// [`oag_title::MenuSkin::title_font`].
+    #[must_use]
+    pub(crate) fn title_font(&self) -> Option<&'static str> {
+        self.skin.title_font
+    }
+
     /// The screen title's colour.
     ///
     /// **The disc's own declared `TitleColor` first.** A title whose skin
@@ -737,6 +745,7 @@ mod tests {
         title_x: 50.0,
         title_y: 0.0,
         title_scale: 1.0,
+        title_font: None,
         first_row_y: Some(32.0),
         row_extra_leading: Some(6.0),
         menu_font: Some("menu"),

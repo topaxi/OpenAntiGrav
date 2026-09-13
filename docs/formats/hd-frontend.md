@@ -1577,6 +1577,37 @@ be reading the wrong one. Note also that the picker's title hard-codes `x="84"`
 rather than using `TitleXOffset`, so `title_x = 194` is the *menu* screens'
 number, not the picker's.
 
+### The title's own font role, wired 2026-09-13
+
+Both widgets quoted above also say `font="Title"`, and until this date
+nothing downstream read that - every menu text this build drew, chrome title
+included, used the `Default` role (`helv.fnt`, line height 33; see
+[fnt.md](fnt.md)'s font table). `oag_title::MenuSkin::title_font` is now
+`Some("Title")` on `oag_hd::frontend::MENU_SKIN`, resolved through the same
+`<Font><Values name=...>` plugin slots `menu_font` already used, and loaded
+by `boot::fonts::load_title_font` (mirrors `load_menu_font`) into
+`Shell::title_font`. The renderer binds it as a second glyph texture
+alongside the body atlas - `oag_ui::frontend::Draw::FacedText`, resolved to
+`MODE_FACE_ATLAS` in `ui.wgsl` - so the chrome title draws in `helvb.fnt`
+(line height 44) in the same frame the rest of the page draws in `helv.fnt`.
+Confirmed at `--menu-page main --screenshot --size 1920x1080`: "OPENANTIGRAV"
+renders visibly bolder and taller than the strip tabs below it, where the two
+previously matched.
+
+**Pulse authors the identical role and was left unflipped.**
+`MainMenu_Definition.xml`'s own title widget - `Data.wad`,
+`Data\Plugins\PI001\GUI\MainMenu_Definition.xml`, read 2026-09-13 - says
+`<b d="FE_MM" p="title" ...>` (`p` is `font` in that file's own tag
+dictionary), which resolves case-insensitively to the same `Title` slot,
+landing on `Pulse_14.fnt` (17px) against `Default`'s 13px `pulse_text.fnt`;
+`TournamentLoad`'s own title says `font="Title"` outright. Left `None` on
+`oag_pulse::frontend::MENU_SKIN` anyway: flipping it would move output
+[menus-original.md](../ui/menus-original.md)'s Layout table already verified
+against a capture at confidence 95, and no capture has checked whether the
+taller face is what that capture actually shows - see
+`oag_title::MenuSkin::title_font`'s own doc. Pure's `Main Menu` screen was
+not located at the archive path this pass tried, and was not checked at all.
+
 ## Filling in `BootProfile`
 
 ```rust

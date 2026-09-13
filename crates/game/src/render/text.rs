@@ -19,6 +19,26 @@ use super::*;
 use crate::loading::wrap;
 
 impl Renderer {
+    /// The atlas [`Self::push_text`] and [`Self::push_wrapped_text`] read
+    /// glyphs from: [`Self::face_atlas`] for a [`Draw::FacedText`] whose role
+    /// actually loaded, [`Self::atlas`] for everything else - a `face` of
+    /// `true` with [`Self::face_atlas`] still `None` falls back to
+    /// [`Self::atlas`] too, which is what a title naming a role that failed
+    /// to read draws with, per [`Draw::FacedText`]'s own doc.
+    ///
+    /// A short-lived borrow returned fresh on every call rather than bound
+    /// once across a text-drawing loop: [`Self::quads`] needs `&mut self` in
+    /// the same loop, and this way the two borrows never overlap. See
+    /// `Self::atlas.cell(ch)`'s own call site below, which already worked
+    /// this way before there was a second atlas to choose between.
+    fn atlas_for(&self, face: bool) -> &Atlas {
+        if face {
+            self.face_atlas.as_ref().unwrap_or(&self.atlas)
+        } else {
+            &self.atlas
+        }
+    }
+
     /// One line of text, optionally clipped to a horizontal window (the
     /// marquee's).
     #[expect(
@@ -27,6 +47,7 @@ impl Renderer {
     )]
     pub(super) fn push_text(
         &mut self,
+        face: bool,
         x: f32,
         y: f32,
         scale: f32,
@@ -36,7 +57,15 @@ impl Renderer {
         text: &str,
         clip: Option<(f32, f32)>, // a value marquee's window; see `oag_ui::marquee`
     ) {
-        let width = font::measure(&self.atlas, text) * scale;
+        // `MODE_FACE_ATLAS` only when there is a real face atlas to sample -
+        // never for the placeholder [`face::upload_face`] built with no role
+        // loaded, which `Self::atlas_for` has already fallen back past.
+        let mode = if face && self.face_atlas.is_some() {
+            MODE_FACE_ATLAS
+        } else {
+            MODE_ATLAS
+        };
+        let width = font::measure(self.atlas_for(face), text) * scale;
         let mut pen = match align {
             Align::Left => x,
             Align::Centre => x - width / 2.0,
@@ -44,7 +73,7 @@ impl Renderer {
         };
 
         for ch in text.chars() {
-            let Some(cell) = self.atlas.cell(ch) else {
+            let Some(cell) = self.atlas_for(face).cell(ch) else {
                 continue;
             };
             // Size and advance come from the cell rather than a constant: the
@@ -78,7 +107,7 @@ impl Renderer {
                 uv,
                 color,
                 border,
-                mode: MODE_ATLAS,
+                mode,
                 rotation: 0.0,
                 chamfer: 0.0,
                 tile: [0.0, 0.0],
@@ -87,21 +116,23 @@ impl Renderer {
         }
     }
 
-    /// A [`Draw::Text`] whose `wrap_width` is set: `text` split into lines by
-    /// [`crate::loading::wrap`], each drawn exactly as one call to
-    /// [`Self::push_text`] would, stacked downward from `y` by the atlas's own
-    /// line height at `scale` - the same quantity a real font's `.fnt` carries
-    /// and menu rows already step by. No `clip`: a wrapped block is a
-    /// multi-line paragraph, not a scrolling single line, so nothing has
-    /// needed the two together yet.
+    /// A [`Draw::Text`] or [`Draw::FacedText`] whose `wrap_width` is set:
+    /// `text` split into lines by [`crate::loading::wrap`], each drawn
+    /// exactly as one call to [`Self::push_text`] would, stacked downward
+    /// from `y` by the chosen atlas's own line height at `scale` - the same
+    /// quantity a real font's `.fnt` carries and menu rows already step by.
+    /// No `clip`: a wrapped block is a multi-line paragraph, not a scrolling
+    /// single line, so nothing has needed the two together yet.
     ///
     /// [`Draw::Text`]: oag_ui::frontend::Draw::Text
+    /// [`Draw::FacedText`]: oag_ui::frontend::Draw::FacedText
     #[expect(
         clippy::too_many_arguments,
         reason = "a line of text is this many independent properties"
     )]
     pub(super) fn push_wrapped_text(
         &mut self,
+        face: bool,
         x: f32,
         y: f32,
         scale: f32,
@@ -111,12 +142,13 @@ impl Renderer {
         text: &str,
         width: f32,
     ) {
-        let line_height = self.atlas.line_height * scale;
-        for (index, line) in wrap(&self.atlas, text, scale, width)
+        let line_height = self.atlas_for(face).line_height * scale;
+        for (index, line) in wrap(self.atlas_for(face), text, scale, width)
             .into_iter()
             .enumerate()
         {
             self.push_text(
+                face,
                 x,
                 y + index as f32 * line_height,
                 scale,

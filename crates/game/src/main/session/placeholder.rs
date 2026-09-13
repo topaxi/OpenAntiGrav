@@ -177,6 +177,7 @@ impl Session {
             menu_skin: &placeholder::MENU_SKIN,
             space: oag_display::space::Space::default(),
             menu_font: None,
+            title_font: None,
             frame: menu::Frame::default(),
             // 2048's front end is unread, so its race launches from the
             // RACE page the way every title's did before the pickers.

@@ -777,6 +777,26 @@ writers in it at the same time:
 
 ## Traps that are live
 
+**`cargo check` does not link an executable, so a `--screenshot` capture run
+between a `cargo check` and the last real `cargo build` is silently running
+the old binary.** 2026-09-13, wiring HD's chrome-title font role. The whole
+implementation pass used `cargo check`/`cargo clippy` to verify as it went -
+correctly, they are faster and catch the same type errors - but the first two
+before/after screenshot pairs both came back **zero** pixels different,
+which read as "the fix isn't visible" rather than what it was: `target/debug/oag-game`
+had not been relinked since the one `cargo build --workspace` at the very
+start of the session, so every `--menu-page` capture in between was against
+pre-change code with no error or warning saying so. Rebuilding with `cargo
+build` (not `cargo check`) surfaced the real picture - and a second, genuine
+bug the check-only loop had never run far enough to hit: a `wgpu` validation
+panic, `"the buffer bound at binding index 0 is bound with size 56 where the
+shader expects 64"`, from a `Uniforms` struct whose Rust-side size did not
+match WGSL's own alignment-driven padding. **A `cargo check`-verified change
+to `render.rs` or any `.wgsl` file needs an actual `cargo build` plus a real
+capture before trusting a before/after comparison** - `cargo check`'s silence
+proves the types line up, not that the picture on screen has moved, and a
+wgpu validation error only fires at draw time, never at compile time.
+
 **Adding a weapon to `oag_gameplay::pickup::IMPLEMENTED` re-rolls every
 statistic downstream of `pickup::draw`, and a sparse one will flip.**
 2026-09-08. Landing the LeachBeam turned

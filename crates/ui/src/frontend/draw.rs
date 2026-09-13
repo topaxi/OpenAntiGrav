@@ -226,6 +226,44 @@ pub enum Draw {
         /// Wrap width from `widthlimited="true"`; `None` is one line, however wide.
         wrap_width: Option<f32>,
     },
+    /// [`Self::Text`], drawn in a **named font role** rather than whatever
+    /// face the frame is already bound to.
+    ///
+    /// **A separate variant rather than an `Option<&str>` field on
+    /// [`Self::Text`]**, for the reason [`Self::ChamferedFill`] and the three
+    /// sprite variants already give: `Text` is constructed at two dozen call
+    /// sites across the HUD, the loading screen, the picker, the prompts and
+    /// the scoreboard, and every one of them would carry a `None` for the one
+    /// widget that needs this - the menu's own screen title, when the title
+    /// package names a role for it. See [`oag_title::MenuSkin::title_font`].
+    ///
+    /// The renderer resolves `role` against whichever atlas it loaded for
+    /// that role, falling back to the frame's own bound face when it loaded
+    /// none - never to a *different* title's answer, and never silently to
+    /// `Default` either, both of which would be a face this variant did not
+    /// ask for.
+    FacedText {
+        /// The role, as the language plugin's `<Font><Values name=...>`
+        /// spells it - `"Title"` for Wipeout HD's chrome title.
+        role: &'static str,
+        /// Left or anchor edge, depending on `align`.
+        x: f32,
+        /// Top edge.
+        y: f32,
+        /// Scale multiplier applied to the glyph cell.
+        scale: f32,
+        /// Colour of the glyph body.
+        color: [f32; 4],
+        /// Colour of the glyph's baked outline, when the font has one - see
+        /// [`Self::Text`]'s own `border` field.
+        border: Option<[f32; 4]>,
+        /// Alignment about `x`.
+        align: Align,
+        /// The text.
+        text: String,
+        /// Wrap width from `widthlimited="true"`; `None` is one line, however wide.
+        wrap_width: Option<f32>,
+    },
 }
 
 impl Frontend {

@@ -9,6 +9,14 @@
 // distinguish it only by grey level - see `font.rs`. Text is composited as
 // `mix(border, color, mask)` at `coverage`, which for the three menu fonts (mask
 // constant 1) is exactly the plain `color` it always was.
+//
+// There is a second, smaller glyph texture too - `face_texture`, for
+// `Draw::FacedText` - bound alongside the first exactly the way the sprite
+// sheet is, rather than replacing it: a menu screen can need both the body
+// face and a named role's face (Wipeout HD's bold chrome title) in the same
+// frame, and one bound atlas at a time cannot draw that. It carries a 1x1
+// placeholder whenever no title package has loaded a face atlas, which no
+// quad samples in that case - see `MODE_FACE_ATLAS`.
 
 struct Uniforms {
     // Multiplies clip space to letterbox 480x272 into a window of any shape.
@@ -23,6 +31,11 @@ struct Uniforms {
     // reads it - but both shaders bind the same buffer, so its layout must
     // agree.
     video_rect: vec4<f32>,
+    // The face atlas's own size in pixels - `Draw::FacedText`'s glyphs, which
+    // are not always the same font as `atlas` and so not always the same
+    // size. A 1x1 placeholder whenever no face atlas is loaded, which no quad
+    // samples in that case anyway.
+    face_atlas: vec2<f32>,
 };
 
 @group(0) @binding(0) var<uniform> uniforms: Uniforms;
@@ -30,6 +43,8 @@ struct Uniforms {
 @group(0) @binding(2) var atlas_sampler: sampler;
 @group(0) @binding(3) var sprite_texture: texture_2d<f32>;
 @group(0) @binding(4) var sprite_sampler: sampler;
+@group(0) @binding(5) var face_texture: texture_2d<f32>;
+@group(0) @binding(6) var face_sampler: sampler;
 
 struct Instance {
     // x, y, width, height in screen pixels.
@@ -42,8 +57,10 @@ struct Instance {
     // 0 indexes the glyph atlas, 1 the sprite sheet, 2 the sprite sheet added
     // rather than blended over, 3 a solid fill whose colour runs from `color`
     // on the left to `border` on the right - which the vertex stage resolves
-    // into a plain mode-0 fill, so every `> 0.5` test in the fragment stage
-    // is still exactly "is this a sheet quad".
+    // into a plain mode-0 fill - and 4 the **face** atlas, a second glyph
+    // texture for `Draw::FacedText`. Every mode is tested by range rather than
+    // by an open-ended `>`, because 4 sorts above every earlier mode and an
+    // open-ended test would silently catch it too.
     @location(4) mode: f32,
     // Clockwise turn about the quad's own centre, in radians. Zero for
     // everything but the lock-on reticle's corner brackets, which are four
@@ -136,9 +153,11 @@ fn vs_main(@builtin(vertex_index) index: u32, instance: Instance) -> VertexOut {
     // what reaches the fragment stage is an ordinary atlas fill of that colour
     // - both `color` and `border` carry it, so the solid texel's own mask mixes
     // to the same value whichever way it reads.
-    let is_gradient = instance.mode > 2.5;
-    let is_sheet = instance.mode > 0.5 && !is_gradient;
-    let size = select(uniforms.atlas, uniforms.sprites, is_sheet);
+    let is_gradient = instance.mode > 2.5 && instance.mode < 3.5;
+    let is_sheet = instance.mode > 0.5 && instance.mode < 2.5;
+    let is_face = instance.mode > 3.5;
+    var size = select(uniforms.atlas, uniforms.sprites, is_sheet);
+    size = select(size, uniforms.face_atlas, is_face);
     out.uv = (instance.uv.xy + corner * instance.uv.zw) / size;
     let tiled = instance.tile.x > 0.0;
     out.tile_rect = select(vec4<f32>(0.0), instance.uv / vec4<f32>(size, size), tiled);
@@ -152,9 +171,10 @@ fn vs_main(@builtin(vertex_index) index: u32, instance: Instance) -> VertexOut {
 
 @fragment
 fn fs_main(in: VertexOut) -> @location(0) vec4<f32> {
-    // Both are sampled unconditionally and one is discarded. `textureSample`
-    // needs uniform control flow for its implicit derivatives, and the mode flag
-    // is per-instance, so branching around the sample is not allowed here.
+    // All three are sampled unconditionally and two are discarded.
+    // `textureSample` needs uniform control flow for its implicit derivatives,
+    // and the mode flag is per-instance, so branching around the sample is
+    // not allowed here.
     let glyph = textureSample(atlas_texture, atlas_sampler, in.uv);
     // `r` is the body/outline mask, `g` the silhouette's coverage.
     let mask = glyph.r;
@@ -166,6 +186,15 @@ fn fs_main(in: VertexOut) -> @location(0) vec4<f32> {
     let wrapped = in.tile_rect.xy + fract(in.tiles) * in.tile_rect.zw;
     let sprite_uv = select(in.uv, wrapped, in.tile_rect.z > 0.0);
     let sprite = textureSample(sprite_texture, sprite_sampler, sprite_uv);
+    let face = textureSample(face_texture, face_sampler, in.uv);
+    let face_mask = face.r;
+    let face_coverage = face.g;
+
+    // The vertex stage collapses a gradient (mode 3) to mode 0 before this
+    // runs, so `in.mode` only ever reaches here as 0, 1, 2 or 4 - tested by
+    // range, for the same reason the vertex stage now is.
+    let is_sheet = in.mode > 0.5 && in.mode < 2.5;
+    let is_face = in.mode > 3.5;
 
     // Body toward `color`, outline toward `border`. The alpha is mixed too, so a
     // translucent border colour - which is what the HUD authors, 0x40000000 -
@@ -173,7 +202,13 @@ fn fs_main(in: VertexOut) -> @location(0) vec4<f32> {
     let ink = mix(in.border, in.color, mask);
     let from_atlas = vec4<f32>(ink.rgb, ink.a * coverage);
     let from_sheet = sprite * in.color;
-    let straight = select(from_atlas, from_sheet, in.mode > 0.5);
+    // The face atlas mixes the same way the main one does - the menu faces
+    // this build has loaded through it all carry a constant mask, same as
+    // `from_atlas`'s own menu-font case - so this is not a third formula, only
+    // a third sample.
+    let face_ink = mix(in.border, in.color, face_mask);
+    let from_face = vec4<f32>(face_ink.rgb, face_ink.a * face_coverage);
+    let straight = select(select(from_atlas, from_sheet, is_sheet), from_face, is_face);
 
     // **Premultiplied on the way out**, because the pipeline blends
     // premultiplied alpha - see `render.rs`'s colour target. `src.rgb * src.a`
@@ -187,7 +222,7 @@ fn fs_main(in: VertexOut) -> @location(0) vec4<f32> {
     // the lock-on reticle's brackets glowing on the track and sitting on
     // opaque black tiles: their textures carry the shape in the colour
     // channels over a black field, with alpha pinned at 250/255.
-    let is_additive = in.mode > 1.5;
+    let is_additive = in.mode > 1.5 && in.mode < 2.5;
     let alpha = select(straight.a, 0.0, is_additive);
     return vec4<f32>(straight.rgb * straight.a, alpha);
 }

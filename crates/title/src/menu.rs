@@ -163,6 +163,37 @@ pub struct MenuSkin {
     pub title_y: f32,
     /// Scale applied to the screen title. Authored, `FEGlobals->TitleScale`.
     pub title_scale: f32,
+    /// The font role the screen title is drawn in, as the language plugin
+    /// names it - the same mechanism as [`Self::menu_font`], one widget up.
+    ///
+    /// **`None` means "draw the title in the default face", which is what
+    /// this build has always done and is not the same claim as "this title's
+    /// chrome authors no role".** Wipeout HD's `mainmenu_definition.xml`
+    /// authors `<Text idstring="FE_MM" font="Title" ...>` on its main-menu
+    /// title, resolving to `helvb.fnt` (44px) against `Default`'s `helv.fnt`
+    /// (33px) - see `docs/formats/fnt.md`'s font table and
+    /// `docs/formats/hd-frontend.md`'s `TitleColor` section for the widget
+    /// itself. `oag_hd::frontend::MENU_SKIN` is `Some("Title")`.
+    ///
+    /// **Pulse's own `MainMenu_Definition.xml` authors the same thing** -
+    /// `<b d="FE_MM" p="title" ...>` (`p` is `font` in that file's own tag
+    /// dictionary), matched case-insensitively by [`oag_ui::language::Language::font`]
+    /// to the same `Title` slot, which Pulse's plugins resolve to
+    /// `Pulse_14.fnt` (17px) against `Default`'s 13px `pulse_text.fnt` - and
+    /// `TournamentLoad`'s own title says `font="Title"` too. Read directly off
+    /// `Data.wad`'s `Data\Plugins\PI001\GUI\MainMenu_Definition.xml`,
+    /// 2026-09-13, while wiring this field for HD.
+    ///
+    /// **Left `None` for Pulse anyway - a deliberate scope cut, not a second
+    /// measurement disagreeing with the first.** Flipping it would move
+    /// already-capture-verified, confidence-95 output
+    /// (`docs/ui/menus-original.md`'s Layout table) with no capture of its
+    /// own checking whether the title's face is what changes; that is a
+    /// separate pass this one did not budget for. Whoever takes it next has
+    /// the widget already found, not just the question. Pure was not
+    /// checked at all: its `Main Menu` screen is not at the archive path
+    /// this session tried, and time-boxing stopped there.
+    pub title_font: Option<&'static str>,
     /// Top of the first row, in the layer the rows are drawn in.
     ///
     /// Authored per *screen* rather than in `FEGlobals` - Pulse's `Main Menu`
@@ -354,6 +385,10 @@ mod tests {
         title_x: 50.0,
         title_y: 0.0,
         title_scale: 1.0,
+        // This fixture predates the finding in `title_font`'s own doc that
+        // Pulse's disc does author the role - kept `None` here too, matching
+        // the shipped `oag_pulse::FRONT_END`'s own deliberate scope cut.
+        title_font: None,
         first_row_y: Some(32.0),
         row_extra_leading: Some(6.0),
         menu_font: Some("menu"),
