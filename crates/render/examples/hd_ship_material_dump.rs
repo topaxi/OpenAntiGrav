@@ -1,7 +1,6 @@
-//! Scratch: decode and print every drawn material a ship `.vex` resolves,
-//! for the "what does the resolved variant actually compute" read in the
-//! hull-lighting handover thread
-//! (`handover/rendering/hd-needs-a-per-material-shader-path-and.md`).
+//! Scratch: decode and print every drawn material a ship `.vex` resolves -
+//! the "what does the resolved variant actually compute" read behind
+//! `docs/rendering/hd-ship-materials.md`.
 //!
 //! ```sh
 //! cargo run -p oag-render --example hd_ship_material_dump -- data/images/hdfury-ps3-eu-dec.iso /data/ships/feisar_c1/ship.vex

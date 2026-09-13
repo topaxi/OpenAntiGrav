@@ -17,7 +17,10 @@
   render. The art meshes are behind `--art` rather than being the default, for a
   reason that is [about verification, not rendering](../overview/roadmap.md#m5---full-race)
 - Ship rendering, including team liveries - **done** for the eight teams whose
-  `Ship.vex` resolves by name
+  `Ship.vex` resolves by name. HD's hull materials resolve a shipped shader
+  variant disc-wide, and what each variant computes - plus a live
+  `ADD_SECOND` misclassification it exposed - is in
+  [hd-ship-materials.md](hd-ship-materials.md)
 - Scenery **animation** - **done**, both mechanisms. `Anim Transform` `0x3c0`
   moves the geometry: 393 nodes over the twelve circuits with 474 meshes below
   them, decoded from the class's own binder and evaluators

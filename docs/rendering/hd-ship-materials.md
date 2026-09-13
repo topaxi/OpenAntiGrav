@@ -1,0 +1,244 @@
+# HD ship hull materials: what each resolved variant computes, and a live bug it exposed
+
+2026-09-13. Scope: `feisar_c1/Ship.vex`'s five drawn materials (the craft the
+matched-camera reference frames, `docs/reverse-engineering/rpcs3-capture.md`),
+corroborated disc-wide over every ship family. Confidence per the
+[rubric](../reverse-engineering/confidence-rubric.md). Produced with
+`crates/render/examples/hd_ship_material_dump.rs`.
+
+Prior reading this builds on: `docs/formats/rcsmaterial.md` ("The ship hull's
+dark materials: a wrong colour-set match, not a wrong vertex class", 2026-09-13)
+fixed every hull material's *resolution* (100/178 -> 178/178). This page is
+about what the now-resolved variants actually compute, and a rendering bug the
+resolution fix exposed rather than caused.
+
+## The per-material term table (`feisar_c1/Ship.vex`, 5/5 resolve)
+
+All five resolve `Static/HalfBrightAmbientSunSpot0SVC0` (the ordinary lit-race
+key, no lightmap, no colour set - confidence 95, direct decoder output).
+
+| Material | chunks | ambient | sun | specular chain | unit 0 | unit 1 | unit 2 |
+| --- | ---: | --- | --- | --- | --- | --- | --- |
+| `diffuse_with_specular_from_alpha_n_vcol` | 2 | yes | yes | found, literal `0.0`, unpatched by `SpecularPower` -> falls to the shared `32.0` | `feisar_c1_livery.gtf` | `feisar_c1_livery_norm.gtf` (normal map) | declared `0x9edd3243`, no `.gtf` bound (see below) |
+| `diffuse_vcol` | 6 | yes | yes | **no chain at all** (`None`) -> falls to `32.0` | `feisar_c1_livery.gtf` | none besides the unused lightmap placeholder | - |
+| `carbonfibre` | 1 | yes | yes | found, literal `0.0`, unpatched -> `32.0` | `carbon.gtf` | `carbon_n.gtf` (normal map) | declared `0x9edd3243`, same as above |
+| `glass_texture_clamped` | 1 | yes | yes | none | `feisar_c1_glass.gtf` | - | - |
+| `detonator_emissive_bloom` | 2 | **no** | **no** | none | `colours_flashing_glow.gtf` (an `ag_systems` texture, shared cross-team) | - | - |
+
+Confidence 90 for `ambient`/`sun`/`specular chain` (mechanical decoder output,
+`Declared::takes_constant_ambient`/`takes_directional_light`,
+`fragment::Program::specular_exponent`), already read and wired by prior work
+(`mesh::rcs::skin::roles`, `crates/rcs/src/rcsmaterial/fragment.rs`). Nothing
+in this table is new *wiring* - it is new *reporting* over an existing reader,
+confirming the resolved hull materials feed the same ambient/sun/specular-
+exponent path every other resolved HD material does. `diffuse_vcol` (6 of 12
+chunks - the majority of the hull) genuinely has no specular chain at all,
+which the existing `DEFAULT_SPECULAR_EXPONENT` fallback already treats
+correctly (it still draws a specular term at the shared exponent, a documented,
+tested prior decision - see `crates/render/src/mesh/vertex.rs`'s own doc
+comment - not revisited here).
+
+`detonator_emissive_bloom`'s texture is worth flagging rather than acting on:
+it's shared from `/data/ships/ag_systems/...`, not a Feisar asset, which reads
+as a decal/pad-light slot rather than a hull surface proper (2 chunks, likely
+small trim geometry). Not chased further.
+
+## Finding 1: a ship's own second texture is added to the hull as a glow, disc-wide
+
+**The mechanism.** `mesh::rcs::skin::picks` chooses the material's "aux"
+(second) texture entry per slot. Where the alpha lane traces to nothing
+(`Texel::Untraced` - true of every hull material's output alpha above) and the
+material has no lightmap, `aux` falls back to raw ordinal 1 of the model's own
+sampler table - `Pick::default()`'s `aux: Some(1)`, unconditional. That
+fallback is documented as "what this renderer always bound" and is meant as a
+conservative no-information default.
+
+`mesh::rcs::emissive::emissive` separately asks each material's resolved
+fragment program `Program::accumulates(1)` - a structural test (a `MAD`/`ADD`
+whose destination is also one of its own sources, fed by unit 1's sample) -
+and where that is true and a second texture decoded, sets `slots::ADD_SECOND`:
+the shader adds that texture to the albedo as a tinted, optionally-scrolling
+glow (`mesh.wgsl`'s `glow`/`glow_linear` terms).
+
+**Where the two combine wrongly.** A ship hull material's raw ordinal-1 entry
+is whatever the artist put second in the table - on `feisar_c1`'s two affected
+materials, literally the ship's own **normal map** (`feisar_c1_livery_norm.gtf`,
+`carbon_n.gtf`). Its tangent-space unpack and the specular/diffuse math it
+feeds (`crates/rcs/src/rcsmaterial/fragment.rs`'s decoded instruction stream,
+61 instructions on `diffuse_with_specular_from_alpha_n_vcol`) trips
+`accumulates(1)` - the same `MAD dst, dst, x, y`-shaped register reuse a real
+scrolling glow has, produced here by ordinary lighting arithmetic rather than
+an additive combine. Confidence 85 that `accumulates(1)` is a genuine
+structural true positive here (the instruction shapes were read, not just
+counted) and not a decoder bug; confidence 95 that the *consequence* is wrong,
+verified by the tint check below.
+
+**Verified, not inferred: neither affected material declares `TINT`.**
+`emissive()` reads `material.parameters` for `TINT` (`0xe8bcd7f5`),
+`OFFSET`/`SCALE` (`0x78256a45`/`0x78787596`). `diffuse_with_specular_from_alpha_n_vcol`
+declares `0xab31c2b1`/`0x4232e459` and `carbonfibre` declares
+`0xebecee0f`/`0x24212379` - none of the six is the emissive triple. So the
+fallback fires: `tint = [1.0, 1.0, 1.0]`, `scale = 1.0`, `offset = 0.0`,
+`rate = 0.0`. The normal map's own RGB (unpacked tangent space is typically
+`~(0.5, 0.5, 1.0)` - blue-dominant) is added **at full weight**, gated only by
+the diffuse texture's alpha (`first.a`, which is `1.0` everywhere on a DXT1
+diffuse). Confidence 95 - read directly off the material's own parameter
+table, not estimated.
+
+**Disc-wide count, corrected.** A first census (raw ordinal-1 path string,
+`_norm`/`_n` name match) over-counted; the real number is off the actual build
+pipeline (`mesh::rcs::build`, `Model::material_slots`). Over every ship file
+plus Talon's Junction (forward and reversed): **249 `ADD_SECOND` slots total,
+176 on ship files.** Splitting those 176 by material family:
+
+| Family | slots | reads as |
+| --- | ---: | --- |
+| `diffuse_with_specular_from_alpha_n_vcol` | 52 | hull paint, normal map at ordinal 1 |
+| `nitro_body_new` | 46 | hull paint, but ordinal 1 is a **different diffuse texture** (`*_tp_nolivery.gtf`), not the normal map - see below |
+| `leacheffectmat` | 37 | weapon-trail effect overlay, not a hull surface - plausibly a real glow, not evidenced either way here |
+| `carbonfibre` | 20 | hull trim, normal map at ordinal 1 |
+| `hexagonalshield_alpha` | 6 | shield effect overlay, same caveat as `leacheffectmat` |
+| `diffuse_with_specular_from_alpha_n` | 6 | hull paint, normal map at ordinal 1 |
+| `detonator_diffuse_with_specular_from_alpha_n_vcol` | 4 | hull paint, normal map at ordinal 1 |
+| `glass_texture_n` | 2 | canopy glass, normal map at ordinal 1 |
+| `zonebattle_shield`, `detonator_ship_rich_iridescent`, `detonator_ship_dg_iridescent` | 1 each | mixed - see below |
+
+**132 of 176** are hull-paint families where ordinal 1 is confirmed (by name
+and, for two of them, by direct dump) to be a texture that is not a picture to
+add - a normal map on six of the nine families. The other 44
+(`leacheffectmat`, `hexagonal_shield_alpha`, `zonebattle_shield`) are effect
+overlays where an additive layer is plausible by design; not evidenced as
+wrong here, and not included in the 132.
+
+**Not one shape.** `nitro_body_new` (46 slots, the nitro-variant hull)
+resolves ordinal 1 to `auricom_tp_nolivery.gtf` - a **base, no-livery diffuse
+texture**, not a normal map at all (its actual normal map is at ordinal 2:
+`auricom_c1_tp_norm.gtf`). So the bug's root cause (`aux` falling back to raw
+ordinal 1 regardless of what that position holds) is uniform, but its visible
+symptom differs by family: some ships add their own normal map onto their
+hull, this one adds a *different skin's diffuse texture*. Either way the added
+layer is not what the material's own microcode structurally intends
+`accumulates(1)` to answer for - a glow sprite - and both are symptoms of the
+same ordinal-1 fallback.
+
+**Two fixes were tried and both failed on measurement - reported rather than
+landed.**
+
+1. *Gate on whether `aux` was a positive trace* (a new `Pick::aux_traced`
+   field, true only via the lightmap identification or a resolved
+   `Texel::Unit` alpha-lane read, false on the ordinal-1 fallback). This is
+   the fix that would read as "obviously correct" from the mechanism above.
+   **Measured and refuted**: rerunning the same before/after census found it
+   deletes real, working glows too - `scroller_glow_v3`/`v4`, `tunnel_fx_noalpha`,
+   `bluemetal`, `mt_uvanim_diffuse_emissive2`, `scanlinetext`,
+   `etched_glass_tech`, `mageffect08`, `chevron_facing_material`,
+   `nr_scalinguvs`, `and_arrowmaterial` - every one of them lost `ADD_SECOND`
+   too, because a real glow's *alpha* lane is routinely `Untraced` as well (its
+   coverage is usually a constant; the accumulate lives entirely in RGB). So
+   "was `aux` traced" is not a proxy for "is this a real glow" - both
+   populations get to `aux = Some(1)` by the identical fallback, and the two
+   cannot be told apart at the `Pick` level.
+2. *Hash-exclude the ship normal-map samplers*, matching this codebase's own
+   established idiom (`skin::NOT_A_PICTURE`, a disc-measured hash list already
+   used to keep a ramp/lookup from being picked as a picture). Not landed:
+   `nitro_body_new`'s 46 slots show the wrong-added-texture isn't always a
+   normal map (see above), so a normal-map hash list would fix six of nine
+   affected families and silently leave the rest - an incomplete fix presented
+   as complete. Confirming the exclusion is also safe for `bluemetal`
+   (`blue_metal_facing_ramp.gtf`, already in `NOT_A_PICTURE` for its `picks()`
+   role - would this exclusion also cost `bluemetal`'s existing glow, correctly
+   or not?) needs a decision this session did not reach.
+
+**What a correct fix needs, for whoever picks this up next:** `emissive()`
+should resolve unit 1's *actual* declared-and-bound sampler by hash cross-
+reference against `Declared.samplers` (the same lookup `skin::units` already
+does for `ALBEDO_FROM_SECOND`/`ALPHA_FROM_SECOND` routing), not accept
+whatever `Pick::aux` (ordinal-based) happened to load - and then decide,
+per that resolved sampler's role, whether an accumulate is a real glow. That
+is more than this session's remaining budget allowed to land safely, given the
+first attempt's regression; **no code change is committed for this finding**,
+by design, so `just test-data`'s current green stays green and describes the
+bug rather than a broken fix.
+
+**Player-eye corroboration.** Our own default-chase render of `feisar_c1` at
+the grid (`/tmp/oag-drive/lane-hull-shading/before-default-chase.png`) against
+the same-framing RPCS3 reference (`data/reference/hd-capture/talons-ships/00.png`)
+shows exactly the colour shift this bug predicts: the original's top fuselage
+reads warm khaki-olive with orange wing-panel accents, ours reads
+distinctly cooler/blue-grey with a visible blue-purple cast over the
+canopy/wing-top surfaces that use `diffuse_with_specular_from_alpha_n_vcol` -
+consistent with a raw, blue-dominant tangent-space normal map added at full
+weight. Not a controlled A/B (no code changed this session to compare against),
+but the direction and location of the colour shift match the mechanism.
+
+## Finding 2: unit 2's specular-from-alpha term is not achievable as written
+
+The handover brief named "wire the unit-2 specular-from-alpha binding" as the
+step-2 minimum. It is not achievable with what the disc supplies, for two
+independent reasons, each sufficient on its own:
+
+1. **No `.gtf` to bind.** `diffuse_with_specular_from_alpha_n_vcol`'s declared
+   unit-2 sampler hash is `0x9edd3243`. The *model's own* sampler table
+   (`rcsmodel::Material::samplers`, the thing `mesh_render` can actually load
+   a path from) is `[0xfb17503f, 0x436d3929, 0x37b5db58]` - none of the three
+   is `0x9edd3243`. `skin::picks`'s `index_of` requires a model-sampler entry
+   whose hash matches *and* whose path is `Some`; there is no such entry, so
+   this unit can never resolve to a texture this project can load, regardless
+   of any shader work. Confidence 95 - a direct table lookup, not an
+   inference.
+2. **Its coordinate is computed, not the surface UV.** Block #49
+   (`TEX H1.xyz, coord unit2`) reads a coordinate built at
+   `R1.z = R0.w + 0.25`, `R1.w = (R2.y + R3.y) * 0.5 + 0.5` (traced by hand
+   through the register-write chain, confidence 60 - the individual `MAD`/`ADD`
+   steps are read directly off the decoded instruction stream, but the chain
+   was not cross-checked against a second material or a runtime trace). `R2`/
+   `R3` are the same registers the specular dot-products (`#8`, `#13`, `#15`,
+   `#17`, `#19` - saturated `DP3`s) write into earlier in the same program, so
+   this reads as a **lighting-scalar-indexed lookup** (the same shape as
+   `NOT_A_PICTURE`'s `0x94b2b285`, sampled at `dot(V,N)`), not a picture
+   sampled at the diffuse UV the way `mesh.wgsl`'s existing second-texture path
+   assumes. Sampling it at `in.texcoord` - the only coordinate this renderer's
+   second-texture path currently has - would not reproduce what the file
+   computes, on top of there being no texture to sample in the first place.
+
+Both points independently close this as "name the gap," per `CLAUDE.md`'s rule
+against inventing a stand-in.
+
+## Finding 3 (low confidence, flagged for follow-up, not acted on): VertexColour1 may feed TC0, not TC1, on a hull material
+
+`Mesh::vertex_light` (`crates/rcs/src/rcsmodel.rs`) and `mesh.wgsl` both treat
+`VertexColour1` as HD's `f[TC1]` per-vertex light term, a convention read off
+**track** materials. Tracing where `feisar_c1`'s hull materials' own vertex
+program writes `VertexColour1` (`v[4]`, confirmed via
+`vertex::Program::attribute_slot`) finds it feeding **`o[7]`** - which, per
+this project's own vertex-output numbering
+(`crates/rcs/src/rcsmaterial/vertex.rs`'s `FIRST_TEXCOORD_DEST = 7`), is
+**`TC0`**, the diffuse UV register, not `TC1` (`o[8]`).
+
+**Why this is not asserted as a finding, only flagged.** `vertex::Instruction`
+does not currently expose a destination **write mask**, so it cannot be told
+from this reading alone whether `VertexColour1` overwrites `TC0`'s real UV
+(`.xy`) entirely, or rides in unused lanes (`.zw`) alongside a UV written by a
+different instruction - a common old-shader idiom for packing extra per-vertex
+data into an interpolator's spare channels. Confidence 50 (plausible, could be
+wrong) on "this attribute's real destination is TC0, not TC1, on a hull
+material" - below the line for acting on it, per the confidence rubric,
+without extending the vertex microcode reader (which does not fit this
+session's remaining scope) or a runtime register trace.
+
+If it holds up: this project's `vertex_light`/`sun_mask` feed for ships would
+be reading whichever bytes ride in an unrelated register on the real
+executable, on top of - not in place of - the `ADD_SECOND` bug above. Left
+for the next thread to confirm; the open question is precisely which
+component mask the write covers.
+
+## What has not moved
+
+`mesh::rcs::skin::roles`'s existing per-material reads
+(`NO_AMBIENT`/`NO_SUN`/`specular_exponent`/`ALBEDO_FROM_SECOND`/
+`ALPHA_FROM_SECOND`/`SECOND_IS_LIGHTMAP`) are confirmed correct and unchanged
+for this hull by the table above - the "no per-material lighting branch"
+framing this thread's title carries is narrower than it reads: most of the
+per-material branching already exists and is already correctly wired for
+`feisar_c1`. What remains open is the ADD_SECOND misclassification (Finding
+1) and the TC0/TC1 question (Finding 3), not a missing branch structure.
