@@ -287,6 +287,113 @@ def packet_candidates(blob, base=0):
         at += 4
 
 
+#: The camera has to be the same value in at least `MIN_REGISTER_COUNT`
+#: distinct RSX registers within a frame - empirically `256` and `260` in
+#: every shot measured so far (`rpcs3-capture.md`'s "Picking the camera out:
+#: multiplicity, not a score") - to separate it from a degenerate matrix that
+#: a header match turns up in only one of them.
+CAMERA_REGISTERS = frozenset({256, 260})
+
+
+def pick_camera(frames):
+    """Picks the one candidate per frame that is the camera, or refuses.
+
+    `frames` is a list of per-shot candidate lists, each one
+    `list(packet_candidates(...))` for that shot - every frame in the capture
+    session has to be in hand at once, because the discriminator is
+    **cross-frame**: `rpcs3-capture.md`'s "Picking the camera out" table. A
+    per-object `worldViewProj` (`c[256]`) takes dozens to a hundred distinct
+    values a frame and is excluded by being many, not one; a static constant
+    (a cube face, a bias matrix) is one value that is bit-identical **across
+    frames** and is excluded by recurring there; the camera is the value that
+    is one *within* a frame and different *between* frames. Confirmed
+    directly against `talons-fifo3`'s three dumps (`rpcs3-capture.md`,
+    "A packet-aware finder exists"): two matrices there repeat bit-for-bit
+    across all three frames (the degenerate `0.0`-error ties that beat the
+    real camera under a plain `min`), and the real camera's own eye and
+    `unit_error` differ in all three.
+
+    Within-frame repetition alone is not sufficient - the same section found
+    the degenerate matrices recurring dozens of times *within* one frame too
+    - so a second filter applies to whatever survives being frame-unique:
+    it must be the identical value loaded into at least `CAMERA_REGISTERS`
+    registers (`256` **and** `260`) in that frame. That is what breaks a tie
+    `talons-fifo3/01` has between the real camera and one more degenerate
+    matrix that is itself frame-unique but lands in only one of the two
+    registers.
+
+    Returns a list parallel to `frames`. Each element is
+    `(camera, reason, candidate_count)`:
+
+    - `camera` is `None` unless exactly one value survives every filter, in
+      which case it is a dict: `address`, `order`, `unit_error`, `eye`,
+      `view_proj` (the matrix) and `registers` (which of `256`/`260` carried
+      it, sorted).
+    - `reason` is `None` when a pick was made, else why it was not - carried
+      through to the capture record rather than silently emitting nothing,
+      the same honest-absence rule this project applies to a missing asset.
+    - `candidate_count` is how many frame-unique, dual-register values
+      survived: `0` or more than `1` when `camera` is `None`, exactly `1`
+      otherwise - present even on a successful pick so the record shows its
+      work rather than asserting it.
+
+    This never falls back to the byte-slider (`candidates`): a region with no
+    `TRANSFORM_CONSTANT_LOAD` packet is a region with nothing to offer, not a
+    reason to widen the search and risk a `"finder"` label beside a wrong
+    pose (`rpcs3-capture.md`'s "A packet-aware finder exists" section is the
+    reasoning this followed).
+    """
+    if len(frames) < 2:
+        reason = ("the cross-frame discriminator needs at least 2 frames; "
+                   "only %d captured" % len(frames))
+        return [(None, reason, 0) for _ in frames]
+
+    value_frames = {}
+    for index, candidates_this_frame in enumerate(frames):
+        frame_values = set()
+        for entry in candidates_this_frame:
+            frame_values.add(tuple(entry[4]))
+        for key in frame_values:
+            value_frames.setdefault(key, set()).add(index)
+
+    results = []
+    for index, candidates_this_frame in enumerate(frames):
+        by_value = {}
+        for entry in candidates_this_frame:
+            key = tuple(entry[4])
+            by_value.setdefault(key, []).append(entry)
+
+        frame_unique = {key: entries for key, entries in by_value.items()
+                         if value_frames[key] == {index}}
+        dual_register = {
+            key: entries for key, entries in frame_unique.items()
+            if CAMERA_REGISTERS <= {entry[5] for entry in entries}
+        }
+
+        if len(dual_register) == 1:
+            (entries,) = dual_register.values()
+            address, order, error, eye, matrix, _ = entries[0]
+            registers = sorted({entry[5] for entry in entries})
+            camera = {
+                "address": "%#010x" % address,
+                "order": order,
+                "unit_error": error,
+                "eye": list(eye),
+                "view_proj": list(matrix),
+                "registers": registers,
+            }
+            results.append((camera, None, 1))
+        elif len(dual_register) == 0:
+            results.append((None, "no frame-unique value loaded into both "
+                             "register %d and %d this frame"
+                             % tuple(sorted(CAMERA_REGISTERS)), 0))
+        else:
+            results.append((None, "%d frame-unique dual-register candidates, "
+                             "not exactly one" % len(dual_register),
+                             len(dual_register)))
+    return results
+
+
 def perspective(fov_y, aspect, near, far):
     """A right-handed perspective matrix, row-vector convention.
 
@@ -426,7 +533,67 @@ def self_test_packet():
     return 0
 
 
+def self_test_pick():
+    """Plants two frames - a moving camera and a recurring degenerate matrix
+    that is itself frame-unique in one of them - and insists `pick_camera`
+    takes the camera in both and is not fooled by the degenerate.
+
+    The degenerate is deliberately shaped after `talons-fifo3/01.json`'s own
+    tie (`rpcs3-capture.md`, "A packet-aware finder exists"): bit-identical
+    across the two frames it appears in (so the cross-frame filter alone
+    would not be enough - see the module test below), loaded into only one
+    of the two registers the real camera uses.
+    """
+    import random
+
+    def packed_frame(seed, eye, target, degenerate_header_at):
+        random.seed(seed)
+        m = multiply(look_at(eye, target), perspective(math.radians(60), 16 / 9, 1.0, 8000.0))
+        noise = bytearray(random.randbytes(1 << 14))
+        # The camera packet, loaded into both registers the same way a real
+        # capture's `c[256]`/`c[260]` upload does.
+        for offset, register in ((0x100, 256), (0x300, 260)):
+            struct.pack_into(">II", noise, offset, TRANSFORM_CONSTANT_LOAD_HEADER, register)
+            struct.pack_into(">16f", noise, offset + _PACKET_PREFIX, *m)
+        # A single-register degenerate, same bytes in every frame that plants
+        # one - the shape of the tie `pick_camera` exists to break.
+        degenerate = [0.0] * 16
+        degenerate[11] = 1.0
+        struct.pack_into(">II", noise, degenerate_header_at,
+                          TRANSFORM_CONSTANT_LOAD_HEADER, 260)
+        struct.pack_into(">16f", noise, degenerate_header_at + _PACKET_PREFIX,
+                          *degenerate)
+        return bytes(noise), m
+
+    frame0, m0 = packed_frame(20260905, (-143.58, -48.44, -175.13), (0.0, -48.44, 0.0), 0x600)
+    frame1, m1 = packed_frame(20260906, (88.88, -46.39, -178.36), (0.0, -46.39, 0.0), 0x600)
+
+    frames = [list(packet_candidates(frame0)), list(packet_candidates(frame1))]
+    results = pick_camera(frames)
+    assert len(results) == 2, results
+    for (camera, reason, count), expected in zip(results, (m0, m1)):
+        assert camera is not None, reason
+        assert reason is None, reason
+        assert count == 1, count
+        # Planted as f64, read back through an f32 round trip (the packet is
+        # big-endian `f32`), so compare loosely rather than bit-for-bit.
+        for got, want in zip(camera["view_proj"], expected):
+            assert abs(got - want) < 1e-4, (camera["view_proj"], expected)
+        assert camera["registers"] == [256, 260], camera["registers"]
+    print("pick self test: recovered the camera in both frames, rejecting "
+          "the single-register degenerate in each")
+
+    # Within-frame repetition alone must not be enough: feeding a single
+    # frame refuses rather than guessing, even though its own camera packet
+    # is there and algebraically valid.
+    (camera, reason, count) = pick_camera([list(packet_candidates(frame0))])[0]
+    assert camera is None, camera
+    assert count == 0, count
+    print("               a single frame refuses: %r" % reason)
+    return 0
+
+
 if __name__ == "__main__":
     import sys
 
-    raise SystemExit(self_test() or self_test_packet())
+    raise SystemExit(self_test() or self_test_packet() or self_test_pick())
