@@ -2678,6 +2678,131 @@ confidence score on the offline scale-check's chosen gamma/adapted proxy or
 on the bloom-gate hypothesis above - both are experiments on read numbers,
 not further reads themselves.
 
+### The carry is wired: 16 of 16 environments build the bloom chain, and Sol 2's own gap narrows by 10-25% on the regions it reaches (2026-09-13, `lane-envsettings-carry`)
+
+The "exact wiring" paragraph above, done.
+`crates/game/src/race/load/environment.rs::staged_envsettings` reads
+`/data/fe/fe.track.envsettings` as a base layer and lays the circuit's own
+file over it, keeping only the keys the circuit's own file declares as an
+override - the registrar's own persistence, read live above, applied rather
+than re-derived. `envsettings_bloom` reads through it;
+`hd_envsettings_carry_ground_truth.rs` measures every environment on the
+disc: **5 of 16 built the chain before this change, 16 of 16 after** (the
+five were exactly the base-HD circuits whose own file was already complete -
+`amphiseum`, `modesto_heights`, `talons_junction`, `tech_de_ra`, `zone_1`).
+
+**One correction to this page's own prior note.** The "exact wiring"
+paragraph left open which of `fe.fury.track.envsettings` or DATA02's own
+`fe.track.envsettings` the real boot loads for a Fury/DLC race, saying "both
+carry `20/3/4`" - that is only true of `fe.fury.track.envsettings`.
+Re-checked directly against the disc this session: DATA02's own
+`fe.track.envsettings` is **itself** missing `Tone darkening clamp`/`Tone
+maximum brightness`, the identical two keys every Fury/DLC circuit's own file
+omits. So a Fury/DLC race's own front-end file cannot be the sole seed and
+still reach `(20, 3, 4)` - the value it does run at (per the live read above)
+has to come from something loaded before it, which is consistent with the
+mechanism (persistence across more than one load) but not with the "either
+file, doesn't matter" reading. `fe.fury.track.envsettings` (DATA00) is
+complete and its `HDR and Bloom` block is byte-identical to
+`fe.track.envsettings` (DATA00, all ten keys checked) - so this project seeds
+from the latter uniformly rather than resolving the real per-title boot
+order, which stays open. Chosen, not measured; no confidence score.
+
+**`envsettings_fog` and `envsettings_light` were checked for the same
+partial-key shape and do not have it.** Every one of the 13 circuit files
+that ships a `.envsettings` at all authors a complete `Fog`/`Lighting` block
+on its own - the gap `envsettings_bloom` had does not exist for either
+reader. The only environments where the carry would do anything for them are
+`zone_2`/`zone_3`/`zone_4`, which ship no file at all (a different case:
+nothing to override, not a partial override) - left as the pre-existing
+silent stand-in light/unfogged draw rather than wired to the front end's,
+because nothing this session read or rendered says what a Zone race's light
+rig actually is; `fe.track.envsettings`'s own rig reads as a menu backdrop
+(cyan `Sun color` of `0.09/0.84/0.97`, ambient reaching `3.0`), not
+necessarily what a Zone circuit runs with.
+
+**Measured against the matched-camera pairs (`scripts/hd-frame-compare.py
+--pair-dir <pair> 00`), before/after this change, pose `00` only** (the pose
+`hds-frame-was-too-bright-and-too-bloomy.md` already restricts analysis to,
+for the motion-streak reasons that page gives):
+
+| Circuit | region | before clip% | after clip% | reference clip% | before luma | after luma | reference luma |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Sol 2 (Fury/DLC, was inert) | whole (excl HUD, craft) | 15.08 | 16.51 | 27.30 | 0.475 | 0.494 | 0.627 |
+| Sol 2 | sky | 0.00 | 1.48 | 15.89 | 0.471 | 0.505 | 0.861 |
+| Sol 2 | road surface | 18.48 | 18.52 | 38.38 | 0.585 | 0.586 | 0.722 |
+| Sol 2 | distant geometry | 3.28 | 5.94 | 14.43 | 0.367 | 0.411 | 0.539 |
+| Amphiseum (base HD, unaffected) | whole (excl HUD, craft) | 9.19 | 9.19 | 0.26 | 0.414 | 0.414 | 0.229 |
+| Talon's Junction (base HD, unaffected) | whole (excl HUD, craft) | 4.60 | 4.60 | 6.86 | 0.474 | 0.474 | 0.599 |
+
+Sol 2's own regions **narrow toward the reference, on every region but one**:
+roughly 13% of the whole-frame clip-share gap closes, 9% of the sky's, 24% of
+distant geometry's, and road surface is flat (0.04 points) - a small,
+one-directional move, not a fix. Amphiseum and Talon's Junction are **byte-
+identical** before and after, to the fourth decimal place of every statistic
+`hd-frame-compare.py` reports - confirming the carry does not touch a circuit
+whose own file was already complete, and (for Amphiseum specifically)
+correcting this page's earlier assumption that it was one of the eleven: its
+own file is in the base-HD row of the survey table above and it already
+built the chain before this session.
+
+This corroborates, rather than merely repeats, the gate-cancellation
+hypothesis the "exact wiring" paragraph raised without a built chain to test
+it against: Sol 2 authors a 33x stronger `Bloom from frame contribution`
+than Talon's Junction but also a 3x higher `Bloom adaption boost`, and the
+already-implemented gate (`contribution.y = (1 - min(adapted * boost * 0.25,
+1)) * authored`) folds most of that back toward zero at Sol 2's own
+brightness - which is consistent with a chain that is now running and
+producing a small, real, mostly-additive move rather than the large one its
+raw `frame contribution` alone would predict. Not re-derived as a number this
+session (would need the chain's own internal `adapted` state, not the
+region-level proxy `hd-resolve-probe.py` used); the render itself is the
+corroboration.
+
+**The 55-79%/0-8% clipped-white figures named when this lane was scoped do
+not appear in this measurement.** `scripts/hd-frame-compare.py`'s clip% is
+masked (HUD, sky, road, distant-geometry regions separately, non-HUD/craft
+for "whole") and taken over pose 00's matched-camera frame; the nearest value
+in this table is Talon's Junction's own *sky* region at 55.90% (unaffected by
+this change either way). `scripts/clipped-white.py` measures the same
+`R,G,B >= 250` threshold but over an unmasked, undifferentiated canvas -
+`hds-frame-was-too-bright-and-too-bloomy.md`'s own dated entry already
+records that its docstring's published numbers include a padded-canvas
+reading rather than a frame - so the two scripts are not comparable
+one-for-one. Whichever figure motivated scoping this lane, it is not this
+table's metric; reported as a discrepancy rather than silently reconciled.
+
+**Player-eye read, both pose-00 renders against the original (`/tmp/oag-drive/images/`,
+this session, not committed - `data/reference/` is not this lane's to
+leave modified):** Sol 2's after-render shows a faint, real soft glow on the
+brightest track-surface highlights and the distant white structure past the
+starting gate that the before-render does not, visible on close inspection
+but not at a glance - it reads as "the chain is now doing something" rather
+than "the chain is doing what the original does": the original frame is
+dramatically brighter and more blown-out overall (sky is a near-white glow
+around visible cloud shapes, the whole track surface is a stop or more
+brighter), which the numbers above already say this change does not close.
+No overshoot in either direction - the after-render is not brighter than a
+sane middle ground, just still short of the original's. Amphiseum's
+after-render is pixel-identical to its before, and on its own account (not
+this lane's business to fix) shows two pre-existing, separate gaps: the
+grid-start trackside wall panels draw flat black where the original shows
+them brightly lit cyan/white (already logged in
+`hds-frame-was-too-bright-and-too-bloomy.md`'s "New 2026-09-13" bullet), and
+the arena's own upper structure reads brighter/more blown in this project's
+render than the original's more contained cyan glow - the opposite-sign gap
+that page's quantile table already found.
+
+Confidence summary: 90 (unchanged) on the disc-wide `HDR and Bloom` key
+survey the carry is built on; the `fe.fury.track.envsettings` vs DATA02's own
+`fe.track.envsettings` choice above is explicitly unscored (chosen, not
+measured); the fog/light no-op finding is a direct disc read (confidence 90,
+same basis as the original 39-key schema survey); the frame deltas in the
+table are direct tool output, not an inference, so they carry no separate
+confidence score of their own - what has one is the gate-cancellation
+reading of *why* the move is small, which is unchanged at "hypothesis, not
+measurement" from the "exact wiring" paragraph above.
+
 ### The 14 surface binds, read (2026-08-20)
 
 `FUN_005a40f8(ctx, depth, colour0, colour1, colour2, colour3)` takes **pointers
