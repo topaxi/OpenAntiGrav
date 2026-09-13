@@ -111,25 +111,20 @@ TOLERANCE = 1.2
 # measured on the day they were baselined and why they are here. A row is
 # deleted the moment its test fits.
 BASELINE: dict[str, float] = {
-    # Measured 305 s on 2026-09-09, on an idle machine, in a run whose suite
-    # total was 415 s. It is here rather than split because **the split would
-    # change what is asserted**, which is the one reason this file accepts.
+    # `ai_roll_ground_truth`'s six full-grid tests (including
+    # `a_full_grid_of_skilled_arms_no_fewer_rolls_than_novice_at_the_held_out_seed`,
+    # which carried a 305 s row here from 2026-09-09 to 2026-09-13) do
+    # identical work and land within a ~90 s band of each other depending on
+    # what they overlap with in a given run - `CEILING` sits inside that band,
+    # so whichever one draws the short straw is the one that trips, and
+    # whichever measured over it on a given day is the one that needed a row.
+    # Measured clear of `CEILING` (158-165 s) in two back-to-back full
+    # `test-data` runs on 2026-09-13, on the same machine and load - not
+    # independent samples, so this is one data point on one afternoon, not
+    # proof the contention this file's own history warns about is gone. The
+    # row is deleted per this file's own rule regardless: re-add it,
+    # re-profiled, the day a run actually needs it.
     #
-    # The assertion is a *total* over every forward circuit: a higher tier arms
-    # no fewer rolls than a lower one, summed. Per-circuit is a strictly
-    # stronger claim and not the one the AI is tuned to - a tier can legitimately
-    # roll less on one track and more overall - so making the circuit the test
-    # axis would not be a split, it would be a different test.
-    #
-    # Its five siblings measured 212-244 s in the same run and need no row. That
-    # spread is the point: these six do identical work and land 90 s apart
-    # depending on what they overlap with, so `CEILING` sits inside their band
-    # and whichever one draws the short straw is the one that trips. If a
-    # sibling starts tripping too, the answer is not five more rows - it is that
-    # `CEILING` no longer reflects what these cost, and should be re-derived
-    # from a measured run the way its own comment describes.
-    "oag-game::ai_roll_ground_truth a_full_grid_of_skilled_arms_no_fewer_rolls_"
-    "than_novice_at_the_held_out_seed": 305.0,
     # `ps2_source_ground_truth`'s uncapped transcode - 950 frames of the PS2
     # intro, with `refresh: true` load-bearing for what it asserts, so the work
     # cannot be cached away - measured 160 s on 2026-09-09 and needs no row.

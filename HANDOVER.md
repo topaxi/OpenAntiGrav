@@ -533,7 +533,6 @@ Each is a real, named next step, one file per thread under [`handover/`](handove
 - [HD/Fury's particle effects parse, and a "field that disagrees" turned out to be a wrong check](handover/rendering/hd-furys-particle-effects-parse-and-a-field.md)
 - [Pulse's draw order is recovered, and it is a layer sort rather than a depth sort](handover/rendering/pulses-draw-order-is-recovered-and-it-is.md)
 - [Talon's Junction's "missing floor" is a glass floor drawn with the wrong texture: rendered, not absent](handover/rendering/talons-junctions-missing-floor-is-a-glass-floor.md)
-- [`viewProj` is located; the capture harness still reports the wrong camera](handover/rendering/viewproj-is-located-the-capture-harness-still.md)
 - [`Material::state`'s upper bits: bit 7 is measured, mode 2 is now fully decoded](handover/rendering/material-states-upper-bits-bit-7-is-measured-mode.md)
 - [Is HD's language picker ever *shown*, or only entered?](handover/frontend/is-hds-language-picker-ever-shown-to-a-player.md)
 - [HD's menus are drawn inside its own frame, and the `HD_*` palette turned out to be the FE style](handover/frontend/hds-menus-are-drawn-inside-its-own-frame.md)

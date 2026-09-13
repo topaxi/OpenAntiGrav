@@ -658,8 +658,22 @@ def cmd_race(args):
 # The EBOOT's initialised data and the BSS behind it - where a statically
 # allocated render global lives. `readelf` puts segment 1 at 0x860000 with a
 # file size of 0xd6f80 and a memory size past it; this span covers both and is
-# 917,504 bytes, about a minute at the stub's 41 ms a packet.
+# 917,504 bytes, about a minute at the stub's 41 ms a packet. Measured to hold
+# nothing but the seven static cube-face/shadow matrices
+# (`docs/reverse-engineering/rpcs3-capture.md`, "`viewProj` is not in the
+# executable's data") - no longer `capture`'s default region, kept as a named
+# constant for a manual `--region` against it.
 DATA_SEGMENT = (0x00860000, 0x000E0000)
+
+# The RSX pushbuffer the draw commands actually live in - `viewProj`'s own
+# home, per `rpcs3-capture.md`'s "`viewProj` is in the pushbuffer, and here is
+# where". `capture`'s default `--region` set: the four auxiliary contexts and
+# the two IO targets they jump to.
+PUSHBUFFER_REGIONS = (
+    ("0x40010000", 0x4000),
+    ("0x40060000", 0x20000),
+    ("0x40080000", 0x20000),
+)
 
 
 def parse_region(text):
@@ -761,8 +775,7 @@ def cmd_capture(args):
 
     out = Path(args.out).resolve()
     out.mkdir(parents=True, exist_ok=True)
-    regions = [parse_region(r) for r in args.region] or [
-        ("%#x" % DATA_SEGMENT[0], DATA_SEGMENT[1])]
+    regions = [parse_region(r) for r in args.region] or list(PUSHBUFFER_REGIONS)
 
     with Session(args.image, args.log_dir) as session:
         print("rpcs3 pid %d" % session.proc.pid, flush=True)
@@ -792,6 +805,10 @@ def cmd_capture(args):
         track = track_name()
         print("track: %s" % (track or "<not logged>"), flush=True)
 
+        # Camera picking is cross-frame (see `ps3_pose.pick_camera`), so every
+        # shot's candidates have to be in hand before any of them can be
+        # picked - nothing is written to disk inside this loop.
+        shots = []
         with Debugger() as gdb:
             for n in range(args.shots):
                 session.pad.set("cross", True)
@@ -823,23 +840,31 @@ def cmd_capture(args):
                     except Exception as error:  # noqa: BLE001 - see above
                         print("  %#010x: %s" % (at, error), flush=True)
 
-                pose = describe(blobs, track, shot)
-                (out / ("%s.json" % stem)).write_text(
-                    json.dumps(pose, indent=2) + "\n")
-                found = pose["camera"]
-                if found:
-                    print("  %s: eye %s fov %.2f deg" % (
-                        stem,
-                        ["%.1f" % v for v in found.get("eye", [])],
-                        found.get("fov_y_deg", float("nan"))), flush=True)
-                    if "render_with" in found:
-                        print("       " + found["render_with"], flush=True)
-                else:
-                    print("  %s: no camera in the regions read" % stem, flush=True)
+                candidates = []
+                for at, blob in blobs:
+                    candidates.extend(ps3_pose.packet_candidates(blob, base=at))
+                print("  %s: %d packet candidate(s) read" % (stem, len(candidates)),
+                      flush=True)
+                shots.append((stem, shot, candidates))
                 if args.keep_dumps:
                     for at, blob in blobs:
                         (out / ("%s-%08x.bin" % (stem, at))).write_bytes(blob)
             gdb.resume()
+
+    picks = ps3_pose.pick_camera([candidates for _, _, candidates in shots])
+    for (stem, shot, _), (camera, reason, count) in zip(shots, picks):
+        record = describe(camera, reason, count, track, shot,
+                           args.team, args.hull_variant)
+        (out / ("%s.json" % stem)).write_text(json.dumps(record, indent=2) + "\n")
+        if camera:
+            print("  %s: eye %s regs %s unit error %.2e" % (
+                stem, ["%.1f" % v for v in camera["eye"]],
+                camera["registers"], camera["unit_error"]), flush=True)
+            render_with = record["camera"].get("render_with")
+            if render_with:
+                print("       " + render_with, flush=True)
+        else:
+            print("  %s: camera null (%s)" % (stem, reason), flush=True)
 
     print("done; %d pose(s) in %s" % (args.shots, out), flush=True)
     return 0
@@ -912,8 +937,24 @@ def track_name():
     return hits[-1] if hits else None
 
 
-def describe(blobs, track, shot):
+def describe(camera, reason, candidate_count, track, shot, team=None, hull_variant=None):
     """The capture record: what a frame needs to be reproduced, and nothing more.
+
+    `camera`, `reason` and `candidate_count` are one element of
+    `ps3_pose.pick_camera`'s own return - this does not re-decide anything,
+    it only turns the pick into the record. `camera["camera"]` is JSON `null`
+    when the cross-frame discriminator could not pick exactly one candidate -
+    `"camera_reason"` says why and `"camera_candidates"` says how many
+    survived every filter but the last, rather than silently reporting
+    nothing or, worse, a plausible-looking wrong pose (the same honest-absence
+    rule this project applies to a missing asset).
+
+    `team`/`hull_variant` are never detected - no `TTY.log` line names either
+    on the walk into a race, checked directly against both the Campaign
+    default walk and Racebox's - so they are whatever the caller passed
+    `--team`/`--hull-variant`, `None` when not supplied. Recorded beside
+    `track` regardless, so a render command built from this file races the
+    same craft the screenshot shows rather than whatever `--team` defaults to.
 
     Deliberately not a memory dump. The raw bytes are game memory - extracted
     executable data, which `just audit-leakage` refuses and CI's leakage job
@@ -923,31 +964,21 @@ def describe(blobs, track, shot):
     sys.path.insert(0, str(Path(__file__).resolve().parent))
     import ps3_pose
 
-    best = None
-    for at, blob in blobs:
-        for hit in ps3_pose.candidates(blob, base=at):
-            address, order, error, eye, matrix = hit
-            if best is None or error < best[2]:
-                best = hit
-    camera = None
-    if best:
-        address, order, error, eye, matrix = best
-        pose = ps3_pose.decompose(matrix)
-        camera = {
-            "address": "%#010x" % address,
-            "order": order,
-            "unit_error": error,
-            "view_proj": matrix,
-        }
+    record_camera = None
+    if camera:
+        pose = ps3_pose.decompose(camera["view_proj"])
+        record_camera = dict(camera)
         if pose:
-            camera.update(pose)
-            camera["render_with"] = ps3_pose.command_line(pose, track)
-        else:
-            camera["eye"] = list(eye)
+            record_camera.update(pose)
+            record_camera["render_with"] = ps3_pose.command_line(pose, track)
     return {
         "track": track,
+        "team": team,
+        "hull_variant": hull_variant,
         "screenshot": str(shot) if shot else None,
-        "camera": camera,
+        "camera": record_camera,
+        "camera_reason": reason,
+        "camera_candidates": candidate_count,
     }
 
 
@@ -1145,7 +1176,10 @@ def main(argv=None):
     cap.add_argument("--region", action="append", default=[],
                      help="addr:len to dump, or @addr:len to dereference "
                           "a pointer at addr first; repeatable. Defaults to "
-                          "the EBOOT's data and BSS.")
+                          "the RSX pushbuffer (PUSHBUFFER_REGIONS) - the "
+                          "EBOOT's data and BSS (DATA_SEGMENT) holds only "
+                          "static cube-face/shadow matrices, never the live "
+                          "camera.")
     cap.add_argument("--nav-shots", action="store_true",
                      help="photograph every distinct screen on the way in, so "
                           "a --nav plan can be written from what is actually "
@@ -1156,6 +1190,19 @@ def main(argv=None):
                           "continuing, e.g. \"Cell Selection=right,right\". "
                           "Repeatable; this is how a capture reaches a circuit "
                           "other than the one every default row leads to.")
+    cap.add_argument("--team", default=None,
+                     help="the team this capture's craft is confirmed to be, "
+                          "e.g. 'feisar' - recorded beside track, never "
+                          "detected: no TTY.log line names the team on the "
+                          "walk into a race (checked directly, both the "
+                          "Campaign default walk and Racebox's), so this has "
+                          "to come from the caller having read it off a "
+                          "Team Selection screenshot (--nav-shots) or a "
+                          "live memory read.")
+    cap.add_argument("--hull-variant", default=None,
+                     help="the ship model variant this capture's craft is "
+                          "confirmed to be, e.g. 'concept1' - same caveat as "
+                          "--team: not detected, supplied by the caller.")
     cap.add_argument("--keep-dumps", action="store_true",
                      help="also write the raw memory, which is game data and "
                           "stays under data/")

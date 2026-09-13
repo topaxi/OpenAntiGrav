@@ -11,16 +11,25 @@
   missing paraboloid reflection probe) are tracked so they sit beside the
   renderer's other missing inputs rather than being duplicated here
 - Tone gap: renders clip 21 % to white against a reference's 15 % - a
-  same-camera comparison needs
-  [viewproj-is-located-the-capture-harness-still.md](viewproj-is-located-the-capture-harness-still.md)'s
-  own open item (`viewProj` is located; the harness's finder does not read it yet) before this can be measured
-  precisely rather than eyeballed off the existing `data/reference/hd-talons-glass/`
-  capture
+  same-camera comparison is unblocked as of 2026-09-13 (the capture
+  harness's camera pick is fixed, see
+  `docs/reverse-engineering/rpcs3-capture.md`'s "The pick is fixed, and a
+  rendered overlay confirms it"), but a precise re-measurement against a
+  Talon's Junction pair framing this material was not taken this session -
+  still open, just no longer blocked on the harness
+- A same-camera overlay taken 2026-09-13 (unrelated goal: verifying the
+  capture harness's camera pick) caught this material's other symptom by
+  accident: a road panel a few dozen units ahead renders flat black in
+  `oag-game` rather than the wrong-coloured ramp described above, consistent
+  with [hd-needs-a-per-material-shader-path-and.md](hd-needs-a-per-material-shader-path-and.md)'s
+  "no route to draw it" finding. Not confirmed as the same chunk; see that
+  thread's own note for the evidence paths (gitignored)
 
 ## Next Steps
 
 - Pick up [hd-needs-a-per-material-shader-path-and.md](hd-needs-a-per-material-shader-path-and.md)
   for the shading work - normal map, specular map and this material's facing
   ramp all live there now
-- Pick up [viewproj-is-located-the-capture-harness-still.md](viewproj-is-located-the-capture-harness-still.md)
-  first if the goal is the tone gap specifically
+- The tone gap's own harness blocker is gone (see `## Open` above) - a
+  precise same-camera re-measurement is what is left, not a capture-harness
+  fix
