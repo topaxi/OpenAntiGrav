@@ -340,7 +340,16 @@ pub(super) fn flips(
 ) -> Vec<bool> {
     let mut decl_of: std::collections::HashMap<u32, Option<&rcsmodel::VertexDecl>> =
         Default::default();
-    for mesh in &model.meshes {
+    // **Every surface, not just each chunk's first.** `Mesh::surfaces` is the
+    // chunk plus its `extra_surfaces` - a second material painted over the
+    // same geometry, the shape Talon's Junction's magstrip floor uses
+    // (`mag_effect_loop_opaque` under `mageffectloop`'s blended glow). A
+    // material that is only ever an *extra* surface never appears as any
+    // chunk's own `.material`, so counting `model.meshes` alone reads it as
+    // zero chunks and [`variants`] below skips resolving it entirely - see
+    // that function's own "declared and never drawn" branch, which this
+    // walk is what keeps honest.
+    for mesh in model.meshes.iter().flat_map(rcsmodel::Mesh::surfaces) {
         decl_of.entry(mesh.material).or_insert(mesh.decl.as_ref());
     }
     let mut cache: std::collections::HashMap<String, Option<Vec<u8>>> = Default::default();
@@ -615,7 +624,15 @@ pub(super) fn variants(
     let mut decl_of: std::collections::HashMap<u32, Option<&rcsmodel::VertexDecl>> =
         Default::default();
     let mut chunks_of: std::collections::HashMap<u32, usize> = Default::default();
-    for mesh in &model.meshes {
+    // **Every surface of every chunk, not each chunk's first alone.** See
+    // `flips`'s identical walk for why: a material painted only as a second
+    // (or later) surface over another chunk's geometry - `Mesh::surfaces`,
+    // the shape Talon's Junction's magstrip floor uses - never appears as any
+    // chunk's own `.material`, so it would otherwise read as zero chunks
+    // below and fall into "declared and never drawn" without this ever
+    // resolving a variant for it, even though `super::build`'s own emit loop
+    // draws it through exactly this same `Mesh::surfaces` walk.
+    for mesh in model.meshes.iter().flat_map(rcsmodel::Mesh::surfaces) {
         decl_of.entry(mesh.material).or_insert(mesh.decl.as_ref());
         *chunks_of.entry(mesh.material).or_default() += 1;
     }

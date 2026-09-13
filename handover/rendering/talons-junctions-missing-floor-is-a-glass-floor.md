@@ -20,25 +20,41 @@
 - A same-camera overlay taken 2026-09-13 (unrelated goal: verifying the
   capture harness's camera pick) caught this material's other symptom by
   accident: a road panel a few dozen units ahead renders flat black in
-  `oag-game` rather than the wrong-coloured ramp described above, consistent
-  with [hd-needs-a-per-material-shader-path-and.md](hd-needs-a-per-material-shader-path-and.md)'s
-  "no route to draw it" finding. Not confirmed as the same chunk; see that
-  thread's own note for the evidence paths (gitignored)
-- **Player report, 2026-09-13: the black panel is where a mag-strip section
-  and the glass floor coincide** - a case unique to this circuit, not the
-  general glass-floor gap. Treat it as a reliable oracle, and turn it into a
-  measurement before touching anything: (1) check whether the black chunk's
-  collision class is `MagFloor` (the `Floor`/`MagFloor` filter
-  `docs/rendering/shadows.md` already uses reaches it) and whether its
-  material is `etched_glass_tech` or a second, magstrip-specific material;
-  (2) if it is a distinct material, its variant may be declaring a class or
-  permutation the resolver never asks for (the same shape as the ship-hull
-  `VertexColour1` miss fixed in `432ec4aa`) - the load report's
-  "resolved to a shipped shader variant" line for `track.vex` says which;
-  (3) what would falsify the report: the same material drawing correctly on a
-  non-magstrip glass panel elsewhere on the circuit, which would make the
-  magstrip the trigger rather than a coincidence. A matched frame
-  (`data/reference/hd-capture/talons-matched/03`) already frames the panel
+  `oag-game` rather than the wrong-coloured ramp described above. **Not the
+  same finding as [hd-needs-a-per-material-shader-path-and.md](hd-needs-a-per-material-shader-path-and.md)'s
+  "no route to draw it"** - resolved later the same day, see the next bullet
+- **Resolved 2026-09-13, and confirmed by measurement: the player report was
+  right that this is a magstrip-specific material, not `etched_glass_tech`,
+  and it was black for a third reason neither open hypothesis named.** The
+  black chunk is `materials/mag_effect_loop_opaque.rcsmaterial` - Talon's
+  Junction's magstrip floor is a two-surface chunk, this opaque material
+  underneath a blended `mageffectloop.rcsmaterial` glow - identified by
+  `OAG_TINT_MATERIALS` (squared colour error 9.4 against a 20.7 runner-up)
+  and by triangle-level distance (0.98 units from the camera's own forward
+  ray, `hd_near_probe.rs`). It read **`no resolved variant`**, not because
+  its permutation key misses every shipped row, but because
+  `mesh/rcs/skin.rs`'s `variants()`/`flips()` counted a material's chunks by
+  walking `model.meshes` directly, which only reaches a chunk's *first*
+  surface - `mag_effect_loop_opaque` is exclusively an **extra surface**
+  (`oag_rcs::rcsmodel::Mesh::extra_surfaces`, a second material painted over
+  the same geometry), so it was never even asked to resolve, the same way a
+  genuinely-unused material is skipped. **Fixed**: both maps now walk
+  `Mesh::surfaces()` instead, the same walk the real emit loop already uses
+  to draw the extra surface at all. Disc-wide on this one circuit: 286 of 302
+  drawn materials resolved → 423 of 439 (929 of 983 chunks → 1,759 of 1,813) -
+  every extra-surface material on the circuit was subject to the same bug,
+  confirming this is a general resolver gap and not a magstrip-specific one
+  (a ship hull sample gained covered chunks too, 12 of 12 → 16 of 16, with
+  `variants_unshipped` still 0 both times). Full evidence, the screenshot
+  verdict and the remaining gap: [rcsmaterial.md](../../docs/formats/rcsmaterial.md),
+  "Talon's Junction's magstrip floor was black because its material was
+  never asked to resolve at all". **Not fully closed**: the panel now
+  renders textured and partly lit rather than flat black, but still does not
+  match the reference's evenly-lit grid - `mag_effect_loop_opaque`'s
+  resolved block is the same five-sampler reflective combine as
+  `etched_glass_tech`'s, and this renderer routes only two of its five
+  units. That is the pre-existing "no route to draw it" gap, confirmed
+  rather than caused by this fix
 
 ## Next Steps
 
