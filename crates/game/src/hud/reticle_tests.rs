@@ -191,6 +191,7 @@ static HD_ART: oag_title::HudArt = oag_title::HudArt {
     pickup_icon_models: None,
     pickup_icon_backdrop_model: None,
     zone_speed_classes: None,
+    shield_percent: false,
 };
 
 fn hd_sheet() -> crate::sprite::Sheet {
@@ -590,6 +591,7 @@ fn an_unread_sight_dialect_draws_nothing() {
         pickup_icon_models: None,
         pickup_icon_backdrop_model: None,
         zone_speed_classes: None,
+        shield_percent: true,
     };
 
     let layout = Layout::from_xml(SIGHTS);

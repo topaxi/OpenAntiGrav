@@ -320,6 +320,22 @@ pub struct HudArt {
     /// because the one title that has both recovered them from different
     /// places.
     pub zone_speed_classes: Option<&'static ZoneSpeedClasses>,
+    /// Whether `ShieldBarText` carries a `%` after its digits.
+    ///
+    /// Pulse's own reference frame reads `100%`, which is what
+    /// `oag_game::hud::draw::text_for` drew for every title until this axis
+    /// existed. Three HD/Fury frames of the running original
+    /// (`data/reference/hd-capture/talons-matched/{00,01,03}.png`: full shield
+    /// at the grid, 529 km/h mid-race, and 98% shield after a hit) all read a
+    /// bare number - `100`, `100` and `98`, no `%` in any of them - so this is
+    /// `false` for HD specifically rather than `None`/unmeasured. Neither
+    /// disc's `ShieldBarText` authors a `%`-suffix companion the way
+    /// `SpeedBarTextKMH` does for `SpeedBarText`'s unit, so this cannot be
+    /// read off the layout the way [`Self::always_on`]'s sibling axis
+    /// `speed_unit` is - it has to be a title fact instead. `true` (Pulse's
+    /// reading) for every title that has not had its own frame checked,
+    /// which is every title but HD today.
+    pub shield_percent: bool,
 }
 
 /// The name of each rung of a title's Zone escalation ladder, as string-table

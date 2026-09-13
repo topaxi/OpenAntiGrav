@@ -152,6 +152,9 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     pickup_icon_backdrop_model: Some("weapon_icon_grid"),
     // `None`: no Zone speed-class ladder has been read on this title.
     zone_speed_classes: None,
+    // Unmeasured on Pure; Pulse's own reading (`true`) carries over rather
+    // than guessing a change. See `oag_title::HudArt::shield_percent`.
+    shield_percent: true,
 };
 
 /// Which `<Mode3D><Model>` widget draws each weapon's own icon, indexed in

@@ -81,6 +81,8 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     pickup_icon_backdrop_model: None,
     // `None`: no Zone speed-class ladder has been read on this title.
     zone_speed_classes: None,
+    // Pulse's own reference frame reads `100%`. See `oag_title::HudArt::shield_percent`.
+    shield_percent: true,
 };
 
 /// The layout constant substituted for the pickup backdrop's authored colour.

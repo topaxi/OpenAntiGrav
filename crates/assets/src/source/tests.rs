@@ -109,6 +109,7 @@ const TITLE: &Title = &Title {
         pickup_icon_models: None,
         pickup_icon_backdrop_model: None,
         zone_speed_classes: None,
+        shield_percent: true,
     },
     // Unread here for the fourth and fifth time, and the same reason both
     // times: an archive is found by name, and what is inside one is nothing

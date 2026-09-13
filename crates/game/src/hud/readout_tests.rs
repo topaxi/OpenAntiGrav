@@ -277,6 +277,87 @@ fn the_shield_readout_is_a_percentage() {
     assert_eq!(text, "50%");
 }
 
+/// HD/Fury drops the `%` - `oag_title::HudArt::shield_percent`'s own doc
+/// comment carries the evidence, all three of `talons-matched/{00,01,03}.png`.
+/// Pulse's own reading (the test above) keeps it, so this is a title fact
+/// rather than a formatting default.
+#[test]
+fn the_shield_readout_drops_the_percent_on_a_title_that_measures_none() {
+    let layout = Layout::from_xml(
+        r#"<Screen><Text name="ShieldBarText"><Values font="HUDSmall" x="0" y="0"/></Text></Screen>"#,
+    );
+    let strings = strings();
+    let readout = Readout {
+        shield: 98.0,
+        shield_max: 100.0,
+        ..Readout::blank()
+    };
+    let label = &layout.labels[0];
+    assert_eq!(
+        text_for(label, &readout, &strings, false, true, None, false),
+        Some("98".to_string())
+    );
+    assert_eq!(
+        text_for(label, &readout, &strings, false, true, None, true),
+        Some("98%".to_string())
+    );
+}
+
+/// **Drawn nothing, not the caption fallback.** `HUD_pickups.xml`'s
+/// `PickupDamageTxt`/`PickupAbsorbTxt` (idstring `MSC_DAMAGE`/`MSC_ABSORB`) and
+/// the numbers beside them fell through `text_for`'s catch-all before this,
+/// which draws any idstring-bearing widget as a static caption - so an
+/// undamaged HD race drew `DAMAGE`/`Absorb` with nothing under them, which
+/// `talons-matched/00.png` and `01.png` (full shield, no recent hit) do not
+/// show at all. `03.png` (after a hit) shows both with real numbers, but
+/// nothing in this build tracks a recent hit's damage/absorb total yet - see
+/// `docs/formats/hd-hud.md` - so this stays `None` outright rather than a
+/// half-wired gate.
+#[test]
+fn pickup_damage_and_absorb_draw_nothing_without_a_tracked_hit() {
+    let strings = strings();
+    for name in [
+        "PickupDamageTxt",
+        "PickupAbsorbTxt",
+        "PickupDamage",
+        "PickupAbsorb",
+    ] {
+        let layout = Layout::from_xml(&format!(
+            r#"<Screen><Text name="{name}"><Values idstring="MSC_DAMAGE" font="HUDSmall" x="0" y="0"/></Text></Screen>"#
+        ));
+        let label = &layout.labels[0];
+        assert_eq!(
+            text_for(label, &Readout::blank(), &strings, false, true, None, false),
+            None,
+            "{name} should draw nothing without a tracked recent-hit value"
+        );
+    }
+}
+
+/// **A second `POS` never draws.** `HUD_positions.xml` carries two widgets
+/// sharing `idstring="IG_HUD_POS"` - `PositionTxt` (this module's own
+/// `"PositionTxt"` arm, gated on `place_shown`) and `PositionTxt2`, deep
+/// inside the head-to-head `PosTag0`-`7` cluster whose sprites
+/// (`VoiceCom0`-`7`) are already excluded from every title's `ALWAYS_ON`. No
+/// `talons-matched` frame shows a second `POS` label.
+#[test]
+fn position_txt2_never_draws_a_second_pos_caption() {
+    let layout = Layout::from_xml(
+        r#"<Screen><Text name="PositionTxt2"><Values idstring="IG_HUD_POS" font="HUDSmall" x="0" y="0"/></Text></Screen>"#,
+    );
+    let strings = strings();
+    let readout = Readout {
+        place: 3,
+        ships: 8,
+        ..Readout::blank()
+    };
+    let label = &layout.labels[0];
+    assert_eq!(
+        text_for(label, &readout, &strings, true, true, None, false),
+        None
+    );
+}
+
 #[test]
 fn the_wrong_way_warning_only_appears_when_it_applies() {
     let layout = Layout::from_xml(
