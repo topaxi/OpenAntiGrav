@@ -160,6 +160,25 @@ imprecise_flops = "allow"
 [profile.release]
 debug = 1
 
+# Link time, not compile time, is what the test gate spends on `oag-game`: it
+# has 84 integration-test binaries, each statically linking wgpu, cpal and the
+# rest of the composition root, and every edit to the library relinks all of
+# them. Two settings cut one relink from 1,324 ms to 406 ms and the binary from
+# 338 MB to 77 MB, measured on `hd_boot_ground_truth` on 2026-09-13:
+#
+# - `line-tables-only` keeps `file:line` in a panic backtrace, which is what a
+#   failing test is read from, and drops the type and variable DWARF nobody
+#   attaches a debugger to a test run for. `target/debug/deps` was 51 GB of
+#   mostly that.
+# - dev's default `lto = false` still runs thin-local LTO inside the link;
+#   `"off"` is the setting that actually skips it.
+#
+# `[profile.test]` inherits both from `dev`. Neither touches `release`, which
+# keeps its full `debug = 1` above.
+[profile.dev]
+debug = "line-tables-only"
+lto = "off"
+
 # Behavioural verification runs the simulation for many thousands of ticks, and
 # the ground-truth tests push whole discs through our own decoders. An
 # unoptimised build makes both unusable.
