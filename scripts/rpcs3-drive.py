@@ -853,7 +853,8 @@ def cmd_capture(args):
 
     picks = ps3_pose.pick_camera([candidates for _, _, candidates in shots])
     for (stem, shot, _), (camera, reason, count) in zip(shots, picks):
-        record = describe(camera, reason, count, track, shot)
+        record = describe(camera, reason, count, track, shot,
+                           args.team, args.hull_variant)
         (out / ("%s.json" % stem)).write_text(json.dumps(record, indent=2) + "\n")
         if camera:
             print("  %s: eye %s regs %s unit error %.2e" % (
@@ -936,7 +937,7 @@ def track_name():
     return hits[-1] if hits else None
 
 
-def describe(camera, reason, candidate_count, track, shot):
+def describe(camera, reason, candidate_count, track, shot, team=None, hull_variant=None):
     """The capture record: what a frame needs to be reproduced, and nothing more.
 
     `camera`, `reason` and `candidate_count` are one element of
@@ -947,6 +948,13 @@ def describe(camera, reason, candidate_count, track, shot):
     survived every filter but the last, rather than silently reporting
     nothing or, worse, a plausible-looking wrong pose (the same honest-absence
     rule this project applies to a missing asset).
+
+    `team`/`hull_variant` are never detected - no `TTY.log` line names either
+    on the walk into a race, checked directly against both the Campaign
+    default walk and Racebox's - so they are whatever the caller passed
+    `--team`/`--hull-variant`, `None` when not supplied. Recorded beside
+    `track` regardless, so a render command built from this file races the
+    same craft the screenshot shows rather than whatever `--team` defaults to.
 
     Deliberately not a memory dump. The raw bytes are game memory - extracted
     executable data, which `just audit-leakage` refuses and CI's leakage job
@@ -965,6 +973,8 @@ def describe(camera, reason, candidate_count, track, shot):
             record_camera["render_with"] = ps3_pose.command_line(pose, track)
     return {
         "track": track,
+        "team": team,
+        "hull_variant": hull_variant,
         "screenshot": str(shot) if shot else None,
         "camera": record_camera,
         "camera_reason": reason,
@@ -1180,6 +1190,19 @@ def main(argv=None):
                           "continuing, e.g. \"Cell Selection=right,right\". "
                           "Repeatable; this is how a capture reaches a circuit "
                           "other than the one every default row leads to.")
+    cap.add_argument("--team", default=None,
+                     help="the team this capture's craft is confirmed to be, "
+                          "e.g. 'feisar' - recorded beside track, never "
+                          "detected: no TTY.log line names the team on the "
+                          "walk into a race (checked directly, both the "
+                          "Campaign default walk and Racebox's), so this has "
+                          "to come from the caller having read it off a "
+                          "Team Selection screenshot (--nav-shots) or a "
+                          "live memory read.")
+    cap.add_argument("--hull-variant", default=None,
+                     help="the ship model variant this capture's craft is "
+                          "confirmed to be, e.g. 'concept1' - same caveat as "
+                          "--team: not detected, supplied by the caller.")
     cap.add_argument("--keep-dumps", action="store_true",
                      help="also write the raw memory, which is game data and "
                           "stays under data/")
