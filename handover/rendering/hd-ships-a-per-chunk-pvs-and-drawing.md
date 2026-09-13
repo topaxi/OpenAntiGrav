@@ -4,9 +4,24 @@
 
 ## Open
 
-- Whether our drawn *frame* matches the original's, camera-for-camera, is unverified
 - Talon's 56 unaddressed prop nodes (hashes only in *amphiseum* and *tech_de_ra*) remain unaddressed, though confirmed not a PVS problem. **2026-08-26**: also confirmed not a runtime cross-file lookup - the shipped executable fails to resolve the identical 56 hashes at load time and never opens a second circuit's `.rcsmodel`; see [rcsmodel.md](../../docs/formats/rcsmodel.md) item 6.
+
+**2026-09-13: the other open item is resolved.** Whether our drawn *frame*
+matches the original's, camera-for-camera, is settled yes for geometry: the
+camera pick landed (`docs/reverse-engineering/rpcs3-capture.md`, "The pick
+is fixed, and a rendered overlay confirms it") and its 50/50 overlay across
+three Talon's Junction poses shows the tunnel's pipes, guard rails, lane
+markings and support pylons landing on top of each other with no mirroring
+or inversion. This session's own per-region measurement
+(`scripts/hd-frame-compare.py`, `docs/ghidra/functions/ps3-hdfury-eu/
+renderer.md`'s "The matched-camera comparison") corroborates the same thing
+from a different angle at all three poses: the drawn geometry is where the
+original's is, and the mismatch that comparison does find (the frame reads
+darker) is a lighting/material question, not a PVS or drawn-frame-placement
+one. Nothing here calls the culling or the node-pass draw list back into
+question.
 
 ## Next Steps
 
-- Run a matched-camera RPCS3 comparison once the deferred camera RE lands, to settle whether the drawn frame matches the original's
+None named here. The remaining Open item (the 56 unaddressed prop nodes) has
+no next step of its own beyond what its two dated notes already record.

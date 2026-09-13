@@ -2165,7 +2165,17 @@ fixed:
    so `min(uv * uv_scale, uv_max)` does not constrain the taps - contrary to
    the comment above `drawn()`. Inert at native, where `uv_scale` is 1.0;
    wrong under dynamic resolution or FSR. Fixing it changes DRS-path behaviour
-   with no measurement behind the new behaviour.
+   with no measurement behind the new behaviour. **Fixed 2026-09-13** - see
+   "The matched-camera comparison" below, which supplies that measurement:
+   the tap offset now folds into the same `min` `drawn()` uses instead of
+   being added after it. **"Inert at native" is not quite exact**: a
+   before/after capture at `--render-scale 100` (no DRS, no FSR) differs by
+   1,977 of 921,600 pixels, each by at most 4/255 - a hairline border-band
+   effect from `uv_max` sitting half a texel inside the buffer's own edge
+   even with nothing shrinking the drawn rectangle, not only under DRS/FSR as
+   this entry originally read. Every aggregate this page or `hd-glow-sweep.py`
+   reports is identical before and after to the printed precision, which is
+   the sense in which "inert at native" still holds.
 2. `mesh.wgsl` sums HD's emissive `glow` into `plain` and not into
    `lit_linear`, and the fragment resolves
    `mix(plain_rgb, authored_rgb, scene.light.enabled * in.lit)` - so on HD,
@@ -2177,6 +2187,101 @@ fixed:
    very nearly invisible. Fixing it makes the frame *brighter*, which is the
    opposite of what the report asked for, so it belongs to its own pass with
    its own reference comparison.
+
+### The matched-camera comparison: the frame reads darker than the original, and the post chain is cleared of it (2026-09-13)
+
+Every brightness figure above was **aggregates-at-a-distance**: two close but
+not identical framings, compared as whole-image percentages because no exact
+camera match existed yet. `docs/reverse-engineering/rpcs3-capture.md`'s
+camera pick (same date) removed that constraint - `data/reference/hd-capture/
+talons-matched/{00,01,03}.{png,json}` gives three Talon's Junction frames at
+the original's own recovered `viewProj`, reproducible with `oag-game
+--camera-pose`/`--camera-fov`. `scripts/hd-frame-compare.py` (committed this
+session) renders each pose at the project's stated comparison setting
+(native size, no MSAA/motion-blur/shadows/reconstruction) and reports
+per-region luminance/clipped-white/halo statistics with the HUD and the
+reference's own craft masked out of every region (our render draws no craft
+at all at these poses - see the script's own doc comment for why: `main.rs`'s
+"an RPCS3 capture gives the camera exactly and the craft only as whatever the
+frame shows", and our craft never moved off the spawn point these captures
+were never aimed at).
+
+**The frame is darker than the original everywhere measured, not brighter -
+the opposite of every aggregate-at-a-distance reading above.** Whole-frame
+mean luminance (bloom on, HUD and craft excluded):
+
+| pose | ours | reference | delta |
+| --- | --- | --- | --- |
+| `00` (grid, looking down the tunnel) | 0.470 | 0.599 | -0.129 |
+| `01` (529 km/h banked corridor) | 0.346 | 0.496 | -0.150 |
+| `03` (tight loop, weapon HUD up) | 0.384 | 0.627 | -0.243 |
+
+Road-surface and distant-geometry regions show the same direction and a
+similar magnitude at `00` and `01` (road: -0.06 to -0.15; distant: -0.10 to
+-0.26); `03`'s much larger gap is not this finding - its `road surface`
+region reads 0.250 against 0.588 because of the already-documented flat-black
+`etched_glass_tech` floor panel (`rpcs3-capture.md`, "The pick is fixed",
+and `rcsmaterial.md`), which this session's crop comparison corroborates
+again rather than newly discovers. The `sky` region (visible only at `00`
+and marginally at `03`; `01` is fully enclosed and reads as tunnel ceiling,
+not sky, at 0.23-0.27 luma both sides - no evidence of a distinct sky there
+either way) is close in mean luma (0.914 vs 0.910 at `00`) but under-clips
+relative to the reference (35.4 % vs 55.9 % of pixels >= 250) - a smaller,
+separate gap, addressed below.
+
+**Two negative results narrow where the gap can be**, so the next session
+does not re-run either. (1) **The exposure stage is already saturated at
+`scale = 1.0`** for this scene: hard-coding `fs_encode`'s `scale` to `1.0`
+(diagnostic only, not shipped) changes the pose-`00` whole-frame reading by
+**0.000** in every region. Talon's Junction's own `.envsettings` (boost 20,
+clamp 3, max 4) means `scale` only exceeds 1.0 when the adapted luminance
+drops under 0.15, and this scene's own adapted luminance sits well above
+that, so the exposure resolve this project implements cannot be the source
+of a frame reading uniformly *darker*. (2) **`[graphics] bloom` on vs. off
+moves the whole-frame reading by only 0.017-0.05 luma** at pose `00`
+(0.461 -> 0.478 with the fix in place) - an order of magnitude short of the
+0.13-0.24 gap above, so the additive bloom summand is not the dominant term
+either, whichever side of the player switch a render is judged on.
+
+**That points the remaining gap at the lit material path, not this chain.**
+`mesh.wgsl`'s `lit_sum = ambient + prelit + vertex_light + sun_diffuse` (see
+"The lit track material, read" and "The vertex-light constants are read"
+above) already implements every term this page's own microcode reading
+named as of 2026-09-06, so this is not a missing summand this page can point
+at the way the sun-diffuse and vertex-light removals could in August - it
+reads as a magnitude or data-plumbing gap in a term already present (a
+per-material `.envsettings` value read short, a texture decoded a shade too
+dark, or one of the still-unread terms this page's own "Left unread" line
+already names: `shadowMapTex`'s `1 - shadow` factor, `prelitBias`, and the
+RGBE `k`/`b` at `c464` for materials other than `track_surface`). Settling
+which needs `mesh.wgsl`/`crates/render/src/mesh/` and
+`crates/rcs/` - `lane-ship-hull`'s files this session, not this one's.
+`sky_cube.rs`'s smaller, separate under-clip gap is the same territory
+(`crates/render/src/mesh/sky_cube.rs`).
+
+**Fixed here**: the `fs_blur` tap-offset defect two sections above, now that
+a measurement exists to check it against (see that section's own updated
+text for the exact change and its native-resolution footprint).
+
+**On lead (i), whether Talon's Junction shows visible atmospheric fog at
+all** (`hds-sky-fog-and-lighting-draw-from-the.md`'s own open question): a
+side-by-side crop of pose `00`'s distant cityscape (the region a fog term
+would show most clearly) shows the reference more blown toward white but
+with the same building silhouettes crisp at the same apparent distance as
+ours - no gradient of desaturation or softening with distance in either
+image that reads as a distinct haze term, only an overall brightness
+difference already accounted for above. **Confidence 55, and deliberately
+not higher**: three frames of one circuit, judged by eye against a crop, not
+a per-material microcode read. It weakly supports "fog is off, or
+imperceptible, in this race type" over the vestigial-slot and
+route-mismatch alternatives `hds-sky-fog-and-lighting-draw-from-the.md`
+lists, but does not settle it, and says nothing about a circuit that
+authors heavier fog than Talon's Junction does.
+
+Reproduce with `scripts/hd-frame-compare.py [--pose 00|01|03] [--bloom
+on|off] [--dump-regions]`; region boxes are chosen by eye and shared across
+the three poses (documented in the script itself, no confidence score - a
+comparison window, not an RE claim).
 
 ### The 14 surface binds, read (2026-08-20)
 
