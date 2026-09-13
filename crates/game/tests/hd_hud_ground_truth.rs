@@ -926,13 +926,21 @@ fn the_ladder_before_the_first_zone_is_the_layouts_own_placeholders() {
         default_border: layout.default_border(),
     };
     let frame = hud::draw_list(&cx, &oag_game::hud::Readout::default());
+    // A bare digit string is no longer unique to the `ZonePlus*` ladder:
+    // `ShieldBarText` on HD draws one too now that `oag_title::HudArt::
+    // shield_percent` is `false` for this title (a `Readout::default()`'s
+    // zero shield used to format as `0%`, which this all-digit filter never
+    // matched; it now formats as a bare `0`). Narrowed to the ladder's own
+    // range - `ZonePlus1`-`10`'s authored values are exactly `1`-`10` -
+    // rather than to "any text that happens to be all digits", which stopped
+    // being unique to this widget family.
     let numbers: Vec<String> = frame
         .hud_text
         .iter()
         .chain(&frame.small_text)
         .filter_map(|draw| match draw {
             oag_ui::frontend::Draw::Text { text, .. }
-                if text.chars().all(|c| c.is_ascii_digit()) =>
+                if text.parse::<u32>().is_ok_and(|n| (1..=10).contains(&n)) =>
             {
                 Some(text.clone())
             }
