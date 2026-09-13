@@ -42,6 +42,11 @@ nothing on the title axis; the gameplay determinism reference did not move.
   full-lap HD volley trace exists only for Sol 2 and Anulpha Pass. Not this
   thread's subject; recorded because the next person tracing HD will hit it.
 
+- **`crates/gameplay/src/projectile.rs` is at 997 lines** against the
+  1,000-line ratchet. The next change to `Projectiles::advance` should move
+  its body to `projectile/flight.rs` first, the way `geometry.rs` and
+  `rocket.rs` were split out, rather than trimming comments to fit.
+
 ## Next Steps
 
 1. Seed `Projectile::surface` from the firing craft's up in `launch` and the

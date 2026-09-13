@@ -39,17 +39,13 @@
 //! rockets gone before the next frame, which is what "they look like three dots
 //! and disappear" was.
 //!
-//! Also recovered, **and the part this module got wrong for a month**: wall
-//! versus floor is decided by the surface *class* of what was hit, never by
-//! the angle. The original's query returns the struck collider's own surface
-//! type (`0` wall, `1` floor, `3` mag floor, `4` a craft, `0x7f` nothing) and
-//! `Rocket_Update` switches on it; this engine's raycaster returns the same
-//! tag in `RaycastHit::surface` and the module branched on the hit normal's
-//! angle anyway, under a doc comment claiming the raycaster had no code. A
-//! grazing wall hit was ignored and let a rocket leave the circuit through
-//! the barrier; a steep floor hit detonated it. Both were the "rockets go
-//! straight or disappear in a wavy section" report of 2026-09-13, measured
-//! on Pulse and HD alike - see `docs/gameplay/projectile-floor.md`.
+//! Also recovered, **and what this module got wrong until 2026-09-13**: wall
+//! versus floor is the surface *class* of the hit, never its angle. The
+//! original's query returns the struck collider's surface type (`0` wall,
+//! `1` floor, `3` mag floor, `4` a craft, `0x7f` nothing); this raycaster
+//! returns the same tag in `RaycastHit::surface`, and the module branched on
+//! the hit normal's angle anyway - a grazing wall let a rocket leave the
+//! circuit, a steep floor detonated it. See `docs/gameplay/projectile-floor.md`.
 //!
 //! **Ours.**
 //!
@@ -669,19 +665,16 @@ impl Projectiles {
                 false,
             );
             // **The branch is on the surface class, which is the original's
-            // collision code.** `FUN_0883198c` returns the struck collider's
-            // own surface type - `0` wall, `1` floor, `3` mag floor - or
-            // `0x7f` for nothing, and every projectile update switches on it.
-            // `Rocket_Update` (`0x0885d2a8`), read at decompiler level
-            // 2026-09-13: `0x7f` falls, `0` and `4` detonate, anything else
-            // rides. `Missile_Update` (`0x0885a918`) and `Shuriken_Update`
+            // collision code.** `Collision_SweepSegment` (`0x0883198c`)
+            // returns the struck collider's surface type - `0` wall, `1`
+            // floor, `3` mag floor - or `0x7f` for nothing. `Rocket_Update`
+            // (`0x0885d2a8`), read at decompiler level 2026-09-13: `0x7f`
+            // falls, `0` and `4` detonate, anything else rides.
+            // `Missile_Update` (`0x0885a918`) and `Shuriken_Update`
             // (`0x08877bdc`) take `0`/`4` as *nothing* here - no fall, no
             // ride - and `Plasma_Update` (`0x0885c6cc`) detonates like the
-            // Rocket. See `docs/ghidra/functions/psp-pulse-usa/rocket-visuals.md`.
-            //
-            // This branched on the hit normal's angle until 2026-09-13, and
-            // that was the bug under "rockets go straight or vanish in a wavy
-            // section": see [`nearest_hit`] for the sweep half of it.
+            // Rocket. This branched on the hit normal's angle until
+            // 2026-09-13; see [`nearest_hit`] for the sweep half of that bug.
             match probe {
                 // A floor: sit at the ride height above it, adopt its normal,
                 // and turn the velocity parallel to it without changing speed.
@@ -710,6 +703,9 @@ impl Projectiles {
                 }
                 // A wall within reach below: the Rocket and the Plasma go off
                 // on it, the two bouncing weapons ignore it for this tick.
+                // `Rocket_Update` falls through to its travel sweep after this
+                // and can spawn a second `WO_ROCKET_EXPLO_TRACK`; the
+                // `continue` here spends one blast, deliberately.
                 Some(hit) => {
                     if matches!(kind, Weapon::Rocket | Weapon::Plasma) {
                         impacts[index] = Some(Impact {
@@ -752,22 +748,26 @@ impl Projectiles {
                 // floor, the chord meets it steeply, and the answer is to
                 // land on it. Until 2026-09-13 that chord detonated.
                 //
-                // The velocity is turned parallel and its speed kept, as the
-                // probe branch does, where `Rocket_Update` writes
-                // `(next - prev) / dt` and lets the next tick's probe rescale
-                // it. This engine has no per-tick rescale for the Rocket, so
-                // preserving the speed here is what keeps a rocket at its
-                // class speed rather than bleeding it on every landing - a
-                // choice, recorded as one.
+                // **The Missile only moves; the rest also turn.** `Missile_Update`'s
+                // floor arm here is one `hit + normal * g_ride_height` and
+                // nothing else - no normal adopted, no velocity written; its
+                // guidance rewrites the velocity a few lines later anyway.
+                // `Rocket_Update` and `Shuriken_Update` adopt the normal and
+                // write `(next - prev) / dt`, then let the next tick's probe
+                // rescale it. This engine has no per-tick rescale for the
+                // Rocket, so the velocity is turned parallel with its speed
+                // kept, as the probe branch does - a choice, recorded as one.
                 Some(hit)
                     if hit.struck.is_none() && hit.surface.is_some_and(Surface::is_hoverable) =>
                 {
-                    projectile.surface = hit.normal;
                     projectile.position = hit.point + hit.normal * RIDE_HEIGHT;
-                    let along =
-                        projectile.velocity - hit.normal * projectile.velocity.dot(hit.normal);
-                    if along.length_squared() > 1e-6 {
-                        projectile.velocity = along.normalize() * projectile.velocity.length();
+                    if !guided {
+                        projectile.surface = hit.normal;
+                        let along =
+                            projectile.velocity - hit.normal * projectile.velocity.dot(hit.normal);
+                        if along.length_squared() > 1e-6 {
+                            projectile.velocity = along.normalize() * projectile.velocity.length();
+                        }
                     }
                 }
                 Some(hit) => {

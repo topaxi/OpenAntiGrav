@@ -16,8 +16,10 @@ what the fix was. Implemented in
 | Probe `6.0` (Rocket) / `12.0` (Missile, Plasma, Shuriken) along the ridden normal, ride `3.0` above a hit, fall `50.0` units/s^2 on a miss | **recovered** | 82-92 |
 | **The branch is on the surface class of the hit**: wall or craft ends the flight, floor or mag floor is ridden, nothing means fall | **recovered 2026-09-13**, `Collision_SweepSegment` (`0x0883198c`) read at decompiler level | 85 |
 | A floor met across the travel segment is *landed on* (`hit + normal * 3.0`), for all four weapons | **recovered 2026-09-13**, `Rocket_Update` and `Missile_Update` decompiles | 85 |
+| On that landing the Missile moves and nothing else - no normal adopted, no velocity written - where the Rocket and Shuriken adopt the normal and recompute velocity | **recovered 2026-09-13**, the same two decompiles | 85 |
 | A wall found by the *probe* detonates a Rocket or a Plasma and does nothing to a Missile or a Shuriken | **recovered 2026-09-13** | 80 |
-| Keeping the speed when the velocity is turned onto a floor met across the segment | **ours** - the original writes `(next - prev) / dt` and rescales on the next probe | - |
+| Keeping the speed when the Rocket, Plasma or Shuriken's velocity is turned onto a floor met across the segment | **ours** - the original writes `(next - prev) / dt` and rescales on the next probe | - |
+| The fall is along world `-Y` for every weapon | Rocket and Shuriken **recovered** (`velocity.y -= dt * 50`); the Plasma's decompile falls along its *carried normal* instead, and this engine gives it the Rocket's axis - pre-existing, not touched here | - |
 | The normal a projectile is born riding (`Vec3::Y`; the original seeds it from the firing craft) | **ours**, still | - |
 
 ## The report
@@ -115,8 +117,9 @@ number, not on any angle.
   Missile and Shuriken do nothing this tick;
 - **travel segment** - craft: detonate; wall: Rocket and Plasma detonate, the
   Missile mirrors up to its budget, the Shuriken mirrors without one;
-  floor/mag floor: **land on it** - adopt the normal, sit `3.0` above, turn
-  the velocity parallel with its speed kept.
+  floor/mag floor: **land on it** - sit `3.0` above; the Rocket, Plasma and
+  Shuriken also adopt the normal and turn their velocity parallel with its
+  speed kept, the Missile only moves.
 
 `WALL_FACING` and `RIDEABLE_COS` are gone. The Pulse-measured `6.0`, `3.0` and
 `50.0` are untouched, and nothing here is on the title axis: HD needed no
@@ -128,6 +131,15 @@ which both models resolve identically.
 
 ## Still open
 
+- **Any floor-tagged triangle is now ridden, at any angle.** That is the
+  original's own rule - it has no angle test - and the trace has the case it
+  admits: `t=1206 slot=15 ... probe=hit d=0.97 cos=0.09 MagFloor` on Pulse's
+  03, a near-vertical mag-floor face adopted as the ride surface for a tick.
+  Recorded rather than guarded, because a guard would be the same invention
+  this page removed.
+- **A probe wall hit spends one blast here** where `Rocket_Update` falls
+  through to its travel sweep and can spawn a second `WO_ROCKET_EXPLO_TRACK`
+  on the same tick. Deliberate.
 - **The born normal.** A rocket is spawned riding `Vec3::Y`; the original
   seeds `self+0x100` from the firing craft. Fired down Amphiseum's drop the
   probe along `-Y` missed the near-vertical road for 24 ticks before the
