@@ -381,10 +381,13 @@ pub struct Light {
     pub direction: [f32; 3],
     /// `1.0` to use this rig, `0.0` for `mesh.wgsl`'s stand-in.
     pub enabled: f32,
-    /// Constant ambient, as authored and clamped into range.
+    /// Constant ambient, passed through as authored - see [`Light::authored`].
     pub ambient: [f32; 3],
     _pad0: f32,
-    /// The sun's colour with its magnitude divided out: the hue alone.
+    /// The sun's colour, magnitude and all - see [`Light::authored`]. **Not**
+    /// divided down to a hue: that reduction was this project's own before
+    /// `76d0f58e` read the circuit's combining equation off its own
+    /// microcode; the magnitude is the disc's now, same as the direction.
     pub sun: [f32; 3],
     _pad1: f32,
     /// `Lighting.Prelit ambient colour scale`, applied exactly where the

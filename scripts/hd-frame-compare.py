@@ -29,6 +29,17 @@ sign says which way (~2.2 means ours is linear where the reference is
 gamma-encoded, ~0.45 the reverse). That is a direct, per-pixel probe of
 renderer.md's "whether the 8-bit surfaces hold linear or gamma light",
 confidence 70 there - this script can move that number, not invent one.
+**That per-pixel fit needs correspondence it does not reliably have** (the
+pose is matched, not the geometry - sub-pixel misalignment on high-frequency
+texture, our own missing craft, the known flat-black floor panel at pose 03)
+and its R^2 says so directly (0.01-0.26 across the three poses here). A sixth
+output, the quantile-quantile table, compares each side's own rank-sorted
+luminance distribution instead - no pixel correspondence needed at all - so
+it survives exactly the misalignment the per-pixel fit cannot: a
+near-constant `ref - ours` gap across ranks says an offset, a gap growing
+in proportion to the value says a scale, and a gap concentrated in the top
+few quantiles with low/mid ranks close says the top end is compressed - a
+curve, not a magnitude.
 
 **One asymmetry every region below has to account for**: at `--ticks 0` (no
 `--pose`, only `--camera-pose`) our own craft is wherever the race's normal
@@ -43,6 +54,20 @@ because the reference's craft is real geometry with its own material
 an environment-tone discrepancy that is actually a missing-craft discrepancy.
 It is reported on its own so the gap stays visible rather than quietly
 masked away.
+
+**A second asymmetry, poses `01` and `03` only: the reference frame was
+captured in motion (529 km/h and 431 km/h, its own HUD speed readout says)
+and ours is posed statically at `--ticks 0`.** `COMPARISON_ARGS` forces
+`--motion-blur off` for a like-for-like *setting*, but the reference capture
+is a real frame with the original's own speed-driven streak/blur baked into
+it by construction - not a setting a re-render can turn off. At pose `01`
+this reads as broad white streaks covering roughly the lower half of the
+frame; no static render at any lighting value reproduces that. **Treat pose
+`00` (grid, 74 km/h per its own HUD) as the only pose that isolates the lit
+material path** from a speed-effect confound; `01`/`03` corroborate the
+*direction* of the gap but not its magnitude, and their per-pixel and
+quantile fits should be read as noisier for exactly this reason, on top of
+pose `03`'s already-documented flat-black floor panel.
 
 # The regions are chosen, not measured
 
@@ -160,12 +185,14 @@ def region_stats(arr, luma, mask):
     px = arr[mask].astype(np.float64)
     lum = luma[mask]
     clipped = np.all(px >= CLIP, axis=-1)
+    zero = np.all(px == 0, axis=-1)
     hist, edges = np.histogram(lum, bins=8, range=(0.0, 1.0))
     return {
         "count": count,
         "mean_rgb": px.mean(axis=0),
         "mean_luma": float(lum.mean()),
         "clipped_pct": 100.0 * clipped.sum() / count,
+        "zero_pct": 100.0 * zero.sum() / count,
         "hist": hist,
         "hist_edges": edges,
     }
@@ -213,6 +240,34 @@ def bloom_halo(arr, luma, valid_mask):
         "core_pct": 100.0 * core_count / int(valid_mask.sum()),
         "rings": rings,
     }
+
+
+QUANTILES = (1, 5, 10, 25, 50, 75, 90, 95, 99)
+
+
+def quantile_probe(ours_luma, ref_luma, mask):
+    """Quantile-quantile comparison of a region's luminance distribution.
+
+    Unlike `encoding_probe`, this needs no pixel correspondence at all - each
+    side's own quantiles are compared by rank, not by matching (x, y)
+    screen positions - so it survives the sub-pixel misalignment, our own
+    missing craft, and the known flat-black floor panel that make the affine/
+    power-law fit at pose 03 read as noise (R^2 well under 0.03 there). A
+    near-constant `ref - ours` gap across quantiles says an offset (ambient);
+    a gap that grows with the quantile (both roughly a fixed ratio apart)
+    says a scale (a light magnitude or a texture decode); a gap concentrated
+    at the top few quantiles with the low/mid ones close says the top end is
+    compressed - a saturate-and-encode curve rather than a magnitude, because
+    a magnitude or offset error moves the whole distribution, not just its
+    tail.
+    """
+    ours = np.sort(ours_luma[mask])
+    ref = np.sort(ref_luma[mask])
+    if ours.size < 100 or ref.size < 100:
+        return None
+    ours_q = np.percentile(ours, QUANTILES)
+    ref_q = np.percentile(ref, QUANTILES)
+    return list(zip(QUANTILES, ours_q, ref_q, ref_q - ours_q))
 
 
 def encoding_probe(ours_luma, ref_luma, valid_mask, ours_arr, ref_arr):
@@ -280,11 +335,36 @@ def render(game, camera, out_path, bloom, cfg_root):
     unswitchable"), so the faithful comparison to a fixed-function original
     is with the switch on. `--bloom off` exists to isolate the chain's own
     contribution when a discrepancy needs it.
+
+    **`display.aspect` is pinned to `"wide"` (16:9), not left at the
+    project's own default of `"psp"` (30:17).** `--size 1280x720` is 16:9 and
+    `oag_display::display::Aspect::Wide`'s own doc names it "Wipeout HD's own
+    1920x1080" - the PSP default is 0.7% narrower, close enough to read as a
+    rounding error but not one: at this canvas it letterboxes to a
+    1270.6-wide fitted rectangle with an unwritten margin either side. Found
+    by this script's own `zero_pct` column reading a 100%-black, full-height,
+    10-column strip at the frame's right edge on every pose, present with
+    `--bloom` on or off, absent on a non-HD (Pulse) capture at the same size -
+    `oag_render::post::hd_bloom::Chain::run`'s caller
+    (`crates/game/src/race/scene/frame.rs`) passes the *fitted* width/height
+    to the chain but not the *offset* `oag_display::display::viewport`
+    computes alongside it, so the encode pass's own `set_viewport(0.0, 0.0,
+    ...)` writes a rectangle anchored at the canvas origin while the scene was
+    actually drawn centred - the gap between the two is the strip. Pinning
+    `aspect` to the canvas's own ratio makes the offset zero and reproduces
+    byte-for-byte what a corrected caller would draw; confirmed by rendering
+    pose `00` both ways (`zero_pct` 2.44% -> 0.00% in `road surface`, the
+    region the strip's right-hand box lands in). **Filed, not fixed** at the
+    `hd_bloom`/`frame.rs` level - see renderer.md - because this script does
+    not need the general case and patching the call site is `lane-ship-hull`
+    territory, not a comparison harness's.
     """
     cfg = cfg_root / f"cfg-{'on' if bloom else 'off'}"
     (cfg / "oag").mkdir(parents=True, exist_ok=True)
     (cfg / "oag" / "settings.toml").write_text(
-        f"[graphics]\nbloom = {'true' if bloom else 'false'}\n", encoding="utf-8"
+        f'[graphics]\nbloom = {"true" if bloom else "false"}\n\n'
+        f'[display]\naspect = "wide"\n',
+        encoding="utf-8",
     )
     cmd = [
         str(game),
@@ -376,7 +456,7 @@ def compare_one(game, pose, dump_regions, bloom, cfg_root):
 
     print(f"\n=== pose {pose} ({meta['track']}, fov {camera['fov_y_deg']:.2f} deg) ===")
     print(f"{'region':<28}{'side':<10}{'px':>9}{'mean R':>8}{'mean G':>8}"
-          f"{'mean B':>8}{'luma':>7}{'clip%':>8}  histogram")
+          f"{'mean B':>8}{'luma':>7}{'clip%':>8}{'zero%':>8}  histogram")
     for name, mask in masks.items():
         for side, arr, luma in (("ours", ours_arr, ours_luma), ("reference", ref_arr, ref_luma)):
             stats = region_stats(arr, luma, mask)
@@ -387,7 +467,7 @@ def compare_one(game, pose, dump_regions, bloom, cfg_root):
             print(
                 f"{name:<28}{side:<10}{stats['count']:>9}{r:>8.1f}{g:>8.1f}"
                 f"{b:>8.1f}{stats['mean_luma']:>7.3f}{stats['clipped_pct']:>7.2f}%"
-                f"  {format_hist(stats['hist'])}"
+                f"{stats['zero_pct']:>7.2f}%  {format_hist(stats['hist'])}"
             )
 
     valid = masks["whole (excl HUD, craft)"]
@@ -412,6 +492,15 @@ def compare_one(game, pose, dump_regions, bloom, cfg_root):
         )
         better = "power" if probe["gamma_r2"] > probe["affine_r2"] + 0.01 else "affine"
         print(f"  better fit: {better}")
+
+    print("\nquantile-quantile (rank-matched, no pixel correspondence needed):")
+    print(f"  {'region':<24}{'q%':>4}" + "".join(f"{q:>7}" for q in ("ours", "ref", "ref-ours")))
+    for name in ("whole (excl HUD, craft)", "road surface", "distant geometry", "sky"):
+        rows = quantile_probe(ours_luma, ref_luma, masks[name])
+        if rows is None:
+            continue
+        for q, o, r, d in rows:
+            print(f"  {name:<24}{q:>4}{o:>7.3f}{r:>7.3f}{d:>+7.3f}")
 
     return {
         "pose": pose,
