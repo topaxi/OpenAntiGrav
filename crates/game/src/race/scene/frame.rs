@@ -937,6 +937,7 @@ impl Scene {
                 queue,
                 encoder,
                 view,
+                (viewport.0, viewport.1),
                 (viewport.2 as u32, viewport.3 as u32),
                 hd_bloom_timestamps,
             );
@@ -960,6 +961,7 @@ impl Scene {
                     // makes, and the reason a short render extent no longer
                     // has the bright pass downsampling the region nobody drew.
                     size: (size.width, size.height),
+                    origin: (viewport.0, viewport.1),
                     viewport: (viewport.2 as u32, viewport.3 as u32),
                 },
             );
