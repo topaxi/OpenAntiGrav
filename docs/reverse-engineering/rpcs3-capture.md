@@ -353,6 +353,87 @@ within a frame and different between frames - which needs at least two
 frames' worth of packets in hand at once, not a per-blob `min`. That is
 tracked as an open item, not solved here.
 
+## The pick is fixed, and a rendered overlay confirms it (2026-09-13)
+
+**Confidence 96** - verified against `talons-fifo3`'s own dumps and
+independently corroborated by three rendered overlays. `ps3_pose.pick_camera`
+implements the cross-frame multiplicity discriminator the sections above
+name and never solve: build the set of frames each exact matrix value
+appears in, keep only the values unique to one frame (throws out every
+degenerate constant, which recurs bit-for-bit across every frame it appears
+in at all), then require the survivor to be loaded into **both** RSX
+registers `256` and `260` in that frame. That second filter is not
+redundant - `talons-fifo3`'s frame `01` has a second frame-unique value that
+is itself a degenerate (`unit_error` exactly `0.0`), and it differs from the
+real camera in exactly this: it is only ever loaded into `260`, never `256`.
+Where the two filters do not land on exactly one candidate, `cmd_capture`
+writes `"camera": null` plus `"camera_reason"` and `"camera_candidates"`
+(the survivor count) - never a plausible-looking wrong pose. Re-run offline
+against `talons-fifo3`'s three existing dumps, the pick reproduces this
+page's own table exactly (eye, `unit_error`, `fov_y` and `aspect` all match
+to the digit), now labelled with the register it came from: `256` **and**
+`260` both, in all three frames - so a live camera write updates the shader's
+`c[0..3]` and `c[4..7]` identically rather than only one of them, which is
+new evidence for "a matrix landing in both is evidence it is the camera"
+(the "Picking the camera out" table's last row) without yet settling which
+name (`viewProj` vs `worldViewProj`) belongs to which register - that still
+needs the overlay to fix a sign/handedness convention, not a register.
+
+`cmd_capture`'s default `--region` is now the pushbuffer set three shots of
+`talons-fifo3` used (`0x40010000:0x4000`, `0x40060000:0x20000`,
+`0x40080000:0x20000`), not the EBOOT data segment this page's own
+measurement showed holds nothing but the seven static matrices.
+
+**The overlay is taken, and it lines up.** `talons-matched` (four shots,
+default Fury-campaign walk into Talon's Junction, `--team feisar_c1`
+matching the walk's own default - see below) picked a camera cleanly on
+three of its four shots and refused honestly on the fourth
+(`"no frame-unique value loaded into both register 256 and 260 this frame"`
+- an ordinary frame where the discriminator did not clear both bars, not a
+bug). Rendering `oag-game --race --track
+/data/environments/talons_junction/track.vex --team feisar_c1 --size
+1280x720 --camera-pose <9 numbers> --camera-fov <fov> --screenshot` from
+each of the three picks and blending 50/50 against the matching `NN.png`
+(pairs and blends alike under `data/reference/hd-capture/talons-matched/`
+and `data/reference/hd-capture/talons-matched-overlay/`, both gitignored)
+shows the tunnel's green pipes, the guard rails, the road's lane markings,
+the white support pylons and the ship's own silhouette landing on top of
+each other in all three, including a fast banked-corner frame (`01`, RPCS3
+side motion-blurred at 529 km/h) and a tight loop (`03`). **No mirroring, no
+inversion**: the transpose/handedness convention this project already uses
+is the right one, so nothing needed bisecting.
+
+`03`'s pair also surfaced a rendering difference, unrelated to the camera: a
+road-surface panel a few dozen units ahead renders as flat black in
+`oag-game` where RPCS3 shows shaded geometry. Not chased - it reads as the
+same gap [rcsmaterial.md](../formats/rcsmaterial.md) and
+[renderer.md](../ghidra/functions/ps3-hdfury-eu/renderer.md) already
+document for `etched_glass_tech` (Talon's Junction's glass floor): a traced
+shading path with "no route to draw it" at all, pending a sampler-routing
+decision. This is new corroborating evidence for that existing gap, not a
+new one, and is recorded as such rather than reopened here.
+
+**Team and hull variant, verified rather than assumed.** No `TTY.log` line
+names either on the walk into a race - checked directly against the
+Campaign default walk (Team Selection, Team Launch Transition, Launch Game,
+InGame all print nothing about a ship path) and against Racebox's own walk
+to a Tech De Ra race, same result. `cmd_capture --nav-shots` photographs
+`Team Selection` on the way through regardless, and on two independent cold
+boots of the Fury-campaign default walk it shows
+**Feisar** highlighted (confidence 92: a direct screenshot read, agreeing
+across two boots, but only one measurement *kind*). The hull variant is not
+readable off that same screenshot - the ship-model honeycomb's selection
+cursor does not show clearly in a still frame - so it leans on
+[engine-trail.md](../ghidra/functions/ps3-hdfury-eu/engine-trail.md)'s
+already-measured runtime read, "all eight craft of a Fury-campaign event
+carry `deref` = `concept1`" (confidence 82 there), and this session adds an
+independent visual corroboration: the raced craft's livery in every
+`talons-matched` frame is the matte grey/orange "concept" paint, not the
+blue/white/yellow standard Feisar scheme `screen-Team-Selection.png` itself
+shows. Combined, `--team feisar_c1` **confirms** prior work's own match
+rather than assuming it (confidence 88 for the pairing overall, capped by
+the single-boot-kind evidence behind the team half).
+
 ## What is free, and what costs packets
 
 The circuit costs nothing: HD prints `Loading track model Data\Environments\...`
