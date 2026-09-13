@@ -47,17 +47,49 @@ use crate::mesh::Model;
 ///
 /// Present on every Pulse circuit checked, and **not** one of
 /// `321Go_StartFinish.vex`'s own six textures - so it is track geometry
-/// authored for the gantry rather than part of the gantry.
+/// authored for the gantry rather than part of the gantry. **Pulse-only**:
+/// HD's own `billboarddiffuse.rcsmaterial` binds only `billboard7.gtf` and
+/// `billboard8.gtf` - no second, backing surface has been found on that
+/// title, so [`mount`] never reaches this name there.
 pub const BACKPLATE_TEXTURE: &str = "321backplate.tga";
 
-/// Slot 8's placeholder stub, the Pulse spelling of HD's `billboard8.gtf`.
+/// Slot 8's placeholder stub, the Pulse spelling of HD's [`HD_SLOT8_TEXTURE`].
 ///
 /// 8x8 where every sibling is 64x64. Used as the fallback surface for a
 /// circuit that authors the stub without the backplate.
 pub const SLOT8_TEXTURE: &str = "billboard8.tga";
 
-/// The whole billboard-slot placeholder family, `billboard1.tga` through
-/// `billboard8.tga`.
+/// HD/Fury's own spelling of slot 8's placeholder, bound through
+/// `billboarddiffuse.rcsmaterial` on all 17 environments
+/// (`docs/ghidra/functions/ps3-hdfury-eu/billboards.md`, confidence 90 for the
+/// disc-wide binding, straight off the disc).
+///
+/// **The only mount surface HD authors for this slot.** Unlike Pulse, no
+/// second, backing texture has been found alongside it - so [`mount`] does
+/// not try a backplate-shaped name here at all, and a circuit whose only
+/// candidate is this one is not a weaker measurement for it.
+pub const HD_SLOT8_TEXTURE: &str = "billboard8.gtf";
+
+/// The last path component of a texture label, case-preserved.
+///
+/// **Why this exists at all, and not just `eq_ignore_ascii_case`.** A Pulse
+/// `.vex`'s embedded `Texture` node is already reduced to its bare file name
+/// before it reaches [`crate::mesh::Model::textures`] (`mesh.rs`'s own
+/// `rsplit(['/', '\\'])`), but an HD/Wipeout-2048 `.rcsmodel` material names
+/// its `.gtf` by the **full archive path** the sampler table carries
+/// (`crates/render/src/mesh/rcs/skin.rs`'s `path` argument, passed to
+/// `ModelTexture::from_gtf` unchanged) - `.../textures/dds/billboard8.gtf`,
+/// not `billboard8.gtf`. Matching the whole label would silently never find
+/// an HD surface by name; this is what makes "on the file name alone", the
+/// claim [`surface`] and [`is_slot_placeholder`] already documented, actually
+/// true for both shapes of label rather than only Pulse's.
+fn basename(label: &str) -> &str {
+    label.rsplit(['/', '\\']).next().unwrap_or(label)
+}
+
+/// The whole billboard-slot placeholder family: `billboard1` through
+/// `billboard8`, in both titles' own spellings - Pulse's `.tga` and HD's
+/// `.gtf`.
 ///
 /// **A slot, not artwork.** HD's `Billboard_LoadModelAndBind` (`0x003a4da0`,
 /// confidence 84, `docs/ghidra/functions/ps3-hdfury-eu/billboards.md`) reaches
@@ -70,10 +102,13 @@ pub const SLOT8_TEXTURE: &str = "billboard8.tga";
 /// binding path" is still open, and `BOOT.BIN` ships no lowercase `billboard`
 /// base string for a `billboard%d`-shaped build, so the mechanism plainly
 /// differs from HD's even though the placeholder convention is identical -
-/// but "unfound" is not "absent": a draw bound to one of these eight names is
-/// never the original's own art on either title, so drawing it raw is drawing
-/// what a slot looks like with nothing bound in, not what a player sees.
-pub const SLOT_PLACEHOLDER_TEXTURES: [&str; 8] = [
+/// but "unfound" is not "absent": a draw bound to one of these sixteen names
+/// is never the original's own art on either title, so drawing it raw is
+/// drawing what a slot looks like with nothing bound in, not what a player
+/// sees. HD's own eight are counted on the disc too - `billboard7.gtf` and
+/// `billboard8.gtf` on all 17 environments, the rest on a subset - in the
+/// same source cited above.
+pub const SLOT_PLACEHOLDER_TEXTURES: [&str; 16] = [
     "billboard1.tga",
     "billboard2.tga",
     "billboard3.tga",
@@ -82,17 +117,27 @@ pub const SLOT_PLACEHOLDER_TEXTURES: [&str; 8] = [
     "billboard6.tga",
     "billboard7.tga",
     "billboard8.tga",
+    "billboard1.gtf",
+    "billboard2.gtf",
+    "billboard3.gtf",
+    "billboard4.gtf",
+    "billboard5.gtf",
+    "billboard6.gtf",
+    "billboard7.gtf",
+    "billboard8.gtf",
 ];
 
 /// Whether `label` names one of [`SLOT_PLACEHOLDER_TEXTURES`], matched
 /// case-insensitively on the file name alone - the same match [`surface`]
-/// already uses, since a track's texture labels are file names and their
-/// case is not consistent across circuits.
+/// already uses, since a track's texture labels are file names (Pulse) or
+/// full archive paths ending in one (HD) and neither is consistent in case
+/// across circuits.
 #[must_use]
 pub fn is_slot_placeholder(label: &str) -> bool {
+    let name = basename(label);
     SLOT_PLACEHOLDER_TEXTURES
         .iter()
-        .any(|name| label.eq_ignore_ascii_case(name))
+        .any(|candidate| name.eq_ignore_ascii_case(candidate))
 }
 
 /// Drops every draw in `model` bound to a [`is_slot_placeholder`] texture, and
@@ -242,21 +287,32 @@ impl Mount {
     }
 }
 
-/// The mount a track model authors, preferring the backplate over the stub.
+/// The mount a track model authors: Pulse's backplate, then Pulse's own
+/// stub spelling, then HD's.
 ///
-/// `None` when neither texture is bound by any draw - a circuit this project
+/// **Titles are mutually exclusive by spelling, not by trying one first.**
+/// [`BACKPLATE_TEXTURE`] and [`SLOT8_TEXTURE`] are `.tga` names no HD track
+/// ever binds and [`HD_SLOT8_TEXTURE`] is a `.gtf` name no Pulse track ever
+/// binds, so the ordering only matters on Pulse, where the backing panel
+/// (present on eleven of twelve circuits alongside the stub) is the one
+/// `docs/rendering/start-gantry.md`'s `14_Track` case settles on.
+///
+/// `None` when nothing binds any of the three - a circuit this project
 /// cannot place a gantry on, which is a thing to report rather than to paper
 /// over with a coordinate from a circuit that does.
 #[must_use]
 pub fn mount(model: &Model) -> Option<Mount> {
-    surface(model, BACKPLATE_TEXTURE).or_else(|| surface(model, SLOT8_TEXTURE))
+    surface(model, BACKPLATE_TEXTURE)
+        .or_else(|| surface(model, SLOT8_TEXTURE))
+        .or_else(|| surface(model, HD_SLOT8_TEXTURE))
 }
 
 /// The plane of every draw in `model` that binds a texture named `texture`.
 ///
-/// Matched on the texture's own label, case-insensitively and on the file name
-/// alone, because a track's texture labels are file names and their case is
-/// not consistent across circuits.
+/// Matched on the texture's own label, case-insensitively and on the file
+/// name alone - [`basename`] - because a track's texture labels are bare file
+/// names on Pulse and full archive paths on HD, and neither is consistent in
+/// case across circuits.
 #[must_use]
 pub fn surface(model: &Model, texture: &str) -> Option<Mount> {
     let slots: Vec<usize> = model
@@ -265,7 +321,7 @@ pub fn surface(model: &Model, texture: &str) -> Option<Mount> {
         .enumerate()
         .filter(|(_, t)| {
             t.as_ref()
-                .is_some_and(|t| t.label.eq_ignore_ascii_case(texture))
+                .is_some_and(|t| basename(&t.label).eq_ignore_ascii_case(texture))
         })
         .map(|(slot, _)| slot)
         .collect();
