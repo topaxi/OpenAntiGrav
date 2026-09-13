@@ -183,7 +183,18 @@ fn fs_blur(in: VertexOutput) -> @location(0) vec4<f32> {
     var sum = vec3<f32>(0.0);
     for (var i = 0; i < 9; i = i + 1) {
         let offset = f32(i - 4) * constants.step;
-        sum = sum + textureSample(source_tex, source_sampler, drawn(in.uv) + offset).rgb * BLUR_WEIGHTS[i];
+        // The clamp has to constrain the *sampled* coordinate, not just the
+        // tap's centre: `drawn(in.uv) + offset` (the previous form) added the
+        // tap after `drawn()`'s own `min(..., uv_max)`, so a tap could still
+        // land past the drawn sub-rectangle into another level's clear -
+        // inert at native, where `uv_scale`/`uv_max` are `(1, 1)` and the
+        // sampler's own edge clamp already absorbs the difference, but wrong
+        // once dynamic resolution or FSR shrinks the drawn rectangle inside
+        // its buffer (renderer.md, "Two defects filed and deliberately not
+        // fixed"). Folding the offset into the same `min` `drawn()` uses
+        // fixes that without changing anything at native.
+        let coord = min(in.uv * constants.uv_scale + offset, constants.uv_max);
+        sum = sum + textureSample(source_tex, source_sampler, coord).rgb * BLUR_WEIGHTS[i];
     }
     return vec4<f32>(sum / 4.2, 1.0);
 }

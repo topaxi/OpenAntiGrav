@@ -115,20 +115,40 @@ six of the eleven moved under this change (`01_vineta_k`, `03_track`,
 so they do reach `lit_linear` and take the authored path, and still do not
 respond to the switch.
 
+2026-09-13: **the matched-camera comparison landed, and it reverses the
+direction of every reading above.** Full account in
+[renderer.md](../../docs/ghidra/functions/ps3-hdfury-eu/renderer.md), "The
+matched-camera comparison: the frame reads darker than the original, and the
+post chain is cleared of it". Every prior figure on this page was aggregates
+over two close-but-not-identical framings; `data/reference/hd-capture/
+talons-matched/{00,01,03}` gives an exact camera match, and at an exact
+match **our frame is darker than the original everywhere measured** -
+whole-frame mean luminance -0.13 to -0.24, road and distant-geometry regions
+the same direction - not the "too bright" this page's own title names. Two
+negatives narrow where that gap can be, so they should not be re-run: forcing
+the exposure resolve's `scale` to `1.0` changes nothing (it is already
+pinned there for this scene, `.envsettings`-read `Tone` family and all), and
+`[graphics] bloom` on vs. off moves the reading by only 0.02-0.05 against a
+0.13-0.24 gap. **The remaining gap is not this chain's** - it localises to
+`mesh.wgsl`'s lit material path and possibly `sky_cube.rs`'s texture decode,
+both `lane-ship-hull` territory this session did not touch. The harness is
+`scripts/hd-frame-compare.py`, committed this session.
+
 ## Open
 
+- **The frame is measurably darker than the original at a matched camera, by 0.13-0.24 mean luminance, and the exposure/bloom post chain is ruled out as the cause** - open at `lane-ship-hull`'s files (`mesh.wgsl`, `crates/render/src/mesh/`, `sky_cube.rs`), not this lane's
 - Whether the 8-bit surfaces hold linear or gamma light is undetermined (confidence 70 against ADR-0026, not acted on) - still open, unchanged by the above
 - What the colour set's fourth byte gates is unknown - `0x1aaf7631` is declared by no `SHO` shader block, so the only place left to check is per-material microcode
 - `shadowMapTex` is projected by the disc and unimplemented here
-- `hd_bloom.wgsl`'s `fs_blur` adds its tap offset after `drawn()`, so the sub-rectangle clamp does not constrain the taps - inert at native, wrong under DRS/FSR
 - `scripts/clipped-white.py`'s docstring still publishes the 3.85/6.99 pair, and 3.85 % is a padded canvas rather than a frame - another lane owns that file, so the correction lives in `scripts/hd-glow-sweep.py` and renderer.md instead
 - Why **eleven** of the sixteen circuits measure identically with `[graphics] bloom` on and off, on the baseline build as much as the fixed one - and six of those eleven do take the authored path, so "they never light" is refuted
 - Amphiseum, Fury's circuits and the DLC packs have no rpcs3 grab to be read against at all
 
 ## Next Steps
 
+- Chase the darkness gap in `mesh.wgsl`'s lit material path against Talon's Junction's own `.envsettings` and per-material microcode - a data-plumbing check (a value read short) before a formula check, since every summand this page's own RE already named is implemented
 - Sweep per-material microcode (`scripts/ps3-microcode.py`) for a read of `0x1aaf7631`'s fourth byte, to settle what it gates
 - `shadowMapTex` remains unread; locate what projects it and whether the disc's shadow map is reachable from data already on disc
-- Re-derive the reference band from a fresh rpcs3 grab at a framing our `--pose` can reproduce, so the next comparison is not aggregates-at-a-distance
 - Grab Amphiseum on rpcs3: it is the circuit the emissive layer is busiest on (+1.70 points at the grid, 4.84 % of the frame over 8/255) and the only one whose fix has no reference at all to be read against
 - Find why `[graphics] bloom` is inert on eleven of the sixteen circuits - `scripts/hd-glow-sweep.py sweep --bloom both` is the reproducer, the four named environments plus Zone 1 are the five that do respond, and six of the inert eleven measurably take the authored path so the obvious hypothesis is already refuted
+- `hd_bloom.wgsl`'s `fs_blur` tap-offset defect (previously listed here) is fixed - see renderer.md's own updated text for the change and its measured native-resolution footprint
