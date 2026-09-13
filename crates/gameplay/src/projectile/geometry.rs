@@ -16,11 +16,38 @@
 
 use oag_core::math::Vec3;
 use oag_physics::params::Dimensions;
-use oag_physics::{Ray, Raycaster};
+use oag_physics::{Ray, Raycaster, Surface};
 
-use super::WALL_FACING;
+/// What a swept segment met first.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(super) struct SweepHit {
+    /// Where along the segment it happened.
+    pub point: Vec3,
+    /// The ship slot struck, or `None` for track geometry.
+    pub struck: Option<u8>,
+    /// The surface normal for geometry; the incoming direction reversed for a
+    /// hull, which nothing reads - a hull hit always detonates.
+    pub normal: Vec3,
+    /// Which surface class the geometry is, or `None` for a hull.
+    ///
+    /// **This is the original's collision code.** `FUN_0883198c`, the query
+    /// every projectile update runs, returns `0x7f` for no hit, the struck
+    /// collider's `+0x6c` surface type on a world hit - `0` wall, `1` floor,
+    /// `3` mag floor - and `4` from a second query against the craft. The
+    /// physics layer carries the same numbering in [`Surface`]; a hull is the
+    /// `4`. See `docs/ghidra/functions/psp-pulse-usa/rocket-visuals.md`.
+    pub surface: Option<Surface>,
+}
 
 /// The nearest of the geometry hit and the hull hits along one tick's step.
+///
+/// **Every geometry hit is reported, whatever its angle.** This used to drop
+/// a hit that was not face-on, on the reasoning that a projectile riding the
+/// floor clips it constantly; that let a projectile pass *through a wall* it
+/// met at a shallow angle and leave the circuit, and it detonated on a floor
+/// it met steeply. Which of the two a hit is comes back in
+/// [`SweepHit::surface`], and [`super::Projectiles::advance`] decides from
+/// that, the way the original decides from its code.
 pub(super) fn nearest_hit<R: Raycaster + ?Sized>(
     from: Vec3,
     to: Vec3,
@@ -28,22 +55,25 @@ pub(super) fn nearest_hit<R: Raycaster + ?Sized>(
     raycaster: &R,
     ships: &[crate::world::Ship],
     owner: u8,
-) -> Option<(Vec3, Option<u8>, Vec3)> {
+) -> Option<SweepHit> {
     let direction = (to - from) / distance;
 
     // `include_reset` is false: a `Reset Collision` volume is a respawn trigger
     // rather than a surface, and a rocket detonating on one would blow up in
-    // mid-air over the run-off.
-    //
-    // **Only a face-on hit stops it.** A projectile riding the track clips the
-    // floor constantly - that is what riding it means - and detonating on those
-    // is exactly the bug this model exists to fix: before it, three rockets
-    // died in the tick they were fired. A grazing hit is the floor and is
-    // ignored here, having already been handled by the surface probe; a hit the
-    // projectile runs *into* is a wall and stops it. See [`WALL_FACING`].
+    // mid-air over the run-off. The original's query skips them the same way
+    // - `Collision_RaycastWorld`'s Reset skip, with the request bit clear.
     let mut best = Raycaster::raycast(raycaster, Ray::new(from, direction, distance), None, false)
-        .filter(|hit| -hit.normal.dot(direction) > WALL_FACING)
-        .map(|hit| (hit.distance, hit.point, None, hit.normal));
+        .map(|hit| {
+            (
+                hit.distance,
+                SweepHit {
+                    point: hit.point,
+                    struck: None,
+                    normal: hit.normal,
+                    surface: Some(hit.surface),
+                },
+            )
+        });
 
     for (slot, ship) in ships.iter().enumerate() {
         if !ship.active || slot as u8 == owner {
@@ -54,21 +84,20 @@ pub(super) fn nearest_hit<R: Raycaster + ?Sized>(
             continue;
         };
         let travelled = t * distance;
-        if best.is_none_or(|(nearest, _, _, _)| travelled < nearest) {
-            // A hull hit carries the incoming direction reversed where a geometry
-            // hit carries a surface normal. Nothing reads it - a hull hit always
-            // detonates, never bounces - and it is here so the tuple has one
-            // shape rather than an `Option` nobody unwraps.
+        if best.is_none_or(|(nearest, _)| travelled < nearest) {
             best = Some((
                 travelled,
-                from + direction * travelled,
-                Some(slot as u8),
-                -direction,
+                SweepHit {
+                    point: from + direction * travelled,
+                    struck: Some(slot as u8),
+                    normal: -direction,
+                    surface: None,
+                },
             ));
         }
     }
 
-    best.map(|(_, point, struck, normal)| (point, struck, normal))
+    best.map(|(_, hit)| hit)
 }
 
 /// The sphere a craft is tested against.

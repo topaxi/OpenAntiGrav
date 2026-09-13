@@ -257,6 +257,18 @@ impl Race {
     pub fn spline(&self) -> &Spline {
         &self.sim.spline
     }
+
+    /// The collision world the race queries, for a caller that wants to run the
+    /// same probe a projectile does and see what it saw.
+    ///
+    /// Read-only, and a verification aid in the same sense [`Self::spline`]
+    /// is: a projectile that vanishes mid-flight is explained by re-running
+    /// its surface probe and its flight sweep against exactly this world, not
+    /// one rebuilt from the same disc by a test's own loader.
+    #[must_use]
+    pub fn collision(&self) -> &CollisionWorld {
+        &self.sim.collision
+    }
 }
 
 impl Race {

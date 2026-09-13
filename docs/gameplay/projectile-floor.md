@@ -1,0 +1,155 @@
+# A projectile follows the floor, and what decides wall from floor
+
+How a Rocket (and the Missile, Plasma and Shuriken with it) rides the track,
+why it used to leave the circuit through the barrier or blow up on a dip, and
+what the fix was. Implemented in
+[`oag_gameplay::projectile`](../../crates/gameplay/src/projectile.rs)
+(`Projectiles::advance`) and
+[`projectile/geometry.rs`](../../crates/gameplay/src/projectile/geometry.rs)
+(`nearest_hit`); the recovered model is on
+[rocket-visuals.md](../ghidra/functions/psp-pulse-usa/rocket-visuals.md#flight-follows-the-track).
+
+## Read this first: what is recovered and what is ours
+
+| Piece | Status | Confidence |
+| --- | --- | --- |
+| Probe `6.0` (Rocket) / `12.0` (Missile, Plasma, Shuriken) along the ridden normal, ride `3.0` above a hit, fall `50.0` units/s^2 on a miss | **recovered** | 82-92 |
+| **The branch is on the surface class of the hit**: wall or craft ends the flight, floor or mag floor is ridden, nothing means fall | **recovered 2026-09-13**, `Collision_SweepSegment` (`0x0883198c`) read at decompiler level | 85 |
+| A floor met across the travel segment is *landed on* (`hit + normal * 3.0`), for all four weapons | **recovered 2026-09-13**, `Rocket_Update` and `Missile_Update` decompiles | 85 |
+| On that landing the Missile moves and nothing else - no normal adopted, no velocity written - where the Rocket and Shuriken adopt the normal and recompute velocity | **recovered 2026-09-13**, the same two decompiles | 85 |
+| A wall found by the *probe* detonates a Rocket or a Plasma and does nothing to a Missile or a Shuriken | **recovered 2026-09-13** | 80 |
+| Keeping the speed when the Rocket, Plasma or Shuriken's velocity is turned onto a floor met across the segment | **ours** - the original writes `(next - prev) / dt` and rescales on the next probe | - |
+| The fall is along world `-Y` for every weapon | Rocket and Shuriken **recovered** (`velocity.y -= dt * 50`); the Plasma's decompile falls along its *carried normal* instead, and this engine gives it the Rocket's axis - pre-existing, not touched here | - |
+| The normal a projectile is born riding (`Vec3::Y`; the original seeds it from the firing craft) | **ours**, still | - |
+
+## The report
+
+A player on HD/Fury in `oag-game`: "rockets don't properly follow the
+path/floor - in a looping or wavy section the rockets disappear or go
+straight, instead of going with the floor." Treated as a reliable oracle,
+and it was one.
+
+## What was measured
+
+`crates/game/tests/rocket_floor_trace.rs` (a scratch trace, `#[ignore]`d and
+gated on `OAG_ROCKET_TRACE`) flies the player on the autopilot, fires a volley
+every two seconds, and re-runs each rocket's own probe and sweep against the
+race's own `CollisionWorld` (`Race::collision`) every tick, so the tick a
+rocket stops on names why. 90 seconds a circuit, VENOM, single race with the
+field on. The columns that matter: how many rocket-ticks were spent *falling*
+(probe miss), and how many rockets **expired** - flew their whole 10 s cap
+without meeting anything, which on a closed circuit means they had left it.
+
+| Circuit | Title | falling ticks before -> after | expired before -> after | ends before -> after |
+| --- | --- | --- | --- | --- |
+| 15 Anulpha Pass | HD | 37,215 -> 111 | 58 of 123 -> 0 of 129 | wall 43, hull 22, expired 58 -> wall 113, probed wall 1, hull 15 |
+| 12 Sol 2 | HD | 16,025 -> 9,361 | 27 of 129 -> 16 of 132 | wall 83, hull 19, expired 27 -> wall 96, probed wall 1, hull 19, expired 16 |
+| Amphiseum | HD | 26,541 -> 421 | 39 of 121 -> 0 of 134 | wall 57, hull 25, expired 39 -> wall 96, probed wall 4, hull 34 |
+| 10 Sebenco Climb | HD | 2,449 -> 86 | 4 of 123 -> 0 of 120 | wall 104, hull 15, expired 4 -> wall 89, probed wall 18, hull 13 |
+| 16 Talon's Junction | Pulse | 34,402 -> 107 | 52 of 120 -> 0 of 126 | wall 50, hull 18, expired 52 -> wall 98, probed wall 4, hull 24 |
+| 03 | Pulse | 15,541 -> 248 | 26 of 128 -> 0 of 126 | wall 79, hull 23, expired 26 -> wall 98, probed wall 2, hull 26 |
+| 07 | Pulse | 9,021 -> 3,543 | 15 of 129 -> 6 of 126 | wall 96, hull 18, expired 15 -> wall 107, probed wall 1, hull 12, expired 6 |
+| 10 | Pulse | 4,385 -> 1,590 | 7 of 129 -> 2 of 132 | wall 109, hull 13, expired 7 -> wall 111, probed wall 3, hull 16, expired 2 |
+
+"wall" is a detonation on the travel sweep, "probed wall" one on the surface
+probe (the original's code `0` on either query), "hull" a craft. The HD
+autopilot beaches on Sebenco Climb at t=1560, so that row's later volleys
+fire from a standing craft against the barrier; Sol 2 and Anulpha Pass are the
+two HD rows the autopilot laps.
+
+**What is left is jumps, and it is the recovered model doing what it says.**
+Every rocket that still expires - 16 on Sol 2, 6 on Pulse's 07, 2 on 10 - was
+fired up a ramp that ends in the air: Sol 2's climb at 23 degrees, 07's at 43.
+Riding the ramp turns the velocity along it, so the rocket leaves the lip
+with 108-190 units/s of climb against a fall of `50.0` units/s^2, reaches its
+apex two to four seconds later and comes down a kilometre away. That is the
+Pulse-measured constant at the Pulse-measured speed, and this project does not
+retune it to suppress a symptom; whether the original's rockets sail off the
+same lips is a play-test question, recorded as open.
+
+**Pulse broke the same way as HD**, so the cause was the shared geometry and
+HD was incidental. Nothing about HD's collision world was at fault: every
+circuit loads its full floor (9,018 floor triangles on Anulpha Pass, 9,420 on
+Sebenco Climb, all wound with `normal.y > 0` where the road is upright), the
+half-widths (48-110 units) sit beside Pulse's (49-79), and the rocket flies the
+same 277.8 units/s (`800 + 200` km/h over 3.6) on both.
+
+## The mechanism, tick by tick
+
+Every rocket that left a circuit did it the same way. From the Anulpha Pass
+trace, before the fix:
+
+```text
+t=500 slot=2 age=20 pos=(-1113.4,-18.6,-203.8) n=(0.01,1.00,0.01) RIDE probe=hit d=3.00 Floor sweep=-
+t=501 slot=2 age=21 pos=(-1117.9,-18.5,-204.8) n=(0.01,1.00,0.01) FALL probe=MISS sweep=hit d=1.68 facing=0.25 Wall
+t=502 ... FALL probe=MISS sweep=-          (and so on for 578 more ticks, to y=-865)
+```
+
+The rocket rode the floor until its chord met the **barrier at a shallow
+angle** - `facing` is `-normal . direction`, and `0.25` is about 75 degrees
+off the wall's normal. `nearest_hit` dropped any geometry hit under
+`WALL_FACING` (`0.25`) as "the floor being clipped", so the rocket passed
+through the wall, found no floor on the far side, and fell at `50.0` units/s^2
+until its 10 s cap reaped it. On a wavy or banked stretch the aim line
+diverges from the road sooner, so that is where it showed.
+
+The other half is the same constant from the other side: a floor the chord
+met at *more* than 75 degrees - the far side of a dip, after a crest had put
+the probe out of reach - passed the filter and **detonated**, where the
+original lands on it.
+
+Both were one mistake. `Projectiles::advance` carried a doc comment saying
+"the original picks detonate or deflect from a collision code its query
+returns; this engine's raycaster has no such code, so the test is geometric."
+The raycaster has always returned `RaycastHit::surface`, and
+`Collision_SweepSegment` (`0x0883198c`) returns exactly that: the struck
+collider's `+0x6c` surface type, `0` wall, `1` floor, `3` mag floor, `0x7f`
+for nothing, `4` for the craft test. `Rocket_Update`'s switch is on that
+number, not on any angle.
+
+## The fix
+
+`nearest_hit` reports every geometry hit and carries its `Surface`;
+`Projectiles::advance` branches on it:
+
+- **probe** - nothing: fall; floor/mag floor: ride (adopt the normal, sit
+  `3.0` above, turn the velocity parallel); wall: Rocket and Plasma detonate,
+  Missile and Shuriken do nothing this tick;
+- **travel segment** - craft: detonate; wall: Rocket and Plasma detonate, the
+  Missile mirrors up to its budget, the Shuriken mirrors without one;
+  floor/mag floor: **land on it** - sit `3.0` above; the Rocket, Plasma and
+  Shuriken also adopt the normal and turn their velocity parallel with its
+  speed kept, the Missile only moves.
+
+`WALL_FACING` and `RIDEABLE_COS` are gone. The Pulse-measured `6.0`, `3.0` and
+`50.0` are untouched, and nothing here is on the title axis: HD needed no
+number of its own.
+
+The gameplay determinism reference (`crates/gameplay/tests/determinism.rs`)
+did not move: its scenario is a rocket over a flat floor into a face-on wall,
+which both models resolve identically.
+
+## Still open
+
+- **Any floor-tagged triangle is now ridden, at any angle.** That is the
+  original's own rule - it has no angle test - and the trace has the case it
+  admits: `t=1206 slot=15 ... probe=hit d=0.97 cos=0.09 MagFloor` on Pulse's
+  03, a near-vertical mag-floor face adopted as the ride surface for a tick.
+  Recorded rather than guarded, because a guard would be the same invention
+  this page removed.
+- **A probe wall hit spends one blast here** where `Rocket_Update` falls
+  through to its travel sweep and can spawn a second `WO_ROCKET_EXPLO_TRACK`
+  on the same tick. Deliberate.
+- **The born normal.** A rocket is spawned riding `Vec3::Y`; the original
+  seeds `self+0x100` from the firing craft. Fired down Amphiseum's drop the
+  probe along `-Y` missed the near-vertical road for 24 ticks before the
+  rocket landed at the bottom. One tick on a flat grid, a second of free
+  flight on a drop.
+- **The speed after a segment landing** is kept here and recomputed as
+  `(next - prev) / dt` in the original. A rocket that lands hard loses speed
+  for one tick there and is rescaled by the next probe; here it never slows.
+- **Jump lips**, as above: a play-test of the original on Pulse's 07 ramp
+  would say whether its rockets sail the same way.
+- **HD's own projectile update** has not been read. Everything above is
+  Pulse's model applied to HD's geometry, which the measurement supports and a
+  read of `ps3-hdfury-eu` would settle.
