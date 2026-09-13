@@ -39,12 +39,20 @@
 //! rockets gone before the next frame, which is what "they look like three dots
 //! and disappear" was.
 //!
+//! Also recovered, **and the part this module got wrong for a month**: wall
+//! versus floor is decided by the surface *class* of what was hit, never by
+//! the angle. The original's query returns the struck collider's own surface
+//! type (`0` wall, `1` floor, `3` mag floor, `4` a craft, `0x7f` nothing) and
+//! `Rocket_Update` switches on it; this engine's raycaster returns the same
+//! tag in `RaycastHit::surface` and the module branched on the hit normal's
+//! angle anyway, under a doc comment claiming the raycaster had no code. A
+//! grazing wall hit was ignored and let a rocket leave the circuit through
+//! the barrier; a steep floor hit detonated it. Both were the "rockets go
+//! straight or disappear in a wavy section" report of 2026-09-13, measured
+//! on Pulse and HD alike - see `docs/gameplay/projectile-floor.md`.
+//!
 //! **Ours.**
 //!
-//! - **Wall versus floor.** The original picks "detonate" or "deflect" from a
-//!   collision *code* its query returns; this engine's raycaster has no such
-//!   code, so the test is geometric. See [`WALL_FACING`] and [`RIDEABLE_COS`],
-//!   the two thresholds that decision rests on.
 //! - **Turning the velocity parallel to the surface rather than reflecting it.**
 //!   The original recomputes velocity from a corrected position, which is not
 //!   quite either; this preserves speed and follows the track, which is the
@@ -82,14 +90,14 @@ mod rocket;
 pub mod shuriken;
 
 pub use geometry::hull_radius;
-use geometry::nearest_hit;
+use geometry::{SweepHit, nearest_hit};
 
 pub use blast::{BlastStats, blast};
 pub use mine::TriggerRadii;
 pub use rocket::{ROCKET_SHOTS, launch};
 
 use oag_core::math::{Quat, Vec3};
-use oag_physics::{Ray, Raycaster};
+use oag_physics::{Ray, Raycaster, Surface};
 use oag_tables::weapons::Weapon;
 
 /// The most projectiles that can be in the air at once.
@@ -660,12 +668,26 @@ impl Projectiles {
                 None,
                 false,
             );
+            // **The branch is on the surface class, which is the original's
+            // collision code.** `FUN_0883198c` returns the struck collider's
+            // own surface type - `0` wall, `1` floor, `3` mag floor - or
+            // `0x7f` for nothing, and every projectile update switches on it.
+            // `Rocket_Update` (`0x0885d2a8`), read at decompiler level
+            // 2026-09-13: `0x7f` falls, `0` and `4` detonate, anything else
+            // rides. `Missile_Update` (`0x0885a918`) and `Shuriken_Update`
+            // (`0x08877bdc`) take `0`/`4` as *nothing* here - no fall, no
+            // ride - and `Plasma_Update` (`0x0885c6cc`) detonates like the
+            // Rocket. See `docs/ghidra/functions/psp-pulse-usa/rocket-visuals.md`.
+            //
+            // This branched on the hit normal's angle until 2026-09-13, and
+            // that was the bug under "rockets go straight or vanish in a wavy
+            // section": see [`nearest_hit`] for the sweep half of it.
             match probe {
-                // Rideable: sit at the ride height above it, adopt its normal,
+                // A floor: sit at the ride height above it, adopt its normal,
                 // and turn the velocity parallel to it without changing speed.
                 // Turning rather than reflecting is what makes a projectile
                 // *follow* a rolling track instead of bouncing down it.
-                Some(hit) if hit.normal.dot(projectile.surface) > RIDEABLE_COS => {
+                Some(hit) if hit.surface.is_hoverable() => {
                     projectile.surface = hit.normal;
                     to = hit.point + hit.normal * RIDE_HEIGHT;
                     // A missile re-pins its speed to the ramp here rather than
@@ -686,10 +708,25 @@ impl Projectiles {
                         projectile.velocity = along.normalize() * speed;
                     }
                 }
-                // Nothing under it, or only something too steep to ride: it
-                // falls. The projectile keeps whatever normal it had, so it
-                // resumes riding when the track comes back under it.
-                _ => projectile.velocity -= Vec3::Y * FALL_ACCELERATION * dt,
+                // A wall within reach below: the Rocket and the Plasma go off
+                // on it, the two bouncing weapons ignore it for this tick.
+                Some(hit) => {
+                    if matches!(kind, Weapon::Rocket | Weapon::Plasma) {
+                        impacts[index] = Some(Impact {
+                            point: hit.point,
+                            kind,
+                            owner: projectile.owner,
+                            struck: None,
+                            blast: true,
+                        });
+                        *projectile = Projectile::default();
+                        continue;
+                    }
+                }
+                // Nothing under it: it falls. The projectile keeps whatever
+                // normal it had, so it resumes riding when the track comes
+                // back under it.
+                None => projectile.velocity -= Vec3::Y * FALL_ACCELERATION * dt,
             }
 
             let step = to - from;
@@ -705,54 +742,88 @@ impl Projectiles {
             };
 
             let mut bounced = false;
-            if let Some((point, struck, normal)) = hit {
-                // **A missile glances off a wall; a rocket dies on it.** The
-                // original's missile counts wall hits at `self+0x6c`, mirrors its
-                // velocity about the hit normal with no restitution loss, pushes
-                // out along that normal, and only takes the detonating branch
-                // once the count reaches `MAX_BOUNCES`. A hull hit is a different
-                // collision code and always detonates, which is why this arm asks
-                // for `struck.is_none()`.
+            match hit {
+                // **A floor across the step is ridden, not struck.** The
+                // original's travel-segment switch takes a floor code to the
+                // same push-out a probe hit takes - `hit + normal * 3.0` - for
+                // every one of the four weapons; only a wall or a craft ends
+                // a flight. This is what carries a projectile over a crest
+                // and down into the dip behind it: the probe has lost the
+                // floor, the chord meets it steeply, and the answer is to
+                // land on it. Until 2026-09-13 that chord detonated.
                 //
-                // **A Shuriken bounces too, by the same law and without a
-                // budget.** `Shuriken_Update`'s travel-segment test calls
-                // `Shuriken_Bounce` (`0x088778ac`) on the branch a rocket dies
-                // on, and that function is `v - 2(v.n)n` with no damping term
-                // anywhere in it - so a blade keeps its speed for ever and what
-                // ends it is its own `fuse`, not a count. Its push-off is its
-                // own literal; see [`shuriken::BOUNCE_PUSH_OFF`].
-                //
-                // `bounces` is still counted for it, because the visual side
-                // reads that counter to know when to play a bounce effect -
-                // nothing gates flight on the number.
-                let push_off = match kind {
-                    Weapon::Shuriken => shuriken::BOUNCE_PUSH_OFF,
-                    _ => missile::BOUNCE_PUSH_OFF,
-                };
-                let may_bounce = struck.is_none()
-                    && match kind {
-                        Weapon::Missile => projectile.bounces < missile::MAX_BOUNCES,
-                        Weapon::Shuriken => true,
-                        _ => false,
-                    };
-                if may_bounce {
-                    projectile.bounces = projectile.bounces.saturating_add(1);
-                    projectile.velocity -= normal * (2.0 * projectile.velocity.dot(normal));
-                    projectile.position = point + normal * push_off;
-                    bounced = true;
-                } else {
-                    impacts[index] = Some(Impact {
-                        point,
-                        kind,
-                        owner: projectile.owner,
-                        struck,
-                        blast: true,
-                    });
-                    *projectile = Projectile::default();
-                    continue;
+                // The velocity is turned parallel and its speed kept, as the
+                // probe branch does, where `Rocket_Update` writes
+                // `(next - prev) / dt` and lets the next tick's probe rescale
+                // it. This engine has no per-tick rescale for the Rocket, so
+                // preserving the speed here is what keeps a rocket at its
+                // class speed rather than bleeding it on every landing - a
+                // choice, recorded as one.
+                Some(hit)
+                    if hit.struck.is_none() && hit.surface.is_some_and(Surface::is_hoverable) =>
+                {
+                    projectile.surface = hit.normal;
+                    projectile.position = hit.point + hit.normal * RIDE_HEIGHT;
+                    let along =
+                        projectile.velocity - hit.normal * projectile.velocity.dot(hit.normal);
+                    if along.length_squared() > 1e-6 {
+                        projectile.velocity = along.normalize() * projectile.velocity.length();
+                    }
                 }
-            } else {
-                projectile.position = to;
+                Some(hit) => {
+                    let SweepHit {
+                        point,
+                        struck,
+                        normal,
+                        ..
+                    } = hit;
+                    // **A missile glances off a wall; a rocket dies on it.** The
+                    // original's missile counts wall hits at `self+0x6c`, mirrors its
+                    // velocity about the hit normal with no restitution loss, pushes
+                    // out along that normal, and only takes the detonating branch
+                    // once the count reaches `MAX_BOUNCES`. A hull hit is a different
+                    // collision code and always detonates, which is why this arm asks
+                    // for `struck.is_none()`.
+                    //
+                    // **A Shuriken bounces too, by the same law and without a
+                    // budget.** `Shuriken_Update`'s travel-segment test calls
+                    // `Shuriken_Bounce` (`0x088778ac`) on the branch a rocket dies
+                    // on, and that function is `v - 2(v.n)n` with no damping term
+                    // anywhere in it - so a blade keeps its speed for ever and what
+                    // ends it is its own `fuse`, not a count. Its push-off is its
+                    // own literal; see [`shuriken::BOUNCE_PUSH_OFF`].
+                    //
+                    // `bounces` is still counted for it, because the visual side
+                    // reads that counter to know when to play a bounce effect -
+                    // nothing gates flight on the number.
+                    let push_off = match kind {
+                        Weapon::Shuriken => shuriken::BOUNCE_PUSH_OFF,
+                        _ => missile::BOUNCE_PUSH_OFF,
+                    };
+                    let may_bounce = struck.is_none()
+                        && match kind {
+                            Weapon::Missile => projectile.bounces < missile::MAX_BOUNCES,
+                            Weapon::Shuriken => true,
+                            _ => false,
+                        };
+                    if may_bounce {
+                        projectile.bounces = projectile.bounces.saturating_add(1);
+                        projectile.velocity -= normal * (2.0 * projectile.velocity.dot(normal));
+                        projectile.position = point + normal * push_off;
+                        bounced = true;
+                    } else {
+                        impacts[index] = Some(Impact {
+                            point,
+                            kind,
+                            owner: projectile.owner,
+                            struck,
+                            blast: true,
+                        });
+                        *projectile = Projectile::default();
+                        continue;
+                    }
+                }
+                None => projectile.position = to,
             }
 
             // **Guidance runs last, writes only the velocity, and reads `from`.**
@@ -921,25 +992,6 @@ pub const RIDE_HEIGHT: f32 = 3.0;
 /// the surface probe finds nothing - a projectile that flies off the edge of the
 /// track drops instead of sailing on forever.
 pub const FALL_ACCELERATION: f32 = 50.0;
-
-/// How square-on a geometry hit must be to count as a wall rather than the floor.
-///
-/// **Ours, and the one judgement call in the surface-following model.** The
-/// original distinguishes "detonate" from "deflect" by a *collision code* its
-/// query returns (`0` and `4` detonate, other non-zero values deflect) and this
-/// engine's raycaster has no such code. What it has is the hit normal, so the
-/// test is geometric: a projectile skimming the floor meets it edge-on, and one
-/// flying into a wall meets it face-on. `0.25` is about 75 degrees off the
-/// surface - generous, because a false *wall* stops a shot dead and a false
-/// *floor* only lets it skim one more tick.
-pub const WALL_FACING: f32 = 0.25;
-
-/// How closely a probed surface must match the one being ridden to be ridden too.
-///
-/// **Ours.** Stops a projectile from treating a wall it happens to probe into as
-/// a new floor and climbing it. `0.5` is 60 degrees, which passes any bank or
-/// roll a Pulse circuit authors and rejects anything vertical.
-pub const RIDEABLE_COS: f32 = 0.5;
 
 #[cfg(test)]
 mod tests;
