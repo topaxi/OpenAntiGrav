@@ -260,9 +260,34 @@ check. **No fix applied** - this session does not have a second,
 disc-sourced candidate to check, and `CLAUDE.md`'s rule against a fitted
 constant rules out reaching for one from the table alone.
 
+2026-09-13, later still (`lane-amphiseum-walls`): **the grid-start wall-panel
+defect is fixed, and it was not the emissive/second-texture *shading* gap
+this row's own "New 2026-09-13" bullet guessed - it was the renderer reading
+the wrong sampler entry as the panel's picture.** Full account in
+[rcsmaterial.md](../../docs/formats/rcsmaterial.md), "A trackside wall panel
+drew solid black because its picture was its glow decal". What lives only
+here: Amphiseum's `track_wall.rcsmaterial` names four sampler entries -
+`EmissiveTexture` (a 95%+ solid-black glow decal) at entry 0, the real
+diffuse (`Texture1`) at entry 1, a normal map at entry 2, the circuit's own
+lightmap at entry 3 - and `mesh::rcs::skin::picks`'s lightmap branch chose
+albedo by raw position rather than by sampler role, landing on the glow
+decal every time. Fixed by adding `EmissiveTexture`'s hash to
+`skin.rs`'s `NOT_A_PICTURE` list, the same idiom already used for the glass
+family's ramps and normal maps; a disc-wide binding census
+(`hd_emissive_texture_bind_census.rs`) agrees the hash is never a plain
+diffuse anywhere it is bound (71 distinct paths, all glow/advert/gradient by
+name). The right-hand panel goes from 0.062 to 0.458 mean luma against the
+reference's 0.470 at the matched pose; the left barely moves and stays
+brighter than the reference, closer to the crowd stands (a different
+material, still over-bright both before and after) than to this panel. **Not
+the same mechanism as `etched_glass_tech`'s open routing gap** - that
+material's picture is traced correctly and simply has no bound texture at
+the unit its combine wants; this one had a bound, correct texture the whole
+time, at an entry the picker never looked at.
+
 ## Open
 
-- **The frame is measurably darker than the original at a matched camera, by 0.13-0.24 mean luminance on Talon's Junction and Sol 2, and the exposure/bloom post chain is ruled out as the cause** - open at `lane-ship-hull`'s files (`mesh.wgsl`, `crates/render/src/mesh/`, `sky_cube.rs`), not this lane's; **narrowed 2026-09-13 (twice)**: first, not a single offset/scale/curve (quantile-quantile evidence, confidence 80), and `.envsettings` plumbing is confirmed exact for Talon's Junction's core terms; second, **the gap is not a single global magnitude either** - Amphiseum measures the opposite sign (ours brighter by 0.04-0.19 luma), so what remains is a per-material or per-circuit-lighting-data cause, not a shared constant, with Amphiseum's own black-wall-panel defect (below) as one concrete, separately-diagnosable instance of "per-material"
+- **The frame is measurably darker than the original at a matched camera, by 0.13-0.24 mean luminance on Talon's Junction and Sol 2, and the exposure/bloom post chain is ruled out as the cause** - open at `lane-ship-hull`'s files (`mesh.wgsl`, `crates/render/src/mesh/`, `sky_cube.rs`), not this lane's; **narrowed 2026-09-13 (twice)**: first, not a single offset/scale/curve (quantile-quantile evidence, confidence 80), and `.envsettings` plumbing is confirmed exact for Talon's Junction's core terms; second, **the gap is not a single global magnitude either** - Amphiseum measures the opposite sign (ours brighter by 0.04-0.19 luma), so what remains is a per-material or per-circuit-lighting-data cause, not a shared constant. Amphiseum's own black-wall-panel defect is **fixed** (below, `lane-amphiseum-walls`) and was a distinct bug (a wrong sampler-entry pick, not a shading gap); the panel's residual colour still reads flatter/greyer than the reference's cyan-white, in the same direction as this broader per-material gap, and is left to whoever picks that up next.
 - Whether the 8-bit surfaces hold linear or gamma light is undetermined (confidence 70 against ADR-0026, not acted on) - still open, unchanged by the above
 - Texture-decode brightness (candidate (c)) is not pixel-verified against a reference decoder - only that `oag-texture`'s `.gtf` path carries no gamma/sRGB logic of its own and its ground-truth test passes
 - What the colour set's fourth byte gates is unknown - `0x1aaf7631` is declared by no `SHO` shader block, so the only place left to check is per-material microcode
@@ -270,7 +295,7 @@ constant rules out reaching for one from the table alone.
 - `scripts/clipped-white.py`'s docstring still publishes the 3.85/6.99 pair, and 3.85 % is a padded canvas rather than a frame - another lane owns that file, so the correction lives in `scripts/hd-glow-sweep.py` and renderer.md instead
 - Why **eleven** of the sixteen circuits measure identically with `[graphics] bloom` on and off, on the baseline build as much as the fixed one - and six of those eleven do take the authored path, so "they never light" is refuted
 - Fury's own circuits and the DLC packs still have no rpcs3 grab to be read against at all (Amphiseum now does - see 2026-09-13 above)
-- **New 2026-09-13**: Amphiseum's grid-start trackside wall panels draw unlit/flat-black in `oag-game` where the reference shows them brightly lit - a large, visible, localized gap, most likely the same emissive/second-texture material class as the `etched_glass_tech` item below rather than a new mechanism, not chased into a specific material or shader path this session
+- ~~Amphiseum's grid-start trackside wall panels draw unlit/flat-black~~ **fixed 2026-09-13 (`lane-amphiseum-walls`)**: a wrong sampler-entry pick (`EmissiveTexture` bound as the picture instead of the material's own `Texture1`), not the `etched_glass_tech` shading gap this bullet guessed - see the dated entry above and `rcsmaterial.md`. The panel's residual colour (flatter/greyer than the reference's cyan-white) is left open, folded into the per-material darkness-gap bullet above rather than tracked separately.
 - **New 2026-09-13**: what makes Amphiseum's opening seconds already 406-429 km/h at the same capture settings that gave Talon's Junction and Sol 2 a slow (70-74 km/h) grid pose is unread - a downhill start or a shorter countdown are guesses, not measured; means no Amphiseum pose isolates the lit-material path free of the speed-streak confound
 - `scripts/hd-material-probe.py`'s fog-segment classifier assumes the frame's exposure scalar is `1.0`, calibrated by eye against one unclipped near-camera channel rather than solved - a session that wants coverage past 89% or tighter per-slot deltas needs to actually solve for it (or read `k` off `.envsettings`' `Tone` family and the adapted-luminance state directly) rather than assume it
 
@@ -282,6 +307,6 @@ constant rules out reaching for one from the table alone.
 - Sweep per-material microcode (`scripts/ps3-microcode.py`) for a read of `0x1aaf7631`'s fourth byte, to settle what it gates
 - `shadowMapTex` remains unread; locate what projects it and whether the disc's shadow map is reachable from data already on disc
 - ~~Grab Amphiseum on rpcs3~~ **done 2026-09-13**: `data/reference/hd-capture/amphiseum-matched/` (3 matched-camera poses) - see the dated entry above for what it found (a black-wall-panel defect at the grid, and a sign-flipped whole-frame gap versus Talon's Junction/Sol 2)
-- Chase the Amphiseum grid-start wall-panel defect (flat black vs brightly lit cyan/white in the reference) to a specific material/shader path - likely the same emissive/second-texture class as `etched_glass_tech` below, not confirmed
+- ~~Chase the Amphiseum grid-start wall-panel defect~~ **done 2026-09-13**: `EmissiveTexture` was being bound as the panel's own picture - see the dated entry above
 - Extend `hd-frame-compare.py`'s region boxes past the shared Talon's-Junction shape, or accept per-circuit `--dump-regions` verification as the standing process - Sol 2's grid pose lands `road surface` off-track, Amphiseum's `sky` box samples an indoor ceiling
 - Find why `[graphics] bloom` is inert on eleven of the sixteen circuits - `scripts/hd-glow-sweep.py sweep --bloom both` is the reproducer, the four named environments plus Zone 1 are the five that do respond, and six of the inert eleven measurably take the authored path so the obvious hypothesis is already refuted

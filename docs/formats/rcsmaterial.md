@@ -1786,6 +1786,123 @@ RE claim the confidence rubric's runtime-trace ceiling is written for, and
 the remaining sampler-routing gap was not itself re-measured against RPCS3
 pixel-for-pixel this session.
 
+## A trackside wall panel drew solid black because its picture was its glow decal (2026-09-13)
+
+**Amphiseum's two angled trackside wall panels either side of the road drew
+flat black, at every position along the circuit that draws them.** Unlike
+Talon's Junction's magstrip floor above, this is not a resolver miss: the
+matched-camera pose's own load report already read **641 of 641 drawn
+material(s) resolved** for this circuit before this fix, and still does
+after it (640 of 640 building `track.vex` alone through `scene_from`, which
+does not also walk the speedup/weapon-pad passes the race's own report
+line does) - so "is it resolved at all" was never the question here.
+
+**Identified by tint, the same way the magstrip floor was.**
+`OAG_TINT_MATERIALS=1` at the matched pose (`data/reference/hd-capture/
+amphiseum-matched/00.json`) decodes both panels' flat colour to
+`materials/track_wall.rcsmaterial` (slot 549 of `track.vex`'s 641, hue
+distance 1 against the next-best candidate). `OAG_ALBEDO_ONLY=1` reads the
+same solid black - which for most materials would say "the art itself is
+dark" (the technique `rcsmaterial.md`'s per-material probe section already
+established), but is a **false read for a lightmapped material specifically**:
+`OAG_ALBEDO_ONLY` clears `GpuVertex::lit`, which takes `mesh.wgsl`'s
+"prelit" stand-in path and skips the lightmap/sun/ambient sum entirely, so a
+lightmapped surface's *unlit* diffuse tells you nothing about its *lit*
+appearance. `OAG_SKIP_MATERIAL=track_wall.rcsmaterial` and
+`OAG_ONLY_MATERIAL=track_wall.rcsmaterial` were the deciding pair instead:
+skipping it removes exactly the two panels (nothing else moves), and
+isolating it alone reproduces the same solid black shape end to end - so the
+geometry is real, resolved, and lit, and the picture itself is wrong.
+
+**The material's own sampler table names four entries, and the renderer was
+reading the wrong one.** `oag_rcs::rcsmodel::Material::samplers` for slot 549
+is, in file order:
+
+| Entry | Sampler hash | Name (preimage) | Bound `.gtf` |
+| --- | --- | --- | --- |
+| 0 | `0xb1f2a176` | `EmissiveTexture` | `track_wall_emissive.gtf` - **95%+ solid `(0,0,0)`** off a 50-point grid sample, one small hexagonal highlight |
+| 1 | `0x3bdc0403` | `Texture1` | `ds_wall01_cs.gtf` - the panel's real diffuse+specular, a detailed grey structural texture |
+| 2 | `0xa2d555b9` | `Texture2` | `ds_wall01_rh_n.gtf` - a tangent-space normal map |
+| 3 | `0x37b5db58` | `lightmap` | this circuit's own baked-lighting atlas |
+
+`mesh::rcs::skin::picks`'s lightmap branch - the one that runs for any
+material `Material::lightmap_entry()` finds a lightmap on, which this one is
+- does not read the microcode at all: it picks the surface's albedo as
+"whichever entry is first, by position, that is not in `NOT_A_PICTURE`".
+Nothing excluded `EmissiveTexture` before this fix, so entry 0 won by being
+first, even though the material's *own* sampler name says outright that it
+is a glow, not a picture, and entry 1's name says outright that it is. The
+lightmap/ambient/sun sum this renderer computes for the slot was correct the
+whole time; it was multiplying a near-solid-black decal into it instead of
+the panel's real diffuse.
+
+**Fixed by excluding the hash, the same way the glass family's ramps and
+normal maps already are.** `EmissiveTexture` joins
+`crates/render/src/mesh/rcs/skin.rs`'s `NOT_A_PICTURE` list - it is one of
+the 38 preimages this page's own "sampler names, by preimage" table above
+already carries, grouped there under "Light" beside `lightmap` and
+`shadowMapTex`, and a disc-wide binding census
+(`crates/render/examples/hd_emissive_texture_bind_census.rs`) agrees with
+the name independently: swept over all seven archives, every one of its 71
+distinct bound paths reads as a glow, an advert or a gradient by its own
+file name - `*_emissive.gtf`, `*_e.gtf`, `advert_*.gtf`, `dc_grad*.gtf` -
+never a plain diffuse. The exclusion only matters when a *better* entry
+exists later in the table to fall through to: a material where
+`EmissiveTexture` is the only populated entry is unaffected, because
+`position` finds nothing past it and `unwrap_or` still answers entry 0.
+
+**How much of the disc this shape covers**: exactly **25 lightmapped
+material slots disc-wide** name `EmissiveTexture` positionally first with a
+better entry after it
+(`crates/render/examples/hd_emissive_first_census.rs`, swept over all seven
+archives and 8,129 lightmapped materials) - all 25 on Amphiseum's own
+`track.rcsmodel` and `track_reversed.rcsmodel`, split across the two files.
+No other circuit's own `track_wall.rcsmaterial` (or any other lightmapped
+material) authors its sampler table in this order, which is why this bug
+never showed on Talon's Junction: that circuit's own `track_wall.rcsmaterial`
+had a different, already-documented bug instead (the coordinate-flip case
+`skin.rs`'s `flips` doc comment carries), on a file authored differently by
+the same artist team.
+
+**Measured before/after** at the matched pose (`scripts/hd-frame-compare.py
+--pair-dir data/reference/hd-capture/amphiseum-matched --pose 00` renders;
+before/after crop means are a direct pixel mean over the panel's own screen
+rectangle, not the script's own road/sky/distant-geometry boxes, which
+straddle other content too):
+
+| Panel | Reference | Before | After |
+| --- | ---: | ---: | ---: |
+| Right (x∈[980,1250], y∈[380,550]) | 0.470 mean luma | 0.062 | **0.458** |
+| Left (x∈[30,300], y∈[380,550]) | 0.165 mean luma | 0.274 | 0.292 |
+
+The right panel goes from a 0.41-point gap to a 0.01-point one - solid black
+to a close match. The left panel barely moves and stays brighter than the
+reference; that box sits closer to the crowd stands
+(`materials/nr_crowd_bustle.rcsmaterial`, a different material entirely,
+already over-bright in both the before and after render) and to this
+circuit's own overall darkness gap the "matched-camera comparison" section
+of `renderer.md` tracks separately (+0.04 to +0.19 across Amphiseum's own
+whole-frame regions) - neither of which this fix touches or claims to.
+Talon's Junction pose 00 is unmoved: its own `track_wall.rcsmaterial` never
+matches the `EmissiveTexture`-first shape, so `hd-frame-compare.py --pose 00`
+on `talons-matched` reads the same numbers this fix started from.
+
+**Confidence 92** on the cause and the fix (an exact sampler-table read
+against a 38-preimage table already at confidence 90+, a disc-wide binding
+census with zero counter-examples, and a before/after screenshot at the
+matched pose) - short of the top band because the *why* a material author
+would order the table this way on exactly one circuit's `track_wall`
+remains unread; the *what* is not in question. Pinned by
+`hd_amphiseum_wall_material_ground_truth.rs`
+(`every_track_wall_slot_binds_its_own_diffuse_not_its_glow_decal`), confirmed
+to fail against the pre-fix code.
+
+**What is still open on these two panels**: the colour is closer, not
+identical - ours reads a flat grey where the reference reads a brighter,
+more saturated cyan/white, the same direction (not magnitude) as the
+circuit-wide darkness gap `renderer.md` already tracks as a separate,
+unresolved thread. Nothing here touches that thread's own candidates.
+
 ## Open
 
 - **87 of the 125 sampler hashes**, including the three commonest
