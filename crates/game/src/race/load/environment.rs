@@ -6,6 +6,7 @@
 //! every failure reported, every absence honest rather than substituted.
 
 use super::*;
+use oag_tables::envsettings::EnvSettings;
 
 /// The `sky.gtf` beside a circuit's `.vex` - Wipeout HD's sky.
 ///
@@ -228,6 +229,152 @@ fn envsettings_name(vex_name: &str) -> Option<String> {
         .then(|| format!("{}.envsettings", &vex_name[..at]))
 }
 
+/// Wipeout HD's own front-end `.envsettings` - what the settings registrar
+/// starts from, before a circuit's own file overlays whichever keys it
+/// declares. See [`staged_envsettings`].
+///
+/// **Always this path, never Fury's own `/data/fe/fe.fury.track.envsettings`.**
+/// The two author byte-identical `HDR and Bloom` blocks - all ten keys,
+/// checked against `hdfury-ps3-eu-dec.iso` directly - so which of them the
+/// real engine actually loads ahead of a Fury/DLC race makes no difference to
+/// this carry; `docs/ghidra/functions/ps3-hdfury-eu/renderer.md`'s "exact
+/// wiring for the next lane" paragraph says the real boot order between the
+/// two is unresolved, and picks this one for the same reason. **Chosen, not
+/// measured - no confidence score**, same as every value this project fills
+/// in without reading the executable's own registrar function.
+///
+/// `Archives::read_name` resolves this to `DATA00.PSARC`'s copy even though
+/// `DATA02.PSARC` ships a byte-different entry at the same path (the two
+/// disagree on `Lighting`/`Fog`, not `HDR and Bloom`): the bulk archive is
+/// searched ahead of the DLC one, per `oag_assets::source::Archives::holder_of`.
+const FRONT_END_ENVSETTINGS: &str = "/data/fe/fe.track.envsettings";
+
+/// Reads and parses one `.envsettings` file off the archive set, or `None`
+/// for any reason at all - not found, not UTF-8, not this format. Callers
+/// that need to tell those apart for the report read the archive themselves;
+/// this is for a base layer a caller falls back to silently either way.
+fn read_envsettings(archives: &mut oag_assets::Archives, name: &str) -> Option<EnvSettings> {
+    let blob = archives.read_name(name).ok()?;
+    let text = String::from_utf8(blob).ok()?;
+    EnvSettings::parse(&text).ok()
+}
+
+/// The circuit's own `.envsettings`, laid over [`FRONT_END_ENVSETTINGS`] -
+/// the registrar [`envsettings_bloom`] reads through, replacing its own lone
+/// read of the circuit's file.
+///
+/// **This is the registrar's own persistence, read live rather than
+/// invented.** `renderer.md`'s "The resolve's Fury circuits carry the front
+/// end's own Tone triple" section (2026-09-13) found Sol 2's race running its
+/// exposure resolve at `(20, 3, 4)` although Sol 2's own file authors only the
+/// first of the three - because the front end's file loads first and a
+/// circuit's own file only overwrites the keys it declares, never resetting
+/// the rest. Confidence 85 on the mechanism, cited from that page; this
+/// function is the mechanism, not a new reading of it.
+///
+/// `None` only when *neither* file is readable at all - every Pulse, Pure, PS2
+/// and Wipeout 2048 circuit, none of which ship a front-end `.envsettings` at
+/// this path, and a Wipeout HD/Fury circuit whose own file is also missing
+/// falls through to the front end's alone rather than here.
+///
+/// **[`envsettings_fog`] and [`envsettings_light`] deliberately do not read
+/// through this**, even though the brief that asked for this carry named them
+/// as worth checking for the same shape. Checked: a disc-wide survey of every
+/// `.envsettings` that exists (all 13 circuit files with one) found every
+/// single one authoring a complete `Fog`/`Lighting` block on its own - the
+/// partial-key gap `envsettings_bloom` has is not a gap either reader has.
+/// The only place the carry *would* reach for them is `zone_2`/`zone_3`/
+/// `zone_4`, which ship no `.envsettings` at all - a different case from a
+/// partial override, and one this session has no live read or reference frame
+/// to check: `fe.track.envsettings` is visibly a menu backdrop's rig (a cyan
+/// `Sun color` of `0.09/0.84/0.97`, ambient up to `3.0`), and wiring it into
+/// three Zone circuits' light and fog would be this project drawing a picture
+/// nothing measured, which is exactly what `CLAUDE.md`'s "never invent what
+/// the assets already author" exists to stop. Left as the pre-existing
+/// silent stand-in/unfogged fallback instead - a known, named absence rather
+/// than an unverified substitution.
+struct StagedEnvSettings {
+    /// The table every reader now reads from: the front end's file with the
+    /// circuit's own laid over it.
+    merged: EnvSettings,
+    /// The circuit's own file, unmerged - kept only to tell a carried key
+    /// (present in `merged` because the front end authors it, absent from
+    /// this) apart from the circuit's own for the report.
+    own: Option<EnvSettings>,
+    /// The circuit's own `.envsettings` name, attempted whether or not it
+    /// existed - `None` only when `track` is not a `.vex` at all.
+    own_name: Option<String>,
+}
+
+impl StagedEnvSettings {
+    /// Which of `keys` are not the circuit's own - so came from the front
+    /// end's carried value instead - in the order given, for a report line.
+    fn carried<'a>(&self, keys: &[&'a str]) -> Vec<&'a str> {
+        keys.iter()
+            .copied()
+            .filter(|key| {
+                !self
+                    .own
+                    .as_ref()
+                    .is_some_and(|own| own.entries.contains_key(*key))
+            })
+            .collect()
+    }
+
+    /// The label a report line should name for this circuit: its own file's
+    /// name where it has one, the front end's otherwise.
+    fn label(&self) -> &str {
+        self.own_name.as_deref().unwrap_or(FRONT_END_ENVSETTINGS)
+    }
+}
+
+fn staged_envsettings(
+    archives: &mut oag_assets::Archives,
+    track: &str,
+    report: &mut Vec<String>,
+) -> Option<StagedEnvSettings> {
+    let front_end = read_envsettings(archives, FRONT_END_ENVSETTINGS);
+    let own_name = envsettings_name(track);
+    let own = match own_name
+        .as_deref()
+        .map(|name| (name, archives.read_name(name)))
+    {
+        Some((name, Ok(blob))) => match String::from_utf8(blob) {
+            Ok(text) => match EnvSettings::parse(&text) {
+                Ok(env) => Some(env),
+                Err(error) => {
+                    report.push(format!(
+                        "{name}: {error}; using only the front end's own settings"
+                    ));
+                    None
+                }
+            },
+            Err(_) => {
+                report.push(format!(
+                    "{name}: not text; using only the front end's own settings"
+                ));
+                None
+            }
+        },
+        _ => None,
+    };
+    let merged = match (&front_end, &own) {
+        (Some(front_end), Some(own)) => {
+            let mut merged = front_end.clone();
+            merged.entries.extend(own.entries.clone());
+            merged
+        }
+        (Some(front_end), None) => front_end.clone(),
+        (None, Some(own)) => own.clone(),
+        (None, None) => return None,
+    };
+    Some(StagedEnvSettings {
+        merged,
+        own,
+        own_name,
+    })
+}
+
 /// The distance fog a Wipeout HD circuit authors, or `None` with the reason
 /// reported.
 ///
@@ -242,12 +389,20 @@ fn envsettings_name(vex_name: &str) -> Option<String> {
 ///   is passed through and judged against an rpcs3 reference frame.
 /// - `Alternate Fog Color`/`Density` exist on every circuit and what selects
 ///   them is unread; the primary pair is used and the alternates are not.
+///
+/// **Does not read through [`staged_envsettings`].** Checked for the same
+/// partial-key gap `envsettings_bloom` had (`lane-envsettings-carry`): every
+/// circuit that ships a `.envsettings` at all authors both `Fog` keys itself,
+/// so there is nothing here for the front end's file to carry. See
+/// [`staged_envsettings`]'s own doc for why the remaining case -
+/// `zone_2`/`zone_3`/`zone_4`, which ship no file at all - is left as the
+/// pre-existing unfogged fallback rather than wired to the front end's.
 pub(super) fn envsettings_fog(
     archives: &mut oag_assets::Archives,
     track: &str,
     report: &mut Vec<String>,
 ) -> Option<mesh_render::Fog> {
-    use oag_tables::envsettings::{EnvSettings, FOG_COLOUR, FOG_DENSITY};
+    use oag_tables::envsettings::{FOG_COLOUR, FOG_DENSITY};
     let name = envsettings_name(track)?;
     let blob = archives.read_name(&name).ok()?;
     let text = String::from_utf8(blob).ok()?;
@@ -277,9 +432,21 @@ pub(super) fn envsettings_fog(
 ///
 /// These are the parameters the engine patches into the read
 /// `FunkLayerBloom` gate and blur programs - the formulas live in
-/// `oag_render::post::hd_bloom`, every one of them the microcode's own. A
-/// file without the whole set draws without the chain rather than with a
-/// guessed half of it, and says so.
+/// `oag_render::post::hd_bloom`, every one of them the microcode's own.
+///
+/// **Reads through [`staged_envsettings`], so a circuit's own file only has
+/// to declare what it changes.** Every Fury/DLC circuit's own file authors
+/// `Tone adaption boost` and omits `Tone darkening clamp`/`Tone maximum
+/// brightness`; a live read on Sol 2 found the running settings singleton
+/// holding all three at the front end's own `(20, 3, 4)` regardless - see
+/// `docs/ghidra/functions/ps3-hdfury-eu/renderer.md`'s "The resolve's Fury
+/// circuits carry the front end's own Tone triple". Before this, a file
+/// without the *whole* ten-key set drew without the chain at all rather than
+/// with the front end's carried values - the gap that left `[graphics]
+/// bloom` inert on eleven of sixteen circuits (the eight Fury/DLC ones here,
+/// plus `zone_2`/`zone_3`/`zone_4`, which ship no `.envsettings` at all). A
+/// circuit whose merged table is still incomplete draws without the chain,
+/// same as before.
 pub(super) fn envsettings_bloom(
     archives: &mut oag_assets::Archives,
     track: &str,
@@ -288,12 +455,23 @@ pub(super) fn envsettings_bloom(
     use oag_tables::envsettings::{
         BLOOM_ADAPTION_BOOST, BLOOM_ADAPTION_RATE, BLOOM_ALPHA_CONTRIBUTION,
         BLOOM_FRAME_CONTRIBUTION, BLOOM_FRAME_EXPONENT, BLOOM_HORIZONTAL_SIZE, BLOOM_VERTICAL_SIZE,
-        EnvSettings, TONE_ADAPTION_BOOST, TONE_DARKENING_CLAMP, TONE_MAXIMUM_BRIGHTNESS,
+        TONE_ADAPTION_BOOST, TONE_DARKENING_CLAMP, TONE_MAXIMUM_BRIGHTNESS,
     };
-    let name = envsettings_name(track)?;
-    let blob = archives.read_name(&name).ok()?;
-    let text = String::from_utf8(blob).ok()?;
-    let env = EnvSettings::parse(&text).ok()?;
+    const KEYS: [&str; 10] = [
+        BLOOM_ALPHA_CONTRIBUTION,
+        BLOOM_FRAME_CONTRIBUTION,
+        BLOOM_FRAME_EXPONENT,
+        BLOOM_HORIZONTAL_SIZE,
+        BLOOM_VERTICAL_SIZE,
+        BLOOM_ADAPTION_RATE,
+        BLOOM_ADAPTION_BOOST,
+        TONE_ADAPTION_BOOST,
+        TONE_DARKENING_CLAMP,
+        TONE_MAXIMUM_BRIGHTNESS,
+    ];
+    let staged = staged_envsettings(archives, track, report)?;
+    let env = &staged.merged;
+    let name = staged.label();
     let (
         Some(alpha_contribution),
         Some(frame_contribution),
@@ -319,10 +497,19 @@ pub(super) fn envsettings_bloom(
     )
     else {
         report.push(format!(
-            "{name}: no complete HDR and Bloom block; the race draws without the read \
-             bloom chain"
+            "{name}: no complete HDR and Bloom block even carrying the front end's own; the \
+             race draws without the read bloom chain"
         ));
         return None;
+    };
+    let carried = staged.carried(&KEYS);
+    let provenance = if carried.is_empty() {
+        String::new()
+    } else {
+        format!(
+            " ({} carried from the front end's {FRONT_END_ENVSETTINGS})",
+            carried.join(", ")
+        )
     };
     report.push(format!(
         "{name}: bloom gate alpha x{alpha_contribution}, lum^{frame_exponent} \
@@ -330,7 +517,7 @@ pub(super) fn envsettings_bloom(
          {adaption_boost}), blur steps {horizontal_size}/{vertical_size}, exposure \
          {tone_maximum_brightness} - min(adapted x{tone_adaption_boost}, \
          {tone_darkening_clamp}) - formulas read from the executable's own \
-         FunkLayerBloom microcode and its PPU chain runner"
+         FunkLayerBloom microcode and its PPU chain runner{provenance}"
     ));
     Some(oag_render::post::hd_bloom::Params {
         alpha_contribution,
@@ -361,6 +548,15 @@ pub(super) fn envsettings_bloom(
 /// shape under different key names". Reading HD's keys against a 2048 file
 /// resolves nothing and falls back to the stand-in rig silently wrong about
 /// why; this is what tells the two schemas apart.
+///
+/// **Does not read through [`staged_envsettings`].** Checked for the same
+/// partial-key gap `envsettings_bloom` had (`lane-envsettings-carry`): every
+/// circuit that ships a `.envsettings` at all authors a complete sun
+/// direction, colour and ambient itself, so there is nothing here for the
+/// front end's file to carry. See [`staged_envsettings`]'s own doc for why the
+/// remaining case, `zone_2`/`zone_3`/`zone_4` (which ship no file at all), is
+/// left with the pre-existing stand-in rig rather than wired to the front
+/// end's.
 pub(super) fn envsettings_light(
     archives: &mut oag_assets::Archives,
     track: &str,
@@ -380,7 +576,7 @@ pub(super) fn envsettings_light(
             return mesh_render::Light::stand_in();
         }
     };
-    let env = match oag_tables::envsettings::EnvSettings::parse(&text) {
+    let env = match EnvSettings::parse(&text) {
         Ok(env) => env,
         Err(e) => {
             report.push(format!("{name}: {e}; lighting with the stand-in rig"));
