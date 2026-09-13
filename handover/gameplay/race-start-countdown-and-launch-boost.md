@@ -631,7 +631,16 @@ In short:
   `crates/render/tests/gantry_mount_ground_truth.rs` and
   [`docs/rendering/start-gantry.md`](../../docs/rendering/start-gantry.md) confirm it
   landed on the mount the track itself authors, not off a live breakpoint on the
-  child-list insert as this bullet's own next step still named.
+  child-list insert as this bullet's own next step still named. **2026-09-13: the
+  same mechanism now reaches HD/Fury too** - `oag_render::gantry::mount` matches
+  HD's own full-path texture label shape, `race::gantry::load` builds the PS3
+  model through its sibling `.rcsmodel`, and the digit board's 6.000 s teleport
+  plays through this project's own pipeline, confirmed on Talon's Junction and
+  three other circuits. See `docs/rendering/start-gantry.md`'s "Implemented on
+  HD" section for what is measured (including that HD's own mount is a real 3D
+  structure, not Pulse's flat stub) and what is still open there (HD's glyph
+  *walk* has no on-disk driver and stays unwired, and HD's own `Honey_Board`-shaped
+  backing piece sits deeper in that structure than `CLEARANCE` currently clears).
 - ~~No screenshot comparison of a Zone countdown against a circuit-race countdown~~
   **Done for HD's gantry mesh content, off the disc via `oag-view`** - see the fourth
   pass above. **Still open**: an actual in-game screenshot (this session rendered

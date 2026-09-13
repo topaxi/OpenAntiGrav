@@ -18,18 +18,26 @@ left open gets an answer; 2048 ships those same four plus four of its own
 (three real glyph files and one empty stub), and turns out to author a third
 countdown mechanism entirely - a manifest reaches only two of the eight.
 
-> **The gantry is placed, and it is drawn.** This page used to open by saying
-> nothing on it placed the gantry. That changed in two steps on 2026-09-06:
-> HD/Fury's equivalent code path was read end to end and provably reads no
-> position either - it reaches the world only by binding to geometry the
-> **track model** authors, keyed by the name `billboard<num>` - and Pulse's own
-> track files turned out to author the identical surface, at coordinates this
-> project's parser reads straight off the disc. `oag_render::gantry` measures
-> that surface per circuit and `oag_game::race::gantry` stands
-> `321Go_StartFinish.vex` on it, so a race now plays the `3`, `2`, `1`, `GO`
-> on the object over the start line rather than as a screen overlay. See
-> [the placement section below](#where-the-placement-actually-comes-from-hdfury-answers-it-for-pulse),
-> [what it took to draw it](#what-it-took-to-actually-draw-it), and
+> **The gantry is placed, and it is drawn - on both titles that ship a slot 8
+> now.** This page used to open by saying nothing on it placed the gantry.
+> That changed in two steps on 2026-09-06: HD/Fury's equivalent code path was
+> read end to end and provably reads no position either - it reaches the
+> world only by binding to geometry the **track model** authors, keyed by the
+> name `billboard<num>` - and Pulse's own track files turned out to author
+> the identical surface, at coordinates this project's parser reads straight
+> off the disc. `oag_render::gantry` measures that surface per circuit and
+> `oag_game::race::gantry` stands `321Go_StartFinish.vex` on it, so a race
+> now plays the `3`, `2`, `1`, `GO` on the object over the start line rather
+> than as a screen overlay - on Pulse, and, since 2026-09-13, on HD/Fury too,
+> once the same texture match was widened to HD's own full-path label shape
+> and the PS3 model's own sibling-`.rcsmodel` load path was wired in. HD's
+> own board plays the same authored 6.000 s teleport Pulse's does, confirmed
+> through this project's pipeline; its glyph *walk* has no on-disk driver on
+> HD and stays unwired rather than guessed at. See [the placement section
+> below](#where-the-placement-actually-comes-from-hdfury-answers-it-for-pulse),
+> [what it took to draw it](#what-it-took-to-actually-draw-it),
+> [the HD implementation](#implemented-on-hd-the-same-mechanism-on-a-mount-that-is-not-flat),
+> and
 > [`ghidra/functions/ps3-hdfury-eu/billboards.md`](../ghidra/functions/ps3-hdfury-eu/billboards.md).
 
 ## The asset
@@ -677,8 +685,11 @@ This pass's own geometry-side reading agrees: `pasted__Go_HD_start_light_321goSh
 [0.0078, 0.0078, 0.0078]` - centred on the origin, the same "node-local with a
 bias near the origin" shape `docs/formats/README.md`'s Track startup row
 already records for HD's ordinary advert billboards. Nothing on this page's
-own HD section places the gantry either; the loader report has nothing to
-name yet because nothing here loads `321go_startfinish.vex` at all.
+own HD section places the gantry either - it is the **track**'s own
+`billboard8.gtf`-bound geometry that does, the same convention Pulse's
+`321backplate`/`billboard8` binding is, found by extending the mechanism
+already recovered for Pulse below rather than by anything new on this
+model's own side. See ["Implemented on HD"](#implemented-on-hd-the-same-mechanism-on-a-mount-that-is-not-flat).
 
 ## Wipeout 2048: eight files plus `fx350`, two reached by any of 26 manifests, a third countdown mechanism
 
@@ -1258,6 +1269,173 @@ both are here.
 change this pass makes to the blocker: the six-pass conclusion that unblocking
 required a PPSSPP breakpoint on `func_0x00140bd4` during a track load rested on
 the premise that the billboard system places the gantry, and it does not.
+
+## Implemented on HD: the same mechanism, on a mount that is not flat
+
+2026-09-13. The Pulse mechanism above generalises to HD with one extension and
+one genuine title difference, both measured rather than assumed. No Ghidra and
+no emulator - everything below is `oag_render`/`oag_game` reading the real
+disc through this project's own parser, the same standard the sections above
+hold themselves to.
+
+### The mount: matching HD's own label shape, confidence 90
+
+`oag_render::gantry::mount`'s texture match used to compare a draw's whole
+texture label against `321backplate.tga`/`billboard8.tga`. That is exactly
+right for Pulse, where [`mesh.rs`](../../crates/render/src/mesh.rs) reduces an
+embedded `Texture` node to its bare file name before it ever reaches
+[`Model::textures`](../../crates/render/src/mesh.rs) - but an HD (or Wipeout
+2048) `.rcsmodel` material names its `.gtf` by the **full archive path** the
+sampler table carries (`crates/render/src/mesh/rcs/skin.rs`'s `path`
+argument, passed to `ModelTexture::from_gtf` unchanged):
+`data/environments/talons_junction/textures/dds/billboard8.gtf`, not
+`billboard8.gtf`. Matching the whole label never found an HD surface by name
+at all. `mount` now matches on the label's own file name
+(`oag_render::gantry::basename`) and tries a third candidate,
+[`HD_SLOT8_TEXTURE`](../../crates/render/src/gantry.rs) (`billboard8.gtf`),
+after Pulse's two - HD ships no backplate-shaped second surface next to its
+own stub, so there is only one name to try there.
+`oag_render::gantry::strip_slot_placeholders` gained the same eight `.gtf`
+spellings, so HD's own `billboard1-8` stubs are finally suppressed the way
+Pulse's were.
+
+**Measured on four circuits** (Talon's Junction, Amphiseum, `01_Vineta_K`,
+`Tech_De_Ra`), each through exactly one draw bound to `billboard8.gtf`, no
+unioning of unrelated surfaces:
+
+| circuit | centre | width | height | thickness | vertices |
+| --- | --- | --- | --- | --- | --- |
+| Talon's Junction | `(75.2, -34.6, -185.8)` | 46.3 | 9.8 | **3.00** | 228 |
+| Amphiseum | `(-516.5, 18.2, 45.7)` | 46.3 | 9.9 | **2.97** | 228 |
+| `Tech_De_Ra` | `(-120.3, 3.7, 70.3)` | 46.6 | 9.8 | **2.99** | 228 |
+| `01_Vineta_K` | `(-24.1, 52.2, -106.3)` | 44.7 | 10.8 | **2.02** | 276 |
+| `12_Sol_2` | `(275.9, 9.1, 411.4)` | 42.4 | 10.3 | **1.91** | 276 |
+
+**The load-bearing number is thickness, and it is not the Pulse story.**
+Pulse's own `billboard8.tga`-bound stub measures 0.000-0.100 across all
+twelve circuits that author one - flat, which is what makes reading a
+"panel" off it meaningful. HD's own `billboard8.gtf`-bound chunk measures
+**1.9-3.0** on every circuit checked: it is not a thin placeholder quad, it
+is part of a real 3D structure - on Talon's Junction, visibly the same
+boost-gate frame arching over the track that every capture in this section
+shows. `oag_render::gantry::mount`'s principal-axis fit still returns a
+usable plane (width and height both land in the same order Pulse's own
+panels do, and thickness stays well under height on every circuit, so it is
+not fitting a blob), but the *centroid* it returns sits inside that
+structure's own volume rather than on a single flat backing surface the way
+Pulse's does. `crates/game/tests/start_gantry_hd_mount_ground_truth.rs`
+pins Talon's Junction's own numbers, thickness included, specifically so a
+future change that makes this read back near zero is treated as a
+regression to check by hand, not a fix.
+
+### Loading the model: the sibling `.rcsmodel`, confidence 90
+
+`race::gantry::load` bailed on every HD gantry with "a PS3 .vex carries no
+render geometry" - correct, and the reason is the same one
+["The geometry moved out of the `.vex`"](#the-geometry-moved-out-of-the-vex-the-mechanism-has-to-be-looked-for-beside-it)
+gives above: `321Go_StartFinish.vex`'s own `Mesh` payloads are a bounding box
+and a hash, and the real vertices are in `321go_startfinish.rcsmodel` beside
+it. `load` now detects an external PS3 `.vex`
+(`oag_render::mesh::geometry_is_external`) and builds through
+`oag_render::mesh::rcs::build` with that sibling - the same function a craft's
+own livery loads through, not `build_scene`: the gantry has no world-baked
+second pass of its own to justify `build_scene`'s extra skip, the identical
+reasoning that function's own doc comment gives for every non-track caller.
+Confirmed decoding cleanly: 19 of 19 mesh nodes, 1,530 triangles, radius
+23.25 - exactly the count `docs/ghidra/functions/ps3-hdfury-eu/billboards.md`'s
+rendering pass already recorded for this file.
+
+### A second, independent bug the load exposed: stale bounds under a placement matrix
+
+Getting the model to load found a bug in an entirely different place, latent
+since the mechanism first landed on Pulse. `oag_render::pvs::visible`'s
+frustum test reads a draw's own `bounds` and trusts them to already be in
+world space - true for the track (baked at build time) and true for any draw
+under an `Anim Transform`, which is skipped from the test outright
+(`DrawCall::moving`) because its bounds are stale the moment the node
+animates. Neither covers a standalone prop carrying its own **external**
+placement matrix, the shape `race::gantry::Placed` is: its bounds describe it
+centred near its own origin, before the mount's matrix ever moves it.
+
+**Pulse never hit this.** Every one of `321Go_StartFinish.vex`'s nine `Mesh`
+nodes sits under its own `Anim Transform` (["The asset"](#the-asset)'s node
+tree above), so every Pulse gantry draw is already `moving` and the frustum
+test never ran on one. HD's own `321go_startfinish.vex` mixes animated and
+plain `Mesh` nodes - the digit board and the background panel both teleport
+at 6.000 s and are `moving`, but several smaller pieces are not - so this is
+the first gantry pass with a draw left for the bug to reach. Left unfixed,
+every non-`moving` draw's local-space sphere is tested against a world-space
+frustum and fails everywhere except the world's own origin, which reads
+exactly like "the gantry never draws" and is easy to mistake for a placement
+error. `race::gantry::place_bounds` now rewrites every draw's bounds into the
+placed matrix's own space once, at load.
+
+### The digit board's own teleport plays correctly, confirmed through this project's pipeline
+
+`oag_render::mesh::Model::write_node_anims`/`CLOCK_LIMIT` already replay an
+`Anim Transform` track off the race clock - nothing new was needed for the
+mechanism itself, only for a HD model to reach it. Sampling the loaded
+model's own digit-board node at `t = 5.9` and `t = 6.0` through
+`Model::sample_anim_nodes` gives world Y `-0.719` and `9.286` - a **+10.004**
+move, matching
+["The 6.000-second loop close generalises"](#the-6000-second-loop-close-generalises---the-best-result-of-the-three-title-sequence)'s
+own figure exactly, now reproduced through this project's own model builder
+rather than only the raw `.vex` track that section and
+`crates/hd/tests/start_gantry_hd_ground_truth.rs` already read directly.
+`crates/game/tests/start_gantry_hd_mount_ground_truth.rs`'s own third test
+pins this.
+
+### The glyph walk stays unwired on HD, on purpose
+
+Pulse's countdown plays because its material's own authored `TEXOFFSET` track
+is replayed - the mechanism this page opens with. HD's own equivalent
+material carries no such track at all
+(["What is not proven: whether anything ever changes it"](#what-is-not-proven-whether-anything-ever-changes-it---confidence-40-and-this-is-where-hds-answer-genuinely-differs-from-pulses)),
+confidence 40, deliberately not raised by this pass: nothing here traced a
+runtime write, and the render pipeline that would carry one
+(`crates/render/src/mesh/rcs.rs`'s own material/shader-variant resolution) is
+outside this lane's own boundary while `lane-hd-material-curve` is active.
+Writing a synthetic UV offset here to make a digit appear would be inventing
+the mechanism `CLAUDE.md`'s own "never invent what the assets already
+author" rule exists to stop - HD's file has nowhere on disk for such a track
+to live, so at rest the board plays exactly what it is authored to: nothing
+readable, per that section's own texel-sampling result. This is left as an
+honest absence, the same as slots 1-7's own unrecovered hoarding mounts.
+
+**New evidence on the direction of the confidence-40 question, not a
+resolution of it.** `data/reference/hd-capture/talons-ships/00.png` - a real
+capture at the grid, HUD timer `0.00.0`, `0 KM/H` - shows a lit white `3` on
+the gantry board. The static parameter alone cannot produce that: sampled at
+rest, all four digit cells land at texel row ~55, below every staircase band
+the section above measures. A capture showing a lit digit is independent
+evidence, from neither of the two readings that section already weighs
+against each other, that **something writes this parameter at runtime** -
+strengthening the case for a runtime write without settling where it comes
+from or raising the static confidence score itself, which is about the
+*format* having no on-disk track, not about whether the engine compensates
+for that at runtime.
+
+### What is still open
+
+- **The backing pieces sit inside the mount's own thick structure.**
+  `CLEARANCE` (1.0, unchanged, still Pulse's own measured order) clears the
+  digit board's near-zero local depth but not `Honey_Board`'s HD analogue,
+  authored several units further back in the model's own local space - a
+  larger clearance was tried experimentally and rejected, both because it
+  is fitted to an HD rendering question this lane cannot close (whether the
+  board is ever lit at rest) and because it visually buried the boost-gate
+  structure the reference frame shows the board sitting *inside*, not in
+  front of. Left as Pulse's own measured value; a future pass with the
+  material-curve lane's own shader-variant work landed may find this stops
+  mattering once the board itself paints correctly.
+- **Only four circuits are measured by hand**; the ground-truth test covers
+  Talon's Junction alone, per `just check-test-budget`'s own ratchet. The
+  other twelve HD circuits (and their reversed variants) are unswept.
+- **Mode variants** (`321Go_Zone`, `321Go_HD_Zone_Battle`,
+  `321go_hd_detonator`) are untouched by this pass, per the standing
+  instruction to implement the plain race first - see
+  ["Which model a mode selects"](#which-model-a-mode-selects-a-substitution-site-exists-at-slot-7---not-slot-8)
+  above.
 
 ## The board's background is black on the original and transparent here
 
