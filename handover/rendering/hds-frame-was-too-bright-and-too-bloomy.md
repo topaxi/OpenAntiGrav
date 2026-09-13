@@ -260,6 +260,55 @@ check. **No fix applied** - this session does not have a second,
 disc-sourced candidate to check, and `CLAUDE.md`'s rule against a fitted
 constant rules out reaching for one from the table alone.
 
+2026-09-13, later still (`lane-hd-resolve-fill`): **the "why do eleven of
+sixteen circuits read identically with `[graphics] bloom` on and off" open
+item below is answered, mechanically.** Full account in
+[renderer.md](../../docs/ghidra/functions/ps3-hdfury-eu/renderer.md), "The
+resolve's Fury circuits carry the front end's own Tone triple, and the plain
+variant is confirmed live". What lives only here:
+
+**The eleven are exactly the circuits whose `envsettings_bloom` returns
+`None`.** `zone_2`/`zone_3`/`zone_4` ship no `track.envsettings` at all; the
+eight Fury/DLC circuits (`01_vineta_k`, `02_track`, `03_track`,
+`04_chenghou_project`, `05_ubermall`, `10_sebenco_climb`, `12_sol_2`,
+`15_anulpha_pass`) each author `Tone adaption boost` but never `Tone
+darkening clamp`/`Tone maximum brightness` - confirmed by a full dump of
+every `.envsettings` on the disc, not a grep miss. `envsettings_bloom`
+requires all ten `HDR and Bloom` keys present in the **circuit's own** file
+and returns `None` the moment one is missing, so `oag_render::post::hd_bloom::Chain`
+is never constructed on any of those eleven - not a bloom that runs
+unbloomed, no gate/blur/exposure-resolve/HDR-encode of any kind. The five
+that *do* respond (`amphiseum`, `modesto_heights`, `talons_junction`,
+`tech_de_ra`, `zone_1`) are exactly the five whose file is complete.
+Confirmed by running the built game and reading its own load report:
+`oag-game --race --track 'Data\Environments\12_Sol_2\track.vex' ...` logs
+"no complete HDR and Bloom block; the race draws without the read bloom
+chain" where Talon's Junction and Amphiseum log the full exposure formula.
+
+**The disc's real engine does not skip the chain there.** A live read during
+a Racebox race on Sol 2 found the settings singleton's `Tone` triple holding
+`(20.0, 3.0, 4.0)` - the front end's own `fe.track.envsettings`/
+`fe.fury.track.envsettings` value, carried forward because the registrar is
+a persistent, cumulative object (renderer.md's own prior reading) that a
+circuit's file only overrides the keys it declares. So this project's
+"require the whole block or skip the chain" policy is a genuine gap on all
+eleven circuits, not a faithful reading of a circuit that authors no
+exposure - the wiring the fix needs is in renderer.md's new section, and it
+is a data-plumbing change (seed from the front-end file, let the circuit
+override), not a shader or material one.
+
+**Applying the read exposure `scale` alone to Sol 2's existing render is
+still a clean negative**, extending "the exposure stage is already
+saturated at `scale = 1.0`" from Talon's Junction (established above) to all
+three matched-camera circuits - `scripts/hd-resolve-probe.py`, new this
+session. What is not settled: whether the *additive* bloom summand, also
+never computed on Sol 2, would move the reading - Sol 2 authors a much
+stronger `Bloom from frame contribution` (1.0 against Talon's 0.03) but also
+a higher `Bloom adaption boost` (15 against 5) that the existing gate
+formula may fold back toward zero on a scene this bright. Not measured -
+needs the real chain constructed, `crates/render`/`crates/game` work outside
+this lane.
+
 ## Open
 
 - **The frame is measurably darker than the original at a matched camera, by 0.13-0.24 mean luminance on Talon's Junction and Sol 2, and the exposure/bloom post chain is ruled out as the cause** - open at `lane-ship-hull`'s files (`mesh.wgsl`, `crates/render/src/mesh/`, `sky_cube.rs`), not this lane's; **narrowed 2026-09-13 (twice)**: first, not a single offset/scale/curve (quantile-quantile evidence, confidence 80), and `.envsettings` plumbing is confirmed exact for Talon's Junction's core terms; second, **the gap is not a single global magnitude either** - Amphiseum measures the opposite sign (ours brighter by 0.04-0.19 luma), so what remains is a per-material or per-circuit-lighting-data cause, not a shared constant, with Amphiseum's own black-wall-panel defect (below) as one concrete, separately-diagnosable instance of "per-material"
@@ -268,11 +317,12 @@ constant rules out reaching for one from the table alone.
 - What the colour set's fourth byte gates is unknown - `0x1aaf7631` is declared by no `SHO` shader block, so the only place left to check is per-material microcode
 - `shadowMapTex` is projected by the disc and unimplemented here
 - `scripts/clipped-white.py`'s docstring still publishes the 3.85/6.99 pair, and 3.85 % is a padded canvas rather than a frame - another lane owns that file, so the correction lives in `scripts/hd-glow-sweep.py` and renderer.md instead
-- Why **eleven** of the sixteen circuits measure identically with `[graphics] bloom` on and off, on the baseline build as much as the fixed one - and six of those eleven do take the authored path, so "they never light" is refuted
+- ~~Why **eleven** of the sixteen circuits measure identically with `[graphics] bloom` on and off~~ **answered 2026-09-13 (`lane-hd-resolve-fill`)**: those eleven are exactly the circuits whose `.envsettings` does not author the whole `Tone` family (`zone_2`/`zone_3`/`zone_4` ship no file at all; the eight Fury/DLC circuits omit `Tone darkening clamp`/`Tone maximum brightness`), so `envsettings_bloom` returns `None` and `oag_render::post::hd_bloom::Chain` is never built - the switch has nothing to toggle. See the dated entry above and renderer.md's new section. "Six of those eleven do take the authored [lit-material] path" still stands and is a separate finding - the material lighting and the missing exposure chain are two independent absences that happen to overlap on the same circuit set
 - Fury's own circuits and the DLC packs still have no rpcs3 grab to be read against at all (Amphiseum now does - see 2026-09-13 above)
 - **New 2026-09-13**: Amphiseum's grid-start trackside wall panels draw unlit/flat-black in `oag-game` where the reference shows them brightly lit - a large, visible, localized gap, most likely the same emissive/second-texture material class as the `etched_glass_tech` item below rather than a new mechanism, not chased into a specific material or shader path this session
 - **New 2026-09-13**: what makes Amphiseum's opening seconds already 406-429 km/h at the same capture settings that gave Talon's Junction and Sol 2 a slow (70-74 km/h) grid pose is unread - a downhill start or a shorter countdown are guesses, not measured; means no Amphiseum pose isolates the lit-material path free of the speed-streak confound
 - `scripts/hd-material-probe.py`'s fog-segment classifier assumes the frame's exposure scalar is `1.0`, calibrated by eye against one unclipped near-camera channel rather than solved - a session that wants coverage past 89% or tighter per-slot deltas needs to actually solve for it (or read `k` off `.envsettings`' `Tone` family and the adapted-luminance state directly) rather than assume it
+- **New 2026-09-13 (`lane-hd-resolve-fill`)**: `envsettings_bloom` (and possibly `envsettings_fog`/`envsettings_light`, unread this session) should seed from the title's own front-end `.envsettings` for any `HDR and Bloom` key a circuit's file omits, per renderer.md's "exact wiring" paragraph - a `crates/game/src/race/load/environment.rs` change, not attempted here. Whether wiring it up actually closes Sol 2's own darkness/under-clipping gap is unmeasured: the read exposure `scale` alone is a clean negative there too (see above), and a back-of-envelope read of the already-implemented bloom-gate formula suggests Sol 2's own higher `Bloom adaption boost` may fold its stronger authored `Bloom from frame contribution` back toward zero on a scene this bright - a hypothesis, not a measurement, and the obvious next thing to check once the chain is wired up rather than skipped
 
 ## Next Steps
 
@@ -284,4 +334,4 @@ constant rules out reaching for one from the table alone.
 - ~~Grab Amphiseum on rpcs3~~ **done 2026-09-13**: `data/reference/hd-capture/amphiseum-matched/` (3 matched-camera poses) - see the dated entry above for what it found (a black-wall-panel defect at the grid, and a sign-flipped whole-frame gap versus Talon's Junction/Sol 2)
 - Chase the Amphiseum grid-start wall-panel defect (flat black vs brightly lit cyan/white in the reference) to a specific material/shader path - likely the same emissive/second-texture class as `etched_glass_tech` below, not confirmed
 - Extend `hd-frame-compare.py`'s region boxes past the shared Talon's-Junction shape, or accept per-circuit `--dump-regions` verification as the standing process - Sol 2's grid pose lands `road surface` off-track, Amphiseum's `sky` box samples an indoor ceiling
-- Find why `[graphics] bloom` is inert on eleven of the sixteen circuits - `scripts/hd-glow-sweep.py sweep --bloom both` is the reproducer, the four named environments plus Zone 1 are the five that do respond, and six of the inert eleven measurably take the authored path so the obvious hypothesis is already refuted
+- ~~Find why `[graphics] bloom` is inert on eleven of the sixteen circuits~~ **answered, see the 2026-09-13 (`lane-hd-resolve-fill`) entry above and renderer.md**. The next step this opens: seed `envsettings_bloom` (and check `envsettings_fog`/`envsettings_light` for the same gap) from the title's own front-end `.envsettings` for any key a circuit's own file omits, per renderer.md's "exact wiring" paragraph - `crates/game/src/race/load/environment.rs`, not attempted this session
