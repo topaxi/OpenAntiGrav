@@ -1903,6 +1903,18 @@ more saturated cyan/white, the same direction (not magnitude) as the
 circuit-wide darkness gap `renderer.md` already tracks as a separate,
 unresolved thread. Nothing here touches that thread's own candidates.
 
+**The crowd stands are a different material, over-bright in both the before
+and after render, and not this fix's to close.** Amphiseum's stands draw
+through `materials/nr_crowd_bustle.rcsmaterial` (a cutout list, sampling
+`hd_textures/crowd/crowd_avatars_22x4.gtf`, a tiled crowd-figure sprite
+sheet) - not `EmissiveTexture`, not lightmapped, not touched by this fix
+at all. A crop over the stands region at the matched pose reads **0.42-0.46
+mean luma both before and after** against the reference's **0.18-0.19** -
+the *opposite* direction from the panel bug (too bright, not too dark), and
+consistent with the pair-level "Amphiseum reads +0.04..+0.19 brighter
+overall" reading already recorded as the circuit's own general darkness/
+brightness gap, not a symptom this material's own microcode was read for.
+
 ## Open
 
 - **87 of the 125 sampler hashes**, including the three commonest
