@@ -186,6 +186,17 @@ fn race_load_places_a_gantry_on_talons_junction() {
         loaded.gantry.is_some(),
         "race::load did not carry a placed gantry through to Loaded"
     );
+
+    // Slot 7's own art, borrowed into slot 8's shared model - the ring/logo
+    // cluster (`polySurface155/156/157`, local z ~33) that reads as a stray
+    // "Wipeout symbol" floating over the open road once placed, matching a
+    // player's own report. `oag_render::gantry::strip_fx350_art` drops every
+    // draw bound to `fx350_nomip.gtf`, not just that trio, since the texture
+    // is the disc's own discriminator - see that function's doc comment.
+    assert!(
+        report.contains("fx350_nomip.gtf"),
+        "the report does not say the borrowed slot-7 art is stripped: {report}"
+    );
 }
 
 /// The digit board's own `Anim Transform` teleports it +10 in world Y at the

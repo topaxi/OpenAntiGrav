@@ -488,6 +488,45 @@ Two more things deliberately left as hypotheses rather than findings:
 - Whether the arch geometry itself is drawn in the world in addition to the
   bound texture. Nothing here settles it.
 
+### A live capture through a countdown, 2026-09-13: the digits do change at runtime, but the write is still not located
+
+`docs/rendering/start-gantry.md`'s own confidence-40 section already argued
+from a single reference screenshot that something writes the digit board's
+`uvOffset` at runtime, since the static value alone cannot light any glyph.
+This pass took a live RPCS3 capture through an actual countdown
+(`scripts/rpcs3-drive.py capture --shots 5 --interval 1 --keep-dumps`,
+Talon's Junction, ~1 s apart from the grid) rather than one screenshot: the
+board's own geometry shows nothing, nothing, a faint sliver, a clear `3`,
+then `3` and `2` together across the five frames - a progression, which a
+static rest cell cannot produce. This raises confidence that *some* write
+happens; it does not locate it.
+
+**A raw byte diff between consecutive captures' pushbuffer dumps does not
+isolate it**, and the reason is informative for whoever tries next: the
+small region (the RSX FIFO ring itself, ~16 KB) differs by only a handful of
+bytes frame to frame, but the two larger regions (~128 KB each) carry every
+other draw's own per-frame data - camera, ship, scenery animation - and
+differ in hundreds to thousands of places, with nothing in the raw bytes
+alone to attribute a given changed word to the gantry material rather than
+an unrelated draw nearby in the ring. A step-pattern scan (value stable
+across the frames before the digit appears, then a clean jump) found four
+candidates; all four reverted on the very next frame instead of continuing
+to step, which fits ring-buffer command placement drifting frame to frame
+more than it fits one stable, patched value.
+
+**What this does and does not change about the open items above.** `uvOffset`/
+`uvScale` are bound as named fragment-program constants patched **into the
+shader microcode itself** (the `fslot` patch chain `scripts/ps3-microcode.py`
+documents), not a separate constant register - so the write this section is
+looking for, if it exists, changes the uploaded fragment-program bytes, not
+a constant-buffer upload, which is one more reason a plain float-value diff
+across the whole pushbuffer does not find it. The eleven unexamined
+`lwz 0x834(` sites two paragraphs up remain the concrete next step, together
+with a semantic, packet-aware walk of the pushbuffer against the fragment
+program's own patch-slot table rather than another raw diff - this pass's
+own negative result on the raw-diff route is itself evidence that route
+needs the packet structure, not more captures of the same shape.
+
 ### The name of the table base was wrong on this page
 
 Ghidra labelled the per-slot table base `PTR_s_WIP3OUT_008a704c` and this page

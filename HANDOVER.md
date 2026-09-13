@@ -425,13 +425,36 @@ docs page with the evidence - **do not requote from this file**:
   moves at 6.000 s, `FINAL LAP` enters at 9.333 s and the chequered flag
   enters at 12.333 s, on Pulse, HD (confirmed directly on HD's own disc) and
   2048, with a node literally named `polySurface7` carrying the identical
-  closing frame pair on all three. **Nothing is placed on any title** - slot
-  8's transform is unrecovered on Pulse and HD and untried on 2048.
+  closing frame pair on all three. **The gantry is placed and drawn on Pulse
+  and HD** (2026-09-06 and 2026-09-13): the track's own geometry authors the
+  mount, keyed by name (`billboard8`/`321backplate` on Pulse,
+  `billboard8.gtf` on HD), and `oag_render::gantry`/`oag_game::race::gantry`
+  stand `321Go_StartFinish.vex` on it and play its authored timeline off the
+  race clock. HD's own mount is not Pulse's flat stub - it is 1.9-3.0 units
+  thick, part of a real 3D gate structure - and its model additionally
+  embeds seven mesh nodes of **slot 7's own borrowed `fx350_nomip.gtf` art**;
+  three of them (`polySurface155/156/157`) sit 33 units off the digit
+  board's own display plane and rendered as a stray "Wipeout symbol" logo
+  floating over the open road until `oag_render::gantry::strip_fx350_art`
+  dropped them by texture, matching a player's own report pixel for pixel.
+  HD's glyph *walk* is still unwired - its material's `uvOffset`/`uvScale`
+  are a static value on disk, not a keyframe track (88/40) - but a live
+  RPCS3 capture through an actual countdown (2026-09-13) now shows the
+  board's own geometry lighting a `3` and then overlapping `3`/`2` over four
+  seconds of real play, so *something* writes this parameter at runtime;
+  the write itself was not isolated in a pushbuffer diff and stays a named
+  lead (`docs/ghidra/functions/ps3-hdfury-eu/billboards.md`'s eleven
+  unexamined `lwz 0x834(` sites). 2048 is untried past a first-glance read of
+  the same family: four separate mesh nodes, each slid on and off screen by
+  its own transform track (90), with no shared UV walk at all, and reaches
+  only two of its own eight glyph files (plus `fx350`) across all 26
+  circuits the whole package ships.
   [start-gantry.md](docs/rendering/start-gantry.md), one page for all four
   titles; `crates/vex/tests/start_gantry_ground_truth.rs` (4/4, Pulse),
   `start_gantry_pure_ground_truth.rs` (2/2, Pure),
   `crates/game/tests/start_gantry_report_pure_ground_truth.rs` (1/1, Pure),
   `crates/hd/tests/start_gantry_hd_ground_truth.rs` (6/6, HD),
+  `crates/game/tests/start_gantry_hd_mount_ground_truth.rs` (3/3, HD),
   `start_gantry_2048_ground_truth.rs` (9/9, 2048).
 
 **What M5 still wants**: Zone's explosion. Positional audio and the Autopilot

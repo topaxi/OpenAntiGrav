@@ -168,17 +168,60 @@ pub fn is_slot_placeholder(label: &str) -> bool {
 /// placeholder count - the count mismatch refutes "every slot binds", not
 /// "the raw stub is never shown".
 pub fn strip_slot_placeholders(model: &mut Model) -> usize {
+    strip_texture(model, is_slot_placeholder)
+}
+
+/// Slot 7's own placeholder art, `fx350_nomip.gtf` - HD's
+/// `Data\Billboards\HD_Adverts\fx350.vex`, per
+/// `docs/ghidra/functions/ps3-hdfury-eu/billboards.md`'s "checkered-flag
+/// banner reading 'FX-350 Official A-G Racing League'" - **embedded inside
+/// slot 8's own shared `321Go_StartFinish.vex`**, not loaded through slot 7's
+/// separate substitution site.
+///
+/// **Why this is here at all, and what it explains.** Seven of HD's own
+/// nineteen mesh nodes (`polySurface151` through `polySurface157`) bind this
+/// texture rather than slot 8's own `321_go_64.gtf` staircase. Three of them
+/// (`polySurface155/156/157`) sit at local `z` ~33 - off the digit board's own
+/// display plane (`z` = 0, [`node_plane`]'s own finding on this node) by a
+/// full panel-width, not beside it in `x` the way `Final_Lap`/chequered are,
+/// so [`clip_to_panel`]'s width-only test does not catch them. Once
+/// [`Mount::matrix`] faces the model at the grid, that trio lands roughly 33
+/// units towards the camera, over the open road - three concentric
+/// ring/ellipse shapes that render as a stray logo, matching a player's own
+/// report of "a Wipeout symbol drawn in the middle of the track" pixel for
+/// pixel: `data/reference/hd-capture/talons-ships/00.png` shows no such thing
+/// anywhere in frame, at the gate or over the road.
+pub const FX350_TEXTURE: &str = "fx350_nomip.gtf";
+
+/// Drops every draw in `model` bound to [`FX350_TEXTURE`], and says how many.
+///
+/// **By texture, not by node name or position.** The disc itself is the
+/// discriminator - every draw carrying slot 7's own art is one this model's
+/// own slot-8 display never needs, whatever local coordinate it happens to
+/// sit at. `docs/rendering/start-gantry.md`'s "Implemented on HD" section has
+/// the full accounting of what survives (the two background panels and the
+/// digit board) against what a reference frame shows.
+pub fn strip_fx350_art(model: &mut Model) -> usize {
+    strip_texture(model, |label| {
+        basename(label).eq_ignore_ascii_case(FX350_TEXTURE)
+    })
+}
+
+/// Shared retain-by-texture loop [`strip_slot_placeholders`] and
+/// [`strip_fx350_art`] both need: drop every draw across all three draw lists
+/// whose bound texture's label matches `matches`, and say how many.
+fn strip_texture(model: &mut Model, matches: impl Fn(&str) -> bool) -> usize {
     let slots: Vec<usize> = model
         .textures
         .iter()
         .enumerate()
-        .filter(|(_, t)| t.as_ref().is_some_and(|t| is_slot_placeholder(&t.label)))
+        .filter(|(_, t)| t.as_ref().is_some_and(|t| matches(&t.label)))
         .map(|(slot, _)| slot)
         .collect();
     if slots.is_empty() {
         return 0;
     }
-    let is_placeholder =
+    let is_match =
         |draw: &crate::mesh::DrawCall| draw.texture.is_some_and(|slot| slots.contains(&slot));
     let mut removed = 0;
     for draws in [
@@ -187,7 +230,7 @@ pub fn strip_slot_placeholders(model: &mut Model) -> usize {
         &mut model.transparent_draws,
     ] {
         let before = draws.len();
-        draws.retain(|d| !is_placeholder(d));
+        draws.retain(|d| !is_match(d));
         removed += before - draws.len();
     }
     removed
