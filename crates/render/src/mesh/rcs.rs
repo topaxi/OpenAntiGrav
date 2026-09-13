@@ -659,9 +659,11 @@ fn material_setup(
     let emissive = emissive::emissive(
         model,
         &material_variants,
+        &picks,
         &seconds,
         &mut material_slots,
         textures,
+        report,
     );
     // The disc's own alpha-test reference, for a caller's cutout draws - see
     // `cutout`, which reports a comparison this shader cannot reproduce

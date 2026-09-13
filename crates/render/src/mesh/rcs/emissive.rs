@@ -32,7 +32,7 @@ use oag_rcs::{rcsmaterial, rcsmodel};
 
 use crate::mesh::{Emissive, ModelTexture, slots};
 
-use super::Textures;
+use super::{Report, Textures, skin::Pick};
 
 /// The float3 the emissive sample is multiplied by, parameter `0xe8bcd7f5`.
 const TINT: u32 = 0xe8bc_d7f5;
@@ -42,6 +42,82 @@ const OFFSET: u32 = 0x7825_6a45;
 const SCALE: u32 = 0x7878_7596;
 // None of the three has a preimage yet, so each is cited by hash. See
 // `crates/render/examples/hd_param_names.rs`, which named 64 of 300.
+
+/// What a sampler's own declared name and disc-wide binding say about
+/// whether an accumulate through it is a real glow.
+///
+/// **Established by what the hash binds, disc-wide, with no counter-example**,
+/// the same evidentiary bar `skin::NOT_A_PICTURE` sets, not by a preimage
+/// name alone. A preimage match is real evidence the compiler symbol was
+/// really named that, but it is not by itself evidence the hash is *never* a
+/// picture: three of the seven "Surface maps" preimages
+/// (`docs/formats/rcsmaterial.md`, "sampler names, by preimage") turned up a
+/// live counter-example on inspection and are excluded from
+/// [`NAMED_SURFACE_MAP`] here:
+///
+/// | Hash | Name | Counter-example |
+/// | --- | --- | --- |
+/// | `0x20c3e476` | `SpecularTexture` | binds `and_power_glow.gtf`, `and_station4_diff.gtf` and `biodome_bar_colour.gtf` somewhere on the disc |
+/// | `0x576c4bf3` | `SpecMap` | binds `startdarksideswatch.gtf`, an advert, live on `scanlinetext` at Talon's Junction |
+/// | `0x9fc347ff` | `Spec` | binds `detonator_ao.gtf`, an ambient-occlusion map |
+/// | `0x48f37f5a` | `NormalMap` | a softer call: its one bind, `medal_dissolvehexnormal.gtf`, may name a hex pattern rather than a lighting normal, and this reading does not settle which |
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SamplerRole {
+    /// A normal or specular map: never a glow, whatever the microcode's own
+    /// accumulate shape says. On a ship hull, `accumulates(1)` is tripped by
+    /// ordinary tangent-space lighting arithmetic reusing a register, not a
+    /// real additive combine - see `docs/rendering/hd-ship-materials.md`,
+    /// Finding 1.
+    SurfaceMap,
+    /// A named glow/reflection role - the "Light" preimage group minus
+    /// `lightmap`/`shadowMapTex`, which this function already refuses on an
+    /// earlier, separate check.
+    Glow,
+}
+
+/// Named, disc-wide "Surface maps" preimages with **zero** counter-examples
+/// measured (`crates/render/examples/hd_emissive_role_census.rs`'s own doc
+/// comment carries the full seven-hash table and which four were dropped).
+const NAMED_SURFACE_MAP: &[u32] = &[
+    0x739a_786e, // NormalTexture
+    0x62ae_87a7, // NormalTexture2
+    0xd9d6_922d, // Normal
+];
+
+/// Per-material-family sampler hashes with no preimage, each measured
+/// disc-wide to bind **only** a normal map (or, for the fourth, weapon
+/// normal maps too), with zero exceptions - see
+/// `crates/render/examples/hd_emissive_role_census.rs`'s own doc comment for
+/// the full per-hash path table this was measured from.
+///
+/// | Hash | Family | Paths |
+/// | --- | --- | ---: |
+/// | `0x436d3929` | `diffuse_with_specular_from_alpha_n_vcol`/`_n`/`detonator_*` | 45 |
+/// | `0xc8f18561` | `carbonfibre` | 11 |
+/// | `0x0617f872` | `nitro_body_new` | 13 |
+/// | `0xc78c9866` | `detonator_ship_dg_iridescent` | 4 |
+const SHIP_SURFACE_MAP_SAMPLERS: &[u32] = &[0x436d_3929, 0xc8f1_8561, 0x0617_f872, 0xc78c_9866];
+
+/// Named, disc-wide "Light" preimages minus `lightmap`/`shadowMapTex`, which
+/// [`emissive`] already refuses on a separate, earlier check.
+const NAMED_GLOW: &[u32] = &[
+    0xb1f2_a176, // EmissiveTexture
+    0xfa79_b1cd, // Emissive
+    0x030f_d39b, // emissive
+    0xb160_0426, // ReflectionMap
+    0x2d5f_c6a6, // EnvMap
+    0x6e46_5921, // EnvMap1
+];
+
+fn sampler_role(hash: u32) -> Option<SamplerRole> {
+    if NAMED_SURFACE_MAP.contains(&hash) || SHIP_SURFACE_MAP_SAMPLERS.contains(&hash) {
+        Some(SamplerRole::SurfaceMap)
+    } else if NAMED_GLOW.contains(&hash) {
+        Some(SamplerRole::Glow)
+    } else {
+        None
+    }
+}
 
 /// The glow table and each material's index into it, plus one.
 ///
@@ -55,9 +131,11 @@ const SCALE: u32 = 0x7878_7596;
 pub(super) fn emissive(
     model: &rcsmodel::Model,
     variants: &[Option<rcsmaterial::Variant>],
+    picks: &[Pick],
     seconds: &[Option<std::sync::Arc<ModelTexture>>],
     roles: &mut [u32],
     textures: Textures<'_>,
+    report: &mut Report,
 ) -> Vec<Emissive> {
     let mut table: Vec<Emissive> = Vec::new();
     let mut cache: std::collections::HashMap<String, Option<Vec<u8>>> = Default::default();
@@ -93,6 +171,34 @@ pub(super) fn emissive(
         // own unit. They agree on every accumulating material measured.
         if !program.accumulates(1) {
             continue;
+        }
+
+        // **The role of the texture actually being added, not of whatever
+        // sits at hardware unit 1.** `Pick::aux` is the same ordinal
+        // `skin::skin` already decoded into `seconds[slot]` - the texture
+        // this function is about to tint and add - so its own declared
+        // sampler hash is what a role decision has to be about. Resolving
+        // "unit 1" independently (`Declared::samplers` cross-reference,
+        // ignoring `Pick::aux`) was tried and measured wrong:
+        // `tunnel_fx_noalpha` declares `SpecularTexture` at hardware unit 1
+        // and its own *emissive* texture at unit 2, while `Pick::aux` (no
+        // lightmap, an untraced alpha lane) resolves to ordinal 1 - the
+        // emissive one - exactly as `seconds[slot]` already holds. Asking
+        // about "unit 1" there would have refused a real, working glow this
+        // project already regressed once (`docs/rendering/hd-ship-materials.md`,
+        // "two fixes tried and both failed").
+        let aux_hash = picks
+            .get(slot)
+            .and_then(|pick| pick.aux)
+            .and_then(|aux| material.samplers.get(aux))
+            .map(|&(hash, _)| hash);
+        match aux_hash.map(sampler_role) {
+            Some(Some(SamplerRole::SurfaceMap)) => {
+                report.emissive_surface_map_excluded += 1;
+                continue;
+            }
+            Some(Some(SamplerRole::Glow)) => {}
+            Some(None) | None => report.emissive_role_unresolved += 1,
         }
 
         let find = |hash: u32| material.parameters.iter().find(|p| p.hash == hash);
