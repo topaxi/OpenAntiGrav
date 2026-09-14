@@ -8,6 +8,19 @@ This is the frontend-drawing half; the launch half is the other lane's, per
 the gameplay handover's own instruction not to wire cell-selection without
 first tracing the launch path.
 
+**Update, same day: the launch landed too, in the `campaign-launch-wiring`
+lane.** The title is kept only so this thread's index line still matches -
+confirming a cell in one of the five modes this engine runs now opens `Team
+Selection` and launches the cell's own race, evaluates the medal earned and
+persists it keyed on the cell's own `name`, and feeds it back into
+`Grid Selection`'s `Medals`/`Points` rows and `Cell Selection`'s `Line6`/
+`Line7`. See `docs/ui/campaign-screens.md`'s "Confirming a cell launches"
+and `docs/architecture/persistence.md`'s "where a career system attaches"
+for the full detail. **Not closed by that pass**: everything below this
+paragraph that is not struck through is still open, and it did not attempt
+a live PPSSPP capture or an interactive play-test of the new launch either
+- see `docs/ui/campaign-screens.md`'s own `Open` entry on why.
+
 Milestone: **M7 - Shell and polish**.
 
 Read first: [`docs/ui/campaign-screens.md`](../../docs/ui/campaign-screens.md)
@@ -58,35 +71,43 @@ read), `crates/game/src/main/campaign_stage.rs` and
 
 ## Next Steps
 
-- **Wire the launch, once the other lane's trace lands.** Today,
-  `session::campaign::handle_campaign`'s `(Screen::Cell { .. },
-  Event::Confirmed)` arm logs and stays on `Cell Selection`. Wiring it for
-  real needs, at minimum, everything
-  `docs/architecture/persistence.md`'s "what is not built yet" section
-  already names: which globals `Cell Selection`'s own confirm redirect
-  writes before falling through to `Team Selection`/`Launch Game`
-  (`CellSelection_Update`, `0x088d6430`, and the `OnExit` slot at word 31 of
-  `0x08acfb64` - the gameplay lane's own next step, not retraced here), a
-  mapping from `Cell::track`/`Cell::mode.as_str()` onto
-  `crate::catalogue::Track::entry_name()`/`oag_race::Mode::name()` (the two
-  do not share a spelling - `"16_Track"` against a `.vex` path, `"Time
-  Trial"` against `"time_trial"`), and a value to evaluate per mode
-  (`Observation::place` covers `Race`/`Tournament`/`Head2Head` directly,
-  `Observation::tick` needs converting to the centiseconds `Time Trial`/
-  `Speed Lap` targets are authored in, and `Zone`'s zone count and
-  `Elimination`'s kill count are not in `Observation` at all yet).
-- **Feed `oag_game::records::Observation::campaign_medal` once a cell is
-  selected.** `oag_tables::race_campaign::Cell::evaluate_medal` and
-  `crate::records::Medal` already exist and are unit-tested
-  (`crates/game/tests/campaign_medal.rs`) - what is missing is a caller that
-  knows which `Cell` a just-finished race was run against. Once that exists,
-  `Grid Selection`'s `Medals`/`Points` rows and `Cell Selection`'s `Line6`/
-  `Line7`/`Line5`/`Line8` all stop reading as a fresh profile's zeros -
-  `oag_ui::campaign::GridSummary`/`CellSelection` take the numbers as
-  plain `u32`/`i64` today, so no signature there needs to change, only what
-  feeds them.
+- ~~Wire the launch, once the other lane's trace lands.~~ **Done,
+  2026-09-14**, in the `campaign-launch-wiring` lane -
+  `Session::launch_campaign_cell` (`crates/game/src/main/session/campaign.rs`)
+  is the caller; see `docs/ui/campaign-screens.md`'s "Confirming a cell
+  launches" and `docs/architecture/persistence.md`. The track/mode spelling
+  mismatch this bullet worried about turned out not to be one: a cell's own
+  `track=` id already shares `catalogue::Track::id`'s spelling, so
+  `Shell::track(mode, id)` resolves it directly.
+- ~~Feed `oag_game::records::Observation::campaign_medal` once a cell is
+  selected.~~ **Done, 2026-09-14.** `RaceStage::campaign_medal`
+  (`crates/game/src/main/race_stage.rs`) evaluates the per-mode value -
+  narrower than this bullet assumed: `Observation::tick` turned out to be
+  the wrong quantity for `Speed Lap` (a mode that never finishes, so "the
+  tick it was left on" is not "how fast" - checked against
+  `grid_00.xml`'s own authored targets, see
+  `docs/architecture/persistence.md`), which reads `best_lap_ticks`
+  instead; `Zone`'s zone count and `Elimination`'s kill count did turn out
+  to be reachable without widening `Observation` at all - `RaceStage`
+  already has `self.race` in hand, so the value is computed there and only
+  the already-evaluated medal crosses into `Observation`.
+  `Grid Selection`'s `Medals`/`Points` and `Cell Selection`'s `Line6`/
+  `Line7` all read real numbers now, fed through a `Fn(&str) ->
+  Option<Medal>` closure rather than the store type itself - see
+  `oag_ui::campaign::GridSummary::from_grid_with_medals`/
+  `CellSelection::with_medals`. **`Line5`/`Line8` are unchanged** - both are
+  `Cell_SavedRecord`, a saved best time/zone-count/kill-count this pass did
+  not add a store for, only the medal.
 - **A PPSSPP capture of the walk above**, to move every confidence score in
   `docs/ui/campaign-screens.md` from "read off the XML and the decompile"
   to "measured against a live frame", the same way `selection-screens.md`'s
-  own numbers already are.
+  own numbers already are. Nobody has held PPSSPP for this thread yet.
+- **An interactive play-test of the new launch.** Also not done this pass -
+  the environment it ran in has no way to send synthetic keyboard input to
+  a real window and no safe way to screenshot one window in isolation from
+  a shared desktop, so `Cell Selection` confirming, `Team Selection`, a
+  finished race and the medal showing back on the hex grid are proven by
+  the unit/integration suite and the full gate, not by a screenshot of the
+  real thing. See `docs/ui/campaign-screens.md`'s own `Open` entry for the
+  exact steps a maintainer with a normal desktop can run.
 - **Cell Help's static overlay.**
