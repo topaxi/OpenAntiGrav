@@ -530,6 +530,113 @@ pass (no widget dump against this specific screen was taken, unlike
 `Grid Selection`'s table above, which is measured off the XML directly); the
 diamond shape is a visual read of the capture, confidence 70.
 
+### After a campaign race, measured
+
+**Played `grid0_3_2` (`Time Trial`, `16_Track`/`Talon's Junction White`,
+Venom, 3 laps, targets gold `1.55.00`/silver `1.58.00`/bronze `2.03.00`) to
+completion in PPSSPP**, confirmed through `Team Selection` and flown three
+laps with `scripts/psp-autopilot.py` against a freshly generated
+`oag-trace track` spline (none existed in the repo for either candidate
+track before this pass). **Not `grid0_2_1`** (the `Race` cell this session's
+own assignment first proposed, on the reasoning that a position-based medal
+is easier to earn than a time target): confirmed *locked* in this same
+session (see `race-campaign.md`'s "Runtime-verified 2026-09-14
+(deliverable 1)" - `grid0_2_1` carries no `Locked` attribute at all in
+`grid_00.xml`, defaults locked, and its confirm never reached
+`CellSelection_CommitSelection`). `grid0_3_1` (`Race`, `03_Track`/Moa
+Therma White, the other `Locked="false"` cell) was also available but not
+used: `psp-autopilot.py` follows one fixed craft address with no per-craft
+filter (see `ppsspp-debugger.md`'s "a race updates every craft from the
+same function"), and an 8-craft `Race` was judged too likely to produce a
+garbled capture within this pass's time budget. `grid0_3_2` was chosen as
+the reliable, already-proven case; a slow or medal-less finish was
+explicitly acceptable going in.
+
+**Result: no medal, an honest miss.** `3` laps in `3.11.76` total
+(`1.32.49` / `0.49.34` / `0.49.93`, the first lap slow from the autopilot's
+own startup/aim-acquisition cost, the next two close to the reference
+capture's own `~52 s`/lap pace) against a bronze target of `2.03.00` -
+comfortably over. Frames (`data/reference/psp-campaign-screens/`,
+gitignored):
+
+- `ingame-start.png` - the in-race HUD at the green light: `Lap 1/3`, `GO`
+  banner, `Best 0.00.00`/`Current 0.10.7` corner clock, energy bar.
+  **No medal-target indicator anywhere on this frame** - consistent with
+  `race-campaign.md`'s own "the in-race HUD's medal tier is a separate,
+  still-unread value" open item, though this is one frame at race start,
+  not a full-race capture, so "never shown at all" is not established here,
+  only "not shown at the green light." Confidence 60 on the negative
+  (a HUD element could still appear once the cell's own targets need a
+  passing reference, e.g. a ghost/split - not checked this pass).
+- `results-01.png` - **`EndRace Results`**, a new state name not
+  previously documented: `RESULTS` / `TIME TRIAL COMPLETE!`, a four-row
+  table (`Lap`/`Time`/a pennant-icon column reading `6`/`9`/`10`, total
+  `25`) with the per-lap and total times above. The pennant column's
+  meaning was not identified this pass (not a lap count, not a position -
+  candidates left for whoever picks this screen up next).
+- `results-02.png` - **`EndRace Rewards`**, also new: a `REWARDS` header,
+  an explicit **`"No medal awarded"`** row with a hexagonal dash glyph (the
+  authored "no medal" icon, distinct from a gold/silver/bronze hex), and
+  `Assegai Loyalty: 90 Points` / `Total loyalty: 90` with a filled bar.
+  Confirms a loyalty counter is written even on a run that earns no medal
+  and no campaign points - loyalty and medal are separate rewards, not one
+  gated on the other.
+- `results-03.png` - **`EndRace Menu`**, also new: `RETURN TO GRID` /
+  `RACE AGAIN` / `VIEW RESULTS AGAIN` / `SAVE GHOST` / `DELETE DATA`, and
+  below the ship render, `NO GHOST TIME FOUND` / `NEW GHOST RECORD:
+  0.49.34` - the best of the three laps just driven, not the total.
+  `RETURN TO GRID` is the default cursor position, confirming the campaign
+  flow returns to the hex screens rather than the front end's `Racebox`
+  menu tree a custom race would return to.
+
+**What changed on `Cell Selection` and `Grid Selection` after returning**
+(`back-to-cellselect-postrace.png`, `gridselect-postrace.png`):
+
+- **`grid0_3_2`'s own detail panel gained a `Campaign record` row reading
+  `3.11.76`**, positioned above `Points 0/3` - a row this same cell's panel
+  did not show before the race (`cellselect-grid0_3_2.png`, captured
+  earlier this pass, shows only `Points`/`Target0..2`, no record row at
+  all: `Cell_SavedRecord` has nothing to format before a first attempt).
+  This refines `race-campaign.md`'s `CellSelection_PopulateDetail` table:
+  the row it names `Best` (`Line7`, the *medal*) is not what a `Time Trial`
+  cell shows on a medal-less run - `Campaign record` (`Line8`,
+  `Cell_SavedRecord`'s own time) is what appears instead, once a
+  record exists, corroborating the existing table's own "`Line5`/`Line8`
+  share one offset with `Line7`" reading from a live, positive case rather
+  than an absence.
+- **`Points` stayed `0/3`, and no lock glyph moved anywhere on the
+  hex** - all six previously-locked `grid0` cells are still locked, exactly
+  matching a zero-medal, zero-points outcome under both the cell rule
+  (`Cell_BestMedal(cell) == 0xff`, still true - no medal was ever earned)
+  and the neighbour-fade rule (no adjacent cell gained a medal either).
+- **`Grid Selection`'s `GRID 1` tier panel is byte-for-byte unchanged**:
+  `Gold medals 0/8`, `Total points 000/024`, `Points needed 012` - the same
+  three numbers this pass's own earlier capture read before the race. A
+  medal-less run banks nothing towards `RequiredPoints`, as
+  `Grid_PointsEarned`'s own definition (`sum of Cell_MedalPoints`, `0` when
+  no medal) already predicts.
+- **`DAT_08b30ffc` (the campaign cell pointer) is unchanged across the
+  entire round trip**: read directly before the race (`0x08f61490`) and
+  again after returning to `Cell Selection` (`0x08f61490`, identical) -
+  the same value the 2026-09-14 launch-trace pass recorded for this exact
+  cell on an earlier boot of the same disc, which is corroboration that
+  `PI_Cell` records sit at fixed, parse-time addresses rather than
+  per-session heap ones (the grid/cell table is built once at load and
+  never reallocated). Not cleared by `Race End Photo` -> results ->
+  `EndRace Menu` -> `Return to Grid`, so a reimplementation's own
+  equivalent state does not need to null this out on the way back to the
+  hex, only on actually leaving `Cell Selection` for a different one (or
+  leaving the campaign entirely) if it does at all - not itself confirmed
+  either way this pass.
+- **The profile's gold/silver/bronze counters (`+0x160`/`+0x164`/`+0x168`)
+  were not read.** No global "current profile" pointer is documented
+  anywhere in `docs/ghidra/functions/psp-pulse-usa/*.md`, and finding one
+  needs the Ghidra bridge (not held this pass, PPSSPP-only per this
+  session's lane). Left as a genuine gap rather than skipped silently:
+  the `EndRace Rewards` screen's own loyalty counter is the closest
+  substitute this pass could read, and it is a per-ship value, not the
+  profile-wide medal tally `race-campaign.md` describes.
+
 ## Open
 
 - **PPSSPP was not captured against this pass.** Every number above is read
