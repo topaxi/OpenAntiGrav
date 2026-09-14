@@ -74,21 +74,30 @@ The law, all decompiled and all in `race-campaign.md`:
   recovers three parameters where every call site passes four; the fourth reads
   as create-if-missing but that is inference. Fixing the prototype in Ghidra and
   re-reading would let both be named and would firm up the record-store section.
-- **`Status`/`Locked` on a `PI_Cell`, `Locked`/`Group` on a `PI_Grid`** are
-  parsed and no consumer of any of them was traced. `Definition_IsUnlocked`
-  (which reads `+0x99`/`+0x9c`) and `FUN_0888e5e4` (a `"ms:"`/`"PID"`
-  source-path test, i.e. memory-stick/DLC content, not a lock) are both ruled
-  out. So whether `Locked="true"` drives `Cell Selection`'s `Lock_x_y` overlay
-  or is redundant against the `<Unlock>` rows beside it is **open at 50** -
-  do not implement a lock from the attribute. `Group="1"` marks
-  `grid12`..`grid15`.
+- **`Locked` on a `PI_Cell` is now settled, 2026-09-14**: `CellSelection_PopulateGrid`
+  (`0x088d5de4`) draws the `Lock_x_y` overlay exactly when `cell->Locked
+  (+0xb9) != 0` **and** `Cell_BestMedal(cell) == 0xff` (no medal earned yet) -
+  see `race-campaign.md`'s "Locked does drive the Lock_x_y overlay". Safe to
+  implement a lock from the attribute now, gated the same way. **Still open**:
+  `Status` on a `PI_Cell`, `Locked`/`Group` on a `PI_Grid`, and a six-neighbour
+  adjacency loop the same function runs when no medal is earned
+  (`FUN_088c072c`, coordinate table `0x08ab1e68`) that may be a *second*
+  unlock path layered on `Locked` - not traced, found on the way and left for
+  the next pass. `Definition_IsUnlocked` and `FUN_0888e5e4` remain ruled out
+  as any of these bytes' reader. `Group="1"` marks `grid12`..`grid15`.
 - **The `Tournament` arm of `Race_RecordResult` does a second record lookup**
-  that no other arm does, keyed on `FUN_08945890(DAT_08b31158 + 0x74)` rather
-  than on the cell - the tournament's own standings, the state behind
-  `ER_TOUR_STAN` / `ER_RACE_POINTS` / `ER_END_TOUR_1..8`. `DAT_08b31158` was not
-  identified and the per-leg accumulation was not traced. Tournament has 27
-  authored cells and is the only mode with per-leg state, so this is where a
-  Tournament implementation starts.
+  that no other arm does, keyed on `Libc_HashString(DAT_08b31158 + 0x74)`
+  (named 2026-09-14; formerly `FUN_08945890`) rather than on the cell - the
+  tournament's own standings, the state behind `ER_TOUR_STAN` /
+  `ER_RACE_POINTS` / `ER_END_TOUR_1..8`. `DAT_08b31158` itself was still not
+  identified, but its **seeding** now is: confirming a Tournament-mode cell
+  (`CellSelection_CommitSelection`, `0x088d6138`) resets `DAT_08b31158+0xa0` to
+  0, sets `+0xdc` to 1, resets the leg counter `DAT_08b30fa4` to 0, and
+  appends one entry per `TournamentTrack` row via `FUN_088c3990` - see
+  `race-campaign.md`'s new launch section. The per-leg accumulation itself
+  (what `Race_RecordResult` does to `DAT_08b31158` after each leg) is still
+  not traced. Tournament has 27 authored cells and is the only mode with
+  per-leg state, so this is where a Tournament implementation starts.
 - **`Unlock_LoyaltyMet` (`0x0888ea30`) compares against a whole 32-bit word** at
   the record's `+8`, which for a cell is `difficulty | medal << 8`. Either the
   team record's payload differs or the arithmetic does something this pass did
@@ -97,10 +106,31 @@ The law, all decompiled and all in `race-campaign.md`:
   not checked for `Data\Plugins\grids` at all.
 - **Nothing is runtime-verified.** No PPSSPP breakpoint was taken; every score
   is capped in the 84-92 range.
-- **How a campaign event actually launches was not traced.** `Cell Selection`
-  redirects through `Team Selection` to `Launch Game`; which globals the cell
-  writes on the way (mode, track, class, laps, weapons, AI count) were not read,
-  and that is what an implementation needs first.
+- **How a campaign event launches - traced 2026-09-14, not runtime-verified.**
+  `CellSelection_CommitSelection` (`0x088d6138`, confidence 80 - it is word
+  39 of the `CellSelection` vtable, positionally confirmed the same way
+  `Update`/`OnEnter`/`OnExit` already were, with the identical slot found on
+  `TrackSelection` and `TeamSelection` too) is where a confirmed cell's
+  fields reach two places at once: `DAT_08b30ffc` (a raw `PI_Cell` pointer,
+  already read elsewhere by `Cell_EvaluateMedal`'s callers,
+  `Eliminator_UpdateKillTarget`, `AI_ResolveSkillScale` and `Hud_BindWidgets`)
+  and `Globals_Set` (`0x08888ee0`), the **same** string-keyed front-end global
+  store `TrackSelection_OnExit` writes `Track` into for a custom race -
+  confirmed by `get_function_callers` listing both. Keys written:
+  `Mode`, `Class`, `Track`, `Team`, `Weapons`, `Opponents`, `Laps`, `Damage`,
+  `SkillLevel`, and `Tournament` for a Tournament cell. So it is **not**
+  "one mechanism or the other" between the campaign and the custom Race Box -
+  both write the identical global keys, and the campaign *additionally*
+  carries the raw cell pointer for the numeric consumers a display string
+  can't serve. Full detail, the record-store key (a hash of the cell's own
+  `name` string, not a grid/cell index pair), and what remains
+  unverified: `docs/ghidra/functions/psp-pulse-usa/race-campaign.md`'s new
+  "How a campaign event launches" section. **What is still open**:
+  `CellMode_Definition.xml`
+  carries two named, buttonless `<Redirect>` blocks (`Cell Mode Redirect
+  Team` -> `Team Selection`, `Cell Mode Redirect Game` -> `Launch Game`
+  directly) whose selection logic was not located - whether a campaign
+  launch ever takes the second one is unknown.
 - **Points-vs-medals in the grid summary is settled but worth restating**, since
   the earlier reading was ambiguous: `GridSelection_Update` binds `Medals` to
   `Grid_CountMedalsAtLeast(grid, 0) / Grid_CellCount(grid)` - **gold** medals
@@ -127,12 +157,24 @@ The law, all decompiled and all in `race-campaign.md`:
   system attaches" for the three concrete gaps (the launch path below, the
   `Cell`/catalogue name mismatch, and Zone/Elimination's value not being in
   `Observation` at all).
-- **Do not implement the cell-selection wiring without first tracing the
-  launch path.** Read `Cell Selection`'s `Update`/`OnExit` (`0x088d6430`, and
-  the `OnExit` slot at word 31 of `0x08acfb64`) and `Team Selection`'s exit
-  to find which globals a cell writes. That is the gap between "the law is
-  known and implemented" and "a cell can be raced and its medal earned for
-  real".
+- ~~Do not implement the cell-selection wiring without first tracing the
+  launch path.~~ **Traced, 2026-09-14** - see the `Open` entry above and
+  `race-campaign.md`'s new section. **Still the prerequisite before wiring a
+  real launch**, because nothing on the Rust side yet models `DAT_08b30ffc`
+  (a "current cell" concept `World`/`Stage` construction would need to carry
+  through to `RaceStage::observation`) or the front-end global store
+  `Globals_Set` writes into (this project's own menu code already has some
+  equivalent - `crates/ui`/`crates/game`'s own global-key mechanism, not
+  audited against this page this pass). `oag_tables::race_campaign::Cell`
+  already carries every field the write site reads (`name`, `track`, `mode`,
+  `class`, `laps`, `AICount`... - checked against the struct directly this
+  pass, **no new field is needed there**). What *would* need new code: the
+  hash function itself (`FUN_08945a08`, called by the newly-named
+  `Libc_HashString` but not itself decompiled) is what a Rust reimplementation
+  of the record-store key would need to match byte-for-byte if the key ever
+  has to round-trip through the original's save format; nothing this pass
+  found requires it for `records.toml`, which already keys on its own
+  `Key` type per `docs/architecture/persistence.md`.
 - **Close the HUD tier.** Find the writer of `*(hud + 0x3c) + 0x34` - the
   in-race structure the HUD mirrors. Everything ruled out is listed above, so a
   next pass starts from a shorter list. Closing it unblocks `hud.md`'s medal

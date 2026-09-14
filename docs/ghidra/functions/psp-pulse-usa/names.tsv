@@ -801,3 +801,11 @@
 0x08864dc4	function	Cannon_BuildMuzzleFlashList	85	cannon-quake-leachbeam.md
 0x088c4410	function	TrackDefinition_EnterScreenState	78	race-box-screens.md
 0x08891448	function	StateMachine_LoadXml	72	race-box-screens.md
+0x088d5cb8	function	CellSelection_OnExit	82	race-campaign.md
+0x088d5de4	function	CellSelection_PopulateGrid	78	race-campaign.md
+0x088d6138	function	CellSelection_CommitSelection	80	race-campaign.md
+0x08888ee0	function	Globals_Set	85	race-campaign.md
+0x08888db4	function	Globals_HashKey	78	race-campaign.md
+0x08945890	function	Libc_HashString	85	race-campaign.md
+0x088ed784	function	TrackSelection_CommitSelection	80	race-campaign.md
+0x088e9fa0	function	TeamSelection_CommitSelection	74	race-campaign.md
