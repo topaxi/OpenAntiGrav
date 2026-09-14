@@ -566,8 +566,12 @@ per-difficulty `SkillScaleValue` table.
 
 **`plugins/grids/grid_*.xml`** is the campaign, cell by cell: each `PI_Cell`
 names a track, a mode, a class, `AICount`, `Weapons`, `damage`, laps and medal
-targets for three difficulties. `plugins/frontend/gui/*.xml` is the front end's
-own screen set.
+targets for three difficulties. **Measured in full**: split across four
+archives that disagree on schema and on which eight grids they carry,
+`oag_tables::race_campaign` reads all of it additively, and one grid's own
+`<Values>` tag is broken on the disc - see
+[`race-campaign.md`'s HD section](race-campaign.md#wipeout-hd-and-fury-the-same-schema-extended-split-across-four-archives).
+`plugins/frontend/gui/*.xml` is the front end's own screen set.
 
 **`xml/weaponstats_race.xml`** is [the weapon table](weapon-stats.md) under a
 lowercase name, alongside `_detonator` and `_elimination` variants for modes

@@ -54,6 +54,7 @@
 use oag_assets::{Archives, Result};
 use oag_title::{ArchiveCandidates, ForeignSerial, Platform, Title};
 
+pub mod campaign;
 pub mod frontend;
 pub mod hud;
 pub mod loading;

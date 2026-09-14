@@ -85,11 +85,154 @@ persistence half - a `Medal` and its points, additive on the existing
 per-circuit/mode/class row - and documents exactly where it is, and is not,
 fed yet; see `docs/architecture/persistence.md`.
 
+## Wipeout HD and Fury: the same schema, extended, split across four archives
+
+**Status: understood, for the schema; the medal law's difficulty axis is
+unmeasured.** Measured 2026-09-14 against `hdfury-ps3-eu-dec.iso`
+(EU, decrypted) in
+`crates/hd/tests/campaign_grids_ground_truth.rs` (`#[ignore]`d, `just
+test-data`), with HD's own entry names and archive facts in
+[`oag_hd::campaign`](../../crates/hd/src/campaign.rs) per ADR-0022, mirroring
+[`oag_pulse::campaign`](../../crates/pulse/src/campaign.rs).
+
+**The discriminating question this thread opened with** - does
+`race_campaign::from_blob` parse HD's grids unchanged, or does the schema need
+extending - answers *extending*, additively: three new optional [`Cell`]
+fields, one new [`Mode`] variant, five new optional [`Grid`] fields, and one
+attribute alias. No existing Pulse field changed type or meaning, and
+`crates/tables/tests/race_campaign_ground_truth.rs` passes unchanged.
+
+### The campaign is on four archives, not one, and they disagree
+
+`Data\Plugins\grids\` is on `DATA00.PSARC`, `DATA02.PSARC`, `DATA04.PSARC` and
+`DATA06.PSARC` (of the title's seven), and confirms
+`docs/formats/hd-status.md`'s reading of the schema at a glance - but not at
+the file level:
+
+| Archive | Grids | Cells | Schema | `Campaign=` |
+| --- | --- | --- | --- | --- |
+| `DATA00.PSARC` | `grid_08`..`grid_15` (Fury-only - absent from every other archive) | 80 | per-difficulty | `"Fury"` |
+| `DATA02.PSARC` | `grid_00`..`grid_07` | 77 | flat, Pulse's own shape | absent |
+| `DATA04.PSARC` | `grid_00`..`grid_07` | 77 | per-difficulty | absent |
+| `DATA06.PSARC` | `grid_00`..`grid_07` | 77 | per-difficulty | `"HD"` |
+
+Sixteen grids either way - the same count as Pulse's campaign - but
+`oag_assets::Archives`'s own precedence (`data` = `DATA00`, `fe` = `DATA02`,
+then `DATA01`/`DATA03`/`DATA04`/`DATA05`/`DATA06`) reaches `DATA00` for
+`grid_08`..`15` and falls through to `DATA02` for `grid_00`..`07`, since
+`DATA00` does not carry those eight at all. **So the campaign a normal read of
+this title reaches is genuinely mixed-schema**: the first eight grids flat,
+the last eight per-difficulty - a fact about this ordering, the same shape
+`hd-hud.md` and `oag_hd::names` already record for the language table and the
+front-end `Definition.xml`, not a measurement of what a PS3 loads.
+`DATA04.PSARC`'s and `DATA06.PSARC`'s own per-difficulty copies of
+`grid_00`..`07` are real and on the disc, just not reached by that precedence;
+`every_grid_file_on_every_archive_parses` opens all four directly to prove the
+schema on data the precedence never touches.
+
+`DATA00`'s own `Definition.xml` is the one `Archives` resolves to for that
+path (the fullest, per the same rule that picks its copy of the front-end
+plugin definition), and is the only one of the three copies (`DATA00`,
+`DATA02`, `DATA04`) naming all sixteen grids; `DATA02`'s and `DATA04`'s own
+copies list only the eight they carry.
+
+### The per-difficulty schema
+
+`grid_08`..`grid_15`, and the `DATA04`/`DATA06` copies of `grid_00`..`07`,
+replace each cell's single `<Gold>`/`<Silver>`/`<Bronze>` with three triples -
+`<EasyGold>`/`<EasySilver>`/`<EasyBronze>`, `<Medium...>`, `<Hard...>` - one
+set of medal targets per difficulty rather than one for all three. `Cell::gold`/
+`silver`/`bronze` keep meaning the `medium` rung when a cell authors this
+shape, so every existing caller of `evaluate_medal` (which takes one target
+triple) keeps working unchanged; `Cell::difficulty_targets` carries the full
+`DifficultyTargets { easy, medium, hard }` for a caller that wants the other
+two, and `Cell::targets_for_difficulty(u8)` mirrors
+`Cell::skill_for_difficulty`'s own difficulty-index convention for the target
+side of a cell.
+
+The same eight-generation cells also rename `skill` (Pulse's single
+AI-scaling value) to **`skillMedium`** - read as an alias in
+`Cell::skill`, tried first under `skill` and then `skillMedium`, never both on
+one cell in what this pass measured.
+
+**Every per-difficulty cell also carries a fourth, not-per-difficulty triple**:
+`<NitroElimNovice>`/`<NitroElimSkilled>`/`<NitroElimElite>`, present on every
+cell of a per-difficulty grid regardless of mode - a plain `Race` or `Speed
+Lap` cell included, authored at a dummy `1` there, same as the equally dummy
+`1`/`2`/`3` the per-difficulty `Gold`/`Silver`/`Bronze` rungs carry on those
+same cells. Only `Elimination` and the HD-only `NitroBattle` mode carry
+meaningful values (e.g. `200`/`200`/`200` on an `Elimination` cell measured, or
+`20`/`15`/`12` on a `NitroBattle` one). **Confidence 0 - chosen, not
+measured**: `Cell::nitro_elimination_targets` carries the raw
+`(novice, skilled, elite)` triple and nothing here decides whether `elite`
+is this triple's gold-equivalent, or which mode's own `evaluate_medal` call
+should read this triple instead of `gold`/`silver`/`bronze` - that is a
+decompiled-HD-executable question, out of this pass's scope; see the
+handover thread this measurement opened.
+
+### Two new mode spellings, kept raw
+
+`"NitroBattle"` and `"Detonator"` are on the Fury-only grids (`grid8`
+onwards) and have no entry in the Pulse `g_mode_name_table` reading this
+crate's `Mode` enum is built from. Per this crate's own "a parser cannot fail
+on a field it does not understand" rule - the same one `Cell::class`'s raw
+`"Zone"` already follows - an unrecognised `mode=` is now `Mode::Other(name)`
+rather than a hard parse error (`Error::UnknownMode`, kept in the `Error` enum
+for API stability but no longer produced by this crate's own parser). No
+shipped Pulse cell has ever authored an unrecognised mode, so this is a
+change to behaviour on data nothing here has ever observed, not a change to
+what a real Pulse cell reads as.
+
+### New grid-level attributes, five of them, all front-end concerns
+
+`Campaign="HD"|"Fury"`, `TitleColor`/`TextColor` (raw hex text, not parsed to
+a colour - this title's channel order is not measured), `FlyerName` (the
+cell-selection screen's own flyer image stem) and `BillboardName` (this
+grid's advert `.vex`) are new `<Values>` attributes on `PI_Grid`, all read raw
+into new optional `Grid` fields. None of the four analysed types
+(`bool`/`u32`/`f32`/`i64`) apply to any of them, so nothing here parses them
+further than a `String`.
+
+### `grid_04.xml`'s own `<Values>` tag is broken on the disc
+
+In **all three** of its copies (`DATA02`, `DATA04`, `DATA06`, byte-identical
+at the break): `...vex"</Values>` where every other grid in the corpus reads
+`...vex"></Values>` - the opening `<Values>` tag is missing its closing `>`
+before `BillboardName`'s attribute value ends. Read structurally that
+swallows the text meant to close `<Values>` into the start tag's own
+attribute soup, so the five `<PI_Cell>` elements that follow become
+descendants of the still-open `<Values>` node rather than of `<PI_Grid>`, and
+`race_campaign::parse` correctly reads **zero cells** for a grid that authors
+five. `the_precedence_resolved_campaign_is_sixteen_grids_mixed_schema` asserts
+this directly, so a change to `oag_tables::fexml`'s tag scanner that started
+tolerating the break would have to notice the assertion rather than silently
+disagree with it.
+
+**This is not a bug in this crate's parser.** The file is broken on the disc,
+identically in three independent archive copies, and there is no way to
+recover the intended cell boundaries without guessing which of the five
+`<PI_Cell>` elements the original author meant to close `<Values>` before.
+Whether Wipeout HD's own XML reader tolerates the same malformed tag - and so
+whether the real game shows a five-cell `grid4` or an empty one - is a
+decompiled-HD-executable question, out of this pass's scope.
+
+### What this section does not resolve
+
+- **Which target set a mode's own `evaluate_medal` reads** when a cell
+  carries both the per-difficulty `Gold`/`Silver`/`Bronze` and
+  `NitroElimNovice`/`Skilled`/`Elite` - see above.
+- **Whether HD's own front end reads `grid4`'s five cells at all**, given the
+  broken `<Values>` tag - see above.
+- **US and Fury-disc-only pressings were not checked.** Only the EU Fury
+  pressing (`hdfury-ps3-eu-dec.iso`) was measured; a base-HD-only disc (no
+  Fury update) was not available to this pass, so whether `DATA00`'s
+  Fury-only grids are present on one is unknown.
+
 ## Two open questions this pass did not resolve
 
 - **`Status`/`Locked` on a cell, `Locked`/`Group` on a grid** are parsed (all
   four fields exist on the types) but no consumer of any of them was traced by
   the Ghidra pass, so nothing here interprets them either - see the parent
   page's "What is not determined" section.
-- **Only the USA PSP pressing is validated.** EU, PS2, Pure and HD/Fury were
-  not checked for `Data\Plugins\grids` at all.
+- **Only the USA PSP pressing and the EU PS3 Fury pressing are validated.**
+  EU PSP, PS2 and Pure were not checked for `Data\Plugins\grids` at all.
