@@ -73,19 +73,31 @@ every mode this function handles (`Race`/`Time Trial`/`Head2Head`/`Speed
 Lap`). So the "pennant" in the capture's own description is most likely the
 `perfectlap{n}` icon (`x=352`, sitting immediately to the right of column 2's
 `x=320`, not inside it) read as part of the same visual row, not column 2's
-own digits. **What column 2's stored 16-bit value actually counts is not
-determined this pass** - candidates considered and not confirmed: a
-finishing-position-per-lap (ruled out, the observed 6/9/10 exceed the 8-craft
-field and this cell has no opposing craft in Time Trial), a per-lap score, or
-a boost/pickup count carried in a field distinct from the (unconditionally
-hidden) `boostimg` icon. Confidence 40 on any specific reading; 78 on the
-structural facts above (the field exists, is a per-lap 16-bit int, and is not
-what draws the header icon this pass could find). The totals row's own
-aggregate (`+0x1148` of the shared struct, not summed client-side) reproduces
-the capture's `25` from `6+9+10` - an internally consistent whole, whatever
-the unit is. A PPSSPP breakpoint on `EndRaceResults_PopulateLapTable`
-(`0x088da8c8`), read back on a race with a nonzero boost count, would settle
-this directly.
+own digits. **What column 2's stored 16-bit value actually counts is still
+not determined**, but a second live data point narrows the candidates
+(traced 2026-09-14, [`endrace-screens.md`'s own ghidra
+page](../ghidra/functions/psp-pulse-usa/endrace-screens.md#open)): a second
+`grid0_3_2` race (`Weapons="off"`, same as the first) read `6`/`10`/`8`
+(sum `24`) against the first capture's `6`/`9`/`10` (sum `25`) - **a
+weapon/pickup count is ruled out for both captures specifically**, since
+neither race could carry a weapon at all with `Weapons="off"` authored on
+the cell. Lap 1 reads `6` in both independently-driven races (both starting
+from the same grid position), while laps 2-3 differ by one or two - a
+speedup/boost pad count (present regardless of the `Weapons=` setting, and
+plausible to cross a slightly different number of depending on the exact
+line driven) is the strongest remaining candidate, not confirmed. The raw
+source field during the race itself was traced to `session + 0x900 +
+lap*0x10 + 0x94` (the ghidra page's own copy-site read), but its writer -
+whatever increments it mid-race - was not located either pass. Confidence
+40 on any specific reading; 80 on the structural facts (the field exists,
+is a per-lap 16-bit int, is not what draws the header icon, and is not a
+weapon/pickup count on either of the two `Weapons="off"` captures this
+project has). The totals row's own aggregate (`+0x1148` of the shared
+struct, not summed client-side) reproduces both captures' own totals from
+their own three lap values exactly - an internally consistent whole on both
+runs, whatever the unit is. A live breakpoint on writes to
+`session+0x900+lap*0x10+0x94` itself, not another correlation pass, is the
+direct next step.
 
 ### Two Redirects, one screen - which one fires is mode-driven too
 
@@ -152,17 +164,17 @@ capture this pass has is itself a no-medal run, so it cannot distinguish the
 two. Confidence 55 on "no-medal-only" specifically; 80 on the trophy-select
 mechanism, which does not depend on resolving this.
 
-### The loyalty award: `90 Points` is a read of a precomputed field, and the arithmetic behind it is a one-observation hypothesis, not a decompile
+### The loyalty award: `90 Points` is a decompiled law, confirmed on two independent live races
 
 **`EndRaceRewards_Update` (`0x088dd2b8`) is where `RewardLoyaltyActive` and
-`loyaltynum` actually get their text, not `OnEnter`.** Confidence 80,
-decompiled in full, not runtime-verified. Once the ticker's cycle index
-reaches its own reason-string count (i.e. on the ticker's very first
+`loyaltynum` actually get their text, not `OnEnter`.** Confidence 85,
+decompiled in full and runtime-confirmed (below). Once the ticker's cycle
+index reaches its own reason-string count (i.e. on the ticker's very first
 "beat", before any reason string has had a turn):
 
 - `RewardLoyaltyActive` <- `"%d %s"` of `*(g_endrace_result + 8)` and
-  `ER_POINTS` - **this is `"90 Points"`, read directly off a field this pass
-  did not find the writer of.**
+  `ER_POINTS` - **this is `"90 Points"`, read off a field now traced to its
+  writer, `Race_ComputeLoyaltyAward` - see below.**
 - A **persistent, per-team** record is looked up by `FUN_08808664(DAT_08b31774,
   <team-name-hash>, 0, 0)` - the identical generic keyed-record accessor
   [`race-box-screens.md`](../ghidra/functions/psp-pulse-usa/race-box-screens.md)
@@ -209,17 +221,26 @@ executable). It is nonetheless a strong, checkable hypothesis: **`30` (the
 Time-Trial-family per-lap rate) times `3` (this run's own lap count) is
 `90`, matching the one captured value exactly**, with every other bonus term
 (perfect lap, elimination, zone, the multiplier block) correctly absent for
-a plain, medal-less, non-suggested-ship Time Trial. Confidence **70** - one
-observation, and the "30" itself is inferred from a name rather than read
-off arithmetic, so this sits below the rubric's "one real file parses
-plausibly" ceiling of 84 rather than at it. **The function that actually
-computes `g_endrace_result + 8` and stores it there was not located this
-pass** - `get_xrefs_to` on the struct's own base global (`DAT_08b317b4`)
-returns over fifty call sites across the binary, both read and write, and
-narrowing that list to the one race-end summariser needs either a
-breakpoint (arm it on entry to `EndRace Results`, watch `+8` of
-`DAT_08b317b4 + 0x7d8`) or substantially more decompilation than this pass's
-scope covered. Left as the single highest-value next step on this page.
+a plain, medal-less, non-suggested-ship Time Trial - and, as of 2026-09-14,
+this is no longer an inference from a name. `Race_ComputeLoyaltyAward`
+(`0x0880ac50`, [ghidra page](../ghidra/functions/psp-pulse-usa/endrace-screens.md)),
+called from the race-end summariser `Race_BuildEndRaceResult` (`0x0882a498`)
+right after `Race_RecordResult`, is the writer of `g_endrace_result + 8` -
+found by tracing `Race_RecordResult`'s own caller statically, exactly the
+route the previous pass's own "find the writer" note pointed at. Its
+decompiled law **is** the suffix-numbers-as-rates reading: `laps*15 +
+perfectLaps*25` for the Race family, `laps*30 + perfectLaps*50` for
+Time Trial/Speed Lap, `laps*10 + perfectLaps*20` otherwise, plus a per-kill
+term and a Race-family-only difficulty multiplier (Easy x2/Medium x3/Hard
+x4, doubled again if a suggested ship was offered). Runtime-confirmed on
+two independently-driven `grid0_3_2` (Venom Time Trial) races at different
+paces, both landing on the identical `laps=3, perfectLaps=0` shape and both
+reproducing `award = 90` exactly - live-read off `g_endrace_result+8` on
+the second race (`90`), and shown on both screens (`Assegai Loyalty: 90
+Points`, `Total loyalty: 90`, up from `0` on this fresh profile's first
+race). Confidence **95** for the law; see the ghidra page for the full
+two-data-point table and the Race-family/Zone/Elimination branches this
+pass still could not runtime-verify (both captures are Time Trial).
 
 ## `EndRace Menu`: `RETURN TO GRID` / the ghost comparison
 
@@ -282,7 +303,9 @@ populate functions in full:
 ## What is not determined
 
 - **The per-lap third column on `EndRace Results`** (see above) - a real,
-  stored 16-bit field, meaning unresolved.
+  stored 16-bit field. Meaning still unresolved, but weapon/pickup counts
+  are now ruled out (both captures are `Weapons="off"`); a boost/speedup-pad
+  count is the leading unconfirmed candidate as of 2026-09-14.
 - **The `perfectlap{n}` flag's direction** - hidden when a stored per-lap
   byte is nonzero; whether "nonzero" means "this lap was perfect" or the
   reverse was not settled.
@@ -295,10 +318,9 @@ populate functions in full:
   `Race End Save` fires is decompiled at a structural level only; the exact
   bit arithmetic was read once, not independently re-derived or
   runtime-checked.
-- **The loyalty-award computation itself** - the field `EndRaceRewardsUpdate`
-  reads (`g_endrace_result + 8`) is real and decompiled; the function that
-  *writes* it was not located. The "30 points per Time-Trial-family lap"
-  reading is a one-observation hypothesis, not a decompile - see above.
+- ~~The loyalty-award computation itself~~ **Closed 2026-09-14** - the
+  writer is `Race_ComputeLoyaltyAward` (`0x0880ac50`), decompiled in full
+  and confirmed on two independent live races - see above.
 - **`Endrace Difficulty`'s own binding** was not traced - likely the generic
   `<List global=...>` mechanism `race-setup.md` already documents for
   `Single Player`'s own difficulty row, not re-verified here.
@@ -307,8 +329,8 @@ populate functions in full:
   `Kill Game Transition`) are read directly off the XML above (all plain
   `Dialog`/`MemoryStick` blocks, no widgets needing a code binding) and not
   decompiled further - nothing in their own XML shape needed it.
-- **Nothing here is runtime-verified beyond the one no-medal Time Trial
-  capture** `docs/ui/campaign-screens.md` already has. A medal-earning run
-  (any of gold/silver/bronze) would directly settle the `MedalImg`
-  no-medal-only question and put a second data point on the loyalty
-  hypothesis.
+- **Two no-medal Time Trial captures now exist** (both `grid0_3_2`), which
+  settled the loyalty law and ruled out weapon/pickup readings for the
+  pennant column, but **neither is a medal-earning run** - the `MedalImg`
+  no-medal-only question is still open, and the Race-family/Zone/Elimination
+  loyalty branches are still decompiled-only.

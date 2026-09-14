@@ -834,3 +834,7 @@
 0x088d8c00	function	EndRaceMenu_PopulateOptions	80	endrace-screens.md
 0x088d8648	function	EndRaceMenu_PopulateExistingGhost	78	endrace-screens.md
 0x088c8798	function	StateMachine_EvaluateRedirect	75	endrace-screens.md
+0x0880ac50	function	Race_ComputeLoyaltyAward	95	endrace-screens.md
+0x08807884	function	Loyalty_AccumulateTotal	90	endrace-screens.md
+0x0882a498	function	Race_BuildEndRaceResult	78	endrace-screens.md
+0x088c8e88	function	ConfirmButton_Update	85	endrace-screens.md

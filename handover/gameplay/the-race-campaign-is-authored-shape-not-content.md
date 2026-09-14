@@ -207,39 +207,53 @@ The law, all decompiled and all in `race-campaign.md`:
   The `"00/16"` and `"000/110"` XML strings are template widths, not data.
 
 - **`0x088c8a10` decompiled, 2026-09-14: a negative result, not the lock
-  check.** It sits inside `StateMachine_EvaluateRedirect` (`0x088c8798`,
-  confidence 75) - the generic, screen-agnostic `<Redirect><Entry item=
-  equals= goto=>...<Default goto=>` evaluator every screen's own confirm
-  handling goes through (eleven call sites, found while reading the EndRace
-  screens - see
+  check** - and now, as of a second 2026-09-14 pass, closed further still.
+  It sits inside `StateMachine_EvaluateRedirect` (`0x088c8798`, confidence
+  75) - the generic, screen-agnostic `<Redirect><Entry item= equals=
+  goto=>...<Default goto=>` evaluator every screen's own confirm handling
+  goes through (eleven call sites, found while reading the EndRace screens -
+  see
   [`docs/ghidra/functions/psp-pulse-usa/endrace-screens.md`](../../docs/ghidra/functions/psp-pulse-usa/endrace-screens.md)).
   It never reads `Locked`, a medal, or a `PI_Cell`/`PI_Grid`-shaped offset -
   only the redirect node's own `Entry` list, `Default` target and the
-  special-cased widget name `"Focus"`. So the swallow is not in this
-  function; it is upstream of it too, in whichever of its eleven callers
-  decides to invoke it at all. One caller, `0x088d7e1c`, sits close to
-  `CellSelection`'s own code and carries an unconfirmed per-node "enabled"
-  gate (`*(short*)(redirectNode + 0xbe)`) ahead of its own confirm-button
-  check - a plausible site for a per-tile lock gate, not shown to be one
-  (confidence 55, not renamed). `race-campaign.md`'s own "`0x088c8a10`
-  decompiled" subsection under "Unlock rules, cell and tier" has the full
-  read and the exact breakpoint that would settle `+0xbe`'s role.
+  special-cased widget name `"Focus"`. **`0x088d7e1c`, this section's own
+  earlier lead, is ruled out**: full decompile shows it is the held-confirm
+  variant used by `InGame Photo`, not `Cell Selection` - it never runs on
+  this screen. Breakpointing `StateMachine_EvaluateRedirect` directly (cursor
+  on `grid0_3_1` unlocked, then `grid0_2_1` locked - the same pair the
+  "Runtime-verified 2026-09-14 (deliverable 1)" pass used) found the real
+  caller: `$ra = 0x088c907c`, inside `ConfirmButton_Update` (`0x088c8e88`,
+  confidence 85) - fires on the unlocked cell, never fires on the locked
+  one. `ConfirmButton_Update` was then cleared too: it runs identically
+  every frame regardless of lock state, and its own accept-branch reaches
+  `StateMachine_EvaluateRedirect` unconditionally once "accept is pressed"
+  is true, with no `Locked`/medal read anywhere in it. **The gate is now
+  pinned to input consumption**: something makes `ConfirmButton_Update`'s
+  own `Input_IsPressed(g_input, 4, 0)` check read false on a locked-tile
+  frame despite `cross` being held for the full 6 s of the negative control
+  - not located this pass, but a single, narrow target rather than eleven
+  candidates or an unconfirmed flag. See `race-campaign.md`'s own
+  "`0x088d7e1c` ruled out..." subsection for the full transcript.
 - **A second, unrelated finding from the same EndRace pass closes the
-  `Unlock_LoyaltyMet` anomaly this thread flagged below.** `Unlock_LoyaltyMet`
-  reads a per-*team* record (`DAT_08b31774`, keyed by team name through the
-  same generic accessor `race-box-screens.md` names for `TeamSelection`'s
-  rating table), not a per-*cell* one - `EndRaceRewards_Update` independently
-  reads that same store's `+8` as a plain accumulated loyalty total for the
-  `EndRace Rewards` screen's own "Total loyalty" figure. Raised 72/78 -> 82/82.
-  The `EndRace Rewards` screen also answered, with a strong single-observation
-  hypothesis (not a decompile): a captured `90 Points` no-medal Time Trial
-  award is consistent with 30 points per lap x 3 laps, with every other
-  campaign-loyalty bonus term (perfect lap, elimination, zone, a
-  difficulty/suggested-ship multiplier) correctly absent for that race shape.
-  The function that actually *computes and writes* a race's own loyalty
-  award was not located - see `endrace-screens.md`'s own Open section for the
-  breakpoint that would find it directly (watch
-  `DAT_08b317b4 + 0x7d8 + 8` across a finish line).
+  `Unlock_LoyaltyMet` anomaly this thread flagged below - and, as of
+  2026-09-14, closes the loyalty-award computation itself too.**
+  `Unlock_LoyaltyMet` reads a per-*team* record (`DAT_08b31774`, keyed by
+  team name through the same generic accessor `race-box-screens.md` names
+  for `TeamSelection`'s rating table), not a per-*cell* one -
+  `EndRaceRewards_Update` independently reads that same store's `+8` as a
+  plain accumulated loyalty total for the `EndRace Rewards` screen's own
+  "Total loyalty" figure. Raised 72/78 -> 82/82. **The writer itself is now
+  found and decompiled**: `Race_ComputeLoyaltyAward` (`0x0880ac50`), called
+  from the race-end summariser `Race_BuildEndRaceResult` (`0x0882a498`).
+  Its law is exactly the "30 points per lap" reading, generalised: `laps*15
+  + perfectLaps*25` for the Race family, `laps*30 + perfectLaps*50` for
+  Time Trial/Speed Lap, `laps*10 + perfectLaps*20` otherwise, a per-kill
+  term, and a Race-family-only difficulty multiplier (doubled again for a
+  suggested-ship race). Confirmed on two independent live races (different
+  paces, same `laps=3, perfectLaps=0` shape), both reproducing `award = 90`
+  exactly - live-read off `g_endrace_result+8` and shown on-screen
+  (`Assegai Loyalty: 90 Points`, `Total loyalty: 90`, up from `0` on a fresh
+  profile). Confidence **95**.
 - **A new thread carries the drawing-lane implications of all three EndRace
   screens**: `handover/gameplay/pulses-endrace-screens-are-read-and-not-drawn.md`.
 
@@ -341,11 +355,13 @@ The law, all decompiled and all in `race-campaign.md`:
   refusal happens before `StateMachine_TransitionTo` is entered, on both
   screens. ~~**The new next step**: decompile `0x088c8a10`...~~ **Done,
   2026-09-14, and it is a negative result** - see the `Open` entry above.
-  **The next step now**: a PPSSPP breakpoint on `0x088d7e1c`'s entry (one of
-  `StateMachine_EvaluateRedirect`'s eleven callers, closest in address to
-  `CellSelection`), reading `*(short*)(param_2 + 0xbe)` on a locked cell
-  versus the same unlocked positive-control cell this thread's own
-  deliverable-1 pass already used - if the value differs, that is the gate.
+  ~~**The next step now**: a PPSSPP breakpoint on `0x088d7e1c`'s entry...~~
+  **Done, 2026-09-14 (second pass): `0x088d7e1c` ruled out, real dispatcher
+  found and cleared too** - see the `Open` entry above.
+  **The next step now**: whatever calls `Input_ConsumePress`/otherwise
+  suppresses button `4` on a locked-tile frame, upstream of
+  `ConfirmButton_Update`'s (`0x088c8e88`) own `Input_IsPressed` check - a
+  single input-consumption question, not a widget-tree search.
 - **Read the three EndRace screens.** ~~Not started~~ **Done, 2026-09-14** -
   see the new `Open` entries above and
   [`handover/gameplay/pulses-endrace-screens-are-read-and-not-drawn.md`](pulses-endrace-screens-are-read-and-not-drawn.md)
