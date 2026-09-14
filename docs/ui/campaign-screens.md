@@ -274,6 +274,103 @@ assumed. `Main Menu`'s row 1 (the default cursor) is `RACE CAMPAIGN`, matching
 comment - a single `cross` from a fresh `Main Menu` enters the campaign
 directly.
 
+### The `Selector` misalignment, measured off the assets directly
+
+**A user playing this build reported "the selected hexagon is misaligned" on
+`Cell Selection`; this section is that report turned into numbers.** The
+mechanism: `oag_ui::campaign`'s `hex_position` (`crates/ui/src/campaign.rs`)
+draws the `Selector` widget with its own top-left placed exactly at the
+selected `Medal_x_y` hex's own resolved top-left. That is only correct if
+`Selector` and `Medal_x_y`/`Outline_x_y` are the same size - they are not,
+and the XML says so directly.
+
+**The two source textures, read from the disc, header bytes and pixel
+content both** (`just wad cat ... 'Data\FE\Images\hex_filled.mip'` /
+`hex_outline.mip`, decoded by hand against `crates/texture/src/texture.rs`'s
+own documented header layout - 4bpp/8bpp indexed, GE-swizzled per `+0x07`
+bit 0, unswizzled with `oag_formats::swizzle::unswizzle`'s exact algorithm
+before palette lookup):
+
+| Asset | Native size | Non-transparent content bbox | Content size | Content centre (from its own top-left) |
+| --- | --- | --- | --- | --- |
+| `hex_filled.mip` | 32x32, 4bpp | `(0,2)`-`(32,30)` | 32x28 | `(16, 16)` - exact canvas centre |
+| `hex_outline.mip` | 32x32, 8bpp | `(0,2)`-`(32,30)` | 32x28 | `(16, 16)` - exact canvas centre |
+| `Selector` (crop of `pulse_assets.mip` at `U=114,V=75`, both screens author the identical `x="30" y="95" TxtrWidth="42" TxtrHeight="43"`) | 42x43, not swizzled | `(5,9)`-`(37,37)` | 32x28 - **the same shape and size as the hex art**, just embedded in a bigger canvas | `(21, 23)` |
+
+**The glow art is the same 32x28 hex, just padded into a larger canvas -
+the padding is the entire bug.** `Selector`'s own visible content-centre
+sits `(21-16, 23-16) = (+5, +7)` PSP-native pixels right and down from its
+own canvas's top-left-aligned position relative to a hex's, because both
+widgets are placed at the same screen point (`hex_position`'s return value)
+but `Selector` carries 10 extra pixels of width and 11 of height that this
+build's code does not account for. Confidence **92** - both numbers come
+directly from the shipped texture bytes via the project's own documented
+decode (swizzle flag, palette, indices), not a screenshot estimate, and the
+two hex sources (filled and outline) agree on the target's own geometry
+to the pixel.
+
+**Reproduced exactly in this build's own captures, both screens.** Crop
+`ours-cell-select-selector-misaligned.png` and
+`ours-grid-select-selector-misaligned.png` (in
+`data/reference/psp-campaign-screens/`, alongside
+`asset-hex_filled-32x32.png` / `asset-hex_outline-32x32.png` /
+`asset-selector-crop-42x43.png`, the three decoded textures above): the
+selected tile shows two visibly offset hexagons, a larger filled one at the
+authored top-left and a smaller outlined one shifted down-right of it -
+the `Selector` sitting exactly where the maths above predicts. Confidence
+95 - the direction and rough magnitude match the asset arithmetic on sight,
+on two independently-captured screens.
+
+**The original's own frames show no such artifact** - a single clean
+glowing hex, both on `Grid Selection` and `Cell Selection`
+(`cell-selection-grid0-default-cell.png`,
+`grid-selection-page1-grid0-unlocked.png`). Since the same oversized
+`Selector` sprite is what the original draws too (same `.mip`, same 42x43
+crop - this is one shared asset, not a per-build difference), the original
+must be compensating for the size delta somehow before drawing it -
+**most likely by centring `Selector` on the target hex rather than
+matching top-left corners**, which only needs an offset of `(-5, -7)`
+applied to what `hex_position` returns today to close the gap exactly.
+This is inferred from the asset geometry and the absence of the artifact,
+**not runtime-traced**: no PPSSPP breakpoint was taken on the native
+positioning code this pass (out of this pass's scope - the breakpoint
+budget went to the launch trace in `race-campaign.md`), so whether the
+original centres on the sprite's own canvas, on its content bbox, or does
+something else that happens to land in the same place is open. Confidence
+**60** on "centring by half the size delta" as the *mechanism*, separate
+from the 92/95 above on the *measurement*, which does not depend on this
+guess being right.
+
+**Grid Selection's own `Selector` node is authored twice**, at the same
+`(30, 95)` position/size both times - once inside the enabled `Grid`
+`GridController` (spelled `<aImage c="Selector">` in the dictionary-decoded
+XML, an odd tag name worth a second look some other pass) and once more as
+a `LeftLayer`-level sibling of both `GridController`s. `Cell Selection`
+authors only the second form. Since both instances carry identical
+numbers, this does not change the finding above, but it is the same
+duplicate-declaration shape `campaign-screens.md` already flagged for
+`Grid`/`Grid1`, now seen on a third widget.
+
+### Grid origin, pitch and stagger - corroborated, not re-measured
+
+The hex origins/pitch this page already documents (`Grid Selection`'s
+`(65,145)/(95,126)/(125,107)/(155,88)` diagonal, `Cell Selection`'s `(35,
+40)` `GridController` origin with 30px columns and a 19px stagger) come
+from the XML directly and are re-derivable from `crates/ui/src/campaign/
+tests.rs`'s own miniature fixture, which mirrors the real file's container
+nesting exactly - `Item`/`GridController` offsets accumulate the way
+`oag_ui::screen::Screens::collect_widgets` sums them: for `Medal_0_0`,
+`LeftLayer(0,0) + Item(35,50) + Item(30,19) + Image's own (0,76)` = `(65,
+145)`, matching the table exactly once the innermost `Image`'s own `x`/`y`
+(added by `image_from_node`, not a further `OffsetX`/`OffsetY`) are summed
+in too. A rough visual cross-check against both PPSSPP
+captures (hex centres eyeballed to the nearest few pixels, not
+edge-detected) is consistent with a ~30px column pitch on both screens;
+a pixel-exact re-measurement of the *original's* own render was not done
+this pass beyond that, since the XML numbers are already a direct read
+of the same file the original executes, not a separate guess this build
+could disagree with independently of the `Selector` bug above.
+
 ### The three headline differences from this build
 
 1. **`Grid Selection`'s `Title` reads `"GRID 1"`, `"GRID 5"`, `"GRID 9"` -
