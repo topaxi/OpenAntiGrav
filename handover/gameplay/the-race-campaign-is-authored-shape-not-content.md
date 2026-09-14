@@ -104,8 +104,30 @@ The law, all decompiled and all in `race-campaign.md`:
   not follow. Named `_q` at 72 on the field it reads, not the arithmetic.
 - **Only the USA pressing was read.** EU and PS2 Pulse, Pure and HD/Fury were
   not checked for `Data\Plugins\grids` at all.
-- **Nothing is runtime-verified.** No PPSSPP breakpoint was taken; every score
-  is capped in the 84-92 range.
+- **Runtime-verified 2026-09-14, four of the five priority breakpoints.**
+  `docs/ghidra/functions/psp-pulse-usa/race-campaign.md`'s "Runtime-verified
+  2026-09-14" subsection has the full transcript;
+  `/tmp/oag-drive/campaign-ppsspp-measure.md` is the session's own scratch
+  file. Headline: `CellSelection_CommitSelection` (`0x088d6138`, confidence
+  80 -> **93**) fires on a real confirm and writes the documented nine
+  `Globals_Set` (`0x08888ee0`, confidence 85 -> **92**) keys in the
+  documented order, with resolved values matching the confirmed cell's own
+  authored XML digit for digit (`Track="16_Track"`, `Opponents="0"`,
+  `Damage="Off"`, ...); `DAT_08b30ffc` was read directly at four points from
+  confirm through a live race and never changed; `CellSelection_PopulateGrid`
+  (`0x088d5de4`, confidence 78 -> **82**) fires once per screen entry with
+  two int arguments, not once per cell, and a fresh capture shows the lock
+  glyph on exactly the `grid0` cells with **no** `Locked` attribute at all in
+  `grid_00.xml` - suggesting an absent `Locked` defaults to `true`
+  (confidence 72, new this pass). The fifth breakpoint (a Tournament cell)
+  was blocked: every grid but `grid0` reads `Locked="true"` on the profile
+  used, and confirming a locked `Grid Selection` tile does nothing, so no
+  Tournament cell was reachable without earning points first. A tooling trap
+  worth carrying forward: sending a button press whose own code path hits an
+  armed execution breakpoint leaves that `input.buttons.press` call
+  unacknowledged (client-side timeout) even though the press was delivered
+  and the breakpoint fired correctly - catch the timeout and check
+  `wait_for_break` anyway rather than treating it as a failure.
 - **How a campaign event launches - traced 2026-09-14, not runtime-verified.**
   `CellSelection_CommitSelection` (`0x088d6138`, confidence 80 - it is word
   39 of the `CellSelection` vtable, positionally confirmed the same way
