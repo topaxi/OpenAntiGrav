@@ -132,19 +132,34 @@ The law, all decompiled and all in `race-campaign.md`:
   by `get_function_callers` - no input-handling code reaches either. The real
   cursor-movement code was not located; a reimplementation is still on its
   own chosen nearest-neighbour search.
-- **The `Tournament` arm of `Race_RecordResult` does a second record lookup**
-  that no other arm does, keyed on `Libc_HashString(DAT_08b31158 + 0x74)`
-  (named 2026-09-14; formerly `FUN_08945890`) rather than on the cell - the
-  tournament's own standings, the state behind `ER_TOUR_STAN` /
-  `ER_RACE_POINTS` / `ER_END_TOUR_1..8`. `DAT_08b31158` itself was still not
-  identified, but its **seeding** now is: confirming a Tournament-mode cell
-  (`CellSelection_CommitSelection`, `0x088d6138`) resets `DAT_08b31158+0xa0` to
-  0, sets `+0xdc` to 1, resets the leg counter `DAT_08b30fa4` to 0, and
-  appends one entry per `TournamentTrack` row via `FUN_088c3990` - see
-  `race-campaign.md`'s new launch section. The per-leg accumulation itself
-  (what `Race_RecordResult` does to `DAT_08b31158` after each leg) is still
-  not traced. Tournament has 27 authored cells and is the only mode with
-  per-leg state, so this is where a Tournament implementation starts.
+- ~~The `Tournament` arm of `Race_RecordResult` does a second record
+  lookup... `DAT_08b31158` itself was still not identified... The per-leg
+  accumulation itself... is still not traced.~~ **Closed, 2026-09-14, a
+  separate pass**: [`docs/ghidra/functions/psp-pulse-usa/tournament.md`](../../docs/ghidra/functions/psp-pulse-usa/tournament.md)
+  has the full law. Headline: a leg's points are a **fixed table by finishing
+  position** (`g_tournament_points_by_position`, `0x08ab0ba0`: 8/6/5/4/3/2/1/0
+  for 1st..8th, zero for a destroyed or DNF craft) - not the campaign's own
+  3/2/1 medal points and not arithmetic on position. `DAT_08b31158+0xa0` is
+  the **leg count**, correcting this thread's own "reset standings" framing
+  of it - the standings live in the profile-keyed record, unchanged.
+  `Race_BuildEndRaceResult`'s previously-untraced Tournament block
+  accumulates each craft's per-leg points into a persistent per-craft total
+  and sorts descending; **that sorted rank, not the last leg's own
+  finishing position and not the raw point total, is what
+  `Cell_EvaluateMedal` compares** for a Tournament cell's medal. A tie in
+  total points is broken by grid-slot order (no swap on an exact tie), not
+  a secondary criterion. `Tournament_AdvanceLeg` (`0x0882e0e0`) is what
+  moves a tournament between legs, gated by `EndRace Menu`'s own
+  `ER_NEXT_RACE` row. Confirmed that a Custom Race `Tournament C`
+  (`TournamentSelection`) writes the identical `DAT_08b31158` and calls the
+  identical leg-append functions the campaign's own `Cell Selection` does,
+  so a Custom Race tournament is a faithful test of the campaign's law.
+  Still open: `DAT_08b30fa0`'s own write site, `DAT_08b31158+0xdc`'s exact
+  meaning, and Head2Head entirely - see `tournament.md`'s own "What is not
+  determined". `docs/gameplay/race-modes.md`'s new Tournament section
+  carries the implementation-facing summary, and
+  `handover/gameplay/tournament-scoring-is-read-and-the-mode-is-next.md`
+  is the implementation brief.
 - **`Unlock_LoyaltyMet` (`0x0888ea30`) compares against a whole 32-bit word** at
   the record's `+8`, which for a cell is `difficulty | medal << 8`. Either the
   team record's payload differs or the arithmetic does something this pass did
