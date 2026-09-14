@@ -384,6 +384,11 @@ identified and the per-leg accumulation was not traced. Tournament is the mode
 with 27 authored cells and the only one carrying per-leg state, so this is the
 concrete starting point for it.
 
+**Closed, 2026-09-14, a separate pass**: [`tournament.md`](tournament.md) has
+`DAT_08b31158` fully fielded, the per-leg points table, and what value the
+medal above actually compares for a Tournament cell (the final standings
+rank by total points, not the last leg's own position).
+
 ## The mode and class enumerations, read off their own tables
 
 `PI_Cell_ParseElement` resolves `mode=` against a null-terminated
