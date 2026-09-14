@@ -98,16 +98,39 @@ const NAMED_SURFACE_MAP: &[u32] = &[
 /// | `0xc78c9866` | `detonator_ship_dg_iridescent` | 4 |
 const SHIP_SURFACE_MAP_SAMPLERS: &[u32] = &[0x436d_3929, 0xc8f1_8561, 0x0617_f872, 0xc78c_9866];
 
-/// The same shape on circuit scenery: per-family sampler hashes measured
-/// disc-wide (every `.rcsmodel` in all seven archives, 643 models) to bind
-/// **only** a normal map, with zero exceptions.
+/// The same shape on circuit scenery, keyed by **material family and
+/// sampler hash together**, because on a circuit the hash alone is not
+/// enough: `Texture2` (`0xa2d555b9`) binds a normal map under
+/// `diffuse_normal_specular` and a picture under other families, and a hash
+/// that is sometimes a picture cannot be refused by hash. Each pair below was
+/// measured across every `.rcsmodel` in all seven archives (643 models) and
+/// **every** path it binds decoded and checked: 136 paths, 119 with the
+/// canonical tangent-space signature (RGB mean near `(128, 128, 250)`) and 17
+/// DXT5 two-channel packings reading as flat `(128, 128, 128)` - all named
+/// `*_n`, `*_ne` or `*normal*`, none a picture.
 ///
-/// | Hash | Family | Paths | Every one |
-/// | --- | --- | ---: | --- |
-/// | `0x0cddca48` | `tech_de_ra_rocks` | 1 | `rocks_01_normal_alpha.gtf` - 512x512, mean RGB (127, 126, 246): a tangent-space normal with a dark specular mask in alpha |
+/// | Family | Hash | Paths |
+/// | --- | --- | ---: |
+/// | `tech_de_ra_rocks` | `0x0cddca48` | 1 - `rocks_01_normal_alpha.gtf`, the only path the hash binds at all |
+/// | `diffuse_normal_specular` | `0xa2d555b9` | 37 |
+/// | `diffuse_normal_specular_emmissive` | `0xa2d555b9` | 47 |
+/// | `weapon_pads` | `0xa2d555b9` | 21 - the pads' `_ne` files, whose RGB `docs/rendering/pads.md` already measured as a normal map |
+/// | `glass_reflect_opacity_normal` | `0xa2d555b9` | 6 |
+/// | `and_glass_normscale` | `0xa2d555b9` | 2 |
+/// | `glass_texture_n` | `0xa2d555b9` | 2 - the ship glass, `hd-ship-materials.md`'s own open case |
+/// | `pb_diffalphaspecnormal` | `0x3bdc0403` | 4 |
+/// | `tracktexture_with_normal` | `0x48f37f5a` | 4 |
+/// | `reflectplane_dc_seawater` | `0x11cb4f74` | 4 |
+/// | `glassalpha` | `0xfc52b822` | 3 |
+/// | `glassalpha_customr` | `0xfc52b822` | 1 |
+/// | `dc_windows_a` | `0xfc52b822` | 1 |
+/// | `mt_windows_a` | `0xfc52b822` | 1 |
+/// | `mt_windows_c_opaque` | `0xfc52b822` | 1 |
+/// | `mt_tunnelrefraction` | `0x41d572a2` | 1 |
+/// | `cf_icetunnel` | `0xfe9bd1f3` | 1 |
 ///
-/// **How this one was found**: Tech De Ra's mountains drew cyan/purple. Of
-/// the circuit's 22 `tech_de_ra_rocks` slots, slot 343 (58 chunks, the
+/// **How the first row was found**: Tech De Ra's mountains drew cyan/purple.
+/// Of the circuit's 22 `tech_de_ra_rocks` slots, slot 343 (58 chunks, the
 /// mountain range itself) is the only one whose `lightmap` entry carries no
 /// path, so `Pick::aux` fell through to entry 1 - this normal map - and the
 /// accumulate added it, untinted, to `rocks_01_sand.gtf`. Every other rock
@@ -116,15 +139,34 @@ const SHIP_SURFACE_MAP_SAMPLERS: &[u32] = &[0x436d_3929, 0xc8f1_8561, 0x0617_f87
 /// `Normal_Spec` on this hash (and `Dirt` - already a recovered preimage -
 /// and `Rock` on the material's other two samplers; three hits for three
 /// targets where chance predicts 0.0007), which agrees with the file's own
-/// name; the refusal rests on the bind census, not on that reading.
+/// name; the refusal rests on the bind census, not on that reading. The
+/// other rows are the same census run over every accumulating slot on the
+/// disc whose added texture decodes to a normal map.
 ///
-/// **Measured and deliberately not added**, because each binds a picture
-/// somewhere on the disc and a hash that is sometimes a picture cannot be
-/// refused by hash alone: `0xfc52b822` (window normal maps on seven paths,
-/// but `dc_waterdiffuse.gtf` on the eighth), `0x41d572a2` (`mt_tunnelhex_n`
-/// and `cl_tunnelhex_specv3`), `0x3bdc0403` (1,438 paths, adverts included),
-/// `0x11cb4f74` (319 paths) and `0xa2d555b9` (`Texture2`, 178 paths).
-const CIRCUIT_SURFACE_MAP_SAMPLERS: &[u32] = &[0x0cdd_ca48];
+/// What refusing does *not* do is draw the normal map in its own role: that
+/// still wants the tangent frame `mesh.wgsl` has no input for, and the pads'
+/// own `_ne`-alpha-gated term is a separate open question on
+/// `docs/rendering/pads.md`. Nothing added is an honest absence; a normal
+/// map added as a glow was not.
+const CIRCUIT_SURFACE_MAP_SAMPLERS: &[(&str, u32)] = &[
+    ("tech_de_ra_rocks", 0x0cdd_ca48),
+    ("diffuse_normal_specular", 0xa2d5_55b9),
+    ("diffuse_normal_specular_emmissive", 0xa2d5_55b9),
+    ("weapon_pads", 0xa2d5_55b9),
+    ("glass_reflect_opacity_normal", 0xa2d5_55b9),
+    ("and_glass_normscale", 0xa2d5_55b9),
+    ("glass_texture_n", 0xa2d5_55b9),
+    ("pb_diffalphaspecnormal", 0x3bdc_0403),
+    ("tracktexture_with_normal", 0x48f3_7f5a),
+    ("reflectplane_dc_seawater", 0x11cb_4f74),
+    ("glassalpha", 0xfc52_b822),
+    ("glassalpha_customr", 0xfc52_b822),
+    ("dc_windows_a", 0xfc52_b822),
+    ("mt_windows_a", 0xfc52_b822),
+    ("mt_windows_c_opaque", 0xfc52_b822),
+    ("mt_tunnelrefraction", 0x41d5_72a2),
+    ("cf_icetunnel", 0xfe9b_d1f3),
+];
 
 /// Named, disc-wide "Light" preimages minus `lightmap`/`shadowMapTex`, which
 /// [`emissive`] already refuses on a separate, earlier check.
@@ -137,10 +179,21 @@ const NAMED_GLOW: &[u32] = &[
     0x6e46_5921, // EnvMap1
 ];
 
-fn sampler_role(hash: u32) -> Option<SamplerRole> {
+/// The material's leaf file name without its extension - the key the
+/// per-family tables are written in.
+fn family(material: &rcsmodel::Material) -> &str {
+    material
+        .name
+        .rsplit('/')
+        .next()
+        .unwrap_or(&material.name)
+        .trim_end_matches(".rcsmaterial")
+}
+
+fn sampler_role(material: &rcsmodel::Material, hash: u32) -> Option<SamplerRole> {
     if NAMED_SURFACE_MAP.contains(&hash)
         || SHIP_SURFACE_MAP_SAMPLERS.contains(&hash)
-        || CIRCUIT_SURFACE_MAP_SAMPLERS.contains(&hash)
+        || CIRCUIT_SURFACE_MAP_SAMPLERS.contains(&(family(material), hash))
     {
         Some(SamplerRole::SurfaceMap)
     } else if NAMED_GLOW.contains(&hash) {
@@ -223,7 +276,7 @@ pub(super) fn emissive(
             .and_then(|pick| pick.aux)
             .and_then(|aux| material.samplers.get(aux))
             .map(|&(hash, _)| hash);
-        match aux_hash.map(sampler_role) {
+        match aux_hash.map(|hash| sampler_role(material, hash)) {
             Some(Some(SamplerRole::SurfaceMap)) => {
                 report.emissive_surface_map_excluded += 1;
                 continue;

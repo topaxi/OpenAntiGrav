@@ -45,6 +45,17 @@ twenty-second and twenty-third passes. In short:
   same fifteen slots by a later branch of the same loader, so the parameter
   named for Zone carries Detonator's art when Detonator loaded last.
 
+**2026-09-14, a rendering note for whoever picks this up**: until this
+day the Zone floor drew *lavender* - not any Zone art, but
+`tracktexture_with_normal`'s own `tracknormal.gtf` added as a glow by
+`mesh::rcs::emissive` (the Zone tracks ship no lightmaps, so `Pick::aux`
+lands on the normal map). That accumulate is refused now (`emissive.rs`,
+`CIRCUIT_SURFACE_MAP_SAMPLERS`), and the floor draws its real diffuse -
+`tracktexture.gtf`, a 1x1 black texel. **Black is the honest state**: the
+whole Zone look is this thread's unread shader, and nothing else in the
+material record paints it. Same for the pads' `weapon_pads` `_ne` map on the
+four Zone tracks.
+
 ## What is *not* established, and why that bounds the work
 
 **The Zone shader itself has never been read.** We know which texture arrives

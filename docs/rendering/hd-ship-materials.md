@@ -266,15 +266,35 @@ samplers, three hits for three targets where chance predicts 0.0007; a
 reading that agrees with the file, not the evidence the refusal rests on),
 so it joins the role table as `emissive.rs`'s `CIRCUIT_SURFACE_MAP_SAMPLERS`.
 Verified at the reported pose (`--pose 410.5,-47.2,-291.4`): the range now
-draws the same brown rock as the lightmapped slots beside it, and the load
-report's unresolved count on the circuit moves 48 -> 47. Pinned by
-`tech_de_ras_mountains_no_longer_glow_their_own_normal_map`. **Five more
-circuit hashes add a normal map somewhere and were measured, not added**,
-each because it also binds a picture: `0xfc52b822` (seven window normal maps
-and `dc_waterdiffuse.gtf`), `0x41d572a2` (`mt_tunnelhex_n` and
-`cl_tunnelhex_specv3`), `0x3bdc0403` (1,438 paths, adverts included),
-`0x11cb4f74` (319) and `0xa2d555b9` (`Texture2`, 178) - the same rule that
-kept `SpecularTexture` and `SpecMap` out of the table above.
+draws the same brown rock as the lightmapped slots beside it. Pinned by
+`tech_de_ras_mountains_no_longer_glow_their_own_normal_map`.
+
+**Then the same census over every accumulating slot on the disc, by pixels
+rather than by name, same day.** Decoding all 254 distinct second textures
+the 932 `ADD_SECOND` slots load and classifying each by its channel means
+found **29 normal maps** still being added as glows, on **16 (family, hash)
+pairs** across five hashes. None of those hashes can be refused alone -
+`Texture2` (`0xa2d555b9`) binds a normal map under `diffuse_normal_specular`
+and a picture elsewhere, `0x3bdc0403` binds 1,438 paths including adverts -
+but keyed on the material family *and* the hash every pair is unambiguous:
+136 paths bound disc-wide across the 16 pairs, 119 with the canonical
+tangent-space signature and 17 DXT5 two-channel packings reading as flat
+`(128, 128, 128)`, all named `*_n`/`*_ne`/`*normal*`, no picture among them.
+`emissive.rs`'s `CIRCUIT_SURFACE_MAP_SAMPLERS` is therefore a `(family,
+hash)` table with the full row list. What that changes on screen, measured
+before/after at fixed ticks: **Zone 1-4's whole floor** (`tracktexture_with_normal`,
+whose diffuse is a 1x1 black texel - the Zone look is the unread Zone
+shader's, `hd-zone-stage-textures-are-grounded.md`) goes from lavender to
+black, an honest absence in place of an accident; Zone's pads
+(`weapon_pads`, the `_ne` normal map pads.md already measured) lose the same
+lavender - on every other circuit the pads carry a lightmap and were never
+accumulating, so pads.md's "none of that reaches the frame" still stands;
+Sol 2's `diffuse_normal_specular` wall pieces lose a lilac tint; Moa
+Therma's chevron overpass underside (`pb_diffalphaspecnormal`) goes from
+pink-tinged to its yellow; the ship cockpit glass (`glass_texture_n`, the
+open case above) no longer adds its normal map either. Every other circuit's
+fixed-tick frames moved under 2 %. Pinned by
+`zone_1s_floor_and_pads_no_longer_glow_their_normal_maps`.
 
 **Guarded, not just measured**: `hd_hull_glow_role_ground_truth.rs` pins
 `feisar_c1`'s `diffuse_with_specular_from_alpha_n_vcol` losing `ADD_SECOND`

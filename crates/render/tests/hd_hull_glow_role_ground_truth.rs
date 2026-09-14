@@ -222,3 +222,37 @@ fn tech_de_ras_mountains_no_longer_glow_their_own_normal_map() {
         "lambert_spec_mult_emissive_scroll should still glow on Tech De Ra: {families:?}"
     );
 }
+
+#[test]
+#[ignore = "needs a decrypted PS3 disc image in data/images"]
+fn zone_1s_floor_and_pads_no_longer_glow_their_normal_maps() {
+    let Some(image) = image() else { return };
+    let Some((model, geometry_model, report)) = build_circuit(
+        &image,
+        "DATA00.PSARC",
+        "/data/environments/zone_1/track.vex",
+    ) else {
+        panic!("Zone 1 should build");
+    };
+    let families = add_second_families(&model, &geometry_model);
+    println!("Zone 1 ADD_SECOND families: {families:?}");
+
+    // The Zone tracks ship no lightmaps, so every `Pick::aux` there is the
+    // material's own entry 1 - `tracknormal.gtf` under the floor's
+    // `tracktexture_with_normal` (a 1x1 black diffuse, the Zone look being
+    // the unread Zone shader's) and the pads' `_ne` normal map under
+    // `weapon_pads`. Both were drawn as a lavender glow; both hashes bind a
+    // picture under *other* families, which is why the table is keyed on
+    // (family, hash) rather than hash alone.
+    for family in ["tracktexture_with_normal", "weapon_pads"] {
+        assert!(
+            !families.contains(family),
+            "{family} still glows its own normal map on Zone 1: {families:?}"
+        );
+    }
+    assert!(
+        report.emissive_surface_map_excluded >= 2,
+        "Zone 1 should refuse the floor's and the pads' accumulates, got {}",
+        report.emissive_surface_map_excluded
+    );
+}

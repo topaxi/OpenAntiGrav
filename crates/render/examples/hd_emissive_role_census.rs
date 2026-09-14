@@ -96,9 +96,28 @@ const NAMED_SURFACE_MAP: &[u32] = &[
 /// | `0xc78c9866` | `detonator_ship_dg_iridescent` | 4 | `detonator_n.gtf`, or a weapon's own `*_n_*.gtf` |
 const SHIP_SURFACE_MAP_SAMPLERS: &[u32] = &[0x436d_3929, 0xc8f1_8561, 0x0617_f872, 0xc78c_9866];
 
-/// The same bar on circuit scenery - mirrors `emissive.rs`'s
-/// `CIRCUIT_SURFACE_MAP_SAMPLERS`, which carries the measured row.
-const CIRCUIT_SURFACE_MAP_SAMPLERS: &[u32] = &[0x0cdd_ca48];
+/// The same bar on circuit scenery, keyed by (family, hash) - mirrors
+/// `emissive.rs`'s `CIRCUIT_SURFACE_MAP_SAMPLERS`, which carries the
+/// measured rows.
+const CIRCUIT_SURFACE_MAP_SAMPLERS: &[(&str, u32)] = &[
+    ("tech_de_ra_rocks", 0x0cdd_ca48),
+    ("diffuse_normal_specular", 0xa2d5_55b9),
+    ("diffuse_normal_specular_emmissive", 0xa2d5_55b9),
+    ("weapon_pads", 0xa2d5_55b9),
+    ("glass_reflect_opacity_normal", 0xa2d5_55b9),
+    ("and_glass_normscale", 0xa2d5_55b9),
+    ("glass_texture_n", 0xa2d5_55b9),
+    ("pb_diffalphaspecnormal", 0x3bdc_0403),
+    ("tracktexture_with_normal", 0x48f3_7f5a),
+    ("reflectplane_dc_seawater", 0x11cb_4f74),
+    ("glassalpha", 0xfc52_b822),
+    ("glassalpha_customr", 0xfc52_b822),
+    ("dc_windows_a", 0xfc52_b822),
+    ("mt_windows_a", 0xfc52_b822),
+    ("mt_windows_c_opaque", 0xfc52_b822),
+    ("mt_tunnelrefraction", 0x41d5_72a2),
+    ("cf_icetunnel", 0xfe9b_d1f3),
+];
 
 /// Named, disc-wide "Light" preimages minus `lightmap`/`shadowMapTex`.
 const NAMED_GLOW: &[u32] = &[
@@ -110,10 +129,10 @@ const NAMED_GLOW: &[u32] = &[
     0x6e46_5921, // EnvMap1
 ];
 
-fn sampler_role(hash: u32) -> Option<Role> {
+fn sampler_role(family: &str, hash: u32) -> Option<Role> {
     if NAMED_SURFACE_MAP.contains(&hash)
         || SHIP_SURFACE_MAP_SAMPLERS.contains(&hash)
-        || CIRCUIT_SURFACE_MAP_SAMPLERS.contains(&hash)
+        || CIRCUIT_SURFACE_MAP_SAMPLERS.contains(&(family, hash))
     {
         Some(Role::SurfaceMap)
     } else if NAMED_GLOW.contains(&hash) {
@@ -235,21 +254,21 @@ fn main() -> anyhow::Result<()> {
                 .unwrap_or(&material.name)
                 .trim_end_matches(".rcsmaterial");
             bucket.record(family);
-            match hash.and_then(sampler_role) {
+            match hash.and_then(|h| sampler_role(family, h)) {
                 Some(Role::SurfaceMap) => bucket.surface_map += 1,
                 Some(Role::Glow) => bucket.glow += 1,
                 None => bucket.unresolved += 1,
             }
             if std::env::var("OAG_VERBOSE").is_ok()
                 || bucket.total <= 5
-                || hash.and_then(sampler_role) == Some(Role::SurfaceMap)
+                || hash.and_then(|h| sampler_role(family, h)) == Some(Role::SurfaceMap)
             {
                 println!(
                     "  {} [{slot}] second={} hash={} ({})",
                     material.name,
                     second.label,
                     hash.map_or("none".to_string(), |h| format!("{h:#010x}")),
-                    hash.and_then(sampler_role)
+                    hash.and_then(|h| sampler_role(family, h))
                         .map_or("unresolved".to_string(), |r| format!("{r:?}")),
                 );
             }
