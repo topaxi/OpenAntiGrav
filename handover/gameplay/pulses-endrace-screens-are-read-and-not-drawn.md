@@ -120,16 +120,36 @@ for this track/class" the way `EndRaceMenu_PopulateExistingGhost`/
 
 ## Next Steps
 
-- Extend `records.toml`'s schema (or a sibling table) with a per-team
-  loyalty total, once the award-computation writer above is found and its
-  law is actually decompiled rather than hypothesised from a single
-  observation.
-- Draw `EndRace Results`'s per-lap table from `scoreboard.rs`'s own existing
-  per-lap data, mapping `Lap`/`Time` directly and leaving the third column
-  absent until its meaning is read.
-- Draw `EndRace Rewards`'s medal phrase and trophy/glyph choice off
-  `Observation::campaign_medal` / `Cell::evaluate_medal`'s own ordinal -
-  this mapping is already clean, no new RE needed.
+**All three screens now draw**, 2026-09-14 - `oag_ui::endrace` (model/draw/
+pointer), `oag_game::endrace` (the disc read), `crate::race_stage::endrace`
+(the runtime a finished race holds open, drawn inside `Stage::Race` over the
+already-frozen scene rather than through `MenuStage`) and
+`crate::main::session::endrace` (the flow). See
+[`docs/ui/endrace-screens.md`](../../docs/ui/endrace-screens.md) for what
+draws, what is left blank and why, and its own measured-vs-chosen table.
+`--menu-page endrace-results`/`endrace-rewards`/`endrace-menu` captures
+against the reference frames, and one live Xvfb walk confirmed `EndRace
+Results` draws correctly over a real, just-finished race. What is left:
+
+- **The loyalty row still draws nothing at all** - unchanged, still blocked
+  on the award-computation writer above; extend `records.toml`'s schema (or
+  a sibling table) with a per-team loyalty total once that lands.
+- **The trophy model is not wired.** `oag_game::preview::model` can load an
+  arbitrary `.vex` the same way a picker's own ship preview does, and
+  `TrophyPanel`'s own `OriginX="145.0" OriginY="60.0"` is a real number
+  `EndRace_Definition.xml` authors - but `Mode3D`/`Model` widgets are not yet
+  collected by `oag_ui::screen::Screens::collect_widgets`, and no capture
+  this project holds is a medal-earning run to check the result against
+  anyway. See `docs/ui/endrace-screens.md`'s own Open section.
+- **A live-walk discrepancy is unresolved**: after a campaign-launched race,
+  a single confirm at `EndRace Results` landed on the ordinary `Main Menu`
+  rather than stopping at `Rewards` or reaching `Menu`'s own
+  `RETURN TO GRID` with the campaign context intact - consistent with
+  `RaceStage::campaign_cell` reading `None` at the point the EndRace flow was
+  built, despite the race having launched through `Cell Selection`. Not
+  root-caused (each repro cycle costs a multi-minute autopiloted race); see
+  `docs/ui/endrace-screens.md`'s Open section for the exact next diagnostic
+  step (two `log::info!` calls and one repeat of the live walk).
 - Decide, once `data/images/pulse-psp-usa.chd`'s save/ghost system (if any)
   exists in this project, whether `EndRace Menu`'s ghost comparison is worth
   reproducing at all versus staying results-only, the way `RECORDS`'s own
