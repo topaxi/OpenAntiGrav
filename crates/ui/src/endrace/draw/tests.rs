@@ -35,7 +35,7 @@ const XML: &str = r#"
 <Text name="lap3.2"><Values x="320" y="135"></Values></Text>
 <Image name="perfectlap1"><Values x="352" y="95" width="16" height="16" src="Data\FE\Images\pulse_assets.mip"></Values></Image>
 <Image name="boostimg"><Values x="320" y="77" width="12" height="12" src="Data\FE\Images\pulse_assets.mip"></Values></Image>
-<Image name="tablehighlight"><Values x="0" y="20" width="480" height="19" src="Data\FE\Images\pulse_assets.mip"></Values></Image>
+<Image name="tablehighlight"><Values x="0" y="20" width="480" height="19" RealGlow="128" Color="0x30009fff"></Values></Image>
 </Text>
 <Text name="ContinueButton"><Values idstring="FE_CONFIRM_BUTTON" x="348" y="254"></Values></Text>
 </Screen>
@@ -47,6 +47,8 @@ const XML: &str = r#"
 <Text name="RewardLine2"><Values idstring="ER_LOY" x="130" y="107"></Values></Text>
 <Text name="RewardLoyaltyActive"><Values string="line 2" x="270" y="107"></Values></Text>
 <Text name="loyaltynum"><Values string="0" x="340" y="98"></Values></Text>
+<Image name="loyaltybg"><Values x="340" y="116" width="124" height="10" Color="0x7fffffff" src="Data\FE\Images\pulse_assets.mip"></Values></Image>
+<Image name="loyaltybar"><Values x="340" y="116" width="124" height="10" Color="0xffffffff" src="Data\FE\Images\pulse_assets.mip"></Values></Image>
 </Screen>
 <Screen type="EndRace Menu" name="EndRace Menu">
 <Menu name="Endrace Options"><Values x="50" y="60" font="title" color="0xffffffff"></Values>
@@ -124,6 +126,14 @@ fn texts(layers: &crate::menu::Layers) -> Vec<String> {
             _ => None,
         })
         .collect()
+}
+
+fn sprite_count(layers: &crate::menu::Layers) -> usize {
+    layers
+        .body
+        .iter()
+        .filter(|draw| matches!(draw, Draw::Sprite { .. } | Draw::TiledSprite { .. }))
+        .count()
 }
 
 /// `BigTopText`/`Line1` and the per-lap table draw off the model, and the
@@ -238,12 +248,12 @@ fn rewards_draws_the_no_medal_case_and_never_the_loyalty_row() {
     let texts = texts(&layers);
     assert!(texts.contains(&"REWARDS".to_string()), "{texts:?}");
     assert!(texts.contains(&"No medal awarded".to_string()), "{texts:?}");
-    assert!(
-        layers
-            .body
-            .iter()
-            .any(|draw| matches!(draw, Draw::Sprite { .. } | Draw::TiledSprite { .. })),
-        "MedalImg's own hex-dash glyph should draw"
+    let sprites = sprite_count(&layers);
+    assert_eq!(
+        sprites, 1,
+        "MedalImg's own hex-dash glyph should draw, and nothing else - not \
+         LoyaltyImg or the loyalty bar's own two sprites: {:?}",
+        layers.body
     );
     assert!(
         !texts.iter().any(|t| t == "line 2" || t == "0"),
@@ -276,12 +286,12 @@ fn rewards_hides_the_glyph_off_a_non_campaign_race_or_an_earned_medal() {
             false,
             &|_| placed(),
         );
-        assert!(
-            !layers
-                .body
-                .iter()
-                .any(|draw| matches!(draw, Draw::Sprite { .. } | Draw::TiledSprite { .. })),
-            "{model:?} should draw no medal glyph"
+        assert_eq!(
+            sprite_count(&layers),
+            0,
+            "{model:?} should draw no sprite at all - not the medal glyph, \
+             not the loyalty icon or bar: {:?}",
+            layers.body
         );
     }
 }

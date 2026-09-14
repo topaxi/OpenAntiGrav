@@ -89,24 +89,32 @@ pub fn results_draw_list(
     };
     let screen = &layout.screen;
     let mut out = Vec::new();
+    let total_row = model.laps.len() + 1;
     for fill in &screen.fills {
+        if fill.name.as_deref() == Some("tablehighlight") {
+            // `tablehighlight` carries `Color`/no `src`, so it collects as a
+            // [`crate::screen::Fill`], not an `Image` - repositioned onto the
+            // totals row, the same "authored default, overridden at the
+            // right row" idiom `crate::campaign::draw::centred_selector_draw`
+            // uses for `Selector`. **Chosen, not measured**: no decompile of
+            // this screen's own row-highlight positioning was made this
+            // pass.
+            out.push(Draw::Fill {
+                rect: [
+                    0.0,
+                    tablebg_y(total_row),
+                    fill.width.unwrap_or(0.0),
+                    fill.height.unwrap_or(0.0),
+                ],
+                color: argb_to_rgba(fill.color),
+            });
+            continue;
+        }
         out.push(fill_draw(fill));
     }
-    let total_row = model.laps.len() + 1;
     for image in &screen.images {
         let name = image.name.as_deref().unwrap_or("");
         if name.starts_with("perfectlap") || name == "boostimg" {
-            continue;
-        }
-        if name == "tablehighlight" {
-            // Repositioned onto the totals row, the same "authored default,
-            // overridden at the right row" idiom
-            // `crate::campaign::draw::centred_selector_draw` uses for
-            // `Selector` - **chosen, not measured**: no decompile of this
-            // screen's own row-highlight positioning was made this pass.
-            if let Some(placed) = sprites(&image.src) {
-                out.push(positioned_draw(image, placed, 0.0, tablebg_y(total_row)));
-            }
             continue;
         }
         let Some(placed) = sprites(&image.src) else {
@@ -166,9 +174,9 @@ pub fn rewards_draw_list(
     }
     for image in &screen.images {
         let name = image.name.as_deref().unwrap_or("");
-        // The loyalty row's own icon, and the medal glyph outside the one
-        // measured case - see the module doc.
-        if name == "LoyaltyImg" {
+        // The loyalty row's own icon and fill bar, and the medal glyph
+        // outside the one measured case - see the module doc.
+        if matches!(name, "LoyaltyImg" | "loyaltybg" | "loyaltybar") {
             continue;
         }
         if name == "MedalImg" && !model.shows_no_medal_glyph() {
@@ -423,10 +431,6 @@ fn mean(a: [f32; 4], b: [f32; 4]) -> [f32; 4] {
 
 fn image_draw(image: &Image, placed: Placed) -> Draw {
     sprite_draw(image, placed, image.x, image.y, image.color)
-}
-
-fn positioned_draw(image: &Image, placed: Placed, x: f32, y: f32) -> Draw {
-    sprite_draw(image, placed, x, y, image.color)
 }
 
 fn sprite_draw(image: &Image, placed: Placed, x: f32, y: f32, argb: u32) -> Draw {
