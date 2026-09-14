@@ -16,8 +16,10 @@ use crate::race;
 use crate::render::{Renderer, VideoFormat};
 use oag_ui::frontend::Draw;
 
+mod endrace_page;
 mod menu_page;
 mod offscreen;
+use endrace_page::endrace_kind;
 use menu_page::{
     PreviewRequest, campaign_kind, campaign_page, draw_preview, fury_picture, menu_page,
     open_for_previews, picker_kind, picker_page, picker_stills,
@@ -608,6 +610,29 @@ pub fn run(
                     &menu_frame,
                     &mut sprites,
                     &globals,
+                )?;
+                (backdrop, video_format, list, space)
+            } else if let Some(kind) = endrace_kind(page) {
+                // The three EndRace screens - the same "opened over the
+                // menus, off the disc's own source" shape `campaign_kind`'s
+                // own arm above is, not a page of our own tree. See
+                // `oag_game::endrace` and `crate::main::session::endrace`
+                // for the live flow this is a still of. The archive-opening
+                // and faces/skin/globals setup `campaign_kind`'s own arm
+                // keeps inline lives in `endrace_page::capture` instead -
+                // see that function's own doc for why.
+                let list = endrace_page::capture(
+                    kind,
+                    options.race.as_ref(),
+                    menu_font.as_ref(),
+                    &font,
+                    menu_skin,
+                    space,
+                    &frontend.screens().globals,
+                    &strings,
+                    frame,
+                    &menu_frame,
+                    &mut sprites,
                 )?;
                 (backdrop, video_format, list, space)
             } else {

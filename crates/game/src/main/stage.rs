@@ -548,6 +548,11 @@ impl Stage {
             // which drain `Session::campaign_cell` into here. Never known
             // here: this function has no `Session` to read it from.
             campaign_cell: None,
+            // Built lazily once the race finishes - see
+            // `crate::main::session::endrace` and `RaceStage::endrace`'s own
+            // doc. Never known here for the same reason `campaign_cell`
+            // isn't: this function has no `Session` to read a `Shell` from.
+            endrace: None,
         }))
     }
 }

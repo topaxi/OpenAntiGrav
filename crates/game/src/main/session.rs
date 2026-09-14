@@ -26,6 +26,8 @@ mod apply;
 mod campaign;
 #[path = "session/draw.rs"]
 mod draw;
+#[path = "session/endrace.rs"]
+mod endrace;
 // `Session::escape` and `Session::resume_race` - split out of `menus.rs`
 // under the 1,000-line rule; see `escape.rs`'s own doc for why this pair is
 // the seam.
