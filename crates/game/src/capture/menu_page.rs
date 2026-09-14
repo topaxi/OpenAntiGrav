@@ -621,8 +621,11 @@ pub(super) fn campaign_page(
     // from further down `run` is the one these two textures actually landed
     // on.
     sprites: &mut crate::sprite::Sheet,
+    // The front-end root's own `FEGlobals` - see `crate::campaign::load`'s
+    // own doc for why a still needs this too, not only the live session.
+    fallback_globals: &[(&str, &str)],
 ) -> Result<Vec<oag_ui::frontend::Draw>> {
-    let campaign = crate::campaign::load(archives, strings, faces, grid, sprites)
+    let campaign = crate::campaign::load(archives, strings, faces, grid, sprites, fallback_globals)
         .context("this source has no Race Campaign to show")?;
     *sprites = campaign.sprites;
     let layers = match kind {

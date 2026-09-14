@@ -591,6 +591,12 @@ pub fn run(
                     space,
                     menu_font.as_ref().unwrap_or(&font).line_height,
                 );
+                let globals: Vec<(&str, &str)> = frontend
+                    .screens()
+                    .globals
+                    .iter()
+                    .map(|(key, value)| (key.as_str(), value.as_str()))
+                    .collect();
                 let list = campaign_page(
                     kind,
                     &mut archives,
@@ -601,6 +607,7 @@ pub fn run(
                     &skin,
                     &menu_frame,
                     &mut sprites,
+                    &globals,
                 )?;
                 (backdrop, video_format, list, space)
             } else {

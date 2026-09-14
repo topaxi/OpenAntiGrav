@@ -122,24 +122,66 @@ exactly as before: `"00/{cell_count:02}"` and `"000/{max_points:03}"`.
 `grid15`'s own `0` - since it is authored on the grid itself, not derived
 from a save.
 
-**`Title` is the grid's own raw name**, e.g. `"grid0"`, not a friendlier
-"GRID 1". `GridSelection_Update` binds it to `grid->name` (`+0x74`)
-directly with no further formatting, and nothing on disc carries a nicer
-label for a tier - the XML's own `string="GRID 1"` is the same runtime
-placeholder pattern `Medals`/`Points`/`Required` are. Drawn as measured
-rather than invented a prettier scheme.
+**Superseded, 2026-09-14: `Title` resolves through a real per-grid
+idstring, not `grid->name` drawn raw.** The reading above had it backwards -
+`GridSelection_Update` binding `Title` to `grid->name` directly is still
+what the decompile shows, but the disc's own English `entries.xml` carries
+one idstring per grid, spelled `Grid0`..`Grid19` (capitalised, matching
+`grid->name`'s own spelling with its first letter upper-cased): `Grid0`
+answers `"Grid 1"`, `Grid4` answers `"Grid 5"`, and - not derivable from a
+`"Grid {n+1}"` formula - **`Grid12`..`Grid15` answer `"Phantom Grid
+1"`..`"Phantom Grid 4"`**, not `"Grid 13"`..`"Grid 16"`. `Grid16`..`Grid19`
+exist too (`"Download grid 1"`..`"4"`), for DLC grids this build's sixteen
+shipped ones never reach. `oag_ui::campaign::draw::grid_title` looks the
+capitalised name up directly (`strings.get(&id)`), falling back to the raw
+`grid->name` on a miss - the same visible-absence rule every other label on
+this screen already follows. This also very likely settles `race-campaign.md`'s
+own open `Group="1"` field on `grid12`..`grid15`: it is plausibly what
+selects the `"Phantom Grid N"` naming rather than `"Grid N"`, though that
+binding itself was not traced this pass - the string table entries were
+found by inspection, not decompilation, so this is a strong correlation
+(`Group` is set on exactly the four grids with the alternate name) rather
+than a proven mechanism.
 
-## Grid tiers are not locked
+## Grid tiers and cells lock and unlock, 2026-09-14
 
-`Unlock_GridPointsMet` gates the *next* grid on the *previous* grid's
-`RequiredPoints` being met - and that comparison needs
-`Grid_PointsEarned`, which needs the same per-cell save this build does not
-have. There is nothing to sum, so every tier draws open rather than reading
-a lock this build cannot evaluate honestly. **Chosen, not measured**:
-leaving every tier reachable is this project's own call, not a reading of
-the disc (the disc's own `Cell Selection`/`Grid Selection` would show locks
-on an unplayed profile too - grid1..15 all authoring `Locked="true"`, see
-below).
+**Superseded.** This section used to say every tier draws open because this
+build had no per-cell save to sum `Grid_PointsEarned` from - that save now
+exists (`records.toml`'s `[[campaign]]` table, see the "Medal/points
+figures" section above and `docs/architecture/persistence.md`), and
+`docs/ghidra/functions/psp-pulse-usa/race-campaign.md`'s "Unlock rules, cell
+and tier" traced the actual glyph rule in full, on both screens:
+
+```
+tier lock glyph visible  ⟺  grid.locked != 0
+                        AND  this grid's own Grid_PointsEarned == 0
+                        AND  NOT (previous tile's earned >= previous tile's required)
+
+cell lock glyph visible  ⟺  cell.locked (absent defaults to true) != 0
+                        AND  Cell_BestMedal(cell) == 0xff
+                        AND  no hex-adjacent cell has a medal either
+```
+
+`oag_ui::campaign::GridSelection::tier_shows_lock`/`CellSelection::cell_shows_lock`
+implement both exactly, the six-neighbour cell check against
+`g_anCellNeighbourOffsets`'s own two-parity table included, and
+[`Lock_x_y`/`Lock_n_0`](#lock_x_ylock_n_0-now-draw-three-linen-titles-still-do-not)
+now draws under it on both screens - see that section for which widgets
+still do not.
+
+**Confirming a locked tile also refuses, on both screens - chosen, not
+measured.** `crate::main::session::campaign::handle_campaign` reuses the
+identical glyph predicate to swallow a `Confirm` on a locked tier or cell,
+logging why rather than opening `Cell Selection`/launching. This is *not* a
+decompiled mechanism: no PI001 function this project has read
+(`CellSelection_CommitSelection`, `GridSelection_CommitSelection`,
+`StateMachine_TransitionTo`) ever refuses the transition on either `Locked`
+byte - only a live PPSSPP capture measured that confirming a locked tile
+does nothing (see "Grid-tier locking is not cosmetic in the original"
+below), and the real refusal was narrowed to an un-decompiled function
+(`0x088c8a10`) upstream of the state machine, not found in this pass. Reusing
+the glyph's own predicate reproduces the *measured behaviour* without
+claiming to have found the *mechanism*.
 
 ## `Cell Selection`: the 32-slot staggered hex grid
 
@@ -164,18 +206,51 @@ spelled out a second time.
 
 ### The detail panel
 
+**`Title`/`Track Line` resolve through the disc's own string table,
+2026-09-14 - superseding the raw-string reading this table used to give
+both.** `docs/ui/campaign-screens.md`'s own PPSSPP measurement (below) found
+the previous reading backwards: a `Race` cell reads `"SINGLE RACE"`, not the
+raw enum spelling, and `Track Line` reads the circuit's display name, not
+the raw `NN_Track` id. `oag_ui::campaign::draw::cell_title` mirrors
+`crate::menu::mode_label`'s own `MSC_EVENT_*`-head-before-the-colon reading
+for the five modes this engine implements, plus `MSC_EVENT_TOURN`/`_HTH`
+for `Tournament`/`Head2Head` (present on disc, resolved the identical way,
+but unmeasured against a live frame - no capture reaches either mode);
+`Custom Grid`/`AI Race`/an HD `Other` mode still fall back to the raw
+spelling, since neither authors an `MSC_EVENT_*` entry at all.
+`draw::track_line` calls `strings.get_or_id(&cell.track)` directly - Pulse's
+single copy of the string table needs no `CircuitNames` fold to reach it,
+unlike Wipeout HD's (see `oag_ui::language::CircuitNames`'s own doc).
+
 | Widget | Source | Shown for |
 | --- | --- | --- |
-| `Title` | `cell.mode.as_str()` - the raw enum spelling (`"Head2Head"`, not "Head to Head") | always |
-| `Track Line` | `cell.track`, or `"{n} Races"` off `tournament_tracks.len()` | always |
+| `Title` | the localised mode name (`cell_title`) - raw spelling only for `Custom Grid`/`AI Race`/`Other` | always |
+| `Track Line` | the circuit's own display name (`strings.get_or_id(&cell.track)`), or `"{n} Races"` off `tournament_tracks.len()` for `Tournament` | always |
 | `Line1` | `cell.class` (raw string - `"Zone"` on a Zone cell, not a speed class) | all but Zone |
+| `Line1 Title` | `RC_SC` (`"Speed class"`) | all but Zone |
 | `Line2` | `cell.laps`, or `RC_INF` when absent/zero/Zone | always |
+| `Line2 Title` | `RC_LAPS` (`"Laps"`) | always |
 | `Line3` | `FE_ON`/`FE_OFF` off `cell.weapons` | Race / Head2Head / Tournament only |
+| `Line3 Title` | `RB_WEAP` (`"Weapons"`) | same as `Line3` |
 | `Line6` | the selected cell's own saved points over `Medal::Gold.points()`, `"0/3"` with no saved medal | always |
-| `Line7` | `IG_HUD_GOLD`/`SILVER`/`BRONZE` for a saved medal, `MSC_NONE` otherwise | always |
+| `Line6 Title` | `ER_POINTS` (`"Points"`) | always |
+| `Line7` | `IG_HUD_GOLD`/`SILVER`/`BRONZE` for a saved medal, `MSC_NONE` otherwise | only when `Target0..2` are not (see below) |
+| `Line7 Title` | `IG_HUD_BEST` (`"Best"`) | same as `Line7` |
 | `Target0..2` | `cell.gold`/`silver`/`bronze`, formatted as `M:SS.CC` for Time Trial/Speed Lap, a plain number otherwise | Time Trial / Zone / Elimination / Speed Lap only |
 | `Target0..2 Title` | `IG_HUD_TARGET`, resolved | same as `Target0..2` |
 | `Target0..2 Image` | the gold/silver/bronze swatch (`0xfffaeb38`/`0xffdae3e4`/`0xffdf942f`) | same as `Target0..2` |
+
+**`Line7`/`Target0..2` are mutually exclusive, not additive, 2026-09-14** -
+see "A cell's detail panel: `Best`/`Target` looks mutually exclusive" below,
+whose finding this now implements: `Line7`/`Line7 Title` draw only when
+`targets_visible` is false, sharing the row `Target0..2` would otherwise
+sit in.
+
+**The row dividers (`line bg1`/`2`/`3`, drawn as a `Fill` pair per stripe)
+draw one per *visible* row, not four unconditionally, 2026-09-14** - a
+`Race` cell shows three (`Line1`/`2`/`3` all visible), a `Time Trial` cell
+two (`Line3` hidden). `line bg4` never draws: nothing ever populates `Line4`
+to sit above it.
 
 `targets_visible`/`weapons_visible` reproduce
 `CellSelection_PopulateDetail`'s own gating exactly:
@@ -195,25 +270,40 @@ regression test, built with a sprite closure that actually resolves a
 the first place, since an unconditionally-drawn widget and a correctly-
 gated one look identical when neither ever reaches a real sprite draw.
 
-### Four widgets this build deliberately does not draw
+### `Lock_x_y`/`Lock_n_0` now draw; three `Line{n} Title`s still do not
 
-- **`Lock_x_y` and `Lock_n_0`, on both screens.** `Locked` on a `PI_Cell`/
-  `PI_Grid` has no traced consumer - `race-campaign.md`'s "what is not
-  determined" scores this 50 and says explicitly not to implement a lock
-  from it. Every cell and every tier draws open.
-- **`Line{n} Title`, every `n`, on `Cell Selection`.**
-  `CellSelection_PopulateDetail`'s own table names `Line1`..`Line8` as
-  *values* but never their `Title` companions - unlike `Target0..2 Title`
-  (`IG_HUD_TARGET`, a real idstring) or `Medals Title`/`Points Title`/
-  `Required Title` (`RC_GM`/`RC_TP`/`RC_PN`) on `Grid Selection`. Their own
-  authored strings are template junk (`"l1 title"`, `"--7"`), not an
-  idstring, so there is nothing to resolve and nothing safe to invent -
-  skipped uniformly.
-- **`Line4`.** Never appears in `PopulateDetail`'s own table at all.
+**`Lock_x_y`/`Lock_n_0` moved out of this list, 2026-09-14.** `race-campaign.md`'s
+own "what is not determined" scored `Locked` at 50 and said not to implement
+a lock from it - a later pass traced its actual consumer in full (see "Grid
+tiers and cells lock and unlock" above), so this build now draws it under
+that measured rule on both screens rather than leaving every cell and tier
+open.
+
+- **`Line1`/`Line2`/`Line3`/`Line6`/`Line7 Title`, on `Cell Selection`, also
+  moved out of this list, 2026-09-14.** They resolve to real idstrings -
+  `RC_SC`/`RC_LAPS`/`RB_WEAP`/`ER_POINTS`/`IG_HUD_BEST` - found by reading
+  the disc's own English `entries.xml` for the exact label text the
+  PPSSPP frames show (`"Speed class"`, `"Laps"`, `"Weapons"`, `"Points"`,
+  `"Best"`), not by decompilation: `CellSelection_PopulateDetail`'s own
+  table (`race-campaign.md`) still names `Line1`..`Line8` as *values* only,
+  never their `Title` companions, so which idstring belongs to which row is
+  this build's own reading of the string table's contents, not a traced
+  binding. `RC_SC`/`RC_LAPS` sit in the same `RC_`-prefixed family as
+  `Medals`/`Points`/`Required Title` already confirmed on `Grid Selection`
+  (`RC_GM`/`RC_TP`/`RC_PN`); `RB_WEAP` is corroborated independently -
+  `docs/formats/race-setup.md` already names it the `Single Player` screen's
+  own `Weapons` row, same `FE_ON`/`FE_OFF` values; `ER_POINTS` is the one
+  plain `"Points"` entry in the whole table with no `RC_`-family
+  alternative. `Line7 Title` (`Best`) draws only when `Target0..2` do not -
+  see "A cell's detail panel: `Best`/`Target` looks mutually exclusive"
+  below, whose finding this implements.
+- **`Line4`.** Never appears in `PopulateDetail`'s own table at all. Still
+  blank.
 - **`Line5`/`Line8`.** Both `Cell_SavedRecord` - the saved best this build
   has no record for - sharing one offset (`Item OffsetX="260" OffsetY="180"`,
   the same swap idiom `race-setup.md` documents for `Single Player`'s
-  `Zone`/`DifficultyNaText`).
+  `Zone`/`DifficultyNaText`). Still blank, and so are their own `Title`
+  companions - no idstring was found for either.
 
 ## Confirming a cell launches, 2026-09-14
 
@@ -237,11 +327,59 @@ mode detail; this page stays about what draws.
 implemented, so a campaign race still uses the ordinary `[ai] difficulty`
 setting. Chosen, not measured, and logged when it happens.
 
+**A locked tile refuses `Confirm` outright, 2026-09-14** - `handle_campaign`
+checks `GridSelection::selected_is_locked`/`CellSelection::selected_is_locked`
+before either arm above runs, logging why and leaving the screen where it
+was rather than opening `Cell Selection` or `Team Selection`. See "Grid
+tiers and cells lock and unlock" above for the predicate and why this is
+chosen, not measured, on the exact refusal mechanism.
+
 `Cell Help` (`triangle`) is modelled as a boolean toggle
 (`CellSelection::help_open`) that suspends movement while open, matching
 the disc's own `Watch` element redirecting every directional press back to
 `Cell Help` while it is the present screen - but the overlay itself is not
 drawn yet; see [Open](#open).
+
+## The hex look, 2026-09-14: an outline always, a medal-colour swatch only where earned
+
+**Superseded: this build used to draw `hex_filled.mip` on every hex, on both
+screens, unconditionally.** `docs/ghidra/functions/psp-pulse-usa/race-campaign.md`'s
+`CellSelection_PopulateGrid`/`GridSelection_PopulateTiles` pseudocode names
+two widgets at every slot with two different jobs: `Outline_x_y` (base hex,
+always drawn) and `Medal_x_y` (a colour swatch, drawn only where a cell/tier
+has actually earned a medal or points - `draw_medal_colour`/`if pointsEarned
+!= 0`). `oag_ui::campaign::draw::{grid_draw_list, cell_draw_list}` now
+follow that: `Medal_x_y` is skipped entirely (`Outline_x_y` still draws)
+unless `CellSelection::medal_at`/the tier's own `points_earned` says
+otherwise, and the swatch that does draw is tinted per the medal tier
+(`medal_argb`) or a single "earned" tint on `Grid Selection`
+(`medal_tint`).
+
+**The swatch's own colour is chosen, not measured.** No PPSSPP capture this
+project holds exercises it - every frame under
+`data/reference/psp-campaign-screens/` is a zero-medal profile, so the
+`gold`/`silver`/`bronze[medal]` array `CellSelection_PopulateGrid`'s
+pseudocode names was never read off the executable or seen on screen.
+`medal_argb` reuses the panel's own measured `Target0..2 Image` swatches
+(`0xfffaeb38`/`0xffdae3e4`/`0xffdf942f`) as the closest available evidence -
+the same three-tier colour concept, authored on the same screen - not an
+independent reading of the hex fill itself. `Grid Selection`'s own
+`medal_tier_colour(pointsEarned, ...)` mapping was not traced at all, so its
+tint is always gold's own swatch regardless of how much of the tier is
+actually earned.
+
+**`Outline_x_y`'s own colour now resolves through `FEGlobals`, 2026-09-14.**
+`Cell Selection`'s copy authors `i="FEGlobals->CM_HEX_Outline"`
+(`Data\Plugins\PI001\GUI\Skin.xml`: `0x7F34ACC2`, a semi-transparent teal);
+`crate::campaign::load` parsed `CellMode_Definition.xml` on its own before
+this pass, with no fallback globals, so that reference never resolved and
+the outline drew opaque white instead. `load` now takes the front-end
+root's own globals as a fallback (`shell.globals` live,
+`frontend.screens().globals` in a `--menu-page` capture) - the same
+`Screens::from_xml_with_fallback_globals` idiom `crate::boot::screens::load_included_screens`
+already uses for every other `LoadXML` include. `Grid Selection`'s own copy
+of `Outline_x_y` authors no `FEGlobals->` reference at all, so its colour is
+unaffected by this fix and stays the authored default.
 
 ## Captures
 
@@ -261,6 +399,38 @@ drawn yet; see [Open](#open).
   `"NÉANT"` (no medal) - matching `grid0_2_1`'s own authored values
   (`track="16_Track" mode="Race" class="Venom" Weapons="on" ... laps="3"`)
   digit for digit against `race-campaign.md`'s own reading of the file.
+
+### Recaptured after this pass's fixes, 2026-09-14
+
+Same two flags, `data/images/pulse-psp-usa.chd` (English), `--size
+1440x816`, kept at `/tmp/oag-drive/picture/ours-{grid,cell}-select.png` (not
+committed - see the frontend handover thread for the durable copy's path).
+Every string, lock and hex-fill change this page documents above is visible
+side by side with `data/reference/psp-campaign-screens/`'s own frames on the
+same fresh, zero-medal profile:
+
+- `grid-select`: `"RACE CAMPAIGN"`, `"GRID 1"` (not `"GRID0"`), `"GOLD
+  MEDALS 00/08"` / `"TOTAL POINTS 000/024"` / `"POINTS NEEDED 12"`, three of
+  the four visible tiles showing a lock glyph over a plain outline hex (no
+  fill) and the selected tile (`grid0`, `Locked="false"`) showing neither -
+  matching `grid-selection-page1-grid0-unlocked.png` widget for widget.
+  Still missing: the tip ticker and the button-legend footer row, neither
+  implemented this pass (see [Open](#open)).
+- `cell-select`: `"SINGLE RACE"` / `"Talon's Junction White"` (not `"RACE"`
+  / `"16_TRACK"`), row labels `"SPEED CLASS"` / `"LAPS"` / `"WEAPONS"` /
+  `"POINTS"` / `"BEST"`, all six non-selected occupied hexes locked (plain
+  outline, padlock glyph) and the selected one (`grid0_2_1`, no `Locked`
+  attribute - defaults locked) also showing its own lock glyph under the
+  selector - matching `cell-selection-grid0-default-cell.png` on every text
+  row. The `HELP`/`CHANGE DIFFICULTY` footer draws here (a mechanism outside
+  `oag_ui::campaign` this pass did not need to touch) but without the
+  `Confirm`/`Back` legend the reference shows - not chased further this
+  pass. The occupied-hex layout is still the two-column zigzag
+  `crates/tables/src/race_campaign.rs`'s `grid_coords` parse produces from
+  `grid0`'s own cell names, not the original's diamond - see "The 8-cell hex
+  layout is a diamond" below, unchanged by this pass since the coordinates
+  are the disc's own, not a rule this build could choose differently
+  without inventing one.
 
 ## Measured against PPSSPP, 2026-09-14
 
@@ -544,6 +714,23 @@ diamond shape is a visual read of the capture, confidence 70.
 
 ## Open
 
+- **The scrolling tip ticker and the button-legend footer row are still not
+  drawn**, 2026-09-14 - see "New: a scrolling tip ticker" and "The hex
+  look"/`docs/ui/campaign-screens.md`'s own recapture note above. The
+  ticker's own strings are now located (`TKR_NOTOURN`/`TKR_NOZONE`/
+  `TKR_SONGS`/`TKR_DIST` in the disc's English table) but not traced to a
+  widget name or a scroll-speed measurement, and the `Cell Selection`
+  footer this build already draws (`HELP`/`CHANGE DIFFICULTY`, from a
+  mechanism outside `oag_ui::campaign`) is missing the `Confirm`/`Back`
+  legend the original shows beside them.
+- **A previous pass's live-walk cell (`grid0_2_1`) is now locked under this
+  pass's own rule** - it authors no `Locked` attribute, which defaults to
+  `true`, and has no medal or medalled neighbour on a fresh profile. The
+  "launch path... driven live" bullet below recorded a walk through that
+  exact cell; repeating it today would refuse `Confirm` rather than reach
+  `Team Selection`. `grid0_3_1`/`grid0_3_2` (both author `Locked="false"`) are
+  the cells to re-walk with, or any cell after the profile has earned it or
+  a hex-adjacent medal.
 - **PPSSPP was not captured against this pass.** Every number above is read
   off the disc's own XML and the executable's decompiled binding, not
   cross-checked against a live screenshot the way `selection-screens.md`'s
