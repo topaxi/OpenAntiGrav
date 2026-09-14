@@ -132,6 +132,19 @@ Three things about this that are easy to get wrong:
   job" failure that has now hit sixteen members. Tell them the gate may sit
   for several minutes before it starts, and that this is correct.
 
+**`sccache` inherits the lock and holds it after the gate exits.** Found
+2026-09-14 with two members' gates both "waiting for the lock" and no gate
+running: `cargo` under a `flock`-wrapped `just` spawns the `sccache` server
+with the lock's file descriptor open, and that server outlives the `just`
+by its idle timeout (ten minutes by default), holding the lock the whole
+time. `lsof "$HOME/.cache/oag/gate.lock"` shows it - a line for `sccache`
+beside the waiting `flock`s. This is most of the "the gate may sit for
+minutes" folklore above. Fix: start the server *outside* any lock before
+the first gate (`sccache --start-server` from the lead's own shell), and if
+a stale one is holding the lock, `sccache --stop-server` then start it
+again outside - the waiting gate proceeds within seconds. Do not tell
+members to kill it themselves; the lead owns the lock's health.
+
 **Do not solve this with a dedicated gate-runner member** - it costs one of
 four slots and needs cross-agent request/response plumbing invented for
 something one line of `flock` already does. **Do not cap per-member `-j` as the
