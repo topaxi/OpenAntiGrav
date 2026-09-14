@@ -637,6 +637,28 @@ impl Screens {
             // panel groups every stat row as `<Item OffsetY="59">` - and
             // carries the offsets that make its children's positions mean
             // anything.
+            // `GridController` is the Race Campaign's own container -
+            // `CellMode_Definition.xml`'s `Grid Selection`/`Cell Selection`
+            // hex layouts, each `Medal_x_y`/`Outline_x_y`/`Lock_x_y` nested
+            // under it exactly the way an ordinary info panel nests under
+            // `Item`. **A `startenabled="false"` controller is skipped
+            // outright, not just left unfocused**: `Grid Selection` authors
+            // two, `Grid` and `Grid1`, both naming `Medal_0_0`..`Medal_3_0` -
+            // the same widget names - so collecting both would silently
+            // overwrite one tier's hexes with the other's in `screen.images`,
+            // a flat `Vec` with no notion of which controller a name came
+            // from. See `docs/ui/campaign-screens.md`.
+            "gridcontroller" if child.attr("startenabled") != Some("false") => {
+                for grandchild in &child.children {
+                    self.collect_widgets(
+                        screen,
+                        grandchild,
+                        viewport_width,
+                        inner,
+                        fallback_images,
+                    );
+                }
+            }
             "animation" | "backgroundcontroller" | "leftlayer" | "item" => {
                 for grandchild in &child.children {
                     self.collect_widgets(

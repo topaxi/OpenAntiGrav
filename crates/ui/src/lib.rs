@@ -12,6 +12,7 @@
 
 pub mod anim;
 pub mod backdrop;
+pub mod campaign;
 pub mod font;
 pub mod frontend;
 pub mod language;
