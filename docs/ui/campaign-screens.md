@@ -223,6 +223,189 @@ drawn yet; see [Open](#open).
   (`track="16_Track" mode="Race" class="Venom" Weapons="on" ... laps="3"`)
   digit for digit against `race-campaign.md`'s own reading of the file.
 
+## Measured against PPSSPP, 2026-09-14
+
+**PPSSPP v1.20.4 (SDL build), `pulse-psp-usa.chd`, Xvfb `:97` at 960x544 (twice
+the PSP's 480x272, the `selection-screens.md` convention), `import -window
+root`.** The memory stick already carried a profile from an earlier session on
+this machine (state went `Show Logo` -> `RemoveMemoryStickWarning` ->
+`AutoLoadProfileCheckScreen` -> `Main Menu` with no name/tag entry), so
+**`TournamentLoad`'s autosave dialog (`MSC_SQ_MSG7`) never appeared** - a
+legitimate negative result, not a skipped step: the SDL build persists
+`~/.config/ppsspp/PSP/SAVEDATA/`, and this stick's is not fresh. The profile
+carries no campaign medals, so grid1 onward reads as freshly locked regardless.
+Fifteen frames, kept under `data/reference/psp-campaign-screens/` (gitignored,
+not committed): `grid-selection-*.png`, `cell-selection-*.png`,
+`cell-help-overlay-*.png`, and this build's own `ours-grid-select.png` /
+`ours-cell-select.png` (`--menu-page grid-select` / `cell-select` on the same
+`pulse-psp-usa.chd`, matching the emulator rather than `pulse-psp-eu`).
+
+**State names, confirmed live**: `Grid Selection`, `Cell Selection`, `Cell
+Help` - exactly the three names this page and `race-campaign.md` already
+assumed. `Main Menu`'s row 1 (the default cursor) is `RACE CAMPAIGN`, matching
+`scripts/psp-drive.py`'s own `tap(dbg, "down")  # RACE CAMPAIGN -> RACEBOX`
+comment - a single `cross` from a fresh `Main Menu` enters the campaign
+directly.
+
+### The three headline differences from this build
+
+1. **`Grid Selection`'s `Title` reads `"GRID 1"`, `"GRID 5"`, `"GRID 9"` -
+   never the raw `grid->name`.** `grid-selection-page1-grid0-unlocked.png`
+   shows `"GRID 1"` for `grid0`, `grid-selection-page2-grid1-4-locked.png`
+   shows `"GRID 5"` for `grid4` (page `5-8 / 16`, i.e. flat index 4, 1-based
+   in the title), and the page-3 burst shows `"GRID 9"` for `grid8`. This
+   build's `ours-grid-select.png` reads `"GRID0"` (the raw name, capitalised
+   by the font, the `0` reading as an `O`) - the exact gap
+   `campaign-screens.md`'s own "`Title` is the grid's own raw name" section
+   already flagged as unmeasured. **The reading there was backwards**: the
+   game does show a friendlier `"GRID N"` (1-based), not the raw name - the
+   XML's own `string="GRID 1"` template is not a runtime placeholder pattern
+   after all, or a second, unlocated formatting/lookup step turns
+   `grid->name` into it. Confidence 90 the *display* is `"GRID N"` (three
+   separate grids read on screen, digit for digit); confidence 50 on *how*,
+   since no breakpoint was taken on `GridSelection_Update` this pass (out of
+   scope - the priority breakpoints were `CellSelection`'s, per the
+   assignment).
+2. **`Cell Selection`'s `Title` is a localised mode name, not
+   `cell->mode`'s bare enum spelling.** A `Race` cell
+   (`cell-selection-grid0-default-cell.png`) reads `"SINGLE RACE"`; a `Time
+   Trial` cell (`cell-selection-grid0-time-trial-cell.png`) reads `"TIME
+   TRIAL"`. `"TIME TRIAL"` is consistent with either reading (it's the enum
+   name, capitalised), but `"SINGLE RACE"` is not - `g_mode_name_table` names
+   value 3 `"Race"`, and `"Single Race"` is the *Racebox's* `RACE TYPE`
+   label for the same mode (`selection-screens.md`/the front-end capture
+   never named this screen's own copy of the string). This build's
+   `ours-cell-select.png` reads `"RACE"` - the raw table entry,
+   uppercased by the same font, per `campaign-screens.md`'s own documented
+   binding. Confidence 88 - two cells read on two different discs' worth of
+   mode text disagree the same way runtime-vs-static already does elsewhere
+   in this doc, and `"Single Race"` matching the Racebox's own wording is a
+   second, independent corroboration it's a shared localised string rather
+   than a coincidence.
+3. **The `Track Line` shows the circuit's own display name, not the raw
+   XML string.** The default cell resolves to `grid0_3_1` (`track="03_Track"
+   mode="Race" class="Venom" Weapons="on" laps="3"`, matched digit for digit
+   against `grid_00.xml`) and the panel reads `"Moa Therma White"` - `03_Track`
+   is `Moa Therma` per `ppsspp-debugger.md`'s own name-to-directory note.
+   Moving down one row selects `grid0_3_2` (`track="16_Track" mode="Time
+   Trial" ... Gold Target="11500"`) and the panel reads `"Talon's Junction
+   White"` - `16_Track` is Talon's Junction, this project's own reference
+   track. This build's `ours-cell-select.png` reads `"16_TRACK"`, the raw
+   string, exactly as `campaign-screens.md`'s existing captures section
+   already documented for `grid0_2_1`. Confidence 92 - two tracks on two
+   different cells resolve to their known display names exactly, with no
+   name-to-directory ambiguity on either.
+
+### Corroborated, not contradicted
+
+- **The three stat rows on `Grid Selection` match this build's own numbers
+  exactly**, both grids read: `grid0` shows `Gold medals 0/8`, `Total points
+  000/024`, `Points needed 012`; `grid4` (`"GRID 5"`) shows `0/16`, `000/048`,
+  `028` - both pairs match `race-campaign.md`'s table
+  (`Cells`/`Max points`/`RequiredPoints`) and this build's own
+  `ours-grid-select.png` reading for `grid0`. Confidence 95.
+- **The honey counter's formula is right.** `"1-4 / 16"` on page 1, `"5-8 /
+  16"` and `"9-12 / 16"` on the pages reached by `down`, matching
+  `index*4+1, index*4+4, max*4+4` exactly.
+- **`down`/`up` on `Grid Selection` move a full page (+/-4 index); `left`/
+  `right` move one tile within the current page.** Not previously measured:
+  a `down` from `grid0`'s page landed directly on `"GRID 5"` (index 4), not
+  `"GRID 2"`, and a `right` from `grid0` landed on `"GRID 2"` (index 1). This
+  settles which control is the paging one and which is the per-tile one -
+  both were assumed to be up/down in the prose above the "Two
+  `GridController`s" section, which is not what was pressed. Confidence 90,
+  directly observed.
+- **No visible crossfade at a page turn, down to the earliest captured
+  frame (~50 ms after the press).** Four bursts, one as tight as `wait 0.05`
+  before the first shot, all show the new page already fully rendered - no
+  half-opacity, no partial reveal. This is *evidence toward* "`Grid1` is a
+  pre-settled buffer swapped instantly" over "a crossfade", but does not
+  fully rule out a transition faster than this capture's ~50 ms floor.
+  Confidence 60 on the reading, 90 on the observation itself.
+- **`Cell Help`'s overlay is static.** Two frames a second apart
+  (`cell-help-overlay-t0.png` / `-t1s.png`) are pixel-identical apart from the
+  independently-scrolling tip ticker bleeding through underneath - no
+  scroll animation fired in this window, consistent with this build's
+  planned "a static overlay would be honest" approach in [Open](#open)
+  below. It draws as a **semi-transparent panel over the still-visible,
+  darkened `Cell Selection` screen**, not a full-screen replacement, and
+  the button-icon glyphs at the bottom render as plain circles rather than
+  face-button icons in this PPSSPP build - almost certainly a font/icon
+  substitution specific to the emulator's UI font, not a reading of real
+  hardware, and not a claim about the original console's own rendering.
+- **`AI difficulty` (`square`) cycles Easy/Medium/Hard and changes nothing
+  else in the panel** (`cell-selection-difficulty-hard.png` against the
+  `-t0`/`-t1s` pair) - only the bottom-bar label text changes
+  (`"AI difficulty (Medium)"` -> `"(Hard)"`).
+
+### New: a scrolling tip ticker, not documented anywhere before this pass
+
+Both `Grid Selection` and `Cell Selection` carry a **scrolling marquee of
+one-line tips and stats** along the bottom, above the button row: `"Why don't
+you try out the Speed Lap events?"`, `"You've listened to a total of 1
+songs"`, `"Throughout the game you've travelled a total of 0.00 km"`, `"You
+haven't raced in a single Zone mode event yet - why not?"`. This build draws
+an empty bar in the same position (`ours-grid-select.png`,
+`ours-cell-select.png`) - not a difference this pass's captures previously
+knew to look for, since no earlier capture of either screen exists. Not
+traced to a widget name or a string table this pass; flagged in
+[Open](#open) below for whoever picks up the ticker.
+
+### Grid-tier locking is not cosmetic in the original
+
+Paging to `"GRID 2"` (`grid1`, `Locked="true"`, page `1-4 / 16` via `right`)
+and pressing `Confirm` **does nothing** -
+`grid-selection-confirm-on-locked-grid-inert.png` is pixel-identical to
+`grid-selection-grid2-locked-selected.png` taken immediately before it, and
+the state name stays `Grid Selection`. This build's own "Grid tiers are not
+locked" section documents *drawing* every tier open as a deliberate choice,
+not a measurement - this is the measurement that choice was waiting on, and
+it says the original gates entry on `Locked`/points, not just the lock glyph.
+**Not breakpoint-verified** (no execution breakpoint was armed on
+`GridSelection`'s own confirm handler this pass - out of scope, since the
+assignment's five priority breakpoints are all `CellSelection`'s); confidence
+70 on "confirm is gated" from the behavioural evidence alone, capped below
+the runtime-trace band for exactly that reason. Left open for whoever picks
+up the grid-tier locking thread next, not implemented here.
+
+### A cell's detail panel: `Best`/`Target` looks mutually exclusive, not additive
+
+The `Race` cell's panel (`cell-selection-grid0-default-cell.png`) shows
+`Points 0/3` then `Best None` and no `Target` rows. The `Time Trial` cell's
+panel (`cell-selection-grid0-time-trial-cell.png`) shows `Points 0/3` then
+three `Target` rows (gold/silver/bronze, each with its own coloured hex
+swatch) and **no `Best` row at all** - not `Best` alongside the targets, not
+`Best` blanked to nothing in the same position, just absent. `race-campaign.md`
+reads `Line7` (`Best`/medal) as shown "always" and `Target0..2` as shown only
+for the four modes that need one, which this contradicts unless the two
+share screen space the same way `Line5`/`Line8` are already documented to
+(`Cell_SavedRecord`'s "same offset" swap idiom). Confidence 65 - one cell of
+each shape, not a census, but a clean and repeatable behavioural
+observation.
+
+**Target times are formatted with periods, not a colon**: `"1.55.00"` /
+`"1.58.00"` / `"2.03.00"` for `grid0_3_2`'s gold/silver/bronze
+(`11500`/`11800`/`12300` centiseconds - 115.00 s, 118.00 s, 123.00 s exactly),
+not `"1:55.00"`. `race-campaign.md`'s own reading names the format
+`"M:SS.CC"`; the separator is measured wrong there. Confidence 95 - direct,
+legible digits on screen matching the authored centisecond values to the
+centisecond.
+
+### The 8-cell hex layout is a diamond, not a static full-page grid, but all 8 do show
+
+`cell-selection-grid0-default-cell.png` shows all 8 of `grid0`'s cells at
+once (2+3+1+2 in a diamond: two locked corners, a row of
+locked-selected-locked through the middle, one unlocked-unselected cell
+below centre, two more locked corners at the bottom) - not fewer, and not
+panned. This build's `ours-cell-select.png` also shows all 8, in a two-column
+zigzag rather than a diamond. **Both show every authored cell**, so this is
+a layout-shape difference, not a windowing/panning one as first suspected
+mid-capture - struck here rather than left as a live misreading. The
+exact per-cell pixel positions were not measured to sub-pixel precision this
+pass (no widget dump against this specific screen was taken, unlike
+`Grid Selection`'s table above, which is measured off the XML directly); the
+diamond shape is a visual read of the capture, confidence 70.
+
 ## Open
 
 - **PPSSPP was not captured against this pass.** Every number above is read

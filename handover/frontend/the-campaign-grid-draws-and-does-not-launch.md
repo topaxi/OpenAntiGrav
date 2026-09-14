@@ -55,6 +55,28 @@ read), `crates/game/src/main/campaign_stage.rs` and
   consumer for the byte on either a `PI_Cell` or a `PI_Grid`). No lock glyph
   draws anywhere. Do not implement one from the attribute without first
   tracing its consumer.
+- **PPSSPP measured 2026-09-14 - `docs/ui/campaign-screens.md`'s "Measured
+  against PPSSPP" section has the full readings and frame paths
+  (`data/reference/psp-campaign-screens/`, gitignored).** Three corrections
+  to this file's own prose above, all confirmed live rather than inferred:
+  `Grid Selection`'s `Title` reads `"GRID 1"`/`"GRID 5"`/`"GRID 9"`, not the
+  raw `grid->name` this file and `campaign-screens.md` both assumed - the
+  "runtime placeholder" reading of the XML's own `string="GRID 1"` was
+  backwards. `Cell Selection`'s `Title` is a localised mode name
+  (`"SINGLE RACE"` for a `Race` cell, matching the Racebox's own `RACE TYPE`
+  wording), not `cell->mode`'s bare enum spelling. The `Track Line` is the
+  circuit's own display name (`"Moa Therma White"`, `"Talon's Junction
+  White"`), not the raw `03_Track`/`16_Track` string. Also new: a scrolling
+  tip ticker along the bottom of both screens (not documented anywhere
+  before this pass, not drawn here at all), and behavioural evidence
+  (confidence 70, not breakpoint-verified) that **grid-tier locking gates
+  `Confirm` in the original** - pressing it on a `Locked` grid does nothing -
+  which is stronger than "cosmetic lock glyph" and worth weighing against
+  the "chosen, not measured" note two bullets up. `race-campaign.md`'s own
+  `Locked`/`Lock_x_y` reading (the *cell*-level glyph, a different byte) was
+  independently settled by a different pass the same day; this file's bullet
+  above still describes this build's own choice not to implement it, which
+  stands unless whoever picks this thread up next decides otherwise.
 
 ## Next Steps
 
