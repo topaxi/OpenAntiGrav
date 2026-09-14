@@ -28,7 +28,7 @@
 
 use crate::frontend::{Align, Draw, Placed};
 use crate::language::StringTable;
-use crate::menu::{Backdrop, Frame, Layers, Skin};
+use crate::menu::{Frame, Layers, Picture, Skin};
 use crate::screen::{Fill, Image, Screen, Screens, Text, argb_to_rgba};
 use oag_gameplay::input::{Button, Input};
 
@@ -489,20 +489,15 @@ pub fn draw_list(
     layout: &Layout,
     skin: &Skin,
     frame: &Frame,
-    backdrop: Option<Backdrop>,
+    backdrop: Option<Picture>,
     race_behind: bool,
     sprites: &dyn Fn(&str) -> Option<Placed>,
     measure: &dyn Fn(&str) -> f32,
 ) -> Layers {
     let (title_x, title_y, title_scale) = skin.title_at();
-    let video = backdrop.map(|backdrop| Draw::Video {
-        rect: backdrop.rect,
-        frame: backdrop.frame,
-        position: backdrop.position,
-        source: crate::frontend::Video::Backdrop,
-    });
+    let picture = backdrop.map(Picture::draw);
     let mut layers = Layers {
-        backdrop: frame.backdrops(skin.space(), skin.background(), video, race_behind),
+        backdrop: frame.backdrops(skin.space(), skin.background(), picture, race_behind),
         ..Layers::default()
     };
     // See `crate::menu::draw_list`'s own title push - `Draw::title` is shared

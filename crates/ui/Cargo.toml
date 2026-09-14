@@ -15,6 +15,9 @@ rust-version.workspace = true
 # classification is what makes linking a renderer *legal* here without ever
 # becoming legal for anything gameplay depends on.
 [dependencies]
+# `backdrop::Fury`'s path picker draws from the seeded `Rng`, so a capture at
+# a given seed is the same picture twice.
+oag-core.workspace = true
 oag-display.workspace = true
 oag-gameplay.workspace = true
 # Only for the boot sequence's title fallback and its front-end table, the same

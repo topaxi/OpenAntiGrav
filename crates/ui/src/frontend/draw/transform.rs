@@ -13,8 +13,9 @@ use super::Draw;
 impl Draw {
     /// The colour this draw is modulated by, when it has one.
     ///
-    /// `None` for [`Self::Video`] alone: a movie frame has no alpha channel to
-    /// fade and is never part of a page.
+    /// `None` for [`Self::Video`] and [`Self::FuryBackdrop`] alone: a movie
+    /// frame and the point-cloud pass have no alpha channel to fade and are
+    /// never part of a page.
     ///
     /// **It exists so a new variant is one edit rather than three.** The menu's
     /// zoom and fade helpers each used to spell the variant list out, so adding
@@ -34,7 +35,7 @@ impl Draw {
             // of a rule that fades in from the left would expect. Fading
             // both edges is [`Self::fade`]'s job, not this accessor's.
             Self::GradientFill { left, .. } => Some(left),
-            Self::Video { .. } => None,
+            Self::Video { .. } | Self::FuryBackdrop(_) => None,
         }
     }
 
@@ -99,8 +100,9 @@ impl Draw {
                 left[3] *= alpha;
                 right[3] *= alpha;
             }
-            // A movie has no alpha channel to fade and is never part of a page.
-            Self::Video { .. } => {}
+            // A movie and the point-cloud pass have no alpha channel to fade
+            // and are never part of a page.
+            Self::Video { .. } | Self::FuryBackdrop(_) => {}
         }
     }
 

@@ -18,18 +18,23 @@ use oag_display::space::{SCREEN, Space};
 use oag_ui::font::{self, Atlas};
 use oag_ui::frontend::{Align, Draw};
 
+mod backdrop;
 mod face;
 mod quad;
 mod resources;
 mod text;
+mod video;
 
 use face::{face_atlas_size, face_sampler, upload_face};
 use resources::{
-    blank_r8, sampler_entry, sampler_kind, texture_entry, ui_bind_group, uniform_entry, upload_rg8,
+    sampler_entry, sampler_kind, texture_entry, ui_bind_group, uniform_entry, upload_rg8,
     upload_rgba,
 };
 
 use quad::{MODE_ATLAS, MODE_FACE_ATLAS, MODE_SPRITE, MODE_SPRITE_ADDITIVE, Quad};
+use video::Video;
+
+pub use backdrop::FuryBackdrop;
 
 /// Shared with both shaders.
 #[repr(C)]
@@ -146,6 +151,13 @@ pub struct Renderer {
     /// The sprite sheet's pixel size, which the shader needs to normalise UVs.
     sprites: (u32, u32),
     video: Option<Video>,
+    /// The Fury menu backdrop's clouds and passes, once a boot has loaded
+    /// them - see [`Self::set_fury_backdrop`]. `None` draws a
+    /// `Draw::FuryBackdrop` as nothing, which is the honest absence.
+    fury: Option<FuryBackdrop>,
+    /// What the pipelines were built for, kept so the backdrop's composite
+    /// can be built later against the same target.
+    target_format: wgpu::TextureFormat,
     quads: Vec<Quad>,
     /// The grid the draw lists it is given are in, and what that grid is shown
     /// as. [`Space::PSP`] until someone says otherwise, which is what every
@@ -160,13 +172,6 @@ impl std::fmt::Debug for Renderer {
             .field("has_video", &self.video.is_some())
             .finish()
     }
-}
-
-struct Video {
-    pipeline: wgpu::RenderPipeline,
-    bind_group: wgpu::BindGroup,
-    planes: [wgpu::Texture; 3],
-    format: VideoFormat,
 }
 
 impl Renderer {
@@ -389,9 +394,24 @@ impl Renderer {
             atlas,
             sprites: (sprites.width, sprites.height),
             video,
+            fury: None,
+            target_format: format,
             quads: Vec::new(),
             space: Space::PSP,
         })
+    }
+
+    /// Uploads the Fury backdrop's clouds and builds its passes.
+    ///
+    /// Called once, by whoever built the menus, with the clouds the boot read
+    /// off the disc; from then on a `Draw::FuryBackdrop` in a list draws.
+    pub fn set_fury_backdrop(
+        &mut self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        clouds: &[oag_rcs::points2::PointCloud],
+    ) {
+        self.fury = Some(FuryBackdrop::new(device, queue, self.target_format, clouds));
     }
 
     /// Replaces the sprite sheet every later draw samples.
@@ -583,8 +603,14 @@ impl Renderer {
         // than filling it the way a `.PMF` always has. See
         // `oag_display::space::pillarbox`.
         let mut video_rect = [0.0, 0.0, self.space.size.0, self.space.size.1];
+        // Where the Fury backdrop sits, the same way: its passes run before
+        // this one and its composite is drawn at its place in the order.
+        let mut fury_at = None;
         for (index, draw) in list.iter().enumerate() {
             match draw {
+                Draw::FuryBackdrop(frame) => {
+                    fury_at = Some((self.quads.len() as u32, frame.as_ref()));
+                }
                 Draw::Fill { rect, color } => self.push_solid(*rect, *color, [0.0, 0.0]),
                 Draw::ChamferedFill {
                     rect,
@@ -763,6 +789,15 @@ impl Renderer {
                 mapped_at_creation: false,
             });
         }
+        if let (Some((_, frame)), Some(fury)) = (&fury_at, &mut self.fury) {
+            fury.prepare(
+                device,
+                queue,
+                encoder,
+                frame,
+                (viewport.2 as u32, viewport.3 as u32),
+            );
+        }
         let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("frame"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -784,142 +819,44 @@ impl Renderer {
         pass.set_viewport(viewport.0, viewport.1, viewport.2, viewport.3, 0.0, 1.0);
 
         let total = self.quads.len() as u32;
-        let split = video_at.unwrap_or(total);
-
-        // Quads behind the movie, the movie, then quads in front of it. Three
-        // draws rather than two so the list's own order is honoured.
         if !self.quads.is_empty() {
             queue.write_buffer(&self.quad_buffer, 0, bytemuck::cast_slice(&self.quads));
-            pass.set_pipeline(&self.ui_pipeline);
-            pass.set_bind_group(0, &self.ui_bind_group, &[]);
-            pass.set_vertex_buffer(0, self.quad_buffer.slice(..));
-            if split > 0 {
-                pass.draw(0..6, 0..split);
+        }
+
+        // Quads behind a picture, the picture, then the quads in front of it -
+        // for each of the two pictures a list can carry, in the order the
+        // list puts them, so the list's own order is honoured.
+        let mut cuts: Vec<(u32, bool)> = Vec::new();
+        cuts.extend(video_at.map(|at| (at, true)));
+        cuts.extend(fury_at.map(|(at, _)| (at, false)));
+        cuts.sort_unstable();
+        let mut drawn = 0;
+        let draw_quads = |pass: &mut wgpu::RenderPass<'_>, range: std::ops::Range<u32>| {
+            if range.start < range.end {
+                pass.set_pipeline(&self.ui_pipeline);
+                pass.set_bind_group(0, &self.ui_bind_group, &[]);
+                pass.set_vertex_buffer(0, self.quad_buffer.slice(..));
+                pass.draw(0..6, range);
+            }
+        };
+        for (at, is_video) in cuts {
+            draw_quads(&mut pass, drawn..at);
+            drawn = at;
+            match (is_video, &self.video, &self.fury, &fury_at) {
+                (true, Some(video), ..) => {
+                    pass.set_pipeline(&video.pipeline);
+                    pass.set_bind_group(0, &video.bind_group, &[]);
+                    pass.draw(0..6, 0..1);
+                }
+                (false, _, Some(fury), Some((_, frame))) => {
+                    fury.composite(&mut pass, frame.tint);
+                }
+                _ => {}
             }
         }
-
-        if video_at.is_some()
-            && let Some(video) = &self.video
-        {
-            pass.set_pipeline(&video.pipeline);
-            pass.set_bind_group(0, &video.bind_group, &[]);
-            pass.draw(0..6, 0..1);
-        }
-
-        if split < total {
-            pass.set_pipeline(&self.ui_pipeline);
-            pass.set_bind_group(0, &self.ui_bind_group, &[]);
-            pass.set_vertex_buffer(0, self.quad_buffer.slice(..));
-            pass.draw(0..6, split..total);
-        }
-    }
-}
-
-impl Video {
-    fn new(
-        device: &wgpu::Device,
-        uniform_buffer: &wgpu::Buffer,
-        target: wgpu::TextureFormat,
-        format: VideoFormat,
-    ) -> Result<Self> {
-        // Linear filtering here, unlike the glyphs: the frame is being scaled up
-        // from 480x272 and nearest would look worse than the original did.
-        let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
-            label: Some("planes"),
-            mag_filter: wgpu::FilterMode::Linear,
-            min_filter: wgpu::FilterMode::Linear,
-            address_mode_u: wgpu::AddressMode::ClampToEdge,
-            address_mode_v: wgpu::AddressMode::ClampToEdge,
-            ..Default::default()
-        });
-
-        let planes = [
-            blank_r8(device, "plane y", format.width, format.height),
-            blank_r8(device, "plane u", format.chroma_width, format.chroma_height),
-            blank_r8(device, "plane v", format.chroma_width, format.chroma_height),
-        ];
-        let views: Vec<wgpu::TextureView> = planes
-            .iter()
-            .map(|t| t.create_view(&wgpu::TextureViewDescriptor::default()))
-            .collect();
-
-        let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("video"),
-            entries: &[
-                uniform_entry(0),
-                texture_entry(1),
-                texture_entry(2),
-                texture_entry(3),
-                sampler_entry(4, wgpu::SamplerBindingType::Filtering),
-            ],
-        });
-
-        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("video"),
-            layout: &layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: uniform_buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::TextureView(&views[0]),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 2,
-                    resource: wgpu::BindingResource::TextureView(&views[1]),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 3,
-                    resource: wgpu::BindingResource::TextureView(&views[2]),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 4,
-                    resource: wgpu::BindingResource::Sampler(&sampler),
-                },
-            ],
-        });
-
-        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("video"),
-            source: wgpu::ShaderSource::Wgsl(include_str!("video.wgsl").into()),
-        });
-
-        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("video"),
-            bind_group_layouts: &[Some(&layout)],
-            immediate_size: 0,
-        });
-
-        let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("video"),
-            layout: Some(&pipeline_layout),
-            vertex: wgpu::VertexState {
-                module: &shader,
-                entry_point: Some("vs_main"),
-                buffers: &[],
-                compilation_options: Default::default(),
-            },
-            fragment: Some(wgpu::FragmentState {
-                module: &shader,
-                entry_point: Some("fs_main"),
-                targets: &[Some(target.into())],
-                compilation_options: Default::default(),
-            }),
-            primitive: wgpu::PrimitiveState::default(),
-            depth_stencil: None,
-            multisample: wgpu::MultisampleState::default(),
-            multiview_mask: None,
-            cache: None,
-        });
-
-        Ok(Self {
-            pipeline,
-            bind_group,
-            planes,
-            format,
-        })
+        // A picture last in the list - `Show Logo`'s movie with nothing over
+        // it - is drawn by the loop above, not skipped by a cut at `total`.
+        draw_quads(&mut pass, drawn..total);
     }
 }
 

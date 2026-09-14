@@ -118,6 +118,14 @@ Two structural facts to expect, both different from every other binary here:
   transparency difference), the strip's `ItemWidth` default of 298 and its
   selected-entry bonus of 70, and the one-sixth-per-frame easing all three
   menu classes grow with.
+- [menu-backdrop.md](menu-backdrop.md) - `BackgroundAnimFury_Item.cpp`, the
+  Fury menu's backdrop: one of nineteen `.points2` ship point clouds (the record
+  format, measured on all nineteen), the camera paths and colours in
+  `fury.envsettings`, the path picker, the `RadioHead2` vertex program read as
+  arithmetic (depth-of-field, fog, the travelling colour ramp), the procedural
+  six-mip sprite, the feedback-trail post passes, and the per-screen tint. Also
+  where `ShaderRegistry_RegisterPair` closes renderer.md's unpaired-shader
+  question.
 
 Add a row to [`names.tsv`](names.tsv) and the page it cites in the same change:
 `scripts/apply-ghidra-names.py` refuses a row whose address and name do not

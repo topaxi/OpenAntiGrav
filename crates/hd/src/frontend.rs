@@ -525,4 +525,43 @@ pub mod names {
     /// and its `.rcsmodel` are in `DATA02`, so the geometry is behind the same
     /// undecoded container the circuits' is.
     pub const FRONT_END_SCENE: &str = r"Data\FE\FrontEndScene\FrontEndScene_HD_ATG.vex";
+
+    /// The Fury style's backdrop settings: its camera paths and colours, in
+    /// `.envsettings` syntax. `BackgroundAnimFury_Load` reads it; see
+    /// `oag_tables::fury_backdrop` and [`menu-backdrop.md`].
+    ///
+    /// [`menu-backdrop.md`]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/ghidra/functions/ps3-hdfury-eu/menu-backdrop.md
+    pub const FURY_SETTINGS: &str = "Data/fe/fury.envsettings";
+
+    /// The nineteen point clouds the Fury backdrop flies past, as the
+    /// executable's own table at `0x009209b4` spells them - forward slashes
+    /// and mixed case, unlike the backslashed `Data\FE\Images` names beside
+    /// it. `Load` picks twelve of these at random per boot; see
+    /// [`menu-backdrop.md`].
+    ///
+    /// [`menu-backdrop.md`]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/ghidra/functions/ps3-hdfury-eu/menu-backdrop.md
+    pub const FURY_CLOUDS: [&str; 19] = [
+        "data/FE/Fury/AG_Systems_c1.points2",
+        "data/FE/Fury/AG_Systems_n1.points2",
+        "data/FE/Fury/Assegai_c1.points2",
+        "data/FE/Fury/Assegai_n1.points2",
+        "data/FE/Fury/Auricom_c1.points2",
+        "data/FE/Fury/Detonator.points2",
+        "data/FE/Fury/EGX_c1.points2",
+        "data/FE/Fury/Feisar_c1.points2",
+        "data/FE/Fury/Goteki_c1.points2",
+        "data/FE/Fury/Harimau_c1.points2",
+        "data/FE/Fury/Harimau_n1.points2",
+        "data/FE/Fury/Icaras_c1.points2",
+        "data/FE/Fury/Mirage_c1.points2",
+        "data/FE/Fury/Mirage_n1.points2",
+        "data/FE/Fury/Piranha_c1.points2",
+        "data/FE/Fury/Qirex_c1.points2",
+        "data/FE/Fury/Qirex_n1.points2",
+        "data/FE/Fury/Triakis_c1.points2",
+        "data/FE/Fury/Triakis_n1.points2",
+    ];
+
+    /// How many of [`FURY_CLOUDS`] `Load` reads into the widget's table.
+    pub const FURY_CLOUDS_LOADED: usize = 12;
 }

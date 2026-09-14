@@ -432,6 +432,24 @@ impl Session {
         // titles today, a no-op here; see `capture::run`'s own call for why
         // this has to happen on both the live and the headless path.
         renderer.set_face_atlas(&self.gpu.device, &self.gpu.queue, shell.title_font.clone());
+        // The Fury backdrop's clouds, uploaded once per menu stage the same
+        // way the sprite sheet is; the model that flies past them is built
+        // below, from the same assets.
+        if let Some(assets) = &shell.fury_backdrop {
+            renderer.set_fury_backdrop(&self.gpu.device, &self.gpu.queue, &assets.clouds);
+        }
+        let fury = shell.fury_backdrop.as_ref().and_then(|assets| {
+            oag_ui::backdrop::Fury::new(
+                assets.settings.clone(),
+                assets.first,
+                oag_game::boot::fury::SEED,
+            )
+        });
+        let fury_tints = shell
+            .fury_backdrop
+            .as_ref()
+            .map(|assets| assets.tints.clone())
+            .unwrap_or_default();
         // **The picture moves across as well as the playhead**, and it has to,
         // because the renderer does not. A fresh `Renderer` is fresh planes:
         // zeroed, which is green rather than black, so the first menu frame
@@ -488,6 +506,8 @@ impl Session {
                 // asking about a page that is no longer on screen.
                 prompt: None,
                 picker: None,
+                fury,
+                fury_tints,
                 backdrop: shape.map(|shape| Backdrop {
                     player: menu_playhead(carried, frames, shape.frame_rate),
                     rect: shape.rect,

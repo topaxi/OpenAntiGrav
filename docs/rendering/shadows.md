@@ -411,8 +411,8 @@ Two things follow for the setting:
   bbox) but a genuinely different topology encoding (confidence 82 on the
   vertex/index split, closed by an exact arithmetic invariant between two
   independently-read allocator functions - see that page). **The draw call
-  is found too**: a two-sided depth-fail stencil test over a rigidly-shifted
-  box proxy (see below - not a true silhouette-derived volume), colour-mask
+  is found too**: a two-sided depth-fail stencil test over the extruded box
+  volume (see below), colour-mask
   bracketed, its RSX register identities (stencil test/func/op, two-sided
   stencil, cull-face and colour-mask toggling) cross-checked against a local
   `rpcs3`'s own `gcm_enums.h` rather than assumed. **The record format is now
@@ -426,20 +426,17 @@ Two things follow for the setting:
   earlier reading of the min/max fields as a "bounding box": the offsets
   they actually reduce over are the vertex *normal*, not the position, per
   this closed layout. **The vertex shader is disassembled too, same day**:
-  `LiveStencilShadow_vp` applies a *uniform* `lightDirection *
-  extrusionDistance` shift to every vertex regardless of facing - the
-  normal is read into a dot product that is never used again - so this is
-  a rigid-body shift of the sealed box, not a per-vertex silhouette
-  extrusion the way Pulse's runtime reader builds one (confidence 84,
-  disassembly with hash-confirmed parameter names). This explains why a
-  fixed, disc-wide box template works: there's nothing model-specific left
-  for the vertex program to key off of. Checked directly against both draw
-  functions: neither re-uploads a different `extrusionDistance` between the
-  two stencil passes, so there is no separate near-cap/far-cap pair either -
-  both passes submit the same, once-shifted box. What HD actually renders is
-  closer to **"does this pixel's depth sample fall inside a fixed box
-  template, shifted toward the light and positioned at the caster"** than to
-  a true silhouette-derived shadow volume.
+  `LiveStencilShadow_vp` extrudes **only the vertices whose normal faces the
+  light**: `DP3C` writes `dot(normal, lightDirection)` to the condition
+  register and the `lightDirection * extrusionDistance` add is predicated
+  `(GT.xxxx)` on it - a per-vertex silhouette extrusion of the unwelded box,
+  the same construction as Pulse's runtime reader (confidence 84, disassembly
+  with hash-confirmed parameter names). A first reading on 2026-09-04, made
+  before `scripts/ps3-microcode.py` decoded vertex-program predication,
+  called this a rigid shift of the whole box; retracted 2026-09-14 on
+  `shadow-stencilvolume.md`. Checked directly against both draw functions:
+  neither re-uploads a different `extrusionDistance` between the two stencil
+  passes - one extruded volume serves both.
   See [`shadow-stencilvolume.md`](../ghidra/functions/ps3-hdfury-eu/shadow-stencilvolume.md)
   for the full numbers.
 

@@ -596,6 +596,10 @@ pub(crate) struct Shell {
     /// is unread, which draws the menus exactly as they were drawn before this
     /// existed. See `oag_ui::menu::read_frame`.
     pub(crate) frame: menu::Frame,
+    /// The Fury menu backdrop's settings, clouds and tints, read at boot -
+    /// see `oag_game::boot::fury`. `None` on every source but a Fury-style
+    /// HD, and then the menus sit on the movie or the page's clear.
+    pub(crate) fury_backdrop: Option<std::sync::Arc<oag_game::boot::fury::FuryAssets>>,
     /// The race box's two selection screens, read at boot - see
     /// `oag_game::boot::Shell::track_select`. `None` launches straight from
     /// the RACE page.

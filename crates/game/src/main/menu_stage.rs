@@ -79,6 +79,14 @@ pub(crate) struct MenuStage {
     /// rebuilt, so the loop never restarts on the handoff. See
     /// [`menu_playhead`].
     pub(crate) backdrop: Option<Backdrop>,
+    /// The Fury style's point-cloud backdrop, when this source has one -
+    /// the model, ticked here off the same fixed step the movie is; the
+    /// clouds themselves are in [`Self::renderer`]. `None` on every other
+    /// source, and then the rows sit on the movie or on the page's clear.
+    pub(crate) fury: Option<oag_ui::backdrop::Fury>,
+    /// The per-screen tints the widget is authored with, read once off the
+    /// skin - empty when there is no widget, and then never read.
+    pub(crate) fury_tints: oag_ui::backdrop::Tints,
     /// The race box's selection screen over this page, when one is open -
     /// see [`crate::picker_stage`]. Like [`Self::prompt`], it takes the
     /// tick's input whole while it is `Some`, and it is drawn instead of
@@ -198,6 +206,11 @@ impl MenuStage {
     pub(crate) fn tick(&mut self, dt: f64) {
         if let Some(backdrop) = &mut self.backdrop {
             backdrop.player.update(dt);
+        }
+        // One clip frame per tick: the original counts its clip up once per
+        // rendered frame at sixty, and the stage's step is the same sixty.
+        if let Some(fury) = &mut self.fury {
+            fury.tick();
         }
         // The same fixed `dt` the backdrop is stepped with, and for the same
         // reason: nothing on this stage reads the wall clock, so two runs of
@@ -388,6 +401,16 @@ impl MenuStage {
             // over the menu rather than a missing picture.
             _ => None,
         };
+        // The movie where there is one, else the Fury backdrop's frame for
+        // this tick - sized to the viewport, since the sprite size and the
+        // colours scale with the picture's line count, and tinted for the
+        // page: the root is the disc's `Main Menu`, the rest its `default`.
+        let shown = shown.map(menu::Picture::from).or_else(|| {
+            let fury = self.fury.as_ref()?;
+            let (_, _, w, h) = viewport;
+            let tint = self.fury_tints.for_root(self.menu.depth() == 1);
+            Some(menu::Picture::from(fury.frame(h, w / h, tint)))
+        });
         // A selection screen replaces the rows outright - it is the disc's
         // own screen, drawn in the same frame - and its preview goes on last,
         // a 3D pass over the finished picture. No marquee, no page tween and

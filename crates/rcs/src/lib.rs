@@ -23,5 +23,6 @@
 
 pub mod gxp;
 pub mod hd_pvs;
+pub mod points2;
 pub mod rcsmaterial;
 pub mod rcsmodel;

@@ -109,30 +109,6 @@ pub fn mode_choices(strings: &crate::language::StringTable) -> Vec<Choice> {
         .collect()
 }
 
-/// One frame of the looping picture the rows are drawn on top of.
-///
-/// **A frame and a rectangle, not a movie.** Deciding which frame is showing is
-/// timing, deciding where it goes is the source's own display aspect, and
-/// neither is a menu's business - this module draws a list and knows nothing
-/// about either, the same way it knows nothing about what a setting means.
-/// `main.rs` owns the player; see [`draw_list`].
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct Backdrop {
-    /// Where the picture goes on the 480x272 screen: `[x, y, width, height]`.
-    pub rect: [f32; 4],
-    /// Which frame of it to show, counting from zero.
-    pub frame: usize,
-    /// How far playback has got, counting every loop.
-    ///
-    /// Carried through to the draw for the same reason the front end carries it
-    /// (see [`Draw::Video`]), even though the menus have already taken their
-    /// picture out of the feed by the time they build one. It is the *same*
-    /// playback either way: the number goes on rising across the handoff from
-    /// `Show Logo` rather than starting again at zero, and a draw list that said
-    /// otherwise would be the one place that claim is not visible.
-    pub position: u64,
-}
-
 /// One option on a `choice` row: what it stores, and what it shows.
 ///
 /// Named for the row kind rather than for "option", which would shadow
@@ -1048,6 +1024,8 @@ impl Menu {
 }
 
 pub mod block;
+mod picture;
+pub use picture::{Backdrop, Picture};
 mod focus;
 mod frame;
 mod layers;
@@ -1130,8 +1108,9 @@ pub const WARNING: [f32; 4] = [1.0, 0.76, 0.25, 1.0];
 ///
 /// `backdrop` is the same arrangement one step further out: a frame and a
 /// rectangle, already decided, rather than a movie this module would then have
-/// to know how to play. `None` draws the rows on whatever the frame put down,
-/// or black if it put down nothing - see [`Backdrop`].
+/// to know how to play - or the Fury backdrop's frame, already computed, rather
+/// than its clock. `None` draws the rows on whatever the frame put down, or
+/// black if it put down nothing - see [`Picture`].
 ///
 /// # Two idioms, and the disc picks
 ///
@@ -1145,7 +1124,7 @@ pub fn draw_list(
     skin: &Skin,
     bindings: &dyn Fn(Button) -> Vec<&'static str>,
     measure: &dyn Fn(&str) -> f32,
-    backdrop: Option<Backdrop>,
+    backdrop: Option<Picture>,
     frame: &Frame,
     // A parked race showing through instead of this frame's own
     // clear/background/marks - see `Frame::backdrops`. Needed alongside
@@ -1155,18 +1134,10 @@ pub fn draw_list(
     let page = menu.page();
     let (title_x, title_y, title_scale) = skin.title_at();
 
-    // Frame::backdrops's own clear/video/marks order - see its doc for why a
-    // race behind the menus drops anything covering the whole screen.
-    let video = backdrop.map(|backdrop| Draw::Video {
-        rect: backdrop.rect,
-        frame: backdrop.frame,
-        position: backdrop.position,
-        // The same movie `Show Logo` sits on, still looping and still on
-        // the same playhead: the menus are where the disc's own
-        // `FE Screen` was going anyway.
-        source: crate::frontend::Video::Backdrop,
-    });
-    let backdrops = frame.backdrops(skin.space(), skin.background(), video, race_behind);
+    // Frame::backdrops's own clear/picture/marks order - see its doc for why
+    // a race behind the menus drops anything covering the whole screen.
+    let picture = backdrop.map(Picture::draw);
+    let backdrops = frame.backdrops(skin.space(), skin.background(), picture, race_behind);
 
     let mut layers = Layers {
         backdrop: backdrops,

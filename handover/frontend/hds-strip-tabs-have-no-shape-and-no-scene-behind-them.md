@@ -220,6 +220,42 @@ styles); the blink 70, with five stills arguing against it.
 - HD's `<aVertMenu>` pause menu authors `Width`/`FocusWidth` and draws the
   same blocks; this build's pause menu is not wired to it.
 
+## 2026-09-14: the scene behind the Fury menu is a point cloud, read and drawn
+
+**The "background scene" was never `FrontEndScene_HD_ATG.vex` on the Fury
+style.** `skin.xml`'s `Top FE Screen` carries two widgets: `<BackgroundAnim>`
+(the HD style's `.vex` ring, `BackgroundAnim_Item.cpp`) and
+`<BackgroundAnimFury startenabled="false">` (`BackgroundAnimFury_Item.cpp`),
+which the Fury style enables. The second one is what every capture in this
+thread shows: one of nineteen `Data/FE/Fury/*.points2` clouds - a hull sampled
+to ~55,000 points - drawn as camera-facing sprites along an authored camera path
+out of `Data/fe/fury.envsettings`, through GPU modes named `RadioHead0..12`,
+trailed by a feedback pass and tinted per screen. Read in full on
+[menu-backdrop.md](../../docs/ghidra/functions/ps3-hdfury-eu/menu-backdrop.md)
+(34 names; also closes renderer.md's 62-unpaired-shader question - the route is
+`ShaderRegistry_RegisterPair`). Shipped: `oag_rcs::points2`,
+`oag_tables::fury_backdrop`, `oag_ui::backdrop`, `oag_game::render::backdrop`,
+`oag_game::boot::fury`; `--menu-page main` on the Fury disc draws it.
+
+**What plays is mode 2 on the eight static paths, and it does not look like
+the captures yet.** The page's "What shipped" section carries the colour census:
+the RPCS3 main menu is 0.4% white and 9.3% red where this build's frame is 8%
+white and 35% grey, and the hull overflows the frame. A reverted diagnostic
+pins what is missing: scaling every point's **eye-to-point distance** by `0.4`
+(view space, projection untouched) lands the census within five points on every
+bin and puts the red band where the capture has it; scaling the cloud about the
+origin with the eye left in place does not. So the gap is on `Render`'s
+`worldView` bind or the projection's path through `0x00182358`, neither read
+(`staticPaths[4]` ends its eye *inside* the hull's box as read). Not tuned to
+taste, per the rule: the arithmetic draws as read until one of them is.
+
+Also unread: the morph and line modes (`5`, `9`, `10`, `11`) and their extra
+streams, the blend pass's quad grid, the equaliser tap (`musicPulse` sits at
+`1`), `OnEnable`'s brightness pulse, and the HD-style `<BackgroundAnim>` widget
+itself (`FEBackgroundAnim_vp/fp/Copy_fp`, `blur`, `use_bands`) - which is the
+answer to the older open item below about which non-Fury program the HD style
+resolves to: its own, not a RadioHead.
+
 ## Open, added 2026-09-05
 
 - **The label sits `8.7` authored units too low inside its tab** (real cap top
@@ -257,6 +293,13 @@ styles); the blink 70, with five stills arguing against it.
 
 ## Next Steps
 
+- **Find the `0.4` on the eye-to-point distance**: read `Render`'s `worldView`
+  bind (`BackgroundAnimFury_Render`) and
+  `0x00182358`, which the projection is handed through; then re-run the colour
+  census on `--menu-page main --screenshot --size 1920x1080` against
+  `data/reference/hd-main-menu-screenshot-2/00.png` (the crop and bins are on
+  the page). An RSX capture of one frame's constants (`worldView`, `proj`,
+  `colourRampFactors`) under RPCS3 would settle it faster than the decompiler.
 - **The resolver-side blocker is gone; the light-source one is not.** `oag-render` now resolves `basic_vertexemissive.rcsmaterial`'s `(RigidBody, ...)` row (see Open, above), so this thread's own remaining question is live again on its own terms: which light source a front-end screen (no `.envsettings`) should feed it, and whether the result is what the Fury capture's motion actually is or a second, separate `FEBackgroundAnim*` effect on top. The per-material lighting/shading chain generally - reading which terms a resolved material's own microcode computes, rather than one shared `mesh.wgsl` formula - is still [hd-needs-a-per-material-shader-path-and.md](../rendering/hd-needs-a-per-material-shader-path-and.md)'s own open ground, not this thread's to build.
 - **Shipped 2026-09-13 for HD**, see above. Pulse's own chrome title authors the same `Title` role and was deliberately left unflipped - a capture-verification pass, not a continuation of this one - and Pure's `Main Menu` screen was not located in time to check at all. Both are `oag_title::MenuSkin::title_font`'s own open questions now, not this thread's.
 - The tab label's own `8.7`-unit vertical offset (noted above, added 2026-09-05) is unaffected: it is the strip's row face, not the chrome title's, and stays open on its own terms.

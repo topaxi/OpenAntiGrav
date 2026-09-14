@@ -386,10 +386,10 @@ parameter 0x4c06f24f  float4 x4  c256   (worldViewProj)
 parameter 0x12c7d82c  float3 x1  c467   (lightDirection)
 parameter 0x711247ea  float1 x1  c466   (extrusionDistance)
 
-0  DP3 R63.x, v[2].xyzx, c[211].xyzx     ; dot(normal, lightDirection) -> R63.x
+0  DP3C R63.x, v[2].xyzx, c[211].xyzx    ; dot(normal, lightDirection) -> R63.x, and the condition register
 1  MOV R1.xyz, c[211].xyzx               ; R1 = lightDirection
 2  MOV R0.xyz, v[0].xyzx                 ; R0 = position
-3  MAD R0.xyz, R1.xyzx, c[210].xxxx, v[0].xyzx  ; R0 = position + lightDirection * extrusionDistance
+3  MAD R0.xyz (GT.xxxx), R1.xyzx, c[210].xxxx, v[0].xyzx  ; only where that dot > 0: R0 = position + lightDirection * extrusionDistance
 4  MUL R1, R0.yyyy, c[1]
 5  MAD R1, R0.xxxx, c[0], R1
 6  MAD R0, R0.zzzz, c[2], R1
@@ -440,6 +440,26 @@ what this disassembler prints, not a guarantee no hidden condition exists.
 Nothing in this specific 8-instruction program's printed operands
 references a predicate, though, and the reading above needs no such
 mechanism to explain what actually reaches `o[POS]`.
+
+**Retracted 2026-09-14: that hidden condition exists, and it is the whole
+mechanism.** `scripts/ps3-microcode.py` now decodes NV40 vertex-program
+predication (`COND_UPDATE_ENABLE`, bit 14 of dword 0 with bit 29;
+`COND_TEST_ENABLE`, bit 13, test in bits 10..12, swizzle in bits 2..9 -
+`nv40_vertprog.h`'s `NV40_VP_INST_COND_*`), added while reading the Fury menu
+backdrop's programs ([menu-backdrop.md](menu-backdrop.md)), and the listing
+above is what it prints. Instruction 0 is `DP3C`: it writes the condition
+register with `dot(normal, lightDirection)`. Instruction 3 carries
+`(GT.xxxx)`: the extrusion is written **only where that dot is greater than
+zero**. Vertices whose normal faces the light move by `lightDirection *
+extrusionDistance`; the rest stay put. That is a per-vertex,
+facing-dependent extrusion of the unwelded box - the shadow volume its
+face-split topology (24 vertices for 6 faces, no shared corners) was built
+for - and the same construction as Pulse's `Shadow_RenderOccluderVolume`,
+not a rigid shift. `R63` is not dead: it is the condition write. The
+"rigid-body shift" paragraph above is kept for the record and is wrong;
+confidence on the per-vertex reading is 84 by the same rubric row, with the
+same one-block, not-runtime-traced ceiling. Nothing in `crates/` implemented
+the rigid reading.
 
 Confidence 84 on the mechanism (a uniform per-vertex shift, not a facing-
 dependent one) - a direct disassembly of the actual executed instructions,

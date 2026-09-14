@@ -1790,6 +1790,19 @@ The only `.bik` files on the disc that are not per-track previews or UI icons
 are the two Studio Liverpool logos. There is nothing a `menu_backdrop` could
 point at even if the type wanted one.
 
+**2026-09-14: the "something real-time" on the Fury style is read.** The same
+`Top FE Screen` carries a second widget, `<BackgroundAnimFury name="bgAnimFury"
+startenabled="false">`, with thirteen `<ScreenSetting name=".." tint="0xAARRGGBB"
+equaliser="0"/>` rows - `Main Menu`, `Additional`, `Controls Menu` and `Extras`
+white, the rest `0xFF202020`. The Fury style enables it, and it draws one of
+nineteen `Data/FE/Fury/*.points2` hull point clouds along the camera paths in
+`Data/fe/fury.envsettings`, as sprites through `RadioHead` GPU modes with a
+feedback trail, tinted by that row. Read in full on
+[menu-backdrop.md](../ghidra/functions/ps3-hdfury-eu/menu-backdrop.md);
+`oag_ui::backdrop` and `oag_game::render::backdrop` draw it, and
+`oag_hd::frontend::names::FURY_CLOUDS`/`FURY_SETTINGS` name the files. The HD
+style's `<BackgroundAnim>` above stays unread and undrawn.
+
 ### `picker_backdrop_parent: None`, with a caveat
 
 Pure's picker is a child of `Intro Screen` and inherits its white fill. HD's

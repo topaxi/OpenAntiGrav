@@ -61,7 +61,7 @@ fn list(
         &skin(),
         bindings,
         &measure,
-        backdrop,
+        backdrop.map(Picture::from),
         &Frame::default(),
         false,
     )

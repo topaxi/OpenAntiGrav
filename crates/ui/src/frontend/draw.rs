@@ -117,6 +117,16 @@ pub enum Draw {
         /// Which movie the frame belongs to.
         source: Video,
     },
+    /// The Fury menu backdrop's point-cloud pass, composited here in the
+    /// list's order the way [`Self::Video`] is.
+    ///
+    /// The frame says which cloud, where the camera is and every constant the
+    /// sprites are drawn with - see [`crate::backdrop::Frame`]. Like a movie
+    /// frame it covers the whole screen, has no alpha to fade, and is never
+    /// part of a page: it is what the page sits on. Boxed, for the same
+    /// reason [`crate::menu::Picture`] boxes it: a `Draw` is otherwise a few
+    /// words and this is two matrices and nine constants.
+    FuryBackdrop(Box<crate::backdrop::Frame>),
     /// One of the front end's own images, from the sprite sheet.
     Sprite {
         /// Where it goes on the 480x272 screen: `[x, y, width, height]`.

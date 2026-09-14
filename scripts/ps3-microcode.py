@@ -196,11 +196,33 @@ def vp_src(bits17: int, const: int, inp: int) -> str:
     return f"{neg}?{bits17:05x}{swizzle}"
 
 
+VP_CONDS = ("FL", "LT", "EQ", "LE", "GT", "NE", "GE", "TR")
+
+
+def vp_predicate(d0: int) -> tuple[str, str]:
+    """`(test, update)` - the condition-code fields of dword 0.
+
+    An instruction with `COND_TEST_ENABLE` (bit 13) only writes lanes where
+    the condition register, swizzled by bits 2..9, passes the test in bits
+    10..12; `COND_UPDATE_ENABLE` (bit 14 with bit 29) makes the instruction
+    write that register. `nv40_vertprog.h`'s `NV40_VP_INST_COND_*`. Without
+    these a predicated pair such as `MOV R3.z, R0.z` / `MOV R3.z, 1.0`
+    reads as the second line overwriting the first.
+    """
+    test = ""
+    if d0 & (1 << 13):
+        cond = VP_CONDS[(d0 >> 10) & 7]
+        test = f" ({cond}{swz(d0 >> 2, (6, 4, 2, 0))})"
+    update = "C" if d0 & (1 << 14) else ""
+    return test, update
+
+
 def vp_render(d0: int, d1: int, d2: int, d3: int) -> str:
     vec_op = (d1 >> 22) & 0x1F
     sca_op = (d1 >> 27) & 0x1F
     const = (d1 >> 12) & 0xFF
     inp = (d1 >> 8) & 0x0F
+    test, update = vp_predicate(d0)
     srcs = [
         ((d1 & 0xFF) << 9) | ((d2 >> 23) & 0x1FF),
         (d2 >> 6) & 0x1FFFF,
@@ -218,7 +240,7 @@ def vp_render(d0: int, d1: int, d2: int, d3: int) -> str:
         wm = mask((d3 >> 13) & 0xF, (("x", 8), ("y", 4), ("z", 2), ("w", 1)))
         slots = VP_SRC_SLOTS.get(name, [0, 1])
         ops = ", ".join(vp_src(srcs[n], const, inp) for n in slots)
-        parts.append(f"{name} {dst}{wm}, {ops}")
+        parts.append(f"{name}{update} {dst}{wm}{test}, {ops}")
     if sca_op:
         name = SCA_OPS.get(sca_op, hex(sca_op))
         dst = (
@@ -227,12 +249,33 @@ def vp_render(d0: int, d1: int, d2: int, d3: int) -> str:
             else f"R{(d3 >> 7) & 0x1F}"
         )
         wm = mask((d3 >> 17) & 0xF, (("x", 8), ("y", 4), ("z", 2), ("w", 1)))
-        parts.append(f"{name} {dst}{wm}, {vp_src(srcs[2], const, inp)}")
+        parts.append(f"{name}{update} {dst}{wm}{test}, {vp_src(srcs[2], const, inp)}")
     if not parts:
         parts.append("NOP")
     if d3 & 1:
         parts.append("END")
     return " | ".join(parts)
+
+
+def show_vp_literals(raw: bytes, base: int) -> None:
+    """The literal constants a vertex program carries, which is the
+    "defaults section" `vp_disasm` probes past.
+
+    At `base + 0x14`: a u32 count, then that many u32 register numbers, then
+    the values as float4s from the next 16-byte boundary - read off eight
+    RadioHead and FEBackgroundAnim blocks, on all of which the registers
+    named are exactly the `c[]` numbers the code reads that no parameter
+    supplies (`c[201]`/`c[202]` in `RadioHead2_vp`, for instance). Register
+    numbers are stored +256 like the parameter table's.
+    """
+    count = struct.unpack_from(">I", raw, base + 0x14)[0]
+    if count == 0 or count > 32:
+        return
+    regs = struct.unpack_from(f">{count}I", raw, base + 0x18)
+    values_at = (base + 0x18 + 4 * count + 15) & ~15
+    for i, reg in enumerate(regs):
+        value = struct.unpack_from(">4f", raw, values_at + 16 * i)
+        print(f"  literal c[{reg - 256}] = ({', '.join(f'{v:g}' for v in value)})")
 
 
 def vp_disasm(raw: bytes, at: int) -> None:
@@ -248,6 +291,7 @@ def vp_disasm(raw: bytes, at: int) -> None:
     _, _, program_at = block_header(raw, at)
     n_insn = struct.unpack_from(">H", raw, at + program_at)[0]
     base = at + program_at
+    show_vp_literals(raw, base)
 
     def plausible(probe: int) -> bool:
         for k in range(min(n_insn, 8)):

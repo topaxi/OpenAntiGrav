@@ -128,8 +128,8 @@ impl Frame {
     /// inferred from a rect, and is the change to make if a title ever
     /// authors a full-screen mark it means to draw *over* its movie.
     ///
-    /// `video` is the movie quad, already built - this type does not know how
-    /// to play one. `clear` and [`oag_title::MenuSkin::background`]
+    /// `video` is the picture quad, already built - a movie frame or the Fury
+    /// backdrop's pass; this type does not know how to play either. `clear` and [`oag_title::MenuSkin::background`]
     /// (`skin_background`, passed in rather than read here - this type does
     /// not hold a `Skin`) are always full-screen by construction, so they join
     /// that group without a rect comparison; a mark is judged by its own rect

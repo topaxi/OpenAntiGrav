@@ -30,7 +30,7 @@ pub(super) fn menu_page(
     languages: &[oag_ui::language::Language],
     strings: &oag_ui::language::StringTable,
     music_discs: &crate::audio::MusicDiscs,
-    backdrop: Option<oag_ui::menu::Backdrop>,
+    backdrop: Option<oag_ui::menu::Picture>,
     skin: &oag_ui::menu::Skin,
     // The width of a string in the face the entries are drawn in, which a
     // horizontal strip needs and a column does not. The same face `skin`'s line
@@ -446,7 +446,7 @@ pub(super) fn picker_page(
     tracks: &[crate::catalogue::Track],
     teams: &[crate::catalogue::Team],
     strings: &oag_ui::language::StringTable,
-    backdrop: Option<oag_ui::menu::Backdrop>,
+    backdrop: Option<oag_ui::menu::Picture>,
     skin: &oag_ui::menu::Skin,
     frame: &oag_ui::menu::Frame,
     sprites: &crate::sprite::Sheet,
@@ -720,6 +720,36 @@ pub(super) fn picker_stills(
         log::info!("{line}");
     }
     stills
+}
+
+/// The Fury backdrop's frame for a captured page, on a source that has one:
+/// the same model the live stage ticks, run `anim_seconds` in at sixty frames
+/// a second, sized to the viewport and tinted for the page - the root is the
+/// disc's `Main Menu`. One frame, so the trail the live picture accumulates
+/// is not here; the fresh particles are.
+pub(super) fn fury_picture(
+    assets: Option<&crate::boot::fury::FuryAssets>,
+    page: &str,
+    viewport: (f32, f32, f32, f32),
+    anim_seconds: Option<f32>,
+) -> Option<oag_ui::menu::Picture> {
+    let assets = assets?;
+    let mut model = oag_ui::backdrop::Fury::new(
+        assets.settings.clone(),
+        assets.first,
+        crate::boot::fury::SEED,
+    )?;
+    let frames =
+        (anim_seconds.unwrap_or(0.0).max(0.0) * oag_ui::backdrop::FRAMES_PER_SECOND) as u32;
+    for _ in 0..frames {
+        model.tick();
+    }
+    let (_, _, w, h) = viewport;
+    Some(oag_ui::menu::Picture::from(model.frame(
+        h,
+        w / h,
+        assets.tints.for_root(page == "main"),
+    )))
 }
 
 #[cfg(test)]

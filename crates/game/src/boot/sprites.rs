@@ -50,14 +50,7 @@ pub(super) fn block_art(
         ));
         return None;
     };
-    let fury = screens
-        .globals
-        .get("HD_BG")
-        .and_then(|value| oag_ui::screen::parse_argb(value))
-        .is_some_and(|argb| {
-            let [r, g, b] = [argb >> 16 & 0xff, argb >> 8 & 0xff, argb & 0xff];
-            r + g + b < 3 * 128
-        });
+    let fury = fury_style(screens);
     let cursor = sprites.get(blocks.cursor_texture);
     let arrow = sprites.get(blocks.arrow_texture);
     report.push(format!(
@@ -82,6 +75,20 @@ pub(super) fn block_art(
         arrow,
         fury,
     })
+}
+
+/// Whether the served front end is the Fury style - see [`block_art`] for the
+/// rule and why it stands in for `FrontEnd_IsFuryStyle`. Read by the menu
+/// backdrop's loader too, since it is the same byte both widgets check.
+pub(super) fn fury_style(screens: &Screens) -> bool {
+    screens
+        .globals
+        .get("HD_BG")
+        .and_then(|value| oag_ui::screen::parse_argb(value))
+        .is_some_and(|argb| {
+            let [r, g, b] = [argb >> 16 & 0xff, argb >> 8 & 0xff, argb & 0xff];
+            r + g + b < 3 * 128
+        })
 }
 
 /// Decodes every image the screens name.

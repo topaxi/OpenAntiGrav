@@ -61,6 +61,9 @@ pub struct Boot {
     pub menu_skin: &'static oag_title::MenuSkin,
     /// The frame its menus are drawn inside. See [`Shell::frame`].
     pub frame: oag_ui::menu::Frame,
+    /// The Fury menu backdrop's clouds and settings, on a Fury-style HD source
+    /// - see [`fury::load`]. `None` everywhere else.
+    pub fury_backdrop: Option<Arc<fury::FuryAssets>>,
     /// The race box's selection screens. See [`Shell::track_select`].
     pub track_select: Option<oag_ui::picker::Layout>,
     pub ship_select: Option<oag_ui::picker::Layout>,
@@ -360,6 +363,9 @@ pub struct Shell {
     /// all three are in hand. Empty for a title whose frame is unread, which
     /// draws the menus exactly as they were drawn before this existed.
     pub frame: oag_ui::menu::Frame,
+    /// The Fury menu backdrop's settings, clouds and tints, read here for the
+    /// same reason the frame is; `None` on every source but a Fury-style HD.
+    pub fury_backdrop: Option<Arc<fury::FuryAssets>>,
     /// The race box's two selection screens, read off the same XML the
     /// frame was - `Track Creation` and `Team Selection` on Pulse - with
     /// every string resolved. `None` on a title that authors neither, which
@@ -686,6 +692,16 @@ pub fn load_shell(
     // menu that looks like the wrong game is then a line in the boot report
     // rather than a mystery. See [`oag_ui::menu::frame`].
     let blocks = sprites::block_art(front_end.menu.blocks, &sprites, &screens, &mut report);
+    let skin_xml = archives
+        .read_name(front_end.root)
+        .ok()
+        .and_then(|b| expand(&b).ok());
+    let fury_backdrop = fury::load(
+        &mut archives,
+        sprites::fury_style(&screens),
+        skin_xml.as_deref(),
+        &mut report,
+    );
     let frame = oag_ui::menu::read_frame(
         &screens,
         sprites.entries(),
@@ -726,6 +742,7 @@ pub fn load_shell(
             profile,
             menu_skin: front_end.menu,
             frame,
+            fury_backdrop,
             track_select,
             ship_select,
             menu_font,
@@ -1076,6 +1093,7 @@ pub fn assemble(shell: Shell, media: Media) -> Boot {
         profile,
         menu_skin,
         frame,
+        fury_backdrop,
         track_select,
         ship_select,
         menu_font,
@@ -1256,6 +1274,7 @@ pub fn assemble(shell: Shell, media: Media) -> Boot {
         entries,
         menu_skin,
         frame,
+        fury_backdrop,
         track_select,
         ship_select,
         menu_font,
@@ -1607,42 +1626,8 @@ pub fn load_strings(
     }
 }
 
-/// What `--movie` defaults to: the movie the disc's own boot plays.
-///
-/// `Data\Movies\Intro.PMF` is the 1200-frame, 40-second Pulse showcase, and it
-/// is what the `LogoFMV` screen's `Movie` widget names - `src="Data\Movies\Intro"`,
-/// `autostart`, `repeat="false"`, `autoredirect` - in the front-end XML on the
-/// disc. A cold boot under PPSSPP with `MoviePlayer_Open` armed from reset opens
-/// exactly two movies in ten minutes, this one and `Data\Movies\Backdrop.PMF`,
-/// the latter being the looping backdrop of the `FE Screen` that comes after.
-///
-/// See `docs/architecture/frontend-boot.md` and
-/// `docs/ghidra/functions/psp-pulse-usa/frontend-video.md`.
-pub const DEFAULT_BOOT_MOVIE: &str = pulse::names::INTRO_MOVIE;
-
-/// What `--reel` defaults to: the European cut of the dev/pub reel.
-///
-/// Spelled as a hash because the reel has no recovered name. It is the reel
-/// whose contents fit `Intro Screen->IntroMovie1`'s constants - 260 frames,
-/// static at 144 and 231, which is exactly where that state pauses for two
-/// seconds, and those frames read `SONY COMPUTER ENTERTAINMENT EUROPE PRESENTS`
-/// and `A STUDIO LIVERPOOL GAME`.
-///
-/// **It is not a boot movie.** The disc never opens it during boot, and it
-/// carries no Pulse branding: the same three cuts ship byte-identically on
-/// *Wipeout Pure*'s USA disc, which is why booting into it looked like the wrong
-/// game. Where the reels *are* played is an open question.
-///
-/// European rather than American despite the disc's `UCUS-98712` serial: the
-/// executable on this image is the EU build throughout - 18 `UCES00465` strings
-/// and no `UCUS` string at all - and the ISO's volume id and publisher are both
-/// `SCEE`. Confidence 75; the selection itself has not been read out of the
-/// binary. `--movie hash:3d2c85f8` is the American cut.
-///
-/// See `docs/architecture/frontend-boot.md`.
-pub const DEVPUB_REEL: &str = pulse::names::DEVPUB_REEL;
-
 mod fonts;
+pub mod fury;
 mod images;
 mod movies;
 mod provenance;
@@ -1652,8 +1637,8 @@ mod sprites;
 pub(crate) mod xml;
 
 use fonts::{load_font, load_menu_font, load_title_font};
-pub use movies::EntryRef;
 use movies::load_movie;
+pub use movies::{DEFAULT_BOOT_MOVIE, DEVPUB_REEL, EntryRef};
 use roster::{definitions, load_circuit_names, load_teams, load_tracks, load_zone_tracks};
 use screens::{load_included_screens, load_screens, selection_layouts};
 use xml::expand;

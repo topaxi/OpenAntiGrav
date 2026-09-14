@@ -928,6 +928,13 @@ route is, is open**. The unpaired set is coherent rather than random - all of
 `lineshader` and `FatLine` - which is a hint that they share a mechanism, not
 evidence of one.
 
+**Closed 2026-09-14**: the route is `ShaderRegistry_RegisterPair` (`0x006774b8`,
+`(slot, name, blob)`), called from each subsystem's static initialiser with both
+arguments loaded from the TOC, which is why a `bl`-to-constructor scan never saw
+it. Reading `r4`/`r5` at every `bl 0x006774b8` pairs the 62 - see
+[menu-backdrop.md](menu-backdrop.md#the-shader-pairs-and-the-registration-route-the-census-could-not-see)
+for the table covering the RadioHeads and the three `FEBackgroundAnimFury` passes.
+
 `FunkLayerBloom_vp`'s block at `0x0092ec80`, and why the reading is not just
 magic-matching:
 

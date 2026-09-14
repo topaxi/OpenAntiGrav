@@ -11,6 +11,7 @@
 //! `docs/architecture/workspace-layout.md`.
 
 pub mod anim;
+pub mod backdrop;
 pub mod font;
 pub mod frontend;
 pub mod language;

@@ -132,6 +132,14 @@ ALLOWED = {
         "printed number. It is f64 as well, which nothing in the simulation "
         "may be"
     ),
+    "crates/ui/src/backdrop.rs": (
+        "`camera`'s `tan` is the Fury menu backdrop's projection - the tangent "
+        "of half the authored `fovy`, the same term `display.rs`'s entry above "
+        "is allowed for and for the same reason. The frame it builds is handed "
+        "to `oag_game::render` as a `Draw` and reaches a pixel, never a hash: "
+        "no simulation crate names `oag_ui::backdrop`, and the menus draw "
+        "nothing the tick reads"
+    ),
     "crates/ui/src/frontend/draw.rs": (
         "`pulse_alpha`'s `sin` shapes the PRESS START text's fade-in/pulse "
         "curve, and `menu/skin.rs`'s `cos` (below) shapes a selected row's "
