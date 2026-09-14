@@ -238,3 +238,173 @@ pub(crate) fn to_campaign_medal(medal: oag_game::records::Medal) -> Medal {
         oag_game::records::Medal::Bronze => Medal::Bronze,
     }
 }
+
+/// What this race's own outcome feeds `loyalty_award` - one field per term
+/// `Race_ComputeLoyaltyAward` reads. Two of the seven are always `0`/`false`
+/// because this project keeps no running tally for them: `perfect_laps` (no
+/// per-lap "was this one perfect" accumulator exists past the disc's own
+/// unread `perfectlap{n}` flag direction - see
+/// `docs/formats/endrace-screens.md`) and `perfect_zones` (`oag_race::state::Outcome::perfect_zone`
+/// is a per-tick event, not a running count, and `crates/race` is outside
+/// this lane). `suggested_ship` is always `false` - `docs/ui/campaign-screens.md`'s
+/// own "Not launched from a cell: the AI difficulty curve" already records
+/// that this project implements no per-cell suggested-ship mechanism at all.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct LoyaltyInputs {
+    pub(crate) mode: oag_race::Mode,
+    pub(crate) laps: u32,
+    pub(crate) perfect_laps: u32,
+    pub(crate) kills: u32,
+    pub(crate) zones: u32,
+    pub(crate) perfect_zones: u32,
+    /// `0`/`1`/`2` (easy/medium/hard) - `None` when this project has no
+    /// honest mapping to offer. See [`loyalty_award`]'s own doc on why this
+    /// is `None` for every race today.
+    pub(crate) difficulty: Option<u8>,
+    pub(crate) suggested_ship: bool,
+}
+
+/// `Race_ComputeLoyaltyAward` (`0x0880ac50`), confidence 95, confirmed on
+/// two independent live `Time Trial` races -
+/// `docs/ghidra/functions/psp-pulse-usa/endrace-screens.md`. The
+/// `SingleRace`/Tournament/Head2Head branch (the only one with a difficulty
+/// multiplier) and the `Zone`/`Eliminator` branch are decompiled under the
+/// same page but not independently live-verified - `oag_ui::endrace::Loyalty`
+/// carries no flag for this, so `docs/ui/endrace-screens.md` states the
+/// caveat in prose rather than on screen, the same way this project already
+/// treats every other confidence gap that does not change what draws.
+///
+/// **`inputs.difficulty` is always `None` in this build**: the original's
+/// own `easy`/`medium`/`hard` three-tier scale is a campaign cell's own
+/// `skill`/`skillEasy`/`skillHard` (`AI_ResolveSkillScale`, not implemented -
+/// see `docs/ui/campaign-screens.md`), not this project's four-tier
+/// `[ai] difficulty` (`novice`/`skilled`/`elite`/`ace`) - the two scales do
+/// not correspond, so mapping one onto the other would be inventing a
+/// correspondence the disc does not author. `None` reads as `SingleRace`'s
+/// own multiplier defaulting to `1` (no multiplier) - a real absence, not a
+/// guessed "medium".
+#[must_use]
+pub(crate) fn loyalty_award(inputs: LoyaltyInputs) -> u32 {
+    let (lap_rate, perfect_lap_rate) = match inputs.mode {
+        oag_race::Mode::SingleRace => (15, 25),
+        oag_race::Mode::TimeTrial | oag_race::Mode::SpeedLap => (30, 50),
+        oag_race::Mode::Zone | oag_race::Mode::Eliminator => (10, 20),
+    };
+    let lap_term = inputs.laps * lap_rate + inputs.perfect_laps * perfect_lap_rate;
+    let kill_rate = if inputs.mode == oag_race::Mode::Eliminator {
+        30
+    } else {
+        15
+    };
+    let kill_term = inputs.kills * kill_rate;
+    let zone_term = inputs.zones * 10 + inputs.perfect_zones * 20;
+
+    let mut multiplier = 1;
+    if inputs.mode == oag_race::Mode::SingleRace {
+        multiplier = match inputs.difficulty {
+            Some(0) => 2,
+            Some(1) => 3,
+            Some(2) => 4,
+            // No honest mapping - see this function's own doc.
+            _ => 1,
+        };
+    }
+    if inputs.suggested_ship {
+        multiplier *= 2;
+    }
+
+    multiplier * (lap_term + kill_term + zone_term)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{LoyaltyInputs, loyalty_award};
+
+    /// The two live races
+    /// (`docs/ghidra/functions/psp-pulse-usa/endrace-screens.md`'s
+    /// "Runtime-confirmed 2026-09-14"): a 3-lap Time Trial, zero of
+    /// everything else, is `90` both times, independent of pace.
+    #[test]
+    fn a_three_lap_time_trial_with_nothing_else_reproduces_ninety() {
+        let award = loyalty_award(LoyaltyInputs {
+            mode: oag_race::Mode::TimeTrial,
+            laps: 3,
+            perfect_laps: 0,
+            kills: 0,
+            zones: 0,
+            perfect_zones: 0,
+            difficulty: None,
+            suggested_ship: false,
+        });
+        assert_eq!(award, 90);
+    }
+
+    /// `SingleRace`'s own difficulty multiplier - decompiled, not
+    /// independently live-verified (see the module's own doc on
+    /// `loyalty_award`) - doubles/triples/quadruples the lap term, and a
+    /// suggested-ship race doubles whatever that already is.
+    #[test]
+    fn single_race_carries_a_difficulty_multiplier_the_other_modes_do_not() {
+        let base = |difficulty| {
+            loyalty_award(LoyaltyInputs {
+                mode: oag_race::Mode::SingleRace,
+                laps: 3,
+                perfect_laps: 0,
+                kills: 0,
+                zones: 0,
+                perfect_zones: 0,
+                difficulty,
+                suggested_ship: false,
+            })
+        };
+        // 3 laps * 15 = 45, times the multiplier.
+        assert_eq!(base(None), 45, "no honest mapping - defaults to x1");
+        assert_eq!(base(Some(0)), 90, "easy - x2");
+        assert_eq!(base(Some(1)), 135, "medium - x3");
+        assert_eq!(base(Some(2)), 180, "hard - x4");
+
+        let suggested = loyalty_award(LoyaltyInputs {
+            mode: oag_race::Mode::SingleRace,
+            laps: 3,
+            perfect_laps: 0,
+            kills: 0,
+            zones: 0,
+            perfect_zones: 0,
+            difficulty: Some(0),
+            suggested_ship: true,
+        });
+        assert_eq!(
+            suggested, 180,
+            "easy x2, doubled again for a suggested ship"
+        );
+    }
+
+    /// `Zone`/`Eliminator` take the fixed `10`/`20` lap rate and their own
+    /// kill/zone terms, and carry no difficulty multiplier at all.
+    #[test]
+    fn zone_and_eliminator_use_the_low_rate_and_their_own_terms() {
+        let zone = loyalty_award(LoyaltyInputs {
+            mode: oag_race::Mode::Zone,
+            laps: 0,
+            perfect_laps: 0,
+            kills: 0,
+            zones: 5,
+            perfect_zones: 1,
+            difficulty: Some(2), // ignored outside SingleRace
+            suggested_ship: false,
+        });
+        assert_eq!(zone, 5 * 10 + 20);
+
+        let eliminator = loyalty_award(LoyaltyInputs {
+            mode: oag_race::Mode::Eliminator,
+            laps: 2,
+            perfect_laps: 0,
+            kills: 3,
+            zones: 0,
+            perfect_zones: 0,
+            difficulty: None,
+            suggested_ship: false,
+        });
+        assert_eq!(eliminator, 2 * 10 + 3 * 30);
+    }
+}

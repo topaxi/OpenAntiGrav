@@ -161,6 +161,16 @@ fn endrace_page(
             let model = oag_ui::endrace::Rewards {
                 medal: None,
                 campaign: true,
+                // The reference capture's own numbers
+                // (`docs/ui/campaign-screens.md`'s "After a campaign race,
+                // measured"): a fresh profile's first race,
+                // `Race_ComputeLoyaltyAward`'s `3 laps * 30 = 90`, matching
+                // `"Assegai Loyalty: 90 Points"` / `"Total loyalty: 90"`.
+                loyalty: Some(oag_ui::endrace::Loyalty {
+                    team_name: "Assegai".to_string(),
+                    award: 90,
+                    total: 90,
+                }),
             };
             oag_ui::endrace::rewards_draw_list(
                 &model,

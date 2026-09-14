@@ -80,6 +80,9 @@ fn strings() -> StringTable {
 <Entry ID="ER_VIEW_AGAIN" String="VIEW RESULTS AGAIN"></Entry>
 <Entry ID="ER_NEW_GHOST" String="NEW GHOST RECORD:"></Entry>
 <Entry ID="FE_CONFIRM_BUTTON" String="X"></Entry>
+<Entry ID="ER_LOY" String="Loyalty:"></Entry>
+<Entry ID="ER_POINTS" String="Points"></Entry>
+<Entry ID="ER_TOT_LOY" String="Total loyalty:"></Entry>
 </Strings>"#,
     )
 }
@@ -228,12 +231,13 @@ fn a_position_headline_resolves_and_an_unresolved_one_draws_nothing() {
 
 /// The one measured case: a campaign race with no medal shows the hex-dash
 /// glyph and the `No medal awarded` phrase, and draws nothing in the
-/// loyalty row - see `docs/ui/endrace-screens.md`.
+/// loyalty row when the model carries none - see `docs/ui/endrace-screens.md`.
 #[test]
-fn rewards_draws_the_no_medal_case_and_never_the_loyalty_row() {
+fn rewards_draws_the_no_medal_case_and_never_the_loyalty_row_absent_one() {
     let model = Rewards {
         medal: None,
         campaign: true,
+        loyalty: None,
     };
     let layers = rewards_draw_list(
         &model,
@@ -261,6 +265,43 @@ fn rewards_draws_the_no_medal_case_and_never_the_loyalty_row() {
     );
 }
 
+/// The loyalty row draws once the model carries an award -
+/// `Race_ComputeLoyaltyAward`/`Loyalty_AccumulateTotal`'s own two numbers,
+/// `docs/ghidra/functions/psp-pulse-usa/endrace-screens.md`, matching the
+/// captured `"Assegai Loyalty: 90 Points"` / `"Total loyalty: 90"`.
+#[test]
+fn rewards_draws_the_loyalty_row_once_the_model_carries_an_award() {
+    let model = Rewards {
+        medal: None,
+        campaign: true,
+        loyalty: Some(crate::endrace::Loyalty {
+            team_name: "Assegai".to_string(),
+            award: 90,
+            total: 90,
+        }),
+    };
+    let layers = rewards_draw_list(
+        &model,
+        &rewards_layout(),
+        &skin(),
+        &Frame::default(),
+        &strings(),
+        None,
+        false,
+        &|_| placed(),
+    );
+    let texts = texts(&layers);
+    assert!(texts.contains(&"Assegai Loyalty:".to_string()), "{texts:?}");
+    assert!(texts.contains(&"90 Points".to_string()), "{texts:?}");
+    assert!(
+        texts.contains(&"Total loyalty: 90".to_string()),
+        "{texts:?}"
+    );
+    // `LoyaltyImg` plus the two loyalty-bar sprites, alongside `MedalImg`'s
+    // own hex-dash glyph (no medal, campaign race).
+    assert_eq!(sprite_count(&layers), 4, "{:?}", layers.body);
+}
+
 /// A non-campaign race hides `MedalImg` outright, and an earned medal
 /// leaves it undrawn too - the trophy is the composition root's own layer,
 /// not this crate's.
@@ -270,10 +311,12 @@ fn rewards_hides_the_glyph_off_a_non_campaign_race_or_an_earned_medal() {
         Rewards {
             medal: None,
             campaign: false,
+            loyalty: None,
         },
         Rewards {
             medal: Some(Medal::Gold),
             campaign: true,
+            loyalty: None,
         },
     ] {
         let layers = rewards_draw_list(

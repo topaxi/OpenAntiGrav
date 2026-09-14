@@ -139,10 +139,11 @@ pub fn results_draw_list(
     layers
 }
 
-/// `EndRace Rewards`' draw list: the medal-award phrase, and the disc's own
-/// hex-dash glyph on the one measured no-medal case. See the module doc on
-/// [`super::Rewards`] for the trophy (drawn by the composition root, not
-/// here) and why the loyalty row draws nothing at all.
+/// `EndRace Rewards`' draw list: the medal-award phrase, the disc's own
+/// hex-dash glyph on the one measured no-medal case, and the loyalty row
+/// when the model carries one. See the module doc on [`super::Rewards`] for
+/// the trophy (drawn by the composition root, not here) and
+/// [`super::Loyalty`] for the law behind the two loyalty numbers.
 #[must_use]
 #[allow(
     clippy::too_many_arguments,
@@ -174,12 +175,37 @@ pub fn rewards_draw_list(
     }
     for image in &screen.images {
         let name = image.name.as_deref().unwrap_or("");
-        // The loyalty row's own icon and fill bar, and the medal glyph
-        // outside the one measured case - see the module doc.
-        if matches!(name, "LoyaltyImg" | "loyaltybg" | "loyaltybar") {
+        // The loyalty row's own icon, drawn only alongside the row's own
+        // text - see the module doc.
+        if name == "LoyaltyImg" && model.loyalty.is_none() {
             continue;
         }
         if name == "MedalImg" && !model.shows_no_medal_glyph() {
+            continue;
+        }
+        if name == "loyaltybg" {
+            if model.loyalty.is_some()
+                && let Some(placed) = sprites(&image.src)
+            {
+                out.push(image_draw(image, placed));
+            }
+            continue;
+        }
+        if name == "loyaltybar" {
+            if let (Some(loyalty), Some(placed)) = (&model.loyalty, sprites(&image.src)) {
+                // `loyaltybar`'s own fill fraction -
+                // `EndRaceRewards_Update`'s `total * 0.00124`, decompiled
+                // (`docs/ghidra/functions/psp-pulse-usa/endrace-screens.md`).
+                // The total is capped at `100000` (`Loyalty_AccumulateTotal`),
+                // well inside `f32`'s exact-integer range, so this cast loses
+                // nothing.
+                #[allow(
+                    clippy::cast_precision_loss,
+                    reason = "total is capped at 100_000, exact in f32"
+                )]
+                let fraction = loyalty.total as f32 * 0.00124;
+                out.push(loyalty_bar_draw(image, placed, fraction));
+            }
             continue;
         }
         let Some(placed) = sprites(&image.src) else {
@@ -189,16 +215,24 @@ pub fn rewards_draw_list(
     }
     for text in &screen.texts {
         let name = text.name.as_deref().unwrap_or("");
-        let content = match name {
-            "RewardLine1" => Some(medal_award_text(model.medal, strings)),
-            // The loyalty row (`docs/formats/endrace-screens.md`'s own
-            // "the loyalty award...is a one-observation hypothesis, not a
-            // decompile") and `BigPos` (a finishing-position figure this
-            // model carries no place for) - drawn nothing, per the module
-            // doc.
-            "RewardLine2" | "RewardLoyaltyActive" | "loyaltynum" | "BigPos" => None,
-            _ => text.string.clone(),
-        };
+        let content =
+            match name {
+                "RewardLine1" => Some(medal_award_text(model.medal, strings)),
+                "RewardLine2" => model.loyalty.as_ref().map(|loyalty| {
+                    format!("{} {}", loyalty.team_name, strings.get_or_id("ER_LOY"))
+                }),
+                "RewardLoyaltyActive" => model
+                    .loyalty
+                    .as_ref()
+                    .map(|loyalty| format!("{} {}", loyalty.award, strings.get_or_id("ER_POINTS"))),
+                "loyaltynum" => model.loyalty.as_ref().map(|loyalty| {
+                    format!("{} {}", strings.get_or_id("ER_TOT_LOY"), loyalty.total)
+                }),
+                // `BigPos` (a finishing-position figure this model carries no
+                // place for) - drawn nothing, per the module doc.
+                "BigPos" => None,
+                _ => text.string.clone(),
+            };
         let Some(content) = content else { continue };
         out.push(text_draw(text, &content, layout));
     }
@@ -431,6 +465,17 @@ fn mean(a: [f32; 4], b: [f32; 4]) -> [f32; 4] {
 
 fn image_draw(image: &Image, placed: Placed) -> Draw {
     sprite_draw(image, placed, image.x, image.y, image.color)
+}
+
+/// `loyaltybar`'s own draw, its authored width scaled by `fraction` - a
+/// clone with the width overridden reaches the same `sprite_draw` every
+/// other image on this screen does, rather than a second copy of its UV
+/// logic for one widget.
+fn loyalty_bar_draw(image: &Image, placed: Placed, fraction: f32) -> Draw {
+    let full_width = image.width.unwrap_or(placed.width as f32);
+    let mut scaled = image.clone();
+    scaled.width = Some(full_width * fraction.clamp(0.0, 1.0));
+    sprite_draw(&scaled, placed, image.x, image.y, image.color)
 }
 
 fn sprite_draw(image: &Image, placed: Placed, x: f32, y: f32, argb: u32) -> Draw {

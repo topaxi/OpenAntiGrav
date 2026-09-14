@@ -143,11 +143,22 @@ draws, what is left blank and why, and its own measured-vs-chosen table.
 against the reference frames, and one live Xvfb walk confirmed `EndRace
 Results` draws correctly over a real, just-finished race. What is left:
 
-- **The loyalty row now draws for the two live-verified branches**
-  (Time Trial/Speed Lap) - `Race_ComputeLoyaltyAward`/`Loyalty_AccumulateTotal`
-  (see Open above) unblocked this once the law landed in main. The
-  Race/Zone/Elimination branches are decompiled but not live-verified, drawn
-  under the same law with that caveat stated on screen and in the docs page.
+- **The loyalty row now draws, including a persisted per-team total**
+  (`records.toml`'s new `[[loyalty]]` table, `Store::record_loyalty`/
+  `loyalty_total`) - `Race_ComputeLoyaltyAward`/`Loyalty_AccumulateTotal`
+  (see Open above) unblocked this once the law landed in main.
+  `SingleRace`/`Zone`/`Eliminator` are decompiled but not independently
+  live-verified, drawn under the same law with that caveat stated in prose
+  (`docs/ui/endrace-screens.md`), not on screen. "Perfect lap"/"perfect
+  zone" counts and the campaign's own `easy`/`medium`/`hard` difficulty
+  multiplier are always `0`/unapplied - this project keeps no running tally
+  for the first two and has no honest mapping from its own four-tier
+  `[ai] difficulty` to the original's three-tier scale for the third. **A
+  real, unresolved mismatch**: `loyaltybar`'s own fill width, computed from
+  the decompiled `total * 0.00124` fraction, does not match how full the
+  reference frame's own bar shows at the same total (`90`) - see
+  `docs/ui/endrace-screens.md`'s Open section, a rendering-law question for
+  whoever next has a Ghidra bridge on this screen.
 - **The trophy model is not wired.** `oag_game::preview::model` can load an
   arbitrary `.vex` the same way a picker's own ship preview does, and
   `TrophyPanel`'s own `OriginX="145.0" OriginY="60.0"` is a real number

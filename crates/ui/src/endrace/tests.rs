@@ -76,6 +76,7 @@ fn the_no_medal_glyph_shows_only_on_a_medal_less_campaign_race() {
         Rewards {
             medal: None,
             campaign: true,
+            loyalty: None,
         }
         .shows_no_medal_glyph()
     );
@@ -83,6 +84,7 @@ fn the_no_medal_glyph_shows_only_on_a_medal_less_campaign_race() {
         !Rewards {
             medal: None,
             campaign: false,
+            loyalty: None,
         }
         .shows_no_medal_glyph()
     );
@@ -90,6 +92,7 @@ fn the_no_medal_glyph_shows_only_on_a_medal_less_campaign_race() {
         !Rewards {
             medal: Some(Medal::Gold),
             campaign: true,
+            loyalty: None,
         }
         .shows_no_medal_glyph()
     );

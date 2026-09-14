@@ -7,7 +7,9 @@ use log::warn;
 
 use oag_ui::endrace::{Event, MenuOption};
 
-use crate::race_stage::endrace::{EndRaceRuntime, headline, menu_options, to_campaign_medal};
+use crate::race_stage::endrace::{
+    EndRaceRuntime, LoyaltyInputs, headline, loyalty_award, menu_options, to_campaign_medal,
+};
 use crate::stage::Stage;
 
 use super::Session;
@@ -35,7 +37,9 @@ impl Session {
         let mode = race_options.mode;
         let source = race_options.source.clone();
         let dlc = race_options.dlc.clone();
+        let team = race_options.team.clone();
         let campaign = stage.campaign_cell.is_some();
+        let title = stage.result_key.title.clone();
         let observation = stage.observation();
         let standing = &stage.race.sim.world.ships[0].standing;
         let laps: Vec<oag_ui::endrace::LapSplit> = (0..oag_race::MAX_RECORDED_LAPS)
@@ -47,6 +51,20 @@ impl Session {
             })
             .collect();
         let new_best_lap_ticks = standing.best_lap_ticks;
+
+        // `Race_ComputeLoyaltyAward`'s own inputs - see `LoyaltyInputs`'s own
+        // doc for why `perfect_laps`/`perfect_zones`/`suggested_ship` are
+        // always `0`/`false` and `difficulty` always `None` in this build.
+        let award = loyalty_award(LoyaltyInputs {
+            mode,
+            laps: observation.laps_completed,
+            perfect_laps: 0,
+            kills: standing.kills,
+            zones: u32::from(stage.race.sim.world.race.zone),
+            perfect_zones: 0,
+            difficulty: None,
+            suggested_ship: false,
+        });
 
         let faces = oag_ui::picker::FaceScales {
             default: shell
@@ -113,9 +131,25 @@ impl Session {
             laps,
             total_ticks: observation.tick,
         };
+        // The loyalty row - `None` when this launch named no team at all
+        // (a `--race` run with no `--team`), which draws the row absent
+        // rather than a blank name. A real launch through `Team Selection`
+        // always names one.
+        let loyalty = team.map(|team| {
+            let total = self.records.record_loyalty(&title, &team, award);
+            if let Err(e) = oag_game::records::save(&self.records) {
+                warn!("could not save the loyalty total: {e:#}");
+            }
+            oag_ui::endrace::Loyalty {
+                team_name: team,
+                award,
+                total,
+            }
+        });
         let rewards = oag_ui::endrace::Rewards {
             medal: observation.campaign_medal.map(to_campaign_medal),
             campaign,
+            loyalty,
         };
         let menu = oag_ui::endrace::EndRaceMenu::new(menu_options(campaign), new_best_lap_ticks);
 

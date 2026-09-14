@@ -34,9 +34,12 @@
 //!   preview uses) rather than anything this crate draws itself - see the
 //!   module's own "not runtime-verified" note in the ghidra page for why
 //!   `MedalImg`'s own state under an earned trophy is left undrawn rather
-//!   than guessed. **The loyalty row draws nothing at all** - its award law
-//!   is a different lane's still-open decompile (see the handover thread),
-//!   and this pass does not compute a number the disc has not yet given up.
+//!   than guessed. **The loyalty row draws when the model carries a
+//!   [`Loyalty`]** - `Race_ComputeLoyaltyAward`/`Loyalty_AccumulateTotal`
+//!   (confidence 95/90, `docs/ghidra/functions/psp-pulse-usa/endrace-screens.md`)
+//!   landed after this crate's own first pass, which is why the module's
+//!   earlier reading (nothing drawn at all) no longer holds; `None` still
+//!   draws nothing, for a caller with no team to compute one for.
 //! - **`EndRace Menu`**: the option list, built per mode the same way
 //!   `EndRaceMenu_PopulateOptions` builds it, and the just-driven run's own
 //!   best lap (`GhostTime2`/`ER_NEW_GHOST`). **No existing-ghost comparison
@@ -120,15 +123,43 @@ pub struct Results {
     pub total_ticks: u64,
 }
 
-/// `EndRace Rewards`: the medal award, and whether a campaign cell was in
-/// play at all - `EndRaceRewards_OnEnter`'s own `DAT_08b30ffc != 0` branch,
-/// which decides whether a trophy is even attempted. `false` on a Racebox/
-/// custom race, which never resolves a trophy and hides `MedalImg` outright
-/// - see the module doc.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// `EndRace Rewards`: the medal award, whether a campaign cell was in play
+/// at all - `EndRaceRewards_OnEnter`'s own `DAT_08b30ffc != 0` branch, which
+/// decides whether a trophy is even attempted - and this race's own loyalty
+/// award, if one was computed. `campaign` is `false` on a Racebox/custom
+/// race, which never resolves a trophy and hides `MedalImg` outright - see
+/// the module doc.
+#[derive(Debug, Clone, PartialEq)]
 pub struct Rewards {
     pub medal: Option<Medal>,
     pub campaign: bool,
+    /// `RewardLine2`/`RewardLoyaltyActive`/`loyaltynum`/`loyaltybar`'s own
+    /// row - `None` draws none of it, the same absence this project's own
+    /// rule prefers over a guessed number. See [`Loyalty`]'s own doc for the
+    /// law behind the two numbers it carries.
+    pub loyalty: Option<Loyalty>,
+}
+
+/// This race's own loyalty award and the team's running total -
+/// `Race_ComputeLoyaltyAward`/`Loyalty_AccumulateTotal`
+/// (`docs/ghidra/functions/psp-pulse-usa/endrace-screens.md`), confidence 95/90,
+/// confirmed on two live Time-Trial/Speed-Lap races; the Race/Zone/
+/// Eliminator branches are decompiled under the same law but not
+/// independently live-verified - see that page's own "Still open".
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Loyalty {
+    /// The team's own display name (e.g. `"Assegai"`) - `RewardLine2`'s own
+    /// `"%s %s"` of this and `ER_LOY` is built at draw time, not stored
+    /// pre-formatted, so a source with no team name resolves this screen
+    /// exactly as honestly as every other label on it.
+    pub team_name: String,
+    /// This race's own award - `RewardLoyaltyActive`'s `"%d %s"` of this and
+    /// `ER_POINTS`.
+    pub award: u32,
+    /// The team's running total *after* this race's award is folded in -
+    /// `loyaltynum`'s `"%s %d"` of `ER_TOT_LOY` and this, and `loyaltybar`'s
+    /// own fill fraction (`total * 0.00124`).
+    pub total: u32,
 }
 
 impl Rewards {
