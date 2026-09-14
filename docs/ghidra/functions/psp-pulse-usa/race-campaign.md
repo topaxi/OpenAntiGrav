@@ -1452,6 +1452,33 @@ itself calls" - a concrete next target rather than an open-ended search.
 cannot be entered or played in the original, on this profile, at either
 granularity.
 
+### `0x088c8a10` decompiled: a negative result, not the lock check
+
+`0x088c8a10` is a return address inside `StateMachine_EvaluateRedirect`
+(`0x088c8798`, confidence 75, [full read on the EndRace screens
+page](endrace-screens.md#deliverable-3-0x088c8a10s-containing-function-is-not-a-lock-check) -
+decompiled that pass because it was reached chasing the EndRace screens'
+own confirm handling and turned out to be the same function this page's
+positive control already pinned). It is the generic `<Redirect><Entry
+item= equals= goto=>...<Default goto=>` evaluator every screen's own
+`<Redirect>` block goes through on confirm - eleven call sites across the
+binary, none of them specific to `CellSelection` or the campaign. **It
+never reads `Locked`, a medal, or any `PI_Cell`/`PI_Grid`-shaped offset** -
+every field it touches is the redirect node's own `Entry` list, `Default`
+target, and the special-cased widget name `"Focus"`. So the function
+containing `0x088c8a10` is **not** the predicate that swallows a confirm on
+a locked tile; whatever does that runs *before* this function is ever
+invoked on the node in question, narrowing "somewhere before
+`StateMachine_TransitionTo`" to "somewhere before
+`StateMachine_EvaluateRedirect`, or in whichever of its eleven callers
+decides whether to invoke it at all" - still open, not closed. One of those
+callers, `0x088d7e1c`, is close in address to `CellSelection`'s own code and
+carries an unconfirmed "enabled" gate (`*(short*)(redirectNode + 0xbe)`)
+ahead of its own confirm-button check - a plausible site for a per-tile
+lock gate, not yet shown to be one; see the EndRace screens page's own
+write-up of it (confidence 55, not renamed) for the exact shape and the
+breakpoint that would settle it.
+
 ## What is not determined
 
 - **`g_class_name_table` (`0x08ab067c`) is read above as four entries, and a
@@ -1514,6 +1541,10 @@ granularity.
   rules, cell and tier" for the full four-breakpoint transcript, including
   `GridController_SetTileFlags` reproducing `GridSelection_PopulateTiles`'s
   lock-layer branch live, tile for tile, on the real page.
+  **Decompiled, 2026-09-14: a negative result.** `0x088c8a10` sits inside
+  `StateMachine_EvaluateRedirect` (`0x088c8798`), the generic, screen-agnostic
+  `<Redirect>` evaluator - it never reads `Locked` or a medal, so it is not
+  the swallowing predicate itself. See "`0x088c8a10` decompiled" above.
 - **`Group` (`+0xb0`) on a `PI_Grid`** is `1` on `grid12`..`grid15` and absent
   elsewhere; its consumer was not traced. A "these four are the expert set"
   reading is plausible and unverified.
@@ -1527,13 +1558,21 @@ granularity.
   (`CellSelection_PopulateGrid`, confirmed by `get_function_callers`), not
   any input-handling code. The real movement rule was not located this pass;
   a reimplementation is still on its own chosen nearest-neighbour search.
-- **The `Loyalty` unlock predicate** (`Unlock_LoyaltyMet`) compares the required
-  value against a whole 32-bit word at the record's `+8`, which under this
-  page's record layout is `difficulty | medal << 8`. That does not read as a
-  loyalty counter, so either the team record's payload is laid out differently
-  from a cell's or the comparison is doing something this pass did not follow.
-  Scored 72 and named `_q` on the strength of the field it reads, not the
-  arithmetic.
+- ~~The `Loyalty` unlock predicate... does not read as a loyalty counter~~
+  **Resolved, 2026-09-14, decompiling the EndRace screens
+  ([`endrace-screens.md`](endrace-screens.md)).** `Unlock_LoyaltyMet` reads a
+  **different** store from a cell's own record: `DAT_08b31774`, a per-team
+  record keyed by team name through the same generic accessor
+  (`FUN_08808664`) `race-box-screens.md` already names for `TeamSelection`'s
+  per-craft rating table. `EndRaceRewards_Update` independently reads that
+  same store's own `+8` field as a plain accumulated loyalty total (feeding
+  the `EndRace Rewards` screen's `loyaltynum`/`loyaltybar`, "Total loyalty"),
+  which is decompiled corroboration - not a runtime trace - that
+  `Unlock_LoyaltyMet`'s comparison is exactly what its name says, not a
+  misread of a cell-shaped `difficulty | medal << 8` word. Raised
+  `Unlock_LoyaltyMet`/`Unlock_LoyaltyValue` 72/78 -> 82/82 on this basis; the
+  writer of the total itself (where a race's own loyalty award gets added in)
+  was not located - see `endrace-screens.md`'s own open item.
 - **Only the USA pressing was read.** The EU and PS2 pressings of Pulse, and
   Pure and HD/Fury, were not checked for `Data\Plugins\grids` at all.
 - **Nothing is runtime-verified.** No PPSSPP breakpoint was taken this pass;
@@ -1597,8 +1636,8 @@ dictionary; expand `<x y="...">` by looking `x` and `y` up as `xs`/`ys`.
 | `0x0888f034` | `Unlock_MedalCountValue` | 80 |
 | `0x0888e86c` | `Unlock_MedalMet` | 72 |
 | `0x0888ef80` | `Unlock_MedalValue` | 85 |
-| `0x0888ea30` | `Unlock_LoyaltyMet` | 72 |
-| `0x0888f064` | `Unlock_LoyaltyValue` | 78 |
+| `0x0888ea30` | `Unlock_LoyaltyMet` | 82 |
+| `0x0888f064` | `Unlock_LoyaltyValue` | 82 |
 | `0x0888edfc` | `Unlock_TeamName` | 78 |
 | `0x0888eeb8` | `Unlock_TournamentName` | 78 |
 | `0x0880ae54` | `Race_RecordResult` | 85 |

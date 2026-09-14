@@ -769,8 +769,8 @@
 0x0888f034	function	Unlock_MedalCountValue	80	race-campaign.md
 0x0888e86c	function	Unlock_MedalMet	72	race-campaign.md
 0x0888ef80	function	Unlock_MedalValue	85	race-campaign.md
-0x0888ea30	function	Unlock_LoyaltyMet	72	race-campaign.md
-0x0888f064	function	Unlock_LoyaltyValue	78	race-campaign.md
+0x0888ea30	function	Unlock_LoyaltyMet	82	race-campaign.md
+0x0888f064	function	Unlock_LoyaltyValue	82	race-campaign.md
 0x0888edfc	function	Unlock_TeamName	78	race-campaign.md
 0x0888eeb8	function	Unlock_TournamentName	78	race-campaign.md
 0x0880ae54	function	Race_RecordResult	85	race-campaign.md
@@ -821,3 +821,16 @@
 0x088de180	function	GridSelection_CommitSelection	90	race-campaign.md
 0x088de630	function	GridSelection_PopulateTiles	90	race-campaign.md
 0x088de320	function	GridSelection_FindTileAt	80	race-campaign.md
+0x088db968	function	EndRaceResults_Construct	78	endrace-screens.md
+0x088dd89c	function	EndRaceRewards_Construct	78	endrace-screens.md
+0x088d90dc	function	EndRaceMenu_Construct	78	endrace-screens.md
+0x088d98cc	function	EndRaceResults_OnEnter	82	endrace-screens.md
+0x088da8c8	function	EndRaceResults_PopulateLapTable	80	endrace-screens.md
+0x088d939c	function	EndRaceResults_ResetTable	76	endrace-screens.md
+0x088dbbd4	function	EndRaceRewards_OnEnter	85	endrace-screens.md
+0x088dd2b8	function	EndRaceRewards_Update	85	endrace-screens.md
+0x088d81dc	function	EndRaceMenu_OnEnter	76	endrace-screens.md
+0x088d84ec	function	EndRaceMenu_DispatchPopulate	72	endrace-screens.md
+0x088d8c00	function	EndRaceMenu_PopulateOptions	80	endrace-screens.md
+0x088d8648	function	EndRaceMenu_PopulateExistingGhost	78	endrace-screens.md
+0x088c8798	function	StateMachine_EvaluateRedirect	75	endrace-screens.md
