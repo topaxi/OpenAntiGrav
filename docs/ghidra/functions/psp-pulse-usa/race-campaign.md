@@ -810,6 +810,126 @@ None of the above is runtime-verified. In order of how much each would move:
    read matches what the previous pass's "Tournament" open item described in
    `Race_RecordResult`.
 
+### Runtime-verified 2026-09-14
+
+PPSSPP v1.20.4 (SDL build), `pulse-psp-usa.chd`, Xvfb `:97`, debugger on
+`ws://127.0.0.1:47810/debugger`. Breakpoints 1-4 taken in priority order; 5
+was blocked (see below). Full transcript in
+`/tmp/oag-drive/campaign-ppsspp-measure.md`.
+
+**1. `CellSelection_CommitSelection` (`0x088d6138`) fires on a real confirm,
+and the dispatcher is `0x08891360`.** Armed the breakpoint, pressed `cross`
+on a selected cell in `Cell Selection`: the CPU stopped at `pc=0x088d6138`
+with `a0=0x08d73170` (the `CellSelection` instance - matches the `this` seen
+at every other breakpoint this pass), `a1=0x08d731c4` (`this+0x54`, not a
+bare `0`/`1` - the "`param_2 != 0`" framing above is a boolean *test* the
+decompiler rendered from a pointer compare, not a literal 0/1 argument;
+worth a caveat, not a correction, since the branch direction is unaffected),
+and `ra=0x08891360` - the exact call site `get_xrefs_to` could not find by
+cross-reference (a vtable dispatch, not a direct call). `0x08891360` was not
+decompiled or named this pass (no Ghidra bridge held), but it is now a
+concrete address for whoever holds the bridge next to confirm the
+"generic `Screen_CommitSelection`-style virtual call" guess directly rather
+than inferring it. Resuming past the hit let the confirm complete normally
+(-> `Team Selection`), so the breakpoint did not observably change behaviour.
+**Confidence raised 80 -> 92**: runtime trace, single binary (rubric caps a
+runtime trace at 94 until a second binary corroborates).
+
+**Tooling trap found, not previously documented**: sending
+`input.buttons.press` for the very button whose resulting code path hits an
+already-armed execution breakpoint leaves that `input.buttons.press` call
+itself unacknowledged (client-side `TimeoutError`) even though PPSSPP
+received and processed the input and the breakpoint did fire correctly
+afterward - confirmed by catching the timeout and calling `wait_for_break`
+anyway, which returned the hit immediately. Treat a `press()` timeout as
+inconclusive, not as "nothing happened," whenever a breakpoint is armed on
+the code the press is expected to reach.
+
+**2. `DAT_08b30ffc` is never cleared before `Launch Game` reads it.** Read
+directly (`0x08f61490`) right after the `CellSelection_CommitSelection` hit
+above, armed a write-watch (`enabled: false, log: true`) on it, then drove
+`cross` (confirm craft) -> `Launch Game Transition` ->
+`InGameTrackDescriptionScreen` -> `cross` -> `InGame`. **0 hits**, and a
+direct re-read at each of those four states returned the identical
+`0x08f61490` throughout, including once the race was actually running. Not
+just a zero-hit count (which the confidence rubric's own "always arm a
+positive control" caveat would want corroborated) - the *value itself* was
+read and compared directly at four points, which is stronger than the watch
+alone. **Confidence 90** that `Launch Game` (and everything after it) can
+rely on the pointer staying set once a campaign cell is confirmed.
+
+**3. `Globals_Set` writes the documented nine keys, in the documented order,
+with resolved values matching the confirmed cell's own authored XML digit
+for digit.** Breakpointed `Globals_Set` (`0x08888ee0`) itself and caught
+every hit during one `CellSelection_CommitSelection` call: `Mode`, `Class`,
+`Track`, `Team`, `Weapons`, `Opponents`, `Laps`, `Damage`, `SkillLevel`, in
+exactly that order, no `Tournament` key (the confirmed cell was `Time
+Trial`, not `Tournament` - consistent). **One correction to the earlier
+reading**: `a1` at the breakpoint is not the value string directly - it is
+the address of a small per-call scratch slot (`0x08aeeaf0`, `+4` per key)
+that itself holds the value pointer, i.e. one more level of indirection
+than `a0` (the key, which *is* the string directly). Dereferencing once
+gave clean text for every key: `Mode="Time Trial"`, `Class="Venom"`,
+`Track="16_Track"`, `Team="None"`, `Weapons="Off"`, `Opponents="0"`,
+`Laps="3"`, `Damage="Off"`, `SkillLevel="Hard"` - matching `grid0_3_2`'s own
+authored record (`track="16_Track" mode="Time Trial" ... damage="off"`, no
+`AICount` attribute hence `0` opponents) to the letter, and `SkillLevel`
+matching the difficulty (`Hard`) set on the pad immediately beforehand in
+this same session. `Track` reads raw (`"16_Track"`, unlocalized) exactly as
+documented; `Mode`/`Class` did not exercise the "`Race` -> `"Single Race"`"
+transformation this session (the confirmed cell was `Time Trial`, whose
+enum name and display name coincide) - see the UI-side finding in
+`docs/ui/campaign-screens.md`'s "Measured against PPSSPP" section, which
+independently shows a `Race` cell's on-screen `Title` reading `"SINGLE
+RACE"`, a different render path (`CellSelection_PopulateDetail`) from this
+`Globals_Set` call, not yet cross-checked against each other. **Confidence
+raised 85 -> 92** for `Globals_Set` (runtime trace, values corroborate
+authored data exactly) and **80 -> 93** for `CellSelection_CommitSelection`'s
+body specifically (the write side, as opposed to the vtable-slot claim
+scored separately above).
+
+**The read side of item 3 (does `Launch Game` itself read `&DAT_08b317b8`)
+was attempted and is inconclusive, not negative.** A broad read-watch
+(`0x08b317b8`, `0x1000` bytes, `log: true`) produced **over five million
+hits in under five seconds** - consistent with `log: true`'s own documented
+disk-filling failure mode, not with a clean signal - so no PC or address was
+distinguishable from it, and it was removed immediately rather than let run.
+The hash table's own bucket count, stride and key/value layout remain
+undocumented (a separate RE pass, per the assignment's own scope note), so a
+narrower, targeted watch was not attempted this pass. Left open.
+
+**4. `CellSelection_PopulateGrid` (`0x088d5de4`) fires once per screen
+entry, not once per cell.** Breakpointed it and re-entered `Cell Selection`
+from `Grid Selection`: exactly **one** hit, `a0=0x08d73170` (the same
+`CellSelection` instance), `a1=1`, `a2=1` - small integers, not a cell
+pointer, so the per-cell `medal`/`Locked` branch this page's pseudocode
+describes runs in an **internal loop inside this one call**, not once per
+invocation as the earlier reading's phrasing could be misread to imply. The
+lock-glyph branch itself was not step-verified at the instruction level (no
+Ghidra bridge held this pass to find an inner address to break on), but the
+live capture in `docs/ui/campaign-screens.md` corroborates it structurally:
+`grid0`'s own 8 cells show a lock glyph on exactly the 6 that carry **no**
+`Locked` attribute at all in `grid_00.xml`, and no glyph on the 2 that
+explicitly author `Locked="false"` - which only makes sense if **an absent
+`Locked` attribute defaults to `true`** in `PI_Cell_ParseElement`, a default
+this page never stated either way. **Confidence for
+`CellSelection_PopulateGrid` raised 78 -> 82** (function entry and its
+two-int-argument shape confirmed live; the per-cell branch is corroborated
+by the capture, not itself breakpointed). The "absent `Locked` defaults to
+`true`" reading is new this pass, confidence **72** - one grid's worth of
+cells, consistent but not a census, and not itself breakpointed either.
+
+**5. Blocked, not attempted: no reachable Tournament cell in this profile.**
+Every grid but `grid0` reads `Locked="true"` on this session's save (no
+medals earned, `grid0_...`'s own points never banked), and pressing
+`Confirm` on a locked `Grid Selection` tile does nothing (see
+`docs/ui/campaign-screens.md`'s "Grid-tier locking is not cosmetic" finding)
+- so `grid1`'s own `Tournament`-mode cells, and every other grid's, were
+unreachable without either earning points first or writing profile memory
+by hand, both out of scope for this pass. `DAT_08b31158` was not watched.
+Left for a pass that either plays a race to earn the 12 points `grid0`
+needs, or accepts the risk of a direct memory write to force an unlock.
+
 ## What is not determined
 
 - **`g_class_name_table` (`0x08ab067c`) is read above as four entries, and a
@@ -923,9 +1043,9 @@ dictionary; expand `<x y="...">` by looking `x` and `y` up as `xs`/`ys`.
 | `0x08ab062c` | `g_mode_name_table` (data) | 92 |
 | `0x08ab067c` | `g_class_name_table` (data) | 92 |
 | `0x088d5cb8` | `CellSelection_OnExit` | 82 |
-| `0x088d5de4` | `CellSelection_PopulateGrid` | 78 |
-| `0x088d6138` | `CellSelection_CommitSelection` | 80 |
-| `0x08888ee0` | `Globals_Set` | 85 |
+| `0x088d5de4` | `CellSelection_PopulateGrid` | 82 |
+| `0x088d6138` | `CellSelection_CommitSelection` | 93 |
+| `0x08888ee0` | `Globals_Set` | 92 |
 | `0x08888db4` | `Globals_HashKey` | 78 |
 | `0x08945890` | `Libc_HashString` | 85 |
 | `0x088ed784` | `TrackSelection_CommitSelection` | 80 |
