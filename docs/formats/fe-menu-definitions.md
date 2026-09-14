@@ -24,7 +24,8 @@ both a full path and a `SrcRel` basename. Seventeen of them resolve in
 `Additional_Definition`, `Selection_Definition`, `Multiplayer_Definition`,
 `RecordGrid_Definition`, `Stats_Definition`, `Network_Definition`,
 `Online_Definition`, `Manual_Definition`, `Demo_Definition`,
-`GriefReport_Definition`, `EndRace_Definition`, `InGame_Definition`.
+`GriefReport_Definition`, `EndRace_Definition` (read in full - see
+[endrace-screens.md](endrace-screens.md)), `InGame_Definition`.
 
 Five do not, and where they live is unread: `Controls_Definition`,
 `Credits_Definition`, `Debug_Screens`, `MemoryStickBootScreens`,
