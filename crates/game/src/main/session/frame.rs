@@ -496,11 +496,17 @@ impl Session {
                     }
                 }
                 Stage::Race(stage) if stage.race.finished() => {
-                    // The results table waits for cross or start and draws
-                    // nothing to aim at, so a click is the press - the
-                    // rising edge the block above this match reads next
-                    // tick. A running race is never offered the pointer.
-                    pointer::press_for_click(&mut self.controls, &pointer);
+                    // The built-in results table waits for cross or start
+                    // and draws nothing to aim at, so a click is the press -
+                    // the rising edge the block above this match reads next
+                    // tick. The EndRace flow answers the pointer directly
+                    // instead (`Session::tick_endrace`, called after this
+                    // match ends) - `EndRace Menu`'s own rows need a real
+                    // hit-test, which a synthesised Cross press on every
+                    // click would fight with.
+                    if stage.endrace.is_none() {
+                        pointer::press_for_click(&mut self.controls, &pointer);
+                    }
                     // **The race is over, so nothing is stepped.** The world is
                     // left exactly as the finishing tick left it and the frame
                     // loop goes on drawing it under the results table, which is
@@ -521,6 +527,18 @@ impl Session {
                     // `World` state, so "nothing is stepped" is still true of
                     // the thing that sentence is about.
                     self.audio.race_tick(&mut stage.race);
+                    // `stage`'s own last use - the reborrow inside
+                    // `Session::tick_endrace` is legal from here on, the
+                    // same NLL shape `Stage::Menu`'s own arm relies on for
+                    // `Session::tick_campaign`.
+                    let space = stage
+                        .endrace
+                        .as_ref()
+                        .map(crate::race_stage::endrace::EndRaceRuntime::space);
+                    if let Some(space) = space {
+                        let grid = pointer::in_grid(pointer, space, rect);
+                        self.tick_endrace(&grid);
+                    }
                 }
                 Stage::Race(stage) if self.paused => {
                     // A paused race reads circle as "back to the menus";
@@ -603,6 +621,16 @@ impl Session {
                 }
             }
         }
+
+        // Once per frame, not once per catch-up step above - the pointer
+        // input itself is handled per-step, inside the loop's own finished-
+        // race arm (`Session::tick_endrace`'s call site there), the same
+        // grid-resolution shape `Stage::Menu`'s own arm uses for
+        // `Session::tick_campaign`. `build_endrace` is idempotent past its
+        // first call (`RaceStage::endrace`'s own `is_some()` guard), so
+        // calling it every frame the race sits finished costs nothing once
+        // it has either built the flow or given up.
+        self.build_endrace();
 
         let presented = self.draw(now, frame_seconds)?;
         // **What the `OUTSIDE` row is derived from**, and the anchor matters:

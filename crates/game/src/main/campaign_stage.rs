@@ -132,6 +132,14 @@ impl CampaignStage {
         })
     }
 
+    /// Every grid this campaign carries - `crate::main::session::endrace`'s
+    /// own `RETURN TO GRID` reads this to find which one a raced cell
+    /// belongs to.
+    #[must_use]
+    pub(crate) fn grids(&self) -> &[race_campaign::Grid] {
+        &self.grids
+    }
+
     #[must_use]
     pub(crate) fn grid_layout(&self) -> &oag_ui::campaign::Layout {
         &self.grid_layout

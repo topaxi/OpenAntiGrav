@@ -504,6 +504,31 @@ impl CampaignRecord {
     }
 }
 
+/// One team's persistent loyalty total - `EndRace Rewards`' own `Total
+/// loyalty: <n>` line and fill bar, and the original's `DAT_08b31774` store
+/// mirrored the same way [`CampaignRecord`] mirrors the campaign's own
+/// per-cell record: a sibling table, not a fourth part of [`Key`], because
+/// the key ([`oag_title::Title::name`] + team) has nothing to do with a
+/// circuit/mode/class row.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LoyaltyRecord {
+    /// [`oag_title::Title::name`], lower-cased - see [`Key::title`].
+    pub title: String,
+    /// The team's own id (`Livery::team`, e.g. `"Assegai"`), lower-cased.
+    pub team: String,
+    /// The running total - `Loyalty_AccumulateTotal`'s own `+= award`,
+    /// capped the same place the original caps it: `100000`. See
+    /// [`Store::record_loyalty`].
+    #[serde(default)]
+    pub total: u32,
+}
+
+impl LoyaltyRecord {
+    fn matches(&self, title: &str, team: &str) -> bool {
+        self.title == title && self.team == team
+    }
+}
+
 /// Every row [`load`] found or [`Store::record`] has added since, in one
 /// file.
 ///
@@ -521,6 +546,10 @@ pub struct Store {
     /// [`Key`]. A file with no `[[campaign]]` table at all - every row
     /// written before this existed - parses to an empty one; see [`parse`].
     campaign: Vec<CampaignRecord>,
+    /// One row per team ever raced - see [`LoyaltyRecord`]'s own doc. A file
+    /// with no `[[loyalty]]` table at all parses to an empty one, the same
+    /// way `campaign`'s own absence does.
+    loyalty: Vec<LoyaltyRecord>,
 }
 
 impl Store {
@@ -648,6 +677,54 @@ impl Store {
         self.campaign
             .sort_by(|a, b| (&a.title, &a.cell).cmp(&(&b.title, &b.cell)));
     }
+
+    /// The team `(title, team)` names' own running total - `0` for a team
+    /// never raced, matching the original's own fresh-profile reading
+    /// (`EndRace Rewards`' `Total loyalty: 0`).
+    #[must_use]
+    pub fn loyalty_total(&self, title: &str, team: &str) -> u32 {
+        let title = title.trim().to_ascii_lowercase();
+        let team = team.trim().to_ascii_lowercase();
+        self.loyalty
+            .iter()
+            .find(|row| row.matches(&title, &team))
+            .map_or(0, |row| row.total)
+    }
+
+    /// Adds `award` to `(title, team)`'s own running total, creating the row
+    /// if this is the first race ever recorded for it, and returns the new
+    /// total - `Loyalty_AccumulateTotal`'s own `record+8 += award`, capped
+    /// the same place the original caps it: `100000`.
+    pub fn record_loyalty(&mut self, title: &str, team: &str, award: u32) -> u32 {
+        const CAP: u32 = 100_000;
+        let title = title.trim().to_ascii_lowercase();
+        let team = team.trim().to_ascii_lowercase();
+        let row = match self
+            .loyalty
+            .iter_mut()
+            .find(|row| row.matches(&title, &team))
+        {
+            Some(row) => row,
+            None => {
+                self.loyalty.push(LoyaltyRecord {
+                    title,
+                    team,
+                    total: 0,
+                });
+                self.loyalty
+                    .last_mut()
+                    .expect("just pushed onto this exact vec")
+            }
+        };
+        row.total = row.total.saturating_add(award).min(CAP);
+        let total = row.total;
+
+        // Stable, for the same reason `Self::record`/`Self::record_campaign`
+        // sort their own tables.
+        self.loyalty
+            .sort_by(|a, b| (&a.title, &a.team).cmp(&(&b.title, &b.team)));
+        total
+    }
 }
 
 /// Parses `text` as a records file, keeping every row that decodes and
@@ -704,7 +781,31 @@ pub fn parse(text: &str) -> Result<(Store, Vec<String>)> {
     }
     campaign.sort_by(|a, b| (&a.title, &a.cell).cmp(&(&b.title, &b.cell)));
 
-    Ok((Store { records, campaign }, notes))
+    // `loyalty` is read the same tolerant way, for the same "every file
+    // written before this table existed" reason `campaign` is.
+    let mut loyalty = Vec::new();
+    match table.get("loyalty") {
+        Some(toml::Value::Array(rows)) => {
+            for (index, row) in rows.iter().enumerate() {
+                match row.clone().try_into::<LoyaltyRecord>() {
+                    Ok(record) => loyalty.push(record),
+                    Err(e) => notes.push(format!("loyalty[{index}] dropped: {e}")),
+                }
+            }
+        }
+        Some(_) => notes.push("`loyalty` is not an array of tables; ignoring it".to_string()),
+        None => {}
+    }
+    loyalty.sort_by(|a, b| (&a.title, &a.team).cmp(&(&b.title, &b.team)));
+
+    Ok((
+        Store {
+            records,
+            campaign,
+            loyalty,
+        },
+        notes,
+    ))
 }
 
 /// Where the records file lives: `<config dir>/oag/records.toml`, beside

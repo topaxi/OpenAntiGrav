@@ -625,3 +625,39 @@ fn a_campaign_cells_medal_is_never_downgraded_and_round_trips() {
     );
     assert_eq!(parsed.campaign_rows(), store.campaign_rows());
 }
+
+/// [`Store::record_loyalty`] accumulates rather than overwrites, caps at
+/// `100_000` the same place `Loyalty_AccumulateTotal` does, and round-trips
+/// through a write the same way [`CampaignRecord`] does.
+#[test]
+fn loyalty_accumulates_caps_and_round_trips() {
+    let mut store = Store::default();
+    assert_eq!(store.loyalty_total("wipeout pulse", "assegai"), 0);
+
+    assert_eq!(store.record_loyalty("wipeout pulse", "Assegai", 90), 90);
+    assert_eq!(
+        store.record_loyalty("Wipeout Pulse", "assegai", 90),
+        180,
+        "case-insensitive, the same way Key::new lower-cases every part"
+    );
+    assert_eq!(store.loyalty_total("wipeout pulse", "assegai"), 180);
+
+    // A different team gets its own row, not a shared one.
+    store.record_loyalty("wipeout pulse", "qirex", 30);
+    assert_eq!(store.loyalty_total("wipeout pulse", "assegai"), 180);
+    assert_eq!(store.loyalty_total("wipeout pulse", "qirex"), 30);
+
+    assert_eq!(
+        store.record_loyalty("wipeout pulse", "assegai", 99_999),
+        100_000,
+        "capped, not left to overflow past it"
+    );
+
+    let text = toml::to_string_pretty(&store).expect("serialises");
+    let (parsed, notes) = parse(&text).expect("parses back");
+    assert!(
+        notes.is_empty(),
+        "a clean write should need no notes: {notes:?}"
+    );
+    assert_eq!(parsed.loyalty_total("wipeout pulse", "qirex"), 30);
+}
