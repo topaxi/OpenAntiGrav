@@ -147,6 +147,39 @@ pub fn contains(rect: [f32; 4], point: (f32, f32)) -> bool {
     point.0 >= x && point.0 < x + width && point.1 >= y && point.1 < y + height
 }
 
+/// Whether `point` lies inside the hexagon a campaign hex sprite draws,
+/// where `rect` is that sprite's own `[x, y, width, height]` - the same
+/// rect [`contains`] would bounding-box-test.
+///
+/// **Measured off the shipped art, idealised to a regular hexagon.**
+/// `Data\FE\Images\hex_filled.mip` (`pulse-psp-eu.chd`'s `Data.wad`) decodes
+/// to a 32x32 4bpp indexed image whose alpha spans the sprite's own width
+/// vertex-to-vertex at mid-height (a full 32px row) and narrows to roughly
+/// half that at the top and bottom edges (an 16-18px row, two rows of
+/// padding in from the sprite's own top/bottom) - a flat-top hexagon whose
+/// circumradius is half the sprite's width, which is what this tests
+/// exactly rather than the anti-aliased raster. **The idealisation is
+/// chosen, not measured**: the on-disc pixels are anti-aliased raster art,
+/// not vector data, so no rect of pixels is *the* hexagon, only evidence
+/// for one. See `docs/ui/campaign-screens.md`.
+///
+/// This is why a click is tested against the hexagon and not `rect`
+/// itself: two neighbouring hexes in the campaign's staggered grid overlap
+/// at their bounding boxes' corners, so a box test would sometimes pick the
+/// wrong hex near an edge.
+#[must_use]
+pub fn hex_contains(rect: [f32; 4], point: (f32, f32)) -> bool {
+    let [x, y, width, height] = rect;
+    if width <= 0.0 || height <= 0.0 {
+        return false;
+    }
+    let radius = width * 0.5;
+    let top = radius * 3.0_f32.sqrt() * 0.5;
+    let dx = (point.0 - (x + width * 0.5)).abs();
+    let dy = (point.1 - (y + height * 0.5)).abs();
+    dy <= top && dx <= radius - dy / 3.0_f32.sqrt()
+}
+
 /// The index of the row a point is over, given rows of one pitch from one
 /// origin.
 ///
@@ -241,6 +274,48 @@ mod tests {
         assert!(!contains(rect, (20.0, 60.0)));
         assert!(!contains(rect, (9.9, 30.0)));
         assert!(!contains([10.0, 10.0, 0.0, 10.0], (10.0, 10.0)));
+    }
+
+    #[test]
+    fn hex_contains_the_middle_and_not_the_boxs_corners() {
+        let rect = [0.0, 0.0, 32.0, 32.0];
+        assert!(hex_contains(rect, (16.0, 16.0)), "dead centre");
+        assert!(hex_contains(rect, (1.0, 16.0)), "left vertex, mid-height");
+        assert!(hex_contains(rect, (31.0, 16.0)), "right vertex, mid-height");
+        assert!(
+            !hex_contains(rect, (0.0, 0.0)),
+            "top-left corner of the box is outside the hexagon"
+        );
+        assert!(!hex_contains(rect, (31.0, 0.0)), "top-right corner");
+        assert!(!hex_contains(rect, (0.0, 31.0)), "bottom-left corner");
+        assert!(!hex_contains(rect, (31.0, 31.0)), "bottom-right corner");
+        assert!(
+            !hex_contains([0.0, 0.0, 0.0, 32.0], (0.0, 0.0)),
+            "no extent"
+        );
+    }
+
+    /// Two hexes side by side the way the campaign grid draws them - 30px
+    /// apart horizontally, staggered 19px vertically - whose bounding boxes
+    /// overlap at a corner. A box test would sometimes pick whichever hex
+    /// happens to be listed first; the hexagon test picks the one whose own
+    /// shape the point is actually inside.
+    #[test]
+    fn a_corner_where_two_hex_boxes_overlap_resolves_to_the_hexagon_that_contains_it() {
+        let left = [0.0, 19.0, 32.0, 32.0];
+        let right = [30.0, 0.0, 32.0, 32.0];
+        let point = (31.0, 16.0);
+        assert!(!hex_contains(left, point), "outside left's own hexagon");
+        assert!(hex_contains(right, point), "inside right's own hexagon");
+    }
+
+    #[test]
+    fn a_point_in_the_gap_between_hexes_is_in_neither() {
+        let a = [0.0, 0.0, 32.0, 32.0];
+        let b = [30.0, 19.0, 32.0, 32.0];
+        let point = (0.0, 31.0);
+        assert!(!hex_contains(a, point));
+        assert!(!hex_contains(b, point));
     }
 
     #[test]

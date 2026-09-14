@@ -11,7 +11,16 @@ Selection` and launches the cell's own race; a cell in one of the four this
 engine does not (`Tournament`/`Head2Head`/`Custom Grid`/`AI Race`) logs why
 and stays on `Cell Selection`. See "Confirming a cell launches" below and
 `docs/architecture/persistence.md` for the medal it earns and where it is
-kept. Implemented in
+kept. **Both screens answer a mouse and a finger too, since 2026-09-14** -
+hovering a tier tile or a hex selects it, a second click on the selection
+confirms it, the paging arrows are clickable, and the secondary button (or
+a click/tap while `Cell Help` is open) backs out - the same vocabulary
+`docs/architecture/menus.md`'s "A mouse and a finger" already gives every
+other front-end screen. See
+[`oag_ui::campaign::pointer`](../../crates/ui/src/campaign/pointer.rs) for
+the targets and the two-tap idiom, and its own module doc for why a hex is
+hit-tested as a hexagon rather than its bounding box - the staggered grid's
+neighbours overlap at their corners otherwise. Implemented in
 [`oag_ui::campaign`](../../crates/ui/src/campaign.rs) (model, layout, draw),
 [`oag_game::campaign`](../../crates/game/src/campaign.rs) (the shared read
 off an open source), `crates/game/src/main/campaign_stage.rs` (what the
@@ -19,8 +28,11 @@ session holds open) and `crates/game/src/main/session/campaign.rs` (the
 flow: `RACE CAMPAIGN` opens it, confirm and back move between the two
 screens, and a confirmed cell launches). Captured headlessly with
 `--menu-page grid-select` / `--menu-page cell-select`, on `pulse-psp-eu` -
-the drawing alone; the launch itself needs a live window, not captured
-against the running original in this pass (see [Open](#open)).
+the drawing alone; the launch itself was verified live under Xvfb with
+`xdotool` driving the mouse on 2026-09-14 - hover, click, `Team Selection`,
+an autopiloted race to its results table and back onto `Cell Selection` all
+confirmed by screenshot (see the `campaign-pointer` lane's own report) -
+not captured against the running original in this pass (see [Open](#open)).
 
 This page is the *picture* half of
 [`docs/formats/race-setup.md`](../formats/race-setup.md)'s "The Race
@@ -552,24 +564,47 @@ diamond shape is a visual read of the capture, confidence 70.
   `oag_ui::screen::Screens::collect_widgets` already discards the timeline
   of and keeps the widget for elsewhere in this crate - a static overlay
   would be honest, an animated one is not built.
-- **The Selector cursor's exact centering is unmeasured.** It is drawn at
-  the selected hex's own `Medal_{x}_{y}` position, top-left aligned rather
-  than centred against the hex's own (smaller) extent - the XML gives no
-  number for the offset between a `42x43` selector and a hex sized however
-  `hex_filled.mip` actually is.
-- **The launch path is wired but not interactively played in this pass.**
-  All of it is proven by the unit/integration suite
+- ~~The Selector cursor's exact centering is unmeasured.~~ **Fixed
+  2026-09-14.** `hex_filled.mip`/`hex_outline.mip` decode to a 32x32 4bpp
+  indexed image (`Data.wad` on `pulse-psp-eu.chd`, measured directly off the
+  blob's own header and palette alpha), so the selected hex is always 32x32
+  against `Selector`'s own authored 42x43
+  (`pulse_assets.mip`, `l="42" m="43"`) - `CellMode_Definition.xml` authors
+  no offset between the two on either screen, only `Selector`'s own default
+  `x="30" y="95"`, which `hex_rect` already overrode outright. Top-left
+  aligning a 42x43 sprite to a 32x32 hex's own corner (what this build did
+  before) draws the cursor visibly down-and-right of the hex rather than
+  around it - confirmed live, `xdotool` hovering a tier on
+  `pulse-psp-eu.chd` at 2026-09-14's window scale, screenshot on file with
+  the `campaign-pointer` lane. `oag_ui::campaign::centred_selector_draw`
+  centres the two rects on each other instead - **chosen, not measured**:
+  both sprite sizes are the disc's own, but nothing on disc says centring is
+  the right rule for the gap between them, only that top-left alignment
+  reads wrong. `the_selector_is_centred_on_the_selected_hex_not_top_left_aligned`/
+  `cell_selections_selector_is_also_centred_on_the_selected_hex`
+  (`crates/ui/src/campaign/tests.rs`) pin the two screens' own resolved
+  rects.
+- ~~The launch path is wired but not interactively played in this pass.~~
+  **Driven live, 2026-09-14**, mouse-only, under Xvfb with `xdotool`
+  (`docs/architecture/menus.md`'s recipe): `RACE CAMPAIGN` -> hover/click a
+  tier -> hover/click a `Race` cell (`grid0_2_1`, `16_Track`) -> `Team
+  Selection` -> click the ship -> `--autopilot` to the results table -> back
+  on `Cell Selection`, `Line6`/`Line7` still read `"0/3"`/`NICHT VERFÜGBAR`
+  (German for "none") because both runs (default skill, then
+  `--autopilot-skill ace`) finished 4th of eight - this build's default
+  `settings.toml` already races opponents at `ace`, the ceiling the flag
+  also names, so there was no headroom left to podium without editing a
+  config outside this worktree, which this pass declined to do. **Still
+  open**: a live capture of `Line6`/`Line7` actually reading a nonzero medal
+  after a podium finish - a maintainer with a lower `[ai] difficulty` (or a
+  `Time Trial`/`Zone` cell, whose medal is a time/count threshold rather
+  than a finishing position) can close this directly:
+  `cargo run -p oag-game -- --autopilot data/images/pulse-psp-eu.chd`,
+  navigate `RACE CAMPAIGN` -> a tier -> a cell -> confirm -> `Team
+  Selection` -> confirm, let the race finish, and check the results table's
+  medal line and the cell's own `Line6`/`Line7` back on `Cell Selection`.
+  Proven by the unit/integration suite either way
   (`crates/game/src/campaign/tests.rs`, `crates/game/src/records/tests.rs`,
   `crates/game/src/race/tests/mode_override.rs`,
   `crates/ui/src/campaign/tests.rs`) and by the full `just`/`just test-data`
-  gate, but nobody has driven `Cell Selection` from a real keyboard and
-  watched a campaign race finish and a medal appear on the results table
-  and back on the hex grid: this pass ran in an environment with no way to
-  send synthetic keyboard input to a native Wayland window and no safe way
-  to screenshot one window in isolation from a shared desktop, so a live
-  play-test was not attempted rather than faked. A maintainer with a normal
-  desktop session can: `cargo run -p oag-game -- data/images/pulse-psp-eu.chd`,
-  navigate `RACE CAMPAIGN` -> a tier -> a `Race`/`Time Trial` cell -> confirm
-  -> `Team Selection` -> confirm, let (or `--autopilot`) the race finish,
-  and check the results table's `BEST MEDAL` line and the cell's own
-  `Line6`/`Line7` back on `Cell Selection`.
+  gate.

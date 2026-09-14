@@ -882,10 +882,16 @@ A second copy of the layout kept in step by hand is the drift `rows.rs`
 already refuses between `Menu::scroll` and the skin. Each path's test
 draws the page and asserts every row's label pen lies inside that row's
 region, and that HD's arrow sprites *are* the step regions, rect for rect.
-The prompts, the selection screens, the language picker and the disc
-chooser each factor their geometry the same way (`prompt::Grid`,
-`picker::pointer::targets`, `frontend::rows::language_rows`,
-`launcher::row_at`) with the same drift guard.
+The prompts, the selection screens, the language picker, the disc chooser
+and the Race Campaign's `Grid Selection`/`Cell Selection` each factor their
+geometry the same way (`prompt::Grid`, `picker::pointer::targets`,
+`frontend::rows::language_rows`, `launcher::row_at`,
+`campaign::pointer::{grid_targets, cell_targets}`) with the same drift
+guard. The campaign screens' own hex targets go one step further: a hex's
+hit region is tested as the hexagon `hex_filled.mip`/`hex_outline.mip`
+actually draw (`pointer::hex_contains`), not its bounding box, because the
+grid is staggered and neighbouring hexes' boxes overlap at their corners -
+see [campaign-screens.md](../ui/campaign-screens.md).
 
 **A row of plain text gets its band from the face's ink, not the pen.** A
 disc font's glyph box is the whole atlas row, and a capital sits at the
