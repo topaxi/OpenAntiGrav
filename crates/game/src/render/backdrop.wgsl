@@ -71,23 +71,26 @@ fn vs_points(@builtin(vertex_index) index: u32, point: Point) -> PointOut {
         view.z = 1.0;
     }
     let d = -view.z;
-    let fade = d * points.depth_fade.x + points.depth_fade.y;
+    // Four of the program's instructions carry the saturate flag, so their
+    // results are clamped to 0..1 on write: the fade, the distance term, the
+    // ramp base and the fog base. The ramp is therefore never more than one.
+    let fade = saturate(d * points.depth_fade.x + points.depth_fade.y);
     // `(view.z - (-start)) * (-1/strength)` is `(d - start) / strength`.
     let dof = 1.0 + clamp((view.z - points.dof.x) * points.dof.y, 0.0, points.dof.z);
-    // LG2 of a negative is -inf on the RSX and EX2 of that is zero; a
-    // negative base is clamped to zero here to the same end.
-    let fog_base = max((view.z - points.fog.x) * points.fog.y, 0.0);
+    let fog_base = saturate((view.z - points.fog.x) * points.fog.y);
     let fog = pow(fog_base, points.fog.w);
     let crf2 = points.colour_ramp_factors2;
-    let ramp_base = max((1.0 - fract(t)) * 0.4 * d * crf2.x + crf2.y, 0.0);
+    // `MUL_SAT` by the literal `-0.4`: the distance term is `min(0.4 * d, 1)`,
+    // one for everything past two and a half units.
+    let distance = saturate(0.4 * d);
+    let ramp_base = saturate((1.0 - fract(t)) * distance * crf2.x + crf2.y);
     let ramp = pow(ramp_base, crf2.z);
     let size = dof * points.particle_colour.w;
     let placed = view + vec4<f32>(corner * size, 0.0, 0.0);
     var out: PointOut;
     out.clip = points.proj * placed;
-    // `o[COL0]` is clamped to 0..1 on write, as every NV vertex program's
-    // colour output is; without it the ramp's sixth power would turn a
-    // fogged, near-transparent point white.
+    // `f[COL0]` is read clamped to 0..1 by the fragment program, which is
+    // where RPCS3's decoder puts the `_saturate` too.
     out.colour = saturate(vec4<f32>(
         points.particle_colour.rgb + ramp * points.colour_ramp.rgb,
         fade * (1.0 - fog),
@@ -101,7 +104,7 @@ fn fs_points(in: PointOut) -> @location(0) vec4<f32> {
     return in.colour * textureSample(sprite, sprite_sampler, in.uv);
 }
 
-// The post passes: one full-screen triangle, the targets sampled 1:1.
+// The post passes: one full-screen triangle over whichever target is bound.
 
 struct Post {
     // rgb: the trail's survival per frame.
@@ -118,6 +121,9 @@ struct Post {
 @group(0) @binding(1) var source: texture_2d<f32>;
 @group(0) @binding(2) var trail: texture_2d<f32>;
 @group(0) @binding(3) var post_sampler: sampler;
+// The half-size trail is read back up to the viewport bilinearly, as the
+// half targets' linear views are; the full-size particles never are.
+@group(0) @binding(4) var trail_sampler: sampler;
 
 struct PostOut {
     @builtin(position) clip: vec4<f32>,
@@ -140,7 +146,7 @@ fn vs_post(@builtin(vertex_index) index: u32) -> PostOut {
 @fragment
 fn fs_blend(in: PostOut) -> @location(0) vec4<f32> {
     let fresh = textureSample(source, post_sampler, in.uv).rgb;
-    let previous = textureSample(trail, post_sampler, in.uv).rgb;
+    let previous = textureSample(trail, trail_sampler, in.uv).rgb;
     return vec4<f32>(min(fresh, post.source_max.rgb) + previous * post.feedback.rgb, 1.0);
 }
 
@@ -158,6 +164,6 @@ fn fs_wave(in: PostOut) -> @location(0) vec4<f32> {
 @fragment
 fn fs_composite(in: PostOut) -> @location(0) vec4<f32> {
     let fresh = textureSample(source, post_sampler, in.uv).rgb;
-    let trailed = textureSample(trail, post_sampler, in.uv).rgb;
+    let trailed = textureSample(trail, trail_sampler, in.uv).rgb;
     return vec4<f32>((fresh + trailed) * (257.0 / 256.0) - 1.0 / 257.0, 1.0);
 }

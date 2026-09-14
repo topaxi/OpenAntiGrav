@@ -8,9 +8,9 @@
 //!    (`SRC_ALPHA, ONE`, as `PointCloud_Submit` sets it) into a cleared
 //!    target the size of the viewport.
 //! 2. **Blend** - the fresh particles, capped, over the decayed trail, into a
-//!    temporary.
+//!    temporary at half the viewport.
 //! 3. **Wave** - that accumulation dimmed and pulled down, back into the
-//!    trail for next frame.
+//!    half-size trail for next frame.
 //!
 //! Then, inside the page's pass where the draw list's
 //! [`oag_ui::frontend::Draw::FuryBackdrop`] sits:
@@ -20,8 +20,11 @@
 //!
 //! Every target is `Rgba8Unorm`, which clamps at one the way the original's
 //! 8-bit targets do and is where the composite's `257/256` stretch comes from.
-//! The pass order and which target feeds which are the page's
-//! confidence-60 reading; see
+//! The sizes are `BackgroundAnimFury_AllocateTargets`' - one full, two half,
+//! the half ones sampled linear - and the composite reads the full one as
+//! `texture` and a half one as `waveTexture`, as `Render` binds them; the
+//! blend pass's own target and quad grid are still the page's confidence-60
+//! reading. See
 //! [menu-backdrop.md](../../../../docs/ghidra/functions/ps3-hdfury-eu/menu-backdrop.md).
 
 use oag_rcs::points2::PointCloud;
@@ -83,7 +86,8 @@ struct Cloud {
     count: u32,
 }
 
-/// The viewport-sized targets, rebuilt when the viewport changes.
+/// The targets, rebuilt when the viewport changes: the particles at its
+/// size, the two trail targets at half of it.
 struct Targets {
     size: (u32, u32),
     particles: wgpu::TextureView,
@@ -107,6 +111,7 @@ pub struct FuryBackdrop {
     point_bind_group: wgpu::BindGroup,
     post_layout: wgpu::BindGroupLayout,
     post_sampler: wgpu::Sampler,
+    trail_sampler: wgpu::Sampler,
     targets: Option<Targets>,
 }
 
@@ -201,12 +206,21 @@ impl FuryBackdrop {
                 },
             ],
         });
-        // The targets are read 1:1, so nearest is exact and linear would only
-        // blur a trail by a texel a frame.
+        // `AllocateTargets` gives the full-size particle target a nearest
+        // view and the two half-size trail targets linear ones: the trail is
+        // sampled up to the viewport bilinearly, the particles never are.
         let post_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
             label: Some("fury post"),
             mag_filter: wgpu::FilterMode::Nearest,
             min_filter: wgpu::FilterMode::Nearest,
+            address_mode_u: wgpu::AddressMode::ClampToEdge,
+            address_mode_v: wgpu::AddressMode::ClampToEdge,
+            ..Default::default()
+        });
+        let trail_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+            label: Some("fury trail"),
+            mag_filter: wgpu::FilterMode::Linear,
+            min_filter: wgpu::FilterMode::Linear,
             address_mode_u: wgpu::AddressMode::ClampToEdge,
             address_mode_v: wgpu::AddressMode::ClampToEdge,
             ..Default::default()
@@ -218,6 +232,7 @@ impl FuryBackdrop {
                 texture_entry(1),
                 texture_entry(2),
                 sampler_entry(3, wgpu::SamplerBindingType::NonFiltering),
+                sampler_entry(4, wgpu::SamplerBindingType::Filtering),
             ],
         });
 
@@ -338,6 +353,7 @@ impl FuryBackdrop {
             point_bind_group,
             post_layout,
             post_sampler,
+            trail_sampler,
             targets: None,
         }
     }
@@ -443,13 +459,13 @@ impl FuryBackdrop {
     }
 
     fn targets_for(&self, device: &wgpu::Device, size: (u32, u32)) -> Targets {
-        let target = |label: &str| {
+        let target = |label: &str, (width, height): (u32, u32)| {
             device
                 .create_texture(&wgpu::TextureDescriptor {
                     label: Some(label),
                     size: wgpu::Extent3d {
-                        width: size.0,
-                        height: size.1,
+                        width,
+                        height,
                         depth_or_array_layers: 1,
                     },
                     mip_level_count: 1,
@@ -462,9 +478,11 @@ impl FuryBackdrop {
                 })
                 .create_view(&wgpu::TextureViewDescriptor::default())
         };
-        let particles = target("fury particles");
-        let temporary = target("fury temporary");
-        let trail = target("fury trail");
+        // `AllocateTargets`: one target at the display's size, two at half.
+        let half = ((size.0 / 2).max(1), (size.1 / 2).max(1));
+        let particles = target("fury particles", size);
+        let temporary = target("fury temporary", half);
+        let trail = target("fury trail", half);
         let bind = |label: &str, source: &wgpu::TextureView, trail: &wgpu::TextureView| {
             device.create_bind_group(&wgpu::BindGroupDescriptor {
                 label: Some(label),
@@ -485,6 +503,10 @@ impl FuryBackdrop {
                     wgpu::BindGroupEntry {
                         binding: 3,
                         resource: wgpu::BindingResource::Sampler(&self.post_sampler),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 4,
+                        resource: wgpu::BindingResource::Sampler(&self.trail_sampler),
                     },
                 ],
             })
@@ -570,10 +592,14 @@ fn upload_sprite(device: &wgpu::Device, queue: &wgpu::Queue) -> wgpu::TextureVie
         let amp = amp0 + (amp1 - amp0) * f;
         let half = size as f32 * 0.5;
         let mut texels = Vec::with_capacity((size * size * 4) as usize);
+        // The texel's own index, not its centre: `MakeSprite` measures from
+        // `(x, y)` to `(half, half)`, so the two smallest mips come out
+        // fully transparent (every texel a whole half from the centre) and
+        // the far dots fade with distance rather than sharpening.
         for y in 0..size {
             for x in 0..size {
-                let dx = x as f32 + 0.5 - half;
-                let dy = y as f32 + 0.5 - half;
+                let dx = x as f32 - half;
+                let dy = y as f32 - half;
                 let r = (dx * dx + dy * dy).sqrt() / half;
                 let alpha = amp * (1.0 - r.min(1.0)).powf(exp);
                 texels.extend_from_slice(&[255, 255, 255, (alpha * 255.0).round() as u8]);

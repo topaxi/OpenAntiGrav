@@ -732,6 +732,7 @@ pub(super) fn fury_picture(
     page: &str,
     viewport: (f32, f32, f32, f32),
     anim_seconds: Option<f32>,
+    fury_path: Option<usize>,
 ) -> Option<oag_ui::menu::Picture> {
     let assets = assets?;
     let mut model = oag_ui::backdrop::Fury::new(
@@ -739,6 +740,9 @@ pub(super) fn fury_picture(
         assets.first,
         crate::boot::fury::SEED,
     )?;
+    if let Some(path) = fury_path {
+        model.force_path(path)?;
+    }
     let frames =
         (anim_seconds.unwrap_or(0.0).max(0.0) * oag_ui::backdrop::FRAMES_PER_SECOND) as u32;
     for _ in 0..frames {

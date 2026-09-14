@@ -947,6 +947,45 @@ the time. `Session.press_until` presses, watches `TTY.log` for the expected
 screen, and re-presses up to four times - which is the whole reason the walk is
 written as the list of screens rather than as a count of buttons.
 
+## Two more channels, both measured on the Fury menu backdrop (2026-09-14)
+
+**Reading a function's arguments at a breakpoint settles a decompile that will
+not read.** `0x00182358` is 587 lines of VMX permutes taking a view and a
+projection matrix in place; rather than read it, `scripts/hd-fury-backdrop-break.py`
+stops `BackgroundAnimFury_Render` at the `bl` before it and at the instruction
+after it and reads both matrices off the stack (`r1 + 0x430`, `+0x470`) - eight
+frames, bit-identical before and after, so the function is inert here and the
+question closed in an afternoon. Three things that script does differently from
+`hd-flare-rendertick-break.py`, each because the other way desynced the stub:
+
+- **One breakpoint armed at a time.** Arm, run, read, disarm, arm the next. A
+  thread parked on an armed address is never resumed onto it, and no second
+  hit's stop reply ever queues behind the first - the two conditions under which
+  a `qfThreadInfo` came back with nothing and the session died on a timeout.
+- **`wait_for_stop(0.3)` before `pause()`, not instead of it.** The stub may or
+  may not announce a hit; a short wait catches the reply when it comes, and the
+  interrupt still follows when it does not.
+- **Write guest memory to hold the target on the path you want.** The picker's
+  debug kind field (`g_FurySettings+0x418`) written to `3` through `M` keeps
+  every later clip on a static path, so the mode this build draws is sampled
+  every time instead of one pick in three. The write costs one packet.
+
+Wall clock: about 40 s per sample (two stops, ~20 register dumps, five memory
+reads, a screenshot), so a run of twelve fits in ten minutes with the boot.
+
+**RPCS3's shader log is a second decoder for RSX microcode.** `Log shader
+programs: true` in `config.yml` (Video) writes every program the renderer builds
+to `~/.cache/rpcs3/shaderlog/` as `VertexProgramN.spirv` and `FragmentProgramN.spirv`
+- **GLSL text despite the extension** under Vulkan, `#version 450` and readable.
+Constants are renumbered from zero in first-use order (`c[201]` became
+`_fetch_constant(8)`), so a program is found by its shape - `fract` plus `log2`
+plus `exp2` for a `RadioHead`. It carried modifiers `scripts/ps3-microcode.py` did
+not decode: the four `clamp(.., 0.0, 1.0)` on `VertexProgram11` were the NV40
+saturate flag, bit 26 of dword 0, and the whole of why the backdrop drew white.
+Cheap - one boot with the flag on - and the check to make before trusting a
+disassembly's arithmetic. Turn the flag off after: it writes on every shader
+compile.
+
 ## What is worth doing next, in order
 
 1. **A committed input script and a lap.** The walk is six taps and thrust is a

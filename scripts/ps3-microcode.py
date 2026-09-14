@@ -229,6 +229,14 @@ def vp_render(d0: int, d1: int, d2: int, d3: int) -> str:
         ((d2 & 0x3F) << 11) | ((d3 >> 21) & 0x7FF),
     ]
     dest = (d3 >> 2) & 0x1F
+    # Bit 26 of dword 0 is the saturate flag (RPCS3's `D0.staturate`): the
+    # result is clamped to 0..1 on write. `RadioHead2_vp` carries it on
+    # exactly the four instructions RPCS3's own decoder renders with
+    # `clamp(.., 0.0, 1.0)` - its depth fade, its `0.4 * d` distance term,
+    # its ramp base and its fog base - and reading them without it turned a
+    # ramp bounded at one into a sixth power that saturated every point
+    # white (menu-backdrop.md).
+    sat = "_SAT" if d0 & (1 << 26) else ""
     parts = []
     if vec_op:
         name = VEC_OPS.get(vec_op, hex(vec_op))
@@ -240,7 +248,7 @@ def vp_render(d0: int, d1: int, d2: int, d3: int) -> str:
         wm = mask((d3 >> 13) & 0xF, (("x", 8), ("y", 4), ("z", 2), ("w", 1)))
         slots = VP_SRC_SLOTS.get(name, [0, 1])
         ops = ", ".join(vp_src(srcs[n], const, inp) for n in slots)
-        parts.append(f"{name}{update} {dst}{wm}{test}, {ops}")
+        parts.append(f"{name}{update}{sat} {dst}{wm}{test}, {ops}")
     if sca_op:
         name = SCA_OPS.get(sca_op, hex(sca_op))
         dst = (
@@ -249,7 +257,7 @@ def vp_render(d0: int, d1: int, d2: int, d3: int) -> str:
             else f"R{(d3 >> 7) & 0x1F}"
         )
         wm = mask((d3 >> 17) & 0xF, (("x", 8), ("y", 4), ("z", 2), ("w", 1)))
-        parts.append(f"{name}{update} {dst}{wm}{test}, {vp_src(srcs[2], const, inp)}")
+        parts.append(f"{name}{update}{sat} {dst}{wm}{test}, {vp_src(srcs[2], const, inp)}")
     if not parts:
         parts.append("NOP")
     if d3 & 1:

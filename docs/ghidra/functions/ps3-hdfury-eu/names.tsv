@@ -299,6 +299,7 @@
 0x00186b90	function	BackgroundAnimFury_ParseScreenSetting	80	menu-backdrop.md
 0x00182a78	function	BackgroundAnimFury_Load	82	menu-backdrop.md
 0x00183c88	function	BackgroundAnimFury_Render	78	menu-backdrop.md
+0x00181348	function	BackgroundAnimFury_AllocateTargets	75	menu-backdrop.md
 0x0017e810	function	BackgroundAnimFury_OnEnable	70	menu-backdrop.md
 0x00180a60	function	BackgroundAnimFury_PickPath	82	menu-backdrop.md
 0x0017ea80	function	FurySettings_Construct	82	menu-backdrop.md

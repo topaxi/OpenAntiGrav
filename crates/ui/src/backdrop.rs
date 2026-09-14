@@ -189,6 +189,28 @@ impl Fury {
         self.rerolled
     }
 
+    /// Plays static path `path` from its start, whatever the picker rolled -
+    /// the original's debug `Force Path` (`g_FurySettings+0x414`), which
+    /// `PickPath` honours before rolling. `None` when the path is not
+    /// authored, and the clip is left as it was.
+    pub fn force_path(&mut self, path: usize) -> Option<()> {
+        if !self
+            .settings
+            .static_paths
+            .get(path)
+            .is_some_and(Path::is_authored)
+        {
+            return None;
+        }
+        let duration = self.settings.static_paths[path].duration;
+        self.clip = Clip {
+            path,
+            frame: 0,
+            frames: (duration * FRAMES_PER_SECOND).max(1.0) as u32,
+        };
+        Some(())
+    }
+
     /// Seconds into the clip.
     #[must_use]
     pub fn seconds(&self) -> f32 {
@@ -275,8 +297,11 @@ impl Fury {
         // `clamp(0.0015 * height - 0.62, 0, 4)`, both `1.0` at 1080 lines.
         let sprite_scale = (2.26 - 0.001_166_7 * height).clamp(0.5, 2.5);
         let res_scale = (0.0015 * height - 0.62).clamp(0.0, 4.0);
-        // `1 + (mean(eq) - base) * factor`, with the bands sitting at the base.
-        let music_pulse = 1.0;
+        // `1 + (mean(eq) - base) * factor` over three equaliser bands the
+        // sound system feeds. Nothing feeds them here, and a band nobody
+        // feeds reads zero - the same `0.23` RPCS3 shows between beats.
+        let music_pulse =
+            1.0 + (0.0 - self.settings.music_pulse_base) * self.settings.music_pulse_factor;
         let particle_colour = self
             .settings
             .particle_colour

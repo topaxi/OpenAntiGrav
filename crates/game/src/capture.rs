@@ -51,6 +51,11 @@ pub struct Options {
     /// Pins the animation clock, in seconds, instead of deriving it from the
     /// tick. `None` derives it. See `Cli::anim_seconds`.
     pub anim_seconds: Option<f32>,
+    /// Plays this static path of the Fury menu backdrop instead of the
+    /// picker's roll, with [`Self::anim_seconds`] as the time into it - the
+    /// pair that lines a `--menu-page` capture up with an RPCS3 frame whose
+    /// path and clock were read. See `Cli::fury_path`.
+    pub fury_path: Option<usize>,
     /// Offset the camera by a sub-pixel each frame, on the race this hands off
     /// to. `--camera-jitter`; see `race::CaptureOptions::camera_jitter`.
     ///
@@ -487,6 +492,7 @@ pub fn run(
                         options.settings.display.aspect,
                     ),
                     options.anim_seconds,
+                    options.fury_path,
                 )
             });
             // The race box's two selection screens are not pages of our

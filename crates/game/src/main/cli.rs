@@ -12,6 +12,11 @@ use oag_render::mesh_render::Anisotropy;
 
 use crate::args::DEFAULT_SIZE;
 
+// `#[path]` for the reason `main.rs` gives its own children: this module is
+// itself loaded through one, so a bare `mod` would look beside `main.rs`.
+#[path = "cli/render_overrides.rs"]
+mod render_overrides;
+
 #[derive(Parser, Debug)]
 #[command(
     name = "oag-game",
@@ -274,6 +279,14 @@ pub(crate) struct Cli {
     /// static. A harness knob belongs on the command line.
     #[arg(long, value_name = "SECONDS")]
     pub(crate) anim_seconds: Option<f32>,
+
+    /// Plays this static path of the Fury menu backdrop on a `--menu-page`
+    /// capture instead of the picker's roll, `--anim-seconds` being the time
+    /// into it. The original's own debug `Force Path`. This is how a capture
+    /// is lined up with an RPCS3 frame whose path and clock were read off the
+    /// clip (`scripts/hd-fury-backdrop-break.py`).
+    #[arg(long, value_name = "INDEX")]
+    pub(crate) fury_path: Option<usize>,
 
     /// With `--screenshot`, the image's size as `WIDTHxHEIGHT`.
     ///
@@ -957,42 +970,4 @@ pub(crate) struct Cli {
     /// wants for `apps/`.
     #[arg(long, requires = "write_icon", default_value_t = 256)]
     pub(crate) icon_size: u32,
-}
-
-impl Cli {
-    /// Applies `--render-scale`, `--upscaler`, `--anti-aliasing` and
-    /// `--motion-blur` to one render profile.
-    ///
-    /// **One function because there are two callers and they disagreed.**
-    /// `main.rs` applies these by walking `settings.render_profiles`, which is
-    /// keyed by title - and a headless `--race` capture has no title in hand,
-    /// so it built a `RenderProfile::default()` instead and every one of these
-    /// four flags was silently discarded. That made `just compare-upscalers`
-    /// produce three byte-identical images, which is exactly the failure a
-    /// comparison instrument cannot survive: it reported "these upscalers look
-    /// the same" and nobody could tell that from "the flag did nothing".
-    ///
-    /// `render_scale` is parsed by the caller because it is the one of the four
-    /// that can fail.
-    pub(crate) fn apply_render_overrides(
-        &self,
-        profile: &mut crate::settings::RenderProfile,
-        render_scale: Option<oag_display::display::Scale>,
-    ) {
-        if let Some(render_scale) = render_scale {
-            profile.render_scale = render_scale;
-        }
-        if let Some(reconstruction) = self.reconstruction {
-            profile.reconstruction = reconstruction;
-        }
-        if let Some(msaa) = self.msaa {
-            profile.msaa = msaa;
-        }
-        if let Some(motion_blur) = self.motion_blur {
-            profile.motion_blur = motion_blur;
-        }
-        if let Some(shadows) = self.shadows {
-            profile.shadows = shadows;
-        }
-    }
 }

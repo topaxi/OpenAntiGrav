@@ -26,6 +26,7 @@ below was re-derived from the render's own use of the field (the attribute slot 
 | `0x00186b90` | `BackgroundAnimFury_ParseScreenSetting` | 80 |
 | `0x00182a78` | `BackgroundAnimFury_Load` | 82 |
 | `0x00183c88` | `BackgroundAnimFury_Render` | 78 |
+| `0x00181348` | `BackgroundAnimFury_AllocateTargets` | 75 |
 | `0x0017e810` | `BackgroundAnimFury_OnEnable` | 70 |
 | `0x00180a60` | `BackgroundAnimFury_PickPath` | 82 |
 | `0x0017ea80` | `FurySettings_Construct` | 82 |
@@ -199,8 +200,11 @@ dynamic section.
 ## `BackgroundAnimFury_PickPath` - which path, which cloud
 
 Called by `Render` when the running clip's frame reaches its frame count, with the
-eight-entry queue of recent paths at `+0xd0..+0xec`. Unless the debug `Force Path`
-`g+0x414` is set:
+eight-entry queue of recent paths at `+0xd0..+0xec`. Two debug fields on
+`g_FurySettings` come first: `g+0x414` is a forced path *index* (`-1` off), and
+`g+0x418` a forced *kind* - `1` morph, `2` dynamic, anything else from `1` up
+static, `0` rolls - which is what `scripts/hd-fury-backdrop-break.py` writes (`3`)
+through the GDB stub to hold RPCS3 on static paths. Unless the index is forced:
 
 1. `type = rand() % 3`: `0` static (index `rand() % 8`), `1` morph (`% 8`),
    `2` dynamic (`% 4`).
@@ -224,10 +228,24 @@ game is not paused, and `PointCloud_Prepare` writes `clip+0x20 = frame / fps`
 `start + (end - start) * t`, the target `focusStart + (focusEnd - focusStart) * t`,
 both straight lerps; the forward is `target - eye` normalised (the VMX
 reciprocal-square-root with one Newton step, guarded against a zero length), and a
-right/up basis is built from it with the world up and written out as a 4x4 the
-render uses as `worldView`. The projection is `perspective(fovy in degrees * PI/180,
+right/up basis is built from it with the world up (`FUN_005a2b18`, the vectormath
+`lookAt`: `z = normalise(eye - target)`, `x = up x z`, `y = z x x`, translation
+`-basis . eye`) and written out as a 4x4 the render uses as `worldView` - after
+multiplying it by the current cloud's own `+0x3c` matrix, identity in every file
+and untouched at runtime. The projection is `perspective(fovy in degrees * PI/180,
 aspect, 0.005, 50)`, aspect `4/3` or `16/9` from the display's wide flag
-(`g_video+0x11c`), then handed through `0x00182358` before the clip's `+0x90` slot.
+(`g_video+0x11c`); both matrices are then handed to `0x00182358` in place. **That
+call does nothing here, measured**: stopped before and after it on eight RPCS3
+frames, the view matrix is bit-identical and the projection is the plain
+perspective (`0.61386 / 1.09131` for `85 deg` at `16/9`, `-1.0002 / -0.01` for
+`0.005..50`). It reads two floats off the post chain's object (`0x008c3520+8` and
+`+0xc`, `0.5` and `0.4` in the image's initialisers, **`0` and `0` at runtime**)
+and its VMX body is a transpose, a translation by the first times a basis vector,
+and a transpose back - the shape of a stereo eye offset, left unnamed at 40. The
+constants slot it feeds is `clip+0x50..+0x80` for `worldView` and `+0x90..+0xc0`
+for `proj` (`RadioHead2_Update` copies them to the block `RadioHead2_Upload` reads
+at `+0x10` and `+0x50`; the parameter order there is `worldView`, `proj`,
+`particleColour`, `spriteSizeMultiplier`, then the seven float4s).
 
 ## `RadioHead2` - what a static path draws
 
@@ -248,21 +266,37 @@ view     = worldView * p                                       view-space positi
 t        = ((position.z - crf.x) + r * crf.z) * crf.y          crf = colourRampFactors; the attribute's own z, before the displacement
 d        = -view.z                                             distance down the view axis
 if view.z < fogFactors.z: view.z = 1                           beyond the fog end: behind the eye, culled
-fade     = d * dff.x + dff.y                                   dff = depthFadeFactors, 0..1 from near to far
+fade     = sat(d * dff.x + dff.y)                              dff = depthFadeFactors, 0..1 from near to far
 dof      = 1 + clamp((d - dofStart) / dofStrength, 0, 24)      dofFactors = (-dofStart, -1/dofStrength, 24, 1/dofFactor)
-fog      = ((d - fogStart) / fogLength) ^ fogExponent          fogFactors = (-fogStart, -1/fogLength, -fogStart-fogLength, fogExponent)
-ramp     = max(0, 4 * (1 - frac(t)) * 0.4 * d - 3) ^ 6         colourRampFactors2 = (4, -3, 6, 0); LG2 of a negative is -inf, so 0
+fog      = sat((d - fogStart) / fogLength) ^ fogExponent       fogFactors = (-fogStart, -1/fogLength, -fogStart-fogLength, fogExponent)
+dist     = sat(0.4 * d)                                        MUL_SAT by the literal -0.4: one past two and a half units
+ramp     = sat(4 * (1 - frac(t)) * dist - 3) ^ 6               colourRampFactors2 = (4, -3, 6, 0); never more than one
 size     = dof * spriteSizeMultiplier
 POS      = proj * (view + corner * size)                       a view-aligned sprite, size in world units
 COL0.rgb = particleColour + ramp * colourRamp
 COL0.a   = fade * (1 - fog)
 ```
 
-and `RadioHead2_fp` is `COL0 * tex(diffuseSampler, uv)`. The sprite is **procedural**:
+`sat` is the NV40 saturate flag, bit 26 of the instruction's first dword, on exactly
+those four instructions - `MAD_SAT`, `MUL_SAT`, `MAD_SAT`, `MUL_SAT` at 20, 24, 26
+and 28. **The page's first reading missed it** (`scripts/ps3-microcode.py` did not
+decode the bit until 2026-09-14) and had the ramp as an unbounded sixth power of
+`1.6 * d * (1 - frac t) - 3`, which saturates every point past three units white;
+RPCS3's own decoder (`Log shader programs`, `VertexProgram11`) renders the same
+four lines with `clamp(.., 0.0, 1.0)`, which is what settled it. With the flag the
+ramp is a band on `1 - frac(t) > 0.75`, at most one, and the hull is red where the
+band is not (`crates/ui/src/backdrop/tests.rs` pins the bound). Every other SHO
+block the HD pages cite was re-run with the bit decoded: only the RadioHeads
+carry it (`2`-`6` each), `LiveStencilShadow_vp` and the zone and material
+programs none, so no other page's arithmetic moves.
+
+and `RadioHead2_fp` is `COL0 * tex(diffuseSampler, uv)`, `COL0` read clamped to
+`0..1` by the fragment program. The sprite is **procedural**:
 `PointCloud_Construct` (`0x002615b8`) makes two 32x32 six-mip textures and fills each
 with `PointCloud_MakeSprite` (`0x00260e20`, `(exp0, exp1, amp0, amp1, curve, texture)`):
 per mip `m` of `n`, `f = (m / (n - 1)) ^ curve`, `exp = exp0 + (exp1 - exp0) * f`,
-`amp = amp0 + (amp1 - amp0) * f`, and per texel `r = |xy - centre| / half`,
+`amp = amp0 + (amp1 - amp0) * f`, and per texel `r = |xy - half| / half` from the
+texel's *index*, not its centre - so the 2x2 and 1x1 levels are wholly transparent,
 `alpha = 255 * amp * (1 - min(r, 1)) ^ exp`, RGB white. The first texture, the one
 every quad mode binds, is `(0.6, 2.0, 0.07, 1.0, 1.0)`: a sprite that is dim and soft
 when it covers many pixels (mip 0) and bright and tight when it is a dot. The second,
@@ -289,8 +323,12 @@ where `resScale = clamp(0.0015 * height - 0.62, 0, 4)` (`1.0` at 1080 lines),
 `rand() * 2^-29 - 1` values and a `0.2..1.6` s duration, `Render` runs
 `0.65 * lerp + 0.7` through a `(1 - sin(PI * t)) / 2` ease while it lasts), and
 `musicPulse = 1 + (mean(eq[3]) - Music Pulse Base) * Music Pulse factor` from three
-equaliser bands at `+0x19c..+0x1a4` that the sound system feeds. **This build has no
-equaliser tap**, so it sits the bands at the base: `musicPulse = 1`. The ramp's
+equaliser bands at `+0x19c..+0x1a4` that the sound system feeds. RPCS3 reads the
+uploaded `particleColour` between `0.040` and `0.21` over two minutes of menu music
+(`musicPulse` from `0.23` to `1.2`; the disc authors base `0.7`, factor `1.1`).
+**This build has no equaliser tap and plays no menu music yet**, so it sits the
+bands at zero - `musicPulse = 0.23`, the quietest RPCS3 showed - rather than at
+the base. The ramp's
 `0.2` and `10.0` are `FuryStaticPath_Ramp`'s hard-coded values (`+0x4c`, `+0x48`).
 
 So the visible motion on a static path is the camera's lerp, the sprites growing with
@@ -304,9 +342,18 @@ and their `Update`s sit beside `RadioHead2_Update` in the jump table at `0x008b2
 
 ## The post passes, as far as they are read
 
-Three full-screen passes follow the particles each frame; `Render` owns several
-1080p targets (`0x00181348` at `+0xfc`, sized from the display) and a ping-pong index
-at `+0x118`. From the three fragment programs and the constants `Render` binds:
+Three full-screen passes follow the particles each frame; `Render` owns three
+targets (`BackgroundAnimFury_AllocateTargets`, `0x00181348`, at `+0xfc`: **one at
+the display's size and two at half of it** - `1280x720`, `640x360`, `640x360`,
+pitch `0x1400`/`0xa00`, read off the objects at runtime - all format `8`, each with
+a texture view at `+0x108..+0x110`, the full one's filter word `0x0101` (nearest),
+the half ones' `0x0202` (linear)) and a ping-pong index at `+0x118`. `Render`
+binds the full view (`+0x108`) to the composite's `texture` (`+0x128`) and the
+half view `+0x10c + 4 * pp` to its `waveTexture` (`+0x12c`), so the trail is the
+half-size pair sampled up bilinearly and the particles are the full one; which
+target the particle submit and the blend pass each land in is read from the
+decompile's order only (Open). From the three fragment programs and the constants
+`Render` binds:
 
 - **Blend** (`FEBackgroundAnimFuryBlend`): `out = min(src * srcScale, srcMax) + dst *
   dstScale`, `dstScale = Feedback`, `dst` sampled through `uv0ScaleBias` (`Feedback
@@ -349,43 +396,65 @@ were not followed vertex by vertex. Open below.
   and dynamic re-rolled, no equaliser, a fixed seed. `--menu-page main` on the Fury
   disc draws it; `--anim-seconds` runs the clip in.
 
-**It does not yet look like the original, and the numbers say how.** On
-`data/reference/hd-main-menu-screenshot-2/00.png` (RPCS3, Fury main menu), over the
-region rows 200..960 by columns 160..1760 at 1080p, the backdrop is 66% black, 9.3%
-red, 2.7% orange-yellow and **0.4%** white; the same census on this build's first
-frame is 51% black, 0% red, **8% white and 35% grey** (white at low alpha). The
-cause is traced to the reading rather than the code: the ramp `max(0, 1.6 * d *
-(1 - frac(t)) - 3) ^ 6` exceeds one for most points at the distances the static
-paths author (`d` of 4-20), so `o[COL0]` saturates white (the NV clamp on colour
-outputs is applied in the WGSL), and at those distances the hull overflows the
-frame - `staticPaths[4]` even ends its eye at `(0, 0.3, -2.5)`, inside the hull's
-own box.
+## Runtime verification, 2026-09-14
 
-One diagnostic, run and reverted the same day: scaling the view-space position by
-`0.4` uniformly (every point `0.4` times as far from the eye, projection untouched)
-brings the census to 69% black, 4.1% red, 1.8% yellow, 0.6% white, 6.9% grey and
-the hull into frame with the red band along its top edge where the reference has
-it. Scaling the *cloud* by `0.4` about the origin with the eye left where the path
-puts it does not - 87% black, 0% red, 9.8% white - so what is missing acts on the
-**eye-to-point distance**, not on the field of view or the cloud's own size. It is
-not the vertex program: its bits, literals and the `Update` constants were re-read
-against `scripts/ps3-microcode.py`. `PointCloud_Draw` applies no model matrix, so
-the candidates are the `worldView` `Render` hands the program and the projection's
-own path through `0x00182358`, the one step on it this page has not read. Until one
-of them is, what draws is the arithmetic as it stands, not a tuned stand-in.
+`scripts/hd-fury-backdrop-break.py` boots the disc in RPCS3 under the PPU
+interpreter, walks to the Fury main menu, forces the picker to static paths through
+the debug kind field, and on each sample stops `Render` twice - `0x0018438c`, before
+the perspective helper, and `0x001843a0`, after `0x00182358` - reading the two
+matrices, the clip block, the current cloud's header, the post chain's object and,
+on mode 2, the constant block at `RadioHead2_Upload`'s entry, with a screenshot of
+the same instant. Eighteen samples over three boots at 1280x720, six static paths
+among them; the two tests in `crates/game/tests/hd_fury_backdrop_ground_truth.rs`
+hold the numbers. What they settle:
+
+- **The camera is right.** `worldView` for path 7 at frame 421 and path 6 at frame
+  372 agree with this build's `lookAt` to `5e-4`, one frame's travel (the clock is
+  read a frame later); `fovy` is the path's; `spriteSizeMultiplier` is `pointSize *
+  1.42`, the `2.26 - 0.0011667 * 720` of a 720-line display. `0x00182358` changes
+  neither matrix. The cloud's header matrix is identity at runtime.
+- **The constants are the ones `Update`'s table above says**, to the float:
+  `colourRampFactors = (20 - 4 * seconds, 0.08, 0.5, 0)`, `(4, -3, 6, 0)`,
+  `depthFade (0.5, -0.5)`, the path's `dof` and `fog` factors, `colourRamp = Particle
+  Ramp Colour * 0.46` at 720 lines, `particleColour = 0.541 * 0.7 * musicPulse *
+  0.46`.
+- **So the white was the shader reading, not a scale.** The four saturates above.
+  The page's earlier diagnosis - a `0.4` missing on the eye-to-point distance,
+  because scaling view space by `0.4` made the colour census match - is retracted:
+  the `0.4` was the program's own `MUL_SAT ... c[201].x`, and the census it matched
+  was against a capture of a different mode at a different resolution.
+
+**What still differs, measured on path 6 at frame 372 against
+`/tmp/hd-fury-backdrop-break3/05.png`** (both 1280x720, the pulse there `1.12`
+against this build's `0.23`, so colour levels are not compared): the hull, its
+framing, the band's place and the red-to-yellow ordering all agree. In a sparse
+region (rows 440..560, columns 1050..1250) the mean light is the same to a percent
+(`13.6, 5.4` against `13.0, 5.2` in 8-bit RGB) but RPCS3 spreads it over dots with
+a half-maximum footprint of **37 pixels against 13** - the same energy, ~1.7x the
+diameter - and in a dense region that spread overlaps into a saturated `139, 89,
+31` mean against `10, 3, 0` here. Same total, wider dots. The half-size trail
+targets were the first suspect and are now drawn at half size here, sampled
+linear - **which changed nothing measurable**: with the bands at zero the trail's
+cap is its `0.02` floor and it carries almost no light, in this build or (between
+beats) in RPCS3. So the spread is on the fresh particles themselves, and the
+candidates are the sprite's mip selection (the RSX sampler state
+`PointCloud_DrawRaw` sets, unread - a larger, softer level would widen a dot
+without brightening it), `srcScale` (dropped as one) and the blend pass's quad
+grid, which could draw the particles more than once.
 
 ## Open
 
-- The missing scale on the eye-to-point distance, above - the first thing to read:
-  `Render`'s `worldView` bind and `0x00182358`.
-
+- The dots' spread: the sprite sampler `PointCloud_DrawRaw` sets (mip filter,
+  LOD bias), the particle submit's target and the blend pass's quad grid - the
+  first thing to read; the dots here carry the right light over half the diameter.
 - Modes `5`, `9`, `10`, `11`: the vertex programs are paired and disassemble; their
   `Update` functions and the two extra streams (`targetPosition`, the line/quad
   offsets) are unread.
 - The blend pass's quad grid and the exact target ping-pong.
 - The equaliser: what feeds `+0x19c..+0x1a4` and `+0x1dc..+0x1e4`, and whether the
   menu's own music track is what it analyses.
-- `0x00182358`'s effect on the projection matrix.
+- `0x00182358`'s purpose: inert here with its two inputs at zero, shaped like a
+  stereo eye offset, unnamed.
 - The HD-style `BackgroundAnim_Item.cpp` (`FEBackgroundAnim_vp`/`_fp`/`Copy_fp`, the
   `.vex` ring with `blur`/`use_bands`), which answers hd-frontend.md's open question
   about which non-Fury program the HD style resolves to: its own, not a RadioHead.

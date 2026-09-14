@@ -72,7 +72,12 @@ fn the_frame_carries_the_pages_constants_at_1080_lines() {
         "pointSize at 1080 lines"
     );
     let expect = |a: [f32; 3], b: [f32; 3]| a.iter().zip(b).all(|(x, y)| (x - y).abs() < 1e-3);
-    assert!(expect(frame.particle_colour, [0.5 * 0.7, 0.1 * 0.7, 0.0]));
+    // `0.7` at rest, the bands at zero: `1 + (0 - 0.6) * 1.2`.
+    let pulse = 0.7 * 0.28;
+    assert!(expect(
+        frame.particle_colour,
+        [0.5 * pulse, 0.1 * pulse, 0.0]
+    ));
     assert_eq!(
         frame.colour_ramp_factors,
         [20.0, 0.08, 0.5, 0.0],
@@ -143,4 +148,74 @@ fn tints_read_the_widgets_screen_settings_and_fall_back_to_default() {
     let grey = 0x20 as f32 / 255.0;
     assert_eq!(tints.for_screen("Race Records"), [grey, grey, grey, 1.0]);
     assert!(Tints::read(&oag_tables::fexml::parse("<Root><BackgroundAnim/></Root>")).is_none());
+}
+
+#[test]
+fn force_path_plays_that_path_from_its_start_and_refuses_an_unauthored_one() {
+    let mut fury = Fury::new(settings(), 3, 1).expect("authored");
+    for _ in 0..30 {
+        fury.tick();
+    }
+    assert!(fury.force_path(5).is_some());
+    assert_eq!(fury.path(), 5);
+    assert_eq!(fury.seconds(), 0.0);
+    // Path 5 authors six seconds: it runs them, then the picker takes over.
+    for _ in 0..(6 * FRAMES_PER_SECOND as u32) - 1 {
+        fury.tick();
+    }
+    assert_eq!(fury.path(), 5);
+    fury.tick();
+    assert_ne!(fury.path(), 5);
+    let before = fury.path();
+    assert!(fury.force_path(8).is_none(), "no ninth static path");
+    assert_eq!(fury.path(), before, "a refused force leaves the clip alone");
+}
+
+#[test]
+fn the_music_pulse_reads_silence_as_bands_at_zero() {
+    let fury = Fury::new(settings(), 3, 1).expect("authored");
+    let frame = fury.frame(1080.0, 16.0 / 9.0, [1.0; 4]);
+    // No `Music Pulse Base` authored: the constructor's `0.6` and `1.2`, so
+    // `1 + (0 - 0.6) * 1.2 = 0.28`, times the `0.7` brightness at rest.
+    let expected = 0.5 * BRIGHTNESS_AT_REST * (1.0 + (0.0 - 0.6) * 1.2);
+    assert!(
+        (frame.particle_colour[0] - expected).abs() < 1e-6,
+        "{}",
+        frame.particle_colour[0]
+    );
+}
+
+/// `RadioHead2_vp`'s ramp off a frame's constants, as `backdrop.wgsl`
+/// computes it: `sat(crf2.x * (1 - frac t) * sat(0.4 d) + crf2.y) ^ crf2.z`.
+fn ramp(frame: &Frame, d: f32, one_minus_frac: f32) -> f32 {
+    let crf2 = frame.colour_ramp_factors2;
+    let distance = (0.4 * d).clamp(0.0, 1.0);
+    (crf2[0] * one_minus_frac * distance + crf2[1])
+        .clamp(0.0, 1.0)
+        .powf(crf2[2])
+}
+
+#[test]
+fn the_ramp_is_a_band_bounded_at_one_never_the_sixth_power_of_a_distance() {
+    let fury = Fury::new(settings(), 3, 1).expect("authored");
+    let frame = fury.frame(720.0, 16.0 / 9.0, [1.0; 4]);
+    let mut peak: f32 = 0.0;
+    for d_tenths in 0..400 {
+        let d = d_tenths as f32 / 10.0;
+        for phase in 0..=100 {
+            let one_minus_frac = phase as f32 / 100.0;
+            let value = ramp(&frame, d, one_minus_frac);
+            assert!(
+                (0.0..=1.0).contains(&value),
+                "d {d} phase {one_minus_frac}: {value}"
+            );
+            peak = peak.max(value);
+            // Past two and a half units the distance term is one, and the
+            // band is the quarter of the period where `1 - frac t > 0.75`.
+            if d >= 2.5 && one_minus_frac < 0.75 {
+                assert_eq!(value, 0.0, "d {d} phase {one_minus_frac}");
+            }
+        }
+    }
+    assert_eq!(peak, 1.0);
 }
