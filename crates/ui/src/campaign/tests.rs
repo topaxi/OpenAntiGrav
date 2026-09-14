@@ -455,6 +455,12 @@ fn a_grid_with_one_gold_cell_shows_it_on_medals_and_points() {
             race_cell("grid0_2_1", "16_Track"),
             race_cell("grid0_3_1", "03_Track"),
         ],
+        // HD's own grid attributes - see `race_campaign`'s HD section.
+        campaign: None,
+        title_color: None,
+        text_color: None,
+        flyer_name: None,
+        billboard_name: None,
     };
     let summary = GridSummary::from_grid_with_medals(&grid, &|name| {
         (name == "grid0_2_1").then_some(Medal::Gold)

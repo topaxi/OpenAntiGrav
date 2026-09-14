@@ -141,10 +141,14 @@ pub fn race_mode_for_cell(mode: race_campaign::Mode) -> Option<oag_race::Mode> {
         race_campaign::Mode::Zone => Some(oag_race::Mode::Zone),
         race_campaign::Mode::Elimination => Some(oag_race::Mode::Eliminator),
         race_campaign::Mode::SpeedLap => Some(oag_race::Mode::SpeedLap),
+        // `Other` is a mode name with no Pulse ordinal at all (HD's
+        // `NitroBattle`/`Detonator`) - nothing to map onto, so it refuses
+        // the same way the four unimplemented Pulse modes do.
         race_campaign::Mode::Tournament
         | race_campaign::Mode::Head2Head
         | race_campaign::Mode::CustomGrid
-        | race_campaign::Mode::AiRace => None,
+        | race_campaign::Mode::AiRace
+        | race_campaign::Mode::Other(_) => None,
     }
 }
 
@@ -185,7 +189,11 @@ mod tests {
             CampaignMode::CustomGrid,
             CampaignMode::AiRace,
         ] {
-            assert_eq!(race_mode_for_cell(mode), None, "{mode} should not launch");
+            assert_eq!(
+                race_mode_for_cell(mode.clone()),
+                None,
+                "{mode} should not launch"
+            );
         }
     }
 }

@@ -159,7 +159,7 @@ impl Session {
     /// never substitutes an implemented mode or a different circuit for an
     /// unimplemented or missing one.
     fn launch_campaign_cell(&mut self, cell: oag_tables::race_campaign::Cell) {
-        let Some(mode) = oag_game::campaign::race_mode_for_cell(cell.mode) else {
+        let Some(mode) = oag_game::campaign::race_mode_for_cell(cell.mode.clone()) else {
             warn!(
                 "{} is {} - not one of the modes this engine can run yet, so {} cannot launch",
                 cell.mode, cell.mode, cell.name

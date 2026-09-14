@@ -240,7 +240,8 @@ impl RaceStage {
             CampaignMode::Tournament
             | CampaignMode::Head2Head
             | CampaignMode::CustomGrid
-            | CampaignMode::AiRace => None,
+            | CampaignMode::AiRace
+            | CampaignMode::Other(_) => None,
         }?;
         let medal = cell.evaluate_medal(value)?;
         Some(match medal {
