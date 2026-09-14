@@ -611,9 +611,9 @@ pub fn cell_draw_list(
             "Target0 Title" | "Target1 Title" | "Target2 Title" if targets_visible => {
                 Some(strings.get_or_id("IG_HUD_TARGET").to_string())
             }
-            "Target0" if targets_visible => Some(target_value(cell.gold, cell.mode)),
-            "Target1" if targets_visible => Some(target_value(cell.silver, cell.mode)),
-            "Target2" if targets_visible => Some(target_value(cell.bronze, cell.mode)),
+            "Target0" if targets_visible => Some(target_value(cell.gold, &cell.mode)),
+            "Target1" if targets_visible => Some(target_value(cell.silver, &cell.mode)),
+            "Target2" if targets_visible => Some(target_value(cell.bronze, &cell.mode)),
             "Target0 Title" | "Target1 Title" | "Target2 Title" | "Target0" | "Target1"
             | "Target2" => None,
             _ => text.string.clone(),
@@ -655,7 +655,7 @@ fn laps_line(cell: &Cell, strings: &StringTable) -> String {
 
 /// `Target0..2`'s own value: a time for `Time Trial`/`Speed Lap`, a plain
 /// number otherwise (`Zone`'s zone count, `Elimination`'s kill count).
-fn target_value(value: i64, mode: Mode) -> String {
+fn target_value(value: i64, mode: &Mode) -> String {
     if matches!(mode, Mode::TimeTrial | Mode::SpeedLap) {
         format_centiseconds(value)
     } else {

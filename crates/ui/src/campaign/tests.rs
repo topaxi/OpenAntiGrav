@@ -152,6 +152,9 @@ fn race_cell(name: &str, track: &str) -> Cell {
         silver: 2,
         bronze: 3,
         tournament_tracks: Vec::new(),
+        // Neither is Pulse's own shape - see `race_campaign`'s HD section.
+        difficulty_targets: None,
+        nitro_elimination_targets: None,
     }
 }
 
@@ -423,7 +426,7 @@ fn race_draws_no_target_swatch_even_though_the_sprite_resolves() {
 #[test]
 fn zone_blanks_the_class_line_and_counts_up() {
     let cell = zone_cell("grid0_4_2");
-    assert_eq!(target_value(cell.gold, cell.mode), "20");
+    assert_eq!(target_value(cell.gold, &cell.mode), "20");
     assert_eq!(laps_line(&cell, &strings()), "INF");
 }
 
