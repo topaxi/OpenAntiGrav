@@ -384,6 +384,11 @@ identified and the per-leg accumulation was not traced. Tournament is the mode
 with 27 authored cells and the only one carrying per-leg state, so this is the
 concrete starting point for it.
 
+**Closed, 2026-09-14, a separate pass**: [`tournament.md`](tournament.md) has
+`DAT_08b31158` fully fielded, the per-leg points table, and what value the
+medal above actually compares for a Tournament cell (the final standings
+rank by total points, not the last leg's own position).
+
 ## The mode and class enumerations, read off their own tables
 
 `PI_Cell_ParseElement` resolves `mode=` against a null-terminated
@@ -1479,6 +1484,38 @@ lock gate, not yet shown to be one; see the EndRace screens page's own
 write-up of it (confidence 55, not renamed) for the exact shape and the
 breakpoint that would settle it.
 
+### `0x088d7e1c` ruled out; `Cell Selection`'s real dispatcher is `ConfirmButton_Update`, and it isn't the gate either
+
+**Runtime-confirmed 2026-09-14** (full transcript on the [EndRace screens
+page](endrace-screens.md#0x088d7e1c-ruled-out-the-real-cell-selection-confirm-dispatcher-found-and-the-swallow-narrowed-to-input-consumption)):
+`0x088d7e1c` is the held-confirm variant used by `InGame Photo`, not
+`Cell Selection` - it never runs on this screen at all, so its `+0xbe` flag
+was a dead end. Breakpointing `StateMachine_EvaluateRedirect` directly, with
+the cursor on `grid0_3_1` (unlocked, positive control) then `grid0_2_1`
+(locked, `left` from the default cursor, negative control - the same two
+cells "Runtime-verified 2026-09-14 (deliverable 1)" above used), found the
+real caller: `$ra = 0x088c907c`, inside `ConfirmButton_Update` (`0x088c8e88`,
+confidence 85) - fired on the unlocked positive control, **never fired** on
+the locked negative control, reproducing this page's own cell/tier findings
+from a third, independent function.
+
+`ConfirmButton_Update` itself was then cleared as the gate: passively
+breakpointed at its own entry (no button pressed), it fires identically -
+same instance, same internal state - regardless of which tile the cursor is
+on, and its own decompiled accept-branch (`0x088c8fec`-`0x088c9074`) reaches
+the `StateMachine_EvaluateRedirect` call unconditionally once "accept is
+pressed" is true, with no `Locked`/medal read anywhere in that span. So the
+swallow is not inside any PI001 function traced so far, on either screen -
+it is specifically why `ConfirmButton_Update`'s own accept-button check
+(`Input_IsPressed(g_input, 4, 0)`, a screen-global button code, not a
+per-tile one) reads *false* on a locked-tile frame despite `cross` being
+held for the whole 6 s of the negative-control press. **The open question is
+now input consumption**: what calls `Input_ConsumePress`/otherwise makes
+`Input_IsPressed` miss button `4` specifically when the focused
+`GridController` tile's lock layer is visible - not located this pass, and
+a materially narrower target than either the eleven-callers list or the
+unconfirmed `+0xbe` flag were.
+
 ## What is not determined
 
 - **`g_class_name_table` (`0x08ab067c`) is read above as four entries, and a
@@ -1545,6 +1582,12 @@ breakpoint that would settle it.
   `StateMachine_EvaluateRedirect` (`0x088c8798`), the generic, screen-agnostic
   `<Redirect>` evaluator - it never reads `Locked` or a medal, so it is not
   the swallowing predicate itself. See "`0x088c8a10` decompiled" above.
+  **Narrowed further, 2026-09-14 (runtime):** the real `Cell Selection`
+  dispatcher (`ConfirmButton_Update`, `0x088c8e88`) is found and cleared too
+  - see "`0x088d7e1c` ruled out..." above. The gate is upstream of every
+  PI001 function traced on either screen, specifically in whatever consumes
+  button `4` before `ConfirmButton_Update`'s own `Input_IsPressed` check
+  sees it on a locked-tile frame.
 - **`Group` (`+0xb0`) on a `PI_Grid`** is `1` on `grid12`..`grid15` and absent
   elsewhere; its consumer was not traced. A "these four are the expert set"
   reading is plausible and unverified.
@@ -1570,9 +1613,12 @@ breakpoint that would settle it.
   which is decompiled corroboration - not a runtime trace - that
   `Unlock_LoyaltyMet`'s comparison is exactly what its name says, not a
   misread of a cell-shaped `difficulty | medal << 8` word. Raised
-  `Unlock_LoyaltyMet`/`Unlock_LoyaltyValue` 72/78 -> 82/82 on this basis; the
-  writer of the total itself (where a race's own loyalty award gets added in)
-  was not located - see `endrace-screens.md`'s own open item.
+  `Unlock_LoyaltyMet`/`Unlock_LoyaltyValue` 72/78 -> 82/82 on this basis.
+  **Fully closed 2026-09-14**: the writer is `Race_ComputeLoyaltyAward`
+  (`0x0880ac50`), called from `Race_BuildEndRaceResult` (`0x0882a498`) and
+  reproducing `90` exactly on two independent live races - see
+  `endrace-screens.md`'s "The loyalty-award computation, decompiled and
+  runtime-confirmed" section for the full law and both data points.
 - **Only the USA pressing was read.** The EU and PS2 pressings of Pulse, and
   Pure and HD/Fury, were not checked for `Data\Plugins\grids` at all.
 - **Nothing is runtime-verified.** No PPSSPP breakpoint was taken this pass;

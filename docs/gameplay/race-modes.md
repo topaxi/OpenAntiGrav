@@ -731,6 +731,61 @@ HUD layout: `Elimination_HUD.xml`, wired the same way every other mode's
 layout is (`oag_title::HudLayouts::elimination`) - see [the HUD
 page](../ui/hud.md#eliminator).
 
+## Tournament
+
+**Read, not implemented.** `oag_game::campaign::race_mode_for_cell` still
+refuses `Tournament`, the same way it refuses `Head2Head` - see the top of
+this page. What follows is the law an implementation needs, recovered
+2026-09-14; the full decompilation and evidence is
+[`tournament.md`](../ghidra/functions/psp-pulse-usa/tournament.md).
+
+A tournament is a series of single races (up to twelve legs, four authored
+on the PSP disc's own campaign cells - `Data\Plugins\grids\grid_01.xml`
+onward) scored as one event:
+
+- **A leg earns points by finishing position, off a fixed table - not the
+  campaign's own gold/silver/bronze medal points.** 1st through 8th score
+  **8, 6, 5, 4, 3, 2, 1, 0**; a destroyed craft or one that did not finish
+  scores **0** regardless of where it stopped. No fastest-lap or
+  elimination bonus. Confidence 88, a direct table read
+  (`g_tournament_points_by_position`, `0x08ab0ba0`).
+- **A leg advances when the player picks `Race Again`'s mid-tournament
+  sibling, `ER_NEXT_RACE`**, offered on `EndRace Menu` for every leg but
+  the last (`endrace-screens.md`). `Tournament_AdvanceLeg` increments the
+  leg counter and loads the next leg's track.
+- **The campaign medal a finished tournament earns is a threshold on the
+  *final standings rank* by total accumulated points across every leg -
+  not the last leg's own finishing position, and not the raw point
+  total.** The same `Cell_EvaluateMedal` threshold compare
+  ([`race-campaign.md`](../ghidra/functions/psp-pulse-usa/race-campaign.md))
+  that turns a `Race` cell's position into gold/silver/bronze runs against
+  that rank.
+- **A tie in total points is broken by grid-slot order, not a secondary
+  criterion** - the standings sort never swaps two crafts with an equal
+  total, so whichever started ahead stays ahead. No fastest lap, no
+  head-to-head leg result and no later-leg placing was found acting as a
+  tie-break.
+- **Progress can be saved and resumed between legs**, into the same
+  name-hashed profile store the campaign's own per-cell records use
+  (`Tournament_SaveProgress`/`Tournament_LoadProgress`,
+  `tournament.md`) - the mechanism behind `MSC_EVENT_TOURN`'s own "you can
+  also save your tournament progress between races" and the
+  `MSC_MSG_AUTOSAVE3` dialog.
+- **A Custom Race `TOURNAMENT` (Racebox's `Tournament C`) exercises the
+  identical law**, not an adjacent one: its own `CommitSelection` writes
+  the same runtime tournament object and the same leg-append functions the
+  campaign's `Cell Selection` does. `scripts/psp-racebox.py --race-type
+  tournament` reaches the settings screen without any campaign progress.
+
+**What an implementation needs, not yet decided here**: `oag_race::World`/
+`RaceState` needs a per-craft points-total field that survives a leg
+boundary (this engine currently resets `RaceState` fresh per race, since
+every implemented mode ends there), and the campaign session
+(`crates/game/src/main/session/campaign.rs`) needs to carry the leg list
+and the running totals across a `Race Again`-shaped relaunch rather than a
+fresh `launch_campaign_cell` call. See `HANDOVER.md`'s open-threads index
+for the implementation brief this pass wrote up.
+
 ## What happens when a race ends
 
 **The flag is the player's own last crossing.** `RaceState::finished` is set by

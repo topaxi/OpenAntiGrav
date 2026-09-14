@@ -149,7 +149,8 @@ loyaltybar fill <- *(record + 8) * 0.00124
 ```
 
 Confidence 85 - full decompile, and the field `*(g_endrace_result + 8)`
-reproduces the capture's `90 Points` exactly under the hypothesis below.
+reproduces the capture's `90 Points` exactly under the law now decompiled
+below.
 **Every later "beat"** (roughly every 10 accumulated update-timer units,
 `elapsed += frameDelta * 20.0` against a fixed threshold of `10.0`) instead
 advances to the next reason string from the array `OnEnter` built - see the
@@ -173,27 +174,99 @@ is exactly what its name says. Raise `Unlock_LoyaltyMet` and
 unrelated call site reading the identical field as a plain counter, not a
 runtime trace, so short of the rubric's top bands.
 
-**What was not found: the writer of `g_endrace_result + 8` itself.**
-`get_xrefs_to(DAT_08b317b4)` returns over fifty call sites (two `[WRITE]`,
-`0x08826d40` in `FUN_08826cac` and `0x088291ac` in `FUN_08829124` - both
-likely the pointer's own allocation site, not a race-end summariser writing
-into an offset of what it points at, which would show as a `[READ]` of the
-base followed by an offset store `get_xrefs_to` does not resolve). Whether
-`0x08826cac`/`0x08829124` or one of the ~48 `[READ]` sites is the actual
-loyalty-award computation was not narrowed further this pass - see
-[Open](#open).
+### The loyalty-award computation, decompiled and runtime-confirmed on two independent races
 
-**The `30 points per Time-Trial-family lap` reading is a hypothesis, not a
-decompile.** `MSC_LOY_LAP15`/`MSC_LOY_LAP30`/`MSC_LOY_LAP10`'s own resolved
-English text was not read this pass (no `MSC_LOY_*` string exists in the
-executable itself - every one of these idstrings resolves through
-`FUN_088938ec`'s runtime localisation call, the same one every other
-idstring on this page goes through, to text this pass did not extract).
-Reading the `30` suffix as a literal per-lap point value and multiplying by
-this run's own `3` laps reproduces `90` exactly, with every other bonus term
-(perfect lap, elimination, zone, the difficulty multiplier) correctly absent
-for a plain, medal-less, non-suggested-ship Time Trial - a real, checkable
-fit, but one observation. Confidence **70**.
+**Found 2026-09-14, entirely from the Ghidra bridge, then verified live in
+PPSSPP.** The static route the previous pass left as its own next step -
+"the finish-line path, `Race_RecordResult`" - worked directly:
+`Race_RecordResult`'s own single caller, `Race_BuildEndRaceResult`
+(`0x0882a498`, previously `FUN_0882a498`), calls a second function
+immediately after it that reads every field the reason-string table above
+enumerates and writes straight into `g_endrace_result + 8`:
+
+```
+Race_BuildEndRaceResult(base, shipDestroyedFlag):          # base = *(int*)DAT_08b317b4,
+    ...                                                     # g_endrace_result = base + 0x7d8
+    base->0x1938 (== g_endrace_result+0x1160) <- Race_RecordResult(...)   # the medal ordinal
+    award <- Race_ComputeLoyaltyAward(DAT_08b31774, base + 0x7d8)
+    base->0x7e0 (== g_endrace_result+8) <- award                          # "90 Points", this race's own award
+```
+
+| Address | Name | Conf | Role |
+| --- | --- | --- | --- |
+| `0x0882a498` | `Race_BuildEndRaceResult` | 78 | the race-end summariser: fills the whole `g_endrace_result`-shaped sub-structure (ghost time, per-lap array, ranking sorts, tournament standings, the medal ordinal via `Race_RecordResult`, and the loyalty award via `Race_ComputeLoyaltyAward`) from a much larger in-race state object at `base+0x2c0`. Single caller, `0x08827b4c` (a trivial wrapper), itself called from six race/zone-end update paths including `Eliminator_UpdateKillTarget`. Confidence capped below the other rows here because most of its own body (craft ranking sorts, the Tournament-standings block, several offsets read but not named) was not traced past "this writes/reads here" - the loyalty and medal writes specifically are confidence 90+, the function as a whole is not. |
+| `0x0880ac50` | `Race_ComputeLoyaltyAward` | **95** | the law itself - full decompile, reproduces `90` exactly on two independent live races (below) |
+| `0x08807884` | `Loyalty_AccumulateTotal` | 90 | `*(record+8) += award`, capped at `100000` - the per-team persistent-total writer `Unlock_LoyaltyMet`/`loyaltynum` read |
+
+`Race_ComputeLoyaltyAward(teamStore, g_endrace_result)`, decompiled in full:
+
+```
+laps          <- g_endrace_result + 0x1140
+perfectLaps   <- g_endrace_result + 0x1144
+kills         <- g_endrace_result + 0x1154
+zones         <- g_endrace_result + 0x1134
+perfectZones  <- g_endrace_result + 0x1138
+difficulty    <- g_endrace_result + 0x115c      # 0 easy, 1 medium, 2 hard
+suggestedShip <- g_endrace_result + 0x1164      # bool
+mode          <- DAT_08b31048 (or 0 under split-screen, DAT_08ab07e3)
+
+lapTerm  <- mode in {Race,Tournament,Head2Head, 3/4/9}: laps*15 + perfectLaps*25
+         <- mode in {TimeTrial,SpeedLap, 5/10}:         laps*30 + perfectLaps*50
+         <- otherwise (Zone, Elimination, ...):          laps*10 + perfectLaps*20
+
+killTerm <- mode == Elimination(8): kills*30, else kills*15
+
+difficultyMult <- 1                              # default: no multiplier at all
+if mode in {Race,Tournament,Head2Head}:
+    difficultyMult <- {0: 2, 1: 3, 2: 4}[difficulty]   # Easy x2, Medium x3, Hard x4
+if suggestedShip: difficultyMult <- difficultyMult * 2
+
+award <- difficultyMult * (lapTerm + killTerm + zones*10 + perfectZones*20)
+
+record <- FUN_08808664(teamStore, Libc_HashString(team_name), 0, create=1)
+Loyalty_AccumulateTotal(record, award)            # record+8 += award, capped 100000
+return award
+```
+
+This is exactly the reason-string vocabulary above turned into arithmetic:
+`MSC_LOY_LAP{15,30,10}`'s own suffix numbers **are** the per-lap rates
+(confirming the previous pass's "reading the suffix as a literal value" was
+right), `MSC_LOY_PLAP{25,50,20}` the per-perfect-lap rates,
+`MSC_LOY_ELIM{30,15}` the per-kill rates, `MSC_LOY_ZONE10`/`MSC_LOY_PZONE20`
+the zone rates, and `MSC_LOY_EASY2`/`MSC_LOY_MED3`/`MSC_LOY_HARD4` the
+Race-family difficulty multiplier - all five reason-string families this
+page's reason-ticker table already named, now each with a decompiled
+arithmetic weight rather than an inferred one.
+
+**Runtime-confirmed 2026-09-14, PPSSPP v1.20.4, `pulse-psp-usa.chd`, Xvfb
+`:97`, fresh zero-profile boot.** Two independent `grid0_3_2` (Time Trial,
+Venom, `16_Track`/Talon's Junction, `Weapons="off"`) races, flown by
+`psp-autopilot.py` on different lines and at different paces, both reaching
+3 laps with zero perfect laps, zero kills/zones (Time Trial has none) and no
+medal:
+
+| Run | Per-lap times | Total | `laps`/`perfectLaps` | Predicted award | `g_endrace_result+8` (live read) | On-screen `X Points` / `Total loyalty` |
+| --- | --- | --- | --- | --- | --- | --- |
+| A (prior pass, OCR only) | `1.32.49`/`0.49.34`/`0.49.93` | `3.11.76` | 3 / 0 | `3*30 + 0*50 = 90` | not read | `90 Points` |
+| B (this pass, live memory) | `1.15.89`/`0.49.21`/`0.49.51` | `2.54.61` | 3 / 0 | `3*30 + 0*50 = 90` | **`90`** | `Assegai Loyalty: 90 Points`, `Total loyalty: 90` |
+
+Run B's `Total loyalty` reads `90` because this is the profile's first-ever
+race (Team Selection's own loyalty bar read `0` before launching); the
+in-game screenshot and the raw `record+8` read agree, and `Loyalty_AccumulateTotal`'s
+own decompile (`*(record+8) += award`) is the reason why. Two different
+finishing times, same lap/perfect-lap shape, same award, exactly as the
+formula predicts and independent of pace - this closes the "one observation"
+caveat the previous pass's reading carried. Confidence **95** for
+`Race_ComputeLoyaltyAward` (full decompile plus an exact arithmetic match
+replayed on two separately-driven races); **90** for `Loyalty_AccumulateTotal`
+and the `Race_BuildEndRaceResult` call sites that wire the two together.
+
+**Still open**: the Race-family branch (difficulty multiplier, the `15`/`25`
+lap rate, the `30` kill rate) and the Zone/Elimination `10`/`20` branch are
+decompiled but not runtime-verified - both captures this pass has are Time
+Trial. A `Single Race`/`Race` cell would need `psp-autopilot.py --craft
+ADDRESS` (untested, see `ppsspp-debugger.md`) to drive safely with seven AI
+opponents present.
 
 ## `EndRace Menu`
 
@@ -302,16 +375,97 @@ differs, this is the gate; if it is identical on both, the refusal sits
 somewhere else in this function's own un-narrowed input-handling path, or a
 level further upstream still.
 
+### `0x088d7e1c` ruled out; the real `Cell Selection` confirm dispatcher found, and the swallow narrowed to input consumption
+
+**Runtime-confirmed 2026-09-14, PPSSPP v1.20.4, same zero-medal profile.**
+`0x088d7e1c` itself is **not** the gate - full decompile (above) plus its
+own call graph shows it is the *held-confirm* variant of a generic Redirect
+widget (three-button-code accumulator against a 2-second hold timer,
+`DAT_08b317b0 + 0x40`), used by the `InGame Photo`-family screens
+(`FUN_08814014`'s own `Race_End_Photo` redirect target sits in the same
+call chain); it never runs on `Cell Selection` at all.
+
+The **true** dispatcher was found by breakpointing `StateMachine_EvaluateRedirect`
+itself (`0x088c8798`) with the cursor on `grid0_3_1` (unlocked, positive
+control) and reading `$ra` on the hit: `ra = 0x088c907c`, inside
+`FUN_088c8e88` - the twelfth caller this page's own `get_function_callers`
+sweep had already decompiled and set aside as "a generic Confirm/Decline
+dialog handler" (the same class `TRC_LOCKED`/gallery/account-check dialogs
+use). Renamed `ConfirmButton_Update` (confidence **85**): its own
+`StateMachine_EvaluateRedirect(param_1)` call, passing itself as the
+redirect node, is at `0x088c9074` - the exact call the positive control's
+`$ra` sits one instruction past. The same breakpoint **never fired** with
+the cursor moved one `left` to `grid0_2_1` (locked, no `Locked` attribute)
+- reproducing `race-campaign.md`'s own cell/tier findings from the
+`StateMachine_EvaluateRedirect` side, and closing "which of the eleven
+callers is `Cell Selection`'s own" with a concrete address.
+
+**`ConfirmButton_Update` itself is not the gate either - traced instruction
+by instruction.** Passively breakpointed at its own entry (no button
+pressed), it fires identically on both the locked and the unlocked cursor
+position - same instance address (`a0 = 0x08d8d030`, a single persistent
+per-screen object, not one per tile), same internal state bytes
+(`00000000 01000000 04000000 ffffffff ...`, i.e. accept-button code `4`,
+decline unbound) on both. Disassembling its own accept branch
+(`0x088c8fec`-`0x088c9074`) shows every path through it - the `*(param_1+0x264)`
+early-exit gate included - converges on the same unconditional
+`jal 0x088c8798` at `0x088c9074` once "accept is pressed" is true; there is
+no `Locked`/medal read anywhere in this span. So **the swallow is not a
+Cell/Grid-specific check in any PI001 function traced so far** - it is
+whatever makes `ConfirmButton_Update`'s own "is accept pressed" test
+(`Input_IsPressed(g_input, 4, 0)` off `*(param_1+0x198)`, a screen-global
+button code, not a per-tile one) read false on a locked-tile frame despite
+`cross` being held for the full duration of the negative-control press (up
+to 6 s, no hit). Confidence **85** for "the gate is upstream of
+`ConfirmButton_Update`'s own accept-check, not inside it" - a runtime trace
+with its own positive and negative control, both reproduced from the
+`StateMachine_EvaluateRedirect` side and the `ConfirmButton_Update` side
+independently.
+
+**What this leaves for the next pass**: `Input_IsPressed`'s own callers (or
+whatever calls `Input_ConsumePress`) on the same frame, for button code `4`,
+specifically when the focused `GridController` tile's lock layer is
+visible - not located this pass. This is now a much narrower target than
+"eleven candidate functions" or "an unconfirmed `+0xbe` flag": a single
+input-consumption question, upstream of a function whose own body is fully
+understood and cleared.
+
 ## Open
 
-- **The loyalty-award computation's own writer** (`g_endrace_result + 8`,
-  and its siblings `+0x1134`/`+0x1138`/`+0x1140`/`+0x1144`/`+0x1148`/
-  `+0x114c`/`+0x1154`/`+0x1160`/`+0x1164`/`+0x1165`) was not located. Arm a
-  breakpoint on entry to the `EndRace Results` state (or watch
-  `DAT_08b317b4 + 0x7d8 + 8` for a write across the finish line) to find it
-  directly - the single highest-value next step on this page.
-- **`0x088d7e1c`'s own `+0xbe` gate** - see above, the lead deliverable 3
-  leaves open.
+- ~~**The loyalty-award computation's own writer**~~ **Closed 2026-09-14** -
+  `Race_ComputeLoyaltyAward` (`0x0880ac50`), called from
+  `Race_BuildEndRaceResult` (`0x0882a498`); see "The loyalty-award
+  computation, decompiled and runtime-confirmed" above.
+- **The per-lap `+0x10` pennant column's own writer, during the race** -
+  narrowed but not closed 2026-09-14. `Race_BuildEndRaceResult`'s own copy
+  loop (already decompiled: `iVar19 = base; ...; *(short*)(iVar19+0x7e8) =
+  *(short*)(iVar15+0x94); iVar15 += 0x10; iVar19 += 8`) shows the raw source
+  is `*(session + 0x900 + lap*0x10 + 0x94)`, a 2-byte field in an 8-lap,
+  16-byte-stride per-lap record (siblings `+0x88` time, `+0x8c` perfect-lap
+  flag, `+0x90` lap number - all three already named as the copy targets
+  `+0xc`/`+0x12`/`+0x13`) inside the in-race state object at `base+0x2c0`
+  (itself not named this pass). This is the *copy site*, not the writer -
+  whatever fills `session+0x900+lap*0x10+0x94` during the race itself was
+  not located; `search_instructions` on the raw offset `0x94` alone returns
+  241 matches (mostly unrelated `sw ra,0x94(sp)` prologue spills) and is not
+  selective enough. **Two live data points now exist** (both `grid0_3_2`,
+  Venom, `Weapons="off"`): `6,10,8` (sum 24, this pass) and `6,9,10` (sum
+  25, the prior pass) - **weapons/pickups are ruled out for both**, since
+  neither race could carry a weapon at all. Lap 1 reads `6` in both
+  independently-driven races starting from the same grid position;
+  laps 2-3 differ by one or two. Speedup/boost pads (present regardless of
+  the `Weapons=` setting, and plausible to cross a slightly different count
+  of depending on the exact line) are the strongest remaining candidate,
+  not confirmed. The next step is a live breakpoint on writes to
+  `session+0x900+lap*0x10+0x94` itself (needs `session`'s own address,
+  readable at any `EndRace Results` breakpoint as `*(int*)(base+0x2c0)`),
+  not another correlation pass.
+- ~~**`0x088d7e1c`'s own `+0xbe` gate**~~ **Ruled out 2026-09-14** -
+  `0x088d7e1c` is the held-confirm variant used by `InGame Photo`, not
+  `Cell Selection`'s own dispatcher; see "`0x088d7e1c` ruled out..." above.
+  The real dispatcher (`ConfirmButton_Update`, `0x088c8e88`) is found and
+  cleared too - the remaining gate is upstream of it, in input consumption,
+  not a `+0xbe`-shaped flag.
 - **`EndRaceResults`/`EndRaceMenu`'s own `Update`/`OnExit` slots**
   (`0x088da530`, `0x088d92e0`, `0x088d8338`, `0x088d8248`) were positionally
   located (vtable word 9/31) but not decompiled this pass.
@@ -347,3 +501,7 @@ level further upstream still.
 | `0x088d8c00` | `EndRaceMenu_PopulateOptions` | 80 |
 | `0x088d8648` | `EndRaceMenu_PopulateExistingGhost` | 78 |
 | `0x088c8798` | `StateMachine_EvaluateRedirect` | 75 |
+| `0x0880ac50` | `Race_ComputeLoyaltyAward` | 95 |
+| `0x08807884` | `Loyalty_AccumulateTotal` | 90 |
+| `0x0882a498` | `Race_BuildEndRaceResult` | 78 |
+| `0x088c8e88` | `ConfirmButton_Update` | 85 |
