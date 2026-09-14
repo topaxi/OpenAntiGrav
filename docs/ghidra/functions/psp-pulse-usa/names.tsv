@@ -811,13 +811,13 @@
 0x088e9fa0	function	TeamSelection_CommitSelection	74	race-campaign.md
 0x088c072c	function	Grid_FindCellAtCoordinate	85	race-campaign.md
 0x08ab1e68	data	g_anCellNeighbourOffsets	85	race-campaign.md
-0x088a3638	function	GridController_SetTileFlags	82	race-campaign.md
+0x088a3638	function	GridController_SetTileFlags	90	race-campaign.md
 0x088a374c	function	GridController_ClearTileFlags	82	race-campaign.md
 0x088a3850	function	GridController_SetTileColor	85	race-campaign.md
 0x088a3ad0	function	GridController_SetLockTint	78	race-campaign.md
 0x088a39d4	function	GridController_IsLockFading	65	race-campaign.md
 0x088a39ac	function	GridController_ClearLockFade	65	race-campaign.md
 0x088a3a40	function	GridController_ResetLockFades	68	race-campaign.md
-0x088de180	function	GridSelection_CommitSelection	82	race-campaign.md
-0x088de630	function	GridSelection_PopulateTiles	82	race-campaign.md
+0x088de180	function	GridSelection_CommitSelection	90	race-campaign.md
+0x088de630	function	GridSelection_PopulateTiles	90	race-campaign.md
 0x088de320	function	GridSelection_FindTileAt	80	race-campaign.md

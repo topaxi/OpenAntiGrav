@@ -97,20 +97,24 @@ The law, all decompiled and all in `race-campaign.md`:
   absent `Locked` attribute truly defaults to `true` still can't be read from
   `PI_Cell_ParseElement` alone - it never writes a default to `+0xb9`, so the
   answer is in the (unlocated) object allocator, not this parser.
-- **New open question, and now the page's most important one: does `Locked`
-  (either byte) actually gate `Confirm`, or is it cosmetic end to end?** No
-  PI001 function this pass read - `CellSelection_CommitSelection`,
-  `CellSelection_Update`, `GridSelection_CommitSelection` (`0x088de180`,
-  newly named), or `StateMachine_TransitionTo` - ever refuses a transition on
-  either `Locked` byte, and the `GridSelection` screen's own XML redirect on
-  confirm is unconditional. Yet `docs/ui/campaign-screens.md` measured live
-  that confirming a locked `Grid Selection` tile does nothing. The likely
-  explanation is a generic, non-PI001 widget rule (a focused tile can't be
-  confirmed while its lock layer is visible) that this pass's tools (Ghidra
-  bridge only) could not reach - if real, it would mean the cell-level
-  `Locked` byte is *also* a real gameplay gate, just enforced once,
-  generically. Three concrete breakpoints for whoever holds PPSSPP next are
-  listed at the end of `race-campaign.md`'s new section.
+- **Answered, runtime-verified 2026-09-14: yes, `Locked` (either byte) gates
+  `Confirm`, and the refusal sits upstream of every function this project has
+  decompiled so far.** Four PPSSPP breakpoints, each with its own positive
+  control on an unlocked tile of the same kind: on a `Locked`, unmedalled
+  `Cell Selection` cell and on a `Locked` `Grid Selection` tier,
+  `StateMachine_TransitionTo` is never entered at all, so neither screen's
+  own `CommitSelection` vtable slot ever gets a chance to check the byte -
+  the confirm press is swallowed before the state machine is even asked to
+  transition. Not cosmetic at either level. The successful positive-control
+  runs pin `StateMachine_TransitionTo`'s own caller at `ra=0x088c8a10` - a
+  concrete, previously unseen address, not yet decompiled (no Ghidra bridge
+  held this pass) - as the next target for finding the actual generic rule.
+  `GridController_SetTileFlags` also fired live with exactly the
+  `(widget, layer, column, row)` shape `GridSelection_PopulateTiles`'s
+  decompile already predicted, reproducing the lock-layer branch tile for
+  tile on a real page. Full four-breakpoint transcript:
+  `race-campaign.md`'s "Runtime-verified 2026-09-14 (deliverable 1)"
+  subsection under "Unlock rules, cell and tier".
 - **`Grid`/`Grid1` are a double-buffer pair**, settled this pass:
   `GridSelection_Update` toggles which of the two holds the currently-shown
   page (`+0x114`, flipped on every page move) while the other is repopulated
@@ -290,11 +294,10 @@ The law, all decompiled and all in `race-campaign.md`:
   gating on `Locked` for both would match the tier-level PPSSPP capture at
   the cost of possibly over-blocking cells if the cell-level lock turns out
   to be cosmetic-only in the original.
-- **Next PPSSPP pass, three breakpoints, in order of what each would settle**:
-  (1) confirm on a `Locked`, unmedalled, no-medalled-neighbour cell - does
-  `CellSelection_CommitSelection` fire at all; (2) single-step from an armed
-  confirm press to `StateMachine_TransitionTo`'s entry on a locked grid tile,
-  to find what (if anything) suppresses the attempt; (3) read the
-  `GridController` tile's own `+0x2c` flags on a locked tile for an
-  "interactive" bit, to check the generic-widget-rule hypothesis
-  structurally. Full detail in `race-campaign.md`'s new section.
+- ~~Next PPSSPP pass, three breakpoints...~~ **Done, 2026-09-14** - see the
+  `Open` entry above. All three questions collapsed to one answer: the
+  refusal happens before `StateMachine_TransitionTo` is entered, on both
+  screens. **The new next step**: decompile `0x088c8a10`
+  (`StateMachine_TransitionTo`'s own caller on a cell confirm, found this
+  pass) with the Ghidra bridge, to find the actual generic rule rather than
+  just its call site.

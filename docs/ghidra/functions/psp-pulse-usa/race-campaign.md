@@ -1325,6 +1325,133 @@ previous pass already left:
    "not interactive," to check the "generic rule" hypothesis structurally
    rather than behaviourally.
 
+### Runtime-verified 2026-09-14 (deliverable 1: does a lock refuse confirm)
+
+PPSSPP v1.20.4 (SDL build), `pulse-psp-usa.chd`, Xvfb `:97`, debugger on
+`ws://127.0.0.1:47810/debugger`, same zero-medal profile the earlier
+2026-09-14 pass used (confirmed again live: `grid0`'s `Gold medals 0/8`).
+All three breakpoints taken, each with a same-session positive control on
+an unlocked tile of the same kind, arming order `cpu.stepping` ->
+`cpu.breakpoint.add` -> `cpu.resume` throughout. `grid_00.xml` read fresh
+this pass (`just wad cat`) to pick a target with certainty: `grid0_2_1` and
+`grid0_4_1`/`_2_2`/`_4_2`/`_2_3`/`_4_3` carry no `Locked` attribute at all
+(the six glyphed cells), `grid0_3_1` and `grid0_3_2` explicitly author
+`Locked="false"` (the two the previous pass's own captures already showed
+unlocked and, in `grid0_3_2`'s case, already breakpoint-confirmed to
+launch). `grid0_2_1` (`Race`, `16_Track`, no `Locked` attribute, zero
+medals anywhere on the profile so no hex-adjacent medal either) is this
+pass's locked test cell.
+
+**1. `CellSelection_CommitSelection` (`0x088d6138`) does not fire on a
+locked cell.** Positive control first: cursor on `grid0_3_1` (unlocked),
+armed the breakpoint, pressed `cross` - fired at `pc=0x088d6138`,
+`a0=0x08d73170`, `a1=0x08d731c4`, `ra=0x08891360`, state advanced to `Team
+Selection`, matching the existing 2026-09-14 trace on `grid0_3_2` digit for
+digit. Backed out (`circle` x2) to `Cell Selection`, moved the cursor onto
+`grid0_2_1` (confirmed by the panel: `Talon's Junction White`, `16_Track`'s
+own display name, matching `grid_00.xml`'s `track="16_Track"` for that
+cell), re-armed the same breakpoint, pressed `cross`: **the breakpoint never
+fired** (`wait_for_break` timed out at 6 s; the `input.buttons.press`
+timeout trap did not fire this time either, since the press itself has
+nothing to hit and returns normally when the confirm has nowhere to go).
+The state name stayed `Cell Selection` throughout. Confidence **90** -
+runtime trace, single binary, with its own positive control in the same
+session on the same screen.
+
+**2. `StateMachine_TransitionTo` (`0x0889123c`) is not entered either, so
+the refusal is not "a transition starts and something short-circuits it" -
+no transition is even attempted.** Same locked `grid0_2_1` selection,
+breakpoint moved to `StateMachine_TransitionTo`'s own entry: **no hit**
+within 6 s. Positive control on `grid0_3_1` again: fired at
+`pc=0x0889123c`, `a0=0x08d0a820` (the state-machine pointer,
+`G_STATE_MACHINE`'s own value), `a1=0x08d8d450` (the target state, almost
+certainly `Team Selection`'s own state-table entry), `a2=0x08d731c4`
+(the same value `CommitSelection`'s `a1` carried above - passed straight
+through as the transition's own `param_3`), `a3=0x08a6bbcc`,
+**`ra=0x088c8a10`** - a concrete, previously unseen return address for a
+function that calls `StateMachine_TransitionTo` on a cell confirm. Not
+decompiled this pass (no Ghidra bridge held), but it is now the direct
+target for whoever holds the bridge next: this is almost certainly the
+`CellSelection`-side confirm-button handler (or a shared, generic one -
+see the tier result below), sitting between the `cross` press and the
+state machine, and it is the earliest point in the call chain this pass's
+tools can place the refusal at. The same test repeated on the tier side
+(below) points at the identical two-function shape, which is why "generic,
+non-PI001 rule" is now the leading reading rather than a hedge. Confidence
+**85** for "no transition is attempted on a locked cell" (one cell, one
+positive control, but a clean binary yes/no on an address independently
+confirmed to fire).
+
+**3. The tier side reproduces both results exactly, with its own positive
+control.** `GridSelection_CommitSelection` (`0x088de180`) and
+`StateMachine_TransitionTo` (`0x0889123c`) were each armed in turn with the
+cursor on `GRID 2` (`grid1`, `Locked="true"`, `RequiredPoints="16"`,
+`0/10` gold medals, `000/030` points - confirmed on the panel): **neither
+fired**, matching the cell result term for term. Positive control on `GRID
+1` (`grid0`, unlocked, already the page's default cursor): `cross` fired
+`GridSelection_CommitSelection` at `pc=0x088de180`, `a0=0x08d357e0`,
+`a1=0x08d35834`, `a2=0`, `a3=0x088de180`, `ra=0x08891360` - the identical
+internal call site inside `StateMachine_TransitionTo` that
+`CellSelection_CommitSelection`'s own `ra` already carried, confirming
+both screens' word-39 slots are reached through the same dispatch path -
+and the state advanced to `Cell Selection`. **So the cell-level and
+tier-level questions are now the same question, answered the same way**:
+on both screens, confirming a `Locked`, no-medal(/no-points) tile never
+reaches `StateMachine_TransitionTo` at all, let alone either screen's own
+`CommitSelection` slot. Confidence **88** - two screens, two functions,
+each with its own positive control, all four results consistent with one
+mechanism.
+
+**4. `GridController_SetTileFlags` (`0x088a3638`) fired live with exactly
+the `(widget, layer, column, row)` shape `GridSelection_PopulateTiles`'s
+decompiled pseudocode already predicted, and its layer writes line up
+digit for digit with the known lock state.** Armed on screen re-entry
+(back to `Main Menu`, `cross` into `RACE CAMPAIGN`) rather than on a
+confirm - this function fires from `PopulateTiles`, not from a button
+press. Two widget pointers hit in sequence, `0x08d38320` then `0x08d6fe40`
+(the `Grid`/`Grid1` double-buffer pair the previous pass's decompile-only
+reading already named), each with an **identical** six-call pattern for
+page 1's four tiles: `(widget, 1, 0, 0)`, `(widget, 1, 1, 0)`, `(widget, 4,
+1, 0)`, `(widget, 1, 2, 0)`, `(widget, 4, 2, 0)`, `(widget, 1, 3, 0)` (the
+capture window closed here, at 20 hits; the seventh call, `(widget, 4, 3,
+0)`, is inferred from the pattern rather than captured). Column 0
+(`grid0`, unlocked) gets **only** the base layer (`1`); columns 1-3
+(`grid1`/`grid2`/`grid3`, all `Locked="true"` on this profile) each get
+**both** the base layer and the lock layer (`4`) - exactly
+`GridSelection_PopulateTiles`'s own `if grid->Locked != 0: SetTileFlags(...,
+LOCK_LAYER, ...)` branch, live, on the real four tiles of the real page,
+with `row` fixed at `0` and `column` counting `0..3` exactly as the
+pseudocode's `for column in 0..3` names it. This is a **runtime trace of a
+non-input code path**, not a confirm-refusal test, but it is the strongest
+evidence yet for `GridSelection_PopulateTiles`'s reading of `PI_Grid.Locked`
+- raised **82 -> 90**, and `GridController_SetTileFlags` itself **82 -> 90**
+- and it independently corroborates the panel readings for `GRID 1`/`GRID
+2` above (`0/10` medals, `Locked="true"` on `grid1`) from a completely
+different address. **`*(GridController+0x2c)`'s own "interactive" bit was
+not reached this pass** - `SetTileFlags`'s arguments are `(widget, layer,
+column, row)`, not a per-tile struct pointer this pass could dereference
+without decompiling how `widget`/`layer`/`column`/`row` resolve to a tile
+base address, which needs the Ghidra bridge this pass did not hold. The two
+widget pointers above (`0x08d38320`, `0x08d6fe40`) are recorded so that
+work does not have to re-find them.
+
+**The answer to "does a lock refuse confirm," at confidence 85-90 across
+four independent breakpoints and their positive controls**: yes, on both
+`Cell Selection` and `Grid Selection`, and the refusal happens **before**
+`StateMachine_TransitionTo` is ever entered - so it is not any of the
+functions this project has decompiled so far (`CellSelection_Update`,
+`CellSelection_CommitSelection`, `GridSelection_CommitSelection`,
+`StateMachine_TransitionTo` itself), all of which sit downstream of where
+the confirm press is actually being swallowed. The likely mechanism is
+still the generic, non-PI001 widget rule the previous pass hypothesised
+(the confirm dispatcher upstream of the state machine, return address
+`0x088c8a10`, un-decompiled), now narrowed from "somewhere before the
+transition" to "the specific function at `0x088c8a10` or something it
+itself calls" - a concrete next target rather than an open-ended search.
+**Cosmetic-only at either level is ruled out**: a `Locked` tile genuinely
+cannot be entered or played in the original, on this profile, at either
+granularity.
+
 ## What is not determined
 
 - **`g_class_name_table` (`0x08ab067c`) is read above as four entries, and a
@@ -1367,18 +1494,26 @@ previous pass already left:
   calling `Unlock_GridPointsMet`. **`Status` (`+0xb8`) on a `PI_Cell` remains
   untraced** - no shipped grid file sets it. `Definition_IsUnlocked` and
   `FUN_0888e5e4` remain ruled out as any of these bytes' reader.
-- **Whether `Locked` (either byte) actually gates `Confirm`, or is purely
-  cosmetic, is now the page's single open question**, not "untraced": no
-  PI001 function this pass read (`CellSelection_CommitSelection`,
-  `CellSelection_Update`, `GridSelection_CommitSelection`,
-  `StateMachine_TransitionTo`, the `GridSelection` screen's own XML redirect)
-  ever refuses a transition on either byte, yet
-  [`docs/ui/campaign-screens.md`](../../../ui/campaign-screens.md) measured
-  live that confirming a locked `Grid Selection` tile does nothing. The
-  likely explanation - a generic, non-PI001 `GridController`/widget rule
-  keyed on the lock layer's own visibility flag - was not locatable with the
-  Ghidra bridge alone; three concrete breakpoints are listed at the end of
-  "Unlock rules, cell and tier" for whoever holds PPSSPP next.
+- **Runtime-verified 2026-09-14: `Locked` (either byte) does gate `Confirm`,
+  and the refusal sits upstream of every function this project has
+  decompiled.** Four breakpoints (`CellSelection_CommitSelection`,
+  `StateMachine_TransitionTo`, the tier-level repeat of both, and
+  `GridController_SetTileFlags` as a structural check), each with its own
+  positive control on an unlocked tile of the same kind, all agree: on a
+  `Locked`, unmedalled `Cell Selection` cell (`grid0_2_1`, no hex-adjacent
+  medal either, on a zero-medal profile) and on a `Locked` `Grid Selection`
+  tier (`grid1`/`GRID 2`), `StateMachine_TransitionTo` is never entered at
+  all - so neither screen's own `CommitSelection` vtable slot ever gets the
+  chance to check the byte, cosmetic or otherwise. The confirm press is
+  being swallowed before the state machine is even asked to transition.
+  `StateMachine_TransitionTo`'s own `ra` on the *successful* positive-control
+  runs is `0x088c8a10` - a concrete, previously unseen return address, not
+  yet decompiled (no Ghidra bridge held this pass), and the next target for
+  finding the actual generic rule. See `race-campaign.md`'s own new
+  "Runtime-verified 2026-09-14 (deliverable 1)" subsection under "Unlock
+  rules, cell and tier" for the full four-breakpoint transcript, including
+  `GridController_SetTileFlags` reproducing `GridSelection_PopulateTiles`'s
+  lock-layer branch live, tile for tile, on the real page.
 - **`Group` (`+0xb0`) on a `PI_Grid`** is `1` on `grid12`..`grid15` and absent
   elsewhere; its consumer was not traced. A "these four are the expert set"
   reading is plausible and unverified.
