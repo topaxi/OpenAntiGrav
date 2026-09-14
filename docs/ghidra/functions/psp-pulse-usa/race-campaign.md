@@ -1539,6 +1539,25 @@ granularity.
 - **Nothing is runtime-verified.** No PPSSPP breakpoint was taken this pass;
   every score is capped at the rubric's 85-94 "arithmetic invariant across many
   real files" band and most sit at 84-90.
+- **The fifth breakpoint (`DAT_08b31158`, a confirmed Tournament cell) is
+  still not taken, deliberately, 2026-09-14.** This pass's own deliverable-1
+  work (see "Runtime-verified 2026-09-14 (deliverable 1)" above) settled the
+  precondition it was waiting on: `Locked` genuinely refuses `Confirm` at the
+  tier level too, so a Tournament cell (every one of which lives on `grid1`
+  or later) stays unreachable without first earning `grid0`'s own 12
+  `RequiredPoints`. This pass's own deliverable-2 race (`grid0_3_2`, `Time
+  Trial`) earned **no medal** (`3.11.76` against a `2.03.00` bronze target -
+  see `docs/ui/campaign-screens.md`'s "After a campaign race, measured"), so
+  it did not open `grid1` either. Neither a second race attempt (this pass's
+  autopilot has no per-craft filter, and the two unlocked cells are both
+  hard to medal quickly - a position-based `Race` needs an untested 8-craft
+  capture, a faster `Time Trial` run needs autopilot tuning) nor a memory
+  poke of the record store (the aggregate `Grid_PointsEarned` sums
+  `Cell_MedalPoints` over every cell in the grid, not a single counter, and
+  `ppsspp-debugger.md` already documents `memory.write` crashing the
+  emulator on more than one occasion) was judged worth the "modest effort"
+  this item was scoped to. Left for a pass that either earns the points
+  properly or accepts the memory-write risk on its own terms.
 
 ## Reproducing the data
 
