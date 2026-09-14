@@ -1,4 +1,11 @@
-# Wipeout HD/Fury's campaign grids now parse; the Grid Selection screen is next
+# Wipeout HD/Fury's campaign grids now parse, and `Grid Selection`/`Cell Selection` draw
+
+2026-09-14, later the same day. Both screens now draw off the real disc -
+see `docs/ui/campaign-screens.md`'s "Wipeout HD/Fury" section for the full
+picture (what's measured, what's chosen, two shared-parser fixes, capture
+paths). This section is the historical record of the parsing-only pass;
+the screen-drawing pass's own detail lives in the docs page, not repeated
+here.
 
 2026-09-14. The discriminating question was: does `oag_tables::race_campaign::from_blob`
 parse HD's `plugins/grids/grid_*.xml` unchanged, or does the schema need a
@@ -52,75 +59,10 @@ this thread is the open work, not a restatement of what landed.
 
 ## Next Steps
 
-The next step is drawing HD's `Grid Selection` screen off
-`plugins/frontend/gui/*.xml`, once Pulse's own campaign screens (in progress
-in `crates/ui` as of this thread) land and the `Draw` vocabulary they use
-exists to build against. HD's equivalent of Pulse's `CellMode_Definition.xml`
-is `Data\Plugins\Frontend\Gui\CellMode_Definition.xml`, on `DATA02.PSARC`
-(42,548 bytes - the copy `oag_assets::Archives`'s own precedence reaches, `fe`
-= `DATA02`) and, disagreeing, on `DATA06.PSARC` (59,361 bytes - larger,
-presumably a later build; not diffed against the DATA02 copy this pass, so
-treat any difference between them the same open-precedence-question way
-`crates/hd/src/campaign.rs` already treats `Definition.xml`'s own five
-copies). Read with `oag_assets::psarc::Archive::read_path`, the same way
-`campaign_grids_ground_truth.rs` reads a grid file - it is plain UTF-8, not
-name-shortened, so no `oag_tables::fexml` dictionary expansion is needed
-first.
-
-What `DATA02`'s copy authors, so that pass can start cold:
-
-- **`<Screen type="FlyerSelection" name="Grid Selection" ...>`** is the
-  screen's own name and type, nested inside a `<Flyer name="FlyerModel">`
-  block that sources `Data\FE\Flyers\00_flyer.vex` - the 3-D flyer model
-  behind the hex grid, matching `docs/formats/race-campaign.md`'s
-  `FlyerName`/`BillboardName` grid attributes (per-grid flyer stem and
-  billboard, composited into this one shared model/screen).
-- **`<GridController name="Grid">`** is the hex-grid widget itself. Inside it,
-  every cell position `_R_C` (row/column, matching `Cell::grid_coords`'s own
-  `_x_y` reading) repeats five image layers - `Bg_R_C`, `Outline_R_C`,
-  `Lock_R_C`, `Medal_R_C` (each a 3-5-frame flip-book keyed by medal tier,
-  `Hexmedal_HD.mip`) - plus one shared `Selector` overlay
-  (`Hexagon_HD_THICK_OUT.mip`, tinted `0x3fffffff`). The three hex textures
-  are `Hexagon_HD.mip` (a cell), `Hexagon_HD_OUTLINE.mip` (its border) and
-  `Hexlock_HD.mip` (the locked overlay, alongside a `Padlock.gtf` used
-  elsewhere in the screen).
-- **The right-hand detail column** (`Event Emblem`, `Track Emblem`, `Speed
-  Class Emblem`, `Weapons Emblem`, each a `Bracket`-framed `Text`+`Image`
-  pair) names the four facts a selected cell shows: event type
-  (`RB_EVENT_TYPE`), track (`RC_TRACK`), speed class (`RC_SC`), weapons
-  (`FE_WEAPONS`) - all via `NonSelectable_Arrow_HD.gtf` as the row's own
-  bullet, `Subtitle_Arrow_HD.gtf` elsewhere. A `Track Reverse` icon
-  (`reverse_icon_mini.gtf`) sits beside the track row for a reversed-grid
-  cell.
-- **A three-target row** (`Target0`/`Target1`/`Target2`, each a
-  `Hexmedal_HD.gtf`-backed medal icon plus a value `Text`) is exactly the
-  medal-target triple this project's own `Cell`/`DifficultyTargets` now
-  parses - `IG_HUD_TARGET` titles it, `IG_HUD_GOLD`/`SILVER`/`BRONZE` are the
-  three tier strings. **This row is three wide, not nine** - it shows one
-  target triple at a time, which is the strongest screen-side evidence yet
-  that a difficulty selector switches which triple this row (and the medal
-  icons) reads, rather than all nine ever being on screen together.
-- **`<Text name="DifficultyButton">`** (`"Change Difficulty"`, a `δ`-glyph
-  icon in the `buttons` font) is on **both** archive copies of this file,
-  including `DATA02`'s - the one this project's own read precedence reaches
-  for `grid_00.xml`..`grid_07.xml`, which is the **flat**-schema copy with
-  only one target triple per cell. So the screen offers a difficulty toggle
-  even where the underlying grid data (as this project reads it) has nothing
-  for that toggle to change - either the flat grids reuse one target triple
-  across all three difficulties on screen, or the real game reads
-  `DATA04`'s/`DATA06`'s per-difficulty copies of those same eight grids
-  instead of `DATA02`'s, contradicting `oag_assets::Archives`'s generic
-  precedence for this one path. Worth resolving before the screen pass
-  decides how to feed this widget.
-- **Left/right column** (`RC Laps`, `Record`, `Points`, `Best`, each
-  `Subtitle_Arrow_HD.gtf`-bulleted) and **unlock box** (`unlockbox`,
-  `unlockboxbrackets`, `RC_POINTSTOUNL`/`RC_POINTSACH`/`RC_TOTPOINTSAV`) round
-  out the screen - a grid's required/earned/total points, matching
-  `Grid::required_points` and the points-possible law already in
-  `Grid::max_points`.
-- Redirects at the bottom (`<Redirect name="Cell Mode Redirect Team">`,
-  goto `"Team Selection"`) are the wiring into what a cell launches into -
-  relevant once a Cell Selection pass exists to chain off this one; one
-  redirect (`Cell Mode Redirect Game` -> `"Launch Game"`) is commented out on
-  the disc itself (`<!--ZLIU removed...-->`), a real, authored deactivation
-  rather than something to reactivate.
+Done, this same day: both screens draw, pointer-driven, off the real disc -
+see `docs/ui/campaign-screens.md`'s "Wipeout HD/Fury" section. What is
+still open moved there too (the archive-precedence/RPCS3 question, the
+stray hex artifact, the undrawn flyer model, the launch path's live
+verification) rather than being duplicated in both places - this thread's
+own `## Open` above is the parsing-level items only, unchanged by the
+drawing pass.

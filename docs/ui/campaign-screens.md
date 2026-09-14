@@ -819,6 +819,248 @@ gitignored):
   substitute this pass could read, and it is a per-ship value, not the
   profile-wide medal tally `race-campaign.md` describes.
 
+## Wipeout HD/Fury: the same two screen names, off a different file, 2026-09-14
+
+**Draws, off the real disc, both screens.** HD authors `Grid Selection`/`Cell
+Selection` too, but in `Data\Plugins\Frontend\Gui\CellMode_Definition.xml`
+([`oag_hd::campaign::SCREEN_ENTRY`](../../crates/hd/src/campaign.rs)) rather
+than Pulse's `Data\Plugins\PI001\GUI\CellMode_Definition.xml`, at 1920x1080
+rather than the PSP's 480x272, and `Grid Selection` **nests** `Cell
+Selection` inside it in the XML rather than sitting beside it as a sibling.
+`oag_ui::screen::Screens::collect` already flattens a nested `<Screen>` into
+its own entry regardless of depth, so
+[`oag_ui::campaign::Layout::read_authored`](../../crates/ui/src/campaign.rs)
+reaches both by the same two names unmodified - the discriminating question
+this thread opened with ("does `FlyerSelection` combine what Pulse splits
+into two?") turned out to be no: read whole, the file is the same two-screen shape, just
+authored differently inside each screen. Implemented in
+[`oag_ui::campaign::hd`](../../crates/ui/src/campaign/hd.rs), wired through
+`oag_game::campaign::load` (title-dispatched to a Wipeout HD/Fury branch the
+same way the rest of this build picks a title's tables),
+`crate::main::campaign_stage::CampaignStage::is_hd`/`circuit_names`/
+`cell_grid_summary`, and a draw/pointer dispatch in `crate::main::menu_stage`/
+`crate::main::session::pointer`. **The confirm/launch path is untouched** -
+`Screen::Grid`/`Screen::Cell` and `oag_ui::campaign::Event` are shared
+between the two titles, so `session::campaign::handle_campaign`/
+`launch_campaign_cell` need no HD arm of their own; an HD cell launches
+through the identical code Pulse's already does. Captured headlessly with
+`--menu-page grid-select`/`cell-select --size 1920x1080` against
+`hdfury-ps3-eu-dec.iso` (German, this machine's settings language) - kept at
+`/tmp/oag-drive/hd-campaign-grid-screen.md`'s own paths, not committed (game
+content).
+
+### `Grid Selection` is not a hex grid of tiers - it is a flyer pager
+
+HD's own `<Screen type="FlyerSelection" name="Grid Selection">` pages **one**
+tier at a time through `Flyer Left Arrow`/`Flyer Right Arrow` beside a 3-D
+flyer model, not Pulse's four-hexes-per-page `GridController`. There is no
+lock glyph per tile either - one `Flyer Pad Lock` overlays the whole flyer,
+gated the same three-term way Pulse's own tile lock is
+(`GridSelection::selected_is_locked`), reused unchanged and labelled
+**"assumed to transfer to HD, unmeasured"** on the exact glyph, the same
+qualifier `crate::campaign` module doc already carries for `Cell
+Selection`'s own lock rule. `oag_ui::campaign::GridSelection`'s model is
+reused as-is - one flat `index`, `step`, `selected_is_locked` - since a
+one-tier-at-a-time pager is exactly that shape; only the *draw* differs
+(`hd_grid_draw_list`, not `draw::grid_draw_list`).
+
+Measured off the widget names and the panel's own numbers:
+
+| Thing | HD widget | Reads |
+| --- | --- | --- |
+| page counter | `EventNum`/`GridNum` | `"Event {:02}/{:02}"`, 1-based - the literal template both widgets author |
+| medal fraction | `Medals Title` (`RC_POINTSACH`) / `Points` | `Grid_CountMedalsAtLeast`/`Grid_CellCount`, `"00/06"` shape - same numbers Pulse's own `Medals` field carries |
+| points fraction | `Points Title` (`RC_TOTPOINTSAV`) / `TotPoints` | `points_earned`/`max_points`, `"000/018"` |
+| unlock reason | `Required`/`Required Previous` | two texts for two distinct lock reasons - see below |
+| flyer lock | `Flyer Pad Lock` | gated on `selected_is_locked()` |
+
+**`Required`/`Required Previous` pick between two texts for two distinct
+reasons a tier is locked - chosen, not measured**, on the same terms as the
+glyph rule they read: `Required` (its own idstring `RC_POINTSTOUNL`) shows
+when the tier's own lock is not explained by the previous tile falling
+short; `Required Previous` (a literal string) shows when it is. No capture
+or decompile settles which predicate each is actually bound to; this reuses
+`GridSelection::selected_is_locked`'s own two terms to choose between them
+rather than showing both or neither.
+
+**`RC_POINTSTOUNL`'s own string is a raw `%d` template** (`"NOCH %d PUNKTE
+ZUM FREISCHALTEN VON:"` in German - "still %d points needed to unlock
+from:") that nothing in this build's string-table reader formats. `hd.rs`
+substitutes the one concrete figure this screen already carries
+(`required_points`) - **chosen, not measured**, since which number the
+template actually wants (this grid's own requirement, a different one, the
+gap to the previous tile) is not settled by reading the file alone, and
+whether the widget is gated on the grid genuinely being short that many
+points is unmeasured too - this build shows it whenever the lock reason
+picks that text at all.
+
+**Not drawn, and said so in the loader/draw code**: the 3-D flyer model
+itself (`Data\FE\Flyers\00_flyer.vex`, `<Flyer name="FlyerModel">`) - this
+crate draws a flat 2-D list, not a mesh scene, and wiring a `.vex` flyer
+through `oag_render` behind this screen is out of this pass's scope; and the
+per-grid `flyerlogo` (`Data\FE\Flyers\01_uplift\Logo.gtf`), whose path is
+the **same literal string on every grid** in the file with no per-grid
+attribute to pick a different one, so drawing it would show grid 9's own
+logo under grid 1's name.
+
+### `Cell Selection` is the same 32-slot staggered hex grid Pulse's is
+
+`GridController name="Grid" OffsetX="170" OffsetY="230"`, `MaxX="7"
+MaxY="5"` - the identical bounding shape and widget-name scheme
+(`{Bg,Outline,Lock,Medal}_{x}_{y}`) Pulse's own `Cell Selection` authors,
+just with a fourth layer (`Bg_x_y`, `Hexagon_HD_OUTLINE.mip`/`.gtf` - see
+below) under Pulse's three. `oag_ui::campaign::CellSelection` and
+[`hex_rect`](../../crates/ui/src/campaign.rs) (which already searches for a
+"Medal_" or "Outline_" widget, both of which HD authors) are reused
+unchanged; `Bg_x_y`/`Outline_x_y` both draw for every occupied slot the same
+way Pulse's single `Outline_x_y` does, `Lock_x_y`/`Medal_x_y` gated the same
+way. Confirmed by the capture: the hex grid, its padlocks and the selected
+hex's medal-colour gate all draw correctly.
+
+**The detail column and the target row are the same shape as Pulse's
+`Line1`..`Line8`, spelled with real names instead of numbers** - `Event`/
+`Track`/`Speed Class`/`Weapons` (each in its own `*Emblem` container) and
+`RC Laps`/`Record`/`Points`/`Best` (a plain column, `RightColumnText`), plus
+`Target0`..`2` under a `Target Title`, exactly matching Pulse's own naming
+and gating (`targets_visible`/`weapons_visible`, the identical mode sets).
+Unlike Pulse's screen, HD's own column shows the target row **and**
+`RC Laps`/`Record`/`Points`/`Best` simultaneously, at non-overlapping
+offsets - no `Line7`/`Target` mutual-exclusion swap idiom is needed here,
+since nothing shares a position.
+
+| Widget | Source | Notes |
+| --- | --- | --- |
+| `Event` | `crate::campaign::draw::cell_title` (reused) | the localised mode name |
+| `Track` | [`hd_track_line`](../../crates/ui/src/campaign/hd.rs) | through `oag_ui::language::CircuitNames`, not `strings.get_or_id` directly - see below |
+| `Speed Class` | `cell.class` | shown for every mode, not gated on Zone the way Pulse's `Line1` is - nothing shares its slot |
+| `Weapons` | `FE_ON`/`FE_OFF` | Race/Head2Head/Tournament only, same gate as Pulse |
+| `Target0..2` | `Cell::targets_for_difficulty(model.difficulty())` | the selected difficulty rung - see below |
+| `RC Laps`/`Points`/`Best` | reused Pulse helpers (`laps_line`/`medal_line`) | identical formatting |
+| `Record` | not drawn | `Cell_SavedRecord`, no saved record kept - same absence as Pulse's `Line5`/`Line8` |
+
+**A track's display name goes through `CircuitNames`, which Pulse's own
+`track_line` doc says it never needs.** This is the screen that fold was
+for: HD's circuit name table is a different archive copy from its circuit
+*list* (`docs/formats/hd-frontend.md`), so `strings.get_or_id(&cell.track)`
+alone would show the wrong name on eight circuits. `hd_track_line` folds
+through `CircuitNames::get`, falling back to `strings.get_or_id` and then
+the raw id - **simplified from `oag_game::catalogue::label`**: that function
+also appends `FE_REVERSE` where a reversed circuit shares its forward
+twin's own name, which needs the full circuit catalogue this module has no
+access to at draw time, so a reversed HD circuit whose name collides with
+its forward twin is not disambiguated here. The live session
+(`session::campaign::open_campaign`) passes the real
+`Shell::circuit_names`; the headless `--menu-page cell-select` capture
+passes `CircuitNames::default()` (a no-op fold, same gap `picker_page`'s own
+RACE-page capture already has) - see `oag_game::campaign::menu_page`'s own
+doc for why building one there was out of scope this pass.
+
+**A three-rung difficulty toggle, `DifficultyButton` - new state, backed by
+an existing function.** `oag_tables::race_campaign::Cell::targets_for_difficulty`
+already existed (added alongside the schema itself); nothing there changed.
+What is new: `CellSelection::difficulty`/`cycle_difficulty`, a `0..=2`
+field defaulting to `1` (medium - the rung `gold`/`silver`/`bronze` already
+mean on a cell with no `difficulty_targets`, so it is inert on every Pulse
+cell) and a wrapping step, bound to `Square` on the pad (free on this
+screen in this build) and to a click on `DifficultyButton`'s own text via
+[`difficulty_button_rect`](../../crates/ui/src/campaign/hd.rs) - **an
+invented rect**, since the widget is a `Text` with no authored width or
+height, sized generously around its baseline rather than measured off a
+capture.
+
+### The archive's `.mip` naming is dead; the real files are `.gtf`
+
+`CellMode_Definition.xml` spells every hex texture `src="Data\FE\Images\Hexagon_HD_OUTLINE.mip"`
+- the PSP-era extension [`oag_hd::frontend::names::MENU_STRIP_CURSOR`]'s own
+doc already found for `cursor.mip` - but **no archive on this disc carries a
+`.mip` by that stem**. Measured directly: `oag_assets::psarc::Archive::paths`
+over all seven archives on `hdfury-ps3-eu-dec.iso` lists every one of the
+five hex textures as `.gtf`, lower-cased (`data/fe/images/hexagon_hd_outline.gtf`
+and siblings), never as `.mip`. `oag_assets::psarc`'s own path normalisation
+folds case and backslashes for the read, but `oag_game::sprite::Sheet::get`
+keys its placements by an exact string match against a widget's own
+`image.src` - so `oag_hd::campaign::HEX_TEXTURES` is `(widget src, archive
+path)` pairs: read the `.gtf` off the archive, shelve the decoded blob under
+the `.mip` spelling the widget actually asks for at draw time.
+`OTHER_TEXTURES` (the bullet arrows, the padlock) needs no such pairing -
+every one of those is already spelled `.gtf` on both sides.
+
+### Two shared-parser gaps this pass found and fixed, verified as no-ops elsewhere
+
+Both in `oag_ui::screen::Screens::collect_widgets`
+(`crates/ui/src/screen.rs`), both found by a garbled or missing picture on
+the real capture rather than by reading the parser cold, and both re-run
+against the full `oag-ui` test suite (331 tests, up from 322, zero
+regressions) to check neither changes anything Pulse/Pure/HD's *other*
+screens already depended on:
+
+1. **A `Text` authoring its own `OffsetX`/`OffsetY` directly, with no `x`/
+   `y` and no wrapping `<Item>`, used to position only its *children* by
+   that offset, not itself.** `Medals Title`/`Points Title`/`EPoints Title`
+   are the only three widgets in either HD screen shaped this way - every
+   other positioned label sits inside an `<Item OffsetY="...">` instead,
+   which already worked. The bug was invisible until this screen: two
+   labels landing at `(x, 0)` read as one garbled overlapping string at the
+   top of the frame. Fixed by positioning a `Text` at `inner` (its own
+   offset folded in) rather than `offset` - a no-op wherever a `Text`
+   authors neither, which is every widget measured before this pass.
+2. **An `Image` used as a positioned container for widgets of its own was
+   silently dropped, children and all.** HD's detail column
+   (`<Image name="Event Emblem" OffsetX="630" OffsetY="340">`, nesting a
+   `Text`/`Image`/`Text` triple) is authored the same way Pulse's own
+   `Item`/`LeftLayer` containers are, but `collect_widgets`'s `"image"` arm
+   had no recursion into a widget's own children at all - unlike every
+   other container tag (`"text"`, `"item"`, `"leftlayer"`,
+   `"gridcontroller"`, `"viewport"`, `"animation"`, `"screen"`). The whole
+   detail column (`Event`/`Track`/`Speed Class`/`Weapons`) was simply
+   absent from the capture until this was fixed, not merely mispositioned.
+   Fixed the same way `"text"` already recurses: push the image itself,
+   then walk its children at `inner`.
+
+`crates/ui/src/screen/tests.rs` pins both
+(`a_text_that_authors_its_own_offset_with_no_wrapping_item_positions_itself_by_it`,
+`an_image_used_as_a_positioned_container_collects_its_own_children`).
+
+### Which archive copy of a shared HD grid file is read: kept, and a real disagreement found
+
+**Kept: this project's own `oag_assets::Archives::read_name` precedence**,
+unchanged - `DATA02.PSARC`'s flat copy of `grid_00.xml`..`grid_07.xml`, the
+same reading `crates/hd/src/campaign.rs`'s own module doc already
+documents. The driving brief asked this be settled by measurement where
+possible, RPCS3 otherwise; this pass took the offline half of that (diffing
+the archive copies directly) and found something worth recording before
+deciding whether to spend an RPCS3 boot on it:
+
+**`DATA02`'s flat `Gold`/`Silver`/`Bronze` values equal `DATA04`/`DATA06`'s
+per-difficulty copies' `hard` rung, not the `medium` one.** Four
+non-dummy-valued cells checked in `grid_00.xml` (`grid0_1_2`, `grid0_2_2`,
+`grid0_3_2`, `grid0_4_2`) all agree: e.g. `grid0_2_2`'s flat targets are
+`11100`/`11400`/`12000`, matching `DATA04`/`DATA06`'s own `hard` rung
+(`11100`/`11400`/`12000`) exactly, **not** `medium`
+(`11400`/`11700`/`12300`). This contradicts
+`oag_tables::race_campaign::Cell::gold`'s own doc comment, which reads
+"on a cell with `difficulty_targets`, this is that rung's own `medium`
+value" - true for a cell *authored* with the per-difficulty shape, but
+`DATA02`'s flat copy of the same grid is a **separate file**, and its own
+numbers are the hard rung's, not medium's. Not itself a bug to fix (both
+readings are correct for the file each one parses); a genuine, measured
+disagreement between the disc's own three copies of "the same" grid, left
+for whoever picks up the RPCS3 half of this question. **Not RPCS3-verified
+this pass** - which rung the real screen shows by default (if the flat and
+per-difficulty copies really do disagree this way generally, "default" may
+not even be `medium`) needs a boot this pass did not spend on it, per its
+own budget; see [Open](#open) below.
+
+### An open cell-grid artifact, not chased
+
+`ours-cell-select.png` shows a stray unfilled hex outline, unattached to
+the six-cell cluster, off to the right of the grid at roughly the screen's
+own centre. `grid0`'s own cell count (`00/06`) is one more than the five
+hexes the visible cluster shows, so this is very likely the sixth cell's
+own hex, at a `(x, y)` genuinely far from the others in the coordinate
+space `Cell::grid_coords` reads off its name - not chased to a confirmed
+reading this pass; see [Open](#open).
+
 ## Open
 
 - **The scrolling tip ticker and the button-legend footer row are still not
@@ -902,3 +1144,43 @@ gitignored):
   `crates/game/src/race/tests/mode_override.rs`,
   `crates/ui/src/campaign/tests.rs`) and by the full `just`/`just test-data`
   gate.
+
+### Wipeout HD/Fury, 2026-09-14
+
+- **Which archive copy of `grid_00.xml`..`grid_07.xml` the real screen
+  shows by default is not RPCS3-verified.** This pass found that the
+  precedence-resolved flat copy's own numbers equal the per-difficulty
+  copies' `hard` rung, not `medium` - see "Which archive copy... a real
+  disagreement found" above. A boot to `Cell Selection` on a cell whose
+  three rungs differ enough to read on screen (`grid0_2_2`, gold
+  `11100`/`11400`/`12000` across the three rungs) would settle both which
+  copy the game reads *and* which rung `DifficultyButton` opens on.
+  `scripts/rpcs3-drive.py browse`, `just rpcs3-preflight`,
+  `docs/formats/hd-frontend.md`'s "How this was measured".
+- **The stray hex outline on `Cell Selection`** (see above) - almost
+  certainly `grid0`'s sixth cell at its own authored `(x, y)`, not chased
+  to a confirmed reading. `crates/tables/src/race_campaign.rs`'s
+  `Cell::grid_coords` and a look at `grid_00.xml`'s own cell names would
+  settle it in a few minutes.
+- **The 3-D flyer model behind `Grid Selection`** is not drawn at all -
+  `oag_ui` draws a flat 2-D list, and putting a `.vex` mesh behind a 2-D
+  screen needs a render-side mechanism this pass did not build. Whoever
+  picks this up should decide whether that mechanism belongs in
+  `oag_render` generally or is specific to this one screen.
+- **The launch path is wired, through the identical code Pulse's own
+  cell confirms use, but not driven live against an HD source this
+  pass** - `session::campaign::handle_campaign`/`launch_campaign_cell`
+  received no HD-specific edit at all, so this is "the same code that
+  already works for Pulse, now also reachable from an HD confirm" rather
+  than a new path, but nobody has clicked through an HD cell to `Team
+  Selection` and a race under Xvfb the way the Pulse "campaign-pointer"
+  lane did. HD's own `race_box: None` (`oag_hd::frontend::FRONT_END`)
+  means no ship picker opens either way - `Session::open_ship_picker`
+  returns `false` and the cell launches straight through
+  `finish_launch()`, which is existing behaviour for any title with no
+  picker, not something this pass added.
+- **The `Required`/`Required Previous`/`NextPoints` unlock-reason
+  predicates are chosen, not measured**, on both which text shows and
+  what number a raw `%d` template should carry - see the two sections
+  above. An RPCS3 capture of a genuinely locked tier/cell would settle
+  both at once.

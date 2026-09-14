@@ -67,9 +67,8 @@ pub struct Campaign {
 /// (`Data\Plugins\grids\grid_00.xml`..`grid_07.xml`, flat on `DATA02`,
 /// per-difficulty on `DATA04`/`DATA06`) is read is whatever
 /// `oag_assets::Archives::read_name` already resolves to - **chosen, not
-/// measured**, per the driving brief; see
-/// `handover/gameplay/hd-furys-campaign-grids-parse-and-the-screen-is-next.md`
-/// for the discriminating measurement this pass took (`DATA02`'s own flat
+/// measured**. See `docs/ui/campaign-screens.md`'s HD section for the
+/// discriminating measurement this pass took (`DATA02`'s own flat
 /// `Gold`/`Silver`/`Bronze` values equal `DATA04`/`DATA06`'s **hard** rung,
 /// not the medium one `oag_tables::race_campaign::Cell::gold`'s own doc
 /// otherwise assumes) and why it stopped short of an RPCS3 capture to

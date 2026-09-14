@@ -92,8 +92,7 @@ pub fn entry_name(index: u8) -> String {
 /// precedence reaches `DATA02`'s copy, undiffed against `DATA06`'s this
 /// pass. **Plain UTF-8, not dictionary-shortened** - unlike
 /// [`DEFINITION_ENTRY`], reading this needs no `oag_tables::fexml`
-/// expansion first. See
-/// `handover/gameplay/hd-furys-campaign-grids-parse-and-the-screen-is-next.md`.
+/// expansion first. See `docs/ui/campaign-screens.md`'s HD section.
 pub const SCREEN_ENTRY: &str = r"Data\Plugins\Frontend\Gui\CellMode_Definition.xml";
 
 /// The grid `CellMode_Definition.xml` is authored in - HD's own screen

@@ -6,9 +6,9 @@
 //!
 //! # The two screens turned out to be the same shape after all
 //!
-//! `handover/gameplay/hd-furys-campaign-grids-parse-and-the-screen-is-next.md`
-//! left open whether HD's `FlyerSelection` screen combines what Pulse splits
-//! into two. Reading `CellMode_Definition.xml` whole settled it: HD's own
+//! Whether HD's `FlyerSelection` screen combines what Pulse splits into two
+//! was open before this file - reading `CellMode_Definition.xml` whole
+//! settled it: HD's own
 //! `<Screen type="FlyerSelection" name="Grid Selection">` nests a second
 //! `<Screen type="CellSelection" name="Cell Selection">` inside it, and
 //! `oag_ui::screen::Screens::collect` already flattens a nested `<Screen>`
