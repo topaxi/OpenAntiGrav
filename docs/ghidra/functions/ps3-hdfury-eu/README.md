@@ -111,6 +111,13 @@ Two structural facts to expect, both different from every other binary here:
   identities cross-checked against a vendored `rpcs3`'s own source), and the
   record shape that loader parses - which rhymes with, but does not
   byte-match, Pulse's `DynamicShadowOccluder` `.vex` payload.
+- [menu-blocks.md](menu-blocks.md) - `Block_Item.cpp`, the box behind every
+  `<HorizMenu>` tab, `<List>` row and `<aVertMenu>` entry: a nine-patch frame
+  off `file2.gtf`, a fill whose alpha is a swatch texel (drawn twice, the second
+  pass opaque on the HD style only, which is the whole HD-versus-Fury
+  transparency difference), the strip's `ItemWidth` default of 298 and its
+  selected-entry bonus of 70, and the one-sixth-per-frame easing all three
+  menu classes grow with.
 
 Add a row to [`names.tsv`](names.tsv) and the page it cites in the same change:
 `scripts/apply-ghidra-names.py` refuses a row whose address and name do not

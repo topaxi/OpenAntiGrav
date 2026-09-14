@@ -8,6 +8,7 @@
 //! This file holds only the fixtures the themes below share; each theme is a
 //! file of its own, split along the seams the tests already had.
 
+mod blocks;
 mod drawing;
 mod frame;
 mod navigation;

@@ -459,3 +459,109 @@ fn the_disc_offers_five_modes_and_says_which() {
         );
     }
 }
+
+/// The menu blocks' art comes off the disc the way `Block_Construct` and
+/// `HorizMenu_Construct` load it, and the one number sampled from it - the
+/// fill swatch - is the texel `Block_DrawFill` reads.
+///
+/// `oag_hd::frontend::MENU_BLOCKS` names three textures no screen names; this
+/// is the test that they resolve on the served archives, that the nine-patch
+/// is the 64x64 the executable addresses in sixty-fourths, that its swatch is
+/// `110/255` (the `0.68` inside a Fury tab and the solid inside an HD one
+/// both follow from that one texel - `menu-blocks.md`), and that the underline
+/// mark's bar sits at the sheet's row 7, which is where the capture's `y +
+/// 42.6` comes from once the sheet's own row flip is counted.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn the_menu_blocks_art_is_the_discs_and_the_swatch_is_the_texel() {
+    let Some(image) = image() else { return };
+    let shell = shell(&image);
+    let blocks = oag_hd::frontend::MENU_SKIN
+        .blocks
+        .expect("HD's skin carries its blocks");
+
+    let art = shell
+        .frame
+        .blocks
+        .expect("the nine-patch decoded, so the frame carries block art");
+    let frame = shell
+        .sprites
+        .get(blocks.frame_texture)
+        .expect("file2.gtf is in the sheet");
+    assert_eq!((frame.width, frame.height), (64, 64), "{frame:?}");
+    assert_eq!(art.frame, frame);
+    assert!(
+        (art.fill_alpha - 110.0 / 255.0).abs() < 0.5 / 255.0,
+        "the swatch texel is alpha 110: {}",
+        art.fill_alpha
+    );
+    // The outline is opaque where the second pass samples it on the HD
+    // style: texel `(2, 58)` of the file, sheet row `5`.
+    assert!(
+        (art.solid_alpha - 1.0).abs() < 0.5 / 255.0,
+        "the outline texel is opaque: {}",
+        art.solid_alpha
+    );
+
+    // The two top-left corner pieces land on their features: kind 2's
+    // region (file columns `0..40`, rows `0..18`) is the chamfer, cut away
+    // one texel in from its outer corner, and kind 5's (file columns
+    // `64..24`, mirrored, same rows) the square corner, opaque there. Kind
+    // 5 is the HD style's and this build serves the Fury one, so the sheet
+    // is the only thing that can vouch for it.
+    let file = |x: f32, y: f32| {
+        shell
+            .sprites
+            .alpha_at(frame, x / 64.0, 1.0 - y / 64.0)
+            .expect("inside the sheet")
+    };
+    assert!(file(1.5, 1.5) < 0.5, "the chamfer: {}", file(1.5, 1.5));
+    assert!(
+        file(62.5, 1.5) > 0.5,
+        "the square corner: {}",
+        file(62.5, 1.5)
+    );
+
+    // `DATA00` serves the root and clears to black: the Fury style.
+    assert!(art.fury, "the served archive's page is black");
+
+    // The underline mark: 32x16, its bar at sheet rows 7..=14, columns 1..=21.
+    let cursor = art.cursor.expect("cursor.gtf decoded");
+    assert_eq!((cursor.width, cursor.height), (32, 16));
+    let bar = |x: u32, y: u32| {
+        shell
+            .sprites
+            .alpha_at(cursor, (x as f32 + 0.5) / 32.0, (y as f32 + 0.5) / 16.0)
+            .expect("inside the sheet")
+    };
+    assert!(bar(1, 7) > 0.5 && bar(21, 14) > 0.5, "the bar's corners");
+    assert!(
+        bar(1, 6) < 0.5 && bar(1, 15) < 0.5,
+        "and the rows either side"
+    );
+    assert!(bar(22, 7) < 0.5, "and the column past it");
+
+    // The arrow: 32x32, a triangle pointing right, its base at column 8.
+    let arrow = art.arrow.expect("HD_options_arrow.gtf decoded");
+    assert_eq!((arrow.width, arrow.height), (32, 32));
+    let tip = |x: u32, y: u32| {
+        shell
+            .sprites
+            .alpha_at(arrow, (x as f32 + 0.5) / 32.0, (y as f32 + 0.5) / 32.0)
+            .expect("inside the sheet")
+    };
+    assert!(
+        tip(8, 15) > 0.5 && tip(22, 15) > 0.5,
+        "the base and near the tip"
+    );
+    assert!(tip(7, 15) < 0.5 && tip(24, 15) < 0.5, "and outside both");
+
+    assert!(
+        shell
+            .report
+            .iter()
+            .any(|line| line.starts_with("menu blocks: Fury style, fill swatch alpha 0.431")),
+        "reported: {:#?}",
+        shell.report
+    );
+}

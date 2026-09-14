@@ -2,7 +2,7 @@
 categories: [frontend, rendering]
 ---
 
-# HD's strip widget draws bare text; the real menu also draws a tab shape, an underline, and a background scene
+# HD's strip widget draws bare text; the real menu also draws a tab shape, an underline, and a background scene - the tab is now the executable's `Block`, the scene is the open half
 
 2026-09-01. Grew out of a now-closed thread on HD's horizontal main menu, whose two open questions (the `selected` colour and whether the strip carousels) closed with a live RPCS3 capture (`scripts/rpcs3-drive.py`, boot chain to `Main Menu`, then `Additional` -> `settings`/`Game Options`; screenshots under `data/reference/hd-main-menu-screenshot*`, `hd-menu-highlight-shift`, `hd-menu-style-toggle*`, `hd-settings-screenshot*` on the machine that captured them - gitignored, not committed). Full evidence and confidence scores are on [hd-frontend.md](../../docs/formats/hd-frontend.md#the-fe-style-switch-is-live-works-and-is-not-an-archive-swap---confirmed-by-capture). Three gaps opened this thread; two shipped the same day, and the third - the background scene - is still fully open.
 
@@ -144,6 +144,81 @@ search.
 **Test**: `crates/game/tests/hd_boot_ground_truth.rs`'s
 `the_chrome_title_resolves_to_the_bold_face_not_the_body_one`, disc-backed
 like the rest of that file.
+
+## 2026-09-14: the tab is `Block_Item.cpp`, read out of `EBOOT.elf`, and drawn as it draws
+
+**The question the 2026-09-05 section left "deliberately not implemented" -
+the tab width - is answered by the executable, and with it the border, the
+translucent inside and the growth.** A player's report that the real menu's
+entries *grow* on selection, carry a border, and are more transparent inside
+than at the edge sent this to Ghidra rather than to another capture: none of
+it is in the GUI XML (a `<HorizMenu>` authors position and colour, a `<List>`
+authors its strings), so the data route was closed. Full evidence on
+[menu-blocks.md](../../docs/ghidra/functions/ps3-hdfury-eu/menu-blocks.md),
+28 names in `names.tsv`, the summary on
+[hd-frontend.md](../../docs/formats/hd-frontend.md#2026-09-14-the-tab-is-a-block-and-the-executable-says-every-number-the-capture-measured).
+
+**Shipped:**
+
+- `oag_ui::menu::block` is `Block_Render` reimplemented: a two-pass fill (a
+  swatch texel of `file2.gtf` at `110/255`, then the same on Fury or opaque
+  on HD - the whole style difference in one texel choice), a 10-unit
+  45-degree cut band 17 short of the fill on a landing block, and eight
+  border pieces cut from the same nine-patch. `Draw::ChamferedFill` grew a
+  left cut for Fury's chamfered top-left.
+- `strip.rs` draws the executable's widths - `ItemWidth` 298, selected `+70`,
+  pitch `+10`, label inset 10 - and the underline as `cursor.gtf` at
+  `(x + 10, y + 35)`. The measured `TAB_*` group is the fallback for a frame
+  whose nine-patch did not decode.
+- `rows.rs` draws HD's settings rows as `List_Item.cpp` does: 520-wide label
+  block at `<Item OffsetX="160" OffsetY="170">` (`oag_title::MenuList`, new,
+  authored), value block 10 past it growing 280 to 340 with focus, arrows off
+  `HD_options_arrow.gtf` at `-18`/`-30` from the label's right edge.
+- `Menu::tick_focus` eases every block's growth fraction by a sixth a tick
+  (`oag_title::MenuBlocks::ease`) and snaps it when a page arrives, as the
+  widgets' `OnEnable` reset does; `Menu::settle` is what a `--menu-page`
+  still calls so it draws the page at rest rather than the arrival tick.
+- The three textures ride the sprite sheet by name
+  (`boot::sprites::load`'s `extra`), and `boot::sprites::block_art` samples
+  both of the fill's texels off the decoded sheet - the swatch and the
+  outline texel the HD style's second pass reads - so neither alpha is a
+  constant in this tree. The Fury/HD choice is the served page's colour, standing in for the
+  unread `FrontEnd_IsFuryStyle` byte, and reported at boot.
+- **A sheet-row trap, caught by a `0.000` in the boot report**: a `.gtf`'s
+  rows run bottom-up and `Sheet` flips them, so the executable's `v`
+  constants address the sheet upside down. Accounting for it made every one
+  of the six corner UVs land on its feature *and* closed the underline's
+  `6.6`-unit residual with no measured fudge (bar at file row 1 = sheet row
+  7, `35 + 7 = 42` for the capture's `42.6`).
+- **Kind 5, the HD style's square top-left corner, was first transcribed
+  wrong** (`u 0 -> 0.625, v 1.0 -> 0.281`, a 46-row region "squeezed" into
+  18) and caught in review by the anomaly itself: every other piece is 40x18
+  at one texel per unit. Re-decoded from the jump table at `0x00189f48`
+  (case 5 at `0x0018a14c`): `u 1.0 -> 0.375, v 0 -> 0.281`, the bottom-left
+  piece without its vertical flip. No capture could have caught it - this
+  build serves `DATA00`, the Fury style, which never draws kind 5.
+- `visible_rows` budgets HD's rows by the `<aList>`'s own `170 + 50n` grid
+  rather than the font's pitch, so a page scrolls where the original does.
+
+**Confidence**: the widths, pitch and inset 85-92 (code and three captures
+within a unit); the fill alpha 88 (two captures, three channels, both
+styles); the blink 70, with five stills arguing against it.
+
+**Open from this pass:**
+
+- **The underline blink** - 8 on / 9 off at 60 Hz per `HorizMenu_LayoutBlocks`,
+  implemented, and every one of five captures shows the mark lit. A short
+  `just rpcs3-record` of the main menu settles it either way.
+- **`FrontEnd_IsFuryStyle`'s writer is unread**; the page colour stands in.
+  The settings-save handler at `0x0024b408` is the place to look.
+- **The arrows' per-direction dimming is unread**: the capture shows an arrow
+  dim (`0x3fffffff`) when a step that way is impossible, and this build's
+  choices wrap, so both are lit except on a disabled row.
+- The label's vertical offset inside its tab (below) is untouched - the
+  block is placed by the executable's numbers, the text still by
+  `TAB_TOP_PAD`.
+- HD's `<aVertMenu>` pause menu authors `Width`/`FocusWidth` and draws the
+  same blocks; this build's pause menu is not wired to it.
 
 ## Open, added 2026-09-05
 

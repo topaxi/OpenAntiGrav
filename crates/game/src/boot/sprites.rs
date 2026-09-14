@@ -1,0 +1,180 @@
+//! The front end's sprite sheet: every image the screens name, plus the ones
+//! the executable draws on its own, and the menu blocks' art read off it.
+//!
+//! Its own file rather than a stretch of `boot.rs`, for the reason
+//! `provenance.rs` and `images.rs` already give: that file is baselined by
+//! `scripts/check-file-size.py` and may shrink but not grow, and the menu
+//! blocks arrived as a net addition. The sprite loading moved with them
+//! because [`block_art`] reads what [`load`] produced and the two are one
+//! subject.
+
+use super::Screens;
+
+/// The menu blocks' decoded art, for a title that has blocks.
+///
+/// The nine-patch is required - no frame, no boxes, and the report says so
+/// rather than the menu quietly going back to bare text. The two marks are
+/// each optional on their own: a strip with no underline mark, or rows with
+/// no arrows, is a missing sprite and not a missing idiom.
+///
+/// **The style is the served page's colour.** `FrontEnd_IsFuryStyle` reads a
+/// byte whose writer is unread (`menu-blocks.md`), so what stands in for it
+/// is the one thing the two styles' archives disagree on that this build
+/// already resolves: `DATA00` clears its front end to black and `DATA06` to
+/// white, and every other `HD_*` global follows the same split. A black page
+/// is the Fury style. Reported, so a menu drawn in the wrong style is a line
+/// in the boot log.
+pub(super) fn block_art(
+    blocks: Option<oag_title::MenuBlocks>,
+    sprites: &crate::sprite::Sheet,
+    screens: &Screens,
+    report: &mut Vec<String>,
+) -> Option<oag_ui::menu::block::BlockArt> {
+    let blocks = blocks?;
+    let Some(frame) = sprites.get(blocks.frame_texture) else {
+        report.push(format!(
+            "menu blocks: {} did not decode, so entries draw with no box",
+            blocks.frame_texture
+        ));
+        return None;
+    };
+    let (u, v) = oag_ui::menu::block::FILL_SWATCH_UV;
+    let (su, sv) = oag_ui::menu::block::SOLID_SWATCH_UV;
+    let (Some(fill_alpha), Some(solid_alpha)) = (
+        sprites.alpha_at(frame, u, v),
+        sprites.alpha_at(frame, su, sv),
+    ) else {
+        report.push(format!(
+            "menu blocks: {}'s fill swatch is outside the sheet, so entries draw with no box",
+            blocks.frame_texture
+        ));
+        return None;
+    };
+    let fury = screens
+        .globals
+        .get("HD_BG")
+        .and_then(|value| oag_ui::screen::parse_argb(value))
+        .is_some_and(|argb| {
+            let [r, g, b] = [argb >> 16 & 0xff, argb >> 8 & 0xff, argb & 0xff];
+            r + g + b < 3 * 128
+        });
+    let cursor = sprites.get(blocks.cursor_texture);
+    let arrow = sprites.get(blocks.arrow_texture);
+    report.push(format!(
+        "menu blocks: {} style, fill swatch alpha {fill_alpha:.3} then {solid_alpha:.3}, underline {}, arrows {}",
+        if fury { "Fury" } else { "HD" },
+        if cursor.is_some() {
+            "decoded"
+        } else {
+            "missing"
+        },
+        if arrow.is_some() {
+            "decoded"
+        } else {
+            "missing"
+        },
+    ));
+    Some(oag_ui::menu::block::BlockArt {
+        frame,
+        fill_alpha,
+        solid_alpha,
+        cursor,
+        arrow,
+        fury,
+    })
+}
+
+/// Decodes every image the screens name.
+///
+/// The names come from the screens rather than from a list here, so a screen
+/// that gains an `Image` gains its texture without this function changing.
+///
+/// **Every archive the source has is searched, `FE.wad` first, and both parts of
+/// that matter.** `pulse_logo.mip` is in `FE.wad` *and* `Data.wad` at the same
+/// size, which makes `FE.wad` look sufficient; `gameshare_backdrop.mip` is in
+/// `Data.wad` only, which proves it is not. The order is deliberate and is
+/// therefore written here rather than taken from
+/// [`oag_assets::Archives::read_name`], which searches the *bulk* archive
+/// first because that is the right default for a race: same size is not same
+/// bytes, and a front-end image should come off the front end's own archive.
+///
+/// `extra` is for the images a screen never names because the executable
+/// draws them on its own - the menu blocks' nine-patch and its two marks on
+/// HD. They go through the same lookup and the same report line, so one of
+/// them missing from the served archives reads exactly like a screen's own
+/// image missing.
+pub(super) fn load(
+    archives: &mut oag_assets::Archives,
+    sources: &[&Screens],
+    extra: &[&str],
+    report: &mut Vec<String>,
+) -> crate::sprite::Sheet {
+    let mut srcs: Vec<String> = Vec::new();
+    for screen in sources.iter().flat_map(|screens| &screens.screens) {
+        for image in &screen.images {
+            if !srcs.contains(&image.src) {
+                srcs.push(image.src.clone());
+            }
+        }
+    }
+    for src in extra {
+        if !srcs.iter().any(|known| known == src) {
+            srcs.push((*src).to_string());
+        }
+    }
+
+    if srcs.is_empty() {
+        return crate::sprite::Sheet::default();
+    }
+
+    let mut blobs: Vec<(String, Vec<u8>)> = Vec::new();
+    for src in &srcs {
+        match read_front_end_first(archives, src) {
+            Ok(blob) => blobs.push((src.clone(), blob)),
+            Err(e) => report.push(format!("image {src}: {e}")),
+        }
+    }
+
+    let sheet = crate::sprite::Sheet::build(&blobs, report);
+    report.push(format!(
+        "{} of {} front-end image(s) decoded into a {}x{} sheet",
+        sheet.len(),
+        srcs.len(),
+        sheet.width,
+        sheet.height
+    ));
+    sheet
+}
+
+/// Reads a front-end asset, preferring the companion archive over the bulk one.
+///
+/// The mirror image of [`oag_assets::Archives::read_name`]'s order, for the
+/// callers that want a front-end asset specifically. See [`load`] for the
+/// two entries that decide it.
+///
+/// A name neither archive has falls through to
+/// [`oag_assets::Archives::read_image`], which knows the handful of
+/// images the PS2 keeps under an entry its own XML's name does not hash to -
+/// `pulse_logo.mip` among them.
+///
+/// **Checked before any of that**: a `hash:`-prefixed `name` is a
+/// `fallback_images` entry, not a path, and belongs nowhere near
+/// `oag_pulse::read_image`'s PS2 `.pct` name rewrite - that rule turns a real
+/// PSP path into a PS2 one, which a hash spec is not.
+/// [`oag_assets::Archives::read_hash`] already searches every mounted
+/// archive, so this both short-circuits and replaces the FE-then-Data order
+/// below, which a raw hash has no use for.
+pub(super) fn read_front_end_first(
+    archives: &mut oag_assets::Archives,
+    name: &str,
+) -> oag_assets::Result<Vec<u8>> {
+    if let Some(hash) = super::images::hash_spec(name) {
+        return archives.read_hash(hash);
+    }
+    if let Some(fe) = archives.fe.as_mut()
+        && let Ok(blob) = fe.read_entry(name)
+    {
+        return Ok(blob);
+    }
+    oag_pulse::read_image(archives, name)
+}

@@ -32,13 +32,20 @@ pub enum Draw {
         /// Colour.
         color: [f32; 4],
     },
-    /// A solid rectangle whose **top-right corner is cut back diagonally**.
+    /// A solid rectangle whose **top corners are cut back diagonally**.
     ///
-    /// The cut runs the full height of `rect`: the top edge is `chamfer`
-    /// shorter than the bottom one, and the right edge is the diagonal joining
-    /// them. `chamfer` of `0.0` is exactly [`Self::Fill`], and a `chamfer`
-    /// wider than `rect`'s own width collapses the top edge to nothing rather
-    /// than inverting it.
+    /// Each cut runs the full height of `rect`: the top edge is
+    /// `chamfer[0]` shorter than the bottom one at the left and `chamfer[1]`
+    /// shorter at the right, and each side edge is the diagonal joining the
+    /// two lengths. `[0.0, 0.0]` is exactly [`Self::Fill`], and cuts wider
+    /// than `rect`'s own width together collapse the top edge to nothing
+    /// rather than inverting it.
+    ///
+    /// **Two cuts since 2026-09-14**, because the shape HD's `Block` draws
+    /// its top band with has one at each end on the Fury style
+    /// (`Block_DrawTopBand`, `docs/ghidra/functions/ps3-hdfury-eu/menu-blocks.md`)
+    /// and only the right one on the HD style; a one-sided variant could
+    /// draw the second style and not the first.
     ///
     /// **A separate variant rather than a field on [`Self::Fill`]**, for the
     /// reason [`Self::RotatedSprite`] is separate: fills are constructed in
@@ -53,15 +60,16 @@ pub enum Draw {
     /// tab's own height would run the diagonal all the way to the corner
     /// instead. That shape was built, shown next to the capture, and reverted
     /// on 2026-09-01 for exactly that reason. What draws the real thing is
-    /// this applied to a *band* the height of the cut alone, narrowed by the
-    /// landing, with an ordinary [`Self::Fill`] below it - see
-    /// [`crate::menu::strip::draw`] and
+    /// this applied to a *band* ten units tall, the executable's
+    /// `Block_DrawTopBand`, with an ordinary [`Self::Fill`] body below it -
+    /// [`crate::menu::block::draw`], and
     /// [hd-frontend.md](../../../docs/formats/hd-frontend.md).
     ChamferedFill {
-        /// Rectangle, before the corner is cut: `[x, y, width, height]`.
+        /// Rectangle, before the corners are cut: `[x, y, width, height]`.
         rect: [f32; 4],
-        /// How far the top edge falls short of the bottom one, in screen units.
-        chamfer: f32,
+        /// How far the top edge falls short of the bottom one at the left
+        /// and at the right, in screen units.
+        chamfer: [f32; 2],
         /// Colour.
         color: [f32; 4],
     },

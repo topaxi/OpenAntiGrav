@@ -109,7 +109,7 @@ impl Renderer {
                 border,
                 mode,
                 rotation: 0.0,
-                chamfer: 0.0,
+                chamfer: [0.0, 0.0],
                 tile: [0.0, 0.0],
             });
             pen += cell.advance * scale;

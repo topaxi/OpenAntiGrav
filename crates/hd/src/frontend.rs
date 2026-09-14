@@ -197,6 +197,82 @@ pub const MENU_SKIN: &oag_title::MenuSkin = &oag_title::MenuSkin {
         // the value changes. See `docs/formats/hd-frontend.md`.
         selected_fill: Some("HD_Blue"),
     }),
+    blocks: Some(MENU_BLOCKS),
+    // `<Item OffsetX="160" OffsetY="170">` around every row of every
+    // `type="Settings"` screen in `additional_definition.xml`, the rows' own
+    // `y` stepping `0, 50, 100, ...` - four archives, no disagreement. This is
+    // where HD's settings rows are, and `MenuXOffset` (800) is not: that
+    // global places the language picker's `<Menu>` and nothing else this build
+    // draws. Confidence 90.
+    list: Some(oag_title::MenuList {
+        x: 160.0,
+        y: 170.0,
+        pitch: 50.0,
+        text_scale: 0.8,
+    }),
+};
+
+/// The box behind every entry of HD's strip and settings rows, as
+/// `EBOOT.elf` draws it.
+///
+/// **Every number is the executable's** - read out of `Block_Item.cpp`,
+/// `HorizMenu_Item.cpp` and `List_Item.cpp`, with each constant's address on
+/// [`menu-blocks.md`]. Nothing here was measured off a capture and nothing is
+/// authored in the GUI XML; the strip's `ItemWidth` default is what the main
+/// menu draws with *because* it authors none. The three captures that exist
+/// agree with these to the unit, which is recorded on the same page.
+///
+/// The three textures are named, not transcribed: the caller decodes them off
+/// the served archives, and the fill's alpha - a swatch texel of the first -
+/// is sampled from the decoded picture rather than written here.
+///
+/// [`menu-blocks.md`]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/ghidra/functions/ps3-hdfury-eu/menu-blocks.md
+pub const MENU_BLOCKS: oag_title::MenuBlocks = oag_title::MenuBlocks {
+    frame_texture: names::MENU_BLOCK_FRAME,
+    cursor_texture: names::MENU_STRIP_CURSOR,
+    arrow_texture: names::MENU_LIST_ARROW,
+    strip: oag_title::StripBlocks {
+        // `HorizMenu_Construct`, `0x001b47c8`: `+0xe0 = 298.0`, the field
+        // `HorizMenu_ParseXml` fills from `ItemWidth`.
+        item_width: 298.0,
+        // `HorizMenu_LayoutBlocks`, `0x001b4158`: `0x008ad5a0`.
+        focus_extra: 70.0,
+        // The same function: `0x008ad59c`, the block pitch's `+10` and the
+        // label's inset.
+        gap: 10.0,
+        // `HorizMenu_AddEntryBlock`, `0x001b2b98`: `0x008ad4f0`.
+        height: 64.0,
+        // `HorizMenu_LayoutBlocks`: `0x008ad59c` and `0x008ad5a4`.
+        underline_offset: (10.0, 35.0),
+        // The same function: the `Image` child's `+0xac`/`+0xb0`.
+        underline_size: (32.0, 16.0),
+        // The same function's 17-frame counter: white for `0..7`, invisible
+        // for `8..16`. Confidence 70 - see the page for the captures that
+        // argue with it.
+        underline_on_ticks: 8,
+        underline_off_ticks: 9,
+    },
+    list: oag_title::ListBlocks {
+        // `List_Construct`, `0x001bf7f8`: `+0x12c`, `+0x13c`, `+0x140`.
+        label_width: 520.0,
+        value_width: 280.0,
+        value_focus_width: 340.0,
+        // `List_CreateWidgets`, `0x001bdb48`: `0x008ad8d0`.
+        gap: 10.0,
+        // `Block_Construct`'s own default, `0x0018b818`, which `List` keeps.
+        height: 40.0,
+        // `List_CreateWidgets`: `0x008ad8cc` and `0x008ad8c8`.
+        marker_offset: (8.0, 4.0),
+        // `List_Construct`: `+0xe8..+0xf4` (32), `+0xf8` (-18), `+0xfc` (-30).
+        arrow_size: 32.0,
+        arrow_left_offset: -18.0,
+        arrow_right_offset: -30.0,
+        // `List_Update`, `0x001c03e0`, and measured at alpha `0.247` in
+        // `hd-settings-screenshot-2/01.png`.
+        arrow_inert: 0x3FFF_FFFF,
+    },
+    // `0x008ad594`, `0x008afc94` and `0x008ad9c0`: one sixth, in all three.
+    ease: 1.0 / 6.0,
 };
 
 /// The boot order HD takes, read out of `skin.xml` and then **watched**.
@@ -393,6 +469,23 @@ pub mod names {
     /// than a measurement of what a PS3 loads. All six agree on every layout
     /// global; they do not agree on the screen list. See `hd-frontend.md`.
     pub const FRONTEND_ROOT: &str = r"Data\Plugins\Frontend\Gui\Skin.xml";
+
+    /// The nine-patch every menu `Block` cuts its border from and samples its
+    /// fill's alpha off: 64x64 `A8R8G8B8`, white, in `DATA06` only. Named by
+    /// the pointer table `Block_Construct` reads (`0x00920a00`), not by any
+    /// screen - which is why `oag_game::boot::load_sprites` has to be told
+    /// about it. See `docs/ghidra/functions/ps3-hdfury-eu/menu-blocks.md`.
+    pub const MENU_BLOCK_FRAME: &str = r"Data\FE\Images\file2.gtf";
+
+    /// The strip's underline mark: a white 21x8 bar at texel `(1, 1)` of a
+    /// 32x16 DXT texture in `DATA02`. `HorizMenu_Construct` loads it as
+    /// `cursor.mip`, the PSP-era spelling the loader maps to `.gtf`.
+    pub const MENU_STRIP_CURSOR: &str = r"Data\FE\Images\cursor.gtf";
+
+    /// The settings rows' step arrow: a white right-pointing triangle in a
+    /// 32x32 DXT texture in `DATA02`, drawn mirrored for the left one.
+    /// `List_Construct`'s TOC slot `0x4cc`.
+    pub const MENU_LIST_ARROW: &str = r"Data\FE\Images\HD_options_arrow.gtf";
 
     /// The logo reel, as `DATA06`'s `skin.xml` spells it.
     ///

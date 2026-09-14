@@ -470,6 +470,33 @@ impl Sheet {
             .map(|(_, placed)| *placed)
     }
 
+    /// The alpha of one texel of `placed`, addressed as a fraction of the
+    /// image on each axis, `0.0..=1.0`.
+    ///
+    /// Nearest texel, no filtering: what the menu blocks' fill samples off
+    /// its nine-patch is a swatch the texture's author painted flat two
+    /// texels wide, so the bilinear tap the original takes at its centre
+    /// reads the same. `None` for a point outside the sheet, which a
+    /// placement this sheet handed out cannot produce.
+    #[must_use]
+    pub fn alpha_at(&self, placed: Placed, u: f32, v: f32) -> Option<f32> {
+        #[expect(
+            clippy::cast_possible_truncation,
+            clippy::cast_sign_loss,
+            reason = "a texel index inside a placement, clamped below"
+        )]
+        let texel = |fraction: f32, size: u32| -> u32 {
+            ((fraction * size as f32).floor().max(0.0) as u32).min(size.saturating_sub(1))
+        };
+        let x = placed.x + texel(u, placed.width);
+        let y = placed.y + texel(v, placed.height);
+        if x >= self.width || y >= self.height {
+            return None;
+        }
+        let at = ((y * self.width + x) * 4 + 3) as usize;
+        self.rgba.get(at).map(|alpha| f32::from(*alpha) / 255.0)
+    }
+
     /// Every placement this sheet holds, name and rectangle together.
     ///
     /// The same shape `crate::frontend::Frontend`'s own `placements` field

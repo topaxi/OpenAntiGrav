@@ -1474,6 +1474,78 @@ hand-transcribed-table rule applied to layout. Recorded as measured-and-unauthor
 - The title authors `random="true"` - a character-scramble reveal - and this
   build draws it plain.
 
+### 2026-09-14: the tab is a `Block`, and the executable says every number the capture measured
+
+**The strip section above is now a measurement of code that has been read.**
+`Block_Item.cpp`, `HorizMenu_Item.cpp` and `List_Item.cpp` in `EBOOT.elf` are
+what draw the box behind an entry, and
+[menu-blocks.md](../ghidra/functions/ps3-hdfury-eu/menu-blocks.md) is the
+evidence page - every address, constant and UV. What it settles, against the
+numbers above:
+
+| Measured above | Executable | Where |
+| --- | --- | --- |
+| unselected tab `296.88` wide | `ItemWidth` default **`298.0`**, less the one-unit border inset each side | `HorizMenu_Construct` |
+| selected tab `366.67` wide | `ItemWidth + 70.0` | `HorizMenu_LayoutBlocks` |
+| gap `11.3..11.46` | pitch is width **`+ 10.0`**, the inset landing in the gap | `HorizMenu_LayoutBlocks` |
+| tab height `62.0`, top at `126.0` for `y=125` | block height **`64.0`**, its three-texel border starting one texel in | `HorizMenu_AddEntryBlock`, `file2.gtf` |
+| label inset `9.4..9.9` | **`10.0`** | `HorizMenu_LayoutBlocks` |
+| diagonal `9`, landing `17.5` at 1080p | a 10-unit 45-degree cut and a band **17** short of the fill, whose one-unit overhang makes the landing 18 | `Block_DrawTopBand`, `0x008ac594` |
+| underline top `167.1` for `y=125` | image at `y + 35`, its bar at the sheet's row 7 | `HorizMenu_LayoutBlocks`, `cursor.gtf` |
+
+`368 + 4 * 298 + 4 * 10 = 1600`, the frame rules' own span, which the
+measured `1599.8` was. **"Tab width is an engine default, and the disc says so
+by declining to author it" stands, and the default is now recovered rather
+than measured** - so `oag_hd::frontend::MENU_BLOCKS` carries `298.0` as the
+executable's number, cited to its address, where the measured `296.88` was
+deliberately never written down.
+
+**What the capture could not have shown: the border and the fill are
+separate, and the fill is drawn twice.** The block is a nine-patch border cut
+from `Data\FE\Images\file2.gtf` (64x64, white, its alpha a three-texel
+outline with one chamfered corner and one stepped one) over a flat fill whose
+vertices sample a *swatch texel* of the same texture at alpha `110/255`. The
+fill is drawn once at that alpha on both styles, then again at that alpha on
+the Fury style or at an opaque texel on the HD style - so a Fury tab's inside
+is `1 - 0.569^2 = 0.676` of its colour over the black page and an HD tab's is
+solid. That is the `102/150 = 0.68` a Fury capture measures inside a `#969696`
+border, and the `#646464`-to-the-byte, border-invisible tab the HD capture
+measures - one mechanism, not two rules. The Fury style also chamfers the
+block's top-left corner (10 units, visible in
+`hd-menu-style-toggle/03-main-menu-after.png` rows 49-55); the HD style
+leaves it square, which is why the 3840-wide capture's left edge is vertical
+throughout.
+
+**"It is rasterised geometry, not a texture mask" was half right.** The
+fill's diagonal is a triangle `Block_DrawTopBand` rasterises; the border's
+diagonal is `file2.gtf`'s own texels, drawn as 40x18 corner pieces at one
+texel per unit. The paragraph above tested the texture-mask hypothesis
+against `corner2.gtf`, the `<Bracket>` asset, which does not draw this widget.
+
+**The underline's `6.6`-unit residual is closed.** A `.gtf`'s rows run
+bottom-up and `oag_game::sprite::Sheet` flips them (measured on the loading
+screen's craft, see `sprite.rs`); the bar is at the file's row 1, so the
+sheet's row 7, so `y + 35 + 7 = 167` for the capture's `167.1`. The
+executable's `y + 35` needed no measured correction once the flip was counted.
+
+**The underline blinks, on the code's reading - 8 ticks on, 9 off - and
+slides in from the strip's right when a page arrives.** Five captures all
+show it lit, a 2 % event at that duty cycle, so this is recorded at
+confidence 70 with the tension stated rather than resolved; `just
+rpcs3-record` would settle it. The *tab* still does not pulse: nothing in
+the layout touches its colour or width on a timer.
+
+**Drawn as of 2026-09-14**: `crates/ui/src/menu/block.rs` is `Block_Render`
+reimplemented, `strip.rs` draws the executable's widths and eases the
+selected one at a sixth of the remaining distance a tick (`Menu::tick_focus`),
+and `rows.rs` draws HD's settings rows as `List_Item.cpp` does - a 520-wide
+label block, a value block that grows from 280 to 340 with focus, and the
+step arrows off `HD_options_arrow.gtf`. The measured `TAB_*` group in
+`skin.rs` is now the fallback for a frame whose nine-patch did not decode.
+`crates/game/tests/hd_menu_ground_truth.rs`'s
+`the_menu_blocks_art_is_the_discs_and_the_swatch_is_the_texel` pins the
+texture, the swatch and the sheet-row of the bar against the disc.
+
 ### `menu_font` is `None`, and that is a measurement
 
 Pulse's rows say `font="menu"`, which its language plugins resolve to a face

@@ -15,7 +15,7 @@ use super::movies::EntryRef;
 
 /// The hash `src` addresses, if it uses the `hash:` spelling.
 ///
-/// `None` for an ordinary name, which [`super::read_front_end_first`]'s
+/// `None` for an ordinary name, which [`super::sprites::read_front_end_first`]'s
 /// existing FE-then-Data search handles unchanged - this is consulted first
 /// and only short-circuits that search when it matches.
 pub(super) fn hash_spec(src: &str) -> Option<u32> {

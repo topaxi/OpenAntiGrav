@@ -29,7 +29,7 @@ use resources::{
     upload_rgba,
 };
 
-use quad::{MODE_ATLAS, MODE_FACE_ATLAS, MODE_SPRITE, MODE_SPRITE_ADDITIVE};
+use quad::{MODE_ATLAS, MODE_FACE_ATLAS, MODE_SPRITE, MODE_SPRITE_ADDITIVE, Quad};
 
 /// Shared with both shaders.
 #[repr(C)]
@@ -53,57 +53,6 @@ struct Uniforms {
     /// alignment), and a 56-byte binding is a validation error, not a
     /// truncated read.
     _padding: [f32; 2],
-}
-
-/// One quad.
-#[repr(C)]
-#[derive(Clone, Copy, Debug, bytemuck::Pod, bytemuck::Zeroable)]
-struct Quad {
-    rect: [f32; 4],
-    uv: [f32; 4],
-    color: [f32; 4],
-    /// The colour the glyph's baked outline takes, RGBA.
-    ///
-    /// Only the atlas path reads it, and only for a font that bakes an outline -
-    /// the two HUD ones. Everywhere else the atlas's mask is a constant 255, so
-    /// the mix collapses to `color` and this is never visible. See
-    /// `oag_ui::font::Atlas::luma`.
-    border: [f32; 4],
-    /// Which texture `uv` indexes: [`MODE_ATLAS`] or [`MODE_SPRITE`].
-    ///
-    /// Per-quad rather than per-pipeline, so images, text and fills stay in one
-    /// instance stream and the draw list's own back-to-front order is honoured
-    /// without splitting the pass. The movie still needs a split because it is a
-    /// genuinely different pipeline; a sprite is not.
-    mode: f32,
-    /// Clockwise turn about the quad's own centre, in radians.
-    ///
-    /// `0.0` for everything but [`Draw::RotatedSprite`]. The **geometry** spins
-    /// and the `uv` does not, which is what makes this a rotated model rather
-    /// than a rotated texture lookup: the four corner brackets of the lock-on
-    /// reticle are one model drawn four times.
-    ///
-    /// A trailing attribute, so adding it changed no existing site's meaning -
-    /// see [`Draw::RotatedSprite`] on why the variant is separate too.
-    rotation: f32,
-    /// How far the quad's **top-right** corner is pulled left, in screen units.
-    ///
-    /// `0.0` for everything but [`Draw::ChamferedFill`], which is HD's
-    /// main-menu tab corner and nothing else. Moving the one corner rather
-    /// than adding vertices is what keeps this a trailing field on the
-    /// existing six-vertex quad: the two triangles are `TL, TR, BL` and
-    /// `BL, TR, BR`, so pulling `TR` left shortens the top edge in the first
-    /// and turns the second's shared edge into the diagonal joining the two.
-    /// A general pentagon would need a vertex count change, and the shape this
-    /// draws is not a pentagon - see [`Draw::ChamferedFill`].
-    chamfer: f32,
-    /// How many times `uv` repeats across and down the quad - `[0, 0]` for
-    /// every quad but a [`Draw::TiledSprite`], whose `uv` is one tile of the
-    /// sheet rather than the whole patch. Read by the fragment stage, which
-    /// wraps its own texture coordinate rather than relying on a sampler
-    /// address mode: the tile is a patch *inside* the sheet, so the sampler's
-    /// repeat would wrap the sheet, not the patch.
-    tile: [f32; 2],
 }
 
 /// What a glyph's baked outline is drawn in when nothing supplies a colour.
@@ -381,7 +330,7 @@ impl Renderer {
                         3 => Float32x4,
                         4 => Float32,
                         5 => Float32,
-                        6 => Float32,
+                        6 => Float32x2,
                         7 => Float32x2
                     ],
                 })],
@@ -636,7 +585,7 @@ impl Renderer {
         let mut video_rect = [0.0, 0.0, self.space.size.0, self.space.size.1];
         for (index, draw) in list.iter().enumerate() {
             match draw {
-                Draw::Fill { rect, color } => self.push_solid(*rect, *color, 0.0),
+                Draw::Fill { rect, color } => self.push_solid(*rect, *color, [0.0, 0.0]),
                 Draw::ChamferedFill {
                     rect,
                     chamfer,
@@ -658,7 +607,7 @@ impl Renderer {
                     border: *color,
                     mode: MODE_SPRITE,
                     rotation: 0.0,
-                    chamfer: 0.0,
+                    chamfer: [0.0, 0.0],
                     tile: [0.0, 0.0],
                 }),
                 Draw::TiledSprite {
@@ -673,7 +622,7 @@ impl Renderer {
                     border: *color,
                     mode: MODE_SPRITE,
                     rotation: 0.0,
-                    chamfer: 0.0,
+                    chamfer: [0.0, 0.0],
                     tile: *repeat,
                 }),
                 Draw::RotatedSprite {
@@ -688,7 +637,7 @@ impl Renderer {
                     border: *color,
                     mode: MODE_SPRITE,
                     rotation: *rotation,
-                    chamfer: 0.0,
+                    chamfer: [0.0, 0.0],
                     tile: [0.0, 0.0],
                 }),
                 Draw::BlendedSprite {
@@ -714,7 +663,7 @@ impl Renderer {
                         _ => MODE_SPRITE,
                     },
                     rotation: *rotation,
-                    chamfer: 0.0,
+                    chamfer: [0.0, 0.0],
                     tile: [0.0, 0.0],
                 }),
                 Draw::Text {

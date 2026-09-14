@@ -41,6 +41,7 @@ fn the_clear_is_read_and_resolved() {
         oag_display::space::Space::HD,
         Some("Frame"),
         None,
+        None,
     );
     let Some(Draw::Fill { rect, color }) = frame.clear else {
         panic!("the screen clears: {frame:?}");
@@ -66,6 +67,7 @@ fn an_image_the_sheet_has_no_placement_for_is_skipped() {
         oag_display::space::Space::HD,
         Some("Frame"),
         None,
+        None,
     );
     assert!(frame.marks.is_empty(), "no placements, so no marks");
     assert!(frame.clear.is_some(), "and the clear is unaffected");
@@ -77,13 +79,14 @@ fn an_image_the_sheet_has_no_placement_for_is_skipped() {
 #[test]
 fn no_name_and_a_wrong_name_both_read_as_no_frame() {
     let space = oag_display::space::Space::HD;
-    let unnamed = crate::menu::read_frame(&screens(), &[], space, None, None);
+    let unnamed = crate::menu::read_frame(&screens(), &[], space, None, None, None);
     assert!(unnamed.is_empty());
     let missing = crate::menu::read_frame(
         &screens(),
         &[],
         space,
         Some("A Screen This Disc Has Not Got"),
+        None,
         None,
     );
     assert!(missing.is_empty());
@@ -103,6 +106,7 @@ fn the_selected_fill_is_read_from_the_globals_table_by_name() {
         oag_display::space::Space::HD,
         Some("Frame"),
         Some("Ink"),
+        None,
     );
     let Some(color) = frame.tab_selected else {
         panic!("Ink is one of the fixture's own globals: {frame:?}");
@@ -118,6 +122,7 @@ fn the_selected_fill_is_read_from_the_globals_table_by_name() {
         oag_display::space::Space::HD,
         Some("Frame"),
         None,
+        None,
     );
     assert!(no_name.tab_selected.is_none(), "no name, nothing to read");
 
@@ -127,6 +132,7 @@ fn the_selected_fill_is_read_from_the_globals_table_by_name() {
         oag_display::space::Space::HD,
         Some("Frame"),
         Some("HD_Blue"),
+        None,
     );
     assert!(
         unknown_name.tab_selected.is_none(),
@@ -150,6 +156,7 @@ fn the_frames_text_widgets_are_left_alone() {
         &[],
         oag_display::space::Space::HD,
         Some("Frame"),
+        None,
         None,
     );
     let drawn = frame.clear.iter().chain(frame.marks.iter()).count();

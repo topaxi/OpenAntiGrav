@@ -215,6 +215,9 @@ pub(super) fn menu_page(
         );
     }
     model.open(page);
+    // A still shows the page at rest, not the tick it arrived on - see
+    // `Menu::settle` for what the arrival tick would otherwise draw.
+    model.settle();
     // The same window the live menus use, so a captured page scrolls where a
     // played one does rather than where a default happened to put it - the
     // AI PILOTS page's own reservation included, off the page just opened

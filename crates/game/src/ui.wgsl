@@ -66,9 +66,10 @@ struct Instance {
     // everything but the lock-on reticle's corner brackets, which are four
     // instances of one model at four quarter turns.
     @location(5) rotation: f32,
-    // How far the top-right corner is pulled left, in screen units. Zero for
-    // everything but HD's main-menu tab corner.
-    @location(6) chamfer: f32,
+    // How far the top-left corner is pulled right and the top-right corner
+    // pulled left, in screen units. Zero for everything but HD's menu
+    // blocks' top band.
+    @location(6) chamfer: vec2<f32>,
     // How many times `uv` - then one tile of the sheet, not a patch - repeats
     // across and down the quad. Zero for everything but a tiled sprite: the
     // selection screens' hex grid, a 32x16 tile drawn 340x120.
@@ -128,16 +129,22 @@ fn vs_main(@builtin(vertex_index) index: u32, instance: Instance) -> VertexOut {
     // quad comes out the same either way, which is why the lock-on reticle -
     // the only caller until 2026-08-31, and 8 pixels square - never showed it.
     //
-    // The chamfer, before anything else touches the corner: it is a change to
-    // where this vertex *is* on the quad, not a transform of the quad. Only
-    // the top-right corner moves, and only left - the two triangles are
-    // `TL, TR, BL` and `BL, TR, BR`, so a shorter top edge in the first leaves
-    // the second's `TR`-to-`BR` edge as the diagonal joining the two lengths.
-    // Clamped at the quad's own width so an over-wide chamfer collapses the
-    // top edge to a point rather than folding it back past the left edge.
-    let cut = min(instance.chamfer, instance.rect.z);
-    let is_top_right = corner.x * (1.0 - corner.y);
-    let corner_px = corner * instance.rect.zw - vec2<f32>(is_top_right * cut, 0.0);
+    // The chamfers, before anything else touches the corners: they are a
+    // change to where this vertex *is* on the quad, not a transform of the
+    // quad. Only the two top corners move, each inward - the two triangles
+    // are `TL, TR, BL` and `BL, TR, BR`, so a shorter top edge leaves the
+    // second's `TR`-to-`BR` edge and the first's `TL`-to-`BL` edge as the
+    // diagonals joining the two lengths. Clamped so the two cuts together
+    // collapse the top edge to a point rather than folding it back past
+    // each other: the right cut is bounded by the width, the left by what
+    // the right cut leaves.
+    let right_cut = min(instance.chamfer.y, instance.rect.z);
+    let left_cut = min(instance.chamfer.x, instance.rect.z - right_cut);
+    let is_top = 1.0 - corner.y;
+    let is_top_right = corner.x * is_top;
+    let is_top_left = (1.0 - corner.x) * is_top;
+    let corner_px = corner * instance.rect.zw
+        + vec2<f32>(is_top_left * left_cut - is_top_right * right_cut, 0.0);
     let centred = corner_px - instance.rect.zw * 0.5;
     let turn = mat2x2<f32>(
         vec2<f32>(cos(instance.rotation), sin(instance.rotation)),

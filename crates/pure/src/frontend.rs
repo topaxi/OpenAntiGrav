@@ -314,6 +314,8 @@ pub const MENU_SKIN: &oag_title::MenuSkin = &oag_title::MenuSkin {
     // 46 of them naming `Menu` at all - finds no `HorizMenu` anywhere. See
     // `oag_title::MenuStrip`.
     strip: None,
+    blocks: None,
+    list: None,
 };
 
 /// Pure's boot sequence, cold-boot measured on both pressings.

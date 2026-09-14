@@ -68,6 +68,15 @@ const STRIP_GAP: f32 = 5.3;
 /// A strip entry's own background tab, and the mark under a selected one -
 /// both **ours**, and both approximated rather than authored.
 ///
+/// **The fallback since 2026-09-14, not the tab.** The box behind an entry is
+/// `Block_Item.cpp`'s, read out of `EBOOT.elf` and drawn by
+/// [`super::block`] off the executable's own widths
+/// ([`oag_title::MenuBlocks`]) and the disc's own nine-patch; this group is
+/// what [`super::strip`] draws instead when a title has a strip and no
+/// decoded block art, and [`TAB_TOP_PAD`] alone is still read on the block
+/// path, for the label's vertical placement. Every number below came out
+/// within a unit of the executable's, which is what says both are right.
+///
 /// Nothing on disc states any of this: a `<HorizMenu>` gives a position and a
 /// colour and nothing about a tab shape at all - see [`Strip::color`]. A
 /// 2026-09-01 RPCS3 capture (`data/reference/hd-menu-highlight-shift/00-campaign.png`,
@@ -361,6 +370,45 @@ impl Skin {
         })
     }
 
+    /// The box this title's executable draws behind an entry, with its
+    /// widths still in the title's own units - see
+    /// [`oag_title::MenuBlocks`]. Paired with [`Self::theirs_scale`], which
+    /// puts them in the grid being drawn in; the block drawer takes both
+    /// rather than a pre-scaled copy, because the nine-patch's own geometry
+    /// scales the same way and lives with the drawer.
+    ///
+    /// `None` for a title with no blocks. **This is what decides which strip
+    /// and row idiom draws**: with it, the tab is the executable's block and
+    /// the measured `TAB_*` figures below are not read at all; without it,
+    /// they are.
+    #[must_use]
+    pub fn blocks(&self) -> Option<oag_title::MenuBlocks> {
+        self.skin.blocks
+    }
+
+    /// What multiplies a number written in the title's own grid into the
+    /// grid being drawn in. `(1.0, 1.0)` on every title today - each authors
+    /// in the grid its platform draws in - and kept as a value rather than
+    /// assumed, for the reason [`Self::new`]'s own doc gives.
+    #[must_use]
+    pub fn theirs_scale(&self) -> (f32, f32) {
+        self.from_theirs
+    }
+
+    /// Where this title anchors its settings rows, in the grid being drawn
+    /// in, when its screens author that separately from `MenuXOffset` - see
+    /// [`oag_title::MenuList`]. `None` keeps [`Self::menu_x`] and
+    /// [`Self::first_row_y`].
+    #[must_use]
+    pub fn list(&self) -> Option<List> {
+        self.skin.list.map(|list| List {
+            x: list.x * self.from_theirs.0,
+            y: list.y * self.from_theirs.1,
+            pitch: list.pitch * self.from_theirs.1,
+            text_scale: list.text_scale,
+        })
+    }
+
     /// The gap between two strip entries, in the grid being drawn in. Ours; see
     /// [`STRIP_GAP`].
     #[must_use]
@@ -601,6 +649,20 @@ impl Skin {
     }
 }
 
+/// A title's settings-row anchor, converted into the grid the menus are
+/// drawn in. See [`Skin::list`] and [`oag_title::MenuList`].
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct List {
+    /// Left edge of the rows' blocks. Authored, the `<Item>`'s `OffsetX`.
+    pub x: f32,
+    /// Top of the first row's block. Authored, the `<Item>`'s `OffsetY`.
+    pub y: f32,
+    /// From one row's top to the next. Authored, the rows' own `y` step.
+    pub pitch: f32,
+    /// The rows' own `scale`, on top of the skin's. Authored.
+    pub text_scale: f32,
+}
+
 /// A title's `<HorizMenu>`, converted into the grid the menus are drawn in.
 ///
 /// The same relationship [`Skin`] has to [`oag_title::MenuSkin`], one field
@@ -667,14 +729,28 @@ pub struct Strip {
 /// number, seven for Pulse's own skin.
 #[must_use]
 pub fn visible_rows(skin: &Skin, frame: &super::Frame, reserve_note: bool) -> usize {
-    let pitch = skin.row_pitch().max(1.0);
+    // A title whose screens anchor and space the rows themselves - HD's
+    // `<aList>`, drawn by `rows::draw_list_rows` - is budgeted by that grid,
+    // not by the font's own pitch, which on HD is seven units longer. The
+    // condition is the drawing's own: a frame whose nine-patch did not
+    // decode falls back to text rows at the font's pitch, and is budgeted
+    // by it.
+    let list = if frame.blocks.is_some() {
+        skin.list()
+    } else {
+        None
+    };
+    let (first_y, pitch) = list.map_or((skin.first_row_y(), skin.row_pitch()), |list| {
+        (list.y, list.pitch)
+    });
+    let pitch = pitch.max(1.0);
     let note_line = skin.line_height * MESSAGE_SCALE + skin.message_gap();
     let room = match frame.content_bottom(skin.space()) {
         Some(bottom) => {
             let reserve = if reserve_note { note_line } else { 0.0 };
-            bottom - skin.first_row_y() - reserve
+            bottom - first_y - reserve
         }
-        None => skin.space().size.1 - skin.first_row_y() - note_line,
+        None => skin.space().size.1 - first_y - note_line,
     };
     #[expect(
         clippy::cast_possible_truncation,
@@ -699,7 +775,7 @@ const MESSAGE_GAP: f32 = 6.0;
 const MESSAGE_SCALE: f32 = 0.8;
 
 /// A packed `0xAARRGGBB` as the renderer's straight-alpha RGBA.
-fn argb(value: oag_title::menu::Argb) -> [f32; 4] {
+pub(super) fn argb(value: oag_title::menu::Argb) -> [f32; 4] {
     let byte = |shift: u32| ((value >> shift) & 0xFF) as f32 / 255.0;
     [byte(16), byte(8), byte(0), byte(24)]
 }
@@ -756,6 +832,8 @@ mod tests {
         selected_pulse_period_secs: Some(1.1),
         transition_secs: 0.5,
         strip: None,
+        blocks: None,
+        list: None,
     };
 
     fn skin() -> Skin {

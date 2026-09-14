@@ -351,6 +351,148 @@ pub struct MenuSkin {
     /// `x` and on `align`, and six of them say `y="125"` against four at
     /// `y="140"`.
     pub strip: Option<MenuStrip>,
+    /// The box this title's executable draws behind a menu entry, and the
+    /// widths it gives the widgets that use it. **Recovered from the
+    /// executable**, not read off the disc's XML - see [`MenuBlocks`].
+    ///
+    /// `None` for a title whose entries are bare text, which is what both
+    /// PSP titles' captures show, and for one whose executable has not been
+    /// read for it.
+    pub blocks: Option<MenuBlocks>,
+    /// Where this title's settings rows sit, when its screens author a
+    /// position for them separately from `MenuXOffset`. See [`MenuList`].
+    pub list: Option<MenuList>,
+}
+
+/// Where a title's settings rows are anchored, read off its screens.
+///
+/// **Authored.** Wipeout HD's `Settings` screens do not use `MenuXOffset` at
+/// all: every one of them nests its `<List>`/`<Slider>` rows inside an
+/// `<Item OffsetX="160" OffsetY="170">` and authors each row's own `y` at
+/// `0, 50, 100, ...` - `additional_definition.xml`, all four archives that
+/// carry it. So the column's left edge, its top and its pitch are three
+/// authored numbers, distinct from [`MenuSkin::menu_x`] and
+/// [`MenuSkin::first_row_y`], which a title whose rows *are* placed by the
+/// globals keeps using.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct MenuList {
+    /// The `<Item>`'s `OffsetX`, in [`MenuSkin::space`].
+    pub x: f32,
+    /// The `<Item>`'s `OffsetY`, in [`MenuSkin::space`].
+    pub y: f32,
+    /// The step between two rows' authored `y`, in [`MenuSkin::space`].
+    pub pitch: f32,
+    /// The rows' own `scale`, as every `<List>` and `<Slider>` on those
+    /// screens authors it (`scale="0.8"` on HD), multiplying
+    /// [`MenuSkin::menu_scale`].
+    pub text_scale: f32,
+}
+
+/// The `Block` a title draws behind a menu entry, as its executable draws it.
+///
+/// **Every number here is the executable's, not the disc's** - which is the
+/// third provenance this type carries, beside the authored and measured
+/// fields the rest of [`MenuSkin`] documents. Wipeout HD's GUI XML authors a
+/// `<HorizMenu>`'s position and colour and nothing about the box behind each
+/// entry; the box, its border, its translucent inside, the selected entry
+/// being wider and easing toward that width are all `Block_Item.cpp`,
+/// `HorizMenu_Item.cpp` and `List_Item.cpp` in `EBOOT.elf`. See
+/// `docs/ghidra/functions/ps3-hdfury-eu/menu-blocks.md` for every address.
+///
+/// What *is* the disc's is named here rather than transcribed: the textures
+/// are entry names for the caller to decode, and the fill's alpha is a texel
+/// of one of them, sampled by whoever decodes it rather than written down.
+///
+/// The geometry of the box itself - the three-unit border, the two-unit fill
+/// inset, the ten-unit chamfer, the seventeen-unit landing, the 40x18 corner
+/// pieces - is the drawing routine's and lives with the drawing code, the
+/// way a reimplemented function's constants do.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct MenuBlocks {
+    /// The nine-patch every block's border is cut from and whose swatch
+    /// texels its fill samples: `Data\FE\Images\file2.gtf`, named by a
+    /// pointer table the `Block` constructor reads (`0x00920a00`).
+    pub frame_texture: &'static str,
+    /// The strip's underline mark: `Data\FE\Images\cursor.gtf`, loaded by
+    /// `HorizMenu_Construct`.
+    pub cursor_texture: &'static str,
+    /// The settings rows' step arrow: `Data\FE\Images\HD_options_arrow.gtf`,
+    /// loaded by `List_Construct`.
+    pub arrow_texture: &'static str,
+    /// The `<HorizMenu>` widget's own numbers.
+    pub strip: StripBlocks,
+    /// The `<List>` widget's own numbers.
+    pub list: ListBlocks,
+    /// How much of the remaining distance a block's width closes per tick
+    /// toward its target: `0.16667` in all three widgets
+    /// (`HorizMenu_LayoutBlocks`, `VertMenu_LayoutBlocks`, `List_Update`).
+    /// Per *frame* in the original, which runs its front end at 60 Hz - the
+    /// same rate this build's menu stage ticks at.
+    pub ease: f32,
+}
+
+/// What `HorizMenu_Item.cpp` gives a strip's blocks.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct StripBlocks {
+    /// An unselected entry's block width: the `ItemWidth` attribute's
+    /// default, `298.0`, set by `HorizMenu_Construct`. The main menu authors
+    /// no `ItemWidth`, so this is what it draws with.
+    pub item_width: f32,
+    /// How much wider the selected entry's block is: `70.0` in
+    /// `HorizMenu_LayoutBlocks`. `368 + 4 * 298 + 4 * 10 = 1600`, the frame
+    /// rules' own span.
+    pub focus_extra: f32,
+    /// The step from one block's right edge to the next block's left:
+    /// `10.0`, and also the label's inset from its block's left edge.
+    pub gap: f32,
+    /// Block height, `64.0`, set by `HorizMenu_AddEntryBlock`.
+    pub height: f32,
+    /// Where the underline `Image` is placed, relative to its entry's block:
+    /// `(10.0, 35.0)`. The mark's own bar is at texel `(1, 1)` of a 32x16
+    /// texture, so the bar's left edge is one unit further in.
+    pub underline_offset: (f32, f32),
+    /// The underline image's size, `(32.0, 16.0)`.
+    pub underline_size: (f32, f32),
+    /// The underline's blink: visible for this many ticks, then hidden for
+    /// [`Self::underline_off_ticks`], on a free-running counter.
+    pub underline_on_ticks: u32,
+    /// See [`Self::underline_on_ticks`]. `8` on and `9` off in
+    /// `HorizMenu_LayoutBlocks`.
+    pub underline_off_ticks: u32,
+}
+
+/// What `List_Item.cpp` gives a settings row's blocks.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ListBlocks {
+    /// The label block's width, `520.0`.
+    pub label_width: f32,
+    /// The value block's width when the row is not focused, `280.0`.
+    pub value_width: f32,
+    /// The value block's width when the row is focused, `340.0`; it eases
+    /// between the two at [`MenuBlocks::ease`].
+    pub value_focus_width: f32,
+    /// Between the label block's right edge and the value block's left,
+    /// `10.0`.
+    pub gap: f32,
+    /// Both blocks' height, `40.0`.
+    pub height: f32,
+    /// The step arrows' size, `32.0` square.
+    pub arrow_size: f32,
+    /// Where the row's marker `Image` sits, relative to the label block's
+    /// corner: `(8.0, 4.0)`. The label's text follows it, one arrow-width
+    /// further in; the arrows share its `y`.
+    pub marker_offset: (f32, f32),
+    /// The **left** arrow's `x`, relative to the label block's right edge;
+    /// it is drawn mirrored, extending leftward from there: `-18.0`.
+    pub arrow_left_offset: f32,
+    /// The **right** arrow's `x`, relative to the label block's right edge:
+    /// `-30.0`.
+    pub arrow_right_offset: f32,
+    /// The colour an arrow draws in when a step that way is impossible:
+    /// white at a quarter alpha, `0x3FFF_FFFF`. Measured at `0.247` over two
+    /// backgrounds in the Fury settings capture, and the same literal
+    /// `List_Update` writes for a disabled row.
+    pub arrow_inert: Argb,
 }
 
 impl MenuSkin {
@@ -400,6 +542,8 @@ mod tests {
         transition_secs: 0.5,
         // Pulse's own answer: its discs author no `<HorizMenu>` at all.
         strip: None,
+        blocks: None,
+        list: None,
     };
 
     /// The four pitches measured off the original, reproduced by the rule.

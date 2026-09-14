@@ -1,9 +1,59 @@
-//! The quad modes and the two solid-quad pushes, split out of [`super`]
-//! under the 1,000-line rule in `scripts/check-file-size.py` - a move, with
-//! no behaviour change. A child module rather than a sibling because it
-//! reaches the renderer's own private instance list.
+//! The quad instance, its modes and the two solid-quad pushes, split out of
+//! [`super`] under the 1,000-line rule in `scripts/check-file-size.py` - a
+//! move, with no behaviour change. A child module rather than a sibling
+//! because it reaches the renderer's own private instance list.
 
-use super::{Quad, Renderer};
+use super::Renderer;
+
+/// One quad.
+#[repr(C)]
+#[derive(Clone, Copy, Debug, bytemuck::Pod, bytemuck::Zeroable)]
+pub(super) struct Quad {
+    pub(super) rect: [f32; 4],
+    pub(super) uv: [f32; 4],
+    pub(super) color: [f32; 4],
+    /// The colour the glyph's baked outline takes, RGBA.
+    ///
+    /// Only the atlas path reads it, and only for a font that bakes an outline -
+    /// the two HUD ones. Everywhere else the atlas's mask is a constant 255, so
+    /// the mix collapses to `color` and this is never visible. See
+    /// `oag_ui::font::Atlas::luma`.
+    pub(super) border: [f32; 4],
+    /// Which texture `uv` indexes: [`MODE_ATLAS`] or [`MODE_SPRITE`].
+    ///
+    /// Per-quad rather than per-pipeline, so images, text and fills stay in one
+    /// instance stream and the draw list's own back-to-front order is honoured
+    /// without splitting the pass. The movie still needs a split because it is a
+    /// genuinely different pipeline; a sprite is not.
+    pub(super) mode: f32,
+    /// Clockwise turn about the quad's own centre, in radians.
+    ///
+    /// `0.0` for everything but [`super::Draw::RotatedSprite`]. The **geometry** spins
+    /// and the `uv` does not, which is what makes this a rotated model rather
+    /// than a rotated texture lookup: the four corner brackets of the lock-on
+    /// reticle are one model drawn four times.
+    ///
+    /// A trailing attribute, so adding it changed no existing site's meaning -
+    /// see [`super::Draw::RotatedSprite`] on why the variant is separate too.
+    pub(super) rotation: f32,
+    /// How far the quad's top-left corner is pulled right and its top-right
+    /// corner pulled left, in screen units.
+    ///
+    /// `[0.0, 0.0]` for everything but [`super::Draw::ChamferedFill`], HD's menu
+    /// blocks' top band. Moving the two corners rather than adding vertices
+    /// keeps this a trailing field on the six-vertex quad: the triangles are
+    /// `TL, TR, BL` and `BL, TR, BR`, so a pulled `TR` turns the second's
+    /// shared edge into a diagonal and a pulled `TL` does the same to the
+    /// first's `TL`-`BL` edge. See [`super::Draw::ChamferedFill`].
+    pub(super) chamfer: [f32; 2],
+    /// How many times `uv` repeats across and down the quad - `[0, 0]` for
+    /// every quad but a [`super::Draw::TiledSprite`], whose `uv` is one tile of the
+    /// sheet rather than the whole patch. Read by the fragment stage, which
+    /// wraps its own texture coordinate rather than relying on a sampler
+    /// address mode: the tile is a patch *inside* the sheet, so the sampler's
+    /// repeat would wrap the sheet, not the patch.
+    pub(super) tile: [f32; 2],
+}
 
 /// A quad whose `uv` is in glyph-atlas pixels, sampled for coverage.
 pub(super) const MODE_ATLAS: f32 = 0.0;
@@ -18,11 +68,11 @@ pub(super) const MODE_SPRITE: f32 = 1.0;
 /// [`MODE_SPRITE`] index the sheet, so `mode > 0.5` still means "a sheet quad".
 pub(super) const MODE_SPRITE_ADDITIVE: f32 = 2.0;
 /// A solid quad whose colour runs from `color` at its left edge to `border`
-/// at its right - [`Draw::GradientFill`]. The vertex stage interpolates the
+/// at its right - [`super::Draw::GradientFill`]. The vertex stage interpolates the
 /// two and then hands the fragment stage an ordinary [`MODE_ATLAS`] fill, so
 /// the pipeline stays one pass with one back-to-front order.
 pub(super) const MODE_GRADIENT: f32 = 3.0;
-/// A quad whose `uv` is in the **face atlas's** pixels - [`Draw::FacedText`],
+/// A quad whose `uv` is in the **face atlas's** pixels - [`super::Draw::FacedText`],
 /// sampled from a second glyph texture bound alongside the main one rather
 /// than replacing it, the way [`MODE_SPRITE`] samples a second texture
 /// beside [`MODE_ATLAS`]. Only emitted once the role it names has actually
@@ -30,7 +80,7 @@ pub(super) const MODE_GRADIENT: f32 = 3.0;
 pub(super) const MODE_FACE_ATLAS: f32 = 4.0;
 
 impl Renderer {
-    pub(super) fn push_solid(&mut self, rect: [f32; 4], color: [f32; 4], chamfer: f32) {
+    pub(super) fn push_solid(&mut self, rect: [f32; 4], color: [f32; 4], chamfer: [f32; 2]) {
         let solid = self.atlas.solid;
         self.quads.push(Quad {
             rect,
@@ -59,7 +109,7 @@ impl Renderer {
             border: right,
             mode: MODE_GRADIENT,
             rotation: 0.0,
-            chamfer: 0.0,
+            chamfer: [0.0, 0.0],
             tile: [0.0, 0.0],
         });
     }

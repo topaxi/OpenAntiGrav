@@ -122,7 +122,7 @@ BASELINE = {
     # at its ceiling, and a ceiling only ever lowers.
     "crates/game/tests/race_ground_truth.rs": 2266,
     "crates/vex/src/vex.rs": 1651,
-    "crates/game/src/boot.rs": 1784,
+    "crates/game/src/boot.rs": 1719,
     # Ratcheted down from 1,981 when `Player`, `FRAME_RATE` and
     # `PS2_DISPLAY_ASPECT` moved to `crates/game/src/frontend/player.rs` -
     # prep for the `oag-ui` extraction, which cannot name a type that lives in
@@ -134,7 +134,7 @@ BASELINE = {
     # `Definition`, `Error`, the raw TOML shape and the parse/check functions
     # split out into `menu/definition.rs` - the seam `string_id` resolution
     # needs, and the file had zero lines of headroom to grow it in place.
-    "crates/ui/src/menu.rs": 1274,
+    "crates/ui/src/menu.rs": 1201,
     "crates/render/src/psys.rs": 1956,
     "crates/game/src/audio.rs": 1798,
     "crates/trace/src/main.rs": 1543,

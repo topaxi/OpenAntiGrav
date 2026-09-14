@@ -87,7 +87,7 @@ fn hds_root_page_runs_left_to_right_from_its_own_anchor() {
     let (band, ..) = list
         .iter()
         .find_map(|draw| match draw {
-            Draw::ChamferedFill { rect, chamfer, .. } => Some((*rect, *chamfer)),
+            Draw::ChamferedFill { rect, chamfer, .. } => Some((*rect, chamfer[1])),
             _ => None,
         })
         .expect("a tab's cut band");
@@ -294,7 +294,7 @@ fn the_tab_corner_is_a_45_degree_cut_followed_by_a_flat_landing() {
     let (band, chamfer) = list
         .iter()
         .find_map(|draw| match draw {
-            Draw::ChamferedFill { rect, chamfer, .. } => Some((*rect, *chamfer)),
+            Draw::ChamferedFill { rect, chamfer, .. } => Some((*rect, chamfer[1])),
             _ => None,
         })
         .expect("a cut band");

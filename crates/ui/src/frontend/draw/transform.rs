@@ -56,7 +56,8 @@ impl Draw {
         // It scales with its own quad: a fixed-size cut left on a shrinking
         // corner would eat more of the tab the smaller the tab got.
         if let Self::ChamferedFill { chamfer, .. } = self {
-            *chamfer *= scale;
+            chamfer[0] *= scale;
+            chamfer[1] *= scale;
         }
         match self {
             Self::Text {

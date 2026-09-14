@@ -562,11 +562,26 @@ pub fn load_shell(
         &mut report,
     );
     steps.lap("catalogue");
-    let sprites = load_sprites(
+    // The menu blocks' three textures are the executable's own, named by no
+    // screen - see `oag_title::MenuBlocks` - so they are asked for by name
+    // alongside everything the screens name.
+    let block_textures: Vec<&str> = front_end
+        .menu
+        .blocks
+        .map(|blocks| {
+            vec![
+                blocks.frame_texture,
+                blocks.cursor_texture,
+                blocks.arrow_texture,
+            ]
+        })
+        .unwrap_or_default();
+    let sprites = sprites::load(
         &mut archives,
         &std::iter::once(&screens)
             .chain(race_box.as_ref())
             .collect::<Vec<_>>(),
+        &block_textures,
         &mut report,
     );
     steps.lap("sprites");
@@ -670,12 +685,14 @@ pub fn load_shell(
     // style, black and red in `DATA00` against white and teal in `DATA06`. A
     // menu that looks like the wrong game is then a line in the boot report
     // rather than a mystery. See [`oag_ui::menu::frame`].
+    let blocks = sprites::block_art(front_end.menu.blocks, &sprites, &screens, &mut report);
     let frame = oag_ui::menu::read_frame(
         &screens,
         sprites.entries(),
         space,
         front_end.menu_frame,
         front_end.menu.strip.and_then(|strip| strip.selected_fill),
+        blocks,
     );
     if let Some(name) = front_end.menu_frame {
         report.push(format!("menu frame {name}: {}", frame.describe()));
@@ -1461,89 +1478,6 @@ fn load_second_movie(
     }
 }
 
-/// Decodes every image the screens name.
-///
-/// The names come from the screens rather than from a list here, so a screen
-/// that gains an `Image` gains its texture without this function changing.
-///
-/// **Every archive the source has is searched, `FE.wad` first, and both parts of
-/// that matter.** `pulse_logo.mip` is in `FE.wad` *and* `Data.wad` at the same
-/// size, which makes `FE.wad` look sufficient; `gameshare_backdrop.mip` is in
-/// `Data.wad` only, which proves it is not. The order is deliberate and is
-/// therefore written here rather than taken from
-/// [`oag_assets::Archives::read_name`], which searches the *bulk* archive
-/// first because that is the right default for a race: same size is not same
-/// bytes, and a front-end image should come off the front end's own archive.
-fn load_sprites(
-    archives: &mut oag_assets::Archives,
-    sources: &[&Screens],
-    report: &mut Vec<String>,
-) -> crate::sprite::Sheet {
-    let mut srcs: Vec<String> = Vec::new();
-    for screen in sources.iter().flat_map(|screens| &screens.screens) {
-        for image in &screen.images {
-            if !srcs.contains(&image.src) {
-                srcs.push(image.src.clone());
-            }
-        }
-    }
-
-    if srcs.is_empty() {
-        return crate::sprite::Sheet::default();
-    }
-
-    let mut blobs: Vec<(String, Vec<u8>)> = Vec::new();
-    for src in &srcs {
-        match read_front_end_first(archives, src) {
-            Ok(blob) => blobs.push((src.clone(), blob)),
-            Err(e) => report.push(format!("image {src}: {e}")),
-        }
-    }
-
-    let sheet = crate::sprite::Sheet::build(&blobs, report);
-    report.push(format!(
-        "{} of {} front-end image(s) decoded into a {}x{} sheet",
-        sheet.len(),
-        srcs.len(),
-        sheet.width,
-        sheet.height
-    ));
-    sheet
-}
-
-/// Reads a front-end asset, preferring the companion archive over the bulk one.
-///
-/// The mirror image of [`oag_assets::Archives::read_name`]'s order, for the
-/// callers that want a front-end asset specifically. See [`load_sprites`] for the
-/// two entries that decide it.
-///
-/// A name neither archive has falls through to
-/// [`oag_assets::Archives::read_image`], which knows the handful of
-/// images the PS2 keeps under an entry its own XML's name does not hash to -
-/// `pulse_logo.mip` among them.
-///
-/// **Checked before any of that**: a `hash:`-prefixed `name` is a
-/// `fallback_images` entry, not a path, and belongs nowhere near
-/// `oag_pulse::read_image`'s PS2 `.pct` name rewrite - that rule turns a real
-/// PSP path into a PS2 one, which a hash spec is not.
-/// [`oag_assets::Archives::read_hash`] already searches every mounted
-/// archive, so this both short-circuits and replaces the FE-then-Data order
-/// below, which a raw hash has no use for.
-fn read_front_end_first(
-    archives: &mut oag_assets::Archives,
-    name: &str,
-) -> oag_assets::Result<Vec<u8>> {
-    if let Some(hash) = images::hash_spec(name) {
-        return archives.read_hash(hash);
-    }
-    if let Some(fe) = archives.fe.as_mut()
-        && let Ok(blob) = fe.read_entry(name)
-    {
-        return Ok(blob);
-    }
-    oag_pulse::read_image(archives, name)
-}
-
 /// Every language plugin this source carries.
 ///
 /// Public because a race needs the string table too, for the HUD's `idstring`
@@ -1714,6 +1648,7 @@ mod movies;
 mod provenance;
 pub(crate) mod roster;
 mod screens;
+mod sprites;
 pub(crate) mod xml;
 
 use fonts::{load_font, load_menu_font, load_title_font};

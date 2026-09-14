@@ -193,6 +193,8 @@ pub const MENU_SKIN: &oag_title::MenuSkin = &oag_title::MenuSkin {
     // them. See `oag_title::MenuStrip` for the whole census and for why a string
     // search finds a shortened element.
     strip: None,
+    blocks: None,
+    list: None,
 };
 
 #[cfg(test)]

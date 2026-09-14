@@ -74,6 +74,11 @@ pub struct Frame {
     /// strip, or names one whose global this screen's globals table does not
     /// carry.
     pub tab_selected: Option<[f32; 4]>,
+    /// The art the title's menu blocks draw with, when the title has blocks
+    /// and their nine-patch decoded - see [`super::block::BlockArt`]. Built
+    /// by the caller, which is where the decoded pixels are; `None` draws
+    /// every entry as bare text, which is what both PSP titles are.
+    pub blocks: Option<super::block::BlockArt>,
 }
 
 impl Frame {
@@ -255,6 +260,10 @@ impl Frame {
 /// shape `crate::frontend::Frontend`'s own `placements` field already is;
 /// `crate::sprite::Sheet::entries` returns exactly this, so a real caller
 /// passes `sheet.entries()`.
+///
+/// `blocks` is the menu blocks' decoded art, built by the same caller for
+/// the same reason - sampling the fill swatch needs the sheet's pixels, which
+/// this crate never sees. `None` for a title with no blocks.
 #[must_use]
 pub fn read(
     screens: &Screens,
@@ -262,6 +271,7 @@ pub fn read(
     space: Space,
     name: Option<&str>,
     selected_fill: Option<&str>,
+    blocks: Option<super::block::BlockArt>,
 ) -> Frame {
     let tab_selected = selected_fill
         .and_then(|global| screens.globals.get(global))
@@ -271,6 +281,7 @@ pub fn read(
     let Some(screen) = name.and_then(|name| screens.by_name(name)) else {
         return Frame {
             tab_selected,
+            blocks,
             ..Frame::default()
         };
     };
@@ -342,5 +353,6 @@ pub fn read(
         marks,
         ink,
         tab_selected,
+        blocks,
     }
 }

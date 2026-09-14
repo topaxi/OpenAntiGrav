@@ -5,55 +5,45 @@
 //! `<HorizMenu name="Mode">` and no `<Menu>` at all. This module is what draws
 //! it; [`super::rows`] is the column, and [`super::draw_list`] picks.
 //!
-//! # What is the disc's here, and what is ours
+//! # What is the disc's here, what is the executable's, and what is ours
 //!
 //! The disc's: that the menu is horizontal at all, where it starts, and what
 //! colour an entry is - [`oag_title::MenuStrip`], read off five archives' copies
-//! of the same file.
+//! of the same file - and the two textures the tab and its underline are cut
+//! from, decoded by the caller into [`super::Frame::blocks`].
 //!
-//! Ours, and each marked where it is made: the gap between two entries
-//! ([`super::Skin::strip_gap`]), the selected colour on a title with no capture
-//! ([`super::Skin::selected`]), and [`suits`]'s rule about which pages get drawn
-//! this way.
+//! The executable's, since 2026-09-14: everything about the tab itself. Its
+//! width is `HorizMenu_Item.cpp`'s `ItemWidth` default of 298, the selected
+//! one is 70 wider and eases there at a sixth of the remaining distance a
+//! tick, the pitch is the width plus 10, the label is inset 10, the box
+//! behind it is a `Block` - see [`super::block`] and
+//! [`oag_title::MenuBlocks`] for every number's address. **This replaced a set
+//! of measured figures** (`TAB_*` in `skin.rs`, which [`draw_measured`] still
+//! reads for a title that has a strip and no blocks): those were read off
+//! captures at ruler accuracy and came out within a unit of these, which is
+//! what says both are right.
+//!
+//! Ours, and marked where made: [`suits`]'s rule about which pages get drawn
+//! this way, the label's vertical placement inside its tab
+//! ([`super::Skin::tab_pad`], a measured figure this build's font atlas still
+//! needs), and - on a title with no blocks - the measured tab.
 //!
 //! # What the anchor means: the tab's corner, not the label's pen
 //!
 //! [`oag_title::MenuStrip::x`] and [`oag_title::MenuStrip::y`] are the
 //! `<HorizMenu>`'s own `x="160" y="125"`, and they are the **top-left corner of
-//! an entry's tab**. The label is placed inside it, at
-//! [`super::Skin::tab_pad`] in from that corner.
-//!
-//! **This module read them as the label's pen position until 2026-09-05**, and
-//! derived the tab by padding outward and *upward* from the text - which put
-//! every tab one left-pad too far left and one top-pad too high. Measured
-//! against a calibrated framebuffer capture of the real menu, both halves of
-//! that were wrong by exactly the pad:
-//!
-//! | | real | this build, before |
-//! | --- | --- | --- |
-//! | tab's left edge | `160.5` | `150.8` |
-//! | tab's top edge | `126.0` | `117.5` |
-//!
-//! The authored numbers are `160` and `125`, so the real menu puts the tab's
-//! corner *on* the anchor to within a unit on both axes, and this build put the
-//! label there instead. The pads' own magnitudes were never the problem and did
-//! not change - only which edge they hang off did.
-//!
-//! The ruler is `docs/formats/hd-frontend.md`'s: the frame's own two `line.gtf`
-//! rules are in the same capture and are disc-authored, which is what makes
-//! this a measurement rather than an eyeballed nudge.
-//!
-//! Entry-to-entry spacing is unaffected. `left` and the pen differ by a
-//! constant, so advancing either by `width + gap` steps the same distance.
+//! an entry's block**. `HorizMenu_AddEntryBlock` puts the block there and
+//! `HorizMenu_LayoutBlocks` puts the label ten units in from it - which is
+//! what a 2026-09-05 capture had measured before the code was read: the tab's
+//! corner within a unit of the anchor on both axes, this module having read
+//! the anchor as the label's pen until then.
 //!
 //! # Every entry is drawn, and there is no carousel
 //!
-//! The widget states one position and lists its entries; nothing in it says the
-//! selected entry is centred, or that the strip scrolls, or that entries off the
-//! end are hidden. So all of them are drawn from the anchor, which is the only
-//! reading the data supports. A capture of the original would settle whether it
-//! centres the selection - none exists, and a carousel built on the guess would
-//! be exactly the plausible-looking stand-in `CLAUDE.md` forbids.
+//! `HorizMenu_LayoutBlocks` walks every entry from the anchor and moves
+//! nothing to centre the selection; a 2026-09-05 capture of `RECORDS`, the
+//! last entry, sitting at its natural position at the strip's right end had
+//! already said so.
 
 use crate::frontend::{Align, Draw};
 
@@ -99,18 +89,174 @@ pub(super) fn suits(page: &Page) -> bool {
 ///
 /// `measure` is the width of a string in the face the entries will be drawn in,
 /// at scale 1. Passed in for the reason `bindings` is: the atlas belongs to the
-/// renderer and the layout belongs here, so neither has to hold the other. A
-/// column never needed it - rows start at one x - and a strip cannot be laid out
-/// without it.
+/// renderer and the layout belongs here, so neither has to hold the other. Only
+/// [`draw_measured`] needs it - the executable's tab has a width of its own -
+/// but a title with a strip and no blocks still has to size a tab somehow.
 ///
 /// `frame` supplies the two colours a capture settled: [`super::Frame::ink`]
 /// (`HD_Grey`) for an unselected tab and [`super::Frame::tab_selected`]
-/// (`HD_Blue`) for the selected one. A colour that is `None` - a title with no
-/// frame at all, or a served archive whose globals do not carry the name -
-/// skips its own fill rather than inventing one, the same rule
-/// [`super::read_frame`] already applies to a mark whose texture did not
+/// (`HD_Blue`) for the selected one, and the block art. A colour that is
+/// `None` - a title with no frame at all, or a served archive whose globals do
+/// not carry the name - skips its own fill rather than inventing one, the same
+/// rule [`super::read_frame`] already applies to a mark whose texture did not
 /// decode.
 pub(super) fn draw(
+    menu: &Menu,
+    skin: &Skin,
+    strip: Strip,
+    measure: &dyn Fn(&str) -> f32,
+    frame: &super::Frame,
+) -> Vec<Draw> {
+    match (skin.blocks(), frame.blocks) {
+        (Some(blocks), Some(art)) => draw_blocks(menu, skin, strip, frame, blocks, art),
+        _ => draw_measured(menu, skin, strip, measure, frame),
+    }
+}
+
+/// The strip as `HorizMenu_LayoutBlocks` lays it out: one `Block` per entry
+/// at the executable's own widths, the selected one eased wider, the label
+/// ten units in, and the underline `Image` sliding in and blinking on the
+/// page's own arrival counter.
+fn draw_blocks(
+    menu: &Menu,
+    skin: &Skin,
+    strip: Strip,
+    frame: &super::Frame,
+    blocks: oag_title::MenuBlocks,
+    art: super::block::BlockArt,
+) -> Vec<Draw> {
+    let scale = skin.row_scale();
+    let (sx, sy) = skin.theirs_scale();
+    let numbers = blocks.strip;
+    let (_, tab_top_pad) = skin.tab_pad();
+    let gap = numbers.gap * sx;
+    let height = numbers.height * sy;
+
+    let mut out = Vec::new();
+    let mut left = strip.x;
+    for (index, entry) in menu.page().entries.iter().enumerate() {
+        let selected = index == menu.selected();
+        // `ItemWidth`, plus the selected bonus by however far this entry's
+        // block has grown toward it - `1.0` at rest on the selected entry,
+        // `0.0` on the rest, in between during a cursor move.
+        let width = (numbers.item_width + numbers.focus_extra * menu.focus_of(index)) * sx;
+
+        // The block's colour switches on selection outright; only the width
+        // eases. `HD_Blue` for the selected entry, `HD_Grey` for the rest,
+        // each resolved off the served archive - and a title whose globals
+        // carry neither draws no block at all.
+        let fill = if selected {
+            frame.tab_selected
+        } else {
+            frame.ink
+        };
+        if let Some(color) = fill {
+            super::block::draw(
+                &super::block::Block {
+                    x: left,
+                    y: strip.y,
+                    width,
+                    height,
+                    color,
+                    landing: true,
+                },
+                &art,
+                (sx, sy),
+                &mut out,
+            );
+        }
+
+        out.push(Draw::Text {
+            x: left + gap,
+            y: strip.y + tab_top_pad,
+            scale,
+            // Every entry is this same colour, selected or not: `HD_White`
+            // in `HorizMenu_LayoutBlocks`, which is `TextColor` here.
+            color: skin.normal(),
+            border: None,
+            align: Align::Left,
+            text: entry.label().to_string(),
+            wrap_width: None,
+        });
+
+        // The underline, selected entry only, and only alongside its own
+        // tab: on a title with no fill the mark would float under nothing.
+        if selected
+            && fill.is_some()
+            && let Some(cursor) = art.cursor
+        {
+            underline(&numbers, cursor, menu, skin, left, strip.y, &mut out);
+        }
+
+        left += width + gap;
+    }
+    out
+}
+
+/// The selected entry's underline: `cursor.gtf` at `(x + 10 + slide, y + 35)`.
+///
+/// On the tick a page arrives `slide` is a whole `ItemWidth` - the mark
+/// starts off the tab's right end - and it is multiplied by five sixths every
+/// tick after, so the mark sweeps in and settles over about half a second.
+/// The same counter blinks it: eight ticks on, nine off. Both from
+/// `HorizMenu_LayoutBlocks`; a settled menu draws it at rest and visible.
+///
+/// The image goes at `y + 35`, and its bar is at row 7 of the sheet's copy
+/// of the texture - file row 1, a `.gtf`'s rows running bottom-up - so the
+/// bar's top lands at `y + 42`, which is the capture's `y + 42.6`. The
+/// residual this module carried against the measured figure until the
+/// sheet's own flip was accounted for is gone; the measured
+/// [`super::Skin::underline`] offset is no longer read here.
+fn underline(
+    numbers: &oag_title::StripBlocks,
+    cursor: crate::frontend::Placed,
+    menu: &Menu,
+    skin: &Skin,
+    x: f32,
+    y: f32,
+    out: &mut Vec<Draw>,
+) {
+    let (sx, sy) = skin.theirs_scale();
+    let (slide, visible) = match menu.ticks_since_arrival() {
+        Some(ticks) => {
+            let period = numbers.underline_on_ticks + numbers.underline_off_ticks;
+            let decay = 5.0_f32 / 6.0;
+            (
+                numbers.item_width * decay.powi(i32::try_from(ticks).unwrap_or(i32::MAX)),
+                ticks % period < numbers.underline_on_ticks,
+            )
+        }
+        None => (0.0, true),
+    };
+    if !visible {
+        return;
+    }
+    out.push(Draw::Sprite {
+        rect: [
+            x + (numbers.underline_offset.0 + slide) * sx,
+            y + numbers.underline_offset.1 * sy,
+            numbers.underline_size.0 * sx,
+            numbers.underline_size.1 * sy,
+        ],
+        uv: [
+            cursor.x as f32,
+            cursor.y as f32,
+            cursor.width as f32,
+            cursor.height as f32,
+        ],
+        color: skin.normal(),
+    });
+}
+
+/// The strip drawn from measured figures, for a title with a strip and no
+/// block art - the way every tab was drawn until 2026-09-14.
+///
+/// The tab is sized from its label plus a pad, the corner is the measured
+/// cut-and-landing (`skin.rs`'s `TAB_*` group), and the underline is a plain
+/// fill. Kept rather than deleted because the frame's textures can fail to
+/// decode, and a strip with no tabs at all is a worse fallback than one
+/// within a unit of the capture.
+fn draw_measured(
     menu: &Menu,
     skin: &Skin,
     strip: Strip,
@@ -172,7 +318,7 @@ pub(super) fn draw(
                     (tab_width - chamfer_landing).max(0.0),
                     chamfer_height,
                 ],
-                chamfer: chamfer_cut,
+                chamfer: [0.0, chamfer_cut],
                 color,
             });
         }

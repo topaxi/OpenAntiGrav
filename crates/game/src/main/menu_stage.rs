@@ -227,6 +227,12 @@ impl MenuStage {
             reason = "a tick is milliseconds; f32 holds it exactly"
         )]
         self.skin.tick_pulse(dt as f32);
+        // The blocks behind HD's entries ease toward their selected width
+        // at the executable's own rate, one step per tick - `Menu` keeps the
+        // fraction and the skin says what it is worth. A title with no
+        // blocks ticks a fraction nothing reads.
+        self.menu
+            .tick_focus(self.skin.blocks().map_or(1.0, |blocks| blocks.ease));
         // The picker's own clock - the turntable - off the same fixed tick.
         if let Some(picker) = &mut self.picker {
             #[expect(

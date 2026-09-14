@@ -550,6 +550,12 @@ pub struct Menu {
     /// Whether this title draws navigation pages as a strip. See
     /// [`Self::set_strip_layout`].
     strip_layout: bool,
+    /// How far each row's block has grown toward its selected width, per
+    /// page and parallel to [`Self::cursor`]. See `focus.rs`.
+    focus: Vec<Vec<f32>>,
+    /// Ticks since the page on screen arrived, or `None` once settled. See
+    /// `focus.rs`.
+    arrival: Option<u32>,
 }
 
 /// How many rows a page shows before the caller says otherwise.
@@ -568,6 +574,11 @@ impl Menu {
         let root = definition.root;
         let cursor = vec![0; definition.pages.len()];
         let scroll = vec![0; definition.pages.len()];
+        let focus = definition
+            .pages
+            .iter()
+            .map(|page| focus::snapped(page.entries.len(), 0))
+            .collect();
         Self {
             definition,
             stack: vec![root],
@@ -577,6 +588,8 @@ impl Menu {
             // A column until a title says otherwise, which is what both PSP
             // discs measurably say.
             strip_layout: false,
+            focus,
+            arrival: Some(0),
         }
     }
 
@@ -719,6 +732,7 @@ impl Menu {
             return false;
         };
         self.stack = vec![at];
+        self.snap_focus();
         true
     }
 
@@ -1001,6 +1015,7 @@ impl Menu {
         match entry {
             Entry::Submenu { target, .. } => {
                 self.stack.push(*target);
+                self.snap_focus();
                 Vec::new()
             }
             Entry::Run { action, .. } => vec![MenuEvent::Fired(*action)],
@@ -1024,6 +1039,7 @@ impl Menu {
     pub fn back(&mut self) -> Vec<MenuEvent> {
         if self.stack.len() > 1 {
             self.stack.pop();
+            self.snap_focus();
             Vec::new()
         } else {
             vec![MenuEvent::Closed]
@@ -1031,13 +1047,17 @@ impl Menu {
     }
 }
 
+pub mod block;
+mod focus;
 mod frame;
+mod layers;
 mod rows;
 mod skin;
 mod strip;
 
 pub use frame::{Frame, read as read_frame};
-pub use skin::{Skin, Strip, visible_rows};
+pub use layers::{Layers, Transition};
+pub use skin::{List, Skin, Strip, visible_rows};
 
 /// Where the visible window starts, given where it was pushed to and where the
 /// cursor is.
@@ -1086,99 +1106,6 @@ pub const DIMMED: [f32; 4] = [0.45, 0.5, 0.56, 1.0];
 /// selected, normal and inert, so a warning had to be a mark in the margin in a
 /// colour none of them use rather than a fourth shade of the row itself.
 pub const WARNING: [f32; 4] = [1.0, 0.76, 0.25, 1.0];
-
-/// One page's draws, split by what a page change is allowed to move.
-///
-/// **The split is the original's, not a convenience.** A capture of Pulse
-/// changing pages shows the row block scaling up and fading while the top bar
-/// and the footer crossfade in place, so a flat list cannot express the
-/// transition: something has to say which draws zoom. See
-/// `docs/ui/menus-original.md`.
-///
-/// [`Self::flatten`] puts them back together for a caller that is not
-/// animating, in paint order.
-#[derive(Debug, Default, Clone)]
-pub struct Layers {
-    /// The looping movie behind everything. Never moves, never fades.
-    pub backdrop: Vec<Draw>,
-    /// Framing that stays put across a page change: the screen title.
-    pub chrome: Vec<Draw>,
-    /// The rows, which are what a page change animates.
-    pub body: Vec<Draw>,
-}
-
-impl Layers {
-    /// Every draw, back to front.
-    #[must_use]
-    pub fn flatten(self) -> Vec<Draw> {
-        let mut out = self.backdrop;
-        out.extend(self.chrome);
-        out.extend(self.body);
-        out
-    }
-
-    /// The body scaled about `origin` and faded to `alpha`.
-    ///
-    /// This is the whole of the page-change effect. A capture of the original
-    /// shows the outgoing page growing and fading while the incoming one grows
-    /// into place from smaller and fades in, with the chrome crossfading where
-    /// it stands - so one function, called twice with different arguments,
-    /// covers both halves.
-    ///
-    /// Only [`Self::body`] moves. The backdrop is a looping movie that runs
-    /// across page changes untouched, and the chrome is what the capture shows
-    /// staying put.
-    #[must_use]
-    pub fn zoomed(mut self, origin: (f32, f32), scale: f32, alpha: f32) -> Self {
-        for draw in &mut self.body {
-            draw.zoom(origin, scale, alpha);
-        }
-        for draw in &mut self.chrome {
-            // Faded but not moved, which is the split the capture shows.
-            fade(draw, alpha);
-        }
-        self
-    }
-}
-
-/// Multiplies one draw's alpha, leaving it where it is.
-fn fade(draw: &mut Draw, alpha: f32) {
-    draw.fade(alpha);
-}
-
-/// How a page change looks, in the terms [`Layers::zoomed`] takes.
-///
-/// **Measured, then rounded.** A capture of Pulse going from `Main Menu` to
-/// `Grid Selection` puts the outgoing page at scale 1.19 six frames into a
-/// thirteen-frame transition and gone by the end, so it is still growing when
-/// it disappears; extrapolating the measured steps to the full duration gives
-/// roughly 1.5. The incoming page comes *from* smaller by the same argument
-/// run backwards. Alpha holds for the first two frames and then falls.
-///
-/// See `docs/ui/menus-original.md` for the frame-by-frame table.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct Transition {
-    /// Where the zoom is centred, in the 480x272 space.
-    ///
-    /// Solving the measured positions puts this near the content block's own
-    /// centre rather than the screen's - confidence 55, so it is deliberately
-    /// approximate. See the doc page.
-    pub origin: (f32, f32),
-    /// What the outgoing page has grown to by the time it is gone.
-    pub out_scale: f32,
-    /// What the incoming page grows from.
-    pub in_scale: f32,
-}
-
-impl Default for Transition {
-    fn default() -> Self {
-        Self {
-            origin: (150.0, 127.0),
-            out_scale: 1.5,
-            in_scale: 0.7,
-        }
-    }
-}
 
 /// What one page looks like, as plain data.
 ///
@@ -1264,7 +1191,7 @@ pub fn draw_list(
     // every page on both PSP titles and all but the root on Wipeout HD.
     layers.body = match skin.strip().filter(|_| strip::suits(page)) {
         Some(strip) => strip::draw(menu, skin, strip, measure, frame),
-        None => rows::draw(menu, skin, bindings),
+        None => rows::draw(menu, skin, bindings, frame),
     };
 
     layers
