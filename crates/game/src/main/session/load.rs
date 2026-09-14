@@ -505,6 +505,15 @@ impl Session {
                         .and_then(|options| options.track.as_deref()),
                 );
                 info!("race scene built in {:?}", start.elapsed());
+                // Drained here, not read: this is the one place a launch
+                // that set `self.campaign_cell` (`Session::launch_campaign_cell`)
+                // and a stage that is actually about to become live meet -
+                // see `RaceStage::campaign_cell`'s own doc. `.take()` leaves
+                // `self.campaign_cell` empty for whatever races next,
+                // campaign or not.
+                if let Ok(race_stage) = &mut built {
+                    race_stage.campaign_cell = self.campaign_cell.take();
+                }
                 // **Building the pipeline objects above is not the same as the
                 // driver having compiled them.** Several backends defer that to
                 // the first real draw call, which is why the eager build alone

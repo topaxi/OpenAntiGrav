@@ -5,6 +5,17 @@
 
 use oag_tables::race_campaign;
 
+/// `oag_game::records::Medal` restated as `oag_tables::race_campaign::Medal`.
+/// The two are duplicated on purpose, not shared, per `records.rs`'s own
+/// module doc; this is the one conversion this file needs, in one place.
+fn to_campaign_medal(medal: oag_game::records::Medal) -> race_campaign::Medal {
+    match medal {
+        oag_game::records::Medal::Gold => race_campaign::Medal::Gold,
+        oag_game::records::Medal::Silver => race_campaign::Medal::Silver,
+        oag_game::records::Medal::Bronze => race_campaign::Medal::Bronze,
+    }
+}
+
 /// One open campaign screen: `Grid Selection`, or `Cell Selection` over one
 /// of its tiers.
 pub(crate) enum Screen {
@@ -39,6 +50,15 @@ pub(crate) struct CampaignStage {
     /// slideshow does: nothing here is per-entity art.
     pub(crate) sprites: oag_game::sprite::Sheet,
     pub(crate) screen: Screen,
+    /// [`oag_title::Title::name`], for [`Self::medal_of`] - the same string
+    /// `oag_game::records::Key::new`'s own `title` takes.
+    title: String,
+    /// A snapshot of the player's own saved progress, taken once when the
+    /// campaign opens - the same "read once on open" choice [`Self::grids`]
+    /// already makes, and safe for the same reason: nothing mutates
+    /// `Session::records` while a campaign screen is open, only a finished
+    /// or escaped race does, and reaching one closes this stage first.
+    records: oag_game::records::Store,
 }
 
 impl CampaignStage {
@@ -48,11 +68,13 @@ impl CampaignStage {
         cell_layout: oag_ui::campaign::Layout,
         strings: oag_ui::language::StringTable,
         sprites: oag_game::sprite::Sheet,
+        title: String,
+        records: oag_game::records::Store,
     ) -> Self {
         let model = oag_ui::campaign::GridSelection::new(
             grids
                 .iter()
-                .map(oag_ui::campaign::GridSummary::from_grid)
+                .map(|grid| Self::grid_summary(grid, &title, &records))
                 .collect(),
         );
         Self {
@@ -62,7 +84,22 @@ impl CampaignStage {
             strings,
             sprites,
             screen: Screen::Grid(model),
+            title,
+            records,
         }
+    }
+
+    fn grid_summary(
+        grid: &race_campaign::Grid,
+        title: &str,
+        records: &oag_game::records::Store,
+    ) -> oag_ui::campaign::GridSummary {
+        oag_ui::campaign::GridSummary::from_grid_with_medals(grid, &|cell_name| {
+            records
+                .campaign_medal(title, cell_name)?
+                .best_medal
+                .map(to_campaign_medal)
+        })
     }
 
     #[must_use]
@@ -85,8 +122,16 @@ impl CampaignStage {
         if grid.cells.is_empty() {
             return false;
         }
+        let cells = grid.cells.clone();
+        let title = &self.title;
+        let records = &self.records;
         self.screen = Screen::Cell {
-            model: oag_ui::campaign::CellSelection::new(grid.cells.clone()),
+            model: oag_ui::campaign::CellSelection::with_medals(cells, &|name| {
+                records
+                    .campaign_medal(title, name)?
+                    .best_medal
+                    .map(to_campaign_medal)
+            }),
             which,
         };
         true
@@ -102,7 +147,7 @@ impl CampaignStage {
         let mut model = oag_ui::campaign::GridSelection::new(
             self.grids
                 .iter()
-                .map(oag_ui::campaign::GridSummary::from_grid)
+                .map(|grid| Self::grid_summary(grid, &self.title, &self.records))
                 .collect(),
         );
         model.set_index(index);

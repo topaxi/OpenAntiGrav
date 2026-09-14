@@ -409,12 +409,30 @@ impl Session {
             }
             (Kind::Ship, Event::Confirmed) => {
                 stage.picker = None;
-                self.launch_from_settings();
+                // A campaign cell already built `self.race_options` in full
+                // (`Session::launch_campaign_cell`) - `launch_from_settings`
+                // would overwrite the cell's own track/mode/class with
+                // whatever the RACE page's own settings happen to hold, so
+                // a campaign launch takes the shared tail directly instead.
+                if self.campaign_cell.is_some() {
+                    self.finish_launch();
+                } else {
+                    self.launch_from_settings();
+                }
             }
             (Kind::Track, Event::Back) => stage.picker = None,
             (Kind::Ship, Event::Back) => {
                 stage.picker = None;
-                self.open_track_picker();
+                // Backing out of `Team Selection` on a campaign launch has
+                // no `Track Select` to return to - a cell picks its own
+                // track outright - so this reopens `Grid Selection` instead
+                // and drops the abandoned cell rather than let it leak into
+                // whatever race is launched next.
+                if self.campaign_cell.take().is_some() {
+                    self.open_campaign();
+                } else {
+                    self.open_track_picker();
+                }
             }
         }
     }

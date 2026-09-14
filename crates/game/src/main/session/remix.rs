@@ -320,10 +320,17 @@ impl Session {
     /// source fields neither the CLI's `--race` route nor the ordinary RACE
     /// page ever has to resolve.
     pub(crate) fn launch_remix(&mut self) {
+        // Defensive, the same reason `Session::launch_from_settings` clears
+        // both: RACE REMIX is not reachable from the campaign at all, but a
+        // cell abandoned mid-`Team Selection` must never leak its own
+        // eliminator target or lap override into an unrelated launch.
+        self.campaign_cell = None;
         let Some(mut race_options) = self.race_options.take() else {
             warn!("no disc image has been chosen yet, so there is nothing to race");
             return;
         };
+        race_options.eliminator_kill_target = None;
+        race_options.laps_override = None;
         if let Some(mode) = oag_race::Mode::from_name(&self.settings.race.mode) {
             race_options.mode = mode;
         }

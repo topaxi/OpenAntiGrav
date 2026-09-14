@@ -480,6 +480,22 @@ pub(crate) struct Session {
     /// all - see [`Self::open_menus`], which is the only place that fills it,
     /// and only when the outgoing race had not finished.
     pub(crate) suspended_race: Option<Box<RaceStage>>,
+    /// The campaign cell a launch in progress is racing, from the moment
+    /// `Cell Selection`'s own confirm is handled
+    /// ([`Session::launch_campaign_cell`]) to the moment the race stage is
+    /// actually built, which drains it via [`Option::take`] into
+    /// [`RaceStage::campaign_cell`] - see `crate::main::session::load`'s
+    /// `finish_loading`. The mirror of `DAT_08b30ffc`,
+    /// `docs/ghidra/functions/psp-pulse-usa/race-campaign.md`'s "current
+    /// campaign cell" - not carried through `race::Options`/`race::Setup`
+    /// because nothing in `oag_race`/`oag_gameplay` may know a campaign
+    /// exists, only the composition root.
+    ///
+    /// `None` on every path but a campaign launch: an ordinary RACE-page or
+    /// RACE REMIX launch clears it defensively (`Session::launch_from_settings`,
+    /// `Session::launch_remix`) so a cell abandoned by backing out of `Team
+    /// Selection` cannot leak into the next unrelated race.
+    pub(crate) campaign_cell: Option<oag_tables::race_campaign::Cell>,
     /// A CONTROLS binding row a player just confirmed, waiting for the key
     /// that will replace it.
     ///
