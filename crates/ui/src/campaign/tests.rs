@@ -190,6 +190,8 @@ fn grid_selection_pages_four_at_a_time_and_wraps() {
             cell_count: 8,
             max_points: 24,
             required_points: 12,
+            gold_medals: 0,
+            points_earned: 0,
         })
         .collect();
     let mut model = GridSelection::new(grids);
@@ -235,6 +237,8 @@ fn a_fresh_grids_title_is_its_own_raw_name_and_required_falls_back_to_na() {
         cell_count: 8,
         max_points: 24,
         required_points: 0,
+        gold_medals: 0,
+        points_earned: 0,
     }]);
     let layers = grid_draw_list(
         &model,
@@ -431,4 +435,79 @@ fn zone_blanks_the_class_line_and_counts_up() {
 fn centiseconds_format_as_minutes_seconds_hundredths() {
     assert_eq!(format_centiseconds(6600), "1:06.00");
     assert_eq!(format_centiseconds(59), "0:00.59");
+}
+
+/// [`GridSummary::from_grid_with_medals`]'s own reason to exist: a real
+/// progress source moves `Medals`/`Points` off the fresh-profile `"00/.."`
+/// this crate otherwise draws.
+#[test]
+fn a_grid_with_one_gold_cell_shows_it_on_medals_and_points() {
+    let grid = Grid {
+        name: "grid0".to_string(),
+        required_points: 12,
+        locked: false,
+        group: None,
+        unlock_grid: None,
+        cells: vec![
+            race_cell("grid0_2_1", "16_Track"),
+            race_cell("grid0_3_1", "03_Track"),
+        ],
+    };
+    let summary = GridSummary::from_grid_with_medals(&grid, &|name| {
+        (name == "grid0_2_1").then_some(Medal::Gold)
+    });
+    assert_eq!(summary.gold_medals, 1);
+    assert_eq!(summary.points_earned, Medal::Gold.points());
+    assert_eq!(summary.cell_count, 2);
+    assert_eq!(summary.max_points, 6);
+}
+
+/// [`CellSelection::with_medals`]'s own reason to exist: `Line6`/`Line7`
+/// stop reading as a fresh profile's `"0/3"`/`MSC_NONE` once a caller can
+/// say what a cell's own best medal was.
+#[test]
+fn a_cells_saved_medal_reaches_line6_and_line7() {
+    let screens = Screens::from_xml(XML);
+    let layout = Layout::read(
+        &screens,
+        "Cell Selection",
+        &strings(),
+        crate::picker::FaceScales::default(),
+        PSP_GRID,
+    )
+    .unwrap();
+    let model = CellSelection::with_medals(vec![race_cell("grid0_0_0", "16_Track")], &|_| {
+        Some(Medal::Silver)
+    });
+    let layers = cell_draw_list(
+        &model,
+        &layout,
+        &skin(),
+        &Frame::default(),
+        &strings(),
+        None,
+        false,
+        &|_| None,
+    );
+    let texts: Vec<&String> = layers
+        .body
+        .iter()
+        .filter_map(|draw| match draw {
+            Draw::Text { text, .. } => Some(text),
+            _ => None,
+        })
+        .collect();
+    assert!(
+        texts.contains(&&format!(
+            "{}/{}",
+            Medal::Silver.points(),
+            Medal::Gold.points()
+        )),
+        "{texts:?}"
+    );
+    assert!(
+        texts.contains(&&"IG_HUD_SILVER".to_string()),
+        "unresolved id falls back to itself, the same as every other label \
+         this test file's own `strings()` does not carry: {texts:?}"
+    );
 }
