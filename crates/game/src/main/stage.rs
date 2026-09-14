@@ -543,6 +543,11 @@ impl Stage {
             result_key,
             personal_best: None,
             result_saved: false,
+            // Filled in by the caller once this stage is actually handed
+            // off - see `Session::finish_loading`/`finish_race_loading`,
+            // which drain `Session::campaign_cell` into here. Never known
+            // here: this function has no `Session` to read it from.
+            campaign_cell: None,
         }))
     }
 }

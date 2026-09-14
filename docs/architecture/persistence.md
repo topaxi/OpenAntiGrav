@@ -187,9 +187,9 @@ actually asserts.
 
 ## Where a career system attaches
 
-`Record` now also carries a best-ever campaign medal and its points, and the
-most recent race's own medal - `oag_tables::race_campaign::Cell::evaluate_medal`
-reimplements the law that produces one (`Cell_EvaluateMedal`); still absent
+`Record` carries a best-ever campaign medal and its points, and the most
+recent race's own medal - `oag_tables::race_campaign::Cell::evaluate_medal`
+reimplements the law that produces one (`Cell_EvaluateMedal`). Still absent
 is an unlock or a tournament standing. Two ways to grow this file further,
 still additive, neither needing `Key`, `parse` or `Store::record` to change:
 
@@ -199,6 +199,32 @@ still additive, neither needing `Key`, `parse` or `Store::record` to change:
 - A new **sibling table** in the same file, alongside `[[records]]`, for
   something that spans more than one circuit - a tournament standing.
 
+**2026-09-14: a campaign cell is now such a sibling table, `[[campaign]]`,
+keyed on `(title, cell name)`.** This is the wiring the paragraph below used
+to say was missing - see `crates/game/src/records.rs`'s own module doc,
+"where a career system attaches", for the full reasoning. In short: keying
+a campaign medal by `(title, track, mode, class)` - `Key`'s own four parts -
+would have meant two different cells that share a track/mode/class
+overwriting one row, and a `Zone` cell's own `class="Zone"` cannot even
+build a matching `Key` at all (`Race::start` falls back to whatever class
+was last selected for a Zone launch, since this engine has no Zone handling
+block of its own - see [race-modes.md](../gameplay/race-modes.md)'s own
+"every title ships one Zone handling block, and this engine does not read
+it"). Keying on the cell's own `name` string instead is also what the
+original measurably does - see
+[race-campaign.md](../ghidra/functions/psp-pulse-usa/race-campaign.md)'s
+"how a campaign event launches" - and needs no change to the four-part `Key`
+at all. `Store::campaign_medal`/`Store::record_campaign` are the two new
+methods; `oag_ui::campaign::GridSummary::from_grid_with_medals`/
+`CellSelection::with_medals` are what `Grid Selection`'s `Medals`/`Points`
+rows and `Cell Selection`'s `Line6`/`Line7` read them through, fed by
+`crates/game/src/main/campaign_stage.rs`.
+
+The ordinary `[[records]]` row for a campaign race is still written too, at
+its usual `(title, track, mode, class)` key - the two tables answer
+different questions ("the best result on this track/mode/class" against
+"what did this cell earn") and a campaign race contributes to both.
+
 ## What is not built yet
 
 There is still no records **browser** - a circuit list plus every stored best
@@ -207,22 +233,57 @@ on that circuit. That is a bigger, separate piece, probably its own
 `menu.toml` page (which, unlike the results table's own free text, *would*
 need `string_id`s - see `scripts/check-strings.py`). Not started.
 
-**Nor is there any wiring from a real race to a campaign cell.** The medal
-law is implemented and unit-tested
-(`crates/tables/src/race_campaign/tests.rs`,
-`crates/game/tests/campaign_medal.rs`), and `Observation::campaign_medal`
-and `Record::best_medal`/`best_points`/`last_medal` are ready to carry a
-result through to disk - but `RaceStage::observation`, the one place an
-`Observation` is built from a real race today, passes `campaign_medal: None`
-unconditionally, because nothing yet selects which `PI_Cell` a launched race
-corresponds to. Closing that needs, at minimum: tracing `Cell Selection`'s
-launch path to find which globals a cell writes (the `campaign` handover
-thread's own next step), a mapping from `Cell::track`/`Cell::mode.as_str()`
-onto `crate::catalogue::Track::entry_name`/`oag_race::Mode::name()` (the two
-do not share a spelling - `"16_Track"` against a `.vex` path,
-`"Time Trial"` against `"time_trial"`), and a value to evaluate per mode:
-`Observation::place` covers `Race`/`Tournament`/`Head2Head` directly,
-`Observation::tick` needs converting from 60 Hz ticks to the centiseconds
-`Time Trial`/`Speed Lap` targets are authored in, and `Zone`'s zone count and
-`Elimination`'s kill count are not in the snapshot `Observation` carries at
-all yet.
+**A campaign cell now reaches `Observation::campaign_medal` for real**,
+closing what this section used to describe as the gap:
+`Session::launch_campaign_cell` (`crates/game/src/main/session/campaign.rs`)
+resolves the cell's own track against the open source
+(`crate::catalogue::Track::entry_name`, matched by the cell's own `track=`
+id, which turned out to share `catalogue::Track::id`'s own spelling - no
+mismatch to bridge there after all), maps `oag_tables::race_campaign::Mode`
+onto the five `oag_race::Mode` this engine implements
+(`oag_game::campaign::race_mode_for_cell`, `None` for `Tournament`/
+`Head2Head`/`Custom Grid`/`AI Race`, which refuse to launch and log why),
+and carries the cell itself on `Session::campaign_cell` through to
+`RaceStage::campaign_cell`. `RaceStage::observation` (`crates/game/src/main/race_stage.rs`)
+evaluates the per-mode value and calls `Cell::evaluate_medal`:
+
+- `Race` and `Time Trial` gate on `finished` - a running position or an
+  in-progress clock is not a result, only a completed one.
+- `Time Trial`'s value is the finish tick, converted to centiseconds.
+  Confirmed against `Data\Plugins\grids\grid_00.xml`'s own authored
+  targets, not merely inferred from the field list: a cell's gold sits at
+  `10000`-`11500` (100-115 s), which is a **3-lap total**, not a lap -
+  `race-modes.md` measures a 3-lap Venom race ending "around tick 7,500",
+  ~125 s. This is new since the "Next Steps" line below was written, which
+  had named `Observation::tick` without checking which quantity a real
+  target actually measures.
+- `Speed Lap`'s value is the best single lap, not the tick - checked the
+  same way: `03_Track`'s own Speed Lap cell golds `4000` (40 s) against
+  `laps="7"`, a fifth of a 7-lap total at the same pace and squarely one
+  lap's own length. Gated on nothing, since the mode never finishes and the
+  best lap so far only ever improves - unlike the tick, which would read as
+  "however long the player happened to stay" on an escaped run.
+- `Zone`'s value is `RaceState::zone`, the count of *completed* 10-second
+  steps (`advance_zone` increments it only once a step finishes), gated on
+  nothing for the same "only ever grows" reason as Speed Lap's lap.
+- `Elimination`'s value is the player's own kill count, gated on nothing,
+  same reason.
+
+See `RaceStage::campaign_medal`'s own doc comment for the full per-mode
+table and the worked evidence.
+
+**Two things this pass chose rather than measured, both logged when they
+happen:** a `Zone` cell's own `class="Zone"` is not a speed class this
+engine's handling reads, so a Zone launch races at whatever class the RACE
+page last had selected; and the campaign's own `skill`/`skillEasy`/
+`skillHard` AI-difficulty curve (`AI_ResolveSkillScale`) is not
+implemented, so every campaign launch uses the ordinary `[ai] difficulty`
+setting rather than the cell's own figure. Neither invents a number the
+disc does not author - both are documented gaps this engine already had
+before the campaign could reach them, now visibly reached.
+
+**Still not implemented: `Tournament`'s per-leg state and `Head2Head` at
+all** (no `oag_race::Mode` variant exists for the latter - see
+`oag_game::campaign::race_mode_for_cell`'s own doc), and grid-tier locking
+(`Unlock_GridPointsMet`) - see the `campaign` handover threads for the scope
+reasoning on both.

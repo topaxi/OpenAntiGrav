@@ -590,6 +590,13 @@ impl Session {
                     self.records.get(&key),
                     &observation,
                 ));
+                if let Some(cell) = stage.campaign_cell.as_ref() {
+                    self.records.record_campaign(
+                        &key.title,
+                        &cell.name,
+                        observation.campaign_medal,
+                    );
+                }
                 self.records.record(key, observation);
                 if let Err(e) = records::save(&self.records) {
                     error!("could not save race records: {e:#}");

@@ -1,18 +1,26 @@
 # The Race Campaign's two screens: `Grid Selection` and `Cell Selection`
 
 **Status: both screens draw, off the disc's own `CellMode_Definition.xml` and
-the real 236-cell campaign. The player can page through all sixteen grid
-tiers, drill into a tier's own hex grid, and see a selected cell's detail
-panel - track, class, laps, weapons, points, medal, and (where the disc
-shows them) the three medal targets. Confirming a cell is a stub: it does
-not launch a race.** Implemented in
+the real 236-cell campaign, and confirming a cell launches it.** The player
+can page through all sixteen grid tiers, drill into a tier's own hex grid,
+and see a selected cell's detail panel - track, class, laps, weapons,
+points, medal, and (where the disc shows them) the three medal targets.
+Confirming a cell in one of the five modes this engine implements
+(`Race`/`Time Trial`/`Speed Lap`/`Zone`/`Elimination`) opens `Team
+Selection` and launches the cell's own race; a cell in one of the four this
+engine does not (`Tournament`/`Head2Head`/`Custom Grid`/`AI Race`) logs why
+and stays on `Cell Selection`. See "Confirming a cell launches" below and
+`docs/architecture/persistence.md` for the medal it earns and where it is
+kept. Implemented in
 [`oag_ui::campaign`](../../crates/ui/src/campaign.rs) (model, layout, draw),
 [`oag_game::campaign`](../../crates/game/src/campaign.rs) (the shared read
 off an open source), `crates/game/src/main/campaign_stage.rs` (what the
 session holds open) and `crates/game/src/main/session/campaign.rs` (the
 flow: `RACE CAMPAIGN` opens it, confirm and back move between the two
-screens). Captured headlessly with `--menu-page grid-select` /
-`--menu-page cell-select`, on `pulse-psp-eu`.
+screens, and a confirmed cell launches). Captured headlessly with
+`--menu-page grid-select` / `--menu-page cell-select`, on `pulse-psp-eu` -
+the drawing alone; the launch itself needs a live window, not captured
+against the running original in this pass (see [Open](#open)).
 
 This page is the *picture* half of
 [`docs/formats/race-setup.md`](../formats/race-setup.md)'s "The Race
@@ -82,18 +90,25 @@ entrance animation finishes" `Grid1` actually is was not resolved - neither
 matters to what is drawn, since only the enabled one ever is. Confidence 60
 on "harmless to skip"; open at 50 on what `Grid1` is *for*.
 
-### The two things this build cannot show yet
+### Medal/points figures, 2026-09-14
 
-**Every medal/points figure is the fresh-profile one**, because this
-project keeps no per-cell campaign save at all -
-`crates/game/src/records.rs`'s own doc: `Observation::campaign_medal` is
-`None` at the only call site that builds one today. `GridSelection_Update`
-binds `Medals` to `Grid_CountMedalsAtLeast(grid, 0) / Grid_CellCount(grid)`
-and `Points` to `Grid_PointsEarned / Grid_PointsPossible` - both read a
-saved record this build does not keep, so both draw as if nothing has ever
-been raced: `"00/{cell_count:02}"` and `"000/{max_points:03}"`. `Required`
-*is* real - `grid.required_points`, or `FE_NA` on `grid15`'s own `0` - since
-it is authored on the grid itself, not derived from a save.
+**No longer always the fresh-profile reading.** `GridSelection_Update` binds
+`Medals` to `Grid_CountMedalsAtLeast(grid, 0) / Grid_CellCount(grid)` and
+`Points` to `Grid_PointsEarned / Grid_PointsPossible` - both read a saved
+record, which now exists (`records.toml`'s `[[campaign]]` table, see
+`docs/architecture/persistence.md`). `oag_ui::campaign::GridSummary::from_grid_with_medals`/
+`CellSelection::with_medals` take a `Fn(&str) -> Option<Medal>` keyed on a
+cell's own `name`, and `crates/game/src/main/campaign_stage.rs` feeds it
+from `Session::records` - a snapshot read once when the screen opens, the
+same "read once" choice the sixteen grid files themselves already make.
+`GridSummary::from_grid`/`CellSelection::new` still exist for a caller with
+no store to read - `crates/game/src/capture/menu_page.rs`'s headless
+`--menu-page grid-select`/`cell-select` capture, which draws a page in
+isolation with no `Session` behind it - and draw the fresh-profile numbers
+exactly as before: `"00/{cell_count:02}"` and `"000/{max_points:03}"`.
+`Required` was always real - `grid.required_points`, or `FE_NA` on
+`grid15`'s own `0` - since it is authored on the grid itself, not derived
+from a save.
 
 **`Title` is the grid's own raw name**, e.g. `"grid0"`, not a friendlier
 "GRID 1". `GridSelection_Update` binds it to `grid->name` (`+0x74`)
@@ -144,8 +159,8 @@ spelled out a second time.
 | `Line1` | `cell.class` (raw string - `"Zone"` on a Zone cell, not a speed class) | all but Zone |
 | `Line2` | `cell.laps`, or `RC_INF` when absent/zero/Zone | always |
 | `Line3` | `FE_ON`/`FE_OFF` off `cell.weapons` | Race / Head2Head / Tournament only |
-| `Line6` | `"0/3"` - earned points over `Medal::Gold.points()`, always `0` earned (no save) | always |
-| `Line7` | `MSC_NONE`, resolved ("NONE"/"NÉANT"/...) - no medal is ever saved | always |
+| `Line6` | the selected cell's own saved points over `Medal::Gold.points()`, `"0/3"` with no saved medal | always |
+| `Line7` | `IG_HUD_GOLD`/`SILVER`/`BRONZE` for a saved medal, `MSC_NONE` otherwise | always |
 | `Target0..2` | `cell.gold`/`silver`/`bronze`, formatted as `M:SS.CC` for Time Trial/Speed Lap, a plain number otherwise | Time Trial / Zone / Elimination / Speed Lap only |
 | `Target0..2 Title` | `IG_HUD_TARGET`, resolved | same as `Target0..2` |
 | `Target0..2 Image` | the gold/silver/bronze swatch (`0xfffaeb38`/`0xffdae3e4`/`0xffdf942f`) | same as `Target0..2` |
@@ -188,15 +203,27 @@ gated one look identical when neither ever reaches a real sprite draw.
   the same swap idiom `race-setup.md` documents for `Single Player`'s
   `Zone`/`DifficultyNaText`).
 
-## The stub boundary
+## Confirming a cell launches, 2026-09-14
 
-Per `docs/ghidra/functions/psp-pulse-usa/race-campaign.md`'s own "what is
-not determined" section - the launch path (which globals `Cell Selection`'s
-own confirm redirect writes before falling through to `Team Selection`/
-`Launch Game`) is not traced - confirming a grid tier opens `Cell Selection`
-on that tier's own cells (pure screen navigation), but confirming a cell
-**does not** open `Team Selection` or launch a race.
-`session::campaign::handle_campaign` logs and stays on `Cell Selection`.
+The launch path traced (`docs/ghidra/functions/psp-pulse-usa/race-campaign.md`'s
+"how a campaign event launches") and wired the same afternoon:
+`session::campaign::handle_campaign` reads the confirmed cell and hands it to
+`Session::launch_campaign_cell`, which resolves the cell's own track and
+mode against the open source, refuses a mode this engine cannot run
+(`Tournament`, `Head2Head`, `Custom Grid`, `AI Race` - logged, `Cell
+Selection` stays open), and opens `Team Selection` the same way the RACE
+page's own START row does - every authored cell carries `ShipChoice="Yes"`.
+Confirming a team launches the race with the cell's own track/mode/class/
+laps/kill target, and a finished or escaped run's medal is evaluated against
+the cell's own gold/silver/bronze targets and folded into `records.toml`'s
+new `[[campaign]]` table - see `docs/architecture/persistence.md`. See that
+page and `crates/game/src/main/session/campaign.rs` for the full mode-by-
+mode detail; this page stays about what draws.
+
+**Not launched from a cell: the AI difficulty curve.** A campaign cell's own
+`skill`/`skillEasy`/`skillHard` (`AI_ResolveSkillScale`) is not
+implemented, so a campaign race still uses the ordinary `[ai] difficulty`
+setting. Chosen, not measured, and logged when it happens.
 
 `Cell Help` (`triangle`) is modelled as a boolean toggle
 (`CellSelection::help_open`) that suspends movement while open, matching
@@ -250,6 +277,19 @@ drawn yet; see [Open](#open).
   than centred against the hex's own (smaller) extent - the XML gives no
   number for the offset between a `42x43` selector and a hex sized however
   `hex_filled.mip` actually is.
-- **The launch path.** See `docs/ghidra/functions/psp-pulse-usa/race-campaign.md`'s
-  "what is not determined" section and `docs/architecture/persistence.md`'s
-  "what is not built yet".
+- **The launch path is wired but not interactively played in this pass.**
+  All of it is proven by the unit/integration suite
+  (`crates/game/src/campaign/tests.rs`, `crates/game/src/records/tests.rs`,
+  `crates/game/src/race/tests/mode_override.rs`,
+  `crates/ui/src/campaign/tests.rs`) and by the full `just`/`just test-data`
+  gate, but nobody has driven `Cell Selection` from a real keyboard and
+  watched a campaign race finish and a medal appear on the results table
+  and back on the hex grid: this pass ran in an environment with no way to
+  send synthetic keyboard input to a native Wayland window and no safe way
+  to screenshot one window in isolation from a shared desktop, so a live
+  play-test was not attempted rather than faked. A maintainer with a normal
+  desktop session can: `cargo run -p oag-game -- data/images/pulse-psp-eu.chd`,
+  navigate `RACE CAMPAIGN` -> a tier -> a `Race`/`Time Trial` cell -> confirm
+  -> `Team Selection` -> confirm, let (or `--autopilot`) the race finish,
+  and check the results table's `BEST MEDAL` line and the cell's own
+  `Line6`/`Line7` back on `Cell Selection`.

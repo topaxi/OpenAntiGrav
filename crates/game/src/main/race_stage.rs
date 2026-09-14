@@ -64,6 +64,14 @@ pub(crate) struct RaceStage {
     /// on the way into the park; clearing the flag on the way back out does
     /// not lose that write; it only stops it from blocking the next one.
     pub(crate) result_saved: bool,
+    /// The campaign cell this race was launched against, or `None` for an
+    /// ordinary RACE-page/RACE REMIX/`--race` launch. Drained from
+    /// `Session::campaign_cell` into here the moment this stage is built
+    /// (`crate::main::session::load::finish_loading`) - the mirror of
+    /// `DAT_08b30ffc`, per
+    /// `docs/ghidra/functions/psp-pulse-usa/race-campaign.md`'s "how a
+    /// campaign event launches". Read by [`RaceStage::observation`] alone.
+    pub(crate) campaign_cell: Option<oag_tables::race_campaign::Cell>,
 }
 
 impl RaceStage {
@@ -154,24 +162,92 @@ impl RaceStage {
     /// doc for why it takes primitives rather than a `&Race`.
     pub(crate) fn observation(&self) -> oag_game::records::Observation {
         let standing = &self.race.sim.world.ships[0].standing;
+        let finished = self.race.finished();
         oag_game::records::Observation {
-            finished: self.race.finished(),
+            finished,
             place: Some(self.race.places()[0]),
             laps_completed: oag_game::records::laps_completed(
                 standing.lap,
-                self.race.finished(),
+                finished,
                 self.race.sim.world.race.laps_target,
             ),
             tick: standing.finish_tick.unwrap_or(self.race.sim.world.tick),
             best_lap_ticks: standing.best_lap_ticks,
-            // No campaign cell is selected for any race yet - that is
-            // frontend wiring (`Cell Selection`/`Grid Selection`), out of
-            // scope here. `oag_tables::race_campaign::Cell::evaluate_medal`
-            // and `oag_game::records::Medal` are ready for whoever wires it:
-            // see `Observation::campaign_medal`'s own doc and the `campaign`
-            // handover thread.
-            campaign_medal: None,
+            campaign_medal: self.campaign_medal(finished, standing.best_lap_ticks),
         }
+    }
+
+    /// The medal this race earns against [`Self::campaign_cell`], or `None`
+    /// with no cell in play.
+    ///
+    /// **The value evaluated per mode, and why two of the five gate on
+    /// `finished`.** Confirmed against `Data\Plugins\grids\grid_00.xml`'s
+    /// own authored targets, not merely inferred from the field list:
+    ///
+    /// - `Race` - the finishing place, only once `finished` - a running
+    ///   position mid-race is not a result.
+    /// - `Time Trial` - the finish tick, converted to centiseconds, only
+    ///   once `finished`. Its own gold targets (`10000`/`11500` on two
+    ///   `16_Track`/`18_Track` cells) sit in the 100-120 s range a **3-lap**
+    ///   Venom race actually takes (`race-modes.md` measures one ending
+    ///   "around tick 7,500", 125 s) - a *total* race time, not a lap.
+    /// - `Speed Lap` - the best single lap, converted the same way,
+    ///   whenever one exists, gated on nothing: the mode never finishes, so
+    ///   the alternative (the tick at whatever moment the race was left) is
+    ///   not "how fast", it is "how long the player happened to stay" -
+    ///   confirmed the same way: a `03_Track` Speed Lap cell's gold is
+    ///   `4000` (40 s) against `laps="7"`, a fifth of a 7-lap total at the
+    ///   same pace and squarely one lap's own length.
+    /// - `Zone` - the zone counter reached so far (`RaceState::zone`, which
+    ///   counts *completed* 10-second steps - `advance_zone` increments it
+    ///   only after each one finishes, so no off-by-one), gated on nothing:
+    ///   it only ever grows, so a value read at any moment is a real
+    ///   "zones survived", the same "never ends, escape leaves" shape Speed
+    ///   Lap has. `grid0_4_2`'s own `20`/`17`/`15` targets are exactly the
+    ///   [`oag_tables::race_campaign::Cell::evaluate_medal`] doc's own
+    ///   worked example.
+    /// - `Elimination` - the player's own kill count, gated on nothing, for
+    ///   the same "only ever grows" reason as `Zone`.
+    ///
+    /// Everything else - `Tournament`, `Head2Head`, `Custom Grid`,
+    /// `AI Race` - is `None`: `Self::campaign_cell` never carries one of
+    /// those, since `oag_game::campaign::race_mode_for_cell` refuses to map
+    /// them onto a launch in the first place.
+    fn campaign_medal(
+        &self,
+        finished: bool,
+        best_lap_ticks: Option<u32>,
+    ) -> Option<oag_game::records::Medal> {
+        use oag_tables::race_campaign::Mode as CampaignMode;
+        let cell = self.campaign_cell.as_ref()?;
+        let value = match cell.mode {
+            CampaignMode::Race if finished => Some(i64::from(self.race.places()[0])),
+            CampaignMode::TimeTrial if finished => {
+                let tick = self.race.sim.world.ships[0]
+                    .standing
+                    .finish_tick
+                    .unwrap_or(self.race.sim.world.tick);
+                Some(ticks_to_centiseconds(tick))
+            }
+            CampaignMode::Race | CampaignMode::TimeTrial => None,
+            CampaignMode::SpeedLap => {
+                best_lap_ticks.map(|ticks| ticks_to_centiseconds(u64::from(ticks)))
+            }
+            CampaignMode::Zone => Some(i64::from(self.race.sim.world.race.zone)),
+            CampaignMode::Elimination => {
+                Some(i64::from(self.race.sim.world.ships[0].standing.kills))
+            }
+            CampaignMode::Tournament
+            | CampaignMode::Head2Head
+            | CampaignMode::CustomGrid
+            | CampaignMode::AiRace => None,
+        }?;
+        let medal = cell.evaluate_medal(value)?;
+        Some(match medal {
+            oag_tables::race_campaign::Medal::Gold => oag_game::records::Medal::Gold,
+            oag_tables::race_campaign::Medal::Silver => oag_game::records::Medal::Silver,
+            oag_tables::race_campaign::Medal::Bronze => oag_game::records::Medal::Bronze,
+        })
     }
 
     /// Draws the HUD, or the results table once the race has one.
@@ -371,4 +447,14 @@ impl RaceStage {
             warn!("could not wait for the race scene's warmup submit: {e}");
         }
     }
+}
+
+/// 60 Hz ticks to centiseconds, the unit a campaign cell's own `Gold`/
+/// `Silver`/`Bronze Target` is authored in for `Time Trial`/`Speed Lap` -
+/// see `RaceStage::campaign_medal`. **Chosen, not measured**: nothing here
+/// traces the original's own tick-to-centisecond rounding rule, only that
+/// ticks run at the fixed 60 Hz [ADR-0007](../../../../docs/architecture/adr/0007-fixed-timestep-vs-original.md)
+/// mandates.
+fn ticks_to_centiseconds(ticks: u64) -> i64 {
+    i64::try_from(ticks.saturating_mul(5) / 3).unwrap_or(i64::MAX)
 }

@@ -149,32 +149,33 @@ The law, all decompiled and all in `race-campaign.md`:
   `Observation::campaign_medal`, additive per this thread's own earlier
   "field" suggestion. `crates/game/tests/campaign_medal.rs` proves the two
   pieces agree end to end with an invented cell (evaluate → convert → merge
-  → `save`/`parse` round trip → medal and points survive). **Not done, and
-  the next step now**: `RaceStage::observation` still passes
-  `campaign_medal: None` unconditionally - no medal is captured from any
-  real race yet, because nothing selects which `PI_Cell` a launch
-  corresponds to. See `docs/architecture/persistence.md`'s "where a career
-  system attaches" for the three concrete gaps (the launch path below, the
-  `Cell`/catalogue name mismatch, and Zone/Elimination's value not being in
-  `Observation` at all).
+  → `save`/`parse` round trip → medal and points survive).
+  ~~**Not done, and the next step now**: `RaceStage::observation` still
+  passes `campaign_medal: None` unconditionally.~~ **Done, 2026-09-14**, in
+  the `campaign-launch-wiring` lane: `Session::campaign_cell` is the Rust
+  model of `DAT_08b30ffc` (drained into `RaceStage::campaign_cell` the
+  moment a race stage is built), the `Cell`/catalogue name mismatch this
+  bullet worried about was not one - a cell's own `track=` id already
+  shares `catalogue::Track::id`'s spelling - and `Zone`/`Elimination`'s
+  value reached `RaceStage::campaign_medal` without widening `Observation`
+  at all, since that function already has `self.race` in hand. A second,
+  cell-name-keyed `[[campaign]]` table in `records.toml` is what
+  `Grid Selection`/`Cell Selection` read the medal back through - see
+  `docs/architecture/persistence.md`'s "where a career system attaches" for
+  the full detail and why it is a sibling table rather than a fourth `Key`
+  field. The record-store key's own hash function (`FUN_08945a08`,
+  below) is still not needed: `records.toml` keys on the cell's own bare
+  `name` string, not a hash of it, so nothing here had to reproduce the
+  original's hash byte-for-byte.
 - ~~Do not implement the cell-selection wiring without first tracing the
-  launch path.~~ **Traced, 2026-09-14** - see the `Open` entry above and
-  `race-campaign.md`'s new section. **Still the prerequisite before wiring a
-  real launch**, because nothing on the Rust side yet models `DAT_08b30ffc`
-  (a "current cell" concept `World`/`Stage` construction would need to carry
-  through to `RaceStage::observation`) or the front-end global store
-  `Globals_Set` writes into (this project's own menu code already has some
-  equivalent - `crates/ui`/`crates/game`'s own global-key mechanism, not
-  audited against this page this pass). `oag_tables::race_campaign::Cell`
-  already carries every field the write site reads (`name`, `track`, `mode`,
-  `class`, `laps`, `AICount`... - checked against the struct directly this
-  pass, **no new field is needed there**). What *would* need new code: the
-  hash function itself (`FUN_08945a08`, called by the newly-named
-  `Libc_HashString` but not itself decompiled) is what a Rust reimplementation
-  of the record-store key would need to match byte-for-byte if the key ever
-  has to round-trip through the original's save format; nothing this pass
-  found requires it for `records.toml`, which already keys on its own
-  `Key` type per `docs/architecture/persistence.md`.
+  launch path.~~ **Traced, 2026-09-14, and wired the same day** - see the
+  `Open` entry above, `race-campaign.md`'s new section, and
+  `docs/ui/campaign-screens.md`'s "Confirming a cell launches".
+  `oag_tables::race_campaign::Cell` needed no new field, as this bullet
+  predicted. **Still open**: the hash function itself (`FUN_08945a08`,
+  called by the newly-named `Libc_HashString` but not itself decompiled)
+  would still be needed the day a save has to round-trip through the
+  original's own format, which nothing in this project does.
 - **Close the HUD tier.** Find the writer of `*(hud + 0x3c) + 0x34` - the
   in-race structure the HUD mirrors. Everything ruled out is listed above, so a
   next pass starts from a shorter list. Closing it unblocks `hud.md`'s medal

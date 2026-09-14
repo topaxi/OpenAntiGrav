@@ -134,6 +134,29 @@ pub struct Options {
     /// it is: a campaign loader would fill it in per cell instead of leaving
     /// it `None`.
     pub eliminator_kill_target: Option<u32>,
+    /// Laps this race ends after, overriding [`Mode::laps_target`]'s own
+    /// per-class table - or `None` for that table's own answer, which is
+    /// every caller outside the campaign.
+    ///
+    /// **Only meaningful for the two modes whose own [`Mode::laps_target`]
+    /// already returns `Some`** - [`Mode::TimeTrial`] and
+    /// [`Mode::SingleRace`]. A caller must not set this for [`Mode::SpeedLap`]
+    /// or [`Mode::Zone`]: both author a `laps` attribute on their own
+    /// campaign cells (`7` and `0`) that is display convention, not an
+    /// ending - `docs/gameplay/race-modes.md` measures both as never ending
+    /// on their own, live, and turning either field into
+    /// [`oag_race::RaceState::laps_target`] would end a race the original
+    /// does not. [`Mode::Eliminator`] ends on a kill count instead and its
+    /// campaign cells author no `laps` attribute at all - see
+    /// [`Self::eliminator_kill_target`].
+    ///
+    /// **The real number is per campaign cell, not this table.** A cell's
+    /// own `laps="%d"` is the authority the moment a campaign launch can set
+    /// it (`oag_tables::race_campaign::Cell::laps`) - `Mode::laps_target`'s
+    /// table is the fallback for a Custom Race outside the campaign, which
+    /// has no cell to read one from. See that constant's own doc for the
+    /// same retirement clause [`Self::eliminator_kill_target`] carries.
+    pub laps_override: Option<u32>,
     /// Force the Zone colour grade to a stage, instead of resting where the
     /// title's own ladder leaves it.
     ///
@@ -281,6 +304,7 @@ impl Default for Options {
             class: SpeedClass::Venom.as_str().to_string(),
             mode: Mode::default(),
             eliminator_kill_target: None,
+            laps_override: None,
             zone_stage: None,
             ribbon: false,
             collision: false,
@@ -305,6 +329,11 @@ pub struct Setup {
     /// Unresolved, like [`Options::eliminator_kill_target`] - [`Race::start`]
     /// is what applies [`Mode::ELIMINATOR_KILL_TARGET_DEFAULT`].
     pub eliminator_kill_target: Option<u32>,
+    /// See [`Options::laps_override`] - carried through unresolved the same
+    /// way [`Self::eliminator_kill_target`] is, and applied to
+    /// [`oag_race::RaceState::laps_target`] by [`Race::start`] once the
+    /// class-derived table has already run.
+    pub laps_override: Option<u32>,
     /// How good the opponents are. See [`Options::difficulty`].
     pub difficulty: oag_ai::Difficulty,
     /// The speed class the race is run in, spelled the way the disc spells it.

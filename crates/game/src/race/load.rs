@@ -926,6 +926,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         setup: Setup {
             mode: options.mode,
             eliminator_kill_target: options.eliminator_kill_target,
+            laps_override: options.laps_override,
             difficulty: options.difficulty,
             class: options.class.clone(),
             opponents: options.opponents,

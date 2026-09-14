@@ -133,6 +133,9 @@ impl Pending {
             // value would come from is not wired into this engine yet - see
             // `race::Options::eliminator_kill_target`.
             eliminator_kill_target: None,
+            // `None` for the same reason - the campaign is the only writer
+            // of this field. See `race::Options::laps_override`.
+            laps_override: None,
             zone_stage: self.cli.zone_stage,
             opponent_teams,
             ribbon: self.cli.ribbon,

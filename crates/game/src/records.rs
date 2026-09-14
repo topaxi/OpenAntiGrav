@@ -72,27 +72,34 @@
 //!
 //! # Where a career system attaches
 //!
-//! [`Record`] now also carries a best-ever campaign [`Medal`] and its
-//! points, and the most recent race's own medal - the law behind them
+//! [`Record`] carries a best-ever campaign [`Medal`] and its points, and the
+//! most recent race's own medal - the law behind them
 //! (`Cell_EvaluateMedal`/`Cell_MedalPoints`) was a sibling member's own
 //! finding, recovered and reimplemented as
 //! `oag_tables::race_campaign::Cell::evaluate_medal`, not guessed at here;
-//! see `docs/ghidra/functions/psp-pulse-usa/race-campaign.md`. What is
-//! **still** not here: no unlock, no tournament standing, and no wiring
-//! that selects *which* campaign cell a real race was run against -
-//! [`Observation::campaign_medal`] is `None` at the one call site that
-//! builds an `Observation` today, so a medal is captured only once
-//! something upstream starts computing it. Two ways left to grow this file
-//! further, and both stay additive:
+//! see `docs/ghidra/functions/psp-pulse-usa/race-campaign.md`.
+//! [`Observation::campaign_medal`] is what feeds both: [`RaceStage::observation`]
+//! (`crates/game/src/main/race_stage.rs`) evaluates it once a race carries a
+//! [`RaceStage::campaign_cell`], and [`Store::record`] folds it into the
+//! ordinary `[[records]]` row the way every other field is.
 //!
-//! - A new **field** on [`Record`], `#[serde(default)]` like every field
-//!   already here, for something that is still one number per
-//!   circuit/mode/class - a difficulty the medal was earned at, say.
-//! - A new **sibling table** in the same file, alongside `[[records]]`, for
-//!   something that is not shaped like this key at all - a tournament
-//!   standing spans several circuits, not one.
+//! **A second, cell-keyed table carries the same medal for a different
+//! question.** `[[records]]` answers "what is the best result on this
+//! track/mode/class", which a campaign race also contributes to; `Cell
+//! Selection`/`Grid Selection` ask "what did *this cell* earn", which is not
+//! the same key - two different campaign cells can share a track, a mode
+//! and a class, and a `Zone` cell's own `class="Zone"` does not even round-
+//! trip through [`Key`] (see [`CampaignRecord`]'s own doc for why). So
+//! [`Store::campaign_medal`]/[`Store::record_campaign`] keep a sibling
+//! `[[campaign]]` table, keyed on `(title, cell name)` alone - the same key
+//! the original's own record store uses, per
+//! `docs/ghidra/functions/psp-pulse-usa/race-campaign.md`'s "how a campaign
+//! event launches" section - and neither [`Key`], [`parse`]'s `records`
+//! handling nor [`Store::record`] had to change to add it.
 //!
-//! Neither needs [`Key`], [`parse`] or [`Store::record`] to change.
+//! What is **still** not here: no unlock and no tournament standing - see
+//! `docs/architecture/persistence.md`'s "where a career system attaches" for
+//! the two ways left to grow this file further, both still additive.
 //!
 //! # No circuit list is hardcoded here, and none should ever be added
 //!
@@ -452,6 +459,51 @@ impl PersonalBest {
     }
 }
 
+/// One campaign cell's whole history, keyed on the cell's own `name` rather
+/// than on [`Key`].
+///
+/// **Why a sibling table rather than a fourth field on [`Key`].** The
+/// original hashes the cell's own `name` string for its record-store key
+/// (`docs/ghidra/functions/psp-pulse-usa/race-campaign.md`'s "how a campaign
+/// event launches" section), not a track/mode/class tuple, and a cell's own
+/// `class` is not always a usable lookup key even if it were: a `Zone` cell
+/// authors the literal `class="Zone"`, `Cell::speed_class` answers `None`
+/// for it, and `Race::start` falls back to whatever class was last selected.
+/// A `Key` built from `cell.class` at read time would therefore not match
+/// the `Key` `setup.class` built at load time, and a medal earned there
+/// would write once and never read back. Keying on the cell's own name
+/// alone has no such mismatch, matches the measured mechanism, and needs no
+/// change to [`Key`], [`parse`] or [`Store::record`] - see
+/// `docs/architecture/persistence.md`.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CampaignRecord {
+    /// [`oag_title::Title::name`], lower-cased - see [`Key::title`].
+    pub title: String,
+    /// The cell's own authored `name`, e.g. `"grid0_2_1"`, lower-cased.
+    /// Never a grid/cell index pair - see this struct's own doc.
+    pub cell: String,
+    /// The best medal ever earned on this cell - never downgraded, the same
+    /// best-of rule [`Record::best_lap_ticks`] follows, via [`Medal::better`].
+    #[serde(default)]
+    pub best_medal: Option<Medal>,
+    /// [`Self::best_medal`]'s points, kept alongside it for the same reason
+    /// [`Record::best_points`] is: a reader of the file sees the number a
+    /// career total would sum without also knowing the medal-to-points law.
+    #[serde(default)]
+    pub best_points: Option<u32>,
+    /// The most recent race run against this cell's own medal - `None` both
+    /// for a cell never raced and for a run that scored no tier at all,
+    /// which is what "the most recent race scored nothing" means here.
+    #[serde(default)]
+    pub last_medal: Option<Medal>,
+}
+
+impl CampaignRecord {
+    fn matches(&self, title: &str, cell: &str) -> bool {
+        self.title == title && self.cell == cell
+    }
+}
+
 /// Every row [`load`] found or [`Store::record`] has added since, in one
 /// file.
 ///
@@ -459,10 +511,16 @@ impl PersonalBest {
 /// is what keeps the array sorted - `save` writes it back in a stable order
 /// on every run, the same reason [`crate::settings::Settings::render_profiles`]
 /// is a `BTreeMap` rather than a `HashMap`: an unordered rewrite is a diff
-/// with nothing changed in it every single launch.
+/// with nothing changed in it every single launch. [`Self::campaign`] follows
+/// the identical rule through [`Store::record_campaign`].
 #[derive(Debug, Clone, Default, Serialize)]
 pub struct Store {
     records: Vec<Record>,
+    /// One row per campaign cell ever raced - see [`CampaignRecord`]'s own
+    /// doc for why this is a sibling table rather than a fourth part of
+    /// [`Key`]. A file with no `[[campaign]]` table at all - every row
+    /// written before this existed - parses to an empty one; see [`parse`].
+    campaign: Vec<CampaignRecord>,
 }
 
 impl Store {
@@ -530,6 +588,66 @@ impl Store {
         // the numbers that actually changed - see the struct's own doc.
         self.records.sort_by_key(Record::key);
     }
+
+    /// Every campaign row, in the file's own stable order.
+    #[must_use]
+    pub fn campaign_rows(&self) -> &[CampaignRecord] {
+        &self.campaign
+    }
+
+    /// The row `(title, cell)` names, if this cell has ever been raced.
+    /// Lower-cased the same way [`Key::new`] lower-cases every part, so a
+    /// caller passing a cell's own mixed-case `name` still finds its row.
+    #[must_use]
+    pub fn campaign_medal(&self, title: &str, cell: &str) -> Option<&CampaignRecord> {
+        let title = title.trim().to_ascii_lowercase();
+        let cell = cell.trim().to_ascii_lowercase();
+        self.campaign.iter().find(|row| row.matches(&title, &cell))
+    }
+
+    /// Merges one campaign race's own medal into the row `(title, cell)`
+    /// names, creating it if this is the first result ever recorded there.
+    ///
+    /// **The same best-of/last shape as [`Self::record`], on the one field
+    /// this table carries a medal for.** `medal` is `None` both for a race
+    /// with no campaign cell in play - which is never this function's
+    /// caller's business to call it for at all - and for a race that *was*
+    /// run against `cell` but scored no tier: [`CampaignRecord::last_medal`]
+    /// still takes that `None`, the same "last means last, better or worse"
+    /// rule [`Record::last_medal`] follows, while
+    /// [`CampaignRecord::best_medal`] is left untouched, the same
+    /// never-downgraded rule [`Self::record`] applies to
+    /// [`Record::best_medal`].
+    pub fn record_campaign(&mut self, title: &str, cell: &str, medal: Option<Medal>) {
+        let title = title.trim().to_ascii_lowercase();
+        let cell = cell.trim().to_ascii_lowercase();
+        let row = match self
+            .campaign
+            .iter_mut()
+            .find(|row| row.matches(&title, &cell))
+        {
+            Some(row) => row,
+            None => {
+                self.campaign.push(CampaignRecord {
+                    title,
+                    cell,
+                    ..CampaignRecord::default()
+                });
+                self.campaign
+                    .last_mut()
+                    .expect("just pushed onto this exact vec")
+            }
+        };
+        if let Some(medal) = medal {
+            row.best_medal = Some(row.best_medal.map_or(medal, |best| best.better(medal)));
+            row.best_points = row.best_medal.map(Medal::points);
+        }
+        row.last_medal = medal;
+
+        // Stable, for the same reason `Self::record` sorts `self.records`.
+        self.campaign
+            .sort_by(|a, b| (&a.title, &a.cell).cmp(&(&b.title, &b.cell)));
+    }
 }
 
 /// Parses `text` as a records file, keeping every row that decodes and
@@ -567,7 +685,26 @@ pub fn parse(text: &str) -> Result<(Store, Vec<String>)> {
         None => {}
     }
     records.sort_by_key(Record::key);
-    Ok((Store { records }, notes))
+
+    // `campaign` is read the same tolerant way, and its own absence - every
+    // file this project wrote before this table existed - is exactly the
+    // ordinary "fresh file" case above, not a degraded read.
+    let mut campaign = Vec::new();
+    match table.get("campaign") {
+        Some(toml::Value::Array(rows)) => {
+            for (index, row) in rows.iter().enumerate() {
+                match row.clone().try_into::<CampaignRecord>() {
+                    Ok(record) => campaign.push(record),
+                    Err(e) => notes.push(format!("campaign[{index}] dropped: {e}")),
+                }
+            }
+        }
+        Some(_) => notes.push("`campaign` is not an array of tables; ignoring it".to_string()),
+        None => {}
+    }
+    campaign.sort_by(|a, b| (&a.title, &a.cell).cmp(&(&b.title, &b.cell)));
+
+    Ok((Store { records, campaign }, notes))
 }
 
 /// Where the records file lives: `<config dir>/oag/records.toml`, beside

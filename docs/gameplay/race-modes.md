@@ -6,12 +6,17 @@ grid: they are the part of the race layer that can be finished rather than
 stubbed. The fourth, **single race**, is the first with weapons, and it exists
 because pickups have nowhere else to happen; see below.
 
-**The disc names three more, and there is no game around any of the four
-implemented here.** `Tournament`, `Elimination` and `Head2Head` sit alongside
-the four above in `Single Player`'s own `Mode` list, and above all seven of
-them sits a `RACE CAMPAIGN` main-menu entry this project has no equivalent of
-at all - a persistent grid of events with medals and unlocks, not a single
-race repeated. [`race-setup.md`'s Race Campaign
+**The disc names three more.** `Tournament`, `Elimination` and `Head2Head` sit
+alongside the four above in `Single Player`'s own `Mode` list; `Elimination`
+is implemented (below), `Tournament` and `Head2Head` are not - see
+[Eliminator](#eliminator)'s own "what is deliberately out of scope" and
+`oag_game::campaign::race_mode_for_cell`'s doc for why the latter two refuse
+to launch even from the campaign. Above all seven of them sits a
+`RACE CAMPAIGN` main-menu entry - a persistent grid of events with medals
+and unlocks, not a single race repeated - whose two screens now draw and
+launch a cell in any of the five modes this engine runs; see
+`docs/ui/campaign-screens.md` and `docs/architecture/persistence.md`.
+[`race-setup.md`'s Race Campaign
 section](../formats/race-setup.md#the-race-campaign-the-discs-own-campaign-grid-shape-yes-content-no)
 has the 2026-09-08 scoping pass: the campaign's **screen flow and grid shape**
 are fully authored (a two-level hex grid, `Grid Selection` then `Cell
@@ -510,13 +515,20 @@ nothing until now.
   a warning in the load report; that fallback is **chosen, not measured**, and
   carries no confidence score.
 
-  **This table is the fallback, not the authority.** A race launched from the
-  campaign should take the lap count from its *own* cell -
-  `oag_tables::race_campaign::Cell` already parses `laps: Option<u32>` - and
-  the cell's value should win over the table the moment a campaign launch can be
-  wired, which is the same retirement clause `Mode::ELIMINATOR_KILL_TARGET_DEFAULT`
-  carries. What keeps the table necessary is that nothing selects a cell yet,
-  and a Custom Race started outside the campaign has no cell to read.
+  **This table is the fallback, not the authority, and the retirement clause
+  fired 2026-09-14.** A campaign launch now takes the lap count from its own
+  cell: `race::Options::laps_override`/`Setup::laps_override` carry
+  `oag_tables::race_campaign::Cell::laps` straight through to
+  `oag_race::RaceState::laps_target`, overriding whatever this table would
+  have answered - `Session::launch_campaign_cell`
+  (`crates/game/src/main/session/campaign.rs`) is the one caller. **Only for
+  `Time Trial` and `Single Race`**, the two modes this table's own
+  `laps_target` already answers `Some` for - `Speed Lap` and `Zone` both
+  author a `laps` attribute too (`7` and `0`) that is display convention,
+  not an ending, and applying it the same way would end a race the original
+  measurably does not; see `race::Options::laps_override`'s own doc. This
+  table stays necessary regardless: a Custom Race started outside the
+  campaign still has no cell to read one from.
 
   **A Phantom race's fifth lap has no split row and is not recorded.**
   `MAX_RECORDED_LAPS` is `4` because HD/Fury's `HUD_lap_times.xml` composes
@@ -682,19 +694,26 @@ flat census; the campaign RE pass the same day found the real source is
 `Data\Plugins\grids\grid_00..15.xml`'s `PI_Cell` records, each with its own
 gold-medal figure, and the values actually used are **10, 7 or 5** - never
 one flat figure. `FEData.wad`'s `10` was one sample of three read as the
-whole population. **This engine has no campaign grid wired in at all**
-(`oag_race::Mode::ELIMINATOR_KILL_TARGET_DEFAULT` says so in its own doc
-comment), so `Options::eliminator_kill_target` is a parameter with `10` -
-one of the three real values, not an invented one - as its default, ready for
-a campaign loader to fill in the cell's own figure per race the day one
-exists.
+whole population. **A campaign Eliminator launch now fills this in from the
+cell's own gold target, 2026-09-14** -
+`Session::launch_campaign_cell` (`crates/game/src/main/session/campaign.rs`)
+sets `Options::eliminator_kill_target` to `cell.gold`, so the campaign's own
+`10`/`7`/`5` reach `Race::start` per race rather than one flat figure. A
+Custom Race outside the campaign still has no cell to read, so
+`Options::eliminator_kill_target: None` still falls back to
+`oag_race::Mode::ELIMINATOR_KILL_TARGET_DEFAULT`'s `10` - one of the three
+real values, not an invented one, and still the only figure a `--mode
+eliminator` run with no campaign cell in play can have.
 
 ### What is deliberately out of scope
 
-- **The campaign grid itself.** No `PI_Cell`, no medal evaluation
-  (`Cell_EvaluateMedal`'s own gold/silver/bronze, direction flipped for Zone
-  and Elimination), no per-cell AI-skill or lap-count resolution. Wiring a
-  cell in is what would let `eliminator_kill_target` stop being a default.
+- **Per-cell AI-skill resolution.** `AI_ResolveSkillScale`'s own
+  `skill`/`skillEasy`/`skillHard` interpolation is not implemented - a
+  campaign launch still uses the ordinary `[ai] difficulty` setting rather
+  than the cell's own figure. `Cell_EvaluateMedal`'s own gold/silver/bronze
+  (direction flipped for Zone and Elimination) and the lap-count/kill-target
+  resolution above it are wired, 2026-09-14 - see
+  `docs/architecture/persistence.md`'s "where a career system attaches".
 - **Presentation.** The same "the sound is built, the HUD hide and the camera
   swing are not" gap [Zone's own ending](#zone-has-no-ending-yet-and-now-we-know-what-it-should-be)
   already carries applies here too.

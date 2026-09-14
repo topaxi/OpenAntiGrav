@@ -116,3 +116,76 @@ pub fn load(
         sprites,
     })
 }
+
+/// Which [`oag_race::Mode`] a campaign cell's own [`race_campaign::Mode`]
+/// launches as - `None` for the four this engine cannot run at all.
+///
+/// **Not a spelling mismatch to resolve, a scope one.** `oag_race::Mode` has
+/// five variants because that is what `crates/race` implements; a campaign
+/// cell's own mode is one of nine, read straight off the disc
+/// (`docs/ghidra/functions/psp-pulse-usa/race-campaign.md`). `Tournament`
+/// carries per-leg standings this engine has no state for at all;
+/// `Head2Head` has no [`oag_race::Mode`] variant to map onto - a two-craft
+/// race is a design question (how many opponents, which HUD), not a naming
+/// one, and inventing an answer here is exactly what `CLAUDE.md`'s "never
+/// invent what the assets author" forbids; `Custom Grid`/`AI Race` are not
+/// authored by any shipped `grid_NN.xml` cell at all. A cell whose mode maps
+/// to `None` must not launch - the caller logs why and stays on `Cell
+/// Selection` rather than substituting an implemented mode for an
+/// unimplemented one.
+#[must_use]
+pub fn race_mode_for_cell(mode: race_campaign::Mode) -> Option<oag_race::Mode> {
+    match mode {
+        race_campaign::Mode::Race => Some(oag_race::Mode::SingleRace),
+        race_campaign::Mode::TimeTrial => Some(oag_race::Mode::TimeTrial),
+        race_campaign::Mode::Zone => Some(oag_race::Mode::Zone),
+        race_campaign::Mode::Elimination => Some(oag_race::Mode::Eliminator),
+        race_campaign::Mode::SpeedLap => Some(oag_race::Mode::SpeedLap),
+        race_campaign::Mode::Tournament
+        | race_campaign::Mode::Head2Head
+        | race_campaign::Mode::CustomGrid
+        | race_campaign::Mode::AiRace => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::race_mode_for_cell;
+    use oag_tables::race_campaign::Mode as CampaignMode;
+
+    #[test]
+    fn the_five_implemented_modes_map_onto_their_oag_race_mode() {
+        assert_eq!(
+            race_mode_for_cell(CampaignMode::Race),
+            Some(oag_race::Mode::SingleRace)
+        );
+        assert_eq!(
+            race_mode_for_cell(CampaignMode::TimeTrial),
+            Some(oag_race::Mode::TimeTrial)
+        );
+        assert_eq!(
+            race_mode_for_cell(CampaignMode::Zone),
+            Some(oag_race::Mode::Zone)
+        );
+        assert_eq!(
+            race_mode_for_cell(CampaignMode::Elimination),
+            Some(oag_race::Mode::Eliminator)
+        );
+        assert_eq!(
+            race_mode_for_cell(CampaignMode::SpeedLap),
+            Some(oag_race::Mode::SpeedLap)
+        );
+    }
+
+    #[test]
+    fn the_four_unimplemented_modes_refuse_to_map_at_all() {
+        for mode in [
+            CampaignMode::Tournament,
+            CampaignMode::Head2Head,
+            CampaignMode::CustomGrid,
+            CampaignMode::AiRace,
+        ] {
+            assert_eq!(race_mode_for_cell(mode), None, "{mode} should not launch");
+        }
+    }
+}

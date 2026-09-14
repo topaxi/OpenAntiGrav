@@ -689,10 +689,23 @@ impl Session {
         // are no menus before a disc has been chosen, so the `None`
         // here is unreachable in practice and says so rather than
         // unwrapping.
+        // Defensive, not load-bearing on the ordinary path: a campaign
+        // launch abandoned mid-`Team Selection` (`Session::handle_picker`'s
+        // `Kind::Ship` `Event::Back` arm) already clears
+        // `self.campaign_cell`, but clearing it here too means a RACE-page
+        // launch can never inherit a stale cell whatever path reached this
+        // function.
+        self.campaign_cell = None;
         let Some(mut race_options) = self.race_options.take() else {
             warn!("no disc image has been chosen yet, so there is nothing to race");
             return;
         };
+        // The campaign is the only writer of either field - see
+        // `Session::launch_campaign_cell` - and a RACE-page launch must
+        // never inherit one left over from a campaign cell that was backed
+        // out of before racing.
+        race_options.eliminator_kill_target = None;
+        race_options.laps_override = None;
         // Resolved before the circuit below, and out of its usual
         // order beneath the class and difficulty rows: which list a
         // stored circuit is checked against - the race one or the
@@ -796,6 +809,16 @@ impl Session {
         );
         // Back before the load, which reads it.
         self.race_options = Some(race_options);
+        self.finish_launch();
+    }
+
+    /// [`Self::launch_race`], plus the same hand-off report on success and
+    /// the same non-fatal log on failure every launcher wants - the RACE
+    /// page's own [`Self::launch_from_settings`] above and a campaign cell's
+    /// [`Self::launch_campaign_cell`] (`crate::main::session::campaign`)
+    /// alike. Neither builds `self.race_options` here: by the time either
+    /// calls this, it is already exactly what should load.
+    pub(crate) fn finish_launch(&mut self) {
         match self.launch_race() {
             Ok(()) => {
                 let strings = strings::project_table(self.settings.language.as_deref());

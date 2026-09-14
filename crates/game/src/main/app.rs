@@ -414,6 +414,7 @@ impl App {
             pick_language: self.pick_language,
             race_ready_at: None,
             suspended_race: None,
+            campaign_cell: None,
             awaiting_binding: None,
             // A load failure here is not fatal - it is the same "corrupt
             // file" case `pilots::load_from` always could hit, just reached

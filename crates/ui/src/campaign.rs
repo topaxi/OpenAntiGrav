@@ -16,26 +16,31 @@
 //! same way [`crate::picker::Layout::read`] reads `Track Creation`/`Team
 //! Selection`. Nothing here invents a layout number.
 //!
-//! # This build has no player-progress source, and draws that honestly
+//! # A player-progress source is optional
 //!
-//! `Grid_PointsEarned`/`Grid_CountMedalsAtLeast`/`Cell_SavedMedal` all read a
-//! saved profile record this project does not keep - see
-//! `crates/game/src/records.rs`'s own doc, "nothing selects which `PI_Cell` a
-//! launched race corresponds to" - so every grid and cell this draws is in
-//! its **fresh-profile** state: zero medals, zero points earned, no saved
-//! record. That is not a stand-in; it is what those fields are worth with no
-//! progress to report, the same reading `docs/formats/race-setup.md` gives
-//! `Team Selection`'s `Loyalty` bar (drawn as absent, never as a zero-filled
-//! bar that would read as a real zero).
+//! `Grid_PointsEarned`/`Grid_CountMedalsAtLeast`/`Cell_SavedMedal` read a
+//! saved profile record - [`GridSummary::from_grid`]/[`CellSelection::new`]
+//! take none, and draw the **fresh-profile** state: zero medals, zero points
+//! earned, no saved record - the same reading `docs/formats/race-setup.md`
+//! gives `Team Selection`'s `Loyalty` bar (drawn as absent, never as a
+//! zero-filled bar that would read as a real zero). A caller that *does*
+//! have a save - `oag_game`'s own `records::Store`, which this crate cannot
+//! depend on without pulling the composition root's persistence into a
+//! presentation crate - reaches the real numbers through
+//! [`GridSummary::from_grid_with_medals`]/[`CellSelection::with_medals`]
+//! instead, each taking a plain `Fn(&str) -> Option<Medal>` keyed on a
+//! cell's own `name` rather than the store type itself.
 //!
-//! # Stub: draws both screens, stops at confirm
+//! # The launch path is the composition root's, not this crate's
 //!
-//! The launch path - which globals `Cell Selection`'s own confirm redirect
-//! writes before falling through to `Team Selection`/`Launch Game` - is not
-//! traced yet (`docs/ghidra/functions/psp-pulse-usa/race-campaign.md`'s "what
-//! is not determined"). So [`CellSelection::update`]'s [`Event::Confirmed`]
-//! is not wired to either screen here - see `crate::main::session::campaign`
-//! in `oag-game` for the composition-root side of the stub.
+//! Confirming a cell is this crate's own [`Event::Confirmed`] and no more -
+//! [`CellSelection::update`] does not know what a confirm *means*, the same
+//! way [`crate::picker::Picker`] does not launch a race either. Which
+//! campaign modes can actually launch, resolving the cell's own track
+//! against the source, and evaluating the medal a finished race earned all
+//! live in `oag_game`/`crate::main::session::campaign` - see
+//! `docs/ghidra/functions/psp-pulse-usa/race-campaign.md`'s "how a campaign
+//! event launches" and `docs/architecture/persistence.md`.
 //!
 //! # Three widgets this build deliberately does not draw
 //!
@@ -59,7 +64,7 @@
 //!   this build has no record for. All three are left blank.
 
 use oag_gameplay::input::{Button, Input};
-use oag_tables::race_campaign::{Cell, Grid, Mode};
+use oag_tables::race_campaign::{Cell, Grid, Medal, Mode};
 
 use crate::frontend::{Align, Draw, Placed};
 use crate::language::StringTable;
@@ -96,9 +101,7 @@ pub enum Event {
     Back,
 }
 
-/// A grid tier, reduced to what `GridSelection_Update` binds - see the
-/// module doc for why every earned figure here is zero rather than read off
-/// a save this project does not keep.
+/// A grid tier, reduced to what `GridSelection_Update` binds.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GridSummary {
     /// The grid's own name, e.g. `"grid0"` - what `GridSelection_Update`
@@ -113,16 +116,48 @@ pub struct GridSummary {
     pub max_points: u32,
     /// `grid->RequiredPoints`. `0` renders as `FE_NA` (`grid15`'s own value).
     pub required_points: u32,
+    /// `Grid_CountMedalsAtLeast(grid, 0)`: cells on this grid whose best
+    /// saved medal is gold. `0` on a fresh profile, or whenever
+    /// [`Self::from_grid`] built this without a progress source - see the
+    /// module doc.
+    pub gold_medals: u32,
+    /// `Grid_PointsEarned`: the sum of `Medal::points()` over every cell's
+    /// own best saved medal on this grid. `0` on the same terms as
+    /// [`Self::gold_medals`].
+    pub points_earned: u32,
 }
 
 impl GridSummary {
+    /// The fresh-profile reading: every earned figure zero, because there is
+    /// no progress to report. See the module doc.
     #[must_use]
     pub fn from_grid(grid: &Grid) -> Self {
+        Self::from_grid_with_medals(grid, &|_| None)
+    }
+
+    /// The real reading: `medal_of` answers a cell's own best saved medal by
+    /// its `name`, from whatever store the caller holds - see the module
+    /// doc for why this crate takes a closure rather than the store type
+    /// itself.
+    #[must_use]
+    pub fn from_grid_with_medals(grid: &Grid, medal_of: &dyn Fn(&str) -> Option<Medal>) -> Self {
+        let mut gold_medals = 0;
+        let mut points_earned = 0;
+        for cell in &grid.cells {
+            if let Some(medal) = medal_of(&cell.name) {
+                points_earned += medal.points();
+                if medal == Medal::Gold {
+                    gold_medals += 1;
+                }
+            }
+        }
         Self {
             name: grid.name.clone(),
             cell_count: u32::try_from(grid.cells.len()).unwrap_or(u32::MAX),
             max_points: grid.max_points(),
             required_points: grid.required_points,
+            gold_medals,
+            points_earned,
         }
     }
 }
@@ -217,6 +252,10 @@ impl GridSelection {
 #[derive(Debug, Clone)]
 pub struct CellSelection {
     cells: Vec<Cell>,
+    /// Parallel to [`Self::cells`] - `medals[i]` is `cells[i]`'s own best
+    /// saved medal. All `None` when built through [`Self::new`]. See the
+    /// module doc's "a player-progress source is optional".
+    medals: Vec<Option<Medal>>,
     index: usize,
     help_open: bool,
 }
@@ -224,11 +263,23 @@ pub struct CellSelection {
 impl CellSelection {
     /// `cells` is one [`Grid`]'s own list, in document order. `index` starts
     /// on the first cell the grid names - not necessarily hex position
-    /// `(0, 0)`, since not every grid fills that slot.
+    /// `(0, 0)`, since not every grid fills that slot. The fresh-profile
+    /// reading - every cell's own medal absent - see [`Self::with_medals`]
+    /// for the real one.
     #[must_use]
     pub fn new(cells: Vec<Cell>) -> Self {
+        Self::with_medals(cells, &|_| None)
+    }
+
+    /// The real reading: `medal_of` answers a cell's own best saved medal by
+    /// its `name` - see [`GridSummary::from_grid_with_medals`]'s own doc for
+    /// why this takes a closure rather than the store type itself.
+    #[must_use]
+    pub fn with_medals(cells: Vec<Cell>, medal_of: &dyn Fn(&str) -> Option<Medal>) -> Self {
+        let medals = cells.iter().map(|cell| medal_of(&cell.name)).collect();
         Self {
             cells,
+            medals,
             index: 0,
             help_open: false,
         }
@@ -242,6 +293,13 @@ impl CellSelection {
     #[must_use]
     pub fn selected(&self) -> Option<&Cell> {
         self.cells.get(self.index)
+    }
+
+    /// The selected cell's own best saved medal, `None` on a fresh profile
+    /// or a cell never raced.
+    #[must_use]
+    pub fn selected_medal(&self) -> Option<Medal> {
+        self.medals.get(self.index).copied().flatten()
     }
 
     #[must_use]
@@ -485,8 +543,14 @@ pub fn grid_draw_list(
         let content = match name {
             "honey" => Some(model.counter()),
             "Title" => Some(selected.name.clone()),
-            "Medals" => Some(format!("00/{:02}", selected.cell_count)),
-            "Points" => Some(format!("000/{:03}", selected.max_points)),
+            "Medals" => Some(format!(
+                "{:02}/{:02}",
+                selected.gold_medals, selected.cell_count
+            )),
+            "Points" => Some(format!(
+                "{:03}/{:03}",
+                selected.points_earned, selected.max_points
+            )),
             "Required" => Some(if selected.required_points == 0 {
                 strings.get_or_id("FE_NA").to_string()
             } else {
@@ -604,10 +668,11 @@ pub fn cell_draw_list(
             "Line3" => None,
             "Line4" | "Line5" | "Line8" => None,
             "Line6" => Some(format!(
-                "0/{}",
-                oag_tables::race_campaign::Medal::Gold.points()
+                "{}/{}",
+                model.selected_medal().map_or(0, Medal::points),
+                Medal::Gold.points()
             )),
-            "Line7" => Some(strings.get_or_id("MSC_NONE").to_string()),
+            "Line7" => Some(medal_line(model.selected_medal(), strings)),
             "Target0 Title" | "Target1 Title" | "Target2 Title" if targets_visible => {
                 Some(strings.get_or_id("IG_HUD_TARGET").to_string())
             }
@@ -644,6 +709,21 @@ fn track_line(cell: &Cell) -> String {
     } else {
         cell.track.clone().unwrap_or_default()
     }
+}
+
+/// `Line7`'s own resolution: `Cell_SavedMedal` maps onto `IG_HUD_GOLD`/
+/// `SILVER`/`BRONZE`, `MSC_NONE` for no saved medal.
+/// `race-campaign.md` records this table but not the difficulty suffix
+/// `CellSelection_PopulateDetail` appends (`Cell_SavedDifficulty`) - not
+/// drawn here, since this build keeps no per-cell saved difficulty at all.
+fn medal_line(medal: Option<Medal>, strings: &StringTable) -> String {
+    let id = match medal {
+        Some(Medal::Gold) => "IG_HUD_GOLD",
+        Some(Medal::Silver) => "IG_HUD_SILVER",
+        Some(Medal::Bronze) => "IG_HUD_BRONZE",
+        None => "MSC_NONE",
+    };
+    strings.get_or_id(id).to_string()
 }
 
 fn laps_line(cell: &Cell, strings: &StringTable) -> String {
