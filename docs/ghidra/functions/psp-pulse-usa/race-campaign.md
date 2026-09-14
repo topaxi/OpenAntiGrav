@@ -571,34 +571,76 @@ once, not one or the other:
    `Launch Game` runs, rather than the campaign carrying a value the race box
    never sets or vice versa.
 
-### `CellSelection_ConfirmCell` (`0x088d6138`) - the write site
+### `CellSelection_CommitSelection` (`0x088d6138`) - the write site, and a real vtable slot
 
-Confidence **68**, named `_q`. The behaviour is read directly and is
-unambiguous; the score is capped because **no caller was found** - see
-[what is not determined](#the-callers---none-of-them-found-by-cross-reference)
-below. In full, when its selected-cell parameter is non-null:
+Confidence **80**. Corrected from an initial 68/`_q`: the first pass through
+this function found it via `get_xrefs_to(DAT_08b30ffc)` and could not find
+*its own* caller by cross-reference, and wrongly reasoned that through to "no
+evidence of when it runs." **It is not a free function waiting on a caller -
+it is word 39 of the `CellSelection` vtable itself**, positionally confirmed
+the same way word 9/29/31 already were on this page: `read_memory` on
+`0x08acfb64` for 256 bytes (not the 128 `race-box-screens.md` read for
+`TrackSelection`/`TeamSelection`) decodes word 39 (byte offset `0x9c`) as
+`0x088d6138` exactly. `get_xrefs_to`/`get_function_callers` return nothing on
+*any* of these four slots (9, 29, 31, 39) for the same reason - a vtable
+store is a data write, not a call site, and this binary's dispatch is by
+vtable throughout (see `race-box-screens.md`'s own vtable section). That is
+the same evidentiary class `CellSelection_OnEnter`/`_OnExit` already carry at
+74-82, so this slot is scored the same way rather than capped for a gap that
+turns out not to exist.
+
+**Independent corroboration that word 39 is a real, consistently-purposed
+slot**: `TrackSelection`'s vtable (`0x08ad0ce4`) and `TeamSelection`'s
+(`0x08ad0b04`) both carry a function at the identical word 39, which
+`race-box-screens.md` never read (it stopped at 128 bytes / word 31).
+`TrackSelection`'s (`0x088ed784`, named `TrackSelection_CommitSelection`
+this pass, confidence 80) is one line: `Globals_Set("Track",
+current_track_definition->name)` - the same commit-current-selection-to-the-
+global-store duty as `CellSelection`'s slot, just for one field instead of
+nine. `TeamSelection`'s (`0x088e9fa0`, named `TeamSelection_CommitSelection`
+this pass, confidence 74 - gated behind three `strcasecmp`s against state
+names `"Pre_Race_Music_Select"`/`"Team_Help"` this pass did not chase)
+does music-selection/help-text bookkeeping rather than a `Globals_Set` call,
+so the slot's *exact* contract varies by screen, but its role - fired
+whenever that screen's current selection should be committed, distinct from
+`OnEnter`/`OnExit`/`Update` - is now evidenced on three screens, not
+inferred from one.
+
+In full, `CellSelection_CommitSelection`:
 
 ```
-cell = *(param_1 + 0xdc)
-Globals_Set("Mode",   localize(cell->mode))          # Globals_HashKey hashes "FE_Mode"
-Globals_Set("Class",  localize(cell->class))
-Globals_Set("Track",  cell->track)                    # +0xba, raw string, no localize
-Globals_Set("Team"/unnamed key, cell->ship)           # +0xca
-Globals_Set("Weapons", FE_ON/FE_OFF)                  # cell->Weapons, +0xb4
-Globals_Set("Opponents", "%d" of cell->AICount)       # +0xb0
-Globals_Set("Laps", "%d" of cell->laps)               # +0xac
-Globals_Set("Damage", FE_ON/FE_OFF)                   # cell->damage, +0xb5
-DAT_08b30ffc = cell
-strcpy(DAT_08b31000, cell->name)                      # +0x74, display copy only
-Globals_Set("SkillLevel", Easy/Medium/Hard[param_1->f0])  # the screen's own difficulty cursor
-if cell->mode == 4 (Tournament):
-    Globals_Set("Tournament", "yourTourney")
-    hash = Libc_HashString(DAT_08b31158 + 0x74)        # tournament record key
-    DAT_08b31158->0xa0 = 0; DAT_08b31158->0xdc = 1; DAT_08b30fa4 = 0   # reset standings/leg counter
-    for each of cell->TournamentTrackCount (+0xf0) TournamentTrack name hashes (+0xf4):
-        FUN_088c3990(DAT_08b31158, hash)               # append a leg
-Store("DifficultyRC") = param_1->f0                    # profile-wide, not per-cell - see below
+FUN_088902c8()                                         # base-class hook, unread
+if param_2 != 0:                                        # a cell is selected
+    cell = *(param_1 + 0xdc)
+    Globals_Set("Mode",   localize(cell->mode))          # Globals_HashKey hashes "FE_Mode"
+    Globals_Set("Class",  localize(cell->class))
+    Globals_Set("Track",  cell->track)                    # +0xba, raw string, no localize
+    Globals_Set("Team",   cell->ship)                     # +0xca - "None" on all 236 authored cells
+    Globals_Set("Weapons", FE_ON/FE_OFF)                  # cell->Weapons, +0xb4
+    Globals_Set("Opponents", "%d" of cell->AICount)       # +0xb0
+    Globals_Set("Laps", "%d" of cell->laps)               # +0xac
+    Globals_Set("Damage", FE_ON/FE_OFF)                   # cell->damage, +0xb5
+    DAT_08b30ffc = cell
+    strcpy(DAT_08b31000, cell->name)                      # +0x74, display copy only
+    Globals_Set("SkillLevel", Easy/Medium/Hard[param_1->f0])  # the screen's own difficulty cursor
+    if cell->mode == 4 (Tournament):
+        Globals_Set("Tournament", "yourTourney")
+        hash = Libc_HashString(DAT_08b31158 + 0x74)        # tournament record key
+        DAT_08b31158->0xa0 = 0; DAT_08b31158->0xdc = 1; DAT_08b30fa4 = 0   # reset standings/leg counter
+        for each of cell->TournamentTrackCount (+0xf0) TournamentTrack name hashes (+0xf4):
+            FUN_088c3990(DAT_08b31158, hash)               # append a leg
+Store("DifficultyRC") = param_1->f0    # unconditional - runs even when param_2 == 0, see below
 ```
+
+`Store("DifficultyRC")` is **not** gated by `param_2` - the `if` above only
+guards the cell-specific writes; the difficulty persist sits at the
+function's single shared exit and runs on every call, cell selected or not.
+`cell->ship` (`+0xca`) written under the unnamed `"Team"` key is the literal
+string `"None"` on all 236 authored cells (`race-campaign.md`'s own
+"every cell carries `ship="None"`" finding), so the campaign writes `"None"`
+into `Team` rather than ever forcing a craft - consistent with
+`ShipChoice="Yes"`, not a new fact but a direct corroboration of it from a
+second call site.
 
 `Globals_Set` (`0x08888ee0`, confidence **85**) is the front-end global
 setter: it hashes `"FE_" + key` (`Globals_HashKey`, `0x08888db4`, confidence
@@ -607,9 +649,10 @@ inserts into a single flat hash table at `&DAT_08b317b8`, replacing any
 existing entry for that key first. **This is not a guess at the mechanism -
 it is the same function `TrackSelection_OnExit` (already named,
 [`race-box-screens.md`](race-box-screens.md)) calls to write the `Track`
-global** when a custom race is set up through `Track Creation`. Confirmed by
+global** when a custom race is set up through `Track Creation`, and the same
+one `TrackSelection_CommitSelection` above calls too. Confirmed by
 `get_function_callers(0x08888ee0)`, which lists `TrackSelection_OnExit`
-(`0x088ed6cc`) alongside `CellSelection_ConfirmCell_q` and three others. So
+(`0x088ed6cc`) alongside `CellSelection_CommitSelection` and three others. So
 **the campaign writes into the identical store the custom race box's screens
 write into**, under the identical key names `race-setup.md` already
 catalogued (`Mode`, `Class`, `Weapons`, `SkillLevel` - it calls the fourth
@@ -630,8 +673,13 @@ below.
 ### The record store keys a cell by a hash of its own authored `name` - not a grid/cell index pair
 
 Answers "how is a race mapped back to its cell": **`Libc_HashString`**
-(`0x08945890`, confidence **82** - `strlen` then `FUN_08945a08`, not itself
-renamed, on the cell's own literal name string) is what `PI_Cell_ParseElement`
+(`0x08945890`, confidence **85** - `strlen` then `FUN_08945a08`, decompiled
+this pass and confirmed as a textbook table-driven CRC32: init `0`, `(table[
+(crc ^ byte) & 0xff]) ^ (crc >> 8)` per byte against a 256-entry table at
+`DAT_08b04480`, final `XOR 0xffffffff`. That table is a different address
+from the already-named `g_wad_crc_table` (`0x08afbffc`, `Wad_HashName`,
+`wad-subsystem.md`) - whether the two tables hold the same 256 values was not
+checked) on the cell's own literal name string is what `PI_Cell_ParseElement`
 already calls (`race-campaign.md`'s `FUN_0880871c`, not renamed - the
 existing prototype-ambiguity caveat on it and on `FUN_08808624` stands and
 neither was touched this pass) to create a save record, keyed by
@@ -695,8 +743,9 @@ that `ScreenTitle`/`FE_RACE_CAM` pair as the last thing before its closing
 tag - copies one field (`+0x54`) from the current grid (`DAT_08b30fb8`) into
 an info-panel widget, and, when its own `param_2` is non-zero, re-runs the
 lock-overlay refresh loop over every cell definition. It does **not** write
-`DAT_08b30ffc` or any `Globals_Set` key itself - the write happens earlier,
-in `CellSelection_ConfirmCell_q`.
+`DAT_08b30ffc` or any `Globals_Set` key itself - the write happens in
+`CellSelection_CommitSelection` (word 39, not word 31 - see below), a
+separate vtable slot from this one.
 
 ### Two named, buttonless redirects - a mechanism this project has not documented before
 
@@ -717,40 +766,32 @@ Neither carries an `<a forward="..."/>` button condition - every other
 `<Redirect>` this project has read so far (`race-setup.md`'s "Redirect out"
 sections, this file's own `Definition_ParseUnlock` table) is either a button
 mapping or an `<Entry item=... equals=... goto=...>` value test. These two
-are named (`c="..."`) with no trigger at all, which reads as **fired by name
-from native code** rather than by input or by an XML-declared value test - a
-third redirect mechanism. Nothing in this pass located the native call site
-that picks between them (`get_xrefs_to`/`get_function_callers` on both
-`CellSelection_ConfirmCell_q` and the two redirect blocks' names all came
-back empty - the redirect names never appear as string literals in the
-executable, only inside the WAD's own XML, so they are resolved through the
-already-parsed screen tree rather than looked up by name at fire time).
+are named (`c="..."`) with no button or value trigger at all - a third
+redirect shape. `search_strings` for both names against the executable
+returns nothing, so native code is **not** looking either name up as a
+string at fire time; the two blocks are more likely selected by their
+position in the parsed redirect list, or through a pointer to the
+already-parsed XML node captured once at screen construction, than by name.
+Which, and from where, was not located this pass - `get_xrefs_to` on both
+redirect blocks' addresses and on `CellSelection_CommitSelection` returns
+nothing either (consistent with the vtable-dispatch pattern above: a value
+stored in a data structure, not a call site `get_xrefs_to` tracks).
 **Whether `Cell Mode Redirect Game` (straight to `Launch Game`, skipping
 `Team Selection`) is ever actually taken for a campaign cell, or exists only
 for a same-cell retry after a finished race, is open** - every campaign cell
 carries `ship="None" ShipChoice="Yes"`, so there is no obvious reason a first
 launch would skip craft selection, but nothing rules it out either.
 
-#### The callers - none of them found by cross-reference
-
-`CellSelection_ConfirmCell_q` itself has **no callers found** by either
-`get_function_callers` or `get_xrefs_to` - the same class of gap this
-project has already hit on `ScreenClass_Register`-style registration
-(`race-box-screens.md`'s "no callers found ... consistent with a
-`.ctors`/init-array table Ghidra does not track as a call"). The confidence
-on this function is capped at 68 for exactly this reason: the body is read
-in full and unambiguous, but nothing confirms *when* it runs relative to a
-button press, only that it is the one place a cell's fields reach the shared
-global store and `DAT_08b30ffc`.
-
 ### What the next pass should verify, in PPSSPP
 
 None of the above is runtime-verified. In order of how much each would move:
 
-1. **Breakpoint at `0x088d6138` (`CellSelection_ConfirmCell_q`) entry**,
-   press confirm on a grid cell in `Cell Selection`. Confirms this function
-   actually runs on a real confirm (not some other trigger), and a step-out
-   identifies the caller `get_xrefs_to` could not find.
+1. **Breakpoint at `0x088d6138` (`CellSelection_CommitSelection`) entry**,
+   press confirm on a grid cell in `Cell Selection`. Confirms the vtable-slot
+   reading above by showing it actually fires on a real confirm, and a
+   step-out identifies the dispatcher `get_xrefs_to` could not find (almost
+   certainly a generic `Screen_CommitSelection`-style virtual call, matching
+   how `Update`/`OnEnter`/`OnExit` are already known to be dispatched).
 2. **Watch `0x08b30ffc`** (`DAT_08b30ffc`) for writes across a full
    `Cell Selection -> Team Selection -> Launch Game` sequence, and check
    whether it is ever written `0` again before `Launch Game`'s own `OnEnter`
@@ -883,7 +924,9 @@ dictionary; expand `<x y="...">` by looking `x` and `y` up as `xs`/`ys`.
 | `0x08ab067c` | `g_class_name_table` (data) | 92 |
 | `0x088d5cb8` | `CellSelection_OnExit` | 82 |
 | `0x088d5de4` | `CellSelection_PopulateGrid` | 78 |
-| `0x088d6138` | `CellSelection_ConfirmCell` (applied as `_q`) | 68 |
+| `0x088d6138` | `CellSelection_CommitSelection` | 80 |
 | `0x08888ee0` | `Globals_Set` | 85 |
 | `0x08888db4` | `Globals_HashKey` | 78 |
-| `0x08945890` | `Libc_HashString` | 82 |
+| `0x08945890` | `Libc_HashString` | 85 |
+| `0x088ed784` | `TrackSelection_CommitSelection` | 80 |
+| `0x088e9fa0` | `TeamSelection_CommitSelection` | 74 |

@@ -91,7 +91,7 @@ The law, all decompiled and all in `race-campaign.md`:
   tournament's own standings, the state behind `ER_TOUR_STAN` /
   `ER_RACE_POINTS` / `ER_END_TOUR_1..8`. `DAT_08b31158` itself was still not
   identified, but its **seeding** now is: confirming a Tournament-mode cell
-  (`CellSelection_ConfirmCell_q`, `0x088d6138`) resets `DAT_08b31158+0xa0` to
+  (`CellSelection_CommitSelection`, `0x088d6138`) resets `DAT_08b31158+0xa0` to
   0, sets `+0xdc` to 1, resets the leg counter `DAT_08b30fa4` to 0, and
   appends one entry per `TournamentTrack` row via `FUN_088c3990` - see
   `race-campaign.md`'s new launch section. The per-leg accumulation itself
@@ -107,7 +107,10 @@ The law, all decompiled and all in `race-campaign.md`:
 - **Nothing is runtime-verified.** No PPSSPP breakpoint was taken; every score
   is capped in the 84-92 range.
 - **How a campaign event launches - traced 2026-09-14, not runtime-verified.**
-  `CellSelection_ConfirmCell_q` (`0x088d6138`) is where a confirmed cell's
+  `CellSelection_CommitSelection` (`0x088d6138`, confidence 80 - it is word
+  39 of the `CellSelection` vtable, positionally confirmed the same way
+  `Update`/`OnEnter`/`OnExit` already were, with the identical slot found on
+  `TrackSelection` and `TeamSelection` too) is where a confirmed cell's
   fields reach two places at once: `DAT_08b30ffc` (a raw `PI_Cell` pointer,
   already read elsewhere by `Cell_EvaluateMedal`'s callers,
   `Eliminator_UpdateKillTarget`, `AI_ResolveSkillScale` and `Hud_BindWidgets`)
@@ -122,9 +125,8 @@ The law, all decompiled and all in `race-campaign.md`:
   can't serve. Full detail, the record-store key (a hash of the cell's own
   `name` string, not a grid/cell index pair), and what remains
   unverified: `docs/ghidra/functions/psp-pulse-usa/race-campaign.md`'s new
-  "How a campaign event launches" section. **What is still open**: no caller
-  of `CellSelection_ConfirmCell_q` was found by cross-reference (confidence
-  capped at 68 for exactly that reason), and `CellMode_Definition.xml`
+  "How a campaign event launches" section. **What is still open**:
+  `CellMode_Definition.xml`
   carries two named, buttonless `<Redirect>` blocks (`Cell Mode Redirect
   Team` -> `Team Selection`, `Cell Mode Redirect Game` -> `Launch Game`
   directly) whose selection logic was not located - whether a campaign
