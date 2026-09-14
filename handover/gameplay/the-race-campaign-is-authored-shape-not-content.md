@@ -74,17 +74,55 @@ The law, all decompiled and all in `race-campaign.md`:
   recovers three parameters where every call site passes four; the fourth reads
   as create-if-missing but that is inference. Fixing the prototype in Ghidra and
   re-reading would let both be named and would firm up the record-store section.
-- **`Locked` on a `PI_Cell` is now settled, 2026-09-14**: `CellSelection_PopulateGrid`
-  (`0x088d5de4`) draws the `Lock_x_y` overlay exactly when `cell->Locked
-  (+0xb9) != 0` **and** `Cell_BestMedal(cell) == 0xff` (no medal earned yet) -
-  see `race-campaign.md`'s "Locked does drive the Lock_x_y overlay". Safe to
-  implement a lock from the attribute now, gated the same way. **Still open**:
-  `Status` on a `PI_Cell`, `Locked`/`Group` on a `PI_Grid`, and a six-neighbour
-  adjacency loop the same function runs when no medal is earned
-  (`FUN_088c072c`, coordinate table `0x08ab1e68`) that may be a *second*
-  unlock path layered on `Locked` - not traced, found on the way and left for
-  the next pass. `Definition_IsUnlocked` and `FUN_0888e5e4` remain ruled out
-  as any of these bytes' reader. `Group="1"` marks `grid12`..`grid15`.
+- **`Locked` on both `PI_Cell` (`+0xb9`) and `PI_Grid` (`+0xa0`) is fully
+  traced now, 2026-09-14** - see `race-campaign.md`'s new "Unlock rules, cell
+  and tier". The cell's `Lock_x_y` glyph is visible exactly when
+  `cell->Locked != 0` **and** `Cell_BestMedal(cell) == 0xff` **and** no
+  hex-adjacent cell has a medal either (`CellSelection_PopulateGrid`,
+  `0x088d5de4`) - three terms, not two: the six-neighbour adjacency loop the
+  previous pass flagged as a possible *second unlock mechanism* is now fully
+  decompiled and is not a second mechanism, but it **is** real, player-visible
+  unlock-display logic (`Grid_FindCellAtCoordinate`,
+  `g_anCellNeighbourOffsets` at `0x08ab1e68`, a `GridController_*` widget-flag
+  family) - `Locked` is the static default an unmedalled cell starts from,
+  and a medal (its own, or with a brief shared-timer fade, a neighbour's)
+  clears the glyph. It never writes `cell->Locked`, `PI_Grid.Locked`,
+  `Status`, or calls any `Unlock_*` predicate - only the glyph's visibility
+  changes. `GridSelection_PopulateTiles` (`0x088de630`, newly named) draws
+  the tier's own lock the same shape, off `grid->Locked` (`+0xa0`), with a
+  hard-coded "is the immediately-preceding tile's own points-required
+  already met" shortcut instead of calling `Unlock_GridPointsMet`. `Status`
+  on a `PI_Cell` remains untraced; `Group="1"` still just marks
+  `grid12`..`grid15`, consumer untraced. **Separately open**: whether an
+  absent `Locked` attribute truly defaults to `true` still can't be read from
+  `PI_Cell_ParseElement` alone - it never writes a default to `+0xb9`, so the
+  answer is in the (unlocated) object allocator, not this parser.
+- **New open question, and now the page's most important one: does `Locked`
+  (either byte) actually gate `Confirm`, or is it cosmetic end to end?** No
+  PI001 function this pass read - `CellSelection_CommitSelection`,
+  `CellSelection_Update`, `GridSelection_CommitSelection` (`0x088de180`,
+  newly named), or `StateMachine_TransitionTo` - ever refuses a transition on
+  either `Locked` byte, and the `GridSelection` screen's own XML redirect on
+  confirm is unconditional. Yet `docs/ui/campaign-screens.md` measured live
+  that confirming a locked `Grid Selection` tile does nothing. The likely
+  explanation is a generic, non-PI001 widget rule (a focused tile can't be
+  confirmed while its lock layer is visible) that this pass's tools (Ghidra
+  bridge only) could not reach - if real, it would mean the cell-level
+  `Locked` byte is *also* a real gameplay gate, just enforced once,
+  generically. Three concrete breakpoints for whoever holds PPSSPP next are
+  listed at the end of `race-campaign.md`'s new section.
+- **`Grid`/`Grid1` are a double-buffer pair**, settled this pass:
+  `GridSelection_Update` toggles which of the two holds the currently-shown
+  page (`+0x114`, flipped on every page move) while the other is repopulated
+  with the incoming page - not two independent widgets. This also explains
+  the earlier "no crossfade" screen capture: an index flip between two
+  already-populated widgets has nothing to interpolate.
+- **Negative result: the cell d-pad movement rule is not the six-neighbour
+  table.** `Grid_FindCellAtCoordinate` and `g_anCellNeighbourOffsets` have
+  exactly one caller between them (`CellSelection_PopulateGrid`), confirmed
+  by `get_function_callers` - no input-handling code reaches either. The real
+  cursor-movement code was not located; a reimplementation is still on its
+  own chosen nearest-neighbour search.
 - **The `Tournament` arm of `Race_RecordResult` does a second record lookup**
   that no other arm does, keyed on `Libc_HashString(DAT_08b31158 + 0x74)`
   (named 2026-09-14; formerly `FUN_08945890`) rather than on the cell - the
@@ -232,3 +270,31 @@ The law, all decompiled and all in `race-campaign.md`:
   keeps gold/silver/bronze counters at `+0x160`/`+0x164`/`+0x168` and a dirty
   flag at `+0x45e`, and a custom grid's medals deliberately do **not** count
   toward them.
+- **A front-end pass can now draw both locks for real**, 2026-09-14, and both
+  are the same three-term shape - `Locked` as the static default, cleared by
+  *this thing's own progress* or by *the adjacent thing's progress*: the cell
+  glyph needs `cell->Locked != 0` and no medal of its own and no hex-adjacent
+  cell with a medal either; the tier glyph needs `grid->Locked != 0` and this
+  grid's own `Grid_PointsEarned == 0` and the previous tile's own
+  points-required not yet met (see `race-campaign.md`'s "Unlock rules, cell
+  and tier"). The tier side's
+  "previous tile" shortcut is the original's own actual code path, though
+  calling `Unlock_GridPointsMet` against the grid's own `<Unlock
+  Grid=>` target is the more correct rule to implement (they agree on all 16
+  shipped grids; only the hard-coded shortcut would diverge on a hypothetical
+  non-adjacent `<Unlock Grid=>`, which nothing shipped exercises). **Whether a
+  `Locked` glyph also has to block actually entering/playing that cell or
+  tier is still open** - see the new bullet above - so a first pass should
+  treat the glyph as authoritative for *drawing* the lock and treat
+  *blocking* the confirm action as a separate, still-unverified decision;
+  gating on `Locked` for both would match the tier-level PPSSPP capture at
+  the cost of possibly over-blocking cells if the cell-level lock turns out
+  to be cosmetic-only in the original.
+- **Next PPSSPP pass, three breakpoints, in order of what each would settle**:
+  (1) confirm on a `Locked`, unmedalled, no-medalled-neighbour cell - does
+  `CellSelection_CommitSelection` fire at all; (2) single-step from an armed
+  confirm press to `StateMachine_TransitionTo`'s entry on a locked grid tile,
+  to find what (if anything) suppresses the attempt; (3) read the
+  `GridController` tile's own `+0x2c` flags on a locked tile for an
+  "interactive" bit, to check the generic-widget-rule hypothesis
+  structurally. Full detail in `race-campaign.md`'s new section.

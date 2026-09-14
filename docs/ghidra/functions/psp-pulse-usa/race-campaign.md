@@ -701,18 +701,19 @@ plain settings value all share - not a structure specific to `PI_Cell`.
 
 ### `Locked` does drive the `Lock_x_y` overlay - closing that open item, at least for the `PI_Cell` byte
 
-`CellSelection_PopulateGrid` (`0x088d5de4`, confidence **78** - direct read,
-not runtime-verified) fills the hex overlay per cell and settles what the
+`CellSelection_PopulateGrid` (`0x088d5de4`, confidence **85**, raised from 78 -
+the six-neighbour loop below is now fully decompiled, though still not
+runtime-verified) fills the hex overlay per cell and settles what the
 previous pass and `race-box-screens.md` both left open at 50:
 
 ```
 medal = Cell_BestMedal(cell)                  # already-named accessor
 draw_base_overlay(x, y)
 if cell->Locked (+0xb9) != 0 and medal == 0xff:
-    draw_lock_overlay(x, y)                   # the Lock_x_y glyph
+    draw_lock_overlay(x, y)                   # the Lock_x_y glyph, fully opaque
 if medal == 0xff:
-    ... # a six-neighbour adjacency loop, FUN_088c072c against a coordinate
-        # table at &DAT_08ab1e68 - not traced further, flagged below
+    ... # a six-neighbour adjacency loop - see "Unlock rules, cell and tier" below,
+        # now fully traced: it is cosmetic, not a second unlock mechanism
 else:
     draw_medal_colour(x, y, gold/silver/bronze[medal])   # Medal_x_y
 ```
@@ -720,15 +721,16 @@ else:
 So **`Locked="true"` does gate the lock glyph, directly, and only while no
 medal has been earned on that cell** - the earlier "redundant against
 `<Unlock>`" hypothesis is not what the code does; a `Locked` cell that has
-never been medalled shows locked regardless of what else is true. Confidence
-**78**, capped because the six-neighbour loop this same function runs when
-`medal == 0xff` (`FUN_088c072c`, a coordinate table at `0x08ab1e68`) was not
-traced this pass and may be a *second*, adjacency-based unlock path layered
-on top of the `Locked` byte - found on the way per the "cheap only"
-instruction for this section, left for whoever picks it up next rather than
-chased further here. **`Status` (`+0xb8`) and `PI_Grid`'s own `Locked`
-(`+0xa0`) remain untouched by anything this pass read** - only the `PI_Cell`
-byte at `+0xb9` is settled.
+never been medalled shows locked regardless of what else is true.
+**Correction to the previous pass's own hedge**: the six-neighbour loop this
+same function runs when `medal == 0xff` is traced in full below
+("Unlock rules, cell and tier") and is **not** a second, adjacency-based
+gameplay-unlock path - it only decides whether the lock glyph is shown, tinted
+or fading, and never touches `cell->Locked`, `PI_Grid.Locked` or any
+`Unlock_*` predicate. **`Status` (`+0xb8`) and `PI_Grid`'s own `Locked`
+(`+0xa0`) are addressed below too** - `Status` remains untouched by anything
+this pass read, but `PI_Grid.Locked` is now settled the same way `PI_Cell`'s
+byte is.
 
 ### `CellSelection_OnExit` (`0x088d5cb8`) - the given vtable slot, read in full
 
@@ -802,9 +804,11 @@ None of the above is runtime-verified. In order of how much each would move:
    `Launch Game` actually read the string global, or only `DAT_08b30ffc`.
 4. **Breakpoint at `0x088d5de4`** (`CellSelection_PopulateGrid`) with a save
    carrying a `Locked="true"` cell with no medal, then again after medalling
-   it, to confirm the lock-glyph branch flips as read above - and, if time
-   allows, step into `FUN_088c072c`'s six-neighbour loop to settle whether it
-   is a second unlock path.
+   it, to confirm the lock-glyph branch flips as read above. **Answered this
+   pass without a breakpoint**: the six-neighbour loop
+   (`Grid_FindCellAtCoordinate`/`g_anCellNeighbourOffsets`, decompiled in
+   full) is not a second unlock path - see
+   ["Unlock rules, cell and tier"](#unlock-rules-cell-and-tier) above.
 5. **Confirm a Tournament-mode cell** and watch `DAT_08b31158` and the
    `FUN_088c3990` calls to verify the per-leg standings reset this pass
    read matches what the previous pass's "Tournament" open item described in
@@ -930,6 +934,397 @@ by hand, both out of scope for this pass. `DAT_08b31158` was not watched.
 Left for a pass that either plays a race to earn the 12 points `grid0`
 needs, or accepts the risk of a direct memory write to force an unlock.
 
+## Unlock rules, cell and tier
+
+Traced 2026-09-14, entirely from decompilation with the Ghidra bridge - no
+PPSSPP breakpoint was taken this pass (the bridge was the only tool held).
+This closes the previous pass's "may be a second unlock mechanism" hedge on
+the six-neighbour loop, and reads the `Grid Selection` tier's own lock glyph
+for the first time.
+
+**Read this section as two separate questions, answered to very different
+degrees.** "When is the lock glyph drawn" is settled below at high
+confidence for both the cell and the tier, and it is a real, three-term,
+player-visible rule on each screen - not a cosmetic detail. "When is a cell
+actually playable, and when is a tier actually enterable" - i.e. whether
+`Confirm` itself is refused - is **not** settled: no PI001 function this
+pass traced ever refuses a transition on either `Locked` byte, yet PPSSPP
+measured live that confirming a locked tier does nothing. The glyph rule is
+not evidence either way for the confirm question; see the dedicated
+paragraphs below and the three breakpoints at the end of this section.
+
+### The cell unlock rule: `Locked` is the static default, and a medal (the cell's own or a hex neighbour's) clears it
+
+`Grid_FindCellAtCoordinate` (`0x088c072c`, confidence **85**) is a plain
+linear search: given a grid's cell list and an `(x, y)` pair, it walks the
+list (the same iterator, `FUN_088bff48`, every other cell-list walk in this
+file uses) comparing each cell's `+0x124`/`+0x128` - the coordinates
+`PI_Cell_ParseElement` already parses out of the cell's own name - and
+returns the first match or `0`. It has exactly one caller,
+`CellSelection_PopulateGrid`, confirmed by `get_function_callers`.
+
+`g_anCellNeighbourOffsets` (data, `0x08ab1e68`, confidence **85**) is not one
+six-entry table but **two**, back to back, 48 bytes (six `(dx, dy)` `int32`
+pairs) each:
+
+| Direction | Even `x` (bytes `0x00-0x2f`) | Odd `x` (bytes `0x30-0x5f`) |
+| --- | --- | --- |
+| left | `(-1, 0)` | `(-1, 0)` |
+| up | `(0, -1)` | `(0, -1)` |
+| right | `(1, 0)` | `(1, 0)` |
+| down | `(0, 1)` | `(0, 1)` |
+| diagonal 1 | `(-1, -1)` | `(-1, 1)` |
+| diagonal 2 | `(1, -1)` | `(1, 1)` |
+
+The four orthogonal offsets are identical for both parities; only the two
+diagonals flip between "up-left/up-right" (even columns) and
+"down-left/down-right" (odd columns) - exactly the offset-column convention a
+staggered hex grid needs, and read directly off the raw bytes (`read_memory`
+on `0x08ab1e68`, 96 bytes), not inferred.
+
+`CellSelection_PopulateGrid`'s neighbour loop, decompiled in full
+(disassembly at `0x088d5fb0`-`0x088d60c0`, confidence **85**):
+
+```
+if medal == 0xff:                                            # this cell has no medal
+    table = (x & 1) ? g_anCellNeighbourOffsets[6..11] : g_anCellNeighbourOffsets[0..5]
+    found = false
+    for (dx, dy) in table:                                    # six tries
+        neighbour = Grid_FindCellAtCoordinate(current_grid, x + dx, y + dy)
+        if neighbour != 0 and Cell_BestMedal(neighbour) != 0xff:   # a medalled neighbour exists
+            GridController_ClearTileFlags(widget, LOCK_LAYER, x, y, VISIBLE)   # hide the lock glyph
+            if GridController_IsLockFading_q(widget, x, y):        # was already fading out
+                GridController_SetLockTint(widget, 0xff, x, y)     # reset its tint to opaque white
+                found = true
+            break
+    if GridController_IsLockFading_q(widget, x, y) and not found:
+        GridController_ClearLockFade_q(widget, x, y)                # stop the fade, no neighbour found
+```
+
+`GridController_SetTileFlags`/`ClearTileFlags` (`0x088a3638`/`0x088a374c`,
+confidence **82** each), `GridController_SetTileColor`/`SetLockTint`
+(`0x088a3850`/`0x088a3ad0`, confidence **85**/**78**) and
+`GridController_IsLockFading_q`/`ClearLockFade_q`
+(`0x088a39d4`/`0x088a39ac`, confidence **65** each, `_q` - the *reader*
+behaviour is measured directly in `CellSelection_Update` below, but the bit's
+name is inferred from that one consumer, not itself documented) are a shared
+widget-layer accessor family: each takes a `(widget, layer, x, y)` tile
+address, where `layer` selects one of three overlapping sub-widgets per
+`(x, y)` slot (`1`/`2`/`4` at byte offsets `+0xc0`/`+0x1c0`/`+0x2c0` off the
+tile's base) - `1` the base hex, `2` the medal-colour swatch, `4` the lock
+glyph. They are used identically by `GridSelection_PopulateTiles` below, so
+they belong to the shared `GridController` widget class both screens'
+hex/row layouts are built from, not to `CellSelection` alone.
+
+**`GridController_IsLockFading_q`'s bit is a fade-out timer flag, read
+(not written) by `CellSelection_Update`'s own per-cell loop**
+(`FUN_088d6430`, already on this page; full body re-read this pass): every
+frame, for every cell whose bit is set, it computes
+`elapsed = currentTime - screen->+0xc8` - **one shared timestamp on the
+screen object itself, not a per-cell start time**, so every currently-fading
+lock glyph on the whole grid fades on one synchronised schedule, not
+independently from when each one's neighbour was medalled - and either
+interpolates the lock glyph's alpha down towards zero
+(`GridController_SetLockTint`) while `elapsed` is still under a threshold,
+or - once the threshold passes - hides the glyph outright
+(`GridController_ClearTileFlags`) and clears the bit
+(`GridController_ClearLockFade_q`). The writer of `screen+0xc8` was not
+located this pass. `GridController_ResetLockFades_q` (`0x088a3a40`,
+confidence **68**, `_q`) clears the bit for every `(x, y)` in the grid's own
+bounding box, and is what `CellSelection_PopulateGrid` calls on first entry
+(or when the current grid changed) to discard stale animation state.
+
+**Checked and ruled out as the fade-bit's setter**:
+`GridController_SetTileFlags` (`0x088a3638`) ends with an unconditional call
+to `FUN_088a38d0(widget, x, y)`, which looked like a promising candidate for
+turning the `+0x3c4` fade bit on - but it decompiles to
+`*(*(widget+0xb8) + y*4) |= 1 << x`, a **different** row-bitmask pointer
+field (`+0xb8`, not `+0x3c4`) on the same widget, structurally identical but
+distinct. `GridController_ClearTileFlags` has no matching call at all, so
+whatever `+0xb8` tracks is set on every layer-flag write and never cleared
+by the tile-flag accessors themselves - read as "this tile has been
+drawn/touched," not lock-fade state. **The actual setter of the `+0x3c4`
+fade bit was not found this pass.**
+
+**The conclusion this settles, restated as the actual display-level
+predicate rather than "cosmetic vs not"**: the cell's lock glyph is visible
+exactly when
+
+```
+cell->Locked (+0xb9) != 0
+  and Cell_BestMedal(cell) == 0xff             # the cell has no medal of its own
+  and no hex-adjacent cell has a medal either  # the six-neighbour check
+```
+
+`Locked` is the **static default** an unmedalled cell starts from; a medal -
+the cell's own, or (with a brief fade) a hex neighbour's - is what actually
+*clears* the glyph. Calling the neighbour loop "cosmetic" undersells it: it
+is real, player-visible unlock-*display* logic, decompiled in full and
+correct at confidence **85**. What is **not** settled, and is a genuinely
+separate question from the display rule above, is whether this predicate (or
+any part of it) also gates whether the cell can be *played* - see below.
+`g_anCellNeighbourOffsets`'s two-parity table and
+`Grid_FindCellAtCoordinate` never write `cell->Locked`, `PI_Grid.Locked`,
+`Status`, or call any `Unlock_*` predicate - only the glyph's visibility and
+fade state change.
+
+**One live-capture caveat this reading exposes**: the profile
+`docs/ui/campaign-screens.md` captured had zero medals earned anywhere, so
+the neighbour clause could never have fired in that session - the capture
+(`grid0`'s lock glyph on exactly the cells with no authored `Locked`
+attribute) is evidence for the *two-term* `Locked && no own medal` shape and
+says nothing about the third, neighbour-medal term. The "absent `Locked`
+defaults to `true`" reading (confidence 72) is unaffected by this, since
+none of those cells had a medalled neighbour either.
+
+**Where the "absent defaults to true" question actually has to be settled,
+and why it wasn't this pass**: `PI_Cell_ParseElement` (`0x088bf83c`, full
+body decompiled this pass) never writes a default value to `+0xb9` - the
+`Xml_AttributeAsBool(attr, param_1+0xb9, 1)` call only runs inside the
+`if (attribute name is "Locked")` branch, so an absent attribute leaves the
+byte at whatever the `PI_Cell` object already held before parsing began.
+That makes the answer depend entirely on the object's allocator (zero-init
+would default to `false`, a deliberate pre-fill to `true` would explain the
+capture), which is a different function from this one. `PI_Cell_ParseElement`
+has **no direct callers or xrefs** (`get_function_callers` and `get_xrefs_to`
+both return nothing) - it is reached the same vtable/generic-XML-dispatch
+way every other `_ParseElement` in this file is, so finding the allocator
+means tracing that dispatch table, not this function. Left open; the
+existing confidence-72 reading stands as a live-capture inference, not a
+decompiled fact.
+
+**What is still open, and could not be settled from decompilation alone**:
+neither `CellSelection_CommitSelection` (`0x088d6138`) nor
+`CellSelection_Update` (`0x088d6430`) reads `cell->Locked` or
+`Cell_BestMedal` to *refuse* committing the currently-selected cell - as far
+as PI001's own code goes, **confirming a `Locked="true"`, no-medal, no
+medalled-neighbour cell would launch it normally**. Whether that is actually
+true in the original, or a generic (non-PI001) widget rule refuses `Confirm`
+whenever the focused tile's lock layer is visible, is exactly the same open
+question the tier rule below raises, and is the single highest-value
+breakpoint left for whoever holds PPSSPP next (see "What the next pass
+should verify" at the end of this section).
+
+### The tier unlock rule: `PI_Grid.Locked` is the static default, cleared by this grid's own points or the previous tile's
+
+`GridSelection_PopulateTiles` (`0x088de630`, confidence **82** - the
+`GridSelection` counterpart to `CellSelection_PopulateGrid`, same
+`GridController_*` accessor family, not runtime-verified) fills the four
+tiles of the currently-shown page:
+
+```
+for column in 0..3:                                          # the four tiles on this page
+    grid = GridSelection_FindTileAt(screen, column, current_page)
+    if grid == 0: continue
+    GridController_SetTileFlags(widget, BASE_LAYER, column, 0, VISIBLE)
+    GridController_SetTileColor(widget, BASE_LAYER, column, 0, pulsing_teal)
+    if grid->Locked (+0xa0) != 0:                             # PI_Grid's own Locked byte
+        GridController_SetTileFlags(widget, LOCK_LAYER, column, 0, VISIBLE)
+        GridController_SetTileColor(widget, LOCK_LAYER, column, 0, pulsing_white)
+        previous = GridSelection_FindTileAt(screen, column - 1, page (wrapping to the prior page's last slot))
+        if previous != 0 and cached_required_points[previous] <= cached_points_earned[previous]:
+            GridController_ClearTileFlags(widget, LOCK_LAYER, column, 0, VISIBLE)   # previous tile's points met - hide anyway
+    pointsEarned = cached_points_earned[grid]
+    if pointsEarned != 0:                                     # this grid has any points of its own
+        GridController_ClearTileFlags(widget, LOCK_LAYER, column, 0, VISIBLE)       # hide the lock unconditionally
+        GridController_SetTileColor(widget, COLOUR_LAYER, column, 0, medal_tier_colour(pointsEarned, ...))
+```
+
+This last `if pointsEarned != 0` check runs **unconditionally after the
+`Locked` branch**, not inside it - so a grid the player has already scored
+any points in has its lock glyph hidden regardless of `Locked` and
+regardless of the previous tile, exactly mirroring the cell rule's "the
+cell's own medal clears it" term. The full three-term predicate, symmetric
+with the cell one above:
+
+```
+tier lock glyph visible  ⟺  grid->Locked (+0xa0) != 0
+                        AND  this grid's own Grid_PointsEarned == 0
+                        AND  NOT (previous tile's earned >= previous tile's required)
+```
+
+`GridSelection_FindTileAt` (`0x088de320`, confidence **80**) is
+`GridSelection`'s own coordinate lookup, structurally identical to
+`Grid_FindCellAtCoordinate` but over the cached `PI_Grid*` array
+`GridSelection_PopulateGrids` builds, matching against two **previously
+undocumented** `PI_Grid` fields at `+0xa8` and `+0xac` (not parsed by
+`PI_Grid_ParseElement`, so written elsewhere, presumably at
+grid-list-collection time as the grid's own flat tile position: column
+`0..3` and page `0..3`). Their writer was not located this pass, so they are
+recorded here as bare offsets rather than named.
+
+**So `PI_Grid.Locked` (`+0xa0`) does drive the tier's lock glyph directly**,
+closing race-campaign.md's own long-standing "`Locked` on `PI_Grid`... no
+consumer traced" item (see "The authored data" section above) - the same
+shape as the `PI_Cell` finding, and settled by the same kind of read.
+Confidence **82**.
+
+**The "previous tile" check is a hard-coded UI shortcut, not the real
+`<Unlock Grid="...">` predicate.** It does not call `Unlock_GridPointsMet`
+(`0x0888ebd8`) or read the `<Unlock>` node's `Grid=` attribute at all -
+it directly compares the *immediately preceding tile's own* cached
+points-earned/required-points (the same arrays `GridSelection_PopulateGrids`
+builds for the honey-counter math already documented above). This
+reproduces the correct shipped behaviour **only because** every authored
+`<Unlock Grid=>` from `grid1` onward names exactly the tile immediately
+before it - a fact this page's own unlock-ladder table already established
+(`grid1` unlocks on `Grid0`, `grid2` on `Grid1`, ... `grid15` on `Grid14`).
+Nothing in the 16 shipped grids exercises the divergent case (a grid naming
+a non-adjacent `<Unlock Grid=>`), so the UI's shortcut and the data-driven
+mechanism cannot be told apart on the shipped disc - but they are two
+different code paths, and a modded or future grid that broke the adjacency
+assumption would show the wrong lock state without actually being ungated
+(or vice versa). Confidence **85** for the mechanism, **90** for "it
+reproduces the shipped ladder" (arithmetic invariant against the existing
+12/16/20/24/28 table).
+
+**`GridSelection_CommitSelection` (`0x088de180`, word 39 of `GridSelection`'s
+vtable at `0x08ad0064`, positionally confirmed the same `read_memory` way
+`CellSelection`'s was - word 9 at this address decodes to
+`GridSelection_Update` and word 29 to `GridSelection_OnEnter`, both already
+named, corroborating the offset) does not check `Locked` at all.** In full:
+
+```
+FUN_088902c8()                                    # base-class hook, unread - shared with CellSelection_CommitSelection
+if screen->highlightedIndex (+0xdc) != -1:
+    DAT_08b30fb8 = screen->gridDefinitions[+0xdc]   # unconditional - no Locked check
+    if DAT_08b30fb8 != 0:
+        strcpy(DAT_08b30fbc, DAT_08b30fb8->name)    # +0x74, display copy
+```
+
+Confidence **82**. So, precisely mirroring the cell-level finding: **no
+PI001 function this pass traced ever refuses a grid-tier confirm.** The
+`GridSelection` screen's own XML redirect
+(`Data\Plugins\PI001\GUI\CellMode_Definition.xml`,
+`<Screen type="GridSelection">`'s own `<Redirect><Default
+goto="Cell Selection"/></Redirect>`) is **unconditional** too - no `<a
+forward=>` button guard, no `<Entry item= equals=>` value test, unlike every
+other conditional redirect this file documents. Yet
+[`docs/ui/campaign-screens.md`](../../../ui/campaign-screens.md)'s "Grid-tier
+locking is not cosmetic" finding measured, live, that pressing `Confirm` on a
+`Locked="true"` tile does nothing. **Both facts are true at once only if the
+actual refusal lives outside PI001** - most plausibly a generic widget/engine
+rule ("a focused `GridController` tile cannot be confirmed while its
+lock-layer flag is set"), which this pass's scope (the Ghidra bridge, PI001's
+own functions only) cannot reach. If that generic rule exists, it would
+apply to `CellSelection` identically, which would mean the cell-level
+`Locked` byte is **also** a real gameplay gate after all - just enforced once,
+generically, rather than duplicated per screen. This is now the single most
+important open question this page has, because it recasts both "is this cell
+playable" and "is this tier enterable" as depending on the same unresolved
+mechanism rather than two independent ones.
+
+### The dispatcher at `0x08891360`: it is `StateMachine_TransitionTo`, already named, and the redirect chain lives inside it
+
+`0x08891360` (the return address the previous pass's PPSSPP breakpoint
+caught) is not a function entry point - it is the instruction immediately
+after the `jalr` at `0x08891358` inside `StateMachine_TransitionTo`
+(`0x0889123c`, confidence 88, already named and documented on
+[`main-loop.md`](main-loop.md)). Confirmed by `get_function_by_address` (body
+`0889123c`-`08891447`) and by disassembling that range directly: the `jalr`
+at `0x08891358` calls `*(*(int*)(old_state + 0x38) + 0x9c)` - word 39, byte
+offset `0x9c`, the exact `CommitSelection` slot this page already
+positionally confirmed on `CellSelection`, `TrackSelection` and
+`TeamSelection` - on `old_state` (found via `StateMachine_FindState` against
+the machine's current-state name), passing through the transition's own
+`param_3`. This is the generic "`Screen_CommitSelection`-style virtual call"
+the previous pass predicted from the runtime trace alone; confidence **90**
+for "`StateMachine_TransitionTo` is what calls a screen's word-39 slot on the
+way out," now read directly from the decompile rather than inferred from one
+return address.
+
+**New this pass: the `<Redirect>` mechanism itself is implemented inside
+this same function, and needs no button or name lookup at all.** Immediately
+after the `CommitSelection` call, at `0x08891360`-`0x08891398`:
+
+```
+while (new_state->flags (+0xd0) & 1) and (new_state->redirectTarget (+0x94) != 0):
+    new_state = StateMachine_FindState(machine, new_state->redirectTarget, create=1)
+```
+
+So a `<Redirect>` block is simply a state table entry with bit 0 of a flags
+byte at `+0xd0` set and a resolved target pointer at `+0x94` - `<Default
+goto="X">` is what populates `+0x94`. The chain is walked *before* the final
+state's `OnEnter` (`+0x74`) fires and *before* the outgoing state's `OnExit`
+(`+0x7c`) fires (call order: `CommitSelection(old)` -> walk redirects ->
+`OnEnter(new)` -> `OnExit(old)`). This is a **name-free, button-free
+selection**: whichever other state names a redirect block as its own `goto`
+target is the only thing that ever reaches it, exactly matching the earlier
+pass's own finding that `search_strings` turns up neither
+`"Cell Mode Redirect Team"` nor `"Cell Mode Redirect Game"` anywhere in the
+executable - native code never needs to look either name up, because nothing
+resolves a redirect *by* name at transition time. **Still open**: which
+state names `Cell Mode Redirect Game` as its `goto` (skipping straight to
+`Launch Game`) was not located this pass either - that requires reading the
+XML's own button/`<a forward=>` wiring for `CellSelection`'s confirm action,
+not this generic transition function, and is a different investigation from
+the one this pass's tools (the Ghidra bridge alone) are suited to finish
+quickly.
+
+### `Grid`/`Grid1`: a double-buffer pair, not two independent widgets
+
+`GridSelection_Update` (`0x088dec24`, already named, re-read in full this
+pass) toggles an index at `screen+0x114` between `0` and `1` on every
+successful page move (`*(uint*)(screen+0x114) = (index + 1) & 1`), and reads
+`screen+0x10c`/`screen+0x110` (`Grid`/`Grid1`) as a two-element array indexed
+by it - `screen + index*4 + 0x10c`. On a page move it: clears the cursor-
+highlight flag (bit `0x200`) on the **currently active** buffer,
+re-populates the buffer that is about to become active via
+`GridSelection_PopulateTiles` with the new page's four grids, flips the
+index, then sets the cursor-highlight flag on the **newly active** buffer.
+Confidence **82** - direct decompile of the toggle and the flag writes, not
+runtime-verified.
+
+This settles what the previous pass scored 50: `Grid`/`Grid1` are a
+**double-buffered pair of the same `GridController` row widget**, one always
+holding the currently-displayed page and the other being (re)populated with
+the *next* page in the background, swapped by flipping which one is
+"active" rather than by animating either one's contents. It also explains,
+structurally, [`docs/ui/campaign-screens.md`](../../../ui/campaign-screens.md)'s
+"no visible crossfade... down to the earliest captured frame" finding: an
+index flip between two already-fully-populated widgets has no interpolated
+state to be caught mid-transition, unlike a blend or scroll would.
+
+### The cell movement rule: not this table - a negative result
+
+`Grid_FindCellAtCoordinate` and `g_anCellNeighbourOffsets` have **exactly one
+caller between them**, `CellSelection_PopulateGrid` (confirmed by
+`get_function_callers` on both) - neither is reached from any
+button/d-pad-handling code this pass located. `CellSelection_Update`
+(`0x088d6430`, read in full) drives the AI-difficulty cycle (button 7) and
+the per-cell fade timers, but never reads a directional input at all; cursor
+movement across the hex grid must be driven by a different function this
+pass did not find, most plausibly on the same generic, non-PI001
+`GridController` widget class the tier-confirm question above also points
+to. **So the six-neighbour table does not double as the movement rule** -
+this project's own chosen nearest-neighbour cursor search on the staggered
+grid is not yet correctable against a real one from this pass's evidence.
+Left open.
+
+### What the next pass should verify, in PPSSPP
+
+In order of how much each would move, and additive to the priority list the
+previous pass already left:
+
+1. **Breakpoint on `Confirm`/cross with the cursor on a `Locked="true"`,
+   unmedalled `Cell Selection` tile that also has no medalled hex neighbour**
+   (`grid0` has none such once a few cells are medalled, or use a fresh
+   profile's `grid1`+ once reachable). Does `CellSelection_CommitSelection`
+   (`0x088d6138`) fire at all? If it does not, the refusal is a generic
+   widget rule and both open items above (cell and tier) collapse to the
+   same mechanism; if it does fire, `Locked` is confirmed cosmetic-only at
+   the cell level and the tier-level refusal is a *different*, still-unknown
+   mechanism.
+2. **Single-step (or breakpoint) the widget/input code between an armed
+   `Confirm` press and `StateMachine_TransitionTo`'s entry**, on a locked
+   `Grid Selection` tile, to find what (if anything) suppresses the
+   transition attempt before it starts - this is the direct way to answer
+   (1) without needing a second cell-level test.
+3. **Read `*(GridController+0x2c)` on a locked tile** (both a `Grid
+   Selection` tile and a `Cell Selection` cell) for a bit that flags
+   "not interactive," to check the "generic rule" hypothesis structurally
+   rather than behaviourally.
+
 ## What is not determined
 
 - **`g_class_name_table` (`0x08ab067c`) is read above as four entries, and a
@@ -959,19 +1354,44 @@ needs, or accepts the risk of a direct memory write to force an unlock.
   `0x088207e4` (a results-screen `sprintf` of `cell + 0xa0`),
   `Eliminator_UpdateKillTarget_q` and `AI_ResolveSkillScale`. Confidence **50**,
   deliberately not renamed.
-- **`Locked` (`+0xb9`) on a `PI_Cell` is now settled**: `CellSelection_PopulateGrid`
-  (`0x088d5de4`) draws the `Lock_x_y` overlay exactly when `Locked != 0` and
-  no medal has been earned on the cell yet - see
-  ["Locked does drive the Lock_x_y overlay"](#locked-does-drive-the-lock_x_y-overlay---closing-that-open-item-at-least-for-the-pi_cell-byte)
-  above. **`Status` (`+0xb8`) on a `PI_Cell`, and `Locked` (`+0xa0`) on a
-  `PI_Grid`, are still untraced** - no shipped grid file sets `Status`, and
-  the same function's six-neighbour adjacency loop (`FUN_088c072c`, not
-  traced) may be a second mechanism layered on `Locked` rather than the
-  `PI_Grid` byte; `Definition_IsUnlocked` and `FUN_0888e5e4` remain ruled out
-  as either's reader.
+- **`Locked` on both `PI_Cell` (`+0xb9`) and `PI_Grid` (`+0xa0`) is now
+  settled, 2026-09-14** - see
+  ["Unlock rules, cell and tier"](#unlock-rules-cell-and-tier) above.
+  `CellSelection_PopulateGrid` (`0x088d5de4`) and `GridSelection_PopulateTiles`
+  (`0x088de630`) each draw their own lock glyph exactly when `Locked != 0` and
+  no medal/points threshold has been met yet. **The six-neighbour adjacency
+  loop is traced in full and is *not* a second unlock mechanism** - it is a
+  cosmetic lock-glyph fade trigger (`Grid_FindCellAtCoordinate`,
+  `g_anCellNeighbourOffsets`, the `GridController_*` widget-flag family), and
+  the tier side has its own hard-coded "previous tile" shortcut instead of
+  calling `Unlock_GridPointsMet`. **`Status` (`+0xb8`) on a `PI_Cell` remains
+  untraced** - no shipped grid file sets it. `Definition_IsUnlocked` and
+  `FUN_0888e5e4` remain ruled out as any of these bytes' reader.
+- **Whether `Locked` (either byte) actually gates `Confirm`, or is purely
+  cosmetic, is now the page's single open question**, not "untraced": no
+  PI001 function this pass read (`CellSelection_CommitSelection`,
+  `CellSelection_Update`, `GridSelection_CommitSelection`,
+  `StateMachine_TransitionTo`, the `GridSelection` screen's own XML redirect)
+  ever refuses a transition on either byte, yet
+  [`docs/ui/campaign-screens.md`](../../../ui/campaign-screens.md) measured
+  live that confirming a locked `Grid Selection` tile does nothing. The
+  likely explanation - a generic, non-PI001 `GridController`/widget rule
+  keyed on the lock layer's own visibility flag - was not locatable with the
+  Ghidra bridge alone; three concrete breakpoints are listed at the end of
+  "Unlock rules, cell and tier" for whoever holds PPSSPP next.
 - **`Group` (`+0xb0`) on a `PI_Grid`** is `1` on `grid12`..`grid15` and absent
   elsewhere; its consumer was not traced. A "these four are the expert set"
   reading is plausible and unverified.
+- **`PI_Grid` carries two more previously-unlisted fields, `+0xa8` and
+  `+0xac`**, read by the new `GridSelection_FindTileAt` (`0x088de320`) as a
+  `(column, page)` tile position - not written by `PI_Grid_ParseElement`, so
+  computed elsewhere at grid-list-collection time. Writer not located.
+- **The cell cursor-movement rule (d-pad across the staggered hex grid) is
+  not `g_anCellNeighbourOffsets`** - that table and
+  `Grid_FindCellAtCoordinate` have exactly one caller between them
+  (`CellSelection_PopulateGrid`, confirmed by `get_function_callers`), not
+  any input-handling code. The real movement rule was not located this pass;
+  a reimplementation is still on its own chosen nearest-neighbour search.
 - **The `Loyalty` unlock predicate** (`Unlock_LoyaltyMet`) compares the required
   value against a whole 32-bit word at the record's `+8`, which under this
   page's record layout is `difficulty | medal << 8`. That does not read as a
@@ -1043,10 +1463,22 @@ dictionary; expand `<x y="...">` by looking `x` and `y` up as `xs`/`ys`.
 | `0x08ab062c` | `g_mode_name_table` (data) | 92 |
 | `0x08ab067c` | `g_class_name_table` (data) | 92 |
 | `0x088d5cb8` | `CellSelection_OnExit` | 82 |
-| `0x088d5de4` | `CellSelection_PopulateGrid` | 82 |
+| `0x088d5de4` | `CellSelection_PopulateGrid` | 85 |
 | `0x088d6138` | `CellSelection_CommitSelection` | 93 |
 | `0x08888ee0` | `Globals_Set` | 92 |
 | `0x08888db4` | `Globals_HashKey` | 78 |
 | `0x08945890` | `Libc_HashString` | 85 |
 | `0x088ed784` | `TrackSelection_CommitSelection` | 80 |
 | `0x088e9fa0` | `TeamSelection_CommitSelection` | 74 |
+| `0x088c072c` | `Grid_FindCellAtCoordinate` | 85 |
+| `0x08ab1e68` | `g_anCellNeighbourOffsets` (data) | 85 |
+| `0x088a3638` | `GridController_SetTileFlags` | 82 |
+| `0x088a374c` | `GridController_ClearTileFlags` | 82 |
+| `0x088a3850` | `GridController_SetTileColor` | 85 |
+| `0x088a3ad0` | `GridController_SetLockTint` | 78 |
+| `0x088a39d4` | `GridController_IsLockFading` | 65 |
+| `0x088a39ac` | `GridController_ClearLockFade` | 65 |
+| `0x088a3a40` | `GridController_ResetLockFades` | 68 |
+| `0x088de180` | `GridSelection_CommitSelection` | 82 |
+| `0x088de630` | `GridSelection_PopulateTiles` | 82 |
+| `0x088de320` | `GridSelection_FindTileAt` | 80 |
