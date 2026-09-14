@@ -179,6 +179,8 @@ ids = [
     # reached by it - see `docs/architecture/menus.md`'s RECORDS section.
     "OAG_MENU_RECORDS",
     "OAG_RECORDS_PAGE_TITLE",
+    # RACE CAMPAIGN is new for the same reason - see `docs/ui/campaign-screens.md`.
+    "OAG_MENU_RACE_CAMPAIGN",
     # PC-specific graphics/display jargon - see this file's own header.
     "OAG_DISPLAY_FRONT_END_STYLE",
     "OAG_DISPLAY_VSYNC",

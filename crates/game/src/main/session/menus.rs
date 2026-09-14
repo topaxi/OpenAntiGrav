@@ -509,6 +509,7 @@ impl Session {
                 // asking about a page that is no longer on screen.
                 prompt: None,
                 picker: None,
+                campaign: None,
                 fury,
                 fury_tints,
                 backdrop: shape.map(|shape| Backdrop {
@@ -636,6 +637,8 @@ impl Session {
             // on the answer. See `session::pilot_editor`.
             menu::MenuEvent::Fired(menu::Action::RenamePilot) => self.rename_pilot(),
             menu::MenuEvent::Fired(menu::Action::DeletePilot) => self.delete_pilot(),
+            // RACE CAMPAIGN - see `session::campaign`.
+            menu::MenuEvent::Fired(menu::Action::OpenCampaign) => self.open_campaign(),
             // Backing out of the root page used to always mean the same thing
             // as QUIT: there was nothing behind the menus to go back to. Now
             // there can be - a race `escape` parked rather than discarded -

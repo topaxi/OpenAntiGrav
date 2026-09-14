@@ -150,6 +150,13 @@ impl GridSelection {
         self.index
     }
 
+    /// Moves the selection directly to `index`, clamped to the last grid -
+    /// how `Cell Selection`'s own `Back` lands `Grid Selection` on the tier
+    /// it was opened from, rather than resetting to the first.
+    pub fn set_index(&mut self, index: usize) {
+        self.index = index.min(self.grids.len().saturating_sub(1));
+    }
+
     #[must_use]
     pub fn selected(&self) -> Option<&GridSummary> {
         self.grids.get(self.index)
@@ -348,17 +355,51 @@ pub struct Layout {
     /// How much larger this screen's grid is than the PSP's - see
     /// `crate::picker::Layout::scale`.
     pub scale: [f32; 2],
+    /// The `default`/`small` faces' own scale against the loaded `menu`
+    /// face - see `crate::picker::FaceScales`, which this reuses rather than
+    /// duplicating: both screens are authored in the same three faces
+    /// `Selection_Definition.xml` is.
+    pub faces: crate::picker::FaceScales,
 }
 
 impl Layout {
     /// Reads `Grid Selection` or `Cell Selection` off the parsed
-    /// `CellMode_Definition.xml`. `None` when the screen is not in `screens`
-    /// at all.
+    /// `CellMode_Definition.xml`, resolving every `idstring` through
+    /// `strings` - the same second pass `crate::picker::Layout::read` makes,
+    /// so a fixed label like `Medals Title` (`RC_GM`) or `Target0 Title`
+    /// (`IG_HUD_TARGET`) already carries its text by the time a draw
+    /// function's generic `text.string.clone()` fallback reaches it.
+    /// `None` when the screen is not in `screens` at all.
     #[must_use]
-    pub fn read(screens: &Screens, name: &str, grid: [f32; 2]) -> Option<Self> {
-        let screen = screens.by_name(name)?.clone();
+    pub fn read(
+        screens: &Screens,
+        name: &str,
+        strings: &StringTable,
+        faces: crate::picker::FaceScales,
+        grid: [f32; 2],
+    ) -> Option<Self> {
+        let mut screen = screens.by_name(name)?.clone();
+        for text in &mut screen.texts {
+            if let Some(id) = text.idstring.as_deref()
+                && let Some(resolved) = strings.get(id)
+            {
+                text.string = Some(resolved.to_string());
+            }
+        }
         let scale = [grid[0] / PSP_GRID[0], grid[1] / PSP_GRID[1]];
-        Some(Self { screen, scale })
+        Some(Self {
+            screen,
+            scale,
+            faces,
+        })
+    }
+
+    fn face_scale(&self, font: &str) -> f32 {
+        match font.to_ascii_lowercase().as_str() {
+            "default" => self.faces.default,
+            "small" => self.faces.small,
+            _ => 1.0,
+        }
     }
 }
 
@@ -454,7 +495,7 @@ pub fn grid_draw_list(
             _ => text.string.clone(),
         };
         let Some(content) = content else { continue };
-        out.push(text_draw(text, &content, layout.scale));
+        out.push(text_draw(text, &content, layout));
     }
     layers.body = out;
     layers
@@ -573,7 +614,7 @@ pub fn cell_draw_list(
             _ => text.string.clone(),
         };
         let Some(content) = content else { continue };
-        out.push(text_draw(text, &content, layout.scale));
+        out.push(text_draw(text, &content, layout));
     }
     // The three medal-tier swatches: shown iff their own text row is.
     for image in &screen.images {
@@ -730,12 +771,11 @@ fn sprite_draw(image: &Image, placed: Placed, x: f32, y: f32) -> Draw {
     }
 }
 
-fn text_draw(text: &Text, content: &str, scale: [f32; 2]) -> Draw {
-    let _ = scale;
+fn text_draw(text: &Text, content: &str, layout: &Layout) -> Draw {
     Draw::Text {
         x: text.x,
         y: text.y,
-        scale: text.scale,
+        scale: text.scale * layout.face_scale(&text.font),
         color: argb_to_rgba(text.color),
         border: None,
         align: match text.align.to_ascii_lowercase().as_str() {

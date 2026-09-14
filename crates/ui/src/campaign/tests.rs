@@ -222,7 +222,14 @@ fn grid_selection_pages_four_at_a_time_and_wraps() {
 #[test]
 fn a_fresh_grids_title_is_its_own_raw_name_and_required_falls_back_to_na() {
     let screens = Screens::from_xml(XML);
-    let layout = Layout::read(&screens, "Grid Selection", PSP_GRID).unwrap();
+    let layout = Layout::read(
+        &screens,
+        "Grid Selection",
+        &strings(),
+        crate::picker::FaceScales::default(),
+        PSP_GRID,
+    )
+    .unwrap();
     let model = GridSelection::new(vec![GridSummary {
         name: "grid0".to_string(),
         cell_count: 8,
@@ -309,7 +316,14 @@ fn triangle_opens_help_and_suspends_movement() {
 #[test]
 fn targets_are_hidden_for_race_and_shown_as_a_time_for_time_trial() {
     let screens = Screens::from_xml(XML);
-    let layout = Layout::read(&screens, "Cell Selection", PSP_GRID).unwrap();
+    let layout = Layout::read(
+        &screens,
+        "Cell Selection",
+        &strings(),
+        crate::picker::FaceScales::default(),
+        PSP_GRID,
+    )
+    .unwrap();
 
     let race = CellSelection::new(vec![race_cell("grid0_0_0", "16_Track")]);
     let layers = cell_draw_list(

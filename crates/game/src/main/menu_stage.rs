@@ -92,6 +92,11 @@ pub(crate) struct MenuStage {
     /// tick's input whole while it is `Some`, and it is drawn instead of
     /// the rows rather than over them.
     pub(crate) picker: Option<crate::picker_stage::PickerStage>,
+    /// The Race Campaign's `Grid Selection`/`Cell Selection`, when one is
+    /// open - the same "takes the tick whole, draws instead of the rows"
+    /// shape [`Self::picker`] is. See `crate::campaign_stage` and
+    /// `crate::session::campaign`.
+    pub(crate) campaign: Option<crate::campaign_stage::CampaignStage>,
 }
 
 /// A page change part-way through.
@@ -477,6 +482,61 @@ impl MenuStage {
                     seconds,
                 );
             }
+            return Ok(());
+        }
+        // The Race Campaign's own screens - no preview mesh, no slideshow:
+        // both are plain 2D widget draws off `CellMode_Definition.xml`, the
+        // same pass a picker's own body uses without the 3D tail.
+        if let Some(campaign) = self.campaign.as_ref() {
+            let layers = match &campaign.screen {
+                crate::campaign_stage::Screen::Grid(model) => oag_ui::campaign::grid_draw_list(
+                    model,
+                    campaign.grid_layout(),
+                    &self.skin,
+                    &self.frame,
+                    &campaign.strings,
+                    if frozen_race { None } else { shown },
+                    frozen_race,
+                    &|src| campaign.sprites.get(src),
+                ),
+                crate::campaign_stage::Screen::Cell { model, .. } => {
+                    oag_ui::campaign::cell_draw_list(
+                        model,
+                        campaign.cell_layout(),
+                        &self.skin,
+                        &self.frame,
+                        &campaign.strings,
+                        if frozen_race { None } else { shown },
+                        frozen_race,
+                        &|src| campaign.sprites.get(src),
+                    )
+                }
+            };
+            let list: Vec<Draw> = if frozen_race {
+                std::iter::once(Draw::Fill {
+                    rect: overlay_rect(self.skin.space(), viewport),
+                    color: PAUSE_OVERLAY,
+                })
+                .chain(layers.flatten())
+                .collect()
+            } else {
+                layers.flatten()
+            };
+            let load = if frozen_race {
+                wgpu::LoadOp::Load
+            } else {
+                wgpu::LoadOp::Clear(wgpu::Color::BLACK)
+            };
+            self.renderer.render_with(
+                load,
+                &gpu.device,
+                &gpu.queue,
+                encoder,
+                view,
+                &list,
+                viewport,
+                None,
+            );
             return Ok(());
         }
         // Refreshed every frame, off whichever page is current, rather than
