@@ -527,8 +527,8 @@ pub fn grid_draw_list(
             continue;
         };
         if image.name.as_deref() == Some("Selector") {
-            if let Some((x, y)) = hex_position(screen, "Medal_", slot, 0) {
-                out.push(sprite_draw(image, placed, x, y));
+            if let Some(hex) = hex_rect(screen, slot, 0, sprites) {
+                out.push(centred_selector_draw(image, placed, hex));
             }
             continue;
         }
@@ -630,9 +630,9 @@ pub fn cell_draw_list(
         };
         if image.name.as_deref() == Some("Selector")
             && let Some((sx, sy)) = selected_coords
-            && let Some((x, y)) = hex_position(screen, "Medal_", sx as usize, sy as usize)
+            && let Some(hex) = hex_rect(screen, sx as usize, sy as usize, sprites)
         {
-            out.push(sprite_draw(image, placed, x, y));
+            out.push(centred_selector_draw(image, placed, hex));
             continue;
         }
         out.push(image_draw(image, placed));
@@ -772,16 +772,31 @@ fn hex_slot_xy(name: &str, prefix: &str) -> Option<(u32, u32)> {
     Some((x, y))
 }
 
-/// The resolved screen position of `{prefix}{x}_{y}` - the position the
-/// cursor moves to, since `Selector` is one movable widget rather than one
-/// per cell.
-fn hex_position(screen: &Screen, prefix: &str, x: usize, y: usize) -> Option<(f32, f32)> {
-    let name = format!("{prefix}{x}_{y}");
-    screen
-        .images
-        .iter()
-        .find(|image| image.name.as_deref() == Some(name.as_str()))
-        .map(|image| (image.x, image.y))
+/// The resolved screen rect of `Medal_{x}_{y}` (or `Outline_{x}_{y}`,
+/// wherever a slot draws only the empty state) - position and size, the
+/// same rect [`pointer::hit`] tests against. Neither screen authors an
+/// explicit width or height for a hex: its size is whichever of
+/// `hex_filled.mip`/`hex_outline.mip` the sprite sheet places.
+pub(super) fn hex_rect(
+    screen: &Screen,
+    x: usize,
+    y: usize,
+    sprites: &dyn Fn(&str) -> Option<Placed>,
+) -> Option<[f32; 4]> {
+    for prefix in ["Medal_", "Outline_"] {
+        let name = format!("{prefix}{x}_{y}");
+        if let Some(image) = screen
+            .images
+            .iter()
+            .find(|image| image.name.as_deref() == Some(name.as_str()))
+            && let Some(placed) = sprites(&image.src)
+        {
+            let width = image.width.unwrap_or(placed.width as f32);
+            let height = image.height.unwrap_or(placed.height as f32);
+            return Some([image.x, image.y, width, height]);
+        }
+    }
+    None
 }
 
 fn fill_draw(fill: &Fill) -> Draw {
@@ -818,8 +833,24 @@ fn image_draw(image: &Image, placed: Placed) -> Draw {
     sprite_draw(image, placed, image.x, image.y)
 }
 
+/// `Selector`'s own draw, centred on `hex` - the selected hex's own rect
+/// from [`hex_rect`]. **Chosen, not measured**: `CellMode_Definition.xml`
+/// positions `Selector` at a fixed default (`x="30" y="95"`, overridden here
+/// regardless) and authors no offset between its own 42x43 sprite and
+/// whatever size a hex actually draws at (32x32, measured off
+/// `hex_filled.mip`) - top-left aligning the two, as this build previously
+/// did, draws the cursor visibly down-and-right of the hex it marks rather
+/// than around it. See `docs/ui/campaign-screens.md`.
+fn centred_selector_draw(image: &Image, placed: Placed, hex: [f32; 4]) -> Draw {
+    let width = image.width.unwrap_or(placed.width as f32);
+    let height = image.height.unwrap_or(placed.height as f32);
+    let x = hex[0] + (hex[2] - width) * 0.5;
+    let y = hex[1] + (hex[3] - height) * 0.5;
+    sprite_draw(image, placed, x, y)
+}
+
 /// An image widget's draw, with its position overridden - what
-/// [`hex_position`] feeds `Selector`.
+/// [`centred_selector_draw`] feeds `Selector`.
 fn sprite_draw(image: &Image, placed: Placed, x: f32, y: f32) -> Draw {
     let width = image.width.unwrap_or(placed.width as f32);
     let height = image.height.unwrap_or(placed.height as f32);

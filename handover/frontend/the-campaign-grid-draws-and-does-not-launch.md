@@ -102,12 +102,14 @@ read), `crates/game/src/main/campaign_stage.rs` and
   `docs/ui/campaign-screens.md` from "read off the XML and the decompile"
   to "measured against a live frame", the same way `selection-screens.md`'s
   own numbers already are. Nobody has held PPSSPP for this thread yet.
-- **An interactive play-test of the new launch.** Also not done this pass -
-  the environment it ran in has no way to send synthetic keyboard input to
-  a real window and no safe way to screenshot one window in isolation from
-  a shared desktop, so `Cell Selection` confirming, `Team Selection`, a
-  finished race and the medal showing back on the hex grid are proven by
-  the unit/integration suite and the full gate, not by a screenshot of the
-  real thing. See `docs/ui/campaign-screens.md`'s own `Open` entry for the
-  exact steps a maintainer with a normal desktop can run.
+- ~~An interactive play-test of the new launch.~~ **Driven live, 2026-09-14**,
+  in the `campaign-pointer` lane, mouse-only under Xvfb: `Cell Selection`
+  confirming, `Team Selection`, an `--autopilot` race finishing and the
+  results table all confirmed by screenshot. Not fully closed: both runs
+  finished 4th of eight (this build's default `[ai] difficulty` is already
+  `ace`, the ceiling `--autopilot-skill` also offers), so `Line6`/`Line7`
+  were only seen reading the *no medal* state live, never a podium one -
+  see `docs/ui/campaign-screens.md`'s own `Open` entry for the one step
+  left (a lower `[ai] difficulty` or a threshold-medal mode cell) and why
+  this pass didn't take it.
 - **Cell Help's static overlay.**

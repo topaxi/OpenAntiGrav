@@ -276,6 +276,52 @@ fn a_fresh_grids_title_is_its_own_raw_name_and_required_falls_back_to_na() {
     );
 }
 
+/// The regression this pass fixes: `Selector` used to share the selected
+/// hex's own top-left corner, which put a 42x43 cursor visibly down-and-right
+/// of a 32x32 hex rather than around it - see `docs/ui/campaign-screens.md`.
+#[test]
+fn the_selector_is_centred_on_the_selected_hex_not_top_left_aligned() {
+    let screens = Screens::from_xml(XML);
+    let layout = Layout::read(
+        &screens,
+        "Grid Selection",
+        &strings(),
+        crate::picker::FaceScales::default(),
+        PSP_GRID,
+    )
+    .unwrap();
+    let model = GridSelection::new(vec![GridSummary {
+        name: "grid0".to_string(),
+        cell_count: 8,
+        max_points: 24,
+        required_points: 12,
+        gold_medals: 0,
+        points_earned: 0,
+    }]);
+    let layers = grid_draw_list(
+        &model,
+        &layout,
+        &skin(),
+        &Frame::default(),
+        &strings(),
+        None,
+        false,
+        &|_| placed32(),
+    );
+    let selector_rect = layers
+        .body
+        .iter()
+        .find_map(|draw| match draw {
+            Draw::Sprite { rect, .. } if rect[2] == 42.0 && rect[3] == 43.0 => Some(*rect),
+            _ => None,
+        })
+        .expect("the Selector draws as a 42x43 sprite");
+    // Hex 0 sits at [65,145,32,32] - see
+    // `grid_selections_hexes_are_at_the_docs_own_measured_positions`.
+    // Centred: `65 + (32-42)/2 = 60`, `145 + (32-43)/2 = 139.5`.
+    assert_eq!(selector_rect, [60.0, 139.5, 42.0, 43.0]);
+}
+
 #[test]
 fn cell_selection_moves_toward_the_pressed_direction_and_skips_absent_slots() {
     let cells = vec![
@@ -520,6 +566,43 @@ fn a_cells_saved_medal_reaches_line6_and_line7() {
         "unresolved id falls back to itself, the same as every other label \
          this test file's own `strings()` does not carry: {texts:?}"
     );
+}
+
+/// The same fix as `the_selector_is_centred_on_the_selected_hex_not_top_left_aligned`,
+/// on `Cell Selection`'s own `Selector`.
+#[test]
+fn cell_selections_selector_is_also_centred_on_the_selected_hex() {
+    let screens = Screens::from_xml(XML);
+    let layout = Layout::read(
+        &screens,
+        "Cell Selection",
+        &strings(),
+        crate::picker::FaceScales::default(),
+        PSP_GRID,
+    )
+    .unwrap();
+    let model = CellSelection::new(vec![race_cell("grid0_1_0", "16_Track")]);
+    let layers = cell_draw_list(
+        &model,
+        &layout,
+        &skin(),
+        &Frame::default(),
+        &strings(),
+        None,
+        false,
+        &|_| placed32(),
+    );
+    let selector_rect = layers
+        .body
+        .iter()
+        .find_map(|draw| match draw {
+            Draw::Sprite { rect, .. } if rect[2] == 42.0 && rect[3] == 43.0 => Some(*rect),
+            _ => None,
+        })
+        .expect("the Selector draws as a 42x43 sprite");
+    // Cell (1,0) sits at [65,59,32,32] - see
+    // `cell_selections_hexes_sit_at_their_own_grid_coords_position`.
+    assert_eq!(selector_rect, [60.0, 53.5, 42.0, 43.0]);
 }
 
 /// The 32x32 `hex_filled.mip`/`hex_outline.mip` sheet placement, measured

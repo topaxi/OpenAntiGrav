@@ -33,9 +33,8 @@
 
 use crate::frontend::Placed;
 use crate::pointer::{Pointer, contains, hex_contains};
-use crate::screen::Screen;
 
-use super::{CellSelection, Event, GRIDS_PER_PAGE, GridSelection, Layout};
+use super::{CellSelection, Event, GRIDS_PER_PAGE, GridSelection, Layout, hex_rect};
 
 /// What a click on one of the screen's targets does.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -118,30 +117,6 @@ pub fn cell_targets(
         }
     }
     out
-}
-
-/// The `Medal_{x}_{y}` (or `Outline_{x}_{y}`, wherever a grid draws only the
-/// empty state) widget's own rect - the position and sprite size
-/// [`super::hex_position`]'s own drawing already reads, so a hit region can
-/// never name a rect the draw does not also use.
-fn hex_rect(
-    screen: &Screen,
-    x: usize,
-    y: usize,
-    sprites: &dyn Fn(&str) -> Option<Placed>,
-) -> Option<[f32; 4]> {
-    for prefix in ["Medal_", "Outline_"] {
-        let name = format!("{prefix}{x}_{y}");
-        if let Some(image) = screen
-            .images
-            .iter()
-            .find(|image| image.name.as_deref() == Some(name.as_str()))
-            && let Some(rect) = image_rect(image, sprites)
-        {
-            return Some(rect);
-        }
-    }
-    None
 }
 
 /// Where an image is drawn: its authored size, or its texture's - the same

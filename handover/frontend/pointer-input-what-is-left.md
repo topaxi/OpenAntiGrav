@@ -12,7 +12,11 @@ selected the row *below* until `oag_ui::pointer::RowInk` centred the band
 on the face's capitals - see menus.md's "A row of plain text gets its band
 from the face's ink" - after which the maintainer reported the picker
 "feels good now"; the same fix reaches Pure's selection screens through
-`menu::Skin::set_row_ink`, unverified live).
+`menu::Skin::set_row_ink`, unverified live). **The Race Campaign's `Grid
+Selection`/`Cell Selection` joined this set the same day**, in the
+`campaign-pointer` lane, after this file's own opening line was already
+written ahead of them - see `oag_ui::campaign::pointer` and
+`docs/ui/campaign-screens.md`.
 
 ## Open
 
