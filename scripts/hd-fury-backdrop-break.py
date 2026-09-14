@@ -129,7 +129,8 @@ def current_decoder():
 
 
 def main():
-    out = Path(sys.argv[1] if len(sys.argv) > 1 else "/tmp/hd-fury-backdrop-break")
+    positional = [a for a in sys.argv[1:] if not a.startswith("--")]
+    out = Path(positional[0] if positional else "/tmp/hd-fury-backdrop-break")
     out.mkdir(parents=True, exist_ok=True)
     previous = current_decoder()
     set_decoder("Interpreter (static)")
@@ -138,6 +139,9 @@ def main():
     finally:
         if previous is not None:
             set_decoder(previous)
+
+
+args_dump_targets = "--dump-targets" in sys.argv
 
 
 def run(out):
@@ -216,6 +220,31 @@ def run(out):
                     at = int.from_bytes(slots[4 * n:4 * n + 4], "big")
                     if at:
                         frame["targets"]["%#x" % at] = dbg.read(at, 0x80).hex()
+                # A window of each target's pixels, to see what each holds
+                # rather than infer it from the bind order: rows 300..420 of the
+                # full one and the same rows at half scale of the half ones.
+                # **Reads back all zeros** (2026-09-14, three frames): the
+                # targets sit at RSX local addresses (`0xc5b30000` and up) and
+                # the stub's `m` returns nothing for them - RPCS3 keeps render
+                # targets on the host GPU and does not write them to guest
+                # memory unless the game reads them. Kept as the negative.
+                if args_dump_targets:
+                    for n, key in enumerate(list(frame["targets"])[:3]):
+                        obj = bytes.fromhex(frame["targets"][key])
+                        base = int.from_bytes(obj[8:12], "big")
+                        pitch = int.from_bytes(obj[0x2c:0x30], "big")
+                        scale = 1 if n == 0 else 2
+                        rows = range(300 // scale, 420 // scale)
+                        x0, x1 = 500 // scale, 780 // scale
+                        blob = bytearray()
+                        for y in rows:
+                            blob += dbg.read(base + y * pitch + x0 * 4, (x1 - x0) * 4)
+                        (out / ("%02d-target%d.raw" % (len(frames), n))).write_bytes(blob)
+                        frame.setdefault("target_windows", {})["target%d" % n] = {
+                            "base": "%#x" % base, "pitch": pitch,
+                            "width": x1 - x0, "height": len(rows),
+                        }
+                        print("  target%d window read (%dx%d)" % (n, x1 - x0, len(rows)), flush=True)
                 clip = int.from_bytes(dbg.read(item + 0x1640, 4), "big")
                 frame["clip"] = "%#x" % clip
                 if clip:

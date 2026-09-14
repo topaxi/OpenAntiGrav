@@ -444,9 +444,23 @@ grid, which could draw the particles more than once.
 
 ## Open
 
-- The dots' spread: the sprite sampler `PointCloud_DrawRaw` sets (mip filter,
-  LOD bias), the particle submit's target and the blend pass's quad grid - the
-  first thing to read; the dots here carry the right light over half the diameter.
+- The dots' spread: the dots here carry the right light over half the diameter.
+  Four leads from `Render`'s tail, read as far as they go on 2026-09-14 and no
+  further: (1) `PointCloud_DrawRaw` sets no sampler state of its own, and the
+  sprite texture's filter word is `0x0206` (mag linear, min trilinear) from
+  `PointCloud_Construct` - so not the sampler. (2) In the steady-state path the
+  particle submit (before `FUN_006781f8`) comes before any
+  set-target call (`FUN_00677c48` -> `0x005a40f8`: it sets
+  `target[0]`, later `target[1 + pp]`), so the fresh particles may draw onto the
+  page directly and `target[0]` be the full-size accumulation - which a moving
+  camera would smear into wider dots. (3) `FUN_00678268` -> `0x003cd038` is a
+  FunkLayer copy: it sets `target[1 + pp]`, binds `view[0]` and draws one quad
+  under `BlendFunc(CONSTANT_COLOR, ONE)` with the screen tint as the constant,
+  so the half targets receive the tinted full one, not the particles. (4) The
+  thirty-vertex grid is drawn after the second set-target and before the
+  `texture`/`waveTexture` binds. Which program each of the three quads runs
+  is the reading that orders them; the render-target contents cannot be read
+  through the stub (rpcs3-debugger.md), so it is a Ghidra read.
 - Modes `5`, `9`, `10`, `11`: the vertex programs are paired and disassemble; their
   `Update` functions and the two extra streams (`targetPosition`, the line/quad
   offsets) are unread.

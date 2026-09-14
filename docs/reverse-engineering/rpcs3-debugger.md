@@ -973,6 +973,15 @@ question closed in an afternoon. Three things that script does differently from
 Wall clock: about 40 s per sample (two stops, ~20 register dumps, five memory
 reads, a screenshot), so a run of twelve fits in ten minutes with the boot.
 
+**Render targets cannot be read this way.** The same script's `--dump-targets`
+reads windows of the backdrop's three targets at their RSX local addresses
+(`0xc5b30000`, `0xc5ef0000`, `0xc5fe0000`, off the texture objects) and gets
+zeros for every byte on three frames while the screen shows the hull. RPCS3
+keeps a render target on the host GPU and writes it to guest memory only when
+the game itself reads it back, so a target's contents are not an observable on
+this transport; the texture *objects* (size, pitch, format, filter word) are,
+and were.
+
 **RPCS3's shader log is a second decoder for RSX microcode.** `Log shader
 programs: true` in `config.yml` (Video) writes every program the renderer builds
 to `~/.cache/rpcs3/shaderlog/` as `VertexProgramN.spirv` and `FragmentProgramN.spirv`
