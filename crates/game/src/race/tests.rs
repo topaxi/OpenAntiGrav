@@ -22,6 +22,7 @@ mod field;
 mod hash;
 mod held_buttons;
 mod load;
+mod mode_override;
 mod models;
 mod pads;
 mod respawn;
@@ -123,6 +124,7 @@ fn setup(handling: Handling) -> Setup {
         },
         mode: Mode::TimeTrial,
         eliminator_kill_target: None,
+        laps_override: None,
         difficulty: oag_ai::Difficulty::default(),
         class: "VENOM".to_string(),
         opponents: false,

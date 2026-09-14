@@ -22,6 +22,7 @@ impl Race {
         let Setup {
             mode,
             eliminator_kill_target,
+            laps_override,
             difficulty,
             opponents,
             trail_sparks,
@@ -94,6 +95,13 @@ impl Race {
             oag_race::SpeedClass::Venom
         });
         world.race = RaceState::new(mode, lap_class);
+        // The cell's own `laps` wins over the per-class table, for the two
+        // modes where a lap count ends the race at all - see
+        // `Options::laps_override`'s own doc for why `SpeedLap`/`Zone` must
+        // never reach here despite authoring a `laps` attribute too.
+        if let Some(laps) = laps_override {
+            world.race.laps_target = Some(laps);
+        }
         let ship = &mut world.ships[0];
         ship.active = true;
         ship.handling = handling;
