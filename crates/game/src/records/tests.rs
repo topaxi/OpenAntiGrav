@@ -575,3 +575,53 @@ fn a_medal_round_trips_as_a_lowercase_word_not_an_ordinal() {
     );
     assert_eq!(parsed.rows(), store.rows());
 }
+
+/// **A file written before `[[campaign]]` existed must still load.** The
+/// whole point of a sibling table rather than a `Key` change: nothing about
+/// the shape of `[[records]]` moved, so a pre-change file parses with no
+/// notes and an empty campaign store rather than being dropped or refused.
+#[test]
+fn a_records_file_with_no_campaign_table_still_loads() {
+    let text = "\
+[[records]]
+title = \"wipeout pulse\"
+track = \"16_track\"
+mode = \"single_race\"
+class = \"venom\"
+best_lap_ticks = 1987
+";
+    let (store, notes) = parse(text).expect("an old-shape file still parses");
+    assert!(notes.is_empty(), "no note for an absent campaign table");
+    assert_eq!(store.rows().len(), 1);
+    assert!(store.campaign_rows().is_empty());
+    assert_eq!(store.campaign_medal("wipeout pulse", "grid0_2_1"), None);
+}
+
+/// [`Store::record_campaign`]'s own best-of/last shape, and the round trip
+/// through the exact bytes `records.toml` would hold - the sibling of
+/// `a_medal_round_trips_as_a_lowercase_word_not_an_ordinal` above, for the
+/// `[[campaign]]` table instead of `[[records]]`.
+#[test]
+fn a_campaign_cells_medal_is_never_downgraded_and_round_trips() {
+    let mut store = Store::default();
+    store.record_campaign("wipeout pulse", "grid0_2_1", Some(Medal::Silver));
+    store.record_campaign("wipeout pulse", "grid0_2_1", Some(Medal::Gold));
+    // A later run that scores no tier at all must not erase the standing
+    // gold - `last_medal` takes it, `best_medal` does not.
+    store.record_campaign("wipeout pulse", "grid0_2_1", None);
+
+    let row = store
+        .campaign_medal("Wipeout Pulse", "GRID0_2_1")
+        .expect("found case-insensitively, the same way Key::new lower-cases");
+    assert_eq!(row.best_medal, Some(Medal::Gold));
+    assert_eq!(row.best_points, Some(3));
+    assert_eq!(row.last_medal, None);
+
+    let text = toml::to_string_pretty(&store).expect("serialises");
+    let (parsed, notes) = parse(&text).expect("parses back");
+    assert!(
+        notes.is_empty(),
+        "a clean write should need no notes: {notes:?}"
+    );
+    assert_eq!(parsed.campaign_rows(), store.campaign_rows());
+}
