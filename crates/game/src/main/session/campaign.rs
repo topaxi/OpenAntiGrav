@@ -95,18 +95,20 @@ impl Session {
         }
     }
 
-    /// One tick of an open campaign screen: its input, and what came of it.
-    pub(crate) fn tick_campaign(&mut self) {
+    /// One tick of an open campaign screen: its pad input, its pointer, and
+    /// what came of either.
+    pub(crate) fn tick_campaign(&mut self, pointer: &oag_ui::pointer::Pointer) {
         let Stage::Menu(stage) = &mut self.stage else {
             return;
         };
         let Some(campaign) = stage.campaign.as_mut() else {
             return;
         };
-        let events = match &mut campaign.screen {
+        let mut events = match &mut campaign.screen {
             Screen::Grid(model) => model.update(self.controls.buttons_mut()),
             Screen::Cell { model, .. } => model.update(self.controls.buttons_mut()),
         };
+        events.extend(super::pointer::campaign_pointer(stage, pointer));
         for event in events {
             self.handle_campaign(event);
         }

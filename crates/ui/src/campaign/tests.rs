@@ -1,6 +1,7 @@
 use super::*;
 use crate::language::StringTable;
 use crate::menu::{Frame, Skin};
+use crate::pointer::Pointer;
 use oag_gameplay::input::Input;
 use oag_tables::race_campaign::Cell;
 
@@ -519,4 +520,293 @@ fn a_cells_saved_medal_reaches_line6_and_line7() {
         "unresolved id falls back to itself, the same as every other label \
          this test file's own `strings()` does not carry: {texts:?}"
     );
+}
+
+/// The 32x32 `hex_filled.mip`/`hex_outline.mip` sheet placement, measured
+/// off the real `.mip` on `pulse-psp-eu.chd` - see
+/// `crate::pointer::hex_contains`'s own doc.
+fn placed32() -> Option<crate::frontend::Placed> {
+    Some(crate::frontend::Placed {
+        x: 0,
+        y: 0,
+        width: 32,
+        height: 32,
+        quad_extent: None,
+        blend: None,
+    })
+}
+
+fn grid_layout() -> Layout {
+    Layout::read(
+        &Screens::from_xml(XML),
+        "Grid Selection",
+        &strings(),
+        crate::picker::FaceScales::default(),
+        PSP_GRID,
+    )
+    .unwrap()
+}
+
+/// [`grid_layout`], with the paging arrows the miniature fixture otherwise
+/// leaves out - at `docs/ui/campaign-screens.md`'s own measured positions.
+fn grid_layout_with_arrows() -> Layout {
+    let xml = XML.replace(
+        r#"<Text name="honey""#,
+        r#"<Image name="up arrow" x="117" y="84" width="17" height="14" src="Data\FE\Images\pulse_assets.mip"></Image><Text name="honey""#,
+    );
+    Layout::read(
+        &Screens::from_xml(&xml),
+        "Grid Selection",
+        &strings(),
+        crate::picker::FaceScales::default(),
+        PSP_GRID,
+    )
+    .unwrap()
+}
+
+fn cell_layout() -> Layout {
+    Layout::read(
+        &Screens::from_xml(XML),
+        "Cell Selection",
+        &strings(),
+        crate::picker::FaceScales::default(),
+        PSP_GRID,
+    )
+    .unwrap()
+}
+
+fn grid_summaries(n: usize) -> Vec<GridSummary> {
+    (0..n)
+        .map(|i| GridSummary {
+            name: format!("grid{i}"),
+            cell_count: 8,
+            max_points: 24,
+            required_points: 12,
+            gold_medals: 0,
+            points_earned: 0,
+        })
+        .collect()
+}
+
+fn hover(at: (f32, f32)) -> Pointer {
+    Pointer {
+        at: Some(at),
+        moved: true,
+        ..Pointer::default()
+    }
+}
+
+fn click(at: (f32, f32)) -> Pointer {
+    Pointer {
+        at: Some(at),
+        moved: true,
+        clicked: true,
+        ..Pointer::default()
+    }
+}
+
+fn hex_centre(rect: [f32; 4]) -> (f32, f32) {
+    (rect[0] + rect[2] * 0.5, rect[1] + rect[3] * 0.5)
+}
+
+#[test]
+fn grid_selections_hexes_are_at_the_docs_own_measured_positions() {
+    let layout = grid_layout();
+    let model = GridSelection::new(grid_summaries(4));
+    let targets = pointer::grid_targets(&model, &layout, &|_| placed32());
+    let rect_of = |index: usize| {
+        targets
+            .iter()
+            .find(|target| target.what == pointer::What::Hex(index))
+            .unwrap_or_else(|| panic!("hex {index}"))
+            .rect
+    };
+    // `docs/ui/campaign-screens.md`'s own staggered-diagonal measurement.
+    assert_eq!(rect_of(0), [65.0, 145.0, 32.0, 32.0]);
+    assert_eq!(rect_of(1), [95.0, 126.0, 32.0, 32.0]);
+    assert_eq!(rect_of(2), [125.0, 107.0, 32.0, 32.0]);
+    assert_eq!(rect_of(3), [155.0, 88.0, 32.0, 32.0]);
+}
+
+#[test]
+fn a_grid_page_offers_no_hex_for_a_slot_the_page_has_no_tier_for() {
+    let layout = grid_layout();
+    let model = GridSelection::new(grid_summaries(2));
+    let targets = pointer::grid_targets(&model, &layout, &|_| placed32());
+    assert!(targets.iter().any(|t| t.what == pointer::What::Hex(0)));
+    assert!(targets.iter().any(|t| t.what == pointer::What::Hex(1)));
+    assert!(
+        !targets
+            .iter()
+            .any(|t| matches!(t.what, pointer::What::Hex(2 | 3))),
+        "only two tiers exist - slots 2 and 3 draw no hex, so they are no \
+         target either: {targets:?}"
+    );
+}
+
+#[test]
+fn hovering_a_grid_hex_selects_it_and_a_second_click_confirms() {
+    let layout = grid_layout();
+    let mut model = GridSelection::new(grid_summaries(4));
+    let targets = pointer::grid_targets(&model, &layout, &|_| placed32());
+    assert_eq!(
+        model.pointer(&hover((111.0, 142.0)), &targets),
+        vec![Event::Moved]
+    );
+    assert_eq!(model.index(), 1);
+    // A tap that lands on the tier already selected confirms rather than
+    // reselecting it - the two-tap idiom `oag_ui::picker::pointer` uses.
+    assert_eq!(
+        model.pointer(&click((111.0, 142.0)), &targets),
+        vec![Event::Confirmed]
+    );
+}
+
+/// The regression this pass exists for: two neighbouring hexes' bounding
+/// boxes overlap by a couple of pixels at a corner (`[65,145,32,32]` and
+/// `[95,126,32,32]` here), and a point in that sliver must resolve to
+/// whichever hexagon actually contains it - never to whichever hex a box
+/// test or list order happens to favour.
+#[test]
+fn a_point_in_two_hexes_overlapping_bounding_boxes_picks_the_one_that_actually_contains_it() {
+    let layout = grid_layout();
+    let targets = pointer::grid_targets(&GridSelection::new(grid_summaries(4)), &layout, &|_| {
+        placed32()
+    });
+    let hex0 = targets
+        .iter()
+        .find(|t| t.what == pointer::What::Hex(0))
+        .unwrap();
+    let hex1 = targets
+        .iter()
+        .find(|t| t.what == pointer::What::Hex(1))
+        .unwrap();
+    let point = (96.85, 145.0);
+    assert!(
+        crate::pointer::contains(hex0.rect, point) && crate::pointer::contains(hex1.rect, point),
+        "both hexes' bounding boxes must contain this point for the test to \
+         mean anything: {hex0:?} {hex1:?}"
+    );
+    let hit = pointer::hit(&targets, point);
+    assert_eq!(
+        hit.map(|t| t.what),
+        Some(pointer::What::Hex(1)),
+        "hex 0's own hexagon does not reach this point even though its box does"
+    );
+}
+
+#[test]
+fn a_point_in_the_gap_between_two_grid_hexes_picks_nothing() {
+    let layout = grid_layout();
+    let targets = pointer::grid_targets(&GridSelection::new(grid_summaries(4)), &layout, &|_| {
+        placed32()
+    });
+    assert_eq!(pointer::hit(&targets, (96.0, 152.0)), None);
+}
+
+#[test]
+fn clicking_the_paging_arrow_steps_one_tier_and_the_secondary_button_backs_out() {
+    let layout = grid_layout_with_arrows();
+    let mut model = GridSelection::new(grid_summaries(4));
+    let targets = pointer::grid_targets(&model, &layout, &|_| placed32());
+    let up = targets
+        .iter()
+        .find(|t| t.what == pointer::What::Previous)
+        .expect("the up arrow is a target");
+    assert_eq!(
+        model.pointer(&click(hex_centre(up.rect)), &targets),
+        vec![Event::Moved]
+    );
+    assert_eq!(model.index(), 3, "up from tier 0 wraps to the last tier");
+    let back = Pointer {
+        back: true,
+        ..Pointer::default()
+    };
+    assert_eq!(model.pointer(&back, &targets), vec![Event::Back]);
+}
+
+#[test]
+fn cell_selections_hexes_sit_at_their_own_grid_coords_position() {
+    let layout = cell_layout();
+    let cells = vec![
+        race_cell("grid0_0_0", "16_Track"),
+        race_cell("grid0_0_1", "16_Track"),
+        race_cell("grid0_1_0", "16_Track"),
+    ];
+    let model = CellSelection::new(cells);
+    let targets = pointer::cell_targets(&model, &layout, &|_| placed32());
+    let rect_of = |index: usize| {
+        targets
+            .iter()
+            .find(|t| t.what == pointer::What::Hex(index))
+            .unwrap_or_else(|| panic!("cell {index}"))
+            .rect
+    };
+    assert_eq!(rect_of(0), [35.0, 40.0, 32.0, 32.0]);
+    assert_eq!(rect_of(1), [35.0, 78.0, 32.0, 32.0]);
+    assert_eq!(rect_of(2), [65.0, 59.0, 32.0, 32.0]);
+}
+
+#[test]
+fn hovering_a_cell_selects_it_and_a_second_click_confirms() {
+    let layout = cell_layout();
+    let cells = vec![
+        race_cell("grid0_0_0", "16_Track"),
+        race_cell("grid0_0_1", "16_Track"),
+        race_cell("grid0_1_0", "16_Track"),
+    ];
+    let mut model = CellSelection::new(cells);
+    let targets = pointer::cell_targets(&model, &layout, &|_| placed32());
+    assert_eq!(
+        model.pointer(&hover((81.0, 75.0)), &targets),
+        vec![Event::Moved]
+    );
+    assert_eq!(model.selected().unwrap().name, "grid0_1_0");
+    assert_eq!(
+        model.pointer(&click((81.0, 75.0)), &targets),
+        vec![Event::Confirmed]
+    );
+}
+
+#[test]
+fn a_point_in_the_gap_between_two_cells_picks_nothing() {
+    let layout = cell_layout();
+    let cells = vec![
+        race_cell("grid0_0_0", "16_Track"),
+        race_cell("grid0_1_0", "16_Track"),
+    ];
+    let model = CellSelection::new(cells);
+    let targets = pointer::cell_targets(&model, &layout, &|_| placed32());
+    let hex0 = targets
+        .iter()
+        .find(|t| t.what == pointer::What::Hex(0))
+        .unwrap();
+    let hex1 = targets
+        .iter()
+        .find(|t| t.what == pointer::What::Hex(1))
+        .unwrap();
+    let point = (66.0, 65.0);
+    assert!(
+        crate::pointer::contains(hex0.rect, point) && crate::pointer::contains(hex1.rect, point),
+        "both cells' bounding boxes must contain this point for the test to \
+         mean anything: {hex0:?} {hex1:?}"
+    );
+    assert_eq!(pointer::hit(&targets, point), None);
+}
+
+#[test]
+fn a_click_while_cell_help_is_open_closes_it_rather_than_confirming_the_cell_underneath() {
+    let layout = cell_layout();
+    let cells = vec![race_cell("grid0_0_0", "16_Track")];
+    let mut model = CellSelection::new(cells);
+    let mut input = Input::new();
+    press(&mut input, Button::Triangle);
+    assert_eq!(model.update(&mut input), vec![Event::Help]);
+    assert!(model.help_open());
+    let targets = pointer::cell_targets(&model, &layout, &|_| placed32());
+    assert_eq!(
+        model.pointer(&click((51.0, 56.0)), &targets),
+        vec![Event::Help]
+    );
+    assert!(!model.help_open());
 }

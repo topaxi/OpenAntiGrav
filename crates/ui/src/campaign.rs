@@ -71,6 +71,8 @@ use crate::language::StringTable;
 use crate::menu::{Frame, Layers, Picture, Skin};
 use crate::screen::{Fill, Image, Screen, Screens, Text, argb_to_rgba};
 
+pub mod pointer;
+
 #[cfg(test)]
 mod tests;
 
@@ -230,12 +232,10 @@ impl GridSelection {
             return out;
         }
         if input.take(Button::Down) {
-            self.index = (self.index + 1) % self.grids.len();
-            out.push(Event::Moved);
+            out.extend(self.step(1));
         }
         if input.take(Button::Up) {
-            self.index = (self.index + self.grids.len() - 1) % self.grids.len();
-            out.push(Event::Moved);
+            out.extend(self.step(-1));
         }
         if input.take(Button::Cross) || input.take(Button::Start) {
             out.push(Event::Confirmed);

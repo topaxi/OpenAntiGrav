@@ -397,7 +397,7 @@ impl Session {
                     // The Race Campaign's own screens, same shape: they take
                     // the tick whole rather than sitting behind the rows.
                     if stage.campaign.is_some() {
-                        self.tick_campaign();
+                        self.tick_campaign(&grid);
                         continue;
                     }
                     // Snapshotted *before* the input is consumed, because the

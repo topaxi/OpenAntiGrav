@@ -107,3 +107,38 @@ pub(super) fn picker_pointer(stage: &mut MenuStage, pointer: &Pointer) -> Vec<pi
     );
     stage_picker.model.pointer(pointer, &targets)
 }
+
+/// `Grid Selection`/`Cell Selection` answering the pointer, against the
+/// targets they just drew. See `oag_ui::campaign::pointer`.
+///
+/// The targets are built off a shared borrow of `campaign` first - its
+/// layout and sprite sheet never change while a screen is open, only the
+/// model's own selection does - so the mutable borrow `Model::pointer`
+/// needs can start only after that borrow ends.
+pub(super) fn campaign_pointer(
+    stage: &mut MenuStage,
+    pointer: &Pointer,
+) -> Vec<oag_ui::campaign::Event> {
+    let Some(campaign) = stage.campaign.as_mut() else {
+        return Vec::new();
+    };
+    if pointer.is_idle() {
+        return Vec::new();
+    }
+    let targets = match &campaign.screen {
+        crate::campaign_stage::Screen::Grid(model) => {
+            oag_ui::campaign::pointer::grid_targets(model, campaign.grid_layout(), &|src| {
+                campaign.sprites.get(src)
+            })
+        }
+        crate::campaign_stage::Screen::Cell { model, .. } => {
+            oag_ui::campaign::pointer::cell_targets(model, campaign.cell_layout(), &|src| {
+                campaign.sprites.get(src)
+            })
+        }
+    };
+    match &mut campaign.screen {
+        crate::campaign_stage::Screen::Grid(model) => model.pointer(pointer, &targets),
+        crate::campaign_stage::Screen::Cell { model, .. } => model.pointer(pointer, &targets),
+    }
+}
