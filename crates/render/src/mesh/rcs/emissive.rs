@@ -98,6 +98,34 @@ const NAMED_SURFACE_MAP: &[u32] = &[
 /// | `0xc78c9866` | `detonator_ship_dg_iridescent` | 4 |
 const SHIP_SURFACE_MAP_SAMPLERS: &[u32] = &[0x436d_3929, 0xc8f1_8561, 0x0617_f872, 0xc78c_9866];
 
+/// The same shape on circuit scenery: per-family sampler hashes measured
+/// disc-wide (every `.rcsmodel` in all seven archives, 643 models) to bind
+/// **only** a normal map, with zero exceptions.
+///
+/// | Hash | Family | Paths | Every one |
+/// | --- | --- | ---: | --- |
+/// | `0x0cddca48` | `tech_de_ra_rocks` | 1 | `rocks_01_normal_alpha.gtf` - 512x512, mean RGB (127, 126, 246): a tangent-space normal with a dark specular mask in alpha |
+///
+/// **How this one was found**: Tech De Ra's mountains drew cyan/purple. Of
+/// the circuit's 22 `tech_de_ra_rocks` slots, slot 343 (58 chunks, the
+/// mountain range itself) is the only one whose `lightmap` entry carries no
+/// path, so `Pick::aux` fell through to entry 1 - this normal map - and the
+/// accumulate added it, untinted, to `rocks_01_sand.gtf`. Every other rock
+/// slot names a `-lmap.gtf` there and drew correctly. A brute-force sweep of
+/// about a million compound names against `rcsmaterial::name_hash` lands
+/// `Normal_Spec` on this hash (and `Dirt` - already a recovered preimage -
+/// and `Rock` on the material's other two samplers; three hits for three
+/// targets where chance predicts 0.0007), which agrees with the file's own
+/// name; the refusal rests on the bind census, not on that reading.
+///
+/// **Measured and deliberately not added**, because each binds a picture
+/// somewhere on the disc and a hash that is sometimes a picture cannot be
+/// refused by hash alone: `0xfc52b822` (window normal maps on seven paths,
+/// but `dc_waterdiffuse.gtf` on the eighth), `0x41d572a2` (`mt_tunnelhex_n`
+/// and `cl_tunnelhex_specv3`), `0x3bdc0403` (1,438 paths, adverts included),
+/// `0x11cb4f74` (319 paths) and `0xa2d555b9` (`Texture2`, 178 paths).
+const CIRCUIT_SURFACE_MAP_SAMPLERS: &[u32] = &[0x0cdd_ca48];
+
 /// Named, disc-wide "Light" preimages minus `lightmap`/`shadowMapTex`, which
 /// [`emissive`] already refuses on a separate, earlier check.
 const NAMED_GLOW: &[u32] = &[
@@ -110,7 +138,10 @@ const NAMED_GLOW: &[u32] = &[
 ];
 
 fn sampler_role(hash: u32) -> Option<SamplerRole> {
-    if NAMED_SURFACE_MAP.contains(&hash) || SHIP_SURFACE_MAP_SAMPLERS.contains(&hash) {
+    if NAMED_SURFACE_MAP.contains(&hash)
+        || SHIP_SURFACE_MAP_SAMPLERS.contains(&hash)
+        || CIRCUIT_SURFACE_MAP_SAMPLERS.contains(&hash)
+    {
         Some(SamplerRole::SurfaceMap)
     } else if NAMED_GLOW.contains(&hash) {
         Some(SamplerRole::Glow)

@@ -96,6 +96,10 @@ const NAMED_SURFACE_MAP: &[u32] = &[
 /// | `0xc78c9866` | `detonator_ship_dg_iridescent` | 4 | `detonator_n.gtf`, or a weapon's own `*_n_*.gtf` |
 const SHIP_SURFACE_MAP_SAMPLERS: &[u32] = &[0x436d_3929, 0xc8f1_8561, 0x0617_f872, 0xc78c_9866];
 
+/// The same bar on circuit scenery - mirrors `emissive.rs`'s
+/// `CIRCUIT_SURFACE_MAP_SAMPLERS`, which carries the measured row.
+const CIRCUIT_SURFACE_MAP_SAMPLERS: &[u32] = &[0x0cdd_ca48];
+
 /// Named, disc-wide "Light" preimages minus `lightmap`/`shadowMapTex`.
 const NAMED_GLOW: &[u32] = &[
     0xb1f2_a176, // EmissiveTexture
@@ -107,7 +111,10 @@ const NAMED_GLOW: &[u32] = &[
 ];
 
 fn sampler_role(hash: u32) -> Option<Role> {
-    if NAMED_SURFACE_MAP.contains(&hash) || SHIP_SURFACE_MAP_SAMPLERS.contains(&hash) {
+    if NAMED_SURFACE_MAP.contains(&hash)
+        || SHIP_SURFACE_MAP_SAMPLERS.contains(&hash)
+        || CIRCUIT_SURFACE_MAP_SAMPLERS.contains(&hash)
+    {
         Some(Role::SurfaceMap)
     } else if NAMED_GLOW.contains(&hash) {
         Some(Role::Glow)

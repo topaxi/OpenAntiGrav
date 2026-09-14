@@ -249,6 +249,33 @@ does not guess at its role). The same shape recurs on **80** circuit slots
 sharing the ship hull's own material family or a real normal map at
 `NormalTexture`.
 
+**One circuit case found and closed the same way, 2026-09-14: Tech De Ra's
+mountains drew cyan/purple.** Its `tech_de_ra_rocks.rcsmaterial` names four
+samplers - `rocks_01_sand.gtf`, `rocks_01_normal_alpha.gtf`,
+`rocks_01_colour.gtf` and the `lightmap` slot - and of the circuit's 22
+slots on that material, slot 343 (58 chunks, the mountain range itself) is
+the only one whose `lightmap` entry carries no path. `picks()` therefore
+took its non-lightmap branch, `Pick::aux` landed on entry 1 - the normal
+map, 512x512, mean RGB (127, 126, 246) - and `emissive()` added it untinted
+to the sand albedo: exactly Finding 1's shape, on scenery. Its sampler hash
+`0x0cddca48` binds that one path and nothing else across all 643
+`.rcsmodel`s on the disc (a brute-force sweep of about a million compound
+names against `rcsmaterial::name_hash` lands `Normal_Spec` on it, beside
+`Dirt` - already a recovered preimage - and `Rock` for the other two
+samplers, three hits for three targets where chance predicts 0.0007; a
+reading that agrees with the file, not the evidence the refusal rests on),
+so it joins the role table as `emissive.rs`'s `CIRCUIT_SURFACE_MAP_SAMPLERS`.
+Verified at the reported pose (`--pose 410.5,-47.2,-291.4`): the range now
+draws the same brown rock as the lightmapped slots beside it, and the load
+report's unresolved count on the circuit moves 48 -> 47. Pinned by
+`tech_de_ras_mountains_no_longer_glow_their_own_normal_map`. **Five more
+circuit hashes add a normal map somewhere and were measured, not added**,
+each because it also binds a picture: `0xfc52b822` (seven window normal maps
+and `dc_waterdiffuse.gtf`), `0x41d572a2` (`mt_tunnelhex_n` and
+`cl_tunnelhex_specv3`), `0x3bdc0403` (1,438 paths, adverts included),
+`0x11cb4f74` (319) and `0xa2d555b9` (`Texture2`, 178) - the same rule that
+kept `SpecularTexture` and `SpecMap` out of the table above.
+
 **Guarded, not just measured**: `hd_hull_glow_role_ground_truth.rs` pins
 `feisar_c1`'s `diffuse_with_specular_from_alpha_n_vcol` losing `ADD_SECOND`
 while its `carbonfibre` keeps it, and that `scroller_glow_v3`,

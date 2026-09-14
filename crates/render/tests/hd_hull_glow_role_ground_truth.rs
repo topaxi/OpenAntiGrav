@@ -181,3 +181,44 @@ fn talons_junctions_real_glows_still_glow_after_the_role_fix() {
         );
     }
 }
+
+#[test]
+#[ignore = "needs a decrypted PS3 disc image in data/images"]
+fn tech_de_ras_mountains_no_longer_glow_their_own_normal_map() {
+    let Some(image) = image() else { return };
+    let Some((model, geometry_model, report)) = build_circuit(
+        &image,
+        "DATA00.PSARC",
+        "/data/environments/tech_de_ra/track.vex",
+    ) else {
+        panic!("Tech De Ra should build");
+    };
+    let families = add_second_families(&model, &geometry_model);
+    println!("Tech De Ra ADD_SECOND families: {families:?}");
+    println!(
+        "Tech De Ra: {} excluded as a known normal/specular map, {} left unresolved (kept as before)",
+        report.emissive_surface_map_excluded, report.emissive_role_unresolved
+    );
+
+    // The same Finding-1 shape on circuit scenery: `tech_de_ra_rocks`' slot
+    // 343 - the 58-chunk mountain range - is the one rock slot with no
+    // lightmap path, so `Pick::aux` landed on `rocks_01_normal_alpha.gtf` and
+    // the mountains drew cyan/purple. The hash (`0x0cddca48`) binds that one
+    // normal map and nothing else disc-wide - `emissive.rs`,
+    // `CIRCUIT_SURFACE_MAP_SAMPLERS`.
+    assert!(
+        !families.contains("tech_de_ra_rocks"),
+        "Tech De Ra's rocks still glow their own normal map: {families:?}"
+    );
+    assert!(
+        report.emissive_surface_map_excluded > 0,
+        "Tech De Ra should refuse at least one normal-map accumulate"
+    );
+
+    // A named glow on the same circuit is untouched: `EmissiveTexture` on
+    // the rail's scrolling emissive.
+    assert!(
+        families.contains("lambert_spec_mult_emissive_scroll"),
+        "lambert_spec_mult_emissive_scroll should still glow on Tech De Ra: {families:?}"
+    );
+}
