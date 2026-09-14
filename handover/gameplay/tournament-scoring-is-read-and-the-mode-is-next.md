@@ -70,9 +70,30 @@ on two different screens, calling the same sibling functions.
 
 ## Open
 
-- **`DAT_08b30fa0`'s write site.** `get_xrefs_to` returns eleven reads and
-  zero writes across every function this pass and the previous one
-  decompiled. Needs a live watch, not another cross-reference search.
+- **A full live points-award observation was not completed.** This pass did
+  reach `Tournament C` live (PPSSPP, Xvfb `:97`) and confirmed
+  `DAT_08b31158`'s structure exactly - `+0xa0` reading `2` after picking two
+  legs, `+0xa8`/`+0xac` reading identical hashes for the same track picked
+  twice, `+0xdc` reading `0` as the decompile predicted for this path - the
+  first time any pass has read this struct live at all (the campaign's own
+  attempt was blocked, no reachable Tournament cell). Driving a leg to an
+  actual finish was not: `psp-autopilot.py` tracked Talon's Junction's own
+  branch poorly (`2 path(s), 2 junction(s)`), covering 0.234 laps in 5,700
+  ticks - roughly ten times this project's own normal pace - making a full
+  two-leg race an hour-plus proposition for a result already established at
+  high confidence from decompilation. See `tournament.md`'s own "Live
+  verification" section for the full transcript and values.
+- **A Custom Race Tournament can only verify half the law.**
+  `Race_RecordResult`'s own `Cell_EvaluateMedal` step is gated on
+  `DAT_08b30ffc != 0` (a campaign cell in play) - confirmed live at `0x0`
+  throughout a Custom Race Tournament. So a Custom Race exercises the
+  points table and the standings sort faithfully, but the medal step itself
+  needs an actual campaign cell, which the previous pass found locked
+  behind `grid1`.
+- **`DAT_08b30fa0`'s write site.** Narrowed live this pass to the window
+  between `Team Selection`'s own confirm and `Launch Game` reaching
+  `InGame` (read `0` before, `2` after) - not yet pinned to a single
+  function.
 - **`DAT_08b31158+0xdc`'s exact meaning.** Written `1` by a campaign launch,
   `0` by both Racebox paths (editing vs. playing is the working guess,
   untested) - nothing reads it back in any function decompiled so far.

@@ -337,14 +337,21 @@ and `TournamentSelection_CommitSelection` at word 39:
   the picker is shown.
 
 So a custom Racebox tournament and a campaign Tournament cell write the
-*same* global, through the *same* two append functions, and (per the
-`Race_BuildEndRaceResult`/`Race_RecordResult` chain above, which reads
-`DAT_08b30ffc`/`DAT_08b31158` unconditionally rather than branching on how
-they were populated) score legs and finish through the identical path. **A
-Custom Race Tournament run is a faithful test of the campaign's own
-Tournament law**, confidence **88** for that specific equivalence claim
-(two independent vtable slots, on two different screens, calling the two
-sibling append functions with the same reset pattern).
+*same* global, through the *same* two append functions. **One real
+divergence, confirmed live (below) rather than assumed**:
+`Race_BuildEndRaceResult`'s Tournament block (the points accumulation and
+standings sort) runs unconditionally, but `Race_RecordResult`'s own
+`Cell_EvaluateMedal` step - the part that turns a standings rank into a
+gold/silver/bronze - is gated on `DAT_08b30ffc != 0` (`race-campaign.md`,
+"For every mode with a campaign cell in play"). A Custom Race Tournament
+has no cell (`DAT_08b30ffc == 0` throughout), so **it exercises the points
+table and the standings sort faithfully, but never reaches the medal step**
+- that half needs an actual campaign cell, which the previous pass found
+blocked behind `grid1`'s own lock. Confidence **88** for the points/standings
+equivalence specifically (two independently-positioned vtable slots, on two
+different screens, calling the two sibling append functions with the same
+reset pattern); the medal step's equivalence is untested by construction,
+not just unverified.
 
 ## Head2Head - not reached this pass
 
@@ -356,8 +363,10 @@ write-up) and the live verification below rather than a second mode. See
 
 ## What is not determined
 
-- **`DAT_08b30fa0`'s write site.** See above - a live watch is needed, not
-  another cross-reference search.
+- **`DAT_08b30fa0`'s write site.** Narrowed live this pass to the window
+  between `Team Selection`'s own confirm and `Launch Game` reaching
+  `InGame` (see "Live verification" below) - still not pinned to a single
+  function.
 - **`DAT_08b31158+0xdc`'s exact meaning.** A "live tournament in progress"
   reading fits every write site seen, but nothing reads the flag back in
   any function this pass decompiled, so the reading is unconfirmed.
@@ -380,8 +389,77 @@ write-up) and the live verification below rather than a second mode. See
 
 ## Live verification
 
-<!-- Filled in after the PPSSPP pass, or left as an honest negative if the
-     pass could not complete within budget. -->
+PPSSPP v1.20.4 (SDL build), `pulse-psp-usa.chd`, Xvfb `:97`, debugger on
+`ws://127.0.0.1:47810/debugger`, fresh profile (first-boot dialogs answered
+live). Screenshots under `data/reference/psp-tournament/` (gitignored, not
+committed).
+
+**Reached and confirmed live, this pass**: `Racebox -> Single Player`,
+`RACE TYPE` cycled to `TOURNAMENT` (screenshotted), confirmed into
+`Tournament C` - the exact screen the redirect in `race-setup.md` predicts,
+by state name. `Tournament C` shows **twelve** `Track %d` slots, all
+`None` (matching the "twelve on PS2, four on PSP-authored-cells" note -
+the *screen* always offers twelve regardless of platform; a `PI_Cell`'s own
+authored slot count is a different, smaller number). Picked "Talon's
+Junction White" for slots 1 and 2 (screenshotted both selections), confirmed
+into `Team Selection` (an existing Assegai save with `Loyalty 90` from a
+prior pass's own race), confirmed into `InGame`.
+
+**`DAT_08b31158` read live, immediately after `Tournament C`'s own
+confirm** (`TournamentSelection_CommitSelection`), via `memory.read_u32`/
+`read_u8` on the tournament pointer (`0x08c0e070` this session):
+
+| Field | Value | Matches |
+| --- | --- | --- |
+| `+0xa0` (leg count) | `2` | the two slots picked |
+| `+0xa4` (multiplayer bool) | `0` | single-player Custom Race |
+| `+0xa8` (leg 0 hash) | `0x51f3a6e9` | |
+| `+0xac` (leg 1 hash) | `0x51f3a6e9` | identical to leg 0 - same track picked twice, as intended |
+| `+0xb0` (leg 2 hash) | `0x0` | unused slot, confirming the count really is 2 |
+| `+0xdc` | `0` | matches the decompiled `TournamentSelection_CommitSelection`, corroborating the "Racebox editing path writes 0" reading above |
+
+This is the first time any pass has read `DAT_08b31158` live - the
+previous campaign pass's own fifth breakpoint was blocked entirely (no
+reachable Tournament cell in that profile). Confidence for the struct
+layout above: raised to **92** for `+0xa0`/`+0xa8`/`+0xac` specifically
+(static decompile plus an exact live match on a value this pass chose and
+could predict in advance - the strongest form of corroboration this
+project's rubric recognises).
+
+**`DAT_08b30fa0` (the still-unlocated "session leg count copy") was caught
+live, closing part of that open item.** Read `0` immediately after
+`Tournament C`'s confirm (Team Selection screen), and `2` once `InGame` was
+reached (after Team Selection's own confirm) - so **the write happens
+somewhere in the Team-Selection-confirm-to-Launch-Game window**, not at
+`Tournament C`'s own commit. The exact function is still not identified
+(this pass did not have a free Ghidra-bridge budget left to binary-search
+that window with more checkpoints), but the window itself is new
+information - narrower than "not found by cross-reference" alone.
+`DAT_08b30fa4` (leg index) read `0` at both checkpoints, as expected before
+any leg has finished.
+
+**`DAT_08b30ffc` (the campaign-cell pointer) read `0x0` throughout** -
+confirming a Custom Race Tournament never sets it, and therefore never
+reaches `Race_RecordResult`'s `Cell_EvaluateMedal` step (see the caveat
+added to the previous section).
+
+**Not completed this pass: driving a leg to a finish.** `scripts/psp-autopilot.py`
+against this track's own spline (`oag-trace track`, `16_Track` - the tool
+picked the same circuit by default) tracked the racing line poorly on
+Talon's Junction's own branch (`2 path(s), 2 junction(s)` per `oag-trace`'s
+own log) - 5,700 ticks covered only 0.234 laps, roughly ten times slower
+than this project's own "race ends around tick 7,500" baseline for a clean
+3-lap Venom run, with repeated wall contact visible in the `off`-from-line
+column. Finishing three laps at that rate, times two legs, was not a
+"modest effort" any more (the same phrase the previous pass's own deferred
+item used) - extrapolated real time was on the order of an hour, for a
+result (the points table and the medal-comparison value) already
+established at high confidence from clean decompilation. **This is a
+time-boxed, honest stop, not a blocked one**: the points write and the
+`EndRace Results` Tournament standings table were not captured live, and
+whoever picks this up next should either retune the autopilot's steering
+for a junction-laden track or pick a simpler circuit (`Venom Straight` has
+a committed reference trace already) when re-attempting.
 
 ## Names recovered
 
@@ -409,7 +487,8 @@ stated inline above rather than renamed.
 
 ## Next steps
 
-1. Watch `0x08b30fa0` live across a tournament launch to find its writer.
+1. Watch `0x08b30fa0` live in the narrowed `Team Selection confirm ->
+   InGame` window (see "Live verification") to pin its exact writer.
 2. Decompile `FUN_08820d78` to confirm `DAT_08b34320+0x90`'s reset
    condition (does a fresh tournament actually zero it, or does it carry
    over from an unrelated prior race).
