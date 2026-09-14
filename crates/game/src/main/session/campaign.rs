@@ -59,7 +59,19 @@ impl Session {
         // `strings` above is already a clone rather than a borrow.
         let title = shell.title.name.to_string();
         let records = self.records.clone();
-        match oag_game::campaign::load(&mut archives, &strings, faces, grid, &shell.sprites) {
+        let globals: Vec<(&str, &str)> = shell
+            .globals
+            .iter()
+            .map(|(key, value)| (key.as_str(), value.as_str()))
+            .collect();
+        match oag_game::campaign::load(
+            &mut archives,
+            &strings,
+            faces,
+            grid,
+            &shell.sprites,
+            &globals,
+        ) {
             Ok(campaign) => {
                 // The extended sheet - `hex_filled.mip`/`hex_outline.mip`,
                 // neither of which `Skin.xml`'s own sheet carries - has to
@@ -114,6 +126,11 @@ impl Session {
         }
     }
 
+    /// The pad path (`GridSelection::update`/`CellSelection::update`) and
+    /// the pointer path (`super::pointer::campaign_pointer`) both fold down
+    /// to this one function, which is deliberate: a locked tile refuses
+    /// `Confirm` on **either** input, and gating only inside `update` would
+    /// leave a mouse two-tap launching a cell the pad cannot.
     pub(crate) fn handle_campaign(&mut self, event: Event) {
         // Whatever cell was just confirmed, read out here and acted on
         // *after* this borrow of `self.stage` ends below - `launch_campaign_cell`
@@ -129,14 +146,40 @@ impl Session {
             };
             match (&campaign.screen, event) {
                 (Screen::Grid(model), Event::Confirmed) => {
-                    let index = model.index();
-                    if !campaign.open_cell_selection(index) {
-                        warn!("grid {index} has no cells - staying on Grid Selection");
+                    // **Chosen, not measured**: no PI001 function this
+                    // project has decompiled ever refuses the transition on
+                    // `PI_Grid.Locked` - a live capture measured that
+                    // confirming a locked tile does nothing, so this reuses
+                    // the tier's own lock-glyph predicate to reproduce that,
+                    // rather than a mechanism traced from the executable.
+                    // See `docs/ghidra/functions/psp-pulse-usa/race-campaign.md`'s
+                    // "Unlock rules, cell and tier".
+                    if model.selected_is_locked() {
+                        log::info!(
+                            "grid {} is locked - Confirm does nothing, chosen not measured",
+                            model.index()
+                        );
+                    } else {
+                        let index = model.index();
+                        if !campaign.open_cell_selection(index) {
+                            warn!("grid {index} has no cells - staying on Grid Selection");
+                        }
                     }
                 }
                 (Screen::Grid(_), Event::Back) => stage.campaign = None,
                 (Screen::Cell { model, .. }, Event::Confirmed) => {
-                    confirmed_cell = model.selected().cloned();
+                    // The identical reasoning as the tier arm above, on
+                    // `PI_Cell.Locked`.
+                    if model.selected_is_locked() {
+                        log::info!(
+                            "{} is locked - Confirm does nothing, chosen not measured",
+                            model
+                                .selected()
+                                .map_or_else(|| "no cell".to_string(), |cell| cell.name.clone())
+                        );
+                    } else {
+                        confirmed_cell = model.selected().cloned();
+                    }
                 }
                 (Screen::Cell { .. }, Event::Back) => campaign.back_to_grid_selection(),
                 (_, Event::Moved | Event::Help) => {}

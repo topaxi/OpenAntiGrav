@@ -1,9 +1,13 @@
+//! Model-level tests: navigation, paging, pointer hit-testing, and the lock
+//! predicates - everything that does not need a [`crate::menu::Layers`] out
+//! of [`super::draw`]. See `campaign/draw/tests.rs` for the draw-list ones,
+//! split out the same way `draw.rs` itself was, under the 1,000-line rule.
+
 use super::*;
 use crate::language::StringTable;
-use crate::menu::{Frame, Skin};
 use crate::pointer::Pointer;
 use oag_gameplay::input::Input;
-use oag_tables::race_campaign::Cell;
+use oag_tables::race_campaign::{Cell, Mode};
 
 /// `CellMode_Definition.xml` in miniature: the same container nesting and
 /// widget names the real file authors, trimmed to two grid tiers and four
@@ -113,17 +117,19 @@ fn strings() -> StringTable {
 <Entry ID="FE_ON" String="ON"></Entry>
 <Entry ID="FE_OFF" String="OFF"></Entry>
 <Entry ID="RC_INF" String="INF"></Entry>
+<Entry ID="RC_SC" String="Speed class"></Entry>
+<Entry ID="RC_LAPS" String="Laps"></Entry>
+<Entry ID="RB_WEAP" String="Weapons"></Entry>
+<Entry ID="ER_POINTS" String="Points"></Entry>
+<Entry ID="IG_HUD_BEST" String="Best"></Entry>
 <Entry ID="MSC_NONE" String="NONE"></Entry>
 <Entry ID="IG_HUD_TARGET" String="Target"></Entry>
+<Entry ID="MSC_EVENT_SR" String="Single Race: take on a full grid."></Entry>
+<Entry ID="MSC_EVENT_TT" String="Time Trial: beat the clock."></Entry>
+<Entry ID="Grid0" String="Grid 1"></Entry>
+<Entry ID="Grid4" String="Grid 5"></Entry>
+<Entry ID="Grid12" String="Phantom Grid 1"></Entry>
 </Strings>"#,
-    )
-}
-
-fn skin() -> Skin {
-    Skin::new(
-        oag_pulse::FRONT_END.menu,
-        oag_display::space::Space::PSP,
-        22.0,
     )
 }
 
@@ -159,33 +165,6 @@ fn race_cell(name: &str, track: &str) -> Cell {
     }
 }
 
-fn time_trial_cell(name: &str) -> Cell {
-    Cell {
-        mode: Mode::TimeTrial,
-        weapons: false,
-        ai_count: None,
-        skill: None,
-        skill_easy: None,
-        skill_hard: None,
-        gold: 6600,
-        silver: 6800,
-        bronze: 7000,
-        ..race_cell(name, "16_Track")
-    }
-}
-
-fn zone_cell(name: &str) -> Cell {
-    Cell {
-        mode: Mode::Zone,
-        class: "Zone".to_string(),
-        laps: Some(0),
-        gold: 20,
-        silver: 17,
-        bronze: 15,
-        ..race_cell(name, "16_Track")
-    }
-}
-
 #[test]
 fn grid_selection_pages_four_at_a_time_and_wraps() {
     let grids: Vec<GridSummary> = (0..6)
@@ -196,6 +175,7 @@ fn grid_selection_pages_four_at_a_time_and_wraps() {
             required_points: 12,
             gold_medals: 0,
             points_earned: 0,
+            locked: false,
         })
         .collect();
     let mut model = GridSelection::new(grids);
@@ -223,103 +203,6 @@ fn grid_selection_pages_four_at_a_time_and_wraps() {
     assert_eq!(model.update(&mut input), vec![Event::Confirmed]);
     press(&mut input, Button::Circle);
     assert_eq!(model.update(&mut input), vec![Event::Back]);
-}
-
-#[test]
-fn a_fresh_grids_title_is_its_own_raw_name_and_required_falls_back_to_na() {
-    let screens = Screens::from_xml(XML);
-    let layout = Layout::read(
-        &screens,
-        "Grid Selection",
-        &strings(),
-        crate::picker::FaceScales::default(),
-        PSP_GRID,
-    )
-    .unwrap();
-    let model = GridSelection::new(vec![GridSummary {
-        name: "grid0".to_string(),
-        cell_count: 8,
-        max_points: 24,
-        required_points: 0,
-        gold_medals: 0,
-        points_earned: 0,
-    }]);
-    let layers = grid_draw_list(
-        &model,
-        &layout,
-        &skin(),
-        &Frame::default(),
-        &strings(),
-        None,
-        false,
-        &|_| None,
-    );
-    let texts: Vec<(String, f32, f32)> = layers
-        .body
-        .iter()
-        .filter_map(|draw| match draw {
-            Draw::Text { text, x, y, .. } => Some((text.clone(), *x, *y)),
-            _ => None,
-        })
-        .collect();
-    assert!(
-        texts.contains(&("grid0".to_string(), 270.0, 93.0)),
-        "{texts:?}"
-    );
-    assert!(
-        texts.contains(&("00/08".to_string(), 390.0, 131.0)),
-        "{texts:?}"
-    );
-    assert!(
-        texts.contains(&("N/A".to_string(), 390.0, 161.0)),
-        "{texts:?}"
-    );
-}
-
-/// The regression this pass fixes: `Selector` used to share the selected
-/// hex's own top-left corner, which put a 42x43 cursor visibly down-and-right
-/// of a 32x32 hex rather than around it - see `docs/ui/campaign-screens.md`.
-#[test]
-fn the_selector_is_centred_on_the_selected_hex_not_top_left_aligned() {
-    let screens = Screens::from_xml(XML);
-    let layout = Layout::read(
-        &screens,
-        "Grid Selection",
-        &strings(),
-        crate::picker::FaceScales::default(),
-        PSP_GRID,
-    )
-    .unwrap();
-    let model = GridSelection::new(vec![GridSummary {
-        name: "grid0".to_string(),
-        cell_count: 8,
-        max_points: 24,
-        required_points: 12,
-        gold_medals: 0,
-        points_earned: 0,
-    }]);
-    let layers = grid_draw_list(
-        &model,
-        &layout,
-        &skin(),
-        &Frame::default(),
-        &strings(),
-        None,
-        false,
-        &|_| placed32(),
-    );
-    let selector_rect = layers
-        .body
-        .iter()
-        .find_map(|draw| match draw {
-            Draw::Sprite { rect, .. } if rect[2] == 42.0 && rect[3] == 43.0 => Some(*rect),
-            _ => None,
-        })
-        .expect("the Selector draws as a 42x43 sprite");
-    // Hex 0 sits at [65,145,32,32] - see
-    // `grid_selections_hexes_are_at_the_docs_own_measured_positions`.
-    // Centred: `65 + (32-42)/2 = 60`, `145 + (32-43)/2 = 139.5`.
-    assert_eq!(selector_rect, [60.0, 139.5, 42.0, 43.0]);
 }
 
 #[test]
@@ -367,126 +250,6 @@ fn triangle_opens_help_and_suspends_movement() {
     assert!(!model.help_open());
 }
 
-#[test]
-fn targets_are_hidden_for_race_and_shown_as_a_time_for_time_trial() {
-    let screens = Screens::from_xml(XML);
-    let layout = Layout::read(
-        &screens,
-        "Cell Selection",
-        &strings(),
-        crate::picker::FaceScales::default(),
-        PSP_GRID,
-    )
-    .unwrap();
-
-    let race = CellSelection::new(vec![race_cell("grid0_0_0", "16_Track")]);
-    let layers = cell_draw_list(
-        &race,
-        &layout,
-        &skin(),
-        &Frame::default(),
-        &strings(),
-        None,
-        false,
-        &|_| None,
-    );
-    assert!(
-        !layers
-            .body
-            .iter()
-            .any(|draw| matches!(draw, Draw::Text { text, .. } if text == "1")),
-        "Race hides its target column: {:?}",
-        layers.body
-    );
-
-    let tt = CellSelection::new(vec![time_trial_cell("grid0_0_0")]);
-    let layers = cell_draw_list(
-        &tt,
-        &layout,
-        &skin(),
-        &Frame::default(),
-        &strings(),
-        None,
-        false,
-        &|_| None,
-    );
-    let texts: Vec<&String> = layers
-        .body
-        .iter()
-        .filter_map(|draw| match draw {
-            Draw::Text { text, .. } => Some(text),
-            _ => None,
-        })
-        .collect();
-    assert!(texts.iter().any(|t| t.as_str() == "1:06.00"), "{texts:?}");
-    assert!(texts.iter().any(|t| t.as_str() == "Target"), "{texts:?}");
-}
-
-/// A real sprite lookup - `&|_| None` in the tests above hides a widget that
-/// draws unconditionally in the *general* image loop as readily as one that
-/// is correctly gated, since neither ever reaches `Draw::Sprite` at all. This
-/// is the regression test for exactly that: the `Target{n} Image` swatches
-/// used to draw whether or not `targets_visible` said so, because nothing
-/// excluded them from the screen's own ungated `for image in &screen.images`
-/// pass - only the *second*, gated pass that draws them properly.
-#[test]
-fn race_draws_no_target_swatch_even_though_the_sprite_resolves() {
-    let screens = Screens::from_xml(XML);
-    let layout = Layout::read(
-        &screens,
-        "Cell Selection",
-        &strings(),
-        crate::picker::FaceScales::default(),
-        PSP_GRID,
-    )
-    .unwrap();
-    let race = CellSelection::new(vec![race_cell("grid0_0_0", "16_Track")]);
-    let placed = crate::frontend::Placed {
-        x: 0,
-        y: 0,
-        width: 14,
-        height: 14,
-        quad_extent: None,
-        blend: None,
-    };
-    let layers = cell_draw_list(
-        &race,
-        &layout,
-        &skin(),
-        &Frame::default(),
-        &strings(),
-        None,
-        false,
-        &|_| Some(placed),
-    );
-    let sprites: Vec<&[f32; 4]> = layers
-        .body
-        .iter()
-        .filter_map(|draw| match draw {
-            Draw::Sprite { rect, .. } | Draw::TiledSprite { rect, .. } => Some(rect),
-            _ => None,
-        })
-        .collect();
-    // Exactly the occupied cell's own `Medal_0_0`/`Outline_0_0` plus the
-    // `Selector` cursor - `Medal_0_1`/`Medal_1_0`/`Outline_0_1`/`Outline_1_0`
-    // are unoccupied slots, `Lock_0_0` is never drawn, and `Target0 Image`
-    // is this test's own regression: it must not appear for a `Race` cell.
-    assert_eq!(sprites.len(), 3, "{:?}", layers.body);
-}
-
-#[test]
-fn zone_blanks_the_class_line_and_counts_up() {
-    let cell = zone_cell("grid0_4_2");
-    assert_eq!(target_value(cell.gold, &cell.mode), "20");
-    assert_eq!(laps_line(&cell, &strings()), "INF");
-}
-
-#[test]
-fn centiseconds_format_as_minutes_seconds_hundredths() {
-    assert_eq!(format_centiseconds(6600), "1:06.00");
-    assert_eq!(format_centiseconds(59), "0:00.59");
-}
-
 /// [`GridSummary::from_grid_with_medals`]'s own reason to exist: a real
 /// progress source moves `Medals`/`Points` off the fresh-profile `"00/.."`
 /// this crate otherwise draws.
@@ -516,98 +279,103 @@ fn a_grid_with_one_gold_cell_shows_it_on_medals_and_points() {
     assert_eq!(summary.points_earned, Medal::Gold.points());
     assert_eq!(summary.cell_count, 2);
     assert_eq!(summary.max_points, 6);
+    assert!(!summary.locked, "grid0 authors Locked=\"false\"");
 }
 
-/// [`CellSelection::with_medals`]'s own reason to exist: `Line6`/`Line7`
-/// stop reading as a fresh profile's `"0/3"`/`MSC_NONE` once a caller can
-/// say what a cell's own best medal was.
+/// The two-term display rule, cell side: `docs/ghidra/functions/psp-pulse-usa/race-campaign.md`'s
+/// "Unlock rules, cell and tier" - locked by default, cleared by the cell's
+/// own medal.
 #[test]
-fn a_cells_saved_medal_reaches_line6_and_line7() {
-    let screens = Screens::from_xml(XML);
-    let layout = Layout::read(
-        &screens,
-        "Cell Selection",
-        &strings(),
-        crate::picker::FaceScales::default(),
-        PSP_GRID,
-    )
-    .unwrap();
-    let model = CellSelection::with_medals(vec![race_cell("grid0_0_0", "16_Track")], &|_| {
-        Some(Medal::Silver)
+fn a_cell_with_no_locked_attribute_shows_its_lock_until_it_or_a_neighbour_earns_a_medal() {
+    let unmedalled = CellSelection::new(vec![race_cell("grid0_2_1", "16_Track")]);
+    assert!(
+        unmedalled.cell_shows_lock(2, 1),
+        "absent Locked defaults to true - confidence 72, \
+         docs/ghidra/functions/psp-pulse-usa/race-campaign.md"
+    );
+
+    let own_medal = CellSelection::with_medals(vec![race_cell("grid0_2_1", "16_Track")], &|_| {
+        Some(Medal::Bronze)
     });
-    let layers = cell_draw_list(
-        &model,
-        &layout,
-        &skin(),
-        &Frame::default(),
-        &strings(),
-        None,
-        false,
-        &|_| None,
-    );
-    let texts: Vec<&String> = layers
-        .body
-        .iter()
-        .filter_map(|draw| match draw {
-            Draw::Text { text, .. } => Some(text),
-            _ => None,
-        })
-        .collect();
     assert!(
-        texts.contains(&&format!(
-            "{}/{}",
-            Medal::Silver.points(),
-            Medal::Gold.points()
-        )),
-        "{texts:?}"
-    );
-    assert!(
-        texts.contains(&&"IG_HUD_SILVER".to_string()),
-        "unresolved id falls back to itself, the same as every other label \
-         this test file's own `strings()` does not carry: {texts:?}"
+        !own_medal.cell_shows_lock(2, 1),
+        "the cell's own medal clears it"
     );
 }
 
-/// The same fix as `the_selector_is_centred_on_the_selected_hex_not_top_left_aligned`,
-/// on `Cell Selection`'s own `Selector`.
+/// The cell rule's third term: a hex-adjacent cell's medal clears the lock
+/// too, even though the cell itself has none - `g_anCellNeighbourOffsets`'s
+/// six-neighbour check.
 #[test]
-fn cell_selections_selector_is_also_centred_on_the_selected_hex() {
-    let screens = Screens::from_xml(XML);
-    let layout = Layout::read(
-        &screens,
-        "Cell Selection",
-        &strings(),
-        crate::picker::FaceScales::default(),
-        PSP_GRID,
-    )
-    .unwrap();
-    let model = CellSelection::new(vec![race_cell("grid0_1_0", "16_Track")]);
-    let layers = cell_draw_list(
-        &model,
-        &layout,
-        &skin(),
-        &Frame::default(),
-        &strings(),
-        None,
-        false,
-        &|_| placed32(),
+fn a_medalled_neighbour_clears_an_unmedalled_cells_lock() {
+    let cells = vec![
+        race_cell("grid0_2_1", "16_Track"),
+        race_cell("grid0_3_1", "16_Track"), // (3,1): odd x, "right" neighbour of (2,1)
+    ];
+    let medalled_neighbour = CellSelection::with_medals(cells, &|name| {
+        (name == "grid0_3_1").then_some(Medal::Silver)
+    });
+    assert!(
+        !medalled_neighbour.cell_shows_lock(2, 1),
+        "a neighbour's own medal clears this cell's lock too"
     );
-    let selector_rect = layers
-        .body
-        .iter()
-        .find_map(|draw| match draw {
-            Draw::Sprite { rect, .. } if rect[2] == 42.0 && rect[3] == 43.0 => Some(*rect),
-            _ => None,
-        })
-        .expect("the Selector draws as a 42x43 sprite");
-    // Cell (1,0) sits at [65,59,32,32] - see
-    // `cell_selections_hexes_sit_at_their_own_grid_coords_position`.
-    assert_eq!(selector_rect, [60.0, 53.5, 42.0, 43.0]);
 }
 
-/// The 32x32 `hex_filled.mip`/`hex_outline.mip` sheet placement, measured
-/// off the real `.mip` on `pulse-psp-eu.chd` - see
-/// `crate::pointer::hex_contains`'s own doc.
+/// A cell that explicitly authors `Locked="false"` never shows the glyph,
+/// medal or not.
+#[test]
+fn a_cell_authored_locked_false_never_shows_the_glyph() {
+    let mut cell = race_cell("grid0_3_1", "16_Track");
+    cell.locked = Some(false);
+    let model = CellSelection::new(vec![cell]);
+    assert!(!model.cell_shows_lock(3, 1));
+}
+
+/// The tier rule, mirrored: locked by default, cleared by this grid's own
+/// points, or by the previous tile's own points meeting its own
+/// `RequiredPoints`.
+#[test]
+fn a_tier_is_locked_until_its_own_points_or_the_previous_tiers_are_met() {
+    let base = |name: &str, required: u32, earned: u32| GridSummary {
+        name: name.to_string(),
+        cell_count: 8,
+        max_points: 24,
+        required_points: required,
+        gold_medals: 0,
+        points_earned: earned,
+        locked: true,
+    };
+    // grid0 never locked at all - `grid_00.xml`'s own `Locked="false"`.
+    let grid0 = GridSummary {
+        locked: false,
+        ..base("grid0", 12, 0)
+    };
+    let grid1_unmet = base("grid1", 16, 0);
+    let model = GridSelection::new(vec![grid0.clone(), grid1_unmet]);
+    assert!(
+        model.tier_shows_lock(1),
+        "grid0's own points (0) have not met its own RequiredPoints (12)"
+    );
+
+    let grid0_met = GridSummary {
+        points_earned: 12,
+        ..grid0
+    };
+    let grid1_still_locked = base("grid1", 16, 0);
+    let model = GridSelection::new(vec![grid0_met, grid1_still_locked]);
+    assert!(
+        !model.tier_shows_lock(1),
+        "grid0's own points now meet its RequiredPoints, clearing grid1's glyph"
+    );
+
+    let grid1_own_points = base("grid1", 16, 3);
+    let model = GridSelection::new(vec![base("grid0", 12, 0), grid1_own_points]);
+    assert!(
+        !model.tier_shows_lock(1),
+        "grid1's own points, even short of RequiredPoints, clear its own glyph"
+    );
+}
+
 fn placed32() -> Option<crate::frontend::Placed> {
     Some(crate::frontend::Placed {
         x: 0,
@@ -667,6 +435,7 @@ fn grid_summaries(n: usize) -> Vec<GridSummary> {
             required_points: 12,
             gold_medals: 0,
             points_earned: 0,
+            locked: false,
         })
         .collect()
 }

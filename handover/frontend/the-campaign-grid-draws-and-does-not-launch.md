@@ -21,6 +21,25 @@ paragraph that is not struck through is still open, and it did not attempt
 a live PPSSPP capture or an interactive play-test of the new launch either
 - see `docs/ui/campaign-screens.md`'s own `Open` entry on why.
 
+**Update, 2026-09-14, `campaign-picture` lane: the picture itself, against
+the PPSSPP frames the `campaign-ppsspp-results` lane measured the same
+day.** Most of six items landed: the hex grid draws `Outline_x_y` always
+and `Medal_x_y` only where a medal/points are earned (was: `hex_filled.mip`
+everywhere); `Lock_x_y`/`Lock_n_0` draw under
+`docs/ghidra/functions/psp-pulse-usa/race-campaign.md`'s measured
+three-term rule on both screens, and a locked tile now refuses `Confirm`
+too (chosen, not measured, on the exact refusal mechanism - see
+`docs/ui/campaign-screens.md`'s "Grid tiers and cells lock and unlock");
+`Grid Selection`'s `Title` resolves through a real per-grid idstring
+(`"GRID 1"`, and `"PHANTOM GRID 1"` on `grid12`..`grid15` - not derivable
+from a formula), `Cell Selection`'s `Title`/`Track Line` resolve through the
+disc's own mode/circuit names, and the panel's five row labels (`Speed
+class`/`Laps`/`Weapons`/`Points`/`Best`) resolve to real idstrings instead
+of staying blank. **Not landed**: the tip ticker and the `Confirm`/`Back`
+half of the button-legend footer - see this thread's `Open` section, which
+replaces the two locking bullets below (struck through) with the measured
+rule now implemented.
+
 Milestone: **M7 - Shell and polish**.
 
 Read first: [`docs/ui/campaign-screens.md`](../../docs/ui/campaign-screens.md)
@@ -59,15 +78,15 @@ read), `crates/game/src/main/campaign_stage.rs` and
   `oag_ui::screen::Screens::collect_widgets` already discards elsewhere in
   this crate; a static (non-scrolling) overlay would be the honest next
   step, not a scripted one.
-- **Grid-tier locking draws every tier open.** `Unlock_GridPointsMet` needs
-  `Grid_PointsEarned`, which needs a per-cell save this build does not keep
-  (see below) - so there is nothing to compare a `RequiredPoints` against.
-  Chosen, not measured; documented in `campaign-screens.md`.
-- **`Locked`/`Lock_x_y` is deliberately unimplemented**, at the RE pass's own
-  confidence 50 (`race-campaign.md`'s "what is not determined": no traced
-  consumer for the byte on either a `PI_Cell` or a `PI_Grid`). No lock glyph
-  draws anywhere. Do not implement one from the attribute without first
-  tracing its consumer.
+- ~~Grid-tier locking draws every tier open.~~ **Done, 2026-09-14**, in the
+  `campaign-picture` lane, once a per-cell save existed to compare
+  `Grid_PointsEarned` against and `race-campaign.md`'s own later pass traced
+  the actual glyph rule. See the update paragraph above.
+- ~~`Locked`/`Lock_x_y` is deliberately unimplemented.~~ **Done, 2026-09-14**
+  - `race-campaign.md`'s own confidence rose to 82-85 once its "Unlock
+    rules, cell and tier" section traced the consumer in full; the
+    `campaign-picture` lane implemented the draw side the same day. See the
+    update paragraph above.
 - **PPSSPP measured 2026-09-14 - `docs/ui/campaign-screens.md`'s "Measured
   against PPSSPP" section has the full readings and frame paths
   (`data/reference/psp-campaign-screens/`, gitignored).** Three corrections
@@ -120,10 +139,26 @@ read), `crates/game/src/main/campaign_stage.rs` and
   `CellSelection::with_medals`. **`Line5`/`Line8` are unchanged** - both are
   `Cell_SavedRecord`, a saved best time/zone-count/kill-count this pass did
   not add a store for, only the medal.
-- **A PPSSPP capture of the walk above**, to move every confidence score in
+- ~~A PPSSPP capture of the walk above~~, to move every confidence score in
   `docs/ui/campaign-screens.md` from "read off the XML and the decompile"
-  to "measured against a live frame", the same way `selection-screens.md`'s
-  own numbers already are. Nobody has held PPSSPP for this thread yet.
+  to "measured against a live frame". **Done, 2026-09-14**, in the
+  `campaign-ppsspp-results` lane - see `docs/ui/campaign-screens.md`'s
+  "Measured against PPSSPP" section, which that lane owns; do not edit
+  inside it.
+- **The scrolling tip ticker and the `Confirm`/`Back` half of the footer
+  legend still do not draw.** The ticker's own strings are located
+  (`TKR_NOTOURN`/`TKR_NOZONE`/`TKR_SONGS`/`TKR_DIST`) but not traced to a
+  widget or a scroll speed; the footer already draws `HELP`/`CHANGE
+  DIFFICULTY` through a mechanism outside `oag_ui::campaign` this pass did
+  not need to touch to add the other two. See `docs/ui/campaign-screens.md`'s
+  own `Open` entry.
+- **A previous live walk's cell (`grid0_2_1`) is locked under the rule this
+  pass implemented.** The "interactive play-test" bullet below drove
+  through `grid0_2_1` on a fresh profile; that cell authors no `Locked`
+  attribute (defaults locked) and has no medal or medalled neighbour, so a
+  repeat of that walk today would refuse `Confirm` rather than reach `Team
+  Selection`. `grid0_3_1`/`grid0_3_2` (`Locked="false"`) are the cells to
+  re-walk with.
 - ~~An interactive play-test of the new launch.~~ **Driven live, 2026-09-14**,
   in the `campaign-pointer` lane, mouse-only under Xvfb: `Cell Selection`
   confirming, `Team Selection`, an `--autopilot` race finishing and the

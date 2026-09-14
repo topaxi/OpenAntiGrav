@@ -42,36 +42,53 @@
 //! `docs/ghidra/functions/psp-pulse-usa/race-campaign.md`'s "how a campaign
 //! event launches" and `docs/architecture/persistence.md`.
 //!
-//! # Three widgets this build deliberately does not draw
+//! # The hex grid: an outline always, a medal-colour swatch only where earned
 //!
-//! - **`Lock_x_y` / `Lock_n_0`.** `Locked` on a `PI_Cell`/`PI_Grid` has no
-//!   traced consumer (`race-campaign.md`'s "what is not determined",
-//!   confidence 50) - drawing a lock glyph from it would be a guess dressed
-//!   as a measurement. Every tier and every cell draws open.
-//! - **`Line{n} Title`, every `n`.** `CellSelection_PopulateDetail`'s own
-//!   table names `Line1`..`Line8` as *values* but never their `Title`
-//!   companions, unlike `Target0..2 Title` (`IG_HUD_TARGET`, a real
-//!   idstring) or `Medals Title`/`Points Title`/`Required Title` (`RC_GM`/
-//!   `RC_TP`/`RC_PN`). Their own authored strings are template junk
-//!   (`"l1 title"`, `"--7"`) rather than an idstring, so there is nothing to
-//!   resolve and nothing safe to invent; skipped uniformly rather than
-//!   drawing the junk or guessing a label.
-//! - **`Line4`, `Line5` or `Line8`.** `Line4` never appears in
-//!   `PopulateDetail`'s own table at all. `Line5`/`Line8` share one offset
-//!   (`Item OffsetX="260" OffsetY="180"`, the same swap idiom
-//!   `docs/formats/race-setup.md` documents for `Single Player`'s `Zone`/
-//!   `DifficultyNaText`) and both are `Cell_SavedRecord` - the saved best
-//!   this build has no record for. All three are left blank.
+//! Both screens author two widgets at every hex slot - `Outline_x_y` (the
+//! base hex, always drawn) and `Medal_x_y` (a colour swatch, drawn only over
+//! a cell/tier that has actually earned a medal/points) - not one filled hex
+//! everywhere, which is what this build drew before 2026-09-14. See
+//! `docs/ghidra/functions/psp-pulse-usa/race-campaign.md`'s
+//! `CellSelection_PopulateGrid`/`GridSelection_PopulateTiles` pseudocode and
+//! `docs/ui/campaign-screens.md`. The swatch's own tint is **chosen, not
+//! measured** - `medal_argb`/`medal_tint` in [`draw`] say why.
+//!
+//! # `Lock_x_y` / `Lock_n_0`: drawn under a measured three-term rule
+//!
+//! `docs/ghidra/functions/psp-pulse-usa/race-campaign.md`'s "Unlock rules,
+//! cell and tier" traces the glyph's own visibility in full, on both
+//! screens: locked by default, cleared by the cell's/tier's own medal or
+//! points, and (cell only) cleared by a hex-adjacent cell's medal too. See
+//! [`CellSelection::cell_shows_lock`]/[`GridSelection::tier_shows_lock`].
+//! **Whether the same byte also refuses `Confirm` is not settled by any
+//! decompiled PI001 function**, but a live capture measured that it does -
+//! this build reuses the identical predicate to gate a confirm at the
+//! composition root (`oag_game::main::session::campaign::handle_campaign`),
+//! which is `chosen, not measured` on the exact mechanism, not on the
+//! glyph's own timing.
+//!
+//! # `Line{n} Title`: five resolved, three still blank
+//!
+//! `Line1`/`Line2`/`Line3`/`Line6`/`Line7 Title` resolve to real idstrings
+//! (`RC_SC`/`RC_LAPS`/`RB_WEAP`/`ER_POINTS`/`IG_HUD_BEST`) - see [`draw`]'s
+//! own doc on [`draw::cell_draw_list`]. `Line4`/`Line5`/`Line8 Title` stay
+//! blank: `Line4` never appears in `CellSelection_PopulateDetail`'s own
+//! table at all, and `Line5`/`Line8` are `Cell_SavedRecord` - the saved best
+//! this build has no record for - sharing one offset (`Item OffsetX="260"
+//! OffsetY="180"`, the same swap idiom `docs/formats/race-setup.md`
+//! documents for `Single Player`'s `Zone`/`DifficultyNaText`).
 
 use oag_gameplay::input::{Button, Input};
-use oag_tables::race_campaign::{Cell, Grid, Medal, Mode};
+use oag_tables::race_campaign::{Cell, Grid, Medal};
 
-use crate::frontend::{Align, Draw, Placed};
+use crate::frontend::Placed;
 use crate::language::StringTable;
-use crate::menu::{Frame, Layers, Picture, Skin};
-use crate::screen::{Fill, Image, Screen, Screens, Text, argb_to_rgba};
+use crate::screen::{Screen, Screens};
 
+pub mod draw;
 pub mod pointer;
+
+pub use draw::{cell_draw_list, grid_draw_list};
 
 #[cfg(test)]
 mod tests;
@@ -127,6 +144,13 @@ pub struct GridSummary {
     /// own best saved medal on this grid. `0` on the same terms as
     /// [`Self::gold_medals`].
     pub points_earned: u32,
+    /// `PI_Grid`'s own `Locked` byte (`+0xa0`) - the tier's *static default*,
+    /// not the final answer: `GridSelection_PopulateTiles` also clears the
+    /// glyph once this grid has scored any points of its own, or once the
+    /// previous tile's own points meet its own `RequiredPoints` - see
+    /// [`GridSelection::tier_shows_lock`], `docs/ghidra/functions/psp-pulse-usa/race-campaign.md`'s
+    /// "Unlock rules, cell and tier".
+    pub locked: bool,
 }
 
 impl GridSummary {
@@ -160,6 +184,7 @@ impl GridSummary {
             required_points: grid.required_points,
             gold_medals,
             points_earned,
+            locked: grid.locked,
         }
     }
 }
@@ -220,6 +245,44 @@ impl GridSelection {
         let first = page * GRIDS_PER_PAGE + 1;
         let last = ((page + 1) * GRIDS_PER_PAGE).min(self.grids.len().max(1));
         format!("{first}-{last} / {}", self.grids.len())
+    }
+
+    /// Whether the selected tier still shows its `Lock_n_0` glyph -
+    /// `GridSelection_PopulateTiles`'s own three-term rule: the tier's own
+    /// `Locked` byte is set, it has scored no points of its own, and the
+    /// immediately preceding tile's own points have not met its own
+    /// `RequiredPoints` either. See
+    /// `docs/ghidra/functions/psp-pulse-usa/race-campaign.md`'s "Unlock
+    /// rules, cell and tier".
+    ///
+    /// **Also what gates `Confirm`** - `docs/ui/campaign-screens.md`
+    /// measured live that confirming a locked tier does nothing, but no
+    /// PI001 function traced ever refuses the transition on this byte, so
+    /// reusing the glyph's own predicate for the refusal is **chosen, not
+    /// measured**: the real gate lives in an un-decompiled function
+    /// upstream of `GridSelection_CommitSelection`. See
+    /// `crate::main::session::campaign::handle_campaign` in `oag_game`,
+    /// which is where this is actually applied.
+    #[must_use]
+    pub fn selected_is_locked(&self) -> bool {
+        self.tier_shows_lock(self.index)
+    }
+
+    /// [`Self::selected_is_locked`], for any tier by flat index - what
+    /// [`draw::grid_draw_list`] calls per tile rather than only the
+    /// selected one.
+    #[must_use]
+    pub(crate) fn tier_shows_lock(&self, index: usize) -> bool {
+        let Some(grid) = self.grids.get(index) else {
+            return false;
+        };
+        if !grid.locked || grid.points_earned > 0 {
+            return false;
+        }
+        let Some(previous) = index.checked_sub(1).and_then(|i| self.grids.get(i)) else {
+            return true;
+        };
+        previous.points_earned < previous.required_points
     }
 
     /// Up/down wrap over every grid, one at a time - the same `Picker::update`
@@ -305,6 +368,73 @@ impl CellSelection {
     #[must_use]
     pub fn help_open(&self) -> bool {
         self.help_open
+    }
+
+    /// A cell's own best saved medal, by hex position rather than list
+    /// index - what the six-neighbour lock check and [`draw::cell_draw_list`]'s
+    /// own `Medal_x_y` gate both need. `None` for an unoccupied slot as much
+    /// as for an occupied one with no medal; the two are not distinguished
+    /// here, the same way `Cell_BestMedal` on a slot with no `PI_Cell` at
+    /// all is not this function's problem to separate from one that has a
+    /// cell but no medal.
+    #[must_use]
+    pub fn medal_at(&self, x: u32, y: u32) -> Option<Medal> {
+        self.cells
+            .iter()
+            .zip(&self.medals)
+            .find(|(cell, _)| cell.grid_coords() == Some((x, y)))
+            .and_then(|(_, medal)| *medal)
+    }
+
+    /// Whether the selected cell still shows its `Lock_x_y` glyph -
+    /// `CellSelection_PopulateGrid`'s own three-term rule. See
+    /// [`Self::cell_shows_lock`] and, for why this is also what gates
+    /// `Confirm`, [`GridSelection::selected_is_locked`]'s own doc (the
+    /// identical reasoning, applied to the other screen).
+    #[must_use]
+    pub fn selected_is_locked(&self) -> bool {
+        self.selected()
+            .is_some_and(|cell| self.cell_shows_lock_cell(cell))
+    }
+
+    /// [`Self::selected_is_locked`], for any occupied `(x, y)` rather than
+    /// only the selected one - what [`draw::cell_draw_list`] calls per hex.
+    /// `false` for an unoccupied slot, which has no `Cell` to be locked.
+    #[must_use]
+    pub(crate) fn cell_shows_lock(&self, x: u32, y: u32) -> bool {
+        self.cells
+            .iter()
+            .find(|cell| cell.grid_coords() == Some((x, y)))
+            .is_some_and(|cell| self.cell_shows_lock_cell(cell))
+    }
+
+    /// `cell.Locked (+0xb9) != 0 and Cell_BestMedal(cell) == 0xff and no
+    /// hex-adjacent cell has a medal either` -
+    /// `docs/ghidra/functions/psp-pulse-usa/race-campaign.md`'s "Unlock
+    /// rules, cell and tier". **The absent-`Locked`-attribute default is
+    /// `true`**, confidence 72 on that page: `PI_Cell_ParseElement` never
+    /// writes a default onto the byte itself, but every one of `grid0`'s six
+    /// glyphed cells is exactly the six that author no `Locked` attribute at
+    /// all, on a live capture with zero medals anywhere to trigger the
+    /// neighbour clause instead.
+    fn cell_shows_lock_cell(&self, cell: &Cell) -> bool {
+        if !cell.locked.unwrap_or(true) {
+            return false;
+        }
+        let Some((x, y)) = cell.grid_coords() else {
+            return true;
+        };
+        if self.medal_at(x, y).is_some() {
+            return false;
+        }
+        !neighbour_offsets(x)
+            .iter()
+            .filter_map(|&(dx, dy)| {
+                let nx = i64::from(x) + dx;
+                let ny = i64::from(y) + dy;
+                (nx >= 0 && ny >= 0).then(|| self.medal_at(nx as u32, ny as u32))
+            })
+            .any(|medal| medal.is_some())
     }
 
     /// Moves to the cell nearest `(dx, dy)` away from the current one, in the
@@ -405,6 +535,22 @@ impl CellSelection {
     }
 }
 
+/// `g_anCellNeighbourOffsets` (`0x08ab1e68`), the two six-entry `(dx, dy)`
+/// tables `CellSelection_PopulateGrid` picks between on `x`'s own parity -
+/// read directly off the raw bytes, not inferred - see
+/// `docs/ghidra/functions/psp-pulse-usa/race-campaign.md`'s "Unlock rules,
+/// cell and tier". The four orthogonal offsets are identical either way;
+/// only the two diagonals flip between up-left/up-right (even columns) and
+/// down-left/down-right (odd columns), the offset-column convention this
+/// screen's own staggered hex grid needs.
+fn neighbour_offsets(x: u32) -> [(i64, i64); 6] {
+    if x.is_multiple_of(2) {
+        [(-1, 0), (0, -1), (1, 0), (0, 1), (-1, -1), (1, -1)]
+    } else {
+        [(-1, 0), (0, -1), (1, 0), (0, 1), (-1, 1), (1, 1)]
+    }
+}
+
 /// The disc's own layout for one campaign screen, with every fixed string
 /// already resolved.
 #[derive(Debug, Clone)]
@@ -461,317 +607,6 @@ impl Layout {
     }
 }
 
-/// `Grid Selection`'s draw list.
-#[must_use]
-#[allow(
-    clippy::too_many_arguments,
-    reason = "the same eight facts a menu page or a picker takes"
-)]
-pub fn grid_draw_list(
-    model: &GridSelection,
-    layout: &Layout,
-    skin: &Skin,
-    frame: &Frame,
-    strings: &StringTable,
-    backdrop: Option<Picture>,
-    race_behind: bool,
-    sprites: &dyn Fn(&str) -> Option<Placed>,
-) -> Layers {
-    let mut layers = Layers {
-        backdrop: frame.backdrops(
-            skin.space(),
-            skin.background(),
-            backdrop.map(Picture::draw),
-            race_behind,
-        ),
-        ..Layers::default()
-    };
-    let (title_x, title_y, title_scale) = skin.title_at();
-    let title = strings.get_or_id("FE_RACE_CAM").to_string();
-    layers.chrome.push(Draw::title(
-        skin.title_font(),
-        title_x,
-        title_y,
-        title_scale,
-        skin.title_color(frame.ink),
-        title,
-    ));
-
-    let screen = &layout.screen;
-    let mut out = Vec::new();
-    for fill in &screen.fills {
-        out.push(fill_draw(fill));
-    }
-    let page = model.page();
-    let slot = model.slot();
-    for image in &screen.images {
-        if let Some(name) = image.name.as_deref()
-            && let Some(slot_index) =
-                hex_slot_of(name, "Medal_", 1).or_else(|| hex_slot_of(name, "Outline_", 1))
-        {
-            if name.starts_with("Lock_") {
-                continue;
-            }
-            if page * GRIDS_PER_PAGE + slot_index >= model.grids().len() {
-                continue;
-            }
-        }
-        if image
-            .name
-            .as_deref()
-            .is_some_and(|n| n.starts_with("Lock_"))
-        {
-            continue;
-        }
-        let Some(placed) = sprites(&image.src) else {
-            continue;
-        };
-        if image.name.as_deref() == Some("Selector") {
-            if let Some(hex) = hex_rect(screen, slot, 0, sprites) {
-                out.push(centred_selector_draw(image, placed, hex));
-            }
-            continue;
-        }
-        out.push(image_draw(image, placed));
-    }
-    let Some(selected) = model.selected() else {
-        layers.body = out;
-        return layers;
-    };
-    for text in &screen.texts {
-        let name = text.name.as_deref().unwrap_or("");
-        let content = match name {
-            "honey" => Some(model.counter()),
-            "Title" => Some(selected.name.clone()),
-            "Medals" => Some(format!(
-                "{:02}/{:02}",
-                selected.gold_medals, selected.cell_count
-            )),
-            "Points" => Some(format!(
-                "{:03}/{:03}",
-                selected.points_earned, selected.max_points
-            )),
-            "Required" => Some(if selected.required_points == 0 {
-                strings.get_or_id("FE_NA").to_string()
-            } else {
-                selected.required_points.to_string()
-            }),
-            _ => text.string.clone(),
-        };
-        let Some(content) = content else { continue };
-        out.push(text_draw(text, &content, layout));
-    }
-    layers.body = out;
-    layers
-}
-
-/// `Cell Selection`'s draw list.
-#[must_use]
-#[allow(
-    clippy::too_many_arguments,
-    reason = "the same eight facts a menu page or a picker takes"
-)]
-pub fn cell_draw_list(
-    model: &CellSelection,
-    layout: &Layout,
-    skin: &Skin,
-    frame: &Frame,
-    strings: &StringTable,
-    backdrop: Option<Picture>,
-    race_behind: bool,
-    sprites: &dyn Fn(&str) -> Option<Placed>,
-) -> Layers {
-    let mut layers = Layers {
-        backdrop: frame.backdrops(
-            skin.space(),
-            skin.background(),
-            backdrop.map(Picture::draw),
-            race_behind,
-        ),
-        ..Layers::default()
-    };
-    let (title_x, title_y, title_scale) = skin.title_at();
-    let title = strings.get_or_id("FE_RACE_CAM").to_string();
-    layers.chrome.push(Draw::title(
-        skin.title_font(),
-        title_x,
-        title_y,
-        title_scale,
-        skin.title_color(frame.ink),
-        title,
-    ));
-
-    let screen = &layout.screen;
-    let mut out = Vec::new();
-    for fill in &screen.fills {
-        out.push(fill_draw(fill));
-    }
-    let occupied: Vec<(u32, u32)> = model.cells().iter().filter_map(Cell::grid_coords).collect();
-    let selected_coords = model.selected().and_then(Cell::grid_coords);
-    for image in &screen.images {
-        if let Some(name) = image.name.as_deref() {
-            if name.starts_with("Lock_") {
-                continue;
-            }
-            if let Some((x, y)) =
-                hex_slot_xy(name, "Medal_").or_else(|| hex_slot_xy(name, "Outline_"))
-                && !occupied.contains(&(x, y))
-            {
-                continue;
-            }
-            // Drawn below, gated on `targets_visible` - not here, where
-            // nothing yet knows the selected cell's own mode.
-            if matches!(name, "Target0 Image" | "Target1 Image" | "Target2 Image") {
-                continue;
-            }
-        }
-        let Some(placed) = sprites(&image.src) else {
-            continue;
-        };
-        if image.name.as_deref() == Some("Selector")
-            && let Some((sx, sy)) = selected_coords
-            && let Some(hex) = hex_rect(screen, sx as usize, sy as usize, sprites)
-        {
-            out.push(centred_selector_draw(image, placed, hex));
-            continue;
-        }
-        out.push(image_draw(image, placed));
-    }
-    let Some(cell) = model.selected() else {
-        layers.body = out;
-        return layers;
-    };
-
-    let counting = matches!(cell.mode, Mode::Zone | Mode::Elimination);
-    let targets_visible = matches!(
-        cell.mode,
-        Mode::TimeTrial | Mode::Zone | Mode::Elimination | Mode::SpeedLap
-    );
-    let weapons_visible = matches!(cell.mode, Mode::Race | Mode::Head2Head | Mode::Tournament);
-
-    for text in &screen.texts {
-        let name = text.name.as_deref().unwrap_or("");
-        if name.starts_with("Line") && name.ends_with("Title") {
-            // No traced consumer - see the module doc.
-            continue;
-        }
-        let content = match name {
-            "Title" => Some(cell.mode.as_str().to_string()),
-            "Track Line" => Some(track_line(cell)),
-            "Line1" if cell.mode != Mode::Zone => Some(cell.class.clone()),
-            "Line1" => None,
-            "Line2" => Some(laps_line(cell, strings)),
-            "Line3" if weapons_visible => {
-                let id = if cell.weapons { "FE_ON" } else { "FE_OFF" };
-                Some(strings.get_or_id(id).to_string())
-            }
-            "Line3" => None,
-            "Line4" | "Line5" | "Line8" => None,
-            "Line6" => Some(format!(
-                "{}/{}",
-                model.selected_medal().map_or(0, Medal::points),
-                Medal::Gold.points()
-            )),
-            "Line7" => Some(medal_line(model.selected_medal(), strings)),
-            "Target0 Title" | "Target1 Title" | "Target2 Title" if targets_visible => {
-                Some(strings.get_or_id("IG_HUD_TARGET").to_string())
-            }
-            "Target0" if targets_visible => Some(target_value(cell.gold, &cell.mode)),
-            "Target1" if targets_visible => Some(target_value(cell.silver, &cell.mode)),
-            "Target2" if targets_visible => Some(target_value(cell.bronze, &cell.mode)),
-            "Target0 Title" | "Target1 Title" | "Target2 Title" | "Target0" | "Target1"
-            | "Target2" => None,
-            _ => text.string.clone(),
-        };
-        let Some(content) = content else { continue };
-        out.push(text_draw(text, &content, layout));
-    }
-    // The three medal-tier swatches: shown iff their own text row is.
-    for image in &screen.images {
-        let Some(name) = image.name.as_deref() else {
-            continue;
-        };
-        if matches!(name, "Target0 Image" | "Target1 Image" | "Target2 Image") && targets_visible {
-            let Some(placed) = sprites(&image.src) else {
-                continue;
-            };
-            out.push(image_draw(image, placed));
-        }
-    }
-    let _ = counting; // direction is `Cell::evaluate_medal`'s own concern, not this draw's
-    layers.body = out;
-    layers
-}
-
-fn track_line(cell: &Cell) -> String {
-    if cell.mode == Mode::Tournament {
-        format!("{} Races", cell.tournament_tracks.len())
-    } else {
-        cell.track.clone().unwrap_or_default()
-    }
-}
-
-/// `Line7`'s own resolution: `Cell_SavedMedal` maps onto `IG_HUD_GOLD`/
-/// `SILVER`/`BRONZE`, `MSC_NONE` for no saved medal.
-/// `race-campaign.md` records this table but not the difficulty suffix
-/// `CellSelection_PopulateDetail` appends (`Cell_SavedDifficulty`) - not
-/// drawn here, since this build keeps no per-cell saved difficulty at all.
-fn medal_line(medal: Option<Medal>, strings: &StringTable) -> String {
-    let id = match medal {
-        Some(Medal::Gold) => "IG_HUD_GOLD",
-        Some(Medal::Silver) => "IG_HUD_SILVER",
-        Some(Medal::Bronze) => "IG_HUD_BRONZE",
-        None => "MSC_NONE",
-    };
-    strings.get_or_id(id).to_string()
-}
-
-fn laps_line(cell: &Cell, strings: &StringTable) -> String {
-    match cell.laps {
-        Some(laps) if laps >= 1 && cell.mode != Mode::Zone => laps.to_string(),
-        _ => strings.get_or_id("RC_INF").to_string(),
-    }
-}
-
-/// `Target0..2`'s own value: a time for `Time Trial`/`Speed Lap`, a plain
-/// number otherwise (`Zone`'s zone count, `Elimination`'s kill count).
-fn target_value(value: i64, mode: &Mode) -> String {
-    if matches!(mode, Mode::TimeTrial | Mode::SpeedLap) {
-        format_centiseconds(value)
-    } else {
-        value.to_string()
-    }
-}
-
-/// Centiseconds to `M:SS.CC`, the unit `PI_Cell_ParseElement` stores a
-/// `Gold`/`Silver`/`Bronze Target` in for a timed mode - see
-/// `docs/ghidra/functions/psp-pulse-usa/race-campaign.md`.
-fn format_centiseconds(value: i64) -> String {
-    let value = value.max(0);
-    let minutes = value / 6000;
-    let seconds = (value / 100) % 60;
-    let centis = value % 100;
-    format!("{minutes}:{seconds:02}.{centis:02}")
-}
-
-/// The hex slot index (`0..GRIDS_PER_PAGE`) a `Grid Selection` widget name
-/// carries, e.g. `"Medal_2_0"` -> `2`. `coord` is which underscore-separated
-/// number to read (both screens spell the coordinate the same way).
-fn hex_slot_of(name: &str, prefix: &str, coord: usize) -> Option<usize> {
-    let rest = name.strip_prefix(prefix)?;
-    rest.split('_').nth(coord.saturating_sub(1))?.parse().ok()
-}
-
-/// The `(x, y)` a `Cell Selection` widget name carries, e.g.
-/// `"Outline_3_2"` -> `(3, 2)`.
-fn hex_slot_xy(name: &str, prefix: &str) -> Option<(u32, u32)> {
-    let rest = name.strip_prefix(prefix)?;
-    let mut parts = rest.split('_');
-    let x = parts.next()?.parse().ok()?;
-    let y = parts.next()?.parse().ok()?;
-    Some((x, y))
-}
-
 /// The resolved screen rect of `Medal_{x}_{y}` (or `Outline_{x}_{y}`,
 /// wherever a slot draws only the empty state) - position and size, the
 /// same rect [`pointer::hit`] tests against. Neither screen authors an
@@ -797,109 +632,4 @@ pub(super) fn hex_rect(
         }
     }
     None
-}
-
-fn fill_draw(fill: &Fill) -> Draw {
-    let rect = [
-        fill.x,
-        fill.y,
-        fill.width.unwrap_or(0.0),
-        fill.height.unwrap_or(0.0),
-    ];
-    match fill.gradient {
-        Some([c1, c2, c3, c4]) => Draw::GradientFill {
-            rect,
-            left: mean(argb_to_rgba(c1), argb_to_rgba(c2)),
-            right: mean(argb_to_rgba(c3), argb_to_rgba(c4)),
-        },
-        None => Draw::Fill {
-            rect,
-            color: argb_to_rgba(fill.color),
-        },
-    }
-}
-
-fn mean(a: [f32; 4], b: [f32; 4]) -> [f32; 4] {
-    [
-        (a[0] + b[0]) * 0.5,
-        (a[1] + b[1]) * 0.5,
-        (a[2] + b[2]) * 0.5,
-        (a[3] + b[3]) * 0.5,
-    ]
-}
-
-/// An ordinary image widget, at its own authored position.
-fn image_draw(image: &Image, placed: Placed) -> Draw {
-    sprite_draw(image, placed, image.x, image.y)
-}
-
-/// `Selector`'s own draw, centred on `hex` - the selected hex's own rect
-/// from [`hex_rect`]. **Chosen, not measured**: `CellMode_Definition.xml`
-/// positions `Selector` at a fixed default (`x="30" y="95"`, overridden here
-/// regardless) and authors no offset between its own 42x43 sprite and
-/// whatever size a hex actually draws at (32x32, measured off
-/// `hex_filled.mip`) - top-left aligning the two, as this build previously
-/// did, draws the cursor visibly down-and-right of the hex it marks rather
-/// than around it. See `docs/ui/campaign-screens.md`.
-fn centred_selector_draw(image: &Image, placed: Placed, hex: [f32; 4]) -> Draw {
-    let width = image.width.unwrap_or(placed.width as f32);
-    let height = image.height.unwrap_or(placed.height as f32);
-    let x = hex[0] + (hex[2] - width) * 0.5;
-    let y = hex[1] + (hex[3] - height) * 0.5;
-    sprite_draw(image, placed, x, y)
-}
-
-/// An image widget's draw, with its position overridden - what
-/// [`centred_selector_draw`] feeds `Selector`.
-fn sprite_draw(image: &Image, placed: Placed, x: f32, y: f32) -> Draw {
-    let width = image.width.unwrap_or(placed.width as f32);
-    let height = image.height.unwrap_or(placed.height as f32);
-    let sampled = [
-        image.texture_width.unwrap_or(placed.width as f32),
-        image.texture_height.unwrap_or(placed.height as f32),
-    ];
-    let color = argb_to_rgba(image.color);
-    if sampled[0] > placed.width as f32 + 0.5 || sampled[1] > placed.height as f32 + 0.5 {
-        return Draw::TiledSprite {
-            rect: [x, y, width, height],
-            uv: [
-                placed.x as f32,
-                placed.y as f32,
-                placed.width as f32,
-                placed.height as f32,
-            ],
-            repeat: [
-                sampled[0] / placed.width.max(1) as f32,
-                sampled[1] / placed.height.max(1) as f32,
-            ],
-            color,
-        };
-    }
-    Draw::Sprite {
-        rect: [x, y, width, height],
-        uv: [
-            placed.x as f32 + image.u.unwrap_or(0.0),
-            placed.y as f32 + image.v.unwrap_or(0.0),
-            sampled[0],
-            sampled[1],
-        ],
-        color,
-    }
-}
-
-fn text_draw(text: &Text, content: &str, layout: &Layout) -> Draw {
-    Draw::Text {
-        x: text.x,
-        y: text.y,
-        scale: text.scale * layout.face_scale(&text.font),
-        color: argb_to_rgba(text.color),
-        border: None,
-        align: match text.align.to_ascii_lowercase().as_str() {
-            "right" => Align::Right,
-            "centre" | "center" => Align::Centre,
-            _ => Align::Left,
-        },
-        text: content.to_string(),
-        wrap_width: text.wrap_width,
-    }
 }

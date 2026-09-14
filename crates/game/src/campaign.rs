@@ -62,12 +62,22 @@ pub fn load(
     faces: FaceScales,
     grid: [f32; 2],
     base: &Sheet,
+    // The front-end root's own `FEGlobals` (`shell.screens.globals` live,
+    // `frontend.screens().globals` in a `--menu-page` capture) - fallbacks
+    // for a `FEGlobals->` reference this file declares no `<Variable>` for
+    // itself, the same `Screens::from_xml_with_fallback_globals` idiom
+    // `crate::boot::screens::load_included_screens` already uses for every
+    // other `LoadXML` include. Without this, `Outline_x_y`'s own
+    // `i="FEGlobals->CM_HEX_Outline"` (`Data\Plugins\PI001\GUI\Skin.xml`,
+    // `0x7F34ACC2`) never resolves and the hex outline draws opaque white
+    // instead of its authored translucent teal.
+    fallback_globals: &[(&str, &str)],
 ) -> Result<Campaign> {
     let blob = archives
         .read_name(SCREEN_ENTRY)
         .with_context(|| format!("reading {SCREEN_ENTRY}"))?;
     let xml = oag_tables::fexml::text(&blob).context("expanding CellMode_Definition.xml")?;
-    let screens = oag_ui::screen::Screens::from_xml(&xml);
+    let screens = oag_ui::screen::Screens::from_xml_with_fallback_globals(&xml, fallback_globals);
     let grid_layout = Layout::read(&screens, "Grid Selection", strings, faces, grid)
         .context("Grid Selection is not on this screen")?;
     let cell_layout = Layout::read(&screens, "Cell Selection", strings, faces, grid)
