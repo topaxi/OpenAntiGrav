@@ -46,10 +46,14 @@ pages above:
   (`No medal awarded` etc.) and - the interesting mechanism - **the medal
   colour is which of three separate 3D trophy models gets unpaused, not a
   re-sourced 2D icon**. A scrolling ticker shows this race's own loyalty
-  award (`"90 Points"`, a plain read of a field this pass could not find the
-  writer of) and then cycles through a fixed vocabulary of "why" reason
-  strings, before showing the team's own persistent running total
-  (`"Total loyalty: <n>"`) and a fill bar.
+  award (`"90 Points"`) and then cycles through a fixed vocabulary of "why"
+  reason strings, before showing the team's own persistent running total
+  (`"Total loyalty: <n>"`) and a fill bar. **2026-09-14: the award's own
+  law is now decompiled and confirmed on two live races** -
+  `laps*30 + perfectLaps*50` for Time Trial/Speed Lap (`laps*15+perfectLaps*25`
+  for the Race family, `laps*10+perfectLaps*20` otherwise), plus a per-kill
+  term, a Race-family-only difficulty multiplier, and a doubling for a
+  suggested-ship race. See `docs/ghidra/functions/psp-pulse-usa/endrace-screens.md`.
 - **`EndRace Menu`**: the option list (`RETURN TO GRID`/`RACE AGAIN`/
   `VIEW RESULTS AGAIN`/`SAVE GHOST`/`DELETE DATA`) is built conditionally per
   mode, and `NEW GHOST RECORD` reads this run's own best lap, separate from
@@ -90,40 +94,48 @@ for this track/class" the way `EndRaceMenu_PopulateExistingGhost`/
 
 ## Open
 
-- **The loyalty-award computation's own writer** was not located - see
-  `endrace-screens.md`'s own Open section. The `"90 Points"` this pass
-  captured is read off a precomputed field (`g_endrace_result + 8`);
-  finding what writes it (a breakpoint watching
-  `DAT_08b317b4 + 0x7d8 + 8` across a finish line, or substantially more
-  decompilation) is the single highest-value next step on the *reading*
-  side before a drawing pass could compute this project's own equivalent
-  rather than only display a persisted one.
+- ~~The loyalty-award computation's own writer~~ **Closed 2026-09-14**:
+  `Race_ComputeLoyaltyAward` (`0x0880ac50`), decompiled in full and
+  confirmed on two independent live races (`laps*30 + perfectLaps*50` for
+  Time Trial/Speed Lap, `laps*15+perfectLaps*25` for the Race family,
+  `laps*10+perfectLaps*20` otherwise, a per-kill term, a Race-family-only
+  difficulty multiplier, doubled for a suggested-ship race) - see
+  `docs/ghidra/functions/psp-pulse-usa/endrace-screens.md`. The
+  per-team persistent total's own writer, `Loyalty_AccumulateTotal`
+  (`0x08807884`), is a plain capped accumulate (`+= award`, ceiling
+  `100000`) - a drawing pass now has both laws, not just the display field.
 - **The per-lap table's third column** (`docs/formats/endrace-screens.md`'s
   own "the third column does not" section) - a real, stored per-lap 16-bit
-  field, meaning unresolved. Candidates ruled out: a finishing position
-  (exceeds the 8-craft field), the `boostimg` icon (unconditionally hidden
-  on every single-player mode path decompiled this pass).
+  field, meaning still unresolved. Candidates ruled out: a finishing
+  position (exceeds the 8-craft field), the `boostimg` icon (unconditionally
+  hidden on every single-player mode path decompiled), and - new
+  2026-09-14, from a second live race - **weapon/pickup counts** (both
+  captures are `Weapons="off"` cells, so neither could carry one). A
+  speedup/boost-pad count is the leading remaining candidate, unconfirmed.
 - **The Tournament/Zone/Elimination/split-screen variants of `EndRace
   Results`'s own populate** (`FUN_088dad90`/`FUN_088db574`/`FUN_088db1ec`/
   `FUN_088d9588`) were not opened - `Line2`..`Line8` and `boostimg`'s real
   firing condition likely close once one of these is read.
 - **The generic confirm-swallow-on-a-locked-tile mechanism** - found while
   reading these screens (`StateMachine_EvaluateRedirect`,
-  `0x088c8798`, ruled out as the predicate itself) - is a `race-campaign.md`
-  thread, not this one; see
+  `0x088c8798`, ruled out as the predicate itself), and narrowed further
+  2026-09-14: the real `Cell Selection` dispatcher (`ConfirmButton_Update`,
+  `0x088c8e88`) is found and cleared too, pinning the gate to input
+  consumption upstream of it - is a `race-campaign.md` thread, not this
+  one; see
   [`the-race-campaign-is-authored-shape-not-content.md`](the-race-campaign-is-authored-shape-not-content.md)'s
   own `Open`/`Next Steps` for where that stands.
-- **Nothing here is runtime-verified beyond the one no-medal Time Trial
-  capture.** A medal-earning run (any of gold/silver/bronze) would settle
-  whether `MedalImg`'s own static icon stays visible under an earned
-  trophy, and would put a second data point on the loyalty-award hypothesis.
+- **Two no-medal Time Trial captures now exist**, but **no medal-earning
+  run** - `MedalImg`'s own static-icon-under-the-trophy question is still
+  open, and the Race-family/Zone/Elimination loyalty branches are still
+  decompiled-only.
 
 ## Next Steps
 
 - Extend `records.toml`'s schema (or a sibling table) with a per-team
-  loyalty total, once the award-computation writer above is found and its
-  law is actually decompiled rather than hypothesised from a single
-  observation.
+  loyalty total - the award-computation writer is now found and its law
+  decompiled (see Open above), so this is no longer blocked on RE, only on
+  schema/implementation work.
 - Draw `EndRace Results`'s per-lap table from `scoreboard.rs`'s own existing
   per-lap data, mapping `Lap`/`Time` directly and leaving the third column
   absent until its meaning is read.
