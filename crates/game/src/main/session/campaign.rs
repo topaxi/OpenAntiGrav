@@ -121,13 +121,12 @@ impl Session {
             }
             (Screen::Grid(_), Event::Back) => stage.campaign = None,
             // **Not wired past here** - see `oag_ui::campaign`'s own module
-            // doc and the `campaign` handover thread. Confirming a cell logs
-            // and stays on `Cell Selection` rather than opening `Team
-            // Selection`/`Launch Game`.
+            // doc. Confirming a cell logs and stays on `Cell Selection`
+            // rather than opening `Team Selection`/`Launch Game`.
             (Screen::Cell { .. }, Event::Confirmed) => {
                 log::info!(
-                    "Cell Selection confirmed - launch is not wired yet, see \
-                     handover/frontend/the-campaign-grid-draws-and-does-not-launch.md"
+                    "Cell Selection confirmed - launch is not wired yet, see oag_ui::campaign's \
+                     own module doc"
                 );
             }
             (Screen::Cell { .. }, Event::Back) => campaign.back_to_grid_selection(),

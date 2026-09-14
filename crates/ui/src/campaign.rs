@@ -30,11 +30,11 @@
 //!
 //! # Stub: draws both screens, stops at confirm
 //!
-//! Per the gameplay handover's own instruction ("do not implement the
-//! cell-selection wiring without first tracing the launch path" -
-//! `handover/gameplay/the-race-campaign-is-authored-shape-not-content.md`),
-//! [`CellSelection::update`]'s [`Event::Confirmed`] is not wired to
-//! `Team Selection`/`Launch Game` here - see `crate::main::session::campaign`
+//! The launch path - which globals `Cell Selection`'s own confirm redirect
+//! writes before falling through to `Team Selection`/`Launch Game` - is not
+//! traced yet (`docs/ghidra/functions/psp-pulse-usa/race-campaign.md`'s "what
+//! is not determined"). So [`CellSelection::update`]'s [`Event::Confirmed`]
+//! is not wired to either screen here - see `crate::main::session::campaign`
 //! in `oag-game` for the composition-root side of the stub.
 //!
 //! # Three widgets this build deliberately does not draw
