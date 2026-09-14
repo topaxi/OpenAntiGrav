@@ -6,6 +6,9 @@ use oag_game::{race, upscale};
 
 use crate::gpu::Gpu;
 
+#[path = "race_stage/endrace.rs"]
+pub(crate) mod endrace;
+
 /// A race, and everything only it needs.
 pub(crate) struct RaceStage {
     pub(crate) scene: race::Scene,
@@ -72,6 +75,14 @@ pub(crate) struct RaceStage {
     /// `docs/ghidra/functions/psp-pulse-usa/race-campaign.md`'s "how a
     /// campaign event launches". Read by [`RaceStage::observation`] alone.
     pub(crate) campaign_cell: Option<oag_tables::race_campaign::Cell>,
+    /// The EndRace flow (`Results` -> `Rewards`/`Menu`) once the race has
+    /// finished and this title carries `EndRace_Definition.xml` - `None`
+    /// until then, and forever `None` on a title that does not (or on an
+    /// open source [`endrace::EndRaceRuntime::new`] could not read), which
+    /// falls this stage back to [`RaceStage::scoreboard`] exactly as before
+    /// this existed. Built once, by `Session::frame`'s finish-transition
+    /// arm - see `crate::main::session::endrace`.
+    pub(crate) endrace: Option<endrace::EndRaceRuntime>,
 }
 
 impl RaceStage {
@@ -288,6 +299,15 @@ impl RaceStage {
         viewport: (f32, f32, f32, f32),
         target_size: (u32, u32),
     ) {
+        // The disc's own three EndRace screens, when this title carries
+        // `EndRace_Definition.xml` and it read - see `RaceStage::endrace`'s
+        // own doc. `scoreboard` stays this stage's fallback: a title with no
+        // such screen, or whose read failed, draws exactly what it always
+        // did.
+        if let Some(endrace) = &mut self.endrace {
+            endrace.draw(&gpu.device, &gpu.queue, encoder, view, viewport);
+            return;
+        }
         match self.race.results() {
             Some(board) => self.scoreboard.draw(
                 &gpu.device,

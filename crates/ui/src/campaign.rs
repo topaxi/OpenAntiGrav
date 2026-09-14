@@ -358,6 +358,19 @@ impl CellSelection {
         self.cells.get(self.index)
     }
 
+    /// Moves the selection to the cell named `name`, if this grid carries
+    /// one - `EndRace Menu`'s own `RETURN TO GRID`, which lands back on the
+    /// exact cell the race launched from rather than resetting to the first.
+    /// A no-op, silently, if no cell here carries that name any more (a DLC
+    /// pack unmounted between launch and return, say) - the same "stay
+    /// where the screen already was" choice
+    /// [`GridSelection::set_index`]'s own out-of-range clamp makes.
+    pub fn select_by_name(&mut self, name: &str) {
+        if let Some(index) = self.cells.iter().position(|cell| cell.name == name) {
+            self.index = index;
+        }
+    }
+
     /// The selected cell's own best saved medal, `None` on a fresh profile
     /// or a cell never raced.
     #[must_use]

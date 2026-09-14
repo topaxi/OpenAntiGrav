@@ -7,7 +7,11 @@
 > colours and page-change animation, which are measured and which this build
 > now draws with. The race box's own two screens - Track Select and Ship
 > Select - are read off the disc and drawn; see
-> [selection-screens.md](selection-screens.md).
+> [selection-screens.md](selection-screens.md). The Race Campaign's two
+> screens - Grid Selection and Cell Selection - draw the same way; see
+> [campaign-screens.md](campaign-screens.md). A finished Pulse race's own
+> three `EndRace` screens (`Results`/`Rewards`/`Menu`) draw too; see
+> [endrace-screens.md](endrace-screens.md).
 
 ## The HUD is authored data
 

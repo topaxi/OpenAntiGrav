@@ -34,6 +34,7 @@ pub mod catalogue;
 pub mod cursor;
 pub mod dlc;
 pub mod drs;
+pub mod endrace;
 pub mod hud;
 pub mod icon;
 /// The abstract button layer, which lives in `oag-gameplay` because the
