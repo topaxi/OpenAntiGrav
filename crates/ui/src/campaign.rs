@@ -555,6 +555,11 @@ pub fn cell_draw_list(
             {
                 continue;
             }
+            // Drawn below, gated on `targets_visible` - not here, where
+            // nothing yet knows the selected cell's own mode.
+            if matches!(name, "Target0 Image" | "Target1 Image" | "Target2 Image") {
+                continue;
+            }
         }
         let Some(placed) = sprites(&image.src) else {
             continue;

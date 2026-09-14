@@ -19,8 +19,8 @@ use oag_ui::frontend::Draw;
 mod menu_page;
 mod offscreen;
 use menu_page::{
-    PreviewRequest, draw_preview, fury_picture, menu_page, open_for_previews, picker_kind,
-    picker_page, picker_stills,
+    PreviewRequest, campaign_kind, campaign_page, draw_preview, fury_picture, menu_page,
+    open_for_previews, picker_kind, picker_page, picker_stills,
 };
 use offscreen::{offscreen, read_back, write_png};
 
@@ -566,6 +566,43 @@ pub fn run(
                     .then_some(request)
                     .flatten();
                 (backdrop, format, list, space)
+            } else if let Some(kind) = campaign_kind(page) {
+                // The Race Campaign's own two screens - the disc's, opened
+                // over the menus the same way the race box's are, not pages
+                // of our own tree. See `oag_game::campaign` and
+                // `crate::main::session::campaign` for the live flow this is
+                // a still of.
+                let mut archives = match options.race.as_ref() {
+                    Some(race) => open_for_previews(race)?,
+                    None => anyhow::bail!(
+                        "--menu-page grid-select/cell-select needs --race options open"
+                    ),
+                };
+                let faces = oag_ui::picker::FaceScales {
+                    default: menu_font
+                        .as_ref()
+                        .map_or(oag_ui::picker::FaceScales::default().default, |menu| {
+                            font.line_height / menu.line_height
+                        }),
+                    ..oag_ui::picker::FaceScales::default()
+                };
+                let skin = oag_ui::menu::Skin::new(
+                    menu_skin,
+                    space,
+                    menu_font.as_ref().unwrap_or(&font).line_height,
+                );
+                let list = campaign_page(
+                    kind,
+                    &mut archives,
+                    &strings,
+                    faces,
+                    [space.size.0, space.size.1],
+                    frame,
+                    &skin,
+                    &menu_frame,
+                    &mut sprites,
+                )?;
+                (backdrop, video_format, list, space)
             } else {
                 let list = menu_page(
                     &options.settings,

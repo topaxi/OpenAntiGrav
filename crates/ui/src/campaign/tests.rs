@@ -368,6 +368,58 @@ fn targets_are_hidden_for_race_and_shown_as_a_time_for_time_trial() {
     assert!(texts.iter().any(|t| t.as_str() == "Target"), "{texts:?}");
 }
 
+/// A real sprite lookup - `&|_| None` in the tests above hides a widget that
+/// draws unconditionally in the *general* image loop as readily as one that
+/// is correctly gated, since neither ever reaches `Draw::Sprite` at all. This
+/// is the regression test for exactly that: the `Target{n} Image` swatches
+/// used to draw whether or not `targets_visible` said so, because nothing
+/// excluded them from the screen's own ungated `for image in &screen.images`
+/// pass - only the *second*, gated pass that draws them properly.
+#[test]
+fn race_draws_no_target_swatch_even_though_the_sprite_resolves() {
+    let screens = Screens::from_xml(XML);
+    let layout = Layout::read(
+        &screens,
+        "Cell Selection",
+        &strings(),
+        crate::picker::FaceScales::default(),
+        PSP_GRID,
+    )
+    .unwrap();
+    let race = CellSelection::new(vec![race_cell("grid0_0_0", "16_Track")]);
+    let placed = crate::frontend::Placed {
+        x: 0,
+        y: 0,
+        width: 14,
+        height: 14,
+        quad_extent: None,
+        blend: None,
+    };
+    let layers = cell_draw_list(
+        &race,
+        &layout,
+        &skin(),
+        &Frame::default(),
+        &strings(),
+        None,
+        false,
+        &|_| Some(placed),
+    );
+    let sprites: Vec<&[f32; 4]> = layers
+        .body
+        .iter()
+        .filter_map(|draw| match draw {
+            Draw::Sprite { rect, .. } | Draw::TiledSprite { rect, .. } => Some(rect),
+            _ => None,
+        })
+        .collect();
+    // Exactly the occupied cell's own `Medal_0_0`/`Outline_0_0` plus the
+    // `Selector` cursor - `Medal_0_1`/`Medal_1_0`/`Outline_0_1`/`Outline_1_0`
+    // are unoccupied slots, `Lock_0_0` is never drawn, and `Target0 Image`
+    // is this test's own regression: it must not appear for a `Race` cell.
+    assert_eq!(sprites.len(), 3, "{:?}", layers.body);
+}
+
 #[test]
 fn zone_blanks_the_class_line_and_counts_up() {
     let cell = zone_cell("grid0_4_2");

@@ -3,24 +3,13 @@
 //! See `oag_ui::campaign` for the model and `crate::campaign_stage` for what
 //! this holds open.
 
-use anyhow::{Context, Result};
 use log::warn;
-use oag_tables::race_campaign;
-use oag_ui::campaign::{Event, Layout};
+use oag_ui::campaign::Event;
 
 use crate::campaign_stage::{CampaignStage, Screen};
 use crate::stage::Stage;
 
 use super::Session;
-
-/// `Data\Plugins\PI001\GUI\CellMode_Definition.xml` - the file
-/// `Grid Selection` and `Cell Selection` are both authored in. Pulse-only:
-/// no other title has been checked for this path (`docs/formats/race-setup.md`
-/// leaves Pure's/HD's own Race Campaign screens unread), so a source that
-/// does not carry it just logs and opens nothing - the same "let the data
-/// answer" shape `Shell::track_select` already gives a title with no race
-/// box.
-const SCREEN_ENTRY: &str = r"Data\Plugins\PI001\GUI\CellMode_Definition.xml";
 
 impl Session {
     /// `RACE CAMPAIGN`'s own action: opens `Grid Selection` over the menus.
@@ -65,14 +54,37 @@ impl Session {
         };
         let grid = [shell.space.size.0, shell.space.size.1];
         let strings = shell.strings.clone();
-        let sprites = shell.sprites.clone();
-        match load_campaign(&mut archives, &strings, faces, grid, sprites) {
-            Ok(stage) => {
+        match oag_game::campaign::load(&mut archives, &strings, faces, grid, &shell.sprites) {
+            Ok(campaign) => {
+                // The extended sheet - `hex_filled.mip`/`hex_outline.mip`,
+                // neither of which `Skin.xml`'s own sheet carries - has to
+                // reach the renderer once before anything drawn from it is
+                // on screen, the same upload `PickerStage::take_sheet` does
+                // for a slideshow's own stills.
+                self.renderer_set_sprites(&campaign.sprites);
                 if let Stage::Menu(menu_stage) = &mut self.stage {
-                    menu_stage.campaign = Some(stage);
+                    menu_stage.campaign = Some(CampaignStage::new(
+                        campaign.grids,
+                        campaign.grid_layout,
+                        campaign.cell_layout,
+                        strings,
+                        campaign.sprites,
+                    ));
                 }
             }
             Err(error) => warn!("{error:#} - RACE CAMPAIGN has nothing to show"),
+        }
+    }
+
+    /// Uploads `sheet` to the menu stage's own renderer - `MenuStage::render`
+    /// otherwise has no chance to, since [`Self::open_campaign`] runs before
+    /// the next frame's draw and a campaign screen carries no `take_sheet`
+    /// dance of its own the way a picker's slideshow does.
+    fn renderer_set_sprites(&mut self, sheet: &oag_game::sprite::Sheet) {
+        if let Stage::Menu(stage) = &mut self.stage {
+            stage
+                .renderer
+                .set_sprites(&self.gpu.device, &self.gpu.queue, sheet);
         }
     }
 
@@ -122,57 +134,4 @@ impl Session {
             (_, Event::Moved | Event::Help) => {}
         }
     }
-}
-
-fn load_campaign(
-    archives: &mut oag_assets::Archives,
-    strings: &oag_ui::language::StringTable,
-    faces: oag_ui::picker::FaceScales,
-    grid: [f32; 2],
-    sprites: oag_game::sprite::Sheet,
-) -> Result<CampaignStage> {
-    let blob = archives
-        .read_name(SCREEN_ENTRY)
-        .with_context(|| format!("reading {SCREEN_ENTRY}"))?;
-    let xml = oag_tables::fexml::text(&blob).context("expanding CellMode_Definition.xml")?;
-    let screens = oag_ui::screen::Screens::from_xml(&xml);
-    let grid_layout = Layout::read(&screens, "Grid Selection", strings, faces, grid)
-        .context("Grid Selection is not on this screen")?;
-    let cell_layout = Layout::read(&screens, "Cell Selection", strings, faces, grid)
-        .context("Cell Selection is not on this screen")?;
-
-    let definition_blob = archives
-        .read_name(oag_pulse::campaign::DEFINITION_ENTRY)
-        .with_context(|| format!("reading {}", oag_pulse::campaign::DEFINITION_ENTRY))?;
-    let definition_xml =
-        oag_tables::fexml::text(&definition_blob).context("expanding grids/Definition.xml")?;
-    let mut grids = Vec::new();
-    for src in race_campaign::definition_entries(&definition_xml) {
-        match archives
-            .read_name(&src)
-            .map_err(anyhow::Error::from)
-            .and_then(|blob| race_campaign::from_blob(&blob).map_err(anyhow::Error::from))
-        {
-            Ok(grid) => grids.push(grid),
-            Err(error) => warn!("{src}: {error:#} - grid skipped"),
-        }
-    }
-    if grids.is_empty() {
-        anyhow::bail!(
-            "no grid in {} parsed",
-            oag_pulse::campaign::DEFINITION_ENTRY
-        );
-    }
-    log::info!(
-        "Race Campaign: {} grid(s), {} cell(s)",
-        grids.len(),
-        grids.iter().map(|g| g.cells.len()).sum::<usize>()
-    );
-    Ok(CampaignStage::new(
-        grids,
-        grid_layout,
-        cell_layout,
-        strings.clone(),
-        sprites,
-    ))
 }
