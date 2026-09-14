@@ -590,6 +590,15 @@ pub(crate) struct Shell {
     /// and still names them for its stills' colour. See
     /// `oag_ui::picker::slideshow::Slideshow::read`.
     pub(crate) globals: Vec<(String, String)>,
+    /// Wipeout HD/Fury's own circuit-name fold, carried from
+    /// `boot::Shell::circuit_names` for
+    /// `crate::main::session::campaign::open_campaign`, the one place after
+    /// boot that resolves a track id to a name outside the RACE page's own
+    /// rows (which use [`Self::tracks`]/[`Self::zone_tracks`], already
+    /// folded above). `CircuitNames::default()` on every other title, which
+    /// is free to carry and a no-op to consult - see
+    /// `oag_ui::campaign::draw::track_line`'s own doc.
+    pub(crate) circuit_names: oag_ui::language::CircuitNames,
     /// How this title lays its menus out and colours them, carried from the
     /// serial that identified the source. See `boot::Shell::menu_skin`.
     pub(crate) menu_skin: &'static oag_title::MenuSkin,

@@ -376,7 +376,7 @@ fn grid_title(grid_name: &str, strings: &StringTable) -> String {
 /// read the identical way, unmeasured against a live frame but the same
 /// mechanism as the five that are. `Custom Grid`/`AI Race`/`Other` fall back
 /// to the raw spelling, per `docs/ui/campaign-screens.md`.
-fn cell_title(cell: &Cell, strings: &StringTable) -> String {
+pub(super) fn cell_title(cell: &Cell, strings: &StringTable) -> String {
     match cell.mode {
         Mode::Race => crate::menu::mode_label(oag_race::Mode::SingleRace, strings),
         Mode::TimeTrial => crate::menu::mode_label(oag_race::Mode::TimeTrial, strings),
@@ -427,7 +427,7 @@ fn track_line(cell: &Cell, strings: &StringTable) -> String {
 /// `race-campaign.md` records this table but not the difficulty suffix
 /// `CellSelection_PopulateDetail` appends (`Cell_SavedDifficulty`) - not
 /// drawn here, since this build keeps no per-cell saved difficulty at all.
-fn medal_line(medal: Option<Medal>, strings: &StringTable) -> String {
+pub(super) fn medal_line(medal: Option<Medal>, strings: &StringTable) -> String {
     let id = match medal {
         Some(Medal::Gold) => "IG_HUD_GOLD",
         Some(Medal::Silver) => "IG_HUD_SILVER",
@@ -437,7 +437,7 @@ fn medal_line(medal: Option<Medal>, strings: &StringTable) -> String {
     strings.get_or_id(id).to_string()
 }
 
-fn laps_line(cell: &Cell, strings: &StringTable) -> String {
+pub(super) fn laps_line(cell: &Cell, strings: &StringTable) -> String {
     match cell.laps {
         Some(laps) if laps >= 1 && cell.mode != Mode::Zone => laps.to_string(),
         _ => strings.get_or_id("RC_INF").to_string(),
@@ -475,7 +475,7 @@ fn hex_slot_of(name: &str, prefix: &str, coord: usize) -> Option<usize> {
 
 /// The `(x, y)` a `Cell Selection` widget name carries, e.g.
 /// `"Outline_3_2"` -> `(3, 2)`.
-fn hex_slot_xy(name: &str, prefix: &str) -> Option<(u32, u32)> {
+pub(super) fn hex_slot_xy(name: &str, prefix: &str) -> Option<(u32, u32)> {
     let rest = name.strip_prefix(prefix)?;
     let mut parts = rest.split('_');
     let x = parts.next()?.parse().ok()?;
@@ -483,7 +483,7 @@ fn hex_slot_xy(name: &str, prefix: &str) -> Option<(u32, u32)> {
     Some((x, y))
 }
 
-fn fill_draw(fill: &Fill) -> Draw {
+pub(super) fn fill_draw(fill: &Fill) -> Draw {
     let rect = [
         fill.x,
         fill.y,
@@ -513,7 +513,7 @@ fn mean(a: [f32; 4], b: [f32; 4]) -> [f32; 4] {
 }
 
 /// An ordinary image widget, at its own authored position.
-fn image_draw(image: &Image, placed: Placed) -> Draw {
+pub(super) fn image_draw(image: &Image, placed: Placed) -> Draw {
     sprite_draw(image, placed, image.x, image.y, image.color)
 }
 
@@ -525,7 +525,7 @@ fn image_draw(image: &Image, placed: Placed) -> Draw {
 /// measured table - since they are the same three-tier colour concept
 /// authored on the same screen, not an independently measured value for the
 /// hex fill itself.
-fn medal_argb(medal: Medal) -> u32 {
+pub(super) fn medal_argb(medal: Medal) -> u32 {
     match medal {
         Medal::Gold => 0xfffa_eb38,
         Medal::Silver => 0xffda_e3e4,
@@ -546,7 +546,7 @@ fn medal_tint(_points_earned: u32) -> u32 {
 /// A `Medal_x_y` swatch, tinted `argb` in place of the image's own authored
 /// colour (always `0xffffffff` on both screens - neither XML tints per
 /// medal itself, since the tint is a runtime choice).
-fn tinted_medal_draw(image: &Image, placed: Placed, argb: u32) -> Draw {
+pub(super) fn tinted_medal_draw(image: &Image, placed: Placed, argb: u32) -> Draw {
     sprite_draw(image, placed, image.x, image.y, argb)
 }
 
@@ -558,7 +558,7 @@ fn tinted_medal_draw(image: &Image, placed: Placed, argb: u32) -> Draw {
 /// `hex_filled.mip`) - top-left aligning the two, as this build previously
 /// did, draws the cursor visibly down-and-right of the hex it marks rather
 /// than around it. See `docs/ui/campaign-screens.md`.
-fn centred_selector_draw(image: &Image, placed: Placed, hex: [f32; 4]) -> Draw {
+pub(super) fn centred_selector_draw(image: &Image, placed: Placed, hex: [f32; 4]) -> Draw {
     let width = image.width.unwrap_or(placed.width as f32);
     let height = image.height.unwrap_or(placed.height as f32);
     let x = hex[0] + (hex[2] - width) * 0.5;
@@ -568,7 +568,7 @@ fn centred_selector_draw(image: &Image, placed: Placed, hex: [f32; 4]) -> Draw {
 
 /// An image widget's draw, with its position and colour overridden - what
 /// [`centred_selector_draw`]/[`tinted_medal_draw`] feed.
-fn sprite_draw(image: &Image, placed: Placed, x: f32, y: f32, argb: u32) -> Draw {
+pub(super) fn sprite_draw(image: &Image, placed: Placed, x: f32, y: f32, argb: u32) -> Draw {
     let width = image.width.unwrap_or(placed.width as f32);
     let height = image.height.unwrap_or(placed.height as f32);
     let sampled = [
@@ -604,7 +604,7 @@ fn sprite_draw(image: &Image, placed: Placed, x: f32, y: f32, argb: u32) -> Draw
     }
 }
 
-fn text_draw(text: &Text, content: &str, layout: &Layout) -> Draw {
+pub(super) fn text_draw(text: &Text, content: &str, layout: &Layout) -> Draw {
     Draw::Text {
         x: text.x,
         y: text.y,

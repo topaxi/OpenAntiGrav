@@ -562,27 +562,57 @@ impl Screens {
             offset.1 + self.number(child.value("OffsetY")).unwrap_or(0.0),
         );
         match child.name.to_ascii_lowercase().as_str() {
-            "image" => match child.value("src").or_else(|| {
-                // A widget whose XML gives no `src` at all is assigned one
-                // programmatically on the original - matched here by its own
-                // `name` attribute against a title's own measured table. A
-                // widget this table does not name, and that carries no
-                // `color` either, falls through to `fill_from_node` below and
-                // is dropped exactly as it always was.
-                let name = child.attr("name")?;
-                fallback_images
-                    .iter()
-                    .find(|(widget, _)| *widget == name)
-                    .map(|(_, src)| *src)
-            }) {
-                // A `src` names a texture; a bare colour is a [`Fill`].
-                Some(src) => screen.images.push(self.image_from_node(child, src, offset)),
-                None => {
-                    if let Some(fill) = self.fill_from_node(child, offset) {
-                        screen.fills.push(fill);
+            "image" => {
+                match child.value("src").or_else(|| {
+                    // A widget whose XML gives no `src` at all is assigned one
+                    // programmatically on the original - matched here by its own
+                    // `name` attribute against a title's own measured table. A
+                    // widget this table does not name, and that carries no
+                    // `color` either, falls through to `fill_from_node` below and
+                    // is dropped exactly as it always was.
+                    let name = child.attr("name")?;
+                    fallback_images
+                        .iter()
+                        .find(|(widget, _)| *widget == name)
+                        .map(|(_, src)| *src)
+                }) {
+                    // A `src` names a texture; a bare colour is a [`Fill`].
+                    // Positioned at `inner` (its own `OffsetX`/`OffsetY`
+                    // folded in), not `offset` - the same choice `"text"`
+                    // below makes and for the same reason: HD's own detail
+                    // column (`Data\Plugins\Frontend\Gui\CellMode_Definition.xml`'s
+                    // `<Image name="Event Emblem" OffsetX="630" OffsetY="340">`)
+                    // is an `Image` used as a positioned *container* for a
+                    // `Text`/`Image` group of its own, the same idiom
+                    // `Item`/`LeftLayer` already carry, and an `Image` with
+                    // no `OffsetX`/`OffsetY` of its own (every one measured
+                    // before this) resolves `inner == offset`, so this is a
+                    // no-op everywhere that shape is absent.
+                    Some(src) => screen.images.push(self.image_from_node(child, src, inner)),
+                    None => {
+                        if let Some(fill) = self.fill_from_node(child, offset) {
+                            screen.fills.push(fill);
+                        }
                     }
                 }
-            },
+                // An `Image` can hold widgets of its own - HD's detail
+                // column nests a `Text` label, a bullet `Image` and a
+                // `Text` value under each of its four `*Emblem` images, and
+                // `CellMode_Definition.xml`'s own `unlockbox`/`flyerlogo`
+                // nest a `Text`/`Image` pair the same way. Before this arm
+                // recursed, every one of those was silently dropped - the
+                // same gap `"text"`'s own doc records having had for its
+                // child widgets, now closed for `Image` too.
+                for grandchild in &child.children {
+                    self.collect_widgets(
+                        screen,
+                        grandchild,
+                        viewport_width,
+                        inner,
+                        fallback_images,
+                    );
+                }
+            }
             "screenclear" => {
                 // `Colour`, the British spelling, which is what every
                 // `ScreenClear` on Wipeout HD's disc uses - and `color` beside
@@ -597,9 +627,21 @@ impl Screens {
             }
             "movie" => screen.movies.push(Movie::from_node(child)),
             "text" => {
+                // Positioned at `inner`, not `offset` - HD's own
+                // `Data\Plugins\Frontend\Gui\CellMode_Definition.xml`
+                // authors a handful of labels (`Medals Title`/`Points
+                // Title`/`EPoints Title`) with their own `OffsetX`/`OffsetY`
+                // directly on the `<Text>` tag and no `x`/`y`, no wrapping
+                // `<Item>` - every *other* positioned label on either of its
+                // two screens sits inside one instead. `inner` already
+                // folds a `Text`'s own `OffsetX`/`OffsetY` into what its
+                // children see; using it for the text's own position too is
+                // a no-op wherever that pair is absent (`inner == offset`
+                // then, since `self.number(None).unwrap_or(0.0)` is `0.0`),
+                // which is every widget measured before this file.
                 screen
                     .texts
-                    .push(self.text_from_node(child, viewport_width, offset));
+                    .push(self.text_from_node(child, viewport_width, inner));
                 // A `Text` can hold widgets of its own: `Team Selection`'s
                 // `skin` label carries its two livery arrows as child
                 // `Image`s. Its `Values` child is its own attributes, not a

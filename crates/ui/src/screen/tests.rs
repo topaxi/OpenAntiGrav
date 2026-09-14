@@ -607,3 +607,91 @@ fn parses_argb() {
     assert_eq!(parse_argb("nonsense"), None);
     assert_eq!(argb_to_rgba(0xff00_0000), [0.0, 0.0, 0.0, 1.0]);
 }
+
+#[test]
+fn a_text_that_authors_its_own_offset_with_no_wrapping_item_positions_itself_by_it() {
+    // The shape `Data\Plugins\Frontend\Gui\CellMode_Definition.xml` authors
+    // for `Medals Title`/`Points Title`/`EPoints Title`: `OffsetY` directly
+    // on the `<Text>` tag, no `x`/`y`, no wrapping `<Item>`. Before this was
+    // fixed, `collect_widgets` folded a text's own `OffsetX`/`OffsetY` into
+    // what its *children* saw but not into its own position, so this label
+    // landed at `(179, 0)` instead of `(179, 300)` - see
+    // `oag_ui::campaign::hd`'s own module doc for the visible bug that was.
+    let screens = Screens::from_xml(
+        r#"
+<Screen>
+  <Screen name="Grid Selection">
+    <Item OffsetX="179">
+      <Text name="Medals Title" OffsetY="300">
+        <Values idstring="RC_POINTSACH"></Values>
+        <Text name="Points">
+          <Values string="00/16" x="30" y="36"></Values>
+        </Text>
+      </Text>
+    </Item>
+  </Screen>
+</Screen>
+"#,
+    );
+    let screen = screens.by_name("Grid Selection").unwrap();
+    let title = screen
+        .texts
+        .iter()
+        .find(|t| t.name.as_deref() == Some("Medals Title"))
+        .unwrap();
+    assert_eq!((title.x, title.y), (179.0, 300.0));
+    // The child's own position already included the parent's `OffsetY`
+    // before this fix and still does - `inner` was already threaded to
+    // grandchildren, only the text's own position was wrong.
+    let points = screen
+        .texts
+        .iter()
+        .find(|t| t.name.as_deref() == Some("Points"))
+        .unwrap();
+    assert_eq!((points.x, points.y), (179.0 + 30.0, 300.0 + 36.0));
+}
+
+#[test]
+fn an_image_used_as_a_positioned_container_collects_its_own_children() {
+    // `CellMode_Definition.xml`'s own detail column: `<Image name="Event
+    // Emblem" OffsetX="630" OffsetY="340">` wraps a `Text`/`Image`/`Text`
+    // group the same way `Item`/`LeftLayer` wrap one elsewhere - before this
+    // was fixed, the `"image"` arm never recursed into a widget's own
+    // children at all, so the whole detail column was silently dropped.
+    let screens = Screens::from_xml(
+        r#"
+<Screen>
+  <Screen name="Cell Selection">
+    <Image name="Event Emblem" OffsetX="630" OffsetY="340">
+      <Values x="64" y="0" width="128" height="128" src="Data\FE\Images\bracket.gtf"></Values>
+      <Text name="Event Title">
+        <Values idstring="RB_EVENT_TYPE" x="20" y="150"></Values>
+      </Text>
+      <Text name="Event">
+        <Values string="Event line" x="50" y="182"></Values>
+      </Text>
+    </Image>
+  </Screen>
+</Screen>
+"#,
+    );
+    let screen = screens.by_name("Cell Selection").unwrap();
+    let emblem = screen
+        .images
+        .iter()
+        .find(|i| i.name.as_deref() == Some("Event Emblem"))
+        .unwrap();
+    assert_eq!((emblem.x, emblem.y), (630.0 + 64.0, 340.0));
+    let title = screen
+        .texts
+        .iter()
+        .find(|t| t.name.as_deref() == Some("Event Title"))
+        .unwrap();
+    assert_eq!((title.x, title.y), (630.0 + 20.0, 340.0 + 150.0));
+    let value = screen
+        .texts
+        .iter()
+        .find(|t| t.name.as_deref() == Some("Event"))
+        .unwrap();
+    assert_eq!((value.x, value.y), (630.0 + 50.0, 340.0 + 182.0));
+}

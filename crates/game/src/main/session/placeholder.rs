@@ -174,6 +174,7 @@ impl Session {
             font: font::Atlas::build(),
             sprites: sprite::Sheet::default(),
             globals: Vec::new(),
+            circuit_names: oag_ui::language::CircuitNames::default(),
             menu_skin: &placeholder::MENU_SKIN,
             space: oag_display::space::Space::default(),
             menu_font: None,

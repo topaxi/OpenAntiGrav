@@ -230,6 +230,7 @@ impl Pending {
         let shell = Shell {
             definition,
             title,
+            circuit_names: boot_shell.circuit_names.clone(),
             strings: boot_shell.strings.clone(),
             entries: boot_shell.entries.clone(),
             modes: menu::mode_choices(&boot_shell.strings),

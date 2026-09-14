@@ -51,8 +51,18 @@ pub(crate) struct CampaignStage {
     pub(crate) sprites: oag_game::sprite::Sheet,
     pub(crate) screen: Screen,
     /// [`oag_title::Title::name`], for [`Self::medal_of`] - the same string
-    /// `oag_game::records::Key::new`'s own `title` takes.
+    /// `oag_game::records::Key::new`'s own `title` takes. Also what
+    /// `crate::main::menu_stage::MenuStage::render` and
+    /// `crate::main::session::pointer::campaign_pointer` dispatch on to
+    /// pick between Pulse's draw/pointer functions and
+    /// [`oag_ui::campaign::hd`]'s own, since both screens share one name.
     title: String,
+    /// **HD only** - Pulse's own `Track Line` never needs this fold (see
+    /// `oag_ui::campaign::draw::track_line`'s own doc), so this is
+    /// `CircuitNames::default()` on every other title and costs nothing to
+    /// carry. `crate::boot::Shell::circuit_names`, read once when the
+    /// campaign opens.
+    circuit_names: oag_ui::language::CircuitNames,
     /// A snapshot of the player's own saved progress, taken once when the
     /// campaign opens - the same "read once on open" choice [`Self::grids`]
     /// already makes, and safe for the same reason: nothing mutates
@@ -62,6 +72,11 @@ pub(crate) struct CampaignStage {
 }
 
 impl CampaignStage {
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "one call site (`session::campaign::open_campaign`), each a separate fact the \
+                  stage needs to hold open"
+    )]
     pub(crate) fn new(
         grids: Vec<race_campaign::Grid>,
         grid_layout: oag_ui::campaign::Layout,
@@ -69,6 +84,7 @@ impl CampaignStage {
         strings: oag_ui::language::StringTable,
         sprites: oag_game::sprite::Sheet,
         title: String,
+        circuit_names: oag_ui::language::CircuitNames,
         records: oag_game::records::Store,
     ) -> Self {
         let model = oag_ui::campaign::GridSelection::new(
@@ -85,8 +101,22 @@ impl CampaignStage {
             sprites,
             screen: Screen::Grid(model),
             title,
+            circuit_names,
             records,
         }
+    }
+
+    /// Whether this is Wipeout HD/Fury's own campaign - what
+    /// `MenuStage::render`/`session::pointer::campaign_pointer` dispatch
+    /// draw/pointer functions on. See [`Self::title`]'s own doc.
+    #[must_use]
+    pub(crate) fn is_hd(&self) -> bool {
+        self.title == oag_hd::TITLE.name
+    }
+
+    #[must_use]
+    pub(crate) fn circuit_names(&self) -> &oag_ui::language::CircuitNames {
+        &self.circuit_names
     }
 
     fn grid_summary(
@@ -135,6 +165,25 @@ impl CampaignStage {
             which,
         };
         true
+    }
+
+    /// **HD only** - the enclosing grid's own index, grid count and
+    /// [`oag_ui::campaign::GridSummary`], for `oag_ui::campaign::hd::hd_cell_draw_list`'s
+    /// own `EventNum`/`EPoints` counters. `None` off `Grid Selection` itself,
+    /// since there is no "enclosing grid" there.
+    #[must_use]
+    pub(crate) fn cell_grid_summary(
+        &self,
+    ) -> Option<(usize, usize, oag_ui::campaign::GridSummary)> {
+        let Screen::Cell { which, .. } = &self.screen else {
+            return None;
+        };
+        let grid = self.grids.get(*which)?;
+        Some((
+            *which,
+            self.grids.len(),
+            Self::grid_summary(grid, &self.title, &self.records),
+        ))
     }
 
     /// Returns to `Grid Selection`, on the tier `Cell Selection` was opened
