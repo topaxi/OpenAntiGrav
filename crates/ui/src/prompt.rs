@@ -288,6 +288,58 @@ impl Keyboard {
         Outcome::Pending
     }
 
+    /// Consumes a tick of pointer input - see [`crate::pointer`] - and says
+    /// what happened, on the same [`Outcome`] terms as [`Self::update`].
+    ///
+    /// **Ours.** A click on a cell is a move onto it and a press of it, one
+    /// gesture, so a finger can type on the grid without a cursor to steer
+    /// first. Hovering a cell moves the cursor onto it, so a mouse sees which
+    /// key it is over before pressing. The secondary button cancels, as
+    /// circle does. Nothing else - the buffer, the note, the hint - is a
+    /// target, and a click on the scrim behind the panel is ignored rather
+    /// than read as a cancel: a stray click must not throw a name away.
+    ///
+    /// `skin` is the one the prompt is drawn with, so the cells are tested
+    /// where [`Self::draw`] just put them: [`Grid`] is the one place the
+    /// arithmetic is written.
+    pub fn pointer(&mut self, pointer: &crate::pointer::Pointer, skin: &Skin) -> Outcome {
+        if pointer.is_idle() {
+            return Outcome::Pending;
+        }
+        if pointer.back {
+            return Outcome::Cancelled;
+        }
+        let Some(at) = pointer.at else {
+            return Outcome::Pending;
+        };
+        let cell = Self::grid(skin).cell_at(at);
+        if pointer.moved
+            && let Some(cell) = cell
+        {
+            self.cell = cell;
+        }
+        if pointer.clicked
+            && let Some(cell) = cell
+        {
+            self.cell = cell;
+            match self.selected() {
+                Key::Char(c) => self.edit(Edit::Type(c)),
+                Key::Delete => self.edit(Edit::Delete),
+                Key::Accept => return Outcome::Accepted,
+            }
+        }
+        Outcome::Pending
+    }
+
+    /// The grid as [`Self::draw`] lays it out on `skin`.
+    fn grid(skin: &Skin) -> Grid {
+        let panel = Panel::new(skin);
+        // The buffer's line and the room reserved for the note, exactly as
+        // `draw` advances past them.
+        let y = panel.body_y + panel.line * 1.3 + panel.line * NOTE_ROOM;
+        Grid::new(&panel, y)
+    }
+
     /// What this looks like, over whatever is already on screen.
     ///
     /// `skin` is where every colour and the row pitch come from, the same way
@@ -337,12 +389,10 @@ impl Keyboard {
         // appears mid-typing, which it does on every keystroke.
         y += line * NOTE_ROOM;
 
-        let cell_w = panel.text_width / COLUMNS as f32;
-        let cell_h = line * 0.78;
+        let grid = Grid::new(&panel, y);
+        let (cell_w, cell_h) = (grid.cell_w, grid.cell_h);
         for index in 0..CELLS {
-            let (row, column) = (index / COLUMNS, index % COLUMNS);
-            let x = panel.text_x + column as f32 * cell_w;
-            let top = y + row as f32 * cell_h;
+            let [x, top, _, _] = grid.cell(index);
             let selected = index == self.cell;
             if selected {
                 // **A box, not a brightened glyph - chosen, not measured.**
@@ -414,6 +464,58 @@ pub enum Edit {
     Delete,
 }
 
+/// Where the [`Keyboard`]'s cells are: the one place the grid's arithmetic
+/// is written, read by [`Keyboard::draw`] to paint them and by
+/// [`Keyboard::pointer`] to find the one under a point.
+///
+/// **Chosen, not measured**, like the grid itself: `COLUMNS` cells across
+/// the panel's text width, each `0.78` of a line tall, from `top` down.
+struct Grid {
+    left: f32,
+    top: f32,
+    cell_w: f32,
+    cell_h: f32,
+}
+
+impl Grid {
+    fn new(panel: &Panel, top: f32) -> Self {
+        Self {
+            left: panel.text_x,
+            top,
+            cell_w: panel.text_width / COLUMNS as f32,
+            cell_h: panel.line * 0.78,
+        }
+    }
+
+    /// Cell `index`'s rect, `[x, y, width, height]`, the full pitch of the
+    /// cell rather than the two-unit-shy box the cursor is drawn as - the
+    /// gap between two keys belongs to whichever is nearer, not to neither.
+    fn cell(&self, index: usize) -> [f32; 4] {
+        let (row, column) = (index / COLUMNS, index % COLUMNS);
+        [
+            self.left + column as f32 * self.cell_w,
+            self.top + row as f32 * self.cell_h,
+            self.cell_w,
+            self.cell_h,
+        ]
+    }
+
+    /// The cell under `at`, if any.
+    fn cell_at(&self, at: (f32, f32)) -> Option<usize> {
+        let row = crate::pointer::row_at(
+            at,
+            self.left,
+            self.cell_w * COLUMNS as f32,
+            self.top,
+            self.cell_h,
+            GRID_ROWS,
+        )?;
+        let column = ((at.0 - self.left) / self.cell_w).floor() as usize;
+        let index = row * COLUMNS + column.min(COLUMNS - 1);
+        (index < CELLS).then_some(index)
+    }
+}
+
 /// The text a [`Confirm`] draws. See [`Labels`].
 #[derive(Debug, Clone, Default)]
 pub struct ConfirmLabels {
@@ -480,6 +582,63 @@ impl Confirm {
             };
         }
         Outcome::Pending
+    }
+
+    /// Consumes a tick of pointer input, on the same terms as
+    /// [`Keyboard::pointer`]: hovering an answer moves the cursor onto it, a
+    /// click on one is that answer, the secondary button cancels, and a
+    /// click anywhere else is ignored.
+    ///
+    /// Each answer's target is its half of the panel's width on the answer
+    /// line - [`Self::answer_rects`], the same two anchors [`Self::draw`]
+    /// puts the words at - rather than the word's own extent, which this
+    /// module cannot measure and a half-panel band is the more forgiving
+    /// target anyway.
+    pub fn pointer(&mut self, pointer: &crate::pointer::Pointer, skin: &Skin) -> Outcome {
+        if pointer.is_idle() {
+            return Outcome::Pending;
+        }
+        if pointer.back {
+            return Outcome::Cancelled;
+        }
+        let Some(at) = pointer.at else {
+            return Outcome::Pending;
+        };
+        let [no, yes] = Self::answer_rects(skin);
+        let over = if crate::pointer::contains(yes, at) {
+            Some(true)
+        } else if crate::pointer::contains(no, at) {
+            Some(false)
+        } else {
+            None
+        };
+        let Some(is_yes) = over else {
+            return Outcome::Pending;
+        };
+        if pointer.moved || pointer.clicked {
+            self.yes = is_yes;
+        }
+        if pointer.clicked {
+            return if is_yes {
+                Outcome::Accepted
+            } else {
+                Outcome::Cancelled
+            };
+        }
+        Outcome::Pending
+    }
+
+    /// The two answers' targets, no first, as [`Self::draw`] places the
+    /// words: each half the panel's text width, one line tall, on the line
+    /// two above the panel's bottom.
+    fn answer_rects(skin: &Skin) -> [[f32; 4]; 2] {
+        let panel = Panel::new(skin);
+        let y = panel.bottom() - panel.line * 2.0;
+        let half = panel.text_width * 0.5;
+        [
+            [panel.text_x, y, half, panel.line],
+            [panel.text_x + half, y, half, panel.line],
+        ]
     }
 
     /// What this looks like, over whatever is already on screen.

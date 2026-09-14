@@ -363,3 +363,59 @@ fn draw_measured(
     }
     out
 }
+
+/// The rects a pointer can land on: one tab per entry, left to right, at
+/// the width [`draw`] just gave it. See [`super::pointer`].
+///
+/// A strip is hit-tested on **x** where a column is hit-tested on y, and
+/// every entry is navigation, so each tab is one [`super::pointer::Part::Row`]
+/// region and nothing else. The widths are the same two rules the two
+/// drawings use (the executable's `ItemWidth` plus the eased focus bonus
+/// on a title with blocks, the label's measure plus the pad on one without)
+/// and the tab advances by the same `width + gap` step, so the region and
+/// the tab it stands for are one arithmetic.
+pub(super) fn regions(
+    menu: &Menu,
+    skin: &Skin,
+    strip: Strip,
+    measure: &dyn Fn(&str) -> f32,
+    frame: &super::Frame,
+) -> Vec<super::pointer::Region> {
+    use super::pointer::{Part, Region};
+    let scale = skin.row_scale();
+    let mut out = Vec::new();
+    match (skin.blocks(), frame.blocks) {
+        (Some(blocks), Some(_)) => {
+            let (sx, sy) = skin.theirs_scale();
+            let numbers = blocks.strip;
+            let gap = numbers.gap * sx;
+            let height = numbers.height * sy;
+            let mut left = strip.x;
+            for index in 0..menu.page().entries.len() {
+                let width = (numbers.item_width + numbers.focus_extra * menu.focus_of(index)) * sx;
+                out.push(Region {
+                    row: index,
+                    part: Part::Row,
+                    rect: [left, strip.y, width, height],
+                });
+                left += width + gap;
+            }
+        }
+        _ => {
+            let gap = skin.strip_gap();
+            let (tab_left_pad, _) = skin.tab_pad();
+            let tab_height = skin.tab_height();
+            let mut left = strip.x;
+            for entry in &menu.page().entries {
+                let width = measure(entry.label()) * scale;
+                out.push(Region {
+                    row: out.len(),
+                    part: Part::Row,
+                    rect: [left, strip.y, tab_left_pad + width, tab_height],
+                });
+                left += width + gap;
+            }
+        }
+    }
+    out
+}

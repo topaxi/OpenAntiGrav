@@ -882,5 +882,38 @@ pub fn letterbox_in(target: (u32, u32), screen_aspect: f32) -> [f32; 2] {
     }
 }
 
+/// A window position, in the grid a stage's `Draw`s are authored in.
+///
+/// [`letterbox_in`] and `ui.wgsl`'s `to_clip` run backwards: `viewport` is
+/// the aspect rectangle every stage draws into (`oag_display::display::viewport`,
+/// in physical pixels), and `space` is the grid and display aspect the
+/// stage's list is fitted with. What comes back is what a `Draw` at that
+/// point would have as its `rect` origin, so a screen can hit-test a click
+/// against the rects it just emitted - see `oag_ui::pointer`.
+///
+/// **The letterbox is undone, not only the viewport**, and that is the
+/// whole reason this is a function rather than two divisions. A title whose
+/// display aspect is not the viewport's is fitted inside it with bars, and a
+/// click in those bars maps to a grid coordinate outside `space.size` - as it
+/// should, since nothing is drawn there. `MenuStage`'s `overlay_rect` is the
+/// same cancellation in the other direction.
+///
+/// A point outside the viewport is still mapped rather than refused: a
+/// pointer that has left the picture reads as a grid coordinate off the
+/// grid, and every hit test already answers `None` for one of those.
+#[must_use]
+pub fn to_grid(space: Space, viewport: (f32, f32, f32, f32), window: (f32, f32)) -> (f32, f32) {
+    let (left, top, width, height) = viewport;
+    let [scale_x, scale_y] = letterbox_in((width as u32, height as u32), space.display_aspect);
+    // Physical pixel to clip space, `set_viewport`'s own mapping: `-1` at the
+    // viewport's left and top edges, except that clip y runs upward.
+    let clip_x = (window.0 - left) / width.max(1.0) * 2.0 - 1.0;
+    let clip_y = 1.0 - (window.1 - top) / height.max(1.0) * 2.0;
+    // `to_clip` multiplied by the letterbox scale last; divide it out first.
+    let normalised_x = (clip_x / scale_x + 1.0) * 0.5;
+    let normalised_y = (1.0 - clip_y / scale_y) * 0.5;
+    (normalised_x * space.size.0, normalised_y * space.size.1)
+}
+
 #[cfg(test)]
 mod tests;

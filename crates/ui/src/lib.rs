@@ -19,6 +19,7 @@ pub mod marquee;
 pub mod menu;
 pub mod picker;
 pub mod placeholder;
+pub mod pointer;
 pub mod prompt;
 pub mod screen;
 pub mod state_machine;

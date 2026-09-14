@@ -210,7 +210,13 @@ impl Gpu {
                 .create_window(attributes)
                 .context("creating the window")?,
         );
-        // Racing is keyboard/gamepad-only; the cursor has nothing to click on.
+        // The window system's own cursor is never shown over the game. The
+        // menus answer a pointer, and draw their own in the title's own
+        // palette - `oag_game::cursor`, painted by `Session::draw` - because
+        // a compositor's cursor over a borderless game is whatever that
+        // compositor feels like showing, which on a handheld is nothing.
+        // Racing reads no pointer at all, and there the drawn one is left
+        // out too.
         window.set_cursor_visible(false);
 
         let instance = adapter::instance();

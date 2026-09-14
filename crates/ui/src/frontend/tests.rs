@@ -13,6 +13,7 @@ mod aspect;
 mod backdrop;
 mod drawing;
 mod intro;
+mod pointer;
 mod screens;
 
 use super::*;

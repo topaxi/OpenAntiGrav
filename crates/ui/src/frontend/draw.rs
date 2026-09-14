@@ -19,6 +19,7 @@
 //! `super` re-exports it, so every `crate::frontend::Draw` in the tree is
 //! unchanged.
 
+use super::rows::{LanguageRows, language_rows};
 use super::*;
 use oag_display::space::pillarbox_in;
 
@@ -844,10 +845,13 @@ impl Frontend {
         // the widget's own font's line height, the same quantity a line of
         // that font would step by anywhere else it is used.
         let menu = screen.menu.as_ref();
-        let menu_x = menu.map_or(0.0, |m| m.x);
-        let menu_y = menu.map_or(0.0, |m| m.y);
-        let scale = menu.map_or(1.0, |m| m.scale).max(0.5);
-        let align = Align::parse(menu.map_or("left", |m| m.align.as_str()));
+        let LanguageRows {
+            x: menu_x,
+            y: menu_y,
+            scale,
+            pitch: row,
+            align,
+        } = language_rows(menu);
         // **The title's own measured unselected ink wins over the widget's
         // `color`**, where it measured one. Pure's `<Menu>` says
         // `color="FEGlobals->TextColor"`, and `TextColor` is `0xFF11ACD0` -
@@ -863,8 +867,6 @@ impl Frontend {
             .and_then(|skin| skin.text)
             .or_else(|| menu.map(|m| m.color))
             .map_or([1.0, 1.0, 1.0, 1.0], argb_to_rgba);
-        let row = font_line_height(menu.map_or("Default", |m| m.font.as_str())) * scale;
-
         // The selected row's own ink, when this title carries a *static*
         // measured one. `selected_pulse_period_secs` being `Some` (Pulse's
         // shape: its own ink brightens toward white and back on a clock, see

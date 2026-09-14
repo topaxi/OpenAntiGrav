@@ -52,9 +52,6 @@
 //! below run with no config directory, no disc and no window.
 
 use crate::frontend::Draw;
-// For the tests below, reached through `use super::*`.
-#[cfg(test)]
-use crate::frontend::Align;
 use oag_gameplay::input::{Button, Input};
 
 /// The menu tree this build ships with.
@@ -1029,6 +1026,7 @@ pub use picture::{Backdrop, Picture};
 mod focus;
 mod frame;
 mod layers;
+pub mod pointer;
 mod rows;
 mod skin;
 mod strip;

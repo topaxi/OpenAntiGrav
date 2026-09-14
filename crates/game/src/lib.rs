@@ -30,6 +30,7 @@ pub mod audio;
 pub mod boot;
 pub mod capture;
 pub mod catalogue;
+pub mod cursor;
 pub mod dlc;
 pub mod drs;
 pub mod hud;

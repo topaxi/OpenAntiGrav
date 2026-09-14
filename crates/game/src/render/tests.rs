@@ -220,3 +220,69 @@ fn a_translucent_fill_blends_over_whatever_load_kept() {
         pixel[3]
     );
 }
+
+/// `ui.wgsl`'s `to_clip`, reimplemented independently of `to_grid` so the
+/// round trip below cannot pass by sharing a mistake with it - the same
+/// arrangement `menu_stage.rs`'s own `overlay_rect` test uses.
+fn to_clip(space: Space, viewport: (f32, f32, f32, f32), grid: (f32, f32)) -> (f32, f32) {
+    let scale = letterbox_in((viewport.2 as u32, viewport.3 as u32), space.display_aspect);
+    (
+        (2.0 * (grid.0 / space.size.0) - 1.0) * scale[0],
+        (1.0 - 2.0 * (grid.1 / space.size.1)) * scale[1],
+    )
+}
+
+/// And `RenderPass::set_viewport`'s: clip `-1..1` onto the rectangle.
+fn to_window(viewport: (f32, f32, f32, f32), clip: (f32, f32)) -> (f32, f32) {
+    (
+        viewport.0 + (clip.0 + 1.0) * 0.5 * viewport.2,
+        viewport.1 + (1.0 - clip.1) * 0.5 * viewport.3,
+    )
+}
+
+/// A grid point drawn through the real chain and read back through
+/// `to_grid` lands where it started - on every space, at every viewport
+/// shape, including the ones where the letterbox actually bars something.
+#[test]
+fn to_grid_inverts_the_draw_chain_on_every_aspect() {
+    let viewports = [
+        (0.0, 0.0, 960.0, 544.0),
+        // Wider than any title: bars down the sides.
+        (0.0, 0.0, 1920.0, 800.0),
+        // Taller: bars top and bottom.
+        (0.0, 0.0, 800.0, 1000.0),
+        // Offset by an aspect setting that did not fill the window.
+        (240.0, 60.0, 1440.0, 810.0),
+    ];
+    for space in [Space::PSP, Space::PS2] {
+        for viewport in viewports {
+            for grid in [
+                (0.0, 0.0),
+                (space.size.0, space.size.1),
+                (100.0, 50.0),
+                (space.size.0 * 0.5, space.size.1 * 0.5),
+                (space.size.0 - 1.0, 17.0),
+            ] {
+                let window = to_window(viewport, to_clip(space, viewport, grid));
+                let back = to_grid(space, viewport, window);
+                assert!(
+                    (back.0 - grid.0).abs() < 1e-3 && (back.1 - grid.1).abs() < 1e-3,
+                    "{space:?} at {viewport:?}: {grid:?} -> {window:?} -> {back:?}"
+                );
+            }
+        }
+    }
+}
+
+/// A click in the letterbox bars is off the grid, not clamped onto its
+/// edge: nothing is drawn there, so nothing should be hit there.
+#[test]
+fn to_grid_maps_a_bar_to_a_point_off_the_grid() {
+    // A window twice as wide as the PSP's shape: the picture fills the
+    // middle half, and the leftmost quarter is a bar.
+    let viewport = (0.0, 0.0, 960.0 * 2.0, 544.0);
+    let (x, _) = to_grid(Space::PSP, viewport, (10.0, 272.0));
+    assert!(x < 0.0, "{x}");
+    let (x, _) = to_grid(Space::PSP, viewport, (1920.0 - 10.0, 272.0));
+    assert!(x > Space::PSP.size.0, "{x}");
+}

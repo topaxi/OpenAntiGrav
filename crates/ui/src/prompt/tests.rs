@@ -295,3 +295,150 @@ fn both_prompts_scrim_everything_behind_them() {
         );
     }
 }
+
+/// The middle of a rect, which is always inside it.
+fn centre(rect: [f32; 4]) -> (f32, f32) {
+    (rect[0] + rect[2] * 0.5, rect[1] + rect[3] * 0.5)
+}
+
+fn click_at(at: (f32, f32)) -> crate::pointer::Pointer {
+    crate::pointer::Pointer {
+        at: Some(at),
+        moved: true,
+        clicked: true,
+        ..Default::default()
+    }
+}
+
+/// Where the grid draws each cell's label: the `Draw::Text` whose text is
+/// the cell's, centred in the cell.
+fn drawn_cell_labels(keyboard: &Keyboard) -> Vec<(String, (f32, f32))> {
+    keyboard
+        .draw(&skin())
+        .into_iter()
+        .filter_map(|draw| match draw {
+            Draw::Text {
+                x,
+                y,
+                text,
+                align: Align::Centre,
+                ..
+            } => Some((text, (x, y))),
+            _ => None,
+        })
+        .collect()
+}
+
+/// The drift guard: every cell's drawn label sits inside the cell the
+/// pointer path would resolve for that point - so a click on a glyph types
+/// that glyph, on every cell, `DEL` and `OK` included.
+#[test]
+fn a_click_on_every_drawn_cell_label_presses_that_cell() {
+    let labels = drawn_cell_labels(&keyboard(""));
+    assert_eq!(labels.len(), CELLS);
+    for (index, (label, pen)) in labels.iter().enumerate() {
+        let mut keyboard = keyboard("");
+        // A hair under the pen, which is centred at the cell's top edge
+        // plus a tenth: the label's own top-left is inside the cell.
+        let outcome = keyboard.pointer(&click_at((pen.0, pen.1 + 1.0)), &skin());
+        match key_at(index) {
+            Key::Char(c) => {
+                assert_eq!(outcome, Outcome::Pending);
+                assert_eq!(keyboard.text(), c.to_string(), "cell {index} ({label})");
+            }
+            Key::Delete => assert_eq!(outcome, Outcome::Pending, "{label}"),
+            Key::Accept => assert_eq!(outcome, Outcome::Accepted, "{label}"),
+        }
+        assert_eq!(keyboard.selected(), key_at(index));
+    }
+}
+
+#[test]
+fn hovering_a_cell_moves_the_cursor_without_typing() {
+    let mut keyboard = keyboard("");
+    let grid = Keyboard::grid(&skin());
+    let hover = crate::pointer::Pointer {
+        at: Some(centre(grid.cell(12))),
+        moved: true,
+        ..Default::default()
+    };
+    assert_eq!(keyboard.pointer(&hover, &skin()), Outcome::Pending);
+    assert_eq!(keyboard.selected(), key_at(12));
+    assert_eq!(keyboard.text(), "");
+}
+
+#[test]
+fn a_click_off_the_grid_does_nothing_and_the_secondary_button_cancels() {
+    let mut keyboard = keyboard("ab");
+    assert_eq!(
+        keyboard.pointer(&click_at((-10.0, -10.0)), &skin()),
+        Outcome::Pending
+    );
+    assert_eq!(keyboard.text(), "ab");
+    let back = crate::pointer::Pointer {
+        back: true,
+        ..Default::default()
+    };
+    assert_eq!(keyboard.pointer(&back, &skin()), Outcome::Cancelled);
+}
+
+#[test]
+fn a_click_on_the_delete_cell_deletes() {
+    let mut keyboard = keyboard("ab");
+    let grid = Keyboard::grid(&skin());
+    assert_eq!(
+        keyboard.pointer(&click_at(centre(grid.cell(KEYS.len()))), &skin()),
+        Outcome::Pending
+    );
+    assert_eq!(keyboard.text(), "a");
+}
+
+/// A confirm's two answers are each drawn inside their own half of the
+/// answer line, so a click on either word is that answer.
+#[test]
+fn a_click_on_either_drawn_answer_is_that_answer() {
+    let [no, yes] = Confirm::answer_rects(&skin());
+    let words: Vec<(String, (f32, f32))> = confirm()
+        .draw(&skin())
+        .into_iter()
+        .filter_map(|draw| match draw {
+            Draw::Text { x, y, text, .. } if text == "KEEP" || text == "DELETE" => {
+                Some((text, (x, y)))
+            }
+            _ => None,
+        })
+        .collect();
+    assert_eq!(words.len(), 2, "{words:?}");
+    for (word, pen) in words {
+        let mut prompt = confirm();
+        let at = (pen.0 + 1.0, pen.1 + 1.0);
+        let outcome = prompt.pointer(&click_at(at), &skin());
+        if word == "DELETE" {
+            assert!(crate::pointer::contains(yes, at), "{at:?} in {yes:?}");
+            assert_eq!(outcome, Outcome::Accepted);
+            assert!(prompt.on_yes());
+        } else {
+            assert!(crate::pointer::contains(no, at), "{at:?} in {no:?}");
+            assert_eq!(outcome, Outcome::Cancelled);
+            assert!(!prompt.on_yes());
+        }
+    }
+}
+
+#[test]
+fn hovering_an_answer_moves_it_and_a_click_elsewhere_is_ignored() {
+    let mut prompt = confirm();
+    let [_, yes] = Confirm::answer_rects(&skin());
+    let hover = crate::pointer::Pointer {
+        at: Some(centre(yes)),
+        moved: true,
+        ..Default::default()
+    };
+    assert_eq!(prompt.pointer(&hover, &skin()), Outcome::Pending);
+    assert!(prompt.on_yes());
+    assert_eq!(
+        prompt.pointer(&click_at((1.0, 1.0)), &skin()),
+        Outcome::Pending
+    );
+    assert!(prompt.on_yes(), "a stray click changes nothing");
+}

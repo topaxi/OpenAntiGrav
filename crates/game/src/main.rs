@@ -85,6 +85,8 @@ mod menu_stage;
 mod overlay;
 #[path = "main/picker_stage.rs"]
 mod picker_stage;
+#[path = "main/pointer.rs"]
+mod pointer;
 #[path = "main/pose.rs"]
 mod pose;
 #[path = "main/prepare.rs"]

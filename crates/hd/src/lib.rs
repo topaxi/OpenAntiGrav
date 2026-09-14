@@ -114,6 +114,7 @@ pub const TITLE: &Title = &Title {
     track_plugin_definition: None,
     loading: Some(&loading::LOADING),
     music: Some(MUSIC),
+    cursor: include_str!("../../../assets/cursors/hd.svg"),
     // **Pulse's two names, and HD answers them.** `Data\XML\WeaponStats_Race.xml`
     // resolves in `DATA00.PSARC` through the same path normalisation every other
     // HD entry goes through, and parses with thirteen weapons and four pickup

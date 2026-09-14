@@ -283,13 +283,18 @@ impl App {
         // reason: the overlay has to work on every route, and `--race` never
         // loads a font at all. One pipeline and a 616-byte atlas, against a
         // fallible build and a borrow dance in the middle of `frame`.
+        // Its sheet is the pointer's - the one sprite the overlay pass
+        // draws. The chooser's own cursor to begin with; `Session::draw`
+        // swaps in the title's the frame a shell exists. See
+        // `oag_game::cursor`.
+        let cursor_sheet = oag_game::cursor::sheet(oag_game::cursor::LAUNCHER);
         let overlay = Renderer::new(
             &gpu.device,
             &gpu.queue,
             gpu.config.format,
             None,
             oag_ui::font::Atlas::build(),
-            &oag_game::sprite::Sheet::default(),
+            &cursor_sheet,
         )
         .context("building the performance overlay")?;
 
@@ -330,6 +335,7 @@ impl App {
             framebuffer,
             stage,
             controls,
+            pointer: crate::pointer::Window::default(),
             audio,
             music_discs: self.music_discs.clone(),
             clock: TickClock::new(TickRate::DEFAULT),
@@ -353,6 +359,8 @@ impl App {
             stall_frame: 0,
             memory: perf::memory::Probe::new(),
             overlay,
+            cursor_sheet,
+            cursor_title: None,
             stalled: true,
             paused: false,
             next_frame: std::time::Instant::now(),
@@ -495,10 +503,33 @@ impl ApplicationHandler for App {
             WindowEvent::Resized(size) => session.resize(size.width, size.height),
 
             // A key held while the window loses focus is never seen to come up, and
-            // the ship would keep turning while the player is elsewhere.
-            WindowEvent::Focused(false) => session.controls.release_all(),
+            // the ship would keep turning while the player is elsewhere. A click
+            // that landed just before was for whatever took the focus.
+            WindowEvent::Focused(false) => {
+                session.controls.release_all();
+                session.pointer.release();
+            }
+
+            // The mouse and the touchscreen, latched for the tick loop - see
+            // `crate::pointer`. Every stage reads them through
+            // `Session::frame`; nothing is mapped or decided here.
+            WindowEvent::CursorMoved { position, .. } => {
+                session.pointer.cursor_moved(position.x, position.y);
+            }
+            WindowEvent::CursorLeft { .. } => session.pointer.cursor_left(),
+            WindowEvent::MouseInput { state, button, .. } => {
+                session.pointer.button(button, state);
+            }
+            WindowEvent::MouseWheel { delta, .. } => session.pointer.wheel(delta),
+            WindowEvent::Touch(touch) => session.pointer.touch(touch),
 
             WindowEvent::KeyboardInput { event, .. } => {
+                // The keyboard is the device in use now, whatever the key:
+                // the drawn cursor goes until the mouse moves again. See
+                // `crate::pointer::Window::other_device`.
+                if event.state == ElementState::Pressed {
+                    session.pointer.other_device();
+                }
                 // A CONTROLS row is waiting for its new key, and this raw event
                 // is the only place that key still exists as itself - past
                 // this point `Controls::set_key` would already have mapped it

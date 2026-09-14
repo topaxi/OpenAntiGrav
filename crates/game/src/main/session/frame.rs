@@ -5,6 +5,8 @@
 use anyhow::Result;
 use log::{error, info, warn};
 
+use oag_display::display;
+use oag_display::space::Space;
 use oag_game::{boot, race, records, report, settings};
 use oag_gameplay::input::Button;
 use oag_ui::frontend::{self};
@@ -15,6 +17,7 @@ use crate::hints;
 use crate::stage::Stage;
 
 use super::Session;
+use super::pointer;
 
 impl Session {
     pub(crate) fn frame(&mut self) -> Result<()> {
@@ -183,6 +186,11 @@ impl Session {
         // now that drawing is split into its own file - but `progress` is
         // read again below, inside the tick loop.
         let (_phase, progress) = self.loading_progress();
+        // Where the picture is on the surface this frame, for the pointer:
+        // the same rectangle `Session::draw` fits every stage into, so a
+        // click maps back through exactly the transform the rows went out
+        // through. See `session::pointer::in_grid`.
+        let rect = display::viewport(self.gpu.size(), self.settings.display.aspect);
 
         for _ in 0..steps {
             // Ends the devices' tick for both stages. A race reads the snapshot's
@@ -190,6 +198,17 @@ impl Session {
             // through `buttons_mut`, because it needs `consume_press` and a
             // snapshot is a value.
             let snapshot = self.controls.snapshot();
+            // The pad spoke: the drawn cursor goes until the mouse moves
+            // again, the same rule a key press applies in `app.rs`. Read
+            // off the pad's own contribution rather than the merged
+            // snapshot, because a click synthesises a press through the
+            // keyboard's latch and that press is the mouse speaking.
+            if self.controls.pad_spoke() {
+                self.pointer.other_device();
+            }
+            // And the pointer's, on the same latch terms: one take per tick,
+            // in window pixels until a stage says which grid it draws in.
+            let pointer = self.pointer.take();
             // The audio's whole tick, and it is inside this loop rather than
             // beside it on purpose. Cue emission and mixer control are driven by
             // the tick count, exactly as the exhaust and the chase camera are
@@ -293,6 +312,9 @@ impl Session {
                 // as one press at the same 60 Hz the menus read theirs at.
                 Stage::Launcher(stage) => {
                     stage.update(self.controls.buttons_mut());
+                    // The chooser draws in the PSP's grid, having no source
+                    // to take one from - see `Stage::launcher`.
+                    stage.pointer(&pointer::in_grid(pointer, Space::PSP, rect));
                 }
                 Stage::Loading(stage) => {
                     stage
@@ -300,6 +322,13 @@ impl Session {
                         .advance(progress.finished && stage.media_ready() && stage.race_ready());
                 }
                 Stage::Frontend(stage) => {
+                    // The language picker takes the pointer itself; every
+                    // other screen in the chain waits for a button and
+                    // reads a click as one. See `session::pointer`.
+                    let grid = pointer::in_grid(pointer, stage.frontend.space(), rect);
+                    if !stage.frontend.pointer(&grid) {
+                        pointer::press_for_click(&mut self.controls, &grid);
+                    }
                     let events =
                         stage
                             .frontend
@@ -357,8 +386,9 @@ impl Session {
                     // picture. Confirming may hand the window to a loading
                     // screen, so the catch-up loop stops the same way it does
                     // for a race the menu just started.
+                    let grid = pointer::in_grid(pointer, stage.skin.space(), rect);
                     if stage.picker.is_some() {
-                        self.tick_picker();
+                        self.tick_picker(&grid);
                         if !matches!(self.stage, Stage::Menu(_)) {
                             break;
                         }
@@ -395,22 +425,38 @@ impl Session {
                     // on-screen keyboard or a confirm is up, the rows behind
                     // it are a picture. Ahead of the menus rather than beside
                     // them, and `Input::take` is why finishing on this very
-                    // tick is safe - the edge that closed the prompt is
-                    // consumed, so `Menu::update` below sees nothing.
+                    // tick is safe for a *button* - the edge that closed the
+                    // prompt is consumed, so `Menu::update` below sees
+                    // nothing. A `Pointer` is a value nothing consumes, so
+                    // the menus are gated on whether a prompt was up *before*
+                    // this tick: the click that answered KEEP, or the
+                    // right-click that cancelled a keyboard, must not also
+                    // land on the row beneath it.
+                    let prompt_was_open = stage.prompt.is_some();
                     let finished = Session::tick_prompt(
                         stage,
                         self.controls.buttons_mut(),
+                        &grid,
                         &self.pilot_roster,
                         self.shell.as_ref().map(|shell| &shell.strings),
                     );
                     // Frozen while a capture is in flight: `app.rs` diverts
                     // every keyboard event away from `Controls::set_key` for
                     // as long as `awaiting_binding` is `Some`, so there is
-                    // nothing new here for the menus to navigate with anyway.
-                    let events = if self.awaiting_binding.is_some() || stage.prompt.is_some() {
+                    // nothing new here for the menus to navigate with anyway
+                    // - and the pointer is held back with it, so a click
+                    // cannot move the page under a prompt or a capture.
+                    let events = if self.awaiting_binding.is_some() || prompt_was_open {
                         Vec::new()
                     } else {
-                        stage.menu.update(self.controls.buttons_mut())
+                        let mut events = stage.menu.update(self.controls.buttons_mut());
+                        events.extend(pointer::menu_pointer(
+                            stage,
+                            &grid,
+                            &mut self.awaiting_binding,
+                            &mut self.controls,
+                        ));
+                        events
                     };
                     if stage.menu.page().id != before {
                         stage.begin_change(leaving);
@@ -444,6 +490,11 @@ impl Session {
                     }
                 }
                 Stage::Race(stage) if stage.race.finished() => {
+                    // The results table waits for cross or start and draws
+                    // nothing to aim at, so a click is the press - the
+                    // rising edge the block above this match reads next
+                    // tick. A running race is never offered the pointer.
+                    pointer::press_for_click(&mut self.controls, &pointer);
                     // **The race is over, so nothing is stepped.** The world is
                     // left exactly as the finishing tick left it and the frame
                     // loop goes on drawing it under the results table, which is
@@ -466,6 +517,12 @@ impl Session {
                     self.audio.race_tick(&mut stage.race);
                 }
                 Stage::Race(stage) if self.paused => {
+                    // A paused race reads circle as "back to the menus";
+                    // the secondary button is circle everywhere else on
+                    // screen, so it is here too.
+                    if pointer.back {
+                        self.controls.tap(Button::Circle);
+                    }
                     // Same shape as the finished arm above and for the same
                     // reason: the audio is not simulation state, so ticking
                     // it is what keeps the engine note honest while `World`

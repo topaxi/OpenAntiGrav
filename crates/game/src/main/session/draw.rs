@@ -643,7 +643,7 @@ impl Session {
         // `Renderer::overlay` loads rather than clears, so the blit and the
         // aspect bars underneath it survive. One pass, skipped entirely when the
         // setting is off.
-        let list = perf::draw_list(
+        let mut list = perf::draw_list(
             &self.meter,
             self.settings.graphics.perf_overlay,
             self.presentation_hz(),
@@ -684,6 +684,22 @@ impl Session {
                 present: self.present_cost.stats().map(|s| s.mean_ms / 1000.0),
             },
         );
+        // The pointer, last of all, so it is over the overlay's own text
+        // too. Only where a pointer means something - see
+        // `Session::shows_cursor` - and only while there is a mouse over
+        // the window; a finger draws none, and a mouse that left draws
+        // nothing.
+        // Positioned off the window's latest reading rather than the last
+        // tick's, so it keeps up with the mouse between ticks, and mapped
+        // through the same rectangle the overlay is fitted into: the PSP
+        // grid is the overlay renderer's own space, whatever title is up.
+        if self.shows_cursor()
+            && let Some(at) = self.pointer.cursor_at()
+        {
+            self.refresh_cursor();
+            let at = oag_game::render::to_grid(oag_display::space::Space::PSP, rect, at);
+            list.extend(oag_game::cursor::draw(&self.cursor_sheet, at));
+        }
         if !list.is_empty() {
             self.overlay.overlay(
                 &self.gpu.device,
@@ -753,5 +769,35 @@ impl Session {
             );
         }
         Ok(true)
+    }
+
+    /// Whether the stage on screen answers a pointer, which is when one is
+    /// drawn: the chooser, the boot sequence, the menus with everything on
+    /// them, and a race only once it is paused or over. A running race
+    /// reads no pointer, and a cursor over it would say otherwise.
+    fn shows_cursor(&self) -> bool {
+        match &self.stage {
+            Stage::Launcher(_) | Stage::Frontend(_) | Stage::Menu(_) => true,
+            Stage::Loading(_) => false,
+            Stage::Race(stage) => self.paused || stage.race.finished(),
+        }
+    }
+
+    /// Puts the current title's cursor on the overlay's sheet, once per
+    /// title: the chooser's own until a shell exists, the title's after.
+    /// See `oag_game::cursor`.
+    fn refresh_cursor(&mut self) {
+        let title = self.shell.as_ref().map(|shell| shell.title.name);
+        if title == self.cursor_title {
+            return;
+        }
+        self.cursor_title = title;
+        let svg = self
+            .shell
+            .as_ref()
+            .map_or(oag_game::cursor::LAUNCHER, |shell| shell.title.cursor);
+        self.cursor_sheet = oag_game::cursor::sheet(svg);
+        self.overlay
+            .set_sprites(&self.gpu.device, &self.gpu.queue, &self.cursor_sheet);
     }
 }

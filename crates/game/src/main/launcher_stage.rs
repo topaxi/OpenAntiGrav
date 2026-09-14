@@ -36,6 +36,14 @@ impl LauncherStage {
         self.picked = self.launcher.update(input);
     }
 
+    /// The same tick's pointer, on the same terms as [`Self::update`].
+    pub(crate) fn pointer(&mut self, pointer: &oag_ui::pointer::Pointer) {
+        if self.picked.is_some() {
+            return;
+        }
+        self.picked = self.launcher.pointer(pointer);
+    }
+
     /// Draws the list into `target`.
     pub(crate) fn render(
         &mut self,

@@ -818,6 +818,130 @@ every other sound outside it, not race state being kept alive - but it meant
 anything to invent. See `crates/game/src/audio.rs`'s `start_race_music` and
 `pause_race_music`.
 
+## A mouse and a finger
+
+**Ours, on every title, and nothing on any disc is being reproduced.** The
+line at the top of this page - a PSP, no mouse - is still true of every
+original in the lineage, so every rule below is this build's own, marked so
+in the code, and evidence for none of it is claimed. The vocabulary is
+`oag_ui::pointer::Pointer`: one tick's worth of *where the pointer is, in the
+screen's own grid*, and whether it moved, clicked, pressed its secondary
+button or turned its wheel. A default `Pointer` is one that is not there,
+so a headless capture that never builds one draws exactly what it always
+did.
+
+**Why the pointer is not a button.** `InputSnapshot` feeds the `World` and
+the committed state hash, and a pointer has a position - a pair of
+window-relative floats. Putting one in the snapshot would be a
+[determinism](determinism.md) failure waiting for a second monitor. So the
+pointer stops at the front end: the models in `oag-ui` consume it directly,
+beside the button edges they already consume, and it never reaches a
+simulation crate. The one place the two vocabularies meet is
+`Controls::tap` - the composition root pressing start and cross for a click
+on a screen that has nothing to point at (the boot movies, `PRESS START`,
+Pure's storage warning, the results table), onto the keyboard's own latch,
+so the screen reads it exactly as it reads a key. Never in a running race:
+a click is not thrust, and a race is not offered the pointer until it is
+paused or over.
+
+**The window's cursor is hidden and the game draws its own**, in the
+title's own palette - `assets/cursors/*.svg`, one per title plus this
+build's for the chooser, named by `oag_title::Title::cursor` and painted
+last in `Session::draw` by `oag_game::cursor`. A compositor's cursor over a
+borderless game is whatever that compositor feels like showing, which on a
+handheld is nothing, and a player with no visible pointer has no way to
+find out the menus answer one. Drawing it ourselves is also what lets it
+vanish exactly when it means nothing: during a race, and whenever the
+mouse was not the last device to speak. A finger draws no arrow - it would
+sit under the fingertip, covering the row it is on - and neither does a
+pad or a keyboard, where an arrow parked over a row the player is not
+using would say that row is pointed at when nothing is. `Window::other_device`
+(off a raw key event in `app.rs`, off `Controls::pad_spoke` in the tick
+loop) hides it, and the next mouse move, click or wheel turn brings it
+back, the way every desktop game does. 2048's `data/FE/Images/cursor.gxt` was checked before its cursor
+was invented - it is a 32x16 mark, the same shape as HD's strip-underline
+`cursor.gtf`, not a pointer; whether PS TV mode draws one is unread.
+
+**Grid space, not window pixels.** `oag_game::render::to_grid` runs the
+renderer's own fitting backwards - `display::viewport`, `letterbox_in`,
+`ui.wgsl`'s `to_clip` - so a model hit-tests against the rects it just
+emitted and never learns what a window is. The letterbox is undone as well
+as the viewport, for the reason `MenuStage`'s `overlay_rect` already exists:
+sizing to `space.size` is only right when the aspects happen to agree, and a
+click in the bars maps to a coordinate off the grid, where nothing is hit.
+`crates/game/src/render/tests.rs` round-trips it against an independent
+reimplementation of the shader's mapping on both spaces and four viewport
+shapes.
+
+**Hit regions come from the drawing's own arithmetic.** Four layout paths
+draw a page - a PSP column of text rows, HD's list rows with their step
+arrows, HD's strip with block art, and the strip's measured fallback - and
+`menu::pointer::regions` asks the same two modules that draw them
+(`rows.rs`, `strip.rs`) for the rects, computed from the same numbers.
+A second copy of the layout kept in step by hand is the drift `rows.rs`
+already refuses between `Menu::scroll` and the skin. Each path's test
+draws the page and asserts every row's label pen lies inside that row's
+region, and that HD's arrow sprites *are* the step regions, rect for rect.
+The prompts, the selection screens, the language picker and the disc
+chooser each factor their geometry the same way (`prompt::Grid`,
+`picker::pointer::targets`, `frontend::rows::language_rows`,
+`launcher::row_at`) with the same drift guard.
+
+**A row of plain text gets its band from the face's ink, not the pen.** A
+disc font's glyph box is the whole atlas row, and a capital sits at the
+bottom of it under room kept for accents: Pure's `Default` face keeps
+seven of its sixteen rows empty above the cap line, so at the language
+picker's scale of 1.15 the capitals of a row whose pen is at `y` are drawn
+from `y + 8` to `y + 18` grid units while the rows step by 15. A band laid
+from the pen covered the gap above one row and the ink of the next, and
+pointing at DEUTSCH lit ESPAÑOL - reproduced on 2026-09-14 with `xdotool`
+at window pixel (200, 290) of a 1600x900 window, the drawn cursor's tip
+inside DEUTSCH. `oag_ui::pointer::RowInk::measure` reads the first and
+last inked row of `A`..=`Z` off the atlas the renderer actually draws
+`Draw::Text` with, and the language picker (`Frontend::set_row_ink`, from
+`Stage::frontend`) and the selection screens (`menu::Skin::set_row_ink`, from
+`Session::open_menus`) centre each row's band on that. The menu pages do
+not need it: their rows carry highlight fills laid out by the same skin
+that places the text, and `menu::pointer::regions` takes those rects.
+
+**The rules, and why each is what it is:**
+
+| Gesture | Menus | Elsewhere |
+| --- | --- | --- |
+| Hover | selects the row under it - only on a tick the pointer *moved*, so a mouse resting on a row does not fight the keyboard for the cursor. On HD the block grows through `focus.rs`'s easing, which is what makes a mouse menu feel right | the same on the language picker, Pure's listed selection rows, the keyboard grid, a confirm's answers and the chooser |
+| Click | activates the row under it, whatever the cursor was on - one gesture, "that one". On a choice or toggle it steps forward as cross does; on one of HD's step arrows it steps the way the arrow points; on a binding row it opens the key capture | **two taps on the language picker and the selection screens**: a click selects, a click on the row already selected confirms. The choice is persisted the moment it confirms and the screen never comes back on its own, so a finger one row off must not race the whole game in the wrong language. Pulse's one-at-a-time selection screen confirms from its info panel or preview instead, having no rows; its `up arrow`/`down arrow` images step, as do the livery arrows |
+| Wheel | walks the cursor one row per detent and **stops at the ends**: a wheel is a scroll, and a list that jumps from last to first under one has lost the player's place | steps the entry on a selection screen, the language on the picker, the row on the chooser |
+| Secondary button | back, which is what circle is on the same page; closes from the root, as circle does | back on a selection screen, cancel on a prompt, "back to the menus" on a paused race; nothing on the boot sequence, which has no back |
+| A disabled row | selectable and inert, exactly as for a pad: `Menu::adjust` refuses it and a click goes through the same gate | a chooser row that will not open is not a target at all, the rule `Launcher::step` already applies |
+
+**Touch is a pointer that is only there while it is down.** `Started` is a
+move to the location *and* a click in one event - a finger has no hover, so
+a tap has to select and activate together, which is what the models do
+with `moved` and `clicked` in the same tick and why the two-tap screens
+above compare against the row selected *before* the gesture. `Ended` takes
+the position away, so nothing stays highlighted under a finger nobody is
+holding there. One finger is followed; a second is ignored until the first
+lifts. Dragging a long page is not built: the wheel and the rows' own
+lookahead scroll (`window_start`) cover it, and a drag that fights the tap
+is worse than no drag.
+
+**The order is the pad's order.** `session::frame` routes a click through
+the same precedence it routes a button: a selection screen takes the tick
+whole, then a binding capture freezes the page, then a modal prompt eats the
+input, and only then do the rows see it. A click reaching the rows behind a
+scrim is the bug that ordering already prevents for cross - with one
+difference a `Pointer` forces: a button edge is *consumed* by whatever
+takes it (`Input::take`), so a prompt may close on the very tick it reads
+cross and the rows below see nothing, but a `Pointer` is a value nothing
+consumes, so the rows are gated on whether a prompt was up *before* the
+tick rather than after. Otherwise the click that answered KEEP would also
+land on the row under it. The latch is the
+keyboard's too: `crate::pointer::Window` accumulates winit's events between
+ticks and hands out one `Pointer` per tick, so a click between two ticks is
+delivered on the next rather than lost - finding U5's argument, applied to a
+button with no repeat rate. Focus loss drops the pending presses beside
+`Controls::release_all`.
+
 ## The background the menus sit on
 
 The rows are drawn over **the disc's own looping menu backdrop**, and that is a

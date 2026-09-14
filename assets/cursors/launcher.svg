@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 32" width="24" height="32">
+  <!-- The disc chooser's pointer: the window icon's own hull white over its
+       slate outline, with two of its streaks - one cyan, one magenta -
+       trailing off the tail. Ours; there is no disc under this screen to
+       borrow from. -->
+  <polygon fill="#C22A63" points="13,20 18,19 22.5,25 17.5,26"/>
+  <polygon fill="#06ABE9" points="6,19 14,17 20,26 12,28"/>
+  <polygon fill="#F8F8F8" stroke="#3A4A60" stroke-width="2" stroke-linejoin="miter"
+           points="1.5,1.5 1.5,22 6.5,17.5 10.5,26.5 14.5,24.5 10.5,15.5 18,15.5"/>
+</svg>

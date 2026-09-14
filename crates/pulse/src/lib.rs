@@ -58,6 +58,7 @@ pub const TITLE: &Title = &Title {
     track_plugin_definition: None,
     loading: Some(&loading::LOADING),
     music: Some(MUSIC),
+    cursor: include_str!("../../../assets/cursors/pulse.svg"),
     // The two tables Pulse picks between by race mode. `DAT_08b32428` is what
     // selects the file - measured `0` in a single race and `1` in Eliminator,
     // at Venom both times, so it is the *file* and not the speed class. See

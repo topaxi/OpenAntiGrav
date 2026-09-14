@@ -12,10 +12,12 @@ mod blocks;
 mod drawing;
 mod frame;
 mod navigation;
+mod pointer;
 mod rows;
 mod strip;
 
 use super::*;
+use crate::frontend::Align;
 
 /// [`draw_list`] flattened, which is what every test below wants: the
 /// layer split exists for the transition, and none of these animate.

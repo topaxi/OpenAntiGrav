@@ -347,7 +347,7 @@ impl Session {
     }
 
     /// One tick of an open picker: its input, and what came of it.
-    pub(crate) fn tick_picker(&mut self) {
+    pub(crate) fn tick_picker(&mut self, pointer: &oag_ui::pointer::Pointer) {
         let Stage::Menu(stage) = &mut self.stage else {
             return;
         };
@@ -355,7 +355,8 @@ impl Session {
             return;
         };
         picker.refresh_info();
-        let events = picker.model.update(self.controls.buttons_mut());
+        let mut events = picker.model.update(self.controls.buttons_mut());
+        events.extend(super::pointer::picker_pointer(stage, pointer));
         for event in events {
             self.handle_picker(event);
         }

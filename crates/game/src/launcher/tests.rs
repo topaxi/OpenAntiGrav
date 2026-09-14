@@ -245,3 +245,81 @@ fn the_notes_sit_below_the_last_row() {
         assert!(y > last_row, "a note at {y} overlaps the row at {last_row}");
     }
 }
+
+/// Where each row's file name is drawn, in row order - the name, because
+/// two images of one title share a title.
+fn drawn_row_pens(launcher: &Launcher) -> Vec<(f32, f32)> {
+    let list = draw_list(launcher);
+    launcher
+        .rows()
+        .iter()
+        .map(|row| {
+            list.iter()
+                .find_map(|draw| match draw {
+                    Draw::Text { x, y, text, .. } if *text == row.name && *x == NAME_COLUMN => {
+                        Some((*x, *y))
+                    }
+                    _ => None,
+                })
+                .unwrap_or_else(|| panic!("{} is drawn", row.name))
+        })
+        .collect()
+}
+
+fn click_at(at: (f32, f32)) -> oag_ui::pointer::Pointer {
+    oag_ui::pointer::Pointer {
+        at: Some(at),
+        moved: true,
+        clicked: true,
+        ..Default::default()
+    }
+}
+
+/// The drift guard: every drawn row is under its own pen, and a click on
+/// a playable one picks it while a click on a broken one is nothing.
+#[test]
+fn a_click_on_a_drawn_row_picks_it_unless_it_will_not_open() {
+    let mut launcher = Launcher::new(vec![
+        playable("a.chd"),
+        broken("enc.iso"),
+        playable("b.chd"),
+    ]);
+    let pens = drawn_row_pens(&launcher);
+    for (index, pen) in pens.iter().enumerate() {
+        assert_eq!(row_at((pen.0 + 2.0, pen.1 + 2.0), 3), Some(index));
+    }
+    assert_eq!(
+        launcher.pointer(&click_at((pens[2].0 + 2.0, pens[2].1 + 2.0))),
+        Some("data/images/b.chd".to_string())
+    );
+    assert_eq!(launcher.cursor(), 2);
+    assert_eq!(
+        launcher.pointer(&click_at((pens[1].0 + 2.0, pens[1].1 + 2.0))),
+        None
+    );
+    assert_eq!(launcher.cursor(), 2, "a broken row is not a target");
+    assert_eq!(launcher.pointer(&click_at((pens[0].0, 10.0))), None);
+}
+
+#[test]
+fn hovering_a_row_moves_the_cursor_and_the_wheel_steps_it() {
+    let mut launcher = Launcher::new(vec![playable("a.chd"), playable("b.chd")]);
+    let pens = drawn_row_pens(&launcher);
+    let hover = oag_ui::pointer::Pointer {
+        at: Some((pens[1].0 + 2.0, pens[1].1 + 2.0)),
+        moved: true,
+        ..Default::default()
+    };
+    assert_eq!(launcher.pointer(&hover), None);
+    assert_eq!(launcher.cursor(), 1);
+    let wheel = oag_ui::pointer::Pointer {
+        scroll: 1,
+        ..Default::default()
+    };
+    assert_eq!(launcher.pointer(&wheel), None);
+    assert_eq!(
+        launcher.cursor(),
+        0,
+        "the wheel steps like the d-pad, wrapping"
+    );
+}

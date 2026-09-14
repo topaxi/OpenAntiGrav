@@ -248,6 +248,10 @@ pub struct Skin {
     /// [`oag_title::MenuSkin::space`], which is not always [`Self::space`].
     from_theirs: (f32, f32),
     line_height: f32,
+    /// Where the rows' face keeps its ink, for a pointer's row bands on the
+    /// screens that step by [`Self::line_height`]. See
+    /// [`crate::pointer::RowInk`]; `None` until [`Self::set_row_ink`].
+    row_ink: Option<crate::pointer::RowInk>,
     /// A free-running clock for [`Self::selected`]'s pulse, advanced by
     /// [`Self::tick_pulse`]. Never reset: the capture that measured Pulse's
     /// period never moved the cursor, so there is no evidence the original
@@ -331,8 +335,24 @@ impl Skin {
             from_ours: into(oag_display::space::SCREEN),
             from_theirs: into(skin.space),
             line_height,
+            row_ink: None,
             pulse_elapsed: 0.0,
         }
+    }
+
+    /// Records where the face [`Self::line_height`] came off keeps its ink,
+    /// measured by the caller that has the atlas.
+    pub fn set_row_ink(&mut self, ink: Option<crate::pointer::RowInk>) {
+        self.row_ink = ink;
+    }
+
+    /// The top edge of a pointer band one [`Self::line_height`] tall for a
+    /// line drawn with its pen at `y` at `scale`: centred on the face's
+    /// capitals when [`Self::set_row_ink`] measured them, the pen otherwise.
+    #[must_use]
+    pub fn row_band_top(&self, y: f32, scale: f32) -> f32 {
+        self.row_ink
+            .map_or(y, |ink| ink.band_top(y, scale, self.line_height * scale))
     }
 
     /// Advances [`Self::selected`]'s pulse clock by one tick's worth of time.

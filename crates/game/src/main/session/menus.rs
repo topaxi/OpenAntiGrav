@@ -187,7 +187,10 @@ impl Session {
         // are laid out and drawn where the disc says rather than shrunk into
         // another console's coordinates. `Space::PSP` on both PSP titles, where
         // the ratio is exactly 1.0 and nothing moves. See `menu::Skin::new`.
-        let skin = menu::Skin::new(shell.menu_skin, shell.space, rows_face.line_height);
+        let mut skin = menu::Skin::new(shell.menu_skin, shell.space, rows_face.line_height);
+        // And where that face keeps its ink, for the pointer bands on the
+        // selection screens' rows - the renderer below draws them with it.
+        skin.set_row_ink(oag_ui::pointer::RowInk::measure(&rows_face));
         // Just the first frame's own value - `MenuStage::render` refreshes
         // this every frame off whichever page is actually current, since a
         // player can navigate to a page with a different reservation need

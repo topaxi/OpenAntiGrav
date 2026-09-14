@@ -65,6 +65,7 @@ pub const TITLE: &Title = &Title {
     // cleared frame. See `oag_title::Loading`.
     loading: None,
     music: Some(MUSIC),
+    cursor: include_str!("../../../assets/cursors/pure.svg"),
     // **One table, all lower case, and no Eliminator variant.**
     // `Data\XML\weaponstats.xml` at `0x08a445a0` in `/psp-pure-usa/BOOT.BIN`,
     // three strings before the `"WeaponStats"` and `"Weapon"` element names the

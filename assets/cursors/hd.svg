@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 32" width="24" height="32">
+  <!-- Wipeout HD / Fury: Block_Render's tab as a pointer. HD_Blue fill, the
+       thin HD_White border its nine-patch draws, the executable's 45-degree
+       cut-and-landing where the arrow's shoulder turns back toward the tip,
+       and an HD_Grey block offset behind it the way an unfocused block sits
+       behind the focused one. Ours. -->
+  <polygon fill="#666666" fill-opacity="0.8"
+           points="4.5,4.5 4.5,25 9.5,20.5 13,28.5 17,26.5 13.5,18.5 18,18.5 20.5,16 20.5,14"/>
+  <polygon fill="#8AC0CA" stroke="#F4F8F9" stroke-width="1.5" stroke-linejoin="miter"
+           points="1.5,1.5 1.5,22 6.5,17.5 10,25.5 14,23.5 10.5,15.5 15,15.5 17.5,13 17.5,11.5"/>
+  <polygon fill="#F4F8F9" fill-opacity="0.75" points="3.5,4.5 3.5,10.5 8,15 9.5,13.5"/>
+</svg>

@@ -169,6 +169,17 @@ pub struct Title {
     /// weapons and handed out no pickups, silently, with only a report line to
     /// say so.
     pub weapons: &'static weapons::Weapons,
+    /// The mouse pointer drawn over this title's screens, as SVG source.
+    ///
+    /// **Ours, not the disc's, on every title.** Nothing in this lineage was
+    /// authored for a mouse, so there is no cursor to recover; each title
+    /// package draws one in its own menu palette and says so in the file -
+    /// see `assets/cursors/README.md`. On `Title` rather than on
+    /// [`MenuSkin`] because the one screen a title shows with no menu skin
+    /// at all (a placeholder for a title whose front end is unread) still
+    /// answers a pointer and still needs one to point with. Rasterised and
+    /// drawn by `oag_game::cursor`.
+    pub cursor: &'static str,
 }
 
 /// Where a title keeps the music its front end and its races play.

@@ -71,6 +71,21 @@ impl Keyboard {
         }
     }
 
+    /// Presses `button` for one tick, as if a bound key had gone down and
+    /// come up between two reads.
+    ///
+    /// **A pointer's way of pressing a button.** A screen that waits for
+    /// start or cross and nothing else - the boot movies, `PRESS START`, the
+    /// results table - has nothing to point *at*, so a click on it is the
+    /// press; the composition root turns the one into the other here, and
+    /// the screen reads it through the same [`Self::take_taps`] latch a
+    /// real key does. Nothing about the tap says it was not a key, which is
+    /// the point: the front end keeps one answer to "did the player press
+    /// this". Never called from a race - a click is not thrust.
+    pub fn tap(&mut self, button: Button) {
+        self.tapped |= button.bit();
+    }
+
     /// Releases everything.
     ///
     /// Call this on focus loss. Without it a key held while the window loses
@@ -195,6 +210,9 @@ pub struct Controls {
     keyboard: Keyboard,
     pad: Pad,
     buttons: Input,
+    /// Whether the pad contributed anything to the last [`Self::snapshot`]:
+    /// a held button or a stick or trigger off centre. See [`Self::pad_spoke`].
+    pad_spoke: bool,
 }
 
 impl Controls {
@@ -215,12 +233,19 @@ impl Controls {
             keyboard: Keyboard::new(),
             pad: Pad::none(),
             buttons: Input::new(),
+            pad_spoke: false,
         }
     }
 
     /// Records a key going down or coming up. See [`Keyboard::set_key`].
     pub fn set_key(&mut self, key: &Key, pressed: bool) {
         self.keyboard.set_key(key, pressed);
+    }
+
+    /// Presses `button` for one tick on the keyboard's own latch. See
+    /// [`Keyboard::tap`].
+    pub fn tap(&mut self, button: Button) {
+        self.keyboard.tap(button);
     }
 
     /// Releases every key. Call it on focus loss, as [`Keyboard::release_all`]
@@ -291,6 +316,11 @@ impl Controls {
     /// bits count as a shoulder - is invisible to `snapshot`'s caller and
     /// impossible to reach on a machine with no pad, which is every CI run.
     fn merge(&mut self, pad: pad::PadState) -> InputSnapshot {
+        self.pad_spoke = pad.held != 0
+            || pad.stick_x != 0.0
+            || pad.stick_y != 0.0
+            || pad.airbrake_left != 0.0
+            || pad.airbrake_right != 0.0;
         // The keyboard's *taps* as well as what it still holds - see
         // [`Keyboard::take_taps`]. The pad is polled rather than
         // event-driven, so it has no equivalent to latch.
@@ -334,6 +364,18 @@ impl Controls {
     /// Mutable button state, for [`Input::consume_press`].
     pub fn buttons_mut(&mut self) -> &mut Input {
         &mut self.buttons
+    }
+
+    /// Whether the pad contributed anything to the last [`Self::snapshot`].
+    ///
+    /// What the composition root reads to decide that the pad, rather than
+    /// the mouse, is the device in use - and so to stop drawing a cursor.
+    /// Off the pad's own reading and not the merged `Input`, because a
+    /// click presses a button through the keyboard's latch ([`Self::tap`])
+    /// and that press is the mouse speaking, not the pad.
+    #[must_use]
+    pub fn pad_spoke(&self) -> bool {
+        self.pad_spoke
     }
 }
 

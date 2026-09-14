@@ -550,6 +550,7 @@ impl Session {
     pub(crate) fn tick_prompt(
         stage: &mut MenuStage,
         input: &mut oag_game::input::Input,
+        pointer: &oag_ui::pointer::Pointer,
         roster: &pilots::Roster,
         strings: Option<&StringTable>,
     ) -> Option<Finished> {
@@ -564,7 +565,13 @@ impl Session {
                 keyboard.set_note(note);
             }
         }
-        match prompt.update(input) {
+        // The pad first, then the pointer, and the first to finish wins:
+        // both are edges, so the other cannot fire again next tick.
+        let outcome = match prompt.update(input) {
+            Outcome::Pending => prompt.pointer(pointer, &stage.skin),
+            finished => finished,
+        };
+        match outcome {
             Outcome::Pending => None,
             Outcome::Cancelled => {
                 stage.prompt = None;

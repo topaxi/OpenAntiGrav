@@ -513,3 +513,249 @@ fn pulses_selection_screens_list_nothing() {
     .expect("Track Creation reads");
     assert!(layout.screen.menu.is_none());
 }
+
+fn track_layout() -> Layout {
+    Layout::read(
+        &Screens::from_xml(XML),
+        Kind::Track,
+        &strings(),
+        FaceScales::default(),
+        PSP,
+    )
+    .expect("Track Creation reads")
+}
+
+fn pulse_skin() -> Skin {
+    Skin::new(
+        oag_pulse::FRONT_END.menu,
+        oag_display::space::Space::PSP,
+        22.0,
+    )
+}
+
+fn click_at(at: (f32, f32)) -> crate::pointer::Pointer {
+    crate::pointer::Pointer {
+        at: Some(at),
+        moved: true,
+        clicked: true,
+        ..Default::default()
+    }
+}
+
+fn centre(rect: [f32; 4]) -> (f32, f32) {
+    (rect[0] + rect[2] * 0.5, rect[1] + rect[3] * 0.5)
+}
+
+/// The `up arrow` image is a target where the disc puts it, at the size
+/// the disc gives it, and a click on it steps back; the panel confirms;
+/// the backdrop is nothing.
+#[test]
+fn pulses_arrows_step_and_its_panel_confirms() {
+    let layout = track_layout();
+    let mut picker = Picker::new(Kind::Track, entries(), Some("03_Track"), None);
+    let targets = pointer::targets(&picker, &layout, &pulse_skin(), &|_| None);
+    let up = targets
+        .iter()
+        .find(|target| target.what == pointer::What::Previous)
+        .expect("the up arrow is a target");
+    assert_eq!(up.rect, [117.0, 30.0, 17.0, 14.0]);
+    assert_eq!(
+        picker.pointer(&click_at(centre(up.rect)), &targets),
+        vec![Event::Moved]
+    );
+    assert_eq!(picker.index(), 0);
+    assert_eq!(
+        picker.pointer(&click_at(centre(layout.panel)), &targets),
+        vec![Event::Confirmed]
+    );
+    assert!(
+        picker.pointer(&click_at((5.0, 260.0)), &targets).is_empty(),
+        "a click on the backdrop is nothing"
+    );
+    let back = crate::pointer::Pointer {
+        back: true,
+        ..Default::default()
+    };
+    assert_eq!(picker.pointer(&back, &targets), vec![Event::Back]);
+}
+
+/// An arrow with no authored size and no sheet to size it from is no
+/// target rather than a zero-sized one.
+#[test]
+fn an_unsized_arrow_off_the_sheet_is_no_target() {
+    let xml = XML.replace(r#" width="17" height="14""#, "");
+    let layout = Layout::read(
+        &Screens::from_xml(&xml),
+        Kind::Track,
+        &strings(),
+        FaceScales::default(),
+        PSP,
+    )
+    .unwrap();
+    let picker = Picker::new(Kind::Track, entries(), None, None);
+    let targets = pointer::targets(&picker, &layout, &pulse_skin(), &|_| None);
+    assert!(
+        targets
+            .iter()
+            .all(|target| target.what != pointer::What::Previous)
+    );
+    // With a sheet that places it, the texture's size is the target's.
+    let placed = crate::frontend::Placed {
+        x: 0,
+        y: 0,
+        width: 17,
+        height: 14,
+        quad_extent: None,
+        blend: None,
+    };
+    let targets = pointer::targets(&picker, &layout, &pulse_skin(), &|_| Some(placed));
+    let up = targets
+        .iter()
+        .find(|target| target.what == pointer::What::Previous)
+        .unwrap();
+    assert_eq!(up.rect, [117.0, 30.0, 17.0, 14.0]);
+}
+
+/// Pure's listed rows: hovering selects, a click on the selected row
+/// confirms, and a tap on another row selects it without confirming - a
+/// tap being a move and a click in one tick.
+#[test]
+fn pures_listed_rows_select_on_hover_and_confirm_on_a_second_click() {
+    let layout = listing_layout();
+    let skin = Skin::new(
+        oag_pure::FRONT_END.menu,
+        oag_display::space::Space::PSP,
+        20.0,
+    );
+    let entries: Vec<Entry> = ["Feisar", "Qirex", "Auricom"]
+        .iter()
+        .map(|id| Entry {
+            id: (*id).into(),
+            label: id.to_uppercase(),
+            details: Details::Ship {
+                rating: None,
+                variants: Vec::new(),
+            },
+        })
+        .collect();
+    let mut picker = Picker::new(Kind::Ship, entries, Some("Qirex"), None);
+    let targets = pointer::targets(&picker, &layout, &skin, &|_| None);
+    let row = |index: usize| {
+        targets
+            .iter()
+            .find(|target| target.what == pointer::What::Entry(index))
+            .unwrap_or_else(|| panic!("row {index}"))
+            .rect
+    };
+    // The rows step by the same pitch the drawing test measures.
+    let step = 20.0 * FaceScales::default().default * 2.0;
+    assert_eq!(row(0), [21.0, 45.0, row(0)[2], step]);
+    assert!((row(2)[1] - (45.0 + 2.0 * step)).abs() < 1e-3);
+    // With the face's ink measured, the same rows sit on the capitals:
+    // centred on rows 7 to 16 of the cell at the drawing's scale.
+    let mut inked = Skin::new(
+        oag_pure::FRONT_END.menu,
+        oag_display::space::Space::PSP,
+        20.0,
+    );
+    inked.set_row_ink(Some(crate::pointer::RowInk {
+        top: 7.0,
+        bottom: 16.0,
+    }));
+    let inked = pointer::targets(&picker, &layout, &inked, &|_| None);
+    let scale = FaceScales::default().default * 2.0;
+    let expect = 45.0 + 11.5 * scale - step * 0.5;
+    let first = inked
+        .iter()
+        .find(|target| target.what == pointer::What::Entry(0))
+        .unwrap();
+    assert!((first.rect[1] - expect).abs() < 1e-3, "{}", first.rect[1]);
+
+    let hover = crate::pointer::Pointer {
+        at: Some(centre(row(2))),
+        moved: true,
+        ..Default::default()
+    };
+    assert_eq!(picker.pointer(&hover, &targets), vec![Event::Moved]);
+    assert_eq!(picker.index(), 2);
+    // Moving within the same row is not another move.
+    assert!(picker.pointer(&hover, &targets).is_empty());
+    // A tap on a different row selects it and stops there.
+    assert_eq!(
+        picker.pointer(&click_at(centre(row(0))), &targets),
+        vec![Event::Moved]
+    );
+    assert_eq!(picker.index(), 0);
+    // A second tap on the same row confirms.
+    assert_eq!(
+        picker.pointer(&click_at(centre(row(0))), &targets),
+        vec![Event::Confirmed]
+    );
+}
+
+#[test]
+fn the_wheel_steps_the_entry_and_livery_arrows_step_the_livery() {
+    let team = |id: &str, variants: Vec<(String, String)>| Entry {
+        id: id.to_string(),
+        label: id.to_uppercase(),
+        details: Details::Ship {
+            rating: None,
+            variants,
+        },
+    };
+    let mut picker = Picker::new(
+        Kind::Ship,
+        vec![
+            team(
+                "Assegai",
+                vec![
+                    ("".into(), "Classic".into()),
+                    ("_alt".into(), "Alternative".into()),
+                ],
+            ),
+            team("Qirex", Vec::new()),
+        ],
+        None,
+        None,
+    );
+    let xml = XML.replace(
+        r#"<Text name="honey""#,
+        r#"<Image name="skin right arrow" x="439" y="74" width="8" height="10" src="a.mip"></Image><Text name="honey""#,
+    );
+    let layout = Layout::read(
+        &Screens::from_xml(&xml),
+        Kind::Track,
+        &strings(),
+        FaceScales::default(),
+        PSP,
+    )
+    .unwrap();
+    let targets = pointer::targets(&picker, &layout, &pulse_skin(), &|_| None);
+    let right = targets
+        .iter()
+        .find(|target| target.what == pointer::What::NextVariant)
+        .expect("a two-livery team offers its arrow");
+    assert_eq!(
+        picker.pointer(&click_at(centre(right.rect)), &targets),
+        vec![Event::VariantChanged]
+    );
+    assert_eq!(picker.variant().map(|(id, _)| id.as_str()), Some("_alt"));
+
+    let wheel = crate::pointer::Pointer {
+        scroll: 3,
+        ..Default::default()
+    };
+    assert_eq!(picker.pointer(&wheel, &targets), vec![Event::Moved]);
+    assert_eq!(
+        picker.index(),
+        1,
+        "one entry per tick, whatever the detents"
+    );
+    // And on the single-livery team the arrow is no longer offered.
+    let targets = pointer::targets(&picker, &layout, &pulse_skin(), &|_| None);
+    assert!(
+        targets
+            .iter()
+            .all(|target| target.what != pointer::What::NextVariant)
+    );
+}

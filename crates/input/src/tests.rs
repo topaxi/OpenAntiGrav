@@ -224,3 +224,38 @@ fn a_tapped_airbrake_key_still_reaches_the_axis() {
         "a latched tap must release, or the airbrake sticks on"
     );
 }
+
+/// A pad reading with anything in it says the pad spoke; a tap through
+/// the keyboard's latch does not, because that is the mouse's doing.
+#[test]
+fn the_pad_speaks_only_when_it_contributed() {
+    let mut controls = Controls::without_pad();
+    controls.tap(Button::Cross);
+    controls.merge(pad::PadState::default());
+    assert!(!controls.pad_spoke(), "a synthesised tap is not the pad");
+    controls.merge(pad::PadState {
+        stick_x: 0.3,
+        ..pad::PadState::default()
+    });
+    assert!(controls.pad_spoke());
+    controls.merge(pad::PadState {
+        held: Button::Cross.bit(),
+        ..pad::PadState::default()
+    });
+    assert!(controls.pad_spoke());
+    controls.merge(pad::PadState::default());
+    assert!(!controls.pad_spoke());
+}
+
+/// A synthesised tap is one press-then-release edge, exactly what a key
+/// tapped between two reads produces - and it is gone by the tick after.
+#[test]
+fn a_synthesised_tap_is_one_press_edge() {
+    let mut controls = Controls::without_pad();
+    controls.tap(Button::Start);
+    controls.snapshot();
+    assert!(controls.buttons().is_pressed(Button::Start));
+    controls.snapshot();
+    assert!(!controls.buttons().is_pressed(Button::Start));
+    assert!(!controls.buttons().is_held(Button::Start));
+}

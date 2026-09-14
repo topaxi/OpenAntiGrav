@@ -32,6 +32,7 @@ use crate::menu::{Frame, Layers, Picture, Skin};
 use crate::screen::{Fill, Image, Screen, Screens, Text, argb_to_rgba};
 use oag_gameplay::input::{Button, Input};
 
+pub mod pointer;
 pub mod slideshow;
 
 /// The grid the selection screens are authored in on the PSP, which every
@@ -241,27 +242,17 @@ impl Picker {
     /// this build does not have. Cross or Start confirms; Circle backs out.
     pub fn update(&mut self, input: &mut Input) -> Vec<Event> {
         let mut out = Vec::new();
-        let count = self.entries.len();
-        if input.take(Button::Down) && count > 0 {
-            self.index = (self.index + 1) % count;
-            self.variant = 0;
-            self.since_selection = 0.0;
-            out.push(Event::Moved);
+        if input.take(Button::Down) {
+            out.extend(self.step_entry(1));
         }
-        if input.take(Button::Up) && count > 0 {
-            self.index = (self.index + count - 1) % count;
-            self.variant = 0;
-            self.since_selection = 0.0;
-            out.push(Event::Moved);
+        if input.take(Button::Up) {
+            out.extend(self.step_entry(-1));
         }
-        let variants = self.variants().len();
-        if input.take(Button::Right) && variants > 1 {
-            self.variant = (self.variant + 1) % variants;
-            out.push(Event::VariantChanged);
+        if input.take(Button::Right) {
+            out.extend(self.step_variant(1));
         }
-        if input.take(Button::Left) && variants > 1 {
-            self.variant = (self.variant + variants - 1) % variants;
-            out.push(Event::VariantChanged);
+        if input.take(Button::Left) {
+            out.extend(self.step_variant(-1));
         }
         if input.take(Button::Cross) || input.take(Button::Start) {
             out.push(Event::Confirmed);

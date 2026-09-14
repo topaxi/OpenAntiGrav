@@ -86,6 +86,16 @@ impl Prompt {
         }
     }
 
+    /// Consumes a tick of pointer input. See [`Keyboard::pointer`] and
+    /// [`Confirm::pointer`], which take the skin because their targets are
+    /// wherever [`Self::draw`] just put them.
+    pub(crate) fn pointer(&mut self, pointer: &oag_ui::pointer::Pointer, skin: &Skin) -> Outcome {
+        match &mut self.model {
+            Model::Keyboard(keyboard) => keyboard.pointer(pointer, skin),
+            Model::Confirm(confirm) => confirm.pointer(pointer, skin),
+        }
+    }
+
     /// What this looks like, over whatever the menus already drew.
     pub(crate) fn draw(&self, skin: &Skin) -> Vec<Draw> {
         match &self.model {

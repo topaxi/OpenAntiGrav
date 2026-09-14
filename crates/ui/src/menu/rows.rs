@@ -86,7 +86,6 @@ fn draw_list_rows(
     let numbers = blocks.list;
     let row_scale = skin.row_scale() * list.text_scale;
     let (_, tab_top_pad) = skin.tab_pad();
-    let height = numbers.height * sy;
     let label_width = numbers.label_width * sx;
     let value_x = list.x + label_width + numbers.gap * sx;
     let visible = menu.visible_rows();
@@ -96,7 +95,8 @@ fn draw_list_rows(
     let mut noted: Option<String> = None;
     let mut shown = 0usize;
     for (row, entry) in page.entries.iter().enumerate().skip(first).take(visible) {
-        let y = list.y + (row - first) as f32 * list.pitch;
+        let geometry = list_row(&list, &numbers, (sx, sy), first, row, menu.focus_of(row));
+        let y = geometry.y;
         shown += 1;
         let selected = row == menu.selected();
         let inert = matches!(entry, Entry::Binding { .. }) || menu.is_disabled(entry);
@@ -113,10 +113,10 @@ fn draw_list_rows(
         if let Some(color) = fill {
             super::block::draw(
                 &super::block::Block {
-                    x: list.x,
+                    x: geometry.label[0],
                     y,
-                    width: label_width,
-                    height,
+                    width: geometry.label[2],
+                    height: geometry.label[3],
                     color,
                     landing: false,
                 },
@@ -175,15 +175,13 @@ fn draw_list_rows(
             other => other.value().map(|value| value.to_string()),
         };
         if let Some(text) = value {
-            let grown = numbers.value_width
-                + (numbers.value_focus_width - numbers.value_width) * menu.focus_of(row);
             if let Some(color) = fill {
                 super::block::draw(
                     &super::block::Block {
-                        x: value_x,
+                        x: geometry.value[0],
                         y,
-                        width: grown * sx,
-                        height,
+                        width: geometry.value[2],
+                        height: geometry.value[3],
                         color,
                         landing: true,
                     },
@@ -216,8 +214,8 @@ fn draw_list_rows(
                 } else {
                     skin.normal()
                 };
-                let size = numbers.arrow_size * sx;
-                let label_right = list.x + label_width;
+                let [left_rect, right_rect] =
+                    arrow_rects(&numbers, list.x, label_width, y, (sx, sy));
                 let uv = [
                     arrow.x as f32,
                     arrow.y as f32,
@@ -227,22 +225,12 @@ fn draw_list_rows(
                 // The left arrow is the right one drawn with a negative
                 // width from its anchor, so it extends leftward, mirrored.
                 out.push(Draw::Sprite {
-                    rect: [
-                        label_right + numbers.arrow_left_offset * sx - size,
-                        y + numbers.marker_offset.1 * sy,
-                        size,
-                        numbers.arrow_size * sy,
-                    ],
+                    rect: left_rect,
                     uv: [uv[0] + uv[2], uv[1], -uv[2], uv[3]],
                     color,
                 });
                 out.push(Draw::Sprite {
-                    rect: [
-                        label_right + numbers.arrow_right_offset * sx,
-                        y + numbers.marker_offset.1 * sy,
-                        size,
-                        numbers.arrow_size * sy,
-                    ],
+                    rect: right_rect,
                     uv,
                     color,
                 });
@@ -404,5 +392,157 @@ fn draw_text_rows(
         });
     }
 
+    out
+}
+
+/// The two blocks of one HD list row, at the row's own focus: `[x, y,
+/// width, height]` each, in the grid being drawn in.
+///
+/// **The one place the row's geometry is written**, read by
+/// [`draw_list_rows`] for the boxes it paints and by [`regions`] for the
+/// rects a pointer is tested against - so the two cannot disagree about
+/// where a row is, which is the drift `rows.rs` already guards against
+/// between `Menu::scroll` and the skin.
+struct ListRow {
+    /// The row's top, the label block's and the value block's alike.
+    y: f32,
+    label: [f32; 4],
+    /// The value block, grown by `focus` toward its focused width.
+    value: [f32; 4],
+}
+
+fn list_row(
+    list: &super::skin::List,
+    numbers: &oag_title::ListBlocks,
+    (sx, sy): (f32, f32),
+    first: usize,
+    row: usize,
+    focus: f32,
+) -> ListRow {
+    let y = list.y + (row - first) as f32 * list.pitch;
+    let height = numbers.height * sy;
+    let label_width = numbers.label_width * sx;
+    let value_x = list.x + label_width + numbers.gap * sx;
+    let grown = numbers.value_width + (numbers.value_focus_width - numbers.value_width) * focus;
+    ListRow {
+        y,
+        label: [list.x, y, label_width, height],
+        value: [value_x, y, grown * sx, height],
+    }
+}
+
+/// Where a list row's two step arrows are drawn: the left one first. Both
+/// `[x, y, width, height]`, in the grid being drawn in.
+///
+/// The left arrow is anchored by its right edge - it is the right one
+/// drawn mirrored from the same anchor - so its rect starts a full arrow
+/// width before `arrow_left_offset`.
+fn arrow_rects(
+    numbers: &oag_title::ListBlocks,
+    list_x: f32,
+    label_width: f32,
+    y: f32,
+    (sx, sy): (f32, f32),
+) -> [[f32; 4]; 2] {
+    let size = numbers.arrow_size * sx;
+    let label_right = list_x + label_width;
+    let top = y + numbers.marker_offset.1 * sy;
+    let height = numbers.arrow_size * sy;
+    [
+        [
+            label_right + numbers.arrow_left_offset * sx - size,
+            top,
+            size,
+            height,
+        ],
+        [
+            label_right + numbers.arrow_right_offset * sx,
+            top,
+            size,
+            height,
+        ],
+    ]
+}
+
+/// The rects a pointer can land on, for the rows on screen - the same
+/// rows, at the same places, [`draw`] just painted them. See
+/// [`super::pointer`].
+///
+/// A text row (both PSP titles) is one band the width of the column, from
+/// the margin's marker slot to the value's right edge: there are no arrows
+/// to aim at, so the whole row is the target and a click activates it,
+/// which on an adjustable row steps it forward the way cross does. An HD
+/// list row is its label block and its value block, both activating, plus
+/// the two step arrows on a row that has them - the natural target for a
+/// `choice` that the original draws them for. The value block is tested
+/// at the width it has *right now*, mid-ease included, because that is the
+/// box the player sees.
+pub(super) fn regions(
+    menu: &Menu,
+    skin: &Skin,
+    frame: &super::Frame,
+) -> Vec<super::pointer::Region> {
+    use super::pointer::{Part, Region};
+    let page = menu.page();
+    let visible = menu.visible_rows();
+    let first = menu.scroll();
+    let mut out = Vec::new();
+    match (skin.blocks(), skin.list(), frame.blocks) {
+        (Some(blocks), Some(list), Some(art)) => {
+            let (sx, sy) = skin.theirs_scale();
+            let numbers = blocks.list;
+            for (row, entry) in page.entries.iter().enumerate().skip(first).take(visible) {
+                let geometry = list_row(&list, &numbers, (sx, sy), first, row, menu.focus_of(row));
+                out.push(Region {
+                    row,
+                    part: Part::Row,
+                    rect: geometry.label,
+                });
+                // A value block only where a value is drawn - the same rows
+                // `draw_list_rows` gives one, which is every row with
+                // something to show in it.
+                let has_value = matches!(entry, Entry::Binding { .. }) || entry.value().is_some();
+                if has_value {
+                    out.push(Region {
+                        row,
+                        part: Part::Row,
+                        rect: geometry.value,
+                    });
+                }
+                if has_value && entry.is_adjustable() && art.arrow.is_some() {
+                    let [left, right] =
+                        arrow_rects(&numbers, list.x, geometry.label[2], geometry.y, (sx, sy));
+                    out.push(Region {
+                        row,
+                        part: Part::StepBack,
+                        rect: left,
+                    });
+                    out.push(Region {
+                        row,
+                        part: Part::StepForward,
+                        rect: right,
+                    });
+                }
+            }
+        }
+        _ => {
+            let margin_x = skin.menu_x();
+            let row_height = skin.row_pitch();
+            let first_row_y = skin.first_row_y();
+            // From the marker's slot (`margin_x - 18.0`, where a `!` goes) to
+            // the value column's right edge - the same two x's the text is
+            // drawn between.
+            let left = margin_x - 18.0;
+            let width = (skin.value_right() - left).max(0.0);
+            for row in (first..page.entries.len()).take(visible) {
+                let y = first_row_y + (row - first) as f32 * row_height;
+                out.push(Region {
+                    row,
+                    part: Part::Row,
+                    rect: [left, y, width, row_height],
+                });
+            }
+        }
+    }
     out
 }

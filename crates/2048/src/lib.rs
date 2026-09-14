@@ -73,6 +73,11 @@ pub const TITLE: &Title = &Title {
     track_plugin_definition: Some(names::TRACK_PLUGIN_DEFINITION),
     loading: None,
     music: None,
+    // Invented like the other four - and 2048 is the one title where that
+    // is worth a second look: its `data/FE/Images/cursor.gxt` turned out to
+    // be a 32x16 mark, the same shape as HD's strip underline `cursor.gtf`,
+    // not a pointer, and whether PS TV mode draws one at all is unread.
+    cursor: include_str!("../../../assets/cursors/2048.svg"),
     // **2048's own tables, beside the HD-derived ones.** The archive carries
     // five `weaponstats*` documents: HD's three (`_Race`, `_Elimination`,
     // `_Detonator`) and two suffixed `_2048`. The suffixed pair is this

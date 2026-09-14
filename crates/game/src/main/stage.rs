@@ -230,6 +230,12 @@ impl Stage {
         // `oag_display::space::Space`.
         let mut renderer = renderer;
         renderer.set_space(loaded.frontend.space());
+        // And the face that renderer draws `Draw::Text` with is the one whose
+        // ink the language picker's pointer bands are centred on - measured
+        // here, beside the renderer, so the two cannot name different faces.
+        loaded
+            .frontend
+            .set_row_ink(oag_ui::pointer::RowInk::measure(&loaded.font));
         // The store moves onto its own thread and the `Movie` around it is done
         // with: everything else it carried - the frame count, the rate, the
         // aspect - was read into the sequence and the renderer before this.

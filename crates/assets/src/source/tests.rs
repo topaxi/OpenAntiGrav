@@ -119,6 +119,7 @@ const TITLE: &Title = &Title {
     // This crate opens archives; nothing here draws a loading screen.
     loading: None,
     music: None,
+    cursor: "",
 };
 
 /// The bulk archive's PSP and PS2 names, as the fixture spells them.

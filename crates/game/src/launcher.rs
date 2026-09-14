@@ -270,6 +270,41 @@ impl Launcher {
         if confirmed { self.pick() } else { None }
     }
 
+    /// Consumes a tick of pointer input - see [`oag_ui::pointer`] - and
+    /// returns the source picked when one is, on the same terms as
+    /// [`Self::update`].
+    ///
+    /// **Ours**, like the screen. Hovering a playable row moves the cursor
+    /// onto it, a click on one picks it, the wheel steps the cursor, and a
+    /// row that will not open is not a target at all - the same rule
+    /// [`Self::step`] applies, so the pointer cannot land the cursor where
+    /// the d-pad refuses to. The rows are tested where [`draw_list`] puts
+    /// them: [`row_at`] is the one place that arithmetic is written.
+    pub fn pointer(&mut self, pointer: &oag_ui::pointer::Pointer) -> Option<String> {
+        if pointer.is_idle() {
+            return None;
+        }
+        if pointer.scroll != 0 {
+            self.step(pointer.scroll.signum() as isize);
+        }
+        let row = pointer
+            .at
+            .and_then(|at| row_at(at, self.rows.len()))
+            .filter(|&row| self.rows[row].is_playable());
+        if pointer.moved
+            && let Some(row) = row
+        {
+            self.cursor = row;
+        }
+        if pointer.clicked
+            && let Some(row) = row
+        {
+            self.cursor = row;
+            return self.pick();
+        }
+        None
+    }
+
     /// The source under the cursor, if it is one that can be played.
     #[must_use]
     pub fn pick(&self) -> Option<String> {
@@ -383,6 +418,20 @@ pub fn draw_list(launcher: &Launcher) -> Vec<Draw> {
     });
 
     out
+}
+
+/// Which row a point is over: the band [`draw_list`] highlights the
+/// selected row with, from `FIRST_ROW` down at `ROW` a step and the
+/// margin's width across.
+fn row_at(at: (f32, f32), count: usize) -> Option<usize> {
+    oag_ui::pointer::row_at(
+        at,
+        MARGIN - 4.0,
+        SCREEN.0 - MARGIN * 2.0 + 8.0,
+        FIRST_ROW - 2.0,
+        ROW,
+        count,
+    )
 }
 
 /// One line of text, left aligned, with no border.

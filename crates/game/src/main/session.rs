@@ -44,6 +44,8 @@ mod picker;
 mod pilot_editor;
 #[path = "session/placeholder.rs"]
 mod placeholder;
+#[path = "session/pointer.rs"]
+mod pointer;
 #[path = "session/timing.rs"]
 mod timing;
 // Named `remix_menu`, not `remix` - `oag_game::remix` is already imported
@@ -60,6 +62,9 @@ pub(crate) struct Session {
     /// to what is on screen, so key state carries across the handoff and a focus
     /// loss releases everything whichever stage is running.
     pub(crate) controls: Controls,
+    /// The mouse and the touchscreen, latched between ticks the way
+    /// `controls` latches a key. See `crate::pointer`.
+    pub(crate) pointer: crate::pointer::Window,
     /// The mixer, and the device behind it when this run has one.
     ///
     /// Beside `controls` because it is the same kind of thing: a device that
@@ -248,6 +253,12 @@ pub(crate) struct Session {
     /// A renderer of its own because a race has none: `race::Scene` draws
     /// meshes and knows nothing about text.
     pub(crate) overlay: Renderer,
+    /// The cursor's own sprite, on `overlay`'s sheet - see
+    /// `oag_game::cursor`. Rebuilt whenever the title changes, which is
+    /// once: the chooser's own until a disc is picked, the title's after.
+    pub(crate) cursor_sheet: oag_game::sprite::Sheet,
+    /// Which title `cursor_sheet` was built for; `None` is the chooser's.
+    pub(crate) cursor_title: Option<&'static str>,
     /// Set whenever the loop is about to stall on a load, so the frame that
     /// carries it is dropped from [`Session::meter`] rather than measured.
     ///

@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 32" width="24" height="32">
+  <!-- Wipeout Pulse: the menu face's 45-degree cuts on every corner, the
+       unselected row's cyan for the body and the selected row's deeper teal
+       for the edge, on the near-black the menus sit on. Ours. -->
+  <polygon fill="#0A1E26" fill-opacity="0.85"
+           points="2,3 2,24 4,24 7,21 10.5,28.5 14.5,26.5 11.5,19 18,19 20,17 4,1"/>
+  <polygon fill="#88D6E8" stroke="#34ACC2" stroke-width="1.5" stroke-linejoin="miter"
+           points="1.5,1.5 1.5,21.5 6,17.5 9.5,25.5 13.5,23.5 10,15.5 16.5,15.5"/>
+  <polygon fill="#FFFFFF" points="3.5,4 3.5,9 8.5,14 10,13"/>
+</svg>

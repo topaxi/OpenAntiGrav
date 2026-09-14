@@ -300,6 +300,8 @@ pub enum Video {
 }
 
 mod draw;
+mod pointer;
+mod rows;
 mod updates;
 
 pub use draw::Draw;
@@ -353,6 +355,10 @@ pub struct Frontend {
     /// archives' platform - see [`Space`] for why the PS2 needs it and what
     /// goes wrong silently without it.
     space: Space,
+    /// Where the picker's font has its ink, for the pointer's row bands -
+    /// see [`crate::pointer::RowInk`]. `None` until [`Self::set_row_ink`],
+    /// which every test fixture in this crate leaves it at.
+    row_ink: Option<crate::pointer::RowInk>,
     /// The looping backdrop `FE Screen` plays under `Show Logo`, and where it
     /// goes on screen. `None` on a source that has no backdrop, under
     /// `--no-video`, and when its plane geometry does not match the intro's -
@@ -517,6 +523,7 @@ impl Frontend {
             auto_confirm: false,
             placements,
             space: Space::PSP,
+            row_ink: None,
             player: Player::new(frames, false, first.frame_rate),
             first,
             backdrop: None,
@@ -620,6 +627,13 @@ impl Frontend {
     /// afterwards leaves a PSP-shaped rect on a PS2 screen.
     pub fn set_space(&mut self, space: Space) {
         self.space = space;
+    }
+
+    /// Tells the language picker where the face its rows are drawn in keeps
+    /// its ink, so a pointer's row bands sit on the glyphs rather than on the
+    /// pen. Measured off the atlas the renderer draws `Draw::Text` with.
+    pub fn set_row_ink(&mut self, ink: Option<crate::pointer::RowInk>) {
+        self.row_ink = ink;
     }
 
     /// Gives the sequence the title's own measured menu colours.
