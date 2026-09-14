@@ -164,7 +164,7 @@ fn lap_counts_match_the_class_exactly_with_no_exception() {
                     // to keep this test's claim to the modes it names.
                     checked += 1;
                 }
-                Mode::CustomGrid | Mode::AiRace => {
+                Mode::CustomGrid | Mode::AiRace | Mode::Other(_) => {
                     panic!(
                         "{}: {} is mode {:?}, not authored by any shipped grid",
                         grid.name, cell.name, cell.mode
@@ -209,7 +209,7 @@ fn the_mode_census_matches_the_re_pass() {
                 Mode::Elimination => elimination += 1,
                 Mode::Head2Head => head2head += 1,
                 Mode::SpeedLap => speed_lap += 1,
-                Mode::CustomGrid | Mode::AiRace => {
+                Mode::CustomGrid | Mode::AiRace | Mode::Other(_) => {
                     panic!(
                         "{}: {} unexpected mode {:?}",
                         grid.name, cell.name, cell.mode

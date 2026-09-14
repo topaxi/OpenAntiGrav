@@ -59,7 +59,7 @@ fn a_race_cell_carries_track_class_and_skill() {
     let race = &grid.cells[0];
     assert_eq!(race.track.as_deref(), Some("99_Track"));
     assert_eq!(race.mode, Mode::Race);
-    assert_eq!(race.mode.ordinal(), 3);
+    assert_eq!(race.mode.ordinal(), Some(3));
     assert_eq!(race.class, "Venom");
     assert_eq!(race.speed_class(), Some(SpeedClass::Venom));
     assert!(race.weapons);
@@ -117,16 +117,19 @@ fn zone_class_is_not_a_speed_class() {
     assert_eq!(zone.skill_for_difficulty(0), None);
 }
 
+/// **Changed 2026-09-14**: an unrecognised `mode=` used to be a hard parse
+/// error (`Error::UnknownMode`). Wipeout HD's own `"NitroBattle"` and
+/// `"Detonator"` forced the same "keep it raw" treatment [`Cell::class`]
+/// already gets for `Zone`'s `"Zone"` - see the module docs' HD section and
+/// [`Mode::Other`]. No shipped Pulse cell ever authors an unrecognised mode
+/// (see `race_campaign_ground_truth.rs`'s own census), so this is a change
+/// to the parser's behaviour on data that has never been observed, not a
+/// change to what any real Pulse cell reads as.
 #[test]
-fn an_unknown_mode_is_a_hard_error_not_a_default() {
+fn an_unknown_mode_is_kept_raw_rather_than_erroring() {
     let bad = FIXTURE.replace(r#"mode="Race""#, r#"mode="Nonsense""#);
-    let err = parse(&bad).unwrap_err();
-    assert_eq!(
-        err,
-        Error::UnknownMode {
-            name: "Nonsense".to_string()
-        }
-    );
+    let grid = parse(&bad).expect("parses, with the mode kept raw");
+    assert_eq!(grid.cells[0].mode, Mode::Other("Nonsense".to_string()));
 }
 
 #[test]
@@ -277,15 +280,15 @@ fn gold_is_the_smallest_ord_value() {
 
 #[test]
 fn mode_ordinals_match_the_executables_own_table() {
-    assert_eq!(Mode::Race.ordinal(), 3);
-    assert_eq!(Mode::Tournament.ordinal(), 4);
-    assert_eq!(Mode::TimeTrial.ordinal(), 5);
-    assert_eq!(Mode::Zone.ordinal(), 6);
-    assert_eq!(Mode::Elimination.ordinal(), 8);
-    assert_eq!(Mode::Head2Head.ordinal(), 9);
-    assert_eq!(Mode::SpeedLap.ordinal(), 10);
-    assert_eq!(Mode::CustomGrid.ordinal(), 11);
-    assert_eq!(Mode::AiRace.ordinal(), 12);
+    assert_eq!(Mode::Race.ordinal(), Some(3));
+    assert_eq!(Mode::Tournament.ordinal(), Some(4));
+    assert_eq!(Mode::TimeTrial.ordinal(), Some(5));
+    assert_eq!(Mode::Zone.ordinal(), Some(6));
+    assert_eq!(Mode::Elimination.ordinal(), Some(8));
+    assert_eq!(Mode::Head2Head.ordinal(), Some(9));
+    assert_eq!(Mode::SpeedLap.ordinal(), Some(10));
+    assert_eq!(Mode::CustomGrid.ordinal(), Some(11));
+    assert_eq!(Mode::AiRace.ordinal(), Some(12));
     assert_eq!(Mode::from_name("time trial"), Some(Mode::TimeTrial));
     assert_eq!(Mode::from_name("nope"), None);
 }

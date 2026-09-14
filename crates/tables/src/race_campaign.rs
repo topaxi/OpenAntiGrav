@@ -65,12 +65,23 @@ use std::fmt;
 use crate::fexml::{self, Node};
 use crate::handling::SpeedClass;
 
-/// The nine modes `g_mode_name_table` (`0x08ab062c`) names, in ordinal order.
+/// The nine modes `g_mode_name_table` (`0x08ab062c`) names, in ordinal order,
+/// plus a raw catch-all for a spelling that table has no entry for.
 ///
 /// **`7` is absent from the table** - a retired or debug mode, per
 /// `race-campaign.md` - so this type has no variant for it and
 /// [`Mode::from_name`] returns `None` for anything not in the other nine.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+/// [`Mode::Other`] is a *different* thing: not this crate refusing to guess
+/// at ordinal `7`, but Wipeout HD authoring two spellings
+/// (`"NitroBattle"`, `"Detonator"`) this table was never extended to cover,
+/// on an executable this pass does not decompile - see
+/// `docs/formats/race-campaign.md`'s HD section.
+///
+/// Carrying a `String` rather than adding a properly-ordinalled variant per
+/// the "keep it raw" rule this crate already applies to [`Cell::class`]'s
+/// `"Zone"` is why this type is no longer [`Copy`] - every existing match on
+/// a [`Mode`] value that does not destructure [`Mode::Other`] is unaffected.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Mode {
     /// Ordinal `3`. A full grid, weapons optional.
     Race,
@@ -92,6 +103,12 @@ pub enum Mode {
     CustomGrid,
     /// Ordinal `12`. Not authored by any shipped `grid_NN.xml` either.
     AiRace,
+    /// A `mode=` spelling absent from `g_mode_name_table` on the one
+    /// executable this crate reads the table off - Wipeout HD's own
+    /// `"NitroBattle"` and `"Detonator"`, both only on the Fury-tagged grids
+    /// (`Campaign="Fury"`). Carries the exact text authored, never guessed
+    /// at a Pulse ordinal it was not measured against.
+    Other(String),
 }
 
 impl Mode {
@@ -109,10 +126,11 @@ impl Mode {
     ];
 
     /// The integer `g_mode_name_table` associates with this mode, and the same
-    /// one `Race_RecordResult` switches on (`mode - 3`).
+    /// one `Race_RecordResult` switches on (`mode - 3`). `None` for
+    /// [`Mode::Other`], which this table has no entry for at all.
     #[must_use]
-    pub fn ordinal(self) -> u32 {
-        match self {
+    pub fn ordinal(&self) -> Option<u32> {
+        Some(match self {
             Self::Race => 3,
             Self::Tournament => 4,
             Self::TimeTrial => 5,
@@ -122,12 +140,13 @@ impl Mode {
             Self::SpeedLap => 10,
             Self::CustomGrid => 11,
             Self::AiRace => 12,
-        }
+            Self::Other(_) => return None,
+        })
     }
 
     /// The exact spelling a `grid_NN.xml` file's `mode=` attribute carries.
     #[must_use]
-    pub fn as_str(self) -> &'static str {
+    pub fn as_str(&self) -> &str {
         match self {
             Self::Race => "Race",
             Self::Tournament => "Tournament",
@@ -138,12 +157,16 @@ impl Mode {
             Self::SpeedLap => "Speed Lap",
             Self::CustomGrid => "Custom Grid",
             Self::AiRace => "AI Race",
+            Self::Other(name) => name,
         }
     }
 
-    /// Parses a `mode=` value case-insensitively. `None` for anything not one
-    /// of the nine named ordinals - including a literal `"7"`-shaped mode,
-    /// which the table itself has no name for.
+    /// Parses a `mode=` value case-insensitively against the nine named
+    /// ordinals only. `None` for anything else - a literal `"7"`-shaped mode
+    /// the table itself has no name for, **and** a spelling like HD's
+    /// `"NitroBattle"` this crate's own parser wraps in [`Mode::Other`]
+    /// rather than passing through here; this function never produces that
+    /// variant itself.
     #[must_use]
     pub fn from_name(name: &str) -> Option<Self> {
         Self::ALL
@@ -188,7 +211,11 @@ pub enum Error {
         /// What was found, so the error names the offending text.
         value: String,
     },
-    /// A `mode=` value that is not one of [`Mode`]'s nine ordinals.
+    /// **No longer produced by this crate's own parser.** A `mode=` value
+    /// outside [`Mode`]'s nine named ordinals is [`Mode::Other`] now rather
+    /// than a parse failure, per the module docs' "a parser cannot fail on a
+    /// field it does not understand" rule - kept in this enum for API
+    /// stability rather than removed.
     UnknownMode {
         /// What was found.
         name: String,
@@ -255,6 +282,27 @@ pub struct Grid {
     pub unlock_grid: Option<String>,
     /// This grid's cells, in document order.
     pub cells: Vec<Cell>,
+    /// `Campaign="HD"|"Fury"`, raw. Absent from every Pulse grid and from
+    /// some of Wipeout HD's own copies of the same grid (`DATA02.PSARC`'s
+    /// `grid_00.xml`..`grid_07.xml` carries neither this nor the
+    /// per-difficulty cell schema; `DATA04.PSARC`'s copy of the same eight
+    /// carries the schema but not this attribute; `DATA06.PSARC`'s carries
+    /// both) - see `docs/formats/race-campaign.md`'s HD section for the full
+    /// archive table this measures.
+    pub campaign: Option<String>,
+    /// `TitleColor="0xFF525252"`, raw hex text exactly as authored. Not
+    /// parsed to a colour: this title's channel order (ARGB vs RGBA) has not
+    /// been measured, and guessing it would be exactly the kind of invented
+    /// reading this crate's own parsing rule forbids.
+    pub title_color: Option<String>,
+    /// `TextColor=`, the same raw treatment as [`Grid::title_color`].
+    pub text_color: Option<String>,
+    /// `FlyerName="01_uplift"`: the cell-selection screen's own flyer image
+    /// for this grid, by its stem - HD-only, absent from every Pulse grid.
+    pub flyer_name: Option<String>,
+    /// `BillboardName="Data/Billboards/HD_Adverts/.../....vex"`: this grid's
+    /// own advert billboard, HD-only.
+    pub billboard_name: Option<String>,
 }
 
 impl Grid {
@@ -303,6 +351,12 @@ pub struct Cell {
     pub ai_count: Option<u32>,
     /// A position on the track's own `SkillScaleValue` curve at the medium
     /// difficulty. Absent on the solo modes, alongside `ai_count`.
+    ///
+    /// **`skillMedium` on Wipeout HD**, read as an alias of Pulse's `skill` -
+    /// the same value under a name that says which difficulty it is rather
+    /// than leaving it implicit. Never both on the same cell in what this
+    /// project has measured, so there is no precedence to pick between them;
+    /// `skill` is tried first.
     pub skill: Option<f32>,
     /// The easy-difficulty position. Defaults to `skill - 1.0` in the
     /// original's own parser when the attribute is absent but `skill` is
@@ -325,15 +379,72 @@ pub struct Cell {
     /// `<Gold Target="..."/>`. A finishing position for `Race`/`Tournament`/
     /// `Head2Head`, a time in centiseconds for `Time Trial`/`Speed Lap`, a
     /// zone count for `Zone`, a kill count for `Elimination`.
+    ///
+    /// **On a cell with [`Cell::difficulty_targets`], this is that rung's own
+    /// `medium` value** - the medal law this crate reimplements
+    /// ([`Cell::evaluate_medal`]) takes one target triple, and every existing
+    /// caller of it wants the difficulty-agnostic value Pulse always had, so
+    /// this field keeps meaning that on Wipeout HD too rather than becoming
+    /// `None` the moment a cell authors three triples instead of one.
     pub gold: i64,
-    /// `<Silver Target="..."/>`.
+    /// `<Silver Target="..."/>`, or [`Cell::difficulty_targets`]'s `medium`
+    /// rung - see [`Cell::gold`].
     pub silver: i64,
-    /// `<Bronze Target="..."/>`.
+    /// `<Bronze Target="..."/>`, or [`Cell::difficulty_targets`]'s `medium`
+    /// rung - see [`Cell::gold`].
     pub bronze: i64,
     /// `<TournamentTrack track="..."/>` rows, in document order. Empty for
     /// every mode but `Tournament`, which carries no [`Cell::track`] and
     /// names its legs here instead.
     pub tournament_tracks: Vec<String>,
+    /// Three medal-target triples, one per difficulty -
+    /// `<EasyGold>`/`<MediumGold>`/`<HardGold>` and the two element groups
+    /// beside them. `None` on every Pulse cell and on the copy of
+    /// `grid_00.xml`..`grid_07.xml` this project's own archive precedence
+    /// reaches (`DATA02.PSARC`'s, plain `<Gold>`/`<Silver>`/`<Bronze>`);
+    /// `Some` on `grid_08.xml`..`grid_15.xml` (`DATA00.PSARC`, Fury-only)
+    /// and on the `DATA04.PSARC`/`DATA06.PSARC` copies of `grid_00`..`07`
+    /// that precedence does not reach. See `docs/formats/race-campaign.md`'s
+    /// HD section for the full archive table this measures.
+    pub difficulty_targets: Option<DifficultyTargets>,
+    /// `<NitroElimNovice>`/`<NitroElimSkilled>`/`<NitroElimElite>`: a fourth
+    /// target triple, present on every cell of a grid that carries
+    /// [`Cell::difficulty_targets`] - a plain `Race` or `Speed Lap` cell
+    /// included, authored at a dummy `1` there - not only on `Elimination`
+    /// or the HD-only `NitroBattle` mode whose name it carries.
+    ///
+    /// Named `(novice, skilled, elite)` in the ascending order the file
+    /// itself authors the words - **chosen, not measured**: whether a caller
+    /// should read `elite` as this triple's gold-equivalent target is not
+    /// established against any executable. See
+    /// `docs/formats/race-campaign.md`'s HD section.
+    pub nitro_elimination_targets: Option<(i64, i64, i64)>,
+}
+
+/// One gold/silver/bronze target triple - [`Cell::gold`]/[`Cell::silver`]/
+/// [`Cell::bronze`] at a single difficulty, and each rung of
+/// [`DifficultyTargets`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct MedalTargets {
+    /// The gold-medal target.
+    pub gold: i64,
+    /// The silver-medal target.
+    pub silver: i64,
+    /// The bronze-medal target.
+    pub bronze: i64,
+}
+
+/// [`Cell::difficulty_targets`]: one [`MedalTargets`] triple per difficulty.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DifficultyTargets {
+    /// `<EasyGold>`/`<EasySilver>`/`<EasyBronze>`.
+    pub easy: MedalTargets,
+    /// `<MediumGold>`/`<MediumSilver>`/`<MediumBronze>`. Also
+    /// [`Cell::gold`]/[`Cell::silver`]/[`Cell::bronze`]'s own value - see
+    /// those fields' docs.
+    pub medium: MedalTargets,
+    /// `<HardGold>`/`<HardSilver>`/`<HardBronze>`.
+    pub hard: MedalTargets,
 }
 
 impl Cell {
@@ -375,6 +486,29 @@ impl Cell {
             1 => skill,
             _ => self.skill_hard.unwrap_or(skill + 1.0),
         })
+    }
+
+    /// The medal-target triple for a difficulty, `0` easy through `2` hard:
+    /// [`Cell::difficulty_targets`]'s matching rung when the cell authors
+    /// one, else [`Cell::gold`]/[`Cell::silver`]/[`Cell::bronze`]
+    /// unconditionally - which is every Pulse cell, and every Wipeout HD
+    /// cell this project's own archive precedence reaches for
+    /// `grid_00.xml`..`grid_07.xml`. The mirror of [`Cell::skill_for_difficulty`]
+    /// for the target side of a cell rather than the AI side.
+    #[must_use]
+    pub fn targets_for_difficulty(&self, difficulty: u8) -> MedalTargets {
+        match &self.difficulty_targets {
+            Some(dt) => match difficulty {
+                0 => dt.easy,
+                1 => dt.medium,
+                _ => dt.hard,
+            },
+            None => MedalTargets {
+                gold: self.gold,
+                silver: self.silver,
+                bronze: self.bronze,
+            },
+        }
     }
 
     /// `Cell_EvaluateMedal` (`0x088bf620`): a three-way threshold compare of
@@ -502,6 +636,12 @@ pub fn parse(expanded: &str) -> Result<Grid> {
         .map(parse_cell)
         .collect::<Result<Vec<_>>>()?;
 
+    let campaign = values.attr("Campaign").map(str::to_string);
+    let title_color = values.attr("TitleColor").map(str::to_string);
+    let text_color = values.attr("TextColor").map(str::to_string);
+    let flyer_name = values.attr("FlyerName").map(str::to_string);
+    let billboard_name = values.attr("BillboardName").map(str::to_string);
+
     Ok(Grid {
         name,
         required_points,
@@ -509,6 +649,11 @@ pub fn parse(expanded: &str) -> Result<Grid> {
         group,
         unlock_grid,
         cells,
+        campaign,
+        title_color,
+        text_color,
+        flyer_name,
+        billboard_name,
     })
 }
 
@@ -527,9 +672,10 @@ fn parse_cell(cell: &Node) -> Result<Cell> {
         element: "Values",
         attribute: "mode",
     })?;
-    let mode = Mode::from_name(mode_name).ok_or_else(|| Error::UnknownMode {
-        name: mode_name.to_string(),
-    })?;
+    // Anything not one of the nine named ordinals is kept raw rather than
+    // rejected - see `Mode::Other`'s own docs for why, and the module docs'
+    // "a parser cannot fail on a field it does not understand" rule.
+    let mode = Mode::from_name(mode_name).unwrap_or_else(|| Mode::Other(mode_name.to_string()));
 
     let class = values
         .attr("class")
@@ -539,9 +685,8 @@ fn parse_cell(cell: &Node) -> Result<Cell> {
         })?
         .to_string();
 
-    let gold = required_i64(child(cell, "PI_Cell", "Gold")?, "Gold", "Target")?;
-    let silver = required_i64(child(cell, "PI_Cell", "Silver")?, "Silver", "Target")?;
-    let bronze = required_i64(child(cell, "PI_Cell", "Bronze")?, "Bronze", "Target")?;
+    let (gold, silver, bronze, difficulty_targets) = parse_targets(cell)?;
+    let nitro_elimination_targets = parse_nitro_elimination_targets(cell)?;
 
     let tournament_tracks = cell
         .children_named("TournamentTrack")
@@ -565,7 +710,7 @@ fn parse_cell(cell: &Node) -> Result<Cell> {
         locked: optional_bool_result(values, "Locked")?,
         status: optional_bool_result(values, "Status")?,
         ai_count: optional_u32(values, "AICount")?,
-        skill: optional_f32(values, "skill")?,
+        skill: optional_f32_alias(values, "skill", "skillMedium")?,
         skill_easy: optional_f32(values, "skillEasy")?,
         skill_hard: optional_f32(values, "skillHard")?,
         laps: optional_u32(values, "laps")?,
@@ -575,7 +720,66 @@ fn parse_cell(cell: &Node) -> Result<Cell> {
         silver,
         bronze,
         tournament_tracks,
+        difficulty_targets,
+        nitro_elimination_targets,
     })
+}
+
+/// A cell's own gold/silver/bronze, either shape: Pulse's (and some of
+/// Wipeout HD's) single `<Gold>`/`<Silver>`/`<Bronze>`, or Wipeout HD's own
+/// per-difficulty nine elements. Returns the flat triple either way - the
+/// per-difficulty case's own `medium` rung, per [`Cell::gold`]'s docs - plus
+/// the full per-difficulty structure when that is the shape authored.
+fn parse_targets(cell: &Node) -> Result<(i64, i64, i64, Option<DifficultyTargets>)> {
+    if cell.children_named("Gold").next().is_some() {
+        let gold = required_i64(child(cell, "PI_Cell", "Gold")?, "Gold", "Target")?;
+        let silver = required_i64(child(cell, "PI_Cell", "Silver")?, "Silver", "Target")?;
+        let bronze = required_i64(child(cell, "PI_Cell", "Bronze")?, "Bronze", "Target")?;
+        return Ok((gold, silver, bronze, None));
+    }
+
+    let targets = |gold_el, silver_el, bronze_el| -> Result<MedalTargets> {
+        Ok(MedalTargets {
+            gold: required_i64(child(cell, "PI_Cell", gold_el)?, gold_el, "Target")?,
+            silver: required_i64(child(cell, "PI_Cell", silver_el)?, silver_el, "Target")?,
+            bronze: required_i64(child(cell, "PI_Cell", bronze_el)?, bronze_el, "Target")?,
+        })
+    };
+    let easy = targets("EasyGold", "EasySilver", "EasyBronze")?;
+    let medium = targets("MediumGold", "MediumSilver", "MediumBronze")?;
+    let hard = targets("HardGold", "HardSilver", "HardBronze")?;
+
+    Ok((
+        medium.gold,
+        medium.silver,
+        medium.bronze,
+        Some(DifficultyTargets { easy, medium, hard }),
+    ))
+}
+
+/// `<NitroElimNovice>`/`<NitroElimSkilled>`/`<NitroElimElite>`, when a cell
+/// authors them - see [`Cell::nitro_elimination_targets`].
+fn parse_nitro_elimination_targets(cell: &Node) -> Result<Option<(i64, i64, i64)>> {
+    if cell.children_named("NitroElimNovice").next().is_none() {
+        return Ok(None);
+    }
+    Ok(Some((
+        required_i64(
+            child(cell, "PI_Cell", "NitroElimNovice")?,
+            "NitroElimNovice",
+            "Target",
+        )?,
+        required_i64(
+            child(cell, "PI_Cell", "NitroElimSkilled")?,
+            "NitroElimSkilled",
+            "Target",
+        )?,
+        required_i64(
+            child(cell, "PI_Cell", "NitroElimElite")?,
+            "NitroElimElite",
+            "Target",
+        )?,
+    )))
 }
 
 /// Reads an archive blob, expanding it first if it needs it.
@@ -708,6 +912,20 @@ fn optional_f32(node: &Node, attribute: &'static str) -> Result<Option<f32>> {
             attribute,
             value: raw.to_string(),
         })
+    }
+}
+
+/// [`optional_f32`], trying `primary` first and `alias` when `primary` is
+/// absent - Pulse's `skill` and Wipeout HD's own `skillMedium` name the same
+/// value; see [`Cell::skill`]'s docs.
+fn optional_f32_alias(
+    node: &Node,
+    primary: &'static str,
+    alias: &'static str,
+) -> Result<Option<f32>> {
+    match optional_f32(node, primary)? {
+        Some(value) => Ok(Some(value)),
+        None => optional_f32(node, alias),
     }
 }
 
