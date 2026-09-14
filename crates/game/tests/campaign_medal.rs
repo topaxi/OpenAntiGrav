@@ -42,6 +42,9 @@ fn zone_cell() -> Cell {
         silver: 17,
         bronze: 15,
         tournament_tracks: Vec::new(),
+        // Neither is Pulse's own shape - see `race_campaign`'s HD section.
+        difficulty_targets: None,
+        nitro_elimination_targets: None,
     }
 }
 
