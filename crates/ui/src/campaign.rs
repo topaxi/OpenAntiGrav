@@ -86,6 +86,7 @@ use crate::language::StringTable;
 use crate::screen::{Screen, Screens};
 
 pub mod draw;
+pub mod hd;
 pub mod pointer;
 
 pub use draw::{cell_draw_list, grid_draw_list};
@@ -118,6 +119,12 @@ pub enum Event {
     Help,
     /// The player backed out.
     Back,
+    /// **HD only, ours - no Pulse cell ever authors
+    /// [`Cell::difficulty_targets`], so this never fires on that title.**
+    /// `CellSelection::difficulty` stepped to a different rung
+    /// (`square`, or a click on HD's own `DifficultyButton` widget) - see
+    /// [`CellSelection::cycle_difficulty`].
+    DifficultyChanged,
 }
 
 /// A grid tier, reduced to what `GridSelection_Update` binds.
@@ -321,6 +328,16 @@ pub struct CellSelection {
     medals: Vec<Option<Medal>>,
     index: usize,
     help_open: bool,
+    /// **HD only.** Which of [`Cell::targets_for_difficulty`]'s three rungs
+    /// (`0` easy .. `2` hard) HD's own `DifficultyButton` widget currently
+    /// shows - `docs/ui/campaign-screens.md`'s HD section: the target row is
+    /// "three wide, not nine", one triple on screen at a time. Starts at `1`
+    /// (medium), the rung [`Cell::gold`]/[`silver`]/[`bronze`] themselves
+    /// already mean on a cell with no [`Cell::difficulty_targets`] at all -
+    /// so a Pulse cell, which never authors one, draws identically whatever
+    /// this holds. Never read by [`draw::grid_draw_list`]/[`cell_draw_list`],
+    /// only by [`crate::campaign::hd`]'s own draw.
+    difficulty: u8,
 }
 
 impl CellSelection {
@@ -345,7 +362,27 @@ impl CellSelection {
             medals,
             index: 0,
             help_open: false,
+            difficulty: 1,
         }
+    }
+
+    /// **HD only.** The rung [`Self::difficulty`] currently holds, `0` easy
+    /// through `2` hard - see that field's own doc.
+    #[must_use]
+    pub fn difficulty(&self) -> u8 {
+        self.difficulty
+    }
+
+    /// **HD only.** Steps [`Self::difficulty`] to the next rung, wrapping
+    /// `easy -> medium -> hard -> easy`. Always available, even on a cell
+    /// with no [`Cell::difficulty_targets`] - `DifficultyButton` is authored
+    /// unconditionally on HD's own screen (see
+    /// `docs/ui/campaign-screens.md`'s HD section), and stepping it there is
+    /// inert rather than refused, since [`Cell::targets_for_difficulty`]
+    /// already falls back to the one triple such a cell has regardless of
+    /// which rung is asked for.
+    pub fn cycle_difficulty(&mut self) {
+        self.difficulty = (self.difficulty + 1) % 3;
     }
 
     #[must_use]
@@ -544,6 +581,20 @@ impl CellSelection {
         if input.take(Button::Circle) {
             out.push(Event::Back);
         }
+        // `Square` is unbound on this screen in this build - nothing else
+        // in `crate::campaign`/`oag_game` consumes it here, so stepping
+        // `Self::difficulty` on every press is harmless on Pulse (drawn by
+        // [`draw::cell_draw_list`], which never reads this field) and is
+        // HD's own `DifficultyButton` toggle. The original's own PPSSPP
+        // binding of `Square` to a *different* control (an AI-difficulty
+        // setting, not this field - `docs/ui/campaign-screens.md`'s "AI
+        // difficulty (square) cycles" finding) is not reproduced by this;
+        // this build's AI difficulty is a settings-file value, not a
+        // per-screen toggle.
+        if input.take(Button::Square) {
+            self.cycle_difficulty();
+            out.push(Event::DifficultyChanged);
+        }
         out
     }
 }
@@ -587,6 +638,12 @@ impl Layout {
     /// (`IG_HUD_TARGET`) already carries its text by the time a draw
     /// function's generic `text.string.clone()` fallback reaches it.
     /// `None` when the screen is not in `screens` at all.
+    ///
+    /// [`PSP_GRID`] is the grid the file is authored in - correct for Pulse.
+    /// A title whose own `CellMode_Definition.xml` is authored at a
+    /// different resolution (Wipeout HD's is 1920x1080, not the PSP's
+    /// 480x272) needs [`Self::read_authored`] instead, or every position on
+    /// the screen scales by the wrong factor.
     #[must_use]
     pub fn read(
         screens: &Screens,
@@ -594,6 +651,20 @@ impl Layout {
         strings: &StringTable,
         faces: crate::picker::FaceScales,
         grid: [f32; 2],
+    ) -> Option<Self> {
+        Self::read_authored(screens, name, strings, faces, grid, PSP_GRID)
+    }
+
+    /// [`Self::read`], with the file's own authored grid stated explicitly
+    /// rather than assumed to be the PSP's - see that function's own doc.
+    #[must_use]
+    pub fn read_authored(
+        screens: &Screens,
+        name: &str,
+        strings: &StringTable,
+        faces: crate::picker::FaceScales,
+        grid: [f32; 2],
+        authored: [f32; 2],
     ) -> Option<Self> {
         let mut screen = screens.by_name(name)?.clone();
         for text in &mut screen.texts {
@@ -603,7 +674,7 @@ impl Layout {
                 text.string = Some(resolved.to_string());
             }
         }
-        let scale = [grid[0] / PSP_GRID[0], grid[1] / PSP_GRID[1]];
+        let scale = [grid[0] / authored[0], grid[1] / authored[1]];
         Some(Self {
             screen,
             scale,

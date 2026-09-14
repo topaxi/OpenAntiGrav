@@ -125,6 +125,37 @@ pub(super) fn campaign_pointer(
     if pointer.is_idle() {
         return Vec::new();
     }
+    // Wipeout HD/Fury draws a completely different screen behind the same
+    // two names - see `oag_ui::campaign::hd`'s own module doc - so its
+    // pointer targets are built and consumed by that module's own
+    // functions, not Pulse's `oag_ui::campaign::pointer`.
+    if campaign.is_hd() {
+        return match &campaign.screen {
+            crate::campaign_stage::Screen::Grid(_) => {
+                let targets =
+                    oag_ui::campaign::hd::hd_grid_targets(campaign.grid_layout(), &|src| {
+                        campaign.sprites.get(src)
+                    });
+                let crate::campaign_stage::Screen::Grid(model) = &mut campaign.screen else {
+                    unreachable!("just matched Screen::Grid above")
+                };
+                model.hd_pointer(pointer, &targets)
+            }
+            crate::campaign_stage::Screen::Cell { model, .. } => {
+                let targets = oag_ui::campaign::pointer::cell_targets(
+                    model,
+                    campaign.cell_layout(),
+                    &|src| campaign.sprites.get(src),
+                );
+                let difficulty_rect =
+                    oag_ui::campaign::hd::difficulty_button_rect(&campaign.cell_layout().screen);
+                let crate::campaign_stage::Screen::Cell { model, .. } = &mut campaign.screen else {
+                    unreachable!("just matched Screen::Cell above")
+                };
+                model.hd_pointer(pointer, &targets, difficulty_rect)
+            }
+        };
+    }
     let targets = match &campaign.screen {
         crate::campaign_stage::Screen::Grid(model) => {
             oag_ui::campaign::pointer::grid_targets(model, campaign.grid_layout(), &|src| {

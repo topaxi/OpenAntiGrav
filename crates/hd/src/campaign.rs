@@ -84,6 +84,89 @@ pub fn entry_name(index: u8) -> String {
     format!(r"Data\Plugins\grids\grid_{index:02}.xml")
 }
 
+/// The screen `Grid Selection`/`Cell Selection` are both authored in -
+/// `Data\Plugins\Frontend\Gui\CellMode_Definition.xml`, HD's counterpart to
+/// [`oag_pulse::campaign`]'s `Data\Plugins\PI001\GUI\CellMode_Definition.xml`.
+/// Present on `DATA02` (42,548 bytes) and, disagreeing, `DATA06` (59,361
+/// bytes, presumably a later build) - [`oag_assets::Archives`]'s own
+/// precedence reaches `DATA02`'s copy, undiffed against `DATA06`'s this
+/// pass. **Plain UTF-8, not dictionary-shortened** - unlike
+/// [`DEFINITION_ENTRY`], reading this needs no `oag_tables::fexml`
+/// expansion first. See `docs/ui/campaign-screens.md`'s HD section.
+pub const SCREEN_ENTRY: &str = r"Data\Plugins\Frontend\Gui\CellMode_Definition.xml";
+
+/// The grid `CellMode_Definition.xml` is authored in - HD's own screen
+/// resolution, unlike Pulse's copy of the same two screen names, which
+/// `oag_ui::campaign::Layout`'s own `PSP_GRID` constant is written at
+/// 480x272 for. Measured directly off the file: `<Flyer>`'s own
+/// `OriginX="960" OriginY="540"` is dead centre of 1920x1080, and widgets
+/// place out past 480 on both axes (`DifficultyButton` at `x="944"
+/// y="994"`), matching [`oag_title::MenuSkin::space`]'s own reading of
+/// `skin.xml`'s `<Movie Width="1920" height="1080">` for the rest of this
+/// title's front end. Confidence 90 - a direct read of the file's own
+/// numbers, not yet cross-checked against a live capture.
+pub const AUTHORED_GRID: [f32; 2] = [1920.0, 1080.0];
+
+/// The hex textures both screens draw from, none of which is part of
+/// `skin.xml`'s own front-end sheet - the same "front end's own sheet plus
+/// this screen's own art" extension [`oag_pulse::campaign`]'s own
+/// `HEX_TEXTURES` makes for Pulse's two, widened to HD's four-layer hex
+/// (`Bg_x_y`/`Outline_x_y`/`Lock_x_y`/`Medal_x_y`, each its own texture)
+/// plus the `Selector` overlay.
+///
+/// **`(widget src, archive path)` pairs, not one string.** `CellMode_Definition.xml`
+/// spells every one of these `src="Data\FE\Images\Hexagon_HD_OUTLINE.mip"` -
+/// the PSP-era extension, same as [`crate::frontend::names::MENU_STRIP_CURSOR`]'s
+/// own doc already found for `cursor.mip` - but no archive on this disc
+/// carries a `.mip` by that stem; each is a `.gtf`, lower-cased, at
+/// `data/fe/images/hexagon_hd_outline.gtf` and siblings. Measured directly:
+/// `oag_assets::psarc::Archive::paths` over all seven archives on
+/// `hdfury-ps3-eu-dec.iso` lists every stem below as a `.gtf` and none as a
+/// `.mip`. `oag_assets::psarc`'s own path normalisation folds case and
+/// backslashes for the *read*, but `oag_game::sprite::Sheet::get` keys its
+/// placements by an exact string match against a widget's own `image.src` -
+/// so a caller has to read the `.gtf` off the archive and then shelve the
+/// decoded blob under the `.mip` spelling the widget actually asks for at
+/// draw time, which is what the first element of each pair names and the
+/// second reads.
+pub const HEX_TEXTURES: [(&str, &str); 5] = [
+    (
+        r"Data\FE\Images\Hexagon_HD_OUTLINE.mip",
+        r"Data\FE\Images\Hexagon_HD_OUTLINE.gtf",
+    ),
+    (
+        r"Data\FE\Images\Hexagon_HD.mip",
+        r"Data\FE\Images\Hexagon_HD.gtf",
+    ),
+    (
+        r"Data\FE\Images\Hexlock_HD.mip",
+        r"Data\FE\Images\Hexlock_HD.gtf",
+    ),
+    (
+        r"Data\FE\Images\Hexmedal_HD.mip",
+        r"Data\FE\Images\Hexmedal_HD.gtf",
+    ),
+    (
+        r"Data\FE\Images\Hexagon_HD_THICK_OUT.mip",
+        r"Data\FE\Images\Hexagon_HD_THICK_OUT.gtf",
+    ),
+];
+
+/// Everything else `SCREEN_ENTRY`'s own `src=` attributes name that this
+/// build draws, beyond the hex art above - the bullet arrow beside every
+/// detail-column row, the lock overlay HD's `Grid Selection` shows over a
+/// locked flyer, and the bracket-cornered ticker's placeholder fill. Every
+/// one of these is already spelled `.gtf` on both the widget and the
+/// archive, unlike [`HEX_TEXTURES`], so a flat list is enough. Read the same
+/// way: off the file directly, not invented. A texture that will not decode
+/// still leaves the widget it was for undrawn - see
+/// `docs/ui/campaign-screens.md`'s HD section.
+pub const OTHER_TEXTURES: [&str; 3] = [
+    r"Data\FE\Images\NonSelectable_Arrow_HD.gtf",
+    r"Data\FE\Images\Subtitle_Arrow_HD.gtf",
+    r"Data\FE\Images\Padlock.gtf",
+];
+
 #[cfg(test)]
 mod tests {
     use super::*;

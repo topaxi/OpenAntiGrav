@@ -624,49 +624,131 @@ pub(super) fn campaign_page(
     // The front-end root's own `FEGlobals` - see `crate::campaign::load`'s
     // own doc for why a still needs this too, not only the live session.
     fallback_globals: &[(&str, &str)],
+    title: &'static oag_title::Title,
 ) -> Result<Vec<oag_ui::frontend::Draw>> {
-    let campaign = crate::campaign::load(archives, strings, faces, grid, sprites, fallback_globals)
-        .context("this source has no Race Campaign to show")?;
+    let campaign = crate::campaign::load(
+        archives,
+        strings,
+        faces,
+        grid,
+        sprites,
+        fallback_globals,
+        title,
+    )
+    .context("this source has no Race Campaign to show")?;
     *sprites = campaign.sprites;
-    let layers = match kind {
-        CampaignKind::Grid => {
-            let model = oag_ui::campaign::GridSelection::new(
-                campaign
-                    .grids
-                    .iter()
-                    .map(oag_ui::campaign::GridSummary::from_grid)
-                    .collect(),
-            );
-            oag_ui::campaign::grid_draw_list(
-                &model,
-                &campaign.grid_layout,
-                skin,
-                frame,
-                strings,
-                backdrop,
-                false,
-                &|src| sprites.get(src),
-            )
+    let is_hd = title.name == oag_hd::TITLE.name;
+    // **HD's own `Track Line` fold is not built here.** `CircuitNames::choose`
+    // needs every copy of the track-name table across the source's own
+    // archives, which this still has no ready list of - see
+    // `oag_ui::campaign::hd::hd_track_line`'s own doc for the plain fallback
+    // this leaves a captured HD `Cell Selection` with (the raw track id, the
+    // same gap `picker_page`'s own RACE-page capture already has). The live
+    // session's `crate::main::session::campaign::open_campaign` does carry
+    // one (`Shell::circuit_names`) and is the path that matters for a
+    // player.
+    let circuit_names = oag_ui::language::CircuitNames::default();
+    let layers = if is_hd {
+        match kind {
+            CampaignKind::Grid => {
+                let model = oag_ui::campaign::GridSelection::new(
+                    campaign
+                        .grids
+                        .iter()
+                        .map(oag_ui::campaign::GridSummary::from_grid)
+                        .collect(),
+                );
+                oag_ui::campaign::hd::hd_grid_draw_list(
+                    &model,
+                    &campaign.grid_layout,
+                    skin,
+                    frame,
+                    strings,
+                    backdrop,
+                    false,
+                    &|src| sprites.get(src),
+                )
+            }
+            CampaignKind::Cell => {
+                // `crate::campaign::load` already refuses an empty grid
+                // list (`"no grid in ... parsed"`), so `first()` is `None`
+                // only if that changes; the fallback below is a zeroed
+                // summary rather than a panic, on the same "a still draws
+                // something honest rather than crashing" terms the rest of
+                // this module follows.
+                let grid = campaign.grids.first();
+                let cells = grid.map(|grid| grid.cells.clone()).unwrap_or_default();
+                let model = oag_ui::campaign::CellSelection::new(cells);
+                let grid_summary = grid.map_or(
+                    oag_ui::campaign::GridSummary {
+                        name: String::new(),
+                        cell_count: 0,
+                        max_points: 0,
+                        required_points: 0,
+                        gold_medals: 0,
+                        points_earned: 0,
+                        locked: false,
+                    },
+                    oag_ui::campaign::GridSummary::from_grid,
+                );
+                oag_ui::campaign::hd::hd_cell_draw_list(
+                    &model,
+                    &campaign.cell_layout,
+                    skin,
+                    frame,
+                    strings,
+                    &circuit_names,
+                    0,
+                    campaign.grids.len().max(1),
+                    &grid_summary,
+                    backdrop,
+                    false,
+                    &|src| sprites.get(src),
+                )
+            }
         }
-        CampaignKind::Cell => {
-            // The first grid `Definition.xml` lists - `--menu-page` has no
-            // way to name a tier, and a still needs something to show.
-            let cells = campaign
-                .grids
-                .first()
-                .map(|grid| grid.cells.clone())
-                .unwrap_or_default();
-            let model = oag_ui::campaign::CellSelection::new(cells);
-            oag_ui::campaign::cell_draw_list(
-                &model,
-                &campaign.cell_layout,
-                skin,
-                frame,
-                strings,
-                backdrop,
-                false,
-                &|src| sprites.get(src),
-            )
+    } else {
+        match kind {
+            CampaignKind::Grid => {
+                let model = oag_ui::campaign::GridSelection::new(
+                    campaign
+                        .grids
+                        .iter()
+                        .map(oag_ui::campaign::GridSummary::from_grid)
+                        .collect(),
+                );
+                oag_ui::campaign::grid_draw_list(
+                    &model,
+                    &campaign.grid_layout,
+                    skin,
+                    frame,
+                    strings,
+                    backdrop,
+                    false,
+                    &|src| sprites.get(src),
+                )
+            }
+            CampaignKind::Cell => {
+                // The first grid `Definition.xml` lists - `--menu-page` has
+                // no way to name a tier, and a still needs something to
+                // show.
+                let cells = campaign
+                    .grids
+                    .first()
+                    .map(|grid| grid.cells.clone())
+                    .unwrap_or_default();
+                let model = oag_ui::campaign::CellSelection::new(cells);
+                oag_ui::campaign::cell_draw_list(
+                    &model,
+                    &campaign.cell_layout,
+                    skin,
+                    frame,
+                    strings,
+                    backdrop,
+                    false,
+                    &|src| sprites.get(src),
+                )
+            }
         }
     };
     Ok(layers.flatten())

@@ -57,7 +57,9 @@ impl Session {
         // Read out of `shell` before the mutable borrow below - `shell`
         // itself cannot survive `self.renderer_set_sprites`, the same reason
         // `strings` above is already a clone rather than a borrow.
+        let title_ref = shell.title;
         let title = shell.title.name.to_string();
+        let circuit_names = shell.circuit_names.clone();
         let records = self.records.clone();
         let globals: Vec<(&str, &str)> = shell
             .globals
@@ -71,6 +73,7 @@ impl Session {
             grid,
             &shell.sprites,
             &globals,
+            title_ref,
         ) {
             Ok(campaign) => {
                 // The extended sheet - `hex_filled.mip`/`hex_outline.mip`,
@@ -87,6 +90,7 @@ impl Session {
                         strings,
                         campaign.sprites,
                         title,
+                        circuit_names,
                         records,
                     ));
                 }
@@ -182,7 +186,12 @@ impl Session {
                     }
                 }
                 (Screen::Cell { .. }, Event::Back) => campaign.back_to_grid_selection(),
-                (_, Event::Moved | Event::Help) => {}
+                // `DifficultyChanged` is HD-only, ours, and needs nothing
+                // from the composition root - `CellSelection::cycle_difficulty`
+                // already moved the model's own state before this event
+                // reached here. See `oag_ui::campaign::Event::DifficultyChanged`'s
+                // own doc.
+                (_, Event::Moved | Event::Help | Event::DifficultyChanged) => {}
             }
         }
         if let Some(cell) = confirmed_cell {

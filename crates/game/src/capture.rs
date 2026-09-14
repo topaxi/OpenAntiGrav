@@ -610,6 +610,7 @@ pub fn run(
                     &menu_frame,
                     &mut sprites,
                     &globals,
+                    title,
                 )?;
                 (backdrop, video_format, list, space)
             } else if let Some(kind) = endrace_kind(page) {

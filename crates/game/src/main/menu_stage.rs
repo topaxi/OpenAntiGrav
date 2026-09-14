@@ -488,28 +488,79 @@ impl MenuStage {
         // both are plain 2D widget draws off `CellMode_Definition.xml`, the
         // same pass a picker's own body uses without the 3D tail.
         if let Some(campaign) = self.campaign.as_ref() {
-            let layers = match &campaign.screen {
-                crate::campaign_stage::Screen::Grid(model) => oag_ui::campaign::grid_draw_list(
-                    model,
-                    campaign.grid_layout(),
-                    &self.skin,
-                    &self.frame,
-                    &campaign.strings,
-                    if frozen_race { None } else { shown },
-                    frozen_race,
-                    &|src| campaign.sprites.get(src),
-                ),
-                crate::campaign_stage::Screen::Cell { model, .. } => {
-                    oag_ui::campaign::cell_draw_list(
+            // Wipeout HD/Fury draws a completely different screen behind the
+            // same two names - see `oag_ui::campaign::hd`'s own module doc.
+            let layers = if campaign.is_hd() {
+                match &campaign.screen {
+                    crate::campaign_stage::Screen::Grid(model) => {
+                        oag_ui::campaign::hd::hd_grid_draw_list(
+                            model,
+                            campaign.grid_layout(),
+                            &self.skin,
+                            &self.frame,
+                            &campaign.strings,
+                            if frozen_race { None } else { shown },
+                            frozen_race,
+                            &|src| campaign.sprites.get(src),
+                        )
+                    }
+                    crate::campaign_stage::Screen::Cell { model, .. } => {
+                        let (grid_index, grid_count, grid_summary) =
+                            campaign.cell_grid_summary().unwrap_or_else(|| {
+                                (
+                                    0,
+                                    1,
+                                    oag_ui::campaign::GridSummary {
+                                        name: String::new(),
+                                        cell_count: 0,
+                                        max_points: 0,
+                                        required_points: 0,
+                                        gold_medals: 0,
+                                        points_earned: 0,
+                                        locked: false,
+                                    },
+                                )
+                            });
+                        oag_ui::campaign::hd::hd_cell_draw_list(
+                            model,
+                            campaign.cell_layout(),
+                            &self.skin,
+                            &self.frame,
+                            &campaign.strings,
+                            campaign.circuit_names(),
+                            grid_index,
+                            grid_count,
+                            &grid_summary,
+                            if frozen_race { None } else { shown },
+                            frozen_race,
+                            &|src| campaign.sprites.get(src),
+                        )
+                    }
+                }
+            } else {
+                match &campaign.screen {
+                    crate::campaign_stage::Screen::Grid(model) => oag_ui::campaign::grid_draw_list(
                         model,
-                        campaign.cell_layout(),
+                        campaign.grid_layout(),
                         &self.skin,
                         &self.frame,
                         &campaign.strings,
                         if frozen_race { None } else { shown },
                         frozen_race,
                         &|src| campaign.sprites.get(src),
-                    )
+                    ),
+                    crate::campaign_stage::Screen::Cell { model, .. } => {
+                        oag_ui::campaign::cell_draw_list(
+                            model,
+                            campaign.cell_layout(),
+                            &self.skin,
+                            &self.frame,
+                            &campaign.strings,
+                            if frozen_race { None } else { shown },
+                            frozen_race,
+                            &|src| campaign.sprites.get(src),
+                        )
+                    }
                 }
             };
             let list: Vec<Draw> = if frozen_race {
