@@ -581,6 +581,94 @@ pub(super) fn picker_page(
     (layers.flatten(), request)
 }
 
+/// Which Race Campaign screen a `--menu-page` name asks for, if either.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum CampaignKind {
+    Grid,
+    Cell,
+}
+
+#[must_use]
+pub(super) fn campaign_kind(page: &str) -> Option<CampaignKind> {
+    match page {
+        "grid-select" | "grid_select" => Some(CampaignKind::Grid),
+        "cell-select" | "cell_select" => Some(CampaignKind::Cell),
+        _ => None,
+    }
+}
+
+/// Draws `Grid Selection` on its first tier, or `Cell Selection` on that
+/// tier's own cells - the same shape [`picker_page`] draws the race box's
+/// two screens in, minus a preview mesh: neither campaign screen authors
+/// one. See `oag_game::campaign` for the read this is a still of.
+#[allow(
+    clippy::too_many_arguments,
+    reason = "the same argument menu_page and picker_page both make: each is a separate fact \
+              the page needs"
+)]
+pub(super) fn campaign_page(
+    kind: CampaignKind,
+    archives: &mut oag_assets::Archives,
+    strings: &oag_ui::language::StringTable,
+    faces: oag_ui::picker::FaceScales,
+    grid: [f32; 2],
+    backdrop: Option<oag_ui::menu::Picture>,
+    skin: &oag_ui::menu::Skin,
+    frame: &oag_ui::menu::Frame,
+    // `&mut`, extended in place with the hex textures neither screen's XML
+    // shares with `Skin.xml` - the same `*sprites = sprites.extended(...)`
+    // idiom `picker_stills` already uses, so the sheet `Renderer::new` builds
+    // from further down `run` is the one these two textures actually landed
+    // on.
+    sprites: &mut crate::sprite::Sheet,
+) -> Result<Vec<oag_ui::frontend::Draw>> {
+    let campaign = crate::campaign::load(archives, strings, faces, grid, sprites)
+        .context("this source has no Race Campaign to show")?;
+    *sprites = campaign.sprites;
+    let layers = match kind {
+        CampaignKind::Grid => {
+            let model = oag_ui::campaign::GridSelection::new(
+                campaign
+                    .grids
+                    .iter()
+                    .map(oag_ui::campaign::GridSummary::from_grid)
+                    .collect(),
+            );
+            oag_ui::campaign::grid_draw_list(
+                &model,
+                &campaign.grid_layout,
+                skin,
+                frame,
+                strings,
+                backdrop,
+                false,
+                &|src| sprites.get(src),
+            )
+        }
+        CampaignKind::Cell => {
+            // The first grid `Definition.xml` lists - `--menu-page` has no
+            // way to name a tier, and a still needs something to show.
+            let cells = campaign
+                .grids
+                .first()
+                .map(|grid| grid.cells.clone())
+                .unwrap_or_default();
+            let model = oag_ui::campaign::CellSelection::new(cells);
+            oag_ui::campaign::cell_draw_list(
+                &model,
+                &campaign.cell_layout,
+                skin,
+                frame,
+                strings,
+                backdrop,
+                false,
+                &|src| sprites.get(src),
+            )
+        }
+    };
+    Ok(layers.flatten())
+}
+
 /// The source a capture's race options name, opened with its packs, for the
 /// selection screens' own reads.
 pub(super) fn open_for_previews(race: &crate::race::Options) -> Result<oag_assets::Archives> {

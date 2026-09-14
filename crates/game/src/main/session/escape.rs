@@ -135,6 +135,12 @@ impl Session {
             self.handle_picker(oag_ui::picker::Event::Back);
             return;
         }
+        // The Race Campaign's own screens, same rule: `Cell Selection` steps
+        // back to `Grid Selection`, which steps back to the menus.
+        if matches!(&self.stage, Stage::Menu(stage) if stage.campaign.is_some()) {
+            self.handle_campaign(oag_ui::campaign::Event::Back);
+            return;
+        }
         // Collected before anything else touches `self`: `handle_menu` takes
         // `&mut self` and the events borrow the stage.
         if let Stage::Menu(stage) = &mut self.stage {

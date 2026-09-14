@@ -22,6 +22,8 @@ use crate::stage::Stage;
 
 #[path = "session/apply.rs"]
 mod apply;
+#[path = "session/campaign.rs"]
+mod campaign;
 #[path = "session/draw.rs"]
 mod draw;
 // `Session::escape` and `Session::resume_race` - split out of `menus.rs`

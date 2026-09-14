@@ -394,6 +394,12 @@ impl Session {
                         }
                         continue;
                     }
+                    // The Race Campaign's own screens, same shape: they take
+                    // the tick whole rather than sitting behind the rows.
+                    if stage.campaign.is_some() {
+                        self.tick_campaign();
+                        continue;
+                    }
                     // Snapshotted *before* the input is consumed, because the
                     // page being left stops existing the moment the model
                     // moves. Compared by page id rather than by stack depth:

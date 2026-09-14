@@ -50,6 +50,13 @@ pub enum Action {
     /// happens: the file was *replacing* the built-in, so removing it
     /// restores it. See `crate::pilots::is_built_in_name`.
     DeletePilot,
+    /// Opens the Race Campaign's `Grid Selection` screen - see
+    /// `oag_ui::campaign` and `crate::main::session::campaign` in `oag-game`.
+    ///
+    /// **A stub past `Grid Selection`/`Cell Selection` themselves.** Neither
+    /// screen launches a race here - see `oag_ui::campaign`'s own module doc
+    /// for why, and the `campaign` handover thread's "Next Steps".
+    OpenCampaign,
 }
 
 impl Action {
@@ -64,6 +71,7 @@ impl Action {
             Self::NewPilot => "new_pilot",
             Self::RenamePilot => "rename_pilot",
             Self::DeletePilot => "delete_pilot",
+            Self::OpenCampaign => "open_campaign",
         }
     }
 
@@ -78,13 +86,14 @@ impl Action {
             "new_pilot" => Some(Self::NewPilot),
             "rename_pilot" => Some(Self::RenamePilot),
             "delete_pilot" => Some(Self::DeletePilot),
+            "open_campaign" => Some(Self::OpenCampaign),
             _ => None,
         }
     }
 
     /// Every action, for error messages and for the integrity check.
     #[must_use]
-    pub fn all() -> [Self; 7] {
+    pub fn all() -> [Self; 8] {
         [
             Self::LaunchRace,
             Self::LaunchRemix,
@@ -93,6 +102,7 @@ impl Action {
             Self::NewPilot,
             Self::RenamePilot,
             Self::DeletePilot,
+            Self::OpenCampaign,
         ]
     }
 }

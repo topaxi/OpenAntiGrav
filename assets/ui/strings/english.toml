@@ -50,9 +50,10 @@
 
 [strings]
 
-# The MAIN menu: its own title and its five rows.
+# The MAIN menu: its own title and its six rows.
 OAG_MENU_MAIN_TITLE = "OPENANTIGRAV"
 OAG_MENU_RACE = "RACE"
+OAG_MENU_RACE_CAMPAIGN = "RACE CAMPAIGN"
 OAG_MENU_REMIX = "REMIX"
 OAG_MENU_RECORDS = "RECORDS"
 OAG_MENU_OPTIONS = "OPTIONS"
