@@ -293,7 +293,15 @@ fn surface(
     let texture = skin.get(slot).and_then(Option::as_ref).map(|_| slot);
     // `DEFAULT` for a slot with no reading, which is what every title but HD
     // has and what an HD material whose microcode did not trace answers.
-    let roles = material_slots.get(slot).copied().unwrap_or(slots::DEFAULT);
+    let mut roles = material_slots.get(slot).copied().unwrap_or(slots::DEFAULT);
+    // The one per-chunk bit in the word: the chunk's own render-block flags
+    // say whether it is track surface, and a Zone race binds the `Track` or
+    // the `Scene` parameter set on that - see `slots::ZONE_TRACK`. Every
+    // surface of a chunk carries the chunk's flags, so this holds for an
+    // extra surface too.
+    if mesh.is_track() {
+        roles |= slots::ZONE_TRACK;
+    }
     // Same fallback rule, same reason - see `mesh::vertex::GpuVertex::specular_exponent`.
     let specular_exponent = material_specular_exponent
         .get(slot)
@@ -845,6 +853,7 @@ fn build_with_options(
             report.see_through += usize::from(surface.blend.is_some());
             report.cutout += usize::from(surface.cutout);
             report.no_texcoord += usize::from(declares_no_texcoord(mesh));
+            report.track_surface += usize::from(std::ptr::eq(mesh, chunk) && mesh.is_track());
             for submesh in &mesh.submeshes {
                 if submesh.vertex_count == 0 || submesh.index_count == 0 {
                     continue;

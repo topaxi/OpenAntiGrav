@@ -275,7 +275,7 @@ fn draw(device: &wgpu::Device, queue: &wgpu::Queue, model: &Model, scene: Scene)
         mesh_render::TRANSPARENT_BLEND,
         mesh_render::GlowMask::Protected,
         mesh_render::Velocity::None,
-        None,
+        &mesh_render::zone::StageArt::NONE,
         None,
         None,
         mesh_render::ShadowReceiver::Never,

@@ -32,7 +32,7 @@ pub(super) fn build(
     anisotropy: Anisotropy,
     sample_count: u32,
     scene_depth: mesh_render::Depth,
-    zone_art: Option<&std::sync::Arc<oag_render::mesh::ModelTexture>>,
+    zone_art: &mesh_render::zone::StageArt,
     shadow_map: &oag_render::shadow::map::Map,
 ) -> Result<Vec<Drawable>> {
     let mut drawables = Vec::new();

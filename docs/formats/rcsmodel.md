@@ -1339,10 +1339,21 @@ The engine shifts it up one bit into each draw record's sort/route key, so
 | 10 | 208, always with bit 0 | cleared from every PVS cell in those modes and, in every other mode, while a game-state byte is zero |
 | 1, 5, 11 | 60, 1,051, 315 | carried in the record; no consumer read yet |
 
-Confidence 85 on the record and the relocation, 80 on bit 0's meaning. Not
-parsed by `oag_rcs` yet; a port that binds the Track set to every chunk (as
-`oag_render` does today) colours 859 of Talon's Junction's 983 chunks with
-the set the original reserves for 124.
+Confidence 85 on the record and the relocation, 80 on bit 0's meaning.
+
+**Read and played, 2026-09-15.** `oag_rcs::rcsmodel::Mesh::render_flags` is
+the halfword, `Mesh::is_track` is bit 0, and `Model::relocations` reads the
+`+0x04` table; `crates/rcs/tests/rcsmodel_ground_truth.rs` reproduces the
+survey from this reader - all 41,861 chunk `+0x08` words in their file's
+table, 4,365 track chunks in 37 files, 124 of Talon's Junction's 983 - and
+`crates/rcs/src/rcsmodel/tests.rs` guards the trap that the chunk header's
+layout byte is *also* a `+0x06`. `oag_render` carries the bit per chunk as
+`mesh::slots::ZONE_TRACK` and `mesh.wgsl` binds `zoneModeTrack*` with the
+`Track.*` colours where it is set and `zoneMode*` with the `Scene.*` colours
+otherwise (`crates/render/tests/zone_recolour.rs`). Before that it bound the
+Track set to every chunk, colouring 859 of Talon's Junction's chunks with
+the set the original reserves for 124. Bits 2-5 (the draw-bucket routing)
+and 9-10 (the PVS scrub) are carried in the field and not acted on.
 
 ## A chunk header is 0x20 bytes and then a SURFACE record
 

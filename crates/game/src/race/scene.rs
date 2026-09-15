@@ -421,9 +421,10 @@ impl Scene {
         // group mid-race is machinery this has no caller for yet.
         let zone_art = zone_grade
             .as_ref()
-            .and_then(|grade| grade.stage_art())
-            .cloned();
-        let zone_art = zone_art.as_ref();
+            .map_or(mesh_render::zone::StageArt::NONE, |grade| {
+                grade.stage_art_pair()
+            });
+        let zone_art = &zone_art;
         // **Built for every race, whatever the setting says**, and bound by
         // every drawable: `Scene::shadow.strength` at zero is what makes it
         // inert, so the shadow row applies live without rebuilding a pipeline.

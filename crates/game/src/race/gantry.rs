@@ -344,7 +344,7 @@ impl Gantry {
             mesh_render::Depth::Scene,
             mesh_render::TRANSPARENT_BLEND,
             mesh_render::GlowMask::Protected,
-            None,
+            &mesh_render::zone::StageArt::NONE,
             Some(shadow_map.view()),
             Some(shadow_map.depth_view()),
             // Scenery, like the track: it stands on the road and the road's

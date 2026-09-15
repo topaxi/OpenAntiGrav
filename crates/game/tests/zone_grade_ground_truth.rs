@@ -282,6 +282,7 @@ fn a_2048_zone_race_escalates_on_the_recovered_ladder() {
         table,
         oag_2048::race::DEFAULTS.zone_stages,
         Vec::new(),
+        Vec::new(),
     )
     .expect("it names stages");
 
@@ -366,11 +367,13 @@ fn open_2048() -> Option<oag_assets::Archives> {
 /// `zoneModeTrack*` textures**, which are the ones this build loads. Both are
 /// read here off the real file, not from a constant this test carries.
 ///
-/// **The `Scene`/`Track` distinction is asserted, not incidental.** `Start`
-/// authors the two in opposite corners - `Scene.Texture Colour` pure black
-/// against `Track.Texture Colour` at `9.0` - so a regression that took the
-/// `Scene` half while still binding the track texture set would draw nothing
-/// where the disc draws its brightest stage, and only this pair catches it.
+/// **Both halves travel, each with its own colours.** `Start` authors the
+/// two in opposite corners - `Scene.Texture Colour` pure black against
+/// `Track.Texture Colour` at `9.0` - so a regression that filled either
+/// group from the other's keys would draw the environment lit or the road
+/// dark where the disc draws a dark environment around a lit road, and only
+/// this pair catches it. Which chunk reads which is the chunk's own
+/// render-block bit, asserted in `crates/rcs/tests/rcsmodel_ground_truth.rs`.
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn the_zone_shader_parameters_come_from_the_half_whose_textures_are_bound() {
@@ -397,10 +400,23 @@ fn the_zone_shader_parameters_come_from_the_half_whose_textures_are_bound() {
     );
     // `"0 Start.Track.Texture Colour"=9.000000 9.000000 9.000000`, against
     // `"0 Start.Scene.Texture Colour"=0.000000 0.000000 0.000000`.
-    assert_eq!(start.effect, [9.0, 9.0, 9.0, 0.0]);
-    assert_ne!(
-        start.effect[0], 0.0,
-        "the Scene half would be black here - the wrong half of the pair"
+    assert_eq!(start.track.effect, [9.0, 9.0, 9.0, 0.0]);
+    assert_eq!(
+        start.scene.effect,
+        [0.0, 0.0, 0.0, 0.0],
+        "Start's Scene half is black: a dark environment around a lit road"
+    );
+    // `"0 Start.Scene.Base Colour"` and its highlight, the scene group's own
+    // rim summands, come from the Scene keys and not the Track ones.
+    assert_eq!(
+        start.scene.base_alt[..3],
+        grade.palette().scene_base_colour.unwrap_or([0.0; 3]),
+        "the scene group's rim colour is the Scene key"
+    );
+    assert_eq!(
+        start.track.base_alt[..3],
+        grade.palette().track_base_colour.unwrap_or([0.0; 3]),
+        "the track group's rim colour is the Track key"
     );
 
     // `"1 Sub Venom.Track.Texture Colour"=4.584567 6.537755 6.917541`,
@@ -410,10 +426,23 @@ fn the_zone_shader_parameters_come_from_the_half_whose_textures_are_bound() {
     let sub_venom = grade.zone_uniform();
     assert_eq!(sub_venom.uv_scale, [1.0, 1.0]);
     assert_eq!(
-        sub_venom.effect,
+        sub_venom.track.effect,
         [4.584_567, 6.537_755, 6.917_541, 20.0],
         "the stage's own Track.Texture Colour, and the disc's own glow drive \
          scalar now that mesh.wgsl's zone_glow draws it"
+    );
+    // `"1 Sub Venom.Scene.Texture Colour"=0.721569 0.909804 0.964706`,
+    // `"1 Sub Venom.Scene.EQ brightness"=20.000000` - the showing stage's
+    // own, unblended, on the same terms as the track group below.
+    assert_eq!(
+        sub_venom.scene.effect,
+        [0.721_569, 0.909_804, 0.964_706, 20.0],
+        "the scene group's effect is Scene.Texture Colour with Scene.EQ brightness in .w"
+    );
+    assert_ne!(
+        sub_venom.scene.effect[..3],
+        sub_venom.track.effect[..3],
+        "the two groups author different colours on Sub Venom"
     );
 
     // **The unblended stage, not the cross-fade.** `commit` zeroes the weight,
@@ -427,7 +456,7 @@ fn the_zone_shader_parameters_come_from_the_half_whose_textures_are_bound() {
         "the colour-space cross-fade is at stage 0's end"
     );
     assert_ne!(
-        sub_venom.effect[0], 9.0,
+        sub_venom.track.effect[0], 9.0,
         "zoneEffect must read the showing stage itself, not the cross-fade"
     );
 
@@ -440,7 +469,7 @@ fn the_zone_shader_parameters_come_from_the_half_whose_textures_are_bound() {
         let uniform = grade.zone_uniform();
         assert_eq!(uniform.enabled, 1.0, "stage {stage} has all three inputs");
         assert_ne!(
-            uniform.effect[..3],
+            uniform.track.effect[..3],
             [0.0; 3],
             "stage {stage} authors a Track.Texture Colour that draws"
         );

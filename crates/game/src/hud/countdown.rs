@@ -186,7 +186,7 @@ impl Countdown {
             TRANSPARENT_BLEND,
             GlowMask::Protected,
             Velocity::None,
-            None,
+            &oag_render::mesh_render::zone::StageArt::NONE,
             None,
             None,
             ShadowReceiver::Never,

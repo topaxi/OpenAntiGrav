@@ -42,16 +42,48 @@ pub const SEGMENTS: usize = 10;
 /// ten. `161 = 1 + 10 * 16`, immediately past the sixteenth bar.
 pub const SMOOTH_BASE: usize = 161;
 
-/// The five layout entries the Zone half of bind group 2 adds: the stage
-/// texture and its sampler at bindings 1-2, a nearest-filtered clone of the
-/// same stage texture at binding 3 (the visualiser's own band index is read
-/// from a texel's alpha, and interpolating between two bands would smear
-/// them together), and the visualiser lookup itself at bindings 4-5.
+/// The showing stage's two textures, as [`resources`] binds them.
+///
+/// **Two, because the original publishes two.** HD's Zone parameters go out
+/// in two paired blocks: `zoneModeTrack<n>.gtf` beside the `Track.*` colours
+/// for a chunk whose render-block flags carry the track bit
+/// (`oag_rcs::rcsmodel::RENDER_TRACK`), and `zoneMode<n>.gtf` beside the
+/// `Scene.*` colours for every other chunk. `mesh.wgsl` selects per fragment
+/// on `slots::ZONE_TRACK`; see [`super::Zone`].
+///
+/// Either slot `None` binds a 1x1 black, on the terms [`resources`] states.
+#[derive(Debug, Clone, Default)]
+pub struct StageArt {
+    /// `zoneModeTrack<n>.gtf` - the set with the art in it.
+    pub track: Option<Arc<ModelTexture>>,
+    /// `zoneMode<n>.gtf` - a flat white on every stage HD/Fury ships, and
+    /// bound rather than replaced by a constant because it is the file's
+    /// own statement of what a Scene chunk samples.
+    pub scene: Option<Arc<ModelTexture>>,
+}
+
+impl StageArt {
+    /// Neither texture: what every model outside an HD Zone race binds.
+    pub const NONE: Self = Self {
+        track: None,
+        scene: None,
+    };
+}
+
+/// The six layout entries the Zone half of bind group 2 adds: the track
+/// stage texture and its sampler at bindings 1-2, a nearest-filtered clone
+/// of the same stage texture at binding 3 (the visualiser's own band index
+/// is read from a texel's alpha, and interpolating between two bands would
+/// smear them together), the visualiser lookup itself at bindings 4-5, and
+/// the scene stage texture at binding 10 - past the shadow map's 6-9, which
+/// were numbered before the second texture set was bound.
 ///
 /// A sampler of its own for the stage texture rather than the albedo's,
-/// because the coordinate is one the shader builds - `zoneColourTint.xy * (1
-/// - meshUV)` - and runs outside `[0, 1]` wherever the file's own scale does.
-pub(super) fn layout_entries() -> [wgpu::BindGroupLayoutEntry; 5] {
+/// because the coordinate is one the shader builds, `zoneColourTint.xy *
+/// (1 - meshUV)`, and runs outside `[0, 1]` wherever the file's own scale
+/// does. The scene texture shares both samplers: same coordinate, same
+/// filter.
+pub(super) fn layout_entries() -> [wgpu::BindGroupLayoutEntry; 6] {
     let texture_entry = |binding| wgpu::BindGroupLayoutEntry {
         binding,
         visibility: wgpu::ShaderStages::FRAGMENT,
@@ -74,18 +106,23 @@ pub(super) fn layout_entries() -> [wgpu::BindGroupLayoutEntry; 5] {
         sampler_entry(3),
         texture_entry(4),
         sampler_entry(5),
+        texture_entry(10),
     ]
 }
 
-/// Everything [`resources`] builds: the stage texture's own view and its two
-/// samplers, and the visualiser lookup's texture, view and sampler.
+/// Everything [`resources`] builds: the two stage textures' views and the
+/// two samplers they share, and the visualiser lookup's texture, view and
+/// sampler.
 ///
-/// [`Self::vis_texture`] is kept, unlike the stage texture's own
-/// `wgpu::Texture` - it is written every frame by [`write_vis`], where the
+/// [`Self::vis_texture`] is kept, unlike the stage textures' own
+/// `wgpu::Texture`s - it is written every frame by [`write_vis`], where a
 /// stage texture is loaded once and never touched again.
 pub(super) struct Resources {
     pub sampler: wgpu::Sampler,
+    /// [`StageArt::track`].
     pub view: wgpu::TextureView,
+    /// [`StageArt::scene`].
+    pub scene_view: wgpu::TextureView,
     /// The same texels as [`Self::view`], point-filtered - see
     /// [`layout_entries`].
     pub nearest_sampler: wgpu::Sampler,
@@ -94,8 +131,8 @@ pub(super) struct Resources {
     pub vis_sampler: wgpu::Sampler,
 }
 
-/// The sampler and the view to bind, for a model that has a Zone stage
-/// texture and for one that does not - plus the visualiser lookup, which
+/// The samplers and the views to bind, for a model that has the Zone stage
+/// textures and for one that does not - plus the visualiser lookup, which
 /// every model gets regardless, silent until [`write_vis`] is called.
 ///
 /// **Black, not white, where there is no stage texture.**
@@ -103,14 +140,17 @@ pub(super) struct Resources {
 /// multiplied out anyway, and a black placeholder means even a caller that
 /// writes a Zone uniform without a texture adds nothing rather than adding a
 /// white sheet - the failure this project wants from a missing asset is an
-/// absence. [`Resources::vis_texture`] starts the same way: all-black, so a
-/// model drawn before the first [`write_vis`] call - or on a build with no
-/// audio device at all - shows no glow rather than an invented one.
+/// absence. That holds for each of [`StageArt`]'s two slots on its own: a
+/// stage whose scene texture failed to decode draws its scene chunks black,
+/// not through the track set. [`Resources::vis_texture`] starts the same
+/// way: all-black, so a model drawn before the first [`write_vis`] call - or
+/// on a build with no audio device at all - shows no glow rather than an
+/// invented one.
 pub(super) fn resources(
     device: &wgpu::Device,
     queue: &wgpu::Queue,
     anisotropy: super::Anisotropy,
-    stage: Option<&Arc<ModelTexture>>,
+    stage: &StageArt,
 ) -> Resources {
     let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
         label: Some("zone"),
@@ -133,7 +173,7 @@ pub(super) fn resources(
         min_filter: wgpu::FilterMode::Nearest,
         ..Default::default()
     });
-    let view = match stage {
+    let upload = |texture: &Option<Arc<ModelTexture>>, label| match texture {
         Some(texture) => texture::upload(
             device,
             queue,
@@ -142,8 +182,10 @@ pub(super) fn resources(
                 .features()
                 .contains(wgpu::Features::TEXTURE_COMPRESSION_BC),
         ),
-        None => texture::upload_rgba(device, queue, 1, 1, &[0, 0, 0, 255], "no zone stage", None),
+        None => texture::upload_rgba(device, queue, 1, 1, &[0, 0, 0, 255], label, None),
     };
+    let view = upload(&stage.track, "no zone track stage");
+    let scene_view = upload(&stage.scene, "no zone scene stage");
 
     let vis_texture = device.create_texture(&wgpu::TextureDescriptor {
         label: Some("zone vis"),
@@ -196,6 +238,7 @@ pub(super) fn resources(
     Resources {
         sampler,
         view,
+        scene_view,
         nearest_sampler,
         vis_texture,
         vis_view,

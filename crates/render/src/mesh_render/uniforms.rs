@@ -524,28 +524,35 @@ impl Light {
 ///   `zoneEffectInner`/`zoneEffectOuter`. Confidence 84.
 /// - The texture is the stage's own `zoneModeTrack<n>.gtf`.
 ///
-/// # Two approximations, stated
-/// **The recolour reaches every surface this renderer draws, and the original
-/// splits its surfaces in two.** HD publishes these parameters twice, and the
-/// two publications are paired end to end: one block binds the `zoneMode*`
-/// textures beside the `Scene.*` colours, the other binds `zoneModeTrack*`
-/// beside the `Track.*` ones. So "which texture set" and "which colour group"
-/// are one choice, not two - and the reading, from the names, from the general
-/// set being fifteen flat whites, and from the maintainer's own observation
-/// that the *floor* shows the equaliser, is that `Scene` is scenery and
-/// `Track` is the track surface.
+/// # Two parameter sets, selected per chunk by the file
 ///
-/// **This build takes the `Track` half of that pair and applies it to
-/// everything**, because it has no scenery/track distinction to branch on. So
-/// scenery here gets the track's recolour where the original would give it the
-/// blank set and a colour of its own. Preferred over the `Scene` half, which
-/// would be self-inconsistent - it would feed the track texture set colours
-/// the original only ever pairs with the blank one. Which block a draw goes
-/// through is genuinely unread: the two sit in one function whose basic blocks
-/// the scheduler has reordered, so telling them apart needs control-flow
-/// reconstruction rather than peephole reading.
+/// **HD publishes these parameters twice, and the two publications are
+/// paired end to end**: one block binds the `zoneMode*` textures beside the
+/// `Scene.*` colours, the other binds `zoneModeTrack*` beside the `Track.*`
+/// ones. So "which texture set" and "which colour group" are one choice, not
+/// two. Both pairs travel here - [`Self::track`] and [`Self::scene`] - and
+/// `mesh.wgsl` picks between them per fragment on `slots::ZONE_TRACK`, which
+/// `mesh::rcs` sets from the chunk's own render-block flags:
+/// `oag_rcs::rcsmodel::Mesh::is_track`, bit 0 of the halfword at `+0x06` of
+/// the record the chunk header's `+0x08` names. That is what `FUN_003ff860`
+/// branches on - it publishes Scene when the bit is clear and Track when it
+/// is set - and the bit is authored in the `.rcsmodel`: 4,365 of the disc's
+/// 41,861 chunks carry it, in exactly the 37 track-shaped models, 124 of
+/// Talon's Junction's 983. Confidence 85 on the record, 80 on the meaning;
+/// `docs/ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md`,
+/// thirtieth pass.
 ///
-/// On top of that, the original applies the variant per material at all:
+/// **Until 2026-09-15 this build bound the `Track` half to everything**,
+/// because it had no scenery/track distinction to branch on; on Talon's
+/// Junction that coloured 859 chunks with the set the original reserves for
+/// 124. The `Scene` texture set is fifteen flat whites, so a scene chunk's
+/// surface is `Scene.Texture Colour` flat plus the two rim terms - authored
+/// black on `Start`, which is a dark environment around a lit road, exactly
+/// what the original's opening frame shows.
+///
+/// # Approximations that remain, stated
+///
+/// The original applies the variant per material at all:
 /// 1,467 of the disc's 1,590 `.rcsmaterial` files carry one, so 123 do not.
 /// **Craft are the case that mattered and they are now excluded from the
 /// data rather than by taste**: the twelve `data/materials/ships/*` materials
@@ -606,27 +613,30 @@ pub struct Zone {
     /// missing input draws nothing rather than something approximate.
     pub enabled: f32,
     pub _pad: f32,
-    /// `zoneEffect<Inner|Outer>` - the showing stage's `Track.Texture Colour`
-    /// in `.rgb`. `Track`, not `Scene`, because the texture set decides it -
-    /// see the paired publication above. The `.w` scales the glow this build
-    /// does not draw and is left at zero rather than filled with a stand-in.
+    /// The `Track.*` colours, published beside `zoneModeTrack<n>.gtf` for a
+    /// chunk whose render-block flags carry the track bit.
+    pub track: ZoneSet,
+    /// The `Scene.*` colours, published beside `zoneMode<n>.gtf` for every
+    /// other chunk.
+    pub scene: ZoneSet,
+}
+
+/// One of the two colour groups a Zone stage authors, in the order the
+/// shader's own parameters take them. See [`Zone`] for which chunk reads
+/// which.
+#[repr(C, align(16))]
+#[derive(Debug, Clone, Copy, Default, PartialEq, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct ZoneSet {
+    /// `zoneEffect<Inner|Outer>` - the showing stage's `Texture Colour` in
+    /// `.rgb`, `EQ brightness` in `.w`: how hard the visualiser glow drives.
     pub effect: [f32; 4],
-    /// `zoneBase<Inner|Outer>` in `.rgb` - the showing stage's
-    /// `Track.Base Colour Highlight`, the `rim^10` summand's colour. `.w`
-    /// unused; the exponent is an inline literal in the microcode, not a
-    /// parameter, so there is nothing per-stage to carry for it.
-    ///
-    /// **Carried, not drawn.** `zoneBase*` belongs to the Zone variant's
-    /// *untextured* material family (`cf_constantcolourglow` and its kin),
-    /// where the whole surface is the two rim terms and there is no albedo to
-    /// add them to. Adding them on this path - the textured one - would light
-    /// every surface the original leaves alone. The field exists so the value
-    /// reaches the GPU in one piece the day a per-material branch can select
-    /// that family; `mesh.wgsl` declares it and reads it nowhere.
+    /// `zoneBase<Inner|Outer>` in `.rgb` - the showing stage's `Base Colour
+    /// Highlight`, the `rim^10` summand's colour. `.w` unused; the exponent
+    /// is an inline literal in the microcode, not a parameter, so there is
+    /// nothing per-stage to carry for it.
     pub base: [f32; 4],
-    /// `zoneBaseAlt<Inner|Outer>` in `.rgb` - the showing stage's
-    /// `Track.Base Colour`, the `rim^5` summand's colour. `.w` unused, and
-    /// carried rather than drawn, as [`Self::base`].
+    /// `zoneBaseAlt<Inner|Outer>` in `.rgb` - the showing stage's `Base
+    /// Colour`, the `rim^5` summand's colour. `.w` unused.
     pub base_alt: [f32; 4],
 }
 
@@ -786,8 +796,8 @@ impl Scene {
 }
 
 const _: () = assert!(
-    std::mem::size_of::<Zone>() == 64,
-    "mesh.wgsl's Zone is four vec4s"
+    std::mem::size_of::<Zone>() == 112,
+    "mesh.wgsl's Zone is a vec4 and two three-vec4 sets"
 );
 const _: () = assert!(
     std::mem::offset_of!(Scene, zone).is_multiple_of(16),

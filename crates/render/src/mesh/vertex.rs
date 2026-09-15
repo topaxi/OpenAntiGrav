@@ -226,6 +226,18 @@ pub mod slots {
     /// and travel in [`super::Emissive`] through the index bits below.
     pub const ADD_SECOND: u32 = 1 << 8;
 
+    /// This chunk is track surface, so an HD Zone race publishes the `Track`
+    /// parameter set and `zoneModeTrack<n>.gtf` for it rather than the
+    /// `Scene` set and `zoneMode<n>.gtf`.
+    ///
+    /// **Per chunk, not per material** - the one bit in this word that is:
+    /// it is bit 0 of the chunk's own render-block flags
+    /// (`oag_rcs::rcsmodel::Mesh::is_track`), authored in the `.rcsmodel`
+    /// on 4,365 of the disc's 41,861 chunks, and `mesh::rcs::surface` ORs
+    /// it in per chunk over the material's roles. `mesh.wgsl`'s `zone_set`
+    /// decodes it; see `mesh_render::Zone` for the two publications.
+    pub const ZONE_TRACK: u32 = 1 << 9;
+
     /// Where a material's index into [`Model::emissive`](super::Model::emissive)
     /// sits in this word, plus one; `0` is "this material has none".
     ///

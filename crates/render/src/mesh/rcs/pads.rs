@@ -256,6 +256,7 @@ pub(super) fn emit_chunk(
         report.see_through += usize::from(surface.blend.is_some());
         report.cutout += usize::from(surface.cutout);
         report.no_texcoord += usize::from(declares_no_texcoord(mesh));
+        report.track_surface += usize::from(std::ptr::eq(mesh, chunk) && mesh.is_track());
         for submesh in &mesh.submeshes {
             if submesh.vertex_count == 0 || submesh.index_count == 0 {
                 continue;

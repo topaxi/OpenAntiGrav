@@ -163,7 +163,7 @@ pub fn capture_pixels_from(
         GlowMask::Protected,
         Velocity::None,
         // No Zone stage: the offscreen helper draws one model, not a race.
-        None,
+        &crate::mesh_render::zone::StageArt::NONE,
         // And no shadow map, and nothing receiving one: this helper draws a
         // single model against nothing, which is what makes it a comparison.
         None,

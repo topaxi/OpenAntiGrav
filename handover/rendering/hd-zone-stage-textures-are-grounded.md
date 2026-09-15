@@ -503,15 +503,20 @@ unblocks - see Next Steps below for what implementing it needs.
 
 ## Next Steps
 
-- **Bind per chunk, not per scene** (renderer lane; read on 2026-09-15, not
-  implemented). `oag_render` binds the Track set to every chunk; the original
-  binds it to the chunks whose `.rcsmodel` render-block halfword has bit 0 set
-  and the blank Scene set to the rest. Expose the halfword from
-  `oag_rcs::rcsmodel` (chunk header `+0x08` is a file offset into a 0x40-byte
-  per-chunk table; the `u16` at `+0x06` of that record) and pick the set per
-  chunk. Expect the environment to go from patterned to flat-coloured and the
-  road to keep the art; check against a Zone frame of the original before
-  calling it right. Evidence and the disc-wide value survey: thirtieth pass of
+- ~~**Bind per chunk, not per scene** (renderer lane; read on 2026-09-15, not
+  implemented).~~ **Done, 2026-09-15**, later the same day:
+  `oag_rcs::rcsmodel::Mesh::is_track` exposes the halfword's bit 0,
+  `mesh::slots::ZONE_TRACK` carries it per chunk, and `mesh.wgsl` binds the
+  Track pair where it is set and the Scene pair (the flat-white `zoneMode*`
+  set beside the `Scene.*` colours) elsewhere. On `Sub Venom` (the only
+  stage a headless capture reaches - the ladder re-shows it every frame) the
+  road and the track-side walls kept the art and the scenery went flat, and
+  flat means **white**: `Scene.Texture Colour` `0.72 0.91 0.96` on a white
+  texture, multiplied by the stage's `Constant Ambient Colour` `1.5`, clamps
+  at the target. Authored numbers through the read equation, with no
+  tonemap; the check against a Zone frame of the original is still owed and
+  is what would say whether that multiply belongs on the Zone surface.
+  Evidence and the disc-wide value survey: thirtieth pass of
   [zone-effectsettings-loader.md](../../docs/ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md).
 - ~~The Zone sky is its own thing, and this port draws the wrong one~~
   **Done, 2026-08-31, and the answer was neither option the item framed** - see

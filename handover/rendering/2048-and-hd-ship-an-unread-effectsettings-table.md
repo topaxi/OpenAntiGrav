@@ -896,16 +896,37 @@ no longer disagree.
   [zone-effectsettings-loader.md](../../docs/ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md).
   One correction on the way: `+0x74` is not on this record but on the object
   its `+0x00` points at.
-- **Port it** (renderer lane, not done here): have `oag_rcs::rcsmodel` expose
+- ~~**Port it** (renderer lane, not done here): have `oag_rcs::rcsmodel` expose
   the record's `+0x06` per chunk (`Mesh`-level; the header's `+0x08` word,
   resolved as a file offset) and bind `zoneModeTrack*` when bit 0 is set and
-  `zoneMode*` otherwise. On Talon's Junction that flips 859 of 983 chunks from
-  the Track colours to the Scene colours, so check it against a Zone frame of
-  the original before trusting the picture - `Start` authors Scene black and
-  Track at `9.0`, and the expected result is a dark environment with a lit
-  road, not the uniform tint drawn today. Also in reach from the same field:
-  the five-bucket routing (record bits 3-5), which decides which fog buffer
-  and publisher a chunk goes through.
+  `zoneMode*` otherwise.~~ **Ported, 2026-09-15.**
+  `oag_rcs::rcsmodel::Mesh::render_flags`/`is_track` read the record;
+  `mesh::slots::ZONE_TRACK` carries the bit per chunk; `mesh_render::Zone`
+  holds both colour groups and bind group 2 both stage textures; `mesh.wgsl`
+  selects per fragment. The disc counts reproduce from the reader (41,861
+  relocated, 4,365 in 37 files, 124 of 983 on Talon's Junction -
+  `crates/rcs/tests/rcsmodel_ground_truth.rs`). What a headless capture of
+  Talon's Junction shows, **on `Sub Venom`** - every headless capture lands
+  there, `--zone-stage` included, because `Scene::sync_zone_grade` re-shows
+  the recovered ladder's rung every frame and zone 0 is stage 1, so `Start`'s
+  dark-environment frame is not reachable from the CLI at all: the near
+  track-side walls and gantries (track-flagged chunks) are dark teal with
+  cyan rim edges and the road is lit cyan; the elevated scenery and
+  everything in the distance (scene chunks) is **blown-out white**. That
+  white is the data through the read equation, not a defect of the split:
+  `zonemode1.gtf` is flat white, `Scene.Texture Colour` is `0.72 0.91 0.96`,
+  and `mesh.wgsl` then multiplies the surface by the stage's own rig
+  (`lit_linear = surface_linear * authored`, with `Constant Ambient Colour`
+  `1.5`), so every channel lands above `1.0` and the target clamps it - the
+  missing tonemap stage `renderer.md` already names. Zeroing the rim term
+  or clamping `rim` to one changes none of it (both tried). Before the split
+  every surface had the road's patterned cyan. On `Flash` (1,800 ticks) the
+  scenery is flat lavender and the road orange. **Not checked against a
+  frame of the original**, which an RPCS3 capture on `Sub Venom` would
+  settle; if the original's scenery is not white there, the light multiply
+  on the Zone surface is the term to re-read, not the chunk split. Still in
+  reach from the same field: the five-bucket routing (record bits 3-5),
+  which decides which fog buffer and publisher a chunk goes through.
 - **Wire the wavefront** (renderer lane): origin = the entity's `+0xb0`
   (re-centred every frame), radius per frame after a commit `r_k = 0.1 + 0.5k
   + 0.05k(k-1)` capped at `20000`, colour weight `min(0.01k, 1)`. All disc

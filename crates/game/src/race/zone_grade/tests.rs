@@ -28,6 +28,7 @@ fn grade_with(stages: Option<&'static oag_title::ZoneStages>) -> ZoneGrade {
         table,
         stages,
         Vec::new(),
+        Vec::new(),
     )
     .expect("it names stages")
 }
@@ -63,7 +64,7 @@ fn a_fresh_grade_rests_on_stage_zero_fully_applied() {
 #[test]
 fn a_table_with_no_stages_builds_no_grade() {
     let table = EffectSettings::parse("\"Texture U scale\"=1.000000\n").expect("it parses");
-    assert!(ZoneGrade::new("empty".to_string(), table, None, Vec::new()).is_none());
+    assert!(ZoneGrade::new("empty".to_string(), table, None, Vec::new(), Vec::new()).is_none());
 }
 
 /// **Stage 0 and stage 1 are two different, correctly-sourced fogs**: `Start`

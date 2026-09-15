@@ -96,6 +96,20 @@ struct Light {
     _lpad2: f32,
 };
 
+// One of the two colour groups a Zone stage authors - `mesh_render::ZoneSet`.
+struct ZoneSet {
+    // `zoneEffect<Inner|Outer>`: the showing stage's `Texture Colour`. `.w`
+    // is `EQ brightness`: how hard the visualiser glow drives at this stage,
+    // `0.0` before the race starts and `20.0` from `Sub Venom` on for the
+    // track set - see `zone_glow` below.
+    effect: vec4<f32>,
+    // `zoneBase<Inner|Outer>`: `Base Colour Highlight`, the `rim^10`
+    // summand. `.w` unused - the exponent is a microcode literal.
+    base: vec4<f32>,
+    // `zoneBaseAlt<Inner|Outer>`: `Base Colour`, the `rim^5` summand.
+    base_alt: vec4<f32>,
+};
+
 // The Zone effect's per-stage parameters. See `mesh_render::Zone`, which
 // carries the microcode this reproduces and, more importantly, the list of
 // terms deliberately left out of it for want of a source on the disc.
@@ -105,26 +119,12 @@ struct Zone {
     // 1.0 only when every input this path reads resolved off the disc.
     enabled: f32,
     _pad: f32,
-    // `zoneEffect<Inner|Outer>`: the showing stage's `Track.Texture Colour` -
-    // `Track` because the texture set this binds decides it; see
-    // `mesh_render::Zone`. `.w` is `Track.EQ brightness`: how hard the
-    // visualiser glow drives at this stage, `0.0` before the race starts and
-    // `20.0` from `Sub Venom` on - see `zone_glow` below.
-    effect: vec4<f32>,
-    // `zoneBase<Inner|Outer>`: `Track.Base Colour Highlight`, the `rim^10`
-    // summand. `.w` unused - the exponent is a microcode literal.
-    //
-    // **Declared and read nowhere below, on purpose.** These two drive the
-    // Zone variant's *untextured* material family, whose whole surface is
-    // `base.rgb * rim^10 + base_alt.rgb * rim^5`; this program is the textured
-    // one, and adding them here would light every surface the original leaves
-    // alone. They stay declared so this layout matches `mesh_render::Zone`
-    // byte for byte - dropping them would move every later field in one
-    // language and not the other, and `min_binding_size: None` would not
-    // catch it.
-    base: vec4<f32>,
-    // `zoneBaseAlt<Inner|Outer>`: `Track.Base Colour`, the `rim^5` summand.
-    base_alt: vec4<f32>,
+    // The `Track.*` group, published beside `zone_tex` for a chunk whose
+    // `slots` carry `ZONE_TRACK`; the `Scene.*` group beside `zone_scene_tex`
+    // for every other chunk. Which is the file's own per-chunk bit - see
+    // `zone_set` below and `mesh_render::Zone`.
+    track: ZoneSet,
+    scene: ZoneSet,
 };
 
 struct Scene {
@@ -214,7 +214,7 @@ override colour_is_light: f32 = 0.0;
 // no branch is needed - the same arrangement `albedo` already uses.
 @group(1) @binding(2) var lightmap: texture_2d<f32>;
 @group(2) @binding(0) var<uniform> scene: Scene;
-// The Zone stage's own `zoneModeTrack<n>.gtf`, and a sampler of its own
+// The Zone stage's `zoneModeTrack<n>.gtf`, and a sampler of its own
 // because it is addressed by a coordinate this shader builds rather than by
 // the mesh's own - `scene.zone.uv_scale * (1 - meshUV)` runs outside [0, 1]
 // wherever the scale does, and the albedo sampler's `Repeat` is what the
@@ -240,6 +240,10 @@ override colour_is_light: f32 = 0.0;
 // depth is the average of two surfaces and belongs to neither.
 @group(2) @binding(8) var shadow_depth_tex: texture_depth_2d;
 @group(2) @binding(9) var shadow_depth_sampler: sampler;
+// The Zone stage's `zoneMode<n>.gtf`, sampled through `zone_sampler` on the
+// same coordinate as `zone_tex`, for a chunk without `ZONE_TRACK` - see
+// `zone_set`. Numbered past the shadow map because it was bound later.
+@group(2) @binding(10) var zone_scene_tex: texture_2d<f32>;
 @group(3) @binding(0) var<uniform> anims: TexAnims;
 
 // The world matrix of each `Anim Transform` node the model carries, sampled for
@@ -550,6 +554,15 @@ fn fogged(colour: vec3<f32>, world: vec3<f32>, view_depth: f32) -> vec3<f32> {
 // it is authored well past 1.0 (to 3.0 on stage 12), which is a multiplier's
 // range and not a colour's. `zoneBase*` are parameters on the same terms.
 //
+// **Which of the two publications a fragment reads is the chunk's own
+// bit.** HD publishes the parameters twice - `zoneModeTrack*` beside the
+// `Track.*` colours, `zoneMode*` beside the `Scene.*` ones - and
+// `FUN_003ff860` picks per chunk on bit 0 of its render-block flags, which
+// `mesh::rcs` carries here as `slots::ZONE_TRACK` (bit 9 of `in.slots`).
+// Both textures are sampled and one selected, rather than branched on: a
+// `textureSample` wants uniform control flow, and a flat-interpolated
+// per-vertex word is not that.
+//
 // **Scope, stated because it is an approximation.** This applies to every
 // surface `mesh.wgsl` draws for a Zone race, and the original applies it per
 // material. Craft are the exclusion that mattered and they are handled at the
@@ -558,9 +571,22 @@ fn fogged(colour: vec3<f32>, world: vec3<f32>, view_depth: f32) -> vec3<f32> {
 // ships. The sky cube, the pads and the collision wireframe do still reach
 // this path, which is the same shape of blanket approximation as the shared
 // specular exponent and the blanket sun term above.
-fn zone_sample(uv: vec2<f32>) -> vec3<f32> {
+fn zone_is_track(slots: u32) -> bool {
+    return (slots & 512u) != 0u;
+}
+
+fn zone_set(slots: u32) -> ZoneSet {
+    if zone_is_track(slots) {
+        return scene.zone.track;
+    }
+    return scene.zone.scene;
+}
+
+fn zone_sample(uv: vec2<f32>, slots: u32) -> vec3<f32> {
     let zone_uv = scene.zone.uv_scale * (1.0 - uv);
-    return textureSample(zone_tex, zone_sampler, zone_uv).rgb;
+    let track = textureSample(zone_tex, zone_sampler, zone_uv).rgb;
+    let general = textureSample(zone_scene_tex, zone_sampler, zone_uv).rgb;
+    return select(general, track, zone_is_track(slots));
 }
 
 // The two rim-lit summands, `zoneBase.rgb * rim^10 + zoneBaseAlt.rgb * rim^5`.
@@ -576,12 +602,12 @@ fn zone_sample(uv: vec2<f32>) -> vec3<f32> {
 // back NaN. A NaN here survives every arithmetic below and paints a hole no
 // unit test on the formula would catch.
 //
-// Undecoded on both shading paths, like `scene.zone.effect`: these are shader
+// Undecoded on both shading paths, like the set's `effect`: these are shader
 // *parameters*, authored in the `.effectSettings` file's own float domain, not
 // texture samples that owe an sRGB decode.
-fn zone_base_term(rim: f32) -> vec3<f32> {
+fn zone_base_term(rim: f32, colours: ZoneSet) -> vec3<f32> {
     let r = max(rim, 0.0);
-    return scene.zone.base.rgb * pow(r, 10.0) + scene.zone.base_alt.rgb * pow(r, 5.0);
+    return colours.base.rgb * pow(r, 10.0) + colours.base_alt.rgb * pow(r, 5.0);
 }
 
 // The visualiser glow: `saturate(N.y - 0.5) * (1 - windowDepth) * E.w *
@@ -601,9 +627,9 @@ fn zone_base_term(rim: f32) -> vec3<f32> {
 //                * zoneTexVis[band].rgb , 0 )
 //
 // `zoneUV` is the same coordinate `zone_sample` builds - the microcode reuses
-// it rather than a second one. `E.w` is `scene.zone.effect.w`, `Track.EQ
-// brightness`: the disc's own per-stage drive scalar, `0.0` before the race
-// starts and `20.0` from `Sub Venom` on.
+// it rather than a second one. `E.w` is the chunk's set's `effect.w` - `EQ
+// brightness`, `Track.` or `Scene.` per `zone_set`: the disc's own per-stage
+// drive scalar, `0.0` before the race starts and `20.0` from `Sub Venom` on.
 //
 // **`zoneTexVis` here is not the original's own table.** HD/Fury zero-fills
 // it at load and rewrites it every frame from `Environment_UpdateStageBlend`
@@ -629,12 +655,18 @@ fn zone_base_term(rim: f32) -> vec3<f32> {
 // `window_depth` is `@builtin(position).z` read at fragment time - WebGPU's
 // own window-space depth in `0..1`, the same convention the microcode's own
 // `f[POS]` carries.
-fn zone_glow(n: vec3<f32>, window_depth: f32, uv: vec2<f32>) -> vec3<f32> {
+fn zone_glow(n: vec3<f32>, window_depth: f32, uv: vec2<f32>, slots: u32) -> vec3<f32> {
     let zone_uv = scene.zone.uv_scale * (1.0 - uv);
-    let band = textureSample(zone_tex, zone_nearest_sampler, zone_uv).a;
+    // The band comes from whichever stage texture this chunk publishes - the
+    // scene set's is alpha 255 everywhere, so a scene chunk indexes the last
+    // entry - and `E.w` from the matching colour group.
+    let track_band = textureSample(zone_tex, zone_nearest_sampler, zone_uv).a;
+    let scene_band = textureSample(zone_scene_tex, zone_nearest_sampler, zone_uv).a;
+    let band = select(scene_band, track_band, zone_is_track(slots));
     let vis = textureSample(zone_vis_tex, zone_vis_sampler, vec2<f32>(band, 0.5)).rgb;
     let up = clamp(n.y - 0.5, 0.0, 1.0);
-    return max(up * (1.0 - window_depth) * scene.zone.effect.w * vis, vec3<f32>(0.0));
+    let drive = zone_set(slots).effect.w;
+    return max(up * (1.0 - window_depth) * drive * vis, vec3<f32>(0.0));
 }
 
 fn lit_texel(in: VertexOutput) -> vec4<f32> {
@@ -853,15 +885,16 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     // out of the fog block, the one slot in bind group 2 that carries a
     // position; the specular term below reads it from there too.
     let zone_to_eye = normalize(scene.fog.camera - in.world);
-    let zone_base = zone_base_term(1.0 - dot(n, zone_to_eye));
-    let zone = zone_sample(in.texcoord);
-    let zone_linear = pow(zone, vec3<f32>(2.2)) * scene.zone.effect.rgb + zone_base;
-    let zone_gamma = zone * scene.zone.effect.rgb + zone_base;
+    let zone_colours = zone_set(in.slots);
+    let zone_base = zone_base_term(1.0 - dot(n, zone_to_eye), zone_colours);
+    let zone = zone_sample(in.texcoord, in.slots);
+    let zone_linear = pow(zone, vec3<f32>(2.2)) * zone_colours.effect.rgb + zone_base;
+    let zone_gamma = zone * zone_colours.effect.rgb + zone_base;
     // The visualiser glow - see `zone_glow`. Gated by `enabled` explicitly
     // rather than trusting `effect.w` to be zero off a Zone race, the same
     // belt-and-braces `surface_linear`/`plain` below already take.
     let zone_glow_term =
-        zone_glow(n, in.clip.z, in.texcoord) * scene.zone.enabled;
+        zone_glow(n, in.clip.z, in.texcoord, in.slots) * scene.zone.enabled;
 
     // The read specular term: half-vector against the sun, raised to
     // `in.specular_exponent` - each material's own inline constant, decoded
