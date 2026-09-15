@@ -194,12 +194,14 @@ The string is referenced exactly once in the ELF, from `FUN_0006c600`
 (`0006c9f8`), a function that gates a Zone class-change branch (the same
 `0`-`14` ladder increment) and, on that branch, calls a confirmed
 cue-name-by-voice-slot helper for `"ZONEADVANCE"` immediately before passing
-`"ZONEBAR_TRANS"` to a second, eight-argument call whose own role isn't yet
-decompiled to certainty. Confidence 65 - see
-[sound.md](../../docs/ghidra/functions/ps3-hdfury-eu/sound.md#zonebar_trans-a-call-site-found)
-for the full read and what's still open in it. Still not wired in this
-codebase, and a single unread label is not the
-fourteen-way order match the `MR_*` ladder has. **Also found and corrected**:
+`"ZONEBAR_TRANS"` to a second, eight-argument call. **2026-09-15, later the
+same day: that call's own role is now decompiled to certainty** - it is
+`Sound_PlayNamedCue`, a real cue-play primitive, so `ZONEBAR_TRANS` is a
+genuine second cue rather than a non-audio event. Confidence 82 (up from 65)
+- see
+[sound.md](../../docs/ghidra/functions/ps3-hdfury-eu/sound.md#zonebar_trans-is-a-genuine-second-cue-not-a-uitelemetry-event-and-its-dispatch-primitive-is-named)
+for the full read. Still not wired in this codebase, and a single confirmed
+cue is not yet the fourteen-way order match the `MR_*` ladder has. **Also found and corrected**:
 `docs/formats/psp-audio.md` previously listed a third cue, `HBEAT_ZCHANGE`,
 beside `HBEAT`/`HBEAT_GO`. Checked directly this session -
 `speech_zone.bnk`'s own header gives `cue_count = 42`, cues `0`-`41`, and no
@@ -438,8 +440,25 @@ free:**
   **Answered, 2026-08-31 - see the dated section above.** It is a wavefront,
   which corroborates the reading; what it corroborates *against* (a fixed
   world-space `zoneOrigin`) is the open question that answer raises.
-- **`ZONEBAR_TRANS`'s call site is found (2026-09-15) but not fully read.**
+- ~~`ZONEBAR_TRANS`'s call site is found (2026-09-15) but not fully read.
   Decompile `FUN_002ffa58` and its callee `FUN_00679688` (called from
   `FUN_0006c600` right beside the confirmed `ZONEADVANCE` cue trigger) to
-  settle whether it is itself the non-verbal class-change cue, per
-  [sound.md](../../docs/ghidra/functions/ps3-hdfury-eu/sound.md#zonebar_trans-a-call-site-found).
+  settle whether it is itself the non-verbal class-change cue~~ **Read,
+  2026-09-15, later the same day - yes, it is.** `FUN_00679688` is a bare
+  cross-TOC trampoline (four instructions, four unrelated callers, left
+  unnamed) to `Sound_PlayNamedCue` (`FUN_0062c500`, confidence 85, renamed) -
+  `SCREAM`'s generic resolve-bank/resolve-sound-by-name/dispatch-to-play
+  entry point, read end to end with no `lvlx` holes and both its diagnostic
+  strings checked against the two-TOC trap rather than trusted from Ghidra's
+  own naming. `ZONEBAR_TRANS` plays through exactly this primitive, so it is
+  a real second cue, not a UI/telemetry event - the maintainer's "spoken
+  name and non-verbal tone together" observation now has a confirmed
+  mechanism on both sides. `ZONEBAR_TRANS`'s own confidence rises to 82
+  (from 65, capped there specifically on this unknown). Full evidence in
+  [sound.md](../../docs/ghidra/functions/ps3-hdfury-eu/sound.md#zonebar_trans-is-a-genuine-second-cue-not-a-uitelemetry-event-and-its-dispatch-primitive-is-named).
+  **Still open, narrower than before**: why `ZONEBAR_TRANS` goes through this
+  bank/sound-by-name primitive while the confirmed `ZONEADVANCE` call beside
+  it goes through a different one (`FUN_00310bd8`'s priority-slot allocator)
+  - general SCREAM convention or specific to this call site is unread.
+  Wiring either cue in this codebase is a separate, implementation-shaped
+  task from here - this pass stayed RE-only per this skill's own rule.

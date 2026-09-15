@@ -597,6 +597,101 @@ shape (fired in the same branch as, and immediately beside, the confirmed
 whether the eight-argument call is itself a cue trigger (and if so, whether
 `0x400` is a bus/category flag) or a different kind of event.
 
+## `ZONEBAR_TRANS` is a genuine second cue, not a UI/telemetry event, and its dispatch primitive is named
+
+2026-09-15, picked at random by `/oag-handover` (narrowed to this thread and
+the rendering one by the invocation's own arguments, then chosen between the
+two by `shuf`). Answers the "Next" item directly above.
+
+**`FUN_00679688` is a bare cross-TOC trampoline, four instructions, nothing
+else**: `std r2,0x28(r1); addis r2,r2,1; subi r2,r2,0x114; b 0x0062c500` -
+save the caller's TOC, load the callee's, tail-branch. It has four callers
+(`FUN_002fdc00`, `FUN_002ffa58`, `FUN_0031c090`, `FUN_0031cb50`), none of them
+Zone-specific, so it is compiler-generated glue at a TOC boundary rather than
+a function this project's naming convention has anything to say about - left
+unnamed, the same way this page already leaves two `.opd` thunks unchased.
+
+**Its target, `FUN_0062c500`, is unambiguous and is renamed
+`Sound_PlayNamedCue`.** Full disassembly read end to end (`0062c500`-`0062c79c`,
+no gaps, no `lvlx`/`lvrx`/`stvlx`/`stvrx` - the Cell-vector holes this
+binary's own trap list warns about are not present here, so nothing was
+silently dropped from the decompile the way `MR_Z_SUP`'s dismissal worried
+this page's own earlier passes). Structurally it is `SCREAM`'s generic
+"resolve then play" entry point, in this order:
+
+1. Resolve a bank - either handed a pointer directly (flag bit `0x20000000`
+   set, which is what `FUN_002ffa58` always sets - see below) or looked up by
+   name via `bl 0x0062ab60`.
+2. Resolve a sound inside that bank by name via `bl 0x0062a8f0`, unless a
+   literal index was already supplied (flag bit `0x40000000`).
+3. Check the bank's own header word against magic `0x6b6c4253` (`lis
+   r0,0x6b6c; ori r0,r0,0x4253` at `0062c55c`-`0062c560`, matching the
+   decompile's `*piVar4 != 0x6b6c4253` exactly) to pick between two dispatch
+   calls: the ordinary case, `bl 0x0062c338(bank, index, priority, bus, ...)` -
+   a `PlaySound`-shaped six-argument call - or, on the magic match, `bl
+   0x00626e78` with two bytes read out of a per-sound record at
+   `bank+0x1c + index*12`.
+4. On either resolution failure, print one of two `SCREAM` diagnostics,
+   gated by two suppression flags read first.
+
+**Both diagnostic strings were checked against the TOC-artifact trap this
+page's own opening paragraphs warn about, not trusted from Ghidra's
+`PTR_s_*` auto-naming.** `search_strings` finds `"SCREAM: Couldn't find named
+bank -> %s\n"` at `0x007cfcd0` and `"SCREAM: Didn't find sound named ->
+%s\n"` at `0x007cfcf8`. `Sound_PlayNamedCue`'s own TOC is `0x008bd3c4` (TOC
+B, the one covering `0x32d5e0`-`0x7579c0`, which `0x0062c500` falls inside);
+`0x008bd3c4 + 0x2d2c = 0x008c00f0` and `0x008bd3c4 + 0x2d30 = 0x008c00f4`,
+and `inspect_memory_content` on those two TOC slots reads back `0x007cfcd0`
+and `0x007cfcf8` exactly - the same two string addresses `search_strings`
+found independently. Both displacements the disassembly actually uses
+(`lwz r3,0x2d2c(r2)` before the bank-not-found print, `lwz r3,0x2d30(r2)`
+before the sound-not-found print) resolve to the right string on the right
+TOC, not a same-shaped wrong one. **Confidence 85**: full disassembly read,
+no unresolved gaps, two independent TOC-slot resolutions landing on the
+exact right strings, and a call shape (resolve bank, resolve sound, dispatch
+to play) that matches nothing else this page has documented as well as it
+matches "generic cue player."
+
+**This settles the open question: `ZONEBAR_TRANS` is played through exactly
+this primitive, so it is a real, second SCREAM cue trigger - not a
+UI/telemetry notification.** The maintainer's own play observation ("a
+spoken class name and a non-verbal tone at once") now has a confirmed
+mechanism on both sides: `FUN_00310bd8` (unrenamed, but read as a control
+this pass - an eight-slot priority-ranked voice allocator taking `(bank,
+subsys, name, priority)`, matching this page's existing description of the
+`ZONEADVANCE` call) for the voice line, `Sound_PlayNamedCue` for the tone.
+`ZONEBAR_TRANS`'s own confidence (previously capped at 65 specifically
+because "the callee that actually consumes the string is not itself
+resolved") rises to **82** with that callee now read; still short of
+`Sound_PlayNamedCue`'s own 85 because the *reason* `ZONEBAR_TRANS` uses this
+path rather than the ordinary voice-line path - a UI cue bus, a different
+priority band, something else - is still not read off the `0x400` argument
+`FUN_002ffa58` hands it (see below).
+
+**`FUN_002ffa58` itself is read enough to describe, not enough to name.**
+It builds a play-request struct on its own stack (a 16-byte name/id block at
+`r1+0xd0`, an optional 8-float parameter block copied in when `r21 != 0`, and
+a flags word `0x20000003`/`0x20000023` whose bit 2 is exactly the
+`0x20000000` bank-pointer-supplied flag `Sound_PlayNamedCue` tests - the two
+functions agree on this bit by construction, not by naming coincidence), then
+either calls `FUN_006766f8`/`FUN_006770a8` (read here only by shape - lock
+and unlock around a global at `TOC+0x76b4`, never chased into their own
+bodies) before or after handing the struct to `FUN_00679688`. That
+lock/unlock pair is the reason this function stays at confidence ~65 rather
+than crossing 70: the request-building half is unambiguous, the
+synchronisation half is not chased. Below the 70-confidence bar for a plain
+name, above 50 for a hypothesis - written down rather than renamed:
+"`Sound_PlayCueRequest_q`" would be the name if the lock/unlock pair turns
+out to be exactly that.
+
+**Not settled by this pass, and worth naming so the next one does not
+re-derive it**: why `ZONEBAR_TRANS` goes through `Sound_PlayNamedCue`
+(bank/sound resolved by name, magic-gated dispatch) while the confirmed
+`ZONEADVANCE` call beside it goes through `FUN_00310bd8`'s priority-slot
+allocator instead - two different primitives fired one after another in the
+same branch, and nothing read this pass says whether that is "voice line vs.
+UI tone" as a general SCREAM convention or specific to this one call site.
+
 ## `FUN_0006c600` named `Zone_UpdateCraftClass`, and its callers found
 
 2026-09-15, closing the "no static caller found" gap the addendum above left
