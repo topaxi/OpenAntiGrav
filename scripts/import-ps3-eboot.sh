@@ -95,7 +95,10 @@ headless="$GHIDRA_INSTALL_DIR/support/analyzeHeadless"
 # finding one is how we know the extension is installed and enabled. Prune
 # `*.oag-backup` dirs - this repo's own naming for a backup taken before
 # reinstalling an extension or patching Ghidra in place - or a stale backup
-# copy wins the search over the live one.
+# copy wins the search over the live one. The prune only protects this
+# search: Ghidra itself still scans a backup's data/languages/, so a backup
+# of an extension that ships an .ldefs (Ps3GhidraScripts since 2026-08-26)
+# must live outside Extensions/ altogether - data/tools/ is where it goes.
 analyze_script="$(find "$HOME/.config/ghidra" "$GHIDRA_INSTALL_DIR/Ghidra/Extensions" \
     \( -name '*.oag-backup' -prune \) -o \
     -name AnalyzePs3Binary.java -print -quit 2>/dev/null || true)"

@@ -172,8 +172,10 @@ By hand, the order matters and is easy to get wrong:
    see the TOC trap below.
 5. Run `DefinePS3Syscalls.java`.
 
-A correct import of Wipeout HD / Fury reports 26,100 functions, 159 memory
-blocks, and imports named from the NID database.
+A correct import of Wipeout HD / Fury reports 26,100 functions under the
+stock language and **26,112 under the `lvlx`-aware PS3 language** (the twelve
+extra are code that was only reachable through a hole, see the `lvlx` trap
+below), 159 memory blocks, and imports named from the NID database.
 
 #### An extension-shipped alternative to step 2, which also decodes `lvlx`
 
