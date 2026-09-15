@@ -254,7 +254,9 @@ binary are never referenced as data at all, direct-`bl` being the norm, and
 a zero here mainly rules out the callback route rather than adding a second
 independent vote for deadness. **Together**: no direct call, and no stored
 pointer to call through - no invocation path is known, which is different
-from, and weaker than, "confirmed unreachable." **[stale 2026-09-15: computed before the lvlx reimport; re-run per toolchain.md#ps3]** Not checked: a function
+from, and weaker than, "confirmed unreachable." **Re-run 2026-09-15 after the
+lvlx reimport, same result - see the dated section at the bottom of this
+page.** Not checked: a function
 pointer built with an absolute `lis`/`addis`+`ori` pair instead of a plain
 stored word.
 
@@ -321,7 +323,9 @@ at confidence 80; see the 2026-09-06 section below.
 - **What calls `GetBillboardMeshIdFromName`, if anything does.** No direct
   `bl` caller (reliable, unlike Ghidra's TOC) and no stored function pointer
   to call through (validated against a positive control) - no known
-  invocation path, not confirmed dead. **[stale 2026-09-15: computed before the lvlx reimport; re-run per toolchain.md#ps3]** Not checked: an absolute
+  invocation path, not confirmed dead. **Re-run 2026-09-15 after the lvlx
+  reimport, same result - see the dated section at the bottom of this page.**
+  Not checked: an absolute
   `lis`/`addis`+`ori`-built pointer. If a caller exists it must pass a
   0-based slot index, not the 1-based `Num` every other function on this page
   takes - true if `0x003a4da0` indexes correctly, per above.
@@ -338,7 +342,8 @@ at confidence 80; see the 2026-09-06 section below.
   A static attempt this session (following `PTR_DAT_008b2dac`'s literal stored
   value) did not converge - the candidate address aliased hundreds of unrelated
   functions, which does not fit a single struct's base address and was not chased
-  further. **[stale 2026-09-15: computed before the lvlx reimport; re-run per toolchain.md#ps3]**
+  further. **Re-run 2026-09-15 after the lvlx reimport, same non-convergent
+  result - see the dated section at the bottom of this page.**
   Live RPCS3 watchpoints, the way this thread's own history solved
   comparably stuck leads, are the likely next step.
 - **`type`'s consumer**, if it has one - unread by this function despite being
@@ -476,7 +481,9 @@ this texture every frame," which is what a countdown needs. **No reader of
 matches program-wide; the three in `FUN_000654e0` were decompiled and are a
 different base entirely (a `RaceManager` sub-object at `+0x6ff0`, read as a
 four-word cursor at `+0x830/834/838/83c`). The rest are unexamined. **Recorded
-as not established**, at no confidence. **[stale 2026-09-15: computed before the lvlx reimport; re-run per toolchain.md#ps3]**
+as not established**, at no confidence. **Re-run 2026-09-15 after the lvlx
+reimport, same result (still 14, no new reader) - see the dated section at
+the bottom of this page.**
 
 Two more things deliberately left as hypotheses rather than findings:
 
@@ -539,3 +546,90 @@ gives `0x008b6f38`; and `get_xrefs_to 0x008b6f38` returns nothing while
 text above. Every *conclusion* this page draws about the table - stride `0x100`,
 indexed by `Num`, nine words zeroed by the destructor - is unaffected. The
 underlying tooling defect is written up in [workflow.md](../../workflow.md).
+
+### 2026-09-15: the four caller-less negatives re-run after the lvlx reimport, all unchanged
+
+`docs/reverse-engineering/toolchain.md#ps3`'s lvlx reimport (09:29 the same day) fixed
+decode for ~213 KB of code across 294 HD functions that previously had no instructions
+and no xrefs. Every negative on this page computed before that point is stale by
+construction - a caller living inside one of those 294 functions could not have shown
+up in any search run against the old database. This pass re-ran all four static
+negatives this page and the sibling handover thread carried, on the reimported image,
+using `program="/ps3-hdfury-eu/EBOOT.elf"` throughout. Positive controls first, so a
+zero result below is a real zero, not a broken query.
+
+**Positive controls.** `get_function_callers(0x0029a6a8)` (`Billboard_ConstructResource_q`,
+already known to be called from both constructors) returns exactly its two known
+callers. `search_instructions(mnemonic="bl", operand_pattern="29a6a8")` returns exactly
+its two known call sites (`0029af04` in `Billboard_CreateFromLocation_q`, `0029b0fc` in
+`Billboard_CreateFromColour_q`). `search_byte_patterns` on `Billboard_ConstructResource_q`'s
+own code address (`0029a6a8`) finds exactly one hit, its own `.opd` descriptor at
+`00881898` - and a second pattern search on that descriptor address as a literal finds
+**zero** matches even though this function definitely has two direct `bl` callers. That
+last result recalibrates this page's own "zero stored words" reasoning from the
+`GetBillboardMeshIdFromName` section above: a function reached only by direct `bl`, the
+normal case, legitimately has zero literal occurrences of its own descriptor address
+anywhere else in the image. The `.opd`-literal route was never going to distinguish
+"no caller" from "called only by `bl`" - it only catches the callback/vtable case, exactly
+as the original write-up already said, now with a control proving it rather than arguing it.
+
+**1 and 2. `GetBillboardMeshIdFromName` (`0x003a4b70`) - re-confirmed negative.**
+`get_function_callers` returns none. `search_instructions(mnemonic="bl",
+operand_pattern="3a4b70")` scans all 1,829,837 instructions in the reimported image and
+returns zero - the same program-wide scan that found the two controls above, so a
+previously-holed caller now decoding for the first time would have shown up here and
+did not. `search_byte_patterns` on the function's own `.opd` descriptor (`0088b6f0`,
+unchanged from the prior pass) finds one hit, the descriptor itself; a second pattern
+search on `0088b6f0` as a literal elsewhere in the image finds zero, same shape as the
+control. `get_xrefs_to(0x003a4b70)` still returns exactly the one data xref from
+`0088b6f0` the original pass found, nothing more. The function's own body carries no
+`lvlx` (`search_instructions(mnemonic="lvlx", operand_pattern="v",
+function="GetBillboardMeshIdFromName")` returns zero of 77 instructions scanned), so it
+was not itself one of the 294 previously-holed functions - the reimport could only have
+surfaced a caller, not changed this function's own reading, and it surfaced none. Three
+routes, three zeros, one calibrated control: **still no known invocation path**, now
+dated after the reimport rather than before it.
+
+**3. `mode_descriptor` (`PTR_DAT_008b2dac`) - re-confirmed non-convergent.**
+`read_memory(0x008b2dac, 8)` gives `00 93 6f e8 00 86 9c 60` - the pointer's own stored
+value is `0x00936fe8`. `search_byte_patterns("00936fe8")` against the reimported image
+returns 151 hits, every one in the `0x008a5xxx`-`0x008c0xxx` data range - the same
+"aliases far too many places to be one struct's base address" shape the original pass
+found, reproduced at essentially the same order of magnitude. `get_xrefs_to(0x008b2dac)`
+still returns exactly one reader, `Billboard_CreateFromLocation_q` at `0029af64
+[READ]` - the same site this page already names as where `mode_descriptor` is read.
+Nothing about the reimport changes this: the value read from the global does not
+resolve to a single struct, and the global still has only the one known reader. Live
+RPCS3 watchpoints remain the next step, as the original pass already said.
+
+**4. `table_base + 0x834` reader - re-confirmed at the same count.** 
+`search_instructions(mnemonic="lwz", operand_pattern="0x834(")` against the reimported
+image returns the same 14 matches as the original pass, not more - meaning none of the
+294 previously-holed functions contains this instruction shape, so the reimport had
+nothing to surface here. Two of the previously-unexamined sites were decompiled this
+pass: `FUN_001560b0` (`00156128`, `lwz r9,0x834(r26)`) indexes an entirely different
+struct, accessed elsewhere in the same function at `param_3+0x7820`..`+0x7870`, nowhere
+near `g_BillboardSlots`'s own layout; `FUN_002d2590` (`002d25e4`, `lwz r9,0x834(r10)`) is
+a four-instruction dispatcher (`RaceManager_GetInstance` -> `FUN_000557e8` -> optionally
+`FUN_002d2068`) whose decompile shows no `+0x834` field access at all, so that
+instruction sits inside a callee not reached by this decompile view rather than in this
+function's own body against `table_base`. Neither is a plausible reader. The other nine
+sites (the `-0x834(r2)` group) remain what the original pass called them: ordinary
+TOC-relative single-word globals, a different shape than the `RaceManager` four-word
+cursor and unrelated to `table_base`. **Still not established, at no confidence** - the
+count itself, unchanged after a reimport that added instructions to 294 functions
+elsewhere in the binary, is now decent evidence this reader (if it exists at all) is not
+reached through a plain `lwz` at this fixed offset.
+
+**Net effect on the handover thread.** The thread's `## Open` list separately claims the
+unnamed 4.5 KB bind function at `0x003a4da0` "has no confirmed caller or invocation
+path." That was already wrong before this pass touched it - this page's own 2026-09-06
+section (`Billboard_LoadModelAndBind`, above) traced a real call chain
+(`Billboard_ConstructResource_q` at `0029adb4` through the pure TOC-fixup trampoline
+`FUN_006791d8` to `0x003a4da0`), unrelated to the lvlx trap since a `bl`'s target is a
+relative displacement, not a TOC-resolved `lwz`. Re-run here as part of the same pass for
+completeness: `get_function_callers(0x003a4da0)` returns the trampoline
+`FUN_006791d8`; `get_function_callers` on that thunk in turn returns
+`Billboard_ConstructResource_q` and its own `.opd` descriptor - the identical chain, now
+reproduced on the reimported image. Nothing changed; the thread's bullet was stale
+independent of the reimport and is corrected below.
