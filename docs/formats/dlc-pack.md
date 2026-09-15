@@ -388,30 +388,35 @@ way Pulse's four DLC teams are - see
 
 **Two things this page does not answer, on purpose:**
 
-- **The 256-byte trailer.** `keys.txt`'s own header comment says it is
-  "encrypted with a region-specific key embedded in BOOT.BIN," which would be
-  a *different* key from the per-pack ones above. An original direct
-  byte-pattern search for that key, the XTEA delta `0x9e3779b9` and the
-  `0x12345678` constant in both `BOOT.BIN`s came back empty, because MIPS
-  commonly synthesises a 32-bit constant from two 16-bit immediates
-  (`lui`/`ori` or `lui`/`addiu`) rather than storing it as data - a
-  contiguous-byte search cannot see that. **A `lui`/`ori`-pair search does
-  see it**: `psp-pure-eu` contains a genuine 8-round XTEA implementation,
-  `Xtea_EncryptBlock`/`Xtea_CryptBuffer`
-  (see [dlc-download-check.md](../ghidra/functions/psp-pure-eu/dlc-download-check.md)),
-  which upgrades "the game implements its own encryption in plain application
-  code" above from an absent-import inference to direct code evidence. A
-  function reading a buffer shaped exactly like `[payload][256-byte trailer]`
-  and sourcing a decrypt key from an unidentified object was also found, fed
-  by a 32-byte high-entropy blob at `0x08aa64fc`. **Tested and ruled out**:
-  that blob, either half, is not the raw key an `Xtea_CryptBuffer`-style
-  keystream would use to decrypt a shipped pack's own trailer, at either
-  offset convention - checked against Gamma Pack 1's real trailer and public
-  key, with the test implementation verified correct against the
-  already-known-good payload-header case first. The object itself - what its
-  twelve unnamed builder calls actually do - is still an open lead, just not
-  this simplest reading of it. Decryption does not need this trailer at all:
-  `oag-wad` never reads it.
+- **The 256-byte trailer.** `keys.txt`'s own header comment says "each DLC
+  has a unique encryption key... stored in the 256-byte signature... encrypted
+  with a region-specific key embedded in BOOT.BIN" - and `psp-pure-eu` now
+  has code matching that almost exactly (see
+  [dlc-download-check.md](../ghidra/functions/psp-pure-eu/dlc-download-check.md)
+  for every address and the full trace). `DlcPack_Load` splits a raw pack
+  into `[payload][trailer]`; `DlcTrailer_Validate` checks the *decrypted*
+  trailer for a literal `"WipeoutPure_____"` magic string, an `"SDRM"` tail,
+  `0xFF` padding and a 20-byte digest over its own last 140 bytes; on success
+  `DlcTrailer_ExtractKey` copies the per-pack XTEA key straight out of
+  **trailer offset `0xb4`** into the field `Xtea_CryptBuffer` uses to decrypt
+  the payload. So the per-pack keys `pure-dlc-keys.txt` already lists are, in
+  principle, derivable from each pack's own trailer rather than needing to be
+  brute-forced - that derivation is the "region-specific key" doing the
+  recovering, not a second XTEA key.
+  **Recovering the trailer's plaintext is RSA-shaped bignum modular
+  exponentiation** (`Bignum_ModExp`/`Bignum_Compare`), with a self-certifying
+  public exponent `65537` at `DAT_08aa63fc` and a modulus candidate at
+  `DAT_08aa64fc` - genuinely encrypted on disk, confirmed by checking that
+  none of `DlcTrailer_Validate`'s plaintext markers appear in a real pack's
+  raw trailer bytes. **Not yet runnable end-to-end**: a 128-byte byte-reversal
+  and a 256-byte modexp operand count disagree on the real operand width, and
+  two exhaustive offline arithmetic sweeps against Gamma Pack 1's real
+  trailer, across the plausible width/endianness combinations, both came back
+  negative - inconclusive rather than disconfirming, since neither sweep had
+  an independently-verified positive control the way a decode-and-check-the-
+  version-field test would. The concrete unblock is a live memory dump (which
+  buffer a byte-reversal step actually touches), not another offline guess.
+  Decryption does not need this trailer at all: `oag-wad` never reads it.
 - **`TEST.bin`.** 16 bytes, unread beyond its size and high-entropy-looking
   content. The upstream tool never touches it and every pack above decrypts
   correctly without it, so it is not load-bearing for reading a pack's

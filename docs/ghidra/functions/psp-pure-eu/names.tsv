@@ -80,3 +80,15 @@
 # "Disk quota exceeded" bridge error), so only pure-eu is named here.
 0x088a9c64	function	Xtea_EncryptBlock	92	dlc-download-check.md
 0x088aa204	function	Xtea_CryptBuffer	90	dlc-download-check.md
+
+# The trailer's own RSA-shaped protection (2026-09-15), same investigation:
+# DlcTrailer_ExtractKey reads the per-pack XTEA key straight out of the
+# trailer at a fixed offset, once DlcTrailer_Validate's magic-string/digest/
+# SDRM-tail checks pass. Bignum_Compare/Bignum_ModExp are the RSA-shaped
+# modular-exponentiation machinery that recovers the trailer's plaintext -
+# exact operand width unresolved, see dlc-download-check.md's own caveat.
+0x088a3118	function	DlcPack_Load	80	dlc-download-check.md
+0x088a9818	function	DlcTrailer_Validate	88	dlc-download-check.md
+0x088a6b0c	function	DlcTrailer_ExtractKey	85	dlc-download-check.md
+0x088ac4c8	function	Bignum_ModExp	92	dlc-download-check.md
+0x088ac278	function	Bignum_Compare	85	dlc-download-check.md

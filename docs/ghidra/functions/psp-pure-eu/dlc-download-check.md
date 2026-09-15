@@ -208,6 +208,130 @@ byte-identical in logic between regions, a sample of two, not "every"
 pair) but this was not confirmed, and no `pure-usa` names.tsv row is added
 for them.
 
+## `DlcPack_Load`, `DlcTrailer_Validate` and `DlcTrailer_ExtractKey`: RSA, not XTEA, protects the trailer
+
+**The earlier `Xtea_CryptBuffer`/`0x08aa64fc` negative result above is now
+explained, not just recorded**: the primitive was wrong. The trailer isn't
+XTEA-keystreamed at all - it's protected by a public-key (RSA-shaped)
+signature scheme, and the actual XTEA key `Xtea_CryptBuffer` uses to decrypt
+the *payload* comes out of the trailer itself, once that scheme verifies it.
+(`Xtea_CryptBuffer`'s *other* caller, `FUN_088a32a4`, is a closed branch, not
+this one - its only caller `FUN_0895851c` builds an HTTP request literally
+named `"%s?upload=profile&value=all&uid=%s"`, Pure's online profile upload,
+the same savedata-signing feature the `sceUtilitySavedataInitStart` chain
+above led to.)
+
+**`DlcPack_Load`** (`0x088a3118`, was `FUN_088a3118`, confidence 80) is the
+real pack loader: splits its input at `length - 0x100`, builds a ~450-byte
+object, and - only if the object's own verification succeeds - calls
+`Xtea_CryptBuffer` on the payload with a key read from inside that object
+(`+0x10c`). Its build sequence (`DlcTrailer_ExtractKey`, `FUN_088a6b80`,
+`FUN_088a70ec`) matches `[payload][256-byte trailer]` exactly.
+
+**`DlcTrailer_ExtractKey`** (`0x088a6b0c`, confidence 85) does two things in
+one function, in this order - not two sibling steps in `DlcPack_Load`'s own
+sequence as an earlier reading of this page had it: it first calls
+**`DlcTrailer_Validate`** (`0x088a9818`, confidence 88, called with an
+argument the decompiler didn't display at this call site - the same
+hidden-argument pattern seen elsewhere in this trace) to parse the
+already-decrypted trailer, and only if that call leaves the object's state
+field at `3` ("verified") does it copy 16 bytes from **trailer offset
+`0xb4`** - inside the digest-checked region below - into the object's
+`+0x10c`, the exact field `DlcPack_Load` later hands to `Xtea_CryptBuffer`.
+
+`DlcTrailer_Validate` is concrete enough to quote directly. On a buffer it
+expects to already be plaintext, it checks, in order:
+
+- byte `0` = `0x00`, byte `1` = `0x01`
+- bytes `2`-`0x5e` (93 bytes) all `0xFF` (padding)
+- a 20-byte digest at `0x60`-`0x74` that must equal a hash of the 140 bytes
+  that follow it (`0x74`-`0x100`) - algorithm unidentified, computed by
+  `FUN_088a8db8` (also used, unrelated key, in the savedata-upload path
+  traced above)
+- the literal ASCII string `"WipeoutPure_____"` (11 letters + 5 underscores,
+  16 bytes, read directly from `0x08a4dbb0`) at trailer offset `0x74`
+- bytes `0xf8`-`0xff`: `00 A0 (04|05) 00 'S' 'D' 'R' 'M'` - an `"SDRM"` tail
+  signature with a one-byte version field
+
+**This is `keys.txt`'s own comment, structurally confirmed**: "each DLC has
+a unique encryption key... stored in the 256-byte signature... encrypted
+with a region-specific key embedded in BOOT.BIN" - the per-pack key lives at
+a fixed offset inside every pack's own trailer, tamper-evident by the
+digest, and the "region-specific key embedded in BOOT.BIN" is what recovers
+the trailer's plaintext in the first place (next section) - not a second
+XTEA key as earlier passes assumed.
+
+**Verified directly against Gamma Pack 1's own trailer that it is genuinely
+encrypted, not merely differently shaped**: none of the plaintext markers
+above (`00 01` header, `0xFF` padding, the magic string, the `SDRM` tail)
+appear anywhere in the raw on-disk trailer bytes - confirmed byte-for-byte
+in `tmp/rsa_trailer_test.py`'s harness. Whatever recovers that plaintext is
+real, not a formality.
+
+### The recovery step is bignum modular exponentiation - RSA-shaped, exact size unresolved
+
+The actual recovery runs earlier than `DlcTrailer_ExtractKey` itself, inside
+the copy-in step: `DlcPack_Load` calls `FUN_088a6a84` to copy the raw
+256-byte trailer into the object, and `FUN_088a6a84` immediately calls
+`FUN_088a97c0` -> `FUN_088a7704` on that copy before `DlcTrailer_ExtractKey`
+(and the `DlcTrailer_Validate` call inside it) ever run - so the object's
+trailer bytes are already claimed-decrypted by the time anything parses them.
+`FUN_088a7704` sets up and runs:
+
+- **`Bignum_Compare`** (`0x088ac278`, confidence 85): a standard three-way
+  bignum compare (`-1`/`0`/`1`), word-descending from the most significant
+  word, exactly `0x40` (64) 32-bit words wide.
+- **`Bignum_ModExp`** (`0x088ac4c8`, confidence 92): textbook MSB-first
+  square-and-multiply modular exponentiation - `FUN_088ac960` finds the
+  highest set bit, then walks down, squaring every step and multiplying in
+  the base whenever the exponent bit is set. Also `0x40` words wide. This
+  settles word order too: word `0` is read first at the *lowest* address and
+  compared/exponentiated as the *least significant* word, so the buffer is a
+  standard little-endian bignum (matching the machine's own endianness, not
+  a ported big-endian convention needing a swap for this step).
+- **The operands**: `DAT_08aa63fc` is `0x00010001` stored as a
+  little-endian bignum (`01 00 01 00` then zeros) - **the RSA public
+  exponent 65537**, about as self-certifying as a constant gets. The
+  modulus candidate is `DAT_08aa64fc`, read for 256 bytes and continuously
+  high-entropy throughout with no boundary found in that span.
+
+**Do not read this as settled as "RSA-2048" or "RSA-1024" - it is neither,
+yet.** `FUN_088abf78` byte-reverses exactly `0x80` (128) bytes of *something*
+before the modexp runs, while `Bignum_Compare`/`Bignum_ModExp` both operate
+on `0x40`-word (256-byte) buffers. Those two sizes disagree, and which one is
+load-bearing for the real ciphertext/modulus width was not resolved this
+pass - `0x08aa64fc` could be a 128-byte (1024-bit) modulus sitting inside a
+256-byte-wide buffer convention, or a genuine 256-byte (2048-bit) one, and
+`FUN_088abf78` could be reversing the ciphertext, the modulus, or something
+else in the object entirely.
+
+**Two exhaustive offline sweeps, both negative, and why they don't disconfirm
+RSA itself.** `tmp/rsa_trailer_test.py` tries `ciphertext^65537 mod N` across
+every combination of {first-128/last-128 bytes of `0x08aa64fc`} x
+{first-128/last-128 bytes of the trailer} x {big/little-endian for each} -
+16 combinations. `tmp/rsa2048_trailer_test.py` tries the same with the full
+256 bytes of each, 4 combinations. None produced the plaintext markers
+`DlcTrailer_Validate` checks for. Unlike the earlier XTEA test, **neither
+sweep has a known-good positive control** - there is no independently-
+verified reference decrypt to confirm the harness itself is right before
+trusting a negative from it, the way the XTEA test verified against Gamma
+Pack 1's own payload header first. The likely missing piece is exact memory
+layout: which buffer `FUN_088abf78` actually reverses (`local_128` in
+`FUN_088a7704` is a pointer whose target was never confirmed - most likely
+the trailer copy at the load object's `+8`, but `FUN_088a8e90`'s second
+argument, the value ultimately stored there, was not visible in this
+session's decompiles), not the arithmetic.
+
+**One more check site, seen but not connected to the above.** `FUN_088a70ec`
+(unnamed - purpose plausible but not confirmed enough to name) compares a
+20-byte value read via `FUN_088a9adc` - `*object + 0xc4`, immediately after
+the extracted key at `0xb4`-`0xc4` - against a computed reference, falling
+back to `FUN_088a748c` plus a conditional re-hash through `FUN_088a8db8`
+(the same digest primitive `DlcTrailer_Validate` uses) if a byte at `+0xfa`
+exceeds `4`. Whether this is a second, independent integrity check on the
+key itself, part of the same RSA recovery, or something else again was not
+worked out this pass - noted here so it isn't silently dropped.
+
 ## Open
 
 - Where `TEST.bin`'s 16 bytes actually get read, if anywhere in `BOOT.BIN` at
@@ -216,55 +340,15 @@ for them.
   (`docs/formats/dlc-pack.md`), so a real PS Store download's content
   validation could be entirely system-side, in which case there is no
   in-game call site to find.
-- **The 256-byte trailer's own key: still unlocated, but substantially
-  chased this pass, not merely "not attempted."** `Xtea_CryptBuffer` has two
-  callers. `FUN_088a32a4` decrypts a buffer in place and then computes and
-  appends exactly `0x100` (256) bytes after it - the same size as the pi.wad
-  trailer - but its only caller (`FUN_0895851c`) builds an HTTP request
-  literally named `"%s?upload=profile&value=all&uid=%s"`: this is Pure's
-  **online profile upload**, i.e. the same savedata-signing feature the
-  `sceUtilitySavedataInitStart` chain above led to, not the DLC path. That
-  branch is closed.
-  `FUN_088a3118` is the more promising lead and was not similarly closed:
-  it splits its input at `length - 0x100`, builds an opaque ~450-byte object
-  over twelve unnamed calls (`FUN_088a6824` through `FUN_088a7018`) fed by a
-  32-byte high-entropy blob at `0x08aa64fc`, and - only if that object's own
-  verification succeeds - calls `Xtea_CryptBuffer` with a key read from
-  *inside that object* (`+0x10c`), matching pi.wad's documented
-  `[payload][256-byte trailer]` shape closely enough to be worth naming, but
-  **nothing in this pass identified which of the twelve calls populates
-  `+0x10c` or reads `0x08aa64fc`'s contents** - that address's use as key
-  material is an unverified candidate, not a finding: only its *pointer* was
-  seen being stored into a shared two-pointer descriptor
-  (`FUN_088a76f0`, used identically by both `FUN_088a3118` and
-  `FUN_088a32a4`), never a read of the 32 bytes themselves. The hash/digest
-  functions in `FUN_088a32a4`'s own chain produce a 20-byte output; which
-  algorithm is unidentified, not assumed to be any specific one.
-  **The decisive offline check was run 2026-09-15 (`tmp/xtea_trailer_test.py`,
-  not committed - gitignored scratch space) and came back negative.** It
-  re-implements `Xtea_EncryptBlock`/`Xtea_CryptBuffer`'s exact algorithm
-  independently of `oag_formats::pure_dlc`, verified correct first against
-  the already-known-good case (decrypting Gamma Pack 1's own payload header
-  with its public key from `data/keys/pure-dlc-keys.txt` correctly yields
-  `version = 1`, matching `docs/formats/dlc-pack.md`'s own description).
-  Against that same verified implementation: XTEA-decrypting Gamma Pack 1's
-  real 256-byte trailer with either half of `0x08aa64fc` as key
-  (`[0:16]` and `[16:32]`), at both offset conventions (`0` and the trailer's
-  absolute file position), never produces the pack's known public key
-  (`UCES00001DGAMMAPAK`:
-  `0x10 0x70 0x53 0xaf 0xaa 0xd9 0x76 0x88 0x72 0x3e 0x13 0xcb 0xf1 0x19 0xa4 0xcb`)
-  anywhere in the plaintext. Four combinations tried, all negative.
-
-  **This disconfirms the simplest version of the master-key hypothesis, not
-  the whole lead.** It rules out "the trailer is XORed with an
-  `Xtea_CryptBuffer`-style keystream keyed directly on `0x08aa64fc`'s raw
-  bytes" - it does not touch the real open question, which is still what the
-  twelve unnamed calls in `FUN_088a3118` (`FUN_088a6824` through
-  `FUN_088a7018`) actually do with the trailer and with `0x08aa64fc`. The
-  trailer could be processed in a different mode (block-chained rather than
-  keystream, per the unused `FUN_088a9eac` CBC variant seen in the same
-  binary), under a derived rather than raw key (the way `FUN_088a2cbc`
-  derives a key from a hash for the *savedata* path), or `0x08aa64fc` may not
-  be key material for this object at all despite being wired into the same
-  descriptor. Decompiling those twelve calls is the next concrete step, not
-  another offline guess - there is no more low-hanging offline fruit here.
+- **The trailer's RSA-shaped recovery is real and substantially traced, but
+  not runnable yet.** The blocker is exact memory layout, not missing math:
+  what `FUN_088abf78` actually reverses, and what `FUN_088a8e90`'s hidden
+  second argument points at. **The concrete unblock is a live memory dump,
+  not another decompile** - break in PPSSPP (or trace via `oag-trace`) at
+  `DlcPack_Load`'s entry and at the `Bignum_ModExp` call, and dump the 256
+  bytes at the load object's `+8` (the trailer copy) at both points, plus
+  the buffer `local_128` resolves to right before `FUN_088abf78` runs. One
+  memory dump settles what three further decompiles could not. Both
+  offline sweep scripts are left in `tmp/` (gitignored) for whoever picks
+  this up next, so the arithmetic doesn't need re-deriving once the layout
+  is known.

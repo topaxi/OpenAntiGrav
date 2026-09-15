@@ -38,20 +38,29 @@ so they mounted behind *Wipeout Pulse* on every later boot, keys or not. See
   a literal, so this does not rule the routine out. Not needed for reading a
   pack's content (`oag-wad` never touches the trailer), only for round-
   tripping a pack the way the upstream region-converter tool does - out of
-  scope unless region conversion becomes a goal. **2026-09-15**: the
-  `get_xrefs_to` gap below that blocked this is now fixed project-wide (see
-  next bullet), and chasing it further found the game's own XTEA cipher in
-  code (`Xtea_EncryptBlock`/`Xtea_CryptBuffer`, `pure-eu` only) plus a
-  function shaped exactly like a `[payload][256-byte trailer]` reader with a
-  key sourced from an unidentified object. **The obvious offline test of that
-  object's key candidate (`0x08aa64fc`) came back negative** - not the raw
-  key `Xtea_CryptBuffer` uses on the trailer, at either half or offset
-  convention - which narrows but does not close the lead: full trace,
-  what's ruled out versus what's still open, in
+  scope unless region conversion becomes a goal. **2026-09-15, substantially
+  resolved in structure, not yet runnable end-to-end.** The per-pack key
+  `Xtea_CryptBuffer` uses to decrypt a pack's payload is not a second BOOT.BIN
+  constant at all - `DlcTrailer_ExtractKey` reads it straight out of the
+  pack's own trailer, at a fixed offset (`0xb4`), once `DlcTrailer_Validate`'s
+  checks pass (a literal `"WipeoutPure_____"` magic string, an `"SDRM"` tail,
+  `0xFF` padding, and a 20-byte digest over the last 140 bytes). Recovering
+  that plaintext from the encrypted-on-disk trailer is RSA-shaped bignum
+  modular exponentiation (`Bignum_ModExp`/`Bignum_Compare`, public exponent
+  65537 at `DAT_08aa63fc`, modulus candidate `DAT_08aa64fc`) - **this is
+  exactly `keys.txt`'s own comment**, structurally confirmed rather than
+  guessed at. What's not resolved: the exact operand width (a 128-byte
+  reversal and a 256-byte modexp operand count disagree) and exact memory
+  layout, so two exhaustive offline arithmetic sweeps against a real pack's
+  trailer both came back negative - inconclusive, not disconfirming, since
+  neither had a known-good positive control the way the original
+  XTEA-as-trailer-key test did. Full trace, every address, and the concrete
+  unblock (a live memory dump, not more decompiling) all in
   [dlc-download-check.md](../../docs/ghidra/functions/psp-pure-eu/dlc-download-check.md).
   The `sceUtilitySavedataInitStart` chain mentioned in earlier versions of
-  this bullet *was* a dead end (ghost-replay/profile savedata, not DLC) but
-  is no longer the only lead.
+  this bullet *was* a dead end (ghost-replay/profile savedata, not DLC) and
+  stays one - the productive lead was always `DlcPack_Load`, reached from the
+  same string-table evidence as `WowDownload_VerifyPackFiles` below.
 - **`TEST.bin`**'s actual role: **narrowed, 2026-09-15, not fully closed.**
   `BOOT.BIN`'s own `WowDownload_VerifyPackFiles`
   (`psp-pure-eu` `0x08955494`, `psp-pure-usa` `0x08955b44`) checks that
@@ -120,25 +129,31 @@ so they mounted behind *Wipeout Pulse* on every later boot, keys or not. See
   for the trace, and note its addresses supersede this thread's - the
   `0x08a76dfc`-style stub addresses recorded above are `psp-pulse-usa`'s, not
   Pure's own.
-- **The game's own XTEA cipher is now found in code** (`Xtea_EncryptBlock`
-  `0x088a9c64`, `Xtea_CryptBuffer` `0x088aa204`, `pure-eu` only - see
-  dlc-download-check.md), matching `oag_formats::pure_dlc::crypt_with_key`'s
-  algorithm structurally. Its caller `FUN_088a3118` handles a buffer shaped
-  exactly like `[payload][256-byte trailer]` and reads a key from an object
-  populated by twelve unnamed calls fed by a 32-byte high-entropy blob at
-  `0x08aa64fc` - a real, unresolved lead, not the dead end the previous
-  version of this bullet described everything as being.
-  **The offline check this bullet used to point at is now done, and came
-  back negative** (dlc-download-check.md's Open section has the full
-  write-up): `0x08aa64fc`, either half, is not the direct `Xtea_CryptBuffer`
-  key for a shipped pack's trailer at either offset convention. That rules
-  out the simplest version of the hypothesis, not the lead itself - **the
-  next step is decompiling `FUN_088a6824` through `FUN_088a7018`** (the
-  twelve calls that build and verify the object `FUN_088a3118` reads its key
-  from) to find what they actually do with the trailer and with
-  `0x08aa64fc`, which needs a working Ghidra session against `pure-eu`.
-  `pure-usa`'s counterparts to both named functions were not found - the
-  Ghidra program for `/psp-pure-usa/BOOT.BIN` became unreachable
+- **The game's own XTEA cipher, the pack loader, and the trailer's RSA-shaped
+  protection are all now found in code**, all `pure-eu` only, all in
+  dlc-download-check.md: `Xtea_EncryptBlock`/`Xtea_CryptBuffer` (the payload
+  cipher, matching `oag_formats::pure_dlc::crypt_with_key` structurally),
+  `DlcPack_Load` (splits `[payload][trailer]`, was `FUN_088a3118`),
+  `DlcTrailer_Validate` (magic string / `SDRM` tail / digest checks, was
+  `FUN_088a9818`), `DlcTrailer_ExtractKey` (reads the per-pack XTEA key from
+  trailer offset `0xb4`, was `FUN_088a6b0c`), and `Bignum_ModExp`/
+  `Bignum_Compare` (the RSA-shaped recovery math, exponent `65537` confirmed,
+  modulus candidate `0x08aa64fc`). Together these are a structural answer to
+  both this bullet and the previous one, matching `keys.txt`'s own comment
+  almost word for word.
+  **What's left is exact operand width and memory layout, not more
+  decompiling of new functions** - a 128-byte swap (`FUN_088abf78`) and a
+  256-byte modexp operand count (`Bignum_ModExp`/`Bignum_Compare`) disagree,
+  and two exhaustive offline arithmetic sweeps across the plausible
+  combinations (`tmp/rsa_trailer_test.py`, `tmp/rsa2048_trailer_test.py` -
+  gitignored, not committed) both came back negative without a known-good
+  positive control to validate the harness against. **The concrete next
+  step is a live memory dump** - break in PPSSPP at `DlcPack_Load`'s entry
+  and at the `Bignum_ModExp` call, dump the trailer copy and whatever
+  `local_128` resolves to in `FUN_088a7704` - not another round of static
+  reading.
+  `pure-usa`'s counterparts to all five newly-named functions were not
+  found - the Ghidra program for `/psp-pure-usa/BOOT.BIN` became unreachable
   (`"Disk quota exceeded"`, then `"Program not found"`) partway through the
   2026-09-15 session and had not recovered as of that session's end; check
   its state fresh before resuming.
