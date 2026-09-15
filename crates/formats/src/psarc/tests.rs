@@ -125,7 +125,7 @@ fn a_deflated_archive_round_trips() {
     assert_eq!(directory.len(), 3, "two files plus the manifest");
 
     assert_eq!(
-        parse_manifest(&entries[0], &directory.header),
+        parse_manifest(&entries[0]),
         vec!["/data/one.txt".to_string(), "/data/two.bin".to_string()],
         "entry n + 1 is manifest line n"
     );
@@ -320,9 +320,6 @@ fn an_implausible_first_block_fails_its_own_entry_not_the_whole_directory() {
 #[test]
 fn a_digest_shared_by_two_entries_matches_the_first_one_in_entry_order() {
     let live_path = "Data/art/ship.gnf";
-    let mut header =
-        Header::parse(&build(64, 2, &[planned("/a", vec![1], false)])).expect("header");
-    header.version_minor = 4;
 
     let live = Entry {
         digest: path_digest(live_path),
@@ -347,7 +344,7 @@ fn a_digest_shared_by_two_entries_matches_the_first_one_in_entry_order() {
         stale_duplicate,
     ];
 
-    let matches = super::match_paths_to_entries(&header, &entries, &[live_path.to_string()]);
+    let matches = super::match_paths_to_entries(&entries, &[live_path.to_string()]);
     assert_eq!(
         matches,
         vec![
@@ -365,38 +362,35 @@ fn a_digest_shared_by_two_entries_matches_the_first_one_in_entry_order() {
     );
 }
 
+/// The regression this guards, even without a version field to mutate any
+/// more: `parse_manifest` takes no `Header` at all now, precisely because a
+/// version-based dispatch here once regressed every Vita-backed path lookup
+/// on `main` - `omega-ps4-eu`'s archives declare version 1.4 and are
+/// NUL-delimited, but Vita `2048`'s `data.psarc` also declares 1.4 and is
+/// newline-delimited throughout, zero `\x00` bytes anywhere. This case, real
+/// CRLF and no NUL byte at all, is exactly Vita's shape.
 #[test]
 fn the_manifest_tolerates_crlf_and_blank_lines() {
-    let v1_3 = Header::parse(&build(64, 2, &[planned("/a", vec![1], false)])).expect("header");
     assert_eq!(
-        parse_manifest(b"/a.txt\r\n/b.txt\r\n\r\n", &v1_3),
+        parse_manifest(b"/a.txt\r\n/b.txt\r\n\r\n"),
         vec!["/a.txt".to_string(), "/b.txt".to_string()]
     );
 }
 
 #[test]
-fn a_version_1_4_manifest_is_nul_delimited_not_newline_delimited() {
-    let mut header =
-        Header::parse(&build(64, 2, &[planned("/a", vec![1], false)])).expect("header");
-    header.version_minor = 4;
-    assert!(header.nul_delimited_manifest());
-
+fn a_manifest_with_no_newline_at_all_is_read_as_nul_delimited() {
     assert_eq!(
-        parse_manifest(b"Data/a.gnf\x00Data/b.gnf\x00\x00\x00", &header),
+        parse_manifest(b"Data/a.gnf\x00Data/b.gnf\x00\x00\x00"),
         vec!["Data/a.gnf".to_string(), "Data/b.gnf".to_string()],
         "NUL-delimited, and a run of empty segments is dropped like a blank line"
     );
 }
 
 #[test]
-fn version_1_4_paths_are_matched_to_entries_by_digest_not_position() {
-    // A v1.4-shaped table: entry 1 is a live file, entry 2 is a fully-zeroed
-    // placeholder row (no path of its own), and the manifest lists a path
-    // this archive has no entry for at all.
-    let mut header =
-        Header::parse(&build(64, 2, &[planned("/a", vec![1], false)])).expect("header");
-    header.version_minor = 4;
-
+fn a_zero_digest_placeholder_row_and_an_orphaned_manifest_path_are_both_dropped() {
+    // entry 1 is a live file, entry 2 is a fully-zeroed placeholder row (no
+    // path of its own), and the manifest lists a path this archive has no
+    // entry for at all - the shape `omega-ps4-eu`'s archives are full of.
     let live_path = "Data/art/ship.gnf";
     let entries = vec![
         Entry {
@@ -423,7 +417,7 @@ fn version_1_4_paths_are_matched_to_entries_by_digest_not_position() {
         "Data/art/orphaned_elsewhere.gnf".to_string(),
     ];
 
-    let matches = super::match_paths_to_entries(&header, &entries, &manifest_paths);
+    let matches = super::match_paths_to_entries(&entries, &manifest_paths);
     assert_eq!(
         matches,
         vec![super::PathEntry {
@@ -431,5 +425,48 @@ fn version_1_4_paths_are_matched_to_entries_by_digest_not_position() {
             path: live_path.to_string(),
         }],
         "the placeholder row and the orphaned manifest path are both dropped, not guessed at"
+    );
+}
+
+/// The well-behaved case is a corollary of digest matching, not a separate
+/// code path: every entry's digest already matches its corresponding
+/// manifest line's, so matching by digest reproduces the exact positional
+/// order this project's PS3 and Vita archives actually hold.
+#[test]
+fn a_positionally_ordered_manifest_still_resolves_in_order_through_digest_matching() {
+    let paths = ["/data/one.txt", "/data/two.bin", "/data/three.xml"];
+    let entries: Vec<Entry> = std::iter::once(Entry {
+        digest: [0u8; 16],
+        first_block: 0,
+        size: 0,
+        offset: 0,
+    })
+    .chain(paths.iter().enumerate().map(|(n, p)| Entry {
+        digest: path_digest(p),
+        first_block: n as u32,
+        size: 64,
+        offset: 128 + n as u64 * 64,
+    }))
+    .collect();
+    let manifest_paths: Vec<String> = paths.iter().map(|p| p.to_string()).collect();
+
+    let matches = super::match_paths_to_entries(&entries, &manifest_paths);
+    assert_eq!(
+        matches,
+        vec![
+            super::PathEntry {
+                index: 1,
+                path: "/data/one.txt".to_string()
+            },
+            super::PathEntry {
+                index: 2,
+                path: "/data/two.bin".to_string()
+            },
+            super::PathEntry {
+                index: 3,
+                path: "/data/three.xml".to_string()
+            },
+        ],
+        "entry n + 1 is manifest line n, recovered by digest rather than assumed"
     );
 }
