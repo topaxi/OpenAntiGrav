@@ -1642,6 +1642,78 @@ flow in this function; the raw instruction listing is.
   `+0xf4..+0x110` each paired with a light handle at `+0x114..+0x130` -
   the same offset range by coincidence, a different, larger struct).
 
+**2026-09-15: the negative re-run on the whole image, after the `lvlx`
+reimport - re-confirmed, confidence 85.** The 2026-09-05 negative above
+was drawn from decompiles of functions the disassembler had holed at an
+undecoded Cell `lvlx` (`0x00090d30` and its caller `0x0009e3d0` both
+carried one - see [toolchain.md#ps3](../../../reverse-engineering/toolchain.md#ps3),
+"Some Cell vector instructions are missing"), so it was computed over an
+image missing code. Redone on the reimported program, where `0x00090d30`
+decompiles clean (718 lines, no `halt_baddata()`, no unreachable-block
+warning; its two `lvlx` at `0x000918ec`/`0x000918f0` decode) and so does
+`0x0009e3d0` (9,556 bytes, no warning). What was actually searched:
+
+- **The per-tick chain.** `get_function_callees(0x0009e3d0)` lists 50
+  callees (40 `.opd` functions plus ten TOC stubs, `Image_SetVertexColours`
+  and `RaceManager_GetInstance`). An inline script decompiled every one and
+  scanned both its listing and its pseudocode for `0x108`: **the only
+  function in the set that touches `+0x108` off anything but the stack is
+  `0x00090d30` itself** - five sites (`lfs`/`stfs f1,0x108(r31)` at
+  `0x00091408`-`0x0009142c` and `0x00091674`-`0x0009167c`), the same
+  rise/fall pair the 2026-09-05 reading had. Four other callees have
+  `0x108(r1)` only (`std`/`stfd` register saves in `0x00089fa8`,
+  `0x0008c6f8`, `0x0008caf0`, `0x00297790`). No callee decompiles with a
+  warning any more.
+- **The whole image.** Every store instruction with a `0x108(` displacement:
+  **1,006** (`std` 548, `stw` 317, `stfd` 71, `stfs` 50, `stb` 19, `stfsu`
+  1), of which **770 are `0x108(r1)`** - stack-frame saves, the noise the
+  2026-09-05 note warned about. Of the 236 on another base register, an
+  inline script kept the ones whose function also touches any displacement
+  in `0x5000..0x7eff` (the craft is a `0x7f00`-byte allocation and every
+  craft method read so far reaches some such offset): **20 sites in 10
+  functions**, every one classified from its decompile - `0x00090d30` (3,
+  the ramp itself); `EngineFlare_Update` (3, the *flare* object's own
+  `+0x108`, base `r31` = `this`, whose `+0x134` is the craft);
+  `PhotoMode_Update` (1, its own object); `FUN_0005ac00` (1, a
+  300-byte per-slot record at `raceManager + slot * 0x12c + 0x674`);
+  `FUN_000c23e0`/`FUN_000c2bf8` (2, `this[0x42] = 1.0f` at construction of
+  an object that holds a craft pointer at `+0x14c`);
+  `FUN_000ca5f8`/`FUN_000ca8e8` (4, `+0x154` of the `0x1b4`-byte pad object
+  the human-craft spawner allocates beside the craft); `FUN_00059870` (1, a
+  21-entry ranking table swapping `+0x108`/`+0x10c`); `FUN_00071890` (1, a
+  HUD object copying its own `+0xa8`); `FUN_000dbdc8` (1, a string-hash
+  cache the craft's parameter loader fills, then reads back into
+  `craft+0x7e4c`); `FUN_001340d8` (1, a bomb's vector triple at
+  `+0x108..+0x110`); `FUN_001395f0` (2, a weapon's timer set
+  `+0x100..+0x134`). The 216 remaining sites are in functions that never
+  touch a craft-sized offset; the 14 `stfs` among them were still opened
+  one by one - a rocket's four-float parameter (`0x00125690`, keyed by hash
+  from the weapon manager's `+0x204c` table), a sin/cos triple on an object
+  with 16-byte matrices at `+0x1b0..` (`0x0028fa50`), a global at
+  `*0x008b35a0` (`0x002b2c60`, the call the human-craft spawner makes after
+  the last player), `RenderManager_PrepareEye_q`, `SoundManager_Construct`,
+  and the four already ruled out on 2026-09-05 - none takes a craft.
+- **Not covered by a displacement search, stated so nobody reads this as
+  more than it is**: indexed stores (`stfsx`/`stwx`), 16-byte vector stores
+  (`stvx`) over the `+0xf4..+0x110` block, and `memcpy`-shaped struct
+  copies. `0x00090d30` itself has none of those on the craft (`stvx` only
+  to `r1`), and the `+0xfc` rate-selector byte now has **three** clearing
+  writers in it, not two - `stbu r0,0xfc(r28)` at `0x0009113c`,
+  `0x00091a68` (in the stretch the hole hid) and `0x00091b30`, all storing
+  zero - and still no setter anywhere in the image through `stb`/`stbu`.
+
+So the reframe stands with the corruption caveat removed: `craft+0x108` is
+the self-contained ramp - now readable in the decompiler as
+`+0x108 += (byte@+0xfc ? 4.0 : 2.0) * dt` on the rising branch (`bVar24`),
+`-= 2 * dt` otherwise, clamped through `FUN_00677538`, and mirrored into
+`*(craft+0x590) + 0x12c`, which is the flare object's boost timer - and the
+decompiler now also shows the rising branch is entered only past the
+`*(craft+0x40)+0x58 == 0xb` class check and a `+0x5f70` transform read the
+2026-09-05 note called the pad-contact candidate. That reading is
+unchanged (still 35, still a hypothesis, still never observed live); the
+one thing this session adds to it is that the decompiler and the
+disassembly now agree.
+
 ## What follows for the renderer, and what stays open
 
 Implemented in `oag_render::exhaust::hd` (the tube and the flame blends),
