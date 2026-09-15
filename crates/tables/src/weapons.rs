@@ -110,8 +110,6 @@
 //! error - [`WeaponStats::simple`] returns `None`. The two Eliminator and Race
 //! files need not carry the same set.
 
-use std::fmt;
-
 use crate::fexml::{self, Node};
 
 /// `Data\XML\WeaponStats_Race.xml`, the ordinary race modes' table.
@@ -249,12 +247,14 @@ impl Weapon {
 }
 
 mod disruptor;
+mod error;
 mod stats;
 
 pub use disruptor::{
     DisruptorStats, Effect as DisruptorEffect, EffectKind as DisruptorEffectKind,
     PER_CLASS_KMH as DISRUPTOR_PER_CLASS_KMH,
 };
+pub use error::Error;
 pub use stats::{
     BombStats, CannonStats, LeachBeamStats, MineStats, MissileStats, PlasmaStats, QuakeStats,
     RocketStats, ShurikenStats, Simple,
@@ -514,66 +514,6 @@ impl WeaponStats {
         self.pickups.iter().find(|t| t.class == class)
     }
 }
-
-/// What can go wrong reading a weapon table.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Error {
-    /// The blob is not text, or the shortened-XML expansion failed.
-    Fexml(fexml::Error),
-    /// No `<WeaponStats>` root.
-    MissingRoot,
-    /// A required element is absent.
-    MissingElement {
-        /// The element that should have held it.
-        parent: &'static str,
-        /// What was missing.
-        element: &'static str,
-    },
-    /// A required attribute is absent.
-    MissingAttribute {
-        /// The element it should have been on.
-        element: &'static str,
-        /// The attribute.
-        attribute: &'static str,
-    },
-    /// An attribute is present and is not a finite number.
-    NotANumber {
-        /// The element it was on.
-        element: &'static str,
-        /// The attribute.
-        attribute: &'static str,
-        /// What the document actually said.
-        value: String,
-    },
-}
-
-impl From<fexml::Error> for Error {
-    fn from(e: fexml::Error) -> Self {
-        Self::Fexml(e)
-    }
-}
-
-impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Fexml(e) => write!(f, "{e}"),
-            Self::MissingRoot => write!(f, "no <WeaponStats> element"),
-            Self::MissingElement { parent, element } => {
-                write!(f, "<{parent}> has no <{element}>")
-            }
-            Self::MissingAttribute { element, attribute } => {
-                write!(f, "<{element}> has no {attribute} attribute")
-            }
-            Self::NotANumber {
-                element,
-                attribute,
-                value,
-            } => write!(f, "<{element} {attribute}=\"{value}\"> is not a number"),
-        }
-    }
-}
-
-impl std::error::Error for Error {}
 
 type Result<T> = std::result::Result<T, Error>;
 

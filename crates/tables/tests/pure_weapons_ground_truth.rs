@@ -12,7 +12,7 @@
 //!
 //! `weapons_ground_truth.rs` pins the decoder against Pulse's two tables. This
 //! is the Pure half, and it exists because Pure's file is a different dialect
-//! - `docs/formats/weapon-stats.md`'s "Pure dialect" section - and for a year
+//! (`docs/formats/weapon-stats.md`'s "Pure dialect" section), and for a year
 //! the decoder handled that dialect by *losing* things: the whole table until
 //! 2026-08-26, the Bomb until 2026-09-15, the Disruptor until the same day.
 //! Every claim below is a shape the file has and Pulse's does not, so a
