@@ -494,7 +494,7 @@ operand_pattern=17acc0)` finds zero direct call sites anywhere in the ELF, and
 the address never appears as an immediate operand
 (`search_instructions(operand_pattern=878db0)` - its own `.opd` descriptor -
 is also empty), so it is reached only through an indirect dispatch this
-session did not locate. The `.opd` table's physical neighbours
+session did not locate. **[stale 2026-09-15: computed before the lvlx reimport; re-run per toolchain.md#ps3]** The `.opd` table's physical neighbours
 (`FUN_006926b0`, `FUN_0017af80`, `FUN_0017b4b8`, ...) are unrelated
 functions (particle-effect timing, a refcounted-object destructor) - adjacency
 in `.opd` is link order, not a call table, and is not evidence of a group.

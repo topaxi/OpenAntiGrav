@@ -254,7 +254,7 @@ binary are never referenced as data at all, direct-`bl` being the norm, and
 a zero here mainly rules out the callback route rather than adding a second
 independent vote for deadness. **Together**: no direct call, and no stored
 pointer to call through - no invocation path is known, which is different
-from, and weaker than, "confirmed unreachable." Not checked: a function
+from, and weaker than, "confirmed unreachable." **[stale 2026-09-15: computed before the lvlx reimport; re-run per toolchain.md#ps3]** Not checked: a function
 pointer built with an absolute `lis`/`addis`+`ori` pair instead of a plain
 stored word.
 
@@ -321,7 +321,7 @@ at confidence 80; see the 2026-09-06 section below.
 - **What calls `GetBillboardMeshIdFromName`, if anything does.** No direct
   `bl` caller (reliable, unlike Ghidra's TOC) and no stored function pointer
   to call through (validated against a positive control) - no known
-  invocation path, not confirmed dead. Not checked: an absolute
+  invocation path, not confirmed dead. **[stale 2026-09-15: computed before the lvlx reimport; re-run per toolchain.md#ps3]** Not checked: an absolute
   `lis`/`addis`+`ori`-built pointer. If a caller exists it must pass a
   0-based slot index, not the 1-based `Num` every other function on this page
   takes - true if `0x003a4da0` indexes correctly, per above.
@@ -338,7 +338,8 @@ at confidence 80; see the 2026-09-06 section below.
   A static attempt this session (following `PTR_DAT_008b2dac`'s literal stored
   value) did not converge - the candidate address aliased hundreds of unrelated
   functions, which does not fit a single struct's base address and was not chased
-  further. Live RPCS3 watchpoints, the way this thread's own history solved
+  further. **[stale 2026-09-15: computed before the lvlx reimport; re-run per toolchain.md#ps3]**
+  Live RPCS3 watchpoints, the way this thread's own history solved
   comparably stuck leads, are the likely next step.
 - **`type`'s consumer**, if it has one - unread by this function despite being
   authored on every slot.
@@ -475,7 +476,7 @@ this texture every frame," which is what a countdown needs. **No reader of
 matches program-wide; the three in `FUN_000654e0` were decompiled and are a
 different base entirely (a `RaceManager` sub-object at `+0x6ff0`, read as a
 four-word cursor at `+0x830/834/838/83c`). The rest are unexamined. **Recorded
-as not established**, at no confidence.
+as not established**, at no confidence. **[stale 2026-09-15: computed before the lvlx reimport; re-run per toolchain.md#ps3]**
 
 Two more things deliberately left as hypotheses rather than findings:
 
