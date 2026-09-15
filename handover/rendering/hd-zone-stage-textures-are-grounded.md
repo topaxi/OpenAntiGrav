@@ -471,6 +471,7 @@ unblocks - see Next Steps below for what implementing it needs.
   The init chain is now mapped three levels deep (`SoundSystem_Init` ->
   cellAudio port setup -> MultiStream bus setup) and the allocation is in
   none of them, which narrows where to look rather than lifting the negative.
+  **[stale 2026-09-15: computed before the lvlx reimport; re-run per toolchain.md#ps3]**
 - **Whether the sixteen are frequency bands or per-channel levels.**
   Confidence 75 on frequency, from three indirect corroborations - two
   unrelated consumers draw them as ten-segment bars, there is a 32-entry

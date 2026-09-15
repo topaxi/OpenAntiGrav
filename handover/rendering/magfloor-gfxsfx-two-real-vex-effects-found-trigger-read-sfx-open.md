@@ -63,7 +63,7 @@ this session (the MCP bridge only had one program switched in at a time and
 `psp-pure-usa`/`psp-pure-eu` would not switch in), so whether Pure has an
 equivalent trigger over a different or absent asset is unchecked, not ruled
 out. HD/Fury's `EBOOT.elf` has no `MagEffect` string at all; not investigated
-further.
+further. **[stale 2026-09-15: computed before the lvlx reimport; re-run per toolchain.md#ps3]**
 
 **Nothing was implemented in `crates/` this session** - the render/audio
 wiring was deliberately left for a follow-up once the placement is located

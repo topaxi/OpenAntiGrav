@@ -559,7 +559,7 @@ search for `stw ...,0x11c(...)` is not the way to find that writer -
 search returns hundreds of unrelated hits on `r1` (the stack pointer) for
 one relevant hit on an object register; the same shape as the `0x00109028`
 dead end
-below, recorded so it isn't retried the same way.
+below, recorded so it isn't retried the same way. **[stale 2026-09-15: computed before the lvlx reimport; re-run per toolchain.md#ps3]**
 
 ### Runtime-verified: 118 real draws, two object families, no watchpoint support
 
@@ -1548,7 +1548,7 @@ actually is on the fogColour path, confirmed by name and by TOC. Two
 independent sessions have now exhausted the static leads this thread named
 (the byte-scoped search, then the TOC-scoped one); **the rpcs3 live-read
 alternative in Next Steps is the remaining path**, not a fallback of last
-resort.
+resort. **[stale 2026-09-15: computed before the lvlx reimport; re-run per toolchain.md#ps3]**
 
 ### A controlled live read: the engine-param table's fogColour slot is dead in gameplay, but that doesn't answer "unscaled" (2026-09-01)
 

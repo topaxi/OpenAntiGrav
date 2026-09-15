@@ -144,7 +144,8 @@ against the real disc in `crates/hd/tests/hd_title_ground_truth.rs`'s
 checking both copies by cue index rather than by trusting either one's own
 print order. **On the same confidence footing this thread's own milestone
 announcer already stands on for HD** - no call site read in the executable for
-either ladder - so this is not a new class of inference, just a second axis of
+either ladder **[stale 2026-09-15: computed before the lvlx reimport; re-run per toolchain.md#ps3]**
+- so this is not a new class of inference, just a second axis of
 the same one.
 
 **Checked that decoded actually means audible, not just that the report reads
@@ -172,7 +173,7 @@ than guessed at either way.
 **A candidate for the non-verbal half, found and deliberately left unwired.**
 `env0_zone.bnk` (HD's Zone environment bank, not `speech_zone.bnk`) names a
 cue `ZONEBAR_TRANS` - plausibly the HUD ladder widget's own transition - but
-nothing traces a call site for it, and a single unread label is not the
+nothing traces a call site for it **[stale 2026-09-15: computed before the lvlx reimport; re-run per toolchain.md#ps3]**, and a single unread label is not the
 fourteen-way order match the `MR_*` ladder has. **Also found and corrected**:
 `docs/formats/psp-audio.md` previously listed a third cue, `HBEAT_ZCHANGE`,
 beside `HBEAT`/`HBEAT_GO`. Checked directly this session -

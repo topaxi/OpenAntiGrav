@@ -668,7 +668,7 @@ no longer disagree.
   non-zero by nothing in the image); `saturation`/`finalScale`/`finalBias` are
   photo mode's exposure controls and both float4s are built **grey**, so they
   cannot express a hue; `colourScale` is bound every frame with `(1,1,1,1)`,
-  its three setters having no caller anywhere. Full evidence, with the
+  its three setters having no caller anywhere. **[stale 2026-09-15: computed before the lvlx reimport; re-run per toolchain.md#ps3]** Full evidence, with the
   whole-image scans that make it an enumeration rather than a failed search, in
   `docs/ghidra/functions/ps3-hdfury-eu/renderer.md` ("The resolve's full-screen
   colour inputs, enumerated") and cross-referenced from
@@ -1037,7 +1037,7 @@ no longer disagree.
   the fifteen-stage table, and `Sub Venom` fogs `[0, 1.305882, 1.8]` at
   density `0.0021` where `Start` authors none. **The trigger is still open**
   and is now the *only* thing between this and a race that escalates on its
-  own - `request_stage`/`set_weight` are a seam with no caller. Two smaller
+  own - `request_stage`/`set_weight` are a seam with no caller. **[stale 2026-09-15: computed before the lvlx reimport; re-run per toolchain.md#ps3]** Two smaller
   questions the wiring surfaced are in
   [effectsettings.md](../../docs/formats/effectsettings.md)'s `## Open`: which
   way `+0x18` runs (the commit zeroes it, `cross_fade_rgba8`'s own doc says
@@ -1193,7 +1193,7 @@ no longer disagree.
   `FUN_003cdc90` writes offset `+0` for entries 0 and 1 to zero (a real
   write to the exact pattern) but its only `get_xrefs_to` hit is its own
   OPD range, and a second-order check (`get_xrefs_to` on *that* address)
-  returns nothing - so it has no located caller, corrected from a first
+  returns nothing - so it has no located caller **[stale 2026-09-15: computed before the lvlx reimport; re-run per toolchain.md#ps3]**, corrected from a first
   read that called it a vtable "Reset" method before checking that far.
   New, found by disassembling rather than trusting the prior slice:
   `FUN_003da540` itself writes entry `n`'s offset `+4` (gated by a flag
@@ -1438,7 +1438,7 @@ no longer disagree.
   `Environment_UpdateStageBlend`'s `+0x04` sources: mode `0xe` ->
   `RaceManager->+0x2e10`; modes `0xd`/`0x15` -> per-viewport entries of the
   same object; **everything else, Zone included, -> `craftArray[n]->+0x640`**,
-  no writer found. The `0x640(` operand sweep returns nothing on this array,
+  no writer found. **[stale 2026-09-15: computed before the lvlx reimport; re-run per toolchain.md#ps3]** The `0x640(` operand sweep returns nothing on this array,
   which proves nothing given the folded-index-bias trap the sixth pass
   recorded; `FUN_003d0b98` (the ~24 KB neighbour carrying the
   `SpeedClass`/`NextSpeedClass`/`SpeedClassParent` node names, and the
@@ -1737,7 +1737,7 @@ no longer disagree.
   two are empty: the keys are authored, registered, parsed to known offsets
   and `Scene.Texture Colour` really is cross-faded per frame into
   `0x00c81a5c` inside `Scene_PrepareFrame` - but nothing located reads that
-  output, the seven `Scene`/`Track` getters have no callers, and the one
+  output, the seven `Scene`/`Track` getters have no callers **[stale 2026-09-15: computed before the lvlx reimport; re-run per toolchain.md#ps3]**, and the one
   alternative reader is unreached and reads elsewhere. Four keys *do* reach a
   draw (the Detonator mine/bomb colours and `Airbrake Colour`), so the
   mechanism is real and exercised - just not for these groups.
