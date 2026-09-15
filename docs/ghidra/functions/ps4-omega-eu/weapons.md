@@ -246,6 +246,42 @@ its shape is exactly what four other already-confirmed manager constructors
 on this same binary look like, just repeated twelve times over twelve
 different literal tags in a row.
 
+### The `MPElimination_ModeManager` branch also builds a `Billboard.cpp`-tagged object
+
+[`billboards.md`](billboards.md) found two writers of the `Billboard.cpp`
+tag on this binary: `Billboard_ConstructResource` itself, and one data
+reference inside this function, left as "one more of its twelve per-mode
+branches, not distinguished from the others" pending a check. Traced now,
+at the instruction level rather than assumed from switch-statement layout
+(the same caution `TrackStartup_Load`'s shared-branch-target check used):
+
+`MPElimination_ModeManager`'s own tag write (`0x01811e50`, resolved via
+`get_xrefs_to` at `0x01251b40`/`0x01251b62`) is immediately followed by an
+intrusive-list splice whose two paths - the ordinary `JZ 0x012527e1` at
+`0x01251b6e` and the dealloc-failure `JMP 0x012527e1` at `0x01251b83` -
+both converge on `0x012527e1`. Disassembling forward from there shows an
+uninterrupted run (another allocation, another list splice, no `RET`, no
+other subclass tag write) straight into a second tagged-object construction
+at `0x012528a0`-`0x01252918`: `0x78`-byte allocation, vtable
+`&PTR_FUN_0192a958`, tag `param_1[0xb] = "Billboard.cpp"` at `0x01252909`,
+and a callback slot filled with `0x1252ab0` - an address inside this same
+function, not a separate one. No other subclass's tag write, and no
+function return, sits anywhere between `MPElimination_ModeManager`'s own
+tag write and this object's construction, which is what pins it to this
+branch specifically rather than merely "somewhere in the dispatcher."
+
+**What this object is stays unnamed and unclaimed**: `0x78` bytes is far
+smaller than `Billboard_ConstructResource`'s own objects (`0xb8`/`0x3f50`
+bytes), so this reads as a small, MPElimination-specific member sharing the
+same tag source file rather than a call into the manager itself - `MPElimination_ModeManager`
+does not call `Billboard_ConstructResource` here, it builds its own
+`Billboard.cpp`-tagged object inline, the same "this binary inlines a
+sibling function" shape `weapons.md`'s own `WeaponExplosions`/`EMP` findings
+and `billboards.md`'s `GetBillboardMeshIdFromName` finding already show
+elsewhere on this binary. Not chased further: what the object's own
+`0x78` bytes hold, or why the elimination mode specifically owns one when no
+other of the eleven branches does (not checked against the other eleven).
+
 ## The `_RaceManager` family: sixteen separate functions, not a `ModeManager`-style dispatcher
 
 Unlike `ModeManager.cpp`, `RaceManager.cpp`'s own tag resolves to exactly one

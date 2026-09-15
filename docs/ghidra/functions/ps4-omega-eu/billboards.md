@@ -177,8 +177,11 @@ itself doesn't show.
 
 ## Not chased this pass
 
-- Whatever `ModeManager_ConstructByMode`'s own `Billboard.cpp`-tagged
-  sub-object is - one more of its twelve per-mode branches, not
-  distinguished from the others in this pass.
 - `+0x21c`'s meaning on the `DAT_01e31910`-shaped `RaceManager` object, and
   which mode selects the `321Go_2048_Combat.vex` gantry.
+
+**Which of `ModeManager_ConstructByMode`'s twelve branches owns this tag is
+now traced** - see
+[`weapons.md`](weapons.md#the-mpelimination_modemanager-branch-also-builds-a-billboardcpp-tagged-object):
+`MPElimination_ModeManager`'s own branch, confirmed at the instruction
+level. What the resulting `0x78`-byte object itself is remains unnamed.
