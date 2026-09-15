@@ -81,9 +81,10 @@ fn every_named_icon_model_decodes_with_a_real_quad_extent() {
         checked += 1;
     }
     assert_eq!(
-        checked, 9,
-        "PICKUP_ICON_MODELS should name nine icons on the real table \
-         (Cannon/LeachBeam/Repulser/Shuriken excluded)"
+        checked, 10,
+        "PICKUP_ICON_MODELS should name ten icons on the real table - Pure's \
+         own roster, the Disruptor included (Cannon/LeachBeam/Repulser/Shuriken \
+         excluded)"
     );
 
     let grid = oag_pure::hud::ART
