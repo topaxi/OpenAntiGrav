@@ -125,7 +125,7 @@ fn a_deflated_archive_round_trips() {
     assert_eq!(directory.len(), 3, "two files plus the manifest");
 
     assert_eq!(
-        parse_manifest(&entries[0]),
+        parse_manifest(&entries[0], &directory.header),
         vec!["/data/one.txt".to_string(), "/data/two.bin".to_string()],
         "entry n + 1 is manifest line n"
     );
@@ -276,8 +276,69 @@ fn an_entry_naming_a_block_past_the_table_is_refused() {
 
 #[test]
 fn the_manifest_tolerates_crlf_and_blank_lines() {
+    let v1_3 = Header::parse(&build(64, 2, &[planned("/a", vec![1], false)])).expect("header");
     assert_eq!(
-        parse_manifest(b"/a.txt\r\n/b.txt\r\n\r\n"),
+        parse_manifest(b"/a.txt\r\n/b.txt\r\n\r\n", &v1_3),
         vec!["/a.txt".to_string(), "/b.txt".to_string()]
+    );
+}
+
+#[test]
+fn a_version_1_4_manifest_is_nul_delimited_not_newline_delimited() {
+    let mut header =
+        Header::parse(&build(64, 2, &[planned("/a", vec![1], false)])).expect("header");
+    header.version_minor = 4;
+    assert!(header.nul_delimited_manifest());
+
+    assert_eq!(
+        parse_manifest(b"Data/a.gnf\x00Data/b.gnf\x00\x00\x00", &header),
+        vec!["Data/a.gnf".to_string(), "Data/b.gnf".to_string()],
+        "NUL-delimited, and a run of empty segments is dropped like a blank line"
+    );
+}
+
+#[test]
+fn version_1_4_paths_are_matched_to_entries_by_digest_not_position() {
+    // A v1.4-shaped table: entry 1 is a live file, entry 2 is a fully-zeroed
+    // placeholder row (no path of its own), and the manifest lists a path
+    // this archive has no entry for at all.
+    let mut header =
+        Header::parse(&build(64, 2, &[planned("/a", vec![1], false)])).expect("header");
+    header.version_minor = 4;
+
+    let live_path = "Data/art/ship.gnf";
+    let entries = vec![
+        Entry {
+            digest: [0u8; 16],
+            first_block: 0,
+            size: 0,
+            offset: 0,
+        },
+        Entry {
+            digest: path_digest(live_path),
+            first_block: 0,
+            size: 64,
+            offset: 128,
+        },
+        Entry {
+            digest: [0u8; 16],
+            first_block: 0,
+            size: 0,
+            offset: 0,
+        },
+    ];
+    let manifest_paths = vec![
+        live_path.to_string(),
+        "Data/art/orphaned_elsewhere.gnf".to_string(),
+    ];
+
+    let matches = super::match_paths_to_entries(&header, &entries, &manifest_paths);
+    assert_eq!(
+        matches,
+        vec![super::PathEntry {
+            index: 1,
+            path: live_path.to_string(),
+        }],
+        "the placeholder row and the orphaned manifest path are both dropped, not guessed at"
     );
 }

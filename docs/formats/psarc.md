@@ -210,6 +210,147 @@ and the block-width probe's 4-byte case, which is
 [undecidable from an even table](#the-block-tables-element-width-is-not-declared)
 and so falls back to 2.
 
+## Version 1.4: the PS4 Omega Collection family
+
+Applies to [`omega-ps4-eu.pkg`/`omega-ps4-eu-patch.pkg`'s](../reverse-engineering/source-images.md#omega-ps4-eupkg--omega-ps4-eu-patchpkg---wipeout-omega-collection-ps4)
+five `dataNN.psarc` archives (PS4, *Wipeout: Omega Collection*). Same 32-byte
+header, same 30-byte entry stride, but two structural differences from the
+PS3 archives above - split by confidence, because they are evidenced very
+differently.
+
+### Manifest delimiter and entry/path correspondence - confidence 88
+
+**The manifest is NUL-delimited, not newline-delimited.** Measured directly
+on `data00.psarc`: its 598,798-byte manifest carries zero `\n` bytes.
+Splitting on `\x00` and dropping empty segments recovers 10,714 well-formed
+paths - **not** the 22,582 a naive `split(NUL).len()` reports, which is
+counting 11,868 empty segments produced by long zero-byte runs inside the
+manifest text itself (three runs, 3,083 + 1,955 + 6,833 bytes, one of them
+truncating a real name mid-string - `Qirex_Col_A` where a `.gnf` extension
+should follow). Those runs are already deflate output, not a read bug (no
+`ShortBlock`), so the game genuinely ships stale zeroed-out manifest text -
+recorded as unrecoverable, not reconstructed.
+
+**Entry order carries no relationship to manifest order at all.** The PS3
+invariant "entry `n + 1` is manifest line `n`" does not hold: the entry table
+is a concatenation of several separately digest-ascending runs (one descent
+in the sequence per extra run - `data00.psarc` has four, `data01`/`data02`/
+`data04` one each, `data03` none), and it carries thousands of fully-zeroed
+placeholder rows (digest, `first_block`, `size` and `offset` all `0`) for
+manifest paths this particular archive does not store.
+
+The correspondence that *does* hold, checked against `path_digest` on all
+five archives:
+
+| Archive | Manifest paths | Real (non-zero-digest) entries | Matched by digest |
+| --- | ---: | ---: | ---: |
+| `data00.psarc` | 10,714 | 1,533 | 1,492 |
+| `data01.psarc` | 4,641 | 894 | 891 |
+| `data02.psarc` | 5,611 | 927 | 923 |
+| `data03.psarc` | 661 | 328 | 327 |
+| `data04.psarc` | 4,569 | 840 | 837 |
+
+97-99% of real entries resolve to a manifest path by MD5, on every archive -
+an exact arithmetic invariant holding across five independent files, the
+strongest evidence short of a runtime trace. The 86-90% of manifest paths
+that *don't* resolve to a local entry are not a split-namespace scheme
+either: checked directly, at most 2 of `data00.psarc`'s 9,222 orphaned paths
+turn up as a real entry in any of the other four archives - noise, not a
+pattern. They are dead text, most plausibly left over from incremental
+repacking that zeroed a removed file's manifest and entry-table rows in
+place rather than compacting around them (the three zero-byte manifest runs
+above are the same behaviour caught mid-edit).
+
+**One digest is shared by two entries on `data00.psarc`** (1,533 real rows,
+1,532 distinct digests): entries 6846 and 6857 carry the same digest and the
+same `first_block`, but entry 6857's `size` and `offset` are both zero -
+another instance of the "digest survives, geometry doesn't" pattern the
+corrupt-row section below documents, not a second file with the same name.
+`match_paths_to_entries` resolves both to the same path, so `Archive::paths`
+lists it twice; `index_of_path`'s first-match `.position()` resolves to
+entry 6846, the row with real geometry, so lookup by name is unaffected.
+
+Implemented as `Header::nul_delimited_manifest`, the NUL branch of
+`parse_manifest`, and `match_paths_to_entries`, which does the digest lookup
+and drops both an unmatched manifest path and an unmatched real entry rather
+than guessing at either. `crates/formats/src/psarc/tests.rs` pins the
+NUL split and the digest match/drop behaviour with a synthetic table;
+`crates/assets/examples/psarc_list` reproduces the table above against real
+data:
+
+```sh
+cargo run -p oag-assets --example psarc_list -- data/extracted/ps4/omega-eu/uroot/data00.psarc
+```
+
+### A single corrupt row per archive - confidence 75
+
+Three of the five archives (`data00.psarc` entry 9042, `data02.psarc` entry
+4676, `data04.psarc` entry 318) each carry **exactly one** row with a real,
+non-zero digest and a `first_block` in the billions - `data02`'s and
+`data04`'s also declare a `size` past their own archive's length (56.5 GB and
+740 GB, inside 9.1 GB and 6.0 GB files). No candidate block-table width could
+ever cover a `first_block` that large, so before this was handled the whole
+directory failed to parse - two of the five archives (`data02`, `data04`)
+could not be opened at all. `read_block_table` now excludes any entry whose
+`first_block` exceeds what the narrowest possible block table could hold from
+its own `highest`-block computation (the same treatment the already-fixed
+`size == 0` sentinel gets), and `Directory::parse` no longer validates every
+entry's block range up front - that check already exists on
+`Directory::entry_range` and now runs lazily, so this one bad row surfaces
+as a read error on the single path that names it instead of refusing the
+archive. Confidence is 75 rather than higher because *why* exactly one row
+per archive is left this way is not established - a single torn write is the
+working description, not a verified cause.
+
+### Block data location - open, not resolved
+
+**Reading a real entry's declared bytes does not currently produce its real
+content**, checked directly and not yet explained. On `data03.psarc`, of 53
+sampled entries whose first block is compressed (not a full stored block),
+**zero** had a `0x78` zlib marker at the position `Directory::entry_range`
+computes from `entry.offset`, and zero had one at the position an
+alternative reading (summing block-table sizes from the start of the block
+region, ignoring `entry.offset`) predicts instead. A targeted check around
+one entry (`Ship_LOD3.vex`, declared offset 417,565,545, single 976-byte
+block) found 512 bytes of literal zero surrounding the declared offset - not
+a sparse-file hole (`stat` reports the file fully allocated, `st_blocks *
+512` matching its logical size) - and no zlib stream anywhere in a 10 MB
+window around it decompresses to 976 bytes with the `.vex` format's `VEXX`
+magic at the expected position. The block-table width itself is not the
+culprit: width 2 (already the narrowest, so already what `read_block_table`
+picks) sums to 2,589,286,451 bytes, close to `data03.psarc`'s actual
+2,576,997,583 - width 4, the only other divisor of this table's length, sums
+to 114.7 GB, absurd for a 2.4 GiB file.
+
+One open, unverified lead: [`source-images.md`'s](../reverse-engineering/source-images.md#omega-ps4-eupkg--omega-ps4-eu-patchpkg---wipeout-omega-collection-ps4)
+own extraction command reads only `omega-ps4-eu.pkg` (the base package) and
+records "~25 GiB total" across the five archives - the `data/extracted/ps4/omega-eu/`
+this page's measurements are against is **~40.8 GiB**, larger than that
+recorded command or size would produce. Whether the current extraction also
+folded in `omega-ps4-eu-patch.pkg`, and if so whether that was a clean merge,
+is not established, and would explain zeroed block regions if the entry
+table and the physical bytes it points into come from different layers. Not
+chased further - the fix would be re-running `PkgTool.Core` correctly, not a
+change to this crate, and is exactly the kind of change that needs the
+original images, not a sandbox.
+
+Reproduce the negative result:
+
+```sh
+cargo run -p oag-assets --example psarc_cat -- \
+  data/extracted/ps4/omega-eu/uroot/data03.psarc \
+  "Data/art/published/hdships/auricom_n1/Ship_LOD3.vex" | xxd | head
+# 976 bytes, all zero - not a `.vex` file
+```
+
+**Consequence for this crate:** `Directory::entry_range`/`Directory::read_entry`
+are unchanged and still trust `entry.offset` directly, exactly as the PS3
+reading does - changing that without knowing the real answer would be a guess
+dressed as a fix, which is worse than the honest failure a wrong read already
+produces. `Archive::paths` on a version-1.4 archive names entries this crate
+can *locate in the directory and match to a path*; it does not promise their
+bytes decode to anything yet.
+
 ## See also
 
 - [Format index](README.md) - the `.psarc` row, and the PSP `PSAR` row it is not

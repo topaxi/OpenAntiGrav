@@ -33,12 +33,30 @@
 //!
 //! # Entry 0 is the manifest, not a file
 //!
-//! It inflates to a newline-separated list of every other entry's path, in
-//! entry order, so entry `n + 1` is the `n`th line. Its own digest field is
-//! sixteen zero bytes - it has no path to hash - and it is the only entry for
-//! which that is true. [`parse_manifest`] reads it; [`path_digest`] is the
-//! check that ties the manifest text, the entry ordering and the entry stride
-//! together.
+//! On a version-1.3 archive (PS3) it inflates to a newline-separated list of
+//! every other entry's path, in entry order, so entry `n + 1` is the `n`th
+//! line. Its own digest field is sixteen zero bytes - it has no path to hash -
+//! and it is the only entry for which that is true. [`parse_manifest`] reads
+//! it; [`path_digest`] is the check that ties the manifest text, the entry
+//! ordering and the entry stride together.
+//!
+//! **Version 1.4 (the PS4 Omega Collection family) breaks both halves of
+//! that.** The manifest is NUL-delimited, not newline-delimited - confirmed
+//! on `omega-ps4-eu`'s `data00.psarc`: its manifest carries zero `\n` bytes
+//! and splits into well-formed paths only on `\x00`. And entry order carries
+//! no relationship to manifest order at all: the entry table is a
+//! concatenation of several separately digest-sorted runs (one descent in the
+//! ascending sequence per extra run - data00 has four, data01/data02/data04
+//! one, data03 none), interleaved with thousands of fully-zeroed placeholder
+//! rows for manifest paths this particular archive does not store. On
+//! `data00.psarc`, 10,714 non-empty manifest paths name only 1,533 real
+//! (non-zero-digest) entries; the other ~86% are dead text - verified *not*
+//! to be files that live in a sibling `dataNN.psarc` instead (at most 2 of
+//! 9,222 orphaned `data00.psarc` paths turn up as a real entry anywhere else
+//! in the five-archive family, statistical noise rather than a split
+//! namespace). [`path_digest`] is therefore not just a check on this family,
+//! it is the only way to find an entry's path at all - see
+//! [`Header::nul_delimited_manifest`] and `docs/formats/psarc.md`.
 //!
 //! # This module does no I/O
 //!
@@ -284,6 +302,15 @@ impl Header {
     pub fn compression_name(&self) -> String {
         String::from_utf8_lossy(&self.compression).into_owned()
     }
+
+    /// Whether this archive is the PS4 Omega Collection family (version
+    /// 1.4), whose manifest is NUL-delimited and whose entry order carries no
+    /// relationship to manifest order. See the module docs' "Entry 0 is the
+    /// manifest, not a file" section.
+    #[must_use]
+    pub fn nul_delimited_manifest(&self) -> bool {
+        self.version_major == 1 && self.version_minor >= 4
+    }
 }
 
 /// One directory entry.
@@ -356,15 +383,16 @@ impl Directory {
         }
 
         let (blocks, block_width) = read_block_table(&toc[entries_end..toc_len], &entries)?;
-        for (index, entry) in entries.iter().enumerate() {
-            if entry.first_block as usize >= blocks.len() && entry.size > 0 {
-                return Err(Error::BlockOutOfRange {
-                    index,
-                    block: entry.first_block,
-                    blocks: blocks.len(),
-                });
-            }
-        }
+
+        // **Not validated per-entry here.** A single corrupt row (real digest,
+        // `first_block` past the block table - see `read_block_table`'s own
+        // doc comment) used to fail the whole directory, which meant two of
+        // `omega-ps4-eu`'s five archives could not be opened over one bad row
+        // apiece out of several thousand good ones. `Directory::entry_range`
+        // already carries this exact check - `Error::BlockOutOfRange` - and
+        // runs it lazily, per entry, so a bad row surfaces as a read error on
+        // the one path that names it instead of refusing every other path in
+        // the archive.
 
         Ok(Self {
             header,
@@ -529,16 +557,99 @@ impl Directory {
     }
 }
 
-/// Splits the manifest's text into paths, in entry order.
+/// Splits the manifest's text into paths.
 ///
-/// Entry `n + 1` is line `n`. Blank lines are dropped, and `\r\n` is handled
-/// because the archives that carry plain-text XML use CRLF throughout.
+/// `header` self-selects the delimiter: a version-1.3 archive's manifest is
+/// newline-separated, one path per entry in entry order (entry `n + 1` is
+/// line `n`), and `\r\n` is handled because the archives that carry
+/// plain-text XML use CRLF throughout. A version-1.4 archive's manifest is
+/// NUL-delimited instead, and carries no positional relationship to the
+/// entry table at all - [`match_paths_to_entries`] is what recovers that
+/// correspondence for it, by digest rather than by position. See
+/// [`Header::nul_delimited_manifest`].
 #[must_use]
-pub fn parse_manifest(data: &[u8]) -> Vec<String> {
+pub fn parse_manifest(data: &[u8], header: &Header) -> Vec<String> {
+    if header.nul_delimited_manifest() {
+        return data
+            .split(|&b| b == 0)
+            .filter(|s| !s.is_empty())
+            .map(|s| {
+                String::from_utf8_lossy(s)
+                    .trim_end_matches('\r')
+                    .to_string()
+            })
+            .filter(|s| !s.trim().is_empty())
+            .collect();
+    }
     String::from_utf8_lossy(data)
         .lines()
         .map(|line| line.trim_end_matches('\r').to_string())
         .filter(|line| !line.trim().is_empty())
+        .collect()
+}
+
+/// One archive path together with the directory index that stores it.
+///
+/// See [`match_paths_to_entries`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PathEntry {
+    /// Index into [`Directory::entries`].
+    pub index: usize,
+    /// The path this entry stores, exactly as the manifest spells it.
+    pub path: String,
+}
+
+/// Matches manifest paths to the entries that actually store them.
+///
+/// On a version-1.3 archive this is positional and total: manifest line `n`
+/// is entry `n + 1`, always, so every manifest path gets a [`PathEntry`].
+///
+/// On a version-1.4 archive position means nothing (see the module docs), so
+/// this instead looks up each manifest path's [`path_digest`] against the
+/// entries whose own digest is not all-zero - a zero digest marks a
+/// placeholder row with no path, the same way it marks the manifest entry
+/// itself. A manifest path with no matching entry (the large majority, on
+/// every `omega-ps4-eu` archive measured) and an entry whose digest matches
+/// no manifest path (41 of 1,533 on `data00.psarc`, 3 of 894 on
+/// `data01.psarc`) are both silently dropped rather than guessed at - the
+/// caller sees only the entries this archive can actually name and read.
+/// A `first_block` too large for any block table to hold (see
+/// [`read_block_table`]) still produces a [`PathEntry`]: its path is known,
+/// reading it is not, and [`Directory::entry_range`] is what reports that.
+#[must_use]
+pub fn match_paths_to_entries(
+    header: &Header,
+    entries: &[Entry],
+    manifest_paths: &[String],
+) -> Vec<PathEntry> {
+    if !header.nul_delimited_manifest() {
+        return manifest_paths
+            .iter()
+            .enumerate()
+            .map(|(n, path)| PathEntry {
+                index: n + 1,
+                path: path.clone(),
+            })
+            .collect();
+    }
+
+    let mut path_by_digest: std::collections::HashMap<[u8; 16], &str> =
+        std::collections::HashMap::with_capacity(manifest_paths.len());
+    for path in manifest_paths {
+        path_by_digest.entry(path_digest(path)).or_insert(path);
+    }
+
+    entries
+        .iter()
+        .enumerate()
+        .skip(1)
+        .filter(|(_, e)| e.digest != [0u8; 16])
+        .filter_map(|(index, e)| {
+            path_by_digest.get(&e.digest).map(|&path| PathEntry {
+                index,
+                path: path.to_string(),
+            })
+        })
         .collect()
 }
 
@@ -564,10 +675,30 @@ pub fn path_digest(path: &str) -> [u8; 16] {
 /// unrecognised layout" when the layout is actually identical to the PS3
 /// archives this parser was written against. See
 /// `docs/formats/psarc.md`.
+///
+/// **A non-zero size does not make `first_block` trustworthy either.** Three
+/// of `omega-ps4-eu`'s five archives (`data00.psarc` entry 9042 above,
+/// `data02.psarc` entry 4676, `data04.psarc` entry 318) each carry exactly
+/// one row - a real, non-zero digest alongside a `first_block` in the
+/// billions and, on the latter two, a `size` past the archive's own length
+/// (56.5 GB and 740 GB respectively, inside 9.1 GB and 6.0 GB files) - a
+/// single torn write each, not a systematic layout. No candidate width can
+/// ever cover a `first_block` past `rest.len() / 2` (2 is the narrowest
+/// width [`BLOCK_WIDTHS`] tries), so that bound excludes a row like this from
+/// `highest` the same way a zero size already did, rather than letting one
+/// corrupt row make the whole archive unreadable. The row itself stays in
+/// [`Directory::entries`] - [`Directory::entry_range`] reports it unreadable
+/// when something actually asks for it, rather than this probe refusing the
+/// other several thousand rows on its behalf.
 fn read_block_table(rest: &[u8], entries: &[Entry]) -> Result<(Vec<u32>, usize)> {
+    let narrowest = *BLOCK_WIDTHS
+        .iter()
+        .min()
+        .expect("BLOCK_WIDTHS is non-empty");
+    let ceiling = rest.len() / narrowest;
     let highest = entries
         .iter()
-        .filter(|e| e.size > 0)
+        .filter(|e| e.size > 0 && (e.first_block as usize) < ceiling)
         .map(|e| e.first_block)
         .max()
         .unwrap_or(0);
