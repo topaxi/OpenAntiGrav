@@ -620,18 +620,18 @@ decryption step beyond the disc's own layer-1 key:
 
 | Key | Value | Where it went |
 | --- | ---: | --- |
-| `Spikes Thrust Max Scale` | 1.5 | runtime storage found (`+0x490` of the tuning block, "Fourth session" below) - no consumer read; the five spike shapes' own throttle scale, separate from `EF_Main`'s |
-| `Spikes Boost Max Scale` | 2.0 | runtime storage found (`+0x480`) - no consumer read; the spikes' boost scale |
-| `Engine Flare Particles Min Alpha` | 0.25 | runtime storage found (`+0x464`) - no consumer read; see below |
-| `Enable Engine Flare Particles` | 1 | unread - see below |
+| `Spikes Thrust Max Scale` | 1.5 | runtime storage unresolved - the `+0x490` the fourth session assigned by value is `Max Chromatic Dispersion` ("Ninth session" below), and the block's head holds 1.5 at both `+0x420` and `+0x42c`; no consumer read; the five spike shapes' own throttle scale, separate from `EF_Main`'s |
+| `Spikes Boost Max Scale` | 2.0 | runtime storage unresolved - not `+0x480`, which is `Flare Radius Min` ("Ninth session"), and 2.0 sits at both `+0x428` and `+0x430`; no consumer read; the spikes' boost scale |
+| `Engine Flare Particles Min Alpha` | 0.25 | runtime storage `+0x44c` (not `+0x464`, which is `Tex Scroll Speed Thrust Contrib` - "Ninth session") - no consumer read; see below |
+| `Enable Engine Flare Particles` | 1 | runtime storage `+0x450`, a byte ("Ninth session") - no consumer read; see below |
 | `Shockwave Cycle Speed` | 0.01 | runtime storage found (`+0x46c`) - no consumer read, no shockwave node identified yet |
-| `Flare Highlight Power` | 32.0 | runtime storage found (`+0x470`) - no consumer read; a specular-looking exponent, not `flame_test.rcsmaterial`'s own `power1` (10.0, already read on engine-flare.md) |
-| `Flare Highlight Boost` | 1.0 | runtime storage found, ambiguous (`+0x474`, tied three ways with `Enable Engine Flare Particles` and `Flare Occluder Radius`, all `1.0`) |
+| `Flare Highlight Power` | 32.0 | **read** (`+0x470`): the exponent of `powf(view_dot, 32.0)` in `EngineFlare_RenderTick`'s fade, "Ninth session" below - a view-angle highlight lobe, not `flame_test.rcsmaterial`'s own `power1` (10.0, already read on engine-flare.md) |
+| `Flare Highlight Boost` | 1.0 | **read** (`+0x474`, the tie settled by row order): multiplies the sprite's alpha, "Ninth session" |
 | `Flare Fadeout Dist` | 15.0 | **read**: `+0x484` of the tuning block, consumed by `EngineFlare_RenderTick`'s linear fade as `f23` - "Fourth session" below |
 | `Flare Fadeout Range` | 15.0 | **read**: `+0x488`, the same fade's `f24` |
-| `Flare Occluder Radius` | 1.0 | runtime storage found, ambiguous (`+0x4a8`/`+0x4ac`, same three-way `1.0` tie; `+0x4a8` is the fade's clamp ceiling `f26` - see "Fourth session", which corrects the `Flare Size Clamp` guess below) |
-| `Flare Size Clamp` | 50.0 | runtime storage found (`+0x4b0`) - **not** the fade's clamp ceiling (that is `+0x4a8` = `1.0`, "Fourth session" below); no consumer read |
-| `Flare Depth Bias` | -0.46 | runtime storage found (`+0x4b4`, already named on hd.rs's `Sprite` doc) - no consumer read |
+| `Flare Occluder Radius` | 1.0 | **read** (`+0x4ac`): the xyz scale of the occlusion-query proxy `EngineFlare_RenderTick` draws with z-pass counting on, "Ninth session"; the fade's clamp ceiling at `+0x4a8` is `Flare Opacity Max`, not this |
+| `Flare Size Clamp` | 50.0 | runtime storage found (`+0x4b0`) - **not** the fade's clamp ceiling (that is `+0x4a8` = `Flare Opacity Max`); `EngineFlare_RenderTick` never loads it ("Ninth session"), no consumer read |
+| `Flare Depth Bias` | -0.46 | runtime storage found (`+0x4b4`, already named on hd.rs's `Sprite` doc) - `EngineFlare_RenderTick` never loads it either; no consumer read |
 
 **`Engine Flare Particles` is a third component, not a variant of the two
 already drawn.** The flare is a `.rcsmodel` (the always-on flame, read on
@@ -710,7 +710,9 @@ checked and ruled out - it is the **track sponsor-signage** system
 **The function that turns `Flare Radius` into a world-space quad remained
 unlocated after both a static and a live pass** across two sessions - this is
 the same wall `engineflare_vp`/`fp` resolving through no registry read already
-put up two rows above.
+put up two rows above. (Located since: it is `EngineFlare_RenderTick` itself,
+whole only after the 2026-09-15 reimport - "Ninth session" below has the
+corner build and the size law.)
 
 ### Third session: it was on `EngineFlare`'s own vtable, not a separate manager
 
@@ -784,8 +786,21 @@ draw path.
 *decompiler* bails there ("Control flow encountered bad instruction data"),
 but the raw bytes are ordinary AltiVec, confirmed with `disassemble_bytes`
 against the plain instruction decoder rather than the function-level
-analysis. And the shared global both `EngineFlare_RenderTick` and
-`Trail_RenderTick` read (`0x00AEA540`) is the tuning file's own runtime
+analysis. **Corrected 2026-09-15: the cause was never a decompiler-analysis
+failure.** `0x002a0be8` is an `lvlx` instruction (`lvlx v13,0,r8`, the
+first of three in this function - `0x002a0bec` and `0x002a0db0` are the
+others), a Cell extension stock Ghidra's sleigh does not decode; the
+disassembler halted at the word and never resumed, so the function had
+1,772 of its 3,192 bytes and the decompiler was reporting a genuine hole
+in the *listing*, not a misreading of the bytes. `disassemble_bytes` read
+past it only because that tool decodes one instruction at a time and skips
+what it cannot decode. The program was reimported on 2026-09-15 under a
+language that decodes `lvlx`, and the function now decompiles whole with no
+warning - see [toolchain.md#ps3](../../../reverse-engineering/toolchain.md#ps3),
+"Some Cell vector instructions are missing", for the mechanism and the
+count (851 sites, 294 functions), and "Ninth session" below for what the
+complete decompile says. And the shared global both `EngineFlare_RenderTick`
+and `Trail_RenderTick` read (`0x00AEA540`) is the tuning file's own runtime
 storage, live-confirmed by exact value.
 
 **What the middle does, read at the instruction level.** Past the two
@@ -807,19 +822,24 @@ base - a first run of the script skipped the second dereference
 address moves between runs) and read every offset as `0.0`. Fixed,
 `struct_base + 0x460`..`0x4b4` matches the tuning file's remaining unread
 rows almost one for one, live and exact
-(`data/reference/hd-capture/flare-size/tuning-dump/`):
+(`data/reference/hd-capture/flare-size/tuning-dump/`). **The row column
+below was assigned by value and is wrong wherever two rows share a value;
+"Ninth session" re-derives it from the whole dump and the file's row order
+(rows 14-41 sit at `+0x44c`..`+0x4b8` in file order, 4 bytes each) - the
+corrected label is in bold after each wrong one, and that section's table
+is the one to cite:**
 
 | Offset | Live value | Tuning row |
 | --- | ---: | --- |
-| `+0x464` | 0.25 | `Engine Flare Particles Min Alpha` |
+| `+0x464` | 0.25 | `Engine Flare Particles Min Alpha` - **wrong, `Tex Scroll Speed Thrust Contrib`; `Min Alpha` is `+0x44c`** |
 | `+0x46c` | 0.01 | `Shockwave Cycle Speed` |
 | `+0x470` | 32.0 | `Flare Highlight Power` |
-| `+0x474` | 1.0 | ambiguous - `Flare Highlight Boost`, `Enable Engine Flare Particles` and `Flare Occluder Radius` are all `1.0` |
-| `+0x480` | 2.0 | `Spikes Boost Max Scale` |
+| `+0x474` | 1.0 | ambiguous - `Flare Highlight Boost`, `Enable Engine Flare Particles` and `Flare Occluder Radius` are all `1.0` - **settled: `Flare Highlight Boost`** |
+| `+0x480` | 2.0 | `Spikes Boost Max Scale` - **wrong, `Flare Radius Min`** |
 | **`+0x484`** | **15.0** | **`Flare Fadeout Dist` - this is `f23` in the formula above** |
 | **`+0x488`** | **15.0** | **`Flare Fadeout Range` - this is `f24`** |
-| `+0x490` | 1.5 | `Spikes Thrust Max Scale` |
-| `+0x4a8`/`+0x4ac` | 1.0 | ambiguous, same three-way tie as `+0x474` - `+0x4a8` is `f26`, the clamp ceiling the fade result is `min()`-ed against right before the store |
+| `+0x490` | 1.5 | `Spikes Thrust Max Scale` - **wrong, `Max Chromatic Dispersion`** |
+| `+0x4a8`/`+0x4ac` | 1.0 | ambiguous, same three-way tie as `+0x474` - `+0x4a8` is `f26`, the clamp ceiling the fade result is `min()`-ed against right before the store - **settled: `+0x4a8` is `Flare Opacity Max`, `+0x4ac` is `Flare Occluder Radius`** |
 | `+0x4b0` | 50.0 | `Flare Size Clamp` |
 | `+0x4b4` | -0.46 | `Flare Depth Bias` |
 
@@ -1250,6 +1270,238 @@ honestly is either Ghidra evidence for what the original itself multiplies
 explicit, disclosed decision to fit a value anyway - which is a call for
 whoever picks this thread up next, not one to make silently mid-session.
 
+### Ninth session: the complete decompile - the quad, its size law, and why the fade never ran
+
+**2026-09-15.** The program was reimported under a language that decodes
+`lvlx` (see the correction at the top of "Fourth session"), and
+`EngineFlare_RenderTick` decompiles whole: 3,192 bytes, `0x002a08a8` to
+`0x002a1524`, no bad-instruction warning, zero unreachable blocks. Read
+against the disassembly, with the TOC constants read off `0x008ad4d8`
+(the function sits below `0x32d5e0`, so Ghidra's TOC is the right one -
+[memory.md](memory.md)) and the tuning block re-labelled from the archived
+live dump, it answers four things this thread had open and narrows the
+fifth to one breakpoint.
+
+**1. The tuning block is the file in row order, and three earlier labels
+were wrong.** `data/reference/hd-capture/flare-size/tuning-dump/global_block.bin`
+is `struct_base + 0x420`..`0x4cf`, dumped 2026-09-02. Rows 14-41 of
+`shipeffectstweaks.txt` sit at `+0x44c`..`+0x4b8` in the file's own order,
+four bytes each, and every one of the 28 words matches: `+0x44c` 0.25 `Min
+Alpha`, `+0x450` byte 1 `Enable Particles`, `+0x454`..`+0x468` the six
+`Tex Scroll` rows (0.08, 0.1, 0.0, **1000.0**, 0.25, 0.6), `+0x46c` 0.01
+`Shockwave`, `+0x470` 32.0 `Highlight Power`, `+0x474` 1.0 `Highlight
+Boost`, `+0x478` **6.283185** `Max Rotate Angle`, `+0x47c` 3.0 **`Flare
+Radius`**, `+0x480` 2.0 **`Flare Radius Min`**, `+0x484`/`+0x488` 15.0
+`Fadeout Dist`/`Range`, `+0x48c` 0.5 **`Max Radius Jitter`**, `+0x490` 1.5
+**`Max Chromatic Dispersion`**, `+0x494` byte 1 **`Enable Flare Sprite`**,
+`+0x498` int **10** `Slow Alpha Noise Timer`, `+0x49c`/`+0x4a0`/`+0x4a4`
+0.5/0.8/0.1 the `Slow Alpha Noise` band and chase, `+0x4a8` 1.0 **`Flare
+Opacity Max`**, `+0x4ac` 1.0 **`Flare Occluder Radius`**, `+0x4b0` 50.0
+`Size Clamp`, `+0x4b4` -0.46 `Depth Bias`, `+0x4b8` byte 1 `Enable Engine
+Trails`. Five of those values are unique in the file (1000, 6.283185, 50,
+-0.46, 0.01) and three are integers landing on words the code loads as
+integers (`lwz r21,0x498(r9)`, `lbz r0,0x494(r9)`), so the mapping is
+overdetermined - **confidence 92**. The head of the block (`+0x420`..
+`+0x448`) is *not* in file order (`+0x42c`/`+0x430` are the `Spikes` pair,
+`+0x444`/`+0x448` the `Afterburner` pair reversed) and no claim is made
+there beyond what the values pin - `+0x42c`/`+0x430` read 1.5/2.0 and
+*could* be the `Spikes` pair, but 1.5 also sits at `+0x420` and 2.0 at
+`+0x428`, so that is a value guess of exactly the kind this paragraph is
+correcting, not a mapping. Consequences: the fourth session's
+`+0x480` = `Spikes Boost Max Scale` and `+0x490` = `Spikes Thrust Max
+Scale` were value coincidences (2.0 and 1.5 each appear twice in the file);
+the byte-flag gate at `+0x494` this thread has been calling "a byte flag"
+is `Enable Flare Sprite` itself; and the three-way `1.0` tie collapses.
+
+**2. This function builds the sprite's quad - the three-session hunt for
+"the function that turns `Flare Radius` into a world-space quad" is over.**
+Past the fade store the decompile is unambiguous:
+
+```
+002a0d78: addi  r3,r26,0x250
+002a0d7c-88: fsel x2           ; a = clamp(fade, 0.0, 1.0)
+002a0d8c: lfs   f13,0xc(r3)    ; this+0x25c, a per-instance 0..1
+002a0d94: fmadds f13,f21,f13,f19   ; MaxRadiusJitter * this[0x25c] + FlareRadiusMin
+002a0dc8: fmadds f12,f18,f12,f13   ; FlareRadius * a + that
+002a0dd4: stfs  f12,0x1e0(r1)  ; half-height, world units
+002a0df4: vmaddfp v5,v29,v7,v6 ; cam_row0 * half
+002a0dfc: vmaddfp v7,v28,v7,v6 ; cam_row1 * half
+002a0e00: vmaddfp v5,v5,v10,v6 ; * 4.0  (v10 = splat of *(r2+0x5aa4) = 0x40800000)
+```
+
+then four corners `pos - v5 - v7`, `pos + v5 - v7`, `pos + v5 + v7`,
+`pos - v5 + v7`, each multiplied through the 4x4 at `FUN_00678f68()`
+(`*0x008b713c`, the camera object's first matrix - world-to-clip by use),
+converted lane by lane with `FUN_00677cb8` (float to half) and stored as
+three `sth` at `this+0x274/6/8`, `+0x284/6/8`, `+0x294/6/8`, `+0x2a4/6/8`
+- the same 16-byte stride `EngineFlare_Init` seeds the UV pairs into at
+`+0x280..+0x2b2`, so the vertex is `{half3 position, pad, u32 colour, half2
+uv}` - "position" in whatever space that first matrix maps to, clip by the
+65-confidence reading above. The colour word at `+0x27c/+0x28c/+0x29c/+0x2ac` is
+`0xffffff00 | alpha_byte`, where `alpha_byte = (int)(fade * 255.0)`
+(`*(r2+0x5ab4)` = `0x437f0000`), `0xff` if `fade > 1`. Then
+`FUN_002c4ad0(MaxChromaticDispersion * (1.0 - view_dot), *(r2+0x5aa8),
+this+0x1a0, this+0x274, 4, 2)` submits it: four vertices, the texture handle
+at `this+0x1a0`, and a dispersion amount that grows as the view leaves the
+nozzle axis. Decompiler line for the submit:
+`_opd_FUN_002c4ad0((double)(float)(dVar35 * (double)(float)((double)fVar2 - dVar50)),uVar3,*(undefined4 *)(param_1 + 0x1a0),(undefined2 *)(param_1 + 0x274),4,2);`
+with `dVar35` = `+0x490` and `dVar50` the view dot. **Confidence 88** for
+"this is the sprite's own draw" (the vertex block, the UV seeding from
+`Init`, the texture handle and the four-vertex submit all sit on the same
+object); the matrix's identity as world-to-clip is by use only, 65.
+
+So **the size law is** `half_height = Flare Radius Min + Flare Radius *
+clamp(fade, 0, 1) + Max Radius Jitter * jitter01`, with `half_width = 4 *
+half_height`. The `4.0` at `0x008b2f7c` scales the camera's row-0 axis only
+and matches the texture: `Engine_Flare_Rich.gtf` is **1024 x 256** (GTF
+header, `DATA02.PSARC`, format `0x86`, 11 mips), a 4:1 streak, so the quad
+keeps the texel aspect rather than squashing it. `oag_render::exhaust::hd`'s
+`RADIUS +- rand * JITTER, floored at MIN` is a different law (its own doc
+says the law was unread; it now is), and `exhaust::sprite` draws a square.
+Neither is changed by this docs-only session - see the handover thread.
+
+**3. `this+0x18c` is the sprite's alpha, and the fade reading is confirmed
+with two terms the raw-byte reading missed.** The decompiler's own
+expression, variables named after the offsets they load:
+
+```
+dVar44 = (double)FUN_00677868(dVar50,dVar47);                      // powf(view_dot, +0x470 = Flare Highlight Power)
+dVar41 = (double)(float)((double)(float)(dVar49 * dVar46 - dVar41) / dVar42);   // (dist * k - +0x484) / +0x488
+dVar38 = dVar48; if ((float)(dVar41 - dVar48) < 0.0) dVar38 = dVar41;   // min(x, 1.0)
+if (dVar38 < 0.0) dVar38 = dVar45;                                  // max(., 0.0)  -> saturate
+dVar38 = (double)((float)((double)(float)(dVar48 - dVar38) * dVar44) * (float)(dVar51 * dVar40));
+                                   // (1 - saturate) * powf(...) * (alpha_walk * +0x474 Flare Highlight Boost)
+if ((float)(dVar43 - dVar38) < 0.0) dVar38 = dVar43;                // min(., +0x4a8 Flare Opacity Max)
+*(float *)(param_1 + 0x18c) = (float)dVar38;
+```
+
+`FUN_00677868` is a TOC-fixup stub onto `0x0042a568`, which Ghidra already
+names `powf` (the `_FDunscale`/`_FLog`/`_FExp` body of a libm pow).
+`dVar48`/`dVar45` are `*(r2+0x5a1c)`/`*(r2+0x5a18)` = `0x008b2ef4`/
+`0x008b2ef0` = 1.0/0.0. `dVar49` is a **distance**, not an inverse length
+- `0x002a0d04: vmaddfp v1,v1,v0,v7` multiplies the squared length by its
+refined `rsqrt`, i.e. `len`, of `flare_pos - cam_row3` - and `dVar46` is
+`((float *)*(r2+0x5aa0))[max(view_index, 0)]`, a per-view table entry, not
+a per-instance value. `dVar51` is `this+0x194` (the walked alpha; the
+countdown at `this+0x190` reloads from `+0x498` = `Slow Alpha Noise Timer`
+and re-targets `this+0x198 = lerp(NoiseMin, NoiseMax, rand() * 2^-30)`,
+`rand` returning `& 0x3fffffff`) - or 1.0 when the camera object below is
+in mode 3 or 4. `dVar50` is the view dot: the camera's row-2 axis and the
+flare node's own Z axis (`*(this+0x38) + 0x20`), both normalised with a
+zero-length fallback, negated on one side, summed - and the fade only runs
+when it is positive (`0x002a0c8c: ble -> epilogue`), so the sprite is a
+one-hemisphere `cos^32` lobe around the nozzle axis. Which hemisphere in
+world terms depends on two sign conventions not settled here. So:
+`fade = min((1 - saturate((dist * k - 15) / 15)) * powf(dot, 32) * alpha_walk * 1.0, 1.0)`,
+stored at `+0x18c`, then used as the vertex alpha and as the size's
+`clamp(fade, 0, 1)` term. **Confidence 90** - the raw-byte reading's
+`1 - saturate((f30*f28 - f23)/f24)` is confirmed, and the fourth session's
+alternative reading (b), "`+0x18c` feeds an occlusion-query parameter", is
+refuted: it feeds the colour word and the half-height, nothing else. The
+seventh session's geometric point stands as stated: at chase range the
+distance term is 1.0, so it is the `powf(dot, 32)` factor, not the
+distance, that keeps a drawn sprite small and dim off-axis.
+
+**4. `0x002a1210` is the occlusion query, traced rather than guessed, and it
+rejoins the fade path.** In order: `FUN_006765f8()` (stub onto
+`0x003c81a0`, `(A[0x4c] == 0) && (A[8] < A[0]) && A[0x39]` on the object at
+`*0x008b7838`) false, and the byte at `**(r2+0x5aac)` set; read ring slot
+`(this[0x270] + 2) % 3` and, if it holds a report, `visible = report.value
+!= 0` (`lwz r0,0x8(r9)` - `CellGcmReportData.value`, the z-pass pixel
+count), else `visible = 1`; advance `this[0x270]`; take a 16-byte report
+from the lwmutex'd pool at `0x005cc710`; zero it; `Rsx_SetMethod(ctx,
+0x17cc, 1)` (`NV4097_SET_ZPASS_PIXEL_COUNT_ENABLE`), depth-write off via
+`FUN_00678148(ctx, 0)`, colour mask `0,0,0,0`; draw the proxy with
+`FUN_006792c8(r, r, r, 1, ctx, 0, node + 0x30, -1)` where `r` = `+0x4ac` =
+**`Flare Occluder Radius`** (1.0) - a unit proxy scaled by the radius at the
+flare node's position; `0x005c766c` writes method `0x1800`
+(`NV4097_GET_REPORT`, `1 << 24 | slot`); then z-pass counting off,
+depth-write and colour mask restored, and **`bne -> 0x002a0b48`** if
+`visible` else return. `FUN_006765e8()` true skips the query entirely and
+goes to `0x002a0b48` directly. So there is no second draw branch: the
+third gate the sixth session found routes through a two-frame-latent
+occlusion test and then rejoins the *same* fade path. **Confidence 88.**
+
+**5. Why the fade never ran, narrowed to one gate - and it looks like the
+function does not draw the viewing player's own sprite.** With the query
+rejoining at `0x002a0b48`, the only thing between it and `0x002a0bb8`
+(where all three of the fifth session's zero-hit breakpoints sat) is
+`0x002a0bb4: beq -> epilogue` on `r10`:
+
+```
+002a0b54: lwz  r9,0x7a60(craft)      ; craft+0x7a60
+002a0b58: cmpwi r9,-1 ; beq -> r10 = 1
+002a0b60: lwz  r0,0x0(r25)           ; *0x008c1430, the view index (0/1 halve the
+                                     ;  viewport at 0x002a0ad8-0x002a0b2c; < 0 skips that)
+002a0b68: blt r0 < 0 -> r10 = 0
+002a0b70-80: r10 = (r9 != r0)        ; xor / abs / sign-bit idiom
+002a0b84-0ba4, 002a11b0-11d4, 002a14d0-14fc:
+   if the camera object at **0x008b2eb4 has (+0x34 & 6) and its +0x1ec == craft:
+       r10 = (mode = +0x40) > 11 || !((1 << mode) & 0x9c4)   ; 0 for modes 2,6,7,8,11
+       modes 3 and 4 also force alpha_walk to 1.0 (r29)
+```
+
+`craft+0x7a60` is written in exactly two places in the image (`stw` sweep
+over 1,829,837 instructions: `0x000de770` in `FUN_000ddd58` and
+`0x000e07ac` in `FUN_000dfd90`, two craft constructors that register with
+the collision world per [collision.md](collision.md)), both storing the
+constructor's seventh argument. Its three callers pass: `FUN_0005cb40`
+(the human-craft spawner - kind `0`, allocates the `0xa0` pad object with
+the same index, stores the craft at `raceManager+0x13e8` when the index is
+0) the **player index**; `FUN_00044a00` (kind `1`) the literal **-1**;
+`FUN_00058e38` (kind `2`) a loop counter. So `+0x7a60` is the local player
+that owns the craft, -1 for none, and `r10` reads as "this craft is not the
+one the current view belongs to": always 1 for a `-1` craft, and for a
+player's craft 1 only in another player's viewport or under a camera object
+targeting it in a mode outside `{2, 6, 7, 8, 11}`. In the single-view races
+every live sample so far was taken in, the player's own craft has
+`+0x7a60 = 0` and a view index of 0 or -1, and either way `r10 = 0` -
+**the fade math and the quad are skipped for the craft the camera belongs
+to**, which is what 0 hits at `0x002a0bb8` over ~2,500 calls with both
+earlier gates measured open already said. Two confidences, because two
+different things are being claimed: the branch logic itself - `r10 =
+(owner != view)` from the `xor`/`abs`/sign-bit idiom at `0x002a0b70`-
+`0x002a0b80`, skipped at `0x002a0bb4` when equal - is mechanical, **90**,
+and the `+0x7a60` identity rests on its two writers and three spawners,
+**85**. What holds the *conclusion* at **75** is narrower: that
+`*0x008c1430` is the current view index (read from the split-screen
+halving at `0x002a0ad8`-`0x002a0b2c`, never measured) and what the
+camera object's `0x9c4` mode set means. The fifth session's breakpoints
+were also not filtered by craft, so whether an AI craft ever reaches
+`0x002a0bb8` is not known either (an AI craft's `+0x7a60` is -1 by the
+spawner above, so it should - unless its query read zero, unless
+`craft+0x5fa4` was in `{4, 5, 6}` for it, or unless it was never enqueued).
+What follows if it holds: the compact glow on the player's own nozzles in
+all three original captures is the flame `.rcsmodel` and whatever `Engine
+Flare Particles` draws, **not this sprite**, and this engine draws on the
+player's craft a quad the original reserves for the other crafts. **The
+one measurement that settles it** is not the branch outcome (the listing
+already gives that) but the two values feeding it: a breakpoint at
+`0x002a0bac` logging `*(*(r31+0x134)+0x7a60)`, `*0x008c1430` and `r31` on
+every craft's call, plus one at `0x002a1428` logging `r28` (the query
+result) - `scripts/hd-flare-gate-check.py` already has the shape, it
+needs the register and memory reads added. **A cheaper check that needs no
+breakpoint**: the reading predicts an asymmetry a single frame shows - no
+sprite on the player's craft, a wide 4:1 streak on every opponent whose
+nozzles face the camera within ~15 units. None of the three captures on
+disc has an opponent nearer than the horizon (the player is in eighth
+place in all three), so a start-grid frame - seven crafts bunched a few
+units ahead, nozzles toward the camera - is the picture to take.
+
+**What this function never loads**: `+0x478` `Flare Max Rotate Angle`,
+`+0x4b0` `Flare Size Clamp`, `+0x4b4` `Flare Depth Bias`, and nothing
+below `+0x470`. The rotate and the two occlusion-adjacent rows have a
+consumer somewhere else or none; `FUN_002c4ad0` and the proxy draw
+`0x005f0c10` are where to look, neither read this session.
+
+Reproduce: `decompile_function 0x002a08a8` and `disassemble_function
+0x002a08a8` with `program="/ps3-hdfury-eu/EBOOT.elf"`; `read_memory
+0x008b2ef0 160` for the TOC constants; `search_instructions
+mnemonic=stw operand_pattern="0x7a60("` for the two writers;
+`python3 scripts/psarc.py cat data/extracted/ps3/hdfury-eu/PS3_GAME/USRDIR/DATA02.PSARC /data/tex/engineflare/engine_flare_rich.gtf | head -c 48 | xxd`
+for the texture header; and the block decode is
+`struct.unpack('>f', global_block.bin[off - 0x420:][:4])` per offset.
+
 ## The flame and the plume breathe; nothing gates the plume
 
 `EngineFlare_Update` is Pulse's exhaust state machine wearing PS3 constants -
@@ -1406,6 +1658,90 @@ flow in this function; the raw instruction listing is.
   `+0xf4..+0x110` each paired with a light handle at `+0x114..+0x130` -
   the same offset range by coincidence, a different, larger struct).
 
+**2026-09-15: the negative re-run on the whole image, after the `lvlx`
+reimport - re-confirmed, confidence 85.** The 2026-09-05 negative above
+was drawn from decompiles of functions the disassembler had holed at an
+undecoded Cell `lvlx` (`0x00090d30` and its caller `0x0009e3d0` both
+carried one - see [toolchain.md#ps3](../../../reverse-engineering/toolchain.md#ps3),
+"Some Cell vector instructions are missing"), so it was computed over an
+image missing code. Redone on the reimported program, where `0x00090d30`
+decompiles clean (718 lines, no `halt_baddata()`, no unreachable-block
+warning; its two `lvlx` at `0x000918ec`/`0x000918f0` decode) and so does
+`0x0009e3d0` (9,556 bytes, no warning). What was actually searched:
+
+- **The per-tick chain.** `get_function_callees(0x0009e3d0)` lists 50
+  callees (40 `.opd` functions plus ten TOC stubs, `Image_SetVertexColours`
+  and `RaceManager_GetInstance`). An inline script decompiled every one and
+  scanned both its listing and its pseudocode for `0x108`: **the only
+  function in the set that touches `+0x108` off anything but the stack is
+  `0x00090d30` itself** - five sites (`lfs`/`stfs f1,0x108(r31)` at
+  `0x00091408`-`0x0009142c` and `0x00091674`-`0x0009167c`), the same
+  rise/fall pair the 2026-09-05 reading had. Four other callees have
+  `0x108(r1)` only (`std`/`stfd` register saves in `0x00089fa8`,
+  `0x0008c6f8`, `0x0008caf0`, `0x00297790`). No callee decompiles with a
+  warning any more.
+- **The whole image.** Every store instruction with a `0x108(` displacement:
+  **1,006** (`std` 548, `stw` 317, `stfd` 71, `stfs` 50, `stb` 19, `stfsu`
+  1), of which **770 are `0x108(r1)`** - stack-frame saves, the noise the
+  2026-09-05 note warned about. Of the 236 on another base register, an
+  inline script kept the ones whose function also touches any displacement
+  in `0x5000..0x7eff` (the craft is a `0x7f00`-byte allocation and every
+  craft method read so far reaches some such offset): **20 sites in 10
+  functions**, every one classified from its decompile - `0x00090d30` (3,
+  the ramp itself); `EngineFlare_Update` (3, the *flare* object's own
+  `+0x108`, base `r31` = `this`, whose `+0x134` is the craft);
+  `PhotoMode_Update` (1, its own object); `FUN_0005ac00` (1, a
+  300-byte per-slot record at `raceManager + slot * 0x12c + 0x674`);
+  `FUN_000c23e0`/`FUN_000c2bf8` (2, `this[0x42] = 1.0f` at construction of
+  an object that holds a craft pointer at `+0x14c`);
+  `FUN_000ca5f8`/`FUN_000ca8e8` (4, `+0x154` of the `0x1b4`-byte pad object
+  the human-craft spawner allocates beside the craft); `FUN_00059870` (1, a
+  21-entry ranking table swapping `+0x108`/`+0x10c`); `FUN_00071890` (1, a
+  HUD object copying its own `+0xa8`); `FUN_000dbdc8` (1, a string-hash
+  cache the craft's parameter loader fills, then reads back into
+  `craft+0x7e4c`); `FUN_001340d8` (1, a bomb's vector triple at
+  `+0x108..+0x110`); `FUN_001395f0` (2, a weapon's timer set
+  `+0x100..+0x134`). The 216 remaining sites are in functions that never
+  touch a craft-sized offset; the 14 `stfs` among them were still opened
+  one by one - a rocket's four-float parameter (`0x00125690`, keyed by hash
+  from the weapon manager's `+0x204c` table), a sin/cos triple on an object
+  with 16-byte matrices at `+0x1b0..` (`0x0028fa50`), a global at
+  `*0x008b35a0` (`0x002b2c60`, the call the human-craft spawner makes after
+  the last player), `RenderManager_PrepareEye_q`, `SoundManager_Construct`,
+  and the four already ruled out on 2026-09-05 - none takes a craft. The
+  heuristic's own blind spot is a small helper that takes a craft and
+  writes only `+0x108`, which would show `baseMax=0x108` and nothing
+  larger; the dozen such sites in the craft-method address range
+  (`0x00083510`, `0x00085270`, `0x0008530c`, `0x00085340`, `0x000853c4`,
+  `0x000853f8`, `0x00085704`, `0x000857d4`, `0x000858a8`, `0x00087b50`,
+  `0x00088b50`, `0x000890e8`, plus the four `0x00049xxx` twins) were opened
+  for that reason: every one is `*(obj + 0x108) += 1` or `-= 1` on a
+  sub-object loaded from the argument - an integer reference count on a
+  shared resource, the pair `0x00085298`/`0x00085350` being the
+  acquire/release the human-craft spawner calls on a global - not a float
+  and not a craft. Outside that range the same shape is not excluded,
+  only made unlikely by the per-tick argument above.
+- **Not covered by a displacement search, stated so nobody reads this as
+  more than it is**: indexed stores (`stfsx`/`stwx`), 16-byte vector stores
+  (`stvx`) over the `+0xf4..+0x110` block, and `memcpy`-shaped struct
+  copies. `0x00090d30` itself has none of those on the craft (`stvx` only
+  to `r1`), and the `+0xfc` rate-selector byte now has **three** clearing
+  writers in it, not two - `stbu r0,0xfc(r28)` at `0x0009113c`,
+  `0x00091a68` (in the stretch the hole hid) and `0x00091b30`, all storing
+  zero - and still no setter anywhere in the image through `stb`/`stbu`.
+
+So the reframe stands with the corruption caveat removed: `craft+0x108` is
+the self-contained ramp - now readable in the decompiler as
+`+0x108 += (byte@+0xfc ? 4.0 : 2.0) * dt` on the rising branch (`bVar24`),
+`-= 2 * dt` otherwise, clamped through `FUN_00677538`, and mirrored into
+`*(craft+0x590) + 0x12c`, which is the flare object's boost timer - and the
+decompiler now also shows the rising branch is entered only past the
+`*(craft+0x40)+0x58 == 0xb` class check and a `+0x5f70` transform read the
+2026-09-05 note called the pad-contact candidate. That reading is
+unchanged (still 35, still a hypothesis, still never observed live); the
+one thing this session adds to it is that the decompiler and the
+disassembly now agree.
+
 ## What follows for the renderer, and what stays open
 
 Implemented in `oag_render::exhaust::hd` (the tube and the flame blends),
@@ -1465,8 +1801,11 @@ Open, in rough order of visible cost:
   still-unopened vtable slots rather than hunting a second object or
   scanning the pushbuffer. What it draws the quad *with* - which of its
   loads is `Flare Radius`, `Flare Fadeout Dist/Range`, or `Flare Size
-  Clamp` - remains unread; most of the function past its gate is RSX
-  submission plumbing rather than the tuning values themselves. **A fourth
+  Clamp` - remained unread until the function decompiled whole on
+  2026-09-15 ("Ninth session": `+0x47c` is `Flare Radius`, the half-height
+  is `Min + Radius * clamp(fade) + Jitter * rand`, the width four times
+  that, and `Size Clamp` is never loaded); before that most of the function
+  past its gate read as RSX submission plumbing. **A fourth
   session (same day) confirmed `Flare Fadeout Dist`/`Range` (15.0/15.0) are
   exactly the two constants a `saturate()`-shaped fade inside the function
   consumes, live; a fifth then breakpoint-traced the function and confirmed

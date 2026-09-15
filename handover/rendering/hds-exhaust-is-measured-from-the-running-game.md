@@ -51,7 +51,23 @@ section) is the current, authoritative state.
   sets the `+0xfc` rate-selector byte (confidence 35, not a name, a
   hypothesis) - a class-ID compare (`sub-object+0x58 == 0xb`) gating a
   transform load from what may be a pad/track object - is on the page but
-  not verified live.
+  not verified live. **Re-run 2026-09-15 on the reimported program
+  (both `0x00090d30` and `0x0009e3d0` had been holed by an undecoded `lvlx`
+  when the negative was first drawn) and re-confirmed at 85**: all 50
+  callees of `0x0009e3d0` decompile clean and only `0x00090d30` touches
+  `+0x108`; a whole-image sweep of the 1,006 stores with a `0x108(`
+  displacement leaves 236 off the stack, the 20 in craft-sized code all
+  classified to other objects (the flare's own `+0x108`, a RaceManager
+  slot record, the pad object, weapons, HUD), the 14 `stfs` in the rest
+  opened one by one, and the dozen `+0x108` sites inside the craft-method
+  address range all integer reference counts on a shared resource - none
+  takes a craft. What the clean decompile adds:
+  the rising branch is entered only past the `+0x58 == 0xb` check and the
+  `+0x5f70` transform read, so the pad-contact reading is now what the
+  decompiler shows too, still never observed live; and `+0xfc` has a
+  third clearing writer (`0x00091a68`, in the formerly hidden stretch) and
+  still no setter. Full account: `engine-trail.md`, the 2026-09-15 entry
+  under "What arms the boost timer".
 
 ## Next Steps
 
@@ -63,17 +79,21 @@ section) is the current, authoritative state.
   this needs a live RPCS3 trace bracketing a boost pickup/barrel
   roll/start sequence with a breakpoint on `craft+0xfc`'s write sites -
   static reading (`search_instructions` for `stb`/`stbu` on `0xfc(`,
-  whole-binary) found exactly two writers of that exact addressing form,
-  **both inside `0x00090d30` itself, and both clearing it to `0`**
-  (`stbu r0,0xfc(r28)` at `0x0009113c`/`0x00091b30`, `r0` loaded from
-  `li r0,0x0`). Nothing anywhere sets it to `1` this way, so whatever arms
+  whole-binary) found exactly two writers of that exact addressing form -
+  three after the 2026-09-15 reimport, `0x00091a68` having sat in a hole -
+  **all inside `0x00090d30` itself, and all clearing it to `0`**
+  (`stbu r0,0xfc(r28)` at `0x0009113c`/`0x00091a68`/`0x00091b30`, `r0`
+  loaded from `li r0,0x0`). Nothing anywhere sets it to `1` this way, so whatever arms
   the rise rate either writes a whole word/struct that happens to overlap
   this byte, or reaches it through indexed addressing (`stbx`) this sweep
   would not catch - read for that live rather than assuming a breakpoint on
   the literal `+0xfc(r31)` address will ever fire. A blind `stw`/`stfs
   0x108(` sweep across the whole binary is
   **not** useful alone - confirmed again this session, 48+ unrelated hits,
-  mostly stack-frame saves at the same offset.
+  mostly stack-frame saves at the same offset; the 2026-09-15 re-run did
+  it properly (1,006 stores, 770 on `r1`, the rest classified by whether
+  the function touches a craft-sized offset) and it need not be repeated -
+  the next evidence is live, not static.
 - Separately, and explicitly not the next step here: implementing the five
   spike shapes (their own geometry, not just the flicker constant) is a
   renderer feature of its own size, tracked by this bullet rather than

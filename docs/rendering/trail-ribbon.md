@@ -532,6 +532,12 @@ kind `CLAUDE.md` names. The load report says so on every HD race.
 - **A second, sprite-shaped flare path**: `Engine_Flare_Rich.gtf` and the
   registry names `engineflare_vp`/`engineflare_fp` exist in the executable, and
   nothing establishes which of the two a race draws, or whether it draws both.
+  **Since 2026-09-15 it does**: `EngineFlare_RenderTick` builds the sprite's
+  own four-vertex quad (a 4:1 streak, alpha from a `powf(view_dot, 32)`
+  highlight) and, by a reading at 75, skips it for the craft the current
+  view belongs to - see
+  [engine-trail.md](../ghidra/functions/ps3-hdfury-eu/engine-trail.md),
+  "Ninth session". Both paths draw; the sprite is for the other crafts.
 - A matched-pose HD reference frame from RPCS3. None has ever been captured, so
   every HD picture in this tree is judged against the loader report rather than
   against the original.
