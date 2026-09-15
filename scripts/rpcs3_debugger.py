@@ -153,6 +153,21 @@ class Debugger:
         self.send("vCont;c")
         self.running = True
 
+    def step(self, tid, timeout=5.0):
+        """`vCont;s:<tid>` - one instruction on one thread, every other thread
+        left stopped. Returns the stop reply, or `None` if none came in time
+        (the target is then still running: `pause()` before reading).
+
+        The one way to move a thread off a breakpoint address without letting
+        the rest of the frame run: `run_for(0.03)` lets every later call in
+        the same frame go by, so a breakpoint on a per-object function samples
+        the *first* object of each frame and almost nothing else - measured
+        2026-09-15, 155 of 160 hits on one of eight crafts.
+        """
+        self.send("vCont;s:%s" % tid)
+        self.running = True
+        return self.wait_for_stop(timeout)
+
     def wait_for_stop(self, timeout=30.0):
         """The stop reply after a resume, or `None` if nothing stopped in time.
 

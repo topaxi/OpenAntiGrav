@@ -39,6 +39,7 @@ with the breakpoint removed, since a thread resumed onto an armed address
 does not step over it.
 
     uv run --with evdev python3 scripts/hd-flare-owner-break.py flare [out_dir]
+    uv run --with evdev python3 scripts/hd-flare-owner-break.py flare-gate [out_dir]   # the gate alone, 240 hits
     uv run --with evdev python3 scripts/hd-flare-owner-break.py zone [out_dir]
 """
 
@@ -115,15 +116,45 @@ class Breaker:
         self.dbg = dbg
         self.prefer = None
         self.parked = None  # address a thread was last left parked on
+        self.stepped = 0
+        self.ran_off = 0
 
     def step_off(self, address):
-        """Move the parked thread past `address` with nothing armed there."""
+        """Move the parked thread past `address` with nothing armed there.
+
+        Done by *hopping*: arm `address + 4`, resume, and the parked thread
+        executes exactly one instruction before it parks again - the shape
+        `hd-fury-backdrop-break.py` alternates its two addresses in, so a
+        thread is never resumed onto an armed address. With that, the very
+        next call of the same function - the next flare in the same frame -
+        is what the re-armed breakpoint catches. `vCont;s` was tried first
+        and never moved the thread (0 of 213 on 2026-09-15), and a 30 ms free
+        run instead let the whole frame go by and sampled one craft 172 times
+        out of 214; the free run stays as the fallback.
+        """
+        dbg = self.dbg
+        hop = address + 4
+        if self.prefer is not None:
+            dbg.add_breakpoint(hop)
+            try:
+                dbg.resume()
+                if dbg.wait_for_stop(timeout=1.0) is None:
+                    dbg.pause()
+                dbg.drain()
+                tid, _ = find_at(dbg, hop, self.prefer)
+            finally:
+                dbg.remove_breakpoint(hop)
+            if tid is not None:
+                self.parked = hop
+                self.stepped += 1
+                return True
         for _ in range(6):
-            self.dbg.run_for(0.03)
-            self.dbg.drain()
-            tid, _ = find_at(self.dbg, address, self.prefer)
+            dbg.run_for(0.03)
+            dbg.drain()
+            tid, _ = find_at(dbg, address, self.prefer)
             if tid is None:
                 self.parked = None
+                self.ran_off += 1
                 return True
         return False
 
@@ -164,6 +195,16 @@ def flare_readout(dbg, regs, where):
         entry["owner"] = s32(dbg.read(craft + 0x7A60, 4))
         entry["count_field"] = u32(dbg.read(craft + 0x5FA4, 4))
     entry["view"] = s32(dbg.read(VIEW_INDEX, 4))
+    # Frame stamps: zoneOrigin is rewritten once per frame by
+    # Scene_PrepareFrame, and the flare's own occlusion ring index (+0x270)
+    # and alpha-noise countdown (+0x190) advance once per call that reaches
+    # them - so two hits on the same flare can be told apart as "same frame,
+    # called again" versus "next frame".
+    entry["frame_stamp"] = dbg.read(ZONE_ORIGIN, 16).hex()
+    ring = dbg.read(flare + 0x18C, 4)
+    entry["fade_alpha"] = floats(ring)[0]
+    entry["noise_countdown"] = u32(dbg.read(flare + 0x190, 4))
+    entry["ring_index"] = u32(dbg.read(flare + 0x270, 4))
     camera = u32(dbg.read(CAMERA_OBJECT_PTR, 4))
     entry["camera"] = "%#x" % camera
     if camera:
@@ -199,14 +240,25 @@ def boot_to_main_menu(session):
     return True
 
 
-def wait_for_load(session, out, seconds=90.0):
-    """Sit through the track load and say what TTY.log called the race."""
+def wait_for_load(session, out, seconds=600.0):
+    """Sit through the track load and say what TTY.log called the race.
+
+    Keyed on `Loading Screen Finished` rather than a fixed pause: under the
+    interpreter on a loaded machine the load ran past 90 s on 2026-09-15,
+    and attaching the debugger mid-load pauses the load itself.
+    """
+    # The front end prints `Loading Screen Finished` on its own boot too, so
+    # the marker is a *new* one after `InGame`, plus the track line.
+    before = drive.tty_text().count("Loading Screen Finished")
     deadline = time.time() + seconds
     while time.time() < deadline:
         text = drive.tty_text()
-        if "Loading Screen Finished" in text:
+        if (text.count("Loading Screen Finished") > before
+                and "Loading track model" in text):
             break
         time.sleep(2.0)
+    else:
+        raise SystemExit("the track never finished loading in %g s" % seconds)
     text = drive.tty_text()
     race_type = [l for l in text.splitlines() if "RACE TYPE" in l]
     print("track: %s; %s" % (drive.track_name(), race_type[-1:] or "no RACE TYPE line"),
@@ -216,7 +268,7 @@ def wait_for_load(session, out, seconds=90.0):
     return race_type[-1] if race_type else None
 
 
-def run_flare(out):
+def run_flare(out, gate_only=False):
     result = {"gate": [], "submit": [], "query": []}
     with drive.Session(str(IMAGE), str(out / "logs"), interpreter=True) as session:
         if not boot_to_main_menu(session):
@@ -234,10 +286,12 @@ def run_flare(out):
         try:
             dbg.pause()
             dbg.drain()
-            for name, address, want, budget in (
-                    ("gate", FLARE_GATE, 160, 600.0),
-                    ("submit", FLARE_SUBMIT, 40, 240.0),
-                    ("query", FLARE_QUERY, 40, 240.0)):
+            phases = (("gate", FLARE_GATE, 160, 600.0),
+                      ("submit", FLARE_SUBMIT, 40, 240.0),
+                      ("query", FLARE_QUERY, 40, 240.0))
+            if gate_only:
+                phases = (("gate", FLARE_GATE, 240, 900.0),)
+            for name, address, want, budget in phases:
                 print("== %s at %#x" % (name, address), flush=True)
                 deadline = time.time() + budget
                 misses = 0
@@ -268,6 +322,7 @@ def run_flare(out):
             dbg.close()
         session.pad.set("cross", False)
     result["summary"] = {name: summarise_flare(result[name]) for name in ("gate", "submit", "query")}
+    result["step_off"] = {"stepped": breaker.stepped, "ran_off": breaker.ran_off}
     (out / "flare.json").write_text(json.dumps(result, indent=1))
     print(json.dumps(result["summary"], indent=1))
     return 0
@@ -417,14 +472,16 @@ def run_zone(out):
 
 
 def main():
-    if len(sys.argv) < 2 or sys.argv[1] not in ("flare", "zone"):
+    if len(sys.argv) < 2 or sys.argv[1] not in ("flare", "flare-gate", "zone"):
         print(__doc__, file=sys.stderr)
         return 2
     mode = sys.argv[1]
     out = Path(sys.argv[2] if len(sys.argv) > 2
                else ROOT / "data/reference/hd-capture/flare-owner" / mode)
     out.mkdir(parents=True, exist_ok=True)
-    return run_flare(out) if mode == "flare" else run_zone(out)
+    if mode == "zone":
+        return run_zone(out)
+    return run_flare(out, gate_only=(mode == "flare-gate"))
 
 
 if __name__ == "__main__":
