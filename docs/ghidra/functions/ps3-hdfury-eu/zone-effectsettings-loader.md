@@ -5271,6 +5271,99 @@ does not read the stage table via `iVar8`: checked directly this pass,
 zero `lvlx` instructions among its 2,613, so it was not part of the
 294-function `lvlx` hole and its prior static result stands unchanged.
 
+## 2026-09-15, a thirty-third pass: two stale negatives re-run against the `lvlx`-aware PS3 language - both hold
+
+Both of these predate the 2026-09-15 reimport that fixed `lvlx` decoding for
+294 functions (`toolchain.md#ps3`); re-run in full against the current
+database (`PowerPC:BE:64:A2ALT-32addr-PS3`, 26,112 functions) rather than
+carried forward.
+
+### `FUN_003cdc90` still has no located caller
+
+The nineteenth-pass-adjacent finding that `FUN_003cdc90` (`0x003cdc90`, the
+function that zeroes offsets `0` and `1` of a 0x1fc-word block while setting
+several other lanes to `0.5`/`1.0`/identity - full decompile already quoted
+earlier on this page) has no caller was re-run by all three routes:
+
+- `get_function_callers(0x003cdc90)`: `No callers found`.
+- `search_instructions(mnemonic="bl", operand_pattern="003cdc90")` and the
+  same with `mnemonic="b"`, scanning all 1,829,837 instructions in the
+  program: zero matches, both mnemonics.
+- Its `.opd` descriptor is `0x0088c198` (confirmed by `get_xrefs_to` on the
+  function address - the same single `[DATA]` xref as before). Searched as a
+  big-endian 4-byte literal (`search_byte_patterns`, pattern `00 88 c1 98`)
+  across the whole image: no matches, so no function-pointer table holds it
+  either. `get_xrefs_to` on the descriptor address itself: no references.
+
+`FUN_003cdc90` contains no `lvlx` instruction (0 of 35 scanned), so it was not
+one of the 294 functions the reimport changed - it was never at risk of being
+an `lvlx` hole. The negative stands, now dated after the reimport.
+
+### `craftArray[n]->+0x640`: still no writer, and the offset sweep is now genuinely exhaustive rather than blind
+
+The prior "the `0x640(` operand sweep returns nothing" was itself suspect -
+the folded-index-bias trap means an empty sweep proves nothing. Re-run in
+full, covering both the direct-displacement case the trap doesn't hide and
+the indexed case it does:
+
+**Displacement stores**, `search_instructions` for `0x640(` on each store
+mnemonic separately across the whole program: `stw` 9 hits, `stb` 1, `sth` 0,
+`std` 13, `stfs` 5 - 28 total, up from the earlier sweep's zero. The
+difference is not the reimport (checked below); it is that this pass
+classifies every hit instead of treating a non-empty result as automatically
+meaningful. Sorted by base register:
+
+- The large majority are `0x640(r1)` (stack-frame spills, e.g.
+  `Environment_UpdateStageBlend` itself at `0x003ddd0c`) or `0x640(r2)`
+  (TOC-relative global loads, `lwz`/`lbz` only) - neither is a struct field
+  on an object at all, `r1` is the stack pointer and `r2` the TOC pointer.
+- The remainder write a real object field at `+0x640`, but not on a craft:
+  `Hud_UpdateZoneSpeedClass` (`0x0004a014`, `r29`, already identified as the
+  HUD speed-class object, see `zone-speed-class-table.md`); `Hud_LoadDefinition`
+  (`0x0009896c`, `r31`) and its immediate neighbour `.opd.FUN_00099b90`
+  (`0x0009a90c`, `r31`) - both in the same 0x00097xxx-0x0009bxxx HUD address
+  range; `.opd.FUN_0008ce10` (three hits, `r30`), called only from
+  `.opd.FUN_0009e3d0` - also in that HUD range; `SoundSystem_Init`
+  (`0x0030adbc`, `r31`, named already); and `.opd.FUN_00014848` (`r3`, a
+  field-clear routine whose own body tops out at offset `0x13a4` - far
+  smaller than the craft object, which has fields past `+0x7a60`, so its
+  object cannot be a craft). None of these six functions touches offset
+  `0x7a60` (checked directly, `search_instructions` scoped per function),
+  the craft-identifying offset `engine-trail.md` establishes, and none
+  contains an `lvlx` instruction, so none was part of the 294-function hole
+  either - the wider hit count on this pass is from covering `std`/`stfs`/
+  `stb`/`sth` where the prior sweep evidently didn't, not from newly
+  decoded code.
+
+**Indexed stores** (the folded-bias shape the sixth pass warned a
+displacement sweep is blind to): searched for every `li rX, 0x640` that could
+be feeding an indexed store's offset register, 15 sites across the program.
+None touches offset `0x7a60` in its own function. Two were read in full
+disassembly as a direct check: `0x003cec98` and `0x003b5618` both turn out to
+address `r1` (the stack) via `stvx`/`stfs`, i.e. local-variable slots, not
+struct fields; `0x002b65f8` (`li r8, 0x640`) is a call argument (part of a
+five-small-integer argument list into `0x002b2d38`), not an offset at all.
+The other twelve were not walked to the same depth - this is a spot check of
+the shape, not a proof every site is stack-relative - but the two read in
+full and the exhaustive `+0x7a60` filter across all 15 together give no
+positive signal anywhere in this list.
+
+**Readers**, for completeness (`lwz`/`lbz` on `0x640(`): the *only* struct-field
+read at that offset anywhere in the image is `Environment_UpdateStageBlend`'s
+own `lwz r0, 0x640(r11)` at `0x003da670` - the already-documented reader.
+Every other `lwz` hit on `0x640(` is `0x640(r2)`, a TOC load, and `lbz` has
+zero hits at all.
+
+So the sweep is now both wider (five store mnemonics, not an unspecified
+subset) and classified (every hit's base register and function checked
+against the craft-identifying `+0x7a60` offset), and the result is the same
+as before: **no writer for `craftArray[n]->+0x640` is found anywhere in the
+PPU text segment.** This does not reopen the live-watchpoint evidence
+(the eleventh pass's two RPCS3 runs, zero hits in 120s each) - it is the
+static half of the same open question, now re-run on a complete instruction
+decode rather than one with 294 holes in it, and it still comes back empty.
+`FUN_003d0b98`, read properly, remains the next concrete step.
+
 ## See also
 
 - [zone-shader.md](zone-shader.md) - **what the shader does with all of it**,

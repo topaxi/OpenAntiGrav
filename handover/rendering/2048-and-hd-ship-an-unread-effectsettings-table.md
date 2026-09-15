@@ -1193,7 +1193,7 @@ no longer disagree.
   `FUN_003cdc90` writes offset `+0` for entries 0 and 1 to zero (a real
   write to the exact pattern) but its only `get_xrefs_to` hit is its own
   OPD range, and a second-order check (`get_xrefs_to` on *that* address)
-  returns nothing - so it has no located caller **[stale 2026-09-15: computed before the lvlx reimport; re-run per toolchain.md#ps3]**, corrected from a first
+  returns nothing - so it has no located caller **[2026-09-15: re-run against the `lvlx`-aware PS3 language, negative holds - see zone-effectsettings-loader.md's thirty-third pass]**, corrected from a first
   read that called it a vtable "Reset" method before checking that far.
   New, found by disassembling rather than trusting the prior slice:
   `FUN_003da540` itself writes entry `n`'s offset `+4` (gated by a flag
@@ -1438,7 +1438,7 @@ no longer disagree.
   `Environment_UpdateStageBlend`'s `+0x04` sources: mode `0xe` ->
   `RaceManager->+0x2e10`; modes `0xd`/`0x15` -> per-viewport entries of the
   same object; **everything else, Zone included, -> `craftArray[n]->+0x640`**,
-  no writer found. **[stale 2026-09-15: computed before the lvlx reimport; re-run per toolchain.md#ps3]** The `0x640(` operand sweep returns nothing on this array,
+  no writer found. **[2026-09-15: re-run against the `lvlx`-aware PS3 language and widened to cover the indexed/folded-bias case too, negative holds - see zone-effectsettings-loader.md's thirty-third pass.]** The `0x640(` operand sweep returns nothing on this array,
   which proves nothing given the folded-index-bias trap the sixth pass
   recorded; `FUN_003d0b98` (the ~24 KB neighbour carrying the
   `SpeedClass`/`NextSpeedClass`/`SpeedClassParent` node names, and the
