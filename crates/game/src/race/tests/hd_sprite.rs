@@ -65,10 +65,10 @@ fn the_players_own_craft_gets_no_sprite_and_an_opponent_ahead_does() {
 }
 
 /// The hemisphere and the range, through the race's own camera: an opponent
-/// whose nozzle points away yields nothing, one past the fade range yields a
-/// quad at alpha 0.
+/// whose nozzle points away yields nothing, and so does one past the fade
+/// range - the original builds no quad for a fade that is not positive.
 #[test]
-fn an_opponent_facing_the_camera_or_beyond_the_fadeout_range_draws_nothing_visible() {
+fn an_opponent_facing_the_camera_or_beyond_the_fadeout_range_draws_nothing() {
     let mut race = race_with_hd_flares();
     let player = race.ship().physics.body.position;
     let (right, up) = camera_axes(&race);
@@ -83,7 +83,8 @@ fn an_opponent_facing_the_camera_or_beyond_the_fadeout_range_draws_nothing_visib
     // Facing the right way but past `Dist + Range` from the eye.
     race.sim.world.ships[1].physics.body.orientation = race.ship().physics.body.orientation;
     race.sim.world.ships[1].physics.body.position = player + Vec3::X * 200.0;
-    let quad = race.hd_sprite_quad(1, right, up);
-    assert_eq!(quad.len(), 6);
-    assert_eq!(quad[0].colour[3], 0.0, "a quad at alpha 0, not no quad");
+    assert!(
+        race.hd_sprite_quad(1, right, up).is_empty(),
+        "past Dist + Range the fade is 0 and no quad is built"
+    );
 }

@@ -611,20 +611,20 @@ impl Sprite {
     ///
     /// `distance` is from the camera to the flare in world units and
     /// `view_dot` the cosine between the camera's forward axis and the
-    /// nozzle's outward axis, as [`sprite_view_dot`] defines it. The original
-    /// early-outs on a non-positive dot (`0x002a0c8c: ble -> epilogue`) before
-    /// any of the fade math, so the sprite is a one-hemisphere lobe: that is
-    /// the `None`. Past the fadeout it is a quad at alpha 0, which is `Some`.
+    /// nozzle's outward axis, as [`sprite_view_dot`] defines it. Two
+    /// early-outs, both the original's: a non-positive dot leaves before any
+    /// of the fade math (`0x002a0c8c: ble -> epilogue`), so the sprite is a
+    /// one-hemisphere lobe; and a fade that is not positive leaves right
+    /// after its store (`stfs f13,0x18c(r31)` and its own `ble`), before the
+    /// quad at `0x002a0d78` is built - measured live, the submit is reached
+    /// only while the fade is positive. Past the fadeout there is no quad.
     #[must_use]
     pub fn fade(&self, distance: f32, view_dot: f32) -> Option<f32> {
         if view_dot <= 0.0 {
             return None;
         }
-        Some(sprite_fade(
-            distance * SPRITE_DISTANCE_SCALE,
-            view_dot,
-            self.alpha,
-        ))
+        let fade = sprite_fade(distance * SPRITE_DISTANCE_SCALE, view_dot, self.alpha);
+        (fade > 0.0).then_some(fade)
     }
 
     /// The quad's half-height for a fade, in the tuning file's model space:
@@ -641,8 +641,9 @@ impl Sprite {
 /// The decompiler's own expression, confidence 90 (engine-trail.md "Ninth
 /// session"): the distance term is 1.0 inside `Flare Fadeout Dist` and
 /// reaches 0 at `Dist + Range`, the highlight is `powf(view_dot, 32)`, and
-/// `Flare Opacity Max` ceilings the product. A `view_dot` of zero or less
-/// is the caller's early-out, not this function's - see [`Sprite::fade`].
+/// `Flare Opacity Max` ceilings the product. The two early-outs - a
+/// `view_dot` of zero or less, a result of zero or less - are
+/// [`Sprite::fade`]'s, not this function's.
 #[must_use]
 pub fn sprite_fade(scaled_distance: f32, view_dot: f32, alpha_walk: f32) -> f32 {
     let far = ((scaled_distance - SPRITE_FADEOUT_DIST) / SPRITE_FADEOUT_RANGE).clamp(0.0, 1.0);

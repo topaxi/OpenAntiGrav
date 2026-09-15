@@ -255,12 +255,18 @@ fn the_fade_is_full_inside_the_fadeout_distance_and_zero_past_its_range() {
     let gone = sprite_fade(SPRITE_FADEOUT_DIST + SPRITE_FADEOUT_RANGE, on_axis, walk);
     assert_eq!(gone, 0.0);
     assert_eq!(sprite_fade(1000.0, on_axis, walk), 0.0);
-    // A craft at the fadeout distance through the state type: a quad at
-    // alpha 0, not no quad - that early-out is the view dot's alone.
+    // A craft at the fadeout distance through the state type: no quad at
+    // all - the original leaves after the store when the fade is not
+    // positive, before the quad is built. One unit inside, a quad.
     let sprite = walked_sprite();
     assert_eq!(
         sprite.fade(SPRITE_FADEOUT_DIST + SPRITE_FADEOUT_RANGE, on_axis),
-        Some(0.0)
+        None
+    );
+    assert!(
+        sprite
+            .fade(SPRITE_FADEOUT_DIST + SPRITE_FADEOUT_RANGE - 1.0, on_axis)
+            .is_some_and(|f| f > 0.0)
     );
 }
 

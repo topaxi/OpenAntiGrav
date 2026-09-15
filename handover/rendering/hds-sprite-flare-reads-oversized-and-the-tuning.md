@@ -242,8 +242,8 @@ negative.
   Verified on this engine's grid by
   `the_sprite_flare_skips_the_players_craft_and_fades_the_rest_by_the_law`:
   the field stands 34..148 units from the player's camera, so every
-  opponent's quad is at alpha 0 there - which is what the tenth session's
-  `+0x18c` column read too - and the player's disc is gone. A start-grid
+  opponent's fade is 0 there and no quad is built - which is what the tenth
+  session's `+0x18c` column read too - and the player's disc is gone. A start-grid
   picture with an opponent inside 15 units needs `--camera-pose` placed
   behind one; this engine's own grid spacing never puts one that close.
 - ~~**Whether the original draws this sprite on the player's own craft at all

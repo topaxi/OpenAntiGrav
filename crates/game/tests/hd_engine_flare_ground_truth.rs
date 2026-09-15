@@ -511,10 +511,14 @@ fn the_anchor_test_fires_later_than_the_sphere_it_replaced() {
 /// (`docs/ghidra/functions/ps3-hdfury-eu/engine-trail.md`, "Tenth session",
 /// confidence 92). This starts the same race the tenth session measured -
 /// a single race, eight craft - runs the countdown out, and checks each
-/// craft's quad against the law computed from the race's own camera, printing
-/// the per-craft table (distance, view dot, fade) beside the one the
-/// breakpoint run gave: six of seven AI flares at 0.0 and one at 0.002-0.003
-/// on the start grid, the field ahead and mostly off the nozzle axis.
+/// craft against the law computed from the race's own camera, printing the
+/// per-craft table (distance, view dot, fade) beside the one the breakpoint
+/// run gave: six of seven AI flares at 0.0 and one at 0.002-0.003 on the
+/// start grid. This engine's grid stands the whole field past `Flare Fadeout
+/// Dist + Range` from the player's camera, so here every one of the seven is
+/// at 0 and none builds a quad - the original's own rule, the quad being
+/// built only while the fade is positive. One opponent moved inside the fade
+/// is the positive path.
 #[test]
 #[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
 fn the_sprite_flare_skips_the_players_craft_and_fades_the_rest_by_the_law() {
@@ -536,7 +540,7 @@ fn the_sprite_flare_skips_the_players_craft_and_fades_the_rest_by_the_law() {
         race.hd_sprite_quad(0, right, up).is_empty(),
         "the viewing player's craft never gets the sprite"
     );
-    let mut drawn = 0;
+    let far = hd::SPRITE_FADEOUT_DIST + hd::SPRITE_FADEOUT_RANGE;
     for slot in 1..race.ship_count() as usize {
         let nozzle = race
             .nozzle_of(slot)
@@ -544,84 +548,58 @@ fn the_sprite_flare_skips_the_players_craft_and_fades_the_rest_by_the_law() {
         let body = race.sim.world.ships[slot].physics.body;
         let distance = (nozzle - eye).length();
         let view_dot = hd::sprite_view_dot(forward, -body.forward());
+        let fade = hd::sprite_fade(distance * hd::SPRITE_DISTANCE_SCALE, view_dot, 1.0);
         let quad = race.hd_sprite_quad(slot, right, up);
-        let fade = quad.first().map(|v| v.colour[3]);
         println!(
-            "slot {slot}: {distance:6.1} units, view dot {view_dot:+.3}, fade {} - nozzle \
-             {nozzle:.1?}, forward {:.3?}, up {:.3?}",
-            fade.map_or("none (nozzle away from the eye)".to_string(), |f| format!(
-                "{f:.4}"
-            )),
+            "slot {slot}: {distance:6.1} units, view dot {view_dot:+.3}, fade {fade:.4} at walk \
+             1.0, {} - nozzle {nozzle:.1?}, forward {:.3?}, up {:.3?}",
+            if quad.is_empty() { "no quad" } else { "a quad" },
             body.forward(),
             body.up(),
         );
-        // The law, recomputed here from the same inputs, is what the vertex
-        // carries; and the quad keeps the texture's 4:1 shape.
-        let expected = hd::sprite_fade(distance * hd::SPRITE_DISTANCE_SCALE, view_dot, 1.0);
-        match fade {
-            None => assert!(
-                view_dot <= 0.0,
-                "slot {slot} skipped with a positive view dot"
-            ),
-            Some(alpha) => {
-                assert!(view_dot > 0.0, "slot {slot} drawn with the nozzle away");
-                // The walk sits in 0.5..0.8, so the vertex alpha is the law's
-                // value at walk 1.0 scaled into that band.
-                assert!(
-                    alpha <= expected * 0.8 + 1e-5 && alpha >= expected * 0.5 - 1e-5,
-                    "slot {slot}: alpha {alpha} outside the walk band of {expected}"
-                );
-                let half_height = quad
-                    .iter()
-                    .map(|v| (Vec3::from_array(v.position) - nozzle).dot(up).abs())
-                    .fold(0.0f32, f32::max);
-                let half_width = quad
-                    .iter()
-                    .map(|v| (Vec3::from_array(v.position) - nozzle).dot(right).abs())
-                    .fold(0.0f32, f32::max);
-                assert!(
-                    (half_width - half_height * hd::SPRITE_ASPECT).abs() < 1e-3,
-                    "slot {slot}: {half_width} wide by {half_height} tall is not 4:1"
-                );
-                // And the half-height is the model-space law times the craft's
-                // own global scale, between its floor and its ceiling.
-                let floor = hd::SPRITE_RADIUS_MIN * exhaust::CRAFT_ROW_SCALE;
-                let ceiling =
-                    (hd::SPRITE_RADIUS_MIN + hd::SPRITE_RADIUS + hd::SPRITE_RADIUS_JITTER)
-                        * exhaust::CRAFT_ROW_SCALE;
-                assert!(
-                    half_height >= floor - 1e-4 && half_height <= ceiling + 1e-4,
-                    "slot {slot}: half-height {half_height} outside {floor}..{ceiling}"
-                );
-                drawn += 1;
-            }
-        }
+        assert!(
+            distance * hd::SPRITE_DISTANCE_SCALE >= far,
+            "slot {slot} is inside the fade at {distance:.1} units - this engine's grid \
+             layout moved, and the assertions below assume nothing is"
+        );
+        assert!(
+            quad.is_empty(),
+            "slot {slot}: a quad past Dist + Range, where the fade is 0 and the original \
+             builds none"
+        );
     }
-    println!(
-        "{drawn} of {} opponents carry a quad",
-        race.ship_count() - 1
-    );
-    assert!(
-        drawn > 0,
-        "the whole field ahead reads as facing away, which the grid is not"
-    );
 
-    // This engine's grid stands the whole field past `Dist + Range` from the
-    // player's camera, so every quad above is at alpha 0 - the honest reading
-    // of the law, and the same picture the breakpoint run's own table gave.
-    // One opponent moved to 8 units dead ahead is inside the fade and on the
-    // axis, and its alpha is the walk itself.
+    // The positive path: slot 1 moved 8 units dead ahead of the player is
+    // inside the fade and on the axis, so its alpha is the walk itself, its
+    // quad is 4:1, and its half-height is the model-space law times the
+    // craft's own global scale, between the law's floor and ceiling.
     let lead = race.sim.world.ships[0].physics.body;
     race.sim.world.ships[1].physics.body.orientation = lead.orientation;
     race.sim.world.ships[1].physics.body.position = lead.position + lead.forward() * 8.0;
+    let nozzle = race.nozzle_of(1).expect("slot 1's nozzle");
     let quad = race.hd_sprite_quad(1, right, up);
-    let alpha = quad
-        .first()
-        .map(|v| v.colour[3])
-        .expect("a quad 8 units ahead");
+    assert_eq!(quad.len(), 6, "an opponent 8 units ahead is one quad");
+    let alpha = quad[0].colour[3];
     println!("slot 1 moved 8 units ahead: fade {alpha:.4}");
     assert!(
         alpha >= hd::SPRITE_ALPHA_NOISE.0 * 0.9 && alpha <= hd::SPRITE_ALPHA_NOISE.1,
         "{alpha} is not the walk inside the fadeout on the nozzle axis"
+    );
+    let extent = |axis: Vec3| {
+        quad.iter()
+            .map(|v| (Vec3::from_array(v.position) - nozzle).dot(axis).abs())
+            .fold(0.0f32, f32::max)
+    };
+    let (half_height, half_width) = (extent(up), extent(right));
+    assert!(
+        (half_width - half_height * hd::SPRITE_ASPECT).abs() < 1e-3,
+        "{half_width} wide by {half_height} tall is not 4:1"
+    );
+    let floor = hd::SPRITE_RADIUS_MIN * exhaust::CRAFT_ROW_SCALE;
+    let ceiling = (hd::SPRITE_RADIUS_MIN + hd::SPRITE_RADIUS + hd::SPRITE_RADIUS_JITTER)
+        * exhaust::CRAFT_ROW_SCALE;
+    assert!(
+        half_height >= floor - 1e-4 && half_height <= ceiling + 1e-4,
+        "half-height {half_height} outside {floor}..{ceiling}"
     );
 }

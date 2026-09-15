@@ -1920,8 +1920,10 @@ Open, in rough order of visible cost:
   engine's own start grid
   (`the_sprite_flare_skips_the_players_craft_and_fades_the_rest_by_the_law`):
   the field stands 34..148 units from the player's camera, so all seven
-  opponents' quads sit at alpha 0 - the same reading as the breakpoint
-  run's `+0x18c` column - and the player's oversized white disc is gone;
+  opponents' fades are 0 and no quad is built for any of them (the quad
+  is built only while the fade is positive, the `ble` after the store at
+  `0x002a0d70`) - the same reading as the breakpoint run's `+0x18c`
+  column - and the player's oversized white disc is gone;
   a camera posed 10 units behind an opponent shows its streak. **The
   history below is kept as written.** It drew, from 2026-09-01 to
   2026-09-15, with its authored radius (3, jittered by 0.5, floored at 2)
