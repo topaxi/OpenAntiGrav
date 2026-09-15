@@ -43,18 +43,21 @@ different hardware:
 | --- | --- |
 | [`ps3-hdfury-eu/`](ps3-hdfury-eu/) | `EBOOT.elf` from Wipeout HD Fury (BCES-00664) - the *decrypted* form of the disc's `EBOOT.BIN`, the only entry here that is not the file the disc ships |
 | [`vita-2048-eu-v104/`](vita-2048-eu-v104/) | `eboot.elf` from WipEout 2048 (PCSF00007), EU, patch v1.04 - **confirmed** to share `ps3-hdfury-eu`'s own source tree (literal `.cpp`/`.h` debug-tag strings match by path, not just basename), not a fresh build off the Pulse lineage. See [`vita-2048-eu-v104/README.md`](vita-2048-eu-v104/README.md). |
+| [`ps4-omega-eu/`](ps4-omega-eu/) | `eboot.bin` from WipEout: Omega Collection (CUSA05670), EU - **confirmed** to share the same `Backend/...` tree as `vita-2048-eu-v104` and `ps3-hdfury-eu`, down to a structurally matching function (`MagstripWake_Construct`) despite the architecture change to x86-64. See [`ps4-omega-eu/README.md`](ps4-omega-eu/README.md). |
 
 ## Index
 
 Maintained as pages are added, sorted by subsystem.
 
-The PS3 and Vita pages are not in the table below, which is a PSP-versus-PS2
-comparison and has no column that would mean anything for a third or fourth
-platform. They are listed in
+The PS3, Vita and PS4 pages are not in the table below, which is a
+PSP-versus-PS2 comparison and has no column that would mean anything for a
+third, fourth or fifth platform. They are listed in
 [`ps3-hdfury-eu/README.md`](ps3-hdfury-eu/README.md) (framework memory layer,
-collision narrowphase, `RaceManager`/`ModeManager` hierarchies, race HUD) and
+collision narrowphase, `RaceManager`/`ModeManager` hierarchies, race HUD),
 [`vita-2048-eu-v104/README.md`](vita-2048-eu-v104/README.md) (boot chain,
-track/collision loaders, zone audio and environment fallback).
+track/collision loaders, zone audio and environment fallback) and
+[`ps4-omega-eu/README.md`](ps4-omega-eu/README.md) (ship visual-effect
+constructors, so far).
 
 | Subsystem | PSP (`BOOT.BIN`) | PS2 (`SCES_547.48`) |
 | --- | --- | --- |
