@@ -1548,7 +1548,14 @@ in a fixed order, 30 frames running:
 | 7 | `0x33284b50` | -1 | 1 | 30/30 | 10..1, cycling | 0.0 | advances |
 | 8 | `0x3338f330` | -1 | 1 | 30/30 | 10..1, cycling | 0.0 | advances |
 
-Constant across all 240 hits: `*0x008c1430 = -1`, camera object
+This 30-frame window is the start grid, not a spread across a lap:
+`craft+0x5fa4` read `0` on every hit where boot 2 saw it go to `1` after
+83 hits, and boot 1's `race-gate.png` shows `GO` at 41 km/h on lap 1. That
+is why all eight flares are enqueued at once and why six of the seven AI
+fades read 0.0 - the field is ahead with its nozzles away from the camera.
+Boot 1's 160 gate hits and its controls run on past the spread (its
+submit hits stop once the field opens up), so the two boots together cover
+more than one instant. Constant across all 240 hits: `*0x008c1430 = -1`, camera object
 `0x309c....` present with `+0x34 = 0x3000` (so `& 6 == 0`, the override
 path at `0x002a11b0` never runs), `+0x40 = 10`, `+0x1ec = 0` (targets no
 craft), `r29 = 0`, `craft+0x5fa4 = 0` (boot 2, which ran longer, saw it

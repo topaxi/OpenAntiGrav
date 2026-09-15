@@ -5091,7 +5091,13 @@ the value about to be stored was read as the 16 bytes at `r3 + 0x30` (the
 hits the thread was hopped one instruction (arm `0x003ad8e0`, resume) and
 the store re-armed, so consecutive hits are consecutive frames - proven by
 the read itself: on 207 of 207 consecutive pairs, "last frame's value at
-`0x00c81550`" equalled the previous hit's "value about to be stored". Three
+`0x00c81550`" equalled the previous hit's "value about to be stored", and
+the stage table's own speed counter (`+0x10`, `+= 0.1` a call) advanced
+by exactly 69 steps of 0.1 across each 70-hit burst (95.9 -> 102.8,
+5.8 -> 12.7, 25.7 -> 32.6), so no frame was skipped between hits either -
+the radius agrees cumulatively, burst 1 growing 634.8 against
+`69 x (5.8 + 12.6) / 2 = 634.8` and burst 2 2007.9 against
+`69 x (25.7 + 32.5) / 2 = 2007.9`. Three
 bursts of 70 frames with 5 s of free running between them; before the
 first, eight hits on `EngineFlare_RenderTick`'s owner gate (`0x002a0bac`,
 see engine-trail.md's tenth session) recorded the player's craft pointer
@@ -5166,7 +5172,10 @@ stop: `0`, race running (`unpaused.png`). One byte, one toggle cycle, both
 edges, against a screen that names the state; thirty-six readers
 including the present loop and the menu backdrop is the shape a pause flag
 has. **Confidence 85** - runtime-verified on one binary, one cycle; short
-of 90 for want of a second cycle or a writer read. Named `g_GamePaused` and
+of 90 for want of a second cycle or a writer read. Not read at the Main
+Menu, so whether the front end also sets it (a broader "simulation
+suspended" flag, which `BackgroundAnimFury_Render` reading it would fit
+just as well) is unmeasured. Named `g_GamePaused` and
 applied; row added to `names.tsv`. What it says for the blend: the
 wavefront and the colour weight freeze while the game is paused and resume
 where they were - there is no time-based catch-up.
