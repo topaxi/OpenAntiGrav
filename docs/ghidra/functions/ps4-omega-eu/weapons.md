@@ -217,14 +217,23 @@ by far the most complex function read on this binary so far). It is not one
 class's constructor: the body writes the base
 `Backend\General\ModeManager.cpp` tag and a shared vtable
 (`&PTR_FUN_01913338`). **`get_xrefs_to` on the base tag string finds thirteen
-write sites here (26 data refs, two per site - a `LEA`+`MOV` pair, the same
-shape every other tagged-object write in this project takes), not twelve** -
-one more than the twelve distinct subclass tags listed below, and not yet
-reconciled: whether one subclass tag is written from two separate sites, or
-one of the thirteen constructions keeps the bare base tag with no subclass
-overwrite, was not chased further this pass. Each of the twelve listed
-subclass tags is, in turn, immediately followed by one of twelve distinct
-subclass tags overwriting the base tag and a subclass-specific vtable -
+write sites here, not twelve - reconciled by disassembling all thirteen
+rather than guessing from address proximity** (a first pairing attempt by
+nearest-address alone gave a wrong answer for two of the thirteen sites,
+caught only by actually reading the bytes in between). Twelve of the
+thirteen base-tag writes are each immediately followed, a few dozen
+instructions later with no intervening tag write or `RET` in between, by one
+of the twelve subclass tags below overwriting it and a subclass-specific
+vtable. **The thirteenth, at `0x012515ed`, is not** - unlike every other
+site, nothing overwrites its tag or its `[RBX]` vtable slot afterward, and
+its immediate prologue (`0x012515a0`-`0x012515ea`) does something none of
+the other twelve do: it stashes the object pointer itself into a global
+(`MOV qword ptr [0x019ffde8], RBX`) and sets another global to `1`
+(`MOV dword ptr [0x01f99900], 0x1`) before writing the tag. That reads as a
+genuine thirteenth construction - a bare base `ModeManager` singleton, not
+one of the twelve named subclasses - rather than a duplicate write of an
+existing subclass tag; not chased further is what selects this branch or
+what the two globals it sets are for. The twelve that do get subclass tags -
 `GameModes\GameMode_TournamentModeManager.cpp`,
 `GameModes\GameMode_ModeManager.cpp`,
 `Backend\General\AIBatch_ModeManager.cpp`,
