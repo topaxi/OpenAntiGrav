@@ -50,9 +50,8 @@ than the other way around. No separate function was found here to carry
 that name, so `GetBillboardMeshIdFromName` gets no `names.tsv` row on this
 binary.
 
-`get_function_callers` finds exactly one caller, `FUN_01391130` (unnamed,
-not chased - the likely `TrackStartup_Load`/`Billboard_CreateFromLocation`
-equivalent, out of scope for this pass).
+`get_function_callers` finds exactly one caller, `TrackStartup_Load`
+(`0x01391130`, named below).
 
 **Confidence 87** (same band as the nine weapon managers in `weapons.md`:
 tag match plus a second, independently-compiled binary corroborating the
@@ -150,16 +149,31 @@ if (strcasecmp(value, "Portrait")  == 0) mode = 2;
 if (strcasecmp(value, "Landscape") == 0) mode = 3;
 ```
 
-That value is one of the arguments `TrackStartup_Load` passes into
-`Billboard_ConstructResource` at the same call site already named above.
-**This is a genuine cross-binary difference, not a corrected gap in HD's
-own reading** - `ps3-hdfury-eu/billboards.md`'s claim is specific and
-already double-checked there (every attribute-loop comparison traced by
-TOC slot); this binary simply consumes an attribute HD's own parser does
-not. Not chased further: which of `Billboard_ConstructResource`'s fields
-this four-way aspect-shaped enum (none/square/portrait/landscape) actually
-feeds, and whether any of this binary's manifests author a `type` other
-than the default.
+**Traced to a specific argument, not just "one of the arguments passed",
+by disassembly rather than by trusting the decompiler's own argument
+list**: at both call sites (`0x01391eb2` and `0x01392202`), `MOV
+EDX,dword ptr [RSP + 0x44]` loads this enum from the stack slot it was
+stored to at `0x01391db0`, and nothing between that load and the `CALL
+0x016e53a0` a few dozen instructions later touches `EDX`/`RDX` - checked
+instruction by instruction, not assumed. Under the SysV calling
+convention (`RDI, RSI, RDX, RCX, R8`), that makes the enum
+**`Billboard_ConstructResource`'s third argument (`param_3`)** - and
+`Billboard_ConstructResource`'s own decompiled body (above) **never
+references `param_3` anywhere**, grepped for it directly. So the `Type`
+attribute is parsed and passed, but the function it's passed into does not
+read it, at least not in the body this pass decompiled. Whether that
+value reaches something through a path this decompile doesn't show (a
+register spilled to an unread stack slot, say) was not chased further.
+
+**This is a genuine cross-binary difference in what gets *parsed*, not a
+corrected gap in HD's own reading** - `ps3-hdfury-eu/billboards.md`'s claim
+is specific and already double-checked there (every attribute-loop
+comparison traced by TOC slot); this binary's parser simply reads an
+attribute HD's does not, even though - per the above - this binary's own
+constructor may not do anything with it either. Not chased further:
+whether any of this binary's manifests author a `type` other than the
+default, and whether `param_3` is read anywhere `Billboard_ConstructResource`
+itself doesn't show.
 
 ## Not chased this pass
 

@@ -384,8 +384,11 @@ at confidence 80; see the 2026-09-06 section below.
 - **`type`'s consumer**, if it has one - unread by this function despite being
   authored on every slot. **Not the same on every binary**: `ps4-omega-eu`'s
   own `TrackStartup_Load` does read `type`, mapping `<none>`/`Square`/
-  `Portrait`/`Landscape` to a small enum passed into its own
-  `Billboard_ConstructResource` - see
+  `Portrait`/`Landscape` to a small enum and passing it as its own
+  `Billboard_ConstructResource`'s third argument (traced to that register at
+  the disassembly level) - though that function's own decompiled body never
+  references the argument either, so parsing it is as far as the trail goes
+  there too. See
   [`ps4-omega-eu/billboards.md`](../ps4-omega-eu/billboards.md#type-is-read-here-unlike-on-ps3-hdfury-eu).
   This doesn't settle what (if anything) reads it here; it's a confirmed
   cross-binary difference, not evidence this function was mis-read.
