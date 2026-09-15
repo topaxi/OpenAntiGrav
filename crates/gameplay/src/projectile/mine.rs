@@ -80,7 +80,18 @@ pub struct Drop {
     /// (`0x08863a20`) makes a single spawn call with no reload timer anywhere
     /// in it.
     pub count: u8,
-    /// Seconds before a laid charge goes off on its own.
+    /// Seconds before a laid charge goes off on its own, or [`NO_FUSE`] for
+    /// a charge that never does.
+    ///
+    /// **Pure's Bomb is the one that never does**, and that is read rather
+    /// than defaulted: its `<Stats>` authors no `timetodie`, its parser has no
+    /// branch for one, and its pool (`BombPool_Update`, `0x0884e968` on
+    /// `psp-pure-usa`) spends the charge's age on the model's spin and
+    /// compares it to nothing - see
+    /// `oag_tables::weapons::BombStats::timetodie`. A `None` there becomes
+    /// [`NO_FUSE`] here, so the countdown in [`advance_laid`] runs and never
+    /// reaches zero, which is the honest shape of "sits until tripped" in a
+    /// field that is otherwise a fuse.
     pub fuse: f32,
     /// How close a craft must come to set it off early.
     pub trigger_radius: f32,
@@ -102,7 +113,10 @@ impl Drop {
     pub const fn bomb(stats: &BombStats) -> Self {
         Self {
             count: 1,
-            fuse: stats.timetodie,
+            fuse: match stats.timetodie {
+                Some(seconds) => seconds,
+                None => NO_FUSE,
+            },
             trigger_radius: stats.trigger_radius,
         }
     }
@@ -128,6 +142,18 @@ impl Drop {
         }
     }
 }
+
+/// The fuse of a charge that has none: positive infinity.
+///
+/// `advance_laid` subtracts `dt` from the countdown every tick and detonates
+/// at or below zero; infinity minus anything is infinity, so a charge laid
+/// with this never times out and only a craft entering `trigger_radius` ends
+/// it. Chosen over an `Option` on [`super::Projectile::lifetime`] because that
+/// field is hashed for every projectile on every tick and an infinity is one
+/// bit pattern where a widened field would move every reference - and because
+/// "never" is exactly what the arithmetic already says. **Pure's Bomb is the
+/// only weapon that lays one**; see [`Drop::fuse`].
+pub const NO_FUSE: f32 = f32::INFINITY;
 
 /// How long between one mine leaving and the next, in seconds.
 ///

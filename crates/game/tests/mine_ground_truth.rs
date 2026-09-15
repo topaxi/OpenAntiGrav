@@ -366,6 +366,9 @@ fn a_bomb_is_one_static_charge_behind_the_craft() {
     };
     let bomb = race.mine_stats().expect("a Mine");
     let stats = race.bomb_stats().expect("the disc authors a Bomb");
+    // Pulse's Bomb has a fuse; Pure's does not (`BombStats::timetodie`), and
+    // this test drives the Pulse disc.
+    let fuse = stats.timetodie.expect("Pulse's Bomb authors a timetodie");
 
     let origin = race.sim.world.ships[0].physics.body.position;
     let forward = race.sim.world.ships[0].physics.body.forward();
@@ -411,10 +414,10 @@ fn a_bomb_is_one_static_charge_behind_the_craft() {
         bomb.timetodie
     );
     assert!(
-        charges[0].lifetime <= stats.timetodie,
+        charges[0].lifetime <= fuse,
         "the bomb carries {:.1} s against an authored {:.1}",
         charges[0].lifetime,
-        stats.timetodie
+        fuse
     );
 
     // Static, over a full second of the craft driving away from it.

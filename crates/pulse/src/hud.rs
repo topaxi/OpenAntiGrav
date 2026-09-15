@@ -249,7 +249,7 @@ pub const PICKUP_BACKDROP_COLOUR: &str = "HudBGColour";
 /// this file's `Cargo.toml`), so the index is a data contract with
 /// `oag_game::hud` - which does own that dependency - the same way
 /// [`oag_title::HudArt::pickup_colours`] documents it.
-pub const PICKUP_COLOURS: [Option<u32>; 13] = {
+pub const PICKUP_COLOURS: [Option<u32>; 14] = {
     // Values are `0xAARRGGBB`, drawn opaque - see this constant's own doc
     // comment for why that is a simplification and not a measurement of the
     // backdrop's real alpha.
@@ -272,6 +272,9 @@ pub const PICKUP_COLOURS: [Option<u32>; 13] = {
         PINK,  // LeachBeam
         PINK,  // Repulser
         PINK,  // Shuriken
+        // Pure's weapon; no Pulse table authors it, so no Pulse pad ever
+        // hands one out and no frame colour was ever measured for it.
+        None, // Disruptor
     ]
 };
 
