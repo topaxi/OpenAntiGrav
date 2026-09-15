@@ -5398,6 +5398,23 @@ instruction decode rather than one with 294 holes in it, and it still comes
 back empty on every route tried. `FUN_003d0b98`, read properly, remains the
 next concrete step.
 
+**2026-09-15: one specific candidate ruled out directly, not just by the
+sweep above.** `FUN_0006c600` - the `ZONEBAR_TRANS` call site
+[`sound.md`](sound.md#zonebar_trans-a-call-site-found) found, and now named
+`Zone_UpdateCraftClass` (see
+[`zone-advance.md`](zone-advance.md) and
+[`sound.md`'s later addendum](sound.md#fun_0006c600-named-zone_updatecraftclass-and-its-callers-found))
+- runs once per craft per tick, reads the craft-identifying `+0x7a60` offset,
+and advances a `0`-`14` wrapping ladder rung on the same threshold-crossing
+shape this page's `craftArray[n]->+0x640` search is looking for. It is not
+the writer: its disassembly contains no `0x640` displacement anywhere, in
+either branch or the unconditional tail, and its own ladder-rung array lives
+at a different base (the `zoneState` sub-object this function's caller passes
+in, not `craftArray[n]` and not `H[e]`) indexed by racer slot, not by
+environment. A real, well-corroborated candidate function with the right
+craft-identifying offset and the right threshold/ladder shape - checked and
+excluded, rather than left unconsidered.
+
 ## See also
 
 - [zone-shader.md](zone-shader.md) - **what the shader does with all of it**,

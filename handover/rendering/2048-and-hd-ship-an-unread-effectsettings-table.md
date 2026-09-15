@@ -1500,6 +1500,20 @@ no longer disagree.
      still the next concrete step, now with the exact live Zone-race
      command sequence already scripted rather than needing to be solved
      again.
+
+     **2026-09-15: `FUN_0006c600` checked directly and ruled out.** The
+     `ZONEBAR_TRANS`/`ZONEADVANCE` call site
+     [`sound.md`](../../docs/ghidra/functions/ps3-hdfury-eu/sound.md#zonebar_trans-a-call-site-found)
+     found is a real candidate - it runs once per craft per tick, reads the
+     craft-identifying `+0x7a60` offset, and advances a `0`-`14` wrapping
+     ladder rung on the same threshold-crossing shape. Named
+     `Zone_UpdateCraftClass` (`docs/ghidra/functions/ps3-hdfury-eu/
+     zone-advance.md`), confidence 72. Its disassembly writes no `0x640`
+     displacement anywhere, on any base register, by literal or
+     immediate-fed indexed store, and its own ladder-rung array is a
+     different object (the `zoneState` sub-object its caller passes in,
+     indexed by racer slot) than `craftArray[n]`. `FUN_003d0b98` remains
+     the next concrete step.
   2. **What sets HD's `raceState->+0x7001`** - the latch Detonator's own
      increment is gated on, i.e. what *event* Detonator counts. Ten of the
      eleven instructions touching that offset are reads; the one write clears

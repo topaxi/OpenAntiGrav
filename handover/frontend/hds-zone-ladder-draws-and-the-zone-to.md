@@ -145,7 +145,24 @@ checking both copies by cue index rather than by trusting either one's own
 print order. **On the same confidence footing this thread's own milestone
 announcer already stands on for HD** - no call site read in the executable for
 either ladder - so this is not a new class of inference, just a second axis of
-the same one. **[stale 2026-09-15: computed before the lvlx reimport; re-run per toolchain.md#ps3]**
+the same one.
+
+**2026-09-15, re-run on the post-`lvlx` image: still negative.**
+`search_strings` for `MR_SVE`, `MR_VEN` and `MR_Z_M1` (three of the fourteen
+`speech_class.bnk` cue names) returns zero hits each - none of those literals
+exist anywhere in the ELF. `MR_Z_SUP` does return one hit, at `0x0077e700`,
+but it is a false positive: `read_memory` around it shows it sitting between
+`"zone_60"` and `"zone_80"` in an unrelated `zone_NN`-style string table, and
+its three `get_xrefs_to` hits all land in `FUN_003a46e8`, a billboard
+distance-sort comparator (`g_BillboardSlots`) whose decompile never
+references the string at all - the cross-reference is noise on a nearby
+constant, not a genuine name lookup. So the claim stands, reconfirmed rather
+than merely re-asserted: no call site for either ladder's cue names is read
+in the executable, post-reimport. See
+[`sound.md`'s `Zone_UpdateCraftClass` addendum](../../docs/ghidra/functions/ps3-hdfury-eu/sound.md#fun_0006c600-named-zone_updatecraftclass-and-its-callers-found)
+for the one adjacent, non-verbal cue (`ZONEBAR_TRANS`/`ZONEADVANCE`) whose
+call site *is* now read - a different string, in a different bank, found the
+way this paragraph's negative was not.
 
 **Checked that decoded actually means audible, not just that the report reads
 well.** `just play hd --race --mode zone --ticks 1` and

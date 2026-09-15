@@ -597,6 +597,95 @@ shape (fired in the same branch as, and immediately beside, the confirmed
 whether the eight-argument call is itself a cue trigger (and if so, whether
 `0x400` is a bus/category flag) or a different kind of event.
 
+## `FUN_0006c600` named `Zone_UpdateCraftClass`, and its callers found
+
+2026-09-15, closing the "no static caller found" gap the addendum above left
+open. `get_function_callers` on `FUN_0006c600` (explicit program) returns two
+real functions, not thunks: `.opd.FUN_0003f6d8` and `.opd.FUN_0006d958`, and
+neither has further callers of its own to chase - this is the top of the call
+chain reachable statically.
+
+**`FUN_0006d958`'s call shape is decisive.** It reads `uVar5 =
+*(uint*)PTR_g_GameState_008a6e90` (the live racer count) and, when nonzero,
+walks a pointer array at its own `param_2+0xe8` once per racer, calling
+`FUN_0006c600(param_1 /* dt */, param_2+0x2dd8, *slot)` each time. So
+`FUN_0006c600` runs **once per craft, every tick it is reached**, and its own
+`param_2` is not a craft or a race manager but a **sub-object embedded inside
+a larger "world" struct at offset `0x2dd8`**, and its `param_3` is the craft
+pointer from the racer array.
+
+That the embedded sub-object is the same one `FUN_0006c600` sees as its own
+`param_2` (offset `0`) is not assumed, it is arithmetic that closes twice over,
+reading `FUN_0006d958`'s own body against `FUN_0006c600`'s:
+
+| Field, relative to `FUN_0006c600`'s `param_2` | `FUN_0006d958`'s absolute offset | `0x2dd8 +` |
+| --- | --- | --- |
+| `+0x334` (upper threshold) | `+0x310c` | `0x2dd8+0x334 = 0x310c` |
+| `+0x31c` (distance denominator) | `+0x30f4` | `0x2dd8+0x31c = 0x30f4` |
+| `iVar5+0x54` (per-checkpoint accumulator, `iVar5=cp*4`) | `iVar20*4+0x54` | same field, same stride |
+| `iVar11*0xc+0xd0` (12-byte per-checkpoint blend record) | `uVar29*0xc+0xd0` | same field, same stride |
+
+Four independent fields, exact arithmetic, no rounding - this is the
+"arithmetic invariant" tier of evidence, not a guess at the base offset.
+
+`FUN_0003f6d8` calls it once, unconditionally, as
+`FUN_0006c600(dt, param_2+0x34f8, *(int*)(param_2+0x13e8))` - a *different*
+outer struct and a *different* embedded offset, but the same shape: one
+sub-object pointer plus one craft pointer, specifically the craft
+`*(param_2+0x13e8)` points at (every other read of that field in the same
+function is guarded by local-player checks), i.e. this caller runs the same
+update for the local player's own craft outside the main per-tick sweep.
+
+**`param_3`'s craft-identifying offset corroborates independently.**
+`FUN_0006c600` reads `param_3+0x7a60` (as `iVar15`) to index two parallel
+arrays. [`engine-trail.md`](engine-trail.md) already established `craft+0x7a60`
+as "the owner index" (which of the fixed eight racer slots this craft is), and
+[`zone-effectsettings-loader.md`](zone-effectsettings-loader.md#craftarrayn-0x640-still-no-writer-and-the-offset-sweep-is-now-genuinely-exhaustive-rather-than-blind)
+independently names `+0x7a60` "the craft-identifying offset" for the same
+reason - a small fixed list of eight slots (`+0xe8`..`+0x104` on the world
+struct, the exact array `FUN_0006d958` walks above) matched by an id field at
+`+0x7a60` on each candidate. Three pages, three unrelated readings, one
+offset.
+
+**The `0`-`14` wrapping index the earlier addendum found is a per-racer Zone
+ladder rung, not a stage value read anywhere else.** It lives at
+`param_2(zoneState) + (param_3->+0x7a60)*4 + 0x24` - an eight-slot array (one
+per racer slot) immediately after a scalar pointer field at `zoneState+0x20`
+that a HUD-facing object is written through (`+0x530`/`+0x53c`, at the very end
+of the function, through a critically-damped-spring ease of a bar position
+towards `zoneState+iVar5+0x2c`). That end-of-function block runs
+unconditionally, every call, independent of which branch the threshold test
+took - it is the on-screen Zone bar's fill animation, not the class-change
+event itself.
+
+**This settles `zone-effectsettings-loader.md`'s open "is `FUN_0006c600` the
+writer" question, in the negative.** Its disassembly (both branches, all
+paths) never writes offset `0x640` on anything - no `stw`/`stb`/`sth`/`std`/
+`stfs` with that displacement, and no `li r_, 0x640` / `addi r_, r_, 0x640`
+either. Every write it makes lands inside the `zoneState` sub-object
+(`param_2`, offsets `0x24`-`0x54`, `0xd0`-`0xdc`, `0x130`-`0x13c`) or on
+`param_3` itself at small offsets (`0x54`, `0x5f40`, `0x6a64`) or on
+`targetObj = *(param_2+iVar5+0x134)` at `0x21c`/`0x200`/`0x4`. None of those
+is `craftArray[n]->+0x640` or the global `H[e]` at `0x008c2cb8` - different
+base, different index space (`H` is indexed `0`/`1` by environment, this
+function's arrays are indexed by racer slot or by checkpoint id, never by
+environment). So `FUN_0006c600` advances a **separate, HUD/audio-facing**
+per-racer ladder counter (`ZONEADVANCE`/`ZONEBAR_TRANS`, the bar's spring
+target), not the render-facing stage value `Environment_UpdateStageBlend`
+reads. This is a genuine negative on a real candidate, not a restatement of
+"still not found" - it removes one specific function from the search.
+
+**Confidence 72, named `Zone_UpdateCraftClass`** (`docs/ghidra/functions/
+ps3-hdfury-eu/zone-advance.md` carries the full page per ADR-0005). Above the
+70-confidence bar: decompilation is unambiguous, both callers are read and
+their own bodies corroborate the sub-object's field layout by exact
+arithmetic (not just a plausible offset), and the craft-identifying `+0x7a60`
+reading agrees with two independent prior pages. Capped in the 70-84
+"decompilation only, consistent call sites" band because there is no runtime
+trace and `FUN_002ffa58`'s exact role (the addendum above's open item) is
+still unresolved - it is a callee's ambiguity, not this function's own, but
+the score does not separate the two.
+
 ## Not determined
 
 - **`sysvar_table`'s contents** (`0x008c0038`). A runtime pointer, not a

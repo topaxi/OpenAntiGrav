@@ -111,6 +111,10 @@ Two structural facts to expect, both different from every other binary here:
   identities cross-checked against a vendored `rpcs3`'s own source), and the
   record shape that loader parses - which rhymes with, but does not
   byte-match, Pulse's `DynamicShadowOccluder` `.vex` payload.
+- [zone-advance.md](zone-advance.md) - `Zone_UpdateCraftClass`, the per-craft,
+  per-tick Zone-mode ladder-rung advance both its callers were read for; also
+  the negative that rules it out as the still-missing writer of
+  `craftArray[n]->+0x640` (see `zone-effectsettings-loader.md`).
 - [menu-blocks.md](menu-blocks.md) - `Block_Item.cpp`, the box behind every
   `<HorizMenu>` tab, `<List>` row and `<aVertMenu>` entry: a nine-patch frame
   off `file2.gtf`, a fill whose alpha is a swatch texel (drawn twice, the second
