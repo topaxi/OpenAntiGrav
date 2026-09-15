@@ -849,3 +849,4 @@
 0x0880b488	function	Tournament_SaveProgress	76	tournament.md
 0x088ec350	function	Tournament_LoadProgress	65	tournament.md
 0x088dad90	function	EndRaceResults_PopulateTournamentTable	82	tournament.md
+0x0886759c	function	WeaponPickup_ArmMine	92	mine.md

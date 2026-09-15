@@ -26,6 +26,7 @@ because they are one weapon in two sizes. See
 | `0x08863a20` | `Weapon_FireBomb` | 88 |
 | `0x08871ddc` | `Weapon_AnnounceIncoming` | 88 |
 | `0x08867f1c` | `Mine_SpawnExplosion` | 90 |
+| `0x0886759c` | `WeaponPickup_ArmMine` | 92 (new 2026-09-15) |
 
 **The addresses on this page are real, not image-relative.** Ghidra renders this
 program's `jal` targets and `lui`/`addiu` operands in the `0x0886xxxx` region as
@@ -365,7 +366,9 @@ if (subsystem->live < 0x40 && (craft->reload -= dt) <= 0.0f) {
 
 **One mine per `0.1 s` until a per-craft counter runs out**, after which the
 handler clears its own bit - which is why `Weapons_DispatchFire` re-reads
-`craft+0x1b8` after every handler. The pool cap here is `0x40`, not the `0x2e`
+`craft+0x1b8` after every handler. **The counter starts at 5** - measured on
+the running original on 2026-09-15, and read off the arm function the same
+day; see [the cluster is five](#2026-09-15-the-cluster-is-five-measured-live-and-the-counters-writer-found). The pool cap here is `0x40`, not the `0x2e`
 the Rocket and Missile test against; it is a different subsystem with a
 different pool.
 
@@ -474,14 +477,22 @@ second page would be nine tenths this one.
 
 ## What is still ours, and one clean negative result
 
-- **How many mines a drop releases.** `craft+0x1ac` is decremented by the
+- ~~**How many mines a drop releases.** `craft+0x1ac` is decremented by the
   handler and **written by nothing else in the binary** - a `search_instructions`
   sweep for every `sw` to a `+0x1ac` offset returns exactly one store on a craft
   base, the decrement itself. The shipped `<Stats>` authors no count for the
   Mine either. This is the same negative result
   [weapon-fire.md](weapon-fire.md#what-is-not-verified) recorded and it survives
   a second search. The engine picks a number and says so; see
-  `crates/gameplay/src/projectile/mine.rs`.
+  `crates/gameplay/src/projectile/mine.rs`.~~ **Measured 2026-09-15: five**,
+  and the writer both sweeps missed is `WeaponPickup_ArmMine` (`0x0886759c`) -
+  see [below](#2026-09-15-the-cluster-is-five-measured-live-and-the-counters-writer-found).
+  The negative result was wrong, not merely incomplete: a third
+  `search_instructions` sweep (`sw`, operand `0x1ac(`) on the relocated
+  2026-09-07 database lists `0x088675c0` in `FUN_0886759c` alongside the
+  decrement, so the earlier sweeps were run against a database in which that
+  function was not yet defined, or read only the rows whose base register was
+  already known to be a craft.
 - ~~**What a mine does when a craft reaches it.**~~ **Recovered 2026-08-26** -
   see [`Mine_SpawnExplosion` plays `WO_MINE_EXPLO`](#mine_spawnexplosion-plays-wo_mine_explo)
   above: `blastradius`'s consumer is `Weapon_PostBlastImpulse_q`, and the
@@ -621,3 +632,121 @@ function boundaries from scratch; see `CLAUDE.md`'s note on this), not that
 either reading here was wrong. Left as a caveat rather than a correction:
 nobody has a confident replacement address, and there is nothing here that
 contradicts the confidence-90/92 rows above.
+
+## 2026-09-15: the cluster is five, measured live, and the counter's writer found
+
+**`CLUSTER = 5` was invented and turns out to be right.** Measured on the
+running original (PPSSPP v1.20.4, `pulse-psp-usa.chd`, a VENOM Single Race
+on Talon's Junction, weapons on, audio off) with `scripts/psp-count-mines.py`,
+which breaks on `Weapon_DropMines` (`0x088675cc`) every frame a cluster is
+coming out and reads the firing record's `+0x1ac` at each hit. Nothing was
+written to game memory: the clusters counted are the ones the AI collected
+and fired through the game's own grant path, which is the only way the count
+can be trusted - setting bit `0x2` by hand (`psp-fire-weapon.py burst`) skips
+the arm below and counts down from whatever the word held.
+
+**Three clusters, three different craft, the same trail every time**
+(`frame` is the PSP cycle counter over `222e6/59.94`; `rounds` is `+0x1ac`
+read at handler entry, before its own decrement; `pool` is the subsystem's
+`+0x164`):
+
+```text
+frame     craft  rounds  reload  pool        frame     craft  rounds  reload  pool
+10284.3   3      5       0.0000  0           15180.2   5      5       0.0000  0
+10285.2   3      4       0.1000  1           15181.2   5      4       0.1000  1
+10291.2   3      3       0.1000  2           15187.2   5      3       0.1000  2
+10298.3   3      2       0.1000  3           15193.2   5      2       0.1000  3
+10304.3   3      1       0.1000  4           15199.2   5      1       0.1000  4
+```
+
+(craft 0's cluster at frames 13175-13199 is identical to craft 5's.) The
+counter reads **5** on the first hit of every cluster, counts down by one per
+drop, and the fire word reads `0x2` throughout and is gone the frame after the
+fifth mine. The write watch on every record's `+0x1ac` counted exactly **6**
+hits per cluster - one arm plus five decrements - beside a control on the
+player's rigid body counting 1,642 in the first 40-second run, so a silent
+record was a record that did not fire rather than a dead instrument. (The
+six-minute second run's control read **0** on the same body address: by then
+the HUD was gone and the camera was on the post-race fly-by, so the parked
+player craft was no longer being integrated - and record 0 fired one of the
+three clusters in that state, so the player's slot is AI-driven once the race
+is over for it. The two target records that fired counted their six hits each
+regardless, which is what a positive control exists to certify.)
+
+**The spacing is `0.1 s` at runtime too**: drops at 6-frame intervals in two
+clusters (15180, 15186, 15192, 15198, 15204) and 7-7-6-6 in the first, where
+the reload read `0.0002` on one frame - the handler's `reload -= dt` missing
+zero by one frame of `dt` jitter and dropping a frame later. `DROP_INTERVAL`
+stays `0.1`, now measured rather than only read. **The first mine leaves on
+the press frame** (`reload 0.0000` at the first hit, `pool` `0` to `1` in the
+same frame) - see the arm function for why.
+
+### `WeaponPickup_ArmMine` (`0x0886759c`, EU `0x088673f8`) writes the five
+
+PPSSPP's own watch log names the writer of the arming store, and it is the
+function immediately before `Weapon_DropMines`:
+
+```text
+CHK Write32(CPU) at 09ba165c, PC=088675c0 (z_un_0886759c)   ; the arm, once
+CHK Write32(CPU) at 09ba165c, PC=08867648 (z_un_088675cc)   ; the decrement, five times
+```
+
+Disassembled on both pressings, byte-identical (`sw a0,0x1ac(a1)` is the
+store the watch caught; `a1` is the craft's weapon record):
+
+```text
+0886759c: li    a0,0x8              ; weapon id 8, the Mine
+088675a0: lw    a2,0x1b8(a1)
+088675a4: mtc1  zero,f12
+088675a8: sw    a0,0x1bc(a1)        ; held weapon
+088675ac: sw    a0,0x1c0(a1)        ; the second copy the grant's no-repeat rule reads
+088675b0: li    a0,-0x2
+088675b4: and   a0,a2,a0
+088675b8: sw    a0,0x1b8(a1)        ; fire word &= ~0x1
+088675bc: li    a0,0x5
+088675c0: sw    a0,0x1ac(a1)        ; rounds = 5        <- the cluster
+088675c4: jr    ra
+088675c8: _swc1 f12,0x1b0(a1)       ; reload = 0.0      <- the first drops on the press frame
+```
+
+It is the Mine's entry in the arm-function family [missile.md](missile.md)
+already names two members of (`WeaponPickup_ArmRocket` writes id `0`,
+`WeaponPickup_ArmMissile` writes id `1`, both two instructions), and Ghidra's
+own xrefs put both its callers inside `WeaponPickup_Grant` (`0x08861d20`):
+the AI branch (`0x08862074`) and the human branch (`0x0886268c`), each
+reached when the `<Pickupodds>` roll lands in the Mine's weight (base
+`0x238`) - so **the count is armed when the pickup is granted, not when fire
+is pressed.** `Weapon_RequestFire`'s id-8 case only `ori`s bit `0x2` into the
+fire word. Confidence **92**: a live write caught at this PC on three
+independent clusters, a direct disassembly on both pressings, and the
+callers resolved by xref rather than by hand. EU at 87 by
+[exact-hash-transfer.md](../psp-pulse-eu/exact-hash-transfer.md)'s `-5`.
+
+**What this settles beyond the number:**
+
+- **A re-press mid-cluster is a no-op in the original**, and that is now
+  recovered rather than chosen. The only writer of `+0x1ac` outside the
+  handler's decrement is on the grant path, and `Weapon_RequestFire` cannot
+  reach it, so a second press while bit `0x2` is already set changes nothing
+  - which is what `oag_gameplay::pickup::Held::begin_drop`'s guard does.
+- **The reload timer's initial value** - listed as unread on
+  [weapon-fire.md](weapon-fire.md#what-is-not-verified) - is `0.0`, written
+  by the arm's delay slot, so the first mine leaves on the frame fire is
+  pressed and the `0.1 s` gaps are between the first and the second onward.
+  The live trail shows exactly that.
+- **The Bomb has no arm function and no count.** `WeaponPickup_Grant` writes
+  `9` straight into `+0x22c`/`+0x230` (`record+0x1bc`/`+0x1c0`) inline for
+  the Bomb's weight (base `0x178`) and calls nothing, which is the grant-side
+  half of "a press lays one" - `Weapon_FireBomb` never reads `+0x1ac`.
+- **`+0x1c0` is the no-repeat memory.** The grant's human branch compares its
+  last-held copy (`iVar7+0x230`) against each candidate id and loops until it
+  draws something else; the arm writes both copies.
+
+**A trap for whoever reads the grant next.** `WeaponPickup_Grant` receives
+`(world, craft_index)` and computes the record as `world + index*0x1f0 + 0x70`
+- the same inline array `Weapons_DispatchFire` walks and
+`scripts/psp-fire-weapon.py` documents. Its `+0x22c`/`+0x230`/`+0x23c`/`+0x240`
+offsets are therefore `record+0x1bc`/`+0x1c0`/`+0x1cc`/`+0x1d0`, not new
+fields: `craft+0x23c` ("human") on [missile.md](missile.md) is
+`record+0x1cc`.
+

@@ -280,12 +280,14 @@ pub struct Held {
     pub last: Option<Weapon>,
     /// How many mines are still to be laid from the drop in progress.
     ///
-    /// **Recovered as a mechanism**, at confidence 90: the original keeps the
-    /// same counter on the craft at `+0x1ac`, `Weapon_DropMines`
-    /// (`0x088675cc`) decrements it once per spawn, and the craft goes on
-    /// holding the weapon until it reaches zero. What is *not* recovered is the
-    /// value it starts at - see [`crate::projectile::mine::CLUSTER`], which is
-    /// the one invented number on this weapon.
+    /// **Recovered**, at confidence 90: the original keeps the same counter on
+    /// the craft at `+0x1ac`, `Weapon_DropMines` (`0x088675cc`) decrements it
+    /// once per spawn, and the craft goes on holding the weapon until it
+    /// reaches zero. The value it starts at is recovered too, since
+    /// 2026-09-15 - see [`crate::projectile::mine::CLUSTER`] - with one
+    /// difference in *when*: the original arms it at pickup-grant time
+    /// (`WeaponPickup_ArmMine`), this engine at press time. Nothing observable
+    /// hangs on that, because nothing reads the counter between the two.
     ///
     /// Zero for every craft that is not mid-drop, which is every craft almost
     /// all of the time.
@@ -352,14 +354,20 @@ impl Held {
 
     /// Starts a drop of `count` mines, the first of them on this very tick.
     ///
-    /// **The first leaves immediately rather than after one interval.** The
-    /// original's reload timer is decremented *before* it is tested and its
-    /// initial value is one of the things `weapon-fire.md` lists as unread, so
-    /// which of the two it does is genuinely open. Immediately is the reading
-    /// that makes a fire press visibly do something on the tick it is pressed.
+    /// **The first leaves immediately rather than after one interval - recovered
+    /// 2026-09-15, confidence 92.** `WeaponPickup_ArmMine` (`0x0886759c`)
+    /// zeroes `craft+0x1b0` when the pickup is granted, and the live trail on
+    /// the original shows the pool's live count going `0` to `1` on the very
+    /// frame `Weapon_DropMines` first runs. See
+    /// `docs/ghidra/functions/psp-pulse-usa/mine.md`'s 2026-09-15 section.
     ///
-    /// **A no-op while a cluster is already coming out - chosen, not measured,
-    /// and deliberately given no confidence score.** A mashed fire button used
+    /// **A no-op while a cluster is already coming out - recovered the same day,
+    /// confidence 88.** The only writer of the round counter outside the
+    /// handler's own decrement is that arm function, and it is reachable only
+    /// from `WeaponPickup_Grant` - so a second press while bit `0x2` is already
+    /// set reaches nothing that could restart the cluster. The paragraph below
+    /// is the reasoning that stood while the writer was unfound and is kept
+    /// for the bug it describes. A mashed fire button used
     /// to call this on every press with no guard, which reset
     /// [`Self::drop_reload`] to zero on a craft already mid-drop; the next
     /// [`Self::advance_drop`] then fired immediately rather than waiting out
@@ -368,19 +376,16 @@ impl Held {
     /// per press-edge, indefinitely, three times the authored ceiling of one
     /// every [`crate::projectile::mine::DROP_INTERVAL`].
     ///
-    /// There is real evidence here and it is suggestive rather than
-    /// dispositive, which is why this stays a choice: the fire-request path
+    /// The evidence that stood before the arm was found, suggestive rather
+    /// than dispositive on its own: the fire-request path
     /// (`Weapon_RequestFire`'s bit-8 case, `docs/ghidra/functions/psp-pulse-usa/mine.md`)
     /// `ori`s its bit into `craft+0x1b8` and nothing more, so a re-press while
     /// that bit is already `1` is a no-op there, and the same page's
     /// `search_instructions` sweep of every `sw` to `craft+0x1ac` (the round
-    /// counter) finds exactly one store in the whole binary, the handler's own
-    /// decrement. Neither closes the question: that sweep also finds no writer
-    /// that *arms* the counter to its starting value in the first place - the
-    /// same page lists that write as unread - and without it, whether that
-    /// unlocated write would fire again on a re-press is unknown rather than
-    /// ruled out. So the guard is this project's own reading of what a
-    /// press-and-hold should do, not the original's.
+    /// counter) found exactly one store in the whole binary, the handler's own
+    /// decrement. That sweep missed the arming store; a runtime write watch on
+    /// the original caught it, and its PC is on the grant path, which is what
+    /// closes the question.
     pub const fn begin_drop(&mut self, count: u8) {
         if self.is_dropping() {
             return;

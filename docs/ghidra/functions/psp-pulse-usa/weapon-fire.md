@@ -259,16 +259,22 @@ the subsystem.
   not a weapon-type enum, which is evidence (not proof) that the global
   per-weapon stats table `Weapon_PostBlastImpulse_q` reads through that same
   offset is keyed by craft rather than by weapon type.
-- **What writes `craft+0x1ac`**, the drop's mine count. No store to that offset
+- ~~**What writes `craft+0x1ac`**, the drop's mine count. No store to that offset
   on a craft base was found outside the decrement itself, and a second sweep on
   2026-08-26 reproduced that negative result exactly - see
   [mine.md](mine.md#what-is-still-ours-and-one-clean-negative-result). It is set by the code
   that arms a pickup - the same never-found grant/fire call site
-  `docs/gameplay/pickups.md` has been recording since the pickups landed.
+  `docs/gameplay/pickups.md` has been recording since the pickups landed.~~
+  **Found 2026-09-15 by a runtime write watch**: `WeaponPickup_ArmMine`
+  (`0x0886759c`) stores a literal `5`, called from `WeaponPickup_Grant` - see
+  [mine.md](mine.md#2026-09-15-the-cluster-is-five-measured-live-and-the-counters-writer-found).
 - **Which axis the fan rotates about.** See above.
 - **What writes `craft+0x1b8`.** The consumers are read; the producer is not.
-- **The initial value of `craft+0x1b0`** (the reload timer), which decides
-  whether the first shot leaves on the arming tick or `0.1 s` after it.
+- ~~**The initial value of `craft+0x1b0`** (the reload timer), which decides
+  whether the first shot leaves on the arming tick or `0.1 s` after it.~~
+  **`0.0`, written by `WeaponPickup_ArmMine`'s delay slot at grant time**, so
+  the first mine leaves on the press frame - measured live 2026-09-15 on
+  [mine.md](mine.md#2026-09-15-the-cluster-is-five-measured-live-and-the-counters-writer-found).
 
 ## What this changes for the engine
 
