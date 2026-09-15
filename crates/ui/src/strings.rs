@@ -238,7 +238,7 @@ mod tests {
         let mut table = StringTable::default();
         let mut report = Vec::new();
         overlay(&mut table, "French", &mut report);
-        assert_eq!(table.get("OAG_MENU_RACE"), Some("COURSE"));
+        assert_eq!(table.get("OAG_MENU_RACEBOX"), Some("COURSE"));
         assert_eq!(table.get("OAG_CONTROLS_SIDESHIFT"), None);
     }
 }

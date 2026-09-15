@@ -429,6 +429,23 @@ impl Skin {
         })
     }
 
+    /// A row's subtitle geometry, in the grid being drawn in, for a title
+    /// whose main-menu screen was captured for it - see
+    /// [`oag_title::MenuSkin::help_text`].
+    ///
+    /// `None` means draw no subtitle at all. Never a fallback to Pulse's own
+    /// numbers: the same rule [`Self::selected_pulse_period_secs`] already
+    /// states for its own axis, and for the same reason - nothing has
+    /// measured where a *different* title's help text would sit.
+    #[must_use]
+    pub fn help_text(&self) -> Option<Subtitle> {
+        self.skin.help_text.map(|help_text| Subtitle {
+            offset_y: help_text.offset_y * self.from_theirs.1,
+            scale: self.row_scale() * help_text.scale,
+            color: argb(help_text.color),
+        })
+    }
+
     /// The gap between two strip entries, in the grid being drawn in. Ours; see
     /// [`STRIP_GAP`].
     #[must_use]
@@ -683,6 +700,18 @@ pub struct List {
     pub text_scale: f32,
 }
 
+/// A row's subtitle geometry, converted into the grid the menus are drawn in.
+/// See [`Skin::help_text`] and [`oag_title::HelpText`].
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Subtitle {
+    /// How far below the selected row's own `y` this sits. Authored.
+    pub offset_y: f32,
+    /// The subtitle face's scale, [`Skin::row_scale`] already folded in.
+    pub scale: f32,
+    /// The subtitle's ink colour. Authored.
+    pub color: [f32; 4],
+}
+
 /// A title's `<HorizMenu>`, converted into the grid the menus are drawn in.
 ///
 /// The same relationship [`Skin`] has to [`oag_title::MenuSkin`], one field
@@ -854,6 +883,7 @@ mod tests {
         strip: None,
         blocks: None,
         list: None,
+        help_text: None,
     };
 
     fn skin() -> Skin {

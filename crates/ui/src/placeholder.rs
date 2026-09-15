@@ -54,4 +54,5 @@ pub const MENU_SKIN: MenuSkin = MenuSkin {
     strip: None,
     blocks: None,
     list: None,
+    help_text: None,
 };

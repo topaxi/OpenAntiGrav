@@ -210,6 +210,10 @@ pub const MENU_SKIN: &oag_title::MenuSkin = &oag_title::MenuSkin {
         pitch: 50.0,
         text_scale: 0.8,
     }),
+    // Unmeasured, and HD's own front end authors no per-row help text
+    // anywhere in the census `docs/formats/hd-frontend.md` already ran for
+    // its selected-row pulse - see `oag_title::MenuSkin::help_text`.
+    help_text: None,
 };
 
 /// The box behind every entry of HD's strip and settings rows, as

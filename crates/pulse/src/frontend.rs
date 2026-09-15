@@ -195,6 +195,16 @@ pub const MENU_SKIN: &oag_title::MenuSkin = &oag_title::MenuSkin {
     strip: None,
     blocks: None,
     list: None,
+    // `helptext0`'s own `y="50"`, 18 below the first row's `y="32"` - the same
+    // 18 every other `helptext`/row pair in `MainMenu_Definition.xml` steps by.
+    // `scale` is this project's own derived ratio, not authored on either
+    // widget - see `oag_title::HelpText::scale`'s own doc for the two
+    // differently-measured numbers it comes from.
+    help_text: Some(oag_title::HelpText {
+        offset_y: 18.0,
+        scale: 13.0 / 22.0,
+        color: 0xFFFF_FFFF,
+    }),
 };
 
 #[cfg(test)]

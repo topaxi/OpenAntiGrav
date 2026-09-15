@@ -376,6 +376,28 @@ fn draw_text_rows(
         }
     }
 
+    // The selected row's own subtitle, only where a title's skin measured
+    // where one goes - `Skin::help_text` is `None` on every title but Pulse.
+    // Only drawn when the selected row is actually on screen: it always is
+    // in practice, since `Menu::scroll` keeps the selection inside the
+    // window, but this is the same defensive bound the rows above and the
+    // note below already apply to their own row.
+    let selected_row = menu.selected();
+    if let (Some(subtitle), Some(Some(text))) = (skin.help_text(), page.subtitles.get(selected_row))
+        && (first..first + visible).contains(&selected_row)
+    {
+        out.push(Draw::Text {
+            x: margin_x,
+            y: first_row_y + (selected_row - first) as f32 * row_height + subtitle.offset_y,
+            scale: subtitle.scale,
+            color: subtitle.color,
+            border: None,
+            align: Align::Left,
+            text: text.clone(),
+            wrap_width: None,
+        });
+    }
+
     // Under the last row *drawn* rather than at a fixed height, so it sits with
     // the page it belongs to instead of floating away from a short one - and so
     // a scrolled page puts it under the window rather than off the bottom.

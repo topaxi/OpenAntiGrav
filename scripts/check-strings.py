@@ -83,6 +83,14 @@ BASELINE_LABELS: set[tuple[str, str]] = set()
 # `BASELINE_LABELS` above.
 BASELINE_TITLES: set[str] = set()
 
+# Pre-existing debt: `(page id, subtitle)` pairs allowed to carry no
+# `subtitle_string_id`. `subtitle` is optional per row - most rows in this
+# file carry none at all, and an empty `subtitle` is never checked - so this
+# set is about the ones that *do* name one. **Empty since `subtitle` itself
+# was introduced 2026-09-15**, the same "declared rather than deleted" reason
+# `BASELINE_LABELS` gives.
+BASELINE_SUBTITLES: set[tuple[str, str]] = set()
+
 # Files read by hand and confirmed to hold nothing under an `OAG_` string
 # literal but a real lookup against a `StringTable` - see this module's own
 # doc for why this is a named list and not a tree-wide regex.
@@ -142,11 +150,14 @@ def main() -> int:
 
     uncovered_labels: list[str] = []
     uncovered_titles: list[str] = []
+    uncovered_subtitles: list[str] = []
     graduated_labels: list[str] = []
     graduated_titles: list[str] = []
+    graduated_subtitles: list[str] = []
     menu_ids: set[str] = set()
     seen_labels: set[tuple[str, str]] = set()
     seen_titles: set[str] = set()
+    seen_subtitles: set[tuple[str, str]] = set()
 
     for page in menu.get("page", []):
         page_id = page["id"]
@@ -177,8 +188,28 @@ def main() -> int:
                 if baselined:
                     graduated_labels.append(f"{key!r}")
 
+            subtitle = entry.get("subtitle")
+            if not subtitle:
+                continue
+            subtitle_key = (page_id, subtitle)
+            seen_subtitles.add(subtitle_key)
+            subtitle_id = entry.get("subtitle_string_id")
+            baselined_subtitle = subtitle_key in BASELINE_SUBTITLES
+            if subtitle_id is None:
+                if not baselined_subtitle:
+                    uncovered_subtitles.append(
+                        f"page {page_id!r} subtitle {subtitle!r}"
+                    )
+            else:
+                menu_ids.add(subtitle_id)
+                if baselined_subtitle:
+                    graduated_subtitles.append(f"{subtitle_key!r}")
+
     vanished_labels = [f"{key!r}" for key in BASELINE_LABELS if key not in seen_labels]
     vanished_titles = [page_id for page_id in BASELINE_TITLES if page_id not in seen_titles]
+    vanished_subtitles = [
+        f"{key!r}" for key in BASELINE_SUBTITLES if key not in seen_subtitles
+    ]
 
     all_ids = menu_ids | ids_from_consumers()
 
@@ -238,8 +269,21 @@ def main() -> int:
         "predates that rule, add its id to BASELINE_TITLES instead and say why.",
     )
     report(
+        "menu row(s) with a subtitle but no subtitle_string_id and not in "
+        "BASELINE_SUBTITLES:",
+        uncovered_subtitles,
+        "A new subtitle needs a subtitle_string_id and its English text in "
+        "assets/ui/strings/english.toml, in the same change. If this row "
+        "predates that rule, add it to BASELINE_SUBTITLES instead and say why.",
+    )
+    report(
         "BASELINE_LABELS row(s) that now carry a string_id - delete them:",
         graduated_labels,
+        "The baseline only ever gets shorter. Leaving a row here keeps an exemption alive.",
+    )
+    report(
+        "BASELINE_SUBTITLES row(s) that now carry a subtitle_string_id - delete them:",
+        graduated_subtitles,
         "The baseline only ever gets shorter. Leaving a row here keeps an exemption alive.",
     )
     report(
@@ -251,6 +295,11 @@ def main() -> int:
         "BASELINE_LABELS row(s) naming a page/label that no longer exists:",
         vanished_labels,
         "Delete them, or a rename carries the old exemption forward under a new label.",
+    )
+    report(
+        "BASELINE_SUBTITLES row(s) naming a page/subtitle that no longer exists:",
+        vanished_subtitles,
+        "Delete them, or a rename carries the old exemption forward under a new subtitle.",
     )
     report(
         "BASELINE_TITLES row(s) naming a page that no longer exists:",
@@ -275,10 +324,13 @@ def main() -> int:
         [
             uncovered_labels,
             uncovered_titles,
+            uncovered_subtitles,
             graduated_labels,
             graduated_titles,
+            graduated_subtitles,
             vanished_labels,
             vanished_titles,
+            vanished_subtitles,
             missing_in_base,
             other_language_problems,
         ]
@@ -289,6 +341,7 @@ def main() -> int:
     print(
         f"OK: {len(seen_labels)} menu row(s) ({len(BASELINE_LABELS)} baselined), "
         f"{len(seen_titles)} page title(s) ({len(BASELINE_TITLES)} baselined), "
+        f"{len(seen_subtitles)} subtitle(s) ({len(BASELINE_SUBTITLES)} baselined), "
         f"{len(all_ids)} string id(s) all resolve in {BASE_LANGUAGE}.toml"
     )
     return 0

@@ -467,6 +467,33 @@ pub struct Page {
     pub title: String,
     /// The rows, in the order they are drawn and moved through.
     pub entries: Vec<Entry>,
+    /// One row's second line, shown only while it is selected - `menu.toml`'s
+    /// own `subtitle`. Same length and order as [`Self::entries`], `None`
+    /// where a row named none. Kept parallel rather than folded into
+    /// [`Entry`] itself so adding it did not touch that enum's six variants
+    /// or their construction sites elsewhere in this crate and `oag_game`.
+    /// See `docs/architecture/menus.md#a-per-row-subtitle`.
+    pub subtitles: Vec<Option<String>>,
+}
+
+impl Page {
+    /// Drops rows from [`Self::entries`] and their [`Self::subtitles`]
+    /// together, so the two never drift out of the lockstep that field's own
+    /// doc promises. `definition::Definition`'s two row-dropping passes both
+    /// go through this rather than calling `entries.retain` directly, which
+    /// is what a plain `retain` here would silently get wrong: it would drop
+    /// a row from one vector and leave its subtitle attached to whatever row
+    /// slid into its old index.
+    pub(super) fn retain_rows(&mut self, mut keep: impl FnMut(&Entry) -> bool) {
+        let mut kept = Vec::with_capacity(self.entries.len());
+        self.entries.retain(|entry| {
+            let k = keep(entry);
+            kept.push(k);
+            k
+        });
+        let mut kept = kept.into_iter();
+        self.subtitles.retain(|_| kept.next().unwrap_or(false));
+    }
 }
 
 mod definition;

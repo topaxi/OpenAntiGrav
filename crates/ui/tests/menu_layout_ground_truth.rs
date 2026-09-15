@@ -160,3 +160,89 @@ fn find_menu(node: &fexml::Node, out: &mut Option<(f32, String)>) {
         find_menu(child, out);
     }
 }
+
+/// Every `<Entry idstring="...">` in the file, in document order - `Main
+/// Menu`'s own seven rows, per `docs/formats/fe-menu-definitions.md`.
+///
+/// Nothing else in `MainMenu_Definition.xml` carries an `idstring`:
+/// `TournamentLoad`'s own `<Redirect><Entry item="Mode" equals="..."
+/// goto="...">` shares the `Entry` tag name but never an `idstring`
+/// attribute, so this does not need to scope itself to the `Menu` widget to
+/// avoid picking those up.
+fn find_entries(node: &fexml::Node, out: &mut Vec<String>) {
+    if node.name.eq_ignore_ascii_case("Entry")
+        && let Some(id) = node.attr("idstring")
+    {
+        out.push(id.to_string());
+    }
+    for child in &node.children {
+        find_entries(child, out);
+    }
+}
+
+/// `entries.xml`'s own `<Entry ID="..." String="...">` table, flat rather
+/// than the `Variable`/`Values` nesting [`collect`] reads off `Skin.xml`.
+fn find_strings(node: &fexml::Node, out: &mut Vec<(String, String)>) {
+    if node.name.eq_ignore_ascii_case("Entry")
+        && let Some(id) = node.attr("ID")
+        && let Some(value) = node.attr("String")
+    {
+        out.push((id.to_string(), value.to_string()));
+    }
+    for child in &node.children {
+        find_strings(child, out);
+    }
+}
+
+/// `Main Menu`'s own row order and wording, read off the USA disc's English
+/// plugin - the primary source `docs/formats/fe-menu-definitions.md`'s own
+/// table cites. Pins the two rows `assets/ui/menu.toml` was reworded to
+/// match: `FE_RACE_CAM` first, `FE_RACEBOX` second.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn pulses_main_menu_row_order_and_text_come_off_the_disc() {
+    let Some(path) = image("pulse-psp-usa.chd") else {
+        return;
+    };
+    let mut archives = oag_assets::Archives::open(&path.to_string_lossy(), oag_pulse::TITLE)
+        .expect("the archives open");
+
+    let raw = archives
+        .read_name(r"Data\Plugins\PI001\GUI\MainMenu_Definition.xml")
+        .expect("Pulse carries a main-menu definition");
+    let xml = fexml::text(&raw).expect("it is text");
+    let root = fexml::parse(&xml);
+    let mut ids = Vec::new();
+    find_entries(&root, &mut ids);
+    assert_eq!(
+        ids,
+        vec![
+            "FE_RACE_CAM",
+            "FE_RACEBOX",
+            "FE_MP",
+            "FE_WIPEOUT_DOT_COM",
+            "FE_PROFILE",
+            "FE_OPT_PLUS",
+            "FE_EXTRAS",
+        ],
+        "the seven rows, in the disc's own order"
+    );
+
+    let raw = archives
+        .read_name(r"Data\Plugins\PI012\entries.xml")
+        .expect("PI012 is the USA disc's English plugin");
+    let xml = fexml::text(&raw).expect("it is text");
+    let root = fexml::parse(&xml);
+    let mut strings = Vec::new();
+    find_strings(&root, &mut strings);
+    let text = |id: &str| {
+        strings
+            .iter()
+            .find(|(name, _)| name == id)
+            .map(|(_, value)| value.as_str())
+            .unwrap_or_else(|| panic!("entries.xml carries no {id:?}"))
+    };
+
+    assert_eq!(text("FE_RACE_CAM"), "RACE CAMPAIGN");
+    assert_eq!(text("FE_RACEBOX"), "RACEBOX");
+}

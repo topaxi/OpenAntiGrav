@@ -165,6 +165,14 @@ mod raw {
         /// string_id` doc for which table that actually is at parse time.
         #[serde(default)]
         pub string_id: Option<String>,
+        /// A second line, shown only while this row is selected. Omitted
+        /// entirely on a row that wants none - unlike `label`, this has no
+        /// required literal fallback for the loader to fall back to when
+        /// only `subtitle_string_id` is named.
+        pub subtitle: Option<String>,
+        /// An id [`super::resolved`] looks up in place of `subtitle`, the same
+        /// mechanism `string_id` is for `label`.
+        pub subtitle_string_id: Option<String>,
     }
 
     /// `disabled_by = { setting = "display.vsync", value = "on" }`,
@@ -222,14 +230,17 @@ impl Definition {
         let mut pages = Vec::with_capacity(file.pages.len());
         for page in &file.pages {
             let mut entries = Vec::with_capacity(page.entries.len());
+            let mut subtitles = Vec::with_capacity(page.entries.len());
             for (row, entry) in page.entries.iter().enumerate() {
                 let context = format!("page {:?} entry {row}", page.id);
                 entries.push(resolve(entry, &context, &index, strings)?);
+                subtitles.push(resolve_subtitle(entry, strings));
             }
             pages.push(Page {
                 id: page.id.clone(),
                 title: resolved(strings, page.title_string_id.as_deref(), &page.title),
                 entries,
+                subtitles,
             });
         }
 
@@ -368,8 +379,7 @@ impl Definition {
             return;
         }
         if let Some(page) = self.pages.iter_mut().find(|page| page.id == "race") {
-            page.entries
-                .retain(|entry| entry.setting() != Some("race.variant"));
+            page.retain_rows(|entry| entry.setting() != Some("race.variant"));
         }
     }
 
@@ -398,7 +408,7 @@ impl Definition {
             return;
         }
         if let Some(page) = self.pages.iter_mut().find(|page| page.id == "race") {
-            page.entries.retain(|entry| {
+            page.retain_rows(|entry| {
                 !matches!(
                     entry.setting(),
                     Some("race.team" | "race.variant" | "race.track")
@@ -428,6 +438,18 @@ fn resolved(strings: &StringTable, string_id: Option<&str>, literal: &str) -> St
     string_id
         .and_then(|id| strings.get(id))
         .map_or_else(|| literal.to_string(), ToString::to_string)
+}
+
+/// A row's `subtitle`, resolved the same way [`resolved`] resolves `label` -
+/// except a subtitle is optional in the first place, so no literal is
+/// required for `subtitle_string_id` to fall back to. A row naming neither
+/// carries `None`, not an empty string, so [`super::rows`] can tell "no
+/// subtitle" apart from "resolved to nothing".
+fn resolve_subtitle(entry: &raw::Entry, strings: &StringTable) -> Option<String> {
+    entry
+        .subtitle
+        .as_deref()
+        .map(|literal| resolved(strings, entry.subtitle_string_id.as_deref(), literal))
 }
 
 /// Turns one raw entry into a resolved one, or says exactly what is wrong.

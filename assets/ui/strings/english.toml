@@ -50,14 +50,26 @@
 
 [strings]
 
-# The MAIN menu: its own title and its six rows.
+# The MAIN menu: its own title, its six rows, and each row's subtitle -
+# shown only under the selected row, see
+# `docs/architecture/menus.md#a-per-row-subtitle`. `RACE_CAMPAIGN` and
+# `RACEBOX` are ordered and worded to match `MainMenu_Definition.xml`'s own
+# first two rows (`FE_RACE_CAM`/`FE_RACEBOX`) - see
+# `docs/formats/fe-menu-definitions.md`; the subtitles themselves are this
+# project's own wording, not the disc's help text.
 OAG_MENU_MAIN_TITLE = "OPENANTIGRAV"
-OAG_MENU_RACE = "RACE"
 OAG_MENU_RACE_CAMPAIGN = "RACE CAMPAIGN"
+OAG_MENU_RACE_CAMPAIGN_SUBTITLE = "The story mode: work your way up the tournament grid"
+OAG_MENU_RACEBOX = "RACEBOX"
+OAG_MENU_RACEBOX_SUBTITLE = "Set up your own race, split screen included"
 OAG_MENU_REMIX = "REMIX"
+OAG_MENU_REMIX_SUBTITLE = "Mix tracks and ships across every title you own"
 OAG_MENU_RECORDS = "RECORDS"
+OAG_MENU_RECORDS_SUBTITLE = "Your best times and scores, by track and class"
 OAG_MENU_OPTIONS = "OPTIONS"
+OAG_MENU_OPTIONS_SUBTITLE = "Display, audio and control settings"
 OAG_MENU_QUIT = "QUIT"
+OAG_MENU_QUIT_SUBTITLE = "Exit to the desktop"
 
 # RACE and RACE REMIX share every row whose setting key and meaning are
 # identical between the two pages - `race.mode`, `race.class`, `ai.difficulty`,

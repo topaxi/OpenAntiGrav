@@ -722,6 +722,59 @@ headless here. Verifying it is `oag-game data/images/pulse-psp-eu.chd
 --press start,cross` (reaches the real Main Menu, no `--screenshot`), then
 navigating MAIN -> RECORDS and reading the table on screen.
 
+## A per-row subtitle
+
+**Built 2026-09-15.** A row's second line, drawn only under the row currently
+selected - `menu.toml`'s own `subtitle`/`subtitle_string_id`, resolved the
+same way `label`/`string_id` already are, and stored on
+[`Page::subtitles`](../../crates/ui/src/menu.rs), parallel to `Page::entries`
+rather than a seventh field on every `Entry` variant, so adding it touched
+no construction site that builds an `Entry` today.
+
+**The wording is ours; the geometry is the disc's.** The original's own
+`Main Menu` authors exactly this widget - seven `helptext` elements, one 18
+pixels below its own row, only the selected one ever drawn - and its wording
+was read in full alongside the row labels themselves, see
+[fe-menu-definitions.md](../formats/fe-menu-definitions.md#the-seven-rows-and-their-help-text-read-in-full).
+That table is not what draws: `menu.toml`'s own header already commits this
+file to no shipped disc content, the same rule that keeps a circuit's real
+name out of a `values_from` row, and a line like "The definitive WipEout®
+single player experience" is marketing copy off the disc rather than a
+number or a label word - closer to the kind of text that rule was written
+for than to `RACE CAMPAIGN`/`RACEBOX` themselves, which this project already
+ships as literal English for the rows they name. So every row's `subtitle`
+in `assets/ui/menu.toml` is this project's own sentence about what the row
+actually does, and the disc's own wording stays in the docs page above as
+the reverse-engineering record it is.
+
+**The layout numbers came from a capture and are Pulse's alone.**
+`oag_title::MenuSkin::help_text` (a `HelpText { offset_y, scale, color }`,
+the same shape `MenuList`/`MenuBlocks` already use for a title's own
+optional geometry) is `Some` only for Pulse - `18.0` below the selected row,
+white, a face two-thirds the row's own size - and `None` for Pure and HD,
+which is what leaves them drawing no subtitle at all rather than borrowing
+Pulse's numbers, the same discipline `MenuSkin::selected_pulse_period_secs`
+already states for its own axis. `crate::menu::skin::Skin::help_text`
+resolves that into the grid being drawn in, and
+`crate::menu::rows::draw_text_rows` is the one place that reads it - the HD
+list idiom (`draw_list_rows`) draws no subtitle, since nothing has measured
+where one would sit on a title whose rows are boxes rather than bare text.
+
+**`RACE CAMPAIGN` and `RACEBOX` were also reordered and reworded in the same
+change**, to match the disc's own first two `Main Menu` rows
+(`FE_RACE_CAM`/`FE_RACEBOX`) rather than this project's earlier `RACE`/`RACE
+CAMPAIGN` naming and order - see the same section of
+[fe-menu-definitions.md](../formats/fe-menu-definitions.md#the-seven-rows-and-their-help-text-read-in-full)
+for the read this settled it against. The row still opens the same `race`
+page; only its label and its place in the list moved. This is presentation
+catching up with the disc, not a change to the tree itself - the disc's
+other five rows (`MULTIPLAYER & SHARING`, `WIPEOUT-GAME.COM`, `PROFILE`,
+`OPTIONS`, `EXTRAS`) have no single row here with the same destination:
+`RECORDS` and `OPTIONS` cover pieces of what `PROFILE`/`OPTIONS` describe but
+are not a row-for-row match, and multiplayer, the web link and extras have
+nothing at all - so none of the five was added as a row that would go
+nowhere or only partway there.
+
 ## What is not built
 
 - **Localised labels.** Row labels are literal text, and `string_id` **is**

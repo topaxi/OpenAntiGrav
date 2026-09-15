@@ -49,9 +49,12 @@
 
 [strings]
 
-# The MAIN menu.
+# The MAIN menu. `RACEBOX` renamed from `RACE` 2026-09-15 - see
+# `docs/architecture/menus.md#a-per-row-subtitle` - and its translation
+# carries over since the row is the same page under a new label. The row
+# subtitles are new text with no translation pass yet; see [untranslated].
 OAG_MENU_MAIN_TITLE = "OPENANTIGRAV"
-OAG_MENU_RACE = "COURSE"
+OAG_MENU_RACEBOX = "COURSE"
 OAG_MENU_REMIX = "REMIX"
 OAG_MENU_OPTIONS = "OPTIONS"
 OAG_MENU_QUIT = "QUITTER"
@@ -181,6 +184,14 @@ ids = [
     "OAG_RECORDS_PAGE_TITLE",
     # RACE CAMPAIGN is new for the same reason - see `docs/ui/campaign-screens.md`.
     "OAG_MENU_RACE_CAMPAIGN",
+    # The six MAIN menu row subtitles, new 2026-09-15 - see this file's own
+    # header on `OAG_MENU_RACEBOX`.
+    "OAG_MENU_RACE_CAMPAIGN_SUBTITLE",
+    "OAG_MENU_RACEBOX_SUBTITLE",
+    "OAG_MENU_REMIX_SUBTITLE",
+    "OAG_MENU_RECORDS_SUBTITLE",
+    "OAG_MENU_OPTIONS_SUBTITLE",
+    "OAG_MENU_QUIT_SUBTITLE",
     # PC-specific graphics/display jargon - see this file's own header.
     "OAG_DISPLAY_FRONT_END_STYLE",
     "OAG_DISPLAY_VSYNC",

@@ -123,6 +123,23 @@ fn only_pulse_states_a_measured_highlight_pulse() {
     );
 }
 
+/// Only Pulse's per-row subtitle geometry is measured - `MainMenu_Definition
+/// .xml`'s seven `helptext` widgets, none of which Pure or HD have an
+/// equivalent capture for. `None` on both is a measurement, the same rule
+/// [`only_pulse_states_a_measured_highlight_pulse`] already guards its own
+/// axis with.
+#[test]
+fn only_pulse_states_measured_help_text_geometry() {
+    let help_text = pulse().help_text.expect("measured off Main Menu");
+    assert!((help_text.offset_y - 18.0).abs() < f32::EPSILON);
+    assert_eq!(help_text.color, 0xFFFF_FFFF);
+    assert!(pure().help_text.is_none(), "unmeasured on Pure");
+    assert!(
+        oag_hd::frontend::MENU_SKIN.help_text.is_none(),
+        "HD authors no per-row help text either"
+    );
+}
+
 /// One title draws a strip and two draw columns, and each says so itself.
 ///
 /// The third title is here because this axis is the one where HD is not simply

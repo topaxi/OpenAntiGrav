@@ -53,6 +53,40 @@ halves are true of *a* screen and neither is true of the main menu: the hex grid
 is `CellMode_Definition.xml`'s `Grid Selection`, reached from `RACE CAMPAIGN`
 via `TournamentLoad`. **The main menu is a plain left-aligned vertical list.**
 
+### The seven rows and their help text, read in full
+
+**Confidence 95** - `Data\Plugins\PI012\entries.xml` (the USA disc's English
+language plugin) read directly with `oag-wad cat ... --expand`, 2026-09-15.
+`Main Menu`'s `<Menu>` names seven `<Entry idstring>`s in this order, each
+paired with a `helptext`*N* widget - only the selected row's is drawn, per
+[the original's menus](../ui/menus-original.md). The English text is the
+`idstring`'s own `<Entry ID=... String=...>` in `entries.xml`:
+
+| # | `idstring` | Row text | `helptext` id | Help text |
+| --- | --- | --- | --- | --- |
+| 1 | `FE_RACE_CAM` | RACE CAMPAIGN | `FE_HELP_RC` | The definitive WipEout® single player experience |
+| 2 | `FE_RACEBOX` | RACEBOX | `FE_HELP_RB` | Customize your own races and campaign grids |
+| 3 | `FE_MP` | MULTIPLAYER & SHARING | `FE_HELP_MP` | Race online or over Ad Hoc, and share data |
+| 4 | `FE_WIPEOUT_DOT_COM` | WIPEOUT-GAME.COM | `FE_HELP_WOC` | Visit the official site for downloads and more |
+| 5 | `FE_PROFILE` | PROFILE | `FE_HELP_PRO` | Stats, records and profile management |
+| 6 | `FE_OPT_PLUS` | OPTIONS | `FE_HELP_OPT` | Change settings, controls, and the music playlist |
+| 7 | `FE_EXTRAS` | Extras | `FE_HELP_EXT` | Software manual, staff credits and more |
+
+Row 1 (`FE_RACE_CAM`) is the default cursor - confirmed independently by
+`docs/ui/campaign-screens.md`'s own capture. This project's tree has no row
+for `FE_MP`, `FE_WIPEOUT_DOT_COM` or `FE_EXTRAS` - there is nothing behind
+any of the three yet - so `assets/ui/menu.toml`'s own `main` page keeps only
+the two that map onto something this project builds: `RACE CAMPAIGN` first,
+and the existing custom-race page renamed to `RACEBOX` second, matching both
+the order and the naming above. See [the menus](../architecture/menus.md) for
+why the tree past those two rows is still ours rather than a transcription.
+
+This also settles this page's own prior "Open" item: the help text's content,
+not only its layout, is now read. What draws it is
+[the row subtitle](../architecture/menus.md#a-per-row-subtitle), which is
+worded in this project's own English rather than lifted from the table
+above - see that section for why.
+
 ## `RecordGrid_Definition.xml` is four record screens, one per mode
 
 **Read 2026-09-09, for the RECORDS page - see

@@ -362,6 +362,44 @@ pub struct MenuSkin {
     /// Where this title's settings rows sit, when its screens author a
     /// position for them separately from `MenuXOffset`. See [`MenuList`].
     pub list: Option<MenuList>,
+    /// A row's second line, drawn only under the selected row, for a title
+    /// whose main menu screen was captured for it. See [`HelpText`].
+    ///
+    /// `None` for a title with no capture, and the caller draws no subtitle
+    /// at all rather than guessing at Pulse's own numbers - the same rule
+    /// [`Self::selected_pulse_period_secs`] states for its own pulse.
+    pub help_text: Option<HelpText>,
+}
+
+/// A row's help text, as `MainMenu_Definition.xml`'s own seven `helptext`
+/// widgets place and colour it. **Layout and colour only** - what the text
+/// actually *says* is this project's own wording, not the disc's marketing
+/// copy; see `docs/architecture/menus.md#a-per-row-subtitle` for why.
+///
+/// Measured off Pulse, `docs/ui/menus-original.md`'s own Layout and Colours
+/// tables, confidence 90: `helptext0` through `helptext6` sit at `y = 50, 78,
+/// 106, ...`, each exactly 18 below its own row's `y = 32, 60, 88, ...`, and
+/// only the selected row's ever draws - the seven widgets share one `x` and
+/// would otherwise overlap.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct HelpText {
+    /// How far below the selected row's own `y` the subtitle sits, in
+    /// [`MenuSkin::space`]. `18.0` on Pulse.
+    pub offset_y: f32,
+    /// The subtitle face's scale, as a multiple of [`MenuSkin::menu_scale`]
+    /// rather than an absolute size - the row face and the help-text face are
+    /// two different widgets and neither authors a `scale` relative to the
+    /// other, so this is a ratio this project derived, not one either widget
+    /// states. **Confidence 70**, lower than the rest of this type: derived
+    /// from `docs/ui/menus-original.md`'s row face (22px, `font="menu"`) and
+    /// its own note that the authored y=50 draws "the 13-pixel help text" -
+    /// `13.0 / 22.0`, two numbers measured by different methods (one authored,
+    /// one read off ink) rather than a single ruler on both.
+    pub scale: f32,
+    /// The subtitle's ink colour. `0xFFFFFFFF` on Pulse - `helptext0`'s own
+    /// `color="0xffffffff"`, authored rather than measured, the one part of
+    /// this type the XML actually states.
+    pub color: Argb,
 }
 
 /// Where a title's settings rows are anchored, read off its screens.
@@ -544,6 +582,7 @@ mod tests {
         strip: None,
         blocks: None,
         list: None,
+        help_text: None,
     };
 
     /// The four pitches measured off the original, reproduced by the rule.

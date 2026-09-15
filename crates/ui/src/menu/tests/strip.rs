@@ -104,7 +104,7 @@ fn hds_root_page_runs_left_to_right_from_its_own_anchor() {
     assert_eq!(
         rows.len(),
         6,
-        "RACE, RACE CAMPAIGN, REMIX, RECORDS, OPTIONS and QUIT: {rows:?}"
+        "RACE CAMPAIGN, RACEBOX, REMIX, RECORDS, OPTIONS and QUIT: {rows:?}"
     );
     let (pen_x, pen_y) = first_pen(&skin);
     for (_, y, _, text) in &rows {
@@ -205,7 +205,7 @@ fn every_entry_is_the_same_text_colour_selected_or_not() {
     assert_eq!(
         rows.len(),
         6,
-        "RACE, RACE CAMPAIGN, REMIX, RECORDS, OPTIONS and QUIT: {rows:?}"
+        "RACE CAMPAIGN, RACEBOX, REMIX, RECORDS, OPTIONS and QUIT: {rows:?}"
     );
     for (_, _, color, text) in &rows {
         assert_eq!(*color, skin.normal(), "{text} should be skin.normal()");
@@ -431,8 +431,8 @@ fn with_no_frame_colours_nothing_but_the_text_draws() {
 fn a_page_with_a_value_column_stays_a_column() {
     let mut menu = Menu::new(built_in());
     menu.set_strip_layout(true);
-    // RACE, RACE CAMPAIGN, REMIX, RECORDS, OPTIONS - four steps down past
-    // the entries RACE CAMPAIGN, REMIX and RECORDS added.
+    // RACE CAMPAIGN, RACEBOX, REMIX, RECORDS, OPTIONS - four steps down past
+    // the entries RACEBOX, REMIX and RECORDS added.
     press(&mut menu, &[Button::Down]);
     press(&mut menu, &[Button::Down]);
     press(&mut menu, &[Button::Down]);
@@ -472,10 +472,11 @@ fn a_page_with_a_value_column_stays_a_column() {
 fn a_title_that_authors_no_strip_draws_a_column() {
     let mut menu = Menu::new(built_in());
     menu.set_strip_layout(oag_pulse::FRONT_END.menu.strip.is_some());
+    let subtitle = menu.page().subtitles[menu.selected()].clone();
     let list = list(&menu, &no_bindings, None);
     let rows: Vec<_> = labels(&list)
         .into_iter()
-        .filter(|(_, _, _, text)| text != menu.page().title.as_str())
+        .filter(|(_, _, _, text)| *text != menu.page().title && Some(text) != subtitle.as_ref())
         .collect();
     assert_eq!(rows.len(), 6, "{rows:?}");
     for pair in rows.windows(2) {
@@ -512,7 +513,7 @@ fn right_and_left_do_not_step_a_column() {
 
     // And on a strip title, a page that is not a strip behaves the same way:
     // the flag says what the disc draws, `suits` says which pages. Four
-    // downs past RACE, RACE CAMPAIGN, REMIX, RECORDS - see
+    // downs past RACE CAMPAIGN, RACEBOX, REMIX, RECORDS - see
     // `a_page_with_a_value_column_stays_a_column`'s own comment for why it
     // is four and not three.
     let mut menu = Menu::new(built_in());

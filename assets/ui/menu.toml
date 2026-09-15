@@ -24,6 +24,12 @@
 # when found, falling back to the literal text otherwise - see
 # `crate::strings`.
 #
+# A row may also carry `subtitle` (with an optional `subtitle_string_id`,
+# resolved the same way): a second line, shown only under the *selected* row,
+# on a title whose skin measured where one goes - see
+# `docs/architecture/menus.md#a-per-row-subtitle`. Omit it and the row simply
+# draws with none, the same as before this field existed.
+#
 # **A new row or page needs its `string_id`/`title_string_id` and the
 # matching English entry in `assets/ui/strings/english.toml`, in the same
 # change.** `just check-strings` (`scripts/check-strings.py`) enforces this at
@@ -47,18 +53,15 @@ id = "main"
 title = "OPENANTIGRAV"
 title_string_id = "OAG_MENU_MAIN_TITLE"
 
-[[page.entry]]
-kind = "submenu"
-label = "RACE"
-string_id = "OAG_MENU_RACE"
-target = "race"
-
-# **Opens `Grid Selection` over the menus rather than a submenu page of our
-# own.** The disc authors `Grid Selection`/`Cell Selection` in
+# **Ordered and worded to match `MainMenu_Definition.xml`'s own first two
+# rows**, `FE_RACE_CAM` then `FE_RACEBOX` - see
+# `docs/formats/fe-menu-definitions.md#the-seven-rows-and-their-help-text-read-in-full`.
+# Opens `Grid Selection` over the menus rather than a submenu page of our
+# own. The disc authors `Grid Selection`/`Cell Selection` in
 # `CellMode_Definition.xml` the same way it authors `Track Creation`/`Team
 # Selection`, and `oag_ui::campaign` draws them the same way
 # `oag_ui::picker` draws those - so this is `kind = "action"`, like START on
-# the RACE page, not a page in this tree. A source whose campaign has not
+# the RACEBOX page, not a page in this tree. A source whose campaign has not
 # been read (everything but Wipeout Pulse today) logs why and leaves the
 # menus open, per `crate::session::campaign::open_campaign`'s own doc.
 [[page.entry]]
@@ -66,6 +69,20 @@ kind = "action"
 label = "RACE CAMPAIGN"
 string_id = "OAG_MENU_RACE_CAMPAIGN"
 action = "open_campaign"
+subtitle = "The story mode: work your way up the tournament grid"
+subtitle_string_id = "OAG_MENU_RACE_CAMPAIGN_SUBTITLE"
+
+# **Renamed from `RACE` to match the disc's own `FE_RACEBOX` naming for this
+# row** - a custom single race or split-screen match, the same thing the
+# original's Racebox sets up. The page this targets (`race`, below) is
+# unchanged; only the row's own label and place in the list moved.
+[[page.entry]]
+kind = "submenu"
+label = "RACEBOX"
+string_id = "OAG_MENU_RACEBOX"
+target = "race"
+subtitle = "Set up your own race, split screen included"
+subtitle_string_id = "OAG_MENU_RACEBOX_SUBTITLE"
 
 # **Shown unconditionally, not gated on "more than one title available".**
 # The menu definition has no way to ask that question - `disabled_by` only
@@ -80,24 +97,32 @@ kind = "submenu"
 label = "REMIX"
 string_id = "OAG_MENU_REMIX"
 target = "remix"
+subtitle = "Mix tracks and ships across every title you own"
+subtitle_string_id = "OAG_MENU_REMIX_SUBTITLE"
 
 [[page.entry]]
 kind = "submenu"
 label = "RECORDS"
 string_id = "OAG_MENU_RECORDS"
 target = "records"
+subtitle = "Your best times and scores, by track and class"
+subtitle_string_id = "OAG_MENU_RECORDS_SUBTITLE"
 
 [[page.entry]]
 kind = "submenu"
 label = "OPTIONS"
 string_id = "OAG_MENU_OPTIONS"
 target = "options"
+subtitle = "Display, audio and control settings"
+subtitle_string_id = "OAG_MENU_OPTIONS_SUBTITLE"
 
 [[page.entry]]
 kind = "action"
 label = "QUIT"
 string_id = "OAG_MENU_QUIT"
 action = "quit"
+subtitle = "Exit to the desktop"
+subtitle_string_id = "OAG_MENU_QUIT_SUBTITLE"
 
 [[page]]
 id = "race"
