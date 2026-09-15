@@ -567,9 +567,21 @@ fn run(ticks: u32) -> (u64, u64) {
 ///   either, for the same reason the `roll_decided` and `reflex` entries
 ///   above give. Replaces `0xf3aa_6cce_9139_99e8` / `0x6f71_5c3a_c11d_3de2`
 ///   at 60 ticks and `0x9290_5461_4434_9d81` / `0xd773_b51b_1a49_815f` at 600.
+///
+/// - **Moved 2026-09-15**, when Pure's Disruptor landed: `Ship::disruption`
+///   (a kind byte and an `f32` timer, `oag_gameplay::disruption`) and
+///   `Projectile::effect` (a kind byte) entered the stream - five more bytes
+///   per ship and one more per projectile slot per tick. **Isolated the
+///   documented way**: with `write_disruption` and the projectile's
+///   `write_effect_kind` replaced by `let _ =` and nothing else changed, the
+///   previous constants reproduced bit for bit at both tick counts for both
+///   scenarios. Neither scenario fires a Disruptor or is hit by one, so every
+///   new byte is `0`. Replaces `0xd98f_5ee7_45c1_2fd8` /
+///   `0x59cb_0602_21c2_ccf2` at 60 ticks and `0xc88f_9c58_aa40_a211` /
+///   `0x02af_2239_1229_462f` at 600.
 const REFERENCE: &[(u32, u64, u64)] = &[
-    (60, 0xd98f_5ee7_45c1_2fd8, 0x59cb_0602_21c2_ccf2),
-    (600, 0xc88f_9c58_aa40_a211, 0x02af_2239_1229_462f),
+    (60, 0xa31c_f93f_c44f_7004, 0xe197_c1d8_e0b5_d07e),
+    (600, 0xbe25_d8d5_f406_e799, 0xc8b7_8f68_8555_be83),
 ];
 
 /// The volley scenario: a craft at an angle fires a real fanned Rocket volley
@@ -763,9 +775,17 @@ fn run_volley(ticks: u32) -> (u64, u64) {
 ///   scenario never calls `Driver::drive` either. Replaces
 ///   `0xdc64_65d2_7fd2_6484` / `0xd117_eae7_9d96_90a4` at 60 ticks and
 ///   `0x0afa_f530_c285_b40b` / `0x5993_a507_fd8b_40ca` at 600.
+///
+/// - **Moved 2026-09-15**, the same `Ship::disruption` and
+///   `Projectile::effect` addition [`REFERENCE`]'s own history records,
+///   inherited through the same `write_ship` and `write_projectile` calls.
+///   No isolation repeated here - [`REFERENCE`]'s entry ran it for both
+///   scenarios at once. Replaces `0x6b88_42dc_ab26_a704` /
+///   `0x71ab_7df0_6e22_ba44` at 60 ticks and `0x1d58_0459_a503_3a6b` /
+///   `0x1077_6477_39e6_016a` at 600.
 const REFERENCE_VOLLEY: &[(u32, u64, u64)] = &[
-    (60, 0x6b88_42dc_ab26_a704, 0x71ab_7df0_6e22_ba44),
-    (600, 0x1d58_0459_a503_3a6b, 0x1077_6477_39e6_016a),
+    (60, 0xc850_5ae4_1c3f_3ed8, 0x2a14_99ab_3d57_53d8),
+    (600, 0xefed_fabd_1add_c7c9, 0xbb56_3a8f_efeb_6394),
 ];
 
 #[test]
