@@ -195,8 +195,8 @@
 0x003f3fb0	function	Environment_LoadRaceScene	75	zone-sky.md
 0x00d45f84	data	g_ZoneEffectsActive	80	zone-sky.md
 0x005ebd58	function	Sky_DrawGradientDome	82	zone-sky.md
-0x000d14c8	function	Ship_DispatchCollisionFx	68	ship-collision-fx.md
-0x002d9730	function	ShipCollisionFx_Trigger	65	ship-collision-fx.md
+0x000d14c8	function	Ship_DispatchCollisionFx	78	ship-collision-fx.md
+0x002d9730	function	ShipCollisionFx_Trigger	76	ship-collision-fx.md
 0x00860d44	data	g_ZoneSpeedClassTable	86	zone-speed-class-table.md
 0x00083490	function	ZoneSpeedClassTable_Count	88	zone-speed-class-table.md
 0x00083498	function	ZoneSpeedClassTable_ThresholdAt	88	zone-speed-class-table.md

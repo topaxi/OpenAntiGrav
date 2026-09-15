@@ -15,11 +15,16 @@ a way Pulse's own recovered dispatch does not obviously mirror.
 ```
 0x00875800 (reaction dispatch table, entry 11 of >=12, {func,toc} pairs)
   -> FUN_0010f730 @ 0x0010f730           ("a reaction handler", not renamed - see below)
-       -> Ship_DispatchCollisionFx_q @ 0x000d14c8   (nearest-of-ten locator pick)
-            -> ShipCollisionFx_Trigger_q @ 0x002d9730  (kind-switched particle spawn)
+       -> Ship_DispatchCollisionFx @ 0x000d14c8   (nearest-of-ten locator pick)
+            -> ShipCollisionFx_Trigger @ 0x002d9730  (kind-switched particle spawn)
 ```
 
-### `Ship_DispatchCollisionFx_q` (`0x000d14c8`), confidence 68
+**2026-09-15: both functions below are corroborated by an independent
+reading on a second binary and confidence raised past the `_q` threshold -
+see "Corroborated on a second architecture" below.** The per-function
+sections keep their original reasoning; the corroboration is additive.
+
+### `Ship_DispatchCollisionFx` (`0x000d14c8`), confidence 78
 
 Takes `(craft, contactPoint, kind)`. Reads ten pointer slots at
 `craft+0x79d0..+0x79f4` - the same locator-array shape `hd-status.md` already
@@ -32,7 +37,7 @@ non-null slot it calls `FUN_002d91e8(locator, contactPoint)` - confirmed by
 raw disassembly to be squared Euclidean distance (`vectorSubtractFloatingPoint`
 then a self dot-product) - and keeps the minimum, exactly Pulse's
 nearest-of-N selection. The winner and the caller's `kind` are then passed to
-`ShipCollisionFx_Trigger_q`.
+`ShipCollisionFx_Trigger`.
 
 Raw disassembly at the call site (`0x000d1714`, `bl 0x002d9730`):
 `r3 = lwzx r3,r8,r11` (the winning locator, indexed by `iVar1*4+0x79d0`),
@@ -42,13 +47,16 @@ unchanged from caller to callee**, confirmed at the register level rather than
 trusted from the decompiler's parameter reordering (which for this function
 renders the args in a confusing order - see the pitfall this avoided, below).
 
-**Confidence 68, `_q`.** The behavioural match to Pulse's
+**Confidence 78 (was 68).** The behavioural match to Pulse's
 `Ship_DispatchCollisionFx` is exact and independently corroborated by a
 doc page written before this one existed, but nothing inside this function
-names itself - the identification is entirely structural, so it stays below
-70 and carries the `_q` suffix per `CLAUDE.md`.
+names itself - the identification was, and still is, entirely structural.
+Raised past the `_q` threshold 2026-09-15 by a second, independent
+structural match on `ps4-omega-eu` - see "Corroborated on a second
+architecture" below; still capped below 85 since neither reading is
+runtime-verified.
 
-### `ShipCollisionFx_Trigger_q` (`0x002d9730`), confidence 65
+### `ShipCollisionFx_Trigger` (`0x002d9730`), confidence 76
 
 Takes `(locatorOrObject, kind, ...)` and gates the whole body on a flag byte
 (`*(object+0xe4)+0x5f42 == 0`) before switching on `kind`:
@@ -90,16 +98,50 @@ plays the plain-damage one), or the plain-damage variant is reached through a
 different caller of this same function with a `kind` this pass's one found
 call site never supplies. Both are open - see below.
 
-**Confidence 65, `_q`.** Four literal string names pin the variant selection
-across two of four branches (as strong a signal as Pulse's own
+**Confidence 76 (was 65).** Four literal string names pin the variant
+selection across two of four branches (as strong a signal as Pulse's own
 `ShipCollisionFx_Trigger` read at 85), the switch is branch-clear, and the
 flag-gated no-op/spawn/spawn/teardown shape matches what
 `oag_game::race::Race::sparks_attached`'s doc comment already needed to
-exist. It stays below 70 specifically because the kind-to-Pulse-variant
-mapping is not a one-to-one match to Pulse's own three kinds, and one
-expected variant (`WO_SHIP_COLL_SPARK_DAMAGE` itself) is absent from all four
-branches - a real gap in the story, not a rounding-down of an otherwise-clean
-read.
+exist. The kind-to-Pulse-variant mapping still isn't a one-to-one match to
+Pulse's own three kinds, and `WO_SHIP_COLL_SPARK_DAMAGE` itself is still
+absent from all four branches read here - that gap is not closed, just now
+independently explained (see below), which is why this moves into the
+70-84 band rather than higher.
+
+### Corroborated on a second architecture
+
+**2026-09-15.** [`ps4-omega-eu/ship-collision-fx.md`](../ps4-omega-eu/ship-collision-fx.md)
+read the same chain independently on `eboot.bin` (x86-64) - found by
+searching for these three `WO_SHIP_*` string names and following their
+cross-references, not by looking for a structural match to this page. It
+landed on the same three-way `kind` mapping (0/off, 1/weapon, 2/zone-masked
+no-damage) and the same ten-slot locator cap this page's own two functions
+read. Two independent decompilations of two unrelated ISAs reaching the
+same kind mapping is the "second binary" the confidence rubric weighs above
+a second reading of the first - hence both functions' scores above.
+
+**It also resolves this page's own open question about the missing
+variants**, in the "sibling function" direction rather than the "different
+caller, different kind" one: on the PS4 binary, `WO_SHIP_COLL_SPARK_DAMAGE`
+(plus a fourth variant this page never found, `WO_SHIP_COLL_SPARK_DAMAGE_ZONE`)
+and `WO_SHIP_SPARK_DAMAGE_LEACHBEAM` are each referenced from a different
+function, not from `ShipCollisionFx_Trigger`'s own PS4 counterpart. Whether
+HD's own binary has the matching three sibling functions is not checked -
+the PS4 finding is real and independently verified on *that* binary, but is
+being used here as a strong lead for this one, not substituted for it.
+
+**One divergence, deliberately not resolved here**: the PS4 switch has at
+least two `kind` values (4, 5) this page's read never found, one of them
+(`kind == 5`) spawning an unrelated effect (`WO_FORCE_FIELD`) with nothing
+to do with collision sparks. Two explanations are open and neither is
+checked: this build could genuinely combine behaviour HD/Fury and 2048 keep
+separate (Omega is a remaster of both), or the PS4 binary could simply
+inline a sibling dispatcher's body into the same switch more aggressively
+than this compiler does - `ps4-omega-eu/ships-effects.md`'s own
+`MagstripWake_Construct` finding already recorded that binary inlining setup
+this one calls out to separately. Either way it doesn't change the kind
+0-3 mapping both binaries agree on above.
 
 ### The dispatch-table entry, `0x0010f730` - not renamed
 
@@ -114,7 +156,7 @@ an object's own vtable slot `+0x44` to get a contact result into two stack
 buffers, ORs `0x24` into a flags word at `object+0x40` - the same
 flag-writing shape Pulse's own contact-response code uses
 (`docs/ghidra/functions/psp-pulse-usa/contact-response.md`'s `0x20`/`0x400020`
-bits) - and then unconditionally calls `Ship_DispatchCollisionFx_q` with
+bits) - and then unconditionally calls `Ship_DispatchCollisionFx` with
 `kind` **hardcoded to the literal `1`** at this call site (confirmed in
 disassembly, not decompiler paraphrase).
 
@@ -165,16 +207,27 @@ the single-TOC-slot pattern the rest of this chain used. That is why
 ## Open
 
 - **What names the plain `WO_SHIP_COLL_SPARK_DAMAGE` and
-  `WO_SHIP_SPARK_DAMAGE_LEACHBEAM` variants is still unfound.**
-  `ShipCollisionFx_Trigger_q`'s four `kind` values (0-3, all read) do not
-  cover them. Either a sibling function owns them, or a different caller
-  reaches `kind` values this pass's one located call site never supplies.
+  `WO_SHIP_SPARK_DAMAGE_LEACHBEAM` variants on *this* binary is still
+  unfound**, though the shape of the answer is no longer a mystery -
+  `ps4-omega-eu/ship-collision-fx.md` found the equivalent names owned by
+  three sibling functions there, and HD/Fury very plausibly has the same
+  shape. `ShipCollisionFx_Trigger`'s four `kind` values (0-3, all read) do
+  not cover them here either way. Finding this binary's own three sibling
+  functions - not just assuming the PS4 answer transfers - is the actual
+  next step.
 - **`WO_SHIP_SPARK_DAMAGE_WEAPON` is a newly found name**, referenced only
-  from `ShipCollisionFx_Trigger_q`'s `kind == 1` branch. Not cross-checked
+  from `ShipCollisionFx_Trigger`'s `kind == 1` branch. Not cross-checked
   against the disc's own `.pob` inventory (`psys_inventory_ground_truth.rs`'s
   `hd` module) - do that before deciding whether it needs a
   `NO_TRIGGER_RECOVERED`-style entry or is already covered under a name
   variant this repo already lists.
+- **Whether this binary's own switch has the PS4 build's extra `kind`
+  values (4, a no-op; 5, `WO_FORCE_FIELD`, unrelated to collision sparks)**
+  is unchecked - not found in this pass's read, but this pass did not
+  specifically look past `kind == 3` either. If HD's own switch turns out
+  narrower, that would favour the "PS4 inlines more aggressively" reading
+  over "PS4 combines HD+2048 logic" - see `ps4-omega-eu/ship-collision-fx.md`'s
+  own open pair of hypotheses, neither resolved yet.
 - **What `0x00875800`'s reaction table is keyed by, and what index 11
   represents**, is undetermined - the table itself is reached through at
   least one hop this pass's literal-address search technique could not close
@@ -189,6 +242,15 @@ the single-TOC-slot pattern the rest of this chain used. That is why
   (queues something into a small array), confirming the table is a general
   reaction dispatch and not specific to collision fx.
 
+## History
+
+- 2026-08-31: `Ship_DispatchCollisionFx_q` 68, `ShipCollisionFx_Trigger_q`
+  65 - entirely structural, single binary, `_q` suffixed per the rubric.
+- 2026-09-15: raised to 78 and 76 respectively, `_q` dropped - an
+  independent reading on `ps4-omega-eu` (x86-64) reached the same kind
+  mapping without looking for a structural match to this page first. See
+  "Corroborated on a second architecture" above.
+
 ## See also
 
 - [`memory.md`](memory.md) - the two-TOC defect this whole chain had to route
@@ -200,3 +262,5 @@ the single-TOC-slot pattern the rest of this chain used. That is why
 - `docs/ghidra/functions/psp-pulse-usa/contact-response.md` - Pulse's own
   `ShipCollisionFx_Trigger`/`Ship_DispatchCollisionFx`, the shape this page
   compares HD against throughout
+- [`ps4-omega-eu/ship-collision-fx.md`](../ps4-omega-eu/ship-collision-fx.md) -
+  the second, independent reading that raised this page's confidence
