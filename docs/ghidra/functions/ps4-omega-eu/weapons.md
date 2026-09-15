@@ -156,16 +156,31 @@ tagged objects in sequence, not one -
 
 This reads as one composite "owns several weapon-adjacent objects" function
 rather than `MineManager_Construct` or `LeachBeamManager_Construct` in the
-single-class sense every other name on this page is. Naming `0x013781e0`
-itself risks the same overclaim the confidence rubric warns against - it is
-not clear what the composite as a whole represents, only what its three
-members are - so **nothing at this address is named**, and neither
-`MineManager_Construct` nor `LeachBeamManager_Construct` gets a `names.tsv`
+single-class sense every other name on this page is. **It is also not a
+weapon-manager top-level object at all**: while reading the `_RaceManager`
+family below, `0x013781e0` turned up as a *member* constructor called
+directly by most of them (`SPArcadeRaceManager_Construct`,
+`DemoRaceManager_Construct`, `MPArcadeRaceManager_Construct`,
+`MPTournamentRaceManager_Construct`, `SPFreePlayRaceManager_Construct`,
+`SPTimeTrialRaceManager_Construct`, `SPTournamentRaceManager_Construct`,
+`SPDetonatorRaceManager_Construct` all confirmed calling it directly, each
+against a freshly allocated `0x1620`-byte block) - the reason `get_xrefs_to`
+on either tag found only this one writer despite it constructing two
+distinct classes: it is a shared composite every race owns one of, not code
+reached from `Backend/Weapons/` at all. That still does not resolve what the
+composite as a whole represents, since it never writes its own tag (the
+placeholder in item 1 above is never overwritten) - naming `0x013781e0`
+itself risks the same overclaim the confidence rubric warns against, so
+**nothing at this address is named**, and neither `MineManager_Construct`
+nor `LeachBeamManager_Construct` gets a `names.tsv`
 row on this binary: like `WeaponExplosions` above, there is no separate
 function address for either, only an inlined occurrence inside a
 larger, unnamed owner.
 
-`Repulser.cpp` was not searched this pass at all.
+`Repulser.cpp` does not exist anywhere in this binary's string table
+(`search_strings` returns zero matches) - not a miss, since every other HD
+weapon tag checked this pass returned exactly one hit. Genuinely absent, or
+present under a different name/path; not chased further.
 
 ## `RaceManager_Construct` - `0x0128e550`
 
@@ -358,14 +373,11 @@ default for any future cross-binary work rather than the fuzzy tools.
 
 ## Next Steps
 
-- Decompile and name the "Not yet verified" table's remaining weapon
-  managers (`BombManager`, `CannonManager`, `LightBarrierManager` are
-  already named as of this pass - `Repulser.cpp` was never searched at all).
-- Read `0x013781e0` (the `LeachBeamManager`/`MineManager` composite) properly
-  before naming anything at that address - it is not a two-tag oddity like
-  `PlasmaManager_Construct` turned out to be (that one resolved cleanly:
-  `WeaponExplosions` is a per-instance member `PlasmaManager_Construct`
-  builds inline, not a second top-level manager sharing the function).
+- `0x013781e0`'s own composite role is still unclear even knowing it is a
+  per-race member every `_RaceManager` subclass constructs (see above) -
+  read what else it owns beyond `MineManager`/`LeachBeamManager` before
+  attempting a name; a guess here would be exactly the kind of name a future
+  reader can't verify.
 - `RaceManager_Construct`/`ModeManager_ConstructByMode` and the full
   `_RaceManager` subclass family are now named - `oag-race`'s own scope is
   the natural next reader, not further RE on this binary, unless the
