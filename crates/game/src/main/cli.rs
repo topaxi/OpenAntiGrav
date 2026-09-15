@@ -523,13 +523,25 @@ pub(crate) struct Cli {
     #[arg(long, default_value = "time_trial")]
     pub(crate) mode: String,
 
-    /// Development override: force the Zone colour grade to a stage.
+    /// Development override: pin the Zone colour grade to a stage for the
+    /// whole run.
     ///
-    /// **The only way to see HD/Fury's Zone look at all today**, because what
-    /// advances the stage during a race is recovered on 2048 and not on HD, so
-    /// an HD Zone race otherwise rests where its loader left it. The original
-    /// is visibly *not* on stage 0 at a start line - Moa Therma's opens on
-    /// `Sub Venom`'s cyan - so a frame compared against it needs this.
+    /// **Both titles' ladders are recovered now** - 2048's own zone-number
+    /// table and, since 2026-08-31, HD/Fury's (`crates/hd/src/race.rs`'s
+    /// `ZONE_STAGES`) - so a race normally escalates the grade on its own,
+    /// re-deriving the stage from the zone counter every frame
+    /// (`Scene::sync_zone_grade`). This flag exists for a **capture** rather
+    /// than for seeing the look at all: without it, a stage 0 (`Start`) frame
+    /// is not reachable at all, since even a zero-tick capture lands after
+    /// the race's own opening-stage logic has already stepped past it (see
+    /// `crate::race::load::environment::zone_grade`), and there is otherwise
+    /// no way to hold the grade still on a chosen rung long enough to compare
+    /// it against the original frame for frame.
+    ///
+    /// Pins, not just sets once:
+    /// [`crate::race::zone_grade::ZoneGrade::pin_stage`] holds the stage
+    /// against every later `show_zone` call, so the ladder does not
+    /// overwrite it on the next frame the way a plain commit would.
     ///
     /// Clamped to the stages the loaded file names. Has no effect outside
     /// `--mode zone`, or on a title that ships no stage table.
