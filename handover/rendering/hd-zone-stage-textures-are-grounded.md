@@ -509,9 +509,13 @@ unblocks - see Next Steps below for what implementing it needs.
   `oag_rcs::rcsmodel::Mesh::is_track` exposes the halfword's bit 0,
   `mesh::slots::ZONE_TRACK` carries it per chunk, and `mesh.wgsl` binds the
   Track pair where it is set and the Scene pair (the flat-white `zoneMode*`
-  set beside the `Scene.*` colours) elsewhere. On `Sub Venom` (the only
-  stage a headless capture reaches - the ladder re-shows it every frame) the
-  road and the track-side walls kept the art and the scenery went flat, and
+  set beside the `Scene.*` colours) elsewhere. On `Sub Venom` (at the time
+  of this capture the only stage a headless run reached, because the ladder
+  re-shows its rung every frame and overwrote any override; **fixed the same
+  day, later, by `ZoneGrade::pin_stage`** - a `--zone-stage 0` capture is no
+  longer overwritten from tick 1, though `Start` itself has not actually
+  been captured this way yet, see [2048-and-hd-ship-an-unread-effectsettings-table.md](2048-and-hd-ship-an-unread-effectsettings-table.md))
+  the road and the track-side walls kept the art and the scenery went flat, and
   flat means **white**: `Scene.Texture Colour` `0.72 0.91 0.96` on a white
   texture, multiplied by the stage's `Constant Ambient Colour` `1.5`, clamps
   at the target. Authored numbers through the read equation, with no

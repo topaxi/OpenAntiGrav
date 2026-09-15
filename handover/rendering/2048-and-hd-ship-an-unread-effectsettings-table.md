@@ -906,10 +906,17 @@ no longer disagree.
   selects per fragment. The disc counts reproduce from the reader (41,861
   relocated, 4,365 in 37 files, 124 of 983 on Talon's Junction -
   `crates/rcs/tests/rcsmodel_ground_truth.rs`). What a headless capture of
-  Talon's Junction shows, **on `Sub Venom`** - every headless capture lands
-  there, `--zone-stage` included, because `Scene::sync_zone_grade` re-shows
-  the recovered ladder's rung every frame and zone 0 is stage 1, so `Start`'s
-  dark-environment frame is not reachable from the CLI at all: the near
+  Talon's Junction shows, **on `Sub Venom`** - at the time this paragraph was
+  written every headless capture landed there regardless of `--zone-stage`,
+  because `Scene::sync_zone_grade` re-shows the recovered ladder's rung every
+  frame and zone 0 is stage 1, overwriting the override from tick 1.
+  **Fixed the same day, later**: `ZoneGrade::pin_stage`
+  (`fix(zone): --zone-stage pins the colour grade instead of losing to the
+  ladder`, 2026-09-15, covered by `zone_grade/tests.rs`) makes the override
+  stick, so a `--zone-stage 0` capture is no longer overwritten from tick 1
+  - `Start`'s dark-environment frame has not actually been captured this
+  way, only the mechanism that would reach it is fixed. This paragraph's
+  own capture predates the fix. The near
   track-side walls and gantries (track-flagged chunks) are dark teal with
   cyan rim edges and the road is lit cyan; the elevated scenery and
   everything in the distance (scene chunks) is **blown-out white**. That
