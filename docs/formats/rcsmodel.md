@@ -1292,6 +1292,58 @@ picture. `.gtf` closed it; the stopgap is gone.
    leaving it opaque, and `Report::untextured` counts it so a partly-textured
    circuit cannot read as a working one.
 
+## The header's `+0x04` is a relocation table, and a chunk's `+0x08` points at its render-block record
+
+Read from the executable on 2026-09-15 while chasing who writes the
+per-chunk Scene/Track bit in HD's Zone mode; the full trace is the thirtieth
+pass of
+[zone-effectsettings-loader.md](../ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md).
+Two words this page had placed but not explained:
+
+**`+0x04` is the offset of a relocation table `{u32 count; u32
+offsets[count]}`.** The generic RCS loader reads the file into memory whole
+and then, for every offset in that table, turns the word there into a
+pointer by adding the buffer base (`0x005d5d80`; a zero word is left zero).
+"End of the directory / first byte of chunk data" is still true - the table
+sits exactly where the directory ends - but it is what the word *names*, and
+it is why the engine never parses the header: every offset in the file has
+already become a pointer by the time anything reads it. On
+`talons_junction/track.rcsmodel` the table is at `0x22acc` with 26,450
+entries, opening with the header's own `0x4, 0x20, 0x24, 0x28, 0x30`.
+
+**Each chunk header's `+0x08` word is one of those offsets** - on all 41,861
+chunks of all 643 files - and points at a **0x40-byte per-chunk record**, one
+per chunk in chunk order, contiguous (Talon's Junction: `0x400c0`-`0x4f680`,
+immediately before the string pool):
+
+```text
++0x00  u32   0 on disc; the engine stores a pointer to the chunk's runtime
+             transform object here (4x4 at its +0x00, scene-node link at +0x70)
++0x04  u16   0 on disc; no located reader or writer of these two bytes alone
+             (every reader loads the u32 at +0x04 and masks into +0x06's bits)
++0x06  u16   AUTHORED FLAGS - see below
++0x20  f32x4, f32x4   two vectors, unread
+```
+
+`+0x06` is non-zero on 5,948 chunks and takes fifteen values on the disc.
+The engine shifts it up one bit into each draw record's sort/route key, so
+**record bit N is this halfword's bit N-1**:
+
+| bit | set on | what the engine does with it |
+| ---: | ---: | --- |
+| 0 | 4,365 chunks in 37 files, all `track`/`track_reversed`/`pvs_blocker`/mode-pad models | **Zone mode publishes the `Track` colour set and `zoneModeTrack*.gtf` for this chunk, the blank `Scene` set otherwise**; also the static mask the shadowed-track redraw passes consult. Reads as "this chunk is track surface" |
+| 3 | 658 (`03_track`, `05_ubermall`) | the draw is also appended to bucket B2 |
+| 4 | 420 (`01_vineta_k`) | bucket B3 instead of B1 |
+| 2 | 10 (`01_vineta_k`) | excluded from the material-split pair B4/B5 |
+| 9 | 418, always with bit 0 | cleared from every PVS cell at track load in game modes `0xe`/`0xd`/`0x15` - a mode-specific track piece the PVS forgets |
+| 10 | 208, always with bit 0 | cleared from every PVS cell in those modes and, in every other mode, while a game-state byte is zero |
+| 1, 5, 11 | 60, 1,051, 315 | carried in the record; no consumer read yet |
+
+Confidence 85 on the record and the relocation, 80 on bit 0's meaning. Not
+parsed by `oag_rcs` yet; a port that binds the Track set to every chunk (as
+`oag_render` does today) colours 859 of Talon's Junction's 983 chunks with
+the set the original reserves for 124.
+
 ## A chunk header is 0x20 bytes and then a SURFACE record
 
 **This closed the largest known gap between what this parser read and what the

@@ -400,18 +400,31 @@ unblocks - see Next Steps below for what implementing it needs.
   [zone-visualiser.md](../../docs/ghidra/functions/ps3-hdfury-eu/zone-visualiser.md)
   and the section above. What is still unfound is one step further back: what
   *fills* the sixteen band floats at `g_sound_system + 0x24`.
-- What writes the eight colour vec4s at `0x00c81460`/`0x00c81470`-`0x00c814d0`,
-  `zoneColourTint`'s own value among them. Nothing stores there by
-  displacement off the loader's base, so the writer is almost certainly
-  indexed VMX (`stvx rV,rA,rB`) with no displacement to grep. **A static
-  fourth sweep is not the move**; an RPCS3 write watchpoint on `0x00c81470`
-  settles it directly - see
-  [rpcs3-debugger.md](../../docs/reverse-engineering/rpcs3-debugger.md).
+- ~~What writes the eight colour vec4s at `0x00c81460`/`0x00c81470`-`0x00c814d0`,
+  `zoneColourTint`'s own value among them.~~ **Found statically on
+  2026-08-31** (`Environment_UpdateStageBlend`, indexed `stvx` exactly as this
+  bullet predicted - twenty-fourth pass of
+  [zone-effectsettings-loader.md](../../docs/ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md)),
+  **and the one lane that stayed open, `zoneColourTint.w`'s sphere radius,
+  closed on 2026-09-15**: the same function advances `H[e].+0x08` by a
+  per-call speed that itself accelerates (`+0x10 += +0x14`), reset to `0.1f`
+  at every stage commit and capped at `20000`; `Transition start speed` and
+  `Transition acceleration` are those two fields' schema keys, unauthored on
+  disc, so the `.data` defaults `0.5f`/`0.1f` shipped. Thirtieth pass, 85.
 - What fills the two-entry palette arrays at `0x00c81330`-`0x00c81350`
   (`zoneAnisoPalette`, `zoneAnisoPaletteOuter`, `GradientColour0..3`). Same
   limitation; confidence only 60 that they hold texture pointers at all.
 - Whether `zoneMode*.gtf` being fifteen identical blanks is what shipped or an
-  authoring leftover. The bytes say identical; nothing says intended.
+  authoring leftover. The bytes say identical; nothing says intended. **What
+  is measured as of 2026-09-15 is that the blanks are load-bearing**: the
+  Scene/Track bit is authored per chunk in the `.rcsmodel` (the chunk header's
+  `+0x08` record, halfword `+0x06`, bit 0 set = Track) and is set on only the
+  track-surface chunks - 124 of Talon's Junction's 983 - so the other 859
+  sample the blank Scene set under the stage's flat `Scene.*` colours while
+  only the road gets the patterned `zoneModeTrack*` art. Whether that was the
+  design or a leftover that happened to look right is still not something the
+  disc can say. Thirtieth pass of
+  [zone-effectsettings-loader.md](../../docs/ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md).
 - ~~**The recovered glow gate produces the floor half of the maintainer's own
   observation and cannot produce the billboard half.**~~ **Measured
   2026-09-01, and both forks this item named are refuted - see the section
@@ -490,6 +503,16 @@ unblocks - see Next Steps below for what implementing it needs.
 
 ## Next Steps
 
+- **Bind per chunk, not per scene** (renderer lane; read on 2026-09-15, not
+  implemented). `oag_render` binds the Track set to every chunk; the original
+  binds it to the chunks whose `.rcsmodel` render-block halfword has bit 0 set
+  and the blank Scene set to the rest. Expose the halfword from
+  `oag_rcs::rcsmodel` (chunk header `+0x08` is a file offset into a 0x40-byte
+  per-chunk table; the `u16` at `+0x06` of that record) and pick the set per
+  chunk. Expect the environment to go from patterned to flat-coloured and the
+  road to keep the art; check against a Zone frame of the original before
+  calling it right. Evidence and the disc-wide value survey: thirtieth pass of
+  [zone-effectsettings-loader.md](../../docs/ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md).
 - ~~The Zone sky is its own thing, and this port draws the wrong one~~
   **Done, 2026-08-31, and the answer was neither option the item framed** - see
   the section above and
