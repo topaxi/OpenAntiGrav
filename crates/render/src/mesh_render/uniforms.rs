@@ -607,17 +607,25 @@ impl Light {
 /// equals the Inner and the test is a no-op, which is also every draw
 /// outside a Zone race ([`Zone::default`], all zero on both sides).
 ///
-/// **Two things about it are not measured, and are stated rather than
-/// tuned.** The radius's *unit*: the shader compares it to a world-space
-/// distance, and whether this renderer's world units are the original's is
-/// unverified - the value is passed through as read, and the live frame at
-/// radius `799` (`burst-1.png` in the RPCS3 artefacts) showing the boundary a
-/// few hundred units ahead of the craft is a picture, not a measurement.
-/// And the stage *texture* on each side: the original also publishes
-/// `zoneTexInner`/`zoneTexOuter`, but this renderer binds one stage's texture
-/// per drawable at build time and never rebinds it (`race::Scene::new`), so
-/// the boundary is a step in the two colour sets over one texture, not in
-/// the texture as well.
+/// **One thing about it is not measured, and is stated rather than tuned:**
+/// the radius's *unit*. The shader compares it to a world-space distance, and
+/// whether this renderer's world units are the original's is unverified -
+/// the value is passed through as read, and the live frame at radius `799`
+/// (`burst-1.png` in the RPCS3 artefacts) showing the boundary a few hundred
+/// units ahead of the craft is a picture, not a measurement.
+///
+/// **The stage texture follows the sphere too, as of 2026-09-15.** The
+/// original publishes `zoneTexInner`/`zoneTexOuter` for both the Track and
+/// Scene sets, and so does this renderer now -
+/// [`super::zone::StageArt::track_outer`]/[`super::zone::StageArt::scene_outer`],
+/// bound alongside [`super::zone::StageArt::track`]/[`super::zone::StageArt::scene`]
+/// at `mesh.wgsl`'s bindings 11/12 and selected per fragment on the same
+/// `zone_inside` test as [`Self::track_outer`]/[`Self::scene_outer`]'s own
+/// colours. The stage-change edge that swaps the showing stage also rebuilds
+/// just those four texture views (`super::zone::rebind`, called from
+/// `oag_game::race::Scene::rebind_zone_art`), rather than rebuilding the
+/// whole drawable - so the boundary is a step in the texture now, not only
+/// in the two colour sets over one texture.
 ///
 /// **Two terms of the recovered rule are deliberately absent**, because
 /// nothing on the disc feeds them and this project does not invent:

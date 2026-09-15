@@ -124,12 +124,40 @@ line, which is what settling gives.
   units a tick at zones 0 to 2 on Talon's Junction (from `--log-every`
   telemetry), against the PS3's measured 1.1 to 1.4 units a frame at zone 2
   on Vineta K - the same order, on different circuits at different speeds.
-- **The stage texture does not follow the sphere.** The original publishes
-  `zoneTexInner` and `zoneTexOuter` too; this renderer binds one stage's
-  texture per drawable at build time (`race::Scene::new`) and never rebinds,
-  so the boundary is a step in the two colour sets over one texture. On the
-  Scene set that is invisible (fifteen byte-identical flat whites); on the
-  Track set the art differs per stage.
+- ~~**The stage texture does not follow the sphere.**~~ **Fixed 2026-09-15.**
+  `StageArt` now carries all four textures - `track`/`scene` (Inner) and
+  `track_outer`/`scene_outer` (Outer) - bound at `mesh.wgsl`'s bindings
+  1/10 and the new 11/12, and `zone_sample`/`zone_glow` select per fragment
+  on the same `zone_inside` test the colours use. `ZoneGrade::stage_art_pair`
+  fills the Outer pair from the wavefront's previous stage, falling back to
+  the Inner texture per slot when there is nothing to sweep out. The
+  stage-change edge rebuilds bind group 2's four texture views alone
+  (`oag_render::mesh_render::zone::rebind`, called from
+  `oag_game::race::Scene::rebind_zone_art`) rather than rebuilding the whole
+  drawable, gated on the same edge `sync_zone_grade`'s own log line already
+  fires on - never every frame.
+
+  **Confirmed wired, not confirmed visible.** A live log at the rebind call
+  site shows the exact right pair bound at Talon's Junction zone 2's step
+  (`track=zonemodetrack2.gtf track_outer=zonemodetrack1.gtf`), and
+  `crates/render/tests/zone_recolour.rs`'s
+  `the_transition_sphere_samples_the_inner_texture_inside_and_the_outer_outside`
+  proves the shader selection on a real adapter with two solid-colour
+  textures. But `hd_zone_wavefront_zone2_k150.png` and `..._k300.png`,
+  reproduced against this fix, are **byte-identical** (ImageMagick
+  `compare -metric AE`, 0) to the pre-fix captures - `zonemodetrack1.gtf` and
+  `zonemodetrack2.gtf` do differ on disc (distinct SHA-256, first differing
+  byte 41,089), so the texture change is real but not visible in either
+  frame. The likely reason is the surface equation's own additive Track
+  multiplier: `Start` alone is known to author `Track.Texture Colour` at
+  `9.0` (`docs/formats/effectsettings.md`), and any texel that large
+  saturates the linear-light sum before the sphere's own colour step (which
+  *is* visible in both frames) ever reaches the output - so a texture swap
+  under a saturating multiplier can be real and still draw the same pixel.
+  Unmeasured for zones 1-2's own multipliers; worth a frame at a stage pair
+  with a smaller one, or a `zonemodetrack*` pair viewed head-on rather than
+  at the grazing angle a chase camera puts a road surface at, where the
+  `rim^5`/`rim^10` colour summands already dominate over the texture term.
 - **The glow's sphere term is read but not drawn.** `5.0 * saturate(1 -
   0.1 * (distance - zoneColourTint.w))` now has both inputs bound, and as
   read it adds `5.0` to every fragment *inside* the sphere rather than at its
@@ -164,3 +192,10 @@ every capture this tree cites), `hd_zone_wavefront_zone2_k<N>.png`:
 That is a boundary sweeping outward from the craft with the new colours
 inside it, at the radii the law predicts - in this renderer's units, which is
 the open question above.
+
+**Reproduced 2026-09-15 against the stage-texture fix**, the `k150` and
+`k300` rows only (the pixels a chase-camera road shows this circuit's own
+Track multiplier through, per the struck Open item above): both frames came
+back byte-identical to the ones this table already names, which is the
+finding, not a broken repro - see that item for the saturation reading and
+what would tell the two apart.

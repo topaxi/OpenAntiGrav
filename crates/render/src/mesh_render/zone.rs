@@ -180,8 +180,8 @@ fn upload_view(
 }
 
 /// [`StageArt`]'s four views alone, rebuilt on a stage-change edge by
-/// [`super::Built::rebind_zone`] - see [`RebindResources`] for what stays
-/// bound underneath them.
+/// [`rebind`] - see [`RebindResources`] for what stays bound underneath
+/// them.
 pub(super) fn retexture(
     device: &wgpu::Device,
     queue: &wgpu::Queue,
