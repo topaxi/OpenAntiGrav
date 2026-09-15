@@ -241,8 +241,45 @@ about a second, decompression-shaped problem on top of it.
   **both** binaries, and resolved one of HD's own open questions (the
   plain-damage spark variants are owned by sibling functions, not folded
   into the same dispatcher). Gameplay/simulation work is still unplanned -
-  this is corroboration groundwork, not a milestone. The natural next RE
-  pass is `GameRoot`/`Game_Main`-equivalent boot-chain naming, the same
-  starting point `vita-2048-eu-v104/game-boot.md` used, now that the binary
-  imports cleanly and the lineage match gives it a same-role function to
-  look for by name.
+  this is corroboration groundwork, not a milestone.
+- **The boot chain and five weapon-manager constructors are named, same
+  day.** [`docs/ghidra/functions/ps4-omega-eu/game-boot.md`](../../docs/ghidra/functions/ps4-omega-eu/game-boot.md)
+  names `Game_Main`, `SoundManager_Construct` and `FrontendRoot_Construct`,
+  and finds that this binary inlines `GameRoot_Construct`/
+  `SystemRoot_Construct`/`SpeechManager_Construct`/`MusicManager_Construct`
+  directly into `Game_Main` rather than keeping them as separate functions -
+  new relative to both `vita-2048-eu-v104` and `ps3-hdfury-eu`, where all
+  four are their own functions.
+  [`docs/ghidra/functions/ps4-omega-eu/weapons.md`](../../docs/ghidra/functions/ps4-omega-eu/weapons.md)
+  transfers nine names from `ps3-hdfury-eu/weapons.md` by `.cpp` tag
+  (`QuakeManager_Construct`, `Rocket_Construct`, `RocketManager_Construct`,
+  `MissileManager_Construct`, `EMPManager_Construct`, `BombManager_Construct`,
+  `CannonManager_Construct`, `LightBarrierManager_Construct`,
+  `PlasmaManager_Construct`) and records a negative result on
+  `find_similar_functions_fuzzy`/`bulk_fuzzy_match` as a cross-architecture
+  naming shortcut: real on the PS3↔PS4 pair only one time out of two probes,
+  pure noise on Vita↔PS4 even seeded from a confirmed match, and
+  `bulk_fuzzy_match`'s own `filter` argument does not appear to restrict its
+  candidate set. The `.cpp` debug-tag technique stays the reliable one for
+  this binary's architecture spread. Two more classes turned out to have no
+  function of their own to name at all: `WeaponExplosions_Construct` (its
+  own function on `ps3-hdfury-eu`) and `MineManager_Construct`/
+  `LeachBeamManager_Construct` are all inlined into larger owning functions
+  here instead, the same shape `game-boot.md` already found for
+  `Game_Main`'s own manager constructors.
+  `weapons.md` also names `RaceManager_Construct` (87, the base race-rule
+  root), `ModeManager_ConstructByMode` (80, a single dispatcher building any
+  of twelve per-mode `ModeManager` subclasses from one shared body - first-
+  in-this-project evidence that neither HD nor 2048 name their own per-mode
+  subclasses at all), and - unlike `ModeManager` - all sixteen `_RaceManager`
+  subclasses as **separate** functions (`AIBatchRaceManager_Construct`,
+  `DemoRaceManager_Construct`, the `MP*`/`SP*` family, `SPZoneRaceManager_Construct`,
+  `GameModeRaceManager_Construct`) plus the intermediate
+  `MPRaceManager_Construct` the four `MP*RaceManager` leaves call instead of
+  the base directly - each proven by an explicit call to its own base
+  constructor, not tag matching alone.
+  `docs/ghidra/functions/ps4-omega-eu/weapons.md#gamemodes-is-a-real-distinct-directory---not-a-rename`
+  resolves this thread's own open `GameModes/*.cpp` question along the way
+  (it is a distinct `GameModes/` directory, not a rename of `Backend/General/`'s
+  own tags - both exist side by side, and `GameModeRaceManager_Construct` is
+  a real, separate, decompiled function).
