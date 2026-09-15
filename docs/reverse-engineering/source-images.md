@@ -16,6 +16,8 @@ against exactly the same data.
 | `pure-psp-usa.chd` | `851075e2a894524bd89703f2f930098c99302a488424328cf77ec33da325a3f1` | PSP | `UCUS-98612` | 2005-06-02 14:29:23 |
 | `pure-psp-eu.chd` | `9390d1ff457be45c518bff4aa66974b3c4cf4c4f0d0c2388d770600b41ec264f` | PSP | `UCES-00001` | 2005-06-29 14:18:53 |
 | `hdfury-ps3-eu.iso` | `6702a1b064c966e30ad878f7dded9a787bbab459ed4a7232007f6f1e7870f987` | PS3 | `BCES-00664` | 2009-08-28 10:02:56 |
+| `omega-ps4-eu.pkg` | `c8cbd2c2063efb41f6c881b601d4643f20236608ef5a347554f278035456a022` | PS4 | `CUSA05670` | n/a (PKG, not a disc) |
+| `omega-ps4-eu-patch.pkg` | `16140a67fdfd8c6c367e56568218adb2d370ca7cd16cf82221b9352abd3f357d` | PS4 | `CUSA05670` | n/a (PKG, not a disc) |
 
 Reproduce with `just hash-images`. It hashes everything in `data/images/`, so it
 also reports any *derived* file kept there - a decrypted copy, a disc key - which
@@ -198,6 +200,55 @@ analysed - 26,100 functions, with a first pass of names under
 Reproduce the whole import with `scripts/import-ps3-eboot.sh`; the procedure and
 its traps are in [toolchain.md](toolchain.md#ps3). Neither the decrypted ELF nor
 the decrypted image is committed.
+
+### `omega-ps4-eu.pkg` / `omega-ps4-eu-patch.pkg` - WipEout: Omega Collection, PS4
+
+```
+container      PS4 PKG
+content id     CUSA05670 (EP9000-CUSA05670_00-WIPEOUTOMEGA00EU)
+region         EU, from the content ID's own suffix - the release's bundled
+               metadata.json claims "USA", which does not match and is not
+               trusted over the header
+platform       PS4
+```
+
+Acquired 2026-09-15 as a scene "fake PKG" (fPKG) rip meant for installation on
+a jailbroken PS4 via HEN, per the release's own NFO - not a PSN retail
+download. **It decrypts on a PC with no console involved, confirmed by
+actually running the extraction, not inferred from the fPKG label:**
+
+```sh
+git clone --depth 1 https://github.com/maxton/LibOrbisPkg.git
+cd LibOrbisPkg/PkgTool.Core && dotnet build -c Release
+dotnet bin/Release/netcoreapp3.0/PkgTool.Core.dll pkg_extract \
+  data/images/omega-ps4-eu.pkg data/extracted/ps4/omega-eu
+```
+
+[LibOrbisPkg](https://github.com/maxton/LibOrbisPkg)'s `PkgTool.Core` (MIT,
+built against `netcoreapp3.0`, needs `<RollForward>LatestMajor</RollForward>`
+added to its `.csproj` to run on a newer-only-installed SDK) produced a full
+`uroot/` tree: `eboot.bin`, `sce_sys/`, `sce_module/*.prx`, and five
+`dataNN.psarc` archives (`data00`-`data04`, 2.5-6.3 GiB each, ~25 GiB total).
+Each `.psarc` starts with a plain `PSAR` header (`zlib` compression, matches
+the container [`hdfury-ps3-eu.iso`](#hdfury-ps3-euiso---wipeout-hd--fury-ps3)
+already ships) - the asset archives are genuinely plaintext, no further key
+needed. `eboot.bin` is not immediately readable either: its header is
+`4F153D1D`, the PS4 SELF magic, the same wrapper Vita's `eboot.bin` needed
+`vita-self-decrypt.py` to get past. Here that turned out to be a non-issue -
+[toolchain.md#ps4](toolchain.md#ps4) parses the SELF header directly and
+finds all 10 segments already unencrypted for this build, and
+[GhidraOrbis](https://github.com/astrelsky/GhidraOrbis) (`just
+build-ghidra-orbis`) is the loader that reads it from there, no separate
+decrypt tool needed the way Vita's is.
+
+Not a reverse-engineering target yet - listed "if feasible" in
+[the roadmap](../overview/roadmap.md) and
+[future-2048/shared-concepts.md](../future-2048/shared-concepts.md), but the
+asset side (the five `.psarc` archives, same container `oag-hd` already
+parses) has no crypto blocker left, only the format/title-crate work itself.
+The extraction above was verified and then deleted (it was written to `/tmp`,
+not `data/`, and ate most of a 32 GiB tmpfs doing it - rerun straight to
+`data/extracted/ps4/`, which is gitignored, instead).
 
 ## Region asymmetry
 

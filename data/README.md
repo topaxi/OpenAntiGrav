@@ -73,6 +73,8 @@ Tooling looks for these names. Copy your own images here and rename:
 | `hdfury-ps3-eu.iso` | WipEout HD / Fury | PS3 | Europe |
 | `2048-vita-usa.pkg` | WipEout 2048 | Vita | USA (`PCSA00015`) |
 | `2048-vita-eu.pkg` | WipEout 2048 | Vita | Europe (`PCSF00007`) |
+| `omega-ps4-eu.pkg` | WipEout: Omega Collection | PS4 | Europe (`CUSA05670`), base v1.00 |
+| `omega-ps4-eu-patch.pkg` | WipEout: Omega Collection | PS4 | Europe (`CUSA05670`), v1.07 patch |
 
 `.iso` works anywhere `.chd` does; the tools sniff the container.
 
@@ -183,6 +185,26 @@ Pure's PSP disc, since its archives share Pulse's own filenames; PS3
 identification doesn't exist yet, so HD/Fury falls back to the archive's own
 "nothing matched" error) rather than silently loading the wrong game -
 playable second-title support is tracked at roadmap M8.
+
+### The Omega Collection PKG decrypts on a PC; the archives are plain, the executable isn't yet
+
+`omega-ps4-eu.pkg` and its `-patch.pkg` are a scene "fake PKG" (fPKG) rip
+meant for installation on a jailbroken PS4 via HEN, not a retail PSN download
+- confirmed directly from the header (`content_id
+EP9000-CUSA05670_00-WIPEOUTOMEGA00EU`) and the release's own NFO. Unlike a
+retail PKG, that turns out not to require console-derived key material at
+all: [LibOrbisPkg](https://github.com/maxton/LibOrbisPkg)'s `PkgTool.Core
+pkg_extract` decrypts it fully on a PC, producing the five `dataNN.psarc`
+asset archives (the same plaintext container `hdfury-ps3-eu.iso` ships) and
+`eboot.bin` - which is itself still a wrapped PS4 SELF and needs a further
+decrypt step no tool here has attempted yet. Full writeup, the exact command,
+and the SELF caveat are in
+[source-images.md](../docs/reverse-engineering/source-images.md#omega-ps4-eupkg--omega-ps4-eu-patchpkg---wipeout-omega-collection-ps4).
+Omega Collection stays listed as "if feasible" in the roadmap because no
+format/title crate reads PS4 content yet, not because of a remaining crypto
+blocker on the asset side - see
+[`docs/overview/roadmap.md`](../docs/overview/roadmap.md) and
+[`docs/future-2048/shared-concepts.md`](../docs/future-2048/shared-concepts.md).
 
 Confirm what you have with:
 

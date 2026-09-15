@@ -537,6 +537,61 @@ offer. The lesson: a clean `import_file` result on this format is not proof
 the right loader ran - check `Language` and the block names in
 `get_metadata`/`list_segments` regardless.
 
+### PS4
+
+**No processor module needed - the PS4's CPU is an ordinary AMD64 core**,
+unlike the PSP's Allegrex/VFPU or the PS2's Emotion Engine, both of which
+stock Ghidra mis-decodes without one. What is missing is everything
+Orbis-specific layered on top of a standard ELF: the SCE-specific program
+header types and dynamic tags (`PT_SCE_DYNLIBDATA`, `DT_SCE_STRTAB_TAG`, and
+more) that the stock ELF loader has no entry for, and the SELF (Signed ELF)
+wrapper every PS4 executable ships in.
+[GhidraOrbis](https://github.com/astrelsky/GhidraOrbis) adds both, as a
+loader/analyzer extension in the same shape as PS3's `Ps3GhidraScripts` and
+Vita's `VitaLoaderRedux`:
+
+```sh
+just build-ghidra-orbis
+```
+
+Same borrowed-wrapper pattern as `build-vita-loader-redux` and
+`build-emotionengine` - `just build-allegrex` must have run at least once
+first. Installation is manual: `File > Install Extensions > +` in Ghidra,
+select the built zip, restart.
+
+**Default build ref is the tag `1.0144`, not `master` - a real, dated build
+break, not a policy choice.** Building `master`'s HEAD as of 2026-06-24 (PR
+#29, "fix/28-null-function-npe") fails to compile: `StackChkFailAnalyzer
+.java`'s `defineFunction`, a `private static` method, calls the non-static
+`getName()` for a log message, which javac rejects regardless of Ghidra
+version (confirmed by building both refs against the same Ghidra 12.1.2 -
+`1.0144` produces `ghidra_12.1.2_DEV_*_GhidraOrbis.zip` cleanly, `master`
+does not get past `compileJava`). `scripts/build-ghidra-orbis.sh --ref
+master` re-tries the upstream default once that lands a fix.
+
+**[Ghidra-Cpp-Class-Analyzer](https://github.com/astrelsky/Ghidra-Cpp-Class-Analyzer)
+(also astrelsky) is not built by `build-ghidra-orbis.sh`.** Upstream's README
+lists it as needed to build a couple of optional features, but nothing under
+`GhidraOrbis`'s own `src/` actually imports it - checked directly, not
+assumed - so it is not required to use the loader at all.
+
+#### The Omega Collection's `eboot.bin` needs no further decrypt step, checked directly
+
+`GhidraOrbisSelfLoader` does not decrypt a SELF itself: it reads each
+segment's own `ENCRYPTED` property bit (`orbis.self.SelfSegment.isEncrypted`)
+and throws `EncryptedSelfException` the moment any segment still has it set,
+the same "parses an already-plaintext container" shape as Vita's loader
+before `vita-self-decrypt.py` runs. For `data/extracted/ps4/omega-eu/uroot/
+eboot.bin` (from `data/README.md`'s Omega Collection section), that question
+was answered without opening Ghidra at all: the SELF main header (8 bytes) +
+extended header (24 bytes) + 10 fixed 32-byte segment records parse
+byte-for-byte per `SelfHeader.java`/`SelfExtendedHeader.java`/
+`SelfSegment.java`'s own field layout, and all 10 segments' `ENCRYPTED` bit
+(bit 1 of each segment's first `u64`) reads 0. This is one specific scene
+fPKG build, not a general PS4 claim - a retail SELF or a different release's
+fPKG may still be encrypted, and importing inside Ghidra itself (rather than
+a standalone header parse) has not been done yet.
+
 ### GhidraMCP
 
 [GhidraMCP](https://github.com/LaurieWired/GhidraMCP) exposes Ghidra over an

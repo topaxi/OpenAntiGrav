@@ -831,6 +831,16 @@ build-vita-loader-redux *ARGS:
 build-psvpfstools *ARGS:
     ./scripts/build-psvpfstools.sh "$@"
 
+# Build GhidraOrbis, the loader/analyzer extension for PS4 binaries, against
+# the installed Ghidra. Stock Ghidra already decodes the CPU; this adds the
+# SELF wrapper and Orbis-specific ELF program header/dynamic tag types. Needs
+# build-allegrex to have run at least once - this borrows its Gradle wrapper
+# too, same as build-vita-loader-redux and build-emotionengine. Installation
+# into Ghidra is manual; this only builds the zip. See
+# docs/reverse-engineering/toolchain.md#ps4.
+build-ghidra-orbis *ARGS:
+    ./scripts/build-ghidra-orbis.sh "$@"
+
 # Add r2 to the unaffected list of Ghidra's PowerPC 64/32-addr compiler spec,
 # which PS3 PPU code needs to decompile correctly - r2 is the TOC pointer and a
 # call does not clobber it. Edits the Ghidra install, so it needs sudo and does
