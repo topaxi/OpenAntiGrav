@@ -194,12 +194,14 @@ The string is referenced exactly once in the ELF, from `FUN_0006c600`
 (`0006c9f8`), a function that gates a Zone class-change branch (the same
 `0`-`14` ladder increment) and, on that branch, calls a confirmed
 cue-name-by-voice-slot helper for `"ZONEADVANCE"` immediately before passing
-`"ZONEBAR_TRANS"` to a second, eight-argument call whose own role isn't yet
-decompiled to certainty. Confidence 65 - see
-[sound.md](../../docs/ghidra/functions/ps3-hdfury-eu/sound.md#zonebar_trans-a-call-site-found)
-for the full read and what's still open in it. Still not wired in this
-codebase, and a single unread label is not the
-fourteen-way order match the `MR_*` ladder has. **Also found and corrected**:
+`"ZONEBAR_TRANS"` to a second, eight-argument call. **2026-09-15, later the
+same day: that call's own role is now decompiled to certainty** - it is
+`Sound_PlayNamedCue`, a real cue-play primitive, so `ZONEBAR_TRANS` is a
+genuine second cue rather than a non-audio event. Confidence 82 (up from 65)
+- see
+[sound.md](../../docs/ghidra/functions/ps3-hdfury-eu/sound.md#zonebar_trans-is-a-genuine-second-cue-not-a-uitelemetry-event-and-its-dispatch-primitive-is-named)
+for the full read. Still not wired in this codebase, and a single confirmed
+cue is not yet the fourteen-way order match the `MR_*` ladder has. **Also found and corrected**:
 `docs/formats/psp-audio.md` previously listed a third cue, `HBEAT_ZCHANGE`,
 beside `HBEAT`/`HBEAT_GO`. Checked directly this session -
 `speech_zone.bnk`'s own header gives `cue_count = 42`, cues `0`-`41`, and no
@@ -384,7 +386,17 @@ free:**
   cross-fade blend's own home turf.
 - Look for the same `{threshold, stringId}` shape on **Detonator**, whose own
   ladder is recovered by a different mechanism (`RaceManager->+0x2e10`) and may
-  or may not share this table's walker.
+  or may not share this table's walker. **2026-09-15: a concrete starting
+  address is now in hand, found as a side effect of the caller census
+  above rather than chased directly** - `FUN_00067120` (called from the top
+  of `Detonator_UpdateRace`) walks a pointer at `param_1+0x2e20` (distinct
+  from `Detonator_UpdateRace`'s own `+0x2e10` step counter) in stride-3
+  steps, yielding two cue-name pointers per step to two back-to-back
+  `Sound_QueueAnnouncerCue` calls - the same indexed-walk shape
+  `zone-speed-class-table.md` already reads for Zone. Start `get_xrefs_to`/
+  `inspect_memory_content` there instead of at `+0x2e10` cold; not walked
+  further this pass; per-instance detail in
+  [sound.md](../../docs/ghidra/functions/ps3-hdfury-eu/sound.md#the-voice-line-vs-tone-split-is-a-general-scream-convention-and-fun_00310bd8-is-named).
 - ~~An RPCS3 write watchpoint on `zoneOrigin` (`0x00c81550`) and the radius
   field is the one instrument that could close the blend~~ **Both writers
   are read statically, 2026-09-15** - see the corrected item 1 and 2 in the
@@ -438,8 +450,48 @@ free:**
   **Answered, 2026-08-31 - see the dated section above.** It is a wavefront,
   which corroborates the reading; what it corroborates *against* (a fixed
   world-space `zoneOrigin`) is the open question that answer raises.
-- **`ZONEBAR_TRANS`'s call site is found (2026-09-15) but not fully read.**
+- ~~`ZONEBAR_TRANS`'s call site is found (2026-09-15) but not fully read.
   Decompile `FUN_002ffa58` and its callee `FUN_00679688` (called from
   `FUN_0006c600` right beside the confirmed `ZONEADVANCE` cue trigger) to
-  settle whether it is itself the non-verbal class-change cue, per
-  [sound.md](../../docs/ghidra/functions/ps3-hdfury-eu/sound.md#zonebar_trans-a-call-site-found).
+  settle whether it is itself the non-verbal class-change cue~~ **Read,
+  2026-09-15, later the same day - yes, it is.** `FUN_00679688` is a bare
+  cross-TOC trampoline (four instructions, four unrelated callers, left
+  unnamed) to `Sound_PlayNamedCue` (`FUN_0062c500`, confidence 85, renamed) -
+  `SCREAM`'s generic resolve-bank/resolve-sound-by-name/dispatch-to-play
+  entry point, read end to end with no `lvlx` holes and both its diagnostic
+  strings checked against the two-TOC trap rather than trusted from Ghidra's
+  own naming. `ZONEBAR_TRANS` plays through exactly this primitive, so it is
+  a real second cue, not a UI/telemetry event - the maintainer's "spoken
+  name and non-verbal tone together" observation now has a confirmed
+  mechanism on both sides. `ZONEBAR_TRANS`'s own confidence rises to 82
+  (from 65, capped there specifically on this unknown). Full evidence in
+  [sound.md](../../docs/ghidra/functions/ps3-hdfury-eu/sound.md#zonebar_trans-is-a-genuine-second-cue-not-a-uitelemetry-event-and-its-dispatch-primitive-is-named).
+  ~~Still open, narrower than before: why `ZONEBAR_TRANS` goes through this
+  bank/sound-by-name primitive while the confirmed `ZONEADVANCE` call beside
+  it goes through a different one (`FUN_00310bd8`'s priority-slot
+  allocator) - general SCREAM convention or specific to this call site is
+  unread~~ **Answered, 2026-09-15, later the same day, by a caller census
+  rather than a guess.** `FUN_00310bd8` is renamed `Sound_QueueAnnouncerCue`
+  (confidence 85): five of its eighteen callers were sampled and every one
+  passes a literal, human-readable cue name for a discrete, state-gated
+  announcement - `Zone_UpdateCraftClass`'s `"ZONEADVANCE"`,
+  `Detonator_UpdateRace`'s `EMPREADY`/`EMPFULL`, and a milestone-announcer
+  function's `TOURN_COMPLETE`/`RACE_COMPLETE`/`SESS_COMPLETE` - while
+  `Sound_PlayNamedCue`'s own three other callers all build a parameter
+  struct instead of passing a literal, one of them an adaptive
+  music-intensity controller. So the split is general and structural, not
+  specific to this call site: `Sound_QueueAnnouncerCue` is a scarce,
+  priority-ranked voice-line queue, and `Sound_PlayNamedCue` is for anything
+  that isn't competing for one of those slots - consistent with
+  `ZONEBAR_TRANS` being a tone layered under the spoken class name rather
+  than another spoken line. Full census in
+  [sound.md](../../docs/ghidra/functions/ps3-hdfury-eu/sound.md#the-voice-line-vs-tone-split-is-a-general-scream-convention-and-fun_00310bd8-is-named).
+  **A genuine side-find for this thread's Detonator Next Step below**: one
+  of the sampled callers, `FUN_00067120` (itself called from the top of
+  `Detonator_UpdateRace`), walks a pointer at `param_1+0x2e20` in stride-3
+  steps yielding two cue-name pointers per step - the same indexed-walk
+  shape as `zone-speed-class-table.md`'s own table, and a concrete address
+  to start from rather than `RaceManager->+0x2e10` cold. Not chased this
+  pass; noted in sound.md and here so the next one does not re-find it.
+  Wiring either cue in this codebase is a separate, implementation-shaped
+  task from here - this pass stayed RE-only per this skill's own rule.
