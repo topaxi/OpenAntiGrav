@@ -367,15 +367,32 @@ free:**
   `zoneOrigin` is rewritten every frame from an entity's `+0xb0` float4, which
   is the reading the maintainer's "wavefront from behind" observation asked
   for: the sphere is re-centred on something that moves with the player, not
-  fixed once per race. A watchpoint would now only confirm *which* entity
-  `session[id]->+0x6adc` is (the local craft is the obvious candidate and is
-  not traced); that is the remaining question, and it is a small one.
+  fixed once per race. ~~A watchpoint would now only confirm *which* entity
+  `session[id]->+0x6adc` is~~ **Confirmed live, 2026-09-15, thirty-first
+  pass**: a `Z0` on the store itself, 210 consecutive frames of a Vineta K
+  Zone race - the entity is the local craft by pointer identity (the same
+  address the flare gate reports as the craft with owner index `0`), the
+  `+0x80` block is its transform (three orthogonal rows of norm 0.75, then
+  the position with `w = 1`), and the position moved on 207 of 207 frame
+  pairs, 0.28 to 2.0 units a frame as the Zone speed climbed. The radius
+  law reproduced to the tenth at two frame counts (`k = 53`: 164.4;
+  `k = 252`: 3288.7), the weight stepped `0.01` a frame, and the radius
+  parks at `20001.86` while the speed keeps growing. `0x009384dd` is the
+  pause flag (`g_GamePaused`, 85): `0` in play, `1` with the `GAME PAUSED`
+  menu up, `0` again on resume - the wavefront freezes while paused and
+  resumes where it was.
 - **Wire the transition** once someone owns the renderer side: origin =
-  the local craft's world position each frame, radius `r_k = 0.1 + 0.5k +
-  0.05k(k-1)` per frame after a stage commit, capped at 20000, colour weight
-  `min(0.01k, 1)`. Every number is the disc's (`.data` defaults for the two
+  the local craft's world position each frame (measured, 92), radius
+  `r_k = 0.1 + 0.5k + 0.05k(k-1)` per frame after a stage commit, capped at
+  20000, colour weight `min(0.01k, 1)` - all three now runtime-verified
+  (thirty-first pass, 94 on the law) - and both frozen while `g_GamePaused`
+  is set. Every number is the disc's (`.data` defaults for the two
   unauthored keys, the constants in `Environment_UpdateStageBlend`), so this
-  is no longer a chosen stand-in.
+  is no longer a chosen stand-in. The one number still not measured against
+  the world is the radius's *unit*: `burst-1.png` in
+  `data/reference/hd-capture/flare-owner/zone/` shows the boundary a few
+  hundred units ahead of the craft at radius 799, which is consistent with
+  world units but is a picture, not a measurement.
 - ~~If the maintainer plays past a class change and can say whether the world
   visibly repaints outward from a point versus changing everywhere at once~~
   **Answered, 2026-08-31 - see the dated section above.** It is a wavefront,

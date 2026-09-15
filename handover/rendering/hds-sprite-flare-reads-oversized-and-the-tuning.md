@@ -202,6 +202,29 @@ own nozzles in the original captures is the flame model, not this sprite.
 Confidence 75; one breakpoint at `0x002a0bac` logging `r10` per craft
 settles it.
 
+**2026-09-15, later, a tenth session ran that breakpoint - full account on
+engine-trail.md ("Tenth session: the owner gate, measured").** Three boots
+of a Talon's Junction single race under the interpreter, muted
+(`scripts/hd-flare-owner-break.py flare` / `flare-gate`). The render queue
+calls `EngineFlare_RenderTick` for all eight flares every frame in a fixed
+order, and at `0x002a0bac` the seven AI crafts read `+0x7a60 = -1`,
+`r10 = 1` on 30 of 30 frames each, while the player's craft read
+`+0x7a60 = 0`, `r10 = 0` on 30 of 30 - with the view index `*0x008c1430`
+at `-1` and the camera object targeting no craft throughout. The fade
+path's own footprints agree: the noise countdown at `+0x190` cycles 10..1
+on every AI flare and never moves on the player's, `+0x18c` stays 0.0 on
+the player's. Controls from the first boot: the four-vertex submit at
+`0x002a1104` was reached 27 times, all on one AI craft; the occlusion
+answer at `0x002a1428` read `1` on all 40 hits including 11 on the player's
+craft, so the query is not what stops it. **The sprite is not drawn for
+the viewing player's own craft - confidence 92** (runtime-verified, one
+binary; split-screen and the camera-object override not exercised).
+Getting every craft rather than the first of each frame needed a *hop*
+(arm `address + 4`, resume) between hits - `vCont;s` never moved the
+thread and a 30 ms free run sampled one craft 172 times in 214; the script
+carries it, and `rpcs3_debugger.py`'s new `step()` docstring records the
+negative.
+
 ## Open
 
 - **The draw is read; what is open is a live confirmation and the
@@ -217,26 +240,21 @@ settles it.
   0.5 * rand`, floored at 2.0, square, alpha = walk only) written when the
   law was unread; its doc comment at `hd.rs` ("The *law* tying the three
   radius numbers together is unread") is now false.
-- **Whether the original draws this sprite on the player's own craft at all
-  - it reads as no.** The gate at `0x002a0bb4` skips the fade and the quad
-  when `craft+0x7a60` (the owning local player index, `-1` for an AI craft
-  - two constructor writers, three spawners, engine-trail.md "Ninth
-  session" part 5) matches the current view, unless a camera object
-  targeting the craft is in a mode outside `{2, 6, 7, 8, 11}`. Every live
-  sample so far was the player's craft in a single view, where that gate is
-  closed by construction - consistent with the fifth session's 0 hits at
-  `0x002a0bb8` over ~2,500 calls with both earlier gates open. The branch
-  logic is mechanical (90) and the `+0x7a60` identity rests on its two
-  writers (85); what holds the conclusion at 75 is that the view-index
-  global (`*0x008c1430`) and the camera modes are read from use, not
-  measured, and the fifth session's breakpoints were not
-  filtered by craft, so it is also unknown whether AI craft reach the fade
-  (they should, unless their occlusion query read zero pixels under RPCS3,
-  `craft+0x5fa4` was in `{4, 5, 6}`, or they were never enqueued). If it
-  holds, the compact glow on the player's nozzles in all three original
-  captures is the flame `.rcsmodel` plus whatever `Engine Flare Particles`
-  draws, and this engine's oversized disc is a sprite the original never
-  puts on the player's craft.
+- ~~**Whether the original draws this sprite on the player's own craft at all
+  - it reads as no.**~~ **Measured 2026-09-15, it does not - confidence
+  92** (engine-trail.md "Tenth session"). The gate at `0x002a0bb4` turned
+  the player's craft (`+0x7a60 = 0`, `r10 = 0`) away on every one of 30
+  frames and passed all seven AI crafts (`+0x7a60 = -1`, `r10 = 1`) on
+  every one; the submit at `0x002a1104` was reached only for an AI craft
+  and the occlusion query answered `1` for the player's craft too. So the
+  compact glow on the player's nozzles in all three original captures is
+  the flame `.rcsmodel` plus whatever `Engine Flare Particles` draws, and
+  this engine's oversized disc is a sprite the original never puts on the
+  player's craft. What stays unmeasured: the split-screen case (`view >=
+  0`, read `-1` throughout) and the camera-object override (`+0x1ec` read
+  `0` throughout, mode 10 - outside the `{2, 6, 7, 8, 11}` set, so even a
+  targeting camera in this mode would not be an exception). Both are the
+  listing's word alone.
 - Still unlocated consumers: `Flare Max Rotate Angle` (`+0x478`), `Flare
   Size Clamp` (`+0x4b0`), `Flare Depth Bias` (`+0x4b4`) - `RenderTick`
   never loads them; `FUN_002c4ad0` (the four-vertex submit) and the
@@ -257,24 +275,13 @@ settles it.
 
 ## Next Steps
 
-- **One picture or one breakpoint run, then the renderer follows from
-  it.** Cheapest first: the reading predicts no sprite on the player's
-  craft and a wide 4:1 streak on every opponent whose nozzles face the
-  camera within ~15 units. None of the three captures on disc has an
-  opponent nearer than the horizon (eighth place in all three), so take a
-  **start-grid frame** with `scripts/rpcs3-drive.py race --shots` before
-  the drive begins - seven crafts bunched a few units ahead, nozzles
-  toward the camera - and look at their engine bays against the player's.
-  Ten minutes. If that is ambiguous, the breakpoint: extend
-  `scripts/hd-flare-gate-check.py` with a checkpoint at `0x002a0bac`
-  logging the two values that feed the branch - `*(*(r31+0x134)+0x7a60)`
-  and `*0x008c1430` - plus `r31` on every hit across ~10 s of a race
-  (the branch outcome itself is already known from the listing), and one
-  at `0x002a1428` logging `r28` (the occlusion result). `PPU Decoder:
-  Interpreter (static)`, one breakpoint per run (two at once desynced the
-  stub last time). About an hour including the two boots.
-- **Then the renderer, in this order**: (1) if the player's craft is
-  confirmed skipped, stop drawing the sprite on the viewing player's craft in
+- ~~**One picture or one breakpoint run, then the renderer follows from
+  it.**~~ **The breakpoint run is done, 2026-09-15** - see the tenth
+  session; `scripts/hd-flare-owner-break.py flare-gate` reproduces it in
+  about fifteen minutes. The start-grid picture was not taken and is no
+  longer load-bearing.
+- **Then the renderer, in this order**: (1) the player's craft is
+  confirmed skipped, so stop drawing the sprite on the viewing player's craft in
   `race::effects::hd_sprite_quad` - the original's own rule, not a fitted
   multiplier - and the eyeballed `0.57x` decision recorded in the eighth
   session is moot; (2) replace `hd::Sprite`'s radius law and the square

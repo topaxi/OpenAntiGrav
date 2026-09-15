@@ -5021,11 +5021,13 @@ fourteen stores at `+0x38..+0x6c`) before the common path - the second
 viewport mirrors the first until either is driven past stage 1. Recorded,
 not chased.
 
-**Not settled**: the byte at `0x009384dd`. Thirty-six functions load its TOC
+**Not settled** as of this pass: the byte at `0x009384dd`. Thirty-six functions load its TOC
 slot, `Game_PresentLoop_q` and `BackgroundAnimFury_Render` among them; a
 "paused" flag is the obvious reading for something the present loop, a
 menu backdrop and a per-frame effect all consult, and it is not checked.
 Nothing here depends on it: with the byte clear the advance runs.
+**Checked live in the thirty-first pass: it is the pause flag,
+`g_GamePaused`, 85.**
 
 ### 3. `zoneOrigin`: the effectsettings thread is right, the ladder thread was stale - and the source is `+0xb0`, not `+0x80`
 
@@ -5067,6 +5069,124 @@ per this pass's brief.
 None. The render-block record is per-file data, not a fixed global;
 `0x009384dd` is not identified; the radius mechanism lives inside a function
 already named at 85.
+
+
+## 2026-09-15, a thirty-first pass, live: `zoneOrigin` is the local craft's position and moves every frame, the radius law reproduces to the tenth, and `0x009384dd` is the pause flag
+
+**Measured on RPCS3 `0.0.42-19777` under `PPU Decoder: Interpreter
+(static)`, audio `"Null"`, one boot of a Racebox Zone race on Vineta K
+(`Zone_HUD.xml` in `TTY.log`, the `RACE TYPE: ZONE` line an earlier build
+printed does not appear on this one), `scripts/hd-flare-owner-break.py
+zone`.** Three questions the thirtieth pass left were each a memory read
+away once a breakpoint could sit on the store, and all three closed.
+
+**How it was read.** A `Z0` breakpoint at `0x003ad8dc`, the `stvx v0,0,r9`
+that writes `zoneOrigin`. The stub's `g` dump carries no VMX registers, so
+the value about to be stored was read as the 16 bytes at `r3 + 0x30` (the
+`lvx v0,r3,r0` two instructions up, `r0 = 0x30`) and the value *still* at
+`0x00c81550` as last frame's; the whole `r3 .. r3+0x40` block, `r27`,
+`array[r27]` off `0x0098d7c0`, its `+0x6adc`, the stage table entry
+`H[0]` (`0x008c2cb8`, `+0x08` radius, `+0x10` speed, `+0x14` acceleration,
+`+0x18` weight) and the byte at `0x009384dd` came with each hit. Between
+hits the thread was hopped one instruction (arm `0x003ad8e0`, resume) and
+the store re-armed, so consecutive hits are consecutive frames - proven by
+the read itself: on 207 of 207 consecutive pairs, "last frame's value at
+`0x00c81550`" equalled the previous hit's "value about to be stored". Three
+bursts of 70 frames with 5 s of free running between them; before the
+first, eight hits on `EngineFlare_RenderTick`'s owner gate (`0x002a0bac`,
+see engine-trail.md's tenth session) recorded the player's craft pointer
+(`*(flare+0x134)` with `+0x7a60 = 0`).
+
+**1. Which entity: the player's own craft, by pointer identity.** `r27` was
+`0` on every hit, `array[0]` at `0x0098d7c0` read `0x33b68bb0`, and that is
+the exact pointer the flare gate had just reported as the craft with owner
+index `0`. `*(craft + 0x6adc)` read `0x33ba74f0` and `r3 - 0x80` read
+`0x33ba74f0` on every hit - the object the twenty-seventh pass could only
+call "an entity" is a sub-object of the local craft. Its `+0x80..+0xc0`
+block is a 4x4 by shape: three rows of uniform norm 0.75 that stay
+mutually orthogonal as the craft turns (first hit of burst 2:
+`(-0.276, 0.013, -0.697)`, `(-0.112, 0.739, 0.058)`, `(0.688, 0.125, -0.270)`,
+`w = 0`), and a fourth row with `w = 1.0` throughout. **Confidence 90**
+that `zoneOrigin` is a row of the local craft's transform - pointer
+identity on 210 of 210 hits; the 0.75 scale is recorded, not explained.
+
+**2. It moves every frame, with the race.** The fourth row's `xyz`
+advanced on 207 of 207 frame pairs, never by zero, and the step grew
+across the run the way a Zone race's speed does:
+
+| burst | frame | `zoneOrigin` about to be stored | step (units) | `H[0]` radius | speed | weight | `0x009384dd` |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 0 | 0 | `-849.99 -149.45 248.28` | - | 20001.9 | 95.9 | 1.00 | 0 |
+| 0 | 1 | `-849.87 -149.44 248.54` | 0.281 | 20001.9 | 96.0 | 1.00 | 0 |
+| 0 | 35 | `-843.97 -149.07 258.33` | 0.406 | 20001.9 | 99.4 | 1.00 | 0 |
+| 0 | 69 | `-834.51 -148.51 271.60` | 0.538 | 20001.9 | 102.8 | 1.00 | 0 |
+| 1 | 0 | `-630.60 -140.36 423.73` | - | 164.4 | 5.8 | 0.53 | 0 |
+| 1 | 1 | `-629.43 -140.41 424.51` | 1.405 | 170.2 | 5.9 | 0.54 | 0 |
+| 1 | 2 | `-628.26 -140.41 425.31` | 1.421 | 176.1 | 6.0 | 0.55 | 0 |
+| 1 | 35 | `-590.78 -138.58 446.29` | 1.063 | 426.9 | 9.3 | 0.88 | 0 |
+| 1 | 69 | `-562.29 -136.49 458.95` | 0.842 | 799.2 | 12.7 | 1.00 | 0 |
+| 2 | 0 | `-287.37 -90.58 428.20` | - | 3288.7 | 25.7 | 1.00 | 0 |
+| 2 | 1 | `-285.80 -90.37 427.57` | 1.704 | 3314.4 | 25.8 | 1.00 | 0 |
+| 2 | 35 | `-228.95 -77.42 406.49` | 1.916 | 4247.7 | 29.2 | 1.00 | 0 |
+| 2 | 69 | `-173.65 -63.00 396.67` | 1.037 | 5296.6 | 32.6 | 1.00 | 0 |
+
+Step magnitudes per burst, min / mean / max: 0.281 / 0.407 / 0.551, then
+0.842 / 1.118 / 1.510, then 1.037 / 1.785 / 1.996 units a frame. So the
+sphere the twenty-fourth pass described is re-centred on the local craft
+every frame, which is what the maintainer's "wavefront that travels with
+the driving direction" needed and what a fixed world-space origin could
+never produce. `burst-1.png` in the artefacts is the frame at radius 799:
+the near track in the new stage's teal, the far walls still the old
+yellow, the boundary a few hundred units ahead of the nozzle. **Confidence
+92** on "rewritten every frame from the local craft's transform" -
+runtime-verified on one binary, 210 frames.
+
+**3. The radius law reproduces to the tenth.** Burst 1 caught a fresh
+stage-2 transition part way: with the thirtieth pass's `.data` defaults
+(`speed_0 = 0.5`, `accel = 0.1`, weight `+0.01` a frame), a speed of 5.8
+is frame `k = 53` after the commit, and the law `r_k = 0.1 + 0.5k +
+0.05k(k-1)` gives `0.1 + 26.5 + 137.8 = 164.4` - the value read - with
+weight `0.53`, also read. Burst 2, speed 25.7, `k = 252`: `0.1 + 126 +
+3162.6 = 3288.7`, read `3288.70`. Frame to frame the radius grew by
+exactly the speed (`164.4 -> 170.2 -> 176.1` at speeds `5.8, 5.9`) and the
+speed by exactly `0.1`; the weight stepped `0.01` a frame and clamped at
+`1.00` on frame 47 of the burst. Burst 0 shows the tail: radius parked at
+`20001.86` past the `20000` ceiling while the speed *kept* growing
+(`95.9 -> 102.8` over 69 frames) - the listing's `bge` skips only the
+radius add. The thirtieth pass's **85 on the mechanism rises to 94**: a
+runtime trace matching the closed form at two independent frame counts
+and matching the per-frame increments directly, one binary.
+
+**4. `0x009384dd` is the pause flag - `g_GamePaused`.** Read `0` on all
+218 hits during play. With the target running, `start` on the pad, three
+seconds, stop: the byte read `1` and the display showed HD's `GAME PAUSED`
+menu (`paused.png`: `CONTINUE / GAME OPTIONS / AUDIO OPTIONS / PHOTO MODE
+/ VIEW INVITES / RESTART RACE / QUIT RACE`). `start` again, three seconds,
+stop: `0`, race running (`unpaused.png`). One byte, one toggle cycle, both
+edges, against a screen that names the state; thirty-six readers
+including the present loop and the menu backdrop is the shape a pause flag
+has. **Confidence 85** - runtime-verified on one binary, one cycle; short
+of 90 for want of a second cycle or a writer read. Named `g_GamePaused` and
+applied; row added to `names.tsv`. What it says for the blend: the
+wavefront and the colour weight freeze while the game is paused and resume
+where they were - there is no time-based catch-up.
+
+Artefacts: `data/reference/hd-capture/flare-owner/zone/` - `zone.json`
+(every hit), `burst-{0,1,2}.png`, `paused.png`, `unpaused.png`,
+`mode-4.png` (the Racebox `RACE TYPE: ZONE` row before confirming),
+`logs/rpcs3.log`. The emulator's own `RPCS3.log` opened with `Used
+configuration:` / `Core:` / `  PPU Decoder: Interpreter (static)` and
+`Audio:` / `  Renderer: "Null"`.
+
+Reproduce: `python3 scripts/rpcs3-drive.py display`, `uv run --with evdev
+python3 scripts/hd-flare-owner-break.py zone <out>` (about twenty minutes
+on a loaded machine), `python3 scripts/rpcs3-drive.py stop`.
+
+### Names applied
+
+| address | kind | name | confidence |
+| --- | --- | --- | --- |
+| `0x009384dd` | data | `g_GamePaused` | 85 |
 
 
 ## See also

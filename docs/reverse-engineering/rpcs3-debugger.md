@@ -995,6 +995,45 @@ Cheap - one boot with the flag on - and the check to make before trusting a
 disassembly's arithmetic. Turn the flag off after: it writes on every shader
 compile.
 
+## Four more things from the flare and Zone breakpoint runs (2026-09-15)
+
+**Every scripted launch is muted and on a copy of the config now.**
+`rpcs3-drive.py` passes `--config data/tools/rpcs3-scratch-config.yml`, a
+full copy of `~/.config/rpcs3/config.yml` with `Audio: Renderer: "Null"` and,
+under `--interpreter`, `Core: PPU Decoder: Interpreter (static)`; every
+subcommand and every script built on `Session` gets it, `--stock-config`
+opts out. Two things it took a boot each to learn: `--config` **replaces**
+the whole configuration rather than overlaying it (a three-key file would
+lose `GDB Server` and `Assume External Debugger`), and the audio value has
+to be the quoted string `"Null"` - a bare `Null` is YAML's null, and
+`RPCS3.log`'s own `Used configuration:` dump still said `Renderer: Cubeb`
+with it. That dump is the check: `Session.config_report()` / `config_report()`
+read `Audio: Renderer` and `Core: PPU Decoder` back out of it.
+
+**`vCont;s` does not move a thread parked on a breakpoint.** Answered, but
+on 213 of 213 tries the thread's PC still read the breakpoint address
+afterwards. A 30 ms free run does move it but lets the rest of the frame go
+by, so a breakpoint on a per-object function samples the *first* object of
+each frame almost exclusively - 172 hits of 214 on one craft of eight. What
+samples every call is a **hop**: with the breakpoint removed, arm
+`address + 4`, resume, and the thread executes one instruction and parks
+again; re-arm `address` and the next call is the next object. Never two
+addresses armed at once, never a resume onto an armed address -
+`scripts/hd-flare-owner-break.py`'s `Breaker.step_off`. With it, 30 frames
+of all eight crafts in a fixed queue order.
+
+**Two Zone-race details of this build.** `TTY.log` prints `ScreenManager
+Load "Data\XML\Zone_HUD.xml"` for a Zone race and **no** `RACE TYPE:`
+line - a check keyed on the line an earlier build printed aborts on a real
+Zone race. And Zone waits on a `START RACE` prompt (cross) after the load
+that the held-thrust single race never shows; nothing moves until it is
+pressed.
+
+**The front end's own `Loading Screen Finished` comes first.** A wait keyed
+on that line returning at all sees the front end's, not the track's; count
+the occurrences before the walk and wait for a new one alongside
+`Loading track model`.
+
 ## What is worth doing next, in order
 
 1. **A committed input script and a lap.** The walk is six taps and thrust is a

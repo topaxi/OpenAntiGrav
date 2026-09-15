@@ -260,12 +260,15 @@ def wait_for_load(session, out, seconds=600.0):
     else:
         raise SystemExit("the track never finished loading in %g s" % seconds)
     text = drive.tty_text()
-    race_type = [l for l in text.splitlines() if "RACE TYPE" in l]
-    print("track: %s; %s" % (drive.track_name(), race_type[-1:] or "no RACE TYPE line"),
+    # HD names the HUD it loads (`Zone_HUD.xml` for Zone); a `RACE TYPE:`
+    # line was seen on an earlier build's log and is not on this one's.
+    marks = [l.strip() for l in text.splitlines()
+             if "RACE TYPE" in l or "_HUD.xml" in l]
+    print("track: %s; %s" % (drive.track_name(), marks[-1:] or "no HUD line"),
           flush=True)
     time.sleep(10.0)
     drive.screenshot(out / "race-loaded.png", trim=True)
-    return race_type[-1] if race_type else None
+    return marks[-1] if marks else None
 
 
 def run_flare(out, gate_only=False):
@@ -390,11 +393,14 @@ def run_zone(out):
             print("did not reach a race (%s)" % drive.current_screen(), file=sys.stderr)
             return 1
         result["race_type"] = wait_for_load(session, out)
-        if not result["race_type"] or "ZONE" not in result["race_type"]:
+        if not result["race_type"] or "zone" not in result["race_type"].lower():
             print("not a Zone race - stopping here", file=sys.stderr)
             (out / "zone.json").write_text(json.dumps(result, indent=1))
             return 1
-        time.sleep(15.0)
+        # Zone waits on a `START RACE` prompt (cross) that the held-thrust
+        # single race never shows; then the countdown, then the craft moves.
+        session.pad.press("cross", 0.2)
+        time.sleep(25.0)
         drive.screenshot(out / "race-running.png", trim=True)
         dbg = Debugger()
         breaker = Breaker(dbg)

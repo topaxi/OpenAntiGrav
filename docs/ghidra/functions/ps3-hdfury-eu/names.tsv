@@ -329,3 +329,4 @@
 0x006774b8	function	ShaderRegistry_RegisterPair	80	menu-backdrop.md
 0x0099f8a0	data	g_FurySettings	82	menu-backdrop.md
 0x009209b4	data	g_FuryCloudNames	85	menu-backdrop.md
+0x009384dd	data	g_GamePaused	85	zone-effectsettings-loader.md
