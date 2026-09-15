@@ -12,10 +12,10 @@ binary's own string table, under `Backend/Weapons/...` rather than HD's flat
 layout, and the technique extends cleanly to the `RaceManager`/`ModeManager`
 family once the weapon managers established the constructor idiom.
 
-**The names here are applied**, from [names.tsv](names.tsv). 28 functions
+**The names here are applied**, from [names.tsv](names.tsv). 29 functions
 named this pass: 9 weapon-manager constructors, the base `RaceManager` and
-`ModeManager` roots, 16 `_RaceManager` subclasses, and the intermediate
-`MPRaceManager_Construct`.
+`ModeManager` roots, 16 `_RaceManager` subclasses, the intermediate
+`MPRaceManager_Construct`, and `RaceManager_ConstructArcadeHud`.
 
 ## Method
 
@@ -261,13 +261,13 @@ Fourteen call `RaceManager_Construct` directly:
 | --- | --- | ---: | --- |
 | `0x0124f040` | `AIBatchRaceManager_Construct` | 84 | Loads `TimeTrial_HUD.xml` |
 | `0x0125ba00` | `DemoRaceManager_Construct` | 87 | Loads `Arcade_HUD.xml` - matches `vita-2048-eu-v104`'s own `DemoRaceManager_Construct` by class name |
-| `0x012a0b90` | `SPArcadeRaceManager_Construct` | 87 | Matches `vita-2048-eu-v104`'s own `SpArcadeRaceManager_Construct` by class name |
+| `0x012a0b90` | `SPArcadeRaceManager_Construct` | 87 | Matches `vita-2048-eu-v104`'s own `SpArcadeRaceManager_Construct` by class name; also calls `RaceManager_ConstructArcadeHud` (below) |
 | `0x012a4610` | `SPDetonatorRaceManager_Construct` | 84 | - |
 | `0x012a7e60` | `SPEliminationRaceManager_Construct` | 84 | Region-aware HUD selection (`WIP3OUT`/`2097` build-name checks, see below) |
 | `0x012a98f0` | `SPFreePlayRaceManager_Construct` | 84 | Loads `TimeTrial_HUD.xml` |
 | `0x012ad580` | `SPNitroRaceManager_Construct` | 84 | Also calls `FUN_012ac060(param_1 + 0x600e)`, a second helper not chased |
 | `0x012af230` | `SPTimeTrialRaceManager_Construct` | 84 | Ghost/replay-slot allocation gated on `DAT_01f999e4 == 10 \|\| == 5` (track-count-dependent) |
-| `0x012b1e60` | `SPTournamentRaceManager_Construct` | 84 | Also calls `FUN_0129c120(param_1)`, a second helper not chased |
+| `0x012b1e60` | `SPTournamentRaceManager_Construct` | 84 | Also calls `RaceManager_ConstructArcadeHud` (below) |
 | `0x012b4960` | `SPZoneRaceManager_Construct` | 84 | Loads region-specific `Zone_HUD.xml` variants (`wo3_HUD`, `2097_HUD` - see below) |
 | `0x015a7020` | `GameModeRaceManager_Construct` | Loads `InGame2048`-namespaced frontend widgets (`InGameWipeout2048Logo`, `EndPreRaceButton`) - ties this `GameModes/` tag concretely to 2048 content, not just a name |
 
@@ -320,21 +320,67 @@ then overwrite with subclass tag" shows, just without a repeated tag write
 at this middle layer. Sets up an `"InGame2048"`-namespaced pre-race-callout
 frontend widget and a redirect lookup keyed `"InGame"`/`"Redirect"`.
 
-### Region-aware HUD selection, found while reading the `_RaceManager` family
+### `"HUD Style"` is a real setting, not a build/region check - corrected from an earlier guess in this same document
 
-Three of the sixteen (`SPEliminationRaceManager_Construct`,
-`SPZoneRaceManager_Construct`, and the `MPElimination`/`SPTimeTrial`
-siblings) branch their HUD XML path on a `strcasecmp` against the current
-loaded title's own name string, matched against two literal build-codename
-constants: `"WIP3OUT"` and a second string at `&DAT_018244b6` (not read this
-pass, likely `"2097"` given the resulting path). The three resulting paths
-are `Data\XML\<Name>_HUD.xml` (default), `Data\XML\wo3_HUD\<Name>_HUD.xml`,
-and `Data\XML\2097_HUD\<Name>_HUD.xml` - `WIP3OUT` and `2097` are two of the
-franchise's own historical titles (*wipE'out''3* and *WipEout 2097*/*XL*),
-so this reads as the frontend picking a HUD skin to match whichever earlier
-title's assets a given build/region is presenting under, not a gameplay
-distinction. Not chased further - which builds actually set this and why is
-a frontend/localization question, not a `RaceManager` one.
+Four of the sixteen (`SPEliminationRaceManager_Construct`,
+`SPZoneRaceManager_Construct`, `SPTimeTrialRaceManager_Construct`, and
+`MPEliminationRaceManager_Construct`) branch their HUD XML path on a
+`strcasecmp` against a value looked up by walking a string-keyed hash table
+(the same `"HUD Style"`/CRC32-style hash loop, `get_xrefs_to` on the literal
+`"HUD Style"` at `0x0182d984` names exactly these four plus three more
+functions below) - matched against two literal values: `"WIP3OUT"` and
+`&DAT_018244b6`, confirmed by `inspect_memory_content` to read `"2097"`. The
+resulting paths are `Data\XML\<Name>_HUD.xml` (default, no match),
+`Data\XML\wo3_HUD\<Name>_HUD.xml` (`"WIP3OUT"`), and
+`Data\XML\2097_HUD\<Name>_HUD.xml` (`"2097"`).
+
+**This is a player-facing frontend setting, not build/region detection**: a
+second string, `"HUD Style P2"` at `0x0182d991` (`search_strings("HUD
+Style")` finds both, only these two), exists purely to give player 2 an
+independent choice in split-screen - a build/region check would need no
+per-player variant. `WIP3OUT` and `2097` are two of the franchise's own
+historical titles (*wipE'out''3* and *WipEout 2097*/*XL*), so `"HUD Style"`
+is Omega Collection's option to reskin the in-race HUD as one of those two
+earlier games' own look, alongside the default (HD-shaped) skin - not a
+gameplay distinction and not tied to which disc/region a copy shipped as.
+This corrects a guess made earlier in this same research pass (previously
+"Region-aware HUD selection", read as a build-codename check) once the
+`"HUD Style"`/`"HUD Style P2"` strings were found; no `names.tsv` row was
+affected, since nothing was renamed on the earlier guess.
+
+**Cross-binary consequence**: `vita-2048-eu-v104/race-hud-selection.md`
+found `wo3_hud`/`2097_hud` shipped in full on that disc but reached by no
+code path in `eboot.elf` ("present on disc and unreachable from any code
+path found so far"). This binary is the resolution: Omega Collection wires
+a real `"HUD Style"` setting to exactly those two skins, on top of the same
+per-mode HUD file layout 2048 already ships unused. Whether 2048 itself has
+an equivalent settings-driven path this project's earlier pass simply
+didn't find, or whether Omega added the setting new, is not established -
+2048's own `names.tsv` has no `"HUD Style"`-tagged function to check yet.
+
+The same `"HUD Style"` lookup also names one more function:
+**`RaceManager_ConstructArcadeHud`** (`0x0129c120`, confidence 80) - called
+by `SPArcadeRaceManager_Construct` and `SPTournamentRaceManager_Construct`
+(confirmed with `get_function_callers`; weapons.md previously logged this
+address only as "a second helper not chased" under
+`SPTournamentRaceManager_Construct`'s own row, and missed the
+`SPArcadeRaceManager_Construct` call entirely). It builds the same
+Arcade-family HUD widget tree (`Arcade_HUD.xml` /
+`wo3_HUD\Arcade_HUD.xml` / `2097_HUD\Arcade_HUD.xml`, honoring the same
+`"HUD Style"` lookup) both callers' own race modes share - Tournament mode
+races with the Arcade HUD rather than a HUD of its own, which is why a
+race-manager-family function builds it rather than the manager itself
+inlining it. Named for its demonstrated behavior (constructs the Arcade HUD
+widget tree, shared by two callers) rather than a class-name guess, the same
+`_ByMode`/`_ConstructByMode` reasoning `ModeManager_ConstructByMode` above
+already uses; **confidence 80** (Probable: decompiled, unambiguous, two
+consistent call sites - no `.cpp` tag of its own and no second-binary
+corroboration to reach higher).
+
+The second helper `FUN_012ac060`, called by `SPNitroRaceManager_Construct`,
+`SPTournamentRaceManager_Construct` and `MPNitroRaceManager_Construct`
+against a `param_1 + <offset>` argument rather than `param_1` itself, is a
+different function - not chased this pass.
 
 ## `GameModes/` is a real, distinct directory - not a rename
 
