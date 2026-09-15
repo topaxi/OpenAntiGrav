@@ -1979,12 +1979,12 @@ against the fourteenth pass's key-to-offset table:
 | `0x003cdc60` `Environment_GetStageBombOuterColour` | `+0x23c` | `Detonator Bomb Outer Colour` | `FUN_001340d8` |
 | `0x003cde20` `Environment_GetStageAirbrakeColour` | `+0x220` | `Airbrake Colour` | `FUN_00107b58`, `FUN_00107c28` |
 | `0x003cdd40` | `+0x70` (and `+0x210`) | `Track.Near Colour`, `Aurora Colour` | `FUN_00298268` |
-| `0x003cde60` | `+0x40` | `Scene.Base Colour` | **nothing** |
-| `0x003cded0` | `+0x20` | `Scene.Base Colour Highlight` | **nothing** |
-| `0x003ce000` | `+0x60` | `Track.Texture Colour` | **nothing** |
-| `0x003ce070` | `+0xa0` | `Track.Base Colour` | **nothing** |
-| `0x003ce0e0` | `+0x80` | `Track.Base Colour Highlight` | **nothing** |
-| `0x003cdf40`, `0x003cdfa0` | `+0x150` | `EQ colour tint`, `EQ analogue colour tint` | **nothing** |
+| `0x003cde60` | `+0x40` | `Scene.Base Colour` | **nothing** (re-confirmed post-`lvlx` reimport, [thirty-second pass](#2026-09-15-a-thirty-second-pass-the-seven-getters-are-re-run-after-the-lvlx-reimport-and-the-negative-holds)) |
+| `0x003cded0` | `+0x20` | `Scene.Base Colour Highlight` | **nothing** (re-confirmed, thirty-second pass) |
+| `0x003ce000` | `+0x60` | `Track.Texture Colour` | **nothing** (re-confirmed, thirty-second pass) |
+| `0x003ce070` | `+0xa0` | `Track.Base Colour` | **nothing** (re-confirmed, thirty-second pass) |
+| `0x003ce0e0` | `+0x80` | `Track.Base Colour Highlight` | **nothing** (re-confirmed, thirty-second pass) |
+| `0x003cdf40`, `0x003cdfa0` | `+0x150` | `EQ colour tint`, `EQ analogue colour tint` | **nothing** (re-confirmed, thirty-second pass) |
 
 The offsets in the getters are written `iVar8 + 0x1230` and so on - i.e.
 `0x1000 + key offset` - which is a second, independent confirmation of the
@@ -5197,6 +5197,79 @@ on a loaded machine), `python3 scripts/rpcs3-drive.py stop`.
 | --- | --- | --- | --- |
 | `0x009384dd` | data | `g_GamePaused` | 85 |
 
+
+## 2026-09-15, a thirty-second pass: the seven getters are re-run after the `lvlx` reimport, and the negative holds
+
+Re-run of the fifteenth pass's "the getters" table, ordered by `HANDOVER.md`'s
+newest "Traps that are live" entry: until 09:29 today stock Ghidra could not
+decode `lvlx`, so 294 HD functions (~213 KB) had no instructions and no xrefs
+before the program was reimported with the fixed language
+(`docs/reverse-engineering/toolchain.md#ps3`). Every static negative on this
+binary from before that reimport is stale by that entry's own rule, and the
+widest-reaching one is this page's own fifteenth-pass claim that the seven
+`Scene`/`Track` getters have no callers, which a companion handover thread
+had marked stale pending this re-run. Re-run on the complete image,
+`/ps3-hdfury-eu/EBOOT.elf`, three independent routes per getter
+(`0x003cde60`, `0x003cded0`, `0x003ce000`, `0x003ce070`, `0x003ce0e0`,
+`0x003cdf40`, `0x003cdfa0`):
+
+1. **`get_function_callers`** (direct-call xrefs). This returns the first
+   hop only, not a thunk-resolved final caller - confirmed on both known-good
+   controls in this same run: `Environment_GetStageAirbrakeColour`
+   (`0x003cde20`) returns exactly one row, its thunk `FUN_00677be8`, and a
+   second `get_function_callers` call *on the thunk* is what reaches
+   `FUN_00107b58`/`FUN_00107c28` (matching the fifteenth pass); the `+0x70`
+   getter (`0x003cdd40`) returns the same shape, one row, its thunk
+   `FUN_00679168` (not itself hop-resolved further here, since the fifteenth
+   pass's caller for this key was already named and is not part of this
+   re-run's task). Against that shape, all seven target getters returned
+   `No callers found` outright - not even a thunk pointing at them, let alone
+   a resolved caller past one.
+2. **`search_instructions(mnemonic="bl", operand_pattern=<address>)`**. All
+   seven: `match_count: 0` of 1,829,837 instructions scanned. This route does
+   not discriminate here and was run anyway per the brief: the known-good
+   control `Environment_GetStageAirbrakeColour` (`0x003cde20`) also returns
+   zero direct `bl` hits, because every caller in this codebase reaches a
+   getter through a `bl <thunk>` -> `b <getter>` pair (documented in the
+   fifteenth pass), never a direct `bl` to the getter's own address.
+3. **OPD descriptor + function-pointer-table literal search.** Located each
+   getter's `.opd` descriptor by searching for its 4-byte big-endian address
+   as a byte pattern - all seven land in one 56-byte cluster,
+   `0x0088c1f0`-`0x0088c220` (8 bytes apart, one descriptor per getter):
+   `0x003cde60`->`0x0088c1f0`, `0x003cded0`->`0x0088c1f8`,
+   `0x003ce000`->`0x0088c210`, `0x003ce070`->`0x0088c218`,
+   `0x003ce0e0`->`0x0088c220`, `0x003cdf40`->`0x0088c200`,
+   `0x003cdfa0`->`0x0088c208`. Searching the whole image for each descriptor
+   address as a literal 4-byte word (the shape a function-pointer table entry
+   would take) returned `No matches found` for all seven - no table anywhere
+   in the image holds any of these descriptors. (The raw address search for
+   `0x003ce000` also returned three unaligned hits - `0x005c7c73`,
+   `0x005cb293`, `0x0060e093` - inspected with `inspect_memory_content` and
+   confirmed to be `lis`/`addis` immediate-field byte sequences inside
+   ordinary instruction encodings, not 4-byte-aligned data words; not a
+   pointer table.)
+
+All three routes, all seven getters, all negative. The fifteenth pass's own
+method note - that a bare descriptor-literal scan reports "no hits" even for
+the two known-good controls, because these calls never go through a
+descriptor load - still applies and is why route 1 (not route 3) is the one
+doing the real work; route 3 is retained as the brief's specified check
+against a function-pointer table, a different call shape route 1 cannot see.
+
+**The negative is unchanged and is now dated after the `lvlx` reimport.**
+`Scene.Base Colour`, `Scene.Base Colour Highlight`, `Track.Texture Colour`,
+`Track.Base Colour`, `Track.Base Colour Highlight` and both `EQ` tints still
+have no consumer through this getter API, on the complete post-reimport
+image. Confidence 85, unchanged from the fifteenth pass - two controls
+(`Environment_GetStageAirbrakeColour` and the `+0x70` getter, both re-run in
+route 1 above, each returning its own thunk where the seven targets return
+nothing at all) resolving to a real caller one hop further is what earns
+that, not the absence of hits alone. This does not reopen or narrow the
+sixteenth pass's separate finding that `FUN_003ce2c0` is also unreached and
+does not read the stage table via `iVar8`: checked directly this pass,
+`search_instructions(mnemonic="lvlx", ...)` scoped to that function finds
+zero `lvlx` instructions among its 2,613, so it was not part of the
+294-function `lvlx` hole and its prior static result stands unchanged.
 
 ## See also
 
