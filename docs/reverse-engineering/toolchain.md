@@ -226,10 +226,13 @@ ELF has eight program headers. Import without a language and correct it after,
 or import in the GUI, or drive `analyzeHeadless`, which takes a loader and a
 processor together.
 
-**GhidraMCP cannot run the two scripts.** `run_ghidra_script` is gated behind
-`GHIDRA_MCP_ALLOW_SCRIPTS=1` in the environment of the *Ghidra process*, so
-enabling it means restarting Ghidra. Without it the pre/post-analysis flow above
-has to be driven from the Script Manager by hand.
+**GhidraMCP runs scripts only when `GHIDRA_MCP_ALLOW_SCRIPTS=1` reaches the
+bridge's environment.** This repository's `.mcp.json` sets it, and
+`run_script_inline` ran live against the PS3 import on 2026-09-15 - so the
+pre/post-analysis flow above is scriptable from here, and "scripting is off"
+is a state to probe, not a constraint to route around; the probe, and what to
+do when it reports disabled, are at the end of
+[the `search_instructions` section](#search_instructionss-mnemonic-filter-is-exact-match-not-substring).
 
 **Every function has its own TOC, and Ghidra uses one for all of them.** The OPD
 declares a TOC per function, and this executable has two - `0x008ad4d8` over
@@ -245,12 +248,80 @@ is the fix. Worked example and the manual three-read check:
 (`ET_SCE_PPURELEXEC`, a relocatable PRX) and Ps3GhidraScripts states outright
 that relocations are unsupported. `EBOOT.elf` is the only usable PS3 target.
 
-**Some Cell vector instructions are missing from Ghidra's sleigh.** `lvlx`,
-`lvrx`, `stvlx`, `stvrx` and their `l` variants are PPC970/Cell extensions that
-`altivec.sinc` does not implement, and they break decompilation where they
-appear. Measured on Wipeout HD / Fury: **851 `lvlx`** in 1,911,344 instructions
-across the four executable sections, and none of the other seven forms. Narrow,
-but concentrated in vector code.
+**Some Cell vector instructions are missing from Ghidra's sleigh, and each one
+truncates the function it sits in.** `lvlx`, `lvrx`, `stvlx`, `stvrx` and their
+`l` variants are PPC970/Cell extensions that `altivec.sinc` does not implement.
+Measured on Wipeout HD / Fury: **851 `lvlx`** in 1,911,344 instruction words
+across the four executable sections, and none of the other seven forms -
+re-derivable offline with `scripts/scan-ps3-cell-vector-ops.py`, which also
+lists every site. What that does to the live import, measured 2026-09-15 by an
+inline script over the same 851 words (confidence 95 - mechanical, and the
+count reproduces from the raw file):
+
+- **All 851 are undefined bytes belonging to no function body** - `lvlx` is not
+  a "bad instruction" inside a function, it is where the function *stops*.
+  Ghidra's disassembler halts at the undecodable word and never resumes at its
+  fall-through, so everything after each site up to the next branch target is
+  missing too. 341 carry an `Error` bookmark; the disassembler never reached
+  the other 510 at all - typically because they sit in the fall-through shadow
+  of an earlier site. Because every PS3 function starts from an OPD entry, the
+  truncated bodies still exist - just short.
+- **The sites fall in 294 functions** (nearest OPD entry before each site). Of
+  the 418,640 bytes between those entries and the next function, **213,044 are
+  not disassembled** - 39% of the 547,320 undisassembled bytes in the whole
+  7.6 MB of executable text is this one missing constructor.
+- **Eight of them are already named** in `names.tsv`, and the damage is not
+  cosmetic: `Collision_MarchSegment` (`0x000364c0`) keeps 36 of its 2,272 bytes
+  and decompiles to a lone `halt_baddata()`; `Collision_TestMeshObb`
+  (`0x00037438`) keeps 1,148 of 2,288. `RaceManager_Construct`,
+  `Craft_IntegrateHull`, `EngineFlare_Update`, `EngineFlare_RenderTick`,
+  `ShipCollisionFx_Trigger_q` and `Trail_HitShipEffect` each lose 36-284
+  bytes. [physics.md](../ghidra/functions/ps3-hdfury-eu/physics.md) read
+  `Collision_MarchSegment` by hand-disassembling past the truncation - that is
+  the workaround, and it does not survive into the decompiler or the call
+  graph.
+
+To map a site to its function in the live project, `getFunctionBefore(site)`
+from an inline script is the owner (`getFunctionContaining` is `null` for every
+site, by the first bullet), `function.getBody().getNumAddresses()` against the
+distance to `getFunctionAfter` is how much survived, and
+`listing.getCodeUnitAt(addr) instanceof Instruction` walked over that range
+counts the hole. `search_byte_patterns` cannot even find the sites: its `mask`
+is ignored
+([the `search_instructions` section](#search_instructionss-mnemonic-filter-is-exact-match-not-substring)
+has the original finding), so `7c00040e`/`fc0007fe` returns "No matches"
+against 851 real sites, and a masked query for one site's exact bytes returns
+the same five hits as the unmasked one.
+
+**Teaching sleigh `lvlx` does not require vendoring Ghidra's sources.**
+Compile-tested 2026-09-15: copying the stock
+`Ghidra/Processors/PowerPC/data/languages/*.sinc` and
+`ppc_64_isa_altivec_be.slaspec` from the local install into a scratch
+directory, adding one `@include "cell_lvlx.sinc"` after `altivec.sinc`, and
+running `support/sleigh` on it produced a `.sla` in 5.4 s with warnings
+byte-identical to the stock spec's. The added constructor, modelled on `lvx`
+(Power ISA 2.06 Book I, 6.7.2 - `EA = (RA|0)+RB`, the bytes from `EA` to the
+end of its 16-byte block land at the top of `vD`, the rest zero; on a
+big-endian vector that is the aligned block shifted left by `EA[0,4]` bytes):
+
+```
+:lvlx vrD,RA_OR_ZERO,B    is OP=31 & vrD & RA_OR_ZERO & B & XOP_1_10=519 & Rc=0
+{
+    build RA_OR_ZERO;
+    ea:$(REGISTER_SIZE) = RA_OR_ZERO + B;
+    eb:1 = ea[0,4];
+    aligned:$(REGISTER_SIZE) = ea & 0xfffffffffffffff0;
+    block:16 = *[ram]:16 aligned;
+    vrD = block << (eb * 8);
+}
+```
+
+That is the same shape as `scripts/build-ghidra-allegrex.sh`'s tracked patch:
+a copy-at-build-time from the user's own Ghidra plus a small file of ours, with
+nothing of Ghidra's committed here. It is **not installed** - shipping it means
+a new `.sla` in the Ps3GhidraScripts extension, a language id or version bump,
+and a reimport of the live project, which is the maintainer's call for the same
+reason the cspec switch above was.
 
 #### Two PS3 read errors that produce a plausible wrong answer with no visible error
 
