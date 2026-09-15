@@ -92,3 +92,47 @@
 0x088a6b0c	function	DlcTrailer_ExtractKey	85	dlc-download-check.md
 0x088ac4c8	function	Bignum_ModExp	92	dlc-download-check.md
 0x088ac278	function	Bignum_Compare	85	dlc-download-check.md
+
+# The same weapon-table, Disruptor and Bomb functions on this pressing
+# (2026-09-15), transferred from psp-pure-usa by string anchor, constant
+# per-subsystem shift and a per-function diff_functions check - see weapons.md
+# for the method and the two _Init functions that carry a bigger discount.
+0x08808604	function	WeaponStats_Load	75	weapons.md
+0x08809518	function	WeaponStats_Parse	79	weapons.md
+0x08808620	function	WeaponStats_ParseRocket	79	weapons.md
+0x0880880c	function	WeaponStats_ParseMissile	79	weapons.md
+0x08808a24	function	WeaponStats_ParseQuake	79	weapons.md
+0x08809bdc	function	WeaponStats_ParseDisruptor	79	weapons.md
+0x08808b84	function	WeaponStats_ParseTurbo	79	weapons.md
+0x08808c84	function	WeaponStats_ParseShield	79	weapons.md
+0x08808d84	function	WeaponStats_ParseAutopilot	79	weapons.md
+0x08808e84	function	WeaponStats_ParsePlasma	79	weapons.md
+0x08809070	function	WeaponStats_ParseBomb	79	weapons.md
+0x0880925c	function	WeaponStats_ParseMine	79	weapons.md
+0x08809448	function	WeaponStats_ParseGlobal	79	weapons.md
+0x0880a340	function	WeaponStats_ParsePickupOdds	79	weapons.md
+0x0884cf84	function	WeaponPickup_Grant	75	weapons.md
+0x0884f7cc	function	WeaponPickup_ArmDisruptor	75	weapons.md
+0x0884f7f0	function	Disruptor_RollEffect	77	weapons.md
+0x0884f8f8	function	Disruptor_PrimeStall	75	weapons.md
+0x0884f910	function	Disruptor_PrimeMirror	75	weapons.md
+0x0884f92c	function	Disruptor_PrimeNoAirbrakes	75	weapons.md
+0x0884f948	function	Disruptor_PrimeAutopilotSlow	75	weapons.md
+0x0884f96c	function	Disruptor_PrimeAutopilotFast	75	weapons.md
+0x0884f990	function	Disruptor_PrimeDrunk	75	weapons.md
+0x0884f9ac	function	Disruptor_PrimeDrunkCamera	75	weapons.md
+0x0884f9d0	function	Disruptor_PrimeRubberShip	75	weapons.md
+0x0884f9f4	function	DisruptorPool_Fire	77	weapons.md
+0x08858de4	function	Disruptor_Init	74	weapons.md
+0x088590e4	function	Disruptor_Update	77	weapons.md
+0x088590b0	function	Disruptor_SpeedForClass	77	weapons.md
+0x088504a4	function	DisruptorPool_Update	77	weapons.md
+0x08850054	function	Disruptor_TestHit	75	weapons.md
+0x08850ca8	function	Disruptor_ApplyEffect	79	weapons.md
+0x08857ea4	function	Bomb_Init	74	weapons.md
+0x088581ac	function	Bomb_UpdateSpin	73	weapons.md
+0x0884e74c	function	BombPool_Update	75	weapons.md
+0x0884ed5c	function	Bomb_UpdateTrigger	77	weapons.md
+0x0884f204	function	Bomb_ApplyHit	77	weapons.md
+0x0884eff8	function	BombPool_Detonate	77	weapons.md
+0x08b11060	data	WeaponStats_Table	79	weapons.md

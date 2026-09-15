@@ -245,6 +245,107 @@ whether Pulse has a fifth speed class, and it points **away** from one: a class
 the code names, discards, and no shipped file authors is a leftover rather than a
 rung.
 
+## The Pure dialect: ten weapons, one Disruptor, no fuse on the Bomb
+
+**Disc-measured 2026-09-15**, off `Data\XML\weaponstats.xml` on both Pure
+pressings (byte-identical, USA and EU) against Pulse USA's
+`WeaponStats_Race.xml`. Attribute **names** and block structure only, per
+[ADR-0006](../architecture/adr/0006-no-copyrighted-content.md); the parser
+that reads each row is on
+[`psp-pure-usa/weapons.md`](../ghidra/functions/psp-pure-usa/weapons.md),
+which also carries the struct it fills.
+
+| `type` | Pure `<Stats>` | Pulse `<Stats>` | Difference |
+| --- | --- | --- | --- |
+| `Global` | `slowdown_limit` | same | none |
+| `Rocket` | `absorb blastforce blastradius damage slowdown_time speed spread` | the same less `speed`, plus `venomspeed flashspeed rapierspeed phantomspeed launchSpeed` | one speed, no launch speed |
+| `Missile` | `absorb blastforce blastradius damage lock_max_dist lock_min_dist slowdown_time speed` | as the Rocket's split, plus the lock pair | one speed, no launch speed |
+| `Quake` | `absorb damage radius slowdown_time` | same | none |
+| **`Disruptor`** | `absorb speed`, plus fourteen `<Effect type=...>` children | **absent** | Pure only |
+| `Turbo` / `Shield` / `Autopilot` | `absorb time` | same | none |
+| `Plasma` | `absorb blastforce blastradius charge_time damage slowdown_time speed` | the same split as the Rocket | one speed, no launch speed |
+| `Bomb` | `absorb blastforce blastradius damage damageradius slowdown_time trigger_radius` | the same plus **`timetodie`** | **no fuse** |
+| `Mine` | `absorb blastforce blastradius damage slowdown_time timetodie trigger_radius` | same | none |
+| `Cannon`, `LeachBeam`, `Repulser`, `Shuriken` | **absent** | present | Pulse only |
+| `<DisturberOdds>` | **absent** | present, seven effects | Pulse only |
+| `<Pickupodds class>` | **five** blocks: `Vector Venom Flash Rapier Phantom`, ten weapons each, `ai back front human` | four blocks, thirteen weapons each | Pure authors the fifth class and its parser stores it |
+
+So ten weapons on Pure against thirteen on Pulse, and the two rosters share
+nine: Pure's tenth is the Disruptor and Pulse's extra four are the Cannon,
+LeachBeam, Repulser and Shuriken. That agrees with `oag_pure::hud`'s ten
+icons and with the ten `absorb` values the file authors - the handover thread
+that first noticed the gap counted nine, which was one short.
+
+### The Disruptor's `<Effect>` blocks
+
+```xml
+<Weapon type="Disruptor">
+  <Stats absorb speed/>
+  <Effect type="Stall">              <EffStats time/>               </Effect>
+  <Effect type="Fire Weapon"/>
+  <Effect type="Mirror Left Right">  <EffStats time/>               </Effect>
+  <Effect type="No Airbrakes">       <EffStats time/>               </Effect>
+  <Effect type="Turbo Now"/>
+  <Effect type="Autopilot Slow">     <EffStats speed_percent time/> </Effect>
+  <Effect type="Autopilot Fast">     <EffStats speed_percent time/> </Effect>
+  <Effect type="HUD Flicker">        <EffStats time/>               </Effect>
+  <Effect type="Drunk">              <EffStats amount time/>        </Effect>
+  <Effect type="Steal Weapon"/>
+  <Effect type="Rubber Ship">        <EffStats amount time/>        </Effect>
+  <Effect type="Adjust Gravity">     <EffStats amount/>             </Effect>
+  <Effect type="Drunk Camera">       <EffStats amount time/>        </Effect>
+  <Effect type="Trippy">             <EffStats time/>               </Effect>
+</Weapon>
+```
+
+Fourteen authored, and the executable sorts them into three layers
+(confidence 90 on the first, 84 on the other two; evidence on
+[`psp-pure-usa/weapons.md`](../ghidra/functions/psp-pure-usa/weapons.md)):
+
+1. **Four are dead at the parser.** `Fire Weapon`, `Turbo Now`, `Steal Weapon`
+   and `Adjust Gravity` match no branch of `WeaponStats_ParseDisruptor` and
+   exist as no string anywhere in either Pure executable. The three
+   attribute-less ones look like an authoring convention for "no tunable";
+   `Adjust Gravity` authors an `amount` nothing reads.
+2. **Two are parsed and never rolled.** `HUD Flicker` and `Trippy` are read
+   into the table and no function reads their slots back:
+   `Disruptor_RollEffect` is `rand() % 8` over the other eight.
+3. **Eight are live**: Stall, Mirror Left Right, No Airbrakes, Autopilot
+   Slow, Autopilot Fast, Drunk, Drunk Camera, Rubber Ship - one chosen
+   uniformly **when the pad hands the weapon over**, carried on the firing
+   craft, and applied to whichever craft the bolt hits for that effect's own
+   `time`. What each does to the victim is tabulated on the evidence page.
+
+`oag_tables::weapons::DisruptorStats` decodes `absorb`, `speed` and the ten
+parsed effects; the four dead blocks are deliberately not decoded, on the
+"no consumer" rule, and the two unrolled ones are decoded because the
+original's parser does and their absence would read as a parse gap.
+
+**`speed` is the one authored speed the code does make per-class.**
+`Disruptor_SpeedForClass` returns `speed + 80.0 * class_index`, 0..4 for
+Vector..Phantom, so a Pure Disruptor flies faster up the ladder where every
+other Pure weapon flies at its one authored figure. The bolt also leaves the
+rail at a literal 500 km/h for its first tick, before the floor probe rescales
+it.
+
+### Pure's Bomb has no `timetodie`, and `damageradius` still has no reader
+
+The Bomb's parser on Pure matches seven attributes and `timetodie` is not one
+of them; the Mine's matches the same seven with `timetodie` in place of
+`damageradius`. `BombPool_Update` ages a laid Bomb and spends that age on the
+model's spin alone - nothing compares it to anything - so a Pure Bomb **sits
+until a craft enters `trigger_radius`**, for the whole race if nothing does.
+Confidence 86.
+
+`damageradius` is parsed into the table and its slot has **no
+cross-reference** on Pure, exactly as on Pulse - where the six slots either
+side of it each resolve to their one consumer. Authored, stored, never read,
+on both titles. It stays undecoded here for the same reason it always has.
+
+`oag_tables::weapons::BombStats::timetodie` is therefore an `Option<f32>`:
+`Some` on Pulse and HD, `None` on Pure, and a `None` fuse is a Bomb that
+never times out rather than one that goes off at once.
+
 ## What this does not answer
 
 - **What the original does on a pickup.** The *trigger* is recovered -
