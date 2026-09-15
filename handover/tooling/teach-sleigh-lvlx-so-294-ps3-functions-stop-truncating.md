@@ -7,15 +7,19 @@ and the compile-tested constructor are on
 "Some Cell vector instructions are missing from Ghidra's sleigh"; the short
 form:
 
-- All 851 `lvlx` words in `EBOOT.elf` are undefined bytes in no function body.
-  Ghidra stops disassembling at each one and never resumes at the
-  fall-through, so the sites truncate **294 functions** and leave 213,044 of
-  the 418,640 bytes between their entries undisassembled - 39% of every
-  undisassembled byte in the executable.
+- All 851 `lvlx` words in `EBOOT.elf` are undefined bytes in no function body
+  (confidence 95). Ghidra stops disassembling at each one and never resumes
+  at the fall-through, so every site opens a hole in one of **294 functions**
+  - a body ends there when no later branch target is reachable, and resumes
+  past it otherwise. 213,044 of the 418,640 bytes between those entries and
+  the next function are undisassembled - 39% of every undisassembled byte in
+  the executable lies in a range with an `lvlx` site in it, which is
+  co-location, not attribution (confidence 80; the range map mixes in padding
+  and neighbouring code).
 - Eight of those functions are already in `names.tsv`. `Collision_MarchSegment`
-  keeps 36 of 2,272 bytes and decompiles to `halt_baddata()`;
-  `Collision_TestMeshObb` keeps half. `physics.md` read the first by
-  hand-disassembling past the hole.
+  has a 36-byte body in a 2,272-byte range and decompiles to
+  `halt_baddata()`; `Collision_TestMeshObb` keeps half. `physics.md` read the
+  first by hand-disassembling past the hole.
 - The fix needs nothing of Ghidra's vendored: copying the stock PowerPC
   `.sinc`/`.slaspec` from the local install at build time and adding one
   14-line `cell_lvlx.sinc` compiles with `support/sleigh` in 5.4 s, warnings

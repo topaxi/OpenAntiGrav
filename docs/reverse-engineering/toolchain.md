@@ -249,34 +249,43 @@ is the fix. Worked example and the manual three-read check:
 that relocations are unsupported. `EBOOT.elf` is the only usable PS3 target.
 
 **Some Cell vector instructions are missing from Ghidra's sleigh, and each one
-truncates the function it sits in.** `lvlx`, `lvrx`, `stvlx`, `stvrx` and their
-`l` variants are PPC970/Cell extensions that `altivec.sinc` does not implement.
-Measured on Wipeout HD / Fury: **851 `lvlx`** in 1,911,344 instruction words
-across the four executable sections, and none of the other seven forms -
-re-derivable offline with `scripts/scan-ps3-cell-vector-ops.py`, which also
-lists every site. What that does to the live import, measured 2026-09-15 by an
-inline script over the same 851 words (confidence 95 - mechanical, and the
-count reproduces from the raw file):
+punches a hole in the function it sits in.** `lvlx`, `lvrx`, `stvlx`, `stvrx`
+and their `l` variants are PPC970/Cell extensions that `altivec.sinc` does not
+implement. Measured on Wipeout HD / Fury: **851 `lvlx`** in 1,911,344
+instruction words across the four executable sections, and none of the other
+seven forms - re-derivable offline with `scripts/scan-ps3-cell-vector-ops.py`,
+which also lists every site. What that does to the live import, measured
+2026-09-15 by an inline script over the same 851 words:
 
-- **All 851 are undefined bytes belonging to no function body** - `lvlx` is not
-  a "bad instruction" inside a function, it is where the function *stops*.
-  Ghidra's disassembler halts at the undecodable word and never resumes at its
-  fall-through, so everything after each site up to the next branch target is
-  missing too. 341 carry an `Error` bookmark; the disassembler never reached
-  the other 510 at all - typically because they sit in the fall-through shadow
-  of an earlier site. Because every PS3 function starts from an OPD entry, the
-  truncated bodies still exist - just short.
-- **The sites fall in 294 functions** (nearest OPD entry before each site). Of
+- **All 851 are undefined bytes belonging to no function body** (confidence
+  95 - mechanical, and the count reproduces from the raw file). `lvlx` is not
+  a "bad instruction" inside a function: Ghidra's disassembler halts at the
+  undecodable word and never resumes at its fall-through, so everything after
+  each site up to the next reachable branch target is missing too. Whether the
+  body *ends* there or resumes past the hole depends on whether a later branch
+  target is reachable - `Collision_MarchSegment`, `Collision_TestMeshObb` and
+  `Craft_IntegrateHull` end at their first site; `RaceManager_Construct`, both
+  `EngineFlare_*` and both effect triggers below are holed and continue. 341
+  sites carry an `Error` bookmark; the other 510 have none, which reads as the
+  disassembler never reaching them - the fall-through shadow of an earlier
+  site is the likely reason, not a measured one. Because every PS3 function
+  starts from an OPD entry, the damaged bodies still exist - just short.
+- **The sites fall in 294 functions** (nearest OPD entry before each site;
+  confidence 80 for the byte figures that follow, since a nearest-entry map
+  mixes in alignment padding and any neighbouring code with no OPD entry). Of
   the 418,640 bytes between those entries and the next function, **213,044 are
   not disassembled** - 39% of the 547,320 undisassembled bytes in the whole
-  7.6 MB of executable text is this one missing constructor.
+  7.6 MB of executable text lie in a range that contains an `lvlx` site. That
+  is co-location, not attribution: `EngineFlare_RenderTick`'s range is 3,200
+  bytes, its body 1,772 and its hole 36, so the rest is something else.
 - **Eight of them are already named** in `names.tsv`, and the damage is not
-  cosmetic: `Collision_MarchSegment` (`0x000364c0`) keeps 36 of its 2,272 bytes
-  and decompiles to a lone `halt_baddata()`; `Collision_TestMeshObb`
-  (`0x00037438`) keeps 1,148 of 2,288. `RaceManager_Construct`,
-  `Craft_IntegrateHull`, `EngineFlare_Update`, `EngineFlare_RenderTick`,
-  `ShipCollisionFx_Trigger_q` and `Trail_HitShipEffect` each lose 36-284
-  bytes. [physics.md](../ghidra/functions/ps3-hdfury-eu/physics.md) read
+  cosmetic: `Collision_MarchSegment` (`0x000364c0`) has a 36-byte body in a
+  2,272-byte range and decompiles to a lone `halt_baddata()`;
+  `Collision_TestMeshObb` (`0x00037438`) keeps 1,148 bytes of 2,288.
+  `RaceManager_Construct`, `Craft_IntegrateHull`, `EngineFlare_Update`,
+  `EngineFlare_RenderTick`, `ShipCollisionFx_Trigger_q` and
+  `Trail_HitShipEffect` each carry a 36-284-byte hole.
+  [physics.md](../ghidra/functions/ps3-hdfury-eu/physics.md) read
   `Collision_MarchSegment` by hand-disassembling past the truncation - that is
   the workaround, and it does not survive into the decompiler or the call
   graph.
