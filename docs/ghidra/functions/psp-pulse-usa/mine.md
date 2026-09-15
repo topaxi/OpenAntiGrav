@@ -713,7 +713,8 @@ store the watch caught; `a1` is the craft's weapon record):
 088675ac: sw    a0,0x1c0(a1)        ; the second copy the grant's no-repeat rule reads
 088675b0: li    a0,-0x2
 088675b4: and   a0,a2,a0
-088675b8: sw    a0,0x1b8(a1)        ; fire word &= ~0x1
+088675b8: sw    a0,0x1b8(a1)        ; fire word &= ~0x1 - bit 0x1, which no weapon in the
+                                    ;   jump table above owns; what it flags is unread
 088675bc: li    a0,0x5
 088675c0: sw    a0,0x1ac(a1)        ; rounds = 5        <- the cluster
 088675c4: jr    ra

@@ -126,10 +126,11 @@ fn moving() -> Option<(race::Race, oag_gameplay::InputSnapshot)> {
 /// **Three claims in one run, because they are three views of one mechanism**
 /// and separating them would mean driving the same thirty ticks three times:
 ///
-/// - The count matches `mine::CLUSTER`. That is the invented number, so what is
+/// - The count matches `mine::CLUSTER`. That number was invented when this
+///   test was written and was measured at five on the running original on
+///   2026-09-15 (`docs/ghidra/functions/psp-pulse-usa/mine.md`), so what is
 ///   being pinned is that the machinery lays *all* of it - a reload that reset
-///   to the wrong value, or a counter decremented twice, shows up here whatever
-///   the constant is later measured to be.
+///   to the wrong value, or a counter decremented twice, shows up here.
 /// - They are spread out rather than stacked. The gap asserted against is the
 ///   craft's own travel, not a chosen distance.
 /// - The craft keeps the pickup until the last one leaves, which is the
