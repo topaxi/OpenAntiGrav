@@ -364,9 +364,33 @@ their ranges - `Collision_MarchSegment` 36 -> 2,260 bytes,
 1,652 -> 1,928, `Trail_HitShipEffect` 492 -> 580. The three still undefined
 (`0x00129188`, `0x0012918c`, `0x001599a0`) sit in stretches the disassembler
 never enters at all - the word before each is undefined too - so they are
-unreached code, not an `lvlx` gap. Whether the decompiler folds the
-`lvlx`/`lvsl`/`vperm` unaligned-load idiom into one 16-byte load under this
-semantics is not yet checked.
+unreached code, not an `lvlx` gap.
+
+**The live program is on this language since 2026-09-15, 09:29.** Ghidra
+closed, `scripts/import-ps3-eboot.sh --ps3-cspec` overwrote
+`ps3-hdfury-eu/EBOOT.elf` in place, a read-only headless re-run of the same
+check reported the identical `lvlx=848 undefined=3 functions=26112`, and all
+309 `names.tsv` rows (267 functions, 42 labels) applied with zero failures and
+zero functions needing creation - so none of the twelve new entry points
+collides with a documented address. `Collision_MarchSegment` decompiles in
+full and matches [physics.md](../ghidra/functions/ps3-hdfury-eu/physics.md)'s
+hand reading. The unaligned-load idiom does **not** fold into one 16-byte
+load, and cannot under any `lvlx` semantics: stock `altivec.sinc` models
+`lvsl` and `vperm` as opaque `loadVectorForShiftLeft`/`vectorPermute` pcodeops,
+so the decompiler shows `lvlx` as the aligned block shifted right by `0x60`
+bits feeding a `vectorPermute` - readable, and the limit is stock Ghidra's,
+not this constructor's.
+
+The names were applied through `run_script_inline` bound to
+`program: /ps3-hdfury-eu/EBOOT.elf`, not `just apply-names`: another session
+was driving the shared bridge at the time and its global current-program
+pointer stayed on a `BOOT.BIN`, which `apply-ghidra-names.py` correctly
+detected and refused (the same trap `HANDOVER.md` records for
+`rename_function_by_address`). An inline script runs against the program it
+names regardless of that pointer - the earlier site-mapping scripts on this
+page ran against `EBOOT.elf` while the current program was the Vita
+`eboot.elf` - so it is the write path that is safe under concurrent bridge
+use.
 
 #### Two PS3 read errors that produce a plausible wrong answer with no visible error
 
