@@ -784,6 +784,26 @@ writers in it at the same time:
 
 ## Traps that are live
 
+**On `ps4-omega-eu`, the tagged-object constructor idiom (vtable install,
+`.cpp`-tag write to `param_1[0xb]`, callback to `param_1[1]`, plus a
+linked-context-list registration walk) is shared boilerplate every class
+uses, not evidence a candidate function matches a specific sibling-binary
+class.** 2026-09-15. Investigating a `Collision.cpp`-tagged candidate for
+`ps3-hdfury-eu/collision.md`'s own `Collision_Construct`
+([`ps4-omega-eu/collision.md`](docs/ghidra/functions/ps4-omega-eu/collision.md)),
+the same busy-wait chain walk, field writes (`0x3006`/`0xffffffff`) and
+vtable/tag/callback triple that looked like collision-specific structural
+corroboration turned out to be byte-identical to code already read the same
+day in all thirteen of `ModeManager_ConstructByMode`'s branches
+([`weapons.md`](docs/ghidra/functions/ps4-omega-eu/weapons.md)) - caught by
+`advisor()` before the name was committed. **On this binary, a `.cpp` tag
+match still needs the class-specific evidence `README.md` already asks for
+(a field offset, an enum, a magic number, or - the strongest, per
+`ps3-hdfury-eu/collision.md`'s own `Collision_Construct` - a loop whose
+count times stride lands exactly on a separately-computed allocation size)**;
+the generic constructor skeleton around the tag write proves nothing on its
+own here, and won't going forward either.
+
 **Every static negative recorded on `ps3-hdfury-eu`'s `EBOOT.elf` before 2026-09-15 09:29 is stale by construction.** Stock Ghidra could not decode the Cell `lvlx` instruction, so 851 sites across 294 functions - about 213 KB of code - held with no instructions, no xrefs and no callers; the live `ps3-hdfury-eu` program was reimported at 09:29 today with a fixed language and now carries all of it (`docs/reverse-engineering/toolchain.md#ps3`, "Some Cell vector instructions are missing"). Any "no writer", "no caller", "no consumer", "no xref", "nothing references", "no reader located" or "the sweep returned nothing" claim about that binary timestamped - or undated - before that reimport was computed over an incomplete image and needs re-running before it's trusted; three were re-run the same day: the Zone radius writer was found, `zoneOrigin`'s writer was re-confirmed against a thread that still said "none", and `craft+0x108` held as a negative. A pass on 2026-09-15 marked the still-load-bearing ones it found across `handover/` and `docs/ghidra/functions/ps3-hdfury-eu/` with `**[stale 2026-09-15: computed before the lvlx reimport; re-run per toolchain.md#ps3]**` inline rather than re-running them all; nobody has audited the rest.
 
 **`cargo check` does not link an executable, so a `--screenshot` capture run
