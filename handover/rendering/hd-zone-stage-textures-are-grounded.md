@@ -508,9 +508,14 @@ unblocks - see Next Steps below for what implementing it needs.
   `oag_rcs::rcsmodel::Mesh::is_track` exposes the halfword's bit 0,
   `mesh::slots::ZONE_TRACK` carries it per chunk, and `mesh.wgsl` binds the
   Track pair where it is set and the Scene pair (the flat-white `zoneMode*`
-  set beside the `Scene.*` colours) elsewhere. The environment went from
-  patterned to flat-coloured with rim edges and the road kept the art, as
-  predicted; the check against a Zone frame of the original is still owed.
+  set beside the `Scene.*` colours) elsewhere. On `Sub Venom` (the only
+  stage a headless capture reaches - the ladder re-shows it every frame) the
+  road and the track-side walls kept the art and the scenery went flat, and
+  flat means **white**: `Scene.Texture Colour` `0.72 0.91 0.96` on a white
+  texture, multiplied by the stage's `Constant Ambient Colour` `1.5`, clamps
+  at the target. Authored numbers through the read equation, with no
+  tonemap; the check against a Zone frame of the original is still owed and
+  is what would say whether that multiply belongs on the Zone surface.
   Evidence and the disc-wide value survey: thirtieth pass of
   [zone-effectsettings-loader.md](../../docs/ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md).
 - ~~The Zone sky is its own thing, and this port draws the wrong one~~

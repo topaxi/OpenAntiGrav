@@ -906,15 +906,27 @@ no longer disagree.
   selects per fragment. The disc counts reproduce from the reader (41,861
   relocated, 4,365 in 37 files, 124 of 983 on Talon's Junction -
   `crates/rcs/tests/rcsmodel_ground_truth.rs`). What a headless capture of
-  Talon's Junction shows: the road keeps the stage art and the environment
-  goes flat in `Scene.Texture Colour` with cyan rim edges - black walls and
-  gantries around a lit road on `Start` (`--zone-stage 0 --ticks 0`; any
-  tick later the recovered ladder moves the race to stage 1), pale white on
-  `Sub Venom`, lavender with an orange road on `Flash` - where before every
-  surface had the road's patterned tint. **Not yet checked against a frame
-  of the original**, which an RPCS3 capture on the same stage would settle.
-  Still in reach from the same field: the five-bucket routing (record bits
-  3-5), which decides which fog buffer and publisher a chunk goes through.
+  Talon's Junction shows, **on `Sub Venom`** - every headless capture lands
+  there, `--zone-stage` included, because `Scene::sync_zone_grade` re-shows
+  the recovered ladder's rung every frame and zone 0 is stage 1, so `Start`'s
+  dark-environment frame is not reachable from the CLI at all: the near
+  track-side walls and gantries (track-flagged chunks) are dark teal with
+  cyan rim edges and the road is lit cyan; the elevated scenery and
+  everything in the distance (scene chunks) is **blown-out white**. That
+  white is the data through the read equation, not a defect of the split:
+  `zonemode1.gtf` is flat white, `Scene.Texture Colour` is `0.72 0.91 0.96`,
+  and `mesh.wgsl` then multiplies the surface by the stage's own rig
+  (`lit_linear = surface_linear * authored`, with `Constant Ambient Colour`
+  `1.5`), so every channel lands above `1.0` and the target clamps it - the
+  missing tonemap stage `renderer.md` already names. Zeroing the rim term
+  or clamping `rim` to one changes none of it (both tried). Before the split
+  every surface had the road's patterned cyan. On `Flash` (1,800 ticks) the
+  scenery is flat lavender and the road orange. **Not checked against a
+  frame of the original**, which an RPCS3 capture on `Sub Venom` would
+  settle; if the original's scenery is not white there, the light multiply
+  on the Zone surface is the term to re-read, not the chunk split. Still in
+  reach from the same field: the five-bucket routing (record bits 3-5),
+  which decides which fog buffer and publisher a chunk goes through.
 - **Wire the wavefront** (renderer lane): origin = the entity's `+0xb0`
   (re-centred every frame), radius per frame after a commit `r_k = 0.1 + 0.5k
   + 0.05k(k-1)` capped at `20000`, colour weight `min(0.01k, 1)`. All disc
