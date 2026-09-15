@@ -38,36 +38,69 @@ so they mounted behind *Wipeout Pulse* on every later boot, keys or not. See
   a literal, so this does not rule the routine out. Not needed for reading a
   pack's content (`oag-wad` never touches the trailer), only for round-
   tripping a pack the way the upstream region-converter tool does - out of
-  scope unless region conversion becomes a goal.
-- **`TEST.bin`**'s actual role is still unknown - not load-bearing for
-  decryption (verified: all seven packs decrypt correctly without touching
-  it), most likely something the real PSP's savedata-signature check needs
-  since `pi.wad` is packaged as savedata. **2026-09-04, one narrowing pass,
-  still unresolved**: `pure-eu/BOOT.BIN` does carry the string
-  `"msroot:%s/TEST.BIN"` at `0x08a76c9c`, sitting in a fixed 20-byte-stride
-  table with `"msroot:%s/PI.WAD"` (`0x08a76c4c`), `ICON0.PNG` (`c60`),
-  `PARAM.SFO` (`c74`) and `PIC1.PNG` (`c88`) - the standard PSP savedata
-  plugin file set, `TEST.BIN` included, so this is consistent with the
-  savedata-signature hypothesis rather than new evidence for it.
-  `scripts/resolve-psp-imports.py --modules` also resolves
-  `sceUtilitySavedataInitStart`/`Update`/`GetStatus`/`ShutdownStart` under
-  `pure-eu/BOOT.BIN`'s `sceUtility` library (4 of its 21 imports) - the
-  official savedata utility genuinely is linked in, not just plausible from
-  the packaging shape. **What did not work**: neither Ghidra's `get_xrefs_to`
-  nor an exhaustive `jal`-mnemonic instruction search across the whole
-  485,915-instruction program found a single caller of that import-stub
-  address, the `TEST.BIN`-string address, or any address in its table -
-  checked against a known-must-be-called control
-  (`sceCtrlReadBufferPositive`, same zero result), so this is a gap in how
-  this binary's import-stub calling convention shows up to `search_instructions`/
-  `get_xrefs_to` (likely an indirection Ghidra's auto-analysis hasn't
-  resolved into direct `jal`s), not evidence the game never calls savedata.
-  Finding the real call site needs someone who knows this project's PSP
-  import-stub convention well enough to work around that gap, then reading
-  the `SceUtilitySavedataParam` populated there - its `key[16]` field is
-  the PSP SDK's standard savedata-encryption key slot and a strong
-  candidate for "the region-specific key embedded in BOOT.BIN" the trailer
-  bullet above is chasing, but this pass did not reach it.
+  scope unless region conversion becomes a goal. **2026-09-15, substantially
+  resolved in structure, not yet runnable end-to-end.** The per-pack key
+  `Xtea_CryptBuffer` uses to decrypt a pack's payload is not a second BOOT.BIN
+  constant at all - `DlcTrailer_ExtractKey` reads it straight out of the
+  pack's own trailer, at a fixed offset (`0xb4`), once `DlcTrailer_Validate`'s
+  checks pass (a literal `"WipeoutPure_____"` magic string, an `"SDRM"` tail,
+  `0xFF` padding, and a 20-byte digest over the last 140 bytes). Recovering
+  that plaintext from the encrypted-on-disk trailer is RSA-shaped bignum
+  modular exponentiation (`Bignum_ModExp`/`Bignum_Compare`, public exponent
+  65537 at `DAT_08aa63fc`, modulus candidate `DAT_08aa64fc`) - **this is
+  exactly `keys.txt`'s own comment**, structurally confirmed rather than
+  guessed at. What's not resolved: the exact operand width (a 128-byte
+  reversal and a 256-byte modexp operand count disagree) and exact memory
+  layout, so two exhaustive offline arithmetic sweeps against a real pack's
+  trailer both came back negative - inconclusive, not disconfirming, since
+  neither had a known-good positive control the way the original
+  XTEA-as-trailer-key test did. Full trace, every address, and the concrete
+  unblock (a live memory dump, not more decompiling) all in
+  [dlc-download-check.md](../../docs/ghidra/functions/psp-pure-eu/dlc-download-check.md).
+  The `sceUtilitySavedataInitStart` chain mentioned in earlier versions of
+  this bullet *was* a dead end (ghost-replay/profile savedata, not DLC) and
+  stays one - the productive lead was always `DlcPack_Load`, reached from the
+  same string-table evidence as `WowDownload_VerifyPackFiles` below.
+- **`TEST.bin`**'s actual role: **narrowed, 2026-09-15, not fully closed.**
+  `BOOT.BIN`'s own `WowDownload_VerifyPackFiles`
+  (`psp-pure-eu` `0x08955494`, `psp-pure-usa` `0x08955b44`) checks that
+  `TEST.BIN` exists alongside `PI.WAD`/`ICON0.PNG`/`PARAM.SFO`/`PIC1.PNG`
+  before treating a PSN pack download as complete - a plain file-existence
+  probe, never a content read. See
+  [dlc-download-check.md](../../docs/ghidra/functions/psp-pure-eu/dlc-download-check.md)
+  for the full trace. This is real, evidenced use of the file, but it
+  **weakens rather than confirms** the savedata-signature hypothesis below:
+  the code that manages this exact five-file bundle only ever asks whether
+  `TEST.bin` exists, never opens it. Whichever code (if any) reads its 16
+  bytes is a different, still-unlocated call site - possibly none at all in
+  `BOOT.BIN`, since neither it nor Pure's PRXs import any NpDrm or KIRK
+  primitive (`docs/formats/dlc-pack.md`), so real PSN content validation may
+  be entirely system-side.
+
+  **The previous "gap" this bullet described was a relocation bug, not an
+  import-stub convention problem - closed 2026-09-15.** The 2026-09-04 pass
+  recorded here found zero callers of `sceUtilitySavedataInitStart`'s stub
+  and zero callers of a known-must-be-called control
+  (`sceCtrlReadBufferPositive`), on both `pure-eu` and `pure-usa`, and read
+  that as `get_xrefs_to` failing to see through this binary's import-stub
+  calling convention. It was actually the pre-2026-09-07 Allegrex relocation
+  bug documented in `docs/ghidra/workflow.md` ("Why a PSP import silently
+  loses every relocation") - already known to have broken `psp-pulse-eu`/
+  `psp-pulse-usa` the same way, but not until now checked against Pure's own
+  two databases. Both are confirmed fixed: `get_xrefs_to` on
+  `sceUtilitySavedataInitStart`'s stub now returns a real caller on the first
+  try, on both regions, with no workaround needed. **The stub addresses this
+  bullet used to cite (e.g. `0x08a76dfc`) were never Pure's** -
+  `data/ghidra/psp-imports.tsv` is `psp-pulse-usa`-addressed only
+  (`scripts/apply-ghidra-names.py`'s `BINARY_PROGRAMS` mapping); Pure's own
+  stub is at `0x08a42798` (`pure-eu`), found by running
+  `scripts/resolve-psp-imports.py` directly against
+  `data/extracted/psp/pure-eu/PSP_GAME/SYSDIR/BOOT.BIN`. The
+  `SceUtilitySavedataParam.key[16]` idea from the old text is neither
+  confirmed nor ruled out - on `pure-eu`, the caller chain from that stub
+  goes to an unrelated feature (see the trailer bullet above), so it was
+  never reached; `pure-usa`'s own chain exists (its stub has a caller too)
+  but was not traced.
 - **Region-selectable DLC**, raised independently while this thread's evidence
   was being gathered: Pure's packs (and potentially others, per
   [ADR-0021](../../docs/architecture/adr/0021-region-independent-dlc.md)'s
@@ -87,15 +120,44 @@ so they mounted behind *Wipeout Pulse* on every later boot, keys or not. See
 
 ## Next Steps
 
-- Whoever chases the region-conversion or savedata-signature questions above
-  needs the upstream tool's own region-converter path re-read alongside a
-  disassembly of `sceNpDrm`'s savedata check in `BOOT.BIN` - out of scope
-  for a casual follow-up. **Narrower now**: the target is specifically the
-  call site that populates a `SceUtilitySavedataParam` and calls
-  `sceUtilitySavedataInitStart` in `pure-eu`/`pure-usa` `BOOT.BIN` - resolving
-  its `key[16]` field would very likely answer both the trailer-key and
-  `TEST.bin` questions at once. Reaching it needs working around the
-  import-stub xref gap noted above, not a fresh byte-pattern search.
+- **The `sceUtilitySavedataInitStart` lead is a dead end for this thread on
+  `pure-eu`**, chased 2026-09-15: its caller there belongs to a ghost-replay/
+  profile savedata dialog, not the DLC download path. `pure-usa`'s equivalent
+  chain exists (its stub has a caller too) but was not chased - lower
+  priority now that a better lead exists (next bullet). See
+  [dlc-download-check.md](../../docs/ghidra/functions/psp-pure-eu/dlc-download-check.md)
+  for the trace, and note its addresses supersede this thread's - the
+  `0x08a76dfc`-style stub addresses recorded above are `psp-pulse-usa`'s, not
+  Pure's own.
+- **The game's own XTEA cipher, the pack loader, and the trailer's RSA-shaped
+  protection are all now found in code**, confirmed on both `pure-eu` (this
+  project's preferred RE target for Pure) and `pure-usa`, all in
+  dlc-download-check.md: `Xtea_EncryptBlock`/`Xtea_CryptBuffer` (the payload
+  cipher, matching `oag_formats::pure_dlc::crypt_with_key` structurally),
+  `DlcPack_Load` (splits `[payload][trailer]`, was `FUN_088a3118`/
+  `FUN_088a3ba8`), `DlcTrailer_Validate` (magic string / `SDRM` tail / digest
+  checks, was `FUN_088a9818`/`FUN_088aa008`), `DlcTrailer_ExtractKey` (reads
+  the per-pack XTEA key from trailer offset `0xb4`, was `FUN_088a6b0c`/
+  `FUN_088a7588`), and `Bignum_ModExp`/`Bignum_Compare` (the RSA-shaped
+  recovery math, exponent `65537` confirmed identical on both regions,
+  modulus candidate `0x08aa64fc`/`0x08aacaf4` - genuinely different bytes
+  between regions, a second confirmation of `keys.txt`'s "region-specific"
+  wording). Together these are a structural answer to both this bullet and
+  the previous one, matching `keys.txt`'s own comment almost word for word.
+  `pure-usa`'s `DlcTrailer_Validate` has one confirmed real divergence from
+  `pure-eu`'s: its `SDRM`-tail version byte accepts only `0x04`, not `0x04`
+  **or** `0x05`.
+  **What's left is exact operand width and memory layout, not more
+  decompiling of new functions** - a 128-byte swap (`FUN_088abf78`) and a
+  256-byte modexp operand count (`Bignum_ModExp`/`Bignum_Compare`) disagree,
+  and two exhaustive offline arithmetic sweeps across the plausible
+  combinations (`tmp/rsa_trailer_test.py`, `tmp/rsa2048_trailer_test.py` -
+  gitignored, not committed) both came back negative without a known-good
+  positive control to validate the harness against. **The concrete next
+  step is a live memory dump** - break in PPSSPP at `DlcPack_Load`'s entry
+  and at the `Bignum_ModExp` call, dump the trailer copy and whatever
+  `local_128` resolves to in `FUN_088a7704` - not another round of static
+  reading.
 - If JP/US copies of any pack turn up, diff their decrypted payload against
   the EU one to settle the region-selectable-DLC question one way or the
   other before building any UI for it.

@@ -67,3 +67,28 @@
 # TrackSelection.
 0x08951bd0	function	TeamSelection_ApplySelection	78	race-box-screens.md
 0x08952fa4	function	TrackSelection_ApplySelection	78	race-box-screens.md
+
+# DLC download completion check (2026-09-15), reached only once the Allegrex
+# relocation fix (docs/ghidra/workflow.md) made get_xrefs_to work on this
+# binary. See dlc-download-check.md for the full trace and what it does and
+# does not settle about the pure-dlc-trailer-key-and-testbin-unknowns thread.
+0x08955494	function	WowDownload_VerifyPackFiles	80	dlc-download-check.md
+
+# The game's own XTEA cipher (2026-09-15), found chasing the same page's
+# trailer-key lead. pure-usa's counterparts were not resolved - the Ghidra
+# program for /psp-pure-usa/BOOT.BIN became unreachable mid-session (a
+# "Disk quota exceeded" bridge error), so only pure-eu is named here.
+0x088a9c64	function	Xtea_EncryptBlock	92	dlc-download-check.md
+0x088aa204	function	Xtea_CryptBuffer	90	dlc-download-check.md
+
+# The trailer's own RSA-shaped protection (2026-09-15), same investigation:
+# DlcTrailer_ExtractKey reads the per-pack XTEA key straight out of the
+# trailer at a fixed offset, once DlcTrailer_Validate's magic-string/digest/
+# SDRM-tail checks pass. Bignum_Compare/Bignum_ModExp are the RSA-shaped
+# modular-exponentiation machinery that recovers the trailer's plaintext -
+# exact operand width unresolved, see dlc-download-check.md's own caveat.
+0x088a3118	function	DlcPack_Load	80	dlc-download-check.md
+0x088a9818	function	DlcTrailer_Validate	88	dlc-download-check.md
+0x088a6b0c	function	DlcTrailer_ExtractKey	85	dlc-download-check.md
+0x088ac4c8	function	Bignum_ModExp	92	dlc-download-check.md
+0x088ac278	function	Bignum_Compare	85	dlc-download-check.md

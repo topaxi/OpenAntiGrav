@@ -118,3 +118,6 @@ __pycache__/
 *.gpr
 *.lock
 scratch-*.md
+
+# Session scratch space (agent-local tmpfiles, not build output).
+/tmp/

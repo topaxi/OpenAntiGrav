@@ -41,3 +41,24 @@
 0x08835a90	function	Scream_PlaySoundByName	82	shield-sound.md
 0x0886b924	function	ExhaustFlare_Init	82	exhaust-sound.md
 0x0881f67c	function	HudSight_UpdateTone	82	lockon-sound.md
+
+# DLC download completion check (2026-09-15), byte-identical to psp-pure-eu's
+# own at a different address - see the shared write-up in that binary's own
+# directory, ../psp-pure-eu/dlc-download-check.md.
+0x08955b44	function	WowDownload_VerifyPackFiles	80	../psp-pure-eu/dlc-download-check.md
+
+# The rest of the same DLC-pack investigation (2026-09-15), found once the
+# Ghidra program for this binary was reachable again - pure-eu is this
+# project's preferred RE target for Pure, so these are corroboration of
+# that binary's own findings, not independent derivation. Every one is
+# byte-identical in logic to its pure-eu counterpart except
+# DlcTrailer_Validate's SDRM-tail version byte, which accepts only 0x04
+# here against 0x04-or-0x05 on pure-eu - a real, small divergence, not a
+# transcription error (see dlc-download-check.md).
+0x088aa44c	function	Xtea_EncryptBlock	92	../psp-pure-eu/dlc-download-check.md
+0x088aa9ec	function	Xtea_CryptBuffer	90	../psp-pure-eu/dlc-download-check.md
+0x088a3ba8	function	DlcPack_Load	80	../psp-pure-eu/dlc-download-check.md
+0x088aa008	function	DlcTrailer_Validate	88	../psp-pure-eu/dlc-download-check.md
+0x088a7588	function	DlcTrailer_ExtractKey	85	../psp-pure-eu/dlc-download-check.md
+0x088acc68	function	Bignum_ModExp	92	../psp-pure-eu/dlc-download-check.md
+0x088aca18	function	Bignum_Compare	85	../psp-pure-eu/dlc-download-check.md
