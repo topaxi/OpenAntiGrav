@@ -48,4 +48,4 @@
 0x012b4960	function	SPZoneRaceManager_Construct	84	weapons.md
 0x015a7020	function	GameModeRaceManager_Construct	84	weapons.md
 0x0129c120	function	RaceManager_ConstructArcadeHud	80	weapons.md
-0x012ac060	function	NitroRaceManager_ConstructDuelRules	78	weapons.md
+0x012ac060	function	NitroRaceManager_ConstructTuning	73	weapons.md

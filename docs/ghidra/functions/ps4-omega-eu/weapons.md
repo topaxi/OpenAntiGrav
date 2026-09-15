@@ -16,7 +16,7 @@ family once the weapon managers established the constructor idiom.
 named this pass: 9 weapon-manager constructors, the base `RaceManager` and
 `ModeManager` roots, 16 `_RaceManager` subclasses, the intermediate
 `MPRaceManager_Construct`, and two race-family helpers,
-`RaceManager_ConstructArcadeHud` and `NitroRaceManager_ConstructDuelRules`.
+`RaceManager_ConstructArcadeHud` and `NitroRaceManager_ConstructTuning`.
 
 ## Method
 
@@ -166,7 +166,7 @@ directly by most of them (`SPArcadeRaceManager_Construct`,
 `SPTimeTrialRaceManager_Construct`, `SPTournamentRaceManager_Construct`,
 `SPDetonatorRaceManager_Construct` all confirmed calling it directly, each
 against a freshly allocated `0x1620`-byte block), plus a ninth, indirect
-path through `NitroRaceManager_ConstructDuelRules` (below), which builds one
+path through `NitroRaceManager_ConstructTuning` (below), which builds one
 more `0x1620`-byte instance of the same composite as its own member - the
 reason `get_xrefs_to` on either tag found only this one writer despite it
 constructing two distinct classes: it is a shared composite every race owns
@@ -269,7 +269,7 @@ Fourteen call `RaceManager_Construct` directly:
 | `0x012a4610` | `SPDetonatorRaceManager_Construct` | 84 | - |
 | `0x012a7e60` | `SPEliminationRaceManager_Construct` | 84 | Region-aware HUD selection (`WIP3OUT`/`2097` build-name checks, see below) |
 | `0x012a98f0` | `SPFreePlayRaceManager_Construct` | 84 | Loads `TimeTrial_HUD.xml` |
-| `0x012ad580` | `SPNitroRaceManager_Construct` | 84 | Also calls `NitroRaceManager_ConstructDuelRules(param_1 + 0x600e)` (below) |
+| `0x012ad580` | `SPNitroRaceManager_Construct` | 84 | Also calls `NitroRaceManager_ConstructTuning(param_1 + 0x600e)` (below) |
 | `0x012af230` | `SPTimeTrialRaceManager_Construct` | 84 | Ghost/replay-slot allocation gated on `DAT_01f999e4 == 10 \|\| == 5` (track-count-dependent) |
 | `0x012b1e60` | `SPTournamentRaceManager_Construct` | 84 | Also calls `RaceManager_ConstructArcadeHud` (below) |
 | `0x012b4960` | `SPZoneRaceManager_Construct` | 84 | Loads region-specific `Zone_HUD.xml` variants (`wo3_HUD`, `2097_HUD` - see below) |
@@ -278,12 +278,12 @@ Fourteen call `RaceManager_Construct` directly:
 Two call a second helper between `RaceManager_Construct()` and their own tag
 write: `SPArcadeRaceManager_Construct`/`SPTournamentRaceManager_Construct`
 call `RaceManager_ConstructArcadeHud`, and `SPNitroRaceManager_Construct`
-calls `NitroRaceManager_ConstructDuelRules` - both named below.
+calls `NitroRaceManager_ConstructTuning` - both named below.
 
 Four call `MPRaceManager_Construct` (`0x01284690`, below) instead of
 `RaceManager_Construct` directly, plus `MPNitroRaceManager_Construct`
 (`0x0127d940`, confidence 84), which calls `FUN_01284690()`
-(`MPRaceManager_Construct`) then `NitroRaceManager_ConstructDuelRules(param_1
+(`MPRaceManager_Construct`) then `NitroRaceManager_ConstructTuning(param_1
 + 0x6148)`, the same helper `SPNitroRaceManager_Construct` calls above,
 before writing its own tag - consistent with the same class hierarchy, not
 chased further:
@@ -340,16 +340,22 @@ resulting paths are `Data\XML\<Name>_HUD.xml` (default, no match),
 `Data\XML\wo3_HUD\<Name>_HUD.xml` (`"WIP3OUT"`), and
 `Data\XML\2097_HUD\<Name>_HUD.xml` (`"2097"`).
 
-**This is a player-facing frontend setting, not build/region detection**: a
+**This is a keyed settings/property lookup, not build/region detection**: a
 second string, `"HUD Style P2"` at `0x0182d991` (`search_strings("HUD
 Style")` finds both, only these two), exists purely to give player 2 an
 independent choice in split-screen - a build/region check would need no
-per-player variant. `WIP3OUT` and `2097` are two of the franchise's own
-historical titles (*wipE'out''3* and *WipEout 2097*/*XL*), so `"HUD Style"`
-is Omega Collection's option to reskin the in-race HUD as one of those two
-earlier games' own look, alongside the default (HD-shaped) skin - not a
-gameplay distinction and not tied to which disc/region a copy shipped as.
-This corrects a guess made earlier in this same research pass (previously
+per-player variant. The table itself (base pointer `DAT_02039628`) has
+exactly one writer, `FrontendRoot_Construct` (`get_xrefs_to` on
+`0x02039628`), and dozens of readers across frontend-area functions near it
+in the address space - consistent with a settings/property store owned by
+the frontend rather than a per-menu-instance widget registry, though which
+of those two shapes it is has not been chased past the writer/reader count.
+`WIP3OUT` and `2097` are two of the franchise's own historical titles
+(*wipE'out''3* and *WipEout 2097*/*XL*), so `"HUD Style"` reads as Omega
+Collection's option to reskin the in-race HUD as one of those two earlier
+games' own look, alongside the default (HD-shaped) skin - not a gameplay
+distinction and not tied to which disc/region a copy shipped as. This
+corrects a guess made earlier in this same research pass (previously
 "Region-aware HUD selection", read as a build-codename check) once the
 `"HUD Style"`/`"HUD Style P2"` strings were found; no `names.tsv` row was
 affected, since nothing was renamed on the earlier guess.
@@ -383,19 +389,26 @@ already uses; **confidence 80** (Probable: decompiled, unambiguous, two
 consistent call sites - no `.cpp` tag of its own and no second-binary
 corroboration to reach higher).
 
-**`NitroRaceManager_ConstructDuelRules`** (`0x012ac060`, confidence 78) is
+**`NitroRaceManager_ConstructTuning`** (`0x012ac060`, confidence 73) is
 the other helper, called only by `SPNitroRaceManager_Construct` and
 `MPNitroRaceManager_Construct` (`get_function_callers` - not
 `SPTournamentRaceManager_Construct`, which calls
 `RaceManager_ConstructArcadeHud` instead, a different function at a
 similarly-shaped call site). It constructs a nested sub-object at a fixed
 offset within its caller (`param_1 + 0x600e`/`+ 0x6148` above, not `param_1`
-itself): sets its own vtable, initializes several per-ship scoring arrays,
-and parses `Data\XML\DuelStats.xml` - present verbatim in
+itself): sets its own vtable, then unconditionally installs a block of
+hardcoded float/int defaults across several per-ship scoring arrays
+(sized off `DAT_01f999e8`/`DAT_01f998f0`) **before** it ever touches XML -
+the `Data\XML\DuelStats.xml` parse only runs if the file opens
+(`FUN_0174e950`'s return is checked), so this reads as a tuning object with
+built-in defaults that XML can override, not a class whose whole identity
+is "the DuelStats loader". `DuelStats.xml` is present verbatim in
 `vita-2048-eu-v104` and `ps3-hdfury-eu`'s own string tables too, though
-neither names a function for it yet - reading a `NoviceStats`/
-`SkilledStats`/`EliteStats`-tiered `GamePlayStats` block whose own keys
-(`ZoneTriggerPercent`, `LightBarrierTriggerPercent`, `MaxZoneAttackBarLevel`,
+neither names a function for it yet, and nothing in this function writes a
+`.cpp` tag of its own - the name records the file it reads, not a claimed
+class name. The keys it reads under a `NoviceStats`/`SkilledStats`/
+`EliteStats`-tiered `GamePlayStats` block (`ZoneTriggerPercent`,
+`LightBarrierTriggerPercent`, `MaxZoneAttackBarLevel`,
 `BarrierNitroBarDecrease`, `SecondsPerZone`, `BarriersPerShip`,
 `LightBarrierPenalty`) are Nitro mode's own barrier-triggered attack-bar
 mechanic, not zone-mode or generic race rules - consistent with being called
@@ -403,11 +416,11 @@ by Nitro race managers only. It also owns one `0x1620`-byte member built
 through `FUN_013781e0` (the still-unnamed `LeachBeamManager`/`MineManager`
 composite from "Not yet verified" above) - a third confirmed owner of that
 composite, alongside the `_RaceManager` subclasses that call it directly.
-Named for its demonstrated behavior and config file rather than a class-name
-guess, the same reasoning `RaceManager_ConstructArcadeHud` above uses;
-**confidence 78** (Probable: decompiled, unambiguous field-name evidence, two
-consistent call sites - no `.cpp` tag and no second-binary function to
-corroborate against, only a shared config file name).
+**Confidence 73** (Probable, at the low end: decompiled, unambiguous
+field-name evidence, two consistent call sites - but no `.cpp` tag, no
+second-binary function to corroborate against, and the name itself asserts
+less than `RaceManager_ConstructArcadeHud` above does, on the same
+"never writes its own tag" grounds that keep `0x013781e0` unnamed).
 
 ## `GameModes/` is a real, distinct directory - not a rename
 
