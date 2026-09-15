@@ -1737,7 +1737,9 @@ no longer disagree.
   two are empty: the keys are authored, registered, parsed to known offsets
   and `Scene.Texture Colour` really is cross-faded per frame into
   `0x00c81a5c` inside `Scene_PrepareFrame` - but nothing located reads that
-  output, the seven `Scene`/`Track` getters have no callers **[stale 2026-09-15: computed before the lvlx reimport; re-run per toolchain.md#ps3]**, and the one
+  output, the seven `Scene`/`Track` getters have no callers **[re-run
+  2026-09-15 post-lvlx-reimport: negative holds, all three routes,
+  zone-effectsettings-loader.md's thirty-second pass]**, and the one
   alternative reader is unreached and reads elsewhere. Four keys *do* reach a
   draw (the Detonator mine/bomb colours and `Airbrake Colour`), so the
   mechanism is real and exercised - just not for these groups.
