@@ -235,6 +235,13 @@ negative.
   half_height`, vertex alpha = `fade = min((1 - saturate((dist * k - 15) /
   15)) * powf(view_dot, 32) * alpha_walk * 1.0, 1.0)`, no quad at all on a
   non-positive view dot - and `race::effects::hd_sprite_quad` skips slot 0.
+  **Corrected the same day, later**: the original has two early-outs, not
+  one - the non-positive view dot before the fade math, and a second `ble`
+  right after the fade's own store, before the quad is built (`fix(hd): the
+  sprite's quad is not built when the fade is not positive`, 2026-09-15).
+  `Sprite::fade` now answers `None` for a fade of zero or less too, so a
+  craft past `Flare Fadeout Dist + Range` gets no quad rather than an
+  invisible one.
   The `hd.rs` doc comment that said the law was unread is gone. What the
   code labels **chosen, not measured**: `k` (the per-view table at
   `*(r2+0x5aa0)`, never read; 1.0) and the hemisphere of the view dot (the
