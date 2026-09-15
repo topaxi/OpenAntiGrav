@@ -11,7 +11,10 @@ of a `<Billboard>`, where it stores each one, and the one place a manifest's
 own authoring is silently overridden.
 
 **Nothing here is runtime-verified.** Per [visibility.md](visibility.md)'s
-rule, static reading of one binary caps every score on this page at **84**.
+rule, static reading of one binary caps every score on this page at **84** -
+except `Billboard_ConstructResource`, whose 85 rests on a second,
+independently-compiled binary corroborating it (below), the same exception
+that rule already carves out elsewhere in this project.
 
 ## The trap that shapes every address below
 
@@ -41,7 +44,7 @@ which is enough to identify the parser without reading the other.
 | `0x000b19a8` | function | `TrackStartup_Load` | 82 |
 | `0x0029adf8` | function | `Billboard_CreateFromLocation_q` | 65 |
 | `0x0029af88` | function | `Billboard_CreateFromColour_q` | 62 |
-| `0x0029a6a8` | function | `Billboard_ConstructResource_q` | 62 |
+| `0x0029a6a8` | function | `Billboard_ConstructResource` | 85 |
 | `0x003a4b70` | function | `GetBillboardMeshIdFromName` | 90 |
 | `0x003a4da0` | function | `Billboard_LoadModelAndBind` | 80 |
 | `0x008b6f38` | data | `g_BillboardSlots` | 84 |
@@ -108,12 +111,12 @@ only store to that stack slot in the whole attribute loop. That same slot is
 loaded at `0x000b239c` (`lwz r4,0x74(r1)`), `extsw`'d and passed on as the
 argument `Billboard_CreateFromLocation_q`/`_FromColour_q` test for occupancy -
 no instruction anywhere on that path subtracts from it. The same value then
-reaches `Billboard_ConstructResource_q` one hop later, as *its* fourth
+reaches `Billboard_ConstructResource` one hop later, as *its* fourth
 argument, which is the `num` this section's array indexing describes. Two
 independent facts confirm the array is sized for indices `0..=8`, nine slots,
 with `0` always wasted:
 
-1. `Billboard_ConstructResource_q` (below) writes the finished object into
+1. `Billboard_ConstructResource` (below) writes the finished object into
    `manager + (num << 2) + 4` on construction, `num` being the argument that
    traces back to the `Num` attribute as above.
 2. The manager's own destructor zeroes exactly nine consecutive words at
@@ -127,7 +130,7 @@ looks up a node by a name the engine builds, so the two stray
 `Billboard<digits>` nodes on `02_track` and `05_ubermall` are artist debris,
 unrelated to this mechanism.
 
-## `Billboard_ConstructResource_q` (`0x0029a6a8`): it instantiates
+## `Billboard_ConstructResource` (`0x0029a6a8`): it instantiates
 
 Both constructors above call this one with the resolved path/colour text.
 **It settles "instantiated vs. supplies textures to existing geometry" in
@@ -144,6 +147,16 @@ disc**: no manifest's `location=` ends in anything but `.vex`, so every real
 billboard takes the first branch. Same shape as the draw-order row's `0x31`
 branch and the `LodGroup` two-tier-always-drawn finding - authored capacity
 the disc's own content never reaches.
+
+**Corroborated on `ps4-omega-eu`, confidence raised 62 -> 85.** That binary's
+own `Billboard.cpp` tag (verbatim, under `System\Render\` rather than a flat
+layout) resolves to a function that opens with the identical
+last-N-characters-uppercased extension check (`.mip` first, `.vex` in the
+`else`) and calls its own resource loader with the **same two magic
+constants**, `0xfdb2` and `0x3e9` - values with no reason to match by chance
+across two independently compiled binaries five console generations apart.
+See [`ps4-omega-eu/billboards.md`](../ps4-omega-eu/billboards.md) for that
+binary's own half of this finding.
 
 ## The surprising part: `Num == 7` is not what its own manifest says it is
 
@@ -262,7 +275,7 @@ stored word.
 
 Separately, `0x003a4da0` (unnamed, confidence held below 50 for the reason
 below - do not rename) **is** reached by a real, traced call:
-`Billboard_ConstructResource_q` calls it at `0x0029adb4` as
+`Billboard_ConstructResource` calls it at `0x0029adb4` as
 `FUN_006791d8((int)param_4, param_2, param_1, uVar23)`, i.e. `(num,
 location_ptr, the billboard object, the just-allocated .vex mesh resource)`.
 `FUN_006791d8` is a pure TOC-fixup trampoline (`std r2,0x28(r1)`; recompute
@@ -558,11 +571,11 @@ negatives this page and the sibling handover thread carried, on the reimported i
 using `program="/ps3-hdfury-eu/EBOOT.elf"` throughout. Positive controls first, so a
 zero result below is a real zero, not a broken query.
 
-**Positive controls.** `get_function_callers(0x0029a6a8)` (`Billboard_ConstructResource_q`,
+**Positive controls.** `get_function_callers(0x0029a6a8)` (`Billboard_ConstructResource`,
 already known to be called from both constructors) returns exactly its two known
 callers. `search_instructions(mnemonic="bl", operand_pattern="29a6a8")` returns exactly
 its two known call sites (`0029af04` in `Billboard_CreateFromLocation_q`, `0029b0fc` in
-`Billboard_CreateFromColour_q`). `search_byte_patterns` on `Billboard_ConstructResource_q`'s
+`Billboard_CreateFromColour_q`). `search_byte_patterns` on `Billboard_ConstructResource`'s
 own code address (`0029a6a8`) finds exactly one hit, its own `.opd` descriptor at
 `00881898` - and a second pattern search on that descriptor address as a literal finds
 **zero** matches even though this function definitely has two direct `bl` callers. That
@@ -625,11 +638,11 @@ reached through a plain `lwz` at this fixed offset.
 unnamed 4.5 KB bind function at `0x003a4da0` "has no confirmed caller or invocation
 path." That was already wrong before this pass touched it - this page's own 2026-09-06
 section (`Billboard_LoadModelAndBind`, above) traced a real call chain
-(`Billboard_ConstructResource_q` at `0029adb4` through the pure TOC-fixup trampoline
+(`Billboard_ConstructResource` at `0029adb4` through the pure TOC-fixup trampoline
 `FUN_006791d8` to `0x003a4da0`), unrelated to the lvlx trap since a `bl`'s target is a
 relative displacement, not a TOC-resolved `lwz`. Re-run here as part of the same pass for
 completeness: `get_function_callers(0x003a4da0)` returns the trampoline
 `FUN_006791d8`; `get_function_callers` on that thunk in turn returns
-`Billboard_ConstructResource_q` and its own `.opd` descriptor - the identical chain, now
+`Billboard_ConstructResource` and its own `.opd` descriptor - the identical chain, now
 reproduced on the reimported image. Nothing changed; the thread's bullet was stale
 independent of the reimport and is corrected below.
