@@ -130,15 +130,21 @@ fn uniforms() -> Vec<u8> {
     bytes
 }
 
-/// `stage` bound as the **Scene** publication's texture, with the Track slot
-/// holding a magenta the tests below never expect - so a quad whose `slots`
-/// carry no `ZONE_TRACK` (every quad here but the split test's) is measured
-/// through the set the file's own bit selects for it, and a wrong selection
-/// paints a colour no assertion accepts.
+/// `stage` bound as the **Scene** publication's texture, Inner and Outer
+/// alike, with the Track slot holding a magenta the tests below never expect
+/// on either side - so a quad whose `slots` carry no `ZONE_TRACK` (every
+/// quad here but the split test's) is measured through the set the file's
+/// own bit selects for it, and a wrong selection paints a colour no
+/// assertion accepts. The Outer half equals the Inner, so a caller that does
+/// not itself vary the two (every test but the sphere one) draws the same
+/// picture regardless of which side of the sphere a fragment lands on.
 fn scene_art(stage: &Arc<ModelTexture>) -> zone::StageArt {
+    let track = Some(texture("poisoned track stage", [255, 0, 255, 255]));
     zone::StageArt {
-        track: Some(texture("poisoned track stage", [255, 0, 255, 255])),
+        track: track.clone(),
+        track_outer: track,
         scene: Some(stage.clone()),
+        scene_outer: Some(stage.clone()),
     }
 }
 
@@ -488,12 +494,22 @@ fn the_track_bit_selects_the_track_texture_and_colours_and_its_absence_the_scene
     // Distinct texels in the two slots, and distinct colours in the two
     // sets, so a crossed pair - track texture with scene colours, or the
     // other way - lands on a third answer neither assertion accepts.
+    // Outer equal to Inner on both sets: this test's own `Zone` carries a
+    // zero radius, which makes `zone_inside` false everywhere (a distance is
+    // never negative), so every fragment here samples the Outer texture -
+    // and the assertions below are about the track/scene split, not the
+    // sphere, so Outer must read exactly what Inner would.
     let art = zone::StageArt {
         track: Some(texture(
             "track stage",
             [ZONE_TEXEL, ZONE_TEXEL, ZONE_TEXEL, 255],
         )),
+        track_outer: Some(texture(
+            "track stage outer",
+            [ZONE_TEXEL, ZONE_TEXEL, ZONE_TEXEL, 255],
+        )),
         scene: Some(texture("scene stage", [255, 255, 255, 255])),
+        scene_outer: Some(texture("scene stage outer", [255, 255, 255, 255])),
     };
     let mut scene = Scene::off();
     scene.light.enabled = 1.0;
@@ -637,6 +653,80 @@ fn the_transition_sphere_selects_the_inner_pair_inside_and_the_outer_outside() {
         texel(right, row),
         (255, 0, 0),
         "outside a zero-radius sphere the Outer pair draws, and it is the Inner one"
+    );
+}
+
+/// **The stage's own texture follows the sphere too, on the identical
+/// `zone_inside` test the colours above already select on.** Same geometry,
+/// origin and radius as
+/// `the_transition_sphere_selects_the_inner_pair_inside_and_the_outer_outside`,
+/// so the two pixel columns land on the same two fragments; here the
+/// `ZoneSet`s are a flat white multiplier with no rim terms
+/// (`effect = [1, 1, 1, 0]`), so the pixel is the sampled texel alone, and
+/// the Inner and Outer scene textures are solid red and green - full-channel
+/// values a rounding error could not blur into each other. Strikes the
+/// "stage texture does not follow the sphere" item in
+/// `docs/rendering/hd-zone-recolour.md`.
+#[test]
+fn the_transition_sphere_samples_the_inner_texture_inside_and_the_outer_outside() {
+    let instance = wgpu::Instance::default();
+    let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
+        eprintln!("no GPU adapter: skipping");
+        return;
+    };
+    let (device, queue) =
+        pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default()))
+            .expect("requesting the device");
+
+    let surface = model(texture("black albedo", [0, 0, 0, 255]), 1.0);
+    let white = ZoneSet {
+        effect: [1.0, 1.0, 1.0, 0.0],
+        base: [0.0; 4],
+        base_alt: [0.0; 4],
+    };
+    // This quad carries no `ZONE_TRACK`, so it reads the Scene pair; the
+    // Track one is a magenta poison, identical on both sides, so a wrong
+    // selection of *set* (not side) would still fail loudly.
+    let poison = ZoneSet {
+        effect: [4.0, 0.0, 4.0, 0.0],
+        base: [0.0; 4],
+        base_alt: [0.0; 4],
+    };
+    let art = zone::StageArt {
+        track: Some(texture("poisoned track stage", [255, 0, 255, 255])),
+        track_outer: Some(texture("poisoned track outer stage", [255, 0, 255, 255])),
+        scene: Some(texture("inner scene stage", [255, 0, 0, 255])),
+        scene_outer: Some(texture("outer scene stage", [0, 255, 0, 255])),
+    };
+    let mut scene = Scene::off();
+    scene.light.enabled = 1.0;
+    scene.fog.camera = [0.0, 0.0, 100.5];
+    scene.zone = Zone {
+        uv_scale: [1.0, 1.0],
+        enabled: 1.0,
+        radius: 1.0,
+        origin: [-1.0, 0.0, 0.5, 1.0],
+        track: poison,
+        track_outer: poison,
+        scene: white,
+        scene_outer: white,
+    };
+
+    let frame = draw_frame(&device, &queue, &surface, &art, scene, None);
+    let texel = |column: u32, row: u32| {
+        let at = ((row * SIZE + column) * 4) as usize;
+        (frame[at], frame[at + 1], frame[at + 2])
+    };
+    let (row, left, right) = (SIZE * 3 / 4, SIZE / 4, SIZE * 3 / 4);
+    assert_eq!(
+        texel(left, row),
+        (255, 0, 0),
+        "half a unit from the origin is inside the sphere and samples the Inner texture"
+    );
+    assert_eq!(
+        texel(right, row),
+        (0, 255, 0),
+        "a unit and a half out is outside and samples the Outer texture"
     );
 }
 

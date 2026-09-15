@@ -367,22 +367,58 @@ impl ZoneGrade {
     /// the slots are positional, so a hole stays a hole.
     #[must_use]
     pub fn stage_art(&self) -> Option<&Arc<ModelTexture>> {
-        self.art.get(self.blend.current as usize)?.as_ref()
+        self.art_at(self.blend.current)
     }
 
     /// The "general" set's texture for the showing stage, on the same terms
     /// as [`Self::stage_art`].
     #[must_use]
     pub fn stage_scene_art(&self) -> Option<&Arc<ModelTexture>> {
-        self.scene_art.get(self.blend.current as usize)?.as_ref()
+        self.scene_art_at(self.blend.current)
     }
 
-    /// Both of the showing stage's textures, as a drawable binds them.
+    /// [`Self::stage_art`] at an arbitrary stage rather than the showing one
+    /// - what [`Self::stage_art_pair`] needs for the stage being swept out.
+    fn art_at(&self, stage: u32) -> Option<&Arc<ModelTexture>> {
+        self.art.get(stage as usize)?.as_ref()
+    }
+
+    /// [`Self::stage_scene_art`] at an arbitrary stage, on the same terms as
+    /// [`Self::art_at`].
+    fn scene_art_at(&self, stage: u32) -> Option<&Arc<ModelTexture>> {
+        self.scene_art.get(stage as usize)?.as_ref()
+    }
+
+    /// All four of the showing stage's and the stage being swept out's own
+    /// textures, as a drawable binds them - see
+    /// [`oag_render::mesh_render::zone::StageArt`].
+    ///
+    /// **The Outer pair falls back to the Inner one, per slot** - the same
+    /// fallback [`Self::zone_uniform`] already gives its own Outer palette,
+    /// `stage_palette(previous).unwrap_or(palette)`. A stage with nothing to
+    /// sweep out (no transition read, no previous stage in the ladder, or a
+    /// previous stage whose own texture did not decode) must not fall
+    /// through to [`mesh_render::zone::StageArt`]'s black placeholder: that
+    /// reads as "no texture", and painting the world black outside the
+    /// sphere is a worse wrong picture than the sphere test being a no-op,
+    /// which is what every other draw before a stage change already is.
     #[must_use]
     pub fn stage_art_pair(&self) -> mesh_render::zone::StageArt {
+        let track = self.stage_art().cloned();
+        let scene = self.stage_scene_art().cloned();
+        let track_outer = self
+            .art_at(self.wavefront.previous)
+            .cloned()
+            .or_else(|| track.clone());
+        let scene_outer = self
+            .scene_art_at(self.wavefront.previous)
+            .cloned()
+            .or_else(|| scene.clone());
         mesh_render::zone::StageArt {
-            track: self.stage_art().cloned(),
-            scene: self.stage_scene_art().cloned(),
+            track,
+            scene,
+            track_outer,
+            scene_outer,
         }
     }
 

@@ -54,6 +54,7 @@ pub(super) fn layout_entries() -> [wgpu::BindGroupLayoutEntry; 4] {
 }
 
 /// What [`resources`] builds.
+#[derive(Debug)]
 pub(super) struct Resources {
     pub view: wgpu::TextureView,
     pub sampler: wgpu::Sampler,

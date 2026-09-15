@@ -571,8 +571,12 @@ pub fn capture(
     // Both tiers follow their settings, because two captures differing only by
     // one of them are how that tier gets validated - see
     // `CaptureOptions::frustum_culling` and `CaptureOptions::pvs_culling`.
-    // As in `RaceStage::render`: the grade follows the zone the race reached.
-    scene.sync_zone_grade(&race);
+    // As in `RaceStage::render`: the grade follows the zone the race reached,
+    // and a step rebuilds bind group 2 on the drawables that read the Zone
+    // effect for real - see `race::Scene::rebind_zone_art`.
+    if scene.sync_zone_grade(&race) {
+        scene.rebind_zone_art(&device, &queue);
+    }
     let spectrum = zone_spectrum(options, audio);
     oag_render::perfprobe::reset();
     oag_render::perfprobe::mark("frame-start");

@@ -146,6 +146,7 @@ pub fn capture_pixels_from(
         fog_bind,
         fog_buffer: _,
         zone_vis_texture: _,
+        zone_rebind: _,
         anim_bind,
         anim_buffer,
         node_anim_buffer,

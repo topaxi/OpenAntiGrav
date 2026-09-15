@@ -86,6 +86,38 @@ impl Scene {
         stepped
     }
 
+    /// Rebuilds bind group 2 on every drawable that reads the Zone effect
+    /// for real - the track, its collision wireframe, its pads and its
+    /// weapon pads - with the showing stage's own four textures. Ships,
+    /// boost, flares, shields and weapon models are not among them: their
+    /// materials carry no Zone block at all, so their stage art is never
+    /// sampled and rebuilding it would be wasted uploads for no picture
+    /// change - see `oag_render::mesh_render::Zone`'s own census.
+    ///
+    /// **Call this once, right after [`Self::sync_zone_grade`] answers
+    /// `true`** - the stage-change edge, never every frame. See
+    /// `oag_render::mesh_render::zone::rebind`'s own doc comment for why a
+    /// per-frame call would still draw correctly and why it would still be
+    /// the wrong thing to do.
+    pub fn rebind_zone_art(&mut self, device: &wgpu::Device, queue: &wgpu::Queue) {
+        let Some(grade) = &self.zone_grade else {
+            return;
+        };
+        let stage = grade.stage_art_pair();
+        self.track.rebind_zone(device, queue, &stage);
+        for drawable in [
+            self.sky.as_mut(),
+            self.collision.as_mut(),
+            self.pads.as_mut(),
+            self.weapon_pads.as_mut(),
+        ]
+        .into_iter()
+        .flatten()
+        {
+            drawable.rebind_zone(device, queue, &stage);
+        }
+    }
+
     /// Rebuilds the depth buffer, and the MSAA colour target if there is one,
     /// for a new viewport size.
     ///

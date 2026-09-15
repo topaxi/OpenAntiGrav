@@ -252,6 +252,14 @@ override colour_is_light: f32 = 0.0;
 // same coordinate as `zone_tex`, for a chunk without `ZONE_TRACK` - see
 // `zone_set`. Numbered past the shadow map because it was bound later.
 @group(2) @binding(10) var zone_scene_tex: texture_2d<f32>;
+// The stage-transition sphere's Outer half of the two textures above - the
+// stage being swept out's own `zoneModeTrack<n>.gtf`/`zoneMode<n>.gtf`,
+// through the same two samplers and the same coordinate. `zone_inside`
+// selects the pair the way it already selects `ZoneSet`'s Inner/Outer
+// colours; see `zone_sample` and `zone_glow`. Numbered past 10 for the same
+// reason that binding is past the shadow map.
+@group(2) @binding(11) var zone_tex_outer: texture_2d<f32>;
+@group(2) @binding(12) var zone_scene_tex_outer: texture_2d<f32>;
 @group(3) @binding(0) var<uniform> anims: TexAnims;
 
 // The world matrix of each `Anim Transform` node the model carries, sampled for
@@ -592,10 +600,12 @@ fn fogged(colour: vec3<f32>, world: vec3<f32>, view_depth: f32) -> vec3<f32> {
 // at all, so `race::scene::frame` binds a default (disabled) Zone to the
 // ships. The sky cube, the pads and the collision wireframe do still reach
 // this path, which is the same shape of blanket approximation as the shared
-// specular exponent and the blanket sun term above. And the stage *texture*
-// does not follow the sphere: the original publishes `zoneTexInner` and
-// `zoneTexOuter` too, but each drawable here binds one stage's texture at
-// build time, so the boundary is a step in the colour sets over one texture.
+// specular exponent and the blanket sun term above. **The stage texture now
+// follows the sphere too**: `zone_tex_outer`/`zone_scene_tex_outer` are the
+// stage being swept out's own `zoneTexInner`/`zoneTexOuter` publication,
+// rebuilt on the same stage-change edge `oag_game::race::Scene::rebind_zone_art`
+// rebinds bind group 2 on rather than every frame - see
+// `oag_render::mesh_render::zone::rebind`.
 fn zone_is_track(slots: u32) -> bool {
     return (slots & 512u) != 0u;
 }
@@ -618,11 +628,24 @@ fn zone_set(slots: u32, world: vec3<f32>) -> ZoneSet {
     return scene.zone.scene_outer;
 }
 
-fn zone_sample(uv: vec2<f32>, slots: u32) -> vec3<f32> {
+// Samples all four stage textures unconditionally and `select`s between them
+// - never branches to decide *which* texture to sample - the same shape
+// `zone_set` above already reads its four `ZoneSet`s in, and needed here for
+// the same reason: `textureSample` wants uniform control flow, and a `select`
+// on its *result* (or, as below, on which pre-sampled result to keep) satisfies
+// that where an `if` around the call itself would not.
+fn zone_sample(uv: vec2<f32>, slots: u32, world: vec3<f32>) -> vec3<f32> {
     let zone_uv = scene.zone.uv_scale * (1.0 - uv);
     let track = textureSample(zone_tex, zone_sampler, zone_uv).rgb;
+    let track_outer = textureSample(zone_tex_outer, zone_sampler, zone_uv).rgb;
     let general = textureSample(zone_scene_tex, zone_sampler, zone_uv).rgb;
-    return select(general, track, zone_is_track(slots));
+    let general_outer = textureSample(zone_scene_tex_outer, zone_sampler, zone_uv).rgb;
+    let inside = zone_inside(world);
+    return select(
+        select(general_outer, track_outer, zone_is_track(slots)),
+        select(general, track, zone_is_track(slots)),
+        inside,
+    );
 }
 
 // The two rim-lit summands, `zoneBase.rgb * rim^10 + zoneBaseAlt.rgb * rim^5`.
@@ -701,10 +724,21 @@ fn zone_glow(n: vec3<f32>, window_depth: f32, uv: vec2<f32>, slots: u32, world: 
     let zone_uv = scene.zone.uv_scale * (1.0 - uv);
     // The band comes from whichever stage texture this chunk publishes - the
     // scene set's is alpha 255 everywhere, so a scene chunk indexes the last
-    // entry - and `E.w` from the matching colour group.
+    // entry - on whichever side of the sphere this fragment is, and `E.w`
+    // from the matching colour group: `band = zoneTex<I|O>Nearest(zoneUV).a`
+    // above already names both sides. Four samples, `select`ed rather than
+    // branched into, for the same uniform-control-flow reason `zone_sample`
+    // is.
     let track_band = textureSample(zone_tex, zone_nearest_sampler, zone_uv).a;
+    let track_outer_band = textureSample(zone_tex_outer, zone_nearest_sampler, zone_uv).a;
     let scene_band = textureSample(zone_scene_tex, zone_nearest_sampler, zone_uv).a;
-    let band = select(scene_band, track_band, zone_is_track(slots));
+    let scene_outer_band = textureSample(zone_scene_tex_outer, zone_nearest_sampler, zone_uv).a;
+    let inside = zone_inside(world);
+    let band = select(
+        select(scene_outer_band, track_outer_band, zone_is_track(slots)),
+        select(scene_band, track_band, zone_is_track(slots)),
+        inside,
+    );
     let vis = textureSample(zone_vis_tex, zone_vis_sampler, vec2<f32>(band, 0.5)).rgb;
     let up = clamp(n.y - 0.5, 0.0, 1.0);
     let drive = zone_set(slots, world).effect.w;
@@ -929,7 +963,7 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     let zone_to_eye = normalize(scene.fog.camera - in.world);
     let zone_colours = zone_set(in.slots, in.world);
     let zone_base = zone_base_term(1.0 - dot(n, zone_to_eye), zone_colours);
-    let zone = zone_sample(in.texcoord, in.slots);
+    let zone = zone_sample(in.texcoord, in.slots, in.world);
     let zone_linear = pow(zone, vec3<f32>(2.2)) * zone_colours.effect.rgb + zone_base;
     let zone_gamma = zone * zone_colours.effect.rgb + zone_base;
     // The visualiser glow - see `zone_glow`. Gated by `enabled` explicitly

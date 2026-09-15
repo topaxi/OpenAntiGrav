@@ -10,8 +10,10 @@
 //!
 //! See [`super::Zone`] for what the shader does with the stage texture, and
 //! `mesh.wgsl`'s own `zone_glow` for the visualiser term this module now also
-//! feeds. [`write_vis`] is the seam a caller updates every frame; everything
-//! else here is built once, at model load.
+//! feeds. [`write_vis`] is the seam a caller updates every frame; the rest of
+//! bind group 2's own contents are built once at model load, by
+//! [`scene_bind_group`] - except [`StageArt`]'s four texture views, which
+//! [`rebind`] rebuilds alone, on the transition sphere's stage-change edge.
 
 use std::sync::Arc;
 
@@ -42,48 +44,66 @@ pub const SEGMENTS: usize = 10;
 /// ten. `161 = 1 + 10 * 16`, immediately past the sixteenth bar.
 pub const SMOOTH_BASE: usize = 161;
 
-/// The showing stage's two textures, as [`resources`] binds them.
+/// The showing stage's two textures and the stage being swept out's own two,
+/// as [`resources`] binds them.
 ///
-/// **Two, because the original publishes two.** HD's Zone parameters go out
-/// in two paired blocks: `zoneModeTrack<n>.gtf` beside the `Track.*` colours
-/// for a chunk whose render-block flags carry the track bit
+/// **Two pairs, because the original publishes two pairs.** HD's Zone
+/// parameters go out in two paired blocks: `zoneModeTrack<n>.gtf` beside the
+/// `Track.*` colours for a chunk whose render-block flags carry the track bit
 /// (`oag_rcs::rcsmodel::RENDER_TRACK`), and `zoneMode<n>.gtf` beside the
-/// `Scene.*` colours for every other chunk. `mesh.wgsl` selects per fragment
-/// on `slots::ZONE_TRACK`; see [`super::Zone`].
+/// `Scene.*` colours for every other chunk - `mesh.wgsl` selects per fragment
+/// on `slots::ZONE_TRACK`. Each of those two is published again as `zoneTex
+/// Inner`/`zoneTexOuter`: the showing stage's own texture and the one being
+/// swept out by the transition sphere, selected per fragment on
+/// `zone_inside`. See [`super::Zone`] for both selections together.
 ///
-/// Either slot `None` binds a 1x1 black, on the terms [`resources`] states.
+/// Any slot `None` binds a 1x1 black, on the terms [`resources`] states.
 #[derive(Debug, Clone, Default)]
 pub struct StageArt {
-    /// `zoneModeTrack<n>.gtf` - the set with the art in it.
+    /// `zoneModeTrack<n>.gtf` for the showing stage - `zoneTexTrackInner`.
     pub track: Option<Arc<ModelTexture>>,
-    /// `zoneMode<n>.gtf` - a flat white on every stage HD/Fury ships, and
-    /// bound rather than replaced by a constant because it is the file's
-    /// own statement of what a Scene chunk samples.
+    /// `zoneMode<n>.gtf` for the showing stage - `zoneTexInner`. A flat white
+    /// on every stage HD/Fury ships, and bound rather than replaced by a
+    /// constant because it is the file's own statement of what a Scene chunk
+    /// samples.
     pub scene: Option<Arc<ModelTexture>>,
+    /// `zoneModeTrack<n>.gtf` for the stage being swept out -
+    /// `zoneTexTrackOuter`. The showing stage's own texture where the
+    /// caller has no previous stage to offer - see
+    /// `oag_game::race::zone_grade::ZoneGrade::stage_art_pair` - so the
+    /// sphere test is a no-op rather than a black hole outside it.
+    pub track_outer: Option<Arc<ModelTexture>>,
+    /// `zoneMode<n>.gtf` for the stage being swept out - `zoneTexOuter`, on
+    /// the same fallback terms as [`Self::track_outer`].
+    pub scene_outer: Option<Arc<ModelTexture>>,
 }
 
 impl StageArt {
-    /// Neither texture: what every model outside an HD Zone race binds.
+    /// Neither pair: what every model outside an HD Zone race binds.
     pub const NONE: Self = Self {
         track: None,
         scene: None,
+        track_outer: None,
+        scene_outer: None,
     };
 }
 
-/// The six layout entries the Zone half of bind group 2 adds: the track
-/// stage texture and its sampler at bindings 1-2, a nearest-filtered clone
-/// of the same stage texture at binding 3 (the visualiser's own band index
-/// is read from a texel's alpha, and interpolating between two bands would
-/// smear them together), the visualiser lookup itself at bindings 4-5, and
-/// the scene stage texture at binding 10 - past the shadow map's 6-9, which
-/// were numbered before the second texture set was bound.
+/// The eight layout entries the Zone half of bind group 2 adds: the track
+/// stage's Inner texture and its sampler at bindings 1-2, a nearest-filtered
+/// clone of the same stage texture at binding 3 (the visualiser's own band
+/// index is read from a texel's alpha, and interpolating between two bands
+/// would smear them together), the visualiser lookup itself at bindings 4-5,
+/// the scene stage's Inner texture at binding 10 - past the shadow map's
+/// 6-9, which were numbered before the second texture set was bound - and
+/// the track and scene stages' Outer textures at bindings 11-12, numbered
+/// past the shadow map for the same reason.
 ///
-/// A sampler of its own for the stage texture rather than the albedo's,
+/// A sampler of its own for the stage textures rather than the albedo's,
 /// because the coordinate is one the shader builds, `zoneColourTint.xy *
 /// (1 - meshUV)`, and runs outside `[0, 1]` wherever the file's own scale
-/// does. The scene texture shares both samplers: same coordinate, same
-/// filter.
-pub(super) fn layout_entries() -> [wgpu::BindGroupLayoutEntry; 6] {
+/// does. All four stage textures share both samplers: same coordinate, same
+/// filter, on either side of the transition sphere.
+pub(super) fn layout_entries() -> [wgpu::BindGroupLayoutEntry; 8] {
     let texture_entry = |binding| wgpu::BindGroupLayoutEntry {
         binding,
         visibility: wgpu::ShaderStages::FRAGMENT,
@@ -107,10 +127,12 @@ pub(super) fn layout_entries() -> [wgpu::BindGroupLayoutEntry; 6] {
         texture_entry(4),
         sampler_entry(5),
         texture_entry(10),
+        texture_entry(11),
+        texture_entry(12),
     ]
 }
 
-/// Everything [`resources`] builds: the two stage textures' views and the
+/// Everything [`resources`] builds: the four stage textures' views and the
 /// two samplers they share, and the visualiser lookup's texture, view and
 /// sampler.
 ///
@@ -123,12 +145,64 @@ pub(super) struct Resources {
     pub view: wgpu::TextureView,
     /// [`StageArt::scene`].
     pub scene_view: wgpu::TextureView,
+    /// [`StageArt::track_outer`].
+    pub outer_view: wgpu::TextureView,
+    /// [`StageArt::scene_outer`].
+    pub scene_outer_view: wgpu::TextureView,
     /// The same texels as [`Self::view`], point-filtered - see
     /// [`layout_entries`].
     pub nearest_sampler: wgpu::Sampler,
     pub vis_texture: wgpu::Texture,
     pub vis_view: wgpu::TextureView,
     pub vis_sampler: wgpu::Sampler,
+}
+
+/// One [`StageArt`] slot as a bound view: the texture's own decode, or a 1x1
+/// black where `texture` is `None` - see [`resources`] for why black rather
+/// than white or the neighbouring slot.
+fn upload_view(
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    texture: &Option<Arc<ModelTexture>>,
+    label: &str,
+) -> wgpu::TextureView {
+    match texture {
+        Some(texture) => texture::upload(
+            device,
+            queue,
+            texture,
+            device
+                .features()
+                .contains(wgpu::Features::TEXTURE_COMPRESSION_BC),
+        ),
+        None => texture::upload_rgba(device, queue, 1, 1, &[0, 0, 0, 255], label, None),
+    }
+}
+
+/// [`StageArt`]'s four views alone, rebuilt on a stage-change edge by
+/// [`rebind`] - see [`RebindResources`] for what stays bound underneath
+/// them.
+pub(super) fn retexture(
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    stage: &StageArt,
+) -> [wgpu::TextureView; 4] {
+    [
+        upload_view(device, queue, &stage.track, "no zone track stage"),
+        upload_view(device, queue, &stage.scene, "no zone scene stage"),
+        upload_view(
+            device,
+            queue,
+            &stage.track_outer,
+            "no zone track outer stage",
+        ),
+        upload_view(
+            device,
+            queue,
+            &stage.scene_outer,
+            "no zone scene outer stage",
+        ),
+    ]
 }
 
 /// The samplers and the views to bind, for a model that has the Zone stage
@@ -140,7 +214,7 @@ pub(super) struct Resources {
 /// multiplied out anyway, and a black placeholder means even a caller that
 /// writes a Zone uniform without a texture adds nothing rather than adding a
 /// white sheet - the failure this project wants from a missing asset is an
-/// absence. That holds for each of [`StageArt`]'s two slots on its own: a
+/// absence. That holds for each of [`StageArt`]'s four slots on its own: a
 /// stage whose scene texture failed to decode draws its scene chunks black,
 /// not through the track set. [`Resources::vis_texture`] starts the same
 /// way: all-black, so a model drawn before the first [`write_vis`] call - or
@@ -173,19 +247,7 @@ pub(super) fn resources(
         min_filter: wgpu::FilterMode::Nearest,
         ..Default::default()
     });
-    let upload = |texture: &Option<Arc<ModelTexture>>, label| match texture {
-        Some(texture) => texture::upload(
-            device,
-            queue,
-            texture,
-            device
-                .features()
-                .contains(wgpu::Features::TEXTURE_COMPRESSION_BC),
-        ),
-        None => texture::upload_rgba(device, queue, 1, 1, &[0, 0, 0, 255], label, None),
-    };
-    let view = upload(&stage.track, "no zone track stage");
-    let scene_view = upload(&stage.scene, "no zone scene stage");
+    let [view, scene_view, outer_view, scene_outer_view] = retexture(device, queue, stage);
 
     let vis_texture = device.create_texture(&wgpu::TextureDescriptor {
         label: Some("zone vis"),
@@ -239,11 +301,252 @@ pub(super) fn resources(
         sampler,
         view,
         scene_view,
+        outer_view,
+        scene_outer_view,
         nearest_sampler,
         vis_texture,
         vis_view,
         vis_sampler,
     }
+}
+
+/// Everything bind group 2 keeps across a stage-change edge: the layout, the
+/// two stage samplers, the visualiser lookup and the shadow map. What
+/// changes on the edge is [`StageArt`]'s four texture views alone, which
+/// [`rebind`] rebuilds; this is what it rebuilds the bind group *against*.
+///
+/// **`pub` only because it has to be.** [`Built`](super::Built) needs a
+/// field of this type to hand a [`scene_bind_group`] call's leftovers back
+/// to [`rebind`] later, `Built`'s own fields are public and cross the crate
+/// boundary into `oag_game`, and a public field of a private type is a hard
+/// compile error under this workspace's `-D warnings` (`private_interfaces`).
+/// Every field here stays private regardless: nothing outside this module
+/// constructs one, reads one apart, or has anywhere to get one besides
+/// [`scene_bind_group`]'s own return value.
+#[derive(Debug)]
+pub struct RebindResources {
+    layout: wgpu::BindGroupLayout,
+    sampler: wgpu::Sampler,
+    nearest_sampler: wgpu::Sampler,
+    vis_view: wgpu::TextureView,
+    vis_sampler: wgpu::Sampler,
+    shadow: super::shadow_map::Resources,
+}
+
+/// Bind group 2 itself, from the stage's four texture views and everything
+/// [`RebindResources`] keeps underneath them. The one assembly
+/// [`scene_bind_group`]'s initial build and [`rebind`]'s later one share, so
+/// the thirteen entries are written down exactly once.
+fn bind_group(
+    device: &wgpu::Device,
+    fog_buffer: &wgpu::Buffer,
+    track: &wgpu::TextureView,
+    scene_tex: &wgpu::TextureView,
+    track_outer: &wgpu::TextureView,
+    scene_outer: &wgpu::TextureView,
+    kept: &RebindResources,
+) -> wgpu::BindGroup {
+    device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: Some("scene"),
+        layout: &kept.layout,
+        entries: &[
+            wgpu::BindGroupEntry {
+                binding: 0,
+                resource: fog_buffer.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 1,
+                resource: wgpu::BindingResource::TextureView(track),
+            },
+            wgpu::BindGroupEntry {
+                binding: 2,
+                resource: wgpu::BindingResource::Sampler(&kept.sampler),
+            },
+            wgpu::BindGroupEntry {
+                binding: 3,
+                resource: wgpu::BindingResource::Sampler(&kept.nearest_sampler),
+            },
+            wgpu::BindGroupEntry {
+                binding: 4,
+                resource: wgpu::BindingResource::TextureView(&kept.vis_view),
+            },
+            wgpu::BindGroupEntry {
+                binding: 5,
+                resource: wgpu::BindingResource::Sampler(&kept.vis_sampler),
+            },
+            wgpu::BindGroupEntry {
+                binding: 6,
+                resource: wgpu::BindingResource::TextureView(&kept.shadow.view),
+            },
+            wgpu::BindGroupEntry {
+                binding: 7,
+                resource: wgpu::BindingResource::Sampler(&kept.shadow.sampler),
+            },
+            wgpu::BindGroupEntry {
+                binding: 8,
+                resource: wgpu::BindingResource::TextureView(&kept.shadow.depth_view),
+            },
+            wgpu::BindGroupEntry {
+                binding: 9,
+                resource: wgpu::BindingResource::Sampler(&kept.shadow.depth_sampler),
+            },
+            wgpu::BindGroupEntry {
+                binding: 10,
+                resource: wgpu::BindingResource::TextureView(scene_tex),
+            },
+            wgpu::BindGroupEntry {
+                binding: 11,
+                resource: wgpu::BindingResource::TextureView(track_outer),
+            },
+            wgpu::BindGroupEntry {
+                binding: 12,
+                resource: wgpu::BindingResource::TextureView(scene_outer),
+            },
+        ],
+    })
+}
+
+/// Builds bind group 2 whole: its layout, the [`super::Scene`] buffer
+/// (initialised to [`super::Scene::off`]), the bind group itself, the Zone
+/// visualiser's own texture for [`write_vis`], and what a later stage change
+/// needs to rebuild just the bind group - see [`RebindResources`] and
+/// [`rebind`].
+///
+/// Split out of `mesh_render::build` under the 1,000-line rule in
+/// `scripts/check-file-size.py`: the file that assembles every other
+/// pipeline state had no room left to also own the one binding set a Zone
+/// stage change touches, and this crate's own convention for a file at that
+/// ceiling is to move the seam rather than exempt it - a move, not a
+/// behaviour change. See `docs/rendering/hd-zone-recolour.md`.
+#[allow(clippy::too_many_arguments)]
+pub(super) fn scene_bind_group(
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    anisotropy: super::Anisotropy,
+    zone: &StageArt,
+    shadow_map: Option<&wgpu::TextureView>,
+    shadow_depth_map: Option<&wgpu::TextureView>,
+) -> (
+    wgpu::BindGroupLayout,
+    wgpu::Buffer,
+    wgpu::BindGroup,
+    wgpu::Texture,
+    RebindResources,
+) {
+    let zone_entries = layout_entries();
+    let shadow_entries = super::shadow_map::layout_entries();
+    let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        // Labelled for what the buffer holds, which is `Scene` - fog *and*
+        // the light rig. The three "fog" labels here predated `Light`
+        // joining it.
+        label: Some("scene"),
+        entries: &[
+            wgpu::BindGroupLayoutEntry {
+                binding: 0,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Uniform,
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            },
+            // The Zone stage's four textures, their two samplers and the
+            // visualiser lookup, in the *scene* group rather than the
+            // per-material one: they are a property of the race, not of a
+            // material slot, so binding them here uploads them once per
+            // model instead of once per slot naming a material. See
+            // [`layout_entries`].
+            zone_entries[0],
+            zone_entries[1],
+            zone_entries[2],
+            zone_entries[3],
+            zone_entries[4],
+            zone_entries[5],
+            // The shadow map, in the scene group for the same reason the
+            // Zone stage's textures are: it is a property of the frame, not
+            // of a material slot. Bound on every pipeline whether or not
+            // anything shadows - `Scene::shadow.strength` at zero is what
+            // makes it inert, so a title with no map still binds a
+            // placeholder rather than needing a second layout.
+            shadow_entries[0],
+            shadow_entries[1],
+            shadow_entries[2],
+            shadow_entries[3],
+            // The Outer half of the Zone stage's two texture sets - see
+            // [`StageArt::track_outer`]/[`StageArt::scene_outer`]. Numbered
+            // past the shadow map for the same reason binding 10 already is.
+            zone_entries[6],
+            zone_entries[7],
+        ],
+    });
+
+    // Every pipeline gets a fog buffer, initialised to `Fog::off`. A caller
+    // that never writes it therefore renders exactly as it did before fog
+    // existed, which is what keeps the asset viewer and the offscreen
+    // capture path unchanged without either of them knowing fog is there.
+    let fog_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("scene"),
+        size: super::SCENE_SIZE,
+        usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        mapped_at_creation: false,
+    });
+    queue.write_buffer(&fog_buffer, 0, bytemuck::bytes_of(&super::Scene::off()));
+
+    let zone_resources = resources(device, queue, anisotropy, zone);
+    let shadow = super::shadow_map::resources(device, queue, shadow_map, shadow_depth_map);
+    let kept = RebindResources {
+        layout: layout.clone(),
+        sampler: zone_resources.sampler,
+        nearest_sampler: zone_resources.nearest_sampler,
+        vis_view: zone_resources.vis_view,
+        vis_sampler: zone_resources.vis_sampler,
+        shadow,
+    };
+    let bind = bind_group(
+        device,
+        &fog_buffer,
+        &zone_resources.view,
+        &zone_resources.scene_view,
+        &zone_resources.outer_view,
+        &zone_resources.scene_outer_view,
+        &kept,
+    );
+
+    (layout, fog_buffer, bind, zone_resources.vis_texture, kept)
+}
+
+/// Rebuilds bind group 2 with `stage`'s four textures alone, from a
+/// [`RebindResources`] a earlier [`scene_bind_group`] call returned -
+/// everything else in the group (the pipeline is not even reachable from
+/// here) stays exactly as that call left it.
+///
+/// **Call this on the stage-change edge alone.** `oag_game::race::Drawable`
+/// keeps its own `RebindResources` beside the [`wgpu::BindGroup`] this
+/// replaces and calls it when
+/// `oag_game::race::zone_grade::ZoneGrade::follow`/`commit` reports a new
+/// `(current, previous)` pair - not every frame. A per-frame call would
+/// still draw the right picture (uploading the same four textures again is
+/// wasteful, not wrong), but the caller gates it the same "log the edge, not
+/// the state" way `race::Scene::sync_zone_grade` already gates the stage
+/// step itself.
+pub fn rebind(
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    fog_buffer: &wgpu::Buffer,
+    kept: &RebindResources,
+    stage: &StageArt,
+) -> wgpu::BindGroup {
+    let [track, scene_tex, track_outer, scene_outer] = retexture(device, queue, stage);
+    bind_group(
+        device,
+        fog_buffer,
+        &track,
+        &scene_tex,
+        &track_outer,
+        &scene_outer,
+        kept,
+    )
 }
 
 /// The visualiser's per-band peak-hold, which the original keeps in its own

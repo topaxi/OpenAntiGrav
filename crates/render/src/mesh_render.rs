@@ -160,6 +160,11 @@ pub struct Built {
     /// [`zone::write_vis`] is called on it; write it once a frame to animate
     /// the glow, the same rhythm [`Built::fog_buffer`] already runs at.
     pub zone_vis_texture: wgpu::Texture,
+    /// What [`Built::fog_bind`] needs besides [`Built::fog_buffer`] and the
+    /// stage's own four textures to be rebuilt on a stage-change edge - see
+    /// [`zone::RebindResources`] and [`zone::rebind`], which
+    /// `race::Drawable` calls with this.
+    pub zone_rebind: zone::RebindResources,
     /// Bind group 3, holding [`TexAnims`]. Bound by every draw; write
     /// [`Built::anim_buffer`] once a frame to animate.
     pub anim_bind: wgpu::BindGroup,
@@ -385,111 +390,20 @@ pub fn build(
         ],
     });
 
-    let zone_entries = zone::layout_entries();
-    let shadow_entries = shadow_map::layout_entries();
-    let fog_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-        // Labelled for what the buffer holds, which is `Scene` - fog *and* the
-        // light rig. The three "fog" labels here predated `Light` joining it.
-        label: Some("scene"),
-        entries: &[
-            wgpu::BindGroupLayoutEntry {
-                binding: 0,
-                visibility: wgpu::ShaderStages::FRAGMENT,
-                ty: wgpu::BindingType::Buffer {
-                    ty: wgpu::BufferBindingType::Uniform,
-                    has_dynamic_offset: false,
-                    min_binding_size: None,
-                },
-                count: None,
-            },
-            // The Zone stage's two textures, their two samplers and the
-            // visualiser lookup, in the *scene* group rather than the
-            // per-material one: they are a property of the race, not of a
-            // material slot, so binding them here uploads them once per
-            // model instead of once per slot naming a material. See
-            // [`zone::layout_entries`].
-            zone_entries[0],
-            zone_entries[1],
-            zone_entries[2],
-            zone_entries[3],
-            zone_entries[4],
-            zone_entries[5],
-            // The shadow map, in the scene group for the same reason the Zone
-            // stage's texture is: it is a property of the frame, not of a
-            // material slot. Bound on every pipeline whether or not anything
-            // shadows - `Scene::shadow.strength` at zero is what makes it
-            // inert, so a title with no map still binds a placeholder rather
-            // than needing a second layout.
-            shadow_entries[0],
-            shadow_entries[1],
-            shadow_entries[2],
-            shadow_entries[3],
-        ],
-    });
-
-    // Every pipeline gets a fog buffer, initialised to `Fog::off`. A caller that
-    // never writes it therefore renders exactly as it did before fog existed,
-    // which is what keeps the asset viewer and the offscreen capture path
-    // unchanged without either of them knowing fog is there.
-    let fog_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-        label: Some("scene"),
-        size: SCENE_SIZE,
-        usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-        mapped_at_creation: false,
-    });
-    queue.write_buffer(&fog_buffer, 0, bytemuck::bytes_of(&Scene::off()));
-    let zone_resources = zone::resources(device, queue, anisotropy, zone);
-    let shadow_resources = shadow_map::resources(device, queue, shadow_map, shadow_depth_map);
-    let fog_bind = device.create_bind_group(&wgpu::BindGroupDescriptor {
-        label: Some("scene"),
-        layout: &fog_layout,
-        entries: &[
-            wgpu::BindGroupEntry {
-                binding: 0,
-                resource: fog_buffer.as_entire_binding(),
-            },
-            wgpu::BindGroupEntry {
-                binding: 1,
-                resource: wgpu::BindingResource::TextureView(&zone_resources.view),
-            },
-            wgpu::BindGroupEntry {
-                binding: 2,
-                resource: wgpu::BindingResource::Sampler(&zone_resources.sampler),
-            },
-            wgpu::BindGroupEntry {
-                binding: 3,
-                resource: wgpu::BindingResource::Sampler(&zone_resources.nearest_sampler),
-            },
-            wgpu::BindGroupEntry {
-                binding: 4,
-                resource: wgpu::BindingResource::TextureView(&zone_resources.vis_view),
-            },
-            wgpu::BindGroupEntry {
-                binding: 5,
-                resource: wgpu::BindingResource::Sampler(&zone_resources.vis_sampler),
-            },
-            wgpu::BindGroupEntry {
-                binding: 6,
-                resource: wgpu::BindingResource::TextureView(&shadow_resources.view),
-            },
-            wgpu::BindGroupEntry {
-                binding: 7,
-                resource: wgpu::BindingResource::Sampler(&shadow_resources.sampler),
-            },
-            wgpu::BindGroupEntry {
-                binding: 8,
-                resource: wgpu::BindingResource::TextureView(&shadow_resources.depth_view),
-            },
-            wgpu::BindGroupEntry {
-                binding: 9,
-                resource: wgpu::BindingResource::Sampler(&shadow_resources.depth_sampler),
-            },
-            wgpu::BindGroupEntry {
-                binding: 10,
-                resource: wgpu::BindingResource::TextureView(&zone_resources.scene_view),
-            },
-        ],
-    });
+    // Bind group 2 whole - the `Scene` layout and buffer, the Zone stage's
+    // four textures and the shadow map - lives in `zone.rs` now, under the
+    // 1,000-line rule in `scripts/check-file-size.py`: this file had no room
+    // left to grow the one binding set a Zone stage change touches. See
+    // [`zone::scene_bind_group`] and [`zone::rebind`], which
+    // `race::Drawable` calls on the stage-change edge.
+    let (fog_layout, fog_buffer, fog_bind, zone_vis_texture, zone_rebind) = zone::scene_bind_group(
+        device,
+        queue,
+        anisotropy,
+        zone,
+        shadow_map,
+        shadow_depth_map,
+    );
 
     // **Two bindings in one group, not two groups.** wgpu's downlevel limit is
     // four bind groups and 0 to 3 are already the uniforms, the texture, the
@@ -978,7 +892,8 @@ pub fn build(
         node_anim_buffer,
         fog_bind,
         fog_buffer,
-        zone_vis_texture: zone_resources.vis_texture,
+        zone_vis_texture,
+        zone_rebind,
         pipeline,
         alpha_test_pipeline,
         cutout_pipelines,
