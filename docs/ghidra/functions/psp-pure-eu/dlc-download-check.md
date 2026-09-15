@@ -169,8 +169,9 @@ function against a real network transfer).
 ## `Xtea_EncryptBlock` and `Xtea_CryptBuffer`: the game's own cipher, found in code
 
 **Confidence 92 and 90.** Following the trailer-key lead further with the now-
-working `get_xrefs_to`, `psp-pure-eu` (only - see "Not resolved on `pure-usa`"
-below) contains a genuine 8-round XTEA implementation, decompiled directly:
+working `get_xrefs_to`, `psp-pure-eu` - this project's preferred RE target
+for Pure - contains a genuine 8-round XTEA implementation, decompiled
+directly:
 
 - **`Xtea_EncryptBlock`** (`0x088a9c64`, was `FUN_088a9c64`). Its round-delta
   sequence - `0x9e3779b9`, `0x3c6ef372`, `0xdaa66d2b`, `0x78dde6e4`,
@@ -189,24 +190,33 @@ Together these upgrade that page's "the game implements its own encryption in
 plain application code" from an inference (no `sceNp`/KIRK imports) to direct
 code evidence: this is that code, found and read.
 
-**Not resolved on `pure-usa`.** Mid-session, a broad `search_instructions`
-sweep against `/psp-pure-usa/BOOT.BIN` failed with `"Disk quota exceeded"`
-from the Ghidra bridge, and every call against that program since (including
-plain `analysis_status`, which had worked earlier the same session) now
-returns `"Program not found"` while `psp-pure-eu` and every other open
-program are unaffected. This is an environment fault, not a finding - `Bash`
-was independently non-functional around the same time (`/tmp` at 80% of a
-32 GiB tmpfs per `df -h`, matching the "Never build under `/tmp`" trap) and
-recovered on its own, but the Ghidra-side program handle did not. No recovery
-action was taken from this session (reopening a shared Ghidra program is a
-GUI-only operation per this page's own workflow doc, and forcing it from a
-script-driven session risks compounding whatever state the disk pressure left
-it in). **The two functions above almost certainly exist at different
-addresses in `psp-pure-usa` too** (both function pairs actually checked this
-session - `WowDownload_VerifyPackFiles` and its file-probe helper - were
-byte-identical in logic between regions, a sample of two, not "every"
-pair) but this was not confirmed, and no `pure-usa` names.tsv row is added
-for them.
+**`pure-usa` resolved, in a later pass once the Ghidra project was reopened.**
+Mid-session on 2026-09-15 a broad `search_instructions` sweep against
+`/psp-pure-usa/BOOT.BIN` had failed with `"Disk quota exceeded"` from the
+Ghidra bridge, taking that program's handle down for the rest of that
+session (an environment fault - `/tmp` at 80% of a 32 GiB tmpfs per `df -h`
+at the time, matching the "Never build under `/tmp`" trap - not a finding,
+and not touched from a script-driven session per this page's own workflow
+doc on GUI-only recovery). Once the Ghidra project was reopened and both Pure
+programs reachable again, `psp-pure-usa`'s counterparts to every function
+this page names were found and confirmed: `Xtea_EncryptBlock` `0x088aa44c`,
+`Xtea_CryptBuffer` `0x088aa9ec`, `DlcPack_Load` `0x088a3ba8`,
+`DlcTrailer_Validate` `0x088aa008`, `DlcTrailer_ExtractKey` `0x088a7588`,
+`Bignum_ModExp` `0x088acc68`, `Bignum_Compare` `0x088aca18` - every one
+decompiled and checked byte-identical in logic to its `psp-pure-eu`
+counterpart, with one genuine divergence: `DlcTrailer_Validate`'s `SDRM`-tail
+version byte accepts only `0x04` on `pure-usa` against `0x04` **or** `0x05`
+on `pure-eu`. Rows added to `psp-pure-usa/names.tsv`, citing this page.
+`pure-eu` stays the primary reading throughout this page; `pure-usa`'s
+addresses are recorded for corroboration and future cross-binary work, not
+as independent derivation.
+
+**A second confirmation of "region-specific" along the way**: `pure-usa`'s
+modulus candidate, `DAT_08aacaf4`, is genuinely different high-entropy bytes
+from `pure-eu`'s `DAT_08aa64fc` - the two regions carry different values at
+the RSA-shaped modulus's address, exactly matching `keys.txt`'s own "a
+region-specific key embedded in BOOT.BIN" wording. The exponent
+(`DAT_08aac9f4`/`DAT_08aa63fc`) is identical in both: `65537`.
 
 ## `DlcPack_Load`, `DlcTrailer_Validate` and `DlcTrailer_ExtractKey`: RSA, not XTEA, protects the trailer
 

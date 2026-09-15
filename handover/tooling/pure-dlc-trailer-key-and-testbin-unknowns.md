@@ -130,17 +130,23 @@ so they mounted behind *Wipeout Pulse* on every later boot, keys or not. See
   `0x08a76dfc`-style stub addresses recorded above are `psp-pulse-usa`'s, not
   Pure's own.
 - **The game's own XTEA cipher, the pack loader, and the trailer's RSA-shaped
-  protection are all now found in code**, all `pure-eu` only, all in
+  protection are all now found in code**, confirmed on both `pure-eu` (this
+  project's preferred RE target for Pure) and `pure-usa`, all in
   dlc-download-check.md: `Xtea_EncryptBlock`/`Xtea_CryptBuffer` (the payload
   cipher, matching `oag_formats::pure_dlc::crypt_with_key` structurally),
-  `DlcPack_Load` (splits `[payload][trailer]`, was `FUN_088a3118`),
-  `DlcTrailer_Validate` (magic string / `SDRM` tail / digest checks, was
-  `FUN_088a9818`), `DlcTrailer_ExtractKey` (reads the per-pack XTEA key from
-  trailer offset `0xb4`, was `FUN_088a6b0c`), and `Bignum_ModExp`/
-  `Bignum_Compare` (the RSA-shaped recovery math, exponent `65537` confirmed,
-  modulus candidate `0x08aa64fc`). Together these are a structural answer to
-  both this bullet and the previous one, matching `keys.txt`'s own comment
-  almost word for word.
+  `DlcPack_Load` (splits `[payload][trailer]`, was `FUN_088a3118`/
+  `FUN_088a3ba8`), `DlcTrailer_Validate` (magic string / `SDRM` tail / digest
+  checks, was `FUN_088a9818`/`FUN_088aa008`), `DlcTrailer_ExtractKey` (reads
+  the per-pack XTEA key from trailer offset `0xb4`, was `FUN_088a6b0c`/
+  `FUN_088a7588`), and `Bignum_ModExp`/`Bignum_Compare` (the RSA-shaped
+  recovery math, exponent `65537` confirmed identical on both regions,
+  modulus candidate `0x08aa64fc`/`0x08aacaf4` - genuinely different bytes
+  between regions, a second confirmation of `keys.txt`'s "region-specific"
+  wording). Together these are a structural answer to both this bullet and
+  the previous one, matching `keys.txt`'s own comment almost word for word.
+  `pure-usa`'s `DlcTrailer_Validate` has one confirmed real divergence from
+  `pure-eu`'s: its `SDRM`-tail version byte accepts only `0x04`, not `0x04`
+  **or** `0x05`.
   **What's left is exact operand width and memory layout, not more
   decompiling of new functions** - a 128-byte swap (`FUN_088abf78`) and a
   256-byte modexp operand count (`Bignum_ModExp`/`Bignum_Compare`) disagree,
@@ -152,11 +158,6 @@ so they mounted behind *Wipeout Pulse* on every later boot, keys or not. See
   and at the `Bignum_ModExp` call, dump the trailer copy and whatever
   `local_128` resolves to in `FUN_088a7704` - not another round of static
   reading.
-  `pure-usa`'s counterparts to all five newly-named functions were not
-  found - the Ghidra program for `/psp-pure-usa/BOOT.BIN` became unreachable
-  (`"Disk quota exceeded"`, then `"Program not found"`) partway through the
-  2026-09-15 session and had not recovered as of that session's end; check
-  its state fresh before resuming.
 - If JP/US copies of any pack turn up, diff their decrypted payload against
   the EU one to settle the region-selectable-DLC question one way or the
   other before building any UI for it.
