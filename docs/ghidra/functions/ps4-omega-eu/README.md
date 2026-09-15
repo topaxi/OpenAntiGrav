@@ -70,6 +70,21 @@ unnamed rather than forced.
   `MusicManager_Construct` directly into `Game_Main` rather than keeping them
   as separate functions the way `vita-2048-eu-v104` and `ps3-hdfury-eu` both
   do.
+- [weapons.md](weapons.md) - 26 functions: nine weapon-manager constructors
+  transferred from `ps3-hdfury-eu/weapons.md` by `.cpp` tag (plus the finding
+  that `WeaponExplosions_Construct`, a separate function on `ps3-hdfury-eu`,
+  is inlined into `PlasmaManager_Construct` here instead); `RaceManager_Construct`,
+  `MPRaceManager_Construct` and all sixteen `_RaceManager` subclasses, each
+  proven by an explicit call to its own base constructor rather than tag
+  matching alone; and `ModeManager_ConstructByMode` - a single
+  ~2,400-instruction dispatcher that builds any of twelve per-mode
+  `ModeManager` subclasses from one shared body, first-in-this-project
+  evidence that neither HD nor 2048 name their own mode-manager subclasses
+  at all. Also records a negative result on
+  `find_similar_functions_fuzzy`/`bulk_fuzzy_match` as a substitute for the
+  tag technique: real on the PS3↔PS4 pair only one time out of two probes,
+  and pure noise on the Vita↔PS4 pair even seeded from a confirmed match.
+
 Add a row to [`names.tsv`](names.tsv) and the page it cites in the same
 change: `scripts/apply-ghidra-names.py` refuses a row whose address and name
 do not both still appear on the page named in its last column.
