@@ -10,7 +10,22 @@ use oag_formats::ByteOrder;
 use super::{
     Error, LAYOUT_DESCRIBED, LAYOUT_INLINE, Layout, Mesh, Result, SPACE_BYTE, SUBMESH_BASE,
     SUBMESH_LEN, SURFACE_BASE, SURFACE_COUNT, SURFACE_LEN, SURFACE_TABLE, SubMesh, VertexDecl,
+    render_block,
 };
+
+/// What a chunk header says that every surface of the chunk inherits.
+///
+/// A surface record has none of these fields of its own - they sit in the
+/// 0x20-byte chunk header before the first record, or in the render block
+/// that header points at - so `parse_surface` takes them as one value rather
+/// than reading them back off a record that does not carry them.
+#[derive(Clone, Copy)]
+struct Header {
+    layout: Layout,
+    space: Space,
+    hash: u32,
+    render_flags: u16,
+}
 
 /// Which space a chunk's dequantised positions are in, out of its
 /// [`SPACE_BYTE`].
@@ -105,7 +120,13 @@ impl Mesh {
         };
         let hash = ByteOrder::Big.u32(data, at);
         let space = Space::of(data[at + SPACE_BYTE]);
-        let mut mesh = Self::parse_surface(data, at + SURFACE_BASE, layout, space, hash)?;
+        let header = Header {
+            layout,
+            space,
+            hash,
+            render_flags: render_block::flags(data, at)?,
+        };
+        let mut mesh = Self::parse_surface(data, at + SURFACE_BASE, header)?;
 
         // **A surface that will not read is skipped, not fatal.** The first one
         // is the chunk itself and its failure is a real error, handled above;
@@ -119,7 +140,7 @@ impl Mesh {
                 break;
             }
             let record = ByteOrder::Big.u32(data, entry) as usize;
-            if let Ok(surface) = Self::parse_surface(data, record, layout, space, hash) {
+            if let Ok(surface) = Self::parse_surface(data, record, header) {
                 mesh.extra_surfaces.push(surface);
             }
         }
@@ -130,13 +151,13 @@ impl Mesh {
     ///
     /// `at` is the record, not the chunk: `chunk + SURFACE_BASE` for the first
     /// and an entry of the chunk's surface table for the rest.
-    fn parse_surface(
-        data: &[u8],
-        at: usize,
-        layout: Layout,
-        space: Space,
-        hash: u32,
-    ) -> Result<Self> {
+    fn parse_surface(data: &[u8], at: usize, header: Header) -> Result<Self> {
+        let Header {
+            layout,
+            space,
+            hash,
+            render_flags,
+        } = header;
         let end = at + SURFACE_LEN;
         if end > data.len() {
             return Err(Error::OutOfBounds {
@@ -205,6 +226,7 @@ impl Mesh {
             material: ByteOrder::Big.u32(data, at),
             layout,
             space,
+            render_flags,
             submeshes,
             decl,
             extra_surfaces: Vec::new(),

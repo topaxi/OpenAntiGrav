@@ -54,7 +54,8 @@
 //!
 //! ```text
 //! +0x00  u32   version, 0x000a0000 on every file on the disc
-//! +0x04  u32   end of the directory / first byte of chunk data
+//! +0x04  u32   offset of the relocation table `{count, offsets[]}`, which
+//!              sits exactly where the directory ends - see [`render_block`]
 //! +0x08  u32   0xffffffff
 //! +0x1c  u32   mesh count
 //! +0x20  u32   offset of the mesh offset table: `count` big-endian u32s
@@ -68,6 +69,8 @@
 //!
 //! ```text
 //! +0x00  u32     hash, matching the `.vex` Mesh node's own +0x30 word
+//! +0x08  u32     offset of the chunk's 0x40-byte render-block record, whose
+//!                +0x06 halfword is [`Mesh::render_flags`] - see [`render_block`]
 //! +0x20  u32     index into the material table - see [`material`]
 //! +0x30  f32[3]  position bias, in the node's own space
 //! +0x40  f32[3]  position scale - 1/128 on every file measured
@@ -94,10 +97,12 @@ use oag_formats::ByteOrder;
 mod coverage;
 pub mod material;
 pub mod psp2;
+mod render_block;
 mod stride;
 mod surface;
 
 pub use coverage::coverage;
+pub use render_block::{RENDER_BLOCK_LEN, RENDER_TRACK};
 pub use surface::Space;
 pub mod vertex_decl;
 
@@ -515,6 +520,15 @@ pub struct Mesh {
     /// Shared by every surface of a chunk, like [`Self::layout`] - the byte is
     /// in the chunk header, outside the surface record.
     pub space: Space,
+    /// The authored flags halfword of the chunk's render-block record, the
+    /// `+0x06` of the 0x40-byte record the header's `+0x08` word names.
+    ///
+    /// **Not the layout byte**, which is also a `+0x06` - of the chunk
+    /// header, not of this record. Bit 0 is [`RENDER_TRACK`]; see
+    /// [`Self::is_track`] and [`render_block`] for the rest. Zero on the
+    /// 35,913 chunks that author nothing, and on a chunk whose word is zero.
+    /// Shared by every surface of a chunk, like [`Self::space`].
+    pub render_flags: u16,
     /// The chunk's surfaces past this one, each a `Mesh` in its own right.
     ///
     /// Empty on the 76 % of chunks that declare a single surface, and on every

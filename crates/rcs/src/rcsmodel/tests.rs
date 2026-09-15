@@ -534,6 +534,7 @@ fn packed(counts: &[usize], stride: usize) -> Mesh {
         submeshes,
         decl: None,
         space: Space::World,
+        render_flags: 0,
         extra_surfaces: Vec::new(),
     }
 }
@@ -662,5 +663,88 @@ fn every_sampler_entry_is_read_and_paired_with_its_own_path() {
         material.second_texture_sampler,
         Some(0x37b5_db58),
         "~crc32(\"lightmap\") - the entry its own path sits in, not the next one"
+    );
+}
+
+/// [`model`] with a relocation table at the header's `+0x04` and a
+/// render-block record for its one chunk, carrying `flags` at the record's
+/// `+0x06`.
+///
+/// The record sits where every other fixture puts nothing, and the table
+/// lists the chunk's `+0x08` slot the way the disc's own tables do, so the
+/// reader can be checked against the same shape the ground-truth test walks.
+fn model_with_render_block(flags: u16) -> Vec<u8> {
+    const CHUNK: usize = 0x100;
+    let mut b = Builder {
+        bytes: model(14, 30_000),
+    };
+    let table = b.bytes.len();
+    let record = table + 0x20;
+    b.u32(0x04, table as u32);
+    b.u32(table, 3);
+    b.u32(table + 4, 0x20);
+    b.u32(table + 8, 0x30);
+    b.u32(table + 12, (CHUNK + 0x08) as u32);
+    b.u32(CHUNK + 0x08, record as u32);
+    b.u16(record + 0x06, flags);
+    b.bytes.resize(record + RENDER_BLOCK_LEN, 0);
+    b.bytes
+}
+
+/// The flags come from the record the chunk's `+0x08` names, and the table
+/// at the header's `+0x04` lists that slot.
+#[test]
+fn the_render_block_flags_are_read_through_the_chunk_header_word() {
+    let data = model_with_render_block(0x0201);
+    let model = Model::parse(&data).expect("a model");
+    let mesh = &model.meshes[0];
+    assert_eq!(mesh.render_flags, 0x0201);
+    assert!(mesh.is_track(), "bit 0 is the track bit");
+    assert_eq!(
+        Model::relocations(&data),
+        Ok(vec![0x20, 0x30, 0x108]),
+        "the chunk's +0x08 slot is a relocated word"
+    );
+
+    let data = model_with_render_block(0x0800);
+    let mesh = &Model::parse(&data).expect("a model").meshes[0];
+    assert_eq!(mesh.render_flags, 0x0800);
+    assert!(!mesh.is_track(), "bit 11 alone is not track");
+}
+
+/// **The layout byte is also a `+0x06`, of a different struct.** A described
+/// chunk's layout byte is `0x05`, whose bit 0 is set; reading that byte in
+/// place of the record's halfword would call every inline chunk track and
+/// every described one too. A record authoring zero says otherwise.
+#[test]
+fn the_layout_byte_is_not_the_render_flags() {
+    let data = model_with_render_block(0);
+    let mesh = &Model::parse(&data).expect("a model").meshes[0];
+    assert_eq!(mesh.layout, Layout::Described);
+    assert_eq!(mesh.render_flags, 0);
+    assert!(!mesh.is_track());
+
+    // And a chunk with no record at all - the word left zero, as every
+    // other fixture here leaves it - reads as the Scene set, not an error.
+    let data = model(14, 30_000);
+    let mesh = &Model::parse(&data).expect("a model").meshes[0];
+    assert_eq!(mesh.render_flags, 0);
+    assert!(!mesh.is_track());
+}
+
+/// A record the word names outside the file is the reader being handed the
+/// wrong word, and is said so rather than read as zero.
+#[test]
+fn a_render_block_past_the_end_of_the_file_is_an_error() {
+    let mut data = model_with_render_block(1);
+    let len = data.len() as u32;
+    data[0x108..0x10c].copy_from_slice(&(len - 8).to_be_bytes());
+    assert_eq!(
+        Model::parse(&data),
+        Err(Error::OutOfBounds {
+            what: "a chunk's render block",
+            end: data.len() - 8 + RENDER_BLOCK_LEN,
+            len: data.len(),
+        })
     );
 }

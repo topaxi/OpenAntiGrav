@@ -33,6 +33,10 @@
 //!    are not waiting in one. A negative result, and it closes a hypothesis
 //!    this format page carried from the day it was written.
 //! 4. **Every model on the disc parses**, in one of two chunk layouts.
+//!
+//! And, from 2026-09-15, claim 11: every chunk's `+0x08` word is in its
+//! file's own relocation table, and the render-block flags behind it put the
+//! track bit on 4,365 of 41,861 chunks - 124 of Talon's Junction's 983.
 
 mod rcsmodel_common;
 
@@ -366,6 +370,10 @@ fn every_model_on_the_disc_parses_in_one_of_two_chunk_layouts() {
     let mut layouts: std::collections::BTreeMap<u8, usize> = Default::default();
     let mut errors: Vec<String> = Vec::new();
     let (mut submeshes, mut in_range, mut triangles) = (0usize, 0usize, 0usize);
+    // Claim 11's tally, taken on the same walk rather than a second one over
+    // 686 MiB: every chunk header's `+0x08` slot is in the file's own
+    // relocation table, and how many chunks carry the track bit.
+    let (mut chunks, mut relocated, mut track, mut track_files) = (0usize, 0usize, 0usize, 0usize);
     for archive in [
         "DATA00", "DATA01", "DATA02", "DATA03", "DATA04", "DATA05", "DATA06",
     ] {
@@ -394,6 +402,21 @@ fn every_model_on_the_disc_parses_in_one_of_two_chunk_layouts() {
             match rcsmodel::Model::parse(&bytes) {
                 Ok(model) => {
                     parsed += 1;
+                    let relocations =
+                        rcsmodel::Model::relocations(&bytes).expect("the relocation table reads");
+                    let relocations: std::collections::HashSet<u32> =
+                        relocations.into_iter().collect();
+                    let mut file_track = 0usize;
+                    for i in 0..count {
+                        let at = big.u32(&bytes, table + i * 4);
+                        chunks += 1;
+                        relocated += usize::from(relocations.contains(&(at + 0x08)));
+                    }
+                    for mesh in &model.meshes {
+                        file_track += usize::from(mesh.is_track());
+                    }
+                    track += file_track;
+                    track_files += usize::from(file_track > 0);
                     // **The check that settles the inline field mapping.** The
                     // vertex count and the index buffer come from different
                     // fields, so a wrong offset for either shows up here as an
@@ -453,6 +476,67 @@ fn every_model_on_the_disc_parses_in_one_of_two_chunk_layouts() {
         "{} submesh(es) do not hold a whole number of triangles",
         submeshes - triangles
     );
+    // Claim 11, disc-wide. The counts are the thirtieth pass's, measured
+    // independently with `scripts/psarc.py` before this reader existed -
+    // `docs/ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md`.
+    // A reader that took the chunk's layout byte (also a `+0x06`, bit 0 set
+    // on every described chunk) for the record's halfword would count
+    // 39,372 here, and one reading the wrong word would count anything.
+    println!(
+        "{relocated} of {chunks} chunk +0x08 words are in their file's relocation table; \
+         {track} chunks in {track_files} files carry the track bit"
+    );
+    assert_eq!(chunks, 41_861, "the disc's chunk count moved");
+    assert_eq!(
+        relocated, chunks,
+        "a chunk's +0x08 is not a word the file itself relocates"
+    );
+    assert_eq!(
+        (track, track_files),
+        (4_365, 37),
+        "the track bit is on a different set of chunks than the executable pass counted"
+    );
+}
+
+/// Claim 11, on the circuit every other claim here rests on: 124 of Talon's
+/// Junction's 983 chunks carry [`rcsmodel::RENDER_TRACK`], the bit HD's Zone
+/// mode selects the `Track` colour set and `zoneModeTrack*.gtf` on. The other
+/// 859 publish the `Scene` set - which is why binding `Track` to every chunk,
+/// as `oag_render` did until 2026-09-15, coloured the whole circuit with the
+/// set the original reserves for the road.
+///
+/// **Per chunk, not per surface**: the record is one per chunk, and the
+/// reader hands the same halfword to every surface of it.
+#[test]
+#[ignore = "needs a decrypted PS3 disc image in data/images"]
+fn a_quarter_of_talons_junction_is_track_surface_by_its_own_render_flags() {
+    let (archive, _, model_path) = PAIRS[2];
+    let Some((_, bytes)) = pair(archive, PAIRS[2].1, model_path) else {
+        return;
+    };
+    let model = rcsmodel::Model::parse(&bytes).expect("the circuit parses");
+    let track = model.meshes.iter().filter(|mesh| mesh.is_track()).count();
+    let surfaces_agree = model
+        .meshes
+        .iter()
+        .all(|mesh| mesh.surfaces().all(|s| s.render_flags == mesh.render_flags));
+    println!(
+        "{track} of {} chunks carry the track bit",
+        model.meshes.len()
+    );
+    assert_eq!((track, model.meshes.len()), (124, 983));
+    assert!(surfaces_agree, "a surface disagrees with its chunk's flags");
+    // The halfword's other bits, as the same pass tabulated them for a
+    // track model: bits 9 and 10 never occur without bit 0.
+    for mesh in &model.meshes {
+        if mesh.render_flags & 0x600 != 0 {
+            assert!(
+                mesh.is_track(),
+                "{:#06x} without the track bit",
+                mesh.render_flags
+            );
+        }
+    }
 }
 
 /// Claim 10: the unresolved-`Mesh`-node phenomenon claim 8 measured on
