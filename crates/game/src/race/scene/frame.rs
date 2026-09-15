@@ -165,9 +165,8 @@ impl Scene {
         // the stage showing recolours the circuit's own fog and rig rather
         // than replacing them - see `crate::race::zone_grade`. Applied per
         // frame rather than folded in at load because the stage is a *runtime*
-        // selection in the original, cross-faded against the stage before it;
-        // that it never moves here is the trigger being unrecovered, not the
-        // path being static.
+        // selection in the original, cross-faded against the stage before it
+        // over the hundred frames after a step (`ZoneGrade::follow`).
         let authored_fog = self
             .zone_grade
             .as_ref()
@@ -203,7 +202,8 @@ impl Scene {
             // The Zone stage's own shader parameters, or all-zero (and so the
             // identity on every albedo) outside a Zone race. Per frame for the
             // same reason the fog and rig above are: the stage is a runtime
-            // selection in the original.
+            // selection in the original - and the transition sphere inside
+            // it moves with the craft every frame.
             zone: self
                 .zone_grade
                 .as_ref()

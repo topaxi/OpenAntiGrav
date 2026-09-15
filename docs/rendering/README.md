@@ -89,6 +89,13 @@
   table; HD's armed/cooling state is the one open question. See
   [pads.md](pads.md), which also records the invented flat tint this replaced
   and how it hid itself
+- HD/Fury's **Zone recolour** - **done** off the disc's own material variant
+  and stage table, and since 2026-09-15 its stage change runs as the
+  original's own **wavefront**: a sphere out of the player's craft, growing
+  by a law read off the executable and reproduced live on RPCS3, the new
+  stage's colours inside it and the old stage's outside. The radius's unit
+  against this renderer's world is the one number not measured. See
+  [hd-zone-recolour.md](hd-zone-recolour.md)
 - The HUD - **done** for the 2D layer, off the disc's own layouts; see
   [the HUD](../ui/hud.md). Its `<Mode3D>` layer is not
 - Post-processing, and the series' distinctive look. Bloom is **done** and
