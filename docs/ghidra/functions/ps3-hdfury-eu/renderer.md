@@ -4442,13 +4442,19 @@ three routes for each of `Post_SetColourScaleRate` (`0x003def38`),
   `Renderer_SetColourCorrection`/`FUN_00678ee8` shape), scanning all
   1,829,837 instructions in the program: zero matches for each address, both
   mnemonics, all three functions.
-- The setter's own `.opd` descriptor, confirmed by `get_xrefs_to` on the
-  function address (`0x0088c430`, `0x0088c438`, `0x0088c440` respectively -
-  unchanged from this section's own table): each descriptor address searched
-  as a big-endian 4-byte literal with `search_byte_patterns` (`00 88 c4 30`,
-  `00 88 c4 38`, `00 88 c4 40`) across the whole image - no matches, so no
-  function-pointer table holds any of the three. `get_xrefs_to` on the
-  descriptor addresses themselves also returns none.
+- Each function's own address searched as a big-endian 4-byte literal
+  (`search_byte_patterns`, `00 3d ef 38`, `00 3d ef 50`, `00 3d ef 68`) -
+  a positive control first, since the tool is documented to ignore `mask`
+  and its behaviour on this program hadn't otherwise been exercised: each
+  returns exactly one hit, its own `.opd` descriptor (`0x0088c430`,
+  `0x0088c438`, `0x0088c440` respectively, matching `get_xrefs_to` on the
+  function address), and no second pointer anywhere else in the image - the
+  same "occurs exactly once" shape this page's `g_FullscreenTintColour`
+  enumeration above already established for a different global.
+- The descriptor address itself searched the same way (`00 88 c4 30`,
+  `00 88 c4 38`, `00 88 c4 40`) - no matches, so no function-pointer table
+  holds any of the three either. `get_xrefs_to` on the descriptor addresses
+  themselves also returns none.
 
 None of the three functions contains an `lvlx` instruction
 (`search_instructions(mnemonic="lvlx", operand_pattern="v", function=...)`
