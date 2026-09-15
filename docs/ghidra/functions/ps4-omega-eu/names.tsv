@@ -1,0 +1,16 @@
+# Applied symbol names for ps4-omega-eu eboot.bin (image base 0x01000000).
+#
+# The evidence lives in the page named in the last column; this file exists so
+# the names can be re-applied to a fresh Ghidra database without hand-editing.
+# Run `just apply-names` after importing eboot.bin with GhidraOrbis (see
+# docs/reverse-engineering/toolchain.md#ps4). See ADR-0005: the pages are the
+# record of truth, and scripts/apply-ghidra-names.py checks that every row
+# here still appears in its evidence page before it renames anything.
+#
+# kind is `function` or `data`. Confidence below 70 gets a `_q` suffix applied,
+# below 50 is skipped. Recovered library and import symbols (the `sceXxx`
+# names NIDAnalyzer resolves automatically on import) keep their real names
+# rather than the project's Subsystem_VerbNoun scheme, same as elsewhere.
+#
+# address	kind	name	confidence	evidence
+0x012e38d0	function	MagstripWake_Construct	85	ships-effects.md

@@ -55,12 +55,27 @@ add corroboration, not correct a guess. That cross-check has not been done:
 `SoundManager`/`FrontendRoot`/`MusicManager` equivalent named yet, so it
 needs fresh RE work on the PS3 side before it can happen, not just a lookup.
 
+## The lineage extends to Omega Collection's PS4 build too
+
+`ps4-omega-eu/eboot.bin` (WipEout: Omega Collection, PS4) shares the same
+`Backend/...` source tree as this binary and `ps3-hdfury-eu`'s: 74 of 76
+`.cpp` debug-tag paths found in the PS4 binary match one here by suffix
+exactly. That similarity held up at the code level too, not just the string
+table: [`MagstripWake_Construct`](ships-effects.md) is the same constructor
+in both binaries - same tagged-object field offset, same resource-name
+lookup, same flag bits, same instance counter - despite one being ARM
+Thumb-2 and the other x86-64. See
+[`ps4-omega-eu/ships-effects.md`](../ps4-omega-eu/ships-effects.md) for the
+full comparison.
+
 ## Pages
 
 - [game-boot.md](game-boot.md) - `Game_Main` and the `GameRoot` singleton:
   the boot chain, the tagged-allocation idiom, and the lineage finding above.
 - [track-and-collision-loaders.md](track-and-collision-loaders.md) - the
   track geometry and collision loaders.
+- [ships-effects.md](ships-effects.md) - `MagstripWake_Construct`, found by
+  cross-referencing this binary against `ps4-omega-eu`'s.
 - [race-hud-selection.md](race-hud-selection.md) - which of the 26 shipped
   HUD layouts a real race actually constructs.
 - [zone-audio.md](zone-audio.md) - Zone's sound banks: the bank-path gate is
