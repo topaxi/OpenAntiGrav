@@ -494,10 +494,108 @@ operand_pattern=17acc0)` finds zero direct call sites anywhere in the ELF, and
 the address never appears as an immediate operand
 (`search_instructions(operand_pattern=878db0)` - its own `.opd` descriptor -
 is also empty), so it is reached only through an indirect dispatch this
-session did not locate. **[stale 2026-09-15: computed before the lvlx reimport; re-run per toolchain.md#ps3]** The `.opd` table's physical neighbours
-(`FUN_006926b0`, `FUN_0017af80`, `FUN_0017b4b8`, ...) are unrelated
-functions (particle-effect timing, a refcounted-object destructor) - adjacency
-in `.opd` is link order, not a call table, and is not evidence of a group.
+session did not locate. **2026-09-15: re-run on the post-`lvlx` image and
+re-confirmed, this time by the validated whole-image literal-address method
+(`toolchain.md#ps3`'s "Two PS3 read errors" section), not just the two direct
+searches above.** `search_byte_patterns` for the function's own `.opd`
+descriptor address (`00878db0`) as a raw big-endian 4-byte literal
+(`00 87 8d b0`) returns zero hits anywhere in the image - no TOC slot, table,
+or object field holds this function's `.opd` entry as a *stored* 4-byte
+word, which is stronger than the direct-`bl` search alone but does not rule
+out every indirect route: a pointer assembled at runtime from separate
+`lis`/`addi` halves (or otherwise computed rather than loaded whole) would
+not show up as a single 4-byte literal either, and this pass did not check
+for that shape. The method was validated first, not trusted blind: the same
+`search_byte_patterns` call against `docs/ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md`'s
+already-known `0x00c81a5c` target (bytes `00 c8 1a 5c`) finds it at
+`0x008b71cc`, and `0x008bd3c4 - 0x61f8 = 0x008b71cc` exactly - reproducing
+`Scene_PrepareFrame @ 0x003aaf8c: lwz r9,-0x61f8(r2)` with zero other hits,
+the same self-check `toolchain.md` prescribes. A second search for the raw
+code address (`0x0017acc0`, bytes `00 17 ac c0`) finds exactly one hit,
+`0x00878db0` - its own `.opd` entry, the expected occurrence, and nowhere
+else. So the negative holds post-reimport, on a method now proven to catch
+what a `bl`/immediate-operand sweep alone would miss: nothing anywhere in the
+image, code or data, holds a static reference to this function by either
+address. The `.opd` table's physical neighbours (`FUN_006926b0`,
+`FUN_0017af80`, `FUN_0017b4b8`, ...) are unrelated functions (particle-effect
+timing, a refcounted-object destructor) - adjacency in `.opd` is link order,
+not a call table, and is not evidence of a group.
+
+## `ZONEBAR_TRANS`, a call site found
+
+2026-09-15. A handover thread on HD's Zone ladder names `ZONEBAR_TRANS`, a cue
+string in `env0_zone.bnk` (not `speech_zone.bnk`,
+which only carries the fifteen `MR_*` names), as a candidate for the Zone
+ladder's second, non-verbal class-change cue, but had no traced call site for
+it. Cues in this binary are looked up by name, not by a precomputed id or
+hash - see `0x08`'s `lookup_by_name(bank, name)` pattern
+[above](#0x08---the-located-handler-snd_sfx_grain_type_branch) - so "the id
+the ELF carries" for a cue is the literal string itself, and the question
+reduces to finding what references that string.
+
+`search_strings("ZONEBAR")` finds the literal at `0x0077dba0`, distinct from
+the unrelated `"ZoneBar%d"` format string at `0x0077bb98`. `get_xrefs_to` on
+`0x0077dba0` returns exactly one code reference (a data reference from a TOC
+slot at `0x008a6eec` aside): `0006c9f8` inside `.opd.FUN_0006c600`
+(`0006c600`-`0006cbaf`, unnamed, no static caller found in this pass either -
+`get_function_callers` returns two `.opd` thunks and neither was chased
+further). The decompile loads the string into a local
+(`puVar7 = PTR_s_ZONEBAR_TRANS_008a6eec;`) at the top of the function, then
+only uses it inside the branch gated on a distance/threshold test
+(`dVar16` against `param_2+0x334`/`+0x33c`) that also increments a `0`-`14`
+wrapping index at `iVar9+4` - the same wraparound shape the fifteen-rung Zone
+ladder already uses elsewhere in this codebase. On that branch it calls two
+things in sequence: `FUN_00310bd8(bank, subsys, "ZONEADVANCE", 0)` - a
+four-argument `(bank, subsys, name, priority)` shape matching the
+voice-slot-allocate-by-name pattern this page already reads for other cues -
+immediately followed by `FUN_002ffa58(uVar3, uVar4, puVar7 /* "ZONEBAR_TRANS" */,
+0x400, 0, 0, 0, 0)`, an eight-argument call whose own decompile is partly
+unresolved (register-passed parameters Ghidra typed as `in_r8`/`in_r9`/
+`in_r13` rather than a clean prototype), so its exact role - a second cue
+trigger alongside `ZONEADVANCE`, versus a differently-shaped event such as a
+UI/telemetry notification - is not settled from decompilation alone.
+
+**Both `PTR_` symbol names were checked, not trusted** - this page's own
+opening paragraph warns that a `PTR_s_*` name under this binary can be a
+wrong-TOC artifact, so trusting `decompile_function`'s naming here without
+checking would repeat exactly the mistake that warning exists to prevent.
+`FUN_0006c600`'s own TOC, read from the program context register
+(`AssignPs3R2FromOpd.java`'s output, the same ground truth
+`toolchain.md#ps3`'s validated method reads), is `0x008ad4d8` - TOC A, the
+default Ghidra assumes without the fix, so a mismatch was possible but not
+guaranteed. Checked directly: `0x008ad4d8 - 0x008a6eec = 0x65ec`, and the
+disassembly at the xref address itself, `0006c9f8`, is `lwz r5,-0x65ec(r2)` -
+an exact match. The sibling load resolves the same way:
+`0x008ad4d8 - 0x008a6ef0 = 0x65e8`, and `0006ca40` disassembles to
+`lwz r5,-0x65e8(r2)`. Both TOC slots were also read directly rather than
+inferred from the symbol name - `0x008a6eec` holds `0x0077dba0` (the
+`"ZONEBAR_TRANS"` string address from `search_strings`, confirmed
+independently), and `0x008a6ef0` holds `0x0077dbb0`, which
+`inspect_memory_content` reads as the literal `"ZONEADVANCE"` (12 bytes,
+null-terminated). So both loads, both pointer targets and both string
+contents are confirmed at the disassembly and raw-memory level, not just
+from `decompile_function`'s rendering - the `ZONEADVANCE` corroboration
+below is not resting on an unchecked symbol name.
+
+**Confidence 65, no rename** (below the 70-confidence bar for a plain name
+and this pass did not chase `FUN_002ffa58` far enough to justify even a `_q`
+guess): the branch shape (class-change gate, ladder increment, cue-name
+literal used exactly once) and both string references are now confirmed at
+the disassembly/raw-memory level, not just decompilation, but the callee
+that actually consumes the `ZONEBAR_TRANS` string is not itself resolved,
+and that unknown is what the score is capped on. This closes the *static*
+half of the open question - a call site exists, which the page this
+addendum answers had marked absent - without yet closing the semantic one.
+Corroboration: the maintainer's own play observation (recorded in the
+zone-ladder thread) is that a Zone class change is "a spoken class name and
+a non-verbal tone at once, not one or the other" - independent evidence
+that a second, non-verbal trigger exists to be found, matching this site's
+shape (fired in the same branch as, and immediately beside, the confirmed
+`ZONEADVANCE` cue-name call).
+
+**Next**: decompile `FUN_002ffa58` and its callee `FUN_00679688` to determine
+whether the eight-argument call is itself a cue trigger (and if so, whether
+`0x400` is a bus/category flag) or a different kind of event.
 
 ## Not determined
 

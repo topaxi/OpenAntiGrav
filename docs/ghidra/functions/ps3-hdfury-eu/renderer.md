@@ -558,8 +558,52 @@ search for `stw ...,0x11c(...)` is not the way to find that writer -
 `0x11c` is a near-universal stack-frame local-variable offset, and the
 search returns hundreds of unrelated hits on `r1` (the stack pointer) for
 one relevant hit on an object register; the same shape as the `0x00109028`
-dead end
-below, recorded so it isn't retried the same way. **[stale 2026-09-15: computed before the lvlx reimport; re-run per toolchain.md#ps3]**
+dead end below, recorded so it isn't retried the same way.
+
+**2026-09-15: re-run on the post-`lvlx` image, scoped rather than blind, and
+still negative - now with the scope wide enough to say why.** Three widths
+this time, not just `stw`: `search_instructions(mnemonic="stw",
+operand_pattern="0x11c(")` (202 hits), `"stfs"` (32), `"sth"` (3), 237 total
+across the whole program, 84 of them on base register `r1`. Only `r1` is
+dropped as a certain frame-local hit - it is the architectural stack pointer
+on every PowerPC function, no exceptions. **`r31` was not dropped**, despite
+this section's own text above reading as if it should be: a spot check of
+five `r31`-based hits before trusting the filter (`Hud_LoadDefinition`,
+`List_Construct`, `Block_DrawHorizontalEdge`, `SoundSystem_Init`,
+`Shadow_ParseStencilVolumeGeometry`) found no `mr r31,r1` frame-chain
+idiom anywhere in their prologues; two of the five instead show `or
+r31,r3,r3` - `r31` holding the incoming `this` pointer, exactly the kind of
+real object register this search is supposed to find, not discard. This
+64-bit ABI keeps the frame in `r1` itself (`stdu r1,-N(r1)`) and has no
+routine second frame register the way a 32-bit `mr r31,r1` convention would;
+treating `r31` as frame-equivalent to `r1` would have silently dropped 53
+genuine candidates.
+
+Dropping only `r1` leaves **153 hits in 123 distinct functions**, base
+registers `r31`(53) `r29`(25) `r30`(21) `r9`(21) `r28`(9) `r11`(8) `r27`(5)
+`r3`(5) `r23`(2) `r22`(2) `r4`(2) - `RenderManager_Construct`/
+`_ConstructComplete`'s own two known sentinel writes among them (reproducing
+the already-known answer on `r30`, the self-check this method needs before
+trusting it on the unknown part). The other 121 functions each write
+`+0x11c` on some object register, a different one per function, consistent
+with each being a different class's own field at a coincidentally-shared
+offset rather than evidence of one shared type; classifying which if any is
+`RenderManager`'s own type needs more than a base-register read.
+
+That question is moot for *this* pass's actual purpose, though, which was
+narrower: **is the writer among the code the `lvlx` reimport newly decoded?**
+It is not. Cross-checking all 123 candidate functions against the set of
+functions containing an `lvlx` instruction (293 functions program-wide -
+matching the ~294 this binary's reimport is known to have unlocked) finds
+**zero overlap** - none of the 123 candidates contain any `lvlx` instruction,
+so none of them are code this session's earlier, pre-reimport sweep could
+have missed for lack of instructions. The depth-override writer remains
+unfound, and - unlike the two audio negatives on this same "stale" list -
+this one is not explained by the reimport at all: whatever writes
+`instance+0x11c` a real value, if it exists in this binary, was already
+fully decoded before 2026-09-15 and simply wasn't found by a `stw`-only,
+un-scoped sweep. The `0x00109028` dead end below is unaffected by the same
+check for the same reason and is not re-run here.
 
 ### Runtime-verified: 118 real draws, two object families, no watchpoint support
 
