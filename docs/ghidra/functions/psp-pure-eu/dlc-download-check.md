@@ -166,6 +166,46 @@ function against a real network transfer).
   investigation was waiting on does not exist any more; the search was
   blocked by a bug that is now fixed project-wide on both databases.
 
+## `Xtea_EncryptBlock` and `Xtea_CryptBuffer`: the game's own cipher, found in code
+
+**Confidence 92 and 90.** Following the trailer-key lead further with the now-
+working `get_xrefs_to`, `psp-pure-eu` (only - see "Not resolved on `pure-usa`"
+below) contains a genuine 8-round XTEA implementation, decompiled directly:
+
+- **`Xtea_EncryptBlock`** (`0x088a9c64`, was `FUN_088a9c64`). Its round-delta
+  sequence - `0x9e3779b9`, `0x3c6ef372`, `0xdaa66d2b`, `0x78dde6e4`,
+  `0x1715609d`, `0xb54cda56`, `0x5384540f`, `0xf1bbcdc8` - is eight exact
+  multiples of the golden-ratio delta `0x9e3779b9` in sequence; nothing else
+  produces that ladder, and the two-word-block/four-word-key shape matches
+  XTEA exactly. Self-certifying, not inferred from adjacency.
+- **`Xtea_CryptBuffer`** (`0x088aa204`, was `FUN_088aa204`). Loads
+  `(0x12345678, offset / 8)` as a block, calls `Xtea_EncryptBlock` on it with
+  a caller-supplied key, and XORs the result over the caller's buffer 8 bytes
+  at a time (with byte-at-a-time handling for the unaligned head/tail) -
+  structurally identical to `oag_formats::pure_dlc::crypt_with_key` as
+  `docs/formats/dlc-pack.md` already documents it from the external tool.
+
+Together these upgrade that page's "the game implements its own encryption in
+plain application code" from an inference (no `sceNp`/KIRK imports) to direct
+code evidence: this is that code, found and read.
+
+**Not resolved on `pure-usa`.** Mid-session, a broad `search_instructions`
+sweep against `/psp-pure-usa/BOOT.BIN` failed with `"Disk quota exceeded"`
+from the Ghidra bridge, and every call against that program since (including
+plain `analysis_status`, which had worked earlier the same session) now
+returns `"Program not found"` while `psp-pure-eu` and every other open
+program are unaffected. This is an environment fault, not a finding - `Bash`
+was independently non-functional around the same time (`/tmp` at 80% of a
+32 GiB tmpfs per `df -h`, matching the "Never build under `/tmp`" trap) and
+recovered on its own, but the Ghidra-side program handle did not. No recovery
+action was taken from this session (reopening a shared Ghidra program is a
+GUI-only operation per this page's own workflow doc, and forcing it from a
+script-driven session risks compounding whatever state the disk pressure left
+it in). **The two functions above almost certainly exist at different
+addresses in `psp-pure-usa` too** (every other function pair checked this
+session was byte-identical in logic between regions) but this was not
+confirmed, and no `pure-usa` names.tsv row is added for them.
+
 ## Open
 
 - Where `TEST.bin`'s 16 bytes actually get read, if anywhere in `BOOT.BIN` at
@@ -174,6 +214,40 @@ function against a real network transfer).
   (`docs/formats/dlc-pack.md`), so a real PS Store download's content
   validation could be entirely system-side, in which case there is no
   in-game call site to find.
-- The 256-byte trailer's own key: still unlocated, now reachable by direct
-  `get_xrefs_to` search rather than blocked by the relocation bug - not
-  attempted this pass beyond the one lead above.
+- **The 256-byte trailer's own key: still unlocated, but substantially
+  chased this pass, not merely "not attempted."** `Xtea_CryptBuffer` has two
+  callers. `FUN_088a32a4` decrypts a buffer in place and then computes and
+  appends exactly `0x100` (256) bytes after it - the same size as the pi.wad
+  trailer - but its only caller (`FUN_0895851c`) builds an HTTP request
+  literally named `"%s?upload=profile&value=all&uid=%s"`: this is Pure's
+  **online profile upload**, i.e. the same savedata-signing feature the
+  `sceUtilitySavedataInitStart` chain above led to, not the DLC path. That
+  branch is closed.
+  `FUN_088a3118` is the more promising lead and was not similarly closed:
+  it splits its input at `length - 0x100`, builds an opaque ~450-byte object
+  over twelve unnamed calls (`FUN_088a6824` through `FUN_088a7018`) fed by a
+  32-byte high-entropy blob at `0x08aa64fc`, and - only if that object's own
+  verification succeeds - calls `Xtea_CryptBuffer` with a key read from
+  *inside that object* (`+0x10c`), matching pi.wad's documented
+  `[payload][256-byte trailer]` shape closely enough to be worth naming, but
+  **nothing in this pass identified which of the twelve calls populates
+  `+0x10c` or reads `0x08aa64fc`'s contents** - that address's use as key
+  material is an unverified candidate, not a finding: only its *pointer* was
+  seen being stored into a shared two-pointer descriptor
+  (`FUN_088a76f0`, used identically by both `FUN_088a3118` and
+  `FUN_088a32a4`), never a read of the 32 bytes themselves. The hash/digest
+  functions in `FUN_088a32a4`'s own chain produce a 20-byte output; which
+  algorithm is unidentified, not assumed to be any specific one.
+  **A decisive, purely offline check is available and was attempted but
+  blocked by the environment fault described above, not run to completion**:
+  XTEA-decrypt the last 256 bytes of a shipped pack (e.g. Gamma Pack 1's
+  `pi.wad`, 8-round, `(0x12345678, offset/8)` keystream per `Xtea_CryptBuffer`'s
+  own algorithm) using `0x08aa64fc`'s first 16 bytes as the key, and check
+  whether the known public key for that pack
+  (`UCES00001DGAMMAPAK` in `data/keys/pure-dlc-keys.txt`:
+  `0x10 0x70 0x53 0xaf 0xaa 0xd9 0x76 0x88 0x72 0x3e 0x13 0xcb 0xf1 0x19 0xa4 0xcb`)
+  appears in the plaintext. A positive result would confirm the master-key
+  hypothesis arithmetically with no further Ghidra tracing at all; a negative
+  result disconfirms it cleanly. This needs no game data beyond what
+  `data/dlc/` and `data/keys/` already have - the next session should run it
+  first, before any further decompilation.

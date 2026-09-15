@@ -390,14 +390,22 @@ way Pulse's four DLC teams are - see
 
 - **The 256-byte trailer.** `keys.txt`'s own header comment says it is
   "encrypted with a region-specific key embedded in BOOT.BIN," which would be
-  a *different* key from the per-pack ones above. A direct byte-pattern search
-  for that per-pack key, the XTEA delta `0x9e3779b9` and the `0x12345678`
-  constant in both `BOOT.BIN`s came back empty (`0x12345678` matched once, but
-  a 4-byte generic constant like that is not meaningful evidence on its own).
-  MIPS commonly synthesises a 32-bit constant from two 16-bit immediates
-  (`lui`/`ori` or `lui`/`addiu`) rather than storing it as data, so a
-  contiguous-byte search cannot rule the routine out - not chased further.
-  Decryption does not need this trailer at all: `oag-wad` never reads it.
+  a *different* key from the per-pack ones above. An original direct
+  byte-pattern search for that key, the XTEA delta `0x9e3779b9` and the
+  `0x12345678` constant in both `BOOT.BIN`s came back empty, because MIPS
+  commonly synthesises a 32-bit constant from two 16-bit immediates
+  (`lui`/`ori` or `lui`/`addiu`) rather than storing it as data - a
+  contiguous-byte search cannot see that. **A `lui`/`ori`-pair search does
+  see it**: `psp-pure-eu` contains a genuine 8-round XTEA implementation,
+  `Xtea_EncryptBlock`/`Xtea_CryptBuffer`
+  (see [dlc-download-check.md](../ghidra/functions/psp-pure-eu/dlc-download-check.md)),
+  which upgrades "the game implements its own encryption in plain application
+  code" above from an absent-import inference to direct code evidence. A
+  function reading a buffer shaped exactly like `[payload][256-byte trailer]`
+  and sourcing a decrypt key from an unidentified object was also found, fed
+  by a 32-byte high-entropy blob at `0x08aa64fc` - a real, promising, still
+  unconfirmed lead for this key, not a dead end. Decryption does not need
+  this trailer at all: `oag-wad` never reads it.
 - **`TEST.bin`.** 16 bytes, unread beyond its size and high-entropy-looking
   content. The upstream tool never touches it and every pack above decrypts
   correctly without it, so it is not load-bearing for reading a pack's

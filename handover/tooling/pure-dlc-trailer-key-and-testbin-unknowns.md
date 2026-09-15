@@ -40,13 +40,16 @@ so they mounted behind *Wipeout Pulse* on every later boot, keys or not. See
   tripping a pack the way the upstream region-converter tool does - out of
   scope unless region conversion becomes a goal. **2026-09-15**: the
   `get_xrefs_to` gap below that blocked this is now fixed project-wide (see
-  next bullet); the one caller chain traced from it so far, on `pure-eu`
-  only (`sceUtilitySavedataInitStart` -> a ghost-replay/profile savedata
-  dialog, not the DLC path - see
-  [dlc-download-check.md](../../docs/ghidra/functions/psp-pure-eu/dlc-download-check.md)),
-  turned out unrelated to this trailer, so the key search itself is still
-  open, just no longer blocked on technique. `pure-usa`'s own chain was found
-  to exist but not chased.
+  next bullet), and chasing it further found the game's own XTEA cipher in
+  code (`Xtea_EncryptBlock`/`Xtea_CryptBuffer`, `pure-eu` only) plus a
+  function shaped exactly like a `[payload][256-byte trailer]` reader with a
+  key sourced from an unidentified object - a real, still-open lead, not a
+  dead end. Full trace, what is and is not confirmed, and the one offline
+  check that would settle it outright, all in
+  [dlc-download-check.md](../../docs/ghidra/functions/psp-pure-eu/dlc-download-check.md).
+  The `sceUtilitySavedataInitStart` chain mentioned in earlier versions of
+  this bullet *was* a dead end (ghost-replay/profile savedata, not DLC) but
+  is no longer the only lead.
 - **`TEST.bin`**'s actual role: **narrowed, 2026-09-15, not fully closed.**
   `BOOT.BIN`'s own `WowDownload_VerifyPackFiles`
   (`psp-pure-eu` `0x08955494`, `psp-pure-usa` `0x08955b44`) checks that
@@ -106,23 +109,34 @@ so they mounted behind *Wipeout Pulse* on every later boot, keys or not. See
 
 ## Next Steps
 
-- **The `sceUtilitySavedataInitStart` lead is a dead end for this thread**,
-  chased 2026-09-15: its one caller in both `pure-eu` and `pure-usa` belongs
-  to a ghost-replay/profile savedata dialog, not the DLC download path, so its
-  `SceUtilitySavedataParam.key[16]` (if it even carries the region-specific
-  key at all - not confirmed) is unrelated to `pi.wad`'s own trailer. See
+- **The `sceUtilitySavedataInitStart` lead is a dead end for this thread on
+  `pure-eu`**, chased 2026-09-15: its caller there belongs to a ghost-replay/
+  profile savedata dialog, not the DLC download path. `pure-usa`'s equivalent
+  chain exists (its stub has a caller too) but was not chased - lower
+  priority now that a better lead exists (next bullet). See
   [dlc-download-check.md](../../docs/ghidra/functions/psp-pure-eu/dlc-download-check.md)
   for the trace, and note its addresses supersede this thread's - the
   `0x08a76dfc`-style stub addresses recorded above are `psp-pulse-usa`'s, not
   Pure's own.
-- Whoever chases the trailer key next has a working technique and no
-  remaining lead: `get_xrefs_to` now works directly against `psp-pure-eu`/
-  `psp-pure-usa` (the relocation bug that blocked it is fixed), but nothing
-  found this pass touches a 16-byte key literal anywhere. The upstream tool's
-  own region-converter path, re-read alongside a disassembly of any
-  `sceNpDrm`-adjacent code, is still the way in - though `docs/formats/dlc-pack.md`
-  already notes neither `BOOT.BIN` nor Pure's PRXs import `sceNp`/KIRK
-  primitives at all, so that code path may not exist in-game.
+- **The game's own XTEA cipher is now found in code** (`Xtea_EncryptBlock`
+  `0x088a9c64`, `Xtea_CryptBuffer` `0x088aa204`, `pure-eu` only - see
+  dlc-download-check.md), matching `oag_formats::pure_dlc::crypt_with_key`'s
+  algorithm structurally. Its caller `FUN_088a3118` handles a buffer shaped
+  exactly like `[payload][256-byte trailer]` and reads a key from an object
+  populated by twelve unnamed calls fed by a 32-byte high-entropy blob at
+  `0x08aa64fc` - a real, unresolved lead, not the dead end the previous
+  version of this bullet described everything as being.
+  **The next session should start with the offline check already written up
+  in dlc-download-check.md's Open section** (XTEA-decrypt Gamma Pack 1's
+  trailer under `0x08aa64fc`'s first 16 bytes, check for its known public
+  key) before any further decompilation - it needs no Ghidra session at all,
+  and was only left undone this pass because of an environment fault
+  (`Bash` and then the Ghidra bridge itself became unreliable mid-session -
+  see that page for specifics), not because it was skipped.
+  `pure-usa`'s counterparts to both named functions were not found - the
+  Ghidra program for `/psp-pure-usa/BOOT.BIN` became unreachable
+  (`"Disk quota exceeded"`, then `"Program not found"`) partway through this
+  session and did not recover; check its state fresh before resuming.
 - If JP/US copies of any pack turn up, diff their decrypted payload against
   the EU one to settle the region-selectable-DLC question one way or the
   other before building any UI for it.

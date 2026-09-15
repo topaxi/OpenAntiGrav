@@ -73,3 +73,10 @@
 # binary. See dlc-download-check.md for the full trace and what it does and
 # does not settle about the pure-dlc-trailer-key-and-testbin-unknowns thread.
 0x08955494	function	WowDownload_VerifyPackFiles	80	dlc-download-check.md
+
+# The game's own XTEA cipher (2026-09-15), found chasing the same page's
+# trailer-key lead. pure-usa's counterparts were not resolved - the Ghidra
+# program for /psp-pure-usa/BOOT.BIN became unreachable mid-session (a
+# "Disk quota exceeded" bridge error), so only pure-eu is named here.
+0x088a9c64	function	Xtea_EncryptBlock	92	dlc-download-check.md
+0x088aa204	function	Xtea_CryptBuffer	90	dlc-download-check.md

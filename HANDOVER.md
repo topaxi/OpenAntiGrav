@@ -632,7 +632,7 @@ Each is a real, named next step, one file per thread under [`handover/`](handove
 - [Where Pulse's language picker belongs is unevidenced](handover/frontend/where-pulses-language-picker-belongs-is-unevidenced.md)
 - [Pure's `Title Screen` logo wordmark is found; `FE Screen`'s own backdrop is not](handover/frontend/pures-title-screen-is-missing-its-own-logo.md)
 - [A *slot-resolved* record's own field layout](handover/tooling/a-slot-resolved-records-own-field-layout.md)
-- [Pure's DLC trailer key still unknown; TEST.bin is a download-completeness marker, not read for content](handover/tooling/pure-dlc-trailer-key-and-testbin-unknowns.md)
+- [Pure's DLC trailer key still unknown; the game's own XTEA cipher is found in code and TEST.bin is a download-completeness marker, not read for content](handover/tooling/pure-dlc-trailer-key-and-testbin-unknowns.md)
 - [A model built from several small pieces sharing one atlas](handover/rendering/a-model-built-from-several-small-pieces-sharing.md)
 - [Which movie cut plays, and what plays the three 260-frame reels](handover/tooling/which-movie-cut-plays-and-what-plays-the.md)
 - [The PS2's backend task table has four unread cases](handover/tooling/the-ps2s-backend-task-table-has-four-unread-cases.md) - what remains after the PAL/NTSC selector's trigger was traced 2026-09-08 to `<Values task="Switch50">` on a first-boot 60 Hz screen ([refresh-mode.md](docs/ghidra/functions/ps2-pulse-eu/refresh-mode.md)): four task names the archive never authors, and whether the player's answer is persisted
