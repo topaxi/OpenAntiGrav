@@ -27,6 +27,13 @@ because they are one weapon in two sizes. See
 | `0x08871ddc` | `Weapon_AnnounceIncoming` | 88 |
 | `0x08867f1c` | `Mine_SpawnExplosion` | 90 |
 | `0x0886759c` | `WeaponPickup_ArmMine` | 92 (new 2026-09-15) |
+| `0x088638b8` | `BombPool_Update` | 85 (new 2026-09-15) |
+| `0x08863d7c` | `Bomb_UpdateTrigger` | 85 (new 2026-09-15) |
+| `0x088633d0` | `Bomb_AdvanceFuse` | 85 (new 2026-09-15) |
+| `0x08863440` | `Bomb_InArmingDelay` | 75 (new 2026-09-15) |
+| `0x088643d0` | `Bomb_ApplyBlast` | 85 (new 2026-09-15) |
+| `0x088640c8` | `Bomb_Detonate` | 88 (new 2026-09-15) |
+| `0x08872078` | `BombBlast_Construct` | 90 (new 2026-09-15) |
 
 **The addresses on this page are real, not image-relative.** Ghidra renders this
 program's `jal` targets and `lui`/`addiu` operands in the `0x0886xxxx` region as
@@ -498,9 +505,13 @@ second page would be nine tenths this one.
   above: `blastradius`'s consumer is `Weapon_PostBlastImpulse_q`, and the
   visual both `trigger_radius` and the fuse timing out reach is
   `Mine_SpawnExplosion`.
-- **The Bomb's own explosion call.** Whether `Weapon_FireBomb`'s teardown
+- ~~**The Bomb's own explosion call.** Whether `Weapon_FireBomb`'s teardown
   reaches `Mine_SpawnExplosion` too (the same `WO_MINE_EXPLO`, larger) or its
-  own equivalent is unchased - see the note at the end of the section above.
+  own equivalent is unchased - see the note at the end of the section above.~~
+  **Read 2026-09-15**: its own - `Bomb_Detonate` builds a `BombBlast` of
+  `explosion_hemisphere.vex`, `WO_BOMB_SMOKERING` and `Bomb_Shockwave.vex`
+  and plays `BOMBEXPL` or `BOMBEXPL_PC`. See
+  [the Bomb's teardown](#2026-09-15-the-bombs-teardown-read---its-own-blast-not-the-mines).
 - **The `+10.0` fuse branch**, above.
 - ~~**`slowdown_time`**, which shares the unspent `<Global slowdown_limit>`
   mechanic's fate on every other weapon.~~ **Recovered 2026-09-06**: the
@@ -749,4 +760,127 @@ callers resolved by xref rather than by hand. EU at 87 by
 offsets are therefore `record+0x1bc`/`+0x1c0`/`+0x1cc`/`+0x1d0`, not new
 fields: `craft+0x23c` ("human") on [missile.md](missile.md) is
 `record+0x1cc`.
+
+## 2026-09-15: the Bomb's teardown read - its own blast, not the Mine's
+
+The stretch item on the same session as the cluster measurement, read-only.
+The Bomb-pool walker the earlier sections predicted "structurally like
+`FUN_08867370`, cursor `+0xc4`/cap 32" exists, is exactly that shape, and sits
+on either side of `Weapon_FireBomb` (`0x08863a20`) in the same function group.
+Found by `search_instructions(lw, "0xc4(")` scoped to the group rather than by
+xref: like `FUN_08867370`, none of these resolve a caller under either address
+rendering. Every address below is real; the EU twin is given only where the
+normalized opcode hash matched exactly (`BombPool_Update` did; the others
+differ only in their `.rodata`/global immediates, same size and instruction
+count, and are **not** transferred under the exact-hash rule).
+
+**`BombPool_Update` (`0x088638b8`, EU `0x08863714`, 85).** Two passes over the
+`+0x44` pointer array up to `+0xc4`: first `Bomb_UpdateTrigger(subsystem, i)`
+per slot, then per slot `Bomb_AdvanceFuse(dt, bomb)`, raising destroy bit `4`
+on the entity's `+0x3c` when it returns false, and for every slot with that bit
+set `Bomb_Detonate(subsystem, bomb, 1, bomb->victim /* +0x74 */)`, clear bit
+`8`, `+0x48 = 0xff`, then the same swap-with-last compaction of `+0xc4` the Mine
+pool uses on `+0x164`. Same template, different pool - which is why nothing
+about one transferred to the other.
+
+**`Bomb_AdvanceFuse` (`0x088633d0`, 85)** is five instructions:
+`bomb->age (+0xc0) += dt; return age < stats->0xe4`. **`+0xe4` is `<Bomb
+timetodie>`** - `WeaponStats_ParseBomb` (`0x0880cef0`) decompiles cleanly on
+the relocated database now, and its eight stores are:
+
+| Offset | Attribute |
+| --- | --- |
+| `+0xc8` | `damage` |
+| `+0xcc` | `damageradius` |
+| `+0xd0` | `blastradius` |
+| `+0xd4` | `blastforce` |
+| `+0xd8` | `absorb` |
+| `+0xdc` | `slowdown_time` |
+| `+0xe0` | `trigger_radius` |
+| `+0xe4` | `timetodie` |
+
+So the Bomb's fuse **is** its own `timetodie`, which `oag_gameplay::projectile::
+mine::Drop::bomb` took by analogy and can now take as recovered - and the
+reason `Weapon_FireBomb` writes nothing to `+0x48` is that the Bomb counts
+**up** from zero at `+0xc0` where the Mine counts **down** at `+0x48`. The
+block sits at `+0xc8..+0xe4`, immediately before the Mine's `+0xe8`, exactly
+where the pool-order arithmetic above put it. Note the order is *not* the
+Mine's: `damageradius` is second and `timetodie` last.
+
+**`Bomb_UpdateTrigger` (`0x08863d7c`, 85)** reads `stats->0xe0`
+(`trigger_radius`) once, then for every craft `i` in the field: skip the
+**owner** (`bomb->+0x48 == i`) while `Bomb_InArmingDelay(bomb)`
+(`0x08863440`, 75: `age < 0.5`, the literal at `0x08ab1054`) - so **the layer
+is exempt from its own bomb for half a second and no longer**, which this
+engine's "never tripped by the craft that laid it" does not match; if the bomb
+is armed (`+0x3c` bit `8`), take `craft->+0x90 - bomb_position`, reject
+outside a `±trigger_radius` box on each axis, then `|d| < trigger_radius`
+sets destroy bit `4` and calls `Bomb_ApplyBlast(subsystem, slot, i)`.
+**After the craft loop it also detonates on the Quake**: it locates the bomb
+on the track (`AiTrack_UpdateCursor(100.0, ...)`) and if
+`Quake_SpanIntensityAt_q` at that point exceeds `0.1` it raises the destroy bit
+with no victim - a passing quake wave sets off every bomb it rolls under.
+
+**`Bomb_ApplyBlast` (`0x088643d0`, 85)** is `Weapon_PostBlastImpulse_q`'s
+shape written out inline against the Bomb's own block: the tripping craft
+takes `+0x120 += stats->0xc8` (`damage`, flat) and `+0x130 += stats->0xdc`
+(`slowdown_time`), records the owner in `+0x13c` and **weapon kind `6` in
+`+0x138`** - the `Ship_Damage` `weapon_kind` sub-bucket pickups.md lists as
+unmapped now has one case named - and then **every** craft within
+`stats->0xd0` (`blastradius`) gets `normalize(d) * (1 - |d|/blastradius) *
+blastforce (+0xd4)` added to its pending impulse at `entity+0x110`, the
+tripping craft included. If the owner is `DAT_08b36c08` the victim's `+0x124`
+byte is set to `1` (a "hit by that craft" flag, unread further). **No read
+of `+0xcc` (`damageradius`) anywhere in this chain**, and a `lwc1`/`lw`
+sweep for a `0xcc(` operand finds none in the group either - it stays the
+one authored Bomb attribute with no consumer.
+
+**`Bomb_Detonate` (`0x088640c8`, 88)** is the teardown, `(subsystem, bomb,
+play_visual, victim)`. With `play_visual` set it builds an orthonormal basis
+from the bomb's `+0x60` direction against the world up at `0x08a907c0` and
+the bomb's position (`FUN_088633c0`), allocates a `0x110`-byte object and
+calls **`BombBlast_Construct(obj, &basis, bomb)`**. Then, on the bomb's own
+sound emitter `+0x4c` (the same per-projectile held-emitter shape `MINERADAR`
+uses): stop it (`FUN_089393b8`), set its `+0x38` to `600.0`, play
+**`BOMBEXPL_PC`** (`0x08a7c7a0`) plus a dry `EAR_SWTNR` (`0x08a7c7b0`) at
+`0x400` when `victim == DAT_08b36c08 && DAT_08b36c08 != 0` and the session
+is local (`DAT_08b31048 < 0xd`) or `DAT_08ab07e3` is set, otherwise
+**`BOMBEXPL`** (`0x08a7c790`); release the emitter, clear `+0x4c`, clear bit
+`4` of the bomb's `+0x2c`, zero `+0x74`. `DAT_08b36c08` is compared against
+craft indices in both functions and reads as **the player's craft index**
+(hypothesis, 65 - it is not read here beyond those two uses), which would make
+`BOMBEXPL_PC` the "player craft" variant heard when the player is the one hit,
+with an ear-sweetener layered on. A bomb that times out has `+0x74 == 0`, so
+it takes the `BOMBEXPL` branch whenever the player's index is non-zero.
+
+**`BombBlast_Construct` (`0x08872078`, 90)** is the Bomb's answer to
+`PlasmaBlast_Construct` (`0x0885fd90`) and settles the two candidates the
+section above left open - it is **neither** `WO_MINE_EXPLO` rescaled **nor**
+`WO_BOMB_SMOKERING` alone, it is three things at once:
+
+1. `Vex_LoadModel(..., "Data\Weapons\explosion_hemisphere.vex", 2048.0,
+   0xfdb2, 0x3e9, 0)` at the basis (`+0xd4`, string at `0x08a7cba0`);
+2. `Psys_Spawn_q(..., "WO_BOMB_SMOKERING", 'BOSM' /* 0x4d534f42 */, &basis,
+   0, 0)` at the same basis (string at `0x08a7cbc8`);
+3. `Vex_LoadModel(..., "Data\Weapons\Bomb_Shockwave.vex", ...)` (`+0xd8`,
+   string at `0x08a7cbdc`) at a **second** copy of the basis whose position
+   is pulled back by `1.0` (`DAT_08ab1070`) along the basis's second row -
+   the shockwave sits one unit below the hemisphere.
+
+Its ramp constants, unread as to meaning: `+0xdc 2.0`, `+0xe0 4.0`, `+0xe4
+0.1`, `+0xe8 0`, `+0xec 12.0`, `+0xf0 0.075`, `+0xf4 1.0`, `+0xf8 0`,
+`+0xfc = DAT_08ab1074 (0.1)`; vtable `0x08acafd8`. The per-tick animator that
+spends them is the next thing to read before drawing any of this. **The
+`Bomb_Shockwave.vex` string the handover thread found at `0x08a7c190` next to
+the plasma models is a second copy**; the one this constructor loads is at
+`0x08a7cbdc`, in the Bomb blast's own `.rodata` group with the alloc tag
+`"file"` at `0x08a7cb98`.
+
+**What this changes for the engine, none of it done here:** the Bomb's fuse
+label moves from "by analogy" to recovered; its layer-exemption is `0.5 s`,
+not forever; its blast is `damage` + `slowdown_time` on the tripping craft
+and a linear-falloff impulse on everyone inside `blastradius`; its detonation
+draws a hemisphere model, a smoke-ring `.pob` and a shockwave model, and plays
+`BOMBEXPL`; and a Quake wave detonates it. `MINE_EXPLO_EFFECT` reused for the
+Bomb would be a stand-in, and so would be `WO_BOMB_SMOKERING` on its own.
 

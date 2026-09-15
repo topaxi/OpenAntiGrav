@@ -276,9 +276,16 @@ pub const fn frozen_pose(orientation: Quat) -> Quat {
 /// **The craft that laid it is never the tripper**, whatever the range. A
 /// cluster leaves from the tail of a craft that is by definition standing right
 /// there, so the alternative is a mine drop that detonates in the dropper's own
-/// face on the tick it is pressed. The original's own arrangement is unread;
-/// this is the same exclusion [`super::nearest_hit`] already makes for a
-/// rocket's owner, applied to a weapon where it is doing more work.
+/// face on the tick it is pressed. This is the same exclusion
+/// [`super::nearest_hit`] already makes for a rocket's owner, applied to a
+/// weapon where it is doing more work. **For the Bomb the original's own
+/// arrangement is now read and it is narrower than this**: `Bomb_UpdateTrigger`
+/// (`0x08863d7c`) skips the owner only while the bomb's age is under `0.5 s`
+/// (`Bomb_InArmingDelay`, `0x08863440`), after which the layer can trip its
+/// own bomb like anyone else. The Mine's own sweep (`FUN_08867b50`) has not
+/// been read for the same point, so the permanent exclusion stays this
+/// engine's for both, labelled as such - see
+/// `docs/ghidra/functions/psp-pulse-usa/mine.md`'s 2026-09-15 Bomb section.
 ///
 /// Takes the radius rather than a stats block, because the Bomb's and the
 /// Mine's come from two different structs and the rule does not care which.

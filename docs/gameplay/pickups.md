@@ -59,7 +59,8 @@ This subsystem is unusually mixed, so the split comes before anything else.
 | `<Bomb>`: the Mine's six, every one of them larger on both shipped tables | **recovered** | 92 |
 | **A Bomb press lays exactly one**, where a Mine press lays a cluster | **recovered** | 88 |
 | **That a bomb is static**, like a mine - its spawn direction is recovered and any speed is not | **ours** | - |
-| **That a bomb's fuse is its own `timetodie`**, by analogy with `Mine_Init` | **ours** | - |
+| **A bomb's fuse is its own `timetodie`** - `Bomb_AdvanceFuse` counts age up against `<Bomb>+0xe4`, which `WeaponStats_ParseBomb` fills from `timetodie` | **recovered** (2026-09-15) | 85 |
+| **A bomb's layer is exempt from tripping it for `0.5 s` only**, then it is a target like anyone; the blast is `damage` and `slowdown_time` on the tripper plus a linear-falloff impulse on everyone inside `blastradius`; a Quake wave detonates it; the detonation is `explosion_hemisphere.vex` + `WO_BOMB_SMOKERING` + `Bomb_Shockwave.vex` with `BOMBEXPL` | **recovered, not built** | 85 |
 | **The blast's impulse falls off linearly** over `blastradius`; the damage does not | **recovered** | 82 |
 | `<Plasma>`: the Rocket's block less `spread`, at measured offsets `+0x9c`..`+0xc4` | **recovered** | 92 |
 | **A Plasma press puts exactly one in the air**, where a Rocket puts three | **recovered** | 88 |
