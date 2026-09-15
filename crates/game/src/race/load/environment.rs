@@ -866,7 +866,11 @@ pub(super) fn zone_grade(
         race.zone_stages,
         art,
         scene_art,
-    );
+    )
+    // How a stage step sweeps the world, where the title's own law is read -
+    // HD/Fury's sphere out of the craft; `None` on 2048, whose rate is
+    // unread. See `oag_title::ZoneTransition`.
+    .map(|grade| grade.with_transition(race.zone_transition));
     // The stage a race *starts* on, which is not stage `0`: **`Start` is the
     // pre-race state, not the opening lap's.** Three converging sources, one of
     // them a direct observation of the original:
@@ -894,10 +898,11 @@ pub(super) fn zone_grade(
         } else {
             grade.request_stage(ZONE_OPENING_STAGE);
             grade.commit();
-            // `commit` zeroes the weight, verbatim as the traced store does,
-            // which would leave the opening stage showing `Start` underneath
-            // it. An opening stage is shown whole.
-            grade.set_weight(1.0);
+            // `commit` zeroes the weight and starts the transition sphere,
+            // verbatim as the traced store does, which would leave the
+            // opening stage showing `Start` underneath and outside it. An
+            // opening stage is shown whole.
+            grade.show_whole();
         }
     }
     // **The development override, applied after the title's own ladder and

@@ -481,10 +481,14 @@ impl Light {
 /// ```text
 /// zoneUV  = zoneColourTint.xy * (1 - meshUV)
 /// rim     = 1 - dot(N, toEye)
+/// inside  = distance(worldPos, zoneOrigin) < zoneColourTint.w
 /// surface = zoneTex(zoneUV).rgb * zoneEffect<I|O>.rgb
 ///         + zoneBase<I|O>.rgb    * rim^10
 ///         + zoneBaseAlt<I|O>.rgb * rim^5
 /// ```
+///
+/// where `<I|O>` is the Inner parameter inside the sphere and the Outer one
+/// outside it - see "the stage-transition wavefront" below.
 ///
 /// **That is the whole surface colour: the material's own albedo does not
 /// enter it.** Which is the finding that carries the look - the original's
@@ -574,7 +578,48 @@ impl Light {
 /// that wrong is invisible whenever `zoneEffect` is exactly `1.0`, which is
 /// why `crates/render/tests/zone_recolour.rs` binds `2.0`.
 ///
-/// **Three terms of the recovered rule are deliberately absent**, because
+/// # The stage-transition wavefront
+///
+/// **A Zone stage change is not a colour cross-fade; it is a sphere.** Every
+/// Zone parameter is published twice more, as an Inner and an Outer copy,
+/// and the fragment picks one on `distance(worldPos, zoneOrigin) <
+/// zoneColourTint.w` (`zone-shader.md`, 82, read with opposite compiler
+/// polarity in two materials). `Environment_UpdateStageBlend` (`0x003da540`)
+/// copies stage `n` into the Inner set and stage `n - 1` into the Outer,
+/// restarts the radius at `0.1` when a stage commits and then grows it every
+/// frame - `radius += speed; speed += 0.1`, from a speed of `0.5`, capped at
+/// `20000` - while `Scene_PrepareFrame` (`0x003ad8dc`) rewrites `zoneOrigin`
+/// from the local craft's own transform every frame. So the new stage's
+/// colours spread out of the player's craft and overtake the old ones at a
+/// quadratic pace: `207` units out after a second, `4,635` after five, the
+/// cap ten and a half seconds in. Read statically, then reproduced live on
+/// RPCS3 on 2026-09-15 to the tenth at two frame counts (94 on the law, 92
+/// on the origin being the craft, 210 of 210 frames); the whole account is
+/// `docs/ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md`,
+/// passes twenty-four, thirty and thirty-one.
+///
+/// Here: [`Self::track`] and [`Self::scene`] are the Inner pair,
+/// [`Self::track_outer`] and [`Self::scene_outer`] the Outer, [`Self::origin`]
+/// is `zoneOrigin` and [`Self::radius`] is `zoneColourTint.w`. The game side
+/// (`oag_game::race::zone_grade::ZoneGrade::follow`) derives the radius from
+/// the race's own zone clock by the closed form of that advance, and hands
+/// the craft's position over unscaled. Before any transition the Outer pair
+/// equals the Inner and the test is a no-op, which is also every draw
+/// outside a Zone race ([`Zone::default`], all zero on both sides).
+///
+/// **Two things about it are not measured, and are stated rather than
+/// tuned.** The radius's *unit*: the shader compares it to a world-space
+/// distance, and whether this renderer's world units are the original's is
+/// unverified - the value is passed through as read, and the live frame at
+/// radius `799` (`burst-1.png` in the RPCS3 artefacts) showing the boundary a
+/// few hundred units ahead of the craft is a picture, not a measurement.
+/// And the stage *texture* on each side: the original also publishes
+/// `zoneTexInner`/`zoneTexOuter`, but this renderer binds one stage's texture
+/// per drawable at build time and never rebinds it (`race::Scene::new`), so
+/// the boundary is a step in the two colour sets over one texture, not in
+/// the texture as well.
+///
+/// **Two terms of the recovered rule are deliberately absent**, because
 /// nothing on the disc feeds them and this project does not invent:
 ///
 /// 1. The whole `zoneAniso` shape - `2 * zoneAnisoPalette[pow(rim,
@@ -582,16 +627,15 @@ impl Light {
 ///    palette textures (`0x00c81330`-`0x00c81350`) have no located filling
 ///    write, and it applies to the four Zone arenas rather than to a circuit,
 ///    so it is absent by scope as much as for want of a source.
-/// 2. The visualiser glow, `saturate(N.y - 0.5) * ... * zoneTexVis[band]`: the
-///    256-entry lookup is built at runtime from a static table inside the
-///    executable, which is game content this project may not carry, and the
-///    build loop's own arithmetic does not yet close.
-/// 3. The inner/outer sphere test. `zoneOrigin` has no located writer at all,
-///    and the radius is a field of a per-environment struct whose own writer is
-///    unfound. It does not matter here: the split is a *stage-transition
-///    wavefront* between stage `n` and stage `n - 1`, and this build never has
-///    a transition in flight, so both sides read the same stage and the test is
-///    a no-op whichever way it would have gone.
+/// 2. The visualiser glow's own table, `zoneTexVis[band]`: the 256-entry
+///    lookup is rewritten every frame from a value whose source is unread,
+///    so `mesh.wgsl`'s `zone_glow` samples a lookup this project fills from
+///    its own mixer instead. Its additive sibling, `5.0 * saturate(1 - 0.1 *
+///    (distance - zoneColourTint.w))`, now has both its inputs and is still
+///    left out: as read it adds `5.0` to *every* fragment inside the sphere,
+///    not just at its edge, and the live frame at radius `799` shows no such
+///    flood - so the reading of that term is what is in doubt, and it stays
+///    out until it is re-read. See `mesh.wgsl`'s `zone_glow`.
 // **`align(16)` is load-bearing, not decoration.** WGSL gives this struct an
 // alignment of 16 because it holds a `vec4<f32>`, so `Scene`'s `zone` field
 // starts at a 16-aligned offset there. Rust's own alignment for it is 4, and
@@ -611,14 +655,30 @@ pub struct Zone {
     /// Not a look switch: it is `0.0` for every draw that is not a Zone race on
     /// a title whose table, UV scale and stage texture all resolved, so a
     /// missing input draws nothing rather than something approximate.
+    ///
+    /// The `.z` lane of `zoneColourTint`, which the original never writes;
+    /// this project's own gate lives in it.
     pub enabled: f32,
-    pub _pad: f32,
-    /// The `Track.*` colours, published beside `zoneModeTrack<n>.gtf` for a
-    /// chunk whose render-block flags carry the track bit.
+    /// `zoneColourTint.w` - the transition sphere's radius this frame, in
+    /// world units as the game side hands them over. Zero outside a Zone
+    /// race, when the Outer pair equals the Inner anyway.
+    pub radius: f32,
+    /// `zoneOrigin` - the sphere's centre, the local craft's world position,
+    /// `.w` unused.
+    pub origin: [f32; 4],
+    /// The `Track.*` colours of the showing stage - `zone*Inner`, published
+    /// beside `zoneModeTrack<n>.gtf` for a chunk whose render-block flags
+    /// carry the track bit.
     pub track: ZoneSet,
-    /// The `Scene.*` colours, published beside `zoneMode<n>.gtf` for every
-    /// other chunk.
+    /// The `Scene.*` colours of the showing stage - `zone*Inner`, published
+    /// beside `zoneMode<n>.gtf` for every other chunk.
     pub scene: ZoneSet,
+    /// The `Track.*` colours of the stage being swept out - `zone*Outer`,
+    /// read by a track chunk's fragment outside the sphere.
+    pub track_outer: ZoneSet,
+    /// The `Scene.*` colours of the stage being swept out - `zone*Outer`,
+    /// read by every other chunk's fragment outside the sphere.
+    pub scene_outer: ZoneSet,
 }
 
 /// One of the two colour groups a Zone stage authors, in the order the
@@ -796,8 +856,8 @@ impl Scene {
 }
 
 const _: () = assert!(
-    std::mem::size_of::<Zone>() == 112,
-    "mesh.wgsl's Zone is a vec4 and two three-vec4 sets"
+    std::mem::size_of::<Zone>() == 224,
+    "mesh.wgsl's Zone is two vec4s and four three-vec4 sets"
 );
 const _: () = assert!(
     std::mem::offset_of!(Scene, zone).is_multiple_of(16),

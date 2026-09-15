@@ -75,6 +75,7 @@ const TITLE: &Title = &Title {
         // the colour grade a Zone race climbs.
         zone_palette: None,
         zone_stages: None,
+        zone_transition: None,
         zone_stage_textures: None,
         zone_sky: None,
         // Unread here too: nothing in this crate resolves a team's variant.

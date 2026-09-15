@@ -338,6 +338,7 @@ const DEFAULTS: RaceDefaults = RaceDefaults {
     zone_class_announcer: None,
     zone_palette: None,
     zone_stages: None,
+    zone_transition: None,
     zone_stage_textures: None,
     zone_sky: None,
     team_variants: Some(&NATIVE),

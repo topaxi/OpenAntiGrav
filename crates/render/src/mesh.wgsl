@@ -118,13 +118,21 @@ struct Zone {
     uv_scale: vec2<f32>,
     // 1.0 only when every input this path reads resolved off the disc.
     enabled: f32,
-    _pad: f32,
-    // The `Track.*` group, published beside `zone_tex` for a chunk whose
-    // `slots` carry `ZONE_TRACK`; the `Scene.*` group beside `zone_scene_tex`
-    // for every other chunk. Which is the file's own per-chunk bit - see
-    // `zone_set` below and `mesh_render::Zone`.
+    // `zoneColourTint.w`: the stage-transition sphere's radius this frame.
+    radius: f32,
+    // `zoneOrigin`: the sphere's centre, the local craft's world position.
+    origin: vec4<f32>,
+    // The showing stage's two groups - `zone*Inner`: the `Track.*` group,
+    // published beside `zone_tex` for a chunk whose `slots` carry
+    // `ZONE_TRACK`; the `Scene.*` group beside `zone_scene_tex` for every
+    // other chunk. Which is the file's own per-chunk bit - see `zone_set`
+    // below and `mesh_render::Zone`.
     track: ZoneSet,
     scene: ZoneSet,
+    // The stage being swept out - `zone*Outer` - for a fragment outside the
+    // sphere. Equal to the pair above whenever no transition is in flight.
+    track_outer: ZoneSet,
+    scene_outer: ZoneSet,
 };
 
 struct Scene {
@@ -563,6 +571,20 @@ fn fogged(colour: vec3<f32>, world: vec3<f32>, view_depth: f32) -> vec3<f32> {
 // `textureSample` wants uniform control flow, and a flat-interpolated
 // per-vertex word is not that.
 //
+// **Which of the Inner and Outer copies a fragment reads is a world-space
+// sphere: `distance(worldPos, zoneOrigin) < zoneColourTint.w`** - read with
+// opposite compiler polarity in two materials, and the same rule both times
+// (`zone-shader.md`, 82). Inside it the stage that just committed, outside
+// it the one before: a stage change on HD is a sphere growing out of the
+// local craft that repaints the world as it passes, not a cross-fade. The
+// radius and origin come from the game side every frame by the law read out
+// of `Environment_UpdateStageBlend` and reproduced live - see
+// `mesh_render::Zone`, "the stage-transition wavefront", for the numbers
+// and for the one input still unmeasured (the radius's unit against this
+// renderer's world). Before any transition the two pairs are equal and this
+// selects the same colours either side, which is also every draw outside a
+// Zone race.
+//
 // **Scope, stated because it is an approximation.** This applies to every
 // surface `mesh.wgsl` draws for a Zone race, and the original applies it per
 // material. Craft are the exclusion that mattered and they are handled at the
@@ -570,16 +592,30 @@ fn fogged(colour: vec3<f32>, world: vec3<f32>, view_depth: f32) -> vec3<f32> {
 // at all, so `race::scene::frame` binds a default (disabled) Zone to the
 // ships. The sky cube, the pads and the collision wireframe do still reach
 // this path, which is the same shape of blanket approximation as the shared
-// specular exponent and the blanket sun term above.
+// specular exponent and the blanket sun term above. And the stage *texture*
+// does not follow the sphere: the original publishes `zoneTexInner` and
+// `zoneTexOuter` too, but each drawable here binds one stage's texture at
+// build time, so the boundary is a step in the colour sets over one texture.
 fn zone_is_track(slots: u32) -> bool {
     return (slots & 512u) != 0u;
 }
 
-fn zone_set(slots: u32) -> ZoneSet {
+fn zone_inside(world: vec3<f32>) -> bool {
+    return distance(world, scene.zone.origin.xyz) < scene.zone.radius;
+}
+
+fn zone_set(slots: u32, world: vec3<f32>) -> ZoneSet {
+    let inside = zone_inside(world);
     if zone_is_track(slots) {
-        return scene.zone.track;
+        if inside {
+            return scene.zone.track;
+        }
+        return scene.zone.track_outer;
     }
-    return scene.zone.scene;
+    if inside {
+        return scene.zone.scene;
+    }
+    return scene.zone.scene_outer;
 }
 
 fn zone_sample(uv: vec2<f32>, slots: u32) -> vec3<f32> {
@@ -646,16 +682,22 @@ fn zone_base_term(rim: f32, colours: ZoneSet) -> vec3<f32> {
 // comment.
 //
 // **One additive term of the microcode's own glow is left out**:
-// `5.0 * saturate(1 - 0.1 * (distance - zoneColourTint.w))`, the sphere
-// test's own bonus, on the same terms `mesh_render::Zone`'s doc comment
-// already states for the sphere test itself: `zoneOrigin` has no located
-// writer, so there is no source for `distance` to read, and inventing one
-// would be exactly the stand-in `CLAUDE.md` rules out.
+// `5.0 * saturate(1 - 0.1 * (distance - zoneColourTint.w))`. Both of its
+// inputs are bound now - `zone_inside` reads the same origin and radius -
+// and it is still not drawn, for a different reason than before: as read,
+// the term is `5.0` for every fragment *inside* the sphere (the argument
+// saturates to `1` wherever `distance <= radius`) and only tails off over
+// ten units past the boundary, which would flood the new stage's whole
+// interior white. The live RPCS3 frame at radius `799` shows nothing of the
+// kind - the near track is plainly the new stage's colours. So the reading
+// of that term is what is in doubt, not its inputs, and it stays out until
+// the microcode is re-read rather than being tuned into an edge glow that
+// looks right.
 //
 // `window_depth` is `@builtin(position).z` read at fragment time - WebGPU's
 // own window-space depth in `0..1`, the same convention the microcode's own
 // `f[POS]` carries.
-fn zone_glow(n: vec3<f32>, window_depth: f32, uv: vec2<f32>, slots: u32) -> vec3<f32> {
+fn zone_glow(n: vec3<f32>, window_depth: f32, uv: vec2<f32>, slots: u32, world: vec3<f32>) -> vec3<f32> {
     let zone_uv = scene.zone.uv_scale * (1.0 - uv);
     // The band comes from whichever stage texture this chunk publishes - the
     // scene set's is alpha 255 everywhere, so a scene chunk indexes the last
@@ -665,7 +707,7 @@ fn zone_glow(n: vec3<f32>, window_depth: f32, uv: vec2<f32>, slots: u32) -> vec3
     let band = select(scene_band, track_band, zone_is_track(slots));
     let vis = textureSample(zone_vis_tex, zone_vis_sampler, vec2<f32>(band, 0.5)).rgb;
     let up = clamp(n.y - 0.5, 0.0, 1.0);
-    let drive = zone_set(slots).effect.w;
+    let drive = zone_set(slots, world).effect.w;
     return max(up * (1.0 - window_depth) * drive * vis, vec3<f32>(0.0));
 }
 
@@ -885,7 +927,7 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     // out of the fog block, the one slot in bind group 2 that carries a
     // position; the specular term below reads it from there too.
     let zone_to_eye = normalize(scene.fog.camera - in.world);
-    let zone_colours = zone_set(in.slots);
+    let zone_colours = zone_set(in.slots, in.world);
     let zone_base = zone_base_term(1.0 - dot(n, zone_to_eye), zone_colours);
     let zone = zone_sample(in.texcoord, in.slots);
     let zone_linear = pow(zone, vec3<f32>(2.2)) * zone_colours.effect.rgb + zone_base;
@@ -894,7 +936,7 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     // rather than trusting `effect.w` to be zero off a Zone race, the same
     // belt-and-braces `surface_linear`/`plain` below already take.
     let zone_glow_term =
-        zone_glow(n, in.clip.z, in.texcoord, in.slots) * scene.zone.enabled;
+        zone_glow(n, in.clip.z, in.texcoord, in.slots, in.world) * scene.zone.enabled;
 
     // The read specular term: half-vector against the sun, raised to
     // `in.specular_exponent` - each material's own inline constant, decoded

@@ -407,18 +407,32 @@ free:**
   pause flag (`g_GamePaused`, 85): `0` in play, `1` with the `GAME PAUSED`
   menu up, `0` again on resume - the wavefront freezes while paused and
   resumes where it was.
-- **Wire the transition** once someone owns the renderer side: origin =
-  the local craft's world position each frame (measured, 92), radius
-  `r_k = 0.1 + 0.5k + 0.05k(k-1)` per frame after a stage commit, capped at
-  20000, colour weight `min(0.01k, 1)` - all three now runtime-verified
-  (thirty-first pass, 94 on the law) - and both frozen while `g_GamePaused`
-  is set. Every number is the disc's (`.data` defaults for the two
-  unauthored keys, the constants in `Environment_UpdateStageBlend`), so this
-  is no longer a chosen stand-in. The one number still not measured against
-  the world is the radius's *unit*: `burst-1.png` in
-  `data/reference/hd-capture/flare-owner/zone/` shows the boundary a few
-  hundred units ahead of the craft at radius 799, which is consistent with
-  world units but is a picture, not a measurement.
+- ~~**Wire the transition** once someone owns the renderer side~~ **Wired,
+  2026-09-15.** `oag_title::ZoneTransition` carries the law
+  (`oag_hd::race::ZONE_TRANSITION`: radius `0.1` on the commit, speed `0.5`
+  `+= 0.1` a frame, cap `20000`, weight `+= 0.01`; `None` on 2048),
+  `ZoneGrade::follow` derives `k` from the zone counter and the zone clock
+  rather than counting frames (so a headless capture's single sync, the
+  windowed loop and a paused race all agree), the `Zone` uniform carries
+  both stage pairs plus `zoneOrigin` and `zoneColourTint.w`, and
+  `mesh.wgsl` selects Inner or Outer per fragment on `distance(world,
+  origin) < radius`. Seen headless on Talon's Junction at `k = 60`, `150`
+  and `300` after the zone-2 step: a boundary sweeping outward from the
+  craft, `Venom` inside and `Sub Venom` beyond. Full account, what is chosen
+  (the opening stage shown whole; the 60 Hz tick as the frame) and what is
+  open, on `docs/rendering/hd-zone-recolour.md`. Still open from that page:
+  the radius's *unit* against this renderer's world (passed through
+  unscaled; the port's craft moves 1.6-2.3 units a tick where the PS3's
+  moved 1.1-1.4 a frame at zone 2, same order, different circuits); the
+  stage *texture* not following the sphere (one texture per drawable, bound
+  at build); the glow's own `5.0 * saturate(1 - 0.1 * (distance -
+  radius))` term, which as read floods the whole inside rather than its
+  edge and is left out until re-read. `burst-2.png` at radius `3288` is
+  the live frame that confirms the polarity (near road green, near walls
+  lime, far scenery cyan); `burst-1.png` at `799` is not discriminating -
+  its near-track teal is `Venom`'s own `Track.Base Colour` rim, not the old
+  stage. The effectsettings thread's own "Wire the wavefront" item is the
+  coordinator's to strike.
 - ~~If the maintainer plays past a class change and can say whether the world
   visibly repaints outward from a point versus changing everywhere at once~~
   **Answered, 2026-08-31 - see the dated section above.** It is a wavefront,

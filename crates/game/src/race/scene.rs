@@ -415,10 +415,13 @@ impl Scene {
         // on a title with no located set, and then the shader's own
         // `zone.enabled` is zero too and nothing is added.
         //
-        // **Bound at build time, so it does not follow a stage change.** No
-        // title reaches one on this path - HD's own trigger is unrecovered and
-        // the art set is HD's alone - and re-binding every drawable's scene
-        // group mid-race is machinery this has no caller for yet.
+        // **Bound at build time, so it does not follow a stage change.** HD
+        // does step stages mid-race now, and the original publishes a
+        // `zoneTexInner`/`zoneTexOuter` pair the way it publishes the colour
+        // sets - but re-binding every drawable's scene group mid-race is
+        // machinery this has no caller for yet, so a stage step moves the
+        // two colour sets over the opening stage's texture. Stated on
+        // `docs/rendering/hd-zone-recolour.md` as open.
         let zone_art = zone_grade
             .as_ref()
             .map_or(mesh_render::zone::StageArt::NONE, |grade| {
