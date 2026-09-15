@@ -392,19 +392,66 @@ non-zero entry that reads correctly is therefore a plain byte copy, and a
 zero one is not a decompression failure either - there is no decoding step
 in either case to have gotten wrong.
 
-One open, unverified lead for the real/zero split itself:
-[`source-images.md`'s](../reverse-engineering/source-images.md#omega-ps4-eupkg--omega-ps4-eu-patchpkg---wipeout-omega-collection-ps4)
-own extraction command reads only `omega-ps4-eu.pkg` (the base package) and
-records "~25 GiB total" across the five archives - the `data/extracted/ps4/omega-eu/`
-this page's measurements are against is **~40.8 GiB**, larger than that
-recorded command or size would produce. Whether the current extraction also
-folded in `omega-ps4-eu-patch.pkg`, and whether that merge was clean, is not
-established - a per-file base-versus-patch split, where some files' bytes
-were carried over correctly and others were not, fits a scattered
-non-positional real/zero pattern better than a uniform offset-formula bug
-would. Not chased further - the fix would be re-running `PkgTool.Core`
-correctly, not a change to this crate, and is exactly the kind of change
-that needs the original images, not a sandbox.
+**The extraction-provenance lead is closed, negative.** An earlier version of
+this page treated the `data/extracted/ps4/omega-eu/` directory's ~40.8 GiB
+(against `source-images.md`'s recorded "~25 GiB, base `.pkg` only") as
+unexplained, and floated an unclean base/patch merge as a possible cause of
+the real/zero split. Checked directly, 2026-09-15: `PkgTool.Core pkg_extract`
+takes exactly one `.pkg` and one output directory
+(`PkgTool/Program.cs`'s `pkg_extract` verb, read from source - no patch-chain
+or merge logic anywhere in the tool) and simply overwrites nothing it doesn't
+touch, so a base-only extraction cannot have silently absorbed patch content.
+The `~25 GiB` figure was just an imprecise earlier estimate; the base `.pkg`
+alone reproducibly extracts to 40.6 GiB across its five archives (`data00`
+13 GiB, `data01` 11 GiB, `data02` 9.1 GiB, `data03` 2.5 GiB, `data04` 6.0 GiB -
+`source-images.md`'s own count corrected to match).
+
+Extracting `omega-ps4-eu-patch.pkg` on its own, same tool, same verb, settles
+it further: the patch's `uroot/` holds **four archives with names the base
+`.pkg` does not have at all** - `data05` (654 MiB), `data07` (20 MiB), `data08`
+(5.3 GiB), `data09` (6.9 MiB), no `data06`, and critically **no `data00`-`data04`** -
+so a patch extraction cannot be "the missing bytes" for any of this page's
+five base archives; it adds new content, it does not complete old content.
+See `source-images.md`'s Omega Collection section for the full patch
+extraction record.
+
+**And the same real/zero split is already present in the patch's own,
+freshly-extracted archives**, measured the same way (`psarc_sweep`, below):
+`data05.psarc` 415/1,207 (34%), `data07.psarc` 6/7 (86%), `data08.psarc`
+796/1,789 (44%), `data09.psarc` 84/121 (69%) - the same 30-70%-ish range as
+the five base archives, on a directory this session extracted itself,
+minutes before measuring it. That rules out "one bad extraction run" as an
+explanation as thoroughly as the merge theory above did: two independent
+extractions, from two different `.pkg` files, on the same machine, in the
+same session, both show the split. Whatever produces it is a property of
+this archive family (or of `PkgTool.Core`'s own PFS reader, not chased
+further - see below), not of one directory's provenance.
+
+Reproduce the corrected measurement, and its trap:
+
+```sh
+cargo run -p oag-assets --release --example psarc_sweep -- \
+  data/extracted/ps4/omega-eu/uroot/data03.psarc
+# 100/328 (30.5%) non-zero - matches this page's original table (99/327, 30%)
+```
+
+**The trap this tool had to be rewritten around**: a first draft of
+`psarc_sweep` checked `bytes.iter().any(|&b| b != 0)` over the *whole*
+decoded entry - "is there a nonzero byte anywhere" - and got wildly higher
+non-zero rates (87% on `data00`, 70% on `data03`) that looked, briefly, like
+either a crate bug only triggered by reading many entries through one
+`Archive` in a loop, or like this page's own original table being stale.
+Neither was true: a large buffer that is genuinely corrupt/zero at the
+*header* - the only place that matters, since that is what a real reader
+checks first - can still contain a single stray nonzero byte tens of
+kilobytes in, and "any nonzero byte" counts that as real. Checking
+`bytes.first()` instead - matching this table's own "non-zero **at**
+`entry.offset`" column header literally - reproduces the original 54%/39%/30%
+figures almost exactly (820/1,530, 347/892, 100/328). Two named entries this
+page already cited settled which check to trust before the fix: both
+reproduced byte-for-byte identically to their original description either
+way, so the discriminator had to be a *third* set of entries, not the two
+already on this page.
 
 Reproduce a real read and an all-zero one:
 
