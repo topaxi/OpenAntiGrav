@@ -1037,7 +1037,7 @@ no longer disagree.
   the fifteen-stage table, and `Sub Venom` fogs `[0, 1.305882, 1.8]` at
   density `0.0021` where `Start` authors none. **The trigger is still open**
   and is now the *only* thing between this and a race that escalates on its
-  own - `request_stage`/`set_weight` are a seam with no caller. **[stale 2026-09-15: computed before the lvlx reimport; re-run per toolchain.md#ps3]** Two smaller
+  own - `request_stage`/`set_weight` are a seam with no caller (a seam in this project's own code, not an executable negative; the HD ladder driving it was recovered 2026-08-31). Two smaller
   questions the wiring surfaced are in
   [effectsettings.md](../../docs/formats/effectsettings.md)'s `## Open`: which
   way `+0x18` runs (the commit zeroes it, `cross_fade_rgba8`'s own doc says
