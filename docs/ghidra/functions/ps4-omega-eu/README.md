@@ -95,6 +95,11 @@ unnamed rather than forced.
   global, picking from the same small vocabulary of `321Go_*.vex` names that
   binary's own string census found but could not trace a mechanism for.
 
+- [vex-classes.md](vex-classes.md) - a two-record spot-check confirming
+  `ps3-hdfury-eu`'s own `g_VexClassTable` (866 records, confidence 95) also
+  exists here in the same shape, scaled to 64-bit pointers. No `names.tsv`
+  row - the spot-check doesn't clear the bar a full read would.
+
 Add a row to [`names.tsv`](names.tsv) and the page it cites in the same
 change: `scripts/apply-ghidra-names.py` refuses a row whose address and name
 do not both still appear on the page named in its last column.
