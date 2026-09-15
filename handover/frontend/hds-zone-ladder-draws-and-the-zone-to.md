@@ -172,7 +172,16 @@ than guessed at either way.
 **A candidate for the non-verbal half, found and deliberately left unwired.**
 `env0_zone.bnk` (HD's Zone environment bank, not `speech_zone.bnk`) names a
 cue `ZONEBAR_TRANS` - plausibly the HUD ladder widget's own transition - but
-nothing traces a call site for it **[stale 2026-09-15: computed before the lvlx reimport; re-run per toolchain.md#ps3]**, and a single unread label is not the
+nothing traces a call site for it. **2026-09-15: a call site is now found.**
+The string is referenced exactly once in the ELF, from `FUN_0006c600`
+(`0006c9f8`), a function that gates a Zone class-change branch (the same
+`0`-`14` ladder increment) and, on that branch, calls a confirmed
+cue-name-by-voice-slot helper for `"ZONEADVANCE"` immediately before passing
+`"ZONEBAR_TRANS"` to a second, eight-argument call whose own role isn't yet
+decompiled to certainty. Confidence 65 - see
+[sound.md](../../docs/ghidra/functions/ps3-hdfury-eu/sound.md#zonebar_trans-a-call-site-found)
+for the full read and what's still open in it. Still not wired in this
+codebase, and a single unread label is not the
 fourteen-way order match the `MR_*` ladder has. **Also found and corrected**:
 `docs/formats/psp-audio.md` previously listed a third cue, `HBEAT_ZCHANGE`,
 beside `HBEAT`/`HBEAT_GO`. Checked directly this session -
@@ -398,3 +407,8 @@ free:**
   **Answered, 2026-08-31 - see the dated section above.** It is a wavefront,
   which corroborates the reading; what it corroborates *against* (a fixed
   world-space `zoneOrigin`) is the open question that answer raises.
+- **`ZONEBAR_TRANS`'s call site is found (2026-09-15) but not fully read.**
+  Decompile `FUN_002ffa58` and its callee `FUN_00679688` (called from
+  `FUN_0006c600` right beside the confirmed `ZONEADVANCE` cue trigger) to
+  settle whether it is itself the non-verbal class-change cue, per
+  [sound.md](../../docs/ghidra/functions/ps3-hdfury-eu/sound.md#zonebar_trans-a-call-site-found).
