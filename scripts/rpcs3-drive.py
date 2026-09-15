@@ -152,6 +152,109 @@ RACE_ARRIVED = {"InGame", "HUD"}
 # circuit from for free - the GDB stub is never asked.
 TRACK_LINE = re.compile(r"Loading track model (\S+)")
 
+#: RPCS3's own configuration, the one its GUI edits. Never written by this
+#: script: everything below reads it and writes a *copy*.
+STOCK_CONFIG = os.path.expanduser("~/.config/rpcs3/config.yml")
+
+#: Where the generated copy goes. Under `data/` because that is gitignored,
+#: and beside the other tool state rather than under `/tmp` (a 32 GiB tmpfs
+#: this project has wedged before).
+SCRATCH_CONFIG = str(Path(__file__).resolve().parent.parent
+                     / "data" / "tools" / "rpcs3-scratch-config.yml")
+
+#: `Session(config=MUTED)` - the default - generates the copy below and passes
+#: it as `--config`. `config=None` launches on the stock file untouched.
+MUTED = "muted"
+
+#: `RPCS3.log`, where the emulator dumps the configuration it actually booted
+#: with (`Used configuration:`) - what `Session.config_report` reads back.
+RPCS3_LOG = os.path.expanduser("~/.cache/rpcs3/RPCS3.log")
+
+
+def scratch_config(path=SCRATCH_CONFIG, interpreter=False, source=STOCK_CONFIG):
+    """Write a full copy of `config.yml` with the audio muted, and return it.
+
+    RPCS3 accepts `--config <path>`, and that path **replaces** the whole
+    configuration rather than overlaying it - a three-line file would reset
+    `Miscellaneous: GDB Server` and `Core: Assume External Debugger` to their
+    defaults, and the failure would read as "breakpoints never fire". So this
+    copies every line of the stock file and edits exactly two keys, each
+    matched inside its own top-level section (`Video:` has a `Renderer:` too):
+
+    - `Audio: Renderer` -> `"Null"`, always, **with the quotes**: a bare
+      `Null` is YAML's null, RPCS3 drops it and boots `Cubeb` regardless -
+      measured 2026-09-15, `Used configuration:` still said `Cubeb` with the
+      unquoted form. The stock file quotes its own `"Null"`s (`Keyboard`,
+      `Microphone Type`) for the same reason. A scripted run on the virtual
+      display has no business on the user's speakers.
+    - `Core: PPU Decoder` -> `Interpreter (static)` when `interpreter` is
+      set. `Z0` breakpoints only fire under it; the stock `Recompiler (LLVM)`
+      answers `OK` and never stops (rpcs3-debugger.md). Boot takes ~75 s
+      instead of ~30 s under it, so it is opt-in.
+
+    The copy is regenerated on every `Session.__enter__`, so an edit to the
+    stock file is picked up by the next launch and nothing here goes stale.
+    What actually came up is in `RPCS3.log`'s own `Used configuration:` dump;
+    `Session.config_report()` pulls the two lines out of it.
+    """
+    edits = {("Audio", "Renderer"): "\"Null\""}
+    if interpreter:
+        edits[("Core", "PPU Decoder")] = "Interpreter (static)"
+    section = None
+    out = []
+    applied = set()
+    with open(source) as handle:
+        for line in handle:
+            if line and not line[0].isspace() and line.rstrip().endswith(":"):
+                section = line.rstrip()[:-1]
+            key = line.strip().split(":", 1)[0] if line.startswith("  ") else None
+            if (section, key) in edits and (section, key) not in applied:
+                line = "  %s: %s\n" % (key, edits[(section, key)])
+                applied.add((section, key))
+            out.append(line)
+    missing = set(edits) - applied
+    if missing:
+        raise SystemExit("%s: no line for %s - the copy would silently run "
+                         "with the stock value" % (source, sorted(missing)))
+    Path(path).parent.mkdir(parents=True, exist_ok=True)
+    Path(path).write_text("".join(out))
+    return path
+
+
+def rpcs3_log_text():
+    try:
+        with open(RPCS3_LOG, errors="replace") as handle:
+            return handle.read()
+    except FileNotFoundError:
+        return ""
+
+
+def config_report(keys=("Audio: Renderer", "Core: PPU Decoder")):
+    """The settings RPCS3 says it booted with, off its own log.
+
+    `RPCS3.log` opens with a `Used configuration:` dump of the whole
+    effective config, so what came up is read back from the emulator rather
+    than assumed from what was passed. Returns `{key: value}` for each
+    `Section: Key` asked for; a key that never appeared maps to `None`, and
+    that is the answer to trust over any launch line.
+    """
+    found = {}
+    section = None
+    for line in rpcs3_log_text().splitlines():
+        if "Used configuration:" in line:
+            section = None
+            continue
+        if line and not line[0].isspace() and line.rstrip().endswith(":"):
+            section = line.rstrip()[:-1]
+            continue
+        if section and line.startswith("  ") and ":" in line:
+            key, _, value = line.strip().partition(":")
+            full = "%s: %s" % (section, key)
+            if full in keys and full not in found:
+                found[full] = value.strip()
+    return {key: found.get(key) for key in keys}
+
+
 
 def tty_text():
     try:
@@ -329,7 +432,7 @@ def screenshot(path, trim=False):
 class Session:
     """One emulator run, with the pad it must not outlive."""
 
-    def __init__(self, image, log_dir):
+    def __init__(self, image, log_dir, config=MUTED, interpreter=False):
         # Resolved here rather than passed through: `data/` is gitignored and
         # does not travel into a worktree, so a relative default silently
         # becomes a path RPCS3 answers `Invalid file or folder` for.
@@ -342,6 +445,11 @@ class Session:
                 % self.image)
         self.log_dir = Path(log_dir)
         self.log_dir.mkdir(parents=True, exist_ok=True)
+        # `MUTED` (the default) generates `scratch_config()` on enter; a path
+        # is passed through as-is; `None` launches on the stock file, sound
+        # and all - the one caller that wants that has to say so.
+        self.config = config
+        self.interpreter = interpreter
         self.pad = None
         self.proc = None
 
@@ -352,9 +460,12 @@ class Session:
         # enumerates devices and does not rescan.
         self.pad = rpcs3_pad.Pad()
         open(TTY, "w").close()
+        if self.config == MUTED:
+            self.config = scratch_config(interpreter=self.interpreter)
+        config_args = ["--config", str(self.config)] if self.config else []
         self.proc = subprocess.Popen(
-            ["rpcs3", "--no-gui", "--input-config", rpcs3_pad.INPUT_CONFIG_NAME,
-             str(self.image)],
+            ["rpcs3", "--no-gui", "--input-config", rpcs3_pad.INPUT_CONFIG_NAME]
+            + config_args + [str(self.image)],
             stdout=open(self.log_dir / "rpcs3.log", "w"),
             stderr=subprocess.STDOUT, start_new_session=True,
             env=emulator_env())
@@ -564,7 +675,7 @@ def cmd_preflight(args):
 
 
 def cmd_boot(args):
-    with Session(args.image, args.log_dir) as session:
+    with session(args) as session:
         print("rpcs3 pid %d, waiting for the Main Menu" % session.proc.pid,
               flush=True)
         if not session.wait_for_screen_pressing("Main Menu", args.timeout):
@@ -584,7 +695,7 @@ def cmd_shot(args):
     what colour it came out. See `Session.take_screenshot`.
     """
     before = set(emulator_screenshots())
-    with Session(args.image, args.log_dir) as session:
+    with session(args) as session:
         print("rpcs3 pid %d" % session.proc.pid, flush=True)
         if not session.wait_for_screen_pressing(args.screen, args.timeout):
             print("never reached %r (last screen: %s)"
@@ -609,7 +720,7 @@ def emulator_screenshots(title_id="BCES00664"):
 
 
 def cmd_race(args):
-    with Session(args.image, args.log_dir) as session:
+    with session(args) as session:
         print("rpcs3 pid %d" % session.proc.pid, flush=True)
         if not session.wait_for_screen_pressing("Main Menu", args.timeout):
             print("never reached the Main Menu (last screen: %s)"
@@ -777,7 +888,7 @@ def cmd_capture(args):
     out.mkdir(parents=True, exist_ok=True)
     regions = [parse_region(r) for r in args.region] or list(PUSHBUFFER_REGIONS)
 
-    with Session(args.image, args.log_dir) as session:
+    with session(args) as session:
         print("rpcs3 pid %d" % session.proc.pid, flush=True)
         if not session.wait_for_screen_pressing("Main Menu", args.timeout):
             print("never reached the Main Menu (last screen: %s)"
@@ -894,7 +1005,7 @@ def cmd_browse(args):
         screen, _, buttons = item.partition("=")
         plan[screen] = [b.strip() for b in buttons.split(",") if b.strip()]
 
-    with Session(args.image, args.log_dir) as session:
+    with session(args) as session:
         print("rpcs3 pid %d" % session.proc.pid, flush=True)
         if not session.wait_for_screen_pressing("Main Menu", args.timeout):
             print("never reached the Main Menu (last screen: %s)"
@@ -1013,7 +1124,7 @@ def cmd_bootchain(args):
     out.mkdir(parents=True, exist_ok=True)
     log, presses = [], []
     current = "?"
-    with Session(args.image, out / "emu") as session:
+    with session(args, out / "emu") as session:
         print("rpcs3 pid %d" % session.proc.pid, flush=True)
         t0 = time.time()
         seen = 0
@@ -1076,7 +1187,7 @@ def cmd_bootchain(args):
 
 def cmd_record(args):
     before = set(recordings())
-    with Session(args.image, args.log_dir) as session:
+    with session(args) as session:
         print("rpcs3 pid %d" % session.proc.pid, flush=True)
         if not session.wait_for_screen_pressing("Main Menu", args.timeout):
             print("never reached the Main Menu (last screen: %s)"
@@ -1127,6 +1238,20 @@ def main(argv=None):
                         help="the layer-1 DECRYPTED disc image")
     parser.add_argument("--log-dir", default="/tmp/rpcs3-drive",
                         help="where the emulator log and screenshots go")
+    parser.add_argument("--config", default=MUTED, metavar="PATH",
+                        help="a config.yml to pass RPCS3 as --config. The "
+                             "default writes a full copy of the stock file "
+                             "with `Audio: Renderer: Null` to %s and uses "
+                             "that, so a scripted run is never audible"
+                             % SCRATCH_CONFIG)
+    parser.add_argument("--stock-config", action="store_true",
+                        help="launch on ~/.config/rpcs3/config.yml itself, "
+                             "sound included; --config is ignored")
+    parser.add_argument("--interpreter", action="store_true",
+                        help="also set `Core: PPU Decoder: Interpreter "
+                             "(static)` in the generated copy - the only "
+                             "decoder Z0 breakpoints fire under; ~75 s to "
+                             "boot instead of ~30 s")
     sub = parser.add_subparsers(dest="command", required=True)
 
     sub.add_parser("display").set_defaults(run=cmd_display)
@@ -1266,7 +1391,18 @@ def main(argv=None):
     rec.set_defaults(run=cmd_record)
 
     args = parser.parse_args(argv)
+    if args.stock_config:
+        args.config = None
+    elif args.interpreter and args.config != MUTED:
+        parser.error("--interpreter edits the generated copy; with an "
+                     "explicit --config, set `PPU Decoder` in that file")
     return args.run(args)
+
+
+def session(args, log_dir=None):
+    """A `Session` built from the top-level options, for every subcommand."""
+    return Session(args.image, log_dir if log_dir is not None else args.log_dir,
+                   config=args.config, interpreter=args.interpreter)
 
 
 if __name__ == "__main__":

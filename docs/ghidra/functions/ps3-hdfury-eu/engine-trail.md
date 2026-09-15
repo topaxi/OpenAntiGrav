@@ -1502,6 +1502,138 @@ mnemonic=stw operand_pattern="0x7a60("` for the two writers;
 for the texture header; and the block decode is
 `struct.unpack('>f', global_block.bin[off - 0x420:][:4])` per offset.
 
+### Tenth session: the owner gate, measured - the player's craft is skipped every frame, all seven opponents pass
+
+**2026-09-15, live on RPCS3 `0.0.42-19777` under `PPU Decoder: Interpreter
+(static)`, audio `"Null"`, three boots of a Campaign single race on Talon's
+Junction (seven AI opponents), `scripts/hd-flare-owner-break.py flare` and
+`flare-gate`.** The ninth session left one gate between the occlusion query
+and the fade math, `0x002a0bb4`, and held its reading - "the sprite is not
+drawn for the craft the current view belongs to" - at 75 because its two
+inputs had never been seen live. Both have now, on every craft, on every
+frame of a 30-frame window, and the reading holds.
+
+**What was armed and read.** One `Z0` breakpoint at a time. At
+`0x002a0bac` (`rlwinm r0,r10,0,0x18,0x1f`, the instruction before the
+`beq`), each hit read `r31` (the `EngineFlare`), `r10` (the value the branch
+tests), `*(r31+0x134)` (the craft), `*(craft+0x7a60)` (the owner index),
+`*0x008c1430` (the view index, `r25`'s target - TOC slot `0x008b2f64`), and
+the camera object `*0x009878c0` (the ninth session wrote this as
+`*0x008b2eb4`; that is the TOC slot, `lwz r9,0x59dc(r2); lwz r9,0(r9)`
+dereferences it twice) with its `+0x34` flags, `+0x40` mode and `+0x1ec`
+target. Two controls in the first boot: `0x002a1104`, the `bl 0x002c4ad0`
+that submits the quad, reached only through the fade path; and
+`0x002a1428`, where `r28` is the occlusion query's answer.
+
+**Sampling every call needed a hop, and the first two boots show why.**
+Moving a parked thread off the breakpoint with a 30 ms free run
+(`run_for(0.03)`) lets the rest of the frame's flares go by, so the re-armed
+breakpoint catches the *first* flare of the next frame almost every time:
+boot 1 sampled one AI craft 152 times in 160 gate hits, boot 2 one craft 172
+times in 214. `vCont;s` did not move the thread at all (0 of 213 attempts;
+the thread's PC read the breakpoint address afterwards every time). What
+works is arming `address + 4` and resuming - the thread executes one
+instruction and parks again, the shape `hd-fury-backdrop-break.py` already
+alternates its two addresses in - and boot 3 then caught all eight crafts
+in a fixed order, 30 frames running:
+
+| queue slot | craft | `+0x7a60` owner | `r10` at `0x002a0bac` | hits | `+0x190` countdown | `+0x18c` alpha | `+0x270` ring |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | `0x33ebca00` | -1 | 1 | 30/30 | 10..1, cycling | 0.0 | advances |
+| 2 | `0x3330ed70` | -1 | 1 | 30/30 | 10..1, cycling | 0.0 | advances |
+| 3 | `0x33e39460` | -1 | 1 | 30/30 | 10..1, cycling | 0.0 | advances |
+| 4 | `0x33fbe710` | **0** | **0** | 30/30 | **1, never moves** | **0.0, never written** | advances |
+| 5 | `0x33f3e2d0` | -1 | 1 | 30/30 | 10..1, cycling | 0.002-0.003 | advances |
+| 6 | `0x33db81b0` | -1 | 1 | 30/30 | 10..1, cycling | 0.0 | advances |
+| 7 | `0x33284b50` | -1 | 1 | 30/30 | 10..1, cycling | 0.0 | advances |
+| 8 | `0x3338f330` | -1 | 1 | 30/30 | 10..1, cycling | 0.0 | advances |
+
+This 30-frame window is the start grid, not a spread across a lap:
+`craft+0x5fa4` read `0` on every hit where boot 2 saw it go to `1` after
+83 hits, and boot 1's `race-gate.png` shows `GO` at 41 km/h on lap 1. That
+is why all eight flares are enqueued at once and why six of the seven AI
+fades read 0.0 - the field is ahead with its nozzles away from the camera.
+Boot 1's 160 gate hits and its controls run on past the spread (its
+submit hits stop once the field opens up), so the two boots together cover
+more than one instant. Constant across all 240 hits: `*0x008c1430 = -1`, camera object
+`0x309c....` present with `+0x34 = 0x3000` (so `& 6 == 0`, the override
+path at `0x002a11b0` never runs), `+0x40 = 10`, `+0x1ec = 0` (targets no
+craft), `r29 = 0`, `craft+0x5fa4 = 0` (boot 2, which ran longer, saw it
+go to `1` after 83 hits - the race start). The three columns on the right
+are the fade path's own footprints, read off the flare each hit, and they
+say the same thing a second way: the `Slow Alpha Noise Timer` countdown at
+`+0x190` only decrements inside the fade path (`0x002a0cac`), and it walks
+10 -> 1 on the seven AI flares and sits at 1 on the player's; `+0x18c` is
+only stored at `0x002a0d70`, and it is 0.0 on the player's flare throughout
+while one AI flare (slot 5, the craft ahead whose nozzles face the camera)
+carries a small live value. The `+0x270` ring index advances on all eight,
+the player's included - the occlusion query at `0x002a1210` runs for every
+craft.
+
+Boots 1 and 2, biased sampling and all, agree on every value they saw:
+gate hits across boot 1's seven distinct crafts and boot 2's eight were
+`owner -1 -> r10 = 1` (211 + 159 hits) and `owner 0 -> r10 = 0` (3 + 1
+hits), view `-1`, camera target `0`. Boot 1's two controls: the **submit**
+at `0x002a1104` was reached 27 times, every one on AI craft `0x33f3bb00`
+(owner -1), and then not at all for three 1.2 s windows once the field
+spread - the quad is genuinely built and submitted for an opponent, and
+only while the fade is positive. The **query answer** at `0x002a1428` read
+`r28 = 1` on all 40 hits, 11 of them on the player's craft (owner 0) - so
+the query is not what stops the player's sprite; the owner gate right after
+it is.
+
+**What this settles.** With `view = -1` in a single-player race, the
+listing's `blt cr7 -> r10 = 0` at `0x002a0b6c` is the branch the player's
+craft takes: `r10 = 1` only for an owner of `-1`. Measured: every AI craft
+reaches the fade math and, when its lobe faces the camera, the quad; the
+player's own craft is turned away at `0x002a0bb4` on every frame, before
+the fade is computed, and its `+0x18c` stays at the 0.0 the fifth session's
+`tuning-dump` first read. **The sprite is not drawn for the viewing
+player's own craft - confidence 92.** Runtime-verified on one binary, three
+boots; short of 95 for want of a second binary, and the split-screen and
+camera-object cases (`view >= 0`, a camera in a mode outside
+`{2, 6, 7, 8, 11}` targeting the craft) were not exercised - `view` read
+`-1` and `+0x1ec` read `0` in every sample, so what they would do is still
+the listing's word alone. The consequence the ninth session drew stands
+with it: the compact glow on the player's nozzles in the original captures
+is the flame `.rcsmodel` and the particles, not this sprite, and a renderer
+that draws the sprite on the viewing player's craft draws something the
+original never does there.
+
+**Other numbers the run gave for free.** The render queue calls
+`EngineFlare_RenderTick` for all eight flares every frame in one fixed
+order, the player's craft fourth - so the fifth session's ~2,500 calls
+were about 310 frames of all eight, not 2,500 of one, and its 0 hits at
+`0x002a0bb8` mean it happened to be reading the player's flare. `Slow Alpha
+Noise Timer` reloads at 10, as the ninth session read it off `+0x498`.
+The camera object's mode read 10 in a chase view throughout; the ninth
+session's `0x9c4` mode set (`{2, 6, 7, 8, 11}`) does not contain it, so a
+camera targeting a craft in this mode would *not* be an exception - which
+is consistent with the chase camera never targeting the craft through
+`+0x1ec` in the first place.
+
+Artefacts: `data/reference/hd-capture/flare-owner/` - `flare-run1/`
+(gate, submit, query), `flare-gate-run2/`, `flare-gate3/` (the hop run,
+the table above is its `flare.json`), each with `logs/rpcs3.log`,
+`race-loaded.png` and `race-gate.png`. The emulator's own `RPCS3.log`
+for every boot opened with
+
+```
+SYS: argc: 7, argv: '/opt/rpcs3/AppRun.wrapped' '--no-gui' '--input-config' 'oag' '--config' '.../data/tools/rpcs3-scratch-config.yml' '.../hdfury-ps3-eu-dec.iso'
+SYS: Used configuration:
+Core:
+  PPU Decoder: Interpreter (static)
+...
+Audio:
+  Renderer: "Null"
+```
+
+Reproduce: `python3 scripts/rpcs3-drive.py display`, then
+`uv run --with evdev python3 scripts/hd-flare-owner-break.py flare-gate
+<out>` (about fifteen minutes on a loaded machine: a 5-minute interpreter
+boot, the six-tap walk, then 240 stops at roughly 2 s each), and
+`python3 scripts/rpcs3-drive.py stop` after.
+
 ## The flame and the plume breathe; nothing gates the plume
 
 `EngineFlare_Update` is Pulse's exhaust state machine wearing PS3 constants -
