@@ -16,3 +16,6 @@
 0x012e38d0	function	MagstripWake_Construct	85	ships-effects.md
 0x01723ae0	function	ShipCollisionFx_Trigger	76	ship-collision-fx.md
 0x012f7500	function	Ship_DispatchCollisionFx	78	ship-collision-fx.md
+0x0163b920	function	Game_Main	88	game-boot.md
+0x017359c0	function	SoundManager_Construct	90	game-boot.md
+0x013c28f0	function	FrontendRoot_Construct	90	game-boot.md

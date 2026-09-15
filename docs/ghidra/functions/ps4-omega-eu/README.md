@@ -64,7 +64,12 @@ unnamed rather than forced.
   `Ship_DispatchCollisionFx`, found independently of `ps3-hdfury-eu`'s own
   reading and agreeing with it - the finding that promoted this binary to an
   RE target in its own right, and the worked example of the technique above.
-
+- [game-boot.md](game-boot.md) - `Game_Main`, `SoundManager_Construct`,
+  `FrontendRoot_Construct`, and the finding that this binary inlines
+  `GameRoot_Construct`/`SystemRoot_Construct`/`SpeechManager_Construct`/
+  `MusicManager_Construct` directly into `Game_Main` rather than keeping them
+  as separate functions the way `vita-2048-eu-v104` and `ps3-hdfury-eu` both
+  do.
 Add a row to [`names.tsv`](names.tsv) and the page it cites in the same
 change: `scripts/apply-ghidra-names.py` refuses a row whose address and name
 do not both still appear on the page named in its last column.
