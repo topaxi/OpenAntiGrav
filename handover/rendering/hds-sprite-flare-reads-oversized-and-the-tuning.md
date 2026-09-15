@@ -227,19 +227,25 @@ negative.
 
 ## Open
 
-- **The draw is read; what is open is a live confirmation and the
-  renderer.** `EngineFlare_RenderTick` (`0x002a08a8`) is the sprite's own
-  draw, whole since 2026-09-15 (engine-trail.md "Ninth session", confidence
-  88): `half_height = Flare Radius Min (2.0) + Flare Radius (3.0) *
+- ~~**The draw is read; what is open is a live confirmation and the
+  renderer.**~~ **Landed 2026-09-15, later the same day.**
+  `oag_render::exhaust::hd::Sprite` now carries the ninth session's law
+  exactly - `half_height = Flare Radius Min (2.0) + Flare Radius (3.0) *
   clamp(fade, 0, 1) + Max Radius Jitter (0.5) * rand01`, `half_width = 4 *
-  half_height` against a 1024 x 256 texture, vertex alpha = `fade`, where
-  `fade = min((1 - saturate((dist * k - 15) / 15)) * powf(view_dot, 32) *
-  alpha_walk * 1.0, 1.0)` - a one-hemisphere `cos^32` lobe on the nozzle
-  axis, so a drawn sprite is small and dim except looking down the nozzle.
-  `oag_render::exhaust::hd::Sprite` implements a different law (`3.0 +-
-  0.5 * rand`, floored at 2.0, square, alpha = walk only) written when the
-  law was unread; its doc comment at `hd.rs` ("The *law* tying the three
-  radius numbers together is unread") is now false.
+  half_height`, vertex alpha = `fade = min((1 - saturate((dist * k - 15) /
+  15)) * powf(view_dot, 32) * alpha_walk * 1.0, 1.0)`, no quad at all on a
+  non-positive view dot - and `race::effects::hd_sprite_quad` skips slot 0.
+  The `hd.rs` doc comment that said the law was unread is gone. What the
+  code labels **chosen, not measured**: `k` (the per-view table at
+  `*(r2+0x5aa0)`, never read; 1.0) and the hemisphere of the view dot (the
+  page's two open sign conventions; looking into the nozzle is taken).
+  Verified on this engine's grid by
+  `the_sprite_flare_skips_the_players_craft_and_fades_the_rest_by_the_law`:
+  the field stands 34..148 units from the player's camera, so every
+  opponent's fade is 0 there and no quad is built - which is what the tenth
+  session's `+0x18c` column read too - and the player's disc is gone. A start-grid
+  picture with an opponent inside 15 units needs `--camera-pose` placed
+  behind one; this engine's own grid spacing never puts one that close.
 - ~~**Whether the original draws this sprite on the player's own craft at all
   - it reads as no.**~~ **Measured 2026-09-15, it does not - confidence
   92** (engine-trail.md "Tenth session"). The gate at `0x002a0bb4` turned
@@ -280,7 +286,7 @@ negative.
   session; `scripts/hd-flare-owner-break.py flare-gate` reproduces it in
   about fifteen minutes. The start-grid picture was not taken and is no
   longer load-bearing.
-- **Then the renderer, in this order**: (1) the player's craft is
+- ~~**Then the renderer, in this order**: (1) the player's craft is
   confirmed skipped, so stop drawing the sprite on the viewing player's craft in
   `race::effects::hd_sprite_quad` - the original's own rule, not a fitted
   multiplier - and the eyeballed `0.57x` decision recorded in the eighth
@@ -289,7 +295,12 @@ negative.
   4:1 wide, alpha = fade), which needs the view dot and the camera
   distance the sim already has; (3) fix the `hd.rs` doc comment that still
   says the law is unread. `CRAFT_ROW_SCALE` stays: the traced half-height
-  is in the same model space as before.
+  is in the same model space as before.~~ **All three landed 2026-09-15**
+  - see the first "Open" bullet above for what the code labels chosen.
+  What would close the two chosen values: read the per-view table at
+  `*(r2+0x5aa0)` (one `read_memory` of the TOC slot, then the floats it
+  points at) for `k`, and one live sample of the view dot's sign at
+  `0x002a0c8c` on an AI craft the camera is behind, for the hemisphere.
 - Read `FUN_002c4ad0` (four-vertex submit with a dispersion scalar) and the
   occluder proxy draw `0x005f0c10` for `Flare Depth Bias`, `Flare Size
   Clamp` and `Flare Max Rotate Angle` - the only two functions on this path

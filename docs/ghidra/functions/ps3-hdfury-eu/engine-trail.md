@@ -1902,14 +1902,38 @@ Open, in rough order of visible cost:
   [renderer.md](renderer.md#the-engines-own-parameter-table-read-from-its-initialiser-2026-08-24)
   for the table and [engine-flare.md](engine-flare.md) for what the flame does
   with it. The ribbon's phase at `+0x1210` is still a *different* accumulator.
-- The `Engine_Flare_Rich.gtf` sprite flare **draws now** with its authored
-  radius (3, jittered by 0.5, floored at 2) and the `Slow Alpha Noise`
-  opacity walk (0.5..0.8, chase 0.1, retarget every 10) - the flare's init
-  (`0x002a1528`) loads the texture and four corner pairs, so the sprite is
-  real, and it is most of the "solid core" the exhaust reads as in the
-  original. Still unread and undrawn: its spin, chromatic dispersion,
-  `Flare Fadeout Dist/Range` term and the occluder query - the shader pair
-  (`engineflare_vp/fp`) resolves through no registry read so far. **And a
+- The `Engine_Flare_Rich.gtf` sprite flare **draws by the traced law since
+  2026-09-15, and never on the viewing player's craft**:
+  `oag_render::exhaust::hd::Sprite` is `EngineFlare_RenderTick`'s own quad
+  (4:1, `half_height = Min + Radius * clamp(fade) + Jitter * rand01`,
+  alpha `= fade`, the fade of the ninth session - a `cos^32` lobe into the
+  nozzle that is whole inside 15 units and gone at 30) and
+  `race::effects::hd_sprite_quad` skips slot 0, the craft `Race::view`
+  frames, which is the owner gate the tenth session measured (92). Every
+  constant is a tuning-file row pinned by
+  `the_sprite_flares_constants_are_the_discs_own`; two things are
+  **chosen, not measured** and say so in the code: the per-view distance
+  scale (`*(r2+0x5aa0)[view]`, unread, taken as 1.0) and which hemisphere
+  of the view dot draws (the page's two unsettled sign conventions; the
+  camera looking into the nozzle is the one taken). Still not drawn: the
+  chromatic dispersion scalar and the occluder query. Verified on this
+  engine's own start grid
+  (`the_sprite_flare_skips_the_players_craft_and_fades_the_rest_by_the_law`):
+  the field stands 34..148 units from the player's camera, so all seven
+  opponents' fades are 0 and no quad is built for any of them (the quad
+  is built only while the fade is positive, the `ble` after the store at
+  `0x002a0d70`) - the same reading as the breakpoint run's `+0x18c`
+  column - and the player's oversized white disc is gone;
+  a camera posed 10 units behind an opponent shows its streak. **The
+  history below is kept as written.** It drew, from 2026-09-01 to
+  2026-09-15, with its authored radius (3, jittered by 0.5, floored at 2)
+  and the `Slow Alpha Noise` opacity walk (0.5..0.8, chase 0.1, retarget
+  every 10) - the flare's init (`0x002a1528`) loads the texture and four
+  corner pairs, so the sprite is real, and it is most of the "solid core"
+  the exhaust reads as in the original. Then unread and undrawn: its spin,
+  chromatic dispersion, `Flare Fadeout Dist/Range` term and the occluder
+  query - the shader pair (`engineflare_vp/fp`) resolves through no
+  registry read so far. **And a
   2026-09-01 screenshot comparison confirms this matters**: drawn at the
   literal 3.0/2.0/0.5 with no distance term, the sprite is visibly oversized
   against the original at ordinary chase distance - "All 41 rows" above has

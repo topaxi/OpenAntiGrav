@@ -226,3 +226,120 @@ fn nearest_survives_the_degenerate_ring_a_race_starts_with() {
     );
     assert!((on - Vec3::new(4.0, 0.0, 0.0)).length() < 1e-4, "{on:?}");
 }
+
+fn walked_sprite() -> Sprite {
+    // Ten ticks of a fixed stream: the walk has moved off its seed and the
+    // jitter is a known draw.
+    let mut sprite = Sprite::new();
+    for _ in 0..10 {
+        sprite.advance(|| 0.5);
+    }
+    sprite
+}
+
+#[test]
+fn the_fade_is_full_inside_the_fadeout_distance_and_zero_past_its_range() {
+    // `1 - saturate((d - 15) / 15)`: 1.0 up to 15 units, 0 from 30 on.
+    let on_axis = 1.0;
+    let walk = 0.7;
+    let near = sprite_fade(0.0, on_axis, walk);
+    let at_start = sprite_fade(SPRITE_FADEOUT_DIST, on_axis, walk);
+    assert!((near - walk).abs() < 1e-6, "{near}");
+    assert!((at_start - walk).abs() < 1e-6, "{at_start}");
+    let halfway = sprite_fade(
+        SPRITE_FADEOUT_DIST + SPRITE_FADEOUT_RANGE * 0.5,
+        on_axis,
+        walk,
+    );
+    assert!((halfway - walk * 0.5).abs() < 1e-6, "{halfway}");
+    let gone = sprite_fade(SPRITE_FADEOUT_DIST + SPRITE_FADEOUT_RANGE, on_axis, walk);
+    assert_eq!(gone, 0.0);
+    assert_eq!(sprite_fade(1000.0, on_axis, walk), 0.0);
+    // A craft at the fadeout distance through the state type: no quad at
+    // all - the original leaves after the store when the fade is not
+    // positive, before the quad is built. One unit inside, a quad.
+    let sprite = walked_sprite();
+    assert_eq!(
+        sprite.fade(SPRITE_FADEOUT_DIST + SPRITE_FADEOUT_RANGE, on_axis),
+        None
+    );
+    assert!(
+        sprite
+            .fade(SPRITE_FADEOUT_DIST + SPRITE_FADEOUT_RANGE - 1.0, on_axis)
+            .is_some_and(|f| f > 0.0)
+    );
+}
+
+#[test]
+fn the_highlight_is_a_narrow_lobe_and_the_far_hemisphere_draws_nothing() {
+    let sprite = walked_sprite();
+    let walk = sprite.alpha_walk();
+    // Dead on the axis the walk comes through whole (Boost is 1.0).
+    let on = sprite.fade(1.0, 1.0).expect("on axis");
+    assert!((on - walk).abs() < 1e-6);
+    // `cos^32`: 30 degrees off is already a hundredth of the peak.
+    let off = sprite
+        .fade(1.0, 30f32.to_radians().cos())
+        .expect("off axis");
+    assert!(off < walk * 0.02, "{off} against {walk}");
+    // The ceiling: a walk above `Flare Opacity Max` cannot exceed it.
+    assert!(sprite_fade(0.0, 1.0, 5.0) <= SPRITE_OPACITY_MAX);
+    // Side-on and behind: the original's `ble` before any of the math.
+    assert_eq!(sprite.fade(1.0, 0.0), None);
+    assert_eq!(sprite.fade(1.0, -0.5), None);
+}
+
+#[test]
+fn the_view_dot_is_positive_looking_into_the_nozzle() {
+    // Camera behind a craft that flies along +X: the view looks along +X and
+    // the exhaust points back along -X, toward the eye.
+    let forward = Vec3::X;
+    let nozzle_axis = Vec3::NEG_X;
+    assert!((sprite_view_dot(forward, nozzle_axis) - 1.0).abs() < 1e-6);
+    // Head-on, the nozzle points away from the eye.
+    assert!((sprite_view_dot(Vec3::NEG_X, nozzle_axis) + 1.0).abs() < 1e-6);
+    // Unnormalised inputs are normalised, and a zero axis is a zero dot.
+    assert!((sprite_view_dot(Vec3::X * 7.0, Vec3::NEG_X * 0.1) - 1.0).abs() < 1e-6);
+    assert_eq!(sprite_view_dot(Vec3::X, Vec3::ZERO), 0.0);
+}
+
+#[test]
+fn the_half_height_is_min_plus_radius_by_fade_plus_a_one_sided_jitter() {
+    // Faded out entirely: the base term plus nothing.
+    assert_eq!(sprite_half_height(0.0, 0.0), SPRITE_RADIUS_MIN);
+    // Full fade, full jitter: every term at its top - 5.5 authored.
+    assert_eq!(
+        sprite_half_height(1.0, 1.0),
+        SPRITE_RADIUS_MIN + SPRITE_RADIUS + SPRITE_RADIUS_JITTER
+    );
+    // The fade is clamped into the size; the jitter never subtracts.
+    assert_eq!(
+        sprite_half_height(3.0, 0.0),
+        SPRITE_RADIUS_MIN + SPRITE_RADIUS
+    );
+    for jitter in [0.0, 0.25, 1.0] {
+        assert!(sprite_half_height(0.5, jitter) >= sprite_half_height(0.5, 0.0));
+    }
+    // And the state type feeds its own tick's draw in.
+    let sprite = walked_sprite();
+    assert_eq!(sprite.jitter(), 0.5);
+    assert_eq!(
+        sprite.half_height(0.0),
+        SPRITE_RADIUS_MIN + SPRITE_RADIUS_JITTER * 0.5
+    );
+}
+
+#[test]
+fn the_quad_is_four_times_wider_than_it_is_tall() {
+    let half = 1.5;
+    let quad = sprite_quad(Vec3::ZERO, Vec3::X, Vec3::Y, half, 0.3);
+    let (mut max_x, mut max_y) = (0.0f32, 0.0f32);
+    for v in &quad {
+        max_x = max_x.max(v.position[0].abs());
+        max_y = max_y.max(v.position[1].abs());
+        assert_eq!(v.colour[3], 0.3, "alpha is the fade");
+    }
+    assert!((max_y - half).abs() < 1e-6, "{max_y}");
+    assert!((max_x - half * SPRITE_ASPECT).abs() < 1e-6, "{max_x}");
+    assert_eq!(SPRITE_ASPECT, 4.0, "1024 x 256 texels");
+}
