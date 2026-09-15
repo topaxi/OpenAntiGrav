@@ -172,7 +172,10 @@ fn every_named_sight_widget_is_authored_by_at_least_one_layout() {
     let Some(mut archives) = open() else {
         return;
     };
-    let oag_title::hud::Sights::Concentric { seeking, locked } = oag_2048::hud::ART.sights else {
+    let oag_title::hud::Sights::Concentric {
+        seeking, locked, ..
+    } = oag_2048::hud::ART.sights
+    else {
         panic!("oag_2048::hud::ART::sights is no longer Concentric - update this test");
     };
 
@@ -189,4 +192,49 @@ fn every_named_sight_widget_is_authored_by_at_least_one_layout() {
             "{name}: not authored by any of the 25 composed layouts"
         );
     }
+}
+
+/// `oag_2048::hud::ART::sights`'s `leach` set is authored too, and no layout
+/// authors a `LeachBeamSight*LockedOn*` widget - the same data-only check
+/// `oag_hd::hud::ART`'s own `leach` field rests on
+/// (`crates/game/tests/lock_sight_ground_truth.rs`'s
+/// `no_hd_layout_authors_a_leachbeam_lockedon_widget`), since no Vita3K
+/// exists here to check a frame against.
+#[test]
+#[ignore = "needs the decrypted Vita package in data/extracted/vita/"]
+fn the_leachbeams_four_widgets_are_authored_and_have_no_lockedon_counterpart() {
+    let Some(mut archives) = open() else {
+        return;
+    };
+    let oag_title::hud::Sights::Concentric { leach, .. } = oag_2048::hud::ART.sights else {
+        panic!("oag_2048::hud::ART::sights is no longer Concentric - update this test");
+    };
+    let names = leach.expect("oag_2048::hud::ART's leach set is None");
+
+    let mut all_leach: BTreeMap<String, (String, [f32; 4], [f32; 4])> = BTreeMap::new();
+    for &root in oag_2048::hud::ROOTS {
+        for sprite in composed(&mut archives, root).layout.sprites {
+            if sprite.name.starts_with("LeachBeamSight") {
+                all_leach.entry(sprite.name.clone()).or_insert((
+                    sprite.src.clone(),
+                    sprite.rect,
+                    sprite.color,
+                ));
+            }
+        }
+    }
+    for (name, (src, rect, color)) in &all_leach {
+        println!("2048 {name}: src={src:?} rect={rect:?} color={color:?}");
+    }
+
+    for name in names {
+        assert!(
+            all_leach.contains_key(name),
+            "{name}: not authored by any of the 25 composed layouts"
+        );
+    }
+    assert!(
+        !all_leach.keys().any(|n| n.contains("LockedOn")),
+        "a LeachBeamSight*LockedOn* widget exists after all: {all_leach:?}"
+    );
 }

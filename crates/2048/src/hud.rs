@@ -91,9 +91,19 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     // were never rescaled for this console.
     //
     // A `LeachBeamSight*` family sits alongside every `MissileSight*` one,
-    // same shape, and is not modelled here - `oag_title::hud::Sights` has one
-    // reticle axis, and HD's own `ART` leaves its `LeachBeamSight*` widgets
-    // out on the same terms (see its `ALWAYS_ON` doc comment). Confidence 85.
+    // same shape, and **is now modelled here too, as data off the disc
+    // alone** - as of 2026-09-15, `LeachBeamSightBG`/`Outer`/`Middle`/`Inner`
+    // off `Data\XML\2048_hud\Texture\leach_reticule.gxt`, 88/88/64/40 pixels
+    // square, centred on the same `(-480, 272)` placeholder every other sight
+    // widget on this skin uses, and no `LeachBeamSight*LockedOn*` widget
+    // anywhere in the composed set - the identical four-name, no-`LockedOn`
+    // shape [`oag_hd::hud::ART`] carries. Confidence 90 on the widget names
+    // and sizes, the same literal-XML-read terms as the row above.
+    //
+    // **Nothing here is runtime-checked.** No Vita3K exists in this project's
+    // toolchain, so this row is read off `data/extracted/vita/PCSF00007`
+    // alone and never played. Which of the four draws when carries the same
+    // chosen-not-measured status `oag_hd::hud::ART`'s own `leach` field does.
     sights: &oag_title::hud::Sights::Concentric {
         seeking: &[
             "MissileSightBG",
@@ -102,6 +112,12 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
             "MissileSightMiddle",
         ],
         locked: &["MissileSightLockedOnLines", "MissileSightLockedOnMiddle"],
+        leach: Some([
+            "LeachBeamSightBG",
+            "LeachBeamSightOuter",
+            "LeachBeamSightMiddle",
+            "LeachBeamSightInner",
+        ]),
     },
     // `None` is "draw what the layout authors", which is the conservative
     // answer for a title whose pickup backdrop colour nothing has measured -

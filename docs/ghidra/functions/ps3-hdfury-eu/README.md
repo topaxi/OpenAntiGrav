@@ -78,6 +78,10 @@ Two structural facts to expect, both different from every other binary here:
   MeshAABB narrowphase.
 - [race-hud.md](race-hud.md) - the per-mode HUD definitions, their three retro
   skins, and what `SPZone` adds on top of the base race manager.
+- [hud-sight.md](hud-sight.md) - the lock-on reticle's own widget bind and its
+  two separate per-tick updates (Missile, LeachBeam), the shared `0.5` s hold
+  time that disagrees with the PSP's `0.8`, and the LeachBeam's four-widget
+  reveal that is not a simple all-or-nothing.
 - [mode-manager.md](mode-manager.md) - `ModeManager.cpp`: the sibling mode
   hierarchy, and the one place a C++ constructor pair could be told apart.
 - [race-manager.md](race-manager.md) - `RaceManager.cpp`: the singleton holder

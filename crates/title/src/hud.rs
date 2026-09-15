@@ -165,6 +165,33 @@ pub enum Sights {
         /// here, which is the reading that shows every authored widget rather
         /// than hiding some on a guess.
         locked: &'static [&'static str],
+        /// The LeachBeam's own reticle on this dialect, or `None` for a title
+        /// that authors none.
+        ///
+        /// **One set of four, with no `locked` counterpart at all** -
+        /// unlike [`Self::seeking`]/[`Self::locked`] above. Measured
+        /// directly off HD's own composed `Arcade_HUD.xml`
+        /// (2026-09-15): `LeachBeamSightBG`/`Outer`/`Middle`/`Inner` are the
+        /// whole set, at 176/176/128/80 px and all centred on the same
+        /// `(-960, 540)` placeholder every other sight widget on this title
+        /// uses, and grepping every composed layout for a
+        /// `LeachBeamSight*LockedOn*` name finds none. Confidence 90 - a
+        /// literal read of the shipped XML, not an inference. 2048's own
+        /// composed layouts carry the identical four-name, no-`LockedOn`
+        /// shape at 88/88/64/40 px, corroborating it in a second title on
+        /// the same dialect.
+        ///
+        /// **Which of the four is up when is chosen, not measured, and
+        /// carries no confidence score.** With no `LockedOn` widget to add on
+        /// a lock, the only reading the layout alone supports is "all four,
+        /// whenever the LeachBeam reticle is up at all" - this project's own
+        /// choice, standing in for [`race-hud.md`]'s still-unread
+        /// `HudSight_Update`-equivalent on this binary. A capture would
+        /// settle whether HD instead drives them by widget the way the
+        /// Missile's `locked` set is driven.
+        ///
+        /// [`race-hud.md`]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/ghidra/functions/ps3-hdfury-eu/race-hud.md
+        leach: Option<[&'static str; 4]>,
     },
     /// This title's reticle has not been read.
     ///

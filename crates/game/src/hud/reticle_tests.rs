@@ -185,6 +185,7 @@ static HD_ART: oag_title::HudArt = oag_title::HudArt {
     sights: &oag_title::hud::Sights::Concentric {
         seeking: &["MissileSightBG", "MissileSightOuter"],
         locked: &["MissileSightLockedOnLines", "MissileSightLockedOnMiddle"],
+        leach: None,
     },
     pickup_backdrop_colour: None,
     pickup_colours: None,
@@ -200,6 +201,68 @@ fn hd_sheet() -> crate::sprite::Sheet {
         &[],
         vec![crate::sprite::DecodedImage {
             src: "missile_reticule.gtf".to_string(),
+            width: 256,
+            height: 256,
+            rgba: vec![255u8; 256 * 256 * 4],
+            quad_extent: None,
+            blend: None,
+        }],
+        &mut report,
+    )
+}
+
+/// HD's LeachBeam reticle, cut to its own four - the real names, off the real
+/// widths a composed `Arcade_HUD.xml` carries (`oag_hd::hud::ART`'s own doc
+/// comment). Unlike [`HD_SIGHTS`] there is no `LockedOn` pair: neither this
+/// fixture nor the real disc authors one for the LeachBeam.
+const HD_LEACH_SIGHTS: &str = r#"
+<Screen>
+<Screen name="HUD">
+<Image name="LeachBeamSightBG">
+<Values x="-1048" y="452" width="176" height="176" U="0" V="0" TxtrWidth="256" TxtrHeight="256" Color="0xFFFFFFFF" Src="leach_reticule.gtf"></Values>
+</Image>
+<Image name="LeachBeamSightOuter">
+<Values x="-1048" y="452" width="176" height="176" U="0" V="0" TxtrWidth="256" TxtrHeight="256" Color="0xFFFFFFFF" Src="leach_reticule.gtf"></Values>
+</Image>
+<Image name="LeachBeamSightMiddle">
+<Values x="-1024" y="476" width="128" height="128" U="0" V="0" TxtrWidth="256" TxtrHeight="256" Color="0xFFFFFFFF" Src="leach_reticule.gtf"></Values>
+</Image>
+<Image name="LeachBeamSightInner">
+<Values x="-1000" y="500" width="80" height="80" U="0" V="0" TxtrWidth="256" TxtrHeight="256" Color="0xFFFFFFFF" Src="leach_reticule.gtf"></Values>
+</Image>
+</Screen>
+</Screen>
+"#;
+
+/// [`HD_ART`] with a `leach` set filled in, the shape `oag_hd::hud::ART` and
+/// `oag_2048::hud::ART` both carry as of 2026-09-15.
+static HD_LEACH_ART: oag_title::HudArt = oag_title::HudArt {
+    texture_extension: None,
+    always_on: &[],
+    sights: &oag_title::hud::Sights::Concentric {
+        seeking: &["MissileSightBG", "MissileSightOuter"],
+        locked: &["MissileSightLockedOnLines", "MissileSightLockedOnMiddle"],
+        leach: Some([
+            "LeachBeamSightBG",
+            "LeachBeamSightOuter",
+            "LeachBeamSightMiddle",
+            "LeachBeamSightInner",
+        ]),
+    },
+    pickup_backdrop_colour: None,
+    pickup_colours: None,
+    pickup_icon_models: None,
+    pickup_icon_backdrop_model: None,
+    zone_speed_classes: None,
+    shield_percent: false,
+};
+
+fn hd_leach_sheet() -> crate::sprite::Sheet {
+    let mut report = Vec::new();
+    crate::sprite::Sheet::build_with(
+        &[],
+        vec![crate::sprite::DecodedImage {
+            src: "leach_reticule.gtf".to_string(),
             width: 256,
             height: 256,
             rgba: vec![255u8; 256 * 256 * 4],
@@ -576,6 +639,127 @@ fn the_concentric_dialect_adds_its_locked_widgets_on_the_lock() {
         plain(&frame).len(),
         4,
         "a locked HD reticle draws the seeking pair and the locked pair: {frame:?}"
+    );
+}
+
+/// A held LeachBeam on the concentric dialect draws its own four widgets
+/// while seeking, not the Missile's `MissileSight*` set.
+///
+/// See `oag_title::hud::Sights::Concentric::leach`: HD authors a `leach` set
+/// and no `LockedOn` counterpart for it, so all four are the whole picture
+/// whether the reticle is seeking or locked - checked by the next test.
+#[test]
+fn the_concentric_dialect_draws_the_leachbeams_own_four_widgets_seeking() {
+    let layout = Layout::from_xml(HD_LEACH_SIGHTS);
+    let sheet = hd_leach_sheet();
+    let strings = strings();
+    let at = [700.0, 400.0];
+
+    let mut reticle = sight::Sight::new([1920.0, 1080.0]);
+    reticle.set_held(sight::Held::LeachBeam);
+    let target = sight::Projected {
+        screen: at,
+        distance: 60.0,
+    };
+    for _ in 0..12 {
+        reticle.update(1.0 / 60.0, Some(target));
+    }
+    assert!(
+        !reticle.locked(),
+        "the fixture was meant to still be seeking"
+    );
+
+    let readout = Readout {
+        sight: Some(reticle),
+        ..Readout::blank()
+    };
+    let frame = draw_list(
+        &context_with(&layout, &strings, &sheet, &HD_LEACH_ART),
+        &readout,
+    );
+    let drawn = plain(&frame);
+    assert_eq!(
+        drawn.len(),
+        4,
+        "a seeking LeachBeam reticle should draw all four of its own widgets: {frame:?}"
+    );
+    let centre = reticle.centre();
+    for (rect, _) in &drawn {
+        assert!(
+            (rect[0] + rect[2] * 0.5 - centre[0]).abs() < 0.01
+                && (rect[1] + rect[3] * 0.5 - centre[1]).abs() < 0.01,
+            "{rect:?} is not centred on {centre:?}"
+        );
+    }
+    assert!(rotated(&frame).is_empty(), "{frame:?}");
+}
+
+/// The LeachBeam's four stay exactly four once locked - there is no fifth
+/// widget for a lock to add, unlike the Missile's set.
+#[test]
+fn the_concentric_dialect_draws_the_same_four_leachbeam_widgets_locked() {
+    let layout = Layout::from_xml(HD_LEACH_SIGHTS);
+    let sheet = hd_leach_sheet();
+    let strings = strings();
+    let at = [700.0, 400.0];
+
+    let mut reticle = sight::Sight::new([1920.0, 1080.0]);
+    reticle.set_held(sight::Held::LeachBeam);
+    let target = sight::Projected {
+        screen: at,
+        distance: 60.0,
+    };
+    for _ in 0..600 {
+        if reticle.update(1.0 / 60.0, Some(target)) == sight::State::Locked {
+            break;
+        }
+    }
+    assert!(reticle.locked(), "the reticle never locked");
+
+    let readout = Readout {
+        sight: Some(reticle),
+        ..Readout::blank()
+    };
+    let frame = draw_list(
+        &context_with(&layout, &strings, &sheet, &HD_LEACH_ART),
+        &readout,
+    );
+    assert_eq!(
+        plain(&frame).len(),
+        4,
+        "a locked LeachBeam reticle draws the same four widgets, not five: {frame:?}"
+    );
+}
+
+/// A title with no `leach` set (Pure-shaped, or any Concentric title that has
+/// not authored the widgets) draws nothing for a held LeachBeam rather than
+/// lending it the Missile's rings.
+#[test]
+fn the_concentric_dialect_draws_nothing_for_a_leachbeam_with_no_leach_set() {
+    let layout = Layout::from_xml(HD_SIGHTS);
+    let sheet = hd_sheet();
+    let strings = strings();
+    let at = [700.0, 400.0];
+
+    let mut reticle = sight::Sight::new([1920.0, 1080.0]);
+    reticle.set_held(sight::Held::LeachBeam);
+    let target = sight::Projected {
+        screen: at,
+        distance: 60.0,
+    };
+    for _ in 0..600 {
+        reticle.update(1.0 / 60.0, Some(target));
+    }
+
+    let readout = Readout {
+        sight: Some(reticle),
+        ..Readout::blank()
+    };
+    // HD_ART's `leach` is `None` in this fixture.
+    let frame = draw_list(&context_with(&layout, &strings, &sheet, &HD_ART), &readout);
+    assert!(
+        plain(&frame).is_empty() && rotated(&frame).is_empty(),
+        "{frame:?}"
     );
 }
 

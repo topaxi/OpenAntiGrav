@@ -446,15 +446,52 @@ fn only_pulse_and_hd_author_a_leachbeam_block() {
     assert!(checked > 0, "no image present to check");
 }
 
-/// And HD's four `LeachBeamSight*` sprites really are there, waiting.
+/// Not one of HD's eighteen composed layouts authors a
+/// `LeachBeamSight*LockedOn*` widget, nor a fifth `LeachBeamSight*` of any
+/// other name - checked across the whole disc, not only the arcade layout
+/// [`hd_draws_its_own_four_leachbeam_sight_widgets_when_held`] uses.
 ///
-/// The other half of the finding above: HD authors the weapon *and* art for it,
-/// and what is missing is only a reading of which of the four is up when. Pinned
-/// so "unwired" stays a statement about this engine rather than about the disc -
-/// a future pass looking for them should find them named here, not go hunting.
+/// This is the measured half of why `oag_title::hud::Sights::Concentric`'s
+/// `leach` field carries no `locked` counterpart: there is no widget for a
+/// lock to add.
 #[test]
 #[ignore = "needs a disc image in data/images/"]
-fn hd_authors_four_leachbeam_sight_sprites_that_nothing_draws() {
+fn no_hd_layout_authors_a_leachbeam_lockedon_widget() {
+    let Some(image) = image_named("hdfury-ps3-eu-dec.iso") else {
+        return;
+    };
+    let mut archives = oag_hd::open(&image.display().to_string()).expect("opening HD's archives");
+    let mut all: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+    for &root in oag_hd::hud::ROOTS {
+        let mut read = |path: &str| archives.read_name(path).ok();
+        let Some(composed) = oag_game::hud::compose(root, &mut read) else {
+            continue;
+        };
+        for sprite in composed.layout.sprites {
+            if sprite.name.starts_with("LeachBeamSight") {
+                all.insert(sprite.name);
+            }
+        }
+    }
+    println!("every LeachBeamSight* name on any of HD's 18 layouts: {all:?}");
+    assert!(
+        !all.iter().any(|n| n.contains("LockedOn")),
+        "a LeachBeamSight*LockedOn* widget exists after all: {all:?}"
+    );
+}
+
+/// HD's four `LeachBeamSight*` sprites really are there, and a held LeachBeam
+/// now draws them - inverted from this file's own former
+/// `hd_authors_four_leachbeam_sight_sprites_that_nothing_draws`, which pinned
+/// the gap `oag_title::hud::Sights::Concentric::leach` and
+/// `oag_game::hud::sight_draw` closed on 2026-09-15. See
+/// [`hd_locks_a_craft_and_draws_its_own_concentric_reticle`] for the
+/// Missile's own equivalent on this dialect.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn hd_draws_its_own_four_leachbeam_sight_widgets_when_held() {
+    use oag_race::sight;
+
     let Some(image) = image_named("hdfury-ps3-eu-dec.iso") else {
         return;
     };
@@ -478,6 +515,50 @@ fn hd_authors_four_leachbeam_sight_sprites_that_nothing_draws() {
         "HD authors {} LeachBeamSight* sprite(s), not four - which changes what \
          wiring them would mean: {found:?}",
         found.len()
+    );
+
+    let oag_title::hud::Sights::Concentric { leach, .. } = oag_hd::TITLE.hud_art.sights else {
+        panic!("HD's sight dialect is not the concentric one");
+    };
+    let names = leach.expect("oag_hd::hud::ART's leach set is None");
+    for name in names {
+        let sprite = layout
+            .sprites
+            .iter()
+            .find(|s| s.name == name)
+            .unwrap_or_else(|| panic!("HD's arcade layout has no {name}"));
+        assert!(
+            loaded.hud.sheet.get(&sprite.src).is_some(),
+            "{name}'s texture {} did not reach HD's HUD sheet",
+            sprite.src
+        );
+    }
+
+    // And it actually draws: hand the player slot a LeachBeam, wait for the
+    // reticle to come up over a real target, and check the four names above
+    // - not the Missile's `MissileSight*` - are what is on screen.
+    let mut race = race::Race::start(loaded.setup);
+    race.set_sight_screen(loaded.hud.space.size);
+    for _ in 0..30 {
+        race.tick(&oag_gameplay::InputSnapshot::default());
+    }
+    race.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::LeachBeam);
+    let mut seeking = false;
+    for _ in 0..240u32 {
+        race.tick(&oag_gameplay::InputSnapshot::default());
+        if race.sight_state() == sight::State::Seeking {
+            seeking = true;
+            break;
+        }
+    }
+    assert!(
+        seeking,
+        "a LeachBeam on the shipped starting grid never put a reticle on screen"
+    );
+    assert_eq!(
+        race.sight().held(),
+        sight::Held::LeachBeam,
+        "the reticle is wearing the wrong weapon's art"
     );
 }
 
@@ -519,7 +600,9 @@ fn hd_locks_a_craft_and_draws_its_own_concentric_reticle() {
         "HD authors PSP-named sight models; the reticle would draw twice"
     );
 
-    let oag_title::hud::Sights::Concentric { seeking, locked } = oag_hd::TITLE.hud_art.sights
+    let oag_title::hud::Sights::Concentric {
+        seeking, locked, ..
+    } = oag_hd::TITLE.hud_art.sights
     else {
         panic!("HD's sight dialect is not the concentric one");
     };

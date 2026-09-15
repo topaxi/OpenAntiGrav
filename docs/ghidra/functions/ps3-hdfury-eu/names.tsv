@@ -333,3 +333,6 @@
 0x0006c600	function	Zone_UpdateCraftClass	72	zone-advance.md
 0x0062c500	function	Sound_PlayNamedCue	85	sound.md
 0x00310bd8	function	Sound_QueueAnnouncerCue	85	sound.md
+0x0009bb30	function	Hud_BindWidgets	80	hud-sight.md
+0x0008a5b8	function	Hud_UpdateMissileSight	78	hud-sight.md
+0x00090d30	function	Hud_UpdateLeachBeamSight	78	hud-sight.md

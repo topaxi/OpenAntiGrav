@@ -83,6 +83,18 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     // The four here are the seeking set and the two on the other row are the
     // locked one, read off the names. `MissileSightBG` is the backdrop and is
     // drawn first, so the order of this list is paint order.
+    //
+    // **The LeachBeam's own four are in too, as of 2026-09-15.** HD's arcade
+    // layout also authors `LeachBeamSightBG`/`Outer`/`Middle`/`Inner`, all off
+    // `Data\HUD\Textures\HUD_Components_01.gtf` at 176/176/128/80 pixels
+    // square and centred on the same `(-960, 540)` placeholder - measured
+    // directly off the composed layout, confidence 90. There is no
+    // `LeachBeamSight*LockedOn*` widget anywhere on any of the eighteen
+    // composed layouts (checked, not assumed -
+    // `crates/game/tests/lock_sight_ground_truth.rs`), so unlike the Missile's
+    // pair above there is no second widget for a lock to add. **Which of the
+    // four draws when is chosen, not measured** - see `Sights::Concentric`'s
+    // own `leach` field doc for what a capture would settle.
     sights: &oag_title::hud::Sights::Concentric {
         seeking: &[
             "MissileSightBG",
@@ -91,6 +103,12 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
             "MissileSightMiddle",
         ],
         locked: &["MissileSightLockedOnLines", "MissileSightLockedOnMiddle"],
+        leach: Some([
+            "LeachBeamSightBG",
+            "LeachBeamSightOuter",
+            "LeachBeamSightMiddle",
+            "LeachBeamSightInner",
+        ]),
     },
     // **Not Pulse's substitution.** HD's `PickupBackground` is a hexagon
     // *outline* rather than a filled white one, so the icon on it is visible in
