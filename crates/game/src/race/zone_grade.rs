@@ -139,6 +139,11 @@ pub struct ZoneGrade {
     /// terms as [`Self::art`]. The one a chunk without the track bit samples
     /// - see [`Self::stage_art_pair`].
     scene_art: oag_render::mesh::TextureSlots,
+    /// Set by [`Self::pin_stage`]: once true, [`Self::show_zone`] is a no-op
+    /// for the rest of this grade's life, so `--zone-stage` wins over the
+    /// title's own ladder instead of being overwritten by it on the next
+    /// frame that steps the zone counter. See [`Self::pin_stage`].
+    pinned: bool,
 }
 
 impl ZoneGrade {
@@ -161,6 +166,7 @@ impl ZoneGrade {
             stages,
             art,
             scene_art,
+            pinned: false,
         })
     }
 
@@ -249,8 +255,13 @@ impl ZoneGrade {
     ///
     /// A no-op on a title with no recovered ladder, which is how HD/Fury keeps
     /// resting on stage `0` rather than escalating off numbers that are not
-    /// its own.
+    /// its own. Also a no-op once [`Self::pin_stage`] has pinned this grade -
+    /// the override wins over the ladder rather than being overwritten by it
+    /// on the next call.
     pub fn show_zone(&mut self, zone: u16) -> bool {
+        if self.pinned {
+            return false;
+        }
         let Some(stage) = self.stage_for_zone(zone) else {
             return false;
         };
@@ -310,6 +321,36 @@ impl ZoneGrade {
         // why that leaves the new stage showing its predecessor.
         self.blend.weight = 0.0;
         true
+    }
+
+    /// The `--zone-stage` development override: commits `stage` whole and
+    /// then holds this grade there for the rest of its life.
+    ///
+    /// **Wins over the ladder, on any title.** [`Self::show_zone`] is called
+    /// once a frame from `crate::race::Scene::sync_zone_grade` and
+    /// would otherwise re-derive the stage from the zone counter on the very
+    /// next call - `zone 0` already maps to a non-zero stage on both titles
+    /// with a recovered ladder (see the module docs), so the override needs
+    /// this rather than a one-time commit at load. There is no per-title
+    /// branch here: a title with no recovered ladder already leaves
+    /// [`Self::show_zone`] a no-op, so pinning changes nothing there beyond
+    /// making that explicit.
+    pub fn pin_stage(&mut self, stage: u32) {
+        self.request_stage(stage);
+        self.commit();
+        // A pinned stage is shown whole, not mid-cross-fade - the same reason
+        // the opening-stage and `--zone-stage` load logic already raise the
+        // weight back up after a commit zeroes it.
+        self.blend.weight = 1.0;
+        self.pinned = true;
+        // Once, here, rather than every frame `show_zone` now declines to
+        // step - the same "log the edge, not the state" rule
+        // `Scene::sync_zone_grade` follows for an actual step.
+        log::info!(
+            "zone: --zone-stage pins the colour grade to stage {}; the ladder will not step it \
+             for the rest of this run",
+            self.blend.current,
+        );
     }
 
     /// The palette showing right now: the current stage cross-faded against

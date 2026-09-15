@@ -900,20 +900,18 @@ pub(super) fn zone_grade(
             grade.set_weight(1.0);
         }
     }
-    // **The development override, applied after the title's own ladder.** It
-    // exists because HD's stage trigger is unrecovered, so nothing else can put
-    // an HD Zone race on a rung to compare against the original - see
+    // **The development override, applied after the title's own ladder and
+    // pinned rather than merely committed once.** Both titles with a
+    // recovered ladder (2048, and HD/Fury since 2026-08-31) drive
+    // `show_zone` from the scene every frame, so a plain commit here would be
+    // overwritten on the very next call - see
+    // `crate::race::zone_grade::ZoneGrade::pin_stage` and
     // `crate::race::Options::zone_stage`.
     if let (Some(grade), Some(stage)) = (grade.as_mut(), forced_stage) {
-        grade.request_stage(stage);
-        grade.commit();
-        // The commit zeroes the weight, verbatim as the traced store does,
-        // which would leave the forced stage showing its predecessor. A forced
-        // stage is asked for whole.
-        grade.set_weight(1.0);
+        grade.pin_stage(stage);
         report.push(format!(
-            "zone: stage forced to {} by --zone-stage; the title's own ladder is not \
-             driving this",
+            "zone: stage pinned to {} by --zone-stage; the title's own ladder will not \
+             move it",
             grade.blend().current,
         ));
     }
