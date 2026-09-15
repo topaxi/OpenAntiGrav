@@ -247,8 +247,10 @@ pub struct RaceDefaults {
 /// "general" set are byte-identical to each other and hold a flat, uniform
 /// white with nothing in it; all fifteen of the "track" set are mutually
 /// distinct and hold a greyscale image whose alpha pattern visibly changes
-/// along the ladder. So [`Self::track_entry`] is the one worth drawing, and
-/// [`Self::general_entry`] is kept only because the original binds it too.
+/// along the ladder. So [`Self::track_entry`] is the one with a picture in
+/// it, and [`Self::general_entry`] is bound because the original binds it
+/// too: to every chunk whose `.rcsmodel` render-block flags lack the track
+/// bit, beside the `Scene.*` colours - `oag_rcs::rcsmodel::Mesh::is_track`.
 ///
 /// # The trap this type exists to stop a port walking into
 ///
@@ -290,8 +292,8 @@ pub struct ZoneStageTextures {
 impl ZoneStageTextures {
     /// The entry name of the "general" set's texture for `stage`.
     ///
-    /// A flat white on every stage HD/Fury ships - see the type's own docs
-    /// before drawing it.
+    /// A flat white on every stage HD/Fury ships, sampled by the chunks
+    /// without the track bit - see the type's own docs.
     #[must_use]
     pub fn general_entry(&self, stage: u32) -> String {
         format!("{}{stage}{}", self.general, self.extension)

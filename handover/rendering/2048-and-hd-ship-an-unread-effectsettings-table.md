@@ -896,16 +896,25 @@ no longer disagree.
   [zone-effectsettings-loader.md](../../docs/ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md).
   One correction on the way: `+0x74` is not on this record but on the object
   its `+0x00` points at.
-- **Port it** (renderer lane, not done here): have `oag_rcs::rcsmodel` expose
+- ~~**Port it** (renderer lane, not done here): have `oag_rcs::rcsmodel` expose
   the record's `+0x06` per chunk (`Mesh`-level; the header's `+0x08` word,
   resolved as a file offset) and bind `zoneModeTrack*` when bit 0 is set and
-  `zoneMode*` otherwise. On Talon's Junction that flips 859 of 983 chunks from
-  the Track colours to the Scene colours, so check it against a Zone frame of
-  the original before trusting the picture - `Start` authors Scene black and
-  Track at `9.0`, and the expected result is a dark environment with a lit
-  road, not the uniform tint drawn today. Also in reach from the same field:
-  the five-bucket routing (record bits 3-5), which decides which fog buffer
-  and publisher a chunk goes through.
+  `zoneMode*` otherwise.~~ **Ported, 2026-09-15.**
+  `oag_rcs::rcsmodel::Mesh::render_flags`/`is_track` read the record;
+  `mesh::slots::ZONE_TRACK` carries the bit per chunk; `mesh_render::Zone`
+  holds both colour groups and bind group 2 both stage textures; `mesh.wgsl`
+  selects per fragment. The disc counts reproduce from the reader (41,861
+  relocated, 4,365 in 37 files, 124 of 983 on Talon's Junction -
+  `crates/rcs/tests/rcsmodel_ground_truth.rs`). What a headless capture of
+  Talon's Junction shows: the road keeps the stage art and the environment
+  goes flat in `Scene.Texture Colour` with cyan rim edges - pale white on
+  `Sub Venom`, lavender with an orange road on `Flash` - where before every
+  surface had the road's patterned tint. **Not yet checked against a frame
+  of the original**, which an RPCS3 capture on the same stage would settle;
+  `Start`'s dark-environment frame is unreachable here because HD's ladder
+  opens on stage 1. Still in reach from the same field: the five-bucket
+  routing (record bits 3-5), which decides which fog buffer and publisher a
+  chunk goes through.
 - **Wire the wavefront** (renderer lane): origin = the entity's `+0xb0`
   (re-centred every frame), radius per frame after a commit `r_k = 0.1 + 0.5k
   + 0.05k(k-1)` capped at `20000`, colour weight `min(0.01k, 1)`. All disc
