@@ -67,3 +67,9 @@
 # TrackSelection.
 0x08951bd0	function	TeamSelection_ApplySelection	78	race-box-screens.md
 0x08952fa4	function	TrackSelection_ApplySelection	78	race-box-screens.md
+
+# DLC download completion check (2026-09-15), reached only once the Allegrex
+# relocation fix (docs/ghidra/workflow.md) made get_xrefs_to work on this
+# binary. See dlc-download-check.md for the full trace and what it does and
+# does not settle about the pure-dlc-trailer-key-and-testbin-unknowns thread.
+0x08955494	function	WowDownload_VerifyPackFiles	80	dlc-download-check.md

@@ -401,9 +401,15 @@ way Pulse's four DLC teams are - see
 - **`TEST.bin`.** 16 bytes, unread beyond its size and high-entropy-looking
   content. The upstream tool never touches it and every pack above decrypts
   correctly without it, so it is not load-bearing for reading a pack's
-  content - but its actual purpose (most likely something the real PSP's
-  savedata-signature check needs, since `pi.wad` is packaged as savedata) is
-  still unknown.
+  content. **One concrete use is now found**: `BOOT.BIN`'s
+  `WowDownload_VerifyPackFiles` (`psp-pure-eu` `0x08955494`, `psp-pure-usa`
+  `0x08955b44` - see
+  [dlc-download-check.md](../ghidra/functions/psp-pure-eu/dlc-download-check.md))
+  checks `TEST.BIN` exists alongside `PI.WAD`/`ICON0.PNG`/`PARAM.SFO`/`PIC1.PNG`
+  before treating a download as complete - a presence check only, never a
+  content read, so this weakens rather than confirms the savedata-signature
+  guess. Whether anything reads its 16 bytes at all, in-game or system-side,
+  is still open.
 
 **Wired in.** `oag_game::dlc::ensure_extracted` decrypts a pack the moment it
 finds a key that fits, `oag_formats::pure_dlc` and the zlib support this
