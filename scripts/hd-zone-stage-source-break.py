@@ -1,0 +1,420 @@
+#!/usr/bin/env python3
+"""Where a Zone race's target stage comes from, measured live on HD/Fury.
+
+`Environment_UpdateStageBlend` (`0x003da540`) picks the pending stage
+`H[n].+0x04` from one of four sources by `g_GameState.mode`
+(zone-effectsettings-loader.md, tenth pass): mode `0xe` at `0x003dd5dc`
+reads `RaceManager->+0x2e10`, `0xd` at `0x003dd364` reads
+`*(RaceManager + 0x2dfc + n*4)`, `0x15` at `0x003dd3a8` reads
+`*(RaceManager + 0x351c + n*4)`, and the fall-through at `0x003da650`
+reads `craftArray[n]->+0x640` with `craftArray = *(0x008b7c00)`. The
+static reading says Zone takes the fall-through, and
+zone-speed-class-table.md names the writer of that field statically -
+`Hud_UpdateZoneSpeedClass`'s `stw r3, 0x640(r29)` at `0x0004a014`, `r3 =
+14 - i` for the speed-class record `i` the zone counter sits in - while a
+`Z2` watch on the same field caught nothing in Campaign and Eliminator
+races, and the loader page's thirty-third pass re-filed the writer as
+"not on a craft". One Zone race, one boot, five breakpoints in turn:
+
+1. `dispatch`  - `0x003da638`, the `cmpwi` right after `lwz r0, 0xe0(r9)`:
+   `r0` is `g_GameState.mode`, `r31` is `n`. Which branch, from the value
+   the branch is taken on.
+2. `targets`   - each of the four branch targets armed in turn; which
+   parks a thread and which never does. `0x003da650` is also reached by
+   the `bne` at `0x003da62c` off the byte at `0x009384e1`, so the byte and
+   the mode are read at every hit there to tell the two routes apart.
+3. `source`    - `0x003da674`, the `stw r0, 0x4(r9)` of the fall-through:
+   `r0` is the value just loaded, `r11` is `craftArray[n]`, so `T = r11 +
+   0x640`; read alongside `H[n]` (`+0x00` current, `+0x04` pending before
+   the store, radius, speed, weight). Bursts of consecutive frames
+   (hopping, see `hd-flare-owner-break.py`'s `Breaker`), with the commit
+   breakpoint below used as the free run between them.
+4. `commit`    - `0x003da74c`, `stwx r8, r4, r9`: fires only when a new
+   stage is pending, so waiting on it *is* waiting for the ladder to step,
+   and `r8` is the value that lands in `H[n].+0x00` - the sanity control
+   that what `T` held is what got committed. At each commit the PPU thread
+   list is dumped with PC and LR.
+5. `writer`    - `0x0004a014`: `r29` is the object being written, `r3` the
+   value, `r28` the record index `i`, `f29` the zone counter the table was
+   walked against. Pointer identity between `r29` and the source's `r11`
+   in the same race is the proof the two pages describe one field.
+
+Boots with `Session(interpreter=True)`: the muted `--config` copy with
+`PPU Decoder: Interpreter (static)`, the only decoder `Z0` fires under.
+One breakpoint armed at a time, never a resume onto an armed address.
+
+    uv run --with evdev python3 scripts/hd-zone-stage-source-break.py [out_dir]
+"""
+
+import importlib.util
+import json
+import struct
+import sys
+import time
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT / "scripts"))
+
+
+def _load(name, filename):
+    spec = importlib.util.spec_from_file_location(name, ROOT / "scripts" / filename)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+drive = _load("rpcs3_drive", "rpcs3-drive.py")
+flare = _load("hd_flare_owner_break", "hd-flare-owner-break.py")
+from rpcs3_debugger import Debugger, REG_FPR, REG_LR, REG_PC  # noqa: E402
+
+IMAGE = ROOT / "data/images/hdfury-ps3-eu-dec.iso"
+
+# Environment_UpdateStageBlend (0x003da540)
+DISPATCH = 0x003DA638        # cmpwi cr7,r0,0xe : r0 = g_GameState.mode, r31 = n
+TARGET_DETONATOR = 0x003DD5DC  # mode 0xe  : RaceManager->+0x2e10
+TARGET_MODE_D = 0x003DD364     # mode 0xd  : *(RaceManager + 0x2dfc + n*4)
+TARGET_MODE_15 = 0x003DD3A8    # mode 0x15 : *(RaceManager + 0x351c + n*4)
+TARGET_FALLBACK = 0x003DA650   # else      : craftArray[n]->+0x640
+SOURCE_STORE = 0x003DA674      # stw r0,0x4(r9) : r0 = *(r11 + 0x640), r11 = craftArray[n]
+COMMIT_STORE = 0x003DA74C      # stwx r8,r4,r9  : H[n].+0x00 = r8 (= H[n].+0x04)
+TARGETS = (("detonator", TARGET_DETONATOR), ("mode_d", TARGET_MODE_D),
+           ("mode_15", TARGET_MODE_15), ("fallback", TARGET_FALLBACK))
+
+# Hud_UpdateZoneSpeedClass (0x00049718)
+WRITER_STORE = 0x0004A014      # stw r3,0x640(r29) : r29 = craftArray[index], r3 = 14 - i
+
+G_GAMESTATE = 0x00936FE8       # *(0x008b7af4); .mode at +0xe0
+MODE_ADDRESS = G_GAMESTATE + 0xE0
+SKIP_BYTE = 0x009384E1         # *(0x008b7af8); set -> straight to the fallback
+CRAFT_ARRAY = 0x0098767C       # *(0x008b7c00); two entries
+STAGE_TABLE_SLOT = 0x008B7944  # -> 0x008c2cb8, H, 0x38-byte entries
+STAGE_TABLE = flare.STAGE_TABLE
+ENTRY_SIZE = 0x38
+
+gpr, u32, s32, floats = flare.gpr, flare.u32, flare.s32, flare.floats
+
+
+def fpr(regs, index):
+    at = REG_FPR + index * 8
+    return struct.unpack(">d", regs[at:at + 8])[0]
+
+
+def stage_entry(dbg, n):
+    blob = dbg.read(STAGE_TABLE + n * ENTRY_SIZE, ENTRY_SIZE)
+    return {
+        "current": u32(blob, 0), "pending": u32(blob, 4),
+        "radius": floats(blob[8:12])[0], "speed": floats(blob[0x10:0x14])[0],
+        "accel": floats(blob[0x14:0x18])[0], "weight": floats(blob[0x18:0x1C])[0],
+        "gate_2c": blob[0x2C],
+    }
+
+
+def globals_readout(dbg):
+    out = {
+        "mode": u32(dbg.read(MODE_ADDRESS, 4)),
+        "skip_byte": dbg.read(SKIP_BYTE, 1)[0],
+        "stage_table": "%#x" % u32(dbg.read(STAGE_TABLE_SLOT, 4)),
+        "craft_array": ["%#x" % u32(dbg.read(CRAFT_ARRAY + i * 4, 4)) for i in range(2)],
+    }
+    for i, craft in enumerate(out["craft_array"]):
+        craft = int(craft, 16)
+        if craft:
+            out["craft%d_0x640" % i] = u32(dbg.read(craft + 0x640, 4))
+    out["H"] = [stage_entry(dbg, n) for n in range(2)]
+    return out
+
+
+def dispatch_readout(dbg, regs):
+    n = gpr(regs, 31) & 0xFFFFFFFF
+    return {
+        "mode_r0": gpr(regs, 0) & 0xFFFFFFFF,
+        "n": n,
+        "g_GameState_r9": "%#x" % (gpr(regs, 9) & 0xFFFFFFFF),
+        "mode_mem": u32(dbg.read(MODE_ADDRESS, 4)),
+        "skip_byte": dbg.read(SKIP_BYTE, 1)[0],
+        "H": stage_entry(dbg, n) if n < 2 else None,
+    }
+
+
+def source_readout(dbg, regs):
+    n = gpr(regs, 31) & 0xFFFFFFFF
+    craft = gpr(regs, 11) & 0xFFFFFFFF
+    entry_ptr = gpr(regs, 9) & 0xFFFFFFFF
+    t = craft + 0x640
+    return {
+        "n": n,
+        "craft_r11": "%#x" % craft,
+        "T": "%#x" % t,
+        "value_r0": gpr(regs, 0) & 0xFFFFFFFF,
+        "T_mem": u32(dbg.read(t, 4)),
+        "entry_r9": "%#x" % entry_ptr,
+        "entry_expected": "%#x" % (STAGE_TABLE + n * ENTRY_SIZE),
+        "H": stage_entry(dbg, n) if n < 2 else None,
+        "mode_mem": u32(dbg.read(MODE_ADDRESS, 4)),
+    }
+
+
+def commit_readout(dbg, regs):
+    base = gpr(regs, 4) & 0xFFFFFFFF
+    offset = gpr(regs, 9) & 0xFFFFFFFF
+    n = offset // ENTRY_SIZE
+    craft = u32(dbg.read(CRAFT_ARRAY + n * 4, 4)) if n < 2 else 0
+    out = {
+        "n": n,
+        "base_r4": "%#x" % base,
+        "offset_r9": offset,
+        "value_r8": gpr(regs, 8) & 0xFFFFFFFF,
+        "H_before": stage_entry(dbg, n) if n < 2 else None,
+        "craft": "%#x" % craft,
+        "T_mem": u32(dbg.read(craft + 0x640, 4)) if craft else None,
+    }
+    return out
+
+
+def writer_readout(dbg, regs):
+    obj = gpr(regs, 29) & 0xFFFFFFFF
+    widget = gpr(regs, 30) & 0xFFFFFFFF
+    return {
+        "object_r29": "%#x" % obj,
+        "value_r3": gpr(regs, 3) & 0xFFFFFFFF,
+        "record_i_r28": gpr(regs, 28) & 0xFFFFFFFF,
+        "widget_r30": "%#x" % widget,
+        "widget_index_0x154": u32(dbg.read(widget + 0x154, 4)) if widget else None,
+        "zone_counter_f29": fpr(regs, 29),
+        "old_0x640": u32(dbg.read(obj + 0x640, 4)) if obj else None,
+        "craft_array": ["%#x" % u32(dbg.read(CRAFT_ARRAY + i * 4, 4)) for i in range(2)],
+        "H0": stage_entry(dbg, 0),
+    }
+
+
+def thread_dump(dbg):
+    rows = []
+    for tid in dbg.threads():
+        regs = dbg.registers(tid)
+        if regs is None:
+            rows.append({"tid": tid})
+            continue
+        rows.append({
+            "tid": tid,
+            "pc": "%#x" % int.from_bytes(regs[REG_PC:REG_PC + 8], "big"),
+            "lr": "%#x" % int.from_bytes(regs[REG_LR:REG_LR + 8], "big"),
+        })
+    return rows
+
+
+def collect(breaker, address, readout, want, budget, label, sink, save):
+    """`want` consecutive hits at `address`, each passed through `readout`."""
+    dbg = breaker.dbg
+    deadline = time.time() + budget
+    misses = 0
+    while len(sink) < want and time.time() < deadline:
+        tid, regs = breaker.stop_at(address, tries=4)
+        if tid is None:
+            misses += 1
+            print("  %s: no thread reached %#x (%d)" % (label, address, misses), flush=True)
+            if misses >= 3:
+                break
+            continue
+        entry = readout(dbg, regs)
+        entry["tid"] = tid
+        entry["t"] = round(time.time(), 2)
+        sink.append(entry)
+        print("  %s %s" % (label, json.dumps(entry, sort_keys=True)), flush=True)
+        save()
+    return len(sink)
+
+
+def probe_target(breaker, address, slices=8, slice_seconds=0.5):
+    """Does any thread ever park at `address`? One arm, `slices` free runs."""
+    dbg = breaker.dbg
+    if breaker.parked == address:
+        breaker.step_off(address)
+    dbg.add_breakpoint(address)
+    try:
+        for index in range(slices):
+            dbg.resume()
+            if dbg.wait_for_stop(timeout=slice_seconds) is None:
+                dbg.pause()
+            dbg.drain()
+            tid, regs = flare.find_at(dbg, address, breaker.prefer)
+            if tid is not None:
+                breaker.prefer = tid
+                breaker.parked = address
+                return index + 1, tid, regs
+    finally:
+        dbg.remove_breakpoint(address)
+    return None, None, None
+
+
+def wait_for_commit(breaker, budget, slice_seconds=1.0):
+    """Arm the commit store and free-run until the ladder steps, or give up."""
+    dbg = breaker.dbg
+    if breaker.parked == COMMIT_STORE:
+        breaker.step_off(COMMIT_STORE)
+    dbg.add_breakpoint(COMMIT_STORE)
+    started = time.time()
+    try:
+        while time.time() - started < budget:
+            dbg.resume()
+            if dbg.wait_for_stop(timeout=slice_seconds) is None:
+                dbg.pause()
+            dbg.drain()
+            tid, regs = flare.find_at(dbg, COMMIT_STORE, breaker.prefer)
+            if tid is not None:
+                breaker.prefer = tid
+                breaker.parked = COMMIT_STORE
+                return time.time() - started, tid, regs
+    finally:
+        dbg.remove_breakpoint(COMMIT_STORE)
+    return time.time() - started, None, None
+
+
+def run(out):
+    result = {"globals": {}, "dispatch": [], "targets": {}, "source": [],
+              "commits": [], "writer": [], "flare_gate": []}
+
+    def save():
+        (out / "zone-source.json").write_text(json.dumps(result, indent=1))
+
+    with drive.Session(str(IMAGE), str(out / "logs"), interpreter=True) as session:
+        if not flare.boot_to_main_menu(session):
+            return 1
+        if not flare.walk_to_zone(session, out):
+            print("did not reach a race (%s)" % drive.current_screen(), file=sys.stderr)
+            return 1
+        result["race_type"] = flare.wait_for_load(session, out)
+        if not result["race_type"] or "zone" not in result["race_type"].lower():
+            print("not a Zone race - stopping here", file=sys.stderr)
+            save()
+            return 1
+        result["config"] = drive.config_report()
+        # Zone waits on a `START RACE` prompt; then the countdown.
+        session.pad.press("cross", 0.2)
+        time.sleep(25.0)
+        drive.screenshot(out / "race-running.png", trim=True)
+        dbg = Debugger()
+        breaker = flare.Breaker(dbg)
+        try:
+            dbg.pause()
+            dbg.drain()
+            result["globals"]["at_attach"] = globals_readout(dbg)
+            print("globals: %s" % json.dumps(result["globals"]["at_attach"]), flush=True)
+            save()
+
+            print("== flare gate, for the player's craft pointer", flush=True)
+            for _ in range(4):
+                tid, regs = breaker.stop_at(flare.FLARE_GATE, tries=4)
+                if tid is None:
+                    break
+                entry = flare.flare_readout(dbg, regs, flare.FLARE_GATE)
+                result["flare_gate"].append(entry)
+                print("  %s" % json.dumps(entry, sort_keys=True), flush=True)
+            save()
+
+            print("== 1. dispatch at %#x" % DISPATCH, flush=True)
+            collect(breaker, DISPATCH, dispatch_readout, 24, 240.0, "dispatch",
+                    result["dispatch"], save)
+
+            print("== 2. the four targets, each armed alone", flush=True)
+            for name, address in TARGETS:
+                slices, tid, regs = probe_target(breaker, address)
+                row = {"address": "%#x" % address, "hit_on_slice": slices, "tid": tid}
+                if regs is not None:
+                    row["mode_mem"] = u32(dbg.read(MODE_ADDRESS, 4))
+                    row["skip_byte"] = dbg.read(SKIP_BYTE, 1)[0]
+                    row["r0"] = gpr(regs, 0) & 0xFFFFFFFF
+                    row["n_r31"] = gpr(regs, 31) & 0xFFFFFFFF
+                result["targets"][name] = row
+                print("  %s: %s" % (name, json.dumps(row)), flush=True)
+                save()
+            # A second sweep, so a "never" is two arms and sixteen slices.
+            for name, address in TARGETS:
+                slices, tid, regs = probe_target(breaker, address)
+                result["targets"][name]["second_sweep_hit_on_slice"] = slices
+                print("  %s again: slice %s" % (name, slices), flush=True)
+            save()
+
+            print("== 3. source at %#x, first burst" % SOURCE_STORE, flush=True)
+            collect(breaker, SOURCE_STORE, source_readout, 60, 300.0, "source",
+                    result["source"], save)
+            drive.screenshot(out / "source-burst-0.png", trim=True)
+
+            print("== 5. writer at %#x, first burst" % WRITER_STORE, flush=True)
+            collect(breaker, WRITER_STORE, writer_readout, 12, 120.0, "writer",
+                    result["writer"], save)
+
+            for step in range(3):
+                print("== 4. waiting on the commit at %#x (step %d)" % (COMMIT_STORE, step),
+                      flush=True)
+                waited, tid, regs = wait_for_commit(breaker, budget=240.0)
+                row = {"waited_s": round(waited, 1), "tid": tid}
+                if regs is not None:
+                    row.update(commit_readout(dbg, regs))
+                    row["threads"] = thread_dump(dbg)
+                    # The committed value, read back after the store lands.
+                    breaker.step_off(COMMIT_STORE)
+                    row["H_after"] = stage_entry(dbg, row["n"]) if row["n"] < 2 else None
+                result["commits"].append(row)
+                print("  commit %s" % json.dumps({k: v for k, v in row.items() if k != "threads"}),
+                      flush=True)
+                save()
+                if regs is None:
+                    print("  no commit in %.0f s" % waited, flush=True)
+                    continue
+                drive.screenshot(out / ("commit-%d.png" % step), trim=True)
+                collect(breaker, SOURCE_STORE, source_readout, len(result["source"]) + 40,
+                        240.0, "source", result["source"], save)
+                collect(breaker, WRITER_STORE, writer_readout, len(result["writer"]) + 8,
+                        120.0, "writer", result["writer"], save)
+            result["globals"]["at_end"] = globals_readout(dbg)
+            result["step_off"] = {"stepped": breaker.stepped, "ran_off": breaker.ran_off}
+            save()
+            dbg.resume()
+        except (TimeoutError, OSError) as exc:
+            print("stub desync: %r" % exc, file=sys.stderr, flush=True)
+            result["desync"] = repr(exc)
+        finally:
+            try:
+                dbg.resume()
+            except Exception:
+                pass
+            dbg.close()
+    result["summary"] = summarise(result)
+    save()
+    print(json.dumps(result["summary"], indent=1))
+    return 0
+
+
+def summarise(result):
+    modes = {}
+    for hit in result["dispatch"]:
+        modes[hit["mode_r0"]] = modes.get(hit["mode_r0"], 0) + 1
+    fired = {name: row.get("hit_on_slice") for name, row in result["targets"].items()}
+    values = []
+    for hit in result["source"]:
+        if not values or values[-1][1] != hit["value_r0"]:
+            values.append((hit["t"], hit["value_r0"], hit["T"]))
+    writer_objects = sorted({hit["object_r29"] for hit in result["writer"]})
+    source_objects = sorted({hit["craft_r11"] for hit in result["source"]})
+    return {
+        "dispatch_modes": modes,
+        "targets_hit_on_slice": fired,
+        "source_hits": len(result["source"]),
+        "source_value_runs": values,
+        "source_objects": source_objects,
+        "writer_objects": writer_objects,
+        "writer_matches_source": writer_objects == source_objects,
+        "commits": [{k: v for k, v in c.items() if k != "threads"} for c in result["commits"]],
+    }
+
+
+def main():
+    out = Path(sys.argv[1] if len(sys.argv) > 1
+               else ROOT / "data/reference/hd-capture/zone-stage-source")
+    out.mkdir(parents=True, exist_ok=True)
+    return run(out)
+
+
+if __name__ == "__main__":
+    sys.exit(main())
