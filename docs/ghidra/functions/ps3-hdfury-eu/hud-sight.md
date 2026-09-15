@@ -149,48 +149,117 @@ argument that `0.8` is close enough, and either is a `oag-race`/gameplay
 change outside this lane's file ownership - recorded in this project's
 handover tracker under the existing HD lock-on thread.
 
-## The LeachBeam's four are not "all four, always" in the original
+## The LeachBeam's four reveal one at a time, gated by hold-time not distance
 
-This project's own `oag_title::hud::Sights::Concentric::leach` currently
-draws all four LeachBeam widgets whenever the reticle is up at all, labelled
-chosen-not-measured for want of a reading. `Hud_UpdateLeachBeamSight` shows
-that is not what the original does: once a lock is in progress
-(`bVar24` true), it walks a chain of float comparisons against per-weapon
-distance breakpoints (read off `iVar16 - 0x5d14`, `- 0x5c94`, `- 0x5c98`, and
-similar small negative offsets from a table pointer this pass has not named)
-and, depending on which threshold the current hold/lock progress clears,
-toggles bit `0x4` at `widget + 0x34` - the same hide-this-widget bit idiom
-`Hud_BindWidgets` clears and sets on dozens of unrelated widgets throughout
-the HUD - individually on the Outer (`+0x594`), Middle (`+0x598`) and Inner
-(`+0x59c`) widgets. The BG (`+0x590`) is set visible unconditionally in the
-same branch. Read plainly: **the rings appear to fill in one at a time as the
-lock progresses, rather than all four snapping on together** - a LOD/reveal
-sequence closer in spirit to the PSP brackets closing in than to "on or off".
+**2026-09-15, corrects this page's own earlier reading.** This section
+previously read the four widgets' bit-`0x4` toggles as gated by "distance
+breakpoints" off a resolved per-weapon stats pointer. Disassembling the
+exact instructions that produce `iVar16 - 0x5d14` etc. shows they are
+`lfs fN, -0x5d14(r2)` - **TOC-relative loads, not pointer-plus-offset reads
+off a runtime struct**. `iVar16`/`iVar17` in the decompile is Ghidra's
+label for whatever currently occupies the stack slot this function's own
+TOC-preservation dance (`puVar10[5] = uVar14; ... = puVar10[5];`, needed
+because callee TOCs differ from the caller's in this binary) has parked
+there at that point - not a weapon-stats pointer at all. `0x00090d30` is
+below `0x32d5e0`, so per [memory.md](memory.md) Ghidra's own TOC
+(`0x008ad4d8`) is the right one here, confirmed directly:
+`scripts/ps3-toc.py toc 0x00090d30` prints `exact`.
 
-**Not fully decoded**: which literal breakpoint values gate which ring, and
-therefore the exact order and timing of the reveal, needs the distance-
-breakpoint table named and read - `iVar16`'s own source (a per-weapon stats
-pointer resolved earlier in the function, likely the same shape
-`oag_tables::weapons::LeachBeamStats` already decodes from the XML side) is
-the next thing to chase. `Hud_UpdateMissileSight` runs the equivalent
-distance-based bit-toggle on its own `LockedOnLines`/`LockedOnMiddle` pair
-rather than an all-or-nothing pair-add, so the "locked adds two more" reading
-[`oag_title::hud::Sights::Concentric::locked`] carries at confidence 70 is
-itself worth re-checking against this same mechanism - not done this pass.
+Resolving the three loads through that TOC and reading the slots
+(`scripts/ps3-toc.py resolve 0x00090d30 -0x5c98` etc., cross-checked against
+a direct `read_memory` at each computed address) gives three **literal,
+static** IEEE-754 floats:
 
-This is why `oag_title::hud::Sights::Concentric::leach`'s doc comment still
-says chosen, not measured, rather than promoting the widget existence
-question (measured, confidence 90) into a claim about the reveal order
-(unmeasured past this page).
+| Load site | Slot | Value |
+| --- | --- | --- |
+| `lfs f0,-0x5c98(r2)` @ `0x00091460` | `0x008a7840` | `0x3e000000` = **0.125** |
+| `lfs f0,-0x5d14(r2)` @ `0x0009147c` | `0x008a77c4` | `0x3e800000` = **0.25** |
+| `lfs f0,-0x5c94(r2)` @ `0x00091a9c` | `0x008a7844` | `0x3ec00000` = **0.375** |
+
+**All three are exact quarters of `DAT_008a764c` (`0.5`), the same hold
+constant this page's previous section already read.** The value the three
+are compared against, `fVar2 = *(float *)(param_2 + 0x604)`, is the same
+field the top-of-function lock check reads and increments by `param_1`
+(the tick's delta seconds) before comparing it to `DAT_008a764c` - so this
+is **the hold-time accumulator itself, in seconds**, not a screen or world
+distance. The reveal is gated by *how far into the 0.5 s hold the lock
+currently is*, at each quarter.
+
+The bit-`0x4` direction reads unambiguously from the function's own
+no-target early return: `*(uint*)(BG+0x34) &= ~4` is the last thing it does
+before returning "nothing to show" - so **clearing bit `0x4` hides a widget
+and setting it shows one**, the opposite of neither being obviously right
+from the toggle sites alone. Restated as a table, `t` being the hold-time
+accumulator in seconds and BG (`+0x590`) shown throughout once a target is
+being tracked:
+
+| `t` | Outer (`+0x594`) | Middle (`+0x598`) | Inner (`+0x59c`) |
+| --- | --- | --- | --- |
+| `t <= 0.125` (0-25% of hold) | shown | hidden | hidden |
+| `0.125 < t <= 0.25` (25-50%) | hidden | shown | hidden |
+| `0.25 < t <= 0.375` (50-75%) | hidden | hidden | shown |
+| `t > 0.375` (75-100%) | hidden | hidden | hidden |
+
+So the four rings do not snap on together and do not stay filled once
+revealed: each of the three outer rings gets **one exclusive quarter** of
+the hold window, and the last quarter (`t > 0.375`) shows only the BG
+before the lock completes at `t > 0.5`. This is a LOD/reveal sequence in
+the same spirit as the PSP's brackets closing in, but built from time
+fractions rather than a closing bracket's own extent.
+
+**Confidence 88** on the three values and the table above: the constants
+are direct memory reads at TOC-exact-resolved addresses, corroborated by
+`scripts/ps3-toc.py` independently of the MCP bridge, and the clean
+quarter-of-`0.5` values are exactly the kind of authored-not-coincidental
+number a hand-tuned reveal schedule would carry. What is not independently
+confirmed: the outer state machine that decides *when* this whole block
+runs versus the function's several other branches (still the per-frame
+"is a target currently being tracked" gating this page's earlier section
+already flagged as not fully decoded) - so the table above is right for the
+frames it runs on, and exactly which frames those are is not proven past
+"while the hold accumulator is live and below the completion threshold."
+
+**Not adopted here either, for the same reason `HOLD_SECONDS` is not**:
+`oag_race::sight::Sight` has no accessor for the hold-time accumulator or a
+0-1 progress fraction derived from it - only `locked()` and `visible()`,
+both hard booleans - so `oag_game::hud::sight_draw` cannot drive this table
+without a new `crates/race` API. `oag_title::hud::Sights::Concentric::leach`
+still draws all four together in code and its own doc comment still says
+chosen, not measured, for the *runtime* behaviour; what moved is that the
+reveal law itself is no longer unread. See this lane's report for the
+concrete ask.
+
+### The Missile shares one of the three constants, but was not fully re-derived
+
+`Hud_UpdateMissileSight` (`0x0008a5b8`) reads `-0x5d14(r2)` too, at
+`0x0008b234` - the **same TOC slot**, `0x008a77c4` = `0.25`. It is compared
+against a value accumulated in that function's own `param_2+0xec` field at
+its own per-frame rate, not against `param_2+0x604`, so the same `0.25`
+constant is corroborated as a shared "halfway" reveal threshold without this
+pass having proven the Missile's own accumulator is unit-for-unit the same
+"seconds into the hold" quantity the LeachBeam's is. Structurally the
+Missile's transition is a **single** step, not three: crossing this
+threshold hides `MissileSightMiddle` (`+0x584`) once and sets
+`LockedOnLines`/`LockedOnMiddle` (`+0x588`/`+0x58c`) visible, guarded by a
+"have I already done this" check on `MissileSightMiddle`'s own hide bit
+rather than being re-evaluated every frame the way the LeachBeam's three-way
+table is. That is a real, structural answer to this page's own open question
+about whether [`oag_title::hud::Sights::Concentric::locked`]'s "locked adds
+two more" reading (confidence 70) is an all-or-nothing pair-add or a staged
+reveal like the LeachBeam's: **it is closer to all-or-nothing than to a
+three-stage reveal**, gated by one threshold rather than three. Confidence
+**60** - the toggle statements and the shared constant are read directly,
+but the full surrounding state machine in this larger, more heavily
+vectorised function was not traced to the same depth as the LeachBeam's.
 
 ## Not read this pass
 
-- The distance-breakpoint table(s) both functions index by small negative
-  offsets from a resolved weapon-stats-shaped pointer - the next step for
-  settling the reveal order above.
-- Whether `Hud_UpdateMissileSight`'s own `LockedOnLines`/`LockedOnMiddle`
-  toggle is genuinely the same distance-reveal mechanism as the LeachBeam's,
-  or a simpler on/off.
+- The full outer state machine gating when `Hud_UpdateLeachBeamSight`'s
+  widget-toggle block runs at all, across the function's several branches -
+  see above.
+- `Hud_UpdateMissileSight`'s own accumulator (`param_2+0xec`) and whether it
+  is genuinely hold-seconds like the LeachBeam's, or a distance-derived
+  ramp that happens to cross the same `0.25` constant.
 - The far-target alpha (96/255 on the PSP) - the colour writes here go through
   `Image_SetVertexColours` with a computed alpha byte, and whether any of that
   arithmetic is the same 96/255 ratio was not checked against the PSP's
