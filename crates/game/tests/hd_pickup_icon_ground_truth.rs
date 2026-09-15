@@ -75,11 +75,15 @@ fn race_on(image: &Path) -> race::Loaded {
     loaded
 }
 
-/// Every one of `Weapon::ALL`'s icon widgets is authored on HD's arcade
-/// layout, resolves into the HUD sheet, and carries a real (non-zero,
-/// non-degenerate) source rectangle - sized off `Weapon::ALL.len()` rather
-/// than a literal count, so a roster change (a 14th weapon) does not need this
-/// test edited to match.
+/// Every one of HD's weapon icon widgets is authored on its arcade layout,
+/// resolves into the HUD sheet, and carries a real (non-zero, non-degenerate)
+/// source rectangle - sized off `Weapon::ALL` rather than a literal count.
+///
+/// **HD's thirteen**: the fourteenth `Weapon`, the Disruptor, is Pure's alone.
+/// HD's weapon table authors no `<Weapon type="Disruptor">` and its layouts no
+/// `DisruptorIcon` (`docs/formats/weapon-stats.md`, "Pure dialect"), so it is
+/// filtered here the way `hud_layout_ground_truth` filters it on Pulse - a disc
+/// fact about the roster, not a gap in the draw path.
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn every_weapon_icon_resolves_to_a_real_sprite_with_non_zero_extent() {
@@ -92,7 +96,10 @@ fn every_weapon_icon_resolves_to_a_real_sprite_with_non_zero_extent() {
         .expect("HD's arcade layout parsed");
 
     let mut checked = 0;
-    for weapon in Weapon::ALL {
+    let hd_roster = Weapon::ALL
+        .into_iter()
+        .filter(|weapon| *weapon != Weapon::Disruptor);
+    for weapon in hd_roster {
         let name = oag_game::hud::pickup_icon_name(weapon);
         let sprite = layout
             .sprites
@@ -121,8 +128,8 @@ fn every_weapon_icon_resolves_to_a_real_sprite_with_non_zero_extent() {
     }
     assert_eq!(
         checked,
-        Weapon::ALL.len(),
-        "every declared weapon should have had its icon checked"
+        Weapon::ALL.len() - 1,
+        "every weapon HD authors should have had its icon checked"
     );
 
     let backdrop = layout
