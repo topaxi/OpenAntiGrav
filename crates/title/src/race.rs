@@ -86,13 +86,17 @@ pub struct ShipPaths {
 }
 
 mod announcer;
+mod transition;
 mod variants;
 pub use crate::speed::SpeedClasses;
 pub use announcer::{ZoneAnnouncer, ZoneClassAnnouncer};
+pub use transition::ZoneTransition;
 pub use variants::{GuestRoster, HullVariant, TeamVariant, TeamVariants, VariantJoin};
 
 /// The circuit and team a race falls back to on one title.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+// `PartialEq` without `Eq` since 2026-09-15: `zone_transition` carries
+// floats.
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct RaceDefaults {
     /// Archive entry of the `.vex` a race loads when the caller names none.
     ///
@@ -172,6 +176,13 @@ pub struct RaceDefaults {
     /// HD/Fury included: its stage index is read from a per-craft field whose
     /// writer has not been found. See [`ZoneStages`]' own docs.
     pub zone_stages: Option<&'static ZoneStages>,
+    /// How this title's Zone stage change moves through the world once a
+    /// stage steps. See [`ZoneTransition`].
+    ///
+    /// `None` where the law is unread, which is every title but HD/Fury: 2048
+    /// fades by a factor nothing traced writes, and Pulse and Pure ship no
+    /// stage table to transition between.
+    pub zone_transition: Option<&'static ZoneTransition>,
     /// Where this title keeps the per-stage textures a Zone race swaps as it
     /// escalates. See [`ZoneStageTextures`].
     ///

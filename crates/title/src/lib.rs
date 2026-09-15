@@ -53,7 +53,7 @@ pub use oag_disc::Platform;
 pub use race::{
     GuestRoster, RaceDefaults, SoundBanks, SpeedClasses, TeamVariant, TeamVariants, VariantJoin,
     ZoneAnnouncer, ZoneCircuit, ZoneClassAnnouncer, ZoneCraft, ZonePalette, ZoneStageTextures,
-    ZoneStages,
+    ZoneStages, ZoneTransition,
 };
 
 /// One title's release-level facts.

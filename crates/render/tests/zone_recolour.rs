@@ -144,19 +144,28 @@ fn scene_art(stage: &Arc<ModelTexture>) -> zone::StageArt {
 
 /// A [`Zone`] whose Scene set is `set` and whose Track set is a magenta
 /// poison, on the same terms as [`scene_art`].
+///
+/// No transition in flight: the Outer pair equals the Inner, so the sphere
+/// test selects the same colours whichever side of it a fragment falls, and
+/// the radius is irrelevant. `the_transition_sphere_selects_the_inner_pair_inside_and_the_outer_outside`
+/// is where the two pairs differ.
 fn scene_zone(set: ZoneSet) -> Zone {
+    let track = ZoneSet {
+        effect: [4.0, 0.0, 4.0, 0.0],
+        base: [0.0; 4],
+        base_alt: [0.0; 4],
+    };
     Zone {
         // `zoneColourTint.xy`. `1.0` on both lanes is what
         // `zonemode.effectsettings` authors.
         uv_scale: [1.0, 1.0],
         enabled: 1.0,
-        _pad: 0.0,
-        track: ZoneSet {
-            effect: [4.0, 0.0, 4.0, 0.0],
-            base: [0.0; 4],
-            base_alt: [0.0; 4],
-        },
+        radius: 0.0,
+        origin: [0.0; 4],
+        track,
         scene: set,
+        track_outer: track,
+        scene_outer: set,
     }
 }
 
@@ -489,20 +498,25 @@ fn the_track_bit_selects_the_track_texture_and_colours_and_its_absence_the_scene
     let mut scene = Scene::off();
     scene.light.enabled = 1.0;
     scene.fog.camera = [0.0, 0.0, 100.5];
+    let track_set = ZoneSet {
+        effect: ZONE_EFFECT,
+        base: [0.0; 4],
+        base_alt: [0.0; 4],
+    };
+    let scene_set = ZoneSet {
+        effect: [0.0, 0.0, 0.25, 0.0],
+        base: [0.0; 4],
+        base_alt: [0.0; 4],
+    };
     scene.zone = Zone {
         uv_scale: [1.0, 1.0],
         enabled: 1.0,
-        _pad: 0.0,
-        track: ZoneSet {
-            effect: ZONE_EFFECT,
-            base: [0.0; 4],
-            base_alt: [0.0; 4],
-        },
-        scene: ZoneSet {
-            effect: [0.0, 0.0, 0.25, 0.0],
-            base: [0.0; 4],
-            base_alt: [0.0; 4],
-        },
+        radius: 0.0,
+        origin: [0.0; 4],
+        track: track_set,
+        scene: scene_set,
+        track_outer: track_set,
+        scene_outer: scene_set,
     };
 
     let track = draw(&device, &queue, &road, &art, scene, None);
@@ -529,6 +543,103 @@ fn the_track_bit_selects_the_track_texture_and_colours_and_its_absence_the_scene
     );
 }
 
+/// **The stage-transition sphere reaches the frame: a fragment inside it
+/// reads the Inner pair and one outside it the Outer.** One quad, one draw,
+/// two texels read off it on either side of the boundary - the pattern the
+/// original's own `distance(worldPos, zoneOrigin) < zoneColourTint.w` puts
+/// on every Zone surface as a stage change sweeps out of the craft.
+///
+/// The identity matrices make world space clip space, so the quad spans
+/// `x` in `-0.9..0.9` at `z = 0.5`. The origin sits at its left edge and the
+/// radius is one unit: `x = -0.5` is half a unit in and `x = 0.5` a unit and
+/// a half out. Inner is red, Outer is green, both through a white stage
+/// texel so the pixel is the parameter alone - and a swapped select lands
+/// each fragment on the other's colour, which no assertion here accepts.
+#[test]
+fn the_transition_sphere_selects_the_inner_pair_inside_and_the_outer_outside() {
+    let instance = wgpu::Instance::default();
+    let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
+        eprintln!("no GPU adapter: skipping");
+        return;
+    };
+    let (device, queue) =
+        pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default()))
+            .expect("requesting the device");
+
+    let surface = model(texture("black albedo", [0, 0, 0, 255]), 1.0);
+    let stage = texture("zone stage", [255, 255, 255, 255]);
+    let inner = ZoneSet {
+        effect: [1.0, 0.0, 0.0, 0.0],
+        base: [0.0; 4],
+        base_alt: [0.0; 4],
+    };
+    let outer = ZoneSet {
+        effect: [0.0, 1.0, 0.0, 0.0],
+        base: [0.0; 4],
+        base_alt: [0.0; 4],
+    };
+    let mut scene = Scene::off();
+    scene.light.enabled = 1.0;
+    scene.fog.camera = [0.0, 0.0, 100.5];
+    scene.zone = Zone {
+        uv_scale: [1.0, 1.0],
+        enabled: 1.0,
+        radius: 1.0,
+        origin: [-1.0, 0.0, 0.5, 1.0],
+        // The Track pair is a magenta poison on both sides, as `scene_zone`
+        // binds it: this quad carries no `ZONE_TRACK`, so it must read the
+        // Scene pair.
+        track: ZoneSet {
+            effect: [4.0, 0.0, 4.0, 0.0],
+            base: [0.0; 4],
+            base_alt: [0.0; 4],
+        },
+        track_outer: ZoneSet {
+            effect: [4.0, 0.0, 4.0, 0.0],
+            base: [0.0; 4],
+            base_alt: [0.0; 4],
+        },
+        scene: inner,
+        scene_outer: outer,
+    };
+
+    let frame = draw_frame(&device, &queue, &surface, &scene_art(&stage), scene, None);
+    // Row 48 is `y = -0.5`, where the triangle is 1.4 units wide, so both
+    // columns land on it: column 16 is `x = -0.5`, column 48 is `x = 0.5`.
+    let texel = |column: u32, row: u32| {
+        let at = ((row * SIZE + column) * 4) as usize;
+        (frame[at], frame[at + 1], frame[at + 2])
+    };
+    let (row, left, right) = (SIZE * 3 / 4, SIZE / 4, SIZE * 3 / 4);
+    assert_eq!(
+        texel(left, row),
+        (255, 0, 0),
+        "half a unit from the origin is inside the sphere and reads the Inner pair"
+    );
+    assert_eq!(
+        texel(right, row),
+        (0, 255, 0),
+        "a unit and a half from the origin is outside and reads the Outer pair"
+    );
+
+    // **And with the Outer pair equal to the Inner, the radius is
+    // irrelevant** - every draw outside a transition, and outside a Zone race
+    // altogether, relies on that.
+    scene.zone.scene_outer = inner;
+    scene.zone.radius = 0.0;
+    let settled = draw_frame(&device, &queue, &surface, &scene_art(&stage), scene, None);
+    let texel = |column: u32, row: u32| {
+        let at = ((row * SIZE + column) * 4) as usize;
+        (settled[at], settled[at + 1], settled[at + 2])
+    };
+    assert_eq!(texel(left, row), (255, 0, 0));
+    assert_eq!(
+        texel(right, row),
+        (255, 0, 0),
+        "outside a zero-radius sphere the Outer pair draws, and it is the Inner one"
+    );
+}
+
 /// Draws `model` once into a `SIZE`x`SIZE` target and answers the centre texel.
 ///
 /// `zone_vis` is the visualiser lookup to write before drawing - `(bands,
@@ -542,6 +653,22 @@ fn draw(
     scene: Scene,
     zone_vis: Option<(&[f32], [u8; 3])>,
 ) -> [u8; 4] {
+    let frame = draw_frame(device, queue, model, stage, scene, zone_vis);
+    // Dead centre of the triangle.
+    let at = (((SIZE / 2) * SIZE + SIZE / 2) * 4) as usize;
+    [frame[at], frame[at + 1], frame[at + 2], frame[at + 3]]
+}
+
+/// [`draw`], returning the whole `SIZE`x`SIZE` RGBA frame, row-major from
+/// the top, for a test that reads more than one texel of it.
+fn draw_frame(
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    model: &Model,
+    stage: &zone::StageArt,
+    scene: Scene,
+    zone_vis: Option<(&[f32], [u8; 3])>,
+) -> Vec<u8> {
     let built = mesh_render::build(
         device,
         queue,
@@ -672,7 +799,5 @@ fn draw(
         .poll(wgpu::PollType::wait_indefinitely())
         .expect("draining the queue");
     let mapped = readback.slice(..).get_mapped_range().expect("mapping");
-    // Dead centre of the triangle.
-    let at = (((SIZE / 2) * SIZE + SIZE / 2) * 4) as usize;
-    [mapped[at], mapped[at + 1], mapped[at + 2], mapped[at + 3]]
+    mapped.to_vec()
 }

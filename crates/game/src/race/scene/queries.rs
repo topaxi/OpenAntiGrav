@@ -60,18 +60,30 @@ impl Scene {
         let Some(grade) = self.zone_grade.as_mut() else {
             return false;
         };
-        if !grade.show_zone(zone) {
-            return false;
+        let stepped = grade.show_zone(zone);
+        if stepped {
+            // Once per stage change, which is at most fifteen times a race -
+            // the same "log the edge, not the state" rule the announcer cue
+            // follows. It is also the only headless evidence that the grade
+            // moved at all, since a `--screenshot` cannot say so on its own.
+            info!(
+                "zone {zone}: the colour grade steps to stage {}",
+                grade.blend().current
+            );
         }
-        // Once per stage change, which is at most fifteen times a race - the
-        // same "log the edge, not the state" rule the announcer cue follows.
-        // It is also the only headless evidence that the grade moved at all,
-        // since a `--screenshot` cannot say so on its own.
-        info!(
-            "zone {zone}: the colour grade steps to stage {}",
-            grade.blend().current
+        // Where the transition sphere is this frame, from the race's own
+        // zone clock rather than a counter of calls - so this reads the same
+        // whether it runs once a frame in the window or once at the end of a
+        // headless capture. Centred on the player's craft, which is what
+        // `Scene_PrepareFrame` re-reads `zoneOrigin` from every frame. See
+        // `ZoneGrade::follow`.
+        grade.follow(
+            zone,
+            race.sim.world.race.zone_timer,
+            race.dt(),
+            race.ship().physics.body.position.to_array(),
         );
-        true
+        stepped
     }
 
     /// Rebuilds the depth buffer, and the MSAA colour target if there is one,

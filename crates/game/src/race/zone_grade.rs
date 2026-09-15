@@ -21,7 +21,8 @@
 //! request/commit pair: when the two indices differ it draws a transition
 //! effect, copies `+0x04` into `+0x00` and zeroes the weight. Two independent
 //! sites then cross-fade stage `n` against stage `n - 1`, saturating at zero.
-//! [`StageBlend`] is those three fields and nothing else. See
+//! [`StageBlend`] is those three fields; the sphere the same entry advances
+//! beside them is [`Wavefront`]. See
 //! `docs/ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md`.
 //!
 //! **Recovered on both 2048 and HD/Fury: the trigger.** 2048's Zone HUD widget
@@ -57,22 +58,32 @@
 //! long race (`docs/formats/psp-audio.md`'s "the two ladders can overlap"
 //! section links the same finding from the announcer side).
 //!
-//! **What still is not recovered on either title: the cross-fade's own rate.**
-//! 2048 fades the current stage toward the *next* one by a factor
-//! (`DAT_816c6bc8`) nothing traced writes, so [`ZoneGrade::show_zone`] leaves
-//! the weight at rest and the stage changes cleanly rather than easing. That is
-//! an absence, not a snap chosen for looks.
+//! **The transition itself is recovered on HD/Fury and unread on 2048.** A
+//! Zone stage change on HD is not a cross-fade in colour space: it is a sphere
+//! centred on the local craft whose radius grows every frame, the new stage's
+//! colours inside it and the previous stage's outside, beside a colour weight
+//! that ramps the fog and rig over a hundred frames. Every number of it is the
+//! executable's own - [`oag_hd::race::ZONE_TRANSITION`], read at instruction
+//! level and reproduced live on RPCS3 to the tenth - and [`ZoneGrade::follow`]
+//! is where it reaches the renderer. 2048 fades the current stage toward the
+//! *next* one by a factor (`DAT_816c6bc8`) nothing traced writes, so that
+//! title carries no [`oag_title::ZoneTransition`] and [`ZoneGrade::show_zone`]
+//! leaves its weight at rest: the stage changes cleanly rather than easing.
+//! That is an absence, not a snap chosen for looks.
 
 use std::sync::Arc;
 
 use oag_render::{mesh::ModelTexture, mesh_render};
 use oag_tables::effectsettings::{EffectSettings, StagePalette};
 
-/// The three fields HD/Fury's own runtime keeps per entity, and no others.
+/// The two stage indices HD/Fury's own runtime keeps per entity, and the
+/// colour weight beside them.
 ///
 /// Named for what the traced code does with them rather than for their
 /// offsets: `+0x00` is the stage being shown, `+0x04` the stage asked for, and
-/// `+0x18` the weight the cross-fade runs at.
+/// `+0x18` the weight the cross-fade runs at. The same entry also holds the
+/// transition sphere's radius (`+0x08`), speed (`+0x10`) and acceleration
+/// (`+0x14`); those are [`Wavefront`]'s, derived per frame rather than stored.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct StageBlend {
     /// `+0x00`: the stage currently applied.
@@ -84,14 +95,15 @@ pub struct StageBlend {
     /// current stage alone and `0.0` for the stage before it - the convention
     /// [`oag_tables::effectsettings::cross_fade_rgba8`] documents.
     ///
-    /// **The direction is open.** That function's own recovered doc reads
-    /// `1.0` "at the moment a stage becomes current", while the commit
-    /// `+0x18 = 0` writes zero at exactly that moment. Both cannot be the same
-    /// quantity with the same meaning, and nothing recovered says what
-    /// advances the field afterwards. This build keeps `cross_fade_rgba8`'s
-    /// convention, rests at `1.0`, and zeroes on commit the way the traced
-    /// store does - which leaves a freshly committed stage showing its
-    /// predecessor until something raises the weight, and nothing does yet.
+    /// **The direction is answered, 2026-09-15.** The commit writes `+0x18 =
+    /// 0` and every later frame adds `0.01f` to it until it clamps at `1.0`
+    /// (`Environment_UpdateStageBlend`, `0x003dd398`; reproduced live), so
+    /// the weight is the *new* stage's share, rising from nothing on the
+    /// commit frame to the whole palette a hundred frames later. The half of
+    /// `cross_fade_rgba8`'s recovered doc that reads `1.0` "at the moment a
+    /// stage becomes current" was the stale one. On a title with a read
+    /// transition [`ZoneGrade::follow`] derives this every frame; on one
+    /// without, it rests at `1.0`.
     pub weight: f32,
 }
 
@@ -104,6 +116,52 @@ impl Default for StageBlend {
             current: 0,
             requested: 0,
             weight: 1.0,
+        }
+    }
+}
+
+/// Where the stage-transition sphere is this frame: what is outside it, how
+/// far it has grown, and what it is centred on.
+///
+/// **Derived from the race's own zone clock, never counted.** HD/Fury keeps
+/// these as per-entity fields it advances once a frame; this port has no
+/// per-frame hook that every path shares - a `--screenshot` capture builds
+/// its scene after the whole tick loop has run - so instead
+/// [`ZoneGrade::follow`] computes the frame count from the zone the stage
+/// stepped at and the time since, both of which `World` already carries. The
+/// result is the same on the windowed loop, the capture's single sync and a
+/// paused race, and adds nothing to `World`.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Wavefront {
+    /// The stage outside the sphere - the one that was showing before the
+    /// last step. Equal to [`StageBlend::current`] when no transition is in
+    /// flight, which makes the shader's sphere test a no-op.
+    pub previous: u32,
+    /// Frames since the stage stepped - `k` in `r_k = 0.1 + 0.5k +
+    /// 0.05k(k - 1)`. Saturated at [`u32::MAX`] once a transition is
+    /// settled.
+    pub frames: u32,
+    /// The sphere's centre: the local craft's world position, re-read every
+    /// frame the way `Scene_PrepareFrame` (`0x003ad8dc`) rewrites
+    /// `zoneOrigin` from the craft's transform. Measured live, 92: the
+    /// pointer was the player's own craft on 210 of 210 frames and moved on
+    /// 207 of 207 consecutive pairs.
+    pub origin: [f32; 3],
+    /// The sphere's radius this frame by the title's law, in whatever unit
+    /// the world is drawn in - see [`oag_hd::race::ZONE_TRANSITION`] for
+    /// the one thing about it not measured. Zero on a title with no read
+    /// transition.
+    pub radius: f32,
+}
+
+impl Wavefront {
+    /// No transition in flight: `previous == current`, at the cap.
+    fn settled(current: u32, radius: f32) -> Self {
+        Self {
+            previous: current,
+            frames: u32::MAX,
+            origin: [0.0; 3],
+            radius,
         }
     }
 }
@@ -126,6 +184,13 @@ pub struct ZoneGrade {
     /// How this title turns a zone number into a stage, where that is
     /// recovered. `None` on every title but 2048 - see the module docs.
     stages: Option<&'static oag_title::ZoneStages>,
+    /// How a stage step sweeps the world on this title, where that is read.
+    /// `None` on every title but HD/Fury - see [`oag_title::ZoneTransition`]
+    /// and [`Self::with_transition`].
+    transition: Option<&'static oag_title::ZoneTransition>,
+    /// Where the transition sphere is this frame. See [`Wavefront`] and
+    /// [`Self::follow`].
+    wavefront: Wavefront,
     /// The "track" set's per-stage texture, one slot per stage, in stage
     /// order. Empty on a title with no located set, and `None` in any slot
     /// whose entry did not decode. See [`Self::stage_art`].
@@ -164,10 +229,126 @@ impl ZoneGrade {
             last_stage,
             blend: StageBlend::default(),
             stages,
+            transition: None,
+            wavefront: Wavefront::settled(0, 0.0),
             art,
             scene_art,
             pinned: false,
         })
+    }
+
+    /// Gives this grade the title's stage-transition law, where the title
+    /// has one read. See [`oag_title::RaceDefaults::zone_transition`].
+    ///
+    /// Without one, a stage step shows the new stage whole on the frame it
+    /// steps, which is what the ladder did before any transition was
+    /// recovered and remains what 2048 gets.
+    #[must_use]
+    pub fn with_transition(
+        mut self,
+        transition: Option<&'static oag_title::ZoneTransition>,
+    ) -> Self {
+        self.transition = transition;
+        self.wavefront = Wavefront::settled(self.blend.current, self.settled_radius());
+        self
+    }
+
+    /// The radius a settled wavefront reports: the law's cap, or zero on a
+    /// title with no law. Either way `previous == current` there, so the
+    /// shader's sphere test selects the same colours on both sides.
+    fn settled_radius(&self) -> f32 {
+        self.transition.map_or(0.0, |law| law.radius_cap)
+    }
+
+    /// Where the transition sphere is this frame. See [`Wavefront`].
+    #[must_use]
+    pub fn wavefront(&self) -> Wavefront {
+        self.wavefront
+    }
+
+    /// Leaves the showing stage whole: no transition in flight, weight at
+    /// rest, the sphere at its cap.
+    fn settle(&mut self) {
+        let origin = self.wavefront.origin;
+        self.wavefront = Wavefront::settled(self.blend.current, self.settled_radius());
+        self.wavefront.origin = origin;
+        self.blend.weight = 1.0;
+    }
+
+    /// The zone number the showing stage began at on this title's ladder, or
+    /// `None` when the ladder does not put `zone` on the showing stage at
+    /// all - which is a grade that has not been pointed at `zone` yet.
+    ///
+    /// The lowest threshold whose (clamped) stage is the showing one, so a
+    /// ladder that keeps stepping past the file's own last stage does not
+    /// restart the transition on rungs that change nothing.
+    fn stage_start_zone(&self, zone: u16) -> Option<u16> {
+        let stages = self.stages?;
+        if self.stage_for_zone(zone)? != self.blend.current {
+            return None;
+        }
+        stages
+            .records
+            .iter()
+            .rev()
+            .map(|&(at, _)| at)
+            .find(|&at| self.stage_for_zone(at) == Some(self.blend.current))
+    }
+
+    /// Points the transition at where the race is: derives the frames since
+    /// the showing stage stepped from the zone counter and the zone clock,
+    /// and re-centres the sphere on the craft.
+    ///
+    /// Call once a frame after [`Self::show_zone`], with the race's zone
+    /// number, its `zone_timer` (seconds accumulated toward the next step),
+    /// the fixed timestep and the local craft's world position.
+    ///
+    /// # The law, and what is assumed
+    ///
+    /// The original advances its radius, speed and weight **per frame**, on
+    /// a variable timestep it never reads (`Environment_UpdateStageBlend`,
+    /// thirtieth pass), and freezes them while `g_GamePaused` is set. This
+    /// port runs a fixed 60 Hz tick ([ADR-0007]), so a frame here is a tick:
+    /// `k` = ticks since the step, which on the shipped defaults puts the
+    /// radius at `207` one second in and the weight at `1.0` after 100
+    /// ticks. A paused race stops ticking, so the sphere freezes with it, as
+    /// measured. **That a PS3 frame and a tick here are the same length is
+    /// the one substitution made**, stated rather than measured.
+    ///
+    /// **The opening stage is shown whole, by this port's choice.** A race
+    /// opens on the ladder's zone-0 stage (`Sub Venom` on HD), and whether
+    /// the original runs a sphere out of `Start`'s black during the countdown
+    /// or has already settled by the time the player sees the track is
+    /// unmeasured; the maintainer's own observation is the cyan already on
+    /// the start line, which is what settling gives. So a stage whose ladder
+    /// threshold is zone `0` carries no transition.
+    ///
+    /// [ADR-0007]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0007-fixed-timestep-vs-original.md
+    pub fn follow(&mut self, zone: u16, seconds_into_zone: f32, dt: f32, origin: [f32; 3]) {
+        self.wavefront.origin = origin;
+        // No law read on this title, or a `--zone-stage` pin: the showing
+        // stage is whole.
+        let (Some(law), false) = (self.transition, self.pinned) else {
+            self.settle();
+            return;
+        };
+        let Some(start) = self.stage_start_zone(zone) else {
+            self.settle();
+            return;
+        };
+        if start == 0 {
+            self.settle();
+            return;
+        }
+        let ticks_per_step = (oag_race::zone::STEP_SECONDS / dt).round();
+        let ticks_into_zone = (seconds_into_zone / dt).round();
+        let frames = f32::from(zone - start) * ticks_per_step + ticks_into_zone;
+        // `as` saturates, and the count is non-negative by construction.
+        let frames = frames.max(0.0) as u32;
+        self.wavefront.previous = self.stage_for_zone(start - 1).unwrap_or(self.blend.current);
+        self.wavefront.frames = frames;
+        self.wavefront.radius = law.radius_after(frames);
+        self.blend.weight = law.weight_after(frames);
     }
 
     /// The "track" set's texture for the showing stage, where the title
@@ -297,30 +478,45 @@ impl ZoneGrade {
         self.blend.requested = stage.min(self.last_stage);
     }
 
-    /// Sets the cross-fade weight. Unreached by a race: what advances it during
-    /// a race is unrecovered on both titles, so [`Self::show_zone`] leaves it at
-    /// rest rather than easing between stages. See the module docs.
+    /// Sets the cross-fade weight directly. A race never calls this: on a
+    /// title with a read transition [`Self::follow`] derives the weight every
+    /// frame, and on one without, [`Self::show_zone`] leaves it at rest. For
+    /// tests, and for reading one stage's palette at a chosen mix.
     pub fn set_weight(&mut self, weight: f32) {
         self.blend.weight = weight;
     }
 
     /// Applies a pending request, the way `Environment_UpdateStageBlend` does:
     /// when the requested stage differs from the current one, it becomes the
-    /// current one and the weight resets.
+    /// current one, the weight resets and the transition sphere restarts at
+    /// its first radius with the old stage outside it.
     ///
     /// Answers whether a stage change actually happened, which is what the
-    /// traced code gates its transition effect on. **That effect is not drawn
-    /// here**: the call it makes (`FUN_0067a7d8`) has not been identified, so
-    /// there is nothing to fire and nothing is invented in its place.
+    /// traced code gates its transition on. The per-frame advance of that
+    /// transition is [`Self::follow`]'s; the call the commit also makes
+    /// (`FUN_0067a7d8`) is still unidentified and nothing is invented for it.
     pub fn commit(&mut self) -> bool {
         if self.blend.requested == self.blend.current {
             return false;
         }
+        let previous = self.blend.current;
         self.blend.current = self.blend.requested;
-        // `+0x18 = 0` at the commit, verbatim. See `StageBlend::weight` for
-        // why that leaves the new stage showing its predecessor.
+        // `+0x18 = 0` at the commit, verbatim: the new stage starts with no
+        // share of the palette, and the sphere starts at its first radius
+        // with the old stage outside it. See `StageBlend::weight` and
+        // `Wavefront`.
         self.blend.weight = 0.0;
+        self.wavefront.previous = previous;
+        self.wavefront.frames = 0;
+        self.wavefront.radius = self.transition.map_or(0.0, |law| law.radius_after(0));
         true
+    }
+
+    /// Shows the committed stage whole: the weight at rest and no sphere in
+    /// flight. What the loader does to an opening stage and what
+    /// [`Self::pin_stage`] does to a pinned one.
+    pub fn show_whole(&mut self) {
+        self.settle();
     }
 
     /// The `--zone-stage` development override: commits `stage` whole and
@@ -338,10 +534,10 @@ impl ZoneGrade {
     pub fn pin_stage(&mut self, stage: u32) {
         self.request_stage(stage);
         self.commit();
-        // A pinned stage is shown whole, not mid-cross-fade - the same reason
-        // the opening-stage and `--zone-stage` load logic already raise the
-        // weight back up after a commit zeroes it.
-        self.blend.weight = 1.0;
+        // A pinned stage is shown whole, not mid-transition - the same reason
+        // the opening-stage load logic settles after a commit zeroes the
+        // weight.
+        self.settle();
         self.pinned = true;
         // Once, here, rather than every frame `show_zone` now declines to
         // step - the same "log the edge, not the state" rule
@@ -354,12 +550,21 @@ impl ZoneGrade {
     }
 
     /// The palette showing right now: the current stage cross-faded against
-    /// the stage before it at the current weight.
+    /// the stage the transition is sweeping out at the current weight.
+    ///
+    /// The stage outside the sphere is [`Wavefront::previous`] - one rung
+    /// down the ladder in play, and the showing stage itself when nothing is
+    /// in flight, where the cross-fade is the identity whatever the weight.
     #[must_use]
     pub fn palette(&self) -> StagePalette {
-        self.table
-            .blended_palette(self.blend.current, self.blend.weight)
-            .unwrap_or_default()
+        let Some(current) = self.table.stage_palette(self.blend.current) else {
+            return StagePalette::default();
+        };
+        let previous = self
+            .table
+            .stage_palette(self.wavefront.previous)
+            .unwrap_or(current);
+        current.cross_fade(previous, self.blend.weight)
     }
 
     /// The fog this stage authors, or `base` where it authors none.
@@ -474,13 +679,14 @@ impl ZoneGrade {
     /// frame. Until 2026-09-15 this build bound the track group to every
     /// chunk and drew the whole circuit in the road's colours.
     ///
-    /// **The showing stage's own palette, not [`Self::palette`]'s cross-fade.**
-    /// The original does not blend these two in colour space at all: it hands
-    /// the shader both stages and picks between them per pixel with a sphere
-    /// test. This build never has a stage transition in flight - nothing
-    /// advances [`StageBlend::weight`] and no title on this path has a
-    /// recovered trigger - so inner and outer are the same stage and the
-    /// unblended palette is what the original would compute too.
+    /// **Two stages' own palettes, not [`Self::palette`]'s cross-fade.** The
+    /// original does not blend these in colour space at all: it hands the
+    /// shader both stages - the showing one as `zone*Inner`, the one being
+    /// swept out as `zone*Outer` - and picks between them per pixel with a
+    /// sphere test against `zoneOrigin` and `zoneColourTint.w`. Those are
+    /// [`mesh_render::Zone::origin`] and [`mesh_render::Zone::radius`] here,
+    /// from [`Self::wavefront`]; the outer pair is [`Wavefront::previous`]'s
+    /// palette, and equal to the inner pair whenever nothing is in flight.
     ///
     /// `enabled` is `0.0`, and the whole term disappears, unless the file
     /// authors the UV scale *and* the stage authors `Track.Texture Colour`
@@ -525,6 +731,23 @@ impl ZoneGrade {
                 base_alt: rgb0(base_colour),
             }
         }
+        /// Both of one stage's publications.
+        fn groups(palette: &StagePalette) -> (mesh_render::ZoneSet, mesh_render::ZoneSet) {
+            (
+                group(
+                    palette.track_texture_colour,
+                    palette.track_eq_brightness,
+                    palette.track_base_colour_highlight,
+                    palette.track_base_colour,
+                ),
+                group(
+                    palette.scene_texture_colour,
+                    palette.scene_eq_brightness,
+                    palette.scene_base_colour_highlight,
+                    palette.scene_base_colour,
+                ),
+            )
+        }
         let off = mesh_render::Zone::default();
         let (Some(uv_scale), Some(palette)) = (
             self.table.zone_uv_scale(),
@@ -535,22 +758,25 @@ impl ZoneGrade {
         if palette.track_texture_colour.is_none() || self.stage_art().is_none() {
             return off;
         }
+        // The stage outside the sphere; the showing stage's own palette where
+        // the previous one is not in the file, so the test selects the same
+        // colours on both sides rather than a black one outside.
+        let outer = self
+            .table
+            .stage_palette(self.wavefront.previous)
+            .unwrap_or(palette);
+        let (track, scene) = groups(&palette);
+        let (track_outer, scene_outer) = groups(&outer);
+        let [x, y, z] = self.wavefront.origin;
         mesh_render::Zone {
             uv_scale,
             enabled: 1.0,
-            _pad: 0.0,
-            track: group(
-                palette.track_texture_colour,
-                palette.track_eq_brightness,
-                palette.track_base_colour_highlight,
-                palette.track_base_colour,
-            ),
-            scene: group(
-                palette.scene_texture_colour,
-                palette.scene_eq_brightness,
-                palette.scene_base_colour_highlight,
-                palette.scene_base_colour,
-            ),
+            radius: self.wavefront.radius,
+            origin: [x, y, z, 1.0],
+            track,
+            scene,
+            track_outer,
+            scene_outer,
         }
     }
 

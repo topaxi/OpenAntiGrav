@@ -49,6 +49,9 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     // Recovered 2026-08-31, and the writer of `craftArray[n]->+0x640` with it.
     // See `ZONE_STAGES`.
     zone_stages: Some(ZONE_STAGES),
+    // Read off `Environment_UpdateStageBlend` and reproduced live - see
+    // `ZONE_TRANSITION`.
+    zone_transition: Some(ZONE_TRANSITION),
     zone_stage_textures: Some(ZONE_STAGE_TEXTURES),
     zone_sky: Some(ZONE_SKY),
     team_variants: Some(&TEAM_VARIANTS),
@@ -196,6 +199,35 @@ pub const ZONE_STAGES: &oag_title::ZoneStages = &oag_title::ZoneStages {
         (2, "Venom"),
         (0, "MSC_SVENOM"),
     ],
+};
+
+/// How a Zone stage change sweeps the world on this title: a sphere out of the
+/// local craft, and a colour weight beside it.
+///
+/// **Every number is the executable's own**, none authored on the disc and
+/// none chosen here. `Environment_UpdateStageBlend` (`0x003da540`) writes
+/// `radius = 0.1f` on the commit and copies the start speed from the entry's
+/// `+0x0c`; the `.data` image initialises that field to `0.5f` and the
+/// acceleration at `+0x14` to `0.1f` (the two developer-only schema keys
+/// `Transition start speed` and `Transition acceleration` would overwrite
+/// them and no shipped file authors either); the cap is the literal `20000.0f`
+/// at TOC slot `0x008b7c24`, and the weight step the literal `0.01f` at
+/// `0x008b7c28`. Read at instruction level (confidence 85) and then matched
+/// live on RPCS3 at two frame counts and frame to frame (94) - see
+/// [zone-effectsettings-loader.md], passes thirty and thirty-one.
+///
+/// The one thing not measured is the radius's *unit* against this port's own
+/// world: the shader compares it to a world-space distance from the craft,
+/// and whether the `.rcsmodel` geometry this port draws is in the same units
+/// is unverified. It is handed over unscaled.
+///
+/// [zone-effectsettings-loader.md]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md
+pub const ZONE_TRANSITION: &oag_title::ZoneTransition = &oag_title::ZoneTransition {
+    start_radius: 0.1,
+    start_speed: 0.5,
+    acceleration: 0.1,
+    radius_cap: 20_000.0,
+    weight_step: 0.01,
 };
 
 /// The cubemap a Zone race draws in place of the circuit's own `sky.gtf`.
