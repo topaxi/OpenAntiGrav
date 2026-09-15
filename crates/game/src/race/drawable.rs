@@ -59,6 +59,10 @@ pub(super) struct Drawable {
     /// All-black until [`Self::write_zone_vis`] is called, which
     /// `race::Scene::render` does once a frame alongside [`Self::fog`].
     zone_vis: wgpu::Texture,
+    /// What [`Self::fog_bind`] needs besides [`Self::fog`] and the showing
+    /// stage's own four textures to be rebuilt - see
+    /// [`mesh_render::zone::RebindResources`] and [`Self::rebind_zone`].
+    zone_rebind: mesh_render::zone::RebindResources,
     /// This model's opaque index ranges, kept so the shadow caster pass can
     /// draw them without walking the draw list again every frame.
     ///
@@ -112,6 +116,7 @@ impl Drawable {
             fog_bind,
             fog_buffer,
             zone_vis_texture,
+            zone_rebind,
             anim_bind,
             anim_buffer,
             node_anim_buffer,
@@ -186,7 +191,28 @@ impl Drawable {
             anims: anim_buffer,
             node_anims: node_anim_buffer,
             zone_vis: zone_vis_texture,
+            zone_rebind,
         })
+    }
+
+    /// Rebuilds bind group 2 with `stage`'s four textures - see
+    /// `oag_render::mesh_render::zone::rebind`, which this forwards to.
+    /// Everything else this drawable draws with (the pipeline, the
+    /// geometry, the shadow map) is untouched.
+    ///
+    /// **Call this on the stage-change edge alone**, when
+    /// `ZoneGrade::follow`/`commit` reports a new `(current, previous)`
+    /// pair, not every frame. See `mesh_render::zone::rebind`'s own doc
+    /// comment for why a per-frame call would still draw correctly and why
+    /// it is still the wrong thing to do.
+    pub(super) fn rebind_zone(
+        &mut self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        stage: &mesh_render::zone::StageArt,
+    ) {
+        self.fog_bind =
+            mesh_render::zone::rebind(device, queue, &self.fog, &self.zone_rebind, stage);
     }
 
     /// This model's own bounding radius, in model space.

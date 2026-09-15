@@ -117,7 +117,16 @@ impl RaceStage {
         // the frame is built - the same per-frame order `Zone_UpdateStage` runs
         // in on 2048, where it is called from the render update rather than the
         // simulation. See `race::Scene::sync_zone_grade`.
-        self.scene.sync_zone_grade(&self.race);
+        //
+        // A step rebuilds bind group 2 on the drawables that read the Zone
+        // effect for real, so the stage's own textures follow the transition
+        // sphere the same frame its colours do - see
+        // `race::Scene::rebind_zone_art`. Gated on the edge `sync_zone_grade`
+        // reports, not run every frame, the same "log the edge, not the
+        // state" rule its own info! call follows.
+        if self.scene.sync_zone_grade(&self.race) {
+            self.scene.rebind_zone_art(&gpu.device, &gpu.queue);
+        }
         // The scene and nothing else. The HUD used to follow it here, into the
         // same target; it composites at presentation resolution now - see
         // [`RaceStage::draw_hud`].
