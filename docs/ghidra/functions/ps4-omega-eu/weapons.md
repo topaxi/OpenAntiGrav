@@ -216,9 +216,15 @@ Decompiles (2,431 instructions, 482 basic blocks, cyclomatic complexity 336 -
 by far the most complex function read on this binary so far). It is not one
 class's constructor: the body writes the base
 `Backend\General\ModeManager.cpp` tag and a shared vtable
-(`&PTR_FUN_01913338`) **twelve separate times**, each immediately followed by
-one of twelve distinct subclass tags overwriting it and a subclass-specific
-vtable -
+(`&PTR_FUN_01913338`). **`get_xrefs_to` on the base tag string finds thirteen
+write sites here (26 data refs, two per site - a `LEA`+`MOV` pair, the same
+shape every other tagged-object write in this project takes), not twelve** -
+one more than the twelve distinct subclass tags listed below, and not yet
+reconciled: whether one subclass tag is written from two separate sites, or
+one of the thirteen constructions keeps the bare base tag with no subclass
+overwrite, was not chased further this pass. Each of the twelve listed
+subclass tags is, in turn, immediately followed by one of twelve distinct
+subclass tags overwriting the base tag and a subclass-specific vtable -
 `GameModes\GameMode_TournamentModeManager.cpp`,
 `GameModes\GameMode_ModeManager.cpp`,
 `Backend\General\AIBatch_ModeManager.cpp`,
@@ -243,8 +249,8 @@ finds none - consistent with the mode selector arriving through a register
 or a computed/indirect call (a dispatch table indexed by mode enum) that
 static analysis does not resolve here, not with this being unreachable code:
 its shape is exactly what four other already-confirmed manager constructors
-on this same binary look like, just repeated twelve times over twelve
-different literal tags in a row.
+on this same binary look like, just repeated across a dozen-plus different
+literal tags in a row.
 
 ### The `MPElimination_ModeManager` branch also builds a `Billboard.cpp`-tagged object
 
@@ -264,16 +270,29 @@ uninterrupted run (another allocation, another list splice, no `RET`, no
 other subclass tag write) straight into a second tagged-object construction
 at `0x012528a0`-`0x01252918`: `0x78`-byte allocation, vtable
 `&PTR_FUN_0192a958`, tag `param_1[0xb] = "Billboard.cpp"` at `0x01252909`,
-and a callback slot filled with `0x1252ab0` - an address inside this same
-function, not a separate one. No other subclass's tag write, and no
-function return, sits anywhere between `MPElimination_ModeManager`'s own
-tag write and this object's construction, which is what pins it to this
-branch specifically rather than merely "somewhere in the dispatcher."
+and a callback slot filled with `0x1252ab0`. **Checked with
+`get_function_by_address`, not assumed**: `0x1252ab0` is its own function
+(`FUN_01252ab0`, body `0x01252ab0`-`0x01252ab7`, eight bytes), outside
+`ModeManager_ConstructByMode`'s own body (`0x0124fe10`-`0x012529ef`) - a
+separate, tiny, unnamed destructor/callback, not an address inside the
+dispatcher itself. `MPElimination_ModeManager`'s own tag-write step fills
+the same kind of slot with `0x1252a60` (`LEA RCX,[0x1252a60]` at
+`0x01251b5b`), so this is a small family of such stub callbacks rather than
+a single one. No other subclass's tag write, and no function return, sits
+anywhere between `MPElimination_ModeManager`'s own tag write and this
+object's construction, which is what pins it to this branch specifically
+rather than merely "somewhere in the dispatcher."
 
 **What this object is stays unnamed and unclaimed**: `0x78` bytes is far
-smaller than `Billboard_ConstructResource`'s own objects (`0xb8`/`0x3f50`
-bytes), so this reads as a small, MPElimination-specific member sharing the
-same tag source file rather than a call into the manager itself - `MPElimination_ModeManager`
+smaller than the objects `Billboard_ConstructResource` allocates *inside
+itself* (`0xb8`/`0x3f50` bytes) - the right comparison is instead to
+`TrackStartup_Load`'s own pre-allocated `param_1` (`0xf0` bytes, `MOV
+EDI,0xf0` at `0x01391e3f`), the object `Billboard_ConstructResource` is
+*called on*. Either way this `0x78`-byte object reads as a small,
+MPElimination-specific member sharing the same tag source file rather than
+a call into the manager itself - and no `CALL 0x016e53a0`
+(`Billboard_ConstructResource`'s own address) appears anywhere in this
+branch, which is the stronger evidence for that reading. `MPElimination_ModeManager`
 does not call `Billboard_ConstructResource` here, it builds its own
 `Billboard.cpp`-tagged object inline, the same "this binary inlines a
 sibling function" shape `weapons.md`'s own `WeaponExplosions`/`EMP` findings

@@ -180,8 +180,13 @@ itself doesn't show.
 - `+0x21c`'s meaning on the `DAT_01e31910`-shaped `RaceManager` object, and
   which mode selects the `321Go_2048_Combat.vex` gantry.
 
-**Which of `ModeManager_ConstructByMode`'s twelve branches owns this tag is
-now traced** - see
+**Which of `ModeManager_ConstructByMode`'s branches owns this tag is now
+traced, and settled as a single-owner finding rather than left open**: `get_xrefs_to`
+on the `Billboard.cpp` tag string finds exactly two writers total across the
+whole binary - `Billboard_ConstructResource` itself and one site inside
+`ModeManager_ConstructByMode` - so the dispatcher writes this tag exactly
+once, not once per branch. See
 [`weapons.md`](weapons.md#the-mpelimination_modemanager-branch-also-builds-a-billboardcpp-tagged-object):
-`MPElimination_ModeManager`'s own branch, confirmed at the instruction
-level. What the resulting `0x78`-byte object itself is remains unnamed.
+that one site is pinned to the `MPElimination_ModeManager` branch, confirmed
+at the instruction level. What the resulting `0x78`-byte object itself is
+remains unnamed.
