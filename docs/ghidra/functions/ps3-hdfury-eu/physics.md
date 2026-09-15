@@ -309,8 +309,16 @@ races.
 
 ### `Collision_MarchSegment` at `0x000364c0`, the per-hull-point query
 
-The call `Craft_IntegrateHull` makes four times a step. Ghidra stops its body at
-`0x000364e3`; disassembling past that shows what it does:
+The call `Craft_IntegrateHull` makes four times a step. Until 2026-09-15
+Ghidra stopped its body at `0x000364e3` - the word after it is a Cell `lvlx`
+that stock sleigh cannot decode (see
+[toolchain.md](../../../reverse-engineering/toolchain.md#ps3), the `lvlx`
+trap) - and the reading below came from disassembling past that by hand. The
+PS3 language decodes it now, the body is 2,260 bytes, and the decompile
+agrees with the hand reading line for line: `vectorSubtractFloatingPoint` of
+the two 16-byte loads, a `vmaddfp` and two folds for the dot product,
+`vrsqrtefp` with the Newton step and the compare-to-zero guard, the
+`fctidz`-then-`+1` step count and the `1.0 / (double)count` step:
 
     v10 = *r5 - *r4                      # the segment, query point minus hull point
     v13 = dot(v10, v10)                  # vmaddfp then two vsldoi/vaddfp folds
