@@ -912,9 +912,11 @@ no longer disagree.
   frame and zone 0 is stage 1, overwriting the override from tick 1.
   **Fixed the same day, later**: `ZoneGrade::pin_stage`
   (`fix(zone): --zone-stage pins the colour grade instead of losing to the
-  ladder`, 2026-09-15) makes the override stick, so `Start`'s dark-environment
-  frame *is* reachable now via `--zone-stage 0` - this paragraph's own
-  capture predates that fix and was never retaken. The near
+  ladder`, 2026-09-15, covered by `zone_grade/tests.rs`) makes the override
+  stick, so a `--zone-stage 0` capture is no longer overwritten from tick 1
+  - `Start`'s dark-environment frame has not actually been captured this
+  way, only the mechanism that would reach it is fixed. This paragraph's
+  own capture predates the fix. The near
   track-side walls and gantries (track-flagged chunks) are dark teal with
   cyan rim edges and the road is lit cyan; the elevated scenery and
   everything in the distance (scene chunks) is **blown-out white**. That
