@@ -43,7 +43,14 @@ Boots with `Session(interpreter=True)`: the muted `--config` copy with
 `PPU Decoder: Interpreter (static)`, the only decoder `Z0` fires under.
 One breakpoint armed at a time, never a resume onto an armed address.
 
-    uv run --with evdev python3 scripts/hd-zone-stage-source-break.py [out_dir]
+    uv run --with evdev python3 scripts/hd-zone-stage-source-break.py zone-source [out_dir]
+    uv run --with evdev python3 scripts/hd-zone-stage-source-break.py writer-chain [out_dir]
+
+`writer-chain` is the second boot: the HUD writer is not reached every
+frame, so it is waited on like the commit - arm, free-run until it parks
+a thread - and the commit is then waited on right behind it, so each link
+of the chain is read in order on one stage step: `r3` at the writer, `T`
+after it, `r8` at the commit.
 """
 
 import importlib.util
@@ -247,12 +254,17 @@ def probe_target(breaker, address, slices=8, slice_seconds=0.5):
     return None, None, None
 
 
-def wait_for_commit(breaker, budget, slice_seconds=1.0):
-    """Arm the commit store and free-run until the ladder steps, or give up."""
+def wait_for_hit(breaker, address, budget, slice_seconds=1.0):
+    """Arm `address` and free-run until a thread parks on it, or give up.
+
+    For a site that runs rarely - the commit store fires once per stage
+    step, the HUD class writer once per class change - the free run *is*
+    the wait, and the slices are only there to look between them.
+    """
     dbg = breaker.dbg
-    if breaker.parked == COMMIT_STORE:
-        breaker.step_off(COMMIT_STORE)
-    dbg.add_breakpoint(COMMIT_STORE)
+    if breaker.parked == address:
+        breaker.step_off(address)
+    dbg.add_breakpoint(address)
     started = time.time()
     try:
         while time.time() - started < budget:
@@ -260,14 +272,117 @@ def wait_for_commit(breaker, budget, slice_seconds=1.0):
             if dbg.wait_for_stop(timeout=slice_seconds) is None:
                 dbg.pause()
             dbg.drain()
-            tid, regs = flare.find_at(dbg, COMMIT_STORE, breaker.prefer)
+            tid, regs = flare.find_at(dbg, address, breaker.prefer)
             if tid is not None:
                 breaker.prefer = tid
-                breaker.parked = COMMIT_STORE
+                breaker.parked = address
                 return time.time() - started, tid, regs
     finally:
-        dbg.remove_breakpoint(COMMIT_STORE)
+        dbg.remove_breakpoint(address)
     return time.time() - started, None, None
+
+
+def wait_for_commit(breaker, budget, slice_seconds=1.0):
+    return wait_for_hit(breaker, COMMIT_STORE, budget, slice_seconds)
+
+
+def boot_into_zone(session, out, result, save):
+    """Boot, walk to a Racebox Zone race, START RACE, and let it settle."""
+    if not flare.boot_to_main_menu(session):
+        return False
+    if not flare.walk_to_zone(session, out):
+        print("did not reach a race (%s)" % drive.current_screen(), file=sys.stderr)
+        return False
+    result["race_type"] = flare.wait_for_load(session, out)
+    if not result["race_type"] or "zone" not in result["race_type"].lower():
+        print("not a Zone race - stopping here", file=sys.stderr)
+        save()
+        return False
+    result["config"] = drive.config_report()
+    # Zone waits on a `START RACE` prompt; then the countdown.
+    session.pad.press("cross", 0.2)
+    time.sleep(25.0)
+    drive.screenshot(out / "race-running.png", trim=True)
+    return True
+
+
+def run_writer_chain(out, steps=4):
+    """The chain, in order: HUD class writer -> `T` -> the blend's commit.
+
+    The first run showed `0x0004a014` is not reached every frame (three
+    misses of four 0.3 s slices each), so the writer is waited on the way
+    the commit is: arm it, free-run until it parks a thread, read `r29`,
+    `r3`, `f29` and `T` before and after the store, then arm the commit
+    and wait for it to fire on the value just written.
+    """
+    result = {"globals": {}, "chain": []}
+
+    def save():
+        (out / "writer-chain.json").write_text(json.dumps(result, indent=1))
+
+    with drive.Session(str(IMAGE), str(out / "logs"), interpreter=True) as session:
+        if not boot_into_zone(session, out, result, save):
+            return 1
+        dbg = Debugger()
+        breaker = flare.Breaker(dbg)
+        try:
+            dbg.pause()
+            dbg.drain()
+            result["globals"]["at_attach"] = globals_readout(dbg)
+            print("globals: %s" % json.dumps(result["globals"]["at_attach"]), flush=True)
+            save()
+            for step in range(steps):
+                link = {"step": step}
+                print("== waiting on the writer at %#x (step %d)" % (WRITER_STORE, step),
+                      flush=True)
+                waited, tid, regs = wait_for_hit(breaker, WRITER_STORE, budget=300.0)
+                link["writer_waited_s"] = round(waited, 1)
+                link["writer_tid"] = tid
+                if regs is None:
+                    print("  no writer hit in %.0f s" % waited, flush=True)
+                    result["chain"].append(link)
+                    save()
+                    continue
+                link["writer"] = writer_readout(dbg, regs)
+                link["writer"]["threads"] = thread_dump(dbg)
+                breaker.step_off(WRITER_STORE)
+                obj = int(link["writer"]["object_r29"], 16)
+                link["writer"]["new_0x640"] = u32(dbg.read(obj + 0x640, 4))
+                print("  writer %s" % json.dumps(
+                    {k: v for k, v in link["writer"].items() if k != "threads"}), flush=True)
+                drive.screenshot(out / ("writer-%d.png" % step), trim=True)
+                print("== waiting on the commit at %#x" % COMMIT_STORE, flush=True)
+                waited, tid, regs = wait_for_commit(breaker, budget=60.0)
+                link["commit_waited_s"] = round(waited, 1)
+                link["commit_tid"] = tid
+                if regs is not None:
+                    link["commit"] = commit_readout(dbg, regs)
+                    breaker.step_off(COMMIT_STORE)
+                    n = link["commit"]["n"]
+                    link["commit"]["H_after"] = stage_entry(dbg, n) if n < 2 else None
+                    print("  commit %s" % json.dumps(link["commit"]), flush=True)
+                else:
+                    print("  no commit in %.0f s" % waited, flush=True)
+                link["source"] = []
+                collect(breaker, SOURCE_STORE, source_readout, 6, 60.0, "source",
+                        link["source"], save)
+                result["chain"].append(link)
+                save()
+            result["globals"]["at_end"] = globals_readout(dbg)
+            result["step_off"] = {"stepped": breaker.stepped, "ran_off": breaker.ran_off}
+            save()
+            dbg.resume()
+        except (TimeoutError, OSError) as exc:
+            print("stub desync: %r" % exc, file=sys.stderr, flush=True)
+            result["desync"] = repr(exc)
+        finally:
+            try:
+                dbg.resume()
+            except Exception:
+                pass
+            dbg.close()
+    save()
+    return 0
 
 
 def run(out):
@@ -278,21 +393,8 @@ def run(out):
         (out / "zone-source.json").write_text(json.dumps(result, indent=1))
 
     with drive.Session(str(IMAGE), str(out / "logs"), interpreter=True) as session:
-        if not flare.boot_to_main_menu(session):
+        if not boot_into_zone(session, out, result, save):
             return 1
-        if not flare.walk_to_zone(session, out):
-            print("did not reach a race (%s)" % drive.current_screen(), file=sys.stderr)
-            return 1
-        result["race_type"] = flare.wait_for_load(session, out)
-        if not result["race_type"] or "zone" not in result["race_type"].lower():
-            print("not a Zone race - stopping here", file=sys.stderr)
-            save()
-            return 1
-        result["config"] = drive.config_report()
-        # Zone waits on a `START RACE` prompt; then the countdown.
-        session.pad.press("cross", 0.2)
-        time.sleep(25.0)
-        drive.screenshot(out / "race-running.png", trim=True)
         dbg = Debugger()
         breaker = flare.Breaker(dbg)
         try:
@@ -410,9 +512,16 @@ def summarise(result):
 
 
 def main():
-    out = Path(sys.argv[1] if len(sys.argv) > 1
-               else ROOT / "data/reference/hd-capture/zone-stage-source")
+    modes = ("zone-source", "writer-chain")
+    if len(sys.argv) < 2 or sys.argv[1] not in modes:
+        print(__doc__, file=sys.stderr)
+        return 2
+    mode = sys.argv[1]
+    out = Path(sys.argv[2] if len(sys.argv) > 2
+               else ROOT / "data/reference/hd-capture/zone-stage-source" / mode)
     out.mkdir(parents=True, exist_ok=True)
+    if mode == "writer-chain":
+        return run_writer_chain(out)
     return run(out)
 
 
