@@ -99,6 +99,11 @@ runs of each side), where `settings.toml`'s `mode` alone did not move it at
 all (`single_race` without `--opponents` reproduced the solo run's RMS to
 the last printed digit) - see the scratch report for the four-way check.
 
+*Corroborated 2026-09-15 on the real device path rather than the null
+backend: `--tap-audio` of windowed `--race --autopilot` runs clipped 0.127 %
+on Pulse (30 s, 16_Track) and 0.127 % on HD/Fury (40 s) - same order as the
+0.074 % above, and both taken with a race start's silence in the window.*
+
 **This is a large, recent improvement over the 2.3-2.8% this thread and its
 sibling were both citing, and the likely cause is attributable rather than
 measured here**: `b46c6659` (landed 2026-09-07, after this thread's own last

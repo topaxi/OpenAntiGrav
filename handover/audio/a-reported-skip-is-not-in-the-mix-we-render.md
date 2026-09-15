@@ -6,6 +6,47 @@ time" - came with a race's worth of `audio:` health lines reading **0 dropped,
 per window. Chasing that produced one landed fix and one still-undiagnosed
 symptom, and the two are not the same thing.
 
+**2026-09-15: the tap was taken, twice, and both Next Step 1 and the late-check
+blind spot are closed.** A maintainer racing HD/Fury on an idle machine read a
+race's worth of `audio:` warnings - `0 dropped, 0 late` on every line, jumps
+and clips moving, `worst ... at frame 136` and `491` recurring - as the machine
+struggling. `--tap-audio` runs of Pulse (30 s, Talon's Junction) and HD (40 s),
+both `--race --autopilot`, windowed, 48 kHz, 1,024-frame buffers:
+
+- **No gap and no held sample.** Longest run of zeros after the race starts:
+  1 frame, in both. Longest held run outside the leading silence: 43 frames,
+  and it is at `-32768` - the clamp's own flat top, not a stall.
+- **The 512-frame `CHUNK_FRAMES` seam is clean.** Steps over 0.25 fall
+  uniformly modulo 512, 1,024 and 800 (Pulse: bin 0 holds 9 against a mean
+  of 7.6; HD has too few events to bias at all). The candidate this thread
+  left "untested and cannot be, this way" is tested, and is not it.
+- **The recurring `frame 136` is a cue's own attack.** The samples around
+  every one of them are a full-scale transient decaying off the clamp
+  (`1.0 1.0 0.892 0.6 0.309 ...`), which is what a one-shot's attack looks
+  like and what a seam does not. That it recurs at one offset is what the
+  mixer's own structure predicts: a `play` lands between two `Mixer::render`
+  passes, so a voice always starts at a 512-frame chunk boundary and its
+  attack sits a fixed distance into a chunk. The tap is *consistent* with
+  that - in HD, offsets 136 and 446 (mod 512) hold four events each against
+  a mean of 0.4, and the maintainer's run on another machine had its
+  windows' worst at 136/137 and 491 as well - but four events in a bin is
+  about an 8 % fluke on its own, so read it as the prediction holding, not
+  as proven. What would prove it: log the tick a `play` was issued on and
+  correlate against the event's frame index.
+- **Rates, for the record.** Pulse: 130 steps/s over 0.25, 0.127 % clipped.
+  HD: 5.5/s, 0.127 % clipped. Both taps' 99.9th-percentile step is under
+  0.30, consistent with the 0.287 `health.rs` already records.
+
+What changed in code: `Health::report` now logs at `warn` only when a
+**fault** moved (dropped, late, refused) and at `trace` when only the content
+readings did, with the clip count also given as a share of the window's
+samples; the counters and both thresholds are exactly as they were. And the
+late check is `owed * 3 / 2` rather than `owed * 2` - at that bound a 60 s HD
+race counted one late callback, the race's own load stall (`frame: 138.5 ms`
+beside it, `0 dropped` because the ring covered it), with `pw-top` reporting
+zero xruns for the client throughout. `0 late callback(s)` now rules out a
+callback half a period late, not only one a whole period late.
+
 ## What landed
 
 **The PS-ADPCM run-out block was being played, and on a looping waveform it was
@@ -44,7 +85,8 @@ a Talon's Junction race (`--race --autopilot --ticks 3600`):
   *there*. **The real-time path's own 512-frame `CHUNK_FRAMES` boundary was not
   tested and cannot be, this way**: `--dump-audio` forces the null backend,
   which renders one tick per call and has no such boundary. The user's run did.
-  This stays a live candidate if the fault ever comes back.
+  *Tested 2026-09-15 on the real path, via `--tap-audio` - clean; see the top
+  of this file.*
 - **No attack click.** Every one of the 43 waveforms a race loads starts at
   exactly 0.000, so a voice starting has nothing to click with.
 
@@ -56,11 +98,11 @@ hundreds per two-second window are what a loud eight-engine mix looks like.
 **Do not raise the threshold to make the line quieter**: the number is honest,
 it is the reading of it that was wrong.
 
-**The one blind spot found and not closed:** `output::build`'s late check fires
-only at `elapsed > owed * 2`, so a callback a whole buffer period late - a
-PipeWire xrun, exactly the class of fault that sounds like a skip - is counted
-as nothing at all. `0 late callback(s)` is therefore weaker evidence than it
-reads as.
+**Closed 2026-09-15 (kept so the "weaker evidence" reading is not repeated):**
+`output::build`'s late check fired only at `elapsed > owed * 2`, so a callback
+a whole buffer period late - a PipeWire xrun, exactly the class of fault that
+sounds like a skip - was counted as nothing at all. It is `owed * 3 / 2` now;
+see the top of this file for what that measured.
 
 **Also unmodelled, and small:** the hardware loops back to the block flagged
 `6` (block 1 on all 18 looping waveforms), while `Mixer::render` wraps to
@@ -70,21 +112,21 @@ fidelity gap rather than an audible one.
 
 ## Next Steps
 
-1. **Get the artifact into a file.** `--tap-audio` records what the device is
-   actually handed, which is the only thing that separates "our samples have a
-   defect" from "our samples were fine and the device path glitched":
+1. ~~Get the artifact into a file.~~ Done 2026-09-15, twice, with no artifact
+   in either; the recipe stays here because it is the one that works:
    `cargo run --release -p oag-game -- data/images/pulse-psp-eu.chd --race
-   --tap-audio /tmp/skip.wav --tap-seconds 90`. It needs a real stream and a
-   real-time loop, so it has to be a windowed run - the headless capture loop
-   runs 3-5x real time and its tap would be meaningless.
-2. If the tap is clean where a listener hears the skip, it is the device path.
-   Tighten the late check first - `owed * 3 / 2`, or measure against a running
-   expectation rather than the previous callback - and read `pw-top`'s ERR
-   column beside it.
-3. If the tap has the artifact in it, find its time offset and correlate
-   against the tick log. `scripts/` has nothing for this yet; the throwaway
-   used here scanned for zero runs, held-value runs, and step positions modulo
-   the chunk size.
+   --autopilot --tap-audio /tmp/skip.wav --tap-seconds 30`, windowed - the
+   headless capture loop runs 3-5x real time and its tap would be meaningless.
+2. ~~Tighten the late check.~~ Done 2026-09-15, `owed * 3 / 2`. The running
+   expectation variant was not taken: a sound card's clock and the wall clock
+   drift, and an expectation that is never re-anchored turns that into a
+   false late callback some minutes into a long session.
+3. If a skip is ever heard again, tap it and correlate the offset against the
+   tick log. `scripts/` has nothing for this yet; the throwaway used both
+   times scanned for zero runs, held-value runs, and step positions modulo
+   the buffer, the chunk and the tick - and, the part that identified the
+   recurring offset, the exact frame distance between events at the same
+   offset.
 4. The loop start is a `loop_start` field on `Sound` and `Voice`, a changed
    wrap in `Mixer::render` (including its interpolation partner, currently
    `sound.frame(0)`) and the same treatment in `Mixer::seek`. Worth doing for
