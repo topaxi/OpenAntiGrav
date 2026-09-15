@@ -111,17 +111,18 @@ reticle is render-only state on `Race`.
   `Ship_FireHeldWeapon`'s and `HudSight_Update`'s callers resolved, and both
   currently return no xrefs from Ghidra's static analysis (probably reached
   through a function-pointer table).
-- **HD authors a LeachBeam and cannot draw its reticle.** Measured 2026-09-07
-  and it was assumed the other way: HD's weapon table carries a
-  `<Weapon type="LeachBeam">` with a lock window, so `Race::sight_held` returns
-  that weapon on HD too, and its layout carries four sprites for it -
-  `LeachBeamSightBG`, `LeachBeamSightOuter`, `LeachBeamSightMiddle`,
-  `LeachBeamSightInner`, the same four-part naming `MissileSight*` uses. What is
-  missing is a second widget set on `oag_title::hud::Sights::Concentric` and a
-  reading of which of the four is up when. `hud::sight_draw` draws **nothing**
-  for a LeachBeam on that dialect rather than lending it `MissileSight*`;
-  without that guard HD would have shown the Missile's rings for the wrong
-  weapon. Wiring it belongs to whoever owns `crates/hd`.
+- ~~**HD authors a LeachBeam and cannot draw its reticle.**~~ **Wired
+  2026-09-15**: `oag_title::hud::Sights::Concentric` gained a `leach` field
+  (the same `Option`-of-four shape `Brackets::leach` already used) and
+  `hud::sight_draw` now draws HD's and 2048's own
+  `LeachBeamSightBG`/`Outer`/`Middle`/`Inner` for a held LeachBeam rather than
+  nothing. Which of the four shows when is **chosen** (all four together) and
+  not measured - HD's own `Hud_UpdateLeachBeamSight`
+  (`docs/ghidra/functions/ps3-hdfury-eu/hud-sight.md`) turns out to reveal
+  them one at a time as the lock progresses rather than all-or-nothing, so
+  the chosen behaviour is known to be an approximation, not just unverified.
+  That page also found HD's hold time is `0.5` s where the PSP's is `0.8`,
+  unadopted pending a decision on a per-title constant.
 - **Where the LeachBeam's four widgets go is inferred, not read.**
   `HudSight_Update` is read end to end and writes **five** widgets - the
   Missile's four plus its inner. Nothing yet read writes the bind's

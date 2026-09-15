@@ -58,12 +58,32 @@ title showing the reticle over a craft ahead.
 
 ## Open
 
-- **Which of HD's six widgets is up when is read off their names**, at 70.
-  Nothing of HD's HUD code has been disassembled; `MissileSightBG` being a
-  backdrop and the `LockedOn` pair being additive are both readings.
-- **HD's four `LeachBeamSight*` are unwired**, and Pure authors none - the
-  LeachBeam is a Pulse weapon and `oag_tables::weapons` parses no
-  `<Weapon type="LeachBeam">` block on any title.
+- ~~**Which of HD's six widgets is up when is read off their names**, at
+  70.~~ **HD's own sight update is disassembled now, 2026-09-15** - see
+  [hud-sight.md](../../docs/ghidra/functions/ps3-hdfury-eu/hud-sight.md).
+  It found something the name-reading did not predict: the Missile and the
+  LeachBeam are each driven by their **own** per-tick update function
+  (`Hud_UpdateMissileSight`, `Hud_UpdateLeachBeamSight`), not one function
+  switching on held weapon, and HD's shared hold time is **`0.5` s**, not the
+  PSP's `0.8` - a real, unadopted divergence (`oag_race::sight::HOLD_SECONDS`
+  is still the PSP's `0.8`, shared and title-blind, and changing it is a
+  simulation-behaviour change outside a presentation-only lane's scope).
+  The `LockedOn` pair's own "additive" reading is now suspect rather than
+  confirmed: the LeachBeam's equivalent mechanism is a distance-gated reveal
+  across its four widgets, not a bare on/off, and whether the Missile's pair
+  is the same mechanism is unchecked - see the page's "Not read this pass".
+- ~~**HD's four `LeachBeamSight*` are unwired**~~ **Wired 2026-09-15** for
+  both HD and 2048 (`oag_title::hud::Sights::Concentric::leach`,
+  `crates/game/src/hud/sight_draw.rs`) - drawn as all four together whenever
+  the LeachBeam reticle is up, **chosen, not measured**: `hud-sight.md`'s
+  finding above is that the original reveals the four one at a time as the
+  lock progresses, which this engine does not reproduce. Pure still authors
+  none, unchanged.
+- **The LeachBeam's distance-breakpoint table is unnamed.** Both
+  `Hud_UpdateMissileSight` and `Hud_UpdateLeachBeamSight` index a
+  weapon-stats-shaped pointer by small negative offsets to decide which
+  widget's hide bit to clear; naming that table is what would turn "chosen"
+  above into "measured".
 - **Pure's Eliminator tuning is one file, and nothing reads the axis's second
   row.** `oag_title::weapons::Weapons::elimination` is carried and unread:
   `Race::load` opens the race table for every mode on every title.
@@ -76,14 +96,21 @@ title showing the reticle over a craft ahead.
   missing field: `damageradius="30"` and no `timetodie`, so it has no fuse.
   Modelling it is `weapons-next`'s Bomb, not this thread's.
 - **The far-target alpha and HD's own blink** are still unreproduced, as on
-  Pulse.
+  Pulse. `hud-sight.md`'s colour writes go through `Image_SetVertexColours`
+  with a computed alpha byte; whether any of that arithmetic is the PSP's
+  same 96/255 ratio is unchecked.
 
 ## Next Steps
 
-- Disassemble HD's own sight update to settle the six-widget grouping, rather
-  than leaving it read off the names.
+- Name the distance-breakpoint table `Hud_UpdateLeachBeamSight` (and
+  `Hud_UpdateMissileSight`) index, to settle the reveal order the widgets
+  fill in and replace the engine's current all-four-together choice with the
+  measured one.
+- Check whether `Hud_UpdateMissileSight`'s own `LockedOnLines`/
+  `LockedOnMiddle` toggle is the same distance-reveal mechanism as the
+  LeachBeam's, rather than the flat "additive" reading at 70.
+- Decide whether HD's measured `0.5` s hold becomes a per-title
+  `oag_race::sight` constant or stays the PSP's `0.8` on every title; either
+  is a gameplay-crate change and a hash move, not this lane's.
 - Compare Pure's weapon roster against Pulse's; the `Disruptor` is the obvious
   one this engine has no model for.
-- Parse `<Weapon type="LeachBeam">` and light the four `leachbeam_sight_*` on
-  Pulse and the four `LeachBeamSight*` on HD - one weapon, both dialects
-  already in place.

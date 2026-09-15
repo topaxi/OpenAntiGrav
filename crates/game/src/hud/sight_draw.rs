@@ -68,27 +68,33 @@ pub(super) fn sight_draws(cx: &Context<'_>, sight: &oag_race::sight::Sight) -> V
                 None => Vec::new(),
             }
         }
-        // **`MissileSight*` is the Missile's, and this dialect has no second
-        // set**, so a held LeachBeam draws nothing here rather than the
-        // Missile's rings. That is not a hypothetical: HD's own weapon table
-        // *does* author a `<Weapon type="LeachBeam">` with a lock window - it is
-        // pinned by `only_pulse_and_hd_author_a_leachbeam_block` in
-        // `crates/game/tests/lock_sight_ground_truth.rs` - so
+        // **`MissileSight*` is the Missile's own set, and the LeachBeam wears
+        // its own** - `leach`, on the same terms `Brackets::leach` already
+        // uses. `None` there is Pure's and Pulse-shaped titles' answer for a
+        // dialect that authors no such set; HD and 2048 both author one (see
+        // their own `ART::sights` doc comments) and reach this arm for real:
+        // HD's weapon table *does* author a `<Weapon type="LeachBeam">` with a
+        // lock window - pinned by `only_pulse_and_hd_author_a_leachbeam_block`
+        // in `crates/game/tests/lock_sight_ground_truth.rs` - so
         // `oag_race::sight::Held::LeachBeam` is reachable on this title and
         // would otherwise put the wrong weapon's reticle on screen.
         //
-        // HD authors four `LeachBeamSight*` sprites of its own off
-        // `HUD_Components_01.gtf`. Wiring them needs a second widget set on
-        // `oag_title::hud::Sights::Concentric` and a reading of which of the
-        // four is up when, and neither exists; drawing nothing is this
-        // project's answer for art it cannot place. See
-        // `docs/ghidra/functions/psp-pulse-usa/lock-sight.md`.
-        oag_title::hud::Sights::Concentric { .. }
-            if sight.held() == oag_race::sight::Held::LeachBeam =>
-        {
-            Vec::new()
-        }
-        oag_title::hud::Sights::Concentric { seeking, locked } => {
+        // The LeachBeam's four have no `locked` counterpart to add - neither
+        // title's layout authors a `LeachBeamSight*LockedOn*` widget - so
+        // `leach`'s four are drawn whenever the LeachBeam reticle is up at
+        // all, seeking or locked. See `oag_title::hud::Sights::Concentric`'s
+        // own `leach` field for what is measured and what is chosen there.
+        oag_title::hud::Sights::Concentric {
+            leach,
+            seeking: _,
+            locked: _,
+        } if sight.held() == oag_race::sight::Held::LeachBeam => match leach {
+            Some(names) => concentric_draws(cx, sight, names.iter(), tint, alpha),
+            None => Vec::new(),
+        },
+        oag_title::hud::Sights::Concentric {
+            seeking, locked, ..
+        } => {
             let names = seeking
                 .iter()
                 .chain(locked.iter().take_while(|_| sight.locked()));
