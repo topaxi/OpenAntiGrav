@@ -61,53 +61,106 @@ different path - not determined.
 
 `oag_formats::psarc` (written against PS3's archives) declares itself
 version 1.3; every one of these five archives declares **1.4** (same `flags`
-value, 13, across all five). Two real differences found, one fixed this
-session, one still open:
+value, 13, across all five). A first real difference was found and fixed in
+an earlier session; the paragraphs below are later sessions layering more
+findings on top, ending with a block-data-location problem still open.
 
-**Fixed**: the block-width probe (`read_block_table`) computed its "highest
-referenced block" across every entry unconditionally, including entries
-with `size == 0`, whose `first_block` field is unspecified. `data00.psarc`
-entry 9042 (`size` and `offset` both `0`) carries `first_block =
-0x960c4925` (2,517,387,557) - large enough that no block-table width could
-ever "cover" it, so the whole archive read as an unrecognised layout. Fixed
-by applying the same `size > 0` filter the out-of-range check one function
-below it already uses. Landed this session (`crates/formats/src/psarc.rs`),
-all 12 existing unit tests still pass.
+**Fixed in an earlier session**: the block-width probe (`read_block_table`)
+computed its "highest referenced block" across every entry unconditionally,
+including entries with `size == 0`, whose `first_block` field is
+unspecified. `data00.psarc` entry 9042 (`size` and `offset` both `0`)
+carries `first_block = 0x960c4925` (2,517,387,557) - large enough that no
+block-table width could ever "cover" it, so the whole archive read as an
+unrecognised layout. Fixed by applying the same `size > 0` filter the
+out-of-range check one function below it already uses
+(`crates/formats/src/psarc.rs`, `0b8d16ad`).
 
-**Still open**: the manifest (entry 0, the one whose digest is sixteen zero
-bytes) is **NUL-delimited on this archive family, not newline-delimited**.
-Measured directly on `data00.psarc`'s manifest (598,799 bytes): exactly one
-`\n` byte (the trailing one), zero `\r`, and **22,581 `\x00` bytes**.
-`parse_manifest`'s `.lines()` split finds none of those, so
-`Archive::paths()` currently returns the *entire manifest blob* as one
-"path". Splitting on NUL instead recovers 22,582 well-formed paths
-(`Data/art/published/hdships/ag_systems/fe/Logo.2x.gnf`, ...) - the same
-`Data/...` namespace `ps3-hdfury-eu` uses, `.gnf` in place of PS3's `.gtf`
-(Sony's PS4-native texture container - **no reader exists for it anywhere
-in this project**, checked directly: zero hits for `gnf` across
-`crates/texture`, `crates/formats`, `docs/formats/`).
+**Resolved this session**: the manifest (entry 0, the one whose digest is
+sixteen zero bytes) is **NUL-delimited on this archive family, not
+newline-delimited**. Measured directly on `data00.psarc`'s manifest
+(598,798 bytes): zero `\n` bytes, and NUL-splitting it recovers 10,714
+well-formed paths - **not the 22,582 the previous session's count reported**,
+which was `split(NUL).len()` including 11,868 empty segments produced by
+three long zero-byte runs inside the manifest text itself (verified against
+`crates/formats/src/psarc.rs`'s Rust reader directly, not just the Python
+reimplementation this session started with). The `entry_count` (10,927)
+versus manifest-path-count mismatch this thread flagged as unexplained
+**is resolved, and it is not the `entry_count - 1` a PS3-shaped manifest
+would produce, but not a 2x ratio either**: entry order carries no
+relationship to manifest order at all on this family - the entry table is a
+concatenation of several separately digest-sorted runs, interleaved with
+thousands of fully-zeroed placeholder rows. The correspondence that does
+hold is by MD5 digest, the same field PS3 archives already carry for
+verification: 1,492 of `data00.psarc`'s 1,533 non-zero-digest entries
+(97%) resolve to a manifest path this way, and the same holds on all four
+other archives (97-99%). Full measurements, the corrupt-row fix below, and
+the still-open block-data-location problem: `docs/formats/psarc.md`'s new
+"Version 1.4" section. Landed in `crates/formats/src/psarc.rs`
+(`Header::nul_delimited_manifest`, NUL-aware `parse_manifest`,
+`match_paths_to_entries`) and `crates/assets/src/psarc.rs`; `.gnf` (Sony's
+PS4-native texture container) still has **no reader anywhere in this
+project** and is unaffected by this fix.
 
-**The open half of this, not yet explained**: the header's own `entry_count`
-for `data00.psarc` is 10,927, but the NUL-split manifest yields 22,582
-paths - roughly double, not the `entry_count - 1` a PS3-shaped manifest
-would produce. Not chased further this session; the entry table's own
-per-entry layout (still 30 bytes, still parses sanely for entries 0-2 by
-hand) may carry two entries per file on this version, or the manifest may
-enumerate files the entry table addresses differently. Whichever it is,
-`Archive::open`/`Directory::parse` need it settled before file-level
-extraction (`entry_range`/`read_entry`) can be trusted on this archive
-family - right now they would use PS3-shaped assumptions on a table that
-looks structurally similar but is not proven to line up 1:1.
+**Also resolved this session, a separate bug found while verifying the
+above**: three of the five archives (`data00.psarc` entry 9042 - the
+already-known sentinel - plus newly-found `data02.psarc` entry 4676 and
+`data04.psarc` entry 318) each carry one row with a real digest but a
+`first_block` in the billions, which used to fail the whole directory parse.
+Two of the five archives (`data02`, `data04`) could not be opened *at all*
+before this fix. `read_block_table` now excludes an implausible
+`first_block` from its own probe the same way it already excludes a zero
+`size`, and `Directory::parse` no longer validates every entry's block range
+eagerly - `Directory::entry_range` already does that lazily, per entry.
+
+**Still open, and a real/zero split rather than uniformly broken - corrected
+after an independent review caught the first framing overclaiming.** An
+early check sampled only entries whose first block's table row is non-zero
+and found zero real reads there, which was reported as "reading an entry's
+declared bytes does not currently produce its real content" - overstated,
+because that sample happened to pick a subset with worse odds, not a
+representative one. A full sweep over every real entry through the crate's
+own unmodified reader (`Archive::read_path`) finds `entry.offset` already
+locates real content on 819/1,528 (54%) of `data00.psarc`, 348/892 (39%) of
+`data01.psarc`, and 99/327 (30%) of `data03.psarc` - and zero bytes for the
+rest, with no predictor found yet (not the stored-block shape, not the
+offset's position in the file; the block table's own arithmetic is
+otherwise self-consistent - `max(entry.offset + entry.size)` over every real
+entry on `data03.psarc` lands exactly on the file's true size). One
+unverified lead for the split itself: `docs/reverse-engineering/source-images.md`'s
+own PS4 extraction command reads only the base `.pkg`, not the patch, and
+records ~25 GiB across the five archives where this session's own
+`data/extracted/` measures ~40.8 GiB - whether the current extraction folded
+in `omega-ps4-eu-patch.pkg`, and whether that merge was clean, is not
+established; a per-file base-versus-patch split fits a scattered pattern
+better than a uniform offset-formula bug would. See `docs/formats/psarc.md`'s
+"Block data location" section for the full measurements and exact repro
+commands.
+
+**Asked directly and checked before closing the session: is this still
+zlib?** No block belonging to a real entry, on `data00.psarc`, `data01.psarc`
+or `data03.psarc`, shows the signature a genuinely deflated block would -
+every block's table value is either exactly `0` (a full padded `block_size`
+of stored bytes) or exactly the entry's remaining byte count (a short,
+unpadded stored block). Zero blocks fall in between. The header's own
+`compression` field still reads `"zlib"`, unchanged from PS3, but nothing
+checked on this family is actually compressed - every real file sampled is
+stored raw. This rules out a codec mismatch as part of the block-data-location
+mystery: the open problem is purely about finding the right offset, not
+about a second, decompression-shaped problem on top of it.
 
 ## Open
 
-- The `entry_count` (10,927) versus manifest-path-count (22,582) mismatch on
-  `data00.psarc` - the actual blocker for real asset extraction, described
-  above. Needs either a second archive's manifest compared the same way (do
-  the smaller ones, e.g. `data03.psarc` at 662 declared entries, show the
-  same ~2x ratio, or is it content-dependent?) or a byte-level diff between
-  what the entry table's block-count arithmetic predicts per file and what
-  the manifest lists.
+- **Block data location** (see above) - entries resolve to real paths now,
+  and roughly a third to a half of them already read real content through
+  the unmodified reader, but which third/half is not yet predictable, on
+  any archive checked. This blocks trustworthy real asset extraction more
+  fundamentally than the (now-resolved) manifest mismatch did - a caller
+  cannot yet tell a real read from a zero one without comparing against a
+  known-good reference. Needs either the PKG extraction re-verified/redone
+  with both `omega-ps4-eu.pkg` and `omega-ps4-eu-patch.pkg` correctly
+  merged, or a from-scratch reading of what distinguishes a real entry from
+  a zeroed one - not attempted this session per the standing rule against
+  guessing a fix without a verified cause.
 - `GameModes/*.cpp` (`GameMode_ModeManager`, `GameMode_RaceManager`,
   `GameMode_TournamentModeManager`) has no obvious Vita/PS3 counterpart in
   the `.cpp`-path census - worth checking whether Vita's own
@@ -115,9 +168,10 @@ looks structurally similar but is not proven to line up 1:1.
   `vita-2048-eu-v104/README.md`'s own comparison table) is the same file
   under a path this census missed, before concluding PS4 added a layer.
 - `.gnf` (PS4's native texture container) has no reader in this project at
-  all. Not urgent - nothing can extract a real `.gnf` file out of a PSARC
-  yet regardless, per the manifest issue above - but worth noting as the
-  next format gap once extraction works, the same role `.gtf`/`.gxt` fill
+  all. Some real `.gnf` bytes can already come out of a PSARC (the
+  real/zero split below means a specific one might or might not), so this
+  is a live gap rather than a blocked one - the next format gap to close
+  once the real/zero split is understood, the same role `.gtf`/`.gxt` fill
   for PS3/Vita.
 - Ghidra's own `analyzed` flag reads `false` on `/ps4-omega-eu/eboot.bin`
   even though `analyzing` is `false` and the function count (20,941) has
@@ -128,17 +182,20 @@ looks structurally similar but is not proven to line up 1:1.
 
 ## Next Steps
 
-- Resolve the manifest/entry-count mismatch (see Open, first item), then
-  extend `oag_formats::psarc::parse_manifest` (or add a PS4-specific
-  variant) to split on NUL instead of `\n` for archives declaring version
-  1.4 - `Header` already carries the version fields, so the container can
-  self-select the delimiter rather than needing a caller flag.
-- Once extraction works, `psarc_list`/`psarc_cat`
-  (`crates/assets/examples/`) already work unmodified against a 1.4 archive
-  - re-run them for a full per-archive file/extension census (this session
-  only got `data00.psarc`'s raw manifest text, not a parsed listing) and
-  decide whether `data03.psarc` (662 entries, by far the smallest) is a
-  distinct content package (DLC-shaped) worth checking against
+- Resolve the block-data-location problem (see Open, first item) - this is
+  the actual blocker for real asset extraction now, not the manifest
+  question. Start with the extraction-provenance lead: re-run
+  `PkgTool.Core pkg_extract` against `omega-ps4-eu-patch.pkg` (not just the
+  base `.pkg`) per `docs/reverse-engineering/source-images.md`'s existing
+  command, and compare the resulting `dataNN.psarc` sizes and a spot-checked
+  entry's bytes against this session's measurements before assuming the
+  container format itself needs more reverse-engineering.
+- Once the real/zero split is understood (or at least detectable per-entry),
+  `psarc_list`/`psarc_cat` (`crates/assets/examples/`) already work against a
+  1.4 archive's directory
+  and manifest - re-run them for a full per-archive file/extension census
+  and decide whether `data03.psarc` (328 real entries, by far the smallest)
+  is a distinct content package (DLC-shaped) worth checking against
   `data/dlc/` before assuming it is just "more of the same".
 - Not a reverse-engineering target in its own right yet (Omega Collection
   stays "if feasible" in the roadmap) - this thread is groundwork, not a

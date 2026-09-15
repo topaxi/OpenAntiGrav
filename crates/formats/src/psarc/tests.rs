@@ -125,7 +125,7 @@ fn a_deflated_archive_round_trips() {
     assert_eq!(directory.len(), 3, "two files plus the manifest");
 
     assert_eq!(
-        parse_manifest(&entries[0]),
+        parse_manifest(&entries[0], &directory.header),
         vec!["/data/one.txt".to_string(), "/data/two.bin".to_string()],
         "entry n + 1 is manifest line n"
     );
@@ -274,10 +274,162 @@ fn an_entry_naming_a_block_past_the_table_is_refused() {
     );
 }
 
+/// A single implausible `first_block` (real digest, real size, but a block
+/// index no candidate width could ever cover) does not take the whole
+/// directory down with it.
+///
+/// Pins the `omega-ps4-eu` fix directly: `read_block_table` excludes an
+/// entry like this from its own `highest`-block computation, and
+/// `Directory::parse` no longer validates every entry's block range up
+/// front, so the corrupt row surfaces as a read error on its own path
+/// instead of refusing the other entries.
+#[test]
+fn an_implausible_first_block_fails_its_own_entry_not_the_whole_directory() {
+    let mut archive = build(
+        64,
+        2,
+        &[
+            planned("/a.bin", vec![1, 2, 3], false),
+            planned("/b.bin", vec![4, 5, 6], false),
+        ],
+    );
+
+    // Entry 1 ("/a.bin") is HEADER_LEN + 1 * ENTRY_LEN bytes in; its
+    // first_block field is the four bytes at +0x10 within that row.
+    let entry_1_first_block = HEADER_LEN + ENTRY_LEN + 0x10;
+    archive[entry_1_first_block..entry_1_first_block + 4].copy_from_slice(&u32::MAX.to_be_bytes());
+
+    let header = Header::parse(&archive).expect("header");
+    let directory =
+        Directory::parse(&archive[..header.toc_len as usize]).expect("directory still parses");
+
+    assert!(
+        directory.entry_range(1).is_err(),
+        "the corrupted entry itself is unreadable"
+    );
+    let (offset, len) = directory
+        .entry_range(2)
+        .expect("the other entry is unaffected");
+    let stored = &archive[offset as usize..(offset + len) as usize];
+    assert_eq!(
+        directory.read_entry(2, stored).expect("reads fine"),
+        vec![4, 5, 6]
+    );
+}
+
+#[test]
+fn a_digest_shared_by_two_entries_matches_the_first_one_in_entry_order() {
+    let live_path = "Data/art/ship.gnf";
+    let mut header =
+        Header::parse(&build(64, 2, &[planned("/a", vec![1], false)])).expect("header");
+    header.version_minor = 4;
+
+    let live = Entry {
+        digest: path_digest(live_path),
+        first_block: 0,
+        size: 64,
+        offset: 128,
+    };
+    let stale_duplicate = Entry {
+        digest: path_digest(live_path),
+        first_block: 0,
+        size: 0,
+        offset: 0,
+    };
+    let entries = vec![
+        Entry {
+            digest: [0u8; 16],
+            first_block: 0,
+            size: 0,
+            offset: 0,
+        },
+        live,
+        stale_duplicate,
+    ];
+
+    let matches = super::match_paths_to_entries(&header, &entries, &[live_path.to_string()]);
+    assert_eq!(
+        matches,
+        vec![
+            super::PathEntry {
+                index: 1,
+                path: live_path.to_string(),
+            },
+            super::PathEntry {
+                index: 2,
+                path: live_path.to_string(),
+            },
+        ],
+        "both entries resolve to the path - entry order decides which one a \
+         first-match lookup like Archive::index_of_path finds"
+    );
+}
+
 #[test]
 fn the_manifest_tolerates_crlf_and_blank_lines() {
+    let v1_3 = Header::parse(&build(64, 2, &[planned("/a", vec![1], false)])).expect("header");
     assert_eq!(
-        parse_manifest(b"/a.txt\r\n/b.txt\r\n\r\n"),
+        parse_manifest(b"/a.txt\r\n/b.txt\r\n\r\n", &v1_3),
         vec!["/a.txt".to_string(), "/b.txt".to_string()]
+    );
+}
+
+#[test]
+fn a_version_1_4_manifest_is_nul_delimited_not_newline_delimited() {
+    let mut header =
+        Header::parse(&build(64, 2, &[planned("/a", vec![1], false)])).expect("header");
+    header.version_minor = 4;
+    assert!(header.nul_delimited_manifest());
+
+    assert_eq!(
+        parse_manifest(b"Data/a.gnf\x00Data/b.gnf\x00\x00\x00", &header),
+        vec!["Data/a.gnf".to_string(), "Data/b.gnf".to_string()],
+        "NUL-delimited, and a run of empty segments is dropped like a blank line"
+    );
+}
+
+#[test]
+fn version_1_4_paths_are_matched_to_entries_by_digest_not_position() {
+    // A v1.4-shaped table: entry 1 is a live file, entry 2 is a fully-zeroed
+    // placeholder row (no path of its own), and the manifest lists a path
+    // this archive has no entry for at all.
+    let mut header =
+        Header::parse(&build(64, 2, &[planned("/a", vec![1], false)])).expect("header");
+    header.version_minor = 4;
+
+    let live_path = "Data/art/ship.gnf";
+    let entries = vec![
+        Entry {
+            digest: [0u8; 16],
+            first_block: 0,
+            size: 0,
+            offset: 0,
+        },
+        Entry {
+            digest: path_digest(live_path),
+            first_block: 0,
+            size: 64,
+            offset: 128,
+        },
+        Entry {
+            digest: [0u8; 16],
+            first_block: 0,
+            size: 0,
+            offset: 0,
+        },
+    ];
+    let manifest_paths = vec![
+        live_path.to_string(),
+        "Data/art/orphaned_elsewhere.gnf".to_string(),
+    ];
+
+    let matches = super::match_paths_to_entries(&header, &entries, &manifest_paths);
+    assert_eq!(
+        matches,
+        vec![super::PathEntry {
+            index: 1,
+            path: live_path.to_string(),
+        }],
+        "the placeholder row and the orphaned manifest path are both dropped, not guessed at"
     );
 }

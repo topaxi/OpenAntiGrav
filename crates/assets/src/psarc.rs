@@ -30,6 +30,11 @@ pub struct Archive {
     label: String,
     directory: Directory,
     paths: Vec<String>,
+    /// Directory index storing `paths[n]`. `n + 1` on a version-1.3 archive,
+    /// where entry order is manifest order - not on a version-1.4 one, where
+    /// it never is. See `oag_formats::psarc`'s "Entry 0 is the manifest, not
+    /// a file" section.
+    entry_of_path: Vec<usize>,
 }
 
 impl std::fmt::Debug for Archive {
@@ -76,17 +81,28 @@ impl Archive {
         let toc = source.read(0, u64::from(header.toc_len))?;
         let directory = Directory::parse(&toc).map_err(bad)?;
 
-        // Entry 0 is the manifest: every other entry's path, in entry order.
-        // Reading it here is what makes the archive addressable by name at all.
+        // Entry 0 is the manifest. Reading it here is what makes the archive
+        // addressable by name at all; `match_paths_to_entries` is what ties
+        // its paths back to the entries that actually store them - positional
+        // on a version-1.3 archive, by digest on a version-1.4 one.
         let (offset, len) = directory.entry_range(MANIFEST).map_err(bad)?;
         let stored = source.read(offset, len)?;
-        let paths = psarc::parse_manifest(&directory.read_entry(MANIFEST, &stored).map_err(bad)?);
+        let manifest_bytes = directory.read_entry(MANIFEST, &stored).map_err(bad)?;
+        let manifest_paths = psarc::parse_manifest(&manifest_bytes, &header);
+        let matches = psarc::match_paths_to_entries(&header, &directory.entries, &manifest_paths);
+        let mut paths = Vec::with_capacity(matches.len());
+        let mut entry_of_path = Vec::with_capacity(matches.len());
+        for psarc::PathEntry { index, path } in matches {
+            paths.push(path);
+            entry_of_path.push(index);
+        }
 
         Ok(Self {
             source,
             label,
             directory,
             paths,
+            entry_of_path,
         })
     }
 
@@ -96,18 +112,32 @@ impl Archive {
         &self.label
     }
 
-    /// Every entry's path, in entry order, the manifest excluded.
+    /// Every entry this archive can both name and locate in the directory,
+    /// the manifest and any unbacked or placeholder entry excluded.
     ///
     /// Paths are stored lowercase and absolute, like
-    /// `/data/environments/talons_junction/track.vex`. This is the one
-    /// structural way PSARC is *easier* than the WAD it replaces: a WAD stores
-    /// only a name hash, so most of its names still have to be mined.
+    /// `/data/environments/talons_junction/track.vex`, on a version-1.3
+    /// archive. This is the one structural way PSARC is *easier* than the WAD
+    /// it replaces: a WAD stores only a name hash, so most of its names still
+    /// have to be mined.
+    ///
+    /// **Naming an entry is not the same as being able to read it, on a
+    /// version-1.4 archive.** `entry.offset` produces real content for a
+    /// substantial fraction of entries already - roughly a third to a half,
+    /// varying by archive, through no more than [`Archive::read_path`] as it
+    /// stands - and zero bytes for the rest, and which of the two a given
+    /// path is has no known predictor yet. See `docs/formats/psarc.md`'s
+    /// "Block data location" section.
     #[must_use]
     pub fn paths(&self) -> &[String] {
         &self.paths
     }
 
-    /// The parsed directory. Entry `n + 1` is [`Archive::paths`]`[n]`.
+    /// The parsed directory. On a version-1.3 archive, entry `n + 1` is
+    /// [`Archive::paths`]`[n]`; on a version-1.4 one entry order carries no
+    /// relationship to [`Archive::paths`] at all, and
+    /// [`Archive::index_of_path`] is what recovers the correspondence. See
+    /// `oag_formats::psarc`'s "Entry 0 is the manifest, not a file" section.
     #[must_use]
     pub fn directory(&self) -> &Directory {
         &self.directory
@@ -115,16 +145,13 @@ impl Archive {
 
     /// Index of the entry with this path, matched case-insensitively and with a
     /// leading `/` optional on either side.
-    ///
-    /// The result indexes the *directory*, so it is one more than the position
-    /// in [`Archive::paths`].
     #[must_use]
     pub fn index_of_path(&self, path: &str) -> Option<usize> {
         let want = normalise(path);
         self.paths
             .iter()
             .position(|p| normalise(p) == want)
-            .map(|n| n + 1)
+            .map(|n| self.entry_of_path[n])
     }
 
     /// Whether an entry with this path exists.
