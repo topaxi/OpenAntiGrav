@@ -139,9 +139,19 @@ Allegrex and the Emotion Engine above:
 just build-ps3-scripts
 ```
 
-This also adds this project's PS3 compiler-spec fix as a second language - see
-below - since upstream ships no `data/languages/` of its own to conflict with.
-Then `File > Install Extensions > +` and restart.
+This also adds this project's PS3 language - the compiler-spec fix and the
+Cell `lvlx` instruction, see below - since upstream ships no
+`data/languages/` of its own to conflict with. Then
+`File > Install Extensions > +` and restart.
+
+**Do not keep a backup of a previous install inside Ghidra's `Extensions/`
+directory once the extension ships an `.ldefs`.** Ghidra scans every
+`data/languages/*.ldefs` under `Extensions/`, backups included, and a second
+copy of `ppc_ps3.ldefs` fails with `Language PowerPC:BE:64:A2ALT-32addr-PS3
+previously defined` - which of the two wins is not specified. The
+`*.oag-backup` naming that `scripts/import-ps3-eboot.sh` prunes only protects
+that script's own search; move the backup to `data/tools/` instead (done
+2026-09-15 for the 2026-08-26 install).
 
 **4. Import.** Use the script, which does all of the below in one command and
 checks the prerequisites first. Close Ghidra before running it - headless cannot
@@ -162,33 +172,44 @@ By hand, the order matters and is easy to get wrong:
    see the TOC trap below.
 5. Run `DefinePS3Syscalls.java`.
 
-A correct import of Wipeout HD / Fury reports 26,100 functions, 159 memory
-blocks, and imports named from the NID database.
+A correct import of Wipeout HD / Fury reports 26,100 functions under the
+stock language and **26,112 under the `lvlx`-aware PS3 language** (the twelve
+extra are code that was only reachable through a hole, see the `lvlx` trap
+below), 159 memory blocks, and imports named from the NID database.
 
-#### An extension-shipped alternative to step 2
+#### An extension-shipped alternative to step 2, which also decodes `lvlx`
 
 Step 2 edits the Ghidra installation itself, which is root-owned and does not
 survive a Ghidra upgrade. The fix can instead ship as part of the
 Ps3GhidraScripts extension: `scripts/ghidra-ps3-language/ppc_64_32_ps3.cspec`
 (the same `ppc_64_32.cspec` with `r2` added to `<unaffected>`) plus
 `scripts/ghidra-ps3-language/ppc_ps3.ldefs`, defining a second language,
-`PowerPC:BE:64:A2ALT-32addr-PS3`, that reuses stock Ghidra's own
-`ppc_64_isa_altivec_be.sla` and `ppc_64.pspec` by filename rather than
-vendoring them - Ghidra's `SleighLanguageProvider` falls back to an
+`PowerPC:BE:64:A2ALT-32addr-PS3`. A duplicate id is not allowed, which is why
+it needs its own rather than reusing step 1's.
+
+Since 2026-09-15 the language also carries its own compiled `.sla`, because
+that is the only way to add an instruction: `scripts/ghidra-ps3-language/cell_lvlx.sinc`
+is the one constructor stock Ghidra lacks for this binary (see the `lvlx` trap
+below), and `just build-ps3-scripts` (`scripts/build-ghidra-ps3-scripts.sh`)
+copies stock Ghidra's own PowerPC `.sinc` files and
+`ppc_64_isa_altivec_be.slaspec` out of the local install at build time,
+generates `ppc_64_isa_altivec_ps3.slaspec` (stock plus one `@include` after
+`altivec.sinc`), compiles it with `support/sleigh` and ships the result -
+nothing of Ghidra's is tracked in this repository. `ppc_64.pspec` is still
+reused by filename: Ghidra's `SleighLanguageProvider` falls back to an
 application-wide search by filename when a referenced file is not found
 beside the `.ldefs`, so this works as long as the filename is unique across
-the install (verified true for both on this machine). A duplicate id is not
-allowed, which is why it needs its own rather than reusing step 1's.
+the install (verified true on this machine). The id and `version` were left
+unchanged on purpose, so the live program imported under the sla-less first
+cut still opens; its own `lvlx` sites stay undefined until it is reimported.
 
-`just build-ps3-scripts` (`scripts/build-ghidra-ps3-scripts.sh`) copies these
-two tracked files into the Ps3GhidraScripts checkout before building, so step
-3 always produces an extension carrying both the scripts and this language -
-there is no separate build to run. Install it the same way as step 3 and
-restart Ghidra. `scripts/import-ps3-eboot.sh --ps3-cspec` then imports under
-it instead of step 2's language, and skips the `just patch-ppc-cspec` check
-entirely since there is nothing on the Ghidra install left to check. Verified
-2026-08-26: `analyzeHeadless` against a scratch project reports `Using
-Language/Compiler: PowerPC:BE:64:A2ALT-32addr-PS3:default` and imports
+So step 3 always produces an extension carrying the scripts and this
+language - there is no separate build to run. Install it the same way as step
+3 and restart Ghidra. `scripts/import-ps3-eboot.sh --ps3-cspec` then imports
+under it instead of step 2's language, and skips the `just patch-ppc-cspec`
+check entirely since there is nothing on the Ghidra install left to check.
+Verified 2026-08-26: `analyzeHeadless` against a scratch project reports
+`Using Language/Compiler: PowerPC:BE:64:A2ALT-32addr-PS3:default` and imports
 successfully.
 
 **The default since 2026-08-28.** The live `OpenAntiGrav.gpr` project was
@@ -302,15 +323,15 @@ has the original finding), so `7c00040e`/`fc0007fe` returns "No matches"
 against 851 real sites, and a masked query for one site's exact bytes returns
 the same five hits as the unmasked one.
 
-**Teaching sleigh `lvlx` does not require vendoring Ghidra's sources.**
-Compile-tested 2026-09-15: copying the stock
+**The PS3 language decodes `lvlx` since 2026-09-15, without vendoring
+Ghidra's sources.** `just build-ps3-scripts` copies the stock
 `Ghidra/Processors/PowerPC/data/languages/*.sinc` and
-`ppc_64_isa_altivec_be.slaspec` from the local install into a scratch
-directory, adding one `@include "cell_lvlx.sinc"` after `altivec.sinc`, and
-running `support/sleigh` on it produced a `.sla` in 5.4 s with warnings
-byte-identical to the stock spec's. The added constructor, modelled on `lvx`
-(Power ISA 2.06 Book I, 6.7.2 - `EA = (RA|0)+RB`, the bytes from `EA` to the
-end of its 16-byte block land at the top of `vD`, the rest zero; on a
+`ppc_64_isa_altivec_be.slaspec` from the local install at build time, adds one
+`@include "cell_lvlx.sinc"` after `altivec.sinc`, and runs `support/sleigh` on
+it - a `.sla` in 5.4 s with warnings byte-identical to the stock spec's. The
+constructor, `scripts/ghidra-ps3-language/cell_lvlx.sinc`, is modelled on
+`lvx` (Power ISA 2.06 Book I, 6.7.2 - `EA = (RA|0)+RB`, the bytes from `EA`
+to the end of its 16-byte block land at the top of `vD`, the rest zero; on a
 big-endian vector that is the aligned block shifted left by `EA[0,4]` bytes):
 
 ```
@@ -327,10 +348,25 @@ big-endian vector that is the aligned block shifted left by `EA[0,4]` bytes):
 
 That is the same shape as `scripts/build-ghidra-allegrex.sh`'s tracked patch:
 a copy-at-build-time from the user's own Ghidra plus a small file of ours, with
-nothing of Ghidra's committed here. It is **not installed** - shipping it means
-a new `.sla` in the Ps3GhidraScripts extension, a language id or version bump,
-and a reimport of the live project, which is the maintainer's call for the same
-reason the cspec switch above was.
+nothing of Ghidra's committed here. The language id and `version` are
+unchanged, so a program imported before the constructor landed still opens
+but keeps its holes - a fresh import is what closes them.
+
+**Verified 2026-09-15 on a scratch `analyzeHeadless` import** (same loader,
+scripts and language as `scripts/import-ps3-eboot.sh --ps3-cspec`; confidence
+95, the check is the same word scan as above run as a post-script): **848 of
+the 851 sites are `lvlx` instructions inside a function**, the function count
+is 26,112 against 26,100 before, and the eight named functions' bodies grow to
+their ranges - `Collision_MarchSegment` 36 -> 2,260 bytes,
+`Collision_TestMeshObb` 1,148 -> 2,280, `EngineFlare_RenderTick`
+1,772 -> 3,192, `RaceManager_Construct` 2,564 -> 2,688, `Craft_IntegrateHull`
+1,500 -> 1,728, `EngineFlare_Update` 1,312 -> 1,540, `ShipCollisionFx_Trigger_q`
+1,652 -> 1,928, `Trail_HitShipEffect` 492 -> 580. The three still undefined
+(`0x00129188`, `0x0012918c`, `0x001599a0`) sit in stretches the disassembler
+never enters at all - the word before each is undefined too - so they are
+unreached code, not an `lvlx` gap. Whether the decompiler folds the
+`lvlx`/`lvsl`/`vperm` unaligned-load idiom into one 16-byte load under this
+semantics is not yet checked.
 
 #### Two PS3 read errors that produce a plausible wrong answer with no visible error
 

@@ -1,0 +1,28 @@
+# The Cell BE / PPC970 "Load Vector Left Indexed" instruction, which stock
+# Ghidra's altivec.sinc does not implement. Wipeout HD / Fury's EBOOT.elf uses
+# it 851 times, and every one of them is an undecodable word that stops the
+# disassembler and holes the function it sits in - measured on the live import,
+# see OpenAntiGrav's docs/reverse-engineering/toolchain.md#ps3. The seven
+# sibling forms (lvlxl, lvrx, lvrxl, stvlx, stvlxl, stvrx, stvrxl) have zero
+# sites in that binary and are deliberately not defined here: an instruction
+# with no site is an instruction with no way to check the definition.
+#
+# Power ISA 2.06 Book I, section 6.7.2: EA = (RA|0) + RB. The bytes from EA to
+# the end of EA's 16-byte-aligned block are loaded into vD starting at byte 0;
+# the remaining low bytes of vD are zero. On a big-endian vector byte 0 is the
+# most significant byte of the 128-bit value, so that is the aligned block
+# shifted left by (EA mod 16) bytes. Modelled on altivec.sinc's own lvx.
+#
+# scripts/build-ghidra-ps3-scripts.sh includes this after altivec.sinc in a
+# generated ppc_64_isa_altivec_ps3.slaspec and compiles the result; nothing of
+# Ghidra's is tracked in the repository for it.
+
+:lvlx vrD,RA_OR_ZERO,B		is OP=31 & vrD & RA_OR_ZERO & B & XOP_1_10=519 & Rc=0
+{
+	build RA_OR_ZERO;
+	ea:$(REGISTER_SIZE) = RA_OR_ZERO + B;
+	eb:1 = ea[0,4];
+	aligned:$(REGISTER_SIZE) = ea & 0xfffffffffffffff0;
+	block:16 = *[ram]:16 aligned;
+	vrD = block << (eb * 8);
+}
