@@ -31,26 +31,31 @@ form:
   variants) have zero sites, so one constructor is the whole job for this
   binary.
 
-What is deliberately not done: nothing is installed, and the live project is
-untouched. Shipping the constructor means a new `.sla` in the Ps3GhidraScripts
-extension, a language id or `version` bump so Ghidra notices, and a reimport
-(or a re-disassembly of the 294 ranges) of the live `ps3-hdfury-eu` program -
-the same maintainer-run step the cspec switch was, and it is slow on 26,100
-functions.
+**Landed later on 2026-09-15: the language ships the constructor and it is
+verified on a scratch import.** `just build-ps3-scripts` now compiles
+`ppc_64_isa_altivec_ps3.sla` from copied stock sources plus
+`scripts/ghidra-ps3-language/cell_lvlx.sinc`, `ppc_ps3.ldefs` points at it
+(same id, same `version`), and the built extension is installed in
+`~/.config/ghidra/ghidra_12.1.2_DEV/Extensions/Ps3GhidraScripts` (the
+2026-08-26 install moved to `data/tools/Ps3GhidraScripts.oag-backup-20260826`
+- it must not stay under `Extensions/`, see toolchain.md's PS3 step 3). A
+headless import into a scratch project under it: **848 of 851 sites are
+`lvlx` instructions inside functions**, 26,112 functions, and all eight named
+bodies grow to their ranges (`Collision_MarchSegment` 36 -> 2,260 bytes). The
+three remaining undefined sites are in code the disassembler never enters at
+all. Full numbers on toolchain.md#ps3.
+
+What remains is the live project, which the running Ghidra GUI holds locked
+and which loaded the *old* `.ldefs` at startup, so it needs a restart before
+it sees the new `.sla` at all.
 
 ## Open
 
-- Whether to bump the existing `PowerPC:BE:64:A2ALT-32addr-PS3` language's
-  `version` (Ghidra offers an in-place language upgrade, which re-disassembles
-  nothing by itself) or to add a second id and reimport. A reimport is the
-  known-good path (`just apply-names` replays the 331 rows); an upgrade plus
-  "clear and disassemble" over the 294 ranges would keep every comment and
-  bookmark but has not been tried.
 - Whether the constructor's semantics are exact enough for the decompiler to
   fold the `lvlx`/`lvsl`/`vperm` unaligned-load idiom into a single 16-byte
   load. Disassembly and flow do not depend on it; the decompiled expression
-  does. Check against `Collision_MarchSegment`'s `v10 = *r5 - *r4` reading
-  once it decompiles.
+  does. Check against `Collision_MarchSegment`'s `v10 = *r5 - *r4` reading in
+  `physics.md` once the live program decompiles it.
 - Whether to publish `scripts/ghidra-ps3-language/` (and this constructor)
   upstream to clienthax/Ps3GhidraScripts. The sleigh sources being patched are
   Ghidra's (Apache-2.0), not clienthax's, so the ask-first rule applies to the
@@ -58,20 +63,14 @@ functions.
 
 ## Next Steps
 
-1. In `scripts/build-ghidra-ps3-scripts.sh`: copy
-   `$GHIDRA_INSTALL_DIR/Ghidra/Processors/PowerPC/data/languages/{*.sinc,ppc_64_isa_altivec_be.slaspec}`
-   into the checkout's `data/languages/`, add `cell_lvlx.sinc` from
-   `scripts/ghidra-ps3-language/` (the constructor on toolchain.md, verbatim),
-   generate `ppc_64_isa_altivec_ps3.slaspec` (stock plus the one `@include`),
-   compile with `$GHIDRA_INSTALL_DIR/support/sleigh`, and point
-   `ppc_ps3.ldefs` at the new `.sla`. Verify the zip carries the `.sla`, as the
-   script already does for the cspec.
-2. Install into a scratch project first, per this thread's own precedent:
-   `analyzeHeadless` import of `EBOOT.elf` under the updated language, then
-   `scripts/scan-ps3-cell-vector-ops.py`'s site list against
-   `getFunctionContaining` - every site should now be an `lvlx` instruction
-   inside a function, and `Collision_MarchSegment`'s body should be near 2,272
-   bytes.
-3. Ask the maintainer to reimport the live program (or try the upgrade path
-   in Open), then `just apply-names` and re-run the mapping script to confirm
-   `0 undefined` at the 851 sites.
+1. Close Ghidra, then from the main checkout run
+   `scripts/import-ps3-eboot.sh --ps3-cspec` - it overwrites
+   `OpenAntiGrav/ps3-hdfury-eu/EBOOT.elf` in place with the same loader,
+   scripts and language the scratch verification used. The scratch run took
+   roughly ten minutes on this machine.
+2. Reopen Ghidra (it now loads the new `.sla`), then `just apply-names` to
+   replay the 331 `names.tsv` rows, and re-run the site check against the live
+   program: the inline-script recipe on toolchain.md#ps3, expecting
+   `undefined=3`, `inFunction=848`.
+3. Decompile `Collision_MarchSegment` and settle the semantics question in
+   Open against `physics.md`'s hand reading.

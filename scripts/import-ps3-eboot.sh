@@ -12,14 +12,17 @@
 #      a loader and a processor together, which the GUI's "recommended"
 #      checkbox and GhidraMCP's `import_file` both make awkward. `--ps3-cspec`
 #      imports under `PowerPC:BE:64:A2ALT-32addr-PS3` instead - the same
-#      slafile and pspec, but a compiler spec shipped by the (locally patched)
-#      Ps3GhidraScripts extension rather than a root-owned edit to the Ghidra
-#      install. It is not the default: the live `OpenAntiGrav.gpr` project was
-#      imported under the stock id, and switching means a fresh reimport under
-#      the new one - safe per ADR-0005 (`just apply-names` reproduces the
-#      recovered names), but slow enough on a 26,100-function binary that it
-#      should be a deliberate choice, not a script default. See
-#      docs/reverse-engineering/toolchain.md#ps3.
+#      pspec, but a compiler spec and, since 2026-09-15, a sleigh spec that
+#      also decodes the Cell `lvlx` (851 sites in Wipeout HD / Fury, each
+#      holing the function it sits in under the stock language), both shipped
+#      by the locally built Ps3GhidraScripts extension rather than as
+#      root-owned edits to the Ghidra install. It is not the default flag
+#      because the live `OpenAntiGrav.gpr` project was first imported under
+#      the stock id, and switching meant a fresh reimport - safe per ADR-0005
+#      (`just apply-names` reproduces the recovered names), but slow enough on
+#      a 26,100-function binary that it should be a deliberate choice, not a
+#      script default. The live project has been on --ps3-cspec since
+#      2026-08-28. See docs/reverse-engineering/toolchain.md#ps3.
 #   2. `AnalyzePs3Binary.java` must run *before* auto-analysis, not after. It
 #      defines the imports, exports and TOC that analysis then works from.
 #      `-preScript` is exactly that hook.
