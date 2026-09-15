@@ -692,6 +692,61 @@ allocator instead - two different primitives fired one after another in the
 same branch, and nothing read this pass says whether that is "voice line vs.
 UI tone" as a general SCREAM convention or specific to this one call site.
 
+## The "voice line vs. tone" split is a general SCREAM convention, and `FUN_00310bd8` is named
+
+2026-09-15, later the same day. Answers the item directly above with a
+caller census rather than a guess, per the same page's own "on this binary a
+known string is a better handle than a known field" lesson - here the known
+strings are the ones already sitting in each caller's own decompile.
+
+`FUN_00310bd8` (`0x00310bd8`, the `ZONEADVANCE` control call earlier in this
+page) has eighteen callers total (`get_function_callers`), including `Zone_UpdateCraftClass`
+and `Detonator_UpdateRace` by name already. Five of the sampled callers pass a
+literal, human-readable cue-name string directly as the third argument, and
+every one is a discrete, state-gated announcement rather than a continuous or
+parametrised effect:
+
+- `Zone_UpdateCraftClass` -> `"ZONEADVANCE"` (already established).
+- `Detonator_UpdateRace` -> `PTR_s_EMPREADY_008a6d1c` / `PTR_s_EMPFULL_008a6d20`,
+  gated on the same kind of threshold-fraction test `zone-advance.md` reads for
+  the Zone ladder - Detonator's EMP charge, not Zone's speed class, but the
+  identical "state crosses a threshold, queue a named voice line" shape.
+- `FUN_0005e948` -> `PTR_s_TOURN_COMPLETE_008a6a60` / `PTR_s_RACE_COMPLETE_008a6a64`
+  / `PTR_s_SESS_COMPLETE_008a6a68`, gated on a session-progress bitmask - the
+  milestone-completion announcer lines, unconnected to either ladder.
+- `FUN_00067120` (itself called from the top of `Detonator_UpdateRace`) walks
+  a pointer at `param_1+0x2e20` in stride-3 steps and passes `puVar16[1]`/
+  `puVar16[2]` - two per-step cue-name pointers read out of an array, not
+  literals - to two back-to-back `FUN_00310bd8` calls whenever the step
+  index changes. That shape - an indexed walk yielding a pair of cue-name
+  pointers per step - is the same family as `zone-speed-class-table.md`'s
+  `g_ZoneSpeedClassTable`, and **is a concrete lead for this thread's own
+  still-open "does Detonator have the same `{threshold, stringId}` shape"
+  Next Step**: `param_1+0x2e20` (distinct from `Detonator_UpdateRace`'s own
+  `+0x2e10` step counter) is where to point `get_xrefs_to`/`inspect_memory_content`
+  next, rather than starting from `RaceManager->+0x2e10` cold. Not chased
+  further this pass - it is a different Next Step's scope, not this one's.
+
+Zero sampled callers of the `Sound_PlayNamedCue` trampoline pass a bare
+string literal at all: `FUN_002fdc00` (the largest of the four, an adaptive
+music/ambient intensity controller - volume ramps, a decaying `local_70`
+counter, per-parameter float overrides) and its two siblings all build a
+parameter struct on their own stack and hand a pointer to it through the
+trampoline, with any name reference already resolved to a pointer field
+inside that struct rather than passed as a literal. **The split is
+structural, not incidental**: `Sound_QueueAnnouncerCue` (renamed from
+`FUN_00310bd8`, confidence 85 - eighteen callers, five sampled and all
+literal-named discrete announcements, matching this page's own control call
+and two other subsystems' milestone/warning lines) is SCREAM's voice-line
+queue - a scarce, priority-ranked resource for the small number of
+simultaneous spoken lines a race can play, which is exactly why it needs
+priority arbitration and `Sound_PlayNamedCue` does not. `ZONEBAR_TRANS`
+going through the latter is therefore consistent with it being a tone or
+effect layered under the spoken line rather than competing with it for a
+voice slot - matching the maintainer's own "a spoken class name and a
+non-verbal tone at once" observation exactly, on the mechanism this time
+rather than only on the pairing.
+
 ## `FUN_0006c600` named `Zone_UpdateCraftClass`, and its callers found
 
 2026-09-15, closing the "no static caller found" gap the addendum above left
