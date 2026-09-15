@@ -226,20 +226,48 @@ dotnet bin/Release/netcoreapp3.0/PkgTool.Core.dll pkg_extract \
 
 [LibOrbisPkg](https://github.com/maxton/LibOrbisPkg)'s `PkgTool.Core` (MIT,
 built against `netcoreapp3.0`, needs `<RollForward>LatestMajor</RollForward>`
-added to its `.csproj` to run on a newer-only-installed SDK) produced a full
-`uroot/` tree: `eboot.bin`, `sce_sys/`, `sce_module/*.prx`, and five
-`dataNN.psarc` archives (`data00`-`data04`, 2.5-6.3 GiB each, ~25 GiB total).
-Each `.psarc` starts with a plain `PSAR` header (`zlib` compression, matches
-the container [`hdfury-ps3-eu.iso`](#hdfury-ps3-euiso---wipeout-hd--fury-ps3)
-already ships) - the asset archives are genuinely plaintext, no further key
-needed. `eboot.bin` is not immediately readable either: its header is
-`4F153D1D`, the PS4 SELF magic, the same wrapper Vita's `eboot.bin` needed
+added to its `.csproj` to run on a newer-only-installed SDK - reconfirmed
+2026-09-15 against a fresh clone and dotnet 10) produced a full `uroot/`
+tree: `eboot.bin`, `sce_sys/`, `sce_module/*.prx`, and five `dataNN.psarc`
+archives (`data00`-`data04`). **Measured precisely 2026-09-15** (the "~25 GiB"
+this page recorded earlier was a rough estimate, not a repro'd figure):
+13 GiB, 11 GiB, 9.1 GiB, 2.5 GiB and 6.0 GiB respectively, ~41.6 GiB total
+with `eboot.bin` and the rest. Each `.psarc` starts with a plain `PSAR`
+header (`zlib` compression, matches the container
+[`hdfury-ps3-eu.iso`](#hdfury-ps3-euiso---wipeout-hd--fury-ps3) already
+ships) - the asset archives are genuinely plaintext, no further key needed.
+`eboot.bin` is not immediately readable either: its header is `4F153D1D`,
+the PS4 SELF magic, the same wrapper Vita's `eboot.bin` needed
 `vita-self-decrypt.py` to get past. Here that turned out to be a non-issue -
 [toolchain.md#ps4](toolchain.md#ps4) parses the SELF header directly and
 finds all 10 segments already unencrypted for this build, and
 [GhidraOrbis](https://github.com/astrelsky/GhidraOrbis) (`just
 build-ghidra-orbis`) is the loader that reads it from there, no separate
 decrypt tool needed the way Vita's is.
+
+**`omega-ps4-eu-patch.pkg` extracts separately and adds content, rather than
+completing the base `.pkg`'s.** `pkg_extract` takes exactly one `.pkg` and
+one output directory - checked directly against `PkgTool/Program.cs`'s own
+source, no patch-chain or base/patch merge logic anywhere in the tool - so
+running it against the patch needs its own output directory:
+
+```sh
+dotnet bin/Release/netcoreapp3.0/PkgTool.Core.dll pkg_extract \
+  data/images/omega-ps4-eu-patch.pkg data/extracted/ps4/omega-eu-patch
+```
+
+Its `uroot/` holds `eboot.bin` (a newer build than the base `.pkg`'s),
+`sce_discmap.plt`/`sce_discmap_patch.plt`, `sce_module/*.prx`, and **four**
+`dataNN.psarc` archives with names the base `.pkg` does not have at all -
+`data05` (654 MiB), `data07` (20 MiB), `data08` (5.3 GiB), `data09`
+(6.9 MiB), no `data06` - and, notably, **no `data00`-`data04`**. The title's
+asset namespace is at least nine named archives across the two packages, not
+the five the base `.pkg` alone suggests; what `data08` (by far the largest of
+the four) actually holds is not yet surveyed.
+[`psarc.md`'s](../formats/psarc.md#block-data-location---open-and-a-realzero-split-rather-than-uniformly-broken)
+"Block data location" section has the full account of why this closes the
+extraction-provenance question for the base archives' still-open real/zero
+split, rather than answering it.
 
 Not a reverse-engineering target yet - listed "if feasible" in
 [the roadmap](../overview/roadmap.md) and

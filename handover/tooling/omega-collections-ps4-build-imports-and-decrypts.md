@@ -152,16 +152,12 @@ locates real content on 819/1,528 (54%) of `data00.psarc`, 348/892 (39%) of
 rest, with no predictor found yet (not the stored-block shape, not the
 offset's position in the file; the block table's own arithmetic is
 otherwise self-consistent - `max(entry.offset + entry.size)` over every real
-entry on `data03.psarc` lands exactly on the file's true size). One
-unverified lead for the split itself: `docs/reverse-engineering/source-images.md`'s
-own PS4 extraction command reads only the base `.pkg`, not the patch, and
-records ~25 GiB across the five archives where this session's own
-`data/extracted/` measures ~40.8 GiB - whether the current extraction folded
-in `omega-ps4-eu-patch.pkg`, and whether that merge was clean, is not
-established; a per-file base-versus-patch split fits a scattered pattern
-better than a uniform offset-formula bug would. See `docs/formats/psarc.md`'s
-"Block data location" section for the full measurements and exact repro
-commands.
+entry on `data03.psarc` lands exactly on the file's true size). **The
+extraction-provenance lead this paragraph used to float here is closed,
+negative, 2026-09-15** - see Open, below, and
+[the new thread it split into](omega-ps4-patch-adds-four-archives-not-in-the-base-pkg.md).
+See `docs/formats/psarc.md`'s "Block data location" section for the full
+measurements and exact repro commands.
 
 **Asked directly and checked before closing the session: is this still
 zlib?** No block belonging to a real entry, on `data00.psarc`, `data01.psarc`
@@ -183,11 +179,20 @@ about a second, decompression-shaped problem on top of it.
   any archive checked. This blocks trustworthy real asset extraction more
   fundamentally than the (now-resolved) manifest mismatch did - a caller
   cannot yet tell a real read from a zero one without comparing against a
-  known-good reference. Needs either the PKG extraction re-verified/redone
-  with both `omega-ps4-eu.pkg` and `omega-ps4-eu-patch.pkg` correctly
-  merged, or a from-scratch reading of what distinguishes a real entry from
-  a zeroed one - not attempted this session per the standing rule against
-  guessing a fix without a verified cause.
+  known-good reference. **The extraction-provenance lead (whether the base
+  `.pkg` extraction had silently absorbed, or needed, patch content) is
+  closed, negative, 2026-09-15**: `PkgTool.Core pkg_extract` has no
+  base/patch merge logic at all (checked directly against its source), the
+  patch's own archives are four names (`data05`/`07`/`08`/`09`) the base
+  `.pkg` doesn't have rather than replacements for `data00`-`04`, and the
+  same real/zero split reproduces at similar magnitude on those four,
+  freshly extracted this session - see
+  [omega-ps4-patch-adds-four-archives-not-in-the-base-pkg.md](omega-ps4-patch-adds-four-archives-not-in-the-base-pkg.md),
+  split out to hold that finding. What remains open is a from-scratch
+  reading of what distinguishes a real entry from a zeroed one - not
+  attempted this session either, per the standing rule against guessing a
+  fix without a verified cause, but now ruled out as an extraction
+  artifact rather than merely unexplained.
 - `GameModes/*.cpp` (`GameMode_ModeManager`, `GameMode_RaceManager`,
   `GameMode_TournamentModeManager`) has no obvious Vita/PS3 counterpart in
   the `.cpp`-path census - worth checking whether Vita's own
@@ -211,19 +216,23 @@ about a second, decompression-shaped problem on top of it.
 
 - Resolve the block-data-location problem (see Open, first item) - this is
   the actual blocker for real asset extraction now, not the manifest
-  question. Start with the extraction-provenance lead: re-run
-  `PkgTool.Core pkg_extract` against `omega-ps4-eu-patch.pkg` (not just the
-  base `.pkg`) per `docs/reverse-engineering/source-images.md`'s existing
-  command, and compare the resulting `dataNN.psarc` sizes and a spot-checked
-  entry's bytes against this session's measurements before assuming the
-  container format itself needs more reverse-engineering.
+  question, and not an extraction-provenance question either (that lead is
+  closed - see Open). A from-scratch reading of what distinguishes a real
+  entry's bytes from a zeroed one is the only avenue left; nothing tried so
+  far (stored-block shape, file position, a base/patch merge) predicts it.
 - Once the real/zero split is understood (or at least detectable per-entry),
-  `psarc_list`/`psarc_cat` (`crates/assets/examples/`) already work against a
-  1.4 archive's directory
-  and manifest - re-run them for a full per-archive file/extension census
-  and decide whether `data03.psarc` (328 real entries, by far the smallest)
-  is a distinct content package (DLC-shaped) worth checking against
-  `data/dlc/` before assuming it is just "more of the same".
+  `psarc_list`/`psarc_cat`/`psarc_sweep` (`crates/assets/examples/`) already
+  work against a 1.4 archive's directory and manifest - re-run them for a
+  full per-archive file/extension census and decide whether `data03.psarc`
+  (328 real entries, by far the smallest of the base `.pkg`'s five) is a
+  distinct content package worth checking against `data/dlc/` before
+  assuming it is just "more of the same". **The same census on the patch's
+  own four archives is done and says no** -
+  [omega-ps4-patch-adds-four-archives-not-in-the-base-pkg.md](omega-ps4-patch-adds-four-archives-not-in-the-base-pkg.md)
+  names every HD circuit and every 2048 zone-mode environment already known
+  to this project across `data05`/`data08`, no name outside either roster,
+  so `data03.psarc` is now the only one of the nine archives left unchecked
+  for the same question.
 - Not a reverse-engineering target in its own right yet (Omega Collection
   stays "if feasible" in the roadmap) - this thread is groundwork, not a
   milestone. The natural next RE pass, if one happens, is `GameRoot`/
