@@ -656,6 +656,12 @@ pub struct QuakeStats {
 /// `0x0886794c`) spends `blastradius` for both, and no consumer of a second
 /// radius has been found anywhere.
 ///
+/// **Checked again on Pure, 2026-09-15, with the same answer.** Pure's parser
+/// stores it at `WeaponStats_Table+0xcc` (`0x08b1786c` on `psp-pure-usa`) and
+/// that slot has no cross-reference in the whole program, where the six slots
+/// either side of it each resolve to exactly one consumer. Authored, parsed,
+/// stored and never read, on both titles.
+///
 /// So it stays undecoded, for the reason the module docs give at length: a
 /// field decoded with no
 /// consumer is a field nobody has checked. It is named on
@@ -677,13 +683,32 @@ pub struct BombStats {
     /// See [`RocketStats::slowdown_time`] for the law it feeds and its
     /// evidence; [`WeaponStats::slowdown_limit`] caps the running total.
     pub slowdown_time: f32,
-    /// How long a dropped bomb lives before it goes off on its own, in seconds.
+    /// How long a dropped bomb lives before it goes off on its own, in seconds,
+    /// or `None` for a title whose Bomb has no fuse at all.
     ///
-    /// Twenty on both shipped tables against the Mine's seven, which is the
-    /// single biggest difference between the two weapons: a bomb left on the
-    /// track is a hazard for most of a lap.
-    pub timetodie: f32,
+    /// Twenty on both shipped Pulse tables against the Mine's seven, which is
+    /// the single biggest difference between the two weapons there: a bomb
+    /// left on the track is a hazard for most of a lap.
+    ///
+    /// **`None` on Pure, and `None` means never, not now.** Pure's
+    /// `Data\XML\weaponstats.xml` authors no `timetodie` on its Bomb, and that
+    /// is the parser's shape rather than a gap in the file:
+    /// `WeaponStats_ParseBomb` (`0x08809230` on `psp-pure-usa`) has no branch
+    /// for the attribute where `WeaponStats_ParseMine` beside it does, and
+    /// `BombPool_Update` (`0x0884e968`) spends the charge's age on the model's
+    /// spin and compares it to nothing. A Pure Bomb sits until a craft enters
+    /// [`Self::trigger_radius`], for the whole race if none does. Confidence
+    /// 86; see `docs/ghidra/functions/psp-pure-usa/weapons.md`. Until
+    /// 2026-09-15 the missing attribute cost Pure its Bomb entirely
+    /// (`WeaponStats::skipped`), which read as a title with no Bomb rather
+    /// than as a Bomb with no fuse.
+    pub timetodie: Option<f32>,
     /// How close a craft must come before the bomb goes off.
+    ///
+    /// On Pure this is the one trigger there is - `Bomb_UpdateTrigger`
+    /// (`0x0884ef78`) box-tests then distance-tests every other craft against
+    /// the table slot this fills, and nothing else sets the detonate bit in a
+    /// single-player race.
     pub trigger_radius: f32,
 }
 

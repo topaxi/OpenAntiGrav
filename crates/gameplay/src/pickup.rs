@@ -44,7 +44,10 @@
 //!
 //! [`IMPLEMENTED`] is the pool a pad draws from: Turbo, Shield, Rocket, Missile,
 //! Autopilot, Mine, Bomb, Plasma, Shuriken, the Cannon and the Quake as of
-//! 2026-09-07, and the LeachBeam as of 2026-09-08.
+//! 2026-09-07, the LeachBeam as of 2026-09-08, and Pure's Disruptor as of
+//! 2026-09-15 - which a Pulse or HD pad can never draw, because those tables
+//! weight no such row and [`Driver::weight`] answers `0.0` for a weapon a
+//! table does not author.
 //!
 //! **One weapon is still out, and it is out by decision rather than by
 //! ignorance**: the Repulser, which needs a field the craft *is in* rather than
@@ -176,6 +179,7 @@ pub const IMPLEMENTED: &[Weapon] = &[
     Weapon::Cannon,
     Weapon::Quake,
     Weapon::LeachBeam,
+    Weapon::Disruptor,
 ];
 
 /// Which column of `<Pickupodds>` a craft draws from, and how its place bends it.

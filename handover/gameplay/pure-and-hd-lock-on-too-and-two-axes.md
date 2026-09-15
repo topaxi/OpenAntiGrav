@@ -87,14 +87,23 @@ title showing the reticle over a craft ahead.
 - **Pure's Eliminator tuning is one file, and nothing reads the axis's second
   row.** `oag_title::weapons::Weapons::elimination` is carried and unread:
   `Race::load` opens the race table for every mode on every title.
-- **Pure ships weapons this build does not model** - its table authors a
-  `Disruptor` with `<Effect type="Stall">` and `<Effect type="Fire Weapon">`
-  blocks that the parser walks past. Nine of its weapons have an absorb value
-  against Pulse's thirteen, so the two rosters differ and nothing has compared
-  them.
-- **Pure's Bomb is not decoded**, and it is a different weapon rather than a
-  missing field: `damageradius="30"` and no `timetodie`, so it has no fuse.
-  Modelling it is `weapons-next`'s Bomb, not this thread's.
+- ~~**Pure ships weapons this build does not model**~~ **Done 2026-09-15.**
+  The roster is compared in `docs/formats/weapon-stats.md`'s Pure dialect
+  section (ten weapons, not nine - the fuse-less Bomb was the tenth and the
+  decoder used to skip it); the `Disruptor` is decoded, fired, flown and
+  landed - `oag_gameplay::projectile::disruptor`, `oag_gameplay::disruption`,
+  `docs/ghidra/functions/psp-pure-usa/weapons.md`. **Still open on it**: the
+  three effects that land without a force (Drunk - its `amount`'s input scale
+  in `Ship_ApplySteeringTorque` `0x0892edfc`; Rubber Ship - `FUN_0892dea8`'s
+  hover damping `* 0.2`; Drunk Camera), every visual and sound
+  (`WO_DISRUPTOR_HEAD`, `~DISRUPTORTVL`, `DISRUPTOREXPWAL`/`SHP`,
+  `disruptor_effect.vex`, `disruptor_cockpit.vex`), the pad-time roll (this
+  engine rolls at the press), and a sight for it so the player's bolt can
+  home the way `DisruptorPool_Fire` (`0x0884fc14`) passes `craft+0x194`.
+- ~~**Pure's Bomb is not decoded**~~ **Settled 2026-09-15**: `BombStats::
+  timetodie` is an `Option`, `None` is a charge that sits until tripped
+  (`Drop::fuse = NO_FUSE`), and `damageradius` (`0x08b1786c`) has **no
+  reader** in the executable - the evidence page's Bomb section.
 - **The far-target alpha and HD's own blink** are still unreproduced, as on
   Pulse. `hud-sight.md`'s colour writes go through `Image_SetVertexColours`
   with a computed alpha byte; whether any of that arithmetic is the PSP's
@@ -112,5 +121,5 @@ title showing the reticle over a craft ahead.
 - Decide whether HD's measured `0.5` s hold becomes a per-title
   `oag_race::sight` constant or stays the PSP's `0.8` on every title; either
   is a gameplay-crate change and a hash move, not this lane's.
-- Compare Pure's weapon roster against Pulse's; the `Disruptor` is the obvious
-  one this engine has no model for.
+- Finish the Disruptor's three unbuilt effects and its visuals; see the
+  struck-through item above for the addresses.

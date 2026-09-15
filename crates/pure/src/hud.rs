@@ -161,15 +161,16 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
 /// `Weapon::ALL`'s order - see [`ART`]'s "weapon icons are `<Model>`s" doc for
 /// the full XML, both layouts checked byte-identical on this point.
 ///
-/// `Cannon`, `LeachBeam` and `Repulser` have no icon on this disc, matching
-/// [ART]'s finding that Pure's own weapon roster is not Pulse's. Neither does
+/// `Cannon`, `LeachBeam` and `Repulser` have no icon on this disc, and
+/// `Disruptor` has one nothing else does, matching [ART]'s finding that
+/// Pure's own weapon roster is not Pulse's. Neither does
 /// `Shuriken` - Pure predates it - even though `oag_gameplay::pickup::
 /// IMPLEMENTED` can hand one out on this title, same as any other; a Pure race
 /// that grants one draws no icon for it, which is the disc's own gap rather
 /// than a reading this project has not done. `Quake`'s slot is filled even
 /// though nothing hands a Quake out today - the widget is on the disc, so
 /// recording it costs nothing.
-pub const PICKUP_ICON_MODELS: [Option<&str>; 13] = [
+pub const PICKUP_ICON_MODELS: [Option<&str>; 14] = [
     Some("ROCKET_icon"),    // Rocket
     Some("MISSILE_icon"),   // Missile
     Some("QUAKE_icon"),     // Quake
@@ -183,6 +184,11 @@ pub const PICKUP_ICON_MODELS: [Option<&str>; 13] = [
     None,                   // LeachBeam
     None,                   // Repulser
     None,                   // Shuriken
+    // The tenth of this disc's ten icons, and the one weapon here that is
+    // Pure's alone - `Weapon::Disruptor` is appended to the pool rather than
+    // slotted where Pure's own class-name run puts it (fourth), see that
+    // enum's doc.
+    Some("DISRUPTOR_icon"), // Disruptor
 ];
 
 /// The sprite widgets Pure draws whenever its HUD is up: **none**.

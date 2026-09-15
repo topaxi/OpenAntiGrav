@@ -71,8 +71,18 @@
 //!   function that spends it. That type also records the one attribute this
 //!   block does **not** author, and why the absence is design.
 //!
-//! Everything else - the other two weapons' blocks (the Quake's is decoded; the
-//! Repulser's is not) and the seven disturber effects - is named on
+//! - **The Disruptor's block, in full, from 2026-09-15** - Pure's weapon,
+//!   authored on no Pulse or HD table, and the one block that is a tree of
+//!   `<Effect>` children rather than a row of attributes. It has its own
+//!   module, [`disruptor`], because the original's parser for it is three
+//!   times the size of any other weapon's. Its consumer is
+//!   `oag_gameplay::projectile::disruptor`.
+//! - **The Bomb's `timetodie` is an `Option`** since the same day, because
+//!   Pure's Bomb authors none and Pure's pool reads none: a `None` fuse is a
+//!   charge that sits until tripped. See [`BombStats::timetodie`].
+//!
+//! Everything else - the Repulser's block and the seven disturber effects - is
+//! named on
 //! `docs/formats/weapon-stats.md` and left undecoded,
 //! because a field decoded with no consumer is a field nobody has checked.
 //! The Bomb's second radius stays out for exactly that reason - see
@@ -100,8 +110,6 @@
 //! error - [`WeaponStats::simple`] returns `None`. The two Eliminator and Race
 //! files need not carry the same set.
 
-use std::fmt;
-
 use crate::fexml::{self, Node};
 
 /// `Data\XML\WeaponStats_Race.xml`, the ordinary race modes' table.
@@ -110,8 +118,8 @@ pub const RACE_ENTRY: &str = r"Data\XML\WeaponStats_Race.xml";
 /// `Data\XML\WeaponStats_Elimination.xml`, Eliminator's.
 pub const ELIMINATION_ENTRY: &str = r"Data\XML\WeaponStats_Elimination.xml";
 
-/// The fourteen pickups, in the order the class-name pool at `0x08a78c00` holds
-/// them.
+/// The thirteen Pulse pickups in the order the class-name pool at `0x08a78c00`
+/// holds them, plus Pure's Disruptor.
 ///
 /// The order is the executable's own rather than the file's, because the file's
 /// order differs between the two shipped tables while the pool does not - and
@@ -135,6 +143,18 @@ pub const ELIMINATION_ENTRY: &str = r"Data\XML\WeaponStats_Elimination.xml";
 ///
 /// Nothing here reads this enum's index as a weapon id, and nothing should
 /// start.
+///
+/// # The fourteenth is Pure's, and it is last on purpose
+///
+/// `Disruptor` is not in Pulse's pool at all - Pure's own class-name run
+/// (`0x08a445d0..0x08a44628` on `psp-pure-usa`) holds it fourth, between
+/// `Quake` and `Turbo`, and holds no `Cannon`, `LeachBeam`, `Repulser` or
+/// `Shuriken`. So there is no one order both discs agree on, and this one
+/// stays Pulse's with Pure's extra appended: every consumer indexed by this
+/// enum's position - `oag_gameplay::hash`'s discriminant, the per-title HUD
+/// tables - keeps its thirteen where they were. See
+/// `docs/formats/weapon-stats.md`'s Pure dialect section for the two rosters
+/// side by side.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Weapon {
     Rocket,
@@ -150,6 +170,10 @@ pub enum Weapon {
     LeachBeam,
     Repulser,
     Shuriken,
+    /// Pure's disruption bolt: a floor-following projectile that hurts nobody
+    /// and hands its victim one of eight control effects for a few seconds.
+    /// Authored on no Pulse or HD table.
+    Disruptor,
 }
 
 impl Weapon {
@@ -157,7 +181,7 @@ impl Weapon {
     ///
     /// Fixed-size so that adding one is a compile error at every caller that
     /// enumerates them, the same reason `oag_race::Mode::ALL` is an array.
-    pub const ALL: [Self; 13] = [
+    pub const ALL: [Self; 14] = [
         Self::Rocket,
         Self::Missile,
         Self::Quake,
@@ -171,6 +195,7 @@ impl Weapon {
         Self::LeachBeam,
         Self::Repulser,
         Self::Shuriken,
+        Self::Disruptor,
     ];
 
     /// The `type` attribute's spelling, exactly as the file has it.
@@ -193,6 +218,7 @@ impl Weapon {
             Self::LeachBeam => "LeachBeam",
             Self::Repulser => "Repulser",
             Self::Shuriken => "Shuriken",
+            Self::Disruptor => "Disruptor",
         }
     }
 
@@ -205,17 +231,30 @@ impl Weapon {
 
     /// Whether this weapon can damage another craft.
     ///
-    /// The three that cannot are the three with no projectile and no blast, and
-    /// they are exactly the three whose `<Stats>` is `absorb` and `time` alone -
-    /// which is a property of the shipped schema, not a judgement.
+    /// Four cannot. Three are the ones with no projectile and no blast, whose
+    /// `<Stats>` is `absorb` and `time` alone. The fourth is the Disruptor,
+    /// which *is* a projectile and still authors no `damage`, no blast and no
+    /// `slowdown_time`: a hit applies a control effect and takes no energy
+    /// (`Disruptor_ApplyEffect`, `0x08850ec8` on `psp-pure-usa`). All four are
+    /// properties of the shipped schema, not judgements.
     #[must_use]
     pub fn damages(self) -> bool {
-        !matches!(self, Self::Turbo | Self::Shield | Self::Autopilot)
+        !matches!(
+            self,
+            Self::Turbo | Self::Shield | Self::Autopilot | Self::Disruptor
+        )
     }
 }
 
+mod disruptor;
+mod error;
 mod stats;
 
+pub use disruptor::{
+    DisruptorStats, Effect as DisruptorEffect, EffectKind as DisruptorEffectKind,
+    PER_CLASS_KMH as DISRUPTOR_PER_CLASS_KMH,
+};
+pub use error::Error;
 pub use stats::{
     BombStats, CannonStats, LeachBeamStats, MineStats, MissileStats, PlasmaStats, QuakeStats,
     RocketStats, ShurikenStats, Simple,
@@ -323,6 +362,10 @@ pub struct WeaponStats {
     ///
     /// Read it through [`Self::leach_beam`].
     leach_beam: Option<LeachBeamStats>,
+    /// The Disruptor's own block, or `None` for a file that omits it.
+    ///
+    /// Read it through [`Self::disruptor`].
+    disruptor: Option<DisruptorStats>,
     /// `absorb` for every weapon the file authors, in document order.
     pub absorb: Vec<(Weapon, f32)>,
     /// One entry per `<Pickupodds>` block, in document order.
@@ -444,6 +487,18 @@ impl WeaponStats {
         self.shuriken
     }
 
+    /// The Disruptor's block, or `None` when the file authors no Disruptor.
+    ///
+    /// `None` is a real state rather than a failure, and here it is the usual
+    /// one: **only Pure authors this weapon**. Both Pulse tables and HD's
+    /// answer `None`, which is what keeps a pad on those titles from ever
+    /// handing one out - `oag_gameplay::pickup` draws only weapons the table
+    /// weights, and a weapon with no block has no odds row either.
+    #[must_use]
+    pub fn disruptor(&self) -> Option<DisruptorStats> {
+        self.disruptor
+    }
+
     /// One weapon's `absorb`, or `None` when the file authors no such weapon.
     #[must_use]
     pub fn absorb(&self, weapon: Weapon) -> Option<f32> {
@@ -459,66 +514,6 @@ impl WeaponStats {
         self.pickups.iter().find(|t| t.class == class)
     }
 }
-
-/// What can go wrong reading a weapon table.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Error {
-    /// The blob is not text, or the shortened-XML expansion failed.
-    Fexml(fexml::Error),
-    /// No `<WeaponStats>` root.
-    MissingRoot,
-    /// A required element is absent.
-    MissingElement {
-        /// The element that should have held it.
-        parent: &'static str,
-        /// What was missing.
-        element: &'static str,
-    },
-    /// A required attribute is absent.
-    MissingAttribute {
-        /// The element it should have been on.
-        element: &'static str,
-        /// The attribute.
-        attribute: &'static str,
-    },
-    /// An attribute is present and is not a finite number.
-    NotANumber {
-        /// The element it was on.
-        element: &'static str,
-        /// The attribute.
-        attribute: &'static str,
-        /// What the document actually said.
-        value: String,
-    },
-}
-
-impl From<fexml::Error> for Error {
-    fn from(e: fexml::Error) -> Self {
-        Self::Fexml(e)
-    }
-}
-
-impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Fexml(e) => write!(f, "{e}"),
-            Self::MissingRoot => write!(f, "no <WeaponStats> element"),
-            Self::MissingElement { parent, element } => {
-                write!(f, "<{parent}> has no <{element}>")
-            }
-            Self::MissingAttribute { element, attribute } => {
-                write!(f, "<{element}> has no {attribute} attribute")
-            }
-            Self::NotANumber {
-                element,
-                attribute,
-                value,
-            } => write!(f, "<{element} {attribute}=\"{value}\"> is not a number"),
-        }
-    }
-}
-
-impl std::error::Error for Error {}
 
 type Result<T> = std::result::Result<T, Error>;
 
@@ -555,6 +550,7 @@ pub fn parse(xml: &str) -> Result<WeaponStats> {
     let mut cannon = None;
     let mut quake = None;
     let mut leach_beam = None;
+    let mut disruptor = None;
     let mut absorb = Vec::new();
     let mut skipped = Vec::new();
 
@@ -660,12 +656,19 @@ pub fn parse(xml: &str) -> Result<WeaponStats> {
         }
         if weapon_kind == Weapon::Bomb {
             // **A missing attribute leaves the weapon undecoded rather than
-            // failing the file**, and Pure's Bomb is why: it authors
-            // `damageradius` and **no** `timetodie`, so its charge has no fuse
-            // and sits until something triggers it. That is a different weapon
-            // wearing the same name, not a field this build forgot to read -
-            // and before this, one such block cost Pure its *whole* table, so a
-            // Pure race parsed no Missile, no Rocket and no pickup odds either.
+            // failing the file**, and Pure's Bomb is why the mechanism
+            // exists: it authors `damageradius` and **no** `timetodie`, and
+            // before `optional_block` one such block cost Pure its *whole*
+            // table, so a Pure race parsed no Missile, no Rocket and no
+            // pickup odds either.
+            //
+            // **`timetodie` itself is optional since 2026-09-15**, because
+            // the absence is now read rather than tolerated: Pure's
+            // `WeaponStats_ParseBomb` has no branch for it and Pure's pool
+            // never compares a Bomb's age to anything, so `None` is a Bomb
+            // with no fuse, not a file with a field missing. See
+            // `BombStats::timetodie`. Until then Pure's Bomb landed in
+            // `skipped`, which read as a title with no Bomb.
             //
             // A bad *value* still fails: a file that does not carry a field is
             // a dialect, and one with rubbish in a field is broken.
@@ -676,7 +679,7 @@ pub fn parse(xml: &str) -> Result<WeaponStats> {
                     blastradius: number(block, "Stats", "blastradius")?,
                     damage: number(block, "Stats", "damage")?,
                     slowdown_time: number(block, "Stats", "slowdown_time")?,
-                    timetodie: number(block, "Stats", "timetodie")?,
+                    timetodie: optional(block, "Stats", "timetodie")?,
                     trigger_radius: number(block, "Stats", "trigger_radius")?,
                 })
             })?;
@@ -746,6 +749,17 @@ pub fn parse(xml: &str) -> Result<WeaponStats> {
                     active_time: number(block, "Stats", "active_time")?,
                     energy_multiplier: number(block, "Stats", "energy_multiplier")?,
                 })
+            })?;
+            continue;
+        }
+        if weapon_kind == Weapon::Disruptor {
+            // Optional for the Bomb's reason, though no shipped file has yet
+            // needed it: Pure is the only title that authors the block, and
+            // it authors every attribute this reads. The `<Effect>` children
+            // are the reason the decode lives in its own module - see
+            // `disruptor::parse`.
+            disruptor = optional_block(&mut skipped, weapon_kind, || {
+                disruptor::parse(weapon, block)
             })?;
             continue;
         }
@@ -820,6 +834,7 @@ pub fn parse(xml: &str) -> Result<WeaponStats> {
         cannon,
         quake,
         leach_beam,
+        disruptor,
         absorb,
         pickups,
         skipped,

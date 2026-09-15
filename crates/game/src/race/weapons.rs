@@ -11,6 +11,7 @@
 
 use super::*;
 
+mod disruptor;
 mod single_instance;
 mod visuals;
 // Only reached through `crate::race::weapons::<name>` by
@@ -340,6 +341,14 @@ impl Race {
                     // and was wrong twice over: an unlocked missile flies
                     // ballistically and goes off on its own timer.
                     self.fire_missile(0, &stats);
+                }
+                oag_tables::weapons::Weapon::Disruptor => {
+                    // Pure's bolt. Rolled, locked and spawned in one place
+                    // for both paths - see `Race::fire_disruptor`. A full
+                    // pool keeps the pickup, as the Rocket's arm does.
+                    if !self.fire_disruptor(0) {
+                        return;
+                    }
                 }
                 oag_tables::weapons::Weapon::Mine | oag_tables::weapons::Weapon::Bomb => {
                     let Some(drop) =

@@ -298,7 +298,7 @@ fn the_bomb_reads_six_of_its_eight() {
             blastradius: 42.0,
             damage: 43.0,
             slowdown_time: 45.0,
-            timetodie: 46.0,
+            timetodie: Some(46.0),
             trigger_radius: 47.0,
         }
     );
@@ -315,7 +315,7 @@ fn the_bomb_and_the_mine_read_their_own_blocks() {
     let bomb = stats.bomb().expect("a Bomb");
     let mine = stats.mine().expect("a Mine");
     assert_ne!(bomb.damage, mine.damage);
-    assert_ne!(bomb.timetodie, mine.timetodie);
+    assert_ne!(bomb.timetodie, Some(mine.timetodie));
     assert_ne!(bomb.trigger_radius, mine.trigger_radius);
 }
 
@@ -434,17 +434,41 @@ fn a_document_that_is_not_this_one_is_refused() {
 
 /// The three that damage nobody are exactly the three with a simple schema.
 /// If that ever stops holding, the reason this module singles them out has
-/// gone with it.
+/// gone with it. The Disruptor is the fourth harmless weapon and the one that
+/// is not simple: a projectile with no `damage` - see `Weapon::damages`.
 #[test]
 fn the_simple_weapons_are_the_harmless_ones() {
     for weapon in Weapon::ALL {
         let stats = parse(FIXTURE).expect("parses");
         let simple = matches!(weapon, Weapon::Turbo | Weapon::Shield | Weapon::Autopilot);
-        assert_eq!(!weapon.damages(), simple, "{weapon:?}");
+        let harmless = simple || weapon == Weapon::Disruptor;
+        assert_eq!(!weapon.damages(), harmless, "{weapon:?}");
         if simple {
             assert!(stats.simple(weapon).is_some());
         }
     }
+}
+
+/// Pure's Bomb: `damageradius` and no `timetodie`, and it parses to a Bomb
+/// with no fuse rather than to a skipped weapon. Shape only - the numbers are
+/// the fixture's.
+#[test]
+fn a_bomb_without_a_fuse_is_a_bomb_that_never_times_out() {
+    let pure = FIXTURE.replace(r#" timetodie="46""#, "");
+    let stats = parse(&pure).expect("parses");
+    let bomb = stats.bomb().expect("a fuse-less Bomb is still a Bomb");
+    assert_eq!(bomb.timetodie, None);
+    assert_eq!(bomb.trigger_radius, 47.0);
+    assert!(
+        !stats.skipped.iter().any(|(w, _)| *w == Weapon::Bomb),
+        "the Bomb was skipped for want of a fuse: {:?}",
+        stats.skipped
+    );
+    // Pulse's Bomb, unchanged: the fuse is still read where it is authored.
+    assert_eq!(
+        parse(FIXTURE).expect("parses").bomb().map(|b| b.timetodie),
+        Some(Some(46.0))
+    );
 }
 
 #[test]

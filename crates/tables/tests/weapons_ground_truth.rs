@@ -366,13 +366,18 @@ fn the_bomb_is_the_mine_one_size_up() {
         let mine = stats
             .mine()
             .unwrap_or_else(|| panic!("{name}: no Mine authored"));
+        // Pulse's Bomb has a fuse. Pure's does not, and Pure is not one of
+        // these tables - see `BombStats::timetodie`.
+        let bomb_fuse = bomb
+            .timetodie
+            .unwrap_or_else(|| panic!("{name}: Pulse's Bomb authors a timetodie"));
 
         println!(
             "{name}: bomb {} damage / {} blast / {} trigger / {} s vs mine {} / {} / {} / {} s",
             bomb.damage,
             bomb.blastradius,
             bomb.trigger_radius,
-            bomb.timetodie,
+            bomb_fuse,
             mine.damage,
             mine.blastradius,
             mine.trigger_radius,
@@ -383,7 +388,7 @@ fn the_bomb_is_the_mine_one_size_up() {
             ("blastradius", bomb.blastradius, mine.blastradius),
             ("blastforce", bomb.blastforce, mine.blastforce),
             ("trigger_radius", bomb.trigger_radius, mine.trigger_radius),
-            ("timetodie", bomb.timetodie, mine.timetodie),
+            ("timetodie", bomb_fuse, mine.timetodie),
         ] {
             assert!(
                 bigger > smaller,
@@ -402,7 +407,7 @@ fn the_bomb_is_the_mine_one_size_up() {
             bomb.trigger_radius
         );
         assert!(
-            bomb.timetodie > 0.0,
+            bomb_fuse > 0.0,
             "{name}: a bomb that expires the tick it is dropped - {bomb:?}"
         );
     }

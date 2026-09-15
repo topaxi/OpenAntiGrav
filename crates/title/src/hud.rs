@@ -313,7 +313,7 @@ pub struct HudArt {
     /// Values are `0xAARRGGBB`, the same convention every colour in a HUD
     /// layout is written in, so a reader comparing this table against one
     /// does not have to convert anything by hand.
-    pub pickup_colours: Option<[Option<u32>; 13]>,
+    pub pickup_colours: Option<[Option<u32>; 14]>,
     /// The `<Mode3D><Model>` widget that draws a weapon's own icon, when this
     /// title has one, or `None` for a title whose icons are `<Image>` sprites
     /// (or unmeasured).
@@ -341,7 +341,7 @@ pub struct HudArt {
     /// `Quake`'s slot is filled even though nothing hands a Quake out today:
     /// the disc authors the widget, so recording it costs nothing and saves a
     /// second reading the day `Quake` joins `IMPLEMENTED`.
-    pub pickup_icon_models: Option<[Option<&'static str>; 13]>,
+    pub pickup_icon_models: Option<[Option<&'static str>; 14]>,
     /// The `<Mode3D><Model>` widget the icon in [`Self::pickup_icon_models`]
     /// sits on, or `None`.
     ///

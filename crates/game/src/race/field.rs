@@ -148,15 +148,24 @@ impl Race {
         self.sim.world.ships[0].driver.index = u32::try_from(index).unwrap_or(0);
     }
 
-    /// Whether slot 0 is being flown for the player this tick, by either route.
+    /// Whether slot 0 is being flown for the player this tick, by any of three
+    /// routes.
     ///
     /// The operator's `--autopilot` and the pickup are deliberately separate
     /// facts joined here rather than one flag: the first is a verification aid
     /// that runs a whole race, the second is a weapon with a timer, and a test
-    /// that sets one must not silently spend the other.
+    /// that sets one must not silently spend the other. The third is a
+    /// Disruptor's two Autopilot effects, which hand the craft to its driver
+    /// for their `time` at a scaled thrust - see
+    /// `oag_gameplay::disruption::Disruption::autopilot_thrust_scale`.
     #[must_use]
     pub fn flown_for_the_player(&self) -> bool {
-        self.sim.autopilot || self.sim.world.ships[0].autopilot_timer > 0.0
+        self.sim.autopilot
+            || self.sim.world.ships[0].autopilot_timer > 0.0
+            || self.sim.world.ships[0]
+                .disruption
+                .autopilot_thrust_scale()
+                .is_some()
     }
 
     /// Counts the Autopilot pickup down and lets go of the craft at zero.
@@ -369,6 +378,9 @@ impl Race {
             if RaceState::thrust_gated(self.sim.world.tick) {
                 controls.thrust = 0.0;
             }
+            // An opponent under a Disruptor: always AI-driven, so the Stall
+            // passes it by and the rest apply. See `Race::disrupted_controls`.
+            controls = self.disrupted_controls(slot, controls, true);
 
             // The pads, measured from where the craft starts the tick, exactly as
             // slot 0's are. Both classes: a speed pad boosts an opponent and a

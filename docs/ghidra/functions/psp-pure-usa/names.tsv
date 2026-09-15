@@ -27,7 +27,7 @@
 # diffs than psp-pulse-eu's.
 0x0880bae8	function	Options_LoadDefaultControlMapping	75	corroboration.md
 0x089345e8	function	Body_Integrate	70	corroboration.md
-0x0892f1f0	function	Ship_UpdateEngine	62	corroboration.md
+0x0892f1f0	function	Ship_UpdateEngine	74	weapons.md
 0x0892cba0	function	Ship_ApplyQuadraticDrag	60	corroboration.md
 0x0892cc2c	function	Ship_ApplyAngularDamping	60	corroboration.md
 
@@ -62,3 +62,49 @@
 0x088a7588	function	DlcTrailer_ExtractKey	85	../psp-pure-eu/dlc-download-check.md
 0x088acc68	function	Bignum_ModExp	92	../psp-pure-eu/dlc-download-check.md
 0x088aca18	function	Bignum_Compare	85	../psp-pure-eu/dlc-download-check.md
+
+# Pure's weapon table, Disruptor and fuse-less Bomb (2026-09-15), read on this
+# binary directly with xrefs working; every offset and the effect switch are on
+# weapons.md. Ship_UpdateEngine's row above moved from corroboration.md (62, by
+# fuzzy match) to weapons.md (74, from its own body) in the same change.
+0x088087c4	function	WeaponStats_Load	80	weapons.md
+0x088096d8	function	WeaponStats_Parse	84	weapons.md
+0x088087e0	function	WeaponStats_ParseRocket	84	weapons.md
+0x088089cc	function	WeaponStats_ParseMissile	84	weapons.md
+0x08808be4	function	WeaponStats_ParseQuake	84	weapons.md
+0x08809d9c	function	WeaponStats_ParseDisruptor	84	weapons.md
+0x08808d44	function	WeaponStats_ParseTurbo	84	weapons.md
+0x08808e44	function	WeaponStats_ParseShield	84	weapons.md
+0x08808f44	function	WeaponStats_ParseAutopilot	84	weapons.md
+0x08809044	function	WeaponStats_ParsePlasma	84	weapons.md
+0x08809230	function	WeaponStats_ParseBomb	84	weapons.md
+0x0880941c	function	WeaponStats_ParseMine	84	weapons.md
+0x08809608	function	WeaponStats_ParseGlobal	84	weapons.md
+0x0880a500	function	WeaponStats_ParsePickupOdds	84	weapons.md
+0x0884d19c	function	WeaponPickup_Grant	80	weapons.md
+0x0884f9ec	function	WeaponPickup_ArmDisruptor	80	weapons.md
+0x0884fa10	function	Disruptor_RollEffect	82	weapons.md
+0x0884fb18	function	Disruptor_PrimeStall	80	weapons.md
+0x0884fb30	function	Disruptor_PrimeMirror	80	weapons.md
+0x0884fb4c	function	Disruptor_PrimeNoAirbrakes	80	weapons.md
+0x0884fb68	function	Disruptor_PrimeAutopilotSlow	80	weapons.md
+0x0884fb8c	function	Disruptor_PrimeAutopilotFast	80	weapons.md
+0x0884fbb0	function	Disruptor_PrimeDrunk	80	weapons.md
+0x0884fbcc	function	Disruptor_PrimeDrunkCamera	80	weapons.md
+0x0884fbf0	function	Disruptor_PrimeRubberShip	80	weapons.md
+0x0884fc14	function	DisruptorPool_Fire	82	weapons.md
+0x08859010	function	Disruptor_Init	84	weapons.md
+0x0885930c	function	Disruptor_Update	82	weapons.md
+0x088592d8	function	Disruptor_SpeedForClass	82	weapons.md
+0x088506c4	function	DisruptorPool_Update	82	weapons.md
+0x08850274	function	Disruptor_TestHit	80	weapons.md
+0x08850ec8	function	Disruptor_ApplyEffect	84	weapons.md
+0x0892935c	function	Ship_UpdateWeapons	78	weapons.md
+0x0892edfc	function	Ship_ApplySteeringTorque	72	weapons.md
+0x088580d8	function	Bomb_Init	84	weapons.md
+0x088583d8	function	Bomb_UpdateSpin	78	weapons.md
+0x0884e968	function	BombPool_Update	80	weapons.md
+0x0884ef78	function	Bomb_UpdateTrigger	82	weapons.md
+0x0884f420	function	Bomb_ApplyHit	82	weapons.md
+0x0884f214	function	BombPool_Detonate	82	weapons.md
+0x08b177a0	data	WeaponStats_Table	84	weapons.md

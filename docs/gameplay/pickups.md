@@ -350,11 +350,33 @@ the exact membership match weapon-for-weapon.
 own executable strings carry `WO_DISRUPTOR_EXPLO` alongside every other
 weapon's explosion effect name, so this is not a second spelling of `Cannon` -
 `Cannon` has no icon in either layout, and Pure's ten omit `LeachBeam`,
-`Repulser` and `Shuriken` from Pulse's thirteen as well. `Weapon`
-(`crates/tables/src/weapons.rs`) is scoped to Pulse's own weapon table, so a
-per-title roster difference like this is expected rather than a gap to
-reconcile by guessing a mapping - see `crates/pure/src/hud.rs`'s module doc
-for the full accounting.
+`Repulser` and `Shuriken` from Pulse's thirteen as well. Until 2026-09-15
+`Weapon` (`crates/tables/src/weapons.rs`) was scoped to Pulse's own table;
+it now carries `Disruptor` as its fourteenth variant, appended last so every
+Pulse index stays where it was, and the block is decoded whole
+(`oag_tables::weapons::DisruptorStats`). See
+[`docs/formats/weapon-stats.md`](../formats/weapon-stats.md)'s Pure dialect
+section for the roster side by side and `crates/pure/src/hud.rs`'s module doc
+for the icon accounting.
+
+**And since the same day it is a weapon this engine fires.** A Disruptor is
+a floor-following bolt that hurts nobody: it hands the craft it sweeps
+through one of eight control effects for an authored `time`, rolled
+uniformly (`Disruptor_RollEffect`, `rand() % 8`). Five of the eight are
+built as control filters - Stall (no thrust, human-driven craft only), No
+Airbrakes, Mirror Left Right (yaw negated, blending back over the last
+second), Autopilot Slow and Autopilot Fast (the driver takes the craft at a
+literal 0.7 / 1.3 thrust) - and three land and change nothing: Drunk (the
+input scale its `amount` is added at is unread), Rubber Ship (a hover
+damping term in `oag-physics`) and Drunk Camera. A shielded or
+already-disrupted craft is immune. Bolt and effects are read off
+`psp-pure-usa` - `docs/ghidra/functions/psp-pure-usa/weapons.md` - and live in
+`oag_gameplay::projectile::disruptor` and `oag_gameplay::disruption`. Two
+recorded deviations: the effect is rolled at the press rather than at the pad,
+and the homing lock is the Missile's test run at the press rather than a
+reticle's hold. Nothing of it is drawn yet beyond the generic projectile
+sprite - `WO_DISRUPTOR_HEAD`, `~DISRUPTORTVL`, `DISRUPTOREXPWAL`/`SHP` and
+`disruptor_effect.vex` are named on the evidence page and unwired.
 
 **This corrects a claim made and merged the same day**: `oag_pure::hud::ART`
 briefly stated Pure "has no per-weapon icon widget of any kind to colour",
@@ -399,7 +421,9 @@ the first time this build has drawn any part of Pure's pickup on screen.
 
 `oag_gameplay::pickup::IMPLEMENTED` is the pool a pad draws from, and it holds
 **Turbo, Shield, Rocket, Missile, Autopilot, Mine, Bomb, Plasma, Shuriken, the
-Cannon and, later the same day, the Quake**. **Being on this list is necessary
+Cannon and, later the same day, the Quake**, the LeachBeam since 2026-09-08 and
+Pure's Disruptor since 2026-09-15 - which only Pure's odds weight, so a Pulse or
+HD pad never draws it. **Being on this list is necessary
 but not sufficient** - see
 "Shuriken and Repulser are gated by mode, not by the pool" below for the two
 weapons the *pool* would hand out and the authored *odds* never do.

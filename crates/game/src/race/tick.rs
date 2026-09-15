@@ -21,11 +21,18 @@ impl Race {
         // for anybody yet. It also means a pickup armed *this* tick takes hold
         // on the next one, which is a tick of latency this port has and has not
         // measured against the original.
-        let mut controls = if self.flown_for_the_player() {
+        let flown = self.flown_for_the_player();
+        let mut controls = if flown {
             self.autopilot_controls()
         } else {
             ship_controls(snapshot, self.sim.scheme)
         };
+        // A Disruptor hit filters whatever the pilot - human or driver -
+        // asked for: no thrust, no airbrakes, a mirrored yaw, or an
+        // autopilot's thrust scale. Before the start-line gate below, so a
+        // stalled craft on the line is still gated and not doubly so. See
+        // `oag_gameplay::disruption`.
+        controls = self.disrupted_controls(0, controls, flown);
         // The start-line countdown: measured, not authored - see
         // `RaceState::thrust_gated` for the live capture this reproduces. Only
         // thrust was held and recorded, so only thrust is gated; steering stays
@@ -265,6 +272,12 @@ impl Race {
 
         self.step_opponents();
         self.resolve_craft_pairs();
+        // Every craft's disruption counts down *after* the tick's controls
+        // were filtered with it - `Ship_UpdateWeapons`'s own order, so an
+        // effect of one tick is one tick. Over the whole field at once, as
+        // `slowdown::drain` is, so the countdown cannot depend on which
+        // branch stepped the craft.
+        oag_gameplay::disruption::advance(&mut self.sim.world, self.sim.dt);
 
         // Eliminator's own respawn-and-bookkeeping pass, over the whole
         // field, and a no-op on every other mode. Before the ending check

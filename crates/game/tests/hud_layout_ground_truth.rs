@@ -673,7 +673,10 @@ fn every_weapon_has_an_icon_widget_named_after_it() {
 
     // The two weapons-bearing layouts author every weapon, which is what makes
     // the name rule worth having: it has to resolve for all thirteen and not
-    // only for the one this engine implements.
+    // only for the one this engine implements. **Pulse's thirteen**: the
+    // fourteenth `Weapon`, the Disruptor, is Pure's alone and Pulse's layouts
+    // author no `DisruptorIcon` - see `Weapon`'s own doc on why it is
+    // appended rather than absent.
     for entry in [hud::layouts::ARCADE, hud::layouts::ELIMINATION] {
         let layout = layout_of(&mut archives, entry);
         assert!(
@@ -682,6 +685,7 @@ fn every_weapon_has_an_icon_widget_named_after_it() {
         );
         let missing: Vec<String> = Weapon::ALL
             .into_iter()
+            .filter(|weapon| *weapon != Weapon::Disruptor)
             .map(hud::pickup_icon_name)
             .filter(|name| layout.sprite(name).is_none())
             .collect();
@@ -690,8 +694,8 @@ fn every_weapon_has_an_icon_widget_named_after_it() {
             "{entry} authors no widget for {missing:?}, so the name rule does not hold"
         );
         println!(
-            "{entry}: all {} weapon icons resolve by name",
-            Weapon::ALL.len()
+            "{entry}: all {} Pulse weapon icons resolve by name",
+            Weapon::ALL.len() - 1
         );
 
         // **The two premises the backdrop substitution rests on**, asserted

@@ -15,6 +15,7 @@
 
 pub mod collision;
 pub mod controls;
+pub mod disruption;
 pub mod handling;
 pub mod hash;
 pub mod input;

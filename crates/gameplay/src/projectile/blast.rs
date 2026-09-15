@@ -230,6 +230,23 @@ pub(super) fn apply_impacts(
             cannon::apply_impact(ships, weapons, impact, rules, absorbed);
             continue;
         }
+        // **A Disruptor has no blast to look up**, and `blast_stats` below
+        // would answer `None` for it anyway; it is named here so a Disruptor
+        // hit is a routed case rather than a fall-through. The effect lands
+        // on the struck craft alone, gated the way `Disruptor_ApplyEffect`
+        // gates it - see `crate::disruption::land`. Nothing else in range is
+        // touched, no damage is done and no slowdown is owed.
+        if impact.kind == Weapon::Disruptor {
+            if let (Some(struck), Some(kind), Some(stats)) = (
+                impact.struck,
+                impact.effect,
+                weapons.and_then(WeaponStats::disruptor),
+            ) && let Some(ship) = ships.get_mut(struck as usize)
+            {
+                crate::disruption::land(ship, kind, &stats);
+            }
+            continue;
+        }
         let Some(stats) = blast_stats(weapons, impact.kind) else {
             continue;
         };
