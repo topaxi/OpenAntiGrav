@@ -306,21 +306,38 @@ working description, not a verified cause.
 
 **Reading a real entry's declared bytes does not currently produce its real
 content**, checked directly and not yet explained. On `data03.psarc`, of 53
-sampled entries whose first block is compressed (not a full stored block),
-**zero** had a `0x78` zlib marker at the position `Directory::entry_range`
-computes from `entry.offset`, and zero had one at the position an
-alternative reading (summing block-table sizes from the start of the block
-region, ignoring `entry.offset`) predicts instead. A targeted check around
-one entry (`Ship_LOD3.vex`, declared offset 417,565,545, single 976-byte
-block) found 512 bytes of literal zero surrounding the declared offset - not
-a sparse-file hole (`stat` reports the file fully allocated, `st_blocks *
-512` matching its logical size) - and no zlib stream anywhere in a 10 MB
-window around it decompresses to 976 bytes with the `.vex` format's `VEXX`
-magic at the expected position. The block-table width itself is not the
-culprit: width 2 (already the narrowest, so already what `read_block_table`
-picks) sums to 2,589,286,451 bytes, close to `data03.psarc`'s actual
+sampled entries whose first block's table row is non-zero, **zero** had a
+`0x78` zlib marker at the position `Directory::entry_range` computes from
+`entry.offset`, and zero had one at the position an alternative reading
+(summing block-table sizes from the start of the block region, ignoring
+`entry.offset`) predicts instead. A targeted check around one entry
+(`Ship_LOD3.vex`, declared offset 417,565,545, single 976-byte block) found
+512 bytes of literal zero surrounding the declared offset - not a
+sparse-file hole (`stat` reports the file fully allocated, `st_blocks * 512`
+matching its logical size) - and no zlib stream anywhere in a 10 MB window
+around it decompresses to 976 bytes with the `.vex` format's `VEXX` magic at
+the expected position. The block-table width itself is not the culprit:
+width 2 (already the narrowest, so already what `read_block_table` picks)
+sums to 2,589,286,451 bytes, close to `data03.psarc`'s actual
 2,576,997,583 - width 4, the only other divisor of this table's length, sums
 to 114.7 GB, absurd for a 2.4 GiB file.
+
+**One thing this rules out: it is not a codec mismatch.** Classified every
+block belonging to a real entry, on `data00.psarc`, `data01.psarc` and
+`data03.psarc`: each block's table value is either exactly `0` (a full,
+padded `block_size` of stored bytes, the existing convention) or exactly
+equal to the entry's remaining byte count at that block (a *short* stored
+block - real, but never padded to `block_size`). On all three archives,
+**zero** blocks fall between those two cases - the signature a genuinely
+`deflate`-shrunk block would leave. The header's `compression: "zlib"` field
+reads the same four bytes as every PS3 archive, but on the entries checked
+here nothing is actually deflated: every real file on this family, at least
+on the three archives sampled, is stored raw. That means the "53 sampled
+entries whose first block is compressed" framing above is a description of
+the block-table row, not of the bytes - there was nothing to inflate in any
+of those 53 either, once reached at the right offset, they should be a raw
+byte copy with no decompression ambiguity at all. The open problem is purely
+locating the bytes, not a second, codec-shaped problem layered on top of it.
 
 One open, unverified lead: [`source-images.md`'s](../reverse-engineering/source-images.md#omega-ps4-eupkg--omega-ps4-eu-patchpkg---wipeout-omega-collection-ps4)
 own extraction command reads only `omega-ps4-eu.pkg` (the base package) and

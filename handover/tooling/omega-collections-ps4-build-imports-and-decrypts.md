@@ -127,6 +127,18 @@ measures ~40.8 GiB - whether the current extraction folded in
 established. See `docs/formats/psarc.md`'s "Block data location" section for
 the full measurements and exact repro commands.
 
+**Asked directly and checked before closing the session: is this still
+zlib?** No block belonging to a real entry, on `data00.psarc`, `data01.psarc`
+or `data03.psarc`, shows the signature a genuinely deflated block would -
+every block's table value is either exactly `0` (a full padded `block_size`
+of stored bytes) or exactly the entry's remaining byte count (a short,
+unpadded stored block). Zero blocks fall in between. The header's own
+`compression` field still reads `"zlib"`, unchanged from PS3, but nothing
+checked on this family is actually compressed - every real file sampled is
+stored raw. This rules out a codec mismatch as part of the block-data-location
+mystery: the open problem is purely about finding the right offset, not
+about a second, decompression-shaped problem on top of it.
+
 ## Open
 
 - **Block data location** (see above) - entries resolve to real paths now,
