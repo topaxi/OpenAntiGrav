@@ -50,3 +50,4 @@
 0x0129c120	function	RaceManager_ConstructArcadeHud	80	weapons.md
 0x012ac060	function	NitroRaceManager_ConstructTuning	73	weapons.md
 0x016e53a0	function	Billboard_ConstructResource	87	billboards.md
+0x01391130	function	TrackStartup_Load	85	billboards.md

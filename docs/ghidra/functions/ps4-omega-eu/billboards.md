@@ -1,12 +1,13 @@
-# Billboards: `Billboard_ConstructResource`, transferred by tag and magic number
+# Billboards: `Billboard_ConstructResource` and `TrackStartup_Load`, transferred by tag, magic number and element census
 
 2026-09-15. Functions in `eboot.bin` (WipEout: Omega Collection, PS4,
 `CUSA05670`, EU), `x86:LE:64:default`, image base `0x01000000`. Continues the
 `.cpp`-tag transfer technique [`README.md`](README.md) and
 [`weapons.md`](weapons.md) already used, applied here to
-`ps3-hdfury-eu/billboards.md`'s own `Billboard_ConstructResource`.
+`ps3-hdfury-eu/billboards.md`'s own `Billboard_ConstructResource` and
+`TrackStartup_Load`.
 
-**The name here is applied**, from [names.tsv](names.tsv).
+**The names here are applied**, from [names.tsv](names.tsv).
 
 ## `Billboard_ConstructResource` - `0x016e53a0`
 
@@ -59,13 +60,63 @@ same class - here doubly so, since the corroboration includes two
 arbitrary magic constants agreeing exactly, not just the tag and the general
 constructor idiom).
 
+## `TrackStartup_Load` - `0x01391130`
+
+**Confidence: 85**
+
+`Billboard_ConstructResource`'s only caller, decompiled in full. One
+function parses the whole `TrackStartup.xml`-shaped element tree by literal
+`strcasecmp` against element names - `TrackStartup`, `LevelFx`,
+`UnderwaterSound`, `WindSound`, `LoadSoundBank`, `Billboard` - the same
+element set `ps3-hdfury-eu/billboards.md`'s own `TrackStartup_Load`
+(`0x000b19a8`) names, in the same nesting, down to `Billboard`'s own
+attribute set (`Num`, `Location`, `Color`/`Colour`, `Glow`) and a `Filename`
+attribute under `LoadSoundBank`. Both constructor calls
+(`Billboard_ConstructResource(pauVar18, uVar5, iVar9, uVar16)`, one per
+branch) confirm this single function does what HD splits across
+`TrackStartup_Load` plus `Billboard_CreateFromLocation_q`/
+`_FromColour_q` - one more instance of this binary folding a sibling
+HD keeps separate into one body, the same shape `weapons.md`'s
+`WeaponExplosions`/`EMP` findings and this page's own
+`GetBillboardMeshIdFromName` finding above already show.
+
+**This also resolves `ps3-hdfury-eu/billboards.md`'s own long-open
+`mode_descriptor` question** - "whether the four `321Go_*.vex` names really
+are what `field_0x4c + 0xf0` resolves to." This binary's slot-7 special case
+is not an opaque pointer chase: it's a direct `strcasecmp`-free branch on
+`DAT_01f999e4` (the mode-selector global `weapons.md`'s
+`Rocket_Construct`/`ModeManager_ConstructByMode` findings already establish
+as "the current mode"), substituting the manifest's own
+`321Go_StartFinish.vex` with one of exactly the same names HD's own string
+census found sitting nearby in memory:
+
+```c
+if (mode == 0x15 || mode == 0xd)      strncpy(-> "321Go_HD_Zone_Battle.vex")
+else if (mode == 0xe)                 strncpy(-> "321go_hd_detonator.vex")
+else                                   strncpy(-> "321Go_Zone.vex")
+```
+
+gated on the manifest's own `321Go_StartFinish.vex` and a display-mode flag
+(`DAT_01f999e4 - 6U < 0x10 && ...`) rather than always firing - the same
+"substitute only in the right context" shape HD's own reading inferred from
+`mode_descriptor->field_0x90`. **HD's four-candidate lead is now a
+confirmed mechanism on a sibling binary**, even though this doesn't reach
+back and read HD's own `field_0x4c` struct - the two binaries could still
+implement the mode-to-name mapping through different intermediate data,
+just picking from the same small vocabulary of named `.vex` files.
+
+**A second, PS4-only substitution exists alongside it**: when a different
+global (`DAT_01e31910`, a race-manager-shaped pointer) is set and its
+`+0x21c` field reads `1`, `321Go_2048.vex` (not `321Go_StartFinish.vex`) is
+substituted with `321Go_2048_Combat.vex` - a fifth countdown-gantry variant,
+named for a 2048-specific "Combat" mode this project has not previously
+catalogued from this angle. Not chased further - which mode `+0x21c == 1`
+identifies is a `RaceManager` question, out of scope for this pass.
+
 ## Not chased this pass
 
-- `FUN_01391130`, this function's only caller - the probable
-  `TrackStartup.xml`-parsing/dispatch equivalent of HD's
-  `Billboard_CreateFromLocation_q`/`_FromColour_q` pair. `TrackStartup.xml`
-  exists verbatim on this binary too (`search_strings` confirms), but reading
-  the parser itself is a separate pass.
 - Whatever `ModeManager_ConstructByMode`'s own `Billboard.cpp`-tagged
   sub-object is - one more of its twelve per-mode branches, not
   distinguished from the others in this pass.
+- `+0x21c`'s meaning on the `DAT_01e31910`-shaped `RaceManager` object, and
+  which mode selects the `321Go_2048_Combat.vex` gantry.

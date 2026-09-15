@@ -359,6 +359,18 @@ at confidence 80; see the 2026-09-06 section below.
   result - see the dated section at the bottom of this page.**
   Live RPCS3 watchpoints, the way this thread's own history solved
   comparably stuck leads, are the likely next step.
+  **Corroborating context from `ps4-omega-eu`, 2026-09-15**: that binary's
+  own `TrackStartup_Load` implements the equivalent slot-7 substitution as a
+  direct branch on its own mode-selector global rather than an opaque
+  pointer chase, picking from exactly the same three of these four names
+  (`321Go_HD_Zone_Battle.vex`, `321go_hd_detonator.vex`, `321Go_Zone.vex` -
+  `321Go_StartFinish.vex` itself is the unsubstituted default, matching this
+  page's own slot-8-is-plain reading) - see
+  [`ps4-omega-eu/billboards.md`](../ps4-omega-eu/billboards.md#trackstartup_load---0x01391130).
+  This confirms the four names are the right vocabulary and the mechanism is
+  mode-keyed substitution, without itself resolving what `mode_descriptor`'s
+  `field_0x4c` points at on *this* binary - the two could still route
+  through different intermediate data to the same small set of files.
 - **`type`'s consumer**, if it has one - unread by this function despite being
   authored on every slot.
 

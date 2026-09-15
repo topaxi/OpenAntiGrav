@@ -85,10 +85,15 @@ unnamed rather than forced.
   tag technique: real on the PS3↔PS4 pair only one time out of two probes,
   and pure noise on the Vita↔PS4 pair even seeded from a confirmed match.
 
-- [billboards.md](billboards.md) - `Billboard_ConstructResource`, transferred
-  from and to `ps3-hdfury-eu` by `.cpp` tag plus an exact match on two
-  arbitrary resource-loader magic constants (`0xfdb2`, `0x3e9`) - strong
-  enough to also raise that binary's own confidence past the naming floor.
+- [billboards.md](billboards.md) - `Billboard_ConstructResource` and
+  `TrackStartup_Load`, transferred from and to `ps3-hdfury-eu` by `.cpp` tag,
+  an element-name census, and an exact match on two arbitrary resource-loader
+  magic constants (`0xfdb2`, `0x3e9`) - strong enough to also raise that
+  binary's own confidence past the naming floor. Along the way, resolves
+  `ps3-hdfury-eu/billboards.md`'s own long-open `mode_descriptor` question:
+  this binary's slot-7 gantry substitution is a direct branch on its own mode
+  global, picking from the same small vocabulary of `321Go_*.vex` names that
+  binary's own string census found but could not trace a mechanism for.
 
 Add a row to [`names.tsv`](names.tsv) and the page it cites in the same
 change: `scripts/apply-ghidra-names.py` refuses a row whose address and name
