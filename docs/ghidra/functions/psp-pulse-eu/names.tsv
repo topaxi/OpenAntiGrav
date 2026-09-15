@@ -496,3 +496,5 @@
 0x088652b8	function	Cannon_DrawRound	83	../psp-pulse-usa/cannon-quake-leachbeam.md
 0x08864b2c	function	Cannon_BuildBoltList	80	../psp-pulse-usa/cannon-quake-leachbeam.md
 0x08864c20	function	Cannon_BuildMuzzleFlashList	80	../psp-pulse-usa/cannon-quake-leachbeam.md
+0x088673f8	function	WeaponPickup_ArmMine	87	../psp-pulse-usa/mine.md
+0x08863714	function	BombPool_Update	80	../psp-pulse-usa/mine.md

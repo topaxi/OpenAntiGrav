@@ -26,6 +26,14 @@ because they are one weapon in two sizes. See
 | `0x08863a20` | `Weapon_FireBomb` | 88 |
 | `0x08871ddc` | `Weapon_AnnounceIncoming` | 88 |
 | `0x08867f1c` | `Mine_SpawnExplosion` | 90 |
+| `0x0886759c` | `WeaponPickup_ArmMine` | 92 (new 2026-09-15) |
+| `0x088638b8` | `BombPool_Update` | 85 (new 2026-09-15) |
+| `0x08863d7c` | `Bomb_UpdateTrigger` | 85 (new 2026-09-15) |
+| `0x088633d0` | `Bomb_AdvanceFuse` | 85 (new 2026-09-15) |
+| `0x08863440` | `Bomb_InArmingDelay` | 75 (new 2026-09-15) |
+| `0x088643d0` | `Bomb_ApplyBlast` | 85 (new 2026-09-15) |
+| `0x088640c8` | `Bomb_Detonate` | 88 (new 2026-09-15) |
+| `0x08872078` | `BombBlast_Construct` | 90 (new 2026-09-15) |
 
 **The addresses on this page are real, not image-relative.** Ghidra renders this
 program's `jal` targets and `lui`/`addiu` operands in the `0x0886xxxx` region as
@@ -365,7 +373,9 @@ if (subsystem->live < 0x40 && (craft->reload -= dt) <= 0.0f) {
 
 **One mine per `0.1 s` until a per-craft counter runs out**, after which the
 handler clears its own bit - which is why `Weapons_DispatchFire` re-reads
-`craft+0x1b8` after every handler. The pool cap here is `0x40`, not the `0x2e`
+`craft+0x1b8` after every handler. **The counter starts at 5** - measured on
+the running original on 2026-09-15, and read off the arm function the same
+day; see [the cluster is five](#2026-09-15-the-cluster-is-five-measured-live-and-the-counters-writer-found). The pool cap here is `0x40`, not the `0x2e`
 the Rocket and Missile test against; it is a different subsystem with a
 different pool.
 
@@ -474,22 +484,34 @@ second page would be nine tenths this one.
 
 ## What is still ours, and one clean negative result
 
-- **How many mines a drop releases.** `craft+0x1ac` is decremented by the
+- ~~**How many mines a drop releases.** `craft+0x1ac` is decremented by the
   handler and **written by nothing else in the binary** - a `search_instructions`
   sweep for every `sw` to a `+0x1ac` offset returns exactly one store on a craft
   base, the decrement itself. The shipped `<Stats>` authors no count for the
   Mine either. This is the same negative result
   [weapon-fire.md](weapon-fire.md#what-is-not-verified) recorded and it survives
   a second search. The engine picks a number and says so; see
-  `crates/gameplay/src/projectile/mine.rs`.
+  `crates/gameplay/src/projectile/mine.rs`.~~ **Measured 2026-09-15: five**,
+  and the writer both sweeps missed is `WeaponPickup_ArmMine` (`0x0886759c`) -
+  see [below](#2026-09-15-the-cluster-is-five-measured-live-and-the-counters-writer-found).
+  The negative result was wrong, not merely incomplete: a third
+  `search_instructions` sweep (`sw`, operand `0x1ac(`) on the relocated
+  2026-09-07 database lists `0x088675c0` in `FUN_0886759c` alongside the
+  decrement, so the earlier sweeps were run against a database in which that
+  function was not yet defined, or read only the rows whose base register was
+  already known to be a craft.
 - ~~**What a mine does when a craft reaches it.**~~ **Recovered 2026-08-26** -
   see [`Mine_SpawnExplosion` plays `WO_MINE_EXPLO`](#mine_spawnexplosion-plays-wo_mine_explo)
   above: `blastradius`'s consumer is `Weapon_PostBlastImpulse_q`, and the
   visual both `trigger_radius` and the fuse timing out reach is
   `Mine_SpawnExplosion`.
-- **The Bomb's own explosion call.** Whether `Weapon_FireBomb`'s teardown
+- ~~**The Bomb's own explosion call.** Whether `Weapon_FireBomb`'s teardown
   reaches `Mine_SpawnExplosion` too (the same `WO_MINE_EXPLO`, larger) or its
-  own equivalent is unchased - see the note at the end of the section above.
+  own equivalent is unchased - see the note at the end of the section above.~~
+  **Read 2026-09-15**: its own - `Bomb_Detonate` builds a `BombBlast` of
+  `explosion_hemisphere.vex`, `WO_BOMB_SMOKERING` and `Bomb_Shockwave.vex`
+  and plays `BOMBEXPL` or `BOMBEXPL_PC`. See
+  [the Bomb's teardown](#2026-09-15-the-bombs-teardown-read---its-own-blast-not-the-mines).
 - **The `+10.0` fuse branch**, above.
 - ~~**`slowdown_time`**, which shares the unspent `<Global slowdown_limit>`
   mechanic's fate on every other weapon.~~ **Recovered 2026-09-06**: the
@@ -621,3 +643,245 @@ function boundaries from scratch; see `CLAUDE.md`'s note on this), not that
 either reading here was wrong. Left as a caveat rather than a correction:
 nobody has a confident replacement address, and there is nothing here that
 contradicts the confidence-90/92 rows above.
+
+## 2026-09-15: the cluster is five, measured live, and the counter's writer found
+
+**`CLUSTER = 5` was invented and turns out to be right.** Measured on the
+running original (PPSSPP v1.20.4, `pulse-psp-usa.chd`, a VENOM Single Race
+on Talon's Junction, weapons on, audio off) with `scripts/psp-count-mines.py`,
+which breaks on `Weapon_DropMines` (`0x088675cc`) every frame a cluster is
+coming out and reads the firing record's `+0x1ac` at each hit. Nothing was
+written to game memory: the clusters counted are the ones the AI collected
+and fired through the game's own grant path, which is the only way the count
+can be trusted - setting bit `0x2` by hand (`psp-fire-weapon.py burst`) skips
+the arm below and counts down from whatever the word held.
+
+**Three clusters, three different craft, the same trail every time**
+(`frame` is the PSP cycle counter over `222e6/59.94`; `rounds` is `+0x1ac`
+read at handler entry, before its own decrement; `pool` is the subsystem's
+`+0x164`):
+
+```text
+frame     craft  rounds  reload  pool        frame     craft  rounds  reload  pool
+10284.3   3      5       0.0000  0           15180.2   5      5       0.0000  0
+10285.2   3      4       0.1000  1           15181.2   5      4       0.1000  1
+10291.2   3      3       0.1000  2           15187.2   5      3       0.1000  2
+10298.3   3      2       0.1000  3           15193.2   5      2       0.1000  3
+10304.3   3      1       0.1000  4           15199.2   5      1       0.1000  4
+```
+
+(craft 0's cluster at frames 13175-13199 is identical to craft 5's.) The
+counter reads **5** on the first hit of every cluster, counts down by one per
+drop, and the fire word reads `0x2` throughout and is gone the frame after the
+fifth mine. The write watch on every record's `+0x1ac` counted exactly **6**
+hits per cluster - one arm plus five decrements - beside a control on the
+player's rigid body counting 1,642 in the first 40-second run, so a silent
+record was a record that did not fire rather than a dead instrument. (The
+six-minute second run's control read **0** on the same body address: by then
+the HUD was gone and the camera was on the post-race fly-by, so the parked
+player craft was no longer being integrated - and record 0 fired one of the
+three clusters in that state, so the player's slot is AI-driven once the race
+is over for it. The two target records that fired counted their six hits each
+regardless, which is what a positive control exists to certify.)
+
+**The spacing is `0.1 s` at runtime too**: drops at 6-frame intervals in two
+clusters (15180, 15186, 15192, 15198, 15204) and 7-7-6-6 in the first, where
+the reload read `0.0002` on one frame - the handler's `reload -= dt` missing
+zero by one frame of `dt` jitter and dropping a frame later. `DROP_INTERVAL`
+stays `0.1`, now measured rather than only read. **The first mine leaves on
+the press frame** (`reload 0.0000` at the first hit, `pool` `0` to `1` in the
+same frame) - see the arm function for why.
+
+### `WeaponPickup_ArmMine` (`0x0886759c`, EU `0x088673f8`) writes the five
+
+PPSSPP's own watch log names the writer of the arming store, and it is the
+function immediately before `Weapon_DropMines`:
+
+```text
+CHK Write32(CPU) at 09ba165c, PC=088675c0 (z_un_0886759c)   ; the arm, once
+CHK Write32(CPU) at 09ba165c, PC=08867648 (z_un_088675cc)   ; the decrement, five times
+```
+
+Disassembled on both pressings, byte-identical (`sw a0,0x1ac(a1)` is the
+store the watch caught; `a1` is the craft's weapon record):
+
+```text
+0886759c: li    a0,0x8              ; weapon id 8, the Mine
+088675a0: lw    a2,0x1b8(a1)
+088675a4: mtc1  zero,f12
+088675a8: sw    a0,0x1bc(a1)        ; held weapon
+088675ac: sw    a0,0x1c0(a1)        ; the second copy the grant's no-repeat rule reads
+088675b0: li    a0,-0x2
+088675b4: and   a0,a2,a0
+088675b8: sw    a0,0x1b8(a1)        ; fire word &= ~0x1 - bit 0x1, which no weapon in the
+                                    ;   jump table above owns; what it flags is unread
+088675bc: li    a0,0x5
+088675c0: sw    a0,0x1ac(a1)        ; rounds = 5        <- the cluster
+088675c4: jr    ra
+088675c8: _swc1 f12,0x1b0(a1)       ; reload = 0.0      <- the first drops on the press frame
+```
+
+It is the Mine's entry in the arm-function family [missile.md](missile.md)
+already names two members of (`WeaponPickup_ArmRocket` writes id `0`,
+`WeaponPickup_ArmMissile` writes id `1`, both two instructions), and Ghidra's
+own xrefs put both its callers inside `WeaponPickup_Grant` (`0x08861d20`):
+the AI branch (`0x08862074`) and the human branch (`0x0886268c`), each
+reached when the `<Pickupodds>` roll lands in the Mine's weight (base
+`0x238`) - so **the count is armed when the pickup is granted, not when fire
+is pressed.** `Weapon_RequestFire`'s id-8 case only `ori`s bit `0x2` into the
+fire word. Confidence **92**: a live write caught at this PC on three
+independent clusters, a direct disassembly on both pressings, and the
+callers resolved by xref rather than by hand. EU at 87 by
+[exact-hash-transfer.md](../psp-pulse-eu/exact-hash-transfer.md)'s `-5`.
+
+**What this settles beyond the number:**
+
+- **A re-press mid-cluster is a no-op in the original**, and that is now
+  recovered rather than chosen. The only writer of `+0x1ac` outside the
+  handler's decrement is on the grant path, and `Weapon_RequestFire` cannot
+  reach it, so a second press while bit `0x2` is already set changes nothing
+  - which is what `oag_gameplay::pickup::Held::begin_drop`'s guard does.
+- **The reload timer's initial value** - listed as unread on
+  [weapon-fire.md](weapon-fire.md#what-is-not-verified) - is `0.0`, written
+  by the arm's delay slot, so the first mine leaves on the frame fire is
+  pressed and the `0.1 s` gaps are between the first and the second onward.
+  The live trail shows exactly that.
+- **The Bomb has no arm function and no count.** `WeaponPickup_Grant` writes
+  `9` straight into `+0x22c`/`+0x230` (`record+0x1bc`/`+0x1c0`) inline for
+  the Bomb's weight (base `0x178`) and calls nothing, which is the grant-side
+  half of "a press lays one" - `Weapon_FireBomb` never reads `+0x1ac`.
+- **`+0x1c0` is the no-repeat memory.** The grant's human branch compares its
+  last-held copy (`iVar7+0x230`) against each candidate id and loops until it
+  draws something else; the arm writes both copies.
+
+**A trap for whoever reads the grant next.** `WeaponPickup_Grant` receives
+`(world, craft_index)` and computes the record as `world + index*0x1f0 + 0x70`
+- the same inline array `Weapons_DispatchFire` walks and
+`scripts/psp-fire-weapon.py` documents. Its `+0x22c`/`+0x230`/`+0x23c`/`+0x240`
+offsets are therefore `record+0x1bc`/`+0x1c0`/`+0x1cc`/`+0x1d0`, not new
+fields: `craft+0x23c` ("human") on [missile.md](missile.md) is
+`record+0x1cc`.
+
+## 2026-09-15: the Bomb's teardown read - its own blast, not the Mine's
+
+The stretch item on the same session as the cluster measurement, read-only.
+The Bomb-pool walker the earlier sections predicted "structurally like
+`FUN_08867370`, cursor `+0xc4`/cap 32" exists, is exactly that shape, and sits
+on either side of `Weapon_FireBomb` (`0x08863a20`) in the same function group.
+Found by `search_instructions(lw, "0xc4(")` scoped to the group rather than by
+xref: like `FUN_08867370`, none of these resolve a caller under either address
+rendering. Every address below is real; the EU twin is given only where the
+normalized opcode hash matched exactly (`BombPool_Update` did; the others
+differ only in their `.rodata`/global immediates, same size and instruction
+count, and are **not** transferred under the exact-hash rule).
+
+**`BombPool_Update` (`0x088638b8`, EU `0x08863714`, 85).** Two passes over the
+`+0x44` pointer array up to `+0xc4`: first `Bomb_UpdateTrigger(subsystem, i)`
+per slot, then per slot `Bomb_AdvanceFuse(dt, bomb)`, raising destroy bit `4`
+on the entity's `+0x3c` when it returns false, and for every slot with that bit
+set `Bomb_Detonate(subsystem, bomb, 1, bomb->victim /* +0x74 */)`, clear bit
+`8`, `+0x48 = 0xff`, then the same swap-with-last compaction of `+0xc4` the Mine
+pool uses on `+0x164`. Same template, different pool - which is why nothing
+about one transferred to the other.
+
+**`Bomb_AdvanceFuse` (`0x088633d0`, 85)** is five instructions:
+`bomb->age (+0xc0) += dt; return age < stats->0xe4`. **`+0xe4` is `<Bomb
+timetodie>`** - `WeaponStats_ParseBomb` (`0x0880cef0`) decompiles cleanly on
+the relocated database now, and its eight stores are:
+
+| Offset | Attribute |
+| --- | --- |
+| `+0xc8` | `damage` |
+| `+0xcc` | `damageradius` |
+| `+0xd0` | `blastradius` |
+| `+0xd4` | `blastforce` |
+| `+0xd8` | `absorb` |
+| `+0xdc` | `slowdown_time` |
+| `+0xe0` | `trigger_radius` |
+| `+0xe4` | `timetodie` |
+
+So the Bomb's fuse **is** its own `timetodie`, which `oag_gameplay::projectile::
+mine::Drop::bomb` took by analogy and can now take as recovered - and the
+reason `Weapon_FireBomb` writes nothing to `+0x48` is that the Bomb counts
+**up** from zero at `+0xc0` where the Mine counts **down** at `+0x48`. The
+block sits at `+0xc8..+0xe4`, immediately before the Mine's `+0xe8`, exactly
+where the pool-order arithmetic above put it. Note the order is *not* the
+Mine's: `damageradius` is second and `timetodie` last.
+
+**`Bomb_UpdateTrigger` (`0x08863d7c`, 85)** reads `stats->0xe0`
+(`trigger_radius`) once, then for every craft `i` in the field: skip the
+**owner** (`bomb->+0x48 == i`) while `Bomb_InArmingDelay(bomb)`
+(`0x08863440`, 75: `age < 0.5`, the literal at `0x08ab1054`) - so **the layer
+is exempt from its own bomb for half a second and no longer**, which this
+engine's "never tripped by the craft that laid it" does not match; if the bomb
+is armed (`+0x3c` bit `8`), take `craft->+0x90 - bomb_position`, reject
+outside a `±trigger_radius` box on each axis, then `|d| < trigger_radius`
+sets destroy bit `4` and calls `Bomb_ApplyBlast(subsystem, slot, i)`.
+**After the craft loop it also detonates on the Quake**: it locates the bomb
+on the track (`AiTrack_UpdateCursor(100.0, ...)`) and if
+`Quake_SpanIntensityAt_q` at that point exceeds `0.1` it raises the destroy bit
+with no victim - a passing quake wave sets off every bomb it rolls under.
+
+**`Bomb_ApplyBlast` (`0x088643d0`, 85)** is `Weapon_PostBlastImpulse_q`'s
+shape written out inline against the Bomb's own block: the tripping craft
+takes `+0x120 += stats->0xc8` (`damage`, flat) and `+0x130 += stats->0xdc`
+(`slowdown_time`), records the owner in `+0x13c` and **weapon kind `6` in
+`+0x138`** - the `Ship_Damage` `weapon_kind` sub-bucket pickups.md lists as
+unmapped now has one case named - and then **every** craft within
+`stats->0xd0` (`blastradius`) gets `normalize(d) * (1 - |d|/blastradius) *
+blastforce (+0xd4)` added to its pending impulse at `entity+0x110`, the
+tripping craft included. If the owner is `DAT_08b36c08` the victim's `+0x124`
+byte is set to `1` (a "hit by that craft" flag, unread further). **No read
+of `+0xcc` (`damageradius`) anywhere in this chain**, and a `lwc1`/`lw`
+sweep for a `0xcc(` operand finds none in the group either - it stays the
+one authored Bomb attribute with no consumer.
+
+**`Bomb_Detonate` (`0x088640c8`, 88)** is the teardown, `(subsystem, bomb,
+play_visual, victim)`. With `play_visual` set it builds an orthonormal basis
+from the bomb's `+0x60` direction against the world up at `0x08a907c0` and
+the bomb's position (`FUN_088633c0`), allocates a `0x110`-byte object and
+calls **`BombBlast_Construct(obj, &basis, bomb)`**. Then, on the bomb's own
+sound emitter `+0x4c` (the same per-projectile held-emitter shape `MINERADAR`
+uses): stop it (`FUN_089393b8`), set its `+0x38` to `600.0`, play
+**`BOMBEXPL_PC`** (`0x08a7c7a0`) plus a dry `EAR_SWTNR` (`0x08a7c7b0`) at
+`0x400` when `victim == DAT_08b36c08 && DAT_08b36c08 != 0` and the session
+is local (`DAT_08b31048 < 0xd`) or `DAT_08ab07e3` is set, otherwise
+**`BOMBEXPL`** (`0x08a7c790`); release the emitter, clear `+0x4c`, clear bit
+`4` of the bomb's `+0x2c`, zero `+0x74`. `DAT_08b36c08` is compared against
+craft indices in both functions and reads as **the player's craft index**
+(hypothesis, 65 - it is not read here beyond those two uses), which would make
+`BOMBEXPL_PC` the "player craft" variant heard when the player is the one hit,
+with an ear-sweetener layered on. A bomb that times out has `+0x74 == 0`, so
+it takes the `BOMBEXPL` branch whenever the player's index is non-zero.
+
+**`BombBlast_Construct` (`0x08872078`, 90)** is the Bomb's answer to
+`PlasmaBlast_Construct` (`0x0885fd90`) and settles the two candidates the
+section above left open - it is **neither** `WO_MINE_EXPLO` rescaled **nor**
+`WO_BOMB_SMOKERING` alone, it is three things at once:
+
+1. `Vex_LoadModel(..., "Data\Weapons\explosion_hemisphere.vex", 2048.0,
+   0xfdb2, 0x3e9, 0)` at the basis (`+0xd4`, string at `0x08a7cba0`);
+2. `Psys_Spawn_q(..., "WO_BOMB_SMOKERING", 'BOSM' /* 0x4d534f42 */, &basis,
+   0, 0)` at the same basis (string at `0x08a7cbc8`);
+3. `Vex_LoadModel(..., "Data\Weapons\Bomb_Shockwave.vex", ...)` (`+0xd8`,
+   string at `0x08a7cbdc`) at a **second** copy of the basis whose position
+   is pulled back by `1.0` (`DAT_08ab1070`) along the basis's second row -
+   the shockwave sits one unit below the hemisphere.
+
+Its ramp constants, unread as to meaning: `+0xdc 2.0`, `+0xe0 4.0`, `+0xe4
+0.1`, `+0xe8 0`, `+0xec 12.0`, `+0xf0 0.075`, `+0xf4 1.0`, `+0xf8 0`,
+`+0xfc = DAT_08ab1074 (0.1)`; vtable `0x08acafd8`. The per-tick animator that
+spends them is the next thing to read before drawing any of this. **The
+`Bomb_Shockwave.vex` string the handover thread found at `0x08a7c190` next to
+the plasma models is a second copy**; the one this constructor loads is at
+`0x08a7cbdc`, in the Bomb blast's own `.rodata` group with the alloc tag
+`"file"` at `0x08a7cb98`.
+
+**What this changes for the engine, none of it done here:** the Bomb's fuse
+label moves from "by analogy" to recovered; its layer-exemption is `0.5 s`,
+not forever; its blast is `damage` + `slowdown_time` on the tripping craft
+and a linear-falloff impulse on everyone inside `blastradius`; its detonation
+draws a hemisphere model, a smoke-ring `.pob` and a shockwave model, and plays
+`BOMBEXPL`; and a Quake wave detonates it. `MINE_EXPLO_EFFECT` reused for the
+Bomb would be a stand-in, and so would be `WO_BOMB_SMOKERING` on its own.
+

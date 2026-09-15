@@ -431,15 +431,22 @@ which is the whole point of the weapon.
   charges. That needs a per-instance scale on a *riding* flare, which
   `advance_one_flare` does not currently carry - `Stage::rescale` exists (the
   Quake uses it) but the flare path never calls it.
-- **`Data\Weapons\Bomb_Shockwave.vex` is a located string with no read call
+- ~~**`Data\Weapons\Bomb_Shockwave.vex` is a located string with no read call
   site.** It sits immediately before the plasma blast's own models in the same
   `.rodata` run (`0x08a7c190`), found while reading `PlasmaBlast_Construct`. A
   neighbour reading and nothing more - but it is the first concrete thing
-  anyone opening the Bomb's unread teardown has to go on.
-- **How many mines a press lays is invented.** `oag_gameplay::projectile::mine::CLUSTER`
+  anyone opening the Bomb's unread teardown has to go on.~~ **Read 2026-09-15**:
+  `BombBlast_Construct` (`0x08872078`) loads a second copy of that string
+  (`0x08a7cbdc`) alongside `explosion_hemisphere.vex` and `WO_BOMB_SMOKERING`
+  - see [mine.md](../../docs/ghidra/functions/psp-pulse-usa/mine.md#2026-09-15-the-bombs-teardown-read---its-own-blast-not-the-mines).
+- ~~**How many mines a press lays is invented.** `oag_gameplay::projectile::mine::CLUSTER`
   is `5`. Two independent sweeps for what writes the original's counter at
   `craft+0x1ac` found only the handler's own decrement, and no `<Stats>`
-  attribute counts mines. It is simulation state, so changing it is a hash move.
+  attribute counts mines. It is simulation state, so changing it is a hash move.~~
+  **Measured 2026-09-15: five, on the running original, and the writer found**
+  (`WeaponPickup_ArmMine`, `0x0886759c`) - see the section at the bottom of
+  this file and [mine.md](../../docs/ghidra/functions/psp-pulse-usa/mine.md#2026-09-15-the-cluster-is-five-measured-live-and-the-counters-writer-found).
+  The hash did not move.
 - **That a mine does not move once laid** is the conservative reading, not a
   read. `Mine_Init` copies the firing craft's velocity into the entity at
   `+0xa0` and nothing found integrates it.
@@ -913,7 +920,7 @@ only alongside the Rocket's own.
   "this is an explosion" tag rather than the Missile's own label -
   `Missile_SpawnExplosion` uses the identical tag for `WO_MISSILE_EXPLO`.
   `blast_for(Mine, ...)` now returns `MINE_EXPLO_EFFECT`.
-- **The Bomb is still open, and now the odd one out.** Every other rear/guided
+- ~~**The Bomb is still open, and now the odd one out.** Every other rear/guided
   weapon that fires has a recovered detonation effect; the Bomb's own teardown
   is a distinct function from the Mine's (separate pool cursor, `+0xc4`/cap 32
   against `+0x164`/`+0x64`) and has not been read. `mine.md`'s new section
@@ -921,7 +928,21 @@ only alongside the Rocket's own.
   would match "the bomb should be static, like the mines, just a single big
   mine" extended to the visual) or its own `WO_BOMB_SMOKERING`. `FUN_08867370`
   is the template to read next: find the Bomb-pool equivalent (likely nearby,
-  structurally similar) and see what it calls at teardown.
+  structurally similar) and see what it calls at teardown.~~ **Read 2026-09-15,
+  not built.** `BombPool_Update` (`0x088638b8`) is that equivalent, and the
+  teardown `Bomb_Detonate` (`0x088640c8`) is **neither** candidate: it builds
+  `BombBlast_Construct`'s three-part blast (`explosion_hemisphere.vex`,
+  `WO_BOMB_SMOKERING` at fourcc `BOSM`, `Bomb_Shockwave.vex` one unit below)
+  and plays `BOMBEXPL`, or `BOMBEXPL_PC` with an `EAR_SWTNR` layer when the
+  victim is the player. Also read: the fuse is `<Bomb timetodie>` counted up
+  at `+0xc0` (so `Drop::bomb`'s "by analogy" is now recovered), the layer's
+  exemption is `0.5 s` not forever, the blast is `damage` + `slowdown_time`
+  on the tripper and a linear-falloff impulse on everyone in `blastradius`
+  (`Bomb_ApplyBlast`, weapon kind `6`), `damageradius` still has no reader,
+  and **a Quake wave detonates a bomb**. Building it means a `BombBlast`
+  stage of two `.vex` models plus one `.pob` with an unread animator - the
+  ramp constants are on the page; read the vtable at `0x08acafd8` first.
+  Reusing `MINE_EXPLO_EFFECT` for the Bomb would be a stand-in.
 - ~~**The Missile's flare rides one instance where the original rides
   two.**~~ **Wrong framing, corrected and implemented the same session.**
   "Needs a located missile model" was never true: the two anchors are not
@@ -958,13 +979,17 @@ only alongside the Rocket's own.
   whichever craft sat behind a driver with a Mine, eating cluster after cluster
   on a line it could not see. Mines still land; one craft is no longer singled
   out for a punishment it had no way to avoid.
-- **The Cannon is the odd one left and is worth a session on its own.** Its fire
+- ~~**The Cannon is the odd one left and is worth a session on its own.** Its fire
   bit `0x2000` is set by `Weapon_RequestFire` and dispatched by **nothing** in
   `Weapons_DispatchFire`. Bit `0x4000` on `world+0x58` (`0x088537ac`) is the
   obvious candidate for where it actually fires and was not chased. It is also
   the only weapon authoring `rounds` and `rate`, which is what made the Mine's
-  handler look like it for months.
-- Measure `CLUSTER` against the running original and retire the invented number.
+  handler look like it for months.~~ **Done 2026-09-07 and 2026-09-09** (the
+  2026-09-07 sections above; `Cannon_BaseSpeedKmh` is a flat `500.0`, not a
+  per-class table - re-verified by disassembly 2026-09-15, three
+  instructions, `lui a0,0x43fa`). Stale row struck so nobody re-derives it.
+- ~~Measure `CLUSTER` against the running original and retire the invented number.~~
+  **Done 2026-09-15** - it is five; see below.
 - **Re-read the five undefined `<Stats>` parsers** once the Ghidra bridge can
   read `.text` again - see Open.
 
@@ -1166,3 +1191,40 @@ weapon-during-countdown path still needs a gate, or whether removing the
 early Turbo grant was the whole gap. Not attempted this session - the mine
 drop-rate pass this thread's own body covers is a separate concern from the
 gate question.
+
+## 2026-09-15: the Mine's cluster measured live - five - and the counter's writer found
+
+The one invented number on the Mine is retired without moving the hash: it
+was already right. Measured on PPSSPP (`pulse-psp-usa.chd`, VENOM Single Race,
+weapons on, audio off) with the new `scripts/psp-count-mines.py`, which breaks
+on `Weapon_DropMines` every frame a cluster is out and reads the firing
+record's `+0x1ac`, alongside a non-halting write watch on every record's
+`+0x1ac` so PPSSPP's own stdout names the writer. Three clusters from three
+different AI craft: `rounds` read **5** at the first hit of every one and
+counted down to the frame the fire bit cleared; drops six frames apart (seven
+once, on a `0.0002` reload residual). Nothing was written to game memory -
+the raw-bit `psp-fire-weapon.py burst` path would have skipped the arm and
+counted down from garbage, which is the trap the measurement had to avoid.
+
+**The writer is `WeaponPickup_ArmMine` (`0x0886759c`, EU `0x088673f8`,
+confidence 92/87)**, the function immediately before `Weapon_DropMines`, both
+callers inside `WeaponPickup_Grant`: `li a0,0x5; sw a0,0x1ac(a1)` plus held
+id `8` into `+0x1bc`/`+0x1c0`, fire word `&= ~0x1`, reload `0.0`. So the
+count is armed **at pickup**, not at press; the first mine leaves on the press
+frame (closes weapon-fire.md's "initial value of `+0x1b0`" item); and a
+re-press mid-cluster is a no-op in the original, which turns
+`Held::begin_drop`'s guard from chosen into recovered. The Bomb has no arm
+function at all - the grant writes `9` inline and calls nothing - which is the
+grant-side half of "a Bomb press lays one". The two earlier static sweeps that
+reported "nothing else writes `+0x1ac`" were wrong, not incomplete: the store
+is a plain `sw a0,0x1ac(a1)` and a third sweep on the relocated database lists
+it. The runtime watch is what made the difference; PPSSPP's `CHK Write32 ...
+PC=` log line is the whole method.
+
+**The stretch item landed as a read, not a build**: the Bomb's pool walker,
+trigger, fuse, blast and teardown are named on mine.md (seven functions,
+`BombPool_Update` through `BombBlast_Construct`) and the Next Steps row above
+is struck with the summary. Nothing in the engine's Bomb changed this pass;
+what a build needs is written there. `MINERADAR`'s held per-projectile voice
+is unchanged.
+

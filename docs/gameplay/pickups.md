@@ -53,13 +53,14 @@ This subsystem is unusually mixed, so the split comes before anything else.
 | **A Mine press lays a cluster, one every `0.1 s`**, and the craft holds the pickup until the last is out | **recovered** | 90 |
 | The cluster leaves from `craft+0xa0`, the **rear** anchor - the Bomb's too, and nothing else's | **recovered** | 90 |
 | A mine's countdown is the authored `timetodie`, taken straight into the entity by `Mine_Init` | **recovered** | 92 |
-| **How many mines a press lays** | **ours** | - |
+| **How many mines a press lays: five**, armed at grant time by `WeaponPickup_ArmMine` and measured live on three clusters | **recovered** (2026-09-15) | 92 |
 | **That a mine does not move once laid**, and that `trigger_radius` is what sets it off | **ours** | - |
 | **That a mine cannot be tripped by the craft that laid it**, at any range | **ours** | - |
 | `<Bomb>`: the Mine's six, every one of them larger on both shipped tables | **recovered** | 92 |
 | **A Bomb press lays exactly one**, where a Mine press lays a cluster | **recovered** | 88 |
 | **That a bomb is static**, like a mine - its spawn direction is recovered and any speed is not | **ours** | - |
-| **That a bomb's fuse is its own `timetodie`**, by analogy with `Mine_Init` | **ours** | - |
+| **A bomb's fuse is its own `timetodie`** - `Bomb_AdvanceFuse` counts age up against `<Bomb>+0xe4`, which `WeaponStats_ParseBomb` fills from `timetodie` | **recovered** (2026-09-15) | 85 |
+| **A bomb's layer is exempt from tripping it for `0.5 s` only**, then it is a target like anyone; the blast is `damage` and `slowdown_time` on the tripper plus a linear-falloff impulse on everyone inside `blastradius`; a Quake wave detonates it; the detonation is `explosion_hemisphere.vex` + `WO_BOMB_SMOKERING` + `Bomb_Shockwave.vex` with `BOMBEXPL` | **recovered, not built** | 85 |
 | **The blast's impulse falls off linearly** over `blastradius`; the damage does not | **recovered** | 82 |
 | `<Plasma>`: the Rocket's block less `spread`, at measured offsets `+0x9c`..`+0xc4` | **recovered** | 92 |
 | **A Plasma press puts exactly one in the air**, where a Rocket puts three | **recovered** | 88 |
@@ -828,14 +829,16 @@ the original does: the stamp is unconditional and the grant is not.
   functions and the health/shield consumer are still unread. The Repulser
   remains the one weapon needing a genuine craft-state field, and is
   deferred as Eliminator-only regardless.
-- **The Cannon's per-class base speed, `func_0x00060af4` (`0x08864af4`).**
+- ~~**The Cannon's per-class base speed, `func_0x00060af4` (`0x08864af4`).**
   `Cannon_Init` adds it to the firing craft's own current speed and the
   Cannon's `<Stats>` authors no speed at all for it to be read off the disc
   instead, so this build invents a value - see `oag_gameplay::
   projectile::cannon::BASE_SPEED_KMH`'s own doc comment, chosen and given no
-  confidence score. This is the one place `cannon-quake-leachbeam.md` itself
-  is not sufficient to build the Cannon from without a further Ghidra
-  session, and its own "Not chased" line says so.
+  confidence score.~~ **Read 2026-09-09 and re-verified 2026-09-15**: it is
+  `Cannon_BaseSpeedKmh`, three instructions returning a flat `500.0` km/h
+  that never reads its class argument, so there is no per-class table to
+  recover - `BASE_SPEED_KMH` is `500.0` at confidence 90. See
+  [cannon-quake-leachbeam.md](../ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md#func_0x00060af4-decompiled-it-is-not-per-class-it-is-a-flat-5000).
 - **What a Cannon round's collision does beyond direct damage.** No
   `Cannon_HitCraft`-style function was located, so this build gives it the
   same floor-following flight and wall/craft detonation every other unread

@@ -43,14 +43,14 @@
 //!   identified the weapon.
 //! - **`trigger_radius` being a distinct, smaller distance than
 //!   `blastradius`** - authored, and true in both shipped tables.
+//! - **[`CLUSTER`], how many a press lays: five.** Measured on the running
+//!   original on 2026-09-15 (three clusters, three craft, the counter at
+//!   `craft+0x1ac` reading `5` at the first `Weapon_DropMines` hit every
+//!   time) and read off `WeaponPickup_ArmMine` (`0x0886759c`), the grant-path
+//!   arm two static sweeps had missed. Confidence 92.
 //!
 //! **Ours.**
 //!
-//! - **[`CLUSTER`], how many a press lays.** Genuinely unfound: nothing writes
-//!   `craft+0x1ac` anywhere in the executable outside the handler's own
-//!   decrement, and no `<Stats>` attribute counts mines. Asked of a maintainer
-//!   who plays the game and they did not want to guess either, so it is flagged
-//!   here and in `handover/` rather than dressed up.
 //! - **That a mine does not move.** See [`at_rest`].
 //! - **That coming inside `trigger_radius` sets it off.** The attribute is the
 //!   disc's and its name is not ambiguous, but the code path that spends it was
@@ -73,10 +73,12 @@ use oag_tables::weapons::{BombStats, MineStats, Weapon};
 pub struct Drop {
     /// How many charges the press lays.
     ///
-    /// [`CLUSTER`] for the Mine and **one** for the Bomb. The Bomb's one is
-    /// recovered - `Weapon_FireBomb` (`0x08863a20`) makes a single spawn call
-    /// with no reload timer anywhere in it - which is worth contrasting with the
-    /// Mine's, where the count is the invented number on this whole weapon.
+    /// [`CLUSTER`] for the Mine and **one** for the Bomb. Both are recovered:
+    /// the Mine's five is armed by `WeaponPickup_ArmMine` and was measured
+    /// live, and the Bomb's one has no counter at all - `WeaponPickup_Grant`
+    /// writes its id inline with no arm call, and `Weapon_FireBomb`
+    /// (`0x08863a20`) makes a single spawn call with no reload timer anywhere
+    /// in it.
     pub count: u8,
     /// Seconds before a laid charge goes off on its own.
     pub fuse: f32,
@@ -129,9 +131,11 @@ impl Drop {
 
 /// How long between one mine leaving and the next, in seconds.
 ///
-/// **Recovered, confidence 90, and it is a code literal rather than an authored
+/// **Recovered, confidence 92, and it is a code literal rather than an authored
 /// one.** `Weapon_DropMines` (`0x088675cc`) reloads `craft+0x1b0` with the bit
-/// pattern `0x3dcccccd` after every spawn. The Mine's `<Stats>` authors no
+/// pattern `0x3dcccccd` after every spawn - and the running original drops at
+/// six-frame intervals (seven where a frame's `dt` jitter left the timer at
+/// `0.0002`), measured 2026-09-15 alongside [`CLUSTER`]. The Mine's `<Stats>` authors no
 /// `rate` - the Cannon is the only weapon that does - so there is nothing this
 /// could be read from instead, and that is itself part of why the handler was
 /// misattributed to the Cannon for months.
@@ -139,21 +143,29 @@ pub const DROP_INTERVAL: f32 = 0.1;
 
 /// How many mines one press lays.
 ///
-/// **Ours, and the one number on this weapon that is.** Two searches have now
-/// failed to find what writes the original's counter at `craft+0x1ac`: the only
-/// store to that offset on a craft base anywhere in the binary is the handler's
-/// own `-= 1`. The shipped `<Weapon type="Mine"><Stats>` authors seven
-/// attributes and none of them is a count.
+/// **Recovered, confidence 92 - and it was the invented number, unchanged.**
+/// Two static sweeps had failed to find what writes the original's counter at
+/// `craft+0x1ac`, so this was chosen at five for the carpet it lays. On
+/// 2026-09-15 it was measured on the running original instead
+/// (`scripts/psp-count-mines.py`, PPSSPP, a VENOM Single Race with the AI
+/// collecting and firing through the game's own grant path): three clusters
+/// from three different craft, and `craft+0x1ac` read **5** at the first
+/// `Weapon_DropMines` hit of every one, counting down by one per drop to the
+/// frame the fire bit cleared. The write watch that ran alongside caught the
+/// arming store's PC, and it is `WeaponPickup_ArmMine` (`0x0886759c`, EU
+/// `0x088673f8`): `li a0,0x5; sw a0,0x1ac(a1)`, called from
+/// `WeaponPickup_Grant` when the `<Pickupodds>` roll lands on the Mine. **The
+/// count is armed when the pickup is granted, not when fire is pressed**, and
+/// the same function zeroes the reload timer, so the first mine leaves on the
+/// press frame. Both pressings carry the same literal. See
+/// `docs/ghidra/functions/psp-pulse-usa/mine.md`'s 2026-09-15 section for the
+/// trail and the disassembly.
 ///
-/// Five, because the *stagger* is what spreads a cluster and the stagger is
-/// recovered: at [`DROP_INTERVAL`] apart and a racing speed near 550 km/h, five
-/// mines lay about sixty units of track behind the craft - long enough to read
-/// as a carpet rather than as one mine, short enough that eight craft dropping
-/// at once stay inside even the original's own 64-slot pool.
+/// The shipped `<Weapon type="Mine"><Stats>` still authors no count; this is a
+/// code literal in the executable, like [`DROP_INTERVAL`].
 ///
 /// **It is simulation state**, so it is in the determinism reference and
-/// changing it is a hash move. `handover/` carries the row asking for it to be
-/// measured against the running original.
+/// changing it is a hash move - which the measurement did not require.
 pub const CLUSTER: u8 = 5;
 
 /// Where a craft lays its mines.
@@ -264,9 +276,16 @@ pub const fn frozen_pose(orientation: Quat) -> Quat {
 /// **The craft that laid it is never the tripper**, whatever the range. A
 /// cluster leaves from the tail of a craft that is by definition standing right
 /// there, so the alternative is a mine drop that detonates in the dropper's own
-/// face on the tick it is pressed. The original's own arrangement is unread;
-/// this is the same exclusion [`super::nearest_hit`] already makes for a
-/// rocket's owner, applied to a weapon where it is doing more work.
+/// face on the tick it is pressed. This is the same exclusion
+/// [`super::nearest_hit`] already makes for a rocket's owner, applied to a
+/// weapon where it is doing more work. **For the Bomb the original's own
+/// arrangement is now read and it is narrower than this**: `Bomb_UpdateTrigger`
+/// (`0x08863d7c`) skips the owner only while the bomb's age is under `0.5 s`
+/// (`Bomb_InArmingDelay`, `0x08863440`), after which the layer can trip its
+/// own bomb like anyone else. The Mine's own sweep (`FUN_08867b50`) has not
+/// been read for the same point, so the permanent exclusion stays this
+/// engine's for both, labelled as such - see
+/// `docs/ghidra/functions/psp-pulse-usa/mine.md`'s 2026-09-15 Bomb section.
 ///
 /// Takes the radius rather than a stats block, because the Bomb's and the
 /// Mine's come from two different structs and the rule does not care which.
