@@ -46,6 +46,8 @@ One breakpoint armed at a time, never a resume onto an armed address.
     uv run --with evdev python3 scripts/hd-zone-stage-source-break.py zone-source [out_dir]
     uv run --with evdev python3 scripts/hd-zone-stage-source-break.py writer-chain [out_dir]
 
+    uv run --with evdev python3 scripts/hd-zone-stage-source-break.py hud-writer [out_dir]
+
 `writer-chain` is the second boot: the HUD writer is not reached every
 frame, so it is waited on like the commit - arm, free-run until it parks
 a thread - and the commit is then waited on right behind it, so each link
@@ -90,6 +92,12 @@ TARGETS = (("detonator", TARGET_DETONATOR), ("mode_d", TARGET_MODE_D),
 
 # Hud_UpdateZoneSpeedClass (0x00049718)
 WRITER_STORE = 0x0004A014      # stw r3,0x640(r29) : r29 = craftArray[index], r3 = 14 - i
+
+# FUN_0008ce10, the HUD's Zone ladder widget update (hud = r3 = r30): walks
+# g_ZoneSpeedClassTable against the zone counter *(*(hud+0x40)+0x20) and
+# stores 14 - i (r7, `subfic r7,r31,0xe`) or 14 outright into hud+0x640.
+HUD_LADDER_ENTRY = 0x0008CE10
+HUD_LADDER_STORES = (0x0008DD70, 0x0008D9F0, 0x0008DEF8)
 
 G_GAMESTATE = 0x00936FE8       # *(0x008b7af4); .mode at +0xe0
 MODE_ADDRESS = G_GAMESTATE + 0xE0
@@ -385,6 +393,130 @@ def run_writer_chain(out, steps=4):
     return 0
 
 
+def hud_entry_readout(dbg, regs):
+    hud = gpr(regs, 3) & 0xFFFFFFFF
+    state = u32(dbg.read(hud + 0x40, 4))
+    return {
+        "hud_r3": "%#x" % hud,
+        "state_0x40": "%#x" % state,
+        "zone": s32(dbg.read(state + 0x20, 4)) if state else None,
+        "hud_0x640": u32(dbg.read(hud + 0x640, 4)),
+        "hud_0x28c": "%#x" % u32(dbg.read(hud + 0x28C, 4)),
+        "hud_0x6a8": s32(dbg.read(hud + 0x6A8, 4)),
+        "craft_array": ["%#x" % u32(dbg.read(CRAFT_ARRAY + i * 4, 4)) for i in range(2)],
+        "H0": stage_entry(dbg, 0),
+    }
+
+
+def hud_store_readout(dbg, regs, where):
+    hud = gpr(regs, 30) & 0xFFFFFFFF
+    state = u32(dbg.read(hud + 0x40, 4))
+    return {
+        "at": "%#x" % where,
+        "hud_r30": "%#x" % hud,
+        "value_r7": gpr(regs, 7) & 0xFFFFFFFF,
+        "record_r31": gpr(regs, 31) & 0xFFFFFFFF,
+        "zone": s32(dbg.read(state + 0x20, 4)) if state else None,
+        "old_0x640": u32(dbg.read(hud + 0x640, 4)),
+        "H0": stage_entry(dbg, 0),
+    }
+
+
+def race_over():
+    return "EndRace Results" in drive.tty_text()
+
+
+def run_hud_writer(out, budget=480.0):
+    """`FUN_0008ce10`'s three `stw r7, 0x640(r30)`, live, across a whole race.
+
+    The second boot showed `Hud_UpdateZoneSpeedClass`'s store never runs in
+    a Racebox Zone race while the field steps 1 -> 4 regardless. The HUD's
+    other ladder walker over the same table is `FUN_0008ce10`; this arms its
+    entry for a few consecutive frames, then samples its stores until the
+    race ends (an unsteered Zone craft lasts about 69 s of race time), and
+    each time a store carries a value different from what the field held,
+    waits for the blend's commit right behind it.
+    """
+    result = {"globals": {}, "entry": [], "stores": [], "commits": []}
+
+    def save():
+        (out / "hud-writer.json").write_text(json.dumps(result, indent=1))
+
+    with drive.Session(str(IMAGE), str(out / "logs"), interpreter=True) as session:
+        if not boot_into_zone(session, out, result, save):
+            return 1
+        dbg = Debugger()
+        breaker = flare.Breaker(dbg)
+        try:
+            dbg.pause()
+            dbg.drain()
+            result["globals"]["at_attach"] = globals_readout(dbg)
+            print("globals: %s" % json.dumps(result["globals"]["at_attach"]), flush=True)
+            save()
+            print("== entry at %#x" % HUD_LADDER_ENTRY, flush=True)
+            collect(breaker, HUD_LADDER_ENTRY, hud_entry_readout, 8, 60.0, "entry",
+                    result["entry"], save)
+            last = None
+            started = time.time()
+            misses = 0
+            while time.time() - started < budget and not race_over():
+                hit = None
+                for address in HUD_LADDER_STORES[:2]:
+                    waited, tid, regs = wait_for_hit(breaker, address, budget=6.0)
+                    if regs is not None:
+                        hit = hud_store_readout(dbg, regs, address)
+                        hit["waited_s"] = round(waited, 2)
+                        hit["tid"] = tid
+                        hit["t"] = round(time.time() - started, 1)
+                        break
+                if hit is None:
+                    misses += 1
+                    print("  no store hit (%d)" % misses, flush=True)
+                    if misses >= 4:
+                        break
+                    continue
+                breaker.step_off(int(hit["at"], 16))
+                hud = int(hit["hud_r30"], 16)
+                hit["new_0x640"] = u32(dbg.read(hud + 0x640, 4))
+                result["stores"].append(hit)
+                changed = hit["value_r7"] != hit["old_0x640"]
+                print("  store %s%s" % (json.dumps(hit, sort_keys=True),
+                                        "   <- CHANGE" if changed else ""), flush=True)
+                save()
+                if changed or (last is not None and last != hit["new_0x640"]):
+                    print("== waiting on the commit at %#x" % COMMIT_STORE, flush=True)
+                    waited, tid, regs = wait_for_commit(breaker, budget=30.0)
+                    row = {"waited_s": round(waited, 1), "tid": tid,
+                           "after_store": hit["t"]}
+                    if regs is not None:
+                        row.update(commit_readout(dbg, regs))
+                        breaker.step_off(COMMIT_STORE)
+                        n = row["n"]
+                        row["H_after"] = stage_entry(dbg, n) if n < 2 else None
+                        drive.screenshot(out / ("commit-%d.png" % len(result["commits"])),
+                                         trim=True)
+                    result["commits"].append(row)
+                    print("  commit %s" % json.dumps(row), flush=True)
+                    save()
+                last = hit["new_0x640"]
+            result["race_over"] = race_over()
+            result["globals"]["at_end"] = globals_readout(dbg)
+            result["step_off"] = {"stepped": breaker.stepped, "ran_off": breaker.ran_off}
+            save()
+            dbg.resume()
+        except (TimeoutError, OSError) as exc:
+            print("stub desync: %r" % exc, file=sys.stderr, flush=True)
+            result["desync"] = repr(exc)
+        finally:
+            try:
+                dbg.resume()
+            except Exception:
+                pass
+            dbg.close()
+    save()
+    return 0
+
+
 def run(out):
     result = {"globals": {}, "dispatch": [], "targets": {}, "source": [],
               "commits": [], "writer": [], "flare_gate": []}
@@ -512,7 +644,7 @@ def summarise(result):
 
 
 def main():
-    modes = ("zone-source", "writer-chain")
+    modes = ("zone-source", "writer-chain", "hud-writer")
     if len(sys.argv) < 2 or sys.argv[1] not in modes:
         print(__doc__, file=sys.stderr)
         return 2
@@ -522,6 +654,8 @@ def main():
     out.mkdir(parents=True, exist_ok=True)
     if mode == "writer-chain":
         return run_writer_chain(out)
+    if mode == "hud-writer":
+        return run_hud_writer(out)
     return run(out)
 
 
