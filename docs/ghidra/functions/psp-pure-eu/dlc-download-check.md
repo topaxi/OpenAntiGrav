@@ -240,16 +240,31 @@ for them.
   `FUN_088a32a4`), never a read of the 32 bytes themselves. The hash/digest
   functions in `FUN_088a32a4`'s own chain produce a 20-byte output; which
   algorithm is unidentified, not assumed to be any specific one.
-  **A decisive, purely offline check is available and was attempted but
-  blocked by the environment fault described above, not run to completion**:
-  XTEA-decrypt the last 256 bytes of a shipped pack (e.g. Gamma Pack 1's
-  `pi.wad`, 8-round, `(0x12345678, offset/8)` keystream per `Xtea_CryptBuffer`'s
-  own algorithm) using `0x08aa64fc`'s first 16 bytes as the key, and check
-  whether the known public key for that pack
-  (`UCES00001DGAMMAPAK` in `data/keys/pure-dlc-keys.txt`:
+  **The decisive offline check was run 2026-09-15 (`tmp/xtea_trailer_test.py`,
+  not committed - gitignored scratch space) and came back negative.** It
+  re-implements `Xtea_EncryptBlock`/`Xtea_CryptBuffer`'s exact algorithm
+  independently of `oag_formats::pure_dlc`, verified correct first against
+  the already-known-good case (decrypting Gamma Pack 1's own payload header
+  with its public key from `data/keys/pure-dlc-keys.txt` correctly yields
+  `version = 1`, matching `docs/formats/dlc-pack.md`'s own description).
+  Against that same verified implementation: XTEA-decrypting Gamma Pack 1's
+  real 256-byte trailer with either half of `0x08aa64fc` as key
+  (`[0:16]` and `[16:32]`), at both offset conventions (`0` and the trailer's
+  absolute file position), never produces the pack's known public key
+  (`UCES00001DGAMMAPAK`:
   `0x10 0x70 0x53 0xaf 0xaa 0xd9 0x76 0x88 0x72 0x3e 0x13 0xcb 0xf1 0x19 0xa4 0xcb`)
-  appears in the plaintext. A positive result would confirm the master-key
-  hypothesis arithmetically with no further Ghidra tracing at all; a negative
-  result disconfirms it cleanly. This needs no game data beyond what
-  `data/dlc/` and `data/keys/` already have - the next session should run it
-  first, before any further decompilation.
+  anywhere in the plaintext. Four combinations tried, all negative.
+
+  **This disconfirms the simplest version of the master-key hypothesis, not
+  the whole lead.** It rules out "the trailer is XORed with an
+  `Xtea_CryptBuffer`-style keystream keyed directly on `0x08aa64fc`'s raw
+  bytes" - it does not touch the real open question, which is still what the
+  twelve unnamed calls in `FUN_088a3118` (`FUN_088a6824` through
+  `FUN_088a7018`) actually do with the trailer and with `0x08aa64fc`. The
+  trailer could be processed in a different mode (block-chained rather than
+  keystream, per the unused `FUN_088a9eac` CBC variant seen in the same
+  binary), under a derived rather than raw key (the way `FUN_088a2cbc`
+  derives a key from a hash for the *savedata* path), or `0x08aa64fc` may not
+  be key material for this object at all despite being wired into the same
+  descriptor. Decompiling those twelve calls is the next concrete step, not
+  another offline guess - there is no more low-hanging offline fruit here.

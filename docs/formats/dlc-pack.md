@@ -403,9 +403,15 @@ way Pulse's four DLC teams are - see
   code" above from an absent-import inference to direct code evidence. A
   function reading a buffer shaped exactly like `[payload][256-byte trailer]`
   and sourcing a decrypt key from an unidentified object was also found, fed
-  by a 32-byte high-entropy blob at `0x08aa64fc` - a real, promising, still
-  unconfirmed lead for this key, not a dead end. Decryption does not need
-  this trailer at all: `oag-wad` never reads it.
+  by a 32-byte high-entropy blob at `0x08aa64fc`. **Tested and ruled out**:
+  that blob, either half, is not the raw key an `Xtea_CryptBuffer`-style
+  keystream would use to decrypt a shipped pack's own trailer, at either
+  offset convention - checked against Gamma Pack 1's real trailer and public
+  key, with the test implementation verified correct against the
+  already-known-good payload-header case first. The object itself - what its
+  twelve unnamed builder calls actually do - is still an open lead, just not
+  this simplest reading of it. Decryption does not need this trailer at all:
+  `oag-wad` never reads it.
 - **`TEST.bin`.** 16 bytes, unread beyond its size and high-entropy-looking
   content. The upstream tool never touches it and every pack above decrypts
   correctly without it, so it is not load-bearing for reading a pack's
