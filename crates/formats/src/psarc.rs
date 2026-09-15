@@ -554,8 +554,23 @@ pub fn path_digest(path: &str) -> [u8; 16] {
 }
 
 /// Probes the block-size width and reads the table.
+///
+/// A zero-size entry needs no block and its `first_block` is unspecified -
+/// confirmed against `omega-ps4-eu`'s `data00.psarc`, entry 9042, whose
+/// `first_block` reads `0x960c4925` (2,517,387,557) with `size` and `offset`
+/// both `0`. Folded into the probe's own `highest` unconditionally, that
+/// sentinel forced every width in [`BLOCK_WIDTHS`] to fail (no real block
+/// table is ever that large), which reads as "this archive uses an
+/// unrecognised layout" when the layout is actually identical to the PS3
+/// archives this parser was written against. See
+/// `docs/formats/psarc.md`.
 fn read_block_table(rest: &[u8], entries: &[Entry]) -> Result<(Vec<u32>, usize)> {
-    let highest = entries.iter().map(|e| e.first_block).max().unwrap_or(0);
+    let highest = entries
+        .iter()
+        .filter(|e| e.size > 0)
+        .map(|e| e.first_block)
+        .max()
+        .unwrap_or(0);
     let needed = highest as usize + usize::from(!entries.is_empty());
     for width in BLOCK_WIDTHS {
         if !rest.len().is_multiple_of(width) || rest.len() / width < needed {
