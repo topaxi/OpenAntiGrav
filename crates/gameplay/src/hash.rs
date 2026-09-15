@@ -34,7 +34,7 @@
 
 use oag_core::hash::StateHasher;
 use oag_race::{LapGate, Mode, RaceState};
-use oag_tables::weapons::Weapon;
+use oag_tables::weapons::{DisruptorEffectKind, Weapon};
 
 use crate::pickup::Held;
 use crate::projectile::leach_beam::{Beam, Kind as BeamKind};
@@ -105,6 +105,7 @@ fn write_ship(hasher: &mut StateHasher, ship: &Ship) {
         standing,
         autopilot_timer,
         pending_slowdown,
+        disruption,
         active,
     } = ship;
 
@@ -130,7 +131,36 @@ fn write_ship(hasher: &mut StateHasher, ship: &Ship) {
     // behaviour changing, and `tests/determinism.rs`'s history note records the
     // isolation that proved that.
     hasher.write_f32(*pending_slowdown);
+    // A Disruptor hit's kind and its seconds left. The kind is
+    // `DisruptorEffectKind::ALL`'s index plus one, `0` for none - the same
+    // shape `write_weapon` gives a pickup. Zero and `0.0` through every
+    // scenario the gate runs, so five fixed bytes per ship per tick: adding
+    // it moved the committed hashes with no behaviour changing, the third
+    // time this struct has done that. See `crate::disruption`.
+    write_disruption(hasher, disruption);
     hasher.write_u8(u8::from(*active));
+}
+
+fn write_disruption(hasher: &mut StateHasher, disruption: &crate::disruption::Disruption) {
+    let crate::disruption::Disruption { kind, timer } = disruption;
+    write_effect_kind(hasher, *kind);
+    hasher.write_f32(*timer);
+}
+
+/// A Disruptor effect as a discriminant byte, `0` for none.
+///
+/// [`DisruptorEffectKind::ALL`]'s index plus one - the original parser's own
+/// branch order rather than this file's opinion, the same argument
+/// [`write_weapon`] makes.
+fn write_effect_kind(hasher: &mut StateHasher, kind: Option<DisruptorEffectKind>) {
+    let discriminant = match kind {
+        None => 0,
+        Some(kind) => DisruptorEffectKind::ALL
+            .iter()
+            .position(|&candidate| candidate == kind)
+            .map_or(0, |index| index as u8 + 1),
+    };
+    hasher.write_u8(discriminant);
 }
 
 /// The opponent driver's own state, which seeds next tick's decisions.
@@ -482,6 +512,7 @@ fn write_projectile(hasher: &mut StateHasher, projectile: &Projectile) {
         bounces,
         launch_speed_kmh,
         charge,
+        effect,
         // Deliberately excluded. `orientation` is a laid charge's frozen
         // drawing pose - `Projectile::orientation`'s own doc comment - and
         // nothing in this crate reads it back on a later tick, so it cannot
@@ -519,6 +550,10 @@ fn write_projectile(hasher: &mut StateHasher, projectile: &Projectile) {
     hasher.write_u8(target.unwrap_or(0));
     hasher.write_u8(*bounces);
     hasher.write_f32(*launch_speed_kmh);
+    // The effect a Disruptor bolt carries to whoever it hits - decided when
+    // it was fired, spent when it lands, so it is state for the whole flight.
+    // `0` for every other weapon and for a free slot.
+    write_effect_kind(hasher, *effect);
 }
 
 fn write_option_u32(hasher: &mut StateHasher, value: Option<u32>) {

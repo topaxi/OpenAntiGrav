@@ -213,7 +213,32 @@ impl DisruptorStats {
     pub fn speed_for_class(&self, class_index: u8) -> f32 {
         self.speed + PER_CLASS_KMH * f32::from(class_index)
     }
+
+    /// [`Self::speed_for_class`] by the class's name, or `None` for a name on
+    /// no ladder.
+    ///
+    /// Pure's ladder is Pulse's four with `Vector` under them, so `Vector` is
+    /// rung 0 and [`crate::handling::SpeedClass`]'s four are rungs 1..=4 -
+    /// which puts Phantom at `speed + 320`. **The index order is the reading
+    /// of `DAT_08b173e0`'s five values against the class-name run at
+    /// `0x08a445d0`, not a measured race**, so it carries the page's
+    /// confidence and not a higher one. Case-insensitive, as
+    /// `SpeedClass::from_name` is, because the two XML files spell a class
+    /// differently.
+    #[must_use]
+    pub fn speed_for_named(&self, class: &str) -> Option<f32> {
+        let rung = if class.eq_ignore_ascii_case(VECTOR) {
+            0
+        } else {
+            crate::handling::SpeedClass::from_name(class)? as u8 + 1
+        };
+        Some(self.speed_for_class(rung))
+    }
 }
+
+/// Pure's fifth speed class, the one under Venom, as `<Pickupodds class>`
+/// spells it.
+pub const VECTOR: &str = "Vector";
 
 /// How much faster a bolt flies per rung of the speed-class ladder, in km/h.
 ///

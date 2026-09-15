@@ -112,6 +112,15 @@ pub struct Ship {
     /// See `oag_physics::slowdown` for the whole law and
     /// `docs/ghidra/functions/psp-pulse-usa/engine.md` for the evidence.
     pub pending_slowdown: f32,
+    /// The Disruptor effect this craft is under, if any.
+    ///
+    /// Pure's `craft+0x134`/`+0x138`/`+0x13c` - a flag, a kind and the seconds
+    /// left - as one [`crate::disruption::Disruption`]. **Here rather than on
+    /// [`ShipState`]**, for [`Self::autopilot_timer`]'s reason exactly: what
+    /// it changes is which controls the craft is handed, and the composition
+    /// root decides that. Hashed, because a craft that cannot thrust is a
+    /// different race from one that can.
+    pub disruption: crate::disruption::Disruption,
     /// Whether this slot holds a ship at all.
     pub active: bool,
 }
@@ -127,6 +136,7 @@ impl Default for Ship {
             standing: oag_race::Standing::default(),
             autopilot_timer: 0.0,
             pending_slowdown: 0.0,
+            disruption: crate::disruption::Disruption::default(),
             active: false,
         }
     }

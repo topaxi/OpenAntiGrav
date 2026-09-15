@@ -76,6 +76,7 @@
 
 mod blast;
 pub mod cannon;
+pub mod disruptor;
 mod flight;
 mod geometry;
 pub mod leach_beam;
@@ -236,6 +237,13 @@ pub struct Projectile {
     /// Hashed, unlike [`Self::orientation`]: it decides *when* a bolt starts
     /// flying and therefore where it is on every later tick.
     pub charge: f32,
+    /// The control effect this bolt lands on whoever it hits.
+    ///
+    /// **Only a Disruptor carries one** - `Disruptor_Init` (`0x08859010` on
+    /// `psp-pure-usa`) copies the firing craft's primed kind into
+    /// `bolt+0x114`, and `Disruptor_ApplyEffect` reads it off the bolt on the
+    /// hit. `None` for every other weapon. See [`disruptor`].
+    pub effect: Option<oag_tables::weapons::DisruptorEffectKind>,
 }
 
 /// What a projectile did when it stopped.
@@ -321,6 +329,13 @@ pub struct Impact {
     /// these and the visual side wants the entry either way: `oag_game`'s tick
     /// still plays the explosion for a `false` one.
     pub blast: bool,
+    /// The effect a Disruptor bolt was carrying, for the craft it struck.
+    ///
+    /// `None` for every other weapon, and for a Disruptor that stopped on a
+    /// wall - a wall takes no effect. Read by `blast::apply_impacts`, which
+    /// routes a Disruptor hit through [`crate::disruption::land`] rather than
+    /// through a blast the weapon does not author.
+    pub effect: Option<oag_tables::weapons::DisruptorEffectKind>,
 }
 
 /// Everything in the air, in one fixed-size array.
@@ -355,6 +370,7 @@ impl Projectiles {
                 launch_speed_kmh: 0.0,
                 orientation: Quat::IDENTITY,
                 charge: 0.0,
+                effect: None,
             }; MAX_PROJECTILES],
         }
     }
@@ -538,8 +554,48 @@ impl Projectiles {
             // other weapon must keep landing in the same slot with the same
             // fields it always did.
             charge: 0.0,
+            // Only `Self::fire_disruptor` sets one, for the same reason.
+            effect: None,
         };
         Some(slot)
+    }
+
+    /// Fires one Disruptor bolt carrying `effect`, homing on `target` if it
+    /// has one.
+    ///
+    /// **A sixth entry point, for [`Self::throw`]'s reason.** The bolt's own
+    /// ten-second life is [`MAX_FLIGHT_SECONDS`] exactly -
+    /// `DisruptorPool_Update` reaps at `age > 10.0`, which is the one place
+    /// that constant is recovered rather than ours; see
+    /// [`disruptor::MAX_FLIGHT_SECONDS`]. `velocity` is
+    /// [`disruptor::launch`]'s literal 500 km/h along the craft's forward,
+    /// and `surface` is seeded from [`disruptor::launch`]'s up rather than
+    /// world up, because the Disruptor is the one weapon whose probe
+    /// direction is **never** re-read from a hit - `Disruptor_Update` writes
+    /// `bolt+0x100` nowhere.
+    pub fn fire_disruptor(
+        &mut self,
+        position: Vec3,
+        velocity: Vec3,
+        surface: Vec3,
+        owner: u8,
+        target: Option<u8>,
+        effect: oag_tables::weapons::DisruptorEffectKind,
+    ) -> bool {
+        let Some(slot) = self.place(
+            Weapon::Disruptor,
+            position,
+            velocity,
+            owner,
+            target,
+            0.0,
+            MAX_FLIGHT_SECONDS,
+        ) else {
+            return false;
+        };
+        slot.surface = surface;
+        slot.effect = Some(effect);
+        true
     }
 }
 
@@ -586,11 +642,13 @@ pub fn step<R: Raycaster + ?Sized>(
 ) -> [Option<Impact>; MAX_PROJECTILES] {
     let count = world.ship_count as usize;
     let missile_stats = weapons.and_then(oag_tables::weapons::WeaponStats::missile);
+    let disruptor_stats = weapons.and_then(oag_tables::weapons::WeaponStats::disruptor);
     let impacts = world.projectiles.advance(
         dt,
         raycaster,
         &world.ships[..count],
         missile_stats.as_ref(),
+        disruptor_stats.as_ref(),
         TriggerRadii::from_table(weapons),
         class,
     );

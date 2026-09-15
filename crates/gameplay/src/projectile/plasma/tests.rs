@@ -62,6 +62,7 @@ fn a_charging_bolt_rides_the_craft_and_leaves_along_its_new_heading() {
             &geometry,
             &ships,
             None,
+            None,
             crate::projectile::TriggerRadii::default(),
             "VENOM",
         );
@@ -111,6 +112,7 @@ fn a_charging_bolt_rides_the_craft_and_leaves_along_its_new_heading() {
         TICK,
         &geometry,
         &ships,
+        None,
         None,
         crate::projectile::TriggerRadii::default(),
         "VENOM",

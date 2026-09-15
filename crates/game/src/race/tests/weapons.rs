@@ -538,6 +538,7 @@ fn every_implemented_weapon_has_a_fire_arm_on_both_paths() {
         Weapon::Cannon,
         Weapon::Quake,
         Weapon::LeachBeam,
+        Weapon::Disruptor,
     ];
 
     assert_eq!(

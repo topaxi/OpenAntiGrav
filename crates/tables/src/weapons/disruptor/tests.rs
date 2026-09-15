@@ -112,6 +112,10 @@ fn the_speed_climbs_eighty_a_rung() {
     let stats = fixture();
     assert_eq!(stats.speed_for_class(0), 300.0);
     assert_eq!(stats.speed_for_class(4), 300.0 + 4.0 * PER_CLASS_KMH);
+    assert_eq!(stats.speed_for_named("Vector"), Some(300.0));
+    assert_eq!(stats.speed_for_named("VENOM"), Some(380.0));
+    assert_eq!(stats.speed_for_named("phantom"), Some(620.0));
+    assert_eq!(stats.speed_for_named("Zen"), None);
 }
 
 /// An effect the original reads an `amount` for must author one; one it does

@@ -415,6 +415,7 @@ pub(super) fn advance_laid(
                     owner,
                     struck: Some(slot),
                     blast: true,
+                    effect: None,
                 });
             }
         }
@@ -443,5 +444,6 @@ pub(super) fn advance_laid(
         owner,
         struck: None,
         blast: true,
+        effect: None,
     })
 }

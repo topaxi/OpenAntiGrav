@@ -562,6 +562,10 @@ impl Race {
             if !self.fire_opponent_leach_beam(slot, field) {
                 return;
             }
+        } else if weapon == oag_tables::weapons::Weapon::Disruptor {
+            if !self.fire_opponent_disruptor(slot, field) {
+                return;
+            }
         } else if matches!(
             weapon,
             oag_tables::weapons::Weapon::Mine | oag_tables::weapons::Weapon::Bomb

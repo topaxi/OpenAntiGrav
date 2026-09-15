@@ -10,8 +10,8 @@
 
 use super::{
     FALL_ACCELERATION, Impact, MAX_FLIGHT_SECONDS, MAX_PROJECTILES, Projectile, Projectiles,
-    RIDE_HEIGHT, SURFACE_PROBE_LENGTH, SweepHit, TriggerRadii, mine, missile, nearest_hit, plasma,
-    shuriken,
+    RIDE_HEIGHT, SURFACE_PROBE_LENGTH, SweepHit, TriggerRadii, disruptor, mine, missile,
+    nearest_hit, plasma, shuriken,
 };
 use oag_core::math::Vec3;
 use oag_physics::{Ray, Raycaster, Surface};
@@ -36,16 +36,25 @@ impl Projectiles {
     /// geometry. The owner's own hull is excluded outright: a straight-line shot
     /// cannot come back, so the exclusion costs nothing and removes the launch
     /// frame's self-hit without a grace period to tune.
+    // Eight parameters: the seven it had plus the Disruptor's table block,
+    // which is one per weapon that flies at an authored speed. A parameter
+    // struct would be the tidy answer and is deferred until a third weapon
+    // asks for one.
+    #[allow(clippy::too_many_arguments)]
     pub fn advance<R: Raycaster + ?Sized>(
         &mut self,
         dt: f32,
         raycaster: &R,
         ships: &[crate::world::Ship],
         missile: Option<&oag_tables::weapons::MissileStats>,
+        disruptor: Option<&oag_tables::weapons::DisruptorStats>,
         trigger_radii: TriggerRadii,
         class: &str,
     ) -> [Option<Impact>; MAX_PROJECTILES] {
         let mut impacts = [None; MAX_PROJECTILES];
+        // Looked up once rather than per bolt: it is a string match on the
+        // class name, and every bolt in the air flies at the same one.
+        let disruptor_kmh = disruptor.and_then(|stats| stats.speed_for_named(class));
 
         for (index, projectile) in self.slots.iter_mut().enumerate() {
             let Some(kind) = projectile.kind else {
@@ -87,6 +96,23 @@ impl Projectiles {
             if matches!(kind, Weapon::Mine | Weapon::Bomb) {
                 impacts[index] = mine::advance_laid(projectile, kind, dt, ships, trigger_radii);
                 if impacts[index].is_some() {
+                    *projectile = Projectile::default();
+                }
+                continue;
+            }
+
+            // **The Disruptor flies, and still takes none of what follows**,
+            // because its flight is read off its own function and differs
+            // from the Rocket's in its order, its probe direction, its ride
+            // height and its hit test - four differences [`disruptor`]'s
+            // module docs list, and four `if kind ==` branches this function
+            // does not need. A bolt that ages out is reaped silently, as a
+            // Rocket is; the original spawns its wall explosion there, which
+            // is presentation and is recorded on the evidence page.
+            if kind == Weapon::Disruptor {
+                impacts[index] =
+                    disruptor::advance(projectile, dt, raycaster, ships, disruptor_kmh);
+                if impacts[index].is_some() || projectile.lifetime <= 0.0 {
                     *projectile = Projectile::default();
                 }
                 continue;
@@ -191,6 +217,7 @@ impl Projectiles {
                             owner: projectile.owner,
                             struck: None,
                             blast: true,
+                            effect: None,
                         });
                         *projectile = Projectile::default();
                         continue;
@@ -295,6 +322,7 @@ impl Projectiles {
                             owner: projectile.owner,
                             struck,
                             blast: true,
+                            effect: None,
                         });
                         *projectile = Projectile::default();
                         continue;
@@ -339,6 +367,7 @@ impl Projectiles {
                     owner: projectile.owner,
                     struck: None,
                     blast: false,
+                    effect: None,
                 });
                 *projectile = Projectile::default();
                 continue;
