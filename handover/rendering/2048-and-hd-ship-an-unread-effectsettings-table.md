@@ -907,14 +907,14 @@ no longer disagree.
   relocated, 4,365 in 37 files, 124 of 983 on Talon's Junction -
   `crates/rcs/tests/rcsmodel_ground_truth.rs`). What a headless capture of
   Talon's Junction shows: the road keeps the stage art and the environment
-  goes flat in `Scene.Texture Colour` with cyan rim edges - pale white on
+  goes flat in `Scene.Texture Colour` with cyan rim edges - black walls and
+  gantries around a lit road on `Start` (`--zone-stage 0 --ticks 0`; any
+  tick later the recovered ladder moves the race to stage 1), pale white on
   `Sub Venom`, lavender with an orange road on `Flash` - where before every
   surface had the road's patterned tint. **Not yet checked against a frame
-  of the original**, which an RPCS3 capture on the same stage would settle;
-  `Start`'s dark-environment frame is unreachable here because HD's ladder
-  opens on stage 1. Still in reach from the same field: the five-bucket
-  routing (record bits 3-5), which decides which fog buffer and publisher a
-  chunk goes through.
+  of the original**, which an RPCS3 capture on the same stage would settle.
+  Still in reach from the same field: the five-bucket routing (record bits
+  3-5), which decides which fog buffer and publisher a chunk goes through.
 - **Wire the wavefront** (renderer lane): origin = the entity's `+0xb0`
   (re-centred every frame), radius per frame after a commit `r_k = 0.1 + 0.5k
   + 0.05k(k-1)` capped at `20000`, colour weight `min(0.01k, 1)`. All disc
