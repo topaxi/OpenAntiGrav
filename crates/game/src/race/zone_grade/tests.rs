@@ -201,3 +201,54 @@ fn a_recovered_ladder_advances_and_clamps_to_the_loaded_table() {
     assert!(!grade.show_zone(90));
     assert_eq!(grade.blend().current, 1);
 }
+
+/// Without `--zone-stage`, a recovered ladder still steps on a zone-counter
+/// advance - the regression `pin_stage` must not cause. Same table and same
+/// zone as `a_recovered_ladder_advances_and_clamps_to_the_loaded_table`
+/// above, stated again here so this test stands on its own as the "unpinned"
+/// half of the pin/no-pin pair below.
+#[test]
+fn an_unpinned_grade_still_steps_on_a_zone_advance() {
+    let mut grade = grade_with(Some(oag_2048::race::ZONE_STAGES));
+    assert!(grade.show_zone(0));
+    assert_eq!(grade.blend().current, 1);
+}
+
+/// The `--zone-stage` override: pinning holds the grade on the requested
+/// stage even though a later `show_zone` call carries a zone number the
+/// title's own ladder would otherwise step off of - the bug this build fixes,
+/// where the ladder overwrote the override from the very first frame.
+#[test]
+fn a_pinned_stage_survives_a_zone_counter_advance() {
+    let mut grade = grade_with(Some(oag_2048::race::ZONE_STAGES));
+    grade.pin_stage(0);
+    assert_eq!(grade.blend().current, 0);
+    assert_eq!(grade.blend().weight, 1.0);
+    // Zone 0 maps to stage 1 on this ladder (see the test above) - if the pin
+    // did not hold, this call would move the grade off stage 0.
+    assert!(!grade.show_zone(0));
+    assert_eq!(
+        grade.blend().current,
+        0,
+        "the pin held, the ladder did not move it"
+    );
+    // A far later zone, deep into the ladder, does not move it either.
+    assert!(!grade.show_zone(90));
+    assert_eq!(grade.blend().current, 0);
+}
+
+/// `pin_stage` clamps the same way [`ZoneGrade::request_stage`] does - a
+/// request past the loaded file's last row still lands on a stage the file
+/// actually names.
+#[test]
+fn pin_stage_clamps_to_the_loaded_table() {
+    let mut grade = grade();
+    grade.pin_stage(99);
+    assert_eq!(
+        grade.blend().current,
+        1,
+        "clamped to this excerpt's last stage"
+    );
+    assert!(!grade.show_zone(0), "still pinned after the clamp");
+    assert_eq!(grade.blend().current, 1);
+}
