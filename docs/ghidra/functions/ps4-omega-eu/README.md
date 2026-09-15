@@ -70,7 +70,7 @@ unnamed rather than forced.
   `MusicManager_Construct` directly into `Game_Main` rather than keeping them
   as separate functions the way `vita-2048-eu-v104` and `ps3-hdfury-eu` both
   do.
-- [weapons.md](weapons.md) - 26 functions: nine weapon-manager constructors
+- [weapons.md](weapons.md) - 28 functions: nine weapon-manager constructors
   transferred from `ps3-hdfury-eu/weapons.md` by `.cpp` tag (plus the finding
   that `WeaponExplosions_Construct`, a separate function on `ps3-hdfury-eu`,
   is inlined into `PlasmaManager_Construct` here instead); `RaceManager_Construct`,

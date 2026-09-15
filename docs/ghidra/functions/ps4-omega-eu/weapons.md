@@ -12,7 +12,7 @@ binary's own string table, under `Backend/Weapons/...` rather than HD's flat
 layout, and the technique extends cleanly to the `RaceManager`/`ModeManager`
 family once the weapon managers established the constructor idiom.
 
-**The names here are applied**, from [names.tsv](names.tsv). 26 functions
+**The names here are applied**, from [names.tsv](names.tsv). 28 functions
 named this pass: 9 weapon-manager constructors, the base `RaceManager` and
 `ModeManager` roots, 16 `_RaceManager` subclasses, and the intermediate
 `MPRaceManager_Construct`.
@@ -257,18 +257,18 @@ inheritance relationship directly rather than through tag matching alone.
 
 Fourteen call `RaceManager_Construct` directly:
 
-| Address | Name | Notably |
-| --- | --- | --- |
-| `0x0124f040` | `AIBatchRaceManager_Construct` | Loads `TimeTrial_HUD.xml` |
-| `0x0125ba00` | `DemoRaceManager_Construct` | Loads `Arcade_HUD.xml` - matches `vita-2048-eu-v104`'s own `DemoRaceManager_Construct` by class name |
-| `0x012a0b90` | `SPArcadeRaceManager_Construct` | Matches `vita-2048-eu-v104`'s own `SpArcadeRaceManager_Construct` by class name |
-| `0x012a4610` | `SPDetonatorRaceManager_Construct` | - |
-| `0x012a7e60` | `SPEliminationRaceManager_Construct` | Region-aware HUD selection (`WIP3OUT`/`2097` build-name checks, see below) |
-| `0x012a98f0` | `SPFreePlayRaceManager_Construct` | Loads `TimeTrial_HUD.xml` |
-| `0x012ad580` | `SPNitroRaceManager_Construct` | Also calls `FUN_012ac060(param_1 + 0x600e)`, a second helper not chased |
-| `0x012af230` | `SPTimeTrialRaceManager_Construct` | Ghost/replay-slot allocation gated on `DAT_01f999e4 == 10 \|\| == 5` (track-count-dependent) |
-| `0x012b1e60` | `SPTournamentRaceManager_Construct` | Also calls `FUN_0129c120(param_1)`, a second helper not chased |
-| `0x012b4960` | `SPZoneRaceManager_Construct` | Loads region-specific `Zone_HUD.xml` variants (`wo3_HUD`, `2097_HUD` - see below) |
+| Address | Name | Confidence | Notably |
+| --- | --- | ---: | --- |
+| `0x0124f040` | `AIBatchRaceManager_Construct` | 84 | Loads `TimeTrial_HUD.xml` |
+| `0x0125ba00` | `DemoRaceManager_Construct` | 87 | Loads `Arcade_HUD.xml` - matches `vita-2048-eu-v104`'s own `DemoRaceManager_Construct` by class name |
+| `0x012a0b90` | `SPArcadeRaceManager_Construct` | 87 | Matches `vita-2048-eu-v104`'s own `SpArcadeRaceManager_Construct` by class name |
+| `0x012a4610` | `SPDetonatorRaceManager_Construct` | 84 | - |
+| `0x012a7e60` | `SPEliminationRaceManager_Construct` | 84 | Region-aware HUD selection (`WIP3OUT`/`2097` build-name checks, see below) |
+| `0x012a98f0` | `SPFreePlayRaceManager_Construct` | 84 | Loads `TimeTrial_HUD.xml` |
+| `0x012ad580` | `SPNitroRaceManager_Construct` | 84 | Also calls `FUN_012ac060(param_1 + 0x600e)`, a second helper not chased |
+| `0x012af230` | `SPTimeTrialRaceManager_Construct` | 84 | Ghost/replay-slot allocation gated on `DAT_01f999e4 == 10 \|\| == 5` (track-count-dependent) |
+| `0x012b1e60` | `SPTournamentRaceManager_Construct` | 84 | Also calls `FUN_0129c120(param_1)`, a second helper not chased |
+| `0x012b4960` | `SPZoneRaceManager_Construct` | 84 | Loads region-specific `Zone_HUD.xml` variants (`wo3_HUD`, `2097_HUD` - see below) |
 | `0x015a7020` | `GameModeRaceManager_Construct` | Loads `InGame2048`-namespaced frontend widgets (`InGameWipeout2048Logo`, `EndPreRaceButton`) - ties this `GameModes/` tag concretely to 2048 content, not just a name |
 
 Two call a second, unnamed helper (`FUN_0129c120`/`FUN_012ac060`) between
@@ -276,26 +276,33 @@ Two call a second, unnamed helper (`FUN_0129c120`/`FUN_012ac060`) between
 chased.
 
 Four call `MPRaceManager_Construct` (`0x01284690`, below) instead of
-`RaceManager_Construct` directly:
+`RaceManager_Construct` directly, plus `MPNitroRaceManager_Construct`
+(`0x0127d940`, confidence 84), which calls `FUN_01284690()`
+(`MPRaceManager_Construct`) then `FUN_012ac060(param_1 + 0x6148)`, a second
+helper also called by `SPNitroRaceManager_Construct` above, before writing
+its own tag - consistent with the same class hierarchy, not chased further:
 
-| Address | Name |
-| --- | --- |
-| `0x01279ed0` | `MPArcadeRaceManager_Construct` |
-| `0x0127ad50` | `MPEliminationRaceManager_Construct` |
-| `0x0127ecd0` | `MPTimeTrialRaceManager_Construct` |
-| `0x01280490` | `MPTournamentRaceManager_Construct` |
+| Address | Name | Confidence |
+| --- | --- | ---: |
+| `0x01279ed0` | `MPArcadeRaceManager_Construct` | 84 |
+| `0x0127ad50` | `MPEliminationRaceManager_Construct` | 84 |
+| `0x0127ecd0` | `MPTimeTrialRaceManager_Construct` | 84 |
+| `0x01280490` | `MPTournamentRaceManager_Construct` | 84 |
 
-One, `MPNitroRaceManager_Construct` (`0x0127d940`), calls neither directly -
-it opens with `FUN_01284690()` (`MPRaceManager_Construct`) then
-`FUN_012ac060(param_1 + 0x6148)`, a second helper also called by
-`SPNitroRaceManager_Construct` above, before writing its own tag. Consistent
-with the same class hierarchy, not chased further.
-
-**Confidence: 87** for all sixteen (same band as `RaceManager_Construct`
-itself: tag, vtable, and now an explicit call to an already-identified base
-constructor - stronger evidence than tag-matching alone gave the weapon
-managers above, since it demonstrates the class hierarchy directly rather
-than inferring it from parallel structure).
+**Confidence: 84 for fourteen of the sixteen, 87 for two.** All sixteen share
+the same structural evidence - tag, vtable, and an explicit call to an
+already-identified base constructor, stronger evidence than tag-matching
+alone gave the weapon managers above, since it demonstrates the class
+hierarchy directly rather than inferring it from parallel structure - but
+that evidence is internal to this one binary. Per the confidence rubric,
+decompilation-only evidence with consistent call sites caps at 84 ("Probable")
+without a second binary naming the same class; `DemoRaceManager_Construct`
+and `SPArcadeRaceManager_Construct` reach 87 because `vita-2048-eu-v104`
+independently names those two exact classes (`DemoRaceManager_Construct`,
+`SpArcadeRaceManager_Construct`), the same cross-binary-corroboration bar
+`RaceManager_Construct` and `MPRaceManager_Construct` themselves clear
+against `ps3-hdfury-eu`. The other fourteen have no such match in either
+sibling binary's own `names.tsv` and stay at 84 until one turns up.
 
 ### `MPRaceManager_Construct` - `0x01284690`
 
