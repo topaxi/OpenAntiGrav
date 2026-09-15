@@ -100,6 +100,15 @@ unnamed rather than forced.
   exists here in the same shape, scaled to 64-bit pointers. No `names.tsv`
   row - the spot-check doesn't clear the bar a full read would.
 
+- [collision.md](collision.md) - a tag-located candidate for
+  `ps3-hdfury-eu/collision.md`'s own `Collision_Construct`, not named: the
+  structural evidence that first looked like a match turned out to be
+  shared tagged-object boilerplate this binary reuses across unrelated
+  classes (documented as a negative result for future tag-transfer
+  attempts), and HD's own discriminating invariant - a strided loop whose
+  count times stride lands exactly on a separately-computed allocation size
+  - isn't present in the disassembled window here. No `names.tsv` row.
+
 Add a row to [`names.tsv`](names.tsv) and the page it cites in the same
 change: `scripts/apply-ghidra-names.py` refuses a row whose address and name
 do not both still appear on the page named in its last column.
