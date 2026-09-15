@@ -144,9 +144,8 @@ against the real disc in `crates/hd/tests/hd_title_ground_truth.rs`'s
 checking both copies by cue index rather than by trusting either one's own
 print order. **On the same confidence footing this thread's own milestone
 announcer already stands on for HD** - no call site read in the executable for
-either ladder **[stale 2026-09-15: computed before the lvlx reimport; re-run per toolchain.md#ps3]**
-- so this is not a new class of inference, just a second axis of
-the same one.
+either ladder - so this is not a new class of inference, just a second axis of
+the same one. **[stale 2026-09-15: computed before the lvlx reimport; re-run per toolchain.md#ps3]**
 
 **Checked that decoded actually means audible, not just that the report reads
 well.** `just play hd --race --mode zone --ticks 1` and
