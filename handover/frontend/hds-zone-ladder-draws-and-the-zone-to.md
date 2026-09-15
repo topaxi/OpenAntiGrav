@@ -401,11 +401,11 @@ free:**
   stage *texture* not following the sphere (one texture per drawable, bound
   at build); the glow's own `5.0 * saturate(1 - 0.1 * (distance -
   radius))` term, which as read floods the whole inside rather than its
-  edge and is left out until re-read; and `burst-1.png` at radius `799`
-  reading near-cyan/walls-lime where inside-is-new predicts the reverse,
-  while `burst-2.png` at `3288` reads as predicted - worth one more
-  emulator frame at a known `k` from someone who has it up. The
-  effectsettings thread's own "Wire the wavefront" item is the
+  edge and is left out until re-read. `burst-2.png` at radius `3288` is
+  the live frame that confirms the polarity (near road green, near walls
+  lime, far scenery cyan); `burst-1.png` at `799` is not discriminating -
+  its near-track teal is `Venom`'s own `Track.Base Colour` rim, not the old
+  stage. The effectsettings thread's own "Wire the wavefront" item is the
   coordinator's to strike.
 - ~~If the maintainer plays past a class change and can say whether the world
   visibly repaints outward from a point versus changing everywhere at once~~

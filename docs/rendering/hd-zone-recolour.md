@@ -135,17 +135,17 @@ line, which is what settling gives.
   read it adds `5.0` to every fragment *inside* the sphere rather than at its
   edge - the RPCS3 frame at radius `799` shows no such flood. The reading is
   what is in doubt; it stays out until re-read.
-- **`burst-1.png` reads oddly under this polarity.** At radius `799`,
-  two seconds into the zone-2 commit, the RPCS3 frame shows the near track
-  cyan and the walls lime; `Venom`'s authored colours are a lime
-  `Scene.Texture Colour` and a pure-green `Track.Texture Colour`, `Sub
-  Venom`'s are cyan on both, so the walls read as the *new* stage and the
-  near track as the old. `burst-2.png` at radius `3288` reads cleanly the
-  other way - near track green and walls lime, far scenery cyan - which is
-  what inside-is-new predicts. Whether the earlier frame is the Track pair's
-  teal `Base Colour` rim on a green road or a polarity this page has wrong
-  is for someone with the emulator to settle; nothing here was tuned to
-  either picture.
+- **Which live frame confirms the polarity.** `burst-2.png` at radius
+  `3288` does: the near road green and the near walls lime (`Venom`'s
+  `Track.Texture Colour` and `Scene.Texture Colour`), the far scenery still
+  `Sub Venom`'s cyan. `burst-1.png` at radius `799` is *not* discriminating
+  and should not be read as a counter-example: the boundary sits past most
+  of the visible road, and the near track's teal there is `Venom`'s own
+  `Track.Base Colour` (`0.0039 0.8118 0.7255`) through the `rim^5` summand a
+  road shows at a glancing angle - the thirty-first pass's "the new stage's
+  teal" is the same reading. Comparing a road chunk against a wall chunk
+  says nothing about the sphere either way, since the two read different
+  colour groups of the same stage; only same-class near against far does.
 
 ## Seen, headless
 
