@@ -12,10 +12,11 @@ binary's own string table, under `Backend/Weapons/...` rather than HD's flat
 layout, and the technique extends cleanly to the `RaceManager`/`ModeManager`
 family once the weapon managers established the constructor idiom.
 
-**The names here are applied**, from [names.tsv](names.tsv). 29 functions
+**The names here are applied**, from [names.tsv](names.tsv). 30 functions
 named this pass: 9 weapon-manager constructors, the base `RaceManager` and
 `ModeManager` roots, 16 `_RaceManager` subclasses, the intermediate
-`MPRaceManager_Construct`, and `RaceManager_ConstructArcadeHud`.
+`MPRaceManager_Construct`, and two race-family helpers,
+`RaceManager_ConstructArcadeHud` and `NitroRaceManager_ConstructDuelRules`.
 
 ## Method
 
@@ -164,10 +165,13 @@ directly by most of them (`SPArcadeRaceManager_Construct`,
 `MPTournamentRaceManager_Construct`, `SPFreePlayRaceManager_Construct`,
 `SPTimeTrialRaceManager_Construct`, `SPTournamentRaceManager_Construct`,
 `SPDetonatorRaceManager_Construct` all confirmed calling it directly, each
-against a freshly allocated `0x1620`-byte block) - the reason `get_xrefs_to`
-on either tag found only this one writer despite it constructing two
-distinct classes: it is a shared composite every race owns one of, not code
-reached from `Backend/Weapons/` at all. That still does not resolve what the
+against a freshly allocated `0x1620`-byte block), plus a ninth, indirect
+path through `NitroRaceManager_ConstructDuelRules` (below), which builds one
+more `0x1620`-byte instance of the same composite as its own member - the
+reason `get_xrefs_to` on either tag found only this one writer despite it
+constructing two distinct classes: it is a shared composite every race owns
+one of (directly or through a race-family helper), not code reached from
+`Backend/Weapons/` at all. That still does not resolve what the
 composite as a whole represents, since it never writes its own tag (the
 placeholder in item 1 above is never overwritten) - naming `0x013781e0`
 itself risks the same overclaim the confidence rubric warns against, so
@@ -265,22 +269,24 @@ Fourteen call `RaceManager_Construct` directly:
 | `0x012a4610` | `SPDetonatorRaceManager_Construct` | 84 | - |
 | `0x012a7e60` | `SPEliminationRaceManager_Construct` | 84 | Region-aware HUD selection (`WIP3OUT`/`2097` build-name checks, see below) |
 | `0x012a98f0` | `SPFreePlayRaceManager_Construct` | 84 | Loads `TimeTrial_HUD.xml` |
-| `0x012ad580` | `SPNitroRaceManager_Construct` | 84 | Also calls `FUN_012ac060(param_1 + 0x600e)`, a second helper not chased |
+| `0x012ad580` | `SPNitroRaceManager_Construct` | 84 | Also calls `NitroRaceManager_ConstructDuelRules(param_1 + 0x600e)` (below) |
 | `0x012af230` | `SPTimeTrialRaceManager_Construct` | 84 | Ghost/replay-slot allocation gated on `DAT_01f999e4 == 10 \|\| == 5` (track-count-dependent) |
 | `0x012b1e60` | `SPTournamentRaceManager_Construct` | 84 | Also calls `RaceManager_ConstructArcadeHud` (below) |
 | `0x012b4960` | `SPZoneRaceManager_Construct` | 84 | Loads region-specific `Zone_HUD.xml` variants (`wo3_HUD`, `2097_HUD` - see below) |
-| `0x015a7020` | `GameModeRaceManager_Construct` | Loads `InGame2048`-namespaced frontend widgets (`InGameWipeout2048Logo`, `EndPreRaceButton`) - ties this `GameModes/` tag concretely to 2048 content, not just a name |
+| `0x015a7020` | `GameModeRaceManager_Construct` | 84 | Loads `InGame2048`-namespaced frontend widgets (`InGameWipeout2048Logo`, `EndPreRaceButton`) - ties this `GameModes/` tag concretely to 2048 content, not just a name |
 
-Two call a second, unnamed helper (`FUN_0129c120`/`FUN_012ac060`) between
-`RaceManager_Construct()` and their own tag write; neither helper was
-chased.
+Two call a second helper between `RaceManager_Construct()` and their own tag
+write: `SPArcadeRaceManager_Construct`/`SPTournamentRaceManager_Construct`
+call `RaceManager_ConstructArcadeHud`, and `SPNitroRaceManager_Construct`
+calls `NitroRaceManager_ConstructDuelRules` - both named below.
 
 Four call `MPRaceManager_Construct` (`0x01284690`, below) instead of
 `RaceManager_Construct` directly, plus `MPNitroRaceManager_Construct`
 (`0x0127d940`, confidence 84), which calls `FUN_01284690()`
-(`MPRaceManager_Construct`) then `FUN_012ac060(param_1 + 0x6148)`, a second
-helper also called by `SPNitroRaceManager_Construct` above, before writing
-its own tag - consistent with the same class hierarchy, not chased further:
+(`MPRaceManager_Construct`) then `NitroRaceManager_ConstructDuelRules(param_1
++ 0x6148)`, the same helper `SPNitroRaceManager_Construct` calls above,
+before writing its own tag - consistent with the same class hierarchy, not
+chased further:
 
 | Address | Name | Confidence |
 | --- | --- | ---: |
@@ -377,10 +383,31 @@ already uses; **confidence 80** (Probable: decompiled, unambiguous, two
 consistent call sites - no `.cpp` tag of its own and no second-binary
 corroboration to reach higher).
 
-The second helper `FUN_012ac060`, called by `SPNitroRaceManager_Construct`,
-`SPTournamentRaceManager_Construct` and `MPNitroRaceManager_Construct`
-against a `param_1 + <offset>` argument rather than `param_1` itself, is a
-different function - not chased this pass.
+**`NitroRaceManager_ConstructDuelRules`** (`0x012ac060`, confidence 78) is
+the other helper, called only by `SPNitroRaceManager_Construct` and
+`MPNitroRaceManager_Construct` (`get_function_callers` - not
+`SPTournamentRaceManager_Construct`, which calls
+`RaceManager_ConstructArcadeHud` instead, a different function at a
+similarly-shaped call site). It constructs a nested sub-object at a fixed
+offset within its caller (`param_1 + 0x600e`/`+ 0x6148` above, not `param_1`
+itself): sets its own vtable, initializes several per-ship scoring arrays,
+and parses `Data\XML\DuelStats.xml` - present verbatim in
+`vita-2048-eu-v104` and `ps3-hdfury-eu`'s own string tables too, though
+neither names a function for it yet - reading a `NoviceStats`/
+`SkilledStats`/`EliteStats`-tiered `GamePlayStats` block whose own keys
+(`ZoneTriggerPercent`, `LightBarrierTriggerPercent`, `MaxZoneAttackBarLevel`,
+`BarrierNitroBarDecrease`, `SecondsPerZone`, `BarriersPerShip`,
+`LightBarrierPenalty`) are Nitro mode's own barrier-triggered attack-bar
+mechanic, not zone-mode or generic race rules - consistent with being called
+by Nitro race managers only. It also owns one `0x1620`-byte member built
+through `FUN_013781e0` (the still-unnamed `LeachBeamManager`/`MineManager`
+composite from "Not yet verified" above) - a third confirmed owner of that
+composite, alongside the `_RaceManager` subclasses that call it directly.
+Named for its demonstrated behavior and config file rather than a class-name
+guess, the same reasoning `RaceManager_ConstructArcadeHud` above uses;
+**confidence 78** (Probable: decompiled, unambiguous field-name evidence, two
+consistent call sites - no `.cpp` tag and no second-binary function to
+corroborate against, only a shared config file name).
 
 ## `GameModes/` is a real, distinct directory - not a rename
 
