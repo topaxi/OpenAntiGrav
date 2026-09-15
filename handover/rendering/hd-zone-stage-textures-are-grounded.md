@@ -512,8 +512,9 @@ unblocks - see Next Steps below for what implementing it needs.
   set beside the `Scene.*` colours) elsewhere. On `Sub Venom` (at the time
   of this capture the only stage a headless run reached, because the ladder
   re-shows its rung every frame and overwrote any override; **fixed the same
-  day, later, by `ZoneGrade::pin_stage`** - `--zone-stage 0` now reaches
-  `Start` too, see [2048-and-hd-ship-an-unread-effectsettings-table.md](2048-and-hd-ship-an-unread-effectsettings-table.md))
+  day, later, by `ZoneGrade::pin_stage`** - a `--zone-stage 0` capture is no
+  longer overwritten from tick 1, though `Start` itself has not actually
+  been captured this way yet, see [2048-and-hd-ship-an-unread-effectsettings-table.md](2048-and-hd-ship-an-unread-effectsettings-table.md))
   the road and the track-side walls kept the art and the scenery went flat, and
   flat means **white**: `Scene.Texture Colour` `0.72 0.91 0.96` on a white
   texture, multiplied by the stage's `Constant Ambient Colour` `1.5`, clamps
