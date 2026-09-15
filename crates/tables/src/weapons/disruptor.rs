@@ -219,10 +219,11 @@ impl DisruptorStats {
     ///
     /// Pure's ladder is Pulse's four with `Vector` under them, so `Vector` is
     /// rung 0 and [`crate::handling::SpeedClass`]'s four are rungs 1..=4 -
-    /// which puts Phantom at `speed + 320`. **The index order is the reading
-    /// of `DAT_08b173e0`'s five values against the class-name run at
-    /// `0x08a445d0`, not a measured race**, so it carries the page's
-    /// confidence and not a higher one. Case-insensitive, as
+    /// which puts Phantom at `speed + 320`. **The rung order is inferred from
+    /// the class-name run at `0x08a445d0`, not read**: the evidence page
+    /// records only that `class_index` *is* `DAT_08b173e0` in `0..4`, and the
+    /// five values behind it were not read, so Vector-first is the order the
+    /// names are listed in and nothing stronger. Case-insensitive, as
     /// `SpeedClass::from_name` is, because the two XML files spell a class
     /// differently.
     #[must_use]
