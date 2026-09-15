@@ -70,8 +70,10 @@ function parses the whole `TrackStartup.xml`-shaped element tree by literal
 `UnderwaterSound`, `WindSound`, `LoadSoundBank`, `Billboard` - the same
 element set `ps3-hdfury-eu/billboards.md`'s own `TrackStartup_Load`
 (`0x000b19a8`) names, in the same nesting, down to `Billboard`'s own
-attribute set (`Num`, `Location`, `Color`/`Colour`, `Glow`) and a `Filename`
-attribute under `LoadSoundBank`. Both constructor calls
+attribute set (`Type`, `Num`, `Location`, `Color`/`Colour`, `Glow` - see
+"`Type` is read here" below for the one attribute HD's own reading marks
+as unconsumed) and a `Filename` attribute under `LoadSoundBank`. Both
+constructor calls
 (`Billboard_ConstructResource(pauVar18, uVar5, iVar9, uVar16)`, one per
 branch) confirm this single function does what HD splits across
 `TrackStartup_Load` plus `Billboard_CreateFromLocation_q`/
@@ -129,6 +131,35 @@ substituted with `321Go_2048_Combat.vex` - a fifth countdown-gantry variant,
 named for a 2048-specific "Combat" mode this project has not previously
 catalogued from this angle. Not chased further - which mode `+0x21c == 1`
 identifies is a `RaceManager` question, out of scope for this pass.
+
+## `Type` is read here, unlike on `ps3-hdfury-eu`
+
+`ps3-hdfury-eu/billboards.md` states plainly that `type` "is never compared
+against in this loop, despite every one of the disc's 118 `<Billboard>`
+elements authoring it - it is read by something else, or by nothing," and
+lists "`type`'s consumer, if it has one" as still open. On this binary it
+is read: the first attribute `TrackStartup_Load`'s `<Billboard>` loop
+checks is `strcasecmp(&DAT_0183a3ad, ...)`, and `inspect_memory_content` on
+`0x0183a3ad` reads the literal `"Type"`. Its value is copied into a local
+buffer, then matched against four literals to produce a small integer:
+
+```c
+mode = strcasecmp(value, "<none>") ? -1 : 0;
+if (strcasecmp(value, "Square")    == 0) mode = 1;
+if (strcasecmp(value, "Portrait")  == 0) mode = 2;
+if (strcasecmp(value, "Landscape") == 0) mode = 3;
+```
+
+That value is one of the arguments `TrackStartup_Load` passes into
+`Billboard_ConstructResource` at the same call site already named above.
+**This is a genuine cross-binary difference, not a corrected gap in HD's
+own reading** - `ps3-hdfury-eu/billboards.md`'s claim is specific and
+already double-checked there (every attribute-loop comparison traced by
+TOC slot); this binary simply consumes an attribute HD's own parser does
+not. Not chased further: which of `Billboard_ConstructResource`'s fields
+this four-way aspect-shaped enum (none/square/portrait/landscape) actually
+feeds, and whether any of this binary's manifests author a `type` other
+than the default.
 
 ## Not chased this pass
 

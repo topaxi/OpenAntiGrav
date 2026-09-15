@@ -382,7 +382,13 @@ at confidence 80; see the 2026-09-06 section below.
   `field_0x4c` points at on *this* binary - the two could still route
   through different intermediate data to the same small set of files.
 - **`type`'s consumer**, if it has one - unread by this function despite being
-  authored on every slot.
+  authored on every slot. **Not the same on every binary**: `ps4-omega-eu`'s
+  own `TrackStartup_Load` does read `type`, mapping `<none>`/`Square`/
+  `Portrait`/`Landscape` to a small enum passed into its own
+  `Billboard_ConstructResource` - see
+  [`ps4-omega-eu/billboards.md`](../ps4-omega-eu/billboards.md#type-is-read-here-unlike-on-ps3-hdfury-eu).
+  This doesn't settle what (if anything) reads it here; it's a confirmed
+  cross-binary difference, not evidence this function was mis-read.
 
 ## 2026-09-06: the transform question is answered, and the answer is "the track supplies it"
 
