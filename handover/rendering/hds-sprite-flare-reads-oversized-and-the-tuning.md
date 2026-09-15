@@ -225,9 +225,11 @@ settles it.
   targeting the craft is in a mode outside `{2, 6, 7, 8, 11}`. Every live
   sample so far was the player's craft in a single view, where that gate is
   closed by construction - consistent with the fifth session's 0 hits at
-  `0x002a0bb8` over ~2,500 calls with both earlier gates open. Confidence
-  75: the view-index global (`*0x008c1430`) and the camera modes are read
-  from use, not measured, and the fifth session's breakpoints were not
+  `0x002a0bb8` over ~2,500 calls with both earlier gates open. The branch
+  logic is mechanical (90) and the `+0x7a60` identity rests on its two
+  writers (85); what holds the conclusion at 75 is that the view-index
+  global (`*0x008c1430`) and the camera modes are read from use, not
+  measured, and the fifth session's breakpoints were not
   filtered by craft, so it is also unknown whether AI craft reach the fade
   (they should, unless their occlusion query read zero pixels under RPCS3,
   `craft+0x5fa4` was in `{4, 5, 6}`, or they were never enqueued). If it
@@ -255,17 +257,24 @@ settles it.
 
 ## Next Steps
 
-- **One breakpoint run, then the renderer follows from it.** Extend
+- **One picture or one breakpoint run, then the renderer follows from
+  it.** Cheapest first: the reading predicts no sprite on the player's
+  craft and a wide 4:1 streak on every opponent whose nozzles face the
+  camera within ~15 units. None of the three captures on disc has an
+  opponent nearer than the horizon (eighth place in all three), so take a
+  **start-grid frame** with `scripts/rpcs3-drive.py race --shots` before
+  the drive begins - seven crafts bunched a few units ahead, nozzles
+  toward the camera - and look at their engine bays against the player's.
+  Ten minutes. If that is ambiguous, the breakpoint: extend
   `scripts/hd-flare-gate-check.py` with a checkpoint at `0x002a0bac`
-  logging `r10`, `r31` (the flare object), `*(*(r31+0x134)+0x7a60)` and
-  `*0x008c1430` for every hit across ~10 s of a race with opponents
-  visible ahead, plus one at `0x002a1428` logging `r28` (the occlusion
-  result). Expected if the reading holds: `r10 = 0` for the craft with
-  `+0x7a60 = 0` every time, `r10 = 1` for `-1` craft. `PPU Decoder:
+  logging the two values that feed the branch - `*(*(r31+0x134)+0x7a60)`
+  and `*0x008c1430` - plus `r31` on every hit across ~10 s of a race
+  (the branch outcome itself is already known from the listing), and one
+  at `0x002a1428` logging `r28` (the occlusion result). `PPU Decoder:
   Interpreter (static)`, one breakpoint per run (two at once desynced the
   stub last time). About an hour including the two boots.
-- **Then the renderer, in this order**: (1) if the player's craft gets
-  `r10 = 0`, stop drawing the sprite on the viewing player's craft in
+- **Then the renderer, in this order**: (1) if the player's craft is
+  confirmed skipped, stop drawing the sprite on the viewing player's craft in
   `race::effects::hd_sprite_quad` - the original's own rule, not a fitted
   multiplier - and the eyeballed `0.57x` decision recorded in the eighth
   session is moot; (2) replace `hd::Sprite`'s radius law and the square

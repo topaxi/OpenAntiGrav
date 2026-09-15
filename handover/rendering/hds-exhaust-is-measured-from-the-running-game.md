@@ -58,8 +58,10 @@ section) is the current, authoritative state.
   `+0x108`; a whole-image sweep of the 1,006 stores with a `0x108(`
   displacement leaves 236 off the stack, the 20 in craft-sized code all
   classified to other objects (the flare's own `+0x108`, a RaceManager
-  slot record, the pad object, weapons, HUD), and the 14 `stfs` in the rest
-  opened one by one - none takes a craft. What the clean decompile adds:
+  slot record, the pad object, weapons, HUD), the 14 `stfs` in the rest
+  opened one by one, and the dozen `+0x108` sites inside the craft-method
+  address range all integer reference counts on a shared resource - none
+  takes a craft. What the clean decompile adds:
   the rising branch is entered only past the `+0x58 == 0xb` check and the
   `+0x5f70` transform read, so the pad-contact reading is now what the
   decompiler shows too, still never observed live; and `+0xfc` has a

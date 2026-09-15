@@ -620,8 +620,8 @@ decryption step beyond the disc's own layer-1 key:
 
 | Key | Value | Where it went |
 | --- | ---: | --- |
-| `Spikes Thrust Max Scale` | 1.5 | runtime storage `+0x42c` ("Ninth session" below corrects the `+0x490` the fourth session assigned by value) - no consumer read; the five spike shapes' own throttle scale, separate from `EF_Main`'s |
-| `Spikes Boost Max Scale` | 2.0 | runtime storage `+0x430` (not `+0x480`, which is `Flare Radius Min` - "Ninth session") - no consumer read; the spikes' boost scale |
+| `Spikes Thrust Max Scale` | 1.5 | runtime storage unresolved - the `+0x490` the fourth session assigned by value is `Max Chromatic Dispersion` ("Ninth session" below), and the block's head holds 1.5 at both `+0x420` and `+0x42c`; no consumer read; the five spike shapes' own throttle scale, separate from `EF_Main`'s |
+| `Spikes Boost Max Scale` | 2.0 | runtime storage unresolved - not `+0x480`, which is `Flare Radius Min` ("Ninth session"), and 2.0 sits at both `+0x428` and `+0x430`; no consumer read; the spikes' boost scale |
 | `Engine Flare Particles Min Alpha` | 0.25 | runtime storage `+0x44c` (not `+0x464`, which is `Tex Scroll Speed Thrust Contrib` - "Ninth session") - no consumer read; see below |
 | `Enable Engine Flare Particles` | 1 | runtime storage `+0x450`, a byte ("Ninth session") - no consumer read; see below |
 | `Shockwave Cycle Speed` | 0.01 | runtime storage found (`+0x46c`) - no consumer read, no shockwave node identified yet |
@@ -1304,7 +1304,10 @@ integers (`lwz r21,0x498(r9)`, `lbz r0,0x494(r9)`), so the mapping is
 overdetermined - **confidence 92**. The head of the block (`+0x420`..
 `+0x448`) is *not* in file order (`+0x42c`/`+0x430` are the `Spikes` pair,
 `+0x444`/`+0x448` the `Afterburner` pair reversed) and no claim is made
-there beyond what the values pin. Consequences: the fourth session's
+there beyond what the values pin - `+0x42c`/`+0x430` read 1.5/2.0 and
+*could* be the `Spikes` pair, but 1.5 also sits at `+0x420` and 2.0 at
+`+0x428`, so that is a value guess of exactly the kind this paragraph is
+correcting, not a mapping. Consequences: the fourth session's
 `+0x480` = `Spikes Boost Max Scale` and `+0x490` = `Spikes Thrust Max
 Scale` were value coincidences (2.0 and 1.5 each appear twice in the file);
 the byte-flag gate at `+0x494` this thread has been calling "a byte flag"
@@ -1332,8 +1335,9 @@ then four corners `pos - v5 - v7`, `pos + v5 - v7`, `pos + v5 + v7`,
 converted lane by lane with `FUN_00677cb8` (float to half) and stored as
 three `sth` at `this+0x274/6/8`, `+0x284/6/8`, `+0x294/6/8`, `+0x2a4/6/8`
 - the same 16-byte stride `EngineFlare_Init` seeds the UV pairs into at
-`+0x280..+0x2b2`, so the vertex is `{half3 clip position, pad, u32 colour,
-half2 uv}`. The colour word at `+0x27c/+0x28c/+0x29c/+0x2ac` is
+`+0x280..+0x2b2`, so the vertex is `{half3 position, pad, u32 colour, half2
+uv}` - "position" in whatever space that first matrix maps to, clip by the
+65-confidence reading above. The colour word at `+0x27c/+0x28c/+0x29c/+0x2ac` is
 `0xffffff00 | alpha_byte`, where `alpha_byte = (int)(fade * 255.0)`
 (`*(r2+0x5ab4)` = `0x437f0000`), `0xff` if `fade > 1`. Then
 `FUN_002c4ad0(MaxChromaticDispersion * (1.0 - view_dot), *(r2+0x5aa8),
@@ -1454,23 +1458,35 @@ every live sample so far was taken in, the player's own craft has
 `+0x7a60 = 0` and a view index of 0 or -1, and either way `r10 = 0` -
 **the fade math and the quad are skipped for the craft the camera belongs
 to**, which is what 0 hits at `0x002a0bb8` over ~2,500 calls with both
-earlier gates measured open already said. Confidence **75** for that
-reading: the control flow is mechanical, the `+0x7a60` identity rests on
-its two writers and three spawners, but the view-index global and the
-camera object's mode numbering are read from use, not measured, and the
-fifth session's breakpoints were not filtered by craft, so whether an AI
-craft ever reaches `0x002a0bb8` is not known either (an AI craft's `+0x7a60`
-is -1 by the spawner above, so it should - unless its query read zero,
-unless `craft+0x5fa4` was in `{4, 5, 6}` for it, or unless it was never
-enqueued). What follows if it holds: the compact glow on the player's own
-nozzles in all three original captures is the flame `.rcsmodel` and
-whatever `Engine Flare Particles` draws, **not this sprite**, and this
-engine draws on the player's craft a quad the original reserves for the
-other crafts. **The one measurement that settles it**: a breakpoint at
-`0x002a0bac` logging `r10`, `r31`, `*(r31+0x134)+0x7a60` and `*0x008c1430`
-across every craft's call, plus one at `0x002a1428` logging `r28` (the
-query result) - `scripts/hd-flare-gate-check.py` already has the shape,
-it needs the register reads added.
+earlier gates measured open already said. Two confidences, because two
+different things are being claimed: the branch logic itself - `r10 =
+(owner != view)` from the `xor`/`abs`/sign-bit idiom at `0x002a0b70`-
+`0x002a0b80`, skipped at `0x002a0bb4` when equal - is mechanical, **90**,
+and the `+0x7a60` identity rests on its two writers and three spawners,
+**85**. What holds the *conclusion* at **75** is narrower: that
+`*0x008c1430` is the current view index (read from the split-screen
+halving at `0x002a0ad8`-`0x002a0b2c`, never measured) and what the
+camera object's `0x9c4` mode set means. The fifth session's breakpoints
+were also not filtered by craft, so whether an AI craft ever reaches
+`0x002a0bb8` is not known either (an AI craft's `+0x7a60` is -1 by the
+spawner above, so it should - unless its query read zero, unless
+`craft+0x5fa4` was in `{4, 5, 6}` for it, or unless it was never enqueued).
+What follows if it holds: the compact glow on the player's own nozzles in
+all three original captures is the flame `.rcsmodel` and whatever `Engine
+Flare Particles` draws, **not this sprite**, and this engine draws on the
+player's craft a quad the original reserves for the other crafts. **The
+one measurement that settles it** is not the branch outcome (the listing
+already gives that) but the two values feeding it: a breakpoint at
+`0x002a0bac` logging `*(*(r31+0x134)+0x7a60)`, `*0x008c1430` and `r31` on
+every craft's call, plus one at `0x002a1428` logging `r28` (the query
+result) - `scripts/hd-flare-gate-check.py` already has the shape, it
+needs the register and memory reads added. **A cheaper check that needs no
+breakpoint**: the reading predicts an asymmetry a single frame shows - no
+sprite on the player's craft, a wide 4:1 streak on every opponent whose
+nozzles face the camera within ~15 units. None of the three captures on
+disc has an opponent nearer than the horizon (the player is in eighth
+place in all three), so a start-grid frame - seven crafts bunched a few
+units ahead, nozzles toward the camera - is the picture to take.
 
 **What this function never loads**: `+0x478` `Flare Max Rotate Angle`,
 `+0x4b0` `Flare Size Clamp`, `+0x4b4` `Flare Depth Bias`, and nothing
@@ -1692,7 +1708,19 @@ warning; its two `lvlx` at `0x000918ec`/`0x000918f0` decode) and so does
   with 16-byte matrices at `+0x1b0..` (`0x0028fa50`), a global at
   `*0x008b35a0` (`0x002b2c60`, the call the human-craft spawner makes after
   the last player), `RenderManager_PrepareEye_q`, `SoundManager_Construct`,
-  and the four already ruled out on 2026-09-05 - none takes a craft.
+  and the four already ruled out on 2026-09-05 - none takes a craft. The
+  heuristic's own blind spot is a small helper that takes a craft and
+  writes only `+0x108`, which would show `baseMax=0x108` and nothing
+  larger; the dozen such sites in the craft-method address range
+  (`0x00083510`, `0x00085270`, `0x0008530c`, `0x00085340`, `0x000853c4`,
+  `0x000853f8`, `0x00085704`, `0x000857d4`, `0x000858a8`, `0x00087b50`,
+  `0x00088b50`, `0x000890e8`, plus the four `0x00049xxx` twins) were opened
+  for that reason: every one is `*(obj + 0x108) += 1` or `-= 1` on a
+  sub-object loaded from the argument - an integer reference count on a
+  shared resource, the pair `0x00085298`/`0x00085350` being the
+  acquire/release the human-craft spawner calls on a global - not a float
+  and not a craft. Outside that range the same shape is not excluded,
+  only made unlikely by the per-tick argument above.
 - **Not covered by a displacement search, stated so nobody reads this as
   more than it is**: indexed stores (`stfsx`/`stwx`), 16-byte vector stores
   (`stvx`) over the `+0xf4..+0x110` block, and `memcpy`-shaped struct
