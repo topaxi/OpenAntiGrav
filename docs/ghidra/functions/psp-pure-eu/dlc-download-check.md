@@ -202,9 +202,11 @@ action was taken from this session (reopening a shared Ghidra program is a
 GUI-only operation per this page's own workflow doc, and forcing it from a
 script-driven session risks compounding whatever state the disk pressure left
 it in). **The two functions above almost certainly exist at different
-addresses in `psp-pure-usa` too** (every other function pair checked this
-session was byte-identical in logic between regions) but this was not
-confirmed, and no `pure-usa` names.tsv row is added for them.
+addresses in `psp-pure-usa` too** (both function pairs actually checked this
+session - `WowDownload_VerifyPackFiles` and its file-probe helper - were
+byte-identical in logic between regions, a sample of two, not "every"
+pair) but this was not confirmed, and no `pure-usa` names.tsv row is added
+for them.
 
 ## Open
 
