@@ -668,7 +668,7 @@ no longer disagree.
   non-zero by nothing in the image); `saturation`/`finalScale`/`finalBias` are
   photo mode's exposure controls and both float4s are built **grey**, so they
   cannot express a hue; `colourScale` is bound every frame with `(1,1,1,1)`,
-  its three setters having no caller anywhere. **[stale 2026-09-15: computed before the lvlx reimport; re-run per toolchain.md#ps3]** Full evidence, with the
+  its three setters having no caller anywhere. **[2026-09-15: re-run against the `lvlx`-aware PS3 language, negative holds - see renderer.md's dated addendum to this section.]** Full evidence, with the
   whole-image scans that make it an enumeration rather than a failed search, in
   `docs/ghidra/functions/ps3-hdfury-eu/renderer.md` ("The resolve's full-screen
   colour inputs, enumerated") and cross-referenced from
