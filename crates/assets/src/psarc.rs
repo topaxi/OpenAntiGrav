@@ -83,13 +83,15 @@ impl Archive {
 
         // Entry 0 is the manifest. Reading it here is what makes the archive
         // addressable by name at all; `match_paths_to_entries` is what ties
-        // its paths back to the entries that actually store them - positional
-        // on a version-1.3 archive, by digest on a version-1.4 one.
+        // its paths back to the entries that actually store them, by digest -
+        // the header's declared version does not say which archives need
+        // that rather than a positional reading, so every archive is read
+        // the same way. See `oag_formats::psarc`'s module docs.
         let (offset, len) = directory.entry_range(MANIFEST).map_err(bad)?;
         let stored = source.read(offset, len)?;
         let manifest_bytes = directory.read_entry(MANIFEST, &stored).map_err(bad)?;
-        let manifest_paths = psarc::parse_manifest(&manifest_bytes, &header);
-        let matches = psarc::match_paths_to_entries(&header, &directory.entries, &manifest_paths);
+        let manifest_paths = psarc::parse_manifest(&manifest_bytes);
+        let matches = psarc::match_paths_to_entries(&directory.entries, &manifest_paths);
         let mut paths = Vec::with_capacity(matches.len());
         let mut entry_of_path = Vec::with_capacity(matches.len());
         for psarc::PathEntry { index, path } in matches {
@@ -116,28 +118,32 @@ impl Archive {
     /// the manifest and any unbacked or placeholder entry excluded.
     ///
     /// Paths are stored lowercase and absolute, like
-    /// `/data/environments/talons_junction/track.vex`, on a version-1.3
-    /// archive. This is the one structural way PSARC is *easier* than the WAD
-    /// it replaces: a WAD stores only a name hash, so most of its names still
-    /// have to be mined.
+    /// `/data/environments/talons_junction/track.vex`. This is the one
+    /// structural way PSARC is *easier* than the WAD it replaces: a WAD
+    /// stores only a name hash, so most of its names still have to be mined.
     ///
-    /// **Naming an entry is not the same as being able to read it, on a
-    /// version-1.4 archive.** `entry.offset` produces real content for a
-    /// substantial fraction of entries already - roughly a third to a half,
-    /// varying by archive, through no more than [`Archive::read_path`] as it
-    /// stands - and zero bytes for the rest, and which of the two a given
-    /// path is has no known predictor yet. See `docs/formats/psarc.md`'s
-    /// "Block data location" section.
+    /// **Naming an entry is not the same as being able to read it, on the
+    /// PS4 Omega Collection family specifically (`omega-ps4-eu`'s
+    /// `dataNN.psarc` archives) - not a property of any particular declared
+    /// version.** `entry.offset` produces real content for a substantial
+    /// fraction of that family's entries already - roughly a third to a
+    /// half, varying by archive, through no more than [`Archive::read_path`]
+    /// as it stands - and zero bytes for the rest, with no known predictor
+    /// yet for which. See `docs/formats/psarc.md`'s "Block data location"
+    /// section. Every other archive read so far, including Vita `2048`'s
+    /// `data.psarc` despite it declaring the same version number, reads
+    /// real content for every entry `paths()` lists.
     #[must_use]
     pub fn paths(&self) -> &[String] {
         &self.paths
     }
 
-    /// The parsed directory. On a version-1.3 archive, entry `n + 1` is
-    /// [`Archive::paths`]`[n]`; on a version-1.4 one entry order carries no
-    /// relationship to [`Archive::paths`] at all, and
-    /// [`Archive::index_of_path`] is what recovers the correspondence. See
-    /// `oag_formats::psarc`'s "Entry 0 is the manifest, not a file" section.
+    /// The parsed directory. Entry order carries no promised relationship to
+    /// [`Archive::paths`]'s order - it happens to, on a well-behaved
+    /// archive, but nothing here relies on that - so
+    /// [`Archive::index_of_path`] is always what recovers the
+    /// correspondence, by digest. See `oag_formats::psarc`'s "Entry 0 is the
+    /// manifest, not a file" section.
     #[must_use]
     pub fn directory(&self) -> &Directory {
         &self.directory

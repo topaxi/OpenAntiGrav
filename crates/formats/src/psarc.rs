@@ -33,36 +33,53 @@
 //!
 //! # Entry 0 is the manifest, not a file
 //!
-//! On a version-1.3 archive (PS3) it inflates to a newline-separated list of
-//! every other entry's path, in entry order, so entry `n + 1` is the `n`th
-//! line. Its own digest field is sixteen zero bytes - it has no path to hash -
-//! and it is the only entry for which that is true. [`parse_manifest`] reads
-//! it; [`path_digest`] is the check that ties the manifest text, the entry
-//! ordering and the entry stride together.
+//! On a well-behaved archive (every PS3 one seen, and Vita `2048`'s
+//! `data.psarc`) it inflates to a newline-separated list of every other
+//! entry's path, in entry order, so entry `n + 1` is the `n`th line. Its own
+//! digest field is sixteen zero bytes - it has no path to hash - and it is
+//! the only entry for which that is true. [`parse_manifest`] reads it;
+//! [`path_digest`] is the check that ties the manifest text, the entry
+//! ordering and the entry stride together, and [`match_paths_to_entries`]
+//! is what actually recovers the path for every entry, by that digest -
+//! see below for why this holds even here, not just on the archive family
+//! that needs it.
 //!
-//! **Version 1.4 (the PS4 Omega Collection family) breaks both halves of
-//! that.** The manifest is NUL-delimited, not newline-delimited - confirmed
-//! on `omega-ps4-eu`'s `data00.psarc`: its manifest carries zero `\n` bytes
-//! and splits into well-formed paths only on `\x00`. And entry order carries
-//! no relationship to manifest order at all: the entry table is a
-//! concatenation of several separately digest-sorted runs (one descent in the
-//! ascending sequence per extra run - data00 has four, data01 two,
-//! data02/data04 one, data03 none), interleaved with thousands of
-//! fully-zeroed placeholder rows for manifest paths this particular archive
-//! does not store. A fourth row shape exists too, one per archive on
-//! data00/01/02/04, always at index 2183: a digest that is fourteen zero
-//! bytes and two real ones - not the all-zero placeholder shape, but not a
-//! real path's MD5 either - alongside plausible-looking geometry. It is
-//! handled the same way an unmatched real digest is: [`match_paths_to_entries`]
-//! finds no manifest path whose digest matches, and drops it. On
-//! `data00.psarc`, 10,714 non-empty manifest paths name only 1,533 real
-//! (non-zero-digest) entries; the other ~86% are dead text - verified *not*
-//! to be files that live in a sibling `dataNN.psarc` instead (at most 2 of
-//! 9,222 orphaned `data00.psarc` paths turn up as a real entry anywhere else
-//! in the five-archive family, statistical noise rather than a split
-//! namespace). [`path_digest`] is therefore not just a check on this family,
-//! it is the only way to find an entry's path at all - see
-//! [`Header::nul_delimited_manifest`] and `docs/formats/psarc.md`.
+//! **The PS4 Omega Collection family (`omega-ps4-eu`'s five `dataNN.psarc`
+//! archives) breaks both halves of that, and the header's declared version
+//! does not say so.** All five declare version 1.4. Their manifest is
+//! NUL-delimited, not newline-delimited - confirmed on `data00.psarc`: its
+//! manifest carries zero `\n` bytes and splits into well-formed paths only
+//! on `\x00`. And entry order carries no relationship to manifest order at
+//! all: the entry table is a concatenation of several separately
+//! digest-sorted runs (one descent in the ascending sequence per extra run -
+//! data00 has four, data01 two, data02/data04 one, data03 none), interleaved
+//! with thousands of fully-zeroed placeholder rows for manifest paths this
+//! particular archive does not store. A fourth row shape exists too, one per
+//! archive on data00/01/02/04, always at index 2183: a digest that is
+//! fourteen zero bytes and two real ones - not the all-zero placeholder
+//! shape, but not a real path's MD5 either - alongside plausible-looking
+//! geometry; handled the same way an unmatched real digest is:
+//! [`match_paths_to_entries`] finds no manifest path whose digest matches,
+//! and drops it. On `data00.psarc`, 10,714 non-empty manifest paths name
+//! only 1,533 real (non-zero-digest) entries; the other ~86% are dead text -
+//! verified *not* to be files that live in a sibling `dataNN.psarc` instead
+//! (at most 2 of 9,222 orphaned `data00.psarc` paths turn up as a real entry
+//! anywhere else in the five-archive family, statistical noise rather than a
+//! split namespace).
+//!
+//! **`version_minor >= 4` is not the signal for any of this - it is not
+//! reliable at all, measured directly.** Vita `2048`'s `data.psarc` also
+//! declares version 1.4 and is the well-behaved shape throughout: its
+//! manifest is newline-delimited (zero `\x00` bytes, 18,429 `\n`), its
+//! 18,430 lines match its entry count exactly, and every one of its 18,430
+//! real entries' digest matches its corresponding manifest line's, entry
+//! `n + 1` to line `n`, the same invariant PS3 archives hold. Dispatching on
+//! the header's version once regressed every Vita-backed path lookup on
+//! `main` - [`parse_manifest`] instead reads the manifest's own bytes to
+//! choose a delimiter, and [`match_paths_to_entries`] always matches by
+//! digest rather than by position, which reproduces the well-behaved case's
+//! own positional order as a corollary rather than needing a second code
+//! path for it. See `docs/formats/psarc.md`.
 //!
 //! # This module does no I/O
 //!
@@ -307,15 +324,6 @@ impl Header {
     #[must_use]
     pub fn compression_name(&self) -> String {
         String::from_utf8_lossy(&self.compression).into_owned()
-    }
-
-    /// Whether this archive is the PS4 Omega Collection family (version
-    /// 1.4), whose manifest is NUL-delimited and whose entry order carries no
-    /// relationship to manifest order. See the module docs' "Entry 0 is the
-    /// manifest, not a file" section.
-    #[must_use]
-    pub fn nul_delimited_manifest(&self) -> bool {
-        self.version_major == 1 && self.version_minor >= 4
     }
 }
 
@@ -565,17 +573,18 @@ impl Directory {
 
 /// Splits the manifest's text into paths.
 ///
-/// `header` self-selects the delimiter: a version-1.3 archive's manifest is
-/// newline-separated, one path per entry in entry order (entry `n + 1` is
-/// line `n`), and `\r\n` is handled because the archives that carry
-/// plain-text XML use CRLF throughout. A version-1.4 archive's manifest is
-/// NUL-delimited instead, and carries no positional relationship to the
-/// entry table at all - [`match_paths_to_entries`] is what recovers that
-/// correspondence for it, by digest rather than by position. See
-/// [`Header::nul_delimited_manifest`].
+/// The delimiter is read off the manifest's own bytes, not the header's
+/// declared version - **version 1.4 does not mean NUL-delimited**, measured
+/// the hard way: `omega-ps4-eu`'s five archives are 1.4 and NUL-delimited,
+/// but Vita `2048`'s `data.psarc` also declares 1.4 and is newline-delimited,
+/// its 18,430-line manifest matching its entry count exactly. A manifest
+/// with no `\n` byte at all is read as NUL-delimited; anything else - the
+/// newline case, and the degenerate one-entry case with neither - is read as
+/// newline-delimited, `\r\n` handled because the archives that carry
+/// plain-text XML use CRLF throughout.
 #[must_use]
-pub fn parse_manifest(data: &[u8], header: &Header) -> Vec<String> {
-    if header.nul_delimited_manifest() {
+pub fn parse_manifest(data: &[u8]) -> Vec<String> {
+    if !data.contains(&b'\n') && data.contains(&0) {
         return data
             .split(|&b| b == 0)
             .filter(|s| !s.is_empty())
@@ -605,17 +614,30 @@ pub struct PathEntry {
     pub path: String,
 }
 
-/// Matches manifest paths to the entries that actually store them.
+/// Matches manifest paths to the entries that actually store them, by
+/// [`path_digest`] rather than by position.
 ///
-/// On a version-1.3 archive this is positional and total: manifest line `n`
-/// is entry `n + 1`, always, so every manifest path gets a [`PathEntry`].
+/// **Not positional, on any archive, even where position happens to agree.**
+/// `entry n + 1 is manifest line n` was this project's first reading of PS3
+/// archives, and it holds there - but only because every real entry's digest
+/// already matches the digest of its corresponding manifest line, the
+/// load-bearing check `docs/formats/psarc.md` verifies at 11,664 of 11,664.
+/// That is a corollary of matching by digest, not a separate fact needing a
+/// separate code path: looking every manifest path up against the entries
+/// whose own digest is not all-zero reproduces the exact same order on a
+/// well-behaved archive, and is what actually holds on `omega-ps4-eu`'s
+/// PS4 archives, where entry order and manifest order agree on nothing at
+/// all (see the module docs). Version does not predict which shape an
+/// archive is: `omega-ps4-eu`'s five archives all declare 1.4 and are the
+/// scrambled shape; Vita `2048`'s `data.psarc` also declares 1.4 and is the
+/// well-behaved one, 100% positional, zero placeholder rows - a version-only
+/// dispatch here regressed every Vita-backed path lookup on `main` once,
+/// which is why this reads every archive the same way now.
 ///
-/// On a version-1.4 archive position means nothing (see the module docs), so
-/// this instead looks up each manifest path's [`path_digest`] against the
-/// entries whose own digest is not all-zero - a zero digest marks a
-/// placeholder row with no path, the same way it marks the manifest entry
-/// itself. A manifest path with no matching entry (the large majority, on
-/// every `omega-ps4-eu` archive measured) and an entry whose digest matches
+/// A zero digest marks a placeholder row with no path, the same way it
+/// marks the manifest entry itself, and is skipped. A manifest path with no
+/// matching entry (the large majority, on every `omega-ps4-eu` archive
+/// measured; none, on a well-behaved one) and an entry whose digest matches
 /// no manifest path (41 of 1,533 on `data00.psarc`, 3 of 894 on
 /// `data01.psarc`) are both silently dropped rather than guessed at - the
 /// caller sees only the entries this archive both names and locates in the
@@ -625,22 +647,7 @@ pub struct PathEntry {
 /// [`read_block_table`]) still produces a [`PathEntry`]: its path is known,
 /// [`Directory::entry_range`] is what reports it unreadable.
 #[must_use]
-pub fn match_paths_to_entries(
-    header: &Header,
-    entries: &[Entry],
-    manifest_paths: &[String],
-) -> Vec<PathEntry> {
-    if !header.nul_delimited_manifest() {
-        return manifest_paths
-            .iter()
-            .enumerate()
-            .map(|(n, path)| PathEntry {
-                index: n + 1,
-                path: path.clone(),
-            })
-            .collect();
-    }
-
+pub fn match_paths_to_entries(entries: &[Entry], manifest_paths: &[String]) -> Vec<PathEntry> {
     let mut path_by_digest: std::collections::HashMap<[u8; 16], &str> =
         std::collections::HashMap::with_capacity(manifest_paths.len());
     for path in manifest_paths {

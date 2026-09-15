@@ -86,7 +86,7 @@ impl Archive {
             paths: Vec::new(),
         };
         let manifest = archive.read(0, disc);
-        archive.paths = psarc::parse_manifest(&manifest, &archive.directory.header);
+        archive.paths = psarc::parse_manifest(&manifest);
         archive
     }
 

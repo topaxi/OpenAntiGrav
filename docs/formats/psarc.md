@@ -210,13 +210,29 @@ and the block-width probe's 4-byte case, which is
 [undecidable from an even table](#the-block-tables-element-width-is-not-declared)
 and so falls back to 2.
 
-## Version 1.4: the PS4 Omega Collection family
+## The PS4 Omega Collection family
 
 Applies to [`omega-ps4-eu.pkg`/`omega-ps4-eu-patch.pkg`'s](../reverse-engineering/source-images.md#omega-ps4-eupkg--omega-ps4-eu-patchpkg---wipeout-omega-collection-ps4)
 five `dataNN.psarc` archives (PS4, *Wipeout: Omega Collection*). Same 32-byte
 header, same 30-byte entry stride, but two structural differences from the
 PS3 archives above - split by confidence, because they are evidenced very
 differently.
+
+**Named by archive family, not by declared version, after a regression.**
+An earlier version of this section called these "version 1.4" archives and
+keyed the container's own behaviour off `header.version_minor >= 4` -
+plausible, since all five of `omega-ps4-eu`'s archives happen to declare
+1.4, but wrong: Vita `2048`'s `data.psarc` also declares version 1.4 and is
+the well-behaved PS3 shape throughout (newline-delimited manifest, zero
+placeholder rows, 100% positional). A version-only dispatch broke every
+Vita-backed path lookup on `main` for exactly as long as the fix below was
+merged without this correction. `parse_manifest` now reads the manifest's
+own bytes to choose a delimiter (no `\n` byte anywhere, but at least one
+`\x00`, reads as NUL-delimited; anything else reads as newline-delimited),
+and `match_paths_to_entries` always matches by digest rather than
+dispatching on version - which reproduces the well-behaved case's own
+positional order as a corollary, not a fact that needs its own code path.
+See `crates/formats/src/psarc.rs`'s module docs for the full argument.
 
 ### Manifest delimiter and entry/path correspondence - confidence 88
 
@@ -280,11 +296,12 @@ corrupt-row section below documents, not a second file with the same name.
 lists it twice; `index_of_path`'s first-match `.position()` resolves to
 entry 6846, the row with real geometry, so lookup by name is unaffected.
 
-Implemented as `Header::nul_delimited_manifest`, the NUL branch of
-`parse_manifest`, and `match_paths_to_entries`, which does the digest lookup
-and drops both an unmatched manifest path and an unmatched real entry rather
-than guessing at either. `crates/formats/src/psarc/tests.rs` pins the
-NUL split and the digest match/drop behaviour with a synthetic table;
+Implemented as the content-based branch in `parse_manifest` and the
+always-by-digest `match_paths_to_entries`, which drops both an unmatched
+manifest path and an unmatched real entry rather than guessing at either.
+`crates/formats/src/psarc/tests.rs` pins the NUL split, the newline split
+on a manifest that would have been misread by a version-based dispatch, and
+the digest match/drop behaviour with a synthetic table;
 `crates/assets/examples/psarc_list` reproduces the table above's "Matched by
 digest" column against real data (its own path count, not the manifest-path
 or real-entry counts, which need reading the directory and manifest
@@ -406,11 +423,14 @@ cargo run -p oag-assets --example psarc_cat -- \
 **Consequence for this crate:** `Directory::entry_range`/`Directory::read_entry`
 are unchanged and still trust `entry.offset` directly, exactly as the PS3
 reading does - and, for the fraction of entries measured above, that already
-produces correct content with no code change. `Archive::paths` on a
-version-1.4 archive names entries this crate can *locate in the directory
-and match to a path*; for any individual one of them, whether reading it
-back gives real bytes is not yet predictable from anything this page has
-found - roughly a third to a half will, and which third is still open.
+produces correct content with no code change. `Archive::paths` on one of
+`omega-ps4-eu`'s five archives specifically names entries this crate can
+*locate in the directory and match to a path*; for any individual one of
+them, whether reading it back gives real bytes is not yet predictable from
+anything this page has found - roughly a third to a half will, and which
+third is still open. This is a property of that archive family, not of a
+declared version number - every other archive read so far, Vita `2048`'s
+included, reads real content for every entry `paths()` lists.
 
 ## See also
 

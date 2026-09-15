@@ -95,11 +95,38 @@ verification: 1,492 of `data00.psarc`'s 1,533 non-zero-digest entries
 (97%) resolve to a manifest path this way, and the same holds on all four
 other archives (97-99%). Full measurements, the corrupt-row fix below, and
 the still-open block-data-location problem: `docs/formats/psarc.md`'s new
-"Version 1.4" section. Landed in `crates/formats/src/psarc.rs`
-(`Header::nul_delimited_manifest`, NUL-aware `parse_manifest`,
-`match_paths_to_entries`) and `crates/assets/src/psarc.rs`; `.gnf` (Sony's
-PS4-native texture container) still has **no reader anywhere in this
-project** and is unaffected by this fix.
+"The PS4 Omega Collection family" section. Landed in
+`crates/formats/src/psarc.rs` and `crates/assets/src/psarc.rs`; `.gnf`
+(Sony's PS4-native texture container) still has **no reader anywhere in
+this project** and is unaffected by this fix.
+
+**Regressed in a later session, fixed in the same one it was caught:** the
+fix above landed as `Header::nul_delimited_manifest` (`version_major == 1 &&
+version_minor >= 4`) dispatching `parse_manifest` and
+`match_paths_to_entries` between a NUL-delimited/digest-matched reading and
+a newline-delimited/positional one. That merged to `main`
+(`70064846`) and broke a real, previously-green ground-truth suite: a peer
+session bisected `oag-game::zone_grade_ground_truth`'s two 2048-branch tests
+failing at `70064846` but not at its parent, `1b3c8c57`, with `data.psarc`
+(Vita `2048`, `PCSF00007`) reporting `NoSuchPath` for
+`Data\art\published\environments\altima\ZoneMode2048.effectSettings`.
+Checked directly: Vita's `data.psarc` **also declares version 1.4** and is
+the well-behaved PS3 shape throughout - newline-delimited manifest (18,429
+`\n` bytes, zero `\x00`), 18,430 manifest lines matching its entry count
+exactly, and 100% of its real entries' digests matching their positional
+manifest line's, entry `n + 1` to line `n`. The header's declared version
+does not predict which shape an archive is; it was never a safe dispatch
+key, and this project had no second `1.4`-declaring archive to catch it
+until now. Fixed by making both functions read the data instead of the
+header: `parse_manifest` picks NUL-delimited only when the manifest has no
+`\n` byte at all (and has at least one `\x00`); `match_paths_to_entries`
+always matches by digest, unconditionally, which reproduces a well-behaved
+archive's own positional order as a corollary rather than needing a
+separate code path for it - proven identical on the synthetic case and
+confirmed against `data00`-`data04` and Vita's `data.psarc` alike.
+`Header::nul_delimited_manifest` is removed; neither function takes a
+`Header` any more. `docs/formats/psarc.md`'s "The PS4 Omega Collection
+family" heading (was "Version 1.4") reflects the correction throughout.
 
 **Also resolved this session, a separate bug found while verifying the
 above**: three of the five archives (`data00.psarc` entry 9042 - the
