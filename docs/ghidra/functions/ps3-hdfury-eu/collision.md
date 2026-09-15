@@ -183,6 +183,13 @@ sizes coming out to the byte is the strongest single check on this page.
 80 rather than 84: "constructor" is read off the shape (base-class chain,
 vtable install, field initialisation) and not off any symbol.
 
+**A same-tag candidate on `ps4-omega-eu` was checked and not transferred**:
+see [`ps4-omega-eu/collision.md`](../ps4-omega-eu/collision.md) - the
+`0x19c`-count-times-stride invariant this section's own `0x11b40`/`0xb440`
+check relies on has no counterpart in that binary's disassembled candidate,
+and the structural evidence that first looked like a match turned out to be
+generic tagged-object boilerplate shared across unrelated classes there.
+
 ### `Collision_Destruct` / `Collision_DestructAndFree`
 
 The class's vtable at `0x00862258` holds, at slots 12 and 13:
