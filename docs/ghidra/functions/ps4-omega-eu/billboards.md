@@ -96,8 +96,25 @@ else if (mode == 0xe)                 strncpy(-> "321go_hd_detonator.vex")
 else                                   strncpy(-> "321Go_Zone.vex")
 ```
 
-gated on the manifest's own `321Go_StartFinish.vex` and a display-mode flag
-(`DAT_01f999e4 - 6U < 0x10 && ...`) rather than always firing - the same
+Verified against the raw disassembly, not just the decompile, since a shared
+branch target across two `CMP`s is exactly the kind of thing a decompiler
+could collapse wrongly: at `0x01391cab`/`0x01391caf`, `CMP R14D,0x15` /
+`JZ 0x01391cbd` is immediately followed at `0x01391cb7`/`0x01391cbb` by
+`CMP R14D,0xd` / `JNZ 0x01391d0b` - so mode `0xd` falls straight through into
+the *same* `0x01391cbd` write site mode `0x15` jumps to directly. Two
+separate compares, one write, confirmed at the instruction level.
+
+Gated on the manifest's own `321Go_StartFinish.vex` and, from
+`0x01391c63`-`0x01391c7b`, an explicit **four-mode allowlist**, not a vague
+"display-mode flag": `(mode - 6) < 0x10` bounds it to modes `6`-`21`, then
+`BT ECX,EAX` against the literal `0x8181` tests one specific bit of that
+range - `0x8181` has bits 0, 7, 8 and 15 set, i.e. modes `{6, 13, 14, 21}`
+exactly, the same four the `else if` chain above branches on (`0xe`=14,
+`0xd`=13, `0x15`=21) plus `6` itself, which falls through the chain to the
+`else` (`"321Go_Zone.vex"`) rather than getting a case of its own. A second,
+independent path into the same substitution exists if the allowlist test
+fails: `byte [0x0203a728]` non-zero **and** `FUN_01669270()` non-zero - an
+unread debug/build flag, not chased further. The same
 "substitute only in the right context" shape HD's own reading inferred from
 `mode_descriptor->field_0x90`. **HD's four-candidate lead is now a
 confirmed mechanism on a sibling binary**, even though this doesn't reach

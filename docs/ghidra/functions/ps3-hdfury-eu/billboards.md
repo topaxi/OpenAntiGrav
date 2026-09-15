@@ -11,10 +11,11 @@ of a `<Billboard>`, where it stores each one, and the one place a manifest's
 own authoring is silently overridden.
 
 **Nothing here is runtime-verified.** Per [visibility.md](visibility.md)'s
-rule, static reading of one binary caps every score on this page at **84** -
-except `Billboard_ConstructResource`, whose 85 rests on a second,
-independently-compiled binary corroborating it (below), the same exception
-that rule already carves out elsewhere in this project.
+rule, static reading of *this* binary alone caps a score at **84** - except
+`Billboard_ConstructResource`, whose 85 rests on a second,
+independently-compiled binary corroborating it (below), per the
+[confidence rubric](../../../reverse-engineering/confidence-rubric.md)'s own
+85-94 band, not an exception `visibility.md` itself states.
 
 ## The trap that shapes every address below
 
@@ -148,14 +149,23 @@ billboard takes the first branch. Same shape as the draw-order row's `0x31`
 branch and the `LodGroup` two-tier-always-drawn finding - authored capacity
 the disc's own content never reaches.
 
-**Corroborated on `ps4-omega-eu`, confidence raised 62 -> 85.** That binary's
-own `Billboard.cpp` tag (verbatim, under `System\Render\` rather than a flat
-layout) resolves to a function that opens with the identical
-last-N-characters-uppercased extension check (`.mip` first, `.vex` in the
-`else`) and calls its own resource loader with the **same two magic
-constants**, `0xfdb2` and `0x3e9` - values with no reason to match by chance
-across two independently compiled binaries five console generations apart.
-See [`ps4-omega-eu/billboards.md`](../ps4-omega-eu/billboards.md) for that
+**Corroborated on `ps4-omega-eu`, confidence raised 62 -> 85 - re-reading
+this function itself, not just citing the other binary.** Re-decompiled
+`0x0029a6a8` end to end for this pass rather than trusting the prose above
+alone: the tag string (`PTR_s_Billboard_cpp_008b2d90`) is assigned to
+`param_1[0xc]` directly, the `.mip`/`.vex` extension branch is a clean,
+unambiguous case-insensitive last-three-characters check with no
+unresolved paths, and both callers (`Billboard_CreateFromLocation_q`,
+`Billboard_CreateFromColour_q`) are already established - "decompilation
+unambiguous and every call site consistent" per the
+[confidence rubric](../../../reverse-engineering/confidence-rubric.md)'s
+85-94 band. What pushes it into that band rather than capping at 84 is
+`ps4-omega-eu`'s own `Billboard_ConstructResource`: verbatim tag, the same
+last-N-characters-uppercased extension check, and a call into its own
+resource loader with the **same two magic constants**, `0xfdb2` and `0x3e9`
+- values with no reason to match by chance across two independently
+compiled binaries five console generations apart. See
+[`ps4-omega-eu/billboards.md`](../ps4-omega-eu/billboards.md) for that
 binary's own half of this finding.
 
 ## The surprising part: `Num == 7` is not what its own manifest says it is
