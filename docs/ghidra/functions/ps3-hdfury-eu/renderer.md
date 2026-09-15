@@ -4427,6 +4427,42 @@ kind as the tint's and equally exhaustive over PPU text, but it rests on the
 initialiser being the only seeding and on the two fade routines being the only
 readers, neither of which has a second independent route.
 
+**2026-09-15: the three setters' "no caller anywhere" is re-run against the
+`lvlx`-aware PS3 language (`toolchain.md#ps3`) and holds.** The static callers
+search that this section's table rests on predates the 2026-09-15 reimport
+that fixed `lvlx` decoding for 294 functions; re-run in full against the
+current database (`PowerPC:BE:64:A2ALT-32addr-PS3`, 26,112 functions) by all
+three routes for each of `Post_SetColourScaleRate` (`0x003def38`),
+`Post_SetColourScaleTarget` (`0x003def50`) and `Post_SetColourScaleImmediate`
+(`0x003def68`):
+
+- `get_function_callers` on each address: `No callers found`, all three.
+- `search_instructions(mnemonic="bl", operand_pattern=<address>)` and the same
+  with `mnemonic="b"` (to catch a cross-TOC trampoline of the
+  `Renderer_SetColourCorrection`/`FUN_00678ee8` shape), scanning all
+  1,829,837 instructions in the program: zero matches for each address, both
+  mnemonics, all three functions.
+- Each function's own address searched as a big-endian 4-byte literal
+  (`search_byte_patterns`, `00 3d ef 38`, `00 3d ef 50`, `00 3d ef 68`) -
+  a positive control first, since the tool is documented to ignore `mask`
+  and its behaviour on this program hadn't otherwise been exercised: each
+  returns exactly one hit, its own `.opd` descriptor (`0x0088c430`,
+  `0x0088c438`, `0x0088c440` respectively, matching `get_xrefs_to` on the
+  function address), and no second pointer anywhere else in the image - the
+  same "occurs exactly once" shape this page's `g_FullscreenTintColour`
+  enumeration above already established for a different global.
+- The descriptor address itself searched the same way (`00 88 c4 30`,
+  `00 88 c4 38`, `00 88 c4 40`) - no matches, so no function-pointer table
+  holds any of the three either. `get_xrefs_to` on the descriptor addresses
+  themselves also returns none.
+
+None of the three functions contains an `lvlx` instruction
+(`search_instructions(mnemonic="lvlx", operand_pattern="v", function=...)`
+returns zero for each), so they were not among the 294 functions the
+reimport changed - the negative was never at risk of being an `lvlx` hole,
+and this pass is a clean re-confirmation rather than a correction. The
+"no caller anywhere" finding for all three setters stands.
+
 ### What this closes, for the Zone question
 
 All five of the post chain's full-screen colour inputs are now accounted for,
