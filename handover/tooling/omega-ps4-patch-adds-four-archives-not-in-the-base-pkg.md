@@ -33,27 +33,65 @@ check right):
 | `data08.psarc` | 1,789 | 796 | 44% |
 | `data09.psarc` | 121 | 84 | 69% |
 
+## Census, all four archives (`psarc_list`, 2026-09-15)
+
+**None of the four read as DLC or bonus content - all four patch the existing
+roster, not extend it.** `data08` names every HD circuit already known to
+this project by directory (`01_Vineta_K`, `02_Metropia`, `03_Moa_Therma`,
+`04_Chenghou_Project`, `05_Ubermall`, `10_Sebenco_Climb`, `12_Sol_2`,
+`15_Anulpha_Pass`, `amphiseum`, `modesto_heights`, `talons_junction`,
+`tech_de_ra`, `zone_1`-`zone_4`) plus **every 2048 zone-mode environment by
+name** (`altima`, `arena`, `bridge`, `cathedral`, `mall`, `park`, `shared`,
+`sol`, `square`, `subway`, `tower`, under `data/environments2048/`) - no name
+outside either already-documented roster. `data05` is the same shape at
+smaller scale (`data/environments`, `data/environments2048`,
+`data/Weapons2048`, `data/particles2048` all present). This is the first
+time this project has found **2048 content bundled inside another title's
+own package** rather than inferred from shared code/debug-tag paths -
+corroboration, at the asset level, of the same lineage the parent thread's
+["codebase-lineage question"](omega-collections-ps4-build-imports-and-decrypts.md#the-codebase-lineage-question-extended-a-third-time)
+established by function and source-tree matching alone.
+
+| Archive | Entries | Dominant extensions | Shape |
+| --- | ---: | --- | --- |
+| `data05.psarc` | 1,205 | 1,155 `.rcsmaterial`, 34 `.pob`, 11 `.xml` | A material-table patch across HD + 2048 environments/weapons/particles - no textures, no models, no audio |
+| `data07.psarc` | 6 | 3 `.gnf`/`.fnt` (Korean fonts), 1 `.xml`, 1 `.rcsmodel` | Korean localization plus one `Zone` ship model fix |
+| `data08.psarc` | 1,786 | 1,265 `.rcsmaterial`, 312 `.gnf`, 113 `.wem`, 35 `.xml`, 17 `.vex`, 15 `.rcsmodel`, 8 `.EnvSettings`, 7 `.bnk` | A comprehensive texture/model/audio/lighting patch across the full HD + 2048 roster |
+| `data09.psarc` | 120 | 120 `.xml` | Frontend/language/grid definitions (already sampled directly, see the parent thread) |
+
+**A new format surfaces in `data08`: Wwise, not the PSP-era in-house sound
+bank this project already parses.** `data/audio/sound/*.wem` (113 of them,
+many under `English(US)/` - localized voice lines) plus `speech.bnk`/
+`speech_zbattle.bnk` - `.wem` is Audiokinetic Wwise's own "Wwise Encoded
+Media" extension, unrelated to the PSP `SBlk` `.bnk` bank format
+[`psp-audio.md`](../../docs/formats/psp-audio.md) already documents despite
+sharing the `.bnk` extension by coincidence (both HD's own `speech_zone.bnk`
+and this one use the name; the PS4 `.bnk` is very likely a Wwise "bank" file,
+a different container entirely). No reader for either half exists in this
+project.
+
 ## Open
 
-- **What `data08` (5.3 GiB, by far the largest of the four) actually holds**
-  is not surveyed at all - no `psarc_list` census run against it yet. The
-  original thread speculated `data03.psarc` (the base `.pkg`'s smallest
-  archive) might be DLC-shaped; that was never chased to a conclusion there,
-  and `data08` is a better candidate to check first now - large, patch-only,
-  and not present in the base install at all.
+- **The Wwise `.wem`/`.bnk` pair in `data08`** - format, not touched. Whether
+  this specific `.bnk` is Wwise's own `SoundBank` container or something else
+  wearing the same three-letter extension is not checked; `.wem` almost
+  certainly is Wwise (that extension has no other common meaning), which
+  would make this the first Wwise-era asset format this project has needed a
+  reader for anywhere in the lineage.
 - **Why `data06` is skipped** - reserved, unchanged-and-therefore-omitted-
   from-the-patch, or an artifact of some numbering this project doesn't have
   context for yet. Not investigated.
 - `sce_discmap_patch.plt` (present in the patch's `uroot/`, absent from the
   base's) is unexamined - PS4 patch metadata, format not looked at.
+- The real/zero split (see the table above) still has no predictor on any of
+  these four archives either, same as the base `.pkg`'s five - this thread
+  only ruled out *why the split exists* being an extraction-provenance
+  question, not the split itself.
 
 ## Next Steps
 
-- Run `psarc_list` (`crates/assets/examples/`) against all four patch
-  archives for a full per-archive file/extension census, the same way the
-  original thread's own Next Steps proposed for `data03.psarc` and never
-  got to. Decide from the census whether `data08` reads as DLC/bonus content
-  (a distinct `Data/...` subtree, ship or track names not in the base
-  install) or as more of the same namespace the base `.pkg` already covers.
 - Not a reverse-engineering target in its own right yet, same standing as
   the parent thread - Omega Collection stays "if feasible" in the roadmap.
+  If it becomes one, `.wem`/Wwise is the next format gap to scope (the way
+  `.gnf` already is for the base `.pkg`'s textures) rather than `data08`'s
+  file listing, which this census now closes.

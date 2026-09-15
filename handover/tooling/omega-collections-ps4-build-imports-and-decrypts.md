@@ -226,9 +226,13 @@ about a second, decompression-shaped problem on top of it.
   full per-archive file/extension census and decide whether `data03.psarc`
   (328 real entries, by far the smallest of the base `.pkg`'s five) is a
   distinct content package worth checking against `data/dlc/` before
-  assuming it is just "more of the same". The patch's own four archives have
-  the same open question, tracked separately -
-  [omega-ps4-patch-adds-four-archives-not-in-the-base-pkg.md](omega-ps4-patch-adds-four-archives-not-in-the-base-pkg.md).
+  assuming it is just "more of the same". **The same census on the patch's
+  own four archives is done and says no** -
+  [omega-ps4-patch-adds-four-archives-not-in-the-base-pkg.md](omega-ps4-patch-adds-four-archives-not-in-the-base-pkg.md)
+  names every HD circuit and every 2048 zone-mode environment already known
+  to this project across `data05`/`data08`, no name outside either roster,
+  so `data03.psarc` is now the only one of the nine archives left unchecked
+  for the same question.
 - Not a reverse-engineering target in its own right yet (Omega Collection
   stays "if feasible" in the roadmap) - this thread is groundwork, not a
   milestone. The natural next RE pass, if one happens, is `GameRoot`/
