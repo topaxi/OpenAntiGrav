@@ -269,11 +269,15 @@ the four) actually holds is not yet surveyed.
 extraction-provenance question for the base archives' still-open real/zero
 split, rather than answering it.
 
-Not a reverse-engineering target yet - listed "if feasible" in
-[the roadmap](../overview/roadmap.md) and
-[future-2048/shared-concepts.md](../future-2048/shared-concepts.md), but the
+**The executable is an RE target as of 2026-09-15** - see
+[`docs/ghidra/functions/ps4-omega-eu/README.md`](../ghidra/functions/ps4-omega-eu/README.md)
+for why (native x86-64, no custom Ghidra processor module, and a proven
+cross-binary corroboration technique against HD/Fury and 2048). Gameplay/
+simulation work is still unplanned, per [the roadmap](../overview/roadmap.md)
+and [future-2048/shared-concepts.md](../future-2048/shared-concepts.md); the
 asset side (the five `.psarc` archives, same container `oag-hd` already
-parses) has no crypto blocker left, only the format/title-crate work itself.
+parses) has no crypto blocker left either way, only the format/title-crate
+work itself.
 The extraction above was verified and then deleted (it was written to `/tmp`,
 not `data/`, and ate most of a 32 GiB tmpfs doing it - rerun straight to
 `data/extracted/ps4/`, which is gitignored, instead).

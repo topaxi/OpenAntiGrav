@@ -16,7 +16,7 @@ entries get promoted to real documentation as evidence arrives.
 | Wipeout Pulse | PS2 | 2009 | Cross-validation, image available |
 | Wipeout HD / Fury | PS3 | 2008/09 | Not yet examined |
 | Wipeout 2048 | Vita | 2012 | Package examined; PSARC, HD's asset-extension family and its whole team roster carry over. Craft/track spawn not yet wired. |
-| Omega Collection | PS4 | 2017 | If feasible |
+| Omega Collection | PS4 | 2017 | RE target as of 2026-09-15 (x86-64, no custom Ghidra processor module needed); no gameplay work planned |
 
 ## Confirmed shared
 
