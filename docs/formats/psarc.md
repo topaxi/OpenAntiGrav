@@ -234,10 +234,17 @@ recorded as unrecoverable, not reconstructed.
 **Entry order carries no relationship to manifest order at all.** The PS3
 invariant "entry `n + 1` is manifest line `n`" does not hold: the entry table
 is a concatenation of several separately digest-ascending runs (one descent
-in the sequence per extra run - `data00.psarc` has four, `data01`/`data02`/
-`data04` one each, `data03` none), and it carries thousands of fully-zeroed
-placeholder rows (digest, `first_block`, `size` and `offset` all `0`) for
-manifest paths this particular archive does not store.
+in the sequence per extra run - `data00.psarc` has four, `data01.psarc` two,
+`data02.psarc`/`data04.psarc` one each, `data03.psarc` none), and it carries
+thousands of fully-zeroed placeholder rows (digest, `first_block`, `size` and
+`offset` all `0`) for manifest paths this particular archive does not store.
+A fourth row shape turns up too, one per archive on `data00`/`data01`/
+`data02`/`data04`, always at index 2183: a digest that is fourteen zero bytes
+and two real ones, not the all-zero placeholder shape and not a real path's
+MD5 either, with plausible-looking geometry beside it. `match_paths_to_entries`
+handles it the same way it handles any real entry whose digest matches no
+manifest path - drops it - so it needs no special case, but the "placeholder
+vs. real" split above is not the whole shape of the table.
 
 The correspondence that *does* hold, checked against `path_digest` on all
 five archives:
@@ -251,8 +258,11 @@ five archives:
 | `data04.psarc` | 4,569 | 840 | 837 |
 
 97-99% of real entries resolve to a manifest path by MD5, on every archive -
-an exact arithmetic invariant holding across five independent files, the
-strongest evidence short of a runtime trace. The 86-90% of manifest paths
+1,492/1,533, 891/894, 923/927, 327/328 and 837/840 respectively. That is not
+an *exact* invariant the way the PS3 check is (every one of 11,664 matches
+there); it corroborates the digest-based correspondence rather than proving
+it outright, which is what keeps this claim's confidence at 88 rather than
+in the PS3 page's 92. The 86-90% of manifest paths
 that *don't* resolve to a local entry are not a split-namespace scheme
 either: checked directly, at most 2 of `data00.psarc`'s 9,222 orphaned paths
 turn up as a real entry in any of the other four archives - noise, not a
@@ -275,8 +285,10 @@ Implemented as `Header::nul_delimited_manifest`, the NUL branch of
 and drops both an unmatched manifest path and an unmatched real entry rather
 than guessing at either. `crates/formats/src/psarc/tests.rs` pins the
 NUL split and the digest match/drop behaviour with a synthetic table;
-`crates/assets/examples/psarc_list` reproduces the table above against real
-data:
+`crates/assets/examples/psarc_list` reproduces the table above's "Matched by
+digest" column against real data (its own path count, not the manifest-path
+or real-entry counts, which need reading the directory and manifest
+separately):
 
 ```sh
 cargo run -p oag-assets --example psarc_list -- data/extracted/ps4/omega-eu/uroot/data00.psarc
@@ -302,71 +314,103 @@ archive. Confidence is 75 rather than higher because *why* exactly one row
 per archive is left this way is not established - a single torn write is the
 working description, not a verified cause.
 
-### Block data location - open, not resolved
+### Block data location - open, and a real/zero split rather than uniformly broken
 
-**Reading a real entry's declared bytes does not currently produce its real
-content**, checked directly and not yet explained. On `data03.psarc`, of 53
-sampled entries whose first block's table row is non-zero, **zero** had a
-`0x78` zlib marker at the position `Directory::entry_range` computes from
-`entry.offset`, and zero had one at the position an alternative reading
-(summing block-table sizes from the start of the block region, ignoring
-`entry.offset`) predicts instead. A targeted check around one entry
-(`Ship_LOD3.vex`, declared offset 417,565,545, single 976-byte block) found
-512 bytes of literal zero surrounding the declared offset - not a
-sparse-file hole (`stat` reports the file fully allocated, `st_blocks * 512`
-matching its logical size) - and no zlib stream anywhere in a 10 MB window
-around it decompresses to 976 bytes with the `.vex` format's `VEXX` magic at
-the expected position. The block-table width itself is not the culprit:
-width 2 (already the narrowest, so already what `read_block_table` picks)
-sums to 2,589,286,451 bytes, close to `data03.psarc`'s actual
-2,576,997,583 - width 4, the only other divisor of this table's length, sums
-to 114.7 GB, absurd for a 2.4 GiB file.
+**`entry.offset` locates real content for a substantial fraction of real
+entries already, through the crate's existing, unmodified reader - and zero
+bytes for the rest, on every archive checked.** Corrected from an earlier
+version of this page, which sampled only entries whose first block's table
+row is non-zero (a description of stored-block *shape*, not of whether the
+content is real - see below) and reported zero hits; a full sweep over every
+real entry, using `Archive::read_path`/`psarc_cat` directly rather than a
+hand-rolled reimplementation, finds:
 
-**One thing this rules out: it is not a codec mismatch.** Classified every
-block belonging to a real entry, on `data00.psarc`, `data01.psarc` and
+| Archive | Real entries (`size > 0`) | Non-zero at `entry.offset` | All-zero |
+| --- | ---: | ---: | ---: |
+| `data00.psarc` | 1,528 | 819 (54%) | 709 |
+| `data01.psarc` | 892 | 348 (39%) | 544 |
+| `data03.psarc` | 327 | 99 (30%) | 228 |
+
+Two concrete examples, both read correctly by `psarc_cat` as it stands today,
+no code change: `data03.psarc`'s
+`Data/art/published/hdships/harimau/Livery2/Holographic_02_GLOW.gnf` opens on
+`GNF ` (Sony's PS4 texture magic), and
+`Data/art/published/hdships/auricom/Ship_LOD.vex` opens on version `6` then
+`VEXX` at the expected `+0x0c`. **`Ship_LOD3.vex`** (a different, similarly-named
+file, declared offset 417,565,545, single 976-byte block), the example an
+earlier version of this page used to argue extraction was uniformly broken,
+is real but is one of the ~70% zero cases on `data03.psarc` - not
+representative, and left below only as a reproducible all-zero instance.
+
+The zero/non-zero split does not correlate with anything checked so far:
+
+- **Not the stored-block shape.** A block's table row is either `0` (a full,
+  padded `block_size`) or equal to the entry's exact remaining byte count (a
+  short, unpadded stored block, never a genuinely shrunk compressed one - see
+  below). Both shapes turn up real and zero content in roughly the same
+  proportion on `data03.psarc` (91/274 real for the full-padded shape, 8/53
+  for the short shape).
+- **Not file position.** Real and zero entries are interleaved throughout
+  `data03.psarc`'s whole offset range in 200 MB buckets, not confined to a
+  prefix, a suffix, or any other contiguous region.
+- **The block table's own arithmetic is otherwise self-consistent.** Only
+  12,099 of `data03.psarc`'s 39,640 block-table rows (31%) are referenced by
+  any real entry's `first_block` + block count - the rest describe blocks no
+  entry claims - and `max(entry.offset + entry.size)` over every real entry
+  lands **exactly** on the file's true size, 2,576,997,583 bytes. Read as a
+  coordinate system, `entry.offset` spans the archive precisely; it is
+  specific entries' *content* that reads as zero; the offsets these entries
+  keep company with are not obviously wrong as numbers.
+
+**One thing this does rule out: it is not a codec mismatch.** Classified
+every block belonging to a real entry, on `data00.psarc`, `data01.psarc` and
 `data03.psarc`: each block's table value is either exactly `0` (a full,
-padded `block_size` of stored bytes, the existing convention) or exactly
-equal to the entry's remaining byte count at that block (a *short* stored
-block - real, but never padded to `block_size`). On all three archives,
-**zero** blocks fall between those two cases - the signature a genuinely
+padded `block_size` of stored bytes) or exactly equal to the entry's
+remaining byte count at that block (a *short* stored block, never padded).
+**Zero** blocks fall between those two cases - the signature a genuinely
 `deflate`-shrunk block would leave. The header's `compression: "zlib"` field
-reads the same four bytes as every PS3 archive, but on the entries checked
-here nothing is actually deflated: every real file on this family, at least
-on the three archives sampled, is stored raw. That means the "53 sampled
-entries whose first block is compressed" framing above is a description of
-the block-table row, not of the bytes - there was nothing to inflate in any
-of those 53 either, once reached at the right offset, they should be a raw
-byte copy with no decompression ambiguity at all. The open problem is purely
-locating the bytes, not a second, codec-shaped problem layered on top of it.
+reads the same four bytes as every PS3 archive, but nothing checked here is
+actually deflated: every real file sampled on this family is stored raw. A
+non-zero entry that reads correctly is therefore a plain byte copy, and a
+zero one is not a decompression failure either - there is no decoding step
+in either case to have gotten wrong.
 
-One open, unverified lead: [`source-images.md`'s](../reverse-engineering/source-images.md#omega-ps4-eupkg--omega-ps4-eu-patchpkg---wipeout-omega-collection-ps4)
+One open, unverified lead for the real/zero split itself:
+[`source-images.md`'s](../reverse-engineering/source-images.md#omega-ps4-eupkg--omega-ps4-eu-patchpkg---wipeout-omega-collection-ps4)
 own extraction command reads only `omega-ps4-eu.pkg` (the base package) and
 records "~25 GiB total" across the five archives - the `data/extracted/ps4/omega-eu/`
 this page's measurements are against is **~40.8 GiB**, larger than that
 recorded command or size would produce. Whether the current extraction also
-folded in `omega-ps4-eu-patch.pkg`, and if so whether that was a clean merge,
-is not established, and would explain zeroed block regions if the entry
-table and the physical bytes it points into come from different layers. Not
-chased further - the fix would be re-running `PkgTool.Core` correctly, not a
-change to this crate, and is exactly the kind of change that needs the
-original images, not a sandbox.
+folded in `omega-ps4-eu-patch.pkg`, and whether that merge was clean, is not
+established - a per-file base-versus-patch split, where some files' bytes
+were carried over correctly and others were not, fits a scattered
+non-positional real/zero pattern better than a uniform offset-formula bug
+would. Not chased further - the fix would be re-running `PkgTool.Core`
+correctly, not a change to this crate, and is exactly the kind of change
+that needs the original images, not a sandbox.
 
-Reproduce the negative result:
+Reproduce a real read and an all-zero one:
 
 ```sh
 cargo run -p oag-assets --example psarc_cat -- \
   data/extracted/ps4/omega-eu/uroot/data03.psarc \
+  "Data/art/published/hdships/harimau/Livery2/Holographic_02_GLOW.gnf" | xxd | head -2
+# opens on `GNF ` - real content, through the existing reader, unmodified
+
+cargo run -p oag-assets --example psarc_cat -- \
+  data/extracted/ps4/omega-eu/uroot/data03.psarc \
   "Data/art/published/hdships/auricom_n1/Ship_LOD3.vex" | xxd | head
-# 976 bytes, all zero - not a `.vex` file
+# 976 bytes, all zero - a real entry, but one of the ~70% zero cases
 ```
 
 **Consequence for this crate:** `Directory::entry_range`/`Directory::read_entry`
 are unchanged and still trust `entry.offset` directly, exactly as the PS3
-reading does - changing that without knowing the real answer would be a guess
-dressed as a fix, which is worse than the honest failure a wrong read already
-produces. `Archive::paths` on a version-1.4 archive names entries this crate
-can *locate in the directory and match to a path*; it does not promise their
-bytes decode to anything yet.
+reading does - and, for the fraction of entries measured above, that already
+produces correct content with no code change. `Archive::paths` on a
+version-1.4 archive names entries this crate can *locate in the directory
+and match to a path*; for any individual one of them, whether reading it
+back gives real bytes is not yet predictable from anything this page has
+found - roughly a third to a half will, and which third is still open.
 
 ## See also
 

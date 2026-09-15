@@ -46,9 +46,15 @@
 //! and splits into well-formed paths only on `\x00`. And entry order carries
 //! no relationship to manifest order at all: the entry table is a
 //! concatenation of several separately digest-sorted runs (one descent in the
-//! ascending sequence per extra run - data00 has four, data01/data02/data04
-//! one, data03 none), interleaved with thousands of fully-zeroed placeholder
-//! rows for manifest paths this particular archive does not store. On
+//! ascending sequence per extra run - data00 has four, data01 two,
+//! data02/data04 one, data03 none), interleaved with thousands of
+//! fully-zeroed placeholder rows for manifest paths this particular archive
+//! does not store. A fourth row shape exists too, one per archive on
+//! data00/01/02/04, always at index 2183: a digest that is fourteen zero
+//! bytes and two real ones - not the all-zero placeholder shape, but not a
+//! real path's MD5 either - alongside plausible-looking geometry. It is
+//! handled the same way an unmatched real digest is: [`match_paths_to_entries`]
+//! finds no manifest path whose digest matches, and drops it. On
 //! `data00.psarc`, 10,714 non-empty manifest paths name only 1,533 real
 //! (non-zero-digest) entries; the other ~86% are dead text - verified *not*
 //! to be files that live in a sibling `dataNN.psarc` instead (at most 2 of
@@ -612,10 +618,12 @@ pub struct PathEntry {
 /// every `omega-ps4-eu` archive measured) and an entry whose digest matches
 /// no manifest path (41 of 1,533 on `data00.psarc`, 3 of 894 on
 /// `data01.psarc`) are both silently dropped rather than guessed at - the
-/// caller sees only the entries this archive can actually name and read.
-/// A `first_block` too large for any block table to hold (see
+/// caller sees only the entries this archive both names and locates in the
+/// directory - not a promise that reading one back gives its real content,
+/// see `docs/formats/psarc.md`'s "Block data location" section. A
+/// `first_block` too large for any block table to hold (see
 /// [`read_block_table`]) still produces a [`PathEntry`]: its path is known,
-/// reading it is not, and [`Directory::entry_range`] is what reports that.
+/// [`Directory::entry_range`] is what reports it unreadable.
 #[must_use]
 pub fn match_paths_to_entries(
     header: &Header,
@@ -690,6 +698,16 @@ pub fn path_digest(path: &str) -> [u8; 16] {
 /// [`Directory::entries`] - [`Directory::entry_range`] reports it unreadable
 /// when something actually asks for it, rather than this probe refusing the
 /// other several thousand rows on its behalf.
+///
+/// **This is sound for one bad row among many good ones, not for a table
+/// where every row is implausible.** Excluding every entry from `highest`
+/// leaves it at its `unwrap_or(0)` floor, which any non-trivial even-length
+/// table then satisfies at the narrowest width - a false "this looks like a
+/// valid width 2 table" rather than [`Error::NoBlockWidth`], because nothing
+/// is left to contradict it. Not a real case on `omega-ps4-eu` (never more
+/// than one such row per archive, of several thousand), so left as the
+/// simpler bound rather than adding a "how many rows were excluded" check
+/// this family has never needed.
 fn read_block_table(rest: &[u8], entries: &[Entry]) -> Result<(Vec<u32>, usize)> {
     let narrowest = *BLOCK_WIDTHS
         .iter()

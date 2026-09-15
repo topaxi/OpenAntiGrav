@@ -121,11 +121,13 @@ impl Archive {
     /// it replaces: a WAD stores only a name hash, so most of its names still
     /// have to be mined.
     ///
-    /// **Naming an entry is not the same as being able to read it.** On a
-    /// version-1.4 archive, `entry.offset`/`first_block` are not yet known to
-    /// locate real content at all - see `docs/formats/psarc.md`'s "Block data
-    /// location" section - so a path appearing here is not itself a promise
-    /// that [`Archive::read_path`] returns anything meaningful.
+    /// **Naming an entry is not the same as being able to read it, on a
+    /// version-1.4 archive.** `entry.offset` produces real content for a
+    /// substantial fraction of entries already - roughly a third to a half,
+    /// varying by archive, through no more than [`Archive::read_path`] as it
+    /// stands - and zero bytes for the rest, and which of the two a given
+    /// path is has no known predictor yet. See `docs/formats/psarc.md`'s
+    /// "Block data location" section.
     #[must_use]
     pub fn paths(&self) -> &[String] {
         &self.paths
