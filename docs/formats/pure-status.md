@@ -615,6 +615,13 @@ first, which is the ordering property
 [`handling::global_classes`'s skip depends on](handling-stats.md#there-are-five-globalclass-blocks-and-only-four-speed-classes).
 Confidence **94**.
 
+**The weapon table's own dialect is on its own page since 2026-09-15**:
+[`weapon-stats.md`](weapon-stats.md)'s "The Pure dialect" section has the
+ten-weapon roster against Pulse's thirteen, the `Disruptor`'s `<Effect>`
+tree, and the fuse-less Bomb - all measured on both pressings and all
+decoded, with the executable's reading of each on
+`docs/ghidra/functions/psp-pure-usa/weapons.md`.
+
 ### Why this page could not have predicted any of it
 
 The method lesson is about surveys, not about Pure. Every per-layer confidence
