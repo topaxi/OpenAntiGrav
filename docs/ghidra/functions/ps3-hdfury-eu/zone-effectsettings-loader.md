@@ -4727,6 +4727,347 @@ two halves of one mechanism.
 | `0x003fb240` | function | `Scene_ResetDrawLists` | 85 |
 | `0x00d45f90` | data | `g_MaterialDrawClass` | 85 |
 
+## 2026-09-15, a thirtieth pass: `block->0x06` is authored on disc, the radius advances inside the blend itself, and `zoneOrigin` is reconciled
+
+Run on the live program after the `lvlx` fix
+([toolchain.md](../../../reverse-engineering/toolchain.md#ps3), "Some Cell
+vector instructions are missing"), so every negative below is computed over
+the complete image, not the one 294 functions were holed in. Three questions
+in, three answers out; none of them needed the newly-decoded code, but the
+sweeps were scoped to include it and that is recorded where it matters.
+
+### 1. `block->0x06` has no instruction writer because it is a **file field**
+
+The twenty-ninth pass located the Scene/Track selector to bit 0 of the `u16`
+at `+0x06` of `*(chunk + 8)` and asked who writes it. Nobody does: the word
+is part of the `.rcsmodel` itself.
+
+**The runtime chunk is the file's chunk header, and `+0x08` is a relocated
+file offset.** [visibility.md](visibility.md) already established that the
+scene object comes straight back from the generic RCS loader with "its header
+offsets relocated to pointers". Read this pass, the mechanism is explicit and
+table-driven, not per-type: `0x005da6b8` -> `0x005d98b8` reads the whole file
+into a buffer, then `0x005d5d30(base)` calls `0x005d5d80(base + hdr[+0x04],
+base, 0)`, which is
+
+```c
+void FUN_005d5d80(uint *table, int base, int bias) {
+    for (i = 0; i < table[0]; i++) {
+        int *slot = (int *)(base + table[1 + i]);
+        if (*slot != 0) *slot = base + (*slot - bias);
+    }
+}
+```
+
+So the header word at `+0x04` - which [rcsmodel.md](../../../formats/rcsmodel.md)
+records as "end of the directory / first byte of chunk data" - is the offset of
+a **relocation table** `{u32 count; u32 offsets[count]}`, and every offset in it
+names a word the loader turns into a pointer. The two readings agree: the table
+sits exactly where the directory ends. On `talons_junction/track.rcsmodel` it is
+at `0x22acc` with 26,450 entries, and its first six are `0x4, 0x20, 0x24, 0x28,
+0x30, 0x3db0` - the header's own directory words, then the mesh table.
+
+Checked on the disc, every `.rcsmodel` (643 files, 41,861 chunks, extracted
+with `scripts/psarc.py` from `hdfury-ps3-eu-dec.iso`):
+
+| | |
+| --- | --- |
+| chunk `+0x08` words present in the file's relocation table | **41,861 of 41,861** |
+| the record `+0x08` points at: `+0x00` word non-zero on disc | 0 of 41,861 |
+| `+0x04` halfword non-zero on disc | 0 of 41,861 |
+| **`+0x06` halfword non-zero on disc** | **5,948 of 41,861** |
+
+The record is 0x40 bytes per chunk, one per chunk in chunk order, in one
+contiguous run: on Talon's Junction `0x400c0` to `0x4f680`, which is
+`983 * 0x40` exactly and ends where the string pool begins. Its `+0x00` is
+zero in every file and filled at runtime - it is the pointer
+`Scene_RefreshNodeMatrices` double-derefs to reach the 4x4 and the node link
+at `+0x70`, so something fills it. The `u16` at `+0x04` is also zero in every
+file, and unlike `+0x00` **nothing located reads or writes bytes
+`+0x04`/`+0x05` on their own**: every reader found loads the *word* at
+`+0x04` and masks bits that live in its low halfword (below). **`+0x06` is
+authored** and the loader carries it across untouched.
+
+**So the twenty-ninth pass's "`+0x04` carries the enable bit" and this pass's
+"`+0x06` bit 0 is the Scene/Track selector" are one authored bit read at two
+widths.** `Scene_BuildStaticChunkMask`'s `*(u32 *)(block + 4) & 1` is, on a
+big-endian word, the low bit of byte `+0x07` - which is bit 0 of the `u16` at
+`+0x06`. There is no separate runtime enable field.
+
+**The executable side, stated as the exact search.** Every `sth`/`sthu` with
+a `0x6(` displacement off a non-stack base, program-wide: 102 sites. Three sit
+in the 293 previously-holed (`lvlx`-bearing) functions - `0x000c3a00`
+(`FUN_000c3410`, craft code), `0x00394488` and `0x003945c8` (two float-to-half
+packers writing `param_1[3]`) - none of them a render block. The rest are libc
+(`_Mbtowcx`, `memmove`, ...), SCREAM, and two environment functions:
+`Environment_UpdateStageBlend` (9 sites, `0x003dad30`..`0x003db208`) and
+`FUN_003d9970` (17), which are all the same shape - four `bl 0x005f7a60`
+(float to half) results stored at `+0x0/+0x2/+0x4/+0x6` of a half4 - a
+different object entirely. A second sweep over the scene, environment and
+RCS-loader modules (`0x003a0000`-`0x00410000`, `0x005d5000`-`0x005dc000`,
+`0x006d0000`-`0x006d4000`) for `stw ,0x4(`, `sth ,0x2(`/`,0x6(` and `stb
+,0x6(`/`,0x7(` off a non-stack base (772 sites) with a 16-instruction
+backward walk for a base defined by `lwz rB,0x8(`: one hit, `0x006d3308` in
+`FUN_006d2e20`, which is an STL red-black-tree insert (`"map/set<T> too
+long"`), not this. The matching **load** sweep (`lwz`/`lhz`/`lha`/`lbz` at
+`0x4(`..`0x7(` off a base defined by `lwz base,0x8(`, same three modules,
+1,630 candidates) attributes eight: six are `lwz r2,0x4(rX)` TOC loads off
+function descriptors, and the other two are the bit-9/10 readers described
+below - both `lwz` of the whole word, both masking into the low halfword.
+**The residual, stated plainly**: an unattributed `stw` at `0x4(base)` would
+span `+0x04..+0x07`, so a runtime writer the 16-instruction walk could not
+reach is not excluded by construction. What is established is narrower and
+sufficient: the halfword arrives from the file with its bits already set, no
+located store changes them, and every located reader of the word treats the
+low halfword as the whole content. Confidence **85** that `block->0x06` is
+authored per chunk in the `.rcsmodel`.
+
+**Polarity, chained explicitly** because a port will need it:
+`Scene_SubmitVisibleChunks` builds `rec[2] = (key << 1) | (kind == 2)` with
+`key = *(short *)(block + 6)`; `FUN_003ff860` reads `uVar20 = rec[2] >> 1`
+and publishes **Scene when `(uVar20 & 1) == 0`, Track otherwise**. So
+**bit 0 set = the Track set (`zoneModeTrack*`), clear = the Scene set
+(`zoneMode*`)**. On disc that is 4,365 Track chunks against 37,496 Scene
+chunks - and the 4,365 sit in exactly **37 files**, every one a
+`track.rcsmodel`/`track_reversed.rcsmodel`, a `pvs_blocker.rcsmodel`, a Zone
+front-end `track01.rcsmodel` or a mode pad. Talon's Junction: 124 of 983.
+
+**A second consumer of the same bit says what it means.**
+`Scene_BuildStaticChunkMask` tests `*(u32 *)(block + 4) & 1` - the low bit of
+the big-endian word at `+0x04`, which *is* bit 0 of the halfword at `+0x06` -
+and ORs the chunk into the static array at `g + 0xc180` when set. That
+array's only readers ([visibility.md](visibility.md)) are
+`Shadow_CompileShadowedTrackRedraw`, `Shadow_CompileAmbientShadowTrackRedraw`
+and `0x00401ba8`. The bit that picks the Track colour set in Zone is the bit
+that picks the chunks the shadowed-track redraw passes draw. **Bit 0 is
+"this chunk is track surface"**, from two independent consumers and a file
+survey that puts it only in track-shaped models. Confidence **80**.
+
+**What the other bits do, from the sorter's routing and the survey.** Record
+bit N is block bit N-1, so:
+
+| block bit | set on | routed by `Scene_SortAndLightVisibleChunks` as | files |
+| ---: | ---: | --- | --- |
+| 0 | 4,365 | Scene/Track (above); static mask | 37, all track-shaped |
+| 1 | 60 | record bit 2: not consulted | `03_track` only (value `2`) |
+| 2 | 10 | record bit 3: excluded from B4/B5 | `01_vineta_k` only |
+| 3 | 658 | record bit 4: also appended to B2 (`FUN_00403a30`) | `03_track`, `05_ubermall` |
+| 4 | 420 | record bit 5: B3 (`FUN_003fc140`) instead of B1 | `01_vineta_k` only |
+| 5 | 1,051 | record bit 6: not consulted by the sorter | `10_sebenco_climb`, `01_vineta_k` |
+| 9, 10 | 418, 208 | not the sorter: **a PVS scrub at track load** (below) | every track, values `0x201`/`0x401` |
+| 11 | 315 | record bit 12: not consulted by the sorter | every track, value `0x800` |
+
+Fifteen distinct values in all: `0` (35,913), `1` (3,263), `8` (638), `33`
+(476), `48` (396), `513` (392), `2048` (295), `1025` (195), `32` (140), `2`
+(60), `545` (26), `16` (24), `2056` (20), `1057` (13), `4` (10). Bits 9 and 10
+never occur without bit 0. **Which draw bucket a chunk reaches is therefore
+authored in the file too**, which is the part that makes the twenty-ninth
+pass's bucket table portable rather than merely located.
+
+**Bits 9 and 10 are read by `Pvs_LoadForTrack` (`0x003f5550`), through two
+small helpers found by the load sweep above**, and what they do is remove the
+chunk from the PVS. `FUN_003fa1e0` walks the scene's chunk table and, for
+every chunk whose record word has `0x400` (bit 10) set, calls
+`FUN_003c5a30(pvs, cell, chunkIndex)` for every cell (`FUN_003c5b68` returns
+the cell count at `pvs+0x10`); `FUN_003fa308` is the same loop keyed on
+`0x600` (bits 9 or 10). `FUN_003c5a30` is
+`byte = (byte | bit) - bit` on `cellBitmap[cell][chunk >> 3]` - a **clear**.
+`Pvs_LoadForTrack`'s tail selects between them:
+
+```c
+if (g_ZoneEffectsActive)                       FUN_003fa430();   // clears every kind-2 chunk
+if (*0x008b80fc == 0 && (mode == 0xe || mode == 0xd || mode == 0x15))
+                                               FUN_003fa308();   // clears bit-9-or-10 chunks
+else if (gameState[0x18] == 0)                 FUN_003fa1e0();   // clears bit-10 chunks
+```
+
+`mode` is `g_GameState.mode` at `+0xe0`, the same three values
+(`0xe` Detonator, `0xd`, `0x15`) the tenth pass found the stage-request
+switch keyed on. So a bit-9 chunk is hidden from every PVS cell in those
+three modes, and a bit-10 chunk is hidden in those modes *and* in every
+other mode while `gameState+0x18` is zero - what that byte and `0x008b80fc`
+mean is not read. Both bits only ever occur together with bit 0, so these are
+**track-surface chunks the PVS is told to forget for a given mode** - the
+shape of a mode-specific track variant (a pad set, a barrier, an alternate
+piece) authored into the one model. Confidence **75** on the mechanism (the
+clear is three instructions and the gate is a plain decompile); no claim
+about which pieces they are. `FUN_003fa430`, the Zone arm, is the same loop
+keyed on `chunk[7] == 2` rather than on the record: **Zone mode drops every
+node-transformed (kind-2) chunk from the PVS**, which is the executable-side
+reason the animated scenery is absent in Zone. Confidence 80.
+
+**One correction to the twenty-ninth pass while here.** It placed the
+OR-accumulated `+0x74` on the same object as `+0x04`/`+0x06`. The submit's own
+expression is `uVar16 |= *(uint *)(**(int **)(chunk + 8) + 0x74)` - a double
+dereference - so `+0x74` belongs to the object the record's `+0x00` points at
+(the one with the 4x4 and the `+0x70` node link), not to the record itself.
+The record is 0x40 bytes and has no `+0x74`.
+
+Reproduce:
+
+```sh
+python3 scripts/psarc.py cat data/images/hdfury-ps3-eu-dec.iso:PS3_GAME/USRDIR/DATA00.PSARC \
+    /data/environments/talons_junction/track.rcsmodel > /tmp/tj.rcsmodel
+# chunk 0 header: hash, ffff 05 01, then 0x000400c0 - the record's file offset
+xxd -s 0x53e20 -l 0x10 /tmp/tj.rcsmodel
+# the record: +0x00/+0x04 zero, +0x06 = 0x0000, then two float4s
+xxd -s 0x400c0 -l 0x40 /tmp/tj.rcsmodel
+# the relocation table header +0x04 points at: count, then offsets
+xxd -s 0x22acc -l 0x1c /tmp/tj.rcsmodel
+```
+
+### 2. The radius writer: `Environment_UpdateStageBlend` advances it itself, and the two dev-only schema keys are its start speed and acceleration
+
+`H[e].f32@0x08` (`H = 0x008c2cb8`, `0x38`-byte entries) is the value the
+twenty-fourth pass found copied into `zoneColourTint.w` under a lane-3 `vsel`.
+Its writer was never chased. It is in the same function, on the arm the ninth
+pass labelled "already applied - the cross-fade runs instead" and did not
+read past. `scripts/ps3-toc.py attrib 0x008c2cb8` names thirty functions,
+which is the five-TOC-slot set the sixth and seventh passes enumerated; no
+slot in the image holds `+0x08` or any other interior address of the array
+(`attrib` on `0x008c2cc0`, `0x008c2cf0`, `0x008c2cf8` and the neighbours
+returns nothing); so the writer had to be one of the thirty, and the
+bias-checked read of this one finds it.
+
+Entry, with `n = param_2` (0 or 1), `r26 - r27 = n * 0x38`, `r7 = H`:
+
+```text
+3da680  subf   r10, r27, r26          ; r10 = n*0x38
+3da684  lwz    r7, -0x5a80(r2)        ; r7  = H            (0x008b7944 -> 0x008c2cb8)
+3da688  extsw  r9, r10
+3da68c  add    r8, r9, r7             ; r8  = &H[n]        (no bias)
+3da690  lwzx   r11, r7, r9            ; H[n].+0x00  current stage
+3da694  lwz    r0, 0x4(r8)            ; H[n].+0x04  requested stage
+3da698  cmpw   cr7, r0, r11
+3da69c  beq    cr7, 0x3dc6a8          ; equal -> the per-frame advance below
+        ...                           ; else: the ninth pass's commit (0x3da724-0x3da75c)
+3dc6a8  lwz    r5, -0x57a4(r2)        ; 0x008b7c20 -> 0x009384dd, a global byte
+3dc6b0  lbz    r0, 0x0(r5)
+3dc6b8  bne    cr7, 0x3dc70c          ; byte set -> skip the advance entirely
+3dc6bc  lfs    f13, 0x8(r8)           ; f13 = H[n].+0x08   *** the radius ***
+3dc6c0  addi   r9, r10, 0x10          ; r9  = n*0x38 + 0x10
+3dc6c4  lfs    f0, -0x57a0(r2)        ; 0x008b7c24 = 0x469c4000 = 20000.0f
+3dc6c8  fcmpu  cr7, f13, f0
+3dc6cc  bge    cr7, 0x3dc6e4          ; radius >= 20000 -> stop growing
+3dc6d4  lwz    r6, -0x5a80(r2)
+3dc6d8  lfsx   f0, r6, r0             ; f0  = H[n].+0x10   (speed)
+3dc6dc  fadds  f0, f13, f0
+3dc6e0  stfs   f0, 0x8(r8)            ; *** H[n].+0x08 += H[n].+0x10 ***
+3dc6e8  lfs    f0, -0x5a50(r2)        ; 0x008b7974 = 1.0f
+3dc6ec  add    r9, r0, r7             ; r9  = &H[n].+0x10  (bias 0x10 from here on)
+3dc6f0  lfsx   f13, r7, r0            ; f13 = H[n].+0x10   (speed)
+3dc6f4  lfs    f12, 0x4(r9)           ; f12 = H[n].+0x14   (acceleration)
+3dc6f8  fadds  f13, f13, f12
+3dc6fc  lfs    f11, 0x8(r9)           ; f11 = H[n].+0x18   (blend weight)
+3dc700  fcmpu  cr7, f11, f0
+3dc704  stfsx  f13, r7, r0            ; *** H[n].+0x10 += H[n].+0x14 ***
+3dc708  blt    cr7, 0x3dd398          ; weight < 1.0 ->
+3dd398  lfs    f0, -0x579c(r2)        ; 0x008b7c28 = 0x3c23d70a = 0.01f
+3dd39c  fadds  f0, f11, f0
+3dd3a0  stfs   f0, 0x8(r9)            ; *** H[n].+0x18 += 0.01f ***  (r9 = &H[n]+0x10)
+3dd3a4  b      0x3dc70c
+3dc70c  ...    r9 = &H[n] + 0x10 again
+3dc724  lfs    f0, 0x8(r9)            ; H[n].+0x18
+3dc72c  ble    cr7, 0x3da76c          ; <= 1.0 -> the cross-fade proper
+3dc730  stfs   f13, 0x8(r9)           ; H[n].+0x18 = 1.0f   (clamp)
+```
+
+Every displacement above was resolved against the folded bias the sixth
+pass warned about: `r8` is `&H[n]` with none (`0x8(r8)` is `+0x08`), `r9` from
+`0x3dc6ec` on is `&H[n] + 0x10` (`0x4(r9)`/`0x8(r9)` are `+0x14`/`+0x18`).
+The TOC is this function's own (`0x008bd3c4`, OPD-verified on earlier
+passes); the four constants resolve with `scripts/ps3-toc.py resolve
+0x003da540 <disp>`.
+
+So the whole per-entry transition state machine, in one function:
+
+| event | `+0x08` radius | `+0x10` speed | `+0x14` accel | `+0x18` weight |
+| --- | --- | --- | --- | --- |
+| `.data` default / `FUN_003cdc90` reset | `0` | `0.5f` | `0.1f` | `0.1f` |
+| commit (`+0x04 != +0x00`, ninth pass) | `= 0.1f` | `= +0x0c` (`0.5f`) | - | `= 0` |
+| every later call, `+0x04 == +0x00`, byte `0x009384dd` clear | `+= speed` while `< 20000` | `+= accel` | - | `+= 0.01f` while `< 1`, then clamped to `1` |
+
+Per call, not per second: no timestep is read anywhere in the block. With
+the shipped defaults the radius after `k` frames is
+`0.1 + 0.5k + 0.05k(k-1)` - 207 at one second, 4,635 at five, and it hits the
+20,000 ceiling around frame 630, ten and a half seconds in; the colour
+weight reaches 1 at frame 100. **Confidence 85** on the mechanism, every
+number read off the instruction stream and the `.data` image.
+
+**The two flag-2 schema keys are these two fields**, closing the
+twenty-fourth pass's 65 on "obvious candidates" from the registration side.
+`Environment_RegisterStageSchema`'s seven non-stage registrations resolve
+their destination registers as (`0x003d4fbc`..`0x003d5078`, `r25 = H`, `r9 =
+max(*(0x008c1430), 0)` the current entity index, `r29 = r9 * 0x38`):
+
+| key | helper | destination |
+| --- | --- | --- |
+| `Override game control` | `0x005d46b8` (bool) | `H[idx] + 0x2c` - the gate byte the fourth pass found on the `+0x04` write |
+| `Target zone level` | `0x005d4220` (int) | `H[idx] + 0x04` - the requested stage |
+| `Transition start speed` | `0x005d4418` (f32) | **`H[idx] + 0x0c`** - copied into `+0x10` at commit |
+| `Transition acceleration` | `0x005d4418` (f32) | **`H[idx] + 0x14`** |
+
+Four keys, four fields already placed by role from the consumer side, and
+the names fit each one. That is what a developer stage driver looks like:
+set `Override game control`, pick `Target zone level`, tune the wavefront's
+speed and acceleration - and the shipped files author none of them, so the
+`.data` defaults (`0.5f`, `0.1f`) are what every player saw. Confidence
+**85** on the destinations, instruction-level.
+
+**What `Environment_UpdateStageBlend` also does that nobody had read**: when
+`n == 1` and both `H[0].+0x04` and `H[1].+0x04` are `<= 1`, it copies
+`H[0]` wholesale into `H[1]` (`0x003dc738`-`0x003dc7c4`, fourteen loads then
+fourteen stores at `+0x38..+0x6c`) before the common path - the second
+viewport mirrors the first until either is driven past stage 1. Recorded,
+not chased.
+
+**Not settled**: the byte at `0x009384dd`. Thirty-six functions load its TOC
+slot, `Game_PresentLoop_q` and `BackgroundAnimFury_Render` among them; a
+"paused" flag is the obvious reading for something the present loop, a
+menu backdrop and a per-frame effect all consult, and it is not checked.
+Nothing here depends on it: with the byte clear the advance runs.
+
+### 3. `zoneOrigin`: the effectsettings thread is right, the ladder thread was stale - and the source is `+0xb0`, not `+0x80`
+
+`scripts/ps3-toc.py attrib 0x00c81550` on the live image returns exactly one
+function, `0x003aa888`, and `0x003ad8b0`-`0x003ad8dc` reads instruction for
+instruction as the twenty-seventh pass recorded it: `lwz r9,-0x61c0(r2)`
+(-> `0x008b7204` -> `0x00c81550`) at `0x003ab67c` and `0x003ad8d0`, `stvx
+v0,0,r9` at `0x003ad8dc`, one frame above the `bl 0x003da540` at `0x003ad8e8`.
+The Zone-ladder work-in-flight thread still carried "no writer at all,
+confidence 82" from 2026-08-31; that sentence was true of
+`Environment_UpdateStageBlend` alone and was superseded on 2026-09-03. Fixed
+in the thread this pass.
+
+**One detail the twenty-seventh pass dropped.** Its listing skipped
+`0x003ad8cc  li r0, 0x30`, so it read the `lvx v0, r3, r0` that follows as
+`*(r3)`. `rA = r3` is non-zero, so the effective address is `r3 + r0`:
+
+```text
+3ad8c4  bl    0x67a728          ; r3 = obj + 0x80     (FUN_00323760: return param_1 + 0x80)
+3ad8cc  li    r0, 0x30
+3ad8d8  lvx   v0, r3, r0        ; v0 = *(obj + 0x80 + 0x30) = obj->+0xb0
+3ad8dc  stvx  v0, 0, r9         ; zoneOrigin = v0
+```
+
+So `zoneOrigin` is the float4 at the object's **`+0xb0`**, the fourth 16-byte
+row of whatever starts at `+0x80`. `FUN_00323760` has thirteen callers, and
+the two others that reach it through the same `*(session + 0x6adc)` field
+(`0x000cfbf4` in `FUN_000cfb80`, `0x000e4480` in `FUN_000e41b0`) also take
+row `+0x30` of the result and scatter its `.x`/`.y`/`.z` into three scalar
+fields - the shape of a position being read out of a 4x4. A 64-byte
+transform at `+0x80` whose last row is the translation is the natural reading
+and is offered at **60**, not traced; which entity `session[id]->+0x6adc`
+names (the local craft is the obvious candidate: `FUN_000d3550`,
+`FUN_000d4d08`, `FUN_000d5188` swap it in craft-side code) is not chased,
+per this pass's brief.
+
+### Names applied
+
+None. The render-block record is per-file data, not a fixed global;
+`0x009384dd` is not identified; the radius mechanism lives inside a function
+already named at 85.
+
 
 ## See also
 

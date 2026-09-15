@@ -40,9 +40,13 @@ draws the subset - twenty-fifth pass, `## Open` below). **2026-09-01: the
 visualiser (`zoneTexVis`) closed too and is already implemented** -
 `oag_audio::spectrum` + `mesh.wgsl`. **2026-09-03: the Scene/Track selection
 mechanism and `zoneOrigin`'s writer are both found too** (see the two newest
-sections below). What remains is two narrow render questions - the sphere
-radius and `zoneAnisoPalette` - not a missing trigger; see Open and Next
-Steps.
+sections below). **2026-09-15: the sphere radius's writer and the
+Scene/Track bit's author are both read** - the radius advances inside
+`Environment_UpdateStageBlend` itself on a quadratic the two dev-only schema
+keys parameterise, and the per-chunk bit is a **file field** of the
+`.rcsmodel` (the chunk header's `+0x08` points at a 0x40-byte per-chunk
+record whose `+0x06` halfword is authored on disc). What remains is
+`zoneAnisoPalette` and the renderer wiring; see Open and Next Steps.
 
 Plain text, same `"Key.Subkey"=float [float...]` shape `oag_tables::envsettings`
 already parses for `.envsettings` - just never pointed at this extension.
@@ -314,23 +318,51 @@ no longer disagree.
      **Per chunk, not per material**; the confidence-55 guess is superseded,
      at 85. What is per material is which *publisher* runs at all. See the
      Next Steps entry and the twenty-ninth pass.
-  2. **`zoneOrigin` (`0x00c81550`) - writer found, 2026-09-03; the radius is
-     the one piece still open.** `Scene_PrepareFrame` writes it every frame,
+
+     **2026-09-15, the bit is authored on disc.** The runtime chunk is the
+     file's own chunk header and its `+0x08` word is a file offset the RCS
+     loader relocates through the file's own relocation table (the header
+     word at `+0x04` names it; 41,861 of 41,861 chunks on the disc have
+     their `+0x08` in it). It points at a 0x40-byte per-chunk record whose
+     `+0x06` halfword is non-zero on 5,948 chunks as shipped; bit 0 - the
+     Scene/Track selector, **set = Track** - is set on 4,365 chunks in
+     exactly the 37 track-shaped models, and the same bit is what
+     `Scene_BuildStaticChunkMask` feeds the shadowed-track redraw passes. No
+     runtime store to the halfword exists (program-wide `sth ,0x6(` sweep,
+     102 sites, all accounted for). Confidence 85 on "authored", 80 on
+     "means track surface". Thirtieth pass of
+     [zone-effectsettings-loader.md](../../docs/ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md).
+     **This changes what a port should bind**: `oag_render` binding the
+     Track set for every chunk is right for 124 of Talon's Junction's 983
+     chunks and wrong for the other 859, which the original draws with the
+     Scene set. Not implemented this pass (RE lane); see Next Steps.
+  2. **`zoneOrigin` (`0x00c81550`) - writer found, 2026-09-03; the radius
+     writer found 2026-09-15.** `Scene_PrepareFrame` writes it every frame,
      one call frame above `Environment_UpdateStageBlend` (which is why the
      twenty-fourth pass found no writer *inside* the blend and correctly
-     didn't claim more than that), from a resolved entity's own `+0x80`
-     field, gated on a viewport/id lookup rather than on Zone mode.
-     Confidence 78 - the chain's two ends (the object-array base, `zoneOrigin`
-     itself) are TOC-verified twice over; what the middle offsets *mean*
-     (whose `+0x80`, which viewport `id` selects) is not chased past this
-     pass. Full trace: twenty-seventh pass of
+     didn't claim more than that), from a resolved entity's own **`+0xb0`**
+     float4 (the twenty-seventh pass wrote `+0x80`; it skipped a `li
+     r0,0x30` in the listing - corrected in the thirtieth pass, which also
+     re-confirmed the site on the complete post-`lvlx` image), gated on a
+     viewport/id lookup rather than on Zone mode. Confidence 78 - the
+     chain's two ends (the object-array base, `zoneOrigin` itself) are
+     TOC-verified twice over; whose `+0xb0` (a 4x4 at `+0x80` with the
+     position in its last row is the reading offered at 60) and which
+     viewport `id` selects is not chased. Full trace: twenty-seventh and
+     thirtieth passes of
      [zone-effectsettings-loader.md](../../docs/ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md).
-     The radius (`H[e].f32@0x08`, copied per frame under a lane-3-only
-     `vsel`) still has no located writer. Inner/outer is a **stage-transition
-     wavefront** - a sphere expanding out of `zoneOrigin` that repaints the
-     world with the new stage - and is only visibly exercised once a
-     transition is in flight, which needs a live Zone race to observe (HD's
-     stage trigger itself is no longer the blocker - see the section above).
+     **The radius** (`H[e].f32@0x08`, copied per frame under a lane-3-only
+     `vsel`) is advanced by `Environment_UpdateStageBlend` itself on the
+     "already applied" arm: `radius += speed` while under `20000`, `speed +=
+     accel`, per call; the commit resets radius to `0.1f` and speed to
+     `+0x0c`. `+0x0c` and `+0x14` are exactly where
+     `Environment_RegisterStageSchema` registers `Transition start speed`
+     and `Transition acceleration`, unauthored on disc, so the `.data`
+     defaults `0.5f`/`0.1f` are what shipped. The colour weight `+0x18`
+     advances `0.01f` per call to a clamp at `1.0`. Confidence 85. Inner/outer
+     is a **stage-transition wavefront** - a sphere expanding out of
+     `zoneOrigin` that repaints the world with the new stage - and every
+     number it needs is now the disc's own.
   3. ~~`zoneTexVis`~~ **Closed and implemented, 2026-09-01 - the `0x003d8b40`
      reading above was wrong.** That address builds an unrelated struct field
      172 bytes away; `zoneTexVis` itself is a load-time zero-fill, rewritten
@@ -851,17 +883,34 @@ no longer disagree.
   trace, including the eight publishers listed by address and the five-way
   material class that picks the input list: twenty-ninth pass of
   [zone-effectsettings-loader.md](../../docs/ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md).
-  **Nothing in it changes what a port binds** - `oag_render` keeps binding
-  the Track set, because the per-chunk bit still has no located writer.
-- **Find the writer of `block->0x06`**, the halfword whose bit 0 is the
-  Scene/Track selector and whose bits 2-4 route a record between the five
-  draw buckets. `block` is `*(chunk + 8)`; its `+0x04` carries the enable bit
-  `Scene_BuildStaticChunkMask` tests and its `+0x74` is OR-accumulated across
-  visible chunks, so the object is well anchored - only this field's author is
-  unread. Once it is, per-chunk Scene/Track selection becomes portable, and
-  whether `zoneModeTrack*` is the right unconditional bind stops being an
-  assumption. **This is the one remaining step between the Zone parameter
-  block and a faithful port of it.**
+  ~~**Nothing in it changes what a port binds** - `oag_render` keeps binding
+  the Track set, because the per-chunk bit still has no located writer.~~
+  **It does change it - see the next item.**
+- ~~**Find the writer of `block->0x06`**~~ **Found, 2026-09-15, and it is not
+  an instruction: the halfword is authored in the `.rcsmodel`.** The chunk
+  header's `+0x08` is a relocated file offset to a 0x40-byte per-chunk record
+  (the "render block"); `+0x06` of that record carries the bits as shipped,
+  bit 0 set = Track. Surveyed over all 643 models: 15 distinct values, and the
+  sorter's routing bits 2-4 are authored on only three circuits (Vineta K,
+  `03_track`, Ubermall). Full table in the thirtieth pass of
+  [zone-effectsettings-loader.md](../../docs/ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md).
+  One correction on the way: `+0x74` is not on this record but on the object
+  its `+0x00` points at.
+- **Port it** (renderer lane, not done here): have `oag_rcs::rcsmodel` expose
+  the record's `+0x06` per chunk (`Mesh`-level; the header's `+0x08` word,
+  resolved as a file offset) and bind `zoneModeTrack*` when bit 0 is set and
+  `zoneMode*` otherwise. On Talon's Junction that flips 859 of 983 chunks from
+  the Track colours to the Scene colours, so check it against a Zone frame of
+  the original before trusting the picture - `Start` authors Scene black and
+  Track at `9.0`, and the expected result is a dark environment with a lit
+  road, not the uniform tint drawn today. Also in reach from the same field:
+  the five-bucket routing (record bits 3-5), which decides which fog buffer
+  and publisher a chunk goes through.
+- **Wire the wavefront** (renderer lane): origin = the entity's `+0xb0`
+  (re-centred every frame), radius per frame after a commit `r_k = 0.1 + 0.5k
+  + 0.05k(k-1)` capped at `20000`, colour weight `min(0.01k, 1)`. All disc
+  numbers; nothing chosen. What is still unmeasured is whether the radius's
+  world units match `oag_render`'s.
 - Two smaller ones left by the same pass: which draw list `FUN_004053e0`
   walks and who consumes bucket B1 (`g+0x311e8`), and what `material+0x10`
   bit 7 means - it is tested before the transparency mode and short-circuits
@@ -875,10 +924,13 @@ no longer disagree.
   the corresponding item in `## Open` above.
 - ~~Find `zoneOrigin`'s writer, or establish it has none~~ **Found,
   2026-09-03** - one call frame above `Environment_UpdateStageBlend`, in
-  `Scene_PrepareFrame`. See the corresponding item in `## Open` above. What
-  is left is narrower: what the source object's `+0x80` field is (a
-  world-position guess, not traced further) and which entity the viewport
-  lookup that gates the write actually selects.
+  `Scene_PrepareFrame`. See the corresponding item in `## Open` above.
+  **Re-confirmed on the complete image 2026-09-15, with one correction**: the
+  source is the object's `+0xb0` float4, not `+0x80` (`li r0,0x30` before the
+  `lvx v0,r3,r0`). What is left is narrower still: whether `+0x80` is a 4x4
+  whose last row that is (offered at 60 - two other callers of the same
+  accessor split that row into x/y/z scalars) and which entity
+  `session[id]->+0x6adc` selects.
 - ~~Close `zoneTexVis`'s build loop~~ **Done, 2026-09-01** - see the
   corresponding item in `## Open` above. The address named here
   (`0x003d8b40`) turned out to build an unrelated field; `zoneTexVis` itself

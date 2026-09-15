@@ -96,8 +96,14 @@ asset file.
   declares, so they draw white. `FEGlobals` is a live binding rather than a
   load-time constant (`docs/formats/fexml.md`); what the runtime binds is
   unread.
-- **The cross-fade's own rate is still unrecovered**, on both titles - the
-  sibling threads' remaining question, untouched by this.
+- ~~**The cross-fade's own rate is still unrecovered**, on both titles~~
+  **Recovered on HD, 2026-09-15**: the weight `H[e].+0x18` advances by a
+  literal `0.01f` per call of `Environment_UpdateStageBlend` (`0x003dd398`,
+  TOC slot `0x008b7c28`) and clamps at `1.0`, so the colour cross-fade is 100
+  frames long; the sphere radius runs on its own quadratic beside it. See the
+  thirtieth pass of
+  [zone-effectsettings-loader.md](../../docs/ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md).
+  2048's rate is still unread.
 
 ## A zone-8 frame settled the placement and confirmed the table a third time
 
@@ -183,29 +189,36 @@ twenty-fourth/twenty-fifth passes with this question in mind. The mechanism
 it the new stage's colours apply, outside the old stage's. Three of its inputs
 are specifically unrecovered, not just "the rate":
 
-1. **`zoneOrigin` (`0x00c81550`) has no writer at all**, confidence 82 -
-   zero-initialised once and never touched again in
-   `Environment_UpdateStageBlend`, the one gap in an otherwise unbroken run of
-   vec4s that function writes.
-2. **The radius itself, `H[e].f32@0x08`, has an unchased writer.** Nothing
-   traced what advances it.
-3. **The two schema keys that read as the obvious candidates for the radius'
-   rate - `Transition start speed` and `Transition acceleration` - are flag-2,
-   developer-only fields.** Confirmed from both directions: the schema marks
-   them flag 2, and cross-checked against `effectsettings.md`'s own count of
-   what the four *shipped* files actually author, they are among the eight
-   schema entries no shipped file ever sets. So even the rate's own named
-   handle carries no authored value to read.
+1. ~~**`zoneOrigin` (`0x00c81550`) has no writer at all**, confidence 82~~
+   **Stale as written - this was only ever true of
+   `Environment_UpdateStageBlend` itself.** The writer was found on 2026-09-03
+   one call frame up, in `Scene_PrepareFrame` at `0x003ad8d0`-`0x003ad8dc`,
+   and re-confirmed on the complete (post-`lvlx`) image on 2026-09-15: `attrib
+   0x00c81550` names exactly that function. The source is the float4 at
+   `+0xb0` of the entity `session[id]->+0x6adc` names (the twenty-seventh pass
+   dropped a `li r0,0x30` and wrote `+0x80`; corrected in the thirtieth pass).
+   See [zone-effectsettings-loader.md](../../docs/ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md),
+   passes twenty-seven and thirty.
+2. ~~**The radius itself, `H[e].f32@0x08`, has an unchased writer.**~~
+   **Found, 2026-09-15**: `Environment_UpdateStageBlend` advances it itself,
+   on the `+0x04 == +0x00` arm nobody had read past - `radius += speed`
+   (`+0x10`) while under `20000`, `speed += accel` (`+0x14`), and the colour
+   weight `+0x18 += 0.01f` to a clamp at `1.0`, all per call. Thirtieth pass,
+   confidence 85.
+3. ~~**The two schema keys ... are flag-2, developer-only fields.**~~ True,
+   and now placed: `Transition start speed` registers to `H[idx]+0x0c` (the
+   value the commit copies into `speed`) and `Transition acceleration` to
+   `H[idx]+0x14`. Unauthored on the shipped disc, so the `.data` defaults
+   `0.5f` and `0.1f` are what the game ran with. Same pass, confidence 85.
 
-Three unknowns, not one: where the wavefront starts, how fast it grows, and
-whether the growth-rate keys the schema declares are ever set to anything at
-all. Wiring a value for any of them would be exactly the "plausible-looking
-stand-in" `CLAUDE.md` rules out - a chosen origin, a chosen speed, on a page
-that already has one recorded instance of that going wrong and surviving
-review. So this stays drawn as it is today: the showing stage's own unblended
-palette, [`ZoneGrade::commit`](../../crates/game/src/race/zone_grade.rs)'s own doc
-comment already saying plainly that the transition effect is not drawn because
-its call site is unidentified.
+All three unknowns are now read. What is still not a measured number is the
+*unit* of the radius against the world (the shader's `zoneColourTint.w`
+compares it to a world-space distance; whether `oag_render`'s units match is a
+renderer question, not an RE one). The port side is untouched by this: the
+showing stage's own unblended palette is still what draws, and
+[`ZoneGrade::commit`](../../crates/game/src/race/zone_grade.rs)'s own doc
+comment still says the transition effect is not drawn - the reason has moved
+from "unidentified" to "not yet wired".
 
 ## 2026-08-31, later still: the maintainer's own play answers both discriminators
 
@@ -346,16 +359,23 @@ free:**
 - Look for the same `{threshold, stringId}` shape on **Detonator**, whose own
   ladder is recovered by a different mechanism (`RaceManager->+0x2e10`) and may
   or may not share this table's walker.
-- **An RPCS3 write watchpoint on `zoneOrigin` (`0x00c81550`) and the radius
-  field is the one instrument that could close the blend**, the same way
-  `docs/reverse-engineering/rpcs3-debugger.md` is already the recommended next
-  move for `zoneColourTint`'s own writer. A static fourth sweep is not the
-  move - three have already come back the same way. **Sharpened by the
-  maintainer's own play (see the dated section above)**: watch for whether the
-  value moves frame to frame at all, before reading anything into where it
-  moves to - a wavefront that tracks the driving direction is not what a
-  motionless point produces, so a hit that never changes after the first write
-  would itself be a finding, not just a location.
+- ~~An RPCS3 write watchpoint on `zoneOrigin` (`0x00c81550`) and the radius
+  field is the one instrument that could close the blend~~ **Both writers
+  are read statically, 2026-09-15** - see the corrected item 1 and 2 in the
+  2026-08-31 section above and the thirtieth pass of
+  [zone-effectsettings-loader.md](../../docs/ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md).
+  `zoneOrigin` is rewritten every frame from an entity's `+0xb0` float4, which
+  is the reading the maintainer's "wavefront from behind" observation asked
+  for: the sphere is re-centred on something that moves with the player, not
+  fixed once per race. A watchpoint would now only confirm *which* entity
+  `session[id]->+0x6adc` is (the local craft is the obvious candidate and is
+  not traced); that is the remaining question, and it is a small one.
+- **Wire the transition** once someone owns the renderer side: origin =
+  the local craft's world position each frame, radius `r_k = 0.1 + 0.5k +
+  0.05k(k-1)` per frame after a stage commit, capped at 20000, colour weight
+  `min(0.01k, 1)`. Every number is the disc's (`.data` defaults for the two
+  unauthored keys, the constants in `Environment_UpdateStageBlend`), so this
+  is no longer a chosen stand-in.
 - ~~If the maintainer plays past a class change and can say whether the world
   visibly repaints outward from a point versus changing everywhere at once~~
   **Answered, 2026-08-31 - see the dated section above.** It is a wavefront,
