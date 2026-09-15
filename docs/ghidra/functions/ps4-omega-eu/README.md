@@ -8,13 +8,21 @@ where the PKG itself came from and how it decrypts is in
 [data/README.md](../../../../data/README.md)'s Omega Collection section and
 [source-images.md](../../../reverse-engineering/source-images.md).
 
-**Not a reverse-engineering target in its own right** - Omega Collection is
-listed "if feasible" in [the roadmap](../../../overview/roadmap.md), and no
-milestone is open on it. What this directory exists for is the same lineage
-question [`ps3-hdfury-eu/`](../ps3-hdfury-eu/) and
-[`vita-2048-eu-v104/`](../vita-2048-eu-v104/) already answered for each
-other: does Omega Collection's PS4 remaster share their `Backend/...` source
-tree, or is it a fresh PS4-specific build?
+**A reverse-engineering target as of 2026-09-15**, promoted from "if
+feasible" once the lineage match below proved out: `ShipCollisionFx_Trigger`/
+`Ship_DispatchCollisionFx` ([ship-collision-fx.md](ship-collision-fx.md))
+independently reached the same reading HD/Fury's own PPC64 decompile did,
+raising that pair's confidence past the `_q` threshold on **both** binaries
+and resolving one of HD's own open questions in the process. That is the
+case for this binary specifically: x86-64 needs no custom Ghidra processor
+module (unlike PPC64, Allegrex/VFPU, Emotion Engine or ARM), so its
+decompiler output is the most mature of any binary in this project, and the
+shared `Backend/...` tree below means a function read here can corroborate -
+or correct - a reading made on a harder architecture. No gameplay/simulation
+milestone opens on it (`the roadmap`'s M8 still gates that on a real second
+title, and Omega stays out of that scope); this is function-level RE work
+in service of the wider lineage, the same role `ps3-hdfury-eu/` and
+`vita-2048-eu-v104/` already play for each other.
 
 ## The lineage question, extended a third time: shared tree, confirmed at the code level
 
@@ -52,6 +60,10 @@ unnamed rather than forced.
 - [ships-effects.md](ships-effects.md) - `MagstripWake_Construct`, the first
   name recovered here, transferred from and to `vita-2048-eu-v104` in the
   same pass.
+- [ship-collision-fx.md](ship-collision-fx.md) - `ShipCollisionFx_Trigger`/
+  `Ship_DispatchCollisionFx`, found independently of `ps3-hdfury-eu`'s own
+  reading and agreeing with it - the finding that promoted this binary to an
+  RE target in its own right, and the worked example of the technique above.
 
 Add a row to [`names.tsv`](names.tsv) and the page it cites in the same
 change: `scripts/apply-ghidra-names.py` refuses a row whose address and name

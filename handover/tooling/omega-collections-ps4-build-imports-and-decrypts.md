@@ -233,9 +233,16 @@ about a second, decompression-shaped problem on top of it.
   to this project across `data05`/`data08`, no name outside either roster,
   so `data03.psarc` is now the only one of the nine archives left unchecked
   for the same question.
-- Not a reverse-engineering target in its own right yet (Omega Collection
-  stays "if feasible" in the roadmap) - this thread is groundwork, not a
-  milestone. The natural next RE pass, if one happens, is `GameRoot`/
-  `Game_Main`-equivalent boot-chain naming, the same starting point
-  `vita-2048-eu-v104/game-boot.md` used, now that the binary imports cleanly
-  and the lineage match gives it a same-role function to look for by name.
+- **The executable became an RE target 2026-09-15** - see
+  [`docs/ghidra/functions/ps4-omega-eu/ship-collision-fx.md`](../../docs/ghidra/functions/ps4-omega-eu/ship-collision-fx.md):
+  independently reading HD/Fury's own `Ship_DispatchCollisionFx`/
+  `ShipCollisionFx_Trigger` chain on this binary reached the same kind
+  mapping, raised both functions' confidence past the `_q` threshold on
+  **both** binaries, and resolved one of HD's own open questions (the
+  plain-damage spark variants are owned by sibling functions, not folded
+  into the same dispatcher). Gameplay/simulation work is still unplanned -
+  this is corroboration groundwork, not a milestone. The natural next RE
+  pass is `GameRoot`/`Game_Main`-equivalent boot-chain naming, the same
+  starting point `vita-2048-eu-v104/game-boot.md` used, now that the binary
+  imports cleanly and the lineage match gives it a same-role function to
+  look for by name.

@@ -1254,7 +1254,13 @@ paths.
       verified end to end against real data; the menu page exists and is
       gate-tested but unseen on a real display. See the section below and
       [ADR-0034](../architecture/adr/0034-a-race-may-open-two-titles-at-once.md)
-- [ ] Omega Collection, if feasible
+- [ ] Omega Collection - no gameplay/simulation work planned yet (still
+      gated by this milestone's own exit criterion), but its PS4 build is a
+      reverse-engineering target as of 2026-09-15: native x86-64 needs no
+      custom Ghidra processor module, and cross-checking a function's
+      reading against it corroborated (and raised the confidence of) two
+      HD/Fury functions independently. See
+      [`docs/ghidra/functions/ps4-omega-eu/README.md`](../ghidra/functions/ps4-omega-eu/README.md).
 
 Release order, because each title is the closest relative of the one before it.
 Pure shares the most format DNA with Pulse and is the cheapest second title;

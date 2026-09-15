@@ -90,8 +90,10 @@ project.
 
 ## Next Steps
 
-- Not a reverse-engineering target in its own right yet, same standing as
-  the parent thread - Omega Collection stays "if feasible" in the roadmap.
-  If it becomes one, `.wem`/Wwise is the next format gap to scope (the way
-  `.gnf` already is for the base `.pkg`'s textures) rather than `data08`'s
-  file listing, which this census now closes.
+- **The executable (not these asset archives specifically) became an RE
+  target 2026-09-15** - see the parent thread and
+  [`docs/ghidra/functions/ps4-omega-eu/README.md`](../../docs/ghidra/functions/ps4-omega-eu/README.md).
+  These four `.psarc` archives themselves are still asset-format groundwork,
+  not gameplay/simulation work. `.wem`/Wwise is the next format gap to scope
+  (the way `.gnf` already is for the base `.pkg`'s textures) rather than
+  `data08`'s file listing, which this census now closes.
