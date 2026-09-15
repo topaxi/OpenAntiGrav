@@ -18,7 +18,7 @@ use uniforms::Uniforms;
 mod velocity;
 pub use uniforms::{
     DEPTH_FORMAT, Fog, Light, SCENE_SIZE, Scene, ShadowMap, ShadowReceiver, UNIFORMS_SIZE, Zone,
-    write_uniforms, write_uniforms_raw,
+    ZoneSet, write_uniforms, write_uniforms_raw,
 };
 pub(crate) use velocity::velocity_targets;
 pub use velocity::{VELOCITY_FORMAT, Velocity};
@@ -262,7 +262,9 @@ pub fn build(
     blend: wgpu::BlendState,
     glow: GlowMask,
     velocity: Velocity,
-    zone: Option<&std::sync::Arc<crate::mesh::ModelTexture>>,
+    // The Zone stage's two textures, or [`zone::StageArt::NONE`] outside an
+    // HD Zone race - see that type for why there are two.
+    zone: &zone::StageArt,
     // The frame's shadow map, or `None` for the placeholder - see
     // `shadow_map::resources`. A `Built` binds whichever it was given for its
     // whole life, so a caller that gains a map mid-race rebuilds rather than
@@ -400,7 +402,7 @@ pub fn build(
                 },
                 count: None,
             },
-            // The Zone stage's own texture, its two samplers and the
+            // The Zone stage's two textures, their two samplers and the
             // visualiser lookup, in the *scene* group rather than the
             // per-material one: they are a property of the race, not of a
             // material slot, so binding them here uploads them once per
@@ -411,6 +413,7 @@ pub fn build(
             zone_entries[2],
             zone_entries[3],
             zone_entries[4],
+            zone_entries[5],
             // The shadow map, in the scene group for the same reason the Zone
             // stage's texture is: it is a property of the frame, not of a
             // material slot. Bound on every pipeline whether or not anything
@@ -480,6 +483,10 @@ pub fn build(
             wgpu::BindGroupEntry {
                 binding: 9,
                 resource: wgpu::BindingResource::Sampler(&shadow_resources.depth_sampler),
+            },
+            wgpu::BindGroupEntry {
+                binding: 10,
+                resource: wgpu::BindingResource::TextureView(&zone_resources.scene_view),
             },
         ],
     });

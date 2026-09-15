@@ -135,6 +135,10 @@ pub struct ZoneGrade {
     /// so dropping a slot that failed to decode would silently re-map every
     /// stage above it.
     art: oag_render::mesh::TextureSlots,
+    /// The "general" set's per-stage texture, `zoneMode<n>.gtf`, on the same
+    /// terms as [`Self::art`]. The one a chunk without the track bit samples
+    /// - see [`Self::stage_art_pair`].
+    scene_art: oag_render::mesh::TextureSlots,
 }
 
 impl ZoneGrade {
@@ -146,6 +150,7 @@ impl ZoneGrade {
         table: EffectSettings,
         stages: Option<&'static oag_title::ZoneStages>,
         art: oag_render::mesh::TextureSlots,
+        scene_art: oag_render::mesh::TextureSlots,
     ) -> Option<Self> {
         let last_stage = *table.stages.keys().next_back()?;
         Some(Self {
@@ -155,23 +160,21 @@ impl ZoneGrade {
             blend: StageBlend::default(),
             stages,
             art,
+            scene_art,
         })
     }
 
-    /// The per-stage texture the showing stage indexes, where the title ships
-    /// one and it decoded.
+    /// The "track" set's texture for the showing stage, where the title
+    /// ships one and it decoded.
     ///
-    /// **This is the "track" set, and it draws.** The original samples it
-    /// through the `zoneTexInner`/`zoneTexOuter` shader parameters, and
-    /// `mesh.wgsl`'s `zone_surface` reproduces the part of that rule whose
-    /// inputs are all on the disc - see [`Self::zone_uniform`] and
-    /// [`oag_render::mesh_render::Zone`]. The visualiser glow that rides
-    /// alongside it needs a runtime-built 256-entry lookup (`zoneTexVis`)
-    /// built from a table inside the executable, and is not drawn.
-    ///
-    /// The **track** set rather than the "general" one because the general
-    /// set is fifteen byte-identical flat whites whose alpha is 255
-    /// everywhere: it indexes one lookup entry and can display nothing.
+    /// **The set with the art in it**, sampled by every chunk whose own
+    /// render-block flags carry the track bit (124 of Talon's Junction's
+    /// 983) through the `zoneTexInner`/`zoneTexOuter` shader parameters. The
+    /// other 859 sample [`Self::stage_scene_art`], the "general" set: fifteen
+    /// byte-identical flat whites whose alpha is 255 everywhere, so a scene
+    /// chunk's surface is its `Scene.Texture Colour` flat plus the rim terms.
+    /// `mesh.wgsl`'s `zone_sample` picks per fragment; see
+    /// [`Self::zone_uniform`] and [`oag_render::mesh_render::Zone`].
     ///
     /// `None` for a stage past the set, or one whose entry did not decode -
     /// the slots are positional, so a hole stays a hole.
@@ -180,11 +183,36 @@ impl ZoneGrade {
         self.art.get(self.blend.current as usize)?.as_ref()
     }
 
-    /// How many of this title's per-stage textures decoded, and how many it
-    /// numbers.
+    /// The "general" set's texture for the showing stage, on the same terms
+    /// as [`Self::stage_art`].
+    #[must_use]
+    pub fn stage_scene_art(&self) -> Option<&Arc<ModelTexture>> {
+        self.scene_art.get(self.blend.current as usize)?.as_ref()
+    }
+
+    /// Both of the showing stage's textures, as a drawable binds them.
+    #[must_use]
+    pub fn stage_art_pair(&self) -> mesh_render::zone::StageArt {
+        mesh_render::zone::StageArt {
+            track: self.stage_art().cloned(),
+            scene: self.stage_scene_art().cloned(),
+        }
+    }
+
+    /// How many of this title's per-stage "track" textures decoded, and how
+    /// many it numbers.
     #[must_use]
     pub fn stage_art_counts(&self) -> (usize, usize) {
         (self.art.iter().flatten().count(), self.art.len())
+    }
+
+    /// The same for the "general" set.
+    #[must_use]
+    pub fn stage_scene_art_counts(&self) -> (usize, usize) {
+        (
+            self.scene_art.iter().flatten().count(),
+            self.scene_art.len(),
+        )
     }
 
     /// The stage this title's ladder puts zone number `zone` on, clamped to the
@@ -385,21 +413,25 @@ impl ZoneGrade {
     ///   parameter 52's storage, so this is the whole of the binding rather
     ///   than a reading of it. Confidence 85.
     /// - `zoneEffectInner`/`zoneEffectOuter`, the showing stage's
-    ///   **`Track.Texture Colour`**. `Environment_UpdateStageBlend`
-    ///   (`0x003da540`) copies stage `n`'s into the inner parameter and stage
-    ///   `n - 1`'s into the outer one. Confidence 84.
+    ///   **`Texture Colour`** - `Track.` and `Scene.` both.
+    ///   `Environment_UpdateStageBlend` (`0x003da540`) copies stage `n`'s
+    ///   into the inner parameter and stage `n - 1`'s into the outer one.
+    ///   Confidence 84.
     ///
-    /// **`Track`, not `Scene`, because the texture set decides it.** HD
-    /// publishes these parameters twice and the two publications are paired:
-    /// one binds the `zoneMode*` textures beside the `Scene.*` colours, the
-    /// other binds `zoneModeTrack*` beside the `Track.*` ones (read out of
-    /// `FUN_003ff860`'s two blocks, confidence 85). This build binds the
-    /// **track** set - the one that carries real art, the general set being
-    /// fifteen flat whites - so the track colours are its half of that pair,
-    /// and pairing them the other way is a combination the original never
-    /// publishes. It also matters: `Scene.Texture Colour` is authored black on
-    /// stage `Start` and its `Track` sibling is `9.0` there, so the two
-    /// disagree about whether an HD Zone race at rest shows anything at all.
+    /// **Both groups, and the chunk decides which it reads.** HD publishes
+    /// these parameters twice and the two publications are paired: one binds
+    /// the `zoneMode*` textures beside the `Scene.*` colours, the other binds
+    /// `zoneModeTrack*` beside the `Track.*` ones (read out of
+    /// `FUN_003ff860`'s two blocks, confidence 85), and which block a chunk
+    /// goes through is bit 0 of its own render-block flags in the
+    /// `.rcsmodel` - `oag_rcs::rcsmodel::Mesh::is_track`, set on 124 of
+    /// Talon's Junction's 983 chunks. [`mesh_render::Zone::track`] and
+    /// [`mesh_render::Zone::scene`] carry one group each and `mesh.wgsl`
+    /// selects per fragment. It matters: `Scene.Texture Colour` is authored
+    /// black on stage `Start` and its `Track` sibling is `9.0` there, which
+    /// is a dark environment around a lit road - the original's own opening
+    /// frame. Until 2026-09-15 this build bound the track group to every
+    /// chunk and drew the whole circuit in the road's colours.
     ///
     /// **The showing stage's own palette, not [`Self::palette`]'s cross-fade.**
     /// The original does not blend these two in colour space at all: it hands
@@ -410,8 +442,12 @@ impl ZoneGrade {
     /// unblended palette is what the original would compute too.
     ///
     /// `enabled` is `0.0`, and the whole term disappears, unless the file
-    /// authors the UV scale *and* the stage authors `Scene.Texture Colour`
-    /// *and* the stage's texture decoded. A missing input draws nothing.
+    /// authors the UV scale *and* the stage authors `Track.Texture Colour`
+    /// *and* the stage's track texture decoded. A missing input draws
+    /// nothing. The scene group is not part of that gate: a stage authoring
+    /// no `Scene.*` key, or whose general texture did not decode, draws its
+    /// scene chunks black - which is what `Start` authors anyway - and the
+    /// load report says so.
     #[must_use]
     pub fn zone_uniform(&self) -> mesh_render::Zone {
         /// An authored rgb as a `float4` with an unused `.w`, or all-zero
@@ -420,6 +456,34 @@ impl ZoneGrade {
             let [r, g, b] = colour.unwrap_or([0.0; 3]);
             [r, g, b, 0.0]
         }
+        /// One publication's three parameters from its three keys.
+        ///
+        /// `effect.w` scales the visualiser glow: `EQ brightness`, `0.0` on
+        /// `Start` and `20.0` from `Sub Venom` on for the track group.
+        /// `base`/`base_alt` are `zoneBase*`/`zoneBaseAlt*`, the two rim-lit
+        /// summands of the surface: `zoneBase.rgb * rim^10 +
+        /// zoneBaseAlt.rgb * rim^5`, both exponents inline literals in the
+        /// microcode. **Not a separate family.** These are consumed by
+        /// 20,084 of the 20,214 Zone-bearing fragment blocks on the disc -
+        /// more than `zoneTexInner` is - and co-occur with a sampled
+        /// `zoneTex*` in 18,032 of them. Every one of the twelve racing
+        /// circuits carries this shape and nothing else. See
+        /// `oag_render::mesh_render::Zone` for the census and the second,
+        /// arena-only shape it is not. Zero where the stage authors nothing,
+        /// which is the identity on a summand.
+        fn group(
+            texture_colour: Option<[f32; 3]>,
+            eq_brightness: Option<f32>,
+            base_colour_highlight: Option<[f32; 3]>,
+            base_colour: Option<[f32; 3]>,
+        ) -> mesh_render::ZoneSet {
+            let [r, g, b] = texture_colour.unwrap_or([0.0; 3]);
+            mesh_render::ZoneSet {
+                effect: [r, g, b, eq_brightness.unwrap_or(0.0)],
+                base: rgb0(base_colour_highlight),
+                base_alt: rgb0(base_colour),
+            }
+        }
         let off = mesh_render::Zone::default();
         let (Some(uv_scale), Some(palette)) = (
             self.table.zone_uv_scale(),
@@ -427,40 +491,25 @@ impl ZoneGrade {
         ) else {
             return off;
         };
-        let (Some([r, g, b]), true) = (palette.track_texture_colour, self.stage_art().is_some())
-        else {
+        if palette.track_texture_colour.is_none() || self.stage_art().is_none() {
             return off;
-        };
+        }
         mesh_render::Zone {
             uv_scale,
             enabled: 1.0,
             _pad: 0.0,
-            // The `.w` scales the visualiser glow: `Track.EQ brightness`,
-            // `0.0` on `Start` and `20.0` from `Sub Venom` on. Filled now that
-            // `mesh.wgsl`'s `zone_glow` draws it - see
-            // `oag_render::mesh_render::zone` for what feeds the lookup it
-            // indexes.
-            effect: [r, g, b, palette.track_eq_brightness.unwrap_or(0.0)],
-            // `zoneBase*`/`zoneBaseAlt*`, the two rim-lit summands of the
-            // surface: `zoneBase.rgb * rim^10 + zoneBaseAlt.rgb * rim^5`, both
-            // exponents inline literals in the microcode.
-            //
-            // **Not a separate family.** These are consumed by 20,084 of the
-            // 20,214 Zone-bearing fragment blocks on the disc - more
-            // than `zoneTexInner` is - and co-occur with a sampled `zoneTex*`
-            // in 18,032 of them. Every one of the twelve racing circuits
-            // carries this shape and nothing else. See
-            // `oag_render::mesh_render::Zone` for the census and the second,
-            // arena-only shape it is not.
-            //
-            // The `Track` siblings rather than the `Scene` ones, for the same
-            // reason `effect` above takes `Track.Texture Colour`: HD publishes
-            // these parameters in two paired blocks, and this build binds the
-            // `zoneModeTrack*` texture set, so the track colours are its half
-            // of that pair. Zero where the stage authors nothing, which is the
-            // identity on a summand.
-            base: rgb0(palette.track_base_colour_highlight),
-            base_alt: rgb0(palette.track_base_colour),
+            track: group(
+                palette.track_texture_colour,
+                palette.track_eq_brightness,
+                palette.track_base_colour_highlight,
+                palette.track_base_colour,
+            ),
+            scene: group(
+                palette.scene_texture_colour,
+                palette.scene_eq_brightness,
+                palette.scene_base_colour_highlight,
+                palette.scene_base_colour,
+            ),
         }
     }
 
@@ -527,21 +576,30 @@ impl ZoneGrade {
         let zone = {
             let uniform = self.zone_uniform();
             let (decoded, named) = self.stage_art_counts();
+            let (scene_decoded, scene_named) = self.stage_scene_art_counts();
             if uniform.enabled > 0.0 {
-                let [r, g, b, _] = uniform.effect;
+                let [r, g, b, _] = uniform.track.effect;
+                let [sr, sg, sb, _] = uniform.scene.effect;
                 let [u, v] = uniform.uv_scale;
-                // A stage whose `Scene.Texture Colour` is black multiplies the
-                // whole term out. Said plainly rather than reported as a draw,
-                // because it is the file's own statement and not a failure:
-                // `Start` is authored that way.
-                let effect = if [r, g, b] == [0.0; 3] {
-                    "adds nothing here, this stage authoring Track.Texture Colour black".to_string()
-                } else {
-                    format!("draws where the albedo is black, zoneEffect [{r}, {g}, {b}]")
+                // A stage whose `Texture Colour` is black multiplies that
+                // group's texture term out. Said plainly rather than reported
+                // as a draw, because it is the file's own statement and not a
+                // failure: `Start` authors Scene that way, so its environment
+                // is dark around a lit road.
+                let describe = |group: &str, [r, g, b]: [f32; 3]| {
+                    if [r, g, b] == [0.0; 3] {
+                        format!(
+                            "{group} chunks black, this stage authoring {group}.Texture Colour black"
+                        )
+                    } else {
+                        format!("{group} chunks zoneEffect [{r}, {g}, {b}]")
+                    }
                 };
                 format!(
-                    "; the Zone recolour {effect}: stage {} art of {decoded}/{named}, \
-                     zone UV scale [{u}, {v}]",
+                    "; the Zone recolour draws {} and {}: stage {} art of {decoded}/{named} \
+                     track and {scene_decoded}/{scene_named} scene, zone UV scale [{u}, {v}]",
+                    describe("Track", [r, g, b]),
+                    describe("Scene", [sr, sg, sb]),
                     self.blend.current,
                 )
             } else {

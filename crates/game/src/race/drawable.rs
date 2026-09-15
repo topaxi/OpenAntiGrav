@@ -89,7 +89,7 @@ impl Drawable {
         depth: mesh_render::Depth,
         blend: wgpu::BlendState,
         glow: mesh_render::GlowMask,
-        zone: Option<&std::sync::Arc<oag_render::mesh::ModelTexture>>,
+        zone: &mesh_render::zone::StageArt,
         // The frame's shadow map and whether this model's surfaces read it -
         // the track's do and a craft's do not, which is Wipeout HD's own split.
         // See `mesh_render::build`.

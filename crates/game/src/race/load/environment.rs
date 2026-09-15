@@ -762,59 +762,58 @@ pub(super) fn staging(
     }
 }
 
-/// The Zone colour grade a title lays over the circuit, stage by stage, or
-/// `None` with the reason reported.
+/// Both fifteen-entry per-stage texture sets, `(track, general)`, one slot
+/// per stage each.
 ///
-/// **Zone only, and only where the title ships a table.** Pulse and Pure ship
-/// none - see [`oag_title::ZonePalette`] for how thoroughly each disc was
-/// searched before that was written down - so this is silent on them rather
-/// than reporting an absence that is true of a whole title, the same rule
-/// [`envsettings_light`] follows. A missing entry on a title that *claims* one
-/// is reported, because that is a gap in this reading rather than in the data.
-///
-/// **Nothing this returns advances during a race.** The grade rests on stage
-/// `0`, which is where HD's own loader leaves it, and what would move it is
-/// unrecovered on both titles - see `crate::race::zone_grade`'s module docs
-/// and `docs/formats/effectsettings.md`'s `## Open`.
-/// The "track" set's per-stage textures, decoded, one slot per stage.
-///
-/// **The track set, never the general one.** The original binds both to the
-/// same two shader parameters from different publishers, and only this one is
-/// a picture - see [`oag_title::ZoneStageTextures`] for the trap. A stage
-/// whose entry is missing or will not decode leaves its slot `None` and says
-/// so in the report rather than substituting a neighbour's.
+/// **Both, because the original binds both and the chunk picks.** The track
+/// set carries the art and is sampled by a chunk whose render-block flags
+/// carry the track bit; the general set, fifteen byte-identical flat whites,
+/// by every other chunk, whose surface is then its `Scene.Texture Colour`
+/// flat. See `oag_render::mesh_render::zone::StageArt` and
+/// [`oag_title::ZoneStageTextures`] for the trap the general set used to be.
+/// A stage whose entry is missing or will not decode leaves its slot `None`
+/// and says so in the report rather than substituting a neighbour's.
 fn zone_stage_art(
     archives: &mut oag_assets::Archives,
     textures: &'static oag_title::ZoneStageTextures,
     report: &mut Vec<String>,
-) -> Vec<Option<std::sync::Arc<oag_render::mesh::ModelTexture>>> {
-    let mut decoded = 0_u32;
-    let mut art = Vec::with_capacity(textures.stages as usize);
-    for stage in textures.stages() {
-        let name = textures.track_entry(stage);
-        let slot = archives
-            .read_name(&name)
-            .ok()
-            .and_then(|blob| oag_render::mesh::ModelTexture::from_gtf(&name, &blob))
-            .map(std::sync::Arc::new);
-        if slot.is_some() {
-            decoded += 1;
-        } else {
-            report.push(format!(
-                "{name}: no per-stage Zone texture for stage {stage}"
-            ));
+) -> (
+    oag_render::mesh::TextureSlots,
+    oag_render::mesh::TextureSlots,
+) {
+    let mut load = |set: &str, entry: &dyn Fn(u32) -> String| {
+        let mut decoded = 0_u32;
+        let mut art = Vec::with_capacity(textures.stages as usize);
+        for stage in textures.stages() {
+            let name = entry(stage);
+            let slot = archives
+                .read_name(&name)
+                .ok()
+                .and_then(|blob| oag_render::mesh::ModelTexture::from_gtf(&name, &blob))
+                .map(std::sync::Arc::new);
+            if slot.is_some() {
+                decoded += 1;
+            } else {
+                report.push(format!(
+                    "{name}: no per-stage Zone {set} texture for stage {stage}"
+                ));
+            }
+            art.push(slot);
         }
-        art.push(slot);
-    }
-    report.push(format!(
-        "{}0{}..{}: {decoded}/{} per-stage Zone textures decoded; nothing draws them yet, \
-         because HD's own Zone fragment program is unread",
-        textures.track,
-        textures.extension,
-        textures.stages - 1,
-        textures.stages,
-    ));
-    art
+        report.push(format!(
+            "{}0{}..{}: {decoded}/{} per-stage Zone {set} textures decoded",
+            entry(0)
+                .trim_end_matches(textures.extension)
+                .trim_end_matches('0'),
+            textures.extension,
+            textures.stages - 1,
+            textures.stages,
+        ));
+        art
+    };
+    let track = load("track", &|stage| textures.track_entry(stage));
+    let general = load("general", &|stage| textures.general_entry(stage));
+    (track, general)
 }
 
 /// The stage a Zone race opens on where the title's own ladder is unrecovered.
@@ -857,12 +856,17 @@ pub(super) fn zone_grade(
             return None;
         }
     };
-    let art = match race.zone_stage_textures {
+    let (art, scene_art) = match race.zone_stage_textures {
         Some(textures) => zone_stage_art(archives, textures, report),
-        None => Vec::new(),
+        None => (Vec::new(), Vec::new()),
     };
-    let mut grade =
-        crate::race::zone_grade::ZoneGrade::new(name.clone(), table, race.zone_stages, art);
+    let mut grade = crate::race::zone_grade::ZoneGrade::new(
+        name.clone(),
+        table,
+        race.zone_stages,
+        art,
+        scene_art,
+    );
     // The stage a race *starts* on, which is not stage `0`: **`Start` is the
     // pre-race state, not the opening lap's.** Three converging sources, one of
     // them a direct observation of the original:

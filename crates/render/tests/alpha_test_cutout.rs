@@ -189,7 +189,7 @@ fn draw(device: &wgpu::Device, queue: &wgpu::Queue, model: &Model) -> [u8; 4] {
         // "drawn" and "discarded" differ in every channel rather than in three.
         mesh_render::GlowMask::Written,
         mesh_render::Velocity::None,
-        None,
+        &mesh_render::zone::StageArt::NONE,
         // No shadow map, no depth map and no receiver: this test draws one
         // model against nothing.
         None,

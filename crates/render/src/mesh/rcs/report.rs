@@ -72,6 +72,12 @@ pub struct Report {
     /// reading has not seen, and is reported rather than guessed at - drawing
     /// a `GL_LESS` cutout through a `GL_GREATER` shader inverts it.
     pub cutout_unread: usize,
+    /// Chunks whose own render-block flags call them track surface
+    /// (`oag_rcs::rcsmodel::Mesh::is_track`), and which an HD Zone race
+    /// therefore draws through the `Track` parameter set and
+    /// `zoneModeTrack<n>.gtf`; every other chunk takes the `Scene` set. 124
+    /// of Talon's Junction's 983. Counted per chunk, whichever pass drew it.
+    pub track_surface: usize,
     /// Materials whose `.gtf` this build could not paint with - no path in the
     /// record, no such entry in the archive, or a container
     /// `oag_texture::gtf::Texture::to_rgba` refuses.
@@ -231,6 +237,9 @@ impl Report {
         } + &match self.cutout_unread {
             0 => String::new(),
             n => format!(", {n} cutout material(s) whose alpha test is unread, drawn opaque"),
+        } + &match self.track_surface {
+            0 => String::new(),
+            n => format!(", {n} chunk(s) flagged track surface for Zone's Track set"),
         } + &match self.untextured {
             0 => String::new(),
             n => format!(", {n} material(s) whose .gtf did not paint"),

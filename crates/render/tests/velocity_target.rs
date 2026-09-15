@@ -148,7 +148,7 @@ fn the_velocity_target_carries_the_ndc_delta_halved_and_y_flipped() {
         mesh_render::GlowMask::Protected,
         mesh_render::Velocity::Write,
         // No Zone stage: this test draws a model, not a race.
-        None,
+        &mesh_render::zone::StageArt::NONE,
         // No shadow map, no depth map and no receiver: this test draws one
         // model against nothing.
         None,

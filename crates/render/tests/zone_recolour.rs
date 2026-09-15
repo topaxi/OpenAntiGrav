@@ -25,7 +25,7 @@
 use std::sync::Arc;
 
 use oag_render::mesh::{Bounds, DrawCall, GpuVertex, Model, ModelTexture, Texels, slots};
-use oag_render::mesh_render::{self, Anisotropy, Scene, UNIFORMS_SIZE, Zone};
+use oag_render::mesh_render::{self, Anisotropy, Scene, UNIFORMS_SIZE, Zone, ZoneSet, zone};
 
 const FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
 const SIZE: u32 = 64;
@@ -130,6 +130,36 @@ fn uniforms() -> Vec<u8> {
     bytes
 }
 
+/// `stage` bound as the **Scene** publication's texture, with the Track slot
+/// holding a magenta the tests below never expect - so a quad whose `slots`
+/// carry no `ZONE_TRACK` (every quad here but the split test's) is measured
+/// through the set the file's own bit selects for it, and a wrong selection
+/// paints a colour no assertion accepts.
+fn scene_art(stage: &Arc<ModelTexture>) -> zone::StageArt {
+    zone::StageArt {
+        track: Some(texture("poisoned track stage", [255, 0, 255, 255])),
+        scene: Some(stage.clone()),
+    }
+}
+
+/// A [`Zone`] whose Scene set is `set` and whose Track set is a magenta
+/// poison, on the same terms as [`scene_art`].
+fn scene_zone(set: ZoneSet) -> Zone {
+    Zone {
+        // `zoneColourTint.xy`. `1.0` on both lanes is what
+        // `zonemode.effectsettings` authors.
+        uv_scale: [1.0, 1.0],
+        enabled: 1.0,
+        _pad: 0.0,
+        track: ZoneSet {
+            effect: [4.0, 0.0, 4.0, 0.0],
+            base: [0.0; 4],
+            base_alt: [0.0; 4],
+        },
+        scene: set,
+    }
+}
+
 /// What `mesh.wgsl` must produce for one channel: the zone sample decoded,
 /// scaled by the parameter, then encoded back.
 fn expected(effect: f32) -> u8 {
@@ -170,19 +200,15 @@ fn the_zone_surface_replaces_the_albedo_in_the_right_colour_space() {
     // `the_two_rim_summands_carry_their_own_literal_exponents` is where they
     // are measured instead.
     scene.fog.camera = [0.0, 0.0, 100.5];
-    scene.zone = Zone {
-        // `zoneColourTint.xy`. `1.0` on both lanes is what
-        // `zonemode.effectsettings` authors.
-        uv_scale: [1.0, 1.0],
-        enabled: 1.0,
-        _pad: 0.0,
+    scene.zone = scene_zone(ZoneSet {
         effect: ZONE_EFFECT,
         base: [0.0; 4],
         base_alt: [0.0; 4],
-    };
+    });
+    let art = scene_art(&stage);
 
     // Black albedo: the recolour lands.
-    let painted = draw(&device, &queue, &black, Some(&stage), scene, None);
+    let painted = draw(&device, &queue, &black, &art, scene, None);
     let (r, g, b) = (expected(ZONE_EFFECT[0]), expected(ZONE_EFFECT[1]), 0u8);
     assert_eq!(
         (painted[0], painted[1], painted[2]),
@@ -203,7 +229,7 @@ fn the_zone_surface_replaces_the_albedo_in_the_right_colour_space() {
     // assertion is the inverse of the one it replaces, which asserted the
     // `zoneAniso` shape that lives only in HD's four Zone arenas.
     let white = model(texture("white albedo", [255, 255, 255, 255]), 1.0);
-    let replaced = draw(&device, &queue, &white, Some(&stage), scene, None);
+    let replaced = draw(&device, &queue, &white, &art, scene, None);
     assert_eq!(
         (replaced[0], replaced[1], replaced[2]),
         (r, g, b),
@@ -218,7 +244,7 @@ fn the_zone_surface_replaces_the_albedo_in_the_right_colour_space() {
     // channel: `128` is the raw sample, and `56` is what a linear summand
     // would have left.
     let prelit = model(texture("black albedo", [0, 0, 0, 255]), 0.0);
-    let gamma = draw(&device, &queue, &prelit, Some(&stage), scene, None);
+    let gamma = draw(&device, &queue, &prelit, &art, scene, None);
     let raw =
         |effect: f32| ((f32::from(ZONE_TEXEL) / 255.0 * effect).min(1.0) * 255.0).round() as u8;
     assert_eq!(
@@ -229,7 +255,14 @@ fn the_zone_surface_replaces_the_albedo_in_the_right_colour_space() {
 
     // The same black surface with the Zone term switched off draws black,
     // which is what every draw outside a Zone race gets.
-    let off = draw(&device, &queue, &black, None, Scene::off(), None);
+    let off = draw(
+        &device,
+        &queue,
+        &black,
+        &zone::StageArt::NONE,
+        Scene::off(),
+        None,
+    );
     assert_eq!(
         (off[0], off[1], off[2]),
         (0, 0, 0),
@@ -276,10 +309,7 @@ fn the_two_rim_summands_carry_their_own_literal_exponents() {
     // move the angle. The quad's normal is `+Z`, so `dot(N, toEye) = 0.5` and
     // `rim = 0.5`.
     scene.fog.camera = [86.6025, 0.0, 50.5];
-    scene.zone = Zone {
-        uv_scale: [1.0, 1.0],
-        enabled: 1.0,
-        _pad: 0.0,
+    scene.zone = scene_zone(ZoneSet {
         // Zero, so the texture term contributes nothing and the pixel is the
         // two rim summands alone.
         effect: [0.0; 4],
@@ -287,9 +317,9 @@ fn the_two_rim_summands_carry_their_own_literal_exponents() {
         base: [512.0, 0.0, 0.0, 0.0],
         // `16 * 0.5^5 == 0.5`, on green.
         base_alt: [0.0, 16.0, 0.0, 0.0],
-    };
+    });
 
-    let painted = draw(&device, &queue, &surface, Some(&stage), scene, None);
+    let painted = draw(&device, &queue, &surface, &scene_art(&stage), scene, None);
     // Both summands are shader *parameters*, not textures, so they enter the
     // linear path undecoded exactly as `zoneEffect` does; only the encode back
     // out applies.
@@ -373,22 +403,20 @@ fn the_visualiser_glow_is_driven_by_the_vis_lookup_and_gated_up_facing() {
     // see `mesh.wgsl`'s `mix(plain_rgb, authored_rgb, scene.light.enabled *
     // in.lit)`.
     scene.light.enabled = 0.0;
-    scene.zone = Zone {
-        uv_scale: [1.0, 1.0],
-        enabled: 1.0,
-        _pad: 0.0,
+    scene.zone = scene_zone(ZoneSet {
         // `.rgb` zero so the texture term of the *surface* contributes
         // nothing; `.w` is `E.w`, the glow's own drive scalar.
         effect: [0.0, 0.0, 0.0, 1.6],
         base: [0.0; 4],
         base_alt: [0.0; 4],
-    };
+    });
+    let art = scene_art(&stage);
 
     let lit = draw(
         &device,
         &queue,
         &surface,
-        Some(&stage),
+        &art,
         scene,
         Some((&bands, [255, 255, 255])),
     );
@@ -414,7 +442,7 @@ fn the_visualiser_glow_is_driven_by_the_vis_lookup_and_gated_up_facing() {
         &device,
         &queue,
         &surface,
-        Some(&stage),
+        &art,
         scene,
         Some((&[0.0f32; 256], [255, 255, 255])),
     );
@@ -422,6 +450,82 @@ fn the_visualiser_glow_is_driven_by_the_vis_lookup_and_gated_up_facing() {
         (dark[0], dark[1], dark[2]),
         (0, 0, 0),
         "an all-zero spectrum must draw no glow at all"
+    );
+}
+
+/// **The chunk's own bit picks the publication.** HD publishes the Zone
+/// parameters twice - `zoneModeTrack*` beside the `Track.*` colours and
+/// `zoneMode*` beside the `Scene.*` ones - and selects per chunk on bit 0 of
+/// its render-block flags, which `mesh::rcs` carries as `slots::ZONE_TRACK`.
+/// Two draws that differ in nothing but that bit read different textures
+/// *and* different colours, each pair the one the original binds together.
+#[test]
+fn the_track_bit_selects_the_track_texture_and_colours_and_its_absence_the_scene_pair() {
+    let instance = wgpu::Instance::default();
+    let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
+        eprintln!("no GPU adapter: skipping");
+        return;
+    };
+    let (device, queue) =
+        pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default()))
+            .expect("requesting the device");
+
+    let black = texture("black albedo", [0, 0, 0, 255]);
+    let scenery = model(black.clone(), 1.0);
+    let mut road = model(black, 1.0);
+    for vertex in &mut road.vertices {
+        vertex.slots |= slots::ZONE_TRACK;
+    }
+    // Distinct texels in the two slots, and distinct colours in the two
+    // sets, so a crossed pair - track texture with scene colours, or the
+    // other way - lands on a third answer neither assertion accepts.
+    let art = zone::StageArt {
+        track: Some(texture(
+            "track stage",
+            [ZONE_TEXEL, ZONE_TEXEL, ZONE_TEXEL, 255],
+        )),
+        scene: Some(texture("scene stage", [255, 255, 255, 255])),
+    };
+    let mut scene = Scene::off();
+    scene.light.enabled = 1.0;
+    scene.fog.camera = [0.0, 0.0, 100.5];
+    scene.zone = Zone {
+        uv_scale: [1.0, 1.0],
+        enabled: 1.0,
+        _pad: 0.0,
+        track: ZoneSet {
+            effect: ZONE_EFFECT,
+            base: [0.0; 4],
+            base_alt: [0.0; 4],
+        },
+        scene: ZoneSet {
+            effect: [0.0, 0.0, 0.25, 0.0],
+            base: [0.0; 4],
+            base_alt: [0.0; 4],
+        },
+    };
+
+    let track = draw(&device, &queue, &road, &art, scene, None);
+    assert_eq!(
+        (track[0], track[1], track[2]),
+        (expected(ZONE_EFFECT[0]), expected(ZONE_EFFECT[1]), 0),
+        "a track chunk reads the track texture through the Track colours"
+    );
+
+    let general = draw(&device, &queue, &scenery, &art, scene, None);
+    // A white texel decodes to 1.0, so the pixel is the Scene effect alone:
+    // `0.25` in linear light encodes to `0.25^(1/2.2) * 255`.
+    let blue = (0.25f32.powf(1.0 / 2.2) * 255.0).round() as u8;
+    assert_eq!(
+        (general[0], general[1]),
+        (0, 0),
+        "a scene chunk must not see the Track colours"
+    );
+    assert!(
+        general[2].abs_diff(blue) <= 2,
+        "blue came out {}, want about {blue}: the scene chunk reads the scene \
+         texture through the Scene colours",
+        general[2]
     );
 }
 
@@ -434,7 +538,7 @@ fn draw(
     device: &wgpu::Device,
     queue: &wgpu::Queue,
     model: &Model,
-    stage: Option<&Arc<ModelTexture>>,
+    stage: &zone::StageArt,
     scene: Scene,
     zone_vis: Option<(&[f32], [u8; 3])>,
 ) -> [u8; 4] {

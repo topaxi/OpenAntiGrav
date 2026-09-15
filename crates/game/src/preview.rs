@@ -235,7 +235,7 @@ impl Preview {
             // velocity. No Zone stage, no shadow map, nothing receiving one.
             GlowMask::Protected,
             Velocity::None,
-            None,
+            &oag_render::mesh_render::zone::StageArt::NONE,
             None,
             None,
             ShadowReceiver::Never,
