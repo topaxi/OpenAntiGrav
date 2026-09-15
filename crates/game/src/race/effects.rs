@@ -480,8 +480,20 @@ impl Race {
     }
 
     /// One craft's sprite-flare quad: `Engine_Flare_Rich.gtf` at the nozzle,
-    /// at this tick's jittered radius and walked alpha. Empty off HD or
-    /// where no locator exists.
+    /// a 4:1 streak sized and faded by `EngineFlare_RenderTick`'s own law
+    /// (`oag_render::exhaust::hd::Sprite`). Empty off HD, where no locator
+    /// exists, for the craft the camera follows, and when the nozzle faces
+    /// away from the eye.
+    ///
+    /// **Never for the viewing player's own craft.** The original's draw
+    /// tests the craft's owning local player against the current view and
+    /// turns the player's own craft away before any of the fade math -
+    /// measured on every one of 30 frames for the player and none of 210 for
+    /// the seven AI crafts (`docs/ghidra/functions/ps3-hdfury-eu/
+    /// engine-trail.md`, "Tenth session", confidence 92). The craft this
+    /// engine's one view belongs to is slot 0: [`Race::view`] frames
+    /// [`Race::ship`], which is `ships[0]`, and a `CameraOverride` pose is
+    /// still that player's view, so slot 0 is skipped under one too.
     #[must_use]
     pub fn hd_sprite_quad(
         &self,
@@ -489,30 +501,38 @@ impl Race {
         right: Vec3,
         up: Vec3,
     ) -> Vec<oag_render::mesh::GpuVertex> {
-        if !self.view.hd_trail_active {
+        if !self.view.hd_trail_active || slot == FOLLOWED_SLOT {
             return Vec::new();
         }
         let Some(nozzle) = self.nozzle_of(slot) else {
             return Vec::new();
         };
+        // The camera's forward and position, both read out of the view
+        // matrix: `right` and `up` are its rows 0 and 1, and for an
+        // orthonormal basis row 2 is the camera's own +Z, which looks
+        // backward - so the view direction is its negation.
+        let camera = self.view();
+        let forward = -Vec3::new(camera.x_axis.z, camera.y_axis.z, camera.z_axis.z);
+        let eye = camera.inverse().w_axis.truncate();
+        let nozzle_axis = -self.sim.world.ships[slot].physics.body.forward();
         let sprite = &self.view.hd_sprite[slot];
-        // `sprite.radius()` is the tuning file's own `Flare Radius`
-        // (`exhaust::hd::SPRITE_RADIUS`), authored in the same model space as
-        // the hull it sits on - `nozzle` above already carries the craft's
-        // 0.75 global scale through `model_matrix_of`, so the radius needs
-        // the same factor or it draws larger than the hull it is meant to
-        // sit inside. Isolated with a pixel-diff (this quad's own additive
-        // contribution against a render with it disabled, not eyeballing a
-        // saturated crop - see `docs/ghidra/functions/ps3-hdfury-eu/
-        // engine-trail.md`, "Eighth session"): the unscaled sprite's own
-        // footprint reaches almost the whole underside of the hull, and this
-        // factor alone cuts that footprint by roughly half.
-        exhaust::sprite(
+        let Some(fade) = sprite.fade(
+            (nozzle - eye).length(),
+            exhaust::hd::sprite_view_dot(forward, nozzle_axis),
+        ) else {
+            return Vec::new();
+        };
+        // The half-height is in the tuning file's model space, as `Flare
+        // Radius` is - `nozzle` already carries the craft's 0.75 global scale
+        // through `model_matrix_of`, so the size needs the same factor or it
+        // draws larger than the hull it sits on (engine-trail.md, "Eighth
+        // session").
+        exhaust::hd::sprite_quad(
             nozzle,
             right,
             up,
-            sprite.radius() * exhaust::CRAFT_ROW_SCALE,
-            sprite.alpha(),
+            sprite.half_height(fade) * exhaust::CRAFT_ROW_SCALE,
+            fade,
         )
         .to_vec()
     }
@@ -876,6 +896,10 @@ impl Race {
         self.view.nozzles.get(slot).copied().flatten()
     }
 }
+
+/// The slot the one view belongs to: [`Race::view`] is built around
+/// [`Race::ship`], which is `ships[0]`.
+pub(super) const FOLLOWED_SLOT: usize = 0;
 
 /// The exhaust flicker seed for one craft.
 ///

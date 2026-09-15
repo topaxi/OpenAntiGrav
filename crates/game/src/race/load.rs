@@ -793,8 +793,9 @@ pub fn load(options: &Options) -> Result<Loaded> {
         report.push(
             "read and not drawn on HD: the flame spikes' per-shape random flicker \
              (0.65..0.85), the Fury afterburner's second boost blend, and the sprite \
-             flare's spin, chromatic fringe, distance fade and occlusion query (its \
-             radius, alpha walk and texture do draw - exhaust::hd::Sprite). The flame \
+             flare's chromatic fringe and occlusion query (its 4:1 quad, distance \
+             fade, cos^32 highlight and alpha walk draw by the traced law, on every \
+             craft but the viewing player's - exhaust::hd::Sprite). The flame \
              surface's Speed*time scroll draws now: time is engine shader parameter \
              slot 0, a global seconds clock (renderer.md)"
                 .into(),

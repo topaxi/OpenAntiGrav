@@ -458,15 +458,16 @@ pub const BOOST_EXTRA_XY: f32 = 1.4;
 pub const BOOST_EXTRA_Z: f32 = 2.0;
 
 /// `Flare Radius` from `Data/ships/shipeffectstweaks.txt`: the sprite
-/// flare's base half-size, in the same model space every other per-craft
-/// tuning number in this file lives in - **not** world units on its own.
+/// flare's fade-scaled half-height term, in the same model space every other
+/// per-craft tuning number in this file lives in - **not** world units on its
+/// own.
 ///
 /// The sprite is real and always built: `Enable Flare Sprite` is authored 1,
 /// the flare's own init (`0x002a1528`) loads
 /// `Data/Tex/EngineFlare/Engine_Flare_Rich.gtf` and four corner pairs, and
-/// this is the bright core the exhaust reads as "solid" in the original -
-/// the tube alone is an additive wash without it. A caller placing the
-/// sprite in world space still owes it the craft's own global scale
+/// `EngineFlare_RenderTick` (`0x002a08a8`) builds the quad every frame - the
+/// law is [`Sprite::half_height`]'s. A caller placing the sprite in world
+/// space still owes it the craft's own global scale
 /// (`crate::exhaust::CRAFT_ROW_SCALE`, the same factor `model_matrix_of`
 /// applies to the sprite's own position) - see `race::effects::hd_sprite_quad`
 /// and `docs/ghidra/functions/ps3-hdfury-eu/engine-trail.md` ("Eighth
@@ -474,14 +475,16 @@ pub const BOOST_EXTRA_Z: f32 = 2.0;
 /// pixel-diff isolation measures for it.
 pub const SPRITE_RADIUS: f32 = 3.0;
 
-/// `Flare Radius Min`: the floor the jittered radius may not fall under.
+/// `Flare Radius Min`: the half-height's base term - what a fully faded
+/// sprite still measures, not a floor under a jitter.
 pub const SPRITE_RADIUS_MIN: f32 = 2.0;
 
-/// `Max Radius Jitter`: the per-frame radius wobble's span.
+/// `Max Radius Jitter`: the span of the half-height's one-sided random term.
 ///
-/// The *law* tying the three radius numbers together is unread - this
-/// implementation jitters `RADIUS +- rand * JITTER`, floored at `MIN`, which
-/// uses each authored number in its stated role and nothing else.
+/// `fmadds f13,f21,f13,f19` at `0x002a0d94` is `Max Radius Jitter *
+/// this[0x25c] + Flare Radius Min`, `+0x25c` a per-instance 0..1 - so the
+/// jitter only ever adds. Read 2026-09-15, engine-trail.md "Ninth session",
+/// confidence 88.
 pub const SPRITE_RADIUS_JITTER: f32 = 0.5;
 
 /// `Slow Alpha Noise Min` / `Max`: the band the sprite's opacity wanders in.
@@ -493,25 +496,61 @@ pub const SPRITE_ALPHA_CHASE: f32 = 0.1;
 /// `Slow Alpha Noise Timer`: ticks between picking a new target.
 pub const SPRITE_ALPHA_RETARGET: u32 = 10;
 
-/// `Flare Opacity Max`: the ceiling on the walked alpha.
+/// `Flare Opacity Max`: the ceiling on the fade.
 pub const SPRITE_OPACITY_MAX: f32 = 1.0;
 
-/// The sprite flare's per-craft state: a slow alpha walk and a jittered
-/// radius, both from the authored constants above.
+/// `Flare Fadeout Dist`: the scaled camera distance the fade starts at.
+pub const SPRITE_FADEOUT_DIST: f32 = 15.0;
+
+/// `Flare Fadeout Range`: how much further the fade takes to reach zero.
+pub const SPRITE_FADEOUT_RANGE: f32 = 15.0;
+
+/// `Flare Highlight Power`: the exponent on the view dot - `cos^32`, a lobe
+/// a few degrees wide around the nozzle axis.
+pub const SPRITE_HIGHLIGHT_POWER: f32 = 32.0;
+
+/// `Flare Highlight Boost`: the multiplier on the walked alpha.
+pub const SPRITE_HIGHLIGHT_BOOST: f32 = 1.0;
+
+/// Half-width over half-height: the `4.0` at `0x008b2f7c` that
+/// `EngineFlare_RenderTick` scales the camera's row-0 axis by and nothing
+/// else. It is the texture's own shape - `Engine_Flare_Rich.gtf` is 1024 x
+/// 256 - so the quad keeps the texel aspect rather than squashing a streak
+/// into a square.
+pub const SPRITE_ASPECT: f32 = 4.0;
+
+/// What multiplies the camera distance before the fadeout compares it.
+///
+/// **Chosen, not measured.** The original reads this off a per-view table -
+/// `((float *)*(r2+0x5aa0))[max(view_index, 0)]`, one entry per split-screen
+/// view - and nothing has read that table; its value is open on
+/// engine-trail.md. `1.0` is the identity, which leaves the term exactly as
+/// the decompile writes it in world units, and it is the value the seventh
+/// session's own reasoning already assumed ("at chase range the distance
+/// term is 1.0" holds for a scale near 1 and not otherwise).
+pub const SPRITE_DISTANCE_SCALE: f32 = 1.0;
+
+/// The sprite flare's per-craft state: the slow alpha walk and this tick's
+/// jitter draw, both from the authored constants above. The fade and the
+/// quad size are [`Self::fade`] and [`Self::half_height`], the law
+/// `EngineFlare_RenderTick` (`0x002a08a8`) was read to hold on 2026-09-15
+/// (engine-trail.md "Ninth session", confidence 88 for the quad and 90 for
+/// the fade).
 ///
 /// Read and deliberately **not** implemented, said here so the absence is a
-/// decision: the `Max Rotate Angle` spin, the `Max Chromatic Dispersion`
-/// fringe, the `Flare Fadeout Dist`/`Range` term (whether it fades the
-/// sprite by camera distance or by occlusion is unread, and the wrong guess
-/// erases every opponent's flare), and the `Flare Occluder Radius` /
-/// `Flare Depth Bias` occlusion query - the shader pair that would settle
-/// them (`engineflare_vp`/`fp`) resolves through no registry read so far.
+/// decision: the `Max Chromatic Dispersion` fringe (a scalar handed to the
+/// four-vertex submit, `FUN_002c4ad0`, which is unread), and the `Flare
+/// Occluder Radius` z-pass occlusion query the original runs two frames
+/// ahead of the draw - this engine has no readback path for it, so an
+/// opponent's sprite shows through its own hull here where the original's
+/// would not. `Flare Max Rotate Angle`, `Flare Size Clamp` and `Flare Depth
+/// Bias` are never loaded by the draw at all.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Sprite {
     alpha: f32,
     target: f32,
     ticks: u32,
-    radius: f32,
+    jitter: f32,
 }
 
 impl Default for Sprite {
@@ -527,12 +566,19 @@ impl Sprite {
             alpha: SPRITE_ALPHA_NOISE.0,
             target: SPRITE_ALPHA_NOISE.1,
             ticks: 0,
-            radius: SPRITE_RADIUS,
+            jitter: 0.0,
         }
     }
 
     /// Advances one tick: re-targets the alpha walk every
-    /// [`SPRITE_ALPHA_RETARGET`] ticks, chases it, and jitters the radius.
+    /// [`SPRITE_ALPHA_RETARGET`] ticks, chases it, and draws the jitter.
+    ///
+    /// The walk is the original's: the countdown at `+0x190` reloads from
+    /// `Slow Alpha Noise Timer`, re-targets `+0x198 = lerp(Min, Max, rand)`,
+    /// and `+0x194` chases it - measured cycling 10..1 on every AI flare live
+    /// (engine-trail.md "Tenth session"). The jitter is re-drawn every tick;
+    /// the original keeps it at `+0x25c` and how often that word is rewritten
+    /// is not read, so the cadence is this engine's.
     ///
     /// `next` supplies uniform randoms in `0..1` - the caller's seeded
     /// per-craft stream, never OS entropy.
@@ -544,21 +590,112 @@ impl Sprite {
         }
         self.ticks -= 1;
         self.alpha += (self.target - self.alpha) * SPRITE_ALPHA_CHASE;
-        self.radius =
-            (SPRITE_RADIUS + (next() * 2.0 - 1.0) * SPRITE_RADIUS_JITTER).max(SPRITE_RADIUS_MIN);
+        self.jitter = next();
     }
 
-    /// This tick's half-size, in world units.
+    /// The walked alpha, `+0x194` - one factor of [`Self::fade`], never the
+    /// vertex alpha on its own.
     #[must_use]
-    pub fn radius(&self) -> f32 {
-        self.radius
+    pub fn alpha_walk(&self) -> f32 {
+        self.alpha
     }
 
-    /// This tick's opacity, already ceilinged by [`SPRITE_OPACITY_MAX`].
+    /// This tick's jitter draw in `0..1`.
     #[must_use]
-    pub fn alpha(&self) -> f32 {
-        self.alpha.min(SPRITE_OPACITY_MAX)
+    pub fn jitter(&self) -> f32 {
+        self.jitter
     }
+
+    /// The sprite's alpha this frame, `+0x18c`, or `None` when the original
+    /// draws no quad at all.
+    ///
+    /// `distance` is from the camera to the flare in world units and
+    /// `view_dot` the cosine between the camera's forward axis and the
+    /// nozzle's outward axis, as [`sprite_view_dot`] defines it. The original
+    /// early-outs on a non-positive dot (`0x002a0c8c: ble -> epilogue`) before
+    /// any of the fade math, so the sprite is a one-hemisphere lobe: that is
+    /// the `None`. Past the fadeout it is a quad at alpha 0, which is `Some`.
+    #[must_use]
+    pub fn fade(&self, distance: f32, view_dot: f32) -> Option<f32> {
+        if view_dot <= 0.0 {
+            return None;
+        }
+        Some(sprite_fade(
+            distance * SPRITE_DISTANCE_SCALE,
+            view_dot,
+            self.alpha,
+        ))
+    }
+
+    /// The quad's half-height for a fade, in the tuning file's model space:
+    /// `Min + Radius * clamp(fade, 0, 1) + Jitter * jitter01`.
+    #[must_use]
+    pub fn half_height(&self, fade: f32) -> f32 {
+        sprite_half_height(fade, self.jitter)
+    }
+}
+
+/// The fade law with the distance already scaled:
+/// `min((1 - saturate((d - Dist) / Range)) * dot^Power * walk * Boost, Max)`.
+///
+/// The decompiler's own expression, confidence 90 (engine-trail.md "Ninth
+/// session"): the distance term is 1.0 inside `Flare Fadeout Dist` and
+/// reaches 0 at `Dist + Range`, the highlight is `powf(view_dot, 32)`, and
+/// `Flare Opacity Max` ceilings the product. A `view_dot` of zero or less
+/// is the caller's early-out, not this function's - see [`Sprite::fade`].
+#[must_use]
+pub fn sprite_fade(scaled_distance: f32, view_dot: f32, alpha_walk: f32) -> f32 {
+    let far = ((scaled_distance - SPRITE_FADEOUT_DIST) / SPRITE_FADEOUT_RANGE).clamp(0.0, 1.0);
+    let highlight = view_dot.powf(SPRITE_HIGHLIGHT_POWER);
+    ((1.0 - far) * highlight * (alpha_walk * SPRITE_HIGHLIGHT_BOOST)).min(SPRITE_OPACITY_MAX)
+}
+
+/// The half-height law, `0x002a0d7c`..`0x002a0dd4`, confidence 88:
+/// `Flare Radius Min + Flare Radius * clamp(fade, 0, 1) + Max Radius Jitter *
+/// jitter01`. The fade is clamped here, the alpha is not: the vertex takes
+/// the stored fade as it is.
+#[must_use]
+pub fn sprite_half_height(fade: f32, jitter01: f32) -> f32 {
+    SPRITE_RADIUS_MIN + SPRITE_RADIUS * fade.clamp(0.0, 1.0) + SPRITE_RADIUS_JITTER * jitter01
+}
+
+/// The view dot the highlight is raised to: the cosine between where the
+/// camera looks and where the nozzle points.
+///
+/// The original sums the camera's row-2 axis against the flare node's own Z
+/// axis with one side negated, both normalised, and draws only when the
+/// result is positive - which hemisphere that is in world terms rests on two
+/// sign conventions the page leaves unsettled. **Chosen, not measured**: the
+/// positive side here is the camera looking *into* the nozzle - a craft
+/// ahead, its exhaust toward the eye - which is the side an engine glow is
+/// visible from; `camera_forward` points along the view and `nozzle_axis`
+/// out of the nozzle (`-forward` of the craft), so the two oppose when the
+/// camera sits behind the craft and the negation makes that `+1`.
+#[must_use]
+pub fn sprite_view_dot(camera_forward: Vec3, nozzle_axis: Vec3) -> f32 {
+    -camera_forward
+        .normalize_or_zero()
+        .dot(nozzle_axis.normalize_or_zero())
+}
+
+/// The sprite's quad: [`SPRITE_ASPECT`] times wider than it is tall, `centre
+/// +- right * half_height * 4 +- up * half_height`, the corner rule at
+/// `0x002a0df4`..`0x002a0e00`; `alpha` is the fade, which the original stores
+/// in the colour word as `0xffffff00 | (fade * 255)`.
+#[must_use]
+pub fn sprite_quad(
+    centre: Vec3,
+    right: Vec3,
+    up: Vec3,
+    half_height: f32,
+    alpha: f32,
+) -> [GpuVertex; 6] {
+    super::sprite::quad(
+        centre,
+        right * (half_height * SPRITE_ASPECT),
+        up * half_height,
+        alpha,
+    )
 }
 
 /// The flame's per-craft animation state: HD's `EngineFlare` blends.
