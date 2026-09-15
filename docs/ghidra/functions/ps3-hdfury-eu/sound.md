@@ -494,10 +494,32 @@ operand_pattern=17acc0)` finds zero direct call sites anywhere in the ELF, and
 the address never appears as an immediate operand
 (`search_instructions(operand_pattern=878db0)` - its own `.opd` descriptor -
 is also empty), so it is reached only through an indirect dispatch this
-session did not locate. **[stale 2026-09-15: computed before the lvlx reimport; re-run per toolchain.md#ps3]** The `.opd` table's physical neighbours
-(`FUN_006926b0`, `FUN_0017af80`, `FUN_0017b4b8`, ...) are unrelated
-functions (particle-effect timing, a refcounted-object destructor) - adjacency
-in `.opd` is link order, not a call table, and is not evidence of a group.
+session did not locate. **2026-09-15: re-run on the post-`lvlx` image and
+re-confirmed, this time by the validated whole-image literal-address method
+(`toolchain.md#ps3`'s "Two PS3 read errors" section), not just the two direct
+searches above.** `search_byte_patterns` for the function's own `.opd`
+descriptor address (`00878db0`) as a raw big-endian 4-byte literal
+(`00 87 8d b0`) returns zero hits anywhere in the image - no TOC slot, table,
+or object field holds this function's `.opd` entry as a *stored* 4-byte
+word, which is stronger than the direct-`bl` search alone but does not rule
+out every indirect route: a pointer assembled at runtime from separate
+`lis`/`addi` halves (or otherwise computed rather than loaded whole) would
+not show up as a single 4-byte literal either, and this pass did not check
+for that shape. The method was validated first, not trusted blind: the same
+`search_byte_patterns` call against `docs/ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md`'s
+already-known `0x00c81a5c` target (bytes `00 c8 1a 5c`) finds it at
+`0x008b71cc`, and `0x008bd3c4 - 0x61f8 = 0x008b71cc` exactly - reproducing
+`Scene_PrepareFrame @ 0x003aaf8c: lwz r9,-0x61f8(r2)` with zero other hits,
+the same self-check `toolchain.md` prescribes. A second search for the raw
+code address (`0x0017acc0`, bytes `00 17 ac c0`) finds exactly one hit,
+`0x00878db0` - its own `.opd` entry, the expected occurrence, and nowhere
+else. So the negative holds post-reimport, on a method now proven to catch
+what a `bl`/immediate-operand sweep alone would miss: nothing anywhere in the
+image, code or data, holds a static reference to this function by either
+address. The `.opd` table's physical neighbours (`FUN_006926b0`,
+`FUN_0017af80`, `FUN_0017b4b8`, ...) are unrelated functions (particle-effect
+timing, a refcounted-object destructor) - adjacency in `.opd` is link order,
+not a call table, and is not evidence of a group.
 
 ## Not determined
 
