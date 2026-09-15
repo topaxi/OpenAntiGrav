@@ -67,8 +67,17 @@ manifest. HD's four-model shape does not generalise backwards. Confidence 85.
 ## Open
 
 - The mode-descriptor pointer replacing `Num==7`'s mesh was not traced all the way to one of the four `321Go_*.vex` race-gate shapes.
-- `GetBillboardMeshIdFromName` still has no found caller. **[stale 2026-09-15: computed before the lvlx reimport; re-run per toolchain.md#ps3]**
-- The unnamed 4.5 KB bind function (confidence below 50) has no confirmed caller or invocation path - not confirmed dead either. **[stale 2026-09-15: computed before the lvlx reimport; re-run per toolchain.md#ps3]**
+- `GetBillboardMeshIdFromName` still has no found caller. **Re-run 2026-09-15
+  after the lvlx reimport (three routes, positive control on each, see
+  billboards.md's own dated section) - still no found caller.**
+- ~~The unnamed 4.5 KB bind function (confidence below 50) has no confirmed
+  caller or invocation path~~ **Wrong, and not because of the lvlx reimport:
+  `billboards.md`'s own 2026-09-06 section already traces a real call
+  (`Billboard_ConstructResource_q` -> the TOC-fixup trampoline `FUN_006791d8`
+  -> `0x003a4da0`, named `Billboard_LoadModelAndBind` at confidence 80). A
+  `bl` target is a relative displacement, not TOC-resolved `lwz`, so this was
+  never affected by the lvlx trap - the bullet here was just stale relative to
+  the page. Re-confirmed on the reimported image 2026-09-15.
 - `type` is authored by every one of 118 slots but is read nowhere in this function or elsewhere.
 - **Pulse's colour-path pool** (`_DAT_002ae2b4+0x3c`, walked by `Billboard_CreateFromColour_q`) has not had its entries' own layout read - may be a second instance of the same registry-and-resolve pattern the location path now has confirmed, for colour slots specifically.
 - `Data\Plugins\PI004\Definition.xml`'s colour-pool reading is a lead, not a finding: no function has been traced choosing an entry from it, and the registry-resolve pattern below is a more promising target than this catalogue.
@@ -86,7 +95,7 @@ manifest. HD's four-model shape does not generalise backwards. Confidence 85.
 ## Next Steps
 
 - Trace the mode-descriptor pointer to confirm it lands on one of the four `321Go_*.vex` race-gate shapes.
-- Find a caller for `GetBillboardMeshIdFromName` or the unnamed 4.5 KB bind function to confirm or rule out an invocation path.
+- Find a caller for `GetBillboardMeshIdFromName` to confirm or rule out an invocation path - the unnamed 4.5 KB bind function (`Billboard_LoadModelAndBind`, `0x003a4da0`) already has one, traced in `billboards.md`'s 2026-09-06 section and re-confirmed 2026-09-15.
 - Find the transform writer that places the instantiated `321Go_StartFinish` object at each circuit's own gantry - watch the object's own transform fields (a non-halting watchpoint, per the new trap above) across a countdown and see what, if anything, writes a non-identity value.
 - Catch the actual `Gfx_BindTexture` call for the gantry's screen position, using a non-halting watchpoint on the candidate texture object rather than a halting breakpoint on the bind function itself.
 - Decode the four state-group sub-objects off the material object, re-sampled *during* a countdown rather than mid-race, to see whether any names or points at real display content.
