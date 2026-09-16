@@ -102,8 +102,11 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     //
     // **Nothing here is runtime-checked.** No Vita3K exists in this project's
     // toolchain, so this row is read off `data/extracted/vita/PCSF00007`
-    // alone and never played. Which of the four draws when carries the same
-    // chosen-not-measured status `oag_hd::hud::ART`'s own `leach` field does.
+    // alone and never played. Which of the four draws when now runs the same
+    // measured, ported reveal `oag_hd::hud::ART`'s own `leach` field does -
+    // 2048 was never independently disassembled for it, so the law is
+    // corroborated by the shared HD/2048 lineage rather than by a second
+    // reading of this binary.
     sights: &oag_title::hud::Sights::Concentric {
         seeking: &[
             "MissileSightBG",

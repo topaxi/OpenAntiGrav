@@ -40,7 +40,6 @@ pub(super) fn sight_draws(cx: &Context<'_>, sight: &oag_race::sight::Sight) -> V
     if alpha <= 0.0 {
         return Vec::new();
     }
-    let tint = sight.tint();
 
     match cx.art.sights {
         oag_title::hud::Sights::Unread => Vec::new(),
@@ -64,7 +63,7 @@ pub(super) fn sight_draws(cx: &Context<'_>, sight: &oag_race::sight::Sight) -> V
                 oag_race::sight::Held::LeachBeam => (*leach, None),
             };
             match names {
-                Some(names) => bracket_draws(cx, sight, names, inner, tint, alpha),
+                Some(names) => bracket_draws(cx, sight, names, inner, alpha),
                 None => Vec::new(),
             }
         }
@@ -79,17 +78,17 @@ pub(super) fn sight_draws(cx: &Context<'_>, sight: &oag_race::sight::Sight) -> V
         // `oag_race::sight::Held::LeachBeam` is reachable on this title and
         // would otherwise put the wrong weapon's reticle on screen.
         //
-        // The LeachBeam's four have no `locked` counterpart to add - neither
-        // title's layout authors a `LeachBeamSight*LockedOn*` widget - so
-        // `leach`'s four are drawn whenever the LeachBeam reticle is up at
-        // all, seeking or locked. See `oag_title::hud::Sights::Concentric`'s
-        // own `leach` field for what is measured and what is chosen there.
+        // **The LeachBeam's own three outer rings reveal one at a time**, per
+        // `docs/ghidra/functions/ps3-hdfury-eu/hud-sight.md`'s
+        // `Hud_UpdateLeachBeamSight` reading - see [`leach_reveal_draws`]. There
+        // is no `locked` counterpart to add either way: neither title's layout
+        // authors a `LeachBeamSight*LockedOn*` widget.
         oag_title::hud::Sights::Concentric {
             leach,
             seeking: _,
             locked: _,
         } if sight.held() == oag_race::sight::Held::LeachBeam => match leach {
-            Some(names) => concentric_draws(cx, sight, names.iter(), tint, alpha),
+            Some(names) => leach_reveal_draws(cx, sight, *names, alpha),
             None => Vec::new(),
         },
         oag_title::hud::Sights::Concentric {
@@ -98,7 +97,7 @@ pub(super) fn sight_draws(cx: &Context<'_>, sight: &oag_race::sight::Sight) -> V
             let names = seeking
                 .iter()
                 .chain(locked.iter().take_while(|_| sight.locked()));
-            concentric_draws(cx, sight, names, tint, alpha)
+            concentric_draws(cx, sight, names, alpha)
         }
     }
 }
@@ -119,10 +118,10 @@ fn bracket_draws(
     sight: &oag_race::sight::Sight,
     brackets: [&'static str; 4],
     inner: Option<&'static str>,
-    tint: f32,
     alpha: f32,
 ) -> Vec<Draw> {
-    let colour = [tint, tint, tint, alpha];
+    let [r, g, b] = sight.tint();
+    let colour = [r, g, b, alpha];
     let mut out = Vec::new();
     let mut place = |name: &str, piece: oag_race::sight::Piece| {
         let Some(placed) = model_art(cx, name) else {
@@ -174,9 +173,9 @@ fn concentric_draws<'a>(
     cx: &Context<'_>,
     sight: &oag_race::sight::Sight,
     names: impl Iterator<Item = &'a &'static str>,
-    tint: f32,
     alpha: f32,
 ) -> Vec<Draw> {
+    let brightness = sight.brightness();
     let [cx_px, cy_px] = sight.centre();
     let mut out = Vec::new();
     for name in names {
@@ -199,14 +198,50 @@ fn concentric_draws<'a>(
             // blink. HD authors these individually - a red outer, a green inner
             // - so overwriting them with white would throw away real data.
             color: [
-                sprite.color[0] * tint,
-                sprite.color[1] * tint,
-                sprite.color[2] * tint,
+                sprite.color[0] * brightness,
+                sprite.color[1] * brightness,
+                sprite.color[2] * brightness,
                 sprite.color[3] * alpha,
             ],
         });
     }
     out
+}
+
+/// HD/2048's own LeachBeam reticle: the backdrop plus one of its three outer
+/// rings, revealed in turn as the hold progresses rather than all three
+/// together.
+///
+/// **Recovered mechanism, ported at reduced confidence.**
+/// `Hud_UpdateLeachBeamSight` (`docs/ghidra/functions/ps3-hdfury-eu/hud-sight.md`)
+/// shows Outer, Middle and Inner each own one exclusive quarter of the hold
+/// window - `names` is `[BG, Outer, Middle, Inner]`, the order
+/// `oag_title::hud::Sights::Concentric::leach` already carries. HD's own
+/// quarter marks are absolute seconds into *its* `0.5` s hold; this engine
+/// scales the same quarters onto [`oag_race::sight::Sight::hold_progress`]
+/// instead of adopting HD's own hold time - see that constant's own doc for
+/// why. Past three-quarters of the hold, or once the lock completes, only the
+/// backdrop is shown: the original's own table stops there, and what (if
+/// anything) replaces the rings on a full lock is not read, so this draws
+/// nothing invented for that span rather than guessing.
+fn leach_reveal_draws(
+    cx: &Context<'_>,
+    sight: &oag_race::sight::Sight,
+    names: [&'static str; 4],
+    alpha: f32,
+) -> Vec<Draw> {
+    let progress = sight.hold_progress();
+    let ring = if progress <= 0.25 {
+        Some(names[1])
+    } else if progress <= 0.5 {
+        Some(names[2])
+    } else if progress <= 0.75 {
+        Some(names[3])
+    } else {
+        None
+    };
+    let shown = [Some(names[0]), ring];
+    concentric_draws(cx, sight, shown.iter().flatten(), alpha)
 }
 
 /// Where a `<Mode3D><Model>` widget's art sits in the sheet, by widget name.

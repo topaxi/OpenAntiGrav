@@ -79,6 +79,14 @@ pub const DRAW_RANGE: f32 = 250.0;
 ///
 /// So a lock is not a property of geometry alone. Two craft in identical
 /// positions differ by how long one of them has been held there.
+///
+/// **Not HD's own hold time.** `docs/ghidra/functions/ps3-hdfury-eu/hud-sight.md`
+/// reads HD's shared hold constant directly out of memory as `0.5`, not the
+/// PSP's `0.8` above - a real, measured divergence this project has not
+/// adopted: it is shared, title-blind engine code judged against the PSP's
+/// own recovered law, and changing it for HD alone is a simulation-behaviour
+/// change and a determinism-hash move, out of scope for a presentation-only
+/// lane. Left at `0.8` on every title, deliberately.
 pub const HOLD_SECONDS: f32 = 0.8;
 
 /// The reticle's half-extent when it has nothing, in screen pixels.
@@ -149,10 +157,25 @@ pub const ALPHA_NEAR: f32 = 255.0;
 
 /// The alpha a far target's reticle is drawn at.
 ///
-/// **Recovered, confidence 80.** "Far" is a second, softer range test on the
-/// projected depth, on top of [`DRAW_RANGE`]; this engine has no equivalent of
-/// the global it compares against, so [`Sight::update`] treats every drawn
-/// target as near. Recorded rather than approximated - see the module docs.
+/// **Recovered, confidence 80 on the value; the "far" test itself is not a
+/// tuning constant at all.** Read further 2026-09-16: `near` compares the
+/// projected depth against `g_hud_sight_depth_sample`
+/// (`0x08ab0a4c`), which is not a fixed global - it is written once a frame by
+/// `Hud_SampleSightDepth` (`0x08819b24`) from a live read of the rendered
+/// frame's own Z-buffer at the reticle's *previous* on-screen position (the
+/// call site, `FUN_0890906c` at `0x0890906c`, reuses an existing per-frame
+/// depth-buffer sampling pass shared with an unidentified post-process effect,
+/// so "near" is really "is the target's own depth closer than whatever
+/// geometry the reticle was sitting over last frame" - a one-frame-lagged
+/// screen-space occlusion test, not a softer range band on top of
+/// [`DRAW_RANGE`] as this constant's own name suggests). See
+/// `docs/ghidra/functions/psp-pulse-usa/lock-sight.md#the-far-target-alpha-step-is-a-live-depth-buffer-sample-not-a-tuning-constant`.
+///
+/// **Still not reproduced, now for a structural reason rather than a missing
+/// read.** Reproducing it needs the rendered frame's own depth buffer, which
+/// `oag_race` cannot reach - rule 1 in `CLAUDE.md`'s two dependency rules
+/// forbids a gameplay crate depending on `oag-render`. [`Sight::update`] keeps
+/// treating every drawn target as near, unchanged.
 pub const ALPHA_FAR: f32 = 96.0;
 
 /// How fast alpha eases, in units of 255 a second.
@@ -560,7 +583,35 @@ impl Sight {
         (self.alpha / 255.0).clamp(0.0, 1.0)
     }
 
-    /// What the reticle's colour is multiplied by this frame.
+    /// How far into the hold window the target has been continuously visible,
+    /// 0..1 - `0` the moment a target is (re)acquired, `1` once held past
+    /// [`HOLD_SECONDS`].
+    ///
+    /// **For Wipeout HD's progressive LeachBeam reveal.** HD's own
+    /// `Hud_UpdateLeachBeamSight` shows one of its three outer rings at a time,
+    /// switching at exact quarters of *its own* `0.5` s hold constant - see
+    /// `docs/ghidra/functions/ps3-hdfury-eu/hud-sight.md#the-leachbeams-four-reveal-one-at-a-time-gated-by-hold-time-not-distance`.
+    /// This engine keeps the PSP's shared [`HOLD_SECONDS`] (`0.8`) rather than
+    /// adopting HD's `0.5` - a separate, unadopted divergence recorded on
+    /// [`HOLD_SECONDS`]'s own doc - so what this exposes is the *shape*, a
+    /// hold window divided into quarters, scaled onto whichever hold constant
+    /// is active rather than HD's own absolute second marks.
+    #[must_use]
+    pub fn hold_progress(&self) -> f32 {
+        (self.hold / HOLD_SECONDS).clamp(0.0, 1.0)
+    }
+
+    /// What the reticle's colour is multiplied by this frame, as a brightness
+    /// alone - no hue.
+    ///
+    /// **For Wipeout HD's own-coloured concentric widgets.** HD authors each
+    /// ring's colour itself (a red outer, a green inner - see
+    /// `oag_title::hud::Sights::Concentric`), so multiplying by [`Self::tint`]'s
+    /// recovered PSP hue here would repaint HD's own art rather than dim it.
+    /// Nothing has read whether HD's own sight code spends a blink the same
+    /// way that PSP reading (see [`Self::tint`]'s doc) does, so this keeps
+    /// the brightness-only behaviour this engine already had before the hue
+    /// below was recovered, unchanged for this dialect.
     ///
     /// **The blink is a tint and never a hide**, which is worth stating because
     /// the obvious reading of "blink" is the wrong one and this file had it
@@ -569,19 +620,46 @@ impl Sight {
     /// value and the other takes it scaled by `0xc0 >> 8` - [`BLINK_TINT`],
     /// recovered as a literal. Once locked the blink stops being spent and the
     /// colour holds.
-    ///
-    /// **What is not reproduced is the hue.** The original's two seeking arms
-    /// light different channels of the widget's colour word, and which channel
-    /// is which depends on that word's byte order - which is unread. So this
-    /// carries the recovered *brightness* difference and leaves the reticle
-    /// white, rather than inventing a colour to be confidently wrong about. See
-    /// `docs/ghidra/functions/psp-pulse-usa/lock-sight.md`.
     #[must_use]
-    pub fn tint(&self) -> f32 {
+    pub fn brightness(&self) -> f32 {
         if self.locked || !self.blink {
             1.0
         } else {
             BLINK_TINT
+        }
+    }
+
+    /// What colour the PSP dialect's white corner-bracket models are tinted
+    /// this frame - `[r, g, b]`, multiplied by [`Self::alpha`] at the draw site.
+    ///
+    /// **Recovered, confidence 88.** `HudSight_Update` (`0x0881dbcc`) builds a
+    /// packed colour word and hands it to `Image_SetVertexColours`
+    /// (`0x089122b4`); this project's own established byte order for that
+    /// word - byte0 = R, byte1 = G, byte2 = B, byte3 = A, the same one
+    /// `Loading_DrawWave`'s `0xff000000` -> `0xff808080` ramp already fixed
+    /// (`crates/render/src/loading.rs`, `docs/formats/psp-texture.md`) - reads
+    /// the literal construction as:
+    ///
+    /// - **Locked**: pure red (`R` = the eased alpha byte, `G` = `B` = `0`).
+    /// - **Seeking, blink phase off**: yellow at full brightness (`R` = `G` =
+    ///   the alpha byte, `B` = `0`).
+    /// - **Seeking, blink phase on**: white at [`BLINK_TINT`] the brightness
+    ///   (`R` = `G` = `B` = the alpha byte scaled by `0xc0 >> 8`).
+    ///
+    /// The colour word's own alpha byte is always `0xff` - the eased value this
+    /// project already carries as [`Self::alpha`] scales the RGB channels
+    /// instead, which is the same operation under the models' `Additive` blend
+    /// (`src.rgb * src.a`) as scaling `src.a` alone would be with `rgb = 1`, so
+    /// nothing here is a second, uncounted fade. See
+    /// `docs/ghidra/functions/psp-pulse-usa/lock-sight.md#colour-and-blink-resolved-the-byte-order-and-the-two-tints`.
+    #[must_use]
+    pub fn tint(&self) -> [f32; 3] {
+        if self.locked {
+            [1.0, 0.0, 0.0]
+        } else if self.blink {
+            [BLINK_TINT, BLINK_TINT, BLINK_TINT]
+        } else {
+            [1.0, 1.0, 0.0]
         }
     }
 
