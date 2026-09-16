@@ -310,8 +310,11 @@ pub(super) fn load_named_cue(bank: &sblk::Bank, name: &str) -> anyhow::Result<(L
         let pan_volume_gain = oag_audio::spatial::pan_volume_gain(record.volume, sound.volume);
         waveforms.push((
             Arc::new(
-                Sound::new(pcm, 1, sblk::ASSUMED_SAMPLE_RATE)?
-                    .with_pan_volume_gain(pan_volume_gain),
+                // Each waveform at the rate its own descriptor keys it on with:
+                // `Sound::pitch` is the `sceSasSetPitch` word the original hands
+                // the hardware for an unmodulated play. See
+                // `oag_formats::sblk::pitch`.
+                Sound::new(pcm, 1, sound.sample_rate())?.with_pan_volume_gain(pan_volume_gain),
             ),
             sound.is_looping(),
         ));

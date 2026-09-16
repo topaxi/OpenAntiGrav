@@ -1,12 +1,11 @@
 # PSP sound bank
 
 **Status: understood.** The container, the `SBlk` descriptor header, the audio
-codec, **where each individual sound starts** and **what each sound is called**
-are all decoded, implemented in
-[`oag-formats::sblk`](../../crates/formats/src/sblk.rs) and validated across all
-39 banks on the PSP disc. What remains open is about *playing* a bank rather
-than reading one: 41 of the 45 command opcodes, and the sample rate each
-waveform runs at.
+codec, **where each individual sound starts**, **what each sound is called**
+and, since 2026-09-16, **the rate each waveform plays at** are all decoded,
+implemented in [`oag-formats::sblk`](../../crates/formats/src/sblk.rs) and
+validated across all 39 banks on the PSP disc. What remains open is about
+*playing* a bank rather than reading one: 37 of the 45 command opcodes.
 
 These are the `03000000` blobs from the [WAD](wad.md) census - 3 in `FE.wad`,
 36 in `Data.wad`. The known name `Data\Sound\frontend.bnk` is one of them.
@@ -347,10 +346,13 @@ every one of the 39 banks is 0, and the largest offset plus its length is the
 section length exactly.
 
 Implemented as [`Bank::sounds`](../../crates/formats/src/sblk.rs). The
-descriptor's other fields, from the runtime: `+0x01` a note, `+0x04` an angle in
-degrees, `+0x0e` a flags word whose `0x40` selects loop mode and `0x80` marks a
-waveform that is **not** PS-ADPCM. Those are exposed as raw values, not
-interpreted; see [the `0x80` polarity](#0x80-means-not-adpcm-and-this-page-had-it-backwards).
+descriptor's other fields, from the runtime: `+0x01` a volume, `+0x02`/`+0x03`
+the **centre note and fine-tune the playback rate comes from** (see
+[the rate each waveform plays at](#the-rate-each-waveform-plays-at)), `+0x04`
+an angle in degrees, `+0x08`/`+0x09` the pitch-bend ranges, `+0x0e` a flags
+word whose `0x40` selects loop mode and `0x80` marks a waveform that is
+**not** PS-ADPCM. The flags are exposed as a raw word, not interpreted; see
+[the `0x80` polarity](#0x80-means-not-adpcm-and-this-page-had-it-backwards).
 
 ### What the ground-truth test proves
 
@@ -914,6 +916,113 @@ an exact identity and nothing has been run under an emulator. Per the
 [rubric](../reverse-engineering/confidence-rubric.md) data agreement caps at 94
 either way.
 
+## The rate each waveform plays at
+
+**Decoded 2026-09-16, confidence 95.** Until then every waveform in this
+project played at a placeholder 44,100 Hz. The rate is not in the header and
+not in the codec; it is the descriptor's **`+0x02` centre note and `+0x03`
+centre fine-tune**, two signed bytes, run through the engine's own
+note-to-pitch arithmetic to the word it hands `sceSasSetPitch`:
+
+```text
+pitch = Scream_VoicePitch(desc[0x02], desc[0x03], note = 60, fine = 0)
+rate  = 44,100 Hz * pitch / 0x1000
+```
+
+The whole chain is read on `psp-pulse-usa` and written up in
+[the sound engine page](../ghidra/functions/psp-pulse-usa/sound.md#the-pitch-a-waveforms-rate-is-its-descriptors-centre-note-2026-09-16):
+`Scream_StartSound` starts every play at MIDI note 60, `Scream_KeyOnVoice`
+reads the two bytes, `Scream_NoteToPitch` walks a 12-entry semitone table
+and a 128-entry fine table (both Q15, both `floor(32768 * 2^(i/N))` exactly,
+read off `0x08ac36dc` and `0x08ac370c`), and a negative centre note - which
+is every centre note on every Pulse and Pure disc - is negated first and the
+result scaled by `0x1278b / 0x10000`. The port is
+[`oag_formats::sblk::pitch`](../../crates/formats/src/sblk/pitch.rs), integer
+arithmetic only, and [`Sound::sample_rate`](../../crates/formats/src/sblk.rs)
+is what `oag_game::audio::sfx` and `oag-wad sounds` now play and print.
+
+This page's earlier reading of the first word - `0x42aa7f00` as "a constant
+`0x42` plus a per-sound byte" - was the right bytes read in the wrong order.
+Little-endian, the word is `00 7f aa 42`: priority `0`, volume `127`,
+**centre note `-86`**, **centre fine `66`**. `(-86, 66)` at note 60 is
+`0x400` exactly, 11,025 Hz.
+
+### Why it is a finding and not a fit
+
+Nothing in the walk was tuned to the data, and round rates fall out of it:
+
+| Descriptor `(centre, fine)` | Pitch word | Rate | Where |
+| --- | --- | ---: | --- |
+| `(-86, 66)` | `0x400` | 11,025 Hz | `frontend.bnk`, 294 descriptors on the disc |
+| `(-74, 66)` | `0x800` | 22,050 Hz | `hud.bnk`, `~ENGINE`, 136 descriptors |
+| `(-62, 66)` | `0x1000` | 44,100 Hz | `hud.bnk`, `weapons.bnk` |
+| `(-60, 0)` | `0x116f` | 48,051 Hz | four descriptors |
+| `(-79, 66)` | `0x5fd` | 16,505 Hz | |
+| `(-77, 66)` | `0x6b9` | 18,529 Hz | |
+
+Across the USA disc's 880 key-on descriptors, **574 land within 0.2% of a
+standard rate** (11,025 / 16,000 / 18,000 / 22,050 / 24,000 / 32,000 / 44,100
+/ 48,000) and 306 do not; Pure EU is 307 of 433, the PS2's byte-identical
+banks 609 of 985. `speech.bnk`'s 38 lines are all at 18,002 Hz; the circuit
+ambiences shared across the 24 track banks are 143 descriptors at 15,569 Hz.
+Every centre note is negative (0 of 2,334 positive, none `-128`).
+
+**Confirmed live, 190 of 190.** A breakpoint at `__sceSasSetPitch`
+(`0x08a76c7c`) on PPSSPP v1.20.4, reading the voice, the pitch word and the
+voice record's own descriptor pointer, note, fine, bend and offset at every
+hit: 40 hits in the front end (`0x260`, `0x35c`, `0x400` - three words out
+of one bank, each what its descriptor predicts, so "one rate per bank" is
+false), 150 in a driven Time Trial including 90 with a non-zero pitch offset
+and 73 with a bend. The port reproduces every one to the bit. Per the
+rubric, a decompiled chain plus a bit-exact runtime trace plus a corpus-wide
+data invariant is the 95 band; what keeps it off 99 is that the `0x1278b`
+scale is read and not explained.
+
+### What it is not
+
+It is the **playback rate at the default note**, not an authored sample rate.
+The bytes encode a transposition against the SAS core's 44,100 Hz - a
+descriptor whose note and centre cancel plays at `0x1000` whatever the
+recording was - so "a 16 kHz recording pitched down" and "a 15,569 Hz
+recording" are the same bytes and the disc cannot tell them apart. For
+playing the disc it does not matter, and `Sound::sample_rate` is exactly the
+rate the hardware reads the span at.
+
+What the game adds on top - the engine note rising with speed, a Doppler
+shift - is a pitch offset and bend the *caller* sets per play
+(`Scream_UpdateVoicePitch`), not a property of the bank. `oag_game` does not
+carry that yet; see [the sound engine page](../ghidra/functions/psp-pulse-usa/sound.md#the-chain)
+for where the two inputs live.
+
+**The PS2's own arithmetic is not read.** Its banks are byte-identical, so
+`oag_game` plays them through the PSP walk; whether `SCREAM.IRX` on a 48 kHz
+SPU2 base lands on the same rates from the same bytes is open, and the
+cross-check this page once proposed - `speech.bnk` against the PS2's
+`PRERACE.WAD` voice archive - would settle it.
+
+**Neither is HD's, and HD is the corpus to be careful on.** `Bank::sounds`
+reads the two bytes at `+0x02`/`+0x03` by position, and HD's byte-swapped
+container keeps them there: over its 50 banks and 6,548 distinct key-on
+descriptors (`cargo run -p oag-formats --example hd_rate_probe`), every
+centre note is negative and **5,763 land within 0.2% of a standard rate**
+through the PSP walk - 1,803 at 48,051 Hz from `(-60, 0)`, 1,313 at 44,100,
+1,131 at 22,050, 557 at 32,000. That says the bytes are where the PSP keeps
+them; it does not say the PS3's SCREAM applies the same `0x1278b` scale, and
+28% of HD's descriptors sitting on the one pair that scale turns into
+"48 kHz" is exactly the pattern a native 48 kHz engine with no such scale
+would also produce. Two figures from the same probe cut the other way and
+are recorded rather than dropped: **785 of HD's descriptors (12%) land
+nowhere near a standard rate** through the PSP walk, 32 of them at
+114,287 Hz (pitch `0x2977`, legal for SAS but a 2.6x speed-up that would be
+absurd as an authored rate), and HD's **volume byte runs `-27..=127`**, where
+the PSP's is `60..=127` and the documented sentinels stop at `-5` - so
+[`Sound::volume`](../../crates/formats/src/sblk.rs)'s `60..=127` claim is a
+PSP-USA measurement and HD does not honour it. Neither moves the byte
+positions (a one-byte shift would have made every centre note positive),
+but both say HD's own engine may well read these bytes differently.
+`oag_game` plays HD at these rates on the strength of the byte positions
+alone; HD's own `EBOOT.elf` note-to-pitch is unread.
+
 ## The PS2 ships the same container, byte for byte
 
 Despite the page's title, this format is not PSP-only within Pulse. The PS2
@@ -1292,18 +1401,18 @@ just wad sounds 'data/images/pulse-psp-usa.chd:PSP_GAME/USRDIR/Data.wad' --bank 
 
 ```text
 #860 cbd73678  SHIP      9 cues, 34 commands, 22 waveforms, 239 KiB
-    .COLLISIONS        cue   1  cmds   1..18  15 waveform(s), 0 looping, 4.23s total
-    EXPLBIG            cue   3  cmds  19..22   3 waveform(s), 0 looping, 2.39s total
-    EXPLSMALL          cue   2  cmds  18..19   1 waveform(s), 0 looping, 0.59s total
-    FLIP               cue   5  cmds  23..25   2 waveform(s), 0 looping, 0.63s total
-    MALFUNCTION        cue   6  cmds  25..28   1 waveform(s), 1 looping, 1.61s total
-    RESET              cue   4  cmds  22..23   1 waveform(s), 0 looping, 0.19s total
-    ~ENGINE            cue   0  cmds   0..1    1 waveform(s), 1 looping, 1.21s total
+    .COLLISIONS        cue   1  cmds   1..18  15 waveform(s), 0 looping, 11.99s total at 15569 Hz
+    EXPLBIG            cue   3  cmds  19..22   3 waveform(s), 0 looping, 6.92s total at 10390/18002/22050 Hz
+    EXPLSMALL          cue   2  cmds  18..19   1 waveform(s), 0 looping, 1.62s total at 15988 Hz
+    FLIP               cue   5  cmds  23..25   2 waveform(s), 0 looping, 1.38s total at 19994 Hz
+    MALFUNCTION        cue   6  cmds  25..28   1 waveform(s), 1 looping, 17.81s total at 3984 Hz
+    RESET              cue   4  cmds  22..23   1 waveform(s), 0 looping, 0.41s total at 19994 Hz
+    ~ENGINE            cue   0  cmds   0..1    1 waveform(s), 1 looping, 2.42s total at 22050 Hz
 ```
 
-The seconds are at [the assumed rate](#not-determined), which is not recovered.
-`--cue` filters the same way, so `--cue COLLISION` over a whole archive finds
-every bank that has one.
+The seconds are each waveform at [its own rate](#the-rate-each-waveform-plays-at),
+and the rates a cue's waveforms play at follow. `--cue` filters the same way,
+so `--cue COLLISION` over a whole archive finds every bank that has one.
 
 ## Not determined
 
@@ -1319,11 +1428,19 @@ every bank that has one.
 
 - ~~**Per-sound names.**~~ **Solved and validated** - see [above](#every-sound-has-a-name).
 
-- **The command opcodes.** Nine distinct values seen in the data; the engine
-  defines **45**, dispatched through a jump table at `0x08ac326c`. Two are now
-  traced - `0x01` and `0x09` both bind a waveform, above - and eight more share
-  a single handler, which is the shape of a family taking an index. The other 35
-  are unread.
+- **The command opcodes.** ~~Nine distinct values seen in the data~~ -
+  **27 on Pulse**, counted properly on 2026-09-16 (and `0x09`, the table's
+  second key-on, in none of them); the engine defines **45**, dispatched
+  through a jump table at `0x08ac326c`. Twenty-one are named on
+  [the sound engine page](../ghidra/functions/psp-pulse-usa/sound.md#not-determined):
+  the key-on, the three child grains (`0x05` play, `0x06` stop, `0x08`
+  branch - the PSP handlers now read, corroborating HD's), the alternate
+  pick, guard/marker/goto and a random goto, five register grains
+  (`0x1e`-`0x21`, `0x1f` random), a random delay (`0x1a`), a random bend
+  (`0x1b`), key-off (`0x29`), wait-for-voices (`0x26`), two no-ops and an
+  LFO setup at `_q`. Eight more share a single handler. Of the opcodes the
+  Pulse banks actually use, seven have no named handler and they are 65 of
+  `Data.wad`'s 2,881 commands.
 - **`+0x24` = 20544.** Still not determined; the shape of it suggests an
   audio-RAM base address.
 - ~~**Which cue owns which commands.**~~ **Solved and validated** - see
@@ -1339,28 +1456,16 @@ every bank that has one.
   **bit `0x100` means "this bank carries a name table"** - a capability flag
   rather than a size. The other bits are still unread. See
   [the sound engine](../ghidra/functions/psp-pulse-usa/sound.md#the-name-table-decoded).
-- **The sample rate of each waveform.** Not in the header. PS-ADPCM carries no
-  rate, so it comes from a per-sound pitch value, and the 24-byte parameter
-  records' first word is the obvious candidate - `0x42aa7f00`, `0x42a15000`,
-  `0x42a76400` in `frontend.bnk`, which vary per sound and cluster tightly.
-
-  **This is now load-bearing rather than academic**, because the game plays
-  these waveforms: `oag_formats::sblk::ASSUMED_SAMPLE_RATE` is **44,100 and is
-  a placeholder**, chosen because it is the rate the PS2's own voice archive
-  uses ([ps2-voice.md](ps2-voice.md)) and because it puts the recovered cues at
-  plausible lengths - a collision impact at 0.28 s, `~ENGINE` at 1.21 s. That
-  is the whole argument for it. Every consumer goes through the one named
-  constant so that decoding the field is a one-line change.
-
-  One observation worth carrying forward: read as four bytes rather than as a
-  float, the high byte of that word is `0x42` on all three `frontend.bnk`
-  examples while the next varies (`0xaa`, `0xa1`, `0xa7`). That reads more like
-  a constant note plus a per-sound fine-tune than like a single float, which is
-  the opposite of what this entry originally assumed. Not pursued.
-
-  The technique that would settle it is already in this tree: the 48 kHz music
-  finding came from cross-correlating PS2 PCM against rate-declaring PSP
-  ATRAC3plus. `speech.bnk` against `PRERACE.WAD` is the same pairing.
+- ~~**The sample rate of each waveform.**~~ **Solved and confirmed live** -
+  see [above](#the-rate-each-waveform-plays-at). The placeholder 44,100 Hz is
+  gone; the rate is the descriptor's `+0x02`/`+0x03` centre note and fine
+  through the engine's own note-to-pitch walk, confidence 95. What the earlier
+  entry got right: the first word's bytes were "a note plus a fine-tune", not
+  a float. What it got wrong: the "constant `0x42`" is the *fine* byte and
+  the varying byte the note, and the placeholder put a collision impact at
+  0.28 s where the disc plays it at 0.8 s. Still open from the same entry:
+  the PS2's own arithmetic, which the `speech.bnk`-against-`PRERACE.WAD`
+  cross-correlation it proposed would settle.
 - ~~**Whether this is Sony's SCREAM engine.**~~ **Settled: it is.** The PSP
   executable carries nineteen `SCREAM` strings including the verbatim copyright
   line `" SCREAM PSP    (c)2006 Sony Computer Entertainment America"` and a

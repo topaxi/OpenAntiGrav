@@ -96,28 +96,18 @@
 //! `c_CShipShip` and `c_CShipWall` underneath it. [`Bank::cue_tree_sounds`]
 //! follows them and [`child`] carries the record and the evidence.
 //!
+//! # The rate each waveform plays at
+//!
+//! Decoded, 2026-09-16. The descriptor's `+0x02`/`+0x03` are a centre note and
+//! a centre fine-tune, and [`pitch`] is the port of the engine's own arithmetic
+//! from those to the `sceSasSetPitch` word - confirmed live, 190 of 190 hits.
+//! [`Sound::sample_rate`] is what a player wants; `oag_game::audio::sfx` plays
+//! every waveform at it.
+//!
 //! # What is not decoded
 //!
-//! 41 of the 45 command opcodes - including whichever one **chooses** between a
-//! cue's several waveforms - the sample rate each waveform plays at, and the
-//! header's `+0x24`. See the format page's open questions.
-
-/// The rate a waveform is played back at, **which is not recovered**.
-///
-/// Nothing in the bank states it. PS-ADPCM carries no rate of its own, and the
-/// per-sound rate the hardware is given comes from a pitch value this project
-/// has not decoded - the 24-byte descriptor's first word is the candidate, and
-/// `docs/formats/psp-audio.md` lists it under "Not determined".
-///
-/// So this is a **placeholder, and every consumer of it is playing a guess**.
-/// It exists as one named constant rather than as a literal in each caller so
-/// that decoding the field is a one-line change and so that a reader of the
-/// playback path is told, here, that the number is not evidence. 44,100 is
-/// chosen because it is the rate the PS2 disc's own voice archive uses
-/// (`docs/formats/ps2-voice.md`) and it puts the recovered cues at plausible
-/// lengths - a collision impact at a third of a second, `~ENGINE` at 1.2 - but
-/// "plausible" is the whole of the argument for it.
-pub const ASSUMED_SAMPLE_RATE: u32 = 44_100;
+//! 37 of the 45 command opcodes, and the header's `+0x24`. See the format
+//! page's open questions.
 
 /// Bytes before the section table.
 pub const HEADER_LEN: usize = 8;
@@ -560,6 +550,8 @@ impl<'a> Bank<'a> {
                 opcode,
                 descriptor: at,
                 volume: record[0x01] as i8,
+                centre_note: record[0x02] as i8,
+                centre_fine: record[0x03] as i8,
                 mode: self.order.u16(record, 0x0e),
                 offset: self.order.u32(record, 0x10),
                 length: self.order.u32(record, 0x14),
@@ -648,6 +640,18 @@ pub struct Sound {
     /// Every one of the 880 key-on descriptors across all 36 banks on the PSP
     /// USA disc reads `60..=127`.
     pub volume: i8,
+    /// The descriptor's centre note, `+0x02`, one signed byte.
+    ///
+    /// The MIDI note the waveform plays at its own rate on, as far as the
+    /// engine is concerned - and **negative on every descriptor of every Pulse
+    /// and Pure disc**, which routes the pitch through [`pitch::sas_pitch`]'s
+    /// scaled branch. See [`pitch`] for the arithmetic and [`Sound::pitch`]
+    /// for the result.
+    pub centre_note: i8,
+    /// The descriptor's centre fine-tune, `+0x03`, in 1/128ths of a semitone
+    /// with `127` in tune. `66` on almost every descriptor, `0` on the ones
+    /// that play at 48 kHz.
+    pub centre_fine: i8,
     /// The descriptor's `+0x0e` flags word.
     ///
     /// `Scream_KeyOnVoice` passes `0x40` to `sceSasSetVoice` as its loop mode,
@@ -700,6 +704,30 @@ impl Sound {
     #[must_use]
     pub fn is_looping(&self) -> bool {
         self.mode & LOOP_FLAG != 0
+    }
+
+    /// The `sceSasSetPitch` word this waveform is keyed on with, played at the
+    /// default note with no bend or offset: `0x1000` is 44,100 Hz.
+    ///
+    /// The value the original hands the hardware for an unmodulated play -
+    /// `Scream_StartSound` starts every play at note 60, and the game's pitch
+    /// modulation (the engine note, for one) is added on top by the caller,
+    /// not by the bank. See [`pitch`].
+    #[must_use]
+    pub fn pitch(&self) -> u16 {
+        pitch::sas_pitch(self.centre_note, self.centre_fine, pitch::DEFAULT_NOTE, 0)
+    }
+
+    /// The rate this waveform plays at, in Hz, at the default note.
+    ///
+    /// [`Sound::pitch`] scaled onto the SAS core's 44,100 Hz and rounded to
+    /// the nearest Hz. The PSP disc's banks come out at 11,025, 22,050 and
+    /// 44,100 exactly and at a spread of others (18,002 for every speech
+    /// clip, 15,569 for the circuit ambiences); see [`pitch`] for why "the
+    /// authored rate" is not what this is.
+    #[must_use]
+    pub fn sample_rate(&self) -> u32 {
+        pitch::sample_rate_hz(self.pitch())
     }
 }
 
@@ -894,6 +922,7 @@ use crate::byte_order::ByteOrder;
 
 pub mod child;
 pub mod cue;
+pub mod pitch;
 pub use child::Child;
 pub use cue::Cue;
 

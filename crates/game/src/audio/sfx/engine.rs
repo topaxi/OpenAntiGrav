@@ -26,17 +26,27 @@ use super::{Banks, Cue};
 /// volume = i * 0.6 + 0.4
 /// ```
 ///
-/// # The unit of `pitch` is inferred, not recovered
+/// # The unit of `pitch` is 1/128 of a semitone - 1536 to the octave
 ///
-/// The law is a direct read; what the number *means* is not. It is written to a
-/// SCREAM sound instance's `+0x04`, and at a standstill it is about **-1143**,
-/// which is 1143 below whatever unity is. Read as **cents** - 1200 to the
-/// octave, the near-universal convention - that is a playback ratio of
-/// `2^(-1143/1200)` = 0.52 at rest, unity at 228.6 km/h and about 1.23 at 300,
-/// which is the shape of an engine note. No other reading of a number near
-/// -1143 lands anywhere sensible. Recorded as a hypothesis at confidence
-/// **60**, and it is the one thing here a hardware capture would settle in a
-/// second.
+/// Until 2026-09-16 this was read as cents (1200 to the octave) at confidence
+/// 60, with "a hardware capture would settle it in a second" written beside
+/// it. The capture is done and it settled it the other way. The number is
+/// written to a SCREAM sound instance's `+0x04`, which `Scream_StartSound`
+/// carries into the handler as the **pitch offset** and
+/// `Scream_ComputeVoiceNote` (`0x089950a0`) adds to `note * 128 + fine` -
+/// the same 1/128th-of-a-semitone unit the fine-tune table is indexed in
+/// (`floor(32768 * 2^(i/1536))`, read off the binary) and the same `1536.0`
+/// `SoundInstance_UpdateSpatial`'s Doppler term multiplies an octave ratio
+/// by. Live, at a standstill, `~ENGINE`'s voice reached `sceSasSetPitch`
+/// with an offset of `-1148` on its 22,050 Hz descriptor and a pitch word of
+/// `0x4c3`: 13,124 Hz, a ratio of 0.595, which is `2^(-1148/1536)` and not
+/// `2^(-1148/1200)` (0.515). Confidence **92** - a decompiled path, a table
+/// closed form and a bit-exact live hit agreeing; see
+/// `docs/ghidra/functions/psp-pulse-usa/sound.md`'s pitch section and
+/// `oag_formats::sblk::pitch`.
+///
+/// So the engine sits at `2^(-1143/1536)` = 0.60 at rest, unity at 228.6
+/// km/h and about 1.18 at 300.
 #[derive(Debug)]
 pub struct Engine {
     /// The per-craft random offset, in the same unit as `lag`.
@@ -64,8 +74,9 @@ pub struct Engine {
     warned: bool,
 }
 
-/// Cents to an octave, the unit `base` is read as. See [`Engine`].
-const CENTS_PER_OCTAVE: f32 = 1200.0;
+/// Pitch-offset units to an octave: 12 semitones of 128 fine steps, the unit
+/// `base` is in. See [`Engine`].
+const PITCH_UNITS_PER_OCTAVE: f32 = 1536.0;
 
 /// The centre of the per-craft random spread, `rand(-127, 127) - 1143`.
 const ENGINE_BASE: f32 = -1143.0;
@@ -181,7 +192,7 @@ impl Engine {
             return;
         }
 
-        let pitch = (self.pitch / CENTS_PER_OCTAVE).exp2();
+        let pitch = (self.pitch / PITCH_UNITS_PER_OCTAVE).exp2();
         // Three terms, multiplied the way the original multiplies them:
         // `Exhaust_UpdateEngineSound` writes `i * 0.6 + 0.4` (`x 0.85` for
         // everyone but the player) **into the sound instance's own volume

@@ -440,8 +440,13 @@ Sas_QueueSetVoice(v, *(u32 *)(wf + 0x10),      /* address */
 So a **waveform descriptor** carries, at least:
 
 ```text
-wf + 0x02   s8    a note or pitch base
-wf + 0x03   s8    a second one
+wf + 0x00   s8    read by FUN_0898f5e8; a priority, hypothesised (see the pitch section)
+wf + 0x01   s8    volume, 60..127 on every PSP descriptor
+wf + 0x02   s8    centre note   - the pitch, decoded 2026-09-16, see below
+wf + 0x03   s8    centre fine   - 1/128ths of a semitone, 0x7f in tune
+wf + 0x04   s16   pan, degrees, reduced modulo 360
+wf + 0x08   s8    pitch-bend range down, semitones (Scream_ComputeVoiceNote)
+wf + 0x09   s8    pitch-bend range up
 wf + 0x0a   u16   paired with +0x0c into an envelope call
 wf + 0x0c   u16
 wf + 0x0e   u16   flags; 0x40 selects loop mode, 0x80 marks NOT-ADPCM
@@ -566,8 +571,9 @@ with that page's `{ u8 opcode, u24 operand }` reading of a little-endian word
 rather than in conflict with it. And **the engine defines 45 opcodes**
 (`0x00`-`0x2c`) through a jump table, `g_scream_opcode_table` at
 **`0x08ac326c`**, where the format page
-observed only nine distinct values in the shipped data - so the banks use a
-fifth of the instruction set.
+observed only nine distinct values in the shipped data - a count corrected to
+27 on 2026-09-16, see [the census](#the-census-the-format-pages-nine-distinct-values-should-have-been)
+below.
 
 `handler + 0x4a` is the program counter, and a cue ends when it passes
 `*(i8 *)(cue + 4) - 1`. **That refines the note above**: `cue + 0x04` is the
@@ -748,17 +754,268 @@ confirmed consumer, `0x14` does not.** No opcode found scanning for `0x14`
 specifically, so unlike `0x15` its "why does the disc author this" stays
 genuinely open rather than answered by a sibling opcode.
 
+## The pitch: a waveform's rate is its descriptor's centre note, 2026-09-16
+
+`docs/formats/psp-audio.md` carried the rate every waveform plays at as a
+placeholder 44,100 Hz, with the descriptor's first word as the candidate
+field. This section traces every writer of the SAS voice record's pitch field
+(`+0x50`, the one bit `0x10` in the dirty word commits through `Sas_SetPitch`)
+back to the bank bytes it is computed from, and then watches the hardware call
+live. The answer is two signed bytes and an integer table walk, and the walk is
+now [`oag_formats::sblk::pitch`](../../../../crates/formats/src/sblk/pitch.rs).
+
+### The writer set is closed
+
+Searching the whole binary for `ori ..., 0x10` inside the `0x0898xxxx`-
+`0x0899xxxx` sound module finds one store to `+0x50`:
+
+```c
+undefined4 Sas_QueuePitch(voice, pitch) {                 /* 0x0898bf14 */
+  (&DAT_08b89420)[voice * 0x1b] = pitch;                  /* +0x50 */
+  (&DAT_08b8940c)[voice * 0x1b] |= 0x10;                  /* +0x3c, dirty */
+  return 1;
+}
+```
+
+`0x08b89420 - 0x08b893d0 = 0x50`, `0x1b` words is `0x6c` bytes: the same
+table and the same field `Sas_CommitVoices` reads and hands to
+`__sceSasSetPitch`. It has **exactly two callers**, `Scream_KeyOnVoice`
+(`0x0899456c`) and `Scream_UpdateVoicePitch` (`0x0898f25c`), and both compute
+the argument the same way, so every pitch word this binary ever commits comes
+out of the chain below. Confidence **92** - a direct store to the exact offset,
+the sibling of `Sas_QueueSetVoice` in shape and address, and the two-caller
+count is Ghidra's xref list on a function it resolves cleanly.
+
+### The chain
+
+```text
+Scream_StartSound        0x0898f864   handler+0x34 = 0x3c (note 60), +0x35 = 0 (fine)
+                                      handler+0x14 = pitch offset (arg flag 0x10, else 0)
+                                      handler+0x36 = pitch bend   (arg flag 0x20, else 0)
+Scream_OpKeyOn           0x0898fc78   copies +0x34/+0x35 to voice+0x18/+0x19,
+                                      +0x36 to voice+0x24, +0x14 to voice+0x26,
+                                      the descriptor pointer to voice+0x14
+Scream_KeyOnVoice        0x0899456c   note, fine  = Scream_ComputeVoiceNote(wf, bend, offset, note, fine)
+                                      pitch       = Scream_VoicePitch(wf+0x02, wf+0x03, note, fine)
+                                      Sas_QueuePitch(voice, pitch)
+Scream_UpdateVoicePitch  0x0898f25c   the same two calls per voice, every update, with
+                                      +0x36 = +0x42 + +0x40 and +0x14 = +0x46 + +0x44
+```
+
+`Scream_ComputeVoiceNote` (`0x089950a0`, confidence **88**) is the
+modulation:
+
+```c
+void Scream_ComputeVoiceNote(wf, bend, offset, note, fine, int *out_note, uint *out_fine) {
+  if (bend < 0) v = wf[0x08] * bend * 0x80 / 0x8000;   /* bend-down range, semitones */
+  else          v = wf[0x09] * bend * 0x80 / 0x7fff;   /* bend-up range */
+  total     = note * 0x80 + fine + offset + v;         /* 1/128ths of a semitone */
+  *out_note = total / 0x80;                            /* toward zero */
+  *out_fine = total < 0 ? -((-total) & 0x7f) : total & 0x7f;
+}
+```
+
+`Scream_VoicePitch` (`0x08994fec`, confidence **90**) reads the descriptor's
+`+0x02` and `+0x03` as **signed bytes** (`sll 0x18; sra 0x18` on both), takes
+the absolute value of a negative centre note, and multiplies the result by
+`0x1278b >> 16` when it did:
+
+```text
+08995018  bgez a3, 0x08995040          ; centre note >= 0: plain
+08995020  subu a3, zero, a3            ; else negate ...
+0899503c  andi a3, a3, 0xffff
+08995068  jal  Scream_NoteToPitch
+08995078  lui  a0, 0x1
+0899507c  addiu a0, a0, 0x278b         ; 0x1278b
+08995080  mult a2, a0
+08995088  srl  a2, a2, 0x10            ; pitch * 0x1278b >> 16
+```
+
+`Scream_NoteToPitch` (`0x089952c4`, confidence **90**) is Sony's standard
+note-to-pitch: `(centre_note, centre_fine, note, fine) -> pitch`, with
+`0x1000` meaning "the sample's own rate". The fine offset is
+`centre_fine + fine - 0x7f`, borrowing a semitone from `note` while negative,
+so a centre fine of `0x7f` is in tune and `0` is one semitone flat. The
+semitone distance `note - centre` splits into an octave shift of `0x1000` and
+a 12-entry Q15 table, and the fine offset indexes a 128-entry Q15 table:
+
+| Table | Address | Entries | Closed form |
+| --- | --- | --- | --- |
+| `g_scream_semitone_table` | `0x08ac36dc` | 12 x u32, `0x8000 .. 0xf1a1` | `floor(32768 * 2^(i/12))`, all 12 |
+| `g_scream_fine_table` | `0x08ac370c` | 128 x u32, `0x8000 .. 0x878c` | `floor(32768 * 2^(i/1536))`, all 128 |
+
+The two abut - 560 bytes, 140 words, no slack - and the closed forms hold on
+every entry (checked in `crates/formats/src/sblk/pitch/tests.rs`), so a fine
+step is 1/128 of a semitone and the note is a MIDI note. Confidence **92** on
+both labels: the addresses are `lui/addiu` pairs in the function that indexes
+them, and the closed form is what a wrong base could not produce.
+
+**The default play is note 60, fine 0, always.** `Scream_StartSound`'s
+`sb a0, 0x34(s0)` at `0x0898fa58` (with `a0 = 0x3c`) and `sb zero, 0x35(s0)`
+at `0x0898fa5c` are the only stores to those two handler bytes anywhere in
+the sound module - an instruction search over the whole binary for `sb` to
+`0x34(`/`0x35(` finds no other in `0x0898xxxx`-`0x0899xxxx` - so a
+descriptor's rate at rest is `Scream_VoicePitch(centre, fine, 60, 0)` and
+nothing in a cue's command list can change it. What the game adds is the
+offset and bend through `Scream_UpdateVoicePitch`, which is how the engine
+note follows speed; that is the caller's business, not the bank's.
+
+### What `0x1278b` is, and is not
+
+`0x1278b / 0x10000 = 1.154465`. It is not `48000 / 44100` (`1.088`), and not
+that times `2^(1/12)` either (`0x12735`). It is recorded as read and not
+explained. What it *does*: with every centre note on both Pulse discs and
+both Pure discs negative (0 of 2,334 key-on descriptors positive, none
+`-128`), the multiply is universal, and it puts `(-86, 66)` on exactly
+`0x400`, `(-74, 66)` on `0x800` and `(-62, 66)` on `0x1000` - 11,025, 22,050
+and 44,100 Hz, the rates the disc's banks are full of. A reading of the
+bytes without it lands nowhere round.
+
+### Confirmed live: 190 of 190
+
+PPSSPP v1.20.4, `pulse-psp-usa.chd`, own profile, breakpoint at
+`__sceSasSetPitch` (`0x08a76c7c`), reading `a1` (voice) and `a2` (pitch) at
+every hit and, off the voice record itself, the descriptor pointer at
+`+0x14`, the note/fine at `+0x18`/`+0x19` and the bend/offset at
+`+0x24`/`+0x26` - so each hit's prediction is computed from the same inputs
+the game used, through the port:
+
+| Where | Hits | Matched | Distinct pitch words |
+| --- | ---: | ---: | --- |
+| Front end (menus, `frontend.bnk`) | 40 | **40** | `0x260`, `0x35c`, `0x400` |
+| Time Trial on Talon's Junction, driven | 150 | **150** | 47, `0x35c` .. `0x908` |
+
+The front end is the discriminating case the format page asked for: three
+different words out of one bank, each exactly what its descriptor's
+`(centre, fine)` predicts, which falsifies "one rate per bank" outright. The
+race capture exercises the modulation too - 90 of its hits carry a non-zero
+pitch offset (down to `-1252`) and 73 a non-zero bend - and every one of
+those reproduces, so `Scream_ComputeVoiceNote`'s rounding is right as well.
+Every hit's `ra` was `0x08a2aeb0`, inside `Sas_SetPitch`, as the table above
+already said it would be.
+
+Confidence **95** on the decode as a whole: a decompiled chain with every
+link read, an integer port that reproduces 190 live hardware calls to the
+bit, and a data-side invariant (exact standard rates falling out of a walk
+that was not fitted to them) on three discs. What is *not* claimed is an
+authored sample rate: the bytes encode a transposition against the SAS
+core's 44,100 Hz, and `(note, fine)` cancelling against the centre gives
+`0x1000`, so "a 16 kHz recording pitched down" and "a 15,569 Hz recording"
+are the same descriptor. The PS2's banks are byte-identical but its
+`SCREAM.IRX` was not read; whether its arithmetic (on a 48 kHz SPU2 base)
+lands on the same rates is open, and `oag_game` plays PS2 banks through the
+PSP walk on the strength of the bytes being the same.
+
+### Names owed and taken
+
+| Address | Kind | Name | Confidence |
+| --- | --- | --- | --- |
+| `0x0898bf14` | function | `Sas_QueuePitch` | 92 |
+| `0x08994fec` | function | `Scream_VoicePitch` | 90 |
+| `0x089952c4` | function | `Scream_NoteToPitch` | 90 |
+| `0x089950a0` | function | `Scream_ComputeVoiceNote` | 88 |
+| `0x0898f25c` | function | `Scream_UpdateVoicePitch` | 85 |
+| `0x08ac36dc` | data | `g_scream_semitone_table` | 92 |
+| `0x08ac370c` | data | `g_scream_fine_table` | 92 |
+
+`Scream_UpdateVoicePitch` is 85 rather than 88 because what triggers it is
+not read - it walks a handler's voices (`FUN_089930ac(handler, i)` yields
+them) and re-pitches each, and the sums it forms first (`+0x42 + +0x40` into
+the bend, `+0x46 + +0x44` into the offset) read as base-plus-modulation
+pairs without the writers of any of the four being traced.
+
+**Not named:** `FUN_0898f5e8`, which `Scream_OpKeyOn` calls with the
+handler's `+0x3a` (a volume, `0x400` at rest) and the descriptor, and whose
+result goes to the voice allocator as its first argument. It reads the
+descriptor's `+0x00` as a signed byte and, when flag bits `0x6` of `+0x0e`
+select a divisor (`/5` or `/2`), scales that byte down as the volume falls
+below `0x3b6`. **Hypothesis: a voice priority that quiet plays give up**,
+with `+0x00` the descriptor's authored priority - which would make the
+24-byte record `priority, volume, centre note, centre fine, pan, ...`, Sony's
+usual tone layout. Below 70, so no name; the allocator (`FUN_089953c0` /
+`FUN_08994550`) is unread and would settle it.
+
+## Five more opcodes, 2026-09-16: the ones the banks actually use
+
+The format page's observed-in-data list had four opcodes with no PSP handler
+read: `0x05`, `0x06`, `0x1e`, `0x29`, plus `0x08` beside `0x05`. All five are
+read now, off `g_scream_opcode_table` at `0x08ac326c` - which, unlike the
+2026-09-04 pass found, now reads real `0x0898xxxx` addresses directly (the
+`0x19` entry is `0x0898e178`, matching that pass exactly, so the base and
+stride are the confirmed ones). Three corroborate HD's readings; two are new.
+
+| Opcode | Address | Name | Confidence | What it does |
+| --- | --- | --- | --- | --- |
+| `0x05` | `0x08990100` | `Scream_OpPlayChild` | 85 | Resolve the 32-byte child record's cue (index at `+0x0c`, or name at `+0x10` looked up in every bank then this one); volume from `+0x00` and pan from `+0x04`, each through the `-1..-5` sentinel scheme (`-5` random, `-1..-4` the handler's four register bytes at `+0x4c`); `Scream_StartSound` with the parent's volume x child volume / 127, its pan, its pitch offset and bend (`+0x46`, `+0x42`) and its four registers, flags `0x8000007c`; link the child to the parent (`FUN_089929a4`) |
+| `0x06` | `0x0898ed5c` | `Scream_OpStopChild` | 85 | Resolve the child the same way, then walk the parent's child list (`handler+0x2c`, linked by `+0x30`) and unlink-and-kill (`FUN_08993944(child, 1, 0, 0)`) every instance whose cue is the resolved one, until none is left |
+| `0x08` | `0x0898eb6c` | `Scream_OpBranch` | 85 | Resolve the child; kill this handler's own voices (`FUN_08994b54(handler+0x18, 0)`); if the cue's flag `0x8` is set, ask `FUN_0898f6a4` for an existing instance and kill it unless it is this one; then **replace the handler's cue, defaults, command list and bank with the child's** and reset the program counter (`+0x4a = -1`), so the interpreter carries on inside the other cue. **No bounds check on the index on PSP** - HD's `Scream_DoGrainBranch` has one against `cue_count` and the `snd_SFX_GRAIN_TYPE_BRANCH invalid sound index` string; this build reads `+0x0c` and indexes with it |
+| `0x1e` | `0x0898e41c` | `Scream_OpSetRegister` | 88 | Two lines: operand byte 0 is a register index, byte 1 the value. Non-negative writes the handler's own byte at `+0x4c + i`; negative writes the global at `0x08ac3247 - i`. The same two address spaces `Scream_OpGuard` compares against, and `talonsj`'s `~SETREG` cues are named for it |
+| `0x29` | `0x0898ea4c` | `Scream_OpKeyOff` | 85 | One call: `FUN_089949d0(handler+0x18, 0)`, which for every voice in the handler's bitmask that is in state `1` sets its bit in `g_sas_keyoff_pending` (`0x08b8f784`) and clears it from the key-on mask (`0x08b8f780`). `FUN_089947c8` flushes that mask a voice at a time through `FUN_0898c050` -> `Sas_SetKeyOff` (`0x08a2adcc`) -> `__sceSasSetKeyOff` (`0x08a76c6c`), so the opcode releases the handler's voices into their ADSR release rather than cutting them |
+
+`Sas_SetKeyOff` is named on the same mirroring convention as the other four
+`Sas_Set*` wrappers (confidence **90**: a direct `jal 0x08a76c6c` onto the
+import stub Ghidra already names, behind the usual "is SAS initialised"
+guard), and `g_sas_keyoff_pending` at **88** - its consumer is read through
+to the import; the sibling masks at `0x08b8f780` and `0x08b8f788` are
+touched by the same functions and left unnamed, their consumers unread.
+
+`0x05`, `0x06` and `0x08` are each the same algorithm HD's
+[`Scream_DoGrainPlayChild` / `StopChild` / `Branch`](../ps3-hdfury-eu/sound.md#opcodes-read-so-far)
+read on a different CPU with no shared analysis - the same second-binary
+corroboration the 2026-09-04 pass gave `0x19`/`0x22`/`0x23`/`0x24` - with
+the one real difference (the missing bounds check) recorded above rather
+than smoothed over. That lifts HD's three from 82/78/84 into the 85 band on
+both sides. `0x1e` and `0x29` have no HD reading yet.
+
+Not read from this pass: `FUN_0898f6a4` (the flag-`0x8` "find an existing
+instance" the branch consults), `FUN_089929a4` (the parent-child link) and
+`FUN_08993944` (the kill), which the three child opcodes lean on and which
+would be the next three to name.
+
+### The census the format page's "nine distinct values" should have been
+
+Counting the opcode byte of every command in every bank (Pulse USA
+`Data.wad` + `FE.wad`, Pure EU, PS2 EU) gives **27 distinct opcodes on
+Pulse**, not nine, and `0x09` - the second key-on `KEY_ON_OPCODES` carries
+from the table - appears in **none** of them. By count on Pulse USA's
+`Data.wad`: `0x01` 880, `0x23` 238, `0x1a` 231, `0x24` 230, `0x22` 205,
+`0x05` 195, `0x1e` 130, `0x1b` 122, `0x29` 90, `0x14` 89, `0x04` 69, `0x20`
+66, `0x06` 58, `0x15`/`0x16` 49 each, `0x26` 48, `0x08` 46, `0x19` 42,
+`0x25` 24, then `0x28` 4, `0x0a` 4, `0x2b` 3, `0x17`/`0x18`/`0x1f`/`0x21` 2
+each, `0x1c` 1. The heavy unread ones were read in the same session:
+
+| Opcode | Address | Name | Confidence | What it does |
+| --- | --- | --- | --- | --- |
+| `0x1a` | `0x0898e270` | `Scream_OpRandomDelay` | 85 | Returns `rand() % (operand + 1)`. A handler's non-negative return is what `Scream_StepCommandList` **adds to the next command's own delay word** (`handler+0x48 = next.word1 + r`), so this is a random extra wait before the next grain |
+| `0x1b` | `0x0898e2b0` | `Scream_OpRandomBend` | 85 | A random value in `-0x8000..0x7fff`, scaled by operand byte 0 as a percentage, written as the sound's pitch bend through `Scream_SetSoundBend` (`0x0898f174`, **85**): that resolves the handle, writes `+0x42` on the handler and every child, and calls `Scream_UpdateVoicePitch`. Through the descriptor's own bend ranges (`+0x08`/`+0x09`, semitones) that is a random detune of up to the authored range |
+| `0x1f` | `0x0898e458` | `Scream_OpSetRegisterRandom` | 88 | Register `byte0 = rand() in byte1..=byte2`, same local/global addressing as `0x1e` |
+| `0x20` | `0x0898e4dc` | `Scream_OpIncRegister` | 88 | Register `byte0 += 1`, saturating at `127` |
+| `0x21` | `0x0898e538` | `Scream_OpDecRegister` | 88 | Register `byte0 -= 1`, saturating at `-128` |
+| `0x25` | `0x0898e768` | `Scream_OpGotoRandomMarker` | 88 | Pick a marker id in `byte0..=byte1`, scan the cue's commands for an opcode `'#'` (`0x23`) whose byte 0 is that id, set the program counter to it; the same 8-deep recursion guard (`DAT_08ac3268`) and error path as `Scream_OpGoto`. HD's own `snd_DoGrain` strings name a "Goto Random Marker" |
+| `0x26` | `0x0898e8d4` | `Scream_OpWaitForVoices` | 78 | If the handler has any voice open (`+0x18`/`+0x1c` masks) or has keyed one on (flag `0x10` at `+0x16`), step the program counter back onto itself and return 1. That return goes through the same rule as `0x1a`'s: `Scream_StepCommandList` re-increments the counter (landing on this command again) and writes `handler+0x48 = word1 + 1`, a non-zero delay, which is what `Scream_StartSound`'s `while (... && handler+0x48 == 0)` loop exits on. So the command list blocks here, re-tested once the delay runs out, until the handler's voices have ended. 78 rather than higher because what clears the masks and the flag at voice end is not read |
+| `0x04` | `0x0898de84` | `Scream_OpConfigureLfo_q` | 60 | Operand byte 0 selects one of the handler's four `0x34`-byte modulator slots (initialised in `Scream_StartSound`'s four-iteration loop at `+0x5c`); byte 1 enables it, and the rest of the 16-byte parameter record fills a type (`+0x03`), rate (`+0x06`), flags (`+0x08`, bit `0x2` = random start phase, `& 0x7ff << 16`), phase (`+0x0a`) and depth (`+0x0c`), then `FUN_08996a90(slot)` starts it, or `FUN_08996ba8` stops it when byte 1 is zero. Rate, phase, depth and a random phase are an LFO's fields; the two functions that run it are unread, hence `_q` |
+
+Still unread, by count: `0x28` (4), `0x0a` (4), `0x2b` (3), `0x17`, `0x18`,
+`0x1c`, `0x27`; and `0x16` (49) is decompiled but unnamed. `0x25` is the
+obvious candidate for where the 15% of Pulse grains the goto reading made
+"unreachable" go - a random goto is a goto whose target no static walk that
+only follows `0x24` can pick - but that is a hypothesis, not a measurement:
+the reachability walk has not been re-run with `0x25`'s marker ranges
+included, and it is what would turn 15% into a number.
+
 ## Not determined
 
-- **37 of the 45 opcode handlers, plus one read but not confidently named.**
-  `0x01`, `0x09`, `0x14`, `0x15`, `0x19`, `0x22`, `0x23` and `0x24` are named
-  and confidence-scored; `0x16`'s handler is decompiled (a backward scan for
-  `0x15`, see [above](#opcode-0x14-is-a-no-op-corroborated-on-hd-2026-09-08))
-  but its *purpose* is not established well enough to name past the rubric's
-  50-confidence floor, so it stays `FUN_0898dfe0`. The rest are not read. The
-  format page's other observed opcodes (`0x05`, `0x06`, `0x1e`, `0x29`) are
-  what a bank actually uses, so they are the ones worth reading next, and
-  eight of the 45 share one handler.
+- **24 of the 45 opcode handlers, plus one read but not confidently named.**
+  `0x01`, `0x04` (`_q`), `0x05`, `0x06`, `0x08`, `0x09`, `0x14`, `0x15`,
+  `0x19`, `0x1a`, `0x1b`, `0x1e`, `0x1f`, `0x20`, `0x21`, `0x22`, `0x23`,
+  `0x24`, `0x25`, `0x26` and `0x29` are named and confidence-scored;
+  `0x16`'s handler is decompiled (a backward scan for `0x15`, see
+  [above](#opcode-0x14-is-a-no-op-corroborated-on-hd-2026-09-08)) but its
+  *purpose* is not established well enough to name past the rubric's
+  50-confidence floor, so it stays `FUN_0898dfe0`. The rest are not read, and
+  eight of the 45 share one handler. Of the 27 opcodes the Pulse banks
+  actually use, seven (`0x0a`, `0x16`, `0x17`, `0x18`, `0x1c`, `0x28`,
+  `0x2b`) have no named handler, and together they are 65 of the 2,881 commands in `Data.wad`.
 - **Whether `0x01` and `0x09` differ.** They share a handler, so any difference
   must come from the command word rather than the dispatch.
 - ~~**The extraction itself.**~~ **Done.** Both rules are implemented in
@@ -804,4 +1061,9 @@ genuinely open rather than answered by a sibling opcode.
   between.
 - **EU cross-verification.** Nothing on this page has been checked against
   `psp-pulse-eu`, which is normally this project's primary target.
-- **Nothing here is runtime-verified.** Every claim is static reading.
+- ~~**Nothing here is runtime-verified.**~~ **The pitch chain is**, 190 of
+  190 hits at `__sceSasSetPitch` (see
+  [the pitch section](#the-pitch-a-waveforms-rate-is-its-descriptors-centre-note-2026-09-16)),
+  and `Sas_SetVolume`'s call site and the voice table's base were read live
+  on 2026-09-06. The cue dispatch and the opcode handlers are still static
+  reading only.

@@ -290,9 +290,18 @@ pitch = (short)( (int)( -(e[0x34] / dt) * inst[0x0c] * 1536.0f ) + (int)inst[0x0
 
 `inst[0x04]` is the instance's base pitch - for the engine note that is the
 `base + speed_kmh * 5.0` value [`exhaust.md`](exhaust.md) recovers - and
-`inst[0x0c]` is a per-instance doppler scale. The `1536.0` is read; **the unit
-is not**, and it is the same unrecovered pitch unit `~ENGINE` already reads as
-cents. Confidence **78**.
+`inst[0x0c]` is a per-instance doppler scale. The `1536.0` is read, and
+**since 2026-09-16 so is the unit: 1/128 of a semitone, 1536 to the
+octave** - the pitch this writes reaches SCREAM as the handler's pitch
+offset, which `Scream_ComputeVoiceNote` adds to `note * 128 + fine` before
+the fine-tune table (`floor(32768 * 2^(i/1536))`) scales the voice; see
+[sound.md's pitch section](sound.md#the-pitch-a-waveforms-rate-is-its-descriptors-centre-note-2026-09-16).
+`~ENGINE`'s reading as *cents* was the earlier hypothesis and is retired:
+live, the engine at rest reached `sceSasSetPitch` with an offset of `-1148`
+and a word of `0x4c3`, which is `2^(-1148/1536)` of its descriptor's rate and
+not `2^(-1148/1200)`. So `1536.0` here is "one octave of pitch offset per
+unit of the Doppler ratio", and the formula is confidence **85** as a whole
+- the unit is settled, the Doppler scale's own writer still is not.
 
 ### The two hardware volumes, and the table that makes them
 

@@ -112,8 +112,10 @@ enum Command {
     ///
     /// A cue's waveform count is what `Bank::cue_sounds` resolves through the
     /// command table; `loop` is the descriptor's own `+0x40` flag. Seconds are
-    /// at the rate `oag_game::audio::sfx` assumes, which is **not recovered** -
-    /// see `docs/formats/psp-audio.md`.
+    /// summed with each waveform at its own rate - the one its descriptor's
+    /// centre note keys it on with, `Sound::sample_rate` - and the distinct
+    /// rates a cue's waveforms play at are listed after them. See
+    /// `docs/formats/psp-audio.md`.
     Sounds {
         /// A `.wad` path, or `<image>:<path-on-disc>`.
         archive: String,
@@ -218,19 +220,38 @@ fn sounds(spec: &str, bank_filter: Option<&str>, cue_filter: Option<&str>) -> Re
             };
             let waveforms = parsed.cue_sounds(&cue);
             let looping = waveforms.iter().filter(|s| s.mode & 0x40 != 0).count();
-            let frames: usize = waveforms
+            // Each waveform at its own rate: a cue's alternates need not share
+            // one, so the total is a sum of seconds rather than of frames.
+            let seconds: f64 = waveforms
                 .iter()
-                .map(|s| (s.length as usize / sblk::ADPCM_BLOCK_LEN) * sblk::ADPCM_BLOCK_SAMPLES)
+                .map(|s| {
+                    let frames =
+                        (s.length as usize / sblk::ADPCM_BLOCK_LEN) * sblk::ADPCM_BLOCK_SAMPLES;
+                    frames as f64 / f64::from(s.sample_rate())
+                })
                 .sum();
+            let mut rates: Vec<u32> = waveforms.iter().map(sblk::Sound::sample_rate).collect();
+            rates.sort_unstable();
+            rates.dedup();
+            let rates = rates
+                .iter()
+                .map(u32::to_string)
+                .collect::<Vec<_>>()
+                .join("/");
             println!(
-                "    {:<18} cue {:>3}  cmds {:>3}..{:<3} {:>2} waveform(s), {} looping, {:.2}s total",
+                "    {:<18} cue {:>3}  cmds {:>3}..{:<3} {:>2} waveform(s), {} looping, {:.2}s total at {} Hz",
                 name.name,
                 name.cue,
                 cue.first_command,
                 cue.first_command + cue.commands,
                 waveforms.len(),
                 looping,
-                frames as f64 / f64::from(sblk::ASSUMED_SAMPLE_RATE),
+                seconds,
+                if rates.is_empty() {
+                    "-".to_string()
+                } else {
+                    rates
+                },
             );
         }
     }
