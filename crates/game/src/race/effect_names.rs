@@ -75,8 +75,9 @@ pub const MISSILE_FLARE_EFFECT: &str = "WO_MISSILE_HEAD";
 /// `Plasma_UpdateCharge`'s `(1.0 - remaining) * 0.75` scale, called through
 /// [`psys::Stage::rescale`] every tick alongside the `follow`, so the glow
 /// does grow as the shot charges - see that function's own doc comment for
-/// the fraction's exact shape, for the further `* 0.5` craft flag that is
-/// **not** ported (its meaning is unread), and for why a released bolt's
+/// the fraction's exact shape, for the further `* 0.5` on `craft+0x6d` - the
+/// internal/cockpit camera flag, read 2026-09-16 at 82 and ported as the
+/// function's `cockpit` argument - and for why a released bolt's
 /// flare freezes at `0.75` (the wind-up's own maximum) rather than resetting
 /// to `1.0`: `Plasma_Launch`'s recovered body writes no severity field, so
 /// nothing in it changes what `Plasma_UpdateCharge` last wrote. Verified by
