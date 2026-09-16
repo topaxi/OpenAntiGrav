@@ -56,8 +56,17 @@
   [`skycube.md`](../formats/skycube.md) and drawn camera-centred and out of depth
   by `oag_render::mesh::build_sky`). `fogCube` is **done** too - the runtime is
   recovered in [`fog.md`](../ghidra/functions/psp-pulse-usa/fog.md) and applied by
-  `oag_vex::fog` plus `mesh.wgsl`'s own bind group. The cloud and sea classes
-  are not implemented
+  `oag_vex::fog` plus `mesh.wgsl`'s own bind group. `cloudCube`/`cloudGroup` are
+  **decoded, not drawn** - `oag_vex::cloud` parses both (position, colour ramp,
+  sprite radius, the shared `Wipeout_Clouds_D_128x64x4.mip` texture), but the
+  original's `cloudGroup` draw handler builds a *rotating* per-instance
+  billboard whose exact phase/rate this project has not pinned down
+  ([`clouds.md`](../ghidra/functions/psp-pulse-usa/clouds.md)'s Open section),
+  and a renderer is real new GPU-pipeline work in `exhaust::Pipeline`'s
+  shape, not yet done. `sea`,
+  `seareflect` and `seaweed` author zero instances on either PSP Pulse
+  pressing, so there is nothing to implement for them on this title; unchecked
+  on Pure and PS2
 - Particle effects: thrust (**done** - the `Engine Flare` class plus its
   `Trail` ribbon and the `<Team>boost.vex` plume a speed pad reveals, all
   recovered in [`exhaust.md`](../ghidra/functions/psp-pulse-usa/exhaust.md) and

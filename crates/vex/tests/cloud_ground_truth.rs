@@ -245,3 +245,44 @@ fn sea_classes_author_no_instance_on_either_pulse_pressing() {
     }
     assert_eq!(total, 0);
 }
+
+/// `CloudGroup_Init` (`0x08933048`) loads this path once, shared by every
+/// `cloudGroup` instance - see `docs/ghidra/functions/psp-pulse-usa/clouds.md`.
+/// Checked here rather than only asserted in a doc comment: a renderer's first
+/// question is whether the asset is reachable at all.
+#[test]
+#[ignore = "needs data/images/pulse-psp-usa.chd; run with `just test-data`"]
+fn the_shared_cloud_texture_is_in_data_wad() {
+    let Some(path) = image("pulse-psp-usa.chd") else {
+        return;
+    };
+    let mut disc = DiscImage::open(&path).expect("open disc");
+    let data_wad_path = archive_path(&mut disc, "Data.wad");
+    let archive = disc
+        .entries()
+        .expect("entries")
+        .iter()
+        .find(|e| e.path == data_wad_path)
+        .expect("Data.wad")
+        .clone();
+    let header = disc
+        .read_entry_range(&archive, 0, wad::HEADER_LEN as u64)
+        .expect("header");
+    let count = Directory::peek_entry_count(&header).expect("entry count");
+    let dir_bytes = disc
+        .read_entry_range(&archive, 0, Directory::directory_len(count))
+        .expect("directory");
+    let dir = Directory::parse(&dir_bytes, Some(archive.size)).expect("parse directory");
+
+    let wanted = wad::hash_name(r"Data\Tex\Cloud\Wipeout_Clouds_D_128x64x4.mip");
+    let entry = dir.entries.iter().find(|e| e.name_hash == wanted);
+    assert!(
+        entry.is_some(),
+        "Data\\Tex\\Cloud\\Wipeout_Clouds_D_128x64x4.mip (hash {wanted:#010x}) is not in Data.wad - \
+         the path read out of the executable does not match a real entry"
+    );
+    println!(
+        "cloud texture: entry size {} byte(s)",
+        entry.expect("checked above").size
+    );
+}
