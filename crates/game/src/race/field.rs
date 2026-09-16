@@ -722,7 +722,13 @@ pub(super) fn advance_standings(world: &mut World, course: &Course) {
     // slot's `race[i].lap` is deliberately left alone: nothing reads it, and
     // syncing it would put a lap counter into the hash for seven craft that
     // never had one, which is a state change dressed as a refactor.
-    for slot in world.human_slots().collect::<Vec<_>>() {
-        world.race[slot].lap = world.ships[slot].standing.lap;
+    //
+    // Spelled out rather than `world.human_slots()`, which borrows the world
+    // the loop then writes to: collecting it first would put a heap allocation
+    // in the 60 Hz step to dodge a borrow. Same slot order, same single write.
+    for slot in 0..oag_gameplay::MAX_PLAYERS {
+        if world.controllers[slot].is_human() {
+            world.race[slot].lap = world.ships[slot].standing.lap;
+        }
     }
 }

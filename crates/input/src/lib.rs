@@ -448,13 +448,6 @@ impl Controls {
         &mut self.buttons[slot]
     }
 
-    /// One slot's button state, for a caller that means a craft rather than
-    /// the menu.
-    #[must_use]
-    pub fn buttons_of(&self, slot: usize) -> &Input {
-        self.buttons.get(slot).unwrap_or(&self.buttons[0])
-    }
-
     /// Whether the pad contributed anything to the last [`Self::snapshot`].
     ///
     /// What the composition root reads to decide that the pad, rather than

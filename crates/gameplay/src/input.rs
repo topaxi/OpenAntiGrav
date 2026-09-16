@@ -508,14 +508,6 @@ impl PlayerInputs {
             *entry = snapshot;
         }
     }
-
-    /// Every slot's snapshot, in slot order.
-    ///
-    /// Slot order because this can reach simulation state, the same argument
-    /// [`crate::World::human_slots`] makes about itself.
-    pub fn iter(&self) -> impl Iterator<Item = &InputSnapshot> {
-        self.slots.iter()
-    }
 }
 
 impl From<InputSnapshot> for PlayerInputs {
