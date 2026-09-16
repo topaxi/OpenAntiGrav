@@ -347,6 +347,16 @@ pub fn load(options: &Options) -> Result<Loaded> {
     let mine_model = body_model(MINE_MODEL_ENTRY, "a laid mine");
     let bomb_model = body_model(BOMB_MODEL_ENTRY, "a laid bomb");
     let cannon_model = body_model(CANNON_MODEL_ENTRY, "a cannon round");
+    // The Plasma's own detonation - see `PLASMA_BLAST_HALO_MODEL_ENTRY`.
+    let plasma_blast_halo_model = body_model(PLASMA_BLAST_HALO_MODEL_ENTRY, "a plasma blast halo");
+    let plasma_blast_hemisphere1_model = body_model(
+        PLASMA_BLAST_HEMISPHERE1_MODEL_ENTRY,
+        "a plasma blast hemisphere",
+    );
+    let plasma_blast_hemisphere2_model = body_model(
+        PLASMA_BLAST_HEMISPHERE2_MODEL_ENTRY,
+        "a plasma blast hemisphere",
+    );
     // The cockpit half of the shield, on the same terms and for the same
     // reason: not per team, not per track, one entry for every craft in the
     // game. The shell beside it *is* per team and loads with the livery above.
@@ -986,6 +996,9 @@ pub fn load(options: &Options) -> Result<Loaded> {
         cannon_model,
         mine_model,
         bomb_model,
+        plasma_blast_halo_model,
+        plasma_blast_hemisphere1_model,
+        plasma_blast_hemisphere2_model,
         shield_cockpit,
         countdown_model,
         visibility,

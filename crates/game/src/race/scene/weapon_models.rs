@@ -129,6 +129,58 @@ impl super::Scene {
     }
 }
 
+impl super::Scene {
+    /// Writes this tick's transform and anim-time scrub onto every live
+    /// Plasma blast's three drawables, and hands back which slots are live
+    /// so the caller knows which to draw.
+    ///
+    /// **Sparse, unlike [`Self::write_weapon_models`]'s four pools.** A
+    /// projectile pool swap-removes to keep its live entries packed from
+    /// slot 0, so those four are bounded by a simple live *count*; a blast
+    /// frees its own slot the moment [`blast_models::PLASMA_BLAST_LIFETIME_SECONDS`]
+    /// runs out, independent of every other slot, so this hands back which
+    /// slots are live rather than how many.
+    ///
+    /// **One `matrix` writes all three drawables** - see
+    /// [`blast_models::PlasmaBlastDraw`]'s own doc comment for why - so only
+    /// the anim-time scrub passed to [`Drawable::write_node_anims`] differs
+    /// per model.
+    ///
+    /// **No previous-frame matrix is tracked for this pool**, so a blast
+    /// draws with no motion blur of its own: `prev_mvp` is passed as this
+    /// frame's own `view_projection * matrix`, which zeroes the shader's
+    /// velocity term rather than smearing from a frame this pool never
+    /// recorded. **Chosen, not measured** - a short-lived effect the camera
+    /// is rarely tracking directly, against the cost of a second matrix
+    /// array only this pool would need.
+    pub(super) fn write_plasma_blasts(
+        &self,
+        race: &Race,
+        queue: &wgpu::Queue,
+        view_projection: Mat4,
+    ) -> [bool; blast_models::PLASMA_BLAST_SLOTS] {
+        let draws = race.plasma_blast_draws(race.camera_position());
+        let mut active = [false; blast_models::PLASMA_BLAST_SLOTS];
+        for (slot, draw) in draws.iter().enumerate() {
+            let Some(draw) = draw else { continue };
+            active[slot] = true;
+            let mvp = view_projection * draw.matrix;
+            for (drawables, seconds) in [
+                (&self.plasma_blast_halo, draw.halo_seconds),
+                (&self.plasma_blast_hemisphere2, draw.hemisphere2_seconds),
+                (&self.plasma_blast_hemisphere1, draw.hemisphere1_seconds),
+            ] {
+                let Some(drawable) = drawables.get(slot) else {
+                    continue;
+                };
+                drawable.write(queue, view_projection, draw.matrix, mvp);
+                drawable.write_node_anims(queue, seconds);
+            }
+        }
+        active
+    }
+}
+
 /// One kind's own write loop - the shared body of
 /// [`super::Scene::write_weapon_models`]'s four calls.
 fn write_one_kind(

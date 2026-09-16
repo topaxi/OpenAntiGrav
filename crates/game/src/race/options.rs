@@ -596,6 +596,14 @@ pub struct Loaded {
     /// The model a laid Bomb is drawn as: [`BOMB_MODEL_ENTRY`]. `None` on the
     /// same terms.
     pub bomb_model: Option<Model>,
+    /// The Plasma's own detonation: a halo and two hemispheres, each `None`
+    /// on the same terms as [`Self::rocket_model`] - see
+    /// [`PLASMA_BLAST_HALO_MODEL_ENTRY`].
+    pub plasma_blast_halo_model: Option<Model>,
+    /// See [`Self::plasma_blast_halo_model`].
+    pub plasma_blast_hemisphere1_model: Option<Model>,
+    /// See [`Self::plasma_blast_halo_model`].
+    pub plasma_blast_hemisphere2_model: Option<Model>,
     /// The sphere a fired Shield shows from **inside** the cockpit, drawn
     /// instead of the per-team shell when the camera is in the craft.
     ///

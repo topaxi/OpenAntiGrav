@@ -157,6 +157,19 @@ pub struct Scene {
     /// `Data\Weapons\pulse_muzzleflash.vex` did not load, and a round then
     /// draws as nothing rather than as an invented stand-in.
     cannon_rounds: Vec<Drawable>,
+    /// The Plasma's own detonation: one drawable per render-side blast slot,
+    /// for each of the three models. See `blast_models` for that pool - it
+    /// is sized the same as [`Self::rockets`] but indexed independently of
+    /// the projectile pool, because a blast outlives the bolt that made it.
+    /// Empty, on the same terms as [`Self::rockets`], when this model's own
+    /// entry did not load.
+    plasma_blast_halo: Vec<Drawable>,
+    /// See [`Self::plasma_blast_halo`]; drawn second, matching
+    /// `PlasmaBlast_Construct`'s own load order.
+    plasma_blast_hemisphere2: Vec<Drawable>,
+    /// See [`Self::plasma_blast_halo`]; drawn third, matching
+    /// `PlasmaBlast_Construct`'s own load order.
+    plasma_blast_hemisphere1: Vec<Drawable>,
     /// Each slot's own plume's authored texture-transform keyframes, sampled
     /// per frame and applied to that plume's authored UVs - the recovered
     /// mechanism (`TEXMAPMODE` 0 plus the animated `TEXOFFSET` u-scroll; see
@@ -338,6 +351,9 @@ impl Scene {
         mine_model: Option<Model>,
         bomb_model: Option<Model>,
         cannon_model: Option<Model>,
+        plasma_blast_halo_model: Option<Model>,
+        plasma_blast_hemisphere1_model: Option<Model>,
+        plasma_blast_hemisphere2_model: Option<Model>,
         shield_cockpit: Option<Model>,
         flare: Option<FlareTexture>,
         noise: Option<FlareTexture>,
@@ -881,6 +897,13 @@ impl Scene {
         let mines = weapon_drawables(mine_model)?;
         let bombs = weapon_drawables(bomb_model)?;
         let cannon_rounds = weapon_drawables(cannon_model)?;
+        // Built the same way as the four above, on the same pool-of-slots
+        // shape `weapon_models::build` already gives every weapon model -
+        // see `blast_models` for why the three share one transform per slot
+        // rather than each carrying its own.
+        let plasma_blast_halo = weapon_drawables(plasma_blast_halo_model)?;
+        let plasma_blast_hemisphere1 = weapon_drawables(plasma_blast_hemisphere1_model)?;
+        let plasma_blast_hemisphere2 = weapon_drawables(plasma_blast_hemisphere2_model)?;
         // 64 is a stand-in size only, and only when the disc's own texture did not
         // decode; `load` has already reported that when it happens.
         let flare = flare.unwrap_or_else(|| FlareTexture::placeholder(64));
@@ -974,6 +997,9 @@ impl Scene {
             mines,
             bombs,
             cannon_rounds,
+            plasma_blast_halo,
+            plasma_blast_hemisphere1,
+            plasma_blast_hemisphere2,
             boost_uv_transforms,
             collision,
             sky,

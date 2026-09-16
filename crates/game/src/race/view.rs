@@ -202,6 +202,11 @@ pub struct RaceView {
     /// only the player's own craft is followed; see
     /// [`Race::advance_leach_beam_visual`].
     pub(super) leach_charge_effect: Option<psys::Playing>,
+    /// The Plasma's own render-side detonation instances, one per
+    /// [`blast_models::PLASMA_BLAST_SLOTS`] - see that module's own doc
+    /// comment for why this lives here rather than in `World`, and
+    /// [`Race::spawn_plasma_blast_model`] for what fills a slot.
+    pub(super) plasma_blasts: [Option<blast_models::PlasmaBlast>; blast_models::PLASMA_BLAST_SLOTS],
     /// The stage's generator, deliberately **not** `world.rng` - see
     /// [`Self::exhaust_rng`].
     pub(super) stage_rng: Rng,

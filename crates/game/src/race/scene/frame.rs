@@ -431,6 +431,10 @@ impl Scene {
         oag_render::perfprobe::mark("ship+shield-write");
         let (rocket_matrices, mine_matrices, bomb_matrices, cannon_matrices) =
             self.write_weapon_models(race, &prev, queue, view_projection, prev_vp);
+        // The Plasma's own detonation - a fifth model kind, but a sparse one
+        // (see `write_plasma_blasts`'s own doc comment), so it hands back
+        // which slots are live rather than a live count.
+        let plasma_blast_active = self.write_plasma_blasts(race, queue, view_projection);
         // Same model matrix as the ship: the original parents the plume to the
         // craft, not to the flare - see `Loaded::boost_model`. Skipped while
         // hidden rather than written and left undrawn, since there is nothing
@@ -846,6 +850,23 @@ impl Scene {
         }
         for drawable in self.cannon_rounds.iter().take(cannon_matrices.len()) {
             stats.add(drawable.draw(&mut pass, None, None, None, None));
+        }
+        // The Plasma's own detonation - sparse, unlike the four above, so
+        // bounded by which slots `write_plasma_blasts` says are live rather
+        // than by a matrix count.
+        for (slot, active) in plasma_blast_active.into_iter().enumerate() {
+            if !active {
+                continue;
+            }
+            for drawables in [
+                &self.plasma_blast_halo,
+                &self.plasma_blast_hemisphere2,
+                &self.plasma_blast_hemisphere1,
+            ] {
+                if let Some(drawable) = drawables.get(slot) {
+                    stats.add(drawable.draw(&mut pass, None, None, None, None));
+                }
+            }
         }
         // After the ships, so the hulls' depth is already in the buffer: a
         // plume's own blend pipeline writes no depth, the same reasoning as
