@@ -26,28 +26,44 @@ position.
 # `CRAFT_POINTER_NOT_LOCATED` below for what that actually costs.
 SHIP_UPDATE_CRAFT = 0x001596F8
 
-# **Not yet located, and this is the real gap.** Every offset in this file is
-# relative to a live craft pointer, and nothing here says how to find one
-# without already having it: PPSSPP's capture reads it straight off the `a0`
-# register at a breakpoint on `Ship_UpdateCraft`'s entry, and PINE exposes no
-# CPU registers at all - memory read/write and savestates only
-# (`docs/reverse-engineering/pcsx2-debugger.md`). `scripts/pcsx2-trace.py`
-# therefore takes the craft pointer as a required `--craft` argument rather
-# than discovering it, and the address is only good for the savestate it was
-# found under - PCSX2's savestate loading is bit-exact
-# (`pcsx2-debugger.md`'s "Deterministic capture" section), so a fixed grid
-# save's craft address is a fixed address, but a different save or a fresh
-# boot is a different heap layout and a different one.
+# **No automatic way to find one - PINE exposes no CPU registers at all**
+# (`docs/reverse-engineering/pcsx2-debugger.md`), so there is nothing
+# equivalent to PPSSPP's breakpoint-and-read-`a0`. `scripts/pcsx2-trace.py`
+# takes the craft pointer as a required `--craft` argument, and the address
+# is only good for the savestate it was found under - PCSX2's savestate
+# loading is bit-exact, so a fixed grid save's craft address is a fixed
+# address, but a different save or a fresh boot may give a different one.
 #
-# `docs/reverse-engineering/pcsx2-debugger.md`'s own "what is worth doing
-# next" item 2 names this exact gap: "the ship state block is the obvious
-# first target and is not yet located in the PS2 corpus." Finding it once is
-# a live session: pause on the grid, and either walk a known-shape memory
-# scan (a position near the track's own start line, cross-referenced against
-# `oag-trace track`'s spline output) or diff EE RAM the way the frame counter
-# itself was found - a word that moves along `velocity` while the ship
-# accelerates, the same technique that found `FRAME_COUNTER` in
-# `pcsx2-drive.py`.
+# **A live session on 2026-09-16 found one and the method is now proven
+# fast**, not just sketched: from a savestate on the grid, anchor twice with
+# `pcsx2-drive.py frames N --from-state <slot>` - once holding `cross` for
+# `N` frames, once holding nothing - and diff the two resulting memory images
+# word for word. Every AI-controlled and every static/authored value is
+# bit-identical between the two runs (PCSX2's frame-advance is verified
+# deterministic, so nothing but the player's own input differs), which cut a
+# naive "diff two snapshots of one run" search - thousands of plausible
+# vector-shaped false positives, mostly other craft and track/camera data -
+# down to **1,743 differing words out of 2,097,152** on this session's grid
+# save. Filtering those for a lone scalar reading ~0 at rest, a plausible
+# speed after 30 frames of thrust, and ~0 again after 30 frames of nothing
+# held found exactly `craft+0x320` (`speed_cached`, already known) plus one
+# more candidate 1000 bytes earlier - `craft = candidate - 0x320`. Confirmed,
+# not just plausible, by three independent checks at that address: the
+# cached basis at `craft+0x180/0x190/0x1a0` came back orthonormal and
+# matched `body+0x00/0x10/0x20` read through `craft+0x1ec` bit for bit; the
+# body's own position read `(x, 4.004, z)` - within 0.06% of the PSP's own
+# independently-established hover height of 3.978-4.002
+# (`oag-trace.md`'s "the suspension was never the problem" section); and the
+# controls block through `craft+0x98` read every axis and the button mask as
+# exactly zero, matching a craft at rest with nothing held.
+#
+# **On this session's grid savestate, `craft = 0x00720f20`.** This is
+# instance data, not a structural fact - a different savestate, a different
+# boot, or a different disc region may give a different address, and it does
+# not belong in `craft-update.md` or `names.tsv` for that reason. It is
+# recorded here only as a worked example of the method, and because a
+# savestate slot loaded on the same machine without a fresh boot in between
+# is likely, though not guaranteed, to reproduce it.
 CRAFT_POINTER_NOT_LOCATED = True
 
 # The body pointer, craft-relative. Confirmed live in
@@ -56,25 +72,54 @@ CRAFT_POINTER_NOT_LOCATED = True
 # `BODY_POINTER` (PSP: `craft+0x1cc`) - a different offset, the same role.
 BODY_POINTER = 0x1EC
 
-# Confirmed craft-relative offsets, all from craft-update.md, all cited where
-# they appear on that page. **Deliberately partial**: `steer` and `brake`'s
-# own ramped, persisted state - the values `Ship_UpdateSteering` and
-# `Ship_UpdateBrakes` write back each frame - are never assigned a craft
-# offset anywhere on that page, only described as local pseudocode variables,
-# and a search of `names.tsv`/`handling-xml.md`/`README.md` for the same
-# binary turns up nothing further. Guessing an offset for either is exactly
-# what ADR-0005 (below 50 confidence, do not rename at all - the same rule
-# applied to data, not just functions) exists to prevent, so neither is here.
-# `scripts/pcsx2-trace.py` writes both as `0.0` with a loud warning rather
-# than a plausible-looking number.
+# Confirmed craft-relative offsets. Most are cited against craft-update.md
+# directly; `steer` and `brake` are not - that page only ever shows them as
+# local pseudocode variables in `Ship_UpdateSteering`/`Ship_UpdateBrakes`,
+# never assigned a craft offset, and a search of
+# `names.tsv`/`handling-xml.md`/`README.md` turned up nothing further. Both
+# are now confirmed anyway, live, on 2026-09-16, by the same session that
+# found `craft` itself (see `CRAFT_POINTER_NOT_LOCATED` above) - not from
+# reading more decompiled code, but from diffing the craft block itself
+# across a held input and back out again:
 #
-# `dt` has the same problem for a different reason: nothing on this page
-# gives it a craft offset either, and unlike `steer`/`brake` there may be no
-# offset to find - the PSP measures a real per-frame duration
-# (ADR-0007), and whether the PS2 build does the same or integrates a fixed
-# PAL step has not been checked. `scripts/pcsx2-trace.py` writes a fixed
-# `1/50` (the PAL rate this title boots at, confirmed live) and says so on
-# every capture; that is a stated assumption; not a measurement.
+# - **`steer` (`craft+0x2f0`)**: reads exactly `0.0` at rest, ramps to
+#   `-64.425` after 20 verified frames holding `left`, ramps to **exactly**
+#   `+64.425` after 20 frames holding `right` from the same anchor (the sign
+#   flip is exact, not approximate - the same magnitude both signs), and
+#   decays back to exactly `0.0` within 60 frames of releasing. All three
+#   match `Ship_UpdateSteering`'s pseudocode verbatim: ramps from zero,
+#   symmetric about centre, "clamped to exactly 0" on release. Confidence
+#   90 - four independent live measurements, all consistent, no ambiguity
+#   about which of a handful of candidates it could be (it was the only word
+#   in the whole craft block that moved this way under `left`/`right`).
+# - **`brake` (`craft+0x2ec`)**: reads `0.0` at rest, ramps smoothly to
+#   `35.4` after 20 frames holding **both** `l1` and `r1` together (not a
+#   snap to a fixed value the way `airbrake_l`/`airbrake_r` at
+#   `craft+0x2d8`/`craft+0x2dc` do, which is what told it apart from six
+#   other candidates that also moved under the same input), reaches exactly
+#   `100.0` by 60 frames (the documented clamp), decays to exactly `0.0`
+#   within 60 frames of release, and - the decisive check -  **stays at
+#   `0.0` for 20 frames holding `l1` alone**, matching
+#   `Ship_UpdateBrakes`'s `controls[0x08] > 0 && controls[0x0c] > 0` gate
+#   exactly: one airbrake does nothing, both together ramp it. Confidence
+#   90, same basis as `steer`.
+#
+# `dt` is different again: nothing on craft-update.md gives it a craft
+# offset either, and there is no register read on this transport to fall
+# back on (PINE exposes memory and savestates only). The same 2026-09-16
+# session found indirect evidence for the fixed-PAL-step assumption
+# `scripts/pcsx2-trace.py` already made: comparing all of EE RAM across one
+# single verified frame-advance, 58 words read exactly `0.02` (`1/50`) and
+# **none** of them changed - and no word anywhere in the 0.01-0.03 range
+# changed at all between the two frames. That is consistent with a fixed
+# step and is not proof of one: this transport only ever advances in
+# whole verified frames regardless of real elapsed wall-clock time between
+# taps, so a *measured* dt reading a hardware timer tied to the emulated
+# video clock could look identically stable under this exact test even if
+# the original genuinely measures. No craft offset was identified for
+# whichever of the 58 words (if any) is the real one, so this remains an
+# assumption - now an evidence-backed one, confidence 55, not a confirmed
+# reading.
 CRAFT_FIELDS = [
     # `up` axis, from `Ship_ApplyVerticalDamping`'s `lqc2 vf2,0x180(a0)` and
     # `Ship_HoverFourCorner`'s hover-spring call site, both reading the same
@@ -109,6 +154,8 @@ CRAFT_FIELDS = [
     # The two airbrake state values, from `Ship_ApplyLateralGrip`'s
     # `max(craft+0x2d8, craft+0x2dc)`.
     ("airbrake_l", 0x2D8), ("airbrake_r", 0x2DC),
+    # `brake`, confirmed live 2026-09-16 - see the comment above this table.
+    ("brake", 0x2EC),
     # The grounded **fraction** (0..1, four-corner hover accumulates +0.25 per
     # contacting probe), read directly in `Ship_ApplyVerticalDamping` and
     # `Ship_ApplyGravity`. This is `REQUIRED_COLUMNS`' `grounded` - the PS2
@@ -119,6 +166,8 @@ CRAFT_FIELDS = [
     # the PS2 layout (the PSP's craft+0x2ec)", from the quadratic-drag
     # section. `REQUIRED_COLUMNS`' `speed_cached`.
     ("speed_cached", 0x320),
+    # `steer`, confirmed live 2026-09-16 - see the comment above this table.
+    ("steer", 0x2F0),
 ]
 
 # The controls block, craft-relative pointer at `craft+0x98` - "every control

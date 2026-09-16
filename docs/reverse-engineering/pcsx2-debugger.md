@@ -421,6 +421,38 @@ Confidence that it advances exactly once per emulated frame: 90, from four
 verified steps plus 20 further single-step observations. Confidence in any
 particular meaning: not offered.
 
+### One verified frame is one video field, not one game tick
+
+`scripts/pcsx2-trace.py`'s first real capture (2026-09-16) found this the
+hard way: five independent craft/body fields - position, velocity, angular
+velocity, `speed_cached`, `throttle` - read **bit-identical** across one
+verified `frames 1` step and only changed on every *other* one, over 20
+consecutive steps. Not "close" - `%.7g`-formatted values matching to seven
+significant figures on the stale rows, the kind of exact repeat that only
+happens when nothing recomputed them at all.
+
+PAL is confirmed interlaced (`Interlaced (FIELD)` in PCSX2's own boot log,
+`docs/tools/oag-trace.md`'s boot session), which is the natural explanation:
+`FRAME_COUNTER` above almost certainly counts video **fields** at 50 Hz,
+while `Ship_UpdateCraft` runs once per video **frame** - 25 Hz, half the
+step rate this whole page's frame-advance measurements are keyed on.
+Confidence 85: five fields, all independently addressed, all agreeing on
+which steps are real and which are stale, across one continuous 20-step
+run - not yet cross-checked against a second capture or a second craft.
+
+**This does not invalidate anything else on this page.** Every
+`advance_frames` measurement here is about whether a *requested number of
+verified steps* lands exactly - it does, regardless of what the game does
+with any given step. What it changes is how a caller should read a capture
+taken one step at a time: `scripts/pcsx2-trace.py` now steps two verified
+frames per recorded row (`PHYSICS_STEP_FRAMES = 2`) so that every row is a
+real tick rather than half of them reading as the craft going motionless.
+An earlier same-session check for whether `dt` is measured or fixed - a
+memory diff across one verified step that found 58 words reading a stable
+`0.02` - is superseded by this finding: that test most likely straddled a
+field pair with no real tick in it either, so it is not evidence about the
+true per-tick `dt`, which would be nearer `0.04` if fixed at all.
+
 ## Steering from a plan, not a human
 
 `--hold cross` alone cannot reach anywhere that needs a turn - it is throttle

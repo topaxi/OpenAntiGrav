@@ -5,14 +5,28 @@ The PS2 sibling of `scripts/psp-trace.py`. PPSSPP's capture breaks on
 `Ship_UpdateCraft` and reads a register; PCSX2's PINE transport has no
 breakpoint and no register read at all
 (`docs/reverse-engineering/pcsx2-debugger.md`), so this drives PCSX2's own
-**verified** frame-advance instead - `scripts/pcsx2-drive.py frames 1`, once
-per tick, which that page measures as bit-exact and pixel-identical across
-repeated runs from the same savestate. That is a stronger determinism
-guarantee than PPSSPP's breakpoint gives, at a similar cost: about three
-verified frames a second, so a few hundred ticks is a few minutes.
+**verified** frame-advance instead - `scripts/pcsx2-drive.py frames
+PHYSICS_STEP_FRAMES`, once per game tick, which that page measures as
+bit-exact and pixel-identical across repeated runs from the same savestate.
+That is a stronger determinism guarantee than PPSSPP's breakpoint gives, at
+a similar cost: about one and a half verified game ticks a second, so a few
+hundred ticks is a few minutes.
 
-Two things this script cannot yet give you, and says so on every capture
-rather than inventing them - see `scripts/pcsx2_trace_fields.py` for the
+**One PCSX2-verified frame is not one game tick.** Found live 2026-09-16,
+from the first real capture: five independent fields (position, velocity,
+angular velocity, `speed_cached`, `throttle`) came back bit-identical across
+one verified `frames 1` step and only changed on every *other* one - PAL is
+confirmed interlaced (`Interlaced (FIELD)` in PCSX2's own boot log), so
+`FRAME_COUNTER` almost certainly counts video **fields** at 50 Hz while
+`Ship_UpdateCraft` runs once a video **frame**, 25 Hz. This script steps
+`PHYSICS_STEP_FRAMES = 2` verified frames per captured row, so every row is
+a real tick rather than half of them being an exact duplicate of the row
+before - see `pcsx2_trace_fields.py` for the full finding, since a duplicate
+row would read as the craft going motionless rather than as "nothing
+happened here."
+
+One thing this script still cannot give you, and says so on every capture
+rather than inventing it - see `scripts/pcsx2_trace_fields.py` for the
 citations:
 
 - **`--craft` is required.** No known static memory location holds the
@@ -20,15 +34,22 @@ citations:
   PPSSPP's breakpoint hands one over for free. Find it once per savestate (it
   is a heap address, fixed for as long as that particular savestate is what
   every capture starts from - PCSX2's `loadstate` is bit-exact) and pass it
-  every time.
-- **`steer` and `brake` are always written as `0.0`, and `dt` is always a
-  fixed `1/50`.** Neither ramped control's craft offset has been located in
-  the PS2 corpus, and whether the game measures a real frame duration or
-  integrates a fixed PAL step has not been checked either. A capture taken
-  with this script cannot be used to verify steering or braking, and is
-  measuring `dt` against an assumption, not a memory read. Both facts are
-  written into the CSV's own header comment as well as printed here, because
-  a CSV outlives the terminal it came from.
+  every time; `scripts/pcsx2_trace_fields.py`'s `CRAFT_POINTER_NOT_LOCATED`
+  comment has the method, live-proven 2026-09-16 (a thrust-vs-coast memory
+  diff from a savestate cuts the search to a few thousand candidate words).
+
+`steer` and `brake` are confirmed and read live as of 2026-09-16
+(`craft+0x2f0`/`craft+0x2ec`) - both ramp symmetrically from and decay
+exactly to `0.0`, matching `Ship_UpdateSteering`/`Ship_UpdateBrakes`'s own
+pseudocode. **`dt` is still an assumption, now `2/50` rather than `1/50`,
+and still not a memory read**: PINE has no register read on this transport
+at all, so there is still no way to confirm what the game itself integrates
+- an earlier same-session check that found 58 words reading a stable `0.02`
+across one verified step is superseded by the finding above, since that test
+most likely straddled a field pair with no real tick in it either and proves
+nothing about the true per-tick `dt`. Written into the CSV's own header
+comment as well as printed here, because a CSV outlives the terminal it
+came from.
 
     python3 scripts/pcsx2-trace.py --craft 0x0a1b2c00 --from-state 1 \\
         --script verification/scenarios/steer-both-ways.inputs \\
@@ -66,11 +87,29 @@ DRIVE_SCRIPT = Path(__file__).resolve().parent / "pcsx2-drive.py"
 # rather than `l`/`r`. Every other name is identical on both sides.
 DRIVE_BUTTON_NAME = {"l": "l1", "r": "r1"}
 
-# PS2 Pulse boots PAL - confirmed live this session (`UpdateVSyncRate: Mode
-# Changed to PAL`, `Frame rate: 50`) - which is the only evidence behind this
-# constant. It is a stated assumption about what `dt` the *game* integrates,
-# not a measurement of it; see the module docstring.
-ASSUMED_DT = 1.0 / 50.0
+# **The game's physics tick runs at half PCSX2's own verified-frame rate.**
+# Found live 2026-09-16, from the first real capture: five independent
+# fields (position, velocity, angular velocity, `speed_cached`, `throttle`)
+# read bit-identical across one verified `pcsx2-drive.py frames 1` step and
+# only change on every *other* one - PAL is confirmed interlaced
+# (`Interlaced (FIELD)` in PCSX2's own boot log), so `FRAME_COUNTER` is
+# almost certainly counting video **fields** at 50 Hz while
+# `Ship_UpdateCraft` runs once a video **frame**, 25 Hz. Stepping 1 frame per
+# row (the original design) therefore wrote a real row and a duplicate row
+# alternately - not merely redundant, actively wrong, since a duplicate row
+# reads as the craft going motionless for a tick rather than as "nothing
+# happened here." `PHYSICS_STEP_FRAMES` steps two verified frames per
+# captured row so every row is a real tick, and `ASSUMED_DT` is `2 * 1/50`
+# to match. Both are still an assumption about what the game itself
+# integrates - PINE has no register read, so there is still no way to
+# confirm `dt` against the argument `Ship_UpdateCraft` actually receives -
+# but now correctly scaled to the tick this capture actually samples,
+# corroborated by five fields at once rather than the single earlier
+# same-session check (a one-step-apart memory diff that found 58 words
+# reading a stable `0.02`) which this finding retroactively casts doubt on:
+# that test likely straddled a field pair with no real update in it either.
+PHYSICS_STEP_FRAMES = 2
+ASSUMED_DT = PHYSICS_STEP_FRAMES / 50.0
 
 # Byte lengths of the three blocks this script reads in one `read_bytes` call
 # each - past the highest offset any of CRAFT_FIELDS / BODY_FIELDS /
@@ -100,10 +139,11 @@ REQUIRED_ORDER = [
 ]
 
 HEADER_COMMENT = (
-    "# pcsx2-trace.py: steer and brake are always 0.0 (the ramped control "
-    "state's craft offset is not yet located in the PS2 corpus); dt is a "
-    "fixed 1/50 (PAL), assumed rather than read; speed is |velocity| computed "
-    "at write time, not a memory read. See scripts/pcsx2_trace_fields.py."
+    "# pcsx2-trace.py: each row is PHYSICS_STEP_FRAMES=2 verified PCSX2 "
+    "frames (one game tick at PAL's interlaced 25 Hz, not one video field "
+    "at 50 Hz); dt is a fixed 2/50, an assumption rather than a memory read "
+    "(PINE has no register access); speed is |velocity| computed at write "
+    "time, not a memory read. See scripts/pcsx2_trace_fields.py."
 )
 
 
@@ -125,8 +165,8 @@ def drive_buttons(state):
     return [DRIVE_BUTTON_NAME.get(name, name) for name in state.held_names()]
 
 
-def step_one_frame(pine_slot, counter, buttons, from_state=None):
-    """One verified frame, via `pcsx2-drive.py frames 1`. Raises on failure.
+def step_one_tick(pine_slot, counter, buttons, from_state=None):
+    """One verified **game** tick, via `pcsx2-drive.py frames PHYSICS_STEP_FRAMES`.
 
     Shelling out rather than importing: `pcsx2-drive.py`'s hyphen makes it
     unimportable (the same reason `psp_trace_fields.py`'s own docstring
@@ -138,7 +178,7 @@ def step_one_frame(pine_slot, counter, buttons, from_state=None):
     """
     command = [
         sys.executable, str(DRIVE_SCRIPT), "--slot", str(pine_slot),
-        "frames", "1", "--counter", "0x%x" % counter,
+        "frames", str(PHYSICS_STEP_FRAMES), "--counter", "0x%x" % counter,
     ]
     if buttons:
         command.append("--hold")
@@ -188,8 +228,8 @@ def read_tick(pine, craft, tick, dt):
         "dt": dt,
         "grounded": craft_values["grounded"],
         "throttle": controls_values["throttle"],
-        "brake": 0.0,
-        "steer": 0.0,
+        "brake": craft_values["brake"],
+        "steer": craft_values["steer"],
         "airbrake_l": craft_values["airbrake_l"],
         "airbrake_r": craft_values["airbrake_r"],
         "speed_cached": craft_values["speed_cached"],
@@ -197,6 +237,7 @@ def read_tick(pine, craft, tick, dt):
     }
     for name in ("right_x", "right_y", "right_z", "up_x", "up_y", "up_z",
                  "fwd_x", "fwd_y", "fwd_z", "pos_x", "pos_y", "pos_z",
+                 "vel_x", "vel_y", "vel_z",
                  "avel_x", "avel_y", "avel_z", "omega_x", "omega_y", "omega_z"):
         row[name] = body_values[name]
     return row
@@ -259,9 +300,10 @@ def main():
 
     ticks = args.ticks if args.ticks is not None else (len(states) or 300)
 
-    print("WARNING: steer and brake will be recorded as 0.0 (not yet "
-          "located on the PS2); dt is a fixed 1/50, assumed rather than "
-          "measured. See scripts/pcsx2_trace_fields.py.", file=sys.stderr)
+    print("WARNING: dt is a fixed 2/50 (one game tick = %d verified PCSX2 "
+          "frames), an assumption rather than a memory read. See "
+          "scripts/pcsx2_trace_fields.py." % PHYSICS_STEP_FRAMES,
+          file=sys.stderr)
 
     # `pcsx2-drive.py`'s own `FRAME_COUNTER` default, duplicated as a literal
     # rather than imported - the hyphenated filename cannot be imported (see
@@ -276,7 +318,7 @@ def main():
 
         buttons = [DRIVE_BUTTON_NAME.get(b, b) for b in args.warmup_hold]
         for i in range(args.warmup):
-            step_one_frame(args.slot, counter, buttons,
+            step_one_tick(args.slot, counter, buttons,
                            from_state=args.from_state if i == 0 else None)
         anchor_state = args.from_state if args.warmup == 0 else None
 
@@ -287,7 +329,7 @@ def main():
                 buttons = drive_buttons(state)
             else:
                 buttons = [DRIVE_BUTTON_NAME.get(b, b) for b in args.hold]
-            step_one_frame(args.slot, counter, buttons,
+            step_one_tick(args.slot, counter, buttons,
                            from_state=anchor_state if tick == 0 else None)
             row = read_tick(pine, args.craft, tick, ASSUMED_DT)
             print(",".join("%.7g" % row[name] for name in REQUIRED_ORDER), file=out)

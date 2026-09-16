@@ -213,6 +213,12 @@ OsdShowFPS = false
 OsdShowIndicators = false
 OsdShowMessages = {osd_messages}
 
+[SPU2/Output]
+; A scripted run has no listener and no reason to reach the host's speakers -
+; without this PCSX2 inherits its own unmuted default and every automated
+; boot plays audio out loud.
+OutputMuted = true
+
 [Logging]
 EnableFileLogging = true
 EnableTimestamps = true

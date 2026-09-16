@@ -1186,9 +1186,47 @@ unit(v)` would apply a 2-unit shove to a nearly stationary ship. Confidence
 - **Which frame `body+0x150` and `body+0x160` are each expressed in.** The
   matrix at `body+0x80` maps the second onto the first; it is a rotation, so it
   cannot change a sign, but it was not identified.
-- **Nothing here was verified at runtime.** The convention result is the one
-  claim on this page with a runtime leg, and that leg is a measurement on the
-  *other* build.
+- **Nothing here was verified at runtime**, except the two fields below,
+  added 2026-09-16 - everything else on this page is still decompilation
+  without a trace.
+
+## `steer` and `brake`, found live rather than read
+
+Neither field is assigned a craft offset anywhere above - [the steering
+section](#steering---identical-including-the-reverse-controls-blend) and
+[the brakes section](#the-control-terms) both show `steer`/`brake` only as
+local pseudocode variables. A live PCSX2 session (`scripts/pcsx2-trace.py`,
+`docs/reverse-engineering/pcsx2-debugger.md`) found both by diffing the
+craft block across a held input rather than by reading more code, on a
+savestate taken on Moa Therma White's grid.
+
+**`steer` is `craft+0x2f0`.** From rest (`0.0`) it ramps to `-64.425` after
+20 verified frames holding `left` and to **exactly** `+64.425` after 20
+frames holding `right` from the same anchor - the same magnitude both
+signs - and decays to exactly `0.0` within 60 frames of release. All three
+match [`Ship_UpdateSteering`](#steering---identical-including-the-reverse-controls-blend)'s
+pseudocode verbatim: ramps from zero, symmetric about centre, clamped to
+exactly `0` at rest. Confidence **90**: it was the only word in the whole
+craft block (`0x000`-`0x330`) that moved this way under `left`/`right`, and
+four independent live measurements agree.
+
+**`brake` is `craft+0x2ec`.** From rest it ramps smoothly to `35.4` after 20
+frames holding **both** `l1` and `r1` (not a snap to a fixed value the way
+`airbrake_l`/`airbrake_r` at `craft+0x2d8`/`craft+0x2dc` do - the six other
+candidate words that also moved under the same input all jumped straight to
+`100.0`, which is what told this one apart), reaches exactly `100.0` by 60
+frames (the documented clamp), decays to exactly `0.0` within 60 frames of
+release, and - the decisive check - **stays at `0.0` for 20 frames holding
+`l1` alone**. That last one matches
+[`Ship_UpdateBrakes`](#the-control-terms)'s `controls[0x08] > 0 &&
+controls[0x0c] > 0` gate exactly: one airbrake does nothing, both together
+ramp it. Confidence **90**, same basis as `steer`.
+
+Both offsets, and the method that found them, are recorded with full
+citations in `scripts/pcsx2_trace_fields.py`. The craft address itself
+(`0x00720f20` on this session's savestate) is not repeated here - it is
+instance data specific to that savestate, not a structural fact about this
+binary.
 
 ## History
 
@@ -1231,3 +1269,14 @@ unit(v)` would apply a 2-unit shove to a nearly stationary ship. Confidence
   inverted. Confidence 88 in the PS2 build, 80 cross-platform. Also fixed
   `Body_AddForceAtPoint`'s argument order: it is `(body, force, point)`, which
   the prologue's `a1 -> s2` / `a2 -> s1` swap disguises.
+- 2026-09-16: the first runtime leg on this page's own build, driven by
+  `scripts/pcsx2-trace.py` needing a working capture. Found `steer`
+  (`craft+0x2f0`) and `brake` (`craft+0x2ec`) live rather than by reading
+  more decompiled code - see [the section above](#steer-and-brake-found-live-rather-than-read).
+  Both confirm their respective pseudocode sections rather than correcting
+  them. A separate, PCSX2-transport-specific finding from the same session -
+  the game's own physics tick runs at half PCSX2's verified-frame rate,
+  because PAL is interlaced - is recorded in
+  [pcsx2-debugger.md](../../../reverse-engineering/pcsx2-debugger.md) rather
+  than here, since it is about the capture transport, not this binary's
+  code.
