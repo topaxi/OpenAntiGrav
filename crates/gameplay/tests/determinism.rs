@@ -80,10 +80,14 @@ fn weapon_stats() -> oag_tables::weapons::WeaponStats {
 /// Each piece is there because it is a *different* part of the world, and a gate
 /// that moved for only one of them would be claiming coverage it does not have:
 ///
-/// - the **projectile array** flies, hits the wall at a tick nobody chose, and
-///   frees its slot;
-/// - the **blast** spends the second craft's energy pool and shoves it, which
-///   reaches `oag_physics::probe::hash_state` through the ship;
+/// - the **projectile array** flies, strikes the second craft's hull at a tick
+///   nobody chose, and frees its slot;
+/// - the **direct hit** spends the second craft's energy pool and the blast
+///   force shoves it, which reaches `oag_physics::probe::hash_state` through
+///   the ship. The craft sits where the rocket's own drop puts it at that
+///   range - a wall hit spends nothing on anyone since 2026-09-16
+///   (`Rocket_HitCraft`/`Rocket_ApplyBlastForce`), so a target 20 units short
+///   of the wall would leave the damage path uncovered;
 /// - the **generator** is drawn from every tick, so its position advances
 ///   independently of anything visible;
 /// - the **inventory and the lap state** are written on fixed ticks.
@@ -93,7 +97,10 @@ fn run(ticks: u32) -> (u64, u64) {
 
     let mut world = World::new(0xC0FFEE);
     world.ship_count = 2;
-    for (slot, position) in [Vec3::ZERO, Vec3::Z * 380.0].into_iter().enumerate() {
+    for (slot, position) in [Vec3::ZERO, Vec3::new(0.0, -14.0, 380.0)]
+        .into_iter()
+        .enumerate()
+    {
         let ship = &mut world.ships[slot];
         ship.active = true;
         ship.handling.dimensions = Dimensions {
@@ -144,6 +151,20 @@ fn run(ticks: u32) -> (u64, u64) {
 ///
 /// # History
 ///
+/// - **Moved 2026-09-16**, by a *weapon-law* change and the scenario change it
+///   forced. `Rocket_HitCraft` (`0x0886ebdc`) and `Rocket_ApplyBlastForce`
+///   (`0x0886ee88`) give the Rocket the Plasma's shape: a hull hit credits the
+///   struck craft alone and sweeps the rest for the impulse; a wall hit spends
+///   nothing. The old scenario's rocket passed 14 units under the second craft
+///   and blew up on the wall, so under that rule it touched nobody and the
+///   coverage test said so; the craft now sits at `(0, -14, 380)`, in the
+///   rocket's own arc. **Not isolated to one cause**: the rule alone and the
+///   position alone each move the constants, so the previous values -
+///   `0x3a3f_0ad0_4464_ffda` / `0x05ff_d20f_72e0_15a2` at 60 ticks and
+///   `0x4de7_25cf_fbe0_9f7f` / `0xa4a7_dd7b_018f_de2b` at 600 - cannot be
+///   reproduced with either in place. Checked instead: the one impact is a
+///   `struck: Some(1)` hull hit, the craft loses shield and gains velocity,
+///   and `crates/physics`'s own gate did not move.
 /// - **Moved 2026-09-06**, when `Driver::roll_decided` joined the hash. Our
 ///   opponents barrel-roll on purpose - a deliberate, authorized deviation, the
 ///   original's never do - and that flag is what makes `Pilot::roll_chance` a
@@ -593,8 +614,8 @@ fn run(ticks: u32) -> (u64, u64) {
 ///   Replaces `0xa31c_f93f_c44f_7004` / `0xe197_c1d8_e0b5_d07e` at 60 ticks and
 ///   `0xbe25_d8d5_f406_e799` / `0xc8b7_8f68_8555_be83` at 600.
 const REFERENCE: &[(u32, u64, u64)] = &[
-    (60, 0x3a3f_0ad0_4464_ffda, 0x05ff_d20f_72e0_15a2),
-    (600, 0x4de7_25cf_fbe0_9f7f, 0xa4a7_dd7b_018f_de2b),
+    (60, 0xa46c_eb85_8895_811b, 0x21a2_22cd_c7b6_9b5d),
+    (600, 0xb481_6943_0d50_eb4e, 0xd842_9949_f3b5_9bec),
 ];
 
 /// The volley scenario: a craft at an angle fires a real fanned Rocket volley
@@ -902,7 +923,10 @@ fn the_run_visits_the_paths_it_claims_to_cover() {
 
     let mut world = World::new(0xC0FFEE);
     world.ship_count = 2;
-    for (slot, position) in [Vec3::ZERO, Vec3::Z * 380.0].into_iter().enumerate() {
+    for (slot, position) in [Vec3::ZERO, Vec3::new(0.0, -14.0, 380.0)]
+        .into_iter()
+        .enumerate()
+    {
         let ship = &mut world.ships[slot];
         ship.active = true;
         ship.handling.dimensions = Dimensions {
@@ -939,7 +963,7 @@ fn the_run_visits_the_paths_it_claims_to_cover() {
     }
 
     assert!(flew, "the rocket never moved, so flight is not covered");
-    assert_eq!(impacts, 1, "the rocket never reached the wall");
+    assert_eq!(impacts, 1, "the rocket never struck the craft");
     assert!(
         world.ships[1].physics.shield < 100.0,
         "the blast reached nobody, so the damage path is not covered"

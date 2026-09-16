@@ -440,16 +440,20 @@ which is the whole point of the weapon.
   struck craft directly, `Plasma_ApplyBlastForce` pushes everyone else in
   radius but the firer. The wall-hit branch now emits `blast: false` and the
   craft-hit branch routes to a new direct-hit rule; both are ported.
-- **What `Rocket_HitCraft_q`'s identical split-shape means for the Rocket's own
-  `blast()` routing is a new lead, not fixed.** `Rocket_HitCraft_q`
-  (`0x0886ebdc`, already named) credits a struck craft's damage/slowdown the
-  same way `Plasma_HitCraft` does, with no radius sweep read alongside it in
-  this pass - so `blast()`'s uniform "full damage to everyone in radius" rule
-  is likely wrong for the Rocket too, the same way it was for the Plasma.
-  Unread: whether `RocketPool_Update`'s own teardown ever damages anyone at
-  all outside `Rocket_HitCraft_q`'s direct credit, and whether an equivalent
-  `Rocket_ApplyBlastForce`-shaped function exists. Its own change, its own
-  regression story.
+- ~~**What `Rocket_HitCraft`'s identical split-shape means for the Rocket's own
+  `blast()` routing is a new lead, not fixed.**~~ **Read and ported
+  2026-09-16**: `RocketPool_Update` runs `Rocket_SweepCraftHit`
+  (`0x0886e7ac`, a 6-unit hull-cylinder sweep) whose hit calls
+  `Rocket_HitCraft` - direct damage/slowdown credit to the struck craft - and
+  then `Rocket_ApplyBlastForce` (`0x0886ee88`), the Plasma's force sweep
+  twin; the pool's wall/expiry teardown touches no craft. The Rocket now
+  takes the Plasma's two arms in `flight.rs`/`blast.rs`, and
+  `crates/gameplay/tests/determinism.rs` moved its constants for it (with its
+  target moved into the rocket's arc). See
+  [rocket-visuals.md](../../docs/ghidra/functions/psp-pulse-usa/rocket-visuals.md)'s
+  "What a rocket hit spends" section. Still not ported from the same read:
+  the 5.0 s lifetime and `Rocket_SweepProjectiles` (a rocket clearing mines
+  and bombs it flies into).
 - **A player mashing fire lays plasma bolts the same way they lay mines**, and
   the array fills: `--give plasma --press square` puts **128** bolts in the
   air inside 260 ticks and holds there, and in `single_race` the craft is dead
@@ -1538,7 +1542,7 @@ because nothing on `plasma.md` had traced the call chain to find it.
 earlier pass and prose-labelled `Plasma_NetSend_q`, a name that was never in
 the database - is `Plasma_SweepCraftHit` (`0x0886afb8`, now named 82): a
 per-tick hull-cylinder sweep against every craft, the same shape
-`RocketPool_Update` runs for the Rocket via `FUN_0886e7ac`/`Rocket_HitCraft_q`.
+`RocketPool_Update` runs for the Rocket via `FUN_0886e7ac`/`Rocket_HitCraft`.
 On a hit it calls two more newly-named functions:
 
 - `Plasma_HitCraft` (`0x0886ad60`, 88) - credits full `damage` and
@@ -1570,7 +1574,7 @@ is `blast: true` routed through a new `blast::blast_direct_hit` rather than
 the uniform `blast()` every other weapon still uses. `Impact::struck` and
 `Impact::blast`'s own doc comments in `crates/gameplay/src/projectile.rs`
 carry the full reading. The Rocket is untouched throughout - see the new Open
-item above for why `Rocket_HitCraft_q`'s identical shape is a lead, not a fix,
+item above for why `Rocket_HitCraft`'s identical shape is a lead, not a fix,
 here.
 
 Tests: three new unit tests in

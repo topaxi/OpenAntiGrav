@@ -830,7 +830,7 @@ if (p->charging == 0) {
 `p->flags & 1` is set the moment a bolt is fired (`Weapon_FirePlasma` writes
 `p->flags = 1`) and nothing ever clears it before a hit, so
 `Plasma_SweepCraftHit` runs every tick a bolt is flying - not conditionally,
-despite the look of the guard. `Rocket_HitCraft_q`'s own caller,
+despite the look of the guard. `Rocket_HitCraft`'s own caller,
 `FUN_0886e7ac`, is called from `RocketPool_Update` behind the identical
 `flags & 1` guard, which is the structural match that pointed at this
 function in the first place, alongside the wrong turn a previous pass took:
@@ -839,7 +839,7 @@ the comment shape `if (p->flags & 1) Plasma_NetSend_q(pool, i)` in this page's
 a database name** - `search_functions("Plasma")` never lists a
 `Plasma_NetSend_q`, and the address it was hung on is `Plasma_SweepCraftHit`,
 not netcode. This is the same trap `apply-ghidra-names.py`'s own history
-records for `Rocket_HitCraft_q`'s sibling functions: an informal name in a
+records for `Rocket_HitCraft`'s sibling functions: an informal name in a
 decompile comment reads exactly like a real one and is not searchable as one.
 
 ### `Plasma_SweepCraftHit` (`0x0886afb8`, confidence 82) is the Rocket's own craft-sweep shape
@@ -849,7 +849,7 @@ Read in full. Per tick, per flying bolt, it walks every live craft
 use) except the bolt's **own firer** (`uVar17 != *(plasma+0x40)`, the `owner`
 field `Weapon_FirePlasma` writes), and tests the bolt's swept segment against
 each craft's hull with a cylinder test - a perpendicular-distance dot product
-inside `-6.0 < d < 6.0`, the same bound `Rocket_HitCraft_q`'s own caller
+inside `-6.0 < d < 6.0`, the same bound `Rocket_HitCraft`'s own caller
 (`FUN_0886e7ac`) uses. On a hit it:
 
 1. Sets the bolt's own destroy bit, `plasma+0x3c |= 4` - the same bit a wall
@@ -897,7 +897,7 @@ void Plasma_HitCraft(Pool *pool, int craft_slot, int plasma_slot) {
 
 Every offset on the right is `WeaponStats_ParsePlasma`'s own table
 (`damage` at `+0xa0`, `slowdown_time` at `+0xc4`) - an exact match, the same
-strength of evidence that carried `Rocket_HitCraft_q`'s reading of the
+strength of evidence that carried `Rocket_HitCraft`'s reading of the
 Rocket's own `+4`/`+0x2c` pair. `body+0x120`/`+0x130` are the exact fields
 `Ship_ApplyPendingWeaponDamage` (`0x0883f13c`) and
 `Ship_ApplyPendingWeaponRepair`-adjacent code already drain each tick, per
@@ -909,7 +909,7 @@ apply is a *force* term, computed separately, next.
 
 `body+0x138 = 2` is a smaller, separate enumeration from the `weapon_id = 7`
 `Weapon_RequestFire`'s jump table uses for the Plasma (`weapon-fire.md`) -
-`Rocket_HitCraft_q` writes `0` at the same offset, so this is some kind of
+`Rocket_HitCraft` writes `0` at the same offset, so this is some kind of
 per-family damage-source tag `Ship_Damage` reads for its own purposes
 (sound/visual selection, most likely), not the fire-dispatch weapon id. Not
 chased further; recorded so nobody re-derives the "7" collision a second
@@ -993,7 +993,7 @@ then sweeps every **active** craft except `owner` for a
 in the original either). `blast()` itself is untouched; every other weapon
 still goes through it exactly as before.
 
-**Not ported: the Rocket's own equivalent split.** `Rocket_HitCraft_q`
+**Not ported: the Rocket's own equivalent split.** `Rocket_HitCraft`
 (`0x0886ebdc`, already named, confidence not raised or lowered here) shows
 the identical shape - direct `damage`/`slowdown_time` to the struck craft via
 its own function, no radius sweep alongside it in the read this page did -
@@ -1002,7 +1002,7 @@ likely just as wrong for the Rocket as it was for the Plasma. Recorded as a
 lead, not fixed: the brief this page answers is the Plasma's craft-hit
 question specifically, and the Rocket's own wall-hit/craft-hit split (does
 `RocketPool_Update`'s teardown ever damage anyone at all, or only
-`Rocket_HitCraft_q`'s own direct credit?) is its own unread question with its
+`Rocket_HitCraft`'s own direct credit?) is its own unread question with its
 own regression story.
 
 ## What is not verified
@@ -1035,7 +1035,7 @@ own regression story.
   cylinder.** Read enough to find and route its two calls
   (`Plasma_HitCraft`/`Plasma_ApplyBlastForce`); its own VFPU-heavy geometry
   (the plane/cone tests before the `-6.0 < d < 6.0` cylinder check) was not
-  independently re-derived past confirming it mirrors `Rocket_HitCraft_q`'s own
+  independently re-derived past confirming it mirrors `Rocket_HitCraft`'s own
   caller shape - hence 82, not higher, and no `_q` since the *routing* is solid
   even where the geometry detail is not fully walked.
 - ~~**`Plasma_SpawnDetonation`'s double call on a craft hit.** `Plasma_SweepCraftHit`
@@ -1307,7 +1307,7 @@ here since the Bomb's teardown is outside this page's own function set.
   function exists" (wrong; the function just was not named yet). Ported to
   `oag_gameplay::projectile::flight`'s two Plasma/Rocket-shared branches,
   split by kind so the Rocket is untouched, and to a new
-  `blast::blast_direct_hit`. The Rocket's own `Rocket_HitCraft_q` shows the
+  `blast::blast_direct_hit`. The Rocket's own `Rocket_HitCraft` shows the
   identical split-shape and is left as a lead, not fixed - see
   [a craft hit is the third ending](#a-craft-hit-is-the-third-ending-and-it-does-spend-a-blast).
 - **2026-09-16.** `FUN_0886b898` read in full and `Plasmas_Update`'s teardown
