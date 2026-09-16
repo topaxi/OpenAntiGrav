@@ -88,7 +88,7 @@ here plays it yet, per CLAUDE.md's "draw nothing and say so" rule.
 | Weapon | Fire/trigger | Flight | Ending/blast | Visuals | Audio | AI use |
 | --- | --- | --- | --- | --- | --- | --- |
 | Rocket | 🟩 built | ✅ verified - shares [flight.rs](../../crates/gameplay/src/projectile/flight.rs) | 🟩 built - fanned `spread`, see [pickups.md](../gameplay/pickups.md#what-a-fired-rocket-does) | 🟨 partial - placeholder billboard, real `Ship Muzzle`/`cannon_flash` effects not built ([pickups.md](../gameplay/pickups.md#what-is-not-built)) | ⬜ `?` | 📖 read - [weapon-ai.md](../ghidra/functions/psp-pulse-usa/weapon-ai.md) |
-| Missile | 🟩 built - lock via `Ship_AcquireLock` | ✅ verified - [missile.md](../ghidra/functions/psp-pulse-usa/missile.md) | 🟩 built | ⬜ `?` | ⬜ `?` | 📖 read - [weapon-ai.md](../ghidra/functions/psp-pulse-usa/weapon-ai.md) |
+| Missile | 🟩 built - lock via `Ship_AcquireLock`; the reticle it drives is 🟨 partial, see the front-end table | ✅ verified - [missile.md](../ghidra/functions/psp-pulse-usa/missile.md) | 🟩 built | ⬜ `?` | ⬜ `?` | 📖 read - [weapon-ai.md](../ghidra/functions/psp-pulse-usa/weapon-ai.md) |
 | Quake | 🟩 built - single travelling instance | 🟩 built - fixed 270 units/s, unauthored ([pickups.md](../gameplay/pickups.md)) | 🟩 built - authored `radius` | 🟨 partial - the disc's own `WO_QUAKE` psys plays, axis-aligned (orientation not established); the wave's track deformation/vertex animation is not built | ⬜ `?` | ⬜ `?` |
 | Cannon | 🟩 built - reload gated on held fire button ([cannon-quake-leachbeam.md](../ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md)) | 🟩 built - flat 500 km/h, no per-class speed authored | 🟨 partial - direct damage only, no splash (schema authors none) | ⬜ `?` | ⬜ `?` | ⬜ `?` |
 | Turbo | 🟩 built | ➖ n/a | ➖ n/a | ⬜ `?` | ⬜ `?` | ⬜ `?` |
@@ -97,7 +97,7 @@ here plays it yet, per CLAUDE.md's "draw nothing and say so" rule.
 | Plasma | 🟩 built - 1s wind-up, `Plasma_Init`/`Plasmas_Update` | ✅ verified - shares Rocket's flight model | ✅ verified - three distinct endings (craft/wall/timeout), see [pickups.md](../gameplay/pickups.md) | 🟩 built - charge glow grows over the wind-up | ⬜ `?` | ⬜ `?` |
 | Bomb | 🟩 built - shares Mine's rear anchor | ✅ verified - [mine_ground_truth.rs](../../crates/game/tests/mine_ground_truth.rs) | 🟨 partial - `damageradius` unread, no consumer | ➖ n/a - `Pulse_Bomb.vex` located, nothing draws it | ⬜ `?` | ⬜ `?` |
 | Mine | 🟩 built - laid one per 0.1s | ✅ verified - [mine.md](../ghidra/functions/psp-pulse-usa/mine.md) | 🟩 built | ➖ n/a - `Pulse_Mine.vex` located, nothing draws it | ⬜ `?` | ⬜ `?` |
-| LeachBeam | 🟩 built - link to Missile's own lock | 🟩 built - whole-race pool cursor | 🟨 partial - drain/repair spent, `slowShipFactor` not wired | ⬜ `?` | ⬜ `?` | ⬜ `?` |
+| LeachBeam | 🟩 built - link to Missile's own lock; its reticle is 🟨 partial, see the front-end table | 🟩 built - whole-race pool cursor | 🟨 partial - drain/repair spent, `slowShipFactor` not wired | ⬜ `?` | ⬜ `?` | ⬜ `?` |
 | Repulser | 📖 read only | ➖ n/a | ➖ n/a | ➖ n/a | ➖ n/a | ➖ n/a |
 | Shuriken | 🟩 built - ±20 degree throw | ✅ verified - shares Rocket/Plasma's floor follower, bounces off walls | 🟩 built - authored `fuse` | ⬜ `?` | ⬜ `?` | ⬜ `?` |
 
@@ -128,6 +128,7 @@ here plays it yet, per CLAUDE.md's "draw nothing and say so" rule.
 | Loading screens | 🟩 built - Pulse's own reading | ⬜ `?` | ⬜ `?` | 📖 read - [hd-loading.md](../formats/hd-loading.md) | ➖ n/a |
 | Results/end-race | 🟩 built - [endrace-screens.md](../ui/endrace-screens.md) | ⬜ `?` | ⬜ `?` | 📖 read - [endrace-screens.md](../formats/endrace-screens.md) | ➖ n/a |
 | HUD | ✅ verified - screen-space reference-frame comparison caught a font bug ([hud.md](../ui/hud.md#what-a-reference-frame-settled)) | ⬜ `?` | ⬜ `?` | 📖 read - all 18 in-race layouts compose, 2,320 widgets ([hd-hud.md](../formats/hd-hud.md)) | 📖 read - 25 layouts compose, no sprite draws yet ([2048-status.md](../formats/2048-status.md)) |
+| Lock-on reticle (Missile, LeachBeam) | 🟨 partial - placement, `0.8` s hold, chase and `~ROCKLOCK` tone recovered and built ([lock-sight.md](../ghidra/functions/psp-pulse-usa/lock-sight.md)); drawn **white** because the blink's two tints depend on the widget colour word's byte order, which is unread, and the far-target alpha step is unreproduced - reported from play 2026-09-16 as not looking like the original | ⬜ `?` | 🟩 built - same law, Pure's own widgets | 🟨 partial - own per-weapon sight updates and a `0.5` s hold read ([hud-sight.md](../ghidra/functions/ps3-hdfury-eu/hud-sight.md)), engine keeps the PSP's `0.8`; the LeachBeam's four widgets draw all at once where the original reveals them one by one - chosen, not measured | 🟨 partial - HD's reading, same all-at-once choice |
 
 ## 4. Rendering
 
