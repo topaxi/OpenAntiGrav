@@ -28,6 +28,18 @@ use super::KMH_PER_UNIT_PER_SECOND;
 /// `docs/ghidra/functions/psp-pulse-usa/weapon-fire.md`.
 pub const ROCKET_SHOTS: usize = 3;
 
+/// How long a rocket that hits nothing stays in the air before the pool reaps
+/// it, in seconds.
+///
+/// **Recovered, confidence 90.** `RocketPool_Update` (`0x0886de60`) tests
+/// `5.0 < rocket+0x48` on every live slot in its second pass and sets the
+/// same retire bit a wall sets; the teardown that follows releases the trail
+/// and plays no explosion and spends no blast, so an expired rocket vanishes
+/// rather than detonating - see `docs/ghidra/functions/psp-pulse-usa/rocket-visuals.md`,
+/// "What a rocket hit spends". Tested against the age at the end of the tick,
+/// strictly greater, the way the pool does.
+pub const LIFETIME_SECONDS: f32 = 5.0;
+
 /// Where a craft launches its rockets from, and how fast.
 ///
 /// Returns [`ROCKET_SHOTS`] `(position, velocity)` pairs in the original's own

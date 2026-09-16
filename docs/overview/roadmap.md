@@ -607,10 +607,14 @@ seen from the authoring side.
       it authors four.
       **Almost all of it is ours**, and pickups.md's table says which parts: no
       firing call site, no projectile class and no flight update exists anywhere
-      in the executable, so straight-line flight, the launch offset, a sphere
-      for a hull, full damage inside the radius, and one rocket per fire are all
-      this project's readings on top of the disc's numbers. `spread` argues for
-      a volley and is recorded as an open question rather than dismissed.
+      in the executable, so straight-line flight, the launch offset and a
+      sphere for a hull were this project's readings on top of the disc's
+      numbers - and "full damage inside the radius" was too, until
+      `RocketPool_Update` was read (2026-09-16): a rocket damages the craft it
+      struck alone, the radius is force only, a wall hit spends nothing, and a
+      miss is reaped at 5.0 s, all ported
+      ([rocket-visuals.md](../ghidra/functions/psp-pulse-usa/rocket-visuals.md)).
+      The volley is recovered: three rockets fanned by `spread`.
       **The Autopilot took the pool to five (2026-08-24)**, and unlike the
       Rocket it is mostly *recovered*: `Autopilot_Fire` (`0x088613bc`) and
       `Autopilot_Update` (`0x08861404`) give the duration's source

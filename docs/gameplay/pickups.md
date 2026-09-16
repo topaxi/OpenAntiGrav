@@ -41,8 +41,10 @@ This subsystem is unusually mixed, so the split comes before anything else.
 | `spread` is that fan's half-angle, in radians | **recovered** | 82 |
 | **That a fired Shield refuses damage, and refuses it outright** | **ours** | - |
 | **That a rocket flies straight at a constant speed** | **ours** | - |
-| **A sphere for a hull, and full damage inside `blastradius` with no falloff** | **ours**, and the falloff half is now measured to be wrong | [missile.md](../ghidra/functions/psp-pulse-usa/missile.md) |
-| **The launch offset, the flight speed being class + `launchSpeed`, the lifetime cap** | **ours** | - |
+| **A sphere for a hull** | **ours** (the original sweeps a 6-unit cylinder along the step, `Rocket_SweepCraftHit`) | [rocket-visuals.md](../ghidra/functions/psp-pulse-usa/rocket-visuals.md) |
+| **A rocket's damage lands on the craft it struck alone; the radius is force only, linear falloff, the firer excluded; a wall hit spends nothing** | **recovered, built** (2026-09-16) | 90 |
+| **The launch offset, the flight speed being class + `launchSpeed`** | **ours** | - |
+| **A rocket that hits nothing is reaped at 5.0 s, silently** | **recovered, built** (2026-09-16) | 90 |
 | `<Missile>`: `damage`, `blastforce`, `blastradius`, `launchSpeed`, a speed per class, **and its two lock distances** | **recovered** | 90 |
 | **A Missile press puts exactly one in the air**, where a Rocket puts three | **recovered** | 90 |
 | The lock: longitudinal window, `0.9` cone, along-track screen, nearest-by-distance | **recovered** | 88 |
@@ -754,15 +756,17 @@ flight update has been found anywhere in the executable:
   box nose-to-tail and is *wider* than it on the other two axes - so a near miss
   can register as a hit, which favours the shooter and is the generous reading
   rather than the conservative one;
-- **full damage everywhere inside `blastradius`, with no falloff**, and the
-  firing craft not excluded from its own blast - the falloff half of which is
-  now known to be wrong and is not yet fixed: `FUN_08868ea4` adds
-  `direction * (1 - distance/blastradius) * blastforce`, a **linear** falloff on
-  the impulse, and reaches no damage at all (see
-  [missile.md](../ghidra/functions/psp-pulse-usa/missile.md#the-blast-and-what-does-not-reach-it));
-- `blastforce` applied as an impulse rather than a force held over a duration;
-- a ten-second lifetime cap, so a rocket that leaves the world through a gap in
-  the collision soup cannot hold its slot for the race.
+- `blastforce` applied as an impulse rather than a force held over a duration.
+
+**No longer ours, since 2026-09-16** - `RocketPool_Update` was read down and
+the port follows it ([rocket-visuals.md](../ghidra/functions/psp-pulse-usa/rocket-visuals.md),
+"What a rocket hit spends"): the damage and slowdown land on **the craft the
+rocket struck and nobody else** (`Rocket_HitCraft`), `blastforce` reaches
+every craft but the firer with the linear `(1 - d/blastradius)` falloff
+(`Rocket_ApplyBlastForce`), **a wall hit spends nothing on anyone**, and a
+rocket that hits nothing is reaped silently at **5.0 s**. The earlier
+"full damage everywhere inside `blastradius`" and the ten-second cap were this
+project's readings and are gone.
 
 ### Three at once, fanned by `spread` - and this one is recovered
 

@@ -11,7 +11,7 @@
 use super::{
     FALL_ACCELERATION, Impact, KMH_PER_UNIT_PER_SECOND, MAX_FLIGHT_SECONDS, MAX_PROJECTILES,
     Projectile, Projectiles, RIDE_HEIGHT, SURFACE_PROBE_LENGTH, SweepHit, TriggerRadii, disruptor,
-    mine, missile, nearest_hit, plasma, shuriken,
+    mine, missile, nearest_hit, plasma, rocket, shuriken,
 };
 use oag_core::math::Vec3;
 use oag_physics::{Ray, Raycaster, Surface};
@@ -475,6 +475,20 @@ impl Projectiles {
                 continue;
             }
 
+            // **A rocket that hit nothing is reaped at five seconds, silently.**
+            // `RocketPool_Update`'s second pass, `5.0 < age`, retires it
+            // through the same teardown a wall hit takes - trail released, no
+            // explosion, no blast - so there is no impact to report. See
+            // [`rocket::LIFETIME_SECONDS`]. Tested after the move like the
+            // Missile's own timer above, because the pool's pass runs after
+            // `Rocket_Update`.
+            if kind == Weapon::Rocket
+                && MAX_FLIGHT_SECONDS - projectile.lifetime > rocket::LIFETIME_SECONDS
+            {
+                *projectile = Projectile::default();
+                continue;
+            }
+
             if projectile.lifetime <= 0.0 {
                 // **The Plasma alone detonates here, and it is a recovered
                 // negative rather than a recovered blast.** `Plasmas_Update`
@@ -518,14 +532,13 @@ impl Projectiles {
                 // existing.
                 //
                 // **The cap itself is ours; that there is one is not.** The
-                // Rocket's pool (`FUN_0886de60`) takes its own destroy branch on
-                // `5.0 < age` at `self+0x48`, and unlike the Missile's it
-                // reaches no explosion spawner - so the original reaps a stale
-                // rocket silently, exactly as this does, just three times
-                // sooner. Porting the 5.0 is a behaviour change to the Rocket
-                // and is deliberately not folded into a change about the
-                // Missile; see the handover thread. A missile never gets here,
-                // having detonated above.
+                // Rocket's pool (`RocketPool_Update`) takes its own destroy
+                // branch on `5.0 < age` and reaches no explosion spawner - the
+                // original reaps a stale rocket silently, exactly as this
+                // does, and since 2026-09-16 the Rocket takes that branch
+                // above at [`rocket::LIFETIME_SECONDS`] and never reaches
+                // this one. A missile never gets here either, having
+                // detonated above.
                 //
                 // **A mine or a bomb never gets here either**, for a different
                 // reason: its countdown is the disc's own `timetodie` and
