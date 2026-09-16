@@ -100,13 +100,15 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     // shape [`oag_hd::hud::ART`] carries. Confidence 90 on the widget names
     // and sizes, the same literal-XML-read terms as the row above.
     //
-    // **Nothing here is runtime-checked.** No Vita3K exists in this project's
-    // toolchain, so this row is read off `data/extracted/vita/PCSF00007`
-    // alone and never played. Which of the four draws when now runs the same
-    // measured, ported reveal `oag_hd::hud::ART`'s own `leach` field does -
-    // 2048 was never independently disassembled for it, so the law is
-    // corroborated by the shared HD/2048 lineage rather than by a second
-    // reading of this binary.
+    // **The sight itself is not runtime-checked.** The 2026-09-16 Vita3K
+    // captures (`docs/reverse-engineering/vita3k-capture.md`) held a Missile
+    // and a Rocket and never had an opponent in the sight's range at a
+    // sampled instant, so no frame shows any of these widgets; the row is
+    // still read off `data/extracted/vita/PCSF00007` alone. Which of the
+    // four draws when runs the same measured, ported reveal
+    // `oag_hd::hud::ART`'s own `leach` field does - 2048 was never
+    // independently disassembled for it, so the law is corroborated by the
+    // shared HD/2048 lineage rather than by a second reading of this binary.
     sights: &oag_title::hud::Sights::Concentric {
         seeking: &[
             "MissileSightBG",
@@ -143,8 +145,11 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     // `oag_2048::race::ZONE_STAGES`, which is a different shape from the
     // per-zone ladder this row carries. See `oag_title::ZoneSpeedClasses`.
     zone_speed_classes: None,
-    // Unmeasured on 2048; Pulse's own reading (`true`) carries over rather
-    // than guessing a change. See `oag_title::HudArt::shield_percent`.
+    // **Measured `true`, 2026-09-16.** Every Vita3K race frame reads the
+    // shield with a `%` - `100%` on the grid, `99%`/`95%`/`93%` after wall
+    // hits, `27%` in Zone - under the silhouette at `EnergyText`'s authored
+    // `(51, 509)`. See `oag_title::HudArt::shield_percent` and
+    // `docs/formats/2048-hud.md`.
     shield_percent: true,
 };
 
@@ -160,15 +165,74 @@ pub fn texture_entry(reference: &str) -> String {
 /// What [`texture_entry`] replaces a reference's extension with.
 pub const TEXTURE_EXTENSION: &str = ".gxt";
 
-/// The sprite widgets 2048 draws whenever its HUD is up: **unread**.
+/// The sprite widgets 2048 draws whenever its HUD is up.
 ///
-/// Layout composition and the reticle axis are both measured now (see
-/// [`ART`]), but which widgets a running race actually shows is a different
-/// question, and this title has no equivalent of the rpcs3 frame capture
-/// [`oag_hd::hud::ALWAYS_ON`] rests on - nothing here runs the Vita title.
-/// Empty because nothing has been captured, *not* because a capture came back
-/// with nothing.
-pub const ALWAYS_ON: &[&str] = &[];
+/// # Read off frames of the running original
+///
+/// **Captured 2026-09-16 on Vita3K** (`PCSF00007` v1.04 - the same EU build
+/// the layouts and [`ART`] were read from, and the same one the Ghidra
+/// program `/vita-2048-eu-v104` is), through the harness
+/// `docs/reverse-engineering/vita3k-capture.md` records. Frames are game
+/// content and stay out of the tree, under `~/.cache/oag/2048-hud/frames/`;
+/// `docs/formats/2048-hud.md` names each one and what it shows. The states
+/// captured: the arcade grid before the craft moves (no pickup), mid-race
+/// with no pickup, mid-race holding a Missile and later a Rocket, the
+/// pickup's announcement frame, a damaged shield (99% down to 92%, and 27% in
+/// Zone), the time-trial grid and mid-lap, and a Zone run at zones 2-5.
+///
+/// The list is the **intersection** across those states, not the contents
+/// of one good frame - the same rule `oag_hd::hud::ALWAYS_ON`'s "what is
+/// deliberately left out" section applies. A widget is identified by
+/// matching its authored source rectangle (cut out of the decoded `.gxt` by
+/// `crates/game/examples/vita_2048_hud_atlas.rs`) against the frame at the
+/// authored `x`/`y`:
+///
+/// | Widget | In the frames |
+/// | --- | --- |
+/// | `ThrustBarBG` | the dim two-bar speed readout, bottom right, in every arcade and time-trial frame from the grid onward. Its lit copies (`ThrustBar`, `SpeedBar0`-`4`) fill in as speed rises. |
+/// | `EnergyBgFrame` | the ship-silhouette outline, bottom left, in every arcade and Zone frame. Time trial does not author it and the time-trial frames show none. |
+/// | `EnergyBg` | the translucent silhouette *inside* that outline, visible as the grey cap above the white fill at 95% and as the whole upper three quarters at 27%. |
+/// | `ZoneCounterBG` | the dim arc of ten dashes round the zone number, bottom left - authored at alpha 0.31 and read at that in the Zone frames; `ZoneLight0`-`9` are the bright copies lit one per zone. |
+///
+/// Confidence **90** on the first two (dozens of frames, both modes, both
+/// clearly the authored art at the authored rectangle), **85** on `EnergyBg`
+/// (the same rect and source as `EnergyBar`/`EnergyBarDelay`; the name is
+/// assigned by elimination - the white fill is the one that shrinks with the
+/// shield and the red one flashes on a hit, which leaves this one for the
+/// translucent constant), **85** on `ZoneCounterBG` (one Zone run, four
+/// frames, authored alpha matches what is seen).
+///
+/// # What is deliberately left out
+///
+/// - `EnergyBar` and `EnergyBarDelay`: the same rect and source rectangle as
+///   `EnergyBg`, differing only in colour - this dialect's "at most one is
+///   live" idiom. The frames show the white one **cropped vertically from
+///   the bottom** to the shield fraction (27% is white for the bottom quarter
+///   and grey above) and the red one for a moment after a hit. Neither is a
+///   fixed sprite, and the runtime paints them white and red where the
+///   layout authors green-at-half-alpha and white - unread.
+/// - `PickupBgFrame`: the arc round the held pickup, right of the shield.
+///   Absent on the grid and in every no-pickup frame; up the whole time a
+///   Missile or Rocket is held. State-gated, with the pickup.
+/// - `PickupIcon` and `DenyPickup`: the icon. Seen once at the authored
+///   top-centre rect with the `PickupText` caption `MISSILE` (the grant
+///   announcement) and then inside `PickupBgFrame` at the bottom left for as
+///   long as it is held - so the runtime moves the one widget, which the
+///   layout's placeholder-rect idiom already implied.
+/// - `ThrustBar`, `SpeedBar0`-`4`: the lit fills of the speed readout.
+/// - `PilotAssist`: the icon left of the speed bar, up only once Pilot
+///   Assist was switched to Extreme in the options; absent at Normal.
+/// - `ZoneLight0`-`9` and `ZoneSpeedLogo`: lit per zone, and never seen (the
+///   class was drawn as text, `VENOM`/`FLASH`, not as the badge).
+/// - `Radar`, `PlayerDot`, `RadarDot*`: never seen in any state reached.
+/// - `ManualShield`, `GiftCannon*`, `TargetShip*`, `TargetReticule*`,
+///   `ReverseShipPos*`, `VoiceCom*`, `ObjectivePoint*`, `GloryMoment*`,
+///   `ProtoTypeShipLogo`, `SpeedPad*`, `RaceMedal`, `MissileSight*`,
+///   `LeachBeamSight*`: never seen in any state reached.
+///
+/// The countdown, the `SCORE` readout in Zone and the `ZONE`/number/class
+/// text are not sprites and are recorded on `docs/formats/2048-hud.md`.
+pub const ALWAYS_ON: &[&str] = &["ThrustBarBG", "EnergyBgFrame", "EnergyBg", "ZoneCounterBG"];
 
 /// The three HUD skins, as directory prefixes under `Data\XML\`.
 ///

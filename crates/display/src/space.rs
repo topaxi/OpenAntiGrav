@@ -151,6 +151,24 @@ impl Space {
         size: (1920.0, 1080.0),
         display_aspect: 16.0 / 9.0,
     };
+    /// Wipeout 2048's 960x544 square pixels, shown as itself - the Vita's
+    /// own panel.
+    ///
+    /// **Measured, confidence 95.** Every HUD widget in a 960x544 frame of
+    /// the running original (Vita3K, 2026-09-16,
+    /// `docs/reverse-engineering/vita3k-capture.md`) sits at its authored
+    /// rectangle read as Vita pixels: `LapTxt` at `(15, 10)`, `EnergyBgFrame`
+    /// at `(15.5, 360)` 71x134, `ThrustBarBG` at `(674, 479)` 271x50,
+    /// `EnergyText` centred on `(51, 509)`. The same idiom the reticle's
+    /// `(-480, 272)` placeholder already implied
+    /// (`oag_2048::hud::ART`), now read off the screen rather than inferred
+    /// from a negated centre. Before this constant existed a Vita source fell
+    /// through to [`Self::PSP`], which drew the top-left labels at twice their
+    /// size and put the whole right-hand column of widgets off the screen.
+    pub const VITA: Self = Self {
+        size: (960.0, 544.0),
+        display_aspect: 960.0 / 544.0,
+    };
 
     /// What a texture's own pixel size means in this grid, per axis.
     ///
@@ -190,6 +208,7 @@ impl Space {
         match platform {
             oag_disc::Platform::Ps2 => Self::PS2,
             oag_disc::Platform::Ps3 => Self::HD,
+            oag_disc::Platform::Vita => Self::VITA,
             // A source we could not identify is read as a PSP one, which is
             // what every other unidentified-source path here already does.
             _ => Self::PSP,

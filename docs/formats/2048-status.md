@@ -100,18 +100,24 @@ the start line and runs the simulation. What it does **not** do, and why:
   the milestone table's own reading function was swept for and not found,
   despite every direct reader of the Zone speech handle being checked. See
   [zone-audio.md](../ghidra/functions/vita-2048-eu-v104/zone-audio.md).
-- **The HUD layouts are read, the textures decode, and no sprite draws yet.**
-  All 25 non-split-screen HUD roots compose with nothing missing and nothing
-  skipped, the played skin is known (`2048_hud\`, not the bare root previously
-  guessed at), the reticle is `Sights::Concentric`, and `oag_texture::gxt` now
-  reads the Vita's texture container - swept against 9,910 files, real HUD
-  icons render correctly. See [2048-hud.md](2048-hud.md). What is still
-  unread is which widgets a race actually shows: `ALWAYS_ON` is empty, and
-  unlike every other axis on this page it needs a running frame to settle
-  rather than more static reading - this title has no capture harness the way
-  HD's rpcs3 one is. So `just play 2048 --race` still shows no HUD at all
-  rather than the wrong one. A copy of HD's `ALWAYS_ON` would draw
-  *something*, which is how a wrong picture survives review.
+- **The HUD draws its four always-on sprites where the original has them,
+  and nothing state-gated yet.** All 25 non-split-screen HUD roots compose
+  with nothing missing and nothing skipped, the played skin is known
+  (`2048_hud\`), the reticle is `Sights::Concentric`, `oag_texture::gxt`
+  reads the textures - and, since 2026-09-16, **the title has been run**:
+  Vita3K on a headless weston/Xwayland stack
+  ([vita3k-capture.md](../reverse-engineering/vita3k-capture.md)) drove the
+  EU v1.04 build through three campaign races, a time trial and a Zone run,
+  and `ALWAYS_ON` is the intersection of what those frames show. The same
+  frames measured the 960x544 coordinate space (`Space::VITA`; before it a
+  Vita source fell through to the PSP's grid and drew the HUD at twice its
+  size with the right-hand column off screen). `just play 2048 --race --mode
+  single_race` now shows the shield silhouette and the speed readout at the
+  original's own positions; the shield fill, the pickup slot, the speed
+  fills, `PilotAssist` and Zone's lit dashes are read as state-gated and not
+  wired, and the text draws as raw `IG_HUD_*` ids in the 5x7 fallback because
+  this title names no language plugin or HUD font. See
+  [2048-hud.md](2048-hud.md).
 
 ## The one axis 2048 forced into existence
 
