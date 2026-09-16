@@ -555,6 +555,7 @@ impl<'a> Bank<'a> {
                 mode: self.order.u16(record, 0x0e),
                 offset: self.order.u32(record, 0x10),
                 length: self.order.u32(record, 0x14),
+                order: self.order,
             });
         }
         out
@@ -663,6 +664,11 @@ pub struct Sound {
     pub offset: u32,
     /// Length of the waveform in bytes.
     pub length: u32,
+    /// The bank's own byte order - [`Sound::pitch`] and [`Sound::sample_rate`]
+    /// switch on it, since Wipeout HD's `Scream_KeyOnVoice` walks the same
+    /// table on a different scale and a different base rate. See
+    /// [`pitch`]'s "Wipeout HD" section.
+    pub order: ByteOrder,
 }
 
 /// The `+0x0e` bit that selects a looping voice.
@@ -706,28 +712,47 @@ impl Sound {
         self.mode & LOOP_FLAG != 0
     }
 
-    /// The `sceSasSetPitch` word this waveform is keyed on with, played at the
-    /// default note with no bend or offset: `0x1000` is 44,100 Hz.
+    /// The pitch word this waveform is keyed on with, played at the default
+    /// note with no bend or offset: `0x1000` means "the sample's own rate" on
+    /// both platforms this reads (44,100 Hz on the PSP's SAS core, 48,000 Hz
+    /// on Wipeout HD's).
     ///
     /// The value the original hands the hardware for an unmodulated play -
-    /// `Scream_StartSound` starts every play at note 60, and the game's pitch
-    /// modulation (the engine note, for one) is added on top by the caller,
-    /// not by the bank. See [`pitch`].
+    /// `Scream_StartSound`/HD's `Scream_OpKeyOn` start every play at note 60,
+    /// and the game's pitch modulation (the engine note, for one) is added on
+    /// top by the caller, not by the bank. See [`pitch`], which this switches
+    /// on [`Sound::order`]: [`ByteOrder::Little`] is the PSP/PS2/Pure walk,
+    /// [`ByteOrder::Big`] is Wipeout HD's own scale.
     #[must_use]
     pub fn pitch(&self) -> u16 {
-        pitch::sas_pitch(self.centre_note, self.centre_fine, pitch::DEFAULT_NOTE, 0)
+        match self.order {
+            ByteOrder::Big => pitch::sas_pitch_scaled(
+                self.centre_note,
+                self.centre_fine,
+                pitch::DEFAULT_NOTE,
+                0,
+                pitch::HD_NEGATIVE_CENTRE_SCALE,
+            ),
+            ByteOrder::Little => {
+                pitch::sas_pitch(self.centre_note, self.centre_fine, pitch::DEFAULT_NOTE, 0)
+            }
+        }
     }
 
     /// The rate this waveform plays at, in Hz, at the default note.
     ///
-    /// [`Sound::pitch`] scaled onto the SAS core's 44,100 Hz and rounded to
-    /// the nearest Hz. The PSP disc's banks come out at 11,025, 22,050 and
-    /// 44,100 exactly and at a spread of others (18,002 for every speech
+    /// [`Sound::pitch`] scaled onto the platform's own core rate and rounded
+    /// to the nearest Hz - 44,100 on the PSP/PS2/Pure, 48,000 on Wipeout HD;
+    /// see [`Sound::pitch`]. The PSP disc's banks come out at 11,025, 22,050
+    /// and 44,100 exactly and at a spread of others (18,002 for every speech
     /// clip, 15,569 for the circuit ambiences); see [`pitch`] for why "the
     /// authored rate" is not what this is.
     #[must_use]
     pub fn sample_rate(&self) -> u32 {
-        pitch::sample_rate_hz(self.pitch())
+        match self.order {
+            ByteOrder::Big => pitch::sample_rate_hz_at(self.pitch(), pitch::HD_SAMPLE_RATE),
+            ByteOrder::Little => pitch::sample_rate_hz(self.pitch()),
+        }
     }
 }
 

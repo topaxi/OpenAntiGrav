@@ -45,8 +45,21 @@
 //! recording at 15,569 Hz is not separable from the disc, and it does not
 //! matter for playing it.
 //!
+//! # Wipeout HD runs the same walk on a different scale and a different base
+//!
+//! `Bank::sounds` reads HD's descriptor the same way byte-for-byte - `+0x02`
+//! and `+0x03` sit where the PSP keeps them, byte-swap and all - and HD's own
+//! `Scream_KeyOnVoice` (`ps3-hdfury-eu`, `0x00630310`) calls the exact same
+//! three-function chain (compute-note, table-walk, queue-pitch) shape for
+//! shape. What differs is [`HD_NEGATIVE_CENTRE_SCALE`] in place of
+//! [`NEGATIVE_CENTRE_SCALE`] and [`HD_SAMPLE_RATE`] (48,000) in place of
+//! [`SAS_SAMPLE_RATE`] (44,100) - both read off immediates in the PS3
+//! disassembly, not guessed. See [`Sound::pitch`](super::Sound::pitch), which
+//! picks the pair off the bank's own [`ByteOrder`](crate::byte_order::ByteOrder).
+//!
 //! See `docs/formats/psp-audio.md` and
-//! `docs/ghidra/functions/psp-pulse-usa/sound.md`.
+//! `docs/ghidra/functions/psp-pulse-usa/sound.md` for the PSP chain, and
+//! `docs/ghidra/functions/ps3-hdfury-eu/sound.md` for HD's.
 
 /// The pitch word at which SAS plays a voice at its own rate.
 pub const SAS_PITCH_BASE: u32 = 0x1000;
@@ -54,6 +67,18 @@ pub const SAS_PITCH_BASE: u32 = 0x1000;
 /// The SAS core's output rate, and so the rate a pitch of [`SAS_PITCH_BASE`]
 /// plays at. `Sas_Init` (`0x08a2ac90`) opens the core at this rate.
 pub const SAS_SAMPLE_RATE: u32 = 44_100;
+
+/// Wipeout HD's own core rate: a pitch of [`SAS_PITCH_BASE`] plays at
+/// 48,000 Hz, not the PSP's 44,100.
+///
+/// Read off the float literal at `0x008c02c4` (`0x413b8000` = `11.71875` =
+/// `48000 / 4096`) that `_opd_FUN_006332e0` - the PS3 analogue of
+/// `Sas_QueuePitch`/`Sas_CommitVoices`, called from `Scream_KeyOnVoice`
+/// `0x00630310` - multiplies the pitch word by to get the rate it hands
+/// `CellMs_QueueVoice`'s caller. Disassembly: `lfs f0,0x2f00(r2)` (the TOC
+/// slot Ghidra resolves to that address) then `fmuls f13,f13,f0` on the pitch
+/// word converted to float.
+pub const HD_SAMPLE_RATE: u32 = 48_000;
 
 /// The note every play starts at. `Scream_StartSound` writes `0x3c` to the
 /// handler's `+0x34` unconditionally, and nothing else in the sound module
@@ -66,6 +91,16 @@ pub const DEFAULT_NOTE: i32 = 60;
 /// `lui a0,0x1; addiu a0,a0,0x278b` at `0x08995078`. Applied after the table
 /// walk, `pitch * 0x1278b >> 16`. Not explained; see the module doc.
 pub const NEGATIVE_CENTRE_SCALE: u32 = 0x1278b;
+
+/// Wipeout HD's own multiplier for a negative centre note, `Q16` - the same
+/// shape as [`NEGATIVE_CENTRE_SCALE`], a different constant.
+///
+/// `lis r0,0x1; ori r0,r0,0xf4a` at `0x0062ecb0`/`0x0062ecb8`, inside the PS3
+/// analogue of `Scream_VoicePitch` (`ps3-hdfury-eu`'s `_opd_FUN_0062ec38`,
+/// called from `Scream_KeyOnVoice` `0x00630310`). `0x10f4a / 0x10000 =
+/// 1.059875`, close to but not exactly a semitone (`2^(1/12) = 1.059463`); see
+/// the module doc for what it does to the corpus.
+pub const HD_NEGATIVE_CENTRE_SCALE: u32 = 0x10f4a;
 
 /// `2^(i/12) * 32768`, truncated, at `0x08ac36dc`.
 pub const SEMITONE_TABLE: [u16; 12] = [
@@ -131,9 +166,20 @@ pub fn note_to_pitch(centre_note: i32, centre_fine: i32, note: i32, fine: i32) -
 ///
 /// A negative centre note is negated before the walk and the result scaled by
 /// [`NEGATIVE_CENTRE_SCALE`]. Every descriptor on the Pulse and Pure discs
-/// takes that branch.
+/// takes that branch. Thin wrapper over [`sas_pitch_scaled`] for the PSP's own
+/// scale; see [`Sound::pitch`](super::Sound::pitch) for the platform switch.
 #[must_use]
 pub fn sas_pitch(centre_note: i8, centre_fine: i8, note: i32, fine: i32) -> u16 {
+    sas_pitch_scaled(centre_note, centre_fine, note, fine, NEGATIVE_CENTRE_SCALE)
+}
+
+/// [`sas_pitch`], with the negative-centre scale as a parameter rather than
+/// baked in - so the same table walk serves Wipeout HD's
+/// [`HD_NEGATIVE_CENTRE_SCALE`] too. The scale only ever applies in the
+/// negative branch, on both platforms: a non-negative centre note returns the
+/// table walk unscaled.
+#[must_use]
+pub fn sas_pitch_scaled(centre_note: i8, centre_fine: i8, note: i32, fine: i32, scale: u32) -> u16 {
     let negative = centre_note < 0;
     // `-(-128)` does not fit an `i8`; the original's `subu; sll; sra; andi
     // 0xffff` leaves it at `0xff80`, and the walk then runs with that as the
@@ -146,13 +192,15 @@ pub fn sas_pitch(centre_note: i8, centre_fine: i8, note: i32, fine: i32) -> u16 
     };
     let pitch = u32::from(note_to_pitch(centre, i32::from(centre_fine), note, fine));
     if negative {
-        ((pitch * NEGATIVE_CENTRE_SCALE) >> 16) as u16
+        ((pitch * scale) >> 16) as u16
     } else {
         pitch as u16
     }
 }
 
-/// The playback rate in Hz a pitch word means, rounded to the nearest Hz.
+/// The playback rate in Hz a pitch word means on the PSP's SAS core, rounded
+/// to the nearest Hz. Thin wrapper over [`sample_rate_hz_at`] for
+/// [`SAS_SAMPLE_RATE`].
 ///
 /// `SAS_SAMPLE_RATE * pitch / SAS_PITCH_BASE`; the rounding is this port's,
 /// since SAS never expresses the rate in Hz - it steps through the waveform by
@@ -160,7 +208,14 @@ pub fn sas_pitch(centre_note: i8, centre_fine: i8, note: i32, fine: i32) -> u16 
 /// loses nothing to it worth hearing (under 0.005% at 11 kHz).
 #[must_use]
 pub fn sample_rate_hz(pitch: u16) -> u32 {
-    let scaled = SAS_SAMPLE_RATE * u32::from(pitch);
+    sample_rate_hz_at(pitch, SAS_SAMPLE_RATE)
+}
+
+/// [`sample_rate_hz`], with the core rate as a parameter rather than baked
+/// in - so the same rounding serves Wipeout HD's [`HD_SAMPLE_RATE`] too.
+#[must_use]
+pub fn sample_rate_hz_at(pitch: u16, base_rate: u32) -> u32 {
+    let scaled = base_rate * u32::from(pitch);
     (scaled + SAS_PITCH_BASE / 2) / SAS_PITCH_BASE
 }
 

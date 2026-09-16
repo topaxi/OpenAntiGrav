@@ -355,3 +355,7 @@
 0x00126108	function	ShipShield_Update	84	shield.md
 0x00125778	function	ShipShield_InitColours	78	shield.md
 0x001258d8	function	ShipShield_DrawCockpit	68	shield.md
+0x0062e998	function	Scream_ComputeVoiceNote	90	sound.md
+0x0062ea98	function	Scream_NoteToPitch	90	sound.md
+0x0062ec38	function	Scream_VoicePitch	90	sound.md
+0x006332e0	function	CellMs_SetVoiceRate	90	sound.md

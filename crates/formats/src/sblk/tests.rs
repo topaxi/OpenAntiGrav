@@ -237,6 +237,43 @@ fn the_key_on_commands_resolve_to_their_waveform_spans() {
 }
 
 #[test]
+fn a_sound_carries_its_bank_s_own_byte_order() {
+    // `scored_bank` writes little-endian, the only order `Bank::parse`
+    // (rather than `parse_as`) infers for it - `Sound::pitch`/`sample_rate`
+    // switch on this, so a `Sound` that forgot it would silently run the
+    // wrong platform's walk.
+    let data = scored_bank(&[(0x01, 0, 16)], &[]);
+    let sounds = Bank::parse(&data).expect("parse").sounds();
+    assert_eq!(sounds[0].order, ByteOrder::Little);
+}
+
+#[test]
+fn pitch_and_sample_rate_switch_on_byte_order() {
+    // The same descriptor bytes, read as each platform's own walk: HD's
+    // `(centre -60, fine 0)` lands on an exact rate under its own scale and
+    // 0.1% off 48,051 under the PSP's - see `sblk::pitch`'s module doc and
+    // `docs/ghidra/functions/ps3-hdfury-eu/sound.md`'s "The pitch" section.
+    let mut sound = Sound {
+        command: 0,
+        opcode: 0x01,
+        descriptor: 0,
+        volume: 127,
+        centre_note: -60,
+        centre_fine: 0,
+        mode: 0,
+        offset: 0,
+        length: 0,
+        order: ByteOrder::Little,
+    };
+    assert_eq!(sound.pitch(), 0x116f);
+    assert_eq!(sound.sample_rate(), 48_051);
+
+    sound.order = ByteOrder::Big;
+    assert_eq!(sound.pitch(), 0x1000);
+    assert_eq!(sound.sample_rate(), 48_000);
+}
+
+#[test]
 fn a_command_that_is_not_a_key_on_binds_nothing() {
     // 0x05 and 0x16 are both opcodes the shipped banks use, and neither
     // reaches the handler that resolves a descriptor.
