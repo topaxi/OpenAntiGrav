@@ -398,9 +398,15 @@ impl Race {
                 .ai_sample(index + 1)
                 .map(Spline::track_sample)
                 .or(track_sample);
+            // The beam's one-shot throttle, consumed here exactly as slot
+            // 0's is above - a beam locks onto an opponent as readily as onto
+            // the player.
+            let thrust_scale =
+                std::mem::replace(&mut self.sim.world.ships[slot].pending_thrust_scale, 1.0);
             let env = Environment {
                 track_sample,
                 track_sample_next,
+                thrust_scale,
                 // **The same pads the player crosses.** Measured from the
                 // position the tick started at and swept to where the craft is
                 // now, exactly as slot 0's are - see `Race::pad_sweep`. Without

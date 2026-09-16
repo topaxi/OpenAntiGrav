@@ -111,6 +111,18 @@ fn run(ticks: u32) -> (u64, u64) {
 ///
 /// # History
 ///
+/// - **Moved 2026-09-16 (second time today)**, when `Ship::pending_thrust_scale`
+///   and `Beam::slow_ship_factor` joined the hash - the LeachBeam's one-shot
+///   throttle, `craft+0x31c`, is now armed by the drain and spent by the
+///   engine. **Isolated the documented way**: with only the two new
+///   `write_f32`s removed and the throttle itself left in, the previous
+///   constants - `0xa46c_eb85_8895_811b` / `0x21a2_22cd_c7b6_9b5d` at 60 ticks
+///   and `0xb481_6943_0d50_eb4e` / `0xd842_9949_f3b5_9bec` at 600, and
+///   `0xa901_3ebe_47aa_6426` / `0xfb1e_cac3_3b77_b824` and
+///   `0xae8a_645f_7a5b_05af` / `0xfb29_615f_cef3_e900` for the volley -
+///   reproduce bit for bit. Neither scenario fires a beam, so the new field is
+///   `1.0` on every ship on every tick and the whole movement is four more
+///   bytes per ship entering the stream.
 /// - **Moved 2026-09-16**, by a *weapon-law* change and the scenario change it
 ///   forced. `Rocket_HitCraft` (`0x0886ebdc`) and `Rocket_ApplyBlastForce`
 ///   (`0x0886ee88`) give the Rocket the Plasma's shape: a hull hit credits the
@@ -574,8 +586,8 @@ fn run(ticks: u32) -> (u64, u64) {
 ///   Replaces `0xa31c_f93f_c44f_7004` / `0xe197_c1d8_e0b5_d07e` at 60 ticks and
 ///   `0xbe25_d8d5_f406_e799` / `0xc8b7_8f68_8555_be83` at 600.
 const REFERENCE: &[(u32, u64, u64)] = &[
-    (60, 0xa46c_eb85_8895_811b, 0x21a2_22cd_c7b6_9b5d),
-    (600, 0xb481_6943_0d50_eb4e, 0xd842_9949_f3b5_9bec),
+    (60, 0x57a6_3ed9_c3d1_ede7, 0x5706_b5b3_ef8f_3411),
+    (600, 0xf313_687a_6471_7f52, 0xf931_ba11_7aca_8358),
 ];
 
 #[test]

@@ -176,6 +176,23 @@ pub struct Ship {
     /// See `oag_physics::slowdown` for the whole law and
     /// `docs/ghidra/functions/psp-pulse-usa/engine.md` for the evidence.
     pub pending_slowdown: f32,
+    /// The one-shot thrust scale a LeachBeam armed, `craft+0x31c`, until the
+    /// next step consumes it.
+    ///
+    /// `Ship_ApplyPendingWeaponDamage` (`0x0883f13c`) writes the beam's
+    /// `slowShipFactor` here on every tick the beam drains an unshielded,
+    /// racing victim, and `Ship_UpdateEngine` reads it once and writes `1.0`
+    /// back. The composition root hands it to
+    /// `oag_physics::Environment::thrust_scale` at the top of the next step and
+    /// resets it in the same move - the drain runs after the step, so a beam
+    /// throttles from the tick after it connects to the tick after it breaks,
+    /// the same ordering [`Self::pending_slowdown`] has. `1.0` is the neutral
+    /// value, not `0.0`.
+    ///
+    /// Hashed, for [`Self::pending_slowdown`]'s reason: a craft about to lose a
+    /// fifth of its thrust is a different craft one tick later. See
+    /// `docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md`.
+    pub pending_thrust_scale: f32,
     /// The Disruptor effect this craft is under, if any.
     ///
     /// Pure's `craft+0x134`/`+0x138`/`+0x13c` - a flag, a kind and the seconds
@@ -200,6 +217,7 @@ impl Default for Ship {
             standing: oag_race::Standing::default(),
             autopilot_timer: 0.0,
             pending_slowdown: 0.0,
+            pending_thrust_scale: 1.0,
             disruption: crate::disruption::Disruption::default(),
             active: false,
         }

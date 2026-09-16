@@ -119,6 +119,7 @@ fn write_ship(hasher: &mut StateHasher, ship: &Ship) {
         standing,
         autopilot_timer,
         pending_slowdown,
+        pending_thrust_scale,
         disruption,
         active,
     } = ship;
@@ -145,6 +146,11 @@ fn write_ship(hasher: &mut StateHasher, ship: &Ship) {
     // behaviour changing, and `tests/determinism.rs`'s history note records the
     // isolation that proved that.
     hasher.write_f32(*pending_slowdown);
+    // The beam's one-shot throttle, `1.0` through every scenario the gate runs
+    // for the reason the two above are `0.0`: none fires a LeachBeam. Four
+    // more fixed bytes per ship per tick, and the history note in
+    // `tests/determinism.rs` records the move.
+    hasher.write_f32(*pending_thrust_scale);
     // A Disruptor hit's kind and its seconds left. The kind is
     // `DisruptorEffectKind::ALL`'s index plus one, `0` for none - the same
     // shape `write_weapon` gives a pickup. Zero and `0.0` through every
@@ -493,6 +499,7 @@ fn write_leach_beam(hasher: &mut StateHasher, leach_beam: &Option<Beam>) {
                 range,
                 active_time,
                 energy_multiplier,
+                slow_ship_factor,
             } = beam;
             hasher.write_u8(*owner);
             hasher.write_u8(*target);
@@ -515,6 +522,7 @@ fn write_leach_beam(hasher: &mut StateHasher, leach_beam: &Option<Beam>) {
             hasher.write_f32(*range);
             hasher.write_f32(*active_time);
             hasher.write_f32(*energy_multiplier);
+            hasher.write_f32(*slow_ship_factor);
         }
     }
 }
