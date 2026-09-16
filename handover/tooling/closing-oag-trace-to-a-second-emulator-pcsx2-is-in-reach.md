@@ -1,4 +1,4 @@
-# Closing oag-trace to a second emulator: PCSX2 is in reach, RPCS3 has no transport, Vita3K/ShadPS4 have no tooling and ShadPS4's install is broken
+# Closing oag-trace to a second emulator: PCSX2 is done, RPCS3 has no transport, Vita3K/ShadPS4 have no tooling and ShadPS4's install is broken
 
 Investigated 2026-09-16, priority order PCSX2 -> RPCS3 -> Vita3K -> ShadPS4 as asked.
 `oag-trace`'s reading half (`crates/trace/`, `docs/tools/oag-trace.md`) is already
@@ -13,7 +13,7 @@ decomposes into four questions, and a different one blocks each:
 - **(d)** does our own side implement the game at all, so a trace has something
   to diverge against
 
-## PCSX2 (PS2 Pulse) - closable, no new RE needed to start
+## PCSX2 (PS2 Pulse) - closed: a real capture works
 
 All four are already in reasonable shape:
 
@@ -76,21 +76,47 @@ they block is a capture being *useful for verifying steering, braking, or
 timing precisely* until a live PCSX2 session locates the three gaps above,
 and *reproducible across sessions* until someone finds a craft address once.
 
-**Not yet done, in order:**
+**All three gaps above closed in a live session, 2026-09-16.** Full method
+and citations are in `scripts/pcsx2_trace_fields.py` and
+`docs/ghidra/functions/ps2-pulse-eu/craft-update.md`'s new "`steer` and
+`brake`, found live rather than read" section; the short version:
 
-1. A live PCSX2 session: boot, walk to the grid (`pcsx2-debugger.md`'s own
-   table), save a state, and find that state's craft pointer - then a first
-   real capture becomes possible with what's already written.
-2. While in that session: locate `steer`/`brake`'s persisted craft offsets
-   and check whether `dt` is measured or fixed, the same live memory-diff
-   technique the frame counter and body pointer were each found with.
-3. Optional: name the frame counter (`0x0027a7e8`, confidence 90 that it
-   increments once per frame, meaning unnamed) and a front-end state word for
-   scripted menu walks - neither blocks a trace, both are quality-of-life.
-4. Measure `--script-lead` for this transport once a real capture exists (it
-   will very likely be 0 or a small constant given input is applied through
-   verified stepping rather than a live breakpoint, but say so from a
-   measurement, not an assumption carried over from PPSSPP's 2).
+- **Craft pointer found** via a thrust-vs-coast memory diff from the same
+  savestate - PCSX2's frame-advance is deterministic, so everything except
+  the player's own input cancels between the two runs, cutting 2.1M EE RAM
+  words to 1,743 candidates. Confirmed three independent ways (orthonormal
+  cached basis matching the body's own, hover height within 0.06% of the
+  PSP's established range, all-zero controls at rest). Instance data, not
+  repeated here - it's specific to one savestate.
+- **`steer` (`craft+0x2f0`) and `brake` (`craft+0x2ec`) confirmed**,
+  confidence 90 each, by holding inputs and watching the craft block ramp
+  and decay exactly the way `Ship_UpdateSteering`/`Ship_UpdateBrakes`'s own
+  pseudocode says it should. Both are now real reads in `pcsx2-trace.py`,
+  not the `0.0` placeholder.
+- **A real bug found in the process, not just an offset**: one PCSX2-verified
+  frame is one PAL video *field* (50 Hz), not one game tick (25 Hz) - five
+  independent fields read bit-identical across alternating steps. Half of
+  every capture taken the original way was an exact duplicate row.
+  `pcsx2-trace.py` now steps `PHYSICS_STEP_FRAMES = 2` per recorded tick;
+  `dt` is `2/50`, still an assumption (PINE has no register read to confirm
+  it against) but now scaled to the tick the capture actually samples, and
+  the earlier single-step `dt` evidence is retracted as inconclusive - see
+  `pcsx2-debugger.md`.
+
+**First real capture**: `data/traces/ps2-moa-therma-white-thrust-smoketest.csv`
+(gitignored). `oag-trace show` reports 15/15 clean ticks and `dt` uniform at
+exactly 25.00 Hz - the first working PS2 trace this project has produced.
+
+**Still open, lower priority:**
+
+1. Name the frame counter (`0x0027a7e8`) now that its field-vs-frame nature
+   is understood, and a front-end state word for scripted menu walks -
+   neither blocks a trace.
+2. Measure `--script-lead` for this transport against a real input-script
+   capture (only a `--hold`-driven smoke test has run so far).
+3. `dt`'s true nature (measured vs. fixed) is still unconfirmed at the source
+   - the `2/50` value is corroborated by five fields at once rather than
+   asserted, but nothing has read it off a register or a located craft field.
 
 Rough size for the remainder: one live PCSX2 session to unblock a first real
 capture, no further Rust or infrastructure work needed.
@@ -233,10 +259,10 @@ disc-image side of this is ready.
 
 ## Open
 
-- PCSX2: both files now exist and are argument-validated, but nobody has run
-  a real capture yet - that needs a live session to find a craft address, and
-  the same session should also locate `steer`/`brake`'s craft offsets and
-  check `dt`, none of which this pass could do without PCSX2 running.
+- PCSX2: closed - a real capture works, `steer`/`brake` are confirmed and
+  read live, and the field-vs-frame bug is fixed. What's left is lower
+  priority: naming the frame counter, an input-script capture (only `--hold`
+  has been smoke-tested), and `dt`'s true nature at the source.
 - RPCS3: no capture channel exists on the GDB-stub transport at 60 Hz; closing
   this needs either a different RPCS3-side debug interface (unevaluated) or a
   scope decision to accept a non-per-tick verification story on this platform.
@@ -248,12 +274,10 @@ disc-image side of this is ready.
 
 ## Next Steps
 
-- Boot PCSX2 to the grid, save a state, and find that state's craft pointer
-  (`scripts/pcsx2_trace_fields.py`'s `CRAFT_POINTER_NOT_LOCATED` has the
-  method) - then run `scripts/pcsx2-trace.py --craft <address> --from-state
-  <slot> --script <file>` for a first real capture. Use the same session to
-  locate `steer`/`brake`'s craft offsets and check whether `dt` is measured
-  or fixed; measure `--script-lead` once a real capture exists.
+- PCSX2 is done for now. Remaining, lower-priority follow-ups: name the frame
+  counter, run an input-script-driven capture (`--script`, not just `--hold`)
+  and measure `--script-lead` off it, and pin down `dt`'s true nature at the
+  source if it ever blocks a real comparison.
 - For RPCS3, before writing any code: check whether RPCS3 exposes a debug
   interface other than the GDB stub (its own scripting/Cheat Engine style API,
   a PINE-equivalent, anything not bound by the 41 ms/packet-while-paused,
