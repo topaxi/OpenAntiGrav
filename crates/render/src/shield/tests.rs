@@ -268,3 +268,47 @@ fn deactivating_nothing_is_a_no_op() {
     shield.advance(DT);
     assert!(!shield.visible());
 }
+
+/// HD's own hit flash is **amber**, not Pulse's cyan - the one confirmed
+/// colour difference `docs/ghidra/functions/ps3-hdfury-eu/shield.md` found.
+/// Same law, different palette: everything else about the bulge is untouched.
+#[test]
+fn hds_palette_flashes_amber_where_pulses_flashes_cyan() {
+    let mut pulse = ShipShield::new();
+    let mut hd = ShipShield::with_palette(HD_PALETTE);
+    pulse.activate();
+    hd.activate();
+    for _ in 0..60 {
+        pulse.advance(DT);
+        hd.advance(DT);
+    }
+    pulse.hit();
+    hd.hit();
+    assert_eq!(pulse.colour()[..3], HIT_COLOUR[..3]);
+    assert_eq!(hd.colour()[..3], HD_HIT_COLOUR[..3]);
+    assert_ne!(pulse.colour()[..3], hd.colour()[..3]);
+}
+
+/// HD's activation colour is a dim red rather than Pulse's transparent black,
+/// but both start at alpha `0.0` - the fade-up itself is unchanged, only the
+/// hue it starts from moves.
+#[test]
+fn hds_palette_starts_the_fade_up_from_a_different_hue_at_the_same_alpha() {
+    let pulse = ShipShield::new();
+    let hd = ShipShield::with_palette(HD_PALETTE);
+    assert_eq!(pulse.colour()[3], 0.0);
+    assert_eq!(hd.colour()[3], 0.0);
+    assert_eq!(pulse.rgba, ACTIVATION_COLOUR);
+    assert_eq!(hd.rgba, HD_ACTIVATION_COLOUR);
+    assert_ne!(pulse.rgba, hd.rgba);
+}
+
+/// Both palettes settle to the same target: HD's own steady-state colour was
+/// not recovered (see [`HD_PALETTE`]'s doc comment), so it is Pulse's white,
+/// chosen rather than measured. This pins that choice rather than letting a
+/// future palette silently start differing here too.
+#[test]
+fn both_palettes_settle_to_the_same_unmeasured_target() {
+    assert_eq!(PULSE_PALETTE.target, HD_PALETTE.target);
+    assert_eq!(HD_PALETTE.target, TARGET_COLOUR);
+}
