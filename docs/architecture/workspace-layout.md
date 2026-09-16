@@ -125,7 +125,8 @@ too. `Course::START_LINE_OFFSET` was the one exception that could **not** be
 filed - at confidence 65 it stood in for a computation nobody had read. That
 computation is read now (`Course::START_LINE_ADVANCE`, a literal in Pulse's
 `RaceManager_Construct`; [race-progress.md](../ghidra/functions/psp-pulse-usa/race-progress.md)),
-so it is the title's and moves with the rest.
+so it is the title's; it stays on `Course` because that is the one place able
+to apply it, and its doc comment says so.
 
 ## Dependency rules
 

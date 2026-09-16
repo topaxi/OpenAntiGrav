@@ -338,9 +338,9 @@ struct Path {               // 0x20 bytes
 consecutive control points in that path, on all 86 paths, to `f32` precision.
 Confidence **92**: an exact numerical match on 86 independent samples - and the
 reason it is exact is that the running game **recomputes** it: `AiTrack_ComputeLength`
-(`0x0887dba0`) overwrites the field with the measured maximum gap at load, after
-resetting any value outside `0.01..20` to `0.5`. The exporter wrote the same
-number the loader would.
+(`0x0887dba0`) overwrites the field with the measured maximum gap at load (a
+reset of out-of-range values to `0.5` sits before that write and is dead). The
+exporter wrote the same number the loader would.
 
 ### Junctions
 
