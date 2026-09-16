@@ -85,6 +85,13 @@ unnamed rather than forced.
   tag technique: real on the PS3↔PS4 pair only one time out of two probes,
   and pure noise on the Vita↔PS4 pair even seeded from a confirmed match.
 
+- [plasma.md](plasma.md) - `PlasmaManager_Update` and the Plasma's whole
+  per-tick state machine: a hardcoded 1.0 s wind-up (`charge_time` authored
+  and unread, calibrated), a 6.0 probe with world-vertical fall, the
+  +-6.0 corridor hit, `damage * weapon_damage_multiplier` with every
+  offset traced to `WeaponStats_ParseXml`, and the three-model explosion's
+  ramps, 1.3 s collapse and 3.5 s lifetime - cross-checked against
+  `ps3-hdfury-eu/plasma.md`.
 - [billboards.md](billboards.md) - `Billboard_ConstructResource` and
   `TrackStartup_Load`, transferred from and to `ps3-hdfury-eu` by `.cpp` tag,
   an element-name census, and an exact match on two arbitrary resource-loader

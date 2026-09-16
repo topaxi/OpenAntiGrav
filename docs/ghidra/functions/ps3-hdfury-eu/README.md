@@ -74,6 +74,12 @@ Two structural facts to expect, both different from every other binary here:
   weapon docs, plus two owning classes (`WeaponManager`, `Plasma`) found but
   not fully read, and the one trap in `batch_string_anchor_report`'s
   per-binary behaviour.
+- [plasma.md](plasma.md) - `PlasmaManager_Update`, `Plasma_Update`,
+  `Plasma_CheckShipHit` and the `WeaponExplosions` update/draw pair: the
+  1.0 s hardcoded wind-up, the 10.0 s reap, the 6.0 probe, the +-6.0 hit
+  corridor, `WeaponStats_ParsePlasma`'s eleven attributes with `charge_time`
+  unread, and the explosion's 1.7/1.3/1.3 s ramps - the PS3 half of the
+  Pulse/HD/Omega comparison.
 - [collision.md](collision.md) - `Collision.cpp`: the arena, the class, and the
   MeshAABB narrowphase.
 - [race-hud.md](race-hud.md) - the per-mode HUD definitions, their three retro

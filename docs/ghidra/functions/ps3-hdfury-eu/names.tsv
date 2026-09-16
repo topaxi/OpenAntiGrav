@@ -336,3 +336,16 @@
 0x0009bb30	function	Hud_BindWidgets	80	hud-sight.md
 0x0008a5b8	function	Hud_UpdateMissileSight	78	hud-sight.md
 0x00090d30	function	Hud_UpdateLeachBeamSight	78	hud-sight.md
+0x00146e68	function	PlasmaManager_Update	88	plasma.md
+0x0011fc88	function	Plasma_Update	85	plasma.md
+0x00120fe8	function	Plasma_Init	88	plasma.md
+0x0011f810	function	Plasma_Launch	82	plasma.md
+0x00146838	function	Plasma_CheckShipHit	85	plasma.md
+0x00121878	function	Plasma_PostUpdate	80	plasma.md
+0x0011f6c0	function	Plasma_Detonate	85	plasma.md
+0x00127cd0	function	WeaponExplosions_Start	88	plasma.md
+0x00127948	function	WeaponExplosions_Update	88	plasma.md
+0x00127770	function	WeaponExplosions_Collapse	85	plasma.md
+0x00126dc0	function	WeaponExplosions_Reset	88	plasma.md
+0x001270b8	function	WeaponExplosions_Draw	85	plasma.md
+0x0002ca00	function	WeaponStats_ParsePlasma	90	plasma.md
