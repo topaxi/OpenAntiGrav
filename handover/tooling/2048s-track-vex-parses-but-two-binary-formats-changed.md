@@ -565,27 +565,37 @@ TITLE entry rather than showing them under 2048 - see
 ## Open
 
 - Section B's vertex declaration is found and its offsets are cross-checked
-  (see "What is left" above). `normal`'s type (5) and `Uv1`'s (8) are both
-  decoded now - confidence 96 each, see the 2026-08-27 section above - but
-  `tangent`'s (also 5, 4 components) is not. Needs either a verified SceGxm
-  attribute-format reference or Ghidra RE of the eboot's vertex-stream setup
-  path (whoever consumes a submesh record's `+0x10`/`+0x2c` pointers) - not
-  located this session; `RcsModel_Load` itself never touches section B past
-  relocating it. Section B's *other* contents past this one declaration and
+  (see "What is left" above). `normal`'s type (5), `Uv1`'s (8) and, as of
+  2026-09-16, `tangent`'s (also 5, 4 components) are all decoded now -
+  confidence 96, 96 and 76 respectively; `tangent`'s is lower because there
+  is no Wipeout HD twin to check its content against (HD's own renderer has
+  no decoded tangent frame either), so it rests on internal consistency
+  (unit length, orthogonality to the already-cracked normal) rather than a
+  cross-title oracle - see `docs/formats/2048-rcsmodel.md#tangent-is-cracked-too-at-a-lower-confidence`.
+  Section B's *other* contents past this one declaration and
   the material table (see above) - the rest of the serialized object graph
-  `RcsModel_Load` reads whole - remain unwalked, including the
+  `RcsModel_Load` reads whole - remain unwalked, including
   the 64-bit hash beside a submesh's buffer pointers, and the three words
   beside the material index at `-0x20`, `-0x10` and `-0x08`. The
   submesh-to-material binding itself is no longer open - see the section
   above - but it was found by measurement, and the function that actually
-  consumes it is still unlocated, which is the same gap `tangent` needs.
+  consumes it (which would also confirm `tangent`'s and the other two
+  fields' SceGxm type codes symbolically) is still unlocated: a 2026-09-16
+  pass searched for a vertex-declaration/attribute source tag near
+  `System/Render/Model.cpp` and found only a texture-mipmap function at its
+  one located caller, not vertex setup.
 - ~~**The pixel format almost every 2048 texture is stored in is not
   decoded.**~~ Closed 2026-08-27 - `oag_texture::pvrtc`, confidence 92, see
-  the section above. What is *not* closed in that module: `UBC1`, `UBC3` and
-  the two uncompressed format bytes (1,110 textures between them, none reached
-  by anything a race loads), and PVRTC-II's local-palette path, which is
-  implemented from the reference but reached by 0 of 1,082,941,440 texels
-  measured, so it carries no evidence either way.
+  the section above. ~~What is *not* closed in that module: `UBC1`, `UBC3`
+  and the two uncompressed format bytes~~ - also closed, 2026-09-16:
+  `UBC1`/`UBC3` reuse `UBC2`'s twiddled block walk (confidence 88, no HD
+  twin exists for either so a picture check carries it - see
+  `docs/formats/gxt.md`), and the second uncompressed byte, `U8U8U8`
+  (`0x98`, 13 files, confidence 70 - its channel order is unconfirmable,
+  every shipped file being pure grayscale). Every format byte the corpus
+  carries decodes now, 9,910/9,910. Still open in that module: PVRTC-II's
+  local-palette path, implemented from the reference but reached by 0 of
+  1,082,941,440 texels measured, so it carries no evidence either way.
 - `normal`'s own type nibble is closed: two failed passes (HD's packed word,
   both byte orders; a reordered-fields-plus-derived-z scheme that looked
   confirmed on two hand-picked examples until checked at scale) were followed
@@ -658,18 +668,25 @@ TITLE entry rather than showing them under 2048 - see
    ambiguity) is a reusable oracle for the next guess.
 7. ~~`Uv1`'s type nibble~~ - done 2026-08-27, see above: two little-endian
    `f16`s, confidence 96 against the same index-exact HD oracle that settled
-   the normal. `tangent`'s (also type 5, 4 components) is still open -
-   worth checking whether the same per-byte scheme applies before assuming
-   it needs its own RE pass. `lightmapUV`'s offset is placed (same
-   declaration, same type as `Uv1`) but its *content* still cannot be
-   cross-title-checked, a lightmap atlas being baked per platform.
+   the normal. ~~`tangent`'s (also type 5, 4 components) is still open~~ -
+   done 2026-09-16, and the same per-byte scheme *does* apply: one signed
+   byte per component, all four bytes used (no spare padding byte the way
+   `normal` has one), confidence 76 - lower than `normal`'s 96 because there
+   is no HD twin to check content against, only internal consistency
+   (orthogonality to `normal`, unit length, the fourth byte reading as a
+   `+-1` handedness sign on the well-formed subset). See
+   `docs/formats/2048-rcsmodel.md#tangent-is-cracked-too-at-a-lower-confidence`.
+   `lightmapUV`'s offset is placed (same declaration, same type as `Uv1`)
+   but its *content* still cannot be cross-title-checked, a lightmap atlas
+   being baked per platform.
 8. ~~**The submesh-to-material binding.**~~ Done 2026-08-27 - a `u32` index
    `0x18` bytes before the record, confidence 90, see the section above. The
    lesson generalises and is the reason to read that section before the next
    field hunt: **an index does not resemble the thing it indexes**, so a
-   search keyed on a target's identity is structurally blind to one. Two
-   fields in this container are still unplaced (`tangent`'s type nibble, the
-   64-bit hash) and both have so far been searched for by identity.
+   search keyed on a target's identity is structurally blind to one. One
+   field in this container is still unplaced (the 64-bit hash beside a
+   submesh's buffer pointers) and has so far been searched for by identity;
+   `tangent`'s type nibble is no longer in this list - see item 7.
 9. ~~**`PVRTII4BPP` decode.**~~ Done 2026-08-27 - `oag_texture::pvrtc`,
    confidence 92, see the section above.
 10. **What is worth doing next, now that a race draws textured.** In order of
@@ -731,3 +748,59 @@ Override %d`, no `Fog.*`-prefixed keys at all), so reading it against HD's
 fixed for the light rig. `environment::staging` still gates both readers to
 HD's geometry only; modelling 2048's own fog/bloom schema is a fresh, unstarted
 piece of work, not a continuation of this one.
+
+## 2026-09-16: `tangent` is cracked (confidence 76, not `normal`'s 96), and its own gap - the vertex format's runtime consumer - is still the same one
+
+Picked up from item 7 above: does `tangent`'s type-5, 4-component field take
+the same one-signed-byte-per-component scheme `normal`'s type-5, 3-component
+field does? Yes, extended to all four bytes (no spare padding byte the way
+`normal` has one) - `x=byte[0] y=byte[1] z=byte[2]` (`i8/127`),
+`w=byte[3]`. **Confidence 76, deliberately short of `normal`'s 96**: there
+is no Wipeout HD twin to check content against for this field (HD's own
+renderer has no decoded tangent frame either), so the evidence is internal
+consistency across 6,653,653 vertices rather than a cross-title oracle - the
+winning byte assignment is the unique best of the six permutations sharing
+its own byte set (mean `|dot(normal)|` 0.219 against 0.39-0.49 for the other
+five and 0.407 for a deliberately-wrong control), and restricted to the
+58.1% of vertices whose `(x, y, z)` passes a unit-length band, the fourth
+byte reads as a `+-1` handedness sign 82.6% of the time and the tangent
+sits within 20 degrees of perpendicular to `normal` 86.5% of the time. Full
+account, including why the other ~42% reads as genuinely degenerate tangent
+data (a real state at UV poles/seams) rather than a second encoding:
+[2048-rcsmodel.md](../../docs/formats/2048-rcsmodel.md#tangent-is-cracked-too-at-a-lower-confidence).
+Reproducer: `crates/game/examples/vita_rcsmodel_tangent_bytesearch.rs`.
+
+**The Ghidra route was tried and hit the same wall the material-index
+section already recorded for a different field.** `search_strings` for a
+vertex-declaration/attribute source tag near `System/Render/Model.cpp` (the
+plausible runtime mesh class, found among 53 `System/Render/*.cpp` tags)
+found one located caller, `FUN_81287fd4` - a texture mip-generation routine,
+not vertex setup - and walking back from `sceGxmDraw` (NID `0xBC059AFC`) is
+the documented dead end this thread's own material-index section already
+hit. No function was named, so `names.tsv` gains no row this session either.
+**`RcsModel_Load`'s actual consumer is still the standing gap** for all
+three of `normal`, `Uv1` and `tangent` - none of `t5`'s or `t8`'s SceGxm
+symbolic names are confirmed, only recognised by behaviour, and confirming
+the consumer is what would take any of the three past its current ceiling.
+
+**Wired, and confirmed to draw nothing new.** `oag_rcs::rcsmodel::psp2::unpack_tangent`
+decodes it, `psp2::SubMesh::tangents` carries it per vertex on the same
+declaration-lookup terms `texcoords` already uses, and
+`oag_render::mesh::rcs::psp2::Report::authored_tangents` counts it into the
+load report (`just play 2048 --race` now says e.g. "260533 tangent(s)
+decoded, unused (no normal-map consumer yet)" for Altima). **Confirmed
+byte-identical before and after** (`cmp` on `data/shots/2048_tangent_before.png`
+against the post-change render): nothing in this title's mesh path samples a
+tangent-space normal map, and the shared `GpuVertex` vertex layout /
+`mesh.wgsl` - used by every title's mesh path - was deliberately left
+untouched rather than growing an attribute with no consumer.
+
+**The GXT side of this thread's own "What is not decoded" list is also
+closed, same session, unrelated to `tangent`**: `UBC1`/`UBC3` (BC1/BC3, 505
+and 493 files) decode via the same twiddled block walk `UBC2` already uses,
+confidence 88 - no HD twin exists for either so a picture check (a scanned
+manual page, a front-end callout) carries it instead. `U8U8U8` (`0x98`, 13
+files, confidence 70 - channel order unconfirmable, every shipped file being
+pure grayscale) closes the last uncompressed format byte. Every format byte
+the corpus carries decodes now, 9,910 of 9,910 `.gxt` files - see
+[gxt.md](../../docs/formats/gxt.md).

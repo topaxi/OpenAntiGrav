@@ -74,17 +74,22 @@
 //! doc for the search, the eighteen candidate offsets it rules out, and the
 //! Ghidra path that stays open.
 //!
+//! **`tangent` decodes too** - the same one-signed-byte-per-component scheme
+//! as `normal`, extended to all four declared bytes (no spare padding byte
+//! this time, since 4 components exactly fill 4 bytes). **Confidence 76,
+//! not `normal`'s 96**: there is no Wipeout HD twin to check content
+//! against for this field, so it rests on internal consistency
+//! (orthogonality to `normal`, unit length, a handedness-sign fourth byte)
+//! rather than a cross-title oracle. See [`unpack_tangent`].
+//!
 //! **Not decoded**: the object graph's own layout, past the declaration and
 //! the material table. This module finds submesh records *through the
 //! relocation table* rather than by walking B - see [`submeshes`] - which is
 //! honest about what is known and is what makes the reading checkable. Also
-//! not decoded: the tangent (four bytes at `+0x10`, same declared type as
-//! `normal` but four components rather than three - the padding argument
-//! above does not apply, since 4 components exactly fill 4 bytes), the
-//! lightmap coordinate's content (offset placed via the same declaration,
-//! unconfirmable across titles since a lightmap atlas is baked per
-//! platform), and the 64-bit hashes each record carries beside its buffer
-//! pointers - along with the three words beside the material index at
+//! not decoded: the lightmap coordinate's content (offset placed via the
+//! same declaration, unconfirmable across titles since a lightmap atlas is
+//! baked per platform), and the 64-bit hashes each record carries beside its
+//! buffer pointers - along with the three words beside the material index at
 //! `-0x20`, `-0x10` and `-0x08`. See
 //! `docs/formats/2048-rcsmodel.md`.
 //!
@@ -216,6 +221,52 @@ pub fn unpack_texcoord(bytes: [u8; 4]) -> [f32; 2] {
     ]
 }
 
+/// Turns the four bytes at `tangent`'s declared offset (type `5`, 4
+/// components) into `(x, y, z, w)` - the same one-signed-byte-per-component
+/// scheme [`unpack_normal`] uses, extended to all four bytes rather than
+/// three-plus-padding, since `tangent`'s byte budget is exactly 4 for 4
+/// declared components and has no spare byte the way `normal`'s does.
+///
+/// **Confidence 76, not the 96 `normal` carries.** There is no Wipeout HD
+/// twin to check content against - HD's own renderer has no decoded tangent
+/// frame either, so this is corroborated internally rather than
+/// cross-title. Measured over 6,653,653 vertices with a declared `tangent`
+/// attribute (`crates/game/examples/vita_rcsmodel_tangent_bytesearch.rs`):
+///
+/// - **This exact byte assignment (`x=byte[0] y=byte[1] z=byte[2]
+///   w=byte[3]`) is the unique best of the six permutations sharing the same
+///   byte set**, by orthogonality to the already-cracked `normal` at the same
+///   vertex: mean `|dot|` 0.219 against 0.39-0.49 for the other five
+///   permutations and 0.407 for a deliberately-wrong control, over the full
+///   corpus. That one specific ordering standing out, rather than every
+///   permutation of the same bytes scoring alike, is what a real signal looks
+///   like and a coincidence does not.
+/// - **58.1% of vertices decode to a unit-length `(x, y, z)` within 10%** (a
+///   length histogram shows this is a real spike at ~1.0, not an average of
+///   unrelated values) - restricted to that subset, `w` reads as `+-127`
+///   (exactly `+-1.0` here) on **82.6%** of vertices, and the tangent sits
+///   within 20 degrees of perpendicular to the normal on **86.5%**, mean
+///   `|dot|` falling to 0.102. The remaining ~42% - short or zero vectors,
+///   concentrated at `len` near 0 - reads as genuinely degenerate tangent
+///   data (a common, real state at UV singularities/poles) rather than a
+///   second, undiscovered encoding: restricting to vertices whose `Uv1` at
+///   the same offset also decodes finite (ruling out the declaration/stride
+///   mismatch `SubMesh::non_finite_texcoords` already documents) barely
+///   moves either number.
+/// - **Not runtime-verified.** `RcsModel_Load`'s actual consumer, whichever
+///   function binds this declaration into a `SceGxmVertexAttribute`, was not
+///   located, the same gap `normal`'s and `Uv1`'s own confidence already
+///   note. Searching for a vertex-declaration/attribute source tag near
+///   `System/Render/Model.cpp` (the plausible runtime mesh class) found only
+///   a texture-mipmap function at its one located caller, and walking back
+///   from `sceGxmDraw` is a documented dead end on this binary already.
+///
+/// See `docs/formats/2048-rcsmodel.md#tangent-is-cracked-too-at-a-lower-confidence`.
+#[must_use]
+pub fn unpack_tangent(bytes: [u8; 4]) -> [f32; 4] {
+    std::array::from_fn(|i| f32::from(bytes[i] as i8) / 127.0)
+}
+
 /// Something wrong with a 2048 `.rcsmodel`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Error {
@@ -319,6 +370,19 @@ pub struct SubMesh {
     /// hidden regression on the normal, unrelated vertices sharing the same
     /// buffer. See `docs/formats/2048-rcsmodel.md`.
     pub non_finite_texcoords: usize,
+    /// `tangent`, one per vertex, decoded via [`unpack_tangent`] from the
+    /// offset [`vertex_decl::VertexDecl::attribute`] gives for
+    /// [`vertex_decl::TANGENT_HASH`].
+    ///
+    /// Empty on the same terms as [`Self::texcoords`] - a submesh whose
+    /// declaration for this stride names no `tangent` attribute at all, not
+    /// an error. **Confidence 76, corroborated internally rather than
+    /// against Wipeout HD** (which has no decoded tangent frame of its own
+    /// to check against) - see [`unpack_tangent`]'s doc comment for the
+    /// measurement. Not consumed by any renderer yet: nothing in this
+    /// title's mesh path samples a tangent-space normal map, so this is
+    /// carried for a future consumer rather than drawn with today.
+    pub tangents: Vec<[f32; 4]>,
     /// Bytes per vertex, derived from the buffer's own length rather than read
     /// from a field - see [`Model::parse`].
     pub stride: usize,
@@ -685,6 +749,25 @@ fn one(
             }
         }
     }
+    let mut tangents = Vec::new();
+    let tangent_offset = declarations_by_stride.get(&stride).and_then(|decl| {
+        let attr = decl.attribute(vertex_decl::TANGENT_HASH)?;
+        (attr.components == 4 && attr.gxm_type == 5).then_some(usize::from(attr.offset))
+    });
+    if let Some(off) = tangent_offset
+        && stride >= off + 4
+    {
+        tangents.reserve_exact(vertex_count);
+        for v in 0..vertex_count {
+            let at = vertex_at + v * stride + off;
+            tangents.push(unpack_tangent([
+                file[at],
+                file[at + 1],
+                file[at + 2],
+                file[at + 3],
+            ]));
+        }
+    }
     Some(SubMesh {
         record,
         material,
@@ -693,6 +776,7 @@ fn one(
         normals,
         texcoords,
         non_finite_texcoords,
+        tangents,
         stride,
     })
 }

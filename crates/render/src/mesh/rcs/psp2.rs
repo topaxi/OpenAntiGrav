@@ -52,6 +52,18 @@ pub struct Report {
     /// from what the file authored, the same reasoning
     /// [`Self::authored_normals`] already applies to its own fallback.
     pub non_finite_texcoords: usize,
+    /// Vertices whose `tangent` decoded from the file (rather than being
+    /// absent because this submesh's declaration names none) - see
+    /// [`psp2::SubMesh::tangents`].
+    ///
+    /// **Decoded and counted, not yet drawn with.** Nothing in this title's
+    /// mesh path samples a tangent-space normal map, so there is no visual
+    /// difference between a model with this at `0` and one with it equal to
+    /// [`Self::submeshes`]' own vertex total - see
+    /// `docs/formats/2048-rcsmodel.md#tangent-is-cracked-too-at-a-lower-confidence`
+    /// for why this is reported anyway (confidence 76, not yet wired into a
+    /// consumer) rather than silently dropped on the way from `oag_rcs`.
+    pub authored_tangents: usize,
     /// How many materials this model's own table names, whether or not this
     /// build could bind one to a draw - see [`psp2::material`]. `0` for a
     /// model with no readable table, which is not the same state as a model
@@ -91,9 +103,17 @@ impl Report {
                 self.non_finite_texcoords
             )
         };
+        let tangents = if self.authored_tangents == 0 {
+            String::new()
+        } else {
+            format!(
+                "; {} tangent(s) decoded, unused (no normal-map consumer yet)",
+                self.authored_tangents
+            )
+        };
         format!(
             "{} triangle(s) over {} submesh(es), {texture}, {} authored \
-             normal(s) (rest off face normals); {} unaccounted GPU pointer(s){poisoned}",
+             normal(s) (rest off face normals); {} unaccounted GPU pointer(s){poisoned}{tangents}",
             self.triangles, self.submeshes, self.authored_normals, self.unpaired
         )
     }
@@ -167,6 +187,9 @@ pub fn build(label: &str, model_blob: &[u8], textures: Textures<'_>) -> Result<(
             // triangles, exactly as it already does for an HD model.
             let normal = submesh.normals.get(i).copied().unwrap_or([0.0; 3]);
             report.authored_normals += usize::from(normal != [0.0; 3]);
+            // Decoded but not sampled by anything yet - see
+            // `Report::authored_tangents`.
+            report.authored_tangents += usize::from(submesh.tangents.get(i).is_some());
             // The file's own diffuse coordinate where the submesh's
             // declaration names one (`psp2::SubMesh::texcoords`), the
             // vertex's origin otherwise - the same fallback shape `normal`
