@@ -184,9 +184,11 @@ pub enum CraftState {
     /// [`zone-mode.md`](../../../docs/ghidra/functions/psp-pulse-usa/zone-mode.md)
     /// recorded that bit as set by nothing findable, and this is what sets it.
     ///
-    /// The original moves on from here after 1.5 s, into a respawn or the
-    /// Eliminator's kill bookkeeping. **This engine stops here**, because a race
-    /// with one craft in it has nothing to move on to.
+    /// The original moves on from here after 1.5 s, into state 6's respawn
+    /// wait or the Eliminator's state 8. **This crate stops here** and the
+    /// composition root decides: the player's own race ends on this state
+    /// (`RaceState::eliminate`), an opponent or an Eliminator craft is put
+    /// back (`oag_game::race::Race::tick_destroyed_craft`).
     Eliminated,
 }
 

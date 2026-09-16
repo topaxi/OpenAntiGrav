@@ -89,6 +89,21 @@ impl RaceSim {
         // recovery puts them, so two machines that disagree on it produce
         // different races the moment one is needed. See [`RaceSim::last_on_track`].
         hasher.write_u32(self.last_on_track);
+        // The respawn countdown and the kill credit: a craft one tick out on
+        // its return is one tick out on every position after it, and a kill
+        // credited to a different slot is a different Eliminator.
+        for delay in self.respawn_delay {
+            hasher.write_f32(delay);
+        }
+        for damager in self.last_damager {
+            match damager {
+                None => hasher.write_u8(0),
+                Some(slot) => {
+                    hasher.write_u8(1);
+                    hasher.write_u8(slot);
+                }
+            }
+        }
 
         hasher.finish()
     }

@@ -1,5 +1,8 @@
-//! Eliminator's own tick: respawn after death, and the kill/death bookkeeping
-//! that makes it a mode about kills rather than position.
+//! What happens to a destroyed craft: Eliminator's respawn and the kill/death
+//! bookkeeping that makes it a mode about kills rather than position, and a
+//! single race's own opponent respawn, which the original runs through the
+//! same craft states (5 then 6) in every mode and only the player's own
+//! ending cuts short.
 //!
 //! Split out of `tick.rs` under the 1,000-line rule in
 //! `scripts/check-file-size.py`, the same reason every other `race/*.rs`
@@ -43,35 +46,49 @@ use super::*;
 /// table cell `Ship_ResetShield` fills the pool from. Confidence 85.
 pub const LAP_REFILL_FRACTION: f32 = 0.2;
 
-/// Seconds a craft spends fully `Eliminated` before it returns to the race.
+/// Seconds a craft spends in state 5, out of the race, before the respawn
+/// timer even starts: `Ship_SetState`'s case 5 writes `1.5` into
+/// `entity+0x874` and `Ship_UpdateDestroyed` (`0x08847650`) counts it down.
+/// After `DESTROYED_DURATION`'s own half-second explosion. Confidence 85.
+pub(super) const DESTROYED_DWELL: f32 = 1.5;
+
+/// Seconds an AI craft then waits in state 6 before `Ship_UpdateRespawn`
+/// (`0x08847914`) puts it back: `Ship_SetState`'s case 6 writes `0.8` for a
+/// craft whose `entity+0x368` is set and `2.0` for the local player, who
+/// never reaches it in a single race. Confidence 85.
+pub(super) const AI_RESPAWN_WAIT: f32 = 0.8;
+
+/// Seconds an Eliminator craft spends fully `Eliminated` before it returns.
 ///
-/// **Measured, separately from the explosion itself.**
-/// [`oag_physics::CraftState::Eliminated`]'s own doc comment records the
-/// original moving on "after 1.5 s, into a respawn or the Eliminator's kill
-/// bookkeeping" - this is that 1.5 s, counted from the tick the craft reaches
-/// `Eliminated` (i.e. *after* `DESTROYED_DURATION`'s own half-second
-/// explosion has already run).
-pub(super) const ELIMINATOR_RESPAWN_DELAY: f32 = 1.5;
+/// [`DESTROYED_DWELL`] alone. The Eliminator's own state 8 sets a second
+/// timer - `1.0` s for the local player, `2.0` s otherwise, the opposite
+/// ratio to state 6 - and what counts it down was not found, so this build
+/// does not add it; when it is read, this is the constant that grows.
+pub(super) const ELIMINATOR_RESPAWN_DELAY: f32 = DESTROYED_DWELL;
 
 impl Race {
-    /// Runs Eliminator's own destroyed-craft handling for every active craft
-    /// this tick. A no-op on every other mode.
+    /// Brings a destroyed craft back, on the terms its mode sets.
     ///
-    /// **Replaces [`RaceState::eliminate`] for this mode rather than calling
-    /// it.** `RaceState::eliminate` is the right ending for Zone and a single
-    /// race - a destroyed craft there does not come back, see that method's
-    /// own doc comment - but Eliminator's own text is explicit that it does,
-    /// so [`Race::tick`] branches on the mode before reaching either path.
+    /// **Two modes bring one back, and the third does not.** In an Eliminator
+    /// every craft returns after [`ELIMINATOR_RESPAWN_DELAY`], with the
+    /// death and kill bookkeeping the mode is about. In a race with opponents,
+    /// a single race, an *opponent* returns after
+    /// [`DESTROYED_DWELL`] plus [`AI_RESPAWN_WAIT`], which is the original's
+    /// own state 5 then state 6 (`Ship_UpdateDestroyed`, `Ship_UpdateRespawn`,
+    /// `docs/ghidra/functions/psp-pulse-usa/shield.md`), and the player does
+    /// not: the Arcade race's own update (`FUN_0882c5c4`) ends the race on
+    /// the player's destroyed bit before state 6 can run, which is
+    /// [`RaceState::eliminate`]'s job here. Zone, a time trial and a speed
+    /// lap field nobody else, so only the player's own ending applies.
     ///
     /// Call once a tick, after every craft has been stepped
     /// ([`Race::step_opponents`] included) and before
     /// [`Race::update_standings`] reads a lap off any of them, so a craft
     /// that respawns this tick is placed where it is *put*, not where the
     /// explosion left it.
-    pub(super) fn tick_eliminator(&mut self) {
-        if self.sim.world.mode() != Mode::Eliminator {
-            return;
-        }
+    pub(super) fn tick_destroyed_craft(&mut self) {
+        let mode = self.sim.world.mode();
+        let player = self.sim.world.primary_slot();
 
         for slot in 0..self.sim.world.ship_count as usize {
             if !self.sim.world.ships[slot].active {
@@ -82,49 +99,66 @@ impl Race {
                 // Not currently down - the countdown has nothing to run and
                 // must not carry over into the *next* death, which would
                 // shorten it.
-                self.sim.eliminator_respawn_timer[slot] = 0.0;
+                self.sim.respawn_delay[slot] = 0.0;
                 continue;
             }
+            let delay = if mode == Mode::Eliminator {
+                ELIMINATOR_RESPAWN_DELAY
+            } else if slot != player && mode.has_opponents() {
+                DESTROYED_DWELL + AI_RESPAWN_WAIT
+            } else {
+                // The player's own ending, or a solo mode: `RaceState::eliminate`.
+                continue;
+            };
 
-            if self.sim.eliminator_respawn_timer[slot] <= 0.0 {
-                self.sim.eliminator_respawn_timer[slot] = ELIMINATOR_RESPAWN_DELAY;
+            if self.sim.respawn_delay[slot] <= 0.0 {
+                self.sim.respawn_delay[slot] = delay;
             }
-            self.sim.eliminator_respawn_timer[slot] -= self.sim.dt;
-            if self.sim.eliminator_respawn_timer[slot] > 0.0 {
+            self.sim.respawn_delay[slot] -= self.sim.dt;
+            if self.sim.respawn_delay[slot] > 0.0 {
                 // Still down.
                 continue;
             }
 
-            self.sim.world.ships[slot].standing.deaths += 1;
-            // A kill only counts against a *different* craft with a recent
-            // hit on record - see this module's own doc comment for why a
-            // stale or absent damager credits nobody.
-            if let Some(killer) = self.sim.last_damager[slot].take()
-                && killer as usize != slot
-                && self.sim.world.ships[killer as usize].active
-            {
-                self.sim.world.ships[killer as usize].standing.kills += 1;
+            if mode == Mode::Eliminator {
+                self.sim.world.ships[slot].standing.deaths += 1;
+                // A kill only counts against a *different* craft with a recent
+                // hit on record - see this module's own doc comment for why a
+                // stale or absent damager credits nobody.
+                if let Some(killer) = self.sim.last_damager[slot].take()
+                    && killer as usize != slot
+                    && self.sim.world.ships[killer as usize].active
+                {
+                    self.sim.world.ships[killer as usize].standing.kills += 1;
+                }
             }
 
-            // **A full refill, chosen rather than recovered.** The original
-            // charges a respawn instead: `Ship_SetState`'s state-3 branch
-            // computes `clamp(shield - 1, 0, 5)`, and what consumes that
-            // figure is unread - see `oag_physics::damage`'s own module doc.
-            // A full pool is the un-punitive reading, not a measurement.
+            // **A full pool, and for state 6 that is measured**:
+            // `Ship_UpdateRespawn` calls `Ship_ResetShield` on its way back to
+            // state 1. For the Eliminator's state 8 the consumer of its own
+            // timer is unread, so the same refill there is the reading carried
+            // over rather than one of its own.
             let dimensions = self.sim.world.ships[slot].handling.dimensions;
             oag_physics::damage::reset(&mut self.sim.world.ships[slot].physics, &dimensions);
 
             // The player's own last-known-good sample is latched separately
             // ([`RaceSim::last_on_track`]); an opponent's is read off its own
             // driver, the same lookup `Race::step_opponents` uses for its own
-            // recovery.
-            let sample_index = if slot == 0 {
+            // recovery. **The pose is the racing line's**, where
+            // `Ship_UpdateRespawn` puts the craft at the AI corridor's
+            // midpoint five units up, facing forty units down the tangent -
+            // a stated departure, since `Race::respawn` is the one recovery
+            // every path here shares.
+            let sample_index = if slot == player {
                 Some(self.sim.last_on_track as usize)
             } else {
                 let index = self.sim.world.ships[slot].driver.index as usize;
                 self.sample_index_of(index)
             };
             self.respawn(slot, sample_index);
+        }
+        if mode != Mode::Eliminator {
+            return;
         }
 
         let target = self.sim.eliminator_kill_target;
@@ -154,6 +188,11 @@ impl Race {
     /// staggered `WO_WEAPON_ABSORB` bursts. The cue is raised here; the
     /// bursts are not yet drawn. See
     /// `docs/ghidra/functions/psp-pulse-usa/shield.md`.
+    ///
+    /// The original's `last_crossings != 0` gate - the grid-exit crossing
+    /// refills nothing - is `RaceState::lap_gate`'s job here: `lap_completed`
+    /// needs the near half and then the far half driven first, and the
+    /// spawn-to-line crossing has driven neither.
     ///
     /// **The player's craft only in the original** - the mode object reads
     /// its own `+0x2c0`. Called for every slot's lap here, because an

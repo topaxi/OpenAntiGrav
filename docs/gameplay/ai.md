@@ -2760,7 +2760,12 @@ against the code on 2026-08-17; check it again before trusting it.
 
 What is still missing, and it is now a short list:
 **adaptation between races**, which was blocked on per-opponent lap times and is
-not any more; and **anything at all happening when a craft is eliminated**. The
+not any more. ~~And **anything at all happening when a craft is eliminated**~~ -
+**it comes back, as of 2026-09-16**: state 5's `1.5` s and state 6's `0.8` s,
+then `Ship_UpdateRespawn`'s full pool and a place on the line, the way the
+original treats any craft no mode object is watching
+([shield.md](../ghidra/functions/psp-pulse-usa/shield.md#who-ends-a-single-race-on-the-destroyed-bit-and-who-comes-back),
+`Race::tick_destroyed_craft`). The
 player's *own* position is on screen; an opponent's is not - `PosTag0`-`PosTag7`
 are eight fixed-position rows meant to list the field, not the runtime-anchored
 per-craft tags an earlier reading of this line took them for (corrected
@@ -2781,6 +2786,7 @@ row is meant to say is - no `idstring`, no `string`, content unread.
 | **A lap time of its own** | **2026-08-17** | `oag_race::Standing::best_lap_ticks` |
 | **Being recovered when it stops** | **2026-08-17** | `Race::stalled`, `race::STALL_SPEED` |
 | **Reaction latency** | **2026-08-26** | [Reaction latency](#reaction-latency-a-driver-takes-time-to-notice) |
+| **Coming back from a wreck in a single race** | **2026-09-16** | `Race::tick_destroyed_craft`, `race::eliminator::AI_RESPAWN_WAIT` |
 
 **Two of those rows are narrower than they look.** The `[ai]` section holds
 `difficulty` and nothing else - `rubberbanding`, `adaptive` and `mistakes` are
