@@ -730,10 +730,15 @@ to 80 % thrust for as long as the link holds, and *that* is why its block is the
 only one authoring no `slowdown_time`. The absence was design, and this names the
 mechanic that replaces it.
 
-**Deliberately not wired, and it is the one gap:** that thrust scale.
-`oag_physics::engine` documents `craft+0x31c` and does not implement it, so
-wiring `slowShipFactor` needs a new `ShipState` field and its own hash movement.
-The attribute is parsed and carried; nothing spends it yet.
+~~**Deliberately not wired, and it is the one gap:** that thrust scale.~~
+**Wired 2026-09-16.** Not as a `ShipState` field after all: the scale is a
+per-step *input* (`oag_physics::Environment::thrust_scale`, beside `pad_hit`
+and `auto_speed`), held between the drain and the next step on
+`oag_gameplay::world::Ship::pending_thrust_scale` the way `pending_slowdown`
+is. That keeps the physics gate unmoved; only the gameplay constants moved,
+isolated the documented way. `Beam::drain` arms it under the original's three
+gates. See `cannon-quake-leachbeam.md`'s "`slowShipFactor` is why this block
+authors no `slowdown_time`".
 
 **By-catch.** The Quake's hit cue is literally `QUAKEHIT` -
 `PTR_s_QUAKEHIT_08a7b740`, from decompiling `FUN_088418e0` whole. The page had
