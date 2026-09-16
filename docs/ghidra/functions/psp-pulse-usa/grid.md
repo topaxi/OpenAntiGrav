@@ -130,6 +130,56 @@ slots than any shipped track uses, and the format string at `0x08a88864` has
 exactly one xref, the writer. Since the geometry turned out to be offsets from
 one node, that dead end is now explained rather than merely unexplored.
 
+## The layout is derived in code, and the constants are literals
+
+**Read 2026-09-16**: `Race_ComputeGridLayout` (`0x0882b3b0`), called by
+`Race_PlaceGrid` (`0x08827c98`) once per race, fills eight `4x4` matrices
+from the one authored node. The two measured constants above are these
+literals, and a third the measurement could not see:
+
+| Literal | Value | Role |
+| --- | --- | ---: |
+| `0x419e6666` | `19.8` | forward step per slot, along the located sample's **tangent**, re-located on the spline after each step (the walk `grid_poses` already does) |
+| `10.0` | `10.0` | lateral offset, sign alternating per slot - the `+/-20` column stagger is `+10` against `-10` |
+| `0x42480000` / `0x40a00000` | `50.0` / `5.0` | each slot is dropped by a raycast from 50 units above the sample and lifted 5 above the hit |
+
+The walk starts at the `"start position"` registry entry (the authored node,
+located on the spline with radius 100), fills **slot 8 first** and steps
+*forward* seven times - so the node is the back of the grid, as measured. The
+lateral base is not the centreline: each slot sits at the **midpoint of the
+AI corridor** (`SplinePt+0x4c`/`+0x50`), and the sign of the first `10.0` is
+chosen by which corridor edge the authored node is nearer, so the stagger
+always begins on the node's own side. Per-slot orientation is built from the
+sample (`FUN_0882663c`): heading follows the spline at each slot rather than
+the anchor's fixed frame, which on a straight start is the same thing to the
+four decimal places the capture saw.
+
+Two mode branches, both worth having: in **Zone** (`g_game_mode == 6`) the
+lateral offset and the step are both `0`, so the single craft sits on the
+node itself; and when the track definition's `+0x164` flags read as a
+**reversed** circuit (`0x20`, or `0x4` without `0x8`/`0x10`) the step is
+`-19.8` and the lateral sign flips - the grid is laid out *behind* the node
+along the tangent. That is the original's answer to the "reversed grids ran
+off the curve" problem below: it never extrapolates in a straight line, and
+on a reversed file it walks the other way. A track authoring all eight
+`"start position %d"` nodes takes them verbatim instead; no Pulse track does.
+
+`Race_PlaceGrid` then puts every craft on its matrix with a second downward
+raycast (20 units, `+2` above the hit), `Ship_SetState(craft, 0)`, records
+the slot in `craft+0x914` and seeds the position array (`manager+0x98`) in
+grid order. `Race_StartRacing` (`0x08827e6c`) is the green light: every
+human or AI craft (`craft+0x368` of `0` or `2`) gets its engine enabled
+(`FUN_08848590(craft->+0x94, 1)`) and `Ship_SetState(1)`. And
+`Race_FinishAllCrafts` (`0x08824e10`) is the flag: every craft is switched
+to `autopilot_input` (the player) or `AI_input_%d` and put in state `2` -
+**the original drives the player's craft itself after the finish line**,
+which is the behaviour behind the end-race screens' cruising backdrop.
+
+Confidence **88** for the layout, from a full decompile of a function with
+one caller and constants that reproduce the two numbers measured live;
+`GRID_ROW_PITCH`/`GRID_COLUMN_OFFSET` can now be `19.8`/`20.0` by reading
+rather than by fit.
+
 ## Ported, and how close it lands
 
 `oag_gameplay::spawn::grid_pose` is the layout and `oag_game::race::grid_poses`
@@ -454,7 +504,9 @@ its neighbours in that section are not.
   "the table returned the identity" - and the one live run had the local player
   as the last racer, which the identity row also puts in slot 8, so **that run
   cannot separate the permutation from `Ai_Construct`'s forcing either**.
-- **Whether the constants are authored or derived**, above.
+- ~~**Whether the constants are authored or derived**, above.~~ Derived,
+  from literals in `Race_ComputeGridLayout` - see "The layout is derived in
+  code". The port's measured `19.79`/`20.0` should become `19.8`/`20.0`.
 - ~~**Nothing drives the opponents**, and they all wear the player's hull.~~
   Both closed: the AI landed 2026-08-11 and per-team hulls on 2026-08-15. A
   slot now flies its own team's `Data\Ships\<Team>\Ship.vex` - eight

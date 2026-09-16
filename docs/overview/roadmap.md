@@ -811,10 +811,13 @@ original to a player, and whose per-tick trace stays within tolerance.
 of the grid rather than a lone slot.** A track's `Start Position` is **slot 8**:
 this project's spawn from it lands 1.84 units from where the original puts its
 own eighth craft, against 139.7 from where a time trial starts. The other seven
-run forward from it in two staggered columns - `19.79` per slot along forward,
-alternating `20.0` along row 0, all eight sharing one heading - measured off
-eight craft read out of the running original while the countdown held them in
-place. `oag_gameplay::spawn::grid_pose` is the port. Which ship gets which slot
+run forward from it in two staggered columns - `19.8` per slot along the
+spline's tangent, `+/-10` to either side of the AI corridor's midpoint, each
+slot re-located on the spline - first measured off eight craft read out of
+the running original while the countdown held them in place, and since
+2026-09-16 read as the literals in `Race_ComputeGridLayout`
+([grid.md](../ghidra/functions/psp-pulse-usa/grid.md)), which also walks the
+other way on a reversed circuit. `oag_gameplay::spawn::grid_pose` is the port. Which ship gets which slot
 is a shipped permutation table, and a short field packs to the *back*. See
 [grid](../ghidra/functions/psp-pulse-usa/grid.md).
 
