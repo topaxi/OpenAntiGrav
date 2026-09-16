@@ -512,7 +512,17 @@ impl Race {
             // on ticks the first one happened not to fire.
             let lost = self.lost_off_the_circuit(slot);
             let stalled = self.stalled(slot);
-            if lost || stalled || self.reset_zone_touched(slot, &env, position) {
+            // **Not a wreck.** A destroyed craft is coasting by definition, so
+            // the stall dwell would fire on it and `Race::respawn` - whose
+            // `place_at` rebuilds the physics state - would put it back on
+            // the line as a *racing* craft with an empty pool, three
+            // seconds before `Race::tick_destroyed_craft` brings it back
+            // properly. That is what used to happen, and it is why the
+            // clean-lap gate never saw those deaths. The dwells still count,
+            // so a craft that comes back stalled is rescued on time.
+            let alive =
+                self.sim.world.ships[slot].physics.craft_state == oag_physics::CraftState::Racing;
+            if alive && (lost || stalled || self.reset_zone_touched(slot, &env, position)) {
                 self.respawn(slot, last_good);
             } else if self.sim.respawn_cooldown[slot] == 0 {
                 self.sim.respawns_in_a_row[slot] = 0;

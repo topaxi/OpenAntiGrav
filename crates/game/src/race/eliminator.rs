@@ -120,8 +120,12 @@ impl Race {
                 continue;
             }
 
+            // Counted in every mode a craft comes back in, not only the one
+            // whose results screen has a row for it: a death is a fact about
+            // the race, and `crates/game/tests/ai_clean_lap_gate.rs` reads it
+            // to tell a craft that died and came back from one that never died.
+            self.sim.world.ships[slot].standing.deaths += 1;
             if mode == Mode::Eliminator {
-                self.sim.world.ships[slot].standing.deaths += 1;
                 // A kill only counts against a *different* craft with a recent
                 // hit on record - see this module's own doc comment for why a
                 // stale or absent damager credits nobody.
