@@ -142,10 +142,12 @@ pub const MAX_PROJECTILES: usize = 128;
 /// is `222` units a second (see [`launch`] on the unit), so ten seconds is
 /// better than two kilometres - more than a lap of any Pulse circuit is wide.
 ///
-/// **The original caps a rocket at `5.0`** (`FUN_0886de60`, `5.0 < self+0x48`)
-/// and reaps it the way this does - that branch reaches the trail release and no
-/// explosion spawner. Not adopted: it halves every rocket's reach and belongs in
-/// a change about the Rocket. See the handover thread.
+/// **The original caps a rocket at `5.0`** (`RocketPool_Update`, `5.0 <
+/// self+0x48`) and reaps it the way this does - that branch reaches the trail
+/// release and no explosion spawner. Adopted 2026-09-16 as
+/// [`rocket::LIFETIME_SECONDS`], tested ahead of this cap the way the
+/// Missile's own timer is; this constant is now the ceiling for the weapons
+/// that have no recovered cap of their own.
 ///
 /// **A Missile never reaches this**, having detonated at
 /// [`missile::SELF_DETONATE_SECONDS`], but its age is still measured against
