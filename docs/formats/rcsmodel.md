@@ -1865,18 +1865,32 @@ magic, not the old version word byte-swapped.**
 ### The magic, confirmed across the whole disc
 
 **Confidence 85** - structural, not decompiled or traced: consistent across
-every real sample checked, and the low byte alone selects the payload type.
-`.rcsmaterial` opens the same four bytes with `ed` replaced by `e5`:
-`0xCA5CADE5`. Extending `crates/assets/examples/psarc_oracle.rs` (which
-already scores `.vex`/`.gnf` this way) to check for it turns the PS4
-`.rcsmodel`/`.rcsmaterial` population from "no magic, zero-vs-nonzero only"
-into the same three-bucket read the other two formats get - see
+every real sample checked. **The low byte is not one-per-extension** -
+checked against two more extensions the PS4 census already knew about
+(`docs/formats/README.md`'s `.rcsskeleton`/`.rcsanimclip` rows): both open
+the identical `0xCA5CADED` `.rcsmodel` carries, not a distinct tag of their
+own (6 of 11 `.rcsskeleton` and 11 of 17 `.rcsanimclip` disc entries carry
+it). Only `.rcsmaterial` uses the other value, `0xCA5CADE5`. So the family is
+two values across four extensions, not four - `.rcsmodel`/`.rcsskeleton`/
+`.rcsanimclip` share one wrapper and `.rcsmaterial` gets its own. **`.col`
+(the fifth PS4-only extension this census found) was checked and is not a
+member**: its one real sample opens `6B 64 74 72` instead, plausibly a k-d
+tree tag given [`.vex`'s own description](vex.md) of 2048's collision format
+- not chased further, out of this session's scope. Extending
+`crates/assets/examples/psarc_oracle.rs` (which already scores `.vex`/`.gnf`
+this way) to check for the tag turns the PS4 `.rcsmodel`/`.rcsmaterial`
+population from "no magic, zero-vs-nonzero only" into the same three-bucket
+read the other two formats get - see
 [psarc.md](psarc.md#block-data-location---the-first-byte-oracle-was-wrong-and-the-corrected-picture-is-three-way-not-binary)'s
 table. Disc-wide: **77 of 250 `.rcsmodel` entries and 439 of 1,270
 `.rcsmaterial` entries carry the tag**; most of the remainder is the same
 unresolved PSARC block-data-location population that bucket already
-describes for every other extension on this family - not a new problem this
-tag introduces.
+describes for every other extension on this family, confirmed directly rather
+than assumed - **checked 2026-09-16: zero of the 141 `.rcsmodel` and zero of
+the 798 `.rcsmaterial` "garbage"-bucketed entries carry the tag anywhere in
+their declared byte range**, not merely at `+0x00`, which rules out "the tag
+is there but shifted" as an explanation for that bucket on these two
+extensions specifically.
 
 ### The container past the tag is not this page's layout
 
@@ -1890,26 +1904,40 @@ against two more samples:
 ```text
 +0x00  u32     tag, 0xCA5CADED / 0xCA5CADE5 (LE)
 +0x04  u32     0x100 on the sample above, scales with file complexity
-+0x08  u32     2, constant on every sample checked
++0x08  u32     2 on `.rcsmodel`, 1 on `.rcsmaterial` - checked disc-wide, see below
 +0x0c  u32     scales with file size (0x180 on a 139,578-byte file, 0x600 on
                a 1,258,691-byte one) - plausibly a data-region length, not
                confirmed
-+0x10  u32     0x60 on every sample checked
++0x10  u32     0x60 on `.rcsmodel`, 0x40 on `.rcsmaterial` - checked disc-wide
 +0x14..0x1c    zero
-+0x20  u32     0xe35e00df, constant on every sample checked - a second tag,
-               not data
++0x20  u32     0xe35e00df on both `.rcsmodel` and `.rcsmaterial` - checked
+               disc-wide, a second tag shared by the wrapper rather than
+               data specific to either format
 +0x24  u32     varies per file
 +0x28  u32     zero
 +0x2c  u32     varies per file (21 on the 24,624-byte sample) - plausibly a
                count, not identified
 +0x30..0x3c    zero
-+0x40  u32     0xe9f17935, constant on every sample checked - a third tag
++0x40  u32     0xe9f17935 on `.rcsmodel` (checked disc-wide) - a third tag,
+               `.rcsmodel`-specific: the same offset on `.rcsmaterial` holds a
+               small varying integer instead (`8` on two samples), not a tag
 +0x44..0x4c    four more fields, one of which tracks file size loosely
 +0x60..        a table of what read as ascending 8-byte values (mostly, not
                always, monotonic - two of 23 entries on the sample above break
                order), each well inside the file's own length: an offset
                table into whatever follows, not confirmed as such
 ```
+
+**The three constant fields are a real disc-wide invariant, not a
+three-sample coincidence** - checked 2026-09-16 over every tag-valid file:
+`+0x08`, `+0x10` and `+0x20` hold their stated value on **77 of 77**
+tag-valid `.rcsmodel` files and **437 of 439** tag-valid `.rcsmaterial`
+files. The two exceptions are both named `Glass_reflect_2.rcsmaterial`
+(`04_chenghou_project` and `01_vineta_k`) and hold `0x5cade542` at `+0x20`
+instead - three of the expected tag's four bytes (`e5 ad 5c`), shifted by
+one byte, which reads as a one-byte insertion or deletion somewhere before
+that offset in those two files specifically rather than a different value.
+Not chased further.
 
 Past that table, on the same file: a 4x4 identity matrix (sixteen `f32`s,
 `1.0` on the diagonal) at `+0x230`, and the ASCII string `OutlineShape` at

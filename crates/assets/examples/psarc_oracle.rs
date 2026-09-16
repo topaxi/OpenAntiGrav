@@ -99,20 +99,26 @@ impl Bucket {
 /// `.rcsmodel`/`.rcsmaterial` carry **no magic on PS3** - `oag_rcs::rcsmodel`'s
 /// own module docs measure that directly, and it still holds there. **On this
 /// PS4 family they do**: every real (non-all-zero) sample carries a fixed
-/// four-byte tag at `+0x00`, `ED AD 5C CA` on `.rcsmodel` and `E5 AD 5C CA` on
-/// `.rcsmaterial` - read little-endian, `0xCA5CADED`/`0xCA5CADE5`, i.e. the
-/// low byte of a shared `0xCA5CADxx` ("cascaded") family selects the payload
-/// type. This is a PS4-only finding (this tool only ever runs against this
-/// family's archives) and does not change what `oag_rcs::rcsmodel::Model::parse`
+/// four-byte tag at `+0x00`, read little-endian as `0xCA5CADxx` ("cascaded").
+/// **The low byte is not one-per-extension** - checked 2026-09-16 against
+/// `.rcsskeleton` and `.rcsanimclip` too, both of which turned up in the same
+/// census that first found `.rcsmodel`/`.rcsmaterial`: `.rcsmodel`,
+/// `.rcsskeleton` and `.rcsanimclip` all share `0xCA5CADED`, and only
+/// `.rcsmaterial` uses `0xCA5CADE5` - two values across four extensions, not
+/// four. `.col` (also found by the same census) was checked and is **not** a
+/// member: its one real sample opens `6B 64 74 72` instead. This is a
+/// PS4-only finding (this tool only ever runs against this family's
+/// archives) and does not change what `oag_rcs::rcsmodel::Model::parse`
 /// (big-endian, PS3-shaped) accepts - see `docs/formats/rcsmodel.md`'s PS4
 /// section. Confidence 85: consistent across every real sample checked
-/// (dozens, across `data00`-`data04`), but the container underneath the tag
-/// is a different, unread layout rather than a byte-swap of PS3's.
+/// (77 of 77 `.rcsmodel` and 437 of 439 `.rcsmaterial` disc-wide, per that
+/// page's own header-field table), but the container underneath the tag is
+/// a different, unread layout rather than a byte-swap of PS3's.
 fn expected_magic(ext: &str) -> Option<Option<(usize, &'static [u8])>> {
     match ext {
         "vex" => Some(Some((0x0c, b"VEXX"))),
         "gnf" => Some(Some((0x00, b"GNF "))),
-        "rcsmodel" => Some(Some((0x00, &[0xed, 0xad, 0x5c, 0xca]))),
+        "rcsmodel" | "rcsskeleton" | "rcsanimclip" => Some(Some((0x00, &[0xed, 0xad, 0x5c, 0xca]))),
         "rcsmaterial" => Some(Some((0x00, &[0xe5, 0xad, 0x5c, 0xca]))),
         _ => None,
     }
