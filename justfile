@@ -58,7 +58,7 @@ default_scenario := "verification/scenarios/talons-junction-time-trial-lap.input
 native_video_flags := if os() == "linux" { "--features native-video" } else { "" }
 
 # fmt + lint + test + docs + architecture rules, the gate every commit must pass
-check: fmt-check lint test check-docs check-deps check-determinism check-size check-names check-captures check-handover check-link-data check-strings check-just-args
+check: fmt-check lint test check-docs check-deps check-determinism check-size check-names check-captures check-handover check-link-data check-strings check-just-args check-status
 
 # Documentation is a deliverable, so its links are checked like any other build output
 check-docs:
@@ -916,6 +916,15 @@ check-size:
 # it needs to make them. CI has no Ghidra, so without this nothing reads the file
 check-names:
     python3 scripts/check-ghidra-names.py
+
+# docs/overview/status.md's RE-coverage table is generated from names.tsv and
+# the evidence pages; a row that lands without regenerating it fails here
+check-status:
+    python3 scripts/gen-re-coverage.py --check
+
+# Regenerate that table after a names.tsv or evidence-page change
+gen-status:
+    python3 scripts/gen-re-coverage.py
 
 # docs/ghidra/captures/ is what a Ghidra database held that names.tsv does not:
 # labels, plate comments, and the structs and prototypes that turned out not to

@@ -16,7 +16,7 @@ for what is actually done versus planned before assuming a subsystem exists.
 ## Commands
 
 ```sh
-just              # fmt-check + lint + test + check-docs + check-deps + check-determinism + check-size + check-names + check-handover - the gate every commit must pass
+just              # fmt-check + lint + test + check-docs + check-deps + check-determinism + check-size + check-names + check-handover + check-status - the gate every commit must pass
 just fmt          # cargo fmt --all
 just lint         # cargo clippy --workspace --all-targets -- -D warnings
 just test         # cargo nextest run --workspace
@@ -27,6 +27,7 @@ just check-determinism # asserts no platform transcendental reaches simulation c
 just check-size   # ratchet on file length (1k lines) and on inline #[cfg(test)] modules (200) (scripts/check-file-size.py)
 just check-names  # every names.tsv row still matches its evidence page, offline (scripts/check-ghidra-names.py)
 just check-handover # HANDOVER.md stays under 256 KiB, the Read tool's own ceiling (scripts/check-handover-size.py)
+just check-status # docs/overview/status.md's RE-coverage table matches names.tsv and the evidence pages; `just gen-status` regenerates it (scripts/gen-re-coverage.py)
 just check-strings # every menu.toml row/title has a string_id and its english.toml text, ratchet over pre-existing debt (scripts/check-strings.py)
 just check-test-budget # no test-data suite over 450s and no single test over 300s, ratchet (scripts/check-test-budget.py)
 just build        # cargo build --workspace
