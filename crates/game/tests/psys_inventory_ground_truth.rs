@@ -124,7 +124,7 @@ const NO_TRIGGER_RECOVERED: &[(&str, &str)] = &[
         "WO_BOMB_SMOKERING",
         "the Bomb is built and detonates, the same way the Mine does - but \
          its teardown is a distinct function from the Mine's own \
-         `FUN_08867370` (a separate pool cursor, `+0xc4`/cap 32 against the \
+         `MinePool_Update` (a separate pool cursor, `+0xc4`/cap 32 against the \
          Mine's `+0x164`/`+0x64`, per `mine.md`), and that function is \
          unread. The disc authors no separate `WO_BOMB_EXPLO`; whether a \
          bomb's detonation plays this smoke ring, `WO_MINE_EXPLO` (now \

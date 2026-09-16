@@ -1098,10 +1098,10 @@ Two consequences:
   longer matters much - every entry has to reach the same struct for these
   offsets to mean anything.
 - **This whole chain is the Mine's blast.** `0x0886794c`, its caller
-  `FUN_08867b50` and *its* caller `FUN_08867370` all sit in `0x08867xxx`, which
-  is `Weapon_DropMines`' own subsystem, and the fuse `FUN_08867370` counts down
+  `Mine_SweepCraftTrigger` and *its* caller `MinePool_Update` all sit in `0x08867xxx`, which
+  is `Weapon_DropMines`' own subsystem, and the fuse `MinePool_Update` counts down
   at `+0x48` is the one `Mine_Init` (`0x08859ac8`) loads `<Mine> timetodie`
-  into. See [mine.md](mine.md). `FUN_08867370` is **still not renamed** - see
+  into. See [mine.md](mine.md). `MinePool_Update` is **still not renamed** - see
   that page for the one measurement that resists it.
 
 Raised to **82** on that basis. What holds it off 84 is listed under "what is
@@ -1251,7 +1251,7 @@ mid-race re-read before anyone treats it as a finding.
 caller.** The write site, its accumulate-not-overwrite semantics and the
 falloff formula are now traced across the whole function body, the
 source-position helper is resolved, `T`'s identity is now measured rather
-than disputed, and the caller (`FUN_08867b50`, below) is now fully read
+than disputed, and the caller (`Mine_SweepCraftTrigger`, below) is now fully read
 rather than found-but-unread - genuine gains, and `targetIndex`'s origin (a
 range-checked sweep over every craft) is settled, not guessed. What still
 holds it under 70: the `stats` table's identity and its
@@ -1259,8 +1259,8 @@ holds it under 70: the `stats` table's identity and its
 function alone with no second independent site to cross-check; the
 `stats->0x368` branch's three cases are not understood, only observed; and
 the trigger two hops further up - what arms a craft's fuse timer and what
-calls `FUN_08867370` each tick - is still open, so "a rocket, a mine or a
-missile" is narrowed (see `FUN_08867370`'s own section for why a mine now
+calls `MinePool_Update` each tick - is still open, so "a rocket, a mine or a
+missile" is narrowed (see `MinePool_Update`'s own section for why a mine now
 fits best) but not confirmed.
 
 #### A second writer at `FUN_08868ea4` (`0x08868ea4`), not renamed
@@ -1304,7 +1304,7 @@ first place.
 `0x30` (48)-iteration loop over a pointer array based at `craftArray+0x68`
 (`entity = *(craftArray + 0x68 + i*4)`, `i` from `0` to `47`) - a **third**
 parallel entity-pointer array on `craftArray`, distinct from the `+0x64` one
-`FUN_08867b50` sweeps and the `+0x48` one `FUN_088690fc` sweeps below; this
+`Mine_SweepCraftTrigger` sweeps and the `+0x48` one `FUN_088690fc` sweeps below; this
 page has still not settled whether the three are independent lists or views
 into the same one at different strides. For each `entity`, a gate
 (`func_0x0005abdc(impulse, entity)`, unread, real address `0x0885abdc`)
@@ -1315,7 +1315,7 @@ building the same `local_30`/`local_2c`/`local_28` 12-byte vector from
 target index or `-1` "no specific target" sentinel at `+0x8`, an xyz vector
 at `+0xc..+0x18`) and both set a flag on `entity+0x3c` (`|= 0x4` on the `-1`
 path, `|= 0x24` otherwise) - the same bit `Weapon_PostBlastImpulse_q` and
-`FUN_08867b50` set on their own "this connected" flag, corroborating that
+`Mine_SweepCraftTrigger` set on their own "this connected" flag, corroborating that
 `entity+0x3c` is a shared flags word across all of this page's contact
 paths, not a per-function coincidence. The non-`-1` branch additionally calls
 `func_0x00065054(craftArray, *(impulse+0x8), i)` (unread, real address
@@ -1332,7 +1332,7 @@ callers, not specific to either. Both branches then call
 `source = *(craftArray + sourceIndex*4 + 0x68)` (the same `+0x68` array
 `FUN_08868a10` walks, this time indexed directly rather than swept), gates on
 a validity check (`func_0x0005ed4c`, the same unread validity function
-`FUN_08867b50` calls at its own step 1) applied to `*(craftArray +
+`Mine_SweepCraftTrigger` calls at its own step 1) applied to `*(craftArray +
 *(source+0x40)*4 + 0x48)` - the **`+0x48`** array, a fourth entity-pointer
 list. Reads two vectors off `source` (`func_0x0005601c`, unread, real address
 `0x0885a01c`) and builds a normalised direction between them (the
@@ -1342,7 +1342,7 @@ length compares equal to zero, rather than dividing by it - the same shape
 sweeps `0..*(0x00577f8)` - a *dynamic* global count, not `FUN_08868a10`'s
 fixed `0x30` - over the `+0x48` array, **skipping `i == *(source+0x40)`**:
 `source+0x40` read here as "this entity's own index, so the sweep does not
-test itself against its own line" corroborates `FUN_08867b50`'s identical
+test itself against its own line" corroborates `Mine_SweepCraftTrigger`'s identical
 `entity+0x40` field, read there as a per-entity counter/index compared
 against its own loop variable the same way. For each candidate that is not
 `source` itself: two dot-product bounds checks against the direction vector
@@ -1365,7 +1365,7 @@ read so far, which is itself worth flagging rather than silently reconciling.
 Confidence on both functions' shape: **60** (the flag bits, the shared
 `FUN_08868ea4`/`func_0x00065054` call pair, and the `+0x40` self-index
 corroboration are read off two independent decompiles and agree with each
-other and with `FUN_08867b50`'s established fields); **under 50** on what
+other and with `Mine_SweepCraftTrigger`'s established fields); **under 50** on what
 either function is *for* semantically (a name like
 `ShipContact_ApplyImpulseSweep` is a guess about the swept-capsule reading,
 not a measurement), so neither is renamed. `func_0x0005abdc`,
@@ -1524,12 +1524,12 @@ being `1` or `10`), `FUN_08844ec4` (unread), `FUN_0883f424` (unread), and
 `+0x1bc` state building what reads like HUD hit-notification text, not
 chased.
 
-### `FUN_08867b50` (`0x08867b50`-`0x08867f1b`): `Weapon_PostBlastImpulse_q`'s caller, and it settles `targetIndex`
+### `Mine_SweepCraftTrigger` (`0x08867b50`-`0x08867f1b`): `Weapon_PostBlastImpulse_q`'s caller, and it settles `targetIndex`
 
 **Read 2026-08-19.** Disassembled in full (decompiler resistant, same as
 everything else on this page today). Signature `(craftArray, sourceIndex)` -
 no target argument at all. It sweeps `0..*(0x0885b7f8)` (a fixed global -
-a different count source than `FUN_08867370`'s own `craftArray+0x164`, which
+a different count source than `MinePool_Update`'s own `craftArray+0x164`, which
 turned out live to be `1`, not a craft count at all - see that function's own
 section) as *candidate targets* over `craftArray`; whether `*(0x0885b7f8)`
 itself resolves to `8` is not independently measured here, but the *target*
@@ -1565,9 +1565,9 @@ the obvious guess given the shape, not confirmed), gated on
 `*(0x0885b7f8)->0xb8 < 14` skipping it. Measured, not chased further; nothing
 here feeds the pending-impulse path.
 
-### `FUN_08867370` (`0x08867370`-`0x0886759b`): the fuse that drives the sweep
+### `MinePool_Update` (`0x08867370`-`0x0886759b`): the fuse that drives the sweep
 
-**Read 2026-08-19**, following `FUN_08867b50`'s one confirmed caller
+**Read 2026-08-19**, following `Mine_SweepCraftTrigger`'s one confirmed caller
 (`search_instructions` on the image-relative `jal` operand, same method as
 every other caller found this session). Signature `(craftArray, dt)` - `dt`
 in `f12`, the leading-float-does-not-reserve-`a0` convention this project has
@@ -1578,25 +1578,25 @@ extrapolation from the loop's shape and is withdrawn** - and for each one:
 1. `craft->0x48 -= dt`, written back unconditionally - **a per-craft countdown
    timer**, decremented every call.
 2. If the timer is now `<= 0.0`: an optional side effect identical in shape to
-   `FUN_08867b50`'s own post-loop block (same two unread calls, same `< 14`
+   `Mine_SweepCraftTrigger`'s own post-loop block (same two unread calls, same `< 14`
    gate, same `source+0x3c |= 0x4` flag - gated here on `*(craft+0x3c) & 0x1`
-   rather than always), then **unconditionally** `FUN_08867b50(craftArray,
+   rather than always), then **unconditionally** `Mine_SweepCraftTrigger(craftArray,
    thisCraftIndex)` - the expiring craft becomes the blast's `sourceIndex`.
 
-So the chain from `FUN_08867370` down is: `FUN_08867370` counts down whatever
+So the chain from `MinePool_Update` down is: `MinePool_Update` counts down whatever
 `craftArray->0x164` names (see the correction just below - not a craft
-count), and fires `FUN_08867b50` sourced from whichever entry's timer
-expires → `FUN_08867b50` sweeps its own candidate targets over `craftArray`
+count), and fires `Mine_SweepCraftTrigger` sourced from whichever entry's timer
+expires → `Mine_SweepCraftTrigger` sweeps its own candidate targets over `craftArray`
 (a different, wider count - see that function's own section above), box-then-
 sphere range-checks each one, and calls `Weapon_PostBlastImpulse_q` for every
 candidate that qualifies → `Weapon_PostBlastImpulse_q` posts the impulse this
 page has already fully read. What arms the timer, and what calls
-`FUN_08867370` itself, are both still open - the next two sections narrow the
+`MinePool_Update` itself, are both still open - the next two sections narrow the
 first without closing either.
 
 **Correction, same session: `craftArray->0x164` is not "eight race craft" -
 but `craftArray` the pointer is still the roster.** A live breakpoint at
-`FUN_08867370` (`0x08867370`), read for its own `a0` and `*(a0+0x164)`,
+`MinePool_Update` (`0x08867370`), read for its own `a0` and `*(a0+0x164)`,
 measured the count at **`1`** during a driven Single Race with a full
 eight-craft grid. "It loops every craft" - this page's own first attempt at
 describing this loop - does not survive that measurement: whatever
@@ -1605,7 +1605,7 @@ loop only visits that many entries via `craftArray + i*4 + 0x64`, so it is
 not visiting all eight craft as fuse-bearers either. That is a narrower claim
 than it first looks, though: it says `+0x164` is not a craft count, not that
 `craftArray` itself is some other base entirely. The pointer keeps flowing
-unchanged into `FUN_08867b50` and then `Weapon_PostBlastImpulse_q`, and
+unchanged into `Mine_SweepCraftTrigger` and then `Weapon_PostBlastImpulse_q`, and
 *that* function's own target identity was independently settled at a live
 breakpoint two sections up, by a completely different route (enumerating
 craft off `Ship_ApplyCollisionImpulse`'s own `a0`, not through `craftArray`
@@ -1673,12 +1673,12 @@ order:
    wants and a forward-flying rocket or missile does not.
 6. The same `< 14` side-effect gate and the same two unread calls
    (`0x0885abc4`/`0x0894c784`) every function on this page has now shown at
-   least once, here with a `20`-literal parameter where `FUN_08867b50` and
-   `FUN_08867370` both used `12` - a per-caller intensity/duration argument is
+   least once, here with a `20`-literal parameter where `Mine_SweepCraftTrigger` and
+   `MinePool_Update` both used `12` - a per-caller intensity/duration argument is
    the obvious guess, unread.
 7. Increments the pool cursor.
 
-**`craft->0x48` - the fuse `FUN_08867370` decrements - is written nowhere in
+**`craft->0x48` - the fuse `MinePool_Update` decrements - is written nowhere in
 this function.** A clean negative result, not an oversight: every field this
 function touches on the new entity is listed above, and `+0x48` is not among
 them. The spawn call at `0x0885f188` was the next candidate this page
@@ -1715,7 +1715,7 @@ way, but a distinct base address and a distinct field, `+0xbc` rather than
 `+0xe8`/`+0xec`/`+0xf0`/`+0xfc`). This is exactly the shape a fuse-arming
 write should have - a distance- or launch-speed-scaled base time plus a
 per-weapon-type offset - and it is a `=`, not a `-=`, consistent with arming
-rather than the routine per-tick decrement `FUN_08867370` already reads.
+rather than the routine per-tick decrement `MinePool_Update` already reads.
 
 **Its caller, `FUN_0886a920`, is its own pool-allocation function - and its
 pool does not obviously match `FUN_08863a20`'s Mine pool.** Read for its
@@ -1732,10 +1732,10 @@ the indexing offset are counted above.) Reached through a two-instruction
 trampoline,
 `FUN_0886b458` (`0x0886b458`-`0x0886b473`, forwards its third argument into
 the second slot too), whose own caller is not found by a static `jal` search
-- the same indirect-dispatch shape as `FUN_08867370` itself.
+- the same indirect-dispatch shape as `MinePool_Update` itself.
 
 **A static re-read the same session found a positive match that cuts the other
-way, though.** `FUN_08867370`'s own decrement instruction - read in full this
+way, though.** `MinePool_Update`'s own decrement instruction - read in full this
 time (`disassemble_bytes` over the whole function, not inferred from the
 earlier partial trace) - resolves its per-slot entity with `lw s4, 0x64(s3)`,
 where `s3` walks `craftArray + i*4` exactly like every pool on this page. That
@@ -1746,7 +1746,7 @@ allocate the very entity `FUN_0885bf84` arms, and the decrement itself -
 not one: the slot arithmetic and the field offset both line up. What still
 does not line up: `FUN_0886a920`'s own allocation cursor lives at
 `subsystem+0xa4` (`sltiu a0, a2, 0x10` gates it against the cap `16` there),
-while `FUN_08867370`'s loop bound is `craftArray+0x164` - a different offset,
+while `MinePool_Update`'s loop bound is `craftArray+0x164` - a different offset,
 so this is not proof the two functions read the very same field, only that
 they index the very same *shape* of array off what could plausibly be the
 same subsystem struct (a rotating write-cursor and a separate live-count on
@@ -1787,7 +1787,7 @@ proof the *ordinary* path stayed silent. See
 [ppsspp-debugger.md](../../../reverse-engineering/ppsspp-debugger.md#a-controlled-watch-can-still-miss-a-write---the-pool-slot-outlives-the-log-does-not)
 for the full account.
 
-So: settling whether `FUN_0885bf84` is really the write `FUN_08867370` needs
+So: settling whether `FUN_0885bf84` is really the write `MinePool_Update` needs
 is still open, but for a narrower reason now - not "the pool shape doesn't
 match" (it mostly does), but "this weapon-instance's slot lifetime is
 apparently too short to catch mid-flight with a write watch, and the
@@ -1809,12 +1809,12 @@ trusting a watchpoint to report absence) are the concrete next steps.
   weapon-fire-bookkeeping call and the HUD-text branch above - a full case
   read of `FUN_0883f540` past what this pass needed.
 - **`Weapon_PostBlastImpulse_q`'s caller chain is now read two hops up**:
-  `FUN_08867b50` and its own caller `FUN_08867370` (the fuse driver), both
+  `Mine_SweepCraftTrigger` and its own caller `MinePool_Update` (the fuse driver), both
   above. Still unread: `FUN_08868a10` and `FUN_088690fc` (the second writer's,
   two call sites), `FUN_0883f540` (`Ship_ApplyCollisionImpulse`'s - now partly
   read above, but its own five unread callees are not), what arms
   `craft->0x48`'s fuse in the first place, and whatever calls
-  `FUN_08867370` itself every tick (not found via a static `jal` search -
+  `MinePool_Update` itself every tick (not found via a static `jal` search -
   see that section for why an indirect/table dispatch is the working guess).
   Reading the second writer's callers is what would identify its own trigger
   and confirm the consumer's calling context beyond the `a1` answer above.
@@ -1822,11 +1822,11 @@ trusting a watchpoint to report absence) are the concrete next steps.
   [`crate::wall::apply_pending_impulse`] - and so does
   `Weapon_PostBlastImpulse_q` - [`crate::wall::post_blast_impulse`], both
   correct and tested against directly-supplied inputs. But nothing in this
-  crate calls `post_blast_impulse`: `FUN_08867b50` and `FUN_08867370` are read
+  crate calls `post_blast_impulse`: `Mine_SweepCraftTrigger` and `MinePool_Update` are read
   well enough now to know exactly *how* a blast is dispatched and *why*
   `targetIndex` is whatever it is, but not well enough to know *when* one
   actually fires - the fuse-arming site and the per-tick caller feeding
-  `FUN_08867370` its `dt` are both still open. The second writer has no port
+  `MinePool_Update` its `dt` are both still open. The second writer has no port
   at all. So `pending_impulse` is still never set by anything in this crate,
   and `apply_pending_impulse` stays a correct, tested, but fully inert no-op
   end to end.

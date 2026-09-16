@@ -407,7 +407,7 @@ reads for `Weapon_PostBlastImpulse` too. `FUN_0886b898` has no write at that
 offset anywhere in its body.
 
 **`Weapon_PostBlastImpulse` has exactly one caller in the whole executable**
-- `get_xrefs_to 0x0886794c` returns a single hit: `FUN_08867b50`, the Mine's
+- `get_xrefs_to 0x0886794c` returns a single hit: `Mine_SweepCraftTrigger`, the Mine's
 own chain (`mine.md`, `contact-response.md`). That one-caller fact is still
 true and still means the Plasma never reaches *this specific address*.
 ~~And `Weapon_PostBlastImpulse` [is] the only function in the binary that

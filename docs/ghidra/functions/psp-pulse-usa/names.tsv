@@ -1031,3 +1031,5 @@
 0x0886e7ac	function	Rocket_SweepCraftHit	88	rocket-visuals.md
 0x0886ee88	function	Rocket_ApplyBlastForce	90	rocket-visuals.md
 0x0886f154	function	Rocket_SweepProjectiles	78	rocket-visuals.md
+0x08867370	function	MinePool_Update	85	mine.md
+0x08867b50	function	Mine_SweepCraftTrigger	88	mine.md
