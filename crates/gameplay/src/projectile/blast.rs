@@ -209,6 +209,57 @@ pub fn blast(
     reached
 }
 
+/// Spends a tripped mine on the one craft that tripped it.
+///
+/// **Recovered.** `Mine_SweepCraftTrigger` (`0x08867b50`) finds the first craft
+/// inside `trigger_radius`, raises the mine's destroy bit, and - only if that
+/// craft is also inside `blastradius` (`stats->0xec`) - calls
+/// `Weapon_PostBlastImpulse(pool, mine, craft)` (`0x0886794c`,
+/// `contact-response.md`), which credits **that craft** with `damage`
+/// (`+0xe8`) and `slowdown_time` (`+0xfc`) and posts a `(1 - d/blastradius) *
+/// blastforce` impulse into its `+0x110`. Nothing sweeps the other craft, and
+/// `MinePool_Update`'s teardown only spawns the explosion. So a craft that
+/// trips a mine from between the two radii sets it off and takes nothing,
+/// and a bystander inside `blastradius` takes nothing either.
+pub(super) fn blast_mine_trip(
+    ships: &mut [crate::world::Ship],
+    point: Vec3,
+    stats: &BlastStats,
+    struck: u8,
+    rules: oag_physics::DamageRules,
+    absorbed: &mut [bool],
+) {
+    let Some(ship) = ships.get_mut(struck as usize).filter(|s| s.active) else {
+        return;
+    };
+    let offset = ship.physics.body.position - point;
+    let distance = offset.length();
+    let radius = stats.radius;
+    if distance >= radius {
+        return;
+    }
+    ship.pending_slowdown += stats.slowdown_time;
+    let dimensions = ship.handling.dimensions;
+    let report =
+        oag_physics::damage::apply_weapon(&mut ship.physics, &dimensions, stats.damage, rules);
+    if let Some(flag) = absorbed.get_mut(struck as usize) {
+        *flag |= report.absorbed;
+    }
+    let direction = if distance > 1e-4 {
+        offset.normalize()
+    } else {
+        Vec3::Y
+    };
+    let falloff = if radius > 0.0 {
+        1.0 - distance / radius
+    } else {
+        1.0
+    };
+    ship.physics
+        .body
+        .apply_impulse(direction * (falloff * stats.force));
+}
+
 /// Spends a Plasma bolt's direct craft hit: full [`BlastStats::damage`] and
 /// [`BlastStats::slowdown_time`] to `struck` alone, plus a
 /// [`BlastStats::force`] impulse - falling off exactly as [`blast`]'s does -
@@ -337,6 +388,19 @@ pub(super) fn apply_impacts(
         // `0x0886ee88`, read 2026-09-16) share with the Plasma's pair
         // field for field. Every other weapon's craft hit still goes through
         // the uniform full-radius [`blast`] below, unexamined.
+        // **A tripped mine spends itself on the craft that tripped it and
+        // nobody else.** `Mine_SweepCraftTrigger` (`0x08867b50`, read
+        // 2026-09-16) raises the destroy bit for the first craft inside
+        // `trigger_radius` and calls `Weapon_PostBlastImpulse` for *that*
+        // craft alone, and only when it is also inside `blastradius`; no
+        // sweep of the rest follows, and the pool's teardown adds nothing.
+        // See [`blast_mine_trip`].
+        if impact.kind == Weapon::Mine
+            && let Some(struck) = impact.struck
+        {
+            blast_mine_trip(ships, impact.point, &stats, struck, rules, absorbed);
+            continue;
+        }
         if matches!(impact.kind, Weapon::Plasma | Weapon::Rocket)
             && let Some(struck) = impact.struck
         {
@@ -354,3 +418,6 @@ pub(super) fn apply_impacts(
         blast(ships, impact.point, &stats, rules, absorbed);
     }
 }
+
+#[cfg(test)]
+mod tests;

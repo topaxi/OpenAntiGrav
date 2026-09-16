@@ -509,14 +509,13 @@ which is the whole point of the weapon.
   `+0xa0` and nothing found integrates it.
 - **That `trigger_radius` is what trips a mine** is this engine's reading of an
   authored attribute; the code path that spends it was not found.
-- **`FUN_08867370` is deliberately unnamed.** It walks a pool with the exact
-  `+0x164` cursor and `+0x64` base `Weapon_DropMines` uses, decrements the same
-  `+0x48` the Mine's fuse lives at, and blast-sweeps on expiry - so "it is
-  `Mines_Update`, and a mine detonates when its fuse runs out" is a strong
-  hypothesis. It is not named because **no caller resolves** for it under either
-  address rendering, and because `contact-response.md` records a live breakpoint
-  reading its `+0x164` as `1` at race load with no weapon fired, which a mine
-  count should not be. Under 50 by the rubric, so no rename.
+- ~~**`MinePool_Update` is deliberately unnamed.**~~ **Named 2026-09-16**
+  (`MinePool_Update` 85, `Mine_SweepCraftTrigger` 88), both read in full: the
+  fuse raises only the destroy bit and the teardown spawns the explosion, so a
+  mine that times out hurts nobody; the trip credits the *one* craft that
+  tripped it, and only inside `blastradius`. The port follows both. See
+  [mine.md](../../docs/ghidra/functions/psp-pulse-usa/mine.md)'s 2026-09-16
+  section.
 - ~~**Nothing dispatches bit `0x2000`**, the Cannon's own fire bit~~. **Read
   2026-09-07**: it never needed to be dispatched. The Cannon fires through a
   separate per-frame reload countdown gated on the held-weapon id, not through
@@ -851,7 +850,7 @@ long.** `get_xrefs_to Plasma_Update` resolves to two callers; the second,
 and it holds everything the 2026-09-02 read had gone looking for in the fire
 path. The lesson worth keeping: **the fire handler was never going to hold the
 timer, because in this engine the pool walker is where a weapon's per-tick
-state machine lives**. `FUN_08867370` is the Mine's equivalent and this thread
+state machine lives**. `MinePool_Update` is the Mine's equivalent and this thread
 had already named it as the template - the mistake was reading it as "the
 teardown" rather than "the update".
 
@@ -1136,8 +1135,8 @@ suite (931 passed).
   for about an hour of this session (drawing nothing, replacing the
   Rocket-reuse bug), then a live Ghidra session found the actual spawn call:
   **`Mine_SpawnExplosion`** (`0x08867f1c`, confidence 90) is called from
-  `FUN_08867370`'s uniform teardown, reached from both the fuse timeout and
-  `FUN_08867b50`'s trigger_radius sweep, and plays `WO_MINE_EXPLO` - confirmed
+  `MinePool_Update`'s uniform teardown, reached from both the fuse timeout and
+  `Mine_SweepCraftTrigger`'s trigger_radius sweep, and plays `WO_MINE_EXPLO` - confirmed
   by a direct memory read of the string, not inferred from a plausible name.
   See [mine.md](../../docs/ghidra/functions/psp-pulse-usa/mine.md#mine_spawnexplosion-plays-wo_mine_explo)
   for the full read, including the finding that fourcc `MIEX` is a shared
@@ -1150,7 +1149,7 @@ suite (931 passed).
   against `+0x164`/`+0x64`) and has not been read. `mine.md`'s new section
   names the two candidates - `WO_MINE_EXPLO` reused at a larger scale (which
   would match "the bomb should be static, like the mines, just a single big
-  mine" extended to the visual) or its own `WO_BOMB_SMOKERING`. `FUN_08867370`
+  mine" extended to the visual) or its own `WO_BOMB_SMOKERING`. `MinePool_Update`
   is the template to read next: find the Bomb-pool equivalent (likely nearby,
   structurally similar) and see what it calls at teardown.~~ **Read 2026-09-15,
   not built.** `BombPool_Update` (`0x088638b8`) is that equivalent, and the
@@ -1470,7 +1469,7 @@ craft near it.
 3. `Weapon_PostBlastImpulse` (`0x0886794c`) - the only function in the binary
    that reads a weapon's `damage`/`blastradius`/`blastforce` and posts an
    impulse - has exactly one caller in the whole executable
-   (`get_xrefs_to`): `FUN_08867b50`, the Mine's own chain. The Plasma never
+   (`get_xrefs_to`): `Mine_SweepCraftTrigger`, the Mine's own chain. The Plasma never
    reaches it.
 4. `search_functions("Blast")` finds five names total and no
    `Plasma_ApplyBlast`-shaped one; the two `*_Construct` functions are visual

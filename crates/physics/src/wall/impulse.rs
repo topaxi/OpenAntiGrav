@@ -76,7 +76,7 @@ use crate::ship::ShipState;
 /// `Weapon_PostBlastImpulse_q` (`0x0886794c`) computes a distance falloff off
 /// a per-weapon stats table and **accumulates** an impulse into the target's
 /// pending vector - a rocket, mine or missile explosion is the unconfirmed
-/// guess for its caller (`FUN_08867b50`, found but unread). A second, unnamed
+/// guess for its caller (`Mine_SweepCraftTrigger`, found but unread). A second, unnamed
 /// writer loops over what reads like a short entity list doing the same
 /// accumulate, also with a found-but-unread caller. `Ship_ApplyCollisionImpulse`
 /// itself is now read at instruction level too: the forward-axis projection
@@ -216,16 +216,16 @@ pub fn apply_pending_impulse(state: &mut ShipState) {
 ///
 /// # Nothing calls this yet, and now the shape of what would is known
 ///
-/// The original's caller, `FUN_08867b50`, is read in full: given a source
+/// The original's caller, `Mine_SweepCraftTrigger`, is read in full: given a source
 /// craft index, it sweeps *every* craft as a candidate target, box-then-
 /// sphere range-checks each one against a per-weapon-type radius, and calls
 /// this function once per candidate that qualifies - which is where
 /// `target`/`source` and the range check this crate would need to reproduce
-/// actually come from. `FUN_08867b50`'s own caller, `FUN_08867370`, is read
+/// actually come from. `Mine_SweepCraftTrigger`'s own caller, `MinePool_Update`, is read
 /// too: it decrements a per-craft countdown timer every tick and fires the
 /// sweep for whichever craft's timer expires - a shape that fits a proximity
 /// mine better than a rocket or missile, though unconfirmed. Still open:
-/// what arms that timer, what feeds `FUN_08867370` its own per-tick call, and
+/// what arms that timer, what feeds `MinePool_Update` its own per-tick call, and
 /// the `radius`/`power` table itself, which this crate has not parsed. See
 /// `docs/ghidra/functions/psp-pulse-usa/contact-response.md` for the full
 /// two-hop read. So this is a correct, tested, pure function with no wiring

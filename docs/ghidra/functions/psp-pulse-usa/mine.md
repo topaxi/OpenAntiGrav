@@ -504,7 +504,8 @@ second page would be nine tenths this one.
   see [`Mine_SpawnExplosion` plays `WO_MINE_EXPLO`](#mine_spawnexplosion-plays-wo_mine_explo)
   above: `blastradius`'s consumer is `Weapon_PostBlastImpulse_q`, and the
   visual both `trigger_radius` and the fuse timing out reach is
-  `Mine_SpawnExplosion`.
+  `Mine_SpawnExplosion`. **And 2026-09-16, the credit is single-target and
+  the fuse spends nothing** - see the section at the end of this page.
 - ~~**The Bomb's own explosion call.** Whether `Weapon_FireBomb`'s teardown
   reaches `Mine_SpawnExplosion` too (the same `WO_MINE_EXPLO`, larger) or its
   own equivalent is unchased - see the note at the end of the section above.~~
@@ -885,3 +886,59 @@ draws a hemisphere model, a smoke-ring `.pob` and a shockwave model, and plays
 `BOMBEXPL`; and a Quake wave detonates it. `MINE_EXPLO_EFFECT` reused for the
 Bomb would be a stand-in, and so would be `WO_BOMB_SMOKERING` on its own.
 
+## 2026-09-16: the fuse and the trip spend differently, and the pool is named
+
+`FUN_08867370` and `FUN_08867b50` decompile cleanly on the relocated database
+and are read in full; both are named, the "no caller resolves" reservation
+notwithstanding, because the bodies leave nothing to guess and the pool is
+reached through a node's update virtual the way every pool in this engine is
+([resource-loading.md](resource-loading.md)).
+
+**`MinePool_Update` (`0x08867370`, 85)** is the Rocket pool's template on
+the `+0x164` count: pass one runs `FUN_08859ecc(dt, mine)` (the per-mine
+animator) and the fuse `mine+0x48 -= dt`, and when the fuse reaches zero on a
+live mine (bit `0`) it raises **only the destroy bit `4`** - under a network
+mode it also posts a `0xc`-byte "mine gone" record. Then
+`Mine_SweepCraftTrigger(pool, i)` per mine. Pass two, for every slot with bit
+`4`: `Mine_SpawnExplosion`, clear bits `2`/`3`, `+0x40 = -1`, swap with last.
+**Nothing on the fuse path or the teardown touches a craft**: a mine that
+times out plays `WO_MINE_EXPLO` and hurts nobody, the same shape as a
+Missile's expiry. The earlier "both ways out spend a blast" reading in
+`crates/gameplay/src/projectile/mine.rs` was an inference from the chain's
+shape and is retracted; the port now expires a mine quietly.
+
+**`Mine_SweepCraftTrigger` (`0x08867b50`, 88)** is the only caller of
+`Weapon_PostBlastImpulse` (`0x0886794c`), and it calls it for **one craft**:
+
+```c
+r = stats->trigger_radius;                            // +0x100
+for each craft (the firer only once FUN_08859f04(mine) says the mine is armed for it):
+    if (!(mine->flags & 8)) continue;                 // armed
+    if (Ship_IsTargetable(craft) /* FUN_08862d4c */) {
+        d = craft->pos (+0x90) - mine->pos;
+        if (|d.x|,|d.y|,|d.z| < r && |d| < r) {       // cube, then sphere
+            mine->flags |= 4;                         // detonate
+            if (|d| < stats->blastradius /* +0xec */)
+                Weapon_PostBlastImpulse(pool, mine, craft);   // THIS craft: damage, slowdown, impulse
+            (network record)
+        }
+    }
+}
+if (Quake_SpanIntensityAt(track cursor at the mine) > 0.1) mine->flags |= 4;   // a Quake sets mines off
+```
+
+So the blast is **not** a radius sweep: the craft that trips the mine is the
+only one credited, and only if it is also inside `blastradius` - a craft
+tripping it from the ring between the two radii sets it off for nothing, and
+a bystander standing inside `blastradius` takes nothing. `Weapon_PostBlastImpulse`'s
+own reading on [contact-response.md](contact-response.md) had it as a
+single-target function all along; what was missing was that nobody loops it.
+Two more things fall out: **a Quake wave passing under a mine detonates it**
+(no credit to anyone), and `Rocket_SweepProjectiles`
+([rocket-visuals.md](rocket-visuals.md)) raising bit `4` on a mine a rocket
+flies through has the same quiet result. Ported: `blast::blast_mine_trip`
+credits the tripping craft alone, gated on `blastradius`; the Quake and
+rocket trips are not yet built.
+
+`FUN_08859f04` (the firer-arming test, 60) and `FUN_08862d4c` (targetable,
+shared with `Rocket_HitCraft`'s shield check, 60) stay unnamed.

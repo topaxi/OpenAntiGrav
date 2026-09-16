@@ -207,9 +207,9 @@ pub const MISSILE_BOUNCE_EFFECT: &str = "WO_MISSILE_BOUNCE";
 /// The explosion a mine plays, whenever and however it detonates.
 ///
 /// **Recovered, confidence 90, direct instruction-level read.** `Mine_SpawnExplosion`
-/// (`0x08867f1c`) is called from `FUN_08867370`'s uniform teardown pass for
+/// (`0x08867f1c`) is called from `MinePool_Update`'s uniform teardown pass for
 /// every entity the fuse timeout **or** `Weapon_PostBlastImpulse_q`'s own
-/// trigger_radius sweep (`FUN_08867b50`) marked for destruction - so a mine
+/// trigger_radius sweep (`Mine_SweepCraftTrigger`) marked for destruction - so a mine
 /// that runs out of time and a mine a craft walks into play the same file.
 /// It calls the already-named `Psys_Spawn_q` with the fourcc tag `MIEX` - a
 /// generic "this is an explosion" instance tag shared with

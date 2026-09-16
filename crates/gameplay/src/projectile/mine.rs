@@ -308,7 +308,7 @@ pub const fn frozen_pose(orientation: Quat) -> Quat {
 /// arrangement is now read and it is narrower than this**: `Bomb_UpdateTrigger`
 /// (`0x08863d7c`) skips the owner only while the bomb's age is under `0.5 s`
 /// (`Bomb_InArmingDelay`, `0x08863440`), after which the layer can trip its
-/// own bomb like anyone else. The Mine's own sweep (`FUN_08867b50`) has not
+/// own bomb like anyone else. The Mine's own sweep (`Mine_SweepCraftTrigger`) has not
 /// been read for the same point, so the permanent exclusion stays this
 /// engine's for both, labelled as such - see
 /// `docs/ghidra/functions/psp-pulse-usa/mine.md`'s 2026-09-15 Bomb section.
@@ -425,25 +425,23 @@ pub(super) fn advance_laid(
     if projectile.lifetime > 0.0 {
         return None;
     }
-    // **Both ways out of here spend a blast**, which is the opposite of the
-    // Missile's expiry and is recovered rather than assumed. `Impact::blast`
-    // exists because a missile that runs out of time spawns its explosion and
-    // hurts nobody - the pool's teardown calls the spawner and neither the
-    // damage nor the force. A mine's fuse running out is the other shape
-    // entirely: the chain that reads it (`FUN_08867370` counts `+0x48` down,
-    // `FUN_08867b50` sweeps, `Weapon_PostBlastImpulse` posts) *is* the blast,
-    // and there is no path where it goes off quietly. A mine that expired
-    // harmlessly would be a mine nobody ever needed to drive around.
-    // The fuse. An unauthored weapon is the one path that reaches here with
-    // nothing to spend, and it produces an impact whose blast lookup then finds
-    // nothing - one free slot and no damage, rather than a charge that lives for
-    // ever.
+    // **A mine whose fuse runs out goes off quietly; a bomb's does not.** This
+    // comment used to say both ways out of here spend a blast, from the shape
+    // of the Mine's chain; `MinePool_Update` (`0x08867370`) read in full on
+    // 2026-09-16 says otherwise. Its first pass counts `+0x48` down and, at
+    // zero, only raises the destroy bit; `Weapon_PostBlastImpulse` is called
+    // from one place, `Mine_SweepCraftTrigger`'s trip branch, and the second
+    // pass's teardown is `Mine_SpawnExplosion` and the slot swap - the same
+    // explosion-and-nothing a Missile's expiry gets. See
+    // `docs/ghidra/functions/psp-pulse-usa/mine.md`, "the fuse and the trip
+    // spend differently". The Bomb keeps its blast: `BombPool_Update` calls
+    // `Bomb_Detonate` on the fuse, which is its own read on the same page.
     Some(Impact {
         point: here,
         kind,
         owner,
         struck: None,
-        blast: true,
+        blast: kind != Weapon::Mine,
         effect: None,
     })
 }
