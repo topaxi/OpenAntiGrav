@@ -1038,12 +1038,15 @@ own regression story.
   independently re-derived past confirming it mirrors `Rocket_HitCraft_q`'s own
   caller shape - hence 82, not higher, and no `_q` since the *routing* is solid
   even where the geometry detail is not fully walked.
-- **`Plasma_SpawnDetonation`'s double call on a craft hit.** `Plasma_SweepCraftHit`
+- ~~**`Plasma_SpawnDetonation`'s double call on a craft hit.** `Plasma_SweepCraftHit`
   calls it inline (gated on `FUN_0883e37c`) and `Plasmas_Update`'s own pass-two
   teardown calls it again, unconditionally, for any entity left with the destroy
   bit set - which a craft hit always leaves set. Whether this is a genuine
   double-spawned flash or `FUN_0883e37c` degates it is not chased; owned by the
-  `blast_models` lane, not renamed or touched here.
+  `blast_models` lane, not renamed or touched here.~~ **Settled 2026-09-16 - see
+  [a craft hit spawns two detonation objects](#a-craft-hit-spawns-two-detonation-objects-and-fun_0883e37c-does-not-degate-it)
+  below: `FUN_0883e37c` evaluates true in every mode this project plays, so a
+  craft hit genuinely double-spawns.**
 - **`DAT_08b36c08`**, compared against a Plasma bolt's owner inside
   `Plasma_HitCraft` to decide whether to set the struck craft's own
   `+0x124` byte (the flag `Ship_Damage` reads as its fifth argument). Reads as
@@ -1336,3 +1339,96 @@ here since the Bomb's teardown is outside this page's own function set.
   that six of the rows are cross-checks against pages that already had the right
   answer. **Write the cross-checkable rows down first and the arithmetic errors
   announce themselves**; a table of only-new addresses would have shipped.
+- **2026-09-16, `plasma-flash-ai` pass.** `FUN_0883e37c` read in full
+  (disassembly, not just the decompile, which drops its one argument) and
+  settles the double-call question the `blast_models` lane left open: see
+  [a craft hit spawns two detonation objects](#a-craft-hit-spawns-two-detonation-objects-and-fun_0883e37c-does-not-degate-it).
+  Not renamed - the mechanism is certain, the subsystem it belongs to is not.
+
+## A craft hit spawns two detonation objects, and `FUN_0883e37c` does not degate it
+
+**The decompiler's `bool FUN_0883e37c(void)` signature is wrong: it drops the
+one argument the call site passes.** The disassembly shows no register setup
+before `jal 0x0883e434` beyond what the caller already left in `a0`, so the
+argument (`*(struck_craft.body + 0xf0)`, a back-pointer of some kind) passes
+straight through. Read whole, stripped of the VFPU-free integer noise:
+
+```c
+bool FUN_0883e37c(void *entity) {
+    int class_or_slot = (char)*(byte *)(*(int *)(entity + 0xae4) + 0x60);  // FUN_0883e434
+    if (class_or_slot & 0xffffffc0) return true;      // out of range (e.g. a signed -1 sentinel)
+    uint64_t mine = FUN_0891e908(g_display);          // this local viewer's own 64-bit mask
+    uint64_t bit  = (uint64_t)1 << class_or_slot;      // FUN_0897bc08 is a generic 64-bit variable shift
+    return (mine & bit) != 0;
+}
+```
+
+`FUN_0891e908(param_1)` reads: if `DAT_08abff58` (a viewport/local-player
+count) is `> 1` and the index is in range, index `param_1 + idx*8` for a
+per-viewport 64-bit mask; otherwise return the fallback pair
+`DAT_08a885c8`/`DAT_08a885cc` unconditionally, ignoring `param_1` entirely -
+so `g_display` is only consulted at all in split-screen. `FUN_0897bc08` is
+confirmed to be exactly `(hi:lo) << shift` on 64-bit operands split across two
+32-bit registers - the classic idiom a MIPS compiler emits for a
+variable-width 64-bit shift it cannot do natively.
+
+**Both constants were read directly out of the image rather than assumed:**
+
+| Address | Bytes | Reading |
+| --- | --- | --- |
+| `0x08a7b928`/`2c` (the `1ULL` fed to the shift) | `01 00 00 00 00 00 00 00` | confirms the "compute `1<<n`" idiom |
+| `0x08a885c8`/`cc` (the non-split-screen fallback mask) | `ff ff ff ff ff ff ff ff` | **every bit set** |
+
+So outside split-screen - which is every mode this project plays or has wired
+- `FUN_0891e908` always returns all-ones, `class_or_slot` is masked against
+0..63 either way (the AI/no-viewport sentinel case returns `true` even
+earlier, without touching the mask at all), and **`(mine & bit) != 0` is true
+for every value the byte can hold.** `FUN_0883e37c` cannot return `false` in
+single-player. It does not degate the second call - it is a split-screen
+"does the current local viewer's own class mask enable this" gate that is
+compiled out to "always yes" everywhere this project's own play is concerned.
+
+**Answering the brief's question directly: two, not one, and it is not a
+guess-dressed-as-a-name situation, it is a measured fact.** A craft hit:
+
+1. `Plasma_SweepCraftHit` sets the bolt's own destroy bit (`plasma+0x3c |= 4`)
+   and, gated on the now-always-true `FUN_0883e37c`, calls
+   `Plasma_SpawnDetonation` inline with `&local_380` - a copy of **the struck
+   craft's own body position** (`craft.body+0x50`, the same field
+   `Plasma_ApplyBlastForce` reads as its per-craft `hit_anchor`).
+2. Because the destroy bit is now set, `Plasmas_Update`'s own pass-two
+   teardown - unconditional for any destroy-bit entity, in the **same**
+   `Plasmas_Update` invocation, later the same tick - calls
+   `Plasma_SpawnDetonation` again, this time with `&p->position`, **the
+   bolt's own last position**.
+
+**Same models, different positions.** `Plasma_SpawnDetonation` takes no
+identity/dedup argument and no static state that would make a second call a
+no-op: it always allocates a fresh `0x170`-byte object
+(`FUN_08946e40(0x170, &DAT_08a7c9b0, 0x21a)`) and always calls
+`PlasmaBlast_Construct` on it, so the two calls are two independent
+`PlasmaBlast` instances, each playing its own baked 1.5 s animation over the
+identical three-model set `PlasmaBlast_Construct` always builds - see
+[the blast's own per-tick animation](#the-blast-objects-own-per-tick-animation-plasmablast_update).
+The two positions are close (the struck craft's body position versus the
+bolt's own position on the tick that swept into it, within the `-6.0 < d <
+6.0` cylinder `Plasma_SweepCraftHit` tests) but not identical, so this reads
+as "the flash draws once where the ship got hit and once where the bolt was,"
+not a literal duplicate of the same object.
+
+**Confidence 88 on the behaviour** (every step is a decompile or a
+disassembly plus two directly-read memory constants, not inference), **under
+50 on `FUN_0883e37c`'s own identity** - "a per-local-viewer, per-craft-class
+visibility mask" is the shape the code has, but neither `entity+0xae4`'s
+struct nor `+0x60`'s exact meaning ("local player index", guessed) is
+corroborated anywhere else, so it is left as `FUN_0883e37c` rather than
+renamed on one reading.
+
+**Not ported.** The fix belongs in `oag_gameplay::projectile::blast` /
+`Impact` and the visuals that consume it (`blast_direct_hit`, the render
+side) - both outside this pass's owned files (`crates/gameplay/src/projectile/**`
+and `crates/game/src/race/weapons/visuals.rs` are `plasma-speed-blend`'s and
+`blast_models`'s lanes respectively). This section is the read those lanes
+need to act on: a Plasma craft hit should spawn **two** `Impact`-triggered
+flash/blast instances, one at the struck craft's position and one at the
+bolt's, not one.
