@@ -156,9 +156,11 @@ file field [track.md](../../../formats/track.md) had as `unk_0x40` holds
 point to `0.9988` at path 0's last, and `dt * L` matches the point spacing
 to a mean 0.16 units). The same function recomputes each path's
 `max_spacing` from the data, which is why that field was "exactly the
-longest gap". If the file's `t` deltas do not sum to something in
-`0.6..10`, every `+0x40` is zeroed and `L` becomes `1.0` - a track without
-the field would count no laps at all.
+longest gap" (the reset of that field to `0.5` when it reads outside
+`0.01..20` is dead code: the measured maximum overwrites it unconditionally).
+If the file's `t` deltas do not sum to something in `0.6..10`, every `+0x40`
+is zeroed and the divisor becomes `1.0`, so `L` is the perimeter and `arc`
+is `0` everywhere - a track without the field would count no laps at all.
 
 The seed is the subtle part: a craft that starts *past* the line seeds
 `wraps = -1` so its progress starts one lap negative and its crossing
@@ -209,7 +211,9 @@ Three consequences for a reimplementation:
   crossing therefore share `2 * dt` of clock where only `dt` elapsed: **every
   recorded lap is exactly one frame longer than the time driven.** Static
   reading only, confidence 85; a capture that logs `craft+0x928` against a
-  frame count is the check, and at 60 Hz the excess is 16.7 ms.
+  frame count is the check - `psp-trace.py` can read `craft+0x928` and
+  `craft+0x920` directly, so one capture over two laps settles it - and the
+  excess is one frame time, whatever the variable timestep made that frame.
 - **The first crossing starts the race but not the clock.** `craft+0x920`
   accumulates `dt` from the first update and is only reset by a *lap*
   completion, so lap 1 is timed from whenever `Race_UpdatePositions` starts
@@ -244,7 +248,7 @@ Confidence **88**. The manager registers itself as `"Race manager"`, then:
 ```c
 start = Registry_Lookup("start position 1");           // the authored Start Position node
 track = Registry_Lookup("AI track data");
-AiTrack_LocatePosition(10000.0, track, &sample, start->pos /*+0x30*/, &cursor, -1, 0);
+AiTrack_LocatePosition(9984.0, track, &sample, start->pos /*+0x30*/, &cursor, -1, 0);   // 0x461c4000
 line_point = sample.pos + 154.0 * sample.tangent;        // 0x431a0000
 if (AiTrack_LocatePosition(100.0, track, &sample, &line_point, 0, -1, 0))
     manager->line_arc /*+0x7ac*/ = sample.t * track->units_per_t;
@@ -259,7 +263,9 @@ the slot's nearest point is `t = 0.4509`, the advanced point lands at
 about 6 units apart, so read that as `146 +/- 6`). The 137.9 units
 [lap-counting.md](../../../gameplay/lap-counting.md) measured is a
 different thing: it is where the captured craft *spawns* relative to the
-slot, and it is about eight units short of the line. So the original places
+slot, and it is **16.5 units short of the line** as the ring measures it
+(`the_captured_run_begins_just_behind_our_start_line`,
+`crates/trace/tests/lap_capture_ground_truth.rs`). So the original places
 its craft just behind the line and lets the first crossing start the race -
 which is exactly the "spawns behind the line, crosses it seconds in" that
 `RaceState::lap_gate` was built to tolerate, and the `started` flag above is

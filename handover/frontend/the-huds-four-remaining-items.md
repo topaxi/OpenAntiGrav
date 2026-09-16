@@ -24,9 +24,13 @@ The layout was never an RE problem - Pulse ships five layouts as `Data\XML\*_HUD
   `IG_HUD_BRONZE`/`SILVER`/`GOLD`/`RECORD` into `oag_game::hud::draw::caption`
   without a real source for the tier value would invent the medal/record
   evaluation this thread did not recover - the stand-in this project's rules
-  forbid. It waits on lap-timing and medal-progression data
-  ([hud.md](../../docs/ui/hud.md#lap-counting-was-the-one-real-blocker)'s existing
-  blocker, and its "Medal targets" deferred item).
+  forbid. It waited on lap-timing and medal-progression data; **the lap half
+  is read as of 2026-09-16**
+  ([race-progress.md](../../docs/ghidra/functions/psp-pulse-usa/race-progress.md):
+  `craft+0x928`/`+0x930` are the last and best lap, and the same function
+  raises the HUD's record and final-lap flags at `"PLAYER_HUD"+0xe0`), so what
+  still blocks the tier value is the medal-progression half
+  ([hud.md](../../docs/ui/hud.md)'s "Medal targets" deferred item).
 - If picked up again: `Hud_UpdateTimeCluster_q` has no confirmed caller (see its
   evidence page) - reads on `param_1 + 0x30`/`+ 0x34`/`+ 0x5a` and on what widgets
   land at `+ 0x200`/`+ 0x204` are the next things to chase. **The PSP relocation
