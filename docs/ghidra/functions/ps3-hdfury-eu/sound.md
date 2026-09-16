@@ -49,9 +49,9 @@ which is a completely different global.
 | Opcode | Address | Name | Confidence | What it does |
 | --- | --- | --- | --- | --- |
 | `0x01`/`0x09` | `0x00626728` | `Scream_OpKeyOn` | 90 | Bind a waveform descriptor to a voice and dispatch it to the ADPCM/PCM codec split - see [below](#0x010x09---scream_opkeyon-and-the-codec-dispatch-chain) |
-| `0x05` | `0x006274b0` | `Scream_DoGrainPlayChild` | 82 | Resolve a child cue by index or name, play it with a computed volume and pan |
-| `0x06` | `0x00625988` | `Scream_DoGrainStopChild` | 78 | Resolve a child cue by index or name, stop every active voice currently playing it |
-| `0x08` | `0x00625fc0` | `Scream_DoGrainBranch` | 84 | `snd_SFX_GRAIN_TYPE_BRANCH` - resolve a child cue by index or name, bounds-check the index, replace this voice's own playback state with it |
+| `0x05` | `0x006274b0` | `Scream_DoGrainPlayChild` | 85 | Resolve a child cue by index or name, play it with a computed volume and pan |
+| `0x06` | `0x00625988` | `Scream_DoGrainStopChild` | 85 | Resolve a child cue by index or name, stop every active voice currently playing it |
+| `0x08` | `0x00625fc0` | `Scream_DoGrainBranch` | 85 | `snd_SFX_GRAIN_TYPE_BRANCH` - resolve a child cue by index or name, bounds-check the index, replace this voice's own playback state with it |
 | `0x19` | `0x00625e88` | `Scream_DoGrainAlternate` | 88 | Pick a random one of the next N key-ons (never repeating the previous pick), jump the program counter to it |
 | `0x22` | `0x00623690` | `Scream_DoGrainGuard` | 88 | Three-way compare a named variable against an immediate; skip the next grain unless the comparison holds |
 | `0x23` | `0x00623770` | `Scream_DoGrainMarker` | 82 | No-op (two instructions: `li r3,0; blr`) - the interpretation as a goto marker rests on `0x24`'s behaviour, not on anything this function does itself |
@@ -68,7 +68,13 @@ shared analysis - see
 [Corroborated on PSP](#corroborated-on-psp-2026-09-04), which replaces the
 "Not corroborated" section below. That is one of the two legs the 95-100
 band needs, putting the four in 85-94, short of Established by the other
-leg - a runtime trace. `Scream_OpKeyOn` and its callees sit above the
+leg - a runtime trace. **`0x05`/`0x06`/`0x08` followed on 2026-09-16**, the
+same way: `psp-pulse-usa`'s `Scream_OpPlayChild`, `Scream_OpStopChild` and
+`Scream_OpBranch` read as the same three algorithms, with one real
+difference recorded rather than smoothed - the PSP branch has **no** bounds
+check on the child index, where this binary's does - see
+[psp-pulse-usa/sound.md](../psp-pulse-usa/sound.md#five-more-opcodes-2026-09-16-the-ones-the-banks-actually-use).
+`Scream_OpKeyOn` and its callees sit above the
 single-binary cap for a different reason: they also carry an exact
 arithmetic invariant across many real files, not just a decompiled reading -
 see [below](#0x010x09---scream_opkeyon-and-the-codec-dispatch-chain).

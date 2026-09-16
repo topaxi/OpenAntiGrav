@@ -571,8 +571,9 @@ with that page's `{ u8 opcode, u24 operand }` reading of a little-endian word
 rather than in conflict with it. And **the engine defines 45 opcodes**
 (`0x00`-`0x2c`) through a jump table, `g_scream_opcode_table` at
 **`0x08ac326c`**, where the format page
-observed only nine distinct values in the shipped data - so the banks use a
-fifth of the instruction set.
+observed only nine distinct values in the shipped data - a count corrected to
+27 on 2026-09-16, see [the census](#the-census-the-format-pages-nine-distinct-values-should-have-been)
+below.
 
 `handler + 0x4a` is the program counter, and a cue ends when it passes
 `*(i8 *)(cue + 4) - 1`. **That refines the note above**: `cue + 0x04` is the
@@ -934,17 +935,85 @@ with `+0x00` the descriptor's authored priority - which would make the
 usual tone layout. Below 70, so no name; the allocator (`FUN_089953c0` /
 `FUN_08994550`) is unread and would settle it.
 
+## Five more opcodes, 2026-09-16: the ones the banks actually use
+
+The format page's observed-in-data list had four opcodes with no PSP handler
+read: `0x05`, `0x06`, `0x1e`, `0x29`, plus `0x08` beside `0x05`. All five are
+read now, off `g_scream_opcode_table` at `0x08ac326c` - which, unlike the
+2026-09-04 pass found, now reads real `0x0898xxxx` addresses directly (the
+`0x19` entry is `0x0898e178`, matching that pass exactly, so the base and
+stride are the confirmed ones). Three corroborate HD's readings; two are new.
+
+| Opcode | Address | Name | Confidence | What it does |
+| --- | --- | --- | --- | --- |
+| `0x05` | `0x08990100` | `Scream_OpPlayChild` | 85 | Resolve the 32-byte child record's cue (index at `+0x0c`, or name at `+0x10` looked up in every bank then this one); volume from `+0x00` and pan from `+0x04`, each through the `-1..-5` sentinel scheme (`-5` random, `-1..-4` the handler's four register bytes at `+0x4c`); `Scream_StartSound` with the parent's volume x child volume / 127, its pan, its pitch offset and bend (`+0x46`, `+0x42`) and its four registers, flags `0x8000007c`; link the child to the parent (`FUN_089929a4`) |
+| `0x06` | `0x0898ed5c` | `Scream_OpStopChild` | 85 | Resolve the child the same way, then walk the parent's child list (`handler+0x2c`, linked by `+0x30`) and unlink-and-kill (`FUN_08993944(child, 1, 0, 0)`) every instance whose cue is the resolved one, until none is left |
+| `0x08` | `0x0898eb6c` | `Scream_OpBranch` | 85 | Resolve the child; kill this handler's own voices (`FUN_08994b54(handler+0x18, 0)`); if the cue's flag `0x8` is set, ask `FUN_0898f6a4` for an existing instance and kill it unless it is this one; then **replace the handler's cue, defaults, command list and bank with the child's** and reset the program counter (`+0x4a = -1`), so the interpreter carries on inside the other cue. **No bounds check on the index on PSP** - HD's `Scream_DoGrainBranch` has one against `cue_count` and the `snd_SFX_GRAIN_TYPE_BRANCH invalid sound index` string; this build reads `+0x0c` and indexes with it |
+| `0x1e` | `0x0898e41c` | `Scream_OpSetRegister` | 88 | Two lines: operand byte 0 is a register index, byte 1 the value. Non-negative writes the handler's own byte at `+0x4c + i`; negative writes the global at `0x08ac3247 - i`. The same two address spaces `Scream_OpGuard` compares against, and `talonsj`'s `~SETREG` cues are named for it |
+| `0x29` | `0x0898ea4c` | `Scream_OpKeyOff` | 85 | One call: `FUN_089949d0(handler+0x18, 0)`, which for every voice in the handler's bitmask that is in state `1` sets its bit in `g_sas_keyoff_pending` (`0x08b8f784`) and clears it from the key-on mask (`0x08b8f780`). `FUN_089947c8` flushes that mask a voice at a time through `FUN_0898c050` -> `Sas_SetKeyOff` (`0x08a2adcc`) -> `__sceSasSetKeyOff` (`0x08a76c6c`), so the opcode releases the handler's voices into their ADSR release rather than cutting them |
+
+`Sas_SetKeyOff` is named on the same mirroring convention as the other four
+`Sas_Set*` wrappers (confidence **90**: a direct `jal 0x08a76c6c` onto the
+import stub Ghidra already names, behind the usual "is SAS initialised"
+guard), and `g_sas_keyoff_pending` at **88** - its consumer is read through
+to the import; the sibling masks at `0x08b8f780` and `0x08b8f788` are
+touched by the same functions and left unnamed, their consumers unread.
+
+`0x05`, `0x06` and `0x08` are each the same algorithm HD's
+[`Scream_DoGrainPlayChild` / `StopChild` / `Branch`](../ps3-hdfury-eu/sound.md#opcodes-read-so-far)
+read on a different CPU with no shared analysis - the same second-binary
+corroboration the 2026-09-04 pass gave `0x19`/`0x22`/`0x23`/`0x24` - with
+the one real difference (the missing bounds check) recorded above rather
+than smoothed over. That lifts HD's three from 82/78/84 into the 85 band on
+both sides. `0x1e` and `0x29` have no HD reading yet.
+
+Not read from this pass: `FUN_0898f6a4` (the flag-`0x8` "find an existing
+instance" the branch consults), `FUN_089929a4` (the parent-child link) and
+`FUN_08993944` (the kill), which the three child opcodes lean on and which
+would be the next three to name.
+
+### The census the format page's "nine distinct values" should have been
+
+Counting the opcode byte of every command in every bank (Pulse USA
+`Data.wad` + `FE.wad`, Pure EU, PS2 EU) gives **27 distinct opcodes on
+Pulse**, not nine, and `0x09` - the second key-on `KEY_ON_OPCODES` carries
+from the table - appears in **none** of them. By count on Pulse USA's
+`Data.wad`: `0x01` 880, `0x23` 238, `0x1a` 231, `0x24` 230, `0x22` 205,
+`0x05` 195, `0x1e` 130, `0x1b` 122, `0x29` 90, `0x14` 89, `0x04` 69, `0x20`
+66, `0x06` 58, `0x15`/`0x16` 49 each, `0x26` 48, `0x08` 46, `0x19` 42,
+`0x25` 24, then `0x28` 4, `0x0a` 4, `0x2b` 3, `0x17`/`0x18`/`0x1f`/`0x21` 2
+each, `0x1c` 1. The heavy unread ones were read in the same session:
+
+| Opcode | Address | Name | Confidence | What it does |
+| --- | --- | --- | --- | --- |
+| `0x1a` | `0x0898e270` | `Scream_OpRandomDelay` | 85 | Returns `rand() % (operand + 1)`. A handler's non-negative return is what `Scream_StepCommandList` **adds to the next command's own delay word** (`handler+0x48 = next.word1 + r`), so this is a random extra wait before the next grain |
+| `0x1b` | `0x0898e2b0` | `Scream_OpRandomBend` | 85 | A random value in `-0x8000..0x7fff`, scaled by operand byte 0 as a percentage, written as the sound's pitch bend through `Scream_SetSoundBend` (`0x0898f174`, **85**): that resolves the handle, writes `+0x42` on the handler and every child, and calls `Scream_UpdateVoicePitch`. Through the descriptor's own bend ranges (`+0x08`/`+0x09`, semitones) that is a random detune of up to the authored range |
+| `0x1f` | `0x0898e458` | `Scream_OpSetRegisterRandom` | 88 | Register `byte0 = rand() in byte1..=byte2`, same local/global addressing as `0x1e` |
+| `0x20` | `0x0898e4dc` | `Scream_OpIncRegister` | 88 | Register `byte0 += 1`, saturating at `127` |
+| `0x21` | `0x0898e538` | `Scream_OpDecRegister` | 88 | Register `byte0 -= 1`, saturating at `-128` |
+| `0x25` | `0x0898e768` | `Scream_OpGotoRandomMarker` | 88 | Pick a marker id in `byte0..=byte1`, scan the cue's commands for an opcode `'#'` (`0x23`) whose byte 0 is that id, set the program counter to it; the same 8-deep recursion guard (`DAT_08ac3268`) and error path as `Scream_OpGoto`. HD's own `snd_DoGrain` strings name a "Goto Random Marker" |
+| `0x26` | `0x0898e8d4` | `Scream_OpWaitForVoices` | 78 | If the handler has any voice open (`+0x18`/`+0x1c` masks) or has keyed one on (flag `0x10` at `+0x16`), step the program counter back onto itself and return 1 - which stops the step loop until the next update. So the command list blocks here until the handler's voices have ended. 78 rather than higher because what clears the masks and the flag at voice end is not read |
+| `0x04` | `0x0898de84` | `Scream_OpConfigureLfo_q` | 60 | Operand byte 0 selects one of the handler's four `0x34`-byte modulator slots (initialised in `Scream_StartSound`'s four-iteration loop at `+0x5c`); byte 1 enables it, and the rest of the 16-byte parameter record fills a type (`+0x03`), rate (`+0x06`), flags (`+0x08`, bit `0x2` = random start phase, `& 0x7ff << 16`), phase (`+0x0a`) and depth (`+0x0c`), then `FUN_08996a90(slot)` starts it, or `FUN_08996ba8` stops it when byte 1 is zero. Rate, phase, depth and a random phase are an LFO's fields; the two functions that run it are unread, hence `_q` |
+
+Still unread, by count: `0x28` (4), `0x0a` (4), `0x2b` (3), `0x17`, `0x18`,
+`0x1c`, `0x27`; and `0x16` (49) is decompiled but unnamed. `0x1a` and `0x25`
+between them answer where the 15% of Pulse grains the goto reading made
+"unreachable" go: a random goto is a goto whose target no static walk can
+pick.
+
 ## Not determined
 
-- **37 of the 45 opcode handlers, plus one read but not confidently named.**
-  `0x01`, `0x09`, `0x14`, `0x15`, `0x19`, `0x22`, `0x23` and `0x24` are named
-  and confidence-scored; `0x16`'s handler is decompiled (a backward scan for
-  `0x15`, see [above](#opcode-0x14-is-a-no-op-corroborated-on-hd-2026-09-08))
-  but its *purpose* is not established well enough to name past the rubric's
-  50-confidence floor, so it stays `FUN_0898dfe0`. The rest are not read. The
-  format page's other observed opcodes (`0x05`, `0x06`, `0x1e`, `0x29`) are
-  what a bank actually uses, so they are the ones worth reading next, and
-  eight of the 45 share one handler.
+- **24 of the 45 opcode handlers, plus one read but not confidently named.**
+  `0x01`, `0x04` (`_q`), `0x05`, `0x06`, `0x08`, `0x09`, `0x14`, `0x15`,
+  `0x19`, `0x1a`, `0x1b`, `0x1e`, `0x1f`, `0x20`, `0x21`, `0x22`, `0x23`,
+  `0x24`, `0x25`, `0x26` and `0x29` are named and confidence-scored;
+  `0x16`'s handler is decompiled (a backward scan for `0x15`, see
+  [above](#opcode-0x14-is-a-no-op-corroborated-on-hd-2026-09-08)) but its
+  *purpose* is not established well enough to name past the rubric's
+  50-confidence floor, so it stays `FUN_0898dfe0`. The rest are not read, and
+  eight of the 45 share one handler. Of the 27 opcodes the Pulse banks
+  actually use, seven (`0x0a`, `0x16`, `0x17`, `0x18`, `0x1c`, `0x28`,
+  `0x2b`) have no named handler, and together they are 65 of the 2,881 commands in `Data.wad`.
 - **Whether `0x01` and `0x09` differ.** They share a handler, so any difference
   must come from the command word rather than the dispatch.
 - ~~**The extraction itself.**~~ **Done.** Both rules are implemented in

@@ -1418,15 +1418,19 @@ so `--cue COLLISION` over a whole archive finds every bank that has one.
 
 - ~~**Per-sound names.**~~ **Solved and validated** - see [above](#every-sound-has-a-name).
 
-- **The command opcodes.** Nine distinct values seen in the data; the engine
-  defines **45**, dispatched through a jump table at `0x08ac326c`. Eight are
-  named on [the sound engine page](../ghidra/functions/psp-pulse-usa/sound.md#not-determined) -
-  `0x01`/`0x09` bind a waveform, `0x19` picks an alternate, `0x22`/`0x23`/`0x24`
-  guard, mark and jump, `0x14`/`0x15` do nothing - and eight more share a
-  single handler, which is the shape of a family taking an index. The other
-  37 are unread by their handlers - `0x05`/`0x08` are decoded from the data
-  side [above](#a-cue-that-plays-other-cues) - and `0x06`, `0x1e` and `0x29`
-  are the ones a bank actually uses and so the ones worth reading next.
+- **The command opcodes.** ~~Nine distinct values seen in the data~~ -
+  **27 on Pulse**, counted properly on 2026-09-16 (and `0x09`, the table's
+  second key-on, in none of them); the engine defines **45**, dispatched
+  through a jump table at `0x08ac326c`. Twenty-one are named on
+  [the sound engine page](../ghidra/functions/psp-pulse-usa/sound.md#not-determined):
+  the key-on, the three child grains (`0x05` play, `0x06` stop, `0x08`
+  branch - the PSP handlers now read, corroborating HD's), the alternate
+  pick, guard/marker/goto and a random goto, five register grains
+  (`0x1e`-`0x21`, `0x1f` random), a random delay (`0x1a`), a random bend
+  (`0x1b`), key-off (`0x29`), wait-for-voices (`0x26`), two no-ops and an
+  LFO setup at `_q`. Eight more share a single handler. Of the opcodes the
+  Pulse banks actually use, seven have no named handler and they are 65 of
+  `Data.wad`'s 2,881 commands.
 - **`+0x24` = 20544.** Still not determined; the shape of it suggests an
   audio-RAM base address.
 - ~~**Which cue owns which commands.**~~ **Solved and validated** - see
