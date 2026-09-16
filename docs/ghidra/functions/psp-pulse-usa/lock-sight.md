@@ -285,7 +285,11 @@ alpha_target = visible ? (near ? 255.0 : 96.0) : 0.0;
 ```
 
 `near` is `depth < _DAT_002aca4c + 500.0`, where the depth comes out of the same
-projection - a second, softer range test on top of the `250.0` one.
+projection - a second, softer range test on top of the `250.0` one. **This
+description is superseded** - `_DAT_002aca4c` is a base-0 address from before
+the 2026-09-07 relocation fix (see `docs/ghidra/workflow.md`), and what it
+resolves to is not a tuning constant at all. See
+[The far-target alpha step is a live depth-buffer sample](#the-far-target-alpha-step-is-a-live-depth-buffer-sample-not-a-tuning-constant).
 
 All five widgets are shown when `visible` or while the extent is still easing,
 and hidden otherwise, so the brackets are watched closing even after the target
@@ -294,10 +298,11 @@ is gone.
 **The blink is a tint and never a hide**, which is the half of this that is easy
 to get backwards: both arms above write a colour and neither drops the draw. A
 port that gates the draw on the blink strobes the reticle off five times a
-second. What is *not* recovered is which colour channel each arm lights, because
-that depends on the byte order of the widget's colour word and nothing here has
-read it - so `oag_game` carries the `0xc0 >> 8` brightness difference and leaves
-the reticle white rather than inventing a hue.
+second. **Which colour channel each arm lights, and the far-target alpha's
+"near" test, are both resolved below** - see
+[Colour and blink, resolved](#colour-and-blink-resolved-the-byte-order-and-the-two-tints)
+and
+[The far-target alpha step is a live depth-buffer sample](#the-far-target-alpha-step-is-a-live-depth-buffer-sample-not-a-tuning-constant).
 
 ## The tone: `~ROCKLOCK`, one voice with two states
 
@@ -430,3 +435,149 @@ ninth of an HD frame - inside its lap counter - and never leaves.
 - **The `<Mode3D>` layer's first real consumer is 2D.** Every one of these nine
   widgets is a screen-space quad with a rotation, drawn in an orthographic block.
   Nothing here needs a 3D pass.
+
+## Colour and blink, resolved: the byte order and the two tints
+
+2026-09-16. Reads a fresh decompile of `HudSight_Update` off the now-relocated
+`psp-pulse-usa` database (the 2026-09-07 relocation fix - see
+`docs/ghidra/workflow.md` - postdates this page's original pass, which is why
+its addresses in this section were still on the base-0 numbering: what this
+page called `_DAT_002aca4c`/`DAT_002aca54` resolve to `g_hud_sight_depth_sample`
+(`0x08ab0a4c`) and `0x08ab0a54` in the live database, not new addresses).
+
+The widget's colour word is written by `Image_SetVertexColours`
+(`0x089122b4`, confidence 78 - it resolves a widget's mesh instances the way
+`HudSight_Bind`'s own lookup helper does and stamps the given `u32` into each
+at `+0x6c`, called with `iVar20`/`iVar14`/`iVar15`/`iVar21`/`iVar9` - the five
+sight widget pointers - immediately after the arithmetic below). The literal
+construction, straight off the decompile:
+
+```c
+uVar16 = uVar18 | 0xff000000;          // uVar18 = the eased alpha, 0..255
+if (!locked) {
+    uVar12 = uVar18 * 0xc0 >> 8;       // 0.75x - the recovered BLINK_TINT
+    if (!blink) {
+        uVar16 = uVar16 | uVar18 << 8;
+    } else {
+        uVar16 = uVar12<<8 | uVar12<<0x10 | uVar12 | 0xff000000;
+    }
+}
+Image_SetVertexColours(widget, uVar16);
+```
+
+**The byte order is this project's own established one, not a fresh
+assumption.** `Loading_DrawWave`'s vertex-colour ramp from `0xff000000` to
+`0xff808080` (`crates/render/src/loading.rs`, `docs/formats/psp-texture.md`)
+already fixed byte0 = R, byte1 = G, byte2 = B, byte3 = A for this engine's own
+32-bit packed colour word, and `HudSight_Update`'s `0xff000000`/`0xc0` literals
+are the identical idiom. Reading `uVar16`'s construction in that order:
+
+| State | R | G | B | A |
+| --- | --- | --- | --- | --- |
+| Locked | alpha byte | `0` | `0` | `0xff` |
+| Seeking, blink off | alpha byte | alpha byte | `0` | `0xff` |
+| Seeking, blink on | alpha byte `* 0.75` | same | same | `0xff` |
+
+So: **locked is red**, brightness driven by the eased alpha value; **seeking
+alternates yellow at full brightness with white at [`BLINK_TINT`] the
+brightness** - never a hue this page's earlier "not recovered" note
+anticipated, but not a coincidence either: yellow-to-red on lock is the same
+warm-to-hot shift a targeting reticle in most other games of this era uses.
+Confidence **88**, matching the surrounding arithmetic this page already
+carries at that score - the construction is read directly, not inferred.
+
+**The colour word's own alpha byte is always `0xff`.** The eased fade this
+project already carries as `Sight::alpha()` scales the RGB channels instead of
+a blend alpha - consistent with the sight models' `Additive` blend class
+(`crates/game/src/hud/sight_draw.rs`): under `dst + src.rgb * src.a`, fixing
+`a = 1` and scaling `rgb` is the same final colour as fixing `rgb = white` and
+scaling `a`, so this is not a second, uncounted fade layered on top of the one
+already ported.
+
+**Ported** to `oag_race::sight::Sight::tint` (returns `[r, g, b]` now, not a
+scalar) and `crates/game/src/hud/sight_draw.rs::bracket_draws`. Wipeout HD's
+concentric dialect is deliberately **not** given this hue - HD authors each
+ring's own colour (a red outer, a green inner) and nothing has read whether
+HD's own sight code spends a blink the same way, so `Sight::brightness()`
+keeps the pre-existing scalar-only behaviour for that dialect. See
+[the other two titles](#the-other-two-titles) below for what nothing here
+answers about HD's own colour writes.
+
+## The far-target alpha step is a live depth-buffer sample, not a tuning constant
+
+2026-09-16. `HudSight_Update`'s `near` test -
+```c
+bVar1 = g_hud_sight_depth_sample < local_60 + 500.0;
+```
+where `local_60` is the target's own projected depth, reshaped into roughly a
+16-bit Z-buffer's units (`((clip.z/clip.w)*0.5+0.5) * -63945.0 + 64946.0`) -
+reads a global this page's earlier pass could not resolve
+(`_DAT_002aca4c`, a base-0 address from before the relocation fix; see
+above). In the live, relocated database it is `g_hud_sight_depth_sample`
+(`0x08ab0a4c`), and it is not a fixed tuning constant.
+
+**It is written once a frame, from a live read of the rendered frame's own
+Z-buffer, at the reticle's own previous on-screen position.**
+`Hud_SampleSightDepth` (`0x08819b24`) is its only writer:
+
+```c
+void Hud_SampleSightDepth(int zbuffer)
+{
+    g_hud_sight_depth_sample =
+        (float)*(ushort *)(zbuffer + ((0x110 - DAT_08ab0a48) * 0x200 + DAT_08ab0a44) * 2);
+}
+```
+
+`DAT_08ab0a48`/`DAT_08ab0a44` are `HudSight_Update`'s own smoothed reticle
+centre (`cy`/`cx`), cast to `int` and stored at the very end of that function -
+so this reads back a 16-bit Z-buffer texel (`0x200` = 512, the buffer's row
+stride) at wherever the reticle was drawn *last* frame, one frame lagged.
+
+**`Hud_SampleSightDepth`'s only caller does double duty**, which is worth
+recording even though the second half is out of this page's scope:
+`FUN_0890906c` (`0x0890906c`, left unnamed - confidence on its own full
+purpose is below 50) gates on `param_1 == 0x200` and a non-null Z-buffer
+pointer, calls `Hud_SampleSightDepth` unconditionally, and then separately
+counts nearby texels below a threshold (`0x3b3`) into
+`*(float*)(DAT_08b62d34+0x74)` - a small neighbourhood readback that looks
+like a depth-of-field or fog focus metric for an entirely different
+subsystem, sharing the pass rather than being sight-specific. The sight's own
+read is the unconditional call at the top; the rest is not read further here.
+
+**So "near" is really "is the target's own depth closer than whatever
+geometry the reticle was sitting over a frame ago"** - a one-frame-lagged,
+screen-space occlusion test, not a softer range band layered on
+[`DRAW_RANGE`] the way this page's own earlier "near/far" framing suggested.
+Confidence **85** on this reading: the writer, its caller, and the field
+layout (`0x200`-wide row stride, `0x110` = 272 = screen height, the flip
+matching `HudSight_Update`'s own `y`-down convention) are all read directly;
+what is not read is `FUN_0890906c`'s own broader purpose or exactly when in
+the frame it runs relative to `HudSight_Update`.
+
+**Not ported.** Reproducing this needs the rendered frame's own depth buffer,
+which `oag_race` structurally cannot reach - `CLAUDE.md`'s dependency rule 1
+forbids a gameplay crate depending on `oag-render`. `oag_race::sight::Sight`
+keeps treating every drawn target as near, same as before this pass - now
+because the alternative needs a renderer in a crate that must not have one,
+rather than because the constant was unsampled.
+
+## Does Pulse have anything like HD's staged reveal? No - checked
+
+2026-09-16. HD's `Hud_UpdateLeachBeamSight` reveals one of three rings at a
+time as the hold progresses (see `docs/ghidra/functions/ps3-hdfury-eu/hud-sight.md`).
+Rereading `HudSight_Update`'s own five-widget placement above with that
+question: **the Missile's own "reveal" is continuous, not staged.** The
+extent (`hud+0x280`) eases from `30.0` open through `9.6` seeking to `6.0`
+locked at one rate the whole time - a single easing curve, never a discrete
+widget swap - so what reads as "the brackets closing in" is one number moving,
+not a sequence of different widgets being shown and hidden the way HD's rings
+are. No widget is ever hidden or added at a hold-time threshold anywhere in
+this function.
+
+**The LeachBeam on Pulse has no known reveal law at all, staged or
+continuous**, because - as [Who places the LeachBeam's four is
+unrecovered](#who-places-the-leachbeams-four-is-unrecovered) already says -
+nothing yet read writes its four widgets' positions in the first place.
+`oag_race::sight`'s choice to give them the Missile's own extent and
+rotations is what supplies the only closing behaviour they have, and that
+choice is unchanged by this finding.

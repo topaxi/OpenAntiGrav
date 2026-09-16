@@ -862,4 +862,7 @@
 0x0886afb8	function	Plasma_SweepCraftHit	82	plasma.md
 0x0885f680	function	PlasmaBlast_Update	82	plasma.md
 0x0885c650	function	Plasma_ClassSpeed	82	plasma.md
+0x089122b4	function	Image_SetVertexColours	78	lock-sight.md
+0x08819b24	function	Hud_SampleSightDepth	80	lock-sight.md
+0x08ab0a4c	data	g_hud_sight_depth_sample	80	lock-sight.md
 
