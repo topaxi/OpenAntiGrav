@@ -64,16 +64,24 @@ pub const MISSILE_FLARE_EFFECT: &str = "WO_MISSILE_HEAD";
 /// nose and `Plasma_UpdateCharge` (`0x0885c170`) scales it by the charge
 /// fraction.
 ///
-/// **This engine gets the riding half of that for free, and does not get the
-/// scale ramp.** [`Race::advance_projectile_flares`] attaches this to every
-/// live projectile whose kind maps here and follows its position each tick;
-/// a charging bolt *is* a live projectile, reseated on the craft's nose every
-/// tick by `Projectiles::advance`'s charging branch, so the glow rides the
-/// craft through the wind-up and the bolt after release - which is what
-/// re-parenting does in the original, arrived at from the other end. What is
-/// **not** ported is `Plasma_UpdateCharge`'s `(1.0 - remaining) * 0.75`
-/// scale, so the glow does not grow as the shot charges; it is played at
-/// [`psys::Stage`]'s neutral scale throughout.
+/// **This engine gets the riding half of that for free, and, as of
+/// 2026-09-16, the scale ramp too.** [`Race::advance_projectile_flares`]
+/// attaches this to every live projectile whose kind maps here and follows
+/// its position each tick; a charging bolt *is* a live projectile, reseated
+/// on the craft's nose every tick by `Projectiles::advance`'s charging
+/// branch, so the glow rides the craft through the wind-up and the bolt
+/// after release - which is what re-parenting does in the original, arrived
+/// at from the other end. `weapons::visuals::plasma_flare_scale` now ports
+/// `Plasma_UpdateCharge`'s `(1.0 - remaining) * 0.75` scale, called through
+/// [`psys::Stage::rescale`] every tick alongside the `follow`, so the glow
+/// does grow as the shot charges - see that function's own doc comment for
+/// the fraction's exact shape, for the further `* 0.5` craft flag that is
+/// **not** ported (its meaning is unread), and for why a released bolt's
+/// flare returns to `1.0` (chosen, not measured). Verified by screenshot at
+/// `data/images/pulse-psp-eu.chd`: the glow visibly grows over the second
+/// half of the 1 s wind-up and steps up again at release, though the first
+/// few ticks after the press are hard to tell apart from the resting state
+/// by eye.
 ///
 /// Corrected 2026-09-09; the earlier "one instance, at the bolt's own
 /// position" reading was written before `Plasma_Init`'s `+0x4c`/`+0x50`

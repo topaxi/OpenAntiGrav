@@ -22,6 +22,7 @@ mod visuals;
 #[cfg(test)]
 pub(super) use visuals::{
     bounce_effect_for, bounced_this_tick, flare_effect_for, missile_flare_anchors,
+    plasma_flare_scale,
 };
 
 /// The far plane the reticle's own projection uses.
