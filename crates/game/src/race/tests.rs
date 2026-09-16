@@ -23,6 +23,7 @@ mod hash;
 mod hd_sprite;
 mod headless;
 mod held_buttons;
+mod leach_beam;
 mod load;
 mod mode_override;
 mod models;

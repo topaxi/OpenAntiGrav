@@ -200,7 +200,12 @@ impl Race {
         let ship = &mut self.sim.world.ships[player];
         // `Ship_UpdateEngine`'s read-and-reset of `craft+0x31c`: the beam's
         // throttle armed last tick is consumed by this step and nothing after
-        // it. See `Ship::pending_thrust_scale`.
+        // it. See `Ship::pending_thrust_scale`. One asymmetry: the original's
+        // engine early-returns *above* that line for a stunned or slowed
+        // craft and so keeps the armed value for a later tick, where this
+        // discards it either way. A beam re-arms it every tick the link
+        // holds, so the two differ only on the tick a stun ends after the
+        // link has already broken - one tick of throttle, not chased.
         let thrust_scale = std::mem::replace(&mut ship.pending_thrust_scale, 1.0);
         let env = Environment {
             track_sample,
