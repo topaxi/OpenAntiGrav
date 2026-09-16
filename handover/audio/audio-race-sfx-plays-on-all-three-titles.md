@@ -28,4 +28,9 @@
 
 ## Next Steps
 
-- None of this thread's own.
+- `FUN_0898f6a4` (the branch's "existing instance" lookup), `FUN_089929a4`
+  (the parent-child link) and `FUN_08993944` (the kill) are the three the
+  child opcodes lean on and are unnamed; the seven opcodes the Pulse banks
+  use with no named handler (`0x0a`, `0x16`, `0x17`, `0x18`, `0x1c`, `0x28`,
+  `0x2b`) are 65 of `Data.wad`'s 2,881 commands. See
+  [sound.md](../../docs/ghidra/functions/psp-pulse-usa/sound.md#not-determined).

@@ -1010,8 +1010,18 @@ through the PSP walk - 1,803 at 48,051 Hz from `(-60, 0)`, 1,313 at 44,100,
 them; it does not say the PS3's SCREAM applies the same `0x1278b` scale, and
 28% of HD's descriptors sitting on the one pair that scale turns into
 "48 kHz" is exactly the pattern a native 48 kHz engine with no such scale
-would also produce. `oag_game` plays HD at these rates on the strength of
-the byte positions alone; HD's own `EBOOT.elf` note-to-pitch is unread.
+would also produce. Two figures from the same probe cut the other way and
+are recorded rather than dropped: **785 of HD's descriptors (12%) land
+nowhere near a standard rate** through the PSP walk, 32 of them at
+114,287 Hz (pitch `0x2977`, legal for SAS but a 2.6x speed-up that would be
+absurd as an authored rate), and HD's **volume byte runs `-27..=127`**, where
+the PSP's is `60..=127` and the documented sentinels stop at `-5` - so
+[`Sound::volume`](../../crates/formats/src/sblk.rs)'s `60..=127` claim is a
+PSP-USA measurement and HD does not honour it. Neither moves the byte
+positions (a one-byte shift would have made every centre note positive),
+but both say HD's own engine may well read these bytes differently.
+`oag_game` plays HD at these rates on the strength of the byte positions
+alone; HD's own `EBOOT.elf` note-to-pitch is unread.
 
 ## The PS2 ships the same container, byte for byte
 

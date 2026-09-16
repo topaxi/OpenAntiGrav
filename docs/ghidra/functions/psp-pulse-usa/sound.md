@@ -992,14 +992,16 @@ each, `0x1c` 1. The heavy unread ones were read in the same session:
 | `0x20` | `0x0898e4dc` | `Scream_OpIncRegister` | 88 | Register `byte0 += 1`, saturating at `127` |
 | `0x21` | `0x0898e538` | `Scream_OpDecRegister` | 88 | Register `byte0 -= 1`, saturating at `-128` |
 | `0x25` | `0x0898e768` | `Scream_OpGotoRandomMarker` | 88 | Pick a marker id in `byte0..=byte1`, scan the cue's commands for an opcode `'#'` (`0x23`) whose byte 0 is that id, set the program counter to it; the same 8-deep recursion guard (`DAT_08ac3268`) and error path as `Scream_OpGoto`. HD's own `snd_DoGrain` strings name a "Goto Random Marker" |
-| `0x26` | `0x0898e8d4` | `Scream_OpWaitForVoices` | 78 | If the handler has any voice open (`+0x18`/`+0x1c` masks) or has keyed one on (flag `0x10` at `+0x16`), step the program counter back onto itself and return 1 - which stops the step loop until the next update. So the command list blocks here until the handler's voices have ended. 78 rather than higher because what clears the masks and the flag at voice end is not read |
+| `0x26` | `0x0898e8d4` | `Scream_OpWaitForVoices` | 78 | If the handler has any voice open (`+0x18`/`+0x1c` masks) or has keyed one on (flag `0x10` at `+0x16`), step the program counter back onto itself and return 1. That return goes through the same rule as `0x1a`'s: `Scream_StepCommandList` re-increments the counter (landing on this command again) and writes `handler+0x48 = word1 + 1`, a non-zero delay, which is what `Scream_StartSound`'s `while (... && handler+0x48 == 0)` loop exits on. So the command list blocks here, re-tested once the delay runs out, until the handler's voices have ended. 78 rather than higher because what clears the masks and the flag at voice end is not read |
 | `0x04` | `0x0898de84` | `Scream_OpConfigureLfo_q` | 60 | Operand byte 0 selects one of the handler's four `0x34`-byte modulator slots (initialised in `Scream_StartSound`'s four-iteration loop at `+0x5c`); byte 1 enables it, and the rest of the 16-byte parameter record fills a type (`+0x03`), rate (`+0x06`), flags (`+0x08`, bit `0x2` = random start phase, `& 0x7ff << 16`), phase (`+0x0a`) and depth (`+0x0c`), then `FUN_08996a90(slot)` starts it, or `FUN_08996ba8` stops it when byte 1 is zero. Rate, phase, depth and a random phase are an LFO's fields; the two functions that run it are unread, hence `_q` |
 
 Still unread, by count: `0x28` (4), `0x0a` (4), `0x2b` (3), `0x17`, `0x18`,
-`0x1c`, `0x27`; and `0x16` (49) is decompiled but unnamed. `0x1a` and `0x25`
-between them answer where the 15% of Pulse grains the goto reading made
-"unreachable" go: a random goto is a goto whose target no static walk can
-pick.
+`0x1c`, `0x27`; and `0x16` (49) is decompiled but unnamed. `0x25` is the
+obvious candidate for where the 15% of Pulse grains the goto reading made
+"unreachable" go - a random goto is a goto whose target no static walk that
+only follows `0x24` can pick - but that is a hypothesis, not a measurement:
+the reachability walk has not been re-run with `0x25`'s marker ranges
+included, and it is what would turn 15% into a number.
 
 ## Not determined
 
