@@ -218,6 +218,7 @@ impl Emitter {
         Some(Placed {
             gain: volume_curve(atten * volume),
             pan: pan_of(to_source, listener.right),
+            distance,
         })
     }
 }
@@ -230,6 +231,82 @@ pub struct Placed {
     pub gain: f32,
     /// `-1.0` hard left, `0.0` centred, `+1.0` hard right.
     pub pan: f32,
+    /// How far the ear is from the source, the input to [`Doppler`].
+    pub distance: f32,
+}
+
+/// The per-instance doppler scale, `inst+0x0c`.
+///
+/// `SoundInstance_Init` (`0x08939b10`) writes `0x3a03126f` - `0.0005` - into
+/// every instance `Sound_Play` builds, and the live capture of 2026-09-01 read
+/// the same value on all 1,610 samples. One scale for every cue, so this is a
+/// constant rather than a field.
+pub const DOPPLER_SCALE: f32 = 0.0005;
+
+/// Pitch units to the octave: the offset `SoundInstance_UpdateSpatial` writes
+/// is in 1/128 of a semitone, which `Scream_ComputeVoiceNote` scales through a
+/// `2^(i/1536)` table. See `sound.md`'s pitch section.
+pub const PITCH_UNITS_PER_OCTAVE: f32 = 1536.0;
+
+/// How far the listener may move in one frame before the doppler term is
+/// suppressed: `mgr+0x94`, `24.0`, read off the manager's constructor.
+///
+/// A camera cut is not a velocity. `SoundManager_Update` compares the new
+/// listener position against the previous frame's and clears `mgr+0x8d` when
+/// the jump exceeds this, so every instance's pitch holds its base for that
+/// frame instead of sweeping through an octave.
+pub const LISTENER_JUMP: f32 = 24.0;
+
+/// One held voice's doppler state: the distance it was heard at last frame.
+///
+/// `SoundInstance_UpdateSpatial` (`0x08939e58`):
+///
+/// ```text
+/// pitch = -(distance_change / dt) * 0.0005 * 1536 + base_pitch
+/// ```
+///
+/// in pitch units, where `distance_change` is the emitter's `+0x34`, this
+/// frame's distance less last frame's. Receding raises the change and lowers
+/// the pitch; a source closing at 100 units a second plays `2^0.05`, about
+/// 3.5 % sharp. Confidence 85 for the law as a whole.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct Doppler {
+    last_distance: Option<f32>,
+}
+
+impl Doppler {
+    /// The pitch ratio for this frame, from how the distance moved since the
+    /// last one. The first frame, and any frame with `enabled` clear, is
+    /// unity - the distance is recorded either way, so the frame after a
+    /// suppressed one measures one frame's change and not two.
+    pub fn ratio(&mut self, distance: f32, dt: f32, enabled: bool) -> f32 {
+        let change = self.last_distance.map_or(0.0, |last| distance - last);
+        self.last_distance = Some(distance);
+        if !enabled || dt <= 0.0 {
+            return 1.0;
+        }
+        (-(change / dt) * DOPPLER_SCALE).exp2()
+    }
+
+    /// Forgets the last distance, for a voice that closed or went out of
+    /// range - the next frame it is heard starts from unity again.
+    pub fn reset(&mut self) {
+        self.last_distance = None;
+    }
+}
+
+impl Listener {
+    /// Whether the ear moved further than [`LISTENER_JUMP`] since `previous`,
+    /// which is the frame the doppler term is held off on.
+    #[must_use]
+    pub fn jumped_from(&self, previous: &Listener) -> bool {
+        let moved = [
+            self.position[0] - previous.position[0],
+            self.position[1] - previous.position[1],
+            self.position[2] - previous.position[2],
+        ];
+        dot(moved, moved).sqrt() > LISTENER_JUMP
+    }
 }
 
 /// The multiply that flattens the near field: `atten * 1.25`, clamped at one.

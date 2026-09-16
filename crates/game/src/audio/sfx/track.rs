@@ -378,6 +378,10 @@ pub struct Ambience {
     /// Index-parallel to [`TrackEmitters::all`], `omni` then `directional`;
     /// [`None`] where the emitter is out of range and so has no voice at all.
     voices: Vec<Option<oag_audio::VoiceId>>,
+    /// Index-parallel to [`Self::voices`]: each held voice's last-frame
+    /// distance, for the doppler term. An authored emitter does not move, so
+    /// the change it reads is the listener's own approach and departure.
+    dopplers: Vec<oag_audio::Doppler>,
 }
 
 impl Ambience {
@@ -421,20 +425,26 @@ impl Ambience {
         emitters: &TrackEmitters,
         listener: &oag_audio::Listener,
         rng: &mut oag_core::Rng,
+        doppler_enabled: bool,
+        dt: f32,
     ) {
-        self.voices
-            .resize(emitters.omni.len() + emitters.directional.len(), None);
-        for (node, held) in emitters.all().zip(&mut self.voices) {
+        let count = emitters.omni.len() + emitters.directional.len();
+        self.voices.resize(count, None);
+        self.dopplers.resize(count, oag_audio::Doppler::default());
+        for ((node, held), doppler) in emitters.all().zip(&mut self.voices).zip(&mut self.dopplers)
+        {
             let placed = placed_emitter(&node.emitter).place(listener, 1.0);
             match (placed, *held) {
                 // In range with a voice open: this is the per-frame
-                // `SoundInstance_UpdateSpatial`, minus the doppler term. An
-                // authored emitter does not move, so the only distance change
-                // is the listener's own, which the original gates on the
-                // camera-cut guard at `mgr+0x8d` rather than reading here.
+                // `SoundInstance_UpdateSpatial`, doppler included. An
+                // authored emitter does not move, so the distance change is
+                // the listener's own, and the camera-cut guard at `mgr+0x8d`
+                // is `doppler_enabled` - the caller's, because the guard is
+                // the manager's and one answer covers every voice this tick.
                 (Some(placed), Some(id)) if mixer.is_playing(id) => {
                     mixer.set_gain(id, placed.gain);
                     mixer.set_pan(id, Some(placed.pan));
+                    mixer.set_pitch(id, doppler.ratio(placed.distance, dt, doppler_enabled));
                 }
                 // **In range, opened once, and finished: leave it alone.**
                 // Not every alternate loops - `platinu~BIRDS` binds sixteen
@@ -450,6 +460,11 @@ impl Ambience {
                 // refuses is already counted by `Mixer::starved`, and an
                 // emitter whose cue never resolved holds `None` forever.
                 (Some(placed), None) => {
+                    // Seeds the doppler with this frame's distance, so the
+                    // first held frame reads no change rather than a jump
+                    // from wherever the voice last closed.
+                    doppler.reset();
+                    doppler.ratio(placed.distance, dt, false);
                     *held = node.sound.as_ref().and_then(|loaded| {
                         let (sound, looping) = pick(loaded, rng)?;
                         let play = if looping {
@@ -467,6 +482,7 @@ impl Ambience {
                 (None, Some(id)) => {
                     mixer.stop(id);
                     *held = None;
+                    doppler.reset();
                 }
                 (None, None) => {}
             }

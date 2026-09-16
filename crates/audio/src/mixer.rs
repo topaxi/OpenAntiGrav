@@ -571,6 +571,14 @@ impl Mixer {
         self.voice(id).is_some()
     }
 
+    /// The rate multiplier a voice is currently playing at, as
+    /// [`Self::set_pitch`] left it. `None` once the handle is stale, like
+    /// [`Self::position`].
+    #[must_use]
+    pub fn pitch(&self, id: VoiceId) -> Option<f32> {
+        self.voice(id).map(|voice| voice.pitch)
+    }
+
     /// How far into its own source a voice has played, in seconds.
     ///
     /// The source's clock, not the device's: [`Voice::position`] counts source

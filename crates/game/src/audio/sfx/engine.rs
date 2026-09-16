@@ -61,6 +61,8 @@ pub struct Engine {
     /// was. Folding them would make the engine spin *back up* from wherever the
     /// chase had got to the moment it restarted.
     pitch: f32,
+    /// The distance this engine was heard at last tick, for the doppler term.
+    doppler: oag_audio::Doppler,
     /// The intensity the volume is derived from, and which the visual shares.
     intensity: f32,
     /// The held voice, while one is playing.
@@ -125,6 +127,7 @@ impl Engine {
             base,
             lag: base,
             pitch: base,
+            doppler: oag_audio::Doppler::default(),
             intensity: 0.0,
             voice: None,
             started: false,
@@ -155,6 +158,7 @@ impl Engine {
         position: [f32; 3],
         listener: &oag_audio::Listener,
         quieter: bool,
+        doppler_enabled: bool,
         dt: f32,
     ) {
         if on {
@@ -217,6 +221,20 @@ impl Engine {
         let volume = law * if quieter { OPPONENT_ENGINE_SCALE } else { 1.0 };
         let placed = oag_audio::Emitter::engine(position).place(listener, volume);
         let (gain, pan) = placed.map_or((0.0, None), |p| (p.gain, Some(p.pan)));
+        // The doppler term rides on top of the note: `SoundInstance_UpdateSpatial`
+        // adds `-(dd/dt) * 0.0005 * 1536` pitch units to the instance's base,
+        // which in ratios is a multiply. The player's own engine gets it too -
+        // the ear is the chase camera, which lags the hull - and that is the
+        // original's arrangement, not an oversight here. See
+        // `oag_audio::Doppler`.
+        let doppler = match placed {
+            Some(p) => self.doppler.ratio(p.distance, dt, doppler_enabled),
+            None => {
+                self.doppler.reset();
+                1.0
+            }
+        };
+        let pitch = pitch * doppler;
 
         match self.voice {
             Some(id) if mixer.is_playing(id) => {

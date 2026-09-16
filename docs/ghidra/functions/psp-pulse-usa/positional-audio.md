@@ -32,6 +32,7 @@ tool in the bridge, so callers here were found with
 | `0x08939b84` | `SoundInstance_StillPlaying` | 80 |
 | `0x08939c00` | `SoundEmitter_ComputeVolumeAndAngle` | 90 |
 | `0x08939e58` | `SoundInstance_UpdateSpatial` | 86 |
+| `0x08939b10` | `SoundInstance_Init` | 90 |
 | `0x089394dc` | `SoundEmitter_ServiceRequests` | 85 |
 | `0x0893a2b0` | `SoundManager_Update` | 88 |
 | `0x0893a5ec` | `SoundManager_LinkEmitter` | 85 |
@@ -733,10 +734,26 @@ describe. Unexplained, and worth a look by whoever next opens `SCES_547.48`.
   [track-sound-emitters.md](track-sound-emitters.md). 2026-09-01's live capture
   reading `False` on all 1,610 samples remains real negative evidence: it
   followed craft emitters, and no craft owns a cone.
-- **`inst[0x0c]`, the per-instance doppler scale, read `0.0005` live on every
-  sample** (2026-09-01) - but only against the engine note, the only
-  continuously-queued cue in that capture, and no construction site was
-  traced, so a collision or pickup cue may carry a different value.
+- ~~**`inst[0x0c]`, the per-instance doppler scale, read `0.0005` live on
+  every sample** (2026-09-01) - but only against the engine note, and no
+  construction site was traced.~~ **Resolved 2026-09-16: the construction
+  site is `SoundInstance_Init` (`0x08939b10`), the 0x30-byte instance
+  `Sound_Play` allocates and fills.** It writes `inst[0x0c] = 0x3a03126f`
+  (`0.0005`) unconditionally, beside `inst[0x04] = 0` (the base pitch),
+  `inst[0x08] = volume`, `inst[0x18] = bank`, `inst[0x1c] = cue name`,
+  `inst[0x20] = flags` and `inst[0x24] = DAT_08ac2280`; a cue whose name
+  starts with `~` also gets bit `0` set and its handle written back through
+  the seventh argument, which is the held-voice mechanism `sound.md`
+  describes. So every cue, one-shot or held, carries the same doppler scale,
+  and the 2026-09-01 engine-note reading generalises. Confidence **90**.
+  **Ported** the same day, now that both the scale and the unit are settled:
+  `oag_audio::spatial::Doppler` is `2^(-(dd/dt) * 0.0005)` as a ratio on the
+  voice, `oag_audio::LISTENER_JUMP` is the `24.0` camera-cut guard, and both
+  the eight engine notes and the circuit's held ambience voices carry it
+  (`crates/game/src/audio/sfx/engine.rs`, `track.rs`). One-shots do not:
+  they are fired and forgotten here, where the original keeps writing pitch
+  to a live instance until it ends - a rocket passing the ear does not bend
+  yet.
 - **Resolved 2026-09-07: the mode mask, which two terms it squares, and what
   feeds all four.** See
   ["`Scream_PanVolumePair`'s four terms"](#scream_panvolumepairs-four-terms)
