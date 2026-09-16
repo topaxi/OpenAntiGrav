@@ -129,9 +129,23 @@ fn speed(race: &race::Race) -> f32 {
 ///   than because of one.
 ///
 /// A real `projectile::step` detonation would put the blast wherever the bolt
-/// stopped; nothing about the arithmetic differs, and aiming a bolt at a
-/// specific craft on a real circuit is a flight test rather than a slowdown
-/// one. `plasma_ground_truth.rs` covers the flight.
+/// stopped; aiming a bolt at a specific craft on a real circuit is a flight
+/// test rather than a slowdown one, and `plasma_ground_truth.rs` covers the
+/// flight.
+///
+/// **This calls [`blast`] directly, which is deliberate and still correct for
+/// what this file measures, but is no longer the whole Plasma rule.** Since
+/// 2026-09-16 a real Plasma craft hit routes through
+/// `oag_gameplay::projectile::blast::blast_direct_hit` instead:
+/// `slowdown_time` (and `damage`) reach only the struck craft, unconditionally,
+/// while every other craft in `blastradius` - except the bolt's own firer -
+/// takes the `blastforce` impulse alone, no slowdown and no damage. This
+/// function's caller is always slot 0 standing in for "the struck craft", so
+/// the assertions below are still measuring the right half of the rule; what
+/// they would *not* catch is a bystander wrongly gaining slowdown from a real
+/// Plasma hit, because this hand-detonation has no bystander to get it wrong
+/// for. See `docs/ghidra/functions/psp-pulse-usa/plasma.md`'s "a craft hit is
+/// the third ending" section.
 fn detonate_behind_the_player(race: &mut race::Race, stats: &BlastStats) {
     let body = &race.sim.world.ships[0].physics.body;
     let point = body.position - body.forward() * (stats.radius * 0.999);

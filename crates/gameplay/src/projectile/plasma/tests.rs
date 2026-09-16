@@ -10,6 +10,24 @@ use oag_core::math::Quat;
 use oag_physics::CollisionWorld;
 use oag_tables::weapons::Weapon;
 
+fn craft_at(position: Vec3, shield: f32, mass: f32) -> crate::world::Ship {
+    let mut ship = crate::world::Ship {
+        active: true,
+        ..crate::world::Ship::default()
+    };
+    ship.handling.dimensions = Dimensions {
+        length: 4.0,
+        width: 2.0,
+        height: 1.0,
+        shield,
+        ..Dimensions::default()
+    };
+    ship.physics.shield = shield;
+    ship.physics.body.mass = mass;
+    ship.physics.body.position = position;
+    ship
+}
+
 /// Our own fixed timestep. ADR-0007.
 const TICK: f32 = 1.0 / 60.0;
 
@@ -265,5 +283,179 @@ fn a_timed_out_plasma_bolt_damages_nobody_standing_in_it() {
     assert_eq!(
         world.ships[0].physics.shield, 100.0,
         "the firing craft took damage from its own expired bolt"
+    );
+}
+
+/// The plasma table this section's tests share: a fixture that authors every
+/// offset `Plasma_HitCraft`/`Plasma_ApplyBlastForce` read
+/// (`docs/ghidra/functions/psp-pulse-usa/plasma.md`'s "a craft hit is the
+/// third ending" section) - `damage` and `slowdown_time` for the direct
+/// credit, `blastradius`/`blastforce` for the impulse sweep.
+fn direct_hit_table() -> oag_tables::weapons::WeaponStats {
+    oag_tables::weapons::parse(
+        r#"<WeaponStats>
+             <Weapon type="Global"><Stats slowdown_limit="0"/></Weapon>
+             <Weapon type="Plasma"><Stats absorb="1" blastforce="10" blastradius="30"
+               damage="25" slowdown_time="1" speed="600" launchSpeed="0"/></Weapon>
+           </WeaponStats>"#,
+    )
+    .expect("the fixture parses")
+}
+
+/// A direct hit is a craft hit, not a wall hit - `struck` carries the slot
+/// and `blast` is `true`, unlike the wall and timeout endings this file
+/// already covers.
+///
+/// **Recovered from `Plasma_SweepCraftHit` (`0x0886afb8`) calling
+/// `Plasma_HitCraft`/`Plasma_ApplyBlastForce` on a hull hit, read
+/// 2026-09-16** - a third ending neither of the other two tests in this file
+/// exercises.
+#[test]
+fn a_plasma_bolt_that_strikes_a_craft_reports_it_struck_with_a_blast() {
+    let geometry = CollisionWorld::new();
+    let ships = vec![
+        craft_at(Vec3::ZERO, 100.0, 1.0),
+        craft_at(Vec3::Z * 30.0, 100.0, 1.0),
+    ];
+    let mut projectiles = Projectiles::new();
+    assert!(projectiles.charge_up(Vec3::ZERO, Vec3::Z * 600.0, 0, 0.0));
+
+    let mut impact = None;
+    for _ in 0..20 {
+        if let Some(hit) = projectiles
+            .advance(
+                1.0 / 60.0,
+                &geometry,
+                &ships,
+                None,
+                None,
+                crate::projectile::TriggerRadii::default(),
+                "VENOM",
+            )
+            .into_iter()
+            .flatten()
+            .next()
+        {
+            impact = Some(hit);
+            break;
+        }
+    }
+    let impact = impact.expect("a plasma bolt flew through a craft");
+    assert_eq!(impact.struck, Some(1), "a plasma bolt hit its own launcher");
+    assert_eq!(impact.owner, 0);
+    assert!(
+        impact.blast,
+        "a craft hit spends a blast - only the wall and the timeout do not"
+    );
+}
+
+/// The struck craft takes full damage and slowdown, unconditionally - the
+/// original's `Plasma_HitCraft` has no distance test at all, unlike
+/// [`blast`]'s own radius-and-falloff rule.
+#[test]
+fn a_plasma_bolt_that_strikes_a_craft_credits_it_directly() {
+    let table = direct_hit_table();
+    let mut world = crate::World::new(1);
+    world.ship_count = 2;
+    world.ships[0] = craft_at(Vec3::ZERO, 100.0, 1.0);
+    world.ships[1] = craft_at(Vec3::Z * 30.0, 100.0, 1.0);
+    assert!(
+        world
+            .projectiles
+            .charge_up(Vec3::ZERO, Vec3::Z * 600.0, 0, 0.0)
+    );
+
+    let empty = CollisionWorld::new();
+    let mut hit = false;
+    for _ in 0..20 {
+        let impacts = crate::projectile::step(
+            &mut world,
+            1.0 / 60.0,
+            &empty,
+            Some(&table),
+            "VENOM",
+            oag_physics::DamageRules::default(),
+            &mut [false; 2],
+        );
+        if impacts.iter().flatten().count() > 0 {
+            hit = true;
+            break;
+        }
+    }
+    assert!(hit, "the bolt never reached the struck craft");
+    assert_eq!(
+        world.ships[1].physics.shield, 75.0,
+        "the struck craft did not take the authored 25 damage"
+    );
+    assert_eq!(
+        world.ships[1].pending_slowdown, 1.0,
+        "the struck craft did not take the authored slowdown_time"
+    );
+}
+
+/// Every other craft in `blastradius` - except the bolt's own firer - takes
+/// only the falling-off `blastforce` impulse: no damage, no slowdown.
+/// `Plasma_ApplyBlastForce` excludes `owner` outright, even though it sits
+/// well inside the radius here.
+#[test]
+fn a_plasma_craft_hit_pushes_bystanders_but_spares_the_firer() {
+    let table = direct_hit_table();
+    let mut world = crate::World::new(1);
+    world.ship_count = 3;
+    // 0 fires, 1 is struck, 2 is a bystander inside `blastradius` (30) of the
+    // hit but not on the flight path.
+    world.ships[0] = craft_at(Vec3::ZERO, 100.0, 1.0);
+    world.ships[1] = craft_at(Vec3::Z * 30.0, 100.0, 1.0);
+    world.ships[2] = craft_at(Vec3::new(10.0, 0.0, 30.0), 100.0, 1.0);
+    assert!(
+        world
+            .projectiles
+            .charge_up(Vec3::ZERO, Vec3::Z * 600.0, 0, 0.0)
+    );
+
+    let empty = CollisionWorld::new();
+    let mut hit = false;
+    for _ in 0..20 {
+        let impacts = crate::projectile::step(
+            &mut world,
+            1.0 / 60.0,
+            &empty,
+            Some(&table),
+            "VENOM",
+            oag_physics::DamageRules::default(),
+            &mut [false; 3],
+        );
+        if impacts.iter().flatten().count() > 0 {
+            hit = true;
+            break;
+        }
+    }
+    assert!(hit, "the bolt never reached the struck craft");
+
+    assert_eq!(
+        world.ships[2].physics.shield, 100.0,
+        "a bystander inside the radius took damage the direct hit never spends on it"
+    );
+    assert_eq!(
+        world.ships[2].pending_slowdown, 0.0,
+        "a bystander inside the radius took slowdown the direct hit never spends on it"
+    );
+    assert!(
+        world.ships[2].physics.body.linear_velocity.length() > 0.0,
+        "a bystander inside the radius took no impulse at all"
+    );
+
+    assert_eq!(
+        world.ships[0].physics.shield, 100.0,
+        "the firer took damage from its own bolt"
+    );
+    assert_eq!(
+        world.ships[0].pending_slowdown, 0.0,
+        "the firer took slowdown from its own bolt"
+    );
+    assert_eq!(
+        world.ships[0].physics.body.linear_velocity.length(),
+        0.0,
+        "the firer is excluded from the impulse sweep, even though it sits inside the radius"
     );
 }
