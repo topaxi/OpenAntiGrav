@@ -185,3 +185,51 @@ fn a_weapon_that_cannot_bounce_never_reads_as_bouncing() {
     assert!(!bounced_this_tick(Some(Weapon::Rocket), 0, 1));
     assert!(!bounced_this_tick(Some(Weapon::Plasma), 0, 1));
 }
+
+/// The riding flare's scale follows the charge for a Plasma alone -
+/// `Plasma_UpdateCharge`'s `(1.0 - remaining) * 0.75`, ported in
+/// `plasma_flare_scale` - and sits at the stage's neutral `1.0` for every
+/// other weapon.
+///
+/// **A flying bolt is `0.75`, not `1.0`.** `Plasma_Launch`'s recovered body
+/// (`plasma.md`) writes no severity field at all, so nothing resets the
+/// value `Plasma_UpdateCharge` left behind when `charge` hit zero - see
+/// `plasma_flare_scale`'s own doc comment for the screenshot evidence that
+/// caught the earlier `1.0` guess as a visible, unexplained pop at release.
+#[test]
+fn the_plasma_flare_scale_follows_the_charge() {
+    use crate::race::weapons::plasma_flare_scale;
+    use oag_gameplay::projectile::plasma::CHARGE_SECONDS;
+    use oag_tables::weapons::Weapon;
+
+    let half_charged = plasma_flare_scale(Some(Weapon::Plasma), CHARGE_SECONDS / 2.0);
+    assert!(
+        (half_charged - 0.375).abs() < 1e-6,
+        "half-charged plasma flare should scale to 0.375, got {half_charged}"
+    );
+
+    let flying = plasma_flare_scale(Some(Weapon::Plasma), 0.0);
+    assert!(
+        (flying - 0.75).abs() < 1e-6,
+        "a launched bolt's flare freezes at the wind-up's own maximum, got {flying}"
+    );
+
+    let just_pressed = plasma_flare_scale(Some(Weapon::Plasma), CHARGE_SECONDS);
+    assert_eq!(
+        just_pressed, 0.0,
+        "the instant of the press should scale the flare to nothing yet"
+    );
+
+    for weapon in [Weapon::Rocket, Weapon::Missile, Weapon::Shuriken] {
+        assert_eq!(
+            plasma_flare_scale(Some(weapon), CHARGE_SECONDS / 2.0),
+            1.0,
+            "{weapon:?} never ramps, whatever charge it is handed"
+        );
+    }
+    assert_eq!(
+        plasma_flare_scale(None, CHARGE_SECONDS / 2.0),
+        1.0,
+        "an empty slot rides at neutral scale"
+    );
+}

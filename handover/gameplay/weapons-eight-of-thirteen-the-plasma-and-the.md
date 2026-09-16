@@ -429,7 +429,7 @@ which is the whole point of the weapon.
   weapon - **not** something the wind-up introduced, since each bolt still
   releases one second after its own press and they stay staggered. Recorded so
   the next person driving weapons with `--give` does not read it as new.
-- **The charging glow rides the nose already; its ramp does not.** Checked
+- ~~**The charging glow rides the nose already; its ramp does not.** Checked
   rather than assumed, and the first draft of this row had it backwards.
   `Race::flare_effect_for` maps `Weapon::Plasma` to `WO_PLASMA_HEAD` and
   `advance_projectile_flares` follows *every* live projectile's position - and
@@ -440,7 +440,20 @@ which is the whole point of the weapon.
   `(1.0 - remaining) * 0.75` scale: the glow does not grow as the shot
   charges. That needs a per-instance scale on a *riding* flare, which
   `advance_one_flare` does not currently carry - `Stage::rescale` exists (the
-  Quake uses it) but the flare path never calls it.
+  Quake uses it) but the flare path never calls it.~~ **Built 2026-09-16**:
+  `weapons::visuals::plasma_flare_scale` computes
+  `(CHARGE_SECONDS - charge.clamp(0, CHARGE_SECONDS)) / CHARGE_SECONDS * 0.75`
+  and `advance_one_flare` now calls `Stage::rescale` alongside `follow` every
+  tick, so a charging Plasma's flare grows. A launched bolt's flare freezes
+  at `0.75` rather than resetting to neutral `1.0` - `Plasma_Launch`'s
+  recovered body writes no severity field, so nothing resets it; an earlier
+  draft that reset to `1.0` produced a visible unexplained pop at release in
+  the screenshot probe, which is what caught it. The `* 0.5` craft flag stays
+  unported (unread meaning). Verified by screenshot against
+  `data/images/pulse-psp-eu.chd`, growth clearest in the back half of the
+  1 s wind-up; see
+  [`PLASMA_FLARE_EFFECT`](../../crates/game/src/race/effect_names.rs)'s
+  doc comment.
 - ~~**`Data\Weapons\Bomb_Shockwave.vex` is a located string with no read call
   site.** It sits immediately before the plasma blast's own models in the same
   `.rodata` run (`0x08a7c190`), found while reading `PlasmaBlast_Construct`. A

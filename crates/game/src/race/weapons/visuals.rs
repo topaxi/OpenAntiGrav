@@ -410,11 +410,17 @@ impl Race {
             } else {
                 (projectile.position, None)
             };
+            // Only the primary anchor ever carries a non-neutral scale - see
+            // `plasma_flare_scale`. The Missile's orbiting anchor rides at
+            // the stage's own neutral `1.0`, the same as a Rocket or a
+            // Shuriken.
+            let scale = plasma_flare_scale(projectile.kind, projectile.charge);
             advance_one_flare(
                 &mut self.view.stage,
                 &self.view.effects,
                 name,
                 primary,
+                scale,
                 &mut self.view.projectile_flare[slot],
             );
             // The Missile's second, orbiting anchor - see `missile_flare_anchors`.
@@ -426,6 +432,7 @@ impl Race {
                 &self.view.effects,
                 orbiting.and(name),
                 orbiting.unwrap_or(primary),
+                1.0,
                 &mut self.view.projectile_flare_orbit[slot],
             );
         }
@@ -719,6 +726,7 @@ fn advance_one_flare(
     effects: &psys::Library,
     name: Option<&'static str>,
     at: Vec3,
+    scale: f32,
     playing: &mut Option<psys::Playing>,
 ) {
     match (name, *playing) {
@@ -730,16 +738,85 @@ fn advance_one_flare(
             *playing = None;
         }
         (None, None) => {}
-        (Some(_), Some(instance)) => stage.follow(instance, at),
+        (Some(_), Some(instance)) => {
+            stage.follow(instance, at);
+            stage.rescale(instance, scale);
+        }
         // Freshly in the air. `attach` returning `None` means the stage is
         // full of flares already, and this projectile simply flies without
         // one rather than evicting someone else's.
         (Some(name), None) => {
             if let Some(effect) = effects.get(name).cloned() {
-                *playing = stage.attach(&effect, at, 1.0);
+                *playing = stage.attach(&effect, at, scale);
             }
         }
     }
+}
+
+/// The riding flare's own scale for one tick, by the projectile's kind and
+/// charge state - `1.0` (the stage's own neutral value) for everything that
+/// is not a Plasma at all.
+///
+/// **Ports `Plasma_UpdateCharge`'s `(1.0 - remaining) * 0.75`** - see
+/// [`PLASMA_FLARE_EFFECT`]'s doc comment and
+/// `docs/ghidra/functions/psp-pulse-usa/plasma.md`'s "The charge is real,
+/// and it is not `charge_time`" section. `remaining` there is a countdown in
+/// *seconds*, `1.0` at press and `0.0` at release, exactly like this
+/// engine's own `projectile.charge`; the fraction is written as
+/// `(CHARGE_SECONDS - charge) / CHARGE_SECONDS` rather than the original's
+/// bare `1.0 - charge` so this stays correct if
+/// [`oag_gameplay::projectile::plasma::CHARGE_SECONDS`] ever moves off its
+/// current `1.0` - the two forms are identical today only because the
+/// constant happens to equal the wind-up the original hardcodes. `charge` is
+/// clamped into `[0, CHARGE_SECONDS]` first: this engine's own countdown
+/// never leaves that range, but a flying bolt's `charge` sits pinned at
+/// exactly `0.0`, so the clamp is what makes the formula read as "the last
+/// charging value" rather than needing a second branch for it - see below.
+///
+/// **Not ported: the further `* 0.5` when the firing craft's `+0x6d` flag is
+/// set.** That flag's meaning has not been read, so halving on it would be
+/// invented behaviour gated on an unread condition rather than a recovered
+/// one - `plasma.md` records this the same way.
+///
+/// **What `scale` actually multiplies is the same thing on both sides.**
+/// `Stage::rescale`/`System::rescale` change an instance's *severity* - the
+/// field this project's own read of `ParticleSystem_DeriveScaledParams`
+/// (`docs/ghidra/functions/psp-pulse-usa/particle-system.md`) establishes
+/// multiplies every emitter's ejection speed and every particle's drawn
+/// size, not a one-off matrix scale applied once at spawn. "Scales the
+/// effect by" is this project's own phrase for exactly that field wherever
+/// else it has been read (`contact-response.md`'s collision sparks), and
+/// `plasma.md`'s own reading lists the matrix push and the scale as two
+/// *separate* operations on the same instance - itself evidence the scale is
+/// not folded into the matrix - so this is the right call and not a
+/// stand-in for one.
+///
+/// **After release, the scale does not reset - it freezes at the wind-up's
+/// own maximum, `0.75`, and this is not a choice.** `Plasma_Launch`'s
+/// recovered body (`plasma.md`) is a complete seven-statement listing - every
+/// field it writes is named with its own offset comment - and none of them is
+/// a severity or scale write; `Psys_Reparent_q` moves the instance's matrix,
+/// it does not touch severity either. So nothing in the recovered release
+/// path changes the value `Plasma_UpdateCharge` last wrote, which this
+/// engine's own countdown pins at exactly `0.75` (`remaining == 0.0`) the
+/// tick charge hits zero - carrying that value forward rather than resetting
+/// to `1.0` is what the recovered functions imply, not a stand-in for a gap
+/// in them. Confirmed against this engine's own screenshot probe: an early
+/// draft that reset to `1.0` produced the single largest brightness jump in
+/// the whole series exactly at release (a fixed-crop brightness metric going
+/// from `0.205` at the last charging tick to `0.304` after release, bigger
+/// than the entire ramp before it) - a pop the recovered functions give no
+/// reason to expect, which is what caught the bug.
+#[must_use]
+pub(in crate::race) fn plasma_flare_scale(
+    kind: Option<oag_tables::weapons::Weapon>,
+    charge: f32,
+) -> f32 {
+    if kind != Some(oag_tables::weapons::Weapon::Plasma) {
+        return 1.0;
+    }
+    let charge_seconds = oag_gameplay::projectile::plasma::CHARGE_SECONDS;
+    (charge_seconds - charge.clamp(0.0, charge_seconds)) / charge_seconds * 0.75
 }
 
 /// The Missile's own two flare anchors this tick, orbiting its flight line -
