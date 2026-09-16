@@ -445,6 +445,31 @@ fn one_rocket_table() -> oag_tables::weapons::WeaponStats {
     .expect("the fixture table must parse")
 }
 
+/// Both the Mine's and the Plasma's own stats blocks in one table - what
+/// `every_cue_has_something_that_raises_it` needs to fire either weapon from a
+/// single `setup.weapons`, since a race holds only one table at a time. Same
+/// numbers [`one_mine_table`] and [`one_plasma_table`] each already use on
+/// their own.
+fn mine_and_plasma_table() -> oag_tables::weapons::WeaponStats {
+    oag_tables::weapons::parse(
+        r#"<WeaponStats>
+             <Weapon type="Global"><Stats slowdown_limit="0"/></Weapon>
+             <Weapon type="Mine"><Stats absorb="17" blastforce="18" blastradius="19"
+               damage="20" slowdown_time="0.5" timetodie="3"
+               trigger_radius="2"/></Weapon>
+             <Weapon type="Plasma"><Stats absorb="21" blastforce="22" blastradius="23"
+               charge_time="3" damage="24" slowdown_time="25" venomspeed="650"
+               flashspeed="750" rapierspeed="850" phantomspeed="950"
+               launchSpeed="26"/></Weapon>
+             <Pickupodds class="Venom">
+               <Weapon type="Mine"><Stats ai="1" back="1" front="1" human="1"/></Weapon>
+               <Weapon type="Plasma"><Stats ai="1" back="1" front="1" human="1"/></Weapon>
+             </Pickupodds>
+           </WeaponStats>"#,
+    )
+    .expect("the fixture table must parse")
+}
+
 /// The Mine's own fixture, for the tests about the drop path and its cue.
 /// Invented numbers, all distinct from the Rocket fixture's.
 fn one_mine_table() -> oag_tables::weapons::WeaponStats {

@@ -275,6 +275,16 @@ impl Race {
                         // the Rocket's arm follows for an empty volley.
                         return;
                     }
+                    // `Plasma_Init` plays `PLASMA` off the firing craft's own
+                    // emitter in the same breath it marks the bolt charging -
+                    // decompiled directly to confirm this runs before the
+                    // bolt's own emitter even exists, so the cue belongs at
+                    // the press rather than at release. See
+                    // `crate::audio::sfx::Cue::Plasma`'s own doc comment.
+                    self.sim.cues.push(crate::audio::sfx::CueEvent::new(
+                        crate::audio::sfx::Cue::Plasma,
+                        0,
+                    ));
                 }
                 oag_tables::weapons::Weapon::Shuriken => {
                     let Some(stats) = weapons.shuriken() else {

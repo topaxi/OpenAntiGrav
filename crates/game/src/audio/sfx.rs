@@ -137,6 +137,21 @@ pub(super) struct SfxVoices {
     /// The circuit's own ambience: one held voice per authored emitter that is
     /// currently in range. See [`TrackEmitters`].
     ambience: track::Ambience,
+    /// `~PLASMATVL`'s held voice, one per **projectile** slot rather than per
+    /// grid slot or per race. See [`Cue::PlasmaTravel`] for why a Plasma bolt
+    /// needs this rather than the `Option<VoiceId>` shape [`Self::shield`] and
+    /// [`Self::blowup`] use: those are one activation per craft at a time,
+    /// and a bolt is neither - it is not the craft, and more than one can be
+    /// in the air together.
+    ///
+    /// Read and written directly off `race.sim.world.projectiles.slots` every
+    /// tick in [`Audio::race_tick`], the same way [`Engine`] reads craft
+    /// position directly rather than through a queued [`CueEvent`] - a moving
+    /// held voice needs *this* tick's position, not a queued one. `None` at
+    /// every index a bolt is not occupying; [`oag_gameplay::projectile::MAX_PROJECTILES`]
+    /// entries because a slot index is the only stable handle a `Copy` world
+    /// snapshot gives a projectile.
+    plasma_travel: [Option<VoiceId>; oag_gameplay::projectile::MAX_PROJECTILES],
     rng: Rng,
 }
 
@@ -183,6 +198,7 @@ impl Audio {
                 blowup: None,
                 blowup_open: false,
                 ambience: track::Ambience::default(),
+                plasma_travel: [None; oag_gameplay::projectile::MAX_PROJECTILES],
                 rng: Rng::new(SFX_SEED),
             }
         });
@@ -192,6 +208,14 @@ impl Audio {
         let class_announcer = race.class_announcer();
         let listener = listener_of(race);
         let craft = craft_positions(race);
+        // An owned snapshot, the same shape `craft` is - `Projectile` is
+        // `Copy` and the array is small, and copying it out avoids holding a
+        // borrow of `race` across the mixer closure below. Read after
+        // `Race::tick` has already run, so a bolt that ended this tick is
+        // already back to `Projectile::default()` here - which is why
+        // `Cue::PlasmaHitWall` carries its own impact point on the `CueEvent`
+        // rather than being read off this array.
+        let projectiles = race.sim.world.projectiles.slots;
         let running = !race.finished();
         let shielded = race.shield_is_up();
         let exploding = race.craft_is_exploding();
@@ -370,6 +394,69 @@ impl Audio {
                 _ => {}
             }
 
+            // The Plasma's own travel loop, `~PLASMATVL`, keyed by
+            // *projectile* slot - see [`Cue::PlasmaTravel`] and
+            // [`SfxVoices::plasma_travel`]'s own doc comments for why this
+            // cannot be the shield/blowup shape above. Read directly off this
+            // tick's own projectile array rather than off a queued
+            // `CueEvent`, for the reason the craft's own engines below are.
+            for (slot, projectile) in projectiles.iter().enumerate() {
+                let flying = projectile.kind == Some(oag_tables::weapons::Weapon::Plasma)
+                    && projectile.charge <= 0.0;
+                match (flying, voices.plasma_travel[slot]) {
+                    // The rising edge: charge just reached zero this tick -
+                    // see `Projectiles::advance`'s charging branch, which is
+                    // the one place this port's own release edge lives.
+                    (true, None) => {
+                        if let Some((sound, looping)) =
+                            banks.pick(Cue::PlasmaTravel, &mut voices.rng)
+                            && looping
+                        {
+                            let placed = oag_audio::Emitter::craft(projectile.position.to_array())
+                                .place(&listener, 1.0);
+                            let (gain, pan) = placed.map_or((0.0, None), |p| (p.gain, Some(p.pan)));
+                            voices.plasma_travel[slot] = mixer.play(Play {
+                                gain,
+                                pan,
+                                ..Play::looping(sound, Cue::PlasmaTravel.bus())
+                            });
+                        }
+                        // Else either nothing loaded or the bank says this
+                        // waveform is not a loop - the same guard
+                        // `Engine::tick` carries for `~ENGINE`. `~PLASMATVL`
+                        // reads looping in every corpus checked so far
+                        // (`oag-wad sounds`), so the second case is
+                        // defensive rather than expected to fire.
+                    }
+                    // Still flying and still held: follow the bolt.
+                    (true, Some(id)) if mixer.is_playing(id) => {
+                        let placed = oag_audio::Emitter::craft(projectile.position.to_array())
+                            .place(&listener, 1.0);
+                        let (gain, pan) = placed.map_or((0.0, None), |p| (p.gain, Some(p.pan)));
+                        mixer.set_gain(id, gain);
+                        mixer.set_pan(id, pan);
+                    }
+                    // The pool reclaimed the voice before the bolt itself
+                    // ended - starved, not stopped. Forget the stale handle so
+                    // a later tick does not stop whatever slot the pool gave
+                    // it to next.
+                    (true, Some(_)) => voices.plasma_travel[slot] = None,
+                    // The falling edge: the bolt is no longer flying, whether
+                    // because it just ended (`Projectile::default()` already
+                    // reset `kind`) or - unreachably today, since nothing
+                    // re-charges a flying bolt - because it started charging
+                    // again. Either way the loop stops here; the one-shot
+                    // `PLASMAHITWALL` for an actual ending is a separate
+                    // `CueEvent` carrying its own impact point, pushed from
+                    // `crates/game/src/race/tick.rs`.
+                    (false, Some(id)) => {
+                        mixer.stop(id);
+                        voices.plasma_travel[slot] = None;
+                    }
+                    (false, None) => {}
+                }
+            }
+
             // Every craft's engine, each off its own emitter. A craft with no
             // pose is one the race never spawned; it is skipped rather than
             // placed at the origin, which would put eight engines in a heap
@@ -440,6 +527,11 @@ impl Audio {
                     mixer.stop(id);
                 }
                 voices.blowup_open = false;
+                for voice in &mut voices.plasma_travel {
+                    if let Some(id) = voice.take() {
+                        mixer.stop(id);
+                    }
+                }
                 voices.ambience.stop(mixer);
             });
         }
@@ -690,11 +782,81 @@ pub enum Cue {
     /// never calls the play function at all. See `mine.md`'s own section for
     /// both.
     MineLaunch,
+    /// The Plasma's wind-up, at the press rather than at release.
+    ///
+    /// `Plasma_Init` (`0x0885bd18`, confidence 90) plays it directly off the
+    /// **firing craft's own emitter**, not the bolt's - `Sound_Play(1.0,
+    /// craft->emitter, ..., "PLASMA", 0)` runs before the bolt's own emitter
+    /// is even constructed a few lines later in the same function
+    /// (`SoundEmitter_Init` on a fresh `0x70`-byte allocation, stored at the
+    /// bolt's `+0x5c`). Decompiled directly 2026-09-16 to settle exactly this:
+    /// see [plasma.md](../../../../docs/ghidra/functions/psp-pulse-usa/plasma.md#plasma_init-0x0885bd18-plays-plasma-and-wo_plasma_head).
+    /// So this fires at the press, the same tick [`oag_gameplay::projectile::plasma::CHARGE_SECONDS`]'s
+    /// wind-up starts - not at release, which is [`Self::PlasmaTravel`]'s edge.
+    /// Bank data confirms it as a plain one-shot: `oag-wad sounds` reports
+    /// `PLASMA` with 3 waveforms and 0 looping, in `weapons.bnk`.
+    Plasma,
+    /// The Plasma bolt's own travel loop, from release to whatever ends it.
+    ///
+    /// `Plasma_Launch` (`0x0885bf84`, confidence 90) starts it -
+    /// `Sound_Play(1.0, p->emitter, ..., "~PLASMATVL", &p->pose)` - on the
+    /// bolt's **own** emitter, the one `Plasma_Init` constructed and pointed
+    /// at the bolt's own matrix (`p->emitter->node = &p->matrix`, read
+    /// directly off `Plasma_Init`'s decompile 2026-09-16) rather than at any
+    /// craft's. That is why this needs its own placement: the bolt is heard
+    /// from wherever it actually is, which is not the firing craft's emitter
+    /// [`Self::Plasma`] plays from a moment earlier. Bank data confirms the
+    /// loop bit: `oag-wad sounds` reports `~PLASMATVL` as one waveform, 1
+    /// looping, in `weapons.bnk`.
+    ///
+    /// **Held per *projectile* slot, not per grid slot** - the gap
+    /// `docs/../mine.md`'s own `MINERADAR` note names as "nothing in
+    /// `CueEvent` or `SfxVoices` can address... every held voice this engine
+    /// plays is keyed by grid slot". This is the first cue built against that
+    /// gap: [`SfxVoices::plasma_travel`] is an array of
+    /// [`oag_gameplay::projectile::MAX_PROJECTILES`] voice handles, read and
+    /// written directly off the world's own projectile array every tick -
+    /// the same reason [`Engine`] reads craft position directly rather than
+    /// through a queued [`CueEvent`]. Never pushed through the cue queue
+    /// itself; [`Self::held`] returns `true` for it so a stray push would be
+    /// silently dropped rather than mis-played as a one-shot.
+    PlasmaTravel,
+    /// Whatever ends a Plasma bolt's flight - a wall, a craft, or the 10 s
+    /// timeout.
+    ///
+    /// `Plasmas_Update`'s teardown pass (`0x0886b490`, confidence 90) plays it
+    /// unconditionally - `Psys_Release_q`, `Plasma_SpawnDetonation`,
+    /// `Sound_Play(1.0, p->emitter, ..., "PLASMAHITWALL", 0)`, nothing else -
+    /// for a wall hit and the `10.0 < age` timeout alike; re-read at
+    /// instruction level 2026-09-16 with no elision. On the bolt's own
+    /// emitter, at wherever it stopped - see [`Self::PlasmaTravel`] for why
+    /// that is not the firing craft.
+    ///
+    /// **This port's own Plasma can also end on a craft**
+    /// (`Impact::struck.is_some()`, `crates/gameplay/src/projectile/flight.rs`'s
+    /// shared sweep-segment test), a third ending `plasma.md`'s reading never
+    /// located a call site for - `Plasma_Update`'s own decompiled switch only
+    /// covers the downward probe (wall/floor/none), and the travel-segment
+    /// sweep against a craft is elided in the same page as "the same
+    /// collision test again". The bank carries a **distinct** `PLASMAHITSHIP`
+    /// cue neither this variant nor any other reads - confirmed present in
+    /// `weapons.bnk` by `oag-wad sounds`, and named as the HD/Omega craft-hit
+    /// cue's PSP counterpart in this thread's own cross-title table. Playing
+    /// `PLASMAHITWALL` for a craft hit too is therefore **chosen, not
+    /// measured**: the honest alternative to inventing which cue a craft hit
+    /// actually plays is to reuse the one ending that *is* confirmed rather
+    /// than guess at the other, and say so here rather than silently. See the
+    /// `weapons-eight-of-thirteen-the-plasma-and-the` handover thread.
+    ///
+    /// **Placed at the impact point, not at a craft** - see [`Placement::Point`]
+    /// and [`CueEvent::at_point`]. Bank data: `oag-wad sounds` reports
+    /// `PLASMAHITWALL` as 4 waveforms, 0 looping.
+    PlasmaHitWall,
 }
 
 impl Cue {
     /// Every cue this port fires, which is every one it knows how to load.
-    pub const ALL: [Self; 10] = [
+    pub const ALL: [Self; 13] = [
         Self::SpeedupPad,
         Self::Collision,
         Self::Absorb,
@@ -705,6 +867,9 @@ impl Cue {
         Self::Blowup,
         Self::LockOn,
         Self::MineLaunch,
+        Self::Plasma,
+        Self::PlasmaTravel,
+        Self::PlasmaHitWall,
     ];
 
     /// The bank the cue is looked up in.
@@ -713,7 +878,12 @@ impl Cue {
         match self {
             Self::SpeedupPad | Self::Blowup | Self::LockOn => BankName::Hud,
             Self::Collision | Self::Engine => BankName::Ship,
-            Self::Absorb | Self::Shield | Self::MineLaunch => BankName::Weapons,
+            Self::Absorb
+            | Self::Shield
+            | Self::MineLaunch
+            | Self::Plasma
+            | Self::PlasmaTravel
+            | Self::PlasmaHitWall => BankName::Weapons,
             Self::ShieldActive | Self::Disengaging => BankName::Speech,
         }
     }
@@ -777,6 +947,9 @@ impl Cue {
             Self::Blowup => "~BLOWUP",
             Self::LockOn => "~ROCKLOCK",
             Self::MineLaunch => "MINELAUNCH",
+            Self::Plasma => "PLASMA",
+            Self::PlasmaTravel => "~PLASMATVL",
+            Self::PlasmaHitWall => "PLASMAHITWALL",
         }
     }
 
@@ -789,9 +962,17 @@ impl Cue {
     /// **not** the test: `~SPARKS` and `~FLYBY_DIST` also carry it and are
     /// one-shots the caller can cancel, so a held cue is one whose *holder* is
     /// written here.
+    ///
+    /// [`Self::PlasmaTravel`] joins this list held **per projectile slot**
+    /// rather than per grid slot or as a single race-wide handle - see
+    /// [`SfxVoices::plasma_travel`]. It is still never pushed through the cue
+    /// queue, so this only guards against a stray push being mis-played.
     #[must_use]
     pub fn held(self) -> bool {
-        matches!(self, Self::Engine | Self::Shield | Self::Blowup)
+        matches!(
+            self,
+            Self::Engine | Self::Shield | Self::Blowup | Self::PlasmaTravel
+        )
     }
 
     /// Which emitter the original plays this cue on.
@@ -843,6 +1024,18 @@ impl Cue {
             // Traces to the firing craft's own `+0x50` - see this variant's
             // own doc comment - so it rides the craft, not the mine.
             Self::MineLaunch => Placement::Craft,
+            // `Plasma_Init` plays this off the argument it was handed
+            // directly - the firing craft's own emitter - before it ever
+            // constructs the bolt's own. See this variant's own doc comment.
+            Self::Plasma => Placement::Craft,
+            // Both ride the bolt's own emitter, which `Plasma_Init`
+            // constructs pointed at the bolt's own matrix rather than any
+            // craft's - see each variant's own doc comment. Neither is routed
+            // through this function's `craft` slice: [`Self::PlasmaTravel`]
+            // is a bespoke per-tick tracker keyed by projectile slot, and
+            // [`Self::PlasmaHitWall`] carries its own point on the
+            // [`CueEvent`] rather than a grid slot.
+            Self::PlasmaTravel | Self::PlasmaHitWall => Placement::Point,
         }
     }
 }
@@ -899,12 +1092,26 @@ fn place(
         gain: 1.0,
         pan: None,
     };
+    if event.cue.placement() == Placement::Point {
+        // An arbitrary world point rather than a craft's own emitter - see
+        // [`Placement::Point`]. `None` here means the event was built wrong
+        // (a `Point` cue without [`CueEvent::at_point`]), not that the point
+        // is out of range; that refusal still comes from `place` below,
+        // exactly as it does for a craft.
+        let point = event.point?;
+        let placed = oag_audio::Emitter::craft(point.to_array()).place(listener, 1.0)?;
+        return Some(Placed {
+            gain: placed.gain,
+            pan: Some(placed.pan),
+        });
+    }
     let emitter = match event.cue.placement() {
         Placement::Unplaced => return Some(dry),
         // The player's own branch, on a hypothesis the type documents.
         Placement::CraftUnlessPlayer if event.is_player() => return Some(dry),
         Placement::Craft | Placement::CraftUnlessPlayer => oag_audio::Emitter::craft,
         Placement::Engine => oag_audio::Emitter::engine,
+        Placement::Point => unreachable!("handled above"),
     };
     // A cue from a slot with no craft is not a cue: dropped rather than played
     // dry, because the alternative is a rival's collision arriving at full
@@ -950,6 +1157,24 @@ pub enum Placement {
     CraftUnlessPlayer,
     /// No emitter has been read for this cue, so it is played dry.
     Unplaced,
+    /// An arbitrary world point, carried on the [`CueEvent`] itself rather
+    /// than read off a craft.
+    ///
+    /// **Ours, not read off any call site** - the original always names an
+    /// *emitter*, an object with a scene node, never a bare position; this is
+    /// what a caller reaches for when the thing making the noise is not a
+    /// craft and has no emitter this port models. The Plasma bolt is the
+    /// first user: `Plasma_Init` constructs the bolt its **own** emitter,
+    /// pointed at the bolt's own matrix rather than any craft's - see
+    /// [`Cue::PlasmaTravel`] and [`Cue::PlasmaHitWall`]. [`CueEvent::at_point`]
+    /// is the entry point, and [`Cue::PlasmaTravel`]'s own held voice is
+    /// placed the same way by its own bespoke tracker rather than through
+    /// this enum's normal draining path - see [`SfxVoices::plasma_travel`].
+    /// Radius is [`oag_audio::Emitter::CRAFT_RADIUS`], because neither
+    /// `Plasma_Init` nor `Plasma_Launch` ever writes the bolt's own emitter's
+    /// `+0x38`, so it keeps `SoundEmitter_Init`'s default - the same one the
+    /// craft's own emitter never overrides either.
+    Point,
 }
 
 /// A cue and the craft that raised it.
@@ -958,12 +1183,23 @@ pub enum Placement {
 /// `Sound_Play` takes an emitter as its first argument and every one of these
 /// cues passes the craft's own, so the slot is the part of the call this port
 /// used to be throwing away - which is why only the player was ever audible.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+///
+/// [`Self::point`] is the same idea for [`Placement::Point`]: a cue not tied
+/// to any craft carries its own position instead of a slot. `#[derive(Eq)]`
+/// is deliberately not here any more - `Vec3` holds `f32` and does not
+/// implement it.
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct CueEvent {
     /// What to play.
     pub cue: Cue,
     /// The grid slot whose emitter plays it. Slot 0 is the player.
+    ///
+    /// Meaningless for a [`Placement::Point`] cue built with
+    /// [`Self::at_point`] - left at `0` there, and nothing reads it for one.
     pub slot: u8,
+    /// The world position a [`Placement::Point`] cue plays at, or [`None`]
+    /// for every other placement.
+    pub point: Option<Vec3>,
 }
 
 impl CueEvent {
@@ -973,6 +1209,17 @@ impl CueEvent {
         Self {
             cue,
             slot: u8::try_from(slot).unwrap_or(u8::MAX),
+            point: None,
+        }
+    }
+
+    /// A cue at `point` rather than at a craft - see [`Placement::Point`].
+    #[must_use]
+    pub fn at_point(cue: Cue, point: Vec3) -> Self {
+        Self {
+            cue,
+            slot: 0,
+            point: Some(point),
         }
     }
 
