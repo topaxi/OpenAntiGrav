@@ -132,6 +132,12 @@ Two structural facts to expect, both different from every other binary here:
   transparency difference), the strip's `ItemWidth` default of 298 and its
   selected-entry bonus of 70, and the one-sixth-per-frame easing all three
   menu classes grow with.
+- [shield.md](shield.md) - `Shield.cpp`: the fired pickup's shell, read and
+  cross-checked field for field against `psp-pulse-usa/shield-pickup.md` - the
+  same law (colour lerp, swell lerp, 60 Hz substep, cockpit-vs-shell camera
+  branch), two colours that moved (the hit flash is amber where Pulse's is
+  cyan) and one that is parameterized rather than hardcoded (the steady-state
+  target, unresolved - ported as Pulse's white, chosen not measured).
 - [menu-backdrop.md](menu-backdrop.md) - `BackgroundAnimFury_Item.cpp`, the
   Fury menu's backdrop: one of nineteen `.points2` ship point clouds (the record
   format, measured on all nineteen), the camera paths and colours in

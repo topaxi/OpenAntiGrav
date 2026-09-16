@@ -54,6 +54,7 @@ impl Race {
             pose_override,
             camera_override,
             hd_trail,
+            shield_palette,
             ..
         } = setup;
 
@@ -383,7 +384,7 @@ impl Race {
                 trail_inside: [0; MAX_SHIPS],
                 hd_flame: [exhaust::hd::Flame::new(); MAX_SHIPS],
                 hd_sprite: [exhaust::hd::Sprite::new(); MAX_SHIPS],
-                shield: [ShipShield::new(); MAX_SHIPS],
+                shield: [ShipShield::with_palette(shield_palette); MAX_SHIPS],
                 nozzles,
                 spark_anchors,
                 collision_fx,

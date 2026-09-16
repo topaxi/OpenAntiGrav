@@ -933,6 +933,11 @@ pub fn load(options: &Options) -> Result<Loaded> {
             course,
             start_position,
             hd_trail: trail_shape.is_some().then_some(hd_trail_red),
+            shield_palette: if craft_title.name == oag_hd::TITLE.name {
+                oag_render::shield::HD_PALETTE
+            } else {
+                oag_render::shield::PULSE_PALETTE
+            },
             collision,
             handling,
             airbrake_graphics,

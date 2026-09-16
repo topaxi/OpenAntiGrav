@@ -349,3 +349,9 @@
 0x00126dc0	function	WeaponExplosions_Reset	88	plasma.md
 0x001270b8	function	WeaponExplosions_Draw	85	plasma.md
 0x0002ca00	function	WeaponStats_ParsePlasma	90	plasma.md
+0x00126418	function	ShipShield_Construct	80	shield.md
+0x00125ae8	function	ShipShield_Activate	82	shield.md
+0x00125660	function	ShipShield_Hit	80	shield.md
+0x00126108	function	ShipShield_Update	84	shield.md
+0x00125778	function	ShipShield_InitColours	78	shield.md
+0x001258d8	function	ShipShield_DrawCockpit	68	shield.md

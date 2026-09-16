@@ -58,6 +58,17 @@
 //! **Nothing here is ours any more.** What a player sees is the authored shell
 //! fading up from nothing and growing from [`SWELL_ON_ACTIVATE`], flashing cyan
 //! and bulging on every absorbed hit, then fading out while it expands.
+//!
+//! # A second title, a second palette
+//!
+//! HD/Fury's own `Shield.cpp` runs the same law - same substep, same lerp
+//! rates, same scale formula - with two of its three colours measured
+//! differently: [`HD_HIT_COLOUR`] is amber where Pulse's [`HIT_COLOUR`] is
+//! cyan, and [`HD_ACTIVATION_COLOUR`] is a dim red where Pulse's
+//! [`ACTIVATION_COLOUR`] is transparent black. See
+//! `docs/ghidra/functions/ps3-hdfury-eu/shield.md`. [`Palette`] is the one
+//! axis this module found to move by title; [`ShipShield::with_palette`] is
+//! how a loader picks [`PULSE_PALETTE`] or [`HD_PALETTE`] per source.
 
 /// How far the colour moves toward its target per 60 Hz substep.
 ///
@@ -168,6 +179,77 @@ pub const HIT_COLOUR: [f32; 4] = [0.0, 1.0, 1.0, 1.0];
 /// is a colour target like any other, not a special case.
 pub const FADE_COLOUR: [f32; 4] = [0.0, 0.0, 0.0, 0.0];
 
+/// HD's own hit flash: **amber**, not Pulse's cyan.
+///
+/// `0x00994000 + 0x00` in `/ps3-hdfury-eu/EBOOT.elf`, `(1.0, 0.2, 0.0, 1.0)`.
+/// Read off the binary's own colour-table writer (`FUN_00125778`, HD's
+/// `.cplinit`-equivalent for `Shield.cpp`'s runtime colour block) rather than
+/// inferred: the literal `0x3f800000`/`DAT_008aa1c8`/`0`/`0x3f800000` stores
+/// land at that struct's first sixteen bytes, and `ShipShield_Hit`'s HD
+/// counterpart (`FUN_00125660`) copies exactly that block into the object's
+/// current colour on a hit - the same shape as Pulse's `ShipShield_Hit`
+/// copying its own `.bss` slot. See
+/// `docs/ghidra/functions/ps3-hdfury-eu/shield.md`. Confidence **80**: static
+/// evidence only, same ceiling Pulse's own page carries for the same reason.
+pub const HD_HIT_COLOUR: [f32; 4] = [1.0, 0.2, 0.0, 1.0];
+
+/// HD's own colour on activation, before the fade-up reaches [`TARGET_COLOUR`].
+///
+/// `0x00994000 + 0x10`, `(0.5471, 0.1, 0.1, 0.0)` - a dim red rather than
+/// [`ACTIVATION_COLOUR`]'s neutral transparent black, read from the same
+/// initialiser as [`HD_HIT_COLOUR`]. The alpha is still `0.0`, so the shell is
+/// still invisible on the activation frame; only the hue the fade-up starts
+/// from moves. Confidence **78**: the literal reads are as solid as
+/// [`HD_HIT_COLOUR`]'s, one notch down only because the first component reads
+/// as a non-round `0x3F0C0831` rather than a value with an obvious decimal
+/// source, which is worth a second look if HD's shield is ever traced live.
+pub const HD_ACTIVATION_COLOUR: [f32; 4] = [0.547_126, 0.1, 0.1, 0.0];
+
+/// Which three colours a shell's animation moves between - the one axis this
+/// module found to differ by title. Everything else - the lerp rates, the
+/// swell values, the scale formula, the flicker, the fade threshold - is one
+/// law both `ShipShield_Update`s run, checked constant for constant in
+/// `docs/ghidra/functions/ps3-hdfury-eu/shield.md` against
+/// `docs/ghidra/functions/psp-pulse-usa/shield-pickup.md`.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Palette {
+    /// What [`ShipShield::activate`] starts the current colour at.
+    pub activation: [f32; 4],
+    /// What the current colour fades toward while the shield is up.
+    pub target: [f32; 4],
+    /// What [`ShipShield::hit`] flashes the current colour to.
+    pub hit: [f32; 4],
+}
+
+/// Pulse's own palette - [`ACTIVATION_COLOUR`], [`TARGET_COLOUR`],
+/// [`HIT_COLOUR`] - and [`ShipShield::new`]'s default.
+pub const PULSE_PALETTE: Palette = Palette {
+    activation: ACTIVATION_COLOUR,
+    target: TARGET_COLOUR,
+    hit: HIT_COLOUR,
+};
+
+/// HD/Fury's palette.
+///
+/// **Two of three are measured, one is not.** [`HD_ACTIVATION_COLOUR`] and
+/// [`HD_HIT_COLOUR`] are read off `/ps3-hdfury-eu/EBOOT.elf`. The steady-state
+/// `target` is **not**: HD's own `ShipShield_Activate` counterpart
+/// (`FUN_00125ae8`) takes the settled colour as a call argument rather than
+/// hardcoding it the way Pulse's does, which reads as a per-team
+/// `ShieldColour` hook (`FUN_000dba30` parses a config key of that name), and
+/// the call site that supplies the argument was not traced through HD's
+/// TOC-corrupted decompile in the time this pass had. So `target` here is
+/// **[`TARGET_COLOUR`], chosen rather than measured** - Pulse's white is the
+/// multiply identity against the mesh's own vertex colours regardless of
+/// title, so it is the least-invented default until the real argument is
+/// read. See the "What is not verified" section of
+/// `docs/ghidra/functions/ps3-hdfury-eu/shield.md`.
+pub const HD_PALETTE: Palette = Palette {
+    activation: HD_ACTIVATION_COLOUR,
+    target: TARGET_COLOUR,
+    hit: HD_HIT_COLOUR,
+};
+
 /// The substep the update runs its two lerps at, `1.0 / 60.0` as the original
 /// spells it.
 ///
@@ -205,6 +287,12 @@ pub struct ShipShield {
     active: bool,
     /// Whether the shell is on its way out.
     fading: bool,
+    /// Which three colours [`Self::activate`] and [`Self::hit`] move between.
+    ///
+    /// Not simulation state either, for the reason the module doc gives - it
+    /// is picked once at construction from the source's title and never
+    /// changes underneath a running shell.
+    palette: Palette,
 }
 
 impl Default for ShipShield {
@@ -214,17 +302,29 @@ impl Default for ShipShield {
 }
 
 impl ShipShield {
-    /// A shield that is not up.
+    /// A shield that is not up, drawn with [`PULSE_PALETTE`].
     #[must_use]
     pub const fn new() -> Self {
+        Self::with_palette(PULSE_PALETTE)
+    }
+
+    /// A shield that is not up, drawn with a given [`Palette`].
+    ///
+    /// The source's own title picks the palette - [`PULSE_PALETTE`] for
+    /// Pulse and Pure, [`HD_PALETTE`] for HD/Fury - so this is what a race
+    /// loader calls once per craft rather than [`Self::new`], which stays
+    /// Pulse's own default for every existing caller and test.
+    #[must_use]
+    pub const fn with_palette(palette: Palette) -> Self {
         Self {
-            rgba: ACTIVATION_COLOUR,
-            rgba_target: TARGET_COLOUR,
+            rgba: palette.activation,
+            rgba_target: palette.target,
             swell: SWELL_REST,
             swell_target: SWELL_REST,
             time: 0.0,
             active: false,
             fading: false,
+            palette,
         }
     }
 
@@ -235,8 +335,8 @@ impl ShipShield {
     /// the same field in its constructor and never elsewhere, so this is a
     /// reading of the activate rather than of a reset.
     pub fn activate(&mut self) {
-        self.rgba = ACTIVATION_COLOUR;
-        self.rgba_target = TARGET_COLOUR;
+        self.rgba = self.palette.activation;
+        self.rgba_target = self.palette.target;
         self.swell = SWELL_ON_ACTIVATE;
         self.swell_target = SWELL_REST;
         self.time = 0.0;
@@ -252,7 +352,7 @@ impl ShipShield {
         if !self.active {
             return;
         }
-        self.rgba = HIT_COLOUR;
+        self.rgba = self.palette.hit;
         self.swell = SWELL_ON_HIT;
     }
 

@@ -141,6 +141,8 @@ fn setup(handling: Handling) -> Setup {
         start_position: None,
         // Not HD's tube: these tests drive the PSP ribbon and physics.
         hd_trail: None,
+        // Pulse's own palette - these tests build a synthetic Pulse fixture.
+        shield_palette: oag_render::shield::PULSE_PALETTE,
         trail_sparks: false,
         spark_anchors: Vec::new(),
         collision: CollisionWorld::new(),

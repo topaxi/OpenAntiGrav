@@ -388,6 +388,16 @@ pub struct Setup {
     /// directory: `*_c1` is the concept skin, `*_n1` the nitro one. See
     /// `docs/ghidra/functions/ps3-hdfury-eu/engine-trail.md`.
     pub hd_trail: Option<[f32; oag_gameplay::MAX_SHIPS]>,
+    /// Which three colours a fired shield's shell moves between.
+    ///
+    /// A title fact, not a per-craft one - every shield on one source shares
+    /// a palette. Resolved from `craft_title`, the same title
+    /// [`assets::shield_entry_names`] and [`assets::boost_entry_name`]
+    /// already key their own per-title path off, so a race whose craft model
+    /// comes from HD draws HD's own colours rather than Pulse's borrowed
+    /// ones. See [`oag_render::shield::Palette`]'s own doc comment for what
+    /// each title's palette carries and which parts are measured.
+    pub shield_palette: oag_render::shield::Palette,
     /// Every collidable triangle of the track.
     pub collision: CollisionWorld,
     /// The force law's parameter set for one team in one speed class.
