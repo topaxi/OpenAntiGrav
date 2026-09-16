@@ -4,8 +4,9 @@
 use super::Cli;
 
 impl Cli {
-    /// Applies `--render-scale`, `--upscaler`, `--anti-aliasing` and
-    /// `--motion-blur` to one render profile.
+    /// Applies `--render-scale`, `--upscaler`, `--anti-aliasing`,
+    /// `--motion-blur`, `--shadows` and `--screen-filter` to one render
+    /// profile.
     ///
     /// **One function because there are two callers and they disagreed.**
     /// `main.rs` applies these by walking `settings.render_profiles`, which is
@@ -37,6 +38,9 @@ impl Cli {
         }
         if let Some(shadows) = self.shadows {
             profile.shadows = shadows;
+        }
+        if let Some(screen_filter) = &self.screen_filter {
+            profile.screen_filter = screen_filter.clone();
         }
     }
 }

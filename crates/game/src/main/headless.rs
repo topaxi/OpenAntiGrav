@@ -486,6 +486,15 @@ pub(crate) fn run_race(
                 }),
                 zone_spectrum_test: cli.zone_spectrum_test,
                 previous_best,
+                // Resolved here rather than in `race::capture`, which has no
+                // config directory in hand: the same catalogue the window
+                // reads, so a `--presented` capture shows the same preset.
+                screen_filter: oag_game::screen::Catalogue::load(
+                    oag_game::screen::Catalogue::directory(),
+                )
+                .get(&render_profile.screen_filter)
+                .cloned(),
+                screen_filter_strength: render_profile.screen_filter_strength,
             },
             &mut audio,
         )?;

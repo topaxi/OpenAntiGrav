@@ -19,6 +19,11 @@ anyhow.workspace = true
 bytemuck = { workspace = true, features = ["derive"] }
 wgpu = "30"
 pollster = "0.4"
+# For `post::screen`'s preset header only: the `//!` lines a screen filter
+# opens with are a TOML document naming the filter and its tunables.
+serde.workspace = true
+toml.workspace = true
+log.workspace = true
 
 [features]
 # Off by default. Turns on `oag_render::perfprobe`'s counters, its `mark`

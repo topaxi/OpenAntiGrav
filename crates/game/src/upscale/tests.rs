@@ -8,7 +8,16 @@
 
 use super::*;
 
+use oag_display::display::Scale;
+
 const LIMIT: u32 = 8192;
+
+/// No filter: what every test here composites with. See `screen_tests.rs`
+/// for the ones that do.
+const UNFILTERED: ScreenFrame = ScreenFrame {
+    native: (480.0, 272.0),
+    strength: oag_display::display::FilterStrength::FULL,
+};
 
 /// Blits a flat colour with and without FSR 1 and returns both results.
 ///
@@ -615,7 +624,17 @@ fn composited(brightness: Brightness, gamma: Gamma) -> Option<[[u8; 4]; 8]> {
         &[fill(0.0, [0.0, 0.0, 1.0, 1.0])],
         whole,
     );
-    framebuffer.composite(&queue, &mut encoder, &surface_view, brightness, gamma);
+    framebuffer.composite(
+        &device,
+        &queue,
+        &mut encoder,
+        &surface_view,
+        Composite {
+            brightness,
+            gamma,
+            screen: UNFILTERED,
+        },
+    );
     instrument.overlay(
         &device,
         &queue,
@@ -833,11 +852,15 @@ fn a_ui_only_stage_reaches_the_surface_and_its_own_clear_draws_the_bars() {
     );
     // No `resolve_scene`. Straight to the surface.
     framebuffer.composite(
+        &device,
         &queue,
         &mut encoder,
         &surface_view,
-        Brightness::NEUTRAL,
-        Gamma::NEUTRAL,
+        Composite {
+            brightness: Brightness::NEUTRAL,
+            gamma: Gamma::NEUTRAL,
+            screen: UNFILTERED,
+        },
     );
 
     encoder.copy_texture_to_buffer(

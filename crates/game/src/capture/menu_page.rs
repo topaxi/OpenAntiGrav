@@ -131,6 +131,13 @@ pub(super) fn menu_page(
         .map(oag_ui::menu::Choice::plain)
         .collect::<Vec<_>>(),
     );
+    // The same list the live menus offer, this machine's own `shaders/`
+    // directory included - a still of the GRAPHICS page should show the row a
+    // player would actually see.
+    model.supply(
+        oag_ui::menu::ValueSource::ScreenFilters,
+        &crate::screen::Catalogue::load(crate::screen::Catalogue::directory()).choices(),
+    );
     // Straight off the boot survey, not off the settings file, and that is
     // the difference from the two rows above: what a player may choose here
     // depends on which discs they own rather than on what they last picked, so

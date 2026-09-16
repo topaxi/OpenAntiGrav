@@ -63,6 +63,7 @@ out to be wrong.
 | [0050](0050-format-crates-split-by-format-family.md) | Format crates split by format family, and why that is not the console axis | Accepted; extends ADR-0022 |
 | [0051](0051-the-composition-root-splits-below-itself.md) | The composition root splits below itself, and the build-time argument does not survive a second time | Accepted; extends ADR-0050 |
 | [0052](0052-world-and-race-tick-widen-to-n-players.md) | `World` and `Race::tick` widen to N players ahead of split screen, multi-window or network play | Accepted; extends ADR-0003 |
+| [0053](0053-screen-filters-are-loadable-wgsl-after-the-composite.md) | Screen filters are loadable WGSL files, run after the UI composites and before the grade, per title | Accepted; extends ADR-0036 and ADR-0041 |
 
 ## Format
 

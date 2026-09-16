@@ -26,6 +26,20 @@ use crate::stage::Stage;
 use super::Session;
 
 impl Session {
+    /// Says, once per name, that the profile names a screen filter this
+    /// machine does not have - a user file that was deleted, or a settings
+    /// file carried from another machine. The frame draws unfiltered; the
+    /// row keeps the name, so putting the file back is enough.
+    fn note_missing_screen_filter(&mut self, id: &str) {
+        if self.missing_screen_filter.as_deref() == Some(id) {
+            return;
+        }
+        log::warn!(
+            "screen filter {id:?} is not a built-in and not in the shaders directory; drawing unfiltered"
+        );
+        self.missing_screen_filter = Some(id.to_string());
+    }
+
     /// What bounds the dynamic-resolution controller this frame.
     ///
     /// The floor is a [`display::Scale`] and so a percentage of the **aspect
@@ -607,13 +621,52 @@ impl Session {
 
         // Last, and the only pass that writes the surface: everything a player
         // sees is in the presentation target by now, so this is where
-        // brightness and gamma can reach all of it.
+        // brightness and gamma can reach all of it - and where the profile's
+        // screen filter, which simulates a display and so wants all of it
+        // too, runs first. Once a second the player's `shaders/` directory is
+        // re-read, so a preset saved in an editor shows on the next frame;
+        // the preset is resolved by name every frame because `set_screen_filter`
+        // is what decides whether that name still means the same shader.
+        if self.frame_index.is_multiple_of(60) {
+            self.screen_filters.poll();
+        }
+        let profile = self.render_profile();
+        let preset = self.screen_filters.get(&profile.screen_filter).cloned();
+        if preset.is_none() && profile.screen_filter != oag_game::settings::SCREEN_FILTER_OFF {
+            self.note_missing_screen_filter(&profile.screen_filter);
+        }
+        // Cloned above rather than borrowed: `set_screen_filter` compares the
+        // id and revision and returns before anything else on every frame
+        // the preset did not change, so the clone is a short string and a
+        // body it never reads.
+        self.framebuffer
+            .set_screen_filter(&self.gpu.device, preset.as_ref());
+        // The title's own grid, for a preset that wants the original panel's
+        // row count rather than the window's. Off the menu shell when this
+        // run has one; the `--race` route has none, so a race's HUD answers
+        // instead, and a run with neither reads as the PSP's.
+        let native = match (&self.shell, &self.stage) {
+            (Some(shell), _) => shell.space,
+            (None, Stage::Race(stage)) => stage
+                .hud
+                .as_ref()
+                .map_or(oag_display::space::Space::PSP, |hud| hud.space()),
+            (None, _) => oag_display::space::Space::PSP,
+        }
+        .size;
         self.framebuffer.composite(
+            &self.gpu.device,
             &self.gpu.queue,
             &mut encoder,
             &view,
-            self.settings.display.brightness,
-            self.settings.display.gamma,
+            upscale::Composite {
+                brightness: self.settings.display.brightness,
+                gamma: self.settings.display.gamma,
+                screen: upscale::ScreenFrame {
+                    native,
+                    strength: profile.screen_filter_strength,
+                },
+            },
         );
 
         // **After** the resolve, and onto the surface rather than the offscreen

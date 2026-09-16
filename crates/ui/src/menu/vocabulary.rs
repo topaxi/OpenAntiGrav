@@ -263,6 +263,12 @@ pub enum ValueSource {
     PilotAxisLow,
     /// [`Self::PilotAxisLow`]'s sibling for the high end of the range.
     PilotAxisHigh,
+    /// Every screen filter this machine can offer: `off`, the built-ins, and
+    /// whatever `.wgsl` files the player's own `shaders/` directory holds -
+    /// supplied for the reason [`Self::Renderers`] is, nothing writable in a
+    /// definition file could name a file on someone else's disk. See
+    /// `oag_game::screen`.
+    ScreenFilters,
 }
 
 impl ValueSource {
@@ -290,6 +296,7 @@ impl ValueSource {
             Self::PilotAxes => "pilot_axes",
             Self::PilotAxisLow => "pilot_axis_low",
             Self::PilotAxisHigh => "pilot_axis_high",
+            Self::ScreenFilters => "screen_filters",
         }
     }
 
@@ -317,6 +324,7 @@ impl ValueSource {
             "pilot_axes" => Some(Self::PilotAxes),
             "pilot_axis_low" => Some(Self::PilotAxisLow),
             "pilot_axis_high" => Some(Self::PilotAxisHigh),
+            "screen_filters" => Some(Self::ScreenFilters),
             _ => None,
         }
     }

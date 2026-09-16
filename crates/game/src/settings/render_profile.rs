@@ -148,7 +148,41 @@ pub struct RenderProfile {
     /// frame, so the setting applies live.
     #[serde(default)]
     pub shadows: oag_display::display::Shadows,
+    /// Which screen filter draws the finished frame: `off`, or the id of a
+    /// preset - a built-in such as `psp-3000` or `crt-interlaced`, or the
+    /// stem of a `.wgsl` file in the player's own `shaders/` directory. See
+    /// [`crate::screen`].
+    ///
+    /// **Per title, and that is the whole reason it is here rather than in
+    /// `[display]` beside brightness and gamma**, where "applied after the
+    /// game has finished drawing" would otherwise have put it. What the right
+    /// filter *is* depends on which machine the title ran on: a PSP disc wants
+    /// its LCD, the PS2 port wants an interlaced television, and Wipeout HD
+    /// wants nothing at all - so one shared value would be wrong on two of
+    /// the three titles a player switches between. Not render-cost-sensitive
+    /// in the way `render_scale` is, but the table's other reason - *what a
+    /// value means depends on the title* - applies exactly as it does to
+    /// [`Self::shadows`].
+    ///
+    /// A `String` rather than an enum for the reason `display.front_end_style`
+    /// is one: which values exist is a property of files on disk, and a file
+    /// naming a preset that is no longer there draws unfiltered with a note
+    /// rather than failing to load. Defaults to `off`.
+    #[serde(default = "default_screen_filter")]
+    pub screen_filter: String,
+    /// How much of that filter shows, as a percentage: 100 is the preset as
+    /// authored. See [`oag_display::display::FilterStrength`].
+    #[serde(default)]
+    pub screen_filter_strength: oag_display::display::FilterStrength,
 }
+
+/// See [`RenderProfile::screen_filter`]: `off`.
+fn default_screen_filter() -> String {
+    SCREEN_FILTER_OFF.to_string()
+}
+
+/// The value of [`RenderProfile::screen_filter`] that runs no pass at all.
+pub const SCREEN_FILTER_OFF: &str = "off";
 
 impl Default for RenderProfile {
     fn default() -> Self {
@@ -164,6 +198,8 @@ impl Default for RenderProfile {
             msaa: oag_display::display::Msaa::default(),
             motion_blur: oag_display::display::MotionBlur::default(),
             shadows: oag_display::display::Shadows::default(),
+            screen_filter: default_screen_filter(),
+            screen_filter_strength: oag_display::display::FilterStrength::default(),
         }
     }
 }
@@ -194,7 +230,7 @@ pub(super) fn ensure_known_titles(settings: &mut Settings) {
 /// hold", because the struct answers that. What needs it is the sweep that
 /// checks every menu seed lands in a table the settings file actually writes.
 #[cfg(test)]
-pub(super) const PROFILE_KEYS: [&str; 8] = [
+pub(super) const PROFILE_KEYS: [&str; 10] = [
     "render_scale",
     "target_fps",
     "minimum_resolution",
@@ -203,6 +239,8 @@ pub(super) const PROFILE_KEYS: [&str; 8] = [
     "msaa",
     "motion_blur",
     "shadows",
+    "screen_filter",
+    "screen_filter_strength",
 ];
 
 /// The keys that used to live flat in `[graphics]` and now live in one

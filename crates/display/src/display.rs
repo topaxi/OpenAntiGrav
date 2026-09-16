@@ -12,16 +12,15 @@
 //!   with the leftover bars left black.
 //! - [`Scale`] is how many pixels that shape is actually rendered with.
 //! - [`Fov`] is how much of the world fits in it.
-//! - [`BoostFovKick`] is how much [`Fov`] itself moves for a moment on a
-//!   speed pad - **this project's own effect, not a reimplementation of the
-//!   original's** (see its own doc, which records what the original does
-//!   instead and why the two are not being reconciled).
-//! - [`CameraView`] is *which* camera the field of view belongs to: the cockpit
-//!   or one of the two chase distances. Unlike everything else here it is also
-//!   cycled from a button during a race, so the settings file is where the
-//!   choice persists rather than the only place it is set.
+//! - [`BoostFovKick`] is how much [`Fov`] itself moves for a moment on a speed pad -
+//!   **this project's own effect, not a reimplementation of the original's** (see its
+//!   own doc, which records what the original does instead and why the two are not reconciled).
+//! - [`CameraView`] is *which* camera the field of view belongs to: the cockpit or one
+//!   of the two chase distances. Unlike everything else here it is also cycled from a
+//!   button during a race, so the settings file is where the choice persists, not the only place it is set.
 //! - [`Brightness`] and [`Gamma`] are what happens to the finished picture on
-//!   its way to the surface.
+//!   its way to the surface, and [`FilterStrength`] is how much of a screen
+//!   filter's simulated display it passes through on the way.
 //!
 //! **These are the types, not the menu pages.** The menus split them across
 //! DISPLAY and GRAPHICS and the settings file across `[display]` and
@@ -41,11 +40,12 @@ mod aspect;
 mod motion_blur;
 mod msaa;
 mod reconstruction;
+mod screen_filter;
 mod shadows;
 
 pub use {
     aspect::Aspect, motion_blur::MotionBlur, msaa::Msaa, reconstruction::Reconstruction,
-    shadows::Shadows,
+    screen_filter::FilterStrength, shadows::Shadows,
 };
 
 /// What kind of window the game asks the compositor for.

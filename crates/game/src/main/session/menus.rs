@@ -296,6 +296,11 @@ impl Session {
         // with one value draws the setting as the fact it is. Empty on a source
         // whose title authors no loading screen at all, which greys it out.
         model.supply(menu::ValueSource::FrontEndStyles, &shell.front_end_styles);
+        // Off, the built-ins, and the player's own files as of the last poll.
+        model.supply(
+            menu::ValueSource::ScreenFilters,
+            &self.screen_filters.choices(),
+        );
         // Race Remix's own axis - every title this machine can currently open
         // a source for, surveyed once at `Session` construction. See the
         // field's own doc comment. TRACK TITLE's own row: 2048's circuits are

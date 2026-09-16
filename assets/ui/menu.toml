@@ -918,6 +918,36 @@ string_id = "OAG_GRAPHICS_SHADOWS"
 setting = "graphics.shadows"
 values = ["off", "blob", "original", "mapped"]
 
+# A simulation of the display the title ran on, drawn over the finished frame
+# - menus, HUD and all - just before brightness and gamma. The list is
+# supplied at runtime: `off`, the presets built into the binary (the PSP's
+# two panels, three kinds of CRT) and every `.wgsl` file in the player's own
+# `shaders/` directory beside `settings.toml`, where a copied built-in can be
+# tuned or a new one written; a saved edit shows within a second, without a
+# restart. See `docs/rendering/screen-filters.md` for the file contract.
+#
+# On this page and per title, not on DISPLAY beside brightness and gamma where
+# "applied after drawing" would otherwise put it: the right filter depends on
+# which machine the title ran on, so it lives in `[render_profiles.<title>]`
+# like SHADOWS. Applies live, which is the only way to pick one.
+[[page.entry]]
+kind = "choice"
+label = "SCREEN FILTER"
+string_id = "OAG_GRAPHICS_SCREEN_FILTER"
+setting = "graphics.screen_filter"
+values_from = "screen_filters"
+
+# How much of the filter shows: a mix between the untouched frame and the
+# filter's output, applied by the pass itself so it means the same for every
+# preset. Greyed while no filter is selected.
+[[page.entry]]
+kind = "choice"
+label = "SCREEN FILTER STRENGTH"
+string_id = "OAG_GRAPHICS_SCREEN_FILTER_STRENGTH"
+setting = "graphics.screen_filter_strength"
+disabled_by = { setting = "graphics.screen_filter", value = "off" }
+values = ["25", "50", "75", "90", "100"]
+
 # Applies to the next race built rather than immediately: the sampler is made
 # when a race's pipelines are.
 [[page.entry]]

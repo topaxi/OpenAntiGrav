@@ -204,6 +204,8 @@ ids = [
     "OAG_GRAPHICS_MSAA",
     "OAG_GRAPHICS_BOOST_FOV_KICK",
     "OAG_GRAPHICS_PERFORMANCE_OVERLAY",
+    "OAG_GRAPHICS_SCREEN_FILTER",
+    "OAG_GRAPHICS_SCREEN_FILTER_STRENGTH",
     # Wipeout's own jargon, not confidently translated - see this file's own
     # header.
     "OAG_CONTROLS_SIDESHIFT",
