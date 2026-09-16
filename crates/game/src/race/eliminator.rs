@@ -63,7 +63,10 @@ pub(super) const AI_RESPAWN_WAIT: f32 = 0.8;
 /// [`DESTROYED_DWELL`] alone. The Eliminator's own state 8 sets a second
 /// timer - `1.0` s for the local player, `2.0` s otherwise, the opposite
 /// ratio to state 6 - and what counts it down was not found, so this build
-/// does not add it; when it is read, this is the constant that grows.
+/// does not add it; when it is read, this is the constant that grows. **The
+/// consequence runs the wrong way until then**: an Eliminator craft here
+/// returns after `2.0` s from destruction against a single-race opponent's
+/// `2.8`, where the original's Eliminator is the slower of the two.
 pub(super) const ELIMINATOR_RESPAWN_DELAY: f32 = DESTROYED_DWELL;
 
 impl Race {
