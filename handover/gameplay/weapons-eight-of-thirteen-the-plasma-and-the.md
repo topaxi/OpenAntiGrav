@@ -844,6 +844,68 @@ of flight. This engine does not implement that ramp: it flies at
 choice, kept so the Rocket and the Plasma cannot drift apart. Worth revisiting
 only alongside the Rocket's own.
 
+## 2026-09-16: the Plasma on HD/Fury and Omega, read from both binaries and set beside Pulse
+
+**The 2026-09-09 findings hold on the two later ports, and the one Pulse
+number the port got wrong is the one the ports changed.** Two new pages,
+[ps4-omega-eu/plasma.md](../../docs/ghidra/functions/ps4-omega-eu/plasma.md)
+(x86-64, read first because it decompiles clean) and
+[ps3-hdfury-eu/plasma.md](../../docs/ghidra/functions/ps3-hdfury-eu/plasma.md)
+(PPC, read second, constants pulled through the function family's own TOC),
+24 names between them. The lesson of the 09-09 pass transfers unchanged:
+the manager's vtable slot 3 is the pool walker and the walker holds the
+state machine - on Omega with the flight step, the ship hit and the
+detonation all inlined into one 2,400-line body, on HD as five separate
+callees.
+
+**The comparison, every cell read off its own binary:**
+
+| | Pulse (PSP) | HD/Fury (PS3) | Omega (PS4) |
+| --- | --- | --- | --- |
+| wind-up | 1.0 s, hardcoded (`Plasma_Init`) | 1.0 s, hardcoded (`0x008a9f48`) | 1.0 s, hardcoded (`+0x88 = 0x3f800000`) |
+| `charge_time` authored | yes, `+0x9c` | yes, `+0xbc` | yes, `+0x114` |
+| `charge_time` read by | nothing (calibrated sweep) | nothing (`lfs 0xbc(r` sweep, `0xc0(r` damage as calibration) | nothing (`0x114]` in all four Plasma functions, `0x118]` damage as calibration) |
+| release heading | node matrix re-read at release | same | same |
+| launch speed | `|v| * 3.6 + launchspeed` | same | same |
+| launch ramp | blend into class speed over first 1.0 s | same | same |
+| speed classes | 4 | 4 (`+0xcc..+0xd8`) | **5**, `superphantomspeed` |
+| km/h factor | `/ 3.6` | `0x3e8e2eb2 = 0.2777` (update), `3.6` (launch) | `0.2777` (update), `0.2777778` (launch) |
+| surface probe | **12.0** | **6.0** | **6.0** |
+| ride height | `g_ride_height` | 4.0 | 4.0 |
+| open-air fall | `-surface * 50 * dt` | **world Y**, `-50` | **world Y**, `-50` (confirmed in disassembly) |
+| wall = collision kinds | `0`, `4`; none = `0x7f` | `0`, `4`, `5`; none = `0x7f` | `4`, `5`, `6`, `8`; none = `0xe` |
+| craft hit | (Pulse: unread this pass) | perpendicular distance in (-6, 6) along the travel segment | same, +-6.0 literals |
+| damage | (unread) | `stats.damage` raw, `+0xc0` | `stats.damage * firer.handling.weapon_damage_multiplier` (`+0x118 * +0x4c4`) |
+| slowdown / blast | (unread) | `+= slowdown_time`; blast loop `0x00146470` unread | `+= slowdown_time`; every craft within `blastradius` gets a `blastforce` impulse |
+| timeout | 10.0 s hardcoded | 10.0 s (`DAT_008aa010`) | 10.0 s literal |
+| timeout detonates? | yes, same path as a wall | yes, same path | yes, same path - **no damage, no impulse** either way; both live only in the craft-hit block |
+| wall / timeout cue | `PLASMAHITWALL` | `PLASMAHITWALL` | `NGP_PlasmaHitWall` |
+| craft-hit cue | (unread) | `PLASMAHITSHIP` | `NGP_PlasmaHitShip` |
+| detonation psys | `PLFL` | `WO_PLASMA_LIGHTNING_EXPAND`, then `_COLLAPSE` at 1.3 s | same, HD asset root only |
+| explosion models | `pulse_plasma_halo1` + 2 hemispheres | `HD_plasma_ring`/`_sphere`/`_halo` | same three (`HD_plasma_ball` is the **bolt head**, not the explosion) |
+| explosion ramps | three, unread | `cur += (target - cur) * rate` per draw; targets **100 / 7.1 / 7.0**, rates 0.01 / 0.3 / 0.2, windows 1.7 / 1.3 / 1.3 s | same rates and windows; targets **50 / 2.0 / 3.0** |
+| explosion lifetime | unread | 3.5 s | 3.5 s |
+| explosion visible-only | - | one viewport must pass a visibility test or it never starts | same, and the slot recycles that tick |
+
+**What this settles for the engine.** `PlasmaStats::charge` stays `1.0` and
+`charge_time` stays unread - three binaries now, and on all three the
+consumer search is calibrated against a sibling attribute that *is* read.
+The 12.0-vs-6.0 probe that the 09-02 port bug was about is genuinely
+title-specific: Pulse probes 12, both HD-lineage ports probe 6, so a
+per-title `SURFACE_PROBE_LENGTH` is right and a shared one would be wrong
+for one of them. Same for the fall axis: the HD engine drops a bolt along
+world Y, the PSP along the carried normal, so an HD racebox would need the
+other branch.
+
+**What is not settled.** Which of Pulse's `PlasmaBlast_Construct` ramps
+map onto which of HD's three (the PSP page never read the advance); the
+HD/Omega target-scale difference (100/7.1/7.0 vs 50/2/3 over identical
+`.vex` names - probably a re-export scale, unverified); the 24-slot
+descriptor pool both ports register lights or post-effects into
+(`0x01606280`/`0x01605f50` on Omega, `FUN_00677c78`/`FUN_00677a88` on HD -
+shape read, consumer not); and where Omega sets the `flags & 1` bit that
+gates the craft-hit test (not in `Init` or `Launch` as decompiled).
+
 ## Next Steps
 
 - ~~**Draw the two rear weapons' models.**~~ **Done 2026-09-05.**
