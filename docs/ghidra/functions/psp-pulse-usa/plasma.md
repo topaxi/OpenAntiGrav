@@ -565,10 +565,15 @@ float Plasma_SpeedForClass(Plasma *p) {
 Two things: it confirms `plasma.md`'s own `<Stats>` offsets from the reading
 end, and **it is the `launchspeed` consumer** - the bolt leaves at the firing
 craft's own speed plus `launchspeed` and blends to the class speed over its
-first second of flight. This engine does not implement the ramp: it flies at
-`class + launchspeed` throughout, which is `oag_gameplay::projectile::launch`'s
-shared choice, taken so the Rocket and the Plasma cannot drift apart, and
-flagged there rather than restated.
+first second of flight. **Ported 2026-09-16.** `oag_gameplay::projectile::flight`'s
+`pinned_kmh` reads the craft's own velocity at the tick the charge ends -
+`crates/gameplay/src/projectile/flight.rs`'s charging branch - and blends it
+to the class speed with `missile::speed_kmh`, the identical linear form
+`Missile_SpeedNow` (`0x0885a038`) independently tests over the same second;
+see that function's own `SPEED_RAMP_SECONDS` doc comment. This is no longer
+`oag_gameplay::projectile::launch`'s shared choice with the Rocket - that
+function's own doc comment now says so - the Rocket alone still flies at
+`class + launchspeed` throughout, unread rather than chosen.
 
 `FUN_0885c650` is a **second** lookup on the same four offsets, without the
 ramp. It was not decompiled past its four `lwc1`s and stays unnamed for the
