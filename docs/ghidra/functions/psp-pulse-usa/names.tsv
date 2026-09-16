@@ -908,3 +908,14 @@
 0x08932eac	function	CloudGroup_CullOverlappingSprites	85	clouds.md
 0x08932f98	function	CloudGroup_SpritesOverlap	88	clouds.md
 0x08933ec4	function	CloudGroup_BuildDisplayList	85	clouds.md
+0x089731c4	function	rand	95	prng.md
+0x089731b4	function	srand	95	prng.md
+0x088f8b60	function	PsysRng_Next	92	prng.md
+0x088f8c98	function	PsysRng_Seed	92	prng.md
+0x088f8d30	function	PsysRng_Reseed	90	prng.md
+0x088f8b48	function	Bits_RotateLeft	95	prng.md
+0x0897e26c	function	ldexpf	85	prng.md
+0x08b620a8	data	g_psys_rng_buffer	92	prng.md
+0x08b620ec	data	g_psys_rng_p1	92	prng.md
+0x08b620f0	data	g_psys_rng_p2	92	prng.md
+0x08b620f4	data	g_psys_rng_scale	92	prng.md

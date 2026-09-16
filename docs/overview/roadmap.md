@@ -139,7 +139,8 @@ The PSP `BOOT.BIN` is an unencrypted ELF, so this can start immediately.
 - [ ] Memory management and the heap layout
 - [ ] Resource loading: how a WAD entry becomes a live object
 - [ ] Game state machine
-- [ ] The original PRNG
+- [x] The original PRNG - two of them, and the gameplay one is clock-seeded,
+      so no sequence can ever match. See [prng.md](../ghidra/functions/psp-pulse-usa/prng.md)
 - [ ] Memory maps for both platforms
 
 **Exit criterion:** engine lifecycle and memory map documented; at least 50

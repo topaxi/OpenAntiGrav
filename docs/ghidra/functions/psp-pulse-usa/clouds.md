@@ -151,8 +151,12 @@ An attribute absent from the list reads as `0.0`, including `Seed` - except
 that when `Seed` resolves to exactly `0`, the constructor takes it as "unset"
 and re-rolls one: `Psys_RandIntRange(1, 9999)`. Every shipped `cloudGroup`
 node's `Seed` is unset, so every shipped cloud gets a runtime-random seed
-this project's parser does not (and, being a boot-time RNG draw with no
-recorded algorithm here, currently cannot) reproduce.
+this project's parser does not reproduce. The draw itself is now read
+([prng.md](prng.md)): the constructor first reseeds the particle generator
+from clock-seeded libc `rand()`, so the re-rolled seed is genuinely
+unpredictable - but everything downstream of it is not, because the group's
+build (`FUN_08933c1c`) reseeds the same generator from `Seed` right before
+the per-sprite draws.
 
 The shared cloud texture load is guarded by `DAT_08ac01b4 == 1` - the first
 `cloudGroup` ever constructed, process-wide - and stored in a static
@@ -382,8 +386,11 @@ identical to this project's own `Fog` interpolation - not a coincidence, given
   unset, so the original assigns a fresh `Psys_RandIntRange(1, 9999)` per
   boot; this project's parser reports the authored `0.0` rather than
   simulating that draw, which is the right default for a deterministic
-  reimplementation but means a shipped cloud's *exact* jitter is not
-  reproducible even if the rest of `CloudGroup_Draw` were.
+  reimplementation. A shipped cloud's *exact* jitter is therefore not
+  reproducible - but a cloud with a *known* seed now is: the generator is
+  read on [prng.md](prng.md), and the build reseeds it from `Seed`
+  immediately before the phase/rate/variant draws, so a port of
+  `PsysRng_Next` fed the same seed lands the same sprites.
 - **Pure and PS2 parity not checked.** Pure's class-ID table is renumbered
   (`vex.md`), so `0x3d8`/`0x3d9` there would look for the wrong class
   entirely; a real check needs Pure's own table read first.
