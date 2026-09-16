@@ -87,10 +87,13 @@ pub struct Standing {
     /// because place in Eliminator is not what `places` computes. See
     /// `docs/gameplay/race-modes.md#eliminator`.
     pub kills: u32,
-    /// Times this craft has been destroyed and come back. Zero on every other
-    /// mode - a craft destroyed outside Eliminator does not return, so
-    /// nothing here ever increments it. `ER_DEATHS` ("Deaths:") is this
-    /// field's own row on the results screen.
+    /// Times this craft has been destroyed and come back. Counted in every
+    /// mode a craft returns in - since 2026-09-16 an opponent in a single
+    /// race does, the way the original's states 5 and 6 bring it back - and
+    /// read by nothing but tests outside the Eliminator, whose `ER_DEATHS`
+    /// ("Deaths:") is this field's own row on the results screen. The
+    /// player's own death outside the Eliminator ends the race, so it stays
+    /// zero there.
     pub deaths: u32,
 }
 
