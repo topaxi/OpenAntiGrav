@@ -157,17 +157,21 @@ touching the tail that actually sets the wall clock.
 
 - **Pre-draw them. Never let members pick at random** - two members picking
   independently land in the same crate and collide at merge.
-- **Lanes disjoint by Ghidra binary first, crate second.** Two members must
-  never touch the *same* binary at once - Ghidra's transaction manager isn't
-  proven safe under that, and it wrecks review sanity regardless. Members on
-  *different* binaries may run Ghidra calls concurrently against the shared
-  bridge, but only if every brief repeats the rule from
-  `docs/ghidra/workflow.md`'s "Bridge quirks" section: pass `program=`
-  explicitly on every call, never call `switch_program`. Skipping that is what
-  caused the 2026-09-03 incident in `HANDOVER.md` where one member's rename
-  landed on another's active binary. Only one member may drive PPSSPP - that
-  one really is a single shared process. Say so explicitly in every brief,
-  naming who holds what.
+- **Lanes disjoint by function set first, crate second - a binary may be
+  shared.** Relaxed 2026-09-16 by the user: two members may work the *same*
+  Ghidra program at once, as long as their briefs name disjoint sets of
+  functions/addresses so no two renames land on one function, and each
+  appends its own dated section and its own `names.tsv` rows rather than
+  editing the other's - the lead resolves the append-append conflict at
+  merge. Every brief still repeats the rule from `docs/ghidra/workflow.md`'s
+  "Bridge quirks" section: pass `program=` explicitly on every call (by path
+  when names collide, e.g. `/psp-pulse-usa/BOOT.BIN`), never call
+  `switch_program`. Skipping that is what caused the 2026-09-03 incident in
+  `HANDOVER.md` where one member's rename landed on another's active binary.
+  Emulators are not shared either way: **each member spawns its own
+  instance** (PPSSPP with its own `HOME`/`XDG_CONFIG_HOME`, debugger port and
+  Xvfb display; RPCS3 with its own config copy), never attaching to one
+  another member started. Say in every brief which ports/displays are taken.
 - Sources for threads: `handover/*.md` (now sorted into `rendering/`, `gameplay/`,
   `frontend/`, `tooling/`, `audio/` - `fd`/`find` still reach them recursively),
   `HANDOVER.md`'s open-threads index, a
