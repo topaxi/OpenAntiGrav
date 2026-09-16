@@ -325,6 +325,26 @@ pub struct Impact {
     /// where the local path does not. Open on
     /// `docs/ghidra/functions/psp-pulse-usa/missile.md`.
     ///
+    /// **The Plasma is `false` on both of its own endings, not one.**
+    /// `Plasmas_Update`'s (`0x0886b490`) teardown - read at instruction level
+    /// 2026-09-16, no elision - is `Psys_Release_q`, `Plasma_SpawnDetonation`,
+    /// `PLASMAHITWALL`, and nothing else, for a wall hit and a `10.0 < age`
+    /// timeout alike; neither reaches `Weapon_PostBlastImpulse` (`0886794c`,
+    /// the Mine's only caller, confirmed by `get_xrefs_to`) or writes
+    /// `entity+0x110`, the slot every real blast function - checked directly
+    /// against `Missile_ApplyBlastForce` - writes. See [`plasma`]'s expiry arm
+    /// in `Projectiles::advance` for the timeout half, ported 2026-09-16.
+    ///
+    /// **The Plasma's own wall-hit branch in `Projectiles::advance` still sets
+    /// `blast: true`, and that is now a known, flagged conflict rather than an
+    /// oversight** - it predates this finding, crediting `damage`/`blastradius`/
+    /// `blastforce` on a wall hit the original never spends either. Left
+    /// standing deliberately: correcting it is a wall-hit behaviour change with
+    /// its own golden-hash and regression story, out of scope for the expiry
+    /// question this doc comment answers. See
+    /// `docs/ghidra/functions/psp-pulse-usa/plasma.md`'s "What is not verified"
+    /// and the `weapons-eight-of-thirteen-the-plasma-and-the` handover thread.
+    ///
     /// A flag rather than a second array, because every consumer already walks
     /// these and the visual side wants the entry either way: `oag_game`'s tick
     /// still plays the explosion for a `false` one.
