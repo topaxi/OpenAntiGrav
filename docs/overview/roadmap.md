@@ -142,7 +142,9 @@ The PSP `BOOT.BIN` is an unencrypted ELF, so this can start immediately.
 - [x] [Resource loading](../ghidra/functions/psp-pulse-usa/resource-loading.md):
       how a WAD entry becomes a live object - VFS device chain, refcounted
       resource cache, scene-graph node on three chains, deferred destroy
-- [ ] Game state machine
+- [x] [Game state machine](../ghidra/functions/psp-pulse-usa/state-machine.md):
+      the menus' states are the disc's own XML loaded per screen, twelve
+      literal states in code, and the 19-entry game-mode enum read whole
 - [x] The original PRNG - two of them, and the gameplay one is clock-seeded,
       so no sequence can ever match. See [prng.md](../ghidra/functions/psp-pulse-usa/prng.md)
 - [ ] Memory maps for both platforms
