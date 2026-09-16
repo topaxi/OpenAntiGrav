@@ -58,6 +58,17 @@
 //! **Nothing here is ours any more.** What a player sees is the authored shell
 //! fading up from nothing and growing from [`SWELL_ON_ACTIVATE`], flashing cyan
 //! and bulging on every absorbed hit, then fading out while it expands.
+//!
+//! # A second title, a second palette
+//!
+//! HD/Fury's own `Shield.cpp` runs the same law - same substep, same lerp
+//! rates, same scale formula - with two of its three colours measured
+//! differently: [`HD_HIT_COLOUR`] is amber where Pulse's [`HIT_COLOUR`] is
+//! cyan, and [`HD_ACTIVATION_COLOUR`] is a dim red where Pulse's
+//! [`ACTIVATION_COLOUR`] is transparent black. See
+//! `docs/ghidra/functions/ps3-hdfury-eu/shield.md`. [`Palette`] is the one
+//! axis this module found to move by title; [`ShipShield::with_palette`] is
+//! how a loader picks [`PULSE_PALETTE`] or [`HD_PALETTE`] per source.
 
 /// How far the colour moves toward its target per 60 Hz substep.
 ///
