@@ -288,3 +288,82 @@ fn a_circuit_is_world_space_and_a_craft_is_not() {
         );
     }
 }
+
+/// `tangent` decodes to a real signal, not noise - the corpus-wide version of
+/// the check `crates/game/examples/vita_rcsmodel_tangent_bytesearch.rs` ran as
+/// a scratch probe. There is no Wipeout HD twin to check `tangent`'s content
+/// against (unlike `normal`/`Uv1`), so orthogonality to the already-cracked
+/// `normal` at the same vertex is the strongest evidence this field has - see
+/// `docs/formats/2048-rcsmodel.md#tangent-is-cracked-too-at-a-lower-confidence`.
+///
+/// Both floors sit well inside what that page reports (86.5% orthogonal-ish,
+/// 82.6% of the fourth byte exactly `+-127`/`-128`, both restricted to the
+/// 58.1% of vertices whose `(x, y, z)` passes a unit-length band) so this
+/// tolerates ordinary corpus drift without masking a real regression.
+///
+/// **The control is what makes this evidence rather than a number that could
+/// be coincidence**: a deliberately wrong byte assignment (`x` and `y`
+/// swapped) has the same vector length by construction, so it passes the
+/// same unit-length filter - and then has to fail the *orthogonality* floor,
+/// or the floor is not discriminating anything. The bytesearch probe measured
+/// this exact permutation at 44.0% orthogonal-ish unrestricted, far below the
+/// winning candidate's 71.1%.
+#[test]
+#[ignore = "needs the extracted 2048 packages in data/extracted/vita/"]
+fn tangents_are_orthogonal_to_normals_on_their_unit_length_subset() {
+    let (mut unit_total, mut orth_within_20deg, mut sign_at_extreme) = (0usize, 0usize, 0usize);
+    let (mut wrong_unit_total, mut wrong_orth_within_20deg) = (0usize, 0usize);
+    let found = survey(&mut |_, decoded| {
+        for mesh in &decoded.submeshes {
+            for (tangent, normal) in mesh.tangents.iter().zip(&mesh.normals) {
+                let len = (0..3).map(|a| tangent[a] * tangent[a]).sum::<f32>().sqrt();
+                if (len - 1.0).abs() < 0.1 {
+                    unit_total += 1;
+                    let unit = [tangent[0] / len, tangent[1] / len, tangent[2] / len];
+                    let dot: f32 = (0..3).map(|a| unit[a] * normal[a]).sum();
+                    orth_within_20deg += usize::from(dot.abs() < 0.342);
+                    let w = (tangent[3] * 127.0).round() as i32;
+                    sign_at_extreme += usize::from(matches!(w, 127 | -127 | -128));
+                }
+
+                // CONTROL: x and y swapped. Length is invariant under
+                // permutation, so this passes the identical unit-length
+                // filter on the identical vertices - only the orthogonality
+                // floor can tell the two apart.
+                let wrong = [tangent[1], tangent[0], tangent[2]];
+                let wrong_len = (0..3).map(|a| wrong[a] * wrong[a]).sum::<f32>().sqrt();
+                if (wrong_len - 1.0).abs() < 0.1 {
+                    wrong_unit_total += 1;
+                    let wrong_unit = [
+                        wrong[0] / wrong_len,
+                        wrong[1] / wrong_len,
+                        wrong[2] / wrong_len,
+                    ];
+                    let wrong_dot: f32 = (0..3).map(|a| wrong_unit[a] * normal[a]).sum();
+                    wrong_orth_within_20deg += usize::from(wrong_dot.abs() < 0.342);
+                }
+            }
+        }
+    });
+    if found.files == 0 {
+        return;
+    }
+    println!(
+        "{orth_within_20deg}/{unit_total} unit-length tangents orthogonal-ish to normal \
+         (within 20deg); {sign_at_extreme}/{unit_total} fourth byte exactly +-1"
+    );
+    println!("CONTROL (x/y swapped): {wrong_orth_within_20deg}/{wrong_unit_total} orthogonal-ish");
+    assert!(unit_total > 1_000_000, "{unit_total} unit-length tangents");
+    assert!(
+        orth_within_20deg * 100 >= unit_total * 80,
+        "only {orth_within_20deg} of {unit_total} orthogonal-ish"
+    );
+    assert!(
+        sign_at_extreme * 100 >= unit_total * 75,
+        "only {sign_at_extreme} of {unit_total} read as a clean +-1 sign"
+    );
+    assert!(
+        wrong_unit_total == 0 || wrong_orth_within_20deg * 100 < wrong_unit_total * 80,
+        "the x/y-swapped control also clears the 80% floor - it is not discriminating anything"
+    );
+}

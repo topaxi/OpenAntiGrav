@@ -542,22 +542,25 @@ fn argb8888(texels: &[u8], width: u32, height: u32) -> Option<Vec<[u8; 4]>> {
 /// length exactly on all 13 shipped textures, so this is 3 tightly-packed
 /// bytes a texel, not 4-byte-padded the way [`Format::Argb8888`] is.
 ///
-/// **The tiling order is confirmed by picture, the channel order is not, and
-/// the second fact does not cost this decoder anything on the shipped
-/// corpus.** All 13 files are `Data\FE\NewImages\scepresents\scee_presents_
-/// <language>.gxt` (512x64), a first-party splash reused per language; raster
-/// order decodes to noise and twiddled order decodes to a crisp, legible
-/// "Sony Computer Entertainment presents" - the same signature `argb8888`'s
-/// own doc records for the Zone/Detonator art. But **every texel in every one
-/// of the 13 files has `max(byte) - min(byte) == 0`** (measured directly,
-/// zero exceptions): the art is pure grayscale, so `R`/`G`/`B`/any permutation
-/// of the three bytes decodes to the identical picture. Read as `R, G, B` in
-/// file order for consistency with [`argb8888`]'s own byte-order convention
-/// (and with how this corpus's vertex formats lay out positions and normals -
-/// see `docs/formats/2048-rcsmodel.md`), not because a color sample confirmed
-/// it - none exists to check against. A future `0x98` texture with actual
-/// colour, if one ever ships, is the only thing that could test this; nothing
-/// in the base package or either DLC pack does.
+/// **The tiling order is measured (confidence 70), the channel order is
+/// chosen, not measured, and carries no confidence score of its own.** All
+/// 13 files are `Data\FE\NewImages\scepresents\scee_presents_<language>.gxt`
+/// (512x64), a first-party splash reused per language; raster order decodes
+/// to noise and twiddled order decodes to a crisp, legible "Sony Computer
+/// Entertainment presents" - the same signature `argb8888`'s own doc records
+/// for the Zone/Detonator art. But **every texel in every one of the 13
+/// files has `max(byte) - min(byte) == 0`** (measured directly, zero
+/// exceptions): the art is pure grayscale, so `R`/`G`/`B`/any permutation of
+/// the three bytes decodes to the identical picture, and nothing in this
+/// corpus can prefer one reading over another. Read as `R, G, B` in file
+/// order for consistency with [`argb8888`]'s own byte-order convention (and
+/// with how this corpus's vertex formats lay out positions and normals - see
+/// `docs/formats/2048-rcsmodel.md`), which is a **pick**, not a decode
+/// backed by a colour sample - none exists to check against, so this is
+/// disclosed as chosen rather than presented as verified. A future `0x98`
+/// texture with actual colour, if one ever ships, is the only thing that
+/// could turn this into a checked claim; nothing in the base package or
+/// either DLC pack does.
 fn rgb888(texels: &[u8], width: u32, height: u32) -> Option<Vec<[u8; 4]>> {
     let pixels = (width as usize).checked_mul(height as usize)?;
     let mut out = vec![[0u8; 4]; pixels];

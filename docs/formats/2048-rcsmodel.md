@@ -421,7 +421,7 @@ named, so `names.tsv` gains no row.
 
 Implemented as `oag_rcs::rcsmodel::psp2::unpack_tangent`, wired into
 `psp2::SubMesh::tangents` and counted (not yet drawn with) in
-`oag_render::mesh::rcs::psp2::Report::authored_tangents` -
+`oag_render::mesh::rcs::psp2::Report::decoded_tangents` -
 `just play 2048 --race` now reports e.g. "260533 tangent(s) decoded, unused
 (no normal-map consumer yet)" for Altima's own circuit mesh. **Confirmed to
 change nothing visually**: `data/shots/2048_tangent_before.png` (pre-change)

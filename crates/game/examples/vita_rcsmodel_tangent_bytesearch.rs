@@ -6,12 +6,11 @@
 //!
 //! `normal` and `Uv1` were both settled against Wipeout HD's own decoded
 //! `.rcsmodel`/`Uv1` at index-exact vertices. `tangent` cannot use that
-//! method: `handover/rendering/hd-needs-a-per-material-shader-path-and.md`
-//! (not linked from here - see `docs/formats/2048-rcsmodel.md` instead)
-//! records that HD's own renderer has no tangent frame either - grep
-//! `oag_rcs::rcsmodel`/`oag_render::mesh::rcs` (the HD, not `psp2`, module)
-//! turns up no decoded tangent to compare against, on either platform. So
-//! this is an **internal-consistency** check, not a cross-title one: unit
+//! method: HD's own renderer has no decoded tangent frame either (see
+//! `docs/formats/2048-rcsmodel.md`) - grep `oag_rcs::rcsmodel`/
+//! `oag_render::mesh::rcs` (the HD, not `psp2`, module) turns up no decoded
+//! tangent to compare against, on either platform. So this is an
+//! **internal-consistency** check, not a cross-title one: unit
 //! length of the xyz part, orthogonality to the already-cracked `normal`,
 //! and whether the byte this reading treats as unused is a `+-1` handedness
 //! sign or genuine padding - each scored against deliberately-wrong controls,

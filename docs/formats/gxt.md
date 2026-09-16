@@ -1,13 +1,16 @@
 # GXT: the Vita's texture container
 
-**Status: understood - all six format bytes the corpus carries decode, and
-370 + 8,430 + 99 + 505 + 493 + 13 = 9,910 of 9,910 files.** `UBC2` at
-confidence 85, `PVRTII4BPP` at 92, `U8U8U8U8` at 80, `UBC1`/`UBC3` at 88,
-`U8U8U8` at 70 (channel order unconfirmed - see its own section below).
-`oag_texture::gxt` for the container, `oag_texture::pvrtc` for the PowerVR
-codec, `oag_texture::bcn` for the shared BC1-3 block math. Measured on
-`data/extracted/vita/PCSF00007` (Wipeout 2048, EU, patch v1.04), 2026-08-26,
-2026-08-27, 2026-08-28 and 2026-09-16.
+**Status: understood - all six format bytes the corpus carries decode.**
+370 + 8,430 + 99 + 505 + 493 + 13 = 9,910 textures, one per file (every
+`.gxt` this corpus ships carries exactly one), so that is also 9,910 of
+9,910 files. `UBC2` at confidence 85, `PVRTII4BPP` at 92, `U8U8U8U8` at 80,
+`UBC1`/`UBC3` at 88, `U8U8U8` at 70 for its tiling and packing - its channel
+order is **chosen, not measured** (no score; see its own section below for
+why the corpus cannot settle it). `oag_texture::gxt` for the container,
+`oag_texture::pvrtc` for the PowerVR codec, `oag_texture::bcn` for the
+shared BC1-3 block math. Measured on `data/extracted/vita/PCSF00007`
+(Wipeout 2048, EU, patch v1.04), 2026-08-26, 2026-08-27, 2026-08-28 and
+2026-09-16.
 
 ```sh
 OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-formats --run-ignored all \
@@ -128,9 +131,10 @@ different container and a different codec, read long before this decoder
 existed, and confirms only that a varying-versus-flat pair exists in the same
 role, not the exact picture). The channel-order finding is strong on its own
 terms (a lockstep three-channel binary mask alongside one continuous channel
-is not something a wrong bit layout would produce by accident), which is what
-keeps this above `U8U8U8`'s 70 - see that format's own section below for why
-its channel order could not be checked the same way.
+is not something a wrong bit layout would produce by accident), which is
+what earns this a confidence score at all where `U8U8U8`'s own channel order
+gets none - see that format's own section below for why its corpus cannot
+check it the same way.
 
 ## `PVRTII4BPP`: PowerVR texture compression, and not the PVRTC-I lookalike
 
@@ -353,7 +357,13 @@ wrong answer the way PVRTC does:
 Both renders are pinned in `crates/texture/tests/gxt_ground_truth.rs`
 (`ubc1_decodes_to_something_a_human_can_check`,
 `ubc3_decodes_to_something_a_human_can_check`) and written to
-`data/shots/2048_ubc1_manual_page.png`/`2048_ubc3_callout.png`. `UBC1`'s own
+`data/shots/2048_ubc1_manual_page.png`/`2048_ubc3_callout.png`. The
+roughness numbers above are not part of that pinned test - they come from
+the scratch probe `crates/game/examples/vita_gxt_ubc13_picture_check.rs`,
+which also writes the raster-order control PNGs
+(`data/shots/2048_ubc1_manual_page_raster.png`/`2048_ubc3_callout_raster.png`)
+that are the actual evidence for the twiddle claim on these two formats -
+the ground-truth test only renders the correct decode. `UBC1`'s own
 check cannot reuse `UBC2`/`UBC3`'s shared `render_checkerboard` helper - BC1
 has no alpha channel at all (`bcn::dxt1` always decodes opaque), so the
 helper's "not every texel opaque" flatness assertion is the wrong invariant
@@ -368,31 +378,38 @@ on two independent files with two independent block sizes, not one
 escalating-mask art asset, and the length arithmetic had a real edge case
 (the 8-byte-block floor) to fail on and didn't.
 
-## `U8U8U8`: the last format byte, and a genuine open question its own corpus cannot close
+## `U8U8U8`: the last format byte, two measured claims and one chosen, not measured
 
-**Confidence 70, added 2026-09-16.** `0x98`, 13 files, all
-`Data\FE\NewImages\scepresents\scee_presents_<language>.gxt` (512x64, one
-level each) - the Vita's per-territory "Sony Computer Entertainment presents"
-splash. `oag_texture::gxt::Format::Rgb888`, `unit_len` 3 bytes, no block
-grid, the same shape [`Format::Argb8888`] is except one byte narrower and
-with no `MIN_LEVEL_LEN` floor (verified rather than assumed, same as
-`Argb8888`: `width * height * 3` matches the declared texel length exactly on
-all 13 files, `crates/game/examples/vita_gxt_u8u8u8_extent.rs`).
+**Confidence 70 for tiling and packing, added 2026-09-16. Channel order
+carries no score - it is chosen, not measured, per this project's own rule
+against scoring an unverified pick as if it were evidence.** `0x98`, 13
+files, all `Data\FE\NewImages\scepresents\scee_presents_<language>.gxt`
+(512x64, one level each) - the Vita's per-territory "Sony Computer
+Entertainment presents" splash. `oag_texture::gxt::Format::Rgb888`,
+`unit_len` 3 bytes, no block grid, the same shape [`Format::Argb8888`] is
+except one byte narrower.
 
-**The tiling order is confirmed the same way as every other format on this
-page**: raster order decodes to noise; twiddled order (texel granularity, the
-same [`twiddle`] algorithm `U8U8U8U8` uses) renders "Sony Computer
-Entertainment presents" crisply, right way up, on every one of the 13 files
-sampled (`crates/game/examples/vita_gxt_u8u8u8_picture_check.rs`).
+**Measured claim 1: 3 tightly-packed bytes a texel, no floor.** `width *
+height * 3` matches the declared texel length exactly on all 13 files
+(`crates/game/examples/vita_gxt_u8u8u8_extent.rs`) - the same verification
+`Argb8888`'s own unfloored arithmetic rests on, not assumed by analogy to it.
 
-**The channel order is not confirmed, and this is not a gap this reading
-glossed over - the corpus itself cannot settle it.** Measured directly across
-all 13 files: **every texel has `max(byte) - min(byte) == 0`** - the art is
-pure grayscale line work, so `R,G,B`, `B,G,R`, and every other permutation of
-the three bytes decode to the bit-identical picture. `Rgb888`'s decode reads
-`R, G, B` in file order, for consistency with `Argb8888`'s own byte-order
-convention rather than because a colour sample confirmed it - none exists in
-this corpus to check against. This is not the same situation `U8U8U8U8` was
+**Measured claim 2: the tiling order.** Confirmed the same way as every
+other format on this page: raster order decodes to noise; twiddled order
+(texel granularity, the same [`twiddle`] algorithm `U8U8U8U8` uses) renders
+"Sony Computer Entertainment presents" crisply, right way up, on every one
+of the 13 files sampled (`crates/game/examples/vita_gxt_u8u8u8_picture_check.rs`).
+
+**Chosen, not measured: the channel order.** The corpus itself cannot settle
+it, and this is not a gap this reading glossed over. Measured directly
+across all 13 files: **every texel has `max(byte) - min(byte) == 0`** - the
+art is pure grayscale line work, so `R,G,B`, `B,G,R`, and every other
+permutation of the three bytes decode to the bit-identical picture.
+`Rgb888`'s decode reads `R, G, B` in file order, for consistency with
+`Argb8888`'s own byte-order convention rather than because a colour sample
+confirmed it - none exists in this corpus to check against, so this reading
+is picked, not verified, and carries no confidence number of its own. This
+is not the same situation `U8U8U8U8` was
 in: that format's ARGB swizzle was corroborated against the public `vitasdk`
 enum *and* against which channel of an actual varying-colour texture carried
 continuous art versus a flat mask - both readings agreeing is what earned
@@ -404,7 +421,18 @@ not in question here; what is missing is the second corroboration. No `0x98`
 texture on this disc has a second channel to disagree with the first, so the
 swizzle/channel-order bits cannot be read the way `0x0c`'s were. A future
 `0x98` file with real colour, if one ever ships in a DLC pack this project
-has not swept, is the only thing that could raise this past 70.
+has not swept, is the only thing that could turn the channel-order pick into
+a scored, checked claim rather than a documented choice.
+
+**The decode is kept anyway, not withheld pending that corroboration** -
+worth stating outright, since a chosen-not-measured field is exactly the
+shape `CLAUDE.md`'s "never invent what the assets already author" rule
+warns against. The difference here: every permutation of the three bytes
+produces the *bit-identical* output on 100% of the shipped corpus (max
+channel spread 0 on all 13 files), so this is not a stand-in painted over
+missing data - it is one specific, disclosed reading of data that happens
+to be unable to distinguish itself from five others on the only evidence
+available.
 
 ## Coverage
 

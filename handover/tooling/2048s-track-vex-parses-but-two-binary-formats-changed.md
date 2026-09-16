@@ -786,7 +786,7 @@ the consumer is what would take any of the three past its current ceiling.
 **Wired, and confirmed to draw nothing new.** `oag_rcs::rcsmodel::psp2::unpack_tangent`
 decodes it, `psp2::SubMesh::tangents` carries it per vertex on the same
 declaration-lookup terms `texcoords` already uses, and
-`oag_render::mesh::rcs::psp2::Report::authored_tangents` counts it into the
+`oag_render::mesh::rcs::psp2::Report::decoded_tangents` counts it into the
 load report (`just play 2048 --race` now says e.g. "260533 tangent(s)
 decoded, unused (no normal-map consumer yet)" for Altima). **Confirmed
 byte-identical before and after** (`cmp` on `data/shots/2048_tangent_before.png`
