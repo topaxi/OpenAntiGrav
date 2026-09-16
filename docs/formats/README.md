@@ -277,10 +277,13 @@ other three are still centred on HD's 1920x1080. **The Vita's `.gxt` texture
 container now decodes too** - `oag_texture::gxt`, swept against 9,910 files -
 once a Morton/Z-order block-tiling scheme was measured off a naive raster
 read's noise, and since 2026-08-27 including `PVRTII4BPP`, the PowerVR codec
-85% of the disc's textures are stored in. What is still unread is which widgets a race actually shows,
-which - unlike everything above - needs a running frame this title has no
-capture harness for yet, so a correct layout with correct art still puts
-nothing on screen.
+85% of the disc's textures are stored in. **Which widgets a race actually
+shows is captured** - 2026-09-16, the first time this project drove the Vita
+title, through Vita3K on a headless weston/Xwayland stack
+([vita3k-capture.md](../reverse-engineering/vita3k-capture.md)): four sprites
+are up in every state reached and now draw where the original has them, and
+the shield fill, the pickup slot, the speed fills and Zone's lit dashes are
+read as state-gated and not yet wired.
 
 **[HD front end](hd-frontend.md)** is the same reading applied to
 `/data/plugins/frontend/gui/skin.xml` - HD ships six copies of it and they agree

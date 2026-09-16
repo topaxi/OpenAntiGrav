@@ -1,0 +1,163 @@
+# Capturing a frame of Wipeout 2048 from Vita3K
+
+The first time this project drove the Vita title. Measured 2026-09-16 with
+`Vita3K v0.2.1 4095-84184a36` (the Arch package `vita3k r4095.84184a363-1`,
+the Qt build) and Wipeout 2048 **EU `PCSF00007` v1.04** with both DLC packs
+installed into Vita3K's `ux0/`. That is the same build `data/extracted/vita/
+PCSF00007` is extracted from and the same one the Ghidra program
+`/vita-2048-eu-v104` is, so a frame captured this way is directly comparable
+with the layouts read off the package and with the executable's reading. The
+USA base `PCSA00015` v1.00 is installed beside it and runs the same way
+(`-r PCSA00015`); it was not used.
+
+What it produced: `oag_2048::hud::ALWAYS_ON` and the Vita coordinate space
+`oag_display::space::Space::VITA` - see [2048-hud.md](../formats/2048-hud.md).
+
+## The one thing that did not work, and the fix
+
+**Xvfb cannot present a Vulkan swapchain from a real GPU.** Vita3K creates its
+Vulkan device fine on an Xvfb display (it enumerates the Radeon), then fails
+`Failed to select proper Vulkan queues. This is likely a bug.` and shows a
+`Failed to initialise the renderer.` dialog. The Mesa line above it in the log
+is the real cause:
+
+```
+MESA: info: vulkan: No DRI3 support detected - required for presentation
+```
+
+Xvfb has no DRI3, so radv has no way to present. The OpenGL backend under
+Xvfb would be llvmpipe, and lavapipe would be the Vulkan equivalent - both
+software, both far slower than the title needs.
+
+**The fix is a headless Wayland compositor on the real GPU with a rooted
+Xwayland on top.** Weston's headless backend renders through EGL on the
+Radeon, Xwayland speaks DRI3 to it over dmabuf, and Vita3K's X11 window on
+that Xwayland presents at full speed - 60 fps in the front end, 30 fps in a
+race, on an RX 7800 XT. Nothing touches the user's own session: it is a
+separate Wayland socket and a separate X display, so the user locking their
+screen mid-capture (which happened) changes nothing.
+
+```sh
+# 1. Headless weston on the GPU, its own socket, GL renderer.
+weston --backend=headless --renderer=gl --width=1280 --height=800 \
+    --socket=wayland-oag94 --idle-time=0 &
+
+# 2. A rooted Xwayland :94 on it. Unset DISPLAY so it does not nest itself.
+env -u DISPLAY WAYLAND_DISPLAY=wayland-oag94 Xwayland :94 -noreset -geometry 1280x800 &
+
+# 3. Vita3K on :94 through X11. Both SDL spellings, and WAYLAND_DISPLAY
+#    unset: with it set, SDL picks Wayland, connects to the *user's*
+#    compositor, and dies with `xdg_surface: must ack the initial configure`.
+env -u WAYLAND_DISPLAY DISPLAY=:94 SDL_VIDEODRIVER=x11 SDL_VIDEO_DRIVER=x11 \
+    vita3k -c ~/.cache/oag/2048-hud/config.yml -w -r PCSF00007 &
+```
+
+`-c <file>.yml` reads a configuration file from elsewhere and `-w` keeps
+Vita3K from writing it back, so the user's `~/.config/Vita3K/config.yml` is
+copied once and never modified. The copy differs from the user's in five
+lines only: `log-level: 2` (the user's `0` is TRACE and floods),
+`discord-rich-presence: false`, `show-compile-shaders: false` (that overlay
+would land in the frames), `validation-layer: false`, and
+`check-for-updates-mode: 0`. `pref-path` stays the user's, which is where
+the installed title and its shader cache live.
+
+The log goes to `~/.cache/Vita3K/vita3k.log` and to stdout. Thousands of
+`Unhandled SIGSEGV at rip ...` lines on stdout are Vita3K's guest-memory
+fault handler doing its job, not a crash - `grep -v SIGSEGV` and read what is
+left.
+
+## The game window, and reading it at 1:1
+
+Vita3K's Qt window is 1280x720 with an app list and a log pane; the emulated
+screen is a child window of its own, titled
+
+```
+WipEout® 2048 (PCSF00007) | Vulkan | 30 FPS (34 ms) | 960x544 | Bilinear
+```
+
+and sized exactly 960x544 at `resolution-multiplier: 1` (check with `xdotool
+getwindowgeometry`). Capture **that** window, not the root:
+
+```sh
+WID=$(DISPLAY=:94 xdotool search --name 'PCS[AF]000' | head -1)
+DISPLAY=:94 import -window "$WID" frame.png
+```
+
+The PNG is then the Vita's own 960x544 pixel grid with its origin at the
+window's origin, so a HUD widget's authored `x`/`y` can be read straight off
+it. There is no `xwininfo` on this machine; `xdotool` does the same job.
+
+## Input: three kinds, and two of them need care
+
+- **Buttons** are keyboard keys per the config (`cross=x circle=c square=z
+  triangle=v start=Return select=Shift_R`, d-pad the arrow keys, left stick
+  `w/a/s/d`, `L1=q R1=e L2=u R2=o`). Send them with XTEST after focusing the
+  game window: `xdotool windowfocus --sync $WID; xdotool key x`.
+  `xdotool key --window` uses `XSendEvent`, which SDL ignores.
+- **Touch** is the mouse on the game window, and **a plain click is too short
+  to register.** `xdotool click 1` did nothing on the Game Mode grid twice;
+  `mousedown 1; sleep 0.3; mouseup 1` at the same spot opened it. Every menu
+  in this title is touch-first - the Game Mode grid, the campaign nodes, the
+  Play/confirm buttons - so almost all navigation is taps.
+- **Accelerate is R1 (`e`), not cross.** Holding `x` for eighteen seconds on
+  the grid left the craft where it was; holding `e` moved it. Square (`z`)
+  did **not** fire the held weapon - what does is unmeasured.
+
+A held key is `xdotool keydown e` ... `keyup e` around a screenshot loop.
+
+## Walking into a race on a fresh save
+
+Touch coordinates are in the 960x544 game window, which is at the display's
+origin, so they double as root coordinates.
+
+| Step | Screen | Action |
+| --- | --- | --- |
+| 1 | intro movie, then the title's 3D attract scene | `key Return`, then `key x` |
+| 2 | "Access to online features ... requires a PSN account" | `key x` |
+| 3 | GAME MODE grid | tap `(295, 162)` Single Player Campaign |
+| 4 | welcome text | tap `(882, 480)` the checkmark |
+| 5 | campaign map, "TOUCH TO START" on the first node | tap `(487, 270)` |
+| 6 | event card (Empire Climb, No Weapons) | tap `(882, 480)` Play |
+| 7 | mode description card | tap `(882, 480)` |
+| 8 | ship intro | tap `(882, 480)`, wait ~20 s for the load |
+| 9 | the race, HUD up, craft on the grid, clock running | `keydown e` |
+
+The first event is a **no-weapons** race. Finishing it (8th is a pass -
+"finish the event") unlocks a weapons race (Queens Mall, offensive weapons
+only), and after that a time trial (Metro Park, beat 2:10, which Extreme
+assist passed at 2:02.95). The fourth event needs 5th place, which assist-only
+driving does not reach, so the single-player campaign's Zone event was not
+reached. **The HD campaign (DLC) opens its first group at once**: Game Mode,
+tap `(477, 162)` HD Campaign, and the `Uplift` group has a Race and a **Zone**
+event on Vineta K (`(505, 345)` and `(600, 395)`) with nothing to unlock
+first - that is where the Zone frames came from.
+
+**Pilot Assist: Extreme** is what makes an unattended lap possible. Pause
+(`key Return`), tap `(139, 192)` Options, `(296, 322)` Pilot Assist, the
+right arrow `(910, 243)` once (Normal to Extreme), `(880, 477)` confirm,
+`(880, 477)` resume. With it, holding `e` alone gets the craft round every
+circuit tried at about 1:30 a lap, hitting walls for a few percent of shield
+each. It also puts the `PilotAssist` HUD icon up, which is why that widget is
+recorded as state-gated rather than always-on. Zone needs no input at all.
+
+Pause menu: `(620, 477)` quits (then `(402, 312)` confirms), `(880, 477)`
+resumes. Post-race summary: `(710, 480)` accepts.
+
+## Cleanup
+
+Kill by pid, Vita3K first so it saves its pipeline cache, then Xwayland,
+then weston. Nothing persistent is left behind except the campaign save on
+the user's own `pref-path` (the events above are now completed on it) and
+the pilot-assist option, which is stored in that save.
+
+The helper scripts this pass used (`launch.sh`, `xwayland.sh`, `shot.sh`,
+`key.sh`, `tap.sh`, `hold.sh`, `race.sh`, `strip.sh`) live under
+`~/.cache/oag/2048-hud/` beside the frames. They are twenty lines each and
+the recipe above is all of them; a `scripts/vita3k-drive.py` on the model of
+`scripts/rpcs3-drive.py` is the obvious next step and is not written.
+
+## What a frame is, legally
+
+A screenshot of the running game is game content, so no frame is committed.
+They stay under `~/.cache/oag/2048-hud/frames/` and the docs cite them by
+name and describe what each shows - see [legal.md](../overview/legal.md).
