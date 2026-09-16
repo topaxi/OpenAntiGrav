@@ -196,25 +196,30 @@ fn a_weapon_that_cannot_bounce_never_reads_as_bouncing() {
 /// value `Plasma_UpdateCharge` left behind when `charge` hit zero - see
 /// `plasma_flare_scale`'s own doc comment for the screenshot evidence that
 /// caught the earlier `1.0` guess as a visible, unexplained pop at release.
+///
+/// `cockpit` is `false` throughout this test - the external-view reading,
+/// which is also every existing assertion's own expected value from before
+/// the flag was ported, so this test still pins the un-halved shape.
+/// [`the_plasma_flare_scale_halves_in_the_cockpit`] is the `cockpit: true` half.
 #[test]
 fn the_plasma_flare_scale_follows_the_charge() {
     use crate::race::weapons::plasma_flare_scale;
     use oag_gameplay::projectile::plasma::CHARGE_SECONDS;
     use oag_tables::weapons::Weapon;
 
-    let half_charged = plasma_flare_scale(Some(Weapon::Plasma), CHARGE_SECONDS / 2.0);
+    let half_charged = plasma_flare_scale(Some(Weapon::Plasma), CHARGE_SECONDS / 2.0, false);
     assert!(
         (half_charged - 0.375).abs() < 1e-6,
         "half-charged plasma flare should scale to 0.375, got {half_charged}"
     );
 
-    let flying = plasma_flare_scale(Some(Weapon::Plasma), 0.0);
+    let flying = plasma_flare_scale(Some(Weapon::Plasma), 0.0, false);
     assert!(
         (flying - 0.75).abs() < 1e-6,
         "a launched bolt's flare freezes at the wind-up's own maximum, got {flying}"
     );
 
-    let just_pressed = plasma_flare_scale(Some(Weapon::Plasma), CHARGE_SECONDS);
+    let just_pressed = plasma_flare_scale(Some(Weapon::Plasma), CHARGE_SECONDS, false);
     assert_eq!(
         just_pressed, 0.0,
         "the instant of the press should scale the flare to nothing yet"
@@ -222,14 +227,54 @@ fn the_plasma_flare_scale_follows_the_charge() {
 
     for weapon in [Weapon::Rocket, Weapon::Missile, Weapon::Shuriken] {
         assert_eq!(
-            plasma_flare_scale(Some(weapon), CHARGE_SECONDS / 2.0),
+            plasma_flare_scale(Some(weapon), CHARGE_SECONDS / 2.0, false),
             1.0,
             "{weapon:?} never ramps, whatever charge it is handed"
         );
     }
     assert_eq!(
-        plasma_flare_scale(None, CHARGE_SECONDS / 2.0),
+        plasma_flare_scale(None, CHARGE_SECONDS / 2.0, false),
         1.0,
         "an empty slot rides at neutral scale"
+    );
+}
+
+/// The cockpit-view half of `craft+0x6d`'s reading: `Plasma_UpdateCharge`
+/// halves the glow again when the firing craft's own flag is set, and this
+/// engine's `cockpit` parameter is the caller's `!Race::draws_own_ship()` -
+/// see `plasma_flare_scale`'s own doc comment for the two independent
+/// consumers (`camera.md`, `shield-pickup.md`) that put the reading at
+/// confidence 82.
+///
+/// **Never for a non-Plasma or an empty slot**, the same as the ramp itself -
+/// `cockpit: true` on either is still neutral `1.0`, not `0.5`, since the
+/// `kind != Plasma` guard returns before `cockpit` is ever read.
+#[test]
+fn the_plasma_flare_scale_halves_in_the_cockpit() {
+    use crate::race::weapons::plasma_flare_scale;
+    use oag_gameplay::projectile::plasma::CHARGE_SECONDS;
+    use oag_tables::weapons::Weapon;
+
+    let half_charged = plasma_flare_scale(Some(Weapon::Plasma), CHARGE_SECONDS / 2.0, true);
+    assert!(
+        (half_charged - 0.1875).abs() < 1e-6,
+        "half-charged, in the cockpit, should scale to half of 0.375 = 0.1875, got {half_charged}"
+    );
+
+    let flying = plasma_flare_scale(Some(Weapon::Plasma), 0.0, true);
+    assert!(
+        (flying - 0.375).abs() < 1e-6,
+        "a launched bolt's flare freezes at half the wind-up's own maximum, got {flying}"
+    );
+
+    assert_eq!(
+        plasma_flare_scale(Some(Weapon::Rocket), CHARGE_SECONDS / 2.0, true),
+        1.0,
+        "a non-Plasma stays neutral even with cockpit set"
+    );
+    assert_eq!(
+        plasma_flare_scale(None, CHARGE_SECONDS / 2.0, true),
+        1.0,
+        "an empty slot stays neutral even with cockpit set"
     );
 }

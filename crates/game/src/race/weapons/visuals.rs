@@ -414,7 +414,20 @@ impl Race {
             // `plasma_flare_scale`. The Missile's orbiting anchor rides at
             // the stage's own neutral `1.0`, the same as a Rocket or a
             // Shuriken.
-            let scale = plasma_flare_scale(projectile.kind, projectile.charge);
+            //
+            // **The halving condition, worked out from two sites.** `craft+0x6d`
+            // is only ever written for the *player's* own craft - camera.md's
+            // SELECT-view cycle sets it on "the player craft" alone - so a
+            // charging opponent's bolt reads the byte at its own, forever-zero
+            // `+0x6d` and never halves; only a *player-owned* charging bolt can.
+            // `self.draws_own_ship()` is this engine's own reading of that same
+            // byte (`oag_display::CameraView::draws_own_ship`, confidence 82 -
+            // raised from 70 once `shield-pickup.md` found a second, independent
+            // consumer), inverted (`craft+0x6d == 1` means *hide* the ship, which
+            // is `draws_own_ship() == false`) and race-wide rather than per-craft
+            // because only the player's own camera can be internal at all.
+            let cockpit = projectile.owner == 0 && !self.draws_own_ship();
+            let scale = plasma_flare_scale(projectile.kind, projectile.charge, cockpit);
             advance_one_flare(
                 &mut self.view.stage,
                 &self.view.effects,
@@ -773,10 +786,34 @@ fn advance_one_flare(
 /// exactly `0.0`, so the clamp is what makes the formula read as "the last
 /// charging value" rather than needing a second branch for it - see below.
 ///
-/// **Not ported: the further `* 0.5` when the firing craft's `+0x6d` flag is
-/// set.** That flag's meaning has not been read, so halving on it would be
-/// invented behaviour gated on an unread condition rather than a recovered
-/// one - `plasma.md` records this the same way.
+/// **Ports the further `* 0.5` when the firing craft's `+0x6d` flag is set -
+/// closed 2026-09-16.** `craft+0x6d` is the internal/cockpit camera flag:
+/// `camera.md`'s SELECT-view cycle writes `1` for `OPT_INT` and `0` for both
+/// external views, on the player craft alone, and `shield-pickup.md` found a
+/// second, independent consumer (`ShipShield_Update`'s own cockpit-shell
+/// branch) that raised the reading from 70 to 82. This engine already models
+/// the same byte as `oag_display::CameraView::draws_own_ship` - `false` for
+/// the internal view - consumed here as `cockpit`, the caller's own
+/// `projectile.owner == 0 && !self.draws_own_ship()`: `+0x6d` is only ever
+/// *written* for the player's own craft (camera.md: "setting one flag on the
+/// player craft"), so an opponent's charging bolt reads a byte that is always
+/// zero in the original and never halves, whichever craft the local camera
+/// happens to be looking at.
+///
+/// **Not frozen the way the ramp itself is, and that is a known, accepted
+/// gap.** `Plasma_UpdateCharge` - and therefore this halving - only runs
+/// while `charging != 0` in the original; once a bolt is released the
+/// function is never called again, so whatever `craft+0x6d` last read stays
+/// baked into the value forever, the same freeze [`Self::plasma_flare_scale`]'s
+/// own "after release" section already documents for the ramp. This engine
+/// has no per-projectile record of "was the camera internal at the tick this
+/// bolt released", so `cockpit` is read live every tick, charging or flying
+/// alike - correct for the charging phase, since the original reads the byte
+/// fresh on every charging tick too, and wrong only in the narrow case of a
+/// player switching camera view during a bolt's own brief flight, where the
+/// original's frozen value and this port's live one can disagree for that
+/// bolt's remaining ticks. Adding a frozen field is `oag_gameplay::projectile`
+/// work, out of this function's own reach.
 ///
 /// **What `scale` actually multiplies is the same thing on both sides.**
 /// `Stage::rescale`/`System::rescale` change an instance's *severity* - the
@@ -811,12 +848,14 @@ fn advance_one_flare(
 pub(in crate::race) fn plasma_flare_scale(
     kind: Option<oag_tables::weapons::Weapon>,
     charge: f32,
+    cockpit: bool,
 ) -> f32 {
     if kind != Some(oag_tables::weapons::Weapon::Plasma) {
         return 1.0;
     }
     let charge_seconds = oag_gameplay::projectile::plasma::CHARGE_SECONDS;
-    (charge_seconds - charge.clamp(0.0, charge_seconds)) / charge_seconds * 0.75
+    let scale = (charge_seconds - charge.clamp(0.0, charge_seconds)) / charge_seconds * 0.75;
+    if cockpit { scale * 0.5 } else { scale }
 }
 
 /// The Missile's own two flare anchors this tick, orbiting its flight line -
