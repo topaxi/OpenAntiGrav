@@ -931,6 +931,11 @@ gates the craft-hit test (not in `Init` or `Launch` as decompiled).
 
 ## Next Steps
 
+- ~~**The Plasma's own three cues are unwired.**~~ **Done 2026-09-16** - see
+  that section. `PLASMA`, `~PLASMATVL` and `PLASMAHITWALL` all fire; the
+  craft-hit ending plays `PLASMAHITWALL` too, chosen rather than measured,
+  and the bank's own distinct `PLASMAHITSHIP` stays open for whoever reads
+  the travel-segment sweep's craft-hit branch.
 - **HD/Omega Plasma, four unread pieces** (2026-09-16, detail in that
   section): where Omega sets the `flags & 1` bit gating the craft-hit test
   (not `Plasma_Init` or `Plasma_Launch`; likely the fire handler); the
@@ -1399,4 +1404,61 @@ Regression gate before this change:
 `race_ground_truth::a_lone_craft_gets_round_the_circuits_it_is_known_to_get_round`
 - all twelve clean. After: unchanged (the gate does not fire a Plasma at any
 craft), quoted verbatim in this pass's own commit.
+
+## 2026-09-16: the Plasma's own three cues, and the per-projectile held-voice gap `MINERADAR`'s note left open is closed for the first weapon that needs it
+
+All three of the Plasma's own recovered cues are wired: `PLASMA` at the press,
+`~PLASMATVL` from release to whatever ends the bolt, `PLASMAHITWALL` at every
+ending. Confirmed against a real disc: a real press on a real circuit put
+`PLASMA` and `PLASMAHITWALL` 82 ticks apart (a 60-tick wind-up plus real
+flight to a real wall on Talons Junction), and the mix rendered non-silent
+PCM through the null backend the whole way - see
+`crates/game/tests/plasma_cues_audio_ground_truth.rs`.
+
+**Decompiling `Plasma_Init` in full is what settled the placement, and it
+was not the reading this thread's own earlier passes assumed.** The bolt gets
+its **own** `SoundEmitter_Init` record (`p->emitter`, `+0x5c`), pointed at the
+bolt's own matrix (`p+0x70`) rather than the firing craft's node - so
+`~PLASMATVL` and `PLASMAHITWALL`, both played on `p->emitter`, are heard from
+the bolt, and `PLASMA`, played on the argument `Plasma_Init` is handed
+directly (the craft's own emitter, before the bolt's is even constructed), is
+heard from the craft. See `plasma.md`'s own updated sections for the
+instruction-level evidence.
+
+**The per-projectile held-voice gap is closed, for the Plasma.** The
+`MINERADAR` bullet above names it precisely: "nothing in `CueEvent` or
+`SfxVoices` can address that today; every held voice this engine plays is
+keyed by grid slot". `~PLASMATVL` needed the same shape and now has it:
+`SfxVoices::plasma_travel` is a `[Option<VoiceId>; MAX_PROJECTILES]`, read and
+written directly off `race.sim.world.projectiles.slots` every tick in
+`Audio::race_tick` rather than through a queued `CueEvent` - the same reason
+`Engine` reads craft position directly. **This does not generalise
+`MINERADAR` for free** - the array is Plasma-specific code, not a shared
+abstraction - but the shape (an array of held voices keyed by projectile
+slot, ticked directly off the world) is now proven out on real disc data and
+is the one to copy rather than invent when someone next picks up `MINERADAR`
+or `~BOMBRADAR`.
+
+**`PLASMAHITWALL` also plays for a craft hit, and that is chosen, not
+measured.** This engine's own Plasma can end on a craft
+(`Impact::struck.is_some()`, the shared sweep-segment test in
+`oag_gameplay::projectile::flight`) as well as a wall or the 10 s timeout.
+`plasma.md`'s own reading of `Plasmas_Update`'s teardown covers only the
+latter two - `Plasma_Update`'s decompiled switch has no craft-hit case, and
+the travel-segment sweep against a craft is the part of that function this
+thread's own re-read left elided ("the same collision test again"). The bank
+carries a **distinct** `PLASMAHITSHIP` cue (confirmed via `oag-wad sounds`,
+alongside the other three, all in `weapons.bnk`) that this build does not
+play for a craft hit, since nothing confirms it belongs there - reusing the
+confirmed wall/timeout cue for the unconfirmed third ending is the smaller
+invention of the two available, and is written down as one rather than
+silently. Whoever reads the travel-segment sweep's own craft-hit branch next
+either confirms `PLASMAHITWALL` there too or hands this its own cue.
+
+A new placement had to be added for both: `Placement::Point`, carried on
+`CueEvent::at_point` rather than a grid slot - the original always names an
+*emitter* with a scene node, never a bare position, so nothing here is read
+off a call site; it is the smallest honest way to place a sound that is not a
+craft's own. `crates/game/src/audio/sfx.rs` and
+`crates/game/src/race/{weapons.rs,tick.rs}`.
 

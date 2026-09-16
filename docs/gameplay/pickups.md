@@ -66,6 +66,7 @@ This subsystem is unusually mixed, so the split comes before anything else.
 | **A Plasma press puts exactly one in the air**, where a Rocket puts three | **recovered** | 88 |
 | **A plasma bolt flies the Rocket's own floor-following path** - `Plasma_Update` is `Rocket_Update` | **recovered** | 85 |
 | The bolt rides `WO_PLASMA_HEAD` and fires the `PLASMA` cue, both read out of `.rodata` | **recovered** | 90 |
+| **This engine now plays all three of the Plasma's own cues**: `PLASMA` at the press (the firing craft's own emitter), `~PLASMATVL` from release to whatever ends the bolt (a new, per-bolt emitter this port tracks by projectile slot rather than by craft), and `PLASMAHITWALL` at every ending it produces - a wall, a craft, or the 10 s timeout, the last two chosen rather than measured since the original's own reading only confirms the first two | **recovered, built** (2026-09-16) | 88 |
 | **A plasma bolt winds up for 1.0 s on the nose before it flies** - `Plasma_Init`'s `+0x4c`/`+0x50`, spent by `Plasmas_Update` | **recovered** | 90 |
 | **A bolt is reaped at 10.0 s** by the pool walker, a hardcoded ceiling and not an authored `timetodie` | **recovered** | 90 |
 | The bolt's detonation is `WO_PLASMA_FLASH`, off `Plasma_SpawnDetonation` in the pool teardown | **recovered** | 88 |
