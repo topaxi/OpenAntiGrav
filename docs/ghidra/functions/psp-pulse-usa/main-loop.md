@@ -14,7 +14,8 @@ page records where things live.
 ## The loop
 
 `Game_MainLoop` at `0x08807244`, identified by the literal `"Main Game Loop"` at
-`0x08a785d0` handed to the profiler immediately before the loop. Confidence
+`0x08a785d0` handed to `Mem_LogStatus` ([memory.md](memory.md)) immediately
+before the loop. Confidence
 **95**: a function that names itself is about as good as static evidence gets.
 
 Per iteration, in order:

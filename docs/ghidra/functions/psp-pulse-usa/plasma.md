@@ -1210,7 +1210,7 @@ For each of the three models (index 0 = the halo, 1 = `hemisphere2`, 2 =
   `+0xac`/`+0xb0` per ramp) for exactly the shape a multi-key ease would need,
   gated on each ramp's own keyframe count at `+0xb4`/`+0xe4`/`+0x114`. That
   count is **never written** by `PlasmaBlast_Construct`, and the shared base
-  constructor every object of this kind runs first, `FUN_08943f08`, does not
+  constructor every object of this kind runs first, `Object_ConstructBase`, does not
   touch it either (checked directly: it writes offsets `0x00`-`0x38` only,
   keyed by dword index, nowhere near `0xb4`). A freshly allocated object's
   `+0xb4` is therefore `0`, `1 < 0` is false, and

@@ -95,7 +95,7 @@ identity tag, and the mechanism that reads it is live.** `+0x08a7255c` -
 address and touches nothing else, which is what the previous version of this
 page called a dead-end thunk. Three independent call sites say otherwise:
 
-- `FUN_08a71364`, the generic tree-walker `vex.md` already documents gathering
+- `Vex_CollectNodesByClass`, the generic tree-walker `vex.md` already documents gathering
   every `Mesh` for `Vex_LoadModel`, does not compare a class id at all - it
   compares `*(node + 4) == *(filter + 4)`. A node's own `+4` is stamped from
   its class's registered descriptor at construction time, so this is a
@@ -105,7 +105,7 @@ page called a dead-end thunk. Three independent call sites say otherwise:
   by *calling* the corresponding tag-getter and storing the result at the
   filter struct's `+4` - `local_28c = func_0x00267d48(); ...
   func_0x0026d364(param_1, local_33dc, 2000, &local_254, auStack_290);` is the
-  `Mesh` gather (cap 2000, matching `vex.md`'s reading of `FUN_08a71364`), and
+  `Mesh` gather (cap 2000, matching `vex.md`'s reading of `Vex_CollectNodesByClass`), and
   two further gathers in the same function use the same shape with different
   tag-getters and caps (1000, 0x40). `func_0x00267d48` is a thunk of the exact
   same self-address-returning form as `weatherPos`'s.
@@ -141,7 +141,7 @@ tried and inconclusive.)
 **This means `pob.md`'s identical framing for `ParticleSystem`'s slot
 (`FUN_08a6bd18`, called there "a trivial self-address-returning thunk", "the
 same dead end") is now suspect too** - it was not re-checked this session
-against `FUN_08a71364`'s callers, and the mechanism above says a thunk of this
+against `Vex_CollectNodesByClass`'s callers, and the mechanism above says a thunk of this
 exact shape is very unlikely to be inert. Flagged in the parent handover
 thread; `pob.md` itself is left as it stood pending that check.
 

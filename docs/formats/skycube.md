@@ -300,7 +300,7 @@ semantically undecoded block.
   confirms its runtime constructor actually runs, loading a real race.**
   `WeatherPos_RegisterClass` (`0x0892c684`) registers class `0x3da` like every
   other environment class; the value it installs at the descriptor's `+4` is
-  not a handler but a class-identity tag (the mechanism `FUN_08a71364`'s
+  not a handler but a class-identity tag (the mechanism `Vex_CollectNodesByClass`'s
   per-class node gather actually reads). `FUN_0892c404`, which allocates and
   tags a real `weatherPos` instance, has no static call site anywhere in the
   binary - and a breakpoint on it fires anyway, during Talon's Junction's

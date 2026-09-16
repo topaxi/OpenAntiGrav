@@ -139,7 +139,9 @@ The PSP `BOOT.BIN` is an unencrypted ELF, so this can start immediately.
 - [x] [Memory management and the heap layout](../ghidra/functions/psp-pulse-usa/memory.md):
       one front door, two bitmap pools, a guarded free-list heap, and a data
       heap the front-end archive is steered into by swapping the heap list head
-- [ ] Resource loading: how a WAD entry becomes a live object
+- [x] [Resource loading](../ghidra/functions/psp-pulse-usa/resource-loading.md):
+      how a WAD entry becomes a live object - VFS device chain, refcounted
+      resource cache, scene-graph node on three chains, deferred destroy
 - [ ] Game state machine
 - [x] The original PRNG - two of them, and the gameplay one is clock-seeded,
       so no sequence can ever match. See [prng.md](../ghidra/functions/psp-pulse-usa/prng.md)

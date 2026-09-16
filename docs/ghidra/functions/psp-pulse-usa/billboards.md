@@ -233,14 +233,14 @@ own body position as a live control:
 
 - **`0x09837cb0`** is read mainly by a per-object world-transform composer
   (`FUN_088fe208`) and a generic component-update dispatcher
-  (`FUN_0894402c`) that walks a child list and calls two functions through a
+  (`Node_UpdateTree`) that walks a child list and calls two functions through a
   vtable-shaped pointer at `+0x38` - unremarkable scene-graph plumbing,
   confirming this object sits in the ordinary per-frame update tree rather
   than being dead weight.
 - **`0x0983a240`** is read overwhelmingly (6,261 of its hits) by one
   address, `0x0890cf34`, which has **no function boundary in Ghidra** -
   reached only through the same kind of indirect/virtual dispatch as
-  `FUN_0894402c`'s vtable calls, which is almost certainly why auto-analysis
+  `Node_UpdateTree`'s vtable calls, which is almost certainly why auto-analysis
   never defined a function over it. Disassembled directly:
   ```text
   lbu   a1, 0xc0(a0)         ; flag byte
@@ -519,7 +519,7 @@ crate).
   *live* content (as opposed to the stale credits-text sample) is likewise
   unread.
 - **`0x0890cf34`** (the animation accumulator) has no function boundary in
-  Ghidra at all; neither it nor `FUN_088fe208`/`FUN_0894402c` were renamed -
+  Ghidra at all; neither it nor `FUN_088fe208`/`Node_UpdateTree` were renamed -
   confidence did not clear the bar, and the first needs a `create_function`
   pass before it even has an address range to name.
 - **The colour-path pool at `_DAT_002ae2b4+0x3c`** (walked by
