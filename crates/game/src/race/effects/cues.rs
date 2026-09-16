@@ -13,42 +13,43 @@
 use super::*;
 
 impl Race {
-    /// Raises `ABSORB` or `.COLLISIONS` for one craft, on that craft's own
-    /// re-arm.
+    /// Raises `.COLLISIONS` for one craft, on that craft's own re-arm.
     ///
     /// **The timer is per craft**, because the original's gate is: the cooldown
     /// lives on the effect the *craft* owns, so eight hulls scraping eight
     /// walls make eight sounds rather than sharing one 0.8-second window.
     ///
     /// It cannot share [`RaceView::sparks_cooldown`] either: a shielded contact
-    /// never ignites, so that timer would sit at zero and `ABSORB` would fire
-    /// sixty times a second through a scrape.
+    /// never ignites, so that timer would sit at zero.
     ///
     /// `ShipCollisionFx_Trigger` plays `"COLLISIONS"` once per call that gets
     /// past its own 0.8-second gate, which is the same 0.8 seconds
     /// `oag_render::sparks::COLLISION_COOLDOWN` carries - one constant in the
-    /// original, read twice here. `"ABSORB"` comes from `FUN_08840640`, which
-    /// **bypasses** that gate and staggers its own ten instances by 0.1 s; how
-    /// often the game calls it is not recovered, so it is re-armed on the same
-    /// 0.8 s and that is a stated approximation rather than a reading. See
-    /// `docs/.../contact-response.md`.
+    /// original, read twice here.
+    ///
+    /// **A shielded contact is silent, and this used to raise `ABSORB` on
+    /// it.** The contact loop skips `Ship_DispatchCollisionFx` - and with it
+    /// the cue - behind the shield bit, and takes `ShipShield_Hit` instead,
+    /// which writes four colour words and a timer and plays nothing
+    /// (`shield-pickup.md`, gates `0x0884255c`/`0x08842684`). `ABSORB` is
+    /// `Ship_PlayAbsorbFeedback` (`0x08840640`), whose four callers are all
+    /// read as of 2026-09-16 and none is a contact: the absorb handler, the
+    /// Eliminator's lap refill, and two network callbacks. The shell's own
+    /// bulge is the whole of what a shielded contact shows or sounds. See
+    /// `docs/ghidra/functions/psp-pulse-usa/shield.md`.
     pub(in crate::race) fn raise_contact_cue(&mut self, slot: usize, impact: bool, shielded: bool) {
         let Some(cooldown) = self.sim.contact_cue_cooldown.get_mut(slot) else {
             return;
         };
         *cooldown = (*cooldown - self.sim.dt).max(0.0);
-        if !impact || *cooldown > 0.0 {
+        if !impact || shielded || *cooldown > 0.0 {
             return;
         }
         *cooldown = oag_render::sparks::COLLISION_COOLDOWN;
-        let cue = if shielded {
-            crate::audio::sfx::Cue::Absorb
-        } else {
-            crate::audio::sfx::Cue::Collision
-        };
-        self.sim
-            .cues
-            .push(crate::audio::sfx::CueEvent::new(cue, slot));
+        self.sim.cues.push(crate::audio::sfx::CueEvent::new(
+            crate::audio::sfx::Cue::Collision,
+            slot,
+        ));
     }
 
     /// Takes the one-shot sound cues this tick raised, leaving the queue empty.

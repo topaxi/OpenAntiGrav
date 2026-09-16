@@ -525,6 +525,16 @@ impl Race {
                 &handling.dimensions,
                 amount,
             );
+            // The absorb handler (`FUN_08844ec4`) ends on
+            // `Ship_PlayAbsorbFeedback` (`0x08840640`) unless the mode is an
+            // Eliminator, which returned above: the `ABSORB` cue, then ten
+            // `WO_WEAPON_ABSORB` bursts staggered 0.1 s over the craft's fx
+            // nodes. The cue is raised; the bursts are not drawn yet. See
+            // `docs/ghidra/functions/psp-pulse-usa/shield.md`.
+            self.sim.cues.push(crate::audio::sfx::CueEvent::new(
+                crate::audio::sfx::Cue::Absorb,
+                slot,
+            ));
         }
         // `Held::take` rather than a direct write - see its doc comment for
         // why an absorb mid-drop has to clear more than the visible weapon.

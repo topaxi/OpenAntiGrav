@@ -7,6 +7,11 @@
 //!
 //! # What is measured here, and what is chosen
 //!
+//! **Measured** (`docs/ghidra/functions/psp-pulse-usa/shield.md`): a
+//! completed lap refills [`LAP_REFILL_FRACTION`] of the maximum pool through
+//! `Ship_AddShield`, with the absorb feedback -
+//! [`Race::eliminator_lap_health_refill`].
+//!
 //! **Measured** (`docs/ghidra/functions/psp-pulse-usa/race-campaign.md`):
 //! `Eliminator_UpdateKillTarget` ends the race the instant any craft's own
 //! kill count reaches the target, read off the current campaign cell or a
@@ -31,6 +36,12 @@
 //! should not read as two different figures agreeing by coincidence.
 
 use super::*;
+
+/// How much of the skill-indexed maximum a completed lap gives back:
+/// `Ship_RefillLapShield` (`0x0883de30`) is
+/// `Ship_AddShield(stats_base[0x84 + skill * 4] * 0.2, entity)`, the same
+/// table cell `Ship_ResetShield` fills the pool from. Confidence 85.
+pub const LAP_REFILL_FRACTION: f32 = 0.2;
 
 /// Seconds a craft spends fully `Eliminated` before it returns to the race.
 ///
@@ -129,19 +140,43 @@ impl Race {
             .eliminator_finished(target, kills);
     }
 
-    /// Refills a craft's shield to full on a completed lap, Eliminator only.
+    /// Refills a fifth of a craft's shield on a completed lap, Eliminator only.
     ///
-    /// **The disc's own text, applied.** `MSC_EVENT_ELIM`: *"you cannot
-    /// absorb pickups, but you regain health after each lap"* - the amount
-    /// is not stated, so a full refill is what this build reads a mode with
-    /// no partial-heal vocabulary anywhere else as meaning; chosen, not
-    /// measured, and easy to find the day a real figure turns up. See
-    /// [`Mode::pickups_absorb`] for the sentence's other half.
+    /// **Measured as of 2026-09-16, and this used to be a full refill chosen
+    /// off `MSC_EVENT_ELIM`'s "you regain health after each lap".**
+    /// `Eliminator_UpdateKillTarget` (`0x0882ce18`) and the multiplayer
+    /// mode's racing-state update both call `Ship_RefillLapShield`
+    /// (`0x0883de30`) on the player's craft when its crossing count
+    /// (`craft+0xac8`) has gone up and `Ship_State` is `1`: that adds
+    /// [`LAP_REFILL_FRACTION`] of the skill-indexed maximum through
+    /// `Ship_AddShield`'s clamp, then plays the absorb feedback -
+    /// `Ship_PlayAbsorbFeedback` (`0x08840640`), the `ABSORB` cue and the
+    /// staggered `WO_WEAPON_ABSORB` bursts. The cue is raised here; the
+    /// bursts are not yet drawn. See
+    /// `docs/ghidra/functions/psp-pulse-usa/shield.md`.
+    ///
+    /// **The player's craft only in the original** - the mode object reads
+    /// its own `+0x2c0`. Called for every slot's lap here, because an
+    /// opponent that never healed would be an opponent the field wears down
+    /// on its own; stated rather than hidden, and `slot` is what to narrow
+    /// if that reading is wrong.
     pub(super) fn eliminator_lap_health_refill(&mut self, slot: usize) {
         if self.sim.world.mode() != Mode::Eliminator {
             return;
         }
-        let dimensions = self.sim.world.ships[slot].handling.dimensions;
-        self.sim.world.ships[slot].physics.shield = dimensions.shield;
+        let ship = &mut self.sim.world.ships[slot];
+        if ship.physics.craft_state != oag_physics::damage::CraftState::Racing {
+            return;
+        }
+        let dimensions = ship.handling.dimensions;
+        oag_physics::damage::add(
+            &mut ship.physics,
+            &dimensions,
+            dimensions.shield * LAP_REFILL_FRACTION,
+        );
+        self.sim.cues.push(crate::audio::sfx::CueEvent::new(
+            crate::audio::sfx::Cue::Absorb,
+            slot,
+        ));
     }
 }

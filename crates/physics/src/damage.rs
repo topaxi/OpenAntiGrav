@@ -11,10 +11,14 @@
 //! FUN_088418e0's contact loop       Ship_Damage(|p| * 0.05 * 0.7, craft, ...)
 //! ```
 //!
-//! Only the collision leg is here. Weapon damage, weapon absorb and the pit-lane
-//! recharge are the other three things that reach this pool in the original, and
-//! none of them has anything to hand out yet - see the module's open list at the
-//! bottom of this comment.
+//! The collision leg and the two weapon legs ([`apply_weapon`], [`add`]) are
+//! here. Everything that *adds* to the pool in the original goes through
+//! `Ship_AddShield` (`0x0883ddc8`), which has exactly four callers, all read:
+//! the pickup absorb, the LeachBeam's repair, Zone's clean-zone recharge and
+//! the Eliminator's per-lap refill - each built where it belongs, in
+//! `oag_gameplay` or the composition root, on top of [`add`]. There is no
+//! pit lane in this title and no pit-lane recharge; earlier revisions of this
+//! comment listed one from memory of older games in the series.
 //!
 //! # Why the pool lives in `oag_physics`
 //!
@@ -30,11 +34,6 @@
 //!
 //! # What is not implemented, and is not guessed at
 //!
-//! - **The destroyed transition.** `Ship_Damage` sets craft state 4 at zero or
-//!   below; this engine has no such state, so [`apply_contact`] floors the pool
-//!   instead and [`Shield::depleted`] is the signal a caller can act on. That
-//!   signal is what [Zone](../../../docs/gameplay/race-modes.md) needs for its
-//!   own missing end condition.
 //! - **`Ship_Damage`'s `weapon_kind` sub-bucket**, nine cases, unmapped - and
 //!   the absorb-spark effect its `source == 2` branch triggers. [`apply_weapon`]
 //!   is that branch's damage half and nothing else.
@@ -251,10 +250,12 @@ pub struct Shield {
     pub crossed_critical: bool,
     /// Whether the pool reached zero this tick.
     ///
-    /// The original transitions the craft into its destroyed state here. Nothing
-    /// does yet; this is the signal to build that on, and the one
-    /// [`Zone`](../../../docs/ghidra/functions/psp-pulse-usa/zone-mode.md)'s
-    /// unimplemented end condition has been waiting for.
+    /// The original transitions the craft into its destroyed state here, and
+    /// so does [`subtract`] - `craft_state` goes to [`CraftState::Destroyed`]
+    /// on the same edge. This flag is the per-tick report of that edge for the
+    /// caller that reads it, which is how
+    /// [`Zone`](../../../docs/ghidra/functions/psp-pulse-usa/zone-mode.md)
+    /// ends.
     pub depleted: bool,
     /// Whether a fired Shield pickup swallowed this tick's damage.
     ///

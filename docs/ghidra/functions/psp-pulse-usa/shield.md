@@ -649,6 +649,84 @@ one, so it was not chased further this pass. It does not change the
 threshold-vs-gradient answer either way: whichever flag it is, the function
 still never blends between two colours by percentage.
 
+## `Ship_AddShield`'s four callers, and `Ship_RefillLapShield` (`0x0883de30`)
+
+Read 2026-09-16, because the roadmap carried "the pit-lane recharge is the
+one left" against this item and nothing on this page said where a pit lane
+was. There is none in this title. `Ship_AddShield` (`0x0883ddc8`) is the only
+way energy comes *back* into the pool short of `Ship_ResetShield`, and it has
+exactly four callers:
+
+| Caller | What it adds | Port |
+| --- | --- | --- |
+| `Zone_Update` (`0x0882f700`) | `g_zone_recharge` on a clean zone ([zone-mode.md](zone-mode.md)) | `oag_race::zone` |
+| `Ship_ApplyPendingWeaponRepair` (`0x0883f228`) | the LeachBeam's repair ([cannon-quake-leachbeam.md](cannon-quake-leachbeam.md)) | `oag_gameplay::projectile::leach_beam` |
+| `FUN_08844ec4`, the absorb handler | the held weapon's own `<Stats absorb>`, thirteen arms ([pickups.md](../../../gameplay/pickups.md)) | `Race::spend_pickup` |
+| **`Ship_RefillLapShield` (`0x0883de30`)** | **a fifth of the maximum, on a completed lap in an Eliminator** | `Race::eliminator_lap_health_refill` |
+
+The fourth is two lines:
+
+```c
+void Ship_RefillLapShield(Entity *entity) {                         // 0x0883de30
+    Ship_AddShield(stats_base[0x84 + g_skill_level * 4] * 0.2f, entity);
+    Ship_PlayAbsorbFeedback(entity);                                // 0x08840640
+}
+```
+
+The table cell is the same one `Ship_ResetShield` fills the pool from - the
+skill-indexed maximum - so the refill is **20 % of full, clamped at full** by
+`Ship_SetShield`. Its two callers are the two Eliminators. `Eliminator_UpdateKillTarget`
+(`0x0882ce18`, [race-campaign.md](race-campaign.md)) keeps the player's last
+crossing count at `mode+0x1a10` and calls it when the count has gone up:
+
+```c
+crossings = player->craft->crossings;                               // craft+0xac8
+if (mode->last_crossings != 0 && Ship_State(player) == 1 && mode->last_crossings < crossings)
+    Ship_RefillLapShield(player);                                   // mode+0x2c0
+mode->last_crossings = crossings;
+```
+
+`FUN_08822a50`, the multiplayer Elimination object's racing-state update
+(`FUN_08822918` dispatches on `mode+0x7c8`, and `2` is this case), is the same
+five lines against `mode+0x1aa4`. Three things fall out. **It is the player's
+craft only** - `mode+0x2c0`, the same slot `Race_CreatePlayer` fills
+([race-progress.md](race-progress.md)); an AI craft's laps refill nothing,
+which is consistent with the AI never absorbing either. **The first crossing
+does not count** - `last_crossings != 0` skips the start-line crossing a craft
+makes leaving the grid. **And it is gated on the racing state**, so a craft
+that crosses while exploding gets nothing. Confidence **85** for the amount
+and the gate (a clean decompile, no VFPU), **80** for the multiplayer twin
+(its object is identified by its size and its field offsets, not by a name).
+
+`Ship_PlayAbsorbFeedback` (`0x08840640`) was on
+[contact-response.md](contact-response.md) as `FUN_08840640`, the absorb
+effect: `Sound_Play(1.0, entity+0x50, bank, 0, "ABSORB", 0)` once, then
+`ShipCollisionFx_Trigger(1.0, node, 2, 0)` - kind 2 is `WO_WEAPON_ABSORB` -
+over up to ten of the craft's fx nodes with `DAT_08abf564 = i * 0.1` staggering
+them a tenth of a second apart. Naming it here because its callers are what
+settle where `ABSORB` is heard, and they are **four, all read**: this refill,
+the absorb handler's tail (`0x088455b8`, skipped in an Eliminator where the
+absorb itself is refused), and two arms of a network callback
+(`FUN_0883d5c0`: message `'B'`, and `'Q'` for a Quake absorbed remotely).
+**None is a wall contact.** The contact loop's shield branch takes
+`ShipShield_Hit` (`0x0885eb04`) instead of `Ship_DispatchCollisionFx`, and
+`ShipShield_Hit` writes four colour words and a `1.1` timer and plays nothing -
+so a shielded contact is *silent*, and this project's `ABSORB` on that edge was
+an invention, removed the same day. Confidence **88** for the callers (a
+complete xref list) and the silence (both gates on
+[shield-pickup.md](shield-pickup.md) read at instruction level).
+
+**Ported**: `Race::eliminator_lap_health_refill` adds
+`LAP_REFILL_FRACTION` (`0.2`) of the maximum through `oag_physics::damage::add`
+on the racing gate and raises `Cue::Absorb`; the absorb handler's own `ABSORB`
+is raised on the same cue. The ten staggered `WO_WEAPON_ABSORB` bursts are
+**not drawn yet** - the effect is in the psys inventory and the trigger is
+now recovered, so it is the stagger and the per-node anchoring that wait, not
+the reading. One departure, stated on the port: it refills every craft's lap,
+not the player's alone, so a field of opponents that the player never shoots
+does not wear itself down; `slot` is what to narrow if that is the wrong
+call.
+
 ## What is not verified
 
 - **Whether `1` means "network human" and `3` is genuinely unused** is still
@@ -659,10 +737,17 @@ still never blends between two colours by percentage.
 - **`weapon_kind`'s nine cases are unmapped.** They select telemetry buckets
   and nothing else here; naming them wants the weapon table, which is
   unstarted.
-- **The absorb-spark branch is not implemented** and is weapon-only.
+- **The absorb-spark burst is not drawn**: ten `WO_WEAPON_ABSORB` instances
+  staggered 0.1 s over the craft's fx nodes, trigger recovered above.
 
 ## History
 
+- 2026-09-16: **`Ship_AddShield`'s four callers enumerated**, closing "the
+  pit-lane recharge" (there is none) with the one caller the port had
+  guessed at: `Ship_RefillLapShield` (`0x0883de30`) gives back 20 % of the
+  maximum on a completed lap in an Eliminator, player only, racing state
+  only. `Ship_PlayAbsorbFeedback` (`0x08840640`) named from its callers,
+  which also settle that a shielded contact plays nothing.
 - 2026-09-05: **`Hud_UpdateEnergyBar` (`0x0881c638`) named and read in
   full**, closing the handover thread on whether the shield bar's colour is
   a threshold or a gradient. It is a threshold: solid red at or under 20%

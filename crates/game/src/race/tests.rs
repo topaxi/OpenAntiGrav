@@ -18,6 +18,7 @@ mod autopilot;
 mod camera;
 mod countdown;
 mod cues;
+mod eliminator;
 mod field;
 mod hash;
 mod hd_sprite;

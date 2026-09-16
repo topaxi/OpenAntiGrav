@@ -429,7 +429,7 @@ impl Race {
             // **An opponent's hull sounds too**, on its own 0.8-second re-arm
             // and off its own emitter. `shielded` is `false` because nothing
             // hands an opponent a Shield yet - the same gap the shell bulge
-            // below records - so `ABSORB`'s branch is unreachable here rather
+            // below records - so the silent branch is unreachable here rather
             // than suppressed.
             self.raise_contact_cue(slot, evaluated.wall.impact, false);
             // The wall counters, on the same footing as the roll ones below:

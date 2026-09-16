@@ -471,6 +471,8 @@
 0x0883dd24	function	Ship_ResetShield	84	shield.md
 0x088439ac	function	Ship_Damage	84	shield.md
 0x0883e64c	function	Ship_State	84	shield.md
+0x0883de30	function	Ship_RefillLapShield	85	shield.md
+0x08840640	function	Ship_PlayAbsorbFeedback	88	shield.md
 0x08844100	function	Ship_SetState	84	shield.md
 0x08896b84	function	Race_ReadSetupOptions	88	shield.md
 0x0881c638	function	Hud_UpdateEnergyBar	82	shield.md
