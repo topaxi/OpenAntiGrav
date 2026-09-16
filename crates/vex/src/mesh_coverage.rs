@@ -149,6 +149,17 @@ fn claim_tex_transform_keys(
 /// decodes and no further.
 fn claim_batch_list(seen: &mut Coverage, payload: &[u8], list: u8, terminator: u16) {
     let list_offset = u32_le(payload, if list == 0 { 4 } else { 8 }) as usize;
+    // Zero is a real, documented value - "offset to batch list B, 0 on every
+    // sky" (`docs/formats/skycube.md`) - and it means "this list does not
+    // exist", not "the list starts at the mesh header". A batch record can
+    // never legally sit before the header ends, so walking from an offset
+    // that lands inside it would read the header's own bytes as a `pass_mask`
+    // and, whenever that word's low bits happen to agree with `terminator`,
+    // fabricate "batch" claims out of header and material data instead of
+    // reporting the honest gap this instrument exists to find.
+    if list_offset < HEADER_LEN {
+        return;
+    }
     let mut at = list_offset;
     while at + BATCH_HEADER <= payload.len() {
         let pass_mask = u16_le(payload, at);

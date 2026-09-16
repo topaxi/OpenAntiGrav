@@ -8,12 +8,14 @@
 //! to make that claim checkable from outside the parser rather than to find
 //! anything new in it.
 //!
-//! **`section` is the opposite case.** `docs/formats/track.md`'s own struct
-//! comment names two fields nothing reads - `pad[6]` and the trailing name
-//! string - and [`section_coverage`] claims around both rather than folding
-//! them into one broad "the rest of the payload" span, so the sweep in
-//! `crates/vex/tests/payload_coverage_ground_truth.rs` reports them as the
-//! gaps they are instead of hiding them under a wide claim.
+//! **`section` is the opposite case, and only `pad[6]` is a real gap here.**
+//! `docs/formats/track.md`'s own struct comment names two fields nothing
+//! reads - `pad[6]` and the trailing name string. [`section_coverage`]
+//! leaves `pad[6]` unclaimed on purpose, but the name-and-its-padding tail
+//! is claimed whole rather than only up to the NUL: the payload is already
+//! the node's own aligned length, so "the rest of it" is a real span to
+//! claim, not a width to guess. `pad[6]` is what the sweep in
+//! `crates/vex/tests/payload_coverage_ground_truth.rs` reports as the gap.
 //!
 //! **Collision is closed by construction.** [`collision::from_vex`] already
 //! refuses a node whose chunk walk does not land on the payload's own
@@ -65,10 +67,11 @@ const SECTION_BOUNDS_LEN: usize = 0x20;
 
 /// Coverage of one `section` payload.
 ///
-/// Deliberately leaves two gaps a real disc always has: `pad[6]` at `+0x02`,
-/// and the run of bytes right after the PVS mask (or the bounding box, when
-/// present) that the NUL-terminated name does not reach - the alignment
-/// padding after it, which nothing names once the string ends.
+/// Deliberately leaves one gap a real disc always has: `pad[6]` at `+0x02`,
+/// never read and never initialised. Everything from the name onward is
+/// claimed as one span reaching the payload's own end, padding included -
+/// a claim about reach rather than an assumption about content, since the
+/// payload is already the node's own aligned length.
 #[must_use]
 pub fn section_coverage(payload: &[u8]) -> Coverage {
     let mut seen = Coverage::new(payload.len());

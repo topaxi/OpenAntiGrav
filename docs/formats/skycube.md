@@ -200,11 +200,13 @@ that would be needed to fix it; recorded rather than silently accepted.
 
 ### The extra block
 
-**`06_Track`'s sky is the only place on the disc a `Mesh`-shaped payload's
-material array and its geometry do not sit back to back**, and the gap is
-**416 bytes (`0x1a0`), not the `0x1a8` this page previously recorded** -
-measured directly off both of `06_Track`'s directions rather than re-read from
-the earlier note. It closes structurally:
+**`06_Track`'s sky is the only place on the disc where a `Mesh`-shaped
+payload's material array and its geometry are separated by more than
+alignment slack** (the corpus sweep's own worst other case is 12 bytes,
+well inside "a handful of bytes" padding), and the gap is **416 bytes
+(`0x1a0`), not the `0x1a8` this page previously recorded** - measured
+directly off both of `06_Track`'s directions rather than re-read from the
+earlier note. It closes structurally:
 
 ```text
 materials_end (aligned to 0x10)

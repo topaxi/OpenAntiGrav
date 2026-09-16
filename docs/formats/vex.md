@@ -679,14 +679,19 @@ next batch  = batch + header_size + payload_size
 
 A list ends on a record whose `pass_mask` does not carry that list's own bit
 (`& 1` for list A, `& 2` for list B) - the walk's own terminator check - and
-**that record occupies real space rather than being absent**: it is a fixed
-`0x40` bytes on every list-end this project's corpus sweep measured (never the
-extended `0x80` form), confirmed by coverage rising from ~98.9% to 99.84% on
-`Mesh` once `oag_vex::mesh_coverage` started claiming it as `"a batch-list
-terminator record"` instead of leaving it as an unclaimed run "between a batch
-and end of file" (or, when list A's terminator sits immediately before list
-B's first real batch, "between a batch and a batch"). Its own fields beyond
-`pass_mask` are not read by anything and are not decoded here.
+**that record occupies real space rather than being absent**: claiming a
+fixed `0x40` bytes there (never the extended `0x80` form) leaves no residual
+gap of that shape anywhere in the corpus swept, which is what took `Mesh`
+coverage from ~98.9% to 99.84% once `oag_vex::mesh_coverage` started claiming
+it as `"a batch-list terminator record"` instead of leaving it as an unclaimed
+run "between a batch and end of file" (or, when list A's terminator sits
+immediately before list B's first real batch, "between a batch and a batch").
+Its own fields beyond `pass_mask` are not read by anything and are not decoded
+here. **A list whose own offset is `0`** - `Skycube`'s list B on every sky,
+see [skycube.md](skycube.md) - **is not walked at all**: zero means the list
+does not exist, not that it starts at the mesh header, and reading it as the
+latter would misclaim header and material bytes as a batch on any mesh whose
+header word happens to satisfy the terminator test.
 
 `+0x28`, `+0x29` and `+0x2c` are written at load and are **not file data**. An
 earlier note describing `+0x2c` as a pre-compiled display list was describing a
