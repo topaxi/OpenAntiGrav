@@ -36,10 +36,17 @@
 //! below this project's naming threshold and so is
 //! written down rather than implied.
 //!
-//! # Two things here are honest placeholders, and both are load-bearing
+//! # One thing here is an honest approximation, and it is load-bearing
 //!
-//! **The sample rate.** [`oag_formats::sblk::ASSUMED_SAMPLE_RATE`] is not
-//! recovered; see its doc comment. Everything below plays at it.
+//! **The sample rate is not it any more.** Until 2026-09-16 every waveform
+//! played at a placeholder 44,100 Hz; now each plays at
+//! [`oag_formats::sblk::Sound::sample_rate`], the rate the original's own
+//! note-to-pitch arithmetic hands `sceSasSetPitch` for an unmodulated play,
+//! decoded from the descriptor's centre note and confirmed live against 190
+//! breakpoint hits. What is *not* carried is the game's own pitch modulation
+//! on top of it - the engine note rising with speed is a pitch offset the
+//! caller adds per play, not a property of the bank, and it is a separate
+//! reading (`Scream_UpdateVoicePitch`'s inputs) this module does not do yet.
 //!
 //! **Which waveform of a cue sounds.** `.COLLISIONS` binds fifteen impact
 //! samples and the opcode that chooses between them, `0x19`, is decoded on

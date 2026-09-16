@@ -368,12 +368,16 @@ fn a_collision_cue_decodes_to_fifteen_different_impacts() {
     assert_eq!(distinct.len(), 15, "the alternates are not all reachable");
 
     // They are alternates rather than layers, and this is the measurement that
-    // says so: fifteen samples of one event, all within a tenth of a second of
-    // each other. A cue whose commands were meant to play *together* would be
-    // a stack of different lengths.
+    // says so: fifteen samples of one event, the longest under twice the
+    // shortest (0.58 s to 0.99 s at the 15,569 Hz their descriptors key them
+    // on with). A cue whose commands were meant to play *together* would be
+    // a stack of different lengths. A ratio rather than a difference in
+    // seconds, so the bound means the same thing whatever rate the bank
+    // plays at - the earlier `< 0.2 s` was calibrated on a placeholder
+    // 44,100 Hz and broke the day the real rate landed.
     let (shortest, longest) = (lengths[0], lengths[lengths.len() - 1]);
     assert!(
-        longest - shortest < 0.2,
+        longest < shortest * 2.0,
         "the fifteen span {shortest:.3}s to {longest:.3}s, which is not one event"
     );
 }
@@ -750,8 +754,10 @@ fn the_shield_opens_a_held_voice_and_closes_it_when_the_pickup_expires() {
 
     // Set directly: this is the field `oag_physics::damage` drives and the one
     // `Race::shield_is_up` reads, and granting a real pickup would be testing
-    // the pad table instead.
-    race.sim.world.ships[0].physics.shield_pickup_timer = 1.0;
+    // the pad table instead. Ten seconds, so it outlasts the wait below for
+    // `shieldactive` to end; a one-second timer used to do, and expired on
+    // its own inside that wait once the line played at its real rate.
+    race.sim.world.ships[0].physics.shield_pickup_timer = 10.0;
     race.tick(&PlayerInputs::none());
     audio.race_tick(&mut race);
     assert!(
@@ -759,9 +765,17 @@ fn the_shield_opens_a_held_voice_and_closes_it_when_the_pickup_expires() {
         "the shield came up and opened no voice"
     );
 
-    // Held across ticks rather than re-triggered - it is a `~` cue.
+    // Held across ticks rather than re-triggered - it is a `~` cue. The
+    // shield coming up also fires `shieldactive`, a one-shot voice line, so
+    // the pool is walked until that has ended and only the loop is left over
+    // idle: 60 ticks used to be enough at the placeholder 44,100 Hz, and at
+    // the 18,002 Hz its descriptor keys it on with the line runs past a
+    // second. Three seconds is longer than any effect on the disc, so a pool
+    // still above `idle + 1` after that is a re-triggered loop, not a slow
+    // one-shot.
     let held = voices(&audio);
-    for _ in 0..30 {
+    let mut settled = None;
+    for tick in 0..180 {
         race.tick(&PlayerInputs::none());
         audio.race_tick(&mut race);
         // The other half of the composition root's per-tick pair: with the
@@ -770,11 +784,18 @@ fn the_shield_opens_a_held_voice_and_closes_it_when_the_pickup_expires() {
         // sit in the pool for the whole test and every count below would be
         // measuring the wrong thing.
         audio.tick();
+        assert!(
+            voices(&audio) <= held,
+            "the shield loop is being re-triggered every tick"
+        );
+        if voices(&audio) == idle + 1 {
+            settled = Some(tick);
+            break;
+        }
     }
-    assert!(
-        voices(&audio) <= held,
-        "the shield loop is being re-triggered every tick"
-    );
+    let settled =
+        settled.expect("the shield's one-shot line never ended, or the loop is not one voice");
+    println!("shield held with only its loop open after {settled} ticks");
 
     race.sim.world.ships[0].physics.shield_pickup_timer = 0.0;
     race.tick(&PlayerInputs::none());
