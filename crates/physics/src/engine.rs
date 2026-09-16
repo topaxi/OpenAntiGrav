@@ -349,6 +349,7 @@ impl EngineForce {
 /// if (throttle > 100.0)  cap = throttle * 0.01 * cap
 /// T = min(T, cap)
 /// T = T * craft+0x294 * 2.0
+/// if (craft+0x31c < 1.0) { T *= craft+0x31c; craft+0x31c = 1.0 }  // one-shot scale
 /// ```
 ///
 /// `speed` is `|dot(velocity, forward)|`, not `|velocity|`. `grounded` is the
@@ -361,10 +362,18 @@ impl EngineForce {
 /// longer inert: [`crate::slowdown::add`] arms [`ShipState::slowdown_timer`] from a
 /// weapon impact, so this early return is what a craft hit by a rocket meets.
 ///
+/// **The one-shot scale at `craft+0x31c` is implemented, as `thrust_scale`.** It
+/// is a value test and not a flag test: below `1.0` it multiplies the doubled
+/// thrust once, on both the throttle and the four-corner branch, and the
+/// original then writes `1.0` back. Its one writer is the LeachBeam's drain
+/// (`slowShipFactor`, `Ship_ApplyPendingWeaponDamage`), so the caller holds the
+/// armed value and passes it here - see [`crate::forces::Environment::thrust_scale`].
+/// The write-back is the caller's too, since this is a function of `&ShipState`.
+///
 /// **Not implemented, all of it flag-gated on the undecoded `craft+0x1c0`:** the
-/// uncapped mode (`cap = 1e10`), the [`ENGINE_PICKUP_SPEEDUP`] multiplier, turbo and its boost
-/// lift, the one-shot scale at `craft+0x31c`, the kill switch at bit `0x2000`, and
-/// the four-corner mode's auto-speed law. Each needs a flag nobody has decoded, so
+/// uncapped mode (`cap = 1e10`), the [`ENGINE_PICKUP_SPEEDUP`] multiplier, turbo's
+/// boost lift, the kill switch at bit `0x2000`, and the four-corner mode's own
+/// `(flags & 1) && !(flags & 2)` gate. Each needs a flag nobody has decoded, so
 /// implementing them would mean inventing their triggers.
 #[must_use]
 pub fn engine(
@@ -373,6 +382,7 @@ pub fn engine(
     grounded: f32,
     forward_speed: f32,
     auto_speed: Option<f32>,
+    thrust_scale: f32,
 ) -> EngineForce {
     // The prologue's early return, at `0x0884c634`. A stunned or weapon-slowed
     // craft gets no thrust and no lift at all - the original writes nothing to
@@ -403,7 +413,10 @@ pub fn engine(
     if let Some(target) = auto_speed {
         let thrust = if grounded > 0.0 { target } else { 0.0 };
         return EngineForce {
-            thrust: thrust * ENGINE_OUTPUT_SCALE * ENGINE_OUTPUT_DOUBLE,
+            thrust: one_shot_scale(
+                thrust * ENGINE_OUTPUT_SCALE * ENGINE_OUTPUT_DOUBLE,
+                thrust_scale,
+            ),
             lift: 0.0,
         };
     }
@@ -433,9 +446,19 @@ pub fn engine(
         thrust += handling.engine.turbo;
     }
 
-    thrust = thrust * ENGINE_OUTPUT_SCALE * ENGINE_OUTPUT_DOUBLE;
+    thrust = one_shot_scale(
+        thrust * ENGINE_OUTPUT_SCALE * ENGINE_OUTPUT_DOUBLE,
+        thrust_scale,
+    );
 
     EngineForce { thrust, lift: 0.0 }
+}
+
+/// `if (craft+0x31c < 1.0) T *= craft+0x31c`, after the doubling and on both
+/// branches - the last thing `Ship_UpdateEngine` does to `T` before the kill
+/// switch. The lift is not scaled, which is why this takes the thrust alone.
+fn one_shot_scale(thrust: f32, scale: f32) -> f32 {
+    if scale < 1.0 { thrust * scale } else { thrust }
 }
 
 /// Counts a fired Turbo pickup down.
@@ -777,9 +800,9 @@ mod auto_speed_tests {
 
         // Throttle at zero, and yet there is thrust: that is the point of the
         // mode. A Zone craft accelerates with nothing held down.
-        let idle = engine(&state, &handling, 1.0, 0.0, Some(50.0)).thrust;
+        let idle = engine(&state, &handling, 1.0, 0.0, Some(50.0), 1.0).thrust;
         state.thrust = 100.0;
-        let full = engine(&state, &handling, 1.0, 0.0, Some(50.0)).thrust;
+        let full = engine(&state, &handling, 1.0, 0.0, Some(50.0), 1.0).thrust;
         assert_eq!(idle, full, "the throttle changed the auto-speed output");
         assert_eq!(idle, 50.0 * ENGINE_OUTPUT_SCALE * ENGINE_OUTPUT_DOUBLE);
     }
@@ -790,7 +813,7 @@ mod auto_speed_tests {
         // `Handling::ZERO` makes that clamp zero. The four-corner branch has no
         // clamp at all, so a large target survives it.
         let state = grounded_ship();
-        let force = engine(&state, &Handling::ZERO, 1.0, 0.0, Some(10_000.0)).thrust;
+        let force = engine(&state, &Handling::ZERO, 1.0, 0.0, Some(10_000.0), 1.0).thrust;
         assert!(force > 0.0, "the cap bound a branch that has no cap");
     }
 
@@ -798,7 +821,7 @@ mod auto_speed_tests {
     fn an_airborne_zone_craft_gets_nothing() {
         // The gate: the original writes `0.0` when the contact bit is clear.
         let state = grounded_ship();
-        let force = engine(&state, &Handling::ZERO, 0.0, 0.0, Some(50.0)).thrust;
+        let force = engine(&state, &Handling::ZERO, 0.0, 0.0, Some(50.0), 1.0).thrust;
         assert_eq!(force, 0.0);
     }
 
@@ -808,13 +831,13 @@ mod auto_speed_tests {
         state.thrust = 100.0;
         let handling = Handling::ZERO;
         assert_eq!(
-            engine(&state, &handling, 1.0, 40.0, None),
-            engine(&state, &handling, 1.0, 40.0, None)
+            engine(&state, &handling, 1.0, 40.0, None, 1.0),
+            engine(&state, &handling, 1.0, 40.0, None, 1.0)
         );
         // `Handling::ZERO` has no engine amount, so the ordinary path is zero and
         // the auto-speed path is not. That difference is the whole branch.
-        assert_eq!(engine(&state, &handling, 1.0, 40.0, None).thrust, 0.0);
-        assert!(engine(&state, &handling, 1.0, 40.0, Some(50.0)).thrust > 0.0);
+        assert_eq!(engine(&state, &handling, 1.0, 40.0, None, 1.0).thrust, 0.0);
+        assert!(engine(&state, &handling, 1.0, 40.0, Some(50.0), 1.0).thrust > 0.0);
     }
 }
 

@@ -55,14 +55,16 @@
 //!   drives when a pulse fires - geometry this crate does not have and must not
 //!   have. **Chosen, not measured**, and it is the one place this build
 //!   knowingly transfers slightly more than the original per second.
-//! - **[`LeachBeamStats::slow_ship_factor`] is parsed and not yet spent.** It is
-//!   fully recovered - `LeachBeam_Drain` copies it onto the victim and
+//! - **[`LeachBeamStats::slow_ship_factor`] is spent as of 2026-09-16**, the way
+//!   the original spends it: `LeachBeam_Drain` copies it onto the victim and
 //!   `Ship_ApplyPendingWeaponDamage` writes it into the victim's handling record
-//!   at `+0x31c`, the one-shot thrust scale `oag_physics::engine` documents and
-//!   does not implement - but wiring it needs a new field on
-//!   `oag_physics::ShipState`, which is a separate change with its own hash
-//!   movement. Recorded here rather than approximated with a slowdown timer,
-//!   which is a *different* mechanic this weapon deliberately does not use.
+//!   at `+0x31c`, the one-shot thrust scale `Ship_UpdateEngine` reads once. Here
+//!   [`Beam::drain`] arms [`Ship::pending_thrust_scale`] on every tick it lands
+//!   an unabsorbed drain on a racing victim, and the composition root hands it
+//!   to `oag_physics::Environment::thrust_scale` at the next step. **Not a
+//!   slowdown timer**, which is a different mechanic this weapon deliberately
+//!   does not use - see `oag_physics::slowdown`. One tick of latency at each end
+//!   of the link is the recovered ordering (the drain runs after the step).
 //! - **Per-tick, not per-second.** Neither rate function nor `LeachBeam_Drain`
 //!   scales by `dt`, so the original's transfer is frame-rate dependent and this
 //!   build's is tied to its own fixed 60 Hz (see
@@ -150,6 +152,9 @@ pub struct Beam {
     pub active_time: f32,
     /// [`LeachBeamStats::energy_multiplier`], copied at launch.
     pub energy_multiplier: f32,
+    /// [`LeachBeamStats::slow_ship_factor`], copied at launch: the one-shot
+    /// thrust scale [`Self::drain`] arms on the victim each tick it lands.
+    pub slow_ship_factor: f32,
 }
 
 /// What one tick of a beam did, for the composition root to draw and play.
@@ -191,6 +196,7 @@ impl Beam {
             range: stats.range,
             active_time: stats.active_time,
             energy_multiplier: stats.energy_multiplier,
+            slow_ship_factor: stats.slow_ship_factor,
         }
     }
 
@@ -305,6 +311,16 @@ impl Beam {
         let target = &mut ships[target_index];
         let dimensions = target.handling.dimensions;
         let hit = oag_physics::damage::apply_weapon(&mut target.physics, &dimensions, taken, rules);
+        // `Ship_ApplyPendingWeaponDamage`'s `kind == 7` arm: inside the
+        // no-shield branch, behind `pending > 0` and the racing state, the
+        // victim's `craft+0x31c` takes `slowShipFactor`. The next step's engine
+        // consumes it - see `Ship::pending_thrust_scale`.
+        if taken > 0.0
+            && !hit.absorbed
+            && target.physics.craft_state == oag_physics::damage::CraftState::Racing
+        {
+            target.pending_thrust_scale = self.slow_ship_factor;
+        }
 
         let given = take_once(&mut self.first_repair, self.repair, self.energy_multiplier);
         let owner = &mut ships[owner_index];

@@ -456,6 +456,7 @@ pub fn replay<R: Raycaster + ?Sized>(
         // And no weapon either, so nothing ever credits this. Named for the
         // same reason the pickup above is.
         pending_slowdown: 0.0,
+        pending_thrust_scale: 1.0,
         // Nor a Disruptor bolt to land one, for the same reason again.
         disruption: oag_gameplay::disruption::Disruption::default(),
         active: true,
@@ -664,6 +665,7 @@ where
         // And no weapon either, so nothing ever credits this. Named for the
         // same reason the pickup above is.
         pending_slowdown: 0.0,
+        pending_thrust_scale: 1.0,
         // Nor a Disruptor bolt to land one, for the same reason again.
         disruption: oag_gameplay::disruption::Disruption::default(),
         active: true,

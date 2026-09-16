@@ -384,6 +384,23 @@ pub struct Environment {
     /// default is both on, which is the original's default for every game mode
     /// except three. See [`crate::damage`].
     pub damage_rules: crate::damage::DamageRules,
+    /// The one-shot thrust scale a LeachBeam drain armed, `craft+0x31c`.
+    ///
+    /// `Ship_UpdateEngine` reads it once and writes `1.0` back - see
+    /// [`crate::engine::engine`] - and its only writer is
+    /// `Ship_ApplyPendingWeaponDamage` (`0x0883f13c`), which copies the beam's
+    /// `slowShipFactor` onto the victim on every tick the beam drains it. A
+    /// value at or above `1.0` is the neutral one and is what every other tick
+    /// passes.
+    ///
+    /// An input rather than a [`ShipState`] field, for the reason
+    /// [`Self::pad_hit`] is: it is re-armed every tick by a weapon this crate
+    /// does not know exists, and it is consumed the tick it is read. The
+    /// composition root holds the armed value between the drain and the next
+    /// step, the way `oag_gameplay::world::Ship::pending_slowdown` holds the
+    /// slowdown credit. See
+    /// `docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md`.
+    pub thrust_scale: f32,
 }
 
 impl Default for Environment {
@@ -396,6 +413,7 @@ impl Default for Environment {
             auto_speed: None,
             pad_hit: None,
             damage_rules: crate::damage::DamageRules::default(),
+            thrust_scale: 1.0,
         }
     }
 }
@@ -578,6 +596,7 @@ pub fn evaluate<R: Raycaster + ?Sized>(
         control_grounded,
         cached_speed,
         env.auto_speed,
+        env.thrust_scale,
     );
     acc.local_force += engine_force.as_local_force();
 

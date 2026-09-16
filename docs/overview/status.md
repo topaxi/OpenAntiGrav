@@ -64,20 +64,12 @@ section yet.
 | Plasma | ✅ verified - [plasma_ground_truth.rs](../../crates/game/tests/plasma_ground_truth.rs); direct-hit blast and the launch-speed ramp both built 2026-09-16, see [pickups.md](../gameplay/pickups.md) rows on `Plasma_HitCraft` and `Plasma_SpeedForClass` | 🟩 built - Pure hardcodes the same 1s charge, see [weapons.md](../ghidra/functions/psp-pure-usa/weapons.md) | 📖 read - `PlasmaManager_Construct`; blast mechanics read in [plasma.md](../ghidra/functions/ps3-hdfury-eu/plasma.md) | 📖 read - [plasma.md](../ghidra/functions/ps4-omega-eu/plasma.md) |
 | Bomb | ✅ verified - shares [mine.rs](../../crates/gameplay/src/projectile/mine.rs), tested in [mine_ground_truth.rs](../../crates/game/tests/mine_ground_truth.rs); gap: `damageradius` unread, no draw | 🟩 built - fuse-less dialect, same code | 📖 read - `BombManager_Construct` | 📖 read - same |
 | Mine | ✅ verified - [mine_ground_truth.rs](../../crates/game/tests/mine_ground_truth.rs); gap: no draw ([pickups.md](../gameplay/pickups.md)) | 🟩 built - same code | 📖 read - `MineManager_Construct` | 📖 read - same |
-| LeachBeam | 🟨 partial - drain/repair and target-lock built, `slowShipFactor` throttle not wired ([pickups.md](../gameplay/pickups.md), dated passage 2026-09-08) | ➖ n/a | 📖 read - `LeachBeamManager_Construct` | 📖 read - shares one composite function with Mine, not yet decompiled ([weapons.md](../ghidra/functions/ps4-omega-eu/weapons.md)) |
+| LeachBeam | 🟩 built - drain/repair, target-lock and the `slowShipFactor` throttle ([pickups.md](../gameplay/pickups.md), dated passages 2026-09-08 and 2026-09-16); no disc-backed ground-truth test yet | ➖ n/a | 📖 read - `LeachBeamManager_Construct` | 📖 read - shares one composite function with Mine, not yet decompiled ([weapons.md](../ghidra/functions/ps4-omega-eu/weapons.md)) |
 | Repulser | 📖 read - mechanism (a field on the firing craft) identified, no craft-state field to attach it to; deferred Eliminator-only ([pickups.md](../gameplay/pickups.md#shuriken-and-repulser-are-gated-by-mode-not-by-the-pool)) | ➖ n/a | 📖 read - `Repulser_Construct` | 📖 read - not named this pass |
 | Shuriken | ✅ verified - [shuriken_ground_truth.rs](../../crates/game/tests/shuriken_ground_truth.rs), Eliminator-only per authored odds | ➖ n/a | ⬜ `?` | ⬜ `?` |
 | Disruptor | ➖ n/a | 🟩 built - [disruptor.rs](../../crates/gameplay/src/projectile/disruptor.rs), table decoded in [pure_weapons_ground_truth.rs](../../crates/tables/tests/pure_weapons_ground_truth.rs) | ➖ n/a | ➖ n/a |
 | EMP | ➖ n/a | ➖ n/a | 📖 read - named on Omega, not yet located on HD's own binary | 📖 read - `EMPManager_Construct` ([weapons.md](../ghidra/functions/ps4-omega-eu/weapons.md)) |
 | Light Barrier | ➖ n/a | ➖ n/a | ⬜ `?` - not located on HD's own binary | 📖 read - `LightBarrierManager_Construct` ([weapons.md](../ghidra/functions/ps4-omega-eu/weapons.md)) |
-
-**Known doc inconsistency, not resolved here**: `docs/gameplay/pickups.md`'s
-general "What is not built" section (below the `## Absorbing` heading) still
-says the slowdown mechanic and LeachBeam's rate functions are unread/unbuilt;
-that predates the 2026-09-08 LeachBeam build and the 2026-09-16 Plasma
-direct-hit slowdown. The dated passages cited above are newer and take
-precedence. Logged in the full report, not fixed here - out of this page's
-scope.
 
 ### Pulse (PSP) weapon pieces
 
@@ -97,7 +89,7 @@ here plays it yet, per CLAUDE.md's "draw nothing and say so" rule.
 | Plasma | 🟩 built - 1s wind-up, `Plasma_Init`/`Plasmas_Update` | ✅ verified - shares Rocket's floor-follower, own launch-speed ramp to the class speed over 1s, read fresh at release ([plasma.md](../ghidra/functions/psp-pulse-usa/plasma.md#plasma_speedforclass-0x0885c5a4-and-the-launch-ramp)) | ✅ verified - three distinct endings (craft/wall/timeout), see [pickups.md](../gameplay/pickups.md) | 🟩 built - charge glow grows over the wind-up | 🟩 built - `PLASMA`/`~PLASMATVL`/`PLASMAHITWALL`/`PLASMAHITSHIP`, see [cue.rs](../../crates/game/src/audio/sfx/cue.rs) | 🟩 built - `Race::fire_opponent_plasma` ([opponent_weapons.rs](../../crates/game/src/race/field/opponent_weapons.rs)), same `Driver::wants_to_fire` gate as the Rocket - chosen, not measured |
 | Bomb | 🟩 built - shares Mine's rear anchor | ✅ verified - [mine_ground_truth.rs](../../crates/game/tests/mine_ground_truth.rs) | 🟨 partial - `damageradius` unread, no consumer | ➖ n/a - `Pulse_Bomb.vex` located, nothing draws it | ⬜ `?` | ⬜ `?` |
 | Mine | 🟩 built - laid one per 0.1s | ✅ verified - [mine.md](../ghidra/functions/psp-pulse-usa/mine.md) | 🟩 built | ➖ n/a - `Pulse_Mine.vex` located, nothing draws it | ⬜ `?` | ⬜ `?` |
-| LeachBeam | 🟩 built - link to Missile's own lock; its reticle is 🟨 partial, see the front-end table | 🟩 built - whole-race pool cursor | 🟨 partial - drain/repair spent, `slowShipFactor` not wired | ⬜ `?` | ⬜ `?` | ⬜ `?` |
+| LeachBeam | 🟩 built - link to Missile's own lock; its reticle is 🟨 partial, see the front-end table | 🟩 built - whole-race pool cursor | 🟩 built - drain/repair spent, `slowShipFactor` throttles the victim through `Environment::thrust_scale` | ⬜ `?` | ⬜ `?` | ⬜ `?` |
 | Repulser | 📖 read only | ➖ n/a | ➖ n/a | ➖ n/a | ➖ n/a | ➖ n/a |
 | Shuriken | 🟩 built - ±20 degree throw | ✅ verified - shares Rocket/Plasma's floor follower, bounces off walls | 🟩 built - authored `fuse` | ⬜ `?` | ⬜ `?` | ⬜ `?` |
 
@@ -164,7 +156,7 @@ only.
 | Barrel roll | ✅ verified | [ai_roll_ground_truth.rs](../../crates/game/tests/ai_roll_ground_truth.rs) |
 | Wall/collision response | ✅ verified | [wall_collision_ground_truth.rs](../../crates/game/tests/wall_collision_ground_truth.rs), `crates/physics/src/wall.rs` |
 | Respawn/stall rescue | ✅ verified | [stall_rescue_ground_truth.rs](../../crates/game/tests/stall_rescue_ground_truth.rs), [off_track_rescue_ground_truth.rs](../../crates/game/tests/off_track_rescue_ground_truth.rs) |
-| Weapon slowdown | 🟨 partial - Plasma's direct-hit case only, other weapons' `Ship_AddSlowdown` not yet wired | [pickups.md](../gameplay/pickups.md) |
+| Weapon slowdown | 🟩 built - every blast, the Cannon and the Quake credit `slowdown_time` and `oag_gameplay::slowdown::drain` spends it through `Ship_AddSlowdown`'s port; the LeachBeam's `slowShipFactor` throttle is the separate one-shot mechanic | [engine.md](../ghidra/functions/psp-pulse-usa/engine.md), `crates/physics/src/slowdown.rs` |
 | AI driving line | 🟩 built | [ai.md](../gameplay/ai.md) |
 | AI weapon use | 📖 read | [weapon-ai.md](../ghidra/functions/psp-pulse-usa/weapon-ai.md) |
 

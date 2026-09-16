@@ -54,7 +54,7 @@ fn full_throttle_pushes_the_ship_along_its_forward_axis() {
     let mut state = ship_moving_forward(40.0);
     state.thrust = 100.0;
 
-    let force = engine(&state, &handling, 1.0, 40.0, None).as_local_force();
+    let force = engine(&state, &handling, 1.0, 40.0, None, 1.0).as_local_force();
     // Body forward is -Z.
     assert!(force.z < 0.0, "force was {force:?}");
     assert_eq!(force.x, 0.0);
@@ -70,7 +70,7 @@ fn a_stunned_ship_produces_no_thrust_at_full_throttle() {
     let mut state = ship_moving_forward(24.0);
     state.thrust = 100.0;
 
-    let running = engine(&state, &handling, 1.0, 24.0, None);
+    let running = engine(&state, &handling, 1.0, 24.0, None, 1.0);
     assert!(
         running.thrust > 0.0,
         "the un-stunned baseline must be non-zero"
@@ -78,7 +78,7 @@ fn a_stunned_ship_produces_no_thrust_at_full_throttle() {
 
     state.stun_timer = 0.5;
     assert_eq!(
-        engine(&state, &handling, 1.0, 24.0, None),
+        engine(&state, &handling, 1.0, 24.0, None, 1.0),
         EngineForce::default()
     );
 }
@@ -92,7 +92,7 @@ fn a_stun_timer_at_exactly_zero_does_not_gate() {
     state.thrust = 100.0;
     state.stun_timer = 0.0;
 
-    assert!(engine(&state, &handling, 1.0, 24.0, None).thrust > 0.0);
+    assert!(engine(&state, &handling, 1.0, 24.0, None, 1.0).thrust > 0.0);
 }
 
 /// The same early return has a second arm, on the weapon slowdown timer.
@@ -104,7 +104,7 @@ fn a_weapon_slowed_ship_produces_no_thrust_either() {
     state.slowdown_timer = 1.0;
 
     assert_eq!(
-        engine(&state, &handling, 1.0, 24.0, None),
+        engine(&state, &handling, 1.0, 24.0, None, 1.0),
         EngineForce::default()
     );
 }
@@ -113,7 +113,7 @@ fn a_weapon_slowed_ship_produces_no_thrust_either() {
 fn no_throttle_is_no_thrust() {
     let handling = test_handling();
     let state = ship_moving_forward(40.0);
-    assert_eq!(engine(&state, &handling, 1.0, 40.0, None).thrust, 0.0);
+    assert_eq!(engine(&state, &handling, 1.0, 40.0, None, 1.0).thrust, 0.0);
 }
 
 /// An airborne ship keeps a fifth of its thrust, and a half-grounded one lands
@@ -131,9 +131,9 @@ fn thrust_is_reduced_but_not_removed_with_no_contact() {
     let mut state = ship_moving_forward(0.0);
     state.thrust = 100.0;
 
-    let grounded = engine(&state, &handling, 1.0, 0.0, None).thrust;
-    let airborne = engine(&state, &handling, 0.0, 0.0, None).thrust;
-    let half = engine(&state, &handling, 0.5, 0.0, None).thrust;
+    let grounded = engine(&state, &handling, 1.0, 0.0, None, 1.0).thrust;
+    let airborne = engine(&state, &handling, 0.0, 0.0, None, 1.0).thrust;
+    let half = engine(&state, &handling, 0.5, 0.0, None, 1.0).thrust;
 
     assert_eq!(airborne, grounded * ENGINE_AIR_THRUST);
     assert!(half > airborne && half < grounded);
@@ -147,8 +147,8 @@ fn the_thrust_cap_grows_with_forward_speed() {
     let mut state = ship_moving_forward(0.0);
     state.thrust = 100.0;
 
-    let stationary = engine(&state, &handling, 1.0, 0.0, None).thrust;
-    let fast = engine(&state, &handling, 1.0, 200.0, None).thrust;
+    let stationary = engine(&state, &handling, 1.0, 0.0, None, 1.0).thrust;
+    let fast = engine(&state, &handling, 1.0, 200.0, None, 1.0).thrust;
     assert!(fast > stationary, "{fast} was not above {stationary}");
 }
 
@@ -161,8 +161,8 @@ fn the_thrust_cap_uses_the_magnitude_of_the_forward_speed() {
     state.thrust = 100.0;
 
     assert_eq!(
-        engine(&state, &handling, 1.0, 60.0, None).thrust,
-        engine(&state, &handling, 1.0, -60.0, None).thrust
+        engine(&state, &handling, 1.0, 60.0, None, 1.0).thrust,
+        engine(&state, &handling, 1.0, -60.0, None, 1.0).thrust
     );
 }
 
@@ -170,7 +170,10 @@ fn the_thrust_cap_uses_the_magnitude_of_the_forward_speed() {
 fn a_zero_parameter_engine_produces_nothing() {
     let mut state = ship_moving_forward(40.0);
     state.thrust = 100.0;
-    assert_eq!(engine(&state, &Handling::ZERO, 1.0, 40.0, None).thrust, 0.0);
+    assert_eq!(
+        engine(&state, &Handling::ZERO, 1.0, 40.0, None, 1.0).thrust,
+        0.0
+    );
 }
 
 #[test]
@@ -372,4 +375,42 @@ fn pitch_damping_does_not_affect_the_pitch_input() {
     let before = pitch(&controls, &handling, true);
     handling.pitch.pitch_damping *= 10.0;
     assert_eq!(pitch(&controls, &handling, true), before);
+}
+
+/// `if (craft+0x31c < 1.0) T *= craft+0x31c`: a beam's `slowShipFactor` cuts
+/// the doubled thrust and nothing else, and the neutral value is a no-op.
+#[test]
+fn a_thrust_scale_below_one_cuts_the_thrust_and_leaves_the_lift_alone() {
+    let state = ShipState {
+        thrust: 100.0,
+        turbo_timer: 1.0,
+        ..ShipState::default()
+    };
+    let handling = Handling {
+        engine: crate::params::Engine {
+            amount: 1.0,
+            accelcap: 100.0,
+            turbo: 10.0,
+            ..crate::params::Engine::default()
+        },
+        ..Handling::ZERO
+    };
+    let full = engine(&state, &handling, 1.0, 40.0, None, 1.0);
+    let throttled = engine(&state, &handling, 1.0, 40.0, None, 0.8);
+    assert!(full.thrust > 0.0);
+    assert_eq!(
+        throttled.thrust,
+        full.thrust * 0.8,
+        "the scale lands after the doubling"
+    );
+    assert_eq!(throttled.lift, full.lift, "the lift is not scaled");
+    // At or above one it is the neutral value, not a boost.
+    assert_eq!(engine(&state, &handling, 1.0, 40.0, None, 1.5), full);
+    // And the four-corner branch is scaled too: the original applies it after
+    // the `if`/`else`, not inside the throttle arm.
+    let zone = engine(&state, &handling, 1.0, 40.0, Some(50.0), 0.5);
+    assert_eq!(
+        zone.thrust,
+        engine(&state, &handling, 1.0, 40.0, Some(50.0), 1.0).thrust * 0.5
+    );
 }

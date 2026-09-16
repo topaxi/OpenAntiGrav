@@ -1520,7 +1520,14 @@ is design.** `craft+0x31c` is not a slowdown at all: `engine.md`'s
 the block above on every tick the beam drains. A craft under a beam is throttled
 to 80 % (Race) or 50 % (Eliminator) of its thrust for exactly as long as the link
 holds, rather than charged a fixed number of seconds on impact the way every
-other weapon is.
+other weapon is. **Ported 2026-09-16**: `oag_gameplay::projectile::leach_beam::Beam::drain`
+arms `Ship::pending_thrust_scale` under the same three gates (positive amount,
+racing, no Shield pickup), the composition root hands it to
+`oag_physics::Environment::thrust_scale` at the next step, and
+`oag_physics::engine::engine` applies it after the doubling on both branches -
+`crates/game/src/race/tests/weapons.rs`,
+`a_leach_beams_victim_is_throttled_by_the_authored_factor`, races two grids
+and measures the difference.
 
 #### The lifetime, and the beam's own geometry: `LeachBeam_Advance` (`0x08873fa0`)
 
@@ -1650,9 +1657,9 @@ reused whole" above.
   (`Ship_ApplyPendingWeaponDamage` and `Ship_ApplyPendingWeaponRepair`); the
   lifetime is the authored `active_time`; and the whole nine-attribute
   `<Stats>` block is decoded as `oag_tables::weapons::LeachBeamStats`. The one
-  half deliberately **not** wired is `slowShipFactor`, which needs the one-shot
-  thrust scale at `craft+0x31c` that `oag_physics::engine` documents and does
-  not implement.
+  half that waited - `slowShipFactor`, the one-shot thrust scale at
+  `craft+0x31c` - is wired since 2026-09-16; see "`slowShipFactor` is why this
+  block authors no `slowdown_time`" above for the port.
 
 ## History
 

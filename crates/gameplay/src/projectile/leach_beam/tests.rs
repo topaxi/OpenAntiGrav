@@ -223,3 +223,34 @@ fn a_shielded_target_breaks_the_link() {
     assert!(report.disconnected);
     assert!(!report.drained);
 }
+
+/// `Ship_ApplyPendingWeaponDamage`'s `kind == 7` arm: every draining tick
+/// arms the victim's one-shot thrust scale with the authored `slowShipFactor`,
+/// and the shooter's own throttle is untouched.
+#[test]
+fn every_draining_tick_arms_the_victims_thrust_scale_and_not_the_shooters() {
+    let mut ships = field(50.0);
+    let mut beam = Beam::locked(0, 1, &stats());
+
+    for _ in 0..3 {
+        // The composition root consumes it between ticks; model that so the
+        // assertion is "re-armed", not "still armed".
+        ships[1].pending_thrust_scale = 1.0;
+        let report = beam.advance(&mut ships, 2, rules(), DT);
+        assert!(report.drained);
+        assert_eq!(ships[1].pending_thrust_scale, 0.8);
+        assert_eq!(ships[0].pending_thrust_scale, 1.0);
+    }
+}
+
+/// The arm sits inside the racing gate: a victim already blowing up takes no
+/// damage from `Ship_Damage` and no throttle either.
+#[test]
+fn a_victim_that_is_not_racing_is_not_throttled() {
+    let mut ships = field(50.0);
+    ships[1].physics.craft_state = oag_physics::damage::CraftState::Destroyed;
+    let mut beam = Beam::locked(0, 1, &stats());
+
+    beam.advance(&mut ships, 2, rules(), DT);
+    assert_eq!(ships[1].pending_thrust_scale, 1.0);
+}

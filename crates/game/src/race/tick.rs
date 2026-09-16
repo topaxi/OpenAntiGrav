@@ -198,11 +198,16 @@ impl Race {
         // asks the whole world and the borrow checker will not have both.
         let env_damage_rules = oag_gameplay::damage_rules(self.sim.world.mode());
         let ship = &mut self.sim.world.ships[player];
+        // `Ship_UpdateEngine`'s read-and-reset of `craft+0x31c`: the beam's
+        // throttle armed last tick is consumed by this step and nothing after
+        // it. See `Ship::pending_thrust_scale`.
+        let thrust_scale = std::mem::replace(&mut ship.pending_thrust_scale, 1.0);
         let env = Environment {
             track_sample,
             track_sample_next,
             auto_speed,
             pad_hit,
+            thrust_scale,
             class_gravity_scale: self.sim.class_gravity_scale,
             // The mode's own `Weapons`/`Damage` defaults, which decide both what
             // a wall costs the energy pool and whether it recovers - a time trial

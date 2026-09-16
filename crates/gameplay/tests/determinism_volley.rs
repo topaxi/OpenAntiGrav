@@ -110,6 +110,11 @@ fn run_volley(ticks: u32) -> (u64, u64) {
 ///   deterministic `oag_core::math::quat_from_axis_angle` and not glam's
 ///   platform `sin_cos` - pinning the hole would have made the hole the
 ///   reference.
+/// - **Moved 2026-09-16 (second time today)**, the `pending_thrust_scale`
+///   addition `REFERENCE`'s own history records, inherited through the same
+///   `hash_world` call and isolated there for both scenarios at once. Replaces
+///   `0xa901_3ebe_47aa_6426` / `0xfb1e_cac3_3b77_b824` at 60 ticks and
+///   `0xae8a_645f_7a5b_05af` / `0xfb29_615f_cef3_e900` at 600.
 /// - **Moved 2026-08-19**, the same `pending_impulse` addition `REFERENCE`'s
 ///   own history records, inherited through the same `hash_world` call and
 ///   not re-isolated here for the same reason. Replaces
@@ -231,8 +236,8 @@ fn run_volley(ticks: u32) -> (u64, u64) {
 ///   `0xc8f5_f44f_4c4d_c618`; isolated by that arithmetic rather than by a
 ///   revert.
 const REFERENCE_VOLLEY: &[(u32, u64, u64)] = &[
-    (60, 0xa901_3ebe_47aa_6426, 0xfb1e_cac3_3b77_b824),
-    (600, 0xae8a_645f_7a5b_05af, 0xfb29_615f_cef3_e900),
+    (60, 0xccab_866c_78e1_d1d6, 0x668e_a6e7_f71d_d3e4),
+    (600, 0x5b48_d436_7dbc_09e7, 0x9c20_7c28_2863_b750),
 ];
 
 #[test]

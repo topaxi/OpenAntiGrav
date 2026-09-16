@@ -923,3 +923,74 @@ fn a_second_leach_beam_press_while_one_is_up_keeps_the_pickup() {
         "a press into somebody else's live beam must keep the pickup"
     );
 }
+
+/// A beam's victim runs on `slowShipFactor` of its thrust, through the whole
+/// tick: the drain arms `Ship::pending_thrust_scale`, and the next step's
+/// `Environment::thrust_scale` spends it. Two identical grids, one with a beam
+/// locked onto slot 1, and the beamed craft is the slower of the two.
+#[test]
+fn a_leach_beams_victim_is_throttled_by_the_authored_factor() {
+    let table = one_leach_beam_table();
+    // The fixture's `damage="42"` empties a 100-point pool in three ticks and
+    // its half-second `active_time` is shorter than the run below; the beam is
+    // built directly, so only the factor is taken from the table.
+    let stats = oag_tables::weapons::LeachBeamStats {
+        damage: 0.1,
+        active_time: 3.0,
+        ..table.leach_beam().expect("the fixture authors a LeachBeam")
+    };
+    let build = || {
+        let mut race = race_with_a_grid();
+        race.sim.weapons = Some(table.clone());
+        // The grid fixture's craft have no engine; give the victim one so
+        // there is a thrust to take a fifth of.
+        let engine = &mut race.sim.world.ships[1].handling.engine;
+        engine.amount = 20.0;
+        engine.accelcap = 1000.0;
+        while RaceState::thrust_gated(race.sim.world.tick) {
+            race.tick(&PlayerInputs::none());
+        }
+        race
+    };
+    let mut control = build();
+    let mut beamed = build();
+    beamed.sim.world.leach_beam = Some(oag_gameplay::projectile::leach_beam::Beam::locked(
+        0, 1, &stats,
+    ));
+
+    beamed.tick(&PlayerInputs::none());
+    assert_eq!(
+        beamed.sim.world.ships[1].pending_thrust_scale, 0.44,
+        "the first draining tick must arm the victim's one-shot scale"
+    );
+    assert_eq!(beamed.sim.world.ships[0].pending_thrust_scale, 1.0);
+
+    control.tick(&PlayerInputs::none());
+    for _ in 0..60 {
+        control.tick(&PlayerInputs::none());
+        beamed.tick(&PlayerInputs::none());
+    }
+    assert!(
+        beamed
+            .sim
+            .world
+            .leach_beam
+            .is_some_and(|beam| beam.connected()),
+        "the link broke before the throttle could be measured"
+    );
+    let speed = |race: &Race| {
+        let body = &race.sim.world.ships[1].physics.body;
+        body.linear_velocity.dot(body.forward())
+    };
+    assert!(
+        speed(&control) > 1.0,
+        "the control craft never got going ({})",
+        speed(&control)
+    );
+    assert!(
+        speed(&beamed) < speed(&control) * 0.9,
+        "the beamed craft ran at {} against {} unbeamed",
+        speed(&beamed),
+        speed(&control)
+    );
+}

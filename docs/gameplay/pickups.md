@@ -550,9 +550,14 @@ weapons the *pool* would hand out and the authored *odds* never do.
   `oag_gameplay::projectile::leach_beam` holds the single link a race ever
   has - a whole-race pool cursor, the strictest gate any weapon here has -
   and `oag_tables::weapons::LeachBeamStats` now decodes all nine attributes.
-  **One half is deliberately not wired**: `slowShipFactor` lands on
-  `craft+0x31c`, the one-shot thrust scale `oag_physics::engine` documents and
-  does not implement, so a craft under a beam is not yet throttled. See
+  **And the throttle is wired as of 2026-09-16**: `slowShipFactor` lands on
+  `craft+0x31c`, the one-shot thrust scale `Ship_UpdateEngine` reads once and
+  resets, and here `Beam::drain` arms `Ship::pending_thrust_scale` on every
+  tick it lands on a racing, unshielded victim, which the next step spends
+  through `oag_physics::Environment::thrust_scale` - 80 % of thrust in a Race,
+  50 % in Eliminator, for exactly as long as the link holds. One tick of
+  latency at each end is the recovered ordering (the drain runs after the
+  step). See
   [cannon-quake-leachbeam.md](../ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md).
   The **Repulser** stays the one true "field the
   craft *is in* rather than a projectile" - its handler copies four of its

@@ -633,10 +633,13 @@ Three consequences, and the first is the interesting one:
 
 **Deliberately not implemented, and why:**
 
-- **Everything flag-gated on the undecoded `craft+0x1c0`**: turbo and its boost lift, the
-  uncapped-thrust mode, the `craft+0x2a0` and `craft+0x31c` engine multipliers, the engine
-  kill switch, and the steering bias at `craft+0x2e4`. Implementing them means inventing
-  their triggers.
+- **Everything flag-gated on the undecoded `craft+0x1c0`**: turbo's boost lift, the
+  uncapped-thrust mode, the `craft+0x2a0` engine multiplier, the engine kill switch, and
+  the steering bias at `craft+0x2e4`. Implementing them means inventing their triggers.
+  The `craft+0x31c` one-shot scale used to be in this list and is not flag-gated at all:
+  it is the LeachBeam's `slowShipFactor`, armed by `Ship_ApplyPendingWeaponDamage` and
+  spent by `oag_physics::engine` through `Environment::thrust_scale` since 2026-09-16
+  (see [cannon-quake-leachbeam.md](../ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md)).
 - **The `craft+0x2a4` mode enum**, which selects a `-0.9` drag coefficient, a `-5.0` roll
   damping and a disabled `rebound` in mode 0, and skips the control block entirely in 4,
   5, 6 and 8. Naming it is a guess at confidence 40, so the racing values are used.

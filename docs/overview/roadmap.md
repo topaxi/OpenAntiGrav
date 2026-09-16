@@ -649,12 +649,21 @@ seen from the authoring side.
       what `launchSpeed` is for - a muzzle velocity added to the *launcher's* own
       speed - and turned up the pickup-grant call site that
       [pickups.md](../gameplay/pickups.md) had recorded as not existing.
-      **Nine weapons still hand out nothing**: Quake needs track deformation,
-      LeachBeam a beam, and most of the rest the slowdown mechanic behind
-      `<Global slowdown_limit>` - **whose whole law is recovered as of
-      2026-09-06** and whose `slowdown_time` is decoded, though the physics half
-      is still unbuilt: see
-      [engine.md](../ghidra/functions/psp-pulse-usa/engine.md). Autopilot is the AI's own controller taking over and belongs
+      **All thirteen weapons the table weights are in the draw pool as of
+      2026-09-16** (`oag_gameplay::pickup::IMPLEMENTED`), and the slowdown
+      mechanic behind `<Global slowdown_limit>` is recovered and built -
+      `Ship_AddSlowdown`'s clamp in `oag_physics::slowdown`, credited by every
+      blast, the Cannon and the Quake, drained once a tick ahead of the step
+      ([engine.md](../ghidra/functions/psp-pulse-usa/engine.md)). The
+      LeachBeam is the one weapon that does not use it: its `slowShipFactor`
+      is the one-shot thrust scale at `craft+0x31c`, armed on every draining
+      tick and spent by the next step's engine, wired the same day
+      ([cannon-quake-leachbeam.md](../ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md)).
+      What the per-weapon rows of [status.md](status.md) still mark partial is
+      presentation and unread detail rather than mechanics: the Quake's track
+      deformation, the Cannon's splash (the schema authors none), the Bomb's
+      unread `damageradius`, and the Repulser, deferred as Eliminator-only.
+      Autopilot is the AI's own controller taking over and belongs
       with the AI; it is weapon id 6, fire-request bit `0x1000`.
       **A rocket now has something to hit**: the AI landed the same day and
       `Mode::SingleRace::has_opponents()` returns `true`, so a single race

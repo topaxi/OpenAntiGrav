@@ -234,6 +234,10 @@ impl Ship {
         // its first tick there, from a hit it took before the teleport. Half a
         // mechanic surviving a reset is the shape to distrust.
         self.pending_slowdown = 0.0;
+        // The same argument for the beam's one-shot throttle: a link the
+        // teleport just broke (`Beam::link_broken` tests `active`) should not
+        // take the first tick back on the line.
+        self.pending_thrust_scale = 1.0;
     }
 }
 
