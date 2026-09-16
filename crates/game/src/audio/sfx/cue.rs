@@ -294,8 +294,7 @@ pub enum Cue {
     /// itself; [`Self::held`] returns `true` for it so a stray push would be
     /// silently dropped rather than mis-played as a one-shot.
     PlasmaTravel,
-    /// Whatever ends a Plasma bolt's flight - a wall, a craft, or the 10 s
-    /// timeout.
+    /// A Plasma bolt ending on a wall, or the 10 s timeout - never a craft.
     ///
     /// `Plasmas_Update`'s teardown pass (`0x0886b490`, confidence 90) plays it
     /// unconditionally - `Psys_Release_q`, `Plasma_SpawnDetonation`,
@@ -305,31 +304,53 @@ pub enum Cue {
     /// emitter, at wherever it stopped - see [`Self::PlasmaTravel`] for why
     /// that is not the firing craft.
     ///
-    /// **This port's own Plasma can also end on a craft**
+    /// **Does not fire on a craft hit - that ending plays [`Self::PlasmaHitShip`]
+    /// instead.** This port's own Plasma can also end on a craft
     /// (`Impact::struck.is_some()`, `crates/gameplay/src/projectile/flight.rs`'s
-    /// shared sweep-segment test), a third ending `plasma.md`'s reading never
-    /// located a call site for - `Plasma_Update`'s own decompiled switch only
-    /// covers the downward probe (wall/floor/none), and the travel-segment
-    /// sweep against a craft is elided in the same page as "the same
-    /// collision test again". The bank carries a **distinct** `PLASMAHITSHIP`
-    /// cue neither this variant nor any other reads - confirmed present in
-    /// `weapons.bnk` by `oag-wad sounds`, and named as the HD/Omega craft-hit
-    /// cue's PSP counterpart in this thread's own cross-title table. Playing
-    /// `PLASMAHITWALL` for a craft hit too is therefore **chosen, not
-    /// measured**: the honest alternative to inventing which cue a craft hit
-    /// actually plays is to reuse the one ending that *is* confirmed rather
-    /// than guess at the other, and say so here rather than silently. See the
-    /// `weapons-eight-of-thirteen-the-plasma-and-the` handover thread.
+    /// shared sweep-segment test), a third ending closed 2026-09-16:
+    /// `Plasma_SweepCraftHit` (`0x0886afb8`) plays `PLASMAHITSHIP` on the
+    /// bolt's own emitter and **clears that emitter** before pass-two's
+    /// unconditional `PLASMAHITWALL` runs, so the original never plays both -
+    /// see `docs/ghidra/functions/psp-pulse-usa/plasma.md`'s "a craft hit is
+    /// the third ending" section. This variant's own gate in
+    /// `crate::race::tick` mirrors that split rather than reusing this cue
+    /// for every ending, which an earlier pass did as a **chosen, not
+    /// measured** placeholder before `Plasma_SweepCraftHit` was read.
     ///
     /// **Placed at the impact point, not at a craft** - see [`Placement::Point`]
     /// and [`super::CueEvent::at_point`]. Bank data: `oag-wad sounds` reports
     /// `PLASMAHITWALL` as 4 waveforms, 0 looping.
     PlasmaHitWall,
+    /// A Plasma bolt ending on a struck craft.
+    ///
+    /// **Measured, confidence 88 on the routing.** `Plasma_SweepCraftHit`
+    /// (`0x0886afb8`), the per-tick hull-cylinder sweep every flying bolt
+    /// runs, plays `Sound_Play(1.0, p->emitter, ..., "PLASMAHITSHIP", 0)` and
+    /// immediately clears that emitter (`+0x5c = 0`) *before* calling
+    /// `Plasma_HitCraft` and `Plasma_ApplyBlastForce` - which is why pass-two's
+    /// later, unconditional [`Self::PlasmaHitWall`] never also fires on this
+    /// path: the emitter it tests is already cleared. No double sound, by
+    /// construction rather than by a branch on which ending this is. See
+    /// `docs/ghidra/functions/psp-pulse-usa/plasma.md`'s "a craft hit is the
+    /// third ending" section, `Plasma_SweepCraftHit`'s own subsection.
+    ///
+    /// **Confirmed in `weapons.bnk`, bank `#866` (hash `01bec824`)**, not just
+    /// the executable's own string - `oag-wad sounds
+    /// data/images/pulse-psp-usa.chd:PSP_GAME/USRDIR/Data.wad --cue
+    /// PLASMAHITSHIP` reports `cue 14, cmds 35..40, 4 waveform(s), 0 looping,
+    /// 3.59s total` - the same shape [`Self::PlasmaHitWall`]'s own 4
+    /// waveforms, 0 looping already carries.
+    ///
+    /// **Placed at the impact point, not at a craft** - the same reasoning as
+    /// [`Self::PlasmaHitWall`]: the bolt has its own emitter, not the struck
+    /// craft's, so this rides [`Placement::Point`] and
+    /// [`super::CueEvent::at_point`] identically.
+    PlasmaHitShip,
 }
 
 impl Cue {
     /// Every cue this port fires, which is every one it knows how to load.
-    pub const ALL: [Self; 13] = [
+    pub const ALL: [Self; 14] = [
         Self::SpeedupPad,
         Self::Collision,
         Self::Absorb,
@@ -343,6 +364,7 @@ impl Cue {
         Self::Plasma,
         Self::PlasmaTravel,
         Self::PlasmaHitWall,
+        Self::PlasmaHitShip,
     ];
 
     /// The bank the cue is looked up in.
@@ -356,7 +378,8 @@ impl Cue {
             | Self::MineLaunch
             | Self::Plasma
             | Self::PlasmaTravel
-            | Self::PlasmaHitWall => BankName::Weapons,
+            | Self::PlasmaHitWall
+            | Self::PlasmaHitShip => BankName::Weapons,
             Self::ShieldActive | Self::Disengaging => BankName::Speech,
         }
     }
@@ -423,6 +446,7 @@ impl Cue {
             Self::Plasma => "PLASMA",
             Self::PlasmaTravel => "~PLASMATVL",
             Self::PlasmaHitWall => "PLASMAHITWALL",
+            Self::PlasmaHitShip => "PLASMAHITSHIP",
         }
     }
 
@@ -501,14 +525,14 @@ impl Cue {
             // directly - the firing craft's own emitter - before it ever
             // constructs the bolt's own. See this variant's own doc comment.
             Self::Plasma => Placement::Craft,
-            // Both ride the bolt's own emitter, which `Plasma_Init`
+            // All three ride the bolt's own emitter, which `Plasma_Init`
             // constructs pointed at the bolt's own matrix rather than any
-            // craft's - see each variant's own doc comment. Neither is routed
+            // craft's - see each variant's own doc comment. None is routed
             // through this function's `craft` slice: [`Self::PlasmaTravel`]
             // is a bespoke per-tick tracker keyed by projectile slot, and
-            // [`Self::PlasmaHitWall`] carries its own point on the
-            // [`CueEvent`] rather than a grid slot.
-            Self::PlasmaTravel | Self::PlasmaHitWall => Placement::Point,
+            // [`Self::PlasmaHitWall`]/[`Self::PlasmaHitShip`] each carry their
+            // own point on the [`CueEvent`] rather than a grid slot.
+            Self::PlasmaTravel | Self::PlasmaHitWall | Self::PlasmaHitShip => Placement::Point,
         }
     }
 }

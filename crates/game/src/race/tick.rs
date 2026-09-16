@@ -244,23 +244,28 @@ impl Race {
                 self.sim.last_damager[struck as usize] = Some(impact.owner);
             }
             self.ignite_blast(impact.kind, impact.point, impact.struck.map(usize::from));
-            // `Plasmas_Update`'s teardown plays `PLASMAHITWALL` on the bolt's
-            // own emitter, at the bolt's position, for every ending it reads
-            // - a wall hit and the 10-second timeout alike, with no branch
-            // between them. This port's own Plasma can also end on a craft
-            // (`impact.struck.is_some()`, the shared sweep-segment test in
-            // `oag_gameplay::projectile::flight`), a case no read call site
-            // covers; the bank separately carries a distinct
-            // `PLASMAHITSHIP` cue this does not play, since nothing confirms
-            // it belongs here. Chosen, not measured - see
-            // `crate::audio::sfx::Cue::PlasmaHitWall`'s own doc comment and
-            // the `weapons-eight-of-thirteen-the-plasma-and-the` handover
-            // thread.
+            // `Plasma_SweepCraftHit` (`0x0886afb8`) plays `PLASMAHITSHIP` on a
+            // craft hit and clears the bolt's own emitter before
+            // `Plasmas_Update`'s pass-two teardown would otherwise play
+            // `PLASMAHITWALL` unconditionally - so the original plays exactly
+            // one of the two per ending, never both. `impact.struck.is_some()`
+            // is this port's own equivalent of that emitter-cleared branch:
+            // a craft hit (the shared sweep-segment test in
+            // `oag_gameplay::projectile::flight`) plays `PlasmaHitShip`, and a
+            // wall hit or the 10 s timeout (`struck: None` either way) plays
+            // `PlasmaHitWall` as before. See
+            // `docs/ghidra/functions/psp-pulse-usa/plasma.md`'s "a craft hit
+            // is the third ending" section and `crate::audio::sfx::Cue::PlasmaHitShip`'s
+            // own doc comment.
             if impact.kind == oag_tables::weapons::Weapon::Plasma {
-                self.sim.cues.push(crate::audio::sfx::CueEvent::at_point(
-                    crate::audio::sfx::Cue::PlasmaHitWall,
-                    impact.point,
-                ));
+                let cue = if impact.struck.is_some() {
+                    crate::audio::sfx::Cue::PlasmaHitShip
+                } else {
+                    crate::audio::sfx::Cue::PlasmaHitWall
+                };
+                self.sim
+                    .cues
+                    .push(crate::audio::sfx::CueEvent::at_point(cue, impact.point));
             }
         }
         self.ignite_missile_bounces(&bounces_before);
