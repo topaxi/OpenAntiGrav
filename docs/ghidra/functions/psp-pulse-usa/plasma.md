@@ -692,23 +692,45 @@ and single-stage.
 
 ### Each model gets a camera-facing basis, an anim-time scrub and a tint - not a `(cur, target, rate)` ease
 
-Confidence **75**, the same figure for each of the three findings below since
-they share the same evidence pass; lower than the retire time because the
-color path below is genuinely irregular in the shipped binary and that
-irregularity is reported rather than resolved.
+Confidence **75** for the anim-time-scrub, dead-ramp and scale-nudge findings
+below, the same figure for all three since they share the same evidence
+pass; lower than the retire time because the color path is genuinely
+irregular in the shipped binary and that irregularity is reported rather
+than resolved. **The camera-basis bullet is confidence 55** - what it reads
+and negates is pinned to a specific camera-struct field by cross-reference,
+but which semantic axis (or combination) that field represents is not, so
+the render side below implements the ordinary "face the camera" billboard as
+a stated substitute rather than this specific, unresolved vector math - see
+that section's own note.
 
 For each of the three models (index 0 = the halo, 1 = `hemisphere2`, 2 =
 `hemisphere1`, `PlasmaBlast_Construct`'s own load order), every tick:
 
-- **A billboard-style basis, built from the active camera.** The function
-  opens by reading `*(0x08ab10b0)+0x48/+0x58/+0x68` - the same global
-  `zone-mode.md` already documents as *the active camera* (`0x088444f0`'s
-  entry in that page's own table) - subtracting the blast's position,
-  normalising, and Gram-Schmidt-orthogonalising a second axis off the object's
-  own stored reference vector. That is a basis that turns to face the camera
-  every frame, not the fixed track-fitted basis `PlasmaBlast_Construct` builds
-  once at spawn - the two coexist: the construct-time basis orients the
-  *group*, this per-tick one re-faces each model inside it.
+- **A basis rebuilt every tick from the active camera - not, on a re-check of
+  the actual decompile, a "look from the camera at the object" vector.** The
+  function opens by reading three floats spaced `0x10` apart at the active
+  camera's own `+0x48`/`+0x58`/`+0x68` - `DAT_08ab10b0` is the same global
+  `zone-mode.md` already documents as *the active camera*, and `exhaust.md`
+  independently reads that struct's `+0x40..0x64` as "columns 0 and 1 of the
+  camera matrix" (`up`, then `right`) with `contact-response.md` separately
+  placing a world *position* at `+0x70` - so `+0x40`/`+0x50`/`+0x60` read as
+  three successive `vec4` **columns** of a camera-to-world matrix (`up`,
+  `right`, a third column, then position), and `+0x48`/`+0x58`/`+0x68` are
+  each column's own third (`z`) component. **This page does not have enough
+  to say which single semantic axis that combination extracts** - whether
+  it is one row of the rotation part re-assembled, the view/forward column
+  specifically, or something this reading has not isolated - only that it is
+  *some* function of the camera's current orientation, negated and normalised
+  before use, and that no term anywhere in this function reads the blast's
+  own position as part of building it (the earlier draft of this bullet said
+  it did; it does not, and that was an assumption written down without the
+  disassembly to back it, corrected in the same pass that found it). Gram-
+  Schmidt-orthogonalising a second axis off the object's own stored reference
+  vector follows the same shape `PlasmaBlast_Construct`'s own basis build
+  uses. Whatever this resolves to, it is **not** the fixed track-fitted basis
+  `PlasmaBlast_Construct` builds once at spawn - the two coexist, and this one
+  is recomputed from the camera every tick, so the model re-orients as the
+  camera moves even though the group's anchor point does not.
 - **`Node_SetAnimTimeTree(age * rate[i], model)`** - already a named, shared
   engine function (not touched here), called with `0.0` once at spawn
   (`PlasmaBlast_Construct`'s own three-iteration loop, `FUN_08912890(0, ...)`

@@ -393,12 +393,14 @@ which is the whole point of the weapon.
   `oag_gameplay::projectile::launch`'s shared choice. Deliberate, so the Rocket
   and the Plasma cannot drift apart - worth revisiting only alongside the
   Rocket's own.
-- **The Plasma blast's three models are recovered and not drawn.**
-  `PlasmaBlast_Construct` (`0x0885fd90`) loads
-  `Data\Weapons\pulse_plasma_halo1.vex` and two
-  `pulse_plasma_hemisphere*.vex`, orients them to the located track surface and
-  animates three ramps over them. This engine plays `WO_PLASMA_FLASH` and draws
-  none of the three. Nothing is substituted for them.
+- ~~**The Plasma blast's three models are recovered and not drawn.**~~
+  **Drawn 2026-09-16** - see that date's section: `PlasmaBlast_Update` read
+  in full (hardcoded 1.5 s single-stage retire, a dead keyframe-ramp
+  mechanism, a per-model `Node_SetAnimTimeTree` scrub most likely playing
+  each model's own baked animation) and `crates/game/src/race/blast_models.rs`
+  now draws all three, anchored on the impact point with a chosen
+  "face the camera" billboard standing in for the original's own unresolved
+  camera-vector read.
 - **A plasma bolt that times out is reaped silently here and detonates in the
   original.** `Plasmas_Update` (`0x0886b490`) raises the destroy bit on
   `age > 10.0` and the *same* teardown pass then runs - so a bolt that never
@@ -898,13 +900,96 @@ world Y, the PSP along the carried normal, so an HD racebox would need the
 other branch.
 
 **What is not settled.** Which of Pulse's `PlasmaBlast_Construct` ramps
-map onto which of HD's three (the PSP page never read the advance); the
+map onto which of HD's three (~~the PSP page never read the advance~~ -
+**read 2026-09-16**, see the section below: they do not map at all in the
+shape this table implies. HD/Omega's three explosion models each carry a
+`(cur, target, rate)` recursive ease over a *scale*; Pulse's own advance,
+`PlasmaBlast_Update`, animates a per-model anim-time value through
+`Node_SetAnimTimeTree` instead - most likely scrubbing each `.vex`'s own
+baked animation rather than computing a scale ease at all - and Pulse's own
+`+0x90..+0x114` keyframe-curve mechanism, structurally the nearest thing
+to HD's ease, ships dead in this binary. The two engines solve "the blast
+grows" by different means, not by the same means at different rates); the
 HD/Omega target-scale difference (100/7.1/7.0 vs 50/2/3 over identical
 `.vex` names - probably a re-export scale, unverified); the 24-slot
 descriptor pool both ports register lights or post-effects into
 (`0x01606280`/`0x01605f50` on Omega, `FUN_00677c78`/`FUN_00677a88` on HD -
 shape read, consumer not); and where Omega sets the `flags & 1` bit that
 gates the craft-hit test (not in `Init` or `Launch` as decompiled).
+
+## 2026-09-16, later: Pulse's own `PlasmaBlast_Update` read, and the three models now draw
+
+Picking up the "Which of Pulse's `PlasmaBlast_Construct` ramps map onto
+which of HD's three" item above, with a live Ghidra session against
+`psp-pulse-usa`. Full evidence in
+[plasma.md](../../docs/ghidra/functions/psp-pulse-usa/plasma.md#the-blast-objects-own-per-tick-animation-plasmablast_update);
+two names landed (`PlasmaBlast_Update`, `Plasma_ClassSpeed`).
+
+**The retire time is a hardcoded 1.5 s, and it is single-stage - no
+HD-style collapse.** `PlasmaBlast_Update`'s own age check compares against
+an immediate `0x3f800000`'s neighbour `0x3fc00000` = `1.5f` two
+instructions before the branch, not a shared `DAT_` constant. HD and
+Omega both retire at 3.5 s with a 1.3 s collapse partway through that hides
+the models early; Pulse has no collapse step in this function at all - one
+teardown call, at 1.5 s, full stop.
+
+**The `+0x90..+0x114` keyframe mechanism `PlasmaBlast_Construct` spends
+real effort precomputing rates for ships dead in the shipped binary** - the
+same shape as the `charge_time` finding on this same page. Its own
+keyframe count is read by `PlasmaBlast_Update` before it is ever written by
+either function, so it is `0` for every constructed blast and the
+interpolation loop never runs; what runs instead is a `count == 0` fallback
+that reads one dword short of each model's own value array, landing on a
+constant `0.07` for the halo and `0.0` for both hemispheres. Recorded as
+observed, not resolved - whether that is authored (a flash confined to the
+halo) or a shipped bug in a path nothing since exercised is open.
+
+**What plays instead: a per-model anim-time scrub, most likely the
+model's own baked animation.** `Node_SetAnimTimeTree(age * rate, model)` -
+already a named, shared engine function - runs every tick with `rate`
+`0.1`/`0.07`/`0.07` for the halo/hemisphere2/hemisphere1. Since this
+project already has a working "sample this model's own `Anim Transform`
+node at a given time" path (`oag_render::mesh::Model::sample_anim_nodes`,
+wired for the PS2 boost plume's anchors), this reads as the *original*
+scrubbing the same kind of baked animation this engine can already play
+back - which is what the render side below does, rather than reproducing
+HD's scale ease.
+
+**One finding corrected the same pass it was written.** The camera-basis
+read this page's first draft described as "look from the camera at the
+blast" does not, on the actual disassembly, ever read the blast's own
+position - it negates three floats read off the active camera struct and
+nothing else. Which single axis that extracts (plasma.md's own hedge: it
+may be one row of the camera's rotation reassembled, not any one semantic
+axis) is not settled, so the render side below uses the ordinary "face the
+camera" billboard as a stated substitute rather than this specific,
+unresolved vector math.
+
+**Drawn.** `crates/game/src/race/blast_models.rs` (new module) tracks a
+render-side pool of live blasts - position and age only, `RaceView` state,
+never hashed - spawned from `Race::ignite_blast` on every Plasma
+detonation and aged in `Race::tick`. `crates/game/src/race/scene.rs` and
+`crates/game/src/race/scene/weapon_models.rs` load and draw
+`PLASMA_BLAST_HALO_MODEL_ENTRY`/`_HEMISPHERE1_/_HEMISPHERE2_MODEL_ENTRY`
+the same way the Rocket's, Mine's, Bomb's and Cannon round's own bodies
+are, sized to `oag_gameplay::projectile::MAX_PROJECTILES` but indexed
+independently of the projectile pool since a blast outlives its bolt. One
+transform serves all three models per blast (the per-model scale/offset
+nudge `PlasmaBlast_Construct` reads is `0.0` for all three, measured), and
+each model's own `write_node_anims` call is driven by that model's own
+anim-time value - real infrastructure, no invented ease. The per-model
+tint (`FUN_089122b4`) is **not** implemented: its values are constant, not
+time-varying, as recovered above, and building a pipeline for a
+barely-understood, possibly-dead code path would be exactly the kind of
+plausible-looking invention `CLAUDE.md` forbids.
+
+**Verified with the offscreen capture route** - `--race --give plasma
+--press square`, screenshots after the bolt's own wind-up and flight;
+paths and tick numbers in the report this thread's own commit history
+carries. Not run against `just test-data`: this is a render-only change
+that moves no simulation hash, checked directly against
+`determinism_matches_the_committed_reference` and the full `oag-game`
+suite (931 passed).
 
 ## Next Steps
 
