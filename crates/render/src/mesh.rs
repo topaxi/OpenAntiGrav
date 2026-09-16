@@ -356,7 +356,7 @@ mod vertex;
 pub use vertex::{DEFAULT_SPECULAR_EXPONENT, GpuVertex, slots};
 
 mod anim_node;
-pub use anim_node::{AnimNode, NODE_ANIM_LIMIT};
+pub use anim_node::{AnimNode, Motion, NODE_ANIM_LIMIT};
 
 mod emissive;
 pub use emissive::Emissive;

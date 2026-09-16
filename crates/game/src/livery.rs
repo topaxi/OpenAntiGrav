@@ -304,7 +304,7 @@ fn one(
             // 2048's container is a different file under the same extension
             // and needs no `.vex` at all - see `oag_render::mesh::rcs::psp2`.
             Some(geometry) if mesh::rcs::psp2::is_psp2(&geometry) => {
-                mesh::rcs::psp2::build(&hull_name, &geometry, &mut |path| {
+                mesh::rcs::psp2::build(&hull_name, &geometry, None, &mut |path| {
                     archives.read_name(path).ok()
                 })
                 .map(|(model, built)| (model, built.describe()))

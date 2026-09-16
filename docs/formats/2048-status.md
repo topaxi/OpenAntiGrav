@@ -31,7 +31,8 @@ copies of 2,284 shared textures).
 | [Handling stats](handling-stats.md) | **yes** | Both the HD-derived roster's per-team files and the shared `<Global>` block at `Data\XML\handlingstats.xml`. The native roster's five teams parse too, `SUPERPHANTOM` class included. |
 | [`WO Track`](track.md) spline | **yes, after a version gate** | See below. |
 | [Collision](2048-collision.md) | **yes, in a container of its own** | Not the `.vex` path: a `track_col.col` beside every `track.vex`. See below. |
-| [Render geometry](2048-rcsmodel.md) | **positions, triangles, normals, diffuse UV, the material table and the per-submesh material binding** | A `.rcsmodel` sharing HD's extension and no other part of its format. Draws textured. `tangent`'s type nibble and section B's wider object graph are still unread. |
+| [Render geometry](2048-rcsmodel.md) | **positions, triangles, normals, diffuse UV, the material table, the per-submesh material binding, and the node table** | A `.rcsmodel` sharing HD's extension and no other part of its format. Draws textured, and since 2026-09-16 its node-bound meshes draw where their node puts them. `tangent`'s type nibble and the rest of section B's object graph are still unread. |
+| [Scenery animation](2048-animation.md) | **yes, from two files of its own** | `track.vex` authors no `Anim Transform`; a `.rcsskeleton` and a `.rcsanimclip` beside the model carry the hierarchy and the keys. Read, wired, and checked against Wipeout HD's evaluator on the twelve shared circuits. |
 | Plugin definitions | **yes, but split three ways** | `Data\Plugins\teams\`, `tracks\` and `music\` each ship their own `Definition.xml` where every other title ships one file carrying all three node kinds. `oag_title::Title::plugin_definition` names the teams one; `oag_title::Title::track_plugin_definition` is the axis that reaches the circuits one - `None` on every other title, `Some` here. The soundtrack list still has no equivalent axis and this build sees none. |
 
 ## What changed, and what state each is in
@@ -86,6 +87,19 @@ the start line and runs the simulation. What it does **not** do, and why:
   race lights off a stand-in rig, unfogged and without bloom, and `track.pvs`
   is not this project's HD PVS layout, so every chunk draws.
   See [2048-rcsmodel.md](2048-rcsmodel.md) and [gxt.md](gxt.md).
+- **The scenery moves, and the craft's airbrakes are on its tail** (since
+  2026-09-16). `track.vex` authors no `Anim Transform`; what animates a 2048
+  circuit is the `.rcsskeleton`/`.rcsanimclip` pair beside its model and a
+  node table inside the model itself, all three now read
+  ([2048-animation.md](2048-animation.md)) and validated node by node
+  against Wipeout HD's own evaluator on the twelve circuits both titles
+  ship. `altima` runs 113 tracks over 165 nodes - river boats, balloons,
+  wind-turbine rotors, a crane, pigeons - and the 130 meshes bound to those
+  nodes, which drew a median 1,086 units from their place before the table
+  was read, are placed and moving. The load report says so:
+  `165 skeleton node(s), 113 animated over 113 track(s), 166.7 s loop`.
+  Not wired: the `trackZone` clip (Zone mode's own skeleton, 30 Hz keys)
+  and the start-grid animation.
 - **No front end, no music.** `oag_2048::TITLE` carries `front_end: None`,
   `loading: None` and `music: None`. Neither has been read.
 - **Zone's announcer is wired, off a bank path that is read rather than

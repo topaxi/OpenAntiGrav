@@ -11,7 +11,7 @@
 //! which is exactly what happened to the texture-transform port's first
 //! attempt.
 
-use oag_render::mesh::{AnimNode, Bounds, DrawCall, GpuVertex, Model};
+use oag_render::mesh::{AnimNode, Bounds, DrawCall, GpuVertex, Model, Motion};
 use oag_vex::vex;
 
 /// A quad, in the space of an `Anim Transform` that slides it along `z`.
@@ -93,14 +93,14 @@ fn moving_quad(xform: u32) -> Model {
         node_vertex_ranges: Vec::new(),
         emissive: Vec::new(),
         anim_nodes: vec![AnimNode {
-            transform: vex::AnimTransform {
+            transform: Motion::Vex(Box::new(vex::AnimTransform {
                 translation,
                 translation_quantum: [1.0, 1.0, 1.0],
                 translation_base: [0.0, 0.0, 0.0],
                 seconds_per_key: 1.0 / 60.0,
                 loop_seconds: vex::DEFAULT_LOOP_SECONDS,
                 ..vex::AnimTransform::default()
-            },
+            })),
             static_above: vex::IDENTITY,
             parent: None,
         }],

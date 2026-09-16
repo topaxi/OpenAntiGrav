@@ -26,18 +26,51 @@ use super::*;
 /// object, not a misplaced one.
 pub const NODE_ANIM_LIMIT: usize = 384;
 
-/// One `Anim Transform` a model carries, with everything needed to place it
+/// What moves a node: the two authored forms a local matrix at a time comes
+/// from.
+///
+/// Both answer the same question - "this node's local matrix at `seconds`" -
+/// and [`Model::sample_anim_nodes`] composes either through the same chain,
+/// so the shader's table and the per-frame upload never learn which title
+/// authored the node.
+///
+/// Both variants are boxed: a `.vex` transform is 288 bytes of key vectors
+/// and the rig's nine channel slots twice that, and a table of a few
+/// hundred is walked once a frame.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Motion {
+    /// A `.vex` `Anim Transform` node: Pulse, Pure and Wipeout HD.
+    Vex(Box<vex::AnimTransform>),
+    /// A `.rcsskeleton` node under its `.rcsanimclip` track: Wipeout 2048,
+    /// whose `track.vex` authors no `Anim Transform` at all.
+    Rig(Box<oag_rcs::rig::NodeMotion>),
+}
+
+impl Motion {
+    /// The local matrix at `seconds`, row-major with the translation in row
+    /// 3 - [`vex::AnimTransform::sample`]'s convention, which
+    /// [`oag_rcs::rig::NodeMotion::sample`] shares.
+    #[must_use]
+    pub fn sample(&self, seconds: f32) -> [f32; 16] {
+        match self {
+            Self::Vex(transform) => transform.sample(seconds),
+            Self::Rig(motion) => motion.sample(seconds),
+        }
+    }
+}
+
+/// One animated node a model carries, with everything needed to place it
 /// again at another time.
 ///
 /// [`Model`] does not keep the file it was built from, so the parent chain is
 /// resolved here at load: [`Self::static_above`] is the product of the static
-/// matrices between this node and the next `Anim Transform` above it, and
+/// matrices between this node and the next animated node above it, and
 /// [`Self::parent`] indexes that node in [`Model::anim_nodes`]. 14 of Pulse's
 /// 393 sit under another one, so the chain is not optional.
 #[derive(Debug, Clone, PartialEq)]
 pub struct AnimNode {
     /// The node's own authored channels.
-    pub transform: vex::AnimTransform,
+    pub transform: Motion,
     /// The static matrices between this node and its parent anchor.
     pub static_above: [f32; 16],
     /// The parent anchor's slot in [`Model::anim_nodes`], if it has one.
@@ -107,7 +140,7 @@ pub(super) fn collect(
             above.map_or((vex::IDENTITY, None), |a| (a.local, a.anchor));
         let slot = out.len();
         out.push(AnimNode {
-            transform,
+            transform: Motion::Vex(Box::new(transform)),
             static_above,
             parent: parent_node.and_then(|p| slots.get(&p).copied()),
         });

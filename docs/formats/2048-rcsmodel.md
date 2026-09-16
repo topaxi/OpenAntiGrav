@@ -133,14 +133,23 @@ between it and the first shape's own tail - a bounding box, like HD's `Mesh`
 node carries, is the obvious guess and is exactly that, a guess; nothing here
 confirms it.
 
-### Positions are the model's own space, and no transform is composed
+### Positions are the model's own space - or a node's, for a mesh bound to one
 
 A circuit's positions come out in world coordinates and a craft's about its own
 origin. Measured rather than assumed: `altima`'s track model spans
 x -1886..2575, y -459..839, z -1486..2435, bracketing the box its own
 `track_col.col` states, while `Assegai`'s hull sits inside 2.8 x 1.7 x 7.0 units.
-So both are already in the space their caller draws them in, and
-`mesh::rcs::psp2::build` composes nothing.
+
+**Corrected 2026-09-16: that is true of a mesh with no node, and wrong for one
+with.** The file's own header names a node for 130 of `altima`'s 1,153 mesh
+objects (and for all 18 of a craft's), and those meshes' positions are in
+*that node's* space: a median 1,086 units, and up to 5,765, from where the
+original draws them when taken as world coordinates. The node table, the
+`.rcsskeleton` that hierarchises it and the `.rcsanimclip` that moves it are
+[2048-animation.md](2048-animation.md); `mesh::rcs::psp2::build` now places
+a node-bound mesh through its node and composes nothing onto the rest. The
+craft's airbrakes were the visible case - node-bound, with the node at the
+tail and the flap about its own hinge, so both drew under the cockpit.
 
 **456 of 33,335,682 positions** across the corpus fall outside a generous world
 box. That is 0.0014 %, it is recorded rather than explained, and a reading wrong
@@ -551,9 +560,12 @@ see [gxt.md](gxt.md).
 
 Named here rather than left to be rediscovered:
 
-- **Section B's object graph**, past the declaration above and past the
-  second record shape [now closes every GPU pointer the corpus
-  names](#a-second-record-shape-closes-every-previously-unpaired-pointer) -
+- **Section B's object graph**, past the declaration above, the second
+  record shape that [closes every GPU pointer the corpus
+  names](#a-second-record-shape-closes-every-previously-unpaired-pointer),
+  and - since 2026-09-16 - the **node table and mesh objects** that walk
+  from the file header down to every one of those records
+  ([2048-animation.md](2048-animation.md#the-models-node-table)):
   `psp2::Model::unpaired_pointers` is a real field for a file this reading has
   not yet met, not evidence of a gap left in the 993 it has.
 - **`RcsModel_Load`'s actual consumer** - whichever function binds a
@@ -564,11 +576,13 @@ Named here rather than left to be rediscovered:
   recognised by behaviour - and why `tangent`'s own reading stops at
   confidence 76 rather than reaching `normal`'s 96: there is no HD twin to
   check its content against, only internal consistency.
-- **The 64-bit hashes** each submesh record carries beside its buffer
-  pointers, the two unidentified 32-bit words each material header carries,
-  and the three words beside the material index at `-0x20`, `-0x10` and
-  `-0x08`. The binding itself is read - see the material index section above -
-  but at confidence 90, off measurement rather than off the executable.
+- **The high word of the 64-bit hash** each mesh object carries - the low
+  word is `~crc32` of the shape's own full Maya path, on all 1,153 of
+  `altima`'s ([2048-animation.md](2048-animation.md#the-models-node-table)) -
+  the two unidentified 32-bit words each material header carries, and the
+  three words beside the material index at `-0x20`, `-0x10` and `-0x08`. The
+  binding itself is read - see the material index section above - but at
+  confidence 90, off measurement rather than off the executable.
 - **The section tags** at each descriptor's `+0x00` (`0xe35e00df` and
   `0xe9f17935` on `altima`).
 

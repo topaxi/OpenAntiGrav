@@ -63,7 +63,7 @@ fn main() -> anyhow::Result<()> {
             Err(e) => println!("  read_path failed: {e}"),
         }
 
-        let (model, report) = mesh::rcs::psp2::build(&entry, &blob, &mut |path| {
+        let (model, report) = mesh::rcs::psp2::build(&entry, &blob, None, &mut |path| {
             // 2048 stores paths lowercase-with-forward-slashes internally;
             // the material's own string uses the same spelling already.
             archive.read_path(path).ok()

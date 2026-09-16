@@ -164,14 +164,15 @@ pub(super) fn psp2_sky_model(
         ));
         return None;
     }
-    let (mut model, built) =
-        match mesh::rcs::psp2::build(&name, &blob, &mut |path| archives.read_name(path).ok()) {
-            Ok(built) => built,
-            Err(error) => {
-                report.push(format!("{name}: {error:#} - the sky stays black"));
-                return None;
-            }
-        };
+    let (mut model, built) = match mesh::rcs::psp2::build(&name, &blob, None, &mut |path| {
+        archives.read_name(path).ok()
+    }) {
+        Ok(built) => built,
+        Err(error) => {
+            report.push(format!("{name}: {error:#} - the sky stays black"));
+            return None;
+        }
+    };
     if model.indices.is_empty() {
         report.push(format!(
             "{name}: decoded to no triangles - the sky stays black"

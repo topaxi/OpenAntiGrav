@@ -6,6 +6,14 @@
 //! carries its own counts and its own buffer pointers, and the stride falls out
 //! of the buffer packing. So this builder takes the model blob alone.
 //!
+//! **A node-bound submesh is placed, and moved, by its node.** The model's
+//! own table names a node for 130 of `altima`'s 1,153 meshes (a
+//! median 1,086 units from where they are authored, as-is), and the
+//! `.rcsskeleton`/`.rcsanimclip` beside the circuit animate those nodes -
+//! see [`placement`] for how a node either bakes through its static world
+//! matrix or takes a slot of the shader's node table, and
+//! `docs/formats/2048-animation.md` for the format and its evidence.
+//!
 //! What it draws is positions, triangles, normals, diffuse texture
 //! coordinates - the file's own where a submesh's stride carries one, computed
 //! off the triangles where normals do not (see [`super::face_normals`]) - and
@@ -24,11 +32,16 @@
 
 use anyhow::Result;
 
+use oag_core::math::{Mat4, Vec3};
 use oag_rcs::rcsmodel::psp2;
 use oag_texture::gxt;
 
 use super::Textures;
 use crate::mesh::{Bounds, DrawCall, GpuVertex, Model, ModelTexture};
+
+pub mod placement;
+
+pub use placement::Animation;
 
 /// What one build found.
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -85,6 +98,23 @@ pub struct Report {
     /// archive or would not decode - the honest count of what is still
     /// missing, kept apart from a submesh that simply has no material.
     pub unresolved_draws: usize,
+    /// Submeshes bound to a node of the model's own table and placed by
+    /// it - through the skeleton where one was given, through the model's
+    /// bind matrix otherwise. See [`placement`].
+    pub node_bound: usize,
+    /// Of those, the submeshes the shader's node table moves per frame.
+    pub moving: usize,
+    /// Nodes the table moves - the entries of [`Model::anim_nodes`].
+    pub anim_nodes: usize,
+    /// Submeshes under a node authored invisible that nothing ever shows,
+    /// not emitted.
+    pub hidden: usize,
+    /// Model nodes the skeleton did not name, placed by the model's own bind
+    /// matrix - see [`placement::Plan::unmatched`].
+    pub unmatched_nodes: usize,
+    /// Nodes frozen at time zero past the table's ceiling - see
+    /// [`placement::Plan::frozen`].
+    pub frozen_nodes: usize,
 }
 
 impl Report {
@@ -116,12 +146,48 @@ impl Report {
                 self.decoded_tangents
             )
         };
+        let nodes = if self.node_bound == 0 {
+            String::new()
+        } else {
+            let frozen = if self.frozen_nodes == 0 {
+                String::new()
+            } else {
+                format!(", {} frozen past the table", self.frozen_nodes)
+            };
+            let unmatched = if self.unmatched_nodes == 0 {
+                String::new()
+            } else {
+                format!(", {} node(s) not in the skeleton", self.unmatched_nodes)
+            };
+            let hidden = if self.hidden == 0 {
+                String::new()
+            } else {
+                format!(", {} hidden", self.hidden)
+            };
+            format!(
+                "; {} node-bound submesh(es), {} moving on {} animated node(s){hidden}{frozen}{unmatched}",
+                self.node_bound, self.moving, self.anim_nodes
+            )
+        };
         format!(
             "{} triangle(s) over {} submesh(es), {texture}, {} authored \
-             normal(s) (rest off face normals); {} unaccounted GPU pointer(s){poisoned}{tangents}",
+             normal(s) (rest off face normals); {} unaccounted GPU pointer(s){poisoned}{tangents}{nodes}",
             self.triangles, self.submeshes, self.authored_normals, self.unpaired
         )
     }
+}
+
+/// The `.rcsskeleton` and `.rcsanimclip` a Wipeout 2048 circuit ships beside
+/// its `.vex`, in that order - the pair [`Animation::parse`] takes.
+///
+/// Same stem rule as [`super::sibling_name`]. Wipeout HD ships neither (its scenery
+/// animation is in the `.vex` itself), so a caller reads them where they
+/// resolve and passes `None` where they do not.
+#[must_use]
+pub fn animation_names(vex_name: &str) -> Option<(String, String)> {
+    let model = super::sibling_name(vex_name)?;
+    let stem = model.strip_suffix(".rcsmodel")?;
+    Some((format!("{stem}.rcsskeleton"), format!("{stem}.rcsanimclip")))
 }
 
 /// Whether a blob is 2048's container rather than Wipeout HD's.
@@ -155,10 +221,13 @@ fn decode_gxt_texture(label: &str, blob: &[u8]) -> Option<ModelTexture> {
 
 /// Builds every submesh of a 2048 `.rcsmodel` into one model.
 ///
-/// **No transform is composed onto anything**, and that is a property of the
-/// files rather than a simplification: a circuit's positions come out in world
-/// coordinates and a craft's about its own origin, so both are already in the
-/// space their caller draws them in. See [`psp2::Model::positions`].
+/// **A submesh with no node is in the space its caller draws in** - a
+/// circuit's in world coordinates, a craft's about its own origin - and
+/// nothing is composed onto it. **A node-bound one is in its node's space**
+/// and is placed by [`placement::plan`]: baked through the node's static
+/// world matrix, or left where it is and moved by the shader's node table
+/// when `animation` names keys for it. See [`psp2::Model::positions`] and
+/// [`psp2::nodes`].
 ///
 /// `textures` is called once per **distinct material** that names a `.gxt`,
 /// never once per draw - see `bind_textures` below.
@@ -166,31 +235,85 @@ fn decode_gxt_texture(label: &str, blob: &[u8]) -> Option<ModelTexture> {
 /// # Errors
 ///
 /// Propagates [`psp2::parse`].
-pub fn build(label: &str, model_blob: &[u8], textures: Textures<'_>) -> Result<(Model, Report)> {
+pub fn build(
+    label: &str,
+    model_blob: &[u8],
+    animation: Option<&Animation>,
+    textures: Textures<'_>,
+) -> Result<(Model, Report)> {
     let decoded = psp2::parse(model_blob)
         .map_err(|e| anyhow::anyhow!("{label}: the .rcsmodel beside it: {e}"))?;
+    let plan = placement::plan(&decoded.scene, animation);
 
     let mut model = Model::none(label);
     let mut report = Report {
         unpaired: decoded.unpaired_pointers,
         materials: decoded.materials.len(),
+        anim_nodes: plan.anim_nodes.len(),
+        unmatched_nodes: plan.unmatched,
+        frozen_nodes: plan.frozen,
         ..Report::default()
     };
+    model.anim_nodes = plan.anim_nodes;
+    // Every draw is pushed in submesh order below, and `bind_textures`
+    // zips on that; a hidden submesh still gets its draw, empty, so the
+    // zip stays a binding.
     for submesh in &decoded.submeshes {
+        let place = submesh
+            .node
+            .and_then(|n| plan.placements.get(n).copied())
+            .unwrap_or(placement::Placement::STATIC);
+        report.node_bound += usize::from(submesh.node.is_some());
+        report.moving += usize::from(place.xform != 0);
+        report.hidden += usize::from(place.hidden);
+        let to_world = Mat4::from_cols_array(&place.to_world);
+        let at_zero = Mat4::from_cols_array(&place.world_at_zero);
+        // Normals through the bake's inverse transpose: 166 skeleton nodes
+        // across the corpus scale non-uniformly (88 of them carry meshes),
+        // and a normal turned by the plain matrix skews under one. A moving
+        // node's normals go through the shader's node matrix instead, which
+        // takes no inverse transpose - `mesh.wgsl`'s own caveat, on lit
+        // geometry here rather than Pulse's prelit.
+        let normal_to_world = to_world.inverse().transpose();
         let base = u32::try_from(model.vertices.len()).unwrap_or(u32::MAX);
         let first = u32::try_from(model.indices.len()).unwrap_or(u32::MAX);
         let mut lo = [f32::MAX; 3];
         let mut hi = [f32::MIN; 3];
         for (i, position) in submesh.positions.iter().enumerate() {
+            if place.hidden {
+                break;
+            }
+            // Baked through the node's static matrix, or left in the node's
+            // own space for the table to move; the bounds are world-space
+            // either way, which for a moving node means time zero.
+            let position = to_world
+                .transform_point3(Vec3::from_array(*position))
+                .to_array();
+            let placed = if place.xform == 0 {
+                position
+            } else {
+                at_zero
+                    .transform_point3(Vec3::from_array(position))
+                    .to_array()
+            };
             for a in 0..3 {
-                lo[a] = lo[a].min(position[a]);
-                hi[a] = hi[a].max(position[a]);
+                lo[a] = lo[a].min(placed[a]);
+                hi[a] = hi[a].max(placed[a]);
             }
             // The file's own normal where this submesh's stride carries one
             // (`psp2::SubMesh::normals`) - a zero otherwise, which is
             // `super::face_normals`'s signal to derive one from the
-            // triangles, exactly as it already does for an HD model.
+            // triangles, exactly as it already does for an HD model. Turned
+            // with the bake and renormalised.
             let normal = submesh.normals.get(i).copied().unwrap_or([0.0; 3]);
+            let normal = if normal == [0.0; 3] {
+                normal
+            } else {
+                normal_to_world
+                    .transform_vector3(Vec3::from_array(normal))
+                    .normalize_or_zero()
+                    .to_array()
+            };
             report.authored_normals += usize::from(normal != [0.0; 3]);
             // Decoded but not sampled by anything yet - see
             // `Report::decoded_tangents`.
@@ -204,7 +327,7 @@ pub fn build(label: &str, model_blob: &[u8], textures: Textures<'_>) -> Result<(
             // `None` already says.
             let texcoord = submesh.texcoords.get(i).copied().unwrap_or([0.0, 0.0]);
             model.vertices.push(GpuVertex {
-                position: *position,
+                position,
                 normal,
                 colour: [1.0, 1.0, 1.0, 1.0],
                 texcoord,
@@ -212,24 +335,34 @@ pub fn build(label: &str, model_blob: &[u8], textures: Textures<'_>) -> Result<(
                 lightmap_texcoord: [0.0, 0.0],
                 anim: 0,
                 slots: 0,
-                xform: 0,
+                xform: place.xform,
                 sun_mask: 1.0,
                 specular_exponent: crate::mesh::DEFAULT_SPECULAR_EXPONENT,
             });
         }
-        for &index in &submesh.indices {
-            model.indices.push(base + u32::from(index));
+        if !place.hidden {
+            for &index in &submesh.indices {
+                model.indices.push(base + u32::from(index));
+            }
         }
-        let centre: [f32; 3] = std::array::from_fn(|a| (lo[a] + hi[a]) * 0.5);
-        let radius = (0..3)
-            .map(|a| (hi[a] - lo[a]) * 0.5)
-            .fold(0.0f32, |acc, half| acc + half * half)
-            .sqrt();
+        let centre: [f32; 3] = if place.hidden {
+            [0.0; 3]
+        } else {
+            std::array::from_fn(|a| (lo[a] + hi[a]) * 0.5)
+        };
+        let radius = if place.hidden {
+            0.0
+        } else {
+            (0..3)
+                .map(|a| (hi[a] - lo[a]) * 0.5)
+                .fold(0.0f32, |acc, half| acc + half * half)
+                .sqrt()
+        };
         model.draws.push(DrawCall {
             range: first..u32::try_from(model.indices.len()).unwrap_or(u32::MAX),
             texture: None,
             bounds: Bounds { centre, radius },
-            moving: false,
+            moving: place.xform != 0,
             culled: false,
             blend: None,
             blend_state: None,
@@ -240,7 +373,9 @@ pub fn build(label: &str, model_blob: &[u8], textures: Textures<'_>) -> Result<(
             alpha_test_ref: None,
         });
         report.submeshes += 1;
-        report.triangles += submesh.triangle_count();
+        if !place.hidden {
+            report.triangles += submesh.triangle_count();
+        }
         report.non_finite_texcoords += submesh.non_finite_texcoords;
     }
     model.mesh_count = report.submeshes;

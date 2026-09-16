@@ -40,8 +40,10 @@ pub(super) fn track_model(
         // of its own rather than a branch inside HD's. See
         // `oag_render::mesh::rcs::psp2`.
         Some(geometry) if mesh::rcs::psp2::is_psp2(geometry) => {
-            match mesh::rcs::psp2::build(track, geometry, &mut |path| archives.read_name(path).ok())
-            {
+            let animation = psp2_animation(archives, track, report);
+            match mesh::rcs::psp2::build(track, geometry, animation.as_ref(), &mut |path| {
+                archives.read_name(path).ok()
+            }) {
                 Ok((model, built)) => {
                     report.push(format!("{track}: {}", built.describe()));
                     Some(model)
@@ -70,6 +72,54 @@ pub(super) fn track_model(
                 None
             }
         },
+    }
+}
+
+/// The `.rcsskeleton` and `.rcsanimclip` beside a Wipeout 2048 circuit, or
+/// `None` with a report line saying which was missing or would not decode.
+///
+/// **A circuit with a skeleton and no clip still gets its skeleton**: the
+/// nodes place the geometry even when nothing moves it, so the clip's
+/// absence costs the motion and not the placement. A circuit with no
+/// skeleton at all draws its node-bound meshes through the model's own bind
+/// matrices - see `oag_render::mesh::rcs::psp2::placement`.
+fn psp2_animation(
+    archives: &mut oag_assets::Archives,
+    track: &str,
+    report: &mut Vec<String>,
+) -> Option<mesh::rcs::psp2::Animation> {
+    let (skeleton_name, clip_name) = mesh::rcs::psp2::animation_names(track)?;
+    let Ok(skeleton) = archives.read_name(&skeleton_name) else {
+        report.push(format!(
+            "{track}: no .rcsskeleton beside it - node-bound scenery is placed by the \
+             model's own bind matrices and nothing moves"
+        ));
+        return None;
+    };
+    let clip = archives.read_name(&clip_name).ok();
+    if clip.is_none() {
+        report.push(format!(
+            "{track}: no .rcsanimclip beside it - the scenery is placed and nothing moves"
+        ));
+    }
+    match mesh::rcs::psp2::Animation::parse(&skeleton, clip.as_deref()) {
+        Ok(animation) => {
+            report.push(format!(
+                "{track}: {} skeleton node(s), {} animated over {} track(s), {:.1} s loop",
+                animation.skeleton.nodes.len(),
+                animation.clip.as_ref().map_or(0, |c| c.tracks.len()),
+                animation.clip.as_ref().map_or(0, |c| c.tracks.len()),
+                animation.clip.as_ref().map_or(0.0, |c| c.duration),
+            ));
+            Some(animation)
+        }
+        Err(error) => {
+            report.push(format!(
+                "{track}: the .rcsskeleton/.rcsanimclip beside it will not decode ({error}) - \
+                 node-bound scenery is placed by the model's own bind matrices and nothing moves"
+            ));
+            None
+        }
     }
 }
 

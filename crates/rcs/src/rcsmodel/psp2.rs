@@ -106,7 +106,11 @@
 
 use std::fmt;
 
+use container::u32_at;
+
+pub mod container;
 pub mod material;
+pub mod nodes;
 pub mod vertex_decl;
 
 /// The word every 2048 `.rcsmodel` opens with.
@@ -386,6 +390,16 @@ pub struct SubMesh {
     /// Bytes per vertex, derived from the buffer's own length rather than read
     /// from a field - see [`Model::parse`].
     pub stride: usize,
+    /// Index into [`Model::scene`]'s mesh objects of the shape this submesh
+    /// belongs to, or `None` when the node table did not read - see
+    /// [`nodes`]. Every record on every shipped file is reachable from
+    /// exactly one mesh object, so `None` here means the table is absent,
+    /// not that the submesh is loose.
+    pub mesh: Option<usize>,
+    /// Index into [`Model::scene`]'s nodes of the node whose space this
+    /// submesh's positions are in, or `None` for a static submesh authored
+    /// in world space. See [`nodes`]' module doc.
+    pub node: Option<usize>,
     /// Which entry of [`Model::materials`] this submesh draws with, in the
     /// file's own material-offset-table order.
     ///
@@ -428,6 +442,10 @@ pub struct Model {
     /// carries no material table either. Which submesh draws with which entry
     /// is [`SubMesh::material`] - see [`material`]'s module doc.
     pub materials: Vec<material::Material>,
+    /// The node table and mesh objects - see [`nodes`]. Empty when the
+    /// header does not check out, on the same terms as [`Self::materials`];
+    /// [`SubMesh::node`] and [`SubMesh::mesh`] are `None` throughout then.
+    pub scene: nodes::Scene,
 }
 
 impl Model {
@@ -499,67 +517,34 @@ impl Model {
 /// buffers do not lie inside the GPU section is skipped rather than refused -
 /// see [`Model::unpaired_pointers`] for the same reasoning.
 pub fn parse(file: &[u8]) -> Result<Model> {
-    let magic = u32_at(file, 0, "magic")?;
-    if magic != MAGIC {
-        return Err(Error::BadMagic { magic });
-    }
-    let section_count = u32_at(file, 0x08, "section count")? as usize;
-    let header_len = u32_at(file, 0x0c, "header length")? as usize;
-    let table_base = DESCRIPTOR_BASE + section_count * DESCRIPTOR_LEN;
-
-    let mut sections = Vec::with_capacity(section_count.min(file.len() / DESCRIPTOR_LEN));
-    let mut at = header_len;
-    for i in 0..section_count {
-        let d = DESCRIPTOR_BASE + i * DESCRIPTOR_LEN;
-        let len = u32_at(file, d + 0x04, "section size")? as usize;
-        let table = table_base + u32_at(file, d + 0x08, "relocation offset")? as usize;
-        let entries = u32_at(file, d + 0x0c, "relocation count")? as usize;
-        let end = table
-            .checked_add(entries * RELOCATION_LEN)
-            .ok_or(Error::OutOfBounds {
-                what: "relocation table",
-                end: usize::MAX,
-                len: file.len(),
-            })?;
-        if end > file.len() {
-            return Err(Error::OutOfBounds {
-                what: "relocation table",
-                end,
-                len: file.len(),
-            });
-        }
-        sections.push(Section {
-            at,
-            len,
-            table,
-            entries,
-        });
-        at = at.checked_add(len).ok_or(Error::OutOfBounds {
-            what: "section",
-            end: usize::MAX,
-            len: file.len(),
-        })?;
-    }
-    if at != file.len() {
-        return Err(Error::SectionsDoNotClose {
-            sections: at,
-            len: file.len(),
-        });
-    }
+    let sections = container::read(file)?.sections;
 
     let Some(&gpu) = sections.get(1) else {
         let cpu = sections[0];
         let materials = material::read(&file[cpu.at..cpu.at + cpu.len]);
+        let scene = nodes::read(&file[cpu.at..cpu.at + cpu.len]).unwrap_or_default();
         return Ok(Model {
             sections,
             submeshes: Vec::new(),
             unpaired_pointers: 0,
             materials,
+            scene,
         });
     };
     let cpu = sections[0];
     let (mut submeshes, unpaired_pointers) = submeshes(file, cpu, gpu)?;
     let materials = material::read(&file[cpu.at..cpu.at + cpu.len]);
+    let scene = nodes::read(&file[cpu.at..cpu.at + cpu.len]).unwrap_or_default();
+    // Each record back to the mesh object that lists it, and through that
+    // to the node whose space its positions are in.
+    let by_record = scene.mesh_by_record();
+    for submesh in &mut submeshes {
+        if let Ok(i) = by_record.binary_search_by_key(&submesh.record, |&(r, _)| r) {
+            let mesh = by_record[i].1;
+            submesh.mesh = Some(mesh);
+            submesh.node = scene.meshes[mesh].node;
+        }
+    }
     // An index this reading cannot resolve against the table it recovered is
     // dropped rather than carried: a caller binding a texture off it would be
     // painting a submesh with some other submesh's material, which is worse
@@ -574,6 +559,7 @@ pub fn parse(file: &[u8]) -> Result<Model> {
         submeshes,
         unpaired_pointers,
         materials,
+        scene,
     })
 }
 
@@ -770,6 +756,8 @@ fn one(
     }
     Some(SubMesh {
         record,
+        mesh: None,
+        node: None,
         material,
         indices,
         positions,
@@ -779,16 +767,6 @@ fn one(
         tangents,
         stride,
     })
-}
-
-fn u32_at(file: &[u8], at: usize, what: &'static str) -> Result<u32> {
-    file.get(at..at + 4)
-        .map(|b| u32::from_le_bytes(b.try_into().expect("four bytes")))
-        .ok_or(Error::OutOfBounds {
-            what,
-            end: at + 4,
-            len: file.len(),
-        })
 }
 
 fn f32_at(file: &[u8], at: usize) -> f32 {
