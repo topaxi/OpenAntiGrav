@@ -11,9 +11,9 @@
 //! [`collision`] is the triangle soup, [`track`] the AI spline graph, [`pads`]
 //! the speedup and weapon trigger volumes, [`pvs`] the authored visible set,
 //! [`fog`] the fog volume, [`lighting`] the light rig, [`sound_emitters`] the
-//! positional sound nodes and [`shadow_occluder`] the convex hulls. Each is a
-//! `vex::Node` payload, not a neighbouring format, and splitting them out would
-//! cut a tree into chunks.
+//! positional sound nodes, [`shadow_occluder`] the convex hulls and [`cloud`]
+//! the `cloudCube`/`cloudGroup` sky puffs. Each is a `vex::Node` payload, not a
+//! neighbouring format, and splitting them out would cut a tree into chunks.
 //!
 //! Three are standalone files rather than nodes, kept here because the same
 //! scene is what reads them: [`vif`] walks the PS2 VIF1 packets a `.vex` batch
@@ -23,6 +23,7 @@
 //!
 //! See [ADR-0050](../../../docs/architecture/adr/0050-format-crates-split-by-format-family.md).
 
+pub mod cloud;
 pub mod collision;
 pub mod fog;
 pub mod kdcol;
