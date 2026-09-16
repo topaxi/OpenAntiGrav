@@ -203,7 +203,10 @@ fn the_plasma_flare_scale_follows_the_charge() {
     );
 
     let flying = plasma_flare_scale(Some(Weapon::Plasma), 0.0);
-    assert_eq!(flying, 1.0, "a launched bolt's flare rides at neutral scale");
+    assert_eq!(
+        flying, 1.0,
+        "a launched bolt's flare rides at neutral scale"
+    );
 
     let just_pressed = plasma_flare_scale(Some(Weapon::Plasma), CHARGE_SECONDS);
     assert_eq!(
