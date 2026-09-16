@@ -24,11 +24,15 @@ pivot composition, `local * parent_world` with a root's own static parent
 matrix, linear/nlerp interpolation wrapping to key 0 - was checked node by
 node against HD's world matrices at up to fourteen times
 (`crates/render/tests/psp2_scenery_animation_ground_truth.rs`, one test per
-circuit). The pivot was the finding that would not have come from `altima`
-alone: the bare `S * R * T` puts a wind-turbine rotor 2,500 units from its
-tower and 63 of Anulpha Pass's 86 shared nodes on HD's matrix, the pivot
-form puts the rotor on its hub and 76 of 86 on HD's, and the pivot
-*translate* brings the seven trains from 520 units off to 4.
+circuit, floors set by running two deliberate breaks through the suite and
+recorded in the test). The pivot was the finding that would not have come
+from `altima` alone: the bare `S * R * T` puts a wind-turbine rotor 2,500
+units from its tower and 63 of Anulpha Pass's 86 shared nodes on HD's
+matrix, the pivot form puts the rotor on its hub and 76 of 86 on HD's, and
+the pivot *translate* brings the seven trains from 520 units off to 4. And
+one node on Metropia said the scale is *not* about that pivot, only the
+rotation - a correction the first reading would have shipped without the
+mutation pass that surfaced it.
 
 **Reading the node table also fixed a placement defect that shipped**, the
 same shape as Pulse's `Anim Transform` one: 130 of `altima`'s 1,153 meshes
@@ -53,11 +57,12 @@ every submesh record reachable from exactly one mesh object.
 
 ## Open
 
-- **`trackZone.rcsanimclip`/`.rcsskeleton` are parsed and wired to nothing.**
-  Zone draws `trackZone.rcsmodel` through `race::load::environment`, which
-  passes `None` for the animation; the Zone skeleton also hides 944 of
-  `altima`'s 960 mesh-bearing nodes at bind (visibility, slot 3), so Zone
-  currently draws scenery the original hides. Its keys run at 30 Hz.
+- **`trackZone.rcsanimclip`/`.rcsskeleton`/`.rcsmodel` are parsed and used
+  by nothing.** A 2048 Zone race here races the ordinary `track.vex` and
+  its model, so the Zone trio is never loaded; the Zone skeleton hides 944
+  of `altima`'s 960 mesh-bearing nodes at bind (visibility, slot 3), which
+  is presumably what a Zone circuit looks like on the Vita and not what
+  this engine draws for one. Its keys run at 30 Hz.
 - **`trackpart_startgridanims(_sp).rcsanimclip`** - the start-grid animation,
   70-odd tracks per circuit, the only files with property slots 7 and 8
   (scalars, unread). No caller; what it animates (a camera? the grid
@@ -71,6 +76,10 @@ every submesh record reachable from exactly one mesh object.
   this pass.
 - **Visibility is at 75**, read off which nodes a clip later shows and which
   a Zone skeleton hides, not off the executable.
+- **51 moving meshes across the fourteen race circuits sit under a
+  non-uniform scale** and light off a normal the shader's node matrix skews
+  (no inverse transpose in `mesh.wgsl`, its own standing caveat); the baked
+  path does the inverse transpose, the moving path does not.
 - **The node id hash function** is unidentified (ten functions tried); the
   mesh object's `+0x04` word and `+0x0a` flags, property slots 6 to 8 and
   the tag word's high half, the clip header's `+0x0c`, and the skeleton's

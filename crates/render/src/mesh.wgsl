@@ -367,7 +367,12 @@ fn vs_main(in: VertexInput) -> VertexOutput {
     // assumed - all 37 meshes under a non-uniformly scaled node are prelit
     // (`lit = 0.0`), so their normals never reach the light rig at all. A title
     // that lights one needs the inverse transpose here;
-    // `scenery_animation_ground_truth.rs` fails when that day comes.
+    // `scenery_animation_ground_truth.rs` fails when that day comes. **Wipeout
+    // 2048 is that title, in a small way**: 51 moving, lit meshes across its
+    // fourteen race circuits sit under a non-uniformly scaled skeleton node
+    // (`docs/formats/2048-animation.md`, "What a race does with it"), and
+    // their normals are skewed here. The baked (static) 2048 path does the
+    // inverse transpose on the CPU; this one does not yet.
     let turned = node * vec4<f32>(in.normal, 0.0);
     out.normal = (uniforms.model * turned).xyz;
     out.colour = in.colour;

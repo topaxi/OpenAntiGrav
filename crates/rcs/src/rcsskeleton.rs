@@ -35,8 +35,9 @@
 //! in a clip), `4` the rotate/scale pivot (vec3) and `5` the pivot's
 //! translate (vec3). Slots 6 to 8 are scalars 21 nodes across two
 //! `startgridanims` files carry and nothing here interprets. A node's local
-//! matrix composes as Maya composes a transform with one shared pivot:
-//! `T(-pivot) * S * R * T(pivot) * T(pivot_translate) * T(translation)`,
+//! matrix composes as Maya composes a transform whose rotate pivot is set
+//! and whose scale pivot is not:
+//! `S * T(-pivot) * R * T(pivot) * T(pivot_translate) * T(translation)`,
 //! row-vector order - see [`Node::local`] for why that and not the bare
 //! `S * R * T` the model's own bind matrices were composed with.
 //!
@@ -137,7 +138,7 @@ impl Node {
     /// The node's local matrix from its own bind values, row-major with the
     /// translation in row 3.
     ///
-    /// `T(-pivot) * S * R * T(pivot) * T(pivot_translate) * T(translation)`.
+    /// `S * T(-pivot) * R * T(pivot) * T(pivot_translate) * T(translation)`.
     /// **The pivot is load-bearing**: `altima`'s wind-turbine rotors carry
     /// their geometry 1,300 units from the node origin with the pivot at
     /// the geometry's centre, and without it each rotor orbits its tower
@@ -279,8 +280,14 @@ pub fn parse(file: &[u8]) -> Result<Skeleton> {
     Ok(Skeleton { nodes })
 }
 
-/// `T(-pivot) * S * R * T(pivot) * T(pivot_translate) * T(translation)`, in
-/// the row-vector convention every matrix in this crate uses.
+/// `S * T(-pivot) * R * T(pivot) * T(pivot_translate) * T(translation)`, in
+/// the row-vector convention every matrix in this crate uses: the scale is
+/// about the node's origin and only the rotation is about the pivot.
+///
+/// Scaling about the pivot too - Maya's form when its scale pivot equals
+/// its rotate pivot - fits every node with a unit scale identically and
+/// misses Metropia's `pCylinder208_1` (scale 17.3, pivot 17.3 up, no
+/// rotation) by 282 units where this form lands it on HD's matrix exactly.
 #[must_use]
 pub fn local_matrix(
     scale: [f32; 3],
@@ -289,18 +296,21 @@ pub fn local_matrix(
     pivot: [f32; 3],
     pivot_translate: [f32; 3],
 ) -> [f32; 16] {
-    let mut m = quat_matrix(rotation);
+    let rotate = quat_matrix(rotation);
+    let mut m = rotate;
     // Scale, then rotate: scale each basis row.
     for row in 0..3 {
         for col in 0..3 {
             m[row * 4 + col] *= scale[row];
         }
     }
-    // A translation composed on the right adds to row 3; one composed on the
-    // left runs through the basis first.
+    // A translation composed on the right adds to row 3; the pivot's lead is
+    // composed between the scale and the rotation, so it runs through the
+    // rotation alone.
     let lead = [-pivot[0], -pivot[1], -pivot[2]];
-    let led: [f32; 3] =
-        std::array::from_fn(|col| lead[0] * m[col] + lead[1] * m[4 + col] + lead[2] * m[8 + col]);
+    let led: [f32; 3] = std::array::from_fn(|col| {
+        lead[0] * rotate[col] + lead[1] * rotate[4 + col] + lead[2] * rotate[8 + col]
+    });
     for k in 0..3 {
         m[12 + k] = led[k] + pivot[k] + pivot_translate[k] + translation[k];
     }

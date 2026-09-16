@@ -212,6 +212,25 @@ fn local_matrix_rotates_about_the_pivot() {
 }
 
 #[test]
+fn the_scale_is_about_the_origin_and_only_the_rotation_about_the_pivot() {
+    // Metropia's `pCylinder208_1`: scale 17.3, pivot 17.3 up, no rotation.
+    // Scaling about the pivot would shift it 282 units down; HD puts it at
+    // its own translation.
+    let m = local_matrix(
+        [17.3; 3],
+        [0.0, 0.0, 0.0, 1.0],
+        [1.0, 2.0, 3.0],
+        [0.0, 17.3, 0.0],
+        [0.0; 3],
+    );
+    assert!(
+        (m[12] - 1.0).abs() < 1e-4 && (m[13] - 2.0).abs() < 1e-4 && (m[14] - 3.0).abs() < 1e-4,
+        "{m:?}"
+    );
+    assert!((m[0] - 17.3).abs() < 1e-4 && (m[5] - 17.3).abs() < 1e-4);
+}
+
+#[test]
 fn bind_world_composes_child_under_parent_and_root_under_above() {
     let mut root = Bind::plain(1, None, [10.0, 0.0, 0.0]);
     root.above[12] = 100.0;

@@ -65,6 +65,7 @@ struct Survey {
     channels: usize,
     keys: usize,
     bind_matches: usize,
+    binds_written: usize,
     node_bound_meshes: usize,
     rates: std::collections::BTreeMap<u32, usize>,
     kinds: std::collections::BTreeMap<(usize, &'static str), usize>,
@@ -210,6 +211,7 @@ fn sweep(package: &Path, survey: &mut Survey) {
             let Some(bind) = model_node.bind else {
                 continue;
             };
+            survey.binds_written += usize::from(skeleton.node_by_id(model_node.id).is_some());
             let Some(i) = skeleton.node_by_id(model_node.id) else {
                 continue;
             };
@@ -250,12 +252,15 @@ fn every_skeleton_clip_and_model_close_on_each_other() {
     assert!(survey.files >= 49, "{} files", survey.files);
     assert!(survey.tracks >= 4305, "{} tracks", survey.tracks);
     assert!(survey.keys >= 1_850_000, "{} keys", survey.keys);
-    assert_eq!(
-        survey.bind_matches,
-        survey.nodes.min(survey.bind_matches),
-        "every node's bind matrix composed"
+    // Every written bind matrix the skeleton can name composed to itself -
+    // the loop above panics on the first that does not, so this is the
+    // count that says the loop ran over something.
+    assert_eq!(survey.bind_matches, survey.binds_written);
+    assert!(
+        survey.bind_matches >= 11_775,
+        "{} bind matrices",
+        survey.bind_matches
     );
-    assert!(survey.bind_matches > 0);
     // Five keys a second on the race tracks, thirty on the Zone ones.
     assert!(
         survey.rates.contains_key(&5) && survey.rates.contains_key(&30),
@@ -270,5 +275,134 @@ fn every_skeleton_clip_and_model_close_on_each_other() {
             _ => "scalar",
         };
         assert_eq!(*kind, expected, "slot {slot} carries a {kind}");
+    }
+}
+
+/// `altima`'s wind turbines, read off its own files with no HD twin: each
+/// rotor's geometry sits 1,300 units from its node origin with the pivot at
+/// the geometry's centre, and the rotor spins about the x axis every two
+/// seconds. With the pivot in the composition the rotor's centroid lands on
+/// its hub's; with the bare `S * R * T` it lands 2,500 units away and sweeps
+/// a 1,300-unit circle - the measurement that settled the pivot on a circuit
+/// Wipeout HD does not ship.
+#[test]
+#[ignore = "needs data/extracted/vita/PCSF00007"]
+fn altimas_rotors_sit_on_their_hubs_because_of_the_pivot() {
+    let Some(package) = package(PACKAGES[0]) else {
+        return;
+    };
+    let mut archive = oag_assets::psarc::Archive::open(package.to_str().expect("utf-8 path"))
+        .expect("the package opens");
+    let base = "data/art/published/environments/altima/track";
+    let model = psp2::parse(
+        &archive
+            .read_path(&format!("{base}.rcsmodel"))
+            .expect("model"),
+    )
+    .expect("model parses");
+    let skeleton = rcsskeleton::parse(
+        &archive
+            .read_path(&format!("{base}.rcsskeleton"))
+            .expect("skeleton"),
+    )
+    .expect("skeleton parses");
+    let clip = rcsanimclip::parse(
+        &archive
+            .read_path(&format!("{base}.rcsanimclip"))
+            .expect("clip"),
+    )
+    .expect("clip parses");
+    let motions: Vec<oag_rcs::rig::NodeMotion> = skeleton
+        .nodes
+        .iter()
+        .map(|n| oag_rcs::rig::NodeMotion {
+            node: n.clone(),
+            track: clip.track(n.id).cloned(),
+        })
+        .collect();
+    // World matrices at time zero, with the pivot pair in the composition
+    // or with the pivot's own translation term taken back out of it.
+    let world_at_zero = |pivot: bool| -> Vec<[f32; 16]> {
+        let mut world = vec![rcsskeleton::IDENTITY; skeleton.nodes.len()];
+        for &i in &skeleton.order() {
+            let node = &skeleton.nodes[i];
+            let mut local = motions[i].sample(0.0);
+            if !pivot {
+                let bare = local_matrix(
+                    node.scale,
+                    node.rotation,
+                    node.translation,
+                    [0.0; 3],
+                    [0.0; 3],
+                );
+                let pivoted = node.local();
+                for k in 0..3 {
+                    local[12 + k] += bare[12 + k] - pivoted[12 + k];
+                }
+            }
+            let parent = node.parent.map_or(node.above, |p| world[p]);
+            world[i] = multiply(&local, &parent);
+        }
+        world
+    };
+    let skeleton_node_of = |mesh: usize| -> usize {
+        let node = model.scene.meshes[mesh].node.expect("node-bound");
+        skeleton
+            .node_by_id(model.scene.nodes[node].id)
+            .expect("in the skeleton")
+    };
+    let centroid = |mesh: usize, world: &[[f32; 16]]| -> [f32; 3] {
+        let w = world[skeleton_node_of(mesh)];
+        let mut sum = [0.0f32; 3];
+        let mut n = 0usize;
+        for submesh in model.submeshes.iter().filter(|s| s.mesh == Some(mesh)) {
+            for p in &submesh.positions {
+                for (k, acc) in sum.iter_mut().enumerate() {
+                    *acc += p[0] * w[k] + p[1] * w[4 + k] + p[2] * w[8 + k] + w[12 + k];
+                }
+                n += 1;
+            }
+        }
+        std::array::from_fn(|k| sum[k] / n as f32)
+    };
+    let distance = |a: [f32; 3], b: [f32; 3]| -> f32 {
+        ((a[0] - b[0]).powi(2) + (a[1] - b[1]).powi(2) + (a[2] - b[2]).powi(2)).sqrt()
+    };
+    let rotors: Vec<usize> = model
+        .scene
+        .meshes
+        .iter()
+        .enumerate()
+        .filter(|(_, m)| {
+            m.name
+                .rsplit(':')
+                .next()
+                .is_some_and(|n| n.starts_with("rotorShape"))
+        })
+        .map(|(i, _)| i)
+        .collect();
+    assert_eq!(rotors.len(), 6, "altima has six rotors");
+    let with = world_at_zero(true);
+    let without = world_at_zero(false);
+    for &rotor in &rotors {
+        // The hub is the mesh on the rotor node's parent.
+        let parent = skeleton.nodes[skeleton_node_of(rotor)]
+            .parent
+            .expect("a rotor hangs under its hub");
+        let hub = (0..model.scene.meshes.len())
+            .find(|&m| model.scene.meshes[m].node.is_some() && skeleton_node_of(m) == parent)
+            .expect("the hub carries a mesh");
+        let on_hub = distance(centroid(rotor, &with), centroid(hub, &with));
+        let off_hub = distance(centroid(rotor, &without), centroid(hub, &without));
+        assert!(
+            on_hub < 5.0,
+            "{}: rotor centroid {on_hub} units from its hub's with the pivot",
+            model.scene.meshes[rotor].name
+        );
+        assert!(
+            off_hub > 1000.0,
+            "{}: without the pivot the rotor would still sit {off_hub} units from its hub - the pivot check has lost its power",
+            model.scene.meshes[rotor].name
+        );
     }
 }

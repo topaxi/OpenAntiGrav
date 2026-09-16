@@ -278,8 +278,10 @@ is only measurable, not visible, from the grid.
   header's `+0x0c`, and the skeleton's `+0x18` matrix for a child.
 - **The `trackZone.rcsanimclip` and `trackpart_startgridanims(_sp)` pairs.**
   Parsed by the same readers (they are the 30 Hz and the slot 7/8 files),
-  wired to nothing: Zone draws `trackZone.rcsmodel` through a path that does
-  not yet load its skeleton, and the start-grid animation has no caller.
+  wired to nothing: a 2048 Zone race in this engine races the ordinary
+  `track.vex` and its model (`zone: racing ...altima/track.vex as named`),
+  so `trackZone.rcsmodel` and its pair are not loaded at all, and the
+  start-grid animation has no caller.
 - **The loader.** No function in `vita-2048-eu-v104` was named this pass;
   every claim above is measured against files and against Wipeout HD, which
   is why the layout confidences stop at 92 and the visibility reading at 75.
