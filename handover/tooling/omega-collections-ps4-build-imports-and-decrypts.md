@@ -173,38 +173,61 @@ about a second, decompression-shaped problem on top of it.
 
 ## Open
 
-- **Block data location** (see above) - entries resolve to real paths now,
-  and roughly a third to a half of them already read real content through
-  the unmodified reader, but which third/half is not yet predictable, on
-  any archive checked. This blocks trustworthy real asset extraction more
-  fundamentally than the (now-resolved) manifest mismatch did - a caller
-  cannot yet tell a real read from a zero one without comparing against a
-  known-good reference. **The extraction-provenance lead (whether the base
-  `.pkg` extraction had silently absorbed, or needed, patch content) is
-  closed, negative, 2026-09-15**: `PkgTool.Core pkg_extract` has no
-  base/patch merge logic at all (checked directly against its source), the
-  patch's own archives are four names (`data05`/`07`/`08`/`09`) the base
+- **Block data location - corrected and narrower, still not closed.** The
+  "roughly a third to a half" figure this section used to carry was itself
+  measured wrong: `psarc_sweep`'s first-byte check counted several real,
+  correctly-located `.gnf` entries as fake because their pixel payload does
+  not start at byte zero (a dedup group of eleven `ShieldHexagonal_ALPHA.gnf`
+  liveries on `data03.psarc` is the worked example - 15,616 zero bytes then
+  real tiled-texture content). `crates/assets/examples/psarc_oracle.rs`
+  replaces it with a magic-based check (`VEXX`/`GNF `) and reports three
+  buckets instead of two: valid, all-zero, and **"garbage"** - real,
+  substantial bytes present but not the claimed magic, the population the
+  old oracle could not see at all. One genuine reader bug was found and
+  fixed along the way (a short stored block whose first byte coincidentally
+  matches zlib's marker no longer raises `Error::BadBlock`, the same
+  coincidence already known for full-size blocks). What is now settled:
+  `entry.offset` is not a location bug - a small sample rules out a constant
+  per-entry offset error, and the PS4 executable itself has no PSARC reader
+  of its own to compare against; it mounts every archive through Sony's
+  FIOS2 (`sceFiosArchiveMountSync`) behind a PlayGo chunk-locus poll, see
+  [`docs/ghidra/functions/ps4-omega-eu/psarc-mount.md`](../../docs/ghidra/functions/ps4-omega-eu/psarc-mount.md).
+  **What remains open**: why a substantial "garbage" population exists at
+  all - real bytes, wrong format, at an offset with no arithmetic problem.
+  Full numbers: [`docs/formats/psarc.md`](../../docs/formats/psarc.md)'s
+  "Block data location" section. **The extraction-provenance lead (whether
+  the base `.pkg` extraction had silently absorbed, or needed, patch
+  content) is closed, negative, 2026-09-15**: `PkgTool.Core pkg_extract` has
+  no base/patch merge logic at all (checked directly against its source),
+  the patch's own archives are four names (`data05`/`07`/`08`/`09`) the base
   `.pkg` doesn't have rather than replacements for `data00`-`04`, and the
-  same real/zero split reproduces at similar magnitude on those four,
-  freshly extracted this session - see
+  same split reproduces at similar magnitude on those four, freshly
+  extracted this session - see
   [omega-ps4-patch-adds-four-archives-not-in-the-base-pkg.md](omega-ps4-patch-adds-four-archives-not-in-the-base-pkg.md),
-  split out to hold that finding. What remains open is a from-scratch
-  reading of what distinguishes a real entry from a zeroed one - not
-  attempted this session either, per the standing rule against guessing a
-  fix without a verified cause, but now ruled out as an extraction
-  artifact rather than merely unexplained.
+  split out to hold that finding.
+- **A 75-file sample of PS4 `.rcsmodel` entries all fail
+  `oag_rcs::rcsmodel::Model::parse`'s big-endian version check** - consistent
+  with, not proof of, this format being stored little-endian on PS4 (every
+  other PS4-native payload checked so far - `.gnf`, `.vex` - is little-endian
+  where PS3's own copies are big-endian). `.vex` itself decodes unmodified
+  through `oag_vex::vex`, whose byte-order detection already reads the
+  file's own magic rather than assuming a platform. `oag-rcs` is left
+  untouched - out of this thread's own lane.
 - `GameModes/*.cpp` (`GameMode_ModeManager`, `GameMode_RaceManager`,
   `GameMode_TournamentModeManager`) has no obvious Vita/PS3 counterpart in
   the `.cpp`-path census - worth checking whether Vita's own
   `GameModes/GameMode_RaceManager.cpp` (present in its own string table per
   `vita-2048-eu-v104/README.md`'s own comparison table) is the same file
   under a path this census missed, before concluding PS4 added a layer.
-- `.gnf` (PS4's native texture container) has no reader in this project at
-  all. Some real `.gnf` bytes can already come out of a PSARC (the
-  real/zero split below means a specific one might or might not), so this
-  is a live gap rather than a blocked one - the next format gap to close
-  once the real/zero split is understood, the same role `.gtf`/`.gxt` fill
-  for PS3/Vita.
+- **`.gnf` has a reader now** - `oag_texture::gnf`, header and the 8-dword
+  GCN "T#" descriptor (surface format, dimensions, tile mode), triangulated
+  from two open-source readers and AMD's public GCN ISA reference rather
+  than a first-party Sony spec. See [`docs/formats/gnf.md`](../../docs/formats/gnf.md).
+  **No pixel decoded**: every real `.gnf` sampled declares a genuinely
+  tiled mode, and untiling GCN correctly needs the full macro/micro
+  tile/pipe/bank-swizzle table with no real PS4 to check the picture
+  against - left as the next gap, the same shape `.gtf`/`.gxt` closed for
+  PS3/Vita once a linear (untiled) sample turns up, if one does.
 - Ghidra's own `analyzed` flag reads `false` on `/ps4-omega-eu/eboot.bin`
   even though `analyzing` is `false` and the function count (20,941) has
   been stable across repeated checks - not chased further, likely a
@@ -214,20 +237,23 @@ about a second, decompression-shaped problem on top of it.
 
 ## Next Steps
 
-- Resolve the block-data-location problem (see Open, first item) - this is
-  the actual blocker for real asset extraction now, not the manifest
-  question, and not an extraction-provenance question either (that lead is
-  closed - see Open). A from-scratch reading of what distinguishes a real
-  entry's bytes from a zeroed one is the only avenue left; nothing tried so
-  far (stored-block shape, file position, a base/patch merge) predicts it.
-- Once the real/zero split is understood (or at least detectable per-entry),
-  `psarc_list`/`psarc_cat`/`psarc_sweep` (`crates/assets/examples/`) already
-  work against a 1.4 archive's directory and manifest - re-run them for a
-  full per-archive file/extension census and decide whether `data03.psarc`
-  (328 real entries, by far the smallest of the base `.pkg`'s five) is a
-  distinct content package worth checking against `data/dlc/` before
-  assuming it is just "more of the same". **The same census on the patch's
-  own four archives is done and says no** -
+- Resolve why the "garbage" bucket exists (see Open, first item) - real,
+  substantial bytes present at an offset with no arithmetic problem, that
+  are neither all-zero nor the format their own extension claims. Nothing
+  tried so far (stored-block shape, file position, a base/patch merge, a
+  constant per-entry offset shift) predicts it; the executable itself has no
+  PSARC reader to compare against, so the only avenue left is inside
+  `libSceFios2.prx` (Sony's signed system module, held but not opened in
+  Ghidra - see `psarc-mount.md`'s own "Not read") or a from-scratch
+  statistical pass over the "garbage" population itself.
+- A full per-archive file/extension census is done -
+  `crates/assets/examples/psarc_oracle.rs`'s own output, and
+  `docs/formats/README.md` now carries a row per extension found. Still
+  open from an earlier session: whether `data03.psarc` (328 real entries, by
+  far the smallest of the base `.pkg`'s five) is a distinct content package
+  worth checking against `data/dlc/` before assuming it is just "more of the
+  same". **The same census on the patch's own four archives is done and
+  says no** -
   [omega-ps4-patch-adds-four-archives-not-in-the-base-pkg.md](omega-ps4-patch-adds-four-archives-not-in-the-base-pkg.md)
   names every HD circuit and every 2048 zone-mode environment already known
   to this project across `data05`/`data08`, no name outside either roster,
