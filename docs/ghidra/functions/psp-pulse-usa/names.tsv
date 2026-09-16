@@ -899,3 +899,6 @@
 0x0898e768	function	Scream_OpGotoRandomMarker	88	sound.md
 0x0898e8d4	function	Scream_OpWaitForVoices	78	sound.md
 0x0898de84	function	Scream_OpConfigureLfo	60	sound.md
+0x08932138	function	CloudCube_RegisterClass	92	clouds.md
+0x0893471c	function	CloudGroup_RegisterClass	92	clouds.md
+0x08933048	function	CloudGroup_Init	90	clouds.md

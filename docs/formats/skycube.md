@@ -281,8 +281,18 @@ semantically undecoded block.
   parameters are re-interpolated every frame from where the camera sits in the fog
   volume. A linear ramp is correct and must not be "fixed" into a curve. See
   [`fog.md`](../ghidra/functions/psp-pulse-usa/fog.md).
-- **`cloudCube` `0x3d8`, `cloudGroup` `0x3d9` are undecoded.** Present in the
-  census - `05_Track` alone authors 5 clouds and 3 cloud groups.
+- ~~`cloudCube` `0x3d8`, `cloudGroup` `0x3d9` are undecoded.~~ **Resolved.**
+  Both are decoded in [`oag_vex::cloud`](../../crates/vex/src/cloud.rs); see
+  [`clouds.md`](../ghidra/functions/psp-pulse-usa/clouds.md). `05_Track` is
+  the *only* Pulse circuit that authors either, on both PSP pressings - 5
+  `cloudCube` leaves and 3 `cloudGroup` nodes per layout, matching the count
+  this page originally quoted from the census that motivated the decode.
+  **Both classes are registered** (`CloudCube_RegisterClass` `0x08932138`,
+  `CloudGroup_RegisterClass` `0x0893471c`), which refutes the guess this
+  bullet used to make by analogy with `engine_fire`/`exitglow`/`gate` below -
+  an unregistered class was the right question to ask, and the answer here
+  is no. No renderer exists yet for either class; see `clouds.md`'s Open
+  section for what a renderer needs and does not yet have.
 - **`weatherPos` `0x3da`'s registration is found, and a live PPSSPP capture
   confirms its runtime constructor actually runs, loading a real race.**
   `WeatherPos_RegisterClass` (`0x0892c684`) registers class `0x3da` like every

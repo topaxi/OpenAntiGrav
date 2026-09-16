@@ -30,6 +30,19 @@ use super::{Node, byte_order, cstr_at};
 /// circuits author `Loopend`, which the engine's `strcmp` does not match, so
 /// those three do not loop. Matching them here would be a departure.
 ///
+/// **Not every consumer of this list uses `strcmp`.** `CloudGroup_Init`
+/// (`0x08933048`, `docs/ghidra/functions/psp-pulse-usa/clouds.md`) reads the
+/// same list shape - `Overlap`, `SpriteRadius`, the colour-ramp names - with
+/// `strcasecmp` instead, a case-*insensitive* compare. Both readings are off
+/// the consumer's own disassembly, so this is a genuine per-caller divergence
+/// rather than a mistake in either page. It makes no difference to any
+/// shipped file (every cloud attribute name already matches this function's
+/// case exactly), which is why [`crate::cloud`] reuses this function
+/// unchanged instead of adding a second, case-folding walker for a
+/// difference no shipped byte exercises - but a future consumer whose data
+/// *does* differ by case should check which comparison its own handler uses
+/// before assuming this function's case-sensitive answer is theirs too.
+///
 /// Returns an empty vector for a node with no list, a header this file does not
 /// contain, or a list that does not walk.
 #[must_use]
