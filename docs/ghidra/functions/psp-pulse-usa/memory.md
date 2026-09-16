@@ -165,10 +165,11 @@ retail binary still has the `printf`, so a PPSSPP log shows them.
 `sceKernelMaxFreeMemSize() - 0x7e49b0` and the heap is recorded as
 `g_main_heap`. `Mem_Init` (`0x08946c58`) is the only caller that passes it,
 building the main heap in the static descriptor `g_main_heap_storage`
-(`0x08b84150`). `Mem_Init` has **no caller**: its address sits in the
-8-byte-stride function-pointer table at `0x08ad9c80`-`0x08ad9d58` (entry
-`0x08ad9d30`), i.e. it is a static constructor that runs before `main`,
-which is why the heap already exists when `Game_Bootstrap` is reached.
+(`0x08b84150`). `Mem_Init` has **no caller**: its address sits in `.cplinit`
+(`0x08ad9798`-`0x08ad9e8f`, 223 entries of 8 bytes, entry `0x08ad9d30`),
+the SDK's C++ static-initialiser section, so it runs before `main` and the
+heap already exists when `Game_Bootstrap` is reached - see the
+[PSP memory map](../../memory-maps/psp-pulse-usa.md).
 
 `Heap_Destroy` (`0x089461f0`) unlinks, frees and deletes the FPL if owned,
 and deletes the lock semaphore when the list empties; bit 0 of its flags
@@ -309,10 +310,6 @@ resource-loading page that will own the VFS proper is still to be written.
   `operator new[]`. Unanswerable from the code alone; unimportant.
 - What `FUN_08971afc(&DAT_08ac1f1c)` / `(&DAT_08ac1f28)` in `Mem_Init`
   initialise. Two more lock-shaped objects, not read.
-- The function-pointer table at `0x08ad9c80` that runs `Mem_Init`: its
-  walker was not traced. It is ascending by address with 8-byte entries,
-  which is not the shape of GCC's `.ctors`; it may be the SDK's own
-  module-start initialiser list.
 
 ## History
 

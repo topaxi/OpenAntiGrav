@@ -33,7 +33,7 @@ assets author": `authored` and `read` are both short of a runtime consumer.
 | --- | --- | --- |
 | [M0 - Foundation](roadmap.md#m0---foundation) | Both Pulse discs listed and identified; every format has a status-table row | ✅ **done** |
 | [M1 - Asset archaeology](roadmap.md#m1---asset-archaeology) | A Pulse track and ship render in `oag-view` from an unmodified disc, both PSP and PS2 paths | ✅ **done** |
-| [M2 - Binary understanding](roadmap.md#m2---binary-understanding) | Engine lifecycle and memory map documented; 50+ functions documented | 🟨 **in progress** - 120 functions documented, memory map still open |
+| [M2 - Binary understanding](roadmap.md#m2---binary-understanding) | Engine lifecycle and memory map documented; 50+ functions documented | ✅ **done** (2026-09-16) - 928 symbols documented; lifecycle on the memory, resource-loading and state-machine pages; [memory maps](../ghidra/memory-maps/README.md) for both platforms |
 | [M3 - Verification harness](roadmap.md#m3---verification-harness) | One command diffs any subsystem against the original and reports where/by how much | 🟨 **in progress** - `oag-trace` does this for PPSSPP; no PCSX2 equivalent yet |
 | [M4 - Playable core](roadmap.md#m4---playable-core) | A single-ship time trial passes trace comparison for a full lap and feels right | ✅ **done** - ship holds the track for 600 ticks, worst spline distance 27.2/114 units |
 | [M5 - Full race](roadmap.md#m5---full-race) | An eight-ship race indistinguishable from the original, per-tick trace in tolerance | 🟨 **in progress** - eight-craft grid built and AI drives; full-race trace parity not yet claimed |
