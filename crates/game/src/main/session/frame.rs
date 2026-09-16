@@ -197,7 +197,14 @@ impl Session {
             // axes; the front end reads the button edges the same call computed,
             // through `buttons_mut`, because it needs `consume_press` and a
             // snapshot is a value.
-            let snapshot = self.controls.snapshot();
+            // One snapshot per grid slot, from whichever device
+            // `oag_input::pad::Assignment` says drives it - every device on
+            // slot 0 until something assigns one elsewhere, which is the single
+            // merged stream this was until 2026-09-16. The front end reads the
+            // button edges this same call computed, through `buttons_mut`, for
+            // the one slot the keyboard drives; it has one menu and one cursor
+            // however many people are racing.
+            let inputs = self.controls.player_snapshots();
             // The pad spoke: the drawn cursor goes until the mouse moves
             // again, the same rule a key press applies in `app.rs`. Read
             // off the pad's own contribution rather than the merged
@@ -563,12 +570,11 @@ impl Session {
                             ship.pickup.weapon = Some(weapon);
                         }
                     }
-                    // The pad's own slot assignment, which is slot 0 for
-                    // every device in a single-player session - see
-                    // `oag_input::pad::Assignment`. One snapshot per slot from
-                    // here down.
-                    let mut inputs = oag_gameplay::PlayerInputs::none();
-                    inputs.set(stage.race.sim.world.primary_slot(), snapshot);
+                    // Every slot's snapshot, straight off the devices'
+                    // assignment - see `oag_input::pad::Assignment`. Under its
+                    // default every device is on slot 0, so this is the one
+                    // snapshot the single-argument signature used to take, in
+                    // the slot it used to go to.
                     stage.race.tick(&inputs);
                     // Immediately after the tick and inside this loop, so a cue
                     // lands on the tick that raised it whether the frame

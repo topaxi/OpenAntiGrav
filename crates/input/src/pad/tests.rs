@@ -279,3 +279,50 @@ fn a_held_shoulder_wins_over_a_lighter_brake_under_the_old_mapping() {
     assert_eq!(state.airbrake_left, pull(0.3));
     assert_eq!(state.airbrake_right, 1.0);
 }
+
+/// The whole point of the default: an unconfigured session behaves exactly as
+/// it did when every pad was merged into one stream.
+#[test]
+fn every_device_drives_slot_zero_until_something_says_otherwise() {
+    let assignment = Assignment::default();
+    assert!(assignment.is_single_player());
+    assert_eq!(assignment.keyboard_slot(), Assignment::DEFAULT_SLOT);
+}
+
+/// A slot past the grid is refused rather than clamped: clamping would put two
+/// people on one craft, which reads as a physics bug rather than a settings one.
+#[test]
+fn a_slot_past_the_grid_is_refused() {
+    let mut assignment = Assignment::default();
+    assignment.assign_keyboard(oag_gameplay::MAX_PLAYERS);
+    assert_eq!(assignment.keyboard_slot(), Assignment::DEFAULT_SLOT);
+
+    assignment.assign_keyboard(oag_gameplay::MAX_PLAYERS - 1);
+    assert_eq!(assignment.keyboard_slot(), oag_gameplay::MAX_PLAYERS - 1);
+    assert!(!assignment.is_single_player());
+}
+
+/// A pad with no assignment of its own is not an error and not a dropped
+/// device: it falls to slot 0, the same place it went before assignment
+/// existed. `gilrs::GamepadId` has no public constructor, so this covers the
+/// fallback - `slot_of` against an empty table - rather than the lookup.
+#[test]
+fn an_unassigned_pad_falls_to_slot_zero() {
+    let pad = Pad::none();
+    assert!(pad.assignment().is_single_player());
+    assert!(pad.assignment().pads.is_empty());
+}
+
+/// A pad subsystem that never opened reports eight resting slots rather than
+/// panicking or reporting one - which is what every CI run and every headless
+/// capture reads.
+#[test]
+fn a_pad_that_was_never_opened_reads_as_eight_resting_slots() {
+    let mut pad = Pad::none();
+    let players = pad.poll_players();
+    assert_eq!(players.len(), oag_gameplay::MAX_PLAYERS);
+    for (slot, state) in players.iter().enumerate() {
+        assert_eq!(*state, PadState::default(), "slot {slot}");
+    }
+    assert_eq!(pad.poll(), players[Assignment::DEFAULT_SLOT]);
+}
