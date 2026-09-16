@@ -463,6 +463,17 @@ To look at one atlas rather than trust the numbers:
 just play ps2 --screenshot data/cache/ps2-main.png --menu-page main
 ```
 
+## Coverage
+
+`oag_texture::fnt::coverage` claims the header, the codepoint and offset
+tables, every glyph record and, when present, the atlas header, palette and
+texels. Swept across all five PSP fonts in `FE.wad`
+(`crates/texture/tests/mip_fnt_coverage_ground_truth.rs`): **99.94%** of
+185,456 bytes, and the only gap on any file is the reserved 20 bytes at
+`+0x1c` (never read; see [Not determined](#not-determined)) plus, on the
+worst file, 2 bytes of alignment slack between the last glyph record and the
+atlas header.
+
 ## Not determined
 
 - **`+0x14`**, 0 in three fonts and 4 in two. The two with 4 are also the two
@@ -479,6 +490,10 @@ just play ps2 --screenshot data/cache/ps2-main.png --menu-page main
   time, and why, is still an open question.
 - The `+0x18` field of the atlas header and the 40 zero bytes after the two
   pointers. Reserved, on the evidence of being zero in all five.
+- **The 20 bytes at `+0x1c` of the *file* header**, before the codepoint
+  table. Named rather than merely implicit: `Metrics::parse` never reads
+  them, so [Coverage](#coverage) reports them as the one gap every font
+  shares.
 
 ## Rendering it
 

@@ -593,5 +593,59 @@ impl Font {
     }
 }
 
+/// Byte coverage of one `.fnt` blob.
+///
+/// Works on both shapes: a PS2 font, where [`Metrics::parse`] alone succeeds
+/// and there is no atlas to claim, and a PSP/PS3 font, where [`Font::parse`]
+/// also succeeds and the atlas header, palette and texels are claimed too.
+/// The 20 bytes at `+0x1c` are deliberately left unclaimed: the module doc
+/// calls them zero, but nothing here reads them to check.
+#[must_use]
+pub fn coverage(data: &[u8]) -> oag_formats::coverage::Coverage {
+    let mut seen = oag_formats::coverage::Coverage::new(data.len());
+    let Ok(metrics) = Metrics::parse(data) else {
+        return seen;
+    };
+    seen.claim(0, 0x1c, "the font header");
+    let order = metrics.order;
+    let count = metrics.glyphs.len().max(1);
+    let codepoints_at = order.u32(data, 0x08) as usize;
+    let offsets_at = order.u32(data, 0x0c) as usize;
+    // The codepoint table is `count` entries as declared at `+0x04`, which
+    // may be one longer than `glyphs.len()` when a trailing zero terminates
+    // the list early - claimed at the declared length either way, since that
+    // is what the file's own table actually spans.
+    let declared_count = order.u32(data, 0x04) as usize;
+    seen.claim(codepoints_at, declared_count * 2, "the codepoint table");
+    seen.claim(offsets_at, declared_count * 4, "the offset table");
+    // A glyph record's own file offset is not kept on `Glyph`, so this
+    // re-walks the offset table exactly as `Metrics::parse` does, once per
+    // glyph, to claim each record's span.
+    for i in 0..count.min(metrics.glyphs.len()) {
+        let Some(bytes) = data.get(offsets_at + i * 4..offsets_at + i * 4 + 4) else {
+            break;
+        };
+        let at = order.u32(bytes, 0) as usize;
+        seen.claim(at, GLYPH_LEN, "a glyph record");
+    }
+
+    if metrics.has_embedded_atlas(data)
+        && let Ok(font) = Font::parse(data)
+    {
+        let atlas_at = metrics.atlas_at;
+        seen.claim(atlas_at, ATLAS_HEADER_LEN, "the atlas header");
+        let clut_size = font.palette.len() * 4;
+        seen.claim(atlas_at + ATLAS_HEADER_LEN, clut_size, "the atlas palette");
+        let texel_size = usize::from(font.width) * usize::from(font.height) / 2;
+        seen.claim(
+            atlas_at + ATLAS_HEADER_LEN + clut_size,
+            texel_size,
+            "the atlas texels",
+        );
+    }
+
+    seen
+}
+
 #[cfg(test)]
 mod tests;

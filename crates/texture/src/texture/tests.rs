@@ -276,3 +276,36 @@ fn a_flat_image_does_not_look_swizzled() {
     let t = Texture::parse(&build(64, 64, 8, 7)).unwrap();
     assert!(!t.looks_swizzled());
 }
+
+#[test]
+fn coverage_leaves_exactly_the_seven_unknown_bytes_on_a_single_level_texture() {
+    let data = build(32, 16, 8, 5);
+    let seen = super::coverage(&data);
+    let gaps = seen.gaps(1);
+    assert_eq!(gaps.len(), 1, "{gaps:?}");
+    assert_eq!((gaps[0].at, gaps[0].len), (9, 7));
+}
+
+#[test]
+fn coverage_leaves_higher_mip_levels_unclaimed_too() {
+    let colours = 256usize;
+    let mut out = Vec::new();
+    out.extend(8u16.to_le_bytes());
+    out.extend(8u16.to_le_bytes());
+    out.push(8);
+    out.extend([0u8, 4, 0, 0]);
+    out.extend([0u8; 7]);
+    for i in 0..colours {
+        out.extend([i as u8, 0, 0, 255]);
+    }
+    out.extend(std::iter::repeat_n(0u8, super::mip_chain_len(8, 8, 8, 4)));
+
+    let seen = super::coverage(&out);
+    let gaps = seen.gaps(1);
+    // The `+0x09` gap, plus whatever of the chain sits past level 0.
+    assert!(gaps.len() >= 2, "{gaps:?}");
+    assert!(
+        seen.claimed() < out.len(),
+        "higher mip levels must not be claimed"
+    );
+}

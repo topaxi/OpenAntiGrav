@@ -108,6 +108,21 @@ identify rather than mis-decode, which is what makes the count evidence. See the
 model textures ship [pre-swizzled](pure-status.md#pures-model-textures-ship-pre-swizzled)
 where Pulse's do not.
 
+## Coverage
+
+`oag_texture::texture::coverage` claims the header fields this page decodes,
+the palette and level 0's pixels, and leaves two gaps this page already
+named in prose rather than in numbers: the seven bytes at `+0x09..+0x10`
+(never read at all, not even into [`Texture::unknown`](../../crates/texture/src/texture.rs),
+which stops at `+0x08`) and every mip level past 0 on a mipmapped blob
+("only level 0 is decoded" above). Swept across 435 standalone `.mip` blobs
+found in `FE.wad`, `FEData.wad`, `Data.wad` and `BEData.wad` on
+`pulse-psp-usa`
+(`crates/texture/tests/mip_fnt_coverage_ground_truth.rs`): **99.26%** of
+14,075,440 bytes, the worst single file (44,688 bytes, mipmapped) at 75.64%
+- 10,880 of its bytes are mip levels 1+, which this parser validates the
+length of but never reads a pixel from.
+
 ## Open questions
 
 ### ~~Is the pixel data swizzled?~~ Sometimes, and `+0x07` says which
