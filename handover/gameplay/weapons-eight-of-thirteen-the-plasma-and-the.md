@@ -908,6 +908,16 @@ gates the craft-hit test (not in `Init` or `Launch` as decompiled).
 
 ## Next Steps
 
+- **HD/Omega Plasma, four unread pieces** (2026-09-16, detail in that
+  section): where Omega sets the `flags & 1` bit gating the craft-hit test
+  (not `Plasma_Init` or `Plasma_Launch`; likely the fire handler); the
+  24-slot descriptor pool both ports register lights or post-effects into
+  (`0x01606280`/`0x01605f50` Omega, `FUN_00677c78`/`FUN_00677a88` HD);
+  HD's blast loop `0x00146470` and mine-clear `0x00145ef8`; and why the
+  explosion targets are 100/7.1/7.0 on HD against 50/2/3 on Omega over
+  the same three `.vex` names. Also `0x00126d80`'s `(1, 0xffff)` gate on
+  HD, which is what writes two of the three explosion windows.
+
 - ~~**Draw the two rear weapons' models.**~~ **Done 2026-09-05.**
   `MINE_MODEL_ENTRY`/`BOMB_MODEL_ENTRY` (`oag_game::race`) load
   `Data\Weapons\Pulse_Mine.vex`/`Pulse_Bomb.vex` through the existing `.vex`

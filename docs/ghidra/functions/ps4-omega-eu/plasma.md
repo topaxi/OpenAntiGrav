@@ -270,6 +270,12 @@ for each viewport v: if (Visible(-1, p->position, p->position, v)) {   // 0x0171
 }
 ```
 
+The craft-hit block nulls the emitter (`*(lVar13 + 0x98) = 0`) after
+playing `NGP_PlasmaHitShip`, and `Plasma_Teardown` only plays
+`NGP_PlasmaHitWall` when the emitter is still there - that is the mechanism
+by which one destroy path serves both endings without the wall cue
+double-firing on a craft kill.
+
 Pass two of the walker then swap-removes any slot whose flag `4` is set
 **and** whose explosion reports `+0x1e1 == 0` - so a slot stays out of the
 pool until its explosion has run, and a bolt nobody could see (no viewport

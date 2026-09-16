@@ -235,6 +235,16 @@ constant `WeaponExplosions_Construct` looks up by CRC on each model.
 `age >= 0x008aa2b4 = 0x40600000 = 3.5 s`; `WeaponExplosions_Collapse` fires
 once at `0x008aa25c = 1.3 s`, spawning `'PLCE'` and hiding all three.
 
+**One hedge on the second and third windows.** On disk `0x008c18ac` and
+`0x008c18b0` hold `0.0`; the `1.3` is written at runtime by `0x00126d80`,
+and that function is gated (`if (param_1 != 1) return; if (param_2 !=
+0xffff) return;`) on two arguments whose meaning was not read. If the gate
+never fires, the sphere and halo never scale at all. The reading stands on
+corroboration rather than on the gate: Omega's `0x01372600` is a plain
+`void (void)` static initialiser that writes the identical `1.7, 1.3, 1.3`
+triple unconditionally, and two independently-compiled binaries agreeing on
+the triple is what makes `1.3` the right number here.
+
 The rates and lifetimes are Omega's exactly; the targets are not (Omega
 50 / 2.0 / 3.0). Given that both titles ship the same three `.vex` names,
 the likeliest reading is that the PS4's `rcsmodel` re-exports carry a
@@ -250,3 +260,5 @@ comparison table rather than a claim about the models.
 - What `FUN_0011eba0` checks before a slot is recycled (Omega: the
   explosion's `active` byte).
 - Whether the HD handling XML carries `weapon_damage_multiplier` at all.
+- What `0x00126d80`'s `(1, 0xffff)` gate means, i.e. when the two `1.3 s`
+  windows actually get written (see the hedge above).
