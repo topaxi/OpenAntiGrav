@@ -347,12 +347,16 @@ the actually-fake ones, and the true fraction is neither the old "30-54%"
 number nor a clean complement of it.
 
 **The corrected oracle checks the format's own magic instead of a
-byte position**, on the two extensions that carry one:
-`Data\...\*.vex` (`VEXX` at `+0x0c` - [`vex.md`](vex.md)) and
-`Data\...\*.gnf` (`GNF ` at `+0x00` - Sony's public PS4 texture magic).
-`.rcsmodel`/`.rcsmaterial` carry no magic at all (`crates/rcs/src/rcsmodel.rs`'s
-own module docs), so they cannot be scored this way and are reported
-separately, zero-vs-nonzero only. Three buckets result, not two -
+byte position**, on the extensions that carry one:
+`Data\...\*.vex` (`VEXX` at `+0x0c` - [`vex.md`](vex.md)),
+`Data\...\*.gnf` (`GNF ` at `+0x00` - Sony's public PS4 texture magic), and -
+added 2026-09-16 by `lane/omega-rcs`, see [`rcsmodel.md`](rcsmodel.md)'s and
+[`rcsmaterial.md`](rcsmaterial.md)'s own PS4 sections - `Data\...\*.rcsmodel`
+(`ED AD 5C CA` at `+0x00`) and `Data\...\*.rcsmaterial` (`E5 AD 5C CA` at
+`+0x00`). **On PS3, `.rcsmodel`/`.rcsmaterial` still carry no magic at all**
+(`crates/rcs/src/rcsmodel.rs`'s own module docs, unchanged) - the PS4 tag is a
+new container wrapping these two formats on this platform only, not a magic
+this project overlooked on PS3. Three buckets result, not two -
 `crates/assets/examples/psarc_oracle.rs`, superseding `psarc_sweep`:
 
 | Archive | `.gnf` valid | `.gnf` all-zero | `.gnf` garbage | `.vex` valid | `.vex` all-zero | `.vex` garbage |
@@ -368,6 +372,29 @@ entire declared range is zero, no exceptions. "Garbage" = neither: real
 bytes are present, but not the expected magic at the expected offset - the
 population the old first-byte check could not see at all, since a "garbage"
 entry's first byte is overwhelmingly zero too.)
+
+**Added 2026-09-16 (`lane/omega-rcs`), same tool, same three buckets, now
+scoring `.rcsmodel`/`.rcsmaterial` too**:
+
+| Archive | `.rcsmodel` valid | `.rcsmodel` all-zero | `.rcsmodel` garbage | `.rcsmaterial` valid | `.rcsmaterial` all-zero | `.rcsmaterial` garbage |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| `data00.psarc` | 27 | 16 | 54 | 147 | 26 | 228 |
+| `data01.psarc` | 18 | 7 | 38 | 113 | 0 | 214 |
+| `data02.psarc` | 7 | 0 | 0 | 137 | 1 | 271 |
+| `data03.psarc` | 18 | 9 | 48 | 0 | 0 | 0 |
+| `data04.psarc` | 7 | 0 | 1 | 42 | 6 | 85 |
+
+Same shape as `.gnf`/`.vex`: a "garbage" majority (`.rcsmodel` 141 of 250,
+`.rcsmaterial` 798 of 1,270 total entries) that is the same unresolved
+block-data-location population described above, not a new problem specific to
+these two formats. See [`rcsmodel.md`](rcsmodel.md)'s and
+[`rcsmaterial.md`](rcsmaterial.md)'s own PS4 sections for what "valid" means
+underneath the tag and for a full-population check that the payload past the
+tag is genuine content: **70 of 77 "valid" `.rcsmodel` files and 386 of 439
+"valid" `.rcsmaterial` files carry at least one `~crc32` name hash this
+project already knows the preimage of**, at a rate no chance collision comes
+close to explaining (`crates/rcs/examples/ps4_hash_scan.rs`'s own doc comment
+does the arithmetic).
 
 **A genuine reader bug surfaced and was fixed while building this table, not
 just a better measurement of an unchanged reader.** `data00.psarc` entry

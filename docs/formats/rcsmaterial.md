@@ -2013,6 +2013,43 @@ Confidence 90.
 - **The microcode**, which is where the operation - multiply, add, replace -
   actually is.
 
+## The PS4 Omega Collection wraps this in a different, unread container
+
+**2026-09-16, `lane/omega-rcs`.** Same finding as [rcsmodel.md's own PS4
+section](rcsmodel.md#the-ps4-omega-collection-a-different-container-not-a-byte-swap-of-this-one),
+which has the full evidence; this page carries the summary specific to
+`.rcsmaterial`.
+
+Every real (non-all-zero) `.rcsmaterial` sample on `omega-ps4-eu`'s five
+`dataNN.psarc` archives opens `e5 ad 5c ca` at `+0x00` - `0xCA5CADE5`
+little-endian, the same `0xCA5CADxx` tag family `.rcsmodel` carries as
+`0xCA5CADED`. **Confidence 85.** This is not the PS3 container: this page's
+own "The container" section above describes a 0x0c-byte header naming a
+variant table and a `0x40`-byte-per-record layout, and no field of a tagged
+PS4 sample matches that shape at any byte order. `crates/assets/examples/psarc_oracle.rs`
+now scores the tag the same way it already scores `.vex`'s `VEXX` and
+`.gnf`'s `GNF `, turning "no magic, zero-vs-nonzero only" into a real
+valid/all-zero/garbage split - **439 of 1,270 `.rcsmaterial` entries carry
+the tag** disc-wide; see [psarc.md](psarc.md#block-data-location---the-first-byte-oracle-was-wrong-and-the-corrected-picture-is-three-way-not-binary)
+for the per-archive table.
+
+**The names inside still resolve.** `crates/rcs/examples/ps4_hash_scan.rs`
+found at least one known sampler/parameter `~crc32` preimage (this page's own
+"The sampler names" / "The parameter names" tables, and
+[`oag_rcs::rcsmaterial::names`](../../crates/rcs/src/rcsmaterial/names.rs))
+in **386 of the 439 tag-confirmed files (88%)**, 2,451 hits total - `Texture1`/
+`Texture2`/`Texture3`, `ShadowColour` (at the identical `+0x724` offset on
+every hit, which a byte-position coincidence does not produce), `power`,
+`Colour_Tint`, `EmissiveTexture`, `lightmap` and `ColourAnim` among the
+matches. Same reading as `.rcsmodel`: whatever the PS4 container turns out to
+be, the material data inside it hashes names in the same namespace PS3 uses.
+
+**No parser exists for this container either**, for the same reason: a
+materially different, unread layout from a handful of samples is a
+reverse-engineering project of its own, and this session's evidence supports
+measuring and naming the container's existence, not guessing its fields.
+`oag_rcs::rcsmaterial`'s existing container reader is untouched.
+
 ## See also
 
 - [rcsmodel](rcsmodel.md) - the material record, and the two texture paths

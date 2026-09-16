@@ -26,10 +26,14 @@
 //!
 //! This tool checks the format's own magic instead, where one exists:
 //! `.vex` (`VEXX` at `+0x0c`, `docs/formats/vex.md`), `.gnf` (`GNF ` at
-//! `+0x00`, `docs/formats/README.md`'s Omega rows). `.rcsmodel` carries no
-//! magic at all (`crates/rcs/src/rcsmodel.rs`'s own module docs), so it is
-//! reported as "unvalidated" rather than forced into a bucket the format
-//! gives no way to check.
+//! `+0x00`, `docs/formats/README.md`'s Omega rows), and - **new**, the
+//! `lane/omega-rcs` session that read the container underneath `.rcsmodel`/
+//! `.rcsmaterial` - `ED AD 5C CA`/`E5 AD 5C CA` at `+0x00` on this PS4
+//! family only (`docs/formats/rcsmodel.md`'s PS4 section; PS3 genuinely has
+//! no magic, per `crates/rcs/src/rcsmodel.rs`'s own module docs, and that is
+//! unchanged). Any extension without a known magic is still reported
+//! "unvalidated" rather than forced into a bucket the format gives no way to
+//! check.
 //!
 //! # The dedup finding
 //!
@@ -89,13 +93,27 @@ impl Bucket {
 }
 
 /// Extensions this tool knows a magic for. `None` means "no magic exists for
-/// this format" (measured, not merely undocumented) - see `.rcsmodel`'s own
-/// module docs. Absent from this table entirely means "not checked yet".
+/// this format" (measured, not merely undocumented). Absent from this table
+/// entirely means "not checked yet".
+///
+/// `.rcsmodel`/`.rcsmaterial` carry **no magic on PS3** - `oag_rcs::rcsmodel`'s
+/// own module docs measure that directly, and it still holds there. **On this
+/// PS4 family they do**: every real (non-all-zero) sample carries a fixed
+/// four-byte tag at `+0x00`, `ED AD 5C CA` on `.rcsmodel` and `E5 AD 5C CA` on
+/// `.rcsmaterial` - read little-endian, `0xCA5CADED`/`0xCA5CADE5`, i.e. the
+/// low byte of a shared `0xCA5CADxx` ("cascaded") family selects the payload
+/// type. This is a PS4-only finding (this tool only ever runs against this
+/// family's archives) and does not change what `oag_rcs::rcsmodel::Model::parse`
+/// (big-endian, PS3-shaped) accepts - see `docs/formats/rcsmodel.md`'s PS4
+/// section. Confidence 85: consistent across every real sample checked
+/// (dozens, across `data00`-`data04`), but the container underneath the tag
+/// is a different, unread layout rather than a byte-swap of PS3's.
 fn expected_magic(ext: &str) -> Option<Option<(usize, &'static [u8])>> {
     match ext {
         "vex" => Some(Some((0x0c, b"VEXX"))),
         "gnf" => Some(Some((0x00, b"GNF "))),
-        "rcsmodel" => Some(None),
+        "rcsmodel" => Some(Some((0x00, &[0xed, 0xad, 0x5c, 0xca]))),
+        "rcsmaterial" => Some(Some((0x00, &[0xe5, 0xad, 0x5c, 0xca]))),
         _ => None,
     }
 }
