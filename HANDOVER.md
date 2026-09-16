@@ -15,6 +15,9 @@ file does not need to carry its own.
 
 ## Read this first
 
+- **"What's built vs. read vs. verified, per title" is now one page**:
+  [`docs/overview/status.md`](docs/overview/status.md), not a question to
+  answer by reading four prose pages.
 - **The disc images are in place** - all six, in `data/images/`:
   `pulse-psp-usa.chd`, `pulse-psp-eu.chd`, `pulse-ps2-eu.chd`,
   `pure-psp-usa.chd`, `pure-psp-eu.chd` and `hdfury-ps3-eu.iso`. Hashes match

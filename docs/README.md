@@ -17,10 +17,11 @@ New to the project? Read these in order:
 
 1. [Project goals](overview/goals.md) - what this is and is not
 2. [Roadmap](overview/roadmap.md) - milestones and their exit criteria
-3. [Glossary](overview/glossary.md) - terminology, including Wipeout-specific terms
-4. [Legal](overview/legal.md) - the no-copyrighted-content policy
-5. [Workspace layout](architecture/workspace-layout.md) - the crates and their boundaries
-6. [Determinism](architecture/determinism.md) - the rule the whole engine is built around
+3. [Status map](overview/status.md) - the cross-title matrix: what is built, read, or verified, per weapon/mode/subsystem/title
+4. [Glossary](overview/glossary.md) - terminology, including Wipeout-specific terms
+5. [Legal](overview/legal.md) - the no-copyrighted-content policy
+6. [Workspace layout](architecture/workspace-layout.md) - the crates and their boundaries
+7. [Determinism](architecture/determinism.md) - the rule the whole engine is built around
 
 Then, depending on what you are here to do:
 
