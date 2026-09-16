@@ -11,13 +11,13 @@
 //! ```text
 //! Scream_StartSound   0x0898f864   note = 60, fine = 0 on every play
 //! Scream_KeyOnVoice   0x0899456c   reads the descriptor's +0x02 / +0x03
-//!   Scream_NoteToPitch  0x08994fec   abs() of a negative centre, then * 0x1278b >> 16
-//!     Scream_Note2Pitch   0x089952c4   the table walk below
+//!   Scream_VoicePitch   0x08994fec   abs() of a negative centre, then * 0x1278b >> 16
+//!     Scream_NoteToPitch  0x089952c4   the table walk below
 //!   Sas_QueuePitch      0x0898bf14   voice + 0x50, dirty bit 0x10
 //! Sas_CommitVoices    0x0898c7e8   sceSasSetPitch(core, voice, pitch)
 //! ```
 //!
-//! `Scream_Note2Pitch` is a 12-entry semitone table and a 128-entry fine table,
+//! `Scream_NoteToPitch` is a 12-entry semitone table and a 128-entry fine table,
 //! both Q15, both read straight off the executable at `0x08ac36dc` and
 //! `0x08ac370c` (they abut: 560 bytes, 140 words, no slack). Their closed forms
 //! are `floor(32768 * 2^(i/12))` and `floor(32768 * 2^(i/1536))` - checked entry
@@ -86,7 +86,7 @@ pub const HD_SAMPLE_RATE: u32 = 48_000;
 /// `0x0899xxxx`, and it is this one).
 pub const DEFAULT_NOTE: i32 = 60;
 
-/// `Scream_NoteToPitch`'s multiplier for a negative centre note, `Q16`.
+/// `Scream_VoicePitch`'s multiplier for a negative centre note, `Q16`.
 ///
 /// `lui a0,0x1; addiu a0,a0,0x278b` at `0x08995078`. Applied after the table
 /// walk, `pitch * 0x1278b >> 16`. Not explained; see the module doc.
@@ -122,7 +122,7 @@ pub const FINE_TABLE: [u16; 128] = [
     0x871f, 0x872e, 0x873e, 0x874e, 0x875d, 0x876d, 0x877d, 0x878c,
 ];
 
-/// `Scream_Note2Pitch` (`0x089952c4`): the table walk, with a non-negative
+/// `Scream_NoteToPitch` (`0x089952c4`): the table walk, with a non-negative
 /// centre note.
 ///
 /// `centre_fine + fine - 127` is the fine offset, borrowing a semitone from
@@ -161,7 +161,7 @@ pub fn note_to_pitch(centre_note: i32, centre_fine: i32, note: i32, fine: i32) -
     ((semitone * fine_scale) >> 15) as u16
 }
 
-/// `Scream_NoteToPitch` (`0x08994fec`): the pitch word SAS is given for a
+/// `Scream_VoicePitch` (`0x08994fec`): the pitch word SAS is given for a
 /// descriptor's `(centre_note, centre_fine)` played at `(note, fine)`.
 ///
 /// A negative centre note is negated before the walk and the result scaled by
