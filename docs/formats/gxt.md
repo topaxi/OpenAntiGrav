@@ -282,6 +282,16 @@ a running frame of the original, only against "does this look like authored
 art" - see [2048-hud.md](2048-hud.md#what-is-not-done) for what that still
 leaves open.
 
+## Coverage
+
+`oag_texture::gxt::coverage` claims the header, the descriptor table and
+every texture's own texel span. `Gxt::parse` already checks that the header's
+own texel-span field equals `descriptors_end` on one side and `data.len()` on
+the other before it accepts a file at all, so there is no room for a gap once
+a file parses - and the sweep confirms it rather than only trusting the
+parser's own check: **100.00%** of all 9,910 `.gxt` files in the base
+package, 1.59 GB, `crates/texture/tests/gxt_coverage_ground_truth.rs`.
+
 ## Wired into the sprite loader
 
 `oag_game::sprite::Image::decode` tries `.gxt` as a fourth branch alongside
