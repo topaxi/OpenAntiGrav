@@ -677,6 +677,17 @@ vertices    = batch + header_size [+ alternate_offset]
 next batch  = batch + header_size + payload_size
 ```
 
+A list ends on a record whose `pass_mask` does not carry that list's own bit
+(`& 1` for list A, `& 2` for list B) - the walk's own terminator check - and
+**that record occupies real space rather than being absent**: it is a fixed
+`0x40` bytes on every list-end this project's corpus sweep measured (never the
+extended `0x80` form), confirmed by coverage rising from ~98.9% to 99.84% on
+`Mesh` once `oag_vex::mesh_coverage` started claiming it as `"a batch-list
+terminator record"` instead of leaving it as an unclaimed run "between a batch
+and end of file" (or, when list A's terminator sits immediately before list
+B's first real batch, "between a batch and a batch"). Its own fields beyond
+`pass_mask` are not read by anything and are not decoded here.
+
 `+0x28`, `+0x29` and `+0x2c` are written at load and are **not file data**. An
 earlier note describing `+0x2c` as a pre-compiled display list was describing a
 runtime allocation.

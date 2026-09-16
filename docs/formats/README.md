@@ -40,7 +40,13 @@ number.
 | Format | Bytes reached | Shape of the residual |
 | --- | --- | --- |
 | `.rcsmodel` | **97.69 %** of 719 MB; a circuit's own `track.rcsmodel` **98.08 %** | string pools, the variable-length tail of a material record (this crate reads `0x18` of one that runs to 768), alignment slack. |
-| `.vex` | **100.00 %** of all 742 files | none. The header declares a tree length and a texture length, and those two plus the header are the whole file. |
+| `.vex` (node walk) | **100.00 %** of all 742 files | none. The header declares a tree length and a texture length, and those two plus the header are the whole file. |
+| `.vex` `Mesh` payload | **99.84 %** of 21,055 nodes, PSP `Data.wad` | alignment slack around the material and texture-transform-key arrays, and the batches `mesh_batches` itself would refuse. |
+| `.vex` `Speedup`/`Weapon Pad` payload | **99.93 %** / **98.73 %** of 544 / 218 nodes | same shape as `Mesh`, the same slack. |
+| `.vex` `Skycube` payload | **99.82 %** of 40 nodes | `06_Track`'s own decoded-but-unexplained leftover block (see [skycube.md](skycube.md#the-extra-block)) plus the same alignment slack. |
+| `.vex` `WO Track` payload | **100.00 %** of 40 nodes | none - closes exactly, as [`AiTrack::encoded_len`](../../crates/vex/src/track.rs) already claimed. |
+| `.vex` `section` payload | **91.15 %** of 2,272 nodes | `pad[6]`, 6 bytes per node, nothing more - see [track.md](track.md#section-visibility-not-geometry). |
+| `.vex` collision payload | **100.00 %** of 319 nodes, both platforms | none - closed by construction, [`collision::from_vex`](../../crates/vex/src/collision.rs) refuses anything that does not. |
 
 `crates/rcs/tests/coverage_ground_truth.rs` holds both as a **ratchet**:
 `.rcsmodel` must not fall below the floors, `.vex` must stay exact.
