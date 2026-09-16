@@ -49,7 +49,7 @@ pub struct Standing {
     ///
     /// `None` until this craft first crosses the line, which is **not** the tick
     /// the race started: the grid is laid out from the authored `Start Position`
-    /// node, `Course::START_LINE_OFFSET` behind the line, so a craft on the grid
+    /// node, `Course::START_LINE_ADVANCE` behind the line, so a craft on the grid
     /// has not begun a lap however long it has been driving. See
     /// [`Self::update`]'s spawn-to-line arm.
     ///
@@ -145,7 +145,7 @@ impl Standing {
     /// A craft crosses the start line **twice** on its way to completing lap 1:
     /// once on the way off the grid, and once to finish the lap. The grid is laid
     /// out from the authored `Start Position` node, which sits
-    /// `Course::START_LINE_OFFSET` behind the line, so timing lap 1 from the
+    /// `Course::START_LINE_ADVANCE` behind the line, so timing lap 1 from the
     /// standing start would make it longer than every other lap by however far the
     /// craft's own slot is back - a different amount per slot, so the field's lap
     /// times would not even be comparable with each other.

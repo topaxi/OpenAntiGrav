@@ -347,11 +347,12 @@ same hole from the RE side - what raises `IG_HUD_PERF_ZONE` and what drives the
 swap does not touch any of it.
 
 **Zone's racing line is authored separately from the race one**, which was worth
-checking because `Course::START_LINE_OFFSET` is fitted on `16_Track`'s *race*
+checking while the start line was a constant fitted on `16_Track`'s *race*
 file. Across the sixteen: fourteen have identical control-point counts and one
 environment does not - `10_Track` at 844 race / 848 zone, and its reversed twin
-`26_Track` at 847 / 852. So the fit carries on fourteen and is inherited rather
-than re-measured on the other two. Nothing about Zone lap timing is verified
+`26_Track` at 847 / 852. The line is now derived from each file's own spline
+(`Course::START_LINE_ADVANCE`, [lap-counting.md](lap-counting.md)), so the
+difference no longer inherits anything. Nothing about Zone lap timing is verified
 against the original either way.
 
 ### Zone's numbers are not in this repository
@@ -748,7 +749,7 @@ onward) scored as one event:
   **8, 6, 5, 4, 3, 2, 1, 0**; a destroyed craft or one that did not finish
   scores **0** regardless of where it stopped. No fastest-lap or
   elimination bonus. Confidence 88, a direct table read
-  (`g_tournament_points_by_position`, `0x08ab0ba0`).
+  (`g_tournament_points_by_position`, `0x08ab0ba4`).
 - **A leg advances when the player picks `Race Again`'s mid-tournament
   sibling, `ER_NEXT_RACE`**, offered on `EndRace Menu` for every leg but
   the last (`endrace-screens.md`). `Tournament_AdvanceLeg` increments the

@@ -98,62 +98,35 @@ impl Course {
     /// number somebody picked, so it travels between circuits.
     pub const REACQUIRE_HALF_WIDTHS: f32 = 4.0;
 
-    /// How far along the track the start line sits from the authored grid slot.
+    /// How far ahead of the authored grid slot the start line is, in track
+    /// units along the spline's tangent at the slot.
     ///
-    /// **The grid slot is not the start line, and it is not close to it.** The
-    /// slot is *upstream*: a captured time trial's craft begins **137.9 units
-    /// along the slot's own forward**, plus 22.4 across the track and 0.8 up. Those
-    /// three numbers are asserted in `the_authored_slot_matches_the_captured_start`
-    /// (`crates/game/tests/race_ground_truth.rs`), which also pins the slot's
-    /// heading to within 1.2 degrees of the craft's - so this is a real separation
-    /// along the track, not a misread matrix.
+    /// **Recovered from the original, not measured.** `RaceManager_Construct`
+    /// (`0x08829124`) locates the `Start Position` node on the spline, steps
+    /// `154.0` units along that sample's tangent in a straight line, locates
+    /// *that* point on the spline, and keeps its arc position as the line the
+    /// lap counter compares against
+    /// (`docs/ghidra/functions/psp-pulse-usa/race-progress.md`). The literal
+    /// is `0x431a0000` in the binary and the same on every circuit, which is
+    /// why the previous single-capture constant (137.9 units, fitted on
+    /// Talon's Junction) happened to work on Moa Therma too: it was standing in
+    /// for this.
     ///
-    /// Putting the line at the slot instead makes a lap tick over partway down the
-    /// starting straight rather than at the end of it, which is exactly how it was
-    /// first noticed - on Moa Therma, by driving one.
-    ///
-    /// Measured **along the ring**, not in a straight line, so it follows a
-    /// curving start straight.
-    ///
-    /// Confidence **65**, and the two halves of that are worth separating.
-    ///
-    /// - **The distance is measured**, on one capture of one circuit: Talon's
-    ///   Junction.
-    /// - **That it generalises is observed, not measured.** Moa Therma - a
-    ///   different circuit, no capture - counts its laps in the right place with
-    ///   this constant, checked by driving it and watching the counter. That rules
-    ///   out the offset being a property of Talon's Junction alone, which was the
-    ///   live worry, but "the counter ticks where it looks like it should" is a
-    ///   player's eye rather than an instrument, and it would not catch a
-    ///   per-track offset that happens to be close on both.
-    ///
-    /// So: no longer suspected of being circuit-specific, still a single
-    /// hard number standing in for whatever the original computes. Whatever lays
-    /// the grid out is unread code (`docs/formats/track.md`, "How a ship gets its
-    /// grid slot").
-    ///
-    /// What would retire it: that code, or a capture on a second circuit.
-    /// [`Self::path_boundaries`] landing on the line across circuits was a third
-    /// candidate and is dead - see its own doc comment.
+    /// The two numbers are not the same quantity. 137.9 is where the original
+    /// *spawns* the craft relative to the slot
+    /// (`the_authored_slot_matches_the_captured_start`,
+    /// `crates/game/tests/race_ground_truth.rs`); the line is a few units
+    /// further on, so a craft starts behind it and its first crossing starts the
+    /// race rather than counting a lap - the original's `started` flag, this
+    /// crate's [`RaceState`]'s lap gate.
     ///
     /// # Which side of the engine/title seam this is on
     ///
-    /// **Neither, yet, and that is the finding rather than an omission.** The
-    /// three constants stage 6 of the engine/title split
-    /// ([ADR-0022](../../../docs/architecture/adr/0022-title-packages.md)) looked
-    /// at each land somewhere definite - the per-team parameters on the disc, the
-    /// force-law literals in Pulse's code, Zone's scoring in Pulse's code - and
-    /// this one lands nowhere, because **it stands in for a computation nobody
-    /// has read**. If the grid layout turns out to be authored, this is disc data
-    /// and belongs to no crate at all; if it is code, it is Pulse's and belongs
-    /// beside the other recovered literals. Confidence 65 is exactly the reason
-    /// it cannot be filed: a number at 65 placed in a title package would be
-    /// asserting it is title-specific, which is one of the two answers still open.
-    ///
-    /// So it stays here, and the seam paragraph in `oag_physics::params` does not
-    /// claim it. A constant whose provenance is unknown is worth less filed
-    /// wrongly than left where the note explaining it is.
-    pub const START_LINE_OFFSET: f32 = 137.9;
+    /// Pulse's code: a literal in `RaceManager_Construct`, like the force-law
+    /// literals `oag_physics::params` files under the title. It stays here
+    /// rather than in `oag-pulse` only because `Course` is the one place that
+    /// can apply it; the number is the title's.
+    pub const START_LINE_ADVANCE: f32 = 154.0;
 
     /// Walks a decoded spline graph into a closed ring.
     ///
@@ -220,10 +193,15 @@ impl Course {
         };
         if let Some(start) = start_near
             && let Some((slot, _)) = course.nearest_global(start)
+            && let Some(tangent) = course.tangent(slot)
         {
-            // The slot is upstream of the line by [`Self::START_LINE_OFFSET`],
-            // so walk that far along the ring rather than measuring from the slot.
-            course.start_index = course.advance(slot, Self::START_LINE_OFFSET);
+            // The original's own rule: the slot projected onto the spline,
+            // advanced [`Self::START_LINE_ADVANCE`] along that point's tangent in
+            // a straight line, projected onto the spline again.
+            let ahead = course.positions[slot] + tangent * Self::START_LINE_ADVANCE;
+            if let Some((line, _)) = course.nearest_global(ahead) {
+                course.start_index = line;
+            }
         }
         Some(course)
     }
@@ -327,8 +305,9 @@ impl Course {
     ///
     /// **Was a lead on whether the start line is authored data; it is not.** A
     /// boundary landing on the visible start line across circuits would have let
-    /// [`Self::START_LINE_OFFSET`] - a single-capture constant applied to all 40
-    /// circuits - be replaced by something at the traversal's own confidence 88.
+    /// the single-capture constant this crate used before
+    /// [`Self::START_LINE_ADVANCE`] was recovered be replaced by something at the
+    /// traversal's own confidence 88.
     /// Checked on all 40 Pulse circuit files (2026-08-30): the nearest boundary to
     /// the true start line ranges 11.6 to 1878.4 units, median 648, with only 4 of
     /// 40 under 100 units. A path split is authored for its own reasons and is not

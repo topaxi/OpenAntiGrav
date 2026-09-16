@@ -4,11 +4,16 @@
 //! Two questions, one capture, and the answers turned out to point in opposite
 //! directions.
 //!
-//! # The start line is right
+//! # The start line is where the original puts it, and the craft is behind it
 //!
-//! `Course::START_LINE_OFFSET` walks 137.9 units along the ring from the authored
-//! grid slot. A captured time trial begins on the real start line. The two agree
-//! on the **same ring point**, which is the strongest check the start line has.
+//! `Course::START_LINE_ADVANCE` is the original's own rule (154 units along the
+//! slot's tangent, re-projected; `RaceManager_Construct`,
+//! `docs/ghidra/functions/psp-pulse-usa/race-progress.md`). A captured time
+//! trial begins **17 units short of that line**: the original spawns its craft
+//! behind the line and lets the first crossing start the race, which is the
+//! same shape as this crate's lap gate. Before the rule was recovered this file
+//! asserted the capture began *on* the line, because the line was a constant
+//! fitted to this very capture.
 //!
 //! # The capture is not a lap
 //!
@@ -109,37 +114,43 @@ fn load() -> Option<(Course, Trace)> {
     Some((course, Trace::parse(&text).expect("the capture parses")))
 }
 
-/// The captured run begins exactly on the line the lap counter uses.
+/// The captured run begins a little behind the line the lap counter uses.
 ///
-/// **The best check the start line has.** `START_LINE_OFFSET` is walked along the
-/// ring from the authored grid slot; the capture's first frame is where the
-/// original puts a craft to start a time trial. They resolve to the same ring
-/// point - not a near one - which exercises the ring walk, `Course::advance` and
-/// the offset together against real geometry.
+/// `START_LINE_ADVANCE` places the line off the slot and the spline; the
+/// capture's first frame is where the original puts a craft to start a time
+/// trial. The craft resolves to a ring point **before** the line, by a distance
+/// a standing start covers in a second or two - measured here at 17.3 units,
+/// eleven ring points - and never on or past it. That is the original's own
+/// design (its `started` flag is set by the first crossing, and no lap is
+/// recorded for it), and it is what `RaceState`'s spawn-to-line arm exists for.
 ///
-/// What it is not: independent. The 137.9 was measured from this capture, so this
-/// is the arithmetic round-tripping. The independent evidence is a second
-/// circuit, and it is an observation - see `docs/gameplay/lap-counting.md`.
+/// The bounds are wide on purpose: the claim is "behind, and not far", not the
+/// exact eleven points, which would pin the ring's sampling resolution rather
+/// than anything about the game.
 #[test]
 #[ignore = "needs a disc image in data/images/ and a capture in data/traces/"]
-fn the_captured_run_begins_on_our_start_line() {
+fn the_captured_run_begins_just_behind_our_start_line() {
     let Some((course, trace)) = load() else {
         return;
     };
     let first = course
         .locate(trace.frames[0].position, None)
         .expect("the captured start is on the ring");
+    let behind = course.length() - first.progress;
     println!(
-        "capture starts at ring point {} (progress {:.1}); start line is point {}",
+        "capture starts at ring point {} (progress {:.1} of {:.1}); start line is point {}; \
+         the craft spawns {behind:.1} units behind the line",
         first.index,
         first.progress,
+        course.length(),
         course.start_index()
     );
-    assert_eq!(
-        first.index,
-        course.start_index(),
-        "the captured run starts {} ring point(s) from where the lap counter starts a lap",
-        first.index.abs_diff(course.start_index())
+    assert!(
+        (5.0..=30.0).contains(&behind),
+        "the captured run should start a few units behind the line, not {behind:.1} units \
+         (progress {:.1} on a {:.1}-unit ring)",
+        first.progress,
+        course.length()
     );
 }
 
@@ -168,6 +179,14 @@ fn the_capture_stalls_and_reverses_rather_than_completing_a_lap() {
     let mut laps = Vec::new();
     let mut furthest_forward = 0.0f32;
     let mut reversed_past_the_line = false;
+    // Forward travel is measured from the capture's own first frame, which sits
+    // a few units *behind* the start line (see the test above): measured as raw
+    // progress it would read as "all the way round" from tick 0, which is
+    // exactly the trap that made an earlier version of this test report 100%.
+    let origin = course
+        .locate(trace.frames[0].position, None)
+        .expect("the captured start is on the ring")
+        .progress;
 
     for (tick, frame) in trace.frames.iter().enumerate() {
         let before = state.progress;
@@ -184,10 +203,10 @@ fn the_capture_stalls_and_reverses_rather_than_completing_a_lap() {
             // How far the run got *going forwards*. Stops accumulating once the
             // run has reversed over the line, because after that a high progress
             // means "just short of the line from the wrong side" rather than
-            // "nearly all the way round" - which is exactly the trap that made an
-            // earlier version of this test report 100%.
+            // "nearly all the way round".
             if !reversed_past_the_line {
-                furthest_forward = furthest_forward.max(after);
+                let forward = (after - origin).rem_euclid(course.length());
+                furthest_forward = furthest_forward.max(forward);
             }
         }
     }

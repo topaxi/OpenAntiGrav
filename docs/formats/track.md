@@ -336,8 +336,11 @@ struct Path {               // 0x20 bytes
 
 `max_spacing` was `unk04`. It is **exactly** the longest distance between
 consecutive control points in that path, on all 86 paths, to `f32` precision.
-Confidence **92**: an exact numerical match on 86 independent samples, though
-what the engine uses it for has not been traced.
+Confidence **92**: an exact numerical match on 86 independent samples - and the
+reason it is exact is that the running game **recomputes** it: `AiTrack_ComputeLength`
+(`0x0887dba0`) overwrites the field with the measured maximum gap at load, after
+resetting any value outside `0.01..20` to `0.5`. The exporter wrote the same
+number the loader would.
 
 ### Junctions
 
@@ -377,7 +380,7 @@ struct SplinePt {             // 0x70 bytes
     float tangent[4];         // +0x10 unit, along the path
     float down[4];            // +0x20 unit, into the surface
     float lateral[4];         // +0x30 unit, across the path
-    float unk_0x40;          // +0x40 also a "no sample here" sentinel at runtime
+    float progress;           // +0x40 normalised arc position round the circuit, 0..1; -1024.0 = "no sample" at runtime
     float half_width_left;    // +0x44
     float half_width_right;   // +0x48
     float ai_bound_left;      // +0x4c clamped to <= racing_line - 0.1
@@ -507,11 +510,19 @@ mechanism depends on the `+0x20` axis being what this page says it is.
 - The ship-entity constructor `FUN_08840c74` initialises both records
   (`0x08840dc0`-`0x08840e3c`) field by field in exactly this layout: four `vec4`,
   six floats at `+0x40`-`+0x54`, two bytes at `+0x60`/`+0x61`.
-- **`+0x40` doubles as a sentinel.** `AiTrack_UpdateCursor` (`0x0887e464`) writes
-  `-1024.0` into it at `0x0887e9f8`-`0x0887ea00` when it has no sample to report,
-  and `Ship_UpdateMagLock` skips the second record when it reads that. So the
-  field is a slot the runtime reuses, whatever the exporter meant by it; the open
-  question below stands for the *file*, not for the running game. (The entity
+- **`+0x40` is the lap-progress parameter, and doubles as a sentinel.** In the
+  file it is the authored **normalised arc position** round the circuit, rising
+  from `0.0` to just under `1.0` across the ring (on `16_Track`: `0.0` at path
+  1's first point, `0.9988` at path 0's last, and each step times the track
+  length matches the point spacing to a mean 0.16 units). The Catmull-Rom
+  evaluator interpolates it like every other field, taking the maximum of the
+  four control points when they straddle the wrap; `AiTrack_ComputeLength`
+  (`0x0887dba0`) derives the track's units-per-`t` from it at load, and the
+  lap counter multiplies the two to get an arc length
+  ([race-progress.md](../ghidra/functions/psp-pulse-usa/race-progress.md)).
+  `AiTrack_UpdateCursor` (`0x0887e464`) writes `-1024.0` into it at
+  `0x0887e9f8`-`0x0887ea00` when it has no sample to report, and
+  `Ship_UpdateMagLock` skips the second record when it reads that. (The entity
   constructor merely zero-fills both records.)
 - The consumer that pins `+0x20`'s direction is the magstrip attitude hold, which
   slaves the ship's up axis to `unit(-(sample+0x20))` and recovers the surface
@@ -897,9 +908,9 @@ until something proves otherwise.
   across the 40 PSP files, matching [`AiTrack::encoded_len`](../../crates/vex/src/track.rs)'s
   own "equal to the payload length on every shipped track."
 - What reads the reserved block, and what `Path.max_spacing` is used for.
-- `SplinePt` `+0x40` (what the *file* means by it - the runtime reuses the slot
-  as a sentinel, see above), `+0x58` (always `0x10`), `+0x5c`-`+0x5f`,
-  `+0x62`-`+0x66`, `+0x68`-`+0x6f`.
+- ~~`SplinePt` `+0x40`~~ - **answered**: the normalised arc position the lap
+  counter runs on, see above. Still open: `+0x58` (always `0x10`),
+  `+0x5c`-`+0x5f`, `+0x62`-`+0x66`, `+0x68`-`+0x6f`.
 - ~~Which lateral direction is "left".~~ **Answered**: `lateral` points to the
   driver's **right**. `Start Position`'s row 0 is the craft's left axis and
   `dot(row0, lateral)` is `-1.000` on all 40 track files, so the widths stored as

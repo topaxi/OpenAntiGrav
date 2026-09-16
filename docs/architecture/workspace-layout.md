@@ -121,9 +121,11 @@ the handling scale factors - have their seam defined but have **not** moved into
 simulation work on M4's exit criterion, and the force law is that milestone's
 live blocker. The move is mechanical once it clears, and
 `oag_race::zone`'s four numbers are the ones to move first: Pure ships zone mode
-too. `Course::START_LINE_OFFSET` is the one exception and could **not** be
-filed - at confidence 65 it stands in for a computation nobody has read, so
-calling it title-specific would assert one of the two answers still open.
+too. `Course::START_LINE_OFFSET` was the one exception that could **not** be
+filed - at confidence 65 it stood in for a computation nobody had read. That
+computation is read now (`Course::START_LINE_ADVANCE`, a literal in Pulse's
+`RaceManager_Construct`; [race-progress.md](../ghidra/functions/psp-pulse-usa/race-progress.md)),
+so it is the title's and moves with the rest.
 
 ## Dependency rules
 

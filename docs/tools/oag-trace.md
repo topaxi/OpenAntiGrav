@@ -426,8 +426,9 @@ was made ("recorded in HANDOVER rather than fixed here, because they are
 load-bearing citations in other arguments and want reading rather than
 sed" - the commit that found this), and this paragraph and that file's
 comment are the belated fix. What the file is still good for: its first
-frame resolves to the same ring point `Course::START_LINE_OFFSET`'s start
-line does, which is the strongest check that constant has - and see the note
+frame resolves to a ring point 16.5 units *behind* the start line
+`Course::START_LINE_ADVANCE` derives (it was the constant that line replaced
+that was fitted to this frame) - and see the note
 below on what its wall-contact percentage and the game's own lap counter
 reading can still be trusted to mean, which is less than the rest of this
 section originally claimed.

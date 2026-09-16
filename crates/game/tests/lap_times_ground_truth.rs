@@ -17,7 +17,7 @@
 //! What needs one is the **grid**. `Standing::update` starts lap 1's clock at the
 //! craft's first crossing of the line rather than at the standing start, and the
 //! reason is a property of authored track data: a track's `Start Position` node is
-//! the *back* of the grid, `Course::START_LINE_OFFSET` behind the line, and the
+//! the *back* of the grid, `Course::START_LINE_ADVANCE` behind the line, and the
 //! eight slots run forward from it in two staggered columns. So every craft begins
 //! a different distance from the line, from rest. A synthetic fixture can only
 //! assert that rule against a spacing it invented itself; this one asserts it
