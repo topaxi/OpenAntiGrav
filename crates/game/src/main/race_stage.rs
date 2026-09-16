@@ -181,11 +181,11 @@ impl RaceStage {
     /// agree with `oag_game::records` in one place. See that module's own
     /// doc for why it takes primitives rather than a `&Race`.
     pub(crate) fn observation(&self) -> oag_game::records::Observation {
-        let standing = &self.race.sim.world.ships[0].standing;
+        let standing = self.race.player_standing();
         let finished = self.race.finished();
         oag_game::records::Observation {
             finished,
-            place: Some(self.race.places()[0]),
+            place: Some(self.race.player_place()),
             laps_completed: oag_game::records::laps_completed(
                 standing.lap,
                 finished,
@@ -241,10 +241,11 @@ impl RaceStage {
         use oag_tables::race_campaign::Mode as CampaignMode;
         let cell = self.campaign_cell.as_ref()?;
         let value = match cell.mode {
-            CampaignMode::Race if finished => Some(i64::from(self.race.places()[0])),
+            CampaignMode::Race if finished => Some(i64::from(self.race.player_place())),
             CampaignMode::TimeTrial if finished => {
-                let tick = self.race.sim.world.ships[0]
-                    .standing
+                let tick = self
+                    .race
+                    .player_standing()
                     .finish_tick
                     .unwrap_or(self.race.sim.world.tick);
                 Some(ticks_to_centiseconds(tick))
@@ -254,9 +255,7 @@ impl RaceStage {
                 best_lap_ticks.map(|ticks| ticks_to_centiseconds(u64::from(ticks)))
             }
             CampaignMode::Zone => Some(i64::from(self.race.sim.world.primary_race().zone)),
-            CampaignMode::Elimination => {
-                Some(i64::from(self.race.sim.world.ships[0].standing.kills))
-            }
+            CampaignMode::Elimination => Some(i64::from(self.race.player_standing().kills)),
             CampaignMode::Tournament
             | CampaignMode::Head2Head
             | CampaignMode::CustomGrid

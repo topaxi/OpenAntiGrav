@@ -26,6 +26,7 @@
 use std::path::{Path, PathBuf};
 
 use oag_game::race;
+use oag_gameplay::PlayerInputs;
 
 fn image_named(name: &str) -> Option<PathBuf> {
     oag_testdata::image(name)
@@ -176,14 +177,14 @@ fn a_missile_in_hand_locks_a_craft_on_a_real_circuit() {
     // A few ticks to settle the grid, then hand slot 0 a Missile the way a pad
     // would. Slot 0 starts at the back, so the field is ahead of it.
     for _ in 0..30 {
-        race.tick(&oag_gameplay::InputSnapshot::default());
+        race.tick(&PlayerInputs::none());
     }
     race.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Missile);
 
     let mut seeking = false;
     let mut locked_at = None;
     for tick in 0..240u32 {
-        race.tick(&oag_gameplay::InputSnapshot::default());
+        race.tick(&PlayerInputs::none());
         match race.sight_state() {
             sight::State::Seeking => seeking = true,
             sight::State::Locked if locked_at.is_none() => locked_at = Some(tick),
@@ -303,14 +304,14 @@ fn a_leachbeam_in_hand_locks_a_craft_on_a_real_circuit() {
     let Some(loaded) = single_race() else { return };
     let mut race = race::Race::start(loaded.setup);
     for _ in 0..30 {
-        race.tick(&oag_gameplay::InputSnapshot::default());
+        race.tick(&PlayerInputs::none());
     }
     race.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::LeachBeam);
 
     let mut seeking = false;
     let mut locked_at = None;
     for tick in 0..240u32 {
-        race.tick(&oag_gameplay::InputSnapshot::default());
+        race.tick(&PlayerInputs::none());
         match race.sight_state() {
             sight::State::Seeking => seeking = true,
             sight::State::Locked if locked_at.is_none() => locked_at = Some(tick),
@@ -540,12 +541,12 @@ fn hd_draws_its_own_four_leachbeam_sight_widgets_when_held() {
     let mut race = race::Race::start(loaded.setup);
     race.set_sight_screen(loaded.hud.space.size);
     for _ in 0..30 {
-        race.tick(&oag_gameplay::InputSnapshot::default());
+        race.tick(&PlayerInputs::none());
     }
     race.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::LeachBeam);
     let mut seeking = false;
     for _ in 0..240u32 {
-        race.tick(&oag_gameplay::InputSnapshot::default());
+        race.tick(&PlayerInputs::none());
         if race.sight_state() == sight::State::Seeking {
             seeking = true;
             break;
@@ -652,11 +653,11 @@ fn locks_within(race: &mut race::Race, ticks: u32) -> bool {
     use oag_race::sight;
 
     for _ in 0..30 {
-        race.tick(&oag_gameplay::InputSnapshot::default());
+        race.tick(&PlayerInputs::none());
     }
     race.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Missile);
     for _ in 0..ticks {
-        race.tick(&oag_gameplay::InputSnapshot::default());
+        race.tick(&PlayerInputs::none());
         if race.sight_state() == sight::State::Locked {
             return true;
         }

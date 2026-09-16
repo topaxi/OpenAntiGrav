@@ -24,6 +24,7 @@
 use std::path::PathBuf;
 
 use oag_game::race;
+use oag_gameplay::PlayerInputs;
 
 fn image() -> Option<PathBuf> {
     oag_testdata::image("data/images/pure-psp-usa.chd")
@@ -132,7 +133,7 @@ fn a_held_turbo_draws_its_own_authored_green_on_a_real_race() {
 
     let mut race = race::Race::start(loaded.setup);
     race.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Turbo);
-    race.tick(&oag_gameplay::InputSnapshot::default());
+    race.tick(&PlayerInputs::none());
 
     let readout = race.readout();
     assert_eq!(

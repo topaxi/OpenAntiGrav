@@ -23,6 +23,7 @@ use std::path::{Path, PathBuf};
 
 use oag_game::audio::sfx::{TrackEmitters, listener_of};
 use oag_game::race;
+use oag_gameplay::PlayerInputs;
 
 /// `01_Track`, the circuit the thread names: 86 `sound` nodes and no cone.
 const TRACK: &str = r"Data\Environments\01_Track\track.vex";
@@ -77,7 +78,7 @@ fn measure(name: &str, race: &mut race::Race, emitters: &TrackEmitters) -> usize
     let mut ever = vec![false; total_emitters];
     let mut ticks = 0usize;
     while ticks < TICK_CAP && race.sim.world.primary_race().laps_completed() < 1 {
-        race.tick(&oag_gameplay::InputSnapshot::default());
+        race.tick(&PlayerInputs::none());
         let listener = listener_of(race);
         let mut live = 0;
         for (at, _) in emitters.placed(&listener) {
@@ -284,7 +285,7 @@ fn a_headless_lap_sounds_the_circuit_and_writes_it_out() {
     let mut ever_moved = false;
     let mut last = None;
     for _ in 0..TICKS {
-        race.tick(&oag_gameplay::InputSnapshot::default());
+        race.tick(&PlayerInputs::none());
         audio.race_tick(&mut race);
         audio.tick();
         let live = audio.ambient_voices();

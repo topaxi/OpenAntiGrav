@@ -42,6 +42,7 @@
 use std::path::{Path, PathBuf};
 
 use oag_game::race;
+use oag_gameplay::PlayerInputs;
 
 /// Ticks per race: over three minutes at the fixed 60 Hz.
 ///
@@ -130,7 +131,7 @@ fn watch_one_race(image: &Path, seed: u64) -> Vec<Shift> {
     let mut done: Vec<Shift> = Vec::new();
 
     for _ in 0..TICKS {
-        race.tick(&oag_gameplay::InputSnapshot::default());
+        race.tick(&PlayerInputs::none());
 
         for (slot, _, toward, _, shift) in &mut watching {
             if let Some((offset, left, right)) = across(&race, *slot) {

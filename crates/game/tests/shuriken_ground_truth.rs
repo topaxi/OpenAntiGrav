@@ -37,6 +37,7 @@
 use std::path::PathBuf;
 
 use oag_game::race;
+use oag_gameplay::PlayerInputs;
 use oag_gameplay::input::{Button, Input};
 use oag_tables::weapons::Weapon;
 
@@ -124,7 +125,7 @@ fn moving(loaded: race::Loaded) -> (race::Race, oag_gameplay::InputSnapshot) {
     let mut race = race::Race::start(loaded.setup);
     let throttle = held(Button::Cross);
     for _ in 0..WARM_UP_TICKS {
-        race.tick(&throttle);
+        race.tick(&PlayerInputs::single(throttle));
     }
     (race, throttle)
 }
@@ -242,7 +243,7 @@ fn a_thrown_blade_bounces_off_a_real_circuit_and_dies_on_its_fuse() {
     fire.buttons = buttons;
     fire.buttons
         .begin_frame(Button::Square.bit() | Button::Cross.bit());
-    race.tick(&fire);
+    race.tick(&PlayerInputs::single(fire));
 
     let thrown: Vec<_> = blades(&race);
     assert_eq!(thrown.len(), 1, "one press threw {} blades", thrown.len());
@@ -263,7 +264,7 @@ fn a_thrown_blade_bounces_off_a_real_circuit_and_dies_on_its_fuse() {
     let mut alive_ticks = 0u32;
     let fuse_ticks = (shuriken.fuse * 60.0).ceil() as u32;
     for _ in 0..fuse_ticks + 30 {
-        race.tick(&throttle);
+        race.tick(&PlayerInputs::single(throttle));
         match blades(&race).first() {
             Some(live) => {
                 peak_bounces = peak_bounces.max(live.bounces);

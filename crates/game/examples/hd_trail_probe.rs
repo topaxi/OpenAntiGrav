@@ -4,7 +4,7 @@
 //! ```sh
 //! cargo run --release -p oag-game --example hd_trail_probe
 //! ```
-use oag_gameplay::InputSnapshot;
+use oag_gameplay::PlayerInputs;
 
 fn main() -> anyhow::Result<()> {
     let options = oag_game::race::Options {
@@ -15,7 +15,7 @@ fn main() -> anyhow::Result<()> {
     let mut race = oag_game::race::Race::start(loaded.setup);
     race.set_autopilot(true);
     for _ in 0..700 {
-        race.tick(&InputSnapshot::default());
+        race.tick(&PlayerInputs::none());
     }
     println!("hd_trail_active: {}", race.hd_trail_active());
     let exhaust = race.exhaust_of(0);

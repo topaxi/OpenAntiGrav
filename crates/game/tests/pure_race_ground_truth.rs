@@ -42,6 +42,7 @@
 //! down, which is noise. See `docs/formats/pure-status.md`.
 
 use oag_game::{catalogue, race};
+use oag_gameplay::PlayerInputs;
 use std::path::{Path, PathBuf};
 
 /// Both Pure pressings, whichever are present.
@@ -231,7 +232,7 @@ fn a_craft_under_power_drives_a_pure_circuit_and_a_wall_stops_it() {
         let mut furthest_from_spline = 0.0f32;
         let mut travelled = 0.0f32;
         for _ in 0..1_200 {
-            race.tick(&input);
+            race.tick(&PlayerInputs::single(input));
             let at = race.sim.world.ships[0].physics.body.position;
             // Distance to the spline is the honest measure of "on the circuit":
             // these tracks climb and bank, so comparing height against the start

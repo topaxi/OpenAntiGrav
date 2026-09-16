@@ -27,6 +27,7 @@
 use std::path::PathBuf;
 
 use oag_game::{catalogue, race};
+use oag_gameplay::PlayerInputs;
 
 const TRACK_ID: &str = "13_Track";
 const LONE: usize = 1;
@@ -114,7 +115,7 @@ fn what_the_jumps_approach_looks_like() {
         let mut started = false;
         println!("\ngrip_believed {grip}: speed by index, first pass through 0..26:");
         for _tick in 0..18_000 {
-            race.tick(&oag_gameplay::InputSnapshot::default());
+            race.tick(&PlayerInputs::none());
             let ship = &race.sim.world.ships[LONE];
             let index = ship.driver.index as usize;
             if index < 5 {
@@ -162,7 +163,7 @@ fn run_grip(setup: &race::Setup, grip: f32) -> (u32, u32, f32, u32) {
     let mut landing_index = 0u32;
     let mut was_airborne = false;
     for _tick in 0..18_000u32 {
-        race.tick(&oag_gameplay::InputSnapshot::default());
+        race.tick(&PlayerInputs::none());
         let ship = &race.sim.world.ships[LONE];
         let airborne_now = ship.physics.time_airborne > 0.0;
         if airborne_now && !was_airborne && liftoff_speed < 0.0 {

@@ -7,6 +7,7 @@
 //! `tests.rs`. The camera half of the same seam is in `camera.rs`.
 
 use super::*;
+use oag_gameplay::PlayerInputs;
 
 /// The blink light keeps the behaviour it had under the old global
 /// 120-tick clock and its per-vertex rate: one full sweep of the palette
@@ -74,13 +75,13 @@ fn each_craft_s_exhaust_follows_its_own_throttle() {
     // player's, so the field would show no engine at all if this test ran
     // inside the gated span.
     for _ in 0..=oag_race::COUNTDOWN_TICKS {
-        race.tick(&InputSnapshot::default());
+        race.tick(&PlayerInputs::none());
     }
     // Long enough for `INTENSITY_RISE` to separate a burning engine from a
     // cold one - the ramp takes four seconds end to end, so a quarter of a
     // second is plenty to order the two and far short of saturating.
     for _ in 0..15 {
-        race.tick(&InputSnapshot::default());
+        race.tick(&PlayerInputs::none());
     }
 
     assert!(
@@ -129,7 +130,7 @@ fn every_craft_lays_its_own_ribbon() {
     // `Exhaust::trail_ready` gates the ribbon on a full ring, which is the
     // original's own gate, so this needs one tick per sample.
     for _ in 0..oag_render::exhaust::TRAIL_SAMPLES {
-        race.tick(&InputSnapshot::default());
+        race.tick(&PlayerInputs::none());
     }
 
     let nozzles: Vec<Vec3> = (0..8)
@@ -176,8 +177,8 @@ fn the_players_flicker_does_not_depend_on_the_field_behind_it() {
     assert_eq!(field.ship_count(), 8);
 
     for tick in 0..30 {
-        alone.tick(&InputSnapshot::default());
-        field.tick(&InputSnapshot::default());
+        alone.tick(&PlayerInputs::none());
+        field.tick(&PlayerInputs::none());
         // Bit-identical, not close: both draw the same two numbers from a
         // generator seeded the same way, against the same thrust and the same
         // standing-start speed.
@@ -202,7 +203,7 @@ fn the_players_flicker_does_not_depend_on_the_field_behind_it() {
 #[test]
 fn the_field_does_not_flicker_in_lockstep() {
     let mut race = race_with_a_grid();
-    race.tick(&InputSnapshot::default());
+    race.tick(&PlayerInputs::none());
 
     let sizes: Vec<f32> = (0..8)
         .map(|slot| race.exhaust_of(slot).half_size())

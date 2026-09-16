@@ -40,6 +40,7 @@
 use std::path::PathBuf;
 
 use oag_game::race;
+use oag_gameplay::PlayerInputs;
 use oag_gameplay::input::{Button, Input};
 use oag_tables::weapons::Weapon;
 
@@ -94,7 +95,7 @@ fn a_missile_turns_toward_the_craft_it_locked() {
     // A few ticks so the grid settles onto its footprints and the standings take
     // a first fix - the lock's along-track screen reads `Standing::progress`.
     for _ in 0..30 {
-        race.tick(&oag_gameplay::InputSnapshot::default());
+        race.tick(&PlayerInputs::none());
     }
 
     let stats = race.missile_stats().expect("the disc authors a Missile");
@@ -110,7 +111,7 @@ fn a_missile_turns_toward_the_craft_it_locked() {
     // room for the f32 accumulation to land on either side of the boundary.
     race.sim.world.ships[0].pickup.weapon = Some(Weapon::Missile);
     for _ in 0..60 {
-        race.tick(&oag_gameplay::InputSnapshot::default());
+        race.tick(&PlayerInputs::none());
     }
     assert!(
         race.sight().locked(),
@@ -142,7 +143,7 @@ fn a_missile_turns_toward_the_craft_it_locked() {
     let mut last = launched;
     let mut travelled = 0.0;
     for _ in 0..240 {
-        race.tick(&oag_gameplay::InputSnapshot::default());
+        race.tick(&PlayerInputs::none());
         let Some(current) = race
             .sim
             .world
@@ -184,7 +185,7 @@ fn a_missile_never_locks_its_own_firer() {
     let Some(loaded) = single_race() else { return };
     let mut race = race::Race::start(loaded.setup);
     for _ in 0..30 {
-        race.tick(&oag_gameplay::InputSnapshot::default());
+        race.tick(&PlayerInputs::none());
     }
     let stats = race.missile_stats().expect("the disc authors a Missile");
 
@@ -195,7 +196,7 @@ fn a_missile_never_locks_its_own_firer() {
     // soon as `lock` finds one and needs no priming.
     race.sim.world.ships[0].pickup.weapon = Some(Weapon::Missile);
     for _ in 0..60 {
-        race.tick(&oag_gameplay::InputSnapshot::default());
+        race.tick(&PlayerInputs::none());
     }
 
     let mut locks = 0;
@@ -249,7 +250,7 @@ fn a_missile_glances_off_the_circuits_barriers() {
     let Some(loaded) = single_race() else { return };
     let mut race = race::Race::start(loaded.setup);
     for _ in 0..30 {
-        race.tick(&oag_gameplay::InputSnapshot::default());
+        race.tick(&PlayerInputs::none());
     }
     let stats = race.missile_stats().expect("the disc authors a Missile");
     let launch_kmh = stats.launch_speed;
@@ -280,7 +281,7 @@ fn a_missile_glances_off_the_circuits_barriers() {
         );
         flown += 1;
         for _ in 0..90 {
-            race.tick(&oag_gameplay::InputSnapshot::default());
+            race.tick(&PlayerInputs::none());
             if race
                 .sim
                 .world
@@ -354,7 +355,7 @@ fn a_pad_can_hand_out_a_missile_and_firing_one_spends_it() {
     // And firing one spends it, through the button path rather than by hand.
     let mut race = race::Race::start(single_race().expect("the image is present").setup);
     for _ in 0..30 {
-        race.tick(&oag_gameplay::InputSnapshot::default());
+        race.tick(&PlayerInputs::none());
     }
     race.sim.world.ships[0].pickup.weapon = Some(Weapon::Missile);
     // `false` now means the pool was full and nothing else - a missing lock is
@@ -367,7 +368,7 @@ fn a_pad_can_hand_out_a_missile_and_firing_one_spends_it() {
     race.sim.world.projectiles.clear();
 
     race.sim.world.ships[0].pickup.weapon = Some(Weapon::Missile);
-    race.tick(&press(Button::Square));
+    race.tick(&PlayerInputs::single(press(Button::Square)));
     assert_eq!(
         race.ship_pickup(),
         None,
@@ -401,7 +402,7 @@ fn a_missile_with_no_lock_still_flies_a_real_circuit_and_ends_itself() {
     let Some(loaded) = single_race() else { return };
     let mut race = race::Race::start(loaded.setup);
     for _ in 0..30 {
-        race.tick(&oag_gameplay::InputSnapshot::default());
+        race.tick(&PlayerInputs::none());
     }
     let stats = race.missile_stats().expect("the disc authors a Missile");
 
@@ -429,7 +430,7 @@ fn a_missile_with_no_lock_still_flies_a_real_circuit_and_ends_itself() {
     // picks up over three seconds.
     let ticks = (SELF_DETONATE_SECONDS * 60.0) as usize + 2;
     for _ in 0..ticks {
-        race.tick(&oag_gameplay::InputSnapshot::default());
+        race.tick(&PlayerInputs::none());
     }
 
     let survivors = race

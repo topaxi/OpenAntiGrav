@@ -57,6 +57,7 @@ use std::path::PathBuf;
 
 use oag_core::TickRate;
 use oag_game::race;
+use oag_gameplay::PlayerInputs;
 use oag_gameplay::input::{Button, Input};
 use oag_gameplay::projectile::{BlastStats, blast};
 
@@ -184,8 +185,8 @@ fn a_plasma_hit_costs_a_craft_its_engine_and_it_recovers() {
     let mut hit = race::Race::start(loaded.setup.clone());
     let mut control = race::Race::start(loaded.setup);
     for _ in 0..WARM_UP_TICKS {
-        hit.tick(&throttle);
-        control.tick(&throttle);
+        hit.tick(&PlayerInputs::single(throttle));
+        control.tick(&PlayerInputs::single(throttle));
     }
     refill_energy(&mut hit);
     refill_energy(&mut control);
@@ -207,8 +208,8 @@ fn a_plasma_hit_costs_a_craft_its_engine_and_it_recovers() {
     );
 
     // The drain, on the next tick.
-    let evaluated = hit.tick(&throttle);
-    control.tick(&throttle);
+    let evaluated = hit.tick(&PlayerInputs::single(throttle));
+    control.tick(&PlayerInputs::single(throttle));
     assert_eq!(
         hit.sim.world.ships[0].pending_slowdown, 0.0,
         "the pending slot was not drained"
@@ -238,8 +239,8 @@ fn a_plasma_hit_costs_a_craft_its_engine_and_it_recovers() {
     // the exit test is `> 0.0` and the assertion afterwards is `<= 0.0`.
     let mut ticks_slowed = 1;
     while hit.sim.world.ships[0].physics.slowdown_timer > 0.0 {
-        hit.tick(&throttle);
-        control.tick(&throttle);
+        hit.tick(&PlayerInputs::single(throttle));
+        control.tick(&PlayerInputs::single(throttle));
         ticks_slowed += 1;
         assert!(ticks_slowed < 600, "the timer never expired");
     }
@@ -271,7 +272,7 @@ fn a_plasma_hit_costs_a_craft_its_engine_and_it_recovers() {
     // circuit by now and no longer comparable.
     let recovering_from = speed(&hit);
     for _ in 0..60 {
-        hit.tick(&throttle);
+        hit.tick(&PlayerInputs::single(throttle));
     }
     let recovered = speed(&hit);
     println!("recovered to {recovered:.2} units/s from {recovering_from:.2}");
@@ -296,7 +297,7 @@ fn a_second_plasma_inside_the_window_does_not_extend_the_timer() {
     let throttle = held(Button::Cross);
     let mut race = race::Race::start(loaded.setup);
     for _ in 0..WARM_UP_TICKS {
-        race.tick(&throttle);
+        race.tick(&PlayerInputs::single(throttle));
     }
     refill_energy(&mut race);
 
@@ -322,7 +323,7 @@ fn a_second_plasma_inside_the_window_does_not_extend_the_timer() {
     let dt = TickRate::DEFAULT.dt();
 
     detonate_behind_the_player(&mut race, &stats);
-    race.tick(&throttle);
+    race.tick(&PlayerInputs::single(throttle));
     let after_one = race.sim.world.ships[0].physics.slowdown_timer;
     assert!(
         after_one <= limit,
@@ -337,7 +338,7 @@ fn a_second_plasma_inside_the_window_does_not_extend_the_timer() {
     // A second hit while the first is still running.
     refill_energy(&mut race);
     detonate_behind_the_player(&mut race, &stats);
-    race.tick(&throttle);
+    race.tick(&PlayerInputs::single(throttle));
     let after_two = race.sim.world.ships[0].physics.slowdown_timer;
     println!("one hit left {after_one}, two left {after_two}, ceiling {limit}");
     assert!(

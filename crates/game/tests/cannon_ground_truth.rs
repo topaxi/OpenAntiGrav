@@ -44,6 +44,7 @@
 use std::path::PathBuf;
 
 use oag_game::race;
+use oag_gameplay::PlayerInputs;
 use oag_gameplay::input::{Button, Input};
 use oag_tables::weapons::Weapon;
 
@@ -100,7 +101,7 @@ fn moving() -> Option<(race::Race, oag_gameplay::InputSnapshot)> {
     let mut race = race::Race::start(loaded.setup);
     let throttle = held(Button::Cross);
     for _ in 0..WARM_UP_TICKS {
-        race.tick(&throttle);
+        race.tick(&PlayerInputs::single(throttle));
     }
     Some((race, throttle))
 }
@@ -155,7 +156,7 @@ fn a_held_fire_button_is_what_fires_a_cannon() {
     // of those is not a window anything could be caught in.
     let quiet = 600u64;
     for _ in 0..quiet {
-        race.tick(&throttle);
+        race.tick(&PlayerInputs::single(throttle));
         assert!(
             rounds(&race).is_empty(),
             "a Cannon round left with SQUARE never held - the countdown is \
@@ -185,7 +186,7 @@ fn a_held_fire_button_is_what_fires_a_cannon() {
     );
     let mut ever_fired = false;
     for _ in 0..ticks {
-        race.tick(&fire);
+        race.tick(&PlayerInputs::single(fire));
         if !rounds(&race).is_empty() {
             ever_fired = true;
             break;
@@ -217,7 +218,7 @@ fn a_held_fire_button_is_what_fires_a_cannon() {
     let mut furthest: f32 = 0.0;
     let mut detonated_after = None;
     for tick in 1..=120 {
-        race.tick(&throttle);
+        race.tick(&PlayerInputs::single(throttle));
         match rounds(&race).first() {
             Some(live) => furthest = furthest.max((live.position - start).length()),
             None => {
@@ -275,7 +276,7 @@ fn an_opponent_holding_a_cannon_fires_it_with_no_button_anywhere() {
     let ticks = (cannon.rate * 60.0).ceil() as u64 + 900;
     let mut shooters: Vec<u8> = Vec::new();
     for _ in 0..ticks {
-        race.tick(&throttle);
+        race.tick(&PlayerInputs::single(throttle));
         for round in race
             .sim
             .world
@@ -331,7 +332,7 @@ fn an_opponent_with_nobody_ahead_does_not_fire_its_cannon() {
     race.sim.world.ships[leader].pickup.weapon = Some(Weapon::Cannon);
 
     for _ in 0..300 {
-        race.tick(&throttle);
+        race.tick(&PlayerInputs::single(throttle));
         // Stop as soon as it is no longer leading - the premise has gone and
         // the rest of the run would be measuring something else.
         if race.places()[leader] != 1 {

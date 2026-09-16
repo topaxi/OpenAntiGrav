@@ -30,6 +30,7 @@
 use std::path::PathBuf;
 
 use oag_game::race;
+use oag_gameplay::PlayerInputs;
 
 /// The disc, or `None` on a checkout without one.
 fn image() -> Option<PathBuf> {
@@ -83,7 +84,7 @@ fn solo_player(level: oag_ai::Difficulty, track: &str, ticks: u64) -> Option<Sol
     };
     let mut stall = 0u32;
     for _ in 0..ticks {
-        race.tick(&oag_gameplay::InputSnapshot::default());
+        race.tick(&PlayerInputs::none());
         let ship = &race.sim.world.ships[0];
         let position = ship.physics.body.position;
         if let Some(distance) = race.spline().distance_to(position) {
@@ -198,7 +199,7 @@ fn a_player_thrown_off_a_real_circuit_at_speed_comes_back() {
     // from the circuit. Red since `b4bb23ee` landed the countdown, and
     // invisible to `just` because this file never runs in CI.
     for _ in 0..oag_race::COUNTDOWN_TICKS + 600 {
-        race.tick(&oag_gameplay::InputSnapshot::default());
+        race.tick(&PlayerInputs::none());
     }
     let from = race.sim.world.ships[0].physics.body.position;
     // Off the side and up, at the speed the log recorded. Sideways rather than
@@ -209,7 +210,7 @@ fn a_player_thrown_off_a_real_circuit_at_speed_comes_back() {
 
     let mut peak: f32 = 0.0;
     for _ in 0..600 {
-        race.tick(&oag_gameplay::InputSnapshot::default());
+        race.tick(&PlayerInputs::none());
         let position = race.sim.world.ships[0].physics.body.position;
         if let Some(distance) = race.spline().distance_to(position) {
             peak = peak.max(distance);

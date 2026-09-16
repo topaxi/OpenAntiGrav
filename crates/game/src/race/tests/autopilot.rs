@@ -8,6 +8,7 @@
 //! Turbo's and the Shield's.
 
 use super::*;
+use oag_gameplay::PlayerInputs;
 
 /// How long [`one_autopilot_table`]'s Autopilot flies for, in seconds.
 const FIXTURE_AUTOPILOT_TIME: f32 = 3.5;
@@ -46,19 +47,22 @@ fn a_fired_autopilot_flies_the_craft_for_its_authored_duration() {
     );
     let mut buttons = Buttons::new();
 
-    race.tick(&buttons.tick(CROSS));
+    race.tick(&PlayerInputs::single(buttons.tick(CROSS)));
     assert_eq!(
         race.ship_pickup(),
         Some(oag_tables::weapons::Weapon::Autopilot)
     );
     assert!(
-        !race.flown_for_the_player(),
+        !race.flown_for_the_player(0),
         "holding one is not the same as having spent it"
     );
 
-    race.tick(&buttons.tick(CROSS | SQUARE));
+    race.tick(&PlayerInputs::single(buttons.tick(CROSS | SQUARE)));
     assert_eq!(race.ship_pickup(), None, "firing must spend the pickup");
-    assert!(race.flown_for_the_player(), "the craft was not handed over");
+    assert!(
+        race.flown_for_the_player(0),
+        "the craft was not handed over"
+    );
     // The authored `time` less the one tick the countdown has already run.
     let armed = race.sim.world.ships[0].autopilot_timer;
     assert!(
@@ -69,11 +73,11 @@ fn a_fired_autopilot_flies_the_craft_for_its_authored_duration() {
     // It ends, and the operator's flag is untouched by any of it.
     let mut ticks: u32 = 1;
     while race.sim.world.ships[0].autopilot_timer > 0.0 {
-        race.tick(&buttons.tick(CROSS));
+        race.tick(&PlayerInputs::single(buttons.tick(CROSS)));
         ticks += 1;
         assert!(ticks < 600, "the autopilot never let go");
     }
-    assert!(!race.flown_for_the_player());
+    assert!(!race.flown_for_the_player(0));
     assert!(
         !race.autopilot(),
         "the pickup moved the operator's own switch"
@@ -99,13 +103,13 @@ fn the_autopilot_warns_once_a_second_before_it_lets_go() {
         one_autopilot_table(),
     );
     let mut buttons = Buttons::new();
-    race.tick(&buttons.tick(CROSS));
-    race.tick(&buttons.tick(CROSS | SQUARE));
+    race.tick(&PlayerInputs::single(buttons.tick(CROSS)));
+    race.tick(&PlayerInputs::single(buttons.tick(CROSS | SQUARE)));
 
     let mut warnings = 0;
     let mut at = None;
     for tick in 0..600u32 {
-        race.tick(&buttons.tick(CROSS));
+        race.tick(&PlayerInputs::single(buttons.tick(CROSS)));
         let raised = race
             .drain_cues()
             .into_iter()
@@ -144,9 +148,9 @@ fn firing_under_autopilot_cancels_it_and_keeps_the_pickup() {
         one_autopilot_table(),
     );
     let mut buttons = Buttons::new();
-    race.tick(&buttons.tick(CROSS));
-    race.tick(&buttons.tick(CROSS | SQUARE));
-    assert!(race.flown_for_the_player());
+    race.tick(&PlayerInputs::single(buttons.tick(CROSS)));
+    race.tick(&PlayerInputs::single(buttons.tick(CROSS | SQUARE)));
+    assert!(race.flown_for_the_player(0));
 
     // A second pickup put in the slot directly - the pad only grants on a *new*
     // entry and the craft is already standing on this one. A fixture, like the
@@ -154,15 +158,15 @@ fn firing_under_autopilot_cancels_it_and_keeps_the_pickup() {
     let held = Some(oag_tables::weapons::Weapon::Rocket);
     race.sim.world.ships[0].pickup.weapon = held;
     assert!(
-        race.flown_for_the_player(),
+        race.flown_for_the_player(0),
         "it let go before the test began"
     );
 
     // Released first: the fire button is edge-triggered, so a second press
     // without a gap is not a press at all.
-    race.tick(&buttons.tick(CROSS));
-    race.tick(&buttons.tick(CROSS | SQUARE));
-    assert!(!race.flown_for_the_player(), "firing did not cancel it");
+    race.tick(&PlayerInputs::single(buttons.tick(CROSS)));
+    race.tick(&PlayerInputs::single(buttons.tick(CROSS | SQUARE)));
+    assert!(!race.flown_for_the_player(0), "firing did not cancel it");
     assert_eq!(
         race.ship_pickup(),
         held,

@@ -37,6 +37,7 @@
 use std::path::PathBuf;
 
 use oag_game::{catalogue, race};
+use oag_gameplay::PlayerInputs;
 use oag_physics::Raycaster;
 
 /// How long a measured run is: five minutes at 60 Hz, the same window
@@ -156,7 +157,7 @@ fn solo_on(track: &str, class: &str, tuning: Option<oag_ai::Tuning>) -> Option<S
     for tick in 0..TICKS {
         let before = race.respawns_of(LONE);
         let was_at = race.sim.world.ships[LONE].driver.index;
-        race.tick(&oag_gameplay::InputSnapshot::default());
+        race.tick(&PlayerInputs::none());
         if race.respawns_of(LONE) != before {
             recovered_this_lap = true;
         }
@@ -661,7 +662,7 @@ fn what_the_airbrakes_do_through_a_hairpin() {
     let mut lap_seen = 0;
     let mut charged = 0.0f32;
     for tick in 0..6_000u64 {
-        race.tick(&oag_gameplay::InputSnapshot::default());
+        race.tick(&PlayerInputs::none());
         let ship = &race.sim.world.ships[LONE];
         let index = ship.driver.index;
         if index < first || index > last {

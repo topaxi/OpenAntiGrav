@@ -50,7 +50,7 @@
 use std::path::PathBuf;
 
 use oag_game::race;
-use oag_gameplay::InputSnapshot;
+use oag_gameplay::PlayerInputs;
 
 /// Ticks to give the race before calling it stuck: a little over eight minutes
 /// at the fixed 60 Hz, where a Venom-class lap of the default circuit runs
@@ -80,7 +80,7 @@ fn autopiloted_race() -> Option<race::Race> {
 /// Runs until the race ends or [`CAP`] runs out, and says which.
 fn race_to_the_flag(race: &mut race::Race) {
     while !race.finished() && race.sim.world.tick < CAP {
-        race.tick(&InputSnapshot::default());
+        race.tick(&PlayerInputs::none());
     }
     assert!(
         race.finished(),
@@ -209,7 +209,7 @@ fn ticking_past_the_flag_does_not_rewrite_the_result() {
     let taken = race.results().expect("a board").clone();
 
     for _ in 0..600 {
-        race.tick(&InputSnapshot::default());
+        race.tick(&PlayerInputs::none());
     }
     assert_eq!(race.results(), Some(&taken));
 }

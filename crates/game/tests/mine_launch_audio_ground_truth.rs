@@ -25,6 +25,7 @@
 use std::path::{Path, PathBuf};
 
 use oag_game::race;
+use oag_gameplay::PlayerInputs;
 use oag_gameplay::input::{Button, Input};
 use oag_tables::weapons::Weapon;
 
@@ -80,7 +81,7 @@ fn laying_a_mine_sounds_minelaunch_and_writes_it_out() {
 
     let throttle = held(Button::Cross);
     for _ in 0..WARM_UP_TICKS {
-        race.tick(&throttle);
+        race.tick(&PlayerInputs::single(throttle));
     }
     let speed = race.sim.world.ships[0]
         .physics
@@ -119,7 +120,7 @@ fn laying_a_mine_sounds_minelaunch_and_writes_it_out() {
     // already emptied rather than the real wiring.
     let mut launches = 0;
     for _ in 0..90 {
-        race.tick(&throttle);
+        race.tick(&PlayerInputs::single(throttle));
         launches += race
             .pending_cues()
             .iter()

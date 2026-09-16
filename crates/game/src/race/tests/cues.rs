@@ -8,6 +8,7 @@
 
 use super::*;
 use crate::audio::sfx::Cue;
+use oag_gameplay::PlayerInputs;
 
 /// A race whose ship is inside a speed pad from the first tick.
 fn grid_on_a_speed_pad() -> Race {
@@ -28,7 +29,7 @@ fn crossing_a_pad_raises_its_cue_on_the_tick_the_flare_is_armed() {
     let mut race = grid_on_a_speed_pad();
     assert!(race.pending_cues().is_empty(), "a cue before any tick ran");
 
-    race.tick(&InputSnapshot::default());
+    race.tick(&PlayerInputs::none());
     // The same edge, the same tick: `Ship_ApplySpeedupPad` calls
     // `ExhaustFlare_OnSpeedupPad` and `Sound_Play("SPEEDUPPAD")` from one
     // branch, so a port where the flare arms and the cue does not is wired
@@ -47,7 +48,7 @@ fn crossing_a_pad_raises_its_cue_on_the_tick_the_flare_is_armed() {
 #[test]
 fn sitting_on_a_pad_raises_the_cue_once_and_not_every_tick() {
     let mut race = grid_on_a_speed_pad();
-    race.tick(&InputSnapshot::default());
+    race.tick(&PlayerInputs::none());
     let first: Vec<_> = race
         .drain_cues()
         .into_iter()
@@ -72,7 +73,7 @@ fn sitting_on_a_pad_raises_the_cue_once_and_not_every_tick() {
     // Zone score and the flare already follow. A pad held for a second would
     // otherwise machine-gun sixty copies of a half-second sample.
     for _ in 0..60 {
-        race.tick(&InputSnapshot::default());
+        race.tick(&PlayerInputs::none());
     }
     assert!(
         !race.drain_cues().iter().any(|e| e.cue == Cue::SpeedupPad),
@@ -83,7 +84,7 @@ fn sitting_on_a_pad_raises_the_cue_once_and_not_every_tick() {
 #[test]
 fn draining_takes_the_queue_and_leaves_it_empty() {
     let mut race = grid_on_a_speed_pad();
-    race.tick(&InputSnapshot::default());
+    race.tick(&PlayerInputs::none());
     assert!(!race.pending_cues().is_empty());
     let drained = race.drain_cues();
     assert!(!drained.is_empty());
@@ -97,7 +98,7 @@ fn draining_takes_the_queue_and_leaves_it_empty() {
 fn a_track_with_no_pads_raises_no_pad_cue() {
     let mut race = race_with_pads(Mode::SingleRace, Vec::new());
     for _ in 0..120 {
-        race.tick(&InputSnapshot::default());
+        race.tick(&PlayerInputs::none());
         assert!(!race.drain_cues().iter().any(|e| e.cue == Cue::SpeedupPad));
     }
 }
@@ -195,7 +196,7 @@ fn every_cue_has_something_that_raises_it() {
         } else {
             buttons.tick(0)
         };
-        saw_impact |= race.tick(&snapshot).wall.impact;
+        saw_impact |= race.tick(&PlayerInputs::single(snapshot)).wall.impact;
         raised.extend(race.drain_cues().into_iter().map(|e| e.cue));
     }
     assert!(
@@ -232,7 +233,7 @@ fn the_shield_announcer_fires_on_the_edge_and_not_on_the_level() {
     let mut announcements = 0;
     for tick in 0..180 {
         race.sim.world.ships[0].physics.shield_pickup_timer = if tick >= 30 { 1.0 } else { 0.0 };
-        race.tick(&InputSnapshot::default());
+        race.tick(&PlayerInputs::none());
         announcements += race
             .drain_cues()
             .iter()
@@ -276,7 +277,7 @@ fn the_class_announcer_fires_on_a_stage_step_and_not_on_every_zone() {
     // slop - the boundary this asserts sits at zone 2 and every zone after
     // it names the same stage, so overshooting past it changes nothing.
     for _ in 0..1300 {
-        race.tick(&InputSnapshot::default());
+        race.tick(&PlayerInputs::none());
         raised.extend(race.drain_class_announcements());
     }
     assert!(
@@ -306,7 +307,7 @@ fn a_title_with_no_zone_stages_never_raises_a_class_announcement() {
 
     let mut raised = Vec::new();
     for _ in 0..1300 {
-        race.tick(&InputSnapshot::default());
+        race.tick(&PlayerInputs::none());
         raised.extend(race.drain_class_announcements());
     }
     assert!(
@@ -338,7 +339,7 @@ fn laying_a_mine_raises_its_launch_cue_once_per_charge() {
     // Comfortably past the whole cluster: `DROP_INTERVAL` is a tenth of a
     // second, so `CLUSTER` charges take under a second at 60 Hz.
     for _ in 0..120 {
-        race.tick(&InputSnapshot::default());
+        race.tick(&PlayerInputs::none());
         launches += race
             .drain_cues()
             .iter()
@@ -378,7 +379,7 @@ fn dropping_a_bomb_raises_no_mine_launch_cue() {
 
     let mut raised = Vec::new();
     for _ in 0..30 {
-        race.tick(&InputSnapshot::default());
+        race.tick(&PlayerInputs::none());
         raised.extend(race.drain_cues());
     }
     assert!(
@@ -396,8 +397,8 @@ fn raising_a_cue_does_not_move_the_race_hash() {
     let mut with = grid_on_a_speed_pad();
     let mut without = grid_on_a_speed_pad();
     for _ in 0..30 {
-        with.tick(&InputSnapshot::default());
-        without.tick(&InputSnapshot::default());
+        with.tick(&PlayerInputs::none());
+        without.tick(&PlayerInputs::none());
         // One of the two has its queue drained every tick and the other never
         // does, so by the end they hold different queues entirely.
         with.drain_cues();

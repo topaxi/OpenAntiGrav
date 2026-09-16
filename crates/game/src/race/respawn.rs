@@ -119,10 +119,10 @@ impl Race {
     /// Advances the dwell counter as a side effect, so it must be called once per
     /// tick and not conditionally, for the reason [`Self::lost_off_the_circuit`]
     /// gives.
-    pub(super) fn lost_off_the_track(&mut self, distance: Option<f32>) -> bool {
+    pub(super) fn lost_off_the_track(&mut self, slot: usize, distance: Option<f32>) -> bool {
         let away = distance.is_some_and(|distance| distance > self.sim.player_rescue_distance);
-        self.sim.lost_ticks[0] = if away {
-            self.sim.lost_ticks[0].saturating_add(1)
+        self.sim.lost_ticks[slot] = if away {
+            self.sim.lost_ticks[slot].saturating_add(1)
         } else {
             0
         };
@@ -131,9 +131,9 @@ impl Race {
         // shape as the racing-line emptiness guard next door, and applied after
         // the counter for the same reason.
         self.sim.player_rescue_distance > 0.0
-            && !self.sim.respawn_disabled[0]
-            && self.sim.respawn_cooldown[0] == 0
-            && self.sim.lost_ticks[0] >= PLAYER_RESCUE_TICKS
+            && !self.sim.respawn_disabled[slot]
+            && self.sim.respawn_cooldown[slot] == 0
+            && self.sim.lost_ticks[slot] >= PLAYER_RESCUE_TICKS
     }
 
     /// Whether this tick ended in contact with `Reset` geometry.

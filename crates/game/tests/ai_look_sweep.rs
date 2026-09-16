@@ -24,6 +24,7 @@
 use std::path::PathBuf;
 
 use oag_game::{catalogue, race};
+use oag_gameplay::PlayerInputs;
 
 const TICKS: u64 = 18_000;
 const LONE: usize = 1;
@@ -67,7 +68,7 @@ fn solo_on(track: &str, tuning: oag_ai::Tuning) -> Option<Solo> {
     let mut shield_at_lap = race.sim.world.ships[LONE].physics.shield;
     for tick in 0..TICKS {
         let before = race.respawns_of(LONE);
-        race.tick(&oag_gameplay::InputSnapshot::default());
+        race.tick(&PlayerInputs::none());
         if race.respawns_of(LONE) != before {
             recovered_this_lap = true;
         }
@@ -136,7 +137,7 @@ fn field_run(measured: oag_ai::Tuning) -> Option<FieldRun> {
     let mut race = race::Race::start(lap_times.setup);
     race.set_ai_tuning(tuned(oag_ai::Difficulty::Ace));
     for _ in 0..9_000 {
-        race.tick(&oag_gameplay::InputSnapshot::default());
+        race.tick(&PlayerInputs::none());
     }
     let lapped: Vec<usize> = (1..usize::from(race.ship_count()))
         .filter(|&slot| race.sim.world.ships[slot].standing.lap >= 2)
@@ -160,7 +161,7 @@ fn field_run(measured: oag_ai::Tuning) -> Option<FieldRun> {
     let opponents = 1..usize::from(race.ship_count());
     let full = race.sim.world.ships[1].handling.dimensions.shield;
     for _ in 0..3_600 {
-        race.tick(&oag_gameplay::InputSnapshot::default());
+        race.tick(&PlayerInputs::none());
     }
     let mean = opponents
         .clone()

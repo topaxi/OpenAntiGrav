@@ -6,6 +6,7 @@
 //! `tests.rs`.
 
 use super::*;
+use oag_gameplay::PlayerInputs;
 
 /// A field of one reports **no** place, rather than "first of one".
 ///
@@ -302,7 +303,7 @@ fn a_ship_over_nothing_falls_and_stays_finite() {
     let mut held = HeldButtons::new(0);
     for _ in 0..60 {
         let snapshot = held.snapshot();
-        race.tick(&snapshot);
+        race.tick(&PlayerInputs::single(snapshot));
     }
 
     let now = race.ship().physics.body.position;

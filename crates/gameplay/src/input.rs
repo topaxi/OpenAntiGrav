@@ -162,6 +162,18 @@ pub struct Input {
 }
 
 impl Input {
+    /// A state with nothing held, as a constant.
+    ///
+    /// [`Self::default`]'s value, reachable from a `const` context - which is
+    /// what [`PlayerInputs`]'s out-of-range fallback needs and `Default` cannot
+    /// give it.
+    pub const EMPTY: Self = Self {
+        held: 0,
+        held_last: 0,
+        released: 0,
+        pressed: 0,
+    };
+
     /// A state with nothing held.
     #[must_use]
     pub fn new() -> Self {
@@ -268,6 +280,17 @@ pub struct InputSnapshot {
 }
 
 impl InputSnapshot {
+    /// Nothing held and sticks centred, as a constant.
+    ///
+    /// [`Input::EMPTY`]'s argument, one level up.
+    pub const EMPTY: Self = Self {
+        buttons: Input::EMPTY,
+        stick_x: 0.0,
+        stick_y: 0.0,
+        airbrake_left: 0.0,
+        airbrake_right: 0.0,
+    };
+
     /// Nothing held, sticks centred.
     #[must_use]
     pub fn new() -> Self {
@@ -417,3 +440,95 @@ mod tests {
         assert_ne!(button_from_name("activate"), button_from_name("cancel"));
     }
 }
+
+/// One tick of pilot intent per grid slot.
+///
+/// **What [`crate::World::race`]'s widening needs on the other side.** The world
+/// now carries a clock per slot and a [`crate::Controller`] per slot; this is
+/// the input that reaches them. Split screen, multiple windows and network play
+/// are all "N people feeding N snapshots into one simulation per tick", and
+/// they differ only in where the snapshots come from - two pads on one machine,
+/// two windows on one machine, or a socket. None of that is visible here, which
+/// is the point: the simulation's contract is still "a snapshot in", it just
+/// has eight of them.
+///
+/// **A fixed array, indexed by grid slot**, for [`crate::World`]'s own reason -
+/// a `Vec` of inputs would make the thing a replay records vary in size with
+/// the session that recorded it. Slot `i` here is `ships[i]`, `race[i]` and
+/// `controllers[i]`: one index for the whole racer, so there is no mapping to
+/// keep in step.
+///
+/// **A slot whose [`crate::Controller`] is not human is not consulted.** Its
+/// entry is [`InputSnapshot::default`] and stays that way - an AI slot is flown
+/// by [`oag_ai`], and writing a snapshot into its entry would not steer it. The
+/// array is dense rather than sparse because a sparse one would have to be a
+/// map, and a map's iteration order must never reach simulation state.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct PlayerInputs {
+    slots: [InputSnapshot; crate::world::MAX_PLAYERS],
+}
+
+impl PlayerInputs {
+    /// Nothing held in any slot.
+    ///
+    /// What a headless run, a capture and every ground-truth test that only
+    /// needs the clock to advance hands the tick.
+    #[must_use]
+    pub fn none() -> Self {
+        Self::default()
+    }
+
+    /// One person in slot 0, nothing in the rest.
+    ///
+    /// The shape of every session this engine currently runs, and the reason
+    /// widening `oag_game::race::Race::tick` changed no behaviour: with
+    /// [`crate::World::SINGLE_PLAYER`] on the other side, exactly slot 0 is
+    /// consulted and it is handed exactly what the single-snapshot signature
+    /// used to pass.
+    #[must_use]
+    pub fn single(snapshot: InputSnapshot) -> Self {
+        let mut inputs = Self::none();
+        inputs.slots[0] = snapshot;
+        inputs
+    }
+
+    /// What slot `i` is holding.
+    ///
+    /// Out of range reads as nothing held rather than panicking: the tick asks
+    /// this per slot over a fixed range, and a bounds panic in the middle of a
+    /// simulation step is a worse failure than a craft that coasts.
+    #[must_use]
+    pub fn get(&self, slot: usize) -> &InputSnapshot {
+        self.slots.get(slot).unwrap_or(&NOTHING_HELD)
+    }
+
+    /// Puts a snapshot in slot `i`, ignoring a slot past the grid.
+    pub fn set(&mut self, slot: usize, snapshot: InputSnapshot) {
+        if let Some(entry) = self.slots.get_mut(slot) {
+            *entry = snapshot;
+        }
+    }
+
+    /// Every slot's snapshot, in slot order.
+    ///
+    /// Slot order because this can reach simulation state, the same argument
+    /// [`crate::World::human_slots`] makes about itself.
+    pub fn iter(&self) -> impl Iterator<Item = &InputSnapshot> {
+        self.slots.iter()
+    }
+}
+
+impl From<InputSnapshot> for PlayerInputs {
+    fn from(snapshot: InputSnapshot) -> Self {
+        Self::single(snapshot)
+    }
+}
+
+impl From<&InputSnapshot> for PlayerInputs {
+    fn from(snapshot: &InputSnapshot) -> Self {
+        Self::single(*snapshot)
+    }
+}
+
+/// What [`PlayerInputs::get`] hands back for a slot past the grid.
+static NOTHING_HELD: InputSnapshot = InputSnapshot::EMPTY;

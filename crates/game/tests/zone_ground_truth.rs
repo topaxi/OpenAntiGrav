@@ -48,6 +48,7 @@
 //! [ADR-0022]: ../../../docs/architecture/adr/0022-title-packages.md
 
 use oag_game::{catalogue, race};
+use oag_gameplay::PlayerInputs;
 use oag_gameplay::input::Button;
 use oag_title::ZoneCircuit;
 use std::path::PathBuf;
@@ -915,7 +916,7 @@ fn zone_speed_is_automatic_and_exhaust_intensity_now_follows_it_too() {
     let mut held_race = race::Race::start(loaded.setup.clone());
     let mut held = race::HeldButtons::new(Button::Cross.bit());
     for _ in 0..TICKS {
-        held_race.tick(&held.snapshot());
+        held_race.tick(&PlayerInputs::single(held.snapshot()));
     }
     let held_intensity = held_race.exhaust_of(0).intensity();
     let held_speed = held_race.exhaust_of(0).speed_kmh();
@@ -929,7 +930,7 @@ fn zone_speed_is_automatic_and_exhaust_intensity_now_follows_it_too() {
     // not need it, so this is a normal way to play the mode.
     let mut coasting_race = race::Race::start(loaded.setup);
     for _ in 0..TICKS {
-        coasting_race.tick(&oag_gameplay::InputSnapshot::default());
+        coasting_race.tick(&PlayerInputs::none());
     }
     let coasting_intensity = coasting_race.exhaust_of(0).intensity();
     let coasting_speed = coasting_race.exhaust_of(0).speed_kmh();

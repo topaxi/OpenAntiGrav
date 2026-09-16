@@ -563,7 +563,13 @@ impl Session {
                             ship.pickup.weapon = Some(weapon);
                         }
                     }
-                    stage.race.tick(&snapshot);
+                    // The pad's own slot assignment, which is slot 0 for
+                    // every device in a single-player session - see
+                    // `oag_input::pad::Assignment`. One snapshot per slot from
+                    // here down.
+                    let mut inputs = oag_gameplay::PlayerInputs::none();
+                    inputs.set(stage.race.sim.world.primary_slot(), snapshot);
+                    stage.race.tick(&inputs);
                     // Immediately after the tick and inside this loop, so a cue
                     // lands on the tick that raised it whether the frame
                     // stepped once, twice or not at all. See

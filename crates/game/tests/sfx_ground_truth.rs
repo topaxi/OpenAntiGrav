@@ -29,6 +29,7 @@ use std::path::{Path, PathBuf};
 
 use oag_game::audio::sfx::{Banks, Cue};
 use oag_game::race;
+use oag_gameplay::PlayerInputs;
 
 /// The discs this runs against, and what each is called in a failure message.
 const DISCS: [(&str, &str); 5] = [
@@ -462,7 +463,7 @@ fn the_engine_sounds_while_a_race_runs_and_stops_when_it_finishes() {
 
     assert_eq!(voices(&audio), 0, "something was playing before the race");
     for _ in 0..120 {
-        race.tick(&oag_gameplay::InputSnapshot::default());
+        race.tick(&PlayerInputs::none());
         audio.race_tick(&mut race);
         // The other half of the composition root's per-tick pair: with the
         // null backend this is the only thing that renders, and a voice that is
@@ -532,7 +533,7 @@ fn a_destroyed_craft_sounds_and_stops_sounding() {
         |audio: &oag_game::audio::Audio| audio.output().with_mixer(|mixer| mixer.active_voices());
 
     for _ in 0..30 {
-        race.tick(&oag_gameplay::InputSnapshot::default());
+        race.tick(&PlayerInputs::none());
         audio.race_tick(&mut race);
         audio.tick();
     }
@@ -617,7 +618,7 @@ fn the_whole_grid_is_audible_and_not_all_from_one_place() {
         false,
     );
     for _ in 0..120 {
-        race.tick(&oag_gameplay::InputSnapshot::default());
+        race.tick(&PlayerInputs::none());
         audio.race_tick(&mut race);
         audio.tick();
     }
@@ -706,7 +707,7 @@ fn the_shield_opens_a_held_voice_and_closes_it_when_the_pickup_expires() {
     // Settle first, so the engine's own voice is already open and the counts
     // below are differences rather than absolutes.
     for _ in 0..60 {
-        race.tick(&oag_gameplay::InputSnapshot::default());
+        race.tick(&PlayerInputs::none());
         audio.race_tick(&mut race);
         // The other half of the composition root's per-tick pair: with the
         // null backend this is the only thing that renders, and a voice that is
@@ -722,7 +723,7 @@ fn the_shield_opens_a_held_voice_and_closes_it_when_the_pickup_expires() {
     // `Race::shield_is_up` reads, and granting a real pickup would be testing
     // the pad table instead.
     race.sim.world.ships[0].physics.shield_pickup_timer = 1.0;
-    race.tick(&oag_gameplay::InputSnapshot::default());
+    race.tick(&PlayerInputs::none());
     audio.race_tick(&mut race);
     assert!(
         voices(&audio) > idle,
@@ -732,7 +733,7 @@ fn the_shield_opens_a_held_voice_and_closes_it_when_the_pickup_expires() {
     // Held across ticks rather than re-triggered - it is a `~` cue.
     let held = voices(&audio);
     for _ in 0..30 {
-        race.tick(&oag_gameplay::InputSnapshot::default());
+        race.tick(&PlayerInputs::none());
         audio.race_tick(&mut race);
         // The other half of the composition root's per-tick pair: with the
         // null backend this is the only thing that renders, and a voice that is
@@ -747,7 +748,7 @@ fn the_shield_opens_a_held_voice_and_closes_it_when_the_pickup_expires() {
     );
 
     race.sim.world.ships[0].physics.shield_pickup_timer = 0.0;
-    race.tick(&oag_gameplay::InputSnapshot::default());
+    race.tick(&PlayerInputs::none());
     audio.race_tick(&mut race);
     assert_eq!(
         voices(&audio),

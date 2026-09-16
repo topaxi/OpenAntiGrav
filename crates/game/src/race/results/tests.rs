@@ -10,6 +10,7 @@
 use super::*;
 
 use crate::race::tests::race_with_a_grid;
+use oag_gameplay::PlayerInputs;
 
 /// A craft that has crossed for the last time, on the tick given.
 fn finish(race: &mut Race, slot: usize, tick: u64) {
@@ -22,7 +23,7 @@ fn finish(race: &mut Race, slot: usize, tick: u64) {
 #[test]
 fn a_race_in_progress_has_no_results() {
     let mut race = race_with_a_grid();
-    race.tick(&InputSnapshot::default());
+    race.tick(&PlayerInputs::none());
     assert!(!race.finished());
     assert!(race.results().is_none());
 }
@@ -32,7 +33,7 @@ fn the_board_is_taken_on_the_tick_the_race_finishes() {
     let mut race = race_with_a_grid();
     finish(&mut race, 0, 5_000);
     race.sim.world.primary_race_mut().finished = true;
-    race.tick(&InputSnapshot::default());
+    race.tick(&PlayerInputs::none());
     let board = race
         .results()
         .expect("the race finished, so it has a board");

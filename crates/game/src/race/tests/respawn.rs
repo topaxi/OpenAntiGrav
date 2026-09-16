@@ -6,6 +6,7 @@
 //! `tests.rs`.
 
 use super::*;
+use oag_gameplay::PlayerInputs;
 
 /// A respawn in flight teleports the craft and leaves the camera spring
 /// catching up, so neither position describes the shot.
@@ -58,7 +59,7 @@ fn a_ship_that_falls_through_a_reset_plane_is_put_back_on_the_track() {
     }
 
     for _ in 0..10 {
-        race.tick(&InputSnapshot::default());
+        race.tick(&PlayerInputs::none());
     }
 
     assert_eq!(race.respawns(), 1, "the reset plane never triggered");
@@ -88,7 +89,7 @@ fn falling_through_any_other_class_does_not_respawn() {
             body.linear_velocity = Vec3::new(0.0, -600.0, 0.0);
         }
         for _ in 0..10 {
-            race.tick(&InputSnapshot::default());
+            race.tick(&PlayerInputs::none());
         }
         assert_eq!(race.respawns(), 0, "{surface:?} respawned the ship");
     }
@@ -113,12 +114,12 @@ fn a_player_that_leaves_the_circuit_is_put_back_after_the_dwell() {
 
     // One short of the dwell: still out there, still not touched.
     for _ in 0..PLAYER_RESCUE_TICKS - 1 {
-        race.tick(&InputSnapshot::default());
+        race.tick(&PlayerInputs::none());
         race.sim.world.ships[0].physics.body.position = away;
     }
     assert_eq!(race.respawns(), 0, "recovered before the dwell elapsed");
 
-    race.tick(&InputSnapshot::default());
+    race.tick(&PlayerInputs::none());
     assert_eq!(race.respawns(), 1, "the dwell elapsed and nothing happened");
     let position = race.sim.world.ships[0].physics.body.position;
     let distance = race.spline().distance_to(position).expect("a sample");
@@ -136,7 +137,7 @@ fn a_player_inside_the_threshold_is_left_alone() {
     let inside = Vec3::new(20.0, 6.0, race.sim.player_rescue_distance - 1.0);
     for _ in 0..PLAYER_RESCUE_TICKS * 3 {
         race.sim.world.ships[0].physics.body.position = inside;
-        race.tick(&InputSnapshot::default());
+        race.tick(&PlayerInputs::none());
     }
     assert_eq!(race.respawns(), 0, "a craft on the track was recovered");
 }
@@ -207,14 +208,14 @@ fn the_recovery_pose_is_the_last_place_the_craft_was_on_the_track() {
     // has to keep.
     let left_from = Vec3::new(60.0, 6.0, 0.0);
     race.sim.world.ships[0].physics.body.position = left_from;
-    race.tick(&InputSnapshot::default());
+    race.tick(&PlayerInputs::none());
 
     // And now out beyond the *near* end, so the nearest sample to the craft is
     // sample zero rather than anything it drove past.
     let away = Vec3::new(0.0, -400.0, 0.0);
     for _ in 0..PLAYER_RESCUE_TICKS {
         race.sim.world.ships[0].physics.body.position = away;
-        race.tick(&InputSnapshot::default());
+        race.tick(&PlayerInputs::none());
     }
     assert_eq!(race.respawns(), 1, "the craft was never recovered");
 
@@ -259,7 +260,7 @@ fn a_sustained_scrape_spawns_sparks_once_not_every_tick() {
     };
 
     push_toward_wall(&mut race);
-    let evaluated = race.tick(&InputSnapshot::default());
+    let evaluated = race.tick(&PlayerInputs::none());
     assert!(
         evaluated.wall.impact,
         "the fixture never reaches the wall - not what this test means to check"
@@ -275,7 +276,7 @@ fn a_sustained_scrape_spawns_sparks_once_not_every_tick() {
     // `crates/render/tests/psys_ground_truth.rs`.
     for tick in 0..10 {
         push_toward_wall(&mut race);
-        race.tick(&InputSnapshot::default());
+        race.tick(&PlayerInputs::none());
         assert_eq!(
             race.spark_ignitions(),
             1,
@@ -308,7 +309,7 @@ fn a_sustained_scrape_refires_after_the_cooldown_elapses() {
     };
 
     push_toward_wall(&mut race);
-    let evaluated = race.tick(&InputSnapshot::default());
+    let evaluated = race.tick(&PlayerInputs::none());
     assert!(
         evaluated.wall.impact,
         "the fixture never reaches the wall - not what this test means to check"
@@ -320,7 +321,7 @@ fn a_sustained_scrape_refires_after_the_cooldown_elapses() {
     let ticks = (oag_render::sparks::COLLISION_COOLDOWN / dt).ceil() as usize + 1;
     for _ in 0..ticks {
         push_toward_wall(&mut race);
-        race.tick(&InputSnapshot::default());
+        race.tick(&PlayerInputs::none());
     }
     assert_eq!(
         race.spark_ignitions(),
@@ -349,7 +350,7 @@ fn a_recovery_pose_inside_a_reset_volume_gives_up_instead_of_looping() {
 
     let mut race = Race::start(setup);
     for _ in 0..(RESPAWN_COOLDOWN_TICKS * (RESPAWN_GIVE_UP + 3)) {
-        race.tick(&InputSnapshot::default());
+        race.tick(&PlayerInputs::none());
     }
 
     assert_eq!(
@@ -372,10 +373,10 @@ fn a_respawn_is_not_repeated_on_the_very_next_tick() {
     );
 
     let mut race = Race::start(setup);
-    race.tick(&InputSnapshot::default());
+    race.tick(&PlayerInputs::none());
     assert_eq!(race.respawns(), 1);
     for _ in 0..(RESPAWN_COOLDOWN_TICKS - 1) {
-        race.tick(&InputSnapshot::default());
+        race.tick(&PlayerInputs::none());
         assert_eq!(race.respawns(), 1, "respawned again inside the cooldown");
     }
 }
@@ -456,7 +457,7 @@ fn a_looping_spark_effect_stops_when_the_contact_does() {
     let mut race = race_with_spark_effect(&one_emitter_pob("WO_TEST_SPARK", flags::LOOPING));
 
     push_toward_wall(&mut race);
-    let evaluated = race.tick(&InputSnapshot::default());
+    let evaluated = race.tick(&PlayerInputs::none());
     assert!(
         evaluated.wall.impact,
         "the fixture never reaches the wall - not what this test means to check"
@@ -469,7 +470,7 @@ fn a_looping_spark_effect_stops_when_the_contact_does() {
     let ticks = (oag_render::sparks::COLLISION_COOLDOWN / race.dt()).ceil() as usize + 2;
     for _ in 0..ticks {
         push_toward_wall(&mut race);
-        race.tick(&InputSnapshot::default());
+        race.tick(&PlayerInputs::none());
     }
     assert_eq!(
         race.spark_ignitions(),
@@ -486,7 +487,7 @@ fn a_looping_spark_effect_stops_when_the_contact_does() {
     for _ in 0..90 {
         race.sim.world.ships[0].physics.body.position = Vec3::new(20.0, 0.0, 0.0);
         race.sim.world.ships[0].physics.body.linear_velocity = Vec3::ZERO;
-        race.tick(&InputSnapshot::default());
+        race.tick(&PlayerInputs::none());
     }
     assert!(
         !race.sparks().is_running(),
@@ -502,7 +503,7 @@ fn a_burst_spark_effect_is_not_cut_short_by_letting_go() {
     let mut race = race_with_spark_effect(&one_emitter_pob("WO_TEST_SPARK", 0));
 
     push_toward_wall(&mut race);
-    race.tick(&InputSnapshot::default());
+    race.tick(&PlayerInputs::none());
     assert_eq!(race.spark_ignitions(), 1);
     assert!(race.sparks().is_running());
 
@@ -510,7 +511,7 @@ fn a_burst_spark_effect_is_not_cut_short_by_letting_go() {
     // owns it and its 4-tick schedule has not run out.
     race.sim.world.ships[0].physics.body.position = Vec3::new(20.0, 0.0, 0.0);
     race.sim.world.ships[0].physics.body.linear_velocity = Vec3::ZERO;
-    race.tick(&InputSnapshot::default());
+    race.tick(&PlayerInputs::none());
     assert!(
         race.sparks().is_running(),
         "letting go truncated a burst that owns its own schedule"
@@ -550,7 +551,7 @@ fn a_shielded_scrape_bulges_the_shell_and_throws_no_sparks() {
     let body = &mut race.sim.world.ships[0].physics.body;
     body.position = Vec3::new(20.0, -39.7, 0.0);
     body.linear_velocity = Vec3::new(0.0, -50.0, 0.0);
-    let evaluated = race.tick(&InputSnapshot::default());
+    let evaluated = race.tick(&PlayerInputs::none());
 
     assert!(
         evaluated.wall.impact,

@@ -331,8 +331,13 @@ pub(crate) fn write_trace(
             button_mask(cli.hold.as_deref()),
             tick,
         );
-        let snapshot = held.snapshot();
-        race.tick(&snapshot);
+        // One scripted pilot, in whichever slot the world says a person
+        // flies - slot 0 for every headless run there is. A script with a
+        // second pilot in it would fill a second entry here and nothing
+        // downstream would change.
+        let mut inputs = oag_gameplay::PlayerInputs::none();
+        inputs.set(race.sim.world.primary_slot(), held.snapshot());
+        race.tick(&inputs);
     }
     if let Some(age) = cli.pose_boost {
         race.force_boost_state(age, cli.pose_intensity, cli.pose_speed);

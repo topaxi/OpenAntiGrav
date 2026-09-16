@@ -6,6 +6,7 @@
 //! `tests.rs`. The rest of the scene composition is in `scene.rs`.
 
 use super::*;
+use oag_gameplay::PlayerInputs;
 
 /// The authored kick widens the view while the boost runs and closes again
 /// afterwards, and **turning it off leaves the projection bit-identical** to
@@ -33,8 +34,8 @@ fn the_boost_kick_widens_the_view_and_turning_it_off_changes_nothing() {
     // simulation, so at any tick they are in the same physical state and the
     // only difference between these two matrices is the kick itself.
     for _ in 0..30 {
-        kicked.tick(&InputSnapshot::default());
-        off.tick(&InputSnapshot::default());
+        kicked.tick(&PlayerInputs::none());
+        off.tick(&PlayerInputs::none());
     }
 
     let open = kicked.projection(16.0 / 9.0, 1000.0, Fov::AUTHORED);
@@ -76,8 +77,8 @@ fn the_boost_kick_widens_the_view_and_turning_it_off_changes_nothing() {
     kicked.sim.speedup_pads.clear();
     off.sim.speedup_pads.clear();
     for _ in 0..600 {
-        kicked.tick(&InputSnapshot::default());
-        off.tick(&InputSnapshot::default());
+        kicked.tick(&PlayerInputs::none());
+        off.tick(&PlayerInputs::none());
     }
     assert_eq!(
         kicked
@@ -151,7 +152,7 @@ fn a_stronger_tier_widens_the_view_further() {
         let mut race = race_with_pads(Mode::TimeTrial, enveloping_pad());
         race.set_boost_fov_kick(tier);
         for _ in 0..30 {
-            race.tick(&InputSnapshot::default());
+            race.tick(&PlayerInputs::none());
         }
         x_scale(race.projection(16.0 / 9.0, 1000.0, Fov::AUTHORED))
     };
@@ -201,8 +202,8 @@ fn cycling_the_camera_changes_no_simulation_state() {
     let mut cycled_input = HeldButtons::new(held);
 
     for tick in 0..240u32 {
-        control.tick(&control_input.snapshot());
-        cycled.tick(&cycled_input.snapshot());
+        control.tick(&PlayerInputs::single(control_input.snapshot()));
+        cycled.tick(&PlayerInputs::single(cycled_input.snapshot()));
         // Eleven changes over the run, so every view is entered and left
         // several times while the craft flies - and eleven is deliberately
         // not a multiple of three, so the run does not end back on the view

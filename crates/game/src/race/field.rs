@@ -159,10 +159,10 @@ impl Race {
     /// for their `time` at a scaled thrust - see
     /// `oag_gameplay::disruption::Disruption::autopilot_thrust_scale`.
     #[must_use]
-    pub fn flown_for_the_player(&self) -> bool {
+    pub fn flown_for_the_player(&self, slot: usize) -> bool {
         self.sim.autopilot
-            || self.sim.world.ships[0].autopilot_timer > 0.0
-            || self.sim.world.ships[0]
+            || self.sim.world.ships[slot].autopilot_timer > 0.0
+            || self.sim.world.ships[slot]
                 .disruption
                 .autopilot_thrust_scale()
                 .is_some()
@@ -183,17 +183,17 @@ impl Race {
     /// first tick and not here, because there is no stale previous value to
     /// cross. No authored `<Weapon type="Autopilot"><Stats time>` is anywhere
     /// near that short.
-    pub(super) fn tick_autopilot(&mut self) {
-        let timer = self.sim.world.ships[0].autopilot_timer;
+    pub(super) fn tick_autopilot(&mut self, slot: usize) {
+        let timer = self.sim.world.ships[slot].autopilot_timer;
         if timer <= 0.0 {
             return;
         }
         let now = timer - self.sim.dt;
-        self.sim.world.ships[0].autopilot_timer = now.max(0.0);
+        self.sim.world.ships[slot].autopilot_timer = now.max(0.0);
         if now < AUTOPILOT_WARNING_SECONDS && timer > AUTOPILOT_WARNING_SECONDS {
             self.sim.cues.push(crate::audio::sfx::CueEvent::new(
                 crate::audio::sfx::Cue::Disengaging,
-                0,
+                slot,
             ));
         }
     }
@@ -215,12 +215,12 @@ impl Race {
     /// **The tuning is the one exception.** [`RaceSim::autopilot_tuning`], not
     /// [`RaceSim::ai_tuning`], when `--autopilot-skill` set it - see
     /// [`Self::set_autopilot_tuning`] for why the two stay apart.
-    pub(super) fn autopilot_controls(&mut self) -> oag_physics::ShipControls {
+    pub(super) fn autopilot_controls(&mut self, slot: usize) -> oag_physics::ShipControls {
         let places = self.places();
-        let field = self.field_for(0, &places);
-        let pilot = self.sim.ai_pilots[0];
+        let field = self.field_for(slot, &places);
+        let pilot = self.sim.ai_pilots[slot];
         let tuning = self.sim.autopilot_tuning.unwrap_or(self.sim.ai_tuning);
-        let ship = &mut self.sim.world.ships[0];
+        let ship = &mut self.sim.world.ships[slot];
         if ship.physics.craft_state != oag_physics::CraftState::Racing {
             return oag_physics::ShipControls::default();
         }
@@ -646,7 +646,7 @@ impl Race {
     /// The player's own race position, `1`-based.
     #[must_use]
     pub fn player_place(&self) -> u8 {
-        self.places()[0]
+        self.places()[self.player_slot()]
     }
 
     /// Craft against craft, every pair, once a tick.

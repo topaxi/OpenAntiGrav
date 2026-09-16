@@ -13,6 +13,7 @@
 //! up on a real circuit is `crates/game/tests/*_ground_truth.rs`.
 
 use super::*;
+use oag_gameplay::PlayerInputs;
 
 /// Throwing a Shuriken puts **one** in the air, off to one side, and the side
 /// is the coin's.
@@ -35,7 +36,7 @@ fn a_thrown_shuriken_leaves_at_the_recovered_angle() {
     );
     let mut buttons = Buttons::new();
 
-    race.tick(&buttons.tick(0));
+    race.tick(&PlayerInputs::single(buttons.tick(0)));
     assert_eq!(
         race.ship_pickup(),
         Some(oag_tables::weapons::Weapon::Shuriken)
@@ -43,7 +44,7 @@ fn a_thrown_shuriken_leaves_at_the_recovered_angle() {
 
     let forward = race.ship().physics.body.forward();
     let up = race.ship().physics.body.up();
-    race.tick(&buttons.tick(SQUARE));
+    race.tick(&PlayerInputs::single(buttons.tick(SQUARE)));
 
     assert_eq!(race.ship_pickup(), None, "throwing must spend the pickup");
     assert_eq!(
@@ -95,7 +96,7 @@ fn a_shurikens_side_is_drawn_and_both_sides_come_up() {
         1.0,
         one_shuriken_table(),
     );
-    race.tick(&InputSnapshot::default());
+    race.tick(&PlayerInputs::none());
 
     let forward = race.ship().physics.body.forward();
     let up = race.ship().physics.body.up();
@@ -107,7 +108,7 @@ fn a_shurikens_side_is_drawn_and_both_sides_come_up() {
         race.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Shuriken);
         let mut buttons = Buttons::new();
         buttons.tick(0);
-        race.tick(&buttons.tick(SQUARE));
+        race.tick(&PlayerInputs::single(buttons.tick(SQUARE)));
         let blade = race.sim.world.projectiles.slots[0];
         assert_eq!(blade.kind, Some(oag_tables::weapons::Weapon::Shuriken));
         if blade.velocity.dot(right) > 0.0 {
@@ -141,7 +142,7 @@ fn a_fired_plasma_puts_exactly_one_projectile_in_the_air() {
         race_with_weapon_table(Mode::SingleRace, enveloping_pad(), 1.0, one_plasma_table());
     let mut buttons = Buttons::new();
 
-    race.tick(&buttons.tick(0));
+    race.tick(&PlayerInputs::single(buttons.tick(0)));
     assert_eq!(
         race.ship_pickup(),
         Some(oag_tables::weapons::Weapon::Plasma)
@@ -154,7 +155,7 @@ fn a_fired_plasma_puts_exactly_one_projectile_in_the_air() {
 
     let before = race.ship().physics.body.position;
     let forward = race.ship().physics.body.forward();
-    race.tick(&buttons.tick(SQUARE));
+    race.tick(&PlayerInputs::single(buttons.tick(SQUARE)));
 
     assert_eq!(race.ship_pickup(), None, "firing must spend the pickup");
     assert_eq!(
@@ -210,7 +211,7 @@ fn a_fired_rocket_puts_three_projectiles_in_the_air() {
         race_with_weapon_table(Mode::SingleRace, enveloping_pad(), 1.0, one_rocket_table());
     let mut buttons = Buttons::new();
 
-    race.tick(&buttons.tick(0));
+    race.tick(&PlayerInputs::single(buttons.tick(0)));
     assert_eq!(
         race.ship_pickup(),
         Some(oag_tables::weapons::Weapon::Rocket)
@@ -223,7 +224,7 @@ fn a_fired_rocket_puts_three_projectiles_in_the_air() {
 
     let before = race.ship().physics.body.position;
     let forward = race.ship().physics.body.forward();
-    race.tick(&buttons.tick(SQUARE));
+    race.tick(&PlayerInputs::single(buttons.tick(SQUARE)));
 
     assert_eq!(race.ship_pickup(), None, "firing must spend the pickup");
     assert_eq!(

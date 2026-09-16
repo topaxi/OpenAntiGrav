@@ -20,6 +20,7 @@
 use std::path::PathBuf;
 
 use oag_game::race;
+use oag_gameplay::PlayerInputs;
 
 /// The disc, or `None` on a checkout without one.
 fn image() -> Option<PathBuf> {
@@ -46,7 +47,7 @@ fn leader_distance(level: oag_ai::Difficulty, seed: u64) -> Option<(f32, usize)>
     let mut race = race::Race::start(loaded.setup);
 
     for _ in 0..3_600 {
-        race.tick(&oag_gameplay::InputSnapshot::default());
+        race.tick(&PlayerInputs::none());
     }
 
     let course = race.course().expect("a closed ring");

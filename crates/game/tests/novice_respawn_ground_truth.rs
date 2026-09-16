@@ -21,6 +21,7 @@
 use std::path::PathBuf;
 
 use oag_game::{catalogue, race};
+use oag_gameplay::PlayerInputs;
 
 /// Five minutes at 60 Hz, the window every other solo benchmark on this disc
 /// uses.
@@ -140,7 +141,7 @@ fn run(
     for tick in 0..TICKS {
         let before = race.respawns_of(LONE);
         let index_before = race.sim.world.ships[LONE].driver.index;
-        race.tick(&oag_gameplay::InputSnapshot::default());
+        race.tick(&PlayerInputs::none());
         if race.respawns_of(LONE) != before {
             recovered_this_lap = true;
             respawn_indices.push(index_before);
