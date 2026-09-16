@@ -451,9 +451,9 @@ which is the whole point of the weapon.
   `crates/gameplay/tests/determinism.rs` moved its constants for it (with its
   target moved into the rocket's arc). See
   [rocket-visuals.md](../../docs/ghidra/functions/psp-pulse-usa/rocket-visuals.md)'s
-  "What a rocket hit spends" section. Still not ported from the same read:
-  the 5.0 s lifetime and `Rocket_SweepProjectiles` (a rocket clearing mines
-  and bombs it flies into).
+  "What a rocket hit spends" section. The 5.0 s lifetime and
+  `Rocket_SweepProjectiles` (a rocket clearing mines and bombs it flies into,
+  quietly) followed the same day.
 - **A player mashing fire lays plasma bolts the same way they lay mines**, and
   the array fills: `--give plasma --press square` puts **128** bolts in the
   air inside 260 ticks and holds there, and in `single_race` the craft is dead

@@ -55,6 +55,10 @@ impl Projectiles {
         // Looked up once rather than per bolt: it is a string match on the
         // class name, and every bolt in the air flies at the same one.
         let disruptor_kmh = disruptor.and_then(|stats| stats.speed_for_named(class));
+        // Where every projectile started this tick, for the rocket-versus-laid
+        // sweep after the loop - the original sweeps the rocket's *previous* to
+        // *current* position, and the loop below overwrites the former.
+        let starts: [Vec3; MAX_PROJECTILES] = std::array::from_fn(|i| self.slots[i].position);
 
         for (index, projectile) in self.slots.iter_mut().enumerate() {
             let Some(kind) = projectile.kind else {
@@ -550,6 +554,57 @@ impl Projectiles {
             }
         }
 
+        self.sweep_rockets_through_laid(&starts, trigger_radii, &mut impacts);
         impacts
+    }
+
+    /// A rocket that flies through a laid mine or bomb sets it off and is
+    /// spent doing so - quietly on both sides.
+    ///
+    /// **Recovered.** `Rocket_SweepProjectiles` (`0x0886f154`), the third call
+    /// in `RocketPool_Update`'s per-rocket loop, tests the rocket's previous-to-
+    /// current segment against every live mine (within the Mine's own
+    /// `trigger_radius`) and every live bomb (the Bomb's), and raises the
+    /// destroy bit on both the rocket and whatever it met. Neither pool's
+    /// teardown then spends anything: the mine or bomb plays its explosion
+    /// (`MinePool_Update`'s second pass, `Bomb_Detonate` with no victim), the
+    /// rocket releases its trail without a cue. See
+    /// `docs/ghidra/functions/psp-pulse-usa/rocket-visuals.md`, "What a rocket
+    /// hit spends", and `mine.md`'s 2026-09-16 section. A rocket that already
+    /// ended this tick (its slot is free) is not swept.
+    fn sweep_rockets_through_laid(
+        &mut self,
+        starts: &[Vec3; MAX_PROJECTILES],
+        trigger_radii: TriggerRadii,
+        impacts: &mut [Option<Impact>; MAX_PROJECTILES],
+    ) {
+        for rocket in 0..MAX_PROJECTILES {
+            if self.slots[rocket].kind != Some(Weapon::Rocket) || impacts[rocket].is_some() {
+                continue;
+            }
+            let from = starts[rocket];
+            let to = self.slots[rocket].position;
+            let met = self.slots.iter().enumerate().find_map(|(laid, slot)| {
+                let kind = slot.kind?;
+                if !matches!(kind, Weapon::Mine | Weapon::Bomb) || impacts[laid].is_some() {
+                    return None;
+                }
+                let radius = trigger_radii.get(kind)?;
+                super::geometry::segment_sphere(from, to, slot.position, radius)
+                    .map(|_| (laid, kind, slot.position, slot.owner))
+            });
+            if let Some((laid, kind, centre, owner)) = met {
+                impacts[laid] = Some(Impact {
+                    point: centre,
+                    kind,
+                    owner,
+                    struck: None,
+                    blast: false,
+                    effect: None,
+                });
+                self.slots[laid] = Projectile::default();
+                self.slots[rocket] = Projectile::default();
+            }
+        }
     }
 }

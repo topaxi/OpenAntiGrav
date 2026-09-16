@@ -937,8 +937,9 @@ Two more things fall out: **a Quake wave passing under a mine detonates it**
 (no credit to anyone), and `Rocket_SweepProjectiles`
 ([rocket-visuals.md](rocket-visuals.md)) raising bit `4` on a mine a rocket
 flies through has the same quiet result. Ported: `blast::blast_mine_trip`
-credits the tripping craft alone, gated on `blastradius`; the Quake and
-rocket trips are not yet built.
+credits the tripping craft alone, gated on `blastradius`, and
+`Projectiles::sweep_rockets_through_laid` is the rocket trip; the Quake trip
+is not yet built.
 
 `FUN_08859f04` (the firer-arming test, 60) and `FUN_08862d4c` (targetable,
 shared with `Rocket_HitCraft`'s shield check, 60) stay unnamed.

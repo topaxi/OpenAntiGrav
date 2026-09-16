@@ -348,15 +348,17 @@ in the per-rocket loop: the same cylinder test against every live **mine**
 (pool `DAT_08b3bf8c`, radius `+0x100` of the rocket record) and every live
 **bomb** (pool `DAT_08b3bf90`, radius `+0xe0`), flagging both the rocket and
 whatever it met for retirement - a rocket clears mines and bombs off the
-track by flying into them. Not ported; the port's rockets pass through both.
+track by flying into them - quietly, since neither pool's teardown credits
+anyone ([mine.md](mine.md)'s 2026-09-16 section). **Ported the same day** as
+`Projectiles::sweep_rockets_through_laid`: the mine or bomb reports an
+ending with no blast, the rocket is spent without one.
 
 **Ported the same day**: `oag_gameplay::projectile::flight` gives the Rocket
 the Plasma's two arms - a craft hit routes to `blast::blast_direct_hit`, a
 wall hit carries `blast: false` - and `crates/gameplay/tests/determinism.rs`
 moved its constants for it, with the scenario's target moved into the
-rocket's own arc so the direct hit stays covered. Not ported: the 5.0 s
-lifetime (still `MAX_FLIGHT_SECONDS = 10.0`, see that constant's doc
-comment) and the mine/bomb sweep.
+rocket's own arc so the direct hit stays covered. The 5.0 s lifetime and
+the mine/bomb sweep followed later the same day.
 
 ## Audio, in passing
 
