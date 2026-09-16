@@ -188,13 +188,22 @@ The instrument everything after this is measured with.
       `oag-trace show|run|compare`; reports the first divergent tick, field,
       magnitude and a bounded/growing/shrinking trend. See
       [oag-trace](../tools/oag-trace.md).
-- [ ] The same for PCSX2
+- [x] The same for PCSX2: `scripts/pcsx2-trace.py` captures per tick off a
+      savestate through PINE's verified frame-advance, and `oag-trace run`
+      replays it off the PS2 disc and reports the divergence the same way -
+      first run 2026-09-16, velocity 4% off at tick 1 and growing, controls
+      and orientation exact. See
+      [the PS2 loop](../tools/oag-trace.md#the-same-loop-on-the-ps2)
 
 **Exit criterion:** one command diffs any subsystem against the original and
-reports where and by how much it diverges. **Substantially met** - `oag-trace`
+reports where and by how much it diverges. **Met, 2026-09-16** - `oag-trace`
 does exactly this for PPSSPP, on the reference scenario
-(`docs/reverse-engineering/ppsspp-debugger.md#the-reference-scenario`). Not
-fully met until the same exists for PCSX2/the PS2 asset path.
+(`docs/reverse-engineering/ppsspp-debugger.md#the-reference-scenario`), and
+for PCSX2 on the PS2 asset path since the capture half landed. "Any
+subsystem" is still read narrowly: the craft, its controls and its body are
+what a capture carries; shield, weapons and race state are traced by
+neither harness yet, which [oag-trace.md](../tools/oag-trace.md) lists as its
+own open item rather than this milestone's.
 
 Its first real run **found and fixed a bug in the harness itself worth
 learning from**: the reference scenario's track was misidentified (`01_Track`

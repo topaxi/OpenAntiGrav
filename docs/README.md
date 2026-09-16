@@ -69,10 +69,10 @@ established yet" on 2026-08-18, several milestones and one booted HD front end
 later, which made the first page a new contributor reads the most wrong one
 (finding I5 of that day's review).
 
-Where it actually stands: **M0-M2 (foundation, asset archaeology, binary
-understanding) and M4 (playable core) are complete**, M3 is complete in every
-part the work so far has needed (the PCSX2 leg is still open), and **M5 (full race), M6 (rendering fidelity) and M7 (shell) are
-in flight**. A race runs, with lap timing, opponents, pickups and three
+Where it actually stands: **M0-M4 (foundation, asset archaeology, binary
+understanding, the verification harness on both Pulse pressings, playable
+core) are complete**, and **M5 (full race), M6 (rendering fidelity) and M7
+(shell) are in flight**. A race runs, with lap timing, opponents, pickups and three
 single-ship modes; three titles' discs open, and Pure and HD both reach a front
 end. Directories for subsystems that do not exist yet contain a scope statement
 rather than speculation.

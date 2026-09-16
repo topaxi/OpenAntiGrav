@@ -120,6 +120,72 @@ input path - are all on
 [the debugger page](../reverse-engineering/ppsspp-debugger.md). Read it before
 capturing.
 
+## The same loop on the PS2
+
+The reading half never cared which pressing a capture came from, and since
+2026-09-16 the capture half exists for PCSX2 too, so the loop closes on the
+second platform with the same two commands and a different script:
+
+```sh
+# 1. capture, out of a race already running in PCSX2 from a savestate on the grid
+python3 scripts/pcsx2-trace.py --craft <address> --from-state 1 \
+    --hold cross --ticks 15 --out data/traces/ps2-moa-therma-white-thrust-smoketest.csv
+
+# 2. replay through our physics off the PS2 disc, and compare
+just trace-compare run data/traces/ps2-moa-therma-white-thrust-smoketest.csv \
+    --source data/images/pulse-ps2-eu.chd \
+    --track 'Data\Environments\03_Track\track.vex' --team Assegai --class venom \
+    --hold cross --out /tmp/ps2-ours.csv
+```
+
+`--source` takes the PS2 image because `oag_assets::Archives` finds the bulk
+archive by name on either pressing ([above](#what-a-run-is-seeded-with-and-what-it-cannot-be));
+`--track` is `03_Track` because that is what the savestate is on (Moa Therma;
+[pcsx2-debugger.md](../reverse-engineering/pcsx2-debugger.md#steering-from-a-plan-not-a-human)),
+and the team and class are what the scripted menu walk picks. The capture
+side's own traps - `--craft` is a per-savestate heap address nobody can
+autodetect, one verified PCSX2 frame is a PAL *field* rather than a game tick,
+and `dt` is a stated `2/50` rather than a memory read - are on that page and
+in `scripts/pcsx2_trace_fields.py`; read them before capturing.
+
+**What the first PS2 comparison reports**, 2026-09-16, on that 15-tick
+thrust-only smoke test, is the same shape of answer the PSP's first run gave
+and a different finding:
+
+```
+compared 15 tick(s) (15 recorded, 15 simulated)
+
+first divergence at tick 1 (row 1), field velocity
+  recorded (0.022568, -0.000021, -1.325587), simulated (0.066865, -0.005636, -1.293124)
+  error 0.055206 units/s (4.164e-2 relative), tolerance 1e-3 relative
+
+field                   max error   at tick      max rel  exceeded  trend
+position                 9.827e-2        14     2.431e-4        12  growing (slope 5.022e-3/tick)
+velocity                 4.318e-1        14     4.164e-2         1  growing (slope 2.974e-2/tick)
+orientation.forward      3.785e-6        14     3.785e-6         -  growing
+grounded / throttle / brake / steer / airbrakes             exact
+angular_velocity         2.617e-4         4     5.392e-1         2  bounded
+```
+
+So the harness works end to end on the PS2 - the controls replay exactly, the
+orientation tracks to `4e-6` rad, the ship stays grounded on the PS2's own
+colliders - and the physics is **not** at parity: our craft is 2.5% slower
+along the track after one tick and the gap grows about `0.03 units/s` per tick,
+which over the 15 ticks reaches `0.43 units/s` against a `1e-3` tolerance. Three
+candidates, none chased on the pass that produced the number: the fixed
+`dt = 2/50` the capture assumes where the game may integrate something else
+([pcsx2_trace_fields.py](../../scripts/pcsx2_trace_fields.py) says so on every
+row); the PS2 handling loader's five load-time scale factors
+([handling-xml.md](../ghidra/functions/ps2-pulse-eu/handling-xml.md)), which a
+PSP-primary sim does not apply; and a genuine launch-ramp difference between
+the pressings. The `x` component (`0.067` simulated against `0.023` recorded on
+a craft pointing down `-z`) says the start-line pose or the first-tick lateral
+term differs too. A 15-tick straight cannot separate these; a longer capture
+with the same script on both pressings can, and is the obvious next use of the
+PS2 harness. **The PSP build remains the reference implementation
+([goals](../overview/goals.md)); the PS2 is corroboration, so a PS2
+divergence is something to explain, not something to tune to.**
+
 ## `show`, and the cleanliness report in it
 
 ```
@@ -1415,7 +1481,9 @@ later risks tunnelling on the swept path instead.
 - **The lap does not replay open-loop into the emulator, and that is measured
   rather than assumed.** See
   [below](#the-lap-does-not-replay-into-the-emulator-and-why).
-- Nothing compares a PSP capture against a PS2 one.
+- Nothing compares a PSP capture against a PS2 one directly; each is compared
+  against our simulation, and the PS2 loop's first result is
+  [above](#the-same-loop-on-the-ps2).
 - Shield, weapons, lap and race-position state are in the protocol's list of what
   gets traced and in neither the capture nor this tool: nothing downstream of the
   craft has been decoded yet.
