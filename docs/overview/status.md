@@ -92,7 +92,7 @@ here plays it yet, per CLAUDE.md's "draw nothing and say so" rule.
 | Turbo | built | n/a | n/a | `?` | `?` | `?` |
 | Shield | built | n/a | n/a | `?` | `?` | `?` |
 | Autopilot | built - `Ai_Construct` names the input source | n/a | n/a | n/a | `?` | built (it *is* the AI) |
-| Plasma | built - 1s wind-up, `Plasma_Init`/`Plasmas_Update` | verified - shares Rocket's flight model | verified - three distinct endings (craft/wall/timeout), see [pickups.md](../gameplay/pickups.md) | built - charge glow grows over the wind-up | `?` | `?` |
+| Plasma | built - 1s wind-up, `Plasma_Init`/`Plasmas_Update` | verified - shares Rocket's flight model | verified - three distinct endings (craft/wall/timeout), see [pickups.md](../gameplay/pickups.md) | built - charge glow grows over the wind-up | built - `PLASMA`/`~PLASMATVL`/`PLASMAHITWALL`/`PLASMAHITSHIP`, see [cue.rs](../../crates/game/src/audio/sfx/cue.rs) | built - `Race::fire_opponent_plasma` ([opponent_weapons.rs](../../crates/game/src/race/field/opponent_weapons.rs)), same `Driver::wants_to_fire` gate as the Rocket - chosen, not measured |
 | Bomb | built - shares Mine's rear anchor | verified - [mine_ground_truth.rs](../../crates/game/tests/mine_ground_truth.rs) | partial - `damageradius` unread, no consumer | n/a - `Pulse_Bomb.vex` located, nothing draws it | `?` | `?` |
 | Mine | built - laid one per 0.1s | verified - [mine.md](../ghidra/functions/psp-pulse-usa/mine.md) | built | n/a - `Pulse_Mine.vex` located, nothing draws it | `?` | `?` |
 | LeachBeam | built - link to Missile's own lock | built - whole-race pool cursor | partial - drain/repair spent, `slowShipFactor` not wired | `?` | `?` | `?` |
