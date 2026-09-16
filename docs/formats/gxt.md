@@ -1,10 +1,16 @@
 # GXT: the Vita's texture container
 
-**Status: `UBC2` decodes at confidence 85, `PVRTII4BPP` at 92, `U8U8U8U8` at
-80 - together 89.8% of the corpus.** `oag_texture::gxt` for the container,
-`oag_texture::pvrtc` for the PowerVR codec. Measured on
-`data/extracted/vita/PCSF00007` (Wipeout 2048, EU, patch v1.04), 2026-08-26,
-2026-08-27 and 2026-08-28.
+**Status: understood - all six format bytes the corpus carries decode.**
+370 + 8,430 + 99 + 505 + 493 + 13 = 9,910 textures, one per file (every
+`.gxt` this corpus ships carries exactly one), so that is also 9,910 of
+9,910 files. `UBC2` at confidence 85, `PVRTII4BPP` at 92, `U8U8U8U8` at 80,
+`UBC1`/`UBC3` at 88, `U8U8U8` at 70 for its tiling and packing - its channel
+order is **chosen, not measured** (no score; see its own section below for
+why the corpus cannot settle it). `oag_texture::gxt` for the container,
+`oag_texture::pvrtc` for the PowerVR codec, `oag_texture::bcn` for the
+shared BC1-3 block math. Measured on `data/extracted/vita/PCSF00007`
+(Wipeout 2048, EU, patch v1.04), 2026-08-26, 2026-08-27, 2026-08-28 and
+2026-09-16.
 
 ```sh
 OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-formats --run-ignored all \
@@ -58,23 +64,22 @@ files the base package ships:
 | --- | --- | --- | ---: | :-: |
 | `0x83` | `PVRTII4BPP` | `0x83000000` | 8,430 | **yes** |
 | `0x86` | `UBC2` (BC2/`DXT23`) | `0x86000000` | 370 | **yes** |
-| `0x85` | `UBC1` (BC1/`DXT1`) | `0x85000000` | 505 | no |
-| `0x87` | `UBC3` (BC3/`DXT45`) | `0x87000000` | 493 | no |
+| `0x85` | `UBC1` (BC1/`DXT1`) | `0x85000000` | 505 | **yes** |
+| `0x87` | `UBC3` (BC3/`DXT45`) | `0x87000000` | 493 | **yes** |
 | `0x0c` | `U8U8U8U8` | `0x0c001000` | 99 | **yes** |
-| `0x98` | `U8U8U8` | `0x98001000` | 13 | no |
+| `0x98` | `U8U8U8` | `0x98001000` | 13 | **yes** |
 
 `UBC2` decodes through `oag_texture::bcn::dxt23` - the same BC2 block math
 [`.gtf`](gtf.md) uses, moved into a shared `oag_texture::bcn` module on
 2026-08-26 since the block layout is a hardware standard rather than something
 either console's container defines. `PVRTII4BPP` decodes through
 `oag_texture::pvrtc`, added 2026-08-27; the section below is its evidence.
-`UBC1`/`UBC3` are the same BC family as `UBC2` and would each be a small
-addition to `bcn`'s existing `dxt1`/`dxt45` if a texture reaching them needed
-one; none measured here does. **The last two rows' raw `format` carries
+`UBC1`/`UBC3` decode through `bcn::dxt1`/`dxt45`, added 2026-09-16 - see
+"`UBC1`/`UBC3` decode too" below. **The last two rows' raw `format` carries
 non-zero low bits** (`0x001000`) where every `UBC2`/`PVRTC` row's is clean -
 this module reads only the top byte, so what that low-bit pattern means (a
 swizzle/channel-order variant) is unread rather than folded into the format
-name.
+name, except where `U8U8U8U8`'s own decode below reads it directly.
 
 **`0x0c` was mislabeled `U4U4U4U4` until 2026-08-28.** Corroborated against
 the public `vitasdk` headers (`psp2/gxm.h`, `SceGxmTextureBaseFormat`) two
@@ -126,8 +131,10 @@ different container and a different codec, read long before this decoder
 existed, and confirms only that a varying-versus-flat pair exists in the same
 role, not the exact picture). The channel-order finding is strong on its own
 terms (a lockstep three-channel binary mask alongside one continuous channel
-is not something a wrong bit layout would produce by accident), which is what
-keeps this above the two undecoded rows.
+is not something a wrong bit layout would produce by accident), which is
+what earns this a confidence score at all where `U8U8U8`'s own channel order
+gets none - see that format's own section below for why its corpus cannot
+check it the same way.
 
 ## `PVRTII4BPP`: PowerVR texture compression, and not the PVRTC-I lookalike
 
@@ -281,6 +288,151 @@ picture-based checks are not the ceiling: no sprite has been compared against
 a running frame of the original, only against "does this look like authored
 art" - see [2048-hud.md](2048-hud.md#what-is-not-done) for what that still
 leaves open.
+
+## `UBC1`/`UBC3` decode too: the same twiddled block walk, BC1/BC3 instead of BC2
+
+**Confidence 88, added 2026-09-16.** `UBC1` (BC1, 505 files) and `UBC3` (BC3,
+493 files) were the two format bytes this page previously named as "the same
+BC family as `UBC2` and would each be a small addition". They were: both
+route through the same `blocks()` twiddled-block walk `UBC2` already uses,
+generalised to take a block size and a decode function rather than being
+hard-coded to BC2's 16 bytes and `bcn::dxt23` - BC1 is 8 bytes (`bcn::dxt1`,
+no alpha channel), BC3 is 16 (`bcn::dxt45`, an interpolated alpha ramp). The
+twiddle order is a property of the block *grid*, not of what a block decodes
+to, so nothing about generalising it needed re-measuring on its own terms -
+what did need checking, separately, was the length arithmetic and the
+tiling/channel picture for each new block size.
+
+**The length arithmetic closes without the `MIN_LEVEL_LEN` floor ever
+firing**, which is worth recording precisely because the floor exists
+specifically for a format whose *word* is smaller than 16 bytes
+(`PVRTII4BPP`, 8-byte words) and `UBC1` is the first *block* format at that
+same 8-byte size. Swept across all three EU packages
+(`crates/game/examples/vita_gxt_ubc13_extent.rs`): the plain
+`ceil(w/4) * ceil(h/4) * unit_len` formula, with no floor at all, closes on
+**835 of 835** `UBC1` textures and **957 of 957** `UBC3` textures found
+across base+DLC1+DLC2 (more than the base package's own 505/493, which is
+what `docs/formats/README.md`'s and this page's own corpus counts are scoped
+to). Every shipped `UBC1` chain has `mips = 1` and a base level of at least
+64x64 (16x16 blocks), and every `UBC3` chain that reaches a single 4x4-block
+level is already exactly 16 bytes there (`UBC3`'s own block size), so **the
+16-byte floor case is genuinely unexercised by the shipped corpus for either
+format** - it is applied anyway (`Format::unit_len` feeds the same
+`level_len` every other block format goes through) for consistency, since a
+floor that never fires cannot be wrong on the files that exist, and there is
+no reason to special-case these two out of a check every other block format
+in this module passes through.
+
+**The tiling order is confirmed by the same "decode both ways and look at the
+picture" method this page already used for `UBC2` and `U8U8U8U8`, and no HD
+`.gtf` twin exists for either format to check against numerically** -
+`crates/game/examples/vita_gxt_ubc13_hd_oracle.rs`, the same cross-title
+oracle that gave `PVRTII4BPP` its 3.83-of-255 median, finds **0 same-name
+same-size pairs** across all three EU packages for `UBC1` or `UBC3` - these
+998 files are book/manual pages and front-end callouts, not the shared
+circuit or roster art the DLC re-ships from Wipeout HD, so there is nothing
+for either format to be twinned against. So the picture check is the only
+oracle available,
+and it discriminates cleanly because BC has no bilinear upscale to smooth a
+wrong answer the way PVRTC does:
+
+- **`UBC1`**: `data/Books/Manual/Pages/02/001.gxt` (1024x1024, one level, the
+  electronic manual's own title page). Raster block order decodes to
+  scrambled horizontal noise; twiddled order renders the full page crisply -
+  the "WIPEOUT 2048 - MANUEL" heading and cover art, legible right down to
+  the sponsor logos on the in-art billboards. Roughness (mean adjacent-texel
+  delta, the same metric `U8U8U8U8`'s smoothness check uses) is 3.56
+  twiddled against 5.57 raster, 1.56x - smaller than a clean win alone would
+  suggest, because BC1 already compresses fine detail; the picture is what
+  carries this, not the number.
+- **`UBC3`**: `data/FE/NewImages/TinyCallout_MP.gxt` (512x256, one level, the
+  front-end's "MULTIPLAYER / TOUCH TO START" callout). Raster order decodes
+  to noise with fragments of the red/white text bleeding through; twiddled
+  order renders the callout legibly, including a controller icon and the
+  callout's own border outline that only become visible once alpha
+  composites correctly - BC3's interpolated ramp reproduces the punch-through
+  edge exactly the way `bcn::dxt45` already does for HD's own `.gtf` copies
+  of BC3 art. Roughness is 2.09 twiddled against 4.08 raster, 1.95x.
+
+Both renders are pinned in `crates/texture/tests/gxt_ground_truth.rs`
+(`ubc1_decodes_to_something_a_human_can_check`,
+`ubc3_decodes_to_something_a_human_can_check`) and written to
+`data/shots/2048_ubc1_manual_page.png`/`2048_ubc3_callout.png`. The
+roughness numbers above are not part of that pinned test - they come from
+the scratch probe `crates/game/examples/vita_gxt_ubc13_picture_check.rs`,
+which also writes the raster-order control PNGs
+(`data/shots/2048_ubc1_manual_page_raster.png`/`2048_ubc3_callout_raster.png`)
+that are the actual evidence for the twiddle claim on these two formats -
+the ground-truth test only renders the correct decode. `UBC1`'s own
+check cannot reuse `UBC2`/`UBC3`'s shared `render_checkerboard` helper - BC1
+has no alpha channel at all (`bcn::dxt1` always decodes opaque), so the
+helper's "not every texel opaque" flatness assertion is the wrong invariant
+for it; `UBC1`'s test checks colour diversity and full opacity instead.
+
+**Why 88 and not the 92 `PVRTII4BPP` holds**: no cross-title numeric oracle
+exists for either format (unlike `PVRTII4BPP`'s 2,284 HD-paired textures), so
+this rests on the same class of evidence `U8U8U8U8`'s 80 does - a picture
+check plus a roughness metric - but scores higher than `U8U8U8U8`'s 80
+because the picture check here is *legible running text at multiple sizes*
+on two independent files with two independent block sizes, not one
+escalating-mask art asset, and the length arithmetic had a real edge case
+(the 8-byte-block floor) to fail on and didn't.
+
+## `U8U8U8`: the last format byte, two measured claims and one chosen, not measured
+
+**Confidence 70 for tiling and packing, added 2026-09-16. Channel order
+carries no score - it is chosen, not measured, per this project's own rule
+against scoring an unverified pick as if it were evidence.** `0x98`, 13
+files, all `Data\FE\NewImages\scepresents\scee_presents_<language>.gxt`
+(512x64, one level each) - the Vita's per-territory "Sony Computer
+Entertainment presents" splash. `oag_texture::gxt::Format::Rgb888`,
+`unit_len` 3 bytes, no block grid, the same shape [`Format::Argb8888`] is
+except one byte narrower.
+
+**Measured claim 1: 3 tightly-packed bytes a texel, no floor.** `width *
+height * 3` matches the declared texel length exactly on all 13 files
+(`crates/game/examples/vita_gxt_u8u8u8_extent.rs`) - the same verification
+`Argb8888`'s own unfloored arithmetic rests on, not assumed by analogy to it.
+
+**Measured claim 2: the tiling order.** Confirmed the same way as every
+other format on this page: raster order decodes to noise; twiddled order
+(texel granularity, the same [`twiddle`] algorithm `U8U8U8U8` uses) renders
+"Sony Computer Entertainment presents" crisply, right way up, on every one
+of the 13 files sampled (`crates/game/examples/vita_gxt_u8u8u8_picture_check.rs`).
+
+**Chosen, not measured: the channel order.** The corpus itself cannot settle
+it, and this is not a gap this reading glossed over. Measured directly
+across all 13 files: **every texel has `max(byte) - min(byte) == 0`** - the
+art is pure grayscale line work, so `R,G,B`, `B,G,R`, and every other
+permutation of the three bytes decode to the bit-identical picture.
+`Rgb888`'s decode reads `R, G, B` in file order, for consistency with
+`Argb8888`'s own byte-order convention rather than because a colour sample
+confirmed it - none exists in this corpus to check against, so this reading
+is picked, not verified, and carries no confidence number of its own. This
+is not the same situation `U8U8U8U8` was
+in: that format's ARGB swizzle was corroborated against the public `vitasdk`
+enum *and* against which channel of an actual varying-colour texture carried
+continuous art versus a flat mask - both readings agreeing is what earned
+`U8U8U8U8` its 80. `0x98`'s own identification as a 3-channel 8-bit
+`SceGxmTextureBaseFormat` was already checked against the same public header
+when `0x0c` was corrected on 2026-08-28 ("`0x98` (`U8U8U8`) was checked too
+and is correct as already documented" - that commit's own message) and is
+not in question here; what is missing is the second corroboration. No `0x98`
+texture on this disc has a second channel to disagree with the first, so the
+swizzle/channel-order bits cannot be read the way `0x0c`'s were. A future
+`0x98` file with real colour, if one ever ships in a DLC pack this project
+has not swept, is the only thing that could turn the channel-order pick into
+a scored, checked claim rather than a documented choice.
+
+**The decode is kept anyway, not withheld pending that corroboration** -
+worth stating outright, since a chosen-not-measured field is exactly the
+shape `CLAUDE.md`'s "never invent what the assets already author" rule
+warns against. The difference here: every permutation of the three bytes
+produces the *bit-identical* output on 100% of the shipped corpus (max
+channel spread 0 on all 13 files), so this is not a stand-in painted over
+missing data - it is one specific, disclosed reading of data that happens
+to be unable to distinguish itself from five others on the only evidence
+available.
 
 ## Coverage
 

@@ -225,20 +225,29 @@ pub type Result<T> = std::result::Result<T, Error>;
 /// The texel format this module decodes, from the top byte of the
 /// descriptor's `format` field (`SceGxmTextureBaseFormat`).
 ///
-/// Three of the six format bytes this title's corpus carries. A format byte
-/// outside them parses (see [`Texture::format_byte`]) but refuses
+/// All six format bytes this title's corpus carries, as of the `UBC1`/`UBC3`/
+/// `U8U8U8` decodes that closed out the last three. A format byte outside
+/// them parses (see [`Texture::format_byte`]) but refuses
 /// [`Texture::to_rgba`] with [`Error::Unsupported`] rather than guessing at a
 /// decode.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Format {
+    /// `0x85`, BC1: 8 bytes per 4x4 block, no alpha channel.
+    Ubc1,
     /// `0x86`, BC2: 16 bytes per 4x4 block, four bits of alpha per texel.
     Ubc2,
+    /// `0x87`, BC3: 16 bytes per 4x4 block, an interpolated alpha ramp.
+    Ubc3,
     /// `0x83`, PVRTC-II at 4 bits per texel: 8 bytes per 4x4 **word**, and
     /// not a block codec at all - see `oag_formats::pvrtc`.
     Pvrtii4bpp,
     /// `0x0c`, `SceGxmTextureSwizzle4Mode::ARGB`: four raw bytes a texel, no
     /// block or bit-packing at all - see [`argb8888`].
     Argb8888,
+    /// `0x98`, `U8U8U8`: three raw bytes a texel, tightly packed (measured -
+    /// see [`rgb888`]'s module doc for why the channel order is read as
+    /// R/G/B rather than independently confirmed).
+    Rgb888,
 }
 
 impl Format {
@@ -248,19 +257,24 @@ impl Format {
         match byte {
             0x0c => Some(Self::Argb8888),
             0x83 => Some(Self::Pvrtii4bpp),
+            0x85 => Some(Self::Ubc1),
             0x86 => Some(Self::Ubc2),
+            0x87 => Some(Self::Ubc3),
+            0x98 => Some(Self::Rgb888),
             _ => None,
         }
     }
 
     /// Bytes one 4x4 block or word occupies. Not meaningful for
-    /// [`Self::Argb8888`], which has no block grid - see
-    /// [`Texture::level_len`], the only caller, which branches around it.
+    /// [`Self::Argb8888`]/[`Self::Rgb888`], which have no block grid - see
+    /// [`Texture::level_len`], the only caller, which branches around both.
     const fn unit_len(self) -> usize {
         match self {
-            Self::Ubc2 => 16,
+            Self::Ubc1 => 8,
+            Self::Ubc2 | Self::Ubc3 => 16,
             Self::Pvrtii4bpp => pvrtc::WORD_LEN,
             Self::Argb8888 => 4,
+            Self::Rgb888 => 3,
         }
     }
 }
@@ -308,18 +322,20 @@ impl Texture {
     /// trusted rather than verified, which is why [`Error::Unsupported`] is a
     /// decode-time error rather than a parse one.
     ///
-    /// [`Format::Argb8888`] has no block grid to floor at [`MIN_LEVEL_LEN`] -
-    /// unlike the two compressed formats, it is not quantised to a minimum
-    /// storage unit larger than one texel. Measured directly rather than
-    /// assumed: all 99 `0x0c` textures in the base package's `.gxt` corpus,
-    /// nine distinct `(width, height, mip count)` shapes down to a single
-    /// 4x4 level, agree with the plain `width * height * 4` formula with
-    /// zero floored, so there is no evidence a floor applies here the way
+    /// [`Format::Argb8888`] and [`Format::Rgb888`] have no block grid to
+    /// floor at [`MIN_LEVEL_LEN`] - unlike the compressed formats, neither is
+    /// quantised to a minimum storage unit larger than one texel. Measured
+    /// directly rather than assumed: all 99 `0x0c` textures in the base
+    /// package's `.gxt` corpus, nine distinct `(width, height, mip count)`
+    /// shapes down to a single 4x4 level, agree with the plain
+    /// `width * height * 4` formula with zero floored, and all 13 `0x98`
+    /// textures (one 512x64 level each) agree with `width * height * 3` to
+    /// the byte - so there is no evidence a floor applies to either the way
     /// there is for `PVRTII4BPP`'s own single-word minimum.
     fn level_len(&self, level: u8) -> Option<usize> {
         let format = self.format()?;
         let (width, height) = self.level_size(level);
-        if format == Format::Argb8888 {
+        if format == Format::Argb8888 || format == Format::Rgb888 {
             return Some(width as usize * height as usize * format.unit_len());
         }
         let across = (width as usize).div_ceil(4);
@@ -366,12 +382,21 @@ impl Texture {
         })?;
         let (width, height) = self.level_size(0);
         let decoded = match format {
-            Format::Ubc2 => blocks(texels, width, height),
+            Format::Ubc1 => blocks(texels, width, height, 8, |b| {
+                bcn::dxt1(b.try_into().expect("8-byte block"))
+            }),
+            Format::Ubc2 => blocks(texels, width, height, 16, |b| {
+                bcn::dxt23(b.try_into().expect("16-byte block"))
+            }),
+            Format::Ubc3 => blocks(texels, width, height, 16, |b| {
+                bcn::dxt45(b.try_into().expect("16-byte block"))
+            }),
             // Not a block walk: every texel reads four words, and the word
             // grid's own Morton order is applied inside the codec rather
             // than here. See [`crate::pvrtc`].
             Format::Pvrtii4bpp => pvrtc::decode_ii_4bpp(texels, width, height),
             Format::Argb8888 => argb8888(texels, width, height),
+            Format::Rgb888 => rgb888(texels, width, height),
         };
         decoded.ok_or(Error::DataOutOfBounds {
             offset: range.start as u32,
@@ -411,14 +436,27 @@ impl Texture {
 /// [`crate::gtf::decode`] uses to settle its own endianness question.
 ///
 /// **Scope**: measured on this one 256x256 square texture. `blocks` applies
-/// [`twiddle`]'s general (non-square) algorithm to every `UBC2` texture this
-/// module decodes, including `hud_2048.gxt`'s 1024x512 - untwiddled visually
-/// on that file specifically, since it draws sprite art rather than one
-/// recognisable shape, but consistent with the same rule.
-fn blocks(texels: &[u8], width: u32, height: u32) -> Option<Vec<[u8; 4]>> {
+/// [`twiddle`]'s general (non-square) algorithm to every BC-family texture
+/// this module decodes, including `hud_2048.gxt`'s 1024x512 - untwiddled
+/// visually on that file specifically, since it draws sprite art rather than
+/// one recognisable shape, but consistent with the same rule.
+///
+/// `UBC1` (BC1, 8-byte blocks via [`bcn::dxt1`]) and `UBC3` (BC3, 16-byte
+/// blocks via [`bcn::dxt45`]) reuse this same walk with their own `unit` and
+/// decode function - the twiddle order is a property of the block *grid*,
+/// not of what each block decodes to, and nothing in the corroboration above
+/// (the reticle atlas, `ClassiCube`'s `TwiddleCalcFactors`) is specific to
+/// BC2's own bit layout. See `docs/formats/gxt.md`'s "`UBC1`/`UBC3` decode
+/// too" section for why this generalisation is measured rather than assumed.
+fn blocks(
+    texels: &[u8],
+    width: u32,
+    height: u32,
+    unit: usize,
+    decode: impl Fn(&[u8]) -> [[u8; 4]; 16],
+) -> Option<Vec<[u8; 4]>> {
     let pixels = (width as usize).checked_mul(height as usize)?;
     let mut out = vec![[0u8; 4]; pixels];
-    let unit = Format::Ubc2.unit_len();
     let across = (width as usize).div_ceil(4) as u32;
     let down = (height as usize).div_ceil(4) as u32;
 
@@ -427,7 +465,7 @@ fn blocks(texels: &[u8], width: u32, height: u32) -> Option<Vec<[u8; 4]>> {
             let index = twiddle(bx, by, across, down) as usize;
             let at = index * unit;
             let block = texels.get(at..at + unit)?;
-            let texels16 = bcn::dxt23(block.try_into().ok()?);
+            let texels16 = decode(block);
             for (i, texel) in texels16.into_iter().enumerate() {
                 let x = bx as usize * 4 + i % 4;
                 let y = by as usize * 4 + i / 4;
@@ -490,6 +528,48 @@ fn argb8888(texels: &[u8], width: u32, height: u32) -> Option<Vec<[u8; 4]>> {
             let texel = texels.get(at..at + 4)?;
             let (a, r, g, b) = (texel[0], texel[1], texel[2], texel[3]);
             out[y as usize * width as usize + x as usize] = [r, g, b, a];
+        }
+    }
+    Some(out)
+}
+
+/// Walks the texel grid in twiddled order and reads each texel's three raw
+/// bytes as `R, G, B`, opaque.
+///
+/// `0x98`, `U8U8U8`, the last format byte this corpus carries that was still
+/// refused. The length arithmetic settles tiling granularity and packing on
+/// its own terms - `plain3` (`width * height * 3`) matches the declared texel
+/// length exactly on all 13 shipped textures, so this is 3 tightly-packed
+/// bytes a texel, not 4-byte-padded the way [`Format::Argb8888`] is.
+///
+/// **The tiling order is measured (confidence 70), the channel order is
+/// chosen, not measured, and carries no confidence score of its own.** All
+/// 13 files are `Data\FE\NewImages\scepresents\scee_presents_<language>.gxt`
+/// (512x64), a first-party splash reused per language; raster order decodes
+/// to noise and twiddled order decodes to a crisp, legible "Sony Computer
+/// Entertainment presents" - the same signature `argb8888`'s own doc records
+/// for the Zone/Detonator art. But **every texel in every one of the 13
+/// files has `max(byte) - min(byte) == 0`** (measured directly, zero
+/// exceptions): the art is pure grayscale, so `R`/`G`/`B`/any permutation of
+/// the three bytes decodes to the identical picture, and nothing in this
+/// corpus can prefer one reading over another. Read as `R, G, B` in file
+/// order for consistency with [`argb8888`]'s own byte-order convention (and
+/// with how this corpus's vertex formats lay out positions and normals - see
+/// `docs/formats/2048-rcsmodel.md`), which is a **pick**, not a decode
+/// backed by a colour sample - none exists to check against, so this is
+/// disclosed as chosen rather than presented as verified. A future `0x98`
+/// texture with actual colour, if one ever ships, is the only thing that
+/// could turn this into a checked claim; nothing in the base package or
+/// either DLC pack does.
+fn rgb888(texels: &[u8], width: u32, height: u32) -> Option<Vec<[u8; 4]>> {
+    let pixels = (width as usize).checked_mul(height as usize)?;
+    let mut out = vec![[0u8; 4]; pixels];
+    for y in 0..height {
+        for x in 0..width {
+            let index = twiddle(x, y, width, height) as usize;
+            let at = index.checked_mul(3)?;
+            let texel = texels.get(at..at + 3)?;
+            out[y as usize * width as usize + x as usize] = [texel[0], texel[1], texel[2], 255];
         }
     }
     Some(out)

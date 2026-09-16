@@ -330,11 +330,107 @@ resolves 92.5%. The reproducer is `crates/game/examples/vita_rcsmodel_uv_oracle.
 the decode is `oag_rcs::rcsmodel::psp2::unpack_texcoord`.
 
 **Confidence 96** on the decode, on the same basis as the normal. What is
-not decoded: `tangent`'s type (`t5`, 4 components - the byte budget argument
-for `normal` does not apply since 4 components exactly fill 4 bytes) and
-`lightmapUV`'s content (offset placed via the same declaration, but its
-value is a per-platform baked atlas coordinate with no HD counterpart to
-check against).
+not decoded: `lightmapUV`'s content (offset placed via the same declaration,
+but its value is a per-platform baked atlas coordinate with no HD
+counterpart to check against). `tangent`'s type (`t5`, 4 components - the
+byte budget argument for `normal` does not apply since 4 components exactly
+fill 4 bytes) is cracked too, at a lower confidence than this - see the next
+section.
+
+## `tangent` is cracked too, at a lower confidence
+
+**2026-09-16, confidence 76.** `tangent` (`t5`, 4 components, `+0x10` on the
+common 28-byte stride) decodes the same way `normal` does - one signed byte
+per component, `byte/127.0` - extended to all four bytes rather than
+three-plus-padding, since 4 components exactly fill 4 declared bytes and
+leave nothing spare the way `normal`'s 4th byte was. This is weaker evidence
+than `normal`'s 96, for a reason specific to this field: **there is no
+Wipeout HD twin to check content against.** HD's own renderer has no decoded
+tangent frame either - `oag_rcs::rcsmodel`/`oag_render::mesh::rcs` (the HD
+module) name a tangent frame among the inputs HD's renderer still lacks, not
+among what it has decoded - so the index-exact oracle that settled `normal`
+and `Uv1` has nothing to compare against here. What follows instead is
+internal consistency, scored against deliberately-wrong controls the same
+way every other reading on this page is.
+
+**The method**: every byte assignment of the four raw bytes to `(x, y, z, w)`
+- which byte is `w` (4 choices) x every ordering of the other three as
+`(x, y, z)` (6) x two signedness conventions (`i8/127`, HD's unsigned-biased
+`u8/127.5-1`) = 48 candidates - scored over 6,653,653 vertices across the
+base package and both DLC packs whose declared stride names a `tangent`
+attribute, by unit length of the `(x, y, z)` part and by `|dot|` against the
+already-cracked `normal` at the same vertex (a tangent is authored
+orthogonal to its normal, so `|dot|` near 0 is the signal and near 0.5 is
+chance). Reproducer:
+`crates/game/examples/vita_rcsmodel_tangent_bytesearch.rs`.
+
+| Candidate | unit-length pass (`|len-1|<10%`) | mean `|dot(normal)|` | orthogonal-ish (`|dot|<0.342`) |
+| --- | ---: | ---: | ---: |
+| **`x=byte[0] y=byte[1] z=byte[2]` (`i8/127`), `w=byte[3]`** | **58.1%** | **0.219** | **71.1%** |
+| next best of the same byte set, reordered | 58.1% | 0.391-0.492 | 36.9-49.2% |
+| best of a different byte set (`u8/127.5-1`, `w=byte[0]`) | 29.2% | 0.480 | 32.8% |
+| CONTROL (`byte[0..3]/255`, no sign, not a plausible encoding) | 23.2% | 0.407 | 47.4% |
+
+**The winning row is not merely best of 48 - it is the unique best of the six
+permutations that share its own byte set**, which is what makes this a
+reading rather than a coincidence: those six all have identical unit-length
+statistics (permuting which byte is `x`/`y`/`z` cannot change the vector's
+length), so the only thing separating 0.219 from 0.391-0.492 is that this
+one ordering is the *authored* one. A coincidental byte-set match would not
+show that spread.
+
+**Restricted to the 58.1% that pass the unit-length band, the signal
+sharpens substantially**: mean `|dot|` falls to **0.102** and 86.5% of
+tangents land within 20 degrees of perpendicular to the normal - against
+23.2%/0.407/47.4% for the control on the same terms. A length histogram
+shows this is a real population, not an average of unrelated values: a
+sharp spike at `len` in `[0.9, 1.0)` (3,524,011 of 6,653,653 vertices)
+alongside a long tail including a genuine cluster near `len` = 0
+(669,437 vertices, `[0, 0.1)`).
+
+**The remaining ~42% is read as degenerate tangent data, not a second
+encoding** - checked rather than assumed: restricting to vertices whose
+`Uv1` at the same declaration also decodes finite (ruling out the
+declaration/stride-mismatch trap `SubMesh::non_finite_texcoords` documents,
+which affects ~21% of texcoords corpus-wide) barely moves either number
+(58.9%/0.206/72.9% clean against 43.8%/0.472/37.0% dirty - the *dirty*
+subset is worse, as expected, but 95% of all vertices are clean and the
+clean subset alone still shows the same weaker-than-`normal` shape). A
+tangent basis is commonly undefined or authored as a near-zero vector at UV
+poles and seams on real assets, which is consistent with the near-zero
+cluster in the length histogram.
+
+**`w`, the fourth byte, reads as a handedness sign on the well-formed
+subset**: across the full corpus it is exactly `+-127`/`-128` on only 48.0%
+of vertices (top values `-127`, `127`, then a long tail), but restricted to
+the same unit-length-passing 58.1% it is exactly `+-127`/`-128` on **82.6%**
+- consistent with a genuine `+-1` handedness sign that only means something
+once the `(x, y, z)` part is itself well-formed.
+
+**Not runtime-verified.** `RcsModel_Load` (`0x812f15b2`) never touches
+section B past relocating it, same as for `normal` and `Uv1`, and the
+function that actually binds a declaration's fields into a
+`SceGxmVertexAttribute` at runtime was searched for and not located this
+session: `search_strings` for a vertex-declaration/attribute source tag
+found `System/Render/Model.cpp`, the plausible runtime mesh class, but its
+one located caller (`FUN_81287fd4`, not named - confidence too low) is a
+texture mip-generation routine, not vertex setup; walking back from
+`sceGxmDraw` (NID `0xBC059AFC`) is the same documented dead end the material
+binding's own confidence-90 section above already hit. No function was
+named, so `names.tsv` gains no row.
+
+Implemented as `oag_rcs::rcsmodel::psp2::unpack_tangent`, wired into
+`psp2::SubMesh::tangents` and counted (not yet drawn with) in
+`oag_render::mesh::rcs::psp2::Report::decoded_tangents` -
+`just play 2048 --race` now reports e.g. "260533 tangent(s) decoded, unused
+(no normal-map consumer yet)" for Altima's own circuit mesh. **Confirmed to
+change nothing visually**: `data/shots/2048_tangent_before.png` (pre-change)
+and the post-change render are byte-identical (`cmp` exit 0) - nothing in
+this title's mesh path samples a tangent-space normal map yet, so adding the
+data changes only the load report, not a pixel. Neither the shared
+`GpuVertex` vertex layout nor `mesh.wgsl` (used by every title's mesh path)
+was touched, deliberately: there is no consumer to justify the risk of
+changing a struct every title's rendering depends on for data nothing reads.
 
 ## The material table is read, and finding a submesh's own binding was tried and ruled out
 
@@ -460,15 +556,14 @@ Named here rather than left to be rediscovered:
   names](#a-second-record-shape-closes-every-previously-unpaired-pointer) -
   `psp2::Model::unpaired_pointers` is a real field for a file this reading has
   not yet met, not evidence of a gap left in the 993 it has.
-- **`tangent`'s SceGxm type code** (`t5`, 4 components) - HD's RSX encodings
-  are confirmed not to apply to this format at all, so it is not a safe guess
-  from HD's own reading. `normal` and `Uv1`, the format's other two `t5`/`t8`
-  fields, are both cracked (see above).
 - **`RcsModel_Load`'s actual consumer** - whichever function binds a
   declaration's fields into a GPU vertex-attribute setup at runtime. Not
-  located this session; both `normal` and `Uv1` were settled empirically
-  instead (see above), which is why neither SceGxm type code's symbolic name
-  is confirmed, only recognised by behaviour.
+  located this session or the one that cracked `tangent` (see above); all
+  three of `normal`, `Uv1` and `tangent` were settled empirically instead,
+  which is why none of `t5`, `t8`'s symbolic SceGxm names are confirmed, only
+  recognised by behaviour - and why `tangent`'s own reading stops at
+  confidence 76 rather than reaching `normal`'s 96: there is no HD twin to
+  check its content against, only internal consistency.
 - **The 64-bit hashes** each submesh record carries beside its buffer
   pointers, the two unidentified 32-bit words each material header carries,
   and the three words beside the material index at `-0x20`, `-0x10` and

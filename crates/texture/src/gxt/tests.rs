@@ -155,19 +155,22 @@ fn a_declared_length_that_disagrees_with_ubc2s_own_arithmetic_is_refused() {
 
 #[test]
 fn an_unsupported_format_parses_but_refuses_to_decode() {
-    // 0x85 is UBC1 - 505 textures on this title's disc, none of them reached
-    // by anything that draws, and not decoded. The declared length is trusted
-    // rather than checked, since the block size for a format this module does
-    // not know is not knowable; the length here is deliberately not any
-    // formula's answer, to show that it passes anyway.
-    let data = blob(&descriptor(0x85, 256, 256, 1234), &[0u8; 1234]);
+    // 0x02 is U4U4U4U4 - a real SceGxm base format (see the module doc's
+    // corroboration of 0x0c against the same public enum ordering), not
+    // observed on this title's disc and not decoded here. UBC1 (0x85) used
+    // to be this test's example until it was decoded on 2026-09-16 - see
+    // `docs/formats/gxt.md`'s "UBC1/UBC3 decode too" section. The declared
+    // length is trusted rather than checked, since the block size for a
+    // format this module does not know is not knowable; the length here is
+    // deliberately not any formula's answer, to show that it passes anyway.
+    let data = blob(&descriptor(0x02, 256, 256, 1234), &[0u8; 1234]);
     let gxt = Gxt::parse(&data).expect("parses");
     let texture = gxt.only().expect("one");
     assert_eq!(texture.format(), None);
     assert_eq!(
         texture.to_rgba(&data),
         Err(Error::Unsupported {
-            format: 0x8500_0000
+            format: 0x0200_0000
         })
     );
 }
