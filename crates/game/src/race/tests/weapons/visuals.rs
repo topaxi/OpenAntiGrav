@@ -189,7 +189,13 @@ fn a_weapon_that_cannot_bounce_never_reads_as_bouncing() {
 /// The riding flare's scale follows the charge for a Plasma alone -
 /// `Plasma_UpdateCharge`'s `(1.0 - remaining) * 0.75`, ported in
 /// `plasma_flare_scale` - and sits at the stage's neutral `1.0` for every
-/// other weapon and for a Plasma that has already launched.
+/// other weapon.
+///
+/// **A flying bolt is `0.75`, not `1.0`.** `Plasma_Launch`'s recovered body
+/// (`plasma.md`) writes no severity field at all, so nothing resets the
+/// value `Plasma_UpdateCharge` left behind when `charge` hit zero - see
+/// `plasma_flare_scale`'s own doc comment for the screenshot evidence that
+/// caught the earlier `1.0` guess as a visible, unexplained pop at release.
 #[test]
 fn the_plasma_flare_scale_follows_the_charge() {
     use crate::race::weapons::plasma_flare_scale;
@@ -203,9 +209,9 @@ fn the_plasma_flare_scale_follows_the_charge() {
     );
 
     let flying = plasma_flare_scale(Some(Weapon::Plasma), 0.0);
-    assert_eq!(
-        flying, 1.0,
-        "a launched bolt's flare rides at neutral scale"
+    assert!(
+        (flying - 0.75).abs() < 1e-6,
+        "a launched bolt's flare freezes at the wind-up's own maximum, got {flying}"
     );
 
     let just_pressed = plasma_flare_scale(Some(Weapon::Plasma), CHARGE_SECONDS);

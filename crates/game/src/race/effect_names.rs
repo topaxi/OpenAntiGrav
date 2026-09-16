@@ -77,10 +77,13 @@ pub const MISSILE_FLARE_EFFECT: &str = "WO_MISSILE_HEAD";
 /// does grow as the shot charges - see that function's own doc comment for
 /// the fraction's exact shape, for the further `* 0.5` craft flag that is
 /// **not** ported (its meaning is unread), and for why a released bolt's
-/// flare returns to `1.0` (chosen, not measured). Verified by screenshot at
-/// `data/images/pulse-psp-eu.chd`: the glow visibly grows over the second
-/// half of the 1 s wind-up and steps up again at release, though the first
-/// few ticks after the press are hard to tell apart from the resting state
+/// flare freezes at `0.75` (the wind-up's own maximum) rather than resetting
+/// to `1.0`: `Plasma_Launch`'s recovered body writes no severity field, so
+/// nothing in it changes what `Plasma_UpdateCharge` last wrote. Verified by
+/// screenshot at `data/images/pulse-psp-eu.chd`: the glow visibly grows over
+/// the second half of the 1 s wind-up and holds there once the bolt flies,
+/// with no pop at release, though the first few ticks after the press are
+/// hard to tell apart from the resting state
 /// by eye.
 ///
 /// Corrected 2026-09-09; the earlier "one instance, at the bolt's own
