@@ -680,8 +680,11 @@ seen from the authoring side.
       the two race-option globals, the regeneration branch and the weapons-off
       halving - which comes out at 1.98 against a predicted 2.00 - and for the
       **coefficient itself**, which measures `0.035000` exactly on 25 of 25
-      `Ship_Damage` calls spanning a factor of 225 in magnitude. The one claim
-      left unmeasured is `entity + 0x368`, the field gating the damage path.
+      `Ship_Damage` calls spanning a factor of 225 in magnitude. `entity + 0x368`, the
+      field gating the damage path, is measured too (`0` on the human's craft,
+      `2` on every AI's) and is `Craft_Construct_q`'s kind argument; the
+      multiplayer values `1`/`3` are read off the constructor's name formats
+      only ([shield.md](../ghidra/functions/psp-pulse-usa/shield.md)).
 - [~] AI. **A basic driver runs and a single race fields a grid** (2026-08-11) -
       see [ai.md](../gameplay/ai.md). `oag-ai` follows the disc's own authored
       racing line with a lookahead-plus-cross-track controller damped on the

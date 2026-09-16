@@ -9,9 +9,14 @@ one-call-per-contact loop and for `entity + 0x368` being `0` on the local
 human's craft and `2` on every AI opponent's in a single-player Single Race;
 **92** for the two race-option globals and the regeneration branch; **90**
 for the weapons-off halving; **80** for `entity + 0x368` being
-`Craft_Construct_q`'s own second argument (decompilation only); **60** still
-for what values `1` and `3` mean, since neither was ever produced in this
-pass's single-player race and multiplayer was not reached.
+`Craft_Construct_q`'s own second argument (decompilation only); **75** for
+what values `1` and `3` mean, from the constructor's own name formats
+(2026-09-16): kind `0` names the craft `"player"` and `1` names it
+`"player%d"`, both with the AI byte `+0x48` clear; kinds `2` and `3` name
+it `"id%d"` with `+0x48 = 1`. So `1`/`3` are the multiplayer twins of
+`0`/`2` - a numbered human and a numbered AI - and under a network mode
+(`g_game_mode >= 0xe`) the constructor calls `FUN_0895ebf0` for `1`/`3`
+and again for `0`/`2` before naming. Neither value was produced live.
 
 What is measured and what is not is set out under
 [the runtime leg](#the-runtime-leg-and-what-it-did-not-reach); the
