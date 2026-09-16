@@ -107,6 +107,14 @@ unnamed rather than forced.
   exists here in the same shape, scaled to 64-bit pointers. No `names.tsv`
   row - the spot-check doesn't clear the bar a full read would.
 
+- [psarc-mount.md](psarc-mount.md) - `PsarcArchive_Mount`/
+  `PsarcArchive_WaitAndMountAll`: this binary has no PSARC reader of its own
+  at all. It mounts every `data%02d.psarc` through Sony's own FIOS2
+  (`sceFiosArchiveMountSync`) behind a PlayGo chunk-locus poll, so there is
+  no game-owned block-read path to compare `oag_formats::psarc` against -
+  the actual read implementation is inside the signed `libSceFios2.prx`
+  system module, not this executable.
+
 - [collision.md](collision.md) - a tag-located candidate for
   `ps3-hdfury-eu/collision.md`'s own `Collision_Construct`, not named: the
   structural evidence that first looked like a match turned out to be

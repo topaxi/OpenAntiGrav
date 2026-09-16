@@ -264,7 +264,7 @@ Its `uroot/` holds `eboot.bin` (a newer build than the base `.pkg`'s),
 asset namespace is at least nine named archives across the two packages, not
 the five the base `.pkg` alone suggests; what `data08` (by far the largest of
 the four) actually holds is not yet surveyed.
-[`psarc.md`'s](../formats/psarc.md#block-data-location---open-and-a-realzero-split-rather-than-uniformly-broken)
+[`psarc.md`'s](../formats/psarc.md#block-data-location---the-first-byte-oracle-was-wrong-and-the-corrected-picture-is-three-way-not-binary)
 "Block data location" section has the full account of why this closes the
 extraction-provenance question for the base archives' still-open real/zero
 split, rather than answering it.

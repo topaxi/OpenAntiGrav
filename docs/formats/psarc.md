@@ -331,55 +331,131 @@ archive. Confidence is 75 rather than higher because *why* exactly one row
 per archive is left this way is not established - a single torn write is the
 working description, not a verified cause.
 
-### Block data location - open, and a real/zero split rather than uniformly broken
+### Block data location - the "first byte" oracle was wrong, and the corrected picture is three-way, not binary
 
-**`entry.offset` locates real content for a substantial fraction of real
-entries already, through the crate's existing, unmodified reader - and zero
-bytes for the rest, on every archive checked.** Corrected from an earlier
-version of this page, which sampled only entries whose first block's table
-row is non-zero (a description of stored-block *shape*, not of whether the
-content is real - see below) and reported zero hits; a full sweep over every
-real entry, using `Archive::read_path`/`psarc_cat` directly rather than a
-hand-rolled reimplementation, finds:
+**Correction, 2026-09-16: the real/zero split measured below was itself
+measured wrong, in the direction that undercounts real content.** Every
+number in the table this replaced came from `psarc_sweep` checking only
+whether an entry's **first** byte is nonzero - the previous section's own
+"trap" writeup explains why *any*-byte was rejected (a corrupt buffer with
+one stray nonzero byte tens of KB in reads as real), but never checked the
+opposite failure: a genuinely real, correctly-located `.gnf` entry whose
+own pixel payload does not start at byte zero. It does not, on a large
+fraction of this family's textures - see the dedup example below - so
+"first byte zero" was silently counting real files as fake right alongside
+the actually-fake ones, and the true fraction is neither the old "30-54%"
+number nor a clean complement of it.
 
-| Archive | Real entries (`size > 0`) | Non-zero at `entry.offset` | All-zero |
-| --- | ---: | ---: | ---: |
-| `data00.psarc` | 1,528 | 819 (54%) | 709 |
-| `data01.psarc` | 892 | 348 (39%) | 544 |
-| `data03.psarc` | 327 | 99 (30%) | 228 |
+**The corrected oracle checks the format's own magic instead of a
+byte position**, on the two extensions that carry one:
+`Data\...\*.vex` (`VEXX` at `+0x0c` - [`vex.md`](vex.md)) and
+`Data\...\*.gnf` (`GNF ` at `+0x00` - Sony's public PS4 texture magic).
+`.rcsmodel`/`.rcsmaterial` carry no magic at all (`crates/rcs/src/rcsmodel.rs`'s
+own module docs), so they cannot be scored this way and are reported
+separately, zero-vs-nonzero only. Three buckets result, not two -
+`crates/assets/examples/psarc_oracle.rs`, superseding `psarc_sweep`:
 
-Two concrete examples, both read correctly by `psarc_cat` as it stands today,
-no code change: `data03.psarc`'s
-`Data/art/published/hdships/harimau/Livery2/Holographic_02_GLOW.gnf` opens on
-`GNF ` (Sony's PS4 texture magic), and
-`Data/art/published/hdships/auricom/Ship_LOD.vex` opens on version `6` then
-`VEXX` at the expected `+0x0c`. **`Ship_LOD3.vex`** (a different, similarly-named
-file, declared offset 417,565,545, single 976-byte block), the example an
-earlier version of this page used to argue extraction was uniformly broken,
-is real but is one of the ~70% zero cases on `data03.psarc` - not
-representative, and left below only as a reproducible all-zero instance.
+| Archive | `.gnf` valid | `.gnf` all-zero | `.gnf` garbage | `.vex` valid | `.vex` all-zero | `.vex` garbage |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| `data00.psarc` | 413 | 80 | 187 | 20 | 44 | 6 |
+| `data01.psarc` | 188 | 39 | 176 | 16 | 47 | 4 |
+| `data02.psarc` | 256 | 27 | 180 | 5 | 5 | 3 |
+| `data03.psarc` | 58 | 30 | 76 | 19 | 51 | 6 |
+| `data04.psarc` | 305 | 95 | 267 | 3 | 2 | 1 |
 
-The zero/non-zero split does not correlate with anything checked so far:
+("Valid" = magic found where the format declares it. "All-zero" = the
+entire declared range is zero, no exceptions. "Garbage" = neither: real
+bytes are present, but not the expected magic at the expected offset - the
+population the old first-byte check could not see at all, since a "garbage"
+entry's first byte is overwhelmingly zero too.)
 
-- **Not the stored-block shape.** A block's table row is either `0` (a full,
-  padded `block_size`) or equal to the entry's exact remaining byte count (a
-  short, unpadded stored block, never a genuinely shrunk compressed one - see
-  below). Both shapes turn up real and zero content in roughly the same
-  proportion on `data03.psarc` (91/274 real for the full-padded shape, 8/53
-  for the short shape).
-- **Not file position.** Real and zero entries are interleaved throughout
-  `data03.psarc`'s whole offset range in 200 MB buckets, not confined to a
-  prefix, a suffix, or any other contiguous region.
+**A genuine reader bug surfaced and was fixed while building this table, not
+just a better measurement of an unchanged reader.** `data00.psarc` entry
+2431, `data01.psarc` entry 4370 and `data02.psarc` entry 4659 each raised
+`Error::BadBlock` ("block did not inflate") the first time this table was
+built with the corrected oracle - a **short** stored block whose first byte
+happens to be `0x78` (zlib's marker), the same coincidence
+["A block size of zero means 'stored'"](#a-block-size-of-zero-means-stored)
+above already fixed for a *full-size* block, one level up. `Directory::read_entry`
+now falls back to treating the chunk as raw when `miniz_oxide` fails to
+inflate it, rather than erroring: deflate is deterministic, so a failed
+inflate proves the leading `0x78` was coincidental content rather than a
+real header - the `Error::BadBlock` variant this replaced is now unreachable
+and was removed. All three entries above now read (one - `data00`'s - as
+"valid" `.gnf`; the other two are `.rcsmaterial`, unvalidated but errorless),
+which is why `data00.psarc`'s `.gnf` "valid" count above is 413 rather than
+412 and `data01.psarc`'s is 188 rather than 187. Ground truth:
+`crates/assets/tests/omega_psarc_ground_truth.rs`; the existing PS3
+(`hdfury-ps3-eu`) and Vita `data.psarc` ground-truth suites stay green
+unchanged, checked directly rather than assumed, since this is the second
+time a fix here has regressed one of them.
+
+**The dedup example that exposed the old oracle's blind spot.** Eleven
+different ship liveries' `Data/art/published/hdships/*/Livery*/ShieldHexagonal_ALPHA.gnf`
+on `data03.psarc` (entries 16, 66, 75, 85, 110, 111, 122, 125, 208, 287, 308)
+all declare the **identical** `(offset, size)` = `(114606848, 49408)` - the
+packer deduplicated one identical texture across eleven entries rather than
+storing it eleven times, not corruption. That entry's first 15,616 bytes
+*are* zero, but bytes 15,616-38,739 are real, plausible tiled-texture
+content (repeating `aa` alpha-fill runs); the old oracle's first-byte check
+called this "zero" outright. Immediately preceding it in the same archive,
+two differently-named `Holographic_02_GLOW.gnf` entries (12, 100) share
+their own dedup pair at `(114590208, 16640)`, open on `GNF ` at byte zero,
+and score "valid" both ways - so a shared offset is not itself suspicious,
+and `entry.offset` is doing its job at the boundary between the two groups.
+
+**The "garbage" bucket is real bytes that do not decode as their own
+extension claims, and a targeted check rules out the simplest explanation
+for it.** If `entry.offset` were off by a small, fixed amount for these
+rows, the expected magic should turn up nearby instead. Checked directly on
+three `data00.psarc` "garbage" `.gnf` entries by scanning an 8 KiB window on
+both sides of the declared range: `GNF ` is absent everywhere in two of the
+three, and present in the third only at exactly `entry.offset + entry.size`
+- i.e. it is the *next* entry's own header, not this entry's, shifted. A
+constant per-entry offset error is ruled out by this sample; what actually
+produces bytes that are present, substantial (tens of KB to over a
+megabyte, not a stray byte), and still not the claimed container is not
+established.
+
+**Two structural findings still hold and are not affected by the
+correction above:**
+
+- **Not file position.** Real ("valid" + "garbage" - both mean bytes are
+  physically present) and all-zero entries are interleaved throughout each
+  archive's whole offset range, not confined to a prefix, a suffix, or any
+  other contiguous region.
 - **The block table's own arithmetic is otherwise self-consistent.** Only
   12,099 of `data03.psarc`'s 39,640 block-table rows (31%) are referenced by
   any real entry's `first_block` + block count - the rest describe blocks no
   entry claims - and `max(entry.offset + entry.size)` over every real entry
   lands **exactly** on the file's true size, 2,576,997,583 bytes. Read as a
   coordinate system, `entry.offset` spans the archive precisely; it is
-  specific entries' *content* that reads as zero; the offsets these entries
-  keep company with are not obviously wrong as numbers.
+  specific entries' *content* that is missing or wrong; the offsets these
+  entries keep company with are not obviously wrong as numbers, and the
+  dedup boundary above shows two adjacent, correctly-read files sitting
+  right against a "garbage" one with nothing to distinguish their geometry.
 
-**One thing this does rule out: it is not a codec mismatch.** Classified
+**New this session: the game itself never reads a `.psarc`'s block table at
+all.** `eboot.bin`'s own code was read looking for the loader this
+project's reader should be compared against
+([`docs/ghidra/functions/ps4-omega-eu/psarc-mount.md`](../ghidra/functions/ps4-omega-eu/psarc-mount.md)),
+and there isn't one: `PsarcArchive_Mount` (confidence 85) calls straight
+into Sony's own `sceFiosArchiveGetMountBufferSizeSync`/`sceFiosArchiveMountSync`
+FIOS2 exports, behind `PsarcArchive_WaitAndMountAll` (confidence 80), a
+background-thread loop that polls `scePlayGoGetLocus` per archive and mounts
+each only once its PlayGo chunk reports locally installed. This corroborates
+`.psarc` being a first-party Sony container with a first-party mounter (not
+a Wipeout-specific scheme) from the executable side, and it means the actual
+block-read implementation lives inside `libSceFios2.prx`, a separate signed
+system module this project holds but has not opened in Ghidra - see that
+page's own "Not read" for why not. It also surfaces PlayGo disc-streaming
+state as one plausible *mechanism* for a static dump legitimately carrying
+un-resolved placeholder content, though nothing in `PsarcArchive_WaitAndMountAll`
+touches per-entry content - it mounts a whole archive at a time - so it
+cannot be the whole explanation for entries that mount fine and still read
+short.
+
+**One thing the fuller sweep still rules out: it is not a codec mismatch.** Classified
 every block belonging to a real entry, on `data00.psarc`, `data01.psarc` and
 `data03.psarc`: each block's table value is either exactly `0` (a full,
 padded `block_size` of stored bytes) or exactly equal to the entry's
@@ -427,57 +503,55 @@ same session, both show the split. Whatever produces it is a property of
 this archive family (or of `PkgTool.Core`'s own PFS reader, not chased
 further - see below), not of one directory's provenance.
 
-Reproduce the corrected measurement, and its trap:
+**`psarc_sweep` (`crates/assets/examples/psarc_sweep.rs`) is superseded by
+`psarc_oracle` (`crates/assets/examples/psarc_oracle.rs`) for this
+question**, kept only as the record of the first-byte measurement above and
+of the trap its own module doc already describes (checking *any* nonzero
+byte over the whole buffer overcounts a corrupt header that happens to carry
+one stray nonzero byte deep inside it as real). `psarc_oracle` replaces the
+position-based check with the per-extension magic check the table above
+reports, and prints the detail (`first_block`, `size`, `offset`, block width)
+this page's own numbers came from for every entry that is not cleanly
+"valid":
 
 ```sh
-cargo run -p oag-assets --release --example psarc_sweep -- \
+cargo run -p oag-assets --release --example psarc_oracle -- \
   data/extracted/ps4/omega-eu/uroot/data03.psarc
-# 100/328 (30.5%) non-zero - matches this page's original table (99/327, 30%)
+# gnf: valid 58, all_zero 30, garbage 76 - matches this page's table
 ```
 
-**The trap this tool had to be rewritten around**: a first draft of
-`psarc_sweep` checked `bytes.iter().any(|&b| b != 0)` over the *whole*
-decoded entry - "is there a nonzero byte anywhere" - and got wildly higher
-non-zero rates (87% on `data00`, 70% on `data03`) that looked, briefly, like
-either a crate bug only triggered by reading many entries through one
-`Archive` in a loop, or like this page's own original table being stale.
-Neither was true: a large buffer that is genuinely corrupt/zero at the
-*header* - the only place that matters, since that is what a real reader
-checks first - can still contain a single stray nonzero byte tens of
-kilobytes in, and "any nonzero byte" counts that as real. Checking
-`bytes.first()` instead - matching this table's own "non-zero **at**
-`entry.offset`" column header literally - reproduces the original 54%/39%/30%
-figures almost exactly (820/1,530, 347/892, 100/328). Two named entries this
-page already cited settled which check to trust before the fix: both
-reproduced byte-for-byte identically to their original description either
-way, so the discriminator had to be a *third* set of entries, not the two
-already on this page.
-
-Reproduce a real read and an all-zero one:
+Reproduce the dedup example and a genuinely all-zero one:
 
 ```sh
 cargo run -p oag-assets --example psarc_cat -- \
   data/extracted/ps4/omega-eu/uroot/data03.psarc \
-  "Data/art/published/hdships/harimau/Livery2/Holographic_02_GLOW.gnf" | xxd | head -2
-# opens on `GNF ` - real content, through the existing reader, unmodified
+  "Data/art/published/hdships/icaras_n1/Livery1/ShieldHexagonal_ALPHA.gnf" \
+  | xxd | head -2
+# all zero for the first 15,616 bytes, then real tiled-texture bytes from
+# 15,616 to 38,739 - the entry the old first-byte oracle miscounted as fake
 
 cargo run -p oag-assets --example psarc_cat -- \
   data/extracted/ps4/omega-eu/uroot/data03.psarc \
   "Data/art/published/hdships/auricom_n1/Ship_LOD3.vex" | xxd | head
-# 976 bytes, all zero - a real entry, but one of the ~70% zero cases
+# 976 bytes, all zero throughout - one of the genuinely all-zero entries
 ```
 
 **Consequence for this crate:** `Directory::entry_range`/`Directory::read_entry`
 are unchanged and still trust `entry.offset` directly, exactly as the PS3
-reading does - and, for the fraction of entries measured above, that already
-produces correct content with no code change. `Archive::paths` on one of
-`omega-ps4-eu`'s five archives specifically names entries this crate can
-*locate in the directory and match to a path*; for any individual one of
-them, whether reading it back gives real bytes is not yet predictable from
-anything this page has found - roughly a third to a half will, and which
-third is still open. This is a property of that archive family, not of a
-declared version number - every other archive read so far, Vita `2048`'s
-included, reads real content for every entry `paths()` lists.
+reading does - and for the "valid" fraction measured above, that already
+produces correct content with no code change, confirmed now by magic rather
+than by a byte position that misclassified real files. `Archive::paths` on
+one of `omega-ps4-eu`'s five archives specifically names entries this crate
+can *locate in the directory and match to a path*; for any individual one of
+them, whether reading it back gives its real content is still not
+predictable from anything checked here - but the un-predictable population
+is smaller and better characterised than the old two-way split implied,
+split between "genuinely stores nothing" (all-zero) and "stores real bytes
+that are not the claimed format" (garbage), the latter now the open
+question rather than "half of everything." This is a property of that
+archive family, not of a declared version number - every other archive read
+so far, Vita `2048`'s included, reads real content for every entry
+`paths()` lists.
 
 ## See also
 

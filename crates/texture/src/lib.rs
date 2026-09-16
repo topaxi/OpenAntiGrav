@@ -21,6 +21,7 @@
 
 mod bcn;
 pub mod fnt;
+pub mod gnf;
 pub mod gtf;
 pub mod gxt;
 pub mod png;

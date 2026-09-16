@@ -181,13 +181,6 @@ pub enum Error {
         /// Entries the archive declares.
         entries: usize,
     },
-    /// A block did not inflate.
-    BadBlock {
-        /// Index of the entry being read.
-        index: usize,
-        /// Position of the block within the table.
-        block: u32,
-    },
     /// A block inflated to something other than the block size, and it was not
     /// the entry's last.
     ///
@@ -243,9 +236,6 @@ impl fmt::Display for Error {
             } => write!(f, "PSARC entry {index} names block {block} of {blocks}"),
             Self::NoSuchEntry { index, entries } => {
                 write!(f, "PSARC entry {index} of {entries}")
-            }
-            Self::BadBlock { index, block } => {
-                write!(f, "PSARC entry {index}: block {block} did not inflate")
             }
             Self::ShortBlock {
                 index,
@@ -483,13 +473,16 @@ impl Directory {
     ///
     /// `stored` must be exactly that range: this walks it block by block, and
     /// a block is inflated when it starts with zlib's own header byte and
-    /// copied otherwise.
+    /// copied otherwise - **and copied anyway if the inflate attempt fails**,
+    /// since deflate is unambiguous: a genuine stream always inflates, so a
+    /// failure proves the leading `0x78` was coincidental raw content, not a
+    /// real header. See [`Directory::read_entry`]'s own inline comment.
     ///
     /// # Errors
     ///
-    /// [`Error::TooShort`] when `stored` is short, [`Error::BadBlock`] when a
-    /// block does not inflate, [`Error::ShortBlock`] when one inflates to less
-    /// than a full block without being the entry's last.
+    /// [`Error::TooShort`] when `stored` is short, [`Error::ShortBlock`] when
+    /// a block (inflated or raw) is not the full block size without being the
+    /// entry's last.
     pub fn read_entry(&self, index: usize, stored: &[u8]) -> Result<Vec<u8>> {
         let entry = self.entries.get(index).ok_or(Error::NoSuchEntry {
             index,
@@ -548,9 +541,26 @@ impl Directory {
             // 16, its block 574 is exactly that, and the entry was unreadable
             // until this line distinguished the two cases. See
             // `docs/formats/psarc.md`.
+            //
+            // **A *short* block starting with `0x78` is the same coincidence,
+            // one level down, and it reaches `omega-ps4-eu`'s archives where
+            // the full-size case above does not.** `docs/formats/psarc.md`'s
+            // "Block data location" section measures that nothing on this
+            // family is actually deflated - every real block is either the
+            // full padded size or exactly the entry's remaining byte count -
+            // so a short stored block beginning with `0x78` is exactly as
+            // possible there as a full one, and `omega-ps4-eu`'s `data00`-
+            // `data02.psarc` each carry (at least) one: entries 2431, 4370
+            // and 4659 respectively raised `Error::BadBlock` before this,
+            // over a single coincidental byte in an otherwise-raw block.
+            // Deflate has no ambiguity the way a byte value does - a real
+            // zlib stream inflates or the bytes were never one - so a failed
+            // inflate is conclusive rather than merely a second guess, and
+            // falls back to treating the chunk as the raw block PS3 archives
+            // already use `0x78`-starting *full* blocks to prove exists.
             let plain = if stored_len != 0 && chunk.first() == Some(&ZLIB_CMF) {
                 miniz_oxide::inflate::decompress_to_vec_zlib(chunk)
-                    .map_err(|_| Error::BadBlock { index, block })?
+                    .unwrap_or_else(|_| chunk.to_vec())
             } else {
                 chunk.to_vec()
             };

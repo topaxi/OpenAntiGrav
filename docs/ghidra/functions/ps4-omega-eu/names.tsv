@@ -62,3 +62,5 @@
 0x01371e20	function	WeaponExplosions_Reset	88	plasma.md
 0x01371f10	function	WeaponExplosions_Draw	85	plasma.md
 0x01656130	function	WeaponStats_ParseXml	90	plasma.md
+0x013a26b0	function	PsarcArchive_Mount	85	psarc-mount.md
+0x013a27d0	function	PsarcArchive_WaitAndMountAll	80	psarc-mount.md

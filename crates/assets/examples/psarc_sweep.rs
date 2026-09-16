@@ -20,6 +20,17 @@
 //!
 //! `--verbose` prints one line per real entry: index, real/zero/error, size,
 //! offset, the first 16 bytes read, and the entry's path if one resolved.
+//!
+//! **Superseded by [`psarc_oracle`](../psarc_oracle.rs) for "is this entry's
+//! content real" specifically.** This tool's own trap writeup above already
+//! flags the position-based check as fragile; the failure it did not catch
+//! is the opposite one - a real `.gnf` entry whose payload does not start at
+//! byte zero (measured: several thousand bytes of legitimate leading zero
+//! before real tiled-texture content) reads as "zero" here when it is not.
+//! `psarc_oracle` checks the format's own magic instead of a byte position
+//! and reports a three-way split (valid / all-zero / garbage) rather than
+//! this tool's two. See `docs/formats/psarc.md`'s "Block data location"
+//! section.
 
 fn main() {
     let mut args = std::env::args().skip(1);
