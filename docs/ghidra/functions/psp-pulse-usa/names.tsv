@@ -1021,3 +1021,10 @@
 0x08b30f9c	data	g_race_laps	90	race-progress.md
 0x08ab0838	data	g_hud	85	race-progress.md
 0x08ab0ba0	data	g_player_status	85	race-progress.md
+0x0882b3b0	function	Race_ComputeGridLayout	88	grid.md
+0x08827c98	function	Race_PlaceGrid	85	grid.md
+0x08827e6c	function	Race_StartRacing	85	grid.md
+0x08824e10	function	Race_FinishAllCrafts	82	grid.md
+0x088404c8	function	Ship_UpdateExploding	88	shield.md
+0x08847650	function	Ship_UpdateDestroyed	85	shield.md
+0x08847914	function	Ship_UpdateRespawn	88	shield.md

@@ -334,6 +334,26 @@ instructions, not decompiled):
 | 7 | `0x088445ec` | Zeroes the same `craft->0x794->0x3bc->0x68` byte state 6 does, then reads a global byte at `0x08aae7e3` to pick between `0` and a value read off a global pointer's `+0xb8`, range-checks it against `19`, and indexes a *second* jump table at `0x08a7bc40` - **resolved** (see below), 18 of its 19 entries read this session, and they collapse to just **two** distinct targets, `0x0884463c` and `0x088446c0`, both still inside this same disassembled block. Both toggle the *same* bit this file's own `Ship_SetState` table already names - `entity->0x860` bit `0x1000`, the bit `zone-mode.md` confirms `Zone_UpdateRacing` reads as "this craft is destroyed" - but differently: `0x0884463c` conditionally sets or clears it based on `entity->0x368` (and, only when setting, calls `FUN_0003c7b0(entity)`); `0x088446c0` unconditionally clears it, no call. **Revised reading, confidence 55: state 7 is not a per-mode countdown dispatch - it reads as a "clear the destroyed flag" transition** (out of states 4/5, back to racing), where the *class* of the current game mode (index `0` invalid/unused, `1` and the last four indices route to the conditional-clear-plus-call path, the twelve in between to the plain unconditional clear) decides which of two clear-bit shapes runs. **This walked back the state-7-as-countdown hypothesis this thread's earlier pass made** - the per-mode *jump table* is real and resolved, but what it dispatches to is narrower and less countdown-shaped than first read. Still open: which twelve-vs-five-ish mode classes these two groups actually are, and what `FUN_0003c7b0` does. |
 | 8 | `0x088446ec` | Sets `entity->0x874` to `1.0` (not networked) or `2.0` (networked, per the same `entity->0x368` test) - **the opposite ratio from state 6** (there the local player got the *longer* timer; here the non-local craft does) - then calls `FUN_0018dd94` again on the `0x3bc`-relative sub-object. Falls into the same common tail. Not enough here to guess what distinguishes state 8 from state 6 beyond the timer and the inverted local/remote ratio - both look like "some kind of timed lockout, direction of the asymmetry depends on which state" rather than one being clearly the false start and the other something else. |
 
+**The per-state *updates* were read 2026-09-16, and they retire the false-start
+hypothesis on state 6.** Three of the states have their own per-tick update:
+
+| State | Update | What it does |
+| --- | --- | --- |
+| 4 | `Ship_UpdateExploding` (`0x088404c8`) | `+0x874 -= dt`; at zero, `Ship_SetState(5)` |
+| 5 | `Ship_UpdateDestroyed` (`0x08847650`) | `+0x874 -= dt`; at zero counts the kill (`craft+0x8d4`), announces `FIRST KILL` / `5 KILLS LEFT` / `3` / `1` / `cont_elim` in Elimination (modes `8`/`0x12`, against the target `DAT_08b30fb0`), then `Ship_SetState(6)` - or `8` in Elimination |
+| 6 | `Ship_UpdateRespawn` (`0x08847914`) | `+0x874 -= dt` (the `2.0` s the player waits, `0.8` s an AI); at zero plays `RESET` for the player, clears the boost/stun fields, **relocates the craft onto the spline** - at the AI-corridor midpoint, 5 units up, facing 40 units down the tangent - sets the hover height from the handling block (`+0x78c * 0.25 + 50`), `Ship_SetState(1)`, `Ship_ResetShield`, and clears the destroyed bit `0x1000` |
+
+So state 6 is the **respawn delay after destruction**, not a false-start stall
+(which [race-modes.md](../../../gameplay/race-modes.md) had already measured
+does not exist), and the `2.0`/`0.8` split is how long a human against an AI
+sits dead before reappearing; state 8 is Elimination's own respawn with the
+opposite ratio. State 3's `RESET` cue is the same one this update plays.
+State `2` is *finished*: `Race_FinishAllCrafts` (`0x08824e10`,
+[grid.md](grid.md)) sets it on the whole field at the flag and hands each craft
+to its autopilot; state `7` is a networked craft whose peer dropped
+(`FUN_08847f54`). States `0` and `1` are grid and racing, set by
+`Race_PlaceGrid` and `Race_StartRacing`.
+
 **The address-resolution trap, and how state 7's table was actually read**:
 both addresses state 7's own disassembly computes (`lui`/`lw`-offset pairs, not
 `jal` targets) failed to read back through `inspect_memory_content` at their

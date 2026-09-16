@@ -302,14 +302,14 @@ pub const GRID_SLOTS: u8 = 8;
 /// How far ahead of its successor each grid slot sits, along the slot's forward
 /// axis.
 ///
-/// **Measured, not read out of the original's code**, which is the distinction
-/// `docs/reverse-engineering/methodology.md` insists on: eight craft were read
-/// out of PPSSPP's memory while the countdown held them on the grid, and this is
-/// what the geometry says. Fourteen samples put the per-slot step between
-/// `19.763` and `19.862`, mean `19.79`. Whoever finds the literal in the
-/// executable should replace this and say so - a *recovered* number would be
-/// exact where this is a mean.
-pub const GRID_ROW_PITCH: f32 = 19.79;
+/// **Read out of the original's code** (2026-09-16): the literal `0x419e6666`
+/// in `Race_ComputeGridLayout` (`0x0882b3b0`), the step it walks along the
+/// spline's tangent from one slot to the next, re-locating after each step -
+/// `docs/ghidra/functions/psp-pulse-usa/grid.md`. It was first *measured*: eight
+/// craft read out of PPSSPP's memory on the grid put the per-slot step between
+/// `19.763` and `19.862`, mean `19.79`, which is this value to within the
+/// curvature of the start straight. The literal replaces the mean.
+pub const GRID_ROW_PITCH: f32 = 19.8;
 
 /// How far the odd-numbered slots sit to one side of the even-numbered ones.
 ///
@@ -318,7 +318,12 @@ pub const GRID_ROW_PITCH: f32 = 19.79;
 /// `GRID_COLUMN_OFFSET` to the craft's **left**. Measured the same way as
 /// [`GRID_ROW_PITCH`] and much tighter - the four odd slots read `19.882`,
 /// `19.993`, `20.035` and `20.016`, and the four even ones are within `0.05` of
-/// zero - so `20.0` is almost certainly the authored value rather than a mean.
+/// zero - and it is: the original offsets every slot `10.0` to alternating
+/// sides of the AI corridor's midpoint (`Race_ComputeGridLayout`,
+/// `docs/ghidra/functions/psp-pulse-usa/grid.md`), so the column-to-column
+/// distance is exactly `20.0`. This crate keeps the even column on the node's
+/// own line and the odd one `20.0` across, which is the same pair of columns
+/// with a different zero.
 ///
 /// **Left, and that is a trap this got wrong once.** The measurement is a
 /// projection onto the original's row 0, and the original's row 0 is the craft's
