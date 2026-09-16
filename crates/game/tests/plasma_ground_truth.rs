@@ -45,6 +45,7 @@ use std::path::PathBuf;
 
 use oag_core::math::Vec3;
 use oag_game::race;
+use oag_gameplay::PlayerInputs;
 use oag_gameplay::input::{Button, Input};
 use oag_tables::weapons::Weapon;
 
@@ -113,7 +114,7 @@ fn moving() -> Option<(race::Race, oag_gameplay::InputSnapshot)> {
     let mut race = race::Race::start(loaded.setup);
     let throttle = held(Button::Cross);
     for _ in 0..WARM_UP_TICKS {
-        race.tick(&throttle);
+        race.tick(&PlayerInputs::single(throttle));
     }
     Some((race, throttle))
 }
@@ -208,7 +209,7 @@ fn a_plasma_fired_on_a_real_track_is_one_bolt_and_it_flies() {
     fire.buttons = buttons;
     fire.buttons
         .begin_frame(Button::Square.bit() | Button::Cross.bit());
-    race.tick(&fire);
+    race.tick(&PlayerInputs::single(fire));
 
     let launched = bolts(&race);
     assert_eq!(
@@ -275,7 +276,7 @@ fn a_plasma_fired_on_a_real_track_is_one_bolt_and_it_flies() {
     let mut mid_speed = None;
     let mut late_speed = None;
     for tick in 1..=240 {
-        race.tick(&throttle);
+        race.tick(&PlayerInputs::single(throttle));
         let Some(live) = bolts(&race).first().copied() else {
             detonated_after = Some(tick);
             break;
@@ -478,7 +479,7 @@ fn a_plasma_bolt_that_times_out_far_above_the_track_hurts_nobody_below_it() {
         if let Some(bolt) = bolts(&race).first() {
             race.sim.world.ships[1].physics.body.position = bolt.position + nearby_offset;
         }
-        race.tick(&throttle);
+        race.tick(&PlayerInputs::single(throttle));
         ticks += 1;
         if bolts(&race).is_empty() {
             ended = true;

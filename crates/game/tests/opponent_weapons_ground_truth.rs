@@ -41,6 +41,7 @@
 use std::path::PathBuf;
 
 use oag_game::race;
+use oag_gameplay::PlayerInputs;
 use oag_tables::weapons::Weapon;
 
 fn image() -> Option<PathBuf> {
@@ -83,7 +84,7 @@ fn hand_out_once(weapon: Weapon, ticks: usize) -> Option<(usize, usize)> {
     // A few ticks so the grid settles and the standings take a first fix - the
     // drivers' own gates read `Standing::progress`.
     for _ in 0..60 {
-        race.tick(&oag_gameplay::InputSnapshot::default());
+        race.tick(&PlayerInputs::none());
     }
 
     let opponents = 1..usize::from(race.ship_count());
@@ -97,7 +98,7 @@ fn hand_out_once(weapon: Weapon, ticks: usize) -> Option<(usize, usize)> {
     // can fit inside this window.
     let mut fired = std::collections::BTreeSet::new();
     for _ in 0..ticks {
-        race.tick(&oag_gameplay::InputSnapshot::default());
+        race.tick(&PlayerInputs::none());
         for projectile in &race.sim.world.projectiles.slots {
             if projectile.kind == Some(weapon) && projectile.owner != 0 {
                 fired.insert(usize::from(projectile.owner));
@@ -273,7 +274,7 @@ fn a_field_racing_with_real_pads_does_not_mine_itself_to_death() {
         let mut laid = 0usize;
         let mut seen = std::collections::BTreeSet::new();
         for _ in 0..3_600 {
-            race.tick(&oag_gameplay::InputSnapshot::default());
+            race.tick(&PlayerInputs::none());
             for projectile in &race.sim.world.projectiles.slots {
                 if matches!(projectile.kind, Some(Weapon::Mine | Weapon::Bomb))
                     && seen.insert(projectile.position.x.to_bits())

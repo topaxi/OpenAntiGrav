@@ -9,6 +9,7 @@
 //! to drop.
 
 use super::*;
+use oag_gameplay::PlayerInputs;
 
 fn shielded_handling() -> Handling {
     let mut handling = Handling::ZERO;
@@ -29,7 +30,7 @@ fn a_fresh_race_is_not_flashing_at_the_start() {
     assert!(!race.readout().shield_flashing, "before the first tick");
 
     for _ in 0..10 {
-        race.tick(&InputSnapshot::default());
+        race.tick(&PlayerInputs::none());
         assert!(
             !race.readout().shield_flashing,
             "a full, untouched pool must never flash"
@@ -47,11 +48,11 @@ fn a_fresh_race_is_not_flashing_at_the_start() {
 #[test]
 fn a_drop_flashes_on_the_same_tick_it_lands() {
     let mut race = Race::start(setup(shielded_handling()));
-    race.tick(&InputSnapshot::default());
+    race.tick(&PlayerInputs::none());
     assert!(!race.readout().shield_flashing, "no drop yet");
 
     race.sim.world.ships[0].physics.shield = 40.0;
-    race.tick(&InputSnapshot::default());
+    race.tick(&PlayerInputs::none());
     assert!(
         race.readout().shield_flashing,
         "the tick that reads the drop must flash immediately"

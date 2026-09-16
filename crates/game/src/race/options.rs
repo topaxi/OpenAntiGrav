@@ -729,3 +729,6 @@ pub struct Loaded {
     /// Lines worth printing once, describing what was found.
     pub report: Vec<String>,
 }
+
+/// [`Setup::headless`]: the disc-free minimum, for the headless-sim binary.
+mod headless;

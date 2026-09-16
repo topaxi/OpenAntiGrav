@@ -29,6 +29,7 @@
 use std::path::PathBuf;
 
 use oag_game::race;
+use oag_gameplay::PlayerInputs;
 use oag_gameplay::input::Button;
 
 /// Ticks the per-tick suspension assertions cover: two seconds at 60 Hz, driven
@@ -104,7 +105,7 @@ fn a_ship_spawns_on_the_track_and_flies_along_it() {
     // assertions above are before this on purpose: they are about tick zero.
     let mut held = race::HeldButtons::new(Button::Cross.bit());
     for _ in 0..oag_race::COUNTDOWN_TICKS {
-        race.tick(&held.snapshot());
+        race.tick(&PlayerInputs::single(held.snapshot()));
     }
     let moving_from = race.telemetry().position;
     let mut grounded_ticks = 0u32;
@@ -116,7 +117,7 @@ fn a_ship_spawns_on_the_track_and_flies_along_it() {
 
     for tick in 0..TICKS {
         let snapshot = held.snapshot();
-        race.tick(&snapshot);
+        race.tick(&PlayerInputs::single(snapshot));
         let telemetry = race.telemetry();
 
         assert!(

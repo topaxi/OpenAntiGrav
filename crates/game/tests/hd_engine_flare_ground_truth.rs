@@ -28,6 +28,7 @@
 use std::path::PathBuf;
 
 use oag_game::race;
+use oag_gameplay::PlayerInputs;
 
 fn image() -> Option<PathBuf> {
     oag_testdata::image("data/images/hdfury-ps3-eu-dec.iso")
@@ -445,7 +446,7 @@ fn a_craft_inside_a_trail_sparks_from_its_leading_half() {
     let mut race = race::Race::start(loaded.setup);
     race.set_autopilot(true);
     for _ in 0..300 {
-        race.tick(&oag_gameplay::InputSnapshot::default());
+        race.tick(&PlayerInputs::none());
     }
     // Sit slot 1 squarely inside slot 0's ribbon, pointing the same way: the
     // geometry the complaint was about.
@@ -480,7 +481,7 @@ fn the_anchor_test_fires_later_than_the_sphere_it_replaced() {
     let mut race = race::Race::start(loaded.setup);
     race.set_autopilot(true);
     for _ in 0..300 {
-        race.tick(&oag_gameplay::InputSnapshot::default());
+        race.tick(&PlayerInputs::none());
     }
     let lead = race.sim.world.ships[0].physics.body;
     race.sim.world.ships[1].physics.body.orientation = lead.orientation;
@@ -527,7 +528,7 @@ fn the_sprite_flare_skips_the_players_craft_and_fades_the_rest_by_the_law() {
     let Some(loaded) = load() else { return };
     let mut race = race::Race::start(loaded.setup);
     for _ in 0..60 {
-        race.tick(&oag_gameplay::InputSnapshot::default());
+        race.tick(&PlayerInputs::none());
     }
     assert!(race.hd_trail_active(), "an HD race draws HD's exhaust");
     let camera = race.view();

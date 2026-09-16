@@ -111,6 +111,7 @@
 use std::path::{Path, PathBuf};
 
 use oag_game::race;
+use oag_gameplay::PlayerInputs;
 
 fn image() -> Option<PathBuf> {
     oag_testdata::image("data/images/pulse-psp-usa.chd")
@@ -214,7 +215,7 @@ fn measure_sticking(image: &Path) -> Sticking {
     let mut sustained_pair_ticks = 0u32;
 
     for _ in 0..TICKS {
-        race.tick(&oag_gameplay::InputSnapshot::default());
+        race.tick(&PlayerInputs::none());
         for a in 0..count {
             for b in (a + 1)..count {
                 if !race.sim.world.ships[a].active || !race.sim.world.ships[b].active {

@@ -50,7 +50,7 @@
 use std::path::PathBuf;
 
 use oag_game::race;
-use oag_gameplay::InputSnapshot;
+use oag_gameplay::PlayerInputs;
 
 /// Ticks to give the race before calling it stuck: a little over eight minutes
 /// at the fixed 60 Hz, where a Venom-class lap of the default circuit runs
@@ -80,13 +80,13 @@ fn autopiloted_race() -> Option<race::Race> {
 /// Runs until the race ends or [`CAP`] runs out, and says which.
 fn race_to_the_flag(race: &mut race::Race) {
     while !race.finished() && race.sim.world.tick < CAP {
-        race.tick(&InputSnapshot::default());
+        race.tick(&PlayerInputs::none());
     }
     assert!(
         race.finished(),
         "the race was still running after {CAP} ticks; the player reached lap {} of {:?}",
-        race.sim.world.race.lap,
-        race.sim.world.race.laps_target
+        race.sim.world.primary_race().lap,
+        race.sim.world.laps_target()
     );
 }
 
@@ -99,8 +99,7 @@ fn a_single_race_ends_when_the_player_finishes_or_is_eliminated() {
     let target = race
         .sim
         .world
-        .race
-        .laps_target
+        .laps_target()
         .expect("a single race has laps");
     race_to_the_flag(&mut race);
 
@@ -118,7 +117,7 @@ fn a_single_race_ends_when_the_player_finishes_or_is_eliminated() {
                 "the player's own standing has to agree with the race's finish condition"
             );
             assert_eq!(
-                race.sim.world.race.lap,
+                race.sim.world.primary_race().lap,
                 target + 1,
                 "a finished race is one lap past its target"
             );
@@ -210,7 +209,7 @@ fn ticking_past_the_flag_does_not_rewrite_the_result() {
     let taken = race.results().expect("a board").clone();
 
     for _ in 0..600 {
-        race.tick(&InputSnapshot::default());
+        race.tick(&PlayerInputs::none());
     }
     assert_eq!(race.results(), Some(&taken));
 }

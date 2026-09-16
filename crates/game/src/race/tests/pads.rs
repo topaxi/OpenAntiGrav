@@ -7,6 +7,7 @@
 //! `tests.rs`.
 
 use super::*;
+use oag_gameplay::PlayerInputs;
 
 /// [`race_with_a_grid`] with a speed pad big enough to hold the whole field.
 fn grid_on_a_speed_pad() -> Race {
@@ -36,7 +37,7 @@ fn grid_on_a_speed_pad() -> Race {
 #[test]
 fn a_speed_pad_boosts_every_craft_and_not_only_the_player() {
     let mut race = grid_on_a_speed_pad();
-    race.tick(&InputSnapshot::default());
+    race.tick(&PlayerInputs::none());
 
     for slot in 0..8 {
         assert!(
@@ -56,7 +57,7 @@ fn a_speed_pad_boosts_every_craft_and_not_only_the_player() {
 #[test]
 fn one_craft_s_pad_row_does_not_move_another_s() {
     let mut race = grid_on_a_speed_pad();
-    race.tick(&InputSnapshot::default());
+    race.tick(&PlayerInputs::none());
     assert_eq!(race.sim.pad_distance.len(), MAX_SHIPS);
 
     let others: Vec<_> = (1..8).map(|slot| race.sim.pad_distance[slot][0]).collect();
@@ -87,7 +88,7 @@ fn one_craft_s_pad_row_does_not_move_another_s() {
 #[test]
 fn a_speed_pad_arms_every_craft_s_own_plume() {
     let mut race = grid_on_a_speed_pad();
-    race.tick(&InputSnapshot::default());
+    race.tick(&PlayerInputs::none());
 
     for slot in 0..8 {
         assert!(
@@ -101,7 +102,7 @@ fn a_speed_pad_arms_every_craft_s_own_plume() {
 fn a_track_with_no_pads_never_boosts() {
     let mut race = race_with_pads(Mode::TimeTrial, Vec::new());
     for _ in 0..120 {
-        let evaluated = race.tick(&InputSnapshot::default());
+        let evaluated = race.tick(&PlayerInputs::none());
         assert_eq!(evaluated.speedup_pad, Vec3::ZERO);
     }
     assert_eq!(race.ship().physics.pad_timer, 0.0);
@@ -114,7 +115,7 @@ fn a_track_with_no_pads_never_boosts() {
 #[test]
 fn a_ship_inside_a_pad_is_pushed_along_the_pads_own_axis() {
     let mut race = race_with_pads(Mode::TimeTrial, enveloping_pad());
-    let evaluated = race.tick(&InputSnapshot::default());
+    let evaluated = race.tick(&PlayerInputs::none());
 
     assert_ne!(evaluated.speedup_pad, Vec3::ZERO, "no boost was applied");
     assert_eq!(
@@ -130,14 +131,14 @@ fn a_ship_inside_a_pad_is_pushed_along_the_pads_own_axis() {
 #[test]
 fn the_boost_outlives_the_pad_and_then_expires() {
     let mut race = race_with_pads(Mode::TimeTrial, vec![pad_at(Vec3::ZERO, 1.0e6)]);
-    race.tick(&InputSnapshot::default());
+    race.tick(&PlayerInputs::none());
     assert!(race.ship().physics.pad_timer > 0.0);
 
     // Take the pad away, which is the same to the trigger as driving off it.
     race.sim.speedup_pads.clear();
     let mut boosted_ticks = 0;
     for _ in 0..120 {
-        if race.tick(&InputSnapshot::default()).speedup_pad != Vec3::ZERO {
+        if race.tick(&PlayerInputs::none()).speedup_pad != Vec3::ZERO {
             boosted_ticks += 1;
         }
     }
@@ -179,9 +180,9 @@ fn the_class_gravity_scale_reaches_the_grounded_half_of_gravity() {
         // Several ticks, not one: gravity reads the *previous* frame's
         // groundedness, so the first tick sees zero contacts however solidly
         // the ship is resting on the floor.
-        let mut evaluated = race.tick(&InputSnapshot::default());
+        let mut evaluated = race.tick(&PlayerInputs::none());
         for _ in 0..20 {
-            evaluated = race.tick(&InputSnapshot::default());
+            evaluated = race.tick(&PlayerInputs::none());
         }
         assert!(
             race.ship().physics.grounded > 0.0,
@@ -218,7 +219,7 @@ fn the_flare_outlives_the_force_and_ignores_the_class_tunable() {
         "the fixture must make the flare the longer of the two"
     );
 
-    race.tick(&InputSnapshot::default());
+    race.tick(&PlayerInputs::none());
     // Armed with the constant, not with the class's `time`.
     assert!(
         (race.exhaust().boost_timer() - (exhaust::BOOST_SECONDS - race.dt())).abs() < 1e-4,
@@ -231,7 +232,7 @@ fn the_flare_outlives_the_force_and_ignores_the_class_tunable() {
     let mut force_ticks = 0;
     let mut flare_ticks = 0;
     for _ in 0..120 {
-        let evaluated = race.tick(&InputSnapshot::default());
+        let evaluated = race.tick(&PlayerInputs::none());
         force_ticks += u32::from(evaluated.speedup_pad != Vec3::ZERO);
         flare_ticks += u32::from(race.exhaust().boost_timer() > 0.0);
     }
@@ -250,11 +251,11 @@ fn zone_scores_once_for_entering_a_pad_and_not_again_while_inside() {
     let mut padded = race_with_pads(Mode::Zone, enveloping_pad());
     let mut bare = race_with_pads(Mode::Zone, Vec::new());
     for _ in 0..TICKS {
-        padded.tick(&InputSnapshot::default());
-        bare.tick(&InputSnapshot::default());
+        padded.tick(&PlayerInputs::none());
+        bare.tick(&PlayerInputs::none());
     }
     assert_eq!(
-        padded.sim.world.race.score - bare.sim.world.race.score,
+        padded.sim.world.primary_race().score - bare.sim.world.primary_race().score,
         oag_race::zone::SPEEDUP_PAD_SCORE,
         "a pad held for {TICKS} ticks must pay exactly once"
     );
@@ -267,12 +268,16 @@ fn only_zone_mode_scores_for_a_speed_pad() {
     for mode in [Mode::TimeTrial, Mode::SpeedLap] {
         let mut race = race_with_pads(mode, enveloping_pad());
         for _ in 0..90 {
-            race.tick(&InputSnapshot::default());
+            race.tick(&PlayerInputs::none());
         }
         assert!(
             race.ship().physics.pad_timer > 0.0,
             "{mode:?}: the pad did not fire at all, so the score assertion proves nothing"
         );
-        assert_eq!(race.sim.world.race.score, 0, "{mode:?} scored for a pad");
+        assert_eq!(
+            race.sim.world.primary_race().score,
+            0,
+            "{mode:?} scored for a pad"
+        );
     }
 }

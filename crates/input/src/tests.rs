@@ -177,7 +177,7 @@ fn release_all_drops_a_latched_tap() {
 #[test]
 fn a_pads_analog_airbrake_survives_the_merge() {
     let mut controls = Controls::without_pad();
-    let snapshot = controls.merge(pad::PadState {
+    let snapshot = controls.merge_one(pad::PadState {
         held: Button::L.bit(),
         airbrake_left: 0.4,
         ..pad::PadState::default()
@@ -195,7 +195,7 @@ fn a_pads_analog_airbrake_survives_the_merge() {
 fn a_held_key_wins_over_a_lighter_pad_pull() {
     let mut controls = Controls::without_pad();
     controls.set_key(&Key::Character("q".into()), true);
-    let snapshot = controls.merge(pad::PadState {
+    let snapshot = controls.merge_one(pad::PadState {
         held: Button::L.bit(),
         airbrake_left: 0.4,
         ..pad::PadState::default()
@@ -231,19 +231,19 @@ fn a_tapped_airbrake_key_still_reaches_the_axis() {
 fn the_pad_speaks_only_when_it_contributed() {
     let mut controls = Controls::without_pad();
     controls.tap(Button::Cross);
-    controls.merge(pad::PadState::default());
+    controls.merge_one(pad::PadState::default());
     assert!(!controls.pad_spoke(), "a synthesised tap is not the pad");
-    controls.merge(pad::PadState {
+    controls.merge_one(pad::PadState {
         stick_x: 0.3,
         ..pad::PadState::default()
     });
     assert!(controls.pad_spoke());
-    controls.merge(pad::PadState {
+    controls.merge_one(pad::PadState {
         held: Button::Cross.bit(),
         ..pad::PadState::default()
     });
     assert!(controls.pad_spoke());
-    controls.merge(pad::PadState::default());
+    controls.merge_one(pad::PadState::default());
     assert!(!controls.pad_spoke());
 }
 
@@ -258,4 +258,51 @@ fn a_synthesised_tap_is_one_press_edge() {
     controls.snapshot();
     assert!(!controls.buttons().is_pressed(Button::Start));
     assert!(!controls.buttons().is_held(Button::Start));
+}
+
+/// The claim the whole per-slot change rests on: under the default assignment
+/// slot 0's snapshot is what the single-snapshot path produced, and the other
+/// seven are empty. If this ever fails, a single-player race has changed.
+#[test]
+fn the_default_assignment_puts_everything_in_slot_zero() {
+    let mut controls = Controls::without_pad();
+    controls.set_key(&Key::Character("a".into()), true);
+    controls.set_key(&Key::Character("q".into()), true);
+
+    let inputs = controls.player_snapshots();
+    let slot_zero = inputs.get(pad::Assignment::DEFAULT_SLOT);
+    assert_eq!(slot_zero.stick_x, -1.0);
+    assert_eq!(slot_zero.airbrake_left, 1.0);
+    assert!(slot_zero.buttons.is_held(Button::Left));
+
+    for slot in 1..oag_gameplay::MAX_PLAYERS {
+        assert_eq!(
+            *inputs.get(slot),
+            InputSnapshot::default(),
+            "slot {slot} took input nobody assigned to it"
+        );
+    }
+}
+
+/// A second slot's edges are its own: `pressed = held & !held_last` computed
+/// against one shared `Input` would let one player's release clear another
+/// player's unconsumed press.
+#[test]
+fn a_second_slot_keeps_its_own_button_edges() {
+    let mut controls = Controls::without_pad();
+    controls.assignment_mut().assign_keyboard(1);
+    assert_eq!(controls.keyboard_slot(), 1);
+
+    controls.set_key(&Key::Named(NamedKey::Space), true);
+    let inputs = controls.player_snapshots();
+    assert!(inputs.get(1).buttons.is_pressed(Button::Start));
+    assert!(
+        !inputs.get(0).buttons.is_held(Button::Start),
+        "slot 0 saw a key the keyboard no longer drives"
+    );
+
+    // And a second read is held rather than pressed, on slot 1's own history.
+    let inputs = controls.player_snapshots();
+    assert!(!inputs.get(1).buttons.is_pressed(Button::Start));
+    assert!(inputs.get(1).buttons.is_held(Button::Start));
 }

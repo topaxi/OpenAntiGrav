@@ -51,6 +51,7 @@
 use std::path::{Path, PathBuf};
 
 use oag_game::race;
+use oag_gameplay::PlayerInputs;
 use oag_tables::weapons::Weapon;
 
 fn image_named(name: &str) -> Option<PathBuf> {
@@ -164,7 +165,7 @@ fn a_held_rocket_draws_its_own_icon_sprite_on_a_real_race() {
     // `--ticks 0` capture never sees it: the assignment has to land before
     // `Race::tick` reads it into the readout.
     race.sim.world.ships[0].pickup.weapon = Some(Weapon::Rocket);
-    race.tick(&oag_gameplay::InputSnapshot::default());
+    race.tick(&PlayerInputs::none());
 
     let readout = race.readout();
     assert_eq!(

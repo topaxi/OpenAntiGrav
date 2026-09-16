@@ -37,6 +37,7 @@
 use std::path::PathBuf;
 
 use oag_game::{catalogue, race};
+use oag_gameplay::PlayerInputs;
 
 /// How long a measured race runs: five minutes at 60 Hz, the same window
 /// `race_ground_truth.rs`'s solo benchmark uses.
@@ -128,7 +129,7 @@ fn rolls_on(level: oag_ai::Difficulty, track: &str, pilot: Option<oag_ai::Pilot>
     let mut was_airborne = false;
     for tick in 0..TICKS {
         let before = race.respawns_of(LONE);
-        race.tick(&oag_gameplay::InputSnapshot::default());
+        race.tick(&PlayerInputs::none());
         if race.respawns_of(LONE) != before {
             recovered_this_lap = true;
         }
@@ -296,7 +297,7 @@ fn measure_grid(race: &mut race::Race, slots: &[usize]) -> Option<Vec<Rolls>> {
 
     for tick in 0..TICKS {
         let before: Vec<u32> = slots.iter().map(|&s| race.respawns_of(s)).collect();
-        race.tick(&oag_gameplay::InputSnapshot::default());
+        race.tick(&PlayerInputs::none());
         for (i, &slot) in slots.iter().enumerate() {
             if race.respawns_of(slot) != before[i] {
                 recovered_this_lap[slot] = true;

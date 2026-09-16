@@ -98,7 +98,7 @@ impl Race {
     #[must_use]
     pub fn readout(&self) -> crate::hud::Readout {
         let ship = self.ship();
-        let race = &self.sim.world.race;
+        let race = self.sim.world.primary_race();
         // Zero still means "unknown", and a track with no closed ring still has
         // no lap counter - the widget is omitted rather than reading 1 of 3 on a
         // course that cannot tell.

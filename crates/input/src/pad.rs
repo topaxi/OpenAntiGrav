@@ -361,18 +361,117 @@ fn deadzone(value: f32) -> f32 {
     scaled.min(1.0) * value.signum()
 }
 
-/// Every pad attached to the machine, as one device.
+/// Which grid slot each device drives.
 ///
-/// Pads are merged rather than assigned to players: there is one ship, and a
-/// Deck with a pad plugged into its dock should steer from either. A machine
-/// with no pad, or a platform `gilrs` cannot open, is not an error - it is a
-/// keyboard-only session, which is what every headless capture and CI run is.
+/// **This replaces "every pad is one logical stream", which is what this module
+/// did until 2026-09-16.** The old rule was written down as a design decision
+/// rather than a limitation - "pads are merged rather than assigned to players:
+/// there is one ship, and a Deck with a pad plugged into its dock should steer
+/// from either" - and it was the right call while there was one ship. Split
+/// screen, a second window and a remote client each need two devices to mean
+/// two craft, and a merge cannot express that at all.
+///
+/// **The default is the old behaviour exactly.** Every pad and the keyboard map
+/// to slot 0, so a Deck with a pad in its dock still steers from either, and a
+/// single-pad session is identical to what it was. Assigning a device anywhere
+/// else is an explicit call; nothing does it yet.
+///
+/// **A `Vec` of pairs rather than a map**, for the reason
+/// `docs/architecture/determinism.md` gives: which slot a device drives decides
+/// which craft an input steers, so it reaches simulation state, and a
+/// `HashMap`'s iteration order is not stable between processes. At most eight
+/// devices matter, so a linear scan is not worth a hash anyway.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Assignment {
+    /// Pads that have been given a slot of their own, in assignment order.
+    ///
+    /// A pad not in here drives [`Self::DEFAULT_SLOT`], which is what keeps an
+    /// unconfigured session working the way it always did.
+    pads: Vec<(gilrs::GamepadId, u8)>,
+    /// Which slot the keyboard drives. Slot 0 until something says otherwise.
+    keyboard: u8,
+}
+
+impl Assignment {
+    /// Where a device with no assignment of its own goes.
+    ///
+    /// Slot 0: the human slot in `oag_gameplay::World::SINGLE_PLAYER`, and the
+    /// one a race has until something enables a second.
+    pub const DEFAULT_SLOT: usize = 0;
+
+    /// Which slot `id` drives.
+    #[must_use]
+    pub fn slot_of(&self, id: gilrs::GamepadId) -> usize {
+        self.pads
+            .iter()
+            .find(|(candidate, _)| *candidate == id)
+            .map_or(Self::DEFAULT_SLOT, |(_, slot)| usize::from(*slot))
+    }
+
+    /// Puts `id` on `slot`, replacing whatever it drove before.
+    ///
+    /// A slot past the grid is ignored rather than clamped: clamping would
+    /// silently put two people on one craft, which is harder to notice than a
+    /// pad that did not take.
+    pub fn assign_pad(&mut self, id: gilrs::GamepadId, slot: usize) {
+        let Ok(slot) = u8::try_from(slot) else {
+            return;
+        };
+        if usize::from(slot) >= oag_gameplay::MAX_PLAYERS {
+            return;
+        }
+        match self.pads.iter_mut().find(|(candidate, _)| *candidate == id) {
+            Some(entry) => entry.1 = slot,
+            None => self.pads.push((id, slot)),
+        }
+    }
+
+    /// Which slot the keyboard drives.
+    #[must_use]
+    pub fn keyboard_slot(&self) -> usize {
+        usize::from(self.keyboard)
+    }
+
+    /// Puts the keyboard on `slot`, ignoring one past the grid.
+    pub fn assign_keyboard(&mut self, slot: usize) {
+        if slot < oag_gameplay::MAX_PLAYERS
+            && let Ok(slot) = u8::try_from(slot)
+        {
+            self.keyboard = slot;
+        }
+    }
+
+    /// Whether every device still drives [`Self::DEFAULT_SLOT`].
+    ///
+    /// What a caller asks to know it is in the single-player case - the one
+    /// where a merged read and a per-slot read are the same thing.
+    #[must_use]
+    pub fn is_single_player(&self) -> bool {
+        self.keyboard_slot() == Self::DEFAULT_SLOT
+            && self
+                .pads
+                .iter()
+                .all(|(_, slot)| usize::from(*slot) == Self::DEFAULT_SLOT)
+    }
+}
+
+/// Every pad attached to the machine, read per player slot.
+///
+/// A machine with no pad, or a platform `gilrs` cannot open, is not an error -
+/// it is a keyboard-only session, which is what every headless capture and CI
+/// run is.
+///
+/// Which pad drives which craft is [`Assignment`]; by default all of them drive
+/// slot 0, which is the single merged stream this type used to be able to
+/// produce and nothing else.
 pub struct Pad {
     gilrs: Option<gilrs::Gilrs>,
     /// What [`Self::poll`] makes of the analog triggers. Held here rather than
     /// passed in per tick because it is a pilot preference that outlives any
     /// one frame, and the frame has no business knowing about it.
     triggers: TriggerConfig,
+    /// Which slot each attached pad drives. See [`Assignment`].
+    assignment: Assignment,
 }
 
 impl std::fmt::Debug for Pad {
@@ -398,12 +497,14 @@ impl Pad {
             Ok(gilrs) => Self {
                 gilrs: Some(gilrs),
                 triggers,
+                assignment: Assignment::default(),
             },
             Err(e) => {
                 warn!("no gamepad support ({e}); keyboard only");
                 Self {
                     gilrs: None,
                     triggers,
+                    assignment: Assignment::default(),
                 }
             }
         }
@@ -420,6 +521,7 @@ impl Pad {
         Self {
             gilrs: None,
             triggers: TriggerConfig::default(),
+            assignment: Assignment::default(),
         }
     }
 
@@ -462,34 +564,64 @@ impl Pad {
             .collect()
     }
 
-    /// Drains the event queue and reads the merged state of every pad.
+    /// Which slot each attached pad drives.
+    #[must_use]
+    pub fn assignment(&self) -> &Assignment {
+        &self.assignment
+    }
+
+    /// The assignment, to change. See [`Assignment::assign_pad`].
+    pub fn assignment_mut(&mut self) -> &mut Assignment {
+        &mut self.assignment
+    }
+
+    /// Drains the event queue and reads every pad into the slot it drives.
     ///
     /// The events have to be drained for `gilrs` to update the state this then
     /// reads, so polling is not optional even though nothing here looks at an
     /// individual event.
-    pub fn poll(&mut self) -> PadState {
-        let Some(gilrs) = &mut self.gilrs else {
-            return PadState::default();
-        };
-        while gilrs.next_event().is_some() {}
+    ///
+    /// **Pads sharing a slot are still merged into one reading**, which is what
+    /// makes the default assignment identical to the single merged stream this
+    /// used to produce: with every pad on slot 0, slot 0's entry is the old
+    /// `poll`'s answer and the other seven are [`PadState::default`].
+    pub fn poll_players(&mut self) -> [PadState; oag_gameplay::MAX_PLAYERS] {
+        let triggers = self.triggers;
+        let mut readings = [Reading::default(); oag_gameplay::MAX_PLAYERS];
+        if let Some(gilrs) = &mut self.gilrs {
+            while gilrs.next_event().is_some() {}
 
-        let mut reading = Reading::default();
-        for (_, pad) in gilrs.gamepads() {
-            for bound_button in BOUND_BUTTONS {
-                if pad.is_pressed(bound_button)
-                    && let Some(button) = map_button(bound_button)
-                {
-                    reading.buttons |= button.bit();
+            for (id, pad) in gilrs.gamepads() {
+                let slot = self.assignment.slot_of(id);
+                let Some(reading) = readings.get_mut(slot) else {
+                    continue;
+                };
+                for bound_button in BOUND_BUTTONS {
+                    if pad.is_pressed(bound_button)
+                        && let Some(button) = map_button(bound_button)
+                    {
+                        reading.buttons |= button.bit();
+                    }
                 }
+                reading.stick_x = larger(reading.stick_x, pad.value(gilrs::Axis::LeftStickX));
+                reading.stick_y = larger(reading.stick_y, pad.value(gilrs::Axis::LeftStickY));
+                reading.throttle = reading
+                    .throttle
+                    .max(analog(&pad, gilrs::Button::RightTrigger2));
+                reading.brake = reading.brake.max(analog(&pad, gilrs::Button::LeftTrigger2));
             }
-            reading.stick_x = larger(reading.stick_x, pad.value(gilrs::Axis::LeftStickX));
-            reading.stick_y = larger(reading.stick_y, pad.value(gilrs::Axis::LeftStickY));
-            reading.throttle = reading
-                .throttle
-                .max(analog(&pad, gilrs::Button::RightTrigger2));
-            reading.brake = reading.brake.max(analog(&pad, gilrs::Button::LeftTrigger2));
         }
-        resolve(reading, self.triggers)
+        readings.map(|reading| resolve(reading, triggers))
+    }
+
+    /// What slot 0's pads contribute, which under the default assignment is
+    /// every pad on the machine.
+    ///
+    /// [`Self::poll_players`]'s first entry, kept as its own call because the
+    /// front end has one cursor and one menu no matter how many people are
+    /// racing.
+    pub fn poll(&mut self) -> PadState {
+        self.poll_players()[Assignment::DEFAULT_SLOT]
     }
 }
 

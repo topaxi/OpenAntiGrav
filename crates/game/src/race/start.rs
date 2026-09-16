@@ -95,13 +95,21 @@ impl Race {
             );
             oag_race::SpeedClass::Venom
         });
-        world.race = RaceState::new(mode, lap_class);
+        // **Every slot, not slot 0's alone.** A `RaceState` is a racer's clock
+        // now, and the mode and speed class it is built from are the *event's*
+        // - all eight craft run the same one. Seeding the array uniformly here
+        // is what makes `World::mode` and `World::laps_target` safe to read off
+        // slot 0; see `World::race`'s own doc comment for the replication this
+        // is the writer of.
+        world.race = [RaceState::new(mode, lap_class); oag_gameplay::MAX_PLAYERS];
         // The cell's own `laps` wins over the per-class table, for the two
         // modes where a lap count ends the race at all - see
         // `Options::laps_override`'s own doc for why `SpeedLap`/`Zone` must
         // never reach here despite authoring a `laps` attribute too.
         if let Some(laps) = laps_override {
-            world.race.laps_target = Some(laps);
+            for race in &mut world.race {
+                race.laps_target = Some(laps);
+            }
         }
         let ship = &mut world.ships[0];
         ship.active = true;

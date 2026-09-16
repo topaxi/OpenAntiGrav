@@ -236,10 +236,31 @@ impl Race {
         self.sim.dt
     }
 
+    /// Which grid slot the person at this screen is flying.
+    ///
+    /// [`oag_gameplay::World::primary_slot`], and `0` under every session this
+    /// engine currently starts. **The accessor every presentation-side reader
+    /// goes through** - a HUD, a camera, a medal, a records row - so that when
+    /// a second local player arrives, "which craft is this view about" is a
+    /// parameter in one place rather than a literal `0` in thirty.
+    #[must_use]
+    pub fn player_slot(&self) -> usize {
+        self.sim.world.primary_slot()
+    }
+
     /// The player's ship.
     #[must_use]
     pub fn ship(&self) -> &Ship {
-        &self.sim.world.ships[0]
+        &self.sim.world.ships[self.player_slot()]
+    }
+
+    /// The player's lap, place and finish tick.
+    ///
+    /// [`Self::ship`]'s `standing`, named because the HUD and the records row
+    /// want exactly this and nothing else off the craft.
+    #[must_use]
+    pub fn player_standing(&self) -> &oag_race::Standing {
+        &self.ship().standing
     }
 
     /// What the player's craft is carrying, if anything.
@@ -249,7 +270,7 @@ impl Race {
     /// [`Ship`] is not.
     #[must_use]
     pub fn ship_pickup(&self) -> Option<oag_tables::weapons::Weapon> {
-        self.sim.world.ships[0].pickup.weapon
+        self.ship().pickup.weapon
     }
 
     /// The resampled spline, for a caller that wants to measure against it.

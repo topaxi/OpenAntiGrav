@@ -15,6 +15,67 @@ use oag_race::{Mode, RaceState};
 /// snapshot a fixed size.
 pub const MAX_SHIPS: usize = 8;
 
+/// The most players a race can hold, which is the whole grid.
+///
+/// **Equal to [`MAX_SHIPS`] on purpose, not by coincidence.** A player occupies
+/// a grid slot, so the player cap can never usefully exceed the grid and there
+/// is no case that wants it smaller: split screen, multiple windows and network
+/// play all target a full eight, which is exactly a race with no AI in it. Two
+/// constants that are always the same number would be two things to keep in
+/// step and one place for them to drift, so this is defined *as* [`MAX_SHIPS`]
+/// rather than written out again - `race[i]` and `ships[i]` are the same racer,
+/// and that has to stay true by construction.
+pub const MAX_PLAYERS: usize = MAX_SHIPS;
+
+/// Who flies a grid slot.
+///
+/// **Alongside [`World::race`], not instead of it.** A slot's *timing* and a
+/// slot's *pilot* are two different questions: every slot is timed - that is
+/// what widening `race` to an array buys - but only some are flown by a person,
+/// and the rest are flown by [`oag_ai`] exactly as they are today. Collapsing
+/// the two would mean "has a `RaceState`" implied "is human", which would make
+/// the array useless for the thing it is for, namely ranking eight timed craft
+/// against each other.
+///
+/// **Local and remote are distinguished here rather than left to the caller**,
+/// because they differ in what the simulation is handed, not in what it does
+/// with it: a local slot's [`crate::InputSnapshot`] comes off a device this
+/// frame, a remote slot's comes off the wire and may be a prediction that gets
+/// replayed. The tick treats both as "a human's input arrived for this slot",
+/// which is why the distinction is a variant and not a second array - but a
+/// reconciliation pass has to know which slots it is allowed to re-derive, and
+/// it cannot ask the input layer, which the simulation may not depend on.
+///
+/// Hashed, for the reason [`Ship::autopilot_timer`] gives about itself: a slot
+/// being flown by a person is a different race from one being flown by a
+/// driver, and a replay that lost which was which would diverge the moment the
+/// two disagreed about a control.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Controller {
+    /// Flown by [`oag_ai::Driver`]. Every slot but slot 0 today.
+    ///
+    /// The default, so a freshly defaulted array is a grid of opponents and a
+    /// human slot has to be asked for rather than assumed.
+    #[default]
+    Ai,
+    /// Flown by a person at this machine, off a device this process polls.
+    Local,
+    /// Flown by a person somewhere else, off inputs that arrive as data.
+    Remote,
+}
+
+impl Controller {
+    /// Whether a person flies this slot, wherever they are sitting.
+    ///
+    /// The question nearly every caller actually has - "does this slot take an
+    /// [`crate::InputSnapshot`] rather than a driver's output" - and the one
+    /// that must be asked instead of comparing against slot 0.
+    #[must_use]
+    pub fn is_human(self) -> bool {
+        matches!(self, Self::Local | Self::Remote)
+    }
+}
+
 /// One racer.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Ship {
@@ -64,11 +125,14 @@ pub struct Ship {
     /// Where this craft is in the race: its lap, its place on the circuit and
     /// whether it has finished.
     ///
-    /// **Every craft, the player included.** [`World::race`] is the *player's*
-    /// race - its clock, its Zone counters, its best lap - and stays that; this
-    /// is the smaller thing the whole field needs so that eight of them can be
-    /// ordered against each other. Slot 0's `lap` is assigned from here rather
-    /// than counted twice, so there is one lap rule and not two.
+    /// **Every craft, the player included**, and it was the *only* per-craft
+    /// race tracking there was until [`World::race`] widened to an array on
+    /// 2026-09-16: this is the smaller thing the whole field needs so that
+    /// eight of them can be ordered against each other, and it is deliberately
+    /// still that. `race[i]` is slot `i`'s clock, its Zone counters and its
+    /// best lap; this is slot `i`'s place in the field. A human slot's `lap` is
+    /// assigned from here into its `race[i].lap` rather than counted twice, so
+    /// there is one lap rule and not two.
     ///
     /// [`World::race`]: World::race
     pub standing: oag_race::Standing,
@@ -211,15 +275,58 @@ pub struct World {
     pub ships: [Ship; MAX_SHIPS],
     /// How many of [`Self::ships`] are in play.
     pub ship_count: u8,
-    /// Lap, timing and mode state for the player's ship.
+    /// Lap, timing and mode state, one per grid slot.
     ///
     /// [ADR-0003] sketched this field when the world was first laid out, and
-    /// this is it. Single-ship for now: the modes that need it - time trial,
-    /// speed lap, Zone - have one ship on the track, and per-opponent timing
-    /// arrives with the grid rather than before it.
+    /// this is it. It was a *single* `RaceState` until 2026-09-16, on the
+    /// reasoning that the modes which need a clock - time trial, speed lap,
+    /// Zone - have one ship on the track, so per-opponent timing could arrive
+    /// with the grid rather than before it. It arrives now, because three
+    /// separate features need it at once: split screen, multiple windows and
+    /// network play are all "N people racing in one simulation", and every one
+    /// of them needs N clocks before it needs anything else.
+    ///
+    /// **A fixed array and not a `Vec`**, for [ADR-0003]'s own reason rather
+    /// than a new one: a world snapshot is one `memcpy`-shaped operation, and a
+    /// heap pointer in it would make a replay's frames uncomparable by memory
+    /// layout. Eight `RaceState`s is the cost of a field that never changes
+    /// size, paid once, against a race that could change the size of its own
+    /// snapshot.
+    ///
+    /// **Per *slot*, not per human.** Index `i` is the racer in `ships[i]`,
+    /// including the AI ones, so the two arrays are read with the same index
+    /// and there is no mapping table to keep in step. An AI slot's clock is
+    /// simply not read by a HUD; it costs nothing to advance and it is what
+    /// makes ranking eight timed craft against each other a lookup rather than
+    /// a search. Which slots a *person* flies is [`Self::controllers`], a
+    /// separate question with a separate array.
+    ///
+    /// **[`RaceState::mode`] and [`RaceState::laps_target`] are replicated
+    /// eight times and only slot 0's is authoritative.** They describe the
+    /// race, not a racer, and every slot carries the same value - a known
+    /// redundancy, kept rather than hoisted out because splitting `RaceState`
+    /// into a per-race half and a per-racer half is a change to `oag-race`'s
+    /// own recovered type, which this widening deliberately does not touch.
+    /// Read them through [`Self::mode`] rather than indexing, so the day a mode
+    /// genuinely differs per player there is one place to fix.
     ///
     /// [ADR-0003]: ../../../docs/architecture/adr/0003-no-ecs.md
-    pub race: RaceState,
+    /// [`RaceState::mode`]: oag_race::RaceState::mode
+    /// [`RaceState::laps_target`]: oag_race::RaceState::laps_target
+    pub race: [RaceState; MAX_PLAYERS],
+    /// Who flies each grid slot: a person here, a person elsewhere, or the AI.
+    ///
+    /// **Alongside [`Self::race`] rather than folded into it** - see
+    /// [`Controller`] for why the two questions are separate. One `Controller`
+    /// is a byte and the array is `Copy`, so the world is still a `memcpy`.
+    ///
+    /// Slot 0 is [`Controller::Local`] and the rest are [`Controller::Ai`] in
+    /// every race this engine currently starts, which is exactly the shape the
+    /// field hard-coded before it existed. The point of writing it down is that
+    /// the hard-coding is now *data*: a caller that wants two local players
+    /// marks slot 1 as well, and nothing in the tick has to learn a second rule
+    /// to make that work.
+    pub controllers: [Controller; MAX_PLAYERS],
     /// Everything a weapon has put in the air.
     ///
     /// **The field that grows the snapshot**, and it grows it by a constant:
@@ -261,12 +368,24 @@ impl World {
             rng: Rng::new(seed),
             ships: [Ship::default(); MAX_SHIPS],
             ship_count: 0,
-            race: RaceState::default(),
+            race: [RaceState::default(); MAX_PLAYERS],
+            controllers: Self::SINGLE_PLAYER,
             projectiles: crate::projectile::Projectiles::new(),
             quake: None,
             leach_beam: None,
         }
     }
+
+    /// One person in slot 0 and seven drivers behind them.
+    ///
+    /// The only grid this engine starts today, and named rather than spelled
+    /// out at each of its uses so "the default is one local player" is a thing
+    /// the reader can find, not a pattern they have to notice.
+    pub const SINGLE_PLAYER: [Controller; MAX_PLAYERS] = {
+        let mut controllers = [Controller::Ai; MAX_PLAYERS];
+        controllers[0] = Controller::Local;
+        controllers
+    };
 
     /// The active ships, in slot order.
     ///
@@ -274,6 +393,71 @@ impl World {
     /// it has to be something that cannot vary between runs.
     pub fn active_ships(&self) -> impl Iterator<Item = &Ship> {
         self.ships.iter().take(self.ship_count as usize)
+    }
+
+    /// The slots a person flies, in slot order.
+    ///
+    /// **Slot order, and over the whole array rather than the active prefix**,
+    /// for the reason [`Self::active_ships`] gives about itself: this iteration
+    /// reaches simulation state - it is what decides which slots consume an
+    /// input snapshot - so it must not vary between runs. Whole array because a
+    /// slot marked human but inactive is a caller's mistake to surface, not one
+    /// to silently skip; nothing marks one today.
+    ///
+    /// This is what replaces `0` wherever the composition root used to mean
+    /// "the player". With the default grid it yields exactly `0`, once, which
+    /// is why that substitution is behaviour-preserving.
+    pub fn human_slots(&self) -> impl Iterator<Item = usize> + '_ {
+        (0..MAX_PLAYERS).filter(|&slot| self.controllers[slot].is_human())
+    }
+
+    /// The lowest slot a person flies, or slot 0 when nobody does.
+    ///
+    /// The single view a full-screen HUD draws and a single-camera render
+    /// follows, until a viewport per player exists to draw the rest into. Slot
+    /// 0 as the fallback rather than `None`, because a race with no human in it
+    /// is an attract-mode demo that still has to point a camera somewhere, and
+    /// every caller here already had slot 0 written into it.
+    #[must_use]
+    pub fn primary_slot(&self) -> usize {
+        self.human_slots().next().unwrap_or(0)
+    }
+
+    /// [`Self::primary_slot`]'s race: the clock a full-screen HUD draws.
+    ///
+    /// **Not `race[0]`, even though it resolves to `race[0]` today.** The two
+    /// are the same value for as long as slot 0 is the only human, and the
+    /// whole point of the widening is that this will stop being true - a reader
+    /// that spelled the index out would keep working and keep showing the wrong
+    /// player. Anything that means "the view being drawn" comes through here;
+    /// anything that means "every racer" iterates [`Self::race`] directly.
+    #[must_use]
+    pub fn primary_race(&self) -> &RaceState {
+        &self.race[self.primary_slot()]
+    }
+
+    /// [`Self::primary_race`], to write to.
+    pub fn primary_race_mut(&mut self) -> &mut RaceState {
+        let slot = self.primary_slot();
+        &mut self.race[slot]
+    }
+
+    /// The race's own mode, which every slot carries a copy of.
+    ///
+    /// Read through here rather than by indexing [`Self::race`], so that the
+    /// replication that field's doc comment records has one reader and not
+    /// sixty. See that comment for why the copies exist at all.
+    #[must_use]
+    pub fn mode(&self) -> Mode {
+        self.race[0].mode
+    }
+
+    /// The race's lap target, which every slot carries a copy of.
+    ///
+    /// [`Self::mode`]'s argument exactly, for the other race-wide field.
+    #[must_use]
+    pub fn laps_target(&self) -> Option<u32> {
+        self.race[0].laps_target
     }
 }
 
@@ -325,10 +509,13 @@ mod tests {
     #[test]
     fn a_new_world_is_on_lap_one_of_a_time_trial() {
         let world = World::new(1);
-        assert_eq!(world.race.mode, oag_race::Mode::TimeTrial);
-        assert_eq!(world.race.lap, 1);
-        assert!(!world.race.finished);
-        assert_eq!(world.race.progress, None);
+        assert_eq!(world.mode(), oag_race::Mode::TimeTrial);
+        for (slot, race) in world.race.iter().enumerate() {
+            assert_eq!(race.mode, oag_race::Mode::TimeTrial, "slot {slot}");
+            assert_eq!(race.lap, 1, "slot {slot}");
+            assert!(!race.finished, "slot {slot}");
+            assert_eq!(race.progress, None, "slot {slot}");
+        }
     }
 
     /// The pool starts empty because nothing fills it yet. When collision damage

@@ -37,6 +37,7 @@
 //! use - and reports the distribution, not a single lucky/unlucky count.
 
 use oag_game::race;
+use oag_gameplay::PlayerInputs;
 
 /// How many ticks past the boost's own duration to keep watching, for the
 /// coast into whatever corner the boost carried the craft towards. Ours -
@@ -121,7 +122,7 @@ fn run(seeds: &[u64], track: &str, look_max: f32) -> RunStats {
         let mut peak = [0f32; 8];
         let mut prev_turbo = [0.0f32; 8];
         for _ in 0..3_600u32 {
-            world_race.tick(&oag_gameplay::InputSnapshot::default());
+            world_race.tick(&PlayerInputs::none());
             for slot in 1..8 {
                 let ship = &world_race.sim.world.ships[slot];
                 let turbo = ship.physics.turbo_timer;

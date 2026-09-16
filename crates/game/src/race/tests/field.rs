@@ -6,6 +6,7 @@
 //! `tests.rs`.
 
 use super::*;
+use oag_gameplay::PlayerInputs;
 
 /// Craft used to pass through each other, which is what this catches.
 ///
@@ -277,7 +278,7 @@ fn the_opponents_are_driven_rather_than_parked() {
     let mut race = race_with_a_grid();
     assert_eq!(race.ship_count(), 8);
     for _ in 0..oag_race::COUNTDOWN_TICKS + u64::from(STALL_TICKS / 2) {
-        race.tick(&InputSnapshot::default());
+        race.tick(&PlayerInputs::none());
     }
 
     for slot in 1..8 {
@@ -304,7 +305,7 @@ fn the_opponents_are_driven_rather_than_parked() {
 #[test]
 fn an_opponent_that_flies_off_the_circuit_is_put_back_on_it() {
     let mut race = race_with_a_grid();
-    race.tick(&InputSnapshot::default());
+    race.tick(&PlayerInputs::none());
     assert_eq!(race.respawns_of(1), 0);
 
     // Straight up and far away, which no reset volume in this fixture
@@ -314,7 +315,7 @@ fn an_opponent_that_flies_off_the_circuit_is_put_back_on_it() {
 
     // Not on the first tick: a craft is only lost once it stays lost, or a
     // leap over a gap would teleport it mid-flight.
-    race.tick(&InputSnapshot::default());
+    race.tick(&PlayerInputs::none());
     assert_eq!(
         race.respawns_of(1),
         0,
@@ -329,7 +330,7 @@ fn an_opponent_that_flies_off_the_circuit_is_put_back_on_it() {
             break;
         }
         race.sim.world.ships[1].physics.body.position = away;
-        race.tick(&InputSnapshot::default());
+        race.tick(&PlayerInputs::none());
     }
     assert_eq!(race.respawns_of(1), 1, "the craft was never recovered");
 
@@ -368,7 +369,7 @@ fn giving_up_on_one_craft_leaves_the_others_recoverable() {
     for _ in 0..=RESCUE_TICKS {
         race.sim.world.ships[1].physics.body.position += Vec3::Y * 100_000.0;
         race.sim.world.ships[2].physics.body.position = away;
-        race.tick(&InputSnapshot::default());
+        race.tick(&PlayerInputs::none());
     }
 
     assert_eq!(race.respawns_of(1), 0, "a craft given up on was recovered");
@@ -394,7 +395,7 @@ fn a_destroyed_opponent_stops_driving() {
     // when the first assertion below checks its throttle. `COUNTDOWN_TICKS`
     // calls still land on the last gated tick; one more releases it.
     for _ in 0..=oag_race::COUNTDOWN_TICKS {
-        race.tick(&InputSnapshot::default());
+        race.tick(&PlayerInputs::none());
     }
     assert_eq!(
         race.sim.world.ships[1].physics.thrust,
@@ -402,7 +403,7 @@ fn a_destroyed_opponent_stops_driving() {
     );
 
     race.sim.world.ships[1].physics.craft_state = oag_physics::CraftState::Destroyed;
-    race.tick(&InputSnapshot::default());
+    race.tick(&PlayerInputs::none());
     assert_eq!(
         race.sim.world.ships[1].physics.thrust, 0.0,
         "a destroyed opponent is still holding throttle"
@@ -424,7 +425,7 @@ fn a_destroyed_opponent_stops_driving() {
 #[test]
 fn every_driver_locates_itself_on_the_line() {
     let mut race = race_with_a_grid();
-    race.tick(&InputSnapshot::default());
+    race.tick(&PlayerInputs::none());
     for slot in 1..8 {
         assert!(
             race.sim.world.ships[slot].driver.index > 0,
@@ -440,7 +441,7 @@ fn every_driver_locates_itself_on_the_line() {
 fn the_ai_never_touches_the_players_craft() {
     let mut race = race_with_a_grid();
     for _ in 0..120 {
-        race.tick(&InputSnapshot::default());
+        race.tick(&PlayerInputs::none());
     }
     let player = &race.sim.world.ships[0];
     assert_eq!(player.physics.thrust, 0.0);

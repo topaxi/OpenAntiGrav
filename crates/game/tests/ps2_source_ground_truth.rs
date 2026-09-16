@@ -49,6 +49,7 @@ use oag_gameplay::input::Button;
 use oag_pulse as pulse;
 
 use oag_game::race;
+use oag_gameplay::PlayerInputs;
 
 /// The PS2 release, Europe-only, `SCES-54748`.
 const PS2_IMAGE: &str = "pulse-ps2-eu.chd";
@@ -204,7 +205,7 @@ fn a_ship_spawns_and_steps_on_the_ps2_disc() {
     let mut grounded_ticks = 0u32;
     for tick in 0..TICKS {
         let snapshot = held.snapshot();
-        race.tick(&snapshot);
+        race.tick(&PlayerInputs::single(snapshot));
         let telemetry = race.telemetry();
         assert!(
             telemetry.position.is_finite(),

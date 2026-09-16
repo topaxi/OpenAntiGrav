@@ -480,6 +480,10 @@ install-desktop-file *ARGS:
 deploy-deck *ARGS:
     ./scripts/deploy-to-deck.sh "$@"
 
+# Run the tick loop with no renderer, no window and no disc, and print its hash
+headless-sim *ARGS:
+    cargo run -q -p oag-game --bin oag-headless-sim -- "$@"
+
 # View assets straight from a disc image
 view *ARGS:
     cargo run -q -p oag-view -- "$@"

@@ -48,6 +48,7 @@
 use std::path::PathBuf;
 
 use oag_game::{catalogue, race};
+use oag_gameplay::PlayerInputs;
 
 /// How long a measured race runs: five minutes at 60 Hz, the same window
 /// `ai_roll_ground_truth.rs`'s own benchmark uses.
@@ -239,7 +240,7 @@ fn measure_airtime(
     let mut start_tick = 0u64;
 
     for tick in 0..TICKS {
-        race.tick(&oag_gameplay::InputSnapshot::default());
+        race.tick(&PlayerInputs::none());
 
         let now_respawns = race.respawns_of(LONE);
         if now_respawns != prev_respawns {

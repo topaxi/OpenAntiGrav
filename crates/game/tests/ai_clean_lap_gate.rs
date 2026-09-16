@@ -138,6 +138,7 @@
 use std::path::PathBuf;
 
 use oag_game::{catalogue, race};
+use oag_gameplay::PlayerInputs;
 
 fn image() -> Option<PathBuf> {
     oag_testdata::image("data/images/pulse-psp-usa.chd")
@@ -205,7 +206,7 @@ fn solo_on(track: &str, class: &str) -> Option<Solo> {
     let mut recovered_this_lap = false;
     for tick in 0..TICKS {
         let before = race.respawns_of(LONE);
-        race.tick(&oag_gameplay::InputSnapshot::default());
+        race.tick(&PlayerInputs::none());
         if race.respawns_of(LONE) != before {
             recovered_this_lap = true;
         }

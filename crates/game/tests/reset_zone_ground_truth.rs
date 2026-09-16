@@ -32,7 +32,7 @@ use std::path::{Path, PathBuf};
 
 use oag_core::math::Vec3;
 use oag_game::race;
-use oag_gameplay::input::InputSnapshot;
+use oag_gameplay::PlayerInputs;
 use oag_physics::Surface;
 
 fn disc(name: &str) -> Option<PathBuf> {
@@ -112,7 +112,7 @@ fn fly_through_first_reset(setup: race::Setup) -> Option<f32> {
     }
 
     for _ in 0..20 {
-        race.tick(&InputSnapshot::default());
+        race.tick(&PlayerInputs::none());
         if race.respawns() > 0 {
             let position = race.ship().physics.body.position;
             assert!(position.is_finite());
@@ -282,7 +282,7 @@ fn touching_a_real_reset_volume_respawns_the_ship() {
     }
 
     for _ in 0..20 {
-        race.tick(&InputSnapshot::default());
+        race.tick(&PlayerInputs::none());
         if race.respawns() > 0 {
             break;
         }

@@ -31,7 +31,7 @@ impl Race {
     /// them however long they run. See [`oag_race::Mode::laps_target`].
     #[must_use]
     pub fn finished(&self) -> bool {
-        self.sim.world.race.finished
+        self.sim.world.primary_race().finished
     }
 
     /// The results, once there are any.
@@ -79,7 +79,7 @@ impl Race {
             .collect();
         self.view.results = Some(scoreboard::build(
             &crafts,
-            self.sim.world.race.laps_target,
+            self.sim.world.laps_target(),
             self.sim.world.tick,
         ));
     }

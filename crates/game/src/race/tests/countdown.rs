@@ -8,6 +8,7 @@
 //! `tests.rs`.
 
 use super::*;
+use oag_gameplay::PlayerInputs;
 
 /// [`hulled_handling`] with a real engine, the same numbers
 /// `race_with_weapon_table` uses - invented, large enough that a thrust of
@@ -26,7 +27,7 @@ fn thrust_reads_zero_for_the_whole_gated_span() {
     let mut race = thrust_capable_race();
     let mut buttons = Buttons::new();
     for tick in 0..oag_race::COUNTDOWN_TICKS {
-        let evaluated = race.tick(&buttons.tick(CROSS));
+        let evaluated = race.tick(&PlayerInputs::single(buttons.tick(CROSS)));
         assert_eq!(
             evaluated.engine.thrust, 0.0,
             "tick {tick} should still be gated"
@@ -41,9 +42,9 @@ fn thrust_releases_at_the_full_held_value_with_no_ramp() {
     let mut race = thrust_capable_race();
     let mut buttons = Buttons::new();
     for _ in 0..oag_race::COUNTDOWN_TICKS {
-        race.tick(&buttons.tick(CROSS));
+        race.tick(&PlayerInputs::single(buttons.tick(CROSS)));
     }
-    let released = race.tick(&buttons.tick(CROSS));
+    let released = race.tick(&PlayerInputs::single(buttons.tick(CROSS)));
     assert!(
         released.engine.thrust > 0.0,
         "the first ungated tick should thrust immediately, not ramp in: {}",
@@ -59,7 +60,7 @@ fn an_untouched_pad_produces_no_thrust_through_or_past_the_gate() {
     let mut race = thrust_capable_race();
     let mut buttons = Buttons::new();
     for _ in 0..(oag_race::COUNTDOWN_TICKS + 10) {
-        let evaluated = race.tick(&buttons.tick(0));
+        let evaluated = race.tick(&PlayerInputs::single(buttons.tick(0)));
         assert_eq!(evaluated.engine.thrust, 0.0);
     }
 }
@@ -76,7 +77,7 @@ fn an_untouched_pad_produces_no_thrust_through_or_past_the_gate() {
 fn opponents_are_held_at_the_line_through_the_gated_span() {
     let mut race = race_with_a_grid();
     for tick in 0..oag_race::COUNTDOWN_TICKS {
-        race.tick(&InputSnapshot::default());
+        race.tick(&PlayerInputs::none());
         for slot in 1..race.ship_count() as usize {
             assert_eq!(
                 race.sim.world.ships[slot].physics.thrust, 0.0,
@@ -84,7 +85,7 @@ fn opponents_are_held_at_the_line_through_the_gated_span() {
             );
         }
     }
-    race.tick(&InputSnapshot::default());
+    race.tick(&PlayerInputs::none());
     for slot in 1..race.ship_count() as usize {
         assert_eq!(
             race.sim.world.ships[slot].physics.thrust,

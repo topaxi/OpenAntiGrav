@@ -48,6 +48,7 @@ use std::path::{Path, PathBuf};
 
 use oag_game::audio::sfx::Cue;
 use oag_game::race;
+use oag_gameplay::PlayerInputs;
 use oag_gameplay::input::{Button, Input};
 use oag_tables::weapons::Weapon;
 
@@ -125,7 +126,7 @@ fn firing_a_plasma_sounds_its_press_travel_and_ending_cues_and_writes_it_out() {
 
     let throttle = held(Button::Cross);
     for _ in 0..WARM_UP_TICKS {
-        race.tick(&throttle);
+        race.tick(&PlayerInputs::single(throttle));
     }
     let speed = race.sim.world.ships[0]
         .physics
@@ -183,7 +184,7 @@ fn firing_a_plasma_sounds_its_press_travel_and_ending_cues_and_writes_it_out() {
         } else {
             throttle
         };
-        race.tick(&snapshot);
+        race.tick(&PlayerInputs::single(snapshot));
         // **Peeked, not drained**: `Audio::race_tick` below does its own
         // `drain_cues`, which is what actually feeds the mixer. Draining
         // here first would starve that call - the same trap
@@ -319,7 +320,7 @@ fn firing_a_plasma_at_a_craft_sounds_plasmahitship_not_plasmahitwall() {
 
     let throttle = held(Button::Cross);
     for _ in 0..WARM_UP_TICKS {
-        race.tick(&throttle);
+        race.tick(&PlayerInputs::single(throttle));
     }
 
     let wav = Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -352,7 +353,7 @@ fn firing_a_plasma_at_a_craft_sounds_plasmahitship_not_plasmahitwall() {
         } else {
             throttle
         };
-        race.tick(&snapshot);
+        race.tick(&PlayerInputs::single(snapshot));
         for event in race.pending_cues() {
             if event.cue == Cue::Plasma {
                 plasma_press_tick.get_or_insert(tick);

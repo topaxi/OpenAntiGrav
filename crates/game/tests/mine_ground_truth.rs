@@ -38,6 +38,7 @@
 use std::path::PathBuf;
 
 use oag_game::race;
+use oag_gameplay::PlayerInputs;
 use oag_gameplay::input::{Button, Input};
 use oag_tables::weapons::Weapon;
 
@@ -115,7 +116,7 @@ fn moving() -> Option<(race::Race, oag_gameplay::InputSnapshot)> {
     let mut race = race::Race::start(loaded.setup);
     let throttle = held(Button::Cross);
     for _ in 0..WARM_UP_TICKS {
-        race.tick(&throttle);
+        race.tick(&PlayerInputs::single(throttle));
     }
     Some((race, throttle))
 }
@@ -146,7 +147,7 @@ fn one_press_lays_a_cluster_spread_along_the_track() {
     // [`WARM_UP_TICKS`] for why the count is what it is.
     let throttle = held(Button::Cross);
     for _ in 0..WARM_UP_TICKS {
-        race.tick(&throttle);
+        race.tick(&PlayerInputs::single(throttle));
     }
 
     let stats = race.mine_stats().expect("the disc authors a Mine");
@@ -171,7 +172,7 @@ fn one_press_lays_a_cluster_spread_along_the_track() {
     // first one leaves on. Drive well past that.
     let mut still_held_after_first = None;
     for tick in 0..60 {
-        race.tick(&throttle);
+        race.tick(&PlayerInputs::single(throttle));
         if still_held_after_first.is_none() && !laid(&race).is_empty() {
             still_held_after_first = Some(race.ship_pickup());
             assert!(tick < 5, "the first mine took {tick} ticks to leave");
@@ -244,7 +245,7 @@ fn a_cluster_is_laid_behind_the_craft() {
     let mut race = race::Race::start(loaded.setup);
     let throttle = held(Button::Cross);
     for _ in 0..WARM_UP_TICKS {
-        race.tick(&throttle);
+        race.tick(&PlayerInputs::single(throttle));
     }
     race.mine_stats().expect("the disc authors a Mine");
 
@@ -257,7 +258,7 @@ fn a_cluster_is_laid_behind_the_craft() {
     // One tick, so exactly the first mine is out and the craft has barely moved -
     // measuring after the whole cluster would fold the craft's own travel into
     // the answer and make a nose-mounted drop look rearward.
-    race.tick(&throttle);
+    race.tick(&PlayerInputs::single(throttle));
 
     let mines = laid(&race);
     assert_eq!(
@@ -287,7 +288,7 @@ fn a_cluster_trips_on_a_rival_and_not_on_its_own_dropper() {
     let mut race = race::Race::start(loaded.setup);
     let throttle = held(Button::Cross);
     for _ in 0..WARM_UP_TICKS {
-        race.tick(&throttle);
+        race.tick(&PlayerInputs::single(throttle));
     }
     let stats = race.mine_stats().expect("the disc authors a Mine");
 
@@ -296,7 +297,7 @@ fn a_cluster_trips_on_a_rival_and_not_on_its_own_dropper() {
         .pickup
         .begin_drop(oag_gameplay::projectile::mine::CLUSTER);
     for _ in 0..40 {
-        race.tick(&throttle);
+        race.tick(&PlayerInputs::single(throttle));
     }
     let mines = laid(&race);
     assert!(
@@ -315,7 +316,7 @@ fn a_cluster_trips_on_a_rival_and_not_on_its_own_dropper() {
     );
     let before = race.sim.world.ships[victim].physics.shield;
     race.sim.world.ships[victim].physics.body.position = mines[0].position;
-    race.tick(&throttle);
+    race.tick(&PlayerInputs::single(throttle));
 
     let after = race.sim.world.ships[victim].physics.shield;
     println!(
@@ -383,7 +384,7 @@ fn a_bomb_is_one_static_charge_behind_the_craft() {
         },
         ..oag_gameplay::InputSnapshot::new()
     };
-    race.tick(&press);
+    race.tick(&PlayerInputs::single(press));
 
     let charges = laid_of(&race, Weapon::Bomb);
     assert_eq!(
@@ -423,7 +424,7 @@ fn a_bomb_is_one_static_charge_behind_the_craft() {
     // Static, over a full second of the craft driving away from it.
     let placed = charges[0].position;
     for _ in 0..60 {
-        race.tick(&throttle);
+        race.tick(&PlayerInputs::single(throttle));
     }
     let still = laid_of(&race, Weapon::Bomb);
     assert_eq!(still.len(), 1, "the bomb went off with nobody near it");
@@ -460,13 +461,13 @@ fn a_bomb_hits_harder_than_a_mine_at_the_same_spot() {
     for kind in [Weapon::Mine, Weapon::Bomb] {
         race.sim.world.ships[0].pickup.weapon = Some(kind);
         race.sim.world.ships[0].pickup.begin_drop(1);
-        race.tick(&throttle);
+        race.tick(&PlayerInputs::single(throttle));
 
         let charges = laid_of(&race, kind);
         assert!(!charges.is_empty(), "{kind:?}: nothing was laid");
         let before = race.sim.world.ships[victim].physics.shield;
         race.sim.world.ships[victim].physics.body.position = charges[0].position;
-        race.tick(&throttle);
+        race.tick(&PlayerInputs::single(throttle));
         taken.push(before - race.sim.world.ships[victim].physics.shield);
 
         // Put the victim back out of the way and heal it, so the second

@@ -209,7 +209,17 @@ impl Keyboard {
 pub struct Controls {
     keyboard: Keyboard,
     pad: Pad,
-    buttons: Input,
+    /// One button state per grid slot, because an edge is per pilot.
+    ///
+    /// This was a single [`Input`] until 2026-09-16, which was right while
+    /// every device fed one craft. `pressed = held & !held_last` has to be
+    /// computed against *that slot's* previous frame, so two people cannot
+    /// share one: player two letting go of cross would clear a press player one
+    /// had not consumed yet.
+    ///
+    /// Under [`pad::Assignment`]'s default every device is on slot 0, so slot 0
+    /// is the old single `Input` and the other seven never see a held bit.
+    buttons: [Input; oag_gameplay::MAX_PLAYERS],
     /// Whether the pad contributed anything to the last [`Self::snapshot`]:
     /// a held button or a stick or trigger off centre. See [`Self::pad_spoke`].
     pad_spoke: bool,
@@ -232,9 +242,28 @@ impl Controls {
         Self {
             keyboard: Keyboard::new(),
             pad: Pad::none(),
-            buttons: Input::new(),
+            buttons: [Input::new(); oag_gameplay::MAX_PLAYERS],
             pad_spoke: false,
         }
+    }
+
+    /// Which slot each device drives. See [`pad::Assignment`].
+    #[must_use]
+    pub fn assignment(&self) -> &pad::Assignment {
+        self.pad.assignment()
+    }
+
+    /// The assignment, to change - the one call that makes a device drive a
+    /// craft other than slot 0's.
+    pub fn assignment_mut(&mut self) -> &mut pad::Assignment {
+        self.pad.assignment_mut()
+    }
+
+    /// Which slot the keyboard drives, and so which snapshot the front end
+    /// reads. [`pad::Assignment::keyboard_slot`].
+    #[must_use]
+    pub fn keyboard_slot(&self) -> usize {
+        self.pad.assignment().keyboard_slot()
     }
 
     /// Records a key going down or coming up. See [`Keyboard::set_key`].
@@ -304,37 +333,89 @@ impl Controls {
     /// stick produces a continuum. Whichever is further from centre wins, so
     /// resting on the stick does not veto the d-pad and vice versa.
     pub fn snapshot(&mut self) -> InputSnapshot {
-        let pad = self.pad.poll();
-        self.merge(pad)
+        let slot = self.keyboard_slot();
+        *self.player_snapshots().get(slot)
     }
 
-    /// [`Self::snapshot`] with the pad's contribution supplied rather than
-    /// polled.
+    /// Ends the tick for every grid slot at once: one snapshot per slot.
+    ///
+    /// **The call a race makes**, where [`Self::snapshot`] is the call the front
+    /// end makes - one menu, one cursor, whichever slot the keyboard drives.
+    /// The devices are polled exactly once here, which is why the two are not
+    /// both callable in a frame: [`Keyboard::take_taps`] is destructive, and a
+    /// second poll would find a tap already spent.
+    ///
+    /// Under [`pad::Assignment`]'s default every device drives slot 0, so slot
+    /// 0's entry is what the single-snapshot path produced and the other seven
+    /// are `InputSnapshot::default`.
+    pub fn player_snapshots(&mut self) -> oag_gameplay::PlayerInputs {
+        let pads = self.pad.poll_players();
+        self.merge_players(pads)
+    }
+
+    /// [`Self::player_snapshots`] with the pads' contributions supplied rather
+    /// than polled.
     ///
     /// The whole merge lives here so a test can state a pad reading directly.
     /// Everything this function decides - which device wins an axis, and which
-    /// bits count as a shoulder - is invisible to `snapshot`'s caller and
-    /// impossible to reach on a machine with no pad, which is every CI run.
-    fn merge(&mut self, pad: pad::PadState) -> InputSnapshot {
-        self.pad_spoke = pad.held != 0
-            || pad.stick_x != 0.0
-            || pad.stick_y != 0.0
-            || pad.airbrake_left != 0.0
-            || pad.airbrake_right != 0.0;
+    /// bits count as a shoulder - is invisible to `player_snapshots`'s caller
+    /// and impossible to reach on a machine with no pad, which is every CI run.
+    fn merge_players(
+        &mut self,
+        pads: [pad::PadState; oag_gameplay::MAX_PLAYERS],
+    ) -> oag_gameplay::PlayerInputs {
+        // Any slot's pad speaking counts: what this answers is "is a pad the
+        // device in use", which a cursor asks about the machine and not about a
+        // craft.
+        self.pad_spoke = pads.iter().any(|pad| {
+            pad.held != 0
+                || pad.stick_x != 0.0
+                || pad.stick_y != 0.0
+                || pad.airbrake_left != 0.0
+                || pad.airbrake_right != 0.0
+        });
         // The keyboard's *taps* as well as what it still holds - see
         // [`Keyboard::take_taps`]. The pad is polled rather than
-        // event-driven, so it has no equivalent to latch.
-        let keys = self.keyboard.held_mask() | self.keyboard.take_taps();
-        self.buttons.begin_frame(keys | pad.held);
+        // event-driven, so it has no equivalent to latch. Taken once, for the
+        // one slot the keyboard drives: taking them per slot would spend them
+        // on the first and leave nothing for the rest.
+        let keyboard_slot = self.keyboard_slot();
+        let keyboard_keys = self.keyboard.held_mask() | self.keyboard.take_taps();
+
+        let mut inputs = oag_gameplay::PlayerInputs::none();
+        for (slot, pad) in pads.into_iter().enumerate() {
+            let keys = if slot == keyboard_slot {
+                keyboard_keys
+            } else {
+                0
+            };
+            inputs.set(slot, self.merge(slot, keys, pad));
+        }
+        inputs
+    }
+
+    /// [`Self::merge_players`] for one pad on the slot the keyboard drives.
+    ///
+    /// What the single-device merge always was, kept so a test can state a pad
+    /// reading and read one snapshot back without spelling out eight.
+    #[cfg(test)]
+    fn merge_one(&mut self, pad: pad::PadState) -> InputSnapshot {
+        let slot = self.keyboard_slot();
+        let mut pads = [pad::PadState::default(); oag_gameplay::MAX_PLAYERS];
+        pads[slot] = pad;
+        *self.merge_players(pads).get(slot)
+    }
+
+    /// One slot's devices, as one snapshot.
+    fn merge(&mut self, slot: usize, keys: u32, pad: pad::PadState) -> InputSnapshot {
+        let buttons = &mut self.buttons[slot];
+        buttons.begin_frame(keys | pad.held);
 
         let digital_x = axis(
-            self.buttons.is_held(Button::Right),
-            self.buttons.is_held(Button::Left),
+            buttons.is_held(Button::Right),
+            buttons.is_held(Button::Left),
         );
-        let digital_y = axis(
-            self.buttons.is_held(Button::Up),
-            self.buttons.is_held(Button::Down),
-        );
+        let digital_y = axis(buttons.is_held(Button::Up), buttons.is_held(Button::Down));
         // Off the *keyboard's* bits, not the merged mask. A pad trigger under
         // `pad::TriggerMode::Airbrakes` contributes its shoulder's bit as well
         // as an analog value, so reading the merge here would answer `1.0` for
@@ -345,7 +426,7 @@ impl Controls {
         let shoulder = |button: Button| f32::from(u8::from(keys & button.bit() != 0));
 
         InputSnapshot {
-            buttons: self.buttons,
+            buttons: *buttons,
             stick_x: pad::larger(digital_x, pad.stick_x),
             stick_y: pad::larger(digital_y, pad.stick_y),
             airbrake_left: shoulder(Button::L).max(pad.airbrake_left),
@@ -358,12 +439,13 @@ impl Controls {
     /// front end drives itself off.
     #[must_use]
     pub fn buttons(&self) -> &Input {
-        &self.buttons
+        &self.buttons[self.keyboard_slot()]
     }
 
     /// Mutable button state, for [`Input::consume_press`].
     pub fn buttons_mut(&mut self) -> &mut Input {
-        &mut self.buttons
+        let slot = self.keyboard_slot();
+        &mut self.buttons[slot]
     }
 
     /// Whether the pad contributed anything to the last [`Self::snapshot`].

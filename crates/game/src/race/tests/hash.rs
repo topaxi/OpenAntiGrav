@@ -6,6 +6,7 @@
 //! `tests.rs`.
 
 use super::*;
+use oag_gameplay::PlayerInputs;
 
 /// The pad half of the determinism gate, and the reason it is here rather
 /// than in `crates/gameplay/tests/determinism.rs`: the timers live on
@@ -21,7 +22,7 @@ fn a_pad_refresh_timer_one_tick_out_moves_the_race_hash() {
     let mut race = race_with_weapon_pads(Mode::SingleRace, enveloping_pad(), 1.0);
     let mut buttons = Buttons::new();
     for _ in 0..30 {
-        race.tick(&buttons.tick(CROSS));
+        race.tick(&PlayerInputs::single(buttons.tick(CROSS)));
     }
     let before = race.sim.state_hash();
 
@@ -41,7 +42,7 @@ fn a_pad_refresh_timer_one_tick_out_moves_the_race_hash() {
 #[test]
 fn the_pad_distance_cache_moves_the_race_hash() {
     let mut race = race_with_weapon_pads(Mode::SingleRace, enveloping_pad(), 1.0);
-    race.tick(&InputSnapshot::default());
+    race.tick(&PlayerInputs::none());
     let before = race.sim.state_hash();
     race.sim.weapon_pad_distance[0][0] += 1.0;
     assert_ne!(before, race.sim.state_hash());
@@ -58,7 +59,7 @@ fn the_pad_distance_cache_moves_the_race_hash() {
 #[test]
 fn both_recovery_dwells_move_the_race_hash() {
     let mut race = race_with_weapon_pads(Mode::SingleRace, enveloping_pad(), 1.0);
-    race.tick(&InputSnapshot::default());
+    race.tick(&PlayerInputs::none());
 
     // Slot 1 rather than 0: the player's entry in either counter is never
     // written, so a test on slot 0 would assert the hash sees a field the
@@ -96,8 +97,8 @@ fn two_identical_races_agree_on_the_race_hash_every_tick() {
             90 => CROSS | CIRCLE,
             _ => CROSS,
         };
-        a.tick(&a_buttons.tick(mask));
-        b.tick(&b_buttons.tick(mask));
+        a.tick(&PlayerInputs::single(a_buttons.tick(mask)));
+        b.tick(&PlayerInputs::single(b_buttons.tick(mask)));
         assert_eq!(
             a.sim.state_hash(),
             b.sim.state_hash(),
@@ -112,10 +113,10 @@ fn two_identical_races_agree_on_the_race_hash_every_tick() {
 fn the_race_hash_sees_a_pickup_being_spent() {
     let mut race = race_with_weapon_pads(Mode::SingleRace, enveloping_pad(), 1.0);
     let mut buttons = Buttons::new();
-    race.tick(&buttons.tick(CROSS));
+    race.tick(&PlayerInputs::single(buttons.tick(CROSS)));
     assert!(race.ship_pickup().is_some(), "nothing to spend");
 
     let held = race.sim.state_hash();
-    race.tick(&buttons.tick(CROSS | SQUARE));
+    race.tick(&PlayerInputs::single(buttons.tick(CROSS | SQUARE)));
     assert_ne!(held, race.sim.state_hash());
 }

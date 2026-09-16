@@ -60,6 +60,7 @@ use std::path::PathBuf;
 
 use oag_core::math::Vec3;
 use oag_game::{boot, catalogue, movie, race};
+use oag_gameplay::PlayerInputs;
 use oag_gameplay::input::{Button, Input};
 use oag_physics::Raycaster;
 use oag_ui::frontend::states;
@@ -208,7 +209,7 @@ fn the_front_end_hands_off_into_a_driveable_race() {
 
     for tick in 0..HANDOFF_TICKS {
         let snapshot = held.snapshot();
-        race.tick(&snapshot);
+        race.tick(&PlayerInputs::single(snapshot));
         let telemetry = race.telemetry();
         assert!(
             telemetry.position.is_finite(),
@@ -288,7 +289,7 @@ fn a_ship_stays_on_the_track_for_ten_seconds() {
     let mut grounded_ticks = 0u32;
     for tick in 0..600u32 {
         let snapshot = held.snapshot();
-        race.tick(&snapshot);
+        race.tick(&PlayerInputs::single(snapshot));
         let telemetry = race.telemetry();
         assert!(
             telemetry.position.is_finite(),
@@ -642,7 +643,7 @@ fn a_ship_spawned_on_the_authored_slot_starts_in_contact() {
 
     // One tick, so the hover probes have run.
     let mut held = race::HeldButtons::new(0);
-    race.tick(&held.snapshot());
+    race.tick(&PlayerInputs::single(held.snapshot()));
     assert_eq!(
         race.ship().physics.grounded,
         1.0,
@@ -723,7 +724,7 @@ fn the_ai_drives_the_field_along_the_track() {
     // Ten seconds, the same window `a_ship_stays_on_the_track_for_ten_seconds`
     // uses, and with the player released so that what moves is the AI.
     for _ in 0..600 {
-        race.tick(&oag_gameplay::InputSnapshot::default());
+        race.tick(&PlayerInputs::none());
     }
 
     for slot in 1..8 {
@@ -806,7 +807,7 @@ fn every_craft_burns_trails_and_boosts_on_its_own() {
     let mut lit = [0u32; 8];
     let mut boosted = [false; 8];
     for _ in 0..TICKS {
-        race.tick(&oag_gameplay::InputSnapshot::default());
+        race.tick(&PlayerInputs::none());
         for slot in 0..8 {
             lit[slot] += u32::from(race.exhaust_of(slot).engine_on());
             boosted[slot] |= race.exhaust_of(slot).boost_timer() > 0.0;
@@ -889,7 +890,7 @@ fn the_field_spreads_across_the_ai_corridor() {
     // craft has left the grid's own lateral stagger behind and settled onto the
     // line it chose.
     for _ in 0..600 {
-        race.tick(&oag_gameplay::InputSnapshot::default());
+        race.tick(&PlayerInputs::none());
     }
 
     let mut offsets = Vec::new();
@@ -941,8 +942,8 @@ fn a_driven_field_replays_identically() {
     let mut second = race::Race::start(second.setup);
 
     for _ in 0..300 {
-        first.tick(&oag_gameplay::InputSnapshot::default());
-        second.tick(&oag_gameplay::InputSnapshot::default());
+        first.tick(&PlayerInputs::none());
+        second.tick(&PlayerInputs::none());
     }
 
     for slot in 0..8 {
@@ -1258,10 +1259,13 @@ fn a_weapon_pad_on_the_disc_hands_out_a_pickup_in_a_single_race() {
 
     // Both hold thrust; one of them also presses fire on the tick after the
     // pickup lands.
-    control.tick(&snapshot(&mut control_buttons, CROSS));
-    fired.tick(&snapshot(&mut fired_buttons, CROSS));
-    control.tick(&snapshot(&mut control_buttons, CROSS));
-    fired.tick(&snapshot(&mut fired_buttons, CROSS | SQUARE));
+    control.tick(&PlayerInputs::single(snapshot(&mut control_buttons, CROSS)));
+    fired.tick(&PlayerInputs::single(snapshot(&mut fired_buttons, CROSS)));
+    control.tick(&PlayerInputs::single(snapshot(&mut control_buttons, CROSS)));
+    fired.tick(&PlayerInputs::single(snapshot(
+        &mut fired_buttons,
+        CROSS | SQUARE,
+    )));
     assert_eq!(fired.ship_pickup(), None, "firing must spend the pickup");
     assert!(
         fired.ship().physics.turbo_timer > 0.0,
@@ -1269,8 +1273,8 @@ fn a_weapon_pad_on_the_disc_hands_out_a_pickup_in_a_single_race() {
     );
 
     for _ in 0..60 {
-        control.tick(&snapshot(&mut control_buttons, CROSS));
-        fired.tick(&snapshot(&mut fired_buttons, CROSS));
+        control.tick(&PlayerInputs::single(snapshot(&mut control_buttons, CROSS)));
+        fired.tick(&PlayerInputs::single(snapshot(&mut fired_buttons, CROSS)));
     }
     let speed = |race: &race::Race| race.ship().physics.body.linear_velocity.length();
     let (boosted, plain) = (speed(&fired), speed(&control));
@@ -1375,14 +1379,14 @@ fn a_rocket_fired_on_a_real_track_flies_and_detonates() {
     };
     const SQUARE: u32 = Button::Square.bit();
 
-    race.tick(&snapshot(&mut buttons, 0));
+    race.tick(&PlayerInputs::single(snapshot(&mut buttons, 0)));
     assert_eq!(
         race.ship_pickup(),
         Some(oag_tables::weapons::Weapon::Rocket)
     );
 
     let muzzle = race.ship().physics.body.position;
-    race.tick(&snapshot(&mut buttons, SQUARE));
+    race.tick(&PlayerInputs::single(snapshot(&mut buttons, SQUARE)));
     assert_eq!(race.ship_pickup(), None, "firing must spend the pickup");
     assert_eq!(
         race.sim.world.projectiles.live(),
@@ -1441,7 +1445,7 @@ fn a_rocket_fired_on_a_real_track_flies_and_detonates() {
                 *alive = ticks;
             }
         }
-        race.tick(&snapshot(&mut buttons, 0));
+        race.tick(&PlayerInputs::single(snapshot(&mut buttons, 0)));
         ticks += 1;
         assert!(ticks < 1200, "a rocket never stopped");
     }
@@ -1494,7 +1498,7 @@ fn the_field_is_placed_by_how_far_round_it_is() {
     };
     let mut race = race::Race::start(loaded.setup);
     for _ in 0..900 {
-        race.tick(&oag_gameplay::InputSnapshot::default());
+        race.tick(&PlayerInputs::none());
     }
 
     let places = race.places();
@@ -1553,7 +1557,7 @@ fn the_players_place_reaches_the_hud() {
     );
 
     for _ in 0..900 {
-        race.tick(&oag_gameplay::InputSnapshot::default());
+        race.tick(&PlayerInputs::none());
     }
 
     let readout = race.readout();
@@ -1651,7 +1655,7 @@ fn an_opponent_fires_at_a_craft_ahead_on_a_real_circuit() {
             .iter()
             .filter(|p| p.kind.is_some())
             .count();
-        race.tick(&oag_gameplay::InputSnapshot::default());
+        race.tick(&PlayerInputs::none());
         for projectile in race.sim.world.projectiles.slots.iter() {
             if projectile.kind.is_some() && projectile.owner != 0 {
                 owners.insert(projectile.owner);
@@ -1756,7 +1760,7 @@ fn solo_lap_tuned(level: oag_ai::Difficulty, track: &str, tuning: Option<oag_ai:
     for tick in 0..18_000u64 {
         let before = race.respawns_of(1);
         let was_at = race.sim.world.ships[1].driver.index;
-        race.tick(&oag_gameplay::InputSnapshot::default());
+        race.tick(&PlayerInputs::none());
         if race.respawns_of(1) != before {
             recovered_this_lap = true;
             lost_at.push(was_at);

@@ -67,6 +67,7 @@
 use std::path::PathBuf;
 
 use oag_game::race;
+use oag_gameplay::PlayerInputs;
 
 /// The disc, or `None` on a checkout without one.
 fn image() -> Option<PathBuf> {
@@ -109,7 +110,7 @@ fn solo(level: oag_ai::Difficulty, track: &str, ticks: u64) -> Option<Solo> {
     let mut solo = Solo::default();
     let mut run = 0u32;
     for tick in 0..ticks {
-        race.tick(&oag_gameplay::InputSnapshot::default());
+        race.tick(&PlayerInputs::none());
         let ship = &race.sim.world.ships[1];
         if ship.physics.craft_state != oag_physics::CraftState::Racing {
             continue;

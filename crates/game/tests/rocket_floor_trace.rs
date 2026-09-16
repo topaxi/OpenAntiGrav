@@ -23,6 +23,7 @@ use std::path::PathBuf;
 
 use oag_core::math::Vec3;
 use oag_game::race;
+use oag_gameplay::PlayerInputs;
 use oag_gameplay::input::{Button, Input};
 use oag_gameplay::projectile::{
     FALL_ACCELERATION, MAX_PROJECTILES, RIDE_HEIGHT, SURFACE_PROBE_LENGTH,
@@ -294,7 +295,7 @@ fn trace_a_rocket_volley_along_the_floor() {
                 ));
             }
         }
-        race.tick(&snap);
+        race.tick(&PlayerInputs::single(snap));
 
         let ship = race.sim.world.ships[0].physics.body.position;
         for slot in 0..MAX_PROJECTILES {

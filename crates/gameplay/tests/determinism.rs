@@ -129,8 +129,8 @@ fn run(ticks: u32) -> (u64, u64) {
             world.ships[0].pickup.weapon = Some(Weapon::Shield);
         }
         if tick == 20 {
-            world.race.lap += 1;
-            world.race.progress = Some(1.0);
+            world.race[0].lap += 1;
+            world.race[0].progress = Some(1.0);
         }
         world.tick += 1;
 
@@ -497,7 +497,7 @@ fn run(ticks: u32) -> (u64, u64) {
 ///   `write_standing` and `write_race`), both rows reproduced the previous
 ///   constants - `0x1f49_7fb4_96fe_9a08` / `0x08cd_936e_e73d_b4d8` at 60 ticks
 ///   and `0xeab3_a311_b56c_807b` / `0xcebe_2c5c_6232_1c5d` at 600 - bit for
-///   bit. This scenario sets `world.race.lap` directly at tick 20 rather than
+///   bit. This scenario sets `world.race[0].lap` directly at tick 20 rather than
 ///   through `RaceState::complete_lap`/`Standing::update`, so no slot in
 ///   either array is ever written to anything but `None` here; the movement
 ///   is the hash primitive's own shape, not a behaviour change to what this
@@ -532,7 +532,7 @@ fn run(ticks: u32) -> (u64, u64) {
 ///   about either scenario changed. The mode enum also gained a fifth
 ///   discriminant (`Mode::Eliminator => 4` in `hash::write_race`), which
 ///   changes nothing for the four pre-existing modes' own encoding - neither
-///   scenario's `world.race.mode` is ever `Eliminator`.
+///   scenario's `world.race[0].mode` is ever `Eliminator`.
 ///
 ///   **Isolated the way this comment requires.** With `write_u32(*kills)` and
 ///   `write_u32(*deaths)` removed from `write_standing` and nothing else
@@ -579,9 +579,22 @@ fn run(ticks: u32) -> (u64, u64) {
 ///   new byte is `0`. Replaces `0xd98f_5ee7_45c1_2fd8` /
 ///   `0x59cb_0602_21c2_ccf2` at 60 ticks and `0xc88f_9c58_aa40_a211` /
 ///   `0x02af_2239_1229_462f` at 600.
+///
+/// - **Moved 2026-09-16**, when `World::race` widened from one `RaceState` to
+///   `[RaceState; MAX_PLAYERS]` and `World::controllers` joined it - the shared
+///   prerequisite split screen, multiple windows and network play all sit on.
+///   Seven more `RaceState`s and eight `Controller` discriminant bytes per tick
+///   entered the stream. **Isolated the documented way**: with `write_race`
+///   called on `race[0]` alone and `controllers` taken as `let _ =`, and
+///   nothing else changed, the previous constants reproduced bit for bit at
+///   both tick counts for both scenarios. Neither scenario has a second timed
+///   racer or a second human, so slots 1..7 hold `RaceState::default()` for
+///   every tick of both and every controller byte is `0` but slot 0's `1`.
+///   Replaces `0xa31c_f93f_c44f_7004` / `0xe197_c1d8_e0b5_d07e` at 60 ticks and
+///   `0xbe25_d8d5_f406_e799` / `0xc8b7_8f68_8555_be83` at 600.
 const REFERENCE: &[(u32, u64, u64)] = &[
-    (60, 0xa31c_f93f_c44f_7004, 0xe197_c1d8_e0b5_d07e),
-    (600, 0xbe25_d8d5_f406_e799, 0xc8b7_8f68_8555_be83),
+    (60, 0x3a3f_0ad0_4464_ffda, 0x05ff_d20f_72e0_15a2),
+    (600, 0x4de7_25cf_fbe0_9f7f, 0xa4a7_dd7b_018f_de2b),
 ];
 
 /// The volley scenario: a craft at an angle fires a real fanned Rocket volley
@@ -783,9 +796,16 @@ fn run_volley(ticks: u32) -> (u64, u64) {
 ///   scenarios at once. Replaces `0x6b88_42dc_ab26_a704` /
 ///   `0x71ab_7df0_6e22_ba44` at 60 ticks and `0x1d58_0459_a503_3a6b` /
 ///   `0x1077_6477_39e6_016a` at 600.
+///
+/// - **Moved 2026-09-16**, the same `World::race` widening and
+///   `World::controllers` addition [`REFERENCE`]'s own history records,
+///   inherited through the same `write_world` call. No isolation repeated
+///   here, because [`REFERENCE`]'s entry ran it for both scenarios at once.
+///   Replaces `0xc850_5ae4_1c3f_3ed8` / `0x2a14_99ab_3d57_53d8` at 60 ticks
+///   and `0xefed_fabd_1add_c7c9` / `0xbb56_3a8f_efeb_6394` at 600.
 const REFERENCE_VOLLEY: &[(u32, u64, u64)] = &[
-    (60, 0xc850_5ae4_1c3f_3ed8, 0x2a14_99ab_3d57_53d8),
-    (600, 0xefed_fabd_1add_c7c9, 0xbb56_3a8f_efeb_6394),
+    (60, 0xa901_3ebe_47aa_6426, 0xfb1e_cac3_3b77_b824),
+    (600, 0xae8a_645f_7a5b_05af, 0xc8f5_f44f_4c4d_c618),
 ];
 
 #[test]

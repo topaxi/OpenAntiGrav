@@ -26,6 +26,7 @@
 use std::path::PathBuf;
 
 use oag_game::race;
+use oag_gameplay::PlayerInputs;
 
 /// The disc, or `None` on a checkout without one.
 fn image() -> Option<PathBuf> {
@@ -80,7 +81,7 @@ fn clocks(track: &str, ticks: u64) -> Option<Vec<Clock>> {
     // only readable from the tick before.
     let mut previous_start = [None; oag_gameplay::MAX_SHIPS];
     for _ in 0..ticks {
-        race.tick(&oag_gameplay::InputSnapshot::default());
+        race.tick(&PlayerInputs::none());
         // **The world's own tick, not the loop counter.** `Race::tick` increments
         // `world.tick` before it advances the standings, so a lap recorded on the
         // n-th call carries tick n+1 - and reconstructing that offset from out

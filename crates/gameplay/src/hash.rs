@@ -40,7 +40,7 @@ use crate::pickup::Held;
 use crate::projectile::leach_beam::{Beam, Kind as BeamKind};
 use crate::projectile::quake::Wave;
 use crate::projectile::{Projectile, Projectiles};
-use crate::world::{Ship, World};
+use crate::world::{Controller, Ship, World};
 
 /// One 64-bit fingerprint of a whole world.
 ///
@@ -65,6 +65,7 @@ pub fn write_world(hasher: &mut StateHasher, world: &World) {
         ships,
         ship_count,
         race,
+        controllers,
         projectiles,
         quake,
         leach_beam,
@@ -89,7 +90,20 @@ pub fn write_world(hasher: &mut StateHasher, world: &World) {
         write_ship(hasher, ship);
     }
 
-    write_race(hasher, race);
+    // **Every slot, for [`World::ships`]'s reason exactly.** A slot's clock is
+    // simulation state whether or not a HUD draws it, an AI slot's lap counter
+    // already decides the field's order, and hashing only the human ones would
+    // make the stream's shape depend on how the grid was configured - the thing
+    // the fixed arrays exist to prevent.
+    for state in race {
+        write_race(hasher, state);
+    }
+    // Beside them, because who flies a slot changes what the slot does with an
+    // input: the same snapshot steers a `Local` craft and is ignored by an `Ai`
+    // one. See `oag_gameplay::world::Controller`.
+    for controller in controllers {
+        write_controller(hasher, *controller);
+    }
     write_projectiles(hasher, projectiles);
     write_quake(hasher, quake);
     write_leach_beam(hasher, leach_beam);
@@ -356,6 +370,18 @@ fn write_weapon(hasher: &mut StateHasher, weapon: Option<Weapon>) {
             .map_or(0, |index| index as u8 + 1),
     };
     hasher.write_u8(discriminant);
+}
+
+/// One [`Controller`] as a discriminant byte.
+///
+/// Written out rather than taken from `as u8`, so reordering the enum's
+/// variants cannot silently move every committed reference hash.
+fn write_controller(hasher: &mut StateHasher, controller: Controller) {
+    hasher.write_u8(match controller {
+        Controller::Ai => 0,
+        Controller::Local => 1,
+        Controller::Remote => 2,
+    });
 }
 
 fn write_race(hasher: &mut StateHasher, race: &RaceState) {
@@ -650,16 +676,52 @@ mod tests {
     fn the_race_rules_move_the_hash() {
         let mut world = World::new(1);
         let before = hash_world(&world);
-        world.race.lap += 1;
+        world.race[0].lap += 1;
         assert_ne!(before, hash_world(&world));
 
         let mut progressed = World::new(1);
-        progressed.race.progress = Some(0.0);
+        progressed.race[0].progress = Some(0.0);
         assert_ne!(
             hash_world(&World::new(1)),
             hash_world(&progressed),
             "'not yet located' must not hash as 'at the start line'"
         );
+    }
+
+    /// Every slot's clock, not only slot 0's - the widening of 2026-09-16 would
+    /// be worth nothing to a replay if seven eighths of it were outside the
+    /// gate, and hashing only the slot a HUD happens to draw is exactly the
+    /// hole this file exists to close.
+    #[test]
+    fn every_players_race_state_moves_the_hash() {
+        let base = hash_world(&World::new(1));
+        for slot in 0..crate::world::MAX_PLAYERS {
+            let mut world = World::new(1);
+            world.race[slot].lap += 1;
+            assert_ne!(base, hash_world(&world), "slot {slot} is outside the hash");
+        }
+    }
+
+    /// Who flies a slot is state as much as what the slot is doing: the same
+    /// snapshot steers a `Local` craft and is ignored by an `Ai` one, so two
+    /// worlds that disagree here are one tick from disagreeing about a force.
+    #[test]
+    fn who_flies_a_slot_moves_the_hash() {
+        let base = hash_world(&World::new(1));
+        for slot in 0..crate::world::MAX_PLAYERS {
+            for controller in [Controller::Ai, Controller::Local, Controller::Remote] {
+                let mut world = World::new(1);
+                if world.controllers[slot] == controller {
+                    continue;
+                }
+                world.controllers[slot] = controller;
+                assert_ne!(
+                    base,
+                    hash_world(&world),
+                    "slot {slot} as {controller:?} is outside the hash"
+                );
+            }
+        }
     }
 
     /// An inactive slot still counts, because a run that cleared it differs from

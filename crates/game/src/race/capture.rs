@@ -739,11 +739,11 @@ pub fn capture(
                 let standing = &race.sim.world.ships[0].standing;
                 let observation = crate::records::Observation {
                     finished: race.finished(),
-                    place: Some(race.places()[0]),
+                    place: Some(race.player_place()),
                     laps_completed: crate::records::laps_completed(
                         standing.lap,
                         race.finished(),
-                        race.sim.world.race.laps_target,
+                        race.sim.world.laps_target(),
                     ),
                     tick: standing.finish_tick.unwrap_or(race.sim.world.tick),
                     best_lap_ticks: standing.best_lap_ticks,
@@ -915,7 +915,7 @@ fn advance_one_tick(
     {
         race.sim.world.ships[0].pickup.weapon = Some(weapon);
     }
-    race.tick(&snapshot);
+    race.tick(&oag_gameplay::PlayerInputs::single(snapshot));
     // The race's own voices, on the tick that raised them - the same call
     // the windowed loop makes immediately after `Race::tick` in
     // `main::session::frame`. Without it a `--dump-audio` capture of a race
