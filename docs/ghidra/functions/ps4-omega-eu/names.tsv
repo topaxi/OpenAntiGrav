@@ -51,3 +51,14 @@
 0x012ac060	function	NitroRaceManager_ConstructTuning	73	weapons.md
 0x016e53a0	function	Billboard_ConstructResource	87	billboards.md
 0x01391130	function	TrackStartup_Load	85	billboards.md
+0x0135e140	function	PlasmaManager_Update	90	plasma.md
+0x0135cad0	function	Plasma_Init	90	plasma.md
+0x0135d5d0	function	Plasma_Launch	90	plasma.md
+0x0135bd70	function	Plasma_UpdateVisual	82	plasma.md
+0x0135dff0	function	Plasma_Teardown	85	plasma.md
+0x01360970	function	PlasmaManager_Destruct	85	plasma.md
+0x01371990	function	WeaponExplosions_Update	88	plasma.md
+0x013719e0	function	WeaponExplosions_Collapse	85	plasma.md
+0x01371e20	function	WeaponExplosions_Reset	88	plasma.md
+0x01371f10	function	WeaponExplosions_Draw	85	plasma.md
+0x01656130	function	WeaponStats_ParseXml	90	plasma.md
