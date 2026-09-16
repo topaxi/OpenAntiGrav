@@ -356,12 +356,13 @@ impl Race {
         // branch stepped the craft.
         oag_gameplay::disruption::advance(&mut self.sim.world, self.sim.dt);
 
-        // Eliminator's own respawn-and-bookkeeping pass, over the whole
-        // field, and a no-op on every other mode. Before the ending check
-        // just below and before the standings, so a craft respawned this
-        // tick is placed where it is put rather than left mid-explosion for
-        // the lap counter to read. See `crate::race::eliminator`.
-        self.tick_eliminator();
+        // The destroyed-craft pass, over the whole field: Eliminator's
+        // respawn-and-bookkeeping, and a single race's opponent respawn.
+        // Before the ending check just below and before the standings, so a
+        // craft respawned this tick is placed where it is put rather than
+        // left mid-explosion for the lap counter to read. See
+        // `crate::race::eliminator`.
+        self.tick_destroyed_craft();
 
         self.sim.world.tick += 1;
 
@@ -382,11 +383,13 @@ impl Race {
         // `RaceState::eliminate` for the disc text that settles the single
         // race's own answer as the same one.
         //
-        // **Eliminator does not reach this branch at all.** `tick_eliminator`
-        // above has already turned this tick's `Eliminated` craft back into a
-        // `Racing` one via a respawn, before this read - see
-        // `crate::race::eliminator`'s own doc comment for why the mode's own
-        // text rules out `RaceState::eliminate` as its ending.
+        // **Eliminator does not reach this branch at all.**
+        // `tick_destroyed_craft` above has already turned this tick's
+        // `Eliminated` craft back into a `Racing` one via a respawn, before
+        // this read - see `crate::race::eliminator`'s own doc comment for why
+        // the mode's own text rules out `RaceState::eliminate` as its ending.
+        // An *opponent* in a single race never reaches it either, for the
+        // same reason with the original's own states behind it.
         if self.sim.world.mode() != Mode::Eliminator
             && self.sim.world.ships[player].physics.craft_state
                 == oag_physics::CraftState::Eliminated

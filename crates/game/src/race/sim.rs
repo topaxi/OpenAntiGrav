@@ -101,8 +101,9 @@ pub struct RaceSim {
     /// nobody). Eliminator-only bookkeeping - see `crate::race::eliminator`.
     pub(super) last_damager: [Option<u8>; oag_gameplay::MAX_SHIPS],
     /// Seconds left before an Eliminated craft returns to the race, once it
-    /// has reached that state - see `crate::race::eliminator`.
-    pub(super) eliminator_respawn_timer: [f32; oag_gameplay::MAX_SHIPS],
+    /// has reached that state - see `crate::race::eliminator`. Hashed: a
+    /// craft one tick out on its respawn is one tick out on everything after.
+    pub(super) respawn_delay: [f32; oag_gameplay::MAX_SHIPS],
     /// How many barrel rolls each craft has armed this race, and what they
     /// cost it.
     ///

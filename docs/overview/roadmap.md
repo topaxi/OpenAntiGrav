@@ -730,10 +730,20 @@ seen from the authoring side.
       craft** - `oag_race::Standing` carries its own clock and best lap, so the
       player is no longer the only craft that is timed.
 
-      **What is left**: reaction latency, and adaptation between races - which
-      was blocked on per-opponent lap times and is not any more. Also still
-      unread: the unit semantics of the original's thrust numbers, which needs a
-      live read under PPSSPP rather than more decompilation.
+      **Landed since that paragraph, too**: reaction latency (2026-08-26,
+      [ai.md](../gameplay/ai.md#reaction-latency-a-driver-takes-time-to-notice))
+      and, on 2026-09-16, **a wrecked opponent comes back** in a single race
+      the way the original's own craft states bring it back - state 5's
+      1.5 s, state 6's 0.8 s, a full pool and a place on the line
+      ([shield.md](../ghidra/functions/psp-pulse-usa/shield.md#who-ends-a-single-race-on-the-destroyed-bit-and-who-comes-back));
+      before that a wrecked opponent coasted to a stop and stayed there.
+      **What is left**: adaptation between races - specified on
+      [ai.md](../gameplay/ai.md#rubberbanding-and-the-config) as the
+      `adaptive` key and deliberately not built, since it is this project's
+      own mechanic rather than a recovered one - and the *"contender
+      eliminated"* announcer line a respawn plays. Also still unread: the unit
+      semantics of the original's thrust numbers, which needs a live read
+      under PPSSPP rather than more decompilation.
 - [~] Audio, including the **positional** classes a track authors:
       `sound` `0x3e1`, `soundcone` `0x3e9` and `speaker` `0x3cc`. The banks and
       waveforms decode already (M1).

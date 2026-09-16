@@ -370,6 +370,50 @@ same data region, which is itself confirmation the correction is right.
 section already puts it at confidence 80 as "zero for the local player, set
 for everyone else", and states 6 and 8 above both read cleanly against that.
 
+### Who ends a single race on the destroyed bit, and who comes back
+
+Read 2026-09-16 alongside `Ship_AddShield`'s callers. State 6 runs in *every*
+mode - `Ship_UpdateDestroyed` picks state 8 only for modes `8`/`0x12` - so
+the question [race-modes.md](../../../gameplay/race-modes.md) settled off the
+results strings ("a destroyed craft is out of a single race") needed a
+reader of the bit. It has one. `ArcadeRace_Update` (`0x0882c48c`, the same
+five-way dispatch on `mode+0x7c8` every mode object has) hands state `2`,
+racing, to `ArcadeRace_UpdateRacing` (`0x0882c5c4`):
+
+```c
+if (0 < mode->state /* +0x7cc */ && mode->state < 2) {
+    Entity *player = mode->player;                              // +0x2c0
+    if ((player->flags /* +0x860 */ & 0x1000) || Ship_State(player) == 2) {
+        Hud_Hide(g_hud);                                        // 0x0881a128
+        Race_BuildEndRaceResult(mode, 0);                       // 0x08827b4c
+        RaceMode_SetState(mode, 3);
+    }
+}
+```
+
+So the **player's** destruction ends an Arcade race the tick state 5 raises
+the bit - before state 6's two seconds can put the craft back - and the
+results row reads "Ship destroyed" because the race is already over. An
+**AI craft** has no mode object watching it: it sits out state 5's `1.5` s
+and state 6's `0.8` s, then `Ship_UpdateRespawn` relocates it and refills it,
+and it races on. Which is exactly what `Ship_UpdateRespawn`'s own `cont_elim`
+line is for: on a respawn while the race manager is still racing
+(`g_race_manager+0x7c8 == 2`) in any mode but Elimination or Demo, it plays
+the announcer's *"contender eliminated"* - the player hears a rival go down
+and come back. Confidence **82** for both names (the object is identified by
+its address range and its HUD file, per [state-machine.md](state-machine.md),
+and the body is a clean decompile); race-modes.md's 75 for the ending rises
+to that with it.
+
+**Ported**: `Race::tick_destroyed_craft` brings an opponent back after
+`DESTROYED_DWELL + AI_RESPAWN_WAIT` (`1.5 + 0.8` s) with a full pool, and the
+player's own destruction still ends the race through `RaceState::eliminate`.
+Two stated departures: the respawn pose is `Race::respawn`'s racing-line one
+rather than state 6's corridor midpoint (`pos + lateral * (bound_r - bound_l)
+* 0.5`, five up, facing forty down the tangent), and neither `cont_elim` nor
+the player's `RESET` cue is raised - both are announcer-bank lines this
+build's cue table does not carry yet.
+
 **What would raise every confidence number in this table**: a live PPSSPP
 capture of an actual false start (hold thrust before the lights, per the
 user's own description of the original) with a watchpoint on `entity->0x874`
@@ -742,6 +786,10 @@ call.
 
 ## History
 
+- 2026-09-16: **`ArcadeRace_Update` / `ArcadeRace_UpdateRacing` named** -
+  the reader of the destroyed bit that ends a single race for the player,
+  and the reason an AI craft, which nothing watches, respawns through state
+  6 instead. Ported as the single race's opponent respawn.
 - 2026-09-16: **`Ship_AddShield`'s four callers enumerated**, closing "the
   pit-lane recharge" (there is none) with the one caller the port had
   guessed at: `Ship_RefillLapShield` (`0x0883de30`) gives back 20 % of the

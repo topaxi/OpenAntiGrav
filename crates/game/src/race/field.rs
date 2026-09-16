@@ -337,10 +337,11 @@ impl Race {
             // `damage::advance_state` runs *inside* the step and the destroyed
             // sequence has to finish.
             //
-            // What happens next is the gap: nothing reads an opponent's
-            // `Eliminated`, because the explosion, the respawn and the
-            // elimination bookkeeping are all unbuilt. So it coasts, settles and
-            // is passed. See `oag_physics::damage::CraftState`.
+            // What happens next is `Race::tick_destroyed_craft`'s: after
+            // state 5's dwell and state 6's wait the craft is put back on
+            // the line with a full pool, the way `Ship_UpdateRespawn` does
+            // for any craft no mode object is watching. See
+            // `oag_physics::damage::CraftState` and `crate::race::eliminator`.
             let pilot = self.sim.ai_pilots[slot];
             let field = self.field_for(slot, &places);
             let ship = &mut self.sim.world.ships[slot];

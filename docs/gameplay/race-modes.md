@@ -586,11 +586,15 @@ reads *"Deaths:"* and `ER_YOU_ELIM` *"You have been eliminated!"*, both beside
 `ER_ELIM_COM` *"Eliminator complete - "*. A mode that counts deaths is a mode
 you come back in; a single race has no such row.
 
-**So `oag_race::RaceState::eliminate` ending a single race is right**, and the
-`CraftState::Eliminated` doc's "the original moves on from here after 1.5 s,
-into a respawn or the Eliminator's kill bookkeeping" resolves to the second
-branch for the modes this engine runs. What is still unread is what the original
-does with the 1.5 s itself.
+**So `oag_race::RaceState::eliminate` ending a single race is right**, and as
+of 2026-09-16 the reader of the bit is found: `ArcadeRace_UpdateRacing`
+(`0x0882c5c4`) ends the race the moment the *player's* destroyed bit is set,
+confidence 82 ([shield.md](../ghidra/functions/psp-pulse-usa/shield.md#who-ends-a-single-race-on-the-destroyed-bit-and-who-comes-back)).
+**An opponent is a different matter**: nothing watches its bit, so it runs
+the original's own state 5 (`1.5` s) and state 6 (`0.8` s for an AI craft)
+and `Ship_UpdateRespawn` puts it back on the track with a full pool - and
+the announcer says *"contender eliminated"*. `Race::tick_destroyed_craft`
+does the respawn; the announcer line is not wired.
 
 ## Eliminator
 
