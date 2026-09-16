@@ -56,7 +56,17 @@ impl Setup {
             course: None,
             start_position: None,
             hd_trail: None,
-            shield_palette: oag_render::shield::PULSE_PALETTE,
+            // No shield to draw either, and `Palette` has no measured "empty"
+            // constant of its own - only Pulse's and HD's real, measured
+            // colours - so a zeroed literal is the honest absence here,
+            // matching every other visual field on this constructor rather
+            // than picking one title's real palette for a race that draws
+            // nothing.
+            shield_palette: oag_render::shield::Palette {
+                activation: [0.0; 4],
+                target: [0.0; 4],
+                hit: [0.0; 4],
+            },
             collision: CollisionWorld::new(),
             handling: Handling::ZERO,
             // Zero travel at zero speed: the flaps neither open nor move.
