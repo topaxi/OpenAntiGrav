@@ -15,6 +15,15 @@ path = "src/lib.rs"
 name = "oag-game"
 path = "src/main.rs"
 
+# The tick loop with no renderer, no window and no disc, over `[lib] oag_game`.
+# A second binary in this crate rather than a crate of its own, because
+# `workspace-layout.md`'s rule 2 says no crate may depend on `oag-game` - so a
+# headless server cannot import `oag_game::race` from outside, and this is the
+# path that needs no new dependency edge. See the binary's own module doc.
+[[bin]]
+name = "oag-headless-sim"
+path = "src/bin/headless_sim.rs"
+
 [dependencies]
 oag-display.workspace = true
 oag-rcs.workspace = true

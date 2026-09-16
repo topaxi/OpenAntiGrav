@@ -21,6 +21,7 @@ mod cues;
 mod field;
 mod hash;
 mod hd_sprite;
+mod headless;
 mod held_buttons;
 mod load;
 mod mode_override;
