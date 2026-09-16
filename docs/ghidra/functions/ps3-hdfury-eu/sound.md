@@ -286,6 +286,128 @@ Confidence **78**: the resolve-and-loop control flow is as clean as the other
 two, but "stop" is inferred from the unlink-and-release shape rather than from
 a string naming it, so it sits a rung below `0x08`.
 
+## The pitch: HD's own scale and base rate, 2026-09-16
+
+`psp-audio.md`'s "Neither is HD's" caveat asked what `Scream_KeyOnVoice`
+(`0x00630310`) computes from a descriptor's `+0x02`/`+0x03` and what it hands
+the mixer as a rate. It runs the **same three-function chain** `Scream_OpKeyOn`
+does for the codec split above, in the `param_2 == 0` branch:
+
+```text
+Scream_KeyOnVoice        0x00630310   note, fine = FUN_0062e998(wf, bend=+0x48, offset=+0x4a, note=+0x18, fine=+0x19)
+  Scream_ComputeVoiceNote  0x0062e998   the same bend/offset modulation as PSP's function of the same role
+  Scream_VoicePitch        0x0062ec38   abs() of a negative centre, then * 0x10f4a >> 16
+    Scream_NoteToPitch       0x0062ea98   the table walk, byte-identical tables
+  CellMs_SetVoiceRate      0x006332e0   pitch -> Hz (* 48000/4096), validates, commits
+```
+
+**The table walk is untouched.** `Scream_NoteToPitch`'s semitone table
+(`0x0091e71c`, 12 entries) and fine table (`0x0091e74c`, 128 entries), read
+directly off HD's memory, are byte-for-byte `psp-pulse-usa`'s
+`g_scream_semitone_table`/`g_scream_fine_table` (`0x8000`, `0x879c`, ...,
+`0xf1a1` and `0x8000`, `0x800e`, ..., checked against both tables' own closed
+forms in `crates/formats/src/sblk/pitch/tests.rs`). What differs is two
+platform-specific constants, both read from disassembly rather than guessed:
+
+- **`Scream_VoicePitch`'s scale is `0x10f4a`, not PSP's `0x1278b`.**
+  Disassembly of `0x0062ec38`: `lis r0,0x1; ori r0,r0,0xf4a; mullw r3,r3,r0;
+  rlwinm r3,r3,0x10,0x10,0x1f` - an immediate, not a memory read, so nothing
+  to cross-check against the per-function-TOC defect below. `0x10f4a / 0x10000
+  = 1.059875`, close to but not exactly a semitone (`2^(1/12) = 1.059463`) -
+  recorded as read, same as PSP's own unexplained `0x1278b`.
+- **The base rate is 48,000 Hz, not the PSP SAS core's 44,100.**
+  `CellMs_SetVoiceRate` (`0x006332e0`, called from `Scream_KeyOnVoice` right
+  after the pitch chain) computes `iVar3 = (int)((float)pitch *
+  fRam008c02c4)` and, past a buffer-size/rate validation this project has not
+  fully traced, hands `iVar3` to `_opd_FUN_0060e3d0` - the value is bounds-
+  checked against `96,000` and `0x5dc00` (384,000), both sane ceilings for a
+  rate in Hz and nonsensical for anything else, which is why this is read as a
+  direct pitch-to-Hz conversion rather than some other unit. `fRam008c02c4` is
+  the float at `0x008c02c4`, `0x413b8000` = `11.71875` = `48000 / 4096` -
+  **independently confirmed** with `scripts/ps3-toc.py resolve 0x006332e0
+  0x2f00`, which agrees with Ghidra's own TOC resolution
+  (`0x008c02c4 -> 0x413b8000`) rather than trusting it alone, per
+  [memory.md](memory.md)'s warning that this binary's TOC resolution is not
+  reliable by default.
+
+### Corpus check: the largest cluster lands exactly on 48,000 Hz
+
+`cargo run -p oag-formats --example hd_rate_probe`, re-run with the new walk
+wired into `Sound::sample_rate` (the walk is selected by the bank's own
+[`ByteOrder`](../../../../crates/formats/src/byte_order.rs), `Big` on every HD
+bank):
+
+| | PSP walk (before) | HD's own walk (now) |
+| --- | ---: | ---: |
+| Within 0.2% of a standard rate | 5,763 of 6,548 | 5,773 of 6,548 |
+| `(centre -60, fine 0)`, the largest single cluster, 1,803 descriptors | 48,051 Hz | **48,000 Hz exactly** |
+
+The near-standard-rate *count* barely moves - both walks are close enough
+that most descriptors stay on the same side of the 0.2% line - but which
+descriptors are exact swaps: under the borrowed PSP arithmetic, 1,803
+descriptors landed 51 Hz off a round number; under HD's own arithmetic, that
+same cluster is exact and the previously-exact `fine 66` family (`(centre
+-62, fine 66)`, 1,313 descriptors: 44,100 -> 44,051, 0.11% off) is not. A
+wrong reading does not snap 1,803 descriptors onto a round number by
+coincidence, and reproducing the pitch-scale family (`fine` clustered at
+`0`/`124`/`126`) landing exactly while the note/fine-modulation family
+(`fine` clustered at `65`-`69`) lands 0.1% off both read as intentional
+rather than as this port choosing wrong: 0.1% is about two cents, inaudible,
+and matching the real engine is the rule over a tidier-looking substitute.
+
+### The 775 that land nowhere near a standard rate are not new
+
+**Neither walk resolves them, and re-checking says they were never expected
+to.** Grouped by `centre_fine` (`by_fine` in the probe), every fine value that
+is far under HD's walk is *also* far under the PSP walk, by nearly the same
+margin (both walks agree with each other to within ~0.1% on the same
+descriptor, the same gap the exact clusters show) - they are not two
+different failure modes, they are the same non-round tail this project
+already has a precedent for tolerating: `psp-audio.md` already documents
+`speech.bnk`'s 38 PSP descriptors landing at 18,002 Hz and the circuit
+ambiences at 15,569 Hz, neither a standard rate and neither read as a bug.
+HD's own 32-descriptor `(centre -45, fine 0)` cluster - the "32 at 114,287 Hz"
+the format page flagged - resolves to 114,188 Hz under HD's own walk, a 0.09%
+move, the same small shift every other descriptor gets. It is a large,
+consistent transposition (about 15.7 semitones above the `-60` reference),
+authored identically across 32 waveforms, which reads as a deliberately
+high-pitched sound (a chime or alert, going by the count) rather than a
+decode fault: both walks agree on it closely, which is corroboration, not a
+discrepancy to resolve.
+
+**PS-ADPCM and 16-bit PCM are not two different rate schemes**: 486 of 5,381
+PS-ADPCM descriptors (9.0%) and 289 of 1,167 PCM16 descriptors (24.8%) are far
+from a standard rate under HD's walk, both codecs represented in the far set,
+so codec type does not gate which formula applies.
+
+### Confidence: 90
+
+A decompiled chain with every link read, immediates confirmed by direct
+disassembly (`Scream_VoicePitch`'s scale) and independently re-resolved
+against the per-function TOC (`CellMs_SetVoiceRate`'s base-rate float,
+matching Ghidra's own resolution rather than trusting it alone), tables read
+straight off memory and checked byte-for-byte against `psp-pulse-usa`'s, and
+a corpus invariant (the largest cluster landing on an exact standard rate)
+that was not fitted to the data. Held at 90 rather than pushed to the
+established trio's precedent for the same reason that trio was capped there:
+**no runtime trace exists for this binary** - there is no RPCS3 breakpoint
+confirming what `CellMs_SetVoiceRate` actually hands the mixer, the way
+`__sceSasSetPitch` was confirmed live on the PSP. A breakpoint at
+`_opd_FUN_0060e3d0` (`0x0060e3d0`), reading its rate argument on a driven race
+capture the way the PSP capture read `__sceSasSetPitch`, is what would move
+this to the 95+ band; see
+[the RPCS3 debugger doc](../../../reverse-engineering/rpcs3-debugger.md) for
+the harness.
+
+### Names taken
+
+| Address | Kind | Name | Confidence |
+| --- | --- | --- | --- |
+| `0x0062e998` | function | `Scream_ComputeVoiceNote` | 90 |
+| `0x0062ea98` | function | `Scream_NoteToPitch` | 90 |
+| `0x0062ec38` | function | `Scream_VoicePitch` | 90 |
+| `0x006332e0` | function | `CellMs_SetVoiceRate` | 90 |
+
 ## Guard `0x22`: a three-way variable-versus-immediate skip
 
 ```c

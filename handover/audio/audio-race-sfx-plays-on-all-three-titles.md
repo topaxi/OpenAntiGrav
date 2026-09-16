@@ -11,6 +11,19 @@
   [psp-audio.md](../../docs/formats/psp-audio.md#the-rate-each-waveform-plays-at).
   Still open from it: the PS2's own arithmetic (`SCREAM.IRX` unread, its
   byte-identical banks play through the PSP walk).
+- ~~HD plays every SFX through the PSP's own scale and base rate, unverified
+  for HD.~~ **HD's own walk read 2026-09-16, confidence 90**: `Scream_KeyOnVoice`
+  (`ps3-hdfury-eu`, `0x00630310`) runs the identical three-function chain on
+  byte-identical semitone/fine tables, with its own negative-centre scale
+  (`0x10f4a`, not the PSP's `0x1278b`) and its own core rate (48,000 Hz, not
+  44,100) - both read from disassembly, the base rate independently
+  re-resolved through the per-function TOC. `Sound::pitch`/`sample_rate` now
+  switch on the bank's own byte order. See
+  [ps3-hdfury-eu/sound.md](../../docs/ghidra/functions/ps3-hdfury-eu/sound.md#the-pitch-hds-own-scale-and-base-rate-2026-09-16)
+  and [psp-audio.md](../../docs/formats/psp-audio.md#the-rate-each-waveform-plays-at).
+  Still open from it: no runtime trace on this binary (an RPCS3 breakpoint at
+  `_opd_FUN_0060e3d0` would settle it), and HD's volume byte still reads
+  `-27..=127` against the PSP's documented `60..=127`, unresolved.
 - ~~Which alternate sounds play is decoded on HD but not corroborated on
   PSP/PS2.~~ **Corroborated on PSP 2026-09-04** (`0x19`, confidence 88 both
   sides now) and wired into `Banks::pick`

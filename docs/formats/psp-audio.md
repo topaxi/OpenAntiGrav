@@ -1000,28 +1000,55 @@ SPU2 base lands on the same rates from the same bytes is open, and the
 cross-check this page once proposed - `speech.bnk` against the PS2's
 `PRERACE.WAD` voice archive - would settle it.
 
-**Neither is HD's, and HD is the corpus to be careful on.** `Bank::sounds`
-reads the two bytes at `+0x02`/`+0x03` by position, and HD's byte-swapped
-container keeps them there: over its 50 banks and 6,548 distinct key-on
-descriptors (`cargo run -p oag-formats --example hd_rate_probe`), every
-centre note is negative and **5,763 land within 0.2% of a standard rate**
-through the PSP walk - 1,803 at 48,051 Hz from `(-60, 0)`, 1,313 at 44,100,
-1,131 at 22,050, 557 at 32,000. That says the bytes are where the PSP keeps
-them; it does not say the PS3's SCREAM applies the same `0x1278b` scale, and
-28% of HD's descriptors sitting on the one pair that scale turns into
-"48 kHz" is exactly the pattern a native 48 kHz engine with no such scale
-would also produce. Two figures from the same probe cut the other way and
-are recorded rather than dropped: **785 of HD's descriptors (12%) land
-nowhere near a standard rate** through the PSP walk, 32 of them at
-114,287 Hz (pitch `0x2977`, legal for SAS but a 2.6x speed-up that would be
-absurd as an authored rate), and HD's **volume byte runs `-27..=127`**, where
-the PSP's is `60..=127` and the documented sentinels stop at `-5` - so
-[`Sound::volume`](../../crates/formats/src/sblk.rs)'s `60..=127` claim is a
-PSP-USA measurement and HD does not honour it. Neither moves the byte
-positions (a one-byte shift would have made every centre note positive),
-but both say HD's own engine may well read these bytes differently.
-`oag_game` plays HD at these rates on the strength of the byte positions
-alone; HD's own `EBOOT.elf` note-to-pitch is unread.
+**HD's own `Scream_KeyOnVoice` is read now, 2026-09-16, confidence 90.**
+`Bank::sounds` reads the two bytes at `+0x02`/`+0x03` by position, and HD's
+byte-swapped container keeps them there - `Scream_KeyOnVoice` (`0x00630310`,
+`ps3-hdfury-eu`) runs the exact same three-function chain the PSP does
+(compute-note, table-walk, queue-pitch), on **byte-for-byte identical
+semitone and fine tables**, read straight off HD's memory. What differs is
+two platform-specific constants, both confirmed from disassembly rather than
+guessed: `Scream_VoicePitch`'s negative-centre scale is `0x10f4a` (an
+immediate, `lis r0,0x1; ori r0,r0,0xf4a`), not the PSP's `0x1278b`, and the
+core rate a pitch of `0x1000` plays at is **48,000 Hz**, not 44,100 - read off
+a float literal and independently re-resolved through the per-function TOC
+(`scripts/ps3-toc.py resolve`) rather than trusted from Ghidra's decompiler
+alone. See
+[`ps3-hdfury-eu/sound.md`](../ghidra/functions/ps3-hdfury-eu/sound.md#the-pitch-hds-own-scale-and-base-rate-2026-09-16)
+for the chain, the disassembly and the independent TOC check.
+
+`oag_formats::sblk::pitch` carries both walks (`sas_pitch`/`sample_rate_hz`
+for the PSP's, `sas_pitch_scaled`/`sample_rate_hz_at` generalized for HD's
+own `HD_NEGATIVE_CENTRE_SCALE`/`HD_SAMPLE_RATE`), and `Sound::pitch`/
+`Sound::sample_rate` pick the pair off the bank's own byte order - `Big` on
+every HD bank, the same signal `Bank::order` already carries. Re-run against
+the real corpus (`cargo run -p oag-formats --example hd_rate_probe`, 50 banks,
+6,548 descriptors): the near-standard-rate count barely moves (5,763 -> 5,773
+of 6,548), but which descriptors are exact does - the largest single cluster,
+1,803 descriptors at `(centre -60, fine 0)`, moves from 48,051 Hz (0.1% off,
+under the borrowed PSP arithmetic) to **exactly 48,000 Hz** under HD's own.
+1,313 descriptors at `(centre -62, fine 66)` move the other way, from an exact
+44,100 to 44,051 (0.1% off) - a swap, not a net improvement in round-number
+count, which is exactly what confirms it: a wrong scale does not snap 1,803
+descriptors onto an exact rate by coincidence.
+
+**The 775 descriptors (12%) that land nowhere near a standard rate under
+either walk are not new evidence of a decode error.** Both walks agree with
+each other on every one of them to within about 0.1%, the same gap the exact
+clusters show, so this is the PSP's own already-documented tail (`speech.bnk`
+at 18,002 Hz, the circuit ambiences at 15,569 Hz, neither a standard rate and
+neither a bug) recurring on HD rather than a second failure mode. The
+32-descriptor `(centre -45, fine 0)` cluster this page previously flagged at
+"114,287 Hz, a 2.6x speed-up that would be absurd as an authored rate" comes
+out at 114,188 Hz under HD's own walk - a 0.09% move, in line with every other
+descriptor - which reads as a real, deliberately high-pitched authored sound
+(consistent across all 32 instances) rather than a decode fault, now that
+both walks corroborate each other on it rather than disagreeing.
+
+**HD's volume byte still runs `-27..=127`**, where the PSP's is `60..=127`
+and the documented sentinels stop at `-5` - so
+[`Sound::volume`](../../crates/formats/src/sblk.rs)'s `60..=127` claim is
+still a PSP-USA measurement, unresolved by this pass and open for a future
+one.
 
 ## The PS2 ships the same container, byte for byte
 

@@ -87,3 +87,41 @@ fn the_scale_is_not_a_rate_ratio_anyone_would_guess() {
     assert_ne!(NEGATIVE_CENTRE_SCALE, from_48k_and_a_semitone);
     assert_eq!(from_48k_and_a_semitone, 0x12735);
 }
+
+/// Wipeout HD's own walk: same tables, `HD_NEGATIVE_CENTRE_SCALE` in place of
+/// `NEGATIVE_CENTRE_SCALE`, `HD_SAMPLE_RATE` in place of `SAS_SAMPLE_RATE`.
+/// Values cross-checked against `cargo run -p oag-formats --example
+/// hd_rate_probe` on the real disc - see `docs/ghidra/functions/
+/// ps3-hdfury-eu/sound.md`'s "The pitch" section.
+#[test]
+fn hd_s_own_scale_lands_its_largest_cluster_on_an_exact_rate() {
+    // `(centre -60, fine 0)`, HD's single largest key-on cluster (1,803 of
+    // 6,548 descriptors): 48,051 Hz under the PSP's borrowed scale, exactly
+    // 48,000 under HD's own.
+    assert_eq!(
+        sas_pitch_scaled(-60, 0, DEFAULT_NOTE, 0, HD_NEGATIVE_CENTRE_SCALE),
+        0x1000
+    );
+    assert_eq!(sample_rate_hz_at(0x1000, HD_SAMPLE_RATE), 48_000);
+}
+
+#[test]
+fn hd_s_own_scale_moves_the_psp_s_exact_rates_off_by_about_a_tenth_of_a_percent() {
+    // `(centre -62, fine 66)`, PSP's own "44,100 Hz exactly" descriptor -
+    // HD's own scale puts it 0.11% off instead, inaudible and expected: the
+    // two platforms' scales are close but not equal.
+    assert_eq!(
+        sas_pitch_scaled(-62, 66, DEFAULT_NOTE, 0, HD_NEGATIVE_CENTRE_SCALE),
+        0xeaf
+    );
+    assert_eq!(sample_rate_hz_at(0xeaf, HD_SAMPLE_RATE), 44_051);
+}
+
+#[test]
+fn the_hd_scale_is_close_to_but_not_a_semitone() {
+    // Recorded so the number is not "corrected" to the semitone ratio it
+    // resembles: `0x10f4a` is read off `lis r0,0x1; ori r0,r0,0xf4a` at
+    // `0x0062ecb0`/`0x0062ecb8`, not derived.
+    let semitone = (65536.0 * 2f64.powf(1.0 / 12.0)) as u32;
+    assert_ne!(HD_NEGATIVE_CENTRE_SCALE, semitone);
+}
