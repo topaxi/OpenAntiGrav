@@ -1665,6 +1665,22 @@ So the node tree, the scene hierarchy, the track payloads and the class space ar
 all one format across three consoles and three titles; the vertex encoding is the
 part that has been rewritten every time.
 
+## The Omega Collection's PS4 build reads the same version-6 `.vex`, unmodified
+
+**Confidence 90, measured 2026-09-16 (`lane/omega-rcs`).** `omega-ps4-eu`'s
+`data03.psarc` carries `Data/art/published/hdships/auricom/Ship_LOD.vex`
+(7,792 bytes): `VEXX` at `+0x0c`, little-endian - this format's own byte-order
+sniff already handles that with no code change, since it reads the magic's
+byte order rather than assuming one. `oag_vex::vex::nodes` decodes it to four
+real nodes with real names (`world`, `persp1`, `Ship_root`, `EngineShape`),
+the last a `Mesh` (class `293`) child of `Ship_root` - a real node tree, not
+noise. This is the positive half of the byte-order question the psarc lane's
+own session opened alongside `.rcsmodel`'s: `.gnf` and `.vex` are both stored
+little-endian on this platform where PS3 stores them big-endian, and `.vex`'s
+own magic-sniffed reader already took that in stride; `.rcsmodel`/
+`.rcsmaterial` are the two formats that turned out **not** to be a simple
+byte-order flip - see [rcsmodel.md](rcsmodel.md#the-ps4-omega-collection-a-different-container-not-a-byte-swap-of-this-one).
+
 ## Other extensions found
 
 `.dat`, `.svml` (a markup format under `Data\SVML\`), `.tga` (under

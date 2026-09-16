@@ -205,14 +205,30 @@ about a second, decompression-shaped problem on top of it.
   extracted this session - see
   [omega-ps4-patch-adds-four-archives-not-in-the-base-pkg.md](omega-ps4-patch-adds-four-archives-not-in-the-base-pkg.md),
   split out to hold that finding.
-- **A 75-file sample of PS4 `.rcsmodel` entries all fail
-  `oag_rcs::rcsmodel::Model::parse`'s big-endian version check** - consistent
-  with, not proof of, this format being stored little-endian on PS4 (every
-  other PS4-native payload checked so far - `.gnf`, `.vex` - is little-endian
-  where PS3's own copies are big-endian). `.vex` itself decodes unmodified
-  through `oag_vex::vex`, whose byte-order detection already reads the
-  file's own magic rather than assuming a platform. `oag-rcs` is left
-  untouched - out of this thread's own lane.
+- **Closed, negative, 2026-09-16 (`lane/omega-rcs`): PS4 `.rcsmodel`/
+  `.rcsmaterial` are not this format stored little-endian.** The byte-order
+  hypothesis this bullet used to carry is withdrawn: every real sample opens
+  a genuine new tag (`0xCA5CADED`/`0xCA5CADE5` little-endian, "cascaded" in
+  hex-speak) rather than the PS3 version word with its bytes reversed, and no
+  field past the tag matches this page's PS3 layout at either byte order.
+  `.vex` **is** the simple byte-order case, confirmed directly this session
+  (`Data/art/published/hdships/auricom/Ship_LOD.vex` decodes to four real,
+  named nodes through `oag_vex::vex` unmodified) - so `.rcsmodel`/
+  `.rcsmaterial` are the exception, not `.vex` the rule. `psarc_oracle` now
+  scores the tag the same way it scores `.vex`'s `VEXX` and `.gnf`'s `GNF `:
+  77 of 250 `.rcsmodel` and 439 of 1,270 `.rcsmaterial` disc entries carry
+  it, and 91%/88% of those still resolve one of this project's own
+  `~crc32` name-hash preimages somewhere in the file - genuine material data
+  in PS3's own hash namespace, wrapped in an unread container. No parser
+  exists for that container: the bytes past the tag include an offset table,
+  an embedded node name (`OutlineShape`) and a 4x4 identity matrix that this
+  format's PS3 shape does not carry at all, which is real reverse-engineering
+  work this session's evidence does not support rushing. Full measurements:
+  [rcsmodel.md](../../docs/formats/rcsmodel.md#the-ps4-omega-collection-a-different-container-not-a-byte-swap-of-this-one),
+  [rcsmaterial.md](../../docs/formats/rcsmaterial.md#the-ps4-omega-collection-wraps-this-in-a-different-unread-container).
+  `oag_rcs::rcsmodel`/`oag_rcs::rcsmaterial` are left untouched: the PS3
+  ground-truth suites stay exactly as they were, and no drawing was
+  attempted on the PS4 side since no parser exists to feed one.
 - `GameModes/*.cpp` (`GameMode_ModeManager`, `GameMode_RaceManager`,
   `GameMode_TournamentModeManager`) has no obvious Vita/PS3 counterpart in
   the `.cpp`-path census - worth checking whether Vita's own
@@ -309,3 +325,17 @@ about a second, decompression-shaped problem on top of it.
   (it is a distinct `GameModes/` directory, not a rename of `Backend/General/`'s
   own tags - both exist side by side, and `GameModeRaceManager_Construct` is
   a real, separate, decompiled function).
+- **`.rcsmodel`/`.rcsmaterial`'s PS4 container itself, past the tag.** This
+  session (`lane/omega-rcs`, 2026-09-16) found and named the tag
+  (`0xCA5CADED`/`0xCA5CADE5`) and confirmed the payload past it still hashes
+  material names in PS3's own `~crc32` namespace, but left the container's
+  own fields unread beyond an offset table shape, a constant per-block tag
+  (`0xe35e00df`, `0xe9f17935` - checked against ~40 plausible type-name
+  candidates, no hit) and one file's embedded node name (`OutlineShape`) and
+  4x4 identity matrix. Reading it for real needs more samples than one
+  session found tag-valid *and* present at an identical PS3 path (only
+  `detonator/ship_lod.rcsmodel` qualified), and ideally a PS4 executable
+  reader to compare against - `eboot.bin` has 20,941 functions and none
+  named yet for asset loading of this specific type. See
+  [rcsmodel.md](../../docs/formats/rcsmodel.md#the-ps4-omega-collection-a-different-container-not-a-byte-swap-of-this-one)
+  for exactly what is and is not measured.

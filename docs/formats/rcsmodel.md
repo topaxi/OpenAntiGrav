@@ -1836,6 +1836,168 @@ Note that the first of those is *true* and still not the answer: the texture is
 stored the right way up, and the flip is in the shader. Checking the texture
 was what made the shader the only place left to look.
 
+## The PS4 Omega Collection: a different container, not a byte-swap of this one
+
+**2026-09-16, `lane/omega-rcs`.** The prior session's own open item asked
+whether PS4's `.rcsmodel` was this format stored little-endian, the way
+[`.gnf`](gnf.md) and [`.vex`](vex.md#the-omega-collections-ps4-build-reads-the-same-version-6-vex-unmodified)
+are - it is not, and the byte-swap hypothesis is withdrawn. **Measured
+directly**: `Data/art/published/hdships/detonator/ship_lod.rcsmodel` on
+`omega-ps4-eu`'s `data03.psarc` (24,624 bytes) opens
+
+```text
+edad5cca 00010000 02000000 80010000
+60000000 00000000 00000000 00000000
+```
+
+against its PS3 twin `/data/ships/detonator/ship_lod.rcsmodel` on
+`hdfury-ps3-eu`'s `DATA00.PSARC` (17,476 bytes), which opens
+
+```text
+000a0000 000004f4 ffffffff 00000000
+```
+
+Reading the PS4 header's first word little-endian gives `0xCA5CADED` -
+readable as hex-speak ("cascaded"), not this format's `0x000a0000` version
+word with its bytes reversed (that would be `0x0000000a`). **This is a new
+magic, not the old version word byte-swapped.**
+
+### The magic, confirmed across the whole disc
+
+**Confidence 85** - structural, not decompiled or traced: consistent across
+every real sample checked. **The low byte is not one-per-extension** -
+checked against two more extensions the PS4 census already knew about
+(`docs/formats/README.md`'s `.rcsskeleton`/`.rcsanimclip` rows): both open
+the identical `0xCA5CADED` `.rcsmodel` carries, not a distinct tag of their
+own (6 of 11 `.rcsskeleton` and 11 of 17 `.rcsanimclip` disc entries carry
+it). Only `.rcsmaterial` uses the other value, `0xCA5CADE5`. So the family is
+two values across four extensions, not four - `.rcsmodel`/`.rcsskeleton`/
+`.rcsanimclip` share one wrapper and `.rcsmaterial` gets its own. **`.col`
+(the fifth PS4-only extension this census found) was checked and is not a
+member**: its one real sample opens `6B 64 74 72` instead, plausibly a k-d
+tree tag given [`.vex`'s own description](vex.md) of 2048's collision format
+- not chased further, out of this session's scope. Extending
+`crates/assets/examples/psarc_oracle.rs` (which already scores `.vex`/`.gnf`
+this way) to check for the tag turns the PS4 `.rcsmodel`/`.rcsmaterial`
+population from "no magic, zero-vs-nonzero only" into the same three-bucket
+read the other two formats get - see
+[psarc.md](psarc.md#block-data-location---the-first-byte-oracle-was-wrong-and-the-corrected-picture-is-three-way-not-binary)'s
+table. Disc-wide: **77 of 250 `.rcsmodel` entries and 439 of 1,270
+`.rcsmaterial` entries carry the tag**; most of the remainder is the same
+unresolved PSARC block-data-location population that bucket already
+describes for every other extension on this family, confirmed directly rather
+than assumed - **checked 2026-09-16: zero of the 141 `.rcsmodel` and zero of
+the 798 `.rcsmaterial` "garbage"-bucketed entries carry the tag anywhere in
+their declared byte range**, not merely at `+0x00`, which rules out "the tag
+is there but shifted" as an explanation for that bucket on these two
+extensions specifically.
+
+### The container past the tag is not this page's layout
+
+**Measured, not guessed - and this is where the reading stops.** The bytes
+after the tag do not match this page's header field-for-field even accounting
+for byte order: no field of it holds `0x000a0000`, `0xffffffff`, or a small
+mesh count in the position this page's layout puts one. What is actually
+there, read off `detonator/ship_lod.rcsmodel` and confirmed shape (not values)
+against two more samples:
+
+```text
++0x00  u32     tag, 0xCA5CADED / 0xCA5CADE5 (LE)
++0x04  u32     0x100 on the sample above, scales with file complexity
++0x08  u32     2 on `.rcsmodel`, 1 on `.rcsmaterial` - checked disc-wide, see below
++0x0c  u32     scales with file size (0x180 on a 139,578-byte file, 0x600 on
+               a 1,258,691-byte one) - plausibly a data-region length, not
+               confirmed
++0x10  u32     0x60 on `.rcsmodel`, 0x40 on `.rcsmaterial` - checked disc-wide
++0x14..0x1c    zero
++0x20  u32     0xe35e00df on both `.rcsmodel` and `.rcsmaterial` - checked
+               disc-wide, a second tag shared by the wrapper rather than
+               data specific to either format
++0x24  u32     varies per file
++0x28  u32     zero
++0x2c  u32     varies per file (21 on the 24,624-byte sample) - plausibly a
+               count, not identified
++0x30..0x3c    zero
++0x40  u32     0xe9f17935 on `.rcsmodel` (checked disc-wide) - a third tag,
+               `.rcsmodel`-specific: the same offset on `.rcsmaterial` holds a
+               small varying integer instead (`8` on two samples), not a tag
++0x44..0x4c    four more fields, one of which tracks file size loosely
++0x60..        a table of what read as ascending 8-byte values (mostly, not
+               always, monotonic - two of 23 entries on the sample above break
+               order), each well inside the file's own length: an offset
+               table into whatever follows, not confirmed as such
+```
+
+**The three constant fields are a real disc-wide invariant, not a
+three-sample coincidence** - checked 2026-09-16 over every tag-valid file:
+`+0x08`, `+0x10` and `+0x20` hold their stated value on **77 of 77**
+tag-valid `.rcsmodel` files and **437 of 439** tag-valid `.rcsmaterial`
+files. The two exceptions are both named `Glass_reflect_2.rcsmaterial`
+(`04_chenghou_project` and `01_vineta_k`) and hold `0x5cade542` at `+0x20`
+instead - three of the expected tag's four bytes (`e5 ad 5c`), shifted by
+one byte, which reads as a one-byte insertion or deletion somewhere before
+that offset in those two files specifically rather than a different value.
+Not chased further.
+
+Past that table, on the same file: a 4x4 identity matrix (sixteen `f32`s,
+`1.0` on the diagonal) at `+0x230`, and the ASCII string `OutlineShape` at
+`+0x300` with no visible length prefix immediately before it. Neither is
+this page's own layout - PS3's `.rcsmodel` carries no node names or matrices
+of its own; that lives in the `.vex` beside it. **The two readings together
+suggest PS4 folded what PS3 splits across a `.vex` node and an `.rcsmodel`
+chunk into one file**, but that is a hypothesis from two data points, not a
+finding, and it is written down rather than acted on. `0xe35e00df` and
+`0xe9f17935` were checked against roughly forty plausible type-name
+candidates (`Model`, `Mesh`, `Node`, `Chunk`, `RTTI`, …) through the same
+`~crc32` this project already uses for `.rcsmaterial` names, with no hit -
+so what they tag is unrecovered, and they are left unnamed rather than
+guessed, per this project's own confidence rule.
+
+**No parser exists for this container.** Implementing one would mean
+reverse-engineering a materially different format from a handful of samples
+with no `.vex` counterpart to check node references against and no PS4
+executable reader read yet for this specific file type - real work, and out
+of what this session's evidence supports. `oag_rcs::rcsmodel::Model::parse`
+is untouched: it still reads only the PS3 big-endian shape, correctly
+rejects every PS4 sample handed to it (the version check the prior session's
+75-file negative result already established), and stays that way rather than
+growing a speculative second code path.
+
+### The names inside are the same names, even though the container is not
+
+**Confidence 82** - an arithmetic-invariant-shaped result, disc-wide.
+Whatever wraps the payload, the payload itself still carries this project's
+own recovered `~crc32` name-hash preimages
+([`oag_rcs::rcsmaterial::names`](../../crates/rcs/src/rcsmaterial/names.rs) -
+shared with [rcsmaterial.md](rcsmaterial.md), since both formats hash names
+the same way on PS3). `crates/rcs/examples/ps4_hash_scan.rs` scans every
+byte-aligned `u32` window of a file, both byte orders, against the ~180
+known sampler/parameter names: **70 of the 77 tag-confirmed `.rcsmodel`
+files (91%) resolve at least one**, 14,146 hits total, dominated by large
+environment files (`Data/environments2048/subway/track.final.rcsmodel`,
+86.7 MB, 2,384 hits - `diffuseTexture`, `lightmap`, `uvOffset`, `uvScale`,
+`NormalMap`, `SpecularPower` recurring in tight clusters roughly 0x1d0-0x1e8
+bytes apart, which reads as repeated per-object material records). The
+tool's own doc comment computes the chance rate this rules out: under
+uniform-random bytes a file this size would expect on the order of 7 hits,
+not 2,384. This does not locate a field - it is evidence the payload is
+genuine `~crc32`-hashed material data in the same namespace PS3 uses, whatever
+the surrounding container turns out to be.
+
+### The one direct byte-count comparison available: bigger, not proof of higher-detail geometry
+
+`detonator/ship_lod.rcsmodel` is the only file this session found tag-valid on
+PS4 **and** present at the identical path on the PS3 disc. PS4's is 24,624
+bytes against PS3's 17,476 - **41% bigger**. `oag_rcs::rcsmodel::Model::parse`
+on the PS3 file gives 1 mesh, 1 material, 900 triangles, 1,112 vertices - real
+numbers, because that side is fully readable; the PS4 side has none, because
+no parser exists for it. So this is a byte-count comparison only, not the
+vertex/triangle/bounding-box oracle the lane's own brief asked for: it is
+consistent with Omega shipping higher-detail geometry per the task's own
+hypothesis, and equally consistent with the new container simply carrying
+more bytes of bookkeeping (the embedded node name and transform matrix above
+account for some of it on their own). Neither is established.
+
 ## See also
 
 - [hd-status](hd-status.md) - everything else HD's assets do, and the `.vex`
