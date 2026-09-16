@@ -1573,7 +1573,15 @@ Applied, from
   - see [draw-order.md](../rendering/draw-order.md) and
   [mesh-draw.md](../ghidra/functions/psp-pulse-usa/mesh-draw.md#the-layer-derivation-and-what-it-is-worth).
 - Whether the 16-byte file header carries anything beyond the version.
-- The `.dat` format paired with ships.
+- ~~The `.dat` format paired with ships.~~ - decoded, see
+  [handling-stats.md](handling-stats.md#related-files) and
+  [ship-skin.md](../ghidra/functions/psp-pulse-usa/ship-skin.md): a `0x20`
+  team-name header plus four 4bpp palette+pixel blocks, a texture swap on the
+  hull model rather than a second mesh. Censused across both PSP pressings and
+  the PS2 disc for this pass (2026-09-16): 16 base-team files on
+  `pulse-psp-usa`/`pulse-psp-eu` and 24 (base plus all four DLC teams) on
+  `pulse-ps2-eu`'s `WADSP.WAD`, every one exactly 26912 bytes, PSP hashes
+  identical between the two pressings; Pure ships zero.
 - ~~**PS2 mesh batches use a vertex type this decoder does not recognise.**~~ -
   decoded, see [PS2: the vertex type still names the attributes, but the data is
   a VIF packet](#ps2-the-vertex-type-still-names-the-attributes-but-the-data-is-a-vif-packet).
