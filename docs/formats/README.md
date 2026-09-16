@@ -47,6 +47,7 @@ number.
 | `.vex` `WO Track` payload | **100.00 %** of 40 nodes | none - closes exactly, as [`AiTrack::encoded_len`](../../crates/vex/src/track.rs) already claimed. |
 | `.vex` `section` payload | **91.15 %** of 2,272 nodes | `pad[6]`, 6 bytes per node, nothing more - see [track.md](track.md#section-visibility-not-geometry). |
 | `.vex` collision payload | **100.00 %** of 319 nodes, both platforms | none - closed by construction, [`collision::from_vex`](../../crates/vex/src/collision.rs) refuses anything that does not. |
+| `.pob` | **25.62 %** of 781 KB, PSP (35 files); **62.24 %** PS2 (41 files) | the slot-resolved records' own internals - a known dead end, see [pob.md](pob.md#not-determined) - measured rather than chased a third time. |
 
 `crates/rcs/tests/coverage_ground_truth.rs` holds both as a **ratchet**:
 `.rcsmodel` must not fall below the floors, `.vex` must stay exact.

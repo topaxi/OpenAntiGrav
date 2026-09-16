@@ -30,6 +30,7 @@ pub mod lighting;
 pub mod mesh_coverage;
 pub mod pads;
 pub mod pob;
+pub mod pob_coverage;
 pub mod pvs;
 pub mod shadow_occluder;
 pub mod sound_emitters;
