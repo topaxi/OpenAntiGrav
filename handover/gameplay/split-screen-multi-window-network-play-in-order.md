@@ -349,10 +349,42 @@ That's wrong - `Race::tick`/`RaceSim` live in `oag-game`, and per
 
 ## Recommended order
 
-1. **Shared prerequisite**: per-player `RaceState`, N-input `Race::tick`,
+1. ~~**Shared prerequisite**: per-player `RaceState`, N-input `Race::tick`,
    device-to-player mapping in `oag-input`. Touches `oag-game` as well as
    the two gameplay-side crates (see the corrected "Why one prerequisite
-   gates all three" section). Blocks all three below and `oag-replay` (M7).
+   gates all three" section). Blocks all three below and `oag-replay` (M7).~~
+   **Done, 2026-09-16.** All three landed, plus the headless-server binary
+   section 3 asked for, in four commits:
+   - `World::race` is `[RaceState; MAX_PLAYERS]` with `MAX_PLAYERS = MAX_SHIPS
+     = 8`, and `World::controllers: [Controller; MAX_PLAYERS]` beside it -
+     `Ai`, `Local` or `Remote`, both hashed. `World::SINGLE_PLAYER` is the one
+     `Local` in slot 0 the engine already had hard-coded, and
+     `human_slots`/`primary_slot`/`primary_race`/`mode`/`laps_target` are what
+     replaced the literal `0`s. `crates/gameplay/tests/determinism.rs`'s
+     constants moved, isolated the documented way - see that file's own
+     2026-09-16 history entry.
+   - `Race::tick` takes `oag_gameplay::PlayerInputs`, a fixed
+     `[InputSnapshot; MAX_PLAYERS]`. The player slot is threaded into
+     `flown_for_the_player`, `autopilot_controls`, `grant_free_turbo`,
+     `spend_pickup`, `tick_autopilot` and `lost_off_the_track`;
+     `advance_cannons` asks `World::controllers` instead of `slot == 0`.
+     **The player step still runs once** and returns one `Evaluated` - N
+     cameras and N HUDs are step 2's work, and `Race::tick`'s doc comment says
+     so.
+   - `oag_input::pad::Assignment` maps `GamepadId` and the keyboard to slots;
+     `Pad::poll_players` and `Controls::player_snapshots` read per slot, and
+     `Controls`' button state is one `Input` per slot because an edge is per
+     pilot. Default: every device on slot 0, which is the old merged stream.
+   - `oag-headless-sim`, a second `[[bin]]` in `oag-game` over
+     `Setup::headless`, ticks with no renderer and prints its state hash -
+     section 3's option 1, taken. `just headless-sim` runs it; its claims are
+     also in `crates/game/src/race/tests/headless.rs` so the gate holds them.
+
+   Behaviour is unchanged throughout: a single-player race still reads exactly
+   `ships[0]`. **No ADR was written** - this thread asks for one and the work
+   was scoped to the refactor, so the design lives in doc comments on
+   `World::race`, `World::controllers`, `Controller` and `PlayerInputs`.
+   Writing the ADR from those is still open.
 2. **Split screen**: viewport/camera-region support in `oag-render`,
    per-player HUD in `oag-ui`. Lowest risk - no window-lifecycle changes.
 3. **Multi-window**: unwind `App`'s one-window-per-run assumption, per-window
@@ -373,11 +405,24 @@ That's wrong - `Race::tick`/`RaceSim` live in `oag-game`, and per
 
 ## Open
 
-- Whether `RaceState` should become a fixed `[RaceState; MAX_PLAYERS]` or
+- ~~Whether `RaceState` should become a fixed `[RaceState; MAX_PLAYERS]` or
   gain an explicit human/AI-slot distinction on top of the existing
   `[Ship; MAX_SHIPS]` grid - not decided here, needs a design pass against
-  how AI opponents and human players currently share the same `ships` array.
-  (`MAX_PLAYERS` itself is decided: 8, matching `MAX_SHIPS`.)
+  how AI opponents and human players currently share the same `ships` array.~~
+  **Done, 2026-09-16. Both, not either.** `race` is the fixed array, indexed
+  by grid slot so `race[i]` and `ships[i]` are the same racer by construction,
+  *and* `controllers` is the human/AI distinction beside it. Collapsing them
+  would have made "has a `RaceState`" mean "is human", which destroys the one
+  thing the array is for - ranking eight timed craft against each other.
+  `RaceState::mode`/`laps_target` are replicated eight times with only slot
+  0's authoritative, read through `World::mode`/`World::laps_target`; that
+  redundancy is recorded on the field rather than hoisted out, because
+  splitting `RaceState` is a change to `oag-race`'s own recovered type.
+- **An ADR for the per-player shape is still owed.** This thread said the
+  design was ADR-shaped and should become one before implementation; the
+  implementation landed first, on a scoped refactor brief, with the reasoning
+  in doc comments instead. Writing it up is a docs-only change now, not a
+  design question - the decisions are made and tested.
 - Transport choice for `oag-net` (framing, reliable-vs-unreliable channel
   split for inputs vs. snapshots, send rate relative to the fixed 60 Hz
   tick) - not decided, needed before the crate is created.
@@ -424,9 +469,12 @@ That's wrong - `Race::tick`/`RaceSim` live in `oag-game`, and per
 
 ## Next Steps
 
-- Land the shared prerequisite (per-player `RaceState`, N-input
+- ~~Land the shared prerequisite (per-player `RaceState`, N-input
   `World::tick`, per-player device mapping in `oag-input`) as its own
-  change, before starting split screen.
+  change, before starting split screen.~~ **Done, 2026-09-16** - see
+  "Recommended order" step 1 for what landed, and note that the function is
+  `Race::tick`, not `World::tick`, which this line still had wrong. Split
+  screen is unblocked; its first move is the viewport work in section 1.
 - Read `handover/frontend/pulses-race-box-is-read-both-pressings.md` for the
   existing split-screen menu-XML findings before building split screen's
   front-end leg.
