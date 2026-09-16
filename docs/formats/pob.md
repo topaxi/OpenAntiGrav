@@ -110,7 +110,7 @@ slot, and is not a small closed vocabulary at all once resolved.
 **Evidence, at the strongest tier this project's rubric has:**
 
 - `FUN_088f8e38(base, resource_base, table_ptr)`, called unconditionally from
-  the generic resource loader `FUN_088f3540` the first time any container of
+  the generic resource loader `ParticleManager_LoadResource` the first time any container of
   this exact shape (count-at-`+8`, table-at-`+0x10`) loads, decompiles to
   precisely the two-line loop above: skip `0xffffffff` slots, otherwise
   `*(resource_base + slot) += resource_base`. Not `.pob`-specific - this is
@@ -158,7 +158,7 @@ mechanism, not that one.
 **The caller is found (2026-08-25, live, PPSSPP v1.20.4 under Xvfb) and
 named `ShipCollisionFx_Preload` (`0x08924550`-`0x089246ab`).** It decompiles
 to four straight-line calls into `func_0x000ef540` (rebased:
-`0x08804000 + 0x000ef540 = 0x088f3540`, i.e. `FUN_088f3540`, the generic
+`0x08804000 + 0x000ef540 = 0x088f3540`, i.e. `ParticleManager_LoadResource`, the generic
 resource loader this page already names) each with the pool-pointer argument
 `_DAT_002ae248` and a **decompiler-printed literal that reads as
 unrelocated**: `0x2846f8`, `0x284720`, `0x284750`, `0x28477c`. This binary
@@ -173,7 +173,7 @@ order (`0x2846f8 + 0x08804000 = 0x08a886f8`, and so on through
 Confirmed live, not just by decompiling: a breakpoint at
 `ShipCollisionFx_Preload`'s own entry never fired (ruling it out as its own
 caller, and closing that specific guess), but a breakpoint at
-`FUN_088f3540`'s entry fired eight times during one "loading the race"
+`ParticleManager_LoadResource`'s entry fired eight times during one "loading the race"
 step, with `a0` (the pool pointer) identical across all eight hits and `ra`
 (the return address, i.e. the actual call site) cycling through exactly
 four values sixteen bytes apart - `0x08924580, 0x08924590, 0x089245a0,
@@ -181,7 +181,7 @@ four values sixteen bytes apart - `0x08924580, 0x08924590, 0x089245a0,
 `ShipCollisionFx_Preload`, right after its four `jal`s, matching the
 decompile exactly. The repeat (eight hits, not four) is consistent with
 `ShipCollisionFx_Preload` itself being invoked twice for two grid entities
-and `FUN_088f3540`'s own load-by-name cache (see "registers the cache
+and `ParticleManager_LoadResource`'s own load-by-name cache (see "registers the cache
 entry" above) absorbing the second round without new disk I/O - only the
 mechanism this page already documented, encountered a second time.
 
@@ -312,7 +312,7 @@ layout of either record kind.
 ## Where the parser is in the executable
 
 The loader chain is now fully decompiled and confirmed live: `FUN_089156a0`
-builds `Data\Psys\%s.POB` and calls the generic `FUN_088f3540`, which loads
+builds `Data\Psys\%s.POB` and calls the generic `ParticleManager_LoadResource`, which loads
 the raw bytes via `Resource_LoadFile`, runs the pointer fixup above
 (`FUN_088f8e38`), registers the cache entry, and returns `resource_base` as
 the resource handle (cached at the caller's `+0xb4`). None of this

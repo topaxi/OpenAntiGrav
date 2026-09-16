@@ -348,7 +348,7 @@ The chain, each link read at instruction level:
    ```
 
    A pre-order walk of the whole node tree (`+0x10` first-child / `+0xc`
-   next-sibling - the same layout `vex.md`'s `FUN_08a71364` walker uses),
+   next-sibling - the same layout `vex.md`'s `Vex_CollectNodesByClass` walker uses),
    collecting every node whose `+4` class-tag field matches the filter's, into
    a fixed-capacity array plus a count. It is class-exclusive by construction:
    a `Weapon Pad` node cannot pass the `+0x40` list's filter.
@@ -523,8 +523,9 @@ second local pad?) is still open, and `oag_game::audio::sfx::Placement::CraftUnl
 **`DAT_08b31048 != 2` is not the Zone check.** This project already identifies
 `DAT_08ab07e3 == 0 && DAT_08b31048 == 6` as the Zone-mode selector
 ([zone-mode.md](zone-mode.md)). Here the same pair is tested against **2**,
-verified at instruction level (`xori a3, a3, 0x2`). So mode `2` is a second,
-unidentified mode, and it must not be folded into the Zone story. Note in passing
+verified at instruction level (`xori a3, a3, 0x2`). So mode `2` is a second
+mode - **`Demo`**, the attract-mode race, per the enum on
+[state-machine.md](state-machine.md) - and it must not be folded into the Zone story. Note in passing
 that `0x08b31048` is `*(0x08b30f90 + 0xb8)` and the speed-class index
 `DAT_08b31040` is `*(0x08b30f90 + 0xb0)`, so both live in one global game-state
 block.

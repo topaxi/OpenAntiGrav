@@ -4,16 +4,21 @@
 //! seeded generator whose state is part of the world snapshot, so a replay
 //! reproduces the same sequence.
 //!
-//! # This is not the original generator
+//! # This is not the original generator, deliberately
 //!
-//! Wipeout Pulse has its own PRNG, and AI decisions and pickup rolls will only
-//! match the original once that generator is recovered from the binary. Until
-//! then this crate provides a placeholder with the right *shape*: seeded,
-//! snapshot-able, no hidden global state. Replacing the algorithm later is a
-//! one-file change, which is the whole point of routing every draw through
-//! here from the start.
+//! Wipeout Pulse's generators are recovered
+//! (`docs/ghidra/functions/psp-pulse-usa/prng.md`), and the answer is why this
+//! one stays: the gameplay draws - AI decisions, pickup rolls - come from libc
+//! `rand()`, seeded from the wall clock at every race set-up. No port can make
+//! a sequence match the original, and the seed source is exactly what the
+//! determinism rules forbid. So this generator is chosen for its own merits:
+//! seeded, snapshot-able, no hidden global state, and a better distribution
+//! than a 31-bit LCG returning its low bits.
 //!
-//! Tracked as an open item in `docs/reverse-engineering/methodology.md`.
+//! The original's *particle* generator (a 17-word RANROT-B seeded with a
+//! constant) is a different matter: it could be ported on the render side if
+//! an effect ever has to match frame-for-frame. That would be a second, named
+//! type behind an ADR, not a change to this one.
 
 /// A small, fast, fully deterministic generator (`xoshiro128**`).
 ///

@@ -1,14 +1,17 @@
 # Memory maps
 
-> **Not yet started.** Milestone M2.
-
 Address space layouts for each binary: where code is loaded, where the heap
 lives, where the important globals sit.
 
-| Platform | Document |
-| --- | --- |
-| PSP | _(pending)_ |
-| PS2 | _(pending)_ |
+| Platform | Document | Covers |
+| --- | --- | --- |
+| PSP (Pulse, USA) | [psp-pulse-usa.md](psp-pulse-usa.md) | The console's regions, `BOOT.BIN` section by section, where the named globals sit, and the heap arithmetic after boot |
+| PS2 (Pulse, EU) | [ps2-pulse-eu.md](ps2-pulse-eu.md) | The EE's regions, `SCES_547.48` section by section, the VU overlays, and why the PS2's allocator is not the PSP's |
+
+The allocator itself - the front door, the small-block pools, the heap
+descriptor and block format, and the two heap sizes - is on
+[memory.md](../functions/psp-pulse-usa/memory.md) beside the functions it
+names; the maps here are where those regions land.
 
 ## What belongs here
 
@@ -19,5 +22,4 @@ lives, where the important globals sit.
   VRAM and scratchpad
 
 Memory maps are what make an address in a
-[function page](../functions/README.md) meaningful. Until these exist, an
-address is just a number.
+[function page](../functions/README.md) meaningful.

@@ -256,20 +256,20 @@ Three independent checks on that table all come back empty or generic:
   room in either for a hidden distance check.
 - **`init`** (`+0x7c`) is `0x0890bc7c`, which *is* `LodGroup`-specific - but it
   turns out to be pure vtable-stamping boilerplate (stamp the method-table and
-  class-name pointers, call the shared allocator) on top of `FUN_08944fc0`,
+  class-name pointers, call the shared allocator) on top of `Node_ConstructBase`,
   the universal base-node constructor (32 unrelated call sites, including
   `Vex_LoadModel` itself). The one call inside it that looked like it might
-  parse the payload, `FUN_08944bd4`, decompiles to pure sibling-list linkage
+  parse the payload, `Node_AttachChild`, decompiles to pure sibling-list linkage
   (splicing the new node into its parent's child chain) - it never reads
   `child_count`, the position, or the switch-distance field either.
 
-The generic tree walker that collects drawable nodes (`FUN_08a71364`, called
+The generic tree walker that collects drawable nodes (`Vex_CollectNodesByClass`, called
 from `Vex_LoadModel` to gather every `Mesh` in the tree) recurses into **every**
 child unconditionally:
 
 ```c
 for (child = *(int*)(node+0x10); child != 0; child = *(int*)(child+0xc))
-    FUN_08a71364(child, out, cap, count, target_class);
+    Vex_CollectNodesByClass(child, out, cap, count, target_class);
 ```
 
 No distance check, no class-based branch, nothing keyed on `LodGroup`

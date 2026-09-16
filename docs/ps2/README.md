@@ -5,6 +5,7 @@ Findings specific to the PlayStation 2 release. Pulse on PS2 was Europe-only.
 | Document | Covers |
 | --- | --- |
 | [Pulse disc layout](pulse-disc-layout.md) | Contents of the Pulse DVD, with findings |
+| [Memory map](../ghidra/memory-maps/ps2-pulse-eu.md) | The EE's regions, `SCES_547.48` section by section, the VU overlays, and why the PS2's allocator is not the PSP's |
 | [Aspect ratio](aspect-ratio.md) | The 640x448 frame is anamorphic; what the disc's own 4:3/16:9 option moves, and what it does not |
 
 ## Key facts

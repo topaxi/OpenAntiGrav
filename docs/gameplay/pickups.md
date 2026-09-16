@@ -137,8 +137,9 @@ accepted - about one grant in twenty thousand on the shipped odds. And an
 *unplaced* craft spends the `human` column alone, because the original always has
 a place to blend against.
 
-**The PRNG bounds what can ever be checked.** The original's generator is an
-open question on the [roadmap](../overview/roadmap.md), so the *sequence* of
+**The PRNG bounds what can ever be checked.** The original's generator is
+libc `rand()`, seeded from the wall clock at every race set-up
+([prng.md](../ghidra/functions/psp-pulse-usa/prng.md)), so the *sequence* of
 draws cannot match the original even with a byte-exact algorithm. Only the
 *distribution* is testable, and only against the authored weights. Every draw
 goes through `World::rng` so that a replay of one of our own races is

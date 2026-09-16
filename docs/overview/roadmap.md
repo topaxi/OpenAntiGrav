@@ -136,20 +136,34 @@ The PSP `BOOT.BIN` is an unencrypted ELF, so this can start immediately.
 - [x] [Engine, brakes, steering and pitch](../ghidra/functions/psp-pulse-usa/engine.md):
       the craft update frame, every control force term, and all 32 handling
       parameters placed with the block's byte accounting closing exactly
-- [ ] Memory management and the heap layout
-- [ ] Resource loading: how a WAD entry becomes a live object
-- [ ] Game state machine
-- [ ] The original PRNG
-- [ ] Memory maps for both platforms
+- [x] [Memory management and the heap layout](../ghidra/functions/psp-pulse-usa/memory.md):
+      one front door, two bitmap pools, a guarded free-list heap, and a data
+      heap the front-end archive is steered into by swapping the heap list head
+- [x] [Resource loading](../ghidra/functions/psp-pulse-usa/resource-loading.md):
+      how a WAD entry becomes a live object - VFS device chain, refcounted
+      resource cache, scene-graph node on three chains, deferred destroy
+- [x] [Game state machine](../ghidra/functions/psp-pulse-usa/state-machine.md):
+      the menus' states are the disc's own XML loaded per screen, twelve
+      literal states in code, and the 19-entry game-mode enum read whole
+- [x] The original PRNG - two of them, and the gameplay one is clock-seeded,
+      so no sequence can ever match. See [prng.md](../ghidra/functions/psp-pulse-usa/prng.md)
+- [x] Memory maps for both platforms: [PSP](../ghidra/memory-maps/psp-pulse-usa.md) and
+      [PS2](../ghidra/memory-maps/ps2-pulse-eu.md)
 
 **Exit criterion:** engine lifecycle and memory map documented; at least 50
 functions documented to the standard in
 [`ghidra/function-template.md`](../ghidra/function-template.md).
 
-The function count is met: [names.tsv](../ghidra/functions/psp-pulse-usa/names.tsv)
-carries **120** documented symbols, each refused by
+**Met, 2026-09-16.** [names.tsv](../ghidra/functions/psp-pulse-usa/names.tsv)
+carries **928** documented symbols, each refused by
 `scripts/apply-ghidra-names.py` unless its address and name are still on an
-evidence page. The memory map is what remains.
+evidence page; the lifecycle is on
+[memory.md](../ghidra/functions/psp-pulse-usa/memory.md),
+[resource-loading.md](../ghidra/functions/psp-pulse-usa/resource-loading.md)
+and [state-machine.md](../ghidra/functions/psp-pulse-usa/state-machine.md),
+and the memory maps are the two pages above. What the PS2 map records as
+*not* read - its allocator, which is a different design from the PSP's - is
+the one honest gap, and it is a PS2-parity item, not an M2 one.
 
 ---
 

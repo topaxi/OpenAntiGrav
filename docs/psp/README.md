@@ -7,6 +7,7 @@ Findings specific to the PlayStation Portable releases.
 | [Allegrex and the VFPU](allegrex-vfpu.md) | **Read first.** Stock Ghidra mis-decodes PSP vector code |
 | [Frame pacing](frame-pacing.md) | The original's timestep. It is **not** fixed. |
 | [Pulse disc layout](pulse-disc-layout.md) | Contents of the Pulse UMD, with findings |
+| [Memory map](../ghidra/memory-maps/psp-pulse-usa.md) | The console's regions, `BOOT.BIN` section by section, where the named globals sit, and the heap arithmetic after boot |
 
 ## Key facts
 

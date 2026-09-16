@@ -14,7 +14,8 @@ page records where things live.
 ## The loop
 
 `Game_MainLoop` at `0x08807244`, identified by the literal `"Main Game Loop"` at
-`0x08a785d0` handed to the profiler immediately before the loop. Confidence
+`0x08a785d0` handed to `Mem_LogStatus` ([memory.md](memory.md)) immediately
+before the loop. Confidence
 **95**: a function that names itself is about as good as static evidence gets.
 
 Per iteration, in order:
@@ -117,7 +118,8 @@ Confidence **85** for the mechanism, **70** for the state list, which was
 enumerated by string search rather than by walking the registration table.
 
 `0x08b31048` is a separate game-mode enum compared against 5, 6, 7, 0xa, 0xc,
-0xd, 0xe and 0x11. Not decoded.
+0xd, 0xe and 0x11. Decoded on [state-machine.md](state-machine.md): 19 named
+modes, `Arcade` = 3 through `Multiplayer Elimination` = 18, with `Demo` = 2.
 
 ## Globals
 
