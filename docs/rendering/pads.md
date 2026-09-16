@@ -542,3 +542,83 @@ whatever the maintainer describes from play is not sitting in this material
 record any more than the earlier tint check found it there. Steps 2-3 of the
 handover thread's Next Steps - the Ghidra-side vtable diff - remain the way
 to find it, unchanged by this section.
+
+### Corrected 2026-09-16: it is each pad's own colour, and it is red on most circuits
+
+**The "identical, cyan, shared rim tint" reading above rests on one circuit
+and does not generalise - the value varies per circuit, and the hash the
+paragraph above calls unidentified was already named.** Two independent
+misses compound here: `0xce5c4410` (`Weapon Pad`'s parameter) is
+`~crc32("W_Cycle")`, recovered by `docs/formats/rcsmaterial.md`'s own
+parameter-preimage sweep on 2026-08-31 and sitting in that page's table
+since - two weeks before this section called it unidentified. `0x02ab9f07`
+(`Speedup Pad`'s parameter on most circuits) is likewise already
+`~crc32("Colour")` on the same table. Neither page linked to the other's
+finding; this is the fix.
+
+**The re-derivation the section above asked for**, straight out of
+`Material::parameters` on every circuit that authors pads
+(`crates/render/examples/hd_pad_colour_census.rs`, twelve circuits with pad
+geometry out of sixteen `track.vex` on the disc - the four Zone circuits
+author none):
+
+| Circuit | Speedup Pad hash | value | Weapon Pad hash | value |
+| --- | --- | --- | --- | --- |
+| `01_vineta_k` | `Colour` | cyan | `W_Cycle` | cyan |
+| `02_track` | `W_Cycle` | cyan | `W_Cycle` | cyan |
+| `03_track` | `Colour` | cyan | `W_Cycle` | cyan |
+| `04_chenghou_project` | `Colour` | cyan | `W_Cycle` | cyan (darker) |
+| `05_ubermall` | `Colour` | cyan | `W_Cycle` | cyan |
+| `10_sebenco_climb` | `Colour` | cyan | `W_Cycle` | cyan |
+| `12_sol_2` | `0x7611a2d8` (unnamed) | cyan | `W_Cycle` | cyan |
+| `15_anulpha_pass` | `0x7611a2d8` (unnamed) | near-white cyan | `W_Cycle` | **red** |
+| `amphiseum` | no Speedup Pad geometry | - | `W_Cycle` | cyan |
+| `modesto_heights` | no Speedup Pad geometry | - | `W_Cycle` | **red** |
+| `talons_junction` | no Speedup Pad geometry | - | `W_Cycle` | **red** |
+| `tech_de_ra` | no Speedup Pad geometry | - | `W_Cycle` | **red** |
+
+Every pad surface on every one of these circuits carries exactly one
+parameter (`multi_param` in the tool's own output is empty), so "the value
+is X" is not hiding a second, unread parameter.
+
+**This settles the question the discriminating target was chosen for, and
+the answer is neither of the two readings on the table.** It is not a shared
+circuit/rim tint (the value is not constant - it is red on four circuits and
+cyan/blue on eight) and the hash is not fixed per pad type either (`Speedup
+Pad`'s own parameter is named `Colour` on six circuits, is `W_Cycle` itself
+on `02_track` - the same hash `Weapon Pad` uses everywhere - and is the
+still-unnamed `0x7611a2d8` on two more). What *is* fixed: **`Weapon Pad`'s
+authored colour is red on `talons_junction`, `tech_de_ra`, `modesto_heights`
+and `15_anulpha_pass`, and cyan/blue on the other eight; `Speedup Pad`'s is
+cyan (or near-white on `15_anulpha_pass`) on every circuit that has one at
+all.** `talons_junction` - this project's default circuit - is one of the
+red ones, which is exactly the maintainer's play report. Confidence **88**:
+a direct field read (`Material::parameters`) across every circuit that ships
+the geometry, not an inference through the register trace, and not a hand
+correction - the measurement came back red on its own.
+
+**One authoring oddity worth recording rather than smoothing over**:
+`02_track`'s `Speedup Pad` node resolves to a material record whose *file*
+is still named `materials/weapon_pads.rcsmaterial`, textures swapped to
+`ds_speedup_cs.gtf`/`ds_speedup_ne.gtf`. The file name is not a reliable pad
+type identifier - only the `.vex` node's own class (`Speedup Pad` vs `Weapon
+Pad`) and the material's own authored value are - which is also why naming
+the parameter hash was never going to settle this on its own: `W_Cycle`
+being "the weapon pad's own parameter" was itself an artifact of `hd_param_
+names.rs`'s scan only ever meeting that hash on files still called
+`weapon_pads.rcsmaterial`.
+
+**Also open, not resolved here:** `amphiseum`, `modesto_heights`,
+`talons_junction` and `tech_de_ra` - the four circuits `DATA00.PSARC` ships,
+Wipeout HD's own tracks rather than Fury's numbered additions - carry no
+`Speedup Pad`-classified geometry at all. Whether HD's speed pads use a
+different class, a different mechanism entirely, or genuinely have none on
+these four, is not answered by this section.
+
+**What this means for `oag_render`'s pad path**: nothing wires yet, and this
+section does not change that on its own - see "One picture, chosen and not
+measured" above for why a composite needs the accumulate's own swizzle/mask
+resolved first, not only the colour. What it does settle is that a future
+wiring should read this parameter **per material instance**, never assume
+one shared constant for "the pad glow colour" the way the retracted reading
+would have.

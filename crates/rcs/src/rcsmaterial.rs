@@ -643,6 +643,7 @@ impl RcsMaterial {
 }
 
 pub mod fragment;
+pub mod names;
 pub mod vertex;
 
 #[cfg(test)]

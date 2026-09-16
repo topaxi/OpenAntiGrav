@@ -20,7 +20,9 @@ mod rcsmodel_common;
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use oag_rcs::rcsmaterial::{Class, Features, PASS_WORD_BITS, RcsMaterial, fragment};
+use oag_rcs::rcsmaterial::{
+    Class, Declared, Features, PASS_WORD_BITS, RcsMaterial, fragment, names,
+};
 use rcsmodel_common::image;
 
 /// Every archive on the disc that holds `.rcsmaterial` files.
@@ -509,4 +511,86 @@ fn the_lighting_dataflow_agrees_with_the_blocks_read_by_hand() {
             "block #{index} does read f[TC4] - the check above is not vacuous"
         );
     }
+}
+
+/// Every name in [`names::KNOWN_SAMPLER_NAMES`] is a preimage of a hash a
+/// resolved shader program on this disc actually declares - not merely a
+/// string that happens to hash to *something*.
+///
+/// A typo'd or misattributed entry would still round-trip through
+/// `names::sampler_name` (the unit test beside the table already checks
+/// that), but it would not show up here, because this asks the disc rather
+/// than the table.
+#[test]
+#[ignore = "needs a decrypted PS3 disc image in data/images"]
+fn every_known_sampler_name_is_a_hash_the_disc_actually_declares() {
+    let Some(_image) = image() else { return };
+    let mut declared: BTreeSet<u32> = BTreeSet::new();
+    for (_, bytes) in every_material() {
+        let Ok(mat) = RcsMaterial::parse(&bytes) else {
+            continue;
+        };
+        let mut seen_offsets = BTreeSet::new();
+        for v in &mat.variants {
+            for block in [&v.vertex, &v.fragment] {
+                if !seen_offsets.insert(block.offset) {
+                    continue;
+                }
+                if let Some(decl) = Declared::parse(&bytes, block.offset) {
+                    declared.extend(decl.samplers.iter().map(|(h, _)| *h));
+                }
+            }
+        }
+    }
+    let missing: Vec<&str> = names::KNOWN_SAMPLER_NAMES
+        .iter()
+        .copied()
+        .filter(|name| !declared.contains(&oag_rcs::rcsmaterial::name_hash(name)))
+        .collect();
+    assert!(
+        missing.is_empty(),
+        "these names' hashes are not declared by any sampler on the disc: {missing:?}"
+    );
+}
+
+/// The same check for [`names::KNOWN_PARAMETER_NAMES`], against every
+/// `.rcsmodel` material's own authored parameter table rather than a
+/// shader's declaration.
+#[test]
+#[ignore = "needs a decrypted PS3 disc image in data/images"]
+fn every_known_parameter_name_is_a_hash_the_disc_actually_authors() {
+    let Some(image) = image() else { return };
+    let mut authored: BTreeSet<u32> = BTreeSet::new();
+    for archive in ARCHIVES {
+        let spec = format!("{}:PS3_GAME/USRDIR/{archive}.PSARC", image.display());
+        let Ok(mut open) = oag_assets::psarc::Archive::open(&spec) else {
+            continue;
+        };
+        let paths: Vec<String> = open
+            .paths()
+            .iter()
+            .filter(|p| p.ends_with(".rcsmodel"))
+            .cloned()
+            .collect();
+        for path in paths {
+            let Ok(blob) = open.read_path(&path) else {
+                continue;
+            };
+            let Ok(model) = oag_rcs::rcsmodel::Model::parse(&blob) else {
+                continue;
+            };
+            for material in &model.materials {
+                authored.extend(material.parameters.iter().map(|p| p.hash));
+            }
+        }
+    }
+    let missing: Vec<&str> = names::KNOWN_PARAMETER_NAMES
+        .iter()
+        .copied()
+        .filter(|name| !authored.contains(&oag_rcs::rcsmaterial::name_hash(name)))
+        .collect();
+    assert!(
+        missing.is_empty(),
+        "these names' hashes are not authored by any material parameter on the disc: {missing:?}"
+    );
 }
