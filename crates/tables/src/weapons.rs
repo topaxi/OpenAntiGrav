@@ -246,6 +246,7 @@ impl Weapon {
     }
 }
 
+pub mod ai;
 mod disruptor;
 mod error;
 mod stats;
