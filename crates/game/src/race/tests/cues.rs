@@ -202,6 +202,11 @@ fn every_cue_has_something_that_raises_it() {
         saw_impact,
         "the fixture never reached the wall - not what this test means to check"
     );
+    // `Cue::PlasmaHitShip` needs a struck craft, which this fixture's own
+    // Plasma never meets - it is re-aimed at the wall every tick, and the
+    // wall is the only thing in this fixture's world. `plasma_hits_a_craft`
+    // stages that ending independently; see its own doc comment.
+    raised.extend(plasma_hits_a_craft());
 
     for cue in Cue::ALL {
         assert!(
@@ -221,9 +226,84 @@ fn every_cue_has_something_that_raises_it() {
         Cue::MineLaunch,
         Cue::Plasma,
         Cue::PlasmaHitWall,
+        Cue::PlasmaHitShip,
     ] {
         assert!(raised.contains(&cue), "{} was never raised", cue.name());
     }
+}
+
+/// A second, stationary craft directly on a Plasma's own nose, close enough
+/// that the bolt reaches it well inside this test's own tick budget - what
+/// [`every_cue_has_something_that_raises_it`]'s own wall fixture cannot stage,
+/// since that one only ever meets the wall it is re-aimed at every tick.
+///
+/// **Both craft held fixed.** Neither throttles nor steers, so the shooter's
+/// own nose never moves and the target sits exactly where it is placed - at
+/// `forward * 15.0` off the shooter, recomputed from the shooter's own
+/// `body.forward()` every tick rather than a hardcoded world axis, so this
+/// does not depend on which way [`setup`]'s synthetic straight happens to
+/// point. `15.0` clears [`hulled_handling`]'s own `hull_radius` (`2.0`, half
+/// its `length: 4.0`) by a wide margin while still sitting well inside the
+/// bolt's own flight envelope - `mine_and_plasma_table`-style Plasma stats
+/// launch at hundreds of units per second, so the sweep segment covers the
+/// distance in the first handful of ticks after release.
+///
+/// **Ship count is `2`, not a full `GRID_SLOTS` grid.** `oag_gameplay::projectile::step`
+/// only sweeps `world.ships[..world.ship_count]` -
+/// `crates/gameplay/src/projectile.rs`'s own `step` - so the second craft has
+/// to be counted in for the hull test to see it at all, but nothing here
+/// needs the other six slots `race_with_a_grid`-style grid construction would
+/// also spin up.
+fn plasma_hits_a_craft() -> std::collections::BTreeSet<Cue> {
+    let mut setup = setup(hulled_handling());
+    setup.mode = Mode::SingleRace;
+    setup.weapons = Some(one_plasma_table());
+    let mut race = Race::start(setup);
+    race.sim.world.ship_count = 2;
+    race.sim.world.ships[1].active = true;
+    race.sim.world.ships[1].handling = hulled_handling();
+    race.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Plasma);
+
+    let mut buttons = Buttons::new();
+    let mut raised = std::collections::BTreeSet::new();
+    for tick in 0..180 {
+        race.sim.world.ships[0].physics.body.position = Vec3::ZERO;
+        race.sim.world.ships[0].physics.body.linear_velocity = Vec3::ZERO;
+        let forward = race.sim.world.ships[0].physics.body.forward();
+        race.sim.world.ships[1].physics.body.position = forward * 15.0;
+        race.sim.world.ships[1].physics.body.linear_velocity = Vec3::ZERO;
+
+        let snapshot = if tick == 0 {
+            buttons.tick(SQUARE)
+        } else {
+            buttons.tick(0)
+        };
+        race.tick(&snapshot);
+        raised.extend(race.drain_cues().into_iter().map(|e| e.cue));
+    }
+    raised
+}
+
+/// `Plasma_SweepCraftHit` plays `PLASMAHITSHIP` on a craft hit and clears the
+/// bolt's own emitter before `Plasmas_Update`'s teardown would otherwise play
+/// `PLASMAHITWALL` unconditionally - so the original plays exactly one of the
+/// two per ending, never both. See
+/// `docs/ghidra/functions/psp-pulse-usa/plasma.md`'s "a craft hit is the
+/// third ending" section and `crate::audio::sfx::Cue::PlasmaHitShip`'s own
+/// doc comment.
+#[test]
+fn a_plasma_that_hits_a_craft_raises_plasmahitship_and_not_plasmahitwall() {
+    let raised = plasma_hits_a_craft();
+    assert!(
+        raised.contains(&Cue::PlasmaHitShip),
+        "PLASMAHITSHIP never fired on a craft hit: {raised:?}"
+    );
+    assert!(
+        !raised.contains(&Cue::PlasmaHitWall),
+        "PLASMAHITWALL fired on a craft hit too - the original clears the \
+         bolt's own emitter before that branch can run, so this is a double \
+         sound the disc never plays: {raised:?}"
+    );
 }
 
 #[test]

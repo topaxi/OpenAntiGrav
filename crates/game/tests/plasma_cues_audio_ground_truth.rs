@@ -1,5 +1,5 @@
-//! The Plasma's own three cues - `PLASMA`, `~PLASMATVL`, `PLASMAHITWALL` - on
-//! a real disc and a real bolt, out to a WAV.
+//! The Plasma's own four cues - `PLASMA`, `~PLASMATVL`, `PLASMAHITWALL` and
+//! `PLASMAHITSHIP` - on a real disc and a real bolt, out to a WAV.
 //!
 //! **`#[ignore]`d and never run in CI.** It needs game content, which this
 //! project does not ship. See
@@ -15,20 +15,22 @@
 //! reason `mine_launch_audio_ground_truth.rs` is its own file rather than a
 //! section of `mine_ground_truth.rs`: that file is the weapon's own mechanics
 //! on `crates/gameplay`'s side of the fence, and this is the wiring -
-//! `audio::sfx::Cue::Plasma`/`PlasmaTravel`/`PlasmaHitWall` - end to end
-//! through the composition root's own `Audio::race_tick`, on a real lap under
-//! the real force law and the real collision soup. Same standard
-//! `track_audio_ground_truth.rs` and `mine_launch_audio_ground_truth.rs` both
-//! set: a headless run through the null backend, written out to 16-bit PCM,
-//! so "it should play" is a file rather than an assertion about internal
+//! `audio::sfx::Cue::Plasma`/`PlasmaTravel`/`PlasmaHitWall`/`PlasmaHitShip` -
+//! end to end through the composition root's own `Audio::race_tick`, on a
+//! real lap under the real force law and the real collision soup. Same
+//! standard `track_audio_ground_truth.rs` and `mine_launch_audio_ground_truth.rs`
+//! both set: a headless run through the null backend, written out to 16-bit
+//! PCM, so "it should play" is a file rather than an assertion about internal
 //! state alone.
 //!
 //! # What only real data can say here
 //!
-//! 1. **That `PLASMA` and `PLASMAHITWALL` both resolve against the real
-//!    `weapons.bnk`** - the unit tests in `race::tests::cues` prove a
-//!    `CueEvent` is queued, not that it survives `Banks::pick` against real
-//!    waveform data.
+//! 1. **That `PLASMA`, `PLASMAHITWALL` and `PLASMAHITSHIP` all resolve
+//!    against the real `weapons.bnk`** - the unit tests in `race::tests::cues`
+//!    prove a `CueEvent` is queued, not that it survives `Banks::pick` against
+//!    real waveform data. The second test in this file (craft hit) is what
+//!    settles it for `PLASMAHITSHIP` specifically, since the first (wall hit)
+//!    never reaches that branch.
 //! 2. **That a real bolt genuinely flies (`charge <= 0.0`) between the press
 //!    and the impact**, on a real circuit's own collision soup rather than a
 //!    hand-built fixture with no floor under it - see `plasma_ground_truth.rs`'s
@@ -38,8 +40,8 @@
 //!    edge has something real to fire on across a real flight, not that the
 //!    voice itself stayed open the whole way - the same reach every other
 //!    ground-truth test in this file has into a private mixer.
-//! 3. **The ordering**: press, then a wind-up with no `PLASMAHITWALL` yet,
-//!    then an ending - on a real class's own charge and flight speed, not a
+//! 3. **The ordering**: press, then a wind-up with no ending cue yet, then an
+//!    ending - on a real class's own charge and flight speed, not a
 //!    hand-timed fixture.
 
 use std::path::{Path, PathBuf};
@@ -89,19 +91,24 @@ fn fire_while_driving() -> oag_gameplay::InputSnapshot {
     }
 }
 
-/// Fires all three of the Plasma's own cues off a real disc, a real press and
-/// a real bolt, and writes the mix out to `data/shots/plasma-cues.wav`.
+/// Fires the Plasma's own press/travel/ending cues off a real disc, a real
+/// press and a real bolt, and writes the mix out to `data/shots/plasma-cues.wav`.
 ///
 /// **What this proves that the unit tests in `race::tests::cues` and
 /// `audio::sfx::tests` cannot**: not only that a `CueEvent` is queued, but
-/// that `PLASMA` and `PLASMAHITWALL` each survive `place()`'s range gate and
-/// resolve against the real `weapons.bnk` waveform data, that the held
-/// `~PLASMATVL` voice actually opens and is still playing partway through a
-/// real flight, and that all of it renders to audible, non-silent PCM through
-/// the same mixer a real session uses.
+/// that `PLASMA` and the ending cue it reaches each survive `place()`'s range
+/// gate and resolve against the real `weapons.bnk` waveform data, that the
+/// held `~PLASMATVL` voice actually opens and is still playing partway
+/// through a real flight, and that all of it renders to audible, non-silent
+/// PCM through the same mixer a real session uses.
+///
+/// **The ending is whichever one a real race reaches, not `PLASMAHITWALL`
+/// specifically** - see the assertion loop's own comment for why a
+/// straight-ahead shot can meet a real opponent instead of a wall on this
+/// exact fixture.
 #[test]
 #[ignore = "needs a disc image in data/images/"]
-fn firing_a_plasma_sounds_all_three_cues_in_order_and_writes_it_out() {
+fn firing_a_plasma_sounds_its_press_travel_and_ending_cues_and_writes_it_out() {
     let Some(image) = image() else { return };
     let loaded = race::load(&race::Options {
         source: image.display().to_string(),
@@ -146,7 +153,21 @@ fn firing_a_plasma_sounds_all_three_cues_in_order_and_writes_it_out() {
     race.sim.world.ships[0].pickup.weapon = Some(Weapon::Plasma);
 
     let mut plasma_press_tick = None;
-    let mut hit_wall_tick = None;
+    // **Either ending, not `PlasmaHitWall` specifically.** `Mode::SingleRace`
+    // fields a full eight-craft grid unconditionally
+    // (`oag_race::Mode::has_opponents`) whenever the track authors a `Start
+    // Position`, which every shipped circuit does - `race::Options::opponents`
+    // has no say in it. So a bolt fired straight ahead early in the race can
+    // meet a real opponent instead of the wall it was originally assumed to
+    // reach: measured on this exact fixture, it does, at tick 82, the tick
+    // `PlasmaHitWall` used to be asserted at before `Cue::PlasmaHitShip`
+    // existed to tell the two endings apart. Both are the recovered ending for
+    // *some* case (`docs/ghidra/functions/psp-pulse-usa/plasma.md`'s "a craft
+    // hit is the third ending"), so this only asserts that exactly one of the
+    // two fires, not which - `firing_a_plasma_at_a_craft_sounds_plasmahitship_not_plasmahitwall`
+    // below is what pins the craft-hit case down deterministically.
+    let mut hit_tick = None;
+    let mut hit_cue = None;
     // Whether a live Plasma bolt was seen actually flying - `charge <= 0.0`,
     // the exact condition `Audio::race_tick`'s own travel tracker gates on
     // (`crates/game/src/audio/sfx.rs`) - on any tick strictly inside the
@@ -171,8 +192,9 @@ fn firing_a_plasma_sounds_all_three_cues_in_order_and_writes_it_out() {
             if event.cue == Cue::Plasma {
                 plasma_press_tick.get_or_insert(tick);
             }
-            if event.cue == Cue::PlasmaHitWall {
-                hit_wall_tick.get_or_insert(tick);
+            if event.cue == Cue::PlasmaHitWall || event.cue == Cue::PlasmaHitShip {
+                hit_tick.get_or_insert(tick);
+                hit_cue.get_or_insert(event.cue);
             }
         }
         saw_bolt_flying |= race
@@ -185,20 +207,23 @@ fn firing_a_plasma_sounds_all_three_cues_in_order_and_writes_it_out() {
         audio.race_tick(&mut race);
         audio.tick();
 
-        if hit_wall_tick.is_some() {
+        if hit_tick.is_some() {
             break;
         }
     }
     audio.finish().expect("writing the dump");
 
     let press = plasma_press_tick.expect("PLASMA never fired");
-    let hit = hit_wall_tick.expect(
-        "PLASMAHITWALL never fired - the bolt may still be flying past FLIGHT_TICKS, \
-         or it timed out at 10 s (600 ticks), past this test's own budget",
+    let hit = hit_tick.expect(
+        "neither PLASMAHITWALL nor PLASMAHITSHIP ever fired - the bolt may still be \
+         flying past FLIGHT_TICKS, or it timed out at 10 s (600 ticks), past this \
+         test's own budget",
     );
+    let cue = hit_cue.expect("hit_tick was set without hit_cue");
     assert!(
         hit > press,
-        "PLASMAHITWALL (tick {hit}) did not come after PLASMA (tick {press})"
+        "{} (tick {hit}) did not come after PLASMA (tick {press})",
+        cue.name()
     );
     // The wind-up is `oag_gameplay::projectile::plasma::CHARGE_SECONDS`
     // (1.0 s = 60 ticks) before the bolt can even start flying, so an ending
@@ -207,8 +232,9 @@ fn firing_a_plasma_sounds_all_three_cues_in_order_and_writes_it_out() {
     let charge_ticks = (oag_gameplay::projectile::plasma::CHARGE_SECONDS * 60.0) as u64;
     assert!(
         hit - press >= charge_ticks,
-        "PLASMAHITWALL landed only {} ticks after PLASMA, inside the {charge_ticks}-tick \
+        "{} landed only {} ticks after PLASMA, inside the {charge_ticks}-tick \
          wind-up - the bolt cannot have flown anywhere",
+        cue.name(),
         hit - press
     );
     assert!(
@@ -218,7 +244,155 @@ fn firing_a_plasma_sounds_all_three_cues_in_order_and_writes_it_out() {
          edge never had anything to trigger on"
     );
     println!(
-        "PLASMA at tick {press}, PLASMAHITWALL at tick {hit} ({} ticks of wind-up and flight)",
+        "PLASMA at tick {press}, {} at tick {hit} ({} ticks of wind-up and flight)",
+        cue.name(),
+        hit - press
+    );
+
+    let file = std::fs::read(&wav).expect("the dump");
+    let pcm = &file[44..];
+    let peak = pcm
+        .as_chunks::<2>()
+        .0
+        .iter()
+        .map(|c| i16::from_le_bytes(*c).unsigned_abs())
+        .max()
+        .expect("samples");
+    assert!(peak > 0, "the dump is {} bytes of silence", pcm.len());
+    println!(
+        "wrote {} - {} frames, peak sample {peak}",
+        wav.display(),
+        pcm.len() / 4
+    );
+}
+
+/// The fourth Plasma cue, `PLASMAHITSHIP`, against the same real
+/// `weapons.bnk` - a craft hit rather than a wall.
+///
+/// **What only real data can say here, on top of what the sibling test
+/// above already covers**: that `PLASMAHITSHIP` itself resolves against the
+/// disc's own bank data, not only that `Cue::PlasmaHitShip` is queued - the
+/// unit test in `race::tests::cues`
+/// (`a_plasma_that_hits_a_craft_raises_plasmahitship_and_not_plasmahitwall`)
+/// proves the queueing on a synthetic fixture with no bank at all, which is
+/// exactly the gap this project's own `oag-wad sounds` check cannot close by
+/// itself: confirming a cue string is *in* `weapons.bnk` is not the same as
+/// confirming `Banks::pick` resolves it in this engine's own load path.
+///
+/// **Slot 1 is a real opponent already, not a craft activated for this
+/// test.** `Mode::SingleRace` fields a full eight-craft grid unconditionally
+/// whenever the track authors a `Start Position` - see the sibling test
+/// above's own doc comment, corrected the same way once this was measured
+/// directly on that fixture. So this repurposes slot 1 as a deterministic
+/// point-blank target exactly the way
+/// `a_plasma_bolt_that_times_out_far_above_the_track_hurts_nobody_below_it`
+/// (`plasma_ground_truth.rs`) repurposes it as a blast sentinel: teleported
+/// every tick, before `Race::tick` runs, rather than left to its own AI
+/// driving. It is re-pinned to `ships[0]`'s own `body.forward() * 15.0` -
+/// ahead of the *moving* player rather than a fixed world point, since this
+/// test drives forward the same way the sibling test does - so the
+/// swept-sphere hull test in `oag_gameplay::projectile::geometry::nearest_hit`
+/// always has a target in its own flight path. Its `handling` is already the
+/// grid's own `VENOM` copy (`Race::start` gives every opponent the player's
+/// own handling), so nothing here has to set it.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn firing_a_plasma_at_a_craft_sounds_plasmahitship_not_plasmahitwall() {
+    let Some(image) = image() else { return };
+    let loaded = race::load(&race::Options {
+        source: image.display().to_string(),
+        class: "VENOM".to_string(),
+        mode: oag_race::Mode::SingleRace,
+        ..race::Options::default()
+    })
+    .expect("loading the race");
+    let mut race = race::Race::start(loaded.setup);
+    race.plasma_stats().expect("the disc authors a Plasma");
+    assert!(
+        race.sim.world.ship_count > 1,
+        "a Single Race needs at least one opponent to repurpose as a target"
+    );
+    assert!(
+        race.sim.world.ships[1].active,
+        "slot 1 is not an active opponent"
+    );
+
+    let throttle = held(Button::Cross);
+    for _ in 0..WARM_UP_TICKS {
+        race.tick(&throttle);
+    }
+
+    let wav = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../data/shots")
+        .join("plasma-hitship.wav");
+    let mut audio = oag_game::audio::Audio::open(
+        &oag_game::settings::Audio::default(),
+        Some(wav.clone()),
+        None,
+        oag_audio::MIN_BUFFER,
+        false,
+    );
+
+    race.sim.world.ships[0].pickup.weapon = Some(Weapon::Plasma);
+
+    let mut plasma_press_tick = None;
+    let mut hit_ship_tick = None;
+    let mut hit_wall_tick = None;
+    for tick in 0..FLIGHT_TICKS {
+        // Re-pinned every tick, ahead of the moving player rather than a
+        // fixed world point - see this test's own doc comment.
+        let forward = race.sim.world.ships[0].physics.body.forward();
+        race.sim.world.ships[1].physics.body.position =
+            race.sim.world.ships[0].physics.body.position + forward * 15.0;
+        race.sim.world.ships[1].physics.body.linear_velocity =
+            race.sim.world.ships[0].physics.body.linear_velocity;
+
+        let snapshot = if tick == 0 {
+            fire_while_driving()
+        } else {
+            throttle
+        };
+        race.tick(&snapshot);
+        for event in race.pending_cues() {
+            if event.cue == Cue::Plasma {
+                plasma_press_tick.get_or_insert(tick);
+            }
+            if event.cue == Cue::PlasmaHitShip {
+                hit_ship_tick.get_or_insert(tick);
+            }
+            if event.cue == Cue::PlasmaHitWall {
+                hit_wall_tick.get_or_insert(tick);
+            }
+        }
+        audio.race_tick(&mut race);
+        audio.tick();
+
+        if hit_ship_tick.is_some() || hit_wall_tick.is_some() {
+            break;
+        }
+    }
+    audio.finish().expect("writing the dump");
+
+    let press = plasma_press_tick.expect("PLASMA never fired");
+    assert!(
+        hit_wall_tick.is_none(),
+        "PLASMAHITWALL fired on a craft hit (tick {:?}) - the target craft was \
+         missed and the bolt reached the real track's own geometry instead",
+        hit_wall_tick
+    );
+    let hit = hit_ship_tick.expect(
+        "PLASMAHITSHIP never fired - the bolt may have missed the target craft \
+         within this test's own FLIGHT_TICKS budget",
+    );
+    let charge_ticks = (oag_gameplay::projectile::plasma::CHARGE_SECONDS * 60.0) as u64;
+    assert!(
+        hit - press >= charge_ticks,
+        "PLASMAHITSHIP landed only {} ticks after PLASMA, inside the {charge_ticks}-tick \
+         wind-up - the bolt cannot have flown anywhere",
+        hit - press
+    );
+    println!(
+        "PLASMA at tick {press}, PLASMAHITSHIP at tick {hit} ({} ticks)",
         hit - press
     );
 
