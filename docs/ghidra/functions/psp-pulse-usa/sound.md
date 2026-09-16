@@ -440,8 +440,13 @@ Sas_QueueSetVoice(v, *(u32 *)(wf + 0x10),      /* address */
 So a **waveform descriptor** carries, at least:
 
 ```text
-wf + 0x02   s8    a note or pitch base
-wf + 0x03   s8    a second one
+wf + 0x00   s8    read by FUN_0898f5e8; a priority, hypothesised (see the pitch section)
+wf + 0x01   s8    volume, 60..127 on every PSP descriptor
+wf + 0x02   s8    centre note   - the pitch, decoded 2026-09-16, see below
+wf + 0x03   s8    centre fine   - 1/128ths of a semitone, 0x7f in tune
+wf + 0x04   s16   pan, degrees, reduced modulo 360
+wf + 0x08   s8    pitch-bend range down, semitones (Scream_ComputeVoiceNote)
+wf + 0x09   s8    pitch-bend range up
 wf + 0x0a   u16   paired with +0x0c into an envelope call
 wf + 0x0c   u16
 wf + 0x0e   u16   flags; 0x40 selects loop mode, 0x80 marks NOT-ADPCM
@@ -748,6 +753,187 @@ confirmed consumer, `0x14` does not.** No opcode found scanning for `0x14`
 specifically, so unlike `0x15` its "why does the disc author this" stays
 genuinely open rather than answered by a sibling opcode.
 
+## The pitch: a waveform's rate is its descriptor's centre note, 2026-09-16
+
+`docs/formats/psp-audio.md` carried the rate every waveform plays at as a
+placeholder 44,100 Hz, with the descriptor's first word as the candidate
+field. This section traces every writer of the SAS voice record's pitch field
+(`+0x50`, the one bit `0x10` in the dirty word commits through `Sas_SetPitch`)
+back to the bank bytes it is computed from, and then watches the hardware call
+live. The answer is two signed bytes and an integer table walk, and the walk is
+now [`oag_formats::sblk::pitch`](../../../../crates/formats/src/sblk/pitch.rs).
+
+### The writer set is closed
+
+Searching the whole binary for `ori ..., 0x10` inside the `0x0898xxxx`-
+`0x0899xxxx` sound module finds one store to `+0x50`:
+
+```c
+undefined4 Sas_QueuePitch(voice, pitch) {                 /* 0x0898bf14 */
+  (&DAT_08b89420)[voice * 0x1b] = pitch;                  /* +0x50 */
+  (&DAT_08b8940c)[voice * 0x1b] |= 0x10;                  /* +0x3c, dirty */
+  return 1;
+}
+```
+
+`0x08b89420 - 0x08b893d0 = 0x50`, `0x1b` words is `0x6c` bytes: the same
+table and the same field `Sas_CommitVoices` reads and hands to
+`__sceSasSetPitch`. It has **exactly two callers**, `Scream_KeyOnVoice`
+(`0x0899456c`) and `Scream_UpdateVoicePitch` (`0x0898f25c`), and both compute
+the argument the same way, so every pitch word this binary ever commits comes
+out of the chain below. Confidence **92** - a direct store to the exact offset,
+the sibling of `Sas_QueueSetVoice` in shape and address, and the two-caller
+count is Ghidra's xref list on a function it resolves cleanly.
+
+### The chain
+
+```text
+Scream_StartSound        0x0898f864   handler+0x34 = 0x3c (note 60), +0x35 = 0 (fine)
+                                      handler+0x14 = pitch offset (arg flag 0x10, else 0)
+                                      handler+0x36 = pitch bend   (arg flag 0x20, else 0)
+Scream_OpKeyOn           0x0898fc78   copies +0x34/+0x35 to voice+0x18/+0x19,
+                                      +0x36 to voice+0x24, +0x14 to voice+0x26,
+                                      the descriptor pointer to voice+0x14
+Scream_KeyOnVoice        0x0899456c   note, fine  = Scream_ComputeVoiceNote(wf, bend, offset, note, fine)
+                                      pitch       = Scream_VoicePitch(wf+0x02, wf+0x03, note, fine)
+                                      Sas_QueuePitch(voice, pitch)
+Scream_UpdateVoicePitch  0x0898f25c   the same two calls per voice, every update, with
+                                      +0x36 = +0x42 + +0x40 and +0x14 = +0x46 + +0x44
+```
+
+`Scream_ComputeVoiceNote` (`0x089950a0`, confidence **88**) is the
+modulation:
+
+```c
+void Scream_ComputeVoiceNote(wf, bend, offset, note, fine, int *out_note, uint *out_fine) {
+  if (bend < 0) v = wf[0x08] * bend * 0x80 / 0x8000;   /* bend-down range, semitones */
+  else          v = wf[0x09] * bend * 0x80 / 0x7fff;   /* bend-up range */
+  total     = note * 0x80 + fine + offset + v;         /* 1/128ths of a semitone */
+  *out_note = total / 0x80;                            /* toward zero */
+  *out_fine = total < 0 ? -((-total) & 0x7f) : total & 0x7f;
+}
+```
+
+`Scream_VoicePitch` (`0x08994fec`, confidence **90**) reads the descriptor's
+`+0x02` and `+0x03` as **signed bytes** (`sll 0x18; sra 0x18` on both), takes
+the absolute value of a negative centre note, and multiplies the result by
+`0x1278b >> 16` when it did:
+
+```text
+08995018  bgez a3, 0x08995040          ; centre note >= 0: plain
+08995020  subu a3, zero, a3            ; else negate ...
+0899503c  andi a3, a3, 0xffff
+08995068  jal  Scream_NoteToPitch
+08995078  lui  a0, 0x1
+0899507c  addiu a0, a0, 0x278b         ; 0x1278b
+08995080  mult a2, a0
+08995088  srl  a2, a2, 0x10            ; pitch * 0x1278b >> 16
+```
+
+`Scream_NoteToPitch` (`0x089952c4`, confidence **90**) is Sony's standard
+note-to-pitch: `(centre_note, centre_fine, note, fine) -> pitch`, with
+`0x1000` meaning "the sample's own rate". The fine offset is
+`centre_fine + fine - 0x7f`, borrowing a semitone from `note` while negative,
+so a centre fine of `0x7f` is in tune and `0` is one semitone flat. The
+semitone distance `note - centre` splits into an octave shift of `0x1000` and
+a 12-entry Q15 table, and the fine offset indexes a 128-entry Q15 table:
+
+| Table | Address | Entries | Closed form |
+| --- | --- | --- | --- |
+| `g_scream_semitone_table` | `0x08ac36dc` | 12 x u32, `0x8000 .. 0xf1a1` | `floor(32768 * 2^(i/12))`, all 12 |
+| `g_scream_fine_table` | `0x08ac370c` | 128 x u32, `0x8000 .. 0x878c` | `floor(32768 * 2^(i/1536))`, all 128 |
+
+The two abut - 560 bytes, 140 words, no slack - and the closed forms hold on
+every entry (checked in `crates/formats/src/sblk/pitch/tests.rs`), so a fine
+step is 1/128 of a semitone and the note is a MIDI note. Confidence **92** on
+both labels: the addresses are `lui/addiu` pairs in the function that indexes
+them, and the closed form is what a wrong base could not produce.
+
+**The default play is note 60, fine 0, always.** `Scream_StartSound`'s
+`sb a0, 0x34(s0)` at `0x0898fa58` (with `a0 = 0x3c`) and `sb zero, 0x35(s0)`
+at `0x0898fa5c` are the only stores to those two handler bytes anywhere in
+the sound module - an instruction search over the whole binary for `sb` to
+`0x34(`/`0x35(` finds no other in `0x0898xxxx`-`0x0899xxxx` - so a
+descriptor's rate at rest is `Scream_VoicePitch(centre, fine, 60, 0)` and
+nothing in a cue's command list can change it. What the game adds is the
+offset and bend through `Scream_UpdateVoicePitch`, which is how the engine
+note follows speed; that is the caller's business, not the bank's.
+
+### What `0x1278b` is, and is not
+
+`0x1278b / 0x10000 = 1.154465`. It is not `48000 / 44100` (`1.088`), and not
+that times `2^(1/12)` either (`0x12735`). It is recorded as read and not
+explained. What it *does*: with every centre note on both Pulse discs and
+both Pure discs negative (0 of 2,334 key-on descriptors positive, none
+`-128`), the multiply is universal, and it puts `(-86, 66)` on exactly
+`0x400`, `(-74, 66)` on `0x800` and `(-62, 66)` on `0x1000` - 11,025, 22,050
+and 44,100 Hz, the rates the disc's banks are full of. A reading of the
+bytes without it lands nowhere round.
+
+### Confirmed live: 190 of 190
+
+PPSSPP v1.20.4, `pulse-psp-usa.chd`, own profile, breakpoint at
+`__sceSasSetPitch` (`0x08a76c7c`), reading `a1` (voice) and `a2` (pitch) at
+every hit and, off the voice record itself, the descriptor pointer at
+`+0x14`, the note/fine at `+0x18`/`+0x19` and the bend/offset at
+`+0x24`/`+0x26` - so each hit's prediction is computed from the same inputs
+the game used, through the port:
+
+| Where | Hits | Matched | Distinct pitch words |
+| --- | ---: | ---: | --- |
+| Front end (menus, `frontend.bnk`) | 40 | **40** | `0x260`, `0x35c`, `0x400` |
+| Time Trial on Talon's Junction, driven | 150 | **150** | 47, `0x35c` .. `0x908` |
+
+The front end is the discriminating case the format page asked for: three
+different words out of one bank, each exactly what its descriptor's
+`(centre, fine)` predicts, which falsifies "one rate per bank" outright. The
+race capture exercises the modulation too - 90 of its hits carry a non-zero
+pitch offset (down to `-1252`) and 73 a non-zero bend - and every one of
+those reproduces, so `Scream_ComputeVoiceNote`'s rounding is right as well.
+Every hit's `ra` was `0x08a2aeb0`, inside `Sas_SetPitch`, as the table above
+already said it would be.
+
+Confidence **95** on the decode as a whole: a decompiled chain with every
+link read, an integer port that reproduces 190 live hardware calls to the
+bit, and a data-side invariant (exact standard rates falling out of a walk
+that was not fitted to them) on three discs. What is *not* claimed is an
+authored sample rate: the bytes encode a transposition against the SAS
+core's 44,100 Hz, and `(note, fine)` cancelling against the centre gives
+`0x1000`, so "a 16 kHz recording pitched down" and "a 15,569 Hz recording"
+are the same descriptor. The PS2's banks are byte-identical but its
+`SCREAM.IRX` was not read; whether its arithmetic (on a 48 kHz SPU2 base)
+lands on the same rates is open, and `oag_game` plays PS2 banks through the
+PSP walk on the strength of the bytes being the same.
+
+### Names owed and taken
+
+| Address | Kind | Name | Confidence |
+| --- | --- | --- | --- |
+| `0x0898bf14` | function | `Sas_QueuePitch` | 92 |
+| `0x08994fec` | function | `Scream_VoicePitch` | 90 |
+| `0x089952c4` | function | `Scream_NoteToPitch` | 90 |
+| `0x089950a0` | function | `Scream_ComputeVoiceNote` | 88 |
+| `0x0898f25c` | function | `Scream_UpdateVoicePitch` | 85 |
+| `0x08ac36dc` | data | `g_scream_semitone_table` | 92 |
+| `0x08ac370c` | data | `g_scream_fine_table` | 92 |
+
+`Scream_UpdateVoicePitch` is 85 rather than 88 because what triggers it is
+not read - it walks a handler's voices (`FUN_089930ac(handler, i)` yields
+them) and re-pitches each, and the sums it forms first (`+0x42 + +0x40` into
+the bend, `+0x46 + +0x44` into the offset) read as base-plus-modulation
+pairs without the writers of any of the four being traced.
+
+**Not named:** `FUN_0898f5e8`, which `Scream_OpKeyOn` calls with the
+handler's `+0x3a` (a volume, `0x400` at rest) and the descriptor, and whose
+result goes to the voice allocator as its first argument. It reads the
+descriptor's `+0x00` as a signed byte and, when flag bits `0x6` of `+0x0e`
+select a divisor (`/5` or `/2`), scales that byte down as the volume falls
+below `0x3b6`. **Hypothesis: a voice priority that quiet plays give up**,
+with `+0x00` the descriptor's authored priority - which would make the
+24-byte record `priority, volume, centre note, centre fine, pan, ...`, Sony's
+usual tone layout. Below 70, so no name; the allocator (`FUN_089953c0` /
+`FUN_08994550`) is unread and would settle it.
+
 ## Not determined
 
 - **37 of the 45 opcode handlers, plus one read but not confidently named.**
@@ -804,4 +990,9 @@ genuinely open rather than answered by a sibling opcode.
   between.
 - **EU cross-verification.** Nothing on this page has been checked against
   `psp-pulse-eu`, which is normally this project's primary target.
-- **Nothing here is runtime-verified.** Every claim is static reading.
+- ~~**Nothing here is runtime-verified.**~~ **The pitch chain is**, 190 of
+  190 hits at `__sceSasSetPitch` (see
+  [the pitch section](#the-pitch-a-waveforms-rate-is-its-descriptors-centre-note-2026-09-16)),
+  and `Sas_SetVolume`'s call site and the voice table's base were read live
+  on 2026-09-06. The cue dispatch and the opcode handlers are still static
+  reading only.

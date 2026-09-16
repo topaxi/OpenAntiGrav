@@ -4,7 +4,13 @@
 
 ## Open
 
-- The sample rate is not recovered.
+- ~~The sample rate is not recovered.~~ **Recovered 2026-09-16, confidence
+  95**: the descriptor's `+0x02`/`+0x03` centre note and fine through the
+  engine's own note-to-pitch walk (`oag_formats::sblk::pitch`), 190 of 190
+  live `sceSasSetPitch` hits reproduced to the bit. See
+  [psp-audio.md](../../docs/formats/psp-audio.md#the-rate-each-waveform-plays-at).
+  Still open from it: the PS2's own arithmetic (`SCREAM.IRX` unread, its
+  byte-identical banks play through the PSP walk).
 - ~~Which alternate sounds play is decoded on HD but not corroborated on
   PSP/PS2.~~ **Corroborated on PSP 2026-09-04** (`0x19`, confidence 88 both
   sides now) and wired into `Banks::pick`
@@ -12,7 +18,12 @@
   never repeats the immediately previous pick for a cue. PS2's own binary is
   not independently checked - it is grouped with PSP/Pure as the same
   library generation by operand byte layout, not by having been read itself.
-- `~ENGINE`'s pitch is read as cents, an approximation.
+- ~~`~ENGINE`'s pitch is read as cents, an approximation.~~ **Settled the
+  other way, 2026-09-16**: the unit is 1/128 of a semitone, 1536 to the
+  octave, confidence 92 - the same live capture caught the engine at rest
+  with an offset of `-1148` and a pitch word that is `2^(-1148/1536)` of its
+  descriptor's rate. `crates/game/src/audio/sfx/engine.rs` divides by 1536
+  now. Still not carried: the Doppler term.
 - The track's own authored sound sources (as opposed to craft positional audio) remain open.
 
 ## Next Steps

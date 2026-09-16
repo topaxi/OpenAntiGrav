@@ -866,3 +866,10 @@
 0x08819b24	function	Hud_SampleSightDepth	80	lock-sight.md
 0x08ab0a4c	data	g_hud_sight_depth_sample	80	lock-sight.md
 
+0x0898bf14	function	Sas_QueuePitch	92	sound.md
+0x08994fec	function	Scream_VoicePitch	90	sound.md
+0x089952c4	function	Scream_NoteToPitch	90	sound.md
+0x089950a0	function	Scream_ComputeVoiceNote	88	sound.md
+0x0898f25c	function	Scream_UpdateVoicePitch	85	sound.md
+0x08ac36dc	data	g_scream_semitone_table	92	sound.md
+0x08ac370c	data	g_scream_fine_table	92	sound.md

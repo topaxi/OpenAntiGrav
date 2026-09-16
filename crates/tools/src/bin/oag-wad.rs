@@ -112,8 +112,10 @@ enum Command {
     ///
     /// A cue's waveform count is what `Bank::cue_sounds` resolves through the
     /// command table; `loop` is the descriptor's own `+0x40` flag. Seconds are
-    /// at the rate `oag_game::audio::sfx` assumes, which is **not recovered** -
-    /// see `docs/formats/psp-audio.md`.
+    /// summed with each waveform at its own rate - the one its descriptor's
+    /// centre note keys it on with, `Sound::sample_rate` - and the distinct
+    /// rates a cue's waveforms play at are listed after them. See
+    /// `docs/formats/psp-audio.md`.
     Sounds {
         /// A `.wad` path, or `<image>:<path-on-disc>`.
         archive: String,
