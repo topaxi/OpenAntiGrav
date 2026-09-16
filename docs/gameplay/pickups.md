@@ -805,15 +805,18 @@ with the volley's lateral components measured symmetric on the disc's own
 
 ### What is not built
 
-**The slowdown mechanic is recovered but not built.** Its law came out of the
+**The slowdown mechanic is recovered, and built.** Its law came out of the
 PSP executable on 2026-09-06 - `Ship_AddSlowdown` (`0x08848690`) adds a hit's
 `slowdown_time` to a timer at `craft+0x2e0` and clamps the running total to
 `<Global slowdown_limit>`, which is therefore a **ceiling on seconds of slowdown
 outstanding**, not a speed floor; while that timer runs the victim gets no
 engine thrust, a zeroed throttle and no lateral grip, and its hover target
 height is lowered. `oag_tables::weapons` decodes `slowdown_time` on all six
-decoded blocks as of the same day. What is *not* built is the physics half - a
-craft hit by a mine, rocket or missile does not slow down yet. See
+decoded blocks as of the same day. **The physics half landed the same day
+too**: `oag_gameplay::slowdown::drain` runs once a tick for the whole field,
+ahead of every craft's own step, and `oag_physics::slowdown` holds the timer,
+the clamp and the four effects it drives - a craft hit by a mine, rocket,
+missile or plasma bolt does slow down. See
 [engine.md](../ghidra/functions/psp-pulse-usa/engine.md). `Ship_Damage`'s `weapon_kind`
 sub-bucket - nine cases - is unmapped, and the absorb-spark effect its
 `source == 2` branch triggers is not reproduced. The visual is a placeholder: an
@@ -848,12 +851,15 @@ the original does: the stamp is unconditional and the grant is not.
 
 ## What is not built
 
-- **Two of the thirteen weapons**, now that the Cannon and the Quake have
-  joined the built set - see
+- **One of the thirteen weapons**, now that the Cannon, the Quake and the
+  LeachBeam have all joined the built set - see
   [cannon-quake-leachbeam.md](../ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md).
   The LeachBeam's beam is a resolved link to whatever the Missile's own
-  lock-on already picked, drained continuously while connected; the two rate
-  functions and the health/shield consumer are still unread. The Repulser
+  lock-on already picked, drained continuously while connected; its two rate
+  functions (`LeachBeam_DrainRate`, `LeachBeam_RepairRate`) and its
+  health/shield consumers (`Ship_ApplyPendingWeaponDamage`,
+  `Ship_ApplyPendingWeaponRepair`) were read and wired 2026-09-08 - see "Only
+  what has an effect is handed out" above. The Repulser
   remains the one weapon needing a genuine craft-state field, and is
   deferred as Eliminator-only regardless.
 - ~~**The Cannon's per-class base speed, `func_0x00060af4` (`0x08864af4`).**
