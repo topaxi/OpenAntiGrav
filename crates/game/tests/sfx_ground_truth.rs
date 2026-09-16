@@ -140,7 +140,7 @@ fn every_wired_cue_resolves_on_every_psp_and_ps2_disc() {
     assert!(ran > 0, "no disc image was present");
 }
 
-/// Wipeout HD loads eight of the nine cues, and says why it misses the ninth.
+/// Wipeout HD loads thirteen of the fourteen cues, and says why it misses the fourteenth.
 ///
 /// Pinned as a *list* rather than a count, because the interesting part is
 /// which one and for which reason. `~ENGINE` does not exist on HD at all: its
@@ -169,9 +169,22 @@ fn every_wired_cue_resolves_on_every_psp_and_ps2_disc() {
 /// the same series with the same cue names is likely to fire them at the same
 /// moments, and nothing here has looked at HD's own weapon-fire dispatch to
 /// check.
+///
+/// **The Plasma's four cues (`PLASMA`, `~PLASMATVL`, `PLASMAHITWALL`,
+/// `PLASMAHITSHIP`) are the newest addition, found stale here 2026-09-16 by
+/// the multiplayer-prerequisite merge's own verification pass rather than by
+/// the commit that wired them** (`687d8743`, weeks earlier - this test is
+/// `#[ignore]`d, so `just` stayed green the whole time, the same trap the
+/// `MINELAUNCH` paragraph above already names). All four resolve on HD's own
+/// `weapons.bnk` with no per-title work: 4, 3, 5 and 15 waveforms
+/// respectively. Bank presence only, the same caveat as `MINELAUNCH`'s -
+/// `Cue::Plasma`/`PlasmaTravel`/`PlasmaHitWall`/`PlasmaHitShip`'s own doc
+/// comments cite `psp-pulse-usa` evidence alone, confidence 90 for the *PSP*
+/// trigger; nothing here has looked at HD's own Plasma dispatch to confirm it
+/// fires the same four cues at the same moments.
 #[test]
 #[ignore = "needs a disc image in data/images/"]
-fn wipeout_hd_loads_the_nine_cues_it_has_and_reports_the_one_it_does_not() {
+fn wipeout_hd_loads_the_thirteen_cues_it_has_and_reports_the_one_it_does_not() {
     let path = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../..")
         .join("data/images/hdfury-ps3-eu-dec.iso");
@@ -220,6 +233,10 @@ fn wipeout_hd_loads_the_nine_cues_it_has_and_reports_the_one_it_does_not() {
             "~BLOWUP",
             "~ROCKLOCK",
             "MINELAUNCH",
+            "PLASMA",
+            "~PLASMATVL",
+            "PLASMAHITWALL",
+            "PLASMAHITSHIP",
         ],
         "HD's loadable cue set changed"
     );
@@ -257,11 +274,23 @@ fn wipeout_hd_loads_the_nine_cues_it_has_and_reports_the_one_it_does_not() {
     assert!(says(
         r"MINELAUNCH -> 88 waveform(s) from Data\Sound\weapons.bnk"
     ));
+    // The Plasma's four cues, bank presence only - see this test's own doc
+    // comment for the same caveat `MINELAUNCH` carries.
+    assert!(says(r"PLASMA -> 4 waveform(s) from Data\Sound\weapons.bnk"));
+    assert!(says(
+        r"~PLASMATVL -> 3 waveform(s) from Data\Sound\weapons.bnk"
+    ));
+    assert!(says(
+        r"PLASMAHITWALL -> 5 waveform(s) from Data\Sound\weapons.bnk"
+    ));
+    assert!(says(
+        r"PLASMAHITSHIP -> 15 waveform(s) from Data\Sound\weapons.bnk"
+    ));
 }
 
 /// Structural checks - the bank names these cues, in this order, at these
 /// indices - are `hd_title_ground_truth.rs`'s job. This is the layer above,
-/// on the same terms as [`wipeout_hd_loads_the_nine_cues_it_has_and_reports_the_one_it_does_not`]:
+/// on the same terms as [`wipeout_hd_loads_the_thirteen_cues_it_has_and_reports_the_one_it_does_not`]:
 /// that a cue reported as loaded actually decodes to a waveform, not a report
 /// line that reads well and a silent voice.
 #[test]
