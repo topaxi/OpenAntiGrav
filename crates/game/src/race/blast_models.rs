@@ -48,6 +48,43 @@ pub(super) const PLASMA_BLAST_HEMISPHERE2_ANIM_RATE: f32 = 0.07;
 /// See [`PLASMA_BLAST_HALO_ANIM_RATE`].
 pub(super) const PLASMA_BLAST_HEMISPHERE1_ANIM_RATE: f32 = 0.07;
 
+/// The three `.vex` files the blast's own detonation loads, grouped into
+/// one field on [`options::Loaded`] and one parameter of [`Scene::new`]
+/// rather than three of each - the line budget `race/load.rs` and
+/// `race/scene.rs` had left for a fifth weapon-model kind was exactly zero.
+#[derive(Debug, Clone, Default)]
+pub struct PlasmaBlastModels {
+    pub halo: Option<Model>,
+    pub hemisphere2: Option<Model>,
+    pub hemisphere1: Option<Model>,
+}
+
+/// The three drawable pools [`Scene`] builds from a [`PlasmaBlastModels`] -
+/// grouped for the same reason that is.
+#[derive(Debug)]
+pub(in crate::race) struct PlasmaBlastDrawables {
+    pub(in crate::race) halo: Vec<Drawable>,
+    pub(in crate::race) hemisphere2: Vec<Drawable>,
+    pub(in crate::race) hemisphere1: Vec<Drawable>,
+}
+
+impl PlasmaBlastDrawables {
+    /// Builds all three pools with `build_one` - `Scene::new`'s own
+    /// `weapon_drawables` closure, reused rather than duplicated so this
+    /// pool is built exactly like the Rocket's, the Mine's, the Bomb's and
+    /// the Cannon round's.
+    pub(in crate::race) fn build(
+        models: PlasmaBlastModels,
+        mut build_one: impl FnMut(Option<Model>) -> Result<Vec<Drawable>>,
+    ) -> Result<Self> {
+        Ok(Self {
+            halo: build_one(models.halo)?,
+            hemisphere2: build_one(models.hemisphere2)?,
+            hemisphere1: build_one(models.hemisphere1)?,
+        })
+    }
+}
+
 /// One live render-side blast: where it detonated, and how long ago.
 ///
 /// **View state, not `World` state** - see this module's own doc comment.

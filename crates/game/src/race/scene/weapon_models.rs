@@ -58,6 +58,61 @@ pub(super) fn build(
     Ok(drawables)
 }
 
+/// Builds every weapon's own drawable pool in one call - the Rocket's, the
+/// Mine's, the Bomb's, the Cannon round's and the Plasma blast's three -
+/// each with [`build`], on `Scene::new`'s own terms.
+///
+/// One function rather than one `let` per kind in `scene.rs`, for the same
+/// line-budget reason [`super::super::load::weapon_models::load_bodies`]
+/// exists on the loading side.
+/// [`build_all`]'s own return: one drawable pool per kind, the Plasma's own
+/// three grouped as [`blast_models::PlasmaBlastDrawables`] already are.
+type WeaponBodies = (
+    Vec<Drawable>,
+    Vec<Drawable>,
+    Vec<Drawable>,
+    Vec<Drawable>,
+    blast_models::PlasmaBlastDrawables,
+);
+
+#[allow(clippy::too_many_arguments)]
+pub(super) fn build_all(
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    rocket_model: Option<Model>,
+    mine_model: Option<Model>,
+    bomb_model: Option<Model>,
+    cannon_model: Option<Model>,
+    plasma_blast_models: blast_models::PlasmaBlastModels,
+    format: wgpu::TextureFormat,
+    anisotropy: Anisotropy,
+    sample_count: u32,
+    scene_depth: mesh_render::Depth,
+    zone_art: &mesh_render::zone::StageArt,
+    shadow_map: &oag_render::shadow::map::Map,
+) -> Result<WeaponBodies> {
+    let one = |model| {
+        build(
+            device,
+            queue,
+            model,
+            format,
+            anisotropy,
+            sample_count,
+            scene_depth,
+            zone_art,
+            shadow_map,
+        )
+    };
+    Ok((
+        one(rocket_model)?,
+        one(mine_model)?,
+        one(bomb_model)?,
+        one(cannon_model)?,
+        blast_models::PlasmaBlastDrawables::build(plasma_blast_models, one)?,
+    ))
+}
+
 impl super::Scene {
     /// Writes this tick's matrices onto the Rocket's, the Mine's and the
     /// Bomb's drawables, and hands back all three matrix lists so the caller
@@ -166,9 +221,9 @@ impl super::Scene {
             active[slot] = true;
             let mvp = view_projection * draw.matrix;
             for (drawables, seconds) in [
-                (&self.plasma_blast_halo, draw.halo_seconds),
-                (&self.plasma_blast_hemisphere2, draw.hemisphere2_seconds),
-                (&self.plasma_blast_hemisphere1, draw.hemisphere1_seconds),
+                (&self.plasma_blast.halo, draw.halo_seconds),
+                (&self.plasma_blast.hemisphere2, draw.hemisphere2_seconds),
+                (&self.plasma_blast.hemisphere1, draw.hemisphere1_seconds),
             ] {
                 let Some(drawable) = drawables.get(slot) else {
                     continue;
@@ -178,6 +233,29 @@ impl super::Scene {
             }
         }
         active
+    }
+
+    /// Draws every live blast's three models - `active` is
+    /// [`Self::write_plasma_blasts`]'s own return, sparse rather than a
+    /// leading count the way the four kinds above are bounded.
+    pub(super) fn draw_plasma_blasts(
+        &self,
+        active: &[bool; blast_models::PLASMA_BLAST_SLOTS],
+        pass: &mut wgpu::RenderPass<'_>,
+        stats: &mut SceneStats,
+    ) {
+        let pools = [
+            &self.plasma_blast.halo,
+            &self.plasma_blast.hemisphere2,
+            &self.plasma_blast.hemisphere1,
+        ];
+        for (slot, _) in active.iter().enumerate().filter(|(_, live)| **live) {
+            for pool in pools {
+                if let Some(drawable) = pool.get(slot) {
+                    stats.add(drawable.draw(pass, None, None, None, None));
+                }
+            }
+        }
     }
 }
 

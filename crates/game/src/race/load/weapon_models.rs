@@ -48,3 +48,42 @@ pub(super) fn load(
         }
     }
 }
+
+/// Every weapon's own body model in one call - the Rocket's, the Mine's,
+/// the Bomb's, the Cannon round's and the Plasma blast's three - each on
+/// [`load`]'s own terms.
+///
+/// One function rather than one `let` per kind in `load.rs`, which is what
+/// buys back the line budget that file has had none of to spare since the
+/// Cannon's own row landed - see this module's doc comment for the seam
+/// this continues.
+pub(super) fn load_bodies(
+    archives: &mut oag_assets::Archives,
+    lod: mesh::Lod,
+    report: &mut Vec<String>,
+) -> (
+    Option<Model>,
+    Option<Model>,
+    Option<Model>,
+    Option<Model>,
+    blast_models::PlasmaBlastModels,
+) {
+    let mut one = |entry, fallback| load(archives, entry, fallback, lod, report);
+    (
+        one(ROCKET_MODEL_ENTRY, "a rocket"),
+        one(MINE_MODEL_ENTRY, "a laid mine"),
+        one(BOMB_MODEL_ENTRY, "a laid bomb"),
+        one(CANNON_MODEL_ENTRY, "a cannon round"),
+        blast_models::PlasmaBlastModels {
+            halo: one(PLASMA_BLAST_HALO_MODEL_ENTRY, "a plasma blast halo"),
+            hemisphere2: one(
+                PLASMA_BLAST_HEMISPHERE2_MODEL_ENTRY,
+                "a plasma blast hemisphere",
+            ),
+            hemisphere1: one(
+                PLASMA_BLAST_HEMISPHERE1_MODEL_ENTRY,
+                "a plasma blast hemisphere",
+            ),
+        },
+    )
+}

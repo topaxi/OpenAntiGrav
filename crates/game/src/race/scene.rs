@@ -157,19 +157,7 @@ pub struct Scene {
     /// `Data\Weapons\pulse_muzzleflash.vex` did not load, and a round then
     /// draws as nothing rather than as an invented stand-in.
     cannon_rounds: Vec<Drawable>,
-    /// The Plasma's own detonation: one drawable per render-side blast slot,
-    /// for each of the three models. See `blast_models` for that pool - it
-    /// is sized the same as [`Self::rockets`] but indexed independently of
-    /// the projectile pool, because a blast outlives the bolt that made it.
-    /// Empty, on the same terms as [`Self::rockets`], when this model's own
-    /// entry did not load.
-    plasma_blast_halo: Vec<Drawable>,
-    /// See [`Self::plasma_blast_halo`]; drawn second, matching
-    /// `PlasmaBlast_Construct`'s own load order.
-    plasma_blast_hemisphere2: Vec<Drawable>,
-    /// See [`Self::plasma_blast_halo`]; drawn third, matching
-    /// `PlasmaBlast_Construct`'s own load order.
-    plasma_blast_hemisphere1: Vec<Drawable>,
+    plasma_blast: blast_models::PlasmaBlastDrawables,
     /// Each slot's own plume's authored texture-transform keyframes, sampled
     /// per frame and applied to that plume's authored UVs - the recovered
     /// mechanism (`TEXMAPMODE` 0 plus the animated `TEXOFFSET` u-scroll; see
@@ -351,9 +339,7 @@ impl Scene {
         mine_model: Option<Model>,
         bomb_model: Option<Model>,
         cannon_model: Option<Model>,
-        plasma_blast_halo_model: Option<Model>,
-        plasma_blast_hemisphere1_model: Option<Model>,
-        plasma_blast_hemisphere2_model: Option<Model>,
+        plasma_blast_models: blast_models::PlasmaBlastModels,
         shield_cockpit: Option<Model>,
         flare: Option<FlareTexture>,
         noise: Option<FlareTexture>,
@@ -873,37 +859,27 @@ impl Scene {
             )?),
             None => None,
         };
-        // One per projectile slot, cloned the way the hulls and plumes above are -
-        // the Rocket's, the Mine's and the Bomb's, all three built the same way by
-        // [`weapon_models::build`]. A laid mine's hull is opaque too - a painted
-        // shell, not a glow - so every one of the three takes the ordinary
-        // transparent blend and the protected glow mask the ships take, and any
-        // flare around one stays in the additive pass with the exhaust where it
-        // belongs.
-        let weapon_drawables = |model| {
-            weapon_models::build(
-                device,
-                queue,
-                model,
-                format,
-                anisotropy,
-                sample_count,
-                scene_depth,
-                zone_art,
-                &shadow_map,
-            )
-        };
-        let rockets = weapon_drawables(rocket_model)?;
-        let mines = weapon_drawables(mine_model)?;
-        let bombs = weapon_drawables(bomb_model)?;
-        let cannon_rounds = weapon_drawables(cannon_model)?;
-        // Built the same way as the four above, on the same pool-of-slots
-        // shape `weapon_models::build` already gives every weapon model -
-        // see `blast_models` for why the three share one transform per slot
-        // rather than each carrying its own.
-        let plasma_blast_halo = weapon_drawables(plasma_blast_halo_model)?;
-        let plasma_blast_hemisphere1 = weapon_drawables(plasma_blast_hemisphere1_model)?;
-        let plasma_blast_hemisphere2 = weapon_drawables(plasma_blast_hemisphere2_model)?;
+        // One per projectile slot: the Rocket's, the Mine's, the Bomb's, the
+        // Cannon round's and the Plasma blast's, all built the same way - see
+        // `weapon_models::build_all`. A laid mine's hull is opaque too - a
+        // painted shell, not a glow - so every one takes the ordinary
+        // transparent blend and protected glow mask the ships take, and any
+        // flare stays in the additive pass with the exhaust where it belongs.
+        let (rockets, mines, bombs, cannon_rounds, plasma_blast) = weapon_models::build_all(
+            device,
+            queue,
+            rocket_model,
+            mine_model,
+            bomb_model,
+            cannon_model,
+            plasma_blast_models,
+            format,
+            anisotropy,
+            sample_count,
+            scene_depth,
+            zone_art,
+            &shadow_map,
+        )?;
         // 64 is a stand-in size only, and only when the disc's own texture did not
         // decode; `load` has already reported that when it happens.
         let flare = flare.unwrap_or_else(|| FlareTexture::placeholder(64));
@@ -997,9 +973,7 @@ impl Scene {
             mines,
             bombs,
             cannon_rounds,
-            plasma_blast_halo,
-            plasma_blast_hemisphere1,
-            plasma_blast_hemisphere2,
+            plasma_blast,
             boost_uv_transforms,
             collision,
             sky,

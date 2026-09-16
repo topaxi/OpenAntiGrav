@@ -154,6 +154,7 @@ mod worker;
 pub mod zone_grade;
 
 pub use assets::{boost_entry_name, shield_entry_names, ship_entry_name};
+pub use blast_models::PlasmaBlastModels;
 pub use camera::chase_params;
 pub use capture::{CaptureOptions, Presented, capture, describe};
 pub use effect_names::*;
