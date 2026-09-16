@@ -345,6 +345,39 @@ fn a_rocket_that_hits_nothing_is_reaped_without_detonating() {
     assert_eq!(projectiles.live(), 0, "the slot leaked");
 }
 
+/// `Rocket_SweepProjectiles`: a rocket flying through a laid mine sets it off
+/// quietly - the mine shows its explosion and hurts nobody, and the rocket is
+/// spent without a detonation of its own.
+#[test]
+fn a_rocket_flying_through_a_laid_mine_sets_it_off_and_is_spent() {
+    let mut projectiles = Projectiles::new();
+    projectiles.spawn(Weapon::Mine, Vec3::new(0.0, 0.0, 30.0), Vec3::ZERO, 1);
+    projectiles.spawn(Weapon::Rocket, Vec3::ZERO, Vec3::Z * 600.0, 0);
+    let world = empty_world();
+    let dt = 1.0 / 60.0;
+    let radii = TriggerRadii {
+        mine: Some(5.0),
+        bomb: None,
+    };
+
+    let mut mine_impacts = 0;
+    for _ in 0..12 {
+        let impacts =
+            projectiles.advance(dt, &world, &ships(&[]), None, None, None, radii, "VENOM");
+        for impact in impacts.iter().flatten() {
+            assert_eq!(impact.kind, Weapon::Mine, "only the mine reports an ending");
+            assert!(!impact.blast, "a mine a rocket set off must not blast");
+            mine_impacts += 1;
+        }
+    }
+    assert_eq!(mine_impacts, 1, "the mine went off {mine_impacts} times");
+    assert_eq!(
+        projectiles.live(),
+        0,
+        "the rocket or the mine outlived the meeting"
+    );
+}
+
 /// The whole chain through [`step`]: fly, hit, blast. The one test that
 /// would catch the halves being wired to each other wrongly rather than each
 /// being right on its own.
