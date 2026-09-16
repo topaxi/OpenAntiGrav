@@ -137,3 +137,133 @@ fn only_a_plasma_is_ever_held() {
     assert!(projectiles.charge_up(Vec3::ZERO, Vec3::Z, 0, CHARGE_SECONDS));
     assert_eq!(projectiles.slots[1].charge, CHARGE_SECONDS);
 }
+
+/// A plasma bolt that hits nothing detonates when its ten seconds are up -
+/// the same ending a wall gives it, ported 2026-09-16.
+///
+/// **Recovered from `Plasmas_Update` (`0x0886b490`), read at instruction level
+/// with no elision.** `10.0 < age` sets the same destroy bit a wall does, and
+/// both endings reach the *identical* teardown - `Psys_Release_q`,
+/// `Plasma_SpawnDetonation`, `PLASMAHITWALL`. Flown in an empty world so
+/// nothing but the timer can end it.
+#[test]
+fn a_plasma_bolt_detonates_when_its_ten_seconds_are_up() {
+    let geometry = CollisionWorld::new();
+    let ships: Vec<crate::world::Ship> = Vec::new();
+    let mut projectiles = Projectiles::new();
+    assert!(projectiles.charge_up(Vec3::ZERO, Vec3::Z * 200.0, 0, 0.0));
+
+    let mut ticks = 0_usize;
+    let mut ended: Option<crate::projectile::Impact> = None;
+    while ended.is_none() {
+        let impacts = projectiles.advance(
+            TICK,
+            &geometry,
+            &ships,
+            None,
+            None,
+            crate::projectile::TriggerRadii::default(),
+            "VENOM",
+        );
+        ticks += 1;
+        ended = impacts.into_iter().flatten().next();
+        assert!(ticks < 700, "the bolt never ended");
+    }
+
+    let impact = ended.expect("an impact");
+    assert_eq!(impact.struck, None, "an empty world struck a craft");
+    assert!(
+        !impact.blast,
+        "the timeout spent a blast the original's teardown never reaches"
+    );
+
+    // Ten seconds as a literal, deliberately, and not the constant - see
+    // `an_unguided_missile_detonates_when_its_three_seconds_are_up`'s own
+    // doc comment for why.
+    let flown = ticks as f32 / 60.0;
+    assert!(
+        (flown - 10.0).abs() <= 2.0 / 60.0,
+        "it flew {flown}s, not the recovered 10.0s"
+    );
+    assert_eq!(
+        MAX_FLIGHT_SECONDS, 10.0,
+        "the constant and the number the flight is measured against have parted"
+    );
+}
+
+/// And the timeout hurts nobody, however close they are standing - the same
+/// half of the rule the Missile's self-detonation carries, and the one this
+/// port exists to close for the Plasma.
+///
+/// **The original's blast (`Weapon_PostBlastImpulse`, `0886794c`) has exactly
+/// one caller in the whole binary** - `FUN_08867b50`, the Mine's own chain,
+/// confirmed by `get_xrefs_to` - **and the Plasma's teardown is not it.** So a
+/// craft parked where a bolt runs out of time watches the flash and takes
+/// nothing.
+#[test]
+fn a_timed_out_plasma_bolt_damages_nobody_standing_in_it() {
+    let mut world = crate::World::new(1);
+    world.ship_count = 2;
+    // Slot 1 is parked near where a bolt fired down `+Z` runs out of time,
+    // and well inside `blastradius` of it.
+    for (slot, position) in [Vec3::ZERO, Vec3::Z * 500.0].into_iter().enumerate() {
+        let ship = &mut world.ships[slot];
+        ship.active = true;
+        ship.handling.dimensions = Dimensions {
+            length: 4.0,
+            width: 2.0,
+            height: 1.0,
+            shield: 100.0,
+            ..Dimensions::default()
+        };
+        ship.physics.shield = 100.0;
+        ship.physics.body.mass = 1.0;
+        ship.physics.body.position = position;
+    }
+
+    let table = oag_tables::weapons::parse(
+        r#"<WeaponStats>
+             <Weapon type="Global"><Stats slowdown_limit="0"/></Weapon>
+             <Weapon type="Plasma"><Stats absorb="1" blastforce="10" blastradius="12"
+               damage="25" slowdown_time="1" speed="600" launchSpeed="0"/></Weapon>
+           </WeaponStats>"#,
+    )
+    .expect("the fixture parses");
+
+    // Fired from beside slot 1's line rather than at it, so the swept hull
+    // test cannot end the flight early - this is about the timer, not about
+    // a hit.
+    assert!(
+        world
+            .projectiles
+            .charge_up(Vec3::X * 40.0, Vec3::Z * 200.0, 0, 0.0)
+    );
+
+    let empty = CollisionWorld::new();
+    let mut ended = false;
+    for _ in 0..700 {
+        let impacts = crate::projectile::step(
+            &mut world,
+            TICK,
+            &empty,
+            Some(&table),
+            "VENOM",
+            oag_physics::DamageRules::default(),
+            &mut [false; 2],
+        );
+        if let Some(impact) = impacts.into_iter().flatten().next() {
+            assert!(!impact.blast, "the timer spent a blast");
+            ended = true;
+            break;
+        }
+    }
+    assert!(ended, "the bolt never ran out of time");
+    assert_eq!(
+        world.ships[1].physics.shield, 100.0,
+        "a craft standing in a timed-out bolt took damage the original never deals"
+    );
+    assert_eq!(
+        world.ships[0].physics.shield, 100.0,
+        "the firing craft took damage from its own expired bolt"
+    );
+}

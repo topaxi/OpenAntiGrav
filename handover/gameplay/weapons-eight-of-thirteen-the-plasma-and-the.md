@@ -399,17 +399,27 @@ which is the whole point of the weapon.
   `pulse_plasma_hemisphere*.vex`, orients them to the located track surface and
   animates three ramps over them. This engine plays `WO_PLASMA_FLASH` and draws
   none of the three. Nothing is substituted for them.
-- **A plasma bolt that times out is reaped silently here and detonates in the
-  original.** `Plasmas_Update` (`0x0886b490`) raises the destroy bit on
-  `age > 10.0` and the *same* teardown pass then runs - so a bolt that never
-  hits anything still reaches `Plasma_SpawnDetonation`. This engine's
-  `Projectiles::advance` frees an expired slot with no `Impact` at all, which
-  is the Rocket's behaviour ported across. Wiring it is not free: an `Impact`
-  is what carries the blast, so producing one on expiry would apply damage and
-  impulse too, and whether the original's expiry path reaches
-  `Weapon_PostBlastImpulse` was not followed. **Read the teardown's other two
-  calls before changing this** - `Psys_Release_q` and `FUN_0886b898` - because
-  one of them is where that answer is.
+- ~~**A plasma bolt that times out is reaped silently here and detonates in the
+  original.**~~ **Closed and ported 2026-09-16** - see the dated section at the
+  bottom of this file and
+  [plasma.md](../../docs/ghidra/functions/psp-pulse-usa/plasma.md#the-expiry-settles-a-damage-question-nobody-had-read).
+  Short version: `FUN_0886b898` is read in full and is not the blast sweep -
+  neither it nor the teardown touches `damage`/`blastradius`/`blastforce` or a
+  craft's pending impulse, on either ending. `Projectiles::advance` now emits
+  an `Impact { blast: false, .. }` on the timeout, matching the wall-hit
+  branch in every way but the blast flag. **That wall-hit branch's own
+  `blast: true` is now a known conflict, not an oversight** - the same reading
+  says the original spends nothing there either, and it is deliberately not
+  touched by this port; see the dated section for why.
+- **The Plasma's wall-hit branch in `Projectiles::advance`
+  (`crates/gameplay/src/projectile/flight.rs`) still credits `blast: true`,
+  which the 2026-09-16 reading below says the original never does either -
+  wall or timeout, `Plasmas_Update`'s teardown is identical and spends no
+  blast on a Plasma.** Correcting it is a real behaviour change (a wall-hit
+  Plasma currently damages and pushes craft in this engine's race) with its
+  own golden-hash and regression story - out of scope for the port that closed
+  the timeout question, and left for whoever picks this up. `Impact::blast`'s
+  own doc comment in `crates/gameplay/src/projectile.rs` carries the same flag.
 - **A player mashing fire lays plasma bolts the same way they lay mines**, and
   the array fills: `--give plasma --press square` puts **128** bolts in the
   air inside 260 ticks and holds there, and in `single_race` the craft is dead
@@ -1227,4 +1237,81 @@ trigger, fuse, blast and teardown are named on mine.md (seven functions,
 is struck with the summary. Nothing in the engine's Bomb changed this pass;
 what a build needs is written there. `MINERADAR`'s held per-projectile voice
 is unchanged.
+
+## 2026-09-16: does a timed-out plasma bolt damage anything? No - and neither does a wall hit
+
+Closed the one item `plasma.md`'s own "not verified" list still carried:
+whether `FUN_0886b898` - called per live entity in `Plasmas_Update`'s pass one,
+unread until now - is the blast sweep that spends `damage`, `blastradius` and
+`blastforce`, and therefore whether a bolt that times out at 10 s damages
+craft near it.
+
+**It is not, and the negative is well-evidenced, not assumed:**
+
+1. `FUN_0886b898`'s full decompile references neither `+0xa0`
+   (`damage`), `+0xa4` (`blastradius`) nor `+0xa8` (`blastforce`) anywhere.
+2. It never writes `entity+0x110`, the pending-impulse slot every real blast
+   function spends - checked directly against `Missile_ApplyBlastForce`
+   (`0x08868ea4`, 88, `missile.md`), which does.
+3. `Weapon_PostBlastImpulse` (`0x0886794c`) - the only function in the binary
+   that reads a weapon's `damage`/`blastradius`/`blastforce` and posts an
+   impulse - has exactly one caller in the whole executable
+   (`get_xrefs_to`): `FUN_08867b50`, the Mine's own chain. The Plasma never
+   reaches it.
+4. `search_functions("Blast")` finds five names total and no
+   `Plasma_ApplyBlast`-shaped one; the two `*_Construct` functions are visual
+   only.
+5. `Plasmas_Update`'s teardown - re-read in full, no elision on the `...` the
+   page used to carry - is `Psys_Release_q`, `Plasma_SpawnDetonation`,
+   `PLASMAHITWALL`, nothing else, identically for a wall hit and the
+   `10.0 < age` timeout.
+
+Full evidence: [plasma.md](../../docs/ghidra/functions/psp-pulse-usa/plasma.md#the-expiry-settles-a-damage-question-nobody-had-read).
+
+**Ported**: `Projectiles::advance`'s Plasma-specific branch at the lifetime
+timeout (`crates/gameplay/src/projectile/flight.rs`) now emits
+`Impact { blast: false, .. }` instead of reaping the slot silently, matching
+the wall-hit branch in point, kind and owner - the same shape the Missile's
+own self-detonation already uses. `Race::tick` plays the `PLASMA_BLAST_EFFECT`
+for every impact regardless of `blast`, so the timeout now draws
+`WO_PLASMA_FLASH` exactly as a wall hit does; `blast: false` keeps
+`apply_impacts` from spending the blast. Tests: two unit tests against a hand
+fixture (`crates/gameplay/src/projectile/plasma/tests.rs`, mirroring the
+Missile's own `an_unguided_missile_detonates_when_its_three_seconds_are_up`
+pair) and one ground-truth test against a real disc
+(`crates/game/tests/plasma_ground_truth.rs`,
+`a_plasma_bolt_that_times_out_far_above_the_track_hurts_nobody_below_it` -
+fired 10,000 units above the track so it cannot reach any real wall, since a
+bolt fired down `Talons Junction`'s own racing line hit one in 1.37 s during
+this pass, measured directly).
+
+**A conflict this surfaces rather than fixes: `Projectiles::advance`'s
+wall-hit branch for the Plasma still sets `blast: true`, and the same reading
+says the original spends nothing there either.** That branch predates this
+pass. Fixing it is a real behaviour change - a wall-hit Plasma currently
+damages and pushes every craft in its `blastradius`, which the disc's own
+teardown never does - with its own golden-hash and regression story, so it is
+recorded as a new Open item above and left for whoever picks it up rather than
+folded in here.
+
+**What is genuinely open, not settled**: `FUN_0886b898` itself. Mechanically
+it sweeps two entity lists shaped exactly like the Mine's own pool
+(`+0x164`/`+0x64`) and the Bomb's own pool (`+0xc4`/`+0x44`) - both already on
+this page's own pool-shape comparison - and sets the struck entity's `+0x3c`
+bit `4`, the same "destroy" bit `mine.md` documents as `Mine_SpawnExplosion`'s
+own trigger. Read at that strength, a flying Plasma bolt could chain-detonate
+a nearby Mine or Bomb early - a third, undocumented way for either to die.
+**Not claimed at that strength**: the two radii it reads (`stats+0x100`,
+`stats+0xe0`) sit past the eleven offsets `WeaponStats_ParsePlasma` ever
+writes, so they are unauthored for a Plasma specifically, and whether they are
+a genuinely shared field or leftover memory is unread. Confidence on the
+positive identity: under 50, so `FUN_0886b898` is not renamed. Reading
+`WeaponStats_Parse`'s own common-attribute path, or a live breakpoint on
+`stats+0x100` while a Plasma is airborne near a mine, is the next step -
+nobody's task yet.
+
+Regression gate before this change:
+`race_ground_truth::a_lone_craft_gets_round_the_circuits_it_is_known_to_get_round`
+- all twelve clean. After: unchanged (the gate does not fire a Plasma at any
+craft), quoted verbatim in this pass's own commit.
 

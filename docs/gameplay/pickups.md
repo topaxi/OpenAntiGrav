@@ -70,6 +70,7 @@ This subsystem is unusually mixed, so the split comes before anything else.
 | **A bolt is reaped at 10.0 s** by the pool walker, a hardcoded ceiling and not an authored `timetodie` | **recovered** | 90 |
 | The bolt's detonation is `WO_PLASMA_FLASH`, off `Plasma_SpawnDetonation` in the pool teardown | **recovered** | 88 |
 | **What `<Plasma charge_time>` does** - authored on three tables, and a calibrated sweep of both PSP executables says **nothing reads it** | **recovered (negative)** | 90 |
+| **A Plasma bolt spends no blast on either ending** - a wall hit and the `10.0 s` timeout reach the identical teardown, and neither it, `FUN_0886b898` (read in full) nor `Weapon_PostBlastImpulse` (Mine-only, one caller in the binary) ever touches `damage`/`blastradius`/`blastforce` or a craft's pending impulse; ported for the timeout ending, `blast: false` | **recovered (negative)** | 85 |
 | `<Shuriken>`: ten of thirteen, at measured offsets `+0x144`..`+0x174` | **recovered** | 92 |
 | **A Shuriken press throws exactly one blade**, at `±0.349066` rad - `20` degrees - on a coin | **recovered** | 88 |
 | A blade carries the **throwing craft's own speed** on top of the class speed | **recovered** | 88 |

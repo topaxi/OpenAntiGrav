@@ -374,6 +374,43 @@ impl Projectiles {
             }
 
             if projectile.lifetime <= 0.0 {
+                // **The Plasma alone detonates here, and it is a recovered
+                // negative rather than a recovered blast.** `Plasmas_Update`
+                // (`0x0886b490`) sets the same destroy bit at `10.0 < age`
+                // that a wall does, and both feed the *identical* teardown
+                // pass - `Psys_Release_q`, `Plasma_SpawnDetonation`
+                // (`0x0886ac88`, `WO_PLASMA_FLASH`), `PLASMAHITWALL` - with no
+                // branch on which one fired. Read at instruction level,
+                // 2026-09-16: that teardown calls nothing that touches a
+                // craft's shield or `entity+0x110` (the pending-impulse slot
+                // every real blast writes, confirmed against
+                // `Missile_ApplyBlastForce`'s own write there), and
+                // `Weapon_PostBlastImpulse` (`0x0886794c`) - the only function
+                // in the binary that spends `damage`/`blastradius`/`blastforce`
+                // - has exactly one caller in the whole executable
+                // (`FUN_08867b50`, the Mine's own chain; `get_xrefs_to`
+                // confirmed it). No `Plasma_ApplyBlast`-shaped function exists
+                // anywhere in the binary either. So a Plasma bolt spends its
+                // blast on **neither** ending - `blast: false` here matches
+                // the wall-hit branch above in every way but that one, which
+                // this port does not touch; see the doc comment on
+                // `Impact::blast` and `docs/ghidra/functions/psp-pulse-usa/plasma.md`'s
+                // "What is not verified" for the flagged tension with that
+                // branch's own `blast: true`, carried forward rather than
+                // fixed here.
+                if kind == Weapon::Plasma {
+                    impacts[index] = Some(Impact {
+                        point: projectile.position,
+                        kind,
+                        owner: projectile.owner,
+                        struck: None,
+                        blast: false,
+                        effect: None,
+                    });
+                    *projectile = Projectile::default();
+                    continue;
+                }
+
                 // Reaped, not detonated: nothing was struck, so nothing takes a
                 // blast. A projectile that leaves the world simply stops
                 // existing.

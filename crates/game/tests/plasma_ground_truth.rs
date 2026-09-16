@@ -43,6 +43,7 @@
 
 use std::path::PathBuf;
 
+use oag_core::math::Vec3;
 use oag_game::race;
 use oag_gameplay::input::{Button, Input};
 use oag_tables::weapons::Weapon;
@@ -286,5 +287,124 @@ fn a_plasma_fired_on_a_real_track_is_one_bolt_and_it_flies() {
     assert!(
         plasma.blastradius > 0.0,
         "a detonating plasma would spend a zero radius and reach nobody"
+    );
+}
+
+/// A plasma bolt that never hits anything detonates at ten seconds, and the
+/// detonation hurts nobody standing just inside its own blast radius - even on
+/// a real disc's own `<Plasma>` numbers and a real circuit's own damage law.
+///
+/// **Why "never hits anything" is engineered rather than found.** A bolt fired
+/// straight down a real circuit hits a wall in about a second and a half -
+/// measured directly on `Talons Junction` while writing this test, well
+/// inside the ten-second window this test exists to reach. So this fires
+/// straight up from 10,000 units above the track instead: nothing in any
+/// shipped circuit's collision geometry reaches that high, so
+/// `Plasma_Update`'s probe finds no floor and no wall on any tick, and the
+/// only way the flight can end is the lifetime hitting zero - the ending this
+/// test is actually about. `oag_gameplay::projectile::FALL_ACCELERATION`
+/// pulls the bolt down at most `0.5 * 50.0 * 10.0^2 = 2500` units over the
+/// full flight, so even a bolt launched with no upward velocity at all stays
+/// thousands of units clear of the ground the whole time.
+///
+/// **The "nearby craft" is a real, active opponent, teleported alongside the
+/// bolt's own position every tick before `Race::tick` runs** - at
+/// `0.75 * blastradius` off to one side, inside the radius a real blast would
+/// reach and outside a hull's own collision footprint, so the sentinel is a
+/// blast candidate rather than a direct hit the moment it is placed.
+/// `Race::tick` applies a tick's blast before `step_opponents` moves anyone
+/// (`crates/game/src/race/tick.rs`), so the craft is exactly where the bolt is
+/// at the moment any blast would land, on every single tick of the flight -
+/// nothing here depends on predicting where a real circuit's geometry puts
+/// the bolt, because the bolt never reaches any. Slot 0's own shield is not
+/// asserted here: it spends the same ten seconds actually racing a real
+/// circuit against real opponents, where a wall scrape or a rival's own
+/// weapon can cost it shield with nothing to do with this bolt.
+///
+/// Confidence on the reading this asserts: **`plasma.md`**'s "the teardown
+/// spends no blast on either ending" - the corresponding unit tests in
+/// `oag_gameplay::projectile::plasma::tests` cover the same claim on a hand
+/// fixture; this is the same claim against the shipped table and a real
+/// track's own damage law.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn a_plasma_bolt_that_times_out_far_above_the_track_hurts_nobody_below_it() {
+    let Some((mut race, throttle)) = moving() else {
+        return;
+    };
+    let plasma = race.plasma_stats().expect("the disc authors a Plasma");
+    assert!(
+        plasma.blastradius > 0.0,
+        "a zero radius reaches nobody anyway"
+    );
+    assert!(plasma.damage > 0.0, "a zero damage credits nothing anyway");
+
+    assert!(
+        race.sim.world.ship_count > 1,
+        "a Single Race needs at least one opponent to stand nearby"
+    );
+    assert!(
+        race.sim.world.ships[1].active,
+        "slot 1 is not an active opponent"
+    );
+    let sentinel_shield_before = race.sim.world.ships[1].physics.shield;
+
+    let above = race.sim.world.ships[0].physics.body.position + Vec3::Y * 10_000.0;
+    assert!(
+        race.sim
+            .world
+            .projectiles
+            .charge_up(above, Vec3::ZERO, 0, 0.0),
+        "no free slot to fire into"
+    );
+    assert_eq!(
+        bolts(&race).len(),
+        1,
+        "the direct spawn did not land a Plasma in the pool"
+    );
+
+    // Just inside `blastradius` and well clear of a hull's own collision
+    // footprint - close enough that the blast would reach it, and far enough
+    // that the sentinel does not itself register as a direct hit the moment
+    // it is placed there. A hull hit and a timeout are different endings
+    // (`Impact::struck` against `None`) and this test is about the second.
+    let nearby_offset = Vec3::X * (plasma.blastradius * 0.75);
+
+    let mut ticks = 0_usize;
+    let mut ended = false;
+    while !ended {
+        // Before the tick, so the blast this tick's `projectile::step` may
+        // spend sees slot 1 sitting next to the bolt.
+        if let Some(bolt) = bolts(&race).first() {
+            race.sim.world.ships[1].physics.body.position = bolt.position + nearby_offset;
+        }
+        race.tick(&throttle);
+        ticks += 1;
+        if bolts(&race).is_empty() {
+            ended = true;
+        }
+        assert!(ticks < 700, "the bolt never ended");
+    }
+
+    let flown = ticks as f32 / 60.0;
+    println!("the bolt timed out after {ticks} ticks ({flown:.2}s)");
+    assert!(
+        (flown - 10.0).abs() <= 2.0 / 60.0,
+        "it ended at {flown}s, not the recovered 10.0s - it may have found a \
+         floor or wall this test was meant to put out of reach"
+    );
+
+    // Slot 1 alone, not the whole grid. Slot 0 spends its own ten seconds
+    // actually racing a real circuit against real opponents - a wall scrape
+    // or a rival's own weapon can cost it shield in that window with nothing
+    // to do with the Plasma, and this test would then be asserting the wrong
+    // thing. Slot 1 never touches the track for the whole flight - it is
+    // teleported next to the bolt and nowhere else - so nothing but this
+    // bolt's own blast can move its shield.
+    assert_eq!(
+        race.sim.world.ships[1].physics.shield, sentinel_shield_before,
+        "the sentinel's shield moved from {} to {} - the timeout spent a blast \
+         the original's teardown never reaches",
+        sentinel_shield_before, race.sim.world.ships[1].physics.shield
     );
 }

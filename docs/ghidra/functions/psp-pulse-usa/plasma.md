@@ -18,6 +18,15 @@ in Pure alike. See [the charge](#the-charge-is-real-and-it-is-not-charge_time).
 The detonation is closed in the same pass: `WO_PLASMA_FLASH` is it, and the
 call site is the pool teardown - see [the detonation](#the-detonation-and-the-three-models-under-it).
 
+**Closed 2026-09-16: the detonation never spends a blast, on either ending.**
+Neither a wall hit nor the `10.0 < age` timeout reaches
+`damage`/`blastradius`/`blastforce` or the pending-impulse slot every real
+blast function writes - `FUN_0886b898`, the pass-one call this page used to
+leave unread, is read in full and is not that function. See
+[the expiry settles a damage question](#the-expiry-settles-a-damage-question-nobody-had-read).
+This leaves a known, flagged conflict with `oag_gameplay`'s own wall-hit
+branch, which still credits a blast - recorded there, not fixed here.
+
 | Address | Name | Confidence |
 | --- | --- | --- |
 | `0x0880cc2c` | `WeaponStats_ParsePlasma` | 92 |
@@ -255,19 +264,35 @@ if (p->charging == 0) {                       // + 0x4c, a byte
 if (p->age > 10.0f) p->flags |= 4;            // + 0x54, the hard reap
 ```
 
-**Pass two, the teardown**, over every entity carrying the destroy bit:
+**Pass two, the teardown**, over every entity carrying the destroy bit -
+**re-read 2026-09-16 at instruction level with no elision**, the `...` below
+resolved rather than left standing:
 
 ```c
-if (p->flags & 4) {
+if (p->flags & 4) {                                // + 0x3c
     Psys_Release_q(g_psys, p->head_instance, 1);   // + 0x58, the WO_PLASMA_HEAD
     Plasma_SpawnDetonation(pool, &p->position);    // 0x0886ac88, + 0xa0
+    flags = p->flags;
     if (p->emitter != 0) {                         // + 0x5c
+        if (p->node != 0) { FUN_08939bcc(); p->node = 0; }   // + 0x60
         Sound_Play(1.0f, p->emitter, ..., "PLASMAHITWALL", 0);
-        ...
+        FUN_08939460(p->emitter, 0);                // stops the emitter's own loop
+        p->emitter = 0;
+        flags = p->flags;
     }
+    p->flags = flags & ~8;                          // + 0x3c, clears bit 8 - not bit 4
+    p->subsystem_flags &= ~4;                       // + 0x2c, a different field
+    p->owner = 0xff;                                // + 0x40
     // swap-remove: pool->live -= 1, swap slot i with slot live
 }
 ```
+
+**Bit `4` itself - the destroy flag the `if` above tests - is not cleared
+here.** Only bit `8` is (`&= ~8`, both branches). That reads as harmless: the
+slot is about to be swap-removed and overwritten by whatever fills it next,
+so nothing downstream reads a freed slot's stale destroy bit. Not chased
+further; named because the snippet above would otherwise look like it clears
+the very flag it is testing.
 
 Three things fall out of that and each was an open item:
 
@@ -276,10 +301,128 @@ Three things fall out of that and each was an open item:
 - **A bolt's own lifetime is a hardcoded `10.0` seconds**, not an authored
   `timetodie` - the Plasma's `<Stats>` has no such attribute, and this is where
   the ceiling actually lives.
+- **That is the whole teardown - two calls and a sound, nothing else, for
+  either ending.** No elided fourth call, no craft touched. See
+  [the expiry settles a damage question](#the-expiry-settles-a-damage-question-nobody-had-read)
+  below.
 
 Also read here: `PLASMAHITWALL` at `0x08a7c99b`, a direct `.rodata` read, and
 `~PLASMATVL` at `0x08a7c09c`, the looping travel cue `Plasma_Launch` starts and
 this teardown stops.
+
+**The age check itself also plays a cosmetic broadcast, separate from the
+teardown.** Re-read in full alongside the teardown: `if (p->age > 10.0f) {
+p->flags |= 4; if (13 < DAT_08b31048 && p->flags & 1) { ... build a message
+from p->position (+0xa0..+0xa8, three floats - the entity's own position, not
+a stats block) and the sentinel -1 ...; FUN_0894c784(msg, 0x18, DAT_08aca838,
+0x50); } }`. `DAT_08b31048` is `*(0x08b30f90 + 0xb8)` by address arithmetic -
+the same global `FUN_0886b898` reads through a different route (see below) -
+gating a HUD/network announcement family that also fires on launch (category
+`0x40`, `DAT_08aca830`, read off the charge-release branch in the same
+function) and, if the read below holds, from `FUN_0886b898` itself (categories
+`0xc`/`DAT_08aca350` and unlabelled/`DAT_08aca354`). None of the four sites is
+a string - `DAT_08aca350` inspects as sixteen 32-bit values, not text - so
+these read as a family of binary message-template calls rather than debug
+strings, and none of them is on a path that reads or writes a craft's shield
+or `entity+0x110`.
+
+## The expiry settles a damage question nobody had read
+
+**Closed 2026-09-16, as a negative, and it is symmetric.** The one thing this
+page's own "What is not verified" list named - whether `FUN_0886b898` (called
+per live entity in pass one) is the blast sweep that spends `damage`,
+`blastradius` and `blastforce`, and therefore whether a timed-out bolt damages
+craft near it - is settled by reading the function in full rather than by
+guessing at its shape.
+
+**`FUN_0886b898`'s full decompile references neither `+0xa0` (`damage`), `+0xa4`
+(`blastradius`) nor `+0xa8` (`blastforce`) anywhere in its body.** The two
+"radius"-shaped floats it does read come from the *active* weapon's own
+per-mode stats pointer (`&DAT_08b32420 + DAT_08b32428 * 4)` -
+[Plasma_SpeedForClass](#plasma_speedforclass-0x0885c5a4-and-the-launch-ramp)'s
+own pointer, so it is genuinely the Plasma's block while this function runs -
+at `+0x100` and `+0xe0`. Both are past `+0xc4`, the last offset
+`WeaponStats_ParsePlasma` ever writes, so for a Plasma specifically neither is
+an authored attribute; whatever sits there is not something the file's own
+`<Stats>` element controls.
+
+**Nor does it write `entity+0x110`, the pending-impulse slot every real blast
+function spends.** Checked directly against `Missile_ApplyBlastForce`
+(`0x08868ea4`, confidence 88, `missile.md`) in the same pass: that function
+loops candidate craft, computes a falloff off its own weapon-type's `+0x48`
+radius, and ends with `*(target+0x110) += falloff * force * direction` - the
+exact shape [contact-response.md](contact-response.md#weapon_postblastimpulse-0x0886794c-confidence-82)
+reads for `Weapon_PostBlastImpulse` too. `FUN_0886b898` has no write at that
+offset anywhere in its body.
+
+**And `Weapon_PostBlastImpulse` - the only function in the binary that reads
+`damage`/`blastradius`/`blastforce` off any weapon's stats block and writes an
+impulse - has exactly one caller in the whole executable.** `get_xrefs_to
+0x0886794c` returns a single hit: `FUN_08867b50`, the Mine's own chain
+(`mine.md`, `contact-response.md`). The Plasma never calls it, directly or
+through any function this page or `Plasmas_Update`'s own re-read touches.
+`search_functions("Blast")` against the whole binary turns up five names -
+`BombBlast_Construct`, `Bomb_ApplyBlast`, `Missile_ApplyBlastForce`,
+`PlasmaBlast_Construct`, `Weapon_PostBlastImpulse` - and the two `*_Construct`
+functions are confirmed purely visual (see
+[the detonation](#the-detonation-and-the-three-models-under-it) and, for the
+Bomb's, `mine.md`). No `Plasma_ApplyBlast`-shaped function exists.
+
+**So a Plasma bolt spends its blast on neither ending.** `Plasmas_Update`'s
+teardown (above, re-read the same pass with no elision) is identical for a
+wall hit and a `10.0 < age` timeout - `Psys_Release_q`,
+`Plasma_SpawnDetonation`, `PLASMAHITWALL`, nothing else - and neither route
+into it, nor the teardown itself, nor `FUN_0886b898`, touches a craft's
+shield or `entity+0x110`. `oag_gameplay::projectile::flight`'s expiry arm is
+ported to this reading, `blast: false`, on 2026-09-16 - see
+[`Impact::blast`](../../../../crates/gameplay/src/projectile.rs)'s doc comment
+and `crates/gameplay/src/projectile/plasma/tests.rs`.
+
+**A conflict this settles rather than closes: the wall-hit branch in
+`Projectiles::advance` still credits `blast: true` for the Plasma, and this
+reading says the original spends nothing there either.** That branch predates
+this pass and is deliberately not touched here - correcting it is a wall-hit
+behaviour change with its own golden-hash and regression story, and the brief
+this page's own port answers is about the expiry ending specifically. Flagged
+loudly rather than fixed quietly; see the
+`weapons-eight-of-thirteen-the-plasma-and-the` handover thread.
+
+### What `FUN_0886b898` actually spends its two radii on - a hypothesis, not a name
+
+Mechanically, the function sweeps two entity lists every tick a bolt is
+flying (not gated on the destroy bit at all):
+
+- **Pass one**: count at `+0x164`, pointer array at `+0x64` off
+  `*(pool+0xac)` - exactly the Mine's own pool shape, per
+  [the pool comparison](#weapon_fireplasma-0x0886a868-fires-exactly-one)
+  above (`+0x164`/`+0x64`). Radius: `stats+0x100`.
+- **Pass two**: count at `+0xc4`, pointer array at `+0x44` off `*(pool+0xb0)`
+  - exactly the Bomb's own pool shape (`+0xc4`/`+0x44`,
+  `contact-response.md`'s read of `FUN_08863a20`). Radius: `stats+0xe0`.
+
+For each struck entity within its pass's radius, it sets `entity+0x3c |= 4` -
+the same "destroy" bit `mine.md` documents as consumed by `Mine_SpawnExplosion`
+- and, gated on the same `13 <` race-mode counter the age check above uses,
+runs the same message-broadcast shape (`FUN_0885ebc4` + `FUN_0894c784`,
+categories `0xc` and unlabelled/`DAT_08aca354`).
+
+**Read as "a flying Plasma bolt can chain-detonate a nearby Mine or Bomb
+early," this would be a third, previously undocumented way for either of
+those weapons to die** - alongside their own fuse-timeout and, for the Mine,
+its own `trigger_radius` sweep (`mine.md`). It is not named or claimed at that
+strength here, for one specific reason: **the radius it reaches for is
+unauthored for a Plasma.** `+0x100` and `+0xe0` sit past the eleven offsets
+`WeaponStats_ParsePlasma` ever writes, so nothing in the file controls what a
+Plasma's own block holds there - it could be a genuinely shared field written
+by some common part of `WeaponStats_Parse` this page has not located, or it
+could be whatever happened to be in memory. Distinguishing those needs reading
+`WeaponStats_Parse`'s own common-attribute path (if it has one) or measuring
+the value live, neither done here. Confidence on the mechanical shape (which
+two pools, which bit, which flag family): decent, from three independent
+matches to already-documented pool layouts. Confidence on what it is *for*:
+**under 50**, so `FUN_0886b898` is not renamed - the rubric's own line for
+this case. Left for whoever reads `WeaponStats_Parse`'s common block or sets a
+breakpoint on `+0x100` next.
 
 ## The charge is real, and it is not `charge_time`
 
@@ -592,13 +735,24 @@ than papered over with an invented three-second timer.
   and the negative is calibrated - see above. Nothing reads it in either PSP
   executable; the wind-up it looks like it describes is a separate, hardcoded
   1.0 s.
-- **What the teardown's other two calls do.** `Psys_Release_q`
-  (`FUN_088f3298`) plainly stops the riding head instance, and `FUN_0886b898`
-  - called per live entity in pass one, and unread - is the obvious candidate
-  for the blast sweep that spends `damage`, `blastradius` and `blastforce`.
-  Reading it is what would settle whether a bolt that times out at 10 s does
-  damage as well as drawing an explosion, which is the one thing this engine's
-  own expiry path cannot decide without it.
+- ~~**What the teardown's other two calls do, and whether `FUN_0886b898` is the
+  blast sweep.**~~ **Closed 2026-09-16 as a negative.** `Psys_Release_q`
+  (`FUN_088f3298`) plainly stops the riding head instance;
+  `FUN_0886b898` is read in full and touches neither
+  `damage`/`blastradius`/`blastforce` nor `entity+0x110` - see
+  [the expiry settles a damage question](#the-expiry-settles-a-damage-question-nobody-had-read).
+  A timed-out bolt draws the explosion and damages nobody, exactly like a wall
+  hit.
+- **What `FUN_0886b898` actually spends its two radii on.** Mechanically a
+  sweep of the Mine's and the Bomb's own pool shapes, setting the same
+  "destroy" bit their own fuse-timeout does - see
+  [the hypothesis section](#what-fun_0886b898-actually-spends-its-two-radii-on---a-hypothesis-not-a-name).
+  Under 50 confidence on what it is *for*, because the radius it reads is
+  unauthored for a Plasma; not renamed.
+- **The wall-hit branch in `Projectiles::advance` still credits `blast: true`
+  for the Plasma**, which the reading above says the original does not do
+  either. Flagged, not fixed - see the same section and the
+  `weapons-eight-of-thirteen-the-plasma-and-the` handover thread.
 - **The blast object's own animation.** `PlasmaBlast_Construct` builds three
   ramps over its three models and nothing here reads what advances them.
 - **`FUN_0885c650`**, the second speed lookup, deliberately unnamed - see
@@ -610,6 +764,16 @@ than papered over with an invented three-second timer.
 
 ## History
 
+- **2026-09-16.** `FUN_0886b898` read in full and `Plasmas_Update`'s teardown
+  re-read with no elision, closing the last item on the 2026-09-09 pass's own
+  "not verified" list: a Plasma bolt spends no blast on either ending, wall or
+  timeout. `Weapon_PostBlastImpulse`'s only caller in the binary is confirmed
+  to be the Mine's own chain (`get_xrefs_to`), and no `Plasma_ApplyBlast`-shaped
+  function exists. Ported to `oag_gameplay::projectile::flight`'s expiry arm;
+  the wall-hit branch's own conflicting `blast: true` is flagged, not touched.
+  `FUN_0886b898` itself is read as a mechanical sweep of the Mine's and the
+  Bomb's pool shapes but not renamed - the radius it reads is unauthored for a
+  Plasma, which holds its positive identity under 50.
 - **2026-09-02.** Written while implementing the Plasma, the first of the six
   remaining weapons. **The page's own trap caught this read too**, which is now
   the fourth time: `weapon-fire.md` warns that `func_0x000NNNNN` needs
