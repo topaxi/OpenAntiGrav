@@ -86,6 +86,7 @@ fn tick(
         world,
         ships,
         None,
+        None,
         stats,
         TriggerRadii::default(),
         "VENOM",

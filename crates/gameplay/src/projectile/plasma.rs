@@ -19,7 +19,17 @@ use oag_tables::weapons::PlasmaStats;
 
 use super::KMH_PER_UNIT_PER_SECOND;
 
-/// Where a craft launches its plasma bolt from, and how fast.
+/// Where a craft launches its plasma bolt from, and how fast it holds while
+/// charging.
+///
+/// **The returned speed is not the flight speed**, as of 2026-09-16 - see this
+/// module's own doc comment. It is spent once, as the magnitude
+/// [`super::Projectiles::charge_up`] reseats every tick of the wind-up, purely
+/// a hold-time visual; the moment the charge ends,
+/// [`super::Projectiles::advance`] replaces both the direction (the craft's
+/// heading *then*) and the magnitude (the craft's speed *then*, plus
+/// `launchSpeed`) with values read fresh at release, per `Plasma_Launch`
+/// (`0x0885bf84`).
 ///
 /// # One shot, and it is read twice over
 ///
@@ -36,12 +46,23 @@ use super::KMH_PER_UNIT_PER_SECOND;
 ///
 /// # What is shared with the Rocket, and is therefore equally ours
 ///
-/// The launch offset - pushing the origin forward by the hull's own extent so
-/// a bolt starts outside the craft that fired it - and the speed being the
-/// class's **plus** `launchSpeed` rather than one or the other. Both are
-/// [`super::launch`]'s choices, taken here so the two weapons cannot drift
-/// apart; both are flagged in that function's own doc comment rather than
-/// restated. The authored speeds are km/h for the Rocket's measured reason.
+/// **Only the launch offset now** - pushing the origin forward by the hull's
+/// own extent so a bolt starts outside the craft that fired it. That is
+/// [`super::launch`]'s choice, taken here so the two weapons cannot drift
+/// apart on it, and flagged in that function's own doc comment rather than
+/// restated.
+///
+/// **The speed law is not shared, as of 2026-09-16.** [`launch`] below still
+/// returns a `class + launchSpeed` magnitude, but that value is spent only as
+/// a hold-time visual while the bolt charges - [`super::Projectiles::advance`]
+/// overwrites it the moment the countdown ends, with the bolt's actual flight
+/// speed: the firing craft's own speed plus `launchSpeed`, blending down to
+/// the class speed over its first second in the air. See
+/// [`CHARGE_SECONDS`]'s sibling constant, [`super::missile::SPEED_RAMP_SECONDS`],
+/// and `Plasma_SpeedForClass` (`0x0885c5a4`,
+/// `docs/ghidra/functions/psp-pulse-usa/plasma.md`'s "the launch ramp"
+/// section) for the recovered law. The authored speeds are km/h for the
+/// Rocket's measured reason.
 #[must_use]
 pub fn launch(
     state: &ShipState,

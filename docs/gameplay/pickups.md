@@ -76,6 +76,7 @@ This subsystem is unusually mixed, so the split comes before anything else.
 | **The detonation's own three models - a halo and two hemispheres - retire at a hardcoded 1.5 s, single-stage, no HD-style collapse** - `PlasmaBlast_Update`'s own age check | **recovered** | 88 |
 | Each model gets a per-tick anim-time scrub (`Node_SetAnimTimeTree(age * rate, model)`), most likely playing the model's own baked expansion rather than an engine-computed ease; the `+0x90..+0x114` keyframe-ramp mechanism `PlasmaBlast_Construct` builds ships dead in this binary | **recovered** | 75 |
 | **This engine now draws the three models** (`crates/game/src/race/blast_models.rs`), anchored on the bolt's own impact point and oriented by an ordinary "face the camera" billboard standing in for `PlasmaBlast_Update`'s own unresolved camera-vector read | **ours, chosen orientation; no confidence score there** | - |
+| **A bolt leaves at the firing craft's own speed plus `launchSpeed` and blends to the class speed over its first second of flight** - `Plasma_SpeedForClass`, the same linear form and the same second `Missile_SpeedNow` independently tests, and read fresh at release rather than at the press that started the charge; ported 2026-09-16, sharing [`missile::speed_kmh`](../../crates/gameplay/src/projectile/missile.rs) | **recovered** | 88 |
 | `<Shuriken>`: ten of thirteen, at measured offsets `+0x144`..`+0x174` | **recovered** | 92 |
 | **A Shuriken press throws exactly one blade**, at `±0.349066` rad - `20` degrees - on a coin | **recovered** | 88 |
 | A blade carries the **throwing craft's own speed** on top of the class speed | **recovered** | 88 |
@@ -808,15 +809,18 @@ with the volley's lateral components measured symmetric on the disc's own
 
 ### What is not built
 
-**The slowdown mechanic is recovered but not built.** Its law came out of the
+**The slowdown mechanic is recovered, and built.** Its law came out of the
 PSP executable on 2026-09-06 - `Ship_AddSlowdown` (`0x08848690`) adds a hit's
 `slowdown_time` to a timer at `craft+0x2e0` and clamps the running total to
 `<Global slowdown_limit>`, which is therefore a **ceiling on seconds of slowdown
 outstanding**, not a speed floor; while that timer runs the victim gets no
 engine thrust, a zeroed throttle and no lateral grip, and its hover target
 height is lowered. `oag_tables::weapons` decodes `slowdown_time` on all six
-decoded blocks as of the same day. What is *not* built is the physics half - a
-craft hit by a mine, rocket or missile does not slow down yet. See
+decoded blocks as of the same day. **The physics half landed the same day
+too**: `oag_gameplay::slowdown::drain` runs once a tick for the whole field,
+ahead of every craft's own step, and `oag_physics::slowdown` holds the timer,
+the clamp and the four effects it drives - a craft hit by a mine, rocket,
+missile or plasma bolt does slow down. See
 [engine.md](../ghidra/functions/psp-pulse-usa/engine.md). `Ship_Damage`'s `weapon_kind`
 sub-bucket - nine cases - is unmapped, and the absorb-spark effect its
 `source == 2` branch triggers is not reproduced. The visual is a placeholder: an
@@ -851,12 +855,15 @@ the original does: the stamp is unconditional and the grant is not.
 
 ## What is not built
 
-- **Two of the thirteen weapons**, now that the Cannon and the Quake have
-  joined the built set - see
+- **One of the thirteen weapons**, now that the Cannon, the Quake and the
+  LeachBeam have all joined the built set - see
   [cannon-quake-leachbeam.md](../ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md).
   The LeachBeam's beam is a resolved link to whatever the Missile's own
-  lock-on already picked, drained continuously while connected; the two rate
-  functions and the health/shield consumer are still unread. The Repulser
+  lock-on already picked, drained continuously while connected; its two rate
+  functions (`LeachBeam_DrainRate`, `LeachBeam_RepairRate`) and its
+  health/shield consumers (`Ship_ApplyPendingWeaponDamage`,
+  `Ship_ApplyPendingWeaponRepair`) were read and wired 2026-09-08 - see "Only
+  what has an effect is handed out" above. The Repulser
   remains the one weapon needing a genuine craft-state field, and is
   deferred as Eliminator-only regardless.
 - ~~**The Cannon's per-class base speed, `func_0x00060af4` (`0x08864af4`).**

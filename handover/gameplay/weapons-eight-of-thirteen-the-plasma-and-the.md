@@ -401,6 +401,21 @@ which is the whole point of the weapon.
   now draws all three, anchored on the impact point with a chosen
   "face the camera" billboard standing in for the original's own unresolved
   camera-vector read.
+- ~~**The Plasma's launch-speed ramp is read and not implemented.**~~ **Ported
+  2026-09-16** - see the dated section at the bottom of this file and
+  [plasma.md](../../docs/ghidra/functions/psp-pulse-usa/plasma.md#plasma_speedforclass-0x0885c5a4-and-the-launch-ramp).
+  Short version: `flight.rs`'s charging branch now reads the firing craft's
+  velocity fresh at the tick the charge ends and blends it to the class speed
+  over one second, sharing `missile::speed_kmh` with the Missile - the same
+  linear form `Missile_SpeedNow` independently tests over the same second. The
+  Rocket is untouched and is now the odd one out rather than a shared choice:
+  nothing has re-read `Rocket_Update` for a ramp.
+- **The Plasma blast's three models are recovered and not drawn.**
+  `PlasmaBlast_Construct` (`0x0885fd90`) loads
+  `Data\Weapons\pulse_plasma_halo1.vex` and two
+  `pulse_plasma_hemisphere*.vex`, orients them to the located track surface and
+  animates three ramps over them. This engine plays `WO_PLASMA_FLASH` and draws
+  none of the three. Nothing is substituted for them.
 - ~~**A plasma bolt that times out is reaped silently here and detonates in the
   original.**~~ **Closed and ported 2026-09-16** - see the dated section at the
   bottom of this file and
@@ -1618,4 +1633,107 @@ A new placement had to be added for both: `Placement::Point`, carried on
 off a call site; it is the smallest honest way to place a sound that is not a
 craft's own. `crates/game/src/audio/sfx.rs` and
 `crates/game/src/race/{weapons.rs,tick.rs}`.
+
+## 2026-09-16, later again: the launch-speed ramp is ported, and a first attempt at it was wrong
+
+Closes the `## Open` item above. `Plasma_SpeedForClass` (`0x0885c5a4`,
+`plasma.md`'s "the launch ramp" section) was read 2026-09-09 and left
+unimplemented: the bolt leaves at the firing craft's own speed plus
+`launchSpeed` and blends to the class speed over its first second of flight,
+and this engine flew at `class + launchSpeed` throughout instead, the choice
+`oag_gameplay::projectile::launch`'s doc comment made "so the Rocket and the
+Plasma cannot drift apart."
+
+**Ported**, in `oag_gameplay::projectile::flight`'s charging branch
+(`crates/gameplay/src/projectile/flight.rs`): the tick the charge countdown
+crosses zero, the bolt's `launch_speed_kmh` is set from the firing craft's
+*current* velocity plus `stats.launch_speed`, read fresh rather than
+whatever the craft was doing at the press - `Plasma_Launch` (`0x0885bf84`)
+re-reads the craft's own node matrix and velocity at release for the same
+reason the position is re-seated. The per-tick blend shares
+[`missile::speed_kmh`](../../crates/gameplay/src/projectile/missile.rs) with
+the Missile rather than growing its own copy: `Missile_SpeedNow`
+(`0x0885a038`) and `Plasma_SpeedForClass` each independently test `age < 1.0`
+and blend with the identical operand order, `launch * (1 - age) + class *
+age` - the same bar this project already used to fold the Rocket's,
+Missile's and Shuriken's `12.0` surface probe into one constant. Age counts
+from *release*, not from the press: the charging branch returns early every
+tick of the wind-up, so `lifetime` (and the age derived from it) does not
+move until the bolt is actually flying. **No launch floor carried over** -
+`Plasma_Launch`'s listing has no `vmax_s` clamping a minimum, unlike
+`Missile_Init`'s `14.4` km/h floor, so a standing-start bolt leaves at
+`launchSpeed` alone. The Rocket is untouched and is now the odd one out
+rather than a shared choice - `rocket.rs`'s own doc comment says so.
+
+**A first attempt at this was wrong, and a real disc caught it, not a unit
+test.** The release computation was gated on the weapon table being present
+(`plasma: Option<&PlasmaStats>` being `Some`) but not on `projectile.charge
+<= 0.0`, so it re-read the craft's velocity and overwrote the bolt's speed on
+*every* charging tick rather than only the release tick. Every hand-fixture
+unit test held the craft's velocity constant through the whole charge, so
+recomputing a constant every tick looks identical to computing it once - the
+bug was invisible to all of them.
+`crates/game/tests/plasma_ground_truth.rs`'s
+`a_plasma_fired_on_a_real_track_is_one_bolt_and_it_flies`, fired one tick
+into an accelerating real race, caught it immediately: the bolt's speed one
+tick after the press read the craft's speed *at that tick*, not the
+charge-hold constant the assertion expected. Fixed by gating the release
+block on `projectile.charge <= 0.0` as well.
+
+**Tests.** Two new unit tests in
+`crates/gameplay/src/projectile/plasma/tests.rs`:
+`the_launch_speed_reads_the_crafts_velocity_at_release_not_at_the_press`
+(release formula, isolated) and
+`a_flying_plasma_bolts_speed_blends_from_launch_to_class_over_one_second`
+(the ramp through real flight, over a floor). Both were verified to actually
+discriminate - deliberately breaking the release-time gate reproduces the
+exact 156.3-vs-291.7 km/h mismatch the ground-truth run first surfaced, and
+both new unit tests fail the same way, before the fix restores them.
+`crates/game/tests/plasma_ground_truth.rs`'s
+`a_plasma_fired_on_a_real_track_is_one_bolt_and_it_flies` is extended rather
+than reassigned: its existing charge-hold-magnitude assertion (fired one tick
+after the press, before any release can happen) is untouched and still
+passes, now with a comment saying why it is unaffected by the ramp. The
+"rides the track" loop widens from 60 to 240 ticks and now also measures,
+against the disc's own table and never a hardcoded value: the release-time
+formula (craft speed that tick plus `launchSpeed`, against `launch_speed_kmh`
+- exactly the assertion that would have caught the bug above on real data),
+the mid-ramp speed (strictly between launch and class, ~0.5s after release),
+and the post-ramp speed (at the class speed, ~1.17s after release). All three
+landed on this run: released tick 60, craft doing 431.2 km/h, bolt's own
+launch speed 631.2 km/h (`launchSpeed=200`); detonated tick 131, so both the
+mid and the post-ramp samples were captured before it hit the wall.
+
+**No committed golden moved.** Both hash references in
+`crates/gameplay/tests/determinism.rs` (`REFERENCE`, `REFERENCE_VOLLEY`) are
+Rocket-only scenarios by their own doc comments and both still pass
+unchanged - checked directly rather than assumed. No regen commit.
+
+Regression gate,
+`race_ground_truth::a_lone_craft_gets_round_the_circuits_it_is_known_to_get_round`,
+quoted verbatim before and after - byte-identical, all twelve circuits clean,
+zero regressions, 01 still the only circuit with a respawn (one, standing-start
+lap):
+
+```
+16_Track     clean lap  42.1s  laps 4   respawns 0   of 3448 lost at []
+03_Track     clean lap  43.8s  laps 4   respawns 0   of 3560 lost at []
+02_Track     clean lap  43.5s  laps 4   respawns 0   of 3112 lost at []
+10_Track     clean lap  38.4s  laps 4   respawns 0   of 3376 lost at []
+05_Track     clean lap  39.6s  laps 4   respawns 0   of 2976 lost at []
+04_Track     clean lap  39.3s  laps 4   respawns 0   of 3344 lost at []
+09_Track     clean lap  51.5s  laps 4   respawns 0   of 4016 lost at []
+14_Track     clean lap  45.8s  laps 4   respawns 0   of 3684 lost at []
+01_Track     clean lap  43.6s  laps 4   respawns 1   of 2836 lost at [794]
+13_Track     clean lap  38.1s  laps 4   respawns 0   of 3084 lost at []
+06_Track     clean lap  46.8s  laps 4   respawns 0   of 2852 lost at []
+07_Track     clean lap  50.7s  laps 4   respawns 0   of 3216 lost at []
+clean laps: ["16_Track", "03_Track", "02_Track", "10_Track", "05_Track", "04_Track", "09_Track", "14_Track", "01_Track", "13_Track", "06_Track", "07_Track"]
+no clean lap: []
+```
+
+Expected: this scenario never fires a Plasma (solo Time Trial-shaped run, no
+pickups), so byte-identical output is the predicted result, not a surprise -
+recorded anyway, per this thread's own standing instruction to quote it
+verbatim rather than summarise it as "unaffected."
 

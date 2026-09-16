@@ -60,6 +60,16 @@ pub const ROCKET_SHOTS: usize = 3;
 ///   `Rocket_Update` mentions `launchSpeed` - so the sum is this engine's
 ///   choice and stays one, flagged here rather than quietly corrected: what
 ///   `launchSpeed` *is* for has not been found.
+///
+///   **This is now the odd one out rather than a shared choice.** Both
+///   [`super::missile::launch`] (`Missile_Init`, `0x0885a160`) and
+///   [`super::plasma`]'s own launch (`Plasma_Launch`, `0x0885bf84`) turned out
+///   to answer the question above the same way: `launchSpeed` is an additive
+///   muzzle velocity over the *launcher's* own speed, ramping down to the
+///   class speed over one second rather than being added to it and held. The
+///   Rocket has neither reading, since `Rocket_Update` was not re-read for a
+///   ramp, so its constant `class + launchSpeed` is what remains unmeasured
+///   here, not a rule the other two weapons still agree with.
 /// - **Treating `launchSpeed` as km/h too.** The four class speeds are measured
 ///   (see below); `launchSpeed` is authored in the same `<Stats>` block and in
 ///   the same range, so it is converted with them. Nothing reads it, so nothing
