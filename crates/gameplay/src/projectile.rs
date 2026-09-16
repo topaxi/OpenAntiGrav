@@ -92,7 +92,7 @@ use geometry::{SweepHit, nearest_hit};
 
 pub use blast::{BlastStats, blast};
 pub use mine::TriggerRadii;
-pub use rocket::{ROCKET_SHOTS, launch};
+pub use rocket::{LIFETIME_SECONDS as ROCKET_LIFETIME_SECONDS, ROCKET_SHOTS, launch};
 
 use oag_core::math::{Quat, Vec3};
 use oag_physics::Raycaster;

@@ -75,7 +75,7 @@ enum End {
     ProbedWall,
     /// A craft's hull.
     Hull,
-    /// Ran out of `MAX_FLIGHT_SECONDS`.
+    /// Ran out of `rocket::LIFETIME_SECONDS`, the original's own 5.0 s.
     Expired,
     /// Gone for a reason this replica did not predict (a blast, a respawn).
     Unexplained,
@@ -356,7 +356,11 @@ fn trace_a_rocket_volley_along_the_floor() {
                     (Some(g), Some((_, h))) if h < g => End::Hull,
                     (Some(_), _) => End::SweptIntoGeometry,
                     (None, Some(_)) => End::Hull,
-                    _ if age as f32 * dt >= 10.0 - dt => End::Expired,
+                    _ if age as f32 * dt
+                        >= oag_gameplay::projectile::ROCKET_LIFETIME_SECONDS - dt =>
+                    {
+                        End::Expired
+                    }
                     _ => End::Unexplained,
                 };
                 *ends.entry(end).or_default() += 1;

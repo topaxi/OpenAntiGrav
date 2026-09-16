@@ -1418,9 +1418,9 @@ fn a_rocket_fired_on_a_real_track_flies_and_detonates() {
     // reap, while only ever measuring slot 0 - two different rockets in one
     // assertion. On this circuit and at this firing point the disc's own
     // `spread` fans the third shot off the side, and it then falls for the
-    // full ten seconds because there is nothing under it to hit. That is
+    // full five seconds because there is nothing under it to hit. That is
     // `Rocket_Update`'s own no-hit branch (`velocity.y -= dt * 50.0`, reaped
-    // at [`MAX_FLIGHT_SECONDS`]), so the reap is the *correct* end for it -
+    // at `ROCKET_LIFETIME_SECONDS`), so the reap is the *correct* end for it -
     // and the failure it produced said "the rocket aged out instead of
     // hitting the track", which sent two passes looking for a speed bug that
     // was never there. The speed is exact: 277.78 units a second, the
