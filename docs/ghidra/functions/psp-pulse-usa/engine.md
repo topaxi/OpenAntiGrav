@@ -1375,7 +1375,7 @@ merely sinking.
 `entity+0x130` is the per-victim accumulator. A `field 0x130` sweep with
 `scripts/psp-relocate.py` over the whole image finds **nine load/store pairs on
 a non-stack base**, all in the weapon subsystems - `Weapon_PostBlastImpulse`
-(`0x08867b14`, the Mine and Bomb blast), `Rocket_HitCraft_q` (`0x0886eca4`), the
+(`0x08867b14`, the Mine and Bomb blast), `Rocket_HitCraft` (`0x0886eca4`), the
 missile's `0x088690d4`, and six more - against exactly **one** consumer, in
 `FUN_088418e0` at `0x088420cc`-`0x08842110`:
 
@@ -1422,7 +1422,7 @@ without that step. Prefer the script for a completeness claim.
 - **Whether the `4.0` in effect 1 is reachable in any title.** See above.
 - **Which of the nine `+0x130` writers is which weapon.** Three are identified
   *here* and off the verified `0x08b32420` table - the Rocket
-  (`Rocket_HitCraft_q`, `0x0886eca4`), the Missile (`0x08869054`) and the Quake
+  (`Rocket_HitCraft`, `0x0886eca4`), the Missile (`0x08869054`) and the Quake
   wave. A fourth, `Weapon_PostBlastImpulse`'s (`0x08867b14`, the Mine and Bomb
   blast), is **inherited from [mine.md](mine.md) and rests on the reading of
   `0x0885bff0` that the last bullet below reopens** - do not bank it as

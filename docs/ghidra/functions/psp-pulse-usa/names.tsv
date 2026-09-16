@@ -530,7 +530,7 @@
 0x0885d1b0	function	Rocket_SpeedForClass	84	rocket-visuals.md
 0x0885d2a8	function	Rocket_Update	88	rocket-visuals.md
 0x0886f038	function	Rocket_Spawn	90	rocket-visuals.md
-0x0886ebdc	function	Rocket_HitCraft_q	78	rocket-visuals.md
+0x0886ebdc	function	Rocket_HitCraft	88	rocket-visuals.md
 0x0886ed34	function	Rocket_SpawnCraftExplosion_q	78	rocket-visuals.md
 0x08915484	function	Psys_Spawn_q	72	rocket-visuals.md
 0x0880c31c	function	WeaponStats_ParseMissile	90	missile.md
@@ -1028,3 +1028,6 @@
 0x088404c8	function	Ship_UpdateExploding	88	shield.md
 0x08847650	function	Ship_UpdateDestroyed	85	shield.md
 0x08847914	function	Ship_UpdateRespawn	88	shield.md
+0x0886e7ac	function	Rocket_SweepCraftHit	88	rocket-visuals.md
+0x0886ee88	function	Rocket_ApplyBlastForce	90	rocket-visuals.md
+0x0886f154	function	Rocket_SweepProjectiles	78	rocket-visuals.md

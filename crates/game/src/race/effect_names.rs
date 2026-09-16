@@ -158,7 +158,7 @@ pub const TRACK_BLAST_EFFECT: &str = "WO_ROCKET_EXPLO_TRACK";
 /// The explosion a rocket that hits a **craft** plays.
 ///
 /// **Recovered, confidence 72.** `Rocket_SpawnCraftExplosion_q` (`0x0886ed34`),
-/// reached only from the craft-hit path `Rocket_HitCraft_q` (`0x0886ebdc`), tag
+/// reached only from the craft-hit path `Rocket_HitCraft` (`0x0886ebdc`), tag
 /// `ROEX`, string `0x08a7ca74`. Seven emitters, the largest tree on the disc:
 /// a root that hangs a `SMOKEMUSHROOM` off every particle, 32 pieces of
 /// `DEBRIS` a tick, a `SMOKERING`, a `GLOW`, and a second per-particle pair of
@@ -225,7 +225,7 @@ pub const MINE_EXPLO_EFFECT: &str = "WO_MINE_EXPLO";
 
 /// How far below a struck craft's centre its blast is drawn, in world units.
 ///
-/// **Recovered, confidence 78.** `Rocket_HitCraft_q` (`0x0886ebdc`) builds the
+/// **Recovered, confidence 78.** `Rocket_HitCraft` (`0x0886ebdc`) builds the
 /// explosion's position from the struck craft's own position with `y - 2.5`, not
 /// from the rocket's impact point.
 pub const CRAFT_BLAST_DROP: f32 = 2.5;

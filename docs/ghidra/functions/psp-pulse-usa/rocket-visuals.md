@@ -22,9 +22,15 @@ emulator exercised sit above the decompilation-only ceiling of 84.
 | `0x0885d1b0` | `Rocket_SpeedForClass` | 84 |
 | `0x0885d2a8` | `Rocket_Update` | 88 |
 | `0x0886f038` | `Rocket_Spawn` | 88 |
-| `0x0886ebdc` | `Rocket_HitCraft_q` | 78 |
+| `0x0886ebdc` | `Rocket_HitCraft` | 88 |
 | `0x0886ed34` | `Rocket_SpawnCraftExplosion_q` | 78 |
 | `0x08915484` | `Psys_Spawn_q` | 72 |
+| `0x0886e7ac` | `Rocket_SweepCraftHit` | 88 |
+| `0x0886ee88` | `Rocket_ApplyBlastForce` | 90 |
+| `0x0886f154` | `Rocket_SweepProjectiles` | 78 |
+
+`Rocket_HitCraft` lost its `_q` on 2026-09-16, when its credit and its
+caller were read in full - see "What a rocket hit spends" below.
 
 ## First: `weapon-fire.md` has the spawn helper at the wrong address
 
@@ -136,7 +142,7 @@ is a four-character tag, little-endian.
 `0x4c464f52` is `ROFL`, `0x32444f52` is `ROD2`, `0x58454f52` is `ROEX`.
 
 **The two explosions are separately authored, and the split is confirmed rather
-than inferred from the names.** `Rocket_HitCraft_q` (`0x0886ebdc`) is the
+than inferred from the names.** `Rocket_HitCraft` (`0x0886ebdc`) is the
 craft-hit path - it credits `damage` and `slowdown_time`, then calls the `ROEX`
 spawner - while both of `Rocket_Update`'s detonating branches call `ROD2`.
 
@@ -292,6 +298,65 @@ constant was touched** - which is the only acceptable outcome, per that test's
 own standing instruction.
 
 The flight path above is still **reported, not implemented**.
+
+## What a rocket hit spends, and what a wall hit does not
+
+Read 2026-09-16 from `RocketPool_Update` (`0x0886de60`) down, because the
+port had been spending a uniform full-radius blast on every rocket ending
+and the Plasma's reading ([plasma.md](plasma.md)) suggested that was wrong
+for the Rocket too. It is.
+
+`RocketPool_Update` runs `Rocket_Update` on every live rocket, then - only
+while the rocket's flag bit `0` (in flight) is set - `Rocket_SweepCraftHit`
+(`0x0886e7ac`): for every craft in the grid except the firer (`rocket+0x40`),
+a hull-cylinder test between the rocket's previous and current positions,
+**6.0 units** either side of the line of travel and bounded by the two
+endpoints. A hit calls `Rocket_HitCraft(pool, rocket, craft)` (`0x0886ebdc`):
+
+```c
+rocket->flags |= 0x24;                                  // hit a craft, retire
+if (Ship_HasActiveShield(craft)) craft->+0x124 = 1;     // absorbed marker, read by the shield path
+craft->+0x120 += stats->damage;                         // +0x04 of the per-class rocket record
+craft->+0x12c += 1.0;                                   // hits taken
+craft->+0x130 += stats->slowdown_time;                  // +0x2c
+craft->+0x138  = 0;
+craft->+0x13c  = rocket->firer;
+if (craft is visible) Rocket_SpawnCraftExplosion_q(...);  // ROEX, at craft y - 2.5
+Rocket_ApplyBlastForce(pool, hit_point, firer);         // 0x0886ee88
+```
+
+`Rocket_ApplyBlastForce` is `Plasma_ApplyBlastForce`'s twin: every craft but
+the firer within `blastradius` (`+0x1c`) receives `(1 - d/blastradius) *
+blastforce` (`+0x20`) along the line from the hit point into
+`entity+0x110`, the pending-impulse slot every blast function writes. It
+carries no damage and no slowdown. So a rocket's damage lands on **the craft
+it struck and nobody else**, and the radius is force only - the struck craft
+takes both.
+
+**A wall hit spends nothing.** `Rocket_Update`'s two detonating branches set
+flag `0x14` (retire, wall); the pool's second pass then reaps any rocket with
+bit `2` set - or older than **5.0 s** - by releasing its particle system
+(`FUN_088f3298`), playing `ROCKEXPLWALL` (bit `0x10`) or `ROCKEXPLSHIP` (bit
+`0x20`), clearing the trail, and swapping the slot out. No craft field is
+touched on that path; `ROD2` was already spawned by `Rocket_Update` itself.
+Confidence **90** for the split: both functions decompile cleanly, the
+offsets are `WeaponStats_ParseRocket`'s own ([weapon-fire.md](weapon-fire.md)),
+and the teardown is the same eleven-line shape as `Plasmas_Update`'s.
+
+`Rocket_SweepProjectiles` (`0x0886f154`, confidence 78) is the third call
+in the per-rocket loop: the same cylinder test against every live **mine**
+(pool `DAT_08b3bf8c`, radius `+0x100` of the rocket record) and every live
+**bomb** (pool `DAT_08b3bf90`, radius `+0xe0`), flagging both the rocket and
+whatever it met for retirement - a rocket clears mines and bombs off the
+track by flying into them. Not ported; the port's rockets pass through both.
+
+**Ported the same day**: `oag_gameplay::projectile::flight` gives the Rocket
+the Plasma's two arms - a craft hit routes to `blast::blast_direct_hit`, a
+wall hit carries `blast: false` - and `crates/gameplay/tests/determinism.rs`
+moved its constants for it, with the scenario's target moved into the
+rocket's own arc so the direct hit stays covered. Not ported: the 5.0 s
+lifetime (still `MAX_FLIGHT_SECONDS = 10.0`, see that constant's doc
+comment) and the mine/bomb sweep.
 
 ## Audio, in passing
 

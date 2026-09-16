@@ -233,7 +233,14 @@ pub fn blast(
 /// hull of the craft that fired it - see [`super::Projectiles::advance`]'s
 /// own hull exclusion) but could for a bystander craft near the firer.
 ///
-/// Called from [`apply_impacts`] only for a Plasma impact with
+/// **The Rocket's pair is the same shape, read 2026-09-16.** `Rocket_HitCraft`
+/// (`0x0886ebdc`) credits `damage` (`+0x04`) and `slowdown_time` (`+0x2c`)
+/// to the struck craft alone, then `Rocket_ApplyBlastForce` (`0x0886ee88`)
+/// sweeps every craft but the firer for a `(1 - d/blastradius) * blastforce`
+/// impulse into `entity+0x110` - `+0x1c`/`+0x20` of the same record. Nothing
+/// on either weapon's wall path touches a craft at all.
+///
+/// Called from [`apply_impacts`] for a Plasma or Rocket impact with
 /// `struck: Some(_)`; every other weapon still goes through [`blast`]
 /// unchanged.
 pub(super) fn blast_direct_hit(
@@ -322,15 +329,15 @@ pub(super) fn apply_impacts(
         let Some(stats) = blast_stats(weapons, impact.kind) else {
             continue;
         };
-        // **A Plasma direct hit spends its blast differently, and only a
-        // Plasma does.** `struck` is set only when the impact was a hull hit
-        // rather than a wall - see [`super::flight`]'s two Plasma arms and
-        // [`blast_direct_hit`]'s own doc comment for the recovered shape.
-        // Every other weapon's craft hit still goes through the uniform
-        // full-radius [`blast`] below, unexamined - `Rocket_HitCraft_q`
-        // suggests the same split exists for the Rocket, but that is a
-        // separate, unread change.
-        if impact.kind == Weapon::Plasma
+        // **A Plasma or Rocket direct hit spends its blast differently.**
+        // `struck` is set only when the impact was a hull hit rather than a
+        // wall - see [`super::flight`]'s two arms and
+        // [`blast_direct_hit`]'s own doc comment for the recovered shape,
+        // which `Rocket_HitCraft`/`Rocket_ApplyBlastForce` (`0x0886ebdc`/
+        // `0x0886ee88`, read 2026-09-16) share with the Plasma's pair
+        // field for field. Every other weapon's craft hit still goes through
+        // the uniform full-radius [`blast`] below, unexamined.
+        if matches!(impact.kind, Weapon::Plasma | Weapon::Rocket)
             && let Some(struck) = impact.struck
         {
             blast_direct_hit(

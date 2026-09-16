@@ -437,7 +437,7 @@ fn a_rocket_flying_along_world_up_does_not_collapse_its_basis() {
 /// A hull hit and a track hit are different blasts, in different places.
 ///
 /// **Both halves are the original's.** It authors `WO_ROCKET_EXPLO` and
-/// `WO_ROCKET_EXPLO_TRACK` separately, and `Rocket_HitCraft_q`
+/// `WO_ROCKET_EXPLO_TRACK` separately, and `Rocket_HitCraft`
 /// (`0x0886ebdc`) puts the hull one at the *struck craft's* position dropped
 /// by [`CRAFT_BLAST_DROP`] rather than at the impact point. This engine drew
 /// one invented flash at the impact point for both until 2026-08-12.
