@@ -253,3 +253,27 @@ fn swapping_a_font_changes_nothing_but_the_byte_order() {
     let from_big = Font::parse(&big).expect("the same file, big-endian, parses");
     assert_eq!(from_little, from_big);
 }
+
+#[test]
+fn coverage_claims_everything_but_the_reserved_header_tail_on_a_full_font() {
+    let data = font(64, 16, &[(65, 4, 8, 0, 4, 0, 8), (66, 8, 8, 4, 12, 0, 8)]);
+    let seen = coverage(&data);
+    let gaps = seen.gaps(1);
+    assert_eq!(gaps.len(), 1, "{gaps:?}");
+    assert_eq!((gaps[0].at, gaps[0].len), (0x1c, 20));
+}
+
+#[test]
+fn coverage_on_a_metrics_only_blob_claims_no_atlas() {
+    let mut data = font(64, 16, &[(65, 4, 8, 0, 4, 0, 8)]);
+    // Trim off the atlas, and point `atlas_at` at the new end - the PS2
+    // shape `Metrics::has_embedded_atlas` recognises.
+    let metrics = Metrics::parse(&data).expect("metrics-only still parses");
+    data.truncate(metrics.atlas_at);
+    let seen = coverage(&data);
+    assert_eq!(
+        seen.claimed(),
+        data.len() - 20,
+        "everything but the reserved header tail"
+    );
+}

@@ -198,6 +198,64 @@ where the hardware uses view-space depth. The two differ by up to `1/cos(fov/2)`
 - about 15 % at the screen corners. The view matrix is not in the uniform block
 that would be needed to fix it; recorded rather than silently accepted.
 
+### The extra block
+
+**`06_Track`'s sky is the only place on the disc where a `Mesh`-shaped
+payload's material array and its geometry are separated by more than
+alignment slack** (the corpus sweep's own worst other case is 12 bytes,
+well inside "a handful of bytes" padding), and the gap is **416 bytes
+(`0x1a0`), not the `0x1a8` this page previously recorded** - measured
+directly off both of `06_Track`'s directions rather than re-read from the
+earlier note. It closes structurally:
+
+```text
+materials_end (aligned to 0x10)
+  +0x00  u32   0x180 - the exact byte length of the six records below
+  +0x04  f32   0.0166666... (= 1/60, unexplained)
+  +0x08  u32   0x18a
+  +0x0c  u32   0x182
+  +0x10  record[6], stride 0x40:
+           +0x00  f32  1.0
+           +0x04  f32  1.0
+           +0x08  f32  0.0
+           +0x0c  f32  0.0
+           +0x14  f32  33.33 (record 0) or 600.0 (records 1-5)
+           +0x18  u32  0x00c2f774 (constant)
+           +0x1c  u32  0x00c2f808 (constant)
+           +0x20  u32  the record's own index, 0..5
+           +0x24  u32  0x080db6c0 (constant, a stale PSP main-RAM pointer)
+           +0x28..+0x40  zero, except record 5's +0x28..+0x3c (see below)
+  +0x190 16 zero bytes, padding to the geometry offset
+```
+
+`oag_vex::mesh_coverage::skycube_extra_block` recognises exactly this shape -
+the lead-in's own word 0 stating the records region's byte length, each
+record's `+0x20` equal to its own index, and the trailing bytes all zero - and
+`crates/vex/tests/payload_coverage_ground_truth.rs` pins it against both of
+`06_Track`'s directions and no other circuit. Confidence **85** for the
+structure (exact arithmetic closure, corroborated on the file's two directions,
+which is the whole population that has this gap); **not attempted** for
+meaning, and the two things that argue against a hasty "this is the
+per-material texture-transform block array" reading are recorded so nobody
+re-opens it on a coincidence: the stride (`0x40`) and count (one per material)
+match [`vex::mesh_tex_transforms`]'s own block array exactly, **but** that
+array's own documented base (`materials_end`, *unaligned*, i.e. `0x30 +
+material_count * 0x14` with no rounding) sits 24 bytes before where this
+block's repeating records actually start, and none of the fields read as
+plausible key counts or key-array offsets - `+0x14`'s value would be a `scale`
+track's `values_rel` field on that reading, and `600.0` is not a byte offset
+any real key array sits at. **`+0x18`/`+0x1c`/`+0x24` read as addresses in two
+different ranges** (`0x00c2xxxx` and `0x080dxxxx`) neither of which is a
+literal PSP main-RAM address by itself once combined this way, which is one
+more reason to read them as an authoring tool's own leftover memory rather
+than as anything the PSP runtime ever held. Record 5 alone carries non-zero
+bytes at `+0x28..+0x3c` (`d0 07 00 01 00 01 00 00 cd 07 00 00 00 00 ff 00 ff
+00 00 00`) that no other record repeats - measured and left unexplained.
+
+Neither `Skycube` handler is recovered ([above](#open)), so there is no
+runtime consumer to trace this against; it stays a structurally-closed but
+semantically undecoded block.
+
 ## Open
 
 - **Neither handler is recovered.** No address, no method table. The route is the
@@ -210,9 +268,8 @@ that would be needed to fix it; recorded rather than silently accepted.
   blend, cull, whether the sky is itself fogged. The depth handling here is
   chosen to work, not measured. `Trail_BuildStateList` is the worked example of
   recovering this from a display list.
-- **The extra block some skies carry.** `06_Track`'s sky puts `0x1a8` bytes
-  between the material array and the geometry: six `0x40`-byte records holding
-  stale PSP main-RAM pointers (`0x080db6c0`). Stepped over, not decoded.
+- ~~**The extra block some skies carry.**~~ Structure decoded, see
+  [below](#the-extra-block); meaning still not recovered.
 - **What separates the 1-, 5- and 6-material skies.** The obvious guess is face
   count - five being a cube with no floor - but triangle counts do not vary with
   it and no payload field distinguishes the groups. Comparing each group's

@@ -271,7 +271,8 @@ sets it.
 `.bnk` sound banks (`03000000`) are [partially decoded](psp-audio.md), `\x01FNT`
 fonts are [decoded](fnt.md), `SYSP` particle systems (`.pob`) are
 [partially decoded](pob.md) - the container and name, not the payload - and
-`.dat` files paired with ships remain undecoded.
+`.dat` files paired with ships are [decoded](handling-stats.md#related-files):
+a livery texture swap, not a mesh or collision data.
 
 ## Usage
 

@@ -671,5 +671,34 @@ fn le32(data: &[u8], at: usize) -> u32 {
     u32::from_le_bytes([data[at], data[at + 1], data[at + 2], data[at + 3]])
 }
 
+/// Byte coverage of one `.gxt` blob.
+///
+/// `Gxt::parse` already checks the file header's own texel span against the
+/// descriptor table's end and against the file's own length (see
+/// `Gxt::parse`'s doc comment), so this container is expected to close
+/// exactly for every file it parses at all - there is no slack between a
+/// texture's own `data` range and the next one's, the descriptor table, or
+/// the header, because `header_end == data.len()` is already enforced. What
+/// this adds beyond that check is making the claim explicit and per-texture,
+/// the same "claim what the parser already knows" shape
+/// `oag_rcs::rcsmodel::coverage` uses.
+#[must_use]
+pub fn coverage(data: &[u8]) -> oag_formats::coverage::Coverage {
+    let mut seen = oag_formats::coverage::Coverage::new(data.len());
+    let Ok(gxt) = Gxt::parse(data) else {
+        return seen;
+    };
+    seen.claim(0, HEADER_LEN, "the gxt header");
+    seen.claim(
+        HEADER_LEN,
+        gxt.textures.len() * DESCRIPTOR_LEN,
+        "the descriptor table",
+    );
+    for texture in &gxt.textures {
+        seen.claim(texture.data.start, texture.data.len(), "texel data");
+    }
+    seen
+}
+
 #[cfg(test)]
 mod tests;

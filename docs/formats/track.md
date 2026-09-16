@@ -886,6 +886,16 @@ until something proves otherwise.
 ### Not determined
 
 - The `section` payload's `pad[6]` and its trailing variable-length data.
+  Measured rather than merely named: `oag_vex::track_coverage::section_coverage`
+  claims everything else, and a corpus sweep over all 2,272 PSP section nodes
+  (`crates/vex/tests/payload_coverage_ground_truth.rs`) finds exactly 6
+  unclaimed bytes per node - `pad[6]` and nothing more, the trailing name
+  region being claimed whole (content, not just reach) since it is already
+  the payload's own tail.
+- `WO Track` itself has no gap at all under the same instrument -
+  `oag_vex::track_coverage::wo_track_coverage` claims all 3,843,824 bytes
+  across the 40 PSP files, matching [`AiTrack::encoded_len`](../../crates/vex/src/track.rs)'s
+  own "equal to the payload length on every shipped track."
 - What reads the reserved block, and what `Path.max_spacing` is used for.
 - `SplinePt` `+0x40` (what the *file* means by it - the runtime reuses the slot
   as a sentinel, see above), `+0x58` (always `0x10`), `+0x5c`-`+0x5f`,

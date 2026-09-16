@@ -677,6 +677,22 @@ vertices    = batch + header_size [+ alternate_offset]
 next batch  = batch + header_size + payload_size
 ```
 
+A list ends on a record whose `pass_mask` does not carry that list's own bit
+(`& 1` for list A, `& 2` for list B) - the walk's own terminator check - and
+**that record occupies real space rather than being absent**: claiming a
+fixed `0x40` bytes there (never the extended `0x80` form) leaves no residual
+gap of that shape anywhere in the corpus swept, which is what took `Mesh`
+coverage from ~98.9% to 99.84% once `oag_vex::mesh_coverage` started claiming
+it as `"a batch-list terminator record"` instead of leaving it as an unclaimed
+run "between a batch and end of file" (or, when list A's terminator sits
+immediately before list B's first real batch, "between a batch and a batch").
+Its own fields beyond `pass_mask` are not read by anything and are not decoded
+here. **A list whose own offset is `0`** - `Skycube`'s list B on every sky,
+see [skycube.md](skycube.md) - **is not walked at all**: zero means the list
+does not exist, not that it starts at the mesh header, and reading it as the
+latter would misclaim header and material bytes as a batch on any mesh whose
+header word happens to satisfy the terminator test.
+
 `+0x28`, `+0x29` and `+0x2c` are written at load and are **not file data**. An
 earlier note describing `+0x2c` as a pre-compiled display list was describing a
 runtime allocation.
@@ -1573,7 +1589,15 @@ Applied, from
   - see [draw-order.md](../rendering/draw-order.md) and
   [mesh-draw.md](../ghidra/functions/psp-pulse-usa/mesh-draw.md#the-layer-derivation-and-what-it-is-worth).
 - Whether the 16-byte file header carries anything beyond the version.
-- The `.dat` format paired with ships.
+- ~~The `.dat` format paired with ships.~~ - decoded, see
+  [handling-stats.md](handling-stats.md#related-files) and
+  [ship-skin.md](../ghidra/functions/psp-pulse-usa/ship-skin.md): a `0x20`
+  team-name header plus four 4bpp palette+pixel blocks, a texture swap on the
+  hull model rather than a second mesh. Censused across both PSP pressings and
+  the PS2 disc for this pass (2026-09-16): 16 base-team files on
+  `pulse-psp-usa`/`pulse-psp-eu` and 24 (base plus all four DLC teams) on
+  `pulse-ps2-eu`'s `WADSP.WAD`, every one exactly 26912 bytes, PSP hashes
+  identical between the two pressings; Pure ships zero.
 - ~~**PS2 mesh batches use a vertex type this decoder does not recognise.**~~ -
   decoded, see [PS2: the vertex type still names the attributes, but the data is
   a VIF packet](#ps2-the-vertex-type-still-names-the-attributes-but-the-data-is-a-vif-packet).

@@ -290,6 +290,21 @@ fn twiddle_over_a_square_grid_is_a_plain_bit_interleave() {
 }
 
 #[test]
+fn coverage_claims_the_header_descriptor_and_texel_span_exactly() {
+    let texels = vec![0u8; 32];
+    let data = blob(&descriptor(0x00, 4, 4, 32), &texels);
+    let seen = coverage(&data);
+    assert_eq!(seen.claimed(), data.len());
+    assert_eq!(seen.gaps(1), Vec::new());
+}
+
+#[test]
+fn coverage_on_a_blob_that_does_not_parse_claims_nothing() {
+    let seen = coverage(&[0u8; 8]);
+    assert_eq!(seen.claimed(), 0);
+}
+
+#[test]
 fn a_zero_sized_texture_is_refused() {
     let data = blob(&descriptor(0x86, 0, 4, 0), &[]);
     assert_eq!(

@@ -171,7 +171,8 @@ pub const MAX_MIP_LEVELS: u8 = 16;
 /// support existed, which is what keeps the 346 already-decoding entries decoding.
 /// If a narrow single-level texture ever fails to identify, this is the first thing
 /// to try.
-fn mip_chain_len(width: u16, height: u16, bits_per_pixel: u8, levels: u8) -> usize {
+#[must_use]
+pub fn mip_chain_len(width: u16, height: u16, bits_per_pixel: u8, levels: u8) -> usize {
     let mut total = 0usize;
     let (mut w, mut h) = (usize::from(width), usize::from(height));
     for level in 0..levels.max(1) {
@@ -353,6 +354,37 @@ impl Texture {
         // signature of reading swizzled data linearly.
         vertical > horizontal.saturating_mul(3)
     }
+}
+
+/// Byte coverage of one `.mip` blob.
+///
+/// **Two gaps this module's own doc comments already name, made
+/// measurable.** `Texture::parse` validates the *length* of the whole mip
+/// chain against the file (so a truncated or overlong blob is refused) but
+/// only ever reads level 0's pixels into [`Texture::indices`] - "the rest of
+/// the chain is validated and skipped" - and the seven bytes at `+0x09` are
+/// never read at all, not even into [`Texture::unknown`], which stops at
+/// `+0x08`. Both show up here as reported gaps rather than as claims this
+/// module cannot honestly make.
+#[must_use]
+pub fn coverage(data: &[u8]) -> oag_formats::coverage::Coverage {
+    let mut seen = oag_formats::coverage::Coverage::new(data.len());
+    let Ok(texture) = Texture::parse(data) else {
+        return seen;
+    };
+    // `+0x00..+0x09`: width, height, bits_per_pixel and the four bytes this
+    // module keeps as `unknown`. `+0x09..+0x10`, seven bytes, is not claimed:
+    // nothing in this module reads it.
+    seen.claim(0, 9, "the texture header");
+    let colours = 1usize << texture.bits_per_pixel;
+    let palette_len = colours * 4;
+    seen.claim(HEADER_LEN, palette_len, "the palette");
+    let level0_len = usize::from(texture.width)
+        * usize::from(texture.height)
+        * usize::from(texture.bits_per_pixel)
+        / 8;
+    seen.claim(HEADER_LEN + palette_len, level0_len, "level 0's pixels");
+    seen
 }
 
 #[cfg(test)]

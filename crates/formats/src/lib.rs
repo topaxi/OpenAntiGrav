@@ -40,6 +40,7 @@ pub mod ps2_music;
 pub mod psarc;
 pub mod pure_dlc;
 pub mod sblk;
+pub mod sblk_coverage;
 pub mod signature;
 pub mod swizzle;
 pub mod wad;

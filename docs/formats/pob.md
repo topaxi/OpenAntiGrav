@@ -1083,6 +1083,24 @@ collision-spark values against the hand transcription they replaced.
   confirmed units - what remains undecoded is the slot-table targets'
   own internals (beyond "site `0x4c4` resolves the texture path") and the
   scratch regions the loader bakes into (`+0x9c8`/`+0x9cc` targets).
+
+  **Measured rather than left as a bare statement**: `oag_vex::pob_coverage`
+  claims everything else this page already decodes (header, slot table, name,
+  each slot's own fixup site, every emitter record and modifier node) and
+  claims a slot's *target* only where it is a NUL-terminated string, per the
+  43%/rest-are-floats split above. Swept over
+  `crates/assets/tests/pob_coverage_ground_truth.rs`: the PSP corpus reaches
+  **25.62%** of 781,104 bytes across 35 files (436 resolved slots, of which
+  every string target is claimed); the PS2 corpus reaches **62.24%** of
+  374,128 bytes across 41 files. The PSP number being so much lower says
+  something concrete about the corpus rather than about the parser: several
+  PSP files carry a run over 2,000 bytes unaccounted for between one slot
+  target and the next, and the worst single file (55,392 bytes) has 35,115
+  bytes - almost two thirds of it - past its last resolved string and before
+  the file's own end, none of it reached by the emitter tree walk either.
+  Two passes at what fills that space came back a dead end (see the next two
+  bullets), so this pass measured the shape of the gap rather than opening a
+  third.
 - **What a slot's *position* in the table means**, if anything - the
   attribute-mapper-class-per-index hypothesis is unverified.
 - **What a shared target (several slots resolving to the identical offset)
