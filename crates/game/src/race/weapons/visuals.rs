@@ -196,6 +196,16 @@ impl Race {
         let Some((name, at)) = self.blast_for(kind, point, struck) else {
             return;
         };
+        // The Plasma's own three-model detonation - `PLASMA_BLAST_EFFECT`
+        // below is `WO_PLASMA_FLASH`, a separate `.pob` particle system; the
+        // halo and two hemispheres are their own `.vex` models with their
+        // own render-side pool, on the same terms as the Rocket's, the
+        // Mine's and the Bomb's own bodies. See `blast_models` module doc
+        // comment for why that pool lives on `self.view` and is advanced
+        // independently of this effect stage.
+        if kind == oag_tables::weapons::Weapon::Plasma {
+            self.spawn_plasma_blast_model(at);
+        }
         let Some(effect) = self.view.effects.get(name).cloned() else {
             return;
         };

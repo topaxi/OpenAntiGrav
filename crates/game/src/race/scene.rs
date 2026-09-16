@@ -157,6 +157,7 @@ pub struct Scene {
     /// `Data\Weapons\pulse_muzzleflash.vex` did not load, and a round then
     /// draws as nothing rather than as an invented stand-in.
     cannon_rounds: Vec<Drawable>,
+    plasma_blast: blast_models::PlasmaBlastDrawables,
     /// Each slot's own plume's authored texture-transform keyframes, sampled
     /// per frame and applied to that plume's authored UVs - the recovered
     /// mechanism (`TEXMAPMODE` 0 plus the animated `TEXOFFSET` u-scroll; see
@@ -338,6 +339,7 @@ impl Scene {
         mine_model: Option<Model>,
         bomb_model: Option<Model>,
         cannon_model: Option<Model>,
+        plasma_blast_models: blast_models::PlasmaBlastModels,
         shield_cockpit: Option<Model>,
         flare: Option<FlareTexture>,
         noise: Option<FlareTexture>,
@@ -857,30 +859,27 @@ impl Scene {
             )?),
             None => None,
         };
-        // One per projectile slot, cloned the way the hulls and plumes above are -
-        // the Rocket's, the Mine's and the Bomb's, all three built the same way by
-        // [`weapon_models::build`]. A laid mine's hull is opaque too - a painted
-        // shell, not a glow - so every one of the three takes the ordinary
-        // transparent blend and the protected glow mask the ships take, and any
-        // flare around one stays in the additive pass with the exhaust where it
-        // belongs.
-        let weapon_drawables = |model| {
-            weapon_models::build(
-                device,
-                queue,
-                model,
-                format,
-                anisotropy,
-                sample_count,
-                scene_depth,
-                zone_art,
-                &shadow_map,
-            )
-        };
-        let rockets = weapon_drawables(rocket_model)?;
-        let mines = weapon_drawables(mine_model)?;
-        let bombs = weapon_drawables(bomb_model)?;
-        let cannon_rounds = weapon_drawables(cannon_model)?;
+        // One per projectile slot: the Rocket's, the Mine's, the Bomb's, the
+        // Cannon round's and the Plasma blast's, all built the same way - see
+        // `weapon_models::build_all`. A laid mine's hull is opaque too - a
+        // painted shell, not a glow - so every one takes the ordinary
+        // transparent blend and protected glow mask the ships take, and any
+        // flare stays in the additive pass with the exhaust where it belongs.
+        let (rockets, mines, bombs, cannon_rounds, plasma_blast) = weapon_models::build_all(
+            device,
+            queue,
+            rocket_model,
+            mine_model,
+            bomb_model,
+            cannon_model,
+            plasma_blast_models,
+            format,
+            anisotropy,
+            sample_count,
+            scene_depth,
+            zone_art,
+            &shadow_map,
+        )?;
         // 64 is a stand-in size only, and only when the disc's own texture did not
         // decode; `load` has already reported that when it happens.
         let flare = flare.unwrap_or_else(|| FlareTexture::placeholder(64));
@@ -974,6 +973,7 @@ impl Scene {
             mines,
             bombs,
             cannon_rounds,
+            plasma_blast,
             boost_uv_transforms,
             collision,
             sky,

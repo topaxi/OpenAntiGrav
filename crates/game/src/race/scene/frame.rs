@@ -431,6 +431,7 @@ impl Scene {
         oag_render::perfprobe::mark("ship+shield-write");
         let (rocket_matrices, mine_matrices, bomb_matrices, cannon_matrices) =
             self.write_weapon_models(race, &prev, queue, view_projection, prev_vp);
+        let plasma_blast_active = self.write_plasma_blasts(race, queue, view_projection);
         // Same model matrix as the ship: the original parents the plume to the
         // craft, not to the flare - see `Loaded::boost_model`. Skipped while
         // hidden rather than written and left undrawn, since there is nothing
@@ -847,6 +848,7 @@ impl Scene {
         for drawable in self.cannon_rounds.iter().take(cannon_matrices.len()) {
             stats.add(drawable.draw(&mut pass, None, None, None, None));
         }
+        self.draw_plasma_blasts(&plasma_blast_active, &mut pass, &mut stats);
         // After the ships, so the hulls' depth is already in the buffer: a
         // plume's own blend pipeline writes no depth, the same reasoning as
         // the flares below. One draw per boosting craft, gated on the same

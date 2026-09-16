@@ -263,6 +263,11 @@ impl Race {
                 ));
             }
         }
+        // After the loop above, so a Plasma detonated this tick is already
+        // in the pool at `age == 0.0` when this ages every slot - the same
+        // one-tick order `advance_projectile_flares` above takes relative to
+        // a freshly-placed flare. See `blast_models` module doc comment.
+        self.advance_plasma_blast_models(self.sim.dt);
         self.ignite_missile_bounces(&bounces_before);
         // After the craft have moved, so a flare sits on this tick's nozzle
         // rather than the last one's.

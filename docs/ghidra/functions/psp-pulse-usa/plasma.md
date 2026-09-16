@@ -1029,14 +1029,215 @@ own regression story.
   `+0x124` byte (the flag `Ship_Damage` reads as its fifth argument). Reads as
   "is the firer a specific craft slot" - the local player's, most likely - but
   not measured; under 50, not renamed.
-- **The blast object's own animation.** `PlasmaBlast_Construct` builds three
-  ramps over its three models and nothing here reads what advances them.
-- **`FUN_0885c650`**, the second speed lookup, deliberately unnamed - see
-  above. `0x0885c5a4` left this list on 2026-09-09 by being decompiled.
+- ~~**The blast object's own animation.** `PlasmaBlast_Construct` builds three
+  ramps over its three models and nothing here reads what advances them.~~
+  **Struck 2026-09-16**: `PlasmaBlast_Update` is that reader - see
+  [the blast's own per-tick animation](#the-blast-objects-own-per-tick-animation-plasmablast_update).
+- ~~**`FUN_0885c650`**, the second speed lookup, deliberately unnamed - see
+  above. `0x0885c5a4` left this list on 2026-09-09 by being decompiled.~~
+  **Struck 2026-09-16**: renamed `Plasma_ClassSpeed`, confidence 82 - see
+  below.
 - **The bodies of the four unbuilt fire handlers** named at 82 in the table
   above. Only their dispatch is read.
 - **`g_ride_height`** (`_DAT_002acf08`), the constant a redirected bolt is
   lifted off the surface by. Read as a global, its value not sampled.
+
+## `Plasma_ClassSpeed` (`0x0885c650`) is `Plasma_SpeedForClass` without the ramp
+
+Confidence **82**, decompiled in full and unambiguous - eleven lines, no VFPU:
+
+```c
+float Plasma_ClassSpeed(void) {
+    stats = *(int *)(&DAT_08b32420 + DAT_08b32428 * 4);   // the same per-mode block
+    switch (g_class) {                                     // DAT_08b31040
+        case 0: return stats->venomspeed;    // + 0xac
+        case 1: return stats->flashspeed;    // + 0xb0
+        case 2: return stats->rapierspeed;   // + 0xb4
+        case 3: return stats->phantomspeed;  // + 0xb8
+        default: return 0.0f;
+    }
+}
+```
+
+Exactly `Plasma_SpeedForClass`'s four-way switch with the `age < 1.0f` launch
+blend cut out - the same stats block, the same four offsets, the same class
+selector. Its one caller, `FUN_08850edc` (`0x08850f64`), is well outside the
+Plasma's own address range and unread, so what asks for a class's steady-state
+speed without the launch ramp is still open; the body itself is not.
+
+## The blast object's own per-tick animation: `PlasmaBlast_Update`
+
+2026-09-16. `PlasmaBlast_Update` (`0x0885f680`, confidence **82**) is vtable
+slot 3 (offset `0xc` into the seven-slot table) of `DAT_08aca6e8`, the vtable
+`PlasmaBlast_Construct` installs at the object's own `+0x38` - found by
+reading that vtable's bytes directly (`inspect_memory_content` at
+`0x08aca6e8`) rather than guessed from a slot count. Six of the table's seven
+entries are `0x0894xxxx` addresses shared with other classes' generic
+object-lifecycle vtables (destroy, name lookup, and the like - not chased,
+since they carry nothing Plasma-specific); the seventh, at the Update slot, is
+the only address inside the Plasma's own module range, and it is called once a
+tick with `(dt, blast)`.
+
+**No separate `Draw` slot exists for this class.** The three loaded `.vex`
+models are children the object parents into the scene graph
+(`PlasmaBlast_Construct`'s `local_1f0`/`+0x40` link), and they draw through the
+engine's generic Vex-model render pass the same way the Rocket's, the Mine's
+and the Bomb's own models do - `PlasmaBlast_Update` only ever *writes* their
+transform, tint and animation-time state, never issues a draw call of its own.
+That is a structural reading (no `Draw`-shaped vtable slot fits, and every
+`0x0894xxxx` slot decompiles as generic-looking bookkeeping), not a decompiled
+negative on all six, so it is offered at the same 82 rather than higher.
+
+### The bolt's own detonation lasts a hardcoded 1.5 seconds
+
+The whole of `PlasmaBlast_Update`'s tail:
+
+```c
+if (1.5f <= blast->age) {                 // + 0x50 - lui a0,0x3fc0, an immediate, not a DAT_ load
+    blast->flags = (blast->flags & ~4) | 0xa;   // + 0x2c
+    unregister from the 32-slot list at DAT_08b30f10 if present, then FUN_08944a38(blast);  // release
+    return 0;   // "I am done, recycle me"
+} else {
+    blast->age += dt;
+    return 1;   // "still alive"
+}
+```
+
+Confidence **88** for the `1.5` figure specifically: `search_instructions` on
+this function for the operand `0x3fc0` finds exactly one hit, `lui a0,0x3fc0`
+building `0x3f800000`'s neighbour `0x3fc00000` = `1.5f` as an immediate two
+instructions before the comparison - not a `DAT_` load, so there is no shared
+constant to mis-attribute. **This is a real, Pulse-specific number and it
+disagrees with both HD ports**: `ps4-omega-eu`'s and `ps3-hdfury-eu`'s
+`WeaponExplosions_Update` retire the equivalent object at **3.5 s**, more than
+twice as long, with an intermediate 1.3 s "collapse" step that hides the three
+models early and lets the last ramp keep running on a hidden mesh. **Pulse has
+no collapse step at all** - `FUN_08944a38` (the release call) is the only
+teardown path found, called once, at 1.5 s, with nothing in between that
+clears a visibility flag on the three models ahead of the object's own death.
+So the map the HD ports gave this page going in - "a `(cur, target, rate)`
+ease per model, a collapse partway through, then a longer full retire" -
+turned out to describe the HD engine, not Pulse's: Pulse's blast is shorter
+and single-stage.
+
+### Each model gets a camera-facing basis, an anim-time scrub and a tint - not a `(cur, target, rate)` ease
+
+Confidence **75** for the anim-time-scrub, dead-ramp and scale-nudge findings
+below, the same figure for all three since they share the same evidence
+pass; lower than the retire time because the color path is genuinely
+irregular in the shipped binary and that irregularity is reported rather
+than resolved. **The camera-basis bullet is confidence 55** - what it reads
+and negates is pinned to a specific camera-struct field by cross-reference,
+but which semantic axis (or combination) that field represents is not, so
+the render side below implements the ordinary "face the camera" billboard as
+a stated substitute rather than this specific, unresolved vector math - see
+that section's own note.
+
+For each of the three models (index 0 = the halo, 1 = `hemisphere2`, 2 =
+`hemisphere1`, `PlasmaBlast_Construct`'s own load order), every tick:
+
+- **A basis rebuilt every tick from the active camera - not, on a re-check of
+  the actual decompile, a "look from the camera at the object" vector.** The
+  function opens by reading three floats spaced `0x10` apart at the active
+  camera's own `+0x48`/`+0x58`/`+0x68` - `DAT_08ab10b0` is the same global
+  `zone-mode.md` already documents as *the active camera*, and `exhaust.md`
+  independently reads that struct's `+0x40..0x64` as "columns 0 and 1 of the
+  camera matrix" (`up`, then `right`) with `contact-response.md` separately
+  placing a world *position* at `+0x70` - so `+0x40`/`+0x50`/`+0x60` read as
+  three successive `vec4` **columns** of a camera-to-world matrix (`up`,
+  `right`, a third column, then position), and `+0x48`/`+0x58`/`+0x68` are
+  each column's own third (`z`) component. **This page does not have enough
+  to say which single semantic axis that combination extracts** - whether
+  it is one row of the rotation part re-assembled, the view/forward column
+  specifically, or something this reading has not isolated - only that it is
+  *some* function of the camera's current orientation, negated and normalised
+  before use, and that no term anywhere in this function reads the blast's
+  own position as part of building it (the earlier draft of this bullet said
+  it did; it does not, and that was an assumption written down without the
+  disassembly to back it, corrected in the same pass that found it). Gram-
+  Schmidt-orthogonalising a second axis off the object's own stored reference
+  vector follows the same shape `PlasmaBlast_Construct`'s own basis build
+  uses. Whatever this resolves to, it is **not** the fixed track-fitted basis
+  `PlasmaBlast_Construct` builds once at spawn - the two coexist, and this one
+  is recomputed from the camera every tick, so the model re-orients as the
+  camera moves even though the group's anchor point does not.
+- **`Node_SetAnimTimeTree(age * rate[i], model)`** - already a named, shared
+  engine function (not touched here), called with `0.0` once at spawn
+  (`PlasmaBlast_Construct`'s own three-iteration loop, `FUN_08912890(0, ...)`
+  before it carried this name) and with `age * rate[i]` every tick after. The
+  three `rate[i]` values are read straight out of the same small shared
+  constants table `PlasmaBlast_Construct`'s scale/offset fields come from:
+  `DAT_08ab0f6c = 0.1`, `DAT_08ab0f70 = 0.07`, `DAT_08ab0f74 = 0.07` for
+  models 0/1/2. Since the three `.vex` files are the ones the disc ships and
+  `Node_SetAnimTimeTree` scrubs a *time*, the expansion this page's own intro
+  calls "the expanding shell of the blast" is most likely baked into each
+  model's own authored vertex animation and scrubbed by this call, **not**
+  computed by a scale ramp this engine would have to reproduce by hand - a
+  materially different shape than HD's `(cur, target, rate)` ease over a
+  basis scale, and good news for a straight port: play the model's own
+  animation at this time value rather than re-deriving an ease curve.
+  Un-chased: what `Node_SetAnimTimeTree` does with a value past the model's
+  own clip length, and whether the three per-model rates were themselves
+  meant to be read from `+0x90..+0x114`'s keyframe table (next bullet) rather
+  than hardcoded here - the two mechanisms sit side by side in the same
+  function and this page did not find the second one wired to anything.
+- **The `+0x90`..`+0x114` "three ramps" are a real keyframe-curve mechanism
+  that ships dead.** `PlasmaBlast_Construct` spends real effort precomputing
+  per-keyframe reciprocal rates (`1.0f / (time[k+1] - time[k])`, stored at
+  `+0xac`/`+0xb0` per ramp) for exactly the shape a multi-key ease would need,
+  gated on each ramp's own keyframe count at `+0xb4`/`+0xe4`/`+0x114`. That
+  count is **never written** by `PlasmaBlast_Construct`, and the shared base
+  constructor every object of this kind runs first, `FUN_08943f08`, does not
+  touch it either (checked directly: it writes offsets `0x00`-`0x38` only,
+  keyed by dword index, nowhere near `0xb4`). A freshly allocated object's
+  `+0xb4` is therefore `0`, `1 < 0` is false, and
+  `PlasmaBlast_Update`'s own keyframe-search loop is skipped for every
+  constructed blast - confirmed in the disassembly (`0885fc48`..`0885fd90`
+  region reads `+0xb4`/`+0xe4`/`+0x114` before any earlier instruction in
+  either function writes them). This is the same shape as the `charge_time`
+  finding above: real, working code with nothing to trigger it. **What runs
+  instead** is the loop's own `count == 0` fallback, which reads one dword
+  *before* each ramp's own value array - for model 0 that lands on
+  `DAT_08ab0f74` (`0.07`, the same constant read as model 2's anim-time rate
+  a few lines away - a coincidence of layout, not a second meaning for that
+  float), and for models 1 and 2 it lands inside the *previous* ramp's own
+  unused rate slots, which are `0.0` for the same reason `+0xb4` is. So as
+  shipped, model 0's tint value is a constant `0.07` every tick and models 1
+  and 2's are a constant `0.0` - not a fade, and this page does not know
+  whether that is an authored intent (a flash confined to the halo, with the
+  two hemispheres carrying their look in the model's own material rather than
+  a tint) or a shipped bug in a feature nothing since exercised. Recorded as
+  observed, not resolved.
+- **The tint itself lands on the model's own submeshes, not a shader
+  uniform this engine already exposes.** `FUN_089122b4(model, colour)`
+  packs its float argument as a byte into `byte * 0x010101 - 0x01000000`
+  (an opaque grayscale colour, full alpha) and writes it to offset `+0x6c` of
+  every submesh group `Mesh_ClassTag()` matches on that model - a per-group
+  field, not a whole-model uniform. Given the values above are effectively
+  constant (0.07 or 0.0, not time-varying), this reads as closer to "tinted
+  once at a fixed shade" than "animated," and is not itself the source of any
+  fading look a player would see - if the halo visibly flashes and fades, that
+  animation is most likely the baked vertex-colour or opacity track
+  `Node_SetAnimTimeTree` scrubs, not this per-group tint.
+- **Per-model scale/offset in the group `PlasmaBlast_Construct` builds
+  alongside the anim-time rate is `0.0` for all three models** (`+0x6c`,
+  `+0x78`, `+0x84`, the first float of each of the three triples the
+  constructor reads from `DAT_08ab0f34`/`f44`/`f54`) - `PlasmaBlast_Update`
+  reads exactly that field to scale a translation nudge added on top of the
+  billboard basis, and a `0.0` nudge is no nudge at all. So the three models
+  sit exactly at the construct-time track-fitted position with no per-model
+  offset; whatever separation the halo and the two hemispheres show on
+  screen comes from their own authored geometry, not from this engine's
+  layout math.
+
+**Read together, the three DAT tables at `0x08ab0f34`-`0x08ab0f78`
+(scale-nudge, anim-time rate, and a middle `8.0`/`3.5`/`3.0` field this page
+did not find a reader for) look like a small shared tuning block for a
+generic "expanding shell" object class rather than Plasma-specific constants**
+- the neighbouring `Data\Weapons\Bomb_Shockwave.vex` string this page already
+flagged as worth a look for whoever reads the Bomb's own teardown is the
+obvious next place that would confirm or rule this out; not chased further
+here since the Bomb's teardown is outside this page's own function set.
 
 ## History
 
@@ -1068,6 +1269,15 @@ own regression story.
   `FUN_0886b898` itself is read as a mechanical sweep of the Mine's and the
   Bomb's pool shapes but not renamed - the radius it reads is unauthored for a
   Plasma, which holds its positive identity under 50.
+- **2026-09-16.** `PlasmaBlast_Update` found off the vtable
+  `PlasmaBlast_Construct` installs and read in full: a hardcoded 1.5 s
+  lifetime with no HD-style collapse stage, a per-model camera-facing basis,
+  and an anim-time scrub that most likely plays each model's own baked
+  expansion rather than this engine computing one. `Plasma_ClassSpeed`
+  (`0x0885c650`) decompiled cleanly and closed the last unnamed function this
+  page's own "What is not verified" list carried. Both closed by
+  `plasma-blast-models`, alongside the render side wired the same day - see
+  `docs/gameplay/pickups.md` and the weapons handover thread for what draws.
 - **2026-09-02.** Written while implementing the Plasma, the first of the six
   remaining weapons. **The page's own trap caught this read too**, which is now
   the fourth time: `weapon-fire.md` warns that `func_0x000NNNNN` needs

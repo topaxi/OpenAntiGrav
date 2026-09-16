@@ -336,17 +336,11 @@ pub fn load(options: &Options) -> Result<Loaded> {
         options.mode,
         &mut report,
     );
-    // The Rocket's, the Mine's and the Bomb's own bodies - see
-    // `weapon_models::load` for the shared shape, and
-    // `MINE_MODEL_ENTRY`/`BOMB_MODEL_ENTRY` for why the latter two carry no
+    // Every weapon's own body - see `weapon_models::load_bodies`, and
+    // `MINE_MODEL_ENTRY`/`BOMB_MODEL_ENTRY` for why those two carry no
     // drop-time effect alongside them.
-    let mut body_model = |entry, fallback| {
-        weapon_models::load(&mut archives, entry, fallback, options.lod, &mut report)
-    };
-    let rocket_model = body_model(ROCKET_MODEL_ENTRY, "a rocket");
-    let mine_model = body_model(MINE_MODEL_ENTRY, "a laid mine");
-    let bomb_model = body_model(BOMB_MODEL_ENTRY, "a laid bomb");
-    let cannon_model = body_model(CANNON_MODEL_ENTRY, "a cannon round");
+    let (rocket_model, mine_model, bomb_model, cannon_model, plasma_blast_models) =
+        weapon_models::load_bodies(&mut archives, options.lod, &mut report);
     // The cockpit half of the shield, on the same terms and for the same
     // reason: not per team, not per track, one entry for every craft in the
     // game. The shell beside it *is* per team and loads with the livery above.
@@ -986,6 +980,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         cannon_model,
         mine_model,
         bomb_model,
+        plasma_blast_models,
         shield_cockpit,
         countdown_model,
         visibility,

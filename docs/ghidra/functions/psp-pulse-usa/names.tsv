@@ -860,3 +860,6 @@
 0x0886ad60	function	Plasma_HitCraft	88	plasma.md
 0x0886ae08	function	Plasma_ApplyBlastForce	88	plasma.md
 0x0886afb8	function	Plasma_SweepCraftHit	82	plasma.md
+0x0885f680	function	PlasmaBlast_Update	82	plasma.md
+0x0885c650	function	Plasma_ClassSpeed	82	plasma.md
+

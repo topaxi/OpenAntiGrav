@@ -121,6 +121,7 @@ use oag_vex::vex;
 
 mod access;
 mod assets;
+mod blast_models;
 mod camera;
 mod capture;
 mod drawable;
@@ -153,6 +154,7 @@ mod worker;
 pub mod zone_grade;
 
 pub use assets::{boost_entry_name, shield_entry_names, ship_entry_name};
+pub use blast_models::PlasmaBlastModels;
 pub use camera::chase_params;
 pub use capture::{CaptureOptions, Presented, capture, describe};
 pub use effect_names::*;
@@ -398,6 +400,24 @@ pub const BOMB_MODEL_ENTRY: &str = r"Data\Weapons\Pulse_Bomb.vex";
 /// model the original hangs on the round and nothing else: the quads are an
 /// honest absence rather than an invented billboard, per CLAUDE.md.
 pub const CANNON_MODEL_ENTRY: &str = r"Data\Weapons\pulse_muzzleflash.vex";
+
+/// The three archive entries the Plasma's own detonation loads: a halo and
+/// two hemispheres, "the expanding shell of the blast".
+///
+/// **Recovered, confidence 88.** `PlasmaBlast_Construct` (`0x0885fd90`) reads
+/// all three strings directly out of `.rodata` - see
+/// `docs/ghidra/functions/psp-pulse-usa/plasma.md#the-detonation-and-the-three-models-under-it`.
+/// The load order is `PLASMA_BLAST_HALO_MODEL_ENTRY`, then
+/// `PLASMA_BLAST_HEMISPHERE2_MODEL_ENTRY`, then
+/// `PLASMA_BLAST_HEMISPHERE1_MODEL_ENTRY` (hemisphere2 before hemisphere1,
+/// which is the file's own order, not a typo) - `weapons::blast_models`
+/// keeps that order because it is also the order `PlasmaBlast_Update`'s own
+/// per-model anim-time rate table pairs against.
+pub const PLASMA_BLAST_HALO_MODEL_ENTRY: &str = r"Data\Weapons\pulse_plasma_halo1.vex";
+/// See [`PLASMA_BLAST_HALO_MODEL_ENTRY`].
+pub const PLASMA_BLAST_HEMISPHERE1_MODEL_ENTRY: &str = r"Data\Weapons\pulse_plasma_hemisphere1.vex";
+/// See [`PLASMA_BLAST_HALO_MODEL_ENTRY`].
+pub const PLASMA_BLAST_HEMISPHERE2_MODEL_ENTRY: &str = r"Data\Weapons\pulse_plasma_hemisphere2.vex";
 
 /// Half-width of the sprite a projectile in flight is drawn as, in world units.
 ///
