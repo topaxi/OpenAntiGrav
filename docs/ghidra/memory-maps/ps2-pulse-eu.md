@@ -74,19 +74,20 @@ section an address is in.
 
 ## What is placed where
 
-The globals this project has named on the PS2, from
-[names.tsv](../functions/ps2-pulse-eu/names.tsv):
+The PS2 globals that place a region. Only the vtable row is in the PS2's
+[names.tsv](../functions/ps2-pulse-eu/names.tsv); the other three were read
+on the pass that wrote this page and are recorded as prose on the cited
+pages, not as applied names - a PS2 evidence page for them is still owed.
 
-| Address | Name | Section | Page |
+| Address | What | Section | Where it is read |
 | --- | --- | --- | --- |
-| `0x0027b3e4` | `_impure_ptr` (newlib reent; `rand` state at `+0x58`) | `.data` | [prng.md](../functions/psp-pulse-usa/prng.md) (cross-platform row) |
+| `0x0027b3e4` | `_impure_ptr` (newlib reent; `rand` state at `+0x58`) | `.data` | [prng.md](../functions/psp-pulse-usa/prng.md), cross-platform row |
 | `0x00284e08` | the memory manager object (below) | `.data` | this page |
-| `0x0029c620` | `g_wad_device_vtable` | `.data` | [wad-subsystem.md](../functions/ps2-pulse-eu/wad-subsystem.md) |
-| `0x002f8a60` - `0x002f8aac` | the particle RNG buffer, pointers and scale | `.bss` | [prng.md](../functions/psp-pulse-usa/prng.md) |
+| `0x0029c620` | `g_wad_device_vtable` (named) | `.data` | [wad-subsystem.md](../functions/ps2-pulse-eu/wad-subsystem.md) |
+| `0x002f8a60` - `0x002f8aac` | the particle RNG buffer, pointers and scale | `.bss` | [prng.md](../functions/psp-pulse-usa/prng.md), cross-platform row |
 
 The rest of the PS2's named data is on the pages under
-[ps2-pulse-eu/](../functions/ps2-pulse-eu/README.md); this table lists
-only what places a *region*.
+[ps2-pulse-eu/](../functions/ps2-pulse-eu/README.md).
 
 ## The runtime heap is a different design
 
