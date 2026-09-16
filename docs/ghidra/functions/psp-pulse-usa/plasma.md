@@ -350,17 +350,16 @@ position every tick after, keyed by **projectile slot** rather than by grid
 slot - the shape `mine.md`'s own `MINERADAR` note names as the gap nothing in
 this engine could address before now (`SfxVoices::plasma_travel`,
 `crates/game/src/audio/sfx.rs`). `Cue::PlasmaHitWall` (`PLASMAHITWALL`) fires
-once for every `Impact` this engine's own `Projectiles::advance` reports for a
-Plasma - a wall hit and the 10 s timeout, matching this teardown's own
-"identical for either ending" reading, **and also a craft hit**
-(`Impact::struck.is_some()`), a third ending this page's own reading of
-`Plasma_Update`'s downward-probe switch and the elided travel-segment sweep
-above never located a call site for. The bank separately carries a distinct
-`PLASMAHITSHIP` (confirmed present via `oag-wad sounds`, alongside `PLASMA`,
-`PLASMAHITWALL` and `~PLASMATVL`, all in `weapons.bnk`) that this engine does
-not play for that case - chosen, not measured; see
-`crate::audio::sfx::Cue::PlasmaHitWall`'s own doc comment and the
-`weapons-eight-of-thirteen-the-plasma-and-the` handover thread.
+for a wall hit and the 10 s timeout, matching this teardown's own "identical
+for either ending" reading; a craft hit (`Impact::struck.is_some()`) plays the
+bank's own distinct `Cue::PlasmaHitShip` (`PLASMAHITSHIP`) instead - measured,
+not chosen, once [`Plasma_SweepCraftHit`](#plasma_sweepcrafthit-0x0886afb8-confidence-82-is-the-rockets-own-craft-sweep-shape)
+was read: it plays `PLASMAHITSHIP` and clears the bolt's own emitter before
+`Plasmas_Update`'s pass-two teardown would otherwise play `PLASMAHITWALL`
+unconditionally, so the original plays exactly one of the two per ending,
+never both. Confirmed present via `oag-wad sounds`, alongside `PLASMA`,
+`PLASMAHITWALL` and `~PLASMATVL`, all in `weapons.bnk` (bank `#866`, hash
+`01bec824`).
 
 **The age check itself also plays a cosmetic broadcast, separate from the
 teardown.** Re-read in full alongside the teardown: `if (p->age > 10.0f) {
@@ -497,8 +496,24 @@ on the nose and its glow grows for the length of the wind-up**, which is
 exactly what a player describes as the Plasma winding up before it fires.
 This engine rides the glow and, as of 2026-09-16, ramps it too - see
 [`PLASMA_FLARE_EFFECT`](../../../../crates/game/src/race/effect_names.rs)'s
-doc comment for which half landed and why, and for the one piece not
-ported (the `* 0.5` flag, unread).
+doc comment for which half landed and why.
+
+**`craft+0x6d` is the internal/cockpit camera flag, closed the same day by two
+independent readings elsewhere on this disc, and the `* 0.5` is now ported.**
+[`camera.md`](camera.md)'s SELECT-view cycle writes it `1` for the internal
+tripod and `0` for both external ones, on the player craft alone; confidence
+88 for the cycle, 70 for the flag's own meaning there. `Ship_ApplyShield`'s
+own animation (see [`shield-pickup.md`](shield-pickup.md)) is a second,
+independent consumer - it picks the cockpit shell over the hull shell on
+exactly the same byte - which is what raises the flag's own confidence to
+**82**: two unrelated call sites reading the same offset the same way is
+corroboration, not the same finding counted twice. This engine already
+modelled the byte as `oag_display::CameraView::draws_own_ship` before this
+page ever asked what `+0x6d` was for, so the Plasma's own consumer is a third
+site rather than a new one - `weapons::visuals::plasma_flare_scale` now takes
+a `cockpit` parameter, `projectile.owner == 0 && !Race::draws_own_ship()`,
+since the flag is only ever written for the player's own craft (an
+opponent's charging bolt reads a byte the original never sets).
 
 `Plasma_Launch` (`0x0885bf84`, confidence **90**) ends it:
 
@@ -1246,6 +1261,34 @@ here since the Bomb's teardown is outside this page's own function set.
 
 ## History
 
+- **2026-09-16, later still.** `PLASMAHITSHIP` wired for the craft-hit ending,
+  closing the "chosen, not measured" gap the `plasma-cues` session left open
+  the same day: `crate::audio::sfx::Cue::PlasmaHitShip` fires for
+  `Impact { kind: Plasma, struck: Some(_), .. }` and `PlasmaHitWall` for
+  everything else, matching `Plasma_SweepCraftHit`'s own emitter-clear-then-play
+  order read above. Confirmed in `weapons.bnk` (bank `#866`, hash `01bec824`)
+  by `oag-wad sounds`: `PLASMAHITSHIP` is cue 14, 4 waveforms, 0 looping,
+  3.59s total - the same shape `PLASMAHITWALL` already carries. A real-disc
+  ground truth run of the sibling wall-hit test
+  (`crates/game/tests/plasma_cues_audio_ground_truth.rs`) turned up something
+  this page had not accounted for: `Mode::SingleRace` fields a full eight-craft
+  grid unconditionally whenever the track authors a `Start Position` (every
+  shipped circuit does), so a bolt fired early in a real race can meet a real
+  opponent instead of a wall - measured on Talons Junction, it does, at tick
+  82. That test is now robust to either ending rather than asserting
+  `PLASMAHITWALL` specifically, and a second ground-truth test pins the
+  craft-hit ending down deterministically by repurposing an already-active
+  opponent slot as a point-blank target.
+- **2026-09-16, later still.** `craft+0x6d`, read above in
+  ["the charge is real"](#the-charge-is-real-and-it-is-not-charge_time), is
+  the internal/cockpit camera flag - confidence raised 70 -> 82 the same
+  session, corroborated by a second independent consumer in
+  [`shield-pickup.md`](shield-pickup.md) (`camera.md` itself is corrected to
+  match, since that raise was recorded there before but never actually
+  applied). `weapons::visuals::plasma_flare_scale` now takes the `cockpit`
+  parameter this page's own "not ported" note used to flag as unread -
+  `projectile.owner == 0 && !Race::draws_own_ship()`, since the byte is only
+  ever written for the player's own craft.
 - **2026-09-16, later pass.** A direct craft hit is a third ending the
   morning pass did not enumerate. `Plasmas_Update`'s own `if (p->flags & 1)`
   call, previously prose-labelled `Plasma_NetSend_q` with no database name

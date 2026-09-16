@@ -448,9 +448,10 @@ impl Audio {
                     // reset `kind`) or - unreachably today, since nothing
                     // re-charges a flying bolt - because it started charging
                     // again. Either way the loop stops here; the one-shot
-                    // `PLASMAHITWALL` for an actual ending is a separate
-                    // `CueEvent` carrying its own impact point, pushed from
-                    // `crates/game/src/race/tick.rs`.
+                    // `PLASMAHITWALL` or `PLASMAHITSHIP` for an actual ending
+                    // - a wall/timeout or a struck craft, never both - is a
+                    // separate `CueEvent` carrying its own impact point,
+                    // pushed from `crates/game/src/race/tick.rs`.
                     (false, Some(id)) => {
                         mixer.stop(id);
                         voices.plasma_travel[slot] = None;
