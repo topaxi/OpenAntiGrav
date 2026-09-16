@@ -51,8 +51,11 @@ fn package() -> Option<PathBuf> {
 struct Survey {
     files: usize,
     decoded: usize,
+    ubc1: usize,
+    ubc3: usize,
     pvrtc: usize,
     argb8888: usize,
+    rgb888: usize,
     unsupported: BTreeMap<u32, usize>,
 }
 
@@ -80,8 +83,11 @@ fn survey(check: &mut impl FnMut(&str, &Gxt, &[u8])) -> Survey {
         for texture in &parsed.textures {
             match texture.format() {
                 Some(Format::Ubc2) => out.decoded += 1,
+                Some(Format::Ubc1) => out.ubc1 += 1,
+                Some(Format::Ubc3) => out.ubc3 += 1,
                 Some(Format::Pvrtii4bpp) => out.pvrtc += 1,
                 Some(Format::Argb8888) => out.argb8888 += 1,
+                Some(Format::Rgb888) => out.rgb888 += 1,
                 None => *out.unsupported.entry(texture.format_byte).or_default() += 1,
             }
         }
@@ -96,22 +102,28 @@ fn survey(check: &mut impl FnMut(&str, &Gxt, &[u8])) -> Survey {
 ///
 /// **The counts are pinned, not just printed.** `checked` and the survey's own
 /// totals increment on the same textures inside `survey`'s callback, so
-/// `checked == decoded + pvrtc + argb8888` alone would hold even if
-/// `Gxt::parse` silently skipped nine thousand files - it says nothing about
-/// whether the *right* files were seen. `9910`/`370`/`8430`/`99` are what the
-/// corpus actually is (measured 2026-08-26, the `PVRTII4BPP` count
-/// 2026-08-27, the `Argb8888` count 2026-08-28); a real regression changes
-/// one of these numbers, which only a pinned value can catch.
+/// `checked == decoded + ubc1 + ubc3 + pvrtc + argb8888 + rgb888` alone would
+/// hold even if `Gxt::parse` silently skipped nine thousand files - it says
+/// nothing about whether the *right* files were seen. `9910`/`370`/`8430`/
+/// `99` are what the corpus actually is (measured 2026-08-26, the
+/// `PVRTII4BPP` count 2026-08-27, the `Argb8888` count 2026-08-28);
+/// `505`/`493`/`13` (`UBC1`/`UBC3`/`Rgb888`) were measured 2026-09-16, closing
+/// out every format byte this corpus carries - `unsupported` is empty from
+/// here on. A real regression changes one of these numbers, which only a
+/// pinned value can catch.
 ///
 /// **The `PVRTII4BPP` half of this was the load-bearing new check when it
 /// landed.** Those 8,430 textures went through `Gxt::parse` unverified until
 /// this crate knew their unit size - their declared length was simply
 /// trusted. Now every one of them has to satisfy the same arithmetic, and
-/// does. `Argb8888`'s 99 are smaller in count but exercise a different edge:
-/// no `MIN_LEVEL_LEN` floor applies to them at all (see
-/// `oag_texture::gxt::Texture::level_len`), and all nine distinct
-/// `(width, height, mip count)` shapes in the corpus - down to a chain that
-/// bottoms out at one 4x4 level - agree with the unfloored formula.
+/// does. `Argb8888`'s 99 and `Rgb888`'s 13 are smaller in count but exercise a
+/// different edge: no `MIN_LEVEL_LEN` floor applies to either (see
+/// `oag_texture::gxt::Texture::level_len`) - all nine distinct
+/// `(width, height, mip count)` `Argb8888` shapes, down to a chain that
+/// bottoms out at one 4x4 level, agree with the unfloored formula, and so does
+/// `Rgb888`'s one shape (512x64, one level, `width * height * 3` to the
+/// byte). `UBC1`/`UBC3` reuse `UBC2`'s own twiddled block walk and its
+/// already-floored arithmetic unchanged - see `docs/formats/gxt.md`.
 #[test]
 #[ignore = "needs the decrypted Vita package in data/extracted/vita/"]
 fn every_shipped_gxt_parses_and_every_known_format_decodes() {
@@ -138,14 +150,29 @@ fn every_shipped_gxt_parses_and_every_known_format_decodes() {
     }
 
     println!(
-        "{} files, {} UBC2 + {} PVRTII4BPP + {} Argb8888 textures decoded, unsupported formats: {:?}",
-        found.files, found.decoded, found.pvrtc, found.argb8888, found.unsupported
+        "{} files, {} UBC2 + {} UBC1 + {} UBC3 + {} PVRTII4BPP + {} Argb8888 + {} Rgb888 \
+         textures decoded, unsupported formats: {:?}",
+        found.files,
+        found.decoded,
+        found.ubc1,
+        found.ubc3,
+        found.pvrtc,
+        found.argb8888,
+        found.rgb888,
+        found.unsupported
     );
     assert_eq!(found.files, 9910, "shipped .gxt files");
     assert_eq!(found.decoded, 370, "UBC2 textures across them");
+    assert_eq!(found.ubc1, 505, "UBC1 textures across them");
+    assert_eq!(found.ubc3, 493, "UBC3 textures across them");
     assert_eq!(found.pvrtc, 8430, "PVRTII4BPP textures across them");
     assert_eq!(found.argb8888, 99, "Argb8888 textures across them");
-    assert_eq!(checked, found.decoded + found.pvrtc + found.argb8888);
+    assert_eq!(found.rgb888, 13, "Rgb888 textures across them");
+    assert!(found.unsupported.is_empty(), "{:?}", found.unsupported);
+    assert_eq!(
+        checked,
+        found.decoded + found.ubc1 + found.ubc3 + found.pvrtc + found.argb8888 + found.rgb888
+    );
 }
 
 /// Decodes a named entry and writes it to a checkerboard-composited PNG so a
@@ -244,6 +271,86 @@ fn the_played_skin_s_own_textures_decode_to_something_a_human_can_check() {
         "data/xml/2048_hud/texture/hud_2048.gxt",
         "2048_hud_2048.png",
     );
+}
+
+/// The same "does the picture look like something a game would ship" check,
+/// on `UBC3` (BC3) - one of the two format bytes that reuse `UBC2`'s own
+/// twiddled block walk (see `oag_texture::gxt::blocks`) with BC3's 16-byte
+/// block math instead of BC2's. `UBC1`'s own check
+/// (`ubc1_decodes_to_something_a_human_can_check`, below) cannot reuse this
+/// helper - BC1 has no alpha channel, and `render_checkerboard`'s flatness
+/// assertions assume one. No HD `.gtf` twin exists for either format
+/// (`vita_gxt_ubc13_hd_oracle.rs`, `crates/game/examples/`, finds 0 same-name
+/// same-size pairs across all three EU packages), so a legible sample is the
+/// oracle: a front-end callout with a text label and a punch-through alpha
+/// edge. It renders legibly; the raster-order control this is compared
+/// against in that probe decodes to noise with the same "swizzle that
+/// happens to agree with raster order along one axis" signature this
+/// module's other formats show when read the wrong way.
+#[test]
+#[ignore = "needs the decrypted Vita package in data/extracted/vita/"]
+fn ubc3_decodes_to_something_a_human_can_check() {
+    let Some(path) = package() else {
+        return;
+    };
+    let mut archive = oag_assets::psarc::Archive::open(&path.display().to_string())
+        .unwrap_or_else(|e| panic!("opening {}: {e}", path.display()));
+
+    render_checkerboard(
+        &mut archive,
+        "data/FE/NewImages/TinyCallout_MP.gxt",
+        "2048_ubc3_callout.png",
+    );
+}
+
+/// `UBC1` (BC1)'s own check, on the same terms as `UBC3`'s above but without
+/// `render_checkerboard`'s alpha-based flatness assertions - BC1 has no
+/// interpolated alpha ramp and every texel measured on this sample decodes
+/// opaque, so "some texels transparent" would be the wrong invariant to check
+/// for this format. What a wrong block order or wrong palette math would
+/// still garble is the colour itself, so the check here is on distinct
+/// colours and on the picture, the same "look at the render" method the
+/// PVRTC font atlas and this module's other formats settled their own
+/// tiling/channel questions with.
+#[test]
+#[ignore = "needs the decrypted Vita package in data/extracted/vita/"]
+fn ubc1_decodes_to_something_a_human_can_check() {
+    let Some(path) = package() else {
+        return;
+    };
+    let mut archive = oag_assets::psarc::Archive::open(&path.display().to_string())
+        .unwrap_or_else(|e| panic!("opening {}: {e}", path.display()));
+
+    let entry = "data/Books/Manual/Pages/02/001.gxt";
+    let blob = archive
+        .read_path(entry)
+        .unwrap_or_else(|e| panic!("{entry}: {e}"));
+    let parsed = Gxt::parse(&blob).unwrap_or_else(|e| panic!("{entry}: {e}"));
+    let texture = parsed.only().expect("one texture");
+    let rgba = texture
+        .to_rgba(&blob)
+        .unwrap_or_else(|e| panic!("{entry}: {e}"));
+    assert!(
+        rgba.iter().all(|p| p[3] == 255),
+        "{entry}: BC1 has no alpha ramp, every texel should decode fully opaque"
+    );
+    let distinct: std::collections::BTreeSet<[u8; 4]> = rgba.iter().copied().collect();
+    assert!(
+        distinct.len() > 4,
+        "{entry}: only {} distinct texels - too flat to be authored art",
+        distinct.len()
+    );
+
+    let width = u32::from(texture.width);
+    let height = u32::from(texture.height);
+    let packed: Vec<u8> = rgba.iter().flatten().copied().collect();
+    let png = oag_texture::png::encode_rgba(width, height, &packed);
+    let out = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../..")
+        .join("data/shots/2048_ubc1_manual_page.png");
+    std::fs::create_dir_all(out.parent().expect("has a parent")).expect("creating data/shots");
+    std::fs::write(&out, &png).unwrap_or_else(|e| panic!("writing {}: {e}", out.display()));
+    println!("wrote {}", out.display());
 }
 
 /// The same "does the picture look like something a game would ship" check, on
