@@ -18,14 +18,22 @@ in Pure alike. See [the charge](#the-charge-is-real-and-it-is-not-charge_time).
 The detonation is closed in the same pass: `WO_PLASMA_FLASH` is it, and the
 call site is the pool teardown - see [the detonation](#the-detonation-and-the-three-models-under-it).
 
-**Closed 2026-09-16: the detonation never spends a blast, on either ending.**
-Neither a wall hit nor the `10.0 < age` timeout reaches
-`damage`/`blastradius`/`blastforce` or the pending-impulse slot every real
-blast function writes - `FUN_0886b898`, the pass-one call this page used to
-leave unread, is read in full and is not that function. See
+**Closed 2026-09-16: a wall hit and the `10.0 < age` timeout never spend a
+blast; a craft hit does, and it is a third ending this page did not
+enumerate until the same day's second pass.** Neither the wall nor the
+timeout ending reaches `damage`/`blastradius`/`blastforce` or the
+pending-impulse slot every real blast function writes -
+`FUN_0886b898`, the pass-one call this page used to leave unread, is read in
+full and is not that function. See
 [the expiry settles a damage question](#the-expiry-settles-a-damage-question-nobody-had-read).
-This leaves a known, flagged conflict with `oag_gameplay`'s own wall-hit
-branch, which still credits a blast - recorded there, not fixed here.
+**A direct craft hit is different and was found later the same day**: it
+credits full `damage` and `slowdown_time` to the struck craft and a
+falling-off `blastforce` impulse to every other craft in `blastradius` except
+the bolt's own firer - see
+[a craft hit is the third ending](#a-craft-hit-is-the-third-ending-and-it-does-spend-a-blast).
+The wall-hit conflict this page used to flag against `oag_gameplay`'s own
+`Impact::blast` is resolved, not left open: the wall arm now matches (no
+blast), and the craft-hit arm is ported the same day it was read.
 
 | Address | Name | Confidence |
 | --- | --- | --- |
@@ -41,6 +49,9 @@ branch, which still credits a blast - recorded there, not fixed here.
 | `0x0885fd90` | `PlasmaBlast_Construct` | 85 |
 | `0x0886a920` | `Plasma_SpawnRemote` | 75 |
 | `0x08a7c098` | `g_plasma_charge_seconds` (data) | 90 |
+| `0x0886afb8` | `Plasma_SweepCraftHit` | 82 |
+| `0x0886ad60` | `Plasma_HitCraft` | 88 |
+| `0x0886ae08` | `Plasma_ApplyBlastForce` | 88 |
 
 Read [weapon-fire.md](weapon-fire.md) first for the two traps this page depends
 on: `entity+0x1b8` is the fire-request word, and every `jal` operand and
@@ -355,20 +366,21 @@ exact shape [contact-response.md](contact-response.md#weapon_postblastimpulse-0x
 reads for `Weapon_PostBlastImpulse` too. `FUN_0886b898` has no write at that
 offset anywhere in its body.
 
-**And `Weapon_PostBlastImpulse` - the only function in the binary that reads
-`damage`/`blastradius`/`blastforce` off any weapon's stats block and writes an
-impulse - has exactly one caller in the whole executable.** `get_xrefs_to
-0x0886794c` returns a single hit: `FUN_08867b50`, the Mine's own chain
-(`mine.md`, `contact-response.md`). The Plasma never calls it, directly or
-through any function this page or `Plasmas_Update`'s own re-read touches.
-`search_functions("Blast")` against the whole binary turns up five names -
-`BombBlast_Construct`, `Bomb_ApplyBlast`, `Missile_ApplyBlastForce`,
-`PlasmaBlast_Construct`, `Weapon_PostBlastImpulse` - and the two `*_Construct`
-functions are confirmed purely visual (see
-[the detonation](#the-detonation-and-the-three-models-under-it) and, for the
-Bomb's, `mine.md`). No `Plasma_ApplyBlast`-shaped function exists.
+**`Weapon_PostBlastImpulse` has exactly one caller in the whole executable**
+- `get_xrefs_to 0x0886794c` returns a single hit: `FUN_08867b50`, the Mine's
+own chain (`mine.md`, `contact-response.md`). That one-caller fact is still
+true and still means the Plasma never reaches *this specific address*.
+~~And `Weapon_PostBlastImpulse` [is] the only function in the binary that
+reads `damage`/`blastradius`/`blastforce` off any weapon's stats block and
+writes an impulse~~ and ~~No `Plasma_ApplyBlast`-shaped function exists~~ are
+both **wrong, corrected the same day below**: `search_functions("Blast")`
+missed `Plasma_HitCraft` (`0x0886ad60`) and `Plasma_ApplyBlastForce`
+(`0x0886ae08`) for the reason every miss on this page has had - neither was
+named in the database yet, so a name search cannot find it. See
+[a craft hit is the third ending](#a-craft-hit-is-the-third-ending-and-it-does-spend-a-blast).
 
-**So a Plasma bolt spends its blast on neither ending.** `Plasmas_Update`'s
+**So a Plasma bolt spends its blast on neither the wall ending nor the
+timeout ending** - that half of the original claim stands. `Plasmas_Update`'s
 teardown (above, re-read the same pass with no elision) is identical for a
 wall hit and a `10.0 < age` timeout - `Psys_Release_q`,
 `Plasma_SpawnDetonation`, `PLASMAHITWALL`, nothing else - and neither route
@@ -376,16 +388,19 @@ into it, nor the teardown itself, nor `FUN_0886b898`, touches a craft's
 shield or `entity+0x110`. `oag_gameplay::projectile::flight`'s expiry arm is
 ported to this reading, `blast: false`, on 2026-09-16 - see
 [`Impact::blast`](../../../../crates/gameplay/src/projectile.rs)'s doc comment
-and `crates/gameplay/src/projectile/plasma/tests.rs`.
+and `crates/gameplay/src/projectile/plasma/tests.rs`. ~~Read at the time as
+"neither ending"~~ - a **third** ending, a direct craft hit, was not yet
+enumerated when that line was written; it is read and ported later the same
+day, below.
 
-**A conflict this settles rather than closes: the wall-hit branch in
+~~A conflict this settles rather than closes: the wall-hit branch in
 `Projectiles::advance` still credits `blast: true` for the Plasma, and this
-reading says the original spends nothing there either.** That branch predates
-this pass and is deliberately not touched here - correcting it is a wall-hit
-behaviour change with its own golden-hash and regression story, and the brief
-this page's own port answers is about the expiry ending specifically. Flagged
-loudly rather than fixed quietly; see the
-`weapons-eight-of-thirteen-the-plasma-and-the` handover thread.
+reading says the original spends nothing there either.~~ **Resolved, not
+just flagged, later the same day**: the wall-hit branch now emits
+`blast: false` for the Plasma, matching this reading, and the craft-hit
+branch it shared code with now emits `blast: true` routed to the new
+direct-hit rule - see
+[a craft hit is the third ending](#a-craft-hit-is-the-third-ending-and-it-does-spend-a-blast).
 
 ### What `FUN_0886b898` actually spends its two radii on - a hypothesis, not a name
 
@@ -729,6 +744,205 @@ engine fires instantly, which is what the read code does. This is the one place
 the port is knowingly at odds with a from-play report, and it is recorded rather
 than papered over with an invented three-second timer.
 
+## A craft hit is the third ending, and it does spend a blast
+
+**Closed 2026-09-16, later the same day as
+[the expiry settles a damage question](#the-expiry-settles-a-damage-question-nobody-had-read).**
+That section proved a wall hit and the `10.0 < age` timeout spend nothing.
+It did not ask about a **direct craft hit**, because nothing on this page had
+yet traced the call chain that reaches one - `search_functions("Blast")`
+cannot find an unnamed function, and the two functions this section is about
+were both still `FUN_xxxxxxxx` until this pass.
+
+**The chain starts in `Plasmas_Update` (`0x0886b490`) itself**, one line this
+page's own decompile of it already carried but had not followed:
+
+```c
+if (p->charging == 0) {
+    Plasma_Update(dt, p, g_world);
+    if (p->flags & 1) Plasma_SweepCraftHit(pool, i);   // 0x0886afb8
+    FUN_0886b898(pool, i);                             // the Mine/Bomb sweep, unrelated
+}
+```
+
+`p->flags & 1` is set the moment a bolt is fired (`Weapon_FirePlasma` writes
+`p->flags = 1`) and nothing ever clears it before a hit, so
+`Plasma_SweepCraftHit` runs every tick a bolt is flying - not conditionally,
+despite the look of the guard. `Rocket_HitCraft_q`'s own caller,
+`FUN_0886e7ac`, is called from `RocketPool_Update` behind the identical
+`flags & 1` guard, which is the structural match that pointed at this
+function in the first place, alongside the wrong turn a previous pass took:
+the comment shape `if (p->flags & 1) Plasma_NetSend_q(pool, i)` in this page's
+2026-09-16 morning read of `Plasmas_Update` was a **prose label that was never
+a database name** - `search_functions("Plasma")` never lists a
+`Plasma_NetSend_q`, and the address it was hung on is `Plasma_SweepCraftHit`,
+not netcode. This is the same trap `apply-ghidra-names.py`'s own history
+records for `Rocket_HitCraft_q`'s sibling functions: an informal name in a
+decompile comment reads exactly like a real one and is not searchable as one.
+
+### `Plasma_SweepCraftHit` (`0x0886afb8`, confidence 82) is the Rocket's own craft-sweep shape
+
+Read in full. Per tick, per flying bolt, it walks every live craft
+(`DAT_08b30f90` count, the same global the Rocket's and the Mine's own sweeps
+use) except the bolt's **own firer** (`uVar17 != *(plasma+0x40)`, the `owner`
+field `Weapon_FirePlasma` writes), and tests the bolt's swept segment against
+each craft's hull with a cylinder test - a perpendicular-distance dot product
+inside `-6.0 < d < 6.0`, the same bound `Rocket_HitCraft_q`'s own caller
+(`FUN_0886e7ac`) uses. On a hit it:
+
+1. Sets the bolt's own destroy bit, `plasma+0x3c |= 4` - the same bit a wall
+   hit and the timeout set, so a craft-hit bolt reaches the identical
+   `Plasmas_Update` pass-two teardown already read above.
+2. Calls `Plasma_SpawnDetonation` (`0x0886ac88`) **inline**, gated on
+   `FUN_0883e37c`, in addition to the unconditional call pass-two makes for
+   any destroy-bit entity. Whether this double-fires the flash or
+   `FUN_0883e37c` degates the second call is not chased here - `blast_models`
+   owns that function and this page does not touch it.
+3. Plays `PLASMAHITSHIP` (`0x08a7c998`) through the bolt's own emitter and
+   immediately stops and clears that emitter (`+0x5c = 0`) - which is why
+   pass-two's later, unconditional `if (p->emitter != 0) Sound_Play(...,
+   "PLASMAHITWALL", ...)` does not also fire on this path: the emitter it
+   tests is already cleared by the time pass-two runs. No double sound, by
+   construction rather than by a branch on which ending this is.
+4. Calls `Plasma_HitCraft` (`0x0886ad60`) with the struck craft's slot and the
+   bolt's own pool slot.
+5. Calls `Plasma_ApplyBlastForce` (`0x0886ae08`) with the hit point and the
+   bolt's `owner`.
+6. Runs the same race-mode-gated (`13 < DAT_08b31048`) HUD/network broadcast
+   family the age-timeout branch and the launch branch already use.
+
+Confidence 82, not higher: the routing (which two functions it calls, in what
+order, on what condition) is solid, but the cylinder test's own VFPU geometry
+was read enough to identify the bound and not walked past that. No `_q` since
+the routing - the load-bearing half for this page's own question - is not in
+doubt.
+
+### `Plasma_HitCraft` (`0x0886ad60`, confidence 88) credits the struck craft, unconditionally
+
+```c
+void Plasma_HitCraft(Pool *pool, int craft_slot, int plasma_slot) {
+    Body *body = *(Body **)(pool + craft_slot*4 + 0x44);   // the struck craft's own physics body
+    if (*(int *)(pool + plasma_slot*4 + 100)->owner == DAT_08b36c08)   // one specific craft slot, unmeasured
+        body->flag_0x124 = 1;                               // Ship_Damage's own 5th argument
+    Stats *stats = active_weapon_stats();                   // &DAT_08b32420 + DAT_08b32428*4, the Plasma's own block
+    body->pending_damage   += stats->damage;                 // +0x120 += +0xa0
+    body->hits_taken       += 1.0f;                          // +0x12c (0x300 decimal), a counter
+    body->pending_slowdown += stats->slowdown_time;          // +0x130 += +0xc4
+    body->pending_weapon_id = 2;                              // +0x138, meaning not chased
+    body->pending_attacker  = plasma->owner;                  // +0x13c, the firer's own slot
+}
+```
+
+Every offset on the right is `WeaponStats_ParsePlasma`'s own table
+(`damage` at `+0xa0`, `slowdown_time` at `+0xc4`) - an exact match, the same
+strength of evidence that carried `Rocket_HitCraft_q`'s reading of the
+Rocket's own `+4`/`+0x2c` pair. `body+0x120`/`+0x130` are the exact fields
+`Ship_ApplyPendingWeaponDamage` (`0x0883f13c`) and
+`Ship_ApplyPendingWeaponRepair`-adjacent code already drain each tick, per
+this project's own read of that function. **Full damage and full
+`slowdown_time`, credited unconditionally** - there is no distance test here
+at all, because the struck craft is already known; the falloff term this
+page's own `blast()` and the original's own `Weapon_PostBlastImpulse` both
+apply is a *force* term, computed separately, next.
+
+`body+0x138 = 2` is a smaller, separate enumeration from the `weapon_id = 7`
+`Weapon_RequestFire`'s jump table uses for the Plasma (`weapon-fire.md`) -
+`Rocket_HitCraft_q` writes `0` at the same offset, so this is some kind of
+per-family damage-source tag `Ship_Damage` reads for its own purposes
+(sound/visual selection, most likely), not the fire-dispatch weapon id. Not
+chased further; recorded so nobody re-derives the "7" collision a second
+time.
+
+`DAT_08b36c08`, compared against the firer's own slot to decide whether to
+set `body+0x124`, reads as "is the firer one specific craft" (the local
+player's, most likely, given the byte feeds `Ship_Damage`'s hit-reaction
+argument) - not measured, confidence under 50, not renamed.
+
+### `Plasma_ApplyBlastForce` (`0x0886ae08`, confidence 88) pushes everyone but the firer
+
+```c
+void Plasma_ApplyBlastForce(Pool *pool, Vec3 *point, int owner_slot) {
+    for (int i = 0; i < craft_count; i++) {
+        if (i == owner_slot) continue;                  // the firer alone is excluded
+        Body *body = craft_body(i);
+        Vec3 offset = body->hit_anchor /* +0x50 */ - *point;
+        float d = length(offset);
+        Stats *stats = active_weapon_stats();            // the Plasma's own block, same pointer as above
+        if (d < stats->blastradius /* +0xa4 */) {
+            Vec3 dir = normalize(offset);
+            body->pending_impulse /* +0x110 */ +=
+                dir * (1.0f - d / stats->blastradius) * stats->blastforce /* +0xa8 */;
+        }
+    }
+}
+```
+
+`+0xa4`/`+0xa8` are `blastradius`/`blastforce` on `WeaponStats_ParsePlasma`'s
+own table, and `+0x110` is the exact pending-impulse slot
+`Missile_ApplyBlastForce` (`0x08868ea4`, confidence 88, `missile.md`) and
+`Weapon_PostBlastImpulse` (`0x0886794c`) both write, with the identical
+`(1.0 - d/radius) * force` falloff this project's own `blast()` already
+implements for every other weapon. `Weapon_PostBlastImpulse`'s "exactly one
+caller in the whole executable" is still true of *that address* -
+`Plasma_ApplyBlastForce` is a second, Plasma-owned copy of the same
+arithmetic, the same relationship `Missile_ApplyBlastForce` already has to
+it. This is why "no `Plasma_ApplyBlast`-shaped function exists" (written
+before this pass, struck above) was wrong: the search that would have found
+it needed the name, and the name did not exist yet.
+
+**The loop excludes only `owner_slot` (the firer), never the struck craft
+itself.** `point` is one endpoint of the bolt's swept segment for this tick
+(`FUN_0885c154`'s output, passed straight through from `Plasma_SweepCraftHit`)
+rather than the exact hull contact point - close enough that the struck craft
+sits at or near `d = 0` and takes a falloff term close to the full
+`blastforce`, *in addition to* the direct `damage`/`slowdown_time`
+`Plasma_HitCraft` already credited it. **This means `Impact`'s own doc
+comment claim that "the firing craft is not excluded" is backwards for the
+Plasma's own craft-hit ending** - the firer is the one craft explicitly
+excluded from this sweep, and the struck craft (which may be the firer's own
+victim, never the firer, since a bolt cannot hit its own launcher - see
+[`Plasma_Update`](#plasma_update-0x0885c6cc-is-rocket_updates-floor-follower)'s
+sweep, which already excludes the owner's hull) is not excluded at all.
+
+### What was ported
+
+`crates/gameplay/src/projectile/flight.rs`, both `Weapon::Plasma` arms that
+used to share code with the Rocket:
+
+- The floor-probe wall branch (`Some(hit) if matches!(kind, Rocket | Plasma)`,
+  ~line 213): `blast` is now `kind != Weapon::Plasma` - the Rocket keeps
+  `blast: true` unconditionally (untouched, out of scope), the Plasma gets
+  `blast: false`, matching the wall reading above.
+- The travel-sweep hit branch (the non-bounce `else` arm, ~line 319): `blast`
+  is now `kind != Weapon::Plasma || struck.is_some()` - a Plasma wall hit
+  here (`struck: None`, the sweep found a wall ahead rather than a floor
+  below) also gets `blast: false`; a Plasma craft hit (`struck: Some(_)`) gets
+  `blast: true`, routed to the new rule below. Every other weapon's `blast`
+  is unchanged.
+
+`crates/gameplay/src/projectile/blast.rs` gains
+`blast_direct_hit(ships, point, stats, struck, owner, rules, absorbed)`,
+called from `apply_impacts` only for `impact.kind == Weapon::Plasma &&
+impact.struck.is_some()`. It credits `damage` and `slowdown_time` to `struck`
+unconditionally (matching `Plasma_HitCraft`'s own lack of a distance test),
+then sweeps every **active** craft except `owner` for a
+`(1.0 - d/radius) * force` impulse within `blastradius` - matching
+`Plasma_ApplyBlastForce` exactly, struck craft included (it is not excluded
+in the original either). `blast()` itself is untouched; every other weapon
+still goes through it exactly as before.
+
+**Not ported: the Rocket's own equivalent split.** `Rocket_HitCraft_q`
+(`0x0886ebdc`, already named, confidence not raised or lowered here) shows
+the identical shape - direct `damage`/`slowdown_time` to the struck craft via
+its own function, no radius sweep alongside it in the read this page did -
+which means `blast()`'s current "full damage to everyone in radius" rule is
+likely just as wrong for the Rocket as it was for the Plasma. Recorded as a
+lead, not fixed: the brief this page answers is the Plasma's craft-hit
+question specifically, and the Rocket's own wall-hit/craft-hit split (does
+`RocketPool_Update`'s teardown ever damage anyone at all, or only
+`Rocket_HitCraft_q`'s own direct credit?) is its own unread question with its
+own regression story.
+
 ## What is not verified
 
 - ~~**Where `charge_time` is spent.**~~ **Closed 2026-09-09 as a negative**,
@@ -749,10 +963,30 @@ than papered over with an invented three-second timer.
   [the hypothesis section](#what-fun_0886b898-actually-spends-its-two-radii-on---a-hypothesis-not-a-name).
   Under 50 confidence on what it is *for*, because the radius it reads is
   unauthored for a Plasma; not renamed.
-- **The wall-hit branch in `Projectiles::advance` still credits `blast: true`
+- ~~**The wall-hit branch in `Projectiles::advance` still credits `blast: true`
   for the Plasma**, which the reading above says the original does not do
-  either. Flagged, not fixed - see the same section and the
-  `weapons-eight-of-thirteen-the-plasma-and-the` handover thread.
+  either. Flagged, not fixed.~~ **Closed 2026-09-16, same day, second pass.**
+  The wall-hit and craft-hit arms shared one code path in the engine; they are
+  split now, and the craft-hit arm carries the new direct-hit rule below - see
+  [a craft hit is the third ending](#a-craft-hit-is-the-third-ending-and-it-does-spend-a-blast).
+- **What `Plasma_SweepCraftHit` (`0x0886afb8`) actually tests, past the hull
+  cylinder.** Read enough to find and route its two calls
+  (`Plasma_HitCraft`/`Plasma_ApplyBlastForce`); its own VFPU-heavy geometry
+  (the plane/cone tests before the `-6.0 < d < 6.0` cylinder check) was not
+  independently re-derived past confirming it mirrors `Rocket_HitCraft_q`'s own
+  caller shape - hence 82, not higher, and no `_q` since the *routing* is solid
+  even where the geometry detail is not fully walked.
+- **`Plasma_SpawnDetonation`'s double call on a craft hit.** `Plasma_SweepCraftHit`
+  calls it inline (gated on `FUN_0883e37c`) and `Plasmas_Update`'s own pass-two
+  teardown calls it again, unconditionally, for any entity left with the destroy
+  bit set - which a craft hit always leaves set. Whether this is a genuine
+  double-spawned flash or `FUN_0883e37c` degates it is not chased; owned by the
+  `blast_models` lane, not renamed or touched here.
+- **`DAT_08b36c08`**, compared against a Plasma bolt's owner inside
+  `Plasma_HitCraft` to decide whether to set the struck craft's own
+  `+0x124` byte (the flag `Ship_Damage` reads as its fifth argument). Reads as
+  "is the firer a specific craft slot" - the local player's, most likely - but
+  not measured; under 50, not renamed.
 - **The blast object's own animation.** `PlasmaBlast_Construct` builds three
   ramps over its three models and nothing here reads what advances them.
 - **`FUN_0885c650`**, the second speed lookup, deliberately unnamed - see
@@ -764,6 +998,24 @@ than papered over with an invented three-second timer.
 
 ## History
 
+- **2026-09-16, later pass.** A direct craft hit is a third ending the
+  morning pass did not enumerate. `Plasmas_Update`'s own `if (p->flags & 1)`
+  call, previously prose-labelled `Plasma_NetSend_q` with no database name
+  behind it, is `Plasma_SweepCraftHit` (`0x0886afb8`, now named, 82): the
+  Rocket's own craft-sweep shape, gated the same way `RocketPool_Update`
+  gates `FUN_0886e7ac`. It calls `Plasma_HitCraft` (`0x0886ad60`, 88), which
+  credits full `damage`/`slowdown_time` to the struck craft unconditionally
+  off `WeaponStats_ParsePlasma`'s own `+0xa0`/`+0xc4`, and
+  `Plasma_ApplyBlastForce` (`0x0886ae08`, 88), which pushes every craft but
+  the bolt's own firer with a `(1 - d/blastradius) * blastforce` impulse -
+  the exact shape `Weapon_PostBlastImpulse` and `Missile_ApplyBlastForce`
+  already carry, corrected from this page's own "no `Plasma_ApplyBlast`-shaped
+  function exists" (wrong; the function just was not named yet). Ported to
+  `oag_gameplay::projectile::flight`'s two Plasma/Rocket-shared branches,
+  split by kind so the Rocket is untouched, and to a new
+  `blast::blast_direct_hit`. The Rocket's own `Rocket_HitCraft_q` shows the
+  identical split-shape and is left as a lead, not fixed - see
+  [a craft hit is the third ending](#a-craft-hit-is-the-third-ending-and-it-does-spend-a-blast).
 - **2026-09-16.** `FUN_0886b898` read in full and `Plasmas_Update`'s teardown
   re-read with no elision, closing the last item on the 2026-09-09 pass's own
   "not verified" list: a Plasma bolt spends no blast on either ending, wall or
