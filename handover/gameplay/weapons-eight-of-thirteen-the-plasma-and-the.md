@@ -944,11 +944,18 @@ gates the craft-hit test (not in `Init` or `Launch` as decompiled).
 
 ## Next Steps
 
-- ~~**The Plasma's own three cues are unwired.**~~ **Done 2026-09-16** - see
+- ~~**The Plasma's own three cues are unwired.**~~ ~~**Done 2026-09-16** - see
   that section. `PLASMA`, `~PLASMATVL` and `PLASMAHITWALL` all fire; the
   craft-hit ending plays `PLASMAHITWALL` too, chosen rather than measured,
   and the bank's own distinct `PLASMAHITSHIP` stays open for whoever reads
-  the travel-segment sweep's craft-hit branch.
+  the travel-segment sweep's craft-hit branch.~~ **Fully measured, same day,
+  later still.** `Plasma_SweepCraftHit` (read the same day, see the section
+  above) plays `PLASMAHITSHIP` and clears the bolt's own emitter before
+  `PLASMAHITWALL` can also fire, so the two are mutually exclusive in the
+  original. `Cue::PlasmaHitShip` is wired the same way here:
+  `Impact::struck.is_some()` gets `PlasmaHitShip`, everything else gets
+  `PlasmaHitWall`. No longer chosen, not measured - `plasma.md`'s own
+  "chosen, not measured" language for this is gone in the same change.
 - **HD/Omega Plasma, four unread pieces** (2026-09-16, detail in that
   section): where Omega sets the `flags & 1` bit gating the craft-hit test
   (not `Plasma_Init` or `Plasma_Launch`; likely the fire handler); the
@@ -1526,6 +1533,16 @@ confirmed wall/timeout cue for the unconfirmed third ending is the smaller
 invention of the two available, and is written down as one rather than
 silently. Whoever reads the travel-segment sweep's own craft-hit branch next
 either confirms `PLASMAHITWALL` there too or hands this its own cue.
+
+**Superseded the same day, later still: the travel-segment sweep's craft-hit
+branch is `Plasma_SweepCraftHit`, and it does hand the craft-hit ending its
+own cue.** See ["a craft hit is the third ending"](../../docs/ghidra/functions/psp-pulse-usa/plasma.md#a-craft-hit-is-the-third-ending-and-it-does-spend-a-blast)
+in `plasma.md`: the function plays `PLASMAHITSHIP` and clears the bolt's own
+emitter before `Plasmas_Update`'s teardown would otherwise play
+`PLASMAHITWALL`, so the original never plays both. `Cue::PlasmaHitShip` now
+exists and `crates/game/src/race/tick.rs` routes on `Impact::struck` the same
+way. The paragraph above is left as the record of what was chosen before this
+was read, not deleted.
 
 A new placement had to be added for both: `Placement::Point`, carried on
 `CueEvent::at_point` rather than a grid slot - the original always names an

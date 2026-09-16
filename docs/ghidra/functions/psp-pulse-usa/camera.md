@@ -84,8 +84,12 @@ with `<InternalCamera>`, and the two external tripods with
 
 Confidence **88** for the cycle and its order: read directly out of the
 decompilation, the three string literals are unambiguous, and it agrees with the
-observed behaviour (below). Confidence **70** for `craft+0x6d` meaning "hide own
-ship".
+observed behaviour (below). Confidence **82** for `craft+0x6d` meaning "hide own
+ship" - raised from the 70 this page originally scored it at, once
+[`shield-pickup.md`](shield-pickup.md)'s `ShipShield_Update` turned up as a
+second, independent consumer reading the same byte the same way (this page's
+own correction, moved here 2026-09-16: that page's own note said the raise
+landed "on that page" and never actually edited this line).
 
 **This is not the only SELECT test in the binary.** `FUN_08879960` also calls
 `Input_IsPressed(g_input, 0xf, 0)` and toggles a `bool` at `param_1+0x3c`, next
@@ -427,7 +431,7 @@ the same order; `<BackwardCamera headtilt>` parsed and discarded there too;
 with `up_speed`/`down_speed` raw beside it; the three-view SELECT cycle in the
 same wrapping order with the same three string literals; and the hide-own-ship
 flag written then mirrored to a neighbouring byte, which strengthens the
-confidence-70 reading of `craft+0x6d` above.
+confidence-82 reading of `craft+0x6d` above.
 
 **The 3/4 factor is not shared.** The PS2 `Camera_UpdatePlayerView` computes its
 chase distance inline - `min(length - 1, 3)`, a geometry probe, a per-frame
