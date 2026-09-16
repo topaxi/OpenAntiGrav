@@ -1000,6 +1000,19 @@ SPU2 base lands on the same rates from the same bytes is open, and the
 cross-check this page once proposed - `speech.bnk` against the PS2's
 `PRERACE.WAD` voice archive - would settle it.
 
+**Neither is HD's, and HD is the corpus to be careful on.** `Bank::sounds`
+reads the two bytes at `+0x02`/`+0x03` by position, and HD's byte-swapped
+container keeps them there: over its 50 banks and 6,548 distinct key-on
+descriptors (`cargo run -p oag-formats --example hd_rate_probe`), every
+centre note is negative and **5,763 land within 0.2% of a standard rate**
+through the PSP walk - 1,803 at 48,051 Hz from `(-60, 0)`, 1,313 at 44,100,
+1,131 at 22,050, 557 at 32,000. That says the bytes are where the PSP keeps
+them; it does not say the PS3's SCREAM applies the same `0x1278b` scale, and
+28% of HD's descriptors sitting on the one pair that scale turns into
+"48 kHz" is exactly the pattern a native 48 kHz engine with no such scale
+would also produce. `oag_game` plays HD at these rates on the strength of
+the byte positions alone; HD's own `EBOOT.elf` note-to-pitch is unread.
+
 ## The PS2 ships the same container, byte for byte
 
 Despite the page's title, this format is not PSP-only within Pulse. The PS2
@@ -1406,10 +1419,14 @@ so `--cue COLLISION` over a whole archive finds every bank that has one.
 - ~~**Per-sound names.**~~ **Solved and validated** - see [above](#every-sound-has-a-name).
 
 - **The command opcodes.** Nine distinct values seen in the data; the engine
-  defines **45**, dispatched through a jump table at `0x08ac326c`. Two are now
-  traced - `0x01` and `0x09` both bind a waveform, above - and eight more share
-  a single handler, which is the shape of a family taking an index. The other 35
-  are unread.
+  defines **45**, dispatched through a jump table at `0x08ac326c`. Eight are
+  named on [the sound engine page](../ghidra/functions/psp-pulse-usa/sound.md#not-determined) -
+  `0x01`/`0x09` bind a waveform, `0x19` picks an alternate, `0x22`/`0x23`/`0x24`
+  guard, mark and jump, `0x14`/`0x15` do nothing - and eight more share a
+  single handler, which is the shape of a family taking an index. The other
+  37 are unread by their handlers - `0x05`/`0x08` are decoded from the data
+  side [above](#a-cue-that-plays-other-cues) - and `0x06`, `0x1e` and `0x29`
+  are the ones a bank actually uses and so the ones worth reading next.
 - **`+0x24` = 20544.** Still not determined; the shape of it suggests an
   audio-RAM base address.
 - ~~**Which cue owns which commands.**~~ **Solved and validated** - see
