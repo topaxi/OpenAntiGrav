@@ -280,9 +280,9 @@ fn the_class_announcer_fires_on_a_stage_step_and_not_on_every_zone() {
         raised.extend(race.drain_class_announcements());
     }
     assert!(
-        race.sim.world.race.zone >= 2,
+        race.sim.world.primary_race().zone >= 2,
         "sanity: 1300 ticks should survive at least two zones, got {}",
-        race.sim.world.race.zone
+        race.sim.world.primary_race().zone
     );
     assert_eq!(
         raised,
@@ -310,7 +310,7 @@ fn a_title_with_no_zone_stages_never_raises_a_class_announcement() {
         raised.extend(race.drain_class_announcements());
     }
     assert!(
-        race.sim.world.race.zone >= 2,
+        race.sim.world.primary_race().zone >= 2,
         "sanity: the zone counter itself does not need a ladder to step"
     );
     assert!(

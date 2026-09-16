@@ -54,7 +54,7 @@ impl Race {
             self.sim.world.quake = None;
             return;
         }
-        let rules = oag_gameplay::damage_rules(self.sim.world.race.mode);
+        let rules = oag_gameplay::damage_rules(self.sim.world.mode());
         let mut absorbed = [false; MAX_SHIPS];
         wave.apply_hits(
             &mut self.sim.world.ships,
@@ -88,7 +88,7 @@ impl Race {
         let Some(mut beam) = self.sim.world.leach_beam else {
             return;
         };
-        let rules = oag_gameplay::damage_rules(self.sim.world.race.mode);
+        let rules = oag_gameplay::damage_rules(self.sim.world.mode());
         let report = beam.advance(
             &mut self.sim.world.ships,
             self.sim.world.ship_count,

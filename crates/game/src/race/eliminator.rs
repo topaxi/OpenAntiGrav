@@ -58,7 +58,7 @@ impl Race {
     /// that respawns this tick is placed where it is *put*, not where the
     /// explosion left it.
     pub(super) fn tick_eliminator(&mut self) {
-        if self.sim.world.race.mode != Mode::Eliminator {
+        if self.sim.world.mode() != Mode::Eliminator {
             return;
         }
 
@@ -123,7 +123,10 @@ impl Race {
             .map(|ship| ship.standing.kills)
             .max()
             .unwrap_or(0);
-        self.sim.world.race.eliminator_finished(target, kills);
+        self.sim
+            .world
+            .primary_race_mut()
+            .eliminator_finished(target, kills);
     }
 
     /// Refills a craft's shield to full on a completed lap, Eliminator only.
@@ -135,7 +138,7 @@ impl Race {
     /// measured, and easy to find the day a real figure turns up. See
     /// [`Mode::pickups_absorb`] for the sentence's other half.
     pub(super) fn eliminator_lap_health_refill(&mut self, slot: usize) {
-        if self.sim.world.race.mode != Mode::Eliminator {
+        if self.sim.world.mode() != Mode::Eliminator {
             return;
         }
         let dimensions = self.sim.world.ships[slot].handling.dimensions;

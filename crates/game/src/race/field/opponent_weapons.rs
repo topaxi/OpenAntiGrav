@@ -604,7 +604,7 @@ impl Race {
             // Eliminator refuses absorption for an opponent exactly as it
             // does for the player - see `Race::spend_pickup` and
             // `Mode::pickups_absorb`.
-            if !self.sim.world.race.mode.pickups_absorb() {
+            if !self.sim.world.mode().pickups_absorb() {
                 return;
             }
             let Some(amount) = absorb else {

@@ -33,4 +33,4 @@ pub use input::InputSnapshot;
 pub use pickup::{Driver, Held};
 pub use projectile::{Impact, MAX_PROJECTILES, Projectile, Projectiles};
 pub use spawn::{GRID_COLUMN_OFFSET, GRID_ROW_PITCH, GRID_SLOTS, Pose, grid_pose};
-pub use world::{MAX_SHIPS, Ship, World, damage_rules};
+pub use world::{Controller, MAX_PLAYERS, MAX_SHIPS, Ship, World, damage_rules};

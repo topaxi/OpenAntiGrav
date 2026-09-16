@@ -743,7 +743,7 @@ pub fn capture(
                     laps_completed: crate::records::laps_completed(
                         standing.lap,
                         race.finished(),
-                        race.sim.world.race.laps_target,
+                        race.sim.world.laps_target(),
                     ),
                     tick: standing.finish_tick.unwrap_or(race.sim.world.tick),
                     best_lap_ticks: standing.best_lap_ticks,

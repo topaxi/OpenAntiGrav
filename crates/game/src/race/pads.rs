@@ -115,8 +115,15 @@ impl Race {
             if entered.is_some() {
                 // Zone mode only. `Ship_ApplySpeedupPad` raises its flag under
                 // the mode selector `zone-mode.md` identifies.
-                if slot == 0 && self.sim.world.race.mode == Mode::Zone {
-                    self.sim.world.race.score += oag_race::zone::SPEEDUP_PAD_SCORE;
+                // **Whichever slot a person flies, not slot 0** - the same
+                // single crossing while slot 0 is the only human, and the
+                // score lands on the craft that actually crossed. Zone has no
+                // AI field today, so this gate is about who is being scored
+                // for rather than about excluding opponents.
+                if self.sim.world.controllers[slot].is_human()
+                    && self.sim.world.mode() == Mode::Zone
+                {
+                    self.sim.world.race[slot].score += oag_race::zone::SPEEDUP_PAD_SCORE;
                 }
                 // The visual, on the same edge and with the same **fixed**
                 // duration the original uses. `ExhaustFlare_OnSpeedupPad`

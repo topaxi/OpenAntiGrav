@@ -150,7 +150,7 @@ fn detonate_behind_the_player(race: &mut race::Race, stats: &BlastStats) {
     let body = &race.sim.world.ships[0].physics.body;
     let point = body.position - body.forward() * (stats.radius * 0.999);
     let count = race.sim.world.ship_count as usize;
-    let rules = oag_gameplay::damage_rules(race.sim.world.race.mode);
+    let rules = oag_gameplay::damage_rules(race.sim.world.mode());
     let reached = blast(
         &mut race.sim.world.ships[..count],
         point,

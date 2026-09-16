@@ -479,7 +479,7 @@ fn the_engine_sounds_while_a_race_runs_and_stops_when_it_finishes() {
     // Forced rather than driven: reaching a real finish is a lap of real
     // circuit, and what is under test is the frame loop's finished-race arm,
     // not the lap counter. This is the same flag `Race::finished` reads.
-    race.sim.world.race.finished = true;
+    race.sim.world.primary_race_mut().finished = true;
     for _ in 0..600 {
         // Deliberately **not** calling `race.tick` - that is exactly what the
         // finished arm does not do.

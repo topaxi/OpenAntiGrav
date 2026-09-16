@@ -63,7 +63,7 @@ impl Race {
     /// Zone is excluded: it authors no pickup widgets at all, and its event text
     /// promises nothing.
     pub(super) fn grant_free_turbo(&mut self) {
-        if !matches!(self.sim.world.race.mode, Mode::TimeTrial | Mode::SpeedLap) {
+        if !matches!(self.sim.world.mode(), Mode::TimeTrial | Mode::SpeedLap) {
             return;
         }
         // The same "only into an empty slot" rule a pad follows, so a player who
@@ -511,7 +511,7 @@ impl Race {
             // is kept rather than spent, the same "nothing happened, so
             // nothing is lost" rule the no-op weapon arms above already
             // follow.
-            if !self.sim.world.race.mode.pickups_absorb() {
+            if !self.sim.world.mode().pickups_absorb() {
                 return;
             }
             let Some(amount) = weapons.absorb(weapon) else {

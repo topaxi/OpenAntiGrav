@@ -319,7 +319,7 @@ impl Race {
     /// **What it still does not get**: reaction latency, and adaptation between
     /// races - which was blocked on per-craft lap times and is not any more.
     pub(super) fn step_opponents(&mut self) {
-        let damage_rules = oag_gameplay::damage_rules(self.sim.world.race.mode);
+        let damage_rules = oag_gameplay::damage_rules(self.sim.world.mode());
         // Once for the whole grid: every craft's view needs the same ordering.
         let places = self.places();
         for slot in 1..self.sim.world.ship_count as usize {
@@ -703,7 +703,7 @@ impl Race {
 /// right reading now that the lap count varies with the class.
 pub(super) fn advance_standings(world: &mut World, course: &Course) {
     let tick = world.tick;
-    let target = world.race.laps_target;
+    let target = world.laps_target();
     for slot in 0..world.ship_count as usize {
         let ship = &mut world.ships[slot];
         if !ship.active {
@@ -712,8 +712,17 @@ pub(super) fn advance_standings(world: &mut World, course: &Course) {
         let position = ship.physics.body.position;
         ship.standing.update(course, position, tick, target);
     }
-    // One lap rule, not two: the player's displayed lap is the standing's.
-    // `RaceState` keeps the clock, the best lap, the Zone counters and the finish
-    // condition, all of which are the player's alone.
-    world.race.lap = world.ships[0].standing.lap;
+    // One lap rule, not two: a displayed lap is the standing's. `RaceState`
+    // keeps the clock, the best lap, the Zone counters and the finish
+    // condition; `Standing` keeps the lap and the place, and this is the one
+    // place the first is told about the second.
+    //
+    // **Over the human slots rather than slot 0**, which is the same single
+    // write while slot 0 is the only human - see `World::human_slots`. An AI
+    // slot's `race[i].lap` is deliberately left alone: nothing reads it, and
+    // syncing it would put a lap counter into the hash for seven craft that
+    // never had one, which is a state change dressed as a refactor.
+    for slot in world.human_slots().collect::<Vec<_>>() {
+        world.race[slot].lap = world.ships[slot].standing.lap;
+    }
 }

@@ -144,7 +144,11 @@ impl Race {
         // order the original runs in: `Zone_Update` assigns the counter into the
         // craft and `Ship_UpdateEngine` reads it on the following craft update.
         let auto_speed = self.sim.zone.map(|zone| {
-            oag_race::zone::thrust(zone.start, zone.increment, self.sim.world.race.zone)
+            oag_race::zone::thrust(
+                zone.start,
+                zone.increment,
+                self.sim.world.primary_race().zone,
+            )
         });
         let before = self.sim.world.ships[0].physics.body.position;
         // Step 15's input, measured before the step because that is when the
@@ -158,6 +162,9 @@ impl Race {
         // and this one returns nothing, because a pickup is an event rather than
         // a per-tick force.
         self.test_weapon_pads(0, before, moved, &sweep);
+        // The mode's rules, read before the craft is borrowed: `World::mode`
+        // asks the whole world and the borrow checker will not have both.
+        let env_damage_rules = oag_gameplay::damage_rules(self.sim.world.mode());
         let ship = &mut self.sim.world.ships[0];
         let env = Environment {
             track_sample,
@@ -170,7 +177,7 @@ impl Race {
             // and a speed lap run with both off, so their pool floors at 20 and
             // regenerates, exactly as the disc's manual text describes. See
             // `oag_gameplay::damage_rules`.
-            damage_rules: oag_gameplay::damage_rules(self.sim.world.race.mode),
+            damage_rules: env_damage_rules,
             ..Environment::default()
         };
         let evaluated = oag_physics::step(
@@ -206,7 +213,7 @@ impl Race {
         // blast this tick is blown up before the lap counter reads it.
         // The whole table rather than the Rocket's block: a blast is looked up by
         // the weapon that made it now that more than one weapon can make one.
-        let damage_rules = oag_gameplay::damage_rules(self.sim.world.race.mode);
+        let damage_rules = oag_gameplay::damage_rules(self.sim.world.mode());
         // One flag per slot for a craft whose shield swallowed a blast. The
         // *only* thing that makes a shell visibly react is an absorbed hit -
         // see `oag_render::shield::ShipShield::hit` - so a blast that a shield
@@ -333,9 +340,9 @@ impl Race {
         // `Racing` one via a respawn, before this read - see
         // `crate::race::eliminator`'s own doc comment for why the mode's own
         // text rules out `RaceState::eliminate` as its ending.
-        if self.sim.world.race.mode != Mode::Eliminator
+        if self.sim.world.mode() != Mode::Eliminator
             && self.sim.world.ships[0].physics.craft_state == oag_physics::CraftState::Eliminated
-            && self.sim.world.race.eliminate()
+            && self.sim.world.primary_race_mut().eliminate()
         {
             // The original plays `~BLOWUP`, hides the HUD and swings the camera
             // into its mode 5 on the way here. **The sound is built** and is
@@ -351,10 +358,11 @@ impl Race {
             // The same flag the collision sparks fire on, so "the HUD says that
             // zone was not clean" and "sparks came off the hull" cannot disagree.
             let contact = evaluated.wall.impact;
-            let outcome = self.sim.world.race.update(
+            let tick = self.sim.world.tick;
+            let outcome = self.sim.world.primary_race_mut().update(
                 course,
                 position,
-                self.sim.world.tick,
+                tick,
                 self.sim.dt,
                 contact,
             );
@@ -377,7 +385,7 @@ impl Race {
             // anything to say" split `raise_contact_cue` and `Banks::pick`
             // already keep. See `oag_title::ZoneAnnouncer`.
             if outcome.zone_advanced {
-                self.push_announcement(self.sim.world.race.zone);
+                self.push_announcement(self.sim.world.primary_race().zone);
             }
 
             // The speed-class announcer's own trigger, on a title whose
@@ -392,7 +400,7 @@ impl Race {
             if outcome.zone_advanced
                 && let Some(stages) = self.sim.zone_stages
             {
-                let after = self.sim.world.race.zone;
+                let after = self.sim.world.primary_race().zone;
                 let before = after.saturating_sub(1);
                 if let Some(stage_after) = stages.stage_for(after)
                     && Some(stage_after) != stages.stage_for(before)

@@ -60,7 +60,7 @@ impl Session {
             laps: observation.laps_completed,
             perfect_laps: 0,
             kills: standing.kills,
-            zones: u32::from(stage.race.sim.world.race.zone),
+            zones: u32::from(stage.race.sim.world.primary_race().zone),
             perfect_zones: 0,
             difficulty: None,
             suggested_ship: false,

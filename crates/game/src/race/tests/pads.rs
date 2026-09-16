@@ -254,7 +254,7 @@ fn zone_scores_once_for_entering_a_pad_and_not_again_while_inside() {
         bare.tick(&InputSnapshot::default());
     }
     assert_eq!(
-        padded.sim.world.race.score - bare.sim.world.race.score,
+        padded.sim.world.primary_race().score - bare.sim.world.primary_race().score,
         oag_race::zone::SPEEDUP_PAD_SCORE,
         "a pad held for {TICKS} ticks must pay exactly once"
     );
@@ -273,6 +273,10 @@ fn only_zone_mode_scores_for_a_speed_pad() {
             race.ship().physics.pad_timer > 0.0,
             "{mode:?}: the pad did not fire at all, so the score assertion proves nothing"
         );
-        assert_eq!(race.sim.world.race.score, 0, "{mode:?} scored for a pad");
+        assert_eq!(
+            race.sim.world.primary_race().score,
+            0,
+            "{mode:?} scored for a pad"
+        );
     }
 }

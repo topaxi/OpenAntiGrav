@@ -189,7 +189,7 @@ impl RaceStage {
             laps_completed: oag_game::records::laps_completed(
                 standing.lap,
                 finished,
-                self.race.sim.world.race.laps_target,
+                self.race.sim.world.laps_target(),
             ),
             tick: standing.finish_tick.unwrap_or(self.race.sim.world.tick),
             best_lap_ticks: standing.best_lap_ticks,
@@ -253,7 +253,7 @@ impl RaceStage {
             CampaignMode::SpeedLap => {
                 best_lap_ticks.map(|ticks| ticks_to_centiseconds(u64::from(ticks)))
             }
-            CampaignMode::Zone => Some(i64::from(self.race.sim.world.race.zone)),
+            CampaignMode::Zone => Some(i64::from(self.race.sim.world.primary_race().zone)),
             CampaignMode::Elimination => {
                 Some(i64::from(self.race.sim.world.ships[0].standing.kills))
             }

@@ -19,7 +19,7 @@ fn laps_override_wins_over_the_per_class_table_for_time_trial() {
     setup.class = "VENOM".to_string();
     setup.laps_override = Some(5);
     let race = Race::start(setup);
-    assert_eq!(race.sim.world.race.laps_target, Some(5));
+    assert_eq!(race.sim.world.laps_target(), Some(5));
 }
 
 /// The same override, for [`Mode::SingleRace`] - the other mode
@@ -31,7 +31,7 @@ fn laps_override_wins_over_the_per_class_table_for_single_race() {
     setup.class = "VENOM".to_string();
     setup.laps_override = Some(7);
     let race = Race::start(setup);
-    assert_eq!(race.sim.world.race.laps_target, Some(7));
+    assert_eq!(race.sim.world.laps_target(), Some(7));
 }
 
 /// `None` changes nothing - the ordinary Custom Race path, still reading
@@ -44,7 +44,7 @@ fn no_override_leaves_the_per_class_table_in_charge() {
     setup.laps_override = None;
     let race = Race::start(setup);
     assert_eq!(
-        race.sim.world.race.laps_target,
+        race.sim.world.laps_target(),
         Some(Mode::TIME_TRIAL_LAPS_BY_CLASS[SpeedClass::Venom as usize])
     );
 }
@@ -76,7 +76,7 @@ fn an_override_would_still_apply_to_speed_lap_which_is_exactly_why_the_caller_mu
     setup.laps_override = Some(2);
     let race = Race::start(setup);
     assert_eq!(
-        race.sim.world.race.laps_target,
+        race.sim.world.laps_target(),
         Some(2),
         "Race::start applies whatever it is given - the guard lives at the caller"
     );
