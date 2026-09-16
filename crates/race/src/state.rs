@@ -163,9 +163,12 @@ pub struct RaceState {
     /// **The guard that makes a wrap mean a lap.** Two separate failures need it,
     /// and one of them was found by driving a time trial on Moa Therma:
     ///
-    /// - A ship spawns on the grid slot, which is *upstream* of the start line by
-    ///   [`Course::START_LINE_OFFSET`]. It therefore crosses the line seconds
-    ///   into the race - a genuine wrap of the distance-along, and not a lap.
+    /// - A ship spawns on the grid slot, which is *upstream* of the start line
+    ///   (the line is [`Course::START_LINE_ADVANCE`] along the tangent from the
+    ///   slot). It therefore crosses the line seconds into the race - a genuine
+    ///   wrap of the distance-along, and not a lap. The original has the same
+    ///   rule as a `started` flag set by the first crossing
+    ///   (`docs/ghidra/functions/psp-pulse-usa/race-progress.md`).
     /// - A ship reversed back over the line and driven forward again re-crosses
     ///   it. Counting that would also reset the lap clock, so a few seconds of
     ///   rocking would record an unbeatable best lap.
@@ -411,11 +414,15 @@ impl RaceState {
                 //
                 // Start lap 1's clock here rather than at the standing start.
                 // The ship spawns on the authored grid slot, which is
-                // `Course::START_LINE_OFFSET` *behind* the line, while the
-                // original's craft starts on the line itself
+                // `Course::START_LINE_ADVANCE` *behind* the line, while the
+                // original's craft starts a few units short of the line
                 // (`crates/game/tests/race_ground_truth.rs`). Timing from the
                 // standing start would make our lap 1 that much longer than
-                // every other lap and than the original's.
+                // every other lap. Note the original does *not* restart its
+                // lap clock at the first crossing - its lap 1 runs from when
+                // the race update starts stepping - so this is a documented
+                // divergence, chosen because our spawn is further back than
+                // its own (`docs/gameplay/lap-counting.md`).
                 self.lap_start_tick = tick;
             }
             self.lap_gate = LapGate::NeedsNearHalf;

@@ -15,13 +15,15 @@ extends rather than repeats.
 
 1. **A leg's points are a fixed table by finishing position, not the
    campaign's 3/2/1 medal points and not arithmetic on the position.**
-   `g_tournament_points_by_position` (`0x08ab0ba0`) reads, index 1..8:
-   **8, 6, 5, 4, 3, 2, 1, 0.** A destroyed craft, or one in a race state the
-   table's own guard reads as `7`, scores **0** regardless of where it
-   finished. Confidence **88** - a direct table read, corroborated by the
-   `undefined4[9]` shape (index 0 unused, matching 1-based positions) and by
-   every other position-keyed table in this binary using the same 1-based
-   convention. No fastest-lap or elimination bonus was found anywhere in the
+   `g_tournament_points_by_position` (`0x08ab0ba4`) reads, for positions
+   1..8: **8, 6, 5, 4, 3, 2, 1, 0.** A destroyed craft, or one in a race
+   state the table's own guard reads as `7`, scores **0** regardless of
+   where it finished. Confidence **88** - a direct table read. The read is
+   `0x08ab0ba0 + 4 * position` with `position` 1-based, so the word at
+   `0x08ab0ba0` itself is never a points entry: it is a separate global,
+   `g_player_status`, written by `Race_CreatePlayer` with a pointer
+   ([race-progress.md](race-progress.md)). An earlier reading had the table
+   start there as an "unused index 0". No fastest-lap or elimination bonus was found anywhere in the
    per-leg accumulation path.
 2. **The runtime tournament object is `DAT_08b31158`, now fully fielded**:
    `+0x74` name (hashed for the standings key, already known),
@@ -60,10 +62,10 @@ Tournament_PointsForCraft(craft, isSplitScreenSecondary):
         if craft->flags (+0x860) & 0x1000 (destroyed):        return 0
         if craft's race state (Ship_RaceState_q, below) == 7:  return 0
         if isSplitScreenSecondary and that state == 1:         return 0
-        return g_tournament_points_by_position[craft->finishPosition]   # craft+0xbd8
+        return g_tournament_points_by_position[craft->finishPosition - 1]   # craft+0xbd8
     else (split-screen family, modes >= 14):
         if FUN_08826b18(craft) == 0 (lap-completion check, not traced): return 0
-        return g_tournament_points_by_position[craft->finishPosition]
+        return g_tournament_points_by_position[craft->finishPosition - 1]
 ```
 
 `craft`'s race state is read by `FUN_0883e64c` (not renamed, confidence 60):
@@ -466,7 +468,7 @@ a committed reference trace already) when re-attempting.
 | Address | Name | Conf |
 | --- | --- | ---: |
 | `0x08826ef4` | `Tournament_PointsForCraft` | 85 |
-| `0x08ab0ba0` | `g_tournament_points_by_position` (data) | 88 |
+| `0x08ab0ba4` | `g_tournament_points_by_position` (data) | 88 |
 | `0x0882e0e0` | `Tournament_AdvanceLeg` | 82 |
 | `0x088c3990` | `Tournament_AppendLegHash` | 85 |
 | `0x088c392c` | `Tournament_AppendLegByName` | 85 |

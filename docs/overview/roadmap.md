@@ -462,9 +462,17 @@ seen from the authoring side.
       single-ship modes are done**, in the new `oag-race` crate: time trial,
       speed lap and Zone, selectable on the RACE menu page. Lap counting is a
       wrap of a travel-ordered ring walked from the track's junction graph -
-      the loop's shape is the original's own traversal at confidence 88, but
-      *where the lap begins* is ours at 55, so read
-      [lap counting](../gameplay/lap-counting.md) before trusting a lap time.
+      the loop's shape is the original's own traversal at confidence 88, and
+      **where the lap begins is the original's own rule since 2026-09-16**:
+      154 units along the tangent from the authored `Start Position`,
+      re-projected onto the spline (`Course::START_LINE_ADVANCE`), read off
+      `RaceManager_Construct` together with the whole counter -
+      `Craft_UpdateLapProgress` unwraps the spline's own authored `t` field
+      and counts line crossings, `Race_UpdatePositions` sorts the grid by
+      progress and finish time. See
+      [race-progress.md](../ghidra/functions/psp-pulse-usa/race-progress.md)
+      and [lap counting](../gameplay/lap-counting.md) for the three places we
+      still differ (lap 1's clock origin, sub-tick times, the split table).
       Zone's ten-second step and its speed law are recovered
       ([zone-mode.md](../ghidra/functions/psp-pulse-usa/zone-mode.md)) and its
       numbers are read off the disc. **Zone now ends**: the pool empties, the
@@ -489,10 +497,12 @@ seen from the authoring side.
       the tick the player crosses for the last time - places, laps, finish
       ticks, best lap - the composition root stops stepping the simulation, and
       the table is drawn in place of the HUD until X or escape leaves.
-      **The table is ours**: the disc's own `Race End Photo`/`Save`/`Records`/
-      `Proceed`/`Alone` chain and `EndRace_Results` are names in `.rodata` and
-      nothing about their screens or transitions has been read, so a plain list
-      of positions stands in and says so. `--autopilot` is what reaches the end
+      **The disc's own end-race screens draw since 2026-09-14** - `EndRace
+      Results`, `Rewards` and `Menu` out of `EndRace_Definition.xml`, with the
+      loyalty law decompiled and persisted
+      ([endrace-screens.md](../ui/endrace-screens.md)); what is still blank
+      there is blank on purpose (the trophy model, the per-lap table's third
+      column). `--autopilot` is what reaches the end
       without a human driving, and
       `crates/game/tests/race_finish_ground_truth.rs` races a real circuit to
       the flag. See
@@ -502,9 +512,11 @@ seen from the authoring side.
       constants, font roles - and a race draws the speed and shield bars, the lap
       block, the three clocks and the wrong-way warning through them, in the
       disc's `PulseHud`/`small` fonts off its own `PulseHUD.mip`. Verified against
-      a PPSSPP reference frame. What it does **not** have is anything to show for
-      lap or position, because neither exists yet - the widgets are omitted
-      rather than filled with invented values. **The shield bar is no longer in
+      a PPSSPP reference frame. The lap and position widgets had no source
+      until the counter was read
+      ([race-progress.md](../ghidra/functions/psp-pulse-usa/race-progress.md),
+      2026-09-16): `Hud_UpdateLapCounter` formats `craft+0xacc - 1` of
+      `g_race_laps`, and `Race_UpdatePositions` writes the position. **The shield bar is no longer in
       that list**: the pool depletes on wall contact as of the shield work
       below, so `ShieldBar` and `ShieldBarText` are live readouts rather than a
       constant 100 %. See

@@ -27,6 +27,7 @@ An unencrypted ELF, so no decryption step is needed. See
 | [Audio levels](audio-levels.md) | The group/master volume chain to the DAC, and the finding that the original reserves no headroom |
 | [Billboards](billboards.md) | `TrackStartup.xml`'s element walker and the two billboard constructors, live-traced through a PPSSPP watchpoint - the transform they write is a hardcoded identity matrix, not a computed placement |
 | [Import stubs](imports.md) | The 335 library calls, 306 of them resolved by NID |
+| [Lap counting, lap timing and race positions](race-progress.md) | The counter behind the HUD's `Lap` widget: the spline's authored `t` field unwrapped, line crossings counted, sub-tick lap times, the 154-unit start-line rule, and the position sort |
 | [State machine and game modes](state-machine.md) | Where the front end's states come from (XML, loaded per screen), the twelve literal states and their triggers, the unlock-everything code, and the 19-entry game-mode enum with its factory and setup rules |
 | [Resource loading](resource-loading.md) | How a WAD entry becomes a live object: the VFS device chain, the refcounted resource cache, the scene-graph node with its child/update/draw chains, and the per-frame deferred-destroy list |
 | [Memory management and the heap layout](memory.md) | `Mem_Alloc`'s front door, the two small-block bitmap pools, the guarded free-list heap, the main and data heaps' sizes, and how the front-end archive is steered into its own heap |

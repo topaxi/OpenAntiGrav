@@ -25,7 +25,7 @@ The layout was never an RE problem - Pulse ships five layouts as `Data\XML\*_HUD
   without a real source for the tier value would invent the medal/record
   evaluation this thread did not recover - the stand-in this project's rules
   forbid. It waits on lap-timing and medal-progression data
-  ([hud.md](../../docs/ui/hud.md#lap-counting-is-the-one-real-blocker)'s existing
+  ([hud.md](../../docs/ui/hud.md#lap-counting-was-the-one-real-blocker)'s existing
   blocker, and its "Medal targets" deferred item).
 - If picked up again: `Hud_UpdateTimeCluster_q` has no confirmed caller (see its
   evidence page) - reads on `param_1 + 0x30`/`+ 0x34`/`+ 0x5a` and on what widgets

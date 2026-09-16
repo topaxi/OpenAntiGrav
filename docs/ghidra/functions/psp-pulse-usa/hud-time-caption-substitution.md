@@ -102,7 +102,7 @@ tier's meaning - it needs the same progression data this page does not have.
 Cross-checked, not assumed: `param_1 + 0x1f0`, `+ 0x1f4` (`+ 500` in the
 decompilation), `+ 0x1f8`, `+ 0x1fc`, `+ 0x200` and `+ 0x204` are all read
 here and are exactly the offsets `FUN_0881fbec` - the widget-bind function
-[hud.md](../../../ui/hud.md#lap-counting-is-the-one-real-blocker) already
+[hud.md](../../../ui/hud.md#lap-counting-was-the-one-real-blocker) already
 names as "the widget bind" - writes widget lookups into. So this function
 consumes widgets that function found by name; which named widgets land at
 `0x200`/`0x204` specifically was not chased (the two candidates are `TotalTime`
@@ -138,5 +138,5 @@ that default. Wiring `IG_HUD_BRONZE`/`SILVER`/`GOLD`/`RECORD` in without a
 real source for tier `0`-`3` would be inventing the medal/record evaluation
 this page explicitly did not find - the stand-in this project's own rules
 forbid. It waits on the same lap-timing and medal-progression data
-[hud.md](../../../ui/hud.md#lap-counting-is-the-one-real-blocker) and its
+[hud.md](../../../ui/hud.md#lap-counting-was-the-one-real-blocker) and its
 "Medal targets" item already flag as absent.

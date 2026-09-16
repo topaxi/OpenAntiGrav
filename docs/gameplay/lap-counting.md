@@ -1,25 +1,29 @@
 # Lap counting
 
-**Status:** implemented, and it is **our convention rather than a recovery**.
-Confidence in the *shape* of the loop is 88 because that is the original's own
-traversal; confidence in *where the lap begins* is 55, and that is the number to
-argue with.
+**Status:** implemented, and since 2026-09-16 **a recovery rather than a
+convention** for the two things that matter: the loop's shape (confidence 88,
+the original's own traversal) and *where the lap begins* (confidence 88, the
+original's own rule, read from `RaceManager_Construct`). What is still ours is
+recorded under "Where we differ" at the end.
 
-## The problem
+## The problem, as it stood
 
-Nothing in the original says where a lap starts or how one is counted.
+Until 2026-09-16 nothing in the original had been found that said where a lap
+starts or how one is counted:
 
 - **`gate` has no runtime class registration.** `.vex` class `0x3ca` is decoded by
   nothing: all 46 callers of the class registrar were enumerated and none passes
   it, so nothing reads a `gate` payload. See
-  [track data](../formats/track.md#where-is-lap-counting).
+  [track data](../formats/track.md#where-is-lap-counting). Still true - the
+  counter does not use it.
 - **No lap or split logic was found in the executable.** Every `lap`-matching
-  string is a HUD label, a save key or a music cue.
+  string is a HUD label, a save key or a music cue. True, and the way in was the
+  HUD label: the `Lap` widget's string is written from a field, and that
+  field's writer is the counter
+  ([race-progress.md](../ghidra/functions/psp-pulse-usa/race-progress.md)).
 - **`Start Position` is a grid slot, not a start line.** One node per track on all
-  40 PSP files, 3.3 and 20.5 units off the spline's own centreline.
-
-So the choice was to leave lap counting unimplemented, or to define it. It is
-defined here, and this page is the definition.
+  40 PSP files, 3.3 and 20.5 units off the spline's own centreline. Still true -
+  and the line is *derived* from it, below.
 
 ## The shape of the loop is recovered
 
@@ -49,58 +53,63 @@ Two details that are ours rather than the file's:
   rather than showing `1 of 3` on a track that cannot count. A best-effort ring
   would produce plausible, wrong numbers.
 
-## Where the lap begins is not
+## Where the lap begins: 154 units past the slot, along the tangent
 
-Arc-length zero is placed at the ring point `Course::START_LINE_OFFSET` **along
-the track from the authored grid slot** - 137.9 units, measured along the ring so
-it follows a curving start straight.
+The original's race manager computes the line once, at construction
+(`RaceManager_Construct`, `0x08829124`,
+[race-progress.md](../ghidra/functions/psp-pulse-usa/race-progress.md)):
 
-That number is measured, not invented: a captured time trial's craft begins 137.9
-units from the slot, decomposing into 137.9 along the slot's own forward, 22.4
-across the track and 0.8 up, with the slot's heading within 1.2 degrees of the
-craft's. It is pinned by `the_authored_slot_matches_the_captured_start` in
-`crates/game/tests/race_ground_truth.rs`.
+1. locate the authored `Start Position` on the spline (`AiTrack_LocatePosition`,
+   search radius 10,000);
+2. step **154.0 units** (`0x431a0000`) from that sample along the sample's
+   tangent, in a straight line;
+3. locate that point on the spline (radius 100) and keep its arc position.
 
-**Confidence 65**, and the two halves of that are different kinds of claim:
+`Course::from_track` does the same with the ring it builds: nearest ring point
+to the slot, `Course::START_LINE_ADVANCE` along that point's tangent, nearest
+ring point again - `course.start_index`. The literal is the title's, applied in
+the one place that can apply it; it is the same on every circuit, which is why
+the constant it replaces happened to work on two.
 
-- **The distance is measured**, on one capture of one circuit - Talon's Junction.
-- **That it generalises is observed, not measured.** Moa Therma, a different
-  circuit with no capture, counts its laps in the right place with this constant.
-  That was checked by driving it. It rules out the offset being a property of the
-  one circuit it came from, which was the live worry; it does not rule out a
-  per-track offset that happens to be close on both, because a player's eye is not
-  an instrument.
+**The constant it replaces.** Before this, arc-length zero was
+`Course::START_LINE_OFFSET = 137.9`, measured *along the ring* from the slot on
+one capture of Talon's Junction and observed to count laps in the right place on
+Moa Therma. That number was real, but it was a different quantity: it is where
+the original **spawns the craft** relative to the slot, not where the line is
+(`the_authored_slot_matches_the_captured_start`,
+`crates/game/tests/race_ground_truth.rs`, still holds). With the recovered rule
+the captured craft starts **16.5 units behind the line** on Talon's Junction
+(`the_captured_run_begins_just_behind_our_start_line`,
+`crates/trace/tests/lap_capture_ground_truth.rs`) - the original puts its craft
+short of the line and lets the first crossing start the race. Our own spawn is
+on the slot, further back still, and the same gate below absorbs both.
 
-Whatever lays a grid out is still unread code. What would retire the constant:
-that code, or a capture on a second circuit - the path-boundary lead below was
-the third candidate, and a sweep of all 40 files (2026-08-30) killed it.
+The path-boundary lead recorded on this page in its earlier form (checked on
+all 40 files, 2026-08-30, median 648 units from the line) stays dead; the
+recovered rule confirms the line is computed, not authored as a path split.
 
-Getting this wrong is visible rather than subtle, which is the one convenient
-thing about it. Placing the line at the slot - which the first implementation did
-- makes the counter tick over partway down the starting straight instead of at the
-end of it, and that is how the error was found: by driving a time trial on Moa
-Therma and watching it happen.
+## How the original counts
 
-### The lead that was checked and killed
+`Craft_UpdateLapProgress` (`0x08842a18`), per craft per tick:
 
-`Course::path_boundaries` reports where one path hands over to the next, and the
-load report prints it beside the start line. On `16_Track` the ring is two paths
-and the boundaries are `[0, 1752]` against a start line at `3415` - the same
-neighbourhood as the offset on one side, nowhere near it on the other, which is
-why this was reported rather than used even on the one circuit in hand.
-
-The generalising question - does a boundary land on the visible line across
-several circuits - was checked on all 40 Pulse circuit files (all four PSP/PS2
-sources; USA and EU agree byte-for-byte, so 32 Pulse files plus Pure's own 8),
-distance from the true start line (the `START_LINE_OFFSET` point) to the
-nearest `path_boundaries()` entry, both directions of the ring: **11.6 to
-1878.4 units, median 648**, and only 4 of the 40 land under 100 units. That is
-not "the boundary is the line" - it reads as boundaries landing wherever a
-track's own path graph happens to split, unrelated to the grid. **Dead as of
-2026-08-30**; `Path::exit` / `Junction` is not evidence for the start line and
-should not be re-chased down this route. What would still retire the constant
-is the code that lays the grid out, unread, or a capture on a second circuit -
-see above.
+- The craft's spline sample carries `t`, the **authored normalised arc
+  position** (`SplinePt+0x40`, `0..1` round the circuit - the field
+  [track.md](../formats/track.md) had as unknown), and the track object's first
+  word is the load-time units-per-`t`, so `arc = t * L`.
+- Progress is `arc` **unwrapped** across the circuit: an integer wrap count is
+  kept, and each tick the wrap that moves progress least (`0`, `+L`, `-L`) is
+  chosen.
+- A **crossing count** is `wraps + (line < arc)`. It rises by one at each
+  forward crossing of the line and falls by one at each reverse crossing; a
+  lap is the count rising by exactly one when it equals the count the next lap
+  is expected on.
+- The **first** forward crossing sets a `started` flag and records no lap; the
+  counter the HUD shows is `next_expected - 1`, initialised so the grid reads
+  "Lap 1".
+- On a lap: the time is interpolated to the fraction of the tick in which the
+  crossing happened, stored in centiseconds in a 20-entry array, compared with
+  the best, checked against the profile's records, flagged perfect if no wall
+  was hit that lap, and the twenty fastest laps are kept.
 
 ## A lap is a wrap, gated
 
@@ -128,9 +137,9 @@ already a wrong-way situation the HUD warns about.
 ## The lap clock starts at the line
 
 Lap 1 is timed from the first crossing, not from the standing start, because our
-ship spawns on the slot while the original's starts on the line. Timing from the
-standing start would make lap 1 longer than every other lap by the offset, and
-longer than the original's by the same amount.
+ship spawns on the slot, further behind the line than the original's own craft.
+Timing from the standing start would make lap 1 longer than every other lap by
+the offset.
 
 **This is every craft's rule, not the player's, as of 2026-08-17.**
 `oag_race::Standing` carries a clock and a best lap of its own, so the whole grid
@@ -143,17 +152,31 @@ comparable even with each other. Slot 0 therefore holds two clocks - its
 drifting apart.
 
 **Do not compare tick counts against the original's own clock.** Two laps of
-3,069 and 3,087 ticks were timed by the game at `0.50.25` and `1.11.08`: whatever
-it counts, it is not frames. The lap *counter* is unaffected and is what to
-compare. See `crates/game/src/hud.rs`'s `TICKS_PER_SECOND`.
+3,069 and 3,087 ticks were timed by the game at `0.50.25` and `1.11.08`: the
+original accumulates its variable `dt` and interpolates the crossing within the
+tick, so its lap times are not frame counts. The lap *counter* is unaffected
+and is what to compare. See `crates/game/src/hud.rs`'s `TICKS_PER_SECOND`.
 
-## What would replace all of this
+## Where we differ
 
-A recovered lap counter. The most likely home is `SplinePt.flags` (`+0x61`), which
-is OR-accumulated and surfaced by the spline evaluator - but that was not
-verified, the consumer of the byte was not found, and `flags` is `0` on every
-control point of `01_Track`. If someone finds it, this page becomes a note about
-what was used before.
+Read [race-progress.md](../ghidra/functions/psp-pulse-usa/race-progress.md)
+for the original in full; the divergences that remain are these, each a choice:
+
+- **Progress.** Ours is a ring-point table with a windowed locator; the
+  original's is the spline `t` field times a load-time length. Same quantity,
+  different instrument; a lap is a wrap in ours and an integer crossing count
+  in theirs, and both re-earn a lap after a reversal.
+- **Lap 1's clock.** The original does **not** restart its clock at the first
+  crossing: lap 1 runs from whenever the race update starts stepping crafts.
+  Ours starts at the line, because our spawn is on the slot rather than the
+  original's 16.5 units short of the line, and a slot-timed lap 1 would be
+  wrong by a different amount per grid slot.
+- **Sub-tick times.** The original interpolates the crossing within the tick -
+  and, as read, adds that fraction to a clock that already holds the whole tick,
+  so every recorded lap is one frame long. Ours is whole ticks at 60 Hz. Neither
+  is implemented as the other; the doc comment on `oag_race::Standing` says so.
+- **The split table, the perfect-lap flag, the twenty fastest laps** and the
+  profile statistics the original updates on a crossing are not modelled.
 
 ## See also
 

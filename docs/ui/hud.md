@@ -988,7 +988,15 @@ Recorded so none of this reads as undiscovered work.
   without them.
 - **Text outlines** (`BorderColor`) and **`CalcBlur`**.
 
-## Lap counting is the one real blocker
+## Lap counting was the one real blocker
+
+**Resolved 2026-09-16**: `Hud_UpdateLapCounter` (`0x0881a690`) writes `Lap`
+and `LapOf` from the `"PLAYER_HUD"` block's `+0x08`/`+0x0c`, which
+`PlayerStatus_Update` fills from `craft+0xacc - 1` and `g_race_laps`; the
+counter itself is `Craft_UpdateLapProgress` (`0x08842a18`). See
+[race-progress.md](../ghidra/functions/psp-pulse-usa/race-progress.md). The
+paragraphs below are the search as it stood, kept because the widget-name
+lead in them is what found it.
 
 `Lap`, `LapOf` and `Lap Outof` have geometry but no source.
 [`track.md`](../formats/track.md#where-is-lap-counting) records `gate` (class

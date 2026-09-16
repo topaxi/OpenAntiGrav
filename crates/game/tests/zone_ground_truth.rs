@@ -210,9 +210,10 @@ fn every_zone_circuit_pulse_offers_loads_as_a_zone_race() {
         .unwrap_or_else(|e| panic!("loading {} as a zone race: {e:#}", circuit.id));
 
         // **How far the racing line moves, measured rather than assumed.**
-        // `Course::START_LINE_OFFSET` is fitted on `16_Track`'s *race* file (see
-        // HANDOVER), and a zone circuit that splines differently inherits a fit
-        // that was never made for it. This started life as an equality
+        // The start line is derived from each file's own spline
+        // (`Course::START_LINE_ADVANCE`), so a zone circuit that splines
+        // differently gets its own line - this used to matter more when the
+        // line was a constant fitted on `16_Track`'s race file. This started life as an equality
         // assertion because `16_Track` splines identically in both - 862 points
         // either way - and that generalised wrongly: `10_Track` does not, 848
         // against 844. So the spread is printed and the count of circuits that
@@ -274,8 +275,7 @@ fn every_zone_circuit_pulse_offers_loads_as_a_zone_race() {
         moved.len() * 2 < offered.len(),
         "most zone circuits now spline differently from their race twin ({} of \
          {}), which would mean the racing line is authored per environment \
-         rather than shared. Course::START_LINE_OFFSET is fitted on 16_Track's \
-         race file, so that fit would no longer carry - see HANDOVER",
+         rather than shared - see HANDOVER",
         moved.len(),
         offered.len()
     );
@@ -288,10 +288,9 @@ fn every_zone_circuit_pulse_offers_loads_as_a_zone_race() {
 /// same geometry, or the swap is not happening.
 ///
 /// **The spline is compared too, and deliberately not asserted equal.**
-/// `Course::START_LINE_OFFSET` is fitted on `16_Track`'s *race* file, so if the
-/// zone variant splines differently, Zone lap timing inherits a fit that was
-/// never made for it. Whichever way it comes out is printed, and the inequality
-/// that is asserted is the geometry one.
+/// A zone variant that splines differently gets its own start line from its
+/// own spline (`Course::START_LINE_ADVANCE`). Whichever way it comes out is
+/// printed, and the inequality that is asserted is the geometry one.
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn a_zone_race_and_a_time_trial_load_different_environments() {
@@ -327,9 +326,7 @@ fn a_zone_race_and_a_time_trial_load_different_environments() {
         zoning.track_model.indices.len()
     );
     println!(
-        "16_Track spline: race {} point(s) / zone {} point(s) - if these differ, \
-         Course::START_LINE_OFFSET was fitted on the race file and zone lap \
-         timing inherits a fit never made for it",
+        "16_Track spline: race {} point(s) / zone {} point(s)",
         racing.setup.ai.point_count(),
         zoning.setup.ai.point_count()
     );
