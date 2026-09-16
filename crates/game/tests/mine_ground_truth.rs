@@ -341,6 +341,67 @@ fn a_cluster_trips_on_a_rival_and_not_on_its_own_dropper() {
     );
 }
 
+/// A Quake wave rippling under a laid mine sets it off, and the mine hurts
+/// nobody doing so - `Mine_SweepCraftTrigger`'s closing `Quake_SpanIntensityAt`
+/// test, which only raises the destroy bit.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn a_quake_wave_under_a_mine_sets_it_off_quietly() {
+    let Some(loaded) = single_race() else { return };
+    let mut race = race::Race::start(loaded.setup);
+    let throttle = held(Button::Cross);
+    for _ in 0..WARM_UP_TICKS {
+        race.tick(&PlayerInputs::single(throttle));
+    }
+    race.sim.world.ships[0].pickup.weapon = Some(Weapon::Mine);
+    race.sim.world.ships[0]
+        .pickup
+        .begin_drop(oag_gameplay::projectile::mine::CLUSTER);
+    for _ in 0..40 {
+        race.tick(&PlayerInputs::single(throttle));
+    }
+    let mines = laid(&race);
+    assert!(!mines.is_empty(), "nothing was laid");
+    let shields: Vec<f32> = race
+        .sim
+        .world
+        .ships
+        .iter()
+        .map(|s| s.physics.shield)
+        .collect();
+
+    // Launch a wave from where the first mine lies, travelling forward, so the
+    // mine sits inside its radius on the very next tick.
+    let stats = race.quake_stats().expect("the disc authors a Quake");
+    let progress = race
+        .course()
+        .expect("a course")
+        .locate(mines[0].position, None)
+        .expect("the mine is on the ring")
+        .progress;
+    race.sim.world.quake = Some(oag_gameplay::projectile::quake::Wave::launch(
+        7, progress, 1.0, &stats,
+    ));
+    race.tick(&PlayerInputs::single(throttle));
+
+    assert!(
+        laid(&race).len() < mines.len(),
+        "the mine under the wave is still in the array"
+    );
+    // The wave itself hits craft in its radius - that is its own law, tested
+    // elsewhere - but the mine it set off must add nothing. Nobody stood on
+    // the mine, so any energy lost here is the wave's, and it is bounded by the
+    // wave's own damage; a mine's damage on top would exceed it.
+    for (slot, ship) in race.sim.world.ships.iter().enumerate() {
+        assert!(
+            shields[slot] - ship.physics.shield <= stats.damage + 1e-3,
+            "slot {slot} lost {:.1}, more than the wave alone can take - the mine it \
+             set off spent a blast",
+            shields[slot] - ship.physics.shield
+        );
+    }
+}
+
 /// **A Bomb press lays exactly one, and it is a Mine one size up in every way
 /// the engine models.**
 ///

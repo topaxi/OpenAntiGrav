@@ -938,8 +938,15 @@ Two more things fall out: **a Quake wave passing under a mine detonates it**
 ([rocket-visuals.md](rocket-visuals.md)) raising bit `4` on a mine a rocket
 flies through has the same quiet result. Ported: `blast::blast_mine_trip`
 credits the tripping craft alone, gated on `blastradius`, and
-`Projectiles::sweep_rockets_through_laid` is the rocket trip; the Quake trip
-is not yet built.
+`Projectiles::sweep_rockets_through_laid` is the rocket trip, and
+`Race::advance_quake` (`crates/game/src/race/weapons/single_instance.rs`) is
+the Quake trip - after the wave's own hits it retires every laid mine whose
+located progress is inside the wave's radius and ignites the effect with no
+craft credited (`crates/game/tests/mine_ground_truth.rs`,
+`a_quake_wave_under_a_mine_sets_it_off_quietly`). The original's `> 0.1`
+intensity threshold is not modelled: `Quake_SpanIntensityAt` is read off the
+deformation table this port does not build yet, so the radius stands in for
+the wave's footprint.
 
 `FUN_08859f04` (the firer-arming test, 60) and `FUN_08862d4c` (targetable,
 shared with `Rocket_HitCraft`'s shield check, 60) stay unnamed.

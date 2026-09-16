@@ -337,6 +337,20 @@ impl Race {
             .and_then(oag_tables::weapons::WeaponStats::mine)
     }
 
+    /// The Quake's authored `<Stats>`, or `None` when the table did not load
+    /// or authors no Quake.
+    ///
+    /// An accessor for [`Self::missile_stats`]'s reason. Read by
+    /// `crates/game/tests/mine_ground_truth.rs`, which launches a wave over a
+    /// laid mine.
+    #[must_use]
+    pub fn quake_stats(&self) -> Option<oag_tables::weapons::QuakeStats> {
+        self.sim
+            .weapons
+            .as_ref()
+            .and_then(oag_tables::weapons::WeaponStats::quake)
+    }
+
     /// The Shuriken's authored `<Stats>`, or `None` when the table did not load
     /// or authors no Shuriken.
     ///

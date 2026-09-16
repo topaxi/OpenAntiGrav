@@ -68,6 +68,35 @@ impl Race {
                 self.view.shield[slot].hit();
             }
         }
+        // **A wave passing under a laid mine sets it off, quietly.**
+        // `Mine_SweepCraftTrigger` (`0x08867b50`) ends by asking
+        // `Quake_SpanIntensityAt` at the mine's own track cursor and raises the
+        // mine's destroy bit when the road there is rippling above `0.1`;
+        // `MinePool_Update`'s teardown then plays the explosion and credits
+        // nobody. This wave model has no per-span intensity, only a front
+        // and a radius, so "rippling under the mine" is the same
+        // within-radius test the craft take. Mines only: the Bomb pool's own
+        // update was not read for a Quake test, and one is not assumed. See
+        // `docs/ghidra/functions/psp-pulse-usa/mine.md`, 2026-09-16.
+        let tripped: Vec<(usize, Vec3)> = self
+            .sim
+            .world
+            .projectiles
+            .slots
+            .iter()
+            .enumerate()
+            .filter(|(_, laid)| laid.kind == Some(oag_tables::weapons::Weapon::Mine))
+            .filter_map(|(slot, laid)| {
+                let located = course.locate(laid.position, None)?;
+                (wave.progress_delta(located.progress, length) <= wave.radius)
+                    .then_some((slot, laid.position))
+            })
+            .collect();
+        for (slot, point) in tripped {
+            self.sim.world.projectiles.slots[slot] =
+                oag_gameplay::projectile::Projectile::default();
+            self.ignite_blast(oag_tables::weapons::Weapon::Mine, point, None);
+        }
         self.sim.world.quake = Some(wave);
     }
 
