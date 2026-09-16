@@ -419,6 +419,7 @@ impl Stage {
             noise,
             trail_blend,
             trail_shape,
+            clouds,
             shadows,
             shadow_hulls,
             ..
@@ -469,6 +470,7 @@ impl Stage {
             noise,
             trail_blend,
             trail_shape,
+            clouds,
             gpu.config.format,
             size,
             anisotropy,

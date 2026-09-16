@@ -8,6 +8,7 @@
 use super::*;
 use log::warn;
 
+mod clouds;
 mod frame;
 mod motion;
 mod queries;
@@ -37,14 +38,12 @@ pub struct Scene {
     /// Empty for a track that authors no `fogCube` - four of the forty - and the
     /// race then renders unfogged, which is what the original does too.
     fog_volumes: Vec<oag_vex::fog::FogVolume>,
-    /// Wipeout HD's authored distance fog, static for the whole race.
-    ///
-    /// What binds when no `fogCube` volume covers the camera - which on HD is
+    /// Wipeout HD's authored distance fog, static for the whole race - what
+    /// binds when no `fogCube` volume covers the camera, which on HD is
     /// always, since HD authors no `fogCube` at all. See
     /// [`crate::race::Loaded::authored_fog`].
     authored_fog: Option<mesh_render::Fog>,
-    /// The Zone colour grade laid over the two above, stage by stage.
-    ///
+    /// The Zone colour grade laid over the two above, stage by stage -
     /// `None` outside Zone and on a title shipping no stage table. Held here
     /// rather than in `oag_gameplay::World` deliberately: nothing in the
     /// simulation reads it, no force depends on it, and `World` is
@@ -54,8 +53,7 @@ pub struct Scene {
     /// presentation, and this is where the rest of the presentation lives.
     /// See [`crate::race::zone_grade::ZoneGrade`].
     zone_grade: Option<crate::race::zone_grade::ZoneGrade>,
-    /// The track's `Skycube`, drawn camera-centred before anything else.
-    ///
+    /// The track's `Skycube`, drawn camera-centred before anything else -
     /// `None` when the file authors no sky, which is every Pure track and every
     /// non-track `.vex`. Its own [`mesh_render::Depth::Sky`] pipelines compare
     /// `Always` and write no depth, so it fills the frame and everything drawn
@@ -102,7 +100,6 @@ pub struct Scene {
     /// rather than `Option<Vec<_>>` so the no-plume source and the iteration read
     /// the same way `ships` does.
     boost: Vec<Option<Drawable>>,
-
     /// One always-on engine flame per craft, for a title that authors its flare
     /// as geometry rather than as a sprite.
     ///
@@ -180,6 +177,7 @@ pub struct Scene {
     /// that `queue` already accepts through a shared reference. The borrow is
     /// taken and released inside `render` with nothing re-entrant in between.
     exhaust: std::cell::RefCell<exhaust::Pipeline>,
+    clouds: std::cell::RefCell<clouds::Clouds>,
     /// Collision sparks. `RefCell` for the same reason [`Self::exhaust`] is.
     sparks: std::cell::RefCell<sparks::Pipeline>,
     /// The `blob` shadow tier: one ground-aligned quad per craft, drawn after
@@ -345,6 +343,7 @@ impl Scene {
         noise: Option<FlareTexture>,
         trail_blend: Option<wgpu::BlendState>,
         trail_shape: Option<FlareTexture>,
+        cloud_layer: Option<(oag_render::cloud::Layer, FlareTexture)>,
         format: wgpu::TextureFormat,
         size: (u32, u32),
         anisotropy: Anisotropy,
@@ -985,6 +984,7 @@ impl Scene {
             authored_fog,
             zone_grade,
             exhaust,
+            clouds: clouds::Clouds::build(device, queue, format, sample_count, cloud_layer),
             sparks,
             shadow,
             shadow_map: std::cell::RefCell::new(shadow_map),

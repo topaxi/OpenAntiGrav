@@ -657,13 +657,15 @@ impl Scene {
             _ => false,
         }));
         oag_render::perfprobe::mark("exhaust-gather");
-        self.exhaust.borrow_mut().upload(
-            queue,
-            &view_projection.to_cols_array_2d(),
-            race.camera_position(),
-            vertices,
-            trail,
-        );
+        // Shared by every upload below - `to_cols_array_2d` is otherwise
+        // recomputed once per pipeline for the same one matrix.
+        let vp = view_projection.to_cols_array_2d();
+        self.exhaust
+            .borrow_mut()
+            .upload(queue, &vp, race.camera_position(), vertices, trail);
+        self.clouds
+            .borrow_mut()
+            .upload(queue, &vp, race.sim.world.tick, right, up);
         // The hull's collision sparks and the stage's rocket effects share
         // one pipeline and one pair of buffers: both are `.pob` particles in
         // the same two blend classes, so a second pipeline would buy nothing
@@ -671,22 +673,14 @@ impl Scene {
         oag_render::perfprobe::mark("exhaust-upload");
         race.extend_spark_vertices(additive, alpha, right, up);
         race.extend_stage_vertices(additive, alpha, right, up);
-        self.sparks.borrow_mut().upload(
-            queue,
-            &view_projection.to_cols_array_2d(),
-            additive,
-            alpha,
-        );
+        self.sparks.borrow_mut().upload(queue, &vp, additive, alpha);
 
         // Both shadow tiers' geometry, gathered with the rest of the frame's.
         // Its own file under the 1,000-line rule - see `frame/shadow.rs`.
         let (quads, hull_vertices) = self.shadow_geometry(race, shadows);
-        self.shadow.borrow_mut().upload(
-            queue,
-            &view_projection.to_cols_array_2d(),
-            &quads,
-            &hull_vertices,
-        );
+        self.shadow
+            .borrow_mut()
+            .upload(queue, &vp, &quads, &hull_vertices);
         oag_render::perfprobe::mark("shadow-gather");
 
         oag_render::perfprobe::mark("psys-gather");
@@ -925,6 +919,7 @@ impl Scene {
         // same reason.
         self.exhaust.borrow().draw(&mut pass);
         self.sparks.borrow().draw(&mut pass);
+        self.clouds.borrow().draw(&mut pass);
         // The scene pass has to close before the bloom can sample what it drew,
         // so this ends the borrow rather than waiting for the scope to.
         drop(pass);

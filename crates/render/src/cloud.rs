@@ -132,7 +132,12 @@ impl Sprite {
         let (sin, cos) = self.phase.sin_cos();
         let r = right * cos + up * sin;
         let u = up * cos - right * sin;
-        quad(self.position, r * self.half_size, u * self.half_size, self.colour)
+        quad(
+            self.position,
+            r * self.half_size,
+            u * self.half_size,
+            self.colour,
+        )
     }
 }
 
@@ -203,6 +208,12 @@ impl Layer {
     #[must_use]
     pub fn is_empty(&self) -> bool {
         self.sprites.is_empty()
+    }
+
+    /// How many sprites this layer draws, for the load report.
+    #[must_use]
+    pub fn len(&self) -> usize {
+        self.sprites.len()
     }
 
     /// Advances every sprite's rotation by one tick.
@@ -418,7 +429,12 @@ impl Pipeline {
     }
 
     /// Uploads this frame's camera matrix and geometry.
-    pub fn upload(&mut self, queue: &wgpu::Queue, view_projection: &[[f32; 4]; 4], vertices: &[GpuVertex]) {
+    pub fn upload(
+        &mut self,
+        queue: &wgpu::Queue,
+        view_projection: &[[f32; 4]; 4],
+        vertices: &[GpuVertex],
+    ) {
         let mut block = [[0.0f32; 4]; 8];
         block[..4].copy_from_slice(view_projection);
         block[4] = [1.0, 0.0, 0.0, 0.0];

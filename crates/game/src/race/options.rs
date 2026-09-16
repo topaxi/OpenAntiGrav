@@ -629,6 +629,11 @@ pub struct Loaded {
     /// The track's authored `fogCube` volumes, for [`Scene`] to sample per
     /// frame at the camera.
     pub fog_volumes: Vec<oag_vex::fog::FogVolume>,
+    /// `05_Track`'s cloud puffs and the shared texture they draw with -
+    /// `None` for every other circuit and for a ribbon build. See
+    /// `crates/render/src/cloud.rs` and
+    /// `docs/ghidra/functions/psp-pulse-usa/clouds.md`.
+    pub clouds: Option<(oag_render::cloud::Layer, FlareTexture)>,
     /// The circuit's own light rig, out of its `.envsettings`.
     ///
     /// [`mesh_render::Light::stand_in`] for every title that authors none,

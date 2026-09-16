@@ -18,7 +18,7 @@ mod surfaces;
 mod variant;
 mod weapon_models;
 use crate::remix::craft_of;
-use environment::{hd_sky_model, psp2_sky_model};
+use environment::{cloud_layer, hd_sky_model, psp2_sky_model};
 
 /// Loads a track, a ship and its handling out of a disc image.
 ///
@@ -35,7 +35,6 @@ pub fn load(options: &Options) -> Result<Loaded> {
     // `Data\Ships\<Team>\handlingstats.xml` and `Data\Environments\<n>_Track\...`
     // under the names the PSP uses - so the layout is the whole of the
     // difference. See `docs/formats/handling-stats.md`.
-    //
     // Downloadable content is mounted behind them. A pack is not tied to the
     // release it was sold for here, so this is the same call whichever image
     // `source` names - see `docs/formats/dlc-pack.md`. **Which of the two lists
@@ -976,6 +975,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         pad_model,
         weapon_pad_model,
         fog_volumes,
+        clouds: cloud_layer(&mut archives, &track_blob, vex_geometry, &mut report),
         light,
         authored_fog,
         hd_bloom,

@@ -298,6 +298,7 @@ pub fn capture(
         noise,
         trail_blend,
         trail_shape,
+        clouds,
         ..
     } = loaded;
     let mode = setup.mode;
@@ -410,6 +411,7 @@ pub fn capture(
         noise,
         trail_blend,
         trail_shape,
+        clouds,
         format,
         scene_size,
         options.anisotropy,
