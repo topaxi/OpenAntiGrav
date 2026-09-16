@@ -126,6 +126,10 @@ pub(super) struct SfxVoices {
     /// generator in slot order, so a `--dump-audio` capture of one race is the
     /// same capture twice.
     engines: [Engine; oag_gameplay::MAX_SHIPS],
+    /// Where the ear was last tick, `mgr+0x70`: the doppler term is held off
+    /// on a tick the listener jumped more than `oag_audio::LISTENER_JUMP`,
+    /// which is a camera cut and not a velocity.
+    last_listener: Option<oag_audio::Listener>,
     /// The shield's held voice, while one is up and the alternate drawn was a
     /// loop. See [`Cue::Shield`].
     /// What the lock-on reticle was doing last frame, so its two blips fire on
@@ -201,6 +205,7 @@ impl Audio {
             let mut rng = Rng::new(SFX_SEED);
             SfxVoices {
                 engines: std::array::from_fn(|_| Engine::new(&mut rng)),
+                last_listener: None,
                 sight: oag_race::sight::State::Absent,
                 shield: None,
                 shield_open: false,
@@ -216,6 +221,13 @@ impl Audio {
         let announcer = race.announcer();
         let class_announcer = race.class_announcer();
         let listener = listener_of(race);
+        // `SoundManager_Update`'s camera-cut guard, one answer for every
+        // voice this tick. The first tick has nothing to compare against and
+        // is treated as a cut, which is also what it is.
+        let doppler_enabled = voices
+            .last_listener
+            .replace(listener)
+            .is_some_and(|previous| !listener.jumped_from(&previous));
         let craft = craft_positions(race);
         // An owned snapshot, the same shape `craft` is - `Projectile` is
         // `Copy` and the array is small, and copying it out avoids holding a
@@ -485,6 +497,7 @@ impl Audio {
                     position.to_array(),
                     &listener,
                     slot != 0,
+                    doppler_enabled,
                     DT,
                 );
             }
@@ -496,9 +509,14 @@ impl Audio {
             // choice and is written down as one. Measured on the two circuits
             // `track_audio_ground_truth` flies, the peak is eight against
             // `oag_audio::mixer::MAX_VOICES`, so it has not yet mattered.
-            voices
-                .ambience
-                .tick(mixer, emitters, &listener, &mut voices.rng);
+            voices.ambience.tick(
+                mixer,
+                emitters,
+                &listener,
+                &mut voices.rng,
+                doppler_enabled,
+                DT,
+            );
         });
     }
 

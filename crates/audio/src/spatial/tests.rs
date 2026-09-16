@@ -301,3 +301,56 @@ fn a_wider_cone_is_still_audible_where_a_narrower_one_is_not() {
     assert_eq!(narrow.place(&listener, 1.0).unwrap().gain, 0.0);
     assert!(wide.place(&listener, 1.0).unwrap().gain > 0.0);
 }
+
+/// `pitch = -(dd/dt) * 0.0005 * 1536`: closing sharpens, receding flattens,
+/// by `2^(rate * 0.0005)` either way.
+#[test]
+fn doppler_sharpens_a_closing_source_and_flattens_a_receding_one() {
+    let dt = 1.0 / 60.0;
+    let mut doppler = Doppler::default();
+    assert_eq!(
+        doppler.ratio(100.0, dt, true),
+        1.0,
+        "the first frame has no change to read"
+    );
+    // 100 units closer in one frame is 6,000 units a second.
+    let closing = doppler.ratio(0.0, dt, true);
+    assert!(
+        (closing - 2f32.powf(6000.0 * DOPPLER_SCALE)).abs() < 1e-4,
+        "{closing}"
+    );
+    let receding = doppler.ratio(100.0, dt, true);
+    assert!(
+        (receding - 2f32.powf(-6000.0 * DOPPLER_SCALE)).abs() < 1e-4,
+        "{receding}"
+    );
+}
+
+/// A suppressed frame is unity but still records the distance, so the frame
+/// after it measures one frame's change and not two.
+#[test]
+fn a_suppressed_frame_holds_unity_and_does_not_double_the_next() {
+    let dt = 1.0 / 60.0;
+    let mut doppler = Doppler::default();
+    doppler.ratio(100.0, dt, true);
+    assert_eq!(doppler.ratio(50.0, dt, false), 1.0);
+    let next = doppler.ratio(0.0, dt, true);
+    assert!(
+        (next - 2f32.powf(3000.0 * DOPPLER_SCALE)).abs() < 1e-4,
+        "{next}"
+    );
+    doppler.reset();
+    assert_eq!(doppler.ratio(500.0, dt, true), 1.0);
+}
+
+/// `mgr+0x94`: a listener that moved more than 24 units in a frame cut, it
+/// did not travel.
+#[test]
+fn a_listener_that_jumped_more_than_the_threshold_is_a_cut() {
+    let before = Listener::at_origin();
+    let mut after = Listener::at_origin();
+    after.position = [23.0, 0.0, 0.0];
+    assert!(!after.jumped_from(&before));
+    after.position = [25.0, 0.0, 0.0];
+    assert!(after.jumped_from(&before));
+}

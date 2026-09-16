@@ -616,6 +616,7 @@
 0x08939b84	function	SoundInstance_StillPlaying	80	positional-audio.md
 0x08939c00	function	SoundEmitter_ComputeVolumeAndAngle	90	positional-audio.md
 0x08939e58	function	SoundInstance_UpdateSpatial	86	positional-audio.md
+0x08939b10	function	SoundInstance_Init	90	positional-audio.md
 0x0893a2b0	function	SoundManager_Update	88	positional-audio.md
 0x0893a5ec	function	SoundManager_LinkEmitter	85	positional-audio.md
 0x0893a7e8	function	SoundManager_BuildVolumeCurve	94	positional-audio.md

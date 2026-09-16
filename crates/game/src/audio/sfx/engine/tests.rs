@@ -74,6 +74,7 @@ fn the_engine_snaps_on_its_first_tick_and_lags_after() {
         HEARD,
         &LISTENER,
         false,
+        true,
         1.0 / 60.0,
     );
     // The rising edge is a snap: without it the note sweeps up from wherever
@@ -90,6 +91,7 @@ fn the_engine_snaps_on_its_first_tick_and_lags_after() {
         HEARD,
         &LISTENER,
         false,
+        true,
         1.0 / 60.0,
     );
     let target = base + 300.0 * ENGINE_PITCH_PER_KMH;
@@ -115,6 +117,7 @@ fn the_engine_holds_one_voice_across_ticks() {
             HEARD,
             &LISTENER,
             false,
+            true,
             1.0 / 60.0,
         );
     }
@@ -145,6 +148,7 @@ fn a_non_looping_engine_bank_is_refused_rather_than_retriggered() {
             HEARD,
             &LISTENER,
             false,
+            true,
             1.0 / 60.0,
         );
     }
@@ -167,6 +171,7 @@ fn intensity_rises_to_full_and_stops_there() {
             HEARD,
             &LISTENER,
             false,
+            true,
             1.0 / 60.0,
         );
     }
@@ -189,6 +194,7 @@ fn a_stopped_engine_winds_down_to_its_own_note_and_stays_there() {
             HEARD,
             &LISTENER,
             false,
+            true,
             1.0 / 60.0,
         );
     }
@@ -210,6 +216,7 @@ fn a_stopped_engine_winds_down_to_its_own_note_and_stays_there() {
             HEARD,
             &LISTENER,
             false,
+            true,
             1.0 / 60.0,
         );
     }
@@ -246,6 +253,7 @@ fn a_finished_race_releases_the_engine_rather_than_leaving_it_humming() {
             HEARD,
             &LISTENER,
             false,
+            true,
             1.0 / 60.0,
         );
     }
@@ -263,6 +271,7 @@ fn a_finished_race_releases_the_engine_rather_than_leaving_it_humming() {
             HEARD,
             &LISTENER,
             false,
+            true,
             1.0 / 60.0,
         );
     }
@@ -280,8 +289,54 @@ fn a_finished_race_releases_the_engine_rather_than_leaving_it_humming() {
             HEARD,
             &LISTENER,
             false,
+            true,
             1.0 / 60.0,
         );
     }
     assert_eq!(mixer.active_voices(), 0, "the engine restarted itself");
+}
+
+/// `SoundInstance_UpdateSpatial`'s doppler term: an engine closing on the ear
+/// plays sharp of its own note, one receding plays flat, and a frame the
+/// listener cut on holds the note alone.
+#[test]
+fn a_closing_engine_is_sharp_and_a_receding_one_flat_and_a_cut_is_neither() {
+    let mut mixer = Mixer::new(44_100);
+    let banks = banks(&[(Cue::Engine, 1, true)]);
+    let mut rng = Rng::new(5);
+    let mut engine = Engine::new(&mut rng);
+    let dt = 1.0 / 60.0;
+    let mut tick = |engine: &mut Engine, mixer: &mut Mixer, at: f32, enabled: bool| {
+        engine.tick(
+            mixer,
+            &banks,
+            &mut rng,
+            100.0,
+            true,
+            [0.0, 0.0, at],
+            &LISTENER,
+            false,
+            enabled,
+            dt,
+        );
+        mixer
+            .pitch(engine.voice.expect("the engine holds a voice"))
+            .unwrap()
+    };
+    // Settle the note itself over a second, so the lag is not what moves.
+    for _ in 0..120 {
+        tick(&mut engine, &mut mixer, 40.0, true);
+    }
+    let held = tick(&mut engine, &mut mixer, 40.0, true);
+    // Ten units closer in a frame: 600 units a second, `2^(600 * 0.0005)`.
+    let closing = tick(&mut engine, &mut mixer, 30.0, true);
+    assert!(
+        (closing / held - 2f32.powf(600.0 * oag_audio::spatial::DOPPLER_SCALE)).abs() < 1e-3,
+        "closing {closing} against held {held}"
+    );
+    let receding = tick(&mut engine, &mut mixer, 40.0, true);
+    assert!(receding < held, "receding {receding} against held {held}");
+    // A cut frame plays the bare note whatever the distance did.
+    let cut = tick(&mut engine, &mut mixer, 10.0, false);
+    assert!((cut - held).abs() < 1e-3, "cut {cut} against held {held}");
 }

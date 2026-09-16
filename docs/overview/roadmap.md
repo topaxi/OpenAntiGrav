@@ -769,11 +769,18 @@ seen from the authoring side.
       really is in the bank they name. `speaker` `0x3cc` has a registered class
       and no instance on the disc at all. See
       [track-sound-emitters.md](../ghidra/functions/psp-pulse-usa/track-sound-emitters.md);
-      `oag_vex::sound_emitters` parses them and **nothing plays them yet**.
-      **What is still not placed**: the emitter cone (recovered,
-      defaulted off, and nothing found turns it on), the doppler term
-      (`-(dd/dt) * scale * 1536`, read but in the unrecovered pitch unit), and
-      `shieldactive`, whose call site plays dry at full volume.
+      `oag_vex::sound_emitters` parses them and **the circuits are audible
+      since 2026-09-06** - `TrackEmitters` holds a looping voice for every
+      `sound` node inside its radius, the 134 `soundcone` nodes with their
+      angle term since 2026-09-09. **The doppler term is in since
+      2026-09-16**: its unit (1/1536 of an octave) and its scale (`0.0005`,
+      written by `SoundInstance_Init` into every instance) are both read, and
+      `oag_audio::Doppler` bends the eight engine notes and the held
+      ambience voices by `2^(-(dd/dt) * 0.0005)` under the original's own
+      24-unit camera-cut guard. **What is still not placed**: the doppler on
+      one-shots (fired and forgotten here, pitch-tracked to the end there),
+      `shieldactive`, whose call site plays dry at full volume, and the
+      announcer lines a respawn plays (`cont_elim`, `RESET`).
       **Music switching is in**: a race plays a cycling playlist through the
       sixteen soundtrack tracks in place of the menu's loop, its position kept
       in memory across races so leaving and re-entering one resumes rather than

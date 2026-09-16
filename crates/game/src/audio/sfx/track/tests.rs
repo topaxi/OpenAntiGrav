@@ -196,13 +196,13 @@ fn a_finished_one_shot_is_not_restarted_while_its_emitter_is_in_range() {
     let mut rng = oag_core::Rng::new(1);
     let mut out = vec![0.0; 2 * 256];
 
-    ambience.tick(&mut mixer, &emitters, &listener, &mut rng);
+    ambience.tick(&mut mixer, &emitters, &listener, &mut rng, true, 1.0 / 60.0);
     assert_eq!(mixer.active_voices(), 1, "the cue never opened a voice");
 
     // Long enough to run the 64-frame sample out several times over.
     for _ in 1..10 {
         mixer.render(&mut out);
-        ambience.tick(&mut mixer, &emitters, &listener, &mut rng);
+        ambience.tick(&mut mixer, &emitters, &listener, &mut rng, true, 1.0 / 60.0);
     }
     assert_eq!(
         mixer.active_voices(),
@@ -233,7 +233,7 @@ fn a_looping_cue_keeps_one_voice_for_as_long_as_it_is_in_range() {
     let mut out = vec![0.0; 2 * 256];
 
     for _ in 0..10 {
-        ambience.tick(&mut mixer, &emitters, &listener, &mut rng);
+        ambience.tick(&mut mixer, &emitters, &listener, &mut rng, true, 1.0 / 60.0);
         mixer.render(&mut out);
     }
     assert_eq!(mixer.active_voices(), 1, "the loop stopped or was doubled");
@@ -244,8 +244,8 @@ fn a_looping_cue_keeps_one_voice_for_as_long_as_it_is_in_range() {
         position: [1000.0, 0.0, 0.0],
         right: [1.0, 0.0, 0.0],
     };
-    ambience.tick(&mut mixer, &emitters, &far, &mut rng);
+    ambience.tick(&mut mixer, &emitters, &far, &mut rng, true, 1.0 / 60.0);
     assert_eq!(ambience.playing(&mixer), 0, "the latch did not close it");
-    ambience.tick(&mut mixer, &emitters, &listener, &mut rng);
+    ambience.tick(&mut mixer, &emitters, &listener, &mut rng, true, 1.0 / 60.0);
     assert_eq!(ambience.playing(&mixer), 1, "coming back opened nothing");
 }
