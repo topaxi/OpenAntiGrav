@@ -352,12 +352,13 @@ byte position**, on the two extensions that carry one:
 `Data\...\*.gnf` (`GNF ` at `+0x00` - Sony's public PS4 texture magic).
 `.rcsmodel`/`.rcsmaterial` carry no magic at all (`crates/rcs/src/rcsmodel.rs`'s
 own module docs), so they cannot be scored this way and are reported
-separately, zero-vs-nonzero only. Three buckets result, not two:
+separately, zero-vs-nonzero only. Three buckets result, not two -
+`crates/assets/examples/psarc_oracle.rs`, superseding `psarc_sweep`:
 
 | Archive | `.gnf` valid | `.gnf` all-zero | `.gnf` garbage | `.vex` valid | `.vex` all-zero | `.vex` garbage |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| `data00.psarc` | 392 | 80 | 187 | 20 | 44 | 6 |
-| `data01.psarc` | 187 | 39 | 176 | 16 | 47 | 4 |
+| `data00.psarc` | 413 | 80 | 187 | 20 | 44 | 6 |
+| `data01.psarc` | 188 | 39 | 176 | 16 | 47 | 4 |
 | `data02.psarc` | 256 | 27 | 180 | 5 | 5 | 3 |
 | `data03.psarc` | 58 | 30 | 76 | 19 | 51 | 6 |
 | `data04.psarc` | 305 | 95 | 267 | 3 | 2 | 1 |
@@ -367,6 +368,27 @@ entire declared range is zero, no exceptions. "Garbage" = neither: real
 bytes are present, but not the expected magic at the expected offset - the
 population the old first-byte check could not see at all, since a "garbage"
 entry's first byte is overwhelmingly zero too.)
+
+**A genuine reader bug surfaced and was fixed while building this table, not
+just a better measurement of an unchanged reader.** `data00.psarc` entry
+2431, `data01.psarc` entry 4370 and `data02.psarc` entry 4659 each raised
+`Error::BadBlock` ("block did not inflate") the first time this table was
+built with the corrected oracle - a **short** stored block whose first byte
+happens to be `0x78` (zlib's marker), the same coincidence
+["A block size of zero means 'stored'"](#a-block-size-of-zero-means-stored)
+above already fixed for a *full-size* block, one level up. `Directory::read_entry`
+now falls back to treating the chunk as raw when `miniz_oxide` fails to
+inflate it, rather than erroring: deflate is deterministic, so a failed
+inflate proves the leading `0x78` was coincidental content rather than a
+real header - the `Error::BadBlock` variant this replaced is now unreachable
+and was removed. All three entries above now read (one - `data00`'s - as
+"valid" `.gnf`; the other two are `.rcsmaterial`, unvalidated but errorless),
+which is why `data00.psarc`'s `.gnf` "valid" count above is 413 rather than
+412 and `data01.psarc`'s is 188 rather than 187. Ground truth:
+`crates/assets/tests/omega_psarc_ground_truth.rs`; the existing PS3
+(`hdfury-ps3-eu`) and Vita `data.psarc` ground-truth suites stay green
+unchanged, checked directly rather than assumed, since this is the second
+time a fix here has regressed one of them.
 
 **The dedup example that exposed the old oracle's blind spot.** Eleven
 different ship liveries' `Data/art/published/hdships/*/Livery*/ShieldHexagonal_ALPHA.gnf`
