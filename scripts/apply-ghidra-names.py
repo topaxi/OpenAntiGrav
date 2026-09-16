@@ -62,6 +62,7 @@ BINARY_PROGRAMS = {
     "psp-pure-usa": "/psp-pure-usa/BOOT.BIN",
     "psp-pure-eu": "/psp-pure-eu/BOOT.BIN",
     "ps2-pulse-eu": "/ps2-pulse-eu/SCES_547.48",
+    "ps4-omega-eu": "/ps4-omega-eu/eboot.bin",
     # The only entry naming a file that does not exist on its disc: a PS3
     # `EBOOT.BIN` is an encrypted SELF, and what gets imported is the ELF
     # `rpcs3 --decrypt` writes beside it. See
