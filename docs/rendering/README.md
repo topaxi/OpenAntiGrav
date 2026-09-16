@@ -57,13 +57,17 @@
   by `oag_render::mesh::build_sky`). `fogCube` is **done** too - the runtime is
   recovered in [`fog.md`](../ghidra/functions/psp-pulse-usa/fog.md) and applied by
   `oag_vex::fog` plus `mesh.wgsl`'s own bind group. `cloudCube`/`cloudGroup` are
-  **decoded, not drawn** - `oag_vex::cloud` parses both (position, colour ramp,
-  sprite radius, the shared `Wipeout_Clouds_D_128x64x4.mip` texture), but the
-  original's `cloudGroup` draw handler builds a *rotating* per-instance
-  billboard whose exact phase/rate this project has not pinned down
-  ([`clouds.md`](../ghidra/functions/psp-pulse-usa/clouds.md)'s Open section),
-  and a renderer is real new GPU-pipeline work in `exhaust::Pipeline`'s
-  shape, not yet done. `sea`,
+  **partly done** - `oag_render::cloud` draws every sprite `oag_vex::cloud`
+  decodes off `05_Track` (the only Pulse circuit that authors any), textured
+  with the shared `Wipeout_Clouds_D_128x64x4.mip` and blended with the
+  measured GE state (`CloudGroup_ApplyDrawState`). Three things the original
+  does are read but not reproduced, each recorded rather than guessed at: the
+  per-sprite rotation is drawn from the same random range the original draws
+  from rather than the original's own per-boot values (there is no fixed rate
+  to read - see [`clouds.md`](../ghidra/functions/psp-pulse-usa/clouds.md)),
+  the camera-heading counter-rotation is omitted, and each sprite draws one
+  chosen flat colour rather than the position-sampled `Lo`/`Mid`/`Hi` ramp
+  whose input variable was not traced. `sea`,
   `seareflect` and `seaweed` author zero instances on either PSP Pulse
   pressing, so there is nothing to implement for them on this title; unchecked
   on Pure and PS2

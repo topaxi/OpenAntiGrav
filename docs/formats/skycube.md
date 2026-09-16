@@ -291,8 +291,11 @@ semantically undecoded block.
   `CloudGroup_RegisterClass` `0x0893471c`), which refutes the guess this
   bullet used to make by analogy with `engine_fire`/`exitglow`/`gate` below -
   an unregistered class was the right question to ask, and the answer here
-  is no. No renderer exists yet for either class; see `clouds.md`'s Open
-  section for what a renderer needs and does not yet have.
+  is no. `oag_render::cloud` now draws every sprite this decodes off
+  `05_Track`, with the measured GE state and the same random rotation-rate
+  range the original draws from; see that module's own doc for the three
+  things read but not reproduced (the camera-heading counter-rotation, the
+  `Overlap` culling, and the position-sampled colour ramp).
 - **`weatherPos` `0x3da`'s registration is found, and a live PPSSPP capture
   confirms its runtime constructor actually runs, loading a real race.**
   `WeatherPos_RegisterClass` (`0x0892c684`) registers class `0x3da` like every

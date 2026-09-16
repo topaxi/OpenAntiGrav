@@ -926,3 +926,70 @@ pub(super) fn zone_grade(
     }
     grade
 }
+
+/// The shared texture every `cloudCube` sprite draws with - `oag_vex::cloud`
+/// names it; present in `Data.wad` per `cloud_ground_truth.rs`.
+const CLOUD_TEXTURE: &str = "Data\\Tex\\Cloud\\Wipeout_Clouds_D_128x64x4.mip";
+
+/// Seeded once per load - fixed and literal, never OS entropy. Drives the
+/// per-sprite phase/rate draw `oag_render::cloud::Sprite::new` documents as
+/// matching the original's *distribution*, not its specific per-boot values.
+const CLOUD_SEED: u64 = 0x0577_0895;
+
+/// `05_Track`'s cloud puffs, and their shared texture - `None` for every
+/// other circuit and for a ribbon build. See `crates/render/src/cloud.rs`'s
+/// module doc for what this draws and what it deliberately does not.
+pub(super) fn cloud_layer(
+    archives: &mut oag_assets::Archives,
+    track_blob: &[u8],
+    vex_geometry: bool,
+    report: &mut Vec<String>,
+) -> Option<(oag_render::cloud::Layer, FlareTexture)> {
+    if !vex_geometry {
+        return None;
+    }
+    let nodes = vex::nodes(track_blob).unwrap_or_default();
+    let mut rng = Rng::new(CLOUD_SEED);
+    let layer = oag_render::cloud::Layer::from_clouds(track_blob, &nodes, &mut rng);
+    if layer.is_empty() {
+        return None;
+    }
+    let blob = match archives.read_name(CLOUD_TEXTURE) {
+        Ok(blob) => blob,
+        Err(error) => {
+            report.push(format!(
+                "{CLOUD_TEXTURE}: not in the archive set ({error}) - {} cloud sprite(s) \
+                 decoded but not drawn",
+                layer.len()
+            ));
+            return None;
+        }
+    };
+    match oag_texture::texture::Texture::parse(&blob) {
+        Ok(texture) => {
+            report.push(format!(
+                "{CLOUD_TEXTURE}: {}x{} .mip - drawing {} cloud sprite(s), one flat colour \
+                 each (the measured ramp's own Mid point, not evaluated per-position - see \
+                 docs/ghidra/functions/psp-pulse-usa/clouds.md)",
+                texture.width,
+                texture.height,
+                layer.len()
+            ));
+            Some((
+                layer,
+                FlareTexture {
+                    width: u32::from(texture.width),
+                    height: u32::from(texture.height),
+                    rgba: texture.to_rgba(),
+                },
+            ))
+        }
+        Err(error) => {
+            report.push(format!(
+                "{CLOUD_TEXTURE}: {error:#} - {} cloud sprite(s) decoded but not drawn",
+                layer.len()
+            ));
+            None
+        }
+    }
+}

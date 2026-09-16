@@ -36,6 +36,7 @@
 
 pub mod camera;
 pub mod capture;
+pub mod cloud;
 pub mod collision;
 pub mod exhaust;
 pub mod gantry;
