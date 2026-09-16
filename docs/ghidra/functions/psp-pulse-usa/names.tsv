@@ -902,3 +902,9 @@
 0x08932138	function	CloudCube_RegisterClass	92	clouds.md
 0x0893471c	function	CloudGroup_RegisterClass	92	clouds.md
 0x08933048	function	CloudGroup_Init	90	clouds.md
+0x08932ab4	function	CloudGroup_ApplyDrawState	90	clouds.md
+0x08932b78	function	CloudGroup_RestoreDrawState	88	clouds.md
+0x08932ba0	function	CloudGroup_SampleColourRamp	80	clouds.md
+0x08932eac	function	CloudGroup_CullOverlappingSprites	85	clouds.md
+0x08932f98	function	CloudGroup_SpritesOverlap	88	clouds.md
+0x08933ec4	function	CloudGroup_BuildDisplayList	85	clouds.md
