@@ -209,6 +209,78 @@ pub fn blast(
     reached
 }
 
+/// Spends a Plasma bolt's direct craft hit: full [`BlastStats::damage`] and
+/// [`BlastStats::slowdown_time`] to `struck` alone, plus a
+/// [`BlastStats::force`] impulse - falling off exactly as [`blast`]'s does -
+/// to every other **active** craft within [`BlastStats::radius`], excluding
+/// only `owner`.
+///
+/// **Recovered, not this module's own rule for once.** `Plasma_HitCraft`
+/// (`0x0886ad60`, confidence 88) credits `struck` unconditionally - there is
+/// no distance test in the original at all, because the struck craft is
+/// already known - and `Plasma_ApplyBlastForce` (`0x0886ae08`, confidence 88)
+/// then sweeps every craft but the bolt's own firer for the impulse alone,
+/// with no second damage or slowdown credit. See
+/// `docs/ghidra/functions/psp-pulse-usa/plasma.md`'s "a craft hit is the
+/// third ending" section.
+///
+/// **`struck` is not excluded from the impulse sweep, and that is the
+/// original's own choice, not an oversight ported over.** `struck` sits at or
+/// near the blast point, so it takes a falloff term close to the full
+/// `force` in addition to the direct credit above - `Plasma_ApplyBlastForce`
+/// excludes only `owner`. `owner` is excluded even if it happens to sit
+/// inside `radius`, which cannot happen for `struck` (a bolt cannot hit the
+/// hull of the craft that fired it - see [`super::Projectiles::advance`]'s
+/// own hull exclusion) but could for a bystander craft near the firer.
+///
+/// Called from [`apply_impacts`] only for a Plasma impact with
+/// `struck: Some(_)`; every other weapon still goes through [`blast`]
+/// unchanged.
+pub(super) fn blast_direct_hit(
+    ships: &mut [crate::world::Ship],
+    point: Vec3,
+    stats: &BlastStats,
+    struck: u8,
+    owner: u8,
+    rules: oag_physics::DamageRules,
+    absorbed: &mut [bool],
+) {
+    if let Some(ship) = ships.get_mut(struck as usize).filter(|s| s.active) {
+        ship.pending_slowdown += stats.slowdown_time;
+        let dimensions = ship.handling.dimensions;
+        let report =
+            oag_physics::damage::apply_weapon(&mut ship.physics, &dimensions, stats.damage, rules);
+        if let Some(flag) = absorbed.get_mut(struck as usize) {
+            *flag |= report.absorbed;
+        }
+    }
+
+    let radius = stats.radius;
+    for (slot, ship) in ships.iter_mut().enumerate() {
+        if !ship.active || slot as u8 == owner {
+            continue;
+        }
+        let offset = ship.physics.body.position - point;
+        let distance = offset.length();
+        if distance > radius {
+            continue;
+        }
+        let direction = if distance > 1e-4 {
+            offset.normalize()
+        } else {
+            Vec3::Y
+        };
+        let falloff = if radius > 0.0 {
+            1.0 - distance / radius
+        } else {
+            1.0
+        };
+        ship.physics
+            .body
+            .apply_impulse(direction * (falloff * stats.force));
+    }
+}
+
 /// What [`super::step`] does with every impact one tick produced.
 ///
 /// Split out of `step` itself under the parent module's own 1,000-line
@@ -250,6 +322,28 @@ pub(super) fn apply_impacts(
         let Some(stats) = blast_stats(weapons, impact.kind) else {
             continue;
         };
+        // **A Plasma direct hit spends its blast differently, and only a
+        // Plasma does.** `struck` is set only when the impact was a hull hit
+        // rather than a wall - see [`super::flight`]'s two Plasma arms and
+        // [`blast_direct_hit`]'s own doc comment for the recovered shape.
+        // Every other weapon's craft hit still goes through the uniform
+        // full-radius [`blast`] below, unexamined - `Rocket_HitCraft_q`
+        // suggests the same split exists for the Rocket, but that is a
+        // separate, unread change.
+        if impact.kind == Weapon::Plasma
+            && let Some(struck) = impact.struck
+        {
+            blast_direct_hit(
+                ships,
+                impact.point,
+                &stats,
+                struck,
+                impact.owner,
+                rules,
+                absorbed,
+            );
+            continue;
+        }
         blast(ships, impact.point, &stats, rules, absorbed);
     }
 }

@@ -208,7 +208,19 @@ impl Projectiles {
                 // on it, the two bouncing weapons ignore it for this tick.
                 // `Rocket_Update` falls through to its travel sweep after this
                 // and can spawn a second `WO_ROCKET_EXPLO_TRACK`; the
-                // `continue` here spends one blast, deliberately.
+                // `continue` here spends one blast, deliberately - except for
+                // the Plasma, which spends none here. `Plasma_SweepCraftHit`
+                // (`0x0886afb8`, read 2026-09-16) never reaches this probe at
+                // all - it is a separate per-tick hull sweep, not this
+                // floor-probe branch - so a wall found here can only be a
+                // wall, and `Plasmas_Update`'s teardown for a wall spends no
+                // damage/blastradius/blastforce/entity+0x110. See
+                // `docs/ghidra/functions/psp-pulse-usa/plasma.md`'s
+                // "the expiry settles a damage question" section, which reads
+                // the same for a wall hit as for the age timeout. The Rocket
+                // keeps `blast: true` here unconditionally - its own
+                // wall/craft split is a separate, unread question, deliberately
+                // not touched by this change.
                 Some(hit) => {
                     if matches!(kind, Weapon::Rocket | Weapon::Plasma) {
                         impacts[index] = Some(Impact {
@@ -216,7 +228,7 @@ impl Projectiles {
                             kind,
                             owner: projectile.owner,
                             struck: None,
-                            blast: true,
+                            blast: kind != Weapon::Plasma,
                             effect: None,
                         });
                         *projectile = Projectile::default();
@@ -316,12 +328,29 @@ impl Projectiles {
                         projectile.position = point + normal * push_off;
                         bounced = true;
                     } else {
+                        // **The Plasma alone splits on `struck` here.** A
+                        // wall found by this travel sweep (`struck: None`) is
+                        // the same "no blast" reading the probe branch above
+                        // and the age timeout both carry. A craft found here
+                        // (`struck: Some(_)`) is `Plasma_SweepCraftHit`'s own
+                        // territory (`0x0886afb8`, read 2026-09-16) - it runs
+                        // its own independent hull-cylinder test every tick,
+                        // separate from this raycast, and on a hit calls
+                        // `Plasma_HitCraft` and `Plasma_ApplyBlastForce`
+                        // (`0x0886ad60`/`0x0886ae08`). `blast::apply_impacts`
+                        // routes a Plasma impact with a `struck` craft to
+                        // [`super::blast::blast_direct_hit`] rather than to
+                        // [`super::blast::blast`] - see that function's own
+                        // doc comment for the credited shape. Every other
+                        // weapon here (Rocket, and Missile/Shuriken once
+                        // their bounce budget is spent) is unchanged and keeps
+                        // `blast: true` unconditionally.
                         impacts[index] = Some(Impact {
                             point,
                             kind,
                             owner: projectile.owner,
                             struck,
-                            blast: true,
+                            blast: kind != Weapon::Plasma || struck.is_some(),
                             effect: None,
                         });
                         *projectile = Projectile::default();

@@ -411,15 +411,28 @@ which is the whole point of the weapon.
   `blast: true` is now a known conflict, not an oversight** - the same reading
   says the original spends nothing there either, and it is deliberately not
   touched by this port; see the dated section for why.
-- **The Plasma's wall-hit branch in `Projectiles::advance`
+- ~~**The Plasma's wall-hit branch in `Projectiles::advance`
   (`crates/gameplay/src/projectile/flight.rs`) still credits `blast: true`,
   which the 2026-09-16 reading below says the original never does either -
   wall or timeout, `Plasmas_Update`'s teardown is identical and spends no
-  blast on a Plasma.** Correcting it is a real behaviour change (a wall-hit
-  Plasma currently damages and pushes craft in this engine's race) with its
-  own golden-hash and regression story - out of scope for the port that closed
-  the timeout question, and left for whoever picks this up. `Impact::blast`'s
-  own doc comment in `crates/gameplay/src/projectile.rs` carries the same flag.
+  blast on a Plasma.**~~ **Closed 2026-09-16, later the same day** - see the
+  dated section at the bottom of this file and
+  [plasma.md](../../docs/ghidra/functions/psp-pulse-usa/plasma.md#a-craft-hit-is-the-third-ending-and-it-does-spend-a-blast).
+  Short version: a direct craft hit is a **third** ending the earlier pass had
+  not enumerated, and it does spend a blast - `Plasma_HitCraft` credits the
+  struck craft directly, `Plasma_ApplyBlastForce` pushes everyone else in
+  radius but the firer. The wall-hit branch now emits `blast: false` and the
+  craft-hit branch routes to a new direct-hit rule; both are ported.
+- **What `Rocket_HitCraft_q`'s identical split-shape means for the Rocket's own
+  `blast()` routing is a new lead, not fixed.** `Rocket_HitCraft_q`
+  (`0x0886ebdc`, already named) credits a struck craft's damage/slowdown the
+  same way `Plasma_HitCraft` does, with no radius sweep read alongside it in
+  this pass - so `blast()`'s uniform "full damage to everyone in radius" rule
+  is likely wrong for the Rocket too, the same way it was for the Plasma.
+  Unread: whether `RocketPool_Update`'s own teardown ever damages anyone at
+  all outside `Rocket_HitCraft_q`'s direct credit, and whether an equivalent
+  `Rocket_ApplyBlastForce`-shaped function exists. Its own change, its own
+  regression story.
 - **A player mashing fire lays plasma bolts the same way they lay mines**, and
   the array fills: `--give plasma --press square` puts **128** bolts in the
   air inside 260 ticks and holds there, and in `single_race` the craft is dead
@@ -1399,4 +1412,63 @@ Regression gate before this change:
 `race_ground_truth::a_lone_craft_gets_round_the_circuits_it_is_known_to_get_round`
 - all twelve clean. After: unchanged (the gate does not fire a Plasma at any
 craft), quoted verbatim in this pass's own commit.
+
+## 2026-09-16, later the same day: a direct craft hit is a third ending, and it does spend a blast
+
+The section above closed the wall and timeout endings and left the wall-hit
+`blast: true` conflict open as a new Open item. This closes that item, and it
+is not the fix the conflict implied - the wall-hit branch was right to be
+flagged, but the fix is a **split**, not a flip: the Plasma has a genuine
+third ending, a direct craft hit, that the earlier pass never enumerated
+because nothing on `plasma.md` had traced the call chain to find it.
+
+**The chain.** `Plasmas_Update`'s own `if (p->flags & 1)` call - read in the
+earlier pass and prose-labelled `Plasma_NetSend_q`, a name that was never in
+the database - is `Plasma_SweepCraftHit` (`0x0886afb8`, now named 82): a
+per-tick hull-cylinder sweep against every craft, the same shape
+`RocketPool_Update` runs for the Rocket via `FUN_0886e7ac`/`Rocket_HitCraft_q`.
+On a hit it calls two more newly-named functions:
+
+- `Plasma_HitCraft` (`0x0886ad60`, 88) - credits full `damage` and
+  `slowdown_time` to the struck craft **unconditionally**, off
+  `WeaponStats_ParsePlasma`'s own `+0xa0`/`+0xc4`. No distance test: the
+  struck craft is already known.
+- `Plasma_ApplyBlastForce` (`0x0886ae08`, 88) - pushes every craft but the
+  bolt's own firer with a `(1 - d/blastradius) * blastforce` impulse, off
+  `+0xa4`/`+0xa8` - the exact shape `Weapon_PostBlastImpulse` and
+  `Missile_ApplyBlastForce` already carry. **The struck craft is not excluded
+  from this sweep either** - it sits at or near the blast point and takes a
+  near-full impulse on top of the direct credit above.
+
+This corrects two things the previous section said, both for the reason
+every such correction on this thread has had: `search_functions("Blast")`
+cannot find a function that has not been renamed yet.
+
+- ~~"the only function in the binary that reads a weapon's
+  `damage`/`blastradius`/`blastforce` and posts an impulse"~~ - true only of
+  `Weapon_PostBlastImpulse`'s own address; `Plasma_ApplyBlastForce` is a
+  second, Plasma-owned copy of the same arithmetic.
+- ~~"no `Plasma_ApplyBlast`-shaped function exists"~~ - `Plasma_HitCraft` is
+  one; it just was not named when that line was written.
+
+**Ported.** `flight.rs`'s two Plasma/Rocket-shared branches (the floor-probe
+wall and the travel-sweep hit) now split by `kind` and, for the sweep branch,
+by `struck`: a Plasma wall hit is `blast: false` on both, a Plasma craft hit
+is `blast: true` routed through a new `blast::blast_direct_hit` rather than
+the uniform `blast()` every other weapon still uses. `Impact::struck` and
+`Impact::blast`'s own doc comments in `crates/gameplay/src/projectile.rs`
+carry the full reading. The Rocket is untouched throughout - see the new Open
+item above for why `Rocket_HitCraft_q`'s identical shape is a lead, not a fix,
+here.
+
+Tests: three new unit tests in
+`crates/gameplay/src/projectile/plasma/tests.rs` (the `Impact` shape on a
+craft hit, the struck craft's direct credit, and the bystander/firer split).
+`weapon_slowdown_ground_truth.rs` needed no assertion change - it hand-detonates
+through `blast()` directly rather than through a real `Impact`, so the new
+routing does not reach it; its own doc comment now says so.
+
+Regression gate:
+`race_ground_truth::a_lone_craft_gets_round_the_circuits_it_is_known_to_get_round`
+- quoted verbatim before and after in this pass's own commit.
 

@@ -301,9 +301,17 @@ pub struct Impact {
     pub owner: u8,
     /// The ship slot it struck directly, or `None` for a hit on geometry.
     ///
-    /// A direct hit takes blast damage like any other craft inside the radius -
-    /// this is here to tell the two apart for a future direct-hit bonus or a
-    /// sound cue, not because the damage differs today.
+    /// For every weapon but the Plasma, a direct hit takes blast damage like
+    /// any other craft inside the radius - this field is here to tell the two
+    /// apart for a future direct-hit bonus or a sound cue, not because the
+    /// damage differs today.
+    ///
+    /// **The Plasma is the one weapon where the damage already differs, and
+    /// `struck` is what `blast::apply_impacts` reads to route it.** A Plasma
+    /// impact with `struck: Some(_)` goes through `blast::blast_direct_hit`
+    /// rather than `blast::blast` - full `damage`/`slowdown_time` to `struck`
+    /// alone, an impulse-only sweep to everyone else in radius. See
+    /// [`Self::blast`]'s own doc comment.
     pub struck: Option<u8>,
     /// Whether this detonation spends a blast, or only shows one.
     ///
@@ -325,25 +333,37 @@ pub struct Impact {
     /// where the local path does not. Open on
     /// `docs/ghidra/functions/psp-pulse-usa/missile.md`.
     ///
-    /// **The Plasma is `false` on both of its own endings, not one.**
-    /// `Plasmas_Update`'s (`0x0886b490`) teardown - read at instruction level
-    /// 2026-09-16, no elision - is `Psys_Release_q`, `Plasma_SpawnDetonation`,
-    /// `PLASMAHITWALL`, and nothing else, for a wall hit and a `10.0 < age`
-    /// timeout alike; neither reaches `Weapon_PostBlastImpulse` (`0886794c`,
-    /// the Mine's only caller, confirmed by `get_xrefs_to`) or writes
-    /// `entity+0x110`, the slot every real blast function - checked directly
-    /// against `Missile_ApplyBlastForce` - writes. See [`plasma`]'s expiry arm
-    /// in `Projectiles::advance` for the timeout half, ported 2026-09-16.
+    /// **The Plasma is `false` on a wall hit and the `10.0 < age` timeout,
+    /// and `true` on a direct craft hit - three endings, not two, and each
+    /// reads differently.** `Plasmas_Update`'s (`0x0886b490`) teardown - read
+    /// at instruction level 2026-09-16, no elision - is `Psys_Release_q`,
+    /// `Plasma_SpawnDetonation`, `PLASMAHITWALL`, and nothing else, for a wall
+    /// hit and the age timeout alike; neither reaches `Weapon_PostBlastImpulse`
+    /// (`0886794c`, the Mine's only caller, confirmed by `get_xrefs_to`) or
+    /// writes `entity+0x110`, the slot every real blast function - checked
+    /// directly against `Missile_ApplyBlastForce` - writes. See [`plasma`]'s
+    /// expiry arm in `Projectiles::advance` for the timeout half, ported
+    /// 2026-09-16.
     ///
-    /// **The Plasma's own wall-hit branch in `Projectiles::advance` still sets
-    /// `blast: true`, and that is now a known, flagged conflict rather than an
-    /// oversight** - it predates this finding, crediting `damage`/`blastradius`/
-    /// `blastforce` on a wall hit the original never spends either. Left
-    /// standing deliberately: correcting it is a wall-hit behaviour change with
-    /// its own golden-hash and regression story, out of scope for the expiry
-    /// question this doc comment answers. See
-    /// `docs/ghidra/functions/psp-pulse-usa/plasma.md`'s "What is not verified"
-    /// and the `weapons-eight-of-thirteen-the-plasma-and-the` handover thread.
+    /// **A direct craft hit is different, found later the same day.**
+    /// `Plasmas_Update`'s own `if (p->flags & 1)` call - previously read as
+    /// network code and prose-labelled `Plasma_NetSend_q` with no database
+    /// name behind it - is `Plasma_SweepCraftHit` (`0x0886afb8`): a per-tick
+    /// hull-cylinder sweep against every craft, structurally the same shape
+    /// `RocketPool_Update` runs for the Rocket. On a hit it calls
+    /// `Plasma_HitCraft` (`0x0886ad60`), which credits full
+    /// `damage`/`slowdown_time` to the struck craft unconditionally off
+    /// `WeaponStats_ParsePlasma`'s own `+0xa0`/`+0xc4`, and
+    /// `Plasma_ApplyBlastForce` (`0x0886ae08`), which pushes every craft but
+    /// the bolt's own firer with a `(1 - d/blastradius) * blastforce`
+    /// impulse - the exact shape `Weapon_PostBlastImpulse` and
+    /// `Missile_ApplyBlastForce` already carry. This corrects an earlier
+    /// version of this comment (and of `plasma.md`) that said "no
+    /// `Plasma_ApplyBlast`-shaped function exists" - the function was simply
+    /// not named yet, so a name search could not find it. See
+    /// `docs/ghidra/functions/psp-pulse-usa/plasma.md`'s "a craft hit is the
+    /// third ending" section, and [`Self::struck`]'s own doc comment for how
+    /// the two credits differ.
     ///
     /// A flag rather than a second array, because every consumer already walks
     /// these and the visual side wants the entry either way: `oag_game`'s tick
