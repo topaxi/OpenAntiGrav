@@ -228,7 +228,12 @@ fn a_plasma_fired_on_a_real_track_is_one_bolt_and_it_flies() {
         (bolt.position - origin).dot(forward) > 0.0,
         "the bolt spawned behind the craft"
     );
-    // The class speed plus `launchSpeed`, both km/h in the file. Asserted as
+    // **This reads the charge-hold magnitude, not the flight speed** - the
+    // fire tick above is the first of [`oag_gameplay::projectile::plasma::CHARGE_SECONDS`]'s
+    // wind-up, so the bolt has not been released yet and this is still
+    // [`oag_gameplay::projectile::plasma::launch`]'s own `class + launchSpeed`
+    // reading, unaffected by the release-time ramp measured further down this
+    // test. The class speed plus `launchSpeed`, both km/h in the file. Asserted as
     // "faster than the craft" rather than against the authored figure, which
     // ADR-0006 keeps off the page - and it is the assertion that would catch the
     // units bug `rocket-visuals.md` records, in the other direction: a bolt
@@ -251,16 +256,56 @@ fn a_plasma_fired_on_a_real_track_is_one_bolt_and_it_flies() {
     // And it rides the track. Drive it out and watch it either travel or detonate
     // on the circuit's own geometry; both are correct, and neither is "it fell
     // through the world", which is what a broken surface probe looks like.
+    //
+    // **Also where the release-time ramp is measured.** The charge outlives
+    // this loop's first tick - the wind-up is
+    // [`oag_gameplay::projectile::plasma::CHARGE_SECONDS`], one second, about
+    // 60 ticks - and the bolt is racing a real circuit's own geometry through
+    // all of it, so the firing craft's own speed is genuinely changing tick to
+    // tick: exactly the case a press-time reading and a release-time reading
+    // disagree on. Widened to 240 ticks (4s) so release, the mid-ramp sample
+    // and the post-ramp sample all fit with margin; a bolt fired down a real
+    // circuit can still hit a wall before all three land, in which case this
+    // reports which samples it got rather than failing on the ones it did not.
     let start = bolt.position;
     let mut furthest: f32 = 0.0;
     let mut detonated_after = None;
-    for tick in 1..=60 {
+    // (tick released, the craft's own km/h that tick, the bolt's own launch_speed_kmh)
+    let mut release: Option<(u32, f32, f32)> = None;
+    let mut mid_speed = None;
+    let mut late_speed = None;
+    for tick in 1..=240 {
         race.tick(&throttle);
-        match bolts(&race).first() {
-            Some(live) => furthest = furthest.max((live.position - start).length()),
-            None => {
-                detonated_after = Some(tick);
-                break;
+        let Some(live) = bolts(&race).first().copied() else {
+            detonated_after = Some(tick);
+            break;
+        };
+        furthest = furthest.max((live.position - start).length());
+
+        if release.is_none() && live.launch_speed_kmh > 0.0 {
+            // `oag_physics::step` for slot 0 runs before `projectile::step`
+            // inside `Race::tick` (`crates/game/src/race/tick.rs`), so the
+            // velocity read here is exactly what the release computation
+            // read this same tick - not a tick behind it.
+            let craft_kmh = race.sim.world.ships[0]
+                .physics
+                .body
+                .linear_velocity
+                .length()
+                * oag_gameplay::projectile::KMH_PER_UNIT_PER_SECOND;
+            release = Some((tick, craft_kmh, live.launch_speed_kmh));
+        }
+        if let Some((release_tick, ..)) = release {
+            let since = tick - release_tick;
+            if since == 30 && mid_speed.is_none() {
+                mid_speed = Some(
+                    live.velocity.length() * oag_gameplay::projectile::KMH_PER_UNIT_PER_SECOND,
+                );
+            }
+            if since == 70 && late_speed.is_none() {
+                late_speed = Some(
+                    live.velocity.length() * oag_gameplay::projectile::KMH_PER_UNIT_PER_SECOND,
+                );
             }
         }
     }
@@ -276,6 +321,61 @@ fn a_plasma_fired_on_a_real_track_is_one_bolt_and_it_flies() {
         "the bolt moved {furthest:.1} units, less than the craft covers in one \
          tick - it is not flying"
     );
+
+    // The release-time reading itself: `Plasma_Launch` re-reads the firing
+    // craft's velocity at the moment the charge ends, not at the moment the
+    // press started it - `docs/ghidra/functions/psp-pulse-usa/plasma.md`'s
+    // "the charge is real" section. `crates/gameplay/src/projectile/plasma/tests.rs`'s
+    // `the_launch_speed_reads_the_crafts_velocity_at_release_not_at_the_press`
+    // is the same claim on a hand fixture with a fixture table; this is the
+    // same claim against the shipped table and a real circuit's own physics -
+    // and it is what caught this port's own first attempt reading the craft's
+    // velocity on *every* charging tick rather than only the last one.
+    if let Some((release_tick, craft_kmh, launch_kmh)) = release {
+        println!(
+            "released on tick {release_tick}: craft was doing {craft_kmh:.1} km/h, \
+             bolt's own launch speed is {launch_kmh:.1} km/h"
+        );
+        assert!(
+            (launch_kmh - (craft_kmh + plasma.launch_speed)).abs() < 1.0,
+            "the bolt's launch speed is {launch_kmh:.1} km/h, not the craft's own \
+             {craft_kmh:.1} plus the authored launchSpeed ({})",
+            plasma.launch_speed
+        );
+    } else {
+        println!(
+            "the bolt never released inside the window this test drove - {}",
+            detonated_after.map_or_else(
+                || "still charging when the run ended".to_string(),
+                |t| format!("it detonated on tick {t} while still charging")
+            )
+        );
+    }
+
+    // The ramp itself: strictly between the release speed and the class speed
+    // partway through, at the class speed once it is over - the class speed
+    // read off the disc's own table, never hardcoded, per ADR-0006.
+    let class_kmh = plasma.speed_for(oag_tables::handling::SpeedClass::Venom);
+    if let (Some((_, _, launch_kmh)), Some(mid)) = (release, mid_speed) {
+        let low = launch_kmh.min(class_kmh);
+        let high = launch_kmh.max(class_kmh);
+        assert!(
+            mid > low + 1.0 && mid < high - 1.0,
+            "expected the bolt strictly between its launch speed ({launch_kmh:.1}) \
+             and the class speed ({class_kmh:.1}) half a second after release, got {mid:.1}"
+        );
+    } else {
+        println!("mid-ramp speed not measured - the bolt did not survive that long");
+    }
+    if let Some(late) = late_speed {
+        assert!(
+            (late - class_kmh).abs() < 5.0,
+            "expected the class speed ({class_kmh:.1}) once the one-second ramp is \
+             over, got {late:.1}"
+        );
+    } else {
+        println!("post-ramp speed not measured - the bolt did not survive that long");
+    }
 
     // Whatever happened to it, the blast numbers behind it are the Plasma's own
     // and are still reachable. A weapon that reaches an impact with no authored
