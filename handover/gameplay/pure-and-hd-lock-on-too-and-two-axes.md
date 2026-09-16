@@ -79,11 +79,16 @@ title showing the reticle over a craft ahead.
   finding above is that the original reveals the four one at a time as the
   lock progresses, which this engine does not reproduce. Pure still authors
   none, unchanged.
-- **The LeachBeam's distance-breakpoint table is unnamed.** Both
-  `Hud_UpdateMissileSight` and `Hud_UpdateLeachBeamSight` index a
-  weapon-stats-shaped pointer by small negative offsets to decide which
-  widget's hide bit to clear; naming that table is what would turn "chosen"
-  above into "measured".
+- ~~**The LeachBeam's distance-breakpoint table is unnamed.**~~ **Corrected
+  and ported, 2026-09-16.** There was no table: `hud-sight.md`'s own
+  2026-09-15 pass had misread three TOC-relative literal loads as a
+  weapon-stats pointer index; they are three static floats, exact quarters of
+  the shared `0.5` s hold constant. `oag_race::sight::Sight::hold_progress`
+  and `oag_game::hud::sight_draw::leach_reveal_draws` now drive HD/2048's
+  three-ring reveal off it, scaled onto this engine's own `HOLD_SECONDS`
+  rather than HD's absolute seconds - see `lock-sight.md`'s own
+  "Colour and blink, resolved" pass for the sibling colour finding from the
+  same session.
 - **Pure's Eliminator tuning is one file, and nothing reads the axis's second
   row.** `oag_title::weapons::Weapons::elimination` is carried and unread:
   `Race::load` opens the race table for every mode on every title.
@@ -104,22 +109,76 @@ title showing the reticle over a craft ahead.
   timetodie` is an `Option`, `None` is a charge that sits until tripped
   (`Drop::fuse = NO_FUSE`), and `damageradius` (`0x08b1786c`) has **no
   reader** in the executable - the evidence page's Bomb section.
-- **The far-target alpha and HD's own blink** are still unreproduced, as on
-  Pulse. `hud-sight.md`'s colour writes go through `Image_SetVertexColours`
-  with a computed alpha byte; whether any of that arithmetic is the PSP's
-  same 96/255 ratio is unchecked.
+- ~~**The far-target alpha ... is still unreproduced.**~~ **Read in full,
+  2026-09-16, on the PSP side - not a tuning constant at all.** Pulse's
+  "near" test samples the rendered frame's own Z-buffer at the reticle's
+  previous screen position (`Hud_SampleSightDepth`, `g_hud_sight_depth_sample`
+  - see `lock-sight.md`'s new section). Still not ported: reproducing it needs
+  a depth buffer inside `oag_race`, which the dependency rules forbid. **HD's
+  own blink is still unread** - whether `Image_SetVertexColours`'s alpha byte
+  on that binary follows the PSP's 96/255 ratio remains unchecked.
+
+## 2026-09-16: the reticle's colour, off byte order and gameplay-hash checks
+
+Reported from play: "the lock-on mechanisms for missile and leech beam are
+implemented, but do not look exactly like the original." Closed the three
+measured-but-unreproduced gaps this thread and `lock-sight.md` already named,
+plus the LeachBeam reveal port `hud-sight.md`'s 2026-09-15 pass had found but
+not wired up:
+
+- **The reticle's hue is recovered and built.** `HudSight_Update`'s packed
+  colour word, read against this project's own established byte order (the
+  same one `Loading_DrawWave`'s ramp fixed): locked is red, seeking
+  alternates yellow (full brightness) with white ([`BLINK_TINT`] the
+  brightness). `oag_race::sight::Sight::tint` now returns `[r,g,b]`;
+  `Sight::brightness` keeps the old scalar for HD's own-coloured concentric
+  widgets, which are deliberately not given this hue - HD authors its own
+  ring colours and nothing has read whether its blink shares this mechanic.
+  Screenshotted on `pulse-psp-eu.chd`: yellow while seeking, white on the
+  alternating blink phase, red once locked - see the lane report for paths.
+- **The far-target alpha step is not a tuning constant.** It samples the
+  rendered frame's own Z-buffer at the reticle's previous screen position, a
+  one-frame-lagged occlusion test - `oag_race` cannot reach a depth buffer
+  (`CLAUDE.md`'s dependency rules), so this stays unported, now for a
+  structural reason rather than an unread global.
+- **HD/2048's LeachBeam reveal is ported.** `Sight::hold_progress` (0..1,
+  scaled onto this engine's own `HOLD_SECONDS`) drives
+  `sight_draw::leach_reveal_draws`, replacing the old all-four-together draw
+  with the measured one-ring-at-a-time reveal, at reduced confidence because
+  the port scales HD's absolute quarter-seconds onto a different hold
+  constant. Screenshotted on `hdfury-ps3-eu-dec.iso`.
+- **`Sight` carries no `World`/hash coverage** - it lives on `Race`'s own
+  view state, not `sim.world` (`crates/game/src/race/weapons.rs`), so none of
+  the above moved a determinism hash. Checked directly, not assumed.
+- **`HOLD_SECONDS` untouched, deliberately** - still the PSP's `0.8` on every
+  title; the HD-vs-PSP hold-time question above remains unresolved by this
+  pass, on purpose.
+
+New tests: `oag-game`'s `reticle_tests.rs` gained a hue test and a
+progressive-reveal test with the fixture's own rect-size assertions since the
+BG and Outer widgets are authored at the same size and only the count (not
+the identity) is checkable for that stage; two existing "all four together"
+LeachBeam tests were rewritten for the new behaviour rather than deleted. All
+ten `lock_sight_ground_truth` tests still pass against real discs.
 
 ## Next Steps
 
-- Name the distance-breakpoint table `Hud_UpdateLeachBeamSight` (and
-  `Hud_UpdateMissileSight`) index, to settle the reveal order the widgets
-  fill in and replace the engine's current all-four-together choice with the
-  measured one.
 - Check whether `Hud_UpdateMissileSight`'s own `LockedOnLines`/
-  `LockedOnMiddle` toggle is the same distance-reveal mechanism as the
-  LeachBeam's, rather than the flat "additive" reading at 70.
+  `LockedOnMiddle` toggle is the same threshold-reveal mechanism as the
+  LeachBeam's or a flat all-or-nothing pair-add - `hud-sight.md`'s 2026-09-16
+  pass narrowed this to confidence 60 ("closer to all-or-nothing") without
+  fully tracing `Hud_UpdateMissileSight`'s own accumulator
+  (`param_2+0xec`); not adopted into the engine's still-additive reading at
+  70 pending that trace.
 - Decide whether HD's measured `0.5` s hold becomes a per-title
   `oag_race::sight` constant or stays the PSP's `0.8` on every title; either
   is a gameplay-crate change and a hash move, not this lane's.
+- Read HD's own blink arithmetic (if any) to say whether
+  `Sight::brightness`'s reused PSP scalar is right for the concentric
+  dialect or just an unverified placeholder that happens not to be wrong yet.
+- `FUN_0890906c` (`0x0890906c`, `psp-pulse-usa`) is read only as far as "it
+  samples the sight's own depth and also does something else with a
+  neighbourhood count" - below 50 confidence on the second half, not named.
+  A full read would settle what `*(float*)(DAT_08b62d34+0x74)` feeds.
 - Finish the Disruptor's three unbuilt effects and its visuals; see the
   struck-through item above for the addresses.

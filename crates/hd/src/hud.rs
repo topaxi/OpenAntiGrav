@@ -93,8 +93,9 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     // composed layouts (checked, not assumed -
     // `crates/game/tests/lock_sight_ground_truth.rs`), so unlike the Missile's
     // pair above there is no second widget for a lock to add. **Which of the
-    // four draws when is chosen, not measured** - see `Sights::Concentric`'s
-    // own `leach` field doc for what a capture would settle.
+    // four draws when is measured and ported, at reduced confidence** - see
+    // `Sights::Concentric`'s own `leach` field doc for the reveal law and
+    // what this engine's own hold constant means for it.
     sights: &oag_title::hud::Sights::Concentric {
         seeking: &[
             "MissileSightBG",

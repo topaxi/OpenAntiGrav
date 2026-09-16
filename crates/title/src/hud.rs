@@ -181,26 +181,23 @@ pub enum Sights {
         /// shape at 88/88/64/40 px, corroborating it in a second title on
         /// the same dialect.
         ///
-        /// **Which of the four is up when is chosen in code, not measured,
-        /// and this field's own runtime behaviour carries no confidence
-        /// score - the reveal *law* now is measured, this axis still draws
-        /// all four together regardless.** [`hud-sight.md`]'s own
-        /// `Hud_UpdateLeachBeamSight` (`0x00090d30`) reading (2026-09-15,
-        /// confidence 88) found the four are not "all four, always": Outer,
-        /// Middle and Inner each get one exclusive quarter of the 0.5 s hold
-        /// window (`t <= 0.125`s shows Outer, `0.125 < t <= 0.25` shows
-        /// Middle, `0.25 < t <= 0.375` shows Inner, past that only BG shows
-        /// until the lock completes), read off three literal TOC-relative
-        /// float constants - not a distance table as an earlier pass of that
-        /// page guessed. **Not wired up**: `oag_race::sight::Sight` exposes
-        /// only `locked()`/`visible()`, no hold-time accumulator or 0-1
-        /// progress fraction a draw call could key this table on, so driving
-        /// it needs a new accessor on that type - a `crates/race` change
-        /// outside this axis's own crate boundary. Until that lands, "all
-        /// four, whenever the LeachBeam reticle is up at all" is what draws,
-        /// which is a good enough placeholder for a widget existence question
-        /// this project has answered (confidence 90) standing in for a
-        /// reveal order it now has not merely lacked, but cannot yet drive.
+        /// **Which of the four is up when is now ported, at reduced
+        /// confidence relative to the widget existence question above.**
+        /// [`hud-sight.md`]'s own `Hud_UpdateLeachBeamSight` (`0x00090d30`)
+        /// reading (2026-09-15, confidence 88) found the four are not "all
+        /// four, always": Outer, Middle and Inner each get one exclusive
+        /// quarter of HD's own `0.5` s hold window (`t <= 0.125`s shows
+        /// Outer, `0.125 < t <= 0.25` shows Middle, `0.25 < t <= 0.375` shows
+        /// Inner, past that only BG shows until the lock completes), read off
+        /// three literal TOC-relative float constants - not a distance table
+        /// as an earlier pass of that page guessed. `oag_game::hud::sight_draw`
+        /// (`leach_reveal_draws`) drives this off
+        /// [`oag_race::sight::Sight::hold_progress`] - a 0..1 fraction of
+        /// *this engine's own* `HOLD_SECONDS` (the PSP's `0.8`, not HD's
+        /// `0.5` - see that constant's own doc), scaled onto the same
+        /// quarters HD's own code uses rather than HD's absolute second
+        /// marks. So the shape is measured and ported; the exact second at
+        /// which each ring changes on this title is not HD's own.
         ///
         /// [`hud-sight.md`]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/ghidra/functions/ps3-hdfury-eu/hud-sight.md
         leach: Option<[&'static str; 4]>,
