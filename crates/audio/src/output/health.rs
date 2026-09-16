@@ -18,10 +18,39 @@
 //! `starved` and `clipped` come from [`Mixer`](crate::Mixer) and are reported
 //! alongside because a refused voice and a saturating mix are two more things
 //! that sound like a fault and are neither of the three.
+//!
+//! # Which of them is worth a warning
+//!
+//! Only a **fault**: a dropped buffer, a late callback, a refused voice. Those
+//! are things this process or the device path did wrong, and every one of them
+//! is zero on a healthy run, so a non-zero count is news.
+//!
+//! A jump count and a clip count are **readings of the content**, not faults,
+//! and both are non-zero on every healthy race: `JUMP` sits below the engine
+//! bed's own 99.9th-percentile step, so a loud eight-craft mix crosses it a
+//! hundred times a second by itself, and the mix saturates because the
+//! original's chain reserves no headroom either (see `Mixer::render`). Until
+//! 2026-09-15 they shared the fault line's `warn`, and a race on an idle
+//! machine with `0 dropped, 0 late` on every line still read as a machine
+//! struggling. Two taps of the device's own input (`--tap-audio`, Pulse and
+//! HD, 30 and 40 s) settled which it was: no gap, no held sample outside the
+//! clamp's own flat tops, every step over the threshold uniform across the
+//! buffer and chunk seams, and the "worst at frame 136" that recurred across
+//! runs and machines was a full-scale transient decaying off the clamp - a
+//! one-shot cue's own attack, not a seam. That it sits at the same offset
+//! every time is what a voice starting at a chunk boundary predicts (a
+//! `play` lands between two `Mixer::render` passes, so a cue's attack is a
+//! fixed distance into a 512-frame chunk), and is consistent with the tap,
+//! not proven by it. Content, in other words. So a window with nothing but
+//! content in it now logs at `trace`, where `RUST_LOG=oag_audio=trace` still
+//! finds it - which means the clip rate is only reachable on purpose now, and
+//! a regression in it will not announce itself during ordinary play. The
+//! counters themselves are untouched, and nothing here is a threshold raised
+//! to make a line quieter.
 
 use std::sync::atomic::{AtomicU32, AtomicU64, Ordering::Relaxed};
 
-use log::warn;
+use log::{trace, warn};
 
 /// Frames between two reports, at 60 Hz about two seconds - short enough that
 /// a fault happening "every few seconds" lands in a window of its own.
@@ -63,6 +92,7 @@ pub struct Health {
     worst_late_us: AtomicU64,
 
     since_report: AtomicU32,
+    said_buffers: AtomicU64,
     said_dropped: AtomicU64,
     said_jumps: AtomicU64,
     said_late: AtomicU64,
@@ -183,11 +213,18 @@ impl Health {
     /// moved *together*: late callbacks with no jumps is the device path, jumps
     /// with no late callbacks is our own mix, and drops with neither is the
     /// mixer lock.
+    ///
+    /// The line is a `warn` only when a fault moved - a drop, a late callback,
+    /// a refused voice. A window that moved nothing but the content readings
+    /// goes out at `trace`; see the module docs for why those two are not
+    /// faults and what was measured to say so.
     pub(crate) fn report(&self, starved: u64, clipped: u64) {
+        let buffers = self.buffers.load(Relaxed);
         let dropped = self.dropped.load(Relaxed);
         let jumps = self.jumps.load(Relaxed);
         let late = self.late.load(Relaxed);
 
+        let d_buffers = buffers - self.said_buffers.swap(buffers, Relaxed);
         let d_dropped = dropped - self.said_dropped.swap(dropped, Relaxed);
         let d_jumps = jumps - self.said_jumps.swap(jumps, Relaxed);
         let d_late = late - self.said_late.swap(late, Relaxed);
@@ -195,29 +232,40 @@ impl Health {
         let d_clipped = clipped.saturating_sub(self.said_clipped.swap(clipped, Relaxed));
 
         let worst_jump = self.worst_jump.swap(0, Relaxed) as f32 / 1000.0;
+        let fault = d_dropped > 0 || d_late > 0 || d_starved > 0;
         // Reported on the worst step alone as well as on the counters, because
         // a mix that is stepping by a fifth of full scale is audible and counts
         // as none of the five.
-        if d_dropped == 0
-            && d_jumps == 0
-            && d_late == 0
-            && d_starved == 0
-            && d_clipped == 0
-            && worst_jump < QUIET_STEP
-        {
+        if !fault && d_jumps == 0 && d_clipped == 0 && worst_jump < QUIET_STEP {
             return;
         }
 
         let worst_late = self.worst_late_us.swap(0, Relaxed) as f32 / 1000.0;
         let jump_at = self.worst_jump_at.load(Relaxed);
-        warn!(
-            "audio: {d_dropped} dropped, {d_jumps} jump(s) in the mix \
-             (worst {worst_jump:.3} at frame {jump_at}), \
-             {d_late} late callback(s) (worst {worst_late:.1} ms over), \
-             {d_starved} voice(s) refused, {d_clipped} sample(s) clipped \
-             - of {} buffer(s) of {} frame(s) so far",
-            self.buffers.load(Relaxed),
-            self.buffer_frames.load(Relaxed)
+        let buffer_frames = self.buffer_frames.load(Relaxed);
+        // As a share of the window's own samples, because "17 clipped" reads
+        // as a fault and "0.015 %" reads as what it is; the original's own
+        // race mix measures 0.044 % live (`audio-levels.md`). Approximate: the
+        // numerator is counted by the render thread a queue-depth ahead of the
+        // callbacks the denominator counts, so the two windows are offset by
+        // the ring's occupancy and the share reads high while it first fills.
+        let window_samples = d_buffers * buffer_frames * crate::mixer::CHANNELS as u64;
+        let clipped_share = if window_samples == 0 {
+            0.0
+        } else {
+            d_clipped as f64 * 100.0 / window_samples as f64
+        };
+        let line = format!(
+            "audio: {d_dropped} dropped, {d_late} late callback(s) \
+             (worst {worst_late:.1} ms over), {d_starved} voice(s) refused; \
+             {d_jumps} step(s) over {JUMP} in the mix (worst {worst_jump:.3} \
+             at frame {jump_at}), {d_clipped} sample(s) clipped ({clipped_share:.3} %) \
+             - of {buffers} buffer(s) of {buffer_frames} frame(s) so far"
         );
+        if fault {
+            warn!("{line}");
+        } else {
+            trace!("{line}");
+        }
     }
 }

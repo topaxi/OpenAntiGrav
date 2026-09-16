@@ -484,11 +484,19 @@ where
             let now = Instant::now();
             if let Some(previous) = previous {
                 // Against the *previous* buffer's playing time, which is this
-                // one's in every configuration cpal offers. Twice it, because a
-                // period's worth of jitter is ordinary and only a gap is not.
+                // one's in every configuration cpal offers. Half a period of
+                // slack, not a whole one: this fired only past `owed * 2` until
+                // 2026-09-15, which let a callback a full period late - one
+                // PipeWire xrun, exactly the fault that sounds like a skip -
+                // count as nothing, so a run reading `0 late callback(s)` had
+                // not actually ruled the device path out. Half a period is
+                // still clear of ordinary jitter: at this bound a 60 s HD race
+                // on an idle PipeWire graph (1,024-frame quantum) counted one
+                // late callback, the race's own load stall (`frame: 138.5 ms`
+                // beside it), with `pw-top` reporting zero xruns throughout.
                 let owed = Duration::from_secs_f32(frames as f32 * seconds_per_frame);
                 let elapsed = now.duration_since(previous);
-                if elapsed > owed * 2 {
+                if elapsed > owed * 3 / 2 {
                     callback_health.late((elapsed - owed).as_micros() as u64);
                 }
             }
