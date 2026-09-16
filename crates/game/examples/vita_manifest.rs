@@ -9,7 +9,7 @@ fn main() -> anyhow::Result<()> {
         .filter(|p| p.to_ascii_lowercase().contains(&needle))
         .collect();
     hits.sort();
-    for p in hits.iter().take(40) {
+    for p in hits.iter().take(400) {
         println!("{p}");
     }
     println!("({} of {} entries)", hits.len(), archive.paths().len());

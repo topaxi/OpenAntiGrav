@@ -24,5 +24,8 @@
 pub mod gxp;
 pub mod hd_pvs;
 pub mod points2;
+pub mod rcsanimclip;
 pub mod rcsmaterial;
 pub mod rcsmodel;
+pub mod rcsskeleton;
+pub mod rig;

@@ -137,6 +137,7 @@ here plays it yet, per CLAUDE.md's "draw nothing and say so" rule.
 | Engine trails | 🟩 built - [trail-ribbon.md](../rendering/trail-ribbon.md) | ⬜ `?` | ⬜ `?` |
 | Weapon models | 🟨 partial - Mine/Bomb located, not drawn ([pickups.md](../gameplay/pickups.md#what-is-not-built)) | ⬜ `?` | ⬜ `?` |
 | Animated textures | 🟩 built - [scenery-animation.md](../rendering/scenery-animation.md) | 📖 read - [README.md](../rendering/README.md) | ⬜ `?` |
+| Animated scenery (nodes) | 🟩 built - [scenery-animation.md](../rendering/scenery-animation.md) | 🟩 built - `Anim Transform`, [README.md](../rendering/README.md) | 🟩 built - `.rcsskeleton`/`.rcsanimclip` rig, checked node by node against HD's authored `Anim Transform`s on the twelve shared circuits ([2048-animation.md](../formats/2048-animation.md), [psp2_scenery_animation_ground_truth.rs](../../crates/render/tests/psp2_scenery_animation_ground_truth.rs)); Zone's and the start grid's clips not wired |
 | Bloom/grading/motion blur | 📖 read only - not ported ([roadmap.md](roadmap.md#m6---rendering-fidelity)) | ⬜ `?` | ⬜ `?` |
 | Upscaling | 🟩 built - FSR3 wired ([fsr3.md](../rendering/fsr3.md), [dynamic-resolution.md](../rendering/dynamic-resolution.md)) | ➖ n/a | ➖ n/a |
 

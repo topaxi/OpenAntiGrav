@@ -605,13 +605,18 @@ fn every_ps2_teams_boost_plume_hangs_two_meshes_off_two_animated_anchors() {
             }
 
             for (index, anim) in model.anim_nodes.iter().enumerate() {
+                // A PS2 plume is a `.vex` node; the rig form is 2048's and
+                // has no business here.
+                let oag_render::mesh::Motion::Vex(transform) = &anim.transform else {
+                    panic!("{name}: anchor {index} is not a .vex Anim Transform");
+                };
                 assert!(
-                    anim.transform.rotation.is_empty(),
+                    transform.rotation.is_empty(),
                     "{name}: anchor {index} carries a rotation track, which nothing here \
                      accounts for"
                 );
                 assert!(
-                    !anim.transform.scale.is_empty(),
+                    !transform.scale.is_empty(),
                     "{name}: anchor {index} carries no scale track - the plume's authored \
                      flicker has gone, and the draw loop's clock has nothing left to drive"
                 );
@@ -621,10 +626,10 @@ fn every_ps2_teams_boost_plume_hangs_two_meshes_off_two_animated_anchors() {
                 // 1.5; a track that dropped below it would wrap mid-boost and
                 // that argument would need re-making.
                 assert!(
-                    anim.transform.loop_seconds > 1.5,
+                    transform.loop_seconds > 1.5,
                     "{name}: anchor {index} loops at {:.4} s, inside the {:.1} s a plume \
                      stays up - see race::scene::frame on why the reveal timer was chosen",
-                    anim.transform.loop_seconds,
+                    transform.loop_seconds,
                     oag_render::exhaust::PLUME_SECONDS,
                 );
             }
