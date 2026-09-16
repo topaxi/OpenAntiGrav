@@ -1305,6 +1305,27 @@ The seconds are at [the assumed rate](#not-determined), which is not recovered.
 `--cue` filters the same way, so `--cue COLLISION` over a whole archive finds
 every bank that has one.
 
+## Coverage
+
+`oag_formats::sblk_coverage` (a byte-range instrument only - it does not
+touch the sample-rate or opcode questions below) claims the container
+header, the `SBlk` block header, the cue table, the command table, the
+waveform data, every resolved waveform descriptor and every reachable name
+table entry. Swept across all 39 PSP banks
+(`crates/formats/tests/sblk_coverage_ground_truth.rs`): **99.51%** of
+8,864,480 bytes, and the two shapes of gap it found both trace to open
+questions already on this page rather than to anything new:
+
+- **1,024 bytes between two waveform descriptors** on the worst bank.
+  `Bank::sounds` resolves a descriptor only for the two opcodes this page has
+  traced (`0x01`, `0x09`); a descriptor reached only by one of the other 35
+  unread opcodes is not resolved, and so not claimed. Consistent with "The
+  command opcodes" below, not a separate finding.
+- **40-60 byte runs between name table entries.** `Bank::sound_names` walks
+  every bucket's hash chain, and an entry no chain reaches is a slot the
+  runtime's own lookup could not find either - dead space in the table
+  rather than an unread field.
+
 ## Not determined
 
 - ~~**Where each sound starts.**~~ **Solved and validated** - see [above](#where-each-sound-starts).

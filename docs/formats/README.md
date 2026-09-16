@@ -51,6 +51,7 @@ number.
 | `.mip` | **99.26 %** of 435 PSP files | the seven never-read bytes at `+0x09`, and every mip level past 0 on a mipmapped blob - see [psp-texture.md](psp-texture.md#coverage). |
 | `.fnt` | **99.94 %** of the PSP disc's 5 fonts | the reserved 20 bytes at `+0x1c` - see [fnt.md](fnt.md#coverage). |
 | `.gxt` | not measured this pass | blocked on `data/extracted/vita/PCSF00007` being unpopulated in this environment (the Vita package needs a one-time decrypt-and-extract this pass did not run); see `data/README.md`. |
+| `.bnk` (`SBlk`) | **99.51 %** of 8.86 MB, 39 PSP banks | descriptors reached only by one of the 35 unread command opcodes, and name-table entries no bucket chain reaches - see [psp-audio.md](psp-audio.md#coverage). |
 
 `crates/rcs/tests/coverage_ground_truth.rs` holds both as a **ratchet**:
 `.rcsmodel` must not fall below the floors, `.vex` must stay exact.
