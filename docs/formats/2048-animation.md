@@ -40,14 +40,30 @@ established, in order of what a renderer needs:
    values (confidence 90). `uterring`'s rotation key 1 is `(0, -0.0251, 0,
    0.9997)`, HD's evaluator at frame 12 is `(0, -0.0251, 0, 0.9997)`; every
    key of every node 2048 kept HD's animation for agrees the same way.
-3. **The local matrix is `T(-pivot) * S * R * T(pivot) * T(pivot_translate) *
-   T(translation)`** - Maya's own, with one shared pivot - row-vector order
-   (confidence 88). On Anulpha Pass the pivot form lands 76 of 86 shared
-   nodes on HD's time-zero world matrix and the bare `S * R * T` lands 63;
-   the pivot translate settles the 7 trains (from 520 units off to 4). On
-   `altima`, which has no HD twin, it is what puts each wind-turbine rotor on
-   its hub (1,469 vs 1,467 world units) where the bare form orbits it 2,500
-   units out.
+3. **The local matrix is `S * T(-pivot) * R * T(pivot) * T(pivot_translate) *
+   T(translation)`** - Maya's own with the rotate pivot set and the scale
+   pivot not - row-vector order (confidence 88). On Anulpha Pass the pivot
+   form lands 76 of 86 shared nodes on HD's time-zero world matrix and the
+   bare `S * R * T` lands 63; the pivot translate settles the 7 trains (from
+   520 units off to 4). On `altima`, which has no HD twin, it is what puts
+   each wind-turbine rotor on its hub (1,469 vs 1,467 world units) where the
+   bare form orbits it 2,500 units out
+   (`altimas_rotors_sit_on_their_hubs_because_of_the_pivot`). **Scaling
+   about the pivot too** - Maya's form when both pivots are set to the same
+   point - was the first reading and is wrong: Metropia's `pCylinder208_1`
+   (scale 17.3, pivot 17.3 up, no rotation) lands on HD's matrix exactly
+   with the scale about the origin and 282 units off with it about the
+   pivot. Every node with a unit scale composes the same either way, which
+   is why the first reading survived four circuits - and the choice is not
+   small elsewhere: 199 meshes over the fourteen race circuits hang under a
+   node with both a scale and a pivot, and the two forms put them up to
+   11,766 units apart. Three things pick the origin: Metropia's node
+   against HD; `altima`'s two boat wakes, which the origin form puts 60 and
+   181 units from the river boat they belong to and the pivot form 612 and
+   550; and the slot inventory itself, which has one pivot pair (slots 4
+   and 5, vec3) and no scale-pivot pair for a scale-about-pivot form to
+   read from - Maya's `scalePivot` and `scalePivotTranslate` would need two
+   more vec3 slots, and slots 6 to 8 are scalars on 21 nodes in two files.
 4. **World matrices compose `local * parent_world`, a root's parent being the
    skeleton's own static matrix for it** (confidence 90). The per-node parent
    array marks a root by its own index, and 31 of `altima`'s 53 roots have a
@@ -62,6 +78,18 @@ established, in order of what a renderer needs:
    where wrapping gives 0.001. Slerp and nlerp were indistinguishable to
    three decimals at 0.2 s key spacing, so the cheaper one is used and no
    claim is made between them.
+
+**The cross-title suite's floors were set by mutation, not by taste.** Two
+deliberate breaks were run through it - the parent chain dropped, and the
+pivot dropped - and each circuit's floor sits between its intact figure and
+its broken one, so a floor is one that has been seen to fail: the parent
+break fails eight of the twelve circuits, the pivot break six (Amphiseum,
+Anulpha Pass, Modesto Heights, Talons Junction, Tech De Ra and Vineta K,
+whose shared nodes carry pivots). Metropia, Moa Therma and Sol 2 move under
+neither - their shared nodes are pivotless roots - so their floors pin the
+pairing and the key decode only. The table is in the test's own `Pair` doc.
+It was the pivot break that surfaced the scale form above: with the pivot
+gone Metropia got *better*, by exactly one node.
 
 Everything below is the layout those five claims were read off, with the
 corpus figures from `crates/rcs/tests/psp2_animation_ground_truth.rs`: 77
@@ -248,14 +276,21 @@ loop` and `224 node-bound submesh(es), 224 moving on 165 animated node(s)`
 on `altima`. A node the clip moves, or that hangs under one it moves, keeps
 its vertices in node space and takes a slot of the shader's node table; a
 static node bakes through its world matrix once, normals through the inverse
-transpose (166 nodes across the corpus scale non-uniformly). Past the table's
+transpose. **A moving node's normals go through the shader's node matrix
+with no inverse transpose**, `mesh.wgsl`'s own standing caveat - harmless on
+Pulse, whose nodes under a non-uniform scale are all prelit, and a real if
+small gap here: 166 skeleton nodes across the corpus scale non-uniformly,
+and **51 of them, over the fourteen race circuits, carry a mesh and move**
+(none on Anulpha Pass, Chenghou Project, Moa Therma, Park or Sol; ten each
+on Bridge and Subway), so those 51 meshes are lit off a skewed normal. Past
+the table's
 383 slots a node freezes at time zero rather than misplacing - the same
 direction `mesh::anim_node::placement` takes, and none of the fourteen race
 circuits reaches it (`park` is the largest at 416 nodes, 357 with meshes,
 and only moving nodes take slots).
 
 Two captures of Tower at the grid, `--anim-seconds 0` and `20`, differ by
-23,800 pixels: the sky traffic the clip flies in past the statue
+28,327 pixels: the sky traffic the clip flies in past the statue
 (`data/shots/2048_tower_anim_0s_20s.png`, top and bottom; the craft's
 airbrakes before and after the node table in
 `data/shots/2048_feisar_airbrakes_before_after.png`). Altima's

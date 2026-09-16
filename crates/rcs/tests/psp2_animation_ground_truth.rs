@@ -321,7 +321,11 @@ fn altimas_rotors_sit_on_their_hubs_because_of_the_pivot() {
         })
         .collect();
     // World matrices at time zero, with the pivot pair in the composition
-    // or with the pivot's own translation term taken back out of it.
+    // or with the *bind* pose's pivot translation taken back out of it -
+    // an approximation of the pivotless form, since the sampled rotation is
+    // the clip's first key rather than the bind's; the margin asserted
+    // below is a thousand units against a two-unit fit, so the
+    // approximation cannot flip it.
     let world_at_zero = |pivot: bool| -> Vec<[f32; 16]> {
         let mut world = vec![rcsskeleton::IDENTITY; skeleton.nodes.len()];
         for &i in &skeleton.order() {

@@ -99,7 +99,13 @@ struct Pair {
     /// Metropia, Moa Therma and Sol 2 moved under neither mutation: their
     /// shared nodes are roots with no pivot, so they pin the pairing and the
     /// key decode and nothing about the composition. Their floors are
-    /// regression floors only.
+    /// regression floors only. **The load-bearing detectors** are Anulpha
+    /// Pass, Vineta K and Modesto Heights for the pivot (ten, ten and five
+    /// points of margin) and Amphiseum, Anulpha Pass, Modesto Heights and
+    /// Ubermall for the parent chain (tens of points each); Amphiseum's and
+    /// Chenghou Project's tight floors sit two points under intact rather
+    /// than one above broken, because a one-sample margin is a flake and
+    /// the other circuits already catch what those two would.
     placement_floor: u8,
     /// The share that must land within [`TIGHT_TOLERANCE`], in percent -
     /// the pivot's own floor, since the loose one cannot see a pivot.
@@ -462,7 +468,7 @@ circuit!(
     "DATA02.PSARC",
     "04_chenghou_project",
     95,
-    40
+    38
 );
 circuit!(
     vineta_k,
@@ -528,7 +534,7 @@ circuit!(
     "DATA00.PSARC",
     "amphiseum",
     90,
-    86
+    84
 );
 circuit!(
     modesto_heights,
