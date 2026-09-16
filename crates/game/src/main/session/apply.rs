@@ -373,6 +373,26 @@ impl Session {
                     return;
                 }
             },
+            // Applied by the next frame's composite, which resolves the name
+            // through the catalogue and rebuilds the pass if it changed - so
+            // the menu the player is standing on is drawn through the filter
+            // they just picked, which is the only way to choose one.
+            "graphics.screen_filter" => {
+                if let Some(profile) = self.render_profile_mut() {
+                    profile.screen_filter = text.clone();
+                }
+            }
+            "graphics.screen_filter_strength" => match text.parse::<display::FilterStrength>() {
+                Ok(strength) => {
+                    if let Some(profile) = self.render_profile_mut() {
+                        profile.screen_filter_strength = strength;
+                    }
+                }
+                Err(e) => {
+                    warn!("ignoring {setting} = {text:?}: {e}");
+                    return;
+                }
+            },
             "graphics.fov" => match text.parse::<display::Fov>() {
                 // Applied by the next frame the race draws, which builds its
                 // projection from this every time. Nothing else uses it: the

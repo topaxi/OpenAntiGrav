@@ -137,6 +137,15 @@
   [ADR-0037](../architecture/adr/0037-dynamic-resolution-varies-a-viewport-not-an-allocation.md).
   There is no controller, no cost signal and no setting, so that sub-rectangle
   is the whole target on every frame the game draws
+- [Screen filters](screen-filters.md) - **built**, 2026-09-16: one loadable
+  WGSL pass over the finished frame, after the UI composites and before the
+  grade, simulating the display a title was seen on. Five built-ins (the
+  PSP-3000 panel, the 1000/2000 panel, and three CRTs including the PS2's
+  interlaced television over composite), a `<config dir>/oag/shaders/`
+  directory a player's own presets load from live, and a per-title
+  `screen_filter` row on the GRAPHICS page. Not reverse engineering - nothing
+  on a disc authors a display - and the page says where every number came
+  from. [ADR-0053](../architecture/adr/0053-screen-filters-are-loadable-wgsl-after-the-composite.md)
 
 ## The art is raster, and that has a consequence
 

@@ -160,6 +160,10 @@ impl App {
         );
         let framebuffer = upscale::Framebuffer::new(&gpu.device, gpu.config.format, target)
             .context("building the upscale pipeline")?;
+        // Read once here and polled from the frame loop after: the built-ins
+        // are in the binary, and the player's directory is one `read_dir`.
+        let screen_filters =
+            oag_game::screen::Catalogue::load(oag_game::screen::Catalogue::directory());
 
         // Taken out of the boot before the front end takes the rest: it belongs
         // to the menus, which outlive the sequence that loaded it, and `--race`
@@ -338,6 +342,8 @@ impl App {
             pointer: crate::pointer::Window::default(),
             audio,
             music_discs: self.music_discs.clone(),
+            screen_filters,
+            missing_screen_filter: None,
             clock: TickClock::new(TickRate::DEFAULT),
             last: std::time::Instant::now(),
             meter: perf::Meter::new(),

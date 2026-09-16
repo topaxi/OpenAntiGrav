@@ -63,6 +63,7 @@ pub mod records;
 pub mod remix;
 pub mod render;
 pub mod scoreboard;
+pub mod screen;
 pub mod settings;
 pub mod source;
 pub mod sprite;

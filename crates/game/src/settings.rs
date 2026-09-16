@@ -60,7 +60,7 @@ mod render_profile;
 
 pub use controls::{Controls, TriggerSensitivity};
 pub use race::{Race, Remix};
-pub use render_profile::RenderProfile;
+pub use render_profile::{RenderProfile, SCREEN_FILTER_OFF};
 use render_profile::{ensure_known_titles, migrate_reconstruction_keys, migrate_render_profiles};
 
 /// Mirrors [`Anisotropy`] for serde, which cannot derive on a type this crate
@@ -805,6 +805,11 @@ pub fn menu_seeds(
             text(&profile.motion_blur.to_string()),
         ),
         ("graphics.shadows", text(&profile.shadows.to_string())),
+        ("graphics.screen_filter", text(&profile.screen_filter)),
+        (
+            "graphics.screen_filter_strength",
+            text(&profile.screen_filter_strength.to_string()),
+        ),
         ("graphics.anisotropy", text(&anisotropy.to_string())),
         ("graphics.fov", text(&settings.graphics.fov.to_string())),
         (

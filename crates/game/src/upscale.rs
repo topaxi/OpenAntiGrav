@@ -72,7 +72,7 @@ use log::{info, warn};
 
 use oag_render::post::{fsr1, fsr3, fullscreen_layout, fxaa, smaa};
 
-use oag_display::display::{Brightness, Gamma, Reconstruction, Scale};
+use oag_display::display::{Brightness, Gamma, Reconstruction};
 
 /// Everything the blit needs that a player chose, gathered so the window's
 /// frame loop and a capture can be handed the same thing.
@@ -96,9 +96,11 @@ pub struct Presentation {
 }
 
 mod blit;
+mod screen;
 mod targets;
 mod temporal;
 
+pub use screen::{Composite, ScreenFrame};
 pub use temporal::{Temporal, jitter_phases};
 
 use blit::{Grade, Source, bind, grade_buffer, resolved_source};
@@ -109,6 +111,7 @@ use blit::{Grade, Source, bind, grade_buffer, resolved_source};
 // menu definition against this crate's warning conditions - a claim about
 // both sides at once, which only a crate that can see both can make.
 pub use blit::magnifies;
+pub use targets::target_size;
 use targets::{output, target};
 
 /// The offscreen target and the pipeline that puts it on screen.
@@ -183,6 +186,9 @@ pub struct Framebuffer {
     /// on top of it before one graded pass writes the surface. See [`Output`]
     /// and [ADR-0036](../../../docs/architecture/adr/0036-ui-composites-at-presentation-resolution.md).
     output: Output,
+    /// The screen filter between [`Framebuffer::output`] and the grade, when
+    /// a profile names one. See [`screen`].
+    screen: Option<screen::ScreenFilter>,
 }
 
 /// The presentation-sized target, between the upscale and the surface.
@@ -308,6 +314,7 @@ impl Framebuffer {
             extent: size,
             format,
             output,
+            screen: None,
         })
     }
 
@@ -756,35 +763,47 @@ impl Framebuffer {
         self.output.size
     }
 
-    /// Puts the presentation target on the surface, graded.
+    /// Puts the presentation target on the surface, graded - through the
+    /// screen filter first, if [`Framebuffer::set_screen_filter`] named one.
     ///
     /// The other half of [`Framebuffer::resolve_scene`], and the pass that has
     /// to come last: everything a player sees, the UI included, is in the
     /// target by now, so this is the one place brightness and gamma can be
-    /// applied to *all* of it. One to one, no resampling - the target is the
-    /// surface's own size, and the aspect bars are already in it from the
-    /// clear `resolve_scene` did.
+    /// applied to *all* of it - and, for the same reason, the one place a
+    /// display simulation can be drawn over all of it. The filter runs
+    /// before the grade, not after: it is part of the picture, and the grade
+    /// is the monitor. See [`screen`]. One to one, no resampling - the target
+    /// is the surface's own size, and the aspect bars are already in it from
+    /// the clear `resolve_scene` did.
     pub fn composite(
         &mut self,
+        device: &wgpu::Device,
         queue: &wgpu::Queue,
         encoder: &mut wgpu::CommandEncoder,
         surface: &wgpu::TextureView,
-        brightness: Brightness,
-        gamma: Gamma,
+        frame: Composite,
     ) {
         // Never a decode. The target is `self.format`, which ADR-0020 forces
         // non-sRGB at every real call site, and it is read through an ordinary
         // view rather than the perceptual twin an upscaler wants - so the bytes
         // arrive in the space they were written in. The flag belongs to
         // `resolve_scene`, which is the pass that reads a post-process output.
-        let wanted = Grade::new(brightness, gamma, false);
+        // A filter's output is the same format and the same space, so the
+        // flag is the same either way.
+        let wanted = Grade::new(frame.brightness, frame.gamma, false);
         if wanted != self.output.graded {
             queue.write_buffer(&self.output.grade, 0, bytemuck::bytes_of(&wanted));
             self.output.graded = wanted;
         }
+        let filtered = self.filter_output(device, queue, encoder, frame.screen);
         let size = self.output.size;
         let rect = (0.0, 0.0, size.0 as f32, size.1 as f32);
-        self.present(encoder, surface, rect, Some(&self.output.bind_group));
+        self.present(
+            encoder,
+            surface,
+            rect,
+            Some(filtered.as_ref().unwrap_or(&self.output.bind_group)),
+        );
     }
 
     /// Makes sure the **allocation** is `size`, rebuilding it if it is not.
@@ -941,26 +960,6 @@ impl Framebuffer {
     }
 }
 
-/// How big the offscreen target should be for a viewport rectangle and a scale.
-///
-/// Clamped at both ends. The floor is one pixel, because a minimised window and
-/// a 25 % scale can otherwise multiply out to zero and a zero-sized texture is a
-/// validation error. The ceiling is `limit`, the device's own maximum texture
-/// dimension: 200 % of a 4K window is 7680 wide, which is past what some
-/// adapters allow, and silently rendering slightly smaller is better than
-/// refusing to draw.
-#[must_use]
-pub fn target_size(rect: (f32, f32, f32, f32), scale: Scale, limit: u32) -> (u32, u32) {
-    let factor = scale.factor();
-    let scaled = |value: f32| {
-        let pixels = (value * factor).round();
-        // `as u32` saturates at 0 for negatives and at u32::MAX above, so the
-        // clamp below is the only bound that has to be reasoned about.
-        (pixels.max(1.0) as u32).clamp(1, limit.max(1))
-    };
-    (scaled(rect.2), scaled(rect.3))
-}
-
 /// Marks `Framebuffer` as holding a texture whose contents are a frame.
 ///
 /// Purely documentary: `texture` is not read outside this module today, and
@@ -983,3 +982,7 @@ mod tests;
 // against `just check-size`'s 1,000-line ratchet.
 #[cfg(test)]
 mod extent_tests;
+
+// The screen filter's own tests, beside `extent_tests` for the same reason.
+#[cfg(test)]
+mod screen_tests;

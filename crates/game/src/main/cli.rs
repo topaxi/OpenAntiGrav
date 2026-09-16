@@ -805,6 +805,18 @@ pub(crate) struct Cli {
     #[arg(long)]
     pub(crate) shadows: Option<oag_display::display::Shadows>,
 
+    /// Which screen filter draws the finished frame: `off`, a built-in such
+    /// as `psp-3000` or `crt-interlaced`, or the stem of a `.wgsl` file in
+    /// `<config dir>/oag/shaders/`.
+    ///
+    /// Overrides `[render_profiles.<title>] screen_filter` for *every* title,
+    /// for this run only, the way `--shadows` does. **Only visible under
+    /// `--presented`** in a capture, for the reason the grade is: an ordinary
+    /// `--screenshot` is the scene as drawn. See
+    /// `docs/rendering/screen-filters.md`.
+    #[arg(long, value_name = "ID")]
+    pub(crate) screen_filter: Option<String>,
+
     /// Start the craft at this world position instead of on its grid slot:
     /// `x,y,z` or `x,y,z,yaw`, `yaw` in degrees off the track's own direction
     /// there.

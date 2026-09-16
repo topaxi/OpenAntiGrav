@@ -9,7 +9,7 @@
 use anyhow::Result;
 
 use super::{Grade, Output, bind, grade_buffer};
-use oag_display::display::{Brightness, Gamma};
+use oag_display::display::{Brightness, Gamma, Scale};
 
 /// Builds the presentation-sized target and the bind group that reads it.
 ///
@@ -94,4 +94,24 @@ pub(super) fn target(
     });
     let bind_group = bind(device, layout, sampler, grade, &view);
     (texture, view, perceptual, bind_group)
+}
+
+/// How big the offscreen target should be for a viewport rectangle and a scale.
+///
+/// Clamped at both ends. The floor is one pixel, because a minimised window and
+/// a 25 % scale can otherwise multiply out to zero and a zero-sized texture is a
+/// validation error. The ceiling is `limit`, the device's own maximum texture
+/// dimension: 200 % of a 4K window is 7680 wide, which is past what some
+/// adapters allow, and silently rendering slightly smaller is better than
+/// refusing to draw.
+#[must_use]
+pub fn target_size(rect: (f32, f32, f32, f32), scale: Scale, limit: u32) -> (u32, u32) {
+    let factor = scale.factor();
+    let scaled = |value: f32| {
+        let pixels = (value * factor).round();
+        // `as u32` saturates at 0 for negatives and at u32::MAX above, so the
+        // clamp below is the only bound that has to be reasoned about.
+        (pixels.max(1.0) as u32).clamp(1, limit.max(1))
+    };
+    (scaled(rect.2), scaled(rect.3))
 }

@@ -381,6 +381,14 @@ pub(crate) struct Session {
     pub(crate) quit: bool,
     /// What the menus need, when this run has menus at all.
     pub(crate) shell: Option<Shell>,
+    /// Every screen filter this run can offer: the built-ins and the player's
+    /// own `shaders/` directory, polled once a second by the frame loop so a
+    /// saved edit shows without a restart. See `oag_game::screen`.
+    pub(crate) screen_filters: oag_game::screen::Catalogue,
+    /// The last `screen_filter` id the profile named that the catalogue could
+    /// not find, so the frame loop says so once rather than sixty times a
+    /// second. See `Session::note_missing_screen_filter`.
+    pub(crate) missing_screen_filter: Option<String>,
     /// The title `--race` opened - see `App::race_title`. Read only when
     /// `shell` is `None`, which is exactly the `--race` route.
     pub(crate) race_title: Option<&'static str>,

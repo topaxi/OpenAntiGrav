@@ -32,6 +32,10 @@ pub struct Overlay {
     art: &'static oag_title::HudArt,
     hud_line_height: f32,
     small_line_height: f32,
+    /// The grid the layout is authored in - `Assets::space`, kept so the
+    /// frame loop can hand a screen filter the title's own row count on the
+    /// `--race` route, which has no menu shell to read it from.
+    space: oag_display::space::Space,
     /// Draws the values, in `PulseHud.fnt`.
     values: crate::render::Renderer,
     /// Draws the captions, in `small.fnt`.
@@ -95,10 +99,17 @@ impl Overlay {
             sheet: assets.sheet.clone(),
             art: assets.art,
             strings: assets.strings.clone(),
+            space: assets.space,
             layout,
             values,
             captions,
         }))
+    }
+
+    /// The grid this HUD is authored in: the title's own, per `Assets::space`.
+    #[must_use]
+    pub fn space(&self) -> oag_display::space::Space {
+        self.space
     }
 
     /// The context [`draw_list`] takes.

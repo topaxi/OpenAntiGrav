@@ -36,6 +36,7 @@ pub mod fsr3;
 pub mod fxaa;
 pub mod hd_bloom;
 pub mod motion_blur;
+pub mod screen;
 pub mod smaa;
 
 /// A sampled 2D colour texture, at `binding`, visible to the fragment stage.

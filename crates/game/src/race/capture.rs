@@ -228,6 +228,17 @@ pub struct CaptureOptions {
     /// save data on every `--screenshot` run would be a third one nobody
     /// asked for.
     pub previous_best: Option<crate::records::Record>,
+    /// The screen filter the profile names, resolved by the caller through
+    /// `crate::screen::Catalogue`, and how much of it shows.
+    ///
+    /// **Honoured only under [`Self::presented`]**, the same footing the
+    /// grade is on: an ordinary capture is the scene as drawn, and a display
+    /// simulation baked into a bug report's PNG would be as wrong as a
+    /// brightness setting baked into one. Under `--presented` it is the one
+    /// way to see what a preset does to a still frame - with last frame's
+    /// output black, since there is no last frame here.
+    pub screen_filter: Option<oag_render::post::screen::Preset>,
+    pub screen_filter_strength: oag_display::display::FilterStrength,
 }
 
 /// [`Presented`] with the scene size worked out.
@@ -817,12 +828,20 @@ pub fn capture(
         },
     }
     if let (Some(framebuffer), Some(state)) = (framebuffer.as_mut(), presented) {
+        framebuffer.set_screen_filter(&device, options.screen_filter.as_ref());
         framebuffer.composite(
+            &device,
             &queue,
             &mut encoder,
             &surface,
-            state.presentation.brightness,
-            state.presentation.gamma,
+            crate::upscale::Composite {
+                brightness: state.presentation.brightness,
+                gamma: state.presentation.gamma,
+                screen: crate::upscale::ScreenFrame {
+                    native: hud.space.size,
+                    strength: options.screen_filter_strength,
+                },
+            },
         );
     }
 
