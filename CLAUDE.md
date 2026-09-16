@@ -4,14 +4,22 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-A clean-room reimplementation of **Wipeout Pulse** (PSP/PS2) in Rust, and a
-foundation for the wider Studio Liverpool anti-gravity racing lineage (Pure, HD/Fury,
-2048). The original executables are a specification, not source code: behaviour is
-observed, documented with evidence and a confidence score, then reimplemented fresh.
-Nothing is transliterated from the decompiler.
+A clean-room reimplementation, in Rust, of the Studio Liverpool anti-gravity
+racing engine - **Wipeout Pure, Pulse, HD/Fury, 2048 and the Omega Collection**
+on one shared engine, not a single-title project. **Pulse** (PSP/PS2) is the
+reference implementation: the most deeply reverse-engineered and the most
+verified against the original. The rest are built on that same architecture
+as their own milestones open, not bolted on afterward - see
+[`docs/overview/status.md`](docs/overview/status.md) for where each title
+actually stands right now. The original executables are a specification, not
+source code: behaviour is observed, documented with evidence and a confidence
+score, then reimplemented fresh. Nothing is transliterated from the
+decompiler.
 
 Status is milestone-driven; check [`docs/overview/roadmap.md`](docs/overview/roadmap.md)
-for what is actually done versus planned before assuming a subsystem exists.
+for what is actually done versus planned, and
+[`docs/overview/status.md`](docs/overview/status.md) for the per-title,
+per-subsystem matrix, before assuming a subsystem exists.
 
 ## Commands
 

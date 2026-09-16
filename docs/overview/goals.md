@@ -2,10 +2,13 @@
 
 ## What this is
 
-A clean-room reimplementation of Wipeout Pulse: a new engine, written in Rust,
-that reproduces the original's behaviour faithfully enough to be
-indistinguishable in play, and is architected so that the rest of the lineage
-(Pure, HD/Fury, 2048, Omega) can be built on the same foundation.
+A clean-room reimplementation of the Studio Liverpool anti-gravity racing
+lineage - Wipeout Pure, Pulse, HD/Fury, 2048 and the Omega Collection - as one
+engine, written in Rust, that reproduces each original's behaviour faithfully
+enough to be indistinguishable in play. Pulse is the reference implementation,
+reverse-engineered and verified in the most depth; the rest are built on that
+same architecture as their own milestones open, not bolted on afterward. See
+[the status map](status.md) for where each title actually stands today.
 
 The original executables are the **specification**. We study what they do,
 document it, and then implement it cleanly.

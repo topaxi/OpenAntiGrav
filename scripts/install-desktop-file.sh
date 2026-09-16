@@ -77,7 +77,7 @@ cat > "$desktop_file" <<DESKTOP
 Type=Application
 Name=OpenAntiGrav (dev)
 GenericName=Anti-gravity racer
-Comment=A clean-room reimplementation of Wipeout Pulse, played from your own disc image
+Comment=A clean-room reimplementation of Wipeout Pulse, Pure, HD/Fury and 2048, played from your own disc image
 Exec=$binary
 Icon=oag-game
 Terminal=false

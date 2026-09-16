@@ -1,38 +1,42 @@
 # OpenAntiGrav
 
-A clean-room reimplementation of **Wipeout Pulse** in Rust, built as a
-foundation for the wider Studio Liverpool anti-gravity racing lineage.
+A clean-room reimplementation, in Rust, of the Studio Liverpool anti-gravity
+racing engine - Wipeout Pure, Pulse, HD/Fury, 2048 and the Omega Collection on
+one shared engine, not a single-game project that happens to tolerate others.
+Pulse is the reference implementation: the most deeply reverse-engineered and
+the most verified against the original. The rest are built on that same
+architecture as their own milestones open, not bolted on afterward - see
+[Scope](#scope) for where each title actually stands today.
 
 This is **not** a decompilation. The original executables are treated as a
 specification: behaviour is studied, documented and then reimplemented with a
 modern architecture. The goal is that gameplay is indistinguishable from the
 original while the code underneath is something a contributor can read.
 
-> **Status: M4, playable core.** `just play` boots the disc's own intro and
-> menus into a real single-ship time trial: a track and ship loaded off the
-> disc, physics simulated at a fixed 60 Hz, driven with a chase camera. The
-> physics model (thrust, steering, airbrakes, the air cushion, collision and
-> wall contact) is fully implemented from reverse-engineered instruction-level
-> evidence but not yet fully verified tick-for-tick against the original - see
-> [M4 in the roadmap](docs/overview/roadmap.md#m4---playable-core) for exactly
-> what's measured and what's still open. Earlier milestones (disc/archive
-> tooling, asset decoding, binary analysis, the trace-comparison harness) are
-> done or substantially done. See
-> [`docs/overview/roadmap.md`](docs/overview/roadmap.md) for the full milestone
-> breakdown and [`docs/psp/pulse-disc-layout.md`](docs/psp/pulse-disc-layout.md)
-> for what has been found on disc so far.
+> **Status.** Pulse plays start to finish through its own menus into a race:
+> a track and ship loaded off the disc, physics simulated at a fixed 60 Hz,
+> driven with a chase camera. Its physics model (thrust, steering, airbrakes,
+> the air cushion, collision and wall contact) is fully implemented from
+> reverse-engineered instruction-level evidence but not yet fully verified
+> tick-for-tick against the original - see
+> [M4](docs/overview/roadmap.md#m4---playable-core)/[M5](docs/overview/roadmap.md#m5---full-race)
+> in the roadmap for exactly what's measured. On the same engine: Pure boots
+> to a Time Trial; HD/Fury and 2048 already race and draw textured on their
+> own assets; a race can even mix a craft from one title with a track from
+> another (Race Remix). Omega Collection is reverse-engineered only, not yet
+> implemented. Full picture, subsystem by subsystem and title by title:
+> [`docs/overview/status.md`](docs/overview/status.md). Milestone narrative:
+> [`docs/overview/roadmap.md`](docs/overview/roadmap.md).
 
 ## Scope
 
-In scope, in the order they will be tackled:
-
-| Title | Platform | Role |
+| Title | Platform | Status |
 | --- | --- | --- |
-| **Wipeout Pulse** | PSP, PS2 | Primary target |
-| Wipeout Pure | PSP | Direct format ancestor, cross-reference |
-| Wipeout HD / Fury | PS3 | Later |
-| Wipeout 2048 | Vita | Long-term goal |
-| Omega Collection | PS4 | If feasible |
+| **Wipeout Pulse** | PSP, PS2 | Reference implementation - deepest RE coverage, plays menu to race |
+| Wipeout Pure | PSP | Boots to a Time Trial on the same engine |
+| Wipeout HD / Fury | PS3 | Races and draws textured on its own assets |
+| Wipeout 2048 | Vita | Races and draws textured on its own assets |
+| Omega Collection | PS4 | Reverse-engineered only, not yet implemented |
 
 Anything before Pure is out of scope.
 
@@ -164,23 +168,34 @@ nothing left behind. See [`docs/tools/oag-game.md`](docs/tools/oag-game.md).
 crates/
   core/      deterministic math, fixed-timestep clock, seeded PRNG, state hashing
   disc/      CHD and raw ISO readers, ISO 9660 filesystem walker
-  formats/   WAD archives, LZSS, textures, track data, front-end XML, PMF, fonts
+  formats/   asset containers: WAD, PSARC, LZSS, sound banks, magic-number triage
   assets/    runtime asset access: read a WAD by path or straight out of a disc image
   tools/     command line tools (oag-unpack, oag-wad)
   physics/   ship dynamics and collision queries (depends on core only)
   race/      race rules: modes, lap timing, track progress
+  ai/        opponent driver: follows the authored racing line, emits ship controls
   gameplay/  the World struct, the InputSnapshot the simulation consumes
   render/    the wgpu renderer: mesh pipeline, track ribbon, cameras (owns no window)
+  audio/     mixing and playback, hardware-free voice pool
   input/     maps real devices onto the abstract button layer
+  ui/        the front end: boot movies, menus, HUD
   view/      wgpu asset viewer
   trace/     per-tick trace capture and comparison against the original
-  game/      composition root: boots the front end, then a race
+  title/     the Title type: what makes a title's data reachable, shared by all of them
+  pulse/     Wipeout Pulse's own archive names, hashes and tables
+  pure/      Wipeout Pure's, deliberately thinner - only what's actually measured
+  hd/        Wipeout HD / Fury's, seven PSARC archives on a PS3 disc rather than two WADs
+  2048/      Wipeout 2048's, the Vita package
+  game/      composition root: boots the front end, then a race, for any of the above
 docs/        the primary deliverable, see docs/README.md
 data/        your disc images and extracted data (gitignored)
 ```
 
-More crates arrive as their milestone opens; the full intended shape is in
-[`docs/architecture/workspace-layout.md`](docs/architecture/workspace-layout.md).
+This is illustrative, not exhaustive - more crates arrive as their milestone
+opens, and the full intended shape (with the two dependency rules every crate
+above is checked against) is in
+[`docs/architecture/workspace-layout.md`](docs/architecture/workspace-layout.md),
+mirrored in [`CLAUDE.md`](CLAUDE.md)'s own crate table.
 
 ## Handover
 
