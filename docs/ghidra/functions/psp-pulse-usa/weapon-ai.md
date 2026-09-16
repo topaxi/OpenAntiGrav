@@ -56,10 +56,44 @@ far as they are used here:
 The two request bytes it writes are `craft+0x15` (**fire**) and `craft+0x17`
 (**absorb**).
 
-## It decides four times a second, not every frame
+## It decides four times a second, not every frame - and one step of that is unverified
 
 `WeaponAi_Update` accumulates `dt` into `+0x30` and does nothing until it
-reaches **0.25**. So an opponent reconsiders its pickup four times a second.
+reaches **0.25**. So an opponent reconsiders its pickup four times a second -
+**if `WeaponAi_Update` itself is called once a frame.** That premise is not
+verified, and the disassembly raises a real question about it.
+
+**`+0x30` has no reset anywhere in this function.** Checked at instruction
+level, not just in the decompile (`08851648`-`08851660`: one `lwc1`/`add.s`/
+`swc1` triple, no second write to that offset anywhere in the listing). If
+`WeaponAi_Update` runs at 60 Hz, `+0x30` crosses `0.25` about a quarter-second
+into the race and then **stays above it forever** - the `0.25 <=` gate would
+open once and never close again, and the decision block would run *every
+tick* for the rest of the race, not four times a second. That contradicts the
+rate tables' own magnitudes (`0.05` as the *highest* non-Eliminator entry only
+makes sense against a handful of rolls a second, not sixty), so the more
+likely explanation is that `WeaponAi_Update` itself is called at a throttled
+cadence by an as-yet-unlocated caller and the `0.25` check is either
+redundant or a leftover from a version that was ticked more often. **Neither
+reading is confirmed**: `get_xrefs_to` and `get_function_callers` both return
+nothing for `WeaponAi_Update`, the same register-computed-address trap this
+page's own "How it was found matters" section names for the two functions
+this page is about - a watchpoint found the reader, not a static call site,
+and nothing has looked for the *caller's own* cadence the same way.
+
+`scripts/psp-relocate.py xrefs 0x08851550` (which matches on the relocated
+value rather than Ghidra's own index, and so is not fooled by the same
+register-address trap) finds exactly **one** reference: a `word` at
+`0x08aca29c` holding this address - a stored function pointer, not a `jal`.
+So the call is indirect, through a table entry, which is consistent with the
+"a watchpoint found it, not a static sweep" story and explains why neither
+Ghidra tool nor this script's own call-site search sees a caller: nothing
+`jal`s this address directly, ever. `scripts/psp-relocate.py xrefs
+0x08aca29c` finds nothing pointing at that table slot either, so what walks
+the table - and how often - is still unlocated. A port
+should keep the four-times-a-second framing (it is what the rate-table
+magnitudes support) and say so is a choice, not a re-confirmed reading, until
+someone catches the actual call frequency live.
 
 Then it reads the held weapon id and switches on it, setting the direction flags
 before calling the decision. **The switch is the strongest corroboration of the
