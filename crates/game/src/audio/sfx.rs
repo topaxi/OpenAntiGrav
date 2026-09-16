@@ -86,11 +86,13 @@ use super::{Audio, TICK_HZ};
 
 mod announcer;
 mod banks;
+mod cue;
 mod engine;
 mod track;
 pub use announcer::{Announcer, ClassAnnouncer};
 use banks::load_named_cue;
 pub use banks::{Banks, Loaded};
+pub use cue::{BankName, Cue};
 pub use engine::Engine;
 pub use track::TrackEmitters;
 
@@ -137,6 +139,21 @@ pub(super) struct SfxVoices {
     /// The circuit's own ambience: one held voice per authored emitter that is
     /// currently in range. See [`TrackEmitters`].
     ambience: track::Ambience,
+    /// `~PLASMATVL`'s held voice, one per **projectile** slot rather than per
+    /// grid slot or per race. See [`Cue::PlasmaTravel`] for why a Plasma bolt
+    /// needs this rather than the `Option<VoiceId>` shape [`Self::shield`] and
+    /// [`Self::blowup`] use: those are one activation per craft at a time,
+    /// and a bolt is neither - it is not the craft, and more than one can be
+    /// in the air together.
+    ///
+    /// Read and written directly off `race.sim.world.projectiles.slots` every
+    /// tick in [`Audio::race_tick`], the same way [`Engine`] reads craft
+    /// position directly rather than through a queued [`CueEvent`] - a moving
+    /// held voice needs *this* tick's position, not a queued one. `None` at
+    /// every index a bolt is not occupying; [`oag_gameplay::projectile::MAX_PROJECTILES`]
+    /// entries because a slot index is the only stable handle a `Copy` world
+    /// snapshot gives a projectile.
+    plasma_travel: [Option<VoiceId>; oag_gameplay::projectile::MAX_PROJECTILES],
     rng: Rng,
 }
 
@@ -183,6 +200,7 @@ impl Audio {
                 blowup: None,
                 blowup_open: false,
                 ambience: track::Ambience::default(),
+                plasma_travel: [None; oag_gameplay::projectile::MAX_PROJECTILES],
                 rng: Rng::new(SFX_SEED),
             }
         });
@@ -192,6 +210,14 @@ impl Audio {
         let class_announcer = race.class_announcer();
         let listener = listener_of(race);
         let craft = craft_positions(race);
+        // An owned snapshot, the same shape `craft` is - `Projectile` is
+        // `Copy` and the array is small, and copying it out avoids holding a
+        // borrow of `race` across the mixer closure below. Read after
+        // `Race::tick` has already run, so a bolt that ended this tick is
+        // already back to `Projectile::default()` here - which is why
+        // `Cue::PlasmaHitWall` carries its own impact point on the `CueEvent`
+        // rather than being read off this array.
+        let projectiles = race.sim.world.projectiles.slots;
         let running = !race.finished();
         let shielded = race.shield_is_up();
         let exploding = race.craft_is_exploding();
@@ -370,6 +396,69 @@ impl Audio {
                 _ => {}
             }
 
+            // The Plasma's own travel loop, `~PLASMATVL`, keyed by
+            // *projectile* slot - see [`Cue::PlasmaTravel`] and
+            // [`SfxVoices::plasma_travel`]'s own doc comments for why this
+            // cannot be the shield/blowup shape above. Read directly off this
+            // tick's own projectile array rather than off a queued
+            // `CueEvent`, for the reason the craft's own engines below are.
+            for (slot, projectile) in projectiles.iter().enumerate() {
+                let flying = projectile.kind == Some(oag_tables::weapons::Weapon::Plasma)
+                    && projectile.charge <= 0.0;
+                match (flying, voices.plasma_travel[slot]) {
+                    // The rising edge: charge just reached zero this tick -
+                    // see `Projectiles::advance`'s charging branch, which is
+                    // the one place this port's own release edge lives.
+                    (true, None) => {
+                        if let Some((sound, looping)) =
+                            banks.pick(Cue::PlasmaTravel, &mut voices.rng)
+                            && looping
+                        {
+                            let placed = oag_audio::Emitter::craft(projectile.position.to_array())
+                                .place(&listener, 1.0);
+                            let (gain, pan) = placed.map_or((0.0, None), |p| (p.gain, Some(p.pan)));
+                            voices.plasma_travel[slot] = mixer.play(Play {
+                                gain,
+                                pan,
+                                ..Play::looping(sound, Cue::PlasmaTravel.bus())
+                            });
+                        }
+                        // Else either nothing loaded or the bank says this
+                        // waveform is not a loop - the same guard
+                        // `Engine::tick` carries for `~ENGINE`. `~PLASMATVL`
+                        // reads looping in every corpus checked so far
+                        // (`oag-wad sounds`), so the second case is
+                        // defensive rather than expected to fire.
+                    }
+                    // Still flying and still held: follow the bolt.
+                    (true, Some(id)) if mixer.is_playing(id) => {
+                        let placed = oag_audio::Emitter::craft(projectile.position.to_array())
+                            .place(&listener, 1.0);
+                        let (gain, pan) = placed.map_or((0.0, None), |p| (p.gain, Some(p.pan)));
+                        mixer.set_gain(id, gain);
+                        mixer.set_pan(id, pan);
+                    }
+                    // The pool reclaimed the voice before the bolt itself
+                    // ended - starved, not stopped. Forget the stale handle so
+                    // a later tick does not stop whatever slot the pool gave
+                    // it to next.
+                    (true, Some(_)) => voices.plasma_travel[slot] = None,
+                    // The falling edge: the bolt is no longer flying, whether
+                    // because it just ended (`Projectile::default()` already
+                    // reset `kind`) or - unreachably today, since nothing
+                    // re-charges a flying bolt - because it started charging
+                    // again. Either way the loop stops here; the one-shot
+                    // `PLASMAHITWALL` for an actual ending is a separate
+                    // `CueEvent` carrying its own impact point, pushed from
+                    // `crates/game/src/race/tick.rs`.
+                    (false, Some(id)) => {
+                        mixer.stop(id);
+                        voices.plasma_travel[slot] = None;
+                    }
+                    (false, None) => {}
+                }
+            }
+
             // Every craft's engine, each off its own emitter. A craft with no
             // pose is one the race never spawned; it is skipped rather than
             // placed at the origin, which would put eight engines in a heap
@@ -440,410 +529,15 @@ impl Audio {
                     mixer.stop(id);
                 }
                 voices.blowup_open = false;
+                for voice in &mut voices.plasma_travel {
+                    if let Some(id) = voice.take() {
+                        mixer.stop(id);
+                    }
+                }
                 voices.ambience.stop(mixer);
             });
         }
         self.sfx = None;
-    }
-}
-
-/// Which bank a cue lives in.
-///
-/// The paths are literal strings in the PSP executable, every one of which
-/// hashes to a real archive entry on the PSP *and* the PS2 disc - see
-/// `docs/formats/psp-audio.md`'s table. The PS2 build ships the same banks
-/// under the same names in `WADS2.WAD`, which is why nothing here branches on
-/// the platform: [`Archives::read_name`] searches whichever archives the source
-/// turned out to have.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub enum BankName {
-    /// `Data\Sound\hud.bnk`.
-    Hud,
-    /// `Data\Sound\ship.bnk`, or `ship_zone.bnk` in Zone mode.
-    Ship,
-    /// `Data\Sound\weapons.bnk`.
-    Weapons,
-    /// `Data\Sound\speech.bnk` - the announcer.
-    ///
-    /// The executable also carries `Data\Sound\speech_%s.bnk` and
-    /// `speech_zone_%s.bnk` templates formatted with a language at runtime, and
-    /// **no expansion of either resolves on the EU disc** - twelve language
-    /// names were tried and every one missed. So this port reads the unsuffixed
-    /// bank, which both discs do carry, and the localised path stays open. See
-    /// `docs/formats/psp-audio.md`.
-    Speech,
-}
-
-impl BankName {
-    /// The archive entry to read, given a title's own table and whether this is
-    /// a Zone race.
-    ///
-    /// **Which file a cue is in is a per-title fact and the cue's name is not.**
-    /// All three titles spell `SPEEDUPPAD` and `.COLLISIONS` identically; HD
-    /// keeps the first in `weapons.bnk` because it has no `hud.bnk` at all, and
-    /// the second in `shiphd.bnk`. See [`oag_title::SoundBanks`].
-    ///
-    /// Only [`Self::Ship`] moves with `zone`, and on Pulse and Pure that is
-    /// load-bearing: `SHIP_ZM` is a different bank with the same cue names and
-    /// different audio - a nine-layer `~ENGINE` against one, ten collision
-    /// alternates against fifteen - so a Zone race reading `ship.bnk` would be
-    /// quietly playing the wrong craft. HD ships no separate Zone bank and its
-    /// table says so by repeating itself.
-    #[must_use]
-    pub fn entry(self, banks: &oag_title::SoundBanks, zone: bool) -> &'static str {
-        match self {
-            Self::Hud => banks.hud,
-            Self::Ship if zone => banks.ship_zone,
-            Self::Ship => banks.ship,
-            Self::Weapons => banks.weapons,
-            Self::Speech => banks.speech,
-        }
-    }
-}
-
-/// A sound the simulation asks for, by the name the original passes to
-/// `Sound_Play`.
-///
-/// Every one of these has a recovered call site. The doc comment on each says
-/// where, because that is the difference between a port and a soundalike.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub enum Cue {
-    /// Crossing onto a speed pad.
-    ///
-    /// `Ship_ApplySpeedupPad` calls `Sound_Play(..., "SPEEDUPPAD", ...)` from
-    /// inside its new-pad branch, the same branch that arms the engine flare -
-    /// so this fires on exactly the edge `oag_game::race::Race::test_speedup_pads`
-    /// already arms the flare on. `docs/ghidra/functions/psp-pulse-usa/pads.md`,
-    /// confidence 88.
-    ///
-    /// Pure's `FUN_0886b548` is the same two-branch (positional/dry)
-    /// dispatcher in one function, firing the same `SPEEDUPPAD` on either
-    /// branch. `docs/ghidra/functions/psp-pure-usa/dry-play-cues.md`,
-    /// confidence 78.
-    SpeedupPad,
-    /// Hull against wall or track.
-    ///
-    /// `ShipCollisionFx_Trigger` (`0x089246b4`) fires it "once per surviving
-    /// kind-0/1 call" - that is, once per contact that gets past the 0.8-second
-    /// spark cooldown - so it rides the same gate the collision sparks do.
-    /// `docs/ghidra/functions/psp-pulse-usa/contact-response.md`, confidence 85.
-    ///
-    /// Pure's own `ShipCollisionFx_Trigger` (`0x0888e340`) does the same thing:
-    /// same `.COLLISIONS` cue (confirmed present in its `SHIP_CL`/`SHIP_ZM`
-    /// banks), same point in the same 0.8-second cooldown gate.
-    /// `docs/ghidra/functions/psp-pure-usa/rocket-and-collision-fx.md`,
-    /// confidence 82 - the only one of the nine cues checked on a second
-    /// title so far; the module doc's confidence-50 bet still covers the rest.
-    Collision,
-    /// A contact a raised shield absorbed.
-    ///
-    /// `FUN_08840640`, the shield-absorb ability's own effect, "plays an
-    /// `ABSORB` sound once" before staggering its ten spark instances. Same
-    /// page. This is the sound of the contact the shield *ate*, which is why it
-    /// fires exactly where the sparks are suppressed.
-    ///
-    /// Pure's own counterpart (`FUN_08925e20`) does the same thing - one
-    /// `Sound_Play` of the same undotted `ABSORB`, then a stagger loop into
-    /// `ShipCollisionFx_Trigger` - with one real difference: the loop runs
-    /// eight times, not ten. `docs/ghidra/functions/psp-pure-usa/rocket-and-collision-fx.md`,
-    /// confidence 80.
-    Absorb,
-    /// The engine, held for as long as the craft is running.
-    ///
-    /// `Exhaust_UpdateEngineSound` (`0x08904cf4`) opens the voice in its
-    /// constructor and writes pitch and volume to it every tick;
-    /// `docs/ghidra/functions/psp-pulse-usa/exhaust.md`, confidence 80. The law
-    /// is in [`Engine`].
-    ///
-    /// Pure's `ExhaustFlare_Init` opens the same `~ENGINE` voice, and two of
-    /// its tuning constants (the `-1143.0` base pitch, the `0.01` lerp rate)
-    /// match Pulse's bit-for-bit, not just structurally.
-    /// `docs/ghidra/functions/psp-pure-usa/exhaust-sound.md`, confidence 82 -
-    /// the per-tick pitch/volume write itself is unchecked on Pure's side.
-    Engine,
-    /// The shield, held for as long as it is up.
-    ///
-    /// `Shield_Activate` (`0x0883e544`) calls
-    /// `Sound_PlayLooping(1.0, entity->0x50, ..., "~SHIELD", entity + 0x54)`,
-    /// keeping the handle - so it runs for the pickup's duration and is
-    /// released when the shield drops.
-    /// `docs/ghidra/functions/psp-pulse-usa/shield-pickup.md`.
-    ///
-    /// Pure's `FUN_0892425c` fires the same `~SHIELD` at the same point in the
-    /// same two-cue order (after `ShieldActive`, below), with a matching
-    /// handle-out-slot call shape. `docs/ghidra/functions/psp-pure-usa/shield-sound.md`,
-    /// confidence 80.
-    Shield,
-    /// The announcer, on the same activation.
-    ///
-    /// The other half of `Shield_Activate`'s pair, one line above [`Self::Shield`]:
-    /// `Sound_Play(entity, ..., "shieldactive", 0x400, 0)`. It lives in
-    /// `speech.bnk` rather than `weapons.bnk`, which is what says it is a voice
-    /// line and not an effect.
-    ///
-    /// Pure's counterpart fires the same undotted `shieldactive` at the same
-    /// volume (`0x400`), first of the pair - but through a deeper call chain
-    /// than Pulse's flat one-hop dry helper, unread past confirming it looks
-    /// like sound-engine code. `docs/ghidra/functions/psp-pure-usa/shield-sound.md`,
-    /// confidence 80.
-    ShieldActive,
-    /// The announcer, one second before an Autopilot pickup lets go.
-    ///
-    /// `Autopilot_Update` (`0x08861404`) plays it on the tick the remaining
-    /// time crosses `1.0` - an edge it keeps `craft+0x144` for - through the
-    /// **dry, full-volume** path rather than through the craft's emitter, which
-    /// is what says it is a voice line in the player's ear rather than a thing
-    /// happening in the world. `docs/ghidra/functions/psp-pulse-usa/autopilot.md`,
-    /// confidence 85.
-    ///
-    /// **Its two partners on the disc are deliberately unwired**: `~AUTOPILOT`
-    /// in `hud.bnk` is a held loop the handler *stops* and no located code
-    /// starts, and `autopilot_eng` sits beside this one in `speech.bnk` with no
-    /// call site at all. An effect whose trigger is not recovered stays silent.
-    ///
-    /// Pure's `FUN_0884c794` fires the same undotted `disengaging` through the
-    /// same dry chain `ShieldActive` uses, at the same volume.
-    /// `docs/ghidra/functions/psp-pure-usa/dry-play-cues.md`, confidence 78 -
-    /// the countdown threshold itself is unread on Pure's side.
-    Disengaging,
-    /// The player's own craft blowing up.
-    ///
-    /// `Ship_SetState`'s case 4 (`0x0884430c`, reached through the nine-entry
-    /// jump table at `0x08a7bc18`) arms the `0.5 s` state timer and, in the
-    /// same breath, plays `~BLOWUP` through `FUN_0883e9b0` - the **dry,
-    /// no-emitter** path at volume `0x400` - keeping the handle at
-    /// `craft+0xcac`. It is therefore held, and it is the player's alone:
-    /// `FUN_0883e9b0` returns without playing when `craft+0x368` is non-zero.
-    /// See [`zone-mode.md`](../../../../docs/ghidra/functions/psp-pulse-usa/zone-mode.md),
-    /// confidence 85.
-    ///
-    /// **An opponent's destruction plays nothing here**, and that is the
-    /// reading rather than a gap in it - whatever an opponent's explosion
-    /// sounds like comes from somewhere this pass did not find.
-    ///
-    /// **The one cue of nine with no confirmed Pure trigger.** The `~BLOWUP`
-    /// string exists in Pure's executable and the cue exists on its disc,
-    /// but its call site was not found - six search methods that found every
-    /// other cue this thread chased all came up empty here.
-    /// `docs/ghidra/functions/psp-pure-usa/blowup-sound-open.md` records
-    /// what was tried, so a future pass does not repeat it.
-    Blowup,
-    /// The lock-on reticle, seeking and then locked.
-    ///
-    /// `HudSight_UpdateTone` (`0x0881b34c`) opens **one** `~ROCKLOCK` voice the
-    /// first frame the reticle has anything, keeps the handle, and switches a
-    /// parameter between `0` while it is seeking and `1` once it has locked -
-    /// stopping the voice only when the target goes away. See
-    /// [`lock-sight.md`](../../../../docs/ghidra/functions/psp-pulse-usa/lock-sight.md),
-    /// confidence 85.
-    ///
-    /// **The bank agrees with the reading**: `~ROCKLOCK` lives in `hud.bnk`
-    /// beside `SPEEDUPPAD` and `~BLOWUP`, and it binds exactly **two**
-    /// waveforms, neither looping, 0.11 s apiece - which is what a parameter
-    /// with two values selects between.
-    ///
-    /// **This port fires them as two edges rather than as one parameterised
-    /// voice**, because this mixer has no cue parameters: waveform `0` on
-    /// entering [`oag_race::sight::State::Seeking`] and waveform `1` on
-    /// entering [`oag_race::sight::State::Locked`]. With two 0.11 s
-    /// non-looping waveforms the audible result is the same pair of blips; what
-    /// is lost is the original's ability to switch mid-voice, which at that
-    /// length it never gets to use. Recorded rather than smoothed over.
-    ///
-    /// **Which waveform is which is inference, at 55.** What is read is that the
-    /// parameter takes `0` while seeking and `1` once locked; that those values
-    /// index the cue's two waveforms *in that order* is the obvious reading,
-    /// not one taken off the bank's command list. This is a different gap from
-    /// the one [`Banks::pick`] closes: `0x19` decodes which *randomly-chosen*
-    /// alternate a multi-waveform cue plays, and `LockOn`'s two waveforms are
-    /// never reached that way - `pick_at` selects between them by the
-    /// seeking/locked parameter above, a mapping no command-list reading would
-    /// recover either way. If the two turn out to be the other way round, the
-    /// seeking blip and the lock chime are swapped and nothing else changes.
-    /// `--sound` writes a WAV and settles it by ear.
-    ///
-    /// Pure's own `HudSight_UpdateTone` is a near line-for-line match: same
-    /// three-state toggle, same `0x400` volume, same choice to call the
-    /// dry-play chain's middle hop directly rather than through its gate
-    /// helper. `docs/ghidra/functions/psp-pure-usa/lockon-sound.md`,
-    /// confidence 82.
-    LockOn,
-    /// A mine leaving the back of a craft, one per charge of a cluster.
-    ///
-    /// `Weapon_DropMines` (`0x088675cc`) calls `Mine_Init` (`0x08859ac8`) once
-    /// per charge; `Mine_Init` ends with two cue plays, and the first is
-    /// `MINELAUNCH`. Both call sites were decompiled directly: the emitter
-    /// argument `Weapon_DropMines` hands `Mine_Init` traces, through two
-    /// pointer hops off the subsystem's per-craft slot, to `+0x50` - the same
-    /// offset [`Self::Collision`] and [`Self::Shield`] read as the firing
-    /// craft's own emitter. See
-    /// [mine.md](../../../../docs/ghidra/functions/psp-pulse-usa/mine.md#2026-09-06-minelaunch-is-a-plain-positional-craft-emitter-cue---mineradar-is-not),
-    /// confidence 78 (two hops of indirection, short of the single-hop reads'
-    /// 82-85).
-    ///
-    /// **`MINERADAR`, the second cue of the same pair, is deliberately not
-    /// here.** It anchors to a *new emitter `Mine_Init` allocates for the mine
-    /// entity itself*, a held, per-projectile voice - a shape nothing in
-    /// [`CueEvent`] or [`SfxVoices`] can address, since every held voice this
-    /// engine plays is keyed by grid slot. `BOMBLAUNCH`/`~BOMBRADAR` also stay
-    /// unwired: `Weapon_FireBomb` (`0x08863a20`) was decompiled end to end and
-    /// never calls the play function at all. See `mine.md`'s own section for
-    /// both.
-    MineLaunch,
-}
-
-impl Cue {
-    /// Every cue this port fires, which is every one it knows how to load.
-    pub const ALL: [Self; 10] = [
-        Self::SpeedupPad,
-        Self::Collision,
-        Self::Absorb,
-        Self::Engine,
-        Self::Shield,
-        Self::ShieldActive,
-        Self::Disengaging,
-        Self::Blowup,
-        Self::LockOn,
-        Self::MineLaunch,
-    ];
-
-    /// The bank the cue is looked up in.
-    #[must_use]
-    pub fn bank(self) -> BankName {
-        match self {
-            Self::SpeedupPad | Self::Blowup | Self::LockOn => BankName::Hud,
-            Self::Collision | Self::Engine => BankName::Ship,
-            Self::Absorb | Self::Shield | Self::MineLaunch => BankName::Weapons,
-            Self::ShieldActive | Self::Disengaging => BankName::Speech,
-        }
-    }
-
-    /// Which mix bus this cue's voice belongs on.
-    ///
-    /// **Read straight off [`Self::bank`], because the bank is where the
-    /// original draws the line.** `shieldactive` sits in `speech.bnk` and not
-    /// in `weapons.bnk` beside the `~SHIELD` loop it fires with, and that is
-    /// already this module's own reason for calling it a voice line rather
-    /// than an effect - see [`Self::ShieldActive`]. `Disengaging` agrees from
-    /// the other direction: `Autopilot_Update` plays it through the dry,
-    /// full-volume path instead of the craft's emitter, which is a line in the
-    /// player's ear rather than a thing happening in the world.
-    ///
-    /// So a cue moves bus by moving bank, and nothing here holds a second list
-    /// that can disagree with `bank()`. See
-    /// [ADR-0027](../../../../docs/architecture/adr/0027-three-mix-buses.md).
-    #[must_use]
-    pub fn bus(self) -> Bus {
-        match self.bank() {
-            BankName::Speech => Bus::Speech,
-            BankName::Hud | BankName::Ship | BankName::Weapons => Bus::Sfx,
-        }
-    }
-
-    /// The string to look up in that bank's name table.
-    ///
-    /// # The dot in `.COLLISIONS` is the executable's own, not a lookup fix-up
-    ///
-    /// **Correction, 2026-09-04**: this section used to read the executable as
-    /// passing bare `"COLLISIONS"` and claimed the leading dot was added here
-    /// to bridge a SCREAM sound/child-sound naming split, at confidence 70.
-    /// That was a misread of the call site - `ShipCollisionFx_Trigger`'s
-    /// string argument is not built in place the way its three spark names
-    /// are; it is loaded indirectly out of a small pointer table
-    /// (`0x08924854: lw a3,0x46ec(a2)`), and the decompiler's inline literal
-    /// showed the table slot's own apparent text, not the string the pointer
-    /// it holds actually points at. Reading that pointer's target directly
-    /// (`0x08a886e0`) gives `.COLLISIONS\0` - the dot is already in the
-    /// executable's own data. See the correction paragraph in
-    /// `docs/ghidra/functions/psp-pulse-usa/contact-response.md`.
-    ///
-    /// So this is a plain, exact match: no bridging, no SCREAM child-sound
-    /// theory needed, just the same name the game itself passes. It happens
-    /// to be the only cue named `.COLLISIONS` on any disc, and Wipeout HD's
-    /// bank independently confirms the dot is a plain naming convention, not
-    /// a parent/child marker: `.COLLISIONS` is the **parent**, and the cues
-    /// it plays are the plainly named `c_CShipShip` and `c_CShipWall`. See
-    /// [`oag_formats::sblk::child`].
-    #[must_use]
-    pub fn name(self) -> &'static str {
-        match self {
-            Self::SpeedupPad => "SPEEDUPPAD",
-            Self::Collision => ".COLLISIONS",
-            Self::Absorb => "ABSORB",
-            Self::Engine => "~ENGINE",
-            Self::Shield => "~SHIELD",
-            Self::ShieldActive => "shieldactive",
-            Self::Disengaging => "disengaging",
-            Self::Blowup => "~BLOWUP",
-            Self::LockOn => "~ROCKLOCK",
-            Self::MineLaunch => "MINELAUNCH",
-        }
-    }
-
-    /// Whether this port keeps a handle to the voice rather than firing and
-    /// forgetting it.
-    ///
-    /// Both of these are cues the original opens with `Sound_PlayLooping` and
-    /// an out-parameter, which is what the `~` prefix marks - see
-    /// `docs/architecture/adr/0018-audio-mixer-architecture.md`. The `~` is
-    /// **not** the test: `~SPARKS` and `~FLYBY_DIST` also carry it and are
-    /// one-shots the caller can cancel, so a held cue is one whose *holder* is
-    /// written here.
-    #[must_use]
-    pub fn held(self) -> bool {
-        matches!(self, Self::Engine | Self::Shield | Self::Blowup)
-    }
-
-    /// Which emitter the original plays this cue on.
-    ///
-    /// Read off each call site's first argument to `Sound_Play`, which is the
-    /// emitter record and nothing else - see
-    /// [`positional-audio.md`](../../../../docs/ghidra/functions/psp-pulse-usa/positional-audio.md).
-    /// A cue whose call site has not been read stays [`Placement::Unplaced`]
-    /// rather than being placed somewhere plausible.
-    #[must_use]
-    pub fn placement(self) -> Placement {
-        match self {
-            // `lw a0, 0x50(a0)` at `0x08924844`, inside
-            // `ShipCollisionFx_Trigger` - the craft's own emitter, with no
-            // branch, so the player's hull is positional too.
-            Self::Collision => Placement::Craft,
-            // `FUN_08840640` is the absorb effect and sits on the same craft;
-            // its emitter argument was not disassembled, so this rides
-            // `Collision`'s reading of the contact path rather than its own.
-            Self::Absorb => Placement::Craft,
-            // `Shield_Activate`'s own doc comment above: `Sound_PlayLooping(1.0,
-            // entity->0x50, ...)`, the same `+0x50` the collision path uses.
-            Self::Shield => Placement::Craft,
-            // Two branches, and which is taken splits on `racer+0x368` -
-            // `ExhaustFlare_OnSpeedupPad` (`0x08904f74`) plays positionally off
-            // `craft+0x50` on one side and dry at volume `0x400` through
-            // `FUN_0883e9b0` on the other. See [`Placement::CraftUnlessPlayer`].
-            Self::SpeedupPad => Placement::CraftUnlessPlayer,
-            // `ExhaustFlare_Init` gives the note its own emitter at a quarter
-            // of the craft radius, and [`Engine`] holds the voice, so this
-            // never reaches the one-shot path.
-            Self::Engine => Placement::Engine,
-            // Recorded as `Sound_Play(entity, ..., "shieldactive", 0x400, 0)` -
-            // full volume and pan zero, which is the shape of the *non*-emitter
-            // path. Left dry, which is also what this port has always done.
-            //
-            // `Disengaging` joins it on a stronger footing: its call site is
-            // read, and it is `FUN_0883e9b0` -> `FUN_0893a768`, the path that
-            // takes no emitter at all.
-            Self::ShieldActive | Self::Disengaging => Placement::Unplaced,
-            // Read, not assumed: case 4 hands it to the path that takes no
-            // emitter and a volume of `0x400`.
-            Self::Blowup => Placement::Unplaced,
-            // `HudSight_UpdateTone` opens it with a volume of `0x400` and no
-            // emitter argument, which is the same dry, full-volume shape - and
-            // it is a HUD sound about the player's own reticle rather than a
-            // thing happening somewhere in the world.
-            Self::LockOn => Placement::Unplaced,
-            // Traces to the firing craft's own `+0x50` - see this variant's
-            // own doc comment - so it rides the craft, not the mine.
-            Self::MineLaunch => Placement::Craft,
-        }
     }
 }
 
@@ -899,12 +593,26 @@ fn place(
         gain: 1.0,
         pan: None,
     };
+    if event.cue.placement() == Placement::Point {
+        // An arbitrary world point rather than a craft's own emitter - see
+        // [`Placement::Point`]. `None` here means the event was built wrong
+        // (a `Point` cue without [`CueEvent::at_point`]), not that the point
+        // is out of range; that refusal still comes from `place` below,
+        // exactly as it does for a craft.
+        let point = event.point?;
+        let placed = oag_audio::Emitter::craft(point.to_array()).place(listener, 1.0)?;
+        return Some(Placed {
+            gain: placed.gain,
+            pan: Some(placed.pan),
+        });
+    }
     let emitter = match event.cue.placement() {
         Placement::Unplaced => return Some(dry),
         // The player's own branch, on a hypothesis the type documents.
         Placement::CraftUnlessPlayer if event.is_player() => return Some(dry),
         Placement::Craft | Placement::CraftUnlessPlayer => oag_audio::Emitter::craft,
         Placement::Engine => oag_audio::Emitter::engine,
+        Placement::Point => unreachable!("handled above"),
     };
     // A cue from a slot with no craft is not a cue: dropped rather than played
     // dry, because the alternative is a rival's collision arriving at full
@@ -950,6 +658,24 @@ pub enum Placement {
     CraftUnlessPlayer,
     /// No emitter has been read for this cue, so it is played dry.
     Unplaced,
+    /// An arbitrary world point, carried on the [`CueEvent`] itself rather
+    /// than read off a craft.
+    ///
+    /// **Ours, not read off any call site** - the original always names an
+    /// *emitter*, an object with a scene node, never a bare position; this is
+    /// what a caller reaches for when the thing making the noise is not a
+    /// craft and has no emitter this port models. The Plasma bolt is the
+    /// first user: `Plasma_Init` constructs the bolt its **own** emitter,
+    /// pointed at the bolt's own matrix rather than any craft's - see
+    /// [`Cue::PlasmaTravel`] and [`Cue::PlasmaHitWall`]. [`CueEvent::at_point`]
+    /// is the entry point, and [`Cue::PlasmaTravel`]'s own held voice is
+    /// placed the same way by its own bespoke tracker rather than through
+    /// this enum's normal draining path - see [`SfxVoices::plasma_travel`].
+    /// Radius is [`oag_audio::Emitter::CRAFT_RADIUS`], because neither
+    /// `Plasma_Init` nor `Plasma_Launch` ever writes the bolt's own emitter's
+    /// `+0x38`, so it keeps `SoundEmitter_Init`'s default - the same one the
+    /// craft's own emitter never overrides either.
+    Point,
 }
 
 /// A cue and the craft that raised it.
@@ -958,12 +684,23 @@ pub enum Placement {
 /// `Sound_Play` takes an emitter as its first argument and every one of these
 /// cues passes the craft's own, so the slot is the part of the call this port
 /// used to be throwing away - which is why only the player was ever audible.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+///
+/// [`Self::point`] is the same idea for [`Placement::Point`]: a cue not tied
+/// to any craft carries its own position instead of a slot. `#[derive(Eq)]`
+/// is deliberately not here any more - `Vec3` holds `f32` and does not
+/// implement it.
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct CueEvent {
     /// What to play.
     pub cue: Cue,
     /// The grid slot whose emitter plays it. Slot 0 is the player.
+    ///
+    /// Meaningless for a [`Placement::Point`] cue built with
+    /// [`Self::at_point`] - left at `0` there, and nothing reads it for one.
     pub slot: u8,
+    /// The world position a [`Placement::Point`] cue plays at, or [`None`]
+    /// for every other placement.
+    pub point: Option<Vec3>,
 }
 
 impl CueEvent {
@@ -973,6 +710,17 @@ impl CueEvent {
         Self {
             cue,
             slot: u8::try_from(slot).unwrap_or(u8::MAX),
+            point: None,
+        }
+    }
+
+    /// A cue at `point` rather than at a craft - see [`Placement::Point`].
+    #[must_use]
+    pub fn at_point(cue: Cue, point: Vec3) -> Self {
+        Self {
+            cue,
+            slot: 0,
+            point: Some(point),
         }
     }
 

@@ -244,6 +244,24 @@ impl Race {
                 self.sim.last_damager[struck as usize] = Some(impact.owner);
             }
             self.ignite_blast(impact.kind, impact.point, impact.struck.map(usize::from));
+            // `Plasmas_Update`'s teardown plays `PLASMAHITWALL` on the bolt's
+            // own emitter, at the bolt's position, for every ending it reads
+            // - a wall hit and the 10-second timeout alike, with no branch
+            // between them. This port's own Plasma can also end on a craft
+            // (`impact.struck.is_some()`, the shared sweep-segment test in
+            // `oag_gameplay::projectile::flight`), a case no read call site
+            // covers; the bank separately carries a distinct
+            // `PLASMAHITSHIP` cue this does not play, since nothing confirms
+            // it belongs here. Chosen, not measured - see
+            // `crate::audio::sfx::Cue::PlasmaHitWall`'s own doc comment and
+            // the `weapons-eight-of-thirteen-the-plasma-and-the` handover
+            // thread.
+            if impact.kind == oag_tables::weapons::Weapon::Plasma {
+                self.sim.cues.push(crate::audio::sfx::CueEvent::at_point(
+                    crate::audio::sfx::Cue::PlasmaHitWall,
+                    impact.point,
+                ));
+            }
         }
         self.ignite_missile_bounces(&bounces_before);
         // After the craft have moved, so a flare sits on this tick's nozzle

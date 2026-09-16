@@ -152,11 +152,17 @@ fn every_cue_names_a_bank_and_a_string() {
     // Pure spells them exactly as Pulse does - the finding, not the assumption.
     assert_eq!(oag_pure::race::SOUND_BANKS, pulse);
     // The cues this port holds a handle to, and only those: a held cue must
-    // not also be fired as a one-shot from the drain loop. All three are ones
-    // the original opens with an out-parameter and keeps - `~ENGINE` at
-    // `flare+0x7c`, `~SHIELD` at `entity+0x54`, `~BLOWUP` at `craft+0xcac`.
+    // not also be fired as a one-shot from the drain loop. The first three
+    // are ones the original opens with an out-parameter and keeps -
+    // `~ENGINE` at `flare+0x7c`, `~SHIELD` at `entity+0x54`, `~BLOWUP` at
+    // `craft+0xcac`. `PlasmaTravel` is held too, but per *projectile* slot
+    // rather than as a single race-wide handle - see
+    // `SfxVoices::plasma_travel`'s own doc comment.
     let held: Vec<Cue> = Cue::ALL.into_iter().filter(|c| c.held()).collect();
-    assert_eq!(held, vec![Cue::Engine, Cue::Shield, Cue::Blowup]);
+    assert_eq!(
+        held,
+        vec![Cue::Engine, Cue::Shield, Cue::Blowup, Cue::PlasmaTravel]
+    );
 }
 
 #[test]

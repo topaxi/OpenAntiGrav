@@ -121,21 +121,35 @@ fn every_cue_has_something_that_raises_it() {
     // because the reticle it follows is render-only state and the queue is the
     // simulation's output. `the_reticle_says_seeking_then_locked` in
     // `race::tests::weapons` is what stops it going unraised.
-    const BY_LEVEL: [Cue; 4] = [Cue::Engine, Cue::Shield, Cue::Blowup, Cue::LockOn];
+    //
+    // `PlasmaTravel` joins this for the same reason: it is read directly off
+    // the world's own projectile array every tick in `Audio::race_tick`,
+    // never pushed as a `CueEvent` - see its own doc comment and
+    // `SfxVoices::plasma_travel`.
+    const BY_LEVEL: [Cue; 5] = [
+        Cue::Engine,
+        Cue::Shield,
+        Cue::Blowup,
+        Cue::LockOn,
+        Cue::PlasmaTravel,
+    ];
 
     // A pad the whole grid stands on *and* a wall to scrape, so one run
     // reaches every edge. The wall is `respawn.rs`'s proven fixture - a
     // backwards-wound triangle registers no contact silently, so an invented
-    // one here could make this pass by never testing anything.
+    // one here could make this pass by never testing anything. The same wall
+    // also closes the Plasma's own bolt: charged and released a body-length
+    // above it, the downward probe finds it within the first flight tick.
     let mut setup = setup_with(
         hulled_handling(),
         vec![plane(1, -40.0, oag_physics::Surface::Wall, 0)],
     );
     setup.mode = Mode::SingleRace;
     setup.speedup_pads = enveloping_pad();
-    setup.weapons = Some(one_mine_table());
+    setup.weapons = Some(mine_and_plasma_table());
     let mut race = Race::start(setup);
 
+    let mut buttons = Buttons::new();
     let mut raised = std::collections::BTreeSet::new();
     let mut saw_impact = false;
     for tick in 0..240 {
@@ -149,6 +163,16 @@ fn every_cue_has_something_that_raises_it() {
         // above is: this is a fixture reaching an edge, not a pickup grant.
         if tick == 0 {
             race.sim.world.ships[0].autopilot_timer = 2.0;
+        }
+        // A Plasma, pressed once the Autopilot cancel above has cleared -
+        // `spend_pickup`'s fire arm cancels instead of firing while
+        // `autopilot_timer > 0.0`, and `2.0` seconds clears by tick 120 at
+        // 60 Hz. `Cue::Plasma` fires on this same tick; the one-second
+        // wind-up releases the bolt around tick 190, comfortably inside the
+        // wall it is re-aimed at every tick, and `Cue::PlasmaHitWall` follows
+        // within a tick or two of that.
+        if tick == 130 {
+            race.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Plasma);
         }
         // A Mine, dropped once - after the wall business above has already
         // had its first pass, so the impulse this leaves on `physics.shield`
@@ -166,7 +190,12 @@ fn every_cue_has_something_that_raises_it() {
         let body = &mut race.sim.world.ships[0].physics.body;
         body.position = Vec3::new(20.0, -39.7, 0.0);
         body.linear_velocity = Vec3::new(0.0, -50.0, 0.0);
-        saw_impact |= race.tick(&InputSnapshot::default()).wall.impact;
+        let snapshot = if tick == 130 {
+            buttons.tick(SQUARE)
+        } else {
+            buttons.tick(0)
+        };
+        saw_impact |= race.tick(&snapshot).wall.impact;
         raised.extend(race.drain_cues().into_iter().map(|e| e.cue));
     }
     assert!(
@@ -190,6 +219,8 @@ fn every_cue_has_something_that_raises_it() {
         Cue::ShieldActive,
         Cue::Disengaging,
         Cue::MineLaunch,
+        Cue::Plasma,
+        Cue::PlasmaHitWall,
     ] {
         assert!(raised.contains(&cue), "{} was never raised", cue.name());
     }

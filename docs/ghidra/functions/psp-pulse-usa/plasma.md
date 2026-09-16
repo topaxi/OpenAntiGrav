@@ -202,6 +202,14 @@ is deliberately not guessed at: `Race::blast_for` returns `None` for the Plasma,
 which is the honest "not implemented" state and not "it does not explode" - the
 damage and impulse in `oag_gameplay::projectile::blast` still land.
 
+**What this engine plays, 2026-09-16.** `PLASMA` fires at the press -
+`Cue::Plasma`, `Placement::Craft`, `crates/game/src/race/weapons.rs` - through
+the firing craft's own emitter, confirmed by decompiling `Plasma_Init` in full
+this session: the `Sound_Play` call above runs on the argument the function
+was handed directly, before it ever constructs the bolt's own emitter a few
+lines later. See the next section's own note for the two cues that ride that
+second, bolt-owned emitter instead.
+
 ## `Plasma_Update` (`0x0885c6cc`) is `Rocket_Update`'s floor follower
 
 Confidence **85**. Stripped of the VFPU register shuffling, one tick is:
@@ -320,6 +328,39 @@ Three things fall out of that and each was an open item:
 Also read here: `PLASMAHITWALL` at `0x08a7c99b`, a direct `.rodata` read, and
 `~PLASMATVL` at `0x08a7c09c`, the looping travel cue `Plasma_Launch` starts and
 this teardown stops.
+
+**Both ride the bolt's own emitter, not the firing craft's - decompiling
+`Plasma_Init` in full 2026-09-16 settles which.** The constructor allocates
+its own `0x70`-byte `SoundEmitter_Init` record, stores it at the entity's
+`+0x5c` (`p->emitter`), and points that record's own `+0x50` scene-node field
+at `&p->matrix` (`p+0x70`) - the bolt's own pose, seeded from the craft's node
+at construction and rewritten by `Plasma_Launch` at release, never at the
+craft's own node. So `p->emitter` tracks *the bolt*, and both `~PLASMATVL`
+(started on it by `Plasma_Launch`, above) and `PLASMAHITWALL` (played on it by
+this teardown) are heard from wherever the bolt actually is - unlike `PLASMA`
+one section up, which plays on the argument `Plasma_Init` was handed directly,
+before this second emitter is even constructed. Neither `Plasma_Init` nor
+`Plasma_Launch` ever writes this emitter's own `+0x38` (radius), so it keeps
+`SoundEmitter_Init`'s `200.0` default - the same radius the craft's own
+emitter never overrides either (`positional-audio.md`).
+
+**What this engine plays.** `Cue::PlasmaTravel` (`~PLASMATVL`) opens a held,
+looping voice the tick a bolt's `charge` first reads `<= 0.0` and follows its
+position every tick after, keyed by **projectile slot** rather than by grid
+slot - the shape `mine.md`'s own `MINERADAR` note names as the gap nothing in
+this engine could address before now (`SfxVoices::plasma_travel`,
+`crates/game/src/audio/sfx.rs`). `Cue::PlasmaHitWall` (`PLASMAHITWALL`) fires
+once for every `Impact` this engine's own `Projectiles::advance` reports for a
+Plasma - a wall hit and the 10 s timeout, matching this teardown's own
+"identical for either ending" reading, **and also a craft hit**
+(`Impact::struck.is_some()`), a third ending this page's own reading of
+`Plasma_Update`'s downward-probe switch and the elided travel-segment sweep
+above never located a call site for. The bank separately carries a distinct
+`PLASMAHITSHIP` (confirmed present via `oag-wad sounds`, alongside `PLASMA`,
+`PLASMAHITWALL` and `~PLASMATVL`, all in `weapons.bnk`) that this engine does
+not play for that case - chosen, not measured; see
+`crate::audio::sfx::Cue::PlasmaHitWall`'s own doc comment and the
+`weapons-eight-of-thirteen-the-plasma-and-the` handover thread.
 
 **The age check itself also plays a cosmetic broadcast, separate from the
 teardown.** Re-read in full alongside the teardown: `if (p->age > 10.0f) {
