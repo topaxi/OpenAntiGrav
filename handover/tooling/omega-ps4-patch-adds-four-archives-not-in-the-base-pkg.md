@@ -7,7 +7,7 @@ whether that merge was clean" as an open, unverified lead for the block-data-
 location mystery. It's now closed, and the answer turned up new content
 rather than resolving the mystery: full evidence and the exact commands are
 [source-images.md](../../docs/reverse-engineering/source-images.md#omega-ps4-eupkg--omega-ps4-eu-patchpkg---wipeout-omega-collection-ps4)
-and [psarc.md](../../docs/formats/psarc.md#block-data-location---open-and-a-realzero-split-rather-than-uniformly-broken).
+and [psarc.md](../../docs/formats/psarc.md#block-data-location---the-first-byte-oracle-was-wrong-and-the-corrected-picture-is-three-way-not-binary).
 
 `omega-ps4-eu-patch.pkg` extracts, via the same `PkgTool.Core pkg_extract`
 verb the base `.pkg` uses (confirmed from `PkgTool/Program.cs` source: it
