@@ -865,4 +865,14 @@
 0x089122b4	function	Image_SetVertexColours	78	lock-sight.md
 0x08819b24	function	Hud_SampleSightDepth	80	lock-sight.md
 0x08ab0a4c	data	g_hud_sight_depth_sample	80	lock-sight.md
+0x08850edc	function	WeaponAi_FindTargetInPath	85	weapon-ai.md
+0x08850d70	function	WeaponAi_ScanTraffic	85	weapon-ai.md
+0x088508d4	function	WeaponAi_ScoreForwardWeapon	85	weapon-ai.md
+0x088509e4	function	WeaponAi_BiasAbsorbByShield	85	weapon-ai.md
+0x08850d0c	function	WeaponAi_HeldPastPatience	80	weapon-ai.md
+0x08850d34	function	WeaponAi_SomethingCloseBehind	80	weapon-ai.md
+0x08850c6c	function	WeaponAi_ScoreTurbo	85	weapon-ai.md
+0x08850cc8	function	WeaponAi_ScoreShield	85	weapon-ai.md
+0x08850ac4	function	WeaponAi_ScoreBomb	85	weapon-ai.md
+0x08850b7c	function	WeaponAi_ScoreMine	85	weapon-ai.md
 
