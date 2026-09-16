@@ -9,9 +9,9 @@
 //! one level further out.
 
 use super::{
-    FALL_ACCELERATION, Impact, MAX_FLIGHT_SECONDS, MAX_PROJECTILES, Projectile, Projectiles,
-    RIDE_HEIGHT, SURFACE_PROBE_LENGTH, SweepHit, TriggerRadii, disruptor, mine, missile,
-    nearest_hit, plasma, shuriken,
+    FALL_ACCELERATION, Impact, KMH_PER_UNIT_PER_SECOND, MAX_FLIGHT_SECONDS, MAX_PROJECTILES,
+    Projectile, Projectiles, RIDE_HEIGHT, SURFACE_PROBE_LENGTH, SweepHit, TriggerRadii, disruptor,
+    mine, missile, nearest_hit, plasma, shuriken,
 };
 use oag_core::math::Vec3;
 use oag_physics::{Ray, Raycaster, Surface};
@@ -36,10 +36,9 @@ impl Projectiles {
     /// geometry. The owner's own hull is excluded outright: a straight-line shot
     /// cannot come back, so the exclusion costs nothing and removes the launch
     /// frame's self-hit without a grace period to tune.
-    // Eight parameters: the seven it had plus the Disruptor's table block,
-    // which is one per weapon that flies at an authored speed. A parameter
-    // struct would be the tidy answer and is deferred until a third weapon
-    // asks for one.
+    // Nine parameters: the Disruptor's table block plus the Plasma's, one per
+    // weapon that flies at an authored speed. A parameter struct would be the
+    // tidy answer and is deferred until a fourth weapon asks for one.
     #[allow(clippy::too_many_arguments)]
     pub fn advance<R: Raycaster + ?Sized>(
         &mut self,
@@ -47,6 +46,7 @@ impl Projectiles {
         raycaster: &R,
         ships: &[crate::world::Ship],
         missile: Option<&oag_tables::weapons::MissileStats>,
+        plasma: Option<&oag_tables::weapons::PlasmaStats>,
         disruptor: Option<&oag_tables::weapons::DisruptorStats>,
         trigger_radii: TriggerRadii,
         class: &str,
@@ -75,13 +75,44 @@ impl Projectiles {
                 // the tick the hold ends still puts the bolt where the craft
                 // is now. `Plasma_Launch` (`0x0885bf84`) re-reads the craft's
                 // node matrix anyway, which is the same thing said twice.
-                if let Some(ship) = ships.get(projectile.owner as usize) {
+                let ship = ships.get(projectile.owner as usize);
+                let heading = ship.map(|ship| {
                     let (position, heading) =
                         plasma::muzzle(&ship.physics, &ship.handling.dimensions);
                     projectile.position = position;
                     projectile.velocity = heading * projectile.velocity.length();
-                }
+                    heading
+                });
                 projectile.charge = (projectile.charge - dt).max(0.0);
+                // **Release, on the same tick the countdown crosses zero -
+                // `projectile.charge <= 0.0` gates this, not merely `plasma`
+                // being `Some`.** `Plasmas_Update` (`0x0886b490`) takes
+                // `Plasma_Launch` instead of `Plasma_Update` on this exact
+                // tick alone, and `Plasma_Launch` re-reads the firing craft's
+                // *current* velocity - not whatever it was moving at when the
+                // press started the charge - `p->launch_kmh =
+                // length(craft_velocity) * 3.6f + stats->launchspeed`
+                // (`docs/ghidra/functions/psp-pulse-usa/plasma.md`'s "the
+                // charge is real" section). Without the `charge <= 0.0` guard
+                // this ran on *every* charging tick, recomputing the launch
+                // speed off whatever the craft was doing at each one, which is
+                // invisible against a craft holding a constant velocity
+                // through the whole charge - `crates/game/tests/plasma_ground_truth.rs`'s
+                // `a_plasma_fired_on_a_real_track_is_one_bolt_and_it_flies`,
+                // fired one tick into an accelerating race, is what caught it.
+                // `plasma` is `None` for a caller with no weapon table, in
+                // which case the bolt keeps whatever magnitude it was
+                // charging at, unchanged - the same "no table, no ramp"
+                // fallback [`missile::speed_kmh`]'s caller below takes.
+                if let (Some(ship), Some(heading), Some(stats)) = (ship, heading, plasma)
+                    && projectile.charge <= 0.0
+                {
+                    let launch_kmh = ship.physics.body.linear_velocity.length()
+                        * KMH_PER_UNIT_PER_SECOND
+                        + stats.launch_speed;
+                    projectile.launch_speed_kmh = launch_kmh;
+                    projectile.velocity = heading * (launch_kmh / KMH_PER_UNIT_PER_SECOND);
+                }
                 continue;
             }
 
@@ -118,25 +149,57 @@ impl Projectiles {
                 continue;
             }
 
-            // A missile's speed is pinned to its ramp every tick rather than
-            // integrated, so the whole flight needs to know how old it is. Age
-            // is derived from the lifetime rather than stored beside it: the two
-            // would be one number written twice, and the second one is what goes
-            // wrong.
+            // A missile's or a plasma bolt's speed is pinned to its ramp every
+            // tick rather than integrated, so the whole flight needs to know
+            // how old it is. Age is derived from the lifetime rather than
+            // stored beside it: the two would be one number written twice, and
+            // the second one is what goes wrong. For the Plasma this is age
+            // *since release*, not since the press that started the charge -
+            // the charging branch above returns early and never reaches this
+            // line, so `lifetime` (and therefore `age`) does not move until
+            // the bolt is actually flying.
             let age = MAX_FLIGHT_SECONDS - projectile.lifetime;
             // `None` where the file authors a speed *per* class and this
-            // race's rung is outside them - the missile then flies on its
+            // race's rung is outside them - the weapon then flies on its
             // integrated velocity rather than on a ramp borrowed from some
             // other rung. Unreachable on every measured disc: the only ladder
             // with a fifth rung is Pure's, and Pure authors one
             // class-independent speed per weapon.
-            let pinned_kmh = missile.filter(|_| guided).and_then(|stats| {
-                Some(missile::speed_kmh(
-                    projectile.launch_speed_kmh,
-                    stats.speed_for_named(class)?,
-                    age,
-                ))
-            });
+            //
+            // **The Plasma shares [`missile::speed_kmh`] rather than owning a
+            // copy.** `Missile_SpeedNow` (`0x0885a038`) and
+            // `Plasma_SpeedForClass` (`0x0885c5a4`) each independently test
+            // `age < 1.0` and blend with the identical operand order -
+            // `launch * (1 - age) + class * age` - which is the same bar this
+            // project already used to fold the Rocket's, the Missile's and the
+            // Shuriken's `12.0` surface probe into one constant: two
+            // functions, read separately, agreeing is worth more than either
+            // alone. See [`missile::SPEED_RAMP_SECONDS`]'s own doc comment,
+            // which now cites both addresses.
+            //
+            // **No launch floor for the Plasma.** `Plasma_Launch`'s listing
+            // has no `vmax_s` guarding a minimum - that clamp is
+            // `Missile_Init`'s own ([`missile::LAUNCH_SPEED_FLOOR_KMH`]), read
+            // off a different function, and is not carried over here.
+            let pinned_kmh = if guided {
+                missile.and_then(|stats| {
+                    Some(missile::speed_kmh(
+                        projectile.launch_speed_kmh,
+                        stats.speed_for_named(class)?,
+                        age,
+                    ))
+                })
+            } else if kind == Weapon::Plasma {
+                plasma.and_then(|stats| {
+                    Some(missile::speed_kmh(
+                        projectile.launch_speed_kmh,
+                        stats.speed_for_named(class)?,
+                        age,
+                    ))
+                })
+            } else {
+                None
+            };
 
             let from = projectile.position;
             let mut to = from + projectile.velocity * dt;
@@ -186,11 +249,20 @@ impl Projectiles {
                 Some(hit) if hit.surface.is_hoverable() => {
                     projectile.surface = hit.normal;
                     to = hit.point + hit.normal * RIDE_HEIGHT;
-                    // A missile re-pins its speed to the ramp here rather than
-                    // preserving what it had - `Missile_Update` normalises and
-                    // rescales on this exact branch, and by a **divide** by 3.6
-                    // where its guidance path multiplies by a bit pattern that is
-                    // not quite 1/3.6. Both roundings are the original's.
+                    // A missile or a plasma bolt re-pins its speed to the ramp
+                    // here rather than preserving what it had -
+                    // `Missile_Update` and `Plasma_Update` (`0x0885c6cc`,
+                    // `default:` arm, `plasma.md`) both normalise and rescale
+                    // on this exact branch, and by a **divide** by 3.6 where
+                    // the Missile's own guidance path multiplies by a bit
+                    // pattern that is not quite 1/3.6. Both roundings are the
+                    // original's. **This is also the only branch that re-pins
+                    // a Plasma's speed** - `Plasma_Update`'s `0x7f` (no floor)
+                    // arm does not rescale, so a bolt fired over a gap keeps
+                    // its launch speed, unchanged, until the track comes back
+                    // under it. A Rocket and a Shuriken never reach a `Some`
+                    // here at all: `pinned_kmh` is `None` for both, so they
+                    // fall to `projectile.velocity.length()`, same as always.
                     let speed = pinned_kmh.map_or_else(
                         || projectile.velocity.length(),
                         missile::speed_units_on_surface,

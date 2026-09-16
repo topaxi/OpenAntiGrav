@@ -128,6 +128,19 @@ pub const SELF_DETONATE_SECONDS: f32 = 3.0;
 /// The Missile's `<Stats>` happens to author `slowdown_time="1.0"` as well, which
 /// is a coincidence worth naming so nobody wires the two together - they are
 /// different quantities that both read 1.0 on the shipped disc.
+///
+/// **Shared with the Plasma, and recovered twice over.** `Plasma_SpeedForClass`
+/// (`0x0885c5a4`) independently tests `age < 1.0` and blends with the identical
+/// operand order - `launch * (1 - age) + class * age` - read weeks after this
+/// function and from a different part of the executable
+/// (`docs/ghidra/functions/psp-pulse-usa/plasma.md`'s "the launch ramp"
+/// section). Two functions agreeing on both the second and the shape is the
+/// same bar this project used to fold the Rocket's, the Missile's and the
+/// Shuriken's `12.0` surface probe into one constant, so [`speed_kmh`] is
+/// spent for the Plasma too rather than the Plasma growing its own copy - see
+/// `oag_gameplay::projectile::flight`'s `pinned_kmh`. The Plasma does **not**
+/// share [`LAUNCH_SPEED_FLOOR_KMH`]: `Plasma_Launch`'s listing has no `vmax_s`
+/// clamping a minimum, so a standing-start bolt leaves at `launchspeed` alone.
 pub const SPEED_RAMP_SECONDS: f32 = 1.0;
 
 /// The slowest a missile may leave the rail, in km/h.

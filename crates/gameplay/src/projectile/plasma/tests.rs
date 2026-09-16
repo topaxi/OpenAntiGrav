@@ -7,7 +7,7 @@
 use super::*;
 use crate::projectile::{MAX_FLIGHT_SECONDS, Projectiles};
 use oag_core::math::Quat;
-use oag_physics::CollisionWorld;
+use oag_physics::{CollisionWorld, Surface, TriangleSoup};
 use oag_tables::weapons::Weapon;
 
 fn craft_at(position: Vec3, shield: f32, mass: f32) -> crate::world::Ship {
@@ -81,6 +81,7 @@ fn a_charging_bolt_rides_the_craft_and_leaves_along_its_new_heading() {
             &ships,
             None,
             None,
+            None,
             crate::projectile::TriggerRadii::default(),
             "VENOM",
         );
@@ -132,6 +133,7 @@ fn a_charging_bolt_rides_the_craft_and_leaves_along_its_new_heading() {
         &ships,
         None,
         None,
+        None,
         crate::projectile::TriggerRadii::default(),
         "VENOM",
     );
@@ -178,6 +180,7 @@ fn a_plasma_bolt_detonates_when_its_ten_seconds_are_up() {
             TICK,
             &geometry,
             &ships,
+            None,
             None,
             None,
             crate::projectile::TriggerRadii::default(),
@@ -329,6 +332,7 @@ fn a_plasma_bolt_that_strikes_a_craft_reports_it_struck_with_a_blast() {
                 &ships,
                 None,
                 None,
+                None,
                 crate::projectile::TriggerRadii::default(),
                 "VENOM",
             )
@@ -457,5 +461,163 @@ fn a_plasma_craft_hit_pushes_bystanders_but_spares_the_firer() {
         world.ships[0].physics.body.linear_velocity.length(),
         0.0,
         "the firer is excluded from the impulse sweep, even though it sits inside the radius"
+    );
+}
+
+/// A fixture whose class speed and `launchSpeed` are both round numbers, so a
+/// test can tell a launch-speed reading from a class-speed one at a glance.
+/// `launchSpeed="0"` so the craft's own speed is the whole of the launch
+/// speed - no offset to add back in by hand.
+fn ramp_table() -> oag_tables::weapons::PlasmaStats {
+    oag_tables::weapons::parse(
+        r#"<WeaponStats>
+             <Weapon type="Global"><Stats slowdown_limit="0"/></Weapon>
+             <Weapon type="Plasma"><Stats absorb="1" blastforce="10" blastradius="12"
+               damage="25" slowdown_time="1" speed="600" launchSpeed="0"/></Weapon>
+           </WeaponStats>"#,
+    )
+    .expect("the fixture parses")
+    .plasma()
+    .expect("a Plasma")
+}
+
+/// A large horizontal floor, wound so its normal points up - the ramp only
+/// re-pins the bolt's speed on a tick the floor probe finds one; see
+/// [`crate::projectile::Projectiles::advance`]'s own doc comment on that
+/// branch.
+fn floor_at_y(y: f32) -> CollisionWorld {
+    let mut world = CollisionWorld::new();
+    world.push(TriangleSoup::new(
+        vec![
+            [-500.0, y, -500.0],
+            [-500.0, y, 500.0],
+            [500.0, y, 500.0],
+            [500.0, y, -500.0],
+        ],
+        vec![[0, 1, 2], [0, 2, 3]],
+        Vec::new(),
+        Surface::Floor,
+        0,
+    ));
+    world
+}
+
+/// **The discriminating test.** `Plasma_Launch` re-reads the firing craft's
+/// velocity at the moment the charge ends, not at the moment the press
+/// started it - a player who stands still, presses fire, and only then
+/// accelerates through the whole one-second hold leaves at the speed they
+/// reached, not at zero. See
+/// `docs/ghidra/functions/psp-pulse-usa/plasma.md`'s "the charge is real"
+/// section. A wiring bug that left [`Projectile::launch_speed_kmh`] at its
+/// default, or that read the craft's velocity at [`Projectiles::charge_up`]
+/// instead, both pass every formula-only test and both fail this one.
+#[test]
+fn the_launch_speed_reads_the_crafts_velocity_at_release_not_at_the_press() {
+    let stats = ramp_table();
+    let geometry = CollisionWorld::new();
+    let mut ships = one_ship(Vec3::ZERO, 0.0);
+    let mut projectiles = Projectiles::new();
+    let (nose, forward) = muzzle(&ships[0].physics, &ships[0].handling.dimensions);
+    // Standing still at the press - if this were read now the launch speed
+    // would be `launchSpeed` alone, `0.0`.
+    assert!(projectiles.charge_up(nose, forward * 100.0, 0, CHARGE_SECONDS));
+
+    let mut tick = 0;
+    while projectiles.slots[0].charge > 0.0 {
+        // Accelerating through the whole hold, so by release the craft is at
+        // 100 units/s - 360 km/h - in every tick the countdown could cross
+        // zero on.
+        ships[0].physics.body.linear_velocity = Vec3::Z * 100.0;
+        projectiles.advance(
+            TICK,
+            &geometry,
+            &ships,
+            None,
+            Some(&stats),
+            None,
+            crate::projectile::TriggerRadii::default(),
+            "VENOM",
+        );
+        tick += 1;
+        assert!(tick < 120, "the hold has to end");
+    }
+
+    let bolt = projectiles.slots[0];
+    assert!(
+        (bolt.launch_speed_kmh - 360.0).abs() < 1e-3,
+        "expected 360 km/h from the craft's speed at release, got {}",
+        bolt.launch_speed_kmh
+    );
+    let expected_units_per_second = 360.0 / KMH_PER_UNIT_PER_SECOND;
+    assert!(
+        (bolt.velocity.length() - expected_units_per_second).abs() < 1e-3,
+        "the release tick's own velocity must already carry the ramp's age-0 \
+         value: expected {expected_units_per_second}, got {}",
+        bolt.velocity.length()
+    );
+}
+
+/// A flying bolt's speed sits strictly between the launch and class speeds
+/// partway through the one-second ramp, and lands on the class speed once the
+/// ramp is over - [`missile::speed_kmh`]'s shape, now exercised through real
+/// flight rather than the formula alone. Needs a floor: see [`floor_at_y`].
+#[test]
+fn a_flying_plasma_bolts_speed_blends_from_launch_to_class_over_one_second() {
+    let stats = ramp_table();
+    let geometry = floor_at_y(0.0);
+    let mut ships = one_ship(Vec3::new(0.0, crate::projectile::RIDE_HEIGHT, 0.0), 0.0);
+    // 100 units/s == 360 km/h, held constant through the charge and the
+    // flight both, so the only thing that can move the bolt's speed is the
+    // ramp itself.
+    ships[0].physics.body.linear_velocity = Vec3::Z * 100.0;
+    let mut projectiles = Projectiles::new();
+    let (nose, forward) = muzzle(&ships[0].physics, &ships[0].handling.dimensions);
+    assert!(projectiles.charge_up(nose, forward * 100.0, 0, CHARGE_SECONDS));
+
+    let advance = |projectiles: &mut Projectiles, ships: &[crate::world::Ship]| {
+        projectiles.advance(
+            TICK,
+            &geometry,
+            ships,
+            None,
+            Some(&stats),
+            None,
+            crate::projectile::TriggerRadii::default(),
+            "VENOM",
+        );
+    };
+
+    let mut tick = 0;
+    while projectiles.slots[0].charge > 0.0 {
+        advance(&mut projectiles, &ships);
+        tick += 1;
+        assert!(tick < 120, "the hold has to end");
+    }
+    assert!(
+        (projectiles.slots[0].launch_speed_kmh - 360.0).abs() < 1e-3,
+        "got {}",
+        projectiles.slots[0].launch_speed_kmh
+    );
+
+    // Half a second into the flight - strictly between 360 and 600, not
+    // pinned at either end.
+    for _ in 0..30 {
+        advance(&mut projectiles, &ships);
+    }
+    let mid = projectiles.slots[0].velocity.length() * KMH_PER_UNIT_PER_SECOND;
+    assert!(
+        (361.0..600.0).contains(&mid),
+        "expected the bolt strictly between the launch (360) and class (600) \
+         speed at age ~0.5s, got {mid}"
+    );
+
+    // Well past the one-second ramp: at the class speed and staying there.
+    for _ in 0..90 {
+        advance(&mut projectiles, &ships);
+    }
+    let after = projectiles.slots[0].velocity.length() * KMH_PER_UNIT_PER_SECOND;
+    assert!(
+        (after - 600.0).abs() < 1.0,
+        "expected the class speed once the ramp is over, got {after}"
     );
 }

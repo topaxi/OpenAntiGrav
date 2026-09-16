@@ -212,10 +212,13 @@ pub struct Projectile {
     pub bounces: u8,
     /// The speed this projectile left the rail at, in km/h.
     ///
-    /// Only a Missile reads it, as the base its speed ramp blends away from over
-    /// [`missile::SPEED_RAMP_SECONDS`]; see [`missile::speed_kmh`]. It is
-    /// per-shot rather than per-weapon because it carries the firing craft's own
-    /// speed at the moment of launch.
+    /// The base a Missile's or a Plasma's speed ramp blends away from over
+    /// [`missile::SPEED_RAMP_SECONDS`]; see [`missile::speed_kmh`], which both
+    /// weapons call. It is per-shot rather than per-weapon because it carries
+    /// the firing craft's own speed at the moment of launch - for the Plasma,
+    /// at the moment the charge ends, not the moment the button went down; see
+    /// [`Projectiles::advance`]'s charging branch. `0.0` for every other
+    /// weapon, which never reads it.
     pub launch_speed_kmh: f32,
     /// The pose a laid charge is drawn with, frozen at the moment it landed.
     ///
@@ -513,8 +516,11 @@ impl Projectiles {
     /// taken and the bolt is reseated on the craft every tick by
     /// [`Self::advance`], so the shot leaves along wherever that craft is
     /// pointing when the wind-up ends rather than where it pointed when the
-    /// button went down. `velocity` is therefore read for its **length** while
-    /// charging and for its direction only once the hold is over.
+    /// button went down. `velocity` is read for its **length** while charging
+    /// and for its direction only - the length is a hold-time visual only, not
+    /// the flight speed. [`Self::advance`]'s charging branch overwrites both
+    /// the moment the countdown reaches zero, from the craft's own velocity
+    /// *then*: see [`Projectile::launch_speed_kmh`].
     pub fn charge_up(&mut self, position: Vec3, velocity: Vec3, owner: u8, charge: f32) -> bool {
         let Some(slot) = self.place(
             Weapon::Plasma,
@@ -682,12 +688,14 @@ pub fn step<R: Raycaster + ?Sized>(
 ) -> [Option<Impact>; MAX_PROJECTILES] {
     let count = world.ship_count as usize;
     let missile_stats = weapons.and_then(oag_tables::weapons::WeaponStats::missile);
+    let plasma_stats = weapons.and_then(oag_tables::weapons::WeaponStats::plasma);
     let disruptor_stats = weapons.and_then(oag_tables::weapons::WeaponStats::disruptor);
     let impacts = world.projectiles.advance(
         dt,
         raycaster,
         &world.ships[..count],
         missile_stats.as_ref(),
+        plasma_stats.as_ref(),
         disruptor_stats.as_ref(),
         TriggerRadii::from_table(weapons),
         class,

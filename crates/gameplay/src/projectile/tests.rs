@@ -108,6 +108,7 @@ fn over_empty_space_a_projectile_keeps_its_heading_and_falls() {
             &ships(&[]),
             None,
             None,
+            None,
             TriggerRadii::default(),
             "VENOM",
         );
@@ -148,6 +149,7 @@ fn a_projectile_over_a_floor_rides_it_rather_than_detonating() {
             dt,
             &world,
             &ships(&[]),
+            None,
             None,
             None,
             TriggerRadii::default(),
@@ -195,6 +197,7 @@ fn a_rocket_hits_a_wall_it_would_tunnel_through_in_one_tick() {
             &ships(&[]),
             None,
             None,
+            None,
             TriggerRadii::default(),
             "VENOM",
         );
@@ -230,6 +233,7 @@ fn a_rocket_strikes_a_craft_that_is_not_its_owner() {
                 &grid,
                 None,
                 None,
+                None,
                 TriggerRadii::default(),
                 "VENOM",
             )
@@ -262,6 +266,7 @@ fn an_inactive_slot_is_not_a_target() {
             &grid,
             None,
             None,
+            None,
             TriggerRadii::default(),
             "VENOM",
         );
@@ -288,6 +293,7 @@ fn geometry_in_front_of_a_craft_stops_the_rocket_first() {
                 1.0 / 60.0,
                 &world,
                 &grid,
+                None,
                 None,
                 None,
                 TriggerRadii::default(),
@@ -325,6 +331,7 @@ fn a_rocket_that_hits_nothing_is_reaped_without_detonating() {
             dt,
             &world,
             &ships(&[]),
+            None,
             None,
             None,
             TriggerRadii::default(),
@@ -705,6 +712,7 @@ fn a_missile_mirrors_off_a_wall_where_a_rocket_detonates() {
             &ships,
             Some(&stats),
             None,
+            None,
             TriggerRadii::default(),
             class,
         );
@@ -740,6 +748,7 @@ fn a_missile_mirrors_off_a_wall_where_a_rocket_detonates() {
             &world,
             &ships,
             Some(&stats),
+            None,
             None,
             TriggerRadii::default(),
             class,
@@ -803,6 +812,7 @@ fn a_missile_gives_up_after_its_bounce_budget() {
             &ships,
             Some(&stats),
             None,
+            None,
             TriggerRadii::default(),
             class,
         );
@@ -846,6 +856,7 @@ fn an_unguided_missile_detonates_when_its_three_seconds_are_up() {
             &world,
             &ships,
             Some(&stats),
+            None,
             None,
             TriggerRadii::default(),
             class,
