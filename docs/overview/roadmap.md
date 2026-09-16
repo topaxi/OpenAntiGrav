@@ -136,7 +136,9 @@ The PSP `BOOT.BIN` is an unencrypted ELF, so this can start immediately.
 - [x] [Engine, brakes, steering and pitch](../ghidra/functions/psp-pulse-usa/engine.md):
       the craft update frame, every control force term, and all 32 handling
       parameters placed with the block's byte accounting closing exactly
-- [ ] Memory management and the heap layout
+- [x] [Memory management and the heap layout](../ghidra/functions/psp-pulse-usa/memory.md):
+      one front door, two bitmap pools, a guarded free-list heap, and a data
+      heap the front-end archive is steered into by swapping the heap list head
 - [ ] Resource loading: how a WAD entry becomes a live object
 - [ ] Game state machine
 - [x] The original PRNG - two of them, and the gameplay one is clock-seeded,

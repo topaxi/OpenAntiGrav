@@ -27,6 +27,7 @@ An unencrypted ELF, so no decryption step is needed. See
 | [Audio levels](audio-levels.md) | The group/master volume chain to the DAC, and the finding that the original reserves no headroom |
 | [Billboards](billboards.md) | `TrackStartup.xml`'s element walker and the two billboard constructors, live-traced through a PPSSPP watchpoint - the transform they write is a hardcoded identity matrix, not a computed placement |
 | [Import stubs](imports.md) | The 335 library calls, 306 of them resolved by NID |
+| [Memory management and the heap layout](memory.md) | `Mem_Alloc`'s front door, the two small-block bitmap pools, the guarded free-list heap, the main and data heaps' sizes, and how the front-end archive is steered into its own heap |
 | [The two random number generators](prng.md) | libc `rand` for gameplay, clock-seeded per race; a 17-word RANROT-B for particles and clouds, seeded with a constant and reseeded by every cloud group |
 | [The `00000030` halt](bad-memory-access-halt.md) | Why setting the LeachBeam fire bit by hand kills PPSSPP, localized to one `lv.q` and one null pointer |
 

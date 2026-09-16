@@ -97,7 +97,8 @@ second call returns `-1`.
 `crypt_ctx` is 0 everywhere.
 
 Flag bit `0x01` makes the whole archive RAM-resident and turns reads into
-`memcpy`; `0x08` selects a different allocator; `0x10` means the caller supplies
+`memcpy`; `0x08` allocates the resident image from the *top* of the heap
+(`Mem_AllocAlignedFromTop`, see [memory.md](memory.md)); `0x10` means the caller supplies
 an already-loaded buffer. Consistent with the sizes: the 315 MiB `Data.wad` is
 streamed with flags 0, while the three small archives are resident.
 
