@@ -3,6 +3,10 @@
 Nine milestones. Each has an exit criterion that is a demonstrable fact, not a
 judgement call, so it is always clear whether a milestone is done.
 
+For a cross-title matrix instead of a milestone narrative - which weapon,
+mode, or rendering feature is built/read/verified on which title - see the
+[status map](status.md).
+
 The ordering follows the natural dependency chain, with one deliberate
 departure: the verification harness (M3) comes *before* the physics work (M4).
 Building ship handling before it can be measured against the original means
