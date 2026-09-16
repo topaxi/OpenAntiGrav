@@ -13,13 +13,15 @@ Fixed here, used everywhere below:
 
 | Word | Meaning |
 | --- | --- |
-| `authored` | the disc ships the data (table/asset) for this title; nothing read or built |
-| `read` | reverse-engineered and documented (page + confidence), not implemented |
-| `built` | implemented in this engine from the read |
-| `verified` | built and checked against the original - ground-truth test, emulator trace, or screenshot diff; the cell names which |
-| `partial` | built with a named gap (≤6 words) |
-| `n/a` | the title does not have this |
-| `?` | not investigated - said rather than guessed |
+| 📦 `authored` | the disc ships the data (table/asset) for this title; nothing read or built |
+| 📖 `read` | reverse-engineered and documented (page + confidence), not implemented |
+| 🟩 `built` | implemented in this engine from the read |
+| ✅ `verified` | built and checked against the original - ground-truth test, emulator trace, or screenshot diff; the cell names which |
+| 🟨 `partial` | built with a named gap (≤6 words) |
+| ➖ `n/a` | the title does not have this |
+| ⬜ `?` | not investigated - said rather than guessed |
+
+The roadmap table uses the same colours: ✅ `done`, 🟨 `in progress`, ⬜ `not started`. Read a row left to right as a traffic light: ✅ is done done, 🟩 is done but unverified against the original, 🟨 has a named gap, 📖/📦 is not started in code.
 
 A cell claiming `built` or `verified` for something the disc merely authors is
 the error this page exists to prevent - see CLAUDE.md's "never invent what the
@@ -29,15 +31,15 @@ assets author": `authored` and `read` are both short of a runtime consumer.
 
 | Milestone | Exit criterion | Status |
 | --- | --- | --- |
-| [M0 - Foundation](roadmap.md#m0---foundation) | Both Pulse discs listed and identified; every format has a status-table row | **done** |
-| [M1 - Asset archaeology](roadmap.md#m1---asset-archaeology) | A Pulse track and ship render in `oag-view` from an unmodified disc, both PSP and PS2 paths | **done** |
-| [M2 - Binary understanding](roadmap.md#m2---binary-understanding) | Engine lifecycle and memory map documented; 50+ functions documented | **in progress** - 120 functions documented, memory map still open |
-| [M3 - Verification harness](roadmap.md#m3---verification-harness) | One command diffs any subsystem against the original and reports where/by how much | **in progress** - `oag-trace` does this for PPSSPP; no PCSX2 equivalent yet |
-| [M4 - Playable core](roadmap.md#m4---playable-core) | A single-ship time trial passes trace comparison for a full lap and feels right | **done** - ship holds the track for 600 ticks, worst spline distance 27.2/114 units |
-| [M5 - Full race](roadmap.md#m5---full-race) | An eight-ship race indistinguishable from the original, per-tick trace in tolerance | **in progress** - eight-craft grid built and AI drives; full-race trace parity not yet claimed |
-| [M6 - Rendering fidelity](roadmap.md#m6---rendering-fidelity) | A still frame is hard to tell from a PPSSPP frame at the same pose; every departure written down | **in progress** - bloom, colour grading, motion blur not yet ported |
-| [M7 - Shell and polish](roadmap.md#m7---shell-and-polish) | Pulse is feature complete, start to finish, on both asset paths | **in progress** - shell exists and navigates, not yet feature-complete |
-| [M8 - Beyond Pulse](roadmap.md#m8---beyond-pulse) | A second title boots and plays on the same engine | **in progress** - Pure boots to a Time Trial; HD/Fury and 2048 race and draw textured; Race Remix backend verified; Omega is RE-only |
+| [M0 - Foundation](roadmap.md#m0---foundation) | Both Pulse discs listed and identified; every format has a status-table row | ✅ **done** |
+| [M1 - Asset archaeology](roadmap.md#m1---asset-archaeology) | A Pulse track and ship render in `oag-view` from an unmodified disc, both PSP and PS2 paths | ✅ **done** |
+| [M2 - Binary understanding](roadmap.md#m2---binary-understanding) | Engine lifecycle and memory map documented; 50+ functions documented | 🟨 **in progress** - 120 functions documented, memory map still open |
+| [M3 - Verification harness](roadmap.md#m3---verification-harness) | One command diffs any subsystem against the original and reports where/by how much | 🟨 **in progress** - `oag-trace` does this for PPSSPP; no PCSX2 equivalent yet |
+| [M4 - Playable core](roadmap.md#m4---playable-core) | A single-ship time trial passes trace comparison for a full lap and feels right | ✅ **done** - ship holds the track for 600 ticks, worst spline distance 27.2/114 units |
+| [M5 - Full race](roadmap.md#m5---full-race) | An eight-ship race indistinguishable from the original, per-tick trace in tolerance | 🟨 **in progress** - eight-craft grid built and AI drives; full-race trace parity not yet claimed |
+| [M6 - Rendering fidelity](roadmap.md#m6---rendering-fidelity) | A still frame is hard to tell from a PPSSPP frame at the same pose; every departure written down | 🟨 **in progress** - bloom, colour grading, motion blur not yet ported |
+| [M7 - Shell and polish](roadmap.md#m7---shell-and-polish) | Pulse is feature complete, start to finish, on both asset paths | 🟨 **in progress** - shell exists and navigates, not yet feature-complete |
+| [M8 - Beyond Pulse](roadmap.md#m8---beyond-pulse) | A second title boots and plays on the same engine | 🟨 **in progress** - Pure boots to a Time Trial; HD/Fury and 2048 race and draw textured; Race Remix backend verified; Omega is RE-only |
 
 ## 1. Weapons
 
@@ -52,22 +54,22 @@ section yet.
 
 | Weapon | Pulse (PSP/PS2) | Pure (PSP) | HD/Fury (PS3) | Omega (PS4) |
 | --- | --- | --- | --- | --- |
-| Rocket | verified - [rocket_floor_trace.rs](../../crates/game/tests/rocket_floor_trace.rs) | built - shares Pulse's code, table decoded ([pure_weapons_ground_truth.rs](../../crates/tables/tests/pure_weapons_ground_truth.rs)) | read - `Rocket_Construct`, `RocketManager_Construct` ([weapons.md](../ghidra/functions/ps3-hdfury-eu/weapons.md)) | read - same classes ([weapons.md](../ghidra/functions/ps4-omega-eu/weapons.md)) |
-| Missile | verified - [missile_ground_truth.rs](../../crates/game/tests/missile_ground_truth.rs), lock/guidance in [missile.md](../ghidra/functions/psp-pulse-usa/missile.md) | built - same code, no Pure-specific behavioural test | read - `MissileManager_Construct` ([weapons.md](../ghidra/functions/ps3-hdfury-eu/weapons.md)) | read - same ([weapons.md](../ghidra/functions/ps4-omega-eu/weapons.md)) |
-| Quake | built - [quake.rs](../../crates/gameplay/src/projectile/quake.rs), no dedicated ground-truth test | built - same code | read - `QuakeManager_Construct` | read - same |
-| Cannon | verified - [cannon_ground_truth.rs](../../crates/game/tests/cannon_ground_truth.rs), fire path in [cannon-quake-leachbeam.md](../ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md) | n/a - not in Pure's roster | read - `CannonManager_Construct` | read - same |
-| Turbo | built - [pickups.md#what-a-fired-turbo-does](../gameplay/pickups.md#what-a-fired-turbo-does) | built - same code | `?` - no manager class located yet (non-projectile like Pulse) | `?` |
-| Shield | built - [pickups.md#what-a-fired-shield-does](../gameplay/pickups.md#what-a-fired-shield-does) | built - same code | `?` | `?` |
-| Autopilot | built - AI takeover, `Ai_Construct` per [pickups.md](../gameplay/pickups.md) | built - same code | `?` | `?` |
-| Plasma | verified - [plasma_ground_truth.rs](../../crates/game/tests/plasma_ground_truth.rs); direct-hit blast built 2026-09-16, see [pickups.md](../gameplay/pickups.md) row on `Plasma_HitCraft` | built - Pure hardcodes the same 1s charge, see [weapons.md](../ghidra/functions/psp-pure-usa/weapons.md) | read - `PlasmaManager_Construct`; blast mechanics read in [plasma.md](../ghidra/functions/ps3-hdfury-eu/plasma.md) | read - [plasma.md](../ghidra/functions/ps4-omega-eu/plasma.md) |
-| Bomb | verified - shares [mine.rs](../../crates/gameplay/src/projectile/mine.rs), tested in [mine_ground_truth.rs](../../crates/game/tests/mine_ground_truth.rs); gap: `damageradius` unread, no draw | built - fuse-less dialect, same code | read - `BombManager_Construct` | read - same |
-| Mine | verified - [mine_ground_truth.rs](../../crates/game/tests/mine_ground_truth.rs); gap: no draw ([pickups.md](../gameplay/pickups.md)) | built - same code | read - `MineManager_Construct` | read - same |
-| LeachBeam | partial - drain/repair and target-lock built, `slowShipFactor` throttle not wired ([pickups.md](../gameplay/pickups.md), dated passage 2026-09-08) | n/a | read - `LeachBeamManager_Construct` | read - shares one composite function with Mine, not yet decompiled ([weapons.md](../ghidra/functions/ps4-omega-eu/weapons.md)) |
-| Repulser | read - mechanism (a field on the firing craft) identified, no craft-state field to attach it to; deferred Eliminator-only ([pickups.md](../gameplay/pickups.md#shuriken-and-repulser-are-gated-by-mode-not-by-the-pool)) | n/a | read - `Repulser_Construct` | read - not named this pass |
-| Shuriken | verified - [shuriken_ground_truth.rs](../../crates/game/tests/shuriken_ground_truth.rs), Eliminator-only per authored odds | n/a | `?` | `?` |
-| Disruptor | n/a | built - [disruptor.rs](../../crates/gameplay/src/projectile/disruptor.rs), table decoded in [pure_weapons_ground_truth.rs](../../crates/tables/tests/pure_weapons_ground_truth.rs) | n/a | n/a |
-| EMP | n/a | n/a | read - named on Omega, not yet located on HD's own binary | read - `EMPManager_Construct` ([weapons.md](../ghidra/functions/ps4-omega-eu/weapons.md)) |
-| Light Barrier | n/a | n/a | `?` - not located on HD's own binary | read - `LightBarrierManager_Construct` ([weapons.md](../ghidra/functions/ps4-omega-eu/weapons.md)) |
+| Rocket | ✅ verified - [rocket_floor_trace.rs](../../crates/game/tests/rocket_floor_trace.rs) | 🟩 built - shares Pulse's code, table decoded ([pure_weapons_ground_truth.rs](../../crates/tables/tests/pure_weapons_ground_truth.rs)) | 📖 read - `Rocket_Construct`, `RocketManager_Construct` ([weapons.md](../ghidra/functions/ps3-hdfury-eu/weapons.md)) | 📖 read - same classes ([weapons.md](../ghidra/functions/ps4-omega-eu/weapons.md)) |
+| Missile | ✅ verified - [missile_ground_truth.rs](../../crates/game/tests/missile_ground_truth.rs), lock/guidance in [missile.md](../ghidra/functions/psp-pulse-usa/missile.md) | 🟩 built - same code, no Pure-specific behavioural test | 📖 read - `MissileManager_Construct` ([weapons.md](../ghidra/functions/ps3-hdfury-eu/weapons.md)) | 📖 read - same ([weapons.md](../ghidra/functions/ps4-omega-eu/weapons.md)) |
+| Quake | 🟨 partial - fires, travels and blasts ([quake.rs](../../crates/gameplay/src/projectile/quake.rs)); the wave's own track deformation/vertex animation is not built and where the original produces it is unresolved ([cannon-quake-leachbeam.md](../ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md)); no dedicated ground-truth test | 🟨 partial - same code, same gap; Pure's wave also authors the grey `bobs` emitter nothing here plays | 📖 read - `QuakeManager_Construct` | 📖 read - same |
+| Cannon | ✅ verified - [cannon_ground_truth.rs](../../crates/game/tests/cannon_ground_truth.rs), fire path in [cannon-quake-leachbeam.md](../ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md) | ➖ n/a - not in Pure's roster | 📖 read - `CannonManager_Construct` | 📖 read - same |
+| Turbo | 🟩 built - [pickups.md#what-a-fired-turbo-does](../gameplay/pickups.md#what-a-fired-turbo-does) | 🟩 built - same code | ⬜ `?` - no manager class located yet (non-projectile like Pulse) | ⬜ `?` |
+| Shield | 🟩 built - [pickups.md#what-a-fired-shield-does](../gameplay/pickups.md#what-a-fired-shield-does) | 🟩 built - same code | ⬜ `?` | ⬜ `?` |
+| Autopilot | 🟩 built - AI takeover, `Ai_Construct` per [pickups.md](../gameplay/pickups.md) | 🟩 built - same code | ⬜ `?` | ⬜ `?` |
+| Plasma | ✅ verified - [plasma_ground_truth.rs](../../crates/game/tests/plasma_ground_truth.rs); direct-hit blast built 2026-09-16, see [pickups.md](../gameplay/pickups.md) row on `Plasma_HitCraft` | 🟩 built - Pure hardcodes the same 1s charge, see [weapons.md](../ghidra/functions/psp-pure-usa/weapons.md) | 📖 read - `PlasmaManager_Construct`; blast mechanics read in [plasma.md](../ghidra/functions/ps3-hdfury-eu/plasma.md) | 📖 read - [plasma.md](../ghidra/functions/ps4-omega-eu/plasma.md) |
+| Bomb | ✅ verified - shares [mine.rs](../../crates/gameplay/src/projectile/mine.rs), tested in [mine_ground_truth.rs](../../crates/game/tests/mine_ground_truth.rs); gap: `damageradius` unread, no draw | 🟩 built - fuse-less dialect, same code | 📖 read - `BombManager_Construct` | 📖 read - same |
+| Mine | ✅ verified - [mine_ground_truth.rs](../../crates/game/tests/mine_ground_truth.rs); gap: no draw ([pickups.md](../gameplay/pickups.md)) | 🟩 built - same code | 📖 read - `MineManager_Construct` | 📖 read - same |
+| LeachBeam | 🟨 partial - drain/repair and target-lock built, `slowShipFactor` throttle not wired ([pickups.md](../gameplay/pickups.md), dated passage 2026-09-08) | ➖ n/a | 📖 read - `LeachBeamManager_Construct` | 📖 read - shares one composite function with Mine, not yet decompiled ([weapons.md](../ghidra/functions/ps4-omega-eu/weapons.md)) |
+| Repulser | 📖 read - mechanism (a field on the firing craft) identified, no craft-state field to attach it to; deferred Eliminator-only ([pickups.md](../gameplay/pickups.md#shuriken-and-repulser-are-gated-by-mode-not-by-the-pool)) | ➖ n/a | 📖 read - `Repulser_Construct` | 📖 read - not named this pass |
+| Shuriken | ✅ verified - [shuriken_ground_truth.rs](../../crates/game/tests/shuriken_ground_truth.rs), Eliminator-only per authored odds | ➖ n/a | ⬜ `?` | ⬜ `?` |
+| Disruptor | ➖ n/a | 🟩 built - [disruptor.rs](../../crates/gameplay/src/projectile/disruptor.rs), table decoded in [pure_weapons_ground_truth.rs](../../crates/tables/tests/pure_weapons_ground_truth.rs) | ➖ n/a | ➖ n/a |
+| EMP | ➖ n/a | ➖ n/a | 📖 read - named on Omega, not yet located on HD's own binary | 📖 read - `EMPManager_Construct` ([weapons.md](../ghidra/functions/ps4-omega-eu/weapons.md)) |
+| Light Barrier | ➖ n/a | ➖ n/a | ⬜ `?` - not located on HD's own binary | 📖 read - `LightBarrierManager_Construct` ([weapons.md](../ghidra/functions/ps4-omega-eu/weapons.md)) |
 
 **Known doc inconsistency, not resolved here**: `docs/gameplay/pickups.md`'s
 general "What is not built" section (below the `## Absorbing` heading) still
@@ -85,65 +87,65 @@ here plays it yet, per CLAUDE.md's "draw nothing and say so" rule.
 
 | Weapon | Fire/trigger | Flight | Ending/blast | Visuals | Audio | AI use |
 | --- | --- | --- | --- | --- | --- | --- |
-| Rocket | built | verified - shares [flight.rs](../../crates/gameplay/src/projectile/flight.rs) | built - fanned `spread`, see [pickups.md](../gameplay/pickups.md#what-a-fired-rocket-does) | partial - placeholder billboard, real `Ship Muzzle`/`cannon_flash` effects not built ([pickups.md](../gameplay/pickups.md#what-is-not-built)) | `?` | read - [weapon-ai.md](../ghidra/functions/psp-pulse-usa/weapon-ai.md) |
-| Missile | built - lock via `Ship_AcquireLock` | verified - [missile.md](../ghidra/functions/psp-pulse-usa/missile.md) | built | `?` | `?` | read - [weapon-ai.md](../ghidra/functions/psp-pulse-usa/weapon-ai.md) |
-| Quake | built - single travelling instance | built - fixed 270 units/s, unauthored ([pickups.md](../gameplay/pickups.md)) | built - authored `radius` | built - disc's own `WO_QUAKE`, axis-aligned (orientation not established) | `?` | `?` |
-| Cannon | built - reload gated on held fire button ([cannon-quake-leachbeam.md](../ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md)) | built - flat 500 km/h, no per-class speed authored | partial - direct damage only, no splash (schema authors none) | `?` | `?` | `?` |
-| Turbo | built | n/a | n/a | `?` | `?` | `?` |
-| Shield | built | n/a | n/a | `?` | `?` | `?` |
-| Autopilot | built - `Ai_Construct` names the input source | n/a | n/a | n/a | `?` | built (it *is* the AI) |
-| Plasma | built - 1s wind-up, `Plasma_Init`/`Plasmas_Update` | verified - shares Rocket's flight model | verified - three distinct endings (craft/wall/timeout), see [pickups.md](../gameplay/pickups.md) | built - charge glow grows over the wind-up | `?` | `?` |
-| Bomb | built - shares Mine's rear anchor | verified - [mine_ground_truth.rs](../../crates/game/tests/mine_ground_truth.rs) | partial - `damageradius` unread, no consumer | n/a - `Pulse_Bomb.vex` located, nothing draws it | `?` | `?` |
-| Mine | built - laid one per 0.1s | verified - [mine.md](../ghidra/functions/psp-pulse-usa/mine.md) | built | n/a - `Pulse_Mine.vex` located, nothing draws it | `?` | `?` |
-| LeachBeam | built - link to Missile's own lock | built - whole-race pool cursor | partial - drain/repair spent, `slowShipFactor` not wired | `?` | `?` | `?` |
-| Repulser | read only | n/a | n/a | n/a | n/a | n/a |
-| Shuriken | built - ±20 degree throw | verified - shares Rocket/Plasma's floor follower, bounces off walls | built - authored `fuse` | `?` | `?` | `?` |
+| Rocket | 🟩 built | ✅ verified - shares [flight.rs](../../crates/gameplay/src/projectile/flight.rs) | 🟩 built - fanned `spread`, see [pickups.md](../gameplay/pickups.md#what-a-fired-rocket-does) | 🟨 partial - placeholder billboard, real `Ship Muzzle`/`cannon_flash` effects not built ([pickups.md](../gameplay/pickups.md#what-is-not-built)) | ⬜ `?` | 📖 read - [weapon-ai.md](../ghidra/functions/psp-pulse-usa/weapon-ai.md) |
+| Missile | 🟩 built - lock via `Ship_AcquireLock` | ✅ verified - [missile.md](../ghidra/functions/psp-pulse-usa/missile.md) | 🟩 built | ⬜ `?` | ⬜ `?` | 📖 read - [weapon-ai.md](../ghidra/functions/psp-pulse-usa/weapon-ai.md) |
+| Quake | 🟩 built - single travelling instance | 🟩 built - fixed 270 units/s, unauthored ([pickups.md](../gameplay/pickups.md)) | 🟩 built - authored `radius` | 🟨 partial - the disc's own `WO_QUAKE` psys plays, axis-aligned (orientation not established); the wave's track deformation/vertex animation is not built | ⬜ `?` | ⬜ `?` |
+| Cannon | 🟩 built - reload gated on held fire button ([cannon-quake-leachbeam.md](../ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md)) | 🟩 built - flat 500 km/h, no per-class speed authored | 🟨 partial - direct damage only, no splash (schema authors none) | ⬜ `?` | ⬜ `?` | ⬜ `?` |
+| Turbo | 🟩 built | ➖ n/a | ➖ n/a | ⬜ `?` | ⬜ `?` | ⬜ `?` |
+| Shield | 🟩 built | ➖ n/a | ➖ n/a | ⬜ `?` | ⬜ `?` | ⬜ `?` |
+| Autopilot | 🟩 built - `Ai_Construct` names the input source | ➖ n/a | ➖ n/a | ➖ n/a | ⬜ `?` | 🟩 built (it *is* the AI) |
+| Plasma | 🟩 built - 1s wind-up, `Plasma_Init`/`Plasmas_Update` | ✅ verified - shares Rocket's flight model | ✅ verified - three distinct endings (craft/wall/timeout), see [pickups.md](../gameplay/pickups.md) | 🟩 built - charge glow grows over the wind-up | ⬜ `?` | ⬜ `?` |
+| Bomb | 🟩 built - shares Mine's rear anchor | ✅ verified - [mine_ground_truth.rs](../../crates/game/tests/mine_ground_truth.rs) | 🟨 partial - `damageradius` unread, no consumer | ➖ n/a - `Pulse_Bomb.vex` located, nothing draws it | ⬜ `?` | ⬜ `?` |
+| Mine | 🟩 built - laid one per 0.1s | ✅ verified - [mine.md](../ghidra/functions/psp-pulse-usa/mine.md) | 🟩 built | ➖ n/a - `Pulse_Mine.vex` located, nothing draws it | ⬜ `?` | ⬜ `?` |
+| LeachBeam | 🟩 built - link to Missile's own lock | 🟩 built - whole-race pool cursor | 🟨 partial - drain/repair spent, `slowShipFactor` not wired | ⬜ `?` | ⬜ `?` | ⬜ `?` |
+| Repulser | 📖 read only | ➖ n/a | ➖ n/a | ➖ n/a | ➖ n/a | ➖ n/a |
+| Shuriken | 🟩 built - ±20 degree throw | ✅ verified - shares Rocket/Plasma's floor follower, bounces off walls | 🟩 built - authored `fuse` | ⬜ `?` | ⬜ `?` | ⬜ `?` |
 
 ## 2. Race modes and rules
 
 | Mode/system | Pulse (PSP/PS2) | Pure (PSP) | HD/Fury (PS3) |
 | --- | --- | --- | --- |
-| Time trial | verified - per-class lap counts confirmed live ([race-modes.md](../gameplay/race-modes.md#time-trial)) | verified - `just play --source pure-psp-eu.chd` reaches a Time Trial ([roadmap.md](roadmap.md#m8---beyond-pulse)) | `?` |
-| Speed lap | built - [race-modes.md](../gameplay/race-modes.md#speed-lap) | `?` | `?` |
-| Zone | partial - no self-ending yet, numbers not in this repo ([race-modes.md](../gameplay/race-modes.md#zone)) | `?` | partial - colour grade escalation read for both HD-lineage titles ([race-modes.md](../gameplay/race-modes.md#the-colour-grade-escalates-too-on-the-two-hd-lineage-titles)) |
-| Single race | verified - eight-craft grid within 2.40 units of the original ([race-modes.md](../gameplay/race-modes.md#single-race), [race_ground_truth.rs](../../crates/game/tests/race_ground_truth.rs)) | `?` | `?` |
-| Eliminator | built - [race-modes.md](../gameplay/race-modes.md#eliminator), kill attribution chosen not measured | n/a | `?` |
-| Head-to-head | read, not implemented - `race_mode_for_cell` refuses it ([race-modes.md](../gameplay/race-modes.md#tournament)) | `?` | `?` |
-| Tournament | read, not implemented - full scoring law recovered ([tournament.md](../ghidra/functions/psp-pulse-usa/tournament.md)) | `?` | `?` |
-| Campaign grids/medals | built - `evaluate_medal` on `Cell` ([race-campaign.md](../formats/race-campaign.md#the-medal-law-implemented-on-cell-evaluate_medal)) | `?` | read - same schema, extended, split across four archives ([race-campaign.md](../formats/race-campaign.md#wipeout-hd-and-fury-the-same-schema-extended-split-across-four-archives)) |
-| Unlocks | read - `Unlock_GridPointsMet` and `Grid0..Grid10` gating named, not wired ([race-campaign.md](../formats/race-campaign.md), [race-modes.md](../gameplay/race-modes.md)) | `?` | `?` |
-| Records (best lap/time) | built - `records.toml`/`records.rs`, per (title, track, mode, class) ([persistence.md](../architecture/persistence.md)) | built - same mechanism, title-keyed | n/a |
-| Ghosts | `?` - not investigated | `?` | `?` |
+| Time trial | ✅ verified - per-class lap counts confirmed live ([race-modes.md](../gameplay/race-modes.md#time-trial)) | ✅ verified - `just play --source pure-psp-eu.chd` reaches a Time Trial ([roadmap.md](roadmap.md#m8---beyond-pulse)) | ⬜ `?` |
+| Speed lap | 🟩 built - [race-modes.md](../gameplay/race-modes.md#speed-lap) | ⬜ `?` | ⬜ `?` |
+| Zone | 🟨 partial - no self-ending yet, numbers not in this repo ([race-modes.md](../gameplay/race-modes.md#zone)) | ⬜ `?` | 🟨 partial - colour grade escalation read for both HD-lineage titles ([race-modes.md](../gameplay/race-modes.md#the-colour-grade-escalates-too-on-the-two-hd-lineage-titles)) |
+| Single race | ✅ verified - eight-craft grid within 2.40 units of the original ([race-modes.md](../gameplay/race-modes.md#single-race), [race_ground_truth.rs](../../crates/game/tests/race_ground_truth.rs)) | ⬜ `?` | ⬜ `?` |
+| Eliminator | 🟩 built - [race-modes.md](../gameplay/race-modes.md#eliminator), kill attribution chosen not measured | ➖ n/a | ⬜ `?` |
+| Head-to-head | 📖 read, not implemented - `race_mode_for_cell` refuses it ([race-modes.md](../gameplay/race-modes.md#tournament)) | ⬜ `?` | ⬜ `?` |
+| Tournament | 📖 read, not implemented - full scoring law recovered ([tournament.md](../ghidra/functions/psp-pulse-usa/tournament.md)) | ⬜ `?` | ⬜ `?` |
+| Campaign grids/medals | 🟩 built - `evaluate_medal` on `Cell` ([race-campaign.md](../formats/race-campaign.md#the-medal-law-implemented-on-cell-evaluate_medal)) | ⬜ `?` | 📖 read - same schema, extended, split across four archives ([race-campaign.md](../formats/race-campaign.md#wipeout-hd-and-fury-the-same-schema-extended-split-across-four-archives)) |
+| Unlocks | 📖 read - `Unlock_GridPointsMet` and `Grid0..Grid10` gating named, not wired ([race-campaign.md](../formats/race-campaign.md), [race-modes.md](../gameplay/race-modes.md)) | ⬜ `?` | ⬜ `?` |
+| Records (best lap/time) | 🟩 built - `records.toml`/`records.rs`, per (title, track, mode, class) ([persistence.md](../architecture/persistence.md)) | 🟩 built - same mechanism, title-keyed | ➖ n/a |
+| Ghosts | ⬜ `?` - not investigated | ⬜ `?` | ⬜ `?` |
 
 ## 3. Front end
 
 | Element | Pulse (PSP) | Pulse (PS2) | Pure (PSP) | HD/Fury (PS3) | 2048 (Vita) |
 | --- | --- | --- | --- | --- | --- |
-| Boot movies | built - [frontend-boot.md](../architecture/frontend-boot.md) | built - same chain | verified - 5-screen boot chain, [pure-boot.md](../architecture/pure-boot.md) | verified - measured boot chain, 3 cold RPCS3 boots ([hd-frontend.md](../formats/hd-frontend.md)) | n/a - `front_end: None`, not read ([2048-status.md](../formats/2048-status.md)) |
-| Menus | built - page tree, Race/Options/Display/Graphics/Controls | built - own widget grid, scaled from PSP ([frontend-boot.md](../architecture/frontend-boot.md#the-ps2-places-its-widgets-in-a-different-grid)) | `?` | partial - gate-tested, not seen on a real display ([roadmap.md](roadmap.md#m8---beyond-pulse)) | n/a |
-| Language selection | built - [frontend-boot.md](../architecture/frontend-boot.md#the-language-selection-screen) | `?` | `?` | `?` | n/a |
-| Ship/track select | built - [selection-screens.md](../ui/selection-screens.md) | `?` | `?` | `?` | n/a |
-| Loading screens | built - Pulse's own reading | `?` | `?` | read - [hd-loading.md](../formats/hd-loading.md) | n/a |
-| Results/end-race | built - [endrace-screens.md](../ui/endrace-screens.md) | `?` | `?` | read - [endrace-screens.md](../formats/endrace-screens.md) | n/a |
-| HUD | verified - screen-space reference-frame comparison caught a font bug ([hud.md](../ui/hud.md#what-a-reference-frame-settled)) | `?` | `?` | read - all 18 in-race layouts compose, 2,320 widgets ([hd-hud.md](../formats/hd-hud.md)) | read - 25 layouts compose, no sprite draws yet ([2048-status.md](../formats/2048-status.md)) |
+| Boot movies | 🟩 built - [frontend-boot.md](../architecture/frontend-boot.md) | 🟩 built - same chain | ✅ verified - 5-screen boot chain, [pure-boot.md](../architecture/pure-boot.md) | ✅ verified - measured boot chain, 3 cold RPCS3 boots ([hd-frontend.md](../formats/hd-frontend.md)) | ➖ n/a - `front_end: None`, not read ([2048-status.md](../formats/2048-status.md)) |
+| Menus | 🟩 built - page tree, Race/Options/Display/Graphics/Controls | 🟩 built - own widget grid, scaled from PSP ([frontend-boot.md](../architecture/frontend-boot.md#the-ps2-places-its-widgets-in-a-different-grid)) | ⬜ `?` | 🟨 partial - gate-tested, not seen on a real display ([roadmap.md](roadmap.md#m8---beyond-pulse)) | ➖ n/a |
+| Language selection | 🟩 built - [frontend-boot.md](../architecture/frontend-boot.md#the-language-selection-screen) | ⬜ `?` | ⬜ `?` | ⬜ `?` | ➖ n/a |
+| Ship/track select | 🟩 built - [selection-screens.md](../ui/selection-screens.md) | ⬜ `?` | ⬜ `?` | ⬜ `?` | ➖ n/a |
+| Loading screens | 🟩 built - Pulse's own reading | ⬜ `?` | ⬜ `?` | 📖 read - [hd-loading.md](../formats/hd-loading.md) | ➖ n/a |
+| Results/end-race | 🟩 built - [endrace-screens.md](../ui/endrace-screens.md) | ⬜ `?` | ⬜ `?` | 📖 read - [endrace-screens.md](../formats/endrace-screens.md) | ➖ n/a |
+| HUD | ✅ verified - screen-space reference-frame comparison caught a font bug ([hud.md](../ui/hud.md#what-a-reference-frame-settled)) | ⬜ `?` | ⬜ `?` | 📖 read - all 18 in-race layouts compose, 2,320 widgets ([hd-hud.md](../formats/hd-hud.md)) | 📖 read - 25 layouts compose, no sprite draws yet ([2048-status.md](../formats/2048-status.md)) |
 
 ## 4. Rendering
 
 | Element | Pulse (PSP/PS2) | HD/Fury (PS3) | 2048 (Vita) |
 | --- | --- | --- | --- |
-| Track geometry | verified - PS2 vs PSP radius within 0.1 ([roadmap.md](roadmap.md#m1---asset-archaeology)) | partial - LOD, scenery animation read ([README.md](../rendering/README.md)) | partial - 413k triangles draw, PVS not this project's HD layout ([2048-status.md](../formats/2048-status.md)) |
-| Ships | verified - visual parity both asset paths | built - hull materials, [hd-ship-materials.md](../rendering/hd-ship-materials.md) | partial - 2,782/2,800 draws, 521/527 materials ([2048-status.md](../formats/2048-status.md)) |
-| Skybox | built - [skycube_ground_truth.rs](../../crates/vex/tests/skycube_ground_truth.rs) | `?` | `?` |
-| Lighting | built - authored normals | `?` | partial - stand-in rig, `.envsettings` does not parse for this title ([2048-status.md](../formats/2048-status.md)) |
-| Shadows | built - [shadows.md](../rendering/shadows.md) | `?` | `?` |
-| PVS/culling | verified - [pvs_placement_ground_truth.rs](../../crates/render/tests/pvs_placement_ground_truth.rs) | read - [README.md](../rendering/README.md) | n/a - falls back to drawing every chunk ([2048-status.md](../formats/2048-status.md)) |
-| Fog | built - [fog.md](../ghidra/functions/psp-pulse-usa/fog.md) | `?` | `?` |
-| Particles | partial - `oag_render::psys::Library`/`Stage` generic, some triggers unwired (see `HANDOVER.md`) | `?` | `?` |
-| Engine trails | built - [trail-ribbon.md](../rendering/trail-ribbon.md) | `?` | `?` |
-| Weapon models | partial - Mine/Bomb located, not drawn ([pickups.md](../gameplay/pickups.md#what-is-not-built)) | `?` | `?` |
-| Animated textures | built - [scenery-animation.md](../rendering/scenery-animation.md) | read - [README.md](../rendering/README.md) | `?` |
-| Bloom/grading/motion blur | read only - not ported ([roadmap.md](roadmap.md#m6---rendering-fidelity)) | `?` | `?` |
-| Upscaling | built - FSR3 wired ([fsr3.md](../rendering/fsr3.md), [dynamic-resolution.md](../rendering/dynamic-resolution.md)) | n/a | n/a |
+| Track geometry | ✅ verified - PS2 vs PSP radius within 0.1 ([roadmap.md](roadmap.md#m1---asset-archaeology)) | 🟨 partial - LOD, scenery animation read ([README.md](../rendering/README.md)) | 🟨 partial - 413k triangles draw, PVS not this project's HD layout ([2048-status.md](../formats/2048-status.md)) |
+| Ships | ✅ verified - visual parity both asset paths | 🟩 built - hull materials, [hd-ship-materials.md](../rendering/hd-ship-materials.md) | 🟨 partial - 2,782/2,800 draws, 521/527 materials ([2048-status.md](../formats/2048-status.md)) |
+| Skybox | 🟩 built - [skycube_ground_truth.rs](../../crates/vex/tests/skycube_ground_truth.rs) | ⬜ `?` | ⬜ `?` |
+| Lighting | 🟩 built - authored normals | ⬜ `?` | 🟨 partial - stand-in rig, `.envsettings` does not parse for this title ([2048-status.md](../formats/2048-status.md)) |
+| Shadows | 🟩 built - [shadows.md](../rendering/shadows.md) | ⬜ `?` | ⬜ `?` |
+| PVS/culling | ✅ verified - [pvs_placement_ground_truth.rs](../../crates/render/tests/pvs_placement_ground_truth.rs) | 📖 read - [README.md](../rendering/README.md) | ➖ n/a - falls back to drawing every chunk ([2048-status.md](../formats/2048-status.md)) |
+| Fog | 🟩 built - [fog.md](../ghidra/functions/psp-pulse-usa/fog.md) | ⬜ `?` | ⬜ `?` |
+| Particles | 🟨 partial - `oag_render::psys::Library`/`Stage` generic, some triggers unwired (see `HANDOVER.md`) | ⬜ `?` | ⬜ `?` |
+| Engine trails | 🟩 built - [trail-ribbon.md](../rendering/trail-ribbon.md) | ⬜ `?` | ⬜ `?` |
+| Weapon models | 🟨 partial - Mine/Bomb located, not drawn ([pickups.md](../gameplay/pickups.md#what-is-not-built)) | ⬜ `?` | ⬜ `?` |
+| Animated textures | 🟩 built - [scenery-animation.md](../rendering/scenery-animation.md) | 📖 read - [README.md](../rendering/README.md) | ⬜ `?` |
+| Bloom/grading/motion blur | 📖 read only - not ported ([roadmap.md](roadmap.md#m6---rendering-fidelity)) | ⬜ `?` | ⬜ `?` |
+| Upscaling | 🟩 built - FSR3 wired ([fsr3.md](../rendering/fsr3.md), [dynamic-resolution.md](../rendering/dynamic-resolution.md)) | ➖ n/a | ➖ n/a |
 
 ## 5. Physics and AI
 
@@ -154,26 +156,26 @@ only.
 
 | System | Status | Evidence |
 | --- | --- | --- |
-| Hover/suspension | verified | [force-balance-ground-truth.md](../physics/force-balance-ground-truth.md) |
-| Steering/pitch | verified | [engine.md](../ghidra/functions/psp-pulse-usa/engine.md), [cornering-ground-truth.md](../physics/cornering-ground-truth.md) |
-| Airbrakes | verified | [airbrake_flaps_ground_truth.rs](../../crates/render/tests/airbrake_flaps_ground_truth.rs) |
-| Sideshift | `?` | not investigated |
-| Barrel roll | verified | [ai_roll_ground_truth.rs](../../crates/game/tests/ai_roll_ground_truth.rs) |
-| Wall/collision response | verified | [wall_collision_ground_truth.rs](../../crates/game/tests/wall_collision_ground_truth.rs), `crates/physics/src/wall.rs` |
-| Respawn/stall rescue | verified | [stall_rescue_ground_truth.rs](../../crates/game/tests/stall_rescue_ground_truth.rs), [off_track_rescue_ground_truth.rs](../../crates/game/tests/off_track_rescue_ground_truth.rs) |
-| Weapon slowdown | partial - Plasma's direct-hit case only, other weapons' `Ship_AddSlowdown` not yet wired | [pickups.md](../gameplay/pickups.md) |
-| AI driving line | built | [ai.md](../gameplay/ai.md) |
-| AI weapon use | read | [weapon-ai.md](../ghidra/functions/psp-pulse-usa/weapon-ai.md) |
+| Hover/suspension | ✅ verified | [force-balance-ground-truth.md](../physics/force-balance-ground-truth.md) |
+| Steering/pitch | ✅ verified | [engine.md](../ghidra/functions/psp-pulse-usa/engine.md), [cornering-ground-truth.md](../physics/cornering-ground-truth.md) |
+| Airbrakes | ✅ verified | [airbrake_flaps_ground_truth.rs](../../crates/render/tests/airbrake_flaps_ground_truth.rs) |
+| Sideshift | ⬜ `?` | not investigated |
+| Barrel roll | ✅ verified | [ai_roll_ground_truth.rs](../../crates/game/tests/ai_roll_ground_truth.rs) |
+| Wall/collision response | ✅ verified | [wall_collision_ground_truth.rs](../../crates/game/tests/wall_collision_ground_truth.rs), `crates/physics/src/wall.rs` |
+| Respawn/stall rescue | ✅ verified | [stall_rescue_ground_truth.rs](../../crates/game/tests/stall_rescue_ground_truth.rs), [off_track_rescue_ground_truth.rs](../../crates/game/tests/off_track_rescue_ground_truth.rs) |
+| Weapon slowdown | 🟨 partial - Plasma's direct-hit case only, other weapons' `Ship_AddSlowdown` not yet wired | [pickups.md](../gameplay/pickups.md) |
+| AI driving line | 🟩 built | [ai.md](../gameplay/ai.md) |
+| AI weapon use | 📖 read | [weapon-ai.md](../ghidra/functions/psp-pulse-usa/weapon-ai.md) |
 
 ## 6. Audio
 
 | System | Pulse (PSP) | Pulse (PS2) | HD/Fury (PS3) | 2048 (Vita) |
 | --- | --- | --- | --- | --- |
-| Engine sound | built - [psp-audio.md](../formats/psp-audio.md) | built - [ps2-audio.md](../formats/ps2-audio.md) | `?` | `?` |
-| Music | verified - `.bnk` decoder, PS-ADPCM | verified - 48kHz PCM cross-validated against PSP masters | read - exercised by [hd_music_ground_truth.rs](../../crates/game/tests/hd_music_ground_truth.rs) | n/a - `music: None`, not read ([2048-status.md](../formats/2048-status.md)) |
-| SFX cues | built - [sfx.rs](../../crates/game/src/audio/sfx.rs), [sfx_ground_truth.rs](../../crates/game/tests/sfx_ground_truth.rs) | `?` | `?` | `?` |
-| Front-end sounds | built | `?` | `?` | n/a |
-| Zone announcer | n/a | n/a | `?` | read - dispatch decompiled, not verified against real audio, extracted data not in this tree ([2048-status.md](../formats/2048-status.md#what-a-race-does-today)) |
+| Engine sound | 🟩 built - [psp-audio.md](../formats/psp-audio.md) | 🟩 built - [ps2-audio.md](../formats/ps2-audio.md) | ⬜ `?` | ⬜ `?` |
+| Music | ✅ verified - `.bnk` decoder, PS-ADPCM | ✅ verified - 48kHz PCM cross-validated against PSP masters | 📖 read - exercised by [hd_music_ground_truth.rs](../../crates/game/tests/hd_music_ground_truth.rs) | ➖ n/a - `music: None`, not read ([2048-status.md](../formats/2048-status.md)) |
+| SFX cues | 🟩 built - [sfx.rs](../../crates/game/src/audio/sfx.rs), [sfx_ground_truth.rs](../../crates/game/tests/sfx_ground_truth.rs) | ⬜ `?` | ⬜ `?` | ⬜ `?` |
+| Front-end sounds | 🟩 built | ⬜ `?` | ⬜ `?` | ➖ n/a |
+| Zone announcer | ➖ n/a | ➖ n/a | ⬜ `?` | 📖 read - dispatch decompiled, not verified against real audio, extracted data not in this tree ([2048-status.md](../formats/2048-status.md#what-a-race-does-today)) |
 
 ## 7. RE coverage per binary
 
