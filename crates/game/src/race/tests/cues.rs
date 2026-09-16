@@ -237,16 +237,26 @@ fn every_cue_has_something_that_raises_it() {
 /// [`every_cue_has_something_that_raises_it`]'s own wall fixture cannot stage,
 /// since that one only ever meets the wall it is re-aimed at every tick.
 ///
-/// **Both craft held fixed.** Neither throttles nor steers, so the shooter's
-/// own nose never moves and the target sits exactly where it is placed - at
-/// `forward * 15.0` off the shooter, recomputed from the shooter's own
-/// `body.forward()` every tick rather than a hardcoded world axis, so this
+/// **Both craft held in place.** Neither throttles nor steers, so the
+/// shooter's own nose never moves and the target sits exactly where it is
+/// placed - at `forward * 15.0` off the shooter, recomputed from the shooter's
+/// own `body.forward()` every tick rather than a hardcoded world axis, so this
 /// does not depend on which way [`setup`]'s synthetic straight happens to
 /// point. `15.0` clears [`hulled_handling`]'s own `hull_radius` (`2.0`, half
-/// its `length: 4.0`) by a wide margin while still sitting well inside the
-/// bolt's own flight envelope - `mine_and_plasma_table`-style Plasma stats
-/// launch at hundreds of units per second, so the sweep segment covers the
-/// distance in the first handful of ticks after release.
+/// its `length: 4.0`) by a wide margin.
+///
+/// **The shooter carries a forward velocity even though its position is
+/// pinned**, because since 2026-09-16 a bolt leaves at *the craft's own speed*
+/// plus `launchSpeed` and only blends up to the class speed over its first
+/// second (`Plasma_SpeedForClass`, `crates/gameplay/src/projectile/flight.rs`).
+/// A shooter held at zero velocity launches a `26 km/h` bolt that falls off
+/// the synthetic straight - which has no surface under it - before it has
+/// covered the fifteen units, and the hull sweep misses under the target. The
+/// position write every tick keeps the shooter where it is regardless of the
+/// velocity the physics would otherwise integrate, so the velocity here is
+/// purely what the release reads: `60.0` units per second is `216 km/h`, an
+/// ordinary Venom pace, and puts the bolt across the gap in the first few
+/// ticks after release the way the pre-ramp fixture did.
 ///
 /// **Ship count is `2`, not a full `GRID_SLOTS` grid.** `oag_gameplay::projectile::step`
 /// only sweeps `world.ships[..world.ship_count]` -
@@ -268,8 +278,8 @@ fn plasma_hits_a_craft() -> std::collections::BTreeSet<Cue> {
     let mut raised = std::collections::BTreeSet::new();
     for tick in 0..180 {
         race.sim.world.ships[0].physics.body.position = Vec3::ZERO;
-        race.sim.world.ships[0].physics.body.linear_velocity = Vec3::ZERO;
         let forward = race.sim.world.ships[0].physics.body.forward();
+        race.sim.world.ships[0].physics.body.linear_velocity = forward * 60.0;
         race.sim.world.ships[1].physics.body.position = forward * 15.0;
         race.sim.world.ships[1].physics.body.linear_velocity = Vec3::ZERO;
 
