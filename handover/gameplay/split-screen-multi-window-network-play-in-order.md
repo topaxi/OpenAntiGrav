@@ -381,10 +381,11 @@ That's wrong - `Race::tick`/`RaceSim` live in `oag-game`, and per
      also in `crates/game/src/race/tests/headless.rs` so the gate holds them.
 
    Behaviour is unchanged throughout: a single-player race still reads exactly
-   `ships[0]`. **No ADR was written** - this thread asks for one and the work
-   was scoped to the refactor, so the design lives in doc comments on
-   `World::race`, `World::controllers`, `Controller` and `PlayerInputs`.
-   Writing the ADR from those is still open.
+   `ships[0]`. ~~No ADR was written~~ - **done, 2026-09-16**:
+   [ADR-0052](../../docs/architecture/adr/0052-world-and-race-tick-widen-to-n-players.md)
+   records it, written from what shipped rather than from a plan, same as this
+   thread's own doc comments on `World::race`, `World::controllers`,
+   `Controller` and `PlayerInputs` already did informally.
 2. **Split screen**: viewport/camera-region support in `oag-render`,
    per-player HUD in `oag-ui`. Lowest risk - no window-lifecycle changes.
 3. **Multi-window**: unwind `App`'s one-window-per-run assumption, per-window
@@ -418,11 +419,12 @@ That's wrong - `Race::tick`/`RaceSim` live in `oag-game`, and per
   0's authoritative, read through `World::mode`/`World::laps_target`; that
   redundancy is recorded on the field rather than hoisted out, because
   splitting `RaceState` is a change to `oag-race`'s own recovered type.
-- **An ADR for the per-player shape is still owed.** This thread said the
-  design was ADR-shaped and should become one before implementation; the
-  implementation landed first, on a scoped refactor brief, with the reasoning
-  in doc comments instead. Writing it up is a docs-only change now, not a
-  design question - the decisions are made and tested.
+- ~~An ADR for the per-player shape is still owed.~~ **Done, 2026-09-16** -
+  [ADR-0052](../../docs/architecture/adr/0052-world-and-race-tick-widen-to-n-players.md).
+  **Still owed, and distinct**: the network-protocol ADR (server-authority,
+  client prediction, reconciliation) section 3 describes - that one still has
+  a real open design question in it (remote-player prediction, below) and
+  shouldn't be written until that's resolved.
 - Transport choice for `oag-net` (framing, reliable-vs-unreliable channel
   split for inputs vs. snapshots, send rate relative to the fixed 60 Hz
   tick) - not decided, needed before the crate is created.
@@ -478,13 +480,15 @@ That's wrong - `Race::tick`/`RaceSim` live in `oag-game`, and per
 - Read `handover/frontend/pulses-race-box-is-read-both-pressings.md` for the
   existing split-screen menu-XML findings before building split screen's
   front-end leg.
-- Write the ADR for the server-authoritative/client-prediction/replay-
-  reconciliation design in section 3 before creating `oag-net` - the shape
-  is decided, the ADR just needs to exist. Not before M8 opens per the
-  roadmap, but the decision itself doesn't need to wait for that milestone
-  to start.
+- Resolve the remote-player prediction question (interpolation vs.
+  rollback-with-predicted-inputs, see section 3 and the "Open" entry above)
+  before writing the network-protocol ADR - unlike the now-written
+  [ADR-0052](../../docs/architecture/adr/0052-world-and-race-tick-widen-to-n-players.md),
+  this one still has a real open design question in it, not just a write-up
+  owed. Not before M8 opens per the roadmap, but the decision itself doesn't
+  need to wait for that milestone to start.
 - Decide the transport (framing, channel split, send rate) as the next open
-  question once the ADR is written.
+  question once that ADR is written.
 - Before writing that ADR, resolve the remote-player prediction question
   flagged in section 3 (interpolation vs. rollback-with-predicted-inputs) -
   it changes the protocol shape, not just a tuning parameter.
