@@ -76,7 +76,11 @@ fn main() -> anyhow::Result<()> {
                 println!("      lightmap_entry={:?}", material.lightmap_entry());
                 println!("      samplers ({} total):", material.samplers.len());
                 for (i, (hash, path)) in material.samplers.iter().enumerate() {
-                    println!("        [{i}] hash={hash:#010x} path={path:?}");
+                    let name = rcsmaterial::names::sampler_name(*hash);
+                    println!(
+                        "        [{i}] hash={hash:#010x} name={} path={path:?}",
+                        name.unwrap_or("?")
+                    );
                 }
 
                 // Resolve the shader variant the way `skin::variants` does,
@@ -116,7 +120,13 @@ fn main() -> anyhow::Result<()> {
                 );
                 println!("      parameters ({} total):", material.parameters.len());
                 for p in &material.parameters {
-                    println!("        hash={:#010x} value={:?}", p.hash, p.value);
+                    let name = rcsmaterial::names::parameter_name(p.hash);
+                    println!(
+                        "        hash={:#010x} name={} value={:?}",
+                        p.hash,
+                        name.unwrap_or("?"),
+                        p.value
+                    );
                 }
             }
         }

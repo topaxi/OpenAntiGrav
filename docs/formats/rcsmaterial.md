@@ -1941,16 +1941,71 @@ Confidence 90.
 
 ## Open
 
-- **87 of the 125 sampler hashes**, including the three commonest
-  (`0xd5e000d1`, `0x00e5b679`, `0x1f6f85a3`, ~4,400 uses each across every unit),
-  which by their spread are engine samplers rather than a material's own. Three
-  of those three are now named - `zoneTexInner`, `zoneTexInnerNearest`,
-  `zoneTexVis` - by a preimage sweep over the executable's own identifier-shaped
-  strings, which is the technique that should be tried on the rest.
-- **236 of the 300 parameter hashes**, after the sweep above. The residue is not
-  arbitrary: the named ones are artist-facing (`Colour`, `Speed`, `Brightness`)
-  and the unnamed ones cluster on one material each, which is what a name that
-  never reaches the executable's own string table looks like.
+- **63 of the 125 sampler hashes**, after the wider sweep below - down from
+  the 87 this section used to carry, which was stale: it never folded in the
+  `zoneTexInner`/five-more-names batches this same page already recorded
+  above. The three commonest residual hashes
+  (`0xd5e000d1`, `0x00e5b679`, `0x1f6f85a3`, ~4,400 uses each across every
+  unit) are `zoneTexInner`/`zoneTexInnerNearest`/`zoneTexVis` themselves and
+  so are **not** part of the 63 - they were the correction, not new debt.
+- **197 of the 300 parameter hashes**, likewise down from 236.
+- **2026-09-16 preimage sweep, done properly this time**
+  (`crates/render/examples/rcs_preimage_sweep.rs`, reproducible with
+  `cargo run --release -p oag-render --example rcs_preimage_sweep -- <image>
+  <decrypted EBOOT.elf> <decrypted DFEngine.prx>`): four candidate sources -
+  `EBOOT.elf`'s own identifier-shaped strings, `DFEngine.sprx` decrypted the
+  same way (`rpcs3 --decrypt`, which works on it exactly as it does on
+  `EBOOT.BIN`), every identifier-shaped string inside every
+  `.rcsmaterial`/`.rcsmodel`/`.vex` on the disc, and a generated vocabulary
+  (the known names' own tokens, recombined camelCase/PascalCase/snake_case,
+  with digit suffixes and `_vp`/`_fp`/`Tex`/`Texture`/`Map`/`Colour`/`Color`
+  affixes). Named **15 more samplers** (13 from `EBOOT.elf`, 2 generated:
+  `Pitch`, `textureSpot0Tex`, `textureSpot0ShadowTex`, `Rock`,
+  `alpha_emissive`, `Electricity`, `Wave`, `GradientColour1`,
+  `paraboloidIblTex`, `ambientShadowTex`, `textureSpot1Tex`,
+  `zoneAnisoPalette`, `textureSpot1ShadowTex`, `zoneAnisoPaletteOuter`,
+  `screenSpaceReflectionTex`) plus **1 on a second pass**
+  (`TextureGradient`, once the first batch's own tokens joined the
+  vocabulary) - 46 to 62 of 125. And **39 more parameters**, all from the
+  generated vocabulary alone (`colour1`, `SpecPower`, `ShadowAlpha`,
+  `SpecularScalar`, `SpecularColour`, `spec`, `SpecScale`, `spec_power`,
+  `SpecularColor`, `DiffuseColour`, `diffuse`, `power`, `NormalPower`,
+  `FresnelMin`, `EmissiveColour`, `ColourTint`, `DiffuseColour1`,
+  `ShadowColour`, `Scaler`, `DistortionSpeed`, `VScale`, `Reflection`,
+  `SpecularPower`, `FresnelScale`, `scale1`, `colour2`, `VSpeed`, `Spec`,
+  `power1`, `Speed2`, `FresnelPower`, `SpecColour`, `SmokeScale`, `colour3`,
+  `noiseScale`, `Specular`, `min1`, `Emissive`, `SmokeScale1`) - 64 to 103 of
+  300. Zero ambiguous (no two distinct candidate strings landed on the same
+  hash) across both sweeps. All names now live in
+  [`oag_rcs::rcsmaterial::names`](../../crates/rcs/src/rcsmaterial/names.rs),
+  looked up rather than re-derived, with a unit test that every entry
+  round-trips through its own hash and a ground-truth test
+  (`rcsmaterial_ground_truth.rs`) that every entry's hash is one the disc
+  itself declares or authors.
+- **Confidence, by source.** `EBOOT.elf`-sourced names sit at confidence 90 -
+  a 32-bit hash match against a string demonstrably shipped in the
+  executable, the same standard `viewProj`/`fogColour` were confirmed at in
+  [renderer.md](../ghidra/functions/ps3-hdfury-eu/renderer.md). Names from the
+  generated vocabulary alone sit at confidence 82: still a genuine preimage
+  (the false-positive rate over ~90,000 candidates against a ~260-hash
+  residual population is on the order of 1 in 200 across the whole batch,
+  not per name), but without the independent "this string ships somewhere"
+  corroboration the executable gives.
+- **The discriminating target the sweep was also run against**:
+  `0xce5c4410` (`Weapon Pad`'s own colour parameter) was already named
+  `W_Cycle` by the 2026-08-31 parameter sweep above, in this same page - the
+  miss was that [pads.md](../rendering/pads.md) never cross-referenced it.
+  `0x7611a2d8` (`Speedup Pad`'s parameter on two circuits) stays unresolved
+  even after this wider sweep. See pads.md's 2026-09-16 update: naming the
+  hash was never going to settle "is this the glow colour" on its own
+  (`W_Cycle` turns out to sit on files still called `weapon_pads.rcsmaterial`
+  even where the geometry is a `Speedup Pad`) - reading the *value* across
+  every circuit is what settled it.
+- **The remaining 63 sampler / 197 parameter hashes.** The residue is not
+  arbitrary: the named ones are artist-facing (`Colour`, `Speed`,
+  `Brightness`) and the unnamed ones cluster on one material each, which is
+  what a name that never reaches the executable's own string table looks
+  like.
 - **The `time` scroll is read and unwired**, and what blocks it is the additive
   second-texture layer rather than the scroll itself. `uvScale`/`uvOffset` are
   read and unwired too and are **not** the cheaper first step they looked like:
