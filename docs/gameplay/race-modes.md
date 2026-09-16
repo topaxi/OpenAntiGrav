@@ -633,13 +633,18 @@ status:
   Eliminator alone; both the player's and an opponent's absorb path check it
   and keep the pickup rather than spend it on nothing, the pattern this
   project already uses for every no-effect weapon.
-- **Health regenerates on a completed lap, in place of absorption.**
-  `Race::eliminator_lap_health_refill` runs on the same `outcome.lap_completed`
-  edge the free Time Trial/Speed Lap turbo already reads. **The amount is not
-  authored anywhere read this pass** - the sentence says "you regain health",
-  not how much - so a full refill is **chosen, not measured**: the plain
-  reading of a mode with no partial-heal vocabulary anywhere else in its own
-  text, easy to replace the day a real figure turns up.
+- **Health regenerates on a completed lap, in place of absorption - a fifth
+  of the maximum, measured.** `Race::eliminator_lap_health_refill` runs on
+  the same `outcome.lap_completed` edge the free Time Trial/Speed Lap turbo
+  already reads, and as of 2026-09-16 the amount is the original's:
+  `Ship_RefillLapShield` (`0x0883de30`) adds 20 % of the skill-indexed
+  maximum through `Ship_AddShield`'s clamp and plays the absorb feedback,
+  called by `Eliminator_UpdateKillTarget` on the player's craft when its
+  crossing count goes up while racing. This used to be a full refill, chosen
+  off the sentence alone. See
+  [shield.md](../ghidra/functions/psp-pulse-usa/shield.md#ship_addshields-four-callers-and-ship_refilllapshield-0x0883de30).
+  One stated departure: it refills every craft's lap here, where the original
+  reads the player's slot alone.
 
 ### A destroyed craft respawns and is counted, not eliminated from the race
 

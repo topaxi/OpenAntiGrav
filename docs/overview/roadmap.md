@@ -684,12 +684,18 @@ seen from the authoring side.
       **Weapon damage and weapon absorb are in** as of 2026-08-11:
       `damage::apply_weapon` is `Ship_Damage`'s body given an authored amount
       rather than a scaled impulse, and `CIRCLE` pays `<Stats absorb>` through
-      the recovered clamp. **The pit-lane recharge is the one left**, and the
-      destroyed transition - `Ship_Damage` sets craft state 4 at zero - still has
-      no state to move to, so the pool floors instead and
-      `damage::Shield::depleted` is the signal to build it on. A fired Shield
-      suppresses that signal for its duration, which is a thing Zone's unbuilt
-      end condition will have to account for. **Measured against the running original** for the pool's location,
+      the recovered clamp. **Everything that puts energy back is read and
+      built as of 2026-09-16**: `Ship_AddShield` has four callers - the absorb,
+      the LeachBeam's repair, Zone's clean-zone recharge and the Eliminator's
+      per-lap refill of 20 % (`Ship_RefillLapShield`, which replaced a chosen
+      full refill) - and there is no pit lane in this title, whatever an
+      earlier revision of this line remembered from older games. The destroyed
+      transition is built too: `damage::subtract` moves the craft to
+      `CraftState::Destroyed` on the same edge `Ship_Damage` sets state 4, and
+      Zone ends on it. What is still open on
+      [shield.md](../ghidra/functions/psp-pulse-usa/shield.md) is the
+      absorb-spark burst (ten staggered `WO_WEAPON_ABSORB` instances, trigger
+      recovered, not drawn) and the multiplayer craft kinds. **Measured against the running original** for the pool's location,
       the two race-option globals, the regeneration branch and the weapons-off
       halving - which comes out at 1.98 against a predicted 2.00 - and for the
       **coefficient itself**, which measures `0.035000` exactly on 25 of 25

@@ -100,12 +100,14 @@ pub enum Cue {
     /// confidence 82 - the only one of the nine cues checked on a second
     /// title so far; the module doc's confidence-50 bet still covers the rest.
     Collision,
-    /// A contact a raised shield absorbed.
+    /// A pickup absorbed into the pool, or Eliminator's lap refill.
     ///
-    /// `FUN_08840640`, the shield-absorb ability's own effect, "plays an
-    /// `ABSORB` sound once" before staggering its ten spark instances. Same
-    /// page. This is the sound of the contact the shield *ate*, which is why it
-    /// fires exactly where the sparks are suppressed.
+    /// `Ship_PlayAbsorbFeedback` (`0x08840640`) "plays an `ABSORB` sound
+    /// once" before staggering its ten spark instances. **Not a shielded
+    /// contact**, which this comment used to say: its four callers are the
+    /// absorb handler, `Ship_RefillLapShield` and two network callbacks, and
+    /// the contact loop's shield branch plays nothing
+    /// (`docs/ghidra/functions/psp-pulse-usa/shield.md`, 2026-09-16).
     ///
     /// Pure's own counterpart (`FUN_08925e20`) does the same thing - one
     /// `Sound_Play` of the same undotted `ABSORB`, then a stagger loop into

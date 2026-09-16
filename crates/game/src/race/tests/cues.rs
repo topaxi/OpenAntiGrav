@@ -175,6 +175,12 @@ fn every_cue_has_something_that_raises_it() {
         if tick == 130 {
             race.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Plasma);
         }
+        // A Mine absorbed, before the shield goes up: `Cue::Absorb` is the
+        // absorb handler's own feedback and nothing else raises it - a
+        // shielded contact is silent.
+        if tick == 40 {
+            race.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Mine);
+        }
         // A Mine, dropped once - after the wall business above has already
         // had its first pass, so the impulse this leaves on `physics.shield`
         // is not mistaken for the wall's own. Its own held-weapon slot, not
@@ -191,10 +197,10 @@ fn every_cue_has_something_that_raises_it() {
         let body = &mut race.sim.world.ships[0].physics.body;
         body.position = Vec3::new(20.0, -39.7, 0.0);
         body.linear_velocity = Vec3::new(0.0, -50.0, 0.0);
-        let snapshot = if tick == 130 {
-            buttons.tick(SQUARE)
-        } else {
-            buttons.tick(0)
+        let snapshot = match tick {
+            40 => buttons.tick(CIRCLE),
+            130 => buttons.tick(SQUARE),
+            _ => buttons.tick(0),
         };
         saw_impact |= race.tick(&PlayerInputs::single(snapshot)).wall.impact;
         raised.extend(race.drain_cues().into_iter().map(|e| e.cue));

@@ -613,20 +613,21 @@ further:
   intensity of `1.0`, but only on the branch where shield/energy has just
   reached zero - a death/destruction burst, not a per-hit spark, and not
   scaled by damage magnitude.
-- **`FUN_08840640`** is the shield-absorb ability's own effect: it plays an
-  `"ABSORB"` sound once, then calls `ShipCollisionFx_Trigger(1.0, ..., 2, 0)`
-  in a loop over up to 10 attached instances, staggering a global float
-  (`DAT_08abf564`) by `0.1` per iteration - unrelated to wall/track contact.
+- **`FUN_08840640`** (named `Ship_PlayAbsorbFeedback` on
+  [shield.md](shield.md) as of 2026-09-16) is the shield-absorb ability's own
+  effect: it plays an `"ABSORB"` sound once, then calls
+  `ShipCollisionFx_Trigger(1.0, ..., 2, 0)` in a loop over up to 10 attached
+  instances, staggering a global float (`DAT_08abf564`) by `0.1` per
+  iteration - unrelated to wall/track contact.
 
 **Both cues are now played**, and they are the same `Sound_Play` calls this page
 found rather than a reconstruction: `.COLLISIONS` on a contact past the
-0.8-second gate, `"ABSORB"` when the shield is up and the sparks are therefore
-suppressed. One caveat, corrected below, is recorded rather than papered over.
-And `"ABSORB"` is re-armed on the same 0.8 seconds, where `FUN_08840640`
-**bypasses** that gate and has its own 0.1-second stagger; how often the game
-calls it is not recovered, so a shared cooldown is a stated approximation and
-the alternative - no gate at all - would fire it sixty times a second through
-a scrape. See
+0.8-second gate, `"ABSORB"` on a pickup absorbed and on the Eliminator's lap
+refill. **Not on a shielded contact**, which this paragraph said until
+2026-09-16 and the port did until the same day: `FUN_08840640`'s callers are
+all read on [shield.md](shield.md) and none is a contact, and the contact
+loop's own shield branch plays nothing - the shell bulges and that is all. One
+caveat, corrected below, is recorded rather than papered over. See
 [psp-audio.md](../../../formats/psp-audio.md#a-cue-owns-a-run-of-the-command-table)
 and `oag_game::audio::sfx`.
 
