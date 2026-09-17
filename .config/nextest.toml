@@ -28,8 +28,24 @@ priority = 50
 # The longest test in the suite, and the one that sets the floor on
 # `just test-data`'s wall clock: it transcodes 950 frames of the PS2 intro, and
 # `refresh: true` is load-bearing for what it asserts, so the work cannot be
-# cached away. Nothing is gained by starting it late. It is also the only entry
-# in `check-test-budget.py`'s `BASELINE`, for the same reason.
+# cached away. Nothing is gained by starting it late.
+#
+# It once was the only entry in `check-test-budget.py`'s `BASELINE`, for the
+# same reason, but that row was measured clear of `CEILING` on 2026-09-09 and
+# deleted per that file's own rule - `BASELINE` is empty as of this writing.
+# Re-check `scripts/check-test-budget.py` before trusting this comment; a
+# ratchet's whole point is that its state moves without this file changing.
 [[profile.default.overrides]]
 filter = 'test(an_uncapped_transcode_still_reports_a_total_to_divide_by)'
 priority = 100
+
+# Selecting a subset for local iteration - nextest's own filtersets already do
+# this, so no extra tool (`cargo-test-changed`, `cargo-difftests`) is needed:
+#
+#   cargo nextest run -E 'rdeps(oag-rcs)'          # oag-rcs and its dependents
+#   cargo nextest run -E 'binary(ai_roll_ground_truth)'  # one ground-truth file
+#
+# Selection is for iteration only. The gate always runs the full suite
+# (`just test-data`) - this project's cross-crate surprises (narrowing
+# `VertexDecl::vertex_colour()` broke `hd_engine_flare_ground_truth` in a
+# different crate) are exactly what a selected run would miss.
