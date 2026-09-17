@@ -8,6 +8,7 @@
 use super::*;
 use log::warn;
 
+mod beam;
 mod clouds;
 mod frame;
 mod hd_chain;
@@ -181,6 +182,8 @@ pub struct Scene {
     exhaust: std::cell::RefCell<exhaust::Pipeline>,
     weapon_quads: std::cell::RefCell<oag_render::weapon_quads::Pipeline>,
     clouds: std::cell::RefCell<clouds::Clouds>,
+    /// The LeachBeam's own ribbon, `None` on an undecoded texture - see `beam`.
+    beam: Option<std::cell::RefCell<oag_render::beam::Pipeline>>,
     /// Collision sparks. `RefCell` for the same reason [`Self::exhaust`] is.
     sparks: std::cell::RefCell<sparks::Pipeline>,
     /// The `blob` shadow tier: one ground-aligned quad per craft, drawn after
@@ -343,6 +346,7 @@ impl Scene {
         plasma_blast_models: blast_models::PlasmaBlastModels,
         shield_cockpit: Option<Model>,
         flare: Option<FlareTexture>,
+        leach_beam_texture: Option<FlareTexture>,
         noise: Option<FlareTexture>,
         trail_blend: Option<wgpu::BlendState>,
         trail_shape: Option<FlareTexture>,
@@ -871,6 +875,13 @@ impl Scene {
         ));
         let weapon_quads =
             weapon_quads::build(device, queue, format, cannon_quad_textures, sample_count);
+        let beam = beam::build(
+            device,
+            queue,
+            format,
+            leach_beam_texture.as_ref(),
+            sample_count,
+        );
         // One silhouette per grid slot, in the same slot order the liveries
         // are in - `race::shadow::silhouettes` built them, and the load report
         // already said which slots got the disc's own image and which got the
@@ -951,6 +962,7 @@ impl Scene {
             exhaust,
             weapon_quads,
             clouds: clouds::Clouds::build(device, queue, format, sample_count, cloud_layer),
+            beam,
             sparks,
             shadow,
             shadow_map: std::cell::RefCell::new(shadow_map),

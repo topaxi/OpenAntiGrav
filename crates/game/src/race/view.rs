@@ -202,6 +202,15 @@ pub struct RaceView {
     /// only the player's own craft is followed; see
     /// [`Race::advance_leach_beam_visual`].
     pub(super) leach_charge_effect: Option<psys::Playing>,
+    /// The LeachBeam ribbon's own render-side state - the amplitude table and
+    /// scroll phase [`oag_gameplay::projectile::leach_beam::Beam`]
+    /// deliberately does not carry, see `oag_render::beam`'s module doc
+    /// comment. `Some` for exactly as long as [`oag_gameplay::World::leach_beam`]
+    /// is `Some(Kind::Locked)`, rebuilt fresh each time a new beam locks on.
+    pub(super) leach_beam_ribbon: Option<oag_render::beam::Ribbon>,
+    /// The LeachBeam ribbon's own generator, deliberately **not** `world.rng` -
+    /// see [`Self::exhaust_rng`].
+    pub(super) leach_beam_rng: Rng,
     /// The Plasma's own render-side detonation instances, one per
     /// [`blast_models::PLASMA_BLAST_SLOTS`] - see that module's own doc
     /// comment for why this lives here rather than in `World`, and

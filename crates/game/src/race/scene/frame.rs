@@ -669,16 +669,12 @@ impl Scene {
         self.clouds
             .borrow_mut()
             .upload(queue, &vp, race.sim.world.tick, right, up);
-        // The hull's collision sparks and the stage's rocket effects share one
-        // pipeline and one pair of buffers: both are `.pob` particles in the
-        // same two blend classes, so a second pipeline would buy nothing.
         oag_render::perfprobe::mark("exhaust-upload");
-        race.extend_spark_vertices(additive, alpha, right, up);
-        race.extend_stage_vertices(additive, alpha, right, up);
-        self.sparks.borrow_mut().upload(queue, &vp, additive, alpha);
+        self.upload_particles(race, queue, &vp, right, up, additive, alpha);
         self.weapon_quads
             .borrow_mut()
             .upload(queue, &vp, cannon_bolt, cannon_flash);
+        self.upload_beam(race, queue, &vp);
 
         // Both shadow tiers' geometry - its own file, see `frame/shadow.rs`.
         let (quads, hull_vertices) = self.shadow_geometry(race, shadows);
@@ -923,6 +919,7 @@ impl Scene {
         // same reason.
         self.exhaust.borrow().draw(&mut pass);
         self.sparks.borrow().draw(&mut pass);
+        self.draw_beam(&mut pass);
         self.clouds.borrow().draw(&mut pass);
         self.weapon_quads.borrow().draw(&mut pass);
         // The scene pass has to close before the bloom can sample what it drew,
@@ -996,5 +993,7 @@ impl Scene {
 }
 
 mod attachments;
+mod beam;
+mod particles;
 mod shadow;
 pub(super) use attachments::{depth_texture, msaa_color_texture};

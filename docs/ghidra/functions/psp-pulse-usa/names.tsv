@@ -1040,3 +1040,7 @@
 0x08867b50	function	Mine_SweepCraftTrigger	88	mine.md
 0x08864ea0	function	Cannon_RotateFlashCorner	82	cannon-quake-leachbeam.md
 0x08864f54	function	Cannon_BuildRoundBasis	75	cannon-quake-leachbeam.md
+0x08872aa0	function	LeachBeam_Construct	80	cannon-quake-leachbeam.md
+0x088730d4	function	LeachBeam_LoadTexture	88	cannon-quake-leachbeam.md
+0x088739b0	function	LeachBeam_BuildStrip	85	cannon-quake-leachbeam.md
+0x088731c4	function	LeachBeam_SubmitStrip	85	cannon-quake-leachbeam.md

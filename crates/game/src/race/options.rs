@@ -724,6 +724,13 @@ pub struct Loaded {
     /// says so; both entries resolve on a real disc, so a `None` here is a
     /// decode failure or a missing archive set, not an unauthored asset.
     pub cannon_quad_textures: (Option<FlareTexture>, Option<FlareTexture>),
+    /// The LeachBeam ribbon's own texture, off the disc, when it decodes -
+    /// see `assets::leach_beam_texture`.
+    ///
+    /// `None` draws no ribbon body at all rather than a stand-in, on the same
+    /// "never invent what the assets author" terms every optional asset here
+    /// follows - see `oag_render::beam`.
+    pub leach_beam_texture: Option<FlareTexture>,
     /// One `blob` shadow silhouette per grid slot, slot 0 the player's.
     ///
     /// The disc's own where the source ships one - Wipeout HD's nine

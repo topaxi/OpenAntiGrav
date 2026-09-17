@@ -1235,24 +1235,29 @@ walks a craft's own mesh chain and passes the texture to `FUN_0890e304` per
 sub-mesh, gated on a scalar at `craft+0x74 -> +0x4c` being positive. That is a
 **surface overlay on the drained craft's hull**, the sibling of
 `Data\Tex\Weapons\absorb_surface.*` (`DAT_08af2800`), which the shield's own
-absorb pass uses in exactly the same shape. The ribbon chain
-`LeachBeam_InitLocked` zero-fills the UV columns of is textured by something
-else, and that something else is still unlocated. Confidence **85** on the
-identification and on which thing it textures; the ribbon's own texture is
-**open**.
+absorb pass uses in exactly the same shape. Confidence **85** on the
+identification and on which thing it textures.
 
-Neither is drawn by this engine, and both are honest absences rather than
-stand-ins.
+~~The ribbon chain `LeachBeam_InitLocked` zero-fills the UV columns of is
+textured by something else, and that something else is still unlocated. The
+ribbon's own texture is **open**.~~ **Wrong, corrected 2026-09-17**: the
+ribbon's own texture is found, and it is not either of the two
+`Data\Tex\Weapons\` strings above - see "2026-09-17: the LeachBeam ribbon's
+own texture, and the draw call that proves it" under the LeachBeam section
+below. ~~The two `Data\Tex\Weapons\` strings are the only LeachBeam-flavoured
+texture paths in `.rodata`~~ was also wrong: a third string,
+`Data\Weapons\Textures\pulse_leechbeam1_ADD.mip`, sits under the Cannon's
+`Data\Weapons\Textures\` directory rather than `Data\Tex\Weapons\`, which is
+why the `(?i)leach` search here (spelled "leach") missed it - the disc spells
+it "lee**ch**".
+
+Neither hull overlay is drawn by this engine, and both are honest absences
+rather than stand-ins.
 
 ### Open
 
-- **The LeachBeam ribbon's own texture is still unlocated**, and
-  `Data\Tex\Weapons\leachbeam_surface.mip` is not it (above). The next step is
-  the ribbon's own draw call out of `LeachBeam_Advance` (`0x08873fa0`) rather
-  than another string search - the two `Data\Tex\Weapons\` strings are the only
-  LeachBeam-flavoured texture paths in `.rodata`, so the ribbon's texture is
-  either shared with something else or named for what it looks like rather than
-  for the weapon.
+- ~~**The LeachBeam ribbon's own texture is still unlocated**~~ - found
+  2026-09-17, see the LeachBeam section below.
 - **`WO_QUAKE.POB` itself was not inspected.** The trigger and its transform
   are recovered; whether the effect it draws looks like the maintainer's
   "concrete wave" description is a separate, unchecked question. If it parses
@@ -1608,10 +1613,174 @@ weapon ids `1` and `10` and no others** - the Missile and the LeachBeam - which
 is independent confirmation of "victim selection is the Missile's own lock-on,
 reused whole" above.
 
+### 2026-09-17: the LeachBeam ribbon's own texture, and the draw call that proves it
+
+**The ribbon's texture is `Data\Weapons\Textures\pulse_leechbeam1_ADD.mip`**
+(string at `0x08a7cc60`), found by widening the earlier `(?i)leach` search: the
+disc spells the weapon "lee**ch**" in this one path, under the Cannon's own
+`Data\Weapons\Textures\` directory rather than the LeachBeam hull overlays'
+`Data\Tex\Weapons\` - which is exactly why the original search, and its own
+claim that only two `Data\Tex\Weapons\` strings existed, both missed it.
+Confirmed on disc, both pressings:
+
+```sh
+cargo run -q -p oag-tools --bin oag-wad -- cat \
+    'data/images/pulse-psp-usa.chd:PSP_GAME/USRDIR/Data.wad' \
+    'Data\Weapons\Textures\pulse_leechbeam1_ADD.mip'
+```
+
+returns 5,136 bytes opening `40 00 40 00 08 00 01 03` - a 64x64, 8-bit
+paletted, **swizzled** `.mip` (`+0x07` bit 0 set), exactly
+`16 + 1024 (palette) + 4096 (pixels)`. `oag_texture::texture::Texture::parse`
+decodes it clean on both pressings; the picture is a horizontal band of
+white/blue static - an additive electric-arc strip, not a solid fill or a
+gradient, matching the `_ADD` suffix and a beam ribbon by eye before any
+Ghidra evidence is checked at all.
+
+**The evidence chain, address by address:**
+
+1. `search_strings` finds exactly one xref to the string, from
+   `LeachBeam_LoadTexture` (`0x088730d4`, renamed from `FUN_088730d4`) - the
+   same `FUN_089277ac` loader `Cannon_LoadTextures` and
+   `Texture_LoadEffectSurfaces` both use, writing the loaded handle into
+   `DAT_08b3bfa4` (left unrenamed - `rename_data`'s Hungarian-prefix linter
+   rejects this project's own `g_snake_case` convention outright and
+   `set_global` hits the same wall; not worth fighting further for one data
+   label).
+2. `LeachBeam_LoadTexture` is called from `LeachBeam_Construct` (`0x08872aa0`,
+   renamed from `FUN_08872aa0`) - a node constructor that installs a vtable at
+   `instance+0x38` and zero-fills a run of fields, the exact "tagged-object
+   constructor idiom" `HANDOVER.md`'s "Traps that are live" warns is shared
+   boilerplate across every node class on this engine and proves nothing
+   alone. What clears that bar here is **class-specific evidence**: this
+   constructor is the one and only caller of `LeachBeam_LoadTexture`, which
+   loads a string with "leech" and "beam" both in it - not a generic
+   allocation pattern. Confidence **80**, capped below the two functions
+   below because the constructor's own field writes past the vtable and the
+   texture load were not read line by line.
+3. `LeachBeam_Construct` is called from `FUN_088662a8`, which allocates the
+   **single** beam `Instance` at `pool+0x64` (`FUN_088662a8`'s own
+   `*(int *)(param_1 + 100) = iVar4` - `100` decimal is `0x64`) - the exact
+   field `Weapon_FireLeachBeam`'s `pool->instance` reads. This is the
+   LeachBeam's own pool/weapon-system constructor, one call per craft, name
+   left alone: it is shared `WEAPON_SYSTEM_%d` node machinery near the Cannon
+   member's own function set, not read further this pass.
+4. `DAT_08b3bfa4` has exactly one other reader: `LeachBeam_BuildStrip`
+   (`0x088739b0`, renamed from `FUN_088739b0`), which opens with
+   `Gfx_BindTexture(DAT_08b3bfa4)`, then walks the beam's own `0x30`-byte-
+   stride vertex chain building GE vertices, then calls
+   `LeachBeam_SubmitStrip` (`0x088731c4`, renamed from `FUN_088731c4`), which
+   issues the actual `Gu_DrawArray`. **Neither function is called by a `jal`** -
+   `get_xrefs_to` on `0x088739b0` finds nothing, which looked like dead code
+   until `read_memory` on `DAT_08acb048` (the vtable `LeachBeam_Construct`
+   installs at `instance+0x38`) showed `0x088739b0` sitting at vtable slot
+   `0x44`, alongside `0x08872c78` and `0x08872b68` at neighbouring slots -
+   it is a **virtual draw method**, dispatched through the node system, which
+   is the whole reason no direct call site exists. Confidence **85** on both
+   functions: the vtable slot is a direct memory read, not an inference, and
+   the field agreement with `LeachBeam_Advance` below is total.
+
+**`LeachBeam_BuildStrip` (`0x088739b0`) is the ribbon's draw call, and it
+closes the page's oldest open item.** It reads:
+
+- `param_1+0x140` - the segment count `LeachBeam_Advance` computes
+  (`ceil((6.0/range)*min(distance,range)*6.0)`, already recovered below).
+- `param_1+0x170 + i*0x10` - **not** "a 32-entry chain of `0x30`-byte
+  transforms" as read before; that is the GE vertex array's own base
+  (`+0x3c0`). `+0x170` is a **separate**, plain `Vec4` array of the chain's
+  raw world-space points, written earlier in the same tick by
+  `LeachBeam_Advance` and consumed here.
+- `param_1+0xe4` - the strip half-width, a **recovered constant**:
+  `LeachBeam_InitLocked` sets it from `DAT_08a7cc04`, read directly as
+  `0x3f800000` = **1.0** world unit (`read_memory`, both pressings share one
+  binary so one read suffices). Confidence **90**.
+- `param_1+0xe8` - the base colour, `0xffffffff` (opaque white) from
+  `LeachBeam_InitLocked`; only its alpha byte is overwritten per vertex below,
+  so the ribbon is unlit, uncoloured white modulated solely by alpha and the
+  texture's own colour. Confidence **88**.
+- `param_1+0x134`/`+0x144`/`+0x148` - age, the disconnected flag and
+  disconnected-at, the same three fields `Beam::advance` already carries.
+
+**The colour write is the disconnect fade, read at instruction level**: while
+`+0x144` (disconnected) is clear, every interior vertex gets alpha `0xff`
+(`iVar6 = -0x1000000`, i.e. `0xff000000`, ORed with `+0xe8`'s RGB). Once
+disconnected, alpha becomes
+`(1.0 - (age - disconnected_at) * 2.0) * 255`, i.e. a **linear fade to zero
+over exactly 0.5 seconds** - [`DISCONNECT_LINGER_SECONDS`] in
+`oag_gameplay::projectile::leach_beam`, already ported and unchanged by this
+finding. Confidence **88**. **The two chain endpoints (`i == 0` and
+`i == segment_count - 1`) are forced to `0xffffff`** - RGB white, alpha
+**zero** - regardless of the connected/disconnected branch, so the ribbon is
+invisible at both attachment points under the additive blend and only the
+middle of the arc ever shows. Confidence **85**, a direct read of the two
+branches that override the computed `iVar6`.
+
+**The geometry is two crossed strips, not one flat ribbon.** `LeachBeam_Advance`
+(`0x08873fa0`) writes each chain point twice - once at `param_2 + i*0x10`
+(consumed by the `i*0x30` vertex pair, displaced along one axis) and once
+folded into the same array at the mirrored index `segment_count + i + 1`
+(displaced along a second, perpendicular axis) - and `LeachBeam_SubmitStrip`
+draws `(segment_count*2+2)*2` vertices as **one** `GU_TRIANGLE_STRIP`
+(`Gu_DrawArray(4, 0x19f, ...)`, primitive `4` = triangle strip). Two
+perpendicular ribbons sharing a spine, crossed through each other like an
+"X" in cross-section, is a standard cheap volumetric-beam trick and reads as
+deliberate rather than as two unrelated draws. Confidence **80**: the vertex
+count and indexing match exactly, but which two axes (view-space billboard
+vs. two fixed axes derived from the craft nodes' own orientation) was not
+resolved past "the CPU pre-transforms the points and the GE matrices are set
+to identity right before the draw" (`Gu_SetMatrix(1, identity)`,
+`Gu_SetMatrix(2, identity)` in `LeachBeam_BuildStrip`), which reads as
+**world-space geometry, not a camera-facing quad** - the transform applied is
+the node's own place in the scene graph, not the camera. This engine has no
+equivalent per-craft node basis to draw the two axes from (`Ship` carries no
+local orientation frame the way a `.vex` node chain does), so the build below
+chooses its own pair of axes perpendicular to the owner-target line - labelled
+**chosen, not measured** for that reason alone, with the crossed-strip
+*structure* itself recovered.
+
+**The amplitude table, read in full from `LeachBeam_InitLocked` (`0x08873d3c`).**
+`instance+0xb4` is a **12-entry `f32` array**, each drawn independently once
+at construction via `Psys_RandFloatRange(0.0, 2.0)` - `0x40000000` is `2.0f`.
+`LeachBeam_Advance` re-rolls exactly **one** bucket per pulse
+(`uVar21 = ceil((segment_count-1)/DAT_08a7cc00)+1; if (uVar21<0xc) amplitude[uVar21] = Psys_RandFloatRange(0,2.0)`),
+where `DAT_08a7cc00` is `0x40400000` = **3.0** (`read_memory`, both
+pressings) - so **one amplitude value covers three consecutive chain
+segments**, not one value per segment as the pre-2026-09-17 reading of this
+page assumed. Confidence **88** on the range and the bucket span, both direct
+reads of literals and a decompiled loop; the exact re-roll *cadence* is not
+reproduced - see below.
+
+**What is buildable and what stays chosen**, for
+`crates/render/src/beam.rs`:
+
+- Recovered and built: the segment-count formula, the half-width (`1.0`),
+  the base colour (opaque white), the disconnect fade (`0.5` s linear, already
+  the ported [`DISCONNECT_LINGER_SECONDS`]), the endpoint-alpha-zero taper,
+  the amplitude range (`[0.0, 2.0]`) and bucket span (`3` segments), the
+  additive blend (identical to [`oag_render::exhaust::BLEND`] -
+  `Gu_BlendFunc(0, 2, 10, 0, 0xffffff)` is the same `GU_ADD`/`GU_SRC_ALPHA`/
+  `GU_FIX(1.0)` call `exhaust::BLEND`'s own doc comment already cites, so this
+  reuses that constant rather than re-deriving it), and the crossed-double-
+  strip structure.
+- Chosen, no confidence score: the exact pair of perpendicular axes the two
+  strips displace along (this engine has no per-craft node basis to read
+  them from), and the amplitude re-roll cadence (recovered as "about once a
+  second, tied to the ribbon's own scroll cursor" - the same cursor
+  `oag_gameplay::projectile::leach_beam`'s own doc comment already declines to
+  model, for the reason given there: reproducing it needs render geometry the
+  simulation crate must not carry). The build re-rolls each bucket on a fixed
+  one-second render-side timer instead, seeded from a `RaceView`-owned `Rng`
+  the same way [`RaceView::exhaust_rng`] is - never `world.rng`.
+- **Not built, and not read this pass**: `Gu_Enable(3)` +
+  `Gu_StencilOp(0,0,2)` + the `g_bloom` call inside `LeachBeam_SubmitStrip`
+  strongly suggest the ribbon feeds the bloom glow mask the same way
+  `Trail_BuildStateList` does for the exhaust ribbon (`exhaust.rs`'s own doc
+  comment on `TRAIL_BLEND`/`TRAIL_GLOW_GAIN`) - flagged for whoever next
+  touches this, not chased further here.
+
 ### Open
 
-- **Which draw call consumes the ribbon.** The chain's contents and its segment
-  count are read; what submits them is not.
+- ~~**Which draw call consumes the ribbon.**~~ Found 2026-09-17, see above.
 - **`FUN_08872e64`** (the per-instance teardown `LeachBeam_UpdatePool` calls on
   retire) and **`FUN_08862d4c`** (the `Ship_IsValid`-shaped predicate
   `LeachBeam_Drain` gates both halves on) are unread past their call sites and
@@ -1620,6 +1789,11 @@ reused whole" above.
   into - `**(float **)(pool + owner * 4 + 0x44)`, i.e. offset zero of the owner's
   own entity - is not identified. A HUD or audio amplitude is the obvious guess
   and it is only a guess.
+- **Which two axes the crossed strips displace along**, and **whether the
+  ribbon feeds the bloom glow mask** - both above, neither chased this pass.
+- **`FUN_08872c78` and `0x08872b68`**, the LeachBeam node's two other vtable
+  slots found alongside `LeachBeam_BuildStrip` in `DAT_08acb048` - not
+  inspected; plausibly construct/destruct or an update method.
 
 ### 2026-09-17: the two hand-built quads' geometry, read - and drawn
 
@@ -1779,6 +1953,13 @@ quads, and is out of this pass's scope. Left as an open item below.
   half that waited - `slowShipFactor`, the one-shot thrust scale at
   `craft+0x31c` - is wired since 2026-09-16; see "`slowShipFactor` is why this
   block authors no `slowdown_time`" above for the port.
+- **The ribbon's own body is buildable too, as of 2026-09-17** - its texture
+  (`Data\Weapons\Textures\pulse_leechbeam1_ADD.mip`), its draw call
+  (`LeachBeam_BuildStrip`/`LeachBeam_SubmitStrip`), its width, its base
+  colour, its disconnect fade and its endpoint taper are all recovered; see
+  "2026-09-17: the LeachBeam ribbon's own texture" above and
+  `crates/render/src/beam.rs`. Only the two displacement axes and the
+  amplitude re-roll cadence are chosen rather than measured.
 
 ## History
 

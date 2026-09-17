@@ -409,6 +409,8 @@ impl Race {
                 quake_effect: None,
                 leach_beam_effect: None,
                 leach_charge_effect: None,
+                leach_beam_ribbon: None,
+                leach_beam_rng: Rng::new(LEACH_BEAM_SEED),
                 plasma_blasts: [None; blast_models::PLASMA_BLAST_SLOTS],
                 stage_rng: Rng::new(STAGE_SEED),
                 sparks_ignitions: 0,

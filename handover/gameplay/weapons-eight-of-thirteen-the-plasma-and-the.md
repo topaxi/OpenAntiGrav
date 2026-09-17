@@ -1762,3 +1762,58 @@ pickups), so byte-identical output is the predicted result, not a surprise -
 recorded anyway, per this thread's own standing instruction to quote it
 verbatim rather than summarise it as "unaffected."
 
+
+## 2026-09-17: the LeachBeam ribbon's own body, drawn
+
+~~Still open: the beam's own ribbon draws nothing, its geometry recovered but
+its texture unlocated.~~ **Found and built.** The texture is
+`Data\Weapons\Textures\pulse_leechbeam1_ADD.mip` (string at `0x08a7cc60`) -
+under the Cannon's own `Data\Weapons\Textures\` directory, not the two
+`Data\Tex\Weapons\` hull-overlay strings the earlier `(?i)leach` search
+found; the disc spells this one "lee**ch**", which is why that search missed
+it. `docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md`'s
+"2026-09-17: the LeachBeam ribbon's own texture" section has the full
+evidence chain: `LeachBeam_LoadTexture` (`0x088730d4`) loads it,
+`LeachBeam_Construct` (`0x08872aa0`) is the only caller, and the loaded
+handle is read by exactly one function, `LeachBeam_BuildStrip`
+(`0x088739b0`) - not called by any `jal`, because it is a virtual draw method
+at slot `0x44` of the vtable `LeachBeam_Construct` installs (`read_memory` on
+`DAT_08acb048` finds the address sitting there directly). `LeachBeam_BuildStrip`
+builds the strip and calls `LeachBeam_SubmitStrip` (`0x088731c4`), which
+issues the actual `GU_TRIANGLE_STRIP` draw with the same blend
+`exhaust::BLEND`'s own doc comment already cites
+(`Gu_BlendFunc(GU_ADD, GU_SRC_ALPHA, GU_FIX, 0, 0xffffff)`).
+
+**Built in `oag_render::beam`** (geometry half, wgpu-free, eleven unit
+tests; `Pipeline` half modelled on `exhaust::Pipeline` but far smaller - one
+texture, one blend, no trail/HD complexity), loaded in
+`race::assets::leach_beam_texture` on the same "absence is reported, not
+fatal" terms every optional asset here follows, and wired into
+`Scene`/`RaceView`/`Race::advance_leach_beam_ribbon` the same way the
+exhaust ribbon and its own `Rng` are. Verified as a player would: headless
+`--race --mode single_race --give leachbeam --hold cross --press square`
+captures at several tick counts show a locked beam's ribbon as a bright
+additive streak between the two craft, brightest at its middle and fading to
+nothing at both ends - exactly the recovered endpoint-alpha-zero taper.
+Screenshots and exact commands are in the lane report,
+`/home/topaxi/.cache/oag/drive/reports/leachbeam-ribbon.md`.
+
+**Chosen, not recovered**: the two axes the crossed double-strip displaces
+along (this engine's `Ship` carries no per-craft node basis the way the
+original's scene graph does) and the amplitude bucket's re-roll cadence (the
+original ties it to a ribbon-scroll cursor `oag_gameplay::projectile::leach_beam`
+already declines to model, for the reason given there). Everything else -
+segment count, half-width, amplitude range and bucket span, base colour, the
+disconnect fade, the endpoint taper, the crossed-strip structure and the
+blend - is a recovered constant or a direct read.
+
+**Not chased this pass**: whether the ribbon feeds the bloom glow mask
+(`Gu_Enable(3)`/`Gu_StencilOp`/`g_bloom` inside `LeachBeam_SubmitStrip`
+suggest it does, the way `Trail_BuildStateList` does for the exhaust
+ribbon), the two other vtable slots beside `LeachBeam_BuildStrip`
+(`0x08872c78`, `0x08872b68`), and the hull overlay pair
+(`leachbeam_surface.mip`/`absorb_surface.mip`, drawn by `FUN_0890d828` ->
+`FUN_0890e304`) - still undrawn, still honest absences.
+
+Gate: full `just` and `OAG_REQUIRE_GAME_DATA=1 just test-data`, both watched
+to completion - see the lane report for exact counts.

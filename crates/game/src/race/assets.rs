@@ -33,6 +33,42 @@ pub const FLARE_TEXTURE: &str = r"Data\Tex\EngineFlare\grabbedEngineFlare128x64x
 /// needs to know which disc it is reading.
 pub const NOISE_TEXTURE: &str = r"Data\Tex\engineFlare\Engine_noise.mip";
 
+/// The LeachBeam ribbon's own texture, a literal in the executable - found
+/// 2026-09-17, spelled "lee**ch**" on disc rather than "leach", which is why
+/// the earlier `(?i)leach` search over `.rodata` missed it.
+///
+/// At `0x08a7cc60`, loaded by `LeachBeam_LoadTexture` (`0x088730d4`) into
+/// `DAT_08b3bfa4`, which `LeachBeam_BuildStrip` (`0x088739b0`) binds right
+/// before building the ribbon's own vertices. See
+/// `docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md`'s
+/// "2026-09-17: the LeachBeam ribbon's own texture" section for the full
+/// evidence chain. Under the Cannon's own `Data\Weapons\Textures\` directory
+/// rather than the two `Data\Tex\Weapons\` hull-overlay textures beside
+/// [`NOISE_TEXTURE`] above - a different directory is the whole reason the
+/// earlier search missed it too.
+pub const LEACHBEAM_TEXTURE: &str = r"Data\Weapons\Textures\pulse_leechbeam1_ADD.mip";
+
+/// Decodes [`LEACHBEAM_TEXTURE`] out of the archive set, or reports why it did
+/// not - the same "absence is reported, not fatal" rule every optional asset
+/// in this module follows. No per-title axis the way [`flare_texture`]'s
+/// `oag_title::flare::Flare` is: the LeachBeam is Pulse's own weapon and this
+/// is its one literal path, found and read on one binary.
+pub(super) fn leach_beam_texture(
+    archives: &mut oag_assets::Archives,
+    report: &mut Vec<String>,
+) -> Option<FlareTexture> {
+    match exhaust_texture(archives, LEACHBEAM_TEXTURE) {
+        Ok((texture, note)) => {
+            report.push(note);
+            Some(texture)
+        }
+        Err(why) => {
+            report.push(format!("{why} - the LeachBeam draws with no ribbon body"));
+            None
+        }
+    }
+}
+
 /// Reads one `Data\Psys\<name>.POB` out of the archive set and parses it
 /// into a playable effect.
 ///
