@@ -1038,3 +1038,5 @@
 0x0886f154	function	Rocket_SweepProjectiles	78	rocket-visuals.md
 0x08867370	function	MinePool_Update	85	mine.md
 0x08867b50	function	Mine_SweepCraftTrigger	88	mine.md
+0x08864ea0	function	Cannon_RotateFlashCorner	82	cannon-quake-leachbeam.md
+0x08864f54	function	Cannon_BuildRoundBasis	75	cannon-quake-leachbeam.md
