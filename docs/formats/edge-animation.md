@@ -322,3 +322,57 @@ own bytes) rather than claiming ranges of the whole file the way
 `oag_rcs::rcsmodel`'s own coverage tracking does. Every byte range this
 module's `Clip`/`Curve` parse touches is bounds-checked against the file
 before being read; nothing is read past what `data.len()` allows.
+
+## What the later titles do instead: Edge is PS3-only, and Omega re-bakes
+
+**Measured 2026-09-17 against the shipped archives and executables**, after
+this format landed, to answer whether any of it transfers to Wipeout 2048
+(Vita) or the Omega Collection (PS4) - Omega being a remaster that ships
+HD/Fury's own content.
+
+| | HD/Fury (PS3) | 2048 (Vita) | Omega (PS4) |
+| --- | ---: | ---: | ---: |
+| `edgeanim` assert strings in the executable | present | **none** | **none** |
+| `1.2.3.0-PS3-SPU-EDGE` | present | absent | absent |
+| `.rcsanimclip` / `.rcsskeleton` entries | **0** | 49 + 49 | 31 |
+| `AnimCurve*` Maya type names | 9 | 9 | 9 |
+
+**Edge does not transfer, and the reason is hardware.** Edge Animation Tools
+is part of Sony's SPU-oriented PS3 Edge suite; the Vita and PS4 have no SPUs
+and neither executable contains a trace of it. So `oag_rcs::edgeanim` is a
+PS3-only reader by nature, not by omission.
+
+**All three titles share the same authoring, though.** The nine `AnimCurve*`
+strings (`AnimCurveTimeToAngular`, `AnimCurveUnitlessToDistance`, ...) are
+Maya's own animation-curve type names and are byte-identical across the three
+executables. What differs is only how the authored curves are baked for the
+target.
+
+**Omega re-bakes HD's circuits into sidecars this project already reads.**
+Nine HD/Fury environments ship a `.rcsanimclip`/`.rcsskeleton` pair in Omega
+where HD embeds Edge clips in the `.rcsmodel`: `talons_junction`, `amphiseum`,
+`03_moa_therma`, `04_chenghou_project`, `05_ubermall`, `10_sebenco_climb`,
+`12_sol_2`, `15_anulpha_pass` and `zone_3`, as `track.final.*` and
+`track_reversed.final.*`. `oag_rcs::rcsanimclip`/`rcsskeleton` decode that
+container already (see [`2048-animation.md`](2048-animation.md)).
+
+**But the two are different kinds of animation and do not substitute for each
+other.** The sidecars carry **node transforms** - a hierarchy plus keys for a
+subset of nodes. Edge's clips here carry **material parameters**
+(`uvOffset`/`uvScale`), which is why this project routes them through
+`AnimTrack::Rcs`/`TexAnims` rather than the node-animation path. The two are
+complementary: a circuit can have both, and reading one says nothing about
+the other.
+
+**Open, and deliberately not chased here**: Omega ships the billboard and
+front-end flyer models (53 and 43 entries respectively, including
+`billboards/HD_Adverts/321Go/`), and **none of them has a `.rcsanimclip`
+sidecar** - every sidecar in the archive is an environment, a crowd rig, or
+`startanim`. So either Omega's adverts and flyers are static, or they carry
+material-parameter animation in some embedded form this pass did not look
+for. Deciding which needs a reader for Omega's own `.rcsmodel` header, which
+is little-endian with a different layout from HD's big-endian one - the same
+reason HD's `material_record+0x20` reading cannot simply be pointed at it.
+`321go_startfinish.rcsmodel` itself is **absent** from Omega; the nearest
+thing is `Data/startanim/model/start.rcsanimclip`, which sits beside 2048's
+own `startanim_fc07_*` materials rather than HD's gantry.
