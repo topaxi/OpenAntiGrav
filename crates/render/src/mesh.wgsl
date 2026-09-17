@@ -891,11 +891,56 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     // for us to use instead. A material that tiles its two textures
     // differently would come out wrong here and would show as a mismatched
     // scale rather than as a missing surface.
-    let first = textureSample(albedo, albedo_sampler, in.texcoord);
+    // **`slots::FACING_RAMP_SHEEN`: the glass family's facing-ramp combine,
+    // fully traced on one material - see `oag_render::mesh::rcs::glass_sheen`
+    // and `docs/formats/rcsmaterial.md`, "Three sampler roles identified by
+    // what they bind, and the glass floor stops painting a ramp".** Where
+    // this bit is set, `mesh::rcs::skin::picks` has already pointed `albedo`
+    // at the material's facing-ramp texture and `lightmap` at its grid, so
+    // the only thing left to do here is address the ramp by `dot(V, N)`
+    // rather than the diffuse UV every other material samples it at - the
+    // view-angle sheen the traced microcode computes
+    // (`DP3 R2.w, -R1, R2` then `TEX H2.xyz, -R2.wwww unit2`).
+    let ramp_sheen = (in.slots & 1024u) != 0u;
+    let view_dir = normalize(scene.fog.camera - in.world);
+    let ramp_facing = dot(view_dir, n);
+    let ramp_uv = vec2<f32>(ramp_facing, ramp_facing);
+    let first_uv = select(in.texcoord, ramp_uv, ramp_sheen);
+    let first = textureSample(albedo, albedo_sampler, first_uv);
     let second = textureSample(lightmap, albedo_sampler, in.texcoord);
     let picture = select(first, second, (in.slots & 2u) != 0u);
     let coverage = select(first, second, (in.slots & 4u) != 0u);
     let texel = vec4<f32>(picture.rgb, coverage[(in.slots >> 3u) & 3u]);
+
+    // **The combine itself**, `vertexLight * ramp + ramp`, plus the grid's
+    // red as an additive term and as the output alpha - block #7's own
+    // `ADD H4.xyz, H6.xxxx, H4` and `MOV H0.w, H6.xxxx END`. Two omissions,
+    // both named rather than guessed shut:
+    //
+    // - **The per-material constant `c`** (`ADD H4.xyz, H2, {c}` -
+    //   parameter `0x512f8e65`, measured `0.26562` on `etched_glass_tech`,
+    //   not zero) is left out of `ramp + c` - `glass_sheen`'s own doc names
+    //   the plumbing this needs and why it did not land in this change.
+    // - **`paraboloidReflectionTex`'s reflection tint**, weighted by the same
+    //   grid red, is left out entirely: this renderer has no dual-paraboloid
+    //   probe and does not invent one, per `CLAUDE.md`.
+    //
+    // `vertexLight` is `f[TC0] + f[TC1] + f[TC5].x * (sun.colour * N.L)` in
+    // the traced microcode (`@0x02`/`@0x05`: `DP3_SAT` against the sun
+    // direction, `MUL` by the sun colour - exactly `scene.light.sun * ndl`
+    // this file already computes as `sun_diffuse` without the mask, since
+    // this program declares no lightmap to mask by). `f[TC5].x` is
+    // `in.texcoord`'s own first component (line 830 of `rcsmaterial.md`
+    // reads `f[TC5].zw` as this file's `in.texcoord`). `f[TC0]` and `f[TC1]`
+    // are a stated approximation, not a reading: both stand in as
+    // `in.colour.rgb`, the one per-vertex light term this project already
+    // decodes for every HD material, on the same terms this file's own
+    // second-texture coordinate above is already a stated approximation
+    // rather than a reading.
+    let ramp_sun = scene.light.sun * ndl;
+    let vertex_light_sheen = in.colour.rgb + in.texcoord.x * ramp_sun;
+    let sheen_rgb = vertex_light_sheen * first.rgb + first.rgb + vec3<f32>(second.r);
+    let sheen = vec4<f32>(sheen_rgb, second.r * in.colour.a);
 
     // **Wipeout HD's additive glow.** Its emissive family samples unit 1 at
     // `(u, (v + a) * b + time)`, multiplies by a tint and adds the result to
@@ -1154,7 +1199,13 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
         mix(plain_rgb, authored_rgb, scene.light.enabled * in.lit),
         texel.a * in.colour.a,
     );
-    return mix(shaded, flame, flame_shading);
+    // **The facing-ramp combine replaces the generic rig entirely**, the
+    // same shape `flame` below already takes: block #7 computes its own
+    // light (the traced `vertexLight`) rather than being multiplied by
+    // `authored`'s ambient/prelit/sun sum, so running both would shade it
+    // twice.
+    let shaded_or_sheen = select(shaded, sheen, ramp_sheen);
+    return mix(shaded_or_sheen, flame, flame_shading);
 }
 
 @fragment

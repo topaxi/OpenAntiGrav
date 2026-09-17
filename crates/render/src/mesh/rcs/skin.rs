@@ -9,7 +9,7 @@ use std::sync::Arc;
 use oag_rcs::{rcsmaterial, rcsmodel};
 
 use super::super::{ModelTexture, TextureSlots};
-use super::{Report, Textures};
+use super::{Report, Textures, glass_sheen};
 
 /// Decodes one material's texture, or says which way it could not be.
 ///
@@ -289,6 +289,21 @@ pub(super) fn picks(
             ) else {
                 return default;
             };
+            // **The glass family's facing-ramp combine wins both bindings,
+            // ahead of the generic picture/coverage reading below.** Its
+            // colour lane is `Texel::Mixed` - more than one unit reaches it -
+            // so the generic reading below falls to `NOT_A_PICTURE`'s
+            // albedo fallback and its alpha lane resolves to the same entry,
+            // which collapses `aux` onto `albedo` and leaves the material's
+            // own ramp (`Material::texture`) bound nowhere. See
+            // `glass_sheen`'s own doc for the full read and the routing
+            // question it settles.
+            if let Some(sheen) = glass_sheen::classify(material, &declared, &program) {
+                return Pick {
+                    albedo: sheen.ramp_entry,
+                    aux: Some(sheen.grid_entry),
+                };
+            }
             // An entry only counts when it supplies a `.gtf`: an entry the
             // material declares and leaves empty is the engine's to bind, and
             // pointing a lane at it would sample `mesh_render::build`'s
@@ -496,6 +511,18 @@ pub(super) fn roles(
             .is_some_and(|d| !d.takes_directional_light())
         {
             packed |= slots::NO_SUN;
+        }
+        // **The glass family's facing-ramp combine, off the same fact
+        // `picks` already routed by.** See `glass_sheen`'s own doc for the
+        // shape this catches. `units` below still runs unconditionally: with
+        // `picks` already pointing `albedo`/`aux` at the ramp and the grid,
+        // its ordinary unit lookup answers correctly on its own, which is
+        // how the alpha-from-second and channel bits below fall out for
+        // this material without a second special case.
+        if let Some((d, p)) = declared.as_ref().zip(program.as_ref())
+            && glass_sheen::classify(material, d, p).is_some()
+        {
+            packed |= slots::FACING_RAMP_SHEEN;
         }
         let (first_unit, second_unit) = units(
             declared.as_ref(),

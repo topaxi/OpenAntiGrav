@@ -137,6 +137,7 @@ mod cutout;
 mod isolate;
 mod pads;
 pub use pads::{build_pads, build_weapon_pads};
+mod glass_sheen;
 pub mod psp2;
 mod skin;
 

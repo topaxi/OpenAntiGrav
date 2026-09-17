@@ -4,12 +4,14 @@
 
 ## Open
 
-- The facing-ramp combine for this exact material (`etched_glass_tech`, the
-  glass floor) is now fully traced - see
-  [hd-needs-a-per-material-shader-path-and.md](hd-needs-a-per-material-shader-path-and.md),
-  which is where its two implementation blockers (an unrouted sampler bind, a
-  missing paraboloid reflection probe) are tracked so they sit beside the
-  renderer's other missing inputs rather than being duplicated here
+- **The facing-ramp combine for this exact material (`etched_glass_tech`, the
+  glass floor) is traced and now drawn - resolved 2026-09-17, `lane-hd-glass`.**
+  See [hd-needs-a-per-material-shader-path-and.md](hd-needs-a-per-material-shader-path-and.md)
+  for the fix (a `Pick`-routing bug, not the hash-mismatch either open
+  hypothesis there named) and what it still leaves out (the `c` parameter,
+  `vertexLight`'s exact composition, the missing paraboloid probe).
+  `mag_effect_loop_opaque` - this file's own magstrip finding below - still
+  does not classify into that combine and stays undrawn on its own terms.
 - Tone gap: renders clip 21 % to white against a reference's 15 % - a
   same-camera comparison is unblocked as of 2026-09-13 (the capture
   harness's camera pick is fixed, see
@@ -48,19 +50,25 @@
   `variants_unshipped` still 0 both times). Full evidence, the screenshot
   verdict and the remaining gap: [rcsmaterial.md](../../docs/formats/rcsmaterial.md),
   "Talon's Junction's magstrip floor was black because its material was
-  never asked to resolve at all". **Not fully closed**: the panel now
-  renders textured and partly lit rather than flat black, but still does not
-  match the reference's evenly-lit grid - `mag_effect_loop_opaque`'s
-  resolved block is the same five-sampler reflective combine as
-  `etched_glass_tech`'s, and this renderer routes only two of its five
-  units. That is the pre-existing "no route to draw it" gap, confirmed
-  rather than caused by this fix
+  never asked to resolve at all". **Not fully closed, and it is not simply
+  `etched_glass_tech`'s own now-fixed gap either** - see the 2026-09-17
+  bullet above. `mag_effect_loop_opaque`'s resolved block only resembles
+  `etched_glass_tech`'s as a family: measured directly, it declares five
+  units at different assignments (grid at unit 1, ramp at unit 4, a fourth
+  real texture at unit 3 this renderer has never named), wraps a fog idiom
+  neither material needed traced before, and its alpha lane does not resolve
+  to a unit at all (`Texel::Untraced`) where `etched_glass_tech`'s does. So
+  `etched_glass_tech`'s fix does not reach it, and reusing that combine here
+  would be inventing a program this project has not read - it stays
+  classified as "a different combine" and undrawn, per `CLAUDE.md`
 
 ## Next Steps
 
-- Pick up [hd-needs-a-per-material-shader-path-and.md](hd-needs-a-per-material-shader-path-and.md)
-  for the shading work - normal map, specular map and this material's facing
-  ramp all live there now
+- `etched_glass_tech`'s own facing-ramp shading is done (2026-09-17). What is
+  left on [hd-needs-a-per-material-shader-path-and.md](hd-needs-a-per-material-shader-path-and.md):
+  the normal map, the specular map, `mag_effect_loop_opaque`'s own untraced
+  combine, and the three named omissions in the glass-sheen fix itself (`c`,
+  `vertexLight`'s exact composition, the paraboloid probe)
 - The tone gap's own harness blocker is gone (see `## Open` above) - a
   precise same-camera re-measurement is what is left, not a capture-harness
   fix

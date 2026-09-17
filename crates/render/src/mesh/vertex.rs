@@ -238,6 +238,15 @@ pub mod slots {
     /// decodes it; see `mesh_render::Zone` for the two publications.
     pub const ZONE_TRACK: u32 = 1 << 9;
 
+    /// This material's resolved fragment program is the glass family's
+    /// facing-ramp combine - `mesh::rcs::glass_sheen`'s own fact-based
+    /// classifier, matched once at load. Where this is set, `albedo` is the
+    /// facing ramp (sampled at `dot(V, N)`, not the diffuse UV) and
+    /// `lightmap`/`aux` is the grid, exactly as `mesh::rcs::skin::picks`
+    /// bound them - see `mesh.wgsl`'s own read of this bit for the combine
+    /// `docs/formats/rcsmaterial.md` traces.
+    pub const FACING_RAMP_SHEEN: u32 = 1 << 10;
+
     /// Where a material's index into [`Model::emissive`](super::Model::emissive)
     /// sits in this word, plus one; `0` is "this material has none".
     ///
