@@ -1555,25 +1555,24 @@ than between a thread and the code.
 
 ### What is still open
 
-- **The animated curve's own authored content is undecoded, and now has a name.**
-  `2026-09-17`'s later pass (`lane/hd-gantry-anim`,
-  [`billboards.md`](../ghidra/functions/ps3-hdfury-eu/billboards.md#2026-09-17-the-curves-on-disk-source-is-sonys-edge-animation-tools-format-located-but-not-decoded))
-  traced the curve pointer to an exact, previously-undecoded field
-  (`material_record + 0x20`, then `+ 0xc`) on the material record
-  `oag_rcs::rcsmodel::material` already parses, confirmed the "animated-target
-  list" `Billboard_UpdateInstanceUvs` reads is the file's own material table
-  (not a separate section), and identified the bytes past the curve pointer
-  as **Sony's own Edge Animation Tools** clip format, off two of the
-  evaluator's own embedded assert strings
-  (`edgeanim_evaluate_ppu.cpp:469`/`:283`) rather than a guess at the shape.
-  **Not 2048's `.rcsanimclip`/`.rcsskeleton`** - checked directly, no such
-  file exists in any of HD's seven PSARC archives and the file carries no
-  `0xca5caded` container magic either. What remains undecoded is Edge's own
-  bit-packed keyframe encoding (frame-index table, per-component bit widths,
-  fixed-point scale/bias, quaternion reconstruction) - a format-recovery task
-  scoped to Edge's own container, not Wipeout's, and the next step rather
-  than another emulator capture. `crates/rcs/examples/hd_gantry_curve_probe.rs`
-  reproduces the pointer chain directly off the extracted file.
+- **The animated curve's own authored content is decoded, and it is a wipe,
+  not a glyph selector.** `2026-09-17`'s later pass (`lane/hd-edgeanim`,
+  [`docs/formats/edge-animation.md`](../formats/edge-animation.md)) decoded
+  Edge Animation Tools' own byte layout for the non-bit-packed scalar path -
+  every curve on `321go_startfinish.rcsmodel` has `offsetPackingSpecs`
+  absent and no joint channel, so the bit-packed encoding the previous
+  finding left open turned out to be a codec path these curves never use.
+  Implemented in `oag_rcs::edgeanim` and
+  `oag_rcs::rcsmodel::material::curve`, validated by
+  `hd_gantry_curve_ground_truth.rs`. **What the four curves actually author
+  is a per-material wipe/reveal ramp staggered across a shared 13.333 s
+  loop, not four discrete glyph states** - which does not by itself explain
+  how the board reads `3`/`2`/`1`/`GO`. **Playback is not wired**: no time
+  base connects this curve's own loop to the ~6 s countdown a player sees,
+  and the per-node `+0xe4` static UV override table `billboards.md`'s
+  2026-09-17 first section already named is at least as likely the real
+  glyph-selection mechanism - unchased, and the lead for whoever picks this
+  up next.
 - **The backing pieces sit inside the mount's own thick structure.**
   `CLEARANCE` (1.0, unchanged, still Pulse's own measured order) clears the
   digit board's near-zero local depth but not `Honey_Board`'s HD analogue,

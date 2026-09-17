@@ -198,6 +198,7 @@ fn mode_two_is_an_alpha_test_and_not_the_pair_it_still_carries() {
         second_texture_sampler: None,
         samplers: Vec::new(),
         parameters: Vec::new(),
+        curve: None,
     };
     assert_eq!(cutout.transparency(), Some(Transparency::Mode2));
     assert!(cutout.is_see_through());
@@ -229,6 +230,7 @@ fn both_factors_come_through_and_an_unknown_one_is_not_guessed_at() {
         second_texture_sampler: None,
         samplers: Vec::new(),
         parameters: Vec::new(),
+        curve: None,
     };
     for (src, named) in [
         (material::FACTOR_ONE, material::Factor::One),
@@ -279,6 +281,7 @@ fn the_unused_transparency_encoding_is_not_guessed_at() {
         second_texture_sampler: None,
         samplers: Vec::new(),
         parameters: Vec::new(),
+        curve: None,
     };
     assert_eq!(odd.transparency(), None);
     assert!(

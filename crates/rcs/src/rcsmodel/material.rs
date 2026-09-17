@@ -42,6 +42,8 @@
 //! +0x16  u16   destination blend factor
 //! +0x18  u32   alpha test comparison function
 //! +0x1c  f32   alpha test reference, in `[0, 1]`
+//! +0x20  u32   file offset of a further pointer; `[+0x20]+0xc` is the
+//!              material's own animated curve, or 0 - see [`curve::Curve`]
 //! ```
 //!
 //! Records are not a fixed size: consecutive offsets differ by 96 to 768 bytes
@@ -50,7 +52,9 @@
 
 use oag_formats::ByteOrder;
 
+pub mod curve;
 mod parameters;
+pub use curve::Curve;
 pub use parameters::{KIND_SAMPLER, Parameter, parameters, samplers};
 
 /// How many low bits of the state word select the transparency mode.
@@ -246,6 +250,12 @@ pub struct Material {
     /// Empty on a record too short to carry the table, which is an ordinary
     /// state rather than a failure: most materials on the disc declare none.
     pub parameters: Vec<Parameter>,
+    /// The material's own animated curve, at `+0x20` then `+0xc` - see
+    /// [`curve::Curve`] and `docs/formats/edge-animation.md`. `None` on a
+    /// material with nothing to animate, which is most of them: on
+    /// `321go_startfinish.rcsmodel` the plain `simpletexture` material has no
+    /// curve and its four `uvoffsetscale` siblings all do.
+    pub curve: Option<Curve>,
 }
 
 /// Where a circuit keeps its baked lighting atlases.
@@ -412,6 +422,7 @@ impl Material {
             second_texture_sampler: entries.get(1).and_then(|(h, p)| p.as_ref().map(|_| *h)),
             samplers: entries,
             parameters: parameters(data, at),
+            curve: Curve::parse(data, at),
         })
     }
 

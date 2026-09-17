@@ -25,6 +25,7 @@ fn material(parameters: Vec<Parameter>) -> rcsmodel::Material {
         second_texture_sampler: None,
         samplers: Vec::new(),
         parameters,
+        curve: None,
     }
 }
 
