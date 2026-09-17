@@ -1,0 +1,69 @@
+config: /home/topaxi/projects/oag-lane-gantry/scratch/gantry-watch/config.yml (Interpreter (static), Null audio, GDB 2350)
+removed a stale /home/topaxi/.cache/rpcs3/RPCS3.buf left by a terminated run
+rpcs3 pid 125004 (patched, watchpoints) on DISPLAY=127.0.0.1:91
+  press      ?                      -> ?                     
+  press      ?                      -> ?                     
+  press      ?                      -> ?                     
+  press      ?                      -> ?                     
+  press      ?                      -> ?                     
+  press      ?                      -> ?                     
+  press      ?                      -> ?                     
+  press      ?                      -> ?                     
+  press      ?                      -> Top                   
+  press      Top                    -> Top                   
+  press      Top                    -> PreFMVConnect         
+  press      PreFMVConnect          -> Studio Logo           
+  press      Studio Logo            -> Studio Logo           
+  press      Studio Logo            -> Studio Logo           
+  press      Studio Logo            -> Studio Logo           
+  press      Studio Logo            -> Studio Logo           
+  press      Studio Logo            -> Studio Logo           
+  press      Studio Logo            -> Save Warning          
+  press      Save Warning           -> Save Warning          
+  press      Save Warning           -> Main Menu             
+Main Menu; settling
+walking to race
+  press  1  Main Menu              -> Campaign Selection    
+  press  2  Campaign Selection     -> Campaign Selection       (dropped)
+  press  3  Campaign Selection     -> Grid Selection Fury   
+  press  4  Grid Selection Fury    -> Grid Selection Fury      (dropped)
+  press  5  Grid Selection Fury    -> Cell Selection        
+  press  6  Cell Selection         -> Cell Selection           (dropped)
+  press  7  Cell Selection         -> Team Selection        
+  press  8  Team Selection         -> Team Selection           (dropped)
+  press  9  Team Selection         -> Team Launch Transition
+  press 10  Team Launch Transition -> Launch Game           
+  press 11  Launch Game            -> InGame                
+in race; waiting for track load
+  Loading track model Data\Environments\Talons_Junction\track.rcsmodel 
+  Loading Screen Finished
+connecting GDB stub (this pauses the target)
+  g_BillboardSlots = 0x00c48180
+  slot8 struct @0x00c48890, resource handle=0x43558e80
+  submesh count=19, instance array base=0x3325cb40
+    [ 0] inst=0x3325cb40 uvOffset.x=00000000 uvScale.x=3f800000 node=0x3064bc20
+    [ 1] inst=0x3325cbd0 uvOffset.x=00000000 uvScale.x=3f800000 node=0x3064bec0
+    [ 2] inst=0x3325cc60 uvOffset.x=00000000 uvScale.x=3f800000 node=0x3064c1e0
+    [ 3] inst=0x3325ccf0 uvOffset.x=00000000 uvScale.x=3f800000 node=0x3064c500
+    [ 4] inst=0x3325cd80 uvOffset.x=00000000 uvScale.x=3f800000 node=0x3064c820
+    [ 5] inst=0x3325ce10 uvOffset.x=00000000 uvScale.x=3f800000 node=0x3064cb40
+    [ 6] inst=0x3325cea0 uvOffset.x=00000000 uvScale.x=3f800000 node=0x3064ce60
+    [ 7] inst=0x3325cf30 uvOffset.x=00000000 uvScale.x=3f800000 node=0x3064d180
+    [ 8] inst=0x3325cfc0 uvOffset.x=00000000 uvScale.x=3f800000 node=0x3064d4a0
+    [ 9] inst=0x3325d050 uvOffset.x=3f800000 uvScale.x=3f800000 node=0x3064d7c0
+    [10] inst=0x3325d0e0 uvOffset.x=00000000 uvScale.x=3f800000 node=0x3064dae0
+    [11] inst=0x3325d170 uvOffset.x=00000000 uvScale.x=3f800000 node=0x3064de00
+    [12] inst=0x3325d200 uvOffset.x=00000000 uvScale.x=3f800000 node=0x3064e120
+    [13] inst=0x3325d290 uvOffset.x=00000000 uvScale.x=3f800000 node=0x3064e440
+    [14] inst=0x3325d320 uvOffset.x=00000000 uvScale.x=3f800000 node=0x3064e760
+    [15] inst=0x3325d3b0 uvOffset.x=00000000 uvScale.x=3f800000 node=0x3064ea80
+    [16] inst=0x3325d440 uvOffset.x=00000000 uvScale.x=3f800000 node=0x3064eda0
+    [17] inst=0x3325d4d0 uvOffset.x=00000000 uvScale.x=3f800000 node=0x3064f0c0
+    [18] inst=0x3325d560 uvOffset.x=00000000 uvScale.x=3f800000 node=0x3064f3e0
+armed 19 write watchpoints; resuming for the countdown
+paused after countdown window
+
+--- watchpoint hits in RPCS3.log ---
+  ·S 0:02:36.824507 {PPU[0x100000b] Thread (36320740) [0x005f9c9c]} GDB: Write watchpoint hit: 4 byte(s) at 0x3325ccb0.
+--- end ---
+

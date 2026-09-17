@@ -666,7 +666,26 @@ In short:
   program's own patch-slot table. Full account in
   `docs/rendering/start-gantry.md`'s "Implemented on HD" section (both new
   subsections) and `docs/ghidra/functions/ps3-hdfury-eu/billboards.md`'s own
-  2026-09-13 section.
+  2026-09-13 section. **2026-09-17, `lane/hd-gantry-glyph-walk`: the write is
+  located.** `just build-rpcs3-watchpoints`'s patched RPCS3 (`Z2` write
+  watchpoints, `docs/reverse-engineering/rpcs3-debugger.md`) armed all 19 of
+  slot 8's own per-submesh instance blocks (addresses read live off
+  `Billboard_LoadModelAndBind`'s own decompile, not computed statically -
+  they are a heap allocation) and caught a real write during an actual
+  countdown, same PC on two independent boots: `AnimCurve_EvaluateChannels`
+  (`0x005f9bd0`), called from the per-frame `Billboard_UpdateInstanceUvs`
+  (`0x003e4f18`) off `Billboard_UpdateAndRender` (`0x003a5f68`) - three newly
+  named functions. The "eleven unexamined `lwz 0x834(` sites" lead named two
+  paragraphs up was already dead before this pass (`billboards.md`'s own
+  2026-09-15 section had ruled out all 14 matches; the count there just never
+  propagated back to this thread - the exact `handover-threads-lag-docs`
+  shape, this time inside the docs tree itself). **Still open**: the curve's
+  own authored content (`target+0x20+0xc`) was not decoded - likely lives
+  inside `321go_startfinish.rcsmodel`'s own bytes, in a section `oag-rcs`
+  does not parse yet - so playback is a format-recovery task first, then a
+  `crates/render/src/mesh/rcs.rs` replay hook. Full write-up:
+  `docs/ghidra/functions/ps3-hdfury-eu/billboards.md`'s own 2026-09-17
+  section and `docs/rendering/start-gantry.md`'s matching one.
 - ~~No screenshot comparison of a Zone countdown against a circuit-race countdown~~
   **Done for HD's gantry mesh content, off the disc via `oag-view`** - see the fourth
   pass above. **Still open**: an actual in-game screenshot (this session rendered

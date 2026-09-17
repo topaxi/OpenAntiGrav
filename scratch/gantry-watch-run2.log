@@ -1,0 +1,31 @@
+NOTE: Xvfb :91 already listening (reusing)
+config: /home/topaxi/projects/oag-lane-gantry/scratch/gantry-watch/config.yml (Interpreter (static), Null audio, GDB 2350)
+removed a stale /home/topaxi/.cache/rpcs3/RPCS3.buf left by a terminated run
+rpcs3 pid 140849 (patched, watchpoints) on DISPLAY=127.0.0.1:91
+  press      ?                      -> ?                     
+  press      ?                      -> ?                     
+  press      ?                      -> Top                   
+  press      Top                    -> Top                   
+  press      Top                    -> PreFMVConnect         
+  press      PreFMVConnect          -> Studio Logo           
+  press      Studio Logo            -> Studio Logo           
+  press      Studio Logo            -> Studio Logo           
+  press      Studio Logo            -> Studio Logo           
+  press      Studio Logo            -> Save Warning          
+  press      Save Warning           -> Save Warning          
+  press      Save Warning           -> Main Menu             
+Main Menu; settling
+walking to race
+  press  1  Main Menu              -> Main Menu                (dropped)
+  press  2  Main Menu              -> Main Menu                (dropped)
+  press  3  Main Menu              -> Main Menu                (dropped)
+  press  4  Main Menu              -> Main Menu                (dropped)
+  press  5  Main Menu              -> Main Menu                (dropped)
+  press  6  Main Menu              -> Main Menu                (dropped)
+  press  7  Main Menu              -> Main Menu                (dropped)
+  press  8  Main Menu              -> Main Menu                (dropped)
+  press  9  Main Menu              -> Main Menu                (dropped)
+  press 10  Main Menu              -> Main Menu                (dropped)
+  press 11  Main Menu              -> Main Menu                (dropped)
+  press 12  Main Menu              -> Main Menu                (dropped)
+ended on 'Main Menu', not a race
