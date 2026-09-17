@@ -589,6 +589,79 @@ the drop alone, which would regress the surface to near-black) and left for
 the coordinator - `mesh/`, `mesh.wgsl`, `emissive.rs`, `sky_cube.rs` are
 unchanged, out of this lane's files.
 
+2026-09-17, later still (`lane-hd-ilevertex-ambient`): **the fix specced above
+is landed in `mesh.wgsl`.** First, the reuse question the spec left open was
+checked against the disc rather than assumed: `prelitBias`/`prelitScaleSpecular`
+(engine parameter slots 13/12) are the *same* two `.envsettings` keys already
+bound as `scene.light.prelit_scale`/`prelit_power` for the lightmap curve,
+confirmed by an independent offset-arithmetic chain rather than the
+value/shape match alone renderer.md's confidence-80 finding rested on -
+`Scene_PrepareFrame` binds `Prelit ambient colour scale`/`power` into the
+shader-parameter table at `+0x198`/`+0x1b8` (renderer.md, "`Constant ambient
+color` (`+0x420`) is confirmed wired..."), and the engine's own 81-entry
+table's own offset formula (`0x18 + slot * 0x20`, cross-checked against eight
+known slots) solves those two offsets to slots 12/13 - the same slots the
+table independently names `prelitScaleSpecular`/`prelitBias`. Two traced
+chains landing on the same slot indices, not a name-string guess. No new
+uniform was needed.
+
+The shader change: on any chunk whose role bits are `NO_AMBIENT` and not
+`EMISSIVE`, `scene.light.ambient` is dropped and the raw `vertex_light` term
+(`in.colour.rgb`) is replaced by `scene.light.prelit_scale *
+pow(in.colour.rgb, scene.light.prelit_power)` - no sRGB predecode, matching
+the vertex program's own raw `LG2/EX2` read. `IleLightmap` chunks lose the
+flat ambient too (their own curve, `prelit`, already stood unchanged); the
+existing `EMISSIVE` branch is untouched, additive only. A new ground-truth
+test, `crates/render/tests/hd_ambient_role_census_ground_truth.rs`, pins the
+split on Amphiseum's own resolved materials: 641 slots total, 553
+`NO_AMBIENT`, 68 of those also `EMISSIVE` (excluded from the curve).
+
+**Measured as a player would, before/after, both circuits**
+(`scripts/hd-frame-compare.py --tiles 4x6`, `data/reference/hd-capture/ilevertex-lane/{before,after}/`,
+screenshots looked at directly, not just the numbers):
+
+- **Amphiseum, pose `00`, whole frame (excl HUD, craft)**: luma ref-ours
+  moved from -0.246 (ours far too bright) to +0.025 (essentially matched);
+  hue moved from 241° (39° from the reference's 202°) to 205° (3° from it).
+  Per-tile, the ceiling/stands rows (`r0`/`r1`) show the same shift - hue gap
+  collapsed from 26-59° to 0-5° across all twelve top-row tiles, luma gap
+  from 0.15-0.48-too-bright to 0.01-0.08-too-bright. The screenshot bears
+  this out directly: the ceiling goes from blown-out white/washed to a
+  cyan/blue tone close to the reference's. **This is a materially bigger win
+  than the spec's own "expect a partial fix" framing anticipated** - most of
+  the top-row tiles are `base_diffusespecular`/`cf_diff_spec`-dominated
+  (renderer.md's own per-vertex reconstruction found those two stay
+  cool-blue through the curve), yet the *rendered, triangle-interpolated*
+  picture still closed almost all the way to the reference at this pose, not
+  just `animhexlights`'s own corner. Reconciling that against the per-vertex
+  finding is unchecked - candidates include the per-pixel blend diluting the
+  two stubborn materials' share, or this pose's own framing not showing much
+  of them at all.
+  **The floor/barrier rows (`r2`/`r3`) got darker and overshot past the
+  reference**, from 0.06-0.30-too-bright before to 0.06-0.31-too-dark after
+  (e.g. `r2c4`: ref-ours -0.149 before, +0.219 after) - these are
+  `NO_AMBIENT` lightmapped chunks losing the flat ambient with no
+  compensating brightness gain, the same mechanism the spec named for
+  Talon's Junction, showing up on Amphiseum's own floor too. Not chased
+  further this session; flagged here rather than silently left in the
+  "partial fix" framing since it is a new, measured direction change, not
+  just an unclosed gap.
+- **Talon's Junction, pose `03`, whole frame (excl HUD, craft)**: luma
+  ref-ours widened from +0.233 to +0.308 (got darker, as specced); hue
+  essentially unchanged (215° before and after, 7° from the reference's
+  208°). Per-region: `road surface` ref-ours widened from +0.277 to +0.386,
+  `distant geometry` from +0.273 to +0.323. Screenshots show a subtle,
+  uniform darkening of the lightmapped wall/ceiling panels, not a new visual
+  defect - nothing went black and no chunk class vanished. **Landed anyway**,
+  per the brief: this is the disc's own arithmetic and the existing darkness
+  gap is already tracked as a separate, open defect (see the "measurably
+  darker" bullet below).
+
+Nothing went black and no chunk class vanished on either circuit at either
+pose. Gate: `just` and `just test-data` both green on this lane's tree (see
+commit for log paths); the twelve-circuit race regression test's own
+respawn-count lines matched the 6912dbc6 baseline exactly, digit for digit.
+
 ## Open
 
 - **Where to start on Amphiseum's 154-degree hue gap: it is near-complementary, which is a structural signature, not a lighting one.** Recorded 2026-09-17 by the coordinating session as a *lead only*. Candidate (1) (channel/byte order) and candidate (2) (per-region attribution) were superseded by the per-material read below rather than run directly. **Candidate (3), per-material attribution, is now done and named the wrong operation** - see the `lane-hd-ceiling` dated entry above and renderer.md's new section: `mesh.wgsl` adds `constantAmbientColour` to four ceiling materials whose own resolved programs never reference it, and the disc's actual replacement term (a curve over the baked vertex colour set) reconstructs to the reference's own warm-band *hue* on one of the four (`animhexlights`) from disc values alone, at low saturation and unchecked against the reference's own saturation-weighted reading. Candidates (1)/(2) are not thereby refuted, only unnecessary to explain that one material - `base_diffusespecular`/`cf_diff_spec` staying cool-blue at every stage of that reconstruction is still unexplained, and a channel-order or byte-order defect specific to those two remains a live, unchecked candidate for their share of the gap. The capture this session identified the four materials against (`amphiseum-matched` pose `00`) reads 180-220°/200-205° uniformly across its top row - no warm cells at all in pose `00` specifically (a first pass misread pose `01`'s tile grid as pose `00`'s and drew a since-retracted conclusion from it, see the dated entry above). A fifth material, `uvanim_diffuse_emissive`, is independently confirmed by its own microcode to share the same no-`constantAmbientColour` defect, but not tied to any verified warm pixel this session. A fresh dome-facing capture (blocked on the RPCS3 menu-nav fix in Next Steps) is still what would settle coverage and whether any of these five materials' own colour is what the reference's warm reading traces to.
@@ -621,6 +694,6 @@ unchanged, out of this lane's files.
 - **Fix the RPCS3 nav plan for Amphiseum before anything else below that needs a capture.** `rpcs3-capture.md`'s own `--nav "Main Menu=right" --nav "Track Creation=right"x8` plan (documented for Racebox) landed on Talon's Junction this session, not Amphiseum - this build's menu route inserts a "Single Player" screen between `Main Menu` and `Track Creation` that the cited page does not name, so the carousel-count table may need re-deriving with `--nav-shots` from the actual screen sequence rather than assumed to still apply. Blocks the two bullets below.
 - **Re-grab Amphiseum at a pose where `animhexlights` is actually on screen** (`amphiseum-grid`'s equivalent, gone from disk) and re-run `hd-material-probe.py --pair-dir` against it, to measure how much of the reference's warm ceiling area `animhexlights` actually covers versus `base_diffusespecular`/`cf_diff_spec` - this session's own capture's only static pose (`amphiseum-matched` pose `00`) shows no warm cells anywhere in its own top-row band (180-220°/200-205° uniformly), so the coverage question is fully open. `amphiseum-matched`'s poses `01`/`03` do show localised warm tile-grid cells, but per this thread's own two-sessions-ago finding they are moving (431-529 km/h) with the original's own speed streak baked into the reference frame, which this project's static render and `hd-material-probe.py`'s own tint-pass classifier cannot be paired against - a genuinely new capture, not a re-read of an existing one, is what this needs. Also re-check the reference's own saturation-weighted hue at whichever region turns out to be `animhexlights`, since this session's `45.5°` came from an unsaturated (~11%) reconstructed colour that HSV hue reads noisily.
 - **Read `uvanim_diffuse_emissive`'s own colour** (`lane-hd-ceiling`, dated entry above) - its resolved program shares the exact no-`constantAmbientColour` defect and code path (`NO_AMBIENT`, not `NO_SUN`) the four ceiling materials do, confirmed by microcode alone, but its own baked colour/texture/glow term was not read this session and it is not tied to any verified warm pixel (the pixel-level claim in an earlier pass of this session was retracted, see the dated entry above - it mixed up two different camera poses). If its colour reads warm, this is a second, independently-verified material the same `mesh.wgsl` fix would correct, and the fix's reach is broader than four materials - but that is still to be checked, not established.
-- **Land the ambient/prelit-curve fix in `mesh.wgsl`** (`lane-hd-ceiling`, dated entry above, out of that lane's files): on a chunk whose resolved material declares no `constantAmbientColour` (`NO_AMBIENT` and not `NO_SUN`, i.e. not `EMISSIVE`), drop the `scene.light.ambient` add and add `scene.light.prelit_scale * pow(in.colour.rgb, scene.light.prelit_power)` in its place, reusing the uniforms already bound for the lightmap curve, applied with no sRGB predecode (the vertex program's own `LG2/EX2` chain reads the raw byte, unlike the lightmap path's `pow(baked.rgb, 2.2)`). Expect `animhexlights` to move toward warm gold and `base_diffusespecular`/`cf_diff_spec` to stay cool-blue; `lambert`'s own direction is not established (72-vertex sample, internally inconsistent) - land the fix on the strength of the other three, not on `lambert`.
+- ~~Land the ambient/prelit-curve fix in `mesh.wgsl`~~ **done 2026-09-17, later still (`lane-hd-ilevertex-ambient`)** - see the dated entry above. Both `.envsettings` keys were confirmed reused (not a new pair) by an independent offset-arithmetic chain, the curve landed on the `NO_AMBIENT`-and-not-`EMISSIVE` chunks exactly as specced, and the frame moved as this bullet predicted: Amphiseum's ceiling hue gap against the reference collapsed from 26-59 degrees to 0-5 degrees across the tile grid at pose `00`, and its whole-frame luma over-brightness (ref-ours -0.246) flipped to a near-match (+0.025). Talon's Junction got measurably darker as expected (whole-frame ref-ours widened from +0.233 to +0.308) and was landed anyway per this thread's own standing call that the darkness gap is a separate, already-tracked defect.
 - Resolve the magnitude discrepancy the microcode sweep found but did not chase: the curved vertex-colour term times the material's own DXT1 albedo overshoots `hd-material-probe.py`'s measured reference luma by roughly 4-5x for `base_diffusespecular`, using the top-decile-by-luma vertex population - likely because a screen pixel is a triangle-interpolated blend, not the vertex population's own top decile, so this needs either a per-triangle/per-pixel reconstruction or a direct RPCS3 read of the live per-vertex value rather than another vertex-population statistic
 - Check `base_diffusespecular`/`cf_diff_spec` specifically for a channel-order or byte-order defect in their own baked colour-set decode (`lane-hd-ceiling`'s own reconstruction found their raw vertex colour data cool-blue at 190-202°, not warm, at every stage including after the correct curve) - the coordinating session's original candidate (1) lead, narrowed from "the whole frame" to these two materials specifically, since `animhexlights`' own colour-set data already reads correctly-warm raw off the disc with no decode change needed

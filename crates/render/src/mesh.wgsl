@@ -815,6 +815,55 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     // one. Kept because not multiplying is the clearer statement.)
     let vertex_light = select(vec3<f32>(0.0), in.colour.rgb, colour_is_light > 0.5);
 
+    // `slots::NO_AMBIENT`/`slots::NO_SUN`, bits 6/7 - read here, ahead of
+    // `emissive`'s own paragraph below, because the ambient fix that follows
+    // needs `no_ambient` before that point and this keeps the two bit reads
+    // from drifting apart.
+    let no_ambient = (in.slots & 64u) != 0u;
+    let no_sun = (in.slots & 128u) != 0u;
+    let emissive = no_ambient && no_sun;
+
+    // **The disc's own compiled shader table carries three ambient sources
+    // per chunk, not one** - see
+    // docs/ghidra/functions/ps3-hdfury-eu/renderer.md, "The per-material
+    // microcode sweep: none of the four ceiling programs ever references
+    // the ambient constant...". Selected by `Features::chunk_word`:
+    // `IleLightmap` -> the `prelit` curve above (already this chunk's only
+    // term, untouched here); `IleVertex` -> the same curve shape applied to
+    // the baked per-vertex colour set instead of the lightmap texel -
+    // `pow(colour_set, prelitBias) * prelitScaleSpecular`; `Ambient`
+    // (neither) -> flat `constantAmbientColour`, i.e. `scene.light.ambient`
+    // unmodified. `slots::NO_AMBIENT` is exactly "this chunk's own program
+    // is not the `Ambient` case" - confirmed on every chunk measured on
+    // Amphiseum, Anulpha Pass and Talon's Junction. Dropping
+    // `scene.light.ambient` alone on these chunks regresses an
+    // `IleVertex`/no-lightmap/sun-occluded chunk to near-black, because the
+    // raw (uncurved) vertex colour this project already wires as
+    // `vertex_light` is far dimmer than the curved value - so the drop and
+    // the curve are one change, not two.
+    //
+    // `prelitBias`/`prelitScaleSpecular` resolve to the same two
+    // `.envsettings` keys already bound above as `prelit_scale`/
+    // `prelit_power`: `Scene_PrepareFrame` binds `Prelit ambient colour
+    // scale`/`power` into the per-draw shader-parameter table at offsets
+    // `+0x198`/`+0x1b8` (renderer.md, "`Constant ambient color` (`+0x420`)
+    // is confirmed wired..."), and the engine's own 81-entry parameter
+    // table uses `offset = 0x18 + slot * 0x20` (renderer.md, "The engine's
+    // own parameter table") - solving that for `0x198`/`0x1b8` gives slots
+    // 12/13, which the same table names `prelitScaleSpecular`/`prelitBias`.
+    // Two independently-traced offset chains landing on the same slot
+    // indices, not a name-string or value/shape match alone.
+    //
+    // No sRGB predecode here, unlike `prelit` above: the colour-set vertex
+    // program reads `v[3]` raw (`LG2 -> MUL -> EX2 -> MUL`), not through the
+    // lightmap's `pow(_, 2.2)` step. `EMISSIVE` chunks (`no_ambient &&
+    // no_sun`) are excluded from the curve below - this is additive to that
+    // branch, not a rewrite of it.
+    let vertex_light_curved = scene.light.prelit_scale
+        * pow(vertex_light, scene.light.prelit_power);
+    let vertex_light_term = select(vertex_light, vertex_light_curved, no_ambient && !emissive);
+    let ambient_term = select(scene.light.ambient, vec3<f32>(0.0), no_ambient);
+
     // **The sun-occlusion mask, restored 2026-08-20.** Two independently
     // decoded carriers of the same scalar: a lightmapped chunk's shadow lives
     // in its lightmap's own alpha, and a vertex-lit chunk's lives in its
@@ -851,17 +900,18 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     // and this mask did not exist yet.
     let mask = baked.a * in.sun_mask;
     let sun_diffuse = scene.light.sun * (ndl * mask);
-    // **This ambient reaches materials the disc never feeds it to**, and
-    // `slots::NO_AMBIENT` says which - 251 of Anulpha Pass's 309 drawn
-    // materials, 922 of its 1,101 chunks. Gating on that bit alone was tried
-    // on 2026-08-24 and is a regression, not a fix: the materials without an
-    // ambient are three families, not one. Most declare `prelitBias`,
-    // `prelitScaleSpecular` and `directionalLight0*` and are lit by the
-    // lightmap and the sun; but `sign_emissive` and its kin declare only
-    // `fogColour` and are **emissive**, so multiplying them by an `authored`
-    // with the ambient removed turns them black. Anulpha traded a brown
-    // circuit for a black one. The branch this wants is the per-material
-    // lighting path HANDOVER has open, not one bit.
+    // **`scene.light.ambient` and `vertex_light` are gated above** (`ambient_term`,
+    // `vertex_light_term`), on `slots::NO_AMBIENT` - 251 of Anulpha Pass's 309
+    // drawn materials, 922 of its 1,101 chunks. Gating `scene.light.ambient`
+    // on that bit *alone* was tried on 2026-08-24 and was a regression: the
+    // materials without an ambient are three families, not one, and
+    // `sign_emissive` and its kin (declaring only `fogColour`) went black
+    // when multiplied by an `authored` with the ambient simply dropped. The
+    // fix above is the drop *and* the vertex-colour curve together, which is
+    // what keeps the `IleLightmap`/`IleVertex` families lit; `EMISSIVE`
+    // below is the third family, excluded from both terms the same way it
+    // always was.
+    //
     // **A program fed no scene light is emissive, and the rig must not touch
     // it.** `slots::EMISSIVE` is the material's own declaration: neither
     // `constantAmbientColour` nor `directionalLight0*`. On Anulpha Pass that
@@ -873,8 +923,7 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     // Multiplying by `1.0` rather than adding anything: the albedo *is* the
     // picture for these, exactly as the microcode leaves it. The specular goes
     // with it, because a program with no sun has no half-vector term either.
-    let emissive = (in.slots & 192u) == 192u;
-    let lit_sum = scene.light.ambient + prelit + vertex_light + sun_diffuse;
+    let lit_sum = ambient_term + prelit + vertex_light_term + sun_diffuse;
     let authored = select(lit_sum, vec3<f32>(1.0), emissive);
 
     // **Which texture is the picture and which is the coverage, off the
