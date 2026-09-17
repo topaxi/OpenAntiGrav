@@ -1555,11 +1555,25 @@ than between a thread and the code.
 
 ### What is still open
 
-- **The animated curve's own authored content is undecoded.** The write is
-  now located (above); what value it plays across a full countdown, and
-  where in `321go_startfinish.rcsmodel`'s own bytes it lives, is not. A
-  format-recovery pass on `oag-rcs` is the next step, not another emulator
-  capture.
+- **The animated curve's own authored content is undecoded, and now has a name.**
+  `2026-09-17`'s later pass (`lane/hd-gantry-anim`,
+  [`billboards.md`](../ghidra/functions/ps3-hdfury-eu/billboards.md#2026-09-17-the-curves-on-disk-source-is-sonys-edge-animation-tools-format-located-but-not-decoded))
+  traced the curve pointer to an exact, previously-undecoded field
+  (`material_record + 0x20`, then `+ 0xc`) on the material record
+  `oag_rcs::rcsmodel::material` already parses, confirmed the "animated-target
+  list" `Billboard_UpdateInstanceUvs` reads is the file's own material table
+  (not a separate section), and identified the bytes past the curve pointer
+  as **Sony's own Edge Animation Tools** clip format, off two of the
+  evaluator's own embedded assert strings
+  (`edgeanim_evaluate_ppu.cpp:469`/`:283`) rather than a guess at the shape.
+  **Not 2048's `.rcsanimclip`/`.rcsskeleton`** - checked directly, no such
+  file exists in any of HD's seven PSARC archives and the file carries no
+  `0xca5caded` container magic either. What remains undecoded is Edge's own
+  bit-packed keyframe encoding (frame-index table, per-component bit widths,
+  fixed-point scale/bias, quaternion reconstruction) - a format-recovery task
+  scoped to Edge's own container, not Wipeout's, and the next step rather
+  than another emulator capture. `crates/rcs/examples/hd_gantry_curve_probe.rs`
+  reproduces the pointer chain directly off the extracted file.
 - **The backing pieces sit inside the mount's own thick structure.**
   `CLEARANCE` (1.0, unchanged, still Pulse's own measured order) clears the
   digit board's near-zero local depth but not `Honey_Board`'s HD analogue,

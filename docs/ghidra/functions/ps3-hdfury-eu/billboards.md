@@ -52,8 +52,17 @@ which is enough to identify the parser without reading the other.
 | `0x003a5f68` | function | `Billboard_UpdateAndRender` | 82 |
 | `0x003e4f18` | function | `Billboard_UpdateInstanceUvs` | 88 |
 | `0x005f9bd0` | function | `AnimCurve_EvaluateChannels` | 78 |
+| `0x0066c3c8` | function | `AnimCurve_SampleChannel` | 80 |
+| `0x0066b840` | function | `EdgeAnim_EvaluateClip` | 85 |
 
-The last three rows are 2026-09-17's - see "The runtime write is located" below.
+The last three rows in the first block are 2026-09-17's - see "The runtime write
+is located" below. The last two rows are also 2026-09-17's, from the later
+same-day pass - see "The curve's on-disk source is Sony's Edge Animation
+Tools format" further down. `AnimCurve_SampleChannel` was already used in
+prose on this page before this pass (the two-line wrapper description below)
+but was never actually renamed in Ghidra or recorded in `names.tsv` - a
+`handover-threads-lag-docs` gap inside a single doc file, closed here rather
+than propagated.
 
 The last row of the first group is a gift, not a reading: the name is the function's own debug
 string (`"GetBillboardMeshIdFromName: No model loaded for billboard %i\n"`,
@@ -827,5 +836,165 @@ write's address and caller are known, only its authored content is not.
 
 Not chased further, and worth naming for whoever does: the per-node `+0xe4`
 static-override table `Billboard_UpdateInstanceUvs` reads (a second, distinct
-mechanism from the animated one) and the deeper curve evaluator
-`_opd_FUN_0066b840` both remain open threads of their own.
+mechanism from the animated one).
+
+## 2026-09-17: the curve's on-disk source is Sony's Edge Animation Tools format, located but not decoded
+
+**`lane/hd-gantry-anim`, same day as the section above, later pass.** The
+previous section closed the location and call chain of the runtime write and
+named the "curve data itself" and "the resource it hangs off" as the open
+question. Both are now answered *structurally* - the exact struct field the
+curve pointer lives at, and the exact middleware whose format the bytes past
+that pointer are - without decoding the middleware's own bit-packed keys,
+which is a separate, larger task named at the end of this section.
+
+### The "animated-target list" is the material table itself
+
+`Billboard_UpdateInstanceUvs`'s own resource-level `+0x2c` count / `+0x30`
+array (the previous section's "animated-target list") are **the same two
+header fields `crates/rcs/src/rcsmodel.rs` already documents**:
+
+```text
++0x2c  u32   material count
++0x30  u32   offset of the material offset table
+```
+
+`oag_rcs::rcsmodel::Model::parse`'s own `materials` field is this exact list.
+Confirmed on `321go_startfinish.rcsmodel` (extracted from
+`DATA02.PSARC` on `hdfury-ps3-eu-dec.iso`, the same file the geometry section
+above already reads): the file's own `+0x2c` is `5`, and `Model::parse` reports
+5 materials for it - matching exactly, not by coincidence of a round number,
+since the file also has 19 mesh chunks and 19 submeshes, neither of which is
+5. Each "target" `AnimCurve_EvaluateChannels` evaluates is one material
+record, not a per-node or per-instance object of its own.
+
+### The curve pointer is the material record's own `+0x20` field, previously undecoded
+
+`crates/rcs/src/rcsmodel/material.rs` reads a material record through `+0x1c`
+(the alpha-test reference) and stops; `+0x20` was never claimed by anything,
+which is exactly the shape `oag_rcs::rcsmodel::coverage`'s own doc warns
+about - "a parser cannot fail on a field it does not know about." Reading it
+directly against `321go_startfinish.rcsmodel`'s own five material records:
+
+| # | material | `+0x20` | `[+0x20]+0xc` (curve pointer) |
+| --- | --- | --- | --- |
+| 0 | `simpletexture.rcsmaterial` | `0xb14` | `0` - no curve |
+| 1 | `simpletextureuvoffsetscale.rcsmaterial` | `0xb2c` | `0x1a30` |
+| 2 | `simpletextureandtexturealphauvoffsetscale.rcsmaterial` | `0x1a38` | `0x1ed0` |
+| 3 | `simpletextureandtexturealphauvoffsetscale.rcsmaterial` | `0x1ed8` | `0x2bf0` |
+| 4 | `simpletextureandtexturealphauvoffsetscale.rcsmaterial` | `0x2bf8` | `0x3790` |
+
+**Confidence 90** - not a guess at a plausible offset: every material whose
+own name carries `uvoffsetscale` has a live, non-null curve pointer, and the
+one material on this file whose name does not (`simpletexture.rcsmaterial`,
+slot 0's own material, the one node with nothing to animate) has a null one.
+The correlation with the material *type* is the reading, not the address
+pattern alone.
+
+At the curve pointer (e.g. `0x1a30` for material 1): `+0x00` is a further
+pointer (`0xb50`, called `inner` below) to the middleware object identified
+below, and `+0x04` onward is a small array of `u16` channel descriptors -
+target-table index in bits 2-15, component (0-3) in bits 0-1, read directly
+off `AnimCurve_EvaluateChannels`'s own decompile (`uVar2 & 0xfffc` for the
+index, `uVar2 & 3` for the component). **The channel count is not in the
+curve struct itself** - `AnimCurve_EvaluateChannels` reads it from
+`inner + 0x24` (`*(ushort *)(iVar3 + 0x24)`, `iVar3` being `*param_2`, the
+curve's own `+0x00`), so reading the descriptor array without checking that
+word first would be guessing how many to print. Checked on all four live
+curves of `321go_startfinish.rcsmodel`: `inner+0x24` is `2` on every one,
+matching `curve+0x04`/`+0x06` exactly - `0x0008`/`0x0009`, both target index
+2, components 0 and 1.
+
+**Target index 2 is `uvOffset`, not inferred from the parameter's position
+but read end to end.** `AnimCurve_EvaluateChannels` resolves a channel's
+destination through the material's own parameter table at `+0x34` (the same
+0x20-byte-stride table `oag_rcs::rcsmodel::material::parameters` decodes):
+`(target_index & 0xfffc) * 8` (i.e. `target_index * 0x20`) indexes into it.
+Material 1's own table has four entries; index 2's own name hash is
+`0x1eb13436` and index 3's is `0xea1dcc4c` -
+**`oag_rcs::rcsmaterial::name_hash("uvOffset")` and `name_hash("uvScale")`
+respectively, exact matches, both kind `0` (a parameter, not the `0x8001`
+sampler kind entries 0 and 1 carry)**. So target index 2, components 0 and 1,
+is confirmed as **`uvOffset.x` and `uvOffset.y`** by the same hash this
+project's own parser already computes, not by assuming the animated
+parameter must be the UV one - matching the field the 2026-09-17 GDB watch
+(previous section) caught being written.
+All four also share one more value at `inner+0x04`, the period `fmodf`
+divides by: `13.333333` seconds, unread by anything else on this page and
+not obviously tied to the 6.000 s teleport or the measured 4.533 s thrust
+gate - a fourth number in the same "nothing here reconciles the countdown's
+several timings" family `start-gantry.md` already tracks.
+
+### The middleware: Sony's own Edge Animation Tools, identified by its own assert strings
+
+`AnimCurve_SampleChannel` (`0x0066c3c8`, a two-line wrapper, renamed this pass
+- it was described in prose on this page before today but never actually
+applied in Ghidra or `names.tsv`) calls a deeper evaluator at `0x0066b840`,
+renamed `EdgeAnim_EvaluateClip` this pass. That function's own body carries
+two `_SCE_Assert` calls whose string arguments are not this project's own
+code and not previously seen anywhere else on this page:
+
+```text
+0x007d48b0  "edgeanim_evaluate_ppu.cpp:469 (anim->offsetPackingSpecs == 0)"
+0x007d48f0  "edgeanim_evaluate_ppu.cpp:283 (frameInteger <= intraFrameCount)"
+```
+
+**`edgeanim_evaluate_ppu.cpp` and `anim->offsetPackingSpecs` are Sony's own
+source file name and struct field name, from the PS3 SDK's Edge Animation
+Tools middleware** (part of the same Edge suite PS3 titles across many
+studios link for compressed skeletal/curve animation) - not Wipeout's own
+code, not decompiled from a stripped symbol, read straight off the binary's
+own embedded assert strings the same way `GetBillboardMeshIdFromName` was
+named off its own debug string. That identification - "this is Edge's own
+evaluator, not a bespoke Wipeout format" - is as solid as a self-describing
+string gets. **The function's own name, `EdgeAnim_EvaluateClip`, is softer
+than that**: the strings prove the middleware and the source file, not that
+this particular entry point evaluates a whole clip rather than one track or
+one channel within Edge's own call layers, which is inference from this
+function's decompile shape rather than from a string. **Confidence 85**
+reflects the gap between the two - the same shape `AnimCurve_EvaluateChannels`
+itself sits at 78 for.
+
+The evaluator's own body (fully decompiled, not excerpted here for length)
+does exactly what a compressed keyframe codec looks like: `fmodf` against a
+period, a binary search over a frame-index table, several bit-packed
+sub-tables located by non-constant offsets read out of the clip header
+(`+0x38`, `+0x3c`, `+0x40`, `+0x44`, `+0x48`), fixed-point-to-float
+conversion, and a `vectorReciprocalSquareRootEstimateFloatingPoint`-based
+slerp for quaternion tracks. That shape is consistent with Edge's own
+documented purpose (bit-packed, quantised keyframe animation) and
+inconsistent with a hand-rolled Wipeout format - nothing this simple.
+
+### This is not 2048's `.rcsanimclip`/`.rcsskeleton`, and not the same container magic
+
+Checked directly before concluding a new format was needed, per this lane's
+own brief: no `.rcsanimclip` or `.rcsskeleton` file exists in any of HD's
+seven `DATA0*.PSARC` archives (`psarc_list` filtered on both substrings
+against all seven returns zero matches on `hdfury-ps3-eu-dec.iso`), and
+`321go_startfinish.rcsmodel`'s own bytes contain no occurrence of `0xca5caded`
+in either byte order - `2048-animation.md`'s own container magic. HD's curve
+data is a third, independent mechanism from both Pulse's material-authored
+`TEXOFFSET` track and 2048's skeleton/clip pair: Sony's Edge Animation Tools,
+reached through a material-record field this project's own parser had not
+read yet.
+
+### What this does and does not settle
+
+**Settled:** the curve pointer's exact address, relative to a material
+record this project already parses (`material_record + 0x20`, then `+ 0xc`);
+which materials on this file carry one (4 of 5, all and only the
+`uvoffsetscale` variants); the channel-to-component mapping for material 1
+(index 2, components 0 and 1 - `uvOffset.x`/`.y`); and the identity of the
+middleware whose format the bytes past the curve pointer are in, from the
+middleware's own embedded assert strings rather than from a guess.
+
+**Not settled, and the real next step:** Edge Animation Tools' own bit-packed
+key encoding - the frame-index table, the per-component bit widths, the
+fixed-point scale/bias and the quaternion reconstruction - is not decoded.
+That is a format-recovery task in its own right, scoped to Edge's own
+container rather than to Wipeout's, and plausibly reusable well past this one
+billboard if Edge is used elsewhere in HD's animation system (nothing here
+checked that). Per this lane's own standing instruction, no value is
+synthesised in its place: `crates/rcs/examples/hd_gantry_curve_probe.rs`
+reproduces every reading on this page directly off the extracted file and
+stops exactly where the bytes stop being Wipeout's own to read.
