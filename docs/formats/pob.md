@@ -990,6 +990,42 @@ Both are content, not byte order, and both are pinned as measurements:
 - **`LOOPING` is per-emitter** - see the retraction under
   [flag `0x1`](#flag-0x1-is-this-effect-loops---2026-08-12) above.
 
+### HD names its own texture the same way Pulse does, and 80 of 82 resolve to a shipped `.gtf` - 2026-09-17
+
+HD does not embed pixels (see "The sprite pixels are on the disc after
+all" above), but every emitter still carries the same own-texture field
+at `record_start + 0x4c4` this project already reads as "an emitter's own
+texture slot" on PSP (`docs/ghidra/functions/psp-pulse-usa/particle-system.md`'s
+collision-spark section). Reading it directly - a pre-fixup offset from
+the resource base, big-endian, no slot-table indirection needed since the
+field *is* the fixup site - resolved a `.tga` developer path string for
+**every emitter in every one of the 84 distinct `.pob` files** extracted
+from the disc's seven PSARC archives (`scripts/psarc.py extract ... .pob`),
+zero missing. Taking each string's basename, lowercasing it and swapping
+`.tga` for `.gtf` against `/data/psys/tex/*.gtf`'s own 
+entries (a full census of all seven archives, `hd-entries.txt`-shaped)
+finds:
+
+- **80 of 82 distinct texture names resolve** to a shipped `.gtf` of the
+  identical basename.
+- **`vandergraf_balls_1024x1024.tga` does not, but a size-renamed sibling
+  does**: `vandergraf_balls_1024x512.gtf` and
+  `vandergraf_balls_1024x512_missile.gtf` both ship, at the export's final
+  dimensions rather than the authoring path's. Read as the same asset
+  under its shipped name, not a genuine gap.
+- **`plasma_8x8_1024x1024.tga` has no match at all**, under any name, in
+  any of the seven archives - the one real unresolved name in the corpus.
+
+This is name resolution only: no `.gtf` was decoded and nothing is wired
+into a draw path. Confidence **80** - the own-texture field read is the
+same mechanism already confirmed on PSP, corroborated here by a 100% hit
+rate for *some* string (a wrong field offset would produce garbage or
+truncated strings on at least some of 249 emitters, not a clean string on
+all of them), but the field's role at *render time* on HD specifically
+(does the interpreter actually read this field to pick the bound texture,
+the way `particle-system.md` traces for PSP) is not independently traced
+here.
+
 ## Evidence summary
 
 Every structural claim below holds on **35 of 35** PSP files and, per the
@@ -1073,6 +1109,61 @@ cargo nextest run -p oag-render --run-ignored all --test psys_ground_truth --no-
 `psys_ground_truth` (in `oag-render`) plays the parsed effects, and pins the
 collision-spark values against the hand transcription they replaced.
 
+### The sprite pixels are on the disc after all - 2026-09-17
+
+The "unlocated texture reference gap" below and in
+[particle-system.md](../ghidra/functions/psp-pulse-usa/particle-system.md)
+said the pixels behind a slot-resolved `Z:\...\Tex\<name>.tga` string were
+off the disc entirely. They are not, on PSP: **each `.pob` embeds a texture
+record directly after an emitter's own fixed-size record**, at
+`resource_base + emitter.offset + EMITTER_LEN` - addressed purely
+positionally, with no slot, fixup or string lookup needed to reach it.
+`oag_vex::pob::texture` is the parser and carries the full evidence and
+confidence scores in its own module doc; the summary:
+
+- **32-byte header**: `u16 width, u16 height, u8 bpp(8), u8 levels(3-4),
+  u8 unk, u8 unk, u32 palette_bytes(1024), u32 pixel_bytes, u32 pixel_offset,
+  u32 palette_offset` - the last two are plain absolute offsets into the
+  blob, not relative to the resource base or the header.
+- **29 of the PSP corpus's 35 root emitters carry one**; the other six -
+  `WO_PLASMA_FLASH`, `WO_RAIN`, `WO_SNOW`, `WO_LEACHBEAM_CHARGING`,
+  `WO_REPULSER`, `WO_ROCKET_FLARE` - do not, measured by
+  `crates/assets/tests/pob_ground_truth.rs`'s
+  `every_psp_root_emitter_texture_is_where_the_layout_says`.
+- **`WO_SHIP_COLL_SPARK_DAMAGE` confirms it names the texture `pob.md`
+  already resolved from the slot table**: its root's positional texture is
+  32x32/3-level, matching `quakesmoke32x32.tga`'s own size, and decodes
+  (`data/shots/quakesmoke32x32.png`, gitignored) to a soft grey puff; its
+  three siblings' positional textures all point at one shared 64x64/4-level
+  pool matching `orange_glow2.tga`, which decodes to the documented
+  white-hot-core-to-orange glow. `WO_PLASMA_HEAD` is the counter-example -
+  see `oag_vex::pob::texture`'s own "positional texture is not proven to be
+  the one a slot names" section for what it shows there.
+- **PS2 embeds none of this**: the identical positional scan over all 41
+  PS2 files, at every emitter offset, finds zero header-shaped records -
+  consistent with the 62.24% vs 25.62% coverage gap already measured below.
+  HD/Fury doesn't use this mechanism either; its sprites are separate
+  `data/psys/tex/*.gtf` PSARC entries.
+- **Coverage moved from 25.62% to 56.76%** of the PSP corpus's 781,104
+  bytes (`crates/assets/tests/pob_coverage_ground_truth.rs`,
+  `oag_vex::pob_coverage`) once the header, palette and level-0 pixels of
+  every found texture were claimed - more than half of what read as an
+  unlocated gap was sitting on disc under a positional address the whole
+  time.
+
+Confidence **85** for the header layout and positional-addressing rule;
+**40** for the two unknown header bytes and for what distinguishes the six
+texture-less root emitters from the twenty-nine with one. The **25.62%**
+coverage figure and the "past its last resolved string, unaccounted for"
+framing in the first "Not determined" bullet below are now stale by this
+section's own **56.76%** measurement - left in place with the correction
+noted here rather than rewritten, since the bullet's remaining claim (the
+slot-resolved record's *own* internal field layout is still undecoded)
+still holds; only the byte-count context around it moved.
+particle-system.md's "sits in main RAM with no WAD entry answering any
+hashable `Data\Psys\Tex\...` name" note is superseded outright - see that
+page's own correction.
+
 ## Not determined
 
 - **The field layout inside a *slot-resolved* record.** A string-bearing
@@ -1089,17 +1180,20 @@ collision-spark values against the hand transcription they replaced.
   each slot's own fixup site, every emitter record and modifier node) and
   claims a slot's *target* only where it is a NUL-terminated string, per the
   43%/rest-are-floats split above. Swept over
-  `crates/assets/tests/pob_coverage_ground_truth.rs`: the PSP corpus reaches
-  **25.62%** of 781,104 bytes across 35 files (436 resolved slots, of which
-  every string target is claimed); the PS2 corpus reaches **62.24%** of
-  374,128 bytes across 41 files. The PSP number being so much lower says
-  something concrete about the corpus rather than about the parser: several
-  PSP files carry a run over 2,000 bytes unaccounted for between one slot
-  target and the next, and the worst single file (55,392 bytes) has 35,115
-  bytes - almost two thirds of it - past its last resolved string and before
-  the file's own end, none of it reached by the emitter tree walk either.
-  Two passes at what fills that space came back a dead end (see the next two
-  bullets), so this pass measured the shape of the gap rather than opening a
+  `crates/assets/tests/pob_coverage_ground_truth.rs`: the PSP corpus first
+  reached **25.62%** of 781,104 bytes across 35 files this way (436 resolved
+  slots, of which every string target is claimed); the PS2 corpus reaches
+  **62.24%** of 374,128 bytes across 41 files. Adding the embedded-texture
+  claim below moved the PSP figure to **56.76%** - it does not touch PS2's
+  62.24% at all, since PS2 embeds none - so the two numbers that used to say
+  "PSP is much lower" now differ by 5.5 points rather than 36.6, and what
+  remains of the gap is genuinely the slot-resolved record internals this
+  bullet is about, not embedded pixel data nobody had found yet. The single
+  worst file (55,392 bytes) still has real unaccounted bytes even after the
+  texture claim; what it no longer includes is the header/palette/pixels of
+  its own embedded textures. Two passes at the *slot-resolved record's own*
+  internals came back a dead end (see the next two bullets), so this pass
+  still measures the shape of that remaining gap rather than opening a
   third.
 - **What a slot's *position* in the table means**, if anything - the
   attribute-mapper-class-per-index hypothesis is unverified.

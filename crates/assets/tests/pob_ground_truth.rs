@@ -180,7 +180,12 @@ fn check(system: &str, emitter: &Emitter, blend_classes: std::ops::RangeInclusiv
 }
 
 /// Parses every system in one archive and reports the corpus totals.
-fn walk_archive(label: &str, spec: &str, expected: usize) {
+///
+/// `assert_no_texture` is the PS2 negative control folded into this same
+/// pass rather than a second full archive read - see
+/// [`no_ps2_particle_system_embeds_a_texture`]'s own doc comment for why
+/// that used to be a separate ~15s decompress of the whole 377 MiB WAD.
+fn walk_archive(label: &str, spec: &str, expected: usize, assert_no_texture: bool) {
     let mut archive = Archive::open(spec).expect("open archive");
     let blobs = particle_systems(&mut archive);
     assert_eq!(
@@ -189,7 +194,7 @@ fn walk_archive(label: &str, spec: &str, expected: usize) {
         "{label}: found {} SYSP blobs, expected {expected}",
         blobs.len()
     );
-    walk_systems(label, &blobs, 1..=3, true);
+    walk_systems(label, &blobs, 1..=3, true, assert_no_texture);
 }
 
 /// Everything asserted about a corpus of blobs, whichever disc they came off.
@@ -197,11 +202,20 @@ fn walk_archive(label: &str, spec: &str, expected: usize) {
 /// `uniform_looping` is whether every emitter of a tree agrees with its root
 /// about [`pob::flags::LOOPING`]. True on both Pulse discs, false on HD - see
 /// [`every_hd_particle_system_walks_the_same_way_byte_swapped`].
+///
+/// `assert_no_texture` is PS2's negative control: every emitter of every
+/// system must have no [`ParticleSystem::embedded_texture`] at all. `false`
+/// on PSP (checked separately and more specifically, root-emitter by
+/// root-emitter, by
+/// [`every_psp_root_emitter_texture_is_where_the_layout_says`]) and on HD
+/// (never checked here - HD ships separate `.gtf` sprites instead, see
+/// `oag_vex::pob::texture`'s module doc).
 fn walk_systems(
     label: &str,
     blobs: &[(usize, Vec<u8>)],
     blend_classes: std::ops::RangeInclusive<u32>,
     uniform_looping: bool,
+    assert_no_texture: bool,
 ) {
     let (mut emitters, mut trees, mut deepest) = (0usize, 0usize, (0usize, String::new()));
     for (index, blob) in blobs {
@@ -252,6 +266,12 @@ fn walk_systems(
                     system.name
                 );
             }
+            assert!(
+                !assert_no_texture || system.embedded_texture(blob, emitter).is_none(),
+                "{label} {}/{}: unexpectedly carries an embedded texture",
+                system.name,
+                emitter.name
+            );
         }
 
         if parsed.len() > deepest.0 {
@@ -277,12 +297,97 @@ fn every_psp_particle_system_walks_its_emitter_tree() {
         "psp",
         &format!("{}:PSP_GAME/USRDIR/Data.wad", image.display()),
         PSP_SYSTEMS,
+        false,
     );
 }
 
+/// The six PSP root emitters `docs/formats/pob.md` records as having no
+/// embedded texture at their positional offset - a continuous/ambient trio
+/// with plausibly no per-particle sprite, plus two more with no explanation
+/// found yet. A file leaving this set (in either direction) is a real
+/// change to what the corpus measures, not noise - update this list and
+/// `pob.md`'s own table together.
+const PSP_ROOTS_WITH_NO_TEXTURE: &[&str] = &[
+    "WO_PLASMA_FLASH",
+    "WO_RAIN",
+    "WO_SNOW",
+    "WO_LEACHBEAM_CHARGING",
+    "WO_REPULSER",
+    "WO_ROCKET_FLARE",
+];
+
+/// [`oag_vex::pob::ParticleSystem::embedded_texture`] over the whole PSP
+/// corpus: every root emitter either has one, or is on
+/// [`PSP_ROOTS_WITH_NO_TEXTURE`] - nothing else silently returns `None`. A
+/// found texture's own bytes must be internally consistent (level 0 no
+/// larger than the declared pixel region, which [`pob::texture::parse_at`]
+/// already refuses, so this just re-asserts the dimensions are sane on
+/// every real file rather than only the one this was decoded against).
+#[test]
+#[ignore = "needs data/images/pulse-psp-usa.chd"]
+fn every_psp_root_emitter_texture_is_where_the_layout_says() {
+    let Some(image) = image("pulse-psp-usa.chd") else {
+        return;
+    };
+    let mut archive =
+        Archive::open(&format!("{}:PSP_GAME/USRDIR/Data.wad", image.display())).expect("open");
+    let blobs = particle_systems(&mut archive);
+    assert_eq!(blobs.len(), PSP_SYSTEMS);
+
+    let mut with_texture = Vec::new();
+    let mut without_texture = Vec::new();
+    for (_, blob) in &blobs {
+        let system = ParticleSystem::parse(blob).expect("parse");
+        let parsed = system.emitters(blob).expect("emitters");
+        let root = &parsed[0];
+        match system.embedded_texture(blob, root) {
+            Some(texture) => {
+                assert!(
+                    texture.width >= 8 && texture.height >= 8,
+                    "{}: implausibly small root texture {}x{}",
+                    system.name,
+                    texture.width,
+                    texture.height
+                );
+                assert_eq!(
+                    texture.indices.len(),
+                    usize::from(texture.width) * usize::from(texture.height),
+                    "{}: level 0 index count",
+                    system.name
+                );
+                with_texture.push(system.name.clone());
+            }
+            None => without_texture.push(system.name.clone()),
+        }
+    }
+    without_texture.sort();
+    let mut expected: Vec<String> = PSP_ROOTS_WITH_NO_TEXTURE
+        .iter()
+        .map(|s| (*s).to_string())
+        .collect();
+    expected.sort();
+    assert_eq!(
+        without_texture, expected,
+        "which root emitters have no embedded texture is a measurement, not a tolerance"
+    );
+    println!(
+        "psp: {} of {PSP_SYSTEMS} root emitters carry an embedded texture",
+        with_texture.len()
+    );
+}
+
+// The negative control `docs/formats/pob.md` draws on - PS2's `.pob`s embed
+// nothing at all, at any emitter's positional offset - is folded into
+// `every_ps2_particle_system_walks_the_same_way` above (`assert_no_texture`)
+// rather than a second full archive walk. See that test's doc comment.
+
 /// The rubric's "a second binary is worth more than a second reading of the
 /// first": the PS2 port's own 41 systems, through the same parser, with no
-/// adjustment.
+/// adjustment. Also the negative control `oag_vex::pob::texture`'s module
+/// doc cites: every emitter of every PS2 system is asserted to carry no
+/// embedded texture at all, folded into this same walk rather than a
+/// second ~15-18s decompress of the whole 377 MiB `WADS2.WAD` - see
+/// [`walk_systems`]'s `assert_no_texture` parameter.
 #[test]
 #[ignore = "needs data/images/pulse-ps2-eu.chd"]
 fn every_ps2_particle_system_walks_the_same_way() {
@@ -293,7 +398,21 @@ fn every_ps2_particle_system_walks_the_same_way() {
         "ps2",
         &format!("{}:54748/WADS2.WAD", image.display()),
         PS2_SYSTEMS,
+        true,
     );
+}
+
+/// Every `.psarc` archive spec on the HD disc image at `path`, `image:archive`
+/// form, ready for [`oag_assets::psarc::Archive::open`]. Shared by both HD
+/// tests so there is one place that walks the ISO's own file list.
+fn hd_psarc_specs(path: &std::path::Path) -> Vec<String> {
+    let mut disc = oag_disc::DiscImage::open(path).expect("open image");
+    disc.entries()
+        .expect("iso walk")
+        .iter()
+        .filter(|entry| !entry.is_directory && entry.path.to_ascii_lowercase().ends_with(".psarc"))
+        .map(|entry| format!("{}:{}", path.display(), entry.path))
+        .collect()
 }
 
 /// The third binary, and the one that moves the format's byte order out of a
@@ -322,15 +441,7 @@ fn every_ps2_particle_system_walks_the_same_way() {
 fn every_hd_particle_system_walks_the_same_way_byte_swapped() {
     let Some(path) = image(HD_IMAGE) else { return };
 
-    let mut disc = oag_disc::DiscImage::open(&path).expect("open image");
-    let specs: Vec<String> = disc
-        .entries()
-        .expect("iso walk")
-        .iter()
-        .filter(|entry| !entry.is_directory && entry.path.to_ascii_lowercase().ends_with(".psarc"))
-        .map(|entry| format!("{}:{}", path.display(), entry.path))
-        .collect();
-
+    let specs = hd_psarc_specs(&path);
     let mut blobs = Vec::new();
     for spec in &specs {
         let mut archive = oag_assets::psarc::Archive::open(spec).expect("the archive opens");
@@ -362,8 +473,11 @@ fn every_hd_particle_system_walks_the_same_way_byte_swapped() {
         blobs.len()
     );
     // 1..=4 and per-emitter LOOPING are the two ways HD's *content* differs;
-    // every other predicate is asserted exactly as it is on Pulse.
-    walk_systems("hd", &blobs, 1..=4, false);
+    // every other predicate is asserted exactly as it is on Pulse. HD's own
+    // texture mechanism (separate `.gtf` PSARC entries) is not this
+    // module's concern, so `assert_no_texture` is false here - a positional
+    // hit on HD would be surprising but is not this test's job to police.
+    walk_systems("hd", &blobs, 1..=4, false, false);
 
     let mut mixed = Vec::new();
     let mut fourth = Vec::new();
@@ -401,5 +515,121 @@ fn every_hd_particle_system_walks_the_same_way_byte_swapped() {
     assert!(
         fourth.iter().all(|e| e.starts_with("WO_NITRO_SHIP_DEATH/")),
         "blend class 4 escaped WO_NITRO_SHIP_DEATH: {fourth:?}"
+    );
+}
+
+/// An emitter's own texture-path string, resolved through whichever slot
+/// names `emitter.offset + 0x4c4` as its fixup site - this project already
+/// reads that field as "an emitter's own texture slot" on PSP, see
+/// `docs/ghidra/functions/psp-pulse-usa/particle-system.md`'s
+/// collision-spark section. `None` if no slot names that site, or the
+/// target does not decode as a NUL-terminated ASCII string.
+fn own_texture_path(system: &ParticleSystem, blob: &[u8], emitter: &Emitter) -> Option<String> {
+    /// The fixed offset, within any emitter record, this project already
+    /// reads as the emitter's own texture reference.
+    const OWN_TEXTURE_FIELD: u32 = 0x4c4;
+
+    let site = emitter.offset as u32 + OWN_TEXTURE_FIELD;
+    let index = system.slots.iter().position(|slot| *slot == Some(site))?;
+    let relative = system.resolve_slot(blob, index).ok().flatten()?;
+    let target = system.resource_base() + pob::NAME_LEN + relative;
+    let end = blob.get(target..)?.iter().position(|&b| b == 0)?;
+    let raw = &blob[target..target + end];
+    (!raw.is_empty() && raw.iter().all(|&b| b.is_ascii_graphic() || b == b' '))
+        .then(|| String::from_utf8_lossy(raw).into_owned())
+}
+
+/// HD does not embed sprite pixels the way PSP does (see
+/// `oag_vex::pob::texture`'s module doc), but every emitter still names its
+/// own texture through the identical `+0x4c4` field, and HD ships the
+/// sprites as separate `/data/psys/tex/*.gtf` PSARC entries rather than a
+/// hash the way PSP's `.wad` does - so a name resolves by simple basename
+/// lookup, no hash table needed.
+///
+/// This test does not decode a `.gtf` or wire anything into a draw path -
+/// it answers only "does the name resolve", the bounded deliverable this
+/// was asked for. See `docs/formats/pob.md`'s "HD names its own texture
+/// the same way Pulse does" for the write-up.
+#[test]
+#[ignore = "needs a decrypted PS3 disc image in data/images"]
+fn hd_own_textures_mostly_resolve_to_a_shipped_gtf() {
+    let Some(path) = image(HD_IMAGE) else { return };
+    let specs = hd_psarc_specs(&path);
+
+    let mut gtf_basenames = std::collections::HashSet::new();
+    let mut blobs = Vec::new();
+    for spec in &specs {
+        let mut archive = oag_assets::psarc::Archive::open(spec).expect("the archive opens");
+        for entry in archive.paths().to_vec() {
+            let lower = entry.to_ascii_lowercase();
+            if lower.contains("/psys/tex/")
+                && lower.ends_with(".gtf")
+                && let Some(basename) = lower.rsplit('/').next()
+            {
+                gtf_basenames.insert(basename.to_string());
+            }
+            if lower.ends_with(".pob") {
+                let blob = archive.read_path(&entry).expect("the entry reads");
+                blobs.push(blob);
+            }
+        }
+    }
+    assert!(
+        !gtf_basenames.is_empty(),
+        "hd: found no /data/psys/tex/*.gtf entries at all"
+    );
+
+    let mut resolved = std::collections::BTreeSet::new();
+    let mut unresolved = std::collections::BTreeSet::new();
+    let mut no_own_reference = 0usize;
+    for blob in &blobs {
+        let system = ParticleSystem::parse(blob).expect("parse");
+        let parsed = system.emitters(blob).expect("emitters");
+        for emitter in &parsed {
+            let Some(path) = own_texture_path(&system, blob, emitter) else {
+                no_own_reference += 1;
+                continue;
+            };
+            let basename = path
+                .replace('\\', "/")
+                .rsplit('/')
+                .next()
+                .unwrap_or(&path)
+                .to_ascii_lowercase();
+            let Some(stem) = basename.strip_suffix(".tga") else {
+                continue;
+            };
+            let gtf = format!("{stem}.gtf");
+            if gtf_basenames.contains(&gtf) {
+                resolved.insert(gtf);
+            } else {
+                unresolved.insert(gtf);
+            }
+        }
+    }
+
+    println!(
+        "hd: {} distinct texture name(s) resolved to a shipped .gtf, {} unresolved, \
+         {no_own_reference} emitter(s) with no own-texture reference at all",
+        resolved.len(),
+        unresolved.len()
+    );
+    assert_eq!(
+        no_own_reference, 0,
+        "hd: every emitter named its own texture in the session this was measured - \
+         a nonzero count here is a real change, not noise"
+    );
+    // The exact unresolved set is asserted, not just its size, per this
+    // project's own "measurement, not a tolerance" convention -
+    // `vandergraf_balls_1024x1024.gtf` ships under a size-renamed sibling
+    // (`vandergraf_balls_1024x512.gtf`/`_missile.gtf`, both present) and
+    // `plasma_8x8_1024x1024.gtf` does not ship under any name.
+    assert_eq!(
+        unresolved.into_iter().collect::<Vec<_>>(),
+        [
+            "plasma_8x8_1024x1024.gtf".to_string(),
+            "vandergraf_balls_1024x1024.gtf".to_string(),
+        ],
+        "which HD texture names fail to resolve is a measurement, not a tolerance"
     );
 }

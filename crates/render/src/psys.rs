@@ -36,9 +36,16 @@
 //! - **Sprite atlases and textures.** Emitters name a developer `.tga` path
 //!   through their slot table and index a grid of frames
 //!   ([`oag_vex::pob::Emitter::atlas_grid`]); this module draws a
-//!   procedural radial falloff instead. Decoding the shipped sprite is the
-//!   follow-up that would let the streak's `v` layout be adopted too - see
-//!   [`crate::sparks`].
+//!   procedural radial falloff instead. **The pixels themselves are decoded**
+//!   as of 2026-09-17 - `oag_vex::pob::texture` reads an emitter's own
+//!   positionally-embedded sprite (PSP only; PS2 has none, HD ships separate
+//!   `.gtf` files instead) straight off the disc, RGBA8-ready via its
+//!   `palette`/`indices` fields - but this module does not yet sample from
+//!   it: the `wgpu` upload, the per-emitter texture binding and the
+//!   atlas-frame selection are still open. Until then this stays the
+//!   documented fallback, not a stand-in that has quietly become the
+//!   picture - see `docs/formats/pob.md`'s "The sprite pixels are on the
+//!   disc after all".
 //! - **Billboard roll.** The rotation-speed channel is parsed and unused;
 //!   quads here are axis-aligned to the camera.
 //! - **The emitter extent.** Particles spawn at the anchor point rather than
