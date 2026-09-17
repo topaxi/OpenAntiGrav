@@ -675,7 +675,7 @@ def cmd_preflight(args):
 
 
 def cmd_boot(args):
-    with session(args) as session:
+    with open_session(args) as session:
         print("rpcs3 pid %d, waiting for the Main Menu" % session.proc.pid,
               flush=True)
         if not session.wait_for_screen_pressing("Main Menu", args.timeout):
@@ -695,7 +695,7 @@ def cmd_shot(args):
     what colour it came out. See `Session.take_screenshot`.
     """
     before = set(emulator_screenshots())
-    with session(args) as session:
+    with open_session(args) as session:
         print("rpcs3 pid %d" % session.proc.pid, flush=True)
         if not session.wait_for_screen_pressing(args.screen, args.timeout):
             print("never reached %r (last screen: %s)"
@@ -720,7 +720,7 @@ def emulator_screenshots(title_id="BCES00664"):
 
 
 def cmd_race(args):
-    with session(args) as session:
+    with open_session(args) as session:
         print("rpcs3 pid %d" % session.proc.pid, flush=True)
         if not session.wait_for_screen_pressing("Main Menu", args.timeout):
             print("never reached the Main Menu (last screen: %s)"
@@ -888,7 +888,7 @@ def cmd_capture(args):
     out.mkdir(parents=True, exist_ok=True)
     regions = [parse_region(r) for r in args.region] or list(PUSHBUFFER_REGIONS)
 
-    with session(args) as session:
+    with open_session(args) as session:
         print("rpcs3 pid %d" % session.proc.pid, flush=True)
         if not session.wait_for_screen_pressing("Main Menu", args.timeout):
             print("never reached the Main Menu (last screen: %s)"
@@ -1005,7 +1005,7 @@ def cmd_browse(args):
         screen, _, buttons = item.partition("=")
         plan[screen] = [b.strip() for b in buttons.split(",") if b.strip()]
 
-    with session(args) as session:
+    with open_session(args) as session:
         print("rpcs3 pid %d" % session.proc.pid, flush=True)
         if not session.wait_for_screen_pressing("Main Menu", args.timeout):
             print("never reached the Main Menu (last screen: %s)"
@@ -1124,7 +1124,7 @@ def cmd_bootchain(args):
     out.mkdir(parents=True, exist_ok=True)
     log, presses = [], []
     current = "?"
-    with session(args, out / "emu") as session:
+    with open_session(args, out / "emu") as session:
         print("rpcs3 pid %d" % session.proc.pid, flush=True)
         t0 = time.time()
         seen = 0
@@ -1187,7 +1187,7 @@ def cmd_bootchain(args):
 
 def cmd_record(args):
     before = set(recordings())
-    with session(args) as session:
+    with open_session(args) as session:
         print("rpcs3 pid %d" % session.proc.pid, flush=True)
         if not session.wait_for_screen_pressing("Main Menu", args.timeout):
             print("never reached the Main Menu (last screen: %s)"
@@ -1399,8 +1399,18 @@ def main(argv=None):
     return args.run(args)
 
 
-def session(args, log_dir=None):
-    """A `Session` built from the top-level options, for every subcommand."""
+def open_session(args, log_dir=None):
+    """A `Session` built from the top-level options, for every subcommand.
+
+    Named distinctly from the `session` local every call site binds via
+    `as session` - `with open_session(args) as session:` shadows the call target
+    with its own result inside the same statement, so the second reference to
+    `session` (the call) resolves to the not-yet-assigned local rather than
+    this function, and every subcommand raised `UnboundLocalError` before
+    ever launching RPCS3. Confirmed in isolation with a two-line repro; this
+    function existing under the same name as its own `with` target is
+    sufficient, no subprocess required.
+    """
     return Session(args.image, log_dir if log_dir is not None else args.log_dir,
                    config=args.config, interpreter=args.interpreter)
 

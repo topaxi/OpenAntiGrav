@@ -334,9 +334,68 @@ material's picture is traced correctly and simply has no bound texture at
 the unit its combine wants; this one had a bound, correct texture the whole
 time, at an entry the picker never looked at.
 
+2026-09-17 (`lane-hd-track-lighting`): **the Amphiseum sign flip is re-
+derived at a true 0 km/h grid pose, and it does not survive a bloom-on/off
+check - but a large hue gap does.** Full account in
+[renderer.md](../../docs/ghidra/functions/ps3-hdfury-eu/renderer.md), "The
+Amphiseum sign flip is re-derived at a clean pose - the luma reading turns
+out to be inside the known bloom sensitivity, but a large hue gap survives
+with bloom on or off". What lives only here:
+
+**The captures this row's own "Open" list rested on are gone** -
+`amphiseum-matched`, `talons-matched`, `talons-ships` all confirmed absent
+from `data/reference/hd-capture/` - and a real bug (`scripts/rpcs3-
+drive.py`'s `with session(args) as session:` self-shadow, `UnboundLocalError`
+on every subcommand, landed 2026-09-15 in `0a181a67`) meant no lane had been
+able to capture anything since. Fixed this session (`open_session` rename);
+every subcommand this project's other lanes use for RPCS3 (`boot`, `shot`,
+`race`, `capture`, `browse`, `bootchain`, `record`) was silently broken
+until now, not only this lane's own captures.
+
+**Fresh 0 km/h grid captures, same protocol both circuits**
+(`--load 20 --interval 2`, verified against each pair's own `track` field),
+checked with `--bloom on` and `--bloom off` both: Talon's Junction
+reproduces the established darker-frame gap and it is robust to the
+bloom setting (luma ref-ours +0.121 on, +0.144 off; hue gap 9-13 deg,
+brightness-only both ways). **Amphiseum's own luma gap is not robust** -
++0.045 (ours brighter) with bloom on collapses to +0.008 (essentially
+matched) with bloom off, a swing the same size as the whole on-bloom
+reading, and Amphiseum is one of only five circuits whose bloom chain
+even builds (`amphiseum`, `modesto_heights`, `talons_junction`,
+`tech_de_ra`, `zone_1`). **So the prior "sign flip" claim rests on a
+reading inside the chain's own known 0.02-0.05 sensitivity, not outside
+it - it is not falsified, but it is not safe to call confirmed either.**
+What *does* survive the bloom check is a 154-155 degree hue gap (on and
+off alike, 1 degree apart) - the reference's dome interior reads warm
+gold, this project's render reads cool blue-violet, confirmed by eye on
+both renders and corroborated on a second pose (22 km/h, shot 06, bloom
+on). Two confounds worth checking before trusting a whole-frame hue
+number were checked and did not explain it: clipping (ours 6.7% vs
+reference 2.8-3.0% with bloom on, nearly matched with bloom off - the hue
+gap does not move even though clipping does) and the reference's opponent
+craft this project does not render (`coloured_pct`, the share of each
+region actually weighing into the hue mean, is 75-92% on both sides, not
+a small livery-dominated slice). Read together: Talon's Junction's gap is
+brightness-only and robust; Amphiseum's sturdier finding is the hue shift,
+not the luma sign, and whether bloom itself over-contributes on Amphiseum
+(a third hypothesis, distinct from a per-material lighting gap) is now
+open rather than distinguished. `scripts/hd-frame-compare.py` gained mean
+HSV saturation, a saturation-weighted circular mean hue and a printed
+`coloured_pct` per region this session, plus a center-crop fix for a
+1px-per-side reference/render size mismatch that made every comparison
+raise before any number came out.
+
+**Not chased this session**: the `track_surface` per-material lead below,
+anything in `crates/render/src/mesh/`, `mesh.wgsl`, `emissive.rs` or
+`sky_cube.rs`, and whether Amphiseum's bloom chain over-contributes
+relative to the original's - the brief scoped this session to
+re-deriving the sign first, and the result argues for chasing Amphiseum's
+hue gap (and, separately, its bloom-chain magnitude) rather than assuming
+Talon's Junction's eventual fix reaches either.
+
 ## Open
 
-- **The frame is measurably darker than the original at a matched camera, by 0.13-0.24 mean luminance on Talon's Junction and Sol 2, and the exposure/bloom post chain is ruled out as the cause** - open at `lane-ship-hull`'s files (`mesh.wgsl`, `crates/render/src/mesh/`, `sky_cube.rs`), not this lane's; **narrowed 2026-09-13 (twice)**: first, not a single offset/scale/curve (quantile-quantile evidence, confidence 80), and `.envsettings` plumbing is confirmed exact for Talon's Junction's core terms; second, **the gap is not a single global magnitude either** - Amphiseum measures the opposite sign (ours brighter by 0.04-0.19 luma), so what remains is a per-material or per-circuit-lighting-data cause, not a shared constant. Amphiseum's own black-wall-panel defect is **fixed** (below, `lane-amphiseum-walls`) and was a distinct bug (a wrong sampler-entry pick, not a shading gap); the panel's residual colour still reads flatter/greyer than the reference's cyan-white, in the same direction as this broader per-material gap, and is left to whoever picks that up next.
+- **The frame is measurably darker than the original at a matched camera, by 0.13-0.24 mean luminance on Talon's Junction and Sol 2, and the exposure/bloom post chain is ruled out as the cause** - open at `lane-ship-hull`'s files (`mesh.wgsl`, `crates/render/src/mesh/`, `sky_cube.rs`), not this lane's; **narrowed 2026-09-13 (twice)**: first, not a single offset/scale/curve (quantile-quantile evidence, confidence 80), and `.envsettings` plumbing is confirmed exact for Talon's Junction's core terms; second, **the gap is not a single global magnitude either** - Amphiseum measures the opposite sign (ours brighter by 0.04-0.19 luma), so what remains is a per-material or per-circuit-lighting-data cause, not a shared constant. Amphiseum's own black-wall-panel defect is **fixed** (below, `lane-amphiseum-walls`) and was a distinct bug (a wrong sampler-entry pick, not a shading gap); the panel's residual colour still reads flatter/greyer than the reference's cyan-white, in the same direction as this broader per-material gap, and is left to whoever picks that up next. **Re-derived at a clean 0 km/h grid pose 2026-09-17 (`lane-hd-track-lighting`, dated entry above): the "opposite sign" reading does not survive a bloom-on/off check** - it is +0.045 with bloom on and +0.008 (essentially matched) with bloom off, inside the chain's own known 0.02-0.05 sensitivity on the one circuit where that chain builds at all, so it is not safe to call a confirmed sign flip. What does survive both bloom settings is a 154-155 degree hue shift Talon's Junction's gap (9-13 degrees, hue intact both ways) does not have - the sturdier finding is the hue gap, not the luma sign, and the two circuits still read as different defects rather than one gap with a per-circuit sign, just on different evidence than originally stated.
 - Whether the 8-bit surfaces hold linear or gamma light is undetermined (confidence 70 against ADR-0026, not acted on) - still open, unchanged by the above
 - Texture-decode brightness (candidate (c)) is not pixel-verified against a reference decoder - only that `oag-texture`'s `.gtf` path carries no gamma/sRGB logic of its own and its ground-truth test passes
 - What the colour set's fourth byte gates is unknown - `0x1aaf7631` is declared by no `SHO` shader block, so the only place left to check is per-material microcode
@@ -345,12 +404,13 @@ time, at an entry the picker never looked at.
 - ~~Why **eleven** of the sixteen circuits measure identically with `[graphics] bloom` on and off~~ **answered 2026-09-13 (`lane-hd-resolve-fill`)**: those eleven are exactly the circuits whose `.envsettings` does not author the whole `Tone` family (`zone_2`/`zone_3`/`zone_4` ship no file at all; the eight Fury/DLC circuits omit `Tone darkening clamp`/`Tone maximum brightness`), so `envsettings_bloom` returns `None` and `oag_render::post::hd_bloom::Chain` is never built - the switch has nothing to toggle. See the dated entry above and renderer.md's new section. "Six of those eleven do take the authored [lit-material] path" still stands and is a separate finding - the material lighting and the missing exposure chain are two independent absences that happen to overlap on the same circuit set
 - Fury's own circuits and the DLC packs still have no rpcs3 grab to be read against at all (Amphiseum now does - see 2026-09-13 above)
 - ~~Amphiseum's grid-start trackside wall panels draw unlit/flat-black~~ **fixed 2026-09-13 (`lane-amphiseum-walls`)**: a wrong sampler-entry pick (`EmissiveTexture` bound as the picture instead of the material's own `Texture1`), not the `etched_glass_tech` shading gap this bullet guessed - see the dated entry above and `rcsmaterial.md`. The panel's residual colour (flatter/greyer than the reference's cyan-white) is left open, folded into the per-material darkness-gap bullet above rather than tracked separately.
-- **New 2026-09-13**: what makes Amphiseum's opening seconds already 406-429 km/h at the same capture settings that gave Talon's Junction and Sol 2 a slow (70-74 km/h) grid pose is unread - a downhill start or a shorter countdown are guesses, not measured; means no Amphiseum pose isolates the lit-material path free of the speed-streak confound
+- ~~what makes Amphiseum's opening seconds already 406-429 km/h at the same capture settings that gave Talon's Junction and Sol 2 a slow (70-74 km/h) grid pose is unread~~ **answered 2026-09-17 (`lane-hd-track-lighting`)**: neither a downhill start nor a shorter countdown - `cmd_capture` holds thrust for `--interval` seconds before every shot including the first, so shot 00's speed is an artefact of where the fixed `--load`+`--interval` window happens to land relative to `GO`, not a circuit property. A shorter `--load`/`--interval` isolates a true 0 km/h grid pose on both circuits; see the dated entry above for the resulting sign-flip re-check
 - `scripts/hd-material-probe.py`'s fog-segment classifier assumes the frame's exposure scalar is `1.0`, calibrated by eye against one unclipped near-camera channel rather than solved - a session that wants coverage past 89% or tighter per-slot deltas needs to actually solve for it (or read `k` off `.envsettings`' `Tone` family and the adapted-luminance state directly) rather than assume it
 - ~~`envsettings_bloom` (and possibly `envsettings_fog`/`envsettings_light`) should seed from the title's own front-end `.envsettings` for any `HDR and Bloom` key a circuit's file omits~~ **done 2026-09-13 (`lane-envsettings-carry`)**: `crates/game/src/race/load/environment.rs::staged_envsettings` carries `/data/fe/fe.track.envsettings` forward for exactly the keys a circuit's own file does not declare, and `hd_envsettings_carry_ground_truth.rs` now measures 16 of 16 environments building the chain (was 5 of 16). `envsettings_fog`/`envsettings_light` were checked for the same partial-key gap and do not have it - every circuit that ships a `.envsettings` authors a complete `Fog`/`Lighting` block on its own, so they were deliberately left un-carried; see renderer.md's new section for the full account, including a correction to this thread's own prior "both Fury front-end files carry `20/3/4`" reading (DATA02's own does not). **Whether wiring it up closes Sol 2's own darkness/under-clipping gap is now measured**: `hd-frame-compare.py`'s pose-00 numbers move toward the reference on every region but road surface (13-24% of the per-region clip-share gap), which corroborates the gate-cancellation hypothesis below rather than confirming it outright - the chain is real and doing something small, not nothing, and what is left open is everything this thread's first bullet already names
 
 ## Next Steps
 
+- **New 2026-09-17**: Amphiseum's 154-degree hue gap (dated entry above) is the sharpest lead for that circuit specifically - reference reads warm gold, this project's render reads cool blue-violet, over a region needing no per-circuit box work (`"whole (excl HUD, craft)"`). Not yet localised to a material, a lightmap, an ambient/sun colour term, or the dome's own emissive surfaces; `crates/render/src/mesh/`, `mesh.wgsl`, `emissive.rs`, `sky_cube.rs` unchanged this session. Worth checking before assuming it is the same `track_surface`/`prelitScale` lead below: that lead was built entirely on Talon's Junction data, which this session's own re-check shows has *no* comparable hue gap (9 degrees, noise-level) - so whatever explains Amphiseum's colour shift is not yet shown to be the same mechanism at all.
 - The per-material probe's own contradiction is the sharpest lead now: find why `track_surface` (no authored sun term) reads *more* deficient than the population that does get the blanket sun addition, not less - candidates worth checking against the disc before anything else: whether `track_surface`'s own `prelitScale`/`prelitPower` pair actually differs from the shared assumption, whether its lightmap texture decodes correctly, and whether its distinct `specular_exponent` (70, against the 32 the rest of the sampled population carries) points at a genuinely different `.rcsmaterial` row being read
 - Extend the per-material probe past pose `00`'s 14-material sample - run it against Anulpha Pass or another circuit with more materials in frame, and reproduce the same role-bucket/track_surface checks, to see whether the "no clean clustering by role bits" reading holds generally or is a small-sample artefact of the fourteen materials pose `00` happens to show
 - Pixel-verify `oag-texture`'s `.gtf` decode against a reference decoder on a flat, evenly-lit Talon's Junction albedo (candidate (c), not reached this session - only that the decoder carries no gamma logic of its own and its ground-truth test passes, neither of which rules out a bit-level DXT/BC defect)
@@ -358,5 +418,5 @@ time, at an entry the picker never looked at.
 - `shadowMapTex` remains unread; locate what projects it and whether the disc's shadow map is reachable from data already on disc
 - ~~Grab Amphiseum on rpcs3~~ **done 2026-09-13**: `data/reference/hd-capture/amphiseum-matched/` (3 matched-camera poses) - see the dated entry above for what it found (a black-wall-panel defect at the grid, and a sign-flipped whole-frame gap versus Talon's Junction/Sol 2)
 - ~~Chase the Amphiseum grid-start wall-panel defect~~ **done 2026-09-13**: `EmissiveTexture` was being bound as the panel's own picture - see the dated entry above
-- Extend `hd-frame-compare.py`'s region boxes past the shared Talon's-Junction shape, or accept per-circuit `--dump-regions` verification as the standing process - Sol 2's grid pose lands `road surface` off-track, Amphiseum's `sky` box samples an indoor ceiling
+- Extend `hd-frame-compare.py`'s region boxes past the shared Talon's-Junction shape, or accept per-circuit `--dump-regions` verification as the standing process - Sol 2's grid pose lands `road surface` off-track, Amphiseum's `sky` box samples an indoor ceiling. **Narrowed 2026-09-17**: this only matters for `sky`/`road surface`/`distant geometry` - `"whole (excl HUD, craft)"` only subtracts the fixed HUD boxes and the centred craft box, both of which generalise across circuits without per-circuit tuning, and is what the sign-flip re-check above used for exactly that reason. Amphiseum's own `sky`/`road surface` boxes were `--dump-regions`-checked this session (dome ceiling, side floor panels respectively) but not re-shaped.
 - ~~Find why `[graphics] bloom` is inert on eleven of the sixteen circuits~~ **answered, see the 2026-09-13 (`lane-hd-resolve-fill`) entry above and renderer.md**. ~~The next step this opens: seed `envsettings_bloom` (and check `envsettings_fog`/`envsettings_light` for the same gap) from the title's own front-end `.envsettings` for any key a circuit's own file omits~~ **done 2026-09-13 (`lane-envsettings-carry`)** - 16 of 16 environments now build the chain; see the Open entry above and renderer.md's new section for the measured, narrow-not-close effect on Sol 2 and the fog/light no-op finding
