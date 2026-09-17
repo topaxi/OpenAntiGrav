@@ -363,16 +363,26 @@ that split (measured constants, not the texels - ADR-0006), which is what
 keeps a spark's bright part small: at the same alpha curve, a flat-rgb quad
 reads about twice as wide.
 
-Two honest caveats from the same session. The identification ran during a
-low-speed grinding state and every sampled draw went through the **mode-3
-billboard** helper - no streak-helper hit was observed, so which draw class
-each collision emitter takes in practice rests on the blend-table nibbles
-(`rmode 5 -> 0x60000019`, class 6; `rmode 6 -> 0x70000019`, class 7) and
-the earlier static reads, not on a live dispatch trace. And the texture
-sits in main RAM (`0x090e9ea0` that session) with no WAD entry answering
-any hashable `Data\Psys\Tex\...` name - how the loader resolves the
-authored path into these pixels is still the unlocated
-texture-reference gap recorded in `docs/formats/pob.md`.
+One honest caveat survives from the same session: the identification ran
+during a low-speed grinding state and every sampled draw went through the
+**mode-3 billboard** helper - no streak-helper hit was observed, so which
+draw class each collision emitter takes in practice rests on the
+blend-table nibbles (`rmode 5 -> 0x60000019`, class 6; `rmode 6 ->
+0x70000019`, class 7) and the earlier static reads, not on a live dispatch
+trace.
+
+**The second caveat is resolved, 2026-09-17.** The texture sitting in main
+RAM with no WAD entry answering any hashable `Data\Psys\Tex\...` name was
+never a loader mystery: `.pob` embeds the pixels itself.
+`WO_SHIP_COLL_SPARK_DAMAGE.POB`'s own file bytes carry a 32-byte texture
+header directly after each emitter's fixed-size record - no WAD lookup
+needed at all - and the three bright emitters' headers all point at one
+shared 64x64/4-level palette+pixel pool that decodes to exactly this
+radial glow: white-hot core, saturated orange, the same measurements this
+section records. `oag_vex::pob::texture` has the header layout and the
+positional-addressing rule; `docs/formats/pob.md`'s "The sprite pixels are
+on the disc after all" section has the corpus-wide evidence. This was the
+"unlocated texture-reference gap" `pob.md` used to record - it is located.
 
 ## Open, deliberately
 

@@ -226,6 +226,8 @@ impl Scene {
             trail,
             additive,
             alpha,
+            cannon_bolt,
+            cannon_flash,
             pads_ready,
             recoloured,
         } = &mut *scratch;
@@ -426,10 +428,8 @@ impl Scene {
             );
             sphere.tint(queue, state.colour(), recoloured);
         }
-        // One matrix per live projectile, for each of the four kinds that draw as
-        // their own model - see `weapon_models::Scene::write_weapon_models`.
         oag_render::perfprobe::mark("ship+shield-write");
-        let (rocket_matrices, plasma_ball_matrices, mine_matrices, bomb_matrices, cannon_matrices) =
+        let (rocket_matrices, ball_matrices, mine_matrices, bomb_matrices, cannon_matrices) =
             self.write_weapon_models(race, &prev, queue, view_projection, prev_vp);
         let plasma_blast_active = self.write_plasma_blasts(race, queue, view_projection);
         // Same model matrix as the ship: the original parents the plume to the
@@ -654,10 +654,10 @@ impl Scene {
             oag_tables::weapons::Weapon::Mine => !self.mines.is_empty(),
             oag_tables::weapons::Weapon::Bomb => !self.bombs.is_empty(),
             oag_tables::weapons::Weapon::Cannon => !self.cannon_rounds.is_empty(),
-            // HD only - see `blast_models::PlasmaBlastModels::ball`.
             oag_tables::weapons::Weapon::Plasma => !self.plasma_blast.ball.is_empty(),
             _ => false,
         }));
+        race.cannon_quad_vertices(right, up, cannon_bolt, cannon_flash);
         oag_render::perfprobe::mark("exhaust-gather");
         // Shared by every upload below - `to_cols_array_2d` is otherwise
         // recomputed once per pipeline for the same one matrix.
@@ -668,17 +668,18 @@ impl Scene {
         self.clouds
             .borrow_mut()
             .upload(queue, &vp, race.sim.world.tick, right, up);
-        // The hull's collision sparks and the stage's rocket effects share
-        // one pipeline and one pair of buffers: both are `.pob` particles in
-        // the same two blend classes, so a second pipeline would buy nothing
-        // but a second pass.
+        // The hull's collision sparks and the stage's rocket effects share one
+        // pipeline and one pair of buffers: both are `.pob` particles in the
+        // same two blend classes, so a second pipeline would buy nothing.
         oag_render::perfprobe::mark("exhaust-upload");
         race.extend_spark_vertices(additive, alpha, right, up);
         race.extend_stage_vertices(additive, alpha, right, up);
         self.sparks.borrow_mut().upload(queue, &vp, additive, alpha);
+        self.weapon_quads
+            .borrow_mut()
+            .upload(queue, &vp, cannon_bolt, cannon_flash);
 
-        // Both shadow tiers' geometry, gathered with the rest of the frame's.
-        // Its own file under the 1,000-line rule - see `frame/shadow.rs`.
+        // Both shadow tiers' geometry - its own file, see `frame/shadow.rs`.
         let (quads, hull_vertices) = self.shadow_geometry(race, shadows);
         self.shadow
             .borrow_mut()
@@ -827,11 +828,8 @@ impl Scene {
             }
             stats.add(drawable.draw(&mut pass, None, None, None, None));
         }
-        // The Rocket's, Mine's, Bomb's and Cannon round's own bodies, with the
-        // hulls: opaque painted models that occlude and are occluded, not
-        // effects, so none belongs in the additive pass below. Each is bounded by
-        // how many matrices were written this frame, for the same reason the
-        // plumes are - an unwritten uniform buffer draws last frame's pose.
+        // Every weapon's own body: opaque painted models, bounded by how many
+        // matrices were written this frame, same as the plumes below.
         for drawable in self.rockets.iter().take(rocket_matrices.len()) {
             stats.add(drawable.draw(&mut pass, None, None, None, None));
         }
@@ -844,12 +842,7 @@ impl Scene {
         for drawable in self.cannon_rounds.iter().take(cannon_matrices.len()) {
             stats.add(drawable.draw(&mut pass, None, None, None, None));
         }
-        for drawable in self
-            .plasma_blast
-            .ball
-            .iter()
-            .take(plasma_ball_matrices.len())
-        {
+        for drawable in self.plasma_blast.ball.iter().take(ball_matrices.len()) {
             stats.add(drawable.draw(&mut pass, None, None, None, None));
         }
         self.draw_plasma_blasts(&plasma_blast_active, &mut pass, &mut stats);
@@ -930,6 +923,7 @@ impl Scene {
         self.exhaust.borrow().draw(&mut pass);
         self.sparks.borrow().draw(&mut pass);
         self.clouds.borrow().draw(&mut pass);
+        self.weapon_quads.borrow().draw(&mut pass);
         // The scene pass has to close before the bloom can sample what it drew,
         // so this ends the borrow rather than waiting for the scope to.
         drop(pass);

@@ -328,6 +328,13 @@ pub const EXHAUST_SEED: u64 = 0xe8_a5_71_00;
 /// the last craft's ribbon with nothing in the logs.
 const _: () = assert!(oag_render::exhaust::MAX_TRAILS >= MAX_SHIPS);
 
+/// Same reason as [`EXHAUST_SEED`]'s assertion above, for the Cannon's own
+/// two quads: `oag_render::weapon_quads` sizes its buffers for
+/// [`oag_render::weapon_quads::MAX_ROUNDS`] and cannot import
+/// `oag_gameplay::projectile::MAX_PROJECTILES` itself.
+const _: () =
+    assert!(oag_render::weapon_quads::MAX_ROUNDS >= oag_gameplay::projectile::MAX_PROJECTILES);
+
 /// Seed for spark spawn parameters, kept distinct from [`SEED`] and
 /// [`EXHAUST_SEED`] for the same determinism reason.
 pub const SPARKS_SEED: u64 = 0x5_9a_2b_00;
@@ -395,11 +402,35 @@ pub const BOMB_MODEL_ENTRY: &str = r"Data\Weapons\Pulse_Bomb.vex";
 /// is the bolt. Each round instance also builds two GU display lists of
 /// hand-written quads in its constructor, textured from
 /// `Data\\Weapons\\Textures\\Cannon_bolt.mip` and
-/// `Cannon_muzzle_flash.mip` (`Cannon_LoadTextures`, `0x08864b00`), and
-/// **which of those two lists is which is not read**. So this draws the
-/// model the original hangs on the round and nothing else: the quads are an
-/// honest absence rather than an invented billboard, per CLAUDE.md.
+/// `Cannon_muzzle_flash.mip` (`Cannon_LoadTextures`, `0x08864b00`) - see
+/// [`CANNON_BOLT_TEXTURE_ENTRY`]/[`CANNON_MUZZLE_FLASH_TEXTURE_ENTRY`],
+/// which list is which, and both quads' own geometry, now recovered and
+/// drawn; see `docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md`,
+/// the 2026-09-17 section.
 pub const CANNON_MODEL_ENTRY: &str = r"Data\Weapons\pulse_muzzleflash.vex";
+
+/// The archive entry the Cannon round's bolt streak textures from.
+///
+/// **Recovered, confidence 88.** `Cannon_DrawRound` (`0x0886545c`) binds
+/// `g_cannon_bolt_texture` immediately before `Cannon_BuildBoltList`'s
+/// `Gu_CallList` every frame a round is alive - see
+/// `docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md`, "Which
+/// display list is the bolt and which the flash". Resolves in `Data.wad` on
+/// both PSP pressings (name hash `ee06a033`, entry 1057, 2,064 bytes); the
+/// directory layout is one level deeper than the model's own -
+/// `Data\Weapons\Textures\`, not `Data\Weapons\`.
+pub const CANNON_BOLT_TEXTURE_ENTRY: &str = r"Data\Weapons\Textures\Cannon_bolt.mip";
+
+/// The archive entry the Cannon round's muzzle flash textures from.
+///
+/// **Recovered, confidence 88.** `Cannon_DrawRound` binds
+/// `g_cannon_muzzle_flash_texture` before `Cannon_BuildMuzzleFlashList`'s
+/// `Gu_CallList`, gated on the round's own age (`+0xc8 < 0.1` seconds) - see
+/// [`CANNON_BOLT_TEXTURE_ENTRY`]. Resolves in `Data.wad` on both PSP
+/// pressings (name hash `1762ad77`, entry 1058, 5,136 bytes), immediately
+/// after the bolt's own entry.
+pub const CANNON_MUZZLE_FLASH_TEXTURE_ENTRY: &str =
+    r"Data\Weapons\Textures\Cannon_muzzle_flash.mip";
 
 /// The three archive entries the Plasma's own detonation loads: a halo and
 /// two hemispheres, "the expanding shell of the blast".

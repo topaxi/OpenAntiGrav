@@ -17,6 +17,10 @@ pub(crate) struct Scratch {
     /// The particle pipeline's two blend classes.
     pub(crate) additive: Vec<oag_render::mesh::GpuVertex>,
     pub(crate) alpha: Vec<oag_render::mesh::GpuVertex>,
+    /// The Cannon round's bolt streak and muzzle flash -
+    /// `oag_render::weapon_quads::Pipeline`'s own two buffers.
+    pub(crate) cannon_bolt: Vec<oag_render::mesh::GpuVertex>,
+    pub(crate) cannon_flash: Vec<oag_render::mesh::GpuVertex>,
     /// Which weapon pads currently hand out a pickup, one per pad node.
     pub(crate) pads_ready: Vec<bool>,
     /// The span of vertices whichever recolour or reshape is running has just
@@ -45,6 +49,8 @@ impl Scratch {
         self.trail.clear();
         self.additive.clear();
         self.alpha.clear();
+        self.cannon_bolt.clear();
+        self.cannon_flash.clear();
         self.pads_ready.clear();
         self.recoloured.clear();
     }

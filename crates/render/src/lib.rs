@@ -56,3 +56,4 @@ pub mod texgen;
 pub mod timing;
 pub mod track;
 pub mod weapon_pad;
+pub mod weapon_quads;

@@ -992,6 +992,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         noise,
         trail_blend,
         trail_shape,
+        cannon_quad_textures: weapon_models::load_cannon_quad_textures(&mut archives, &mut report),
         shadows,
         shadow_hulls,
         report,
