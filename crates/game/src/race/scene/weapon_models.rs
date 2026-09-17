@@ -66,9 +66,9 @@ pub(super) fn build(
 /// line-budget reason [`super::super::load::weapon_models::load_bodies`]
 /// exists on the loading side.
 /// [`build_all`]'s own return: one drawable pool per kind, the Plasma's own
-/// three grouped as [`blast_models::PlasmaBlastDrawables`] already are.
+/// (the bolt's head included) grouped as [`blast_models::PlasmaBlastDrawables`]
+/// already are.
 type WeaponBodies = (
-    Vec<Drawable>,
     Vec<Drawable>,
     Vec<Drawable>,
     Vec<Drawable>,
@@ -85,7 +85,6 @@ pub(super) fn build_all(
     device: &wgpu::Device,
     queue: &wgpu::Queue,
     rocket_model: Option<Model>,
-    plasma_ball_model: Option<Model>,
     mine_model: Option<Model>,
     bomb_model: Option<Model>,
     cannon_model: Option<Model>,
@@ -112,7 +111,6 @@ pub(super) fn build_all(
     };
     Ok((
         one(rocket_model)?,
-        one(plasma_ball_model)?,
         one(mine_model)?,
         one(bomb_model)?,
         one(cannon_model)?,
@@ -160,7 +158,7 @@ impl super::Scene {
             prev_vp,
         );
         write_one_kind(
-            &self.plasma_balls,
+            &self.plasma_blast.ball,
             &plasma_ball_matrices,
             &prev.plasma_balls,
             queue,

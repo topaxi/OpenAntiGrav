@@ -113,18 +113,17 @@ fn load_optional(
 }
 
 /// Every weapon's own body model, on [`load`]'s own terms - the Rocket's,
-/// the Plasma bolt's, the Mine's, the Bomb's, the Cannon round's and the
-/// Plasma blast's three.
-pub(super) struct WeaponBodies {
-    pub(super) rocket: Option<Model>,
-    /// The Plasma bolt's own head - `HD_plasma_ball`, HD only. See
-    /// `oag_title::weapons::WeaponModels::plasma_ball`.
-    pub(super) plasma_ball: Option<Model>,
-    pub(super) mine: Option<Model>,
-    pub(super) bomb: Option<Model>,
-    pub(super) cannon: Option<Model>,
-    pub(super) plasma_blast: blast_models::PlasmaBlastModels,
-}
+/// the Mine's, the Bomb's, the Cannon round's and the Plasma blast's three -
+/// the bolt's own head included, riding inside the last element rather than
+/// a sixth of its own; see [`blast_models::PlasmaBlastModels`]'s own doc
+/// comment for why.
+pub(super) type WeaponBodies = (
+    Option<Model>,
+    Option<Model>,
+    Option<Model>,
+    Option<Model>,
+    blast_models::PlasmaBlastModels,
+);
 
 /// Every weapon's own body model in one call, each on [`load`]'s own terms,
 /// sourced from `models` rather than from a constant fixed to one title.
@@ -156,22 +155,29 @@ pub(super) fn load_bodies(
             halo: one(Some(hd.ring), "a plasma blast ring"),
             hemisphere2: one(Some(hd.sphere), "a plasma blast sphere"),
             hemisphere1: one(Some(hd.halo), "a plasma blast halo"),
+            ball: None, // overwritten below
         }
     } else if let Some(pulse) = models.plasma_blast_pulse {
         blast_models::PlasmaBlastModels {
             halo: one(Some(pulse.halo), "a plasma blast halo"),
             hemisphere2: one(Some(pulse.hemisphere2), "a plasma blast hemisphere"),
             hemisphere1: one(Some(pulse.hemisphere1), "a plasma blast hemisphere"),
+            ball: None, // overwritten below
         }
     } else {
         blast_models::PlasmaBlastModels::default()
     };
-    WeaponBodies {
-        rocket: one(models.rocket, "a rocket"),
-        plasma_ball: one(models.plasma_ball, "a plasma bolt"),
-        mine: one(models.mine, "a laid mine"),
-        bomb: one(models.bomb, "a laid bomb"),
-        cannon: one(models.cannon, "a cannon round"),
-        plasma_blast,
-    }
+    // The bolt's own head, HD only - see `PlasmaBlastModels::ball`'s own doc
+    // comment for why it rides in this container.
+    let ball = one(models.plasma_ball, "a plasma bolt");
+    (
+        one(models.rocket, "a rocket"),
+        one(models.mine, "a laid mine"),
+        one(models.bomb, "a laid bomb"),
+        one(models.cannon, "a cannon round"),
+        blast_models::PlasmaBlastModels {
+            ball,
+            ..plasma_blast
+        },
+    )
 }

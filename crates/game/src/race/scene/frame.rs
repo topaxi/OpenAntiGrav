@@ -654,10 +654,8 @@ impl Scene {
             oag_tables::weapons::Weapon::Mine => !self.mines.is_empty(),
             oag_tables::weapons::Weapon::Bomb => !self.bombs.is_empty(),
             oag_tables::weapons::Weapon::Cannon => !self.cannon_rounds.is_empty(),
-            // HD only, once `HD_plasma_ball` loaded - see `Loaded::plasma_ball_model`.
-            // Pulse and every other source has no bolt-head mesh, so this stays
-            // `false` there and the billboard carries the bolt exactly as before.
-            oag_tables::weapons::Weapon::Plasma => !self.plasma_balls.is_empty(),
+            // HD only - see `blast_models::PlasmaBlastModels::ball`.
+            oag_tables::weapons::Weapon::Plasma => !self.plasma_blast.ball.is_empty(),
             _ => false,
         }));
         oag_render::perfprobe::mark("exhaust-gather");
@@ -846,8 +844,12 @@ impl Scene {
         for drawable in self.cannon_rounds.iter().take(cannon_matrices.len()) {
             stats.add(drawable.draw(&mut pass, None, None, None, None));
         }
-        // HD only - see `Loaded::plasma_ball_model`.
-        for drawable in self.plasma_balls.iter().take(plasma_ball_matrices.len()) {
+        for drawable in self
+            .plasma_blast
+            .ball
+            .iter()
+            .take(plasma_ball_matrices.len())
+        {
             stats.add(drawable.draw(&mut pass, None, None, None, None));
         }
         self.draw_plasma_blasts(&plasma_blast_active, &mut pass, &mut stats);

@@ -101,6 +101,14 @@ pub(super) const HD_BLAST_RATES: [f32; 3] = [0.01, 0.3, 0.2];
 /// rather than three of each - the line budget `race/load.rs` and
 /// `race/scene.rs` had left for a fifth weapon-model kind was exactly zero.
 ///
+/// **`ball` rides along for the same reason, not because it is a blast
+/// model.** It is the bolt's own head - live for the whole flight, not just
+/// the detonation - but a true fourth top-level field or parameter on
+/// `Scene`/`Scene::new` is exactly the zero-headroom case the paragraph
+/// above already describes, and this container already threads through
+/// [`options::Loaded`] and [`Scene::new`] as one value. See
+/// [`oag_title::weapons::WeaponModels::plasma_ball`].
+///
 /// **Field names are Pulse's on both titles, by ordinal position rather than
 /// by name.** On Wipeout HD, `halo` holds `HD_plasma_ring`, `hemisphere2`
 /// holds `HD_plasma_sphere` and `hemisphere1` holds `HD_plasma_halo` - the
@@ -118,19 +126,25 @@ pub struct PlasmaBlastModels {
     pub halo: Option<Model>,
     pub hemisphere2: Option<Model>,
     pub hemisphere1: Option<Model>,
+    /// The bolt's own head - see this struct's own doc comment for why it
+    /// is here.
+    pub ball: Option<Model>,
 }
 
-/// The three drawable pools [`Scene`] builds from a [`PlasmaBlastModels`] -
-/// grouped for the same reason that is.
+/// The drawable pools [`Scene`] builds from a [`PlasmaBlastModels`] -
+/// grouped for the same reason that is, [`Self::ball`] included.
 #[derive(Debug)]
 pub(in crate::race) struct PlasmaBlastDrawables {
     pub(in crate::race) halo: Vec<Drawable>,
     pub(in crate::race) hemisphere2: Vec<Drawable>,
     pub(in crate::race) hemisphere1: Vec<Drawable>,
+    /// The bolt's own head, one per projectile slot - not one of the
+    /// blast's three, see [`PlasmaBlastModels`]'s own doc comment.
+    pub(in crate::race) ball: Vec<Drawable>,
 }
 
 impl PlasmaBlastDrawables {
-    /// Builds all three pools with `build_one` - `Scene::new`'s own
+    /// Builds every pool with `build_one` - `Scene::new`'s own
     /// `weapon_drawables` closure, reused rather than duplicated so this
     /// pool is built exactly like the Rocket's, the Mine's, the Bomb's and
     /// the Cannon round's.
@@ -142,6 +156,7 @@ impl PlasmaBlastDrawables {
             halo: build_one(models.halo)?,
             hemisphere2: build_one(models.hemisphere2)?,
             hemisphere1: build_one(models.hemisphere1)?,
+            ball: build_one(models.ball)?,
         })
     }
 }

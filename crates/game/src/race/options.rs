@@ -606,14 +606,6 @@ pub struct Loaded {
     /// terms as [`Self::boost_model`] - a missing rocket model falls back to the
     /// billboard rather than failing the race.
     pub rocket_model: Option<Model>,
-    /// The model a live Plasma bolt's own head is drawn as: `HD_plasma_ball`.
-    ///
-    /// **HD only.** `None` on every other source - Pulse rides the charge and
-    /// travel glow (`WO_PLASMA_HEAD`) alone and authors no bolt-head mesh.
-    /// `None` on the same terms as [`Self::rocket_model`] otherwise: a
-    /// missing model falls back to the billboard. See
-    /// `docs/ghidra/functions/ps3-hdfury-eu/plasma.md`.
-    pub plasma_ball_model: Option<Model>,
     /// The model a Cannon round in flight is drawn as:
     /// [`CANNON_MODEL_ENTRY`]. `None` on the same terms as
     /// [`Self::rocket_model`], and a round then draws as nothing at all
