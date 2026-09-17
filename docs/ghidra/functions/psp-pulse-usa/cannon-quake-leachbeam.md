@@ -551,12 +551,12 @@ matrix on each live round. **The mesh is named `muzzleflash` and is the bolt**:
 triangles, spanning `1.200 x 1.200 x 3.599` - a dart, longest along the +Z the
 matrix aims down the velocity, which is not the shape of a flash at a barrel.
 
-**The two display lists are still not drawn** - see "Which display list is the
-bolt and which the flash: settled" below for why the *identification* is no
-longer the open question - because drawing them for real needs a
-textured-billboard path this pass's own file ownership does not extend to.
-That is still an honest absence per CLAUDE.md, and it is bounded: the round
-itself is visible, and its impact now throws a spark.
+~~**The two display lists are still not drawn**~~ - **both are drawn as of
+2026-09-17**: see "The two hand-built quads' geometry, read - and drawn"
+further down this page for the vertex-level recovery and
+`oag_render::weapon_quads` for the pipeline. "Which display list is the
+bolt and which the flash: settled" below is what made the geometry read
+possible to attribute correctly once it was found.
 
 ### 2026-09-09: `Cannon_UpdateRound` read - the hit path, `WO_CANNON_SPARKS`'s real trigger, and the base speed corrected
 
@@ -1621,6 +1621,122 @@ reused whole" above.
   own entity - is not identified. A HUD or audio amplitude is the obvious guess
   and it is only a guess.
 
+### 2026-09-17: the two hand-built quads' geometry, read - and drawn
+
+**Closes this page's own "the two display lists are still not drawn" line
+from 2026-09-08.** Read with the Ghidra bridge on `psp-pulse-usa`:
+`Cannon_DrawRound` (`0x0886545c`) itself, plus three functions it or its
+callers reach that were previously unread: `Cannon_RotateFlashCorner`
+(`0x08864ea0`, confidence 82 - single caller `Cannon_DrawRound`, a plain 2D
+rotate-about-`center` applied to one `(x, y)` corner) and
+`Cannon_BuildRoundBasis` (`0x08864f54`, confidence 75 - four callers, all
+Cannon: `Cannon_DrawRound`, `Cannon_Init`, `Cannon_UpdateRound` and
+`FUN_0886481c`; reads the round's Vex node's own world matrix and, only
+when a per-round flag at `+0xe4` is set, recomputes the translation row by
+an offset along the node's local axes - the mechanism is read, the
+*purpose* of that conditional offset is not, so this stops at 75 rather
+than the 85+ this page's fully-closed reads carry). `Cannon_BaseSpeedKmh`,
+`Cannon_Construct`, `Cannon_Init`, `Cannon_UpdateRound` and
+`Weapon_FireCannon` were re-read for the constants below rather than newly
+decompiled - all already named on this page.
+
+#### The bolt: two crossed camera-facing ribbons, not two literal 3D quads
+
+`Cannon_BuildBoltList` draws two triangle strips (`instance+0x100` and
+`+0x160`) from vertex blocks `Cannon_DrawRound` rewrites every frame.
+Reading the stores at instruction level: both blocks share the same two
+world points - the round's own position last tick (`prev`, from
+`instance+0x80`, transformed) and a point 20% of the way from this tick's
+position (`curr`, `instance+0xa0`) back toward `prev`
+(`near = curr + 0.2 * (prev - curr)`, `DAT_08ab1064 = 0x3e4ccccd = 0.2`) -
+and only the offset added to each point's `x`/`y` differs: block one adds
+`(-W, +W)`/`(+W, -W)` (the two corners at one point lie on the diagonal
+`(1, -1)`), block two adds `(-W, -W)`/`(+W, +W)` (diagonal `(1, 1)`),
+`W = *(instance+0xd4) = DAT_08ab1060 = 0x3eb33333 = 0.35`, reseeded to that
+literal by both `Cannon_Construct` and `Cannon_UpdateRound` and never
+touched anywhere else - a flat constant, not a per-round roll. The two
+diagonals are perpendicular, so the pair is a camera-facing cross section
+through the streak's own axis - the standard cheap-volumetric-streak trick -
+rather than two coplanar or two literally-3D-crossed quads. Confidence 85.
+
+**The near 20% of the previous-to-current segment is left uncovered** -
+the streak runs from `near` to `prev`, not from `curr` to `prev` - which
+reads as leaving room for the round's own dart mesh (`pulse_muzzleflash.vex`)
+at its nose, though that specific reason is inferred rather than read.
+
+**Colour is fixed, not read from anywhere per-frame**: `instance+0xd8` is
+seeded to `0xffffffff` (opaque white) once in `Cannon_Construct` and no
+other write to it was found in `Cannon_DrawRound`, `Cannon_UpdateRound` or
+`Cannon_Init`. Confidence 88.
+
+**The original builds this in a hand-transformed, near-clip-space frame**:
+it transforms `prev`/`curr` through the current top-of-matrix-stack
+transform, resets that matrix to an identity constant
+(`DAT_08a907a0`), and adds the constant width straight to the transformed
+`x`/`y` - a fixed-function trick for a billboard whose on-screen size
+tracks perspective without a per-vertex camera basis. `oag_render` has no
+such hand-transform stage, so `oag_render::weapon_quads::geometry` builds
+the equivalent offset from the camera's own `right`/`up` vectors instead,
+the same port `exhaust::sprite` already makes - see that module's own doc
+comment for the full equivalence argument.
+
+#### The muzzle flash: one quad, randomly sized and rotated, fixed white with random alpha
+
+`Cannon_BuildMuzzleFlashList` draws one strip (`instance+0x1c0`), centred
+on the round's own position (`Cannon_BuildRoundBasis`'s translation row,
+transformed) with half-size `*(instance+0xcc) * 3.0`
+(`FLASH_SIZE_SCALE = 3.0`, confidence 88 - the literal at the draw site).
+
+`Cannon_UpdateRound` rerolls three values **every tick** the round's age is
+under `0.1` seconds (`FLASH_WINDOW_SECONDS`, the same `+0xc8 < 0.1` gate
+`Cannon_DrawRound` reads to decide whether to draw the flash at all):
+
+- `instance+0xcc` (the half-size before the `* 3.0` above) from
+  `Psys_RandFloatRange(DAT_08ab105c, DAT_08ab1058)` =
+  `Psys_RandFloatRange(0.65, 1.3)` - `FLASH_SIZE_RANGE`.
+- `instance+0xd0`, a rotation angle from `Psys_RandFloatRange(0, 2*pi)`,
+  consumed by `Cannon_RotateFlashCorner` to rotate each of the flash
+  quad's four corners about its own centre - a rotated square from one
+  axis-symmetric texture, not four differently-shaped corners.
+- The colour word, from `Psys_RandIntRange(0x96, 0xff)` combined as
+  `roll * 0x1000000 + 0xffffff` - **the low three bytes are hard-coded
+  `0xff` (opaque white in each of R/G/B), only the top byte (alpha) is the
+  rolled value.** This corrects the 2026-09-08 entry's "randomly sized and
+  coloured" framing on this page and in `HANDOVER.md`/the visuals thread:
+  the flash is a fixed white with a randomly rerolled **alpha**, not a
+  random RGB colour. Confidence 88 (the arithmetic is read directly).
+
+All three literals - `0.65`, `1.3`, `0.35`, `0.2` - are read at
+`0x08ab105c`/`0x08ab1058`/`0x08ab1060`/`0x08ab1064` respectively, by direct
+memory read on `psp-pulse-usa`, not decompiled from an instruction operand.
+
+#### What this project draws now
+
+`oag_render::weapon_quads::Pipeline` draws both, textured from
+`Data\Weapons\Textures\Cannon_bolt.mip` (`CANNON_BOLT_TEXTURE_ENTRY`, entry
+1057) and `Cannon_muzzle_flash.mip` (`CANNON_MUZZLE_FLASH_TEXTURE_ENTRY`,
+entry 1058), with the same additive blend as the exhaust flare's own
+(`Gu_BlendFunc(0, 2, 10, 0, 0xffffff)` at both `Cannon_BuildBoltList` and
+`Cannon_BuildMuzzleFlashList`, an exact match for
+`ExhaustFlare_BuildDisplayList`'s recovered `sceGuBlendFunc(GU_ADD,
+GU_SRC_ALPHA, GU_FIX, 0, 0xffffff)` - see `crate::exhaust::BLEND`'s own doc
+comment). **Depth write is on** (`Gu_DepthMask(1)`, read directly at both
+list builders) where the exhaust flare's is off - kept as measured rather
+than matched to the flare, and noted as unusual in
+`oag_render::weapon_quads`'s own module doc comment. The flash's per-tick
+roll is generated render-side (`oag_render::weapon_quads::random`), seeded
+from the round's own pool slot and the simulation tick rather than from
+`world.rng`, so drawing it never advances the simulation's own seeded
+stream or moves a committed determinism hash.
+
+**Not read and not built**: the small extra particle-like spawn
+`Cannon_UpdateRound` also drives inside the same `age < 0.1` window
+(`Psys_RandFloatRange(0, 2*pi)` into `instance+0xd0` doubles as an input to
+a second computation feeding `FUN_08945284`, the same function
+`Cannon_Init` also calls once at spawn) - this reads as a separate small
+particle/spark object at the muzzle, not part of either of the two textured
+quads, and is out of this pass's scope. Left as an open item below.
+
 ## What is buildable now and what still is not
 
 - **The Cannon is buildable, end to end.** Its whole fire-rate mechanism - the
@@ -1631,7 +1747,10 @@ reused whole" above.
   behaviour: a world hit throws `WO_CANNON_SPARKS` and stops the round, a
   craft hit applies `damage_per_bullet`/`slowdown_time` and stops it without a
   spark, and anything else bounces. See "`Cannon_UpdateRound` read" above for
-  all three.
+  all three. **Its visuals are complete as of 2026-09-17**: the dart mesh,
+  the bolt streak and the muzzle flash all draw - see "The two hand-built
+  quads' geometry, read - and drawn" above. Only the muzzle's small extra
+  particle spawn (`FUN_08945284`) is unread and undrawn.
 - **The Quake is buildable for its hit/damage/slowdown half**, which reuses the
   Missile's and Mine/Bomb's own shared pending-hit channel outright - nothing
   new to build there beyond wiring the Quake's own `damage`/`slowdown_time` and

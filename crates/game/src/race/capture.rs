@@ -309,6 +309,7 @@ pub fn capture(
         noise,
         trail_blend,
         trail_shape,
+        cannon_quad_textures,
         clouds,
         ..
     } = loaded;
@@ -422,6 +423,7 @@ pub fn capture(
         noise,
         trail_blend,
         trail_shape,
+        cannon_quad_textures,
         clouds,
         format,
         scene_size,

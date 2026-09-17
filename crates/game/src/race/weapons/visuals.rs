@@ -641,6 +641,52 @@ impl Race {
         self.projectile_model_matrices(oag_tables::weapons::Weapon::Cannon)
     }
 
+    /// This frame's vertices for every live Cannon round's two hand-built
+    /// quads: the bolt streak into `bolt`, the muzzle flash into `flash`
+    /// while the round's age is under
+    /// [`oag_render::weapon_quads::geometry::FLASH_WINDOW_SECONDS`].
+    ///
+    /// `right`/`up` are the camera's own basis vectors, the same ones
+    /// [`Self::projectile_sprites`] takes. **The flash's rotation, size and
+    /// alpha are rolled from [`oag_render::weapon_quads::random::flash_roll`],
+    /// seeded from the round's own slot index and [`World::tick`] - not from
+    /// `self.sim.world.rng`.** Rolling it from the simulation's own seeded
+    /// stream would advance that stream once per live round per tick for a
+    /// value nothing in `oag_gameplay` ever reads back, moving every
+    /// committed determinism hash for a purely cosmetic reason - see
+    /// `oag_render::weapon_quads::random`'s own doc comment.
+    ///
+    /// The previous tick's position - the bolt's other endpoint - is derived
+    /// as `position - velocity * dt` rather than stored on `Projectile`,
+    /// since both are already there and adding a field for one draw call
+    /// would be new simulation state for a render-only need.
+    pub fn cannon_quad_vertices(
+        &self,
+        right: Vec3,
+        up: Vec3,
+        bolt: &mut Vec<oag_render::mesh::GpuVertex>,
+        flash: &mut Vec<oag_render::mesh::GpuVertex>,
+    ) {
+        use oag_render::weapon_quads::{geometry, random};
+        let dt = TickRate::DEFAULT.dt();
+        let tick = self.sim.world.tick as u32;
+        for (slot, projectile) in self.sim.world.projectiles.slots.iter().enumerate() {
+            if projectile.kind != Some(oag_tables::weapons::Weapon::Cannon) {
+                continue;
+            }
+            let curr = projectile.position;
+            let prev = curr - projectile.velocity * dt;
+            bolt.extend(geometry::bolt_vertices(prev, curr, right, up));
+            let age = oag_gameplay::projectile::MAX_FLIGHT_SECONDS - projectile.lifetime;
+            if age < geometry::FLASH_WINDOW_SECONDS {
+                let (rotation, half_size, alpha) = random::flash_roll(slot as u32, tick);
+                flash.extend(geometry::flash_vertices(
+                    curr, right, up, half_size, rotation, alpha,
+                ));
+            }
+        }
+    }
+
     /// Where each live projectile of one `kind` is and how it is oriented, for
     /// the model draw - shared by [`Self::rocket_model_matrices`],
     /// [`Self::mine_model_matrices`], [`Self::bomb_model_matrices`] and

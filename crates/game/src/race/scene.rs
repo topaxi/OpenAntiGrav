@@ -10,10 +10,12 @@ use log::warn;
 
 mod clouds;
 mod frame;
+mod hd_chain;
 mod motion;
 mod queries;
 mod scratch;
 mod weapon_models;
+mod weapon_quads;
 
 use frame::{depth_texture, msaa_color_texture};
 use motion::Attachments;
@@ -177,6 +179,7 @@ pub struct Scene {
     /// that `queue` already accepts through a shared reference. The borrow is
     /// taken and released inside `render` with nothing re-entrant in between.
     exhaust: std::cell::RefCell<exhaust::Pipeline>,
+    weapon_quads: std::cell::RefCell<oag_render::weapon_quads::Pipeline>,
     clouds: std::cell::RefCell<clouds::Clouds>,
     /// Collision sparks. `RefCell` for the same reason [`Self::exhaust`] is.
     sparks: std::cell::RefCell<sparks::Pipeline>,
@@ -343,6 +346,7 @@ impl Scene {
         noise: Option<FlareTexture>,
         trail_blend: Option<wgpu::BlendState>,
         trail_shape: Option<FlareTexture>,
+        cannon_quad_textures: (Option<FlareTexture>, Option<FlareTexture>),
         cloud_layer: Option<(oag_render::cloud::Layer, FlareTexture)>,
         format: wgpu::TextureFormat,
         size: (u32, u32),
@@ -364,51 +368,10 @@ impl Scene {
         let far = track_model.radius * 4.0;
         let sample_count = msaa.samples();
         let scene_depth = mesh_render::Depth::Scene;
-        // Wipeout HD's post chain: a linear float scene target, the read
-        // FunkLayerBloom passes and the encode. Present exactly when the
-        // circuit authors an `HDR and Bloom` block - see
-        // `oag_render::post::hd_bloom` for what of it is the microcode's.
-        // A failure is reported and dropped the way the PSP bloom's is: a
-        // race without it is the pre-HDR picture, not a broken one.
-        // **`bloom_enabled` reaches this chain too, and until 2026-09-09 it
-        // did not.** The switch gated only the PSP chain below, so Wipeout
-        // HD - the one title this chain draws for - blooms whatever the
-        // player sets. Measured: flipping the setting moved a Pulse frame's
-        // clipped-white share from 2.07 % to 0.41 % and left an HD frame
-        // byte-identical. `Glow::Suppressed` still runs the exposure resolve,
-        // which is what encodes the linear scene target at all; see that
-        // enum for why turning the whole chain off would be a different and
-        // wrong thing.
-        let glow = if bloom_enabled {
-            oag_render::post::hd_bloom::Glow::Drawn
-        } else {
-            oag_render::post::hd_bloom::Glow::Suppressed
-        };
-        let hd = match hd_bloom
-            .map(|params| {
-                oag_render::post::hd_bloom::Chain::new(device, format, size, params, glow)
-            })
-            .transpose()
-        {
-            Ok(hd) => hd,
-            Err(e) => {
-                warn!("hd post chain unavailable ({e}) - the frame draws without it");
-                None
-            }
-        };
-        // **The format is the statement about colour space.** With the chain
-        // in place every pipeline below is built against the linear float
-        // target and switches itself to linear output - see
-        // `mesh_render::is_linear_target`.
-        // The caller's own format survives the shadowing for the one pass
-        // that runs after every chain has already encoded into the caller's
-        // view - see `motion_blur` below.
-        let caller_format = format;
-        let format = if hd.is_some() {
-            oag_render::post::hd_bloom::SCENE_FORMAT
-        } else {
-            format
-        };
+        // See `hd_chain::build`'s own doc comment for what this chain is and
+        // why `format` comes back shadowed.
+        let (hd, format, caller_format) =
+            hd_chain::build(device, format, size, hd_bloom, bloom_enabled);
         // **The Zone stage's own texture, bound once per model.** The showing
         // stage's `zoneModeTrack<n>.gtf`, which `mesh.wgsl` samples at
         // `zoneColourTint.xy * (1 - meshUV)` wherever the material's albedo is
@@ -906,6 +869,8 @@ impl Scene {
             sample_count,
             mesh_render::Velocity::Write,
         ));
+        let weapon_quads =
+            weapon_quads::build(device, queue, format, cannon_quad_textures, sample_count);
         // One silhouette per grid slot, in the same slot order the liveries
         // are in - `race::shadow::silhouettes` built them, and the load report
         // already said which slots got the disc's own image and which got the
@@ -984,6 +949,7 @@ impl Scene {
             authored_fog,
             zone_grade,
             exhaust,
+            weapon_quads,
             clouds: clouds::Clouds::build(device, queue, format, sample_count, cloud_layer),
             sparks,
             shadow,
