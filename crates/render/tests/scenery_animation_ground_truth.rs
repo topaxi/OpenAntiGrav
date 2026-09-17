@@ -34,7 +34,7 @@
 
 use std::path::PathBuf;
 
-use oag_render::mesh::{self, ANIM_TRACK_LIMIT, Model, NODE_ANIM_LIMIT};
+use oag_render::mesh::{self, ANIM_TRACK_LIMIT, AnimTrack, Model, NODE_ANIM_LIMIT};
 use oag_vex::vex;
 
 /// The `Anim Transform` class, from the class table in `docs/formats/vex.md`.
@@ -205,7 +205,9 @@ fn the_banners_scroll_and_the_disc_authors_it() {
                 continue;
             }
             seen += 1;
-            let track = &model.anim_tracks[slot as usize - 1];
+            let AnimTrack::Psp(track) = &model.anim_tracks[slot as usize - 1] else {
+                panic!("a PSP circuit's own track is never Rcs")
+            };
             assert_eq!(track.offset.times, vec![0, 240, 300, 540, 598]);
             assert_eq!(
                 track.offset.values,

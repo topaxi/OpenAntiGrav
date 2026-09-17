@@ -29,11 +29,24 @@
 
 use std::path::PathBuf;
 
-use oag_render::mesh::{self, Model};
+use oag_render::mesh::{self, AnimTrack, Model};
 use oag_render::mesh_render::TexAnims;
+use oag_vex::vex;
 
 fn image() -> Option<PathBuf> {
     oag_testdata::image("data/images/pulse-psp-usa.chd")
+}
+
+/// Every track `mesh::build`/`mesh::build_sky` produce is a Pulse/Pure
+/// `TEXOFFSET`/`TEXSCALE` block - the PS3 variant only ever comes out of
+/// `mesh::rcs::build*`, which nothing in this file calls - so every assertion
+/// below reads straight through to it rather than repeat the match at each
+/// call site.
+fn psp(track: &AnimTrack) -> Option<&vex::TexTransform> {
+    match track {
+        AnimTrack::Psp(t) => Some(t),
+        AnimTrack::Rcs(_) => None,
+    }
 }
 
 fn track(archives: &mut oag_assets::Archives, circuit: &str) -> Model {
@@ -62,6 +75,7 @@ fn talons_junction_arrows_author_a_one_tile_v_scroll_every_forty_frames() {
     let arrows: Vec<_> = model
         .anim_tracks
         .iter()
+        .filter_map(psp)
         .filter(|t| t.offset.times == vec![0, 40])
         .collect();
     assert!(
@@ -113,7 +127,7 @@ fn the_arrows_track_reaches_a_vertex_and_moves_between_ticks() {
     let slot = model
         .anim_tracks
         .iter()
-        .position(|t| t.offset.times == vec![0, 40])
+        .position(|t| psp(t).is_some_and(|t| t.offset.times == vec![0, 40]))
         .expect("the arrows' track is in the table");
     let index = u32::try_from(slot + 1).expect("slot fits");
     let vertices = model.vertices.iter().filter(|v| v.anim == index).count();
@@ -227,7 +241,7 @@ fn every_shipped_model_fits_the_track_table_and_no_sky_animates() {
             continue;
         }
         skies += 1;
-        for drift in &sky.anim_tracks {
+        for drift in sky.anim_tracks.iter().filter_map(psp) {
             drifting_skies.push(name.clone());
             // The one authored case is a 2000-frame drift. Anything an order
             // of magnitude faster is the failure mode this guards: a block
@@ -286,7 +300,12 @@ fn the_flicker_panels_loop_on_the_authored_period_not_their_last_key() {
     let mut archives = oag_pulse::open(&image.display().to_string()).expect("opening archives");
     let model = track(&mut archives, "16");
 
-    let stepped: Vec<_> = model.anim_tracks.iter().filter(|t| t.step).collect();
+    let stepped: Vec<_> = model
+        .anim_tracks
+        .iter()
+        .filter_map(psp)
+        .filter(|t| t.step)
+        .collect();
     assert!(
         stepped.len() >= 3,
         "expected the three interleaved flicker families, found {}",

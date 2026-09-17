@@ -40,6 +40,16 @@ pub struct Channel {
     /// Which of the parameter's four `f32` components this channel writes,
     /// `0..=3`.
     pub component: u8,
+    /// The targeted parameter's own name hash (`+0x00` of its raw table
+    /// entry, `!crc32(name)` - [`oag_rcsmaterial::name_hash`]'s own
+    /// convention), resolved once at parse time so a caller never has to
+    /// re-walk the raw table [`Self::target_index`] warns about. `0` for a
+    /// `target_index` the material's own `+0x34` table does not reach (should
+    /// not happen on data this module accepts, but a caller reading `0` back
+    /// gets "matches no named parameter" rather than a panic).
+    ///
+    /// [`oag_rcsmaterial::name_hash`]: crate::rcsmaterial::name_hash
+    pub name_hash: u32,
 }
 
 /// A material's own animated curve.
@@ -82,6 +92,13 @@ impl Curve {
         // (confidence 90 on `docs/ghidra/functions/ps3-hdfury-eu/billboards.md`'s
         // 2026-09-17 section: every live curve checked has this equal the
         // channel-descriptor count it actually holds).
+        // The material's own raw parameter table (`+0x34` off the material
+        // record `material_at` names, `parameters.rs`'s own field) - what a
+        // channel's `target_index` actually indexes, per [`Channel::target_index`]'s
+        // own doc comment. Read once here rather than per channel.
+        let raw_table =
+            (material_at + 0x38 <= data.len()).then(|| BE.u32(data, material_at + 0x34) as usize);
+
         let count = usize::from(clip.num_anim_user_channels());
         let mut channels = Vec::with_capacity(count);
         for i in 0..count {
@@ -90,9 +107,15 @@ impl Curve {
                 break;
             }
             let desc = BE.u16(data, at);
+            let target_index = u32::from(desc >> 2);
+            let name_hash = raw_table
+                .map(|table| table + target_index as usize * 0x20)
+                .filter(|&entry| entry + 4 <= data.len())
+                .map_or(0, |entry| BE.u32(data, entry));
             channels.push(Channel {
-                target_index: u32::from(desc >> 2),
+                target_index,
                 component: (desc & 3) as u8,
+                name_hash,
             });
         }
         Some(Self { channels, clip })

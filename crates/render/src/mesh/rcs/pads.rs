@@ -144,7 +144,9 @@ pub(super) fn build_pad_class(
         material_variants,
         emissive,
         alpha_test_ref,
-    } = material_setup(&model, textures, &mut report);
+        material_anim,
+        anim_tracks,
+    } = material_setup(&model, model_blob, textures, &mut report);
     out.textures = skins;
     out.lightmaps = seconds;
     out.material_slots = material_slots;
@@ -152,6 +154,8 @@ pub(super) fn build_pad_class(
     out.material_variants = material_variants;
     out.emissive = emissive;
     out.alpha_test_ref = alpha_test_ref;
+    out.material_anim = material_anim;
+    out.anim_tracks = anim_tracks;
     // **`true`, exactly like every other PS3 model this crate builds.** A pad
     // chunk's `in.colour` is HD's baked per-vertex *light*, the term the
     // fragment program adds inside its authored lighting sum - see
@@ -252,6 +256,7 @@ pub(super) fn emit_chunk(
             &out.textures,
             &out.material_slots,
             &out.material_specular_exponent,
+            &out.material_anim,
         );
         report.see_through += usize::from(surface.blend.is_some());
         report.cutout += usize::from(surface.cutout);

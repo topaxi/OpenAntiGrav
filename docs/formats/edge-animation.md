@@ -24,8 +24,8 @@ clip itself) and
 | Bit-packed keys | **Absent on every clip checked** - `offsetPackingSpecs` is always zero | 90 - the PPU evaluator itself asserts this before reading anything else |
 | Joint (rotation/translation/scale) channels | **Absent on every clip checked** - all seven counts are zero | 85 |
 | What the four checked curves actually animate | `uvOffset.x`/`.y`, confirmed by parameter-table hash, not position | 92 |
-| What the curves' own shape is | A per-material wipe/reveal ramp, **not** a four-state glyph selector | 85 - measured directly, see below |
-| How this connects to `3`/`2`/`1`/`GO` reading correctly | **Not established** | - |
+| What one curve's own shape is, in isolation | A per-material wipe/reveal ramp, not a four-state plateau | 85 - measured directly, see below |
+| How this connects to `3`/`2`/`1`/`GO` reading correctly | **Material 2's curve alone is the mechanism** - it drives both the digit glyph mesh and the backdrop panel; materials 1/3/4's curves belong to geometry the pre-existing panel-clip and `fx350` strip already remove before a frame draws | 88 - real headless captures plus a curve-disabled control render, `scratch/lane-wire-report.md`, one boot |
 
 ## What this is, and how it was found
 
@@ -199,7 +199,12 @@ a 48-bit packed quaternion encoding, neither of which this project has
 decoded or had data to check against - a real, separate task if this format turns out
 to be used for skeletal animation anywhere else in HD.
 
-## What the curves actually author: a wipe, not a glyph selector
+## What one curve authors in isolation: a wipe, not a plateau - and what four of them together turn out to be
+
+**Read this section, then its own 2026-09-17 correction below it**: what
+follows measures one curve at a time and is accurate as far as it goes, but
+reading it alone leads to the wrong conclusion about the countdown - the
+correction is not a footnote.
 
 Sampling all four of `321go_startfinish.rcsmodel`'s curved materials across
 their own shared 13.333 s loop (`each_curve_varies_continuously_not_in_glyph_sized_steps`,
@@ -227,23 +232,87 @@ reads `3`, `2`, `1`, `GO` in sequence over a ~6 s countdown while this curve's
 own loop is 13.333 s: no time base connecting the two has been established
 (`Billboard_UpdateInstanceUvs`'s own clock argument, where it ultimately comes
 from, was not traced further - tracing it is a new RE thread, out of the scope
-that recovered this format). **Playback is not wired into
-`crates/render/src/mesh/rcs.rs`** for exactly this reason: wiring it would
-mean picking a time base with no evidence behind the choice, which is the
-invented-mechanism failure `CLAUDE.md`'s "never invent what the assets
-already author" rule exists to stop - a curve landing on a plausible-looking
-frame by construction of a guessed time base is not the same thing as the
-digit board actually reading correctly for the reason this curve drives it.
+that recovered this format).
 
-**A live capture already shows the digit board's glyphs light up during an
-actual countdown** (`docs/rendering/start-gantry.md`,
-`docs/ghidra/functions/ps3-hdfury-eu/billboards.md`'s 2026-09-13 section), and
-the per-node `+0xe4` static UV override table `Billboard_UpdateInstanceUvs`
-also reads (billboards.md's 2026-09-17 first section) is at least as likely a
-candidate for the actual glyph-selection mechanism as this curve - it is a
-second, distinct write path this project has located but not chased, per this
-lane's own scope. Whoever picks this up next: start there rather than
-re-deriving a time base for the curve documented on this page.
+**2026-09-17, `lane/hd-gantry-wire`: playback is now wired, generically, and
+this is not the same claim as "the digits are correct".** Every `.rcsmodel`
+material carrying a curve - not gantry-specific, see
+[`oag_render::mesh::rcs::curve_track`](../../crates/render/src/mesh/rcs/curve_track.rs)'s
+own doc comment - becomes one more entry of
+[`oag_render::mesh::Model::anim_tracks`](../../crates/render/src/mesh/anim_track.rs),
+the exact table Pulse's own `TEXOFFSET` blocks already fill, sampled every
+frame through the **same per-model clock every other animation on that model
+already rides** - the race clock, unshifted, `crates/game/src/race/gantry.rs`'s
+own `seconds = world.tick / 60` for the gantry, `mesh::rcs::skin`'s callers'
+own clock for anything else. **No new time base was chosen**: this is the
+standing "never invent" rule read the other way round - the invention this
+page always refused was picking a clock to make the digits line up, and
+reusing the clock the model's own node animations already use is not that,
+it is the one clock this project already had evidence for. Verified end to
+end against the real disc,
+[`hd_gantry_curve_replay_ground_truth.rs`](../../crates/render/tests/hd_gantry_curve_replay_ground_truth.rs):
+all four curved materials reach `AnimTrack::Rcs`, a vertex of each selects
+one, and the sampled table differs between two points in time.
+
+**Corrected twice the same day, and the second correction is the one that
+holds.** The first pass at wiring the replay watched the board actually play
+and saw `3`, `2`, `1`, `GO` in order, and concluded "four curves, one per
+glyph, each its own material" - a real improvement on "not established", but
+still wrong about *which* curve does the work, for a reason a control run
+caught: it inferred the mechanism from the fact that four materials carry a
+curve, without checking which of those four materials' own geometry a player
+actually sees.
+
+**Only material 2's curve is ever on screen. The other three belong to
+geometry the pre-existing (unrelated) culling logic already removes before a
+frame is drawn.** Dumping which node each animated draw call belongs to
+(`hd_gantry_curve_replay_ground_truth.rs`'s own diagnostic pass) gives the
+node name behind every one of the four `AnimTrack::Rcs` slots:
+
+| Material | Node(s) | What it is | Reaches the screen? |
+| --- | --- | --- | --- |
+| 1 | `polySurface7Shape` | the chequered-flag state | **No** - `oag_render::gantry::clip_to_panel` parks it outside the mount's own panel, trigger unrecovered (`docs/rendering/start-gantry.md`) |
+| 2 | `Go_HD_start_light_backgroundShape`, `pasted__Go_HD_start_light_321goShape` | the countdown backdrop **and** the digit glyph mesh (the one with the five UV cells) | **Yes** |
+| 3 | `polySurface151Shape`..`polySurface157Shape` (7 nodes) | slot 7's own `fx350` art, embedded in this file | **No** - `oag_render::gantry::strip_fx350_art` already strips exactly these seven node names |
+| 4 | `pasted__Final_LapShape`, `pasted__Final_Lap_1Shape`..`_1_6Shape` (7 nodes) | the `FINAL LAP` state | **No** - parked outside the panel by `clip_to_panel`, same as material 1 |
+
+So the real mechanism is **one shared curve, on one material, walking across
+one texture** - the same shape as Pulse's own gantry, not a distributed
+four-way one. Material 2's single `uvOffset`/`uvScale` curve drives the
+digit glyph's own five UV cells *and* the backdrop panel at once, because
+both surfaces share the same texture (`321_go_64.gtf`, texture slot 2) and
+the same material. **A plausible reading, not a measured one**: the
+backdrop's own red-to-green transition likely comes from the same shared
+offset crossing the "authored, unused by this node" red/green marker
+columns at texel columns 48-54/57-59 `start-gantry.md`'s own texel-grid
+table already found - the timing and the colours both fit - but nothing
+here has actually sampled the backdrop's own UV cell against `321_go_64.gtf`
+at the curve's `t=180`/`t=240` values to confirm it, the way that page's own
+Pulse table confirms its digit windows. Left as a lead rather than a
+finding.
+
+Played for real: `oag-game --race --track
+/data/environments/talons_junction/track.vex --no-audio --screenshot`,
+ticks 0/90/180/240/360, `hdfury-ps3-eu-dec.iso` - blank at tick 0, `3` and
+`2` both legible by tick 90 (1.5 s), `3`/`2`/`1` together by tick 180 (3.0 s),
+`GO` alone on a banner that has gone from red to green by tick 240 (4.0 s),
+and the whole board gone by tick 360 (6.0 s) - the pre-existing, unrelated
+`Anim Transform` teleport-out this page's own "master timeline" already
+documents, untouched by this lane. **Confirmed by a control render** with
+every material's `anim` index forced to `0` (curve replay disabled): the
+backdrop panel and the digits vanish together at every tick checked, rather
+than only the digits going missing - which is what would have shown if a
+separate, curve-independent node swap did the red/green change, and is not
+what happened. Frames from both the real and the control render are in
+`scratch/lane-wire-report.md`.
+
+**What is still not settled**: `3` and `2` reveal together rather than
+strictly one after the other (consistent with two of the glyph's five UV
+cells crossing their own reveal threshold close together, the same shape
+Pulse's own texel-grid table shows for its four cells), and the total
+sequence runs in about 4 s of the asset's own clock rather than the ~6 s the
+measured thrust gate takes - both read exactly as the disc authors them, not
+smoothed into a tidier story. Only one circuit and one boot were checked.
 
 ## Coverage
 

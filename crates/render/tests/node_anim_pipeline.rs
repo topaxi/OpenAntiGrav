@@ -11,7 +11,7 @@
 //! which is exactly what happened to the texture-transform port's first
 //! attempt.
 
-use oag_render::mesh::{AnimNode, Bounds, DrawCall, GpuVertex, Model, Motion};
+use oag_render::mesh::{AnimNode, AnimTrack, Bounds, DrawCall, GpuVertex, Model, Motion};
 use oag_vex::vex;
 
 /// A quad, in the space of an `Anim Transform` that slides it along `z`.
@@ -85,6 +85,7 @@ fn moving_quad(xform: u32) -> Model {
         material_slots: Vec::new(),
         material_specular_exponent: Vec::new(),
         material_variants: Vec::new(),
+        material_anim: Vec::new(),
 
         vertex_colour_is_light: false,
 
@@ -249,7 +250,7 @@ fn the_texture_table_scrolls_a_surface() {
     model.anim_nodes = Vec::new();
     // `u` runs 0 to 0.5 over one second, which walks the quad off the black
     // texel and onto the white one.
-    model.anim_tracks = vec![vex::TexTransform {
+    model.anim_tracks = vec![AnimTrack::Psp(vex::TexTransform {
         offset: vex::TexTransformTrack {
             times: vec![0, 60],
             values: vec![(0, 0), (128, 0)],
@@ -261,7 +262,7 @@ fn the_texture_table_scrolls_a_surface() {
         seconds_per_key: 1.0 / 60.0,
         loop_seconds: 100.0,
         step: false,
-    }];
+    })];
 
     // How many pixels sample the *white* texel. A mean over the whole frame is
     // diluted by background and moves only a few percent; the count of lit

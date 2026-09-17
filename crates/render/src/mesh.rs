@@ -233,6 +233,17 @@ pub struct Model {
     /// circuit can be told from one that does not. Empty on every title but
     /// Wipeout HD - see `oag_rcs::rcsmaterial`.
     pub material_variants: Vec<Option<oag_rcs::rcsmaterial::Variant>>,
+    /// Which of [`Self::anim_tracks`] each material slot drives, plus one -
+    /// positionally beside [`Self::textures`] exactly as [`Self::material_slots`]
+    /// is, and `0` (no track) for a material with nothing authored to animate.
+    ///
+    /// Empty for every title but Wipeout HD: on the PSP/PS2 path
+    /// [`GpuVertex::anim`] is assigned per **batch** as [`build_class`] walks
+    /// them (a Pulse/Pure material's own `TEXOFFSET` block), not per material
+    /// slot, so this table has nothing to hold there. On HD it is what
+    /// [`mesh::rcs`] resolves an [`oag_rcs::rcsmodel::material::Curve`]
+    /// through - see `mesh::rcs::curve_track`.
+    pub material_anim: Vec<u32>,
     /// Whether [`GpuVertex::colour`] holds a **baked light** rather than a tint.
     ///
     /// True only for a Wipeout HD `.rcsmodel`, whose fragment programs *add*
@@ -283,7 +294,7 @@ pub struct Model {
     /// tracks, and identical tracks share an entry so the per-frame table the
     /// shader reads stays small. Order is first-seen, which keeps a rebuild of
     /// the same file byte-identical.
-    pub anim_tracks: Vec<vex::TexTransform>,
+    pub anim_tracks: Vec<AnimTrack>,
     /// One vertex range per node of the class this model was built for, in
     /// the same node-file order [`oag_vex::pads::volumes`] walks the same
     /// file with the same class id - [`Flap::vertices`] generalised from two
@@ -332,6 +343,7 @@ impl Model {
             material_slots: Vec::new(),
             material_specular_exponent: Vec::new(),
             material_variants: Vec::new(),
+            material_anim: Vec::new(),
 
             vertex_colour_is_light: false,
 
@@ -351,6 +363,9 @@ impl Model {
 
 mod lod;
 pub use lod::Lod;
+
+mod anim_track;
+pub use anim_track::AnimTrack;
 
 mod vertex;
 pub use vertex::{DEFAULT_SPECULAR_EXPONENT, GpuVertex, slots};
@@ -671,7 +686,7 @@ fn build_class(
     let mut transparent_draws: Vec<DrawCall> = Vec::new();
     let mut mesh_count = 0;
     let mut airbrakes: [Option<Flap>; 2] = [None, None];
-    let mut anim_tracks: Vec<vex::TexTransform> = Vec::new();
+    let mut anim_tracks: Vec<AnimTrack> = Vec::new();
     let mut node_vertex_ranges: Vec<std::ops::Range<u32>> = Vec::new();
 
     for (index, node) in nodes
@@ -751,12 +766,12 @@ fn build_class(
                     .and_then(|transform| {
                         anim_tracks
                             .iter()
-                            .position(|seen| seen == transform)
+                            .position(|seen| matches!(seen, AnimTrack::Psp(t) if t == transform))
                             .or_else(|| {
                                 // Past the shader's array, the surface draws
                                 // unanimated rather than the build failing.
                                 (anim_tracks.len() + 1 < ANIM_TRACK_LIMIT).then(|| {
-                                    anim_tracks.push(transform.clone());
+                                    anim_tracks.push(AnimTrack::Psp(transform.clone()));
                                     anim_tracks.len() - 1
                                 })
                             })
@@ -938,6 +953,7 @@ fn build_class(
         material_slots: Vec::new(),
         material_specular_exponent: Vec::new(),
         material_variants: Vec::new(),
+        material_anim: Vec::new(),
 
         vertex_colour_is_light: false,
 
