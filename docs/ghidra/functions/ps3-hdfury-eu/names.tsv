@@ -365,3 +365,6 @@
 0x003a83d8	function	Environment_RegisterLightingSchema	80	renderer.md
 0x0066c3c8	function	AnimCurve_SampleChannel	80	billboards.md
 0x0066b840	function	EdgeAnim_EvaluateClip	85	billboards.md
+0x002e02b8	function	WeaponPad_UpdateRefreshTimer	85	pads.md
+0x0086a730	data	WeaponPad_Importer_Vtable	85	pads.md
+0x0086a780	data	SpeedupPad_Importer_Vtable	85	pads.md
