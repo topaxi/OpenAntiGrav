@@ -24,9 +24,13 @@ with.
 # What this measures, and what it deliberately does not
 
 Whole frame excluding the HUD, the sky, the road surface and a distant-
-geometry band, each as a luminance mean/histogram, per-channel mean, clipped-
-white share (R,G,B all >= 250, `scripts/clipped-white.py`'s own threshold)
-and a bloom-halo ring profile around the brightest source pixels. A fifth
+geometry band, each as a luminance mean/histogram, per-channel mean, mean
+HSV saturation, a saturation-weighted circular mean hue (`lane/hd-track-
+lighting`'s own addition - luma alone missed the 2026-08-20 brightness
+defect and the maintainer's own report named "colors", not only
+brightness), clipped-white share (R,G,B all >= 250,
+`scripts/clipped-white.py`'s own threshold) and a bloom-halo ring profile
+around the brightest source pixels. A fifth
 output regresses aligned, non-HUD, non-craft, non-clipped midtone luminance
 between the two images against both an affine fit and a power-law fit - the
 affine slope/intercept names a magnitude or exposure error, the power-law
@@ -203,19 +207,79 @@ def luminance(arr):
     return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255.0
 
 
+# Added for the `lane/hd-track-lighting` sign-flip re-check: mean luma
+# matched the reference throughout the *original* 2026-08-20 brightness
+# investigation and was exactly why that defect survived review (see
+# renderer.md/hds-frame-was-too-bright-and-too-bloomy.md) - clipped-white
+# share was what discriminated there. The maintainer's own from-play report
+# this time named "lighting/illumination/**colors**", and the fixed
+# Amphiseum wall panel's own residual is described as reading "flatter/
+# greyer than the reference's cyan-white" - a saturation/hue complaint, not
+# a luminance one. So hue and saturation are measured per region alongside
+# luma rather than assumed to track it.
+def saturation(arr):
+    """HSV saturation, 0..1, vectorised."""
+    px = arr.astype(np.float64)
+    maxc = px.max(axis=-1)
+    minc = px.min(axis=-1)
+    return np.where(maxc > 0, (maxc - minc) / np.maximum(maxc, 1e-9), 0.0)
+
+
+def hue_deg(arr):
+    """HSV hue in degrees [0, 360), vectorised. Undefined (0) where sat is 0."""
+    px = arr.astype(np.float64)
+    r, g, b = px[..., 0], px[..., 1], px[..., 2]
+    maxc = px.max(axis=-1)
+    minc = px.min(axis=-1)
+    delta = np.maximum(maxc - minc, 1e-9)
+    hue_r = (60.0 * (((g - b) / delta) % 6.0))
+    hue_g = (60.0 * (((b - r) / delta) + 2.0))
+    hue_b = (60.0 * (((r - g) / delta) + 4.0))
+    hue = np.select([maxc == r, maxc == g], [hue_r, hue_g], default=hue_b)
+    return hue % 360.0
+
+
+def circular_mean_hue_deg(hue, weight):
+    """Saturation-weighted circular mean of a hue sample, or `None` if empty.
+
+    A plain arithmetic mean of an angle is wrong at the wrap (0/360 average
+    to 180, the opposite of either) - this averages the unit vectors
+    instead. Weighted by saturation so a low-saturation (near-grey) pixel,
+    whose hue angle is close to meaningless, does not out-vote a strongly
+    coloured one.
+    """
+    if weight.sum() <= 0:
+        return None
+    rad = np.deg2rad(hue)
+    x = float(np.sum(weight * np.cos(rad)))
+    y = float(np.sum(weight * np.sin(rad)))
+    if x == 0.0 and y == 0.0:
+        return None
+    return float(np.degrees(np.arctan2(y, x)) % 360.0)
+
+
 def region_stats(arr, luma, mask):
     count = int(mask.sum())
     if count == 0:
         return None
     px = arr[mask].astype(np.float64)
     lum = luma[mask]
+    sat = saturation(arr)[mask]
+    hue = hue_deg(arr)[mask]
     clipped = np.all(px >= CLIP, axis=-1)
     zero = np.all(px == 0, axis=-1)
     hist, edges = np.histogram(lum, bins=8, range=(0.0, 1.0))
+    # Hue is only meaningful for a pixel with some colour to it; a sat > 0.08
+    # floor keeps HUD anti-aliasing and near-grey concrete from dominating
+    # the circular mean with an arbitrary angle.
+    coloured = sat > 0.08
     return {
         "count": count,
         "mean_rgb": px.mean(axis=0),
         "mean_luma": float(lum.mean()),
+        "mean_sat": float(sat.mean()),
+        "coloured_pct": 100.0 * float(coloured.sum()) / count,
+        "mean_hue_deg": circular_mean_hue_deg(hue[coloured], sat[coloured]),
         "clipped_pct": 100.0 * clipped.sum() / count,
         "zero_pct": 100.0 * zero.sum() / count,
         "hist": hist,
@@ -465,10 +529,35 @@ def compare_one(game, pair_dir, out_dir, pose, dump_regions, bloom, cfg_root):
     ref_img = Image.open(png_path).convert("RGB")
     ours_img = Image.open(ours_path).convert("RGB")
     if ref_img.size != ours_img.size:
-        raise SystemExit(
-            f"pose {pose}: size mismatch, reference {ref_img.size} vs ours "
-            f"{ours_img.size} - resample before trusting any region stat"
-        )
+        margin = (abs(ref_img.width - ours_img.width),
+                  abs(ref_img.height - ours_img.height))
+        # `--size 1280x720` is our own canvas exactly; the reference went
+        # through `screenshot(trim=True)`'s crop on exact #000000
+        # (rpcs3-capture.md, "What is free, and what costs packets"), which
+        # measured 1278x718 here - a 1px margin either side, not a real
+        # framing difference. A center-crop of the larger side to match
+        # loses at most that same 1px rim, negligible against any region
+        # this script reports on; a gap past a few pixels is a real
+        # mismatch and still fails loud rather than silently cropping a
+        # meaningful chunk of frame away.
+        if margin[0] <= 8 and margin[1] <= 8:
+            w = min(ref_img.width, ours_img.width)
+            h = min(ref_img.height, ours_img.height)
+
+            def center_crop(img):
+                left = (img.width - w) // 2
+                top = (img.height - h) // 2
+                return img.crop((left, top, left + w, top + h))
+
+            print(f"pose {pose}: {margin[0]}x{margin[1]}px size margin "
+                  f"(reference {ref_img.size} vs ours {ours_img.size}) - "
+                  f"center-cropping both to {w}x{h}", flush=True)
+            ref_img, ours_img = center_crop(ref_img), center_crop(ours_img)
+        else:
+            raise SystemExit(
+                f"pose {pose}: size mismatch, reference {ref_img.size} vs ours "
+                f"{ours_img.size} - resample before trusting any region stat"
+            )
 
     ref_arr = np.asarray(ref_img)
     ours_arr = np.asarray(ours_img)
@@ -482,7 +571,7 @@ def compare_one(game, pair_dir, out_dir, pose, dump_regions, bloom, cfg_root):
 
     print(f"\n=== pose {pose} ({meta['track']}, fov {camera['fov_y_deg']:.2f} deg) ===")
     print(f"{'region':<28}{'side':<10}{'px':>9}{'mean R':>8}{'mean G':>8}"
-          f"{'mean B':>8}{'luma':>7}{'clip%':>8}{'zero%':>8}  histogram")
+          f"{'mean B':>8}{'luma':>7}{'sat':>6}{'hue':>6}{'clip%':>8}{'zero%':>8}  histogram")
     for name, mask in masks.items():
         for side, arr, luma in (("ours", ours_arr, ours_luma), ("reference", ref_arr, ref_luma)):
             stats = region_stats(arr, luma, mask)
@@ -490,9 +579,12 @@ def compare_one(game, pair_dir, out_dir, pose, dump_regions, bloom, cfg_root):
                 print(f"{name:<28}{side:<10}{'(empty)':>9}")
                 continue
             r, g, b = stats["mean_rgb"]
+            hue_txt = ("%5.0f" % stats["mean_hue_deg"]
+                       if stats["mean_hue_deg"] is not None else "    -")
             print(
                 f"{name:<28}{side:<10}{stats['count']:>9}{r:>8.1f}{g:>8.1f}"
-                f"{b:>8.1f}{stats['mean_luma']:>7.3f}{stats['clipped_pct']:>7.2f}%"
+                f"{b:>8.1f}{stats['mean_luma']:>7.3f}{stats['mean_sat']:>6.3f}"
+                f"{hue_txt}{stats['clipped_pct']:>7.2f}%"
                 f"{stats['zero_pct']:>7.2f}%  {format_hist(stats['hist'])}"
             )
 

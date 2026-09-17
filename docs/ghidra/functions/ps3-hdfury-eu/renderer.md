@@ -2854,6 +2854,165 @@ confidence score of their own - what has one is the gate-cancellation
 reading of *why* the move is small, which is unchanged at "hypothesis, not
 measurement" from the "exact wiring" paragraph above.
 
+### The Amphiseum sign flip is re-derived at a clean pose, and it reproduces - with a hue shift the Talon's Junction gap does not have (2026-09-17, `lane-hd-track-lighting`)
+
+**The measurement this thread's own "Open" list flagged as unusable is
+redone from scratch, and its conclusion survives.** The prior sign-flip
+finding (2026-09-13, `lane-hd-captures`) rested on `data/reference/hd-capture/
+amphiseum-matched/`, which is gone from disk - confirmed directly, `ls -la`
+shows no `amphiseum-matched`, `talons-matched` or `talons-ships` anywhere
+under `data/reference/hd-capture/` - and the thread's own words say the
+Amphiseum half of it was confounded anyway: captured already at 406-429
+km/h with no isolated grid pose, through `hd-frame-compare.py`'s Talon's-
+Junction-shaped region boxes, on a `sky` box that samples an indoor ceiling.
+None of that evidence is trusted here; every number below is from a fresh
+capture, this session, with the track field checked, not assumed.
+
+**Bug found first, and it explains why no lane has produced a working
+capture since 2026-09-15.** `scripts/rpcs3-drive.py`'s `cmd_capture` (and
+every other subcommand) reads `with session(args) as session:` - binding
+the `with` target to the same name as the function being called shadows it
+inside that statement's own scope, so `session(args)` resolves to the
+not-yet-assigned local and every subcommand raised `UnboundLocalError`
+before RPCS3 ever launched. Introduced in `0a181a67` (2026-09-15, the muted-
+config-copy commit), reproduced in two lines with no subprocess needed:
+
+```python
+def session(args):
+    ...
+def cmd_capture(args):
+    with session(args) as session:   # UnboundLocalError: session
+        ...
+```
+
+Fixed by renaming the module-level wrapper to `open_session`, leaving every
+`as session:` binding alone - `scripts/rpcs3-drive.py`, this session.
+
+**Reaching Amphiseum by `--nav` drops a `right` press about half the time,
+not consistently.** `Track Creation=right,right,...` (9 presses, the count
+`rpcs3-capture.md`'s own carousel table gives for The Amphiseum) landed on
+Talon's Junction (8) once and, with a 10th press added to compensate, on
+Modesto Heights (10) - i.e. the drop count is 0 or 1 per boot, not fixed,
+consistent with `navigate()`'s own doc comment ("the d-pad produces no
+`TTY.log` line ... this settles for a fixed pause per press rather than
+pretending to observe one"). Verifying the landed circuit against the
+pair's own `track` field, per `rpcs3-capture.md`'s existing warning, caught
+both wrong landings before any number was computed from them; a third boot
+at 9 presses landed correctly. Not fixed here - a real reliability gap in
+`navigate()`, left as `capture`'s own honest refusal-by-verification rather
+than patched on a two-sample guess.
+
+**What makes Amphiseum's opening seconds already 400+ km/h, answered.**
+`cmd_capture`'s shot loop holds `cross` for `--interval` seconds *before
+every shot including the first*, following `--load` seconds of free run
+after `InGame` - so shot 00 is never actually a t=0 pose, only however far
+`--load` + one `--interval` happens to land past whatever gate is holding
+the craft back. At `--load 20 --interval 2`, Amphiseum's craft sits
+completely still (identical eye position, six decimal places, across shots
+00-05) until `GO` appears on screen around shot 06 (t~32s post-`InGame`,
+22 km/h) and then accelerates hard: 22 -> 162 -> 317 km/h in the next two
+2-second intervals (shots 07, 08). The prior session's default `--load 50
+--interval 6` capture landed shot 00 well past that liftoff point with a
+full 6 seconds of held full thrust already spent, which is sufficient for
+this game's grid-launch acceleration curve to reach 400+ km/h - not a
+downhill start or a shorter countdown, both guessed and both wrong. Talon's
+Junction's own countdown is *shorter* relative to the same `--load`: its
+default-walk capture (this session, same `--load 20 --interval 2`) is
+already fully still at shot 00 (0 km/h, timer `0.00.0`) and stays that way,
+i.e. its countdown had not yet ended either, just further from `GO` than
+Amphiseum's happened to be read at the old default's timing - the two
+circuits were never on the same clock, the capture's own fixed `--load` just
+made it look that way.
+
+**The sign flip reproduces at a true 0 km/h grid pose on both circuits,
+same boot protocol, same fixed capture script, `--dump-regions` checked
+against each circuit's own composition.** `data/reference/hd-capture/
+amphiseum-grid/00.{png,json}` and `talons-grid-recheck/00.{png,json}`
+(gitignored, this session's own captures, `--load 20 --interval 2 --team
+feisar_c1 --hull-variant concept1`), both HUD-confirmed `0 KM/H`, timer
+`0.00.0`, camera picked cleanly (`unit_error` 5.2e-08 and lower, both
+registers). `scripts/hd-frame-compare.py --pose 00`, whole-frame excluding
+HUD and craft (the region that needs no per-circuit box shape - see below):
+
+| Circuit | ours luma | ref luma | ref - ours | ours sat | ref sat | ours hue | ref hue | hue gap |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Talon's Junction | 0.476 | 0.597 | **+0.121 (ours darker)** | 0.337 | 0.362 | 193 deg | 184 deg | 9 deg |
+| Amphiseum | 0.492 | 0.447 | **-0.045 (ours brighter)** | 0.162 | 0.188 | 256 deg | 102 deg | **154 deg** |
+
+Talon's Junction reproduces the established darker-frame gap (magnitude
+0.121 against the 0.13-0.24 range this thread's own table already carries,
+at a slower-than-before, fully static pose) with hue closely matched (9
+degrees, well inside compression noise) - consistent with the existing
+"not a hue/encoding issue on this circuit" reading. **Amphiseum flips sign
+on luma and, separately, carries a hue gap seventeen times larger than
+Talon's Junction's** - 154 degrees is most of the way to the opposite side
+of the colour wheel (the reference's dome interior reads warm gold/tan,
+this project's render reads cool blue-violet in the same region, confirmed
+by eye on both renders, not only in the aggregate). A second Amphiseum pose
+(shot 06, 22 km/h, `GO` banner on screen, camera barely moved from shot 00)
+reproduces both numbers closely (luma gap -0.053, hue gap 170 deg),
+ruling out a one-frame fluke or a state specific to the exact instant the
+race unlocks.
+
+**This is new evidence the Amphiseum gap and the Talon's-Junction gap are
+two different defects, not one gap with a per-circuit sign.** A shared
+global magnitude, offset, scale or exposure curve was already ruled out by
+the pre-existing quantile-quantile work; this session adds that the
+*character* of the two circuits' gaps differs too - one reads as
+brightness-only (hue intact), the other as a real colour-temperature shift
+on top of a smaller-magnitude, opposite-sign brightness gap. Whatever
+Amphiseum's own cause is, matching Talon's Junction's fix would not be
+expected to touch it, and vice versa.
+
+**Why hue, not only luma, this session.** The maintainer's own from-play
+report named "lighting/illumination/**colors**", and this thread's own
+"New 2026-09-13" entry already described the (now-fixed) grid-start wall
+panel's residual as reading "flatter/greyer than the reference's cyan-
+white" - a saturation/hue complaint. Mean luma also matched the reference
+throughout the original 2026-08-20 brightness investigation and was exactly
+why that defect survived review (clipped-white share discriminated there,
+not luma) - so luma agreeing or disagreeing was never assumed to be the
+whole story here either. `scripts/hd-frame-compare.py` gained mean HSV
+saturation and a saturation-weighted circular mean hue per region this
+session (unweighted circular mean of an angle is wrong at the 0/360 wrap;
+weighting by saturation keeps near-grey pixels, whose hue is close to
+meaningless, from outvoting strongly-coloured ones). No confidence score -
+straight pixel arithmetic on committed frames, the same footing every other
+number in this script's output already stands on.
+
+**Two region caveats, both surfaced by `--dump-regions` on Amphiseum's own
+frame rather than assumed from Talon's Junction's box shapes.** The `sky`
+box lands on the dome's interior ceiling structure, not atmospheric sky (no
+such thing exists in an indoor arena) - reported under that name for
+continuity with the rest of the script's output, not because the label is
+literally accurate on this circuit. The `road surface` boxes land on the
+side floor panels beside the ship rather than open track, plausible but
+unverified against a wider Amphiseum shot. **Neither caveat touches the
+whole-frame number above**: `"whole (excl HUD, craft)"` only subtracts the
+fixed HUD boxes and the centred craft box, both of which generalise across
+circuits (the HUD is a fixed overlay; the craft is always centre-frame) -
+it needed no Amphiseum-specific box work at all, which is why it is the
+number this section leads with.
+
+**A harness gap fixed along the way**: `hd-frame-compare.py` required an
+exact pixel-size match between the reference PNG and this project's own
+render, and raised on every pair this session captured - the reference
+goes through `screenshot(trim=True)`'s crop-on-exact-`#000000`
+(`rpcs3-capture.md`), which measured 1278x718 against this project's own
+1280x720 canvas, a 1px margin per side rather than a real framing
+difference. Center-crops both images to the smaller shared size when the
+gap is 8px or less per axis; still raises loud past that, since a bigger
+gap is a real mismatch this script should not silently paper over.
+
+**Not run this session**: the `track_surface` per-material lead (this
+thread's own sharpest one before today) and anything touching
+`prelitScale`/`prelitPower`/`specular_exponent` - out of scope per this
+lane's own brief until the sign question was settled, and the settlement
+above argues for chasing Amphiseum's hue gap as a *separate* lead from
+Talon's Junction's magnitude gap rather than assuming one fix reaches both.
+`mesh/`, `mesh.wgsl`, `emissive.rs` and `sky_cube.rs` were read this session
+but not yet changed.
+
 ### The 14 surface binds, read (2026-08-20)
 
 `FUN_005a40f8(ctx, depth, colour0, colour1, colour2, colour3)` takes **pointers
