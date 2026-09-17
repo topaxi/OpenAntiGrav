@@ -264,5 +264,14 @@ pub(super) fn load_bodies(
                 .to_string(),
         );
     }
+    if models.plasma_ball.is_some() && !blast_models::HD_PLASMA_BALL_DRAWN {
+        report.push(
+            "HD_plasma_ball loaded, not drawn: it resolves through this \
+             engine's one shared lit shader path with no additive/glow \
+             route, and renders as an opaque black shard - see \
+             docs/formats/rcsmaterial.md"
+                .to_string(),
+        );
+    }
     bodies
 }

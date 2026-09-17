@@ -102,6 +102,25 @@ pub(super) const HD_BLAST_HIDE_AT_SECONDS: f32 = 1.3;
 /// once a reading explains the scale.
 pub(super) const HD_BLAST_MODELS_DRAWN: bool = false;
 
+/// **`false` for the same reason, a different cause.** `HD_plasma_ball`
+/// loads and reports a real triangle count and a resolved material, but
+/// that material resolves through `mesh::rcs`'s one shared lit shader path
+/// (`mesh.wgsl`) - already documented (`docs/formats/rcsmaterial.md`) as
+/// missing a Lambert diffuse for most HD material families, a "missing
+/// material, not a missing light". A bolt head is very likely an
+/// additive/glow material on the disc, and
+/// this engine has no additive shader path for `mesh::rcs` geometry at all
+/// (every weapon body, this one included, draws through the same
+/// opaque-painted [`mesh_render::TRANSPARENT_BLEND`] pipeline the Rocket's
+/// hull does - see `scene::weapon_models::build`) - so what a player sees is
+/// an opaque black wedge on the craft's nose, not a glowing bolt. Building
+/// that shader path is the general fix this thread already tracks and is
+/// out of this lane's own evidence; until then this stays `false` and the
+/// bolt's own existing glow (`WO_PLASMA_HEAD`, a `Data\Psys` effect every
+/// source already rides) carries the visual alone, as it did before this
+/// session.
+pub(super) const HD_PLASMA_BALL_DRAWN: bool = false;
+
 /// The three models' own `(target, rate)` ease pair, in
 /// [`PlasmaBlastModels`]'s own ordinal order - ring, sphere, halo - read off
 /// `WeaponExplosions_Construct`/`_Draw`. Confidence 88 for the rates and
@@ -173,7 +192,15 @@ impl PlasmaBlastDrawables {
             halo: build_one(models.halo)?,
             hemisphere2: build_one(models.hemisphere2)?,
             hemisphere1: build_one(models.hemisphere1)?,
-            ball: build_one(models.ball)?,
+            // See `HD_PLASMA_BALL_DRAWN`'s own doc comment: the model still
+            // loads (below), only this pool - and so the draw and the
+            // billboard-suppression gate, both keyed on this pool's own
+            // emptiness - stays empty.
+            ball: build_one(if HD_PLASMA_BALL_DRAWN {
+                models.ball
+            } else {
+                None
+            })?,
         })
     }
 }
