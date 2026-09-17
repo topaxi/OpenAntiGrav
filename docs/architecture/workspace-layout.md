@@ -427,3 +427,51 @@ exceeds **300s**, as a ratchet over a `BASELINE` that may shrink and not grow.
 The ceiling is deliberately loose - a nextest duration is wall-per-test under
 load, not isolated CPU, which is why these durations sum to 4,639s against
 3,143s of real CPU - so it gates gross regressions rather than drift.
+
+### Re-measured 2026-09-17, isolated: the split still holds, and a contended run is not evidence
+
+A `lane/test-tail-split` pass was briefed against numbers that turned out to be
+a contended `just test-data` run overlapping a concurrent lane's own gate - 6
+of the ai_roll tests read 212-350s and `spawn_heading`'s forward test read
+243s, which look like ceiling breaches. They were not: `CEILING` is checked
+against a nextest duration that is wall-per-test-under-load by design (see
+above), and this project has now cost real time twice to the same
+misreading - the 2026-09-06/09-09 history this file already records, and this
+one.
+
+Measured instead with the machine confirmed idle - CPU busy 6.9-14.1% over a
+3s `/proc/stat` sample, zero `nextest`/`rustc`/`rpcs3` processes running, no
+other lane active - rather than by load average, which lags a finished run by
+several minutes and read 7.0 at the moment CPU busy was 12.6%. **Load average
+is a lagging indicator and the wrong signal for "is the machine free to
+measure"; an instantaneous CPU-busy sample plus a process check is the right
+one.**
+
+`ai_roll_ground_truth`'s six full-grid tests, each its own process (`cargo
+nextest run -p oag-game --run-ignored all -E 'binary(ai_roll_ground_truth)'`):
+
+| test (tier pair, seed) | 2026-09-13 | 2026-09-17 (idle) |
+| --- | --- | --- |
+| skilled/novice, held-out | within 158-165s band | **88.8s** |
+| skilled/novice, default | within 158-165s band | **91.5s** |
+| ace/elite, held-out | within 158-165s band | **96.8s** |
+| ace/elite, default | within 158-165s band | **97.9s** |
+| elite/skilled, default | within 158-165s band | **99.3s** |
+| elite/skilled, held-out | within 158-165s band | **99.7s** |
+
+`spawn_heading_ground_truth` (`-E 'binary(spawn_heading_ground_truth)'`):
+forward **43.3s** (was 81s), reversed **37.1s**; the three per-source tests
+5.5-31.2s (was 37s max). All comfortably under both the historical split
+figures and `CEILING`.
+
+**No cost regression despite the weapons work landed since 2026-09-13**
+(rocket, mine, plasma, disruptor, LeachBeam slowdown, wrecked-opponent
+respawn, and the multiplayer per-slot `Race::tick` input change) - if
+anything these tests got faster, plausibly from unrelated CPU-cost
+reductions elsewhere in the same window rather than from anything these
+tests touch. **The split from 2026-09-09 needs no further work**: `ai_roll`
+has no valid split beyond the one it already has (its own doc comment and
+`git show 6f7f7711` already argue why a per-circuit split would change the
+assertion rather than merely partition it), and `spawn_heading` is already
+split on both its available axes. Every `check-test-budget` red seen this
+session was contention, not drift.
