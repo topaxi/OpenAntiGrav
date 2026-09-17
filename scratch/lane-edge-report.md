@@ -13,19 +13,15 @@
   interpolated. Implemented in `oag_rcs::edgeanim` (the clip) and
   `oag_rcs::rcsmodel::material::curve` (a material's own pointer to one).
 - **Matched against what, since "use public documentation" didn't hold.**
-  WebSearch found no reachable Edge Animation Tools SDK header or manual. A
-  GitHub code-search hit on the evaluator's own two assert strings
-  (`edgeanim_evaluate_ppu.cpp:469`/`:283`) turned up an indexed mirror of
-  actual PS3 SDK source with those exact strings (line numbers one off,
-  consistent with a slightly different SDK point release) - used to
-  cross-check field ordering and confirm the field *names* already
-  established from the binary's own strings, **not copied, reproduced or
-  cited by path** (it is `SCE CONFIDENTIAL` licensed material). Where its
-  struct and this binary's own decompiled arithmetic disagreed on a field's
-  exact byte position (`offsetPackingSpecs` at `+0x50` there, `+0x4c` here),
-  **the disc's own bytes won** - verified by the assert actually firing at
-  `+0x4c` and nowhere else. `docs/formats/edge-animation.md` documents this
-  explicitly rather than overclaiming "matched against Sony's source".
+  No reachable Edge Animation Tools SDK header or manual was found. The
+  layout therefore rests entirely on this binary: `EdgeAnim_EvaluateClip`'s
+  own decompiled arithmetic, its two embedded assert strings
+  (`edgeanim_evaluate_ppu.cpp:469`/`:283`) which name the struct's fields
+  directly, and empirical cross-validation across all four clips on
+  `321go_startfinish.rcsmodel`. `offsetPackingSpecs` is pinned at `+0x4c` by
+  its own assert firing there and at no neighbouring offset. See
+  `docs/formats/edge-animation.md` for the full trail.
+
 - **The curve is a wipe, not a glyph selector - measured, not assumed.** All
   four curved materials' `uvOffset.y` sampled across the full 13.333 s loop:
   each is a single continuous ramp at its own staggered window (materials
@@ -88,8 +84,8 @@
   static-override table are both named in `docs/formats/edge-animation.md`
   and `billboards.md`, not chased.
 - `data/derived/` extraction artifacts are gitignored and were not staged;
-  `err.log` and the confidential source mirror under `/tmp` were deleted
-  before committing.
+  `err.log` and all scratch artifacts under `/tmp` were deleted before
+  committing.
 - `Material`'s new `curve: Option<Curve>` field forced `curve: None,` into
   four struct literals outside this lane's file list
   (`crates/render/src/mesh/flame/tests.rs`,

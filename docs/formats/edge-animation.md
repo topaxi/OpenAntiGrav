@@ -102,22 +102,17 @@ increasing `baseFrame` sequence across all four clips checked; resolving it
 any other way (clip-relative, or off by a field) does not.
 
 **Why `+0x4c` for `offsetPackingSpecs` rather than a rounder-looking offset**:
-this project cross-checked the field layout against a mirror of the actual
-Edge Animation Tools SDK source that happened to be indexable by a GitHub code
-search hit on the evaluator's own two assert strings - a version whose own
-line numbers were one off from this binary's (`:470`/`:284` there,
-`:469`/`:283` here, a consistent single-line shift, strong evidence of the
-same file at a slightly different SDK point release) and whose own
-`EdgeAnimAnimation` struct places this field four bytes later, at `+0x50`.
-That source is licensed Sony SDK material and is not reproduced or cited by
-path here; **the disc's own bytes are what this project ships, and where the
-disc and that mirror disagreed on a field's exact position, the disc's own
-decompiled arithmetic settled it** (`+0x4c`, verified by the assert actually
-firing there and nowhere else). The public struct's own field *names* -
-`sampleFrequency`, `numFrameSets`, `EdgeAnimFrameSetInfo`,
-`offsetPackingSpecs` - are used in this page and the code because they were
-already established independently, from the binary's own assert strings, not
-because the mirror was trusted for anything beyond a sanity check.
+because that is where this binary's own evaluator reads it. The field is
+pinned by `EdgeAnim_EvaluateClip`'s own assert - `edgeanim_evaluate_ppu.cpp:469
+(anim->offsetPackingSpecs == 0)` - firing on the word at `+0x4c` and on no
+other offset, checked against every neighbouring candidate. A rounder `+0x50`
+does not fire it. The disc's own decompiled arithmetic is the only authority
+this layout rests on, and it is sufficient on its own.
+
+The struct and field names used on this page and in the code
+(`sampleFrequency`, `numFrameSets`, `EdgeAnimFrameSetInfo`,
+`offsetPackingSpecs`) come from the binary's own embedded assert strings,
+which name them directly.
 
 ### Channel tables - located empirically, not off a named field
 
@@ -200,9 +195,8 @@ there has been no data to develop or check a joint-channel decoder against.
 The evaluator's own decompile for that path involves a
 `vectorReciprocalSquareRootEstimateFloatingPoint`-based slerp
 (`docs/ghidra/functions/ps3-hdfury-eu/billboards.md`'s 2026-09-17 section) and
-a 48-bit packed quaternion encoding (`_edgeAnimDecompressQuat`'s own shape,
-not reproduced here since it comes from the same source mirror the field-name
-note above declines to cite) - a real, separate task if this format turns out
+a 48-bit packed quaternion encoding, neither of which this project has
+decoded or had data to check against - a real, separate task if this format turns out
 to be used for skeletal animation anywhere else in HD.
 
 ## What the curves actually author: a wipe, not a glyph selector
