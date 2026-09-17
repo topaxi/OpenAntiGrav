@@ -290,6 +290,33 @@ pub mod ships {
     }
 }
 
+/// Where Pulse keeps each weapon's own body model.
+///
+/// **`oag_pure::TITLE` restates these same five literals rather than
+/// depending on this crate at runtime** - a title package does not depend on
+/// another outside `[dev-dependencies]`, per ADR-0022; `oag_2048::TITLE`
+/// carries no restatement at all, since 2048's tree is Vita/PSP2 and none of
+/// these paths is checked to resolve there. Moved here 2026-09-17 off
+/// `oag_game::race`'s own `ROCKET_MODEL_ENTRY` and friends, which stay as
+/// `pub use` aliases so no doc link or call site moved - see that module's
+/// own doc comment for the confidence and evidence each entry carries; only
+/// the location changed, not the reading.
+pub const WEAPON_MODELS: &oag_title::weapons::WeaponModels = &oag_title::weapons::WeaponModels {
+    rocket: Some(r"Data\Weapons\Rocket.vex"),
+    mine: Some(r"Data\Weapons\Pulse_Mine.vex"),
+    bomb: Some(r"Data\Weapons\Pulse_Bomb.vex"),
+    cannon: Some(r"Data\Weapons\pulse_muzzleflash.vex"),
+    // Pulse rides the charge/travel glow alone; it authors no bolt-head mesh.
+    plasma_ball: None,
+    plasma_blast_pulse: Some(oag_title::weapons::PulsePlasmaBlast {
+        halo: r"Data\Weapons\pulse_plasma_halo1.vex",
+        hemisphere2: r"Data\Weapons\pulse_plasma_hemisphere2.vex",
+        hemisphere1: r"Data\Weapons\pulse_plasma_hemisphere1.vex",
+    }),
+    plasma_blast_hd: None,
+    leachbeam_ball: None,
+};
+
 #[cfg(test)]
 mod tests {
     use super::ships;

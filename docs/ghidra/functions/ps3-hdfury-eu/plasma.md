@@ -262,3 +262,79 @@ comparison table rather than a claim about the models.
 - Whether the HD handling XML carries `weapon_damage_multiplier` at all.
 - What `0x00126d80`'s `(1, 0xffff)` gate means, i.e. when the two `1.3 s`
   windows actually get written (see the hedge above).
+
+## 2026-09-17: implementation pass - the Collapse/Draw split, and both `.pob` internal names confirmed
+
+Landing the bolt and the explosion in `oag-game` (`crates/game/src/race/blast_models.rs`,
+`crates/title/src/weapons.rs`) forced two checks past what this page's
+`WeaponExplosions_Start`/`_Collapse`/`_Draw` section already established.
+
+**`WeaponExplosions_Collapse` (`0x00127770`) and `WeaponExplosions_Draw`
+(`0x001270b8`) were re-decompiled to settle an apparent contradiction**: this
+page's own table says the ring is "advanced while `age <= 1.7 s`" but
+Collapse "hides all three" at `1.3 s`. Both are true and answer different
+questions. Collapse's own body clears bit `0x4` at offset `+0x34` on all
+three model nodes (`&= 0xfffffffb`) - a node-visibility flag, distinct from
+anything `Draw` reads: `Draw`'s three blocks are gated purely on `age`
+against each model's own window (`PTR_DAT_008aa258[0/1/2]` = 1.7/1.3/1.3 s)
+and never touch `+0x34` at all, and the transform-write helper `Draw` calls
+(`_opd_FUN_00327500`) touches a different bit range (`0x0f000000`, a "dirty"
+nibble) on the same offset. So the ring's own ease keeps computing between
+1.3 s and 1.7 s, and nothing shows it: Collapse's node-hide fires first and
+`Draw`'s per-model window is not what draws or hides anything on screen.
+**Implemented as**: all three models draw with the recovered ease from `0 s`
+and go invisible (`hd_ease` forced to `[0.0; 3]` for the draw alone, object
+state unaffected) from `1.3 s` to the `3.5 s` object reap - i.e. HD's own
+node-hide, not the per-model window. Confidence 85 stands, now corroborated
+rather than merely read.
+
+**`WO_PLASMA_LIGHTNING_EXPAND`/`_COLLAPSE`, confirmed against the disc's own
+`.pob` internal name field, not just the fourcc.** `scripts/psarc.py cat` on
+`DATA02`'s `wo_plasma_lightning_expand.pob`/`_collapse.pob` and a raw `xxd`
+of the header shows the ASCII name field reading `WO_PLASMA_LIGHTNING_EXPAND`
+and `WO_PLASMA_LIGHTNING_COLLAPSE` byte for byte - both load and resolve
+their emitters live (`oag-game`'s own loader report: 1 emitter each).
+
+**`0x00121418` (`Plasma_PostUpdate`'s visual-placement call, "not
+decompiled" in the table above) was opened but not resolved to a name.**
+Confidence stays below 70 by this project's own rubric, so it is not
+renamed. It branches on a byte at `param_1+0x50`: when clear, a bare
+placement (`_opd_FUN_00327500(node, param_1+0x150, 0)`); when set, a full
+Gram-Schmidt basis build off two vectors read from `param_1+0x160`/`+0x170`
+(normalize, cross, cross again - the same shape `Race::projectile_model_matrices`
+already builds off velocity and a reference), consistent with a
+velocity-plus-carried-normal basis but not enough to say which field is
+which without more work. **The engine implementation uses velocity alone**
+(`Race::plasma_ball_model_matrices`, reusing the Rocket's own helper) -
+chosen, not measured, and said so in that function's own doc comment.
+
+**Observed, not yet explained: the picture is oversized.** `HD_plasma_ring`'s
+own target scale (100.0) produces a sphere that fills most of the frame at
+normal chase-camera distance - screenshot at
+`/home/topaxi/.cache/oag/drive/reports/hd-weapon-models-screenshots/t200-detonation.png`
+(kept alongside this thread's report). The number itself is read at
+confidence 88 and re-confirmed this session; the loader report shows every
+one of the three models resolving a real material through the lit race pass
+(not the "no material" flat-shading gap the shield shell has), so the size
+is not a missing-material artifact. The likeliest explanation is still the
+one already on this page - a base-scale mismatch between what this session
+assumed (`cur` as a literal uniform-scale multiplier on the model's own
+authored unit) and what the original composes it against - but nothing this
+session did settles which. Left as an open finding rather than a silent
+correction, per `CLAUDE.md`'s rule against inventing a fix with no evidence
+behind it.
+
+**Gated off the same day, before merge.** At `t200`/`t400` the chase camera
+sits *inside* the 100-scale sphere for a real span of its 3.5 s life, which
+reads as the whole frame going solid grey then tinted purple - worse than
+the billboard fallback it replaces, and a regression by CLAUDE.md's own
+"draw nothing and say so" rule. `blast_models::HD_BLAST_MODELS_DRAWN`
+(`false`) now gates the ring/sphere/halo trio's *draw* off while every other
+Plasma line here keeps running unaffected: the bolt's own head, both
+`WO_PLASMA_LIGHTNING_EXPAND`/`_COLLAPSE` triggers, and this trio's own
+age/ease tracking (`Race::advance_plasma_blast_models`) - so the next reader
+only has to flip the constant once the scale composition above is
+understood. The load report now says so explicitly on an HD source: "HD
+plasma explosion models loaded, not drawn: the recovered scale ease
+produces a screen-filling sphere - see plasma.md's 2026-09-17 'the picture
+is oversized' section."

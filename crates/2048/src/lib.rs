@@ -87,6 +87,10 @@ pub const TITLE: &Title = &Title {
         race: r"Data\XML\weaponstats_Race_2048.xml",
         elimination: Some(r"Data\XML\weaponstats_Elimination_2048.xml"),
     },
+    // Unread, like `exhaust` and `flare` above: 2048 is a Vita/PSP2 asset
+    // tree, not Pulse's, so reusing Pulse's `.vex` paths the way `oag_pure`
+    // does would be a claim this build has not checked.
+    weapon_models: &oag_title::weapons::WeaponModels::EMPTY,
 };
 
 /// Paths inside the packages.

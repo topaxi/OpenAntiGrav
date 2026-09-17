@@ -474,6 +474,41 @@ pub const DEFAULT_TRACK: &str = "/data/environments/talons_junction/track.vex";
 /// Pulse's schema. Nothing about Assegai is HD's own preference.
 pub const DEFAULT_TEAM: &str = "assegai";
 
+/// Where Wipeout HD/Fury keeps each weapon's own body model.
+///
+/// **Every entry is the executable's own string**, not a guess: `strings -a`
+/// over `EBOOT.elf` names every one of these under `Data\Weapons\`, and each
+/// resolves on `hdfury-ps3-eu-dec.iso` as a `.vex`/`.rcsmodel` pair (checked
+/// against the full entry dump, `/data/weapons/<name>.vex` and
+/// `/data/weapons/<name>.rcsmodel` both present, lowercase as every PSARC
+/// entry is - see `docs/ghidra/functions/ps3-hdfury-eu/plasma.md`).
+/// `mesh::rcs::build` is what a PS3 `.vex`'s external-geometry branch needs
+/// for all of them - see `oag_game::race::load::weapon_models`.
+pub const WEAPON_MODELS: &oag_title::weapons::WeaponModels = &oag_title::weapons::WeaponModels {
+    rocket: Some(r"Data\Weapons\hd_Rocket.vex"),
+    mine: Some(r"Data\Weapons\HD_Mine.vex"),
+    bomb: Some(r"Data\Weapons\HD_Bomb.vex"),
+    // Named `muzzleflash` on both titles that author a Cannon round model -
+    // see `oag_pulse::race::WEAPON_MODELS`'s own field for the same quirk on
+    // Pulse's file.
+    cannon: Some(r"Data\Weapons\hd_muzzleflash.vex"),
+    // `PlasmaManager_Update` places this every tick the bolt is live or
+    // charging - see `docs/ghidra/functions/ps3-hdfury-eu/plasma.md`.
+    plasma_ball: Some(r"Data\Weapons\HD_plasma_ball.vex"),
+    plasma_blast_pulse: None,
+    // `WeaponExplosions_Start` (`0x00127cd0`) loads these three, in this
+    // order, into `+0x54`/`+0x58`/`+0x5c` - see plasma.md's own "detonation"
+    // section for the ease each one is scrubbed by.
+    plasma_blast_hd: Some(oag_title::weapons::HdPlasmaBlast {
+        ring: r"Data\Weapons\HD_plasma_ring.vex",
+        sphere: r"Data\Weapons\HD_plasma_sphere.vex",
+        halo: r"Data\Weapons\HD_plasma_halo.vex",
+    }),
+    // Named, not wired - see `oag_game::race::load::weapon_models`'s own doc
+    // comment for what placing this would need and where reading it stopped.
+    leachbeam_ball: Some(r"Data\Weapons\hd_leachbeam_ball_bloomring.vex"),
+};
+
 #[cfg(test)]
 mod tests {
     use super::*;

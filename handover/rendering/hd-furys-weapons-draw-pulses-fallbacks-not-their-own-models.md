@@ -9,38 +9,92 @@ which resolves on the PS3 disc, so on HD every projectile falls back to
 stand-in - and only the `.pob` effects whose names HD shares
 (`WO_ROCKET_FLARE`, `WO_MISSILE_HEAD`, `WO_PLASMA_HEAD`, ...) play.
 
-What HD authors instead, all in DATA02 (`.vex` + `.rcsmodel` pairs, load
+**2026-09-17, same day: the per-title axis landed, and with it the Rocket,
+Mine, Bomb and Cannon round all draw their own HD model too, not only
+Plasma.** `oag_title::weapons::WeaponModels` is a new field on `Title`
+(`crates/title/src/weapons.rs`), filled by all four title crates;
+`load/weapon_models.rs::load` takes the PS3 external-geometry branch
+`crate::livery::shield_model` already had (`mesh::geometry_is_external` +
+`mesh::rcs::build`), so every entry below except the two still-open rows
+now resolves off its `.vex`/`.rcsmodel` pair on a real HD race rather than
+falling back to a billboard. Verified from the loader's own report line at
+`--give <weapon>`: `hd_Rocket.vex`, `HD_Mine.vex`, `HD_Bomb.vex` and
+`hd_muzzleflash.vex` (the Cannon round's own body - not the two hand-drawn
+quads, which `cannon-quads` owns separately) all report a real triangle
+count and material, not "falls back to a billboard".
+
+What HD authors, all in DATA02 (`.vex` + `.rcsmodel` pairs, load
 through `oag_render::mesh::rcs::build` the way a craft hull does; full entry
 dump was taken with `scripts/psarc.py list` over all seven PSARCs):
 
 | weapon | models | HD-only effects |
 | --- | --- | --- |
-| Plasma | `HD_plasma_ball` (the **bolt head**), `HD_plasma_ring`/`_sphere`/`_halo` (the explosion, ramps read: targets 100/7.1/7.0, rates 0.01/0.3/0.2, windows 1.7/1.3/1.3 s, 3.5 s life, [ps3-hdfury-eu/plasma.md](../../docs/ghidra/functions/ps3-hdfury-eu/plasma.md)) | `WO_PLASMA_CHARGING`, `WO_PLASMA_LAUNCH`, `WO_PLASMA_LIGHTNING_EXPAND` then `_COLLAPSE` at 1.3 s (trigger read on that page) |
-| Cannon | `hd_muzzleflash`, `detonator_cannonbolt` (Fury) | `WO_CANNON_MUZZLEFLASH`, `WO_CANNON_HOTSPOT`, `WO_CANNON_SPARKS_DETONATOR` |
-| LeachBeam | `hd_leachbeam_ball_bloomring` | `WO_LEACHBEAM_LAUNCH`/`_EMIT`/`_ABSORB`/`_BREAK`/`_HIT_TARGET`/`_HITSHELL`/`_BALL_SPARKS`/`_CHARGING_SPARKS`/`_ENERGY_SPRAY` |
-| Rocket / Missile | `hd_Rocket`, `HD_missile_ball_bloomring`, `HD_missile_explosion` | `WO_MISSILE_LAUNCH` |
-| Mine / Bomb | `HD_Mine`, `HD_Mine_halo`, `HD_Bomb`, `HD_bomb_*` (halo, sphere, sphere_white, sphere_bloomring, shockwaves), `bomb_shockwave` | `WO_BOMB_RAYS`, `WO_BOMB_SHOCKWAVE_FLASH`, `WO_BOMB_EXPLO_DETONATOR` |
+| ~~Plasma~~ **bolt done; blast gated** | `HD_plasma_ball` (the **bolt head**, drawn), `HD_plasma_ring`/`_sphere`/`_halo` (the explosion, ramps read: targets 100/7.1/7.0, rates 0.01/0.3/0.2, windows 1.7/1.3/1.3 s, 3.5 s life, [ps3-hdfury-eu/plasma.md](../../docs/ghidra/functions/ps3-hdfury-eu/plasma.md) - **loaded and tracked, draw gated off, `HD_BLAST_MODELS_DRAWN = false`, see Open**) | `WO_PLASMA_CHARGING`, `WO_PLASMA_LAUNCH` still unwired; `WO_PLASMA_LIGHTNING_EXPAND`/`_COLLAPSE` wired and confirmed against the disc's own `.pob` internal name field, not just the fourcc |
+| ~~Rocket / ~~Missile | ~~`hd_Rocket`~~ **model wired**, `HD_missile_ball_bloomring`, `HD_missile_explosion` still open | `WO_MISSILE_LAUNCH` |
+| ~~Mine / ~~Bomb | ~~`HD_Mine`~~, ~~`HD_Bomb`~~ **models wired**; `HD_Mine_halo`, `HD_bomb_*` (halo, sphere, sphere_white, sphere_bloomring, shockwaves), `bomb_shockwave` still open | `WO_BOMB_RAYS`, `WO_BOMB_SHOCKWAVE_FLASH`, `WO_BOMB_EXPLO_DETONATOR` |
+| Cannon | `hd_muzzleflash` **round body wired**, own to `cannon-quads`; `detonator_cannonbolt` (Fury) still open | `WO_CANNON_MUZZLEFLASH`, `WO_CANNON_HOTSPOT`, `WO_CANNON_SPARKS_DETONATOR` - `cannon-quads`'s lane |
+| LeachBeam | `hd_leachbeam_ball_bloomring` **entry named** (`oag_title::weapons::WeaponModels::leachbeam_ball`), not drawn - see Next Steps | `WO_LEACHBEAM_LAUNCH`/`_EMIT`/`_ABSORB`/`_BREAK`/`_HIT_TARGET`/`_HITSHELL`/`_BALL_SPARKS`/`_CHARGING_SPARKS`/`_ENERGY_SPRAY` |
 
 The executable's own load-path strings name every model above
 (`strings -a data/extracted/ps3/hdfury-eu/PS3_GAME/USRDIR/EBOOT.elf | grep
-'Data.Weapons'`), which is the evidence a model *is* loaded by the game; the
-trigger for each effect is the RE, and the Plasma's is done.
+'Data.Weapons'`), which is the evidence a model *is* loaded by the game.
 
 ## Open
 
-- Weapon model entries need a per-title axis (`oag_title`/`oag_hd`, the
-  shape `weapons` XML names already take), not a Pulse constant.
-- Which HD blast draws which model set: the Plasma is read; the Bomb's five
-  models and the Missile's explosion are not.
+- **The Plasma explosion is oversized on screen** - `HD_plasma_ring`'s own
+  target scale (100.0) produces a sphere that fills most of the frame at
+  normal chase-camera distance. The number is read at confidence 88 and the
+  loader confirms every one of the three models resolves a real material
+  (not the "no material" flat-shading gap the shield shell has), so this is
+  not a missing-material artifact - likeliest a base-scale mismatch between
+  a literal `cur`-as-uniform-scale reading and what the original composes
+  it against. See plasma.md's own 2026-09-17 section and the screenshot at
+  `/home/topaxi/.cache/oag/drive/reports/hd-weapon-models-screenshots/t200-detonation.png`.
+  Left as an open finding, not corrected on a guess. **Gated off before
+  merge, same day**: the chase camera sits inside the sphere for real spans
+  of the blast's life, tinting the whole frame - a regression, not a
+  faithful oversized picture. `blast_models::HD_BLAST_MODELS_DRAWN =
+  false` stops the trio's *draw* only; the bolt's head, both
+  `WO_PLASMA_LIGHTNING_*` triggers and the trio's own age/ease tracking are
+  unaffected, and the load report says why on an HD source. See plasma.md's
+  own addendum.
+- **LeachBeam's ball is named, not placed.** What positions
+  `hd_leachbeam_ball_bloomring` each tick was not read this session -
+  reading stopped before opening any LeachBeam-specific function on
+  `/ps3-hdfury-eu/EBOOT.elf`. No address to cite yet; the next session
+  starts from `weapons.md`'s own LeachBeam section if one exists, or from a
+  fresh string/xref sweep for `leachbeam`.
+- **Cannon's own round body model is wired** (`hd_muzzleflash.vex`, shared
+  spelling with Pulse's own naming quirk); the two hand-drawn quad textures
+  and the three Cannon effects are `cannon-quads`'s own lane, not touched
+  here.
+- Missile's own explosion pair (`HD_missile_ball_bloomring`,
+  `HD_missile_explosion`) and the Bomb's five-model detonation
+  (`HD_Mine_halo`, `HD_bomb_*`) are named on the executable's own strings
+  but neither their load order nor their per-tick placement was read.
+- `0x00121418` (`Plasma_PostUpdate`'s visual placement) suggests a
+  velocity-plus-carried-normal basis for the bolt, not velocity alone, but
+  is not resolved past confidence ~55 - stays unrenamed per `CLAUDE.md`'s
+  below-70 rule. The engine draws the bolt velocity-only for now, same as
+  the Rocket, documented as chosen rather than measured.
 
 ## Next Steps
 
-1. Plasma first: per-title entries, `HD_plasma_ball` on the bolt,
-   the ring/sphere/halo trio on `blast_models.rs`'s HD branch with the
-   recovered ease, `WO_PLASMA_LIGHTNING_EXPAND`/`_COLLAPSE` on the recovered
-   trigger. Screenshot at player size, several frames, `--give plasma` on the
-   HD image.
+1. ~~Plasma first: per-title entries, `HD_plasma_ball` on the bolt, the
+   ring/sphere/halo trio on `blast_models.rs`'s HD branch with the recovered
+   ease, `WO_PLASMA_LIGHTNING_EXPAND`/`_COLLAPSE` on the recovered
+   trigger.~~ **Landed 2026-09-17** - see plasma.md's own dated section for
+   what the implementation pass itself found (the Collapse/Draw split, the
+   oversized picture).
 2. Cannon (`hd_muzzleflash` + the two muzzle effects) and LeachBeam next -
-   read the triggers on `/ps3-hdfury-eu/EBOOT.elf` before wiring any.
-3. Rocket/Missile/Mine/Bomb models by the same per-title path; effects only
-   as their triggers are read.
+   read the triggers on `/ps3-hdfury-eu/EBOOT.elf` before wiring any. The
+   round's own body model is wired; the quads and the three particle
+   effects are `cannon-quads`'s lane. LeachBeam's ball placement is
+   unread - start there.
+3. Rocket/Missile/Mine/Bomb **bodies** are wired; their own further
+   detonation models (Missile's pair, the Bomb's five) and effects remain,
+   by the same per-title path, only as their triggers are read.
+4. Settle the Plasma explosion's scale, then flip
+   `blast_models::HD_BLAST_MODELS_DRAWN` back to `true` - currently gated
+   off (draw only; the trigger/age logic still runs) because the recovered
+   scale reads as a regression, not a faithful picture. See "Open" above.

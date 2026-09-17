@@ -34,3 +34,96 @@ pub struct Weapons {
     /// and recording that Pure has one is the point of the axis.
     pub elimination: Option<&'static str>,
 }
+
+/// Where a title keeps each weapon's own body model - the projectile itself,
+/// not the pickup pad's icon.
+///
+/// **An axis because HD and Pulse disagree in *name*, not just in whether a
+/// field is `None`.** `oag_game::race`'s own `ROCKET_MODEL_ENTRY` and friends
+/// were Pulse spellings reached for on every source - `Data\Weapons\Rocket.vex`
+/// resolves on no PS3 archive at all, so every HD projectile fell back to a
+/// procedural billboard even though HD authors its own models under
+/// `Data\Weapons\hd_*` - see `docs/ghidra/functions/ps3-hdfury-eu/plasma.md`.
+/// `None` on a field is a title that authors no such model (or where it is not
+/// yet recovered), the same convention [`Weapons::elimination`] uses; whether a
+/// named entry actually resolves on the mounted archives is a load-time
+/// question the loader's own report line answers, not this table's.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct WeaponModels {
+    /// The Rocket's own body, oriented along its flight velocity.
+    pub rocket: Option<&'static str>,
+    /// The Mine's own body, drawn at its landed pose.
+    pub mine: Option<&'static str>,
+    /// The Bomb's own body - the Mine's, one size up.
+    pub bomb: Option<&'static str>,
+    /// The Cannon round's own body. Named `muzzleflash` on both titles that
+    /// author one, which is the file's own name and not a description - see
+    /// `oag_game::race::CANNON_MODEL_ENTRY`.
+    pub cannon: Option<&'static str>,
+    /// The Plasma bolt's own head, ridden from charge through flight.
+    ///
+    /// **Not the wind-up/travel glow** - that is `WO_PLASMA_HEAD`/`_CHARGING`,
+    /// a `Data\Psys` effect every source shares. This is the bolt's own mesh,
+    /// which only HD authors (`HD_plasma_ball`); Pulse rides the glow alone.
+    pub plasma_ball: Option<&'static str>,
+    /// Pulse's own three-model detonation shell: a halo and two hemispheres,
+    /// scrubbed by a baked anim-time track. See
+    /// `oag_game::race::blast_models` for the mechanism this plays back.
+    pub plasma_blast_pulse: Option<PulsePlasmaBlast>,
+    /// Wipeout HD's own three-model detonation shell: a ring, a sphere and a
+    /// halo, each eased by a per-tick `cur += (target - cur) * rate` scale
+    /// ramp read off the executable - a different mechanism from Pulse's baked
+    /// track, not a renamed copy of it. See
+    /// `docs/ghidra/functions/ps3-hdfury-eu/plasma.md`.
+    pub plasma_blast_hd: Option<HdPlasmaBlast>,
+    /// The LeachBeam's own ball, at the drawing end of the beam.
+    ///
+    /// **Named, not wired.** What places this model each tick has not been
+    /// read this session - see `oag_game::race::load::weapon_models`'s own
+    /// doc comment for where that stopped.
+    pub leachbeam_ball: Option<&'static str>,
+}
+
+impl WeaponModels {
+    /// Every field absent - a title with none of these recovered.
+    ///
+    /// A `const` rather than routing every all-`None` `TITLE` through
+    /// `#[derive(Default)]`'s own `default()`, which is not itself `const fn`
+    /// and so cannot sit inside another `const`'s initialiser the way a
+    /// `Title` const does.
+    pub const EMPTY: Self = Self {
+        rocket: None,
+        mine: None,
+        bomb: None,
+        cannon: None,
+        plasma_ball: None,
+        plasma_blast_pulse: None,
+        plasma_blast_hd: None,
+        leachbeam_ball: None,
+    };
+}
+
+/// Pulse's own plasma-blast trio, in `PlasmaBlast_Construct`'s load order -
+/// see [`WeaponModels::plasma_blast_pulse`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PulsePlasmaBlast {
+    /// `Data\Weapons\pulse_plasma_halo1.vex`.
+    pub halo: &'static str,
+    /// `Data\Weapons\pulse_plasma_hemisphere2.vex` - loaded before
+    /// [`Self::hemisphere1`], the file's own order.
+    pub hemisphere2: &'static str,
+    /// `Data\Weapons\pulse_plasma_hemisphere1.vex`.
+    pub hemisphere1: &'static str,
+}
+
+/// Wipeout HD's own plasma-blast trio, in `WeaponExplosions_Start`'s load
+/// order - see [`WeaponModels::plasma_blast_hd`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct HdPlasmaBlast {
+    /// `Data\Weapons\HD_plasma_ring.vex`, target scale 100.0, rate 0.01.
+    pub ring: &'static str,
+    /// `Data\Weapons\HD_plasma_sphere.vex`, target scale 7.1, rate 0.3.
+    pub sphere: &'static str,
+    /// `Data\Weapons\HD_plasma_halo.vex`, target scale 7.0, rate 0.2.
+    pub halo: &'static str,
+}

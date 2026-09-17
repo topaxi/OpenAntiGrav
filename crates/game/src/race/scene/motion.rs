@@ -34,6 +34,9 @@ pub(super) struct Snapshot {
     pub(super) camera_translation: Mat4,
     ships: Vec<Mat4>,
     pub(super) rockets: Vec<Mat4>,
+    /// A live Plasma bolt's own head, same terms - HD only, empty on every
+    /// other source. See `Loaded::plasma_ball_model`.
+    pub(super) plasma_balls: Vec<Mat4>,
     /// The Mine's own, same terms as [`Self::rockets`].
     pub(super) mines: Vec<Mat4>,
     /// The Bomb's own, same terms.
@@ -51,6 +54,7 @@ impl Snapshot {
                 .map(|slot| race.ship_model_matrix_of(slot))
                 .collect(),
             rockets: race.rocket_model_matrices(),
+            plasma_balls: race.plasma_ball_model_matrices(),
             mines: race.mine_model_matrices(),
             bombs: race.bomb_model_matrices(),
             cannon_rounds: race.cannon_model_matrices(),

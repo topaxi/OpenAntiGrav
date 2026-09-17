@@ -428,10 +428,8 @@ impl Scene {
             );
             sphere.tint(queue, state.colour(), recoloured);
         }
-        // One matrix per live projectile, for each of the four kinds that draw as
-        // their own model - see `weapon_models::Scene::write_weapon_models`.
         oag_render::perfprobe::mark("ship+shield-write");
-        let (rocket_matrices, mine_matrices, bomb_matrices, cannon_matrices) =
+        let (rocket_matrices, ball_matrices, mine_matrices, bomb_matrices, cannon_matrices) =
             self.write_weapon_models(race, &prev, queue, view_projection, prev_vp);
         let plasma_blast_active = self.write_plasma_blasts(race, queue, view_projection);
         // Same model matrix as the ship: the original parents the plume to the
@@ -656,6 +654,7 @@ impl Scene {
             oag_tables::weapons::Weapon::Mine => !self.mines.is_empty(),
             oag_tables::weapons::Weapon::Bomb => !self.bombs.is_empty(),
             oag_tables::weapons::Weapon::Cannon => !self.cannon_rounds.is_empty(),
+            oag_tables::weapons::Weapon::Plasma => !self.plasma_blast.ball.is_empty(),
             _ => false,
         }));
         race.cannon_quad_vertices(right, up, cannon_bolt, cannon_flash);
@@ -825,11 +824,8 @@ impl Scene {
             }
             stats.add(drawable.draw(&mut pass, None, None, None, None));
         }
-        // The Rocket's, Mine's, Bomb's and Cannon round's own bodies, with the
-        // hulls: opaque painted models that occlude and are occluded, not
-        // effects, so none belongs in the additive pass below. Each is bounded by
-        // how many matrices were written this frame, for the same reason the
-        // plumes are - an unwritten uniform buffer draws last frame's pose.
+        // Every weapon's own body: opaque painted models, bounded by how many
+        // matrices were written this frame, same as the plumes below.
         for drawable in self.rockets.iter().take(rocket_matrices.len()) {
             stats.add(drawable.draw(&mut pass, None, None, None, None));
         }
@@ -840,6 +836,9 @@ impl Scene {
             stats.add(drawable.draw(&mut pass, None, None, None, None));
         }
         for drawable in self.cannon_rounds.iter().take(cannon_matrices.len()) {
+            stats.add(drawable.draw(&mut pass, None, None, None, None));
+        }
+        for drawable in self.plasma_blast.ball.iter().take(ball_matrices.len()) {
             stats.add(drawable.draw(&mut pass, None, None, None, None));
         }
         self.draw_plasma_blasts(&plasma_blast_active, &mut pass, &mut stats);

@@ -157,6 +157,10 @@ pub struct Scene {
     /// `Data\Weapons\pulse_muzzleflash.vex` did not load, and a round then
     /// draws as nothing rather than as an invented stand-in.
     cannon_rounds: Vec<Drawable>,
+    /// The Plasma's own drawables - the blast's three plus the bolt's own
+    /// head, [`blast_models::PlasmaBlastDrawables::ball`]. See
+    /// [`blast_models::PlasmaBlastModels`]'s own doc comment for why the
+    /// bolt rides in this container rather than a field of its own.
     plasma_blast: blast_models::PlasmaBlastDrawables,
     /// Each slot's own plume's authored texture-transform keyframes, sampled
     /// per frame and applied to that plume's authored UVs - the recovered

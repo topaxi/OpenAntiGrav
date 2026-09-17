@@ -101,6 +101,9 @@ const TITLE: &Title = &Title {
         race: r"Data\XML\WeaponStats_Race.xml",
         elimination: None,
     },
+    // Unread on the same terms as `weapons` above: this fixture is about
+    // archive discovery, not about any weapon's own model.
+    weapon_models: &oag_title::weapons::WeaponModels::EMPTY,
     hud_art: &oag_title::HudArt {
         texture_extension: None,
         always_on: &[],

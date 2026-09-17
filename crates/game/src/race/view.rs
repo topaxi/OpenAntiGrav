@@ -98,6 +98,10 @@ pub struct RaceView {
     pub(super) hd_trail: [exhaust::hd::Tube; MAX_SHIPS],
     pub(super) hd_trail_active: bool,
     pub(super) hd_trail_red: [f32; MAX_SHIPS],
+    /// Whether a Plasma detonation plays Wipeout HD's own three-model scale
+    /// ease rather than Pulse's baked anim-time scrub. See
+    /// `options::Setup::hd_plasma_blast`.
+    pub(super) hd_plasma_blast: bool,
     /// Origin-to-nozzle distance per craft, world units - the trail-hit reach.
     pub(super) hull_reach: [f32; MAX_SHIPS],
     /// `--trail-sparks`: see [`Race::force_trail_sparks`].

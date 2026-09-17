@@ -125,6 +125,7 @@ pub const TITLE: &Title = &Title {
         race: r"Data\XML\WeaponStats_Race.xml",
         elimination: Some(r"Data\XML\WeaponStats_Elimination.xml"),
     },
+    weapon_models: race::WEAPON_MODELS,
 };
 
 /// Where Wipeout HD keeps its music.

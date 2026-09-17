@@ -66,7 +66,8 @@ pub(super) fn build(
 /// line-budget reason [`super::super::load::weapon_models::load_bodies`]
 /// exists on the loading side.
 /// [`build_all`]'s own return: one drawable pool per kind, the Plasma's own
-/// three grouped as [`blast_models::PlasmaBlastDrawables`] already are.
+/// (the bolt's head included) grouped as [`blast_models::PlasmaBlastDrawables`]
+/// already are.
 type WeaponBodies = (
     Vec<Drawable>,
     Vec<Drawable>,
@@ -74,6 +75,10 @@ type WeaponBodies = (
     Vec<Drawable>,
     blast_models::PlasmaBlastDrawables,
 );
+
+/// [`Scene::write_weapon_models`]'s own return: one matrix list per kind, in
+/// the same order [`WeaponBodies`] builds its drawable pools.
+type WeaponMatrices = (Vec<Mat4>, Vec<Mat4>, Vec<Mat4>, Vec<Mat4>, Vec<Mat4>);
 
 #[allow(clippy::too_many_arguments)]
 pub(super) fn build_all(
@@ -114,11 +119,11 @@ pub(super) fn build_all(
 }
 
 impl super::Scene {
-    /// Writes this tick's matrices onto the Rocket's, the Mine's and the
-    /// Bomb's drawables, and hands back all three matrix lists so the caller
-    /// can bound its own draw loops the same way it already does for the
-    /// ships - a drawable past the live count keeps last frame's uniforms and
-    /// must not be drawn.
+    /// Writes this tick's matrices onto the Rocket's, the Plasma bolt's, the
+    /// Mine's, the Bomb's and the Cannon round's drawables, and hands back
+    /// every matrix list so the caller can bound its own draw loops the same
+    /// way it already does for the ships - a drawable past the live count
+    /// keeps last frame's uniforms and must not be drawn.
     ///
     /// One matrix per live projectile of that kind. `zip` bounds the write the
     /// same way for all three: nothing in the air writes nothing, and a
@@ -138,8 +143,9 @@ impl super::Scene {
         queue: &wgpu::Queue,
         view_projection: Mat4,
         prev_vp: Mat4,
-    ) -> (Vec<Mat4>, Vec<Mat4>, Vec<Mat4>, Vec<Mat4>) {
+    ) -> WeaponMatrices {
         let rocket_matrices = race.rocket_model_matrices();
+        let plasma_ball_matrices = race.plasma_ball_model_matrices();
         let mine_matrices = race.mine_model_matrices();
         let bomb_matrices = race.bomb_model_matrices();
         let cannon_matrices = race.cannon_model_matrices();
@@ -147,6 +153,14 @@ impl super::Scene {
             &self.rockets,
             &rocket_matrices,
             &prev.rockets,
+            queue,
+            view_projection,
+            prev_vp,
+        );
+        write_one_kind(
+            &self.plasma_blast.ball,
+            &plasma_ball_matrices,
+            &prev.plasma_balls,
             queue,
             view_projection,
             prev_vp,
@@ -177,6 +191,7 @@ impl super::Scene {
         );
         (
             rocket_matrices,
+            plasma_ball_matrices,
             mine_matrices,
             bomb_matrices,
             cannon_matrices,
@@ -219,17 +234,30 @@ impl super::Scene {
         for (slot, draw) in draws.iter().enumerate() {
             let Some(draw) = draw else { continue };
             active[slot] = true;
-            let mvp = view_projection * draw.matrix;
-            for (drawables, seconds) in [
+            for (index, (drawables, seconds)) in [
                 (&self.plasma_blast.halo, draw.halo_seconds),
                 (&self.plasma_blast.hemisphere2, draw.hemisphere2_seconds),
                 (&self.plasma_blast.hemisphere1, draw.hemisphere1_seconds),
-            ] {
+            ]
+            .into_iter()
+            .enumerate()
+            {
                 let Some(drawable) = drawables.get(slot) else {
                     continue;
                 };
-                drawable.write(queue, view_projection, draw.matrix, mvp);
-                drawable.write_node_anims(queue, seconds);
+                // **HD scales each model on top of the shared billboard
+                // basis; Pulse scrubs a baked anim-time track on the basis
+                // alone.** See `blast_models`'s own module doc comment for
+                // why these do not fold into one branch.
+                let matrix = match draw.hd_scale {
+                    Some(scale) => draw.matrix * Mat4::from_scale(Vec3::splat(scale[index])),
+                    None => draw.matrix,
+                };
+                let mvp = view_projection * matrix;
+                drawable.write(queue, view_projection, matrix, mvp);
+                if draw.hd_scale.is_none() {
+                    drawable.write_node_anims(queue, seconds);
+                }
             }
         }
         active

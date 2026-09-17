@@ -147,6 +147,8 @@ fn setup(handling: Handling) -> Setup {
         hd_trail: None,
         // Pulse's own palette - these tests build a synthetic Pulse fixture.
         shield_palette: oag_render::shield::PULSE_PALETTE,
+        // Pulse's own mechanism, same reasoning as `shield_palette` above.
+        hd_plasma_blast: false,
         trail_sparks: false,
         spark_anchors: Vec::new(),
         collision: CollisionWorld::new(),
