@@ -1230,13 +1230,16 @@ string search to name-hashing when the loading function has not been read**:
 the string is what the original actually passes, a hashed guess is a guess.
 
 **And it is not the beam's ribbon.** `DAT_08af2804` has two readers,
-`FUN_0890d828` (`0x0890d828`) and `FUN_0890e140` (`0x0890e140`), and the first
-walks a craft's own mesh chain and passes the texture to `FUN_0890e304` per
-sub-mesh, gated on a scalar at `craft+0x74 -> +0x4c` being positive. That is a
+`HullOverlay_DrawLeachBeam` (`0x0890d828`, renamed from `FUN_0890d828`) and
+`HullOverlay_SubmitLeachBeamBatched` (`0x0890e140`), and the first walks a
+craft's own mesh chain and passes the texture to `HullOverlay_Submit`
+(`0x0890e304`, renamed from `FUN_0890e304`) per sub-mesh, gated on a scalar
+read through a shared state object's `+0x4c` field being positive. That is a
 **surface overlay on the drained craft's hull**, the sibling of
 `Data\Tex\Weapons\absorb_surface.*` (`DAT_08af2800`), which the shield's own
-absorb pass uses in exactly the same shape. Confidence **85** on the
-identification and on which thing it textures.
+absorb pass uses in exactly the same shape - see "2026-09-17: the hull
+overlay pair, read in full" below for the complete draw path, both textures.
+Confidence **85** on the identification and on which thing it textures.
 
 ~~The ribbon chain `LeachBeam_InitLocked` zero-fills the UV columns of is
 textured by something else, and that something else is still unlocated. The
@@ -1253,6 +1256,179 @@ it "lee**ch**".
 
 Neither hull overlay is drawn by this engine, and both are honest absences
 rather than stand-ins.
+
+### 2026-09-17: the hull overlay pair, read in full - both textures, one draw routine
+
+**Prompted by a from-play report**: the weapon-absorb effect does not appear
+to play in any title here, only its `ABSORB` sound cue does. Reading the
+draw path in full, for both `leachbeam_surface.mip` and `absorb_surface.mip`
+together, since they share every function but the one texture constant.
+
+**Four thin wrappers, one shared draw call, two dispatch sites.** The two
+readers named above are each one of a **pair**:
+
+| Wrapper | Texture | Shape |
+| --- | --- | --- |
+| `HullOverlay_DrawLeachBeam` (`0x0890d828`) | `DAT_08af2804` (`leachbeam_surface.mip`) | walks one entity's own sub-mesh chain |
+| `HullOverlay_DrawAbsorb` (`0x0890d744`, renamed from `FUN_0890d744`) | `DAT_08af2800` (`absorb_surface.mip`) | walks one entity's own sub-mesh chain |
+| `HullOverlay_SubmitLeachBeamBatched` (`0x0890e140`) | `DAT_08af2804` | one pre-resolved (entity, mask) pair from a shared render batch |
+| `HullOverlay_SubmitAbsorbBatched` (`0x0890e120`, renamed from `FUN_0890e120`) | `DAT_08af2800` | one pre-resolved (entity, mask) pair from a shared render batch |
+
+Confirmed at instruction level, not inferred from symmetry: the two
+"batched" wrappers decompile to a bare `HullOverlay_Submit()` tail call with
+no visible arguments, but their disassembly is `lui a3, 0x8af` /
+`lw a3, 0x2804(a3)` (LeachBeam) and `lw a3, 0x2800(a3)` (Absorb) immediately
+before the `jal` - each one injects only the texture into `a3`, leaving
+`a0`/`a1`/`a2` (entity, param2, mask) and the float fade in `$f12` exactly as
+its own caller already set them up. All four ultimately call
+`HullOverlay_Submit` (`0x0890e304`), which is the entire drawn picture for
+both overlays - confidence **88** on the four-wrapper structure, a direct
+decompile and disassembly read with no VFPU trap on any of the four paths.
+
+**Two dispatch sites, same two gates, same shared state object.** The
+per-entity pair (`HullOverlay_DrawLeachBeam`/`HullOverlay_DrawAbsorb`) is
+called from the tail of the generic per-entity mesh-draw function at
+`0x0890f288` (not renamed - shared mesh machinery far outside this weapon's
+scope), and the per-batch pair
+(`HullOverlay_SubmitLeachBeamBatched`/`HullOverlay_SubmitAbsorbBatched`) from
+the tail of `Mesh_DrawBatchSet` (`0x0893074c`, already named). Both dispatch
+sites read from the **same kind of pointer** - `entity+0x74` at the
+per-entity site, a batch-scoped `+0xc0` field at the per-batch site - which
+this page calls the **shared overlay state** for want of a better name; its
+own type, size and writer are not identified this pass (see Open, below).
+Both sites gate identically:
+
+- **LeachBeam**: `DAT_08b317ac == 2` (a small-integer global, meaning
+  unidentified - plausibly a race-mode or race-state selector, since it is
+  compared for equality against a literal rather than tested as a flag bit)
+  **and** `**(float**)(state + 0x4c) > 0.0` - a **double** pointer
+  dereference: `state+0x4c` is itself a pointer field, read again to reach
+  the actual float. That double indirection is exactly the shape a "points
+  at the live instance's own float, or null when there is none" field would
+  have, and the natural candidate is the active `LeachBeam` instance's own
+  age or `LeachBeam_PulseStrength` - not confirmed by a write site this
+  pass.
+- **Absorb**: `HullOverlay_AbsorbWindowActive(state)` (`0x0883e904`, renamed
+  from `FUN_0883e904`) **and** `HullOverlay_AbsorbFade(state) > 0.0`
+  (`0x0883e950`, renamed from `FUN_0883e950`). Both read the identical pair
+  of fields on the same `state` pointer - `state+0x830` minus `state+0x878`
+  - against the identical bounds (`read_memory` on both `DAT_08a7b6a8`/
+  `_DAT_08a7b6ac`: `0.0` and `1.0`), so the two functions are the same
+  window test in a bool and a float shape:
+
+  ```c
+  bool HullOverlay_AbsorbWindowActive(State *state) {
+      float elapsed = state->f0x830 - state->f0x878;
+      return 0.0 <= elapsed && elapsed <= 1.0;
+  }
+  float HullOverlay_AbsorbFade(State *state) {
+      float elapsed = state->f0x830 - state->f0x878;
+      if (elapsed < 0.0 || elapsed > 1.0) return 0.0;
+      return ((elapsed - 0.0) / (1.0 - 0.0)) * 2.0;   // = elapsed * 2.0
+  }
+  ```
+
+  Confidence **88**: both are short, direct decompiles with matching
+  literals read straight from `.rodata`, not derived from each other.
+  `state+0x830`/`+0x878` read as an "age" and a "started-at" timestamp pair
+  on the same object the LeachBeam's own pointer lives on, though which
+  object that is remains open.
+
+**The absorb fade's whole shape is now measured: a one-second, symmetric
+triangle pulse.** `HullOverlay_AbsorbFade` returns `elapsed * 2.0`, a value
+that runs `0..2` as `elapsed` runs `0..1` second. `HullOverlay_Submit` then
+folds anything past the midpoint back down (`fVar11 = param_1; if (1.0 <=
+param_1) fVar11 = 2.0 - param_1;`), so the alpha this produces is `0` at
+`elapsed = 0`, ramps linearly to `1` at `elapsed = 0.5` s, and ramps linearly
+back to `0` at `elapsed = 1.0` s - **half a second in, half a second out,
+gone by one second**, whatever `state+0x878` marks as the start. Nothing
+about the LeachBeam overlay's own fade *shape* was found this pass beyond
+"some float, read through a pointer, greater than zero" - `HullOverlay_Submit`
+applies the identical `param_1 >= 1.0 -> 2.0 - param_1` fold to whatever
+value it is handed, so **if** the LeachBeam's own source value also runs
+`0..2` over its lifetime the same triangle shape would apply to it too, but
+that is inferred from the shared draw code rather than read from a LeachBeam-
+side writer.
+
+**`HullOverlay_Submit` (`0x0890e304`) itself, decompiled whole - the entire
+picture for both overlays:**
+
+1. **Colour is a flat grey-alpha tint, not a fixed colour with a fading
+   alpha.** All four `Gu_Color` channels - R, G, B *and* A - are computed
+   from the *same* expression, `fade * 255.0` (`fVar11` above, clamped by the
+   caller's own `0.0 <` gate on one side and the `2.0 - param_1` fold on the
+   other). So the overlay is literally `(a, a, a, a)`: it tints the texture
+   grey as it fades in and brightens toward white as it nears full fade,
+   with alpha rising in lock-step - not a white surface whose *only* fading
+   channel is alpha. Confidence **85**, a direct read of four identical
+   arithmetic sequences feeding one `Gu_Color` call.
+2. **Depth test and fog are per-sub-mesh, not fixed for the whole overlay.**
+   `Gu_DepthMask`/`Gu_DepthFunc` branch on bit `1` of the sub-mesh's own
+   flags word (`*param_4`, the mask argument threaded through from the
+   caller): set, depth write on and `LEQUAL`; clear, depth write off and
+   `LESS`. `Fog_Disable` unless the sub-mesh's own material flags
+   (`*(byte*)(entity->something+0xc) & 8`) ask for it, in which case
+   `0x0891eac0` (not read this pass) is called instead. Confidence **80** -
+   read at instruction level, but what the two states mean for a given
+   sub-mesh (which ones set which bit) was not traced back to the model
+   data.
+3. **The texture is bound in `GU_TEXTURE_MATRIX` UV mode, not the mesh's own
+   baked UVs**, confirmed independently by `mesh-draw.md`'s own existing
+   `Gu_TexMapMode` table (`0x0890e584`/`0x0890e76c`, both inside this
+   function - mode `(1,0,0)` on entry, restored to `(0,0,0)` on exit). A
+   4x4 projection matrix is built per draw from `cos`/`sin` of a **live,
+   per-frame VFPU time register** (`vcst_s(5)`) at `pi/2` steps, matrix-
+   multiplied against a fixed basis whose one cell is `fade * -1.5` - so the
+   projection's own motion is coupled to the same fade value driving the
+   colour, not a separate clock. Bound as texture matrix slot `3`
+   (`Gu_SetMatrix(3, &matrix)`) for the one draw, restored after. This is a
+   **rotating, self-projected surface treatment**, not a static decal -
+   confidence **75**: the matrix construction and its inputs are a direct
+   read, but the exact visual result (how fast it turns, what the basis
+   matrix's other cells represent) was not derived by hand or checked
+   against a captured frame.
+4. **No `Gu_BlendFunc` call appears in `HullOverlay_Submit` itself - its
+   blend state is set one call earlier, and it decodes clean.**
+   `Gfx_BuildBatchStateList` (`0x0891f890`, already named) is called once
+   per draw with a literal flag word, `0x282`, and its own state-index enum
+   is already pinned project-wide by `mesh-draw.md`'s "PSP SDK" table (`0`
+   `GU_ALPHA_TEST`, `3` `GU_STENCIL_TEST`, `4` `GU_BLEND`, `5`
+   `GU_CULL_FACE`, `0x11` `GU_COLOR_TEST`), which this reading reuses rather
+   than re-derives. Walking `Gfx_BuildBatchStateList` with `param_2 = 0x282`
+   and its own `param_3 = 0` (both literal at this call site):
+   `GU_CULL_FACE` **on**; `Gu_TexWrap(0, 0)` = **repeat** both axes (sensible
+   for a UV matrix that can push the projected coordinate outside `0..1`);
+   `GU_BLEND` **on**, `Gu_BlendFunc(GU_ADD, GU_SRC_ALPHA, GU_FIX, 0,
+   0xffffff)` - **the identical additive blend `exhaust::BLEND` and the
+   LeachBeam ribbon's own `LeachBeam_SubmitStrip` both already use**, not a
+   different equation; depth write **on**, depth test `LEQUAL`;
+   `GU_ALPHA_TEST` on, `GREATER` against `0` (discards fully-transparent
+   texels only); `GU_COLOR_TEST` on, discarding pure-black fragments (`ref =
+   0`) - the same idiom `mesh-draw.md`'s own worked example names; and
+   `GU_STENCIL_TEST` on, `ALWAYS`-pass with a `REPLACE` op - the same
+   stencil shape `LeachBeam_SubmitStrip` uses to feed the bloom glow mask,
+   so **both hull overlays write the glow mask too**, on top of everything
+   else. Confidence **85**: every branch actually taken is a direct
+   `0x282 & mask` evaluation against the SDK's own documented constants, not
+   a guess; the untaken branches (a title or draw call passing a different
+   flag word) were not chased.
+
+**Still neither overlay is drawn by this engine**, but the read is now
+complete enough to build from: geometry reuse (the model's own hull
+sub-meshes, gated per sub-mesh by a bitmask), the grey-alpha tint, the
+rotating `GU_TEXTURE_MATRIX` UV projection, the additive blend (recovered,
+not chosen - identical to the ribbon's own), the stencil/glow-mask write,
+and the absorb half's full 0.5 s-in/0.5 s-out triangle timing. What is
+still open is narrower than it was: the shared state object's own identity
+and writer, and the LeachBeam side's specific fade source (see Open,
+below) - neither blocks a first build of the **absorb** overlay, which can
+be triggered off this engine's own existing shield-hit event
+(`Race::advance_leach_beam`'s own `shell.hit()` call is one such site, and
+the shield pickup's own absorb path is the more general one) rather than
+the unidentified `state+0x830`/`+0x878` pair. That trigger substitution
+would be **chosen, not measured** - the same split every other module in
+this codebase draws between a recovered draw and a chosen wire-up (see
+`oag_render::exhaust`'s own module doc comment for the shape).
 
 ### Open
 
@@ -1273,6 +1449,20 @@ rather than stand-ins.
 - ~~The base speed `Cannon_Init` reads (`0x00060af4`) is unread, and so is
   whatever a Cannon round's collision does on a hit.~~ Both read 2026-09-09 -
   see "`Cannon_UpdateRound` read" under the Cannon section above.
+- **The hull overlay pair's shared state object is unidentified** - see
+  "2026-09-17: the hull overlay pair, read in full" above. Its type, size
+  and writer are open; only two of its fields (`+0x4c`, `+0x830`/`+0x878`)
+  are read, both through their consumers rather than a constructor.
+- **The LeachBeam overlay's own fade source is unidentified.** The gate
+  reads `**(float**)(state+0x4c)`, a double pointer dereference into
+  whatever live float that slot names - plausibly the active `LeachBeam`
+  instance's own age or `LeachBeam_PulseStrength`, not confirmed by a write
+  site.
+- ~~`Gfx_BuildBatchStateList`'s `0x282` flag word is undecoded~~ - decoded
+  2026-09-17, same pass: `GU_BLEND` on, additive (`exhaust::BLEND`'s own
+  equation), `GU_CULL_FACE` on, depth write on, `GU_ALPHA_TEST`/
+  `GU_COLOR_TEST` both cutout-shaped, `GU_STENCIL_TEST` on and feeding the
+  glow mask - see "2026-09-17: the hull overlay pair, read in full" above.
 
 ## The LeachBeam: a resolved link to a pre-locked target, drained every tick it holds
 

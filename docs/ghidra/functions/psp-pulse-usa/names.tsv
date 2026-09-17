@@ -1044,3 +1044,10 @@
 0x088730d4	function	LeachBeam_LoadTexture	88	cannon-quake-leachbeam.md
 0x088739b0	function	LeachBeam_BuildStrip	85	cannon-quake-leachbeam.md
 0x088731c4	function	LeachBeam_SubmitStrip	85	cannon-quake-leachbeam.md
+0x0890d828	function	HullOverlay_DrawLeachBeam	88	cannon-quake-leachbeam.md
+0x0890d744	function	HullOverlay_DrawAbsorb	88	cannon-quake-leachbeam.md
+0x0890e304	function	HullOverlay_Submit	85	cannon-quake-leachbeam.md
+0x0890e140	function	HullOverlay_SubmitLeachBeamBatched	85	cannon-quake-leachbeam.md
+0x0890e120	function	HullOverlay_SubmitAbsorbBatched	85	cannon-quake-leachbeam.md
+0x0883e904	function	HullOverlay_AbsorbWindowActive	85	cannon-quake-leachbeam.md
+0x0883e950	function	HullOverlay_AbsorbFade	85	cannon-quake-leachbeam.md
