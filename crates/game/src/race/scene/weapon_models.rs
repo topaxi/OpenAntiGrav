@@ -76,6 +76,10 @@ type WeaponBodies = (
     blast_models::PlasmaBlastDrawables,
 );
 
+/// [`Scene::write_weapon_models`]'s own return: one matrix list per kind, in
+/// the same order [`WeaponBodies`] builds its drawable pools.
+type WeaponMatrices = (Vec<Mat4>, Vec<Mat4>, Vec<Mat4>, Vec<Mat4>, Vec<Mat4>);
+
 #[allow(clippy::too_many_arguments)]
 pub(super) fn build_all(
     device: &wgpu::Device,
@@ -141,7 +145,7 @@ impl super::Scene {
         queue: &wgpu::Queue,
         view_projection: Mat4,
         prev_vp: Mat4,
-    ) -> (Vec<Mat4>, Vec<Mat4>, Vec<Mat4>, Vec<Mat4>, Vec<Mat4>) {
+    ) -> WeaponMatrices {
         let rocket_matrices = race.rocket_model_matrices();
         let plasma_ball_matrices = race.plasma_ball_model_matrices();
         let mine_matrices = race.mine_model_matrices();

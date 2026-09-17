@@ -481,8 +481,7 @@ pub const DEFAULT_TEAM: &str = "assegai";
 /// resolves on `hdfury-ps3-eu-dec.iso` as a `.vex`/`.rcsmodel` pair (checked
 /// against the full entry dump, `/data/weapons/<name>.vex` and
 /// `/data/weapons/<name>.rcsmodel` both present, lowercase as every PSARC
-/// entry is - see
-/// `handover/rendering/hd-furys-weapons-draw-pulses-fallbacks-not-their-own-models.md`).
+/// entry is - see `docs/ghidra/functions/ps3-hdfury-eu/plasma.md`).
 /// `mesh::rcs::build` is what a PS3 `.vex`'s external-geometry branch needs
 /// for all of them - see `oag_game::race::load::weapon_models`.
 pub const WEAPON_MODELS: &oag_title::weapons::WeaponModels = &oag_title::weapons::WeaponModels {

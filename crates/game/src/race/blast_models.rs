@@ -236,7 +236,12 @@ impl Race {
         // `self.view.stage.play` needs `&mut self.view` too, and nothing
         // below can hold both borrows at once.
         let collapse_effect = hd
-            .then(|| self.view.effects.get(PLASMA_LIGHTNING_COLLAPSE_EFFECT).cloned())
+            .then(|| {
+                self.view
+                    .effects
+                    .get(PLASMA_LIGHTNING_COLLAPSE_EFFECT)
+                    .cloned()
+            })
             .flatten();
         let mut collapsed_at = Vec::new();
         for slot in &mut self.view.plasma_blasts {

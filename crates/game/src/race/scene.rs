@@ -880,13 +880,13 @@ impl Scene {
                 bomb_model,
                 cannon_model,
                 plasma_blast_models,
-            format,
-            anisotropy,
-            sample_count,
-            scene_depth,
-            zone_art,
-            &shadow_map,
-        )?;
+                format,
+                anisotropy,
+                sample_count,
+                scene_depth,
+                zone_art,
+                &shadow_map,
+            )?;
         // 64 is a stand-in size only, and only when the disc's own texture did not
         // decode; `load` has already reported that when it happens.
         let flare = flare.unwrap_or_else(|| FlareTexture::placeholder(64));

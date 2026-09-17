@@ -43,8 +43,7 @@ pub struct Weapons {
 /// were Pulse spellings reached for on every source - `Data\Weapons\Rocket.vex`
 /// resolves on no PS3 archive at all, so every HD projectile fell back to a
 /// procedural billboard even though HD authors its own models under
-/// `Data\Weapons\hd_*` - see
-/// `handover/rendering/hd-furys-weapons-draw-pulses-fallbacks-not-their-own-models.md`.
+/// `Data\Weapons\hd_*` - see `docs/ghidra/functions/ps3-hdfury-eu/plasma.md`.
 /// `None` on a field is a title that authors no such model (or where it is not
 /// yet recovered), the same convention [`Weapons::elimination`] uses; whether a
 /// named entry actually resolves on the mounted archives is a load-time

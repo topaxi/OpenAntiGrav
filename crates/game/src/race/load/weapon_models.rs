@@ -15,7 +15,7 @@
 //! `Data\Weapons\Rocket.vex`, which resolves on no PS3 archive, and every
 //! projectile fell back to a billboard even though HD authors its own models
 //! under `Data\Weapons\hd_*`. See
-//! `handover/rendering/hd-furys-weapons-draw-pulses-fallbacks-not-their-own-models.md`.
+//! `docs/ghidra/functions/ps3-hdfury-eu/plasma.md`.
 //!
 //! **Both geometry layouts, on one path.** A PSP `.vex` carries its own
 //! geometry; a PS3 `.vex` is a header whose vertices live in the

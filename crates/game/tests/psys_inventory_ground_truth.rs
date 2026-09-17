@@ -379,7 +379,7 @@ fn the_ps2_port_s_own_effects_are_accounted_for_too() {
 
 /// Wipeout HD/Fury, and deliberately **not** the three-bucket sweep above.
 ///
-/// HD authors 82 distinct particle systems and 15 are wired (`RACE_EFFECTS`'
+/// HD authors 82 distinct particle systems and 21 are wired (`RACE_EFFECTS`'
 /// current length - up from 11 when this comment was first written; Plasma,
 /// Shuriken and Quake landed since, so recompute from the source rather than
 /// trusting a number here) - the weapon table alone (Detonator, Nitro,
@@ -483,9 +483,11 @@ mod hd {
 
     /// **A wired name absent from the disc would fire into silence.**
     ///
-    /// All eleven of [`RACE_EFFECTS`] are on this disc - a superset of the
+    /// Every one of [`RACE_EFFECTS`] is on this disc - a superset of the
     /// PSP's eight and the PS2's nine, per `oag_game::race::RACE_EFFECTS`'s
-    /// own doc comment. Kept separate from [`SYSTEMS`]'s tripwire below so a
+    /// own doc comment. The count above drifts as more get wired; recompute
+    /// from `RACE_EFFECTS.len()` rather than trusting either number. Kept
+    /// separate from [`SYSTEMS`]'s tripwire below so a
     /// changed inventory count fails *that* test rather than masking this
     /// more serious one under the same red.
     #[test]
