@@ -1939,6 +1939,108 @@ this material genuinely glows with. Asking about hardware unit 1 there would
 have refused a real, working glow - measured before landing, not assumed.
 Confidence 90.
 
+## The glass floor's routing question is settled, and it was neither open hypothesis (2026-09-17, `lane-hd-glass`)
+
+**Read directly off the disc, not inferred.** `hd_glass_sheen_census.rs --params etched_glass_tech` against
+`talons_junction/track.vex` gives `etched_glass_tech.rcsmaterial`'s own sampler table in table order:
+
+```text
+0x94b2b285 (no preimage, the facing ramp) -> dc_iridescent_gradient.gtf
+0x3bdc0403 (Texture1)                     -> glass_etched_tech.gtf   (the etched grid)
+0x37b5db58 (lightmap)                     -> None
+```
+
+and the resolved lit-race variant (`fragment@0x5ef0`, `StaticQuake` class, feature `0x56c94426`) declares
+exactly `0x3bdc0403@unit0`, `0x94b2b285@unit2`, `0x9edd3243@unit1` (`paraboloidReflectionTex`) - both real
+textures, at the exact units block #7's traced microcode samples them ("Talon's Junction's missing floor is a
+glass floor" above, `@0x2b`/`@0x19`).
+
+**The grid binds `Texture1`, never `lightmap`.** Two sections above ("A texture slot names its sampler" at
+line ~1292 and "Acted on 2026-08-24, additively") state that `glass_etched_tech.gtf` names sampler `lightmap`,
+which no variant declares - that claim is **stale**, superseded the same day by "Corrected hours later"'s
+pairing fix a few sections earlier on this same page, and was never updated to match it. Left as written there
+rather than edited, per this project's own rule that a correction is a new dated section, not a silent rewrite;
+this section is that correction. The `lightmap`-hash entry is real, but it is the material's **third** sampler
+entry and carries no path (`None`) - an ordinary "left at whatever the engine binds" entry, per
+`oag_rcs::rcsmodel::Material::samplers`'s own doc, not a binding for the grid at all. A pre-correction
+off-by-one pairing is what put the grid's path beside that empty entry's hash in the earlier reading.
+
+**So neither hypothesis the open routing question stood on holds.** The
+record's word is exactly the binding it appears to be (`Texture1`, not `lightmap`), and the variant this
+project resolves is the right one - it already declares both of the material's real samplers, at the units the
+traced microcode reads them from. Confidence **95**: read directly off the shipped record and the shipped
+variant, on the same terms "Talon's Junction's magstrip floor was black" above claims that number for - a
+code-level finding about this project's own renderer, not an RE claim the confidence rubric's runtime-trace
+ceiling is written for.
+
+**The real gap was downstream, in `mesh::rcs::skin::picks`, and it is a `Pick` collision, not a hash
+mismatch.** This material's colour lane traces to more than one unit (`Texel::Mixed`), so the load-time albedo
+fallback (`NOT_A_PICTURE`, above) picked the grid - the one entry not on that list - for **both** of this
+renderer's bindings: the alpha lane also resolves to the grid's own unit, so `aux` collapsed onto `albedo`
+(`.filter(|&i| i != albedo)` clears it, then `.or(default.aux)` puts it right back on the same entry), and the
+ramp - the material's own primary `Material::texture` - was never bound to anything. `crates/render/src/mesh/rcs/glass_sheen.rs`
+is the fix: a fact-based classifier (exactly `{Texture1, one facing-ramp hash, paraboloidReflectionTex}`
+declared, colour `Mixed`, alpha at `Texture1`'s own unit - none of it a material name) that routes `picks()` to
+`albedo = ` the ramp entry, `aux = ` the grid entry instead, ahead of the generic fallback. Swept disc-wide
+(`hd_glass_sheen_census.rs`, all four PS3 archives): **6 materials, 15 chunks**, three circuits -
+`etched_glass_tech.rcsmaterial` (Talon's Junction, `tech_de_ra`) and its sibling `etched_glass.rcsmaterial`
+(`modesto_heights`), every one keyed on the same ramp hash (`0x94b2b285`) - the other two facing-ramp hashes
+never co-occur with `Texture1` and `paraboloidReflectionTex` in one declared set, so the classifier does not
+pull in the unrelated `blue_metal` family.
+
+**`mag_effect_loop_opaque.rcsmaterial` does not classify, and that is correct, not a miss.** Its own resolved
+block (`fragment@0x6ae0`) declares five units - a fourth real texture (`ds_mag_wave_c.gtf`, unit 3), the grid
+and the ramp on *different* units than here (grid at unit 1, ramp at unit 4), a fog-idiom wrapper
+(`EX2_SAT` against a `1.44269`-scaled term - the shape `scripts/ps3-microcode.py`'s own docstring names), and
+an alpha lane this project's decoder reads as `Texel::Untraced` rather than a resolved unit. "The same
+five-sampler reflective combine as `etched_glass_tech`'s" (this page's 2026-09-13 section, above) is true only
+as a family resemblance - close enough to place the routing gap there, not close enough to reproduce it.
+Drawing it from `etched_glass_tech`'s own traced combine would be inventing a program this project has not
+read, which `CLAUDE.md` rules out; `glass_sheen::classify` does not match it, and it is left classified as "a
+different combine" but undrawn. `docs/formats/rcsmaterial.md`'s own line ~710 read `op3D` as seen only in
+`etched_glass_tech`; `mag_effect_loop_opaque`'s block #7 carries it twice more (`@0x43`, `@0x60`, both writing
+the discard register `R63`), a free correction found while tracing it for this comparison.
+
+**Verified as a player would, and it is strictly additive.** `oag-game`'s recovered camera at
+`data/reference/hd-capture/talons-matched/03.json` frames the *magstrip* panel, not this material (confirmed
+2026-09-13, above) - rendering that exact pose before and after this change is **byte-identical**
+(`frame03-before.png`/`frame03-after.png` under `data/reference/hd-capture/talons-glass-lane/`, gitignored;
+1,175,040 of 1,175,040 pixels equal). `model_probe --pose 76.9,-46,148 OAG_ONLY_MATERIAL=etched_glass_tech`
+(the pose this page's "Talon's Junction's missing floor is a glass floor" section already used) shows the same
+six chunks - the material's alpha, and therefore its screen coverage, is byte-for-byte unchanged (`grid.r` was
+already the alpha before this change, reached through `ALBEDO_FROM_SECOND`'s absence rather than
+`ALPHA_FROM_SECOND`'s presence, the same value through a different path) - only their colour moves, from the
+flat grid picture to the traced sheen: `vertexLight * ramp + ramp`, plus the grid's red as an additive term and
+the output alpha, reproducing visible iridescent colour variation across the ramp's own hue range rather than a
+flat picture.
+
+**Three things this pass leaves out, all named rather than guessed shut.**
+
+1. **The per-material constant `c`** (`ADD H4.xyz, H2, {c}` in block #7 - parameter `0x512f8e65`, no preimage).
+   Read off the model's own parameter table: `[0.26562, 0.26562, 0.26562, 0]` on `etched_glass_tech` - real and
+   non-zero, not a no-op to drop silently. `ramp` stands in for `ramp + c` in `mesh.wgsl`'s combine. Not wired
+   this pass: it needs the same per-material plumbing `GpuVertex::specular_exponent` already has (a vertex
+   field, a `vertex_attr_array!` slot, threading through `MaterialSetup`), and `mesh.rs`/`mesh/rcs/skin.rs`/
+   `mesh_render.rs` had 10, 59 and 88 lines of headroom respectively under `scripts/check-file-size.py`'s
+   1,000-line cap - not enough to add a fourth per-material float in the same change as the routing fix without
+   a further split none of those files' own shape suggested cleanly. Next action: add the field the same way
+   `specular_exponent` did (patch-checked against this parameter's hash via `Program::patches`), then read it
+   in the combine in place of the bare `ramp`.
+2. **`vertexLight`'s exact composition is not fully reproduced.** Traced, it is
+   `f[TC0] + f[TC1] + f[TC5].x * (sun.colour * N.L)` - the third summand is read outright (`@0x02`/`@0x05`:
+   `DP3_SAT` against the sun direction, `MUL` by the sun colour, exactly `scene.light.sun * ndl` this file
+   already computes as `sun_diffuse`) and wired as such, weighted by `in.texcoord.x` (`f[TC5].zw` is already
+   established as `in.texcoord`, line 830 above, making `f[TC5].x` the same attribute's first component).
+   `f[TC0]` and `f[TC1]` are a stated approximation, not a reading: both stand in as `in.colour.rgb`, the one
+   per-vertex light term this project already decodes for every HD material - on the same terms this file's
+   own second-texture coordinate ("The second texture is sampled at the diffuse coordinate...") is already a
+   stated approximation rather than a reading. The paired **vertex** program (which would say what `f[TC0]` and
+   `f[TC1]` actually carry) was not traced this pass.
+3. **`paraboloidReflectionTex`'s reflection tint, weighted by the grid's red**, is left out entirely - this
+   renderer has no dual-paraboloid probe and does not invent one, confirmed again here: neither material's own
+   sampler table carries `0x9edd3243` at all (the hash names an engine-supplied probe, not a `.gtf`), which is
+   the file's own shape for "not authored here", not a gap in reading it.
+
 ## Open
 
 - **63 of the 125 sampler hashes**, after the wider sweep below - down from
