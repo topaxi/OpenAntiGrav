@@ -108,19 +108,39 @@ is complete and this file is only what it did **not** close.
 
 ## Open
 
-- **The two pad types differ in colour, and this project measured them as
-  identical - 2026-09-08, from play.** The maintainer reports **speed pads are
-  cyan, weapon pads are red**. The register trace measured the patched colour
-  as `(0, 196, 253)` cyan and reported it the same in both material files. Cyan
-  is corroborated for the *speed* pad; the *weapon* pad's value is wrong.
-  **The suspect is already named in `docs/rendering/pads.md`**: confidence was
-  capped at 82 over a `Weapon Pad`-specific `R0` aliasing concern under NV40's
-  H/R packing, and the weapon pad is exactly the one play says we read wrong.
-  Re-derive const slot 58 straight out of the material record rather than
-  through the register trace, and **do not hand-correct the value to red**.
-- **The same report corroborates the finding that matters most**: only the
-  light bars change state, which is the `_ne`'s own ~7% alpha and not the
-  diffuse's 93%. That half of the trace is independently confirmed.
+- **Settled 2026-09-16, commit `91071e60` - do NOT re-derive.** The colour
+  question above (2026-09-08) is closed and its "the weapon pad's value is
+  wrong" framing is stale. `crates/render/examples/hd_pad_colour_census.rs`
+  re-derives const slot 58 (`0xce5c4410`, named `W_Cycle`) directly out of
+  `Material::parameters` across all 12 circuits that ship pad geometry, not
+  through the register trace: it is each pad's own **per-instance authored**
+  value, not a shared circuit tint and not a fixed per-type constant. `Weapon
+  Pad` is red (`[1.0, 0.0, 0.0, 0.0]` on `talons_junction`, this project's
+  default circuit) on `talons_junction`, `tech_de_ra`, `modesto_heights` and
+  `15_anulpha_pass`, cyan/blue on the other 8; `Speedup Pad` is cyan (or
+  near-white on `15_anulpha_pass`) everywhere it has geometry at all.
+  Confidence 88. This matches the maintainer's play report on the circuits
+  that are red - the aliasing concern that capped the register trace at 82
+  was a red herring; the value itself was never wrong, only measured on a
+  circuit (`12_sol_2`) where it happens to be cyan for both pad types. See
+  `docs/rendering/pads.md`'s "Corrected 2026-09-16" section for the full
+  table.
+- **Vtable diff done, 2026-09-17 - `docs/ghidra/functions/ps3-hdfury-eu/pads.md`,
+  do NOT re-diff.** `WeaponPad_Importer`'s per-frame update
+  (`WeaponPad_UpdateRefreshTimer`, `0x002e02b8`, vtable slot 3) *is* a runtime
+  colour cycle - a flat grey while cooling, a 6-entry keyframe cross-fade once
+  armed, structurally identical to PSP's function of the same name. It writes
+  the cycling colour to two fields on the pad's own C++ object
+  (`this+0xf0`/`this+0x1b0`), not into the `.rcsmaterial` parameter found
+  above - so there are genuinely two separate colour mechanisms on an HD
+  weapon pad, not one. **What is still open**: whether either object field
+  reaches the renderer at all (traced to nothing downstream this pass) and
+  who writes the `.bss` global (`0x00aec2c0`) the cooling branch reads its
+  neutral colour from. See Next Steps items 2-4 below for the detail.
+- The maintainer's report that only the light bars change state, not the
+  whole pad, is corroborated by the `_ne`-alpha finding (~7% of the texture,
+  bars-only) - that half of the trace is independently confirmed and does
+  not need re-checking.
 
 **Does an HD weapon pad look different while it is cooling down, and what
 draws that? There is a state change - the maintainer reports it from play,
@@ -146,6 +166,14 @@ Three things it changes:
    this material record or this file - it would have to come from somewhere
    else the runtime feeds in, which is exactly what steps 2-3 below would
    find.
+
+   > **Corrected 2026-09-16, commit `91071e60`.** The paragraph above is
+   > wrong about "cannot come from this material record" - see the `## Open`
+   > section's first bullet. The `_ne`-gated term's own colour constant
+   > (`0xce5c4410`, `W_Cycle`) *is* authored per material instance and *is*
+   > red on `talons_junction`. The lit colour comes from exactly this
+   > material record after all; what is still unrecovered is only whether
+   > anything toggles the accumulate on and off at runtime.
 1. **The trigger is the grant, and the relight is the refresh.** That maps onto
    a `WeaponPad_UpdateRefreshTimer`-shaped per-frame update, which is exactly
    what step 2's vtable diff is for. It also means the play capture the old
@@ -164,6 +192,18 @@ Three things it changes:
    the possibility this project's own history warns to keep live - the
    recollection is of a different title's pad. Nothing here decides between
    those three.
+
+   > **Reversed 2026-09-16, commit `91071e60`.** "Negative result" was wrong:
+   > `0xce5c4410` (`W_Cycle`) is a material-authored tint after all, and its
+   > value on `talons_junction` is `[1.0, 0.0, 0.0, 0.0]` - red. It reads at
+   > 82 confidence through the register trace only because the trace was run
+   > on `12_sol_2`, where the same parameter happens to author cyan; reading
+   > the parameter directly (`Material::parameters`, no register trace) across
+   > all 12 circuits with pad geometry gets 88 and shows it varies per
+   > circuit. None of the three alternatives this bullet named is what
+   > happened - the colour was always in this material record, just not on
+   > the one circuit measured first. Only the *toggle* (does anything gate
+   > the accumulate on/off at runtime) is still open.
 3. **It does not contradict "a speed pad is never recoloured on any title".**
    That closed bullet is about *speed* pads and about *recolouring*. An
    emissive layer toggling on and off is a different mechanism, and the two can
@@ -274,41 +314,61 @@ whether to spend on wiring it at all, and the two RE leads.
    real formula) is being built, and prove it with pictures at each step** -
    they are not the same feature, and building the first is not a step
    toward the second.
-2. **Diff the `Pad_Importer` vtables.** `WeaponPad_Importer`'s object takes
-   its vtable from `0x0086a730`, seventeen slots. The adjacent table at
-   `0x0086a780` shares fourteen and differs at slots 0, 3 and 5. A
-   class-specific per-frame update sits in one of those three - that is how
-   `WeaponPad_UpdateRefreshTimer` was found on PSP. Both constructors are
-   below `0x32d5e0`, so **Ghidra's TOC is the right one here** and data
-   references can be read directly (`docs/ghidra/functions/ps3-hdfury-eu/memory.md`).
-3. **Resolve `WeaponPad_Importer`'s `this+0x1b0` vector.** Its constructor
-   (`0x002e0210`) loads it through TOC slot `0x008b431c`, whose value
-   `0x00aec2c0` is past the image's last section (`0x009356ff`) - a `.bss`
-   global with no bytes in the file. `SpeedupPad_Importer` (`0x002dd340`) has
-   no such store, so it is class-specific. Finding its writer needs either a
-   whole-image scan for the address or a live read; the patched RPCS3 with
-   working write watchpoints (`just build-rpcs3-watchpoints`) is the tool for
-   the second.
-4. **Only then implement a state change, if 2-3 find one.** Until they do, an
-   HD pad drawing the same in both states is the correct answer, not a
-   placeholder to improve on. Do not add a cooldown grey by analogy with Pulse
-   - the two titles' pads are already established to differ in mechanism,
-   since Pulse's texture is neutral and HD's is painted. And per step 1's
-   measurement: the material's own shader accumulates the light-bar layer
-   unconditionally on every chunk read, with no parameter that looks like a
-   gate, and (2026-09-07) neither its RGB nor any tint anywhere in either
-   pad's shader is red - so if 2-3 do find a cooldown state, it is not
-   sitting in this material record, this file or this shader, and it is not
-   yet clear it is the same mechanism as the emissive layer at all. Wire
-   whatever colour 2-3 find as its own thing rather than assuming it slots
-   into `emissive`'s tint.
+2. **Done, 2026-09-17 - `docs/ghidra/functions/ps3-hdfury-eu/pads.md`.** The
+   vtable diff is done mechanically rather than assumed, and the "shares
+   fourteen and differs at slots 0, 3 and 5" claim above is wrong: nine of
+   seventeen slots match, eight differ (0, 3, 5, 12, 13, 14, 15, 16), and
+   slot 3 is the class-specific per-frame update. It decompiles as
+   `WeaponPad_UpdateRefreshTimer` (`0x002e02b8`) - PSP's function of the same
+   name, reimplemented almost exactly: a refresh timer at `this+0x160`, the
+   identical flat grey `0x3f3f3f` while cooling down, and a 6-entry keyframe
+   cross-fade once armed, written to `this+0xf0` (packed RGBA) and
+   `this+0x1b0` (float vector). `SpeedupPad_Importer`'s own slot 3 is an
+   unrelated one-argument accessor with no colour logic at all. See that page
+   for the full trace and the four reproducer scripts under `scripts/ghidra/`.
+3. **Partly answered by the same pass.** `WeaponPad_Importer`'s `this+0x1b0`
+   vector is not a spatial bounding-box value - `WeaponPad_UpdateRefreshTimer`
+   writes the same cycling colour there (as a float vector) that it packs
+   into `this+0xf0` (as bytes), so the constructor's own initial write to
+   `this+0x1b0` is this field's cooling-down default, not box geometry. The
+   narrower question - who writes the sixteen bytes at the `.bss` global
+   `0x00aec2c0` itself (the neutral vector `WeaponPad_UpdateRefreshTimer`
+   reads while cooling) - is still open: a whole-image literal scan finds
+   exactly one TOC slot referencing it (`0x008b431c`) and five functions that
+   *read* through that slot, none of which write to the global's own storage.
+   A live read (`just build-rpcs3-watchpoints`) is still the way to find a
+   writer, if one exists at all rather than the global staying at its `.bss`
+   zero-fill.
+4. **The framing here was backwards, and is corrected now rather than
+   repeated.** "Do not add a cooldown grey by analogy with Pulse - the two
+   titles' pads are already established to differ in mechanism" is wrong:
+   they do not differ in mechanism. HD's `WeaponPad_UpdateRefreshTimer` runs
+   the same grey-while-cooling / keyframe-cross-fade-when-armed shape as
+   Pulse's, at the same magic constant and the same 6-entry table size - the
+   two titles differ only in whether the pad's own texture needed recolouring
+   in the first place (Pulse's `weapon_under.tga` is neutral; HD's
+   `ds_weaponup_cs.gtf` is already painted). **What is still genuinely open,
+   and is the real next step**: this function writes `this+0xf0` /
+   `this+0x1b0` on the pad's own C++ object, and nothing in this pass traces
+   where either field goes afterward - neither is `GpuVertex::colour` (flat
+   `0,0,0` on every measured chunk) or a `.rcsmaterial` parameter. If a
+   consumer patches a shader constant from one of these fields, that is the
+   runtime mechanism the material's static `W_Cycle` colour (settled
+   2026-09-16, commit `91071e60`) would ride on top of; if nothing reads
+   them, this is a second "authored but unwired" gap, the same shape as the
+   emissive mask itself. **Do not wire a cooldown grey by guessing which of
+   these it is** - trace the consumer first.
 
-A play capture would settle the *observable* half quickly, but is not this
-project's cheap step right now: this desktop has no working GUI windows and
-RPCS3 screenshots are known to come back black here (see the memory note on
-verifying headless), so a capture needs a machine with a working display -
-recommend it to whoever picks this thread up next with one, rather than
-attempting it blind. Race on `12_sol_2`, cross a weapon pad, and compare the
-pad in the frame before and a second after: that answers "is there a state
-change at all" without reading a single instruction, and decides whether
-steps 2-3 are worth their cost.
+**A play capture was attempted 2026-09-17 and did not land a weapon-pad
+closeup.** The RPCS3 capture harness itself works now (`scripts/rpcs3-drive.py`'s
+`open_session` fix landed 2026-09-17; screenshots are not black) - three
+captures on `talons_junction` (6, 10 and 16 shots, 1-3 s apart, default
+campaign walk) show cyan speed pads clearly (corroborating the material
+finding) but never caught the ship crossing a weapon pad closely enough to
+read its state, despite one capture showing a weapon (`Machine Gun`) get
+picked up between frames. This is a sampling-luck gap, not a tooling one -
+whoever picks this up next should either script tighter interval sampling
+around a known pad position (`Data\Environments\Talons_Junction\track.vex`'s
+own pad nodes would give the exact in-lap position/time to target) or accept
+that the Ghidra-side answer above is cheaper than hunting for the right
+frame.
