@@ -965,6 +965,25 @@ slerp for quaternion tracks. That shape is consistent with Edge's own
 documented purpose (bit-packed, quantised keyframe animation) and
 inconsistent with a hand-rolled Wipeout format - nothing this simple.
 
+**This also gives a candidate location for the file's own largest coverage
+gap, though not a settled one.** Before any of the above was traced,
+`oag_rcs::rcsmodel::coverage` over `321go_startfinish.rcsmodel` reported one
+14,388-byte unclaimed run at `0x5dc`-`0x3e10`, between the mesh offset table
+and the first mesh chunk header. The first 1,060 bytes of it are the file's
+own relocation table (`render_block.rs`'s documented `{count, offsets[]}`,
+just never `seen.claim`ed by `coverage.rs`); in the remaining ~13.3 KB,
+`0xa00`-`0x3e10`, **every pointer this pass traced lands inside it** - the
+four `curve` structs at `0x1a30`, `0x1ed0`, `0x2bf0`, `0x3790` and the four
+`inner` objects at `0xb50`, `0x1a50`, `0x1ef0`, `0x2c10` - with structured,
+non-zero bytes around each rather than padding. **Confidence 75** that this
+region is the Edge clip payload and nothing else: the pointers are measured,
+but no clip's own *extent* is known (that needs the clip header layout,
+which is exactly what is undecoded), so whether four clips tile the whole
+13.3 KB or leave a further, unrelated section inside it is not established.
+Still useful for whoever decodes Edge's own format next: the byte range and
+eight entry points are already found, without re-running the run-detection
+scan this pass used to first notice the region was structured.
+
 ### This is not 2048's `.rcsanimclip`/`.rcsskeleton`, and not the same container magic
 
 Checked directly before concluding a new format was needed, per this lane's
