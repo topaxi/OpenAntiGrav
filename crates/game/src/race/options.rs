@@ -714,6 +714,13 @@ pub struct Loaded {
     /// `None` falls back to [`Exhaust`]'s procedural glow, and the load report
     /// says so - it is not a silent substitution.
     pub flare: Option<FlareTexture>,
+    /// The LeachBeam ribbon's own texture, off the disc, when it decodes -
+    /// see `assets::leach_beam_texture`.
+    ///
+    /// `None` draws no ribbon body at all rather than a stand-in, on the same
+    /// "never invent what the assets author" terms every optional asset here
+    /// follows - see `oag_render::beam`.
+    pub leach_beam_texture: Option<FlareTexture>,
     /// One `blob` shadow silhouette per grid slot, slot 0 the player's.
     ///
     /// The disc's own where the source ships one - Wipeout HD's nine

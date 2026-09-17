@@ -674,6 +674,7 @@ impl Scene {
         race.extend_spark_vertices(additive, alpha, right, up);
         race.extend_stage_vertices(additive, alpha, right, up);
         self.sparks.borrow_mut().upload(queue, &vp, additive, alpha);
+        self.upload_beam(race, queue, &vp);
 
         // Both shadow tiers' geometry, gathered with the rest of the frame's.
         // Its own file under the 1,000-line rule - see `frame/shadow.rs`.
@@ -919,6 +920,7 @@ impl Scene {
         // same reason.
         self.exhaust.borrow().draw(&mut pass);
         self.sparks.borrow().draw(&mut pass);
+        self.draw_beam(&mut pass);
         self.clouds.borrow().draw(&mut pass);
         // The scene pass has to close before the bloom can sample what it drew,
         // so this ends the borrow rather than waiting for the scope to.
@@ -991,5 +993,6 @@ impl Scene {
 }
 
 mod attachments;
+mod beam;
 mod shadow;
 pub(super) use attachments::{depth_texture, msaa_color_texture};

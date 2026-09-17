@@ -341,6 +341,11 @@ pub const STAGE_SEED: u64 = 0x5_9a_2b_01;
 /// same determinism reason.
 pub const SHAKE_SEED: u64 = 0x5_9a_2b_02;
 
+/// Seed for the LeachBeam ribbon's own amplitude draws - see
+/// `RaceView::leach_beam_rng`. Distinct from the others for the same
+/// determinism reason.
+pub const LEACH_BEAM_SEED: u64 = 0x5_9a_2b_03;
+
 /// The archive entry a Rocket's model comes from.
 ///
 /// **Recovered, confidence 85.** The string `Rocket_Ctor` (`0x0885cc24`) hands

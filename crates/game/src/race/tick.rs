@@ -492,6 +492,7 @@ impl Race {
         // tick's. See `Race::advance_leach_beam`.
         self.advance_leach_beam();
         self.advance_leach_beam_visual();
+        self.advance_leach_beam_ribbon();
 
         // **After the standings**, so the last crossing is in the table this
         // reads, and a no-op on every tick but the one the race ends on. It

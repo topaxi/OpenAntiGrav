@@ -8,8 +8,10 @@
 use super::*;
 use log::warn;
 
+mod beam;
 mod clouds;
 mod frame;
+mod hd_chain;
 mod motion;
 mod queries;
 mod scratch;
@@ -178,6 +180,8 @@ pub struct Scene {
     /// taken and released inside `render` with nothing re-entrant in between.
     exhaust: std::cell::RefCell<exhaust::Pipeline>,
     clouds: std::cell::RefCell<clouds::Clouds>,
+    /// The LeachBeam's own ribbon, `None` on an undecoded texture - see `beam`.
+    beam: Option<std::cell::RefCell<oag_render::beam::Pipeline>>,
     /// Collision sparks. `RefCell` for the same reason [`Self::exhaust`] is.
     sparks: std::cell::RefCell<sparks::Pipeline>,
     /// The `blob` shadow tier: one ground-aligned quad per craft, drawn after
@@ -340,6 +344,7 @@ impl Scene {
         plasma_blast_models: blast_models::PlasmaBlastModels,
         shield_cockpit: Option<Model>,
         flare: Option<FlareTexture>,
+        leach_beam_texture: Option<FlareTexture>,
         noise: Option<FlareTexture>,
         trail_blend: Option<wgpu::BlendState>,
         trail_shape: Option<FlareTexture>,
@@ -364,38 +369,8 @@ impl Scene {
         let far = track_model.radius * 4.0;
         let sample_count = msaa.samples();
         let scene_depth = mesh_render::Depth::Scene;
-        // Wipeout HD's post chain: a linear float scene target, the read
-        // FunkLayerBloom passes and the encode. Present exactly when the
-        // circuit authors an `HDR and Bloom` block - see
-        // `oag_render::post::hd_bloom` for what of it is the microcode's.
-        // A failure is reported and dropped the way the PSP bloom's is: a
-        // race without it is the pre-HDR picture, not a broken one.
-        // **`bloom_enabled` reaches this chain too, and until 2026-09-09 it
-        // did not.** The switch gated only the PSP chain below, so Wipeout
-        // HD - the one title this chain draws for - blooms whatever the
-        // player sets. Measured: flipping the setting moved a Pulse frame's
-        // clipped-white share from 2.07 % to 0.41 % and left an HD frame
-        // byte-identical. `Glow::Suppressed` still runs the exposure resolve,
-        // which is what encodes the linear scene target at all; see that
-        // enum for why turning the whole chain off would be a different and
-        // wrong thing.
-        let glow = if bloom_enabled {
-            oag_render::post::hd_bloom::Glow::Drawn
-        } else {
-            oag_render::post::hd_bloom::Glow::Suppressed
-        };
-        let hd = match hd_bloom
-            .map(|params| {
-                oag_render::post::hd_bloom::Chain::new(device, format, size, params, glow)
-            })
-            .transpose()
-        {
-            Ok(hd) => hd,
-            Err(e) => {
-                warn!("hd post chain unavailable ({e}) - the frame draws without it");
-                None
-            }
-        };
+        // See `hd_chain` for what this builds and why `bloom_enabled` reaches it.
+        let hd = hd_chain::build(device, format, size, hd_bloom, bloom_enabled);
         // **The format is the statement about colour space.** With the chain
         // in place every pipeline below is built against the linear float
         // target and switches itself to linear output - see
@@ -906,6 +881,13 @@ impl Scene {
             sample_count,
             mesh_render::Velocity::Write,
         ));
+        let beam = beam::build(
+            device,
+            queue,
+            format,
+            leach_beam_texture.as_ref(),
+            sample_count,
+        );
         // One silhouette per grid slot, in the same slot order the liveries
         // are in - `race::shadow::silhouettes` built them, and the load report
         // already said which slots got the disc's own image and which got the
@@ -985,6 +967,7 @@ impl Scene {
             zone_grade,
             exhaust,
             clouds: clouds::Clouds::build(device, queue, format, sample_count, cloud_layer),
+            beam,
             sparks,
             shadow,
             shadow_map: std::cell::RefCell::new(shadow_map),

@@ -15,9 +15,8 @@ use super::*;
 impl Race {
     /// Keeps the LeachBeam's two authored effects on the two craft the disc
     /// hangs them on: [`LEACHBEAM_CHARGING_EFFECT`] on whoever is *holding* one
-    /// and [`LEACHBEAM_ENERGY_EFFECT`] on whoever a link is currently draining.
-    ///
-    /// # Neither is a stand-in, and the ribbon deliberately is not drawn
+    /// and [`LEACHBEAM_ENERGY_EFFECT`] on whoever a link is currently draining -
+    /// plus, since 2026-09-17, the beam's own ribbon between them.
     ///
     /// Both effects are the disc's own `Data\Psys\*.POB` files, played through
     /// the same [`psys::Stage`] every other weapon's are, with triggers read
@@ -25,19 +24,22 @@ impl Race {
     /// [`LEACHBEAM_CHARGING_EFFECT`] and [`LEACHBEAM_ENERGY_EFFECT`] for the
     /// function and address behind each.
     ///
-    /// **What is not drawn is the beam itself.** `LeachBeam_Advance`
-    /// (`0x08873fa0`) builds it as a segmented ribbon between the two craft -
-    /// `ceil((6.0 / range) * min(distance, range) * 6.0)` segments, each
-    /// displaced sideways by a sine of its own index times a random amplitude,
-    /// with the UV columns `LeachBeam_InitLocked` zero-fills the chain with -
-    /// and *that geometry is recovered*. Its **texture is not**: no WAD entry
-    /// has been located for what the strip is drawn with, and the draw call
-    /// that submits it has not been followed. So this draws nothing for the
-    /// link's own body rather than an untextured strip or a line of billboards,
-    /// which is the rule `CLAUDE.md` states and which this file's own history
-    /// records being broken twice. A player sees the charge on the holder and
-    /// the energy on the victim; the visible absence is the honest report that
-    /// the middle is unread.
+    /// **The beam's own body is drawn now.** `LeachBeam_Advance` (`0x08873fa0`)
+    /// builds it as a segmented ribbon between the two craft -
+    /// `ceil((6.0 / range) * min(distance, range) * 6.0)` segments - and
+    /// `LeachBeam_BuildStrip`/`LeachBeam_SubmitStrip` (`0x088739b0`/
+    /// `0x088731c4`) draw it textured with
+    /// `Data\Weapons\Textures\pulse_leechbeam1_ADD.mip`, additively blended
+    /// (the same blend as [`oag_render::exhaust::BLEND`]), white, fading to
+    /// nothing over the disconnect linger and tapered to zero alpha at both
+    /// ends. The earlier reading here - that the texture was unlocated and the
+    /// draw call unfollowed - was wrong on both counts; see
+    /// `docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md`'s
+    /// "2026-09-17: the LeachBeam ribbon's own texture" section for the
+    /// evidence chain, and [`oag_render::beam`] for what is built from it. The
+    /// two perpendicular displacement axes the original crosses the strip
+    /// along are **chosen, not measured** - this engine has no per-craft node
+    /// basis to read them from the way the original's scene graph does.
     pub(in crate::race) fn advance_leach_beam_visual(&mut self) {
         // The charge: up exactly while slot 0 holds a LeachBeam, which is the
         // whole of `FUN_0883f540`'s own gate. Nothing chosen here.
@@ -91,6 +93,72 @@ impl Race {
             (Some(_), Some(playing)) => self.view.stage.follow(playing, target),
             (None, _) => {}
         }
+    }
+
+    /// Keeps [`RaceView::leach_beam_ribbon`] alive for exactly as long as a
+    /// *locked* beam exists - through its disconnect linger, where it fades
+    /// rather than vanishing, matching `LeachBeam_BuildStrip`'s own alpha
+    /// write. An [`oag_gameplay::projectile::leach_beam::Kind::Unlocked`]
+    /// beam draws no ribbon, the same as its two effects above.
+    ///
+    /// Split from [`Self::advance_leach_beam_visual`] because that function
+    /// returns early once a beam stops being [`Beam::connected`], and the
+    /// ribbon needs to keep advancing past that point for the fade.
+    pub(in crate::race) fn advance_leach_beam_ribbon(&mut self) {
+        let locked = self
+            .sim
+            .world
+            .leach_beam
+            .filter(|beam| beam.kind == oag_gameplay::projectile::leach_beam::Kind::Locked);
+        let dt = self.sim.dt;
+        // Split the two fields rather than borrowing `self.view` twice at
+        // once - the same idiom `Race::force_trail_sparks`'s own
+        // `(player, rng)` pair uses.
+        let (ribbon, rng) = (
+            &mut self.view.leach_beam_ribbon,
+            &mut self.view.leach_beam_rng,
+        );
+        match (locked.is_some(), ribbon.as_mut()) {
+            (true, Some(ribbon)) => ribbon.advance(dt, rng),
+            (true, None) => *ribbon = Some(oag_render::beam::Ribbon::new(rng)),
+            (false, _) => *ribbon = None,
+        }
+    }
+
+    /// The ribbon's geometry for this frame, or empty when there is no
+    /// locked beam to draw - see [`oag_render::beam::build`].
+    ///
+    /// `alpha` is the link's own coverage: `1.0` while connected, and while
+    /// disconnected a linear fade to `0.0` over
+    /// [`oag_gameplay::projectile::leach_beam::DISCONNECT_LINGER_SECONDS`] -
+    /// `LeachBeam_BuildStrip`'s own recovered alpha write, read at
+    /// instruction level (see the docs page this module cites).
+    #[must_use]
+    pub(in crate::race) fn leach_beam_ribbon_vertices(&self) -> Vec<oag_render::mesh::GpuVertex> {
+        use oag_gameplay::projectile::leach_beam::{DISCONNECT_LINGER_SECONDS, Kind};
+
+        let (Some(beam), Some(ribbon)) = (self.sim.world.leach_beam, &self.view.leach_beam_ribbon)
+        else {
+            return Vec::new();
+        };
+        if beam.kind != Kind::Locked {
+            return Vec::new();
+        }
+        let alpha = match beam.disconnected_at {
+            None => 1.0,
+            Some(disconnected_at) => {
+                (1.0 - (beam.age - disconnected_at) / DISCONNECT_LINGER_SECONDS).clamp(0.0, 1.0)
+            }
+        };
+        let owner = self.sim.world.ships[beam.owner as usize]
+            .physics
+            .body
+            .position;
+        let target = self.sim.world.ships[beam.target as usize]
+            .physics
+            .body
+            .position;
+        oag_render::beam::build(ribbon, owner, target, beam.range, alpha)
     }
 
     /// Keeps [`QUAKE_EFFECT`] and its own transform riding the travelling
