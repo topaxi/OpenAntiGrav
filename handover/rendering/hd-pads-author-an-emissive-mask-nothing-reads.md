@@ -108,19 +108,34 @@ is complete and this file is only what it did **not** close.
 
 ## Open
 
-- **The two pad types differ in colour, and this project measured them as
-  identical - 2026-09-08, from play.** The maintainer reports **speed pads are
-  cyan, weapon pads are red**. The register trace measured the patched colour
-  as `(0, 196, 253)` cyan and reported it the same in both material files. Cyan
-  is corroborated for the *speed* pad; the *weapon* pad's value is wrong.
-  **The suspect is already named in `docs/rendering/pads.md`**: confidence was
-  capped at 82 over a `Weapon Pad`-specific `R0` aliasing concern under NV40's
-  H/R packing, and the weapon pad is exactly the one play says we read wrong.
-  Re-derive const slot 58 straight out of the material record rather than
-  through the register trace, and **do not hand-correct the value to red**.
-- **The same report corroborates the finding that matters most**: only the
-  light bars change state, which is the `_ne`'s own ~7% alpha and not the
-  diffuse's 93%. That half of the trace is independently confirmed.
+- **Settled 2026-09-16, commit `91071e60` - do NOT re-derive.** The colour
+  question above (2026-09-08) is closed and its "the weapon pad's value is
+  wrong" framing is stale. `crates/render/examples/hd_pad_colour_census.rs`
+  re-derives const slot 58 (`0xce5c4410`, named `W_Cycle`) directly out of
+  `Material::parameters` across all 12 circuits that ship pad geometry, not
+  through the register trace: it is each pad's own **per-instance authored**
+  value, not a shared circuit tint and not a fixed per-type constant. `Weapon
+  Pad` is red (`[1.0, 0.0, 0.0, 0.0]` on `talons_junction`, this project's
+  default circuit) on `talons_junction`, `tech_de_ra`, `modesto_heights` and
+  `15_anulpha_pass`, cyan/blue on the other 8; `Speedup Pad` is cyan (or
+  near-white on `15_anulpha_pass`) everywhere it has geometry at all.
+  Confidence 88. This matches the maintainer's play report on the circuits
+  that are red - the aliasing concern that capped the register trace at 82
+  was a red herring; the value itself was never wrong, only measured on a
+  circuit (`12_sol_2`) where it happens to be cyan for both pad types. See
+  `docs/rendering/pads.md`'s "Corrected 2026-09-16" section for the full
+  table.
+- **What is still open, unchanged by the above**: whether there is a runtime
+  state change at all (lit -> dark on grant -> relit on re-arm). The colour
+  found above is baked into the material file and read once; nothing in it
+  is a per-tick write, so it does not by itself explain "goes dark then
+  relights" - only "is red at rest on the circuit the maintainer played".
+  That question still needs the vtable diff (Next Steps step 2) and the
+  `0x00aec2c0` writer (step 3).
+- The maintainer's report that only the light bars change state, not the
+  whole pad, is corroborated by the `_ne`-alpha finding (~7% of the texture,
+  bars-only) - that half of the trace is independently confirmed and does
+  not need re-checking.
 
 **Does an HD weapon pad look different while it is cooling down, and what
 draws that? There is a state change - the maintainer reports it from play,
@@ -146,6 +161,14 @@ Three things it changes:
    this material record or this file - it would have to come from somewhere
    else the runtime feeds in, which is exactly what steps 2-3 below would
    find.
+
+   > **Corrected 2026-09-16, commit `91071e60`.** The paragraph above is
+   > wrong about "cannot come from this material record" - see the `## Open`
+   > section's first bullet. The `_ne`-gated term's own colour constant
+   > (`0xce5c4410`, `W_Cycle`) *is* authored per material instance and *is*
+   > red on `talons_junction`. The lit colour comes from exactly this
+   > material record after all; what is still unrecovered is only whether
+   > anything toggles the accumulate on and off at runtime.
 1. **The trigger is the grant, and the relight is the refresh.** That maps onto
    a `WeaponPad_UpdateRefreshTimer`-shaped per-frame update, which is exactly
    what step 2's vtable diff is for. It also means the play capture the old
@@ -164,6 +187,18 @@ Three things it changes:
    the possibility this project's own history warns to keep live - the
    recollection is of a different title's pad. Nothing here decides between
    those three.
+
+   > **Reversed 2026-09-16, commit `91071e60`.** "Negative result" was wrong:
+   > `0xce5c4410` (`W_Cycle`) is a material-authored tint after all, and its
+   > value on `talons_junction` is `[1.0, 0.0, 0.0, 0.0]` - red. It reads at
+   > 82 confidence through the register trace only because the trace was run
+   > on `12_sol_2`, where the same parameter happens to author cyan; reading
+   > the parameter directly (`Material::parameters`, no register trace) across
+   > all 12 circuits with pad geometry gets 88 and shows it varies per
+   > circuit. None of the three alternatives this bullet named is what
+   > happened - the colour was always in this material record, just not on
+   > the one circuit measured first. Only the *toggle* (does anything gate
+   > the accumulate on/off at runtime) is still open.
 3. **It does not contradict "a speed pad is never recoloured on any title".**
    That closed bullet is about *speed* pads and about *recolouring*. An
    emissive layer toggling on and off is a different mechanism, and the two can
@@ -293,15 +328,23 @@ whether to spend on wiring it at all, and the two RE leads.
    HD pad drawing the same in both states is the correct answer, not a
    placeholder to improve on. Do not add a cooldown grey by analogy with Pulse
    - the two titles' pads are already established to differ in mechanism,
-   since Pulse's texture is neutral and HD's is painted. And per step 1's
-   measurement: the material's own shader accumulates the light-bar layer
-   unconditionally on every chunk read, with no parameter that looks like a
-   gate, and (2026-09-07) neither its RGB nor any tint anywhere in either
-   pad's shader is red - so if 2-3 do find a cooldown state, it is not
-   sitting in this material record, this file or this shader, and it is not
-   yet clear it is the same mechanism as the emissive layer at all. Wire
-   whatever colour 2-3 find as its own thing rather than assuming it slots
-   into `emissive`'s tint.
+   since Pulse's texture is neutral and HD's is painted. Per step 1's
+   measurement, the material's own shader accumulates the light-bar layer
+   unconditionally on every chunk read, with no parameter patch that looks
+   like a gate.
+
+   > **Corrected 2026-09-16, commit `91071e60`.** "Neither its RGB nor any
+   > tint anywhere in either pad's shader is red" is wrong - see the `## Open`
+   > section. The colour patched into this accumulate *is* red on
+   > `talons_junction` (and `tech_de_ra`, `modesto_heights`,
+   > `15_anulpha_pass`), authored per material instance. So if 2-3 find a
+   > cooldown state, whether it reuses this same accumulate (perhaps gated by
+   > a runtime flag this pass didn't find, since no parameter patch gates it
+   > today) or is a wholly separate mechanism is still open - but "the colour
+   > isn't in this material record" is no longer a reason to think it's
+   > separate. Wire whatever gate 2-3 find as its own thing; the colour, if
+   > this same accumulate is what lights up, is already measured above and
+   > does not need re-deriving.
 
 A play capture would settle the *observable* half quickly, but is not this
 project's cheap step right now: this desktop has no working GUI windows and

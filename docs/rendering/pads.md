@@ -15,14 +15,18 @@ gets into a model at all is `oag_render::mesh::build_pads` on PSP/PS2 and
 | --- | --- | --- | --- |
 | Pulse (PSP/PS2), Pure | `Speedup Pad` | the texture, unmodified | 90 |
 | Pulse (PSP/PS2), Pure | `Weapon Pad` | `pad+0x6c`, a per-tick runtime write | 85 |
-| HD / Fury | `Speedup Pad` | the texture, unmodified | 80 |
-| HD / Fury | `Weapon Pad` | the texture; any armed/cooling state is **unrecovered** | 80 |
+| HD / Fury | `Speedup Pad` | the texture, plus a per-circuit-authored additive glow tint (cyan on every circuit measured) | 88 |
+| HD / Fury | `Weapon Pad` | the texture, plus a per-circuit-authored additive glow tint - red on `talons_junction`, `tech_de_ra`, `modesto_heights`, `15_anulpha_pass`, cyan/blue on the other 8; any armed/cooling state change is **unrecovered** | 88 |
 
-Three of those four rows say "the texture", and that is the finding worth
-carrying: **on every title measured, a pad's colour is painted by the artists
-and the engine leaves it alone.** The one exception is Pulse's `Weapon Pad`,
-and it is exceptional because its texture is deliberately neutral so that the
-runtime write has something to colour.
+All four rows agree on the finding worth carrying: **on every title measured,
+a pad's colour is authored by the artists and the engine leaves it alone -
+Pulse's runtime write included, since even that reads a fixed keyframe table
+rather than computing anything.** HD's two rows are authored in two places at
+once, not one: the diffuse texture paints a fixed cross/chevron outline, and
+the `_ne`-alpha-gated additive glow (the light bars) is tinted by a per-material
+parameter authored per circuit - see "Corrected 2026-09-16" below for the
+per-circuit table. Nothing on HD is a per-tick write like Pulse's `Weapon Pad`;
+"per-circuit-authored" means baked into the `.rcsmaterial` file, read once.
 
 ## A speed pad is never recoloured, on any title
 
