@@ -13,7 +13,7 @@
 //!
 //! # Settled 2026-09-17: the routing question this combine used to block on
 //!
-//! Two hypotheses stood in `handover/rendering/hd-needs-a-per-material-shader-path-and.md`:
+//! Two hypotheses stood in this project's own open-thread tracker:
 //! either the grid's own sampler word is not the binding it appears to be, or
 //! the variant this project resolves is the wrong one. **Neither.** Read
 //! directly off the disc (`hd_glass_sheen_census.rs --params etched_glass_tech`
