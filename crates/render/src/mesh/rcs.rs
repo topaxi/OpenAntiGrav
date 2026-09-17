@@ -139,13 +139,17 @@ mod pads;
 pub use pads::{build_pads, build_weapon_pads};
 pub mod psp2;
 mod skin;
-use skin::{flips, picks, roles, skin, variants};
 
 mod emissive;
 pub use emissive::EMISSIVE_LIMIT;
 
 mod place;
 use place::{is_world_baked, node_geometry, referenced};
+
+pub mod curve_track;
+
+mod setup;
+use setup::{MaterialSetup, material_setup};
 
 /// The whole of a PS3 model: the meshes its `.vex` places, and the geometry
 /// nothing in the `.vex` mentions.
@@ -288,9 +292,16 @@ fn surface(
     skin: &[Option<std::sync::Arc<ModelTexture>>],
     material_slots: &[u32],
     material_specular_exponent: &[f32],
+    material_anim: &[u32],
 ) -> Surface {
     let slot = mesh.material as usize;
     let texture = skin.get(slot).and_then(Option::as_ref).map(|_| slot);
+    // Which of `Model::anim_tracks` this material's own curve (if any) drives
+    // - see `curve_track::material_anim_tracks`. `0` (no track) for a
+    // material with nothing authored to animate, the same "index plus one"
+    // shape `GpuVertex::anim` already carries for a Pulse/Pure `TEXOFFSET`
+    // block.
+    let anim = material_anim.get(slot).copied().unwrap_or(0);
     // `DEFAULT` for a slot with no reading, which is what every title but HD
     // has and what an HD material whose microcode did not trace answers.
     let mut roles = material_slots.get(slot).copied().unwrap_or(slots::DEFAULT);
@@ -325,6 +336,7 @@ fn surface(
         cutout,
         roles,
         specular_exponent,
+        anim,
     }
 }
 
@@ -415,6 +427,10 @@ struct Surface {
     /// see [`cutout`]. Never set together with [`Self::blend`]: mode 2 turns
     /// the alpha test on and blending off, and they are separate registers.
     cutout: bool,
+    /// Which of `Model::anim_tracks` this surface's material drives, plus
+    /// one; `0` (identity) for a material with no curve. See
+    /// [`curve_track::material_anim_tracks`].
+    anim: u32,
 }
 
 /// Zero for a coordinate that is not a finite number.
@@ -536,7 +552,7 @@ fn emit(
             } else {
                 1.0
             },
-            anim: 0,
+            anim: surface.anim,
             slots: surface.roles,
             xform: place.xform,
             // The colour set's fourth byte - see
@@ -602,90 +618,6 @@ fn emit(
         // `mesh::rcs::cutout`. `None` here leaves that path alone.
         alpha_test_ref: None,
     });
-}
-
-/// One `.rcsmodel`'s whole material setup: every texture, lightmap, slot
-/// role, specular exponent, additive-glow table and alpha-test reference a
-/// caller's [`Model`] needs before it emits a single vertex.
-///
-/// Shared by [`build_with_options`] and [`pads::build_pad_class`] - both read
-/// the same per-material tables off the same file, keyed the same way, and a
-/// caller that re-derived them by hand would drift from this one the moment
-/// either grew a term. It has grown four already (`material_specular_exponent`,
-/// `emissive`, `alpha_test_ref`, the `FLIP_V` fold) since the reading this was
-/// still one inline block.
-struct MaterialSetup {
-    textures: TextureSlots,
-    lightmaps: TextureSlots,
-    material_slots: Vec<u32>,
-    material_specular_exponent: Vec<f32>,
-    material_variants: Vec<Option<oag_rcs::rcsmaterial::Variant>>,
-    emissive: Vec<crate::mesh::Emissive>,
-    alpha_test_ref: Option<f32>,
-}
-
-fn material_setup(
-    model: &rcsmodel::Model,
-    textures: Textures<'_>,
-    report: &mut Report,
-) -> MaterialSetup {
-    // **The variant first**, because which sampler entry each of this
-    // renderer's two bindings comes from is a property of the shader the
-    // lit-race key resolves to, not of the entry's position - see
-    // `skin::picks`.
-    let material_variants = variants(model, textures, report);
-    let picks = picks(model, &material_variants, textures);
-    let (skins, seconds) = skin(model, &picks, textures, report);
-    // After the variants, because the roles are read off the resolved one.
-    let skin::Roles {
-        packed: mut material_slots,
-        specular_exponent: material_specular_exponent,
-    } = roles(
-        model,
-        &material_variants,
-        &picks,
-        &seconds,
-        textures,
-        report,
-    );
-    // **The coordinate's orientation, off the resolved *vertex* block** rather
-    // than the fragment one the roles come from, and folded into the same word
-    // because it is the same kind of statement: what this material's own
-    // microcode says. See `skin::flips`.
-    for (packed, flipped) in
-        material_slots
-            .iter_mut()
-            .zip(flips(model, &material_variants, textures))
-    {
-        if flipped {
-            *packed |= slots::FLIP_V;
-        }
-    }
-    // The additive glow, read off the same resolved variant the roles are -
-    // and after the flip, because it writes into the same word. See
-    // `mesh::slots::ADD_SECOND`.
-    let emissive = emissive::emissive(
-        model,
-        &material_variants,
-        &picks,
-        &seconds,
-        &mut material_slots,
-        textures,
-        report,
-    );
-    // The disc's own alpha-test reference, for a caller's cutout draws - see
-    // `cutout`, which reports a comparison this shader cannot reproduce
-    // rather than drawing one wrongly.
-    let alpha_test_ref = cutout::reference(model, report);
-    MaterialSetup {
-        textures: skins,
-        lightmaps: seconds,
-        material_slots,
-        material_specular_exponent,
-        material_variants,
-        emissive,
-        alpha_test_ref,
-    }
 }
 
 /// Flattens every node of `class` into one buffer pair, taking its geometry
@@ -772,7 +704,9 @@ fn build_with_options(
         material_variants,
         emissive,
         alpha_test_ref,
-    } = material_setup(&model, textures, &mut report);
+        material_anim,
+        anim_tracks,
+    } = material_setup(&model, model_blob, textures, &mut report);
     out.emissive = emissive;
     out.textures = skins;
     out.lightmaps = seconds;
@@ -789,6 +723,8 @@ fn build_with_options(
     out.material_variants = material_variants;
     out.material_slots = material_slots;
     out.material_specular_exponent = material_specular_exponent;
+    out.material_anim = material_anim;
+    out.anim_tracks = anim_tracks;
 
     for (index, node) in nodes
         .iter()
@@ -849,6 +785,7 @@ fn build_with_options(
                 &out.textures,
                 &out.material_slots,
                 &out.material_specular_exponent,
+                &out.material_anim,
             );
             report.see_through += usize::from(surface.blend.is_some());
             report.cutout += usize::from(surface.cutout);

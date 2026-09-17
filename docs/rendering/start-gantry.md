@@ -1567,12 +1567,17 @@ than between a thread and the code.
   `hd_gantry_curve_ground_truth.rs`. **What the four curves actually author
   is a per-material wipe/reveal ramp staggered across a shared 13.333 s
   loop, not four discrete glyph states** - which does not by itself explain
-  how the board reads `3`/`2`/`1`/`GO`. **Playback is not wired**: no time
-  base connects this curve's own loop to the ~6 s countdown a player sees,
-  and the per-node `+0xe4` static UV override table `billboards.md`'s
-  2026-09-17 first section already named is at least as likely the real
-  glyph-selection mechanism - unchased, and the lead for whoever picks this
-  up next.
+  how the board reads `3`/`2`/`1`/`GO`. **2026-09-17, `lane/hd-gantry-wire`:
+  playback is now wired, generically, across every `.rcsmodel` material that
+  carries a curve** (`oag_render::mesh::rcs::curve_track`,
+  `docs/formats/edge-animation.md`'s own updated section) - the same race
+  clock every other animation on the model already rides, no new time base
+  chosen. This makes the digit board's crop windows wipe instead of
+  freezing; it does not make them read `3`/`2`/`1`/`GO`, because the curve is
+  a wipe, not a selector. See
+  [`billboards.md`](../ghidra/functions/ps3-hdfury-eu/billboards.md)'s own
+  2026-09-17 sections for the per-node `+0xe4` static UV override table this
+  lane chased next as the actual glyph-selection candidate.
 - **The backing pieces sit inside the mount's own thick structure.**
   `CLEARANCE` (1.0, unchanged, still Pulse's own measured order) clears the
   digit board's near-zero local depth but not `Honey_Board`'s HD analogue,

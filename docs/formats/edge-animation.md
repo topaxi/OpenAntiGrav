@@ -227,23 +227,39 @@ reads `3`, `2`, `1`, `GO` in sequence over a ~6 s countdown while this curve's
 own loop is 13.333 s: no time base connecting the two has been established
 (`Billboard_UpdateInstanceUvs`'s own clock argument, where it ultimately comes
 from, was not traced further - tracing it is a new RE thread, out of the scope
-that recovered this format). **Playback is not wired into
-`crates/render/src/mesh/rcs.rs`** for exactly this reason: wiring it would
-mean picking a time base with no evidence behind the choice, which is the
-invented-mechanism failure `CLAUDE.md`'s "never invent what the assets
-already author" rule exists to stop - a curve landing on a plausible-looking
-frame by construction of a guessed time base is not the same thing as the
-digit board actually reading correctly for the reason this curve drives it.
+that recovered this format).
 
-**A live capture already shows the digit board's glyphs light up during an
-actual countdown** (`docs/rendering/start-gantry.md`,
-`docs/ghidra/functions/ps3-hdfury-eu/billboards.md`'s 2026-09-13 section), and
-the per-node `+0xe4` static UV override table `Billboard_UpdateInstanceUvs`
-also reads (billboards.md's 2026-09-17 first section) is at least as likely a
-candidate for the actual glyph-selection mechanism as this curve - it is a
-second, distinct write path this project has located but not chased, per this
-lane's own scope. Whoever picks this up next: start there rather than
-re-deriving a time base for the curve documented on this page.
+**2026-09-17, `lane/hd-gantry-wire`: playback is now wired, generically, and
+this is not the same claim as "the digits are correct".** Every `.rcsmodel`
+material carrying a curve - not gantry-specific, see
+[`oag_render::mesh::rcs::curve_track`](../../crates/render/src/mesh/rcs/curve_track.rs)'s
+own doc comment - becomes one more entry of
+[`oag_render::mesh::Model::anim_tracks`](../../crates/render/src/mesh/anim_track.rs),
+the exact table Pulse's own `TEXOFFSET` blocks already fill, sampled every
+frame through the **same per-model clock every other animation on that model
+already rides** - the race clock, unshifted, `crates/game/src/race/gantry.rs`'s
+own `seconds = world.tick / 60` for the gantry, `mesh::rcs::skin`'s callers'
+own clock for anything else. **No new time base was chosen**: this is the
+standing "never invent" rule read the other way round - the invention this
+page always refused was picking a clock to make the digits line up, and
+reusing the clock the model's own node animations already use is not that,
+it is the one clock this project already had evidence for. Verified end to
+end against the real disc,
+[`hd_gantry_curve_replay_ground_truth.rs`](../../crates/render/tests/hd_gantry_curve_replay_ground_truth.rs):
+all four curved materials reach `AnimTrack::Rcs`, a vertex of each selects
+one, and the sampled table differs between two points in time.
+
+**This makes the digit board's crop windows wipe instead of freezing at frame
+zero - it does not make them read `3`, `2`, `1`, `GO`.** The curve is a wipe,
+not a selector (above), so wiring its replay plays the wipe correctly and
+faithfully, and a player watching the gantry now sees the four crop windows
+slide rather than sit static - which is real, honestly-drawn authored motion
+across all 79 of the disc's curved models, not only this one. It is **not**
+the countdown mechanism: see
+[`billboards.md`](../ghidra/functions/ps3-hdfury-eu/billboards.md)'s own
+2026-09-17 section for what was chased next, the per-node `+0xe4` static UV
+override table `Billboard_UpdateInstanceUvs` also reads - a second, distinct
+write path from this curve.
 
 ## Coverage
 
