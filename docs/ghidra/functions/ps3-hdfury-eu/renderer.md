@@ -3567,11 +3567,22 @@ tile-grid and material-probe rows already drew:
 | `animhexlights` (325) | 1,712 | 70.1° | 56.5° | **45.5°** |
 | `lambert` (207) | 72 | 2.9° | 78.4° | **42.8°** |
 
-**Two of four land in the reference's own 39-86° warm band once the
-disc's own curve is applied to the disc's own baked colour, using nothing
-fitted** - `animhexlights` at 45.5°, `lambert` at 42.8°. This names the
-wrong operation *and* the fix produces the right family of colour, which is
-the strongest form of result this brief asked for. Both materials' own
+**Two of four land in the reference's own 39-86° warm-band hue, with two
+caveats that keep this a hue result and not a closed one.** `animhexlights`
+(45.5° curved, 1,712 vertices, stable across raw/top-decile/curved at
+70/56/45°) is the load-bearing one of the two. `lambert`'s own number is not:
+72 vertices total, a top decile of 7, and its own raw-mean (2.9°) and
+top-decile (78.4°) hues disagree by 75° on the *same* population - that
+instability is itself evidence the number is noise, not a second
+confirmation, and it is reported as a hue only, not a finding. Second,
+`animhexlights`' own top-decile colour is close to grey - `rgb=(0.6204,
+0.6161, 0.5461)`, a channel spread of about 0.07 on a value of 0.62, roughly
+11% saturation - and HSV hue is a much noisier statistic on a near-grey
+colour than on a saturated one. The reference's own "39-86° warm" reading
+(two sessions ago) used a saturation-weighted circular mean specifically
+because an unsaturated pixel's hue is not to be trusted alone; this session's
+`45.5°` was not checked against the reference's own saturation at the
+matching region, for the reason in the next paragraph. Both materials' own
 declared parameters are genuine colours, not modifiers of a texture that
 could hide a different source: `animhexlights` multiplies its albedo by an
 unnamed `0xef18f362` = `(0.060, 0.211, 0.424)` and its gradient sample by
@@ -3584,6 +3595,25 @@ the top decile far more than the mean (a vertex at 1.0 curves to 6.0, one at
 0.25 to 0.07 - an 85x spread), so the population that actually dominates a
 curved sum is the brightest tenth, not the arithmetic mean, which is why the
 table reports both.
+
+**A magnitude check against the material-probe's own measured reference
+luma does not corroborate the hue result, and is left as a discrepancy
+rather than smoothed over.** Multiplying `animhexlights`'/`base_diffusespecular`'s
+curved top-decile term by their own DXT1 albedo's mean RGB (`dc_hexgrid.gtf`
+untried this pass; `dc_cement_base_edges.gtf` mean `(0.679, 0.655, 0.629)`,
+`and_metaldark.gtf` mean `(0.173, 0.175, 0.172)`, both read with
+`crates/texture/examples/gtf_to_png.rs`) overshoots
+`hd-material-probe.py`'s own measured reference luma for these slots by
+roughly 4-5x (e.g. `base_diffusespecular`'s curved term times its albedo
+lands close to full white on two channels, against the probe's own
+`ref_mean 0.1933`). The top decile is the population a curved *sum* is
+dominated by in the vertex data, but a screen pixel is an interpolated blend
+across a whole triangle, most of whose area is not its brightest vertex - so
+this mismatch says the top-decile statistic is the wrong stand-in for "what
+the surface looks like on screen," not that the curve or the ambient finding
+is wrong. **The magnitude question is open; only the hue-family question was
+checked this session**, and the doc says so rather than presenting one
+positive check as if it were two.
 
 **Two of four are a clean, disc-value negative, not an inconclusive one.**
 `base_diffusespecular` and `cf_diff_spec` stay in a 190-202° cool-blue family
@@ -3600,19 +3630,42 @@ this term. This is the fix's scope, stated precisely rather than
 overclaimed.
 
 **Not settled by this reconstruction, and worth stating rather than
-glossing over**: `animhexlights` classified **zero** pixels at this
-session's own camera pose (`amphiseum-matched` pose 00, `--pair-dir`) - the
-previous session's row mapping that put it across a large share of the
-visible ceiling (`y 14-212`, centroid 158) came from `amphiseum-grid`, a
-capture that no longer exists on disk. So "two of four go warm, two do not"
-is established from the disc's own authored values, independent of any
-capture, but *how much of the reference's warm ceiling area these two
-particular materials actually cover on screen* is not re-confirmed at a
-pose where they are visible. This session did not run RPCS3: the brief's own
-gate for a live read is "none of the four programs can produce warm gold
-from static disc inputs," and that precondition is false - two of them do,
-from values already on the disc, so a live read was not needed to reach a
-positive result.
+glossing over - the capture this session used does not show the warm
+ceiling at all.** `animhexlights` classified **zero** pixels at this
+session's own camera pose (`amphiseum-matched` pose 00, `--pair-dir`), and a
+direct check of that pose's own tile grid
+(`scripts/hd-frame-compare.py --pair-dir data/reference/hd-capture/
+amphiseum-matched --tiles 4x6`) shows the reference frame's own top rows
+reading **180-220°** (cyan/blue-grey), not the 39-86° warm band two sessions
+ago measured - so `amphiseum-matched` pose 00 is not looking at the dome the
+way the capture that established the warm reading did. That capture,
+`amphiseum-grid`, no longer exists on disk (two sessions ago), which is why
+this session had to identify the four materials' slot numbers against a
+different pose in the first place. **The four materials' own identity
+(`animhexlights`/`cf_diff_spec`/`lambert`/`base_diffusespecular`'s
+non-lightmap slot) carries over from the previous session's `--pair-dir
+amphiseum-grid` naming**, and this session's own vertex-colour reads are a
+property of the `.rcsmodel` file itself, independent of any camera pose -
+but *that the specific chunks sampled here are the same physical dome
+geometry* rests on the material name matching across two different sessions
+and two different captures, not on a fresh, direct re-observation this
+session. A short RPCS3 recapture was attempted to close this
+(`scripts/rpcs3-drive.py capture --nav "Main Menu=right" --nav "Track
+Creation=right,right,right,right,right,right,right,right" --team
+feisar_c1 --hull-variant concept1 --load 20 --interval 2`) but the nav plan
+landed on Talon's Junction instead of Amphiseum - the menu route this
+session's build takes inserts a "Single Player" screen the cited
+`rpcs3-capture.md` walk does not name, so the eight-`right`s-at-`Track
+Creation` count from that page's own carousel table does not carry over
+unchanged. Not chased further this session (menu-navigation exploration is
+outside this lane's brief and risked turning into its own rabbit hole);
+RPCS3 and its Xvfb display were stopped cleanly. This session did not
+otherwise need a live read: the brief's own gate for one is "none of the
+four programs can produce warm gold from static disc inputs," and that
+precondition is false - `animhexlights` does, from values already on the
+disc - but the pose mismatch above means the coverage question ("how much of
+the reference's actual warm ceiling is `animhexlights`/`lambert` versus the
+other two") is still open, not answered.
 
 **The fix implied, sequenced, and its exact scope, for the coordinator to
 land in `mesh.wgsl` (not touched this session - out of this lane's files)**:

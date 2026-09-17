@@ -124,6 +124,12 @@ fn main() -> anyhow::Result<()> {
         let mut raw: Vec<[f32; 3]> = Vec::new();
         let mut chunks_with_colour_set = 0usize;
         let mut chunks_total = 0usize;
+        // Chunk-local Y range (bias + quantised position, no node placement
+        // applied) - a coarse, capture-independent check that a slot's own
+        // geometry actually sits overhead rather than at track level, since
+        // the capture that measured the dome's screen position by eye
+        // (`amphiseum-grid`) is gone from disk.
+        let (mut y_min, mut y_max) = (f32::MAX, f32::MIN);
         for mesh in source
             .meshes
             .iter()
@@ -155,10 +161,19 @@ fn main() -> anyhow::Result<()> {
                     continue;
                 };
                 raw.extend(colours.into_iter().map(|c| [c[0], c[1], c[2]]));
+                if let Ok(positions) = mesh.positions(&geometry, submesh, stride) {
+                    for p in positions {
+                        y_min = y_min.min(p[1]);
+                        y_max = y_max.max(p[1]);
+                    }
+                }
             }
         }
         println!("  chunks: {chunks_with_colour_set} of {chunks_total} carry a colour set");
         println!("  vertices: {}", raw.len());
+        if y_min <= y_max {
+            println!("  chunk-local y range: [{y_min:.1}, {y_max:.1}]");
+        }
         report("raw, whole population", &raw);
 
         // The top decile by luma: the population a `pow(x, 3.5)` sum is
