@@ -111,33 +111,44 @@ not split, because its bound is a ratio and slicing the sample rebuilt a flake
 - see `RACES`'s own doc comment, 2026-09-08 incident, 6 races could not tell
 9% from 17%).
 
-**What this means for the brief's timing table.** Today's isolated measurement
-of `ai_roll_ground_truth` (started at load average ~22, climbed past 40 as
-another lane's full-workspace `test-data` gate ran concurrently) was killed
-before completing cleanly - the same 6.6x load-swing the brief itself warns
-about was visibly in effect (build and link contention alone stretched a
-normally ~10s `cargo nextest list` compile past 60s). No isolated-duration
-table is reported here because no clean sample was taken; see "Open question"
-below.
+**What this means for the brief's timing table.** A first attempt at this
+measurement (load average ~22, climbing past 40 as another lane's
+full-workspace `test-data` gate ran concurrently) was killed before
+completing cleanly - the same 6.6x load-swing the brief itself warns about
+was visibly in effect (build and link contention alone stretched a normally
+~10s `cargo nextest list` compile past 60s). See below for the clean,
+idle-machine re-measurement.
 
-## Open question, not resolved in this pass
+## Resolved: idle measurement taken, no regression
 
-Between 2026-09-13 (ai_roll measured 158-165s idle, ps2_source 160s) and today
-(2026-09-17), substantial gameplay-simulation code landed on this branch's
-ancestry - weapons (rocket, mine, plasma, disruptor, LeachBeam slowdown),
-eliminator scoring, wrecked-opponent respawn, and a multiplayer per-slot input
-snapshot change to `Race::tick`. Any of these could have genuinely raised the
-per-tick CPU cost of every ground-truth test that runs a simulated race,
-independent of load contention. This lane could not tell contention-inflation
-apart from a genuine regression without an isolated reading, and no idle
-window was available in this session (a concurrent lane was gating the merged
-`main` throughout). **This needs a clean, single-lane measurement on an idle
-machine to resolve** - not a test-file change, since neither target file has
-a valid further split. If the isolated numbers come back near 158-165s as in
-2026-09-13, this is a closed, negative-but-complete result. If they come back
-materially higher, that is a "find what grew" finding pointing at
-`crates/gameplay`/`crates/ai`/`crates/physics` production code this lane does
-not own, not a test-splitting task.
+Team lead confirmed the machine idle (CPU busy 6.9-14.1% over a 3s
+`/proc/stat` sample, zero `nextest`/`rustc`/`rpcs3` processes, no other lane
+active) rather than by load average, which was still reading 7.0 several
+minutes after the last run finished - a lagging indicator, not a "safe to
+measure" signal. Measured both binaries in full (`-E
+'binary(ai_roll_ground_truth)'` / `-E 'binary(spawn_heading_ground_truth)'`),
+each test its own nextest process:
+
+| `ai_roll_ground_truth` test | 2026-09-13 | 2026-09-17 (idle) |
+| --- | --- | --- |
+| skilled/novice, held-out seed | 158-165s band | **88.8s** |
+| skilled/novice, default seed | 158-165s band | **91.5s** |
+| ace/elite, held-out seed | 158-165s band | **96.8s** |
+| ace/elite, default seed | 158-165s band | **97.9s** |
+| elite/skilled, default seed | 158-165s band | **99.3s** |
+| elite/skilled, held-out seed | 158-165s band | **99.7s** |
+
+`spawn_heading_ground_truth`: forward **43.3s** (was 81s), reversed
+**37.1s**; the three per-source tests 5.5-31.2s (was 37s max).
+
+**No regression** - every test is faster than the 2026-09-13 figures despite
+the weapons work that landed since (rocket, mine, plasma, disruptor,
+LeachBeam slowdown, wrecked-opponent respawn, the multiplayer per-slot
+`Race::tick` change). All of today's brief's 212-350s/243s figures were
+contention from a concurrent lane's full-workspace gate, not a real cost.
+Written up in `docs/architecture/workspace-layout.md` beside the existing
+measurement table, with the CPU-idle methodology recorded so "load average
+looked high" doesn't cost a third round of this same misreading.
 
 ## What changed on this branch
 
@@ -170,6 +181,19 @@ nextest run -p oag-game` (non-disc tests only, no `--run-ignored`) passed
 suite broke. `cargo fmt --all --check` is clean.
 
 `race_ground_truth::a_lone_craft_gets_round_the_circuits_it_is_known_to_get_
-round` was not touched and was not run to completion in this session (it is
-disc-backed and `#[ignore]`d); no reason to expect it changed, since no
-production code was touched.
+round`, run on the same idle machine (15.6s): `clean laps: ["16_Track",
+"03_Track", "02_Track", "10_Track", "05_Track", "04_Track", "09_Track",
+"14_Track", "01_Track", "13_Track", "06_Track", "07_Track"]`, `no clean lap:
+[]` - stays all-twelve-clean, matching the baseline main this lane branched
+from.
+
+Not run: the full `just` / `just test-data` gate. This lane made no
+production-code change and no test-assertion change, only two doc/comment
+edits (`.config/nextest.toml`, `docs/architecture/workspace-layout.md`) and
+one new scratch file - `just check-docs` is clean on the latter, `cargo fmt
+--all --check` is clean, and `cargo nextest run -p oag-game` (non-disc, no
+`--run-ignored`) passed 963/963. Given the two specific tail targets and the
+one specific race test the brief asked to verify all measured clean on an
+idle machine with no code changed, a full `test-data` run would reconfirm the
+same 4,722/4,722 baseline `main` already has rather than test anything this
+lane touched.
