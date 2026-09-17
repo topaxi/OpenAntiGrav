@@ -715,8 +715,8 @@ pub struct Loaded {
     /// says so - it is not a silent substitution.
     pub flare: Option<FlareTexture>,
     /// The Cannon round's bolt streak and muzzle flash textures off the
-    /// disc (`Data\Weapons\Textures\Cannon_bolt.mip`/`Cannon_muzzle_flash.mip`
-    /// - see `crate::race::CANNON_BOLT_TEXTURE_ENTRY`), when each decodes.
+    /// disc, when each decodes: `Data\Weapons\Textures\Cannon_bolt.mip` and
+    /// `Cannon_muzzle_flash.mip`, see `crate::race::CANNON_BOLT_TEXTURE_ENTRY`.
     /// One tuple field rather than two for the same reason
     /// `weapon_models::load_cannon_quad_textures` returns them unnamed - see
     /// that function's own doc. `None` falls back to
