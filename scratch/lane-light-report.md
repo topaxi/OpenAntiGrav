@@ -223,7 +223,50 @@ flock "$HOME/.cache/oag/gate.lock" just
 flock "$HOME/.cache/oag/gate.lock" env OAG_REQUIRE_GAME_DATA=1 just test-data
 ```
 
-Results and whether the run was watched to completion: see the report
-summary this file's caller received (kept out of this file since the gate
-finished after this report was drafted; update here if a discrepancy turns
-up).
+Both runs were watched to completion, not backgrounded-and-assumed.
+
+**`just`: exit 0**, clean, including `python3 scripts/gen-re-coverage.py --check`
+("RE coverage table matches names.tsv and the evidence pages") - this
+change touches a `docs/ghidra/**` page (`renderer.md`) but no `names.tsv`
+row, so `just gen-status` was also run directly and reported "RE coverage
+block already current" (no diff to commit).
+
+**`just test-data` (`OAG_REQUIRE_GAME_DATA=1`): exit 1, but 4717 tests run,
+4717 passed, 0 failed, 0 skipped** (`Summary [493.506s] 4717 tests run:
+4717 passed (26 slow), 0 skipped`, and a `grep -c FAIL` over the full log
+comes back `0`). The exit code is `check-test-budget`, not a test failure:
+
+```
+oag-game::ai_roll_ground_truth a_full_grid_of_ace_arms_no_fewer_rolls_than_elite_at_the_default_seed
+  took 367s, over the 300s ceiling.
+oag-game::ram_ground_truth a_ram_fires_only_where_there_is_room_and_rarely_throws_the_rammer_out
+  took 320s, over the 300s ceiling.
+the suite took 494s, over the 450s ceiling.
+```
+
+This matches the brief's documented non-test red for `ai_roll_ground_truth`
+(367s here, against the 329/327s the brief measured, both over the 300s
+ceiling under full-suite contention - not this lane's to fix, no `BASELINE`
+row added). `oag-game::ram_ground_truth` reading 320s over budget in this
+run **was not named in the brief** - one data point, on a machine this
+project's own docs already record swinging the same suite from 367s to 141s
+to 285s across three hours purely from load, so it reads as the same
+machine-contention pattern rather than a new regression, but it is flagged
+here rather than silently folded into the known red.
+
+**Watch-list, checked by name**:
+
+- `hd_engine_flare_ground_truth`: all 12 matching lines in the log are
+  `PASS`, 0 `FAIL`.
+- `hd_envsettings_carry_ground_truth`: `PASS [146.706s] (402/4717)
+  oag-game::hd_envsettings_carry_ground_truth
+  every_environment_on_the_disc_builds_its_bloom_chain` - the "16 of 16"
+  assertion is internal to the test body (not printed to the nextest
+  summary on a pass), so a pass is what confirms it held.
+- `race_ground_truth::a_lone_craft_gets_round_the_circuits_it_is_known_to_get_round`,
+  quoted verbatim: `PASS [  30.251s] ( 357/4717)
+  oag-game::race_ground_truth
+  a_lone_craft_gets_round_the_circuits_it_is_known_to_get_round`.
+
+No golden hash was edited to pass anything, and no `BASELINE`/`TEST_BASELINE`
+row was added for the budget check.
