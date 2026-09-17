@@ -124,7 +124,11 @@ fn main() -> anyhow::Result<()> {
         let mut raw: Vec<[f32; 3]> = Vec::new();
         let mut chunks_with_colour_set = 0usize;
         let mut chunks_total = 0usize;
-        for mesh in source.meshes.iter().flat_map(oag_rcs::rcsmodel::Mesh::surfaces) {
+        for mesh in source
+            .meshes
+            .iter()
+            .flat_map(oag_rcs::rcsmodel::Mesh::surfaces)
+        {
             if mesh.material != slot {
                 continue;
             }
@@ -163,7 +167,10 @@ fn main() -> anyhow::Result<()> {
         let mut by_luma = raw.clone();
         by_luma.sort_by(|a, b| luma(*b).partial_cmp(&luma(*a)).unwrap());
         let top = by_luma.len() / 10;
-        report("raw, top decile by luma", &by_luma[..top.max(1).min(by_luma.len())]);
+        report(
+            "raw, top decile by luma",
+            &by_luma[..top.max(1).min(by_luma.len())],
+        );
 
         // The same top decile through Amphiseum's own authored curve -
         // applied to the raw normalised byte, with **no** sRGB decode: the

@@ -33,7 +33,9 @@ fn main() -> anyhow::Result<()> {
     let (model, _) = mesh::rcs::scene_from(&spec, &name, &data)?
         .ok_or_else(|| anyhow::anyhow!("{name}: not a PS3 model"))?;
 
-    println!("slot\tmaterial\tclass\tclass_hash\tfeature_hash\tvertex_offset\tfragment_offset\tfragment_len\tfragment_hash");
+    println!(
+        "slot\tmaterial\tclass\tclass_hash\tfeature_hash\tvertex_offset\tfragment_offset\tfragment_len\tfragment_hash"
+    );
     for (slot, material) in source.materials.iter().enumerate() {
         let is_ceiling = material.name.ends_with("animhexlights.rcsmaterial")
             || material.name.ends_with("cf_diff_spec.rcsmaterial")
