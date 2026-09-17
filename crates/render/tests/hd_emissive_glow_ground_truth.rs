@@ -143,11 +143,18 @@ fn a_circuit_authors_a_glow_table_and_never_over_its_lightmap() {
 
         // The index lives in the high half and the roles in the low half; a
         // role bit that had crept above the split would be read as an index.
+        // **`slots::ZONE_TRACK` (bit 9) is deliberately excluded**: it is the
+        // one bit in this word that is per chunk, not per material
+        // (`mesh::rcs::surface` ORs it in after `model.material_slots` is
+        // built), so it never appears here and its absence is not a gap in
+        // this reading. `slots::FACING_RAMP_SHEEN` (bit 10) is a tenth role
+        // bit, added 2026-09-17 for the glass family's facing-ramp combine -
+        // see `mesh::rcs::glass_sheen`.
         for packed in &model.material_slots {
             assert_eq!(
-                packed & slots::ROLE_MASK & !0x1ffu32,
+                packed & slots::ROLE_MASK & !(0x1ffu32 | slots::FACING_RAMP_SHEEN),
                 0,
-                "a role bit outside the nine this reading defines"
+                "a role bit outside the ten this reading defines"
             );
         }
         assert!(
