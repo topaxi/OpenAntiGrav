@@ -295,6 +295,30 @@ are up in every state reached and now draw where the original has them, and
 the shield fill, the pickup slot, the speed fills and Zone's lit dashes are
 read as state-gated and not yet wired.
 
+**[2048 front end](2048-frontend.md)** is the same reading applied to 2048's
+Vita package, and it ships once - no lineage question the way HD's six copies
+pose one. The front end is not Wipeout HD's `FEGlobals`/`MenuSkin` idiom at
+all: no `<FEGlobals>` block anywhere, and the whole vertical-list/horizontal-strip
+vocabulary is gone, replaced by a touch-icon grid (`GameModeChoice`, `Home`)
+over a persistent 3D campaign map (`FE3DCanvas`). The five-screen boot chain
+is declared in the XML and corroborated in the same order on one cold Vita3K
+launch, 2026-09-17 - a `LOADING...` screen and an attract-mode demo race sit
+between `TitleScreen` and `GameModeChoice`, matching
+[2048-hud.md](2048-hud.md)'s own `DemoRaceManager` finding with an actual
+frame of it running. **This page also corrects that page**: the HUD's raw
+`IG_HUD_*` fallback text is not because the disc names no font - `english`'s
+language plugin names a `2048HUD` role pointing straight at
+`Data\XML\2048_hud\font\2048_hud.fnt` - it is because `oag_2048::TITLE.front_end`
+being `None` starves the loader of a plugin to read it from. And every one of
+Wipeout HD's own language-plugin bugs reproduces here, several byte for byte:
+the `Svenska` name mixups, Russian's mangled `P??????`, and the still-labelled
+`Wipeout Pulse` internal id. `front_end` stays `None` anyway, and for a
+different reason than "unread" - `oag_title::MenuSkin`'s mandatory fields all
+read out of a `FEGlobals` block this title does not ship, so filling them
+would invent a menu shape the disc does not draw. Boot movies are a fourth
+container this project does not read at all: `data/Videos/intro.mp4` and 25
+siblings are real MP4/ISOBMFF, not `.bik`/`.pmf`/`.ipf`.
+
 **[HD front end](hd-frontend.md)** is the same reading applied to
 `/data/plugins/frontend/gui/skin.xml` - HD ships six copies of it and they agree
 on every layout global - plus a read-only sweep of the PS3 executable for the
