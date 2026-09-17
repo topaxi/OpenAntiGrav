@@ -11,9 +11,10 @@ script is that check: it segments pose 00 by material slot and reports each
 slot's own ours-vs-original luma statistics, so a gap that clusters by
 formula names the term instead of the whole frame naming only its average.
 
-    scripts/hd-material-probe.py                    # renders and reports
+    scripts/hd-material-probe.py                    # renders and reports (Talon's Junction)
     scripts/hd-material-probe.py --out table.tsv     # also writes the table
     scripts/hd-material-probe.py --game target/release/oag-game
+    scripts/hd-material-probe.py --pair-dir data/reference/hd-capture/amphiseum-grid
 
 # Only pose 00
 
@@ -82,11 +83,32 @@ import numpy as np
 from PIL import Image
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
-PAIR_DIR = ROOT / "data" / "reference" / "hd-capture" / "talons-matched"
+# `talons-matched` (this script's original pair) is gone from disk - confirmed
+# 2026-09-17, `renderer.md`'s "The Amphiseum sign flip is re-derived at a
+# clean pose". `talons-grid-recheck` is this session's replacement default:
+# same camera-pick JSON shape, a true 0 km/h grid pose rather than a matched
+# mid-race one, and it exists. `--pair-dir` overrides it for any other
+# circuit's pair, e.g. `amphiseum-grid`.
+PAIR_DIR = ROOT / "data" / "reference" / "hd-capture" / "talons-grid-recheck"
 IMAGE = ROOT / "data" / "images" / "hdfury-ps3-eu-dec.iso"
 ARCHIVE = "PS3_GAME/USRDIR/DATA00.PSARC"
+# `TRACK` is derived per pair from its own `00.json` `track` field (see
+# `track_arg`), not hardcoded - a pair off any circuit other than Talon's
+# Junction would otherwise render the wrong track at the right camera, the
+# same trap `hd-frame-compare.py`'s own `track_arg` doc names. This module
+# global is reassigned in `main()` before `render`/`dump_material_roles`
+# read it, since both are plain top-level functions closing over it.
 TRACK = "/data/environments/talons_junction/track.vex"
 TEAM = "feisar_c1"
+
+
+def track_arg(meta_track):
+    """Duplicated from `hd-frame-compare.py` rather than imported - see this
+    file's own `COMPARISON_ARGS` comment for why duplication, not a shared
+    import, is this codebase's answer to two small sibling scripts.
+    """
+    name = meta_track.replace("\\", "/").split("/")[-2]
+    return f"/data/environments/{name.lower()}/track.vex"
 
 # Duplicated from `hd-frame-compare.py` rather than imported: that script is
 # another lane's tonight, and both are small enough that duplication is
@@ -372,6 +394,10 @@ def main():
     parser.add_argument("--tolerance", type=float, default=TINT_TOLERANCE,
                          help="override the segment-distance tolerance, for probing "
                               "the coverage/precision trade-off")
+    parser.add_argument("--pair-dir", default=str(PAIR_DIR),
+                         help="data/reference/hd-capture/<name> pair to probe; "
+                              "the track is derived from the pair's own 00.json, "
+                              "not assumed to be Talon's Junction")
     args = parser.parse_args()
 
     game = pathlib.Path(args.game)
@@ -380,10 +406,14 @@ def main():
     if not IMAGE.exists():
         raise SystemExit(f"{IMAGE} is missing - see data/README.md")
 
-    json_path = PAIR_DIR / "00.json"
-    png_path = PAIR_DIR / "00.png"
+    pair_dir = pathlib.Path(args.pair_dir).resolve()
+    json_path = pair_dir / "00.json"
+    png_path = pair_dir / "00.png"
     meta = json.loads(json_path.read_text())
     camera = meta["camera"]
+    global TRACK
+    TRACK = track_arg(meta["track"])
+    print(f"track: {TRACK} (from {json_path})", file=sys.stderr)
 
     print("dumping material roles (cargo run --example hd_material_probe_dump)...", file=sys.stderr)
     roles, fog_linear = dump_material_roles(game.parent)
@@ -436,10 +466,36 @@ def _classify_and_report(png_path, tint_path, lit_path, roles, palette, fog_byte
     tint_img = Image.open(tint_path).convert("RGB")
     lit_img = Image.open(lit_path).convert("RGB")
     if not (ref_img.size == tint_img.size == lit_img.size):
-        raise SystemExit(
-            f"size mismatch: ref {ref_img.size}, tint {tint_img.size}, "
-            f"lit {lit_img.size}"
-        )
+        # Same 1px-per-side gap `hd-frame-compare.py` found and fixed
+        # (renderer.md, "A harness gap fixed along the way"): the reference
+        # goes through `screenshot(trim=True)`'s crop-on-exact-`#000000`,
+        # measuring 1278x718 against this project's own 1280x720 canvas.
+        # Center-crop all three to the smallest shared size when every gap
+        # is 8px or less per axis; still raise past that, since a bigger gap
+        # is a real mismatch no region stat here should paper over.
+        sizes = [ref_img.size, tint_img.size, lit_img.size]
+        w = min(s[0] for s in sizes)
+        h = min(s[1] for s in sizes)
+        margins = [(abs(s[0] - w), abs(s[1] - h)) for s in sizes]
+        if all(mx <= 8 and my <= 8 for mx, my in margins):
+            def center_crop(img):
+                left = (img.width - w) // 2
+                top = (img.height - h) // 2
+                return img.crop((left, top, left + w, top + h))
+
+            print(
+                f"size margin (ref {ref_img.size}, tint {tint_img.size}, "
+                f"lit {lit_img.size}) - center-cropping all three to {w}x{h}",
+                file=sys.stderr,
+            )
+            ref_img, tint_img, lit_img = (
+                center_crop(ref_img), center_crop(tint_img), center_crop(lit_img)
+            )
+        else:
+            raise SystemExit(
+                f"size mismatch: ref {ref_img.size}, tint {tint_img.size}, "
+                f"lit {lit_img.size}"
+            )
 
     ref_arr = np.asarray(ref_img)
     tint_arr = np.asarray(tint_img)

@@ -359,3 +359,4 @@
 0x0062ea98	function	Scream_NoteToPitch	90	sound.md
 0x0062ec38	function	Scream_VoicePitch	90	sound.md
 0x006332e0	function	CellMs_SetVoiceRate	90	sound.md
+0x003a83d8	function	Environment_RegisterLightingSchema	80	renderer.md
