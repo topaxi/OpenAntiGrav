@@ -29,7 +29,7 @@ dump was taken with `scripts/psarc.py list` over all seven PSARCs):
 
 | weapon | models | HD-only effects |
 | --- | --- | --- |
-| ~~Plasma~~ **done** | `HD_plasma_ball` (the **bolt head**), `HD_plasma_ring`/`_sphere`/`_halo` (the explosion, ramps read: targets 100/7.1/7.0, rates 0.01/0.3/0.2, windows 1.7/1.3/1.3 s, 3.5 s life, [ps3-hdfury-eu/plasma.md](../../docs/ghidra/functions/ps3-hdfury-eu/plasma.md)) | `WO_PLASMA_CHARGING`, `WO_PLASMA_LAUNCH` still unwired; `WO_PLASMA_LIGHTNING_EXPAND`/`_COLLAPSE` wired and confirmed against the disc's own `.pob` internal name field, not just the fourcc |
+| ~~Plasma~~ **bolt done; blast gated** | `HD_plasma_ball` (the **bolt head**, drawn), `HD_plasma_ring`/`_sphere`/`_halo` (the explosion, ramps read: targets 100/7.1/7.0, rates 0.01/0.3/0.2, windows 1.7/1.3/1.3 s, 3.5 s life, [ps3-hdfury-eu/plasma.md](../../docs/ghidra/functions/ps3-hdfury-eu/plasma.md) - **loaded and tracked, draw gated off, `HD_BLAST_MODELS_DRAWN = false`, see Open**) | `WO_PLASMA_CHARGING`, `WO_PLASMA_LAUNCH` still unwired; `WO_PLASMA_LIGHTNING_EXPAND`/`_COLLAPSE` wired and confirmed against the disc's own `.pob` internal name field, not just the fourcc |
 | ~~Rocket / ~~Missile | ~~`hd_Rocket`~~ **model wired**, `HD_missile_ball_bloomring`, `HD_missile_explosion` still open | `WO_MISSILE_LAUNCH` |
 | ~~Mine / ~~Bomb | ~~`HD_Mine`~~, ~~`HD_Bomb`~~ **models wired**; `HD_Mine_halo`, `HD_bomb_*` (halo, sphere, sphere_white, sphere_bloomring, shockwaves), `bomb_shockwave` still open | `WO_BOMB_RAYS`, `WO_BOMB_SHOCKWAVE_FLASH`, `WO_BOMB_EXPLO_DETONATOR` |
 | Cannon | `hd_muzzleflash` **round body wired**, own to `cannon-quads`; `detonator_cannonbolt` (Fury) still open | `WO_CANNON_MUZZLEFLASH`, `WO_CANNON_HOTSPOT`, `WO_CANNON_SPARKS_DETONATOR` - `cannon-quads`'s lane |
@@ -50,7 +50,14 @@ The executable's own load-path strings name every model above
   a literal `cur`-as-uniform-scale reading and what the original composes
   it against. See plasma.md's own 2026-09-17 section and the screenshot at
   `/home/topaxi/.cache/oag/drive/reports/hd-weapon-models-screenshots/t200-detonation.png`.
-  Left as an open finding, not corrected on a guess.
+  Left as an open finding, not corrected on a guess. **Gated off before
+  merge, same day**: the chase camera sits inside the sphere for real spans
+  of the blast's life, tinting the whole frame - a regression, not a
+  faithful oversized picture. `blast_models::HD_BLAST_MODELS_DRAWN =
+  false` stops the trio's *draw* only; the bolt's head, both
+  `WO_PLASMA_LIGHTNING_*` triggers and the trio's own age/ease tracking are
+  unaffected, and the load report says why on an HD source. See plasma.md's
+  own addendum.
 - **LeachBeam's ball is named, not placed.** What positions
   `hd_leachbeam_ball_bloomring` each tick was not read this session -
   reading stopped before opening any LeachBeam-specific function on
@@ -87,5 +94,7 @@ The executable's own load-path strings name every model above
 3. Rocket/Missile/Mine/Bomb **bodies** are wired; their own further
    detonation models (Missile's pair, the Bomb's five) and effects remain,
    by the same per-title path, only as their triggers are read.
-4. Settle the Plasma explosion's scale before calling it faithful - see
-   "Open" above.
+4. Settle the Plasma explosion's scale, then flip
+   `blast_models::HD_BLAST_MODELS_DRAWN` back to `true` - currently gated
+   off (draw only; the trigger/age logic still runs) because the recovered
+   scale reads as a regression, not a faithful picture. See "Open" above.

@@ -85,6 +85,23 @@ pub(super) const HD_BLAST_LIFETIME_SECONDS: f32 = 3.5;
 /// show for it.
 pub(super) const HD_BLAST_HIDE_AT_SECONDS: f32 = 1.3;
 
+/// **`false` until the scale composition is understood.** The recovered ease
+/// above is real (confidence 88 on the numbers, confirmed again 2026-09-17)
+/// but produces a picture no player would call faithful: `HD_plasma_ring`'s
+/// own target (100.0) grows a sphere that fills most of the frame within a
+/// fraction of a second, and once the chase camera is inside it the whole
+/// view tints solid grey/purple for the rest of the blast's life - worse
+/// than the billboard fallback it would otherwise replace. `CLAUDE.md`'s
+/// rule for a picture the read does not yet produce is to draw nothing and
+/// say so, not ship a regression, so [`Race::plasma_blast_draws`] gates the
+/// whole trio on this constant while leaving every other Plasma line (the
+/// bolt's own head, both `WO_PLASMA_LIGHTNING_EXPAND`/`_COLLAPSE` triggers,
+/// the age/ease tracking itself) running unaffected. See plasma.md's
+/// 2026-09-17 "Observed, not yet explained: the picture is oversized"
+/// section for the evidence and the open question. Flip this back to `true`
+/// once a reading explains the scale.
+pub(super) const HD_BLAST_MODELS_DRAWN: bool = false;
+
 /// The three models' own `(target, rate)` ease pair, in
 /// [`PlasmaBlastModels`]'s own ordinal order - ring, sphere, halo - read off
 /// `WeaponExplosions_Construct`/`_Draw`. Confidence 88 for the rates and
@@ -312,9 +329,16 @@ impl Race {
     ) -> [Option<PlasmaBlastDraw>; PLASMA_BLAST_SLOTS] {
         let hd = self.view.hd_plasma_blast;
         std::array::from_fn(|slot| {
-            self.view.plasma_blasts[slot].map(|blast| {
+            self.view.plasma_blasts[slot].and_then(|blast| {
+                // See `HD_BLAST_MODELS_DRAWN`'s own doc comment: the bolt's
+                // own head, both `WO_PLASMA_LIGHTNING_*` triggers and this
+                // blast's own age/ease tracking all run regardless - only
+                // the ring/sphere/halo trio's own draw is gated off.
+                if hd && !HD_BLAST_MODELS_DRAWN {
+                    return None;
+                }
                 let matrix = billboard_matrix(blast.position, camera_position);
-                if hd {
+                Some(if hd {
                     let visible = blast.age < HD_BLAST_HIDE_AT_SECONDS;
                     PlasmaBlastDraw {
                         matrix,
@@ -331,7 +355,7 @@ impl Race {
                         hemisphere1_seconds: blast.age * PLASMA_BLAST_HEMISPHERE1_ANIM_RATE,
                         hd_scale: None,
                     }
-                }
+                })
             })
         })
     }

@@ -323,3 +323,18 @@ authored unit) and what the original composes it against - but nothing this
 session did settles which. Left as an open finding rather than a silent
 correction, per `CLAUDE.md`'s rule against inventing a fix with no evidence
 behind it.
+
+**Gated off the same day, before merge.** At `t200`/`t400` the chase camera
+sits *inside* the 100-scale sphere for a real span of its 3.5 s life, which
+reads as the whole frame going solid grey then tinted purple - worse than
+the billboard fallback it replaces, and a regression by CLAUDE.md's own
+"draw nothing and say so" rule. `blast_models::HD_BLAST_MODELS_DRAWN`
+(`false`) now gates the ring/sphere/halo trio's *draw* off while every other
+Plasma line here keeps running unaffected: the bolt's own head, both
+`WO_PLASMA_LIGHTNING_EXPAND`/`_COLLAPSE` triggers, and this trio's own
+age/ease tracking (`Race::advance_plasma_blast_models`) - so the next reader
+only has to flip the constant once the scale composition above is
+understood. The load report now says so explicitly on an HD source: "HD
+plasma explosion models loaded, not drawn: the recovered scale ease
+produces a screen-filling sphere - see plasma.md's 2026-09-17 'the picture
+is oversized' section."

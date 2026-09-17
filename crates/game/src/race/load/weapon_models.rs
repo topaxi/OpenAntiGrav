@@ -240,7 +240,7 @@ pub(super) fn load_bodies(
     // The bolt's own head, HD only - see `PlasmaBlastModels::ball`'s own doc
     // comment for why it rides in this container.
     let ball = one(models.plasma_ball, "a plasma bolt");
-    (
+    let bodies = (
         one(models.rocket, "a rocket"),
         one(models.mine, "a laid mine"),
         one(models.bomb, "a laid bomb"),
@@ -249,5 +249,20 @@ pub(super) fn load_bodies(
             ball,
             ..plasma_blast
         },
-    )
+    );
+    // See `blast_models::HD_BLAST_MODELS_DRAWN`'s own doc comment: the three
+    // models above load and their ease still runs, but the draw itself is
+    // gated off until the scale composition is understood - a report line
+    // rather than a silent no-op, so the load report says why an HD Plasma
+    // detonation looks the way it does. After `one`'s last use, since that
+    // closure holds its own mutable borrow of `report`.
+    if models.plasma_blast_hd.is_some() && !blast_models::HD_BLAST_MODELS_DRAWN {
+        report.push(
+            "HD plasma explosion models loaded, not drawn: the recovered \
+             scale ease produces a screen-filling sphere - see plasma.md's \
+             2026-09-17 \"the picture is oversized\" section"
+                .to_string(),
+        );
+    }
+    bodies
 }
