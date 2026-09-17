@@ -3429,7 +3429,7 @@ color` are all now known-bound engine parameters a material's microcode
 could reference by hash, but which of the four ceiling materials reference
 which was not checked this session.
 
-### The per-material microcode sweep: none of the four ceiling programs ever references the ambient constant, and the disc's own replacement term produces warm gold from two of them (2026-09-17, `lane-hd-ceiling`)
+### The per-material microcode sweep: none of the four ceiling programs ever references the ambient constant, and a fifth material corroborates the same bug at a verified warm pixel (2026-09-17, `lane-hd-ceiling`)
 
 **The sweep the previous session named and did not run.** For each of
 Amphiseum's four ceiling materials (`animhexlights`, `cf_diff_spec`,
@@ -3629,43 +3629,57 @@ supplies their share of the reference's warm reading, if any, is not in
 this term. This is the fix's scope, stated precisely rather than
 overclaimed.
 
-**Not settled by this reconstruction, and worth stating rather than
-glossing over - the capture this session used does not show the warm
-ceiling at all.** `animhexlights` classified **zero** pixels at this
-session's own camera pose (`amphiseum-matched` pose 00, `--pair-dir`), and a
-direct check of that pose's own tile grid
-(`scripts/hd-frame-compare.py --pair-dir data/reference/hd-capture/
-amphiseum-matched --tiles 4x6`) shows the reference frame's own top rows
-reading **180-220°** (cyan/blue-grey), not the 39-86° warm band two sessions
-ago measured - so `amphiseum-matched` pose 00 is not looking at the dome the
-way the capture that established the warm reading did. That capture,
-`amphiseum-grid`, no longer exists on disk (two sessions ago), which is why
-this session had to identify the four materials' slot numbers against a
-different pose in the first place. **The four materials' own identity
-(`animhexlights`/`cf_diff_spec`/`lambert`/`base_diffusespecular`'s
-non-lightmap slot) carries over from the previous session's `--pair-dir
-amphiseum-grid` naming**, and this session's own vertex-colour reads are a
-property of the `.rcsmodel` file itself, independent of any camera pose -
-but *that the specific chunks sampled here are the same physical dome
-geometry* rests on the material name matching across two different sessions
-and two different captures, not on a fresh, direct re-observation this
-session. A short RPCS3 recapture was attempted to close this
-(`scripts/rpcs3-drive.py capture --nav "Main Menu=right" --nav "Track
-Creation=right,right,right,right,right,right,right,right" --team
-feisar_c1 --hull-variant concept1 --load 20 --interval 2`) but the nav plan
-landed on Talon's Junction instead of Amphiseum - the menu route this
-session's build takes inserts a "Single Player" screen the cited
-`rpcs3-capture.md` walk does not name, so the eight-`right`s-at-`Track
-Creation` count from that page's own carousel table does not carry over
-unchanged. Not chased further this session (menu-navigation exploration is
-outside this lane's brief and risked turning into its own rabbit hole);
-RPCS3 and its Xvfb display were stopped cleanly. This session did not
-otherwise need a live read: the brief's own gate for one is "none of the
-four programs can produce warm gold from static disc inputs," and that
-precondition is false - `animhexlights` does, from values already on the
-disc - but the pose mismatch above means the coverage question ("how much of
-the reference's actual warm ceiling is `animhexlights`/`lambert` versus the
-other two") is still open, not answered.
+**A per-region check of this session's own capture found something sharper
+than "wrong pose" - three tile-grid cells here genuinely read warm, and a
+fifth material's microcode corroborates the same bug at exactly those
+pixels.** The whole-tile-grid read above (most cells 180-220°) is not the
+whole story: `hd-frame-compare.py --tiles 4x6`'s own `r0c4`/`r0c5`/`r1c5`
+cells read **52°/334°/4°** - genuinely warm, and the largest hue gap in the
+grid (166° at `r0c4`). Restricting `hd-material-probe.py`'s own slot
+classifier to those three cells' pixel boxes (a one-off script reusing its
+`render`/`classify_pixels` functions, not a change to the shared tool) finds
+them dominated **by pixel count** by exactly the slots this session already
+analysed - `cf_diff_spec` (slots 356/360) and `base_diffusespecular` (slot
+353) - alongside a substantial minority (up to 27% of one cell) of a fifth
+material, `uvanim_diffuse_emissive`, not among the four this session was
+briefed on. **That fifth material's own resolved fragment program
+(`IleVertex`, feature `0x56c94426`, block `@0x6d60`) was dumped as a check,
+and it fits the same pattern exactly**: no `constantAmbientColour`, the same
+`f[TC0]`/`f[TC1]`/`f[TC2]`-additive shape, `directionalLight0*` and
+`fogColour` present, plus a genuine `EmissiveTexture` (`0xb1f2a176`) glow
+layer added on top - a material literally named "emissive," bright and
+plausibly saturated enough to dominate a saturation-weighted circular mean
+despite a pixel-count minority, which is the parsimonious read of why these
+three cells read warm while cells dominated by the same `cf_diff_spec`/
+`base_diffusespecular` slots elsewhere in the same frame read cool. **This
+is not confirmed as the mechanism** - `uvanim_diffuse_emissive`'s own
+per-pixel colour was not read this session, only that its program shares
+the exact defect this section already established - but it is independent
+corroboration, at a verified pixel in a capture that is actually on disk,
+that the "flat ambient added where the disc's own program never computes
+it" bug is not confined to the four originally-named materials, and it
+supersedes the "wrong pose entirely" reading of the previous paragraph's
+draft: this pose *does* show real warm pixels, they are just a minority
+share of the frame and not concentrated in the top-row cells the way the
+now-gone `amphiseum-grid` capture's reading implied. A short RPCS3
+recapture was separately attempted, to get a pose that shows more of the
+dome directly (`scripts/rpcs3-drive.py capture --nav "Main Menu=right"
+--nav "Track Creation=right,right,right,right,right,right,right,right"
+--team feisar_c1 --hull-variant concept1 --load 20 --interval 2`); it landed
+on Talon's Junction instead - the menu route this session's build takes
+inserts a "Single Player" screen the cited `rpcs3-capture.md` walk does not
+name, so its eight-`right`s-at-`Track Creation` carousel count does not
+carry over unchanged. Not chased further this session (menu-navigation
+exploration is outside this lane's brief); RPCS3 and its Xvfb display were
+stopped cleanly. **Still open**: whether `cf_diff_spec`/`base_diffusespecular`
+themselves ever read warm at any pixel (not measured - the per-region check
+above reads a cell's *overall* saturation-weighted hue, not per-slot), and
+whether `uvanim_diffuse_emissive`'s own colour, once the same ambient fix is
+applied to it, actually closes these three cells' gap or merely shares the
+diagnosis. RPCS3 was not otherwise needed for the core finding: the brief's
+gate for a live read ("none of the four programs can produce warm gold from
+static disc inputs") is false - `animhexlights` does, from disc values
+alone, independent of any capture or pose.
 
 **The fix implied, sequenced, and its exact scope, for the coordinator to
 land in `mesh.wgsl` (not touched this session - out of this lane's files)**:
