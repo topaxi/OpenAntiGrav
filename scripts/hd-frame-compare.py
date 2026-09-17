@@ -571,7 +571,7 @@ def compare_one(game, pair_dir, out_dir, pose, dump_regions, bloom, cfg_root):
 
     print(f"\n=== pose {pose} ({meta['track']}, fov {camera['fov_y_deg']:.2f} deg) ===")
     print(f"{'region':<28}{'side':<10}{'px':>9}{'mean R':>8}{'mean G':>8}"
-          f"{'mean B':>8}{'luma':>7}{'sat':>6}{'hue':>6}{'clip%':>8}{'zero%':>8}  histogram")
+          f"{'mean B':>8}{'luma':>7}{'sat':>6}{'hue':>6}{'colr%':>7}{'clip%':>8}{'zero%':>8}  histogram")
     for name, mask in masks.items():
         for side, arr, luma in (("ours", ours_arr, ours_luma), ("reference", ref_arr, ref_luma)):
             stats = region_stats(arr, luma, mask)
@@ -584,7 +584,7 @@ def compare_one(game, pair_dir, out_dir, pose, dump_regions, bloom, cfg_root):
             print(
                 f"{name:<28}{side:<10}{stats['count']:>9}{r:>8.1f}{g:>8.1f}"
                 f"{b:>8.1f}{stats['mean_luma']:>7.3f}{stats['mean_sat']:>6.3f}"
-                f"{hue_txt}{stats['clipped_pct']:>7.2f}%"
+                f"{hue_txt}{stats['coloured_pct']:>6.1f}%{stats['clipped_pct']:>7.2f}%"
                 f"{stats['zero_pct']:>7.2f}%  {format_hist(stats['hist'])}"
             )
 
