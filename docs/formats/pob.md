@@ -990,6 +990,42 @@ Both are content, not byte order, and both are pinned as measurements:
 - **`LOOPING` is per-emitter** - see the retraction under
   [flag `0x1`](#flag-0x1-is-this-effect-loops---2026-08-12) above.
 
+### HD names its own texture the same way Pulse does, and 80 of 82 resolve to a shipped `.gtf` - 2026-09-17
+
+HD does not embed pixels (see "The sprite pixels are on the disc after
+all" above), but every emitter still carries the same own-texture field
+at `record_start + 0x4c4` this project already reads as "an emitter's own
+texture slot" on PSP (`docs/ghidra/functions/psp-pulse-usa/particle-system.md`'s
+collision-spark section). Reading it directly - a pre-fixup offset from
+the resource base, big-endian, no slot-table indirection needed since the
+field *is* the fixup site - resolved a `.tga` developer path string for
+**every emitter in every one of the 84 distinct `.pob` files** extracted
+from the disc's seven PSARC archives (`scripts/psarc.py extract ... .pob`),
+zero missing. Taking each string's basename, lowercasing it and swapping
+`.tga` for `.gtf` against `/data/psys/tex/*.gtf`'s own 
+entries (a full census of all seven archives, `hd-entries.txt`-shaped)
+finds:
+
+- **80 of 82 distinct texture names resolve** to a shipped `.gtf` of the
+  identical basename.
+- **`vandergraf_balls_1024x1024.tga` does not, but a size-renamed sibling
+  does**: `vandergraf_balls_1024x512.gtf` and
+  `vandergraf_balls_1024x512_missile.gtf` both ship, at the export's final
+  dimensions rather than the authoring path's. Read as the same asset
+  under its shipped name, not a genuine gap.
+- **`plasma_8x8_1024x1024.tga` has no match at all**, under any name, in
+  any of the seven archives - the one real unresolved name in the corpus.
+
+This is name resolution only: no `.gtf` was decoded and nothing is wired
+into a draw path. Confidence **80** - the own-texture field read is the
+same mechanism already confirmed on PSP, corroborated here by a 100% hit
+rate for *some* string (a wrong field offset would produce garbage or
+truncated strings on at least some of 249 emitters, not a clean string on
+all of them), but the field's role at *render time* on HD specifically
+(does the interpreter actually read this field to pick the bound texture,
+the way `particle-system.md` traces for PSP) is not independently traced
+here.
+
 ## Evidence summary
 
 Every structural claim below holds on **35 of 35** PSP files and, per the

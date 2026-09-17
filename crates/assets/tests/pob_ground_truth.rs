@@ -402,6 +402,19 @@ fn every_ps2_particle_system_walks_the_same_way() {
     );
 }
 
+/// Every `.psarc` archive spec on the HD disc image at `path`, `image:archive`
+/// form, ready for [`oag_assets::psarc::Archive::open`]. Shared by both HD
+/// tests so there is one place that walks the ISO's own file list.
+fn hd_psarc_specs(path: &std::path::Path) -> Vec<String> {
+    let mut disc = oag_disc::DiscImage::open(path).expect("open image");
+    disc.entries()
+        .expect("iso walk")
+        .iter()
+        .filter(|entry| !entry.is_directory && entry.path.to_ascii_lowercase().ends_with(".psarc"))
+        .map(|entry| format!("{}:{}", path.display(), entry.path))
+        .collect()
+}
+
 /// The third binary, and the one that moves the format's byte order out of a
 /// reading and into a run: Wipeout HD/Fury's 88 systems, big-endian, through
 /// this same parser with no offset changed.
@@ -428,15 +441,7 @@ fn every_ps2_particle_system_walks_the_same_way() {
 fn every_hd_particle_system_walks_the_same_way_byte_swapped() {
     let Some(path) = image(HD_IMAGE) else { return };
 
-    let mut disc = oag_disc::DiscImage::open(&path).expect("open image");
-    let specs: Vec<String> = disc
-        .entries()
-        .expect("iso walk")
-        .iter()
-        .filter(|entry| !entry.is_directory && entry.path.to_ascii_lowercase().ends_with(".psarc"))
-        .map(|entry| format!("{}:{}", path.display(), entry.path))
-        .collect();
-
+    let specs = hd_psarc_specs(&path);
     let mut blobs = Vec::new();
     for spec in &specs {
         let mut archive = oag_assets::psarc::Archive::open(spec).expect("the archive opens");
@@ -510,5 +515,121 @@ fn every_hd_particle_system_walks_the_same_way_byte_swapped() {
     assert!(
         fourth.iter().all(|e| e.starts_with("WO_NITRO_SHIP_DEATH/")),
         "blend class 4 escaped WO_NITRO_SHIP_DEATH: {fourth:?}"
+    );
+}
+
+/// An emitter's own texture-path string, resolved through whichever slot
+/// names `emitter.offset + 0x4c4` as its fixup site - this project already
+/// reads that field as "an emitter's own texture slot" on PSP, see
+/// `docs/ghidra/functions/psp-pulse-usa/particle-system.md`'s
+/// collision-spark section. `None` if no slot names that site, or the
+/// target does not decode as a NUL-terminated ASCII string.
+fn own_texture_path(system: &ParticleSystem, blob: &[u8], emitter: &Emitter) -> Option<String> {
+    /// The fixed offset, within any emitter record, this project already
+    /// reads as the emitter's own texture reference.
+    const OWN_TEXTURE_FIELD: u32 = 0x4c4;
+
+    let site = emitter.offset as u32 + OWN_TEXTURE_FIELD;
+    let index = system.slots.iter().position(|slot| *slot == Some(site))?;
+    let relative = system.resolve_slot(blob, index).ok().flatten()?;
+    let target = system.resource_base() + pob::NAME_LEN + relative;
+    let end = blob.get(target..)?.iter().position(|&b| b == 0)?;
+    let raw = &blob[target..target + end];
+    (!raw.is_empty() && raw.iter().all(|&b| b.is_ascii_graphic() || b == b' '))
+        .then(|| String::from_utf8_lossy(raw).into_owned())
+}
+
+/// HD does not embed sprite pixels the way PSP does (see
+/// `oag_vex::pob::texture`'s module doc), but every emitter still names its
+/// own texture through the identical `+0x4c4` field, and HD ships the
+/// sprites as separate `/data/psys/tex/*.gtf` PSARC entries rather than a
+/// hash the way PSP's `.wad` does - so a name resolves by simple basename
+/// lookup, no hash table needed.
+///
+/// This test does not decode a `.gtf` or wire anything into a draw path -
+/// it answers only "does the name resolve", the bounded deliverable this
+/// was asked for. See `docs/formats/pob.md`'s "HD names its own texture
+/// the same way Pulse does" for the write-up.
+#[test]
+#[ignore = "needs a decrypted PS3 disc image in data/images"]
+fn hd_own_textures_mostly_resolve_to_a_shipped_gtf() {
+    let Some(path) = image(HD_IMAGE) else { return };
+    let specs = hd_psarc_specs(&path);
+
+    let mut gtf_basenames = std::collections::HashSet::new();
+    let mut blobs = Vec::new();
+    for spec in &specs {
+        let mut archive = oag_assets::psarc::Archive::open(spec).expect("the archive opens");
+        for entry in archive.paths().to_vec() {
+            let lower = entry.to_ascii_lowercase();
+            if lower.contains("/psys/tex/")
+                && lower.ends_with(".gtf")
+                && let Some(basename) = lower.rsplit('/').next()
+            {
+                gtf_basenames.insert(basename.to_string());
+            }
+            if lower.ends_with(".pob") {
+                let blob = archive.read_path(&entry).expect("the entry reads");
+                blobs.push(blob);
+            }
+        }
+    }
+    assert!(
+        !gtf_basenames.is_empty(),
+        "hd: found no /data/psys/tex/*.gtf entries at all"
+    );
+
+    let mut resolved = std::collections::BTreeSet::new();
+    let mut unresolved = std::collections::BTreeSet::new();
+    let mut no_own_reference = 0usize;
+    for blob in &blobs {
+        let system = ParticleSystem::parse(blob).expect("parse");
+        let parsed = system.emitters(blob).expect("emitters");
+        for emitter in &parsed {
+            let Some(path) = own_texture_path(&system, blob, emitter) else {
+                no_own_reference += 1;
+                continue;
+            };
+            let basename = path
+                .replace('\\', "/")
+                .rsplit('/')
+                .next()
+                .unwrap_or(&path)
+                .to_ascii_lowercase();
+            let Some(stem) = basename.strip_suffix(".tga") else {
+                continue;
+            };
+            let gtf = format!("{stem}.gtf");
+            if gtf_basenames.contains(&gtf) {
+                resolved.insert(gtf);
+            } else {
+                unresolved.insert(gtf);
+            }
+        }
+    }
+
+    println!(
+        "hd: {} distinct texture name(s) resolved to a shipped .gtf, {} unresolved, \
+         {no_own_reference} emitter(s) with no own-texture reference at all",
+        resolved.len(),
+        unresolved.len()
+    );
+    assert_eq!(
+        no_own_reference, 0,
+        "hd: every emitter named its own texture in the session this was measured - \
+         a nonzero count here is a real change, not noise"
+    );
+    // The exact unresolved set is asserted, not just its size, per this
+    // project's own "measurement, not a tolerance" convention -
+    // `vandergraf_balls_1024x1024.gtf` ships under a size-renamed sibling
+    // (`vandergraf_balls_1024x512.gtf`/`_missile.gtf`, both present) and
+    // `plasma_8x8_1024x1024.gtf` does not ship under any name.
+    assert_eq!(
+        unresolved.into_iter().collect::<Vec<_>>(),
+        [
+            "plasma_8x8_1024x1024.gtf".to_string(),
+            "vandergraf_balls_1024x1024.gtf".to_string(),
+        ],
+        "which HD texture names fail to resolve is a measurement, not a tolerance"
     );
 }
