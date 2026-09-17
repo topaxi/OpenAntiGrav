@@ -1,7 +1,7 @@
-/* Read-only probe for the HD weapon-pad handover thread
- * (handover/rendering/hd-pads-author-an-emissive-mask-nothing-reads.md,
- * Next Steps 2-3): diff WeaponPad_Importer's and SpeedupPad_Importer's
- * vtables at slots 0, 3, 5, and find every function that references the
+/* Read-only probe for the HD weapon-pad handover thread's Next Steps 2-3
+ * (docs/ghidra/functions/ps3-hdfury-eu/pads.md carries the results): diff
+ * WeaponPad_Importer's and SpeedupPad_Importer's vtables at slots 0, 3, 5,
+ * and find every function that references the
  * literal address 0x00aec2c0 (WeaponPad_Importer's `this+0x1b0` .bss target)
  * through its own TOC slot, per toolchain.md's "before concluding a fixed
  * address has no consumer, search the whole image for that address as a
