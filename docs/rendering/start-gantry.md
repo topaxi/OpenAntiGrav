@@ -32,8 +32,11 @@ countdown mechanism entirely - a manifest reaches only two of the eight.
 > once the same texture match was widened to HD's own full-path label shape
 > and the PS3 model's own sibling-`.rcsmodel` load path was wired in. HD's
 > own board plays the same authored 6.000 s teleport Pulse's does, confirmed
-> through this project's pipeline; its glyph *walk* has no on-disk driver on
-> HD and stays unwired rather than guessed at. See [the placement section
+> through this project's pipeline, and, since 2026-09-17, its own glyph
+> *reveal* plays too: four separate Edge Animation curves, one per glyph's
+> own material, each its own staggered fade-in - wired generically
+> (`oag_render::mesh::rcs::curve_track`) and confirmed by direct capture to
+> read `3`, `2`, `1`, `GO` in order. See [the placement section
 > below](#where-the-placement-actually-comes-from-hdfury-answers-it-for-pulse),
 > [what it took to draw it](#what-it-took-to-actually-draw-it),
 > [the HD implementation](#implemented-on-hd-the-same-mechanism-on-a-mount-that-is-not-flat),
@@ -617,6 +620,17 @@ already named for `mode_descriptor`. Confidence 40, and explicitly the
 softest claim on this page - lower than Pulse's already-open 55, because
 Pulse has an authored track to weigh against a competing write and HD does
 not even have that much to weigh.
+
+**Superseded, 2026-09-17: it does change, and the mechanism is a third thing
+this section did not have a slot for.** `mesh_tex_transforms` correctly finds
+no `TEXOFFSET`-shaped block, because HD's own equivalent is not that format -
+it is a material's `+0x20`-then-`+0xc` pointer into Sony's own Edge Animation
+Tools clip format, decoded in full by `lane/hd-edgeanim` and
+`lane/hd-gantry-wire` (`docs/formats/edge-animation.md`). That resolves this
+section's own "if HD's countdown swaps between states, no track on disk
+drives it" the other way: a track does drive it, in a place this pass had no
+name for yet. See ["What is still open"](#what-is-still-open) below for the
+resolved finding and real captures.
 
 ### The 6.000-second loop close generalises - the best result of the three-title sequence
 
@@ -1555,29 +1569,50 @@ than between a thread and the code.
 
 ### What is still open
 
-- **The animated curve's own authored content is decoded, and it is a wipe,
-  not a glyph selector.** `2026-09-17`'s later pass (`lane/hd-edgeanim`,
-  [`docs/formats/edge-animation.md`](../formats/edge-animation.md)) decoded
-  Edge Animation Tools' own byte layout for the non-bit-packed scalar path -
-  every curve on `321go_startfinish.rcsmodel` has `offsetPackingSpecs`
-  absent and no joint channel, so the bit-packed encoding the previous
-  finding left open turned out to be a codec path these curves never use.
-  Implemented in `oag_rcs::edgeanim` and
-  `oag_rcs::rcsmodel::material::curve`, validated by
-  `hd_gantry_curve_ground_truth.rs`. **What the four curves actually author
-  is a per-material wipe/reveal ramp staggered across a shared 13.333 s
-  loop, not four discrete glyph states** - which does not by itself explain
-  how the board reads `3`/`2`/`1`/`GO`. **2026-09-17, `lane/hd-gantry-wire`:
-  playback is now wired, generically, across every `.rcsmodel` material that
-  carries a curve** (`oag_render::mesh::rcs::curve_track`,
-  `docs/formats/edge-animation.md`'s own updated section) - the same race
-  clock every other animation on the model already rides, no new time base
-  chosen. This makes the digit board's crop windows wipe instead of
-  freezing; it does not make them read `3`/`2`/`1`/`GO`, because the curve is
-  a wipe, not a selector. See
+- **RESOLVED, 2026-09-17 (`lane/hd-gantry-wire`): the animated curve is the
+  countdown mechanism - four of them, one per glyph, each its own staggered
+  reveal.** `lane/hd-edgeanim` decoded Edge Animation Tools' own byte layout
+  ([`docs/formats/edge-animation.md`](../formats/edge-animation.md)) and,
+  measuring one curve at a time, read each of the four as "a per-material
+  wipe/reveal ramp... not four discrete glyph states" - true of any one curve
+  in isolation, and the wrong conclusion about the four together. This lane
+  wired the replay generically (`oag_render::mesh::rcs::curve_track`, every
+  `.rcsmodel` material with a curve, the same per-model race clock every
+  other animation already rides, no new time base) and then actually played
+  it: `oag-game --race --track /data/environments/talons_junction/track.vex
+  --no-audio --screenshot`, `hdfury-ps3-eu-dec.iso`, ticks 0/90/180/240/360.
+  The board is blank at tick 0; `3` and `2` are both legible by tick 90
+  (1.5 s); `3`/`2`/`1` together by tick 180 (3.0 s); `GO` alone, on a banner
+  that has gone from red to green, by tick 240 (4.0 s); and the whole board
+  is gone by tick 360 (6.0 s) - the pre-existing `Anim Transform`
+  teleport-out this page's own master-timeline section already documents,
+  untouched by this lane. Frames in `scratch/lane-wire-report.md`. **The
+  selector is not one shared offset walking four states the way Pulse's
+  gantry does - it is four separate curves, each bound to its own glyph's
+  own material, each fading its own crop window in at its own staggered
+  point in the shared 13.333 s loop.** Four independent wipes, staggered in
+  time, read as a countdown once played; nothing about that shape was
+  visible from sampling one curve's own numbers, which is why the section
+  above got it wrong until this lane actually rendered it.
+
+  **The per-node `+0xe4` static UV override table this page used to name as
+  a competing glyph-selection candidate is chased and ruled out, live and
+  separately from the above**: `scratch/gantry_dump_e4.py` reads the pointer
+  at `+0xe4` for all 19 of slot 8's own instances on Talon's Junction, at
+  load, +3 s and +6 s into a real countdown, and it is `NULL` at every point
+  checked, including the digit board's own submesh - see
   [`billboards.md`](../ghidra/functions/ps3-hdfury-eu/billboards.md)'s own
-  2026-09-17 sections for the per-node `+0xe4` static UV override table this
-  lane chased next as the actual glyph-selection candidate.
+  2026-09-17 section for the full account, the precise pointer-indirection
+  layout the table actually has, and why this also explains the previous
+  pass's two unexplained rest-state values as ordinary static material
+  parameters rather than this table's doing. This table plays no role in the
+  countdown; the curves above do the whole job on their own.
+
+  **What is not settled**: `3` and `2` reveal together rather than strictly
+  one after the other, and the full sequence takes about 4 s of the asset's
+  own clock rather than the ~6 s the measured thrust gate does - both read
+  exactly as the disc authors them, not smoothed into a tidier story. Only
+  one circuit and one boot were checked.
 - **The backing pieces sit inside the mount's own thick structure.**
   `CLEARANCE` (1.0, unchanged, still Pulse's own measured order) clears the
   digit board's near-zero local depth but not `Honey_Board`'s HD analogue,

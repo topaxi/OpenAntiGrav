@@ -1040,3 +1040,118 @@ countdown a player sees, and the per-node `+0xe4` static UV override table
 this page's earlier section already named is at least as likely the real
 glyph-selection mechanism - unchased, per this lane's own scope, and the lead
 for whoever picks this up next.
+
+## 2026-09-17: playback is wired generically, and the `+0xe4` table is chased and ruled out
+
+**`lane/hd-gantry-wire`.** Two things, in the order this lane did them.
+
+### The generic curve replay is wired
+
+`docs/formats/edge-animation.md`'s own updated section has the full account:
+every `.rcsmodel` material carrying a curve now reaches
+[`oag_render::mesh::AnimTrack::Rcs`](../../../../crates/render/src/mesh/anim_track.rs),
+sampled each frame through the same per-model animation clock Pulse's own
+`TEXOFFSET` tracks already ride - no new time base, and not gantry-specific:
+79 of the disc's 379 `.rcsmodel` files carry at least one live curve, and all
+79 now replay instead of freezing at frame zero. **On the digit board this
+turns out to be the whole countdown mechanism**: four curves, one per
+glyph's own material, each fading its own crop window in at its own
+staggered point in the shared loop - confirmed by actually playing it
+(`scratch/lane-wire-report.md`'s captures), not by reading the curves' own
+sampled numbers in isolation, which is what made a single curve look like a
+wipe with no state to select in the first place.
+
+### `Billboard_UpdateInstanceUvs`'s first pass, read precisely
+
+The function's own Ghidra plate comment (already at confidence 88, this
+lane's own re-decompile just reads it rather than re-deriving it) is more
+precise than this page's earlier prose: **`node+0xe4` is a pointer, not an
+inline table.** Read off the decompile directly:
+
+```c
+iVar2 = *(int *)(*(int *)(instance + 0x70) + 0xe4);   // the node's own pointer field
+if (iVar2 != 0) {
+    // per-component override, one float each, contiguous at [iVar2+0x18..0x28):
+    instance->uvScale.z  = sentinel(*(float *)(iVar2 + 0x18), instance->uvScale.z);
+    instance->uvScale.w  = sentinel(*(float *)(iVar2 + 0x1c), instance->uvScale.w);
+    instance->uvOffset.x = sentinel(*(float *)(iVar2 + 0x20), instance->uvOffset.x);
+    instance->uvOffset.y = sentinel(*(float *)(iVar2 + 0x24), instance->uvOffset.y);
+}
+```
+
+where `sentinel(v, keep) = keep if v's bit pattern is 0xffffffff else v` - the
+per-component "leave this alone" rule this page already named, now with the
+exact four float slots it applies to (`uvScale.z`/`.w`, `uvOffset.x`/`.y`,
+packed contiguously at the pointer's own `+0x18`) rather than "a per-node
+table" left unspecified. **Confidence 88, unchanged** - this is the same
+decompile the previous pass already scored, read more carefully rather than
+re-derived.
+
+### Live result: `node+0xe4` is `NULL` on every one of slot 8's 19 instances, at every point checked
+
+`scratch/gantry_dump_e4.py` (this lane's own script, reusing
+`scripts/rpcs3-drive.py`/`rpcs3_debugger.py` exactly as
+`scratch/gantry_watch.py` does - no new watchpoints, a plain memory read) walks
+to a race on Talon's Junction under the patched interpreter build, connects
+GDB the instant "Loading Screen Finished" prints (which pauses the CPU with
+zero game-time elapsed), and reads `*(node+0xe4)` for all 19 of slot 8's own
+`321go_startfinish.rcsmodel` instances - then resumes, waits, pauses and
+re-reads twice more, at +3 s and +6 s of real countdown time (the second
+squarely inside `GO`'s own 3.6-5.97 s window per `start-gantry.md`).
+
+**All 19 pointers are `0x00000000` at all three checkpoints**, including
+submesh index 2 - the digit board's own submesh, the one
+`AnimCurve_EvaluateChannels`'s 2026-09-17 watch found actually receiving the
+animated write. The first pass's own `if (iVar2 == 0) goto skip` branch fires
+on every instance, every time this was checked: **the whole first pass is a
+no-op for this file, on this circuit, across an entire countdown.** This is a
+live, direct read of the pointer itself, not an inference from its absence of
+effect - as strong a negative as this project's own static-Ghidra ceiling
+allows a dynamic check to be. **Confidence 90** - a live GDB read, reproduced
+at three points across a real countdown, is the same evidentiary shape
+`billboards.md`'s own confidence-90 disc-reading rows already carry, capped
+below the 95 a cross-boot reproduction would need since only one boot did the
+check this time (the 2026-09-17 curve-write pass above did reproduce across
+two boots; this did not, for time).
+
+**This retires the "at least as likely" candidate status this table has
+carried on this page since the write chain was first traced.** The per-node
+`+0xe4` table is not the digit-selection mechanism for `321go_startfinish.vex`
+- it is dead weight on this file, at least on the one circuit checked. Nothing
+about a per-node field baked into the `.vex`'s own node payload should vary by
+circuit (the file's bytes are the same wherever it loads), so this is treated
+as settled for the file rather than circuit-specific, though only one circuit
+was actually run.
+
+**This also resolves a loose end from the previous pass, rather than leaving
+it dangling.** That pass found two non-identity rest-state `uvOffset` values
+(submesh 9: `(1.0, 0.25, 0, 0)`; submesh 18: `(0, 0.022, 0, 0)`) and attributed
+them to "this table... resolved by load time" without checking the table
+itself. With `+0xe4` now confirmed `NULL` throughout, those two values cannot
+come from this mechanism at all - they are simply the affected materials' own
+**static** `uvOffset`/`uvScale` parameters (`Billboard_LoadModelAndBind`'s own
+step 3, "binds `+0x50`/`+0x60` as the shader constants... matched by
+`Crc32_HashString`", a separate, earlier load-time write from this function's
+own first pass), the same static parameters
+[`oag_rcs::rcsmodel::material::parameters`](../../../../crates/rcs/src/rcsmodel/material/parameters.rs)
+already decodes and [`curve_track::material_anim_tracks`](../../../../crates/render/src/mesh/rcs/curve_track.rs)
+now reads as every curved material's own rest value.
+
+### What this settles, and what it still leaves open
+
+**The `3`/`2`/`1`/`GO` selection mechanism on HD is resolved: it is the four
+Edge Animation curves themselves, not a separate selector on top of them.**
+Of the two named candidates for "what picks a state", one is now closed
+without a positive (the per-node `+0xe4` override, this section) and the
+other turned out to need no separate selector at all - four curves, each
+bound to its own glyph's own material, each an independent reveal, are
+sufficient once played together. Confidence 88, from real headless captures
+across a countdown (`scratch/lane-wire-report.md`), not from re-reading the
+curve bytes.
+
+**What is not settled**: `3` and `2` reveal together in the captures rather
+than strictly one after another, the full sequence takes about 4 s of the
+asset's own clock against the ~6 s the measured thrust gate takes, and only
+one circuit and one boot were checked. None of these were smoothed over or
+explained away - they are reported as measured. The `+0xe4` table's own
+negative is unaffected by any of this and stands on its own live evidence.

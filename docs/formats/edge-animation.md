@@ -24,8 +24,8 @@ clip itself) and
 | Bit-packed keys | **Absent on every clip checked** - `offsetPackingSpecs` is always zero | 90 - the PPU evaluator itself asserts this before reading anything else |
 | Joint (rotation/translation/scale) channels | **Absent on every clip checked** - all seven counts are zero | 85 |
 | What the four checked curves actually animate | `uvOffset.x`/`.y`, confirmed by parameter-table hash, not position | 92 |
-| What the curves' own shape is | A per-material wipe/reveal ramp, **not** a four-state glyph selector | 85 - measured directly, see below |
-| How this connects to `3`/`2`/`1`/`GO` reading correctly | **Not established** | - |
+| What one curve's own shape is, in isolation | A per-material wipe/reveal ramp, not a four-state plateau | 85 - measured directly, see below |
+| How this connects to `3`/`2`/`1`/`GO` reading correctly | **It is the mechanism**: four curves, one per glyph's own material, each its own staggered reveal - confirmed by playing it, not by reading the numbers | 88 - real headless captures, `scratch/lane-wire-report.md`, one boot |
 
 ## What this is, and how it was found
 
@@ -199,7 +199,12 @@ a 48-bit packed quaternion encoding, neither of which this project has
 decoded or had data to check against - a real, separate task if this format turns out
 to be used for skeletal animation anywhere else in HD.
 
-## What the curves actually author: a wipe, not a glyph selector
+## What one curve authors in isolation: a wipe, not a plateau - and what four of them together turn out to be
+
+**Read this section, then its own 2026-09-17 correction below it**: what
+follows measures one curve at a time and is accurate as far as it goes, but
+reading it alone leads to the wrong conclusion about the countdown - the
+correction is not a footnote.
 
 Sampling all four of `321go_startfinish.rcsmodel`'s curved materials across
 their own shared 13.333 s loop (`each_curve_varies_continuously_not_in_glyph_sized_steps`,
@@ -249,17 +254,31 @@ end against the real disc,
 all four curved materials reach `AnimTrack::Rcs`, a vertex of each selects
 one, and the sampled table differs between two points in time.
 
-**This makes the digit board's crop windows wipe instead of freezing at frame
-zero - it does not make them read `3`, `2`, `1`, `GO`.** The curve is a wipe,
-not a selector (above), so wiring its replay plays the wipe correctly and
-faithfully, and a player watching the gantry now sees the four crop windows
-slide rather than sit static - which is real, honestly-drawn authored motion
-across all 79 of the disc's curved models, not only this one. It is **not**
-the countdown mechanism: see
-[`billboards.md`](../ghidra/functions/ps3-hdfury-eu/billboards.md)'s own
-2026-09-17 section for what was chased next, the per-node `+0xe4` static UV
-override table `Billboard_UpdateInstanceUvs` also reads - a second, distinct
-write path from this curve.
+**Corrected, same day, once this was actually watched play rather than
+sampled offline: wiring the replay does make the board read `3`, `2`, `1`,
+`GO` - correctly and in order.** The table two sections above measures one
+curve at a time and is accurate about what it measures: each material's own
+`uvOffset`/`uvScale` value, sampled in isolation across the loop, is a single
+continuous ramp, not four plateaus. What that framing missed is that this
+file does not use *one shared* offset to pick between four states the way
+Pulse's gantry does - it uses **four separate curves, each bound to its own
+glyph's own material**, and each one is its own reveal: `3`'s material wipes
+its own crop window in, `2`'s does the same at its own staggered time, and so
+does `1`'s and `GO`'s. Four independent wipes, staggered in time, **are** a
+selector - just a distributed one rather than Pulse's single shared walk, and
+nothing here was worked out from the numbers alone: it was seen. `oag-game
+--race --track /data/environments/talons_junction/track.vex --no-audio
+--screenshot`, ticks 0/90/180/240/360, `hdfury-ps3-eu-dec.iso`: blank at
+tick 0, `3` and `2` both legible by tick 90 (1.5 s), `3`/`2`/`1` together by
+tick 180 (3.0 s), `GO` alone (the digits' own banner having gone from red to
+green) by tick 240 (4.0 s), and the whole board gone by tick 360 (6.0 s) -
+the pre-existing, unrelated `Anim Transform` teleport-out this page's own
+"master timeline" already documents, not something this pass touched. Frames
+in `scratch/lane-wire-report.md`. **What is still not settled**: `3` and `2`
+reveal together rather than strictly one after the other, and the total
+sequence runs in about 4 s of the asset's own clock rather than the ~6 s the
+measured thrust gate takes - both are read exactly as the disc authors them,
+not smoothed into a cleaner story.
 
 ## Coverage
 
