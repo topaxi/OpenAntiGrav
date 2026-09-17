@@ -3063,6 +3063,88 @@ misreads or misapplies something on this circuit rather than a missing
 key). `mesh/`, `mesh.wgsl`, `emissive.rs` and `sky_cube.rs` were read this
 session but not yet changed.
 
+### Amphiseum's gap is vertical, not a single sign: the ceiling reads brighter, the floor reads darker, and the whole-frame number is an unstable average of the two (2026-09-17, `lane-hd-amphiseum-hue`)
+
+**The maintainer's own answer, asked directly**: whether Amphiseum reads
+brighter or darker than the original, and whether the complaint is
+brightness or colour - **"Both, and it varies by area."** That single
+sentence is the reason the whole-frame numbers in the section above were
+never going to settle anything: a frame mean is an average, and an average
+over a gap that changes sign by area is not a stable number at all - it
+reads brighter or darker depending on how much of each area a given camera
+framing happens to show, which is a fact about the camera, not about the
+render.
+
+**A box-free tile grid confirms this precisely and quantifies it.**
+`scripts/hd-frame-compare.py` gained `--tiles ROWSxCOLS`: a plain `R x C`
+grid over the frame (HUD and craft still excluded, same as every other
+region), reporting luma and hue per cell with no claim about what a cell
+contains - deliberately, because every hand-picked box on this circuit so
+far has turned out to sample something other than its own name (`sky`
+samples the dome ceiling, `road surface` samples a barrier wall). At
+`--tiles 4x6` on the same 0 km/h grid pose, `--bloom on`:
+
+| Row | What's there (by eye) | ref - ours (px-weighted) | typical hue gap |
+| --- | --- | --- | --- |
+| 0 | Dome ceiling, arch beams | **-0.121 (ours brighter)**, every one of 6 cells | 103-177 deg |
+| 1 | Crowd stands, video screens | **-0.121 (ours brighter)** (folded into the row-0/1 weighted figure below), 5 of 6 cells brighter | 76-141 deg |
+| 2 | Barrier chevrons, side floor | **+0.10 (ours darker)**, 3 of 4 valid cells darker | 50-86 deg |
+| 3 | Floor closest to camera | **+0.10 (ours darker)** (folded into the row-2/3 figure), all 3 valid cells darker | 33-36 deg |
+
+(Rows 0-1 and rows 2-3 are reported together above because that is the
+natural split the per-cell table shows - top half uniformly one sign,
+bottom half uniformly the other, with exactly two near-zero cells at the
+seam.) **Pixel-weighted, the top half of the valid frame averages
+ref-ours = -0.121 (ours brighter) and the bottom half averages +0.100
+(ours darker)** - a 0.22-luma swing from vertical framing alone, arithmetic
+directly off the tile table (top: 270,189 px, sum -32,697; bottom: 141,236
+px, sum +14,102; the two together reproduce the whole-frame "-0.045"
+figure above exactly, `(-32697+14102)/(270189+141236) = -0.0452`, which is
+the whole-frame number's own derivation, not a separate measurement).
+**This is larger than the 0.053 bloom-driven swing the section above
+measured** - vertical framing moves the aggregate about four times as much
+as the bloom setting does. Re-run at `--bloom off`: the same top-brighter/
+bottom-darker split holds to within 1-2 hundredths of a luma per cell, so
+this is not a bloom artefact either.
+
+**The hue pattern is not simply "everything shifted the same way" - the
+reference varies by row and ours does not.** Reference hue runs warm
+(39-86 degrees, gold/yellow-orange) across the ceiling and stands, then
+cool (155-198 degrees, cyan-blue) across the floor and barriers - two
+genuinely different material colours, matching what the frame looks like
+by eye (a warm-lit dome over a cool grey-blue track). **This project's own
+render holds close to one hue family everywhere it draws colour at all**
+(217-305 degrees, blue-violet, both top and bottom) - so the defect is not
+only "our colours are shifted", it is closer to "our render is not
+reproducing two materials' worth of colour *difference*, and collapses
+toward a single one." That reads as a lit-material or lightmap-authoring
+gap that is genuinely local to which material is being drawn, not a
+uniform white-balance or transfer-curve error, which would be expected to
+shift every row's hue by roughly the same amount rather than erase the
+row-to-row difference the reference has.
+
+**Talon's Junction's own tile grid, run for contrast, is close to
+uniform**: 20 of 22 valid cells read "ours darker" (only two floor cells
+at the very bottom-right read marginally brighter, -0.08/-0.10), and every
+cell's hue gap is small (0-37 degrees, mostly under 20). This is the
+concrete form of "Talon's Junction's gap is brightness-only and global,
+Amphiseum's is not" the section above stated from the whole-frame numbers
+alone - the tile grid is what actually shows it rather than inferring it
+from one aggregate differing from another.
+
+**Not yet done**: mapping which `.rcsmaterial`s draw into which rows
+(`scripts/hd-material-probe.py`, noting its own open caveat that its
+fog-segment classifier assumes the exposure scalar is `1.0` rather than
+solving for it - worth checking whether that assumption holds worse in
+the bright ceiling rows than it did on Talon's Junction, where it was
+calibrated). The semantic labels in the table above ("dome ceiling",
+"barrier chevrons") are read by eye against
+`data/reference/hd-capture/amphiseum-grid/00.png`, not measured against
+material names - a `--dump-regions`-style overlay for the tile grid was
+not built this session, so treat the row/what's-there mapping as
+orientation, not a claim with its own confidence score. `mesh/`,
+`mesh.wgsl`, `emissive.rs`, `sky_cube.rs` still unchanged.
+
 ### The 14 surface binds, read (2026-08-20)
 
 `FUN_005a40f8(ctx, depth, colour0, colour1, colour2, colour3)` takes **pointers

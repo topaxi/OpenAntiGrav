@@ -509,7 +509,7 @@ def format_hist(hist):
     return "".join(blocks[min(len(blocks) - 1, int(9 * v / scale))] for v in hist)
 
 
-def compare_one(game, pair_dir, out_dir, pose, dump_regions, bloom, cfg_root):
+def compare_one(game, pair_dir, out_dir, pose, dump_regions, bloom, cfg_root, tiles=None):
     json_path = pair_dir / f"{pose}.json"
     png_path = pair_dir / f"{pose}.png"
     if not json_path.exists() or not png_path.exists():
@@ -620,12 +620,68 @@ def compare_one(game, pair_dir, out_dir, pose, dump_regions, bloom, cfg_root):
         for q, o, r, d in rows:
             print(f"  {name:<24}{q:>4}{o:>7.3f}{r:>7.3f}{d:>+7.3f}")
 
+    if tiles:
+        print_tile_grid(ours_arr, ref_arr, ours_luma, ref_luma, valid, tiles)
+
     return {
         "pose": pose,
         "masks": masks,
         "ours_arr": ours_arr,
         "ref_arr": ref_arr,
     }
+
+
+def print_tile_grid(ours_arr, ref_arr, ours_luma, ref_luma, valid_mask, tiles):
+    """A coarse, box-free spatial breakdown: `rows x cols` equal tiles over the
+    frame, each restricted to `valid_mask` (HUD and craft already excluded).
+
+    Exists because a hand-picked region (`sky`, `road surface`, ...) is a
+    claim about what a rectangle contains, and Amphiseum's own composition
+    keeps refuting that claim on sight (`sky` samples a ceiling, `road
+    surface` samples a barrier wall). A tile needs no such claim - it reports
+    where in the frame a gap sits without asserting what is drawn there, which
+    is what a maintainer's own "both, and it varies by area" report needs
+    checked before trusting any single rectangle's name. No confidence score:
+    straight pixel arithmetic over a fixed grid, same footing as the rest of
+    this script's per-region output.
+    """
+    rows, cols = tiles
+    h, w = valid_mask.shape
+    print(f"\ntile grid ({rows}x{cols}, valid region only - HUD and craft excluded):")
+    print(f"  {'tile':<10}{'px':>8}{'ours luma':>10}{'ref luma':>9}{'ref-ours':>9}"
+          f"{'ours hue':>9}{'ref hue':>9}{'hue gap':>8}")
+    for r in range(rows):
+        y0, y1 = int(h * r / rows), int(h * (r + 1) / rows)
+        for c in range(cols):
+            x0, x1 = int(w * c / cols), int(w * (c + 1) / cols)
+            cell = np.zeros((h, w), dtype=bool)
+            cell[y0:y1, x0:x1] = True
+            cell &= valid_mask
+            count = int(cell.sum())
+            label = f"r{r}c{c}"
+            if count < 200:
+                print(f"  {label:<10}{count:>8}  (too few valid px)")
+                continue
+            ours_l = float(ours_luma[cell].mean())
+            ref_l = float(ref_luma[cell].mean())
+            ours_sat = saturation(ours_arr)[cell]
+            ref_sat = saturation(ref_arr)[cell]
+            ours_hue = hue_deg(ours_arr)[cell]
+            ref_hue = hue_deg(ref_arr)[cell]
+            ours_h = circular_mean_hue_deg(ours_hue[ours_sat > 0.08], ours_sat[ours_sat > 0.08])
+            ref_h = circular_mean_hue_deg(ref_hue[ref_sat > 0.08], ref_sat[ref_sat > 0.08])
+            ours_h_txt = "%6.0f" % ours_h if ours_h is not None else "     -"
+            ref_h_txt = "%6.0f" % ref_h if ref_h is not None else "     -"
+            if ours_h is not None and ref_h is not None:
+                gap = abs(ours_h - ref_h)
+                gap = min(gap, 360.0 - gap)
+                gap_txt = "%6.0f" % gap
+            else:
+                gap_txt = "     -"
+            sign = "brighter" if ref_l < ours_l else "darker" if ref_l > ours_l else "="
+            print(f"  {label:<10}{count:>8}{ours_l:>10.3f}{ref_l:>9.3f}"
+                  f"{ref_l - ours_l:>+9.3f}{ours_h_txt:>9}{ref_h_txt:>9}{gap_txt:>8}  "
+                  f"ours {sign}")
 
 
 def main():
@@ -655,6 +711,12 @@ def main():
                          help="[graphics] bloom for our render; default on - "
                               "see render()'s own doc for why that, not the "
                               "player-facing default, is the faithful setting")
+    parser.add_argument("--tiles", metavar="ROWSxCOLS",
+                         help="print a box-free RxC tile-grid breakdown "
+                              "(luma/hue per tile, valid region only) - for "
+                              "a circuit where the hand-picked sky/road/"
+                              "distant boxes are not trusted, e.g. "
+                              "--tiles 4x6")
     args = parser.parse_args()
 
     game = pathlib.Path(args.game)
@@ -663,6 +725,14 @@ def main():
     if not IMAGE.exists():
         raise SystemExit(f"{IMAGE} is missing - see data/README.md")
 
+    tiles = None
+    if args.tiles:
+        try:
+            rows, cols = (int(v) for v in args.tiles.lower().split("x"))
+        except ValueError:
+            raise SystemExit(f"--tiles wants ROWSxCOLS, e.g. 4x6, got {args.tiles!r}")
+        tiles = (rows, cols)
+
     pair_dir = pathlib.Path(args.pair_dir).resolve()
     out_dir = pair_dir.parent / f"{pair_dir.name}-compare"
     poses = args.poses or ["00", "01", "03"]
@@ -670,7 +740,7 @@ def main():
         cfg_root = pathlib.Path(tmp)
         for pose in poses:
             compare_one(game, pair_dir, out_dir, pose, args.dump_regions,
-                        args.bloom == "on", cfg_root)
+                        args.bloom == "on", cfg_root, tiles=tiles)
 
 
 if __name__ == "__main__":
