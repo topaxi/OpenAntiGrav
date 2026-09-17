@@ -180,7 +180,12 @@ fn check(system: &str, emitter: &Emitter, blend_classes: std::ops::RangeInclusiv
 }
 
 /// Parses every system in one archive and reports the corpus totals.
-fn walk_archive(label: &str, spec: &str, expected: usize) {
+///
+/// `assert_no_texture` is the PS2 negative control folded into this same
+/// pass rather than a second full archive read - see
+/// [`no_ps2_particle_system_embeds_a_texture`]'s own doc comment for why
+/// that used to be a separate ~15s decompress of the whole 377 MiB WAD.
+fn walk_archive(label: &str, spec: &str, expected: usize, assert_no_texture: bool) {
     let mut archive = Archive::open(spec).expect("open archive");
     let blobs = particle_systems(&mut archive);
     assert_eq!(
@@ -189,7 +194,7 @@ fn walk_archive(label: &str, spec: &str, expected: usize) {
         "{label}: found {} SYSP blobs, expected {expected}",
         blobs.len()
     );
-    walk_systems(label, &blobs, 1..=3, true);
+    walk_systems(label, &blobs, 1..=3, true, assert_no_texture);
 }
 
 /// Everything asserted about a corpus of blobs, whichever disc they came off.
@@ -197,11 +202,20 @@ fn walk_archive(label: &str, spec: &str, expected: usize) {
 /// `uniform_looping` is whether every emitter of a tree agrees with its root
 /// about [`pob::flags::LOOPING`]. True on both Pulse discs, false on HD - see
 /// [`every_hd_particle_system_walks_the_same_way_byte_swapped`].
+///
+/// `assert_no_texture` is PS2's negative control: every emitter of every
+/// system must have no [`ParticleSystem::embedded_texture`] at all. `false`
+/// on PSP (checked separately and more specifically, root-emitter by
+/// root-emitter, by
+/// [`every_psp_root_emitter_texture_is_where_the_layout_says`]) and on HD
+/// (never checked here - HD ships separate `.gtf` sprites instead, see
+/// `oag_vex::pob::texture`'s module doc).
 fn walk_systems(
     label: &str,
     blobs: &[(usize, Vec<u8>)],
     blend_classes: std::ops::RangeInclusive<u32>,
     uniform_looping: bool,
+    assert_no_texture: bool,
 ) {
     let (mut emitters, mut trees, mut deepest) = (0usize, 0usize, (0usize, String::new()));
     for (index, blob) in blobs {
@@ -252,6 +266,12 @@ fn walk_systems(
                     system.name
                 );
             }
+            assert!(
+                !assert_no_texture || system.embedded_texture(blob, emitter).is_none(),
+                "{label} {}/{}: unexpectedly carries an embedded texture",
+                system.name,
+                emitter.name
+            );
         }
 
         if parsed.len() > deepest.0 {
@@ -277,10 +297,11 @@ fn every_psp_particle_system_walks_its_emitter_tree() {
         "psp",
         &format!("{}:PSP_GAME/USRDIR/Data.wad", image.display()),
         PSP_SYSTEMS,
+        false,
     );
 }
 
-/// The five PSP root emitters `docs/formats/pob.md` records as having no
+/// The six PSP root emitters `docs/formats/pob.md` records as having no
 /// embedded texture at their positional offset - a continuous/ambient trio
 /// with plausibly no per-particle sprite, plus two more with no explanation
 /// found yet. A file leaving this set (in either direction) is a real
@@ -355,37 +376,18 @@ fn every_psp_root_emitter_texture_is_where_the_layout_says() {
     );
 }
 
-/// The negative control [`docs/formats/pob.md`] draws on: PS2's `.pob`s
-/// embed nothing at all, at any emitter's positional offset. Confirmed by
-/// walking every emitter of every PS2 system, not just the roots - a hit
-/// anywhere would mean the PSP-only claim is wrong.
-#[test]
-#[ignore = "needs data/images/pulse-ps2-eu.chd"]
-fn no_ps2_particle_system_embeds_a_texture() {
-    let Some(image) = image("pulse-ps2-eu.chd") else {
-        return;
-    };
-    let mut archive = Archive::open(&format!("{}:54748/WADS2.WAD", image.display())).expect("open");
-    let blobs = particle_systems(&mut archive);
-    assert_eq!(blobs.len(), PS2_SYSTEMS);
-
-    for (_, blob) in &blobs {
-        let system = ParticleSystem::parse(blob).expect("parse");
-        let parsed = system.emitters(blob).expect("emitters");
-        for emitter in &parsed {
-            assert!(
-                system.embedded_texture(blob, emitter).is_none(),
-                "{}/{}: PS2 unexpectedly carries an embedded texture",
-                system.name,
-                emitter.name
-            );
-        }
-    }
-}
+// The negative control `docs/formats/pob.md` draws on - PS2's `.pob`s embed
+// nothing at all, at any emitter's positional offset - is folded into
+// `every_ps2_particle_system_walks_the_same_way` above (`assert_no_texture`)
+// rather than a second full archive walk. See that test's doc comment.
 
 /// The rubric's "a second binary is worth more than a second reading of the
 /// first": the PS2 port's own 41 systems, through the same parser, with no
-/// adjustment.
+/// adjustment. Also the negative control `oag_vex::pob::texture`'s module
+/// doc cites: every emitter of every PS2 system is asserted to carry no
+/// embedded texture at all, folded into this same walk rather than a
+/// second ~15-18s decompress of the whole 377 MiB `WADS2.WAD` - see
+/// [`walk_systems`]'s `assert_no_texture` parameter.
 #[test]
 #[ignore = "needs data/images/pulse-ps2-eu.chd"]
 fn every_ps2_particle_system_walks_the_same_way() {
@@ -396,6 +398,7 @@ fn every_ps2_particle_system_walks_the_same_way() {
         "ps2",
         &format!("{}:54748/WADS2.WAD", image.display()),
         PS2_SYSTEMS,
+        true,
     );
 }
 
@@ -465,8 +468,11 @@ fn every_hd_particle_system_walks_the_same_way_byte_swapped() {
         blobs.len()
     );
     // 1..=4 and per-emitter LOOPING are the two ways HD's *content* differs;
-    // every other predicate is asserted exactly as it is on Pulse.
-    walk_systems("hd", &blobs, 1..=4, false);
+    // every other predicate is asserted exactly as it is on Pulse. HD's own
+    // texture mechanism (separate `.gtf` PSARC entries) is not this
+    // module's concern, so `assert_no_texture` is false here - a positional
+    // hit on HD would be surprising but is not this test's job to police.
+    walk_systems("hd", &blobs, 1..=4, false, false);
 
     let mut mixed = Vec::new();
     let mut fourth = Vec::new();

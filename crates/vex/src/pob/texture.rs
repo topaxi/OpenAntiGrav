@@ -92,6 +92,17 @@
 //! wherever one doesn't. Prefer the positional texture as the "does this
 //! emitter have a sprite at all" signal; treat a name for it as unverified
 //! unless a nearby string corroborates it.
+//!
+//! **The gap is real, not cosmetic**: checked by comparing
+//! `(palette_offset, pixel_offset)` pairs across `WO_PLASMA_HEAD`'s four
+//! headers - if root's positional texture were secretly the same bytes as
+//! `plasma_glow_64x64.tga`'s header (`+0x1f40`), the two would share a
+//! pool the way `WO_SHIP_COLL_SPARK_DAMAGE`'s three siblings do. They
+//! don't; all four of this file's pools are distinct. Root's positional
+//! texture is its own unique pixel data with no string anywhere in the
+//! file naming it. Resolving what actually binds it (if anything does) is
+//! a live-trace question - `FUN_08916610`'s texture bind, per
+//! `docs/ghidra/functions/psp-pulse-usa/particle-system.md` - not a file-bytes one.
 
 use oag_formats::ByteOrder;
 
