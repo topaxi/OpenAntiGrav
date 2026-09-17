@@ -281,12 +281,15 @@ one texture** - the same shape as Pulse's own gantry, not a distributed
 four-way one. Material 2's single `uvOffset`/`uvScale` curve drives the
 digit glyph's own five UV cells *and* the backdrop panel at once, because
 both surfaces share the same texture (`321_go_64.gtf`, texture slot 2) and
-the same material. That also resolves a loose end `start-gantry.md`'s own
-texel-grid reading left standing: the "authored, unused by this node" red
-and green marker columns at texel columns 48-54/57-59 are not unused at
-all - they are exactly what the backdrop panel samples as the shared offset
-walks across them, which is where the red-to-green transition a player sees
-around `GO` comes from.
+the same material. **A plausible reading, not a measured one**: the
+backdrop's own red-to-green transition likely comes from the same shared
+offset crossing the "authored, unused by this node" red/green marker
+columns at texel columns 48-54/57-59 `start-gantry.md`'s own texel-grid
+table already found - the timing and the colours both fit - but nothing
+here has actually sampled the backdrop's own UV cell against `321_go_64.gtf`
+at the curve's `t=180`/`t=240` values to confirm it, the way that page's own
+Pulse table confirms its digit windows. Left as a lead rather than a
+finding.
 
 Played for real: `oag-game --race --track
 /data/environments/talons_junction/track.vex --no-audio --screenshot`,

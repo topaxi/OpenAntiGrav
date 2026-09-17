@@ -23,6 +23,18 @@
 //! index selects it, and `TexAnims::sample` produces a different value at two
 //! different points in time, the same three checks
 //! `authored_uv_ground_truth.rs` already runs for Pulse's own mechanism.
+//!
+//! **All four curved materials reach the shader, but only one of them ever
+//! reaches the screen.** `docs/formats/edge-animation.md`'s own 2026-09-17
+//! correction found that material 2's curve alone binds geometry a player
+//! sees (the digit glyph mesh and its backdrop panel); materials 1/3/4's
+//! curves are real and replay correctly too, but their own geometry (the
+//! chequered-flag state, slot 7's embedded `fx350` art, and `FINAL LAP`) is
+//! removed from every frame by `oag_render::gantry::clip_to_panel`/
+//! `::strip_fx350_art` before a draw ever reaches this test's own model. This
+//! test asserts the count of four because that is what the byte layout
+//! authors and what the shader table should hold - it does not, and was
+//! never meant to, assert that all four are visible.
 
 use std::path::PathBuf;
 

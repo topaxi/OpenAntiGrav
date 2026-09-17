@@ -1604,9 +1604,12 @@ than between a thread and the code.
   `0`) shows the backdrop and the digits vanish together at every tick, not
   just the digits - ruling out a curve-independent node swap as the source
   of the red-to-green change, and pointing at the shared texture
-  (`321_go_64.gtf`) instead: the "authored, unused" red/green marker columns
-  this page's own texel-grid table already found are what the backdrop
-  samples as the same offset that reveals the digits crosses them. Frames
+  (`321_go_64.gtf`) instead. **A plausible but unmeasured reading**: this
+  page's own "authored, unused" red/green marker columns are what the
+  backdrop samples as the same offset that reveals the digits crosses them -
+  the timing and colours fit, but nothing has sampled the backdrop's own UV
+  cell against the texture to confirm it, the way this page's own digit
+  windows are confirmed. Frames
   from both renders in `scratch/lane-wire-report.md`.
 
   **The per-node `+0xe4` static UV override table this page used to name as
