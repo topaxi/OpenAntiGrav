@@ -31,12 +31,23 @@
   `AnimCurve_EvaluateChannels` sits at 78 for) and `0x0066c3c8` ->
   `AnimCurve_SampleChannel` (80, was used in prose before this pass but
   never actually applied in Ghidra or `names.tsv` - fixed).
-- **Edge's own bit-packed key encoding is NOT decoded.** That's a
-  format-recovery task scoped to Edge's container, not Wipeout's - frame
-  index table, per-component bit widths, fixed-point scale/bias, quaternion
-  slerp reconstruction, read off the evaluator's own decompile but not
-  reduced to a byte layout. Per this lane's brief, no value is synthesised
-  in its place.
+- **Edge's own bit-packed key encoding is NOT decoded, and per the
+  maintainer's instruction that decoding it further is more RE (not
+  wiring), this pass stops here rather than continuing.** Direct answer to
+  the question the stop/wire decision turns on: **Edge Animation Tools'
+  bit-packing scheme is not documented anywhere this pass had access to -
+  no public spec, no SDK header, nothing found via this project's own docs
+  or tooling.** The only source used for anything said about its shape
+  (frame-index binary search, per-component bit widths read from header
+  offsets `+0x38`/`+0x3c`/`+0x40`/`+0x44`/`+0x48`, fixed-point-to-float
+  conversion, quaternion slerp via
+  `vectorReciprocalSquareRootEstimateFloatingPoint`) is `EdgeAnim_EvaluateClip`'s
+  own decompile in this binary - not reduced to a byte-level spec, and
+  nothing here checked whether a public write-up of Edge Animation Tools'
+  format exists outside this project (no web access used in this pass).
+  Decoding it further is format-recovery on Sony's own middleware, not
+  wiring a recovered mechanism - the maintainer's own distinction - so per
+  their instruction this stops rather than continuing.
 - **Playback: not wired.** There is nothing honest to play back yet - wiring
   a `crates/render/src/mesh/rcs.rs` replay hook now would mean inventing the
   curve's values, which `CLAUDE.md`'s "never invent" rule and this lane's own
@@ -46,9 +57,16 @@
   `OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-game --run-ignored all -E
   'binary(gantry_mount_hd_circuits_ground_truth)'` against
   `hdfury-ps3-eu-dec.iso` - all 12 previously-unverified tests pass.
-- **Gate**: `just` run to completion under the shared lock, watched to exit
-  (not left for a notification). See below for the exact result and whether
-  `test-data` was also run.
+- **Gate**: `just` run to completion on the committed tree (`9f94bb7f`),
+  `JUST_EXIT=0`, watched to exit, includes `lint --all-targets` so clippy
+  saw the probe. `just test-data` was started under the same lock
+  afterward (`OAG_REQUIRE_GAME_DATA=1`, 4,717 tests collected, matching the
+  lead's stated baseline) but was still running past 445/4717 when told to
+  stop; not waited on further per that instruction. Log at
+  `/tmp/lane-anim-testdata.log` on this machine if anyone wants to check it
+  once it finishes - nothing in this lane's own diff touches simulation
+  code, so a red there would be the pre-declared `ai_roll_ground_truth`
+  contention budget, not this lane's.
 
 ## Evidence trail (reproducible)
 
@@ -76,16 +94,23 @@
 6. `docs/ghidra/functions/ps3-hdfury-eu/billboards.md`'s new 2026-09-17
    section (second one, same day) has the full trace, tables and addresses.
    `docs/rendering/start-gantry.md`'s "What is still open" updated to match.
+7. The file's largest `coverage` gap (14,388 bytes at `0x5dc`) is 1,060 bytes
+   of documented-but-unclaimed relocation table plus ~13.3 KB where all
+   eight traced pointers (four `curve`, four `inner`) land - named at
+   confidence 75 as "candidate Edge clip payload," not asserted as settled,
+   since no clip's own extent is known.
 
 ## Gate
 
 - `just check-names`, `just gen-status` (names.tsv + billboards.md changed -
   `docs/overview/status.md` regenerated, ps3-hdfury-eu row 343->345), `just
-  check-docs` - all clean.
+  check-docs` - all clean, re-checked (no-op) after the later prose-only
+  edit to `billboards.md` too.
 - `just fmt`/`cargo fmt -p oag-rcs` run after an initial `fmt-check` failure
   on the new probe's formatting.
-- Full `just` under `flock "$HOME/.cache/oag/gate.lock"`, watched to
-  completion (see final message for exit code and log).
+- Full `just` under `flock "$HOME/.cache/oag/gate.lock"` on the committed
+  tree: `JUST_EXIT=0`, watched to completion, not left for a notification.
+- `just test-data`: started, not waited to completion - see Summary.
 
 ## What's still open (for the next pass)
 
