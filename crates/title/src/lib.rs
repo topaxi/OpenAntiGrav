@@ -169,6 +169,15 @@ pub struct Title {
     /// weapons and handed out no pickups, silently, with only a report line to
     /// say so.
     pub weapons: &'static weapons::Weapons,
+    /// Where this title keeps each weapon's own body model. See
+    /// [`weapons::WeaponModels`].
+    ///
+    /// A required field rather than `Option<&'static WeaponModels>`, on the
+    /// same footing [`Self::weapons`] already takes: every title's `TITLE`
+    /// const supplies one, `Default` where nothing is recovered yet, so a
+    /// caller never has to ask "does this title even have a table" before
+    /// asking a field of it.
+    pub weapon_models: &'static weapons::WeaponModels,
     /// The mouse pointer drawn over this title's screens, as SVG source.
     ///
     /// **Ours, not the disc's, on every title.** Nothing in this lineage was

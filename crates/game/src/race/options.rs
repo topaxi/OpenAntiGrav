@@ -398,6 +398,17 @@ pub struct Setup {
     /// ones. See [`oag_render::shield::Palette`]'s own doc comment for what
     /// each title's palette carries and which parts are measured.
     pub shield_palette: oag_render::shield::Palette,
+    /// Whether a Plasma detonation plays Wipeout HD's own three-model scale
+    /// ease rather than Pulse's baked anim-time scrub.
+    ///
+    /// A title fact, the same footing [`Self::shield_palette`] is on:
+    /// `craft_title.weapon_models.plasma_blast_hd.is_some()`. The two
+    /// mechanisms are read off different executables and do not unify - see
+    /// `blast_models`'s own module doc comment - so this is what
+    /// `Race::plasma_blast_draws` and `Race::advance_plasma_blast_models`
+    /// branch on rather than re-deriving which title is live from anywhere
+    /// else.
+    pub hd_plasma_blast: bool,
     /// Every collidable triangle of the track.
     pub collision: CollisionWorld,
     /// The force law's parameter set for one team in one speed class.
@@ -595,6 +606,14 @@ pub struct Loaded {
     /// terms as [`Self::boost_model`] - a missing rocket model falls back to the
     /// billboard rather than failing the race.
     pub rocket_model: Option<Model>,
+    /// The model a live Plasma bolt's own head is drawn as: `HD_plasma_ball`.
+    ///
+    /// **HD only.** `None` on every other source - Pulse rides the charge and
+    /// travel glow (`WO_PLASMA_HEAD`) alone and authors no bolt-head mesh.
+    /// `None` on the same terms as [`Self::rocket_model`] otherwise: a
+    /// missing model falls back to the billboard. See
+    /// `docs/ghidra/functions/ps3-hdfury-eu/plasma.md`.
+    pub plasma_ball_model: Option<Model>,
     /// The model a Cannon round in flight is drawn as:
     /// [`CANNON_MODEL_ENTRY`]. `None` on the same terms as
     /// [`Self::rocket_model`], and a round then draws as nothing at all

@@ -75,6 +75,28 @@ pub const TITLE: &Title = &Title {
         race: r"Data\XML\weaponstats.xml",
         elimination: None,
     },
+    // Pure's own weapon models are unmeasured. **Restated, not imported** -
+    // a title package does not depend on another title package outside
+    // `[dev-dependencies]` (`oag-pulse` is one here, for the cross-checks in
+    // this file's own tests, and ADR-0022 is why runtime code does not reach
+    // for it) - so these are Pulse's exact literals copied rather than a
+    // cross-title reference, the same restatement `oag_tables::handling`
+    // already does for `oag_title::race::SHIP_DIR`. See `oag_pulse::race`'s
+    // own `WEAPON_MODELS` for the evidence behind each one.
+    weapon_models: &oag_title::weapons::WeaponModels {
+        rocket: Some(r"Data\Weapons\Rocket.vex"),
+        mine: Some(r"Data\Weapons\Pulse_Mine.vex"),
+        bomb: Some(r"Data\Weapons\Pulse_Bomb.vex"),
+        cannon: Some(r"Data\Weapons\pulse_muzzleflash.vex"),
+        plasma_ball: None,
+        plasma_blast_pulse: Some(oag_title::weapons::PulsePlasmaBlast {
+            halo: r"Data\Weapons\pulse_plasma_halo1.vex",
+            hemisphere2: r"Data\Weapons\pulse_plasma_hemisphere2.vex",
+            hemisphere1: r"Data\Weapons\pulse_plasma_hemisphere1.vex",
+        }),
+        plasma_blast_hd: None,
+        leachbeam_ball: None,
+    },
 };
 
 /// Where Pure keeps its music.

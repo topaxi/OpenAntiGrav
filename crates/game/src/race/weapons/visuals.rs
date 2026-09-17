@@ -249,7 +249,10 @@ impl Race {
     ///   destroy bit and calls `Plasma_SpawnDetonation` (`0x0886ac88`) with the
     ///   bolt's own position for each - a wall hit and a timed-out bolt reach
     ///   it identically, so there is no split to mirror. Wired 2026-09-09; it
-    ///   returned `None` before, when the teardown was unread.
+    ///   returned `None` before, when the teardown was unread. **On HD,
+    ///   [`PLASMA_LIGHTNING_EXPAND_EFFECT`] instead** - a different
+    ///   executable's own file, read 2026-09-17; see that constant's doc
+    ///   comment.
     /// - **`Bomb`, and everything else**: `None`. The Bomb's own teardown -
     ///   a distinct function from the Mine's, per its own separate pool
     ///   cursor - is not chased, so whether it reaches `Mine_SpawnExplosion`
@@ -281,7 +284,19 @@ impl Race {
             oag_tables::weapons::Weapon::Cannon if struck.is_none() => {
                 Some((CANNON_SPARKS_EFFECT, point))
             }
-            oag_tables::weapons::Weapon::Plasma => Some((PLASMA_BLAST_EFFECT, point)),
+            // HD plays its own file, `WO_PLASMA_LIGHTNING_EXPAND` -
+            // `WeaponExplosions_Start`, not `Plasma_SpawnDetonation`'s
+            // `WO_PLASMA_FLASH`. `WO_PLASMA_LIGHTNING_COLLAPSE`, the other
+            // half of HD's pair, fires later and is not from here - see
+            // `Race::advance_plasma_blast_models`.
+            oag_tables::weapons::Weapon::Plasma => Some((
+                if self.view.hd_plasma_blast {
+                    PLASMA_LIGHTNING_EXPAND_EFFECT
+                } else {
+                    PLASMA_BLAST_EFFECT
+                },
+                point,
+            )),
             _ => None,
         }
     }
@@ -639,6 +654,29 @@ impl Race {
     #[must_use]
     pub fn cannon_model_matrices(&self) -> Vec<Mat4> {
         self.projectile_model_matrices(oag_tables::weapons::Weapon::Cannon)
+    }
+
+    /// Where each live Plasma bolt's own head is, for the model draw.
+    ///
+    /// **HD only** - `oag_gameplay`'s `Projectile` carries no charge/flight
+    /// distinction the mesh needs to be hidden during, so this draws
+    /// whenever a Plasma is live, charging or flying, the same set
+    /// [`Race::advance_projectile_flares`] rides the glow on. Velocity-
+    /// oriented like the Rocket's and the Cannon round's: `Plasma_PostUpdate`
+    /// (`0x00121418`) does place the bolt with a full basis, not a bare
+    /// translation, but that function's own second axis (a carried surface
+    /// normal, at confidence roughly 55 - not renamed, per `CLAUDE.md`'s
+    /// below-70 rule) is not resolved enough to port. **Chosen, not
+    /// measured**: this reuses the Rocket's velocity-alone basis rather than
+    /// inventing the second vector, and a charging bolt (`velocity ==
+    /// Vec3::ZERO`) falls into [`Self::projectile_model_matrices`]'s own
+    /// `orientation` branch, which for a projectile that has never flown is
+    /// simply the identity - an upright bolt on the craft's nose, not a
+    /// measured wind-up pose. See
+    /// `docs/ghidra/functions/ps3-hdfury-eu/plasma.md`.
+    #[must_use]
+    pub fn plasma_ball_model_matrices(&self) -> Vec<Mat4> {
+        self.projectile_model_matrices(oag_tables::weapons::Weapon::Plasma)
     }
 
     /// Where each live projectile of one `kind` is and how it is oriented, for

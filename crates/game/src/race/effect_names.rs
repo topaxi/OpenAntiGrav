@@ -123,6 +123,28 @@ pub const PLASMA_FLARE_EFFECT: &str = "WO_PLASMA_HEAD";
 /// place. See `docs/ghidra/functions/psp-pulse-usa/plasma.md`.
 pub const PLASMA_BLAST_EFFECT: &str = "WO_PLASMA_FLASH";
 
+/// The explosion Wipeout HD/Fury plays when a Plasma bolt goes off - HD's
+/// own file, not [`PLASMA_BLAST_EFFECT`], which is Pulse's.
+///
+/// **Recovered, confidence 88.** `WeaponExplosions_Start` (`0x00127cd0`)
+/// spawns fourcc `'PLED'` at the detonation point -
+/// `docs/ghidra/functions/ps3-hdfury-eu/plasma.md`. The `.pob`'s own
+/// internal name field was read directly, 2026-09-17: `wo_plasma_lightning_expand.pob`
+/// on `DATA02` names itself `WO_PLASMA_LIGHTNING_EXPAND`, byte for byte.
+pub const PLASMA_LIGHTNING_EXPAND_EFFECT: &str = "WO_PLASMA_LIGHTNING_EXPAND";
+
+/// What `WeaponExplosions_Collapse` plays at [`blast_models::HD_BLAST_HIDE_AT_SECONDS`],
+/// the moment it hides all three of a Plasma blast's own models.
+///
+/// **Recovered, confidence 85** (`WeaponExplosions_Collapse`, `0x00127770`,
+/// spawns fourcc `'PLCE'`) - see plasma.md. Internal name independently
+/// confirmed 2026-09-17 the same way [`PLASMA_LIGHTNING_EXPAND_EFFECT`]'s
+/// was: `wo_plasma_lightning_collapse.pob` names itself
+/// `WO_PLASMA_LIGHTNING_COLLAPSE`. Played from
+/// [`Race::advance_plasma_blast_models`], not from [`Race::ignite_blast`] -
+/// it fires 1.3 s after detonation, not at it.
+pub const PLASMA_LIGHTNING_COLLAPSE_EFFECT: &str = "WO_PLASMA_LIGHTNING_COLLAPSE";
+
 /// The effect the original attaches to every blade at launch.
 ///
 /// **Recovered, confidence 88.** `Shuriken_Init` (`0x08877280`) spawns it with

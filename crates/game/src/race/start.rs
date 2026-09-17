@@ -55,6 +55,7 @@ impl Race {
             camera_override,
             hd_trail,
             shield_palette,
+            hd_plasma_blast,
             ..
         } = setup;
 
@@ -410,6 +411,7 @@ impl Race {
                 leach_beam_effect: None,
                 leach_charge_effect: None,
                 plasma_blasts: [None; blast_models::PLASMA_BLAST_SLOTS],
+                hd_plasma_blast,
                 stage_rng: Rng::new(STAGE_SEED),
                 sparks_ignitions: 0,
                 sparks_rng: Rng::new(SPARKS_SEED),

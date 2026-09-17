@@ -337,9 +337,21 @@ pub fn load(options: &Options) -> Result<Loaded> {
     );
     // Every weapon's own body - see `weapon_models::load_bodies`, and
     // `MINE_MODEL_ENTRY`/`BOMB_MODEL_ENTRY` for why those two carry no
-    // drop-time effect alongside them.
-    let (rocket_model, mine_model, bomb_model, cannon_model, plasma_blast_models) =
-        weapon_models::load_bodies(&mut archives, options.lod, &mut report);
+    // drop-time effect alongside them. **Per `craft_title`**, not a fixed
+    // Pulse constant - see `weapon_models`'s own module doc comment.
+    let weapon_models::WeaponBodies {
+        rocket: rocket_model,
+        plasma_ball: plasma_ball_model,
+        mine: mine_model,
+        bomb: bomb_model,
+        cannon: cannon_model,
+        plasma_blast: plasma_blast_models,
+    } = weapon_models::load_bodies(
+        &mut archives,
+        craft_title.weapon_models,
+        options.lod,
+        &mut report,
+    );
     // The cockpit half of the shield, on the same terms and for the same
     // reason: not per team, not per track, one entry for every craft in the
     // game. The shell beside it *is* per team and loads with the livery above.
@@ -937,6 +949,9 @@ pub fn load(options: &Options) -> Result<Loaded> {
             } else {
                 oag_render::shield::PULSE_PALETTE
             },
+            // A title fact, the same footing `shield_palette` above is on -
+            // see `Setup::hd_plasma_blast`'s own doc comment.
+            hd_plasma_blast: craft_title.weapon_models.plasma_blast_hd.is_some(),
             collision,
             handling,
             airbrake_graphics,
@@ -982,6 +997,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         zone_grade,
         liveries,
         rocket_model,
+        plasma_ball_model,
         cannon_model,
         mine_model,
         bomb_model,

@@ -54,12 +54,18 @@ pub(super) fn hull_contact_point(centre: Vec3, contact: Vec3, reach: f32) -> Vec
 /// **It is a superset across sources, not a per-disc list.** An entry absent
 /// from the mounted archives is reported by the loader and skipped, so naming
 /// a PS2-only effect here costs a PSP race one report line and nothing else.
-pub const RACE_EFFECTS: [&str; 19] = [
+pub const RACE_EFFECTS: [&str; 21] = [
     sparks::DAMAGE_EFFECT,
     ROCKET_FLARE_EFFECT,
     MISSILE_FLARE_EFFECT,
     PLASMA_FLARE_EFFECT,
     PLASMA_BLAST_EFFECT,
+    // HD's own Plasma detonation pair - see both constants' own doc
+    // comments. `_EXPAND` at detonation, `_COLLAPSE` 1.3 s later; neither
+    // is on the PSP or PS2 disc, so both are absent from `PSP_WIRED` and
+    // `PS2_WIRED` in `crates/game/tests/psys_inventory_ground_truth.rs`.
+    PLASMA_LIGHTNING_EXPAND_EFFECT,
+    PLASMA_LIGHTNING_COLLAPSE_EFFECT,
     SHURIKEN_FLARE_EFFECT,
     SHURIKEN_BOUNCE_EFFECT,
     TRACK_BLAST_EFFECT,
