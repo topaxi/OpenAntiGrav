@@ -362,3 +362,4 @@
 0x003a5f68	function	Billboard_UpdateAndRender	82	billboards.md
 0x003e4f18	function	Billboard_UpdateInstanceUvs	88	billboards.md
 0x005f9bd0	function	AnimCurve_EvaluateChannels	78	billboards.md
+0x003a83d8	function	Environment_RegisterLightingSchema	80	renderer.md

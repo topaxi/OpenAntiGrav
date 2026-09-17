@@ -78,7 +78,9 @@ are now known; only its data is not.
 Docs updated: `docs/ghidra/functions/ps3-hdfury-eu/billboards.md` (new
 2026-09-17 section + names table), `docs/rendering/start-gantry.md` (new
 section, "still open" bullet rewritten), `HANDOVER.md`'s gantry summary line,
-`handover/gameplay/race-start-countdown-and-launch-boost.md`'s Open list.
+the race-start-countdown handover thread's Open list (named without its
+path: a thread file is deleted when its work lands, and CLAUDE.md forbids
+anything outside `handover/` linking into it).
 Also corrected a stale lead in the same pass: `billboards.md`'s own
 2026-09-15 section had already ruled out all 14 `lwz 0x834(` sites before
 this pass started; the "eleven unexamined" phrasing elsewhere on the page

@@ -3145,6 +3145,146 @@ not built this session, so treat the row/what's-there mapping as
 orientation, not a claim with its own confidence score. `mesh/`,
 `mesh.wgsl`, `emissive.rs`, `sky_cube.rs` still unchanged.
 
+### The rows map to real materials, the albedo textures pixel-verify clean, and the ambient constant is itself the colour the ceiling reads (2026-09-17, later still, `lane-hd-amphiseum-hue`)
+
+**Three things this session closes: which materials draw the ceiling rows,
+whether their albedo `.gtf`s decode correctly, and where the ceiling's own
+colour actually comes from.**
+
+**1. The tile rows are real material boundaries, not an artefact of the
+grid.** `scripts/hd-material-probe.py` gained `--pair-dir` (deriving
+`--track` from the pair's own `00.json`, the same idiom
+`hd-frame-compare.py`'s `track_arg` already uses, rather than the
+hardcoded `talons_junction` the script shipped with - `talons-matched`,
+its original pair, is confirmed gone from disk, so the default pair
+changed to `talons-grid-recheck`) and the same center-crop tolerance
+`hd-frame-compare.py` already carries for the reference's 1278x718 vs this
+project's 1280x720 canvas. Run against `amphiseum-grid` pose 00
+(`--bloom off`, coverage **79.1%**, below the script's own 90% floor - read
+every number below as indicative, per the script's documented caveat that
+its fog-segment classifier is calibrated by eye against Talon's Junction,
+not solved for Amphiseum): the largest-magnitude "ours brighter" slots by
+far are `animhexlights.rcsmaterial` (delta -0.526), `cf_diff_spec.rcsmaterial`
+(-0.315, -0.151 across two slots), `base_diffusespecular.rcsmaterial`
+(-0.277) and `lambert.rcsmaterial` (-0.023 to -0.146) - and reclassifying
+`hd_material_probe_dump`'s own `slot_map` by screen position confirms they
+draw **exactly the ceiling rows**: `animhexlights` at y 14-212 (centroid
+y=158), `cf_diff_spec` at y 117-293, `lambert` at y 0-26, `base_diffusespecular`
+(non-lightmap slot) at y 0-298 - against `track_wall` (y 296-523) and
+`track_surface_no_emissive` (y 342-717) for the floor's own "ours darker"
+population. No role bit cleanly separates the two groups (both sides carry
+`no_ambient` on most slots - that bit does not gate the shader's ambient
+term at all, see `mesh.wgsl`'s own "This ambient reaches materials the disc
+never feeds it to" comment above) - the split is positional, matching the
+tile grid exactly, not a role-bit distinction the material system already
+expresses.
+
+**2. The albedo textures pixel-verify clean - the channel-order/decode
+hypothesis is refuted for this circuit's ceiling materials specifically.**
+`crates/texture/examples/gtf_to_png.rs` (already existed, unused until now)
+decodes a bare `.gtf` to PNG; extracting the three dome-family textures
+straight off the disc (`scripts/psarc.py cat`) and decoding them -
+`dc_hexgrid.gtf` (256x256, DXT1, `animhexlights`'s own texture),
+`and_metaldark.gtf` (512x512, DXT1, `cf_diff_spec`'s), `dc_cement_base_edges.gtf`
+(512x512, DXT1, `base_diffusespecular`'s) - shows **all three are neutral
+grey-to-dark-grey by eye and by number**, no blue, violet or gold cast in
+any of them. So this session's own version of the maintainer's brief lead
+1 (channel order / `.gtf` decode) is a **clean negative** for the DXT1
+albedo textures actually driving the ceiling's colour - whatever bends
+these materials' output toward blue-violet is downstream of the texture
+sample, in the lighting term, not in the decode.
+
+**3. Near-grey albedo through a coloured light term reads as the light
+term's own colour - and Amphiseum's own `Lighting.Constant ambient color`
+is blue-violet on disc.** `mesh.wgsl`'s `lit_sum = scene.light.ambient +
+prelit + vertex_light + sun_diffuse` multiplies the near-grey albedo
+above, so a material dominated by one term reads close to that term's own
+hue. Three of the four ceiling materials carry no `lightmap` role at all
+(`animhexlights`, `cf_diff_spec`, and `lambert`'s non-lightmap slot), so
+`prelit` is zero for them by construction (the no-lightmap placeholder);
+their `vertex_light` is zero wherever the chunk declares no colour set; and
+`sun_diffuse = scene.light.sun * clamp(dot(n, scene.light.direction), 0, 1)`
+clamps to zero for a ceiling-facing normal (pointing down, toward the
+camera) against Amphiseum's own authored sun direction
+(`(0.20957, 0.57352, 0.79193)`, a strongly upward-pointing vector - the dot
+product with a downward normal is negative, clamped away). That leaves
+`scene.light.ambient` as **the only non-zero term** for most of the
+ceiling's own drawn pixels. Reading Amphiseum's `track.envsettings`
+directly (`scripts/psarc.py cat`): `"Lighting.Constant ambient
+color"=0.745098 0.611765 0.925490` - RGB with B > R > G, hue **265.5
+degrees**, a match in kind (not to the exact degree - other terms and
+gamma still move it) to the **285 degrees** this session measured on the
+rendered ceiling strip (`rgb=[0.64, 0.61, 0.65]`, sat 0.11, `coloured_pct`
+66.5%, y 30-260 box). Talon's Junction's own `Constant ambient color` is
+**also** blue-leaning on disc (`0.403922 0.392157 0.509804`, hue 246
+degrees) - so the ambient constant being blue is not Amphiseum-specific -
+but Talon's Junction's `Sun color` reaches HDR magnitude and is warm
+(`2.0 1.827451 0.886275`, R and G » B) and its pose 00 geometry mostly
+faces the sun, so `sun_diffuse` dominates there and the same blue ambient
+never surfaces. **This is a plausible mechanism, not a closed one**: it
+explains why Amphiseum shows the gap and Talon's Junction does not, using
+only values already read off the disc and already wired into this
+project's shader, with no new assumption beyond "the ceiling's own
+`sun_diffuse` is near zero", which the authored sun direction and the
+geometry's own facing both support but this session did not measure the
+per-pixel `ndl` value to confirm.
+
+**What is authored beside the wired ambient and is not consumed at all:
+`Lighting.Sky colour`** - `140 140 140 0` on Amphiseum, `128 128 128 0` on
+Talon's Junction, both **neutral grey**, unlike either circuit's tinted
+`Constant ambient color`. `docs/formats/envsettings.md`'s own table already
+recorded this key as "Read, unused" together with `Ambient false direction`
+(`(0.1, 1.0, 0.1)` on Amphiseum, `(1.0, 1.0, 1.0)` on Talon's Junction - a
+per-axis weight, plausible shape for a normal-driven blend, not decoded).
+Neither is read by `crates/game` or `crates/render` today (confirmed this
+session, `rg` over both crates) - `SKY_COLOUR` and the false-direction key
+exist only as parsed `oag_tables::envsettings` constants with no consumer.
+**A neutral `Sky colour` blended toward for up-facing-away-from-sun
+geometry, in place of (or alongside) the tinted `Constant ambient color`,
+is exactly the shape of mechanism that would turn Amphiseum's ceiling
+neutral/warm without touching Talon's Junction's sun-dominated frame at
+all** - but this is a hypothesis built from the *shape* of the authored
+data, not a read of what the original engine's shader actually does with
+either key, and per `CLAUDE.md`'s rule this is not something to wire on
+that basis alone.
+
+**New RE this session, in support of the above.** The function at
+`0x003a83d8` (`EBOOT.elf`) is the environment-schema registrar: called from
+`Environment_LoadRaceScene` (`0x003f44b4`), it walks the full `.envsettings`
+key list this project's own `envsettings.rs` already names, writing each
+into one struct at a persistent global base (`iRam008b6fb4`) - `Constant
+ambient color` lands at struct offset `+0x430` (four floats, read through
+`_opd_FUN_005d3ec0`, the same reader every other `vec3`/`vec4` colour key
+in the file uses) and `Sky colour` at `+0x440` (read through a *different*
+reader, `_opd_FUN_005d40b8`, consistent with this project's own reading
+that it is four bytes rather than four floats - see `envsettings.rs`'s
+"Two number encodings" section - and defaulting to `0xffffffff` rather
+than a float default when the key is absent). **So `Sky colour` is
+genuinely read into the same live per-environment struct `Constant ambient
+color` lands in** - confirming and sharpening `envsettings.md`'s existing
+"Read, unused" line with the actual function and offset, not just the
+string's own address - **but whether anything downstream ever reads struct
+offset `+0x440` back out is not traced this session.** That is the
+concrete next step: xref the struct base past this registrar (it is
+described elsewhere in this thread as "a persistent, cumulative object",
+carried forward between the front end and a race) to find every reader of
+`+0x440`, and check whether any of them gates on the surface normal the
+way the `Ambient false direction` key's shape suggests. Named
+`Environment_RegisterLightingSchema`, confidence 80 (the call pattern
+matches the full documented key list exactly, one field write per key, and
+it is reached from the already-named `Environment_LoadRaceScene`) - see
+`names.tsv`. The rename linter's PascalCase/verb warnings on this name are
+the tool's own convention mismatch, not a naming defect - see this
+project's own recorded note on that.
+
+**Not run this session**: tracing `+0x440`'s own consumer (if any) past
+this registrar; measuring the per-pixel `ndl` term directly to confirm
+`sun_diffuse` is actually zero on the ceiling's own drawn chunks rather
+than assumed from the authored sun direction and normal facing; extending
+the material cross-check past the 79.1%-coverage, `--bloom off` sample;
+wiring anything - no shader or Rust code changed. `mesh/`, `mesh.wgsl`,
+`emissive.rs`, `sky_cube.rs` read again this session, still unchanged.
+
 ### The 14 surface binds, read (2026-08-20)
 
 `FUN_005a40f8(ctx, depth, colour0, colour1, colour2, colour3)` takes **pointers

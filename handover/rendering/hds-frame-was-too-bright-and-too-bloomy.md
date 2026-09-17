@@ -417,6 +417,48 @@ Amphiseum is not." Full account in
 rows to actual `.rcsmaterial`s (`hd-material-probe.py`); the row labels in
 the table are read by eye, not measured.
 
+2026-09-17, later still (`lane-hd-amphiseum-hue`, continued): **the ceiling
+rows map to real materials, their albedo textures pixel-verify clean, and
+the ceiling's own colour traces to the wired ambient constant, which is
+itself blue-violet on disc.** Full account in
+[renderer.md](../../docs/ghidra/functions/ps3-hdfury-eu/renderer.md), "The
+rows map to real materials, the albedo textures pixel-verify clean, and the
+ambient constant is itself the colour the ceiling reads". `hd-material-probe.py`
+(extended with `--pair-dir` and the same center-crop fix `hd-frame-compare.py`
+already carries) confirms the tile grid's row split by material identity:
+`animhexlights`/`cf_diff_spec`/`lambert`/`base_diffusespecular` (non-lightmap
+slots, delta -0.53 to -0.15, "ours brighter") draw exactly the ceiling rows
+(y 0-298), against `track_wall`/`track_surface_no_emissive` (+0.06 to +0.28,
+"ours darker") on the floor (y 296-717) - coverage 79.1%, below the script's
+own 90% floor, so read as indicative. **The maintainer's own lead 1 (channel
+order/`.gtf` decode) is a clean negative for this circuit**: the three
+ceiling materials' own DXT1 albedo textures (`dc_hexgrid.gtf`,
+`and_metaldark.gtf`, `dc_cement_base_edges.gtf`) decode to plain neutral
+grey with `crates/texture/examples/gtf_to_png.rs`, no blue/violet/gold cast
+at all - so the colour is not in the texture sample. Three of the four
+ceiling materials carry no lightmap and draw chunks with no colour set, and
+their normals face down (toward camera) against Amphiseum's own strongly
+upward sun direction, clamping `sun_diffuse` toward zero - which leaves
+`scene.light.ambient` as close to the only non-zero term feeding a
+near-grey albedo. Amphiseum's own `Lighting.Constant ambient color`
+(`0.745098 0.611765 0.925490`, hue 265.5 deg) is a hue-family match to the
+285-degree hue this session measured on the rendered ceiling. Talon's
+Junction's ambient constant is *also* blue-leaning on disc (hue 246 deg)
+but its HDR-magnitude warm sun (`2.0 1.827 0.886`) dominates its own
+sun-facing pose 00 geometry, which is offered as why the same wired-blue
+ambient never surfaces there. **Not confirmed as the root cause** - this is
+a mechanism built from disc values already wired into the shader, not a
+read of what the original does with them, and the per-pixel `ndl` on the
+ceiling's own chunks was not directly measured this session. New RE:
+`Environment_RegisterLightingSchema` (`0x003a83d8`, confidence 80, `ps3-
+hdfury-eu`) identified - the full `.envsettings` key registrar, confirming
+`Lighting.Sky colour` (neutral grey on every circuit, `128-140`) is read
+into the *same* live struct `Constant ambient color` lands in, at offset
+`+0x440` versus `+0x430` - sharpening but not closing `envsettings.md`'s
+existing "Read, unused" line. **Whether anything downstream ever reads
+struct offset `+0x440` back out is the open RE question**, not traced this
+session. No shader or Rust code changed.
+
 ## Open
 
 - **Where to start on Amphiseum's 154-degree hue gap: it is near-complementary, which is a structural signature, not a lighting one.** Recorded 2026-09-17 by the coordinating session as a *lead only* - **nothing below was measured, and none of it carries a confidence score**; a lane was briefed on it and wound down before starting, so it is written here rather than lost. The reasoning: a shift of ~154 degrees is close to the 180 degrees that a channel swap or a negated term produces, and is a poor fit for any accumulation of lighting magnitudes, which move saturation and luma far more readily than they rotate hue halfway around the wheel. Three candidates follow from that shape, cheapest first. (1) **Channel or byte order.** HD is the PSP pipeline byte-swapped, so a `.gtf` decode, a vertex colour-set unpack or a constant upload that gets its order wrong on *some* materials and not others would produce exactly this - and `oag-texture`'s `.gtf` path has **never been pixel-verified against a reference decoder**, only checked for gamma/sRGB logic it does not carry, which does not rule out a channel-level or bit-level defect. That verification is bounded and is already listed as open in this thread's own Next Steps. (2) **Which surfaces actually carry it.** The maintainer's own report was that the gap "varies by area", so the whole-frame number may be averaging two different populations; measuring per region before sweeping per material would say whether the shift is global to the frame or local to a surface class. `hd-frame-compare.py` prints per-region saturation-weighted circular mean hue and `coloured_pct` as of the dated entry above, and its region boxes need `--dump-regions` verification against Amphiseum's own geometry (they were shaped for Talon's Junction, whose `sky` box samples an indoor ceiling here). (3) **Per-material attribution**, via `hd-material-probe.py` - last, because it is the most expensive and because its fog-segment classifier assumes the frame's exposure scalar is `1.0` by eye rather than solving for it, so its per-slot deltas are indicative rather than exact.
@@ -436,7 +478,7 @@ the table are read by eye, not measured.
 
 ## Next Steps
 
-- **Updated 2026-09-17 (`lane-hd-amphiseum-hue`)**: Amphiseum's gap is now known to be vertical - brighter at the ceiling/stands, darker at the floor/barriers (`--tiles 4x6`, dated entry above) - and the reference's own colour genuinely differs top-to-bottom (warm gold ceiling, cool cyan floor) where this project's render stays in one blue-violet hue family throughout. **The natural next step is mapping tile rows to actual `.rcsmaterial`s** (`scripts/hd-material-probe.py`, noting its own open caveat that its fog-segment classifier assumes the exposure scalar is `1.0` rather than solving for it) rather than chasing a single "Amphiseum hue" constant - the row-by-row pattern argues this is a per-material lighting/lightmap gap that happens to correlate with vertical position (ceiling materials vs. floor materials), not a scene-wide tint. `crates/render/src/mesh/`, `mesh.wgsl`, `emissive.rs`, `sky_cube.rs` unchanged this session. Worth checking before assuming it is the same `track_surface`/`prelitScale` lead below: that lead was built entirely on Talon's Junction data, which this session's own re-check shows has *no* comparable hue gap (9-13 degrees, close to uniform across its own tile grid) - so whatever explains Amphiseum's colour shift is not yet shown to be the same mechanism at all.
+- **Updated 2026-09-17, later still (`lane-hd-amphiseum-hue`)**: the tile rows are now known to be real material boundaries (`hd-material-probe.py --pair-dir`, dated entry above) - the ceiling's own materials (`animhexlights`, `cf_diff_spec`, `lambert`, `base_diffusespecular`'s non-lightmap slot) draw exactly the "ours brighter" rows, and their DXT1 albedo textures pixel-verify neutral grey, no colour cast - refuting the channel-order/decode hypothesis for this circuit specifically. **The sharpest remaining lead is `Lighting.Sky colour`, authored neutral grey on every circuit and parsed into the same live struct as the wired (and itself blue-violet on disc) `Constant ambient color`, but never consumed by `crates/render`/`crates/game` at all** - `Environment_RegisterLightingSchema` (`0x003a83d8`, new this session, confidence 80) is the registrar; whether anything reads struct offset `+0x440` (Sky colour) back out anywhere else in `EBOOT.elf` is the concrete next RE step, not traced yet. `mesh/`, `mesh.wgsl`, `emissive.rs`, `sky_cube.rs` still unchanged - no code wired on this basis, since the mechanism is built from the *shape* of the authored data (a neutral sky term sitting unused beside a tinted one that is wired) rather than a read of what the original shader does with either key.
 - The per-material probe's own contradiction is the sharpest lead now: find why `track_surface` (no authored sun term) reads *more* deficient than the population that does get the blanket sun addition, not less - candidates worth checking against the disc before anything else: whether `track_surface`'s own `prelitScale`/`prelitPower` pair actually differs from the shared assumption, whether its lightmap texture decodes correctly, and whether its distinct `specular_exponent` (70, against the 32 the rest of the sampled population carries) points at a genuinely different `.rcsmaterial` row being read
 - Extend the per-material probe past pose `00`'s 14-material sample - run it against Anulpha Pass or another circuit with more materials in frame, and reproduce the same role-bucket/track_surface checks, to see whether the "no clean clustering by role bits" reading holds generally or is a small-sample artefact of the fourteen materials pose `00` happens to show
 - Pixel-verify `oag-texture`'s `.gtf` decode against a reference decoder on a flat, evenly-lit Talon's Junction albedo (candidate (c), not reached this session - only that the decoder carries no gamma logic of its own and its ground-truth test passes, neither of which rules out a bit-level DXT/BC defect)
