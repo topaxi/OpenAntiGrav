@@ -8,8 +8,9 @@ real material slots and the maintainer's own "channel order" lead, and adds
 one new RE finding. Full technical account is in two places, not duplicated
 here: [renderer.md](../docs/ghidra/functions/ps3-hdfury-eu/renderer.md)'s
 newest two dated sections (both 2026-09-17, `lane-hd-amphiseum-hue`) and
-[the handover thread](../handover/rendering/hds-frame-was-too-bright-and-too-bloomy.md)'s
-matching entries.
+the matching entries in the rendering handover thread named after HD's
+brightness/bloom investigation (not cited by path here - nothing outside
+`handover/` and `HANDOVER.md` may cite a thread file, per `CLAUDE.md`).
 
 ## Answer to the brief's three questions
 
