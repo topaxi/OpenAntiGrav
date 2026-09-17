@@ -1512,16 +1512,54 @@ above's own missing half), or opening those eleven call sites in Ghidra, is
 the next step - not another raw byte diff, which this pass already showed
 does not converge on its own.
 
+### 2026-09-17: the runtime write is located, with a patched RPCS3 GDB watchpoint
+
+**`lane/hd-gantry-glyph-walk`.** `just build-rpcs3-watchpoints`'s patched
+RPCS3 (working `Z2` write watchpoints - `rpcs3-debugger.md`) attacked the
+open question directly instead of another pushbuffer diff: read
+`Billboard_LoadModelAndBind`'s own decompile for the *runtime* addresses of
+slot 8's 19 per-submesh instance blocks (heap-allocated, not knowable
+statically), armed a `Z2` on all 19 at once, then let an actual countdown
+play. **Result: a real write fires**, at instance index 2's own `uvOffset.x`,
+same PC (`0x005f9c9c`) on two independent boots with two different heap
+layouts. The writer is `AnimCurve_EvaluateChannels` (`0x005f9bd0`), called
+from the per-frame `Billboard_UpdateInstanceUvs` (`0x003e4f18`) off
+`Billboard_UpdateAndRender` (`0x003a5f68`) - three newly named functions, full
+write-up, evidence and addresses in
+[`billboards.md`](../ghidra/functions/ps3-hdfury-eu/billboards.md#2026-09-17-the-runtime-write-is-located-live-with-a-patched-rpcs3-gdb-watchpoint).
+
+**This closes the location and mechanism, not the authored data.** The
+curve's own content (`target+0x20+0xc`) was not decoded, and the resource it
+hangs off is the loaded `.rcsmodel`'s own in-memory object - very likely
+authored in that file, in a section `oag-rcs` does not parse yet. Playing it
+back needs that decode first, then a replay hook in
+`crates/render/src/mesh/rcs.rs` (owned by `lane-hd-material-curve` while that
+lane runs) - see `billboards.md`'s own closing paragraph for the exact two
+steps. **The confidence-40 score for "HD's material carries no `TEXOFFSET`
+track" is unchanged and still correct** - it is a finding about the
+*material's own format*, and this pass's write comes from a different
+resource-level mechanism entirely, not from that track.
+
+**The `lwz 0x834(` lead this page pointed at is dead - do not re-run it.**
+`billboards.md`'s own 2026-09-15 section (dated two days before this one, in
+the same file) already re-examined all 14 matches after the lvlx reimport and
+ruled out every one: 3 in `FUN_000654e0` (a `RaceManager` cursor, different
+base entirely), 2 more decompiled and ruled unrelated, and the remaining 9
+are `-0x834(r2)` - ordinary TOC-relative globals off the TOC pointer, a
+different addressing shape than `table_base + 0x834` by construction, caught
+by the search pattern's own substring match rather than being real
+candidates. The "eleven unexamined" figure the previous version of this
+bullet named was already stale when it was written; this is
+`handover-threads-lag-docs` in miniature, inside a single doc file rather
+than between a thread and the code.
+
 ### What is still open
 
-- **The runtime write for `uvOffset`/`uvScale`, if one exists, is still not
-  located** - a live RPCS3 capture now shows the board's own geometry lights
-  up over the course of an actual countdown (above), which is stronger
-  evidence a write happens than the single earlier screenshot, but a raw
-  pushbuffer diff across five captures did not isolate it. The concrete next
-  step is a semantic, packet-aware read of the pushbuffer against the
-  fragment program's own patch-slot table, or the eleven unexamined
-  `lwz 0x834(` call sites `billboards.md` already names.
+- **The animated curve's own authored content is undecoded.** The write is
+  now located (above); what value it plays across a full countdown, and
+  where in `321go_startfinish.rcsmodel`'s own bytes it lives, is not. A
+  format-recovery pass on `oag-rcs` is the next step, not another emulator
+  capture.
 - **The backing pieces sit inside the mount's own thick structure.**
   `CLEARANCE` (1.0, unchanged, still Pulse's own measured order) clears the
   digit board's near-zero local depth but not `Honey_Board`'s HD analogue,

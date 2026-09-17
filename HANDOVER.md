@@ -440,14 +440,16 @@ docs page with the evidence - **do not requote from this file**:
   board's own display plane and rendered as a stray "Wipeout symbol" logo
   floating over the open road until `oag_render::gantry::strip_fx350_art`
   dropped them by texture, matching a player's own report pixel for pixel.
-  HD's glyph *walk* is still unwired - its material's `uvOffset`/`uvScale`
-  are a static value on disk, not a keyframe track (88/40) - but a live
-  RPCS3 capture through an actual countdown (2026-09-13) now shows the
-  board's own geometry lighting a `3` and then overlapping `3`/`2` over four
-  seconds of real play, so *something* writes this parameter at runtime;
-  the write itself was not isolated in a pushbuffer diff and stays a named
-  lead (`docs/ghidra/functions/ps3-hdfury-eu/billboards.md`'s eleven
-  unexamined `lwz 0x834(` sites). 2048 is untried past a first-glance read of
+  HD's glyph *walk* is still unwired for **playback** - its material's
+  `uvOffset`/`uvScale` are a static value on disk, not a keyframe track
+  (88/40) - but 2026-09-17's patched-RPCS3 `Z2` watchpoint pass **located the
+  runtime write live** (`AnimCurve_EvaluateChannels`, off
+  `Billboard_UpdateInstanceUvs`/`Billboard_UpdateAndRender`), same PC on two
+  boots; the authored curve data itself is the remaining gap, likely inside
+  `321go_startfinish.rcsmodel`'s own undecoded bytes
+  (`docs/ghidra/functions/ps3-hdfury-eu/billboards.md`'s 2026-09-17 section;
+  its own prior "eleven unexamined `lwz 0x834(` sites" lead was already dead
+  by 2026-09-15). 2048 is untried past a first-glance read of
   the same family: four separate mesh nodes, each slid on and off screen by
   its own transform track (90), with no shared UV walk at all, and reaches
   only two of its own eight glyph files (plus `fx350`) across all 26

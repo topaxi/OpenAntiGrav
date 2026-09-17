@@ -1,0 +1,86 @@
+NOTE: Xvfb :91 already listening (reusing)
+config: /home/topaxi/projects/oag-lane-gantry/scratch/gantry-watch/config.yml (Interpreter (static), Null audio, GDB 2350)
+removed a stale /home/topaxi/.cache/rpcs3/RPCS3.buf left by a terminated run
+rpcs3 pid 156794 (patched, watchpoints) on DISPLAY=127.0.0.1:91
+  press      ?                      -> ?                     
+  press      ?                      -> ?                     
+  press      ?                      -> Top                   
+  press      Top                    -> Top                   
+  press      Top                    -> Language Selection    
+  press      Language Selection     -> PreFMVConnect         
+  press      PreFMVConnect          -> Studio Logo           
+  press      Studio Logo            -> Studio Logo           
+  press      Studio Logo            -> Studio Logo           
+  press      Studio Logo            -> Studio Logo           
+  press      Studio Logo            -> EpilepsyWarning       
+  press      EpilepsyWarning        -> Save Warning          
+  press      Save Warning           -> Save Warning          
+  press      Save Warning           -> Main Menu             
+Main Menu; settling
+walking to race
+  press  1  Main Menu              -> Campaign Selection    
+  press  2  Campaign Selection     -> Campaign Selection       (dropped)
+  press  3  Campaign Selection     -> Grid Selection Fury   
+  press  4  Grid Selection Fury    -> Grid Selection Fury      (dropped)
+  press  5  Grid Selection Fury    -> Cell Selection        
+  press  6  Cell Selection         -> Cell Selection           (dropped)
+  press  7  Cell Selection         -> Team Selection        
+  press  8  Team Selection         -> Team Selection           (dropped)
+  press  9  Team Selection         -> Team Launch Transition
+  press 10  Team Launch Transition -> Launch Game           
+  press 11  Launch Game            -> InGame                
+in race; waiting for track load
+  Loading track model Data\Environments\Talons_Junction\track.rcsmodel 
+  Loading Screen Finished
+connecting GDB stub (this pauses the target)
+  g_BillboardSlots = 0x00c48180
+  slot8 struct @0x00c48890, resource handle=0x43558e80
+  submesh count=19, instance array base=0x3325fc60
+    [ 0] inst=0x3325fc60 uvOffset.x=00000000 uvScale.x=3f800000 node=0x3064bb20
+    [ 1] inst=0x3325fcf0 uvOffset.x=00000000 uvScale.x=3f800000 node=0x3064bdc0
+    [ 2] inst=0x3325fd80 uvOffset.x=00000000 uvScale.x=3f800000 node=0x3064c0e0
+    [ 3] inst=0x3325fe10 uvOffset.x=00000000 uvScale.x=3f800000 node=0x3064c400
+    [ 4] inst=0x3325fea0 uvOffset.x=00000000 uvScale.x=3f800000 node=0x3064c720
+    [ 5] inst=0x3325ff30 uvOffset.x=00000000 uvScale.x=3f800000 node=0x3064ca40
+    [ 6] inst=0x3325ffc0 uvOffset.x=00000000 uvScale.x=3f800000 node=0x3064cd60
+    [ 7] inst=0x33260050 uvOffset.x=00000000 uvScale.x=3f800000 node=0x3064d080
+    [ 8] inst=0x332600e0 uvOffset.x=00000000 uvScale.x=3f800000 node=0x3064d3a0
+    [ 9] inst=0x33260170 uvOffset.x=3f800000 uvScale.x=3f800000 node=0x3064d6c0
+    [10] inst=0x33260200 uvOffset.x=00000000 uvScale.x=3f800000 node=0x3064d9e0
+    [11] inst=0x33260290 uvOffset.x=00000000 uvScale.x=3f800000 node=0x3064dd00
+    [12] inst=0x33260320 uvOffset.x=00000000 uvScale.x=3f800000 node=0x3064e020
+    [13] inst=0x332603b0 uvOffset.x=00000000 uvScale.x=3f800000 node=0x3064e340
+    [14] inst=0x33260440 uvOffset.x=00000000 uvScale.x=3f800000 node=0x3064e660
+    [15] inst=0x332604d0 uvOffset.x=00000000 uvScale.x=3f800000 node=0x3064e980
+    [16] inst=0x33260560 uvOffset.x=00000000 uvScale.x=3f800000 node=0x3064eca0
+    [17] inst=0x332605f0 uvOffset.x=00000000 uvScale.x=3f800000 node=0x3064efc0
+    [18] inst=0x33260680 uvOffset.x=00000000 uvScale.x=3f800000 node=0x3064f2e0
+armed 19 write watchpoints; resuming for the countdown
+  [t=3s] 1 hit(s) so far
+paused after countdown window
+
+--- watchpoint hits in RPCS3.log ---
+  ·S 0:01:47.204389 {PPU[0x100000b] Thread (36320740) [0x005f9c9c]} GDB: Write watchpoint hit: 4 byte(s) at 0x3325fdd0.
+--- end ---
+
+--- post-window instance state ---
+  inst+0x50=0x3325fcb0 uvOffset=[0.0, 0.0, 0.0, 0.0] uvScale=[1.0, 1.0, 1.0, 1.0]
+  inst+0x50=0x3325fd40 uvOffset=[0.0, 0.0, 0.0, 0.0] uvScale=[1.0, 1.0, 1.0, 1.0]
+  inst+0x50=0x3325fdd0 uvOffset=[0.0, 0.0, 0.0, 0.0] uvScale=[1.0, 1.0, 1.0, 1.0]
+  inst+0x50=0x3325fe60 uvOffset=[0.0, 0.0, 0.0, 0.0] uvScale=[1.0, 1.0, 1.0, 1.0]
+  inst+0x50=0x3325fef0 uvOffset=[0.0, 0.0, 0.0, 0.0] uvScale=[1.0, 1.0, 1.0, 1.0]
+  inst+0x50=0x3325ff80 uvOffset=[0.0, 0.0, 0.0, 0.0] uvScale=[1.0, 1.0, 1.0, 1.0]
+  inst+0x50=0x33260010 uvOffset=[0.0, 0.0, 0.0, 0.0] uvScale=[1.0, 1.0, 1.0, 1.0]
+  inst+0x50=0x332600a0 uvOffset=[0.0, 0.0, 0.0, 0.0] uvScale=[1.0, 1.0, 1.0, 1.0]
+  inst+0x50=0x33260130 uvOffset=[0.0, 0.0, 0.0, 0.0] uvScale=[1.0, 1.0, 1.0, 1.0]
+  inst+0x50=0x332601c0 uvOffset=[1.0, 0.25, 0.0, 0.0] uvScale=[1.0, 1.0, 1.0, 1.0]
+  inst+0x50=0x33260250 uvOffset=[0.0, 0.0, 0.0, 0.0] uvScale=[1.0, 1.0, 1.0, 1.0]
+  inst+0x50=0x332602e0 uvOffset=[0.0, 0.0, 0.0, 0.0] uvScale=[1.0, 1.0, 1.0, 1.0]
+  inst+0x50=0x33260370 uvOffset=[0.0, 0.0, 0.0, 0.0] uvScale=[1.0, 1.0, 1.0, 1.0]
+  inst+0x50=0x33260400 uvOffset=[0.0, 0.0, 0.0, 0.0] uvScale=[1.0, 1.0, 1.0, 1.0]
+  inst+0x50=0x33260490 uvOffset=[0.0, 0.0, 0.0, 0.0] uvScale=[1.0, 1.0, 1.0, 1.0]
+  inst+0x50=0x33260520 uvOffset=[0.0, 0.0, 0.0, 0.0] uvScale=[1.0, 1.0, 1.0, 1.0]
+  inst+0x50=0x332605b0 uvOffset=[0.0, 0.0, 0.0, 0.0] uvScale=[1.0, 1.0, 1.0, 1.0]
+  inst+0x50=0x33260640 uvOffset=[0.0, 0.0, 0.0, 0.0] uvScale=[1.0, 1.0, 1.0, 1.0]
+  inst+0x50=0x332606d0 uvOffset=[0.0, 0.02199999988079071, 0.0, 0.0] uvScale=[1.0, 1.0, 1.0, 1.0]
+--- end ---

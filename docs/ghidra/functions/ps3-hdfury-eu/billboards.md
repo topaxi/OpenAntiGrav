@@ -49,8 +49,13 @@ which is enough to identify the parser without reading the other.
 | `0x003a4b70` | function | `GetBillboardMeshIdFromName` | 90 |
 | `0x003a4da0` | function | `Billboard_LoadModelAndBind` | 80 |
 | `0x008b6f38` | data | `g_BillboardSlots` | 84 |
+| `0x003a5f68` | function | `Billboard_UpdateAndRender` | 82 |
+| `0x003e4f18` | function | `Billboard_UpdateInstanceUvs` | 88 |
+| `0x005f9bd0` | function | `AnimCurve_EvaluateChannels` | 78 |
 
-The last row is a gift, not a reading: the name is the function's own debug
+The last three rows are 2026-09-17's - see "The runtime write is located" below.
+
+The last row of the first group is a gift, not a reading: the name is the function's own debug
 string (`"GetBillboardMeshIdFromName: No model loaded for billboard %i\n"`,
 `0x007b0120`), so it carries no `_q` despite nothing else on this page being
 runtime-checked.
@@ -677,3 +682,150 @@ completeness: `get_function_callers(0x003a4da0)` returns the trampoline
 `Billboard_ConstructResource` and its own `.opd` descriptor - the identical chain, now
 reproduced on the reimported image. Nothing changed; the thread's bullet was stale
 independent of the reimport and is corrected below.
+
+## 2026-09-17: the runtime write is located, live, with a patched RPCS3 GDB watchpoint
+
+**`lane/hd-gantry-glyph-walk`.** The confidence-40 question this page and
+`docs/rendering/start-gantry.md` carried since 2026-09-13 - "a live capture
+shows the digit board's glyphs light up during an actual countdown, but no
+write to `uvOffset`/`uvScale` was ever isolated" - is closed on the location
+and mechanism, not on the authored data behind it. `just build-rpcs3-watchpoints`
+(the patched RPCS3 with working GDB `Z2`/`Z3` watchpoints,
+[`rpcs3-debugger.md`](../../../reverse-engineering/rpcs3-debugger.md)) makes
+this the first pass on this page with a real write trap rather than a raw
+pushbuffer diff.
+
+### Method: watch all 19 of slot 8's own instances at once, found live rather than computed
+
+The earlier raw-diff attempts guessed at a pushbuffer byte; this attempt
+instead read `Billboard_LoadModelAndBind`'s own decompile (above) for the
+*runtime* addresses a watch needs, rather than computing them from the ELF's
+static layout - the instance blocks are a `FwMemAllocator`/`_opd_FUN_005a2f50`
+heap allocation, not something the executable's own address space fixes.
+Live, over a real GDB session (`scripts/rpcs3_debugger.py`, port 2350, a
+private config copy, `Assume External Debugger: true` already in the shared
+stock config so a stop reply's own PC is trustworthy per that page's own
+finding):
+
+1. Read `g_BillboardSlots`' own pointer (`0x008b6f38`) for its current value
+   (heap-allocated, drifts boot to boot - `0x00c48180` both times measured,
+   but read fresh rather than trusted).
+2. Slot 8's own per-slot struct sits at `g_BillboardSlots + 7*0x100 + 0x10`
+   (`Num`-1 = 7, the same `iVar39` `Billboard_LoadModelAndBind` computes).
+   Its own `+0xf8` word (`piVar29[0x3e]` in that function's own decompile) is
+   the instance array's base address, read directly rather than derived a
+   second way.
+3. Read `*(resource+0x1c)` for the submesh count - **19**, matching
+   `start-gantry.md`'s own node count for `321go_startfinish.rcsmodel`
+   exactly, confirming the address arithmetic before arming anything.
+4. Arm one `Z2,<instance+0x50>,0x20` per submesh (19 watches, one GDB session,
+   the registry is an unbounded `std::vector` per
+   [`rpcs3-debugger.md`](../../../reverse-engineering/rpcs3-debugger.md) -
+   no need to guess which of the 19 is the digit board ahead of time), then
+   resume and let an actual countdown play.
+
+Connecting the GDB stub pauses the emulator immediately, so all of this - the
+three reads and the 19 arms - costs zero game-time; the countdown does not
+start until `resume()` is called with every watch already in place.
+
+### Result: one write, same PC, two independent boots
+
+Both runs (`scratch/gantry-watch-run1.log`, `scratch/gantry-watch-run3.log` in
+this lane's own worktree) landed on the exact same instance index and PC,
+from a fresh boot each time with a different heap layout:
+
+| Run | instance base | hit address | submesh index | node pointer |
+| --- | --- | --- | --- | --- |
+| 1 | `0x3325cb40` | `0x3325ccb0` | 2 | `0x3064c1e0` |
+| 3 | `0x3325fc60` | `0x3325fdd0` | 2 | `0x3064c0e0` |
+
+Both: `GDB: Write watchpoint hit: 4 byte(s) at <addr>` at PC **`0x005f9c9c`**,
+on a **non-main** PPU thread (`36320740`, not `main_thread`) - the write is
+`AnimCurve_EvaluateChannels`'s own `*(float *)((uVar2 & 3) * 4 + iVar4) =
+(float)dVar9;` store, 4 bytes at the target's `uvOffset.x` component. Only one
+hit occurred across a 45-second real-time window in run 3 (interpreter mode
+runs well under real-time, so this covers several times the authored 6.000 s
+loop-close) - **the write happens once, not every frame**, consistent with a
+state-transition write rather than a continuously re-evaluated one.
+
+The value written back was `0.0` - identical to the field's own rest value,
+which is why a value-diff approach (as opposed to a write trap) would have
+missed this entirely. That is not a null result: `AnimCurve_EvaluateChannels`
+samples `fmodf(time, curve->period)` through a curve, and a curve landing on
+`0.0` at an early sample is exactly what the live-capture progression
+("nothing, nothing, a faint sliver, a clear `3`, then `3` and `2`") already
+showed for the board's first visible state.
+
+### The call chain, three newly named functions
+
+`Billboard_UpdateAndRender` (`0x003a5f68`, confidence 82) is a **per-frame**
+counterpart to `Billboard_LoadModelAndBind`: it walks `g_BillboardSlots` with
+the identical gating (`*PTR_g_ZoneEffectsActive_008b6f34 == 0 || slot == 7`),
+does its own per-slot RSX render-to-texture setup (`Rsx_SetMethod(.., 0x1fec,
+0)` / `..1)` bracketing the update, a viewport calculation through
+`_opd_FUN_005c2d08`) - the first concrete evidence for
+["Render-to-texture"](#the-slot-8-asymmetry-and-what-is-still-not-established)'s
+own confidence-55 hypothesis above, though this is a *different* per-frame
+pass from the load-time `FUN_005e5858`/`FUN_005ea2d0` pair that hypothesis
+named, not a confirmation of those two specifically. For each active slot it
+calls `Billboard_UpdateInstanceUvs(clock_value, *slot_resource,
+slot_instance_array)` - `*slot_resource` and `slot_instance_array` matching,
+address for address, the `resource handle`/`instance array base` this pass
+read live off `g_BillboardSlots[7]` during an actual countdown.
+
+`Billboard_UpdateInstanceUvs` (`0x003e4f18`, confidence 88) does two passes
+per call: first, for every instance with a bound `.vex` node (`+0x70 != 0`),
+a conditional overwrite of `uvOffset.xy`/`uvScale.zw` from a **per-node**
+table at `node+0xe4` (a `0xffffffff` sentinel per component means "leave this
+alone") - a static, per-node UV override this page had not identified before,
+separate from the animated write below and consistent with the two nonzero
+rest-state instances this pass's own post-window reads found (submesh 9:
+`uvOffset (1.0, 0.25, 0, 0)`; submesh 18: `uvOffset (0, 0.022, 0, 0)`) on both
+runs, both already resolved by load time and untouched by any watch during
+the run. Second, it walks the resource's own animated-target list (`+0x2c`
+count, `+0x30` array) and calls `AnimCurve_EvaluateChannels(clock, curve,
+target)` for every entry whose curve pointer (`target+0x20+0xc`) is non-null -
+this is the call that produced the watched hit.
+
+`AnimCurve_EvaluateChannels` (`0x005f9bd0`, confidence 78) is a **generic**
+curve evaluator - `fmodf(time, curve->period)`, then for each of the curve's
+channels, `AnimCurve_SampleChannel` (`0x0066c3c8`, a two-line wrapper over an
+unnamed deeper evaluator `_opd_FUN_0066b840`, left unrenamed - confidence
+would be a guess at the parent's own generality) samples one float and the
+result is stored into the target's own float table by `(index, component)`.
+**It has five callers total and this reading is generic, not billboard-only**
+- it is confirmed as *a* mechanism billboards route through, not confirmed as
+existing for billboards alone.
+
+### What this does and does not settle
+
+**Settled:** a runtime write to the digit board's own `uvOffset` genuinely
+happens, its exact address (relative to a live-read instance base, not a
+static one), its exact PC, and the three-function call chain from the
+per-frame billboard dispatcher down to the generic curve-sample-and-store
+leaf. Reproduced identically on two independent boots.
+
+**Not settled, and worth being precise about why implementing this is not
+this pass's own next step:** the *curve data itself* - what `target+0x20+0xc`
+points at, how many keyframes it carries, and where in `321go_startfinish`'s
+own `.vex`/`.rcsmodel` bytes (or elsewhere) it is authored - was not decoded.
+The resource handle `Billboard_UpdateInstanceUvs` receives is the loaded
+`.rcsmodel`'s own in-memory object (`Billboard_LoadModelAndBind`'s own
+`_opd_FUN_005da6b8` return value), so the animated-target list is very likely
+populated from that same file at load time, in a section this project's
+`oag-rcs` parser does not yet decode - a new format-recovery task, not
+(necessarily) a `mesh/rcs.rs` question by itself. Playing it back would need,
+in order: (1) locating and decoding this curve-list chunk in the `.rcsmodel`
+format (`oag-rcs`), then (2) replaying it per-tick into the draw's own
+`uvOffset`/`uvScale` shader constants the way `Model::write_node_anims`
+already replays an `Anim Transform` track - which does reach
+`crates/render/src/mesh/rcs.rs`, owned by `lane-hd-material-curve` while that
+lane is active. Writing a synthetic offset here instead would be exactly the
+invented mechanism `CLAUDE.md`'s "never invent what the assets already
+author" rule exists to stop, now with less excuse than before: the real
+write's address and caller are known, only its authored content is not.
+
+Not chased further, and worth naming for whoever does: the per-node `+0xe4`
+static-override table `Billboard_UpdateInstanceUvs` reads (a second, distinct
+mechanism from the animated one) and the deeper curve evaluator
+`_opd_FUN_0066b840` both remain open threads of their own.

@@ -359,3 +359,6 @@
 0x0062ea98	function	Scream_NoteToPitch	90	sound.md
 0x0062ec38	function	Scream_VoicePitch	90	sound.md
 0x006332e0	function	CellMs_SetVoiceRate	90	sound.md
+0x003a5f68	function	Billboard_UpdateAndRender	82	billboards.md
+0x003e4f18	function	Billboard_UpdateInstanceUvs	88	billboards.md
+0x005f9bd0	function	AnimCurve_EvaluateChannels	78	billboards.md
