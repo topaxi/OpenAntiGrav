@@ -3429,6 +3429,232 @@ color` are all now known-bound engine parameters a material's microcode
 could reference by hash, but which of the four ceiling materials reference
 which was not checked this session.
 
+### The per-material microcode sweep: none of the four ceiling programs ever references the ambient constant, and the disc's own replacement term produces warm gold from two of them (2026-09-17, `lane-hd-ceiling`)
+
+**The sweep the previous session named and did not run.** For each of
+Amphiseum's four ceiling materials (`animhexlights`, `cf_diff_spec`,
+`lambert`, `base_diffusespecular` - the non-lightmap slot), this session
+took the variant row this project's own `mesh::rcs::skin::variants` resolves
+for the real ceiling chunks (a new example,
+`crates/render/examples/hd_amphiseum_ceiling_variants.rs`, dumping
+`Model::material_variants`) and dumped its fragment **and** vertex program
+with `scripts/ps3-microcode.py`, resolving every patched constant slot's
+name hash against this project's own preimage tables
+(`oag_rcs::rcsmaterial::names`, the engine parameter table above, and
+`docs/formats/rcsmaterial.md`'s preimage tables). The four resolved variants,
+by material-probe slot (`scripts/hd-material-probe.py --pair-dir
+data/reference/hd-capture/amphiseum-matched`, coverage 84.2% at this pose):
+
+| Material | Slot | Feature hash | Fragment block (offset) | Declares `constantAmbientColour`? |
+| --- | ---: | --- | --- | :---: |
+| `base_diffusespecular.rcsmaterial` | 353 | `0x56c94426` | `0x2b60`, 1040 B | **No** |
+| `cf_diff_spec.rcsmaterial` | 360 | `0x56c94426` | `0x84f0`, 1040 B | **No** |
+| `animhexlights.rcsmaterial` | 325 | `0x56c94426` | `0x6f60`, 720 B | **No** |
+| `lambert.rcsmaterial` | 207 (and 8 more) | `0x56c94426` | `0x3270`, 496 B | **No** |
+
+**Zero of four.** None of the four programs this renderer actually draws for
+Amphiseum's ceiling patches `~crc32("constantAmbientColour")` (`0x81db67ea`)
+anywhere in their constant tables - confirmed by grep over the full patch
+list `ps3-microcode.py` prints per block, not by absence of a plausible
+name. `mesh.wgsl`'s `lit_sum = scene.light.ambient + prelit + vertex_light +
+sun_diffuse` adds `scene.light.ambient` (`constantAmbientColour`)
+unconditionally to all four regardless. **This is the wrong operation, not
+a missing one**, confirmed directly rather than inferred from the `NO_AMBIENT`
+role bit alone (which the code comment at `mesh.wgsl`'s "This ambient reaches
+materials the disc never feeds it to" already flagged as unwired, for
+different reasons - see below).
+
+**The equation each program actually computes**, read instruction-by-instruction
+(`lambert`'s block is the clearest - no specular, one texture):
+
+```
+lambert (feature 0x56c94426, fragment block @0x3270, vertex block @0x3020):
+  ndl      = saturate(dot(normalize(N), directionalLight0DirectionWorldSpace))
+  diffuse  = ndl * directionalLight0Colour
+  ambientTerm = f[TC0].xyz     -- see vertex program below; NOT constantAmbientColour
+  litColour = diffuse + ambientTerm      -- f[TC1], f[TC2] are also added but are
+                                          -- literal (0,0,0) in this material's own
+                                          -- vertex program (`MOV o[TC1].xyz, c[206]`
+                                          -- where c[206] = (0,0,0,0)) - dead code,
+                                          -- not a second real term
+  fogFactor = exp2(-(view_depth * fogColour.w)^2)
+  result   = lerp(fogColour.rgb, litColour * texture(unit0), fogFactor)
+
+lambert's vertex program computes f[TC0].xyz:
+  ambientTerm = pow(v[3], prelitBias) * prelitScaleSpecular
+  -- v[3] is attribute 0x1aaf7631/colorSet1, decoded by this project's own
+  -- `VertexDecl::light_colour_set()`/`Mesh::vertex_light` as HD's baked
+  -- per-vertex light, and read RAW (no sRGB decode) - `LG2 v[3] -> MUL
+  -- prelitBias -> EX2 -> MUL prelitScaleSpecular`, unlike the lightmap path's
+  -- `pow(baked.rgb, 2.2)` predecode.
+
+animhexlights, cf_diff_spec and base_diffusespecular's non-lightmap block
+compute the same `litColour` (diffuse + f[TC0]-only ambientTerm, f[TC1]/f[TC2]
+again literal zero in every one of the three vertex programs dumped), then
+add a second, texture-driven term before the fog lerp:
+  animhexlights: result += texture(unit0, diffuse-coord) * 0xef18f362
+                         + texture(unit1, TextureGradient) * 0x7611a2d8 * texture(unit0)
+  cf_diff_spec / base_diffusespecular: a Blinn-style specular,
+    spec = (N.H)^SpecularPower * directionalLight0Colour * SpecularColour(or)
+           SpecularColor * texture(unit1, specular map)
+    added alongside the diffuse*albedo term, before the same fog lerp.
+```
+
+**`prelitBias`/`prelitScaleSpecular` are named from the executable's own
+string table** (`Shader_InitEngineParams`, engine slots 13/12 above), not
+matched to the `.envsettings` key names by string - "Specular" in
+`prelitScaleSpecular` does not textually match `Lighting.Prelit ambient
+colour scale`. The identification rests on the **values and the arithmetic
+shape** instead: Amphiseum's `track.envsettings` authors exactly one
+`LG2 -> MUL -> EX2 -> MUL` pair of constants system-wide for this role -
+`"Lighting.Prelit ambient colour scale"=6.0 6.0 6.0` and `"Lighting.Prelit
+ambient colour power"=3.5 3.5 3.5` - and the engine parameter table
+(`Shader_InitEngineParams` above) declares exactly one `prelitScaleSpecular`/
+`prelitBias` pair and no other prelit-named entry at all; `mesh.wgsl`
+already reads these same two `.envsettings` keys into `scene.light.
+prelit_scale`/`prelit_power` for the **lightmap** path's identical curve
+shape (`prelit = prelit_scale * pow(baked_linear, prelit_power)`,
+`crates/tables/src/envsettings.rs`). Confidence 80: the value/shape match is
+exact and the two engine-table names are the only candidates, short of a
+traced write into the constant-patch mechanism itself (not done this
+session).
+
+**A three-way permutation, not a two-way one - checked by dumping the third
+variant.** `animhexlights` and `lambert` each ship a *third* resolved
+feature hash on the ceiling's own material file, `0xfb61d927` (slots 329 and
+280 respectively - other chunks of the same file, off the ceiling). Both
+declare and patch `constantAmbientColour` outright:
+
+```
+animhexlights, feature 0xfb61d927, fragment @0x2030:
+  parameter 0x81db67ea (constantAmbientColour) patch fslot 0x78, patch slot 0x12
+  @0x11  MOV H4.xyz, {0x81db67ea}      ; ambientTerm = constantAmbientColour, flat
+lambert, feature 0xfb61d927, fragment @0x2940:
+  parameter 0x81db67ea (constantAmbientColour) patch fslot 0x56, patch slot 0x4
+  @0x03  MOV H1.xyz, {0x81db67ea}      ; ambientTerm = constantAmbientColour, flat
+```
+
+So the original's own compiled shader table already carries **three**
+ambient sources, selected by `Features::chunk_word`'s field bits (this
+project's own name for the permutation, confirmed matching `rcsmaterial.rs`):
+`IleLightmap` -> `pow(lightmap, prelit_power) * prelit_scale`, `IleVertex` ->
+`pow(colour_set, prelitBias) * prelitScaleSpecular`, `Ambient` (neither) ->
+flat `constantAmbientColour`. **`mesh.wgsl` always computes the third case**
+(`scene.light.ambient`, i.e. `constantAmbientColour`) regardless of which of
+the three the resolved chunk's own program actually is - correct only for
+chunks that resolve to `Ambient`, wrong for every `IleLightmap`/`IleVertex`
+chunk, which is every chunk this project's own role census already flags
+`NO_AMBIENT` (`declared.takes_constant_ambient()` is false) but does not
+gate on, per the standing `mesh.wgsl` comment above. Confidence 90: the
+`Ambient`-variant microcode is dumped directly, twice, and both patch the
+exact hash this project's own `scene.light.ambient` binds.
+
+**Reconstructing the arithmetic for a neutral-grey texel** (all four
+albedo textures pixel-verify neutral, per the previous session): the
+`ambientTerm` is the only non-zero lighting input on a ceiling-facing chunk
+(`sun_diffuse` clamps to zero against Amphiseum's own upward sun direction,
+as established two sessions ago), so `ambientTerm`'s own hue is the surface's
+hue. Read the four ceiling materials' actual baked colour-set data off the
+disc (`crates/render/examples/hd_amphiseum_ceiling_vertex_light.rs`, new
+this session) at the resolved `IleVertex` slots, and the curve is **not**
+uniform across the population - it splits exactly along the same lines the
+tile-grid and material-probe rows already drew:
+
+| Material (slot) | Vertices | Raw mean hue | Top-decile-by-luma hue | Curved (`pow(x,3.5)*6`) top-decile hue |
+| --- | ---: | ---: | ---: | ---: |
+| `base_diffusespecular` (353) | 15,256 | 193.2° | 191.0° | 200.0° |
+| `cf_diff_spec` (360) | 1,688 | 192.2° | 190.2° | 201.6° |
+| `animhexlights` (325) | 1,712 | 70.1° | 56.5° | **45.5°** |
+| `lambert` (207) | 72 | 2.9° | 78.4° | **42.8°** |
+
+**Two of four land in the reference's own 39-86° warm band once the
+disc's own curve is applied to the disc's own baked colour, using nothing
+fitted** - `animhexlights` at 45.5°, `lambert` at 42.8°. This names the
+wrong operation *and* the fix produces the right family of colour, which is
+the strongest form of result this brief asked for. Both materials' own
+declared parameters are genuine colours, not modifiers of a texture that
+could hide a different source: `animhexlights` multiplies its albedo by an
+unnamed `0xef18f362` = `(0.060, 0.211, 0.424)` and its gradient sample by
+`0x7611a2d8` = `(1,1,1)` (identity - `pads.md`'s "Speedup Pad" reading of
+this hash does not generalise to this material, it is drawn straight
+through here); neither is where the warm hue comes from - the colour-set
+curve alone already lands there. The mean statistic is the wrong one to
+read here and this session corrects it explicitly: `pow(x, 3.5)` amplifies
+the top decile far more than the mean (a vertex at 1.0 curves to 6.0, one at
+0.25 to 0.07 - an 85x spread), so the population that actually dominates a
+curved sum is the brightest tenth, not the arithmetic mean, which is why the
+table reports both.
+
+**Two of four are a clean, disc-value negative, not an inconclusive one.**
+`base_diffusespecular` and `cf_diff_spec` stay in a 190-202° cool-blue family
+at every stage - raw mean, top decile, and after the curve, which can only
+amplify the population's *existing* skew (an equal exponent on all three
+channels is monotone and cannot change which channel is largest, so B>G>R
+in stays B>G>R out; 193° cannot become 60°). Both materials' own
+`SpecularColour`/`SpecularColor` parameters are achromatic (`(0.498, 0.498,
+0.498)` and `(1, 1, 1)` respectively) so the specular term these two add
+cannot be hiding a colour source either. **Applying the correct operation
+to these two specific materials would not turn them warm** - whatever
+supplies their share of the reference's warm reading, if any, is not in
+this term. This is the fix's scope, stated precisely rather than
+overclaimed.
+
+**Not settled by this reconstruction, and worth stating rather than
+glossing over**: `animhexlights` classified **zero** pixels at this
+session's own camera pose (`amphiseum-matched` pose 00, `--pair-dir`) - the
+previous session's row mapping that put it across a large share of the
+visible ceiling (`y 14-212`, centroid 158) came from `amphiseum-grid`, a
+capture that no longer exists on disk. So "two of four go warm, two do not"
+is established from the disc's own authored values, independent of any
+capture, but *how much of the reference's warm ceiling area these two
+particular materials actually cover on screen* is not re-confirmed at a
+pose where they are visible. This session did not run RPCS3: the brief's own
+gate for a live read is "none of the four programs can produce warm gold
+from static disc inputs," and that precondition is false - two of them do,
+from values already on the disc, so a live read was not needed to reach a
+positive result.
+
+**The fix implied, sequenced, and its exact scope, for the coordinator to
+land in `mesh.wgsl` (not touched this session - out of this lane's files)**:
+
+1. Gate `scene.light.ambient`'s addition on the chunk's own resolved
+   permutation, not on a blanket bit. The existing `NO_AMBIENT` role bit
+   (`declared.takes_constant_ambient()`) already answers "does this
+   chunk's own program ever reference `constantAmbientColour`" correctly for
+   every chunk measured this session and two sessions ago (Anulpha Pass,
+   Talon's Junction) - gating `scene.light.ambient`'s addition on it directly
+   (drop the term where `NO_AMBIENT` is set) is the first half.
+2. **That drop alone regresses the frame to near-black** on a
+   `IleVertex`/no-lightmap, sun-occluded chunk - `prelit` is already zero
+   (no lightmap), `sun_diffuse` is already zero (facing away from the sun),
+   and `vertex_light` (`in.colour.rgb`, already wired) is the *raw*
+   colour-set byte with no curve, which for most of these vertices is far
+   dimmer than the curved value. So the drop and the addition are one
+   change, not two: add `scene.light.prelit_scale * pow(in.colour.rgb,
+   scene.light.prelit_power)` in place of the flat `vertex_light` term on
+   this same `NO_AMBIENT`-and-colour-set path, reusing the uniforms already
+   bound for the lightmap curve rather than a second pair.
+3. **State the domain explicitly, or the port inherits a decode step the
+   microcode does not have.** The lightmap path decodes `baked.rgb` through
+   `pow(_, 2.2)` before the prelit curve; the colour-set path's vertex
+   program reads `v[3]` directly (`LG2 -> MUL -> EX2 -> MUL`, no sRGB
+   step) - applying the lightmap's 2.2 predecode to the vertex-colour path
+   would be inventing a step the disc's own vertex program does not run.
+4. This is still a family of materials this project has already found is
+   not one bit (`mesh.wgsl`'s own "Gating on that bit alone was tried on
+   2026-08-24 and is a regression" comment, about the fully-`EMISSIVE`
+   family) - the `IleVertex` case above is `NO_AMBIENT` but **not** `NO_SUN`
+   (it does take `directionalLight0*`), so it is not `EMISSIVE`
+   (`NO_AMBIENT | NO_SUN`) and the existing emissive branch does not touch
+   it; the change above is additive to that branch, not a rewrite of it.
+
+Confidence on the fix's *shape* (drop-and-replace, not drop-alone): 88 -
+read directly off two materials' vertex and fragment microcode, cross-checked
+against the already-wired lightmap curve's own uniforms. Confidence on it
+*fully* explaining Amphiseum's hue gap: not claimed - two of the four
+materials measured stay cool regardless, so this is a partial, precisely-
+scoped fix, not a closing one.
+
 ### The 14 surface binds, read (2026-08-20)
 
 `FUN_005a40f8(ctx, depth, colour0, colour1, colour2, colour3)` takes **pointers
