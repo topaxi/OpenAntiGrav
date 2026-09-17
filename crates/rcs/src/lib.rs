@@ -7,7 +7,10 @@
 //! and its vertex declarations, [`rcsmaterial`] the shader-variant table that
 //! says how a surface is lit, [`hd_pvs`] the visibility set that decides whether
 //! it is drawn at all, and [`gxp`] the compiled shader programs a material
-//! selects on the Vita.
+//! selects on the Vita. [`edgeanim`] is a fourth, smaller one: Sony's own Edge
+//! Animation Tools clip format, which a `rcsmodel::material::Material` reads
+//! its own animated `uvOffset`/`uvScale` curve from - see
+//! `docs/formats/edge-animation.md`.
 //!
 //! `rcsmodel` and `rcsmaterial` reference each other - a material needs the
 //! model's `VertexDecl`, a model's material needs the material's lightmap
@@ -21,6 +24,7 @@
 //! [ADR-0050](../../../docs/architecture/adr/0050-format-crates-split-by-format-family.md)
 //! and ADR-0022 item 5 both forbid.
 
+pub mod edgeanim;
 pub mod gxp;
 pub mod hd_pvs;
 pub mod points2;

@@ -1017,3 +1017,26 @@ checked that). Per this lane's own standing instruction, no value is
 synthesised in its place: `crates/rcs/examples/hd_gantry_curve_probe.rs`
 reproduces every reading on this page directly off the extracted file and
 stops exactly where the bytes stop being Wipeout's own to read.
+
+## 2026-09-17: Edge's own byte layout is decoded (non-bit-packed path only), and the curve is a wipe, not a glyph selector
+
+**`lane/hd-edgeanim`, later same day.** See
+[`docs/formats/edge-animation.md`](../../../formats/edge-animation.md) for
+the full byte layout, self-relative offset convention, frame-set tables and
+scalar-keyframe evaluator, implemented in `oag_rcs::edgeanim` and
+`oag_rcs::rcsmodel::material::curve`, validated against all four curves of
+`321go_startfinish.rcsmodel` by `hd_gantry_curve_ground_truth.rs`. In short:
+every clip this pass found has `offsetPackingSpecs` absent (the bit-packed
+path the previous section left undecoded is simply not used by any of the
+four curves this file authors) and no rotation/translation/scale channel, so
+the "not decoded" scope above turned out to be for a codec path these
+particular curves never exercise - the scalar path they do use has no
+bit-packing at all, only a sparse-keyframe presence bitmap and plain `f32`
+values. **What the four curves actually author is a per-material wipe/reveal
+ramp staggered across the shared 13.333 s loop, not a four-state glyph
+selector** - see the format page for the measured shape of all four.
+Playback is not wired: no time base connects this curve's own loop to the
+countdown a player sees, and the per-node `+0xe4` static UV override table
+this page's earlier section already named is at least as likely the real
+glyph-selection mechanism - unchased, per this lane's own scope, and the lead
+for whoever picks this up next.

@@ -778,6 +778,7 @@ mod tests {
             second_texture_sampler: second,
             samplers,
             parameters: Vec::new(),
+            curve: None,
         }
     }
 
