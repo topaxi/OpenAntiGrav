@@ -1817,3 +1817,69 @@ ribbon), the two other vtable slots beside `LeachBeam_BuildStrip`
 
 Gate: full `just` and `OAG_REQUIRE_GAME_DATA=1 just test-data`, both watched
 to completion - see the lane report for exact counts.
+
+## 2026-09-17, later: the hull overlay pair, read in full
+
+Prompted by a from-play report: the weapon-absorb effect does not appear to
+play in any title here (only its `ABSORB` sound cue does). Reading
+`leachbeam_surface.mip`'s draw path in full turned out to mean reading
+`absorb_surface.mip`'s too - the two share every function but the one
+texture constant.
+
+**Four thin wrappers, one shared draw call.** `HullOverlay_DrawLeachBeam`
+(`0x0890d828`) / `HullOverlay_DrawAbsorb` (`0x0890d744`) each walk one
+entity's own sub-mesh chain; `HullOverlay_SubmitLeachBeamBatched`
+(`0x0890e140`) / `HullOverlay_SubmitAbsorbBatched` (`0x0890e120`) are the
+same pair's per-batch variant (confirmed at the disassembly level - each is
+a bare tail call into `HullOverlay_Submit` with only the texture register
+set, everything else already staged by its own caller). All four funnel
+into `HullOverlay_Submit` (`0x0890e304`), which is the entire drawn picture
+for both.
+
+**The blend was findable, and it isn't a different equation.**
+`HullOverlay_Submit` calls `Gfx_BuildBatchStateList` with a literal `0x282`
+flag word rather than a direct `Gu_BlendFunc`; walking that function with
+`0x282` (reusing `mesh-draw.md`'s own already-pinned GU state-index table
+rather than re-deriving it) gives `GU_BLEND` on, additive -
+`Gu_BlendFunc(GU_ADD, GU_SRC_ALPHA, GU_FIX, 0, 0xffffff)`, the **same**
+equation `exhaust::BLEND` and the LeachBeam ribbon's own
+`LeachBeam_SubmitStrip` already use. Also on: `GU_CULL_FACE`, depth write,
+`GU_ALPHA_TEST`/`GU_COLOR_TEST` (both cutout-shaped - discard transparent or
+pure-black texels) and `GU_STENCIL_TEST` at `ALWAYS`/`REPLACE` - the same
+shape `LeachBeam_SubmitStrip` uses to feed the bloom glow mask, so **both
+hull overlays write the glow mask too**.
+
+**The absorb half's timing is fully measured: a one-second, symmetric
+triangle pulse.** `HullOverlay_AbsorbWindowActive`/`HullOverlay_AbsorbFade`
+(`0x0883e904`/`0x0883e950`) both read the same `state+0x830 - state+0x878`
+elapsed time against a `[0.0, 1.0]` second window; `HullOverlay_Submit`'s own
+`param_1 >= 1.0 -> 2.0 - param_1` fold turns that into fade-in over the
+first half-second and fade-out over the second.
+
+**Still open**: what the shared `state` object actually is (both dispatch
+sites - the per-entity one at `entity+0x74`, the per-batch one at a
+batch-scoped `+0xc0` - read from the same kind of pointer, but its type,
+size and writer were not found), and what the LeachBeam side's own fade
+source is (`**(float**)(state+0x4c)`, a double pointer dereference into
+some live float, plausibly the active beam's own age or
+`LeachBeam_PulseStrength`, not confirmed by a write site). Neither blocks a
+first build of the absorb half specifically, which this engine can trigger
+off its own existing shield-hit event rather than the unidentified timer
+pair - chosen, not measured, the same split every other wired-up trigger in
+this codebase draws.
+
+**Not built this pass** - the ask was a complete read so a follow-up lane
+can build from it, and a finished read is worth exactly as much as a build
+when the picture (geometry, colour, blend, UV mode, timing) is this settled.
+Seven renames landed:
+`HullOverlay_DrawLeachBeam`/`HullOverlay_DrawAbsorb`/`HullOverlay_Submit`/
+`HullOverlay_SubmitLeachBeamBatched`/`HullOverlay_SubmitAbsorbBatched`/
+`HullOverlay_AbsorbWindowActive`/`HullOverlay_AbsorbFade`, all in
+`names.tsv` against `cannon-quake-leachbeam.md`'s new section.
+
+Regression check: `race_ground_truth::a_lone_craft_gets_round_the_circuits_it_is_known_to_get_round`
+re-run against the same seed after `git worktree add` off post-merge `main`
+(this pass touched only docs and Ghidra's own database, no code) -
+byte-identical to the ribbon lane's own baseline: all twelve clean,
+`01_Track` one respawn at `[794]`, `07_Track` one respawn at `[687]`,
+nothing else moved.
