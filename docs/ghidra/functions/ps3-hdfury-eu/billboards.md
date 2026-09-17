@@ -1054,12 +1054,22 @@ sampled each frame through the same per-model animation clock Pulse's own
 `TEXOFFSET` tracks already ride - no new time base, and not gantry-specific:
 79 of the disc's 379 `.rcsmodel` files carry at least one live curve, and all
 79 now replay instead of freezing at frame zero. **On the digit board this
-turns out to be the whole countdown mechanism**: four curves, one per
-glyph's own material, each fading its own crop window in at its own
-staggered point in the shared loop - confirmed by actually playing it
-(`scratch/lane-wire-report.md`'s captures), not by reading the curves' own
-sampled numbers in isolation, which is what made a single curve look like a
-wipe with no state to select in the first place.
+turns out to be the whole countdown mechanism, and it is one curve, not
+four**: material 2's own curve alone reaches the screen, driving both the
+digit glyph mesh (`pasted__Go_HD_start_light_321goShape`, the node with the
+five UV cells) and the backdrop panel (`Go_HD_start_light_backgroundShape`)
+that share its texture. Materials 1/3/4's own curves are real and now
+replay correctly too, but their geometry - the chequered-flag state, slot
+7's embedded `fx350` art and the `FINAL LAP` state respectively - is removed
+from every frame by mechanisms this project already had
+(`oag_render::gantry::clip_to_panel`, `::strip_fx350_art`), so they never
+reach a player's eye regardless. Confirmed by actually playing it
+(`scratch/lane-wire-report.md`'s captures) and by a control render with
+every curve disabled, which drops the backdrop and the digits together -
+not by reading the curves' own sampled numbers in isolation, which is what
+made a single curve look like a wipe with no state to select in the first
+place, and what made "four curves" look like the mechanism before the
+node-level check ran.
 
 ### `Billboard_UpdateInstanceUvs`'s first pass, read precisely
 
@@ -1139,15 +1149,19 @@ now reads as every curved material's own rest value.
 
 ### What this settles, and what it still leaves open
 
-**The `3`/`2`/`1`/`GO` selection mechanism on HD is resolved: it is the four
-Edge Animation curves themselves, not a separate selector on top of them.**
-Of the two named candidates for "what picks a state", one is now closed
-without a positive (the per-node `+0xe4` override, this section) and the
-other turned out to need no separate selector at all - four curves, each
-bound to its own glyph's own material, each an independent reveal, are
-sufficient once played together. Confidence 88, from real headless captures
-across a countdown (`scratch/lane-wire-report.md`), not from re-reading the
-curve bytes.
+**The `3`/`2`/`1`/`GO` selection mechanism on HD is resolved: it is material
+2's own Edge Animation curve, alone, driving both the digit glyph mesh and
+its backdrop panel - the same "one shared offset on one material" shape as
+Pulse's own gantry, not a distributed multi-curve one.** Of the two named
+candidates for "what picks a state", one is now closed without a positive
+(the per-node `+0xe4` override, this section) and the other resolved to a
+single curve once a node-level check ran: materials 1, 3 and 4 do carry real
+curves too, but their own geometry (the chequered-flag state, slot 7's
+embedded `fx350` art, and the `FINAL LAP` state) is removed from every frame
+by `oag_render::gantry::clip_to_panel`/`::strip_fx350_art`, mechanisms this
+project already had before this lane. Confidence 88, from real headless
+captures across a countdown plus a curve-disabled control render
+(`scratch/lane-wire-report.md`), not from re-reading the curve bytes alone.
 
 **What is not settled**: `3` and `2` reveal together in the captures rather
 than strictly one after another, the full sequence takes about 4 s of the

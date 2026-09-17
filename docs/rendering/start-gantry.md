@@ -33,10 +33,11 @@ countdown mechanism entirely - a manifest reaches only two of the eight.
 > and the PS3 model's own sibling-`.rcsmodel` load path was wired in. HD's
 > own board plays the same authored 6.000 s teleport Pulse's does, confirmed
 > through this project's pipeline, and, since 2026-09-17, its own glyph
-> *reveal* plays too: four separate Edge Animation curves, one per glyph's
-> own material, each its own staggered fade-in - wired generically
-> (`oag_render::mesh::rcs::curve_track`) and confirmed by direct capture to
-> read `3`, `2`, `1`, `GO` in order. See [the placement section
+> *reveal* plays too: one Edge Animation curve, on the digit board's own
+> material, walking across a shared texture the same way Pulse's own shared
+> offset does - wired generically (`oag_render::mesh::rcs::curve_track`) and
+> confirmed by direct capture to read `3`, `2`, `1`, `GO` in order. See [the
+> placement section
 > below](#where-the-placement-actually-comes-from-hdfury-answers-it-for-pulse),
 > [what it took to draw it](#what-it-took-to-actually-draw-it),
 > [the HD implementation](#implemented-on-hd-the-same-mechanism-on-a-mount-that-is-not-flat),
@@ -1569,31 +1570,44 @@ than between a thread and the code.
 
 ### What is still open
 
-- **RESOLVED, 2026-09-17 (`lane/hd-gantry-wire`): the animated curve is the
-  countdown mechanism - four of them, one per glyph, each its own staggered
-  reveal.** `lane/hd-edgeanim` decoded Edge Animation Tools' own byte layout
+- **RESOLVED, 2026-09-17 (`lane/hd-gantry-wire`): the countdown mechanism is
+  material 2's own curve, alone - the same "one shared offset on one
+  material" shape as Pulse's gantry, not a distributed four-curve one.**
+  `lane/hd-edgeanim` decoded Edge Animation Tools' own byte layout
   ([`docs/formats/edge-animation.md`](../formats/edge-animation.md)) and,
   measuring one curve at a time, read each of the four as "a per-material
   wipe/reveal ramp... not four discrete glyph states" - true of any one curve
-  in isolation, and the wrong conclusion about the four together. This lane
-  wired the replay generically (`oag_render::mesh::rcs::curve_track`, every
-  `.rcsmodel` material with a curve, the same per-model race clock every
-  other animation already rides, no new time base) and then actually played
-  it: `oag-game --race --track /data/environments/talons_junction/track.vex
-  --no-audio --screenshot`, `hdfury-ps3-eu-dec.iso`, ticks 0/90/180/240/360.
-  The board is blank at tick 0; `3` and `2` are both legible by tick 90
-  (1.5 s); `3`/`2`/`1` together by tick 180 (3.0 s); `GO` alone, on a banner
-  that has gone from red to green, by tick 240 (4.0 s); and the whole board
-  is gone by tick 360 (6.0 s) - the pre-existing `Anim Transform`
-  teleport-out this page's own master-timeline section already documents,
-  untouched by this lane. Frames in `scratch/lane-wire-report.md`. **The
-  selector is not one shared offset walking four states the way Pulse's
-  gantry does - it is four separate curves, each bound to its own glyph's
-  own material, each fading its own crop window in at its own staggered
-  point in the shared 13.333 s loop.** Four independent wipes, staggered in
-  time, read as a countdown once played; nothing about that shape was
-  visible from sampling one curve's own numbers, which is why the section
-  above got it wrong until this lane actually rendered it.
+  in isolation. This lane wired the replay generically
+  (`oag_render::mesh::rcs::curve_track`, every `.rcsmodel` material with a
+  curve, the same per-model race clock every other animation already rides,
+  no new time base), actually played it, and then checked *which* of the
+  four curved materials' own geometry was actually on screen: only material
+  2's - `Go_HD_start_light_backgroundShape` (the backdrop) and
+  `pasted__Go_HD_start_light_321goShape` (the digit glyph mesh with its five
+  UV cells) both bind it. Materials 1, 3 and 4's own geometry
+  (`polySurface7Shape`, the chequered-flag state; `polySurface151Shape`
+  through `polySurface157Shape`, slot 7's embedded `fx350` art; and
+  `pasted__Final_Lap*Shape`, the `FINAL LAP` state) is removed from every
+  frame by mechanisms this project already had before this lane -
+  `oag_render::gantry::clip_to_panel` and `::strip_fx350_art` - so those
+  three curves never reach the screen regardless of what they sample.
+
+  Played for real: `oag-game --race --track
+  /data/environments/talons_junction/track.vex --no-audio --screenshot`,
+  `hdfury-ps3-eu-dec.iso`, ticks 0/90/180/240/360. The board is blank at
+  tick 0; `3` and `2` are both legible by tick 90 (1.5 s); `3`/`2`/`1`
+  together by tick 180 (3.0 s); `GO` alone, on a banner that has gone from
+  red to green, by tick 240 (4.0 s); and the whole board is gone by tick 360
+  (6.0 s) - the pre-existing `Anim Transform` teleport-out this page's own
+  master-timeline section already documents, untouched by this lane. **A
+  control render with every material's curve disabled** (`anim` forced to
+  `0`) shows the backdrop and the digits vanish together at every tick, not
+  just the digits - ruling out a curve-independent node swap as the source
+  of the red-to-green change, and pointing at the shared texture
+  (`321_go_64.gtf`) instead: the "authored, unused" red/green marker columns
+  this page's own texel-grid table already found are what the backdrop
+  samples as the same offset that reveals the digits crosses them. Frames
+  from both renders in `scratch/lane-wire-report.md`.
 
   **The per-node `+0xe4` static UV override table this page used to name as
   a competing glyph-selection candidate is chased and ruled out, live and
