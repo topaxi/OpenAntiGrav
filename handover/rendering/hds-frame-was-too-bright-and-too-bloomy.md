@@ -459,6 +459,54 @@ existing "Read, unused" line. **Whether anything downstream ever reads
 struct offset `+0x440` back out is the open RE question**, not traced this
 session. No shader or Rust code changed.
 
+2026-09-17, later still (`lane-hd-ambient-light`): **the "does the original
+consume `Lighting.Sky` where we only consume `Lighting.Constant`" lead from
+the last two entries is answered - yes it consumes it, but for an unrelated
+backdrop pass, and the answer refutes the lead rather than confirming it.**
+Full account in
+[renderer.md](../../docs/ghidra/functions/ps3-hdfury-eu/renderer.md),
+"`Lighting.Sky colour`'s consumer is found and is a backdrop clear, not a
+material term". What lives only here:
+
+**A struct-offset correction, found while tracing the consumer**: `Constant
+ambient color` lands at `+0x420`, not `+0x430` as the previous entry states
+(`+0x430` is `Sun color`) - cross-checked against seven other offsets this
+page already had independently and all seven agree, so this decompile's TOC
+reads sound and the prior `+0x430` line was the error. `Lighting.Sky
+colour`'s own consumer (`Scene_PrepareFrame`, `0x003aa888`) is pinned by
+tracing the local variable it reads through, not by offset coincidence -
+the exact trap this page's own TOC-mismatch section warns about - and it
+turns out to feed a screen backdrop/clear-fill colour, gated by a
+`g_ZoneEffectsActive` branch and the `Debug_Draw_sky` toggle, entirely
+outside material shading. It cannot explain the ceiling's colour: the
+ceiling is drawn opaque geometry, which would occlude any backdrop fill
+underneath regardless of its colour. **Separately, `Constant ambient color`
+(`+0x420`) is confirmed bound into the same per-frame shader-parameter
+table `fogColour` uses** - so the original's material pipeline does feed
+itself the same ambient constant `mesh.wgsl` already applies; there is no
+missing-key or wrong-key defect on the ambient front.
+
+**Two more candidates checked and closed the same session.**
+`Lighting.Enable ambient false lighting` defaults off and is declared by
+neither circuit's own `.envsettings` nor by the front-end file
+`staged_envsettings` would otherwise carry it forward from - off by every
+route, so whatever this bit gates (its key names suggest a fake specular
+highlight for lightmapped surfaces, not a diffuse ambient blend) is inactive
+here regardless. And a new one-off diagnostic
+(`crates/render/examples/light_census.rs`, on `oag_vex::vex::nodes`) swept
+every `.vex` file on both circuits (9 each) and found **zero**
+`AmbientLight`/`DirectionalLight`/`PointLight` nodes on either - ruling out
+vex-authored dynamic lights as the ceiling's colour source too, though not
+ruling out the SPU dynamic-light subsystem (`Enable dynamic lights=1` on
+both circuits, unimplemented in this project) being fed from some other,
+unenumerated data source.
+
+**Net: three candidate mechanisms are now refuted, and the root cause is
+still not established.** No shading code changed - `mesh/`, `mesh.wgsl`,
+`emissive.rs`, `sky_cube.rs` are unchanged, per this project's own rule
+against tuning to a reference in the absence of a recovered term. Full
+findings, including the gate run, are in `scratch/lane-light-report.md`.
+
 ## Open
 
 - **Where to start on Amphiseum's 154-degree hue gap: it is near-complementary, which is a structural signature, not a lighting one.** Recorded 2026-09-17 by the coordinating session as a *lead only* - **nothing below was measured, and none of it carries a confidence score**; a lane was briefed on it and wound down before starting, so it is written here rather than lost. The reasoning: a shift of ~154 degrees is close to the 180 degrees that a channel swap or a negated term produces, and is a poor fit for any accumulation of lighting magnitudes, which move saturation and luma far more readily than they rotate hue halfway around the wheel. Three candidates follow from that shape, cheapest first. (1) **Channel or byte order.** HD is the PSP pipeline byte-swapped, so a `.gtf` decode, a vertex colour-set unpack or a constant upload that gets its order wrong on *some* materials and not others would produce exactly this - and `oag-texture`'s `.gtf` path has **never been pixel-verified against a reference decoder**, only checked for gamma/sRGB logic it does not carry, which does not rule out a channel-level or bit-level defect. That verification is bounded and is already listed as open in this thread's own Next Steps. (2) **Which surfaces actually carry it.** The maintainer's own report was that the gap "varies by area", so the whole-frame number may be averaging two different populations; measuring per region before sweeping per material would say whether the shift is global to the frame or local to a surface class. `hd-frame-compare.py` prints per-region saturation-weighted circular mean hue and `coloured_pct` as of the dated entry above, and its region boxes need `--dump-regions` verification against Amphiseum's own geometry (they were shaped for Talon's Junction, whose `sky` box samples an indoor ceiling here). (3) **Per-material attribution**, via `hd-material-probe.py` - last, because it is the most expensive and because its fog-segment classifier assumes the frame's exposure scalar is `1.0` by eye rather than solving for it, so its per-slot deltas are indicative rather than exact.
@@ -478,7 +526,7 @@ session. No shader or Rust code changed.
 
 ## Next Steps
 
-- **Updated 2026-09-17, later still (`lane-hd-amphiseum-hue`)**: the tile rows are now known to be real material boundaries (`hd-material-probe.py --pair-dir`, dated entry above) - the ceiling's own materials (`animhexlights`, `cf_diff_spec`, `lambert`, `base_diffusespecular`'s non-lightmap slot) draw exactly the "ours brighter" rows, and their DXT1 albedo textures pixel-verify neutral grey, no colour cast - refuting the channel-order/decode hypothesis for this circuit specifically. **The sharpest remaining lead is `Lighting.Sky colour`, authored neutral grey on every circuit and parsed into the same live struct as the wired (and itself blue-violet on disc) `Constant ambient color`, but never consumed by `crates/render`/`crates/game` at all** - `Environment_RegisterLightingSchema` (`0x003a83d8`, new this session, confidence 80) is the registrar; whether anything reads struct offset `+0x440` (Sky colour) back out anywhere else in `EBOOT.elf` is the concrete next RE step, not traced yet. `mesh/`, `mesh.wgsl`, `emissive.rs`, `sky_cube.rs` still unchanged - no code wired on this basis, since the mechanism is built from the *shape* of the authored data (a neutral sky term sitting unused beside a tinted one that is wired) rather than a read of what the original shader does with either key.
+- **Updated 2026-09-17, later still (`lane-hd-amphiseum-hue`)**: the tile rows are now known to be real material boundaries (`hd-material-probe.py --pair-dir`, dated entry above) - the ceiling's own materials (`animhexlights`, `cf_diff_spec`, `lambert`, `base_diffusespecular`'s non-lightmap slot) draw exactly the "ours brighter" rows, and their DXT1 albedo textures pixel-verify neutral grey, no colour cast - refuting the channel-order/decode hypothesis for this circuit specifically. ~~The sharpest remaining lead is `Lighting.Sky colour`...~~ **checked and refuted 2026-09-17, later still (`lane-hd-ambient-light`)**: `Lighting.Sky colour`'s consumer is found (`Scene_PrepareFrame`, `0x003aa888`) and it is a screen backdrop/clear-fill pass, gated by `Debug_Draw_sky`/`g_ZoneEffectsActive`, entirely outside material shading - it cannot explain the ceiling's colour, since the ceiling is opaque drawn geometry that would occlude any backdrop fill underneath it. `Constant ambient color` (corrected to `+0x420`, not `+0x430`) is separately confirmed bound into the material shader pipeline exactly as this project's `scene.light.ambient` already assumes. Two further candidates (`Enable ambient false lighting`, vex-authored dynamic lights) were also checked and refuted the same session - see the dated entry above and renderer.md's new section. **The root cause of the ceiling colour gap is not established**; `mesh/`, `mesh.wgsl`, `emissive.rs`, `sky_cube.rs` remain unchanged. The next unchecked lead is measuring the per-pixel `ndl` on the ceiling's own chunks directly (still assumed, never measured, that `sun_diffuse` is zero there) and a per-material microcode sweep of the four ceiling materials for which named engine parameters their own fragment programs declare.
 - The per-material probe's own contradiction is the sharpest lead now: find why `track_surface` (no authored sun term) reads *more* deficient than the population that does get the blanket sun addition, not less - candidates worth checking against the disc before anything else: whether `track_surface`'s own `prelitScale`/`prelitPower` pair actually differs from the shared assumption, whether its lightmap texture decodes correctly, and whether its distinct `specular_exponent` (70, against the 32 the rest of the sampled population carries) points at a genuinely different `.rcsmaterial` row being read
 - Extend the per-material probe past pose `00`'s 14-material sample - run it against Anulpha Pass or another circuit with more materials in frame, and reproduce the same role-bucket/track_surface checks, to see whether the "no clean clustering by role bits" reading holds generally or is a small-sample artefact of the fourteen materials pose `00` happens to show
 - Pixel-verify `oag-texture`'s `.gtf` decode against a reference decoder on a flat, evenly-lit Talon's Junction albedo (candidate (c), not reached this session - only that the decoder carries no gamma logic of its own and its ground-truth test passes, neither of which rules out a bit-level DXT/BC defect)

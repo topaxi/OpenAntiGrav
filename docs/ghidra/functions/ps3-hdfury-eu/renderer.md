@@ -3285,6 +3285,150 @@ the material cross-check past the 79.1%-coverage, `--bloom off` sample;
 wiring anything - no shader or Rust code changed. `mesh/`, `mesh.wgsl`,
 `emissive.rs`, `sky_cube.rs` read again this session, still unchanged.
 
+### `Lighting.Sky colour`'s consumer is found and is a backdrop clear, not a material term; `Constant ambient color` is confirmed wired exactly as this project already assumes (2026-09-17, later still, `lane-hd-ambient-light`)
+
+**A struct-offset correction to the section above, found while tracing its
+own consumer.** `Environment_RegisterLightingSchema`'s registrar calls, read
+again directly off the decompile: `_opd_FUN_005d3ec0(iVar16,iVar16 + 0x420,
+puVar9,0)` where `puVar9 = PTR_s_Lighting_Constant_ambient_color_008b6fe8`
+one line above - **`Constant ambient color` lands at `+0x420`, not `+0x430`**
+as the previous session's entry states. `+0x430` is `Sun color`
+(`_opd_FUN_005d3ec0(iVar16,iVar16 + 0x430,PTR_s_Lighting_Sun_color_008b6ff4,0)`,
+the very next call). `Sky colour` at `+0x440` and `Sky rotation` at `+0x444`
+are unaffected and were already right. Cross-checked against seven other
+key/offset pairs this same decompile carries (`Fog Color +0x4e0`, `Fog
+Density +0x500`, `Alternate Fog Color +0x4f0`, `Alternate Fog Density
++0x504`, `Bloom adaption rate +0x52c`, `Tone adaption boost +0x540`, `Tone
+maximum brightness +0x548`) and all seven match this page's own
+TOC-resolved table exactly - which is what says this decompile's TOC is
+sound and the `+0x430` line was this thread's own error, not a second
+disagreeing reading.
+
+**`Lighting.Sky colour` (`+0x440`) does have a consumer, and it settles the
+open RE question two sessions asked** - `Scene_PrepareFrame` (`0x003aa888`)
+reads it at one call site, pinned by tracing the local it reads through
+rather than trusting offset coincidence (the exact trap this page's own
+"Read correctly" paragraph above warns about): `iVar44 = EnvSettings_GetOrCreate()`
+is called immediately on entry to the block gated by `Lighting.Debug_Draw_sky`
+(`+0x591`, defaults to `1` in the registrar - like every other `Debug_*` key
+on this schema, a production render-enable flag despite the name, not a
+debug-only toggle), `iVar44` is never reassigned before the read, and the
+adjacent statement in the same block reads `*(float *)(iVar44 + 0x444)`
+(`Sky rotation`) to scale a rotation angle - both offsets landing exactly
+where the registrar wrote them is the corroboration, not just one address
+matching by luck. **What it feeds is a screen backdrop/clear-fill, not a
+material lighting term**: gated by `g_ZoneEffectsActive` (a global bool,
+already named), the normal-race branch (`== 0`, which is Amphiseum's grid
+pose - Zone mode is a separate game mode) packs the Sky colour byte into an
+RSX clear-colour word and issues it through `Rsx_SetMethod`/a GCM fill call;
+the Zone-mode branch calls `Sky_DrawGradientDome` instead, using entirely
+different fields (a separate zone-effects colour table, not `+0x440`) -
+Zone mode substitutes its own animated palette rather than reading the
+circuit's authored sky colour at all. **This is a background pass that runs
+before or independently of material draws, not a light term any
+`.rcsmaterial` shader consumes** - it cannot explain the ceiling's colour,
+because the ceiling is drawn opaque geometry (already established: real
+`animhexlights`/`cf_diff_spec`/`lambert`/`base_diffusespecular` chunks, not a
+gap in the geometry) that would occlude any backdrop fill underneath it
+regardless of what colour that fill is. **This refutes the "does the
+original consume `Lighting.Sky` where we only consume `Lighting.Constant`"
+lead from the brief that opened this thread** - the original does consume
+it, but for an unrelated subsystem, so wiring it into `mesh.wgsl`'s ambient
+term would not be a recovered term, it would be inventing a use the disc's
+own code never gives it.
+
+**`Constant ambient color` (`+0x420`) is confirmed wired into the shader
+exactly the way this project's own `scene.light.ambient` already assumes -
+no missing operation here either.** Still inside `Scene_PrepareFrame`, under
+the same `g_ZoneEffectsActive == 0` branch (so: the normal-race case, same
+branch the Sky-colour finding above sits in), the function copies `+0x420`
+(`Constant ambient color`), `+0x450` (`Sun direction`, normalised),
+`+0x4a0` (`Ambient false direction`, normalised), `+0x4c0`/`+0x4d0`
+(`Prelit ambient colour scale`/`power`) and `+0x4e0` (`Fog Color`) into a
+scratch region, then binds each one into a per-draw shader-parameter table
+through the same `(pointer, count)`-pair binding idiom this page's own
+`fogColour` investigation already established (`Render_SetClipPlanes_q`'s
+surrounding block) - traced pair by pair, not by position: `Constant
+ambient color` to `iVar56+0x158`, `Sun direction` to `+0x1d8`, `Ambient
+false direction` to `+0x178`, `Prelit ambient colour scale` to `+0x198`
+(and copied a second time into a separate local slot, `+0x7c00`, that this
+same function's own later vector arithmetic reads and writes back to - not
+traced past that), `Prelit ambient colour power` to `+0x1b8`, `Fog Color` to
+`+0xf8`. So the original's per-frame setup feeds the material pipeline a real
+`Constant ambient color` term, unconditionally, every frame a race is not in
+Zone mode - matching what `mesh.wgsl`'s `scene.light.ambient` already does
+with this same disc value. Whatever produces Amphiseum's warm ceiling in the
+original, it is not "the wired ambient term is fabricated" or "our ambient
+source is a different key than the original's" - both engines read the same
+`Constant ambient color`.
+
+**`Lighting.Enable ambient false lighting` (`+0x5a0`) is confirmed inactive
+on both circuits, checked through the persistent-store carry-forward this
+project's own `staged_envsettings` already models, not just the circuit's
+own file.** The registrar defaults this bit to `0`; `amphiseum/track.envsettings`
+and `talons_junction/track.envsettings` (`scripts/psarc.py cat`) declare
+neither `Enable ambient false lighting` nor `Enable Prelighting`, and
+neither does either front-end file `staged_envsettings` carries values
+forward from (`/data/fe/fe.track.envsettings`, checked in both its `DATA00`
+and `DATA02` copies) - so the persistent-store mechanic that saved Sol 2's
+own `Tone` triple does not save this bit here either; it is off by every
+route. **This does not mean the false-direction machinery is dark**: the
+normalised `Ambient false direction` vector and the `Prelit ambient colour
+scale`/`power` values are still computed and bound to the shader parameter
+table every frame regardless (the copy described above runs unconditionally
+under `g_ZoneEffectsActive == 0`, with no check of `+0x5a0` anywhere in
+`Scene_PrepareFrame`) - only whatever *downstream* code gates its own
+behaviour on that bit is confirmed inactive on these two circuits; that
+downstream consumer was not traced this session. The key names themselves
+("Prelit ambient **false specular** power/intensity") read as a fake/fixed
+specular-highlight system for lightmapped surfaces that have no dynamic
+light to compute a real one from, not a diffuse hemisphere-ambient blend -
+a shape of mechanism unlikely to explain a wholesale material hue shift even
+if it were active, though this is a reading of the key names, not the
+microcode, and carries no confidence score.
+
+**A third candidate is checked and closed narrowly: neither circuit's own
+`.vex` authors any `AmbientLight`/`DirectionalLight`/`PointLight` node.**
+`Lighting.Enable dynamic lights=1` is authored on both circuits, and the
+schema carries a real SPU-driven per-vertex dynamic-light subsystem this
+project implements none of (`Debug_Draw_light_volume` at `+0x59c`,
+`Debug_Stall_for_spu_light_volume` at `+0x5a7`, `Enable_spu_vertex_light` at
+`+0x5a3`, all present as registered keys) - a plausible source for a
+localised, per-area colour difference a flat ambient constant cannot
+produce. A new one-off diagnostic, `crates/render/examples/light_census.rs`
+(built on `oag_vex::vex::nodes`/`class_id`, the same API
+`vex_class_ground_truth.rs` already validates against the whole HD disc),
+swept every `.vex` file under both `data/environments/amphiseum/` and
+`data/environments/talons_junction/` (9 files each, including the 814-node
+`amphiseum/track.vex` and 826-node `talons_junction/track.vex`) and found
+**zero** nodes of class `0x12c` (`AmbientLight`), `0x131`
+(`DirectionalLight`) or `0x132` (`PointLight`) on either circuit. **State
+this narrowly**: it rules out these three vex node classes as the dynamic
+light's data source on these two circuits specifically - it does not rule
+out the SPU light path being fed from a different, unenumerated source (a
+class this sweep did not check, or data carried on HD's own `.rcsmodel`
+geometry rather than the `.vex` scene tree), and it says nothing about any
+other circuit.
+
+**Net for this thread's own opening question**: three candidate mechanisms
+for "does the original apply a light term to the ceiling that this project
+does not" are now checked - `Lighting.Sky colour` (consumed, but by an
+unrelated backdrop pass), `Enable ambient false lighting` (authored off,
+every route checked), and vex-authored dynamic lights (none present) - and
+all three are refuted. **The root cause of Amphiseum's ceiling colour gap
+is not established by this session.** Per this project's own rule against
+tuning to a reference, no shading code was changed - `mesh/`, `mesh.wgsl`,
+`emissive.rs`, `sky_cube.rs` are unchanged. The sharpest remaining, unchecked
+lead is the same one two sessions ago already named and did not run: the
+per-pixel `ndl` on the ceiling's own drawn chunks, to confirm rather than
+assume `sun_diffuse` is genuinely zero there, and a per-material microcode
+sweep (`scripts/ps3-microcode.py`) of the four ceiling materials for which
+named engine parameters (if any) their own fragment programs actually
+declare - `fogColour`, `Ambient false direction` and `Constant ambient
+color` are all now known-bound engine parameters a material's microcode
+could reference by hash, but which of the four ceiling materials reference
+which was not checked this session.
+
 ### The 14 surface binds, read (2026-08-20)
 
 `FUN_005a40f8(ctx, depth, colour0, colour1, colour2, colour3)` takes **pointers
