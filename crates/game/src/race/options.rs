@@ -714,6 +714,16 @@ pub struct Loaded {
     /// `None` falls back to [`Exhaust`]'s procedural glow, and the load report
     /// says so - it is not a silent substitution.
     pub flare: Option<FlareTexture>,
+    /// The Cannon round's bolt streak and muzzle flash textures off the
+    /// disc (`Data\Weapons\Textures\Cannon_bolt.mip`/`Cannon_muzzle_flash.mip`
+    /// - see `crate::race::CANNON_BOLT_TEXTURE_ENTRY`), when each decodes.
+    /// One tuple field rather than two for the same reason
+    /// `weapon_models::load_cannon_quad_textures` returns them unnamed - see
+    /// that function's own doc. `None` falls back to
+    /// [`FlareTexture::placeholder`] in `Scene::new`, and the load report
+    /// says so; both entries resolve on a real disc, so a `None` here is a
+    /// decode failure or a missing archive set, not an unauthored asset.
+    pub cannon_quad_textures: (Option<FlareTexture>, Option<FlareTexture>),
     /// One `blob` shadow silhouette per grid slot, slot 0 the player's.
     ///
     /// The disc's own where the source ships one - Wipeout HD's nine

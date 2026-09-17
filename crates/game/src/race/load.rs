@@ -335,9 +335,8 @@ pub fn load(options: &Options) -> Result<Loaded> {
         options.mode,
         &mut report,
     );
-    // Every weapon's own body - see `weapon_models::load_bodies`, and
-    // `MINE_MODEL_ENTRY`/`BOMB_MODEL_ENTRY` for why those two carry no
-    // drop-time effect alongside them.
+    // Every weapon's own body - see `weapon_models::load_bodies` and
+    // `MINE_MODEL_ENTRY`/`BOMB_MODEL_ENTRY`'s own docs for the no-drop-effect finding.
     let (rocket_model, mine_model, bomb_model, cannon_model, plasma_blast_models) =
         weapon_models::load_bodies(&mut archives, options.lod, &mut report);
     // The cockpit half of the shield, on the same terms and for the same
@@ -993,6 +992,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         noise,
         trail_blend,
         trail_shape,
+        cannon_quad_textures: weapon_models::load_cannon_quad_textures(&mut archives, &mut report),
         shadows,
         shadow_hulls,
         report,

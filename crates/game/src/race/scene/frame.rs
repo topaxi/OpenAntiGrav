@@ -226,6 +226,8 @@ impl Scene {
             trail,
             additive,
             alpha,
+            cannon_bolt,
+            cannon_flash,
             pads_ready,
             recoloured,
         } = &mut *scratch;
@@ -656,6 +658,7 @@ impl Scene {
             oag_tables::weapons::Weapon::Cannon => !self.cannon_rounds.is_empty(),
             _ => false,
         }));
+        race.cannon_quad_vertices(right, up, cannon_bolt, cannon_flash);
         oag_render::perfprobe::mark("exhaust-gather");
         // Shared by every upload below - `to_cols_array_2d` is otherwise
         // recomputed once per pipeline for the same one matrix.
@@ -666,17 +669,18 @@ impl Scene {
         self.clouds
             .borrow_mut()
             .upload(queue, &vp, race.sim.world.tick, right, up);
-        // The hull's collision sparks and the stage's rocket effects share
-        // one pipeline and one pair of buffers: both are `.pob` particles in
-        // the same two blend classes, so a second pipeline would buy nothing
-        // but a second pass.
+        // The hull's collision sparks and the stage's rocket effects share one
+        // pipeline and one pair of buffers: both are `.pob` particles in the
+        // same two blend classes, so a second pipeline would buy nothing.
         oag_render::perfprobe::mark("exhaust-upload");
         race.extend_spark_vertices(additive, alpha, right, up);
         race.extend_stage_vertices(additive, alpha, right, up);
         self.sparks.borrow_mut().upload(queue, &vp, additive, alpha);
+        self.weapon_quads
+            .borrow_mut()
+            .upload(queue, &vp, cannon_bolt, cannon_flash);
 
-        // Both shadow tiers' geometry, gathered with the rest of the frame's.
-        // Its own file under the 1,000-line rule - see `frame/shadow.rs`.
+        // Both shadow tiers' geometry - its own file, see `frame/shadow.rs`.
         let (quads, hull_vertices) = self.shadow_geometry(race, shadows);
         self.shadow
             .borrow_mut()
@@ -920,6 +924,7 @@ impl Scene {
         self.exhaust.borrow().draw(&mut pass);
         self.sparks.borrow().draw(&mut pass);
         self.clouds.borrow().draw(&mut pass);
+        self.weapon_quads.borrow().draw(&mut pass);
         // The scene pass has to close before the bloom can sample what it drew,
         // so this ends the borrow rather than waiting for the scope to.
         drop(pass);

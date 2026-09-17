@@ -49,6 +49,76 @@ pub(super) fn load(
     }
 }
 
+/// Loads one of the Cannon round's two hand-built quads' textures.
+///
+/// Same absence-is-reported terms as [`load`]: a real disc resolves both
+/// (`Data.wad` entries 1057/1058 on both PSP pressings - see
+/// [`super::super::CANNON_BOLT_TEXTURE_ENTRY`]), so `None` here means a
+/// decode error or a missing archive set, not an unauthored asset. The
+/// caller falls back to [`FlareTexture::placeholder`] on `None`, the same
+/// substitute-for-the-missing-asset-alone terms the exhaust flare's own
+/// `flare`/`noise` textures already use in `Scene::new` - never an invented
+/// picture where the real one exists but failed to load.
+fn load_flare_texture(
+    archives: &mut oag_assets::Archives,
+    entry: &str,
+    what: &str,
+    report: &mut Vec<String>,
+) -> Option<FlareTexture> {
+    let blob = match archives.read_name(entry) {
+        Ok(blob) => blob,
+        Err(_) => {
+            report.push(format!("{entry}: absent - {what} draws nothing"));
+            return None;
+        }
+    };
+    match oag_texture::texture::Texture::parse(&blob) {
+        Ok(texture) => {
+            report.push(format!(
+                "{entry}: {}x{} .mip - {what}'s own texture",
+                texture.width, texture.height
+            ));
+            Some(FlareTexture {
+                width: u32::from(texture.width),
+                height: u32::from(texture.height),
+                rgba: texture.to_rgba(),
+            })
+        }
+        Err(error) => {
+            report.push(format!(
+                "{entry}: did not decode ({error}) - {what} draws nothing"
+            ));
+            None
+        }
+    }
+}
+
+/// Both of the Cannon round's hand-built quads' textures, in one call and
+/// one tuple - [`super::Loaded::cannon_quad_textures`] takes the pair
+/// unnamed rather than as two fields for the reason this returns them the
+/// same way: a second field, or a second `let` in `load.rs` for them alone,
+/// would cost exactly the line the tuple exists to not spend, in a file
+/// already at its ceiling.
+pub(super) fn load_cannon_quad_textures(
+    archives: &mut oag_assets::Archives,
+    report: &mut Vec<String>,
+) -> (Option<FlareTexture>, Option<FlareTexture>) {
+    (
+        load_flare_texture(
+            archives,
+            super::super::CANNON_BOLT_TEXTURE_ENTRY,
+            "the cannon bolt streak",
+            report,
+        ),
+        load_flare_texture(
+            archives,
+            super::super::CANNON_MUZZLE_FLASH_TEXTURE_ENTRY,
+            "the cannon muzzle flash",
+            report,
+        ),
+    )
+}
+
 /// Every weapon's own body model in one call - the Rocket's, the Mine's,
 /// the Bomb's, the Cannon round's and the Plasma blast's three - each on
 /// [`load`]'s own terms.
