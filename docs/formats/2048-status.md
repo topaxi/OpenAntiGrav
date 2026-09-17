@@ -100,8 +100,20 @@ the start line and runs the simulation. What it does **not** do, and why:
   `165 skeleton node(s), 113 animated over 113 track(s), 166.7 s loop`.
   Not wired: the `trackZone` clip (Zone mode's own skeleton, 30 Hz keys)
   and the start-grid animation.
-- **No front end, no music.** `oag_2048::TITLE` carries `front_end: None`,
-  `loading: None` and `music: None`. Neither has been read.
+- **The front end is read now; `oag_2048::TITLE` still carries `front_end: None`,
+  `loading: None` and `music: None` - a type mismatch, not an unread disc.**
+  The boot chain (`Boot Studio Logo` -> `Boot Intro Movie` -> `TitleScreen` ->
+  `GameModeChoice`) is declared in `NEWGUI/Bootup_Definition_EU.xml`/
+  `Intro_Definition.xml` and corroborated frame-for-frame on Vita3K. What
+  blocks wiring it is `oag_title::MenuSkin`: 2048 authors no `<FEGlobals>`
+  block at all - no `MenuXOffset`, no `MenuScale`, no title offsets, nothing
+  `MenuSkin`'s mandatory `f32` fields could honestly hold - because its whole
+  front end is a touch-icon grid (`GameModeChoice`, `Home`, the campaign
+  `FE3DCanvas`), an idiom `MenuSkin` was never built to describe. `loading` and
+  `music` stay `None` on narrower gaps: a real percentage-bar loading screen
+  runs on Vita3K but no plugin XML for it has been located, and `frontend.bnk`
+  is confirmed to exist but its cues are unread. See
+  [2048-frontend.md](2048-frontend.md).
 - **Zone's announcer is wired, off a bank path that is read rather than
   measured.** The executable's own track-construction function decompiles to
   a real dispatch between two live Zone speech banks, gated on the selected
@@ -130,8 +142,10 @@ the start line and runs the simulation. What it does **not** do, and why:
   original's own positions; the shield fill, the pickup slot, the speed
   fills, `PilotAssist` and Zone's lit dashes are read as state-gated and not
   wired, and the text draws as raw `IG_HUD_*` ids in the 5x7 fallback because
-  this title names no language plugin or HUD font. See
-  [2048-hud.md](2048-hud.md).
+  `oag_2048::TITLE.front_end` is `None` - **not because the disc names no
+  language plugin or HUD font**, both of which exist
+  ([2048-frontend.md](2048-frontend.md#the-language-plugins-carry-a-hud-font-role-too)).
+  See [2048-hud.md](2048-hud.md).
 
 ## The one axis 2048 forced into existence
 
