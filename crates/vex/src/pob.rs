@@ -423,6 +423,28 @@ impl<'a> ParticleSystem<'a> {
         walk_emitters(data, self.order, base, 0, &mut out, &mut seen)?;
         Ok(out)
     }
+
+    /// `emitter`'s own embedded sprite texture, if the file carries one.
+    ///
+    /// `emitter` must have come from [`Self::emitters`] called on the same
+    /// `data`. See [`texture`] for the evidence this is positional - at
+    /// `resource_base + emitter.offset + `[`EMITTER_LEN`] - rather than
+    /// resolved through [`Self::slots`]. `None` is the documented common
+    /// case, not a parse failure: five of the PSP corpus's thirty-five root
+    /// emitters have no texture here, and PS2 never does.
+    #[must_use]
+    pub fn embedded_texture<'d>(
+        &self,
+        data: &'d [u8],
+        emitter: &Emitter,
+    ) -> Option<texture::EmbeddedTexture<'d>> {
+        texture::parse_at(
+            data,
+            self.order,
+            self.resource_base(),
+            emitter.offset + EMITTER_LEN,
+        )
+    }
 }
 
 /// The most emitter records one file may describe.
@@ -448,6 +470,11 @@ pub const MAX_CHANNEL_KEYS: usize = (CHANNEL_LEN - 0x14) / 8;
 /// [`flags::LOOPING`] alone runs longer than the rest of this module's
 /// constants put together.
 pub mod flags;
+
+/// An emitter's own embedded sprite texture, addressed positionally rather
+/// than through the slot table - see the module's own doc comment for the
+/// evidence.
+pub mod texture;
 
 /// How a channel block produces its value.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

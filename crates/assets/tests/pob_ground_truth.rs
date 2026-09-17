@@ -280,6 +280,109 @@ fn every_psp_particle_system_walks_its_emitter_tree() {
     );
 }
 
+/// The five PSP root emitters `docs/formats/pob.md` records as having no
+/// embedded texture at their positional offset - a continuous/ambient trio
+/// with plausibly no per-particle sprite, plus two more with no explanation
+/// found yet. A file leaving this set (in either direction) is a real
+/// change to what the corpus measures, not noise - update this list and
+/// `pob.md`'s own table together.
+const PSP_ROOTS_WITH_NO_TEXTURE: &[&str] = &[
+    "WO_PLASMA_FLASH",
+    "WO_RAIN",
+    "WO_SNOW",
+    "WO_LEACHBEAM_CHARGING",
+    "WO_REPULSER",
+    "WO_ROCKET_FLARE",
+];
+
+/// [`oag_vex::pob::ParticleSystem::embedded_texture`] over the whole PSP
+/// corpus: every root emitter either has one, or is on
+/// [`PSP_ROOTS_WITH_NO_TEXTURE`] - nothing else silently returns `None`. A
+/// found texture's own bytes must be internally consistent (level 0 no
+/// larger than the declared pixel region, which [`pob::texture::parse_at`]
+/// already refuses, so this just re-asserts the dimensions are sane on
+/// every real file rather than only the one this was decoded against).
+#[test]
+#[ignore = "needs data/images/pulse-psp-usa.chd"]
+fn every_psp_root_emitter_texture_is_where_the_layout_says() {
+    let Some(image) = image("pulse-psp-usa.chd") else {
+        return;
+    };
+    let mut archive =
+        Archive::open(&format!("{}:PSP_GAME/USRDIR/Data.wad", image.display())).expect("open");
+    let blobs = particle_systems(&mut archive);
+    assert_eq!(blobs.len(), PSP_SYSTEMS);
+
+    let mut with_texture = Vec::new();
+    let mut without_texture = Vec::new();
+    for (_, blob) in &blobs {
+        let system = ParticleSystem::parse(blob).expect("parse");
+        let parsed = system.emitters(blob).expect("emitters");
+        let root = &parsed[0];
+        match system.embedded_texture(blob, root) {
+            Some(texture) => {
+                assert!(
+                    texture.width >= 8 && texture.height >= 8,
+                    "{}: implausibly small root texture {}x{}",
+                    system.name,
+                    texture.width,
+                    texture.height
+                );
+                assert_eq!(
+                    texture.indices.len(),
+                    usize::from(texture.width) * usize::from(texture.height),
+                    "{}: level 0 index count",
+                    system.name
+                );
+                with_texture.push(system.name.clone());
+            }
+            None => without_texture.push(system.name.clone()),
+        }
+    }
+    without_texture.sort();
+    let mut expected: Vec<String> = PSP_ROOTS_WITH_NO_TEXTURE
+        .iter()
+        .map(|s| (*s).to_string())
+        .collect();
+    expected.sort();
+    assert_eq!(
+        without_texture, expected,
+        "which root emitters have no embedded texture is a measurement, not a tolerance"
+    );
+    println!(
+        "psp: {} of {PSP_SYSTEMS} root emitters carry an embedded texture",
+        with_texture.len()
+    );
+}
+
+/// The negative control [`docs/formats/pob.md`] draws on: PS2's `.pob`s
+/// embed nothing at all, at any emitter's positional offset. Confirmed by
+/// walking every emitter of every PS2 system, not just the roots - a hit
+/// anywhere would mean the PSP-only claim is wrong.
+#[test]
+#[ignore = "needs data/images/pulse-ps2-eu.chd"]
+fn no_ps2_particle_system_embeds_a_texture() {
+    let Some(image) = image("pulse-ps2-eu.chd") else {
+        return;
+    };
+    let mut archive = Archive::open(&format!("{}:54748/WADS2.WAD", image.display())).expect("open");
+    let blobs = particle_systems(&mut archive);
+    assert_eq!(blobs.len(), PS2_SYSTEMS);
+
+    for (_, blob) in &blobs {
+        let system = ParticleSystem::parse(blob).expect("parse");
+        let parsed = system.emitters(blob).expect("emitters");
+        for emitter in &parsed {
+            assert!(
+                system.embedded_texture(blob, emitter).is_none(),
+                "{}/{}: PS2 unexpectedly carries an embedded texture",
+                system.name,
+                emitter.name
+            );
+        }
+    }
+}
+
 /// The rubric's "a second binary is worth more than a second reading of the
 /// first": the PS2 port's own 41 systems, through the same parser, with no
 /// adjustment.

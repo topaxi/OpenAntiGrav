@@ -2,8 +2,13 @@
 //!
 //! Everything [`ParticleSystem`](oag_vex::pob::ParticleSystem) itself claims
 //! (the container header, the slot table, the resource name, the emitter
-//! tree and its modifier lists) is straightforward to re-derive here the
-//! same way `oag_rcs::rcsmodel::coverage` does. **The slot-resolved records
+//! tree, its modifier lists, and - PSP only, see `crate::pob::texture` -
+//! each emitter's own positionally-addressed embedded texture) is
+//! straightforward to re-derive here the same way `oag_rcs::rcsmodel::coverage`
+//! does. Landing the texture claim alone moved the PSP corpus from 25.62% to
+//! 56.76% (`crates/assets/tests/pob_coverage_ground_truth.rs`, 2026-09-17) -
+//! more than half of what was an "unlocated" gap was sitting on disc the
+//! whole time, just not addressed through the slot table. **The slot-resolved records
 //! are the deliberate exception**, per `docs/formats/pob.md`'s own "Not
 //! determined": two passes at their internals came back a dead end, so this
 //! module measures what a slot resolves to (a fixup site, always 4 bytes,
@@ -73,6 +78,26 @@ pub fn coverage(data: &[u8]) -> Coverage {
                 &emitter.modifiers,
                 emitter.offset,
             );
+            // See `crate::pob::texture` for why this is positional (right
+            // after the record) rather than resolved through a slot -
+            // PSP only; never present on a PS2 or HD file.
+            if let Some(texture) = system.embedded_texture(data, emitter) {
+                seen.claim(
+                    start + EMITTER_LEN,
+                    crate::pob::texture::TEXTURE_HEADER_LEN,
+                    "an embedded texture header",
+                );
+                seen.claim(
+                    texture.palette_offset,
+                    texture.palette.len(),
+                    "an embedded texture palette",
+                );
+                seen.claim(
+                    texture.pixel_offset,
+                    texture.indices.len(),
+                    "an embedded texture's level 0 pixels",
+                );
+            }
         }
     }
 
