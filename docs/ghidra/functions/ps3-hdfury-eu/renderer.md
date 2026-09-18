@@ -4057,6 +4057,166 @@ PS3's own PPU work being PowerPC; say this explicitly so nobody starts here
 expecting the existing toolchain to reach it. Static PPU reading alone
 cannot answer what runs on the SPU side.
 
+**2026-09-18, later still: the first of the twelve unexamined call sites is
+checked, and it retires the "both named sites are shadow-compile" framing
+the confidence note above declined to generalise from.** `FUN_003fa558`
+(`0x003fa558`) is called from `Scene_PrepareFrame` itself and is the
+mainline per-frame material-draw dispatcher - the loop that iterates drawn
+chunks and binds their parameters into the GCM draw-state struct, not a
+cached shadow-redraw compiler. It carries the same gate, **with a confirmed
+`&&`** (unlike the second shadow site, which was only instruction-searched):
+`cVar2 = *(char *)(iVar22 + 0x5a3); ... if (((cVar2 != '\0') && (*(char
+*)(iVar22 + 0x5aa) != '\0')) && (iVar26 = _opd_FUN_0040d390(), iVar26 != 0))
+{ _opd_FUN_0040d370(); }` - run once per frame, before the per-chunk loop
+starts, not per-material. **Three sites now read, one of them mainline: the
+subsystem reaches the main draw path, not only shadow compilation** - the
+"narrows what it could explain" inference this page already declined to
+draw stays declined, but the premise that made it worth declining (shadow
+sites only) no longer holds either.
+
+**In this site, `FUN_0040d370`'s return value is also discarded.** Its own
+disassembly is seven plain instructions (`lwz`/`add`/`blr`, no channel
+operations) computing a slot address and returning it; here that address is
+computed and thrown away, same as at the other checked site. Read this
+narrowly: the pair reads as a guarded poll whose effect, if any, is not
+visible in either decompile checked so far - not as evidence of a hidden
+side effect, which would be a guess this project's own confidence rubric
+has no room for below its floor.
+
+**The buffer's base address chain is closed on the static side, and it
+does not reach a usable address.** `iRam008b83b0`'s TOC-relative load
+(`FUN_0040d390`: `lwz r11,-0x5014(r2)`) resolves cleanly against its own
+function's TOC (`scripts/ps3-toc.py toc 0x0040d390` reports `exact`, no
+defect this time) to address `0x008b83b0` - matching what the decompiler
+already showed, not correcting it. `scripts/ps3-toc.py resolve 0x0040d390
+-0x5014` reads the static word there as `0x00f4b300`, classified `None` -
+not a string, not a named symbol, and **well past `OPD_HI`
+(`0x008A54D8`)**, this binary's own code/data ceiling this page's earlier
+sections already established. That places it outside any static segment
+this project's tooling has reason to trust as meaningful: `0x008b83b0`
+holds a pointer, and `0x00f4b300` is what the *unrelocated* ELF happens to
+carry there, not the runtime-allocated buffer a job system would assign at
+startup. Xrefs to both addresses (`get_xrefs_to`) return nothing, which is
+consistent with a heap pointer assigned by an allocator this session did
+not chase, not with a fixed global. **The static value is not the buffer
+and chasing it further statically will not become one.**
+
+**Live capture was attempted and is blocked by this machine, not by the
+method.** `scripts/rpcs3-drive.py preflight`: no virtual input device
+("the `evdev` module is not importable, so no virtual device can be
+created at all") and no virtual display on `127.0.0.1:77` - both stated as
+this machine's own limits, not as unconfigured-but-reachable. **The
+recipe for whoever has a working RPCS3 setup**, so this does not need
+re-deriving: read the pointer at `0x008b83b0` live (its real runtime
+value, not the static `0x00f4b300`), follow it, read `+0x2080` for the
+current slot index, then `+0x80 + index*0x1000` for that slot's own
+4 KiB - the same double-buffer-reading shape `scripts/rpcs3-trail-dump.py`
+already uses for other SPU output, with `Enable_spu_vertex_light`/
+`Debug.Enable EdgeGeom` both left at their default `1` so the gate is open
+when the read happens.
+
+**Confidence 75 at the point this was written.** The third site strengthens
+reach - the subsystem is mainline, not shadow-only - but the central
+unknown, what the selected slot holds, was exactly as unread as before;
+reach and content are different questions, and only content moves the
+score. No code changed; none of the three lanes that session (this one, the
+byte-order swap, the emissive-texture read) found evidence meeting the bar
+this project sets for changing shipped behaviour, and each says so on its
+own page rather than implying otherwise.
+
+**2026-09-18, later still: the live capture happened, on the environment
+this page said blocked it, and the content is read.** The blocker was this
+machine's own state, not a hard limit - `uv run --with evdev` (rather than
+plain `python3`) already satisfies the `evdev` dependency without a system
+package, and `scripts/rpcs3-drive.py display` starts the missing Xvfb :77.
+Both fixed live, in-session; `scripts/rpcs3-spu-light-dump.py` (committed)
+is the reproducer, built on `rpcs3-trail-dump.py`'s own boot/drive/attach
+shape.
+
+**The pointer is never relocated.** `0x008b83b0`'s *live* value read
+`0x00f4b300` on every boot - byte-identical to the static ELF value this
+page's own TOC-resolved read already reported. Not a heap pointer the
+engine fills in at startup; a fixed low address, assigned once. (The first
+live attempt guarded on the `0x10000000-0x50000000` heap range
+`rpcs3-trail-dump.py`'s own allocations use and rejected every read as a
+result - corrected in the committed script, noted here so the next reader
+does not repeat it.)
+
+**What is there, measured twice, on two different circuits (an
+unidentified Fury campaign default, then Amphiseum specifically): up to 8
+records of 8 big-endian floats, `(x, y, z, w=1.0, A, A·0.25, A·0.1, D)`.**
+The `A·0.25`/`A·0.1` ratios are exact - checked across every record read on
+both runs, including scaled ones (`A` ranges roughly 40-440 across the
+sample) - so each record carries one authored-or-computed scalar with two
+fixed-ratio derived forms, not three independent values. `D` is a fourth,
+independent per-record scalar that does **not** follow that ratio and
+stays stable for a given position across multiple frames rather than
+varying like noise (confirmed: a record at `(29.048, -49.855, 146.856)`
+carried the identical `D = 0.9414657354354858` across three consecutive
+Amphiseum snapshots). **Confidence 80 for this structural claim alone** - a
+direct, repeated measurement on two circuits, the strongest evidence tier
+below a corroborated runtime trace on a second binary.
+
+**Some records move at racing speed; at least one stayed byte-identical
+across every snapshot taken, on both circuits.** On the unidentified Fury
+circuit, `(183.698395, -36.554867, 202.262344, ...)` was unchanged across
+three consecutive 2-second-spaced reads. On Amphiseum, `(-15.340508,
+-50.138016, -176.605759, ...)` was unchanged across all five. **This is a
+property of the buffer's structure, reproduced on two circuits, not an
+artefact of one track.** Whether the moving records specifically track the
+player's own craft is **not confirmed** - inferred only from one record's
+position lying close to where a *different, unrelated* capture placed the
+player seconds earlier, which is not the same pause. The honest claim is
+narrower: several records' positions change frame to frame by magnitudes
+consistent with racing speed; which entity, if any, they track is open.
+
+**Tested directly against the "these are authored `.vex` markers" reading,
+and it fails.** New tool,
+`crates/render/examples/hd_amphiseum_spu_light_marker_check.rs`, checked
+Amphiseum's stationary position against **every node of every class**
+(2,790 world-transform translations, all nine `amphiseum/*.vex` files, not
+only `PointLight`) - the closest is `start_grid.vex`'s class `0x6e`
+(`Transform`) at `(0, 0, -140.414)`, 63.71 units from the target. **63.71
+units is a real miss at this circuit's own scale, not noise**: the buffer
+records this session read span hundreds of units apart (positions from
+roughly `-410` to `480` on one axis alone), so the 5-unit epsilon the tool
+checked against is generous relative to node spacing, and the closest hit
+is over twelve times that epsilon away. The closest node is also a weaker
+candidate than its distance alone suggests - two of its three translation
+components are exactly `0`, the shape of a root-relative or unparented
+`Transform` rather than a placed marker, which argues further against it
+being what the buffer's position traces to, not for it. **No authored
+scene-tree node sits at the position the SPU buffer holds stationary.**
+This is evidence against a `.vex`-authored-marker source, not proof of
+one: the position could still derive from `.rcsmodel` geometry, a
+racing-line/waypoint format this project has not read, or a genuinely
+computed value with no authored anchor at all. It does mean the
+"just track waypoints" reading, the obvious non-lighting alternative,
+does not survive the one check available without more RE.
+
+**What remains unread and unconfirmed, precisely.** Slot 1 (the buffer's
+other half - the index alternates 0/1 across boots, and one early capture
+read `index_raw: 1` but the script did not yet dump slot contents at that
+point) has never actually been read; the `A·0.25`/`A·0.1` ratio is
+confirmed for slot 0 only. No shader consumer for this buffer's contents
+has been found - the standard 81-entry engine-parameter table this page
+already documents has no slot shaped for an 8-record array, so if
+anything reads this data, it is through a mechanism this project's
+existing name-hash sweep (`hd-pointlight-sweep.py`) would not see: a
+vertex texture fetch, most plausibly, which samples a buffer rather than
+binding a named parameter, and which no tool in this project currently
+checks for. **Confidence on anything naming what the records represent -
+lights, markers, waypoints, something else - stays at 75 or below**; the
+structural measurement (80) and the identity of what is measured are
+different claims, and only the first is solid.
+
+No code changed. This is a genuine, reproducible, live-verified structure
+now - stronger evidence than any static reading in this section reached -
+and still not evidence of what consumes it or what it represents, which is
+what this project's own rule against inventing a term the disc does not
+demonstrably compute continues to withhold from `mesh.wgsl` until one of
+those two questions closes.
+
 ### A disc-wide name-hash sweep for `pointLight0*` finds no consumer anywhere (2026-09-18)
 
 **Confidence 85.** The per-material sweep two sessions above checked four

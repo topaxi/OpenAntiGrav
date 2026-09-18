@@ -736,6 +736,34 @@ address, which this project already has the tooling shape for; SPU ELF
 extraction/decompilation last, and only with a new SPU Ghidra processor
 module this project has never set up for any title.
 
+2026-09-18, later still, continued in the same lane: **the live read named
+above as the next step is done, on both `evdev`/display environment
+blockers fixed live in-session** (`uv run --with evdev`, not a system
+package; `scripts/rpcs3-drive.py display` for Xvfb :77). New tool,
+`scripts/rpcs3-spu-light-dump.py` (committed). The pointer at `0x008b83b0`
+is never relocated - its live value matches the static ELF read exactly -
+and the buffer holds up to 8 records of 8 floats, `(position.xyz, w=1.0,
+A, A·0.25, A·0.1, D)`, the ratio exact on every record checked across two
+circuits (confidence 80 for this structural claim, a repeated direct
+measurement). Some records move at racing-speed magnitudes; at least one
+stayed byte-identical across every snapshot on both circuits tested -
+reproduced, not one track's artefact. **Checked directly against "these
+are authored `.vex` markers" and it fails**: a new tool,
+`crates/render/examples/hd_amphiseum_spu_light_marker_check.rs`, swept
+Amphiseum's stationary position against all 2,790 node-transform
+translations across every `.vex` file and every class - closest is 63.71
+units away, no match. Whether the records are lights, computed markers, or
+something else remains open (confidence 75 or below for any claim about
+what they *are*, as opposed to their structure); slot 1 has never been
+read, only slot 0; no shader consumer is found, and the standard
+engine-parameter table has no slot shaped for this, so a consumer - if one
+exists - is likely a vertex texture fetch, a mechanism no tool in this
+project currently checks for. Full account:
+[`renderer.md`](../../docs/ghidra/functions/ps3-hdfury-eu/renderer.md),
+same section, "2026-09-18, later still: the live capture happened". No
+code changed - this is the strongest evidence this thread has reached and
+still short of what "never invent" requires before wiring anything.
+
 2026-09-18, same session: `uvanim_diffuse_emissive`'s own colour, the Next
 Steps item below, is read. `hd_amphiseum_ceiling_variants.rs`'s material
 filter now covers it (committed), which located its five slots at the
