@@ -3949,6 +3949,114 @@ would need one order and others the opposite, which any code change would
 need before it could be conditional rather than a coin flip. Left as a
 disc-value finding for whoever reads the vertex-fetch registers next.
 
+### `Enable_spu_vertex_light` is read at 14 sites, two named and reachable, and gates a double-buffered slot - the light computation itself is not traced (2026-09-18, confidence 75)
+
+**Where this picks up.** Two sessions above, this page named a real, entirely
+unread mechanism: `Lighting.Enable dynamic lights=1` is authored on both
+checked circuits, and the schema carries `Enable_spu_vertex_light` (`+0x5a3`),
+`Debug_Draw_light_volume` (`+0x59c`) and `Debug_Stall_for_spu_light_volume`
+(`+0x5a7`) as registered keys - "a plausible source for a localised, per-area
+colour difference a flat ambient constant cannot produce," never traced past
+the registrar. This session traces it as far as static reading goes without
+a live capture or an SPU disassembler, neither attempted here.
+
+**The registrar confirms the offset and the default, and adds a fourth key
+this page had not named.** `Environment_RegisterLightingSchema` (`0x003a83d8`,
+decompiled directly this session) writes `*(undefined1 *)(iVar16 + 0x5a3) = 1`
+before calling `_opd_FUN_005d46b8(iVar16, iVar16 + 0x5a3,
+PTR_s_Lighting_Enable_spu_vertex_light_008b703c, 2)` - **`Enable_spu_vertex_light`
+defaults to `1` (on)**, on both the fresh-init and the cached-reset path.
+Immediately adjacent in the same registrar: `Debug_Draw_spu_light_volume` at
+`+0x5a4` (default `0`), a distinct key from `Debug_Draw_light_volume` at
+`+0x59c` not previously listed on this page - what, if anything,
+distinguishes the two is not established here, only that both exist as
+separate registered keys. Four keys now located in this cluster:
+`Enable_spu_vertex_light` (`+0x5a3`, on by default), `Debug_Draw_light_volume`
+(`+0x59c`, off), `Debug_Draw_spu_light_volume` (`+0x5a4`, off),
+`Debug_Stall_for_spu_light_volume` (`+0x5a7`, off).
+
+**14 read sites found disc-wide** (`search_instructions mnemonic=lbz
+operand_pattern=0x5a3`, all real `lbz rN, 0x5a3(rM)` loads, not incidental
+matches): `0x003ea4ec`/`0x003ea964` (one function, two sites), `0x003eb950`,
+`0x003fa654`, `0x003fc32c`, `0x003ff9d4`, `0x00400b7c`, `0x00401f5c`,
+`0x00402f60`, `0x00403c20`, `0x00405a1c`, `0x004076d4`, `0x004092c0`,
+`0x0040d9cc`. **Two of fourteen sit in already-named functions**:
+`Shadow_CompileAmbientShadowTrackRedraw` (`0x00402a88`, the read at
+`0x00402f60`) and `Shadow_CompileShadowedTrackRedraw` (`0x004053e0`, the
+read at `0x00405a1c`) - both cached shadow-redraw *command-list compilers*,
+not the main per-frame material draw path. **The other twelve are
+unexamined this session** - ten distinct `FUN_*` functions
+(`0x003ea368`, `0x003eb890`, `0x003fa558`, `0x003fc140`, `0x003ff860`,
+`0x00400a00`, `0x00401ba8`, `0x00403a30`, `0x004074e0`, `0x00408fa8`,
+`0x0040d990`), named here so the next session does not re-derive the list.
+**Do not infer the subsystem's role from the two that happen to be named
+already** - two of fourteen is not a basis for characterizing what the
+other twelve do, and nothing here rules out a material-lighting consumer
+among them.
+
+**In the one site decompiled, `Enable_spu_vertex_light` is read paired with
+`Debug.Enable EdgeGeom` (`+0x5aa`, also on by default) in a single `&&`
+condition** - `Shadow_CompileAmbientShadowTrackRedraw`'s decompile: `cVar34 =
+*(char *)(iVar30 + 0x5a3); ... if ((cVar34 != '\0') && (*(char
+*)(iVar30 + 0x5aa) != '\0')) { iVar30 = _opd_FUN_0040d390(); ... }`.
+`Shadow_CompileShadowedTrackRedraw` was checked by instruction search, not
+decompiled: it carries `lbz`s at `0x00405a1c`/`0x00405a44` reading the same
+two offsets, 0x28 bytes apart - the same two keys read close together, not
+a confirmed `&&` the way the first site's decompile shows. **"EDGE" here is
+Sony's real middleware, confirmed by string, not a project-internal name**:
+`"EdgeGeom"` (`0x007b1758`), `"Debug.Enable EdgeGeom"`/`"...stalling"`
+(`0x007b09c8`/`0x007b09e0`), `"edgeDecompressorTaskset"` (`0x007a7d28`),
+`"edgezlib_inflate_queue.cpp"` (`0x007bedc0`), and the literal embedded task
+binary `"edgezlib_inflate_task.spu.elf"` (`0x007dd8c4`), alongside a full
+`cellSpurs*`/SPURS-kernel string set. **These confirm EDGE's `zlib`
+decompression module ships with its own named SPU task ELF - they do not
+confirm an EDGE *geometry* job exists or that it computes vertex lighting.**
+Only one bare `"EdgeGeom"` string and the two `Debug.Enable EdgeGeom*` key
+names speak to EDGE geom specifically; nothing here traces what, if
+anything, an EDGE geom job does, and the claim "EDGE geom computes the SPU
+vertex light" is not established - only that the two keys are read together
+at two call sites.
+
+**What the gated call actually does, read directly - and it is buffer
+selection, not a light computation.** `FUN_0040d390`:
+`return *(undefined4 *)(*(int *)(iRam008b83b0 + 0x2080) * 4 + iRam008b83b0 +
+0x2084);` - reads a 4-byte value at a per-slot offset. `FUN_0040d370`:
+`return *(int *)(iRam008b83b0 + 0x2080) * 0x1000 + iRam008b83b0 + 0x80;` -
+computes the address of a `0x1000`-byte (4 KiB) slot, indexed by the same
+value both functions read from `+0x2080`. This is the shape of a
+double-buffered (or multi-buffered) region with a running index and
+fixed-size slots - consistent with, but not proven to be, an SPU job's
+output buffer, the same shape this project's own `scripts/
+rpcs3-trail-dump.py` and `hd-flare-sprite-dump.py` already read live for
+other "double-buffered SPU-output vertex buffers." **What the buffer at
+`iRam008b83b0 + 0x80 + index*0x1000` actually holds is not read this
+session** - not vertex data, not a light value, not anything: only its
+address and slot arithmetic are established.
+
+**Confidence 75.** Decompilation-only evidence caps at 84 per the rubric,
+and this session's central open question - what the selected buffer
+contains - is inferred from stride and naming convention, not read. Two
+independently-found call sites agreeing on the identical paired-flag shape,
+and real middleware strings corroborating that "EDGE" names a genuine
+Sony subsystem rather than a project-internal token, are what keep it above
+the 50-69 "plausible inference" band.
+
+**Next steps, in the order that costs least first.** (1) The twelve
+unexamined call sites listed above - cheap, the addresses are in hand,
+no new search needed. (2) A live RPCS3 read of `iRam008b83b0 + 0x80 +
+index*0x1000` (translated to its runtime address) during a race with
+`Enable_spu_vertex_light`/`Debug.Enable EdgeGeom` both at their default
+`1` - this project already has the tooling shape for exactly this (the
+trail/flare scripts read a live double-buffered SPU-output region the same
+way), and it would settle what the buffer holds without needing SPU
+disassembly at all. (3) Locating and decompiling `edgezlib_inflate_task.spu.elf`
+(or any EDGE-geom-specific SPU task, if one exists and is separately
+embedded) - **this needs an SPU-architecture Ghidra processor module this
+project has never set up for any title**, PSP/PS2 tooling being MIPS/EE and
+PS3's own PPU work being PowerPC; say this explicitly so nobody starts here
+expecting the existing toolchain to reach it. Static PPU reading alone
+cannot answer what runs on the SPU side.
+
 ### A disc-wide name-hash sweep for `pointLight0*` finds no consumer anywhere (2026-09-18)
 
 **Confidence 85.** The per-material sweep two sessions above checked four

@@ -709,6 +709,33 @@ touch the SPU per-vertex dynamic-light subsystem
 "plausible, unchecked" mechanism - that is a different system, still open,
 and this sweep says nothing about it.
 
+2026-09-18, separate lane, `EBOOT-ps3-hdfury-eu.elf` open in Ghidra:
+`Enable_spu_vertex_light` is traced as far as static PPU reading goes.
+Confirmed at `+0x5a3`, defaulting to **on** (`Environment_
+RegisterLightingSchema`, `0x003a83d8`, decompiled directly) - a fourth,
+previously unlisted key in the same cluster, `Debug_Draw_spu_light_volume`
+at `+0x5a4` (default off), was found alongside it. Read at 14 sites
+disc-wide; two are in already-named functions,
+`Shadow_CompileAmbientShadowTrackRedraw` and
+`Shadow_CompileShadowedTrackRedraw` (both cached shadow-redraw
+command-list compilers), where it gates - jointly with `Debug.Enable
+EdgeGeom`, Sony's real EDGE middleware confirmed by string (not this
+project's own naming) - selection of a slot in a `0x1000`-byte-stride
+multi-buffer at `iRam008b83b0`, the shape this project's own
+`rpcs3-trail-dump.py`/`hd-flare-sprite-dump.py` already read live for other
+double-buffered SPU-output regions elsewhere. **What the buffer holds is
+not read** - only its address arithmetic is - and the other twelve call
+sites are unexamined; this does not establish what the subsystem does,
+only that it is real, on by default, and reachable. Confidence 75. Full
+account: [`renderer.md`](../../docs/ghidra/functions/ps3-hdfury-eu/renderer.md),
+"`Enable_spu_vertex_light` is read at 14 sites, two named and reachable,
+and gates a double-buffered slot - the light computation itself is not
+traced". **Next steps in cost order**: the twelve unexamined call sites
+(addresses listed on that page); a live RPCS3 read of the buffer's runtime
+address, which this project already has the tooling shape for; SPU ELF
+extraction/decompilation last, and only with a new SPU Ghidra processor
+module this project has never set up for any title.
+
 2026-09-18, same session: `uvanim_diffuse_emissive`'s own colour, the Next
 Steps item below, is read. `hd_amphiseum_ceiling_variants.rs`'s material
 filter now covers it (committed), which located its five slots at the
