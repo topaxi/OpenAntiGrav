@@ -42,23 +42,31 @@
 //! `oag_2048::hud::ART` actually reaches rather than the whole disc, which
 //! this project has not swept.
 //!
-//! # `format` names a Sony `SceGxmTextureBaseFormat`, and this title uses two
+//! # `format` names a Sony `SceGxmTextureBaseFormat`, and this title uses six
 //!
 //! The low three bytes carry swizzle/channel-order bits this module does not
-//! act on; only the top byte - [`Format::from_byte`] - is read. Measured
-//! across the nine `.gxt` files 2048's composed HUD layouts name:
+//! act on; only the top byte - [`Format::from_byte`] - is read. All six
+//! formats below decode; this project's own corpus sweep
+//! (`texture(gxt): UBC1, UBC3 and U8U8U8 decode; all 9,910 .gxt files now
+//! decode`) is what the "all decode" claim rests on, not a narrower survey:
 //!
-//! | Format byte | `SceGxmTextureBaseFormat` | Decoded | Where |
-//! | --- | --- | :-: | --- |
-//! | `0x86` | `UBC2` (BC2/`DXT23`) | **yes** | every `2048_hud\` texture - the played skin |
-//! | `0x83` | `PVRTII4BPP` | no | the bare-root skin's own textures |
+//! | Format byte | `SceGxmTextureBaseFormat` | Where |
+//! | --- | --- | --- |
+//! | `0x86` | `UBC2` (BC2/`DXT23`) | every `2048_hud\` texture - the played skin |
+//! | `0x83` | `PVRTII4BPP` | the bare-root HUD skin, and every front-end atlas measured (`data/FE/NewImages/canvasTexture*.gxt`) |
+//! | `0x85` | `UBC1` (BC1/`DXT1`) | |
+//! | `0x87` | `UBC3` (BC3/`DXT5`) | |
+//! | `0x0c` | `ARGB8888` | |
+//! | `0x98` | `U8U8U8` | |
 //!
 //! `UBC2` decodes through [`crate::bcn::dxt23`], the same BC2 block math
 //! [`crate::gtf`] uses - the block layout is a hardware standard, not
 //! something either console's container defines. `PVRTII4BPP` is PowerVR
 //! texture compression, a different codec family entirely (bilinear-upscaled
 //! low-frequency and high-frequency images plus a modulation layer, not a
-//! per-4x4-block palette), and is refused rather than guessed at - see
+//! per-4x4-block palette) - see [`crate::pvrtc`] for the decode and its own
+//! confidence. A format byte outside this table still refuses rather than
+//! guesses - see
 //! [`Error::Unsupported`]. This costs nothing today: [`oag_2048::hud::LAYOUTS`]
 //! reads the `2048_hud` skin exclusively (see `docs/formats/2048-hud.md`), so
 //! every texture a real race's HUD reaches is `UBC2`.

@@ -41,3 +41,9 @@
 0x816af070	data	g_zone_blended_stage_colour	85	zone-environment-fallback.md
 0x810175fc	function	Environment_RegisterLightingSchema	85	lighting-schema.md
 0x811aeee2	function	MagstripWake_Construct	85	ships-effects.md
+0x810f817c	function	FE3DCanvas_AddHDCampaignEventButtons	78	frontend-campaign-map.md
+0x810f5000	function	FE3DCanvas_AddFuryCampaignEventButtons	78	frontend-campaign-map.md
+0x810039fc	function	Boot_CheckDlcPackageFlags	75	frontend-campaign-map.md
+0x8153fc34	data	g_bDlc1Mounted	75	frontend-campaign-map.md
+0x8153fc38	data	g_bDlc2Mounted	75	frontend-campaign-map.md
+0x8153fc3c	data	g_bDlc3Mounted	75	frontend-campaign-map.md

@@ -52,30 +52,39 @@ names both - `english/Definition.xml` declares a `2048HUD` font role at
     nothing downstream currently draws a touch grid anyway.
   Whichever is chosen, `2048-frontend.md`'s "front end is a touch-icon grid"
   section has every number (`GameModeChoice`'s four `TouchButton`s at
-  `x`/`y`/`140x140`, `Home`'s five, the `FE3DCanvas`'s ~50 `CanvasLabel`
-  hotspots, `Team_Definition.xml`'s 3D ship-model origin) already quoted and
-  ready to fill whichever type lands.
-- **The Game Mode grid has six tiles at runtime; the XML declares four.**
-  `HD CAMPAIGN`/`FURY CAMPAIGN` (unlocked by `dlc1.psarc`/`dlc2.psarc` being
-  mounted, plausibly) correspond to no `TouchButton` in `NEWGUI/Definition.xml`
-  at all. Not traced into the executable - `2048-frontend.md`'s own
-  "what the executable sweep did not reach" names why (see below) and this
-  is the first thing a decompile of `GameModeChoice_Screen`'s construction
-  should answer.
-- **The executable sweep is string-only, not decompiled.** The live Ghidra
-  session has `/ps3-hdfury-eu/EBOOT.elf` open under another lane's active
-  work; `switch_program` was correctly avoided, but the bridge also refuses a
-  `program=` that is not open (`get_function_by_address` against
-  `/vita-2048-eu-v104/eboot.elf` returns `Program not found`), so no new
-  address was recovered this pass, only `strings` corroboration of names
-  `game-boot.md` already carries. **`analyzeHeadless` against a second,
-  independent Ghidra project is the concrete next step** - it does not touch
-  the live GUI session at all. `docs/reverse-engineering/toolchain.md#vita`
-  has the existing import recipe; the six-tile grid and the boot-mode
+  `x`/`y`/`140x140`, `Home`'s five, `Team_Definition.xml`'s 3D ship-model
+  origin) already quoted and ready to fill whichever type lands.
+  `FE3DCanvas`'s own `CanvasLabel`s are not part of that list any more - see
+  the drawn-preview finding below, which found them clustered in one small
+  corner rather than spread across a map.
+- **Resolved 2026-09-18: the six-vs-four tiles were never a `GameModeChoice`
+  fact.** `open_program` on `/2048/eboot-vita-2048-eu-v104.elf` works
+  alongside `/hdfury/EBOOT-ps3-hdfury-eu.elf` staying open for the other lane
+  - the bridge holds more than one open program at once, so the
+  `analyzeHeadless`-on-a-second-project plan below turned out unnecessary;
+  opening the already-imported program was enough. The decompile found
+  `FE3DCanvas_AddHDCampaignEventButtons`/`FE3DCanvas_AddFuryCampaignEventButtons`
+  (`0x810f817c`/`0x810f5000`, confidence 78): a symmetric pair that adds
+  hotspot buttons to the persistent 3D campaign map, not to `GameModeChoice`'s
+  own four-button grid, gated on `g_bDlc1Mounted`/`g_bDlc2Mounted`
+  (confidence 75) - two globals with exactly one writer,
+  `Boot_CheckDlcPackageFlags` (`0x810039fc`, confidence 75), which checks the
+  literal add-on IDs `DLC1W2048PACKAGE`/`DLC2W2048PACKAGE` via
+  `SceAppUtil_2DB7BE3B`. "Unlocked by DLC being mounted, plausibly" is now
+  measured. See
+  [frontend-campaign-map.md](../../docs/ghidra/functions/vita-2048-eu-v104/frontend-campaign-map.md).
+  Still open from that page: no caller found for either tier function (a
+  vtable slot is located at `0x8150eae0`/`0x8150ea74`, 27 slots apart, but
+  its owning class is not), the per-tier position scale/offset tables are
+  undumped, and `g_bDlc3Mounted`/`W2048DLC3PACKAGE` has no known reader
+  anywhere in the binary.
+- **The rest of the executable sweep is still string-only.** The boot-mode
   selector (`Boot Connect`/`Launch 2048`/`RaceBox`/`Main Menu`/`MPStress`,
-  all confirmed present as literal strings, clustered beside a
-  `-mpscreen` command-line flag) are the two things worth pointing it at
-  first.
+  clustered beside a `-mpscreen` command-line flag) is confirmed present as
+  literal strings but not yet traced to real addresses of its own -
+  `docs/reverse-engineering/toolchain.md#vita` has the import recipe, and the
+  program is already open in this project as of the pass above, so this no
+  longer needs a fresh `analyzeHeadless` run either.
 - **`frontend.bnk` is located, its cues are not.** `data/audio/sound/frontend.bnk`
   exists exactly where `SoundManager_Construct`'s decompiled bank list
   (`game-boot.md`) says it should. `oag_title::Music::front_end` needs a
@@ -89,6 +98,26 @@ names both - `english/Definition.xml` declares a `2048HUD` font role at
   *is* engine-native, `oag_title::Loading` (built for a disc-authored screen)
   is the wrong axis for it entirely, on the same "no shared vocabulary"
   grounds as `MenuSkin` above.
+- **Resolved 2026-09-18: `FE3DCanvas` was drawn, and drawing it corrects the
+  "~50 hotspots... explorable city" reading.** `cargo run -p oag-tools
+  --example campaign_map_preview` (`crates/tools/examples/
+  campaign_map_preview.rs`, new) crops `canvasTexture.gxt` at each
+  `<CanvasLabel>`'s `(round(u*2048), round(v*2048))` and pastes the result at
+  its `x`/`y` on a blank 960x544 canvas - no invented crop size, since
+  several labels share identical `u`/`v`/`width`/`height` while linking
+  different events (those two fields pick an icon, not a per-label crop
+  rect), so the tool trims to real non-background pixels around the anchor
+  instead. The anchor reading is now confirmed empirically, not inferred -
+  cropping at the `Trophy-2048-*` labels' shared anchor lands exactly on the
+  trophy-cup glyph. **What the composite also shows: all 69 of
+  `Definition.xml`'s own `FE3DCanvas` labels cluster in `x` 0-196, `y` 0-87 of
+  the canvas** - a corner trophy/season-badge widget, not hotspots spread
+  across a city map. See `data/reference/2048-frontend/
+  11-fe3dcanvas-composite-preview.png` (gitignored, generated not captured)
+  and `2048-frontend.md`'s own section for the full write-up. Open: what
+  `width`/`height` mean if not crop size, and whether the wider hotspot set a
+  real playthrough shows across the map comes from the DLC-gated buttons
+  above (plausible, not confirmed) or from data this pass has not found.
 - **`CheckPoint_HUD.xml`-style dangling references were not swept for in the
   front end.** `2048-hud.md` already flags one HUD XML the executable wants
   and the base package does not ship; this pass did not repeat that search
@@ -100,11 +129,11 @@ names both - `english/Definition.xml` declares a `2048HUD` font role at
 1. Resolve the `MenuSkin` type question above (ask, don't guess) and, once
    resolved, fill `FrontEnd::menu` (or its replacement) from
    `2048-frontend.md`'s already-quoted numbers.
-2. Run `analyzeHeadless` on `/vita-2048-eu-v104/eboot.elf` (or the USA
-   pressing, `1,197` functions currently, far less analyzed) in a project of
-   its own, and decompile `GameModeChoice_Screen`'s construction to settle
-   the six-vs-four tile question and recover real addresses for
-   `names.tsv`.
+2. Name the vtable at `0x8150ea5c`-ish that owns
+   `FE3DCanvas_AddHDCampaignEventButtons`/`FE3DCanvas_AddFuryCampaignEventButtons`
+   (both are Thumb-pointer hits in one table, 27 slots apart) - that names the
+   class and, with it, whatever screen/refresh path calls them, which is the
+   remaining unknown in `frontend-campaign-map.md`.
 3. Extract `frontend.bnk` and read its cue table (`oag_formats::sblk::Bank::parse`)
    to name `Music::front_end`.
 4. Once `front_end` is fillable, re-run
