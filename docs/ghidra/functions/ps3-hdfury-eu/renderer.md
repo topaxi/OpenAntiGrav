@@ -3724,6 +3724,65 @@ against the already-wired lightmap curve's own uniforms. Confidence on it
 materials measured stay cool regardless, so this is a partial, precisely-
 scoped fix, not a closing one.
 
+### `uvanim_diffuse_emissive`'s own colour is read, and its largest populations do not confirm the warm reading (2026-09-18)
+
+**Answers this thread's own open item**: does `uvanim_diffuse_emissive`,
+already confirmed (two sessions above) to share the four ceiling materials'
+exact `NO_AMBIENT`-and-not-`NO_SUN` code-path defect by microcode alone,
+also share their *colour* - extending the fix's confirmed reach past four
+materials? First, its own resolved slots needed locating:
+`hd_amphiseum_ceiling_variants.rs`'s material-name filter now includes
+`uvanim_diffuse_emissive.rcsmaterial`/`cf_uvanim_emssive.rcsmaterial`
+(committed, reused rather than a one-off script). Amphiseum's model draws
+`uvanim_diffuse_emissive` at nine slots; five resolve to the exact
+`0x56c94426`/fragment-offset-`0x6d60` variant this thread already
+identified by hash - `178, 354, 357, 382, 432` - and the rest resolve to
+different, unrelated variants at other offsets, not checked here.
+`hd_amphiseum_ceiling_vertex_light.rs` (unmodified - it already takes slot
+numbers on the command line) read the same raw/top-decile/curved
+reconstruction the four ceiling materials got, on all five:
+
+| Slot | Vertices | Raw mean hue | Top-decile hue | Curved top-decile hue |
+| ---: | ---: | ---: | ---: | ---: |
+| 178 | 432 | 194.6° | 194.2° | 199.4° |
+| 354 | **2,960** | 192.4° | 190.1° | 198.3° |
+| 357 | 360 | 188.5° | 180.5° | 180.8° |
+| 382 | **1,664** | 193.3° | 187.3° | 190.3° |
+| 432 | 168 | 87.5° | 102.1° | 102.5° |
+
+**Mixed, and the dominant instances do not confirm the warm reading.**
+Slots 354 and 382 - 2,960 and 1,664 vertices, both larger than
+`animhexlights`' own 1,712-vertex population this thread already treated as
+load-bearing - sit at 190-198° curved, the same cool-blue family
+`base_diffusespecular`/`cf_diff_spec` occupy, not the reference's 39-86°
+warm band. Slot 178 agrees (199.4°, 432 vertices). Slot 432 does not: 87.5°
+raw mean, 102.1° top-decile, 102.5° curved - stable across all three
+stages, on 168 vertices, so it fails neither of the two reasons this thread
+already discarded `lambert`'s reading for (too few vertices, and a 75°
+raw-versus-top-decile disagreement on the same population). It is a real,
+internally-consistent warm-ish outlier, not a discredited one - just outnumbered
+30 to 1 by the 5,056 vertices across slots 178/354/382 that read solidly
+cool. **Net: on the population that dominates, `uvanim_diffuse_emissive`
+joins `base_diffusespecular`/`cf_diff_spec` as a third material whose own
+vertex-colour-set data does not explain the reference's warm reading, with
+one small instance (slot 432) going the other way** - it shares the code
+defect (established) but not, from disc colour data alone, the hue the
+defect was suspected of hiding, on the geometry that makes up most of what
+this material draws. The "if its colour reads warm, the fix's reach is
+broader" conditional in this thread's Next Steps resolves negative for the
+dominant instances and unresolved for slot 432's own geometry (not
+identified or checked against a capture); `EmissiveTexture`'s own sampled
+colour (the glow layer this material also carries, separate from the
+vertex-colour-set term measured here) is untouched by this session and is
+the only remaining place a warm contribution from this specific material
+could still come from at the slots that read cool.
+
+`cf_uvanim_emssive.rcsmaterial` was swept incidentally by the same filter
+change, but its slots at this feature hash resolve to a different fragment
+block (offset `0x23f0`, not `0x6d60`) - a different variant than the one
+this thread identified, so its own readings answer nothing here and are not
+reported.
+
 ### A disc-wide name-hash sweep for `pointLight0*` finds no consumer anywhere (2026-09-18)
 
 **Confidence 85.** The per-material sweep two sessions above checked four
