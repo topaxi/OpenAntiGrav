@@ -4299,6 +4299,33 @@ Opcode `0x2d` reads its two operand words off the stream and stores them into co
 
 **Confidence 85** for the opcode `0x2d` semantics themselves - read directly from a decompiled handler reached by an address chain each step of which is independently verifiable (TOC resolution, two pointer dereferences, `read_memory`), not inferred. Confidence stays lower for what `+0x14c`/`+0x150` feed into downstream, which this entry narrows but does not close. No code changed.
 
+### Bit `0x800` gates a structurally distinct, much larger code path inside the actual RSX constant-upload function - scoped to the `RigidBody`/`Absorb` consumer family only (2026-09-18, later still, confidence 82)
+
+**Following opcode `0x1c`'s own handler chain** (`_opd_FUN_005d5e18` -> `_opd_FUN_005d7320`, both read in the previous entry as "does not touch `+0x14c`/`+0x150` directly"): `FUN_005d7320` unconditionally calls `_opd_FUN_005d8700(context, shader_ptr, cached_shader_ptr, flags)` whenever context `+4`'s bits `0x1d0000` (shader-state-changed family) are set. `_opd_FUN_005d8700`, decompiled directly, is the real GCM/RSX constant- and vertex-data-upload function: its first block walks the resolved shader program's own parameter table and writes each declared constant's literal default into context slots `+0xf0`..`+0x12c` (16 four-byte slots), then calls `Rsx_UploadVertexConstants` - unrelated to `+0x14c`/`+0x150`, which are outside that slot range.
+
+**Its second block is the connection.** Gated on the same `param_4 & 4` the caller passes and, critically, on **context `+4`'s bit `0x800`** - the identical bit `Shader_GetVariantHash(... | 0x800)` sets at every consumer site this section has found:
+
+```c
+if ((param_4 & 4) != 0) {
+    if ((state_flags & 0x800) == 0) {
+        /* short path: one call to FUN_00731108, one to FUN_005c5d60 */
+    } else {
+        /* long path: allocates a scratch buffer, unrolls a 4x4-float block-copy
+           loop reading from the material's own vertex-format descriptor at
+           negative offsets, writes the result to the scratch buffer, calls
+           FUN_00730e08, then a second unrolled block-copy loop writes the
+           scratch buffer's contents into a different destination (iVar9),
+           before the same FUN_005c5d60 call as the short path */
+    }
+}
+```
+
+Bit `0x800` set is not a shader-variant label alone - it makes the **actual constant-upload function** take a structurally different path, allocating and populating a scratch buffer through an unrolled copy loop before the equivalent of the short path's final call runs. **What the copy loop restructures, and why, is not deciphered this session** - the loop's own stride and offset arithmetic (reading from a vertex-format descriptor, `piVar18`, at negative byte offsets) is read but not interpreted; a plausible but unconfirmed reading is that it builds a combined/interleaved vertex-array buffer to carry an extra attribute stream when the fixed GCM vertex-array slots are otherwise full, consistent with (but not proof of) the standing "vertex-fetch source" hypothesis for what the buffer feeds.
+
+**Scope, not universality**: `_opd_FUN_005d8700` is reached only from `FUN_005d7320`, which is reached only from opcode `0x1c` inside `Render_RunCompiledOps_q`'s own interpreter (`get_xrefs_to` on `0x005d8700` returns exactly one call site plus its own jump-table `.opd` entry). This is the `RigidBody`/`Absorb`/`Leach` family's own consumption path - it says nothing about what the Zone-Stage family's SPU-submitted stream (if `FUN_005fc728` is indeed an SPU dispatch, still unconfirmed) does with the same bit.
+
+**Confidence 82** - the branch condition and its consequences are read directly from a decompiled function reached by a confirmed call chain; the block-copy loop's own semantics are not interpreted, which is why this does not raise confidence on what the buffer *represents*, only on bit `0x800` having a real, distinct, GPU-upload-level effect rather than being inert past the shader-variant selection. No code changed.
+
 ### A disc-wide name-hash sweep for `pointLight0*` finds no consumer anywhere (2026-09-18)
 
 **Confidence 85.** The per-material sweep two sessions above checked four
