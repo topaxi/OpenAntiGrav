@@ -52,6 +52,15 @@ exercises it if it does anything at all.
 Five snapshots two seconds apart, so a moving slot index and changing
 per-record positions distinguish "live SPU output, updated every frame"
 from "an allocated but inert buffer."
+
+**Also reads the `+0x2084` companion array** (`iRam008b83b0 + 0x2084 +
+index*4`, one `u32` per slot index, same index as the buffer above) -
+`_opd_FUN_0040d390`'s own return value, and per
+`_opd_FUN_004074e0`'s decompile, opcode `0x2d`'s own `value` operand
+whenever a chunk's per-chunk bit is set. Unlike the SPU job's own local
+store (which this project's RPCS3 tooling cannot reach - RPCS3's GDB stub
+only lists PPU threads), this array is ordinary PPU main memory, reachable
+the same way the buffer above already is.
 """
 
 import importlib.util
@@ -79,6 +88,15 @@ SLOT_BASE_OFFSET = 0x80
 SLOT_STRIDE = 0x1000
 SLOT_DUMP_LEN = 0x1000  # the whole slot
 
+# `_opd_FUN_0040d390`'s own read: `*(int *)(iRam008b83b0 + 0x2080) * 4 +
+# iRam008b83b0 + 0x2084` - a per-slot-index array parallel to the `+0x80`
+# double-buffer above, sharing the same running index. Never read before
+# 2026-09-18 - this is opcode `0x2d`'s own `value` operand, per
+# `_opd_FUN_004074e0`'s decompile (`docs/ghidra/functions/ps3-hdfury-eu/
+# renderer.md`, "Opcode `0x2d`'s `(address, value)` operand pair is
+# decompiled at its own PPU-side source").
+COMPANION_OFFSET = 0x2084
+
 
 def u32(b, off=0):
     return struct.unpack_from(">I", b, off)[0]
@@ -103,6 +121,12 @@ def snapshot(dbg, out, tag):
     if index > 0xFFFF:
         result["note"] = "index implausibly large, not reading a slot"
         return result
+    companion_addr = ptr + COMPANION_OFFSET + index * 4
+    companion_raw = dbg.read(companion_addr, 4)
+    result["companion_addr"] = "%08x" % companion_addr
+    result["companion_value_u32"] = u32(companion_raw)
+    result["companion_value_f32"] = struct.unpack(">f", companion_raw)[0]
+
     slot_addr = ptr + SLOT_BASE_OFFSET + index * SLOT_STRIDE
     result["slot_addr"] = "%08x" % slot_addr
     data = dbg.read(slot_addr, SLOT_DUMP_LEN)
