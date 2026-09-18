@@ -7,6 +7,8 @@
     ps3-sho.py names             # the names recovered so far
     ps3-sho.py material <image> <path.rcsmaterial>   # one material's variants
     ps3-sho.py materials <image> [substring]         # the sampler census over many
+    ps3-sho.py variants <image> <path.rcsmaterial>   # every variant's key and blocks
+    ps3-sho.py svc-twins <image> [substring]         # do SVC0/SVC1 twins share a fp?
 
 Every number `docs/ghidra/functions/ps3-hdfury-eu/renderer.md` quotes about the
 shader container comes out of this, so the page can be re-derived rather than
@@ -376,6 +378,139 @@ def show_material(image: str, path: str) -> None:
         print(f"  unit {unit}: {shown}")
 
 
+PERMUTATION_TOKENS = (
+    "AmbientShadow", "HalfBright", "IBL", "ShadowToAlpha", "SunOcclusionLightmap",
+    "SunOcclusionVertex", "ZAlphaOnly", "ZoneMode", "ZoneTrans", "Ambient", "IleLightmap",
+    "IleVertex", "Sun", "ShadowMap", "Spot0", "Spot1", "Spot2", "Spot3", "SVC0", "SVC1",
+    "FalseLight", "NoAlbedo",
+)
+CLASS_NAMES = {name_hash(c): c for c in ("Static", "StaticQuake", "RigidBody", "StaticUncompressed")}
+SVC1_BIT = 1 << 11
+
+
+def permutation_name(word: int) -> str:
+    """The feature-permutation name for a twelve-bit pass word.
+
+    The bit layout is `0x003f1028`'s (`docs/formats/rcsmaterial.md`, "The
+    permutation word is read"); the concatenation order is the token table's,
+    the same one `oag_rcs::rcsmaterial::TOKENS` carries.
+    """
+    on = {"Sun"} if word & 1 else set()
+    on.add(("Ambient", "IleVertex", "IleLightmap", "IBL")[word >> 1 & 3])
+    on.add(("Spot0", "Spot1", "Spot2", "Spot3")[word >> 3 & 3])
+    on.add("ShadowToAlpha" if word >> 5 & 1 else "HalfBright")
+    for bit, token in ((6, "ShadowMap"), (7, "FalseLight"), (8, "ZoneMode"), (9, "ZoneTrans"), (10, "NoAlbedo")):
+        if word >> bit & 1:
+            on.add(token)
+    on.add("SVC1" if word & SVC1_BIT else "SVC0")
+    return "".join(t for t in PERMUTATION_TOKENS if t in on)
+
+
+PERMUTATION_WORDS = {name_hash(permutation_name(w)): w for w in range(4096)}
+STANDALONE = {
+    name_hash(s): s
+    for s in ("ZAlphaOnly", "AmbientShadow", "SunOcclusionLightmap", "SunOcclusionVertex")
+}
+
+
+def variant_records(data: bytes) -> list[tuple[int, ...]]:
+    """The 0x40-byte variant records of a `.rcsmaterial`, as sixteen u32 each."""
+    count, table = struct.unpack_from(">II", data, 0)
+    return [
+        struct.unpack(">16I", data[table + i * 0x40 : table + i * 0x40 + 0x40].ljust(0x40, b"\0"))
+        for i in range(count)
+    ]
+
+
+def show_variants(image: str, path: str) -> None:
+    """Every variant's key, decoded, and the vertex/fragment blocks it selects.
+
+    A `SVC1` row and its `SVC0` twin (same class, same word bar bit 11) that
+    print the same `fp=` share one fragment program: the whole variant is then
+    a vertex-program substitution. Over `DATA00` that is 12,282 of 13,026
+    pairs; where the fp differs (`svc-twins` counts them) the `SVC0` twin was
+    compiled without the term and the `SVC1` one combines it the same way.
+    """
+    data = read_entry(image, path)
+    if data is None:
+        print(f"{path} is not in any archive on {image}", file=sys.stderr)
+        return
+    records = variant_records(data)
+    by_key = {(r[0], PERMUTATION_WORDS.get(r[1])): r for r in records}
+    for i, r in enumerate(records):
+        word = PERMUTATION_WORDS.get(r[1])
+        name = STANDALONE.get(r[1]) if word is None else permutation_name(word)
+        twin = by_key.get((r[0], word ^ SVC1_BIT)) if word is not None and word & SVC1_BIT else None
+        note = "" if twin is None else ("  fp shared with SVC0 twin" if twin[5] == r[5] else "  fp differs from SVC0 twin")
+        print(
+            f"#{i:3d} {CLASS_NAMES.get(r[0], f'{r[0]:#010x}'):18s} "
+            f"{name or f'{r[1]:#010x}':48s} vp={r[4]:#07x} fp={r[5]:#07x}{note}"
+        )
+
+
+def show_svc_twins(image: str, substring: str = "") -> None:
+    """How often a `SVC1` variant shares its fragment program with its `SVC0` twin.
+
+    The sweep behind renderer.md's "the `SVC1` combine is read". Disc-wide,
+    1,598 materials carry `SVC1` and every one of their 27,312 distinct `SVC1`
+    vertex blocks carries the `(255, 128)` RGBE literal and reads `0x868f8229`.
+    `DATA00`'s compile shares the fragment block outright on 12,282 of 13,026
+    twin pairs; the later archives' compiles mostly do not (13,038 of 33,981
+    disc-wide), and on every differing pair read by hand the `SVC0` twin has
+    the term dead-stripped rather than combined differently.
+    """
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from psarc import open_archives  # noqa: PLC0415
+
+    literal = struct.pack(">ff", 255.0, 128.0)
+    svc_hash = struct.pack(">I", 0x868F8229)
+    materials = pairs = shared = same_hash = same_size = blocks = decoding = 0
+    differing: dict[str, int] = {}
+    for archive in ("DATA00", "DATA01", "DATA02", "DATA03", "DATA04", "DATA05", "DATA06"):
+        try:
+            opened = list(open_archives(f"{image}:PS3_GAME/USRDIR/{archive}.PSARC"))
+        except SystemExit:
+            continue
+        for handle in opened:
+            for path, _size, index in handle.files():
+                if not path.endswith(".rcsmaterial") or substring not in path:
+                    continue
+                data = handle.read(index)
+                if len(data) < 16:
+                    continue
+                by_key = {(r[0], PERMUTATION_WORDS.get(r[1])): r for r in variant_records(data)}
+                seen_vp: set[int] = set()
+                svc1 = [(k, r) for k, r in by_key.items() if k[1] is not None and k[1] & SVC1_BIT]
+                if not svc1:
+                    continue
+                materials += 1
+                for (cls, word), r in svc1:
+                    if r[4] not in seen_vp:
+                        seen_vp.add(r[4])
+                        blocks += 1
+                        block = data[r[4] : r[4] + r[6]]
+                        decoding += literal in block and svc_hash in block
+                    twin = by_key.get((cls, word ^ SVC1_BIT))
+                    if twin is None:
+                        continue
+                    pairs += 1
+                    if twin[5] == r[5]:
+                        shared += 1
+                    elif twin[9] == r[9]:
+                        same_hash += 1
+                    else:
+                        same_size += twin[7] == r[7]
+                        differing[path] = differing.get(path, 0) + 1
+    print(
+        f"{materials} material(s) with SVC1; {pairs} SVC0/SVC1 twin pair(s): {shared} sharing a fragment block, "
+        f"{same_hash} with the same fragment content hash in another block, "
+        f"{pairs - shared - same_hash} differing ({same_size} of those the same size)"
+    )
+    print(f"{blocks} distinct SVC1 vertex block(s), {decoding} carrying the (255, 128) literal and 0x868f8229")
+    for path, n in sorted(differing.items(), key=lambda kv: -kv[1]):
+        print(f"  {n:4d} differing  {path}")
+
+
 def show_materials(image: str, substring: str = "") -> None:
     """The sampler census over every `.rcsmaterial` on an image.
 
@@ -422,6 +557,12 @@ def main(argv: list[str]) -> int:
         return 0
     if command == "materials":
         show_materials(argv[2], argv[3] if len(argv) > 3 else "")
+        return 0
+    if command == "variants":
+        show_variants(argv[2], argv[3])
+        return 0
+    if command == "svc-twins":
+        show_svc_twins(argv[2], argv[3] if len(argv) > 3 else "")
         return 0
     if command == "hash":
         for text in argv[2:]:
