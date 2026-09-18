@@ -187,13 +187,13 @@ transferred to EU, so EU's count includes names that add no page.
 | Binary | names.tsv rows | below 70 (`_q`) | Evidence pages | Emulator harness | Newest dated page |
 | --- | ---: | ---: | ---: | --- | --- |
 | [ps2-pulse-eu](../ghidra/functions/ps2-pulse-eu/) | 185 (159 fn, 26 data) | 1 (0%) | 16 | `pcsx2-drive.py`, `pcsx2-trace.py`, `pcsx2_pine.py`, `pcsx2_trace_fields.py` | 2026-09-16, [craft-update.md](../ghidra/functions/ps2-pulse-eu/craft-update.md) |
-| [ps3-hdfury-eu](../ghidra/functions/ps3-hdfury-eu/) | 348 (303 fn, 45 data) | 12 (3%) | 34 | `rpcs3-drive.py`, `rpcs3-trail-dump.py`, `rpcs3_debugger.py` (+2 measurement scripts) | 2026-09-17, [billboards.md](../ghidra/functions/ps3-hdfury-eu/billboards.md) |
+| [ps3-hdfury-eu](../ghidra/functions/ps3-hdfury-eu/) | 348 (303 fn, 45 data) | 12 (3%) | 34 | `rpcs3-drive.py`, `rpcs3-spu-light-dump.py`, `rpcs3-trail-dump.py`, `rpcs3_debugger.py` (+2 measurement scripts) | 2026-09-18, [renderer.md](../ghidra/functions/ps3-hdfury-eu/renderer.md) |
 | [ps4-omega-eu](../ghidra/functions/ps4-omega-eu/) | 51 (51 fn, 0 data) | 0 (0%) | 9 | none | 2026-09-16, [plasma.md](../ghidra/functions/ps4-omega-eu/plasma.md) |
 | [psp-pulse-eu](../ghidra/functions/psp-pulse-eu/) | 430 (413 fn, 17 data) | 74 (17%) | 4 | `ppsspp_debugger.py`, `psp-drive.py`, `psp-trace.py`, `psp_trace_fields.py` (+15 measurement scripts) | 2026-09-07, [corroboration.md](../ghidra/functions/psp-pulse-eu/corroboration.md) |
 | [psp-pulse-usa](../ghidra/functions/psp-pulse-usa/) | 1018 (899 fn, 119 data) | 23 (2%) | 59 | `ppsspp_debugger.py`, `psp-drive.py`, `psp-trace.py`, `psp_trace_fields.py` (+15 measurement scripts) | 2026-09-17, [cannon-quake-leachbeam.md](../ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md) |
 | [psp-pure-eu](../ghidra/functions/psp-pure-eu/) | 58 (57 fn, 1 data) | 3 (5%) | 5 | `ppsspp_debugger.py`, `psp-drive.py`, `psp-trace.py`, `psp_trace_fields.py` (+15 measurement scripts) | 2026-09-15, [dlc-download-check.md](../ghidra/functions/psp-pure-eu/dlc-download-check.md) |
 | [psp-pure-usa](../ghidra/functions/psp-pure-usa/) | 63 (62 fn, 1 data) | 2 (3%) | 9 | `ppsspp_debugger.py`, `psp-drive.py`, `psp-trace.py`, `psp_trace_fields.py` (+15 measurement scripts) | 2026-09-07, [ship-models.md](../ghidra/functions/psp-pure-usa/ship-models.md) |
-| [vita-2048-eu-v104](../ghidra/functions/vita-2048-eu-v104/) | 30 (27 fn, 3 data) | 0 (0%) | 7 | `vita-gxp.py`, `vita-self-decrypt.py` | 2026-09-02, [game-boot.md](../ghidra/functions/vita-2048-eu-v104/game-boot.md) |
+| [vita-2048-eu-v104](../ghidra/functions/vita-2048-eu-v104/) | 36 (30 fn, 6 data) | 0 (0%) | 8 | `vita-gxp.py`, `vita-self-decrypt.py` | 2026-09-02, [game-boot.md](../ghidra/functions/vita-2048-eu-v104/game-boot.md) |
 
 <!-- re-coverage:end -->
 

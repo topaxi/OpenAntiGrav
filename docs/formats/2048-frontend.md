@@ -258,20 +258,31 @@ attempt (tap `TitleScreen` again) reached `GameModeChoice` directly. Not
 chased further: whether the demo fires unconditionally once per boot or on
 some other trigger is unmeasured.
 
-## The Game Mode grid has six tiles; the file declares four
+## The Game Mode grid has six tiles; the file declares four - and the two extra are not `GameModeChoice` tiles at all
 
-**Confidence 85, runtime observation.** `NEWGUI/Definition.xml`'s
-`GameModeChoice` screen authors exactly four `<TouchButton>`s -
-`offline`/`multiplayer`/`adhoc`/`crossplay` (`FE_SP_CAMPAIGN`/`FE_MP_CAMPAIGN`/
-`FE_ADHOC`/`FE_CROSSPLAY`). The Vita3K capture (`08-game-mode-grid-clean.png`)
-shows **six**: top row `SINGLE PLAYER CAMPAIGN`, `HD CAMPAIGN`, `FURY
-CAMPAIGN` (all enabled); bottom row `ONLINE CAMPAIGN`, `ADHOC`, `CROSS-PLAY`
-(all network-gated, pale). `HD CAMPAIGN`/`FURY CAMPAIGN` correspond to no
-`TouchButton` in the base file at all - they read as tiles the executable
-inserts once it detects `dlc1.psarc`/`dlc2.psarc` are mounted (both ship HD's
-own re-shipped circuits, per `docs/formats/2048-status.md`), rather than
-something authored anywhere in `NEWGUI`. Not chased into the executable this
-pass - see [what the executable sweep did not reach](#what-the-executable-sweep-did-not-reach).
+**Confidence 85 for the runtime observation; confidence 78 for the mechanism,
+decompiled 2026-09-18.** `NEWGUI/Definition.xml`'s `GameModeChoice` screen
+authors exactly four `<TouchButton>`s - `offline`/`multiplayer`/`adhoc`/
+`crossplay` (`FE_SP_CAMPAIGN`/`FE_MP_CAMPAIGN`/`FE_ADHOC`/`FE_CROSSPLAY`). The
+Vita3K capture (`08-game-mode-grid-clean.png`) shows **six**: top row `SINGLE
+PLAYER CAMPAIGN`, `HD CAMPAIGN`, `FURY CAMPAIGN` (all enabled); bottom row
+`ONLINE CAMPAIGN`, `ADHOC`, `CROSS-PLAY` (all network-gated, pale).
+
+**`HD CAMPAIGN`/`FURY CAMPAIGN` are not `GameModeChoice` tiles.** A decompile
+of `eboot.elf` (below) found
+[`FE3DCanvas_AddHDCampaignEventButtons`/`FE3DCanvas_AddFuryCampaignEventButtons`](../ghidra/functions/vita-2048-eu-v104/frontend-campaign-map.md),
+a symmetric pair that adds hotspot buttons to the persistent 3D campaign map
+(`FE3DCanvas`), gated on `g_bDlc1Mounted`/`g_bDlc2Mounted` - two globals with
+exactly one writer, `Boot_CheckDlcPackageFlags`, which checks for the literal
+add-on content IDs `DLC1W2048PACKAGE`/`DLC2W2048PACKAGE` via
+`SceAppUtil_2DB7BE3B`. "Once it detects `dlc1.psarc`/`dlc2.psarc` are
+mounted" is no longer a plausible guess - it is what the two gating globals'
+only writer does. What the earlier pass could not tell apart from a screen
+capture alone - a `GameModeChoice` grid item versus a differently-styled
+hotspot on the map behind it - the decompile resolves: they share the
+touch-icon visual language but are a different object on a different screen,
+built by a caller this pass did not resolve (see the evidence page's Open
+section).
 
 One sub-page deep, `ADHOCTutorial`'s own text (`Tut_AH_FE_Overlay`) matched
 the capture word for word: *"Welcome to Ad-Hoc Multiplayer. Here you can play
@@ -364,20 +375,25 @@ need to target.
 
 ## What the executable sweep did not reach
 
-**This pass could not decompile the Vita binary.** The live Ghidra session
-this project shares has `/hdfury/EBOOT-ps3-hdfury-eu.elf` open under a different
-lane's active work, and this lane's instructions are explicit: bridge reads
-must name `program=/2048/eboot-vita-2048-eu-v104.elf` but never call
-`switch_program`. In practice the bridge refuses a program that is not
+**2026-09-17 pass: could not decompile the Vita binary.** The live Ghidra
+session this project shares had `/hdfury/EBOOT-ps3-hdfury-eu.elf` open under a
+different lane's active work, and this lane's instructions were explicit:
+bridge reads must name `program=/2048/eboot-vita-2048-eu-v104.elf` but never
+call `switch_program`. In practice the bridge refuses a program that is not
 *open* (`get_function_by_address` with that `program=` returns `Program not
 found... Available programs: EBOOT.elf`), and opening it risked stealing the
 other lane's GUI focus - the exact failure mode the instructions warn against
-- so this pass did not attempt it. `analyzeHeadless` against a second,
-independent project would sidestep that, but was judged out of scope for a
-first sweep given the time already spent capturing and reading; it is the
-concrete next step, named in the handover thread.
+- so that pass did not attempt it, and instead ran the `strings` sweep below.
 
-What this pass has instead is a `strings` sweep of the raw, unencrypted
+**2026-09-18: resolved.** `open_program` on `/2048/eboot-vita-2048-eu-v104.elf`
+succeeds without disturbing the other lane's program - the bridge supports
+more than one open program at once, and `list_open_programs` shows both. The
+decompile this unblocked found the six-vs-four mechanism above; see
+[frontend-campaign-map.md](../ghidra/functions/vita-2048-eu-v104/frontend-campaign-map.md)
+for the full evidence. The 2026-09-17 `strings`-only sweep below is kept for
+what it corroborates independent of the decompile.
+
+What the 2026-09-17 pass had instead was a `strings` sweep of the raw, unencrypted
 `eboot.elf` (`patch-v104/eboot.elf`, ARM/Thumb-2, no section headers - a
 stripped SCE binary, so no symbol table to walk without Ghidra's own loader).
 Textual corroboration only, no addresses, no names recovered or proposed:
@@ -403,9 +419,11 @@ Textual corroboration only, no addresses, no names recovered or proposed:
   `oag_title::Music::front_end` (which needs a *cue* name, not a bank
   filename) stays unfilled.
 
-No new function or address is proposed for `names.tsv` this pass - the
-addresses `game-boot.md` already carries are all this page cites, and nothing
-below confidence 50 gets a name per `CLAUDE.md`'s own rule.
+The 2026-09-17 pass proposed no new `names.tsv` rows - the addresses
+`game-boot.md` already carried were all it cited. The 2026-09-18 decompile
+above added six: three functions and three data globals, all confidence
+75-78, recorded on
+[frontend-campaign-map.md](../ghidra/functions/vita-2048-eu-v104/frontend-campaign-map.md).
 
 ## Why `front_end` stays `None`
 
@@ -451,6 +469,8 @@ bank with no read cues) rather than this structural one.
   recipe, extended here with this pass's own display numbers
 - [game-boot](../ghidra/functions/vita-2048-eu-v104/game-boot.md) - the
   decompiled boot-mode selector this page's `strings` sweep corroborates
+- [frontend-campaign-map](../ghidra/functions/vita-2048-eu-v104/frontend-campaign-map.md) -
+  the decompile that resolved the six-vs-four `GameModeChoice` question above
 - [gxt](gxt.md) - the Vita's texture container, already reading every font and
   image this page names
 - [ADR-0025](../architecture/adr/0025-a-boot-chain-carries-its-provenance.md) -
