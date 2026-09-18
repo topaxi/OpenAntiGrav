@@ -4326,6 +4326,24 @@ Bit `0x800` set is not a shader-variant label alone - it makes the **actual cons
 
 **Confidence 82** - the branch condition and its consequences are read directly from a decompiled function reached by a confirmed call chain; the block-copy loop's own semantics are not interpreted, which is why this does not raise confidence on what the buffer *represents*, only on bit `0x800` having a real, distinct, GPU-upload-level effect rather than being inert past the shader-variant selection. No code changed.
 
+### `FUN_005fc728` is confirmed as a genuine SPU job dispatch, not CPU-side GCM submission - the Zone-Stage family's own consumer path is real work handed to an SPU (2026-09-18, later still, confidence 90)
+
+**The "unconfirmed" hedge in the previous two sections is settled.** `search_functions name_pattern=Spurs` against `EBOOT.elf` finds 34 real, named `cellSpurs*` imports (`cellSpursInitialize`, `cellSpursCreateTaskset`, `cellSpursAddWorkloadWithAttribute`, `cellSpursLFQueuePushBody`, `cellSpursReadyCountStore`, and thirty more) - the binary genuinely links and uses SPURS, the Cell SDK's own SPU work-dispatch runtime, not just the EDGE `zlib` task string set this page already knew about.
+
+**`FUN_005fc728`'s own tail call chain reaches one of them directly**, traced one hop at a time: its last call, `_opd_FUN_004688a0(local_58, puVar4, local_60, 1)`, itself calls `_opd_FUN_00467c70` (an enqueue of some kind, not traced further) and then `_opd_FUN_004664e8(param_2, param_4)`; that function's entire body is:
+
+```c
+void _opd_FUN_004664e8(int param_1,undefined8 param_2) {
+    cellSpursReadyCountStore(*(undefined4 *)(param_1 + 4),*(undefined4 *)(param_1 + 8),param_2);
+}
+```
+
+`cellSpursReadyCountStore` is a real, named Cell SDK function - it increments an SPU workload's ready-work count, the standard SPURS mechanism that wakes an idle SPU to dequeue and execute newly-queued work. **This is not a CPU-side GCM ring-buffer submission function; it is a genuine SPU job dispatch**, three calls deep from every shadow-redraw and Zone-Stage compiler this section has read (`FUN_005fc728`'s own callers, listed in the previous section).
+
+**What this settles and what it does not.** It settles that the Zone-Stage family's own compiled command stream (containing opcode `0x2d`'s `(address, value)` pair whenever the per-chunk bit is set) is handed whole to an SPU program for execution, not interpreted by `Render_RunCompiledOps_q` or any other PPU code this project can read. **It does not identify which SPU program** - `_opd_FUN_00465138`'s own builder API (called from at least eight other, unrelated call sites disc-wide per `get_xrefs_to`) is generic job-descriptor plumbing, not specific to this consumer; nothing traced this session names the actual `.spu.elf` payload or ties it specifically to `Enable_spu_vertex_light`/EDGE geometry versus some other SPU workload this engine runs. That identification, and everything past it, is squarely the SPU-disassembly barrier this section has named since the "14 read sites" entry: **static PPU reading has now been pushed as far as it goes** on this specific question - the remaining work is on the SPU side, needing tooling this project has never set up for any title.
+
+**Confidence 90** - a real, named SDK function is the end of a directly-traced, three-hop call chain from the function in question; about as strong as static-only evidence gets. No code changed.
+
 ### A disc-wide name-hash sweep for `pointLight0*` finds no consumer anywhere (2026-09-18)
 
 **Confidence 85.** The per-material sweep two sessions above checked four
