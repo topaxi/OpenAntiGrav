@@ -6393,3 +6393,43 @@ that follows. The remap *packing* itself is the better-supported half; see
 **This retracts the field-2-continuation reading, not just narrows it: `ila $0, 0x3518` cannot be a reachable branch target for this job**, because SPURS only DMAs the registered `0x2d00` bytes into local store at workload start (documented SPURS behaviour, and consistent with `iRam008bb590` being the literal size argument `_opd_FUN_00466548` passes to `cellSpursWorkloadAttributeInitialize`) - local store past that offset holds whatever a *different* workload left there, never this job's own code. **What the `ila $0, <addr>` values are actually for is now an open fork, not a traced answer**: either (a) these four branches are dead code for this specific `0x2d00`-byte-registered job - plausible given the PPU-side "six pure-discard sites" finding already on this page, where most real callers zero the descriptor's fields before *and* after use, so the nonzero-field path this dispatch guards may simply never fire for most or all of this job's nine PPU-side registrants; or (b) `$0` is not being used as a same-job branch target here at all, and this session's read of the save/restore pattern, while directly observed, is being over-interpreted as "return to per-field code" when it serves some other purpose this session did not consider. **Not chased further** - resolving between (a) and (b) needs either a live RPCS3 read of this job's own local store while `Enable_spu_vertex_light`'s gate is open and a caller with a genuinely nonzero descriptor field executes (the same live-capture shape this section already used for the `0x008b83b0` buffer), or tracing every one of `FUN_005fc728`'s own nine PPU-side callers for one that populates a nonzero field via `_opd_FUN_004651c0`/`_opd_FUN_004652d0`, neither attempted this session.
 
 **Confidence 80** for the boundary-and-header-match finding itself - mechanically checked (`iRam008bb590` read directly, the two headers' shapes compared byte-for-byte, all of region B's own internal branch targets independently self-consistent), not inferred. This **retracts** the previous session's confidence-65 "four-slot DMA-fetch loop... the same field-index scheme `FUN_005fc728`'s own descriptor builder writes" claim - not because the field-index scheme is wrong (the PPU builder's 0-3 field indexing is untouched by this entry), but because there was no DMA-fetch loop at the address that claim named, and the actual per-field consumer (the GETLLAR/PUTLLC decrement, previous entry) does not read or fetch anything shaped like vertex data - it manipulates a single shared counter. No code changed; the extracted binaries (`/tmp/render-ops-job.bin`, `/tmp/render-ops-job-ext.bin`) are not committed, per this project's leakage policy - only the extraction commands above are.
+
+### Opcode `0x2d`'s `(address, value)` operand pair is decompiled at its own PPU-side source: `address` is the already-live-captured SPU vertex-light buffer's current slot, `value` is a previously-unread companion array (2026-09-18, later still, confidence 85)
+
+**Following this page's own next step** ("tracing `FUN_005fc728`'s nine PPU-side callers for one that populates a nonzero field") **landed on something better: the per-chunk compiler that emits opcode `0x2d` in the first place, decompiled in full.** `_opd_FUN_004074e0` (`0x004074e0`) - already named on this page as one of the two functions with a genuine per-chunk shader-variant gate on bit `0x800` - was decompiled directly. It resolves the operand question this page has carried as open since the "14 read sites" entry, from the emitting side rather than the consuming side:
+
+**Once per draw call, before the per-chunk loop starts:**
+
+```c
+cVar20 = *(char *)((int)local_110 + 0x5a3);      // Enable_spu_vertex_light
+*local_1a0[0] = 0x2d;
+local_1a0[0][1] = 0;
+local_1a0[0][2] = 0;
+if ((cVar20 == '\0') || (*(char *)((int)local_110 + 0x5aa) == '\0')) {   // && Debug.Enable EdgeGeom
+    local_12c = 0;
+    local_128 = 0;
+} else {
+    local_12c = _opd_FUN_0040d390();   // buffer VALUE at the current slot
+    if (local_12c != 0) {
+        local_128 = _opd_FUN_0040d370();   // buffer slot ADDRESS
+    }
+}
+```
+
+`_opd_FUN_0040d390`/`_opd_FUN_0040d370` are **exactly the two functions this page already named and read** in the "14 read sites" entry: `_opd_FUN_0040d370` returns `*(int *)(iRam008b83b0 + 0x2080) * 0x1000 + iRam008b83b0 + 0x80` - the current slot's own address inside the double-buffered `0x1000`-byte-stride region this project has **already live-captured** (`scripts/rpcs3-spu-light-dump.py`, "up to 8 records of 8 big-endian floats"). `_opd_FUN_0040d390` returns `*(undefined4 *)(*(int *)(iRam008b83b0 + 0x2080) * 4 + iRam008b83b0 + 0x2084)` - a **previously-unread companion array at `iRam008b83b0 + 0x2084`**, indexed by the identical running slot index at `+0x2080` the address computation itself uses. Confirmed by direct `decompile_function` re-read this session, byte for byte against the earlier documented bodies - not a new read, but the first time this session connects them to opcode `0x2d`.
+
+**Per chunk**, gated on the same per-chunk bit-test this page's "twelve unexamined call sites" entry already documented (`(1 << (chunk_id & 7) & table[...]) == 0) || (local_128 == 0)`):
+
+```c
+} else {
+    *puVar33 = 0x2d;
+    puVar33[1] = local_128;     // = _opd_FUN_0040d370()'s return: the buffer's current slot address
+    puVar33[2] = local_12c;     // = _opd_FUN_0040d390()'s return: the +0x2084 companion value
+    iVar21 = Shader_GetVariantHash(local_13c | uVar19 | 0x800);
+```
+
+**This is a direct, gapless decompile chain, not an inference**: the exact two return values this page already established read a live, double-buffered, main-memory light-candidate array are the exact two words opcode `0x2d` embeds in the compiled-ops stream whenever a chunk's own per-chunk bit is set. `address` is a genuine main-memory pointer into the buffer this project already has 8-record structural data for; `value` is a small 4-byte read from an array this page has never named before now (`+0x2084`), parallel to the `+0x80`-based 8-record array and sharing its index.
+
+**What this does not establish.** Whether the compiled-ops stream (copied wholesale into the SPU job's ring-slot payload at `+0xd8`/`+0xdc` by `FUN_005fc728`, per the "job's own executable binary" entry) is literally what populates the `$80`/`$81` registers the SPU-side field-presence dispatch reads (two entries above) is **not confirmed this session**. Tracing `$80`/`$81`'s own SPU-side provenance backward from SPU offset `0x2ae0` lands, within a few hundred bytes, on a *third*, distinct `MFC_GETLLAR`(`0xd0`)/`MFC_PUTLLC`(`0xb4`) block (SPU offset roughly `0x2900`-`0x2ae0`) with the shape of a hash-table insert-or-lookup (`ceq`/`selb`/mask-heavy, operating on a different structure than either of the two atomic-decrement helpers already read) - not read this session, and the single most direct way to close the gap between "opcode `0x2d`'s PPU-emitted operands" and "what the SPU field-presence dispatch tests" that this page's evidence currently leaves open.
+
+**Confidence 85.** Every step is a direct decompile with no gap: the per-chunk gate, the two-function call, and the operand assignment are read verbatim from `_opd_FUN_004074e0`'s own body, and the two called functions were already independently confirmed on this page. It does not reach higher because connecting this PPU-side finding to the SPU-side register dataflow (the remaining, genuinely open half of the question) is not yet made. No code changed.
