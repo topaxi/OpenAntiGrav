@@ -3783,6 +3783,59 @@ block (offset `0x23f0`, not `0x6d60`) - a different variant than the one
 this thread identified, so its own readings answer nothing here and are not
 reported.
 
+**2026-09-18, later still: `EmissiveTexture`'s own colour is read too, and
+the glow term is real, wired, and reaches the screen everywhere checked -
+but its estimated magnitude does not overturn the reading above.** New
+tool, `crates/render/examples/hd_amphiseum_emissive_texture.rs`, reads
+`rcsmodel::Material::samplers` directly for the `EmissiveTexture`
+(`0xb1f2a176`) entry - `(name hash, path)` pairs, no unit lookup or shader
+resolution needed - and `material.parameters` for `emissive.rs`'s own
+`TINT` (`0xe8bcd7f5`, `quads` confirmed `1` on every read, matching a
+float3). Three findings:
+
+- **The sampled `EmissiveTexture` is achromatic on four of five slots**
+  (`and_verticalemissive.gtf`, slots 354/357/382/432: mean `(0.397, 0.397,
+  0.397)`, saturation `0.000` by this tool's own saturation-based guard -
+  fixed this session after a `delta <= 1e-6` epsilon let a computed mean's
+  floating-point noise through as a spurious `180°` on one of the five rows
+  in the table above). Slot 178's own texture (`m_lightstripv01_e.gtf`) is
+  genuinely saturated, `(0, 0.134, 0.134)` at saturation `1.000` - real
+  cyan, not noise.
+- **The glow's own colour is `TINT`, not the texture - and `TINT` is warm
+  on exactly the two slots (354, 432) whose vertex-colour-set data read
+  cool.** `TINT = (0.8257, 0.2331, 0.0231)` there (hue 15.7°, saturation
+  0.972); `357`/`382` carry a cool-blue `TINT` instead (`(0, 0.505, 1.0)`/
+  `(0, 0.575, 1.0)`, 206-210°) that agrees with their own already-cool
+  vertex-colour reading; `178` is white (`(1,1,1)`, no colour
+  contribution). This material's glow is wired and drawn: `Model::
+  lightmaps[slot]` is `Some` on every one of the five (the decoded second
+  texture reaches the renderer), and each slot's own `TINT` value is
+  present in `Model::emissive`'s built, deduplicated table. **354 and 432
+  are not two independent warm signals** - identical `TINT` and identical
+  albedo (`and_stadiumglowstrip.gtf`) mean they are the same authored decal
+  placed at two locations, not two different surfaces that happen to agree;
+  432's own warm vertex-colour outlier and its warm `TINT` are one surface
+  type, sampled twice, not a second confirmation.
+- **Estimated magnitude, `tint * EmissiveTexture_mean * albedo_alpha`
+  (`mesh.wgsl`'s actual blend, not reproduced - this is the same
+  order-of-magnitude estimate the vertex-colour curve check used, not a
+  pixel measurement): slots 354/432 add roughly `(0.026, 0.007, 0.001)`**
+  - small, because their shared albedo's alpha mean is `0.078`, the lowest
+  of the five - **against `357`/`382` adding roughly `(0, 0.05-0.09,
+  0.09-0.16)`**, 3-6x larger, because their own albedo alpha (`0.23`/
+  `0.40`) is proportionately higher. So accounting for the glow does not
+  overturn the dominant-cool reading: the warm contribution on 354, the
+  material's largest population by far (2,960 vertices), is a small nudge
+  from its own weakest-alpha glow, while the cool contribution on the two
+  vertex-colour-set-cool instances is the larger of the two effects
+  measured, reinforcing rather than offsetting their own already-cool
+  reading. **Not a pixel-level check** - no capture, no triangle-interpolated
+  reconstruction, the same caveat the vertex-colour curve's own magnitude
+  discrepancy already carries two sessions above - so this narrows rather
+  than closes "does the glow layer explain any part of the reference's
+  warm reading here," and does so in the negative for the instances that
+  matter most by vertex count.
+
 ### A disc-wide name-hash sweep for `pointLight0*` finds no consumer anywhere (2026-09-18)
 
 **Confidence 85.** The per-material sweep two sessions above checked four

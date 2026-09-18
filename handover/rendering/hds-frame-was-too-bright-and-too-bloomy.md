@@ -736,6 +736,27 @@ their warm hue; `EmissiveTexture`'s own sampled colour (a separate glow
 layer this material also carries) is untouched and is the only place a
 warm contribution from this material could still come from.
 
+2026-09-18, later still: that last sentence is now checked, with a new
+tool (`crates/render/examples/hd_amphiseum_emissive_texture.rs`,
+committed). The glow is real - wired, decoded, and present in
+`Model::emissive`'s built table on all five slots - and its colour is
+`TINT`, not the (mostly achromatic) `EmissiveTexture` sample itself.
+`TINT` is warm-orange on exactly the two slots (354, 432) whose
+vertex-colour-set data already read cool, and cool-blue on 357/382, whose
+vertex-colour-set data already read cool too - agreeing with, not
+contradicting, the earlier reading there. **Estimated magnitude (`tint *
+texture_mean * albedo_alpha`, not a pixel measurement) does not overturn
+the dominant-cool conclusion**: 354/432's warm contribution is small
+(~0.03 on the red channel, the lowest of the five because their own
+albedo alpha is the lowest) against 357/382's cool contribution (~0.05-0.16
+on green/blue, 3-6x larger) - so on the instances that carry the most
+vertices, the glow nudges warm by less than it reinforces cool elsewhere.
+Full account: [`renderer.md`](../../docs/ghidra/functions/ps3-hdfury-eu/renderer.md),
+same section, "2026-09-18, later still". This is a magnitude estimate, not
+a capture-verified pixel, so it narrows rather than closes the question -
+but it is evidence against, not for, the glow layer being what would flip
+this material's dominant instances warm.
+
 ## Open
 
 - **Where to start on Amphiseum's 154-degree hue gap: it is near-complementary, which is a structural signature, not a lighting one.** Recorded 2026-09-17 by the coordinating session as a *lead only*. Candidate (1) (channel/byte order) and candidate (2) (per-region attribution) were superseded by the per-material read below rather than run directly. **Candidate (3), per-material attribution, is now done and named the wrong operation** - see the `lane-hd-ceiling` dated entry above and renderer.md's new section: `mesh.wgsl` adds `constantAmbientColour` to four ceiling materials whose own resolved programs never reference it, and the disc's actual replacement term (a curve over the baked vertex colour set) reconstructs to the reference's own warm-band *hue* on one of the four (`animhexlights`) from disc values alone, at low saturation and unchecked against the reference's own saturation-weighted reading. Candidates (1)/(2) are not thereby refuted, only unnecessary to explain that one material - `base_diffusespecular`/`cf_diff_spec` staying cool-blue at every stage of that reconstruction is still unexplained, and a channel-order or byte-order defect specific to those two remains a live, unchecked candidate for their share of the gap. The capture this session identified the four materials against (`amphiseum-matched` pose `00`) reads 180-220°/200-205° uniformly across its top row - no warm cells at all in pose `00` specifically (a first pass misread pose `01`'s tile grid as pose `00`'s and drew a since-retracted conclusion from it, see the dated entry above). A fifth material, `uvanim_diffuse_emissive`, is independently confirmed by its own microcode to share the same no-`constantAmbientColour` defect, but not tied to any verified warm pixel this session. A fresh dome-facing capture (blocked on the RPCS3 menu-nav fix in Next Steps) is still what would settle coverage and whether any of these five materials' own colour is what the reference's warm reading traces to.
