@@ -4217,6 +4217,31 @@ what this project's own rule against inventing a term the disc does not
 demonstrably compute continues to withhold from `mesh.wgsl` until one of
 those two questions closes.
 
+**2026-09-18, later still: vertex texture fetch, named above as the most
+plausible mechanism the existing name-hash sweep cannot see, is checked
+disc-wide and comes back clean.** NV40's vertex ISA has a real texture-fetch
+opcode, `TXL` (`0x19` in `scripts/ps3-microcode.py`'s own `VEC_OPS` table) -
+a vertex program that samples a texture would use it. Swept every vertex
+block the same way `hd-pointlight-sweep.py` already sweeps fragment/vertex
+parameter tables, but by opcode rather than by name hash: **zero `TXL`
+instructions in any of the 60,324 vertex blocks across all 1,632
+`.rcsmaterial` entries.** One nominal hit turned up in `EBOOT.elf`'s own
+126 resident blocks (block 32, instruction 0) - not investigated further,
+because its own decode reads as architecturally implausible on its face
+(`TXLC o[POS]., v[0].xxxx, ?00000.xxxx` - a texture-fetch result written
+straight to clip-space position, which no ordinary shader would do) and,
+genuine or not, its shape (one sample, not a loop or array read) does not
+match what a consumer of an 8-record buffer would need regardless. **Not
+committed as a tool** - a three-line addition to an existing method, not a
+reusable one, and the result is a clean negative rather than a lead to
+re-run. Net: of the two consumer mechanisms this thread could think to
+check (named engine parameters, vertex texture fetch), both are now
+disc-wide negatives. What remains unchecked is a mechanism this session
+did not think of, or a genuinely inert computation - and this project's
+own repeated pattern elsewhere on this page (`AmbientLight` on Pulse,
+`pointLight0*` disc-wide) is exactly "authored and computed, never
+consumed," which is what this now most resembles without yet being it.
+
 ### A disc-wide name-hash sweep for `pointLight0*` finds no consumer anywhere (2026-09-18)
 
 **Confidence 85.** The per-material sweep two sessions above checked four

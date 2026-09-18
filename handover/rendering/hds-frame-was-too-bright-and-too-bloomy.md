@@ -764,6 +764,14 @@ same section, "2026-09-18, later still: the live capture happened". No
 code changed - this is the strongest evidence this thread has reached and
 still short of what "never invent" requires before wiring anything.
 
+2026-09-18, later still: the vertex-texture-fetch mechanism named above as
+unchecked is now checked, disc-wide, and comes back clean too - zero `TXL`
+instructions in any of 60,324 vertex blocks across every `.rcsmaterial` on
+the disc. One ambiguous, architecturally implausible hit in `EBOOT.elf`
+itself does not match the shape a consumer of this buffer would need
+regardless. Both consumer mechanisms this thread could think to check are
+now disc-wide negatives; full account in renderer.md, same section.
+
 2026-09-18, same session: `uvanim_diffuse_emissive`'s own colour, the Next
 Steps item below, is read. `hd_amphiseum_ceiling_variants.rs`'s material
 filter now covers it (committed), which located its five slots at the
