@@ -173,6 +173,32 @@ What replaced them, read off `NEWGUI/Definition.xml`'s root screen
   conventional 2D atlas, already decodable, not a blocker for drawing it.
   `TouchCampaign`'s own redirect target is `Launch 2048`, one of the
   boot-mode strings the executable also knows by name (below).
+
+  **2026-09-18: drawn, and the draw corrects the "~50 hotspots... across the
+  map" framing above.** `cargo run -p oag-tools --example
+  campaign_map_preview -- <base data.psarc> out.png` (`crates/tools/examples/
+  campaign_map_preview.rs`) reads every `<CanvasLabel>` under `Definition.xml`'s
+  `<FE3DCanvas>`, crops `canvasTexture.gxt` at `(round(u*2048), round(v*2048))`
+  and trims to the surrounding non-background pixels (no invented crop size -
+  see the example's own doc comment for why `width`/`height` could not be
+  trusted: several labels share identical `u`/`v`/`width`/`height` while
+  linking different events, so those two fields pick *which* icon, not how
+  big to crop it), then pastes the result at the label's `x`/`y`. The anchor
+  reading is now empirically confirmed, not inferred: cropping at the
+  `Trophy-2048-2-3`/`Trophy-2048-3-3`/`Trophy-2048-5-3` labels' shared anchor
+  lands exactly on the trophy-cup glyph, and the composite (`data/reference/
+  2048-frontend/11-fe3dcanvas-composite-preview.png`, gitignored - generated,
+  not captured, see that directory's `README.md`) shows real digits, medal
+  rims and logo fragments in place, not noise. **What it also shows: all 69
+  of this file's `<CanvasLabel>`s cluster in `x` 0-196, `y` 0-87 of the
+  960x544 canvas** - one small corner (a trophy-shelf/season-badge widget),
+  not hotspots spread across a city map. The "explorable city" reading one
+  level up was extrapolated from the class name and a screen capture that
+  never isolated this block; the wider hotspot set a real playthrough shows
+  spread across the map is most plausibly the DLC-gated buttons
+  `frontend-campaign-map.md` already found being added by native code from a
+  node array, not from this XML - unconfirmed, but consistent with both
+  findings landing the same day.
 - **Team selection is 3D too.** `Team_Definition.xml`'s `team` screen positions
   a `<Model name="ShipModel">` at `OriginX="1400" OriginY="264"` in the same
   960x544 space and lays touch buttons (`teamgrid_touch`, skin picker,

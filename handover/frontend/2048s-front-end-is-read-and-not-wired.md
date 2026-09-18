@@ -52,9 +52,11 @@ names both - `english/Definition.xml` declares a `2048HUD` font role at
     nothing downstream currently draws a touch grid anyway.
   Whichever is chosen, `2048-frontend.md`'s "front end is a touch-icon grid"
   section has every number (`GameModeChoice`'s four `TouchButton`s at
-  `x`/`y`/`140x140`, `Home`'s five, the `FE3DCanvas`'s ~50 `CanvasLabel`
-  hotspots, `Team_Definition.xml`'s 3D ship-model origin) already quoted and
-  ready to fill whichever type lands.
+  `x`/`y`/`140x140`, `Home`'s five, `Team_Definition.xml`'s 3D ship-model
+  origin) already quoted and ready to fill whichever type lands.
+  `FE3DCanvas`'s own `CanvasLabel`s are not part of that list any more - see
+  the drawn-preview finding below, which found them clustered in one small
+  corner rather than spread across a map.
 - **Resolved 2026-09-18: the six-vs-four tiles were never a `GameModeChoice`
   fact.** `open_program` on `/2048/eboot-vita-2048-eu-v104.elf` works
   alongside `/hdfury/EBOOT-ps3-hdfury-eu.elf` staying open for the other lane
@@ -96,6 +98,26 @@ names both - `english/Definition.xml` declares a `2048HUD` font role at
   *is* engine-native, `oag_title::Loading` (built for a disc-authored screen)
   is the wrong axis for it entirely, on the same "no shared vocabulary"
   grounds as `MenuSkin` above.
+- **Resolved 2026-09-18: `FE3DCanvas` was drawn, and drawing it corrects the
+  "~50 hotspots... explorable city" reading.** `cargo run -p oag-tools
+  --example campaign_map_preview` (`crates/tools/examples/
+  campaign_map_preview.rs`, new) crops `canvasTexture.gxt` at each
+  `<CanvasLabel>`'s `(round(u*2048), round(v*2048))` and pastes the result at
+  its `x`/`y` on a blank 960x544 canvas - no invented crop size, since
+  several labels share identical `u`/`v`/`width`/`height` while linking
+  different events (those two fields pick an icon, not a per-label crop
+  rect), so the tool trims to real non-background pixels around the anchor
+  instead. The anchor reading is now confirmed empirically, not inferred -
+  cropping at the `Trophy-2048-*` labels' shared anchor lands exactly on the
+  trophy-cup glyph. **What the composite also shows: all 69 of
+  `Definition.xml`'s own `FE3DCanvas` labels cluster in `x` 0-196, `y` 0-87 of
+  the canvas** - a corner trophy/season-badge widget, not hotspots spread
+  across a city map. See `data/reference/2048-frontend/
+  11-fe3dcanvas-composite-preview.png` (gitignored, generated not captured)
+  and `2048-frontend.md`'s own section for the full write-up. Open: what
+  `width`/`height` mean if not crop size, and whether the wider hotspot set a
+  real playthrough shows across the map comes from the DLC-gated buttons
+  above (plausible, not confirmed) or from data this pass has not found.
 - **`CheckPoint_HUD.xml`-style dangling references were not swept for in the
   front end.** `2048-hud.md` already flags one HUD XML the executable wants
   and the base package does not ship; this pass did not repeat that search
