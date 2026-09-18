@@ -4276,6 +4276,29 @@ Per this section's own "Next Steps," slot 1 (index alternates 0/1 across boots; 
 
 **Read together, a plausible but unconfirmed hypothesis**: the three fields are not a pure per-frame multiply of one authored scalar, as the previous entry's "one authored-or-computed scalar with two fixed-ratio derived forms" reading assumed - they may be three independently-updating values (e.g. an SPU-side interpolation toward a target, at per-field rates that only coincide exactly at steady state), which would explain both the exact match on most records (settled state) and the mismatch specifically on records whose neighboring values look like they are mid-transition (the anomalously large `D=10.0` on the one very-low-`A` record most of all - consistent with an activation/spawn transient, not corruption: the raw bytes were re-read directly from `s3_slot.bin` and match the JSON exactly, so this is not a parsing error). **Not confirmed** - this session did not read enough consecutive frames at fine-enough spacing to test an interpolation hypothesis directly, and the records whose ratio breaks could equally be a different record *class* sharing the same 8-float layout coincidentally. **The prior "exact ratio, confidence 80" claim is narrowed**: exact-ratio is the common case, not a universal property of the structure - a session extending this needs to either capture consecutive frames close together (to watch a transition happen) or treat "A, A*0.25, A*0.1" as three separate fields to log independently rather than one value with two derived forms.
 
+### Opcode `0x2d`'s PPU-side handler is read directly: it stores the buffer's `(address, value)` into context offsets `+0x14c`/`+0x150` - confirming the two consumer shapes are the same mechanism (2026-09-18, later still, confidence 85)
+
+**Following this section's own "highest-value next step"**: `Render_RunCompiledOps_q` (`0x005d4a08`) is a generic bytecode interpreter over the same compiled-ops format `FUN_004074e0`/`FUN_00408fa8` build - `iVar1 = *param_1` reads an opcode int from the stream, then indirect-calls through a jump table (`PTR_PTR_008bf21c`, itself resolved via `scripts/ps3-toc.py toc 0x005d4a08` -> TOC `0x008bd3c4` + the `lwz r30,0x1e58(r2)` operand = `0x008bf21c`, matching the symbol name exactly) until the stream's terminator opcode (`1`).
+
+**Opcode `0x2d`'s own handler is resolved by walking that table by hand** (`read_memory` at `0x008bf21c` -> array base `0x00927518`; `0x00927518 + 0x2d*4` = `0x009275cc` -> `.opd` address `0x008a0e88` -> code address `0x005d5f20`, the standard two-level PPC64 `.opd` indirection). `_opd_FUN_005d5f20`, decompiled directly:
+
+```c
+void _opd_FUN_005d5f20(int *param_1) {
+    int *piVar1 = (int *)*param_1;
+    int iVar2 = *piVar1;
+    *param_1 = (int)(piVar1 + 2);
+    int iVar3 = piVar1[1];
+    param_1[0x53] = iVar2;   // context + 0x14c
+    param_1[0x54] = iVar3;   // context + 0x150
+}
+```
+
+Opcode `0x2d` reads its two operand words off the stream and stores them into context offsets `+0x14c` (`param_1[0x53]`) and `+0x150` (`param_1[0x54]`) - the **exact same two fields** the `RigidBody`/`Absorb`/`Leach` family (previous entry) writes directly, without going through an opcode stream at all. **This confirms, rather than merely suggests, that the two consumer shapes are one mechanism**: both ultimately place `(slot_address, buffer_value)` into context `+0x14c`/`+0x150`, one via a compiled bytecode op, the other by direct field assignment. The earlier entry's "circumstantial rather than a proven consumer" hedge for the `RigidBody`/`Absorb` sites is resolved - they and the opcode-`0x2d` sites write the identical fields, so whatever ultimately consumes `+0x14c`/`+0x150` (still unread) consumes both.
+
+**What still isn't known: which later stage actually reads `+0x14c`/`+0x150` back out**, and whether it's the same for both consumer families. `FUN_005fc728`, the flush/submit function both `Shadow_CompileAmbientShadowTrackRedraw`/`Shadow_CompileShadowedTrackRedraw` **and** every "Zone Stage" compiler in this section (`FUN_003fc140`, `FUN_00403a30`, `FUN_003ff860`/`FUN_00400a00`'s family, `FUN_004074e0`, `FUN_00408fa8`, plus `FUN_00401ba8`) call at the end of building their own opcode stream, copies context fields `+0xd8`/`+0xdc` and `+0x154` (not `+0x14c`/`+0x150` directly) into a small, tightly-clustered API (`_opd_FUN_00465138` through `_opd_FUN_004688a0`, all in a ~0x600-byte span) and calls `_opd_FUN_005a20f8` to copy the opcode stream itself by reference. **Whether this is CPU-side GCM ring-buffer submission or an SPU job dispatch is not confirmed this session** - the shared caller set with the two `EdgeGeom`-gated shadow compilers is suggestive, not proof. If it is an SPU dispatch, opcode `0x2d`'s effect for the Zone-Stage family specifically is interpreted by an SPU-side mirror of this same bytecode format, not by `Render_RunCompiledOps_q` itself, and reading it further needs the SPU Ghidra module this project has never set up - the same barrier this section already named. If it is not an SPU dispatch, the consumer of `+0x14c`/`+0x150` is some other, unread PPU-side opcode handler in the same jump table (`0x00927518`), reachable the same way this session resolved `0x2d`.
+
+**Confidence 85** for the opcode `0x2d` semantics themselves - read directly from a decompiled handler reached by an address chain each step of which is independently verifiable (TOC resolution, two pointer dereferences, `read_memory`), not inferred. Confidence stays lower for what `+0x14c`/`+0x150` feed into downstream, which this entry narrows but does not close. No code changed.
+
 ### A disc-wide name-hash sweep for `pointLight0*` finds no consumer anywhere (2026-09-18)
 
 **Confidence 85.** The per-material sweep two sessions above checked four
