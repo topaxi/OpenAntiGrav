@@ -45,6 +45,20 @@ different classes. Immediately after this pass, the caller loads
 `Data/FE/NewImages/canvasTextureHD.gxt` - the shared texture atlas both
 tiers' icons and highlight states draw from.
 
+**That atlas is real and decodes today.** It ships only in
+`patch-v104/PSP2/data2.psarc` (not the base package, and not either DLC
+archive - `psarc_list` against all five finds it nowhere else), a
+2048x2048 PVRTC-II sheet of HD/Fury circuit wordmarks (`WARPED`, `FRENZY`,
+`VERTIGO`, `MELTDOWN`, `DROPZONE`, `BLITZED`, `IMPACT`, `VOLTAGE`,
+`TURBULENCE`, `VORTEX`, `NUKED`, `CORRUPTION`, `AFTERMATH`) and
+bronze/silver/gold medal hexagons, plus the `WIPEOUT HD`/`WIPEOUT HD FURY`
+wordmarks - exactly the badge set two DLC-gated campaign-event tiers would
+need. Decoded via `cargo run -p oag-texture --example gxt_to_png --
+canvasTextureHD.gxt` (`crates/texture`'s existing PVRTC-II support, see
+[`docs/formats/2048-frontend.md`](../../../formats/2048-frontend.md#the-front-end-is-a-touch-icon-grid-not-feglobalsmenuskin)
+for the base package's sibling atlas, `canvasTexture.gxt`, decoded the same
+way).
+
 **This resolves `2048-frontend.md`'s open six-vs-four question outright, not
 just the "plausibly" it was written with.** The count discrepancy was never a
 `GameModeChoice` fact - `GameModeChoice`'s own four `<TouchButton>`s are the

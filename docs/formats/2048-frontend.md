@@ -142,14 +142,37 @@ What replaced them, read off `NEWGUI/Definition.xml`'s root screen
   be **six** tiles at runtime (below) - two more than this file declares.
 - **`Home`** (`type="Home"`) is the same shape: five icons in a row
   (Team/Community/Profile/Options/Extras), each its own `<TouchButton>`.
-- **The persistent background is a real 3D scene**, `<FE3DCanvas>` inside
-  `newFEshell`'s own `<TouchScroll>`, with ~50 `<CanvasLabel>` hotspots
-  (`Trophy-2048-2-3`, `ShipUnlock-2049-3-4`, `SpeedRating_Top_C`, ...) mapped
-  onto UV coordinates of a rendered campaign-map model, each carrying a
-  `linkedevent` naming a specific race event. This is the literal "explorable
-  city" campaign map, not a page of text - `TouchCampaign`'s own redirect
-  target is `Launch 2048`, one of the boot-mode strings the executable also
-  knows by name (below).
+- **The persistent background is `<FE3DCanvas>`** inside `newFEshell`'s own
+  `<TouchScroll>`, with ~50 `<CanvasLabel>` hotspots (`Trophy-2048-2-3`,
+  `ShipUnlock-2049-3-4`, `SpeedRating_Top_C`, ...), each carrying a
+  `linkedevent` naming a specific race event. **Corrected 2026-09-18: "a real
+  3D scene" was read from the class name and a screen capture, not from
+  authored data, and the disc's own XML does not support it.** No
+  `<CanvasLabel>` and no `<FE3DCanvas>` tag ever carries a `<Model>`, a
+  camera, or any other 3D-scene attribute - each label is a flat pair of
+  rects, `x`/`y` (a pixel position in the 960x544 screen) **and** `u`/`v`
+  (a 0.0-1.0 coordinate into a texture), e.g. `<Values x="57" y="40" u="0.0"
+  v="0.4384765625" width="2" height="1">`. That is the shape of a 2D sprite
+  atlas lookup, not a 3D projection. The atlas itself is real and decodes
+  today: `data/FE/NewImages/canvasTexture.gxt` (2048x2048, PVRTC-II, base
+  package) is a sheet of exactly the kind of thing a `CanvasLabel` would
+  pick out - `A·G·R·C 2048`/`2049`/`2050` season badges, event numbers
+  `01`-`20` in two column groups, a trophy glyph, and three tiers of
+  rank-circle badges - decoded via `cargo run -p oag-texture --example
+  gxt_to_png -- canvasTexture.gxt`, the same PVRTC-II path
+  [`frontend-campaign-map.md`](../ghidra/functions/vita-2048-eu-v104/frontend-campaign-map.md)
+  found the executable loading a DLC-specific second copy of
+  (`canvasTextureHD.gxt`, in `patch-v104/data2.psarc`, not the base
+  package - a matching 2048x2048 PVRTC-II sheet of HD/Fury circuit wordmarks
+  and bronze/silver/gold medal hexagons, feeding exactly the
+  `FE3DCanvas_Add{HD,Fury}CampaignEventButtons` widgets that page
+  documents). Whether `FE3DCanvas` *also* renders a real 3D backdrop model
+  underneath - hardcoded in the executable rather than XML-declared, since
+  no background-map asset with an obvious name turned up in either package
+  - is unmeasured; what is measured is that its icon/label layer is a
+  conventional 2D atlas, already decodable, not a blocker for drawing it.
+  `TouchCampaign`'s own redirect target is `Launch 2048`, one of the
+  boot-mode strings the executable also knows by name (below).
 - **Team selection is 3D too.** `Team_Definition.xml`'s `team` screen positions
   a `<Model name="ShipModel">` at `OriginX="1400" OriginY="264"` in the same
   960x544 space and lays touch buttons (`teamgrid_touch`, skin picker,
