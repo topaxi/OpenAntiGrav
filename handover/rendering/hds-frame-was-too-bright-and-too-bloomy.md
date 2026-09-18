@@ -757,6 +757,33 @@ a capture-verified pixel, so it narrows rather than closes the question -
 but it is evidence against, not for, the glow layer being what would flip
 this material's dominant instances warm.
 
+2026-09-18, separate lane: the channel-order/byte-order candidate this
+thread's own Next Steps named for `base_diffusespecular`/`cf_diff_spec` is
+tested, with a real result. `Mesh::vertex_light`'s colour-set decode reads
+`[r, g, b, mask]` in file order - an assumption this project's own code
+makes, since `Attribute` carries no remap field the way `.gtf`'s texture
+fetch does, not something read off the disc. Swapping R and B and
+reconstructing the same way (`hd_amphiseum_ceiling_vertex_light.rs`'s own
+top-decile-then-curve method) lands both materials inside the reference's
+39-86° warm band at saturation 0.95 (`base_diffusespecular` 200.0° -> 39.7°
+on 15,256 vertices; `cf_diff_spec` 201.6° -> 38.4° on 1,688) - and breaks
+`animhexlights`' own already-correct 45.5° reading (saturation only 0.233)
+down to 128.5° under the identical transformation, which is the negative
+control the hypothesis has to survive. Two alternative explanations
+(shader swizzle, wrong-attribute selection) were checked and ruled out -
+see renderer.md for both. **Confidence 70**: strong comparative evidence
+with a working control, but not a runtime or register-level read, which is
+what would move it - a search for the RSX vertex-array-format register
+builder (`Texture_BuildGcmRegisters`'s sibling for vertex fetch) came up
+empty this session, so that read is still to do, not done. `Mesh::
+vertex_light` is **not** changed - a global swap would break
+`animhexlights`, and nothing found explains which chunks need which order,
+so this is left as a disc-value finding, not a fix. Full account:
+[`renderer.md`](../../docs/ghidra/functions/ps3-hdfury-eu/renderer.md),
+"`base_diffusespecular`/`cf_diff_spec` stay cool because of an unverified
+byte-order assumption in this project's own code, not because the disc's
+own data is cool".
+
 ## Open
 
 - **Where to start on Amphiseum's 154-degree hue gap: it is near-complementary, which is a structural signature, not a lighting one.** Recorded 2026-09-17 by the coordinating session as a *lead only*. Candidate (1) (channel/byte order) and candidate (2) (per-region attribution) were superseded by the per-material read below rather than run directly. **Candidate (3), per-material attribution, is now done and named the wrong operation** - see the `lane-hd-ceiling` dated entry above and renderer.md's new section: `mesh.wgsl` adds `constantAmbientColour` to four ceiling materials whose own resolved programs never reference it, and the disc's actual replacement term (a curve over the baked vertex colour set) reconstructs to the reference's own warm-band *hue* on one of the four (`animhexlights`) from disc values alone, at low saturation and unchecked against the reference's own saturation-weighted reading. Candidates (1)/(2) are not thereby refuted, only unnecessary to explain that one material - `base_diffusespecular`/`cf_diff_spec` staying cool-blue at every stage of that reconstruction is still unexplained, and a channel-order or byte-order defect specific to those two remains a live, unchecked candidate for their share of the gap. The capture this session identified the four materials against (`amphiseum-matched` pose `00`) reads 180-220°/200-205° uniformly across its top row - no warm cells at all in pose `00` specifically (a first pass misread pose `01`'s tile grid as pose `00`'s and drew a since-retracted conclusion from it, see the dated entry above). A fifth material, `uvanim_diffuse_emissive`, is independently confirmed by its own microcode to share the same no-`constantAmbientColour` defect, but not tied to any verified warm pixel this session. A fresh dome-facing capture (blocked on the RPCS3 menu-nav fix in Next Steps) is still what would settle coverage and whether any of these five materials' own colour is what the reference's warm reading traces to.
@@ -791,4 +818,4 @@ this material's dominant instances warm.
 - ~~Read `uvanim_diffuse_emissive`'s own colour~~ **done 2026-09-18**, see the dated entry above and renderer.md's new section: its two largest populations (2,960 and 1,664 vertices) do not read warm, so the fix's reach does not extend to this material's dominant instances via the vertex-colour-set term. Its `EmissiveTexture` sampler is the one part of "own baked colour/texture/glow term" this pass did not read and remains open if anyone wants to chase it further.
 - ~~Land the ambient/prelit-curve fix in `mesh.wgsl`~~ **done 2026-09-17, later still (`lane-hd-ilevertex-ambient`)** - see the dated entry above. Both `.envsettings` keys were confirmed reused (not a new pair) by an independent offset-arithmetic chain, the curve landed on the `NO_AMBIENT`-and-not-`EMISSIVE` chunks exactly as specced, and the frame moved as this bullet predicted: Amphiseum's ceiling hue gap against the reference collapsed from 26-59 degrees to 0-5 degrees across the tile grid at pose `00`, and its whole-frame luma over-brightness (ref-ours -0.246) flipped to a near-match (+0.025). Talon's Junction got measurably darker as expected (whole-frame ref-ours widened from +0.233 to +0.308) and was landed anyway per this thread's own standing call that the darkness gap is a separate, already-tracked defect.
 - Resolve the magnitude discrepancy the microcode sweep found but did not chase: the curved vertex-colour term times the material's own DXT1 albedo overshoots `hd-material-probe.py`'s measured reference luma by roughly 4-5x for `base_diffusespecular`, using the top-decile-by-luma vertex population - likely because a screen pixel is a triangle-interpolated blend, not the vertex population's own top decile, so this needs either a per-triangle/per-pixel reconstruction or a direct RPCS3 read of the live per-vertex value rather than another vertex-population statistic
-- Check `base_diffusespecular`/`cf_diff_spec` specifically for a channel-order or byte-order defect in their own baked colour-set decode (`lane-hd-ceiling`'s own reconstruction found their raw vertex colour data cool-blue at 190-202°, not warm, at every stage including after the correct curve) - the coordinating session's original candidate (1) lead, narrowed from "the whole frame" to these two materials specifically, since `animhexlights`' own colour-set data already reads correctly-warm raw off the disc with no decode change needed
+- ~~Check `base_diffusespecular`/`cf_diff_spec` specifically for a channel-order or byte-order defect in their own baked colour-set decode~~ **tested 2026-09-18, confidence 70, not closed** - see the dated entry above and renderer.md's new section: an R/B swap lands both materials in the reference's warm band at high saturation and correctly breaks `animhexlights`' own reading under the same transformation, but `Mesh::vertex_light` was not changed, since nothing found this session explains which chunks would need which byte order. **What would close it**: a static read of the RSX vertex-array-format GCM registers (or their in-binary builder, `Texture_BuildGcmRegisters`'s sibling for vertex fetch) - searched for and not found this session (`EBOOT.elf` has no `Vertex_*`-named function yet, and `Texture_BuildGcmRegisters`'s own seven callers are all texture wrappers)

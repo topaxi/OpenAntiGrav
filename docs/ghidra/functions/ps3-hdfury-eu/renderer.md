@@ -3836,6 +3836,119 @@ float3). Three findings:
   warm reading here," and does so in the negative for the instances that
   matter most by vertex count.
 
+### `base_diffusespecular`/`cf_diff_spec` stay cool because of an unverified byte-order assumption in this project's own code, not because the disc's own data is cool (2026-09-18, confidence 70)
+
+**The question this thread's own Next Steps names**: "Check
+`base_diffusespecular`/`cf_diff_spec` specifically for a channel-order or
+byte-order defect in their own baked colour-set decode." `oag_rcs::
+rcsmodel::Mesh::vertex_light` reads the colour-set attribute's four bytes
+as `[data[at], data[at+1], data[at+2], data[at+3]] = [r, g, b, mask]`, in
+file order, no swap - and **that mapping is an assumption this project's
+own code makes, not a read of anything the disc states.** `Attribute`
+(`crates/rcs/src/rcsmodel/vertex_decl.rs`) carries a byte offset, a
+component count and an RSX vertex type, and nothing else - no remap field
+the way `.gtf`'s texture fetch has one (`Texture_BuildGcmRegisters`,
+elsewhere on this page). Whether RSX vertex-fetch's `RSX_UBYTE_NORM` path
+maps byte 0 to `.x` is exactly the fact in question, and nothing in this
+codebase currently states it either way.
+
+**Tested by swapping R and B and reconstructing the same way
+`hd_amphiseum_ceiling_vertex_light.rs` already does** - new tool,
+`crates/render/examples/hd_amphiseum_ceiling_channel_order_probe.rs`
+(committed), top-decile-by-luma then Amphiseum's own authored curve,
+before and after an R/B swap, on the same three materials this thread
+already has readings for:
+
+| Material (slot) | Vertices | As decoded, curved hue (sat) | R/B swapped, curved hue (sat) |
+| --- | ---: | --- | --- |
+| `base_diffusespecular` (353) | 15,256 | 200.0° (0.947) | **39.7°** (0.951) |
+| `cf_diff_spec` (360) | 1,688 | 201.6° (0.949) | **38.4°** (0.951) |
+| `animhexlights` (325, control) | 1,712 | **45.5°** (0.233) | 128.5° (0.145) |
+
+**The swap lands both unexplained materials inside the reference's 39-86°
+warm band, at saturation 0.95 - four times the saturation of
+`animhexlights`' own accepted 45.5° reading - and breaks `animhexlights`'
+own correct reading under the identical transformation.** That last part is
+the control the hypothesis has to survive, not just the two materials it
+would explain: a transformation that turns a known-good reading bad while
+turning two known-bad readings good, on the same axis, at high confidence
+on the population size that dominates the frame (15,256 and 1,688 vertices
+against `animhexlights`' 1,712), is the shape of evidence for "the wrong
+axis is flipped for two of three," not for "curve-fitting to the
+reference." Per CLAUDE.md's rule against a corrective rotation: **this is
+not tuning a parameter to match a target** - the swap is a fixed,
+structural hypothesis (byte 0 is blue, not red) applied uniformly and
+checked against a negative control, not a fitted rotation with no
+falsifiable shape. **A caveat on the control's own weight**: an R/B swap
+is an involution, so "it flips both directions" alone is automatic, not
+evidence by itself - reversing any wrong-axis hypothesis breaks whatever
+currently reads right on that axis. What actually carries weight is the
+*asymmetry*: the swapped pair lands at saturation 0.951 on 15,256 and
+1,688 vertices, while what it breaks is `animhexlights`' own 45.5°
+reading at saturation 0.233 - a reading this thread already flagged as
+near-grey and noisy two sessions above, not a confident one. Read this as
+"the swap is confidently right on two large, saturated populations and
+confidently wrong on one small, unsaturated one," not as two independent
+confirmations of the same measurement.
+
+**Two alternative mechanisms were checked and ruled out.** (1) *Shader
+swizzle*: both `base_diffusespecular`'s and `animhexlights`' own vertex
+microcode read the colour-set attribute identically - `LG2 R0.x, v[N].
+xxxx` / `.yyyy` / `.zzzz`, straight order, no swizzle, on both (`ps3-
+microcode.py vp-file`, blocks `0x2910` and `0x6cb0` respectively). If the
+defect were in how a specific material's *shader* reads the attribute,
+these two programs would differ; they do not. (2) *Wrong attribute
+selected*: `VertexDecl::vertex_colour()` picks the first `components==4 &&
+rsx_type==RSX_UBYTE_NORM` attribute that isn't `tangent` - a broad filter
+that could in principle grab the wrong one on a chunk with two candidates.
+Checked directly: `base_diffusespecular`'s and `cf_diff_spec`'s
+declarations carry exactly **one** such attribute each (hash `0x1aaf7631`,
+the same hash `animhexlights` uses), so there is no ambiguity to
+mis-resolve. Both rule out a shader- or selection-level explanation,
+leaving the byte order itself - authored, or read - as what is actually in
+question.
+
+**Only one circuit was sampled.** All three readings come from Amphiseum's
+`track.vex` alone - the probe iterates every chunk of the named slot on
+that one file, not a single representative chunk, but whether some chunks
+elsewhere need one byte order and others the opposite is untested at the
+per-chunk granularity a conditional fix would eventually need. Nothing here
+speaks to any other circuit.
+
+**Confidence 70, not higher, and not because the result is weak - because
+the rubric's ceiling for this evidence type is 84 and this falls under it
+without a runtime or register-level read.** What would move it: a decompile
+of whatever this binary's vertex-array-format GCM setup looks like would
+settle byte order directly, the way `Texture_BuildGcmRegisters` settled the
+texture case - but the two cases are not symmetric. `Texture_
+BuildGcmRegisters` is a real function with seven real callers, findable and
+found by an earlier session precisely because it is callable. This page's
+own "device layer" section already establishes that `cellGcmSetVertexDataArray`
+is one of the draw-state entry points with **no import and no call site to
+find at all** - "inline functions in the `cellGcmSys` headers that write RSX
+methods straight into the command buffer" - so the vertex case may have no
+equivalent named function to search for, only inlined method writes
+scattered through the draw path. **Searched for a named function this
+session and did not find one** (`EBOOT.elf` carries no `Vertex_*`-prefixed
+function yet - `search_functions name_pattern=Vertex` returns only
+`Image_SetVertexColours`, `Rsx_UploadVertexConstantBlock/Constants`, none a
+per-chunk register builder), which is the useful negative: **the next
+search should look for the RSX method-write pattern itself** (an immediate
+load of the `NV4097_SET_VERTEX_DATA_ARRAY_FORMAT` method base, around
+`0x1740`, in the draw-setup path) rather than for a named function, since
+one may not exist to find. That read would tell whether byte order is a
+hardware-fixed property (in which case exactly one of
+`base_diffusespecular`/`cf_diff_spec`'s new reading or `animhexlights`' old
+one is right, disc-wide, and the other's agreement
+with its own reference band is coincidence) or something else entirely.
+
+**Not changed: `Mesh::vertex_light`'s decode.** A global swap is not
+justified by this evidence - it would fix two materials and break
+`animhexlights`, and nothing found this session explains *why* some chunks
+would need one order and others the opposite, which any code change would
+need before it could be conditional rather than a coin flip. Left as a
+disc-value finding for whoever reads the vertex-fetch registers next.
+
 ### A disc-wide name-hash sweep for `pointLight0*` finds no consumer anywhere (2026-09-18)
 
 **Confidence 85.** The per-material sweep two sessions above checked four
