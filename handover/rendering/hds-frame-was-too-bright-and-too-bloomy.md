@@ -662,6 +662,53 @@ pose. Gate: `just` and `just test-data` both green on this lane's tree (see
 commit for log paths); the twelve-circuit race regression test's own
 respawn-count lines matched the 6912dbc6 baseline exactly, digit for digit.
 
+2026-09-18: the "vex-authored dynamic lights (none present)" refutation two
+sessions above was narrow on purpose - it checked two circuits' `.vex` for
+`AmbientLight`/`DirectionalLight`/`PointLight` nodes, not whether HD's
+shaders would do anything with a `PointLight` if one were in frame. Extended
+disc-wide, on the other end of the pipe: a name-hash sweep
+([`scripts/hd-pointlight-sweep.py`](../../scripts/hd-pointlight-sweep.py),
+committed) of every `SHO` block on `hdfury-ps3-eu-dec.iso` - every compiled
+variant in all 1,632 `.rcsmaterial` entries plus every block resident in
+`EBOOT.elf`, 97,861 blocks total (97,735 from materials, 126 from the
+executable), all parsed, none failed - for the three named `pointLight0*`
+engine-parameter-table slots found zero references, register-bound or
+patched, anywhere. **A register-arithmetic first attempt at this got the
+wrong answer and was thrown out** - it inferred a parameter from a vertex
+instruction's raw constant-register number rather than its name hash, and
+two checks (a hand-disassembled false positive, and a known-positive
+parameter that came back zero the same way) showed register numbers
+collide across materials and prove nothing; the tool's own docstring and
+renderer.md both carry the failure as a named trap. The corrected method -
+the same per-block parameter table `fp_patch_map` already reads by name
+hash, extended to the register-bound case - needed both its branches
+proven live before the zero meant anything: `constantAmbientColour`
+(patched branch) finds 19,464 hits across 1,515 materials, and
+`positionScale` (register-bound branch, the one a vertex-side point-light
+parameter would actually use) finds 60,267 hits across 1,583 materials -
+both the shape expected of genuinely widely-used constants.
+`pointLight0*`'s zero is disc-wide across every compiled
+permutation, not the single resolved variant the ceiling investigation
+checked by hand, so it does not conflict with that narrower finding: a
+material can ship an ambient-enabled variant nobody currently selects. Full
+account and confidence (85):
+[`renderer.md`](../../docs/ghidra/functions/ps3-hdfury-eu/renderer.md), "A
+disc-wide name-hash sweep for `pointLight0*` finds no consumer anywhere";
+cross-referenced in
+[`lighting.md`](../../docs/formats/lighting.md)'s Open section. **This
+closes the point-light sub-question of the "vex-authored dynamic lights"
+candidate as a converged negative on this disc** - HD authors 1,160
+correctly-classed `PointLight` nodes elsewhere on the disc (confirmed
+against HD's own class table, not a Pulse-borrowed id), ships no
+`PointLight_Importer.cpp`, and no shipped material's shader declares the
+parameters a point light would need. Not the ceiling's colour source, and
+not a render
+feature to implement absent a runtime trace that overturns this. Does not
+touch the SPU per-vertex dynamic-light subsystem
+(`Enable_spu_vertex_light`) named in the same `renderer.md` section as the
+"plausible, unchecked" mechanism - that is a different system, still open,
+and this sweep says nothing about it.
+
 ## Open
 
 - **Where to start on Amphiseum's 154-degree hue gap: it is near-complementary, which is a structural signature, not a lighting one.** Recorded 2026-09-17 by the coordinating session as a *lead only*. Candidate (1) (channel/byte order) and candidate (2) (per-region attribution) were superseded by the per-material read below rather than run directly. **Candidate (3), per-material attribution, is now done and named the wrong operation** - see the `lane-hd-ceiling` dated entry above and renderer.md's new section: `mesh.wgsl` adds `constantAmbientColour` to four ceiling materials whose own resolved programs never reference it, and the disc's actual replacement term (a curve over the baked vertex colour set) reconstructs to the reference's own warm-band *hue* on one of the four (`animhexlights`) from disc values alone, at low saturation and unchecked against the reference's own saturation-weighted reading. Candidates (1)/(2) are not thereby refuted, only unnecessary to explain that one material - `base_diffusespecular`/`cf_diff_spec` staying cool-blue at every stage of that reconstruction is still unexplained, and a channel-order or byte-order defect specific to those two remains a live, unchecked candidate for their share of the gap. The capture this session identified the four materials against (`amphiseum-matched` pose `00`) reads 180-220°/200-205° uniformly across its top row - no warm cells at all in pose `00` specifically (a first pass misread pose `01`'s tile grid as pose `00`'s and drew a since-retracted conclusion from it, see the dated entry above). A fifth material, `uvanim_diffuse_emissive`, is independently confirmed by its own microcode to share the same no-`constantAmbientColour` defect, but not tied to any verified warm pixel this session. A fresh dome-facing capture (blocked on the RPCS3 menu-nav fix in Next Steps) is still what would settle coverage and whether any of these five materials' own colour is what the reference's warm reading traces to.

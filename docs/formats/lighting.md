@@ -236,6 +236,31 @@ Summary, so this page doesn't go stale in place:
   now across all 1142 `Data.wad` entries rather than just the 40 track files
   an earlier census covered. Kept out of render scope on that basis - there
   is no shipped data for the render side to point at, moving or otherwise.
+- **`PointLight` `0x132` on Wipeout HD/Fury: authored (1,160 nodes, correctly
+  classed) but converged-negative on the consumer side.** HD's own
+  `g_VexClassTable` (confidence 95,
+  [`vex-classes.md`](../ghidra/functions/ps3-hdfury-eu/vex-classes.md))
+  confirms `0x132` is genuinely `PointLight` there too, so the node census
+  above is real data - but HD ships no `PointLight_Importer.cpp` (Pulse-only
+  in the by-name importer comparison,
+  [`renderer.md`](../ghidra/functions/ps3-hdfury-eu/renderer.md)), and a
+  disc-wide name-hash sweep of every `SHO` shader block on
+  `hdfury-ps3-eu-dec.iso` - every `.rcsmaterial`'s compiled variants plus
+  every block resident in `EBOOT.elf`, 97,861 parsed, none failed
+  (confidence 85, same page, "A disc-wide name-hash sweep for `pointLight0*`
+  finds no consumer anywhere",
+  [`scripts/hd-pointlight-sweep.py`](../../scripts/hd-pointlight-sweep.py))
+  - found zero references to `pointLight0PositionWorldSpace`/
+  `pointLight0Colour`/`pointLight0Falloff` anywhere, despite all three
+  being real, named slots in HD's own 81-entry engine parameter table
+  (cross-checked against two known-positive controls, one per branch the
+  method checks - `constantAmbientColour` and `positionScale` - both found
+  broadly and plausibly used; see the page for a register-based first
+  attempt that got this wrong and why). Pulse and HD
+  now read the same way on this feature by two different methods on two
+  different binaries: the authoring class exists, nothing consumes it. Not a
+  render-side gap to fill; see `renderer.md` for what would overturn this
+  (mainly: a runtime trace, not attempted here).
 - **PS2 parity.** Not checked. Pulse's class IDs do not carry to Pure, and the
   PS2 build's numbering is unconfirmed - the same caveat
   [`skycube.md`](skycube.md) already carries for its own two classes.

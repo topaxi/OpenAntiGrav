@@ -3724,6 +3724,133 @@ against the already-wired lightmap curve's own uniforms. Confidence on it
 materials measured stay cool regardless, so this is a partial, precisely-
 scoped fix, not a closing one.
 
+### A disc-wide name-hash sweep for `pointLight0*` finds no consumer anywhere (2026-09-18)
+
+**Confidence 85.** The per-material sweep two sessions above checked four
+Amphiseum ceiling materials, at one resolved variant each, for
+`constantAmbientColour`. This generalises the same question disc-wide and
+to every compiled variant: does *any* `SHO` block anywhere on
+`hdfury-ps3-eu-dec.iso` declare `pointLight0PositionWorldSpace`
+(`0x69a6ba16`), `pointLight0Colour` (`0xead721a1`) or `pointLight0Falloff`
+(`0x407290f8`) in its own parameter table - fragment-patched or
+vertex-register-bound, whichever applies? Tool:
+[`scripts/hd-pointlight-sweep.py`](../../../../scripts/hd-pointlight-sweep.py),
+committed. Scanned: 1,632 `.rcsmaterial` entries (1,590 unique paths) across
+the seven `DATA0N.PSARC` archives, plus every `SHO` block resident directly
+in `EBOOT.elf` - 97,735 blocks from materials, 126 from the executable,
+**97,861 total, all parsed, zero failures**. **Zero hits, either kind,
+anywhere.**
+
+**A first attempt at this got the wrong answer by reading the wrong thing,
+and the failure is worth recording as its own trap.** The parameter
+table's `vreg` field, when register-bound, gives a real hardware constant
+register (`vreg`, not `vreg - 256` or any other transform) - but an
+earlier version of this sweep instead tried to *infer* register use from
+raw instruction bit patterns, comparing each vertex instruction's decoded
+`CONST` field against `row + 256` for the three candidate table rows
+(19/20/21), on the assumption that an engine-parameter-table row always
+lands on the same numbered register in every material. **It does not.**
+Each material's own parameter table assigns its own registers, and
+nothing stops one colliding numerically with what a different material -
+or the shared per-frame table - uses for something else. Caught two ways:
+first, hand-disassembling one raw hit
+(`amphiseum/fe/materials/cf_fetracks.rcsmaterial` block 121,
+`scripts/ps3-microcode.py vp-file`) showed `c[19]` there is the fourth row
+of that block's *own* locally bound `c272` 4x4 matrix (272-275), not
+`pointLight0PositionWorldSpace` - a coincidence of allocation. Second, the
+same register-guessing method was pointed at `positionScale`/
+`positionBias` (rows 210/211), which this page's own earlier reading
+already established real vertex code reads as `c[210]`/`c[211]` - and it
+returned **zero** hits disc-wide, on a parameter proven positive. Two
+independent negatives on a known-positive parameter is the method failing,
+not the data. The fix was to stop inferring registers from code and read
+the same parameter table `fp_patch_map` already trusts for the fragment
+side - `vreg != 0xffff` is a real, named, register-bound vertex constant,
+directly, no arithmetic. **The corrected method needs both its branches
+proven live, since `pointLight0*`'s zero spans both.** `constantAmbientColour`
+re-run on the fix exercises the patched branch: 19,464 hits across 1,515
+materials, spanning ship, weapon, HUD and track materials, the shape
+expected of a genuinely widely-used lighting constant. The register-bound
+branch needed its own control, since a patched-only positive cannot prove
+it - `positionScale`'s own hash (`0x9cc5ab3a`, read directly off
+`cf_fetracks.rcsmaterial` block 121's parameter table, the same block the
+false positive came from) finds 60,267 register-bound hits across 1,583
+materials, including that same block, confirming the branch that would
+have to fire for a real `pointLight0PositionWorldSpace` consumer to show
+up is live and working. Both controls positive is what validates trusting
+the zero on `pointLight0*`. **This is the shape this project already names
+in `vex-classes.md`'s "one-field rotation" and `memory.md`'s TOC defect:
+arithmetic that is internally consistent and still reads the wrong thing.**
+Kept in the tool's own docstring so the next person sweeping a parameter by
+register number reads this first.
+
+**Scope note against the earlier hand check.** That check asked a
+narrower question - does the *one specific compiled variant* a named
+chunk's own resolved permutation selects reference the parameter - and
+found the four ceiling materials' *selected* variants do not, while this
+sweep (correctly) finds `constantAmbientColour` declared in *some* variant
+of those same material files: `.rcsmaterial` ships many pre-compiled
+permutations, and a material having an ambient-enabled variant somewhere
+in its file does not mean the specific chunk drawn selects it. The two
+findings do not conflict; they answer different-scoped questions, and
+`pointLight0*`'s zero is the broader of the two - not one drawn variant,
+every compiled permutation shipped.
+
+**What this adds to the standing finding.** The per-circuit `.vex` node
+census in the section above ("A third candidate is checked and closed
+narrowly") found zero `PointLight` nodes on Talon's Junction and Amphiseum
+specifically, and said so narrowly - it does not speak to any other
+circuit. This sweep is disc-wide but on the *other* end of the pipe: not
+whether a circuit authors a `PointLight` node, but whether any shipped
+material's compiled shader program would do anything with one if it did.
+Corroborating context already on this page and in `docs/formats/lighting.md`:
+
+- HD's own `g_VexClassTable` (confidence 95, `vex-classes.md`) confirms
+  class `0x132` genuinely is `PointLight` in HD's own executable, at the
+  same id Pulse uses - so `oag_vex`'s disc-wide census of 1,160 `PointLight`
+  nodes across HD's 742 `.vex` files (`crates/vex/src/lighting.rs`'s module
+  docs) is real, correctly-classed data, not a renumbering artefact the way
+  a borrowed Pulse id elsewhere on this page turned out to be.
+- HD ships **no `PointLight_Importer.cpp`** - the by-name importer
+  comparison above lists `PointLight` and `Dynamic Point Light` as
+  **Pulse only**, alongside `Dynamic Shadow Occluder` and eleven others HD's
+  41 importer translation units do not cover.
+- Pulse's own `PointLight` was already a converged negative on the *other*
+  side of this same pipe: never passed to `Vex_RegisterClass` on either PSP
+  binary (`docs/formats/lighting.md`'s Open section).
+
+So both engines now read the same way on this feature, checked by two
+different methods on two different binaries: Pulse never registers the
+authoring class; HD registers the class (nodes exist, correctly classed)
+but no shipped shader - in any compiled variant, of any material, on this
+disc - ever declares the engine parameters a point light would need to
+affect a pixel. **HD's `pointLight0*` triple reads as a declared,
+wired-into-the-parameter-table, never-consumed feature** - the same shape
+this project's own `DirectionalLight`-consumer thread on Pulse converged
+on, not a gap to fill on the render side. Per
+["never invent what the assets already author"](../../../../CLAUDE.md),
+this is a reason not to add a point-light term to `mesh.wgsl`, not a lead
+to chase further, absent a runtime trace that overturns it.
+
+**What this does not establish.** Only this one disc image was swept
+(`hdfury-ps3-eu-dec.iso`); Fury/DLC `.rcsmaterial` files ship in the same
+archives and were included, but no second HD SKU or binary corroborates
+this, which is what a score above the mid-80s would need. Nothing here ran
+live - a runtime watchpoint on the parameter-table slots themselves, the
+way Pulse's `DirectionalLight` thread eventually did, was not attempted.
+`g_VexClassTable`'s own registrar walk is still unwatched (`vex-classes.md`'s
+Open section), so "the class is real" rests on the table read, not on a
+traced `PointLight_RegisterClass`-equivalent - though HD has no such
+function to trace, per the importer comparison above. And a declared,
+register-bound or patched parameter is not thereby proven to be *read* by
+live code past that point - `fp_patch_map`'s patched case is checked
+against `fp_patch_slots` reaching a real code slot (the same rigor the
+hand investigation applied), but a register-bound vertex entry is only
+checked for existing in the table, not for the code actually consuming
+that register on every path - the same caveat this project's `+0xcc`/
+`+0xd0` per-model tint pair note elsewhere already carries for a "declared,
+not traced" reading.
+
 ### The 14 surface binds, read (2026-08-20)
 
 `FUN_005a40f8(ctx, depth, colour0, colour1, colour2, colour3)` takes **pointers
