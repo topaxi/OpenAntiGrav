@@ -6617,3 +6617,60 @@ then `_opd_FUN_004688a0(...)` - the same `cellSpursReadyCountStore` submit chain
 | `0x00848780` | data | `SpursJobQueue_PolicyModule` | 80 |
 
 `FUN_0040aba0` (the track-visibility pass) and `FUN_0040d890` (the falloff table) stay unnamed: the first is a `0x1300`-line function this session read only the head and tail of, the second has no consumer traced.
+
+### The compiled-ops vocabulary is mapped, opcode `0x30` builds an `EdgeGeom` SPURS job per chunk with the light array at descriptor `+0xb8`/`+0xbc`, and `Debug.Enable EdgeGeom`'s half of the gate is read - the per-vertex light computation lives in the `EdgeGeom` job, `0x007f6d80`, `0x107e0` bytes (2026-09-18, later still, confidence 85 PPU-side)
+
+**The jump table `Render_RunCompiledOps_q` dispatches through is walked end to end** (`PTR_PTR_008bf21c` -> `0x00927518`, `0x31` entries, each an `.opd` pointer resolved with one more `read_memory` - the same chain the "opcode `0x2d`'s PPU-side handler" entry used for one entry). Opcode `0x01` is the terminator (null entry); the rest, with what this session decompiled:
+
+| opcode | handler | reads | effect |
+| --- | --- | --- | --- |
+| `0x00` | `0x005d5dd8` | - | no-op |
+| `0x02` | `0x005d5e40` | 1 | `_opd_FUN_005d6e20(ctx, a)` (not read) |
+| `0x03` | `0x005d5de0` | 1 | absolute jump: `stream = a` |
+| `0x04` | `0x005d6a68` | 1 | relative skip: `stream += a + 4` |
+| `0x05` / `0x06` | `0x005d69f0` / `0x005d6970` | 3 | conditional jump (absolute / relative) on a **bit table at `ctx+8`**: `(table[a >> 3] >> (a & 7)) & 1` compared against `sign(b)`, target `c` - the same byte/bit split the `LightCulling` table uses, from inside a stream |
+| `0x07`-`0x10` | `0x005d6920` .. `0x005d6608` | 2-3 | state setters through `_opd_FUN_005d7410`/`74d0`/`7480`/`7430`/`6e68`/`6ff8`/`71d8`/`70c8`/`6ed8` (not read); `0x0c` copies 24 words and calls `Render_SetClipPlanes_q` |
+| `0x11` | `0x005d65c0` | 1 | `ctx+0xd0` = shader variant hash, dirty `0x10000` on change |
+| `0x12` | `0x005d6578` | 1 | `ctx+0xd4`, dirty `0x10000` on change |
+| `0x13` | `0x005d6538` | 2 | `ctx+0xc4`/`+0xc8` = `(track+0x30, track+0x2c)`, `ctx+0xec = 0`, dirty `0x1f0000` |
+| `0x1b` | `0x005d62d8` | 1 | `ctx+0xcc` = material index, dirty `0x1f0000` on change |
+| `0x1c` / `0x1d` | `0x005d5e18` / `0x005d5df0` | 0 | `_opd_FUN_005d7320()` / `_opd_FUN_005d72b8()` - apply/flush (not read) |
+| `0x24` | `0x005d61e0` | 2 | draw, RSX vertex buffers: `_opd_FUN_005d7590(ctx, model, chunk)` (not read) |
+| `0x29` | `0x005d6020` | 5 | draw, model kind `1`: `_opd_FUN_005d78a8(ctx, a..e)` (not read) |
+| `0x2b` / `0x2c` | `0x005d5f90` / `0x005d5f48` | 1 | set/clear `ctx+4` flag `0x2000` / `0x4000` |
+| `0x2d` | `0x005d5f20` | 2 | `ctx+0x14c`/`+0x150` = light slot address, count (already documented) |
+| `0x2e` | `0x005d5ee8` | 3 | `ctx+0x13c`/`+0x138`/`+0x134` - the render-ops queue triple `Scene_PrepareFrame` also writes from `_opd_FUN_005fca90`/`80`/`78` |
+| `0x2f` | `0x005d5ec0` | 2 | `ctx+0x144`/`+0x148` = **`EdgeGeom` job binary EA, local-store size** |
+| `0x30` | `0x005d5e80` | 1 | draw, model kind `5` (SPU geometry): `_opd_FUN_005d7b70(ctx, chunk_desc \| flags)` - **read in full below** |
+
+`0x14`-`0x1a`, `0x1e`-`0x23`, `0x25`-`0x2a` were not decompiled this session. `_opd_FUN_004074e0` picks the draw opcode by the model's kind byte (`model+6`): `1` -> `0x29`, `5` -> `0x30`, otherwise `0x24` - so **only kind-`5` (SPU-processed, EDGE-compressed) geometry can ever carry a `SpuVertexColours` stream**, which is the same thing `rcsmaterial.md`'s `SVC0`/`SVC1` split says from the asset side.
+
+**Where `ctx+0x144`/`+0x148` and the `Debug.Enable EdgeGeom` gate come from, decompiled in `Scene_PrepareFrame`** (`0x003ab1a8`-`0x003ab1d0`, after `_opd_FUN_005d4868(ctx, gcm)` resets the frame's ops context): `ctx+0x144 = *PTR_DAT_008b768c` (`_opd_FUN_003bdd10`), `ctx+0x148 = header[0x14] + header[0x18]` (`_opd_FUN_00468f80`), then **`ctx+4 |= 0x1000` if `Debug.Enable EdgeGeom` (`+0x5aa`) else `&= ~0x1000`**. `PTR_DAT_008b768c`'s slot is filled by `_opd_FUN_003bdd20(1, 0xffff)` -> `SpuJob_RegisterNamedBinary(slot, PTR_DAT_008b7690, uRam008b7694, PTR_s_EdgeGeom_008b7698)`; `read_memory 0x008b768c`: slot `0x00c514a0`, **binary EA `0x007f6d80`, size `0x107e0`** (`read_memory 0x007f6d80`: the same `0xc0dec0de` job header, image size `0x10800`, `+0x18 = 0x100`), the name string `EdgeGeom`. It sits immediately after `LightCulling` in the file (`0x007f6880 + 0x490`, rounded to `0x80`). `strings` on the extracted blob (`data/extracted/ps3/spu-jobs/edgegeom-0x007f6d80.bin`, gitignored) confirms it is Sony's `libedgegeom` job with game code linked in (`EDGE error: unknown output flavor %d for vertex stream`, `ERROR: attempt to use culling without allocating an extra uniform table!`, ...). **This is the `EdgeGeom` the `Debug.Enable EdgeGeom` key names**, and it is the third and last SPU program on this thread's path.
+
+**Opcode `0x30`'s handler, `_opd_FUN_005d7b70(ctx, chunk_desc | flags)`, decompiled in full.** First it maps the material's vertex attributes: for each attribute the model declares (`*(mesh+0x38)`, count at byte `0`, 8-byte entries), it finds which of the sixteen slots `ctx+0xf0..+0x12c` holds that attribute's hash (the slots `_opd_FUN_005d8700` fills from the vertex program's own attribute table) and binds it (`_opd_FUN_005c3c2c(gcm, slot, fmt, size, stride, 0)`). Then, per chunk (`*(mesh+0x30)` chunks, `0x80`-byte descriptors at `mesh+0x34`):
+
+- if `ctx+4 & 0x1000` is clear (**`Debug.Enable EdgeGeom` off**): `_opd_FUN_005c47cc(gcm, 5, 0, *(chunk+0xa), 0x10, *(chunk+0x74), 1)` - a plain RSX draw straight off the chunk descriptor, **no light data anywhere on this path**;
+- if set: reserve `chunk[1] * 16 + 16` bytes in the RSX command buffer (`_opd_FUN_005c1440`/`GcmContext_Callback`, the hole the SPU fills with the processed draw), and build a `0x100`-byte job record `puVar13`:
+
+```
++0x00..+0x3f  DMA list: (index bytes, index EA), (vertex bytes, vertex EA), (chunk desc | 0x10..), (material constants copy | 0x40..)
++0x40..+0x7f  job commands (this project's own encoding, cf. _opd_FUN_004651c0/_opd_FUN_004655f0):
+              field 0 alloc ((ctx+0x148 + 0x3ff) >> 10) KiB; field 1/2 allocs; field 3 = DMA in ctx+0x144 / ctx+0x148 (the EdgeGeom binary);
+              field 4 = DMA in this record; 0x60000000000; 7; 0xa0000000000
++0x84         RSX command-buffer offset of the reserved hole
++0x8c         index_count (three ushorts summed), +0x88 = vertex counts
++0x90/+0xa0   mesh+0x20 / mesh+0x10 (two quadwords: the chunk's transform/bounds)
++0xb0         flags: ctx+4 bits 13/14 (opcodes 0x2b/0x2c) and the mesh kind
++0xb4         mesh attribute-table byte 9
++0xb8         ctx+0x14c   = light slot address      <- opcode 0x2d's first operand
++0xbc         ctx+0x150   = light count             <- opcode 0x2d's second operand
++0xc0..+0xfc  ctx+0xf0..+0x12c (the sixteen attribute-slot bindings) and ctx+0x12c
+```
+
+then appends `record+0x40 | 0xc0000100000000` to the job list `local_b8` (allocated `chunks * 8` bytes on the stack, the per-chunk queue handed to the render-ops ring by the caller). **So the RigidBody/`Absorb` family's `+0x14c`/`+0x150` staging, and the Zone-Stage family's opcode `0x2d`, both end in an `EdgeGeom` job descriptor carrying `(light array EA, light count)` at `+0xb8`/`+0xbc`, next to the attribute bindings the job writes its output streams through.** The `SpuVertexColours` stream the `SVC1` vertex program declares can only be produced here. Whether `Live_RcsBlackbox` (the Zone-Stage family's SPU-side interpreter, previous sections) builds the identical record from the SPU is the natural assumption and is **not read** - but it does not matter for what the light math *is*: that math runs in `EdgeGeom` either way.
+
+**`_opd_FUN_005d8700`'s `0x800` path is read too, and it is not the lighting - it is fragment-program constant patching.** Both branches under `param_4 & 4` patch the material's fragment program constants; without `0x800`, `_opd_FUN_00731108` patches each constant in place through GCM (`_opd_FUN_005c6024`/`_opd_FUN_005c60e8` per patch offset); with `0x800`, the microcode is copied to an aligned stack scratch (`_opd_FUN_005f9cd8`, the unrolled 16-byte copy loops), `_opd_FUN_00730e08` writes every constant's halfword-swapped float4 into the copy, the copy is written back to the material's own microcode buffer (`*(material+0x10)`) and bound with `_opd_FUN_005c5d60(gcm, offset | 1, ...)`. Neither branch reads `ctx+0x14c`/`+0x150`. Confidence 75 that this is only a "patch CPU-side and re-upload whole" versus "patch in place" distinction for the `SVC1` variant's fragment program; why the `SVC1` variant needs it is not read.
+
+**What this closes and what it leaves.** Every PPU-side step of `Enable_spu_vertex_light` now has a decompiled consumer, and the SPU side has three named binaries with static file ranges: `LightCulling` (read), `Live_RcsBlackbox` (the Zone-Stage ops interpreter, unread), `EdgeGeom` (**the per-vertex light computation, unread** - `scripts/ps3-spu-disasm.py 0x007f6d80 0x107e0`, 16,862 disassembly lines, `data/extracted/ps3/spu-jobs/edgegeom-0x007f6d80.dis`). The next read is inside `EdgeGeom`: the code that DMAs `count * 32` bytes from the descriptor's `+0xb8` and the per-vertex loop that consumes `(position, colour, radius)` records. An anchor for it: the job's own user-data area starts at record `+0x80`, so the light fields are at user-data `+0x38`/`+0x3c`. Confidence 85 for the PPU chain (all decompiled, addresses and names read directly); no code changed.
+
+**Names this section lands**: `0x005d7b70` function `RenderOps_BuildEdgeGeomJob` 85, `0x003bdd20` function `EdgeGeom_RegisterJob` 82, `0x005d5ec0` function `RenderOps_OpSetEdgeGeomBinary` 82, `0x005d5e80` function `RenderOps_OpDrawEdgeGeomChunk` 85, `0x005d5f20` function `RenderOps_OpSetSpuLights` 85, `0x007f6d80` data `SpuJob_EdgeGeom_Binary` 85.

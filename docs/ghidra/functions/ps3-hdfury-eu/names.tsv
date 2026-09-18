@@ -382,3 +382,9 @@
 0x007f6880	data	SpuJob_LightCulling_Binary	85	renderer.md
 0x0084b700	data	SpuJob_LiveRcsBlackbox_Binary	85	renderer.md
 0x00848780	data	SpursJobQueue_PolicyModule	80	renderer.md
+0x005d7b70	function	RenderOps_BuildEdgeGeomJob	85	renderer.md
+0x003bdd20	function	EdgeGeom_RegisterJob	82	renderer.md
+0x005d5ec0	function	RenderOps_OpSetEdgeGeomBinary	82	renderer.md
+0x005d5e80	function	RenderOps_OpDrawEdgeGeomChunk	85	renderer.md
+0x005d5f20	function	RenderOps_OpSetSpuLights	85	renderer.md
+0x007f6d80	data	SpuJob_EdgeGeom_Binary	85	renderer.md
