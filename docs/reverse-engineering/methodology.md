@@ -57,7 +57,7 @@ recipe and `apply-ghidra-names.py`'s own comment that its output,
 `psp-imports.tsv`, "has always been USA-specific". Extracting the EU
 `BOOT.BIN` over the top of it would silently break that chain rather than
 migrate it. Import the EU disc's `BOOT.BIN` into Ghidra as its own program
-(`/psp-pulse-eu/BOOT.BIN` - already done, see `source-images.md`) for the
+(`/pulse/BOOT-psp-pulse-eu.BIN` - already done, see `source-images.md`) for the
 actual investigation; only re-point this worked example and its downstream
 scripts at a region-tagged extraction path in the same change that gives
 `resolve-imports` an EU-specific output, which this pass left as a documented

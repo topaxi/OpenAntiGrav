@@ -48,7 +48,7 @@ import urllib.request
 DEFAULT_URL = "http://127.0.0.1:8089"
 
 # Offsets from the canonical PSP image base, so the probe works at any base.
-PULSE_USA = "/psp-pulse-usa/BOOT.BIN"
+PULSE_USA = "/pulse/BOOT-psp-pulse-usa.BIN"
 
 PROBE_SOURCE = r"""
 import ghidra.app.script.GhidraScript;
@@ -247,8 +247,11 @@ def check(url: str, program: str, verbose: bool) -> bool:
 
 # Real probe output, copied from a headless run against psp-pulse-usa
 # (data/ghidra-reloc-experiment/afull.log), and the same shape as it would read
-# once the relocation fix is installed.
-BAD_REPLY = """INFO  OagCheckImport.java> PROBE path=/psp-pulse-usa/BOOT.BIN (GhidraScript)
+# once the relocation fix is installed. `path=` is updated from the original
+# capture to the program's current name after the switch_program basename
+# rename (see apply-ghidra-names.py's BINARY_PROGRAMS) - everything else here
+# is the unmodified historical capture.
+BAD_REPLY = """INFO  OagCheckImport.java> PROBE path=/pulse/BOOT-psp-pulse-usa.BIN (GhidraScript)
 INFO  OagCheckImport.java> PROBE imageBase=08804000 (GhidraScript)
 INFO  OagCheckImport.java> PROBE functionCount=10679 (GhidraScript)
 INFO  OagCheckImport.java> PROBE relocCount=0 (GhidraScript)
@@ -295,7 +298,7 @@ def self_test() -> int:
             failures += 1
 
     # A non-pulse program must not be judged on pulse-only addresses.
-    other = "/psp-pure-eu/BOOT.BIN"
+    other = "/pure/BOOT-psp-pure-eu.BIN"
     ok, _ = verdict(parse_probes(BAD_REPLY.replace("relocCount=0", "relocCount=1")), other)
     if not ok:
         print("FAIL: a non-pulse program was judged on psp-pulse-usa's addresses")
@@ -311,7 +314,7 @@ def self_test() -> int:
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--url", default=DEFAULT_URL, help="GhidraMCP bridge URL")
-    ap.add_argument("--program", help="program path, e.g. /psp-pulse-usa/BOOT.BIN")
+    ap.add_argument("--program", help="program path, e.g. /pulse/BOOT-psp-pulse-usa.BIN")
     ap.add_argument("--verbose", action="store_true", help="print the raw bridge reply")
     ap.add_argument(
         "--self-test",

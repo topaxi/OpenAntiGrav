@@ -1,7 +1,7 @@
 # Billboards: `TrackStartup.xml` on PSP, and the transform it writes
 
 Binary: `PSP_GAME/SYSDIR/BOOT.BIN` from `pulse-psp-usa.chd` (`UCUS-98712`), as
-`/psp-pulse-usa/BOOT.BIN` in Ghidra, image base `0x08804000`.
+`/pulse/BOOT-psp-pulse-usa.BIN` in Ghidra, image base `0x08804000`.
 
 This is the PSP side of the same question
 [HD/Fury's `billboards.md`](../ps3-hdfury-eu/billboards.md) answers for that

@@ -1,4 +1,4 @@
-# `/psp-pure-usa/BOOT.BIN` - corroborated names
+# `/pure/BOOT-psp-pure-usa.BIN` - corroborated names
 
 Not a reverse-engineering target - Pure is here as the format ancestor per
 [source-images.md](../../../reverse-engineering/source-images.md#pure-psp-usachd---wipeout-pure-psp).

@@ -32,7 +32,7 @@ Evidence:
   to allocate gpu section of RcsModel. %s (requested size %d)\n"` - so the
   class is `Live::Rcs::Model`, and the function unambiguously reads one field
   as "how much main memory" and a different field as "how much GPU memory".
-- Address-identical in `/vita-2048-usa-v104/eboot.elf` (`812f15b2` in both),
+- Address-identical in `/2048/eboot-vita-2048-usa-v104.elf` (`812f15b2` in both),
   the same cross-check `Game_Main`/`GameRoot_Construct` used.
 
 **What this fixes on the container itself**, checked against
@@ -135,7 +135,7 @@ Evidence:
   matching the node stride read from the file) is exactly the shape a
   serialized binary tree's child links take once index-based storage is
   converted to a live pointer graph - not a generic copy loop.
-- Address-identical in `/vita-2048-usa-v104/eboot.elf` (`8118d134` in both).
+- Address-identical in `/2048/eboot-vita-2048-usa-v104.elf` (`8118d134` in both).
 
 **What this fixes on the container itself**, checked against
 `data/art/published/environments/altima/track_col.col` (1,068,082 bytes):
@@ -270,7 +270,7 @@ Evidence:
   **170,744 pairs and no disagreement** on any of the six. See
   [`2048-collision.md`](../../../formats/2048-collision.md).
 - Address-identical and instruction-identical in
-  `/vita-2048-usa-v104/eboot.elf` (`8126f800` in both), the same cross-check
+  `/2048/eboot-vita-2048-usa-v104.elf` (`8126f800` in both), the same cross-check
   the two loaders above use.
 
 `FUN_81190106`, which it calls, takes that byte as its last argument and writes
@@ -293,7 +293,7 @@ never per triangle.
 - 2026-08-26: 85 / 87, first RE pass on either function. Decompilation,
   disassembly at the two points where it changed the reading (`RcsModel_Load`'s
   section-A-size source, `KdTree_Load`'s version-vs-return-value branch),
-  address-identical cross-check against `/vita-2048-usa-v104/eboot.elf`, and a
+  address-identical cross-check against `/2048/eboot-vita-2048-usa-v104.elf`, and a
   direct read of the real container each function loads against the offsets
   its own control flow predicts. No runtime trace yet, and neither container's
   payload (section A/B/C's interior for `RcsModel_Load`, the node's trailing

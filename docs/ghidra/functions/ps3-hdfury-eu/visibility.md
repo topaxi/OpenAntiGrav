@@ -1,7 +1,7 @@
 # Visibility: how Wipeout HD loads and applies `track.pvs`
 
 Binary: `PS3_GAME/USRDIR/EBOOT.BIN` from `hdfury-ps3-eu-dec.iso`, as
-`/ps3-hdfury-eu/EBOOT.elf` in Ghidra.
+`/hdfury/EBOOT-ps3-hdfury-eu.elf` in Ghidra.
 
 The file's own layout, and the measurements that decoded it from data alone,
 are on [hd-pvs.md](../../../formats/hd-pvs.md). This page is the executable's

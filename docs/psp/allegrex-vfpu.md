@@ -249,7 +249,7 @@ it also works after analysis, though rebasing first is cheaper.
 > string pointer resolves to `0x248538`, below the image base, and **no
 > reference is created at all**. The database then answers "no references
 > found" for strings the binary demonstrably uses, with no error to warn you.
-> `/psp-pure-eu/BOOT.BIN` was built the wrong way round and cost a session to
+> `/pure/BOOT-psp-pure-eu.BIN` was built the wrong way round and cost a session to
 > diagnose; see
 > [the import procedure](../ghidra/workflow.md#the-import-order-and-why-it-flips-with-the-patch)
 > and [string-anchors.md](../ghidra/functions/psp-pure-eu/string-anchors.md).

@@ -1889,7 +1889,7 @@ difference aside. Which is the same headline
 
 ## What the executable says
 
-Read out of `/ps3-hdfury-eu/EBOOT.elf` in the project's Ghidra database on
+Read out of `/hdfury/EBOOT-ps3-hdfury-eu.elf` in the project's Ghidra database on
 2026-08-17, **by reading only**. Nothing was renamed, so there is no
 `names.tsv` row and no `docs/ghidra/functions/` page for any of this; addresses
 are cited instead. Anyone promoting one of these to a name owes the page and the

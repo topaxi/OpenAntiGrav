@@ -322,7 +322,7 @@ for a name search in this program.
 
 ## 2026-08-28, a fifth pass: the live project had reverted, and once restored, the file's own content turns out to be parsed after all
 
-**Found before any decompile could be trusted again**: the live `EBOOT.elf` program had silently lost both the TOC fix and every rename this page documents - `get_current_program_info` reported the plain `PowerPC:BE:64:A2ALT-32addr` language, not `-32addr-PS3`, and `0x003d6dc8`/`0x005de2d0` read back as `.opd.FUN_003d6dc8`/`.opd.FUN_005de2d0`, not `Environment_LoadStageTextures`/`Texture_LoadWithFallback`. Whether this was a Ghidra restart that reopened an older save, or the fix session's own `save_program` never landing, was not tracked down - not worth chasing once the fix itself needed redoing anyway. The maintainer rebuilt and reinstalled the Ps3GhidraScripts extension (`just build-ps3-scripts`), reimported under `--ps3-cspec` (fresh creation timestamp confirms it, language now correctly `-PS3`), and `scripts/apply-ghidra-names.py docs/ghidra/functions/ps3-hdfury-eu/names.tsv --program /ps3-hdfury-eu/EBOOT.elf` reapplied all 118 rows clean (0 skipped, 0 failed) and saved. `just check-names` passes project-wide (1182 rows, 7 binaries) afterward. Recorded here as a trap for the next session: **a live Ghidra project's applied state is not assumed durable between sessions any more** - verify a known rename and the language string before trusting a decompile, the same way `program` itself already needed verifying per the tooling note below.
+**Found before any decompile could be trusted again**: the live `EBOOT.elf` program had silently lost both the TOC fix and every rename this page documents - `get_current_program_info` reported the plain `PowerPC:BE:64:A2ALT-32addr` language, not `-32addr-PS3`, and `0x003d6dc8`/`0x005de2d0` read back as `.opd.FUN_003d6dc8`/`.opd.FUN_005de2d0`, not `Environment_LoadStageTextures`/`Texture_LoadWithFallback`. Whether this was a Ghidra restart that reopened an older save, or the fix session's own `save_program` never landing, was not tracked down - not worth chasing once the fix itself needed redoing anyway. The maintainer rebuilt and reinstalled the Ps3GhidraScripts extension (`just build-ps3-scripts`), reimported under `--ps3-cspec` (fresh creation timestamp confirms it, language now correctly `-PS3`), and `scripts/apply-ghidra-names.py docs/ghidra/functions/ps3-hdfury-eu/names.tsv --program /hdfury/EBOOT-ps3-hdfury-eu.elf` reapplied all 118 rows clean (0 skipped, 0 failed) and saved. `just check-names` passes project-wide (1182 rows, 7 binaries) afterward. Recorded here as a trap for the next session: **a live Ghidra project's applied state is not assumed durable between sessions any more** - verify a known rename and the language string before trusting a decompile, the same way `program` itself already needed verifying per the tooling note below.
 
 **With the state trustworthy again, `Environment_LoadStageTextures`'s full decompile settles the open question this page's own "Does not settle" bullet raised**: does HD's executable parse `ZoneMode.effectSettings`'s own key/value text, or only use its path as an opaque cache token? The first read of this pass, from the call shape alone (`param_1` handed to two calls with no obvious file I/O), guessed the latter - **wrong**, corrected by tracing both calls to their real bodies:
 
@@ -1245,7 +1245,7 @@ and found nowhere), but inside `FUN_003da540` itself, one of the fifteen
 already-known direct touchers. **Renamed `Environment_UpdateStageBlend`**
 (`0x003da540`, confidence 85, `names.tsv` updated) - independently
 byte-verified in this session (`disassemble_bytes` against
-`/ps3-hdfury-eu/EBOOT.elf` explicitly, not the ambient "current program" -
+`/hdfury/EBOOT-ps3-hdfury-eu.elf` explicitly, not the ambient "current program" -
 see the tooling trap below) before the rename, not taken on faith from a
 single trace.
 
@@ -1346,9 +1346,9 @@ Mid-pass, `get_function_by_address`/`decompile_function` against known-good
 PS3 addresses started silently returning "no function found" - not an error
 naming the wrong program, just a negative that looks exactly like a bad
 address. Cause: another concurrent session on the same Ghidra MCP bridge
-switched the "current program" to `/vita-2048-eu-v104/eboot.elf`, twice,
+switched the "current program" to `/2048/eboot-vita-2048-eu-v104.elf`, twice,
 mid-session. **`list_open_programs` plus an explicit `program:
-"/ps3-hdfury-eu/EBOOT.elf"` on every call from then on** fixed it - and once,
+"/hdfury/EBOOT-ps3-hdfury-eu.elf"` on every call from then on** fixed it - and once,
 the bare name `"EBOOT.elf"` itself resolved to the *wrong* program (a
 case-insensitive substring match preferred the Vita's lowercase `eboot.elf`
 over the PS3's `EBOOT.elf`), so the full path is what actually disambiguates,
@@ -5209,7 +5209,7 @@ binary from before that reimport is stale by that entry's own rule, and the
 widest-reaching one is this page's own fifteenth-pass claim that the seven
 `Scene`/`Track` getters have no callers, which a companion handover thread
 had marked stale pending this re-run. Re-run on the complete image,
-`/ps3-hdfury-eu/EBOOT.elf`, three independent routes per getter
+`/hdfury/EBOOT-ps3-hdfury-eu.elf`, three independent routes per getter
 (`0x003cde60`, `0x003cded0`, `0x003ce000`, `0x003ce070`, `0x003ce0e0`,
 `0x003cdf40`, `0x003cdfa0`):
 

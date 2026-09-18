@@ -1,4 +1,4 @@
-# `/psp-pure-eu/BOOT.BIN` - the weapon table, Disruptor and Bomb, transferred from `psp-pure-usa`
+# `/pure/BOOT-psp-pure-eu.BIN` - the weapon table, Disruptor and Bomb, transferred from `psp-pure-usa`
 
 The functions [`psp-pure-usa/weapons.md`](../psp-pure-usa/weapons.md) reads,
 located on the EU pressing (UCES-00001). **The reading is that page's; this

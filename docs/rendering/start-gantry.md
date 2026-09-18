@@ -1271,7 +1271,7 @@ both are here.
   triggers are unrecovered. Recovering them turns the clip above from a
   necessity into a per-state cull.
 - **Pulse's own binding path.** `search_strings billboard` on
-  `/psp-pulse-usa/BOOT.BIN` returns only `Billboard` (the XML element),
+  `/pulse/BOOT-psp-pulse-usa.BIN` returns only `Billboard` (the XML element),
   `PI_BILLBOARD` and `PI_Billboard` - **no lowercase `billboard` base string for
   a `billboard%d` build**, so Pulse does not obviously use HD's exact name
   concatenation. The geometry is now located either way; how the engine finds it

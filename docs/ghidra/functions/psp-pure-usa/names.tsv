@@ -7,9 +7,9 @@
 #
 # There is no `just` recipe for this set yet; run the script directly, with
 # the program name and this file both given explicitly, against a bridge
-# that has /psp-pure-usa/BOOT.BIN open:
+# that has /pure/BOOT-psp-pure-usa.BIN open:
 #
-#   scripts/apply-ghidra-names.py --program /psp-pure-usa/BOOT.BIN \
+#   scripts/apply-ghidra-names.py --program /pure/BOOT-psp-pure-usa.BIN \
 #       docs/ghidra/functions/psp-pure-usa/names.tsv
 #
 # kind is `function` or `data`. Confidence below 70 gets a `_q` suffix

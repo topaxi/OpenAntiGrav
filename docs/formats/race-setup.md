@@ -156,7 +156,7 @@ screen classes. Those cannot be reached by cross-reference - see
 [Limits](#limits) - but each class's strings sit contiguously in `.rodata` and
 terminate in the class name, which is enough.
 
-### `TrackSelection`, `/psp-pulse-usa/BOOT.BIN` `0x08a848a0`-`0x08a84a10`
+### `TrackSelection`, `/pulse/BOOT-psp-pulse-usa.BIN` `0x08a848a0`-`0x08a84a10`
 
 The block holds, in order: `Info Track 2.2`, `3.1`, `3.2`, `3.3`,
 `Info Track %d.%d`, `linebg%dl`, `linebg%dr`, `%s Title`, `-.--.--`, `%d`,

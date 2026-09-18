@@ -11,9 +11,9 @@
 #
 # There is no `just` recipe for this set yet; run the script directly, with
 # the program name and this file both given explicitly, against a bridge that
-# has /psp-pulse-eu/BOOT.BIN open:
+# has /pulse/BOOT-psp-pulse-eu.BIN open:
 #
-#   scripts/apply-ghidra-names.py --program /psp-pulse-eu/BOOT.BIN \
+#   scripts/apply-ghidra-names.py --program /pulse/BOOT-psp-pulse-eu.BIN \
 #       docs/ghidra/functions/psp-pulse-eu/names.tsv
 #
 # kind is `function` or `data`. Confidence below 70 gets a `_q` suffix

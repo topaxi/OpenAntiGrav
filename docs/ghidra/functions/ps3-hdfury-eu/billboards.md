@@ -1,7 +1,7 @@
 # Billboards: how `<TrackStartup>` becomes a 9-entry slot array
 
 Binary: `PS3_GAME/USRDIR/EBOOT.BIN` from `hdfury-ps3-eu-dec.iso`, as
-`/ps3-hdfury-eu/EBOOT.elf` in Ghidra.
+`/hdfury/EBOOT-ps3-hdfury-eu.elf` in Ghidra.
 
 The file's own layout - what `trackstartup.xml` declares, and the survey over
 all 16 circuits - is [`oag_tables::trackstartup`](../../../../crates/tables/src/trackstartup.rs),
@@ -613,7 +613,7 @@ and no xrefs. Every negative on this page computed before that point is stale by
 construction - a caller living inside one of those 294 functions could not have shown
 up in any search run against the old database. This pass re-ran all four static
 negatives this page and the sibling handover thread carried, on the reimported image,
-using `program="/ps3-hdfury-eu/EBOOT.elf"` throughout. Positive controls first, so a
+using `program="/hdfury/EBOOT-ps3-hdfury-eu.elf"` throughout. Positive controls first, so a
 zero result below is a real zero, not a broken query.
 
 **Positive controls.** `get_function_callers(0x0029a6a8)` (`Billboard_ConstructResource`,

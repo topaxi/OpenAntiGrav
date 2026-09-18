@@ -1495,7 +1495,7 @@ consumer somewhere else or none; `FUN_002c4ad0` and the proxy draw
 `0x005f0c10` are where to look, neither read this session.
 
 Reproduce: `decompile_function 0x002a08a8` and `disassemble_function
-0x002a08a8` with `program="/ps3-hdfury-eu/EBOOT.elf"`; `read_memory
+0x002a08a8` with `program="/hdfury/EBOOT-ps3-hdfury-eu.elf"`; `read_memory
 0x008b2ef0 160` for the TOC constants; `search_instructions
 mnemonic=stw operand_pattern="0x7a60("` for the two writers;
 `python3 scripts/psarc.py cat data/extracted/ps3/hdfury-eu/PS3_GAME/USRDIR/DATA02.PSARC /data/tex/engineflare/engine_flare_rich.gtf | head -c 48 | xxd`

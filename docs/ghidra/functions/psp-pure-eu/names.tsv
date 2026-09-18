@@ -7,9 +7,9 @@
 #
 # There is no `just` recipe for this set yet; run the script directly, with
 # the program name and this file both given explicitly, against a bridge
-# that has /psp-pure-eu/BOOT.BIN open:
+# that has /pure/BOOT-psp-pure-eu.BIN open:
 #
-#   scripts/apply-ghidra-names.py --program /psp-pure-eu/BOOT.BIN \
+#   scripts/apply-ghidra-names.py --program /pure/BOOT-psp-pure-eu.BIN \
 #       docs/ghidra/functions/psp-pure-eu/names.tsv
 #
 # kind is `function` or `data`. Confidence below 70 gets a `_q` suffix
@@ -76,7 +76,7 @@
 
 # The game's own XTEA cipher (2026-09-15), found chasing the same page's
 # trailer-key lead. pure-usa's counterparts were not resolved - the Ghidra
-# program for /psp-pure-usa/BOOT.BIN became unreachable mid-session (a
+# program for /pure/BOOT-psp-pure-usa.BIN became unreachable mid-session (a
 # "Disk quota exceeded" bridge error), so only pure-eu is named here.
 0x088a9c64	function	Xtea_EncryptBlock	92	dlc-download-check.md
 0x088aa204	function	Xtea_CryptBuffer	90	dlc-download-check.md

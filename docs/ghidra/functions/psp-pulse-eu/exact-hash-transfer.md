@@ -1,4 +1,4 @@
-# `/psp-pulse-eu/BOOT.BIN` - exact opcode-hash transfer from `psp-pulse-usa`
+# `/pulse/BOOT-psp-pulse-eu.BIN` - exact opcode-hash transfer from `psp-pulse-usa`
 
 **2026-09-07, following [ADR-0048](../../../architecture/adr/0048-eu-is-the-psp-pulse-re-target-of-record.md).**
 All four PSP databases were reimported with the Allegrex relocation patch the
@@ -16,8 +16,8 @@ all here, on purpose. Four steps, every one of them a mechanical check rather
 than a judgement call:
 
 1. `get_bulk_function_hashes` pulled every function's normalized opcode hash
-   from both `/psp-pulse-usa/BOOT.BIN` (10,711 functions) and
-   `/psp-pulse-eu/BOOT.BIN` (10,672 functions), over the bridge's plain HTTP
+   from both `/pulse/BOOT-psp-pulse-usa.BIN` (10,711 functions) and
+   `/pulse/BOOT-psp-pulse-eu.BIN` (10,672 functions), over the bridge's plain HTTP
    endpoint rather than one tool call per page, to keep the ~21,000-row pull
    out of the conversation itself.
 2. For each of `psp-pulse-usa/names.tsv`'s named functions, the hash was

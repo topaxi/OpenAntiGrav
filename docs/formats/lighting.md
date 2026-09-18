@@ -157,7 +157,7 @@ see [Open](#open).
 ## Open
 
 **Updated 2026-08-05 - the Ghidra pass this page called a "documented
-follow-up" has now run, in `/psp-pulse-eu/BOOT.BIN` under the reversed
+follow-up" has now run, in `/pulse/BOOT-psp-pulse-eu.BIN` under the reversed
 target-of-record policy (see `HANDOVER.md`).** Full account:
 [`docs/ghidra/functions/psp-pulse-eu/lighting.md`](../ghidra/functions/psp-pulse-eu/lighting.md).
 Summary, so this page doesn't go stale in place:

@@ -154,7 +154,7 @@ grow call itself fails. A registered callback at `DAT_81525218` fires when an
 allocation still fails after that retry loop - the shape of an
 out-of-memory/GC hook, not read further this pass.
 
-Both are single-binary evidence (EU patch-v104 only): `/vita-2048-usa-v104/eboot.elf`
+Both are single-binary evidence (EU patch-v104 only): `/2048/eboot-vita-2048-usa-v104.elf`
 has not been auto-analyzed in this Ghidra project (1,197 functions found vs.
 12,420 for EU), so the address-identical cross-check `Game_Main`/
 `GameRoot_Construct` got was not repeated here. That is why both sit at 80-82
@@ -278,11 +278,11 @@ examined further this pass.
 ## History
 
 - 2026-08-26: 86 / 84, first RE pass on this binary. Decompilation plus
-  address-identical cross-check against `/vita-2048-usa-v104/eboot.elf`; no
+  address-identical cross-check against `/2048/eboot-vita-2048-usa-v104.elf`; no
   runtime trace yet.
 - 2026-08-27: 82 / 80 / 84 / 80 / 90 / 90 / 90, the allocator wrapper and the
   five manager/root constructors `Game_Main` allocates for. Single-binary
-  (EU patch-v104 only) - `/vita-2048-usa-v104/eboot.elf` was not
+  (EU patch-v104 only) - `/2048/eboot-vita-2048-usa-v104.elf` was not
   auto-analyzed in this session's Ghidra project, so no address-identical
   cross-check this pass. Two names correct guesses recorded (and explicitly
   scored 0) in the handover thread that started this work:

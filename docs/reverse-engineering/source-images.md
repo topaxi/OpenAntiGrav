@@ -85,7 +85,7 @@ project's Ghidra database (`docs/ghidra/functions/psp-pulse-usa/`) still
 carries far more named functions than `psp-pulse-eu/` does (656 rows against
 301, measured 2026-09-07), which is the cost the ADR is explicit about, not a
 sign the roles are reversed from what this paragraph now says. This disc's
-`BOOT.BIN` is imported into Ghidra as its own program (`/psp-pulse-eu/BOOT.BIN`,
+`BOOT.BIN` is imported into Ghidra as its own program (`/pulse/BOOT-psp-pulse-eu.BIN`,
 10,671 functions).
 
 ### `pulse-ps2-eu.chd` - Wipeout Pulse, PS2
@@ -124,7 +124,7 @@ Not a target in its own right yet. It is here as the **format ancestor**: it
 uses the same `Data.wad` / `FE.wad` / `FEData.wad` structure as Pulse, with the
 same container header shape. Where a Pulse format is ambiguous, Pure's simpler
 version of it is often the faster way to understand it. `BOOT.BIN` is
-imported into Ghidra at `/psp-pure-usa/BOOT.BIN` (6,927 functions), purely for
+imported into Ghidra at `/pure/BOOT-psp-pure-usa.BIN` (6,927 functions), purely for
 opportunistic corroboration alongside the format work above - not a claim
 that Pure's simulation is a target, which ADR-0009 still defers.
 
@@ -147,7 +147,7 @@ and a second region gives a same-title comparison pair the way it did for
 Pulse. `UCES-00001` is a very low serial - Pure was one of the PSP's EU
 launch titles. Not a reverse-engineering target in the ADR-0009 sense (no
 simulation work is planned for Pure), but `BOOT.BIN` is imported into Ghidra
-at `/psp-pure-eu/BOOT.BIN` (6,934 functions - close to the USA disc's 6,927,
+at `/pure/BOOT-psp-pure-eu.BIN` (6,934 functions - close to the USA disc's 6,927,
 unlike the large, unexplained gap on the Pulse EU import; see `HANDOVER.md`)
 for the same opportunistic-corroboration reason as the USA disc above.
 

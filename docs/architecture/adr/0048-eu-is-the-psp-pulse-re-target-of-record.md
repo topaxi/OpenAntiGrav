@@ -75,9 +75,9 @@ ADR is what makes it discoverable and durable rather than re-deciding it.
 
 Concretely, for new work:
 
-- A fresh Ghidra investigation starts in `/psp-pulse-eu/BOOT.BIN`, documents
+- A fresh Ghidra investigation starts in `/pulse/BOOT-psp-pulse-eu.BIN`, documents
   under `docs/ghidra/functions/psp-pulse-eu/`, and cross-verifies against
-  `/psp-pulse-usa/BOOT.BIN` with `find_similar_functions_fuzzy`/
+  `/pulse/BOOT-psp-pulse-usa.BIN` with `find_similar_functions_fuzzy`/
   `diff_functions` once a name exists - not the reverse.
 - Tooling that has to pick one PSP Pulse binary by default should now default
   to EU, **except** where something else already ties it to USA specifically

@@ -16,7 +16,7 @@ before this page), title-blind - nobody had read HD's own `Shield.cpp`.
 
 ## Found by its own debug tag, the same way Pulse's memory-mapped strings were
 
-`search_strings "Shield"` on `/ps3-hdfury-eu/EBOOT.elf` turns up
+`search_strings "Shield"` on `/hdfury/EBOOT-ps3-hdfury-eu.elf` turns up
 `Shield.cpp` at `0x00783b10`, sitting in a run of literal strings that
 includes `%s\vr_shield_cockpit.vex` (`0x00783b38`), `%s\%sshield.vex`
 (`0x00783b90`) and `Data\Weapons\vr_shield_cockpit.vex` (`0x00783ed8`) - the

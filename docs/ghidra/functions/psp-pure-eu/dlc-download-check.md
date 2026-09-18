@@ -192,7 +192,7 @@ code evidence: this is that code, found and read.
 
 **`pure-usa` resolved, in a later pass once the Ghidra project was reopened.**
 Mid-session on 2026-09-15 a broad `search_instructions` sweep against
-`/psp-pure-usa/BOOT.BIN` had failed with `"Disk quota exceeded"` from the
+`/pure/BOOT-psp-pure-usa.BIN` had failed with `"Disk quota exceeded"` from the
 Ghidra bridge, taking that program's handle down for the rest of that
 session (an environment fault - `/tmp` at 80% of a 32 GiB tmpfs per `df -h`
 at the time, matching the "Never build under `/tmp`" trap - not a finding,

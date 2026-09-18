@@ -1,4 +1,4 @@
-# `/psp-pulse-eu/BOOT.BIN` - corroborated names
+# `/pulse/BOOT-psp-pulse-eu.BIN` - corroborated names
 
 **Reversed 2026-08-05.** Everything below this notice was written under the
 opposite policy - `psp-pulse-eu` treated as pure corroboration, `psp-pulse-usa`
@@ -867,7 +867,7 @@ match list because there is nothing on the target side to match against, and
 `diff_functions` needs two analysed functions by definition. Both programs
 are also literally named `BOOT.BIN`, so the bridge's `program` parameter
 cannot disambiguate them by name. This is a tooling state, not a finding: a
-future pass with a properly analysed `/psp-pulse-eu/BOOT.BIN` should redo this
+future pass with a properly analysed `/pulse/BOOT-psp-pulse-eu.BIN` should redo this
 with the normal tools and should reproduce the table below.
 
 What replaced it is a **relocation-tolerant byte match run directly on the two

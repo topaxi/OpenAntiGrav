@@ -307,7 +307,7 @@ a sibling `<Image name="{label} Bar">`'s fill fraction to
 
 Per this project's EU-preference (`psp-pulse-eu` is the Ghidra target of
 record, [ADR-0048](../../../architecture/adr/0048-eu-is-the-psp-pulse-re-target-of-record.md)),
-all fifteen functions named above were checked against `/psp-pulse-eu/BOOT.BIN`
+all fifteen functions named above were checked against `/pulse/BOOT-psp-pulse-eu.BIN`
 using the exact-opcode-hash method
 [`exact-hash-transfer.md`](../psp-pulse-eu/exact-hash-transfer.md) already
 established: `get_function_hash` on each USA address, matched against a full

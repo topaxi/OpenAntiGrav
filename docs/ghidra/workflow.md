@@ -417,7 +417,7 @@ one. Two habits keep this useful:
   false. Judge the import on the count *after* that.
 - **Analyse first, rebase second - the order decides whether the database is
   usable.** See [Importing a binary](#the-import-order-and-why-it-flips-with-the-patch)
-  below; `/psp-pure-eu/BOOT.BIN` is what the wrong order produces.
+  below; `/pure/BOOT-psp-pure-eu.BIN` is what the wrong order produces.
 - **The symptom of a wrongly-imported binary is that every address-based string
   tool silently returns zero.**
   `get_xrefs_to`, `find_undocumented_by_string` and `search_byte_patterns` on a

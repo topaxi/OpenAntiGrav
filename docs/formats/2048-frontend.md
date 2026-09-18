@@ -365,9 +365,9 @@ need to target.
 ## What the executable sweep did not reach
 
 **This pass could not decompile the Vita binary.** The live Ghidra session
-this project shares has `/ps3-hdfury-eu/EBOOT.elf` open under a different
+this project shares has `/hdfury/EBOOT-ps3-hdfury-eu.elf` open under a different
 lane's active work, and this lane's instructions are explicit: bridge reads
-must name `program=/vita-2048-eu-v104/eboot.elf` but never call
+must name `program=/2048/eboot-vita-2048-eu-v104.elf` but never call
 `switch_program`. In practice the bridge refuses a program that is not
 *open* (`get_function_by_address` with that `program=` returns `Program not
 found... Available programs: EBOOT.elf`), and opening it risked stealing the

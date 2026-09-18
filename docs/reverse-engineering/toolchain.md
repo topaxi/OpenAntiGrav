@@ -382,7 +382,7 @@ bits feeding a `vectorPermute` - readable, and the limit is stock Ghidra's,
 not this constructor's.
 
 The names were applied through `run_script_inline` bound to
-`program: /ps3-hdfury-eu/EBOOT.elf`, not `just apply-names`: another session
+`program: /hdfury/EBOOT-ps3-hdfury-eu.elf`, not `just apply-names`: another session
 was driving the shared bridge at the time and its global current-program
 pointer stayed on a `BOOT.BIN`, which `apply-ghidra-names.py` correctly
 detected and refused (the same trap `HANDOVER.md` records for
@@ -478,9 +478,12 @@ before auto-analysis even runs. `docs/ghidra/functions/vita-2048-*/` and
 `psp-pulse-usa` vs `psp-pulse-eu`: the patch is what a real device actually
 runs (`base` is corroboration only), and EU is preferred over USA by policy
 here the way `pulse-psp-eu` is preferred over the USA disc elsewhere in this
-project. Program paths: `/vita-2048-eu-v104/eboot.elf` (target of record),
-`/vita-2048-usa-v104/eboot.elf`, `/vita-2048-eu-base/eboot.elf`,
-`/vita-2048-usa-base/eboot.elf` (corroboration-only).
+project. Program paths: `/2048/eboot-vita-2048-eu-v104.elf` (target of
+record), `/2048/eboot-vita-2048-usa-v104.elf`,
+`/2048/eboot-vita-2048-eu-base.elf`, `/2048/eboot-vita-2048-usa-base.elf`
+(corroboration-only) - all four renamed into a shared `/2048/` project
+folder, each keeping its own basename, so `switch_program` can tell them
+apart (see `apply-ghidra-names.py`'s own comment on `BINARY_PROGRAMS`).
 
 **`FixupVLRImportThunks.java` (shipped with VitaLoaderRedux) is not needed
 here, checked directly rather than left unevaluated.** Its own README frames

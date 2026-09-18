@@ -15,7 +15,7 @@
 #
 #   scripts/apply-ghidra-names.py            # every binary, this one included
 #   scripts/apply-ghidra-names.py docs/ghidra/functions/ps3-hdfury-eu/names.tsv \
-#       --program /ps3-hdfury-eu/EBOOT.elf   # just this one
+#       --program /hdfury/EBOOT-ps3-hdfury-eu.elf   # just this one
 #
 # Names recovered here are
 # opportunistic - this is not a milestone target, see README.md.

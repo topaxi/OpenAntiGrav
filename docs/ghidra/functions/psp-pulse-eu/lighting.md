@@ -1,8 +1,8 @@
 # Lighting: `AmbientLight`/`DirectionalLight` registration, `PointLight`'s absence, and where ambient actually goes
 
 First pass under the reversed target-of-record policy (see `corroboration.md`'s
-dated notice) - investigated in `/psp-pulse-eu/BOOT.BIN` first, cross-verified
-against `/psp-pulse-usa/BOOT.BIN`. Opened to settle the M6 roadmap item on
+dated notice) - investigated in `/pulse/BOOT-psp-pulse-eu.BIN` first, cross-verified
+against `/pulse/BOOT-psp-pulse-usa.BIN`. Opened to settle the M6 roadmap item on
 `AmbientLight` `0x12c`, `DirectionalLight` `0x131` and `PointLight` `0x132`,
 whose payloads [`docs/formats/lighting.md`](../../../formats/lighting.md)
 decodes from shipped data alone. This page is the handler-recovery half.

@@ -9,7 +9,7 @@ checked.
 **Direction of the check.** The chain was recovered on **USA** and verified
 here, which is the opposite of this directory's
 [stated preference](corroboration.md) for EU as the first target. The reason is
-mechanical rather than considered: only `/psp-pulse-usa/BOOT.BIN` was loaded in
+mechanical rather than considered: only `/pulse/BOOT-psp-pulse-usa.BIN` was loaded in
 Ghidra when the work started, and every address `exhaust.md` and
 `psp-pulse-usa/camera.md` already carried was a USA one. Recorded so the
 direction is visible rather than implied.

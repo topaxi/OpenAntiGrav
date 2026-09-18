@@ -27,7 +27,7 @@ by [CLAUDE.md](../../../../CLAUDE.md)'s rule, held out of `names.tsv` rather
 than written in with the suffix, since nothing here is a rename) - the tag
 string is strong evidence for *what kind of object* this constructs, not proof
 this is the whole of what a `Track_Construct` does, and it has not been
-checked address-identical against `/vita-2048-usa-v104/eboot.elf` the way
+checked address-identical against `/2048/eboot-vita-2048-usa-v104.elf` the way
 every named function in the sibling doc has been.
 
 Deep in the function, gated on a mode/track-type variable (`DAT_8153fd24`)

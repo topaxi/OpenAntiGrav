@@ -1,4 +1,4 @@
-# `/psp-pure-eu/BOOT.BIN` - corroborated names
+# `/pure/BOOT-psp-pure-eu.BIN` - corroborated names
 
 Same status as `psp-pure-usa`: not a reverse-engineering target, here for
 opportunistic format corroboration only, see

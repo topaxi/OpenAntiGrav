@@ -1,4 +1,4 @@
-# `/psp-pure-eu/BOOT.BIN` - string-anchored names
+# `/pure/BOOT-psp-pure-eu.BIN` - string-anchored names
 
 Two names recovered by string anchoring, plus the import trap that makes every
 address-based string tool in the bridge silently return nothing on this

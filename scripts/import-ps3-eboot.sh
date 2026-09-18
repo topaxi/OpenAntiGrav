@@ -62,8 +62,15 @@ ps3_cspec=0
 project_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 project_name="OpenAntiGrav"
 
+# Lands as /hdfury/EBOOT.elf - `apply-ghidra-names.py`'s BINARY_PROGRAMS
+# expects /hdfury/EBOOT-ps3-hdfury-eu.elf (the `switch_program` basename fix;
+# see that file's own comment on BINARY_PROGRAMS), so a fresh import still
+# needs one manual rename in the Ghidra GUI afterward. Not automated here yet:
+# a rename could ride along as another -postScript, but that is untested
+# against a real headless PS3 import and this one is expensive enough to run
+# that it should not be the first time it is exercised.
 eboot="$project_root/data/extracted/ps3/hdfury-eu/PS3_GAME/USRDIR/EBOOT.elf"
-folder="ps3-hdfury-eu"
+folder="hdfury"
 analysis=1
 
 while [[ $# -gt 0 ]]; do

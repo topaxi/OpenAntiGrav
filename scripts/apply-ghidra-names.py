@@ -24,15 +24,23 @@ here is implemented locally and sends nothing.
 **Each binary owns its own `names.tsv` and its own Ghidra program.** A default
 run (no positional args) walks every `docs/ghidra/functions/<binary>/names.tsv`
 that exists and applies it to that binary's own program - `psp-pulse-eu` and
-`psp-pulse-usa` alike, not just whichever one used to be hardcoded here. When
-you pass explicit input paths instead, `--program` applies to all of them, the
-same single-target behaviour this script always had - use that for one-off
-runs against a binary with no `names.tsv` of its own yet, or to replay a
-subset.
+`psp-pulse-usa` alike, not just whichever one used to be hardcoded here. An
+explicit input path is mapped to its program the same way, from the file's own
+location (`program_for_path`) - `docs/ghidra/functions/ps3-hdfury-eu/names.tsv`
+resolves to `/hdfury/EBOOT-ps3-hdfury-eu.elf` with no flag needed, and paths
+targeting different binaries in one invocation are grouped and applied
+separately. `--program` overrides that mapping - use it for a one-off run
+against a binary with no `names.tsv` of its own yet (`program_for_path` has
+nothing to map), or to replay a subset against a different program on
+purpose. Before this, `--program` silently defaulted to
+`/pulse/BOOT-psp-pulse-eu.BIN` for any explicit path with no flag, which
+applied ps3-hdfury-eu's addresses to the PSP program and reported
+false-positive successes there.
 
 Usage:
     scripts/apply-ghidra-names.py                       # every binary's own names.tsv
     scripts/apply-ghidra-names.py --dry-run
+    scripts/apply-ghidra-names.py docs/ghidra/functions/ps3-hdfury-eu/names.tsv
     scripts/apply-ghidra-names.py path/to/names.tsv --program /some/Binary
 """
 
@@ -42,6 +50,7 @@ import argparse
 import json
 import re
 import sys
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -51,32 +60,71 @@ ROOT = Path(__file__).resolve().parent.parent
 FUNCTIONS_DIR = ROOT / "docs" / "ghidra" / "functions"
 
 # Directory name under docs/ghidra/functions/ -> Ghidra project program path.
-# The PS2 build's main executable isn't called BOOT.BIN, so this can't be
-# derived mechanically from the directory name; every other entry follows the
-# PSP convention. Add a line here when a names.tsv appears for a binary not
-# yet listed - the default run silently skips any names.tsv it can't map,
-# printing which one and why, rather than guessing a program path.
+# Project folders are grouped by title (`/pulse`, `/pure`, `/hdfury`, `/omega`,
+# `/2048`); each file's own name now carries the platform/region suffix that
+# used to be its one-file-per-folder's folder name instead. `switch_program`
+# disambiguates by basename alone, not by folder, so under the old layout four
+# PSP `BOOT.BIN`s - and, once `/omega`'s `eboot.bin` and `/hdfury`'s
+# `EBOOT.elf` were both open at once, two differently-cased `eboot`s too - were
+# unreachable for writes "regardless of sequence" (HANDOVER.md), even though
+# each already lived in its own uniquely-named folder. That is a bug this
+# script cannot work around from the outside; only renaming the files
+# themselves, in the Ghidra GUI, fixes it. Add a line here when a names.tsv
+# appears for a binary not yet listed - the default run silently skips any
+# names.tsv it can't map, printing which one and why, rather than guessing a
+# program path.
 BINARY_PROGRAMS = {
-    "psp-pulse-usa": "/psp-pulse-usa/BOOT.BIN",
-    "psp-pulse-eu": "/psp-pulse-eu/BOOT.BIN",
-    "psp-pure-usa": "/psp-pure-usa/BOOT.BIN",
-    "psp-pure-eu": "/psp-pure-eu/BOOT.BIN",
-    "ps2-pulse-eu": "/ps2-pulse-eu/SCES_547.48",
-    "ps4-omega-eu": "/ps4-omega-eu/eboot.bin",
+    "psp-pulse-usa": "/pulse/BOOT-psp-pulse-usa.BIN",
+    "psp-pulse-eu": "/pulse/BOOT-psp-pulse-eu.BIN",
+    "psp-pure-usa": "/pure/BOOT-psp-pure-usa.BIN",
+    "psp-pure-eu": "/pure/BOOT-psp-pure-eu.BIN",
+    # The PS2 build's main executable is `SCES_547.48` - Sony's disc product
+    # code, not a `name.extension` pair - so the rename that gave every other
+    # entry here a `-<binary>` suffix before its extension has nothing to
+    # insert before; the suffix goes on the end instead. It was never part of
+    # the basename collision (always the only program named `SCES_547.48`),
+    # so this is cosmetic, not a fix.
+    "ps2-pulse-eu": "/pulse/SCES_547.48-ps2-pulse-eu",
+    "ps4-omega-eu": "/omega/eboot-ps4-omega-eu.bin",
     # The only entry naming a file that does not exist on its disc: a PS3
     # `EBOOT.BIN` is an encrypted SELF, and what gets imported is the ELF
     # `rpcs3 --decrypt` writes beside it. See
     # docs/reverse-engineering/toolchain.md#ps3.
-    "ps3-hdfury-eu": "/ps3-hdfury-eu/EBOOT.elf",
+    "ps3-hdfury-eu": "/hdfury/EBOOT-ps3-hdfury-eu.elf",
     # Vita `eboot.elf` is likewise not what ships on disc/in the PKG: it is
     # `scripts/vita-self-decrypt.py`'s output, not the SELF itself. Target of
     # record; the other three are corroboration-only. See
     # docs/reverse-engineering/toolchain.md#vita.
-    "vita-2048-eu-v104": "/vita-2048-eu-v104/eboot.elf",
-    "vita-2048-usa-v104": "/vita-2048-usa-v104/eboot.elf",
-    "vita-2048-eu-base": "/vita-2048-eu-base/eboot.elf",
-    "vita-2048-usa-base": "/vita-2048-usa-base/eboot.elf",
+    "vita-2048-eu-v104": "/2048/eboot-vita-2048-eu-v104.elf",
+    "vita-2048-usa-v104": "/2048/eboot-vita-2048-usa-v104.elf",
+    "vita-2048-eu-base": "/2048/eboot-vita-2048-eu-base.elf",
+    "vita-2048-usa-base": "/2048/eboot-vita-2048-usa-base.elf",
 }
+
+# The two resolve-imports outputs are matched by filename rather than by
+# parent directory, since they live under gitignored data/ghidra/ rather than
+# under a docs/ghidra/functions/<binary>/ directory of their own.
+IMPORTS_TABLE_PROGRAMS = {
+    "psp-imports.tsv": BINARY_PROGRAMS["psp-pulse-usa"],
+    "psp-imports-eu.tsv": BINARY_PROGRAMS["psp-pulse-eu"],
+}
+
+
+def program_for_path(path: Path) -> str | None:
+    """The Ghidra program an input path belongs to, from its location alone.
+
+    Used for both the default run and an explicit-path one, so a path always
+    maps to its own binary's program unless `--program` overrides it - an
+    explicit `docs/ghidra/functions/ps3-hdfury-eu/names.tsv` used to silently
+    fall back to `/psp-pulse-eu/BOOT.BIN` (ADR-0048's default) whenever
+    `--program` was left off, applying one binary's addresses to another's
+    program and reporting false-positive successes where the two happened to
+    share a function name.
+    """
+    if path.name in IMPORTS_TABLE_PROGRAMS:
+        return IMPORTS_TABLE_PROGRAMS[path.name]
+    return BINARY_PROGRAMS.get(path.parent.name)
+
 
 # (names.tsv, program) pairs used when no positional inputs are given. The
 # per-binary files are discovered from BINARY_PROGRAMS so a new binary's
@@ -145,6 +193,38 @@ class Bridge:
             if line.startswith("Executable Path:"):
                 return line.removeprefix("Executable Path:").strip()
         return ""
+
+    def is_open(self) -> bool:
+        """Whether this program currently exists in the bridge at all.
+
+        A program the bridge has never opened still answers `get_metadata`
+        with HTTP 200 and a JSON error body rather than raising, so this
+        checks for the one line a real program always answers with, instead
+        of trusting the status code.
+        """
+        return "Executable Path:" in self.get("get_metadata")
+
+    def wait_until_open(self, timeout: float) -> bool:
+        """Poll until this program shows up in the bridge, or `timeout` elapses.
+
+        A program that was just imported, or a Ghidra instance that was just
+        reopened after an import, can take several seconds before UDS
+        discovery picks it up. Without this, a run right after
+        `import-ps3-eboot.sh` fails with "Program not found" even though the
+        import itself succeeded, and the fix is always just to run it again a
+        moment later - so do that waiting here instead of making it manual.
+        """
+        deadline = time.monotonic() + timeout
+        announced = False
+        while True:
+            if self.is_open():
+                return True
+            if time.monotonic() >= deadline:
+                return False
+            if not announced:
+                print(f"  waiting for {self.program} to appear (up to {timeout:.0f}s)...")
+                announced = True
+            time.sleep(2)
 
     def switch_program(self) -> None:
         """Make this Bridge's program the bridge's active one.
@@ -339,7 +419,14 @@ def apply_group(paths: list[Path], program: str, args) -> int:
     bridge = Bridge(args.url, program)
     if not args.dry_run:
         try:
-            bridge.get("get_metadata")
+            if not bridge.wait_until_open(args.wait):
+                print(
+                    f"{program} never appeared at {args.url} within {args.wait:.0f}s - "
+                    "is it open in a headful Ghidra instance? (the bridge needs a GUI, "
+                    "not headless analysis)",
+                    file=sys.stderr,
+                )
+                return 1
             bridge.switch_program()
         except (urllib.error.URLError, OSError) as e:
             print(f"cannot reach the bridge at {args.url} for {program}: {e}", file=sys.stderr)
@@ -403,29 +490,44 @@ def main() -> int:
     ap.add_argument(
         "--program",
         default=None,
-        help="program path in the Ghidra project - only used with explicit input paths, "
-        "since the default run maps each binary's names.tsv to its own program; "
-        "defaults to /psp-pulse-eu/BOOT.BIN (ADR-0048) when not given",
+        help="program path in the Ghidra project - overrides the mapping program_for_path() "
+        "derives from each input's own location; only needed for a binary with no "
+        "names.tsv of its own yet, or to replay a subset against a different program "
+        "on purpose",
+    )
+    ap.add_argument(
+        "--wait",
+        type=float,
+        default=60.0,
+        help="seconds to wait for each target program to appear in the bridge before "
+        "giving up, since a program just imported or a Ghidra instance just reopened "
+        "can take a few seconds to show up (default 60; 0 disables waiting)",
     )
     ap.add_argument("--dry-run", action="store_true", help="print what would change, send nothing")
     ap.add_argument("--no-save", action="store_true", help="leave the program unsaved")
     args = ap.parse_args()
 
     if args.inputs:
-        # Default to the Ghidra target of record (ADR-0048) when an explicit
-        # TSV is given with no --program; `--program` still overrides for a
-        # one-off run against a different binary, USA included.
-        program = args.program or "/psp-pulse-eu/BOOT.BIN"
-        return apply_group(args.inputs, program, args)
+        present = []
+        for path in args.inputs:
+            program = args.program or program_for_path(path)
+            if program is None:
+                print(
+                    f"{path}: no known Ghidra program for {path.parent.name!r} - "
+                    "add it to BINARY_PROGRAMS or pass --program explicitly",
+                    file=sys.stderr,
+                )
+                return 1
+            present.append((path, program))
+    else:
+        present = [(path, program) for path, program in default_inputs() if path.is_file()]
+        if not present:
+            print("nothing to apply. Run `just resolve-imports` first?", file=sys.stderr)
+            return 1
 
-    present = [(path, program) for path, program in default_inputs() if path.is_file()]
-    if not present:
-        print("nothing to apply. Run `just resolve-imports` first?", file=sys.stderr)
-        return 1
-
-    skipped_dirs = sorted(set(BINARY_PROGRAMS) - {p.parent.name for p, _ in present})
-    for binary in skipped_dirs:
-        print(f"skip  {binary}: no names.tsv yet")
+        skipped_dirs = sorted(set(BINARY_PROGRAMS) - {p.parent.name for p, _ in present})
+        for binary in skipped_dirs:
+            print(f"skip  {binary}: no names.tsv yet")
 
     # Merge files that target the same program (psp-pulse-usa's own names.tsv
     # and psp-imports.tsv both do) so the duplicate-address check still sees

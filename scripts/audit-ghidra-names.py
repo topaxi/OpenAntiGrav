@@ -44,14 +44,18 @@ ROOT = Path(__file__).resolve().parent.parent
 FUNCTIONS_DIR = ROOT / "docs" / "ghidra" / "functions"
 
 # Shared with apply-ghidra-names.py. Kept as its own copy rather than imported
-# because that file's name has a hyphen in it and is not importable as a module.
+# because that file's name has a hyphen in it and is not importable as a
+# module. Project folders are grouped by title (`/pulse`, `/pure`, `/hdfury`),
+# each file's own name carrying the platform/region suffix - see that file's
+# own comment on BINARY_PROGRAMS for why (a `switch_program` basename
+# collision the old one-file-per-folder layout could not avoid).
 BINARY_PROGRAMS = {
-    "psp-pulse-usa": "/psp-pulse-usa/BOOT.BIN",
-    "psp-pulse-eu": "/psp-pulse-eu/BOOT.BIN",
-    "psp-pure-usa": "/psp-pure-usa/BOOT.BIN",
-    "psp-pure-eu": "/psp-pure-eu/BOOT.BIN",
-    "ps2-pulse-eu": "/ps2-pulse-eu/SCES_547.48",
-    "ps3-hdfury-eu": "/ps3-hdfury-eu/EBOOT.elf",
+    "psp-pulse-usa": "/pulse/BOOT-psp-pulse-usa.BIN",
+    "psp-pulse-eu": "/pulse/BOOT-psp-pulse-eu.BIN",
+    "psp-pure-usa": "/pure/BOOT-psp-pure-usa.BIN",
+    "psp-pure-eu": "/pure/BOOT-psp-pure-eu.BIN",
+    "ps2-pulse-eu": "/pulse/SCES_547.48-ps2-pulse-eu",
+    "ps3-hdfury-eu": "/hdfury/EBOOT-ps3-hdfury-eu.elf",
 }
 
 CONFIDENT_MIN = 70

@@ -183,7 +183,7 @@ Pulse and HD ship `WeaponStats_Race.xml` and `WeaponStats_Elimination.xml` and
 pick between them by race mode - the global `DAT_08b32428` selects the *file*,
 recovered on [missile.md](../ghidra/functions/psp-pulse-usa/missile.md). Pure
 ships a single, lower-cased **`Data\XML\weaponstats.xml`**, named at
-`0x08a445a0` in `/psp-pure-usa/BOOT.BIN` three strings before the `"WeaponStats"`
+`0x08a445a0` in `/pure/BOOT-psp-pure-usa.BIN` three strings before the `"WeaponStats"`
 and `"Weapon"` element names its parser matches.
 
 Which file a title reads is `oag_title::weapons::Weapons`. Until it was an axis,

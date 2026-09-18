@@ -11,7 +11,7 @@
 //! module is unusual for this crate in being almost entirely recovered**, so the
 //! short list is the other way round from normal.
 //!
-//! **Recovered**, all against `/psp-pulse-usa/BOOT.BIN`, image base `0x08804000`,
+//! **Recovered**, all against `/pulse/BOOT-psp-pulse-usa.BIN`, image base `0x08804000`,
 //! evidence and per-claim confidences on
 //! `docs/ghidra/functions/psp-pulse-usa/missile.md`:
 //!

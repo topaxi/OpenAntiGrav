@@ -35,7 +35,7 @@ full field-by-field match table and why a WipEout-specific term like this one
 carries more weight than a generic engine word would.
 
 **Not yet checked**: address-identical cross-check against
-`/vita-2048-usa-v104/eboot.elf`, the corroboration the other pages in this
+`/2048/eboot-vita-2048-usa-v104.elf`, the corroboration the other pages in this
 directory use - this is the first name in this directory recovered by
 cross-title comparison rather than single-binary reading, so that particular
 check has not been run yet.
