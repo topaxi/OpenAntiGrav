@@ -27,6 +27,12 @@ addendum after the section this docstring opens with.
 
     uv run --with evdev python3 scripts/rpcs3-spu-light-dump.py [out_dir]
 
+`out_dir` defaults to `data/traces/hd-spu-light-dump/` - under the gitignored
+`data/` tree rather than `/tmp`, so a capture survives a reboot. `record_count`
+in the output is a stop-at-first-zero scan and reads a stale high-water mark;
+bound any use of the slot by `companion_value_u32` (`+0x2084[index]`, the
+frustum-survivor count - see renderer.md).
+
 Needs the decrypted image (`data/images/hdfury-ps3-eu-dec.iso`), the `oag`
 input profile and Xvfb :77 - `scripts/rpcs3-drive.py preflight` checks all
 three (`uv run --with evdev python3 scripts/rpcs3-drive.py preflight` - the
