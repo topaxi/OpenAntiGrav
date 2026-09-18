@@ -24,7 +24,7 @@ machine has it at `/opt/ps3dev/spu/bin/spu-objdump` (override with
 
     scripts/ps3-spu-disasm.py 0x00811680 0x4d40          # Trails SPU job
     scripts/ps3-spu-disasm.py 0x00816400 0x1240          # WakeTrail SPU job
-    scripts/ps3-spu-disasm.py 0x00811680 0x4d40 --out /tmp/trails.bin
+    scripts/ps3-spu-disasm.py 0x00811680 0x4d40 --out data/extracted/ps3/spu-jobs/trails.bin
 
 Self-check: both jobs above decode as coherent SPU code - a standard
 prologue (`stqd $80..$82,$126,$0,$1` register spills, `ai $1,$1,-96` stack

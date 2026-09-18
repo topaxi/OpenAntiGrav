@@ -163,7 +163,7 @@ AMPHISEUM_PLAN = {
 
 
 def main():
-    out = Path(sys.argv[1] if len(sys.argv) > 1 else "/tmp/hd-spu-light-dump")
+    out = Path(sys.argv[1] if len(sys.argv) > 1 else ROOT / "data/traces/hd-spu-light-dump")
     out.mkdir(parents=True, exist_ok=True)
     with drive.Session(str(IMAGE), str(out / "logs")) as session:
         print("rpcs3 pid %d" % session.proc.pid, flush=True)
