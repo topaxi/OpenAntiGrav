@@ -561,6 +561,9 @@ impl Stage {
             // doc. Never known here for the same reason `campaign_cell`
             // isn't: this function has no `Session` to read a `Shell` from.
             endrace: None,
+            // Nothing has been tried yet, so nothing has failed yet - see
+            // `RaceStage::endrace_unavailable`.
+            endrace_unavailable: false,
         }))
     }
 }

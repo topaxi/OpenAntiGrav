@@ -20,11 +20,19 @@ impl Session {
     /// a source with no `EndRace_Definition.xml` or whose read failed -
     /// `RaceStage::draw_hud` falls back to `scoreboard::Overlay` exactly as
     /// before this existed. See `RaceStage::endrace`'s own doc.
+    ///
+    /// **Both halves of "no-op" are carried by a flag of their own**, because
+    /// `Session::frame` calls this every frame a finished race sits on
+    /// screen: `stage.endrace` for the built case and
+    /// `RaceStage::endrace_unavailable` for the failed one. Everything past
+    /// the early guards - `dlc::packs_from_defaults`, `open_source`, reading
+    /// the screens - is expensive enough that retrying it per frame is a
+    /// performance bug rather than a log one.
     pub(crate) fn build_endrace(&mut self) {
         let Stage::Race(stage) = &self.stage else {
             return;
         };
-        if !stage.race.finished() || stage.endrace.is_some() {
+        if !stage.race.finished() || stage.endrace.is_some() || stage.endrace_unavailable {
             return;
         }
         let Some(shell) = self.shell.as_ref() else {
@@ -101,6 +109,7 @@ impl Session {
             Ok(opened) => opened.archives,
             Err(error) => {
                 warn!("cannot open {source} for the EndRace screens: {error:#}");
+                self.mark_endrace_unavailable();
                 return;
             }
         };
@@ -118,10 +127,18 @@ impl Session {
         ) {
             Ok(screens) => screens,
             Err(error) => {
+                // Not "this source has no EndRace screens": the entry name
+                // asked for is Pulse's own, and a title that authors its
+                // own elsewhere reaches here too. Wipeout HD ships
+                // `/data/plugins/frontend/gui/endrace_definition.xml` in
+                // five of its seven archives, in a widget vocabulary this
+                // build does not read yet - see
+                // `oag_game::endrace::SCREEN_ENTRY`'s own doc.
                 warn!(
-                    "{error:#} - this source has no EndRace screens to show; keeping the \
-                     built-in results table"
+                    "{error:#} - this title's EndRace screens are not read by this build; \
+                     keeping the built-in results table"
                 );
+                self.mark_endrace_unavailable();
                 return;
             }
         };
@@ -171,7 +188,19 @@ impl Session {
                     stage.endrace = Some(runtime);
                 }
             }
-            Err(error) => warn!("cannot build the EndRace screens' own renderer: {error:#}"),
+            Err(error) => {
+                warn!("cannot build the EndRace screens' own renderer: {error:#}");
+                self.mark_endrace_unavailable();
+            }
+        }
+    }
+
+    /// Records that this race's EndRace flow could not be built, so that
+    /// [`Self::build_endrace`] stops at its own guard from the next frame
+    /// on. See `RaceStage::endrace_unavailable`.
+    fn mark_endrace_unavailable(&mut self) {
+        if let Stage::Race(stage) = &mut self.stage {
+            stage.endrace_unavailable = true;
         }
     }
 

@@ -16,8 +16,22 @@ use oag_ui::picker::FaceScales;
 use crate::sprite::Sheet;
 
 /// `Data\Plugins\PI001\GUI\EndRace_Definition.xml` - the file all three
-/// screens are authored in. Pulse-only, like [`crate::campaign::SCREEN_ENTRY`]:
-/// no other title has been checked for this path.
+/// screens are authored in. Pulse-only, like [`crate::campaign::SCREEN_ENTRY`].
+///
+/// **Wipeout HD authors its own end screens elsewhere, and this name does not
+/// find them.** They are `/data/plugins/frontend/gui/endrace_definition.xml`,
+/// in five of HD's seven archives. The screens share three of Pulse's names
+/// and almost none of its widgets: HD's `EndRace Results` is an eight-row
+/// standings grid (`Grid{row}.{col}`), not Pulse's per-lap table
+/// (`lap{n}.{c}`), and its `EndRace Menu` is one `<Block>` per option shown
+/// by mode, not a populated list - and `DATA02`'s copy, the one this build's
+/// own mount order serves, is where all three names would be found. So
+/// pointing this constant at HD would trade a missing entry for a screen that
+/// reads into an empty draw list, which is the worse failure of the two. See
+/// `docs/formats/hd-frontend.md`'s own "the end screens are located, not read".
+///
+/// A title that reaches [`load`] and fails says so once per race rather than
+/// once per frame - `RaceStage::endrace_unavailable`.
 pub const SCREEN_ENTRY: &str = r"Data\Plugins\PI001\GUI\EndRace_Definition.xml";
 
 /// Textures neither screen shares with `Skin.xml`'s own front-end sheet -

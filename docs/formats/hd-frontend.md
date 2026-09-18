@@ -2100,6 +2100,79 @@ exactly as documented, in a function twenty minutes' reading away from a real
 result. Nothing above `0x32d5e0` was used on this page without the check
 described at the top of this section.
 
+## The end screens are located, not read
+
+**Added 2026-09-18**, off the back of a log line rather than a reading pass:
+a finished HD race warned `Data\Plugins\PI001\GUI\EndRace_Definition.xml`
+missing on every frame it sat on the results table. The entry name is
+**Pulse's**, and HD authors its own end screens under its own named-plugin
+convention - the same divergence [`FrontEnd::root`] already carries for
+`Skin.xml`.
+
+They are `/data/plugins/frontend/gui/endrace_definition.xml`, in five of the
+seven archives, no two copies alike:
+
+| Archive | Size | Screens it declares |
+| --- | --- | --- |
+| `DATA02` | 30,110 | Results, **Rewards**, Menu |
+| `DATA03` | 30,623 | Results, **Rewards**, Menu |
+| `DATA04` | 31,053 | Results, **Rewards**, Menu |
+| `DATA05` | 42,406 | Results, **Rewards**, Menu, **Podium** |
+| `DATA06` | 41,190 | Results, Menu, **Podium** - no Rewards |
+
+All five differ by MD5; every copy also carries `Kill Game Transition`,
+`InGame Restart Transition`, `EndRaceSaveGhost` and `EndRaceDeleteGhost`.
+`DATA00` and the sound-only `DATA01` carry none. **Confidence 94** for the
+inventory - it is a file list and five reads of authored XML - and **nothing
+here says which copy the original loads**, which is the same unresolved
+question [six skins, one layout](#six-skins-one-layout) records for `skin.xml`.
+`oag_assets::Archives` would serve **`DATA02`'s**: `holder_of` walks
+`ArchiveCandidates`' `data` then `fe` then `extra`, which for HD is `DATA00`
+(no copy) and then `DATA02` (`crates/hd/src/lib.rs`'s `DATA_CANDIDATES`/
+`FE_CANDIDATES`). That is a reading of this build's own mount order, not of
+the original's.
+
+### Why the path is not simply swapped in
+
+Three of the screen *names* match Pulse's (`EndRace Results`/`EndRace
+Rewards`/`EndRace Menu`), so `oag_game::endrace::load` would find all three in
+`DATA02`'s copy and then draw almost nothing: the widgets underneath are a
+different vocabulary, and on `EndRace Results` a different screen altogether.
+
+| | Pulse (`EndRace_Definition.xml`) | HD (`endrace_definition.xml`) |
+| --- | --- | --- |
+| Results' table | `lap{n}.{c}` - the player's own per-lap splits | `Grid{row}.{col}`, 8 rows x 10 columns plus `Grid{n}.h`, `Gridp.{n}`, `Gridi.{n}`, `GridHead{n}` - the **finishing order of the whole field** |
+| Results' extras | `tablebg{n}`, `tablehighlight`, `perfectlap{n}`, `boostimg` | `GridHighlight`, `GridSideBarL`/`R`, `GridTopBar`/`BottomBar`, `GridStrikeThrough`, `MedalBlock` with `MedalModelGold`/`Silver`/`Bronze`, `RecordNotifyBlock`, `Target{n}` |
+| Headline | `Line1` | `Line1` - one of the two names that transfer at all, `loyaltybar` being the other |
+| Rewards | medal glyph, loyalty text, `loyaltybar` as an `<Image>` | `MedalImg`, `LoyaltyImg`, `BigPos`, `RewardLine1`/`2`, `RewardLoyaltyPoints`/`Active`, and `loyaltybar` as a **`<Slider>`** (`minSlide`/`maxSlide` 0-100000) |
+| Menu | one list populated per mode by `EndRaceMenu_PopulateOptions` | one `<Block>` per option, shown by mode: `next_race`, `race_again`, `return_to_grid`, `return_to_menu`, `quit_tournament`, `return_to_lobby`, `view_again`, `view_MP_again`, plus an `Endrace Difficulty` `<List>` |
+
+So pointing the constant at HD trades a named missing entry - an honest
+absence - for three screens that read and draw blank, which is the
+["plausible-looking stand-in"](../../CLAUDE.md) failure one step removed.
+**Confidence 90** on the vocabulary table: it is quoted from `DATA02`'s and
+`DATA06`'s copies directly, and the caveat is that four of the five copies were
+only inventoried, not read widget by widget.
+
+What the reading pass would need, and what makes it cheap now: HD's Blocks
+carry `idstring`s this build's own [`MenuOption`] set already mirrors
+(`ER_RACE_AGAIN`, `ER_RETURN_GRID`, `ER_RETURN_MENU`, `ER_VIEW_AGAIN`,
+`ER_NEXT_RACE`), and `just rpcs3-race` can drive a real HD race to its own end
+screens for the frames to compare against - see
+[rpcs3-debugger](../reverse-engineering/rpcs3-debugger.md).
+
+### What this did change
+
+`crates/game/src/main/session/endrace.rs` no longer retries the load once a
+race has failed it: `RaceStage::endrace_unavailable` records the failure, so
+the warning is once per race and the disc image is reopened once per race
+rather than once per frame. The message says "this title's EndRace screens are
+not read by this build" rather than "this source has no EndRace screens",
+which this section is the evidence for.
+
+[`FrontEnd::root`]: https://github.com/topaxi/OpenAntiGrav/blob/main/crates/title/src/lib.rs
+[`MenuOption`]: https://github.com/topaxi/OpenAntiGrav/blob/main/crates/ui/src/endrace.rs
+
 ## What could not be determined
 
 Named explicitly, with what each would take.

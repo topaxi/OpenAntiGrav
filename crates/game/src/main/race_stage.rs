@@ -81,8 +81,29 @@ pub(crate) struct RaceStage {
     /// open source [`endrace::EndRaceRuntime::new`] could not read), which
     /// falls this stage back to [`RaceStage::scoreboard`] exactly as before
     /// this existed. Built once, by `Session::frame`'s finish-transition
-    /// arm - see `crate::main::session::endrace`.
+    /// arm - see `crate::main::session::endrace`. [`Self::endrace_unavailable`]
+    /// is what makes that "forever" true rather than "retried every frame".
     pub(crate) endrace: Option<endrace::EndRaceRuntime>,
+    /// Set once [`Session::build_endrace`] has tried to build
+    /// [`Self::endrace`] and failed, so it is never tried again for this
+    /// race.
+    ///
+    /// **Without it the failure path is a per-frame loop, not a log line.**
+    /// `Session::frame` calls `build_endrace` every frame the race sits
+    /// finished, and the `endrace.is_some()` guard only stops the *success*
+    /// case from repeating: a source whose screens cannot be read reopened
+    /// its disc image and all seven of HD's archives 60 times a second, and
+    /// said so on every one of them, for as long as the results table was on
+    /// screen. Set at each of the three exits past that point - the source
+    /// not opening, the screens not reading, the renderer not building - and
+    /// at none of the guards before it, which mean "not yet" rather than
+    /// "never".
+    ///
+    /// Per race rather than per process: a second race on a source that has
+    /// no screens says so once more, which is a fact about that race.
+    ///
+    /// [`Session::build_endrace`]: crate::main::session::Session::build_endrace
+    pub(crate) endrace_unavailable: bool,
 }
 
 impl RaceStage {

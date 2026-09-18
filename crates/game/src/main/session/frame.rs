@@ -639,9 +639,12 @@ impl Session {
         // race arm (`Session::tick_endrace`'s call site there), the same
         // grid-resolution shape `Stage::Menu`'s own arm uses for
         // `Session::tick_campaign`. `build_endrace` is idempotent past its
-        // first call (`RaceStage::endrace`'s own `is_some()` guard), so
-        // calling it every frame the race sits finished costs nothing once
-        // it has either built the flow or given up.
+        // first call - `RaceStage::endrace`'s own `is_some()` guard for the
+        // built case, `RaceStage::endrace_unavailable` for the failed one -
+        // so calling it every frame the race sits finished costs nothing
+        // once it has either built the flow or given up. The second guard
+        // is not decoration: without it a source whose screens do not read
+        // reopened its disc image once a frame and warned once a frame.
         self.build_endrace();
 
         let presented = self.draw(now, frame_seconds)?;
