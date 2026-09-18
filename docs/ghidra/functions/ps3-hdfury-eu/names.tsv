@@ -368,3 +368,17 @@
 0x002e02b8	function	WeaponPad_UpdateRefreshTimer	85	pads.md
 0x0086a730	data	WeaponPad_Importer_Vtable	85	pads.md
 0x0086a780	data	SpeedupPad_Importer_Vtable	85	pads.md
+0x0040d990	function	SpuLight_AddCandidate	85	renderer.md
+0x0040d728	function	SpuLight_CompactVisibleCandidates	88	renderer.md
+0x0040d370	function	SpuLight_GetVisibleSlotAddress	88	renderer.md
+0x0040d390	function	SpuLight_GetVisibleCount	88	renderer.md
+0x0040dae8	function	SpuLight_AnyVisibleLightTouchesSphere	82	renderer.md
+0x0040d488	function	SpuLight_DispatchLightCullingJob	85	renderer.md
+0x0040d3b0	function	SpuLight_RegisterLightCullingJob	82	renderer.md
+0x005fc550	function	RenderOps_RegisterLiveRcsBlackboxJob	82	renderer.md
+0x004699f8	function	SpuJob_RegisterNamedBinary	80	renderer.md
+0x00469340	function	SpuJob_ReleaseNamedBinary	80	renderer.md
+0x00465e10	function	SpuJobQueue_WaitForTicket	78	renderer.md
+0x007f6880	data	SpuJob_LightCulling_Binary	85	renderer.md
+0x0084b700	data	SpuJob_LiveRcsBlackbox_Binary	85	renderer.md
+0x00848780	data	SpursJobQueue_PolicyModule	80	renderer.md

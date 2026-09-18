@@ -6480,3 +6480,140 @@ This is the **same** `0x1580`/`0x1590`/`0x15a0` triple the "no field set" fallth
 **Both observed values sit inside the buffer's own already-established `0`-`8` record cap** (`docs/ghidra/functions/ps3-hdfury-eu/renderer.md`'s own "up to 8 records" finding), which is suggestive but not proof: a natural reading is that this is a per-frame **count of how many of the slot's 8 records are actually valid this frame**, needed precisely because the raw buffer bytes cannot distinguish a genuinely-updated record from a stale one left over from an earlier frame (`slot_nonzero_bytes` stays flat at `216`-`222` across all five snapshots regardless of the companion value, consistent with unused record slots holding old, still-nonzero data rather than being zeroed - which is exactly the situation an explicit count would exist to resolve). **This is a hypothesis the magnitude is consistent with, not a traced consumer** - no code anywhere, PPU or SPU, has been read this session or any prior one that treats this value as a loop bound or count. It could equally be a generation/version tag, a slot-selection index into some other table, or something this thread has not considered.
 
 **Confidence 55.** This is a live, reproducible measurement (stronger evidence than any hand-disassembly reading on this page, and the first live SPU-adjacent evidence this specific sub-question has had), but the *interpretation* rests on magnitude-range correlation alone, with zero consumer traced - below the 70-84 "single-site inference" band this page uses for a read with at least one traced consumption site. Raising it needs either a consumer (PPU or, if ever reachable, SPU) that reads `+0x2084` and uses it as a bound, or a capture at a moment with a verifiably different number of nearby light-candidate objects to check the value tracks that count specifically rather than something else that happens to also stay small. Artefacts: `/tmp/hd-spu-light-companion/` (gitignored, not committed - `meta.json` and five `s*_slot.bin` raw dumps).
+
+### The three surviving `Enable_spu_vertex_light` claims are re-derived independently, and all three stand - one is narrowed (2026-09-18, later still)
+
+A fresh session re-checked the confidence-75/80/85 findings the previous close-out left standing, against the decompiler and the SPU disassembly rather than against the page, before extending the thread:
+
+- **Opcode `0x2d`'s operand pair (confidence 85) stands.** `_opd_FUN_004074e0` re-decompiled in full: `local_12c = _opd_FUN_0040d390()`, `local_128 = _opd_FUN_0040d370()` only when `local_12c != 0`, and the per-chunk emit is `puVar33[1] = local_128; puVar33[2] = local_12c` under `Shader_GetVariantHash(... | 0x800)` - verbatim as documented. `_opd_FUN_0040d370`/`_opd_FUN_0040d390` re-decompiled byte for byte. One detail the earlier entry did not draw out: **`value` gates `address`** - when the companion word reads `0`, the slot address is never computed and every chunk gets the inert `(0, 0)` pair. That is the shape of a count, and it is the first hint the next section confirms.
+- **The `MFC_GETLLAR`/`MFC_PUTLLC` decrement at SPU offset `0x1bd0` (confidence 75) stands, with one precision.** Re-disassembled (`scripts/ps3-spu-disasm.py 0x00848780 0x3000`): `il $3,0xd0` -> `wrch $ch21`, `il $6,0xb4` -> `wrch $ch21`, `rdch $6,$ch27`, `andi $6,$6,1`, `brnz $6,0x1be8` (retry), `ahi $10,$8,-1` (decrement), `ceqhi $8,$8,1` (pre-decrement test for `1`) - exactly as recorded. The counter is a **halfword**, not a byte: `chx $9,$0,$2` generates a halfword-insert mask and `ceqhi` is the halfword compare. Cosmetic against the mechanism, but the earlier "counter byte/halfword" hedge resolves to halfword.
+- **The SPU offset `0x2d00` program boundary (confidence 80) stands, and is narrowed.** `iRam008bb590` re-read as `0x2cf8`; the bytes at offset `0x2d00` (VA `0x0084b480`) are the four-`ila`-word, `lqa $1,0xc00`, three-`stqd`, `br` header the earlier entry describes. What the earlier entry did not have: that second program is only **`0x280` bytes** long (`0x0084b480`-`0x0084b700`; its `br` at `0x2d28` lands at `0x2e00`, `+0x100` from its own base, not `+0x2100` as recorded), and at `0x0084b700` a **third** blob starts, with a different header shape entirely - the `0xc0dec0de`-magic job header the next-but-one section identifies. The boundary claim survives; the "region B branches `+0x2100`" arithmetic does not, and nothing rested on it.
+
+Nothing here lowers any of the three confidences. What follows does change what one of them was *about*.
+
+### Correction: `0x00848780` is the SPURS job-queue policy module, not the render-ops job - the job that actually receives opcode `0x2d`'s stream is `Live_RcsBlackbox` at `0x0084b700`, `0xd690` bytes (2026-09-18, later still, confidence 85)
+
+**This is the fourth wrong turn in this sub-thread, and it is the one the other three were standing on.** The "job's own executable binary is located" entry named `0x00848780`/`0x2d00` as "the render-ops SPU job" because `FUN_005fc6c8` registers it through `cellSpursAddWorkloadWithAttribute`. That registration is real and re-confirmed. But `cellSpursWorkloadAttributeInitialize`'s program argument is, by the Cell SDK's own definition, a **policy module** - the SPURS-side scheduler that dequeues work descriptors and loads *job binaries* into local store - not a job. The distinction was visible on the PPU side all along and was not read:
+
+**`FUN_005fc728` (the render-ops submit function, re-decompiled) names its job binary as descriptor field `0`:**
+
+```c
+_opd_FUN_00465588(puVar2, 0, 0, PTR_DAT_008bf6b8 + 0x48, 2);   // field 0: {ea, size} at struct+0x48
+```
+
+`_opd_FUN_00465588` (decompiled) reads `param_4[0]` as an effective address and `param_4[1]` as a byte size and packs them into one 64-bit descriptor word (`(size >> 4) << 0x32 | (ea >> 4) << 4 | 0x800000000000 | 0x40000000000`). **`FUN_005fc550`, the queue's own registration function (decompiled), fills that `+0x48` pair:**
+
+```c
+_opd_FUN_004699f8(PTR_DAT_008bf6b8 + 0x48, PTR_DAT_008bf6bc, uRam008bf6c0, PTR_s_Live_RcsBlackbox_008bf6c4);
+```
+
+`_opd_FUN_004699f8(slot, ea, size, name)` (decompiled) stores `slot[0] = ea; slot[1] = size` and enters `(ea, refcount, name)` into a 32-entry table at `PTR_DAT_008bb380` - a named, reference-counted SPU-binary registry. `read_memory` at `0x008bf6b8`: `PTR_DAT_008bf6bc = 0x0084b700`, `uRam008bf6c0 = 0xd690`, the name string at `0x007ce3f8` = `Live_RcsBlackbox`, and the queue's own name two words later = `LiveRcsBlackBox`. **`read_memory` at `0x0084b700`** shows the same header the `LightCulling` job (next-but-one section) and `docs/rendering/trail-ribbon.md`'s `Trails`/`WakeTrail` jobs share: four `ila`-shaped words, `0x30` (code offset), `0xd6b0` (local-store image size, `0x20` past the file size for bss), `0x1d50`, `0xf0`, the `0xc0dec0de` magic, `8`, `0x4000` (load address), `4`, then the `stqd $80,-16($1)` / `stqd $81,-32($1)` / `stqd $82,-48($1)` / `stqd $126,-64($1)` prologue at `+0x30`. `0x00848780` has none of this: no magic, a header that branches into itself, and `brasl $79,0x3fec0` calls to fixed top-of-local-store addresses - the SPURS kernel's own entry region, which only a policy module calls; a job calls the queue runtime through the function table its context hands it (`LightCulling` does exactly that, `lqx $28,$30,$83 ... bisl $0,$27` through `ctx+0x34`).
+
+**What the render-ops job actually receives, also read this session** (`FUN_005fc728`'s disassembly, the 16-byte inline user data at `r1+0x70`): word `0` = `r25`, the ring-slot copy of the calling context (the `0x160`-byte struct `_opd_FUN_005a20f8` copies first - the one whose `+0xd8`/`+0xdc` are the compiled-ops stream pointer and count, re-pointed at the stream's own ring copy), words `1`/`3` = two values from `_opd_FUN_005cbeb8`/`_opd_FUN_005cbde0`, word `2` = `-1` or a shader-hash-derived word. So `Live_RcsBlackbox` DMAs the whole context, finds the ops stream through it, and interprets it there - the SPU mirror of `Render_RunCompiledOps_q` this page hypothesised, now with its binary located: **`0x0084b700`, `0xd690` bytes, `scripts/ps3-spu-disasm.py 0x0084b700 0xd690`** (13,692 disassembly lines; not read this session beyond confirming it is coherent code with 241 `bisl` calls and a `0x30`-offset prologue).
+
+**Consequences for the entries above:**
+
+- The `MFC_GETLLAR`/`MFC_PUTLLC` decrement, the `$80`/`$81` provenance hunt, the "job type `1`/`2`/`3`" dispatch and the hash-table block are all **job-queue runtime** behaviour, shared by the nine queues the earlier entry counted. "Whose counter" now has a natural PPU-side twin worth one sentence: `_opd_FUN_00469340` (decompiled this session) is a `lwarx`/`stwcx.` decrement-and-test-for-`1` on the same `PTR_DAT_008bb380` registry's refcount word, releasing the entry when it hits zero - the same idiom, on the same kind of object. Not confirmed to be the SPU decrement's target; a lead for whoever returns to the policy module, which this thread no longer needs to.
+- The previous close-out's "genuinely blocked - needs an SPU-thread-capable RPCS3 interface or an execution-order trace from this job's true entry point" was **blocked on the wrong binary**. Neither route was wrong in itself; both were aimed at a program that does not consume opcode `0x2d`. The consumer that does is a static file range, extractable today.
+- The confidence-88 "this is the correct binary" claim narrows to: the correct *workload* (policy module) for the render-ops queue. As a claim about which code interprets the ops stream, it is retracted.
+
+**Confidence 85** for the identification - a gapless PPU decompile chain (`FUN_005fc728` field `0` -> `+0x48` -> `FUN_005fc550`'s registration -> `PTR_DAT_008bf6bc`/`uRam008bf6c0` read directly), corroborated at the byte level by the header shape three independently-located jobs share and the policy module lacks. Not higher because the `Live_RcsBlackbox` binary itself has not been read past its header.
+
+### The `+0x2084` companion word is the frustum-survivor count: the compaction function this page said was never located is `FUN_0040d728`, called every frame from `Scene_PrepareFrame`, and three consumers read the word as a bound (2026-09-18, later still, confidence 88)
+
+**Every function that touches `iRam008b83b0` is now read.** The pointer lives in a TOC slot (`-0x5014(r2)`, TOC `0x008bd3c4`), so `get_xrefs_to 0x008b83b0` returns nothing; `search_instructions lwz -0x5014(r2)` finds the eleven readers instead. Ten are the `0x0040d220`-`0x0040dae8` cluster; the eleventh, `FUN_000bf100`, uses a different TOC (`scripts/ps3-toc.py toc 0x000bf100` -> `0x008ad4d8`) and its `-0x5014(r2)` is an unrelated string pointer - excluded, not ignored. Nothing writes the slot (`stw -0x5014(r2)` matches zero instructions), consistent with the live capture's "never relocated" finding.
+
+**`_opd_FUN_0040d728(frustum)` is the selection/compaction step**, decompiled and disassembled:
+
+```c
+uVar1 = *(uint *)(base + 0x2080);
+*(uint *)(base + 0x2080) = uVar1 ^ 1;                 // flip the double buffer
+for each candidate i in 0 .. *(base + 0x2098):        // the 128-slot list FUN_0040d990 fills
+    v = (candidate.xyz, candidate[7]);                // vspltw v0,v1,3 - the record's LAST float as w
+    if (Render_ClassifyAgainstPlanes_q(frustum, v) != 1)   // 1 = wholly outside
+        copy 32 bytes to base + 0x80 + (uVar1 ^ 1) * 0x1000 + survivors * 0x20;  survivors++;
+*(base + 0x2098) = 0;                                 // candidate list consumed
+*(base + 0x2084 + (uVar1 ^ 1) * 4) = survivors;       // 0040d870: stw r24,0x2084(r9)
+```
+
+`0040d7cc lvx v1,r31,r23` (`r23 = 0x10`, the record's second quadword), `0040d7d4 vspltw v0,v1,0x3` (its fourth float), `0040d7d8`/`0040d7dc` two `vsel`s under the `vsldoi v31,v0,v1,4` mask (word 3 only) build `(x, y, z, record[7])` - a sphere for the plane test. Called once per frame, ungated, from `Scene_PrepareFrame` (`0x003abb60`, `_opd_FUN_0040d728(scene + 0x7cb0)` - the same `+0x7cb0` block `Render_SetClipPlanes_q` consumes elsewhere in the same function, i.e. the frame's clip planes). **This links the two offset pairs the "twelve unexamined call sites" entry could only juxtapose**: the 128-slot candidate list at `+0x2098`/`+0x20a0` is copied, frustum-filtered, into the double-buffered slot at `+0x80 + index*0x1000`, and the survivor count is the companion word.
+
+**The producer's record layout, from `_opd_FUN_0040d990(float radius, float w, vector position, vector colour)` decompiled**: `record = (position.xyz, w, colour.xyz, radius)`. The "`A`, `A*0.25`, `A*0.1`" ratio the live captures kept finding is an **authored colour** `(1.0, 0.25, 0.1)` (orange) times an intensity - which is why slot 1's "anomalous" records (`80, 10, 0` - a different orange; a `D = 10.0` record) broke the ratio: they are lights of another colour and another radius, not an interpolation artefact. The "exact ratio" claim was never a structural property, only the dominant light colour on the circuits sampled. The fourth float, previously `D`, is the **radius**: used as the sphere radius by this frustum test, by the `LightCulling` job's chunk test (next section, `rotqbyi $52,$53,12`), and by the third consumer below (`0040db5c vspltw v13,v0,0x3`).
+
+**Three consumers read the count as a bound, all decompiled:**
+
+1. `_opd_FUN_0040d488` - `iVar2 = *(base + 0x2084 + index*4); if (iVar2 == 0) return inert; ... _opd_FUN_004655f0(job, 1, 0, index*0x1000 + base + 0x80, iVar2 << 5, 0)` - DMA field `1` of the `LightCulling` job is the current slot, **`count * 32` bytes**, exactly one 32-byte record per count.
+2. `_opd_FUN_0040dae8(sphere)` - `mtspr CTR, count` then a loop over `count` records testing `(radius + sphere.w)^2 >= |position - sphere.xyz|^2` (`vcmpgefp.`), returning `1` on the first hit: "does any visible light touch this sphere." Called three times, from `FUN_003ea368` (twice) and `FUN_003eb890` - the `RigidBody`/`Absorb`/`Leach` family, which is how that family decides per object whether to stage `(slot address, count)` into context `+0x14c`/`+0x150` at all. The per-object PPU-side equivalent of what the SPU job does per track chunk.
+3. `_opd_FUN_004074e0` itself (spot-check above): `value == 0` suppresses the address.
+
+**The live capture already corroborated this, and nobody had diffed it.** `/tmp/hd-spu-light-companion/s*_slot.bin` (the previous entry's five Amphiseum snapshots), diffed record by record: `s1 -> s2` (count `7`) changes records `0`-`6`; `s2 -> s3` changes `0`-`6`; **`s3 -> s4` (count `2`) changes exactly records `0`-`1`**, and record `7` is byte-identical across all four - the stale eighth record from some earlier frame with eight survivors, which is also what the "at least one record stayed byte-identical across every snapshot on both circuits" observation two entries back was seeing. `record_count: 8` in every snapshot was the script's own stop-at-first-zero scan reading a stale high-water mark, not a cap: **the slot holds up to 128 records** (`0x1000 / 0x20`, the same `0x80` the candidate list caps at), and only the first `count` are live. Any read of this buffer must bound itself by `+0x2084[index]`; `rpcs3-spu-light-dump.py`'s `record_count` should not be used as one.
+
+**Confidence 88.** Producer, compaction and three consumers are all direct decompiles with the load-bearing vector lanes confirmed in disassembly (`vspltw ...,3`), the count is written by one function and read as a length or loop bound by three, and the existing live capture's record-by-record diff matches the count exactly on the one snapshot pair where it changed. This retires the previous entry's confidence-55 "magnitude-correlation only, no consumer traced" framing outright, and the "no selection/compaction function was located" and "whether the 128-slot list becomes the 8-slot buffer is not established" hedges in the "twelve unexamined call sites" entry with it. The other two `iRam008b83b0` functions, for completeness: `_opd_FUN_0040d890(param)` fills a `128 x 128` byte table at `base + 0x3100` with `(uint8)(powf(j * 0.00788, i * 0.0788) * 255.0)` (a falloff lookup, consumer unread; `param` stored at `+0x30a0`), and `_opd_FUN_0040d220` walks scene nodes of class `5` appending `(base pointer, 1, 4, 0x44)` entries to a per-node list - neither on this thread's path.
+
+### The `LightCulling` SPU job is identified, its dispatch decompiled, and its `0x490` bytes read in full: it writes the per-chunk bit table that gates opcode `0x2d`, and `0x800` is the `SVC1`/`SpuVertexColours` permutation bit (2026-09-18, later still, confidence 85 PPU-side, 75 for the SPU computation)
+
+**Identity.** `_opd_FUN_0040d3b0(1, 0xffff)` (decompiled) calls `_opd_FUN_004699f8(base + 0x2090, uRam008b83b4, uRam008b83b8, PTR_s_LightCulling_008b83bc)` - the same named-binary registration `Live_RcsBlackbox` uses (previous-but-one section) - and stores `~Crc32_HashString("SpuVertexColours")` at `base + 0`. `read_memory 0x008b83a0`: `uRam008b83b4 = 0x007f6880`, `uRam008b83b8 = 0x490`, the string at `0x007b4410` = `LightCulling`. `read_memory 0x007f6880`: the job header (`0x30` code offset, `0x4b0` image size, `0xc0dec0de`, `0x4000` load address) and the shared `stqd $80,-16($1)` prologue. `_opd_FUN_00469320(base + 0x2090)` (decompiled: `(*(ea+0x14) + 0x3ff + *(ea+0x18)) >> 10`) reads that header's `+0x14`/`+0x18` words for the job's local-store footprint in KiB - `2` here, `61` for `Live_RcsBlackbox` (`0xd6b0 + 0x1d50`).
+
+**Dispatch: `_opd_FUN_0040d488(out, chunk_spheres_ea, chunk_count, bitmask_ea)`**, decompiled and disassembled (its fourth argument, `r6`, is missing from the decompiler's signature but stored at `r1+0x78`):
+
+| descriptor field | call | contents |
+| --- | --- | --- |
+| `0` | `_opd_FUN_00465588(job, 0, 0, base+0x2090, 2)` | the job binary `{0x007f6880, 0x490}` |
+| `1` | `_opd_FUN_004655f0(job, 1, 0, slot_address, count << 5, 0)` | the current light slot, `count` x 32 bytes |
+| `2` | `_opd_FUN_004655f0(job, 2, 0, chunk_spheres_ea, (chunk_count & 0xfffffff) << 4, 0)` | `chunk_count` x 16 bytes |
+| `3` | `_opd_FUN_00465330(job, 3, 0, 0, 0, 0)` | an output slot, no DMA |
+| inline user data (`r1+0x70`, 16 bytes) | `_opd_FUN_004654e8(job, r1+0x70, 0x10)` | `{count, chunk_count, bitmask_ea, 0}` |
+
+then `_opd_FUN_004688a0(...)` - the same `cellSpursReadyCountStore` submit chain `FUN_005fc728` uses - and the returned ticket is written to `out`. **Its one caller, `_opd_FUN_0040aba0`** (the track-visibility pass that owns the `Job_TrackVisibilityTest` / `Job_PushVisibleRenderables` / `Job_BuildVisibleArray` strings), decompiled: it zeroes the `0x1000` bytes at `PTR_DAT_008b8264 + 0x205400`, calls `_opd_FUN_0040d488(local_100, *(track + 0x24), *(track + 0x1c), PTR_DAT_008b8264 + 0x205400)`, stores the ticket at `+0x61208`, does its own PPU-side visibility work, and at its end spins on that ticket (`_opd_FUN_00465e10(queue, 3, ticket)` - decompiled, waits until the minimum of six per-SPU completion counters at `+0x42..+0x4e` reaches the ticket) before returning. `track + 0x1c` is the chunk count (the same field every loop in that function bounds on) and `track + 0x24` the per-chunk 16-byte array `_opd_FUN_004074e0` itself reads as `(centre.xyz, radius)` for its own sphere-versus-camera distance test (`uVar19 = *(iVar21 + 0x24) + chunk * 0x10`, then `vectorSubtract`/`vectorMultiplyAdd`) - the chunk bounding spheres.
+
+**The two bit-table symbols are one table.** `PTR_DAT_008b8264 = 0x00d44e80`, `PTR_DAT_008b82b0 = 0x00f44e80`, exactly `0x200000` apart, so `FUN_004074e0`'s `PTR_DAT_008b8264 + 0x205400` and `FUN_00408fa8`'s `PTR_DAT_008b82b0 + 0x5400` are both `0x00f4a280` - closing the "not confirmed to be the same underlying table" hedge in the "twelve unexamined call sites" entry.
+
+**What the SPU program does** (`scripts/ps3-spu-disasm.py 0x007f6880 0x490`, 299 lines, all read; `$126` = load base `- 0x4000`, so every `0x4xxx` literal is an image-relative address). After the shared prologue and a `0x1b0`-`0x2b0` block that fetches its three buffers through the queue runtime's function table (`bisl $0,$27` etc. with `$4 = 1, 2, 3`, results in `$82` lights, `$81` spheres, `$80` output) and reads the user data into `stack+32`:
+
+```
+2f8  lqd  $12,32($1)            ; user[0] = light count
+304  brz  $12,0x450             ; no lights: clear the chunk's bit and continue
+30c  fsmbi $13,15  / 310 ila $7,0x10203       ; lane-3 mask, splat-word-0 shuffle
+31c  lqx  $11,$35,$81           ; sphere[chunk] = (cx, cy, cz, r)
+320  rotqbyi $34,$11,12 / 324 shufb $10 = splat(r)
+334  lqd  $53,16($6)  / 33c lqd $50,0($6)     ; light quad 2 (colour.xyz, radius), quad 1 (pos.xyz, w)
+34c  rotqbyi $52,$53,12 / 350 shufb $51 = splat(light radius)
+354  selb $49,$50,$51,$13       ; (px, py, pz, light radius)
+358  fs   $47,$49,$11           ; (dx, dy, dz, .)
+364  fm   $43,$47,$47  / 378 fa / 37c fa      ; dx^2 + dy^2 + dz^2 in lane 0
+368  fa   $45,$46,$10           ; light radius + chunk radius
+374  fm   $39,$45,$45           ; (r1 + r2)^2
+384  fcgt $37,$38,$39 / 388 gb / 38c brnz $36,0x32c   ; dist^2 > (r1+r2)^2: next light
+390  rotmi $58,$14,-3 / 398 andi $60,$14,7 / 3a8 shl $54,$59,$60
+3b4  or   $4,$55,$54 / 3c0 cbd / 3c4 shufb / 3c8 stqd    ; out[chunk >> 3] |= 1 << (chunk & 7)
+3d0  rotqbyi $4,$62,4 / 3d4 clgt $61,$4,$14 / 3d8 brnz  ; while chunk < user[1]
+3e4  rotqbyi $73,$75,8          ; user[2] = bitmask EA
+3f4-420  wrch $ch16 (LSA=out), $ch18 (EAL), $ch19 ((chunk_count + 7) / 8, rounded to 16), $ch20 (tag), $ch21 = 0x20 (MFC_PUT)
+```
+
+`0x450`-`0x478` is the no-light path: `rot $76,-2,chunk&7` / `and` clears the chunk's bit instead. So: for every chunk, set its bit if any visible light's sphere `(position, radius)` intersects the chunk's bounding sphere, then DMA the `(chunk_count + 7) / 8` bytes back to `bitmask_ea`. **That is the table `_opd_FUN_004074e0`/`FUN_00408fa8` test with `1 << (chunk & 7) & table[chunk >> 3]` before emitting opcode `0x2d` and selecting the `| 0x800` shader variant** - the same byte/bit split, the same base, zeroed by the caller immediately before the job and waited on before the draw compilers run.
+
+**`0x800` is `SVC1`.** `Shader_GetVariantHash(word)` is `table[word]` over the 4096-entry permutation table (this page's "`Shader_GetVariantHash`" entry, confidence 80), and `docs/formats/rcsmaterial.md`'s independently-derived bit layout of that same word (confidence 95, naming `0x4074e0`/`0x408fa8` by address as its writers) has bit `11` = "set `SVC1`, clear `SVC0`"; `1 << 11 = 0x800`. `SVC1` is the permutation whose vertex program reads attribute `0x868f8229` = `~crc32("SpuVertexColours")` with the RGBE decode this page's "The vertex-light constants are read" section found unreachable from disc data - and `_opd_FUN_0040d3b0` stores exactly that hash at `base + 0` on registration. **The whole `Enable_spu_vertex_light` pipeline on the PPU side is therefore closed**: (1) fifteen producers push `(position, w, colour, radius)` candidates; (2) `Scene_PrepareFrame` frustum-culls them into the double buffer with a count; (3) the track pass hands the survivors and the chunk spheres to `LightCulling`, which marks every chunk any light touches; (4) the draw compilers emit `(slot address, count)` as opcode `0x2d` for exactly those chunks and select the `SVC1` variant; (5) `Live_RcsBlackbox` (previous-but-one section) receives that stream and, by the variant's own declared input, must produce the `SpuVertexColours` stream the `SVC1` vertex program reads. Step (5) is the one SPU-side computation still unread.
+
+**Confidence 85** for steps (1)-(4) as a PPU-side chain (all decompiled, the SPU job's inputs and output address are the PPU's own arguments, and the bit-table protocol is read on both ends), **75** for the SPU job's arithmetic (hand disassembly, no decompiler, per this page's ceiling - though `0x490` bytes read end to end with the loop bounds matching the PPU-side `count * 32` and `chunk_count * 16` strides is as corroborated as hand disassembly gets), and **78** for `0x800 = SVC1 = SpuVertexColours` (two documented derivations of the permutation word agree; what would raise it is reading `Live_RcsBlackbox` writing that attribute stream). No code changed; `/tmp/lightculling-job.bin`, `/tmp/live-rcsblackbox-job.bin` and `/tmp/render-ops-job-ext.bin` are not committed.
+
+**The names the three sections above land** (`names.tsv`, all in the 70-88 band so none carries `_q`):
+
+| address | kind | name | confidence |
+| --- | --- | --- | --- |
+| `0x0040d990` | function | `SpuLight_AddCandidate` | 85 |
+| `0x0040d728` | function | `SpuLight_CompactVisibleCandidates` | 88 |
+| `0x0040d370` | function | `SpuLight_GetVisibleSlotAddress` | 88 |
+| `0x0040d390` | function | `SpuLight_GetVisibleCount` | 88 |
+| `0x0040dae8` | function | `SpuLight_AnyVisibleLightTouchesSphere` | 82 |
+| `0x0040d488` | function | `SpuLight_DispatchLightCullingJob` | 85 |
+| `0x0040d3b0` | function | `SpuLight_RegisterLightCullingJob` | 82 |
+| `0x005fc550` | function | `RenderOps_RegisterLiveRcsBlackboxJob` | 82 |
+| `0x004699f8` | function | `SpuJob_RegisterNamedBinary` | 80 |
+| `0x00469340` | function | `SpuJob_ReleaseNamedBinary` | 80 |
+| `0x00465e10` | function | `SpuJobQueue_WaitForTicket` | 78 |
+| `0x007f6880` | data | `SpuJob_LightCulling_Binary` | 85 |
+| `0x0084b700` | data | `SpuJob_LiveRcsBlackbox_Binary` | 85 |
+| `0x00848780` | data | `SpursJobQueue_PolicyModule` | 80 |
+
+`FUN_0040aba0` (the track-visibility pass) and `FUN_0040d890` (the falloff table) stay unnamed: the first is a `0x1300`-line function this session read only the head and tail of, the second has no consumer traced.
