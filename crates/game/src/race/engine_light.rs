@@ -45,26 +45,37 @@
 //!   unread, so it stays unwired rather than fired on a guess. A capture
 //!   showed it once, on a different boot.
 //!
-//! # Who receives it
+//! # Who receives it, and why the floor is not it
 //!
 //! [`Race::hd_engine_lights`] is bound into the `Scene` uniform of the track
-//! chunks **and of the craft**, and the second half rests on static evidence
-//! alone. What is measured: `scripts/ps3-sho.py svc-twins <image>
-//! materials/ships` finds 74 of the ship materials compiled with `SVC1`
-//! twins (1,776 pairs, every `RigidBody` class included, all 888 vertex
-//! blocks carrying the `(255, 128)` decode and the `0x868f8229` attribute),
-//! so a hull *can* take the term; and the numbers leave it nothing else to
-//! light at rest - a craft rides at `ride_height * 0.75` = 4.1 units
-//! (Feisar) above the floor while `D` is 0.7-2.0 and the light sits at or
-//! inside the nozzle (`Distance` runs to -0.4), so on a level track the
-//! only surface within `D` is the craft's own engine housing, which is what
-//! a per-ship `Distance` reads as being tuned for. The picture agrees: the
-//! Fury housings take the warm tint the reference capture shows. What is
-//! not measured is the runtime half - whether `LightCulling` sets a hull
-//! chunk's `SVC1` bit - and that is the one RPCS3 read that would settle it
-//! (`scripts/rpcs3-spu-light-candidates.py` is the live lane's tool). The
-//! track floor and walls light up only when a craft is within `D` of them:
-//! landings, wall scrapes and banked sections.
+//! chunks **and of the craft**. Bound to the track alone it changed zero
+//! pixels of an Amphiseum frame, and the numbers say it never can at ride
+//! height: a craft rides at `ride_height * 0.75` = 4.1 units (Feisar) above
+//! the floor while `D` is 0.7-2.0 and the light sits at or inside the nozzle
+//! (`Distance` runs to -0.4). **The original's own records agree**, measured
+//! rather than inferred: every one of the 40 live-captured light positions in
+//! `data/traces/hd-spu-light-companion/` sits 2.98-4.41 units (mean 4.03)
+//! from the nearest collision triangle of the circuit it was captured on,
+//! against 2.85-4.53 (mean 4.09) for this project's lights on the same
+//! circuit over a 1,200-tick race - `crates/game/examples/hd_engine_light_reach_probe.rs`.
+//! Not one record on either side is within its own `D` of the floor. (That
+//! circuit is **Talon's Junction**, not the Amphiseum renderer.md's capture
+//! entry names: scored against all sixteen circuits' collision soups,
+//! `hd_engine_light_which_circuit.rs`, Talon's Junction puts 40 of 40
+//! records 3-4.4 units off a surface and Amphiseum 3 of 40 within 5.)
+//!
+//! So at rest the only surface within `D` is the craft's own engine housing,
+//! which is what a per-ship `Distance` reads as being tuned for, and what
+//! the hull *can* take: `scripts/ps3-sho.py svc-twins <image>
+//! materials/ships` finds 74 ship materials compiled with `SVC1` twins
+//! (1,776 pairs, every `RigidBody` class included, all 888 vertex blocks
+//! carrying the `(255, 128)` decode and the `0x868f8229` attribute). The
+//! picture agrees: the Fury housings take the warm tint the reference
+//! capture shows, brighter on boost. What is still not measured is the
+//! runtime half - whether `LightCulling` sets a hull chunk's `SVC1` bit -
+//! and that is the one RPCS3 read that would settle it. The track floor and
+//! walls light up only when a craft is within `D` of them: landings, wall
+//! scrapes and banked sections.
 
 use oag_core::Rng;
 use oag_core::math::Vec3;
