@@ -47,3 +47,13 @@
 0x8153fc34	data	g_bDlc1Mounted	75	frontend-campaign-map.md
 0x8153fc38	data	g_bDlc2Mounted	75	frontend-campaign-map.md
 0x8153fc3c	data	g_bDlc3Mounted	75	frontend-campaign-map.md
+0x813cf5e4	function	TouchCampaignFury_Item_Construct	82	frontend-campaign-map.md
+0x813cf604	function	TouchCampaignFury_Item_Create	82	frontend-campaign-map.md
+0x813cf748	function	TouchCampaignHD_Item_Construct	82	frontend-campaign-map.md
+0x813cf768	function	TouchCampaignHD_Item_Create	82	frontend-campaign-map.md
+0x810f74ca	function	TouchCampaignHD_Item_OnTap	76	frontend-campaign-map.md
+0x810f440e	function	TouchCampaignFury_Item_OnTap	76	frontend-campaign-map.md
+0x813f2b90	function	sceAppUtilDrmOpen	90	frontend-campaign-map.md
+0x813f2bc0	function	sceAppUtilDrmClose	90	frontend-campaign-map.md
+0x813f2c40	function	sceAppUtilInit	90	frontend-campaign-map.md
+0x8151d504	data	g_bNoDlcMounted	85	frontend-campaign-map.md
