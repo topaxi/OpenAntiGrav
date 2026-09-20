@@ -103,7 +103,7 @@ sys.path.insert(0, str(ROOT / "scripts"))
 spec = importlib.util.spec_from_file_location("rpcs3_drive", ROOT / "scripts" / "rpcs3-drive.py")
 drive = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(drive)
-from rpcs3_debugger import Debugger, REG_FPR, REG_LR  # noqa: E402
+from rpcs3_debugger import Debugger, REG_FPR, REG_LR, REG_PC  # noqa: E402
 
 IMAGE = ROOT / "data/images/hdfury-ps3-eu-dec.iso"
 
@@ -308,7 +308,7 @@ def attribute_hit(dbg, ptr, tid, regs, timeout=1.5):
         dbg.drain()
         for t in dbg.threads():
             r = dbg.registers(t)
-            if r is not None and int.from_bytes(r[512:520], "big") & 0xFFFFFFFF == lr:
+            if r is not None and int.from_bytes(r[REG_PC : REG_PC + 8], "big") & 0xFFFFFFFF == lr:
                 confirmed = True
                 break
     finally:
@@ -334,6 +334,42 @@ def attribute_hit(dbg, ptr, tid, regs, timeout=1.5):
     }
 
 
+def find_thread_at(dbg, address):
+    """`(tid, regs)` of a thread parked at `address`, or `(None, None)` -
+    the `find_at` shape `hd-flare-owner-break.py` uses, inlined rather than
+    imported since this script otherwise has no dependency on that one."""
+    for tid in dbg.threads():
+        regs = dbg.registers(tid)
+        if regs is None:
+            continue
+        pc = int.from_bytes(regs[REG_PC : REG_PC + 8], "big") & 0xFFFFFFFF
+        if pc == address:
+            return tid, regs
+    return None, None
+
+
+def stop_at(dbg, address, tries=20, slice_seconds=0.3):
+    """`resume -> wait_for_stop -> drain -> check every thread's PC`, the
+    pattern `Breaker.stop_at` uses and `Debugger.wait_at` itself does not:
+    `wait_at` never calls `drain()`, so a breakpoint that queues its own
+    unsolicited stop-reply during the `resume`/`sleep` window (exactly what
+    `SpuLight_AddCandidate` does - a function called many times a frame) gets
+    that reply consumed by the next unrelated command instead, and every
+    later packet on the connection is off by one - `rpcs3-debugger.md`'s own
+    "call `drain()` after every breakpoint stop." Measured directly this
+    session: `wait_at()` used here first hung `qfThreadInfo` on a genuine
+    socket timeout after the very first breakpoint hit."""
+    for _ in range(tries):
+        dbg.resume()
+        if dbg.wait_for_stop(timeout=slice_seconds) is None:
+            dbg.pause()
+        dbg.drain()
+        tid, regs = find_thread_at(dbg, address)
+        if tid is not None:
+            return tid, regs
+    return None, None
+
+
 def run_attribution(dbg, ptr, max_hits, time_budget_seconds):
     dbg.add_breakpoint(ADD_CANDIDATE_ENTRY)
     hits = []
@@ -341,7 +377,7 @@ def run_attribution(dbg, ptr, max_hits, time_budget_seconds):
     deadline = time.time() + time_budget_seconds
     try:
         while len(hits) < max_hits and time.time() < deadline:
-            tid, regs = dbg.wait_at(ADD_CANDIDATE_ENTRY, tries=20, slice_seconds=0.3)
+            tid, regs = stop_at(dbg, ADD_CANDIDATE_ENTRY, tries=20, slice_seconds=0.3)
             if tid is None:
                 break
             hit = attribute_hit(dbg, ptr, tid, regs)
