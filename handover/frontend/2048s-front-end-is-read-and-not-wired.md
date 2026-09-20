@@ -15,8 +15,19 @@ touch-icon grids (`GameModeChoice`, `Home`) over a persistent 3D campaign map
 (`FE3DCanvas`), no `<FEGlobals>` block anywhere, no `<Menu>`/`<HorizMenu>`
 widget anywhere. `oag_title::MenuSkin` was built for the vocabulary the other
 three titles share and disagree on numbers within; 2048 does not author that
-vocabulary at all. That is why `oag_2048::TITLE.front_end` is still `None`
+vocabulary at all. That is why `oag_2048::TITLE.front_end` was still `None`
 after this pass, on purpose, and not from a lack of evidence.
+
+**Resolved 2026-09-20, on `lane/2048-frontend`:**
+[ADR-0054](../../docs/architecture/adr/0054-a-touch-front-end-is-a-second-axis-not-a-menuskin-variant.md)
+made `oag_title::FrontEnd::menu` `Option` and added a `touch` axis for
+exactly this vocabulary, so `oag_2048::TITLE.front_end` is `Some` now -
+`menu: None` (still correct, still no `MenuSkin` vocabulary to fill it
+from), `touch: Some(...)` carrying every number this document names. See
+`docs/formats/2048-frontend.md`'s own "Resolved 2026-09-20" section for the
+full account, including a second, previously-invisible defect this
+unblocked: the in-race HUD font still does not draw, now for a role-name
+mismatch (`"HUD"` vs. `2048HUD`) rather than for missing plugins.
 
 The boot chain (`Boot Connect` -> `Boot Studio Logo` -> `Boot Intro Movie` ->
 `Load Save Bootup` -> `TitleScreen` -> `GameModeChoice`) is declared in the
@@ -37,26 +48,19 @@ names both - `english/Definition.xml` declares a `2048HUD` font role at
 
 ## Open
 
-- **`oag_title::MenuSkin` has no shape for a touch-icon front end.** This is
-  the real blocker, not an unread disc. Filling `menu_x`/`space`/etc. with
-  placeholder numbers to satisfy the type would be inventing a menu shape
-  2048 does not draw - exactly what `CLAUDE.md`'s "never invent" section
-  forbids. Two shapes for a fix, neither taken here because a type decision
-  this size is bigger than a first sweep should make unasked:
-  - Make `FrontEnd::menu` `Option<&'static MenuSkin>` and add a second,
-    optional axis (`touch_menu` or similar) for the icon-grid/3D-canvas
-    idiom, filled from `GameModeChoice`/`Home`/`FE3DCanvas`'s own numbers
-    (all read and quoted in `2048-frontend.md`).
-  - Or decide the touch idiom is out of `MenuSkin`'s scope entirely and give
-    `FrontEnd` a `menu: Option<...>` with 2048 the first `None`, since
-    nothing downstream currently draws a touch grid anyway.
-  Whichever is chosen, `2048-frontend.md`'s "front end is a touch-icon grid"
-  section has every number (`GameModeChoice`'s four `TouchButton`s at
-  `x`/`y`/`140x140`, `Home`'s five, `Team_Definition.xml`'s 3D ship-model
-  origin) already quoted and ready to fill whichever type lands.
-  `FE3DCanvas`'s own `CanvasLabel`s are not part of that list any more - see
-  the drawn-preview finding below, which found them clustered in one small
-  corner rather than spread across a map.
+- **Resolved 2026-09-20: `oag_title::MenuSkin` has no shape for a
+  touch-icon front end, and now it does not need one.**
+  [ADR-0054](../../docs/architecture/adr/0054-a-touch-front-end-is-a-second-axis-not-a-menuskin-variant.md)
+  took the first of the two shapes this bullet named: `FrontEnd::menu` is
+  `Option<&'static MenuSkin>`, and a new `oag_title::touch::TouchFrontEnd`
+  fills `FrontEnd::touch` instead, off `GameModeChoice`/`Home`/
+  `Team_Definition.xml`'s real `x`/`y`/`OriginX`/`OriginY` (re-read from the
+  archive for the type, not transcribed from this page's own prose, which
+  never quoted individual button coordinates). `FE3DCanvas`'s own
+  `CanvasLabel`s stayed out of the type, per the drawn-preview finding below:
+  their cluster bounding box is a tool's own measurement over the label set,
+  not a number the disc states, so the type carries the screen name and the
+  atlas entry instead and lets a caller walk the real label list.
 - **Resolved 2026-09-18: the six-vs-four tiles were never a `GameModeChoice`
   fact.** `open_program` on `/2048/eboot-vita-2048-eu-v104.elf` works
   alongside `/hdfury/EBOOT-ps3-hdfury-eu.elf` staying open for the other lane
@@ -126,18 +130,36 @@ names both - `english/Definition.xml` declares a `2048HUD` font role at
 
 ## Next Steps
 
-1. Resolve the `MenuSkin` type question above (ask, don't guess) and, once
-   resolved, fill `FrontEnd::menu` (or its replacement) from
-   `2048-frontend.md`'s already-quoted numbers.
+1. ~~Resolve the `MenuSkin` type question above~~ **Done 2026-09-20**, see
+   [ADR-0054](../../docs/architecture/adr/0054-a-touch-front-end-is-a-second-axis-not-a-menuskin-variant.md).
 2. Name the vtable at `0x8150ea5c`-ish that owns
    `FE3DCanvas_AddHDCampaignEventButtons`/`FE3DCanvas_AddFuryCampaignEventButtons`
    (both are Thumb-pointer hits in one table, 27 slots apart) - that names the
    class and, with it, whatever screen/refresh path calls them, which is the
-   remaining unknown in `frontend-campaign-map.md`.
+   remaining unknown in `frontend-campaign-map.md`. **Still open** - not
+   attempted this pass.
 3. Extract `frontend.bnk` and read its cue table (`oag_formats::sblk::Bank::parse`)
-   to name `Music::front_end`.
-4. Once `front_end` is fillable, re-run
+   to name `Music::front_end`. **Still open** - not attempted this pass.
+4. ~~Once `front_end` is fillable, re-run
    `crates/game/tests/vita_2048_hud_ground_truth.rs` and a fresh
-   `just play 2048 --race` boot report - the HUD font fix
-   (`2048-hud.md`'s correction above) is a real, free improvement that falls
-   out of wiring `front_end` at all, independent of the `MenuSkin` question.
+   `just play 2048 --race` boot report~~ **Done 2026-09-20**, and the "real,
+   free improvement" this step predicted did not fully land: wiring
+   `front_end` does make the seventeen language plugins reachable (a
+   `--race` capture now logs all seventeen, and
+   `vita_2048_hud_ground_truth.rs`'s six tests still pass against real data),
+   but the HUD font itself still draws in 5x7 fallback. The remaining cause
+   is a role-name mismatch this pass found rather than fixed - see
+   `docs/formats/2048-frontend.md`'s "Resolved 2026-09-20" section and
+   `docs/formats/2048-status.md`'s HUD bullet for the full mechanism
+   (`hud_font` asks for role `"HUD"`/`"HUDSmall"`, 2048 names `2048HUD`, and
+   two plugins' leftover `HUD`/`HUDSmall` roles point at files 2048 does not
+   ship).
+5. **New, opened 2026-09-20: give `oag_title` a per-title HUD font role
+   name** (mirroring `MenuSkin::menu_font`'s "which role names the disc
+   actually uses" pattern) so `crates/game/src/race/hud.rs::hud_font` can
+   ask 2048 for `2048HUD` instead of the `"HUD"`/`"HUDSmall"` literal every
+   other title happens to share. Also decide what `HUDSmall` means on a
+   title that names no separate small face at all - falling back to
+   `2048HUD` for both sizes is a plausible reading but is not something this
+   pass measured, so it needs its own check before landing. A candidate for
+   its own thread rather than a tail on this one.

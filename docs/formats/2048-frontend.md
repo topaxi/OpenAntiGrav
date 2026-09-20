@@ -34,7 +34,7 @@ archive, pointed at a loose `.psarc` file instead.
 | Do language plugins carry a HUD font role? | **Yes.** `english/Definition.xml` names `2048HUD` -> `Data\XML\2048_hud\font\2048_hud.fnt`, contradicting a claim on `2048-hud.md`/`2048-status.md` this page corrects | 90 |
 | Do HD's own language-plugin bugs reproduce here? | **Yes, byte for byte** - the `Svenska` mixups, the mangled Russian name, and the still-labelled `Wipeout Pulse` internal id | 90 |
 | What plays the boot movie? | `data/Videos/intro.mp4` - a real MP4/ISOBMFF container, not `.bik`/`.pmf`/`.ipf` | 92 |
-| Is `front_end` wired? | **No, and not for lack of evidence** - `oag_title::MenuSkin` cannot honestly hold this front end's numbers. See [below](#why-front_end-stays-none). | - |
+| Is `front_end` wired? | **Yes, since 2026-09-20** - [ADR-0054](../architecture/adr/0054-a-touch-front-end-is-a-second-axis-not-a-menuskin-variant.md) widened `oag_title::FrontEnd::menu` to `Option` and added a `touch` axis for exactly this vocabulary. `menu` itself stays `None`, correctly - see [below](#why-front_end-stays-none), now describing why one field of `FrontEnd` is `None` rather than why the whole struct was. | - |
 
 ## Reading it yourself
 
@@ -505,6 +505,44 @@ variant, either of which is a type decision bigger than a first sweep should
 make unasked. `loading` and `music` stay `None` on narrower, ordinary
 evidence gaps (a real loading screen with no located plugin XML; a located
 bank with no read cues) rather than this structural one.
+
+### Resolved 2026-09-20: `front_end` is wired, and `menu` is the one field left `None`
+
+[ADR-0054](../architecture/adr/0054-a-touch-front-end-is-a-second-axis-not-a-menuskin-variant.md)
+made the call this section left open: `oag_title::FrontEnd::menu` is now
+`Option<&'static MenuSkin>`, and `FrontEnd` gained a `touch:
+Option<&'static TouchFrontEnd>` axis. `oag_2048::frontend::FRONT_END` fills
+`root`, `language_plugins` (the seventeen plugins above, spelled exactly as
+the archive's own lowercase directories), `boot` (the five-screen chain,
+`Provenance::Declared`) and `touch` (every number in this section: both
+grids' `TouchButton`s with their real `x`/`y`, the team screen's ship-model
+origin, the `FE3DCanvas` screen and atlas names - re-read from the archive
+for the type rather than transcribed from this page's prose, which never
+quoted individual button coordinates). `menu` stays `None`, on the same
+evidence this whole page already gave: no `<FEGlobals>` block, no
+`<Menu>`/`<HorizMenu>` widget. `oag-game`'s menu-driven boot
+(`boot::load_shell`) refuses on that narrower ground now, by name, pointing
+at `--race`; `oag_game::main::session::placeholder` still stands in this
+build's own menu for the title, on the same terms it always did.
+
+**The HUD font this section names is now locatable and still does not
+draw**, and the reason moved rather than closed. Wiring `front_end` makes
+`language_plugins` reachable for the first time - a `--race` capture logs
+all seventeen plugins where it used to log none - but
+`crates/game/src/race/hud.rs`'s `hud_font` asks for the literal role name
+`"HUD"`/`"HUDSmall"` (`oag_ui::language::roles`, shared by every title), and
+none of 2048's plugins name that role; they all name `2048HUD` instead. Two
+of the seventeen - `korean` and `traditionalchinese` - do carry a leftover
+`HUD`/`HUDSmall` role pointing at `Data\FE\Fonts\PulseHud.fnt`/
+`koreanHudSmall.fnt`, neither of which 2048 ships, and because `hud_font`
+searches every loaded language rather than only the chosen one, `korean`'s
+dangling entry is what a `--race` report now names regardless of the
+player's own language. See `docs/formats/2048-status.md`'s HUD bullet for
+the full log evidence. Closing this is a new `oag_title` axis (a per-title
+HUD font role name) and a real gap of its own for the `HUDSmall` half, since
+no 2048 plugin names a distinct small-face role for it to read - out of
+scope for ADR-0054, which wires the front end far enough to expose the
+mismatch rather than to fix it.
 
 ## See also
 

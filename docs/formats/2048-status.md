@@ -100,19 +100,25 @@ the start line and runs the simulation. What it does **not** do, and why:
   `165 skeleton node(s), 113 animated over 113 track(s), 166.7 s loop`.
   Not wired: the `trackZone` clip (Zone mode's own skeleton, 30 Hz keys)
   and the start-grid animation.
-- **The front end is read now; `oag_2048::TITLE` still carries `front_end: None`,
-  `loading: None` and `music: None` - a type mismatch, not an unread disc.**
-  The boot chain (`Boot Studio Logo` -> `Boot Intro Movie` -> `TitleScreen` ->
-  `GameModeChoice`) is declared in `NEWGUI/Bootup_Definition_EU.xml`/
-  `Intro_Definition.xml` and corroborated frame-for-frame on Vita3K. What
-  blocks wiring it is `oag_title::MenuSkin`: 2048 authors no `<FEGlobals>`
-  block at all - no `MenuXOffset`, no `MenuScale`, no title offsets, nothing
-  `MenuSkin`'s mandatory `f32` fields could honestly hold - because its whole
-  front end is a touch-icon grid (`GameModeChoice`, `Home`, the campaign
-  `FE3DCanvas`), an idiom `MenuSkin` was never built to describe. `loading` and
-  `music` stay `None` on narrower gaps: a real percentage-bar loading screen
-  runs on Vita3K but no plugin XML for it has been located, and `frontend.bnk`
-  is confirmed to exist but its cues are unread. See
+- **Resolved 2026-09-20: `oag_2048::TITLE.front_end` is `Some` -
+  [ADR-0054](../architecture/adr/0054-a-touch-front-end-is-a-second-axis-not-a-menuskin-variant.md)
+  widened `oag_title::FrontEnd::menu` to `Option` and added a second,
+  touch-icon axis (`FrontEnd::touch`) rather than waiting on a `MenuSkin`
+  this title was never going to author.** The boot chain (`Boot Connect` ->
+  `Boot Studio Logo` -> `Boot Intro Movie` -> `Load Save Bootup` ->
+  `TitleScreen`) is wired as `Provenance::Declared`, the seventeen language
+  plugins are wired, and the touch-icon layout (`GameModeChoice`'s four
+  buttons, `Home`'s five, the team screen's ship-model origin, the
+  `FE3DCanvas` screen and atlas names) is wired as `FrontEnd::touch`.
+  `FrontEnd::menu` itself stays `None`, on the same evidence as before: no
+  `<FEGlobals>` block, no `<Menu>`/`<HorizMenu>` widget anywhere. The
+  practical effect: `oag-game`'s menu-driven boot (`load_shell`, what
+  `--screenshot` with no `--race` goes through) now refuses by a narrower,
+  more accurate name - "draws no MenuSkin-shaped menu ... race on it with
+  `--race` instead" - where it used to refuse for "no front end at all."
+  `loading` and `music` stay `None` on the narrower gaps this page already
+  named: a real percentage-bar loading screen with no located plugin XML,
+  and a located `frontend.bnk` whose cues are unread. See
   [2048-frontend.md](2048-frontend.md).
 - **Zone's announcer is wired, off a bank path that is read rather than
   measured.** The executable's own track-construction function decompiles to
@@ -141,11 +147,30 @@ the start line and runs the simulation. What it does **not** do, and why:
   single_race` now shows the shield silhouette and the speed readout at the
   original's own positions; the shield fill, the pickup slot, the speed
   fills, `PilotAssist` and Zone's lit dashes are read as state-gated and not
-  wired, and the text draws as raw `IG_HUD_*` ids in the 5x7 fallback because
-  `oag_2048::TITLE.front_end` is `None` - **not because the disc names no
-  language plugin or HUD font**, both of which exist
-  ([2048-frontend.md](2048-frontend.md#the-language-plugins-carry-a-hud-font-role-too)).
-  See [2048-hud.md](2048-hud.md).
+  wired, and the text still draws as raw `IG_HUD_*` ids in the 5x7 fallback -
+  **but the cause moved, 2026-09-20, and is smaller than it was.** Wiring
+  `front_end` (above) makes the seventeen language plugins reachable, and a
+  `--race` capture now logs `17 language(s): American ..., ...` where it used
+  to log none at all. The font still does not resolve, for a second, distinct
+  reason this pass found: `crates/game/src/race/hud.rs`'s `hud_font` looks up
+  a font by the literal role name `"HUD"`/`"HUDSmall"`
+  (`oag_ui::language::roles`), which is Pulse's and Pure's own role spelling,
+  not 2048's - every one of 2048's 17 plugins names its real HUD face
+  `2048HUD` instead. Two of the seventeen (`korean`, `traditionalchinese`)
+  *do* carry a leftover `HUD`/`HUDSmall` role, inherited from the HD/Pulse
+  lineage and pointing at files 2048 does not ship
+  (`Data\FE\Fonts\PulseHud.fnt`, `Data\FE\Fonts\koreanHudSmall.fnt`) - and
+  because `hud_font` searches every loaded language for the first match
+  rather than only the chosen one, `korean`'s dangling entry wins regardless
+  of which language a player picked, so the "unavailable, drawing with 5x7"
+  report line now names a Korean-only filename on an English race. Closing
+  this needs a new axis (a per-title HUD font role name, and 2048 also names
+  no distinct "small" face for `HUDSmall` to fall back to, which is a gap of
+  its own rather than one this pass could fill without inventing one) - out
+  of scope for [ADR-0054](../architecture/adr/0054-a-touch-front-end-is-a-second-axis-not-a-menuskin-variant.md),
+  which only wires the front end far enough to expose this. See
+  [2048-frontend.md](2048-frontend.md#the-language-plugins-carry-a-hud-font-role-too)
+  and [2048-hud.md](2048-hud.md).
 
 ## The one axis 2048 forced into existence
 
