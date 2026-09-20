@@ -846,6 +846,11 @@ pub struct Scene {
     pub zone: Zone,
     /// The shadow map's projection and strength, or [`ShadowMap::off`].
     pub shadow: ShadowMap,
+    /// Wipeout HD's per-frame SPU vertex lights, summed per vertex into the
+    /// pre-albedo diffuse term of every track chunk - see
+    /// [`super::spu_light`]. [`SpuLights::none`] for every other draw, which
+    /// is the identity on the sum.
+    pub spu_lights: super::SpuLights,
 }
 
 impl Scene {
@@ -859,6 +864,7 @@ impl Scene {
             time: [0.0; 4],
             zone: Zone::default(),
             shadow: ShadowMap::off(),
+            spu_lights: super::SpuLights::none(),
         }
     }
 }
@@ -878,6 +884,10 @@ const _: () = assert!(
 const _: () = assert!(
     std::mem::size_of::<ShadowMap>() == 80,
     "mesh.wgsl's ShadowMap is a mat4x4 and one padded vec4"
+);
+const _: () = assert!(
+    std::mem::offset_of!(Scene, spu_lights).is_multiple_of(16),
+    "and Scene.spu_lights, whose array is of two-vec4 records"
 );
 const _: () = assert!(
     std::mem::size_of::<Scene>().is_multiple_of(16),
