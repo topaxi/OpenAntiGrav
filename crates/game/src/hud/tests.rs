@@ -427,6 +427,59 @@ fn the_pickup_backdrop_takes_its_weapons_own_colour_and_the_icon_keeps_its_autho
     assert_eq!(drawn[0].uv, authored.uv);
 }
 
+/// 2048's own `HUD_pickups.xml` shape, cut to what `pickup_sprites` reads:
+/// one `PickupIcon` at its authored top-centre rect and one `PickupBgFrame`
+/// at the bottom-left slot - values straight off
+/// `cargo run -p oag-game --example vita_2048_hud_dump`.
+const SAMPLE_2048_PICKUP: &str = r#"
+<Screen>
+<Screen name="HUD">
+<Image name="PickupBgFrame">
+<Values x="87" y="400" width="110" height="95" U="74" V="48" TxtrWidth="110" TxtrHeight="95" Color="0xFFFFFFFF" Src="Data\XML\2048_hud\Texture\hud_2048.gxt"></Values>
+</Image>
+<Image name="PickupIcon">
+<Values x="437.5" y="17" width="85" height="86" U="6" V="201" TxtrWidth="85" TxtrHeight="86" Color="0xFFFFFFFF" Src="Data\XML\2048_hud\Texture\hud_2048.gxt"></Values>
+</Image>
+</Screen>
+</Screen>
+"#;
+
+/// [`oag_title::HudArt::pickup_icon_uv`]'s own branch of `pickup_sprites`:
+/// the backdrop draws at its own authored rect, unmoved, and the icon's UV
+/// is rewritten from the table while its destination rect is recentred
+/// inside the backdrop - not left at the authored top-centre announcement
+/// position, and not left at the table's own `U`/`V` either.
+#[test]
+fn the_2048_pickup_icon_is_uv_rewritten_and_recentred_in_its_frame() {
+    use oag_tables::weapons::Weapon;
+    let layout = Layout::from_xml(SAMPLE_2048_PICKUP);
+
+    let drawn = pickup_sprites(&layout, Weapon::Rocket, oag_2048::hud::ART);
+    assert_eq!(drawn.len(), 2, "the fixture must author both widgets");
+    assert_eq!(drawn[0].name, "PickupBgFrame");
+    assert_eq!(drawn[1].name, "PickupIcon");
+
+    // The backdrop is untouched - same rect, same uv, same colour.
+    let frame = layout.sprite("PickupBgFrame").expect("PickupBgFrame");
+    assert_eq!(drawn[0].rect, frame.rect);
+    assert_eq!(drawn[0].uv, frame.uv);
+
+    // The icon's uv is the table's Rocket entry, not the authored `(6, 201)`.
+    assert_eq!(drawn[1].uv, [203.0, 201.0, 85.0, 86.0]);
+    // The icon's rect keeps its own 85x86 size and moves to the frame's own
+    // centre: frame is (87, 400, 110, 95), icon is 85x86, so
+    // x = 87 + (110-85)/2 = 99.5, y = 400 + (95-86)/2 = 404.5.
+    assert_eq!(drawn[1].rect, [99.5, 404.5, 85.0, 86.0]);
+
+    // A weapon this table has no entry for draws the backdrop alone, the
+    // same "draw what is held, nothing invented for what is not" rule
+    // `the_pickup_widgets_are_drawn_only_for_what_is_held` already covers
+    // for Pulse's dialect.
+    let unimplemented = pickup_sprites(&layout, Weapon::Repulser, oag_2048::hud::ART);
+    assert_eq!(unimplemented.len(), 1);
+    assert_eq!(unimplemented[0].name, "PickupBgFrame");
+}
+
 /// **A weapon `PICKUP_COLOURS` has not measured falls back to
 /// `pickup_backdrop_colour`**, the single quarter-alpha substitute this
 /// build drew for every weapon before 2026-09-04 - see

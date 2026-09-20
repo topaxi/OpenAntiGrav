@@ -63,6 +63,47 @@ pub(super) fn crop_horizontally(sprite: &Sprite, fraction: f32) -> Sprite {
     out
 }
 
+/// Whether a widget is a bar fill whose *height* tracks a value, cropped
+/// vertically from the bottom - [`bar_fraction`]'s counterpart for the one
+/// dialect that fills this way instead.
+///
+/// Just 2048's `EnergyBar` so far: `36-w-5.png` (95% shield) and
+/// `68-zone-5.png` (27%) both show the fill's *top* edge tracking the
+/// percentage with the bottom edge fixed to the silhouette's foot, unlike
+/// Pulse/HD's `ShieldBar`, which [`bar_fraction`] already crops from the
+/// left. See [`crop_vertically`].
+pub(super) fn vertical_bar_fraction(name: &str, readout: &Readout) -> Option<f32> {
+    match name {
+        "EnergyBar" => Some(readout.shield_fraction()),
+        _ => None,
+    }
+}
+
+/// Crops a sprite vertically to `fraction` of its height, anchored at the
+/// bottom - [`crop_horizontally`]'s counterpart for a fill that grows upward
+/// rather than rightward.
+///
+/// **Confidence 80, the same terms `crop_horizontally`'s own doc comment
+/// gives.** `rect` and `uv` share one top-left, y-down convention -
+/// `crop_horizontally` leaves both `x` origins alone and scales both widths
+/// by the same factor, which only works if the two rectangles are unflipped
+/// against each other - so shrinking from the top is a shared shift of both
+/// `y` origins by the cropped-away height, plus a matching scale of both
+/// heights. Not established: that the crop is linear in the value (assumed,
+/// on `crop_horizontally`'s own precedent) or that `EnergyBarDelay`'s red
+/// flash crops the same way - unread, see `oag_2048::hud::ALWAYS_ON`'s doc
+/// comment.
+pub(super) fn crop_vertically(sprite: &Sprite, fraction: f32) -> Sprite {
+    let mut out = sprite.clone();
+    let cropped_rect_height = sprite.rect[3] * (1.0 - fraction);
+    let cropped_uv_height = sprite.uv[3] * (1.0 - fraction);
+    out.rect[1] = sprite.rect[1] + cropped_rect_height;
+    out.rect[3] = sprite.rect[3] - cropped_rect_height;
+    out.uv[1] = sprite.uv[1] + cropped_uv_height;
+    out.uv[3] = sprite.uv[3] - cropped_uv_height;
+    out
+}
+
 /// The text a widget shows, or `None` when it shows nothing this frame.
 ///
 /// **An allow-list, deliberately.** A widget this function does not name is not
@@ -474,6 +515,9 @@ pub(super) fn pickup_sprites(
     weapon: oag_tables::weapons::Weapon,
     art: &oag_title::HudArt,
 ) -> Vec<Sprite> {
+    if let Some(uv_table) = art.pickup_icon_uv {
+        return pickup_sprites_uv_rewrite(layout, weapon, uv_table);
+    }
     let icon = pickup_icon_name(weapon);
     let backdrop = (!art.always_on.contains(&PICKUP_BACKGROUND)).then_some(PICKUP_BACKGROUND);
     // Backdrop first: the icon sits on it, and paint order here is the layout's
@@ -509,6 +553,64 @@ pub(super) fn pickup_sprites(
             sprite
         })
         .collect()
+}
+
+/// The name of 2048's one pickup-icon widget, rewritten per weapon rather
+/// than selected by name. See [`oag_title::HudArt::pickup_icon_uv`].
+pub(super) const PICKUP_ICON_2048: &str = "PickupIcon";
+
+/// The backdrop the held pickup's icon sits inside, on 2048's dialect.
+///
+/// Not [`PICKUP_BACKGROUND`]: `HUD_pickups.xml`'s `PickupBackground` authors
+/// no `<Values>` at all on this title (see `oag_2048::hud::ART`'s own doc
+/// comment), and the visible arc round the icon is a different, separately
+/// named widget instead.
+pub(super) const PICKUP_BG_FRAME_2048: &str = "PickupBgFrame";
+
+/// [`pickup_sprites`]'s branch for 2048's dialect: one `PickupIcon` widget,
+/// UV rewritten per weapon from `art.pickup_icon_uv`, drawn centred inside
+/// [`PICKUP_BG_FRAME_2048`]'s own authored rect.
+///
+/// **The held state only.** The frames show the icon at a *second*,
+/// top-centre position once, with a caption, the instant a pickup is
+/// granted (`docs/formats/2048-hud.md`'s "The pickup slot") - that
+/// announcement has no state to key off yet (`Readout` carries no
+/// time-since-grant), so this draws only the steady held state, which is
+/// what a race shows the rest of the time a pickup is carried.
+///
+/// **The destination rect is measured, not decompiled.** `Hud_UpdatePickupIcon`
+/// (`docs/ghidra/functions/vita-2048-eu-v104/pickup-icon-uv-table.md`) never
+/// writes `PickupIcon`'s own `x`/`y`, only its UV; the held icon's on-screen
+/// position was found by scanning a captured frame's pixels for the icon's own
+/// tint and matches "native 85x86 size, centred inside `PickupBgFrame`'s own
+/// authored rect" to within 2-3 px on every edge - confidence 80, one frame,
+/// one weapon.
+fn pickup_sprites_uv_rewrite(
+    layout: &Layout,
+    weapon: oag_tables::weapons::Weapon,
+    uv_table: [Option<[u16; 4]>; 14],
+) -> Vec<Sprite> {
+    let frame = layout.sprite(PICKUP_BG_FRAME_2048);
+
+    let mut sprites = Vec::new();
+    // The backdrop draws whenever a weapon is held, whether or not this title
+    // has an icon for it - the same "backdrop alone, rather than nothing or a
+    // panic" rule `pickup_sprites`' Pulse/HD branch already keeps for a name
+    // the layout does not author.
+    if let Some(frame) = frame {
+        sprites.push(frame.clone());
+    }
+
+    if let (Some(uv), Some(icon)) = (uv_table[weapon as usize], layout.sprite(PICKUP_ICON_2048)) {
+        let mut icon = icon.clone();
+        icon.uv = uv.map(f32::from);
+        if let Some(frame) = frame {
+            icon.rect[0] = frame.rect[0] + (frame.rect[2] - icon.rect[2]) * 0.5;
+            icon.rect[1] = frame.rect[1] + (frame.rect[3] - icon.rect[3]) * 0.5;
+        }
+        sprites.push(icon);
+    }
+    sprites
 }
 
 /// [`pickup_sprites`]'s counterpart for Pure's dialect: the held pickup's
@@ -742,7 +844,17 @@ pub fn draw_list(cx: &Context<'_>, readout: &Readout) -> Frame {
                 }
                 sprite_draw(&cropped, cx.sheet)
             }
-            None => sprite_draw(sprite, cx.sheet),
+            // `EnergyBar` alone, so far - see [`vertical_bar_fraction`]. Drawn
+            // in its authored colour (green at half alpha): the frames show a
+            // white fill and a red post-hit flash the runtime is not known to
+            // produce from this same widget, so this crops without tinting
+            // rather than guessing a colour from memory. See
+            // `oag_2048::hud::ALWAYS_ON`'s doc comment for the gap.
+            None => match vertical_bar_fraction(&sprite.name, readout) {
+                Some(fraction) if fraction <= 0.0 => None,
+                Some(fraction) => sprite_draw(&crop_vertically(sprite, fraction), cx.sheet),
+                None => sprite_draw(sprite, cx.sheet),
+            },
         };
         frame.sprites.extend(drawn);
     }

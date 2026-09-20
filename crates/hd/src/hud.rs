@@ -130,6 +130,9 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     // field is moot on the same terms `pickup_colours` is above it.
     pickup_icon_models: None,
     pickup_icon_backdrop_model: None,
+    // Same reasoning again: HD names a widget per weapon, same as Pulse -
+    // 2048's own dialect is the one with a single rewritten-UV widget.
+    pickup_icon_uv: None,
     // The fifteen rungs' names. Which rung a zone is on is a different
     // question and an open one - see [`ZONE_SPEED_CLASSES`].
     zone_speed_classes: Some(ZONE_SPEED_CLASSES),

@@ -191,6 +191,7 @@ static HD_ART: oag_title::HudArt = oag_title::HudArt {
     pickup_colours: None,
     pickup_icon_models: None,
     pickup_icon_backdrop_model: None,
+    pickup_icon_uv: None,
     zone_speed_classes: None,
     shield_percent: false,
 };
@@ -253,6 +254,7 @@ static HD_LEACH_ART: oag_title::HudArt = oag_title::HudArt {
     pickup_colours: None,
     pickup_icon_models: None,
     pickup_icon_backdrop_model: None,
+    pickup_icon_uv: None,
     zone_speed_classes: None,
     shield_percent: false,
 };
@@ -949,6 +951,7 @@ fn an_unread_sight_dialect_draws_nothing() {
         pickup_colours: None,
         pickup_icon_models: None,
         pickup_icon_backdrop_model: None,
+        pickup_icon_uv: None,
         zone_speed_classes: None,
         shield_percent: true,
     };

@@ -57,3 +57,7 @@
 0x813f2bc0	function	sceAppUtilDrmClose	90	frontend-campaign-map.md
 0x813f2c40	function	sceAppUtilInit	90	frontend-campaign-map.md
 0x8151d504	data	g_bNoDlcMounted	85	frontend-campaign-map.md
+0x81192cd0	function	Hud_BindWidgets	80	pickup-icon-uv-table.md
+0x81194f9c	function	Hud_UpdatePickupIcon	85	pickup-icon-uv-table.md
+0x81489070	data	g_pickup_icon_uv_table	90	pickup-icon-uv-table.md
+0x811957a2	function	Hud_UpdateEnergyBar	85	pickup-icon-uv-table.md

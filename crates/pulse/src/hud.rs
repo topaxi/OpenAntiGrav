@@ -79,6 +79,9 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     // not `<Mode3D><Model>`s - this field is Pure's own dialect.
     pickup_icon_models: None,
     pickup_icon_backdrop_model: None,
+    // Pulse names a widget per weapon (`pickup_icon_name`) - this field is
+    // 2048's own dialect, one widget with a rewritten UV.
+    pickup_icon_uv: None,
     // `None`: no Zone speed-class ladder has been read on this title.
     zone_speed_classes: None,
     // Pulse's own reference frame reads `100%`. See `oag_title::HudArt::shield_percent`.

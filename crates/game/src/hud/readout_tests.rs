@@ -100,6 +100,42 @@ fn a_bar_is_cropped_horizontally_and_keeps_its_height() {
     assert_eq!(half.uv, [6.0, 0.0, 84.0, 26.0]);
 }
 
+/// `oag_2048::hud::EnergyBar`'s own rect and uv, off
+/// `cargo run -p oag-game --example vita_2048_hud_dump` against the played
+/// Arcade layout - `110.0` halves exactly, so `assert_eq!` needs no epsilon
+/// the way `crop_horizontally`'s own test does not either.
+#[test]
+fn a_bar_is_cropped_vertically_from_the_bottom_and_keeps_its_width() {
+    let sprite = Sprite {
+        name: "EnergyBar".to_string(),
+        rect: [27.0, 372.0, 50.0, 110.0],
+        uv: [270.0, 16.0, 52.0, 110.0],
+        color: [0.188_235_3, 1.0, 0.188_235_3, 0.501_960_8],
+        src: oag_2048::hud::skins::played::ARCADE.to_string(),
+        rotation: 0.0,
+    };
+
+    // Full: the identity, same as `crop_horizontally` at `1.0`.
+    let full = crop_vertically(&sprite, 1.0);
+    assert_eq!(full.rect, sprite.rect);
+    assert_eq!(full.uv, sprite.uv);
+
+    // Half: the bottom 55 px of a 110 px bar stays, so the top edge moves
+    // down by the other 55 and the height matches it - width and colour are
+    // untouched, the same way `crop_horizontally` leaves height and colour
+    // alone.
+    let half = crop_vertically(&sprite, 0.5);
+    assert_eq!(half.rect, [27.0, 427.0, 50.0, 55.0]);
+    assert_eq!(half.uv, [270.0, 71.0, 52.0, 55.0]);
+    assert_eq!(half.color, sprite.color);
+
+    // Empty: the whole rect collapses to its own bottom edge rather than a
+    // negative-height quad.
+    let empty = crop_vertically(&sprite, 0.0);
+    assert_eq!(empty.rect, [27.0, 482.0, 50.0, 0.0]);
+    assert_eq!(empty.uv, [270.0, 126.0, 52.0, 0.0]);
+}
+
 #[test]
 fn a_bottom_anchored_label_is_lifted_by_its_own_line_height() {
     let label = Label {

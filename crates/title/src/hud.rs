@@ -227,6 +227,7 @@ pub enum Sights {
 /// | [`Self::pickup_colours`] | eleven of thirteen weapons | `None` - unmeasured |
 /// | [`Self::pickup_icon_models`] | `None` - icons are `<Image>` sprites | `None` - unmeasured |
 /// | [`Self::pickup_icon_backdrop_model`] | `None` - moot with the row above | `None` - moot with the row above |
+/// | [`Self::pickup_icon_uv`] | `None` - one widget per weapon | `None` - one widget per weapon |
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct HudArt {
     /// The extension a layout's `src=` reference takes to become an archive
@@ -348,6 +349,32 @@ pub struct HudArt {
     /// it needs no substitution the icon models beside it do not either. Moot
     /// whenever [`Self::pickup_icon_models`] is `None`.
     pub pickup_icon_backdrop_model: Option<&'static str>,
+    /// A per-weapon source-rectangle rewrite for a title whose pickup slot is
+    /// *one* icon widget rather than Pulse/HD's thirteen named ones, or `None`
+    /// for a title that names a widget per weapon (or has not measured this).
+    ///
+    /// **2048's dialect, not a third variant of [`Self::pickup_icon_models`].**
+    /// `HUD_pickups.xml`'s `PickupIcon` is the single widget every weapon's
+    /// icon draws through; the runtime rewrites its source rectangle rather
+    /// than the engine picking between differently-named widgets the way
+    /// `oag_game::hud::pickup_icon_name` does for Pulse and HD, or between
+    /// `<Mode3D><Model>`s the way [`Self::pickup_icon_models`] does for Pure.
+    /// Confirmed from `Hud_UpdatePickupIcon`
+    /// (`docs/ghidra/functions/vita-2048-eu-v104/pickup-icon-uv-table.md`),
+    /// not inferred from the layout alone: the XML authors no per-weapon
+    /// anything for this widget to select between.
+    ///
+    /// `[U, V, W, H]` in atlas pixels, `u16` rather than `f32` because the
+    /// executable's own table is raw integers - `oag_game::hud::Sprite::uv`
+    /// converts on use, the same four components it carries - indexed in
+    /// `oag_tables::weapons::Weapon::ALL`'s declared order, the same axis
+    /// [`Self::pickup_colours`] and [`Self::pickup_icon_models`] use and for
+    /// the same reason: the `Weapon` type itself stays out of this crate. A
+    /// slot's own `None` is a weapon this title's UV table has no entry for
+    /// (`Repulser`/`Shuriken`, unimplemented on 2048 per
+    /// `docs/gameplay/pickups.md`) rather than an unmeasured one - every
+    /// weapon 2048 actually grants has a table entry.
+    pub pickup_icon_uv: Option<[Option<[u16; 4]>; 14]>,
     /// What this title calls each rung of its Zone escalation ladder, or `None`
     /// for a title whose ladder has not been read.
     ///
