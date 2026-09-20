@@ -56,6 +56,7 @@ use oag_vex::vex;
 
 use crate::race::{boost_entry_name, ps2_texture_set, ship_entry_name};
 
+pub(crate) mod engine_light;
 mod flare;
 pub(crate) mod ship_skin;
 
@@ -108,6 +109,10 @@ pub struct Livery {
     /// plausibly. Every team read so far carries the identical track, which
     /// makes it *currently* invisible and is not a reason to share one.
     pub boost_uv: Option<vex::TexTransform>,
+    /// Wipeout HD's engine light: `EngineLightData.xml` and the flare
+    /// locator's axis, or `None` on every title that authors neither. See
+    /// [`engine_light::load`].
+    pub engine_light: Option<engine_light::EngineLight>,
 }
 
 /// One `Ship Collision Fx` locator, in its hull's own model space: where a
@@ -226,6 +231,7 @@ pub fn load(
                 boost_uv: source.boost_uv.clone(),
                 flare: source.flare.clone(),
                 shield: source.shield.clone(),
+                engine_light: source.engine_light,
             };
             report.push(format!(
                 "slot {slot}: {team}, the same livery as slot {first} - the source declares \
@@ -262,6 +268,7 @@ pub fn load(
                     boost_uv: player.boost_uv.clone(),
                     flare: player.flare.clone(),
                     shield: player.shield.clone(),
+                    engine_light: player.engine_light,
                 });
             }
         }
@@ -335,6 +342,7 @@ fn one(
                     boost_uv: None,
                     flare: None,
                     shield: None,
+                    engine_light: None,
                 });
             }
         };
@@ -349,7 +357,9 @@ fn one(
                 "{skin}: a ship skin is a PSP-pipeline texture swap and {hull_name} takes its                  geometry from a .rcsmodel - the craft keeps its own paint"
             ));
         }
-        let (nozzle, collision_fx) = locators(archives, &hull_name, &blob, report);
+        let (nozzle, nozzle_axis, collision_fx) = locators(archives, &hull_name, &blob, report);
+        let engine_light =
+            engine_light::load(archives, team, ships.dir, ctx.flare, nozzle_axis, report);
         // **The plume comes from here too on this title.** HD ships no
         // `shipboost.vex`; `EF_Boost` inside the flare model is what a speed
         // pad reveals, so both halves come out of one load. See
@@ -369,6 +379,7 @@ fn one(
             // Zone. `shell` takes the same external-geometry branch this hull
             // just took. See `crate::race::shield_entry_names`.
             shield: shell(archives, team, ships.dir, ctx.lod, report),
+            engine_light,
         });
     }
     let mut hull = mesh::build_with_textures(&hull_name, &blob, None, ctx.lod)?;
@@ -394,7 +405,9 @@ fn one(
         hull.radius
     ));
 
-    let (nozzle, collision_fx) = locators(archives, &hull_name, &blob, report);
+    let (nozzle, nozzle_axis, collision_fx) = locators(archives, &hull_name, &blob, report);
+    let engine_light =
+        engine_light::load(archives, team, ships.dir, ctx.flare, nozzle_axis, report);
 
     let (boost, boost_uv) = plume(archives, team, ships, ctx.mode, ctx.lod, report);
     let shield = shell(archives, team, ships.dir, ctx.lod, report);
@@ -412,6 +425,7 @@ fn one(
         boost_uv,
         flare: lit.always,
         shield,
+        engine_light,
     })
 }
 
@@ -457,26 +471,28 @@ fn locators(
     hull_name: &str,
     blob: &[u8],
     report: &mut Vec<String>,
-) -> (Option<Vec3>, Vec<SparkAnchor>) {
+) -> (Option<Vec3>, Option<Vec3>, Vec<SparkAnchor>) {
     let mut source = hull_name.to_string();
-    let mut nozzle = engine_flare(blob);
+    let mut flare = engine_flare(blob);
     let mut collision_fx = collision_fx_locators(blob);
 
-    if nozzle.is_none()
+    if flare.is_none()
         && collision_fx.is_empty()
         && let Some(name) = sibling_entry(hull_name, LOCATORS_ENTRY)
         && let Ok(sibling) = archives.read_name(&name)
     {
-        nozzle = engine_flare(&sibling);
+        flare = engine_flare(&sibling);
         collision_fx = collision_fx_locators(&sibling);
-        if nozzle.is_some() || !collision_fx.is_empty() {
+        if flare.is_some() || !collision_fx.is_empty() {
             source = name;
         }
     }
 
-    match nozzle {
-        Some(at) => report.push(format!(
-            "{source}: engine_flare locator at {at:?} in model space"
+    let nozzle = flare.map(|(position, _)| position);
+    let nozzle_axis = flare.map(|(_, axis)| axis);
+    match flare {
+        Some((at, axis)) => report.push(format!(
+            "{source}: engine_flare locator at {at:?} in model space, Z axis {axis:?}"
         )),
         None => report.push(format!(
             "{hull_name}: no Engine Flare node - this craft's exhaust will not be drawn"
@@ -491,7 +507,7 @@ fn locators(
         )
     });
 
-    (nozzle, collision_fx)
+    (nozzle, nozzle_axis, collision_fx)
 }
 
 /// The file HD keeps its locator nodes in, beside the hull.
@@ -507,12 +523,15 @@ fn sibling_entry(name: &str, file: &str) -> Option<String> {
     Some(format!("{}{file}", &name[..=at]))
 }
 
-/// The `Engine Flare` locator's position in a hull's own model space.
+/// The `Engine Flare` locator's position and Z axis in a hull's own model
+/// space - the matrix's row 3 and row 2, the same rows
+/// `EngineFlare_SubmitSpuLight` reads off the node's world matrix
+/// (`+0x30`/`+0x20`; see [`engine_light`]).
 ///
 /// Takes the **first** node if a model somehow had several. Every team checked
 /// has exactly one, so this is a total order on a set of size one rather than a
 /// policy.
-fn engine_flare(ship_blob: &[u8]) -> Option<Vec3> {
+fn engine_flare(ship_blob: &[u8]) -> Option<(Vec3, Vec3)> {
     // The id from the file's own version word, not the version-6 constant: on a
     // version-4 ship `0x3bf` is some other class entirely, so a hit would be a
     // flare mounted on whatever that is. `None` means no flare, which is what an
@@ -522,7 +541,7 @@ fn engine_flare(ship_blob: &[u8]) -> Option<Vec3> {
     let m = vex::class_world_transforms(ship_blob, &nodes, class)
         .into_iter()
         .next()?;
-    Some(Vec3::new(m[12], m[13], m[14]))
+    Some((Vec3::new(m[12], m[13], m[14]), Vec3::new(m[8], m[9], m[10])))
 }
 
 /// Every `Ship Collision Fx` locator in a hull's own model space - the same

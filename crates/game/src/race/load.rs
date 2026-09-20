@@ -10,6 +10,7 @@ use super::*;
 mod audio;
 mod cameras;
 mod countdown;
+mod engine_light;
 mod environment;
 mod geometry;
 mod global;
@@ -454,6 +455,12 @@ pub fn load(options: &Options) -> Result<Loaded> {
         title.race,
         options.mode,
         options.zone_stage,
+        &mut report,
+    );
+    let spu_vertex_lights = engine_light::spu_vertex_lights_enabled(
+        &mut archives,
+        &track,
+        ps3_geometry.is_some(),
         &mut report,
     );
     // The track's authored fog volumes. Empty for a ribbon build, and empty for
@@ -906,6 +913,8 @@ pub fn load(options: &Options) -> Result<Loaded> {
             chase_close,
             internal,
             nozzles: liveries.iter().map(|livery| livery.nozzle).collect(),
+            engine_lights: liveries.iter().map(|livery| livery.engine_light).collect(),
+            spu_vertex_lights,
             // Positions only: this list feeds the trail-hit sparks' nearest-of
             // search (`RaceView::spark_anchor_of`), which has no live hull
             // orientation to aim along today - see `collision_fx` below for

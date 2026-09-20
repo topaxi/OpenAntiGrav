@@ -211,6 +211,7 @@ impl Scene {
             // The shadow map's own projection and strength, or `off` where
             // nothing casts - see `Scene::shadow_uniform`.
             shadow: self.shadow_uniform(shadows),
+            spu_lights: mesh_render::SpuLights::from_slice(&race.hd_engine_lights()),
         };
         // The visualiser's own tint - the showing stage's `EQ colour tint`,
         // or `None` where the file authors none (every 2048 table, and any
@@ -261,6 +262,9 @@ impl Scene {
         // albedo, so binding it to a ship would blank the ship. Fog and the
         // light rig still reach them unchanged - only `zone` is dropped.
         oag_render::perfprobe::mark("fog+zonevis");
+        // The SPU lights stay: 74 ship materials compile `SVC1` twins, and
+        // at ride height the hull is the only receiver in range - see
+        // `race::engine_light`, "Who receives it".
         let ship_scene = mesh_render::Scene {
             zone: mesh_render::Zone::default(),
             ..scene
@@ -305,7 +309,6 @@ impl Scene {
         // by fog either way. Left unfogged rather than guessed. Its animation
         // tables are written below instead, off its own reveal timer rather
         // than the race clock these lists ride.
-
         // **The flame surfaces need the clock, and nothing else from `scene`.**
         // Both a craft's flare and its boost plume draw through `mesh.wgsl`'s
         // `flame_shading` path, which replaces the lit result outright and

@@ -145,6 +145,9 @@ impl Race {
                 );
                 let rng = &mut self.view.exhaust_rng[slot];
                 self.view.hd_sprite[slot].advance(|| rng.next_f32());
+                // And the engine light's jitter, off its own stream - see
+                // `race::engine_light`.
+                self.advance_engine_light_jitter(slot);
             }
             if let Some(nozzle) = self.nozzle_of(slot) {
                 // How far this hull reaches from its own origin, in world

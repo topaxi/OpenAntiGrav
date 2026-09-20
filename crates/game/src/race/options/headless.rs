@@ -93,6 +93,8 @@ impl Setup {
                 pitch: 0.0,
             },
             nozzles: Vec::new(),
+            engine_lights: Vec::new(),
+            spu_vertex_lights: true,
             spark_anchors: Vec::new(),
             collision_fx: Vec::new(),
             effects: psys::Library::default(),

@@ -128,6 +128,7 @@ mod drawable;
 mod effect_names;
 mod effects;
 mod eliminator;
+pub mod engine_light;
 mod field;
 pub mod gantry;
 mod hash;
