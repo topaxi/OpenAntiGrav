@@ -193,7 +193,7 @@ transferred to EU, so EU's count includes names that add no page.
 | [psp-pulse-usa](../ghidra/functions/psp-pulse-usa/) | 1018 (899 fn, 119 data) | 23 (2%) | 59 | `ppsspp_debugger.py`, `psp-drive.py`, `psp-trace.py`, `psp_trace_fields.py` (+15 measurement scripts) | 2026-09-17, [cannon-quake-leachbeam.md](../ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md) |
 | [psp-pure-eu](../ghidra/functions/psp-pure-eu/) | 58 (57 fn, 1 data) | 3 (5%) | 5 | `ppsspp_debugger.py`, `psp-drive.py`, `psp-trace.py`, `psp_trace_fields.py` (+15 measurement scripts) | 2026-09-15, [dlc-download-check.md](../ghidra/functions/psp-pure-eu/dlc-download-check.md) |
 | [psp-pure-usa](../ghidra/functions/psp-pure-usa/) | 63 (62 fn, 1 data) | 2 (3%) | 9 | `ppsspp_debugger.py`, `psp-drive.py`, `psp-trace.py`, `psp_trace_fields.py` (+15 measurement scripts) | 2026-09-07, [ship-models.md](../ghidra/functions/psp-pure-usa/ship-models.md) |
-| [vita-2048-eu-v104](../ghidra/functions/vita-2048-eu-v104/) | 36 (30 fn, 6 data) | 0 (0%) | 8 | `vita-gxp.py`, `vita-self-decrypt.py` | 2026-09-02, [game-boot.md](../ghidra/functions/vita-2048-eu-v104/game-boot.md) |
+| [vita-2048-eu-v104](../ghidra/functions/vita-2048-eu-v104/) | 40 (33 fn, 7 data) | 0 (0%) | 9 | `vita-gxp.py`, `vita-self-decrypt.py` | 2026-09-20, [pickup-icon-uv-table.md](../ghidra/functions/vita-2048-eu-v104/pickup-icon-uv-table.md) |
 
 <!-- re-coverage:end -->
 
