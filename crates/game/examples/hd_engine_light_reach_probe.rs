@@ -138,11 +138,22 @@ fn main() -> anyhow::Result<()> {
     }
 
     let mut race = oag_game::race::Race::start(loaded.setup);
-    race.set_autopilot(true);
+    // The same input a `--hold cross` screenshot run drives, so a tick
+    // printed here is the `--ticks` a capture wants.
+    let mut held = oag_game::race::HeldButtons::new(oag_gameplay::input::Button::Cross.bit());
     let mut ours = Vec::new();
-    println!("\nours, every 100 ticks:");
+    let mut first_boost: Option<u32> = None;
+    println!("\nours, every 100 ticks (player holding cross):");
     for tick in 1..=1200 {
-        race.tick(&PlayerInputs::none());
+        held.advance(None, 0, oag_gameplay::input::Button::Cross.bit(), tick);
+        race.tick(&PlayerInputs::single(held.snapshot()));
+        if first_boost.is_none()
+            && let Some(player) = race.hd_engine_lights().first()
+            && player.colour[0] > 200.0
+        {
+            first_boost = Some(tick);
+            println!("  first tick with the player's light boosted past 5x: {tick}");
+        }
         if tick % 100 == 0 {
             for light in race.hd_engine_lights() {
                 let p = Vec3::from_slice(&light.position[..3]);

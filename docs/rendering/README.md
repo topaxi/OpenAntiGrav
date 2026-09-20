@@ -78,9 +78,12 @@
   every one of the original's 40 captured records sits 3.0-4.4 units (a ride
   height) from the nearest track surface while `D` is 0.6-2.1, and ours sit
   2.9-4.5 on the same circuit (`crates/game/examples/hd_engine_light_reach_probe.rs`),
-  so the list is bound to the hulls as well as the track - 74 ship materials
-  compile `SVC1` twins; the runtime `SVC1` bit on a hull chunk is the one
-  thing still unobserved. The other 23 producers `renderer.md` catalogued
+  so the list is bound to the hulls as well as the track - **chosen, not
+  measured**: 74 ship materials compile `SVC1` twins and nothing else is in
+  range, but the runtime `SVC1` bit on a hull chunk is unobserved. Boosted,
+  the `1 + 10 * blend` gain washes the whole rear of the hull warm
+  (`talons-t487.png` against `talons-t470.png` under
+  `data/scratch/hd-engine-light/`) - the disc's numbers, not tuned. The other 23 producers `renderer.md` catalogued
   (pickups, weapons, the Zone ship) and the flare's blue-to-orange transition
   branch stay unwired until their triggers are read; `"Lighting.Enable spu
   vertex lights"` in a circuit's `.envsettings` (default on, `0` on

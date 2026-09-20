@@ -45,7 +45,7 @@
 //!   unread, so it stays unwired rather than fired on a guess. A capture
 //!   showed it once, on a different boot.
 //!
-//! # Who receives it, and why the floor is not it
+//! # Who receives it, and why the floor is not it (the hull binding is chosen, not measured)
 //!
 //! [`Race::hd_engine_lights`] is bound into the `Scene` uniform of the track
 //! chunks **and of the craft**. Bound to the track alone it changed zero
@@ -71,9 +71,13 @@
 //! (1,776 pairs, every `RigidBody` class included, all 888 vertex blocks
 //! carrying the `(255, 128)` decode and the `0x868f8229` attribute). The
 //! picture agrees: the Fury housings take the warm tint the reference
-//! capture shows, brighter on boost. What is still not measured is the
-//! runtime half - whether `LightCulling` sets a hull chunk's `SVC1` bit -
-//! and that is the one RPCS3 read that would settle it. The track floor and
+//! capture shows, and boosted (`1 + 10 * blend`, a 440-unit light a hand's
+//! breadth from the housing) the whole rear of the hull washes warm. What is
+//! still not measured is the runtime half - whether `LightCulling` sets a
+//! hull chunk's `SVC1` bit, and whether the original's hull washes like that
+//! on boost - and that is the one RPCS3 read that would settle it. **The
+//! hull binding is chosen, not measured**, on the static evidence above, and
+//! carries no confidence score. The track floor and
 //! walls light up only when a craft is within `D` of them: landings, wall
 //! scrapes and banked sections.
 
