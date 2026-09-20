@@ -3,9 +3,10 @@
 //! Two kinds of thing live here, and the split is worth stating because they
 //! point in opposite directions.
 //!
-//! [`pmf`], [`ipf`] and [`bik`] are what the *originals* ship: the PSP movie
-//! file, the PS2 IPU wrapper, and RAD's Bink container as Wipeout HD uses it.
-//! They are read-only, and none of them is decoded here - each one demuxes to a
+//! [`pmf`], [`ipf`], [`pss`] and [`bik`] are what the *originals* ship: the
+//! PSP movie file, the PS2 IPU wrapper, the PS2's loose MPEG-2 program
+//! streams, and RAD's Bink container as Wipeout HD uses it. They are
+//! read-only, and none of them is decoded here - each one demuxes to a
 //! bitstream that something outside this crate plays.
 //!
 //! [`ivf`] and `av1` are what *this project* writes. Per
@@ -28,3 +29,4 @@ pub mod bik;
 pub mod ipf;
 pub mod ivf;
 pub mod pmf;
+pub mod pss;
