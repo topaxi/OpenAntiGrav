@@ -150,6 +150,9 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     // the icons themselves sit at `z="-10"`, in front of it) and with no
     // `colour` of its own.
     pickup_icon_backdrop_model: Some("weapon_icon_grid"),
+    // Pure's icons are `<Mode3D><Model>`s (the row above), not a single
+    // rewritten-UV `<Image>` widget - 2048's own dialect.
+    pickup_icon_uv: None,
     // `None`: no Zone speed-class ladder has been read on this title.
     zone_speed_classes: None,
     // Unmeasured on Pure; Pulse's own reading (`true`) carries over rather

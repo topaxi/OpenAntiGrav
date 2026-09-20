@@ -20,24 +20,33 @@ twice the size, right-hand column off screen.
 
 ## Open
 
-- **The shield fill's runtime tint.** `EnergyBar` now crops **vertically
-  from the bottom** to the shield fraction
-  (`oag_game::hud::draw::crop_vertically`, wired 2026-09-20 - see
+- **The shield fill's runtime tint - and it is `EnergyBg`, not `EnergyBar`,
+  that the executable tints.** `EnergyBar` crops **vertically from the
+  bottom** to the shield fraction (`oag_game::hud::draw::crop_vertically`,
+  wired 2026-09-20 - see
   [2048-hud.md](../../docs/formats/2048-hud.md#energybar-is-wired-a-vertical-crop-from-the-bottom-2026-09-20)),
   checked against `21-race2-start.png` (100%, exact) and `36-w-5.png` (95%,
-  the boundary row to within one pixel). What is still open is the *colour*:
-  the frames show white at runtime where the layout authors green at half
-  alpha, with `EnergyBarDelay` flashing red for a moment after a hit
-  (`36-w-15.png`: red cap, red stripe outlines). Neither tint is sourced
-  from the disc or the executable, so neither is wired - the fill draws
-  correctly cropped and in its authored (wrong) colour rather than guessing
-  a tint from the frame.
-- **The pickup slot.** `PickupBgFrame` is up exactly while a pickup is held;
-  `PickupIcon` shows at its authored top-centre rect with the `PickupText`
-  caption once (the grant), then inside the bottom-left frame, UV rewritten
-  per weapon. `pickup_sprites` selects by widget *name* for Pulse and HD;
-  2048 needs a per-weapon UV table (Missile and Rocket discs are identified
-  on `hud_2048.gxt`, the other eleven are not) and a second position.
+  the boundary row to within one pixel), and the crop is independently
+  confirmed by decompiling `Hud_UpdateEnergyBar` (`0x811957a2`, see
+  [pickup-icon-uv-table.md](../../docs/ghidra/functions/vita-2048-eu-v104/pickup-icon-uv-table.md#hud_updateenergybar---0x811957a2)).
+  That same read found two corrections: `EnergyBarDelay` is not a red flash,
+  it is the same crop fed an exponentially-smoothed *lagging* fraction (a
+  trailing damage edge); the widget that actually turns red
+  (`0xffff0000`) at <=20% shield or during a flash timer, else a fixed grey
+  (`0xffa7a5a7`), is `EnergyBg` - which this thread and `oag_2048::hud::
+  ALWAYS_ON`'s own doc comment currently read as a fixed translucent
+  constant with "nothing tints". **Not yet corrected in either place, and
+  not yet wired** - the values are sourced (not a tint recalled from a
+  frame), so wiring `EnergyBg`'s colour is now a small, well-evidenced
+  follow-up rather than a research question. `EnergyBar` itself still has
+  no located colour write anywhere in `Hud_UpdateEnergyBar`, so why it
+  reads white at runtime (vs. its authored green-at-half-alpha) is still
+  genuinely open.
+- **The pickup grant announcement.** The held state is wired (below);
+  the frames also show `PickupIcon` at a *second*, top-centre position
+  once, with the `PickupText` caption, the instant a pickup is granted -
+  unwired, because `Readout` carries no time-since-grant state to key it
+  off. Needs a new readout field, not just a draw-side change.
 - **The speed fills** `ThrustBar`, `SpeedBar0`-`4`: seen filling, model
   unread. The swoosh takes a purple tint on a speed pad.
 - **`PilotAssist`** off the assist setting; **`ZoneLight0`-`9`** one per
@@ -65,7 +74,11 @@ twice the size, right-hand column off screen.
 2. Give `oag_game::hud::text_for` the four 2048 arms (`Laps`, `Position` as
    `place/ships`, `EnergyText`, `TotalTime` beside a place) and find the
    title's font and strings so the captions resolve.
-3. Read the per-weapon UV table for `PickupIcon` off `eboot.elf` - the two
-   known discs' UVs (Missile, Rocket) are the anchors to search for.
+3. ~~Read the per-weapon UV table for `PickupIcon` off `eboot.elf`~~ - done
+   2026-09-20: `g_pickup_icon_uv_table` (`0x81489070`), all eleven weapons,
+   see [pickup-icon-uv-table.md](../../docs/ghidra/functions/vita-2048-eu-v104/pickup-icon-uv-table.md).
+   `pickup_sprites` wired and checked against five weapons live
+   (`just play 2048 --race --give <weapon>`). Left open by that pass: the
+   grant announcement and the `EnergyBg`/`EnergyBarDelay` corrections above.
 4. Write `scripts/vita3k-drive.py` from the recipe page so steps 1-3 can be
    checked against a fresh frame in one command.

@@ -47,3 +47,7 @@
 0x8153fc34	data	g_bDlc1Mounted	75	frontend-campaign-map.md
 0x8153fc38	data	g_bDlc2Mounted	75	frontend-campaign-map.md
 0x8153fc3c	data	g_bDlc3Mounted	75	frontend-campaign-map.md
+0x81192cd0	function	Hud_BindWidgets	80	pickup-icon-uv-table.md
+0x81194f9c	function	Hud_UpdatePickupIcon	85	pickup-icon-uv-table.md
+0x81489070	data	g_pickup_icon_uv_table	90	pickup-icon-uv-table.md
+0x811957a2	function	Hud_UpdateEnergyBar	85	pickup-icon-uv-table.md

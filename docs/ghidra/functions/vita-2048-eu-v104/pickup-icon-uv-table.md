@@ -1,0 +1,188 @@
+# The held pickup's per-weapon icon: a UV table, not a widget name
+
+Functions and data in `eboot.elf` (WipEout 2048, Vita, `PCSF00007` patch v1.04),
+image base `0x81000000`. **The names here are applied**, from [names.tsv](names.tsv).
+Found while wiring `oag_game::hud::draw::pickup_sprites` for 2048:
+`docs/formats/2048-hud.md`'s "What is not done" section already established that
+`HUD_pickups.xml` names exactly one icon widget (`PickupIcon`, not thirteen
+per-weapon ones the way Pulse and HD's own dialects do), so the runtime has to be
+rewriting that one widget's UV rect per weapon - this settles how.
+
+## `Hud_BindWidgets` - `0x81192cd0`
+
+**Confidence: 80**
+
+A one-time, per-HUD-instance widget binder, found from the single xref to the
+`"PickupIcon"` string (`search_strings`, one hit). Roughly ninety named widgets -
+`EnergyBar`, `EnergyBg`, `EnergyBarDelay`, `PickupParent`, `PickupIcon`,
+`PickupText`, `DenyPickup`, `GiftCannonBullet0`-`14`, `GiftCannon`,
+`PickupBgFrame`, `Radar`, `RadarDot0`-`7`, `ObjectivePoint0`-`2`, `PilotAssist`,
+and more - are each looked up by C-string name through `FUN_8106aef4` (a
+"find widget by name" call, unread past this evidence) and the returned pointer
+stored at a fixed offset of the struct passed in `param_1`. Called from
+`Hud_InitZoneSpeedClassWidget` (`0x81197c24`, [zone-environment-fallback.md](zone-environment-fallback.md))
+and two further `FUN_*` constructors below the renaming floor - each is presumably
+the same binder for a different HUD skin/instance (arcade vs. Zone vs. split-screen).
+
+The offsets this page's own two widgets bind to: `PickupIcon` at `param_1+0xa4`,
+`PickupParent` at `+0xa0`, `PickupBgFrame` at `+0xa8`, `PickupText` at `+0xac`,
+`DenyPickup` at `+0xb0`, `EnergyBar` at `+0x24`, `EnergyBg` at `+0x20`,
+`EnergyBarDelay` at `+0x28`, `EnergyText` at `+0x1c`.
+
+## `Hud_UpdatePickupIcon` - `0x81194f9c`
+
+**Confidence: 85**
+
+Reached from `Hud_BindWidgets`'s struct layout: this is one of several per-frame
+update functions a dirty-flag dispatcher (`FUN_81195cdc`, itself called from
+`FUN_81197fd0`, neither renamed - the flag bits are not independently confirmed
+enough to cross the floor) calls when bit `0x10` of `*(param_1+0x10)` is set.
+Reads the held weapon's internal id from `*(int*)(*(int*)(param_1+0xc)+0x58)` and:
+
+- Switches a caption id on it - `case 1: "FE_ROCKETS"`, `2: "FE_MISSILE"`,
+  `3: "FE_QUAKE"`, `4: "FE_TURBO"`, `5: "FE_SHIELD"`, `6: "FE_AUTOPILOT"`,
+  `7: "FE_PLASMA"`, `8: "FE_MINES"`, `9: "FE_BOMB"`, `10: "FE_CANNON"`,
+  `11: "FE_LEECHBEAM"` - this title's own internal weapon-id order, not
+  `oag_tables::weapons::Weapon::ALL`'s (Cannon and Turbo, and Bomb and Mine,
+  swap places between the two).
+- On a change from the previous frame's id (`*(param_1+0x230)`), indexes a
+  12-slot table at `g_pickup_icon_uv_table` (`0x81489070`, see below) by
+  `id * 0x10` and writes the four values - converted `int` to `float` in
+  place, the values themselves are plain integers - into `PickupIcon+0xc8`,
+  `+0xcc`, `+0xd0`, `+0xd4`.
+- Weapon id `1` (Rockets) is special-cased: instead of the table above, it
+  reads a *second* table at `0x81489160`, indexed by a "tier" value read off
+  `*(int*)(*(int*)(piVar1[0x1590]+0x80)+0x4a0)` - unresolved past the read
+  itself; entry `1` of that table (`203,201,85,86`) is byte-identical to
+  `g_pickup_icon_uv_table`'s own Rockets entry, and entry `0` is a different
+  disc (`399,301,85,86`), so this is plausibly an upgradeable rocket tier
+  with its own icon, not measured further. Confidence 60 on this half only -
+  below the renaming floor, cited here by address.
+- The `iVar5 == 0` branch (no pickup held, or one just consumed) restores
+  `PickupParent`'s cached original `x`/`y` (`param_1+0x204`/`+0x208`,
+  captured from `PickupParent`'s own fields at bind time) and hides it -
+  the counterpart to `oag_2048::hud::ALWAYS_ON`'s doc comment noting
+  `PickupBgFrame` is absent whenever nothing is held.
+
+## `g_pickup_icon_uv_table` - `0x81489070`
+
+**Named here and in `names.tsv`; not live-renamed in Ghidra.** This session's
+ghidra-mcp bridge rejects a data rename outright (`name_quality`) unless it
+carries a Hungarian type prefix after `g_` (`g_dwFoo`, `g_pFoo`) - a rule this
+project's own existing rows (`g_zone_speed_class_thresholds`,
+`g_zone_blended_stage_colour`) do not follow, so either the bridge's linter is
+stricter than when those applied or is simply a mismatched convention. Left at
+its raw address in the live database rather than fought further; `just
+apply-names` against a fresh import may hit the same rejection.
+
+**Confidence 90 on the address, structure and the eleven populated
+entries; 90 each on the Rocket and Missile rows specifically (cross-checked
+against a live frame, below).** Twelve slots (indices `0`-`11`, matching
+`Hud_UpdatePickupIcon`'s weapon-id range and its 11 `case` labels), 16 bytes
+each: four little-endian `int32`s, `U`, `V`, `W`, `H`, read off
+`data/extracted/vita/PCSF00007/patch-v104/eboot.elf` directly:
+
+| id | Weapon | U | V | W | H |
+| ---: | --- | ---: | ---: | ---: | ---: |
+| 0 | (none) | 0 | 0 | 0 | 0 |
+| 1 | Rockets | 203 | 201 | 85 | 86 |
+| 2 | Missile | 301 | 201 | 85 | 86 |
+| 3 | Quake | 692 | 201 | 85 | 86 |
+| 4 | Turbo | 7 | 301 | 85 | 86 |
+| 5 | Shield | 105 | 301 | 85 | 86 |
+| 6 | Autopilot | 790 | 201 | 85 | 86 |
+| 7 | Plasma | 399 | 201 | 85 | 86 |
+| 8 | Mines | 594 | 201 | 85 | 86 |
+| 9 | Bomb | 105 | 201 | 85 | 86 |
+| 10 | Cannon | 7 | 201 | 85 | 86 |
+| 11 | LeachBeam | 496 | 201 | 85 | 86 |
+
+Every `W`/`H` is `85, 86` - the same size `PickupIcon`'s own authored default
+(`U="6" V="201"`, `HUD_pickups.xml`) carries, and index 10 (Cannon)'s `(7, 201)`
+is that same authored default to within the ±1 px this table's `U`/`V` and the
+layout's own attribute rounding can differ by - so the layout's placeholder rect
+is the Cannon icon specifically, not an arbitrary default. Two slots past the
+switch's range (indices 12, 13) read as all-zero; two more past *that* (14, 15)
+read non-zero but outside anything `Hud_UpdatePickupIcon`'s switch reaches, so
+they are left unclaimed rather than assumed to be more weapons - `Weapon::Repulser`
+and `Weapon::Shuriken` have no entry here, consistent with `docs/gameplay/pickups.md`
+recording neither as implemented on this title.
+
+**Cross-checked against the running original**, not just decoded from the
+table: `crates/game/examples/vita_2048_hud_atlas.rs` cuts each `(U,V,85,86)`
+rect out of the decoded `hud_2048.gxt` and the result is eleven distinct,
+semantically correct icons (a shield glyph for `Shield`, a compass for
+`Autopilot`, a chevron stack for `Turbo`, ...). Two of the eleven are checked
+against a live frame directly: the Missile grant announcement
+(`~/.cache/oag/2048-hud/frames/35-w-2.png`, cropped to `PickupIcon`'s
+authored top-centre rect) is pixel-identical to the table's `(301,201)` tile,
+and the Rocket held in the bottom-left slot
+(`~/.cache/oag/2048-hud/frames/50-r4-20.png`) matches the table's `(203,201)`
+tile in shape and colour (the frame's own scene lighting dims it, so the
+match is shape/position, not raw RGB).
+
+**The held icon's on-screen rect is not read from this function** -
+`Hud_UpdatePickupIcon` only ever writes the four UV fields, never `PickupIcon`'s
+own `x`/`y`. Measured instead, off `50-r4-20.png`: the icon's pixel bounding box
+(`x: 102-186`, `y: 405-488`, both frames scanned column/row for the disc's own
+olive tint) is within 2-3 px on every edge of "`PickupIcon`'s native 85x86,
+centred inside `PickupBgFrame`'s own authored rect" - `(87,400,110,95)` centred
+gives `(99.5, 404.5, 85, 86)`. Confidence 80: one frame, one weapon, a close but
+not exact pixel match, and no decompiled evidence for *why* it lands there -
+plausibly `PickupParent`'s position is retargeted somewhere in the update chain
+this pass did not fully trace (candidates: `Hud_UpdatePickupIcon`'s own
+`iVar5==0`/`else` split, or the flag dispatcher's other branches), but the
+measured rect is enough to wire the destination without resolving the mechanism.
+
+## `Hud_UpdateEnergyBar` - `0x811957a2`
+
+**Confidence: 85. Not this page's own subject** (see
+[2048-hud.md](../../../formats/2048-hud.md#energybar-is-wired-a-vertical-crop-from-the-bottom-2026-09-20)
+for the shield fill itself) **but found and named in the same pass**, as the
+dirty-flag dispatcher's bit-`0x2` sibling of `Hud_UpdatePickupIcon`. Confirms
+the vertical-crop implementation independently of the frame comparison that
+pass already ran: `EnergyBar`'s height is set to `orig_height * fraction` and
+its position (a vtable setter, not a raw field) to
+`orig_y + orig_height * (1 - fraction) * 0.5` - which is a bottom-anchored crop
+*if* the position setter takes a rect centre rather than a corner, since a
+centre shifted down by half the removed height leaves the bottom edge fixed and
+moves the top down by the full removed height, matching
+`oag_game::hud::draw::crop_vertically`'s own formula exactly. The identical pair
+of computations (`height = orig * fraction`, `origin = orig + orig*(1-fraction)`)
+is applied a second time to two raw fields (`+0xcc`, `+0xd4`) most likely the
+source UV's `V`/height, mirroring the destination-rect transform - the same dual
+application (`rect` and `uv` both cropped by the same formula)
+`crop_vertically` already implements.
+
+Two findings this function gives that `2048-hud.md`'s existing "what is not
+done" list does not yet have:
+
+- **`EnergyBarDelay` is not a flash.** It receives the *same* crop, fed an
+  exponentially-smoothed fraction (`lagging += (target - lagging) * 0.1` per
+  frame, only smoothing toward the target while shield is *falling*) - a
+  trailing "recent damage" edge, the same idiom a health bar with a delayed
+  white/grey trail implements elsewhere. Nothing here makes it red.
+- **`EnergyBg` is the one that turns red**, not `EnergyBar`/`EnergyBarDelay`:
+  `FUN_8109cfae(energyBg, 0xffa7a5a7, 0)` (opaque light grey) normally, or
+  `0xffff0000` (opaque red) whenever the shield fraction is at or under 20%
+  (matching this project's own `oag_physics::damage::CRITICAL_PERCENT`) or a
+  flash timer is running. `docs/formats/2048-hud.md` and
+  `oag_2048::hud::ALWAYS_ON`'s own doc comment currently read `EnergyBg` as a
+  fixed translucent constant with "nothing tints" - both need a correction,
+  which this page's own finding is the evidence for; the open thread's own
+  `## Open` list carries the follow-up.
+
+Neither of these two correct the still-open question of what makes `EnergyBar`
+itself read as white at runtime rather than its authored green-at-half-alpha -
+no color write to `EnergyBar` (as opposed to `EnergyBg`) was found in this
+function, so that gap in `2048-hud.md` stands as recorded.
+
+## See also
+
+- [race-hud-selection.md](race-hud-selection.md) - the sibling finding this
+  page's method matches: decompile the construction/update path rather than
+  guess from a frame alone
+- [2048-hud.md](../../../formats/2048-hud.md) - the HUD's full write-up,
+  including the frame-based evidence this page's table cross-checks against
+- [../psp-pulse-usa/shield.md](../psp-pulse-usa/shield.md) - `CRITICAL_PERCENT`'s
+  own origin, the constant `Hud_UpdateEnergyBar`'s red threshold matches

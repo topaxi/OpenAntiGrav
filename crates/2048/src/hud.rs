@@ -130,17 +130,18 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     pickup_backdrop_colour: None,
     // Not just unmeasured: `HUD_pickups.xml`'s `PickupBackground` authors no
     // `<Values>` at all, and the icon is one widget (`PickupIcon`) whose UV
-    // rect a runtime table this build has not found must rewrite per weapon,
+    // rect the runtime rewrites per weapon (see `pickup_icon_uv` below)
     // rather than thirteen names `pickup_icon_name` can select between the
     // way Pulse's and HD's own dialects allow. A colour table keyed by name
     // has nothing to attach to yet - see `docs/formats/2048-hud.md`'s "What
     // is not done".
     pickup_colours: None,
-    // 2048's `PickupIcon` is a single `<Image>` widget whose UV rect a runtime
-    // table rewrites, the same widget kind `pickup_colours`' comment above
+    // 2048's `PickupIcon` is a single `<Image>` widget whose UV rect the
+    // runtime rewrites, the same widget kind `pickup_colours`' comment above
     // names - not `<Mode3D><Model>`s, so this field is moot here too.
     pickup_icon_models: None,
     pickup_icon_backdrop_model: None,
+    pickup_icon_uv: Some(PICKUP_ICON_UV),
     // `None`: 2048's Zone HUD shows a class per *band* of zones off
     // `oag_2048::race::ZONE_STAGES`, which is a different shape from the
     // per-zone ladder this row carries. See `oag_title::ZoneSpeedClasses`.
@@ -262,6 +263,49 @@ pub const ALWAYS_ON: &[&str] = &[
     "EnergyBg",
     "EnergyBar",
     "ZoneCounterBG",
+];
+
+/// `PickupIcon`'s per-weapon source rectangle, as [`oag_title::HudArt::pickup_icon_uv`]
+/// carries it - `[U, V, W, H]` in `hud_2048.gxt` atlas pixels, indexed in
+/// `oag_tables::weapons::Weapon::ALL`'s order.
+///
+/// **Read off `eboot.elf`, not inferred from a frame.** `Hud_UpdatePickupIcon`
+/// (`0x81194f9c`) indexes a 12-slot table at `g_pickup_icon_uv_table`
+/// (`0x81489070`, confidence 90) by the held weapon's internal id and writes
+/// the four values straight into `PickupIcon`'s own fields; the internal ids
+/// (1 Rockets .. 11 LeachBeam) are reordered here onto `Weapon::ALL`'s own
+/// axis. Full evidence, including the two entries checked pixel-for-pixel
+/// against a live frame (Missile and Rocket) and the disc-level sanity check
+/// (all eleven crop to a distinct, semantically correct icon), is
+/// [`pickup-icon-uv-table.md`].
+///
+/// `Repulser` and `Shuriken` are `None`: the table has no entry past index 11,
+/// matching `docs/gameplay/pickups.md` recording neither as implemented on
+/// this title, not an unmeasured gap. `Disruptor` is Pure's own weapon and no
+/// title but Pure authors it at all.
+///
+/// Weapon id 1 (Rockets) is special-cased in the executable onto a *second*
+/// table selected by an unresolved "tier" read, one entry of which duplicates
+/// this row's own value exactly - see the doc page's own caveat. Not modelled
+/// here: this row is the table's fallback/default entry, which is what the
+/// cross-checked frame actually showed.
+///
+/// [`pickup-icon-uv-table.md`]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/ghidra/functions/vita-2048-eu-v104/pickup-icon-uv-table.md
+pub const PICKUP_ICON_UV: [Option<[u16; 4]>; 14] = [
+    Some([203, 201, 85, 86]), // Rocket
+    Some([301, 201, 85, 86]), // Missile
+    Some([692, 201, 85, 86]), // Quake
+    Some([7, 201, 85, 86]),   // Cannon
+    Some([7, 301, 85, 86]),   // Turbo
+    Some([105, 301, 85, 86]), // Shield
+    Some([790, 201, 85, 86]), // Autopilot
+    Some([399, 201, 85, 86]), // Plasma
+    Some([105, 201, 85, 86]), // Bomb
+    Some([594, 201, 85, 86]), // Mine
+    Some([496, 201, 85, 86]), // LeachBeam
+    None,                     // Repulser - unimplemented on 2048
+    None,                     // Shuriken - unimplemented on 2048
+    None,                     // Disruptor - Pure-only weapon
 ];
 
 /// The three HUD skins, as directory prefixes under `Data\XML\`.

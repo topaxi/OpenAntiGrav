@@ -84,6 +84,10 @@ full comparison.
 - [zone-environment-fallback.md](zone-environment-fallback.md) - a race's
   environment loader falls back to HD's own title-wide `effectSettings`, and
   the per-stage table it feeds runs every frame regardless.
+- [pickup-icon-uv-table.md](pickup-icon-uv-table.md) - the held pickup's one
+  `PickupIcon` widget gets its per-weapon look from a 12-slot UV table, not
+  thirteen named widgets; found alongside the shield fill's own update
+  function, which corrects two claims about `EnergyBg`/`EnergyBarDelay`.
 
 Add a row to [`names.tsv`](names.tsv) and the page it cites in the same
 change: `scripts/apply-ghidra-names.py` refuses a row whose address and name

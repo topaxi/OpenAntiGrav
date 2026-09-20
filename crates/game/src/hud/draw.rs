@@ -515,6 +515,9 @@ pub(super) fn pickup_sprites(
     weapon: oag_tables::weapons::Weapon,
     art: &oag_title::HudArt,
 ) -> Vec<Sprite> {
+    if let Some(uv_table) = art.pickup_icon_uv {
+        return pickup_sprites_uv_rewrite(layout, weapon, uv_table);
+    }
     let icon = pickup_icon_name(weapon);
     let backdrop = (!art.always_on.contains(&PICKUP_BACKGROUND)).then_some(PICKUP_BACKGROUND);
     // Backdrop first: the icon sits on it, and paint order here is the layout's
@@ -550,6 +553,64 @@ pub(super) fn pickup_sprites(
             sprite
         })
         .collect()
+}
+
+/// The name of 2048's one pickup-icon widget, rewritten per weapon rather
+/// than selected by name. See [`oag_title::HudArt::pickup_icon_uv`].
+pub(super) const PICKUP_ICON_2048: &str = "PickupIcon";
+
+/// The backdrop the held pickup's icon sits inside, on 2048's dialect.
+///
+/// Not [`PICKUP_BACKGROUND`]: `HUD_pickups.xml`'s `PickupBackground` authors
+/// no `<Values>` at all on this title (see `oag_2048::hud::ART`'s own doc
+/// comment), and the visible arc round the icon is a different, separately
+/// named widget instead.
+pub(super) const PICKUP_BG_FRAME_2048: &str = "PickupBgFrame";
+
+/// [`pickup_sprites`]'s branch for 2048's dialect: one `PickupIcon` widget,
+/// UV rewritten per weapon from `art.pickup_icon_uv`, drawn centred inside
+/// [`PICKUP_BG_FRAME_2048`]'s own authored rect.
+///
+/// **The held state only.** The frames show the icon at a *second*,
+/// top-centre position once, with a caption, the instant a pickup is
+/// granted (`docs/formats/2048-hud.md`'s "The pickup slot") - that
+/// announcement has no state to key off yet (`Readout` carries no
+/// time-since-grant), so this draws only the steady held state, which is
+/// what a race shows the rest of the time a pickup is carried.
+///
+/// **The destination rect is measured, not decompiled.** `Hud_UpdatePickupIcon`
+/// (`docs/ghidra/functions/vita-2048-eu-v104/pickup-icon-uv-table.md`) never
+/// writes `PickupIcon`'s own `x`/`y`, only its UV; the held icon's on-screen
+/// position was found by scanning a captured frame's pixels for the icon's own
+/// tint and matches "native 85x86 size, centred inside `PickupBgFrame`'s own
+/// authored rect" to within 2-3 px on every edge - confidence 80, one frame,
+/// one weapon.
+fn pickup_sprites_uv_rewrite(
+    layout: &Layout,
+    weapon: oag_tables::weapons::Weapon,
+    uv_table: [Option<[u16; 4]>; 14],
+) -> Vec<Sprite> {
+    let frame = layout.sprite(PICKUP_BG_FRAME_2048);
+
+    let mut sprites = Vec::new();
+    // The backdrop draws whenever a weapon is held, whether or not this title
+    // has an icon for it - the same "backdrop alone, rather than nothing or a
+    // panic" rule `pickup_sprites`' Pulse/HD branch already keeps for a name
+    // the layout does not author.
+    if let Some(frame) = frame {
+        sprites.push(frame.clone());
+    }
+
+    if let (Some(uv), Some(icon)) = (uv_table[weapon as usize], layout.sprite(PICKUP_ICON_2048)) {
+        let mut icon = icon.clone();
+        icon.uv = uv.map(f32::from);
+        if let Some(frame) = frame {
+            icon.rect[0] = frame.rect[0] + (frame.rect[2] - icon.rect[2]) * 0.5;
+            icon.rect[1] = frame.rect[1] + (frame.rect[3] - icon.rect[3]) * 0.5;
+        }
+        sprites.push(icon);
+    }
+    sprites
 }
 
 /// [`pickup_sprites`]'s counterpart for Pure's dialect: the held pickup's
