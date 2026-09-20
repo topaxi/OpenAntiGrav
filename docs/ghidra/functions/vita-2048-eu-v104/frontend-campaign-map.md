@@ -107,12 +107,21 @@ pattern (`0x8150ea74`/`0x8150eae0`, 27 slots apart) is actually **two** back
 to back 27-slot vtables, starting at `0x8150ea48` (containing the
 `0x810f5001` Thumb pointer at slot 11, `+0x2c` = `0x8150ea74`) and
 `0x8150eab4` (containing `0x810f817d` at slot 11, `0x8150eae0`) - the
-"27 slots apart" reading was two mid-table hits, not one table's span. Most
-slots are byte-identical between the two (inherited, unmodified), and they
-diverge at exactly five slots (0, relative slots 3, 5, 7, 11, 14) - the
-shape of two sibling classes each overriding a handful of virtual methods of
-a shared base, not one class's multiple-inheritance thunk pair (which would
-put the *same* two function pointers in both tables). Both tables' own
+"27 slots apart" reading was two mid-table hits, not one table's span. Of
+the 15 slots read for both tables (relative slots 0-14 - slots 15-26 of the
+HD table were not captured this pass, so the full divergence picture is
+incomplete), most are byte-identical (inherited, unmodified), and seven
+diverge: relative slots 3, 5, 7, 9, 11 and **10, 14** - the shape of two
+sibling classes each overriding a handful of virtual methods of a shared
+base, not one class's multiple-inheritance thunk pair (which would put the
+*same* two function pointers in both tables). Slots 10 and 14 are the
+payoff: they hold `TouchCampaignFury_Item_Construct`/`_Create`
+(`0x813cf5e5`/`0x813cf605`, Thumb bit set) in the Fury table and
+`TouchCampaignHD_Item_Construct`/`_Create` (`0x813cf749`/`0x813cf769`) in
+the HD table - **the vtable's own contents name its owner's constructors**,
+independent corroboration of the class-name finding below from a second
+direction, not just "xrefs happened to point here." Slots 3, 5, 7 and 9 are
+further per-class overrides, not identified this pass. Both tables' own
 "offset-to-top"/typeinfo words (the two words immediately before each table
 start) are zero - this binary has no RTTI (`-fno-rtti`), so the
 "typeinfo string" approach the previous pass proposed finds nothing; the
@@ -195,9 +204,15 @@ after each scale/bias quad - HD's own table (`0x818808e4`, node type field
 | 6 | 6 | 18 |
 | 7 | 37 | 27 |
 
-Fury's own table (`0x81880630 + type*8`, node type field 8-15, matching the
-`7 < iVar8` gate - types 0-7 of this array are never read by Fury and belong
-to HD's table above) reads:
+Fury's own layout mirrors HD's exactly - a scale/bias quad at `0x81880660`
+followed by its own 8-entry table at `0x81880670` (`+0x10`, same as HD) -
+but the *source* indexes it by the raw node-type field (8-15, matching the
+`7 < iVar8` gate) rather than `type - 8`, so the compiler folded that `-8`
+into the base pointer instead of emitting a subtraction: `&DAT_81880630` is
+simply `0x81880670 - 8*8`, a computed address 64 bytes before the real
+table, not a second, wider array with unused low slots (and it does not
+alias HD's table - HD's is a distant, unrelated block at `0x818808e4`). The
+table itself (node type field 8-15) reads:
 
 | Type | X | Y |
 | --- | --- | --- |
@@ -217,10 +232,13 @@ i.e. it is a per-event-badge layout slot inside that bounded area, not a
 name or a category. Reconstructed by hand-tracing register-held immediates
 across two Thumb disassembly windows rather than a clean decompile (Ghidra
 has not created a `Function` over either init block, so `decompile_function`
-was not available for it) - a genuine risk of a mis-attributed register
-value survives that method, which is why this is capped at 84 rather than
-95 even though the two tiers' identical scale/bias values cross-validate
-each other.
+was not available for it). Both tiers' identical scale/bias values
+cross-validate each other, and both blocks stop writing at `+0x3c` (bounding
+each table at 8 entries independent of any assumption); still capped at 84
+rather than 95 because the method itself (manual register-liveness tracing)
+is weaker than a decompile or a runtime trace even when, as here, it holds
+up. `create_function` at each init block's entry followed by
+`decompile_function` would be the clean confirmation - not done this pass.
 
 **The "tag" constants are not a hash - they are Thumb function pointers
 (confidence 90).** `-0x7ef08b35` as `u32` is `0x810f74cb`; `-0x7ef0bbf1` is
