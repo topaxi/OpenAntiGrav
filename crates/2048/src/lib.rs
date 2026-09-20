@@ -14,9 +14,16 @@
 //! files under HD's names and *changed the containers underneath them*. See
 //! `docs/formats/2048-status.md`.
 //!
-//! - [`Title::front_end`] is `None`: none of 2048's front end has been read.
-//!   Its boot chain is not merely undeclared, it is unopened.
-//! - [`Title::loading`] and [`Title::music`] are `None` on the same terms.
+//! - [`Title::front_end`] is `Some` since [ADR-0054]: this build's boot
+//!   chain, language plugins and touch-icon layout are read - see
+//!   [`frontend`]. Its `menu` axis stays `None`, on evidence rather than a
+//!   gap: 2048 authors no `FEGlobals`/`<Menu>`/`<HorizMenu>` vocabulary
+//!   anywhere, a touch-icon grid over a persistent scene instead
+//!   ([`oag_title::FrontEnd::touch`]).
+//! - [`Title::loading`] and [`Title::music`] are `None` on the same terms
+//!   `front_end` used to be: real, narrower gaps rather than a structural
+//!   one - a real loading screen with no located plugin XML, and a located
+//!   sound bank (`data/audio/sound/frontend.bnk`) whose cues are unread.
 //! - [`Title::exhaust`] and [`Title::flare`] are `Unread`. 2048 ships
 //!   `data/ribboneffects/EngineTrail_BlueRed_triangle.vex` and a per-team
 //!   `Engineflare.vex`, so the *files* are there under HD's own spellings -
@@ -39,10 +46,12 @@
 //! [`oag_title::RaceDefaults::ship_dir`] an axis.
 //!
 //! [ADR-0022]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0022-title-packages.md
+//! [ADR-0054]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0054-a-touch-front-end-is-a-second-axis-not-a-menuskin-variant.md
 
 use oag_assets::{Archives, Result};
 use oag_title::{ArchiveCandidates, Platform, Title};
 
+pub mod frontend;
 pub mod hud;
 pub mod race;
 
@@ -63,7 +72,9 @@ pub const TITLE: &Title = &Title {
     // source never reaches the serial check at all - it is read off a disc's
     // `UMD_DATA.BIN`/`SYSTEM.CNF`, and this source is neither.
     foreign_serials: &[],
-    front_end: None,
+    // See `frontend::FRONT_END`'s own doc: real and read, `menu: None` on
+    // evidence rather than a gap.
+    front_end: Some(frontend::FRONT_END),
     hud: hud::LAYOUTS,
     hud_art: hud::ART,
     race: race::DEFAULTS,
