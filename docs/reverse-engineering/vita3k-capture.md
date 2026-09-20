@@ -145,16 +145,44 @@ resumes. Post-race summary: `(710, 480)` accepts.
 
 ## Cleanup
 
-Kill by pid, Vita3K first so it saves its pipeline cache, then Xwayland,
-then weston. Nothing persistent is left behind except the campaign save on
-the user's own `pref-path` (the events above are now completed on it) and
-the pilot-assist option, which is stored in that save.
+`scripts/vita3k-drive.py stop` does this now - Vita3K first so it saves its
+pipeline cache, then Xwayland, then weston, and only the pair this tooling's
+own `display`/`boot`/`race` started (the same ownership-marker idiom
+`scripts/xvfb_display.py` uses for `Xvfb`, never a bare `pkill`). Nothing
+persistent is left behind except the campaign save on the user's own
+`pref-path` (the events above are now completed on it) and the pilot-assist
+option, which is stored in that save.
 
-The helper scripts this pass used (`launch.sh`, `xwayland.sh`, `shot.sh`,
-`key.sh`, `tap.sh`, `hold.sh`, `race.sh`, `strip.sh`) live under
-`~/.cache/oag/2048-hud/` beside the frames. They are twenty lines each and
-the recipe above is all of them; a `scripts/vita3k-drive.py` on the model of
-`scripts/rpcs3-drive.py` is the obvious next step and is not written.
+## `scripts/vita3k-drive.py`, on the model of `scripts/rpcs3-drive.py`
+
+Written 2026-09-20, replacing the twenty-line-each `launch.sh`, `xwayland.sh`,
+`shot.sh`, `key.sh`, `tap.sh`, `hold.sh`, `race.sh` this recipe's own pass
+used by hand (still under `~/.cache/oag/2048-hud/` beside the frames, and
+`strip.sh` still has no Python equivalent - it tiles a capture sequence for
+eyeballing, which this recipe's own steps already do one shot at a time).
+Subcommands: `display`, `stop`, `boot`, `race`, `shot`, `tap`, `key`, `hold` -
+see the script's own module docstring for each.
+
+**`display`/`boot`/`stop` are solid, checked end to end.** `tap`/`key`/`hold`/
+`shot` are the same primitives the shell scripts used, individually checked
+by driving a real race by hand: `python3 scripts/vita3k-drive.py boot`, then
+`tap`/`shot` in a loop watching each frame, reached Metro Park's Time Trial
+on this machine's own (already-progressed, not fresh) save and `hold e 6`
+moved the craft for a real ~10 seconds (`TOTAL 0.00.00` to `0.10.29`, `XP 0`
+to `20`).
+
+**`race`'s own fixed menu walk is not proven reliable unattended**, even
+though every primitive it is built from is. It targets Empire Climb the way
+this page's own walk-in table does, from a save this fresh - but on this
+machine's actual save (already three events in, from this same recipe's own
+prior pass), the campaign map's pan position no longer matches the
+coordinates, and even the Game Mode grid's own two-tap select-then-confirm
+did not reproduce back-to-back inside an unattended run the way driving it
+by hand did. `FIRST_EVENT_TAPS`'s own doc comment in the script has the
+measurement. `race --hold-seconds N --screenshot out.png` is still the
+one-command path to try; `boot` then `tap`/`key`/`hold` by hand for whatever
+a session's own save and map actually show is the reliable fallback, no
+different in kind from a human adapting the recipe above by eye.
 
 ## What a frame is, legally
 

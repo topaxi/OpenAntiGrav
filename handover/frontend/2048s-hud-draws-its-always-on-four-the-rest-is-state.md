@@ -62,10 +62,15 @@ twice the size, right-hand column off screen.
   - Square did not fire, what does is unmeasured), the radar, the countdown,
   Elimination, Speed Lap, the pickup absorb/`ManualShield`, `GiftCannon`,
   `RaceMedal`, `GloryMoment`, `ObjectivePoint`.
-- The capture scripts are twenty-line shell files under
-  `~/.cache/oag/2048-hud/` and are not in the tree; a
-  `scripts/vita3k-drive.py` on the model of `scripts/rpcs3-drive.py` would
-  make the next capture one command.
+- **`scripts/vita3k-drive.py`'s `race` menu walk is save-state dependent and
+  not proven unattended-reliable even on a fresh save** - see its own
+  `FIRST_EVENT_TAPS` doc comment and
+  [vita3k-capture.md](../../docs/reverse-engineering/vita3k-capture.md#scriptsvita3k-drivepy-on-the-model-of-scriptsrpcs3-drivepy).
+  `display`/`boot`/`stop` and the `tap`/`key`/`hold`/`shot` primitives are
+  each checked end to end (drove a real race - Metro Park Time Trial - by
+  hand); the fixed six-tap sequence into a race is not, on this machine's
+  own already-progressed save. A genuinely fresh save (or a person adapting
+  the coordinates the way the manual recipe always needed) is still open.
 
 ## Next Steps
 
@@ -80,5 +85,8 @@ twice the size, right-hand column off screen.
    `pickup_sprites` wired and checked against five weapons live
    (`just play 2048 --race --give <weapon>`). Left open by that pass: the
    grant announcement and the `EnergyBg`/`EnergyBarDelay` corrections above.
-4. Write `scripts/vita3k-drive.py` from the recipe page so steps 1-3 can be
-   checked against a fresh frame in one command.
+4. ~~Write `scripts/vita3k-drive.py` from the recipe page~~ - written
+   2026-09-20. `display`/`boot`/`stop`/`tap`/`key`/`hold`/`shot` are checked
+   end to end; `race`'s own fixed menu walk is not - see the bullet above.
+   Re-running `race` against a genuinely fresh save (or fixing the Game Mode
+   tile's select-then-confirm timing some other way) is the open half.
