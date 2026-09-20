@@ -134,6 +134,20 @@ names both - `english/Definition.xml` declares a `2048HUD` font role at
    (both are Thumb-pointer hits in one table, 27 slots apart) - that names the
    class and, with it, whatever screen/refresh path calls them, which is the
    remaining unknown in `frontend-campaign-map.md`.
+
+   **2026-09-20: done in part.** The class is named -
+   `TouchCampaignFury_Item`/`TouchCampaignHD_Item`, recovered from a literal
+   source-file string (`"Frontend/Items/TouchCampaign{Fury,HD}_Item.cpp"`)
+   each class's own constructor writes into its new object, confidence 82.
+   The screen/refresh path is still not found: neither constructor has a
+   resolved static caller, and the working hypothesis is a `.init_array`
+   global/static-object constructor rather than a `BL` site - unconfirmed.
+   Same pass also resolved two smaller open items on that page: the
+   "hash-shaped" tag constants at each button's `piVar13[2]` are actually
+   Thumb function pointers to each item's own on-tap handler (not a hash),
+   and `SceAppUtil_2DB7BE3B` is `sceAppUtilDrmOpen` per the vitasdk NID
+   database. Full detail in `frontend-campaign-map.md`'s own 2026-09-20
+   sections.
 3. Extract `frontend.bnk` and read its cue table (`oag_formats::sblk::Bank::parse`)
    to name `Music::front_end`.
 4. Once `front_end` is fillable, re-run

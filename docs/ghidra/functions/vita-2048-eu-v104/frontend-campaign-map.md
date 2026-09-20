@@ -100,33 +100,206 @@ for it. Confidence 75, not higher: decompilation and the literal ID strings
 are unambiguous, but nothing here is a runtime trace, and `SceAppUtil_2DB7BE3B`
 itself is identified by call shape rather than a resolved import name.
 
+## 2026-09-20: the vtable's owner is `TouchCampaignFury_Item`/`TouchCampaignHD_Item`, not `FE3DCanvas`
+
+**Confidence 82.** The vtable-shaped table the previous pass found by byte
+pattern (`0x8150ea74`/`0x8150eae0`, 27 slots apart) is actually **two** back
+to back 27-slot vtables, starting at `0x8150ea48` (containing the
+`0x810f5001` Thumb pointer at slot 11, `+0x2c` = `0x8150ea74`) and
+`0x8150eab4` (containing `0x810f817d` at slot 11, `0x8150eae0`) - the
+"27 slots apart" reading was two mid-table hits, not one table's span. Most
+slots are byte-identical between the two (inherited, unmodified), and they
+diverge at exactly five slots (0, relative slots 3, 5, 7, 11, 14) - the
+shape of two sibling classes each overriding a handful of virtual methods of
+a shared base, not one class's multiple-inheritance thunk pair (which would
+put the *same* two function pointers in both tables). Both tables' own
+"offset-to-top"/typeinfo words (the two words immediately before each table
+start) are zero - this binary has no RTTI (`-fno-rtti`), so the
+"typeinfo string" approach the previous pass proposed finds nothing; the
+class name had to come from the constructor instead.
+
+`get_xrefs_to` on the table *start* addresses (not the slot-11 mid-table
+addresses the byte search found) turns up real constructors:
+
+- `0x8150ea48` (Fury): `TouchCampaignFury_Item_Construct` (`0x813cf5e4`,
+  was `FUN_813cf5e4`) and `TouchCampaignFury_Item_Create` (`0x813cf604`,
+  was `FUN_813cf604`).
+- `0x8150eab4` (HD): `TouchCampaignHD_Item_Construct` (`0x813cf748`) and
+  `TouchCampaignHD_Item_Create` (`0x813cf768`), byte-identical in shape to
+  their Fury counterparts.
+
+`TouchCampaignFury_Item_Create` writes the literal string
+`"Frontend/Items/TouchCampaignFury_Item.cpp"` into the new object's field
+`[0xb]` (a debug/leak-tracking "creation site" tag, the same convention as
+the button object's own `"HD campaign event"`/`"Fury campaign event"` tag at
+a different offset); `TouchCampaignHD_Item_Create` writes
+`"Frontend/Items/TouchCampaignHD_Item.cpp"` into the identical field. These
+are the original developers' own source paths, not an inferred name - as
+strong as evidence gets short of a shipped symbol table. The object is
+0xec (236) bytes, base class `LinkObj` (`Memory_Alloc(0xec, "Unknown
+LinkObj", 0x1ef, 0)`, matching the `System\LinkObj.h` string found near the
+vtable data). Capped at 82 rather than higher because this is decompilation
+evidence, not a runtime trace or a second binary - see the confidence
+rubric's ceiling table.
+
+**Still open: no caller found for either constructor.** `get_xrefs_to` on
+`0x813cf604`/`0x813cf768`/`0x813cf5e4`/`0x813cf748` all return nothing,
+same as the tier functions before them. Given the vtable pointer is stored
+by direct assignment rather than a virtual call and nothing statically
+calls the constructor, the likeliest explanation is a C++ global/static
+object constructor invoked from the PRX's `.init_array` (a data table the
+loader walks, not a `BL` site) rather than dead code - consistent
+with, not proven by, this pass. **The screen/refresh path that dispatches
+the two tier functions is therefore still unnamed** - naming the
+`.init_array` entry (or confirming this reading some other way) is the
+concrete next step, not a class name anymore.
+
+**Bonus, while chasing this: the two "tag" constants below are resolved
+(see the dated section after Open) and turned out to name the actual
+tap-handler for each button**, which itself forwards into what reads as a
+race-launch sequence (`FUN_810f7060`/`FUN_810f3fa4`, not renamed this pass -
+reads the tapped node's Class/Track/Weapons/Opponents/Damage/SkillLevel/
+Tournament fields and ends with a call shaped like "start this race").
+
+## 2026-09-20: the per-tier tables, the tag constants, the NID, and DLC3
+
+**The per-tier scale/offset tables (confidence 84 - exact, reconstructed
+from the initializer's own immediate operands).** Both tables are `.bss`:
+zero in the static image, populated at runtime by inline initializer code
+immediately adjacent to each tier's `TouchCampaign*_Item` construction
+(`~0x810f6e80`-`0x810f7044` for Fury, `~0x810fa0f0`-`0x810fa1b8` for HD) -
+there is no live emulator in this pass, so the values below come from
+reading the `mov`/`movw`/`movt` immediates the initializer stores, not from
+a memory dump (a dump of the static image at either address is all zero,
+confirmed). Both tiers share the *same* scale/bias quad:
+
+| Field | HD (`0x818808d4`) | Fury (`0x81880660`) |
+| --- | --- | --- |
+| X scale | 3.0 | 3.0 |
+| Y scale | 2.0 | 2.0 |
+| X bias | 55.0 | 55.0 |
+| Y bias | 25.0 | 25.0 |
+
+Per-type (X,Y) pixel-offset table, stride 8 bytes (two `i32`), immediately
+after each scale/bias quad - HD's own table (`0x818808e4`, node type field
+0-7, matching the `iVar8 < 8` gate) reads:
+
+| Type | X | Y |
+| --- | --- | --- |
+| 0 | 1 | 1 |
+| 1 | 20 | 6 |
+| 2 | 44 | 4 |
+| 3 | 68 | 6 |
+| 4 | 64 | 16 |
+| 5 | 37 | 17 |
+| 6 | 6 | 18 |
+| 7 | 37 | 27 |
+
+Fury's own table (`0x81880630 + type*8`, node type field 8-15, matching the
+`7 < iVar8` gate - types 0-7 of this array are never read by Fury and belong
+to HD's table above) reads:
+
+| Type | X | Y |
+| --- | --- | --- |
+| 8 | 1 | 1 |
+| 9 | 21 | 3 |
+| 10 | 42 | 0 |
+| 11 | 61 | 5 |
+| 12 | 75 | 11 |
+| 13 | 52 | 16 |
+| 14 | 28 | 16 |
+| 15 | 5 | 17 |
+
+16 total node types across both tiers (8 each). The type field selects which
+(X,Y) offset gets added to the node's own projected position before the
+401x120/`< 401.0`/`< 120.0` bounds check both tier functions already share -
+i.e. it is a per-event-badge layout slot inside that bounded area, not a
+name or a category. Reconstructed by hand-tracing register-held immediates
+across two Thumb disassembly windows rather than a clean decompile (Ghidra
+has not created a `Function` over either init block, so `decompile_function`
+was not available for it) - a genuine risk of a mis-attributed register
+value survives that method, which is why this is capped at 84 rather than
+95 even though the two tiers' identical scale/bias values cross-validate
+each other.
+
+**The "tag" constants are not a hash - they are Thumb function pointers
+(confidence 90).** `-0x7ef08b35` as `u32` is `0x810f74cb`; `-0x7ef0bbf1` is
+`0x810f440f`. Both are exactly the Thumb-bit-set entry addresses of two real
+functions already in this binary: `0x810f74ca` and `0x810f440e`. Tested
+against this project's own documented name-hash style first
+(`wad::hash_name`, `~crc32(name)`, lower-cased/`\`->`/`-normalized) against
+36 candidate strings - the button tags, both source paths, both DLC content
+IDs, both atlas filenames, `FE3DCanvas`, `TouchCampaign`, `Launch 2048`, and
+assorted casing/spacing variants of "HD/Fury campaign event" - **no
+candidate matches either constant.** The address reading fits far better and
+is exact, not a guess: renamed `0x810f74ca` to `TouchCampaignHD_Item_OnTap`
+and `0x810f440e` to `TouchCampaignFury_Item_OnTap`. Both check
+`param_1+0x3c == 2` (a stored event-type field, "tap"/"select" hypothesised
+but not confirmed) and `param_1+0x14 != 0`, then forward to `FUN_810f7060`/
+`FUN_810f3fa4` respectively - both of which read the tapped node's own
+race-setup fields (string tags "Class", "Track", "Weapons", "Opponents",
+"Damage", "SkillLevel", a `"Tournament"`/`"yourTourney"` branch) and end in
+a call shaped like "start this race or tournament." Capped at 90 rather than
+the 95+ "runtime trace" band because the address match, while exact
+arithmetic, is still read from static decompilation - not a breakpoint. Not
+renamed this pass: `FUN_810f7060`/`FUN_810f3fa4` themselves (the race-launch
+handlers), left as a concrete next step with the evidence above.
+
+**`SceAppUtil_2DB7BE3B` is `sceAppUtilDrmOpen` (confidence 90).** Looked up
+against the vitasdk/vita-headers NID database
+(`db/360/SceAppUtil.yml` at
+`github.com/vitasdk/vita-headers`, firmware 3.60 - the only firmware
+directory in that repo carrying `SceAppUtil.yml`): NID `0x2DB7BE3B` is
+`sceAppUtilDrmOpen`. Its siblings in the same function
+(`Boot_CheckDlcPackageFlags`) resolve too and corroborate each other: NID
+`0xDAFFE671` (called once, first, before any content-ID check) is
+`sceAppUtilInit`, and NID `0x6A140498` (called right after the first
+`sceAppUtilDrmOpen`, on the `"W2048NETWORKPASS"` check only) is
+`sceAppUtilDrmClose` - exactly the init-once / open+close-per-ticket shape
+the names imply. All three renamed in Ghidra at their own thunk-stub addresses
+(`SceAppUtil_2DB7BE3B` at `0x813f2b90`->`sceAppUtilDrmOpen`,
+`SceAppUtil_6A140498` at `0x813f2bc0`->`sceAppUtilDrmClose`,
+`SceAppUtil_DAFFE671` at `0x813f2c40`->`sceAppUtilInit`) per this project's own
+`names.tsv` convention that a NID-resolved import keeps its real API name
+rather than the `Subsystem_VerbNoun` scheme (see `ps4-omega-eu/names.tsv`'s
+header comment for the precedent). Not capped by the decompilation-only
+ceiling: this is agreement with an independently-authored, external
+database across three separate identifiers, each fitting its call-site role
+exactly.
+
+**`W2048DLC3PACKAGE`/`g_bDlc3Mounted` *does* have a reader (confidence 85) -
+the earlier "no known reader" claim was wrong.** `get_xrefs_to` on
+`g_bDlc3Mounted` (`0x8153fc3c`) finds two reads inside `FUN_810a19e0`, an
+unnamed ~0x148-field object constructor (references `"ONL_CRJ_GLIST"` and
+`data/fe/newimages/callout/cross.gxt` - not identified further this pass).
+It combines all three DLC flags into one new global:
+`g_bNoDlcMounted` (`0x8151d504`, renamed this pass) =
+`!g_bDlc1Mounted && !g_bDlc2Mounted && !g_bDlc3Mounted` - i.e. a single "no
+add-on content mounted at all" flag, plausibly gating a placeholder/upsell
+shown on whatever screen `FUN_810a19e0` builds (one caller,
+`FUN_813c8d14`, not chased). `FUN_810a19e0` itself was not renamed - not
+enough evidence yet for what screen it is.
+
 ## Open
 
-- **No caller found for either tier function.** `get_function_callers` and
-  `get_xrefs_to` on both addresses return nothing - Thumb functions are
-  usually virtual-dispatched here. A byte-pattern search for the Thumb
-  pointer (`7d 81 0f 81` little-endian for `0x810f817d`, `01 50 0f 81` for
-  `0x810f5001`) lands both in the same vtable-shaped table, 0x6c bytes (27
-  slots) apart, at `0x8150eae0` and `0x8150ea74` - consistent with two
-  methods of one class, not two unrelated tables, but the class itself is
-  unnamed. Naming that vtable's owner (most plausibly `FE3DCanvas` itself)
-  is the concrete next step.
-- **The per-tier scale/offset constants are unread.** `FE3DCanvas_AddHDCampaignEventButtons`
-  indexes a flat table (`DAT_818808d4`.."e8`); `FE3DCanvas_AddFuryCampaignEventButtons`
-  indexes an 8-byte-stride array by the node's own type field
-  (`&DAT_81880630 + iVar8*8`). Neither table's contents were dumped this
-  pass - doing so would likely name how many distinct node "types" the map
-  authors beyond the HD/Fury split.
-- **The per-tier tag constants (`piVar13[2] = -0x7ef08b35` / `-0x7ef0bbf1`)
-  are unexplained.** They read like a hash (the same style `TouchCampaign`'s
-  own redirect-target hash uses, per `2048-frontend.md`), not chased this
-  pass.
-- **`W2048DLC3PACKAGE`/`g_bDlc3Mounted` has no known reader.** Worth a search
-  independent of the front end - it may gate content this project has not
-  identified as DLC at all yet.
-- **`SceAppUtil_2DB7BE3B` is named by call shape only.** A NID lookup against
-  a Vita SDK header list would give it (and its sibling `SceAppUtil_*` calls
-  in the same function) a real name.
+- **The screen/refresh path that dispatches the two tier functions is still
+  unnamed.** Neither `TouchCampaignFury_Item_Construct`/`_Create` nor their
+  HD siblings have a resolved static caller; the likeliest explanation is a
+  `.init_array`-driven global/static-object constructor (see the dated
+  section above). Confirming that reading, or finding the real caller some
+  other way, is the concrete next step - it is also probably the way to
+  find what the DLC1/DLC2 gate actually decides at a screen level, not just
+  a function level.
+- **`FUN_810f7060`/`FUN_810f3fa4` (the race-launch handlers the two on-tap
+  callbacks forward to) are not renamed.** They read a tapped campaign-map
+  node's own race-setup fields (Class/Track/Weapons/Opponents/Damage/
+  SkillLevel/Tournament) and end in what looks like "start this race" -
+  worth a dedicated pass, and likely relevant to whatever eventually reads
+  `Team_Definition.xml`-style per-event race config for this screen.
+- **`FUN_810a19e0` (the `g_bNoDlcMounted` reader) is unnamed.** One caller,
+  `FUN_813c8d14`, not chased. The `"ONL_CRJ_GLIST"` string and
+  `callout/cross.gxt` texture suggest an online/leaderboard-adjacent screen
+  with a DLC-upsell callout, not confirmed.
 
 ## See also
 
