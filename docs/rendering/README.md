@@ -59,6 +59,35 @@
   per-team `ambient_shadow.gtf`, Pure's nothing at all, and the three classes
   - `shadow` `0x3cb`, `blob` `0x3e0`, `textureBlob` `0x3df` - authored zero
   times and therefore inert
+- SPU vertex lights (Wipeout HD) - **built for one producer**, 2026-09-20.
+  HD sums a per-frame point-light list into every track chunk's vertex
+  colours on the SPU and adds the decoded term to the pre-albedo diffuse
+  sum; the formula, the RGBE packing and the `SVC1` combine are read off
+  the SPU job and the shipped microcode
+  ([`renderer.md`](../ghidra/functions/ps3-hdfury-eu/renderer.md),
+  "`EdgeGeom`'s light path is read" and "The `SVC1` combine is read"), and
+  `mesh.wgsl` runs the same sum per vertex from a 128-record `SpuLights`
+  block in the `Scene` uniform. The one producer wired is the one the live
+  capture showed filling the buffer, `EngineFlare_SubmitSpuLight`: one
+  light per craft, `EngineLightData.xml`'s `Distance` behind the flare node
+  along its Z axis, range `Radius +- 0.1`, `(40, 10, 4)` on a Fury skin or
+  `(4, 10, 40)` otherwise, times `1 + 10 * boost_blend` - see
+  `oag_game::race::engine_light` and
+  [`hd-status.md`](../formats/hd-status.md), "Authored data that is plain
+  text". **What it lights is the craft's own engine housing, not the floor**:
+  every one of the original's 40 captured records sits 3.0-4.4 units (a ride
+  height) from the nearest track surface while `D` is 0.6-2.1, and ours sit
+  2.9-4.5 on the same circuit (`crates/game/examples/hd_engine_light_reach_probe.rs`),
+  so the list is bound to the hulls as well as the track - **chosen, not
+  measured**: 74 ship materials compile `SVC1` twins and nothing else is in
+  range, but the runtime `SVC1` bit on a hull chunk is unobserved. Boosted,
+  the `1 + 10 * blend` gain washes the whole rear of the hull warm
+  (`talons-t487.png` against `talons-t470.png` under
+  `data/scratch/hd-engine-light/`) - the disc's numbers, not tuned. The other 23 producers `renderer.md` catalogued
+  (pickups, weapons, the Zone ship) and the flare's blue-to-orange transition
+  branch stay unwired until their triggers are read; `"Lighting.Enable spu
+  vertex lights"` in a circuit's `.envsettings` (default on, `0` on
+  `02_track` and `12_sol_2`) is honoured.
 - Environment: `Skycube` (**done** - the payload is a `Mesh` payload, recovered in
   [`skycube.md`](../formats/skycube.md) and drawn camera-centred and out of depth
   by `oag_render::mesh::build_sky`). `fogCube` is **done** too - the runtime is

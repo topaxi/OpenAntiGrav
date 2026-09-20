@@ -129,7 +129,7 @@ here plays it yet, per CLAUDE.md's "draw nothing and say so" rule.
 | Track geometry | ✅ verified - PS2 vs PSP radius within 0.1 ([roadmap.md](roadmap.md#m1---asset-archaeology)) | 🟨 partial - LOD, scenery animation read ([README.md](../rendering/README.md)) | 🟨 partial - 413k triangles draw, PVS not this project's HD layout ([2048-status.md](../formats/2048-status.md)) |
 | Ships | ✅ verified - visual parity both asset paths | 🟩 built - hull materials, [hd-ship-materials.md](../rendering/hd-ship-materials.md) | 🟨 partial - 2,782/2,800 draws, 521/527 materials ([2048-status.md](../formats/2048-status.md)) |
 | Skybox | 🟩 built - [skycube_ground_truth.rs](../../crates/vex/tests/skycube_ground_truth.rs) | ⬜ `?` | ⬜ `?` |
-| Lighting | 🟩 built - authored normals | ⬜ `?` | 🟨 partial - stand-in rig, `.envsettings` does not parse for this title ([2048-status.md](../formats/2048-status.md)) |
+| Lighting | 🟩 built - authored normals | 🟨 partial - the `.envsettings` sun/ambient/prelit rig drawn ([envsettings.md](../formats/envsettings.md)); the SPU vertex-light sum built per vertex with one producer wired, the per-craft engine light ([README.md](../rendering/README.md), "SPU vertex lights") | 🟨 partial - stand-in rig, `.envsettings` does not parse for this title ([2048-status.md](../formats/2048-status.md)) |
 | Shadows | 🟩 built - [shadows.md](../rendering/shadows.md) | ⬜ `?` | ⬜ `?` |
 | PVS/culling | ✅ verified - [pvs_placement_ground_truth.rs](../../crates/render/tests/pvs_placement_ground_truth.rs) | 📖 read - [README.md](../rendering/README.md) | ➖ n/a - falls back to drawing every chunk ([2048-status.md](../formats/2048-status.md)) |
 | Fog | 🟩 built - [fog.md](../ghidra/functions/psp-pulse-usa/fog.md) | ⬜ `?` | ⬜ `?` |

@@ -37,6 +37,8 @@ impl Race {
             chase_close,
             internal,
             nozzles,
+            engine_lights,
+            spu_vertex_lights,
             spark_anchors,
             collision_fx,
             effects,
@@ -395,6 +397,12 @@ impl Race {
                 hd_sprite: [exhaust::hd::Sprite::new(); MAX_SHIPS],
                 shield: [ShipShield::with_palette(shield_palette); MAX_SHIPS],
                 nozzles,
+                engine_lights,
+                spu_vertex_lights,
+                engine_light_jitter: [super::engine_light::Jitter::default(); MAX_SHIPS],
+                engine_light_rng: std::array::from_fn(|slot| {
+                    Rng::new(super::engine_light::engine_light_seed(slot))
+                }),
                 spark_anchors,
                 collision_fx,
                 sparks: psys::System::new(),

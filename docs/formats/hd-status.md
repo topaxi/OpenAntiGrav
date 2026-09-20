@@ -577,6 +577,24 @@ archives that disagree on schema and on which eight grids they carry,
 lowercase name, alongside `_detonator` and `_elimination` variants for modes
 Pulse does not have.
 
+**`ships/<team>/enginelightdata.xml`** is HD's own, two element-text numbers
+and nothing else - `<Distance>` and `<Radius>`, spelled as C float literals
+(`0.4f`, `1f`, `0.3`, `-0.4f` all occur) - and it is the one XML on the disc
+`oag_tables::fexml` cannot carry, because that reader keeps attributes and
+discards text. `oag_tables::enginelight` reads it on its own. **37 files, not
+the 36 renderer.md's load-site entry counted**: the twelve teams and `zone`
+across `DATA02`/`DATA03`, and all twenty-four `_c1`/`_n1` variants in
+`DATA06`; `detonator`, `zone battle` and `test` ship none. `Distance` spans
+`-0.4`..`1.5`, `Radius` `0.7`..`2.0`, asserted on the disc by
+`crates/tables/tests/enginelight_ground_truth.rs`. What consumes it is
+`EngineFlare_SubmitSpuLight` - one SPU vertex light per craft, `Distance`
+behind the flare node along its Z axis, range `Radius`
+([renderer.md](../ghidra/functions/ps3-hdfury-eu/renderer.md), "The
+captured buffer's producer is found", confidence 85),
+and `oag_game::race::engine_light` builds that record per frame from the
+file, the locator and the boost blend - see the "SPU vertex lights" entry in
+[`docs/rendering/README.md`](../rendering/README.md).
+
 ## `.pob` reads byte-swapped, and the parser reads it
 
 **Confidence 93.** The [container](pob.md) is byte-swapped: the magic reads

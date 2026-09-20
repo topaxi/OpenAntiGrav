@@ -223,7 +223,7 @@ pub(super) fn psp2_sky_model(
 /// `track.envsettings`. Case-insensitive on the suffix for the same reason
 /// [`mesh::rcs::sibling_name`] is - the game's own spelling varies between
 /// containers.
-fn envsettings_name(vex_name: &str) -> Option<String> {
+pub(super) fn envsettings_name(vex_name: &str) -> Option<String> {
     let at = vex_name.len().checked_sub(4)?;
     vex_name[at..]
         .eq_ignore_ascii_case(".vex")
@@ -254,7 +254,10 @@ const FRONT_END_ENVSETTINGS: &str = "/data/fe/fe.track.envsettings";
 /// for any reason at all - not found, not UTF-8, not this format. Callers
 /// that need to tell those apart for the report read the archive themselves;
 /// this is for a base layer a caller falls back to silently either way.
-fn read_envsettings(archives: &mut oag_assets::Archives, name: &str) -> Option<EnvSettings> {
+pub(super) fn read_envsettings(
+    archives: &mut oag_assets::Archives,
+    name: &str,
+) -> Option<EnvSettings> {
     let blob = archives.read_name(name).ok()?;
     let text = String::from_utf8(blob).ok()?;
     EnvSettings::parse(&text).ok()

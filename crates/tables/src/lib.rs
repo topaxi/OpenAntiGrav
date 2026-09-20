@@ -4,7 +4,8 @@
 //! into numbers the engine reads: [`handling`] tunes a ship, [`weapons`] tunes
 //! a pickup, [`race_campaign`] lays out a campaign's grid, [`trackstartup`]
 //! says what a circuit loads, [`envsettings`] and [`effectsettings`] carry
-//! the lighting and colour-grade rigs the later titles ship, and
+//! the lighting and colour-grade rigs the later titles ship, [`enginelight`]
+//! is where Wipeout HD hangs each ship's engine light, and
 //! [`fury_backdrop`] is the one `.envsettings` that is a menu's camera paths
 //! rather than a circuit's light.
 //!
@@ -22,6 +23,7 @@
 //! [ADR-0022](../../../docs/architecture/adr/0022-title-packages.md).
 
 pub mod effectsettings;
+pub mod enginelight;
 pub mod envsettings;
 pub mod fexml;
 pub mod fury_backdrop;

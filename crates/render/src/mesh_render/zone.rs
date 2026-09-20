@@ -441,9 +441,13 @@ pub(super) fn scene_bind_group(
         // joining it.
         label: Some("scene"),
         entries: &[
+            // Both stages: the fragment stage reads the fog, the rig, the
+            // Zone grade and the shadow map; the vertex stage reads the SPU
+            // vertex-light list (`spu_light_sum`), per vertex as the original
+            // does.
             wgpu::BindGroupLayoutEntry {
                 binding: 0,
-                visibility: wgpu::ShaderStages::FRAGMENT,
+                visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
                 ty: wgpu::BindingType::Buffer {
                     ty: wgpu::BufferBindingType::Uniform,
                     has_dynamic_offset: false,

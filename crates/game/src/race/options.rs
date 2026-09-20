@@ -446,6 +446,15 @@ pub struct Setup {
     /// models, so one team's locator carried onto another's craft puts the
     /// flare inside the fuselage.
     pub nozzles: Vec<Option<Vec3>>,
+    /// Wipeout HD's engine light per slot - `EngineLightData.xml` and the
+    /// flare locator's Z axis - or `None` on every other title and on a
+    /// craft that ships neither. Indexed like [`Self::nozzles`], which
+    /// carries the locator's position. See [`crate::race::engine_light`].
+    pub engine_lights: Vec<Option<crate::livery::engine_light::EngineLight>>,
+    /// Whether the circuit's `.envsettings` leaves the SPU vertex lights on -
+    /// `"Lighting.Enable spu vertex lights"`, on by default and authored off
+    /// on two HD circuits. See `race::load::engine_light`.
+    pub spu_vertex_lights: bool,
     /// Each slot's `Ship Collision Fx` locators, in that hull's model space.
     ///
     /// The disc's own hull spark anchors - the set the original picks the

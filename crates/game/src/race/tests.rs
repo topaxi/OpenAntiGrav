@@ -198,6 +198,8 @@ fn setup(handling: Handling) -> Setup {
         // same path a model with no `Engine Flare` node takes. Sparks
         // likewise fall back to anchoring at the contact point.
         nozzles: vec![None; MAX_SHIPS],
+        engine_lights: vec![None; MAX_SHIPS],
+        spu_vertex_lights: true,
         collision_fx: Vec::new(),
         // No disc, so no `.pob` at all: every effect trigger runs and
         // draws nothing, which is the same path a missing entry takes.

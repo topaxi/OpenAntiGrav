@@ -135,6 +135,24 @@ struct Zone {
     scene_outer: ZoneSet,
 };
 
+// Wipeout HD's SPU vertex lights, in the record layout `SpuLight_AddCandidate`
+// stores: `position.xyz` and the falloff exponent `w`, then `colour.rgb` and
+// the range `D`. `mesh_render::SpuLights` is the mirror; see `spu_light_sum`
+// below for the formula and where the evidence for it lives. A fixed-size
+// array on the same GL-backend grounds as `TexAnims`: the sum runs in the
+// vertex stage, which may not read storage there. 128 is the original's own
+// candidate cap; a race fills 8.
+struct SpuLight {
+    position: vec4<f32>,
+    colour: vec4<f32>,
+};
+
+struct SpuLights {
+    // `.x` is the live count; the other lanes pad to the array's alignment.
+    count: vec4<u32>,
+    lights: array<SpuLight, 128>,
+};
+
 struct Scene {
     fog: Fog,
     light: Light,
@@ -144,6 +162,7 @@ struct Scene {
     time: vec4<f32>,
     zone: Zone,
     shadow: ShadowMap,
+    spu_lights: SpuLights,
 };
 
 // The shadow map's projection and how hard it darkens. See
@@ -346,7 +365,49 @@ struct VertexOutput {
     // Flat for the same reason `slots` is: a property of the material, not
     // of the vertex.
     @location(11) @interpolate(flat) specular_exponent: f32,
+    // Wipeout HD's SPU vertex-light sum at this vertex - `spu_light_sum`,
+    // computed per vertex and interpolated exactly as the original's
+    // `SpuVertexColours` stream is. Zero wherever no list is bound.
+    @location(12) spu_light: vec3<f32>,
 };
+
+// **Wipeout HD's `EdgeGeom` light loop, per vertex.** Read off the SPU job's
+// own binary (`docs/ghidra/functions/ps3-hdfury-eu/renderer.md`, "`EdgeGeom`'s
+// light path is read", confidence 80): for every light within range,
+//
+//     max(0, 1 - |light.pos - P| / D) ^ w  *  max(0, N . L)  *  colour
+//
+// summed, with `L` the unit vector from the vertex to the light and `w` the
+// record's own exponent - `1.0` on every record ever captured, which is the
+// job's fast path, so the `pow` is only reached where a record says
+// otherwise. The `256/255` is the RGBE round trip the `SVC1` decode's own
+// `255`/`128` literals introduce (same page, "The `SVC1` combine is read",
+// confidence 88) - the packer's quantisation itself is not reproduced.
+//
+// **Chosen, not measured**: no per-chunk sphere cull. The original's
+// `LightCulling` job drops a light from a chunk's list when it is more than
+// `D` from the chunk's bounding sphere - a light whose falloff would be zero
+// on every vertex in it anyway - so the sum is the same either way.
+fn spu_light_sum(world: vec3<f32>, normal: vec3<f32>) -> vec3<f32> {
+    var sum = vec3<f32>(0.0);
+    let count = min(scene.spu_lights.count.x, 128u);
+    let n = select(vec3<f32>(0.0), normalize(normal), dot(normal, normal) > 0.0);
+    for (var i = 0u; i < count; i++) {
+        let light = scene.spu_lights.lights[i];
+        let range = light.colour.w;
+        let d = light.position.xyz - world;
+        let dist = length(d);
+        if range <= 0.0 || dist >= range {
+            continue;
+        }
+        let linear = 1.0 - dist / range;
+        let w = light.position.w;
+        let att = select(pow(linear, w), linear, w == 1.0);
+        let ndl = max(dot(n, d / max(dist, 1e-6)), 0.0);
+        sum += light.colour.rgb * (att * ndl);
+    }
+    return sum * (256.0 / 255.0);
+}
 
 @vertex
 fn vs_main(in: VertexInput) -> VertexOutput {
@@ -397,6 +458,7 @@ fn vs_main(in: VertexInput) -> VertexOutput {
     out.specular_exponent = in.specular_exponent;
     out.cur_clip = out.clip;
     out.prev_clip = uniforms.prev_mvp * placed;
+    out.spu_light = spu_light_sum(out.world, out.normal);
     return out;
 }
 
@@ -923,7 +985,13 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     // Multiplying by `1.0` rather than adding anything: the albedo *is* the
     // picture for these, exactly as the microcode leaves it. The specular goes
     // with it, because a program with no sun has no half-vector term either.
-    let lit_sum = ambient_term + prelit + vertex_light_term + sun_diffuse;
+    // **Plus Wipeout HD's SPU vertex lights**, which the `SVC1` fragment
+    // programs add in exactly this slot - the pre-albedo diffuse sum beside
+    // the ambient, the sun and the lightmap, never the specular, the fog or
+    // the emissive add (renderer.md, "The `SVC1` combine is read"). Zero on
+    // every draw that binds no list, and on an `EMISSIVE` chunk the whole
+    // sum is replaced below, which is the original's own no-op there.
+    let lit_sum = ambient_term + prelit + vertex_light_term + sun_diffuse + in.spu_light;
     let authored = select(lit_sum, vec3<f32>(1.0), emissive);
 
     // **Which texture is the picture and which is the coverage, off the
