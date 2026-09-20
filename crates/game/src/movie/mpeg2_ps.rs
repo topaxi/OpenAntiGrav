@@ -8,8 +8,11 @@
 //! itself**. A `.PMF` and an `.IPF` are demuxed here first - by
 //! [`oag_video::pmf`] and [`oag_video::ipf`] - and only their elementary
 //! streams reach the transcoder, so those paths stay in `movie.rs` beside the
-//! machinery they share. This one and [`super::bink`] hand the file over
-//! unaltered, container and all.
+//! machinery they share. This one and [`super::bink`] hand the video over
+//! unaltered, container and all - but not the audio: `ffmpeg`'s own `mpegps`
+//! demuxer never reports a track on this container, so [`oag_video::pss`]
+//! demuxes `private_stream_1` here first, the same split `.PMF` draws between
+//! `ffmpeg` for the picture and this crate for the sound.
 //!
 //! Two names are shorter here than they were in `movie.rs`, and both shadow
 //! something in the parent that `use super::*` brings in: [`open`] against
@@ -17,6 +20,8 @@
 //! [`transcode`] against [`super::transcode`], which is the H.264 path. The
 //! module qualifies them at every call site, which is why they can afford to
 //! be short.
+
+use oag_video::pss;
 
 use super::*;
 
@@ -30,12 +35,11 @@ pub(super) const START_CODE: [u8; 4] = [0x00, 0x00, 0x01, 0xba];
 /// Makes a raw MPEG-2 program stream's frames available, transcoding if it
 /// must.
 ///
-/// This is the PS2's loose `.PSS` movies: no PSMF wrapper, no separate demux
-/// step - `ffmpeg` reads the whole program stream itself, container and all -
-/// and no audio stream in the one measured so far (`INTRO512.PSS`), so this
-/// never reports one. Width, height and frame rate come from `ffprobe`
-/// (see [`probe`]) rather than a header, because there is no header to read
-/// them from.
+/// This is the PS2's loose `.PSS` movies: no PSMF wrapper, no separate video
+/// demux step - `ffmpeg` reads the whole program stream itself, container and
+/// all. The audio is a separate walk: see [`pss_track_audio`]. Width, height
+/// and frame rate come from `ffprobe` (see [`probe`]) rather than a header,
+/// because there is no header to read them from.
 pub(super) fn open(
     blob: &[u8],
     key: &str,
@@ -45,6 +49,10 @@ pub(super) fn open(
     watch: Watch<'_>,
 ) -> Result<Movie> {
     let probed = probe(blob, key, cache_dir)?;
+    // Read before the `no_video` branch below, and unconditionally: a movie's
+    // audio is not a function of whether its picture is wanted, the same way
+    // `open_psmf` reads a `.PMF`'s track before its own `no_video` check.
+    let audio = pss_track_audio(blob, key);
 
     if how.no_video {
         return Ok(Movie {
@@ -56,7 +64,7 @@ pub(super) fn open(
             display_aspect: PS2_DISPLAY_ASPECT,
             frames: None,
             no_picture_reason: Some("--no-video was given".to_string()),
-            audio: None,
+            audio,
         });
     }
 
@@ -83,7 +91,7 @@ pub(super) fn open(
             display_aspect: PS2_DISPLAY_ASPECT,
             frames: Some(frames),
             no_picture_reason: None,
-            audio: None,
+            audio,
         }),
         Err(reason) => Ok(Movie {
             header: None,
@@ -94,8 +102,28 @@ pub(super) fn open(
             display_aspect: PS2_DISPLAY_ASPECT,
             frames: None,
             no_picture_reason: Some(format!("{reason:#}")),
-            audio: None,
+            audio,
         }),
+    }
+}
+
+/// Demuxes and reads this movie's own audio track, if it has one this build
+/// can play.
+///
+/// Never an error out of `open`: a demux failure, a `format` code this build
+/// has not measured, or a channel layout it does not know are all silence
+/// rather than a failed load - see [`oag_video::pss`]'s module docs and
+/// `track::pss_audio` for what each of those means and why. The two `.PSS`
+/// files measured on this disc (`INTRO512.PSS`, `INTRO640.PSS`) both carry a
+/// track; a `.PSS` with none at all - no `private_stream_1` packets - is the
+/// same silence, logged the same way.
+fn pss_track_audio(blob: &[u8], key: &str) -> Option<MovieAudio> {
+    match pss::demux(blob) {
+        Ok(demuxed) => track::pss_audio(&demuxed, key),
+        Err(error) => {
+            warn!("{key}'s private_stream_1 did not demux ({error}), so it stays silent");
+            None
+        }
     }
 }
 
