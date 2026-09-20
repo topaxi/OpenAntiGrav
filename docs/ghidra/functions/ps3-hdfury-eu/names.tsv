@@ -389,3 +389,5 @@
 0x005d5f20	function	RenderOps_OpSetSpuLights	85	renderer.md
 0x007f6d80	data	SpuJob_EdgeGeom_Binary	85	renderer.md
 0x000d25e0	function	Ship_LoadEngineLightData	72	renderer.md
+0x000db090	function	Ship_SyncActiveModelPointer	80	renderer.md
+0x000dbdc8	function	Ship_ReloadModelForSkin	78	renderer.md

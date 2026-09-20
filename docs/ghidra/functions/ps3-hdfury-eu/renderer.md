@@ -6758,3 +6758,43 @@ SpuLight_AddCandidate(D, w)   // position/colour go via vs34/vs35, not the two d
 **What is not established, stated plainly so it isn't assumed by the next reader:** `obj+0x6a7c`/`obj+0x6adc` (`FUN_000cfb80`'s fields) and `ship+0xfc`/`ship+0x100` (`EngineLightData.xml`'s fields) are different offsets on what may or may not even be the same object - no copy, no aliasing, and no shared caller were found connecting them this session. The `D` arithmetic (`clamp(x, 0) * 133.332`) does not support `x` being `Radius` directly: `Radius`'s own range (`0.7`-`2.0`) times `133.332` would put `D` in the hundreds, far outside the `0.6`-`2.0` this page has actually captured, so `obj+0x6a7c` is some other per-frame quantity (a decaying/animated value, given both `FUN_000cfb80` and the sibling `FUN_000e41b0` floor-clamp it to zero on every call rather than reading it once) - not `Radius` read straight through. The correlation between `EngineLightData.xml`'s `Radius` span and the live `D` span may still be real, but if so the connection runs through a scale or an intermediate write this session did not find, not through this producer's own arithmetic. Two live threads for whoever picks this up: trace what else writes `obj+0x6a7c` (the decaying value `FUN_000cfb80` and `FUN_000e41b0` both clamp), and what `*(obj+0x6adc)` actually points at (a specific node, or the object itself at some fixed sub-offset).
 
 Confidence 88 for the load site and for `FUN_000cfb80`'s own arithmetic, each independently (direct decompile, TOC-resolved string literals, byte-exact constant reads); no confidence assigned to a causal link between them, because none was found. `Ship_LoadEngineLightData` and its evidence landed in `names.tsv`. No code changed.
+
+### `obj+0x6a7c` and `obj+0x6adc` are traced to their setters: a depletable gameplay resource, and the ship's own currently-loaded model - neither is `EngineLightData.xml` (2026-09-20, later still, confidence 80-85)
+
+Following on directly from the section above, both open threads it named are closed.
+
+**`obj+0x6adc` is a synced alias of `obj+0x6ae0`, the ship's own main model.** `Ship_SyncActiveModelPointer` (`0x000db090`, confidence 80) is short and unambiguous:
+
+```c
+void Ship_SyncActiveModelPointer(int ship) {
+    int model = *(int *)(ship + 0x6ae0);
+    if (*(int *)(ship + 0x6adc) == model || model == 0) return;   // idempotent, skips a null model
+    // ... clears a "referenced" bit (0x4) on the *old* obj+0x6ae4/+0x6ae8/+0x6aec if it was set ...
+    *(int *)(ship + 0x6adc) = model;                               // the actual sync
+    // ... Ship_LoadModel-adjacent housekeeping (0x000d2e30, 0x000d2d20) ...
+}
+```
+
+and `obj+0x6ae0` is confirmed the ship's primary mesh by the TOC-resolved format strings its loader builds paths from: `Ship_ReloadModelForSkin` (`0x000dbdc8`, `0x000dbdc8`-`0x000ddd37`, confidence 78 - the read is clear, "ForSkin" rests on the one inference below) is a no-op if `ship+0x6950` (a model/skin identity field) already equals its new value, otherwise releases the four existing models and reloads `'%s\%s.vex'` with `'ship'` into `obj+0x6ae0`, `'%s\shipwreck.vex'` into `+0x6ae4`, `'%s\ship_lod.vex'` into `+0x6ae8`, `'%s\ship_lod1.vex'` into `+0x6aec` (all four strings and the path root `*(ship+0x6298)+0x1b4` - the same root field `Ship_LoadEngineLightData` reads - resolved via `scripts/ps3-toc.py resolve` against this function's own TOC), then calls `Ship_SyncActiveModelPointer` at its very end, having zeroed `obj+0x6adc` first. So the chain is: skin/model change -> reload `ship.vex`/wreck/two LODs -> `obj+0x6adc` synced to whichever of those is the primary model. **"ForSkin" is the one unconfirmed part**: `ship+0x6950`'s identity as specifically a *skin* selector (rather than, say, a damage-state or LOD-tier index) is inferred from the reload triggering on it changing and reloading a livery-adjacent resource set (`'livery4'`/`'Colour_Ramp'`/`leacheffect.vex` sit in the same TOC constant run), not read directly.
+
+`FUN_00323760`'s own triviality (`return param+0x80;`, this page's previous entry) means the position `FUN_000cfb80` submits is `(active_model+0x80)+0x30` - **a fixed offset into the ship's currently-loaded mesh object**, not a distinct "engine flare" attach node. The `WARNING: SHIP MISSING ENGINE FLARE IMPORT NODE` string (`0x007824e0`) is real but its own reference resolves inside `Environment_RegisterStageSchema`, a large schema-registration function unrelated to this path - it gates a *different* system (most likely the particle-based engine flare, `%s\engineflare.vex`, this page's earlier reads), not this SPU light candidate. **The "engine flare node" hypothesis in the previous entry is retracted**: the light sits at the ship's own model transform.
+
+**`obj+0x6a7c` is a real depletable resource, decremented externally - not `Radius`.** A byte-pattern search for `stfs fN,0x6a7c(r3)` (the `this`-in-`r3` calling shape, distinct from the `r31`-based shape `FUN_000cfb80`/`Ship_LoadEngineLightData` use) finds exactly one writer, `FUN_000e3768` (`0x000e3768`, unnamed - see below for why):
+
+```c
+void FUN_000e3768(Ship *self, float amount) {
+    self->f_0x6a78 -= amount;
+    self->f_0x6a7c -= amount;   // the same field FUN_000cfb80 clamps and scales into D
+    self->f_0x6a88 += amount;   // a running total
+    // ... a RaceManager-gated block further down, guarded on self+0x628c (a control-mode
+    //     enum, 0/1/2) and calling three unnamed functions (0xa9f20/0xabc20/0xa9b18) whose
+    //     shape (RaceManager lookup, a match against another object's own +0x1ec against
+    //     self) reads as a pickup/trigger response, not read further this session ...
+}
+```
+
+confirmed via `get_xrefs_to`/vtable read: `FUN_000e3768` is slot 6 (of at least twelve) in a per-frame subsystem-dispatch vtable at `0x00874b00`, sitting between `FUN_000e3728` and `FUN_000e3d18`, three slots before `FUN_000e41b0` - the same big per-tick function this page's earlier entry read as also clamping `obj+0x6a7c`, confirming both are methods of the one class dispatching through this table. **What this rules out plainly**: the `133.332` scale factor already ruled out `obj+0x6a7c == Radius` directly (previous entry); this section adds that it is not a static per-ship value *at all* - it is spent by an external caller through a vtable slot, at a rate this session did not trace, and the two functions that read it (`FUN_000cfb80`, `FUN_000e41b0`) only ever floor-clamp what's left, never assign a fresh value. **What it might be, stated as a hypothesis and not a finding**: the twin-pool-decrement-plus-accumulator shape and the pickup-shaped block right after are consistent with a shield/absorb/boost energy spend - this project's own prior sessions already named an "`Absorb`" family in this same address neighborhood (`docs/ghidra/functions/ps3-hdfury-eu/renderer.md`'s "confirming the `RigidBody`/`Absorb` family's direct field-store" entry) - but no direct evidence ties `FUN_000e3768` to that name specifically, so it is left unnamed (project convention: a name needs a meaningful label, and this session cannot confidently supply one).
+
+**Net effect on the open question**: `EngineLightData.xml`'s `Distance`/`Radius` (`ship+0xfc`/`+0x100`) and `FUN_000cfb80`'s own inputs (`obj+0x6a7c`, a depleting resource; `obj+0x6adc`, the active model pointer) are now both fully traced to their own setters, and **neither setter reads the other's field** - the correlation the previous two entries flagged (`Radius`'s `0.7`-`2.0` span matching live `D`'s `0.6`-`2.0`) has no code path connecting it found across three sessions' worth of tracing, and given how far the static reading has now gone, that is closer to a coincidence of scale than an undiscovered link. Whoever wires this next should treat `FUN_000cfb80` as an independent, order-of-magnitude-verified glow producer (position = ship model, colour = fixed literal, `D` = a spent-resource-scaled range) rather than an `EngineLightData.xml` consumer.
+
+Confidence 80 for `Ship_SyncActiveModelPointer`'s behaviour and the position conclusion (direct decompile, corroborated by the vtable read); 78 for `Ship_ReloadModelForSkin`'s behaviour (direct decompile, TOC-resolved strings), lower on the "ForSkin" label; 80 for `FUN_000e3768`'s own arithmetic (direct decompile, one confirmed writer via exhaustive byte-pattern search), no confidence on what the resource represents. `Ship_SyncActiveModelPointer` and `Ship_ReloadModelForSkin` landed in `names.tsv`. No code changed.
