@@ -64,6 +64,7 @@ out to be wrong.
 | [0051](0051-the-composition-root-splits-below-itself.md) | The composition root splits below itself, and the build-time argument does not survive a second time | Accepted; extends ADR-0050 |
 | [0052](0052-world-and-race-tick-widen-to-n-players.md) | `World` and `Race::tick` widen to N players ahead of split screen, multi-window or network play | Accepted; extends ADR-0003 |
 | [0053](0053-screen-filters-are-loadable-wgsl-after-the-composite.md) | Screen filters are loadable WGSL files, run after the UI composites and before the grade, per title | Accepted; extends ADR-0036 and ADR-0041 |
+| [0054](0054-a-touch-front-end-is-a-second-axis-not-a-menuskin-variant.md) | A touch front end is a second axis on `FrontEnd`, not a `MenuSkin` variant | Accepted; extends ADR-0022 |
 
 ## Format
 
