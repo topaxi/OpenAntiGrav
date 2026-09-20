@@ -39,6 +39,7 @@ mod bink;
 #[cfg(all(target_os = "linux", feature = "native-video"))]
 mod gst;
 mod mpeg2_ps;
+mod track;
 
 use std::collections::VecDeque;
 use std::path::{Path, PathBuf};
@@ -48,7 +49,8 @@ use anyhow::{Context, Result, anyhow, bail};
 use log::{info, warn};
 use oag_video::{av1, bik, ipf, pmf};
 
-use crate::at3;
+pub use track::MovieAudio;
+use track::movie_audio;
 // `FRAME_RATE`/`PS2_DISPLAY_ASPECT` moved to `oag_ui::frontend::player` with
 // `Player`: both are timing/shape constants a movie is *played* at, not part
 // of decoding one, and `Player` is the part of this file the front end talks
@@ -89,194 +91,6 @@ pub fn cache_name(key: &str, width: u32, height: u32, frames: Option<usize>) -> 
         "{key}-{width}x{height}-{CACHE_CODEC}-{}.ivf",
         frames.map_or_else(|| "all".to_string(), |n| n.to_string())
     )
-}
-
-/// Bytes of sub-header on every audio PES payload in a `.PMF`.
-///
-/// `pmf::demux` strips the PES header itself and hands over what follows, and
-/// what follows is **not** an ATRAC3+ frame: it is four bytes and then a slice
-/// of the frame stream. The first two are zero on every packet of every movie
-/// on the disc; the third and fourth are a big-endian offset from the end of
-/// this header to the first frame that *starts* inside the packet, the bytes
-/// before it being the tail of the frame the previous packet began.
-///
-/// **Measured, on all 323 packets of `Intro.PMF` and every other movie with a
-/// track.** Reading that offset lands on the ATRAC3+ sync word 323 times out of
-/// 323, and it is what confirms the field is a pointer rather than a counter:
-/// packet 0 carries two whole 752-byte frames and 509 bytes of a third, and
-/// packet 1's offset is the 243 bytes that complete it.
-///
-/// Nothing here needs the pointer to *reassemble* the stream - concatenating
-/// every packet's payload in order gives the frames back contiguously - but the
-/// first packet's is used, because a movie whose first frame does not begin at
-/// offset zero would otherwise be decoded half a frame out.
-const AUDIO_PES_HEADER_LEN: usize = 4;
-
-/// The sync word every ATRAC3+ frame inside a `.PMF` begins with.
-///
-/// **A RIFF-wrapped `.at3` has no such word**: `PSP_GAME/SND0.AT3`'s data chunk
-/// starts straight in on the codec payload, and a scan of all 25,760 bytes of
-/// it finds `0f d0` nowhere. So this is the `.PMF`'s framing rather than the
-/// codec's, and it has to come off before `ffmpeg` will read a block.
-const ATRAC3PLUS_SYNC: [u8; 2] = [0x0f, 0xd0];
-
-/// Bytes of header on every ATRAC3+ frame inside a `.PMF`, sync word included.
-///
-/// `0f d0` then the codec config word - see `at3::codec_config`, which the
-/// disc's own `.at3` entries carry in the same shape - then four zero bytes.
-/// Constant across all 865 frames of `Intro.PMF` and every frame of every other
-/// movie with a track.
-///
-/// The evidence that it is exactly eight is that stripping eight leaves a block
-/// that decodes: `Intro.PMF`'s frames are 752 bytes apart, 752 - 8 is 744, and
-/// 744-byte blocks decode to 865 whole blocks of 2,048 samples with no
-/// remainder. It also lines the payload up with what a `.at3` stores - both
-/// begin `3a` - where stripping only the two-byte sync word does not, and
-/// `ffmpeg` rejects that with "frame data doesn't match channel configuration"
-/// rather than decoding noise.
-const ATRAC3PLUS_FRAME_HEADER_LEN: usize = 8;
-
-/// A movie's ATRAC3+ track, unwrapped from the container but not yet decoded.
-///
-/// Held rather than decoded on the spot because decoding shells out to `ffmpeg`
-/// and lands in a **different** cache from the one the pictures use - see
-/// [`crate::boot::default_audio_cache_dir`] - and [`open`] is given only the
-/// movie cache. Keeping the two apart is also what lets `--prefetch` and the
-/// viewer open a movie without ever paying for its sound.
-pub struct MovieAudio {
-    /// Every ATRAC3+ block, headers off, back to back. Exactly what
-    /// [`crate::at3::riff`] wants for its `data` chunk.
-    blocks: Vec<u8>,
-    /// What those blocks are, for the RIFF wrapper.
-    pub format: crate::at3::Format,
-}
-
-// Written out rather than derived for the reason `crate::audio::Dump` gives:
-// this is most of a megabyte of codec payload, and a `{:?}` of a `Movie` should
-// say how much there is rather than print it.
-impl std::fmt::Debug for MovieAudio {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("MovieAudio")
-            .field("blocks", &self.blocks.len())
-            .field("format", &self.format)
-            .finish()
-    }
-}
-
-impl MovieAudio {
-    /// How many whole ATRAC3+ blocks the track holds.
-    #[must_use]
-    pub fn block_count(&self) -> usize {
-        self.blocks.len() / usize::from(self.format.block_align).max(1)
-    }
-
-    /// How long the track is, in seconds, at block granularity.
-    ///
-    /// **This is not the movie's own duration and should not be expected to
-    /// match it.** A block is 2,048 samples whatever the encoder had left to
-    /// put in it, so a track always runs to the end of a whole number of them:
-    /// `Intro.PMF` declares 40.04 s and its 865 blocks are 40.17 s. The
-    /// difference is padding, not a demux that ran long.
-    #[must_use]
-    pub fn seconds(&self) -> f64 {
-        let samples = self.block_count() as f64 * f64::from(at3::SAMPLES_PER_BLOCK);
-        samples / f64::from(self.format.sample_rate.max(1))
-    }
-
-    /// Decodes the track through `ffmpeg` and the cache.
-    ///
-    /// # Errors
-    ///
-    /// As [`crate::at3::decode_frames`]: an `ffmpeg` that is absent or fails,
-    /// or a cache file that will not write or read back.
-    pub fn decode(&self, cache_dir: &Path) -> Result<at3::Pcm> {
-        at3::decode_frames(&self.blocks, self.format, cache_dir)
-    }
-}
-
-/// Unwraps a demuxed `.PMF`'s audio packets into ATRAC3+ blocks.
-///
-/// Two layers come off, and both are the container's rather than the codec's:
-/// [`AUDIO_PES_HEADER_LEN`] bytes on each packet, then
-/// [`ATRAC3PLUS_FRAME_HEADER_LEN`] on each frame.
-///
-/// `block_align` is **measured rather than assumed**, because the disc uses two
-/// values: the two 40-second reels are 744 bytes a block and the other seven
-/// tracks are 560. It is the distance between the first two sync words, which
-/// is then checked against every remaining frame - a stream whose sync words are
-/// not evenly spaced is one this has read wrong, and saying so is better than
-/// handing `ffmpeg` a block size that decodes into noise.
-///
-/// `None` means there is no track to play: a header that declares audio but a
-/// demux that found no packets, a sample-rate code this build does not know, or
-/// a stream whose framing does not check out. Never an error, because none of
-/// those should cost a movie its picture.
-fn movie_audio(demuxed: &pmf::Demuxed, stream: pmf::AudioStream, key: &str) -> Option<MovieAudio> {
-    let first = demuxed.audio.first()?;
-    let Some(sample_rate) = stream.frequency_hz() else {
-        warn!(
-            "{key}'s audio is sample-rate code {}, which this build does not know, so \
-             it stays silent",
-            stream.frequency_code
-        );
-        return None;
-    };
-
-    // Where the first whole frame starts, past whatever tail of a previous one
-    // the packet opens with. Zero on every movie on the disc, and read anyway
-    // rather than assumed: it is the one field that tells us.
-    //
-    // Read through `get`, because `pmf::demux` hands over whatever followed the
-    // PES header and that can be fewer than four bytes on a truncated stream -
-    // and a movie that loses its sound must not also lose its picture to a
-    // panic.
-    let pointer: [u8; 2] = first.get(2..4).and_then(|b| b.try_into().ok())?;
-    let start = usize::from(u16::from_be_bytes(pointer));
-
-    let mut stream_bytes = Vec::new();
-    for packet in &demuxed.audio {
-        stream_bytes.extend_from_slice(&packet[AUDIO_PES_HEADER_LEN.min(packet.len())..]);
-    }
-    let body = stream_bytes.get(start..).unwrap_or_default();
-
-    if !body.starts_with(&ATRAC3PLUS_SYNC) {
-        warn!("{key}'s first audio frame carries no sync word, so it stays silent");
-        return None;
-    }
-
-    // Stepped by eight because a frame is always a whole number of eight-byte
-    // groups - `block_align / 8 - 1` is what the config word stores - which
-    // keeps a `0f d0` that happens to fall inside codec payload from being
-    // mistaken for the next frame.
-    let stride = (ATRAC3PLUS_FRAME_HEADER_LEN..body.len().saturating_sub(1))
-        .step_by(8)
-        .find(|&at| body[at..at + 2] == ATRAC3PLUS_SYNC)?;
-    let Ok(block_align) = u16::try_from(stride - ATRAC3PLUS_FRAME_HEADER_LEN) else {
-        return None;
-    };
-
-    // A trailing partial frame is dropped rather than padded: the movie's own
-    // duration is carried by its PTS range, so a fragment of a block would add
-    // noise at the end and nothing else.
-    let frames = body.len() / stride;
-    let mut blocks = Vec::with_capacity(frames * usize::from(block_align));
-    for index in 0..frames {
-        let at = index * stride;
-        if body[at..at + 2] != ATRAC3PLUS_SYNC {
-            warn!("{key}'s audio loses framing at frame {index} of {frames}, so it stays silent");
-            return None;
-        }
-        blocks.extend_from_slice(&body[at + ATRAC3PLUS_FRAME_HEADER_LEN..at + stride]);
-    }
-
-    Some(MovieAudio {
-        blocks,
-        format: crate::at3::Format {
-            channels: u16::from(stream.channels),
-            sample_rate,
-            block_align,
-        },
-    })
 }
 
 /// A movie that has been demuxed, and possibly transcoded.

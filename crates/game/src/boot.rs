@@ -1385,7 +1385,8 @@ fn load_movie_sound(
     if silent {
         report.push(format!(
             "  audio: {} channel(s) at {} Hz, muted - the widget playing it is sound=\"false\"",
-            audio.format.channels, audio.format.sample_rate
+            audio.channels(),
+            audio.sample_rate()
         ));
         return None;
     }
@@ -1393,12 +1394,10 @@ fn load_movie_sound(
     match audio.decode(&options.audio_cache) {
         Ok(pcm) => {
             report.push(format!(
-                "  audio: {} channel(s) at {} Hz, {} ATRAC3+ block(s) of {} bytes, decoded to \
-                 {:.2}s",
+                "  audio: {} channel(s) at {} Hz, {}, decoded to {:.2}s",
                 pcm.channels,
                 pcm.sample_rate,
-                audio.block_count(),
-                audio.format.block_align,
+                audio.codec_clause(),
                 pcm.samples.len() as f64
                     / f64::from(pcm.channels.max(1))
                     / f64::from(pcm.sample_rate.max(1))

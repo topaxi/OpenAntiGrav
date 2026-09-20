@@ -1,11 +1,13 @@
 //! What movie playback in [`super`] is asserted to do: the frame clock and its
-//! audio-following form, the ATRAC3+ demux and its cache, and the ring of
-//! decoded frames.
+//! audio-following form, the cache lookup and transcode planning, and the ring
+//! of decoded frames.
 //!
 //! Its own file rather than a `#[cfg(test)]` block at the end of
-//! `movie.rs`: the tests are 597 lines, past the 200 an inline test
-//! module may hold. See `scripts/check-file-size.py`, which is the rule as a
-//! gate.
+//! `movie.rs`: the tests are past the 200 lines an inline test module may
+//! hold. See `scripts/check-file-size.py`, which is the rule as a gate. The
+//! audio-track tests moved with `movie_audio` to `movie/track/tests.rs` when
+//! that code split out into its own file - what is left here is everything
+//! else `movie.rs` still owns.
 
 use super::*;
 use oag_ui::frontend::Player;
@@ -187,155 +189,6 @@ fn a_paused_player_ignores_the_audio_clock_too() {
     player.resume();
     player.follow(20.0);
     assert_eq!(player.frame(), 599);
-}
-
-/// One audio packet, built the way a `.PMF` builds them: a four-byte
-/// sub-header, then frames that are an eight-byte header and a block.
-fn audio_packet(pointer: u16, frames: &[Vec<u8>]) -> Vec<u8> {
-    let mut out = vec![0, 0];
-    out.extend_from_slice(&pointer.to_be_bytes());
-    for frame in frames {
-        out.extend_from_slice(frame);
-    }
-    out
-}
-
-fn atrac_frame(block_align: usize, fill: u8) -> Vec<u8> {
-    let mut out = Vec::from(ATRAC3PLUS_SYNC);
-    out.extend_from_slice(&[0x28, 0x5c, 0, 0, 0, 0]);
-    out.extend_from_slice(&vec![fill; block_align]);
-    out
-}
-
-fn stereo_44k() -> pmf::AudioStream {
-    pmf::AudioStream {
-        channels: 2,
-        frequency_code: 2,
-    }
-}
-
-/// Both layers of framing come off and the block size is measured rather
-/// than assumed - the disc uses 744 and 560, so a constant would decode one
-/// of them into noise.
-#[test]
-fn the_audio_framing_comes_off_and_the_block_size_is_measured() {
-    let demuxed = pmf::Demuxed {
-        audio: vec![audio_packet(
-            0,
-            &[atrac_frame(744, 0xab), atrac_frame(744, 0xcd)],
-        )],
-        ..pmf::Demuxed::default()
-    };
-    let audio = movie_audio(&demuxed, stereo_44k(), "test").expect("a track");
-
-    assert_eq!(audio.format.block_align, 744, "measured, not assumed");
-    assert_eq!(audio.format.channels, 2);
-    assert_eq!(audio.format.sample_rate, 44_100);
-    assert_eq!(audio.block_count(), 2);
-    assert_eq!(audio.blocks.len(), 744 * 2);
-    assert!(
-        audio.blocks[..744].iter().all(|&b| b == 0xab),
-        "the sync word and its header should be gone"
-    );
-    assert!(audio.blocks[744..].iter().all(|&b| b == 0xcd));
-}
-
-/// A frame straddles the packet boundary in a real `.PMF` - `Intro.PMF`'s
-/// first packet ends 243 bytes into its third frame - so reassembly has to
-/// be a concatenation rather than a frame per packet.
-#[test]
-fn a_frame_split_across_two_packets_is_put_back_together() {
-    let whole = atrac_frame(560, 0x11);
-    let (head, tail) = whole.split_at(200);
-    let demuxed = pmf::Demuxed {
-        audio: vec![
-            audio_packet(0, &[atrac_frame(560, 0x22), head.to_vec()]),
-            // 368 bytes of the previous frame before the next one starts.
-            audio_packet(368, &[tail.to_vec(), atrac_frame(560, 0x33)]),
-        ],
-        ..pmf::Demuxed::default()
-    };
-    let audio = movie_audio(&demuxed, stereo_44k(), "test").expect("a track");
-    assert_eq!(audio.format.block_align, 560);
-    assert_eq!(audio.block_count(), 3);
-    assert!(audio.blocks[560..1120].iter().all(|&b| b == 0x11));
-}
-
-/// A movie whose first packet opens partway into a frame skips to the
-/// frame boundary rather than handing `ffmpeg` a fragment. No movie on the
-/// disc does this, and a decode half a block out is silent noise rather
-/// than an error, so it is pinned rather than left to chance.
-#[test]
-fn a_first_packet_that_opens_mid_frame_is_skipped_to_the_boundary() {
-    let mut packet = audio_packet(16, &[]);
-    packet.extend_from_slice(&[0xff; 16]);
-    packet.extend_from_slice(&atrac_frame(560, 0x44));
-    packet.extend_from_slice(&atrac_frame(560, 0x44));
-    let demuxed = pmf::Demuxed {
-        audio: vec![packet],
-        ..pmf::Demuxed::default()
-    };
-    let audio = movie_audio(&demuxed, stereo_44k(), "test").expect("a track");
-    assert_eq!(audio.block_count(), 2);
-    assert!(audio.blocks.iter().all(|&b| b == 0x44));
-}
-
-/// Every way a track can be unreadable is silence rather than a failure,
-/// because none of them should cost the movie its picture.
-#[test]
-fn an_unreadable_track_is_silence_rather_than_an_error() {
-    let good = audio_packet(0, &[atrac_frame(560, 0x55), atrac_frame(560, 0x66)]);
-
-    // A header that declares audio and a demux that found none.
-    assert!(movie_audio(&pmf::Demuxed::default(), stereo_44k(), "test").is_none());
-
-    // A sample-rate code this build does not know.
-    let unknown = pmf::AudioStream {
-        channels: 2,
-        frequency_code: 7,
-    };
-    let demuxed = pmf::Demuxed {
-        audio: vec![good.clone()],
-        ..pmf::Demuxed::default()
-    };
-    assert!(movie_audio(&demuxed, unknown, "test").is_none());
-
-    // A first frame with no sync word at all.
-    let mut wrong = good.clone();
-    wrong[4] = 0x00;
-    let demuxed = pmf::Demuxed {
-        audio: vec![wrong],
-        ..pmf::Demuxed::default()
-    };
-    assert!(movie_audio(&demuxed, stereo_44k(), "test").is_none());
-
-    // One sync word and never a second, so no stride can be measured.
-    let demuxed = pmf::Demuxed {
-        audio: vec![audio_packet(0, &[atrac_frame(560, 0x77)])],
-        ..pmf::Demuxed::default()
-    };
-    assert!(movie_audio(&demuxed, stereo_44k(), "test").is_none());
-}
-
-/// Block granularity, stated as such: a track is always a whole number of
-/// 2,048-sample blocks and so runs slightly past the movie's own duration.
-#[test]
-fn a_tracks_length_is_a_whole_number_of_blocks() {
-    let demuxed = pmf::Demuxed {
-        audio: vec![audio_packet(
-            0,
-            &[
-                atrac_frame(744, 0),
-                atrac_frame(744, 0),
-                atrac_frame(744, 0),
-            ],
-        )],
-        ..pmf::Demuxed::default()
-    };
-    let audio = movie_audio(&demuxed, stereo_44k(), "test").expect("a track");
-    assert_eq!(audio.block_count(), 3);
-    let expected = 3.0 * 2048.0 / 44_100.0;
-    assert!((audio.seconds() - expected).abs() < 1e-9);
 }
 
 /// **An uncapped conversion still knows how many frames it will make.**

@@ -104,13 +104,15 @@ pub(super) fn open(
         frames,
         no_picture_reason,
         // **Bink's audio is inside the video file**, where ATRAC3+ sits beside
-        // it in a `.PMF` and `MovieAudio` is shaped for that: it holds codec
-        // blocks and an `at3::Format` and decodes through `crate::at3`. Six of
-        // the disc's 37 files have a track - the two logo reels carry four each
-        // - and playing one needs a second route through `ffmpeg` and a widened
-        // `Movie::audio`, which is its own change. Until then a `.bik` is
-        // silent and says so here rather than looking like a file with no
-        // track.
+        // it in a `.PMF` and the PS2's PCM sits beside it in a `.PSS`.
+        // `MovieAudio` no longer assumes either shape - it holds an undecoded
+        // ATRAC3+ block stream or already-decoded PCM, see
+        // `crate::movie::track::MovieAudioKind` - but nothing here reads
+        // Bink's own audio out of the container yet. Six of the disc's 37
+        // files have a track - the two logo reels carry four each - and
+        // playing one needs a second route through `ffmpeg`, which is its own
+        // change. Until then a `.bik` is silent and says so here rather than
+        // looking like a file with no track.
         audio: None,
     };
 

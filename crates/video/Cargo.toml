@@ -19,5 +19,13 @@ av1 = ["dep:re_rav1d"]
 # faster than playback. `bitdepth_8` is all the 8-bit I420 path needs.
 re_rav1d = { workspace = true, optional = true }
 
+# Ground-truth tests read a real `.PSS` off a disc image. Dev-dependencies
+# only, the same split `oag-formats` draws for the same reason: the library
+# itself knows nothing about discs, and `scripts/check-dependency-rules.py`
+# walks normal edges only, so this does not touch the boundary gate.
+[dev-dependencies]
+oag-testdata.workspace = true
+oag-disc.workspace = true
+
 [lints]
 workspace = true
