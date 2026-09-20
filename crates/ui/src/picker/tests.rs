@@ -198,7 +198,7 @@ fn the_body_names_the_selected_entry_and_counts_the_list() {
     .unwrap();
     let picker = Picker::new(Kind::Track, entries(), Some("18_Track"), None);
     let skin = Skin::new(
-        oag_pulse::FRONT_END.menu,
+        oag_pulse::FRONT_END.menu.unwrap(),
         oag_display::space::Space::PSP,
         22.0,
     );
@@ -293,7 +293,7 @@ fn the_hex_grid_tiles_rather_than_reading_past_its_sprite() {
     .unwrap();
     let picker = Picker::new(Kind::Track, entries(), None, None);
     let skin = Skin::new(
-        oag_pulse::FRONT_END.menu,
+        oag_pulse::FRONT_END.menu.unwrap(),
         oag_display::space::Space::PSP,
         22.0,
     );
@@ -448,7 +448,7 @@ fn a_menu_widget_lists_every_entry_at_its_own_position_and_step() {
     // A 20-unit line height and `FaceScales::default().default` of 1.0, so
     // the step is the widget's own `scale="2"`: 40.
     let skin = Skin::new(
-        oag_pure::FRONT_END.menu,
+        oag_pure::FRONT_END.menu.unwrap(),
         oag_display::space::Space::PSP,
         20.0,
     );
@@ -527,7 +527,7 @@ fn track_layout() -> Layout {
 
 fn pulse_skin() -> Skin {
     Skin::new(
-        oag_pulse::FRONT_END.menu,
+        oag_pulse::FRONT_END.menu.unwrap(),
         oag_display::space::Space::PSP,
         22.0,
     )
@@ -623,7 +623,7 @@ fn an_unsized_arrow_off_the_sheet_is_no_target() {
 fn pures_listed_rows_select_on_hover_and_confirm_on_a_second_click() {
     let layout = listing_layout();
     let skin = Skin::new(
-        oag_pure::FRONT_END.menu,
+        oag_pure::FRONT_END.menu.unwrap(),
         oag_display::space::Space::PSP,
         20.0,
     );
@@ -654,7 +654,7 @@ fn pures_listed_rows_select_on_hover_and_confirm_on_a_second_click() {
     // With the face's ink measured, the same rows sit on the capitals:
     // centred on rows 7 to 16 of the cell at the drawing's scale.
     let mut inked = Skin::new(
-        oag_pure::FRONT_END.menu,
+        oag_pure::FRONT_END.menu.unwrap(),
         oag_display::space::Space::PSP,
         20.0,
     );

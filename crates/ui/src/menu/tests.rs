@@ -55,7 +55,7 @@ fn measure(text: &str) -> f32 {
 /// the point - these tests are where the layout is pinned.
 fn skin() -> Skin {
     Skin::new(
-        oag_pulse::FRONT_END.menu,
+        oag_pulse::FRONT_END.menu.unwrap(),
         oag_display::space::Space::PSP,
         PULSE_MENU_LINE_HEIGHT,
     )

@@ -201,7 +201,7 @@ fn the_built_in_menu_opens_on_its_root_and_can_reach_a_race() {
 #[test]
 fn a_skin_authored_at_1080p_is_drawn_at_its_own_numbers() {
     let hd = Skin::new(
-        oag_hd::frontend::FRONT_END.menu,
+        oag_hd::frontend::FRONT_END.menu.unwrap(),
         oag_display::space::Space::HD,
         33.0,
     );

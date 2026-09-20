@@ -351,7 +351,10 @@ pub const BOOT: &oag_title::BootProfile = &oag_title::BootProfile {
 pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     root: names::FRONTEND_ROOT,
     language_plugins: LANGUAGE_PLUGINS,
-    menu: MENU_SKIN,
+    menu: Some(MENU_SKIN),
+    // HD authors the controller-driven `FEGlobals`/`<HorizMenu>` vocabulary
+    // `MenuSkin` describes, not 2048's touch-icon idiom - see ADR-0054.
+    touch: None,
     boot: BOOT,
     menu_frame: Some(states::FE_SCREEN),
     // HD authors `track_selection_definition.xml` and

@@ -1,13 +1,18 @@
 //! Which Studio Liverpool title a source is, when it might be more than one.
 //!
 //! **Every title this crate opens now reaches a race.** Pulse and Pure both
-//! do it through their own boot chain, START at `Title Screen` and out;
-//! Wipeout HD/Fury and Wipeout 2048 do it through `--race` alone, because
-//! neither has a wired front end yet (`Title::front_end` is `None`, so
-//! `load_shell` refuses them by name and points at `--race`). See roadmap M8
-//! for the dates each one landed. DLC packs remain Pulse-only - `open_source`
-//! drops `packs` rather than mounting Pulse's own DLC behind a different
-//! title, since no other title's pack format is described yet.
+//! do it through their own boot chain, START at `Title Screen` and out.
+//! **Wipeout 2048 does it through `--race` alone**, and that stopped being
+//! "because its front end is unwired" on [ADR-0054] - its boot chain is real
+//! and `Title::front_end` is `Some` - and started being "because its front
+//! end draws no `MenuSkin`-shaped menu": `load_shell` refuses the
+//! menu-driven boot by name on that narrower ground and points at `--race`
+//! instead. See roadmap M8 for the dates each title's boot landed. DLC packs
+//! remain Pulse-only - `open_source` drops `packs` rather than mounting
+//! Pulse's own DLC behind a different title, since no other title's pack
+//! format is described yet.
+//!
+//! [ADR-0054]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0054-a-touch-front-end-is-a-second-axis-not-a-menuskin-variant.md
 
 use oag_assets::{Archives, Error, Result, dlc::Pack};
 use oag_title::Title;

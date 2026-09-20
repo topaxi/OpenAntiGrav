@@ -486,6 +486,21 @@ pub fn load_shell(
             title.name
         )
     })?;
+    // **A front end with no `MenuSkin`-shaped menu is refused here too, by
+    // name, the same way a title with no front end at all is refused above.**
+    // Wipeout 2048 is the first title in this state: its front end is real
+    // and walkable (`front_end.boot` below), but its menus are a touch-icon
+    // grid `oag_title::MenuSkin` was never built to hold - see ADR-0054 and
+    // `oag_title::FrontEnd::touch`. `--race` never calls this function, so a
+    // title in this state still races; only the menu-driven boot refuses.
+    let menu_skin = front_end.menu.ok_or_else(|| {
+        anyhow::anyhow!(
+            "{}'s front end draws no MenuSkin-shaped menu (see \
+             oag_title::FrontEnd::touch for what it draws instead), so there is \
+             no menu sequence to walk: race on it with --race instead",
+            title.name
+        )
+    })?;
     let profile = front_end.boot;
     report.push(archives.layout.describe());
     report.push(format!("{}: boot sequence", title.name));
@@ -544,8 +559,8 @@ pub fn load_shell(
         &mut report,
     );
     steps.lap("strings");
-    let menu_font = load_menu_font(&mut archives, &languages, front_end.menu, &mut report);
-    let title_font = load_title_font(&mut archives, &languages, front_end.menu, &mut report);
+    let menu_font = load_menu_font(&mut archives, &languages, menu_skin, &mut report);
+    let title_font = load_title_font(&mut archives, &languages, menu_skin, &mut report);
     steps.lap("menu and title fonts");
     let definition = title.plugin_definition;
     let documents = definitions(&mut archives, definition, &mut report);
@@ -571,8 +586,7 @@ pub fn load_shell(
     // The menu blocks' three textures are the executable's own, named by no
     // screen - see `oag_title::MenuBlocks` - so they are asked for by name
     // alongside everything the screens name.
-    let block_textures: Vec<&str> = front_end
-        .menu
+    let block_textures: Vec<&str> = menu_skin
         .blocks
         .map(|blocks| {
             vec![
@@ -691,7 +705,7 @@ pub fn load_shell(
     // style, black and red in `DATA00` against white and teal in `DATA06`. A
     // menu that looks like the wrong game is then a line in the boot report
     // rather than a mystery. See [`oag_ui::menu::frame`].
-    let blocks = sprites::block_art(front_end.menu.blocks, &sprites, &screens, &mut report);
+    let blocks = sprites::block_art(menu_skin.blocks, &sprites, &screens, &mut report);
     let skin_xml = archives
         .read_name(front_end.root)
         .ok()
@@ -707,7 +721,7 @@ pub fn load_shell(
         sprites.entries(),
         space,
         front_end.menu_frame,
-        front_end.menu.strip.and_then(|strip| strip.selected_fill),
+        menu_skin.strip.and_then(|strip| strip.selected_fill),
         blocks,
     );
     if let Some(name) = front_end.menu_frame {
@@ -740,7 +754,7 @@ pub fn load_shell(
             sprites,
             space,
             profile,
-            menu_skin: front_end.menu,
+            menu_skin,
             frame,
             fury_backdrop,
             track_select,

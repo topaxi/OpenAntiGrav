@@ -1,21 +1,29 @@
-//! A menu presentation for a title with no front end recovered at all.
+//! A menu presentation for a title with no `MenuSkin`-shaped menu to draw.
 //!
-//! Wipeout 2048 is the first title in the corpus whose front end is not
-//! merely undeclared but **unopened** - see `oag_2048`'s own module docs.
-//! `oag_title::FrontEnd` has no state for that: both halves of it, the
-//! layout numbers and the boot chain, are read off a disc's own XML, and
-//! `oag_title::BootProfile::provenance` only ever says `Measured` or
-//! `Declared` - both a claim that *some* front-end data was read. Filling
-//! either in for 2048 would be exactly what `CLAUDE.md`'s "never invent what
-//! the assets already author" forbids, so `oag_2048::TITLE`'s `front_end`
-//! stays `None` and must go on staying `None`.
+//! Two distinct titles can land here, and [ADR-0054] is what tells them
+//! apart. A title whose front end is unopened entirely -
+//! `oag_title::Title::front_end` itself `None` - has no state to read a
+//! layout from at all. Wipeout 2048, since this front end was wired, is the
+//! other case: `oag_title::Title::front_end` is `Some`, its boot chain and
+//! language plugins are real and read, but `oag_title::FrontEnd::menu` stays
+//! `None` because 2048 authors no `FEGlobals`/`<Menu>`/`<HorizMenu>`
+//! vocabulary anywhere - a touch-icon grid instead
+//! (`oag_title::FrontEnd::touch`, `docs/formats/2048-frontend.md`). Filling
+//! `menu` in for either case with another title's numbers, or with
+//! placeholder numbers dressed as measurements, would be exactly what
+//! `CLAUDE.md`'s "never invent what the assets already author" forbids -
+//! so both stay `None`, and both fall into this module rather than into a
+//! wrong picture.
 //!
 //! What [`crate::menu`] draws is not disc content, though - see its own module
 //! docs: the menu *tree* (`assets/ui/menu.toml`) is this project's own, not
 //! the disc's, on every title already. Only its *presentation* - a
-//! `MenuSkin`'s numbers - is measured per title. So a title with no front end
-//! can still show this project's own menu tree; it just cannot do so in a
-//! layout attributed to its own disc, because none was read.
+//! `MenuSkin`'s numbers - is measured per title. So a title with no
+//! `MenuSkin`-shaped menu can still show this project's own menu tree; it
+//! just cannot do so in a layout attributed to its own disc, because none was
+//! read (or, for 2048, because none exists in that vocabulary to read).
+//!
+//! [ADR-0054]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0054-a-touch-front-end-is-a-second-axis-not-a-menuskin-variant.md
 //!
 //! [`MENU_SKIN`] is that layout: plain, round numbers chosen for legibility
 //! and nothing else, carried by `oag-game`'s composition root rather than by

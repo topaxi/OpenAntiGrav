@@ -471,7 +471,7 @@ fn a_page_with_a_value_column_stays_a_column() {
 #[test]
 fn a_title_that_authors_no_strip_draws_a_column() {
     let mut menu = Menu::new(built_in());
-    menu.set_strip_layout(oag_pulse::FRONT_END.menu.strip.is_some());
+    menu.set_strip_layout(oag_pulse::FRONT_END.menu.unwrap().strip.is_some());
     let subtitle = menu.page().subtitles[menu.selected()].clone();
     let list = list(&menu, &no_bindings, None);
     let rows: Vec<_> = labels(&list)
