@@ -63,6 +63,47 @@ pub(super) fn crop_horizontally(sprite: &Sprite, fraction: f32) -> Sprite {
     out
 }
 
+/// Whether a widget is a bar fill whose *height* tracks a value, cropped
+/// vertically from the bottom - [`bar_fraction`]'s counterpart for the one
+/// dialect that fills this way instead.
+///
+/// Just 2048's `EnergyBar` so far: `36-w-5.png` (95% shield) and
+/// `68-zone-5.png` (27%) both show the fill's *top* edge tracking the
+/// percentage with the bottom edge fixed to the silhouette's foot, unlike
+/// Pulse/HD's `ShieldBar`, which [`bar_fraction`] already crops from the
+/// left. See [`crop_vertically`].
+pub(super) fn vertical_bar_fraction(name: &str, readout: &Readout) -> Option<f32> {
+    match name {
+        "EnergyBar" => Some(readout.shield_fraction()),
+        _ => None,
+    }
+}
+
+/// Crops a sprite vertically to `fraction` of its height, anchored at the
+/// bottom - [`crop_horizontally`]'s counterpart for a fill that grows upward
+/// rather than rightward.
+///
+/// **Confidence 80, the same terms `crop_horizontally`'s own doc comment
+/// gives.** `rect` and `uv` share one top-left, y-down convention -
+/// `crop_horizontally` leaves both `x` origins alone and scales both widths
+/// by the same factor, which only works if the two rectangles are unflipped
+/// against each other - so shrinking from the top is a shared shift of both
+/// `y` origins by the cropped-away height, plus a matching scale of both
+/// heights. Not established: that the crop is linear in the value (assumed,
+/// on `crop_horizontally`'s own precedent) or that `EnergyBarDelay`'s red
+/// flash crops the same way - unread, see `oag_2048::hud::ALWAYS_ON`'s doc
+/// comment.
+pub(super) fn crop_vertically(sprite: &Sprite, fraction: f32) -> Sprite {
+    let mut out = sprite.clone();
+    let cropped_rect_height = sprite.rect[3] * (1.0 - fraction);
+    let cropped_uv_height = sprite.uv[3] * (1.0 - fraction);
+    out.rect[1] = sprite.rect[1] + cropped_rect_height;
+    out.rect[3] = sprite.rect[3] - cropped_rect_height;
+    out.uv[1] = sprite.uv[1] + cropped_uv_height;
+    out.uv[3] = sprite.uv[3] - cropped_uv_height;
+    out
+}
+
 /// The text a widget shows, or `None` when it shows nothing this frame.
 ///
 /// **An allow-list, deliberately.** A widget this function does not name is not
@@ -742,7 +783,17 @@ pub fn draw_list(cx: &Context<'_>, readout: &Readout) -> Frame {
                 }
                 sprite_draw(&cropped, cx.sheet)
             }
-            None => sprite_draw(sprite, cx.sheet),
+            // `EnergyBar` alone, so far - see [`vertical_bar_fraction`]. Drawn
+            // in its authored colour (green at half alpha): the frames show a
+            // white fill and a red post-hit flash the runtime is not known to
+            // produce from this same widget, so this crops without tinting
+            // rather than guessing a colour from memory. See
+            // `oag_2048::hud::ALWAYS_ON`'s doc comment for the gap.
+            None => match vertical_bar_fraction(&sprite.name, readout) {
+                Some(fraction) if fraction <= 0.0 => None,
+                Some(fraction) => sprite_draw(&crop_vertically(sprite, fraction), cx.sheet),
+                None => sprite_draw(sprite, cx.sheet),
+            },
         };
         frame.sprites.extend(drawn);
     }

@@ -202,15 +202,39 @@ pub const TEXTURE_EXTENSION: &str = ".gxt";
 /// translucent constant), **85** on `ZoneCounterBG` (one Zone run, four
 /// frames, authored alpha matches what is seen).
 ///
-/// # What is deliberately left out
+/// # `EnergyBar`: wired, in its authored colour - 2026-09-20
 ///
-/// - `EnergyBar` and `EnergyBarDelay`: the same rect and source rectangle as
-///   `EnergyBg`, differing only in colour - this dialect's "at most one is
-///   live" idiom. The frames show the white one **cropped vertically from
-///   the bottom** to the shield fraction (27% is white for the bottom quarter
-///   and grey above) and the red one for a moment after a hit. Neither is a
-///   fixed sprite, and the runtime paints them white and red where the
-///   layout authors green-at-half-alpha and white - unread.
+/// `EnergyBar` shares `EnergyBg`'s rect and source rectangle exactly
+/// (`(27, 372)` 50x110 off `(270, 16)`), differing only in colour, so it is
+/// now in this list too and cropped **vertically from the bottom** by
+/// `oag_game::hud::draw::crop_vertically`, keyed to
+/// `Readout::shield_fraction()` - the vertical counterpart to
+/// `crop_horizontally`, Pulse's `ShieldBar` model. `36-w-5.png` (95%) and
+/// `68-zone-5.png` (27%) both show the fill's top edge tracking the
+/// percentage with the bottom edge fixed, which is the crop direction this
+/// implements; see `crop_vertically`'s own doc comment for the confidence
+/// (80, same terms as `crop_horizontally`'s).
+///
+/// **Chosen, not measured: the runtime colour.** The layout authors
+/// `EnergyBar` green at half alpha (`[0.19, 1.0, 0.19, 0.50]`, read straight
+/// off the composed layout) and `EnergyBarDelay` opaque white, but the
+/// captured frames show the *live* fill as white, with a red cap and red
+/// stripe outlines for a moment after a hit (`36-w-15.png`). Nothing here
+/// tints `EnergyBar` to white or wires `EnergyBarDelay`'s red flash at all -
+/// a tint recalled from the frames rather than sourced from the disc or the
+/// executable would be an invented colour, the failure mode this project's
+/// "never invent what the assets already author" rule exists to prevent. So
+/// the fill draws at its authored green-at-half-alpha, cropped correctly and
+/// coloured wrong, and the white/red runtime tint stays an open gap - see
+/// `docs/formats/2048-hud.md`'s dated section.
+///
+/// # What is still deliberately left out
+///
+/// - `EnergyBarDelay`: the red post-hit flash, on the paragraph above. Not
+///   established that it crops the same way `EnergyBar` does, or what keys
+///   its timing - `Hud_UpdateEnergyBar`'s own flash logic is unread on this
+///   title (`oag_game`'s `Readout::shield_flashing`/`shield_forced_red` are
+///   ported from Pulse/HD's own reading, not re-derived here).
 /// - `PickupBgFrame`: the arc round the held pickup, right of the shield.
 ///   Absent on the grid and in every no-pickup frame; up the whole time a
 ///   Missile or Rocket is held. State-gated, with the pickup.
@@ -232,7 +256,13 @@ pub const TEXTURE_EXTENSION: &str = ".gxt";
 ///
 /// The countdown, the `SCORE` readout in Zone and the `ZONE`/number/class
 /// text are not sprites and are recorded on `docs/formats/2048-hud.md`.
-pub const ALWAYS_ON: &[&str] = &["ThrustBarBG", "EnergyBgFrame", "EnergyBg", "ZoneCounterBG"];
+pub const ALWAYS_ON: &[&str] = &[
+    "ThrustBarBG",
+    "EnergyBgFrame",
+    "EnergyBg",
+    "EnergyBar",
+    "ZoneCounterBG",
+];
 
 /// The three HUD skins, as directory prefixes under `Data\XML\`.
 ///

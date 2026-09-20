@@ -12,19 +12,26 @@ queues`). Touch needs a 300 ms hold, accelerate is R1 (`e`), and Pilot
 Assist Extreme drives a lap unattended.
 
 `oag_2048::hud::ALWAYS_ON` is `ThrustBarBG`, `EnergyBgFrame`, `EnergyBg`,
-`ZoneCounterBG` - the intersection across grid, mid-race, pickup held,
-damaged, time trial and Zone frames. `oag_display::space::Space::VITA`
-(960x544) is measured off the same frames; before it a Vita source drew its
-HUD in the PSP's grid, twice the size, right-hand column off screen.
+`EnergyBar`, `ZoneCounterBG` - the intersection across grid, mid-race,
+pickup held, damaged, time trial and Zone frames, plus the shield fill wired
+2026-09-20 (below). `oag_display::space::Space::VITA` (960x544) is measured
+off the same frames; before it a Vita source drew its HUD in the PSP's grid,
+twice the size, right-hand column off screen.
 
 ## Open
 
-- **The shield fill.** The frames show `EnergyBar` cropped **vertically from
-  the bottom** to the shield fraction, white at runtime where the layout
-  authors green at half alpha, with `EnergyBarDelay` flashing red for a
-  moment after a hit (`36-w-15.png`: red cap, red stripe outlines). Nothing
-  here crops vertically (`oag_game::hud::draw::crop_horizontally` is Pulse's
-  model) and nothing tints. Our shield reads full whatever the race does.
+- **The shield fill's runtime tint.** `EnergyBar` now crops **vertically
+  from the bottom** to the shield fraction
+  (`oag_game::hud::draw::crop_vertically`, wired 2026-09-20 - see
+  [2048-hud.md](../../docs/formats/2048-hud.md#energybar-is-wired-a-vertical-crop-from-the-bottom-2026-09-20)),
+  checked against `21-race2-start.png` (100%, exact) and `36-w-5.png` (95%,
+  the boundary row to within one pixel). What is still open is the *colour*:
+  the frames show white at runtime where the layout authors green at half
+  alpha, with `EnergyBarDelay` flashing red for a moment after a hit
+  (`36-w-15.png`: red cap, red stripe outlines). Neither tint is sourced
+  from the disc or the executable, so neither is wired - the fill draws
+  correctly cropped and in its authored (wrong) colour rather than guessing
+  a tint from the frame.
 - **The pickup slot.** `PickupBgFrame` is up exactly while a pickup is held;
   `PickupIcon` shows at its authored top-centre rect with the `PickupText`
   caption once (the grant), then inside the bottom-left frame, UV rewritten
@@ -53,10 +60,8 @@ HUD in the PSP's grid, twice the size, right-hand column off screen.
 
 ## Next Steps
 
-1. Wire `EnergyBar` as a vertical bottom-up crop keyed to
-   `readout.shield_fraction()`, in its authored colour, and record the
-   white/red runtime tints as the remaining gap - `36-w-5.png` (95%) and
-   `68-zone-5.png` (27%) are the two frames to compare against.
+1. ~~Wire `EnergyBar` as a vertical bottom-up crop keyed to
+   `readout.shield_fraction()`~~ - done 2026-09-20, see above.
 2. Give `oag_game::hud::text_for` the four 2048 arms (`Laps`, `Position` as
    `place/ships`, `EnergyText`, `TotalTime` beside a place) and find the
    title's font and strings so the captions resolve.
