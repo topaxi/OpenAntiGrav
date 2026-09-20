@@ -948,7 +948,7 @@ mod tests {
     #[test]
     fn every_prompt_the_flag_names_draws_something_and_an_unknown_one_errors() {
         let skin = oag_ui::menu::Skin::new(
-            oag_pulse::FRONT_END.menu,
+            oag_pulse::FRONT_END.menu.unwrap(),
             oag_display::space::Space::PSP,
             22.0,
         );

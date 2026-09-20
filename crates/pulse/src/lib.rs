@@ -95,7 +95,10 @@ pub const MUSIC: &oag_title::Music = &oag_title::Music {
 pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     root: names::FRONTEND_ROOT,
     language_plugins: LANGUAGE_PLUGINS,
-    menu: frontend::MENU_SKIN,
+    menu: Some(frontend::MENU_SKIN),
+    // Pulse authors the `FEGlobals`/`<Menu>` vocabulary `MenuSkin` describes,
+    // not the touch-icon idiom `TouchFrontEnd` does - see ADR-0054.
+    touch: None,
     boot: frontend::BOOT_PROFILE,
     // Pulse authors a frame on `Top FE Screen->FE Screen`: a light angled top
     // bar and two bars framing the footer's news ticker, all three patches of

@@ -306,19 +306,25 @@ is declared in the XML and corroborated in the same order on one cold Vita3K
 launch, 2026-09-17 - a `LOADING...` screen and an attract-mode demo race sit
 between `TitleScreen` and `GameModeChoice`, matching
 [2048-hud.md](2048-hud.md)'s own `DemoRaceManager` finding with an actual
-frame of it running. **This page also corrects that page**: the HUD's raw
-`IG_HUD_*` fallback text is not because the disc names no font - `english`'s
+frame of it running. **This page also corrected that page**: the HUD's raw
+`IG_HUD_*` fallback text was not because the disc names no font - `english`'s
 language plugin names a `2048HUD` role pointing straight at
-`Data\XML\2048_hud\font\2048_hud.fnt` - it is because `oag_2048::TITLE.front_end`
-being `None` starves the loader of a plugin to read it from. And every one of
+`Data\XML\2048_hud\font\2048_hud.fnt` - it was because `oag_2048::TITLE.front_end`
+being `None` starved the loader of a plugin to read it from. And every one of
 Wipeout HD's own language-plugin bugs reproduces here, several byte for byte:
 the `Svenska` name mixups, Russian's mangled `P??????`, and the still-labelled
-`Wipeout Pulse` internal id. `front_end` stays `None` anyway, and for a
-different reason than "unread" - `oag_title::MenuSkin`'s mandatory fields all
-read out of a `FEGlobals` block this title does not ship, so filling them
-would invent a menu shape the disc does not draw. Boot movies are a fourth
-container this project does not read at all: `data/Videos/intro.mp4` and 25
-siblings are real MP4/ISOBMFF, not `.bik`/`.pmf`/`.ipf`.
+`Wipeout Pulse` internal id. **`front_end` is `Some` since 2026-09-20**
+([ADR-0054](../architecture/adr/0054-a-touch-front-end-is-a-second-axis-not-a-menuskin-variant.md)):
+`FrontEnd::menu` became `Option` and a second, touch-icon axis
+(`FrontEnd::touch`) holds this vocabulary instead, since
+`oag_title::MenuSkin`'s mandatory fields all read out of a `FEGlobals` block
+this title does not ship and filling them would invent a menu shape the disc
+does not draw. Wiring `front_end` did make the seventeen language plugins
+reachable, but the HUD font still does not draw - a second, distinct gap
+this pass found: `crates/game/src/race/hud.rs` asks for role `"HUD"`, and
+2048 names its face `2048HUD` instead. Boot movies are a fourth container
+this project does not read at all: `data/Videos/intro.mp4` and 25 siblings
+are real MP4/ISOBMFF, not `.bik`/`.pmf`/`.ipf`.
 
 **[HD front end](hd-frontend.md)** is the same reading applied to
 `/data/plugins/frontend/gui/skin.xml` - HD ships six copies of it and they agree

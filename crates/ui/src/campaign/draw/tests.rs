@@ -163,7 +163,7 @@ fn strings() -> StringTable {
 
 fn skin() -> Skin {
     Skin::new(
-        oag_pulse::FRONT_END.menu,
+        oag_pulse::FRONT_END.menu.unwrap(),
         oag_display::space::Space::PSP,
         22.0,
     )

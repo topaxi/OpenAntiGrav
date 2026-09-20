@@ -157,7 +157,7 @@ fn scrolled_to_the_rows_draw_the_label_and_the_presets_name() {
     select(&mut menu, "graphics.screen_filter_strength");
 
     let skin = Skin::new(
-        oag_pulse::FRONT_END.menu,
+        oag_pulse::FRONT_END.menu.unwrap(),
         oag_display::space::Space::PSP,
         22.0,
     );

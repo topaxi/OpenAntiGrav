@@ -70,7 +70,7 @@ fn pulses_skin_matches_its_own_skin_xml() {
         return;
     };
     let declared = globals(&path, oag_pulse::TITLE);
-    let skin = oag_pulse::FRONT_END.menu;
+    let skin = oag_pulse::FRONT_END.menu.expect("Pulse authors a MenuSkin");
 
     assert_eq!(number(&declared, "MenuXOffset"), Some(skin.menu_x));
     assert_eq!(number(&declared, "MenuScale"), Some(skin.menu_scale));
@@ -94,7 +94,7 @@ fn pures_skin_matches_its_own_skin_xml_and_its_silences() {
         return;
     };
     let declared = globals(&path, oag_pure::TITLE);
-    let skin = oag_pure::FRONT_END.menu;
+    let skin = oag_pure::FRONT_END.menu.expect("Pure authors a MenuSkin");
 
     assert_eq!(number(&declared, "MenuXOffset"), Some(skin.menu_x));
     assert_eq!(number(&declared, "MenuScale"), Some(skin.menu_scale));
@@ -132,14 +132,15 @@ fn pulses_first_row_comes_off_its_main_menu_definition() {
     find_menu(&root, &mut found);
     let (y, font) = found.expect("the main menu has a Menu widget");
 
+    let skin = oag_pulse::FRONT_END.menu.expect("Pulse authors a MenuSkin");
     assert_eq!(
         Some(y),
-        oag_pulse::FRONT_END.menu.first_row_y,
+        skin.first_row_y,
         "the skin's first row is the widget's own y"
     );
     assert_eq!(
         Some(font.as_str()),
-        oag_pulse::FRONT_END.menu.menu_font,
+        skin.menu_font,
         "the skin's font role is the widget's own"
     );
 }

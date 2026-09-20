@@ -1,15 +1,21 @@
-//! Booting a title whose front end was never opened at all - Wipeout 2048,
+//! Booting a title with no `MenuSkin`-shaped menu to draw - Wipeout 2048,
 //! today - straight into this build's own menus instead of refusing.
 //!
 //! `oag_game::boot::load_shell` still refuses such a title, by name, and stays
 //! refusing - see `oag_ui::placeholder`'s module docs for why nothing here
-//! may put a `FrontEnd` or a `BootProfile` on `oag_2048::TITLE` to get past
-//! that. This module never calls `load_shell` for one at all: it opens the
-//! archives itself, reads only what does not need a front end - the roster and
-//! the circuit list, off the title's own plugin definitions - and builds the
-//! same light `Session::Shell` [`Session::open_menus`] already knows how to
-//! draw, with `oag_ui::placeholder::MENU_SKIN` standing in for a `Skin.xml`
-//! this title has none of.
+//! may put a `MenuSkin` on `oag_2048::TITLE`'s front end to get past that.
+//! **This is no longer "a title with no front end at all"**, since
+//! `oag_2048::TITLE.front_end` is `Some` since [ADR-0054]: 2048's boot chain
+//! and language plugins are real and read, only its menu vocabulary is not
+//! `MenuSkin`-shaped (a touch-icon grid instead - `oag_title::FrontEnd::touch`).
+//! This module never calls `load_shell` for such a title at all: it opens the
+//! archives itself, reads only what does not need a `MenuSkin` - the roster
+//! and the circuit list, off the title's own plugin definitions - and builds
+//! the same light `Session::Shell` [`Session::open_menus`] already knows how
+//! to draw, with `oag_ui::placeholder::MENU_SKIN` standing in for a layout
+//! this title's front end does not author in a shape this build can read.
+//!
+//! [ADR-0054]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0054-a-touch-front-end-is-a-second-axis-not-a-menuskin-variant.md
 //!
 //! **A whole `Stage::Frontend`/`Stage::loading` cheaper too, not just a
 //! refusal avoided.** There is no intro reel to decode and no loading-screen
@@ -76,18 +82,24 @@ impl Session {
             }
         };
         let title = opened.title;
-        if title.front_end.is_some() {
+        if title.front_end.is_some_and(|fe| fe.menu.is_some()) {
             // Not this route's case after all: whatever `windowed_error` was
-            // about, it was not a missing front end, and the pick goes back so
-            // the player can try another row.
+            // about, it was not a missing `MenuSkin`, and the pick goes back
+            // so the player can try another row.
             self.pending = Some(pending);
             return Err(windowed_error);
         }
         info!(
-            "{}: no front end has been read off this title's own archives yet, so this \
-             is OpenAntiGrav's own placeholder menu, not {}'s own - see \
-             oag_ui::placeholder",
-            title.name, title.name
+            "{}: no MenuSkin-shaped menu has been read off this title's own archives \
+             (front end: {}), so this is OpenAntiGrav's own placeholder menu, not {}'s \
+             own - see oag_ui::placeholder",
+            title.name,
+            if title.front_end.is_some() {
+                "read, but drawing a different vocabulary - see oag_title::FrontEnd::touch"
+            } else {
+                "not read at all"
+            },
+            title.name
         );
         for problem in &problems {
             info!("dlc: {problem}");
@@ -335,7 +347,15 @@ mod tests {
             oag_game::title::open_source(&package.display().to_string(), Vec::new(), Vec::new())
                 .unwrap();
         assert_eq!(opened.title.name, "Wipeout 2048");
-        assert!(opened.title.front_end.is_none());
+        // 2048's front end is real since ADR-0054 - its boot chain and
+        // language plugins are read - but it still has no `MenuSkin`-shaped
+        // menu, which is the state this whole module exists for.
+        assert!(
+            opened
+                .title
+                .front_end
+                .is_some_and(|fe| fe.menu.is_none() && fe.touch.is_some())
+        );
 
         let mut archives = opened.archives;
         let documents = plugin_documents(

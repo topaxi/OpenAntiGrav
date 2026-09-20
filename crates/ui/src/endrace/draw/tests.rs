@@ -377,7 +377,7 @@ fn menu_draws_its_options_and_the_new_best_lap_but_no_existing_ghost_row() {
 
 fn skin() -> crate::menu::Skin {
     crate::menu::Skin::new(
-        oag_pulse::FRONT_END.menu,
+        oag_pulse::FRONT_END.menu.unwrap(),
         oag_display::space::Space::PSP,
         22.0,
     )
