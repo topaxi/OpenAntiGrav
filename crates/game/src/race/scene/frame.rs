@@ -262,9 +262,8 @@ impl Scene {
         // albedo, so binding it to a ship would blank the ship. Fog and the
         // light rig still reach them unchanged - only `zone` is dropped.
         oag_render::perfprobe::mark("fog+zonevis");
-        // The SPU lights stay: 74 ship materials compile `SVC1` twins, and
-        // at ride height the hull is the only receiver in range - see
-        // `race::engine_light`, "Who receives it".
+        // The SPU lights stay - at ride height the hull is the only receiver
+        // in range; see `race::engine_light`, "Who receives it".
         let ship_scene = mesh_render::Scene {
             zone: mesh_render::Zone::default(),
             ..scene
