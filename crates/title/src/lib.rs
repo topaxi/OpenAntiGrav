@@ -43,6 +43,7 @@ pub mod loading;
 pub mod menu;
 pub mod race;
 pub mod speed;
+pub mod touch;
 pub mod weapons;
 
 pub use boot::{BootProfile, BootStep, Provenance};
@@ -55,6 +56,7 @@ pub use race::{
     ZoneAnnouncer, ZoneCircuit, ZoneClassAnnouncer, ZoneCraft, ZonePalette, ZoneStageTextures,
     ZoneStages, ZoneTransition,
 };
+pub use touch::{TouchButton, TouchFrontEnd};
 
 /// One title's release-level facts.
 ///
@@ -247,6 +249,18 @@ pub struct DeclaredTracks {
 /// states, two of which no title can be in - and `oag-game`'s `load_shell`
 /// would then need two refusals where one is the honest answer.
 ///
+/// **[ADR-0054](https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0054-a-touch-front-end-is-a-second-axis-not-a-menuskin-variant.md)
+/// narrows this for one axis, not both.** [`Self::menu`] became
+/// `Option<&'static menu::MenuSkin>` because a fourth title's chain *is*
+/// real and walkable while its menu vocabulary genuinely is not
+/// `MenuSkin`-shaped - "a chain with a skin that cannot be honestly filled"
+/// is a state a real title is in, unlike "a skin with no chain" above, which
+/// stays impossible: [`Self::boot`] is still mandatory on `FrontEnd`, so
+/// `oag-game` still needs exactly one refusal for "no front end at all"
+/// ([`crate::Title::front_end`] being `None`) and a second, narrower one for
+/// "no [`menu::MenuSkin`]-shaped menu to draw" - see
+/// [`Self::menu`]/[`Self::touch`].
+///
 /// # Why `None` is a result
 ///
 /// Wipeout HD ships `/data/plugins/frontend/gui/skin.xml` and a directory of
@@ -285,12 +299,44 @@ pub struct FrontEnd {
     /// inside its definition, not in its path, so this list is what is read back
     /// from the archive rather than trusted.
     pub language_plugins: &'static [&'static str],
-    /// How this title lays menus out. See [`menu::MenuSkin`].
+    /// How this title lays menus out, for a title that authors the
+    /// `FEGlobals`/`<Menu>`/`<HorizMenu>` vocabulary [`menu::MenuSkin`]
+    /// describes. See that type.
     ///
     /// A measured axis: both PSP titles' `Skin.xml` files were read and they
     /// agree on nothing they share. Presentation only - the menu tree itself is
     /// this project's, not the disc's, and lives in `assets/ui/menu.toml`.
-    pub menu: &'static menu::MenuSkin,
+    ///
+    /// **`Option` since [ADR-0054], not because a fourth title's menu is
+    /// merely unread.** Wipeout 2048 authors no `<FEGlobals>` block and no
+    /// `<Menu>`/`<HorizMenu>` widget anywhere - a touch-icon grid over a
+    /// persistent scene instead, a vocabulary this type was never built to
+    /// hold. Filling it with placeholder numbers for a menu shape 2048 does
+    /// not draw would be exactly the invented-stand-in failure `CLAUDE.md`'s
+    /// "never invent what the assets already author" section forbids, so
+    /// `None` here is a measurement about *this front end's idiom*, on the
+    /// same footing [`Self::menu_frame`]'s own `None` already carries for a
+    /// title whose frame has not been read - except here no reading would
+    /// ever fill it. See [`Self::touch`] for what 2048 fills instead, and
+    /// `docs/formats/2048-frontend.md`'s "Why `front_end` stays `None`"
+    /// section (written before this field existed, when the whole struct had
+    /// to refuse for want of this one axis).
+    ///
+    /// [ADR-0054]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0054-a-touch-front-end-is-a-second-axis-not-a-menuskin-variant.md
+    pub menu: Option<&'static menu::MenuSkin>,
+    /// How this title lays a touch-icon front end out, for a title that
+    /// authors *that* vocabulary instead of [`menu::MenuSkin`]'s. See
+    /// [`touch::TouchFrontEnd`].
+    ///
+    /// `None` for every title but Wipeout 2048 today - not because the other
+    /// three were checked and found to lack one (Pulse and Pure are PSP
+    /// titles with no touchscreen at all; Wipeout HD's PS3 controller front
+    /// end was already measured as [`menu::MenuSkin`]-shaped), but because
+    /// only 2048 has ever been read for this axis. See [`Self::menu`] for the
+    /// vocabulary this is not a replacement for, and the module docs on
+    /// [`touch`] for why this stays a single-corpus type rather than an
+    /// [ADR-0022]-licensed one.
+    pub touch: Option<&'static touch::TouchFrontEnd>,
     /// How this title's own boot sequence goes. See [`boot::BootProfile`].
     ///
     /// Hung off [`Title`] rather than selected separately so that there is

@@ -83,9 +83,13 @@ impl BootStep {
 /// is fully recovered.
 ///
 /// **HD's chain has since been watched** (2026-09-05, three cold boots on
-/// RPCS3), so no title is `Declared` today - which does not retire this field.
-/// It was never about HD; it is about the *next* title, whose declaration will
-/// arrive before its capture does.
+/// RPCS3), and Wipeout 2048 landed `Declared` in its place under
+/// [ADR-0054](https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0054-a-touch-front-end-is-a-second-axis-not-a-menuskin-variant.md) -
+/// one Vita3K boot corroborates its order, short of the three independent
+/// ones HD's own `Measured` needed. This field was never about any one
+/// title holding the value at a given moment; it is about *whichever*
+/// title's declaration arrives before its capture does, which on
+/// 2026-09-20 is 2048.
 ///
 /// Widening the type is the third answer, and it is the honest one: the chain
 /// still says what the order is, and this says how much that is worth. Every
@@ -117,12 +121,19 @@ pub enum Provenance {
     /// that walks such a chain says so rather than presenting it as the disc's
     /// behaviour.
     ///
-    /// **No title is in this state today**, HD having been the last and its
-    /// chain having been watched. The variant stays because the next title's
-    /// declaration will arrive before its capture does, and because the whole
-    /// point of the field is that arriving as a measurement by omission must not
-    /// be possible. `oag_game::boot::provenance::caveat` is where it is enforced,
-    /// and it is unit-tested rather than disc-tested for exactly this reason.
+    /// **Wipeout 2048 is in this state since [ADR-0054]**, HD having held it
+    /// before that and had its own chain watched (2026-09-05). 2048's own
+    /// chain is corroborated by one Vita3K cold boot rather than watched
+    /// three independent times the way ADR-0025's own bar asks for, so it
+    /// stays `Declared` rather than moving to `Measured` on a single run -
+    /// see `oag_2048::frontend::BOOT_PROFILE`'s own doc comment. The variant
+    /// stays live either way, because the whole point of the field is that a
+    /// declaration arriving as a measurement by omission must not be
+    /// possible. `oag_game::boot::provenance::caveat` is where it is
+    /// enforced, and it is unit-tested rather than disc-tested for exactly
+    /// this reason.
+    ///
+    /// [ADR-0054]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0054-a-touch-front-end-is-a-second-axis-not-a-menuskin-variant.md
     Declared,
 }
 
