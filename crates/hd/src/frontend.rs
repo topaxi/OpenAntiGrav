@@ -363,6 +363,12 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     race_box: None,
     // Inert: `race_box` is `None`, so no picker opens to read this.
     preview_meshes: false,
+    // `DATA02`'s copy - `oag_assets::Archives::holder_of`'s own mount order
+    // (`data` then `fe` then `extra`) reaches it first, the same precedence
+    // [`names::FRONTEND_ROOT`] documents reaching `DATA00`'s `skin.xml`.
+    // **This build's own mount order, not a measurement of the original's** -
+    // see `docs/formats/hd-endrace-screens.md`.
+    endrace_entry: Some(names::ENDRACE_DEFINITION),
 };
 
 /// The sixteen plugins that carry a language, named rather than numbered.
@@ -476,6 +482,17 @@ pub mod names {
     /// than a measurement of what a PS3 loads. All six agree on every layout
     /// global; they do not agree on the screen list. See `hd-frontend.md`.
     pub const FRONTEND_ROOT: &str = r"Data\Plugins\Frontend\Gui\Skin.xml";
+
+    /// The three screens a race ends on - `EndRace Results`/`EndRace
+    /// Rewards`/`EndRace Menu` - HD's own copy, at a named plugin path like
+    /// [`FRONTEND_ROOT`] rather than Pulse's numbered
+    /// `Data\Plugins\PI001\GUI\EndRace_Definition.xml`.
+    ///
+    /// **Present in five of the seven archives, no two alike by MD5** -
+    /// `DATA02`/`DATA03`/`DATA04` carry `Results`/`Rewards`/`Menu`, `DATA05`
+    /// adds `Podium`, `DATA06` carries `Podium` and no `Rewards` at all. See
+    /// `docs/formats/hd-endrace-screens.md` for the widget-by-widget read.
+    pub const ENDRACE_DEFINITION: &str = r"Data\Plugins\Frontend\Gui\EndRace_Definition.xml";
 
     /// The nine-patch every menu `Block` cuts its border from and samples its
     /// fill's alpha off: 64x64 `A8R8G8B8`, white, in `DATA06` only. Named by

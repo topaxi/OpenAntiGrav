@@ -56,6 +56,7 @@ use oag_gameplay::input::{Button, Input};
 pub use crate::campaign::Layout;
 
 pub mod draw;
+pub mod hd;
 pub mod pointer;
 
 pub use draw::{endrace_menu_draw_list, results_draw_list, rewards_draw_list};
@@ -121,6 +122,33 @@ pub struct Results {
     /// call to make.
     pub laps: Vec<LapSplit>,
     pub total_ticks: u64,
+}
+
+/// One craft's own row on Wipeout HD/Fury's `EndRace Results` - the whole
+/// field's finishing order, not Pulse's own per-lap table. See [`hd`] for
+/// what draws it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct FieldRow {
+    /// Race position, 1-based.
+    pub place: u8,
+    /// The tick this craft crossed for the last time, or `None` for one
+    /// still racing when the field's own clock stopped - the same "no time"
+    /// case `oag_game::scoreboard::Row::finish_tick` carries, off the same
+    /// feed.
+    pub time_ticks: Option<u64>,
+    /// Whether this is the player's own row - what
+    /// [`hd::hd_results_draw_list`] repositions `GridHighlight` onto.
+    pub player: bool,
+}
+
+/// Wipeout HD/Fury's own `EndRace Results`: the headline (the same
+/// [`Headline`] Pulse's screen resolves, reused onto HD's own placeholder
+/// `Line1` - see [`hd`]'s module doc for why that is a chosen substitution
+/// rather than a measured one) and the whole field, ordered by place.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FieldResults {
+    pub headline: Headline,
+    pub rows: Vec<FieldRow>,
 }
 
 /// `EndRace Rewards`: the medal award, whether a campaign cell was in play
@@ -199,6 +227,25 @@ impl MenuOption {
             Self::ReturnToMenu => "ER_RETURN_MENU",
             Self::RaceAgain => "ER_RACE_AGAIN",
             Self::ViewResultsAgain => "ER_VIEW_AGAIN",
+        }
+    }
+
+    /// The `<Block name="...">` this option is on Wipeout HD/Fury's own
+    /// `EndRace Menu` - see [`hd`]'s module doc. Every one of these five
+    /// names is quoted directly off `Data\Plugins\Frontend\Gui\EndRace_Definition.xml`
+    /// (`docs/formats/hd-endrace-screens.md`); the disc's own `idstring` on
+    /// each Block is identical to [`Self::idstring`] already returns
+    /// (`ER_NEXT_RACE`/`ER_RACE_AGAIN`/`ER_RETURN_GRID`/`ER_RETURN_MENU`/`ER_VIEW_AGAIN`),
+    /// which is the corroboration that this is the same option rather than a
+    /// same-named coincidence.
+    #[must_use]
+    pub fn hd_block_name(self) -> &'static str {
+        match self {
+            Self::NextRace => "next_race",
+            Self::ReturnToGrid => "return_to_grid",
+            Self::ReturnToMenu => "return_to_menu",
+            Self::RaceAgain => "race_again",
+            Self::ViewResultsAgain => "view_again",
         }
     }
 }

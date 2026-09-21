@@ -20,7 +20,7 @@
 use anyhow::Result;
 
 use oag_tables::race_campaign::Medal;
-use oag_ui::endrace::{EndRaceMenu, Headline, MenuOption, Results, Rewards};
+use oag_ui::endrace::{EndRaceMenu, FieldResults, Headline, MenuOption, Results, Rewards};
 
 use oag_game::render::Renderer;
 
@@ -32,16 +32,33 @@ enum Which {
     Menu,
 }
 
-/// The three screens' own content, built once when the race finishes, and
-/// which one is current.
+/// `EndRace Results`' own model, title-dispatched: Pulse's per-lap table, or
+/// Wipeout HD/Fury's whole-field standings grid
+/// ([`oag_ui::endrace::hd`]). Carrying both behind one enum, rather than an
+/// `Option` of each, is what keeps [`EndRaceRuntime::draw`] from being able
+/// to hold a Pulse model against an HD screen layout (or the reverse) -
+/// exactly the mismatch `oag_game::endrace::load`'s own title dispatch
+/// already prevents on the read side.
+#[derive(Debug)]
+pub(crate) enum ResultsModel {
+    Pulse(Results),
+    Hd(FieldResults),
+}
+
+/// The screens' own content, built once when the race finishes, and which
+/// one is current. `rewards` is `None` on a title this build does not read
+/// `EndRace Rewards` for (Wipeout HD/Fury today - see
+/// `oag_game::endrace::EndRaceScreens::rewards`'s own doc); [`Which::Rewards`]
+/// is then simply never reached, the same way [`Which::Menu`]'s own
+/// `Endrace Difficulty` list is authored but never driven.
 pub(crate) struct EndRaceRuntime {
     screens: oag_game::endrace::EndRaceScreens,
     skin: oag_ui::menu::Skin,
     frame: oag_ui::menu::Frame,
     strings: oag_ui::language::StringTable,
     renderer: Renderer,
-    results: Results,
-    rewards: Rewards,
+    results: ResultsModel,
+    rewards: Option<Rewards>,
     menu: EndRaceMenu,
     which: Which,
 }
@@ -72,8 +89,8 @@ impl EndRaceRuntime {
         frame: oag_ui::menu::Frame,
         strings: oag_ui::language::StringTable,
         atlas: oag_ui::font::Atlas,
-        results: Results,
-        rewards: Rewards,
+        results: ResultsModel,
+        rewards: Option<Rewards>,
         menu: EndRaceMenu,
     ) -> Result<Self> {
         let mut renderer = Renderer::new(device, queue, format, None, atlas, &screens.sprites)?;
@@ -99,7 +116,14 @@ impl EndRaceRuntime {
     /// `crate::main::session::endrace`'s job.
     pub(crate) fn advance(&mut self) {
         self.which = match self.which {
-            Which::Results if self.rewards.campaign => Which::Rewards,
+            Which::Results
+                if self
+                    .rewards
+                    .as_ref()
+                    .is_some_and(|rewards| rewards.campaign) =>
+            {
+                Which::Rewards
+            }
             Which::Results | Which::Rewards => Which::Menu,
             Which::Menu => Which::Menu,
         };
@@ -122,11 +146,23 @@ impl EndRaceRuntime {
         &mut self.menu
     }
 
-    /// `EndRace Menu`'s own layout - what
-    /// `oag_ui::endrace::pointer::menu_targets` reads its row rects from.
+    /// `EndRace Menu`'s own row targets for a pointer tick, title-dispatched
+    /// the same way [`Self::draw`] is: Pulse's `<Menu>` list stride
+    /// (`oag_ui::endrace::pointer::menu_targets`), or Wipeout HD/Fury's own
+    /// per-`<Block>` positions (`oag_ui::endrace::hd::hd_menu_targets`).
+    /// Kept here rather than at the call site so a caller never has to know
+    /// which title it is driving - the same seam [`Self::draw`] already
+    /// draws for it.
     #[must_use]
-    pub(crate) fn menu_layout(&self) -> &oag_ui::endrace::Layout {
-        &self.screens.menu
+    pub(crate) fn menu_targets(&self) -> Vec<oag_ui::endrace::pointer::Target> {
+        match &self.results {
+            ResultsModel::Pulse(_) => {
+                oag_ui::endrace::pointer::menu_targets(&self.menu, &self.screens.menu)
+            }
+            ResultsModel::Hd(_) => {
+                oag_ui::endrace::hd::hd_menu_targets(&self.menu, &self.screens.menu)
+            }
+        }
     }
 
     /// The grid these screens are authored in - what
@@ -153,9 +189,9 @@ impl EndRaceRuntime {
         viewport: (f32, f32, f32, f32),
     ) {
         let sprites = &self.screens.sprites;
-        let layers = match self.which {
-            Which::Results => oag_ui::endrace::results_draw_list(
-                &self.results,
+        let layers = match (self.which, &self.results) {
+            (Which::Results, ResultsModel::Pulse(results)) => oag_ui::endrace::results_draw_list(
+                results,
                 &self.screens.results,
                 &self.skin,
                 &self.frame,
@@ -164,9 +200,44 @@ impl EndRaceRuntime {
                 true,
                 &|src| sprites.get(src),
             ),
-            Which::Rewards => oag_ui::endrace::rewards_draw_list(
-                &self.rewards,
-                &self.screens.rewards,
+            (Which::Results, ResultsModel::Hd(results)) => {
+                oag_ui::endrace::hd::hd_results_draw_list(
+                    results,
+                    &self.screens.results,
+                    &self.skin,
+                    &self.frame,
+                    &self.strings,
+                    None,
+                    true,
+                    &|src| sprites.get(src),
+                )
+            }
+            // `Which::Rewards` is only ever entered from `advance` when
+            // `self.rewards` is `Some` and `campaign` - see that function's
+            // own doc, and `EndRaceScreens::rewards`'s for why that is
+            // always true on the title this arm ever actually reaches
+            // (Pulse; HD never builds a `Rewards` at all).
+            (Which::Rewards, _) => {
+                let Some(rewards) = &self.rewards else {
+                    return;
+                };
+                let Some(layout) = &self.screens.rewards else {
+                    return;
+                };
+                oag_ui::endrace::rewards_draw_list(
+                    rewards,
+                    layout,
+                    &self.skin,
+                    &self.frame,
+                    &self.strings,
+                    None,
+                    true,
+                    &|src| sprites.get(src),
+                )
+            }
+            (Which::Menu, ResultsModel::Pulse(_)) => oag_ui::endrace::endrace_menu_draw_list(
+                &self.menu,
+                &self.screens.menu,
                 &self.skin,
                 &self.frame,
                 &self.strings,
@@ -174,7 +245,7 @@ impl EndRaceRuntime {
                 true,
                 &|src| sprites.get(src),
             ),
-            Which::Menu => oag_ui::endrace::endrace_menu_draw_list(
+            (Which::Menu, ResultsModel::Hd(_)) => oag_ui::endrace::hd::hd_menu_draw_list(
                 &self.menu,
                 &self.screens.menu,
                 &self.skin,
@@ -225,6 +296,35 @@ pub(crate) fn menu_options(campaign: bool) -> Vec<MenuOption> {
         MenuOption::RaceAgain,
         MenuOption::ViewResultsAgain,
     ]
+}
+
+/// Wipeout HD/Fury's own `EndRace Results`: the whole field, ordered by
+/// place, off the field's own `Board` - the same feed
+/// `oag_game::scoreboard::Overlay` draws when no `EndRace_Definition.xml` is
+/// read at all. `board` is `None` only when `Session::build_endrace` is
+/// called before `Race::capture_results` has run, which does not happen -
+/// `build_endrace`'s own guard requires `stage.race.finished()` first, and
+/// that is the same tick `capture_results` takes the board on - so this
+/// draws an empty field rather than failing outright, on the same "an
+/// honest absence over a guess" reasoning as every other gap on this
+/// screen, not because the `None` case is expected to fire.
+#[must_use]
+pub(crate) fn hd_field_rows(
+    board: Option<&oag_game::scoreboard::Board>,
+) -> Vec<oag_ui::endrace::FieldRow> {
+    board
+        .map(|board| {
+            board
+                .rows
+                .iter()
+                .map(|row| oag_ui::endrace::FieldRow {
+                    place: row.place,
+                    time_ticks: row.finish_tick,
+                    player: row.player,
+                })
+                .collect()
+        })
+        .unwrap_or_default()
 }
 
 /// `oag_game::records::Medal` restated as `oag_tables::race_campaign::Medal` -
@@ -318,7 +418,53 @@ pub(crate) fn loyalty_award(inputs: LoyaltyInputs) -> u32 {
 
 #[cfg(test)]
 mod tests {
-    use super::{LoyaltyInputs, loyalty_award};
+    use super::{LoyaltyInputs, hd_field_rows, loyalty_award};
+    use oag_game::scoreboard::{Board, Row};
+
+    /// `hd_field_rows` reads place/finish tick/player straight off the
+    /// field's own `Board`, in the board's own order - no reordering, no
+    /// renumbering, the same "the places are used exactly as assigned"
+    /// rule `Race::capture_results`'s own doc states for the board itself.
+    /// A craft still racing when the board was taken (`finish_tick: None`)
+    /// keeps that absence rather than a guessed time.
+    #[test]
+    fn hd_field_rows_reads_place_finish_tick_and_player_off_the_board_unchanged() {
+        let board = Board {
+            rows: vec![
+                Row {
+                    place: 1,
+                    slot: 2,
+                    laps_completed: 3,
+                    finish_tick: Some(1234),
+                    best_lap_ticks: Some(400),
+                    player: false,
+                },
+                Row {
+                    place: 2,
+                    slot: 0,
+                    laps_completed: 2,
+                    finish_tick: None,
+                    best_lap_ticks: Some(410),
+                    player: true,
+                },
+            ],
+            laps_target: Some(3),
+            tick: 1234,
+        };
+        let rows = hd_field_rows(Some(&board));
+        assert_eq!(rows.len(), 2);
+        assert_eq!(rows[0].place, 1);
+        assert_eq!(rows[0].time_ticks, Some(1234));
+        assert!(!rows[0].player);
+        assert_eq!(rows[1].place, 2);
+        assert_eq!(rows[1].time_ticks, None);
+        assert!(rows[1].player);
+    }
+
+    #[test]
+    fn hd_field_rows_is_empty_rather_than_panicking_with_no_board() {
+        assert!(hd_field_rows(None).is_empty());
+    }
 
     /// The two live races
     /// (`docs/ghidra/functions/psp-pulse-usa/endrace-screens.md`'s

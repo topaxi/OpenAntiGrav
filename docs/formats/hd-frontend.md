@@ -2170,6 +2170,20 @@ rather than once per frame. The message says "this title's EndRace screens are
 not read by this build" rather than "this source has no EndRace screens",
 which this section is the evidence for.
 
+### 2026-09-21: `EndRace Results`/`EndRace Menu` are read and drawn
+
+The reading pass this section's own "Next Steps" called for happened -
+[`hd-endrace-screens.md`](hd-endrace-screens.md) is the widget-by-widget
+read (`DATA02`'s copy, plus every diff against `DATA03`-`DATA06`), and
+`oag_title::FrontEnd::endrace_entry` is now the per-title axis this section's
+own point 3 named as "worth nothing until a second title's screens actually
+draw" - HD's own value goes through the same `holder_of` precedence this
+page documents for `skin.xml`. `EndRace Rewards` (present on `DATA02`-`05`)
+and `EndRace Podium` (`DATA05`/`DATA06` only) are inventoried on that page
+but not drawn this pass - see its own scope notes. `docs/ui/endrace-screens.md`
+carries the picture half (what draws and why) and this project's live
+verification against a real disc-driven HD race.
+
 [`FrontEnd::root`]: https://github.com/topaxi/OpenAntiGrav/blob/main/crates/title/src/lib.rs
 [`MenuOption`]: https://github.com/topaxi/OpenAntiGrav/blob/main/crates/ui/src/endrace.rs
 

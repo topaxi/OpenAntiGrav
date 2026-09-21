@@ -8,7 +8,8 @@ use log::warn;
 use oag_ui::endrace::{Event, MenuOption};
 
 use crate::race_stage::endrace::{
-    EndRaceRuntime, LoyaltyInputs, headline, loyalty_award, menu_options, to_campaign_medal,
+    EndRaceRuntime, LoyaltyInputs, ResultsModel, hd_field_rows, headline, loyalty_award,
+    menu_options, to_campaign_medal,
 };
 use crate::stage::Stage;
 
@@ -48,6 +49,15 @@ impl Session {
         let team = race_options.team.clone();
         let campaign = stage.campaign_cell.is_some();
         let title = stage.result_key.title.clone();
+        // The actual title package, not the display name above - what
+        // `oag_game::endrace::load`'s own title dispatch needs, and what
+        // this function's own dispatch (Pulse's per-lap `Results` versus
+        // Wipeout HD/Fury's whole-field `FieldResults`) needs too. Read out
+        // of `shell` before the mutable borrows below, the same "clone now,
+        // `shell` cannot survive past this point" idiom
+        // `Session::open_campaign`'s own `title_ref` already uses.
+        let title_ref = shell.title;
+        let board = stage.race.results().cloned();
         let observation = stage.observation();
         let standing = &stage.race.sim.world.ships[0].standing;
         let laps: Vec<oag_ui::endrace::LapSplit> = (0..oag_race::MAX_RECORDED_LAPS)
@@ -124,6 +134,7 @@ impl Session {
             grid,
             &base_sprites,
             &global_refs,
+            title_ref,
         ) {
             Ok(screens) => screens,
             Err(error) => {
@@ -143,30 +154,49 @@ impl Session {
             }
         };
 
-        let results = oag_ui::endrace::Results {
-            headline: headline(mode, observation.place),
-            laps,
-            total_ticks: observation.tick,
+        let is_hd = title_ref.name == oag_hd::TITLE.name;
+
+        // `EndRace Rewards` is not read on this title (see
+        // `oag_game::endrace::EndRaceScreens::rewards`'s own doc), so
+        // recording the loyalty award and building a `Rewards` model to show
+        // it in would be work with no screen to show it on - a title that
+        // never reaches `Which::Rewards` needs no loyalty save either.
+        let rewards = if is_hd {
+            None
+        } else {
+            // The loyalty row - `None` when this launch named no team at all
+            // (a `--race` run with no `--team`), which draws the row absent
+            // rather than a blank name. A real launch through `Team
+            // Selection` always names one.
+            let loyalty = team.map(|team| {
+                let total = self.records.record_loyalty(&title, &team, award);
+                if let Err(e) = oag_game::records::save(&self.records) {
+                    warn!("could not save the loyalty total: {e:#}");
+                }
+                oag_ui::endrace::Loyalty {
+                    team_name: team,
+                    award,
+                    total,
+                }
+            });
+            Some(oag_ui::endrace::Rewards {
+                medal: observation.campaign_medal.map(to_campaign_medal),
+                campaign,
+                loyalty,
+            })
         };
-        // The loyalty row - `None` when this launch named no team at all
-        // (a `--race` run with no `--team`), which draws the row absent
-        // rather than a blank name. A real launch through `Team Selection`
-        // always names one.
-        let loyalty = team.map(|team| {
-            let total = self.records.record_loyalty(&title, &team, award);
-            if let Err(e) = oag_game::records::save(&self.records) {
-                warn!("could not save the loyalty total: {e:#}");
-            }
-            oag_ui::endrace::Loyalty {
-                team_name: team,
-                award,
-                total,
-            }
-        });
-        let rewards = oag_ui::endrace::Rewards {
-            medal: observation.campaign_medal.map(to_campaign_medal),
-            campaign,
-            loyalty,
+
+        let results = if is_hd {
+            ResultsModel::Hd(oag_ui::endrace::FieldResults {
+                headline: headline(mode, observation.place),
+                rows: hd_field_rows(board.as_ref()),
+            })
+        } else {
+            ResultsModel::Pulse(oag_ui::endrace::Results {
+                headline: headline(mode, observation.place),
+                laps,
+                total_ticks: observation.tick,
+            })
         };
         let menu = oag_ui::endrace::EndRaceMenu::new(menu_options(campaign), new_best_lap_ticks);
 
@@ -220,11 +250,11 @@ impl Session {
                 let mut events = endrace.menu_mut().update(self.controls.buttons_mut());
                 // No pointer-target list here: `EndRace Menu`'s own row
                 // rects need the layout `endrace` already owns, which
-                // `oag_ui::endrace::pointer::menu_targets` reads directly -
-                // see that module's own doc for why `Results`/`Rewards`
-                // need no target list of their own.
-                let targets =
-                    oag_ui::endrace::pointer::menu_targets(endrace.menu(), endrace.menu_layout());
+                // `EndRaceRuntime::menu_targets` reads directly, dispatched
+                // to the right title's own row geometry - see that method's
+                // own doc for why `Results`/`Rewards` need no target list of
+                // their own.
+                let targets = endrace.menu_targets();
                 events.extend(endrace.menu_mut().pointer(pointer, &targets));
                 for event in events {
                     match event {

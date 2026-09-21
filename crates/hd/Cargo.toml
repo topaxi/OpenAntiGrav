@@ -26,6 +26,13 @@ oag-tables.workspace = true
 oag-formats.workspace = true
 oag-pulse.workspace = true
 oag-pure.workspace = true
+# Test-only, and a dev-dependency cycle back to a crate that depends on
+# `oag-hd` normally (`oag-ui` reads this title's front-end tables) - Cargo's
+# dev-dependency graph is separate from the build graph, so this is fine.
+# Needed for `crates/hd/tests/endrace_screens_ground_truth.rs`, which reads
+# `EndRace_Definition.xml` through the same `oag_ui::screen`/`oag_ui::endrace`
+# types `oag_ui::endrace::hd` draws with, rather than re-parsing by hand.
+oag-ui.workspace = true
 
 [lints]
 workspace = true

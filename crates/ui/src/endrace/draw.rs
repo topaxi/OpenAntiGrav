@@ -4,10 +4,13 @@
 //! the drawing past a comfortable read.
 //!
 //! The small per-widget helpers below (`fill_draw`/`image_draw`/`text_draw`)
-//! duplicate [`crate::campaign::draw`]'s own rather than sharing them: they
-//! are `fn`, not `pub(crate)`, in that module, the same reason
+//! duplicate [`crate::campaign::draw`]'s own rather than sharing them across
+//! the two module trees, for the same reason
 //! [`crate::campaign::draw::mode_event_label`] duplicates
-//! [`crate::menu::mode_label`] instead of reaching across the same seam.
+//! [`crate::menu::mode_label`] instead of reaching across that seam. They are
+//! `pub(super)`, the same visibility `crate::campaign::draw`'s own copies
+//! carry, so [`super::hd`] can reuse them for Wipeout HD/Fury's own screens
+//! without a second copy inside this module tree.
 
 use crate::frontend::{Align, Draw, Placed};
 use crate::language::StringTable;
@@ -323,8 +326,11 @@ pub fn endrace_menu_draw_list(
 }
 
 /// `Line1`'s own resolved text, or `None` for [`Headline::Unresolved`] - see
-/// [`super::Headline`]'s own doc.
-fn headline_text(headline: Headline, strings: &StringTable) -> Option<String> {
+/// [`super::Headline`]'s own doc. `pub(super)` rather than private: HD's own
+/// `Line1` authors no idstring at all (a runtime-filled placeholder), and
+/// [`super::hd::hd_results_draw_list`] reuses this same idstring table as a
+/// chosen substitution - see that module's own doc.
+pub(super) fn headline_text(headline: Headline, strings: &StringTable) -> Option<String> {
     let id = match headline {
         Headline::TimeTrial => "ER_TT_COM",
         Headline::SpeedLap => "ER_SL_COM",
@@ -426,7 +432,7 @@ fn tablebg_y(row: usize) -> f32 {
 /// is `campaign`'s own lane; this is a second, correct formatter rather
 /// than a shared one - see this module's own doc for why the small helpers
 /// here duplicate rather than share.
-fn format_ticks(ticks: u64) -> String {
+pub(super) fn format_ticks(ticks: u64) -> String {
     let centiseconds = ticks.saturating_mul(100) / 60;
     let minutes = centiseconds / 6000;
     let seconds = (centiseconds / 100) % 60;
@@ -434,7 +440,7 @@ fn format_ticks(ticks: u64) -> String {
     format!("{minutes}.{seconds:02}.{centis:02}")
 }
 
-fn fill_draw(fill: &Fill) -> Draw {
+pub(super) fn fill_draw(fill: &Fill) -> Draw {
     let rect = [
         fill.x,
         fill.y,
@@ -463,7 +469,7 @@ fn mean(a: [f32; 4], b: [f32; 4]) -> [f32; 4] {
     ]
 }
 
-fn image_draw(image: &Image, placed: Placed) -> Draw {
+pub(super) fn image_draw(image: &Image, placed: Placed) -> Draw {
     sprite_draw(image, placed, image.x, image.y, image.color)
 }
 
@@ -514,7 +520,7 @@ fn sprite_draw(image: &Image, placed: Placed, x: f32, y: f32, argb: u32) -> Draw
     }
 }
 
-fn text_draw(text: &Text, content: &str, layout: &Layout) -> Draw {
+pub(super) fn text_draw(text: &Text, content: &str, layout: &Layout) -> Draw {
     Draw::Text {
         x: text.x,
         y: text.y,
