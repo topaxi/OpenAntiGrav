@@ -93,10 +93,10 @@ pub(crate) struct CampaignStage {
     /// (see `docs/ui/campaign-screens.md`), so this build keeps it running.
     ticker_elapsed: f32,
     /// Kept for the render pass, which needs to resolve a per-cell idstring
-/// (`MSC_EVENT_SR` and friends) that neither screen's own `Layout::read`
-/// pass can, since which one applies depends on the selected cell's
-/// mode - read once, the same table `Layout::read` used to resolve every
-/// fixed label.
+    /// (`MSC_EVENT_SR` and friends) that neither screen's own `Layout::read`
+    /// pass can, since which one applies depends on the selected cell's
+    /// mode - read once, the same table `Layout::read` used to resolve every
+    /// fixed label.
     pub(crate) strings: oag_ui::language::StringTable,
     /// The front end's own sprite sheet - `hex_filled.mip`/`hex_outline.mip`/
     /// `pulse_assets.mip`'s lock-and-selector sub-rects all come off it.

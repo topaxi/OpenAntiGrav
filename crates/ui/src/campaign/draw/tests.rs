@@ -264,7 +264,12 @@ fn texts(layers: &crate::menu::Layers) -> Vec<&String> {
         .body
         .iter()
         .filter_map(|draw| match draw {
-            Draw::Text { text, .. } => Some(text),
+            // `Default`-role labels now draw as `FacedText` (`text_draw`'s
+            // own `super::footer::face_role` routing) rather than the plain
+            // `Text` every campaign-screen label used before lane 7's own
+            // atlas made the role mean something - both are "a text draw"
+            // for what these tests check.
+            Draw::Text { text, .. } | Draw::FacedText { text, .. } => Some(text),
             _ => None,
         })
         .collect()
@@ -300,7 +305,12 @@ fn a_grids_title_resolves_through_the_per_grid_idstring() {
         .body
         .iter()
         .filter_map(|draw| match draw {
-            Draw::Text { text, x, y, .. } => Some((text.clone(), *x, *y)),
+            // See the module `texts()` helper's own doc on why both
+            // variants: `Grid`'s `Title` (`font="default"`) now routes
+            // through `Draw::FacedText`.
+            Draw::Text { text, x, y, .. } | Draw::FacedText { text, x, y, .. } => {
+                Some((text.clone(), *x, *y))
+            }
             _ => None,
         })
         .collect();
