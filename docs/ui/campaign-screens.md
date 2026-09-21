@@ -1051,15 +1051,82 @@ per-difficulty copies really do disagree this way generally, "default" may
 not even be `medium`) needs a boot this pass did not spend on it, per its
 own budget; see [Open](#open) below.
 
-### An open cell-grid artifact, not chased
+### The stray hex outline was `Selector`, not a seventh cell - fixed 2026-09-21
 
-`ours-cell-select.png` shows a stray unfilled hex outline, unattached to
-the six-cell cluster, off to the right of the grid at roughly the screen's
-own centre. `grid0`'s own cell count (`00/06`) is one more than the five
-hexes the visible cluster shows, so this is very likely the sixth cell's
-own hex, at a `(x, y)` genuinely far from the others in the coordinate
-space `Cell::grid_coords` reads off its name - not chased to a confirmed
-reading this pass; see [Open](#open).
+**Not the sixth cell's own hex, the hypothesis this thread opened with -
+`Selector` centred on the wrong rect.** `grid0`'s six cells
+(`grid0_3_1`/`grid0_5_1`/`grid0_2_2`/`grid0_4_2`/`grid0_1_2`/`grid0_3_2`,
+read directly off the real disc's `grid_00.xml` through
+`Cell::grid_coords`) all resolve to one cohesive staggered cluster -
+`grid0_5_1` sits one column right of the selected `grid0_3_1`, exactly
+where `GridController`'s own per-column `<Item OffsetX>` places it, not
+isolated. The stray outline sat well past that cluster, over the detail
+column's own dead space, and moved with `Selector`'s own semi-transparent
+`Hexagon_HD_THICK_OUT.mip` colour (`0x3fffffff`) - confirmed by
+instrumenting the draw call directly rather than by reading the XML cold.
+
+**Root cause: `hex_rect` (`crates/ui/src/campaign.rs`) tried `Medal_{x}_{y}`
+before `Outline_{x}_{y}`, and HD's `Medal_` widget is not hex-sized.** Both
+prefixes are interchangeable on Pulse - `hex_filled.mip`/`hex_outline.mip`
+are both a plain 32x32 hex, so whichever the function found first gave the
+same rect. HD's own `Medal_{x}_{y}` sources `Hexmedal_HD.mip`, a shared
+1024x256 multi-colour atlas, not a single hex, and authors no
+`width`/`height` of its own to say otherwise - so `hex_rect` returned the
+whole atlas's size, `[470, 332, 1024, 256]` for `grid0_5_1`'s own slot, as
+"the hex's rect". `centred_selector_draw` then centred a 128x64 sprite
+inside that box, landing it near `(805, 430)` - visually detached from
+every real hex, which all sit inside `x∈[230,540], y∈[330,400]` on a
+1920x1080 capture. **HD authors a `Medal_{x}_{y}` widget for every grid
+slot in the 7x5 template, occupied or not** (`Bg_0_0`..`Bg_6_4` and
+siblings, all declared unconditionally in `CellMode_Definition.xml`), so
+this fired for every selected HD cell, not just this one - `grid0_2_2` and
+every other cell tried during the RPCS3 pass below would have shown the
+same detached cursor.
+
+Fixed by swapping `hex_rect`'s own prefix order to `["Outline_",
+"Medal_"]` - `Outline_` is always present and always single-hex-sized on
+both titles, so it is the reliable source of a hex's own rect; `Medal_`
+stays as a fallback for the same reason it was tried at all. Confirmed by
+re-instrumenting the same draw call after the fix: `Selector` now resolves
+to `hex=[350, 332, 128, 64]`, drawn at the identical rect - exactly
+`Outline_3_1`'s own position and size, since `Selector`'s widget authors no
+width/height of its own either and so takes the hex's exact size, making
+the centring term zero. Confidence 95: reproduced directly (before/after
+capture, `data/scratch/lane-hd/before-cell-select.png` vs
+`after-cell-select.png`, this session's own files, not committed - game
+content) and pinned by `hex_rect_prefers_outline_over_an_oversized_medal_atlas`
+(`crates/ui/src/campaign/tests.rs`), a synthetic fixture asserting
+`hex_rect` resolves to `Outline_0_0`'s 32x32 rect rather than a
+neighbouring `Medal_0_0`'s 1024x256 one at the same slot. Not full
+confidence only because the real disc's `Selector` alpha blend was not
+independently re-verified against RPCS3 in this pass - the position fix is
+geometric and does not depend on that.
+
+**Also affects HD's own hit-testing, not just the draw**: `hex_rect` is the
+same rect `crate::campaign::pointer::hit` tests a click against
+(`pointer::grid_targets`/`cell_targets`), shared with Pulse. The fix
+shrinks every HD cell's own clickable box from the atlas's 1024x256 down to
+the real 128x64 hex - a correctness fix there too, not just cosmetic;
+before this, adjacent HD cells' giant hitboxes would have overlapped each
+other's whole detail column. Pulse's own pointer tests are unaffected: 
+their fixture returns the same 32x32 `Placed` for every `src`, so the
+prefix swap is a no-op for them (`crates/ui/src/campaign/tests.rs`'s own
+353-test run stayed green). Nobody has clicked an HD cell in this build
+before this pass - step 3 below is the first live exercise of this path.
+
+**A related, not-yet-visible latent bug the same investigation found and
+left open**: `tinted_medal_draw`/`sprite_draw` feed the same unauthored
+`Medal_{x}_{y}` widgets through `image.width.unwrap_or(placed.width)` when
+an actual medal *is* drawn (`model.medal_at(x, y).is_some()`), which on HD
+means the same 1024x256 atlas rather than a cropped single-colour hex -
+untested this pass because a fresh profile earns no medals, so
+`tinted_medal_draw` was never reached for any HD cell captured. Whoever
+next drives a podium finish on an HD cell (this thread's own step 3, or a
+future pass) should check the medal glyph's own size once one exists to
+earn - if it renders oversized the same way `Selector` did, `Hexmedal_HD.mip`
+likely packs each colour as a horizontal frame `sprite_draw`'s `u`/`v`/
+`texture_width`/`texture_height` fields would need to select, not something
+`hex_rect`'s own fix touches.
 
 ## The tip ticker, the Confirm/Back legend, `Cell Help` and a podium, 2026-09-21
 
@@ -1238,40 +1305,121 @@ closed against this build's own picture and behaviour.
   `--autopilot-skill ace` finished `grid0_3_1` 1st of 8, and `Cell
   Selection` read `Points 3/3` / `Best Gold` back.
 
-### Wipeout HD/Fury, 2026-09-14
+### Wipeout HD/Fury, 2026-09-21: measured on RPCS3
+
+**The real disc has a `Campaign Selection` screen ahead of `Grid Selection`
+that this build does not model at all, and its default reaches `Fury`
+(`grid8`..`grid15`), not the base campaign `grid0`..`grid7` lives in.**
+`scripts/rpcs3-drive.py`'s own `RACE_WALK` already named the shape
+(`"Campaign Selection", "Grid Selection Fury", "Cell Selection", ...`) but
+this is the first pass to boot it and notice what it implies. Confirmed
+twice, on separate boots (own `--config` copy under
+`data/scratch/lane-hd/rpcs3-scratch-config.yml`, Xvfb :77, `just
+rpcs3-preflight` OK beforehand):
+
+1. Pressing `cross` with no d-pad input at every screen (every other step's
+   own default-highlighted row, matching `RACE_WALK`'s own doc comment)
+   lands on `Fury`'s `grid8` (`"blitzed"`, `Eliminator`, `The Amphiseum`),
+   confirmed by the `EVENT 01/08` counter (`grid_08` is the first of
+   `DATA00`'s eight Fury-only grids) and the screen title reading
+   `CAMPAIGN` over a red skin, not the grey one this build's own capture
+   uses.
+2. Adding one `down` press at `Campaign Selection` before confirming landed
+   on the exact same `grid8` cell again - `down` is not the toggle between
+   the two campaigns, or there is no toggle reachable this way at all.
+
+**This build's own `oag_hd`/`oag_ui::campaign` has no `Campaign Selection`
+state whatsoever** - it goes straight to whichever grid
+`oag_assets::Archives::read_name` precedence resolves (`DATA02`'s `grid0`),
+so there is today no path in this build to `Fury`'s own campaign, and the
+original "which archive copy does the real screen show" question is
+**still not settled for `grid0` specifically** - both boots this pass spent
+landed on `Fury` instead. Screenshots:
+`data/scratch/lane-hd/rpcs3-grid0-3-2/01-down.png` (`grid8`, `NOVICE`
+rung), `02-triangle.png` (`SKILLED` rung, same cell) - this session's own
+worktree, not committed (game content). **Left open, higher-value than the
+original question**: whoever picks this up next should find whether
+`Campaign Selection`'s other entry (the base `Wipeout HD` campaign) is
+reachable at all in this Fury-branded disc, and if so, wire this build's
+own front end to model the screen rather than skipping straight to a grid.
+Confidence 85 on "the screen exists and defaults to Fury" (two independent
+boots, consistent); confidence 0 (unmeasured) on whether the base campaign
+is reachable by any input from there.
+
+**A second, unplanned finding directly relevant to priority 4's own
+question** (which target triple `Elimination`/`NitroBattle` reads):
+`Fury`'s `Eliminator` cell's difficulty rungs are named **`NOVICE`**/
+**`SKILLED`** on screen (`TARGET 200 (NOVICE)` -> `TARGET 200 (SKILLED)`
+after a difficulty press, same numeric target, different rung name), not
+`Gold`/`Silver`/`Bronze` - first-party UI evidence, not a decompile, that
+`Elimination`-family cells read a differently-named rung triple. This
+corroborates, without proving the internal representation, the
+`NitroElimNovice`/`Skilled`/`Elite` hypothesis
+`crates/hd/src/campaign.rs`'s medal-law question opened with. The footer's
+own legend icon reads as PlayStation `Square`
+(`DIFFICULTY (NOVICE)`/`DIFFICULTY (SKILLED)`, confirmed by cropping and
+zooming the frame), but empirically only a synthetic `triangle` press
+changed the rung across a `square`/`triangle`/`l1`/`r1` sequence -
+`square`/`l1`/`r1` were all no-ops. **Chosen not to chase which physical
+button this actually is** (may be this rig's own `oag` RPCS3 input profile
+disagreeing with the icon, or a dropped `square` press - see
+`RACE_WALK`'s own doc comment on dropped presses at ~9 fps); the rung
+**naming** is the trustworthy part of this finding, not the button.
+Confidence 90 on the reading itself - two consecutive, distinct frames on
+the real disc, the difference legible in both the `TARGET` line and the
+footer legend, not a guess. Confidence unmeasured (0) on how far it
+generalises: only one cell, one mode (`Eliminator`), was checked, so
+whether every `Elimination`/`NitroBattle` cell reads this same
+`Novice`/`Skilled`/`Elite` triple - as opposed to, say, a per-cell mix - is
+not settled by this alone.
 
 - **Which archive copy of `grid_00.xml`..`grid_07.xml` the real screen
-  shows by default is not RPCS3-verified.** This pass found that the
-  precedence-resolved flat copy's own numbers equal the per-difficulty
-  copies' `hard` rung, not `medium` - see "Which archive copy... a real
-  disagreement found" above. A boot to `Cell Selection` on a cell whose
-  three rungs differ enough to read on screen (`grid0_2_2`, gold
-  `11100`/`11400`/`12000` across the three rungs) would settle both which
-  copy the game reads *and* which rung `DifficultyButton` opens on.
-  `scripts/rpcs3-drive.py browse`, `just rpcs3-preflight`,
-  `docs/formats/hd-frontend.md`'s "How this was measured".
-- **The stray hex outline on `Cell Selection`** (see above) - almost
-  certainly `grid0`'s sixth cell at its own authored `(x, y)`, not chased
-  to a confirmed reading. `crates/tables/src/race_campaign.rs`'s
-  `Cell::grid_coords` and a look at `grid_00.xml`'s own cell names would
-  settle it in a few minutes.
+  shows by default is still not RPCS3-verified** - both attempts this pass
+  landed on `Fury` instead of the base campaign; see above. This pass found
+  offline (not RPCS3-confirmed) that the precedence-resolved flat copy's
+  own numbers equal the per-difficulty copies' `hard` rung, not `medium`,
+  corroborated on a *second* cell this pass (`grid0_3_2`: `DATA02` flat
+  `3700`/`3800`/`4000` equals `DATA04`/`DATA06`'s own `hard` rung exactly)
+  - see "Which archive copy... a real disagreement found" above. Whoever
+  next finds a path to the base campaign from `Campaign Selection` can
+  settle this in the same boot: `grid0_3_2` (`SpeedLap`, authors
+  `Locked="false"` on the disc) discriminates the three rungs by 150-350
+  units. `grid0_2_2`, this thread's earlier suggested cell, authors no
+  `Locked` attribute at all - **this build's own rule** defaults that to
+  locked on a fresh profile (itself chosen, not measured, per the unlock-
+  reason bullet below), so it was not used here, but whether the real game
+  gates it the same way is not itself established; neither cell has been
+  reached on RPCS3 yet. `scripts/rpcs3-drive.py browse`, `just
+  rpcs3-preflight`, `docs/formats/hd-frontend.md`'s "How this was
+  measured".
+- ~~The stray hex outline on `Cell Selection`~~ **Fixed 2026-09-21** - it
+  was `Selector` centred on the wrong rect, not a seventh cell; see "The
+  stray hex outline was `Selector`, not a seventh cell" above. Left open by
+  that fix: whether `Medal_{x}_{y}`'s own oversized-atlas widget draws
+  correctly sized once a real medal exists to show it (untestable on a
+  fresh profile).
 - **The 3-D flyer model behind `Grid Selection`** is not drawn at all -
   `oag_ui` draws a flat 2-D list, and putting a `.vex` mesh behind a 2-D
   screen needs a render-side mechanism this pass did not build. Whoever
   picks this up should decide whether that mechanism belongs in
   `oag_render` generally or is specific to this one screen.
-- **The launch path is wired, through the identical code Pulse's own
-  cell confirms use, but not driven live against an HD source this
-  pass** - `session::campaign::handle_campaign`/`launch_campaign_cell`
-  received no HD-specific edit at all, so this is "the same code that
-  already works for Pulse, now also reachable from an HD confirm" rather
-  than a new path, but nobody has clicked through an HD cell to `Team
-  Selection` and a race under Xvfb the way the Pulse "campaign-pointer"
-  lane did. HD's own `race_box: None` (`oag_hd::frontend::FRONT_END`)
-  means no ship picker opens either way - `Session::open_ship_picker`
-  returns `false` and the cell launches straight through
-  `finish_launch()`, which is existing behaviour for any title with no
-  picker, not something this pass added.
+- ~~The launch path is wired... but not driven live against an HD source~~
+  **Driven live, 2026-09-21**, mouse-only under Xvfb :93 with `xdotool`
+  (`cargo run -p oag-game -- data/images/hdfury-ps3-eu-dec.iso
+  --autopilot`): `Main Menu` -> `RACE CAMPAIGN` -> `Grid Selection` (its own
+  confirm rect, `hd_grid_targets`) -> `Cell Selection` -> click the already-
+  selected hex (the pointer fix's own first live exercise, see "The stray
+  hex outline..." above) -> `LOADING... VINETA K` (no ship picker, matching
+  HD's own `race_box: None`) -> race genuinely started (window title `-
+  race`, `TickClock` ticking, correct HUD/opponents/track). **Not driven to
+  results** - this sandbox's render path is two orders of magnitude slower
+  during a race than on the campaign screens (`race scene built in 107.6s`,
+  then `741ms`-`8056ms` per frame vs. `10-25ms` outside a race), consistent
+  with a software Vulkan fallback rather than a code bug; a full race would
+  need on the order of two hours of wall clock at the observed tick rate,
+  not spent this pass. `session::campaign::handle_campaign`/
+  `launch_campaign_cell` received no HD-specific edit, confirmed once more
+  by this walk working unmodified.
 - **The `Required`/`Required Previous`/`NextPoints` unlock-reason
   predicates are chosen, not measured**, on both which text shows and
   what number a raw `%d` template should carry - see the two sections

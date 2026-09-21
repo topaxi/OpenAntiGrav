@@ -194,6 +194,8 @@ static HD_ART: oag_title::HudArt = oag_title::HudArt {
     pickup_icon_uv: None,
     zone_speed_classes: None,
     shield_percent: false,
+    hud_font_role: "HUD",
+    hud_small_font_role: Some("HUDSmall"),
 };
 
 fn hd_sheet() -> crate::sprite::Sheet {
@@ -257,6 +259,8 @@ static HD_LEACH_ART: oag_title::HudArt = oag_title::HudArt {
     pickup_icon_uv: None,
     zone_speed_classes: None,
     shield_percent: false,
+    hud_font_role: "HUD",
+    hud_small_font_role: Some("HUDSmall"),
 };
 
 fn hd_leach_sheet() -> crate::sprite::Sheet {
@@ -954,6 +958,8 @@ fn an_unread_sight_dialect_draws_nothing() {
         pickup_icon_uv: None,
         zone_speed_classes: None,
         shield_percent: true,
+        hud_font_role: "HUD",
+        hud_small_font_role: Some("HUDSmall"),
     };
 
     let layout = Layout::from_xml(SIGHTS);

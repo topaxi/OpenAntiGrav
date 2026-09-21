@@ -86,6 +86,14 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     zone_speed_classes: None,
     // Pulse's own reference frame reads `100%`. See `oag_title::HudArt::shield_percent`.
     shield_percent: true,
+    // Measured: every one of Pulse's own language plugins names
+    // `<Font><Values name="HUD" ...Src="...\PulseHud.fnt">` and `HUDSmall`
+    // -> `small.fnt` - see `oag_ui::language::roles`' own doc table (role
+    // spelling is the format's, not one plugin's; `PI012` is English only on
+    // the USA pressing per `oag_ui::language`'s module doc, so this cites the
+    // role rather than one plugin id). See `oag_title::HudArt::hud_font_role`.
+    hud_font_role: "HUD",
+    hud_small_font_role: Some("HUDSmall"),
 };
 
 /// The layout constant substituted for the pickup backdrop's authored colour.

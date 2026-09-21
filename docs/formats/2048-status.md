@@ -147,30 +147,51 @@ the start line and runs the simulation. What it does **not** do, and why:
   single_race` now shows the shield silhouette and the speed readout at the
   original's own positions; the shield fill, the pickup slot, the speed
   fills, `PilotAssist` and Zone's lit dashes are read as state-gated and not
-  wired, and the text still draws as raw `IG_HUD_*` ids in the 5x7 fallback -
-  **but the cause moved, 2026-09-20, and is smaller than it was.** Wiring
+  wired.
+  **Resolved 2026-09-21: the HUD text now draws in `2048_hud.fnt`, not the
+  5x7 fallback.** The cause was exactly what the 2026-09-20 entry below left
+  open: `crates/game/src/race/hud.rs`'s `hud_font` asked every source for the
+  literal role name `"HUD"`/`"HUDSmall"` (`oag_ui::language::roles`), which
+  is Pulse's, Pure's and HD's own spelling and not 2048's - every one of
+  2048's 17 plugins names its real HUD face `2048HUD` instead, and two of the
+  seventeen (`korean`, `traditionalchinese`) carry a leftover `HUD`/
+  `HUDSmall` role pointing at files 2048 does not ship, which the old
+  first-match search picked up regardless of the player's own language. Fixed
+  by giving `oag_title::HudArt` a per-title axis -
+  `hud_font_role`/`hud_small_font_role` - so `hud_font` asks each title for
+  the role its own plugins actually name: `"HUD"`/`Some("HUDSmall")` for
+  Pulse, Pure and HD (measured, unchanged from before), `"2048HUD"` for 2048.
+  2048's own plugins name no distinct caption role at all - confirmed across
+  all seventeen, a real gap rather than an oversight - so
+  `hud_small_font_role` is `None` there and `hud_font` falls back to the
+  value face for captions too. **Measured, not merely chosen**: composing
+  every root the played skin (`oag_2048::hud::skins::PLAYED`) actually reads
+  finds zero `font="HUDSmall"` widgets in any of them - every label is
+  `font="HUD"`, and the visible caption/value size split (`LapTxt` at
+  `scale=0.6` beside `Laps` at `scale=1.0`) comes entirely from each
+  widget's own authored `scale` on that one face, not a second `.fnt` this
+  pass failed to find. `font="HUDSmall"` exists in this archive, 261
+  widgets' worth, only in the three skins this title's race-manager
+  constructors never read. Verified with
+  `just play 2048 --race --screenshot ...`: the boot report now reads `HUD
+  font Data\XML\2048_hud\font\2048_hud.fnt (role "2048HUD")` and the
+  screenshot shows the same clean sans-serif face the real Vita3K captures
+  in [2048-hud.md](2048-hud.md) do, not blocky 5x7 glyphs. Pinned by
+  `crates/game/tests/vita_2048_hud_ground_truth.rs`'s
+  `the_resolved_hud_font_is_2048_huds_own_face_not_a_leftover_or_the_fallback`.
+  See [2048-frontend.md](2048-frontend.md#the-language-plugins-carry-a-hud-font-role-too).
+- **2026-09-20: the HUD font role was located but did not yet draw.** Wiring
   `front_end` (above) makes the seventeen language plugins reachable, and a
-  `--race` capture now logs `17 language(s): American ..., ...` where it used
-  to log none at all. The font still does not resolve, for a second, distinct
-  reason this pass found: `crates/game/src/race/hud.rs`'s `hud_font` looks up
-  a font by the literal role name `"HUD"`/`"HUDSmall"`
-  (`oag_ui::language::roles`), which is Pulse's and Pure's own role spelling,
-  not 2048's - every one of 2048's 17 plugins names its real HUD face
-  `2048HUD` instead. Two of the seventeen (`korean`, `traditionalchinese`)
-  *do* carry a leftover `HUD`/`HUDSmall` role, inherited from the HD/Pulse
-  lineage and pointing at files 2048 does not ship
-  (`Data\FE\Fonts\PulseHud.fnt`, `Data\FE\Fonts\koreanHudSmall.fnt`) - and
-  because `hud_font` searches every loaded language for the first match
-  rather than only the chosen one, `korean`'s dangling entry wins regardless
-  of which language a player picked, so the "unavailable, drawing with 5x7"
-  report line now names a Korean-only filename on an English race. Closing
-  this needs a new axis (a per-title HUD font role name, and 2048 also names
+  `--race` capture logs `17 language(s): American ..., ...` where it used to
+  log none at all - but the literal-role mismatch described above meant the
+  text still drew as raw `IG_HUD_*` ids in the 5x7 fallback, and on
+  `korean`'s dangling entry rather than a clean "unavailable" besides. Closing
+  this needed a new axis (a per-title HUD font role name, and 2048 also names
   no distinct "small" face for `HUDSmall` to fall back to, which is a gap of
   its own rather than one this pass could fill without inventing one) - out
   of scope for [ADR-0054](../architecture/adr/0054-a-touch-front-end-is-a-second-axis-not-a-menuskin-variant.md),
-  which only wires the front end far enough to expose this. See
-  [2048-frontend.md](2048-frontend.md#the-language-plugins-carry-a-hud-font-role-too)
-  and [2048-hud.md](2048-hud.md).
+  which only wired the front end far enough to expose this. Closed the
+  following day - see the entry above.
 - **2026-09-21: `--race --event "<name>"` launches a real campaign event.**
   2048's own campaign is not a racebox grid at all - it is `Data\xml\SP.xml`,
   a "mjolnir" typed-instance database, 288 instances across eight typedefs,

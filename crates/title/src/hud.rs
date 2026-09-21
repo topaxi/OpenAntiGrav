@@ -399,6 +399,86 @@ pub struct HudArt {
     /// reading) for every title that has not had its own frame checked,
     /// which is every title but HD today.
     pub shield_percent: bool,
+    /// The font role this title's language plugins name for the HUD's value
+    /// face - the big lap fraction, position fraction, speed and time
+    /// readouts - as `oag_ui::language::Language::font` resolves it.
+    ///
+    /// **A sixth axis inside this one type, not a second table**: the same
+    /// disagreement [`Self::texture_extension`] exists for, one role name
+    /// lower. Four of the five titles measure the identical literal
+    /// `"HUD"` - Pulse, Pure and HD's own `Data\Plugins\*\Definition.xml`
+    /// (or `english/Definition.xml`'s equivalent) all carry
+    /// `<Font><Values name="HUD" ...>` - so `"HUD"` in each of those four
+    /// title crates is what that title's own plugin spells, not a shared
+    /// default reached for four times. 2048 is the one that disagrees: its
+    /// `english/Definition.xml` carries no `HUD` slot at all and names
+    /// `2048HUD` instead (`Data\XML\2048_hud\font\2048_hud.fnt`), confidence
+    /// 90 - see `docs/formats/2048-frontend.md`'s "The language plugins
+    /// carry a HUD font role too" section.
+    ///
+    /// **Why a per-title role rather than the shared literal every caller
+    /// used to reach for**: `oag_game::race::hud::hud_font` used to ask
+    /// every source for the literal `oag_ui::language::roles::HUD`, which
+    /// drew 2048's HUD in the 5x7 fallback - no 2048 plugin fills that
+    /// role - and had a second failure mode besides: two of 2048's
+    /// seventeen plugins (`korean`, `traditionalchinese`) carry a
+    /// *leftover* `HUD`/`HUDSmall` role pointing at files this title does
+    /// not ship (`Data\FE\Fonts\PulseHud.fnt`/`koreanHudSmall.fnt`), which a
+    /// first-match search across every loaded plugin could and did pick up
+    /// regardless of which language was asked for. Naming the role this
+    /// title's own plugin actually fills closes both: the search asks for
+    /// `2048HUD` and neither leftover plugin has ever filled that.
+    ///
+    /// This crate holds no title's data as a rule, so the value lives in
+    /// each title crate's own `ART` constant - this field is the axis, not
+    /// an answer.
+    pub hud_font_role: &'static str,
+    /// The font role this title's language plugins name for the HUD's
+    /// caption face - the labels beside [`Self::hud_font_role`]'s values -
+    /// or `None` when this title's own plugins name no distinct role for it.
+    ///
+    /// `Some("HUDSmall")` for Pulse, Pure and HD, all measured the same way
+    /// [`Self::hud_font_role`]'s doc states for their `"HUD"` row.
+    ///
+    /// **2048 is `None`, and it is a real gap in the font-role vocabulary
+    /// rather than an oversight or a borrowed default - measured at two
+    /// levels, not assumed at either.** Every one of its seventeen language
+    /// plugins was read and not one carries a second `<Font>` slot for the
+    /// caption face - `2048HUD` is the entire HUD vocabulary its
+    /// `Definition.xml` authors. **And composing every one of the seven
+    /// roots the played skin (`oag_2048::hud::skins::PLAYED`) actually
+    /// carries finds zero `font="HUDSmall"` widgets in any of them** - every
+    /// label in that skin is `font="HUD"`
+    /// (`crates/game/tests/vita_2048_hud_ground_truth.rs`'s
+    /// `the_played_skins_layouts_author_no_hudsmall_widget_at_all`), so no
+    /// widget the played HUD draws will ever ask this build to resolve a
+    /// caption role in the first place - the gap costs nothing real. A
+    /// `font="HUDSmall"` role does exist in this archive, 261 widgets' worth,
+    /// but only in the three *unplayed* skins (`wo3_hud`, `2097_hud`, the
+    /// bare root) `SpArcadeRaceManager_Construct` and its siblings never
+    /// read.
+    ///
+    /// **The visible size split is measured too, and it is not a second
+    /// file.** A Vita3K race frame
+    /// (`data/reference/2048-frontend/06-attract-mode-demo-race.png`'s
+    /// in-race captures under `docs/formats/2048-hud.md`, e.g.
+    /// `21-race2-start.png`) shows caption text (`LAP`, `TOTAL`, `CURRENT`,
+    /// `POS`, `XP`) visibly smaller than the value text (`1/3`, `8/8`)
+    /// beside it, and the composed layout explains it exactly: `LapTxt`
+    /// (`"LAP"`) is authored at `scale=0.6` beside `Laps` (`"1/3"`) at
+    /// `scale=1.0`, both `font="HUD"`; `RaceXPTxt`/`RaceXP` (`"XP"`/its
+    /// value) are both `scale=0.6`, which is why that pair reads as one
+    /// size in the frame while `LAP`/`1/3` reads as two. Every widget's own
+    /// `oag_game::hud::widget::Label::scale` carries the size, on one atlas -
+    /// not a guess standing in for an unlocated second `.fnt`.
+    ///
+    /// So `oag_game::race::hud::hud_font` falling back to
+    /// [`Self::hud_font_role`]'s own face when this is `None` is not merely
+    /// the reading that draws *something* recognisable rather than
+    /// nothing - it is the reading the played skin's own layouts already
+    /// assume, since none of them ever names a second face to fall back
+    /// *from*.
+    pub hud_small_font_role: Option<&'static str>,
 }
 
 /// The name of each rung of a title's Zone escalation ladder, as string-table

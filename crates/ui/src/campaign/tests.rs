@@ -6,6 +6,7 @@
 use super::*;
 use crate::language::StringTable;
 use crate::pointer::Pointer;
+use crate::screen::Image;
 use oag_gameplay::input::Input;
 use oag_tables::race_campaign::{Cell, Mode};
 
@@ -687,4 +688,62 @@ fn a_click_while_cell_help_is_open_closes_it_rather_than_confirming_the_cell_und
         vec![Event::Help]
     );
     assert!(!model.help_open());
+}
+
+/// The regression this pass fixes: HD's `CellMode_Definition.xml` authors a
+/// `Medal_{x}_{y}` widget for every grid slot, occupied or not, sourcing
+/// `Hexmedal_HD.mip` - a shared multi-colour atlas, not a single hex - with
+/// no `width`/`height` of its own either. `hex_rect` used to try `Medal_`
+/// before `Outline_`, so it returned the whole atlas's size as "the hex's
+/// rect" for every HD cell, sending `Selector`'s own centred position miles
+/// from the hex it marks - the floating hex outline
+/// `docs/ui/campaign-screens.md`'s "An open cell-grid artifact" section
+/// found. `Outline_` is always single-hex-sized on both titles; this pins
+/// `hex_rect` preferring it over an oversized `Medal_` at the same slot.
+#[test]
+fn hex_rect_prefers_outline_over_an_oversized_medal_atlas() {
+    let outline = Image {
+        name: Some("Outline_0_0".to_string()),
+        src: r"Data\FE\Images\Hexagon_HD.mip".to_string(),
+        x: 350.0,
+        y: 332.0,
+        width: None,
+        height: None,
+        centred: false,
+        color: 0xffff_ffff,
+        u: None,
+        v: None,
+        texture_width: None,
+        texture_height: None,
+        auto_load: false,
+    };
+    let medal = Image {
+        name: Some("Medal_0_0".to_string()),
+        src: r"Data\FE\Images\Hexmedal_HD.mip".to_string(),
+        ..outline.clone()
+    };
+    let screen = Screen {
+        name: "Cell Selection".to_string(),
+        images: vec![medal, outline],
+        ..Screen::default()
+    };
+    let sprites = |src: &str| -> Option<crate::frontend::Placed> {
+        if src == r"Data\FE\Images\Hexmedal_HD.mip" {
+            Some(crate::frontend::Placed {
+                x: 0,
+                y: 738,
+                width: 1024,
+                height: 256,
+                quad_extent: None,
+                blend: None,
+            })
+        } else {
+            placed32()
+        }
+    };
+    assert_eq!(
+        hex_rect(&screen, 0, 0, &sprites),
+        Some([350.0, 332.0, 32.0, 32.0]),
+        "must resolve to Outline_0_0's own 32x32 hex, not Medal_0_0's 1024x256 atlas"
+    );
 }

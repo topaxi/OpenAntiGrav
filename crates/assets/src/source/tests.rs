@@ -115,6 +115,10 @@ const TITLE: &Title = &Title {
         pickup_icon_uv: None,
         zone_speed_classes: None,
         shield_percent: true,
+        // Unread here too - this fixture is about archive discovery, not
+        // about any language plugin's own font roles.
+        hud_font_role: "HUD",
+        hud_small_font_role: Some("HUDSmall"),
     },
     // Unread here for the fourth and fifth time, and the same reason both
     // times: an archive is found by name, and what is inside one is nothing
