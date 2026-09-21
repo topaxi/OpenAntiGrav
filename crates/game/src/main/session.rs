@@ -35,6 +35,8 @@ mod endrace;
 mod escape;
 #[path = "session/frame.rs"]
 mod frame;
+#[path = "session/launch2048.rs"]
+mod launch2048;
 #[path = "session/load.rs"]
 mod load;
 #[path = "session/menus.rs"]
@@ -320,6 +322,11 @@ pub(crate) struct Session {
     /// Set the first time `Launch Game` starts a race, so a load that fails is
     /// reported once rather than on every frame.
     pub(crate) launched: bool,
+    /// The Wipeout 2048 campaign event the next [`Session::launch_race`]
+    /// starts, by its `SP.xml` name - set by the front end's own
+    /// `Launch 2048` and taken by that one launch. `None` is an ordinary
+    /// race from the menus' own options. See `oag_game::race::load_event`.
+    pub(crate) pending_event: Option<String>,
     /// The persisted settings, kept because the menus change them and every
     /// change is written straight back.
     pub(crate) settings: settings::Settings,

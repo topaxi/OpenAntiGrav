@@ -180,3 +180,44 @@ pub(super) fn load_title_font(
         }
     }
 }
+
+/// Every font role the chosen language declares, with its face's line height
+/// as a ratio of the `Default` role's - what [`oag_ui::frontend::Frontend::set_face_scales`]
+/// takes.
+///
+/// Read off each `.fnt`'s own header, so the number is the disc's; a face
+/// that will not read is reported and left at `1.0`. The `Default` role
+/// itself is the denominator and comes out as `1.0` by construction.
+pub(super) fn face_scales(
+    archives: &mut oag_assets::Archives,
+    language: Option<&Language>,
+    default_line_height: f32,
+    report: &mut Vec<String>,
+) -> Vec<(String, f32)> {
+    let Some(language) = language else {
+        return Vec::new();
+    };
+    if default_line_height <= 0.0 {
+        return Vec::new();
+    }
+    let mut out = Vec::new();
+    for (role, name) in &language.fonts {
+        if role.eq_ignore_ascii_case(oag_ui::language::roles::DEFAULT) {
+            continue;
+        }
+        match archives.read_font(name) {
+            Ok(font) => {
+                let scale = font.line_height as f32 / default_line_height;
+                report.push(format!(
+                    "font role {role:?} is {name}, line height {} - {scale:.3} of Default",
+                    font.line_height
+                ));
+                out.push((role.clone(), scale));
+            }
+            Err(why) => report.push(format!(
+                "font role {role:?} is {name}, which did not read ({why}); drawn at Default's size"
+            )),
+        }
+    }
+    out
+}

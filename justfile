@@ -245,17 +245,23 @@ hash-images:
 #
 # `2048`/`wipeout2048`/`vita` swaps in Wipeout 2048:
 #
-#     just play 2048 --race
+#     just play 2048
 #
 # **This one names a directory, not an image**: 2048 ships as a `.pkg` and what
 # the recipe reads is the decrypted package extracted under
 # `data/extracted/vita/PCSF00007`. The recipe says so if it is not there.
 #
-# `--race` is required and the recipe does not add it: `oag_2048::TITLE` carries
-# `front_end: None`, so a boot with no `--race` has no menu to open and reports
-# exactly that. The circuit and the craft both draw now - `.rcsmodel`'s
-# normal, diffuse UV, material table and per-submesh binding are all read, and
-# `PVRTII4BPP` (almost every 2048 texture's pixel format) decodes - see
+# **`--race` is no longer required** (2026-09-21). The boot walks 2048's own
+# declared chain - `Boot Connect`, the Studio Liverpool card for its authored
+# 4.0 s, `Boot Intro Movie`, the save check, `TitleScreen` - and lands on the
+# `GameModeChoice` touch grid, drawn off the disc's own `<TouchButton>`s in the
+# disc's own font; see docs/formats/2048-frontend.md. Two things to know:
+# `intro.mp4` has no demuxer yet, so the movie screen is black and waits for a
+# button (any of the six the XML authors - press X), and the grids answer the
+# pad (left/right, X) and the mouse alike. `--race` still skips straight to a
+# race. The circuit and the craft both draw - `.rcsmodel`'s normal, diffuse
+# UV, material table and per-submesh binding are all read, and `PVRTII4BPP`
+# (almost every 2048 texture's pixel format) decodes - see
 # docs/formats/2048-status.md. Still missing: `.envsettings` (lighting/fog/
 # bloom fall back to the stand-in rig) and `track.pvs` (every chunk draws).
 #

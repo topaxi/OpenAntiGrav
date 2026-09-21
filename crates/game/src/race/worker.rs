@@ -64,15 +64,27 @@ impl LoadWorker {
     /// than a made-up one.
     #[must_use]
     pub fn spawn(options: Options, label: Option<String>) -> Self {
+        Self::spawn_with(label, move || super::load(&options))
+    }
+
+    /// [`Self::spawn`] for a Wipeout 2048 campaign event, resolved on the
+    /// thread through [`super::load_event`] - the same overlay `--event`
+    /// applies, reached from the front end's own map.
+    #[must_use]
+    pub fn spawn_event(options: Options, event: String, label: Option<String>) -> Self {
+        Self::spawn_with(label, move || super::load_event(&options, &event))
+    }
+
+    fn spawn_with(
+        label: Option<String>,
+        load: impl FnOnce() -> anyhow::Result<Loaded> + Send + 'static,
+    ) -> Self {
         let current = Arc::new(Mutex::new(label));
         let handle = std::thread::Builder::new()
             // Named for the same reason `boot-media` is: it should be obvious
             // in a debugger and in `top` which thread the window is waiting on.
             .name("race-load".to_string())
-            .spawn({
-                let options = options.clone();
-                move || super::load(&options)
-            })
+            .spawn(load)
             .ok();
         Self { handle, current }
     }

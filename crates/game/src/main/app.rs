@@ -385,6 +385,7 @@ impl App {
             scheme: self.scheme,
             anisotropy: self.anisotropy,
             launched: false,
+            pending_event: None,
             races_launched: 0,
             settings: self.settings.clone(),
             // Loaded fresh here rather than carried on `App`: there is one

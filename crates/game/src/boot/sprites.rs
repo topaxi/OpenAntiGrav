@@ -118,9 +118,15 @@ pub(super) fn load(
 ) -> crate::sprite::Sheet {
     let mut srcs: Vec<String> = Vec::new();
     for screen in sources.iter().flat_map(|screens| &screens.screens) {
-        for image in &screen.images {
-            if !srcs.contains(&image.src) {
-                srcs.push(image.src.clone());
+        // A `TouchButton`'s icon is an image the screen names the same way
+        // an `Image` does - 2048's grids are drawn off them.
+        let icons = screen
+            .touch_buttons
+            .iter()
+            .filter_map(|button| button.src.as_ref());
+        for src in screen.images.iter().map(|image| &image.src).chain(icons) {
+            if !srcs.contains(src) {
+                srcs.push(src.clone());
             }
         }
     }
@@ -183,5 +189,30 @@ pub(super) fn read_front_end_first(
     {
         return Ok(blob);
     }
-    oag_pulse::read_image(archives, name)
+    match oag_pulse::read_image(archives, name) {
+        Ok(blob) => Ok(blob),
+        // **Wipeout 2048's front-end XML spells every texture `.gtf` and its
+        // package holds every one as `.gxt`** - `Data\FE\Images\StudioLogo.gtf`
+        // in `Intro_Definition.xml` is `data/FE/Images/StudioLogo.gxt` in
+        // `data.psarc`, and so on for all of them (`2048-frontend.md`). The
+        // XML is Wipeout HD's, retargeted, and the extension was never
+        // re-authored; the Vita loader evidently maps it. Tried only after
+        // the name as written fails, so a source that does ship a `.gtf`
+        // still gets the file it named. The same rewrite HD's own HUD
+        // loader makes in the other direction (`oag_hd::hud`).
+        Err(error) => match vita_texture_name(name) {
+            Some(gxt) => archives.read_name(&gxt).or(Err(error)),
+            None => Err(error),
+        },
+    }
+}
+
+/// `name` with a `.gtf` extension respelled `.gxt`, or `None` for any other
+/// extension. Case-insensitive on the extension, as the archive is on the
+/// whole path.
+fn vita_texture_name(name: &str) -> Option<String> {
+    let stem = name
+        .strip_suffix(".gtf")
+        .or_else(|| name.strip_suffix(".GTF"))?;
+    Some(format!("{stem}.gxt"))
 }

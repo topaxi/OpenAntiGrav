@@ -695,3 +695,94 @@ fn an_image_used_as_a_positioned_container_collects_its_own_children() {
         .unwrap();
     assert_eq!((value.x, value.y), (630.0 + 50.0, 340.0 + 182.0));
 }
+
+/// Wipeout 2048's own widget shapes: a `LoadXML` with `SrcRel`, `localised`
+/// and `DirectEmbed`, a `Redirect` with a `delay`, a `Centred` image, a
+/// `vertalign="middle"` text and a row of `TouchButton`s.
+#[test]
+fn reads_the_touch_front_ends_own_attributes() {
+    let screens = Screens::from_xml(
+        r#"
+<Screen>
+  <LoadXML><Values SrcRel="Definition.xml"></Values></LoadXML>
+  <LoadXML><Values SrcRel="Bootup_Definition.xml" localised="true"></Values></LoadXML>
+  <Screen name="Boot Studio Logo">
+    <Image><Values x="480" y="272" width="960" height="128" Centred="true" src="Data\FE\Images\StudioLogo.gtf"></Values></Image>
+    <Redirect name="Redirect" delay="4.0"><Values backward="none" forward="none"></Values><Default goto="Boot Intro Movie"></Default></Redirect>
+    <Redirect name="Redirectbutton"><Values backward="none" forward="cross"></Values><Default goto="Boot Intro Movie"></Default></Redirect>
+  </Screen>
+  <Screen name="TitleScreen">
+    <Text><Values x="480" y="370" align="centre" vertalign="middle" idstring="BOOT_PRESS_ANY"></Values></Text>
+    <LoadXML><Values SrcRel="Legal_Line_Definition.xml" localised="true" DirectEmbed="true"></Values></LoadXML>
+  </Screen>
+  <Screen name="GameModeChoice" type="GameModeChoice_Screen">
+    <TouchButton name="offline" delay="0">
+      <Values idstring="FE_SP_CAMPAIGN" x="167" y="190" width="140" height="140" toggle="true" StringWidthLimit="175" Src="Data\FE\NewImages\gamemodechoice\gm_SPCampaign.gtf"></Values>
+    </TouchButton>
+    <TouchButton name="confirmButton">
+      <Values string="" redirect="newFEshell" x="822" y="432" width="122" height="96" Src="Data\FE\NewImages\Icon_Tick.gtf"></Values>
+    </TouchButton>
+  </Screen>
+</Screen>
+"#,
+    );
+    assert_eq!(
+        screens.includes,
+        vec![
+            Include {
+                src: "Definition.xml".to_string(),
+                relative: true,
+                localised: false,
+                direct_embed: false,
+                screen: None,
+            },
+            Include {
+                src: "Bootup_Definition.xml".to_string(),
+                relative: true,
+                localised: true,
+                direct_embed: false,
+                screen: None,
+            },
+            Include {
+                src: "Legal_Line_Definition.xml".to_string(),
+                relative: true,
+                localised: true,
+                direct_embed: true,
+                screen: Some("TitleScreen".to_string()),
+            },
+        ]
+    );
+    assert!(screens.load_xml.is_empty(), "`SrcRel` is not `src`");
+
+    let card = screens.by_name("Boot Studio Logo").unwrap();
+    assert!(card.images[0].centred);
+    assert_eq!((card.images[0].x, card.images[0].y), (480.0, 272.0));
+    assert_eq!(card.redirects[0].delay, Some(4.0));
+    assert_eq!(card.redirects[1].delay, None);
+    assert_eq!(card.redirects[1].forward, Some(Button::Cross));
+
+    let title = screens.by_name("TitleScreen").unwrap();
+    assert!(title.texts[0].middle);
+
+    let grid = screens.by_name("GameModeChoice").unwrap();
+    assert_eq!(grid.touch_buttons.len(), 2);
+    let offline = &grid.touch_buttons[0];
+    assert_eq!(offline.name.as_deref(), Some("offline"));
+    assert_eq!(offline.idstring.as_deref(), Some("FE_SP_CAMPAIGN"));
+    assert_eq!(
+        (offline.x, offline.y, offline.width, offline.height),
+        (167.0, 190.0, 140.0, 140.0)
+    );
+    assert!(offline.toggle);
+    assert_eq!(offline.redirect, None);
+    assert_eq!(offline.string_width_limit, Some(175.0));
+    assert_eq!(
+        offline.src.as_deref(),
+        Some(r"Data\FE\NewImages\gamemodechoice\gm_SPCampaign.gtf")
+    );
+    let tick = &grid.touch_buttons[1];
+    assert_eq!(tick.idstring, None);
+    assert_eq!(tick.string, None, "an empty `string` is no label");
+    assert_eq!(tick.redirect.as_deref(), Some("newFEshell"));
+    assert!(!tick.toggle);
+}

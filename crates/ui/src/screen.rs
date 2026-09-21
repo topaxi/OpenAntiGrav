@@ -26,6 +26,9 @@ use oag_gameplay::input::button_from_name;
 use oag_gameplay::input::Button;
 pub use oag_tables::fexml::{Node, parse};
 
+mod touch;
+pub use touch::{Include, TouchButton};
+
 /// Container extensions a `Movie` widget's `src` may already carry.
 ///
 /// The PS2 front-end XML spells them lower case; the disc's own ISO 9660
@@ -123,6 +126,13 @@ pub struct Text {
     pub color: u32,
     /// `left`, `right` or `centre`.
     pub align: String,
+    /// `vertalign="middle"`: [`Self::y`] is the line's middle, not its top.
+    /// Wipeout 2048's `BOOT_PRESS_ANY` and its save-check text author it;
+    /// none of the PSP or PS3 screens this crate's tests parse does. `false`
+    /// when absent, which anchors the pen at `y` exactly as before this
+    /// field existed - and it only moves a widget once the sequence knows
+    /// its face's height (`frontend::Frontend::set_face_scales`).
+    pub middle: bool,
     /// Whether the widget starts hidden.
     pub start_enabled: bool,
     /// Whether the widget throbs once visible, rather than sitting still.
@@ -161,7 +171,7 @@ pub struct Text {
 }
 
 /// One `Redirect`: a button, and the screen it goes to.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq)]
 pub struct Redirect {
     /// Widget name, when it has one. `AutoRedirect` is fired by a finishing
     /// movie; `LanguageAutoRedirect` by the language menu.
@@ -172,6 +182,15 @@ pub struct Redirect {
     pub backward: Option<Button>,
     /// Target screen name from the `Default` child's `goto`.
     pub goto: Option<String>,
+    /// Seconds after the screen appears before this redirect fires on its
+    /// own, from the `delay` attribute - `<Redirect name="Redirect"
+    /// delay="4.0">` on Wipeout 2048's `Boot Studio Logo` is the one
+    /// authored case (`docs/formats/2048-frontend.md`). `None` when the
+    /// widget carries none, which is every redirect on every other title:
+    /// a redirect with no button and no delay is fired by code, and what
+    /// fires it is a question `frontend::updates` leaves open rather than
+    /// answers with a timer.
+    pub delay: Option<f32>,
 }
 
 /// An `Image` widget that names a texture.
@@ -195,6 +214,14 @@ pub struct Image {
     pub width: Option<f32>,
     /// Authored height, likewise.
     pub height: Option<f32>,
+    /// `Centred="true"`: [`Self::x`]/[`Self::y`] name the widget's centre
+    /// rather than its top-left corner. Wipeout 2048's boot screens author
+    /// their logos this way (`Title_Screen.gtf` at `x="480" y="220"`,
+    /// centred on a 960-wide grid); none of the PSP or PS3 screens this
+    /// crate's tests parse carries the attribute. Resolved at draw time rather than here because the
+    /// half-size to subtract is the texture's own when the widget authors
+    /// no `width`/`height`, and that is not known until the sheet is built.
+    pub centred: bool,
     /// Modulating colour as ARGB. White when unstated, which leaves the
     /// texture's own colours alone.
     pub color: u32,
@@ -326,6 +353,9 @@ pub struct Screen {
     pub texts: Vec<Text>,
     /// `Redirect` widgets in document order.
     pub redirects: Vec<Redirect>,
+    /// `TouchButton` widgets in document order - Wipeout 2048's icon tiles,
+    /// see [`TouchButton`]. Empty on every other title's screens.
+    pub touch_buttons: Vec<TouchButton>,
     /// Whether the screen has a `DisplayLanguages` widget, which is what makes
     /// it the language picker.
     pub display_languages: bool,
@@ -373,6 +403,9 @@ pub struct Screens {
     pub globals: HashMap<String, String>,
     /// `LoadXML` sources, in the order the root lists them.
     pub load_xml: Vec<String>,
+    /// The same list with each include's `SrcRel`/`localised` shape kept -
+    /// what a loader that follows them needs. See [`Include`].
+    pub includes: Vec<Include>,
 }
 
 impl Screens {
@@ -422,7 +455,7 @@ impl Screens {
         let mut out = Self::default();
 
         for node in &root.children {
-            out.collect_globals(node);
+            out.collect_globals(node, None);
         }
         for &(name, value) in fallback {
             out.globals
@@ -435,20 +468,30 @@ impl Screens {
         out
     }
 
-    fn collect_globals(&mut self, node: &Node) {
+    /// `screen` is the innermost named `Screen` enclosing `node`, which is
+    /// what a `DirectEmbed` include's widgets belong to - see [`Include`].
+    fn collect_globals(&mut self, node: &Node, screen: Option<&str>) {
         if node.name.eq_ignore_ascii_case("Variable")
             && let Some(name) = node.attr("global")
             && let Some(value) = node.value("String")
         {
             self.globals.insert(name.to_string(), value.to_string());
         }
-        if node.name.eq_ignore_ascii_case("LoadXML")
-            && let Some(src) = node.value("src")
-        {
-            self.load_xml.push(src.to_string());
+        if node.name.eq_ignore_ascii_case("LoadXML") {
+            if let Some(src) = node.value("src") {
+                self.load_xml.push(src.to_string());
+            }
+            if let Some(include) = Include::from_node(node, screen) {
+                self.includes.push(include);
+            }
         }
+        let screen = if node.name.eq_ignore_ascii_case("Screen") {
+            node.attr("name").or(screen)
+        } else {
+            screen
+        };
         for child in &node.children {
-            self.collect_globals(child);
+            self.collect_globals(child, screen);
         }
     }
 
@@ -657,6 +700,9 @@ impl Screens {
                 }
             }
             "redirect" => screen.redirects.push(redirect_from_node(child)),
+            "touchbutton" => screen
+                .touch_buttons
+                .push(self.touch_button_from_node(child, inner)),
             "displaylanguages" => screen.display_languages = true,
             "menu" => screen.menu = Some(self.menu_from_node(child, offset)),
             "viewport" => {
@@ -789,6 +835,7 @@ impl Screens {
             y: self.number(node.value("y")).unwrap_or(0.0) + offset.1,
             width: self.number(node.value("width")),
             height: self.number(node.value("height")),
+            centred: node.flag("Centred").unwrap_or(false),
             color: self
                 .resolve(node.value("color").unwrap_or_default())
                 .and_then(parse_argb)
@@ -830,6 +877,9 @@ impl Screens {
                 .and_then(parse_argb)
                 .unwrap_or(0xffff_ffff),
             align: node.value("align").unwrap_or("left").to_string(),
+            middle: node
+                .value("vertalign")
+                .is_some_and(|v| v.eq_ignore_ascii_case("middle")),
             start_enabled: node.flag("StartEnabled").unwrap_or(true),
             pulse: node.flag("pulse").unwrap_or(false),
             delay: self.number(node.value("delay")).unwrap_or(0.0),
@@ -893,6 +943,7 @@ fn redirect_from_node(node: &Node) -> Redirect {
             .children_named("Default")
             .find_map(|d| d.attr("goto"))
             .map(str::to_string),
+        delay: node.value("delay").and_then(|d| d.trim().parse().ok()),
     }
 }
 

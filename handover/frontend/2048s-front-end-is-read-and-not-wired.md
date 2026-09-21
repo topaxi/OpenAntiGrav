@@ -46,7 +46,58 @@ names both - `english/Definition.xml` declares a `2048HUD` font role at
 `None`, which starves `crates/game/src/race/hud.rs`/`race/load.rs`'s
 `language_plugins` lookup. Both pages now say so.
 
+**Wired and walked 2026-09-21, on `lane/2048-boot`.** `just play 2048` (no
+`--race`) boots this front end: the five declared screens, each driven off
+its own `<Redirect>` widgets (the card's authored `delay="4.0"`, the six
+button exits on the movie and the title screen), then `GameModeChoice`,
+`Home` and the campaign map drawn off the disc's own `<TouchButton>`s and
+`SP.xml`'s events, pad and pointer alike, and a tap on an event starts its
+race through `oag_game::race::load_event`. Two tiles the disc does not
+author - `RACEBOX`, `REMIX` - sit after the authored four at the user's
+request, marked as this build's own. The full account, with what is
+authored, measured and chosen on each screen, is
+[2048-frontend.md](../../docs/formats/2048-frontend.md)'s "Wired: the boot
+walks and the grids draw" section; the mechanism notes are in
+[frontend-boot.md](../../docs/architecture/frontend-boot.md) and
+[menus.md](../../docs/architecture/menus.md). Tests:
+`crates/game/tests/vita_2048_boot_ground_truth.rs` (eight, on the package)
+and `crates/ui/src/frontend/tests/wipeout2048.rs` (seventeen, on a fixture).
+
 ## Open
+
+- **The intro movie is black and waits for a button.** `oag_game::movie::open`
+  does not know `ftyp`, so `Boot Intro Movie`'s plan has `frames == 0` and
+  the screen holds for one of its six authored buttons with a note saying
+  why. `lane/2048-intro-mp4` owns the seam - a `Movie` back from
+  `movie::open` for the MP4 blob is all the front end needs; nothing on the
+  boot side is waiting on anything else.
+- **The campaign map's cell-to-pixel mapping is chosen, not measured.** An
+  even grid (`oag_ui::frontend::campaign_map::PITCH`/`ORIGIN`) over the
+  shell's authored 1920x1088 `<TouchScroll>` canvas, plain `Blue2048`
+  markers, a panel naming the selected event. The original's per-tier
+  projection tables (`frontend-campaign-map.md`) are undumped and the city
+  backdrop, season badges and `FE3DCanvas` labels are not drawn. The unlock
+  graph is not walked: every event is offered, there being no save.
+- **`Home`'s five destinations are not drawn.** `Team_`, `Community_`,
+  `Profile_`, `Options_` and `Extras_Definition.xml` are not in
+  `oag_2048::frontend::includes::FOLLOWED`; a tap on a `Home` tile says the
+  screen is not loaded and stays. `team` is the one a race needs first
+  (the craft picker - every team flies its default craft slot until it is
+  read; `boot::roster::load_teams`'s craft-slot fallback and
+  `session::placeholder::raceable_teams` make the same stand-in).
+- **The `BootFlowCanvas`'s triangle-grid ground has no located asset**;
+  the card and the title screen draw on plain white, labelled chosen.
+- **The `TouchHomeButton` and `TouchNews` widgets are not drawn** (no
+  authored size on either); the home button's two targets are on circle
+  and triangle instead, chosen.
+- **Font roles other than `Default` draw in the `Default` face**, scaled by
+  their own `.fnt` line heights - right for 2048, whose `NEOSANS_BOLD` and
+  `NEOSANS_BOLD_LARGE` are one typeface at two sizes. Only set on a title
+  with a touch front end; the other three would need their screens
+  re-checked against their captures before it is turned on for them.
+- **The `--press` pulse cannot take one screenshot of `TitleScreen` with
+  its prompt faded in**: the same cross that reaches it leaves it on the
+  next even tick. `--screen TitleScreen` draws it settled instead.
 
 - **Resolved 2026-09-20: `oag_title::MenuSkin` has no shape for a
   touch-icon front end, and now it does not need one.**
@@ -129,6 +180,10 @@ names both - `english/Definition.xml` declares a `2048HUD` font role at
   front-end-shaped paths already listed.
 
 ## Next Steps
+
+0. **Done 2026-09-21**: the boot walks, the grids and the map draw, an
+   event races - see the top of this file. What follows is the older list,
+   still standing where it says so.
 
 1. ~~Resolve the `MenuSkin` type question above~~ **Done 2026-09-20**, see
    [ADR-0054](../../docs/architecture/adr/0054-a-touch-front-end-is-a-second-axis-not-a-menuskin-variant.md).

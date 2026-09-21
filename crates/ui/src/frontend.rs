@@ -90,6 +90,16 @@ pub use player::{FRAME_RATE, PS2_DISPLAY_ASPECT, Player};
 
 use oag_display::space::{SCREEN, Space, pillarbox_in};
 use oag_hd::frontend::states as hd_states;
+/// 2048's boot screens, touch grids and campaign map: `wipeout2048.rs`
+/// drives the five screens its declared chain walks off their own
+/// redirects, `touch.rs` the two icon grids after them, `campaign_map.rs`
+/// the map the grids lead to. See each module's own docs.
+mod campaign_map;
+mod faces;
+mod touch;
+mod wipeout2048;
+pub use campaign_map::{CampaignMap, MapEvent};
+pub(crate) use faces::{font_line_height, lighten};
 /// The reel's frame counts and every state name: `oag_pulse::frontend`.
 ///
 /// Both are literals off Pulse's executable and its front-end XML, so they moved
@@ -100,6 +110,7 @@ use oag_hd::frontend::states as hd_states;
 /// [ADR-0022]: ../../../docs/architecture/adr/0022-title-packages.md
 pub use oag_pulse::frontend::{FINISH_FRAME, HOLD_SECONDS, PAUSE_FRAMES, states};
 use oag_pure::frontend::states as pure_states;
+pub use touch::{EXTRA_TILES, ExtraTile, Launch, TouchState};
 
 /// How long `Developer Publisher Screen` takes, as the reel's own length.
 ///
@@ -165,6 +176,9 @@ pub fn can_drive(state: &str) -> bool {
         hd_states::STUDIO_LOGO,
     ]
     .contains(&state)
+        // Wipeout 2048's five boot screens and the grids after them - one
+        // list, read by `Frontend::booting`'s registration too.
+        || wipeout2048::STATES.contains(&state)
 }
 
 /// One screen the boot walks, and the movie it plays there.
@@ -397,6 +411,22 @@ pub struct Frontend {
     /// `docs/formats/pure-status.md`'s `Language Selection has no highlight
     /// band at all` finding.
     menu_skin: Option<&'static oag_title::MenuSkin>,
+    /// Where Wipeout 2048's touch grids are - see [`TouchState`]. Inert on
+    /// every other title, which never enters a state that reads it.
+    touch: TouchState,
+    /// Wipeout 2048's campaign map - see [`CampaignMap`]. Empty on every
+    /// other title.
+    campaign: CampaignMap,
+    /// How much larger or smaller each font role's face is than the
+    /// `Default` one this build draws every screen widget with, by the
+    /// role's name in lower case - see [`Self::set_face_scales`]. Empty
+    /// draws every role at the widget's own `scale`, which is what every
+    /// title did before this existed.
+    face_scales: Vec<(String, f32)>,
+    /// The `Default` face's own line height, in grid units, for the one
+    /// widget attribute that needs it: `vertalign="middle"`. `None` until
+    /// [`Self::set_face_scales`], which anchors every text at its pen.
+    default_line_height: Option<f32>,
 }
 
 impl Frontend {
@@ -478,6 +508,7 @@ impl Frontend {
             pure_states::TITLE_SCREEN,
             pure_states::FMV_INTRO,
         ]);
+        machine.register_all(wipeout2048::STATES.iter().copied());
         // Every screen the XML declares becomes a state, so a transition name
         // recovered from the data resolves without being listed here.
         let paths: Vec<String> = screens.screens.iter().map(|s| s.path.clone()).collect();
@@ -542,6 +573,10 @@ impl Frontend {
             backdrop_parent,
             on_screen_for: 0.0,
             menu_skin: None,
+            touch: TouchState::default(),
+            campaign: CampaignMap::default(),
+            face_scales: Vec::new(),
+            default_line_height: None,
         };
         frontend.machine.transition_to(start);
         frontend
@@ -799,6 +834,9 @@ impl Frontend {
             || self.machine.is(pure_states::DEVELOPER_PUBLISHER)
             || self.machine.is(pure_states::FMV_INTRO)
             || self.machine.is(hd_states::STUDIO_LOGO)
+            || self
+                .machine
+                .is(oag_2048::frontend::states::BOOT_INTRO_MOVIE)
     }
 
     /// Steps the sequence by `dt` seconds.
@@ -868,12 +906,14 @@ impl Frontend {
             self.update_plain_movie(dt, input, movie_playhead);
         } else if self.machine.is(pure_states::TITLE_SCREEN) {
             self.update_title_screen(input);
+        } else if self.in_wipeout2048() {
+            self.update_wipeout2048(dt, input, movie_playhead);
         }
 
         let events = self.machine.apply();
         for event in &events {
             if let Event::Enter(name) = event
-                && name == states::LAUNCH_GAME
+                && (name == states::LAUNCH_GAME || name == oag_2048::frontend::states::LAUNCH_2048)
             {
                 self.finished = true;
             }
@@ -903,56 +943,6 @@ impl Frontend {
         self.selected = at;
         self.auto_confirm = true;
         true
-    }
-}
-
-/// The line height of a font id, in the PSP's own pixel units.
-///
-/// Matches the `.fnt` files Pulse's language plugins resolve each role to:
-/// `Default` is `pulse_text.fnt` (13px), `Menu` is `Pulse_20.fnt` (22px),
-/// `Title`, `Small`, `InGame` and `Stats` are `Pulse_14.fnt` (17px), `HUD` is
-/// `PulseHud.fnt` (25px) and `HUDSmall` is `small.fnt` (10px). The XML is
-/// inconsistent about case (`font="menu"` and `font="Menu"` both appear), so
-/// this matches case-insensitively.
-///
-/// # This is Pulse's table, and it is wrong on Pure
-///
-/// **A known, bounded gap, recorded rather than papered over.** These numbers
-/// are the line heights of *Pulse's* faces, and a role does not resolve to the
-/// same file on both discs - see [`crate::language::roles`]. Measured on
-/// `pure-psp-eu.chd`, Pure's `Default` is `FX300ANG.fnt` at **15px** against
-/// the 13 here, and its `Title` is the same file rather than a 17px one. So a
-/// Pure front-end screen with more than one line of text spaces those lines by
-/// up to a couple of pixels wrong.
-///
-/// The fix is not another table: it is reading the height back off the atlas the
-/// way `boot::load_menu_font`'s caller already does for menu rows
-/// (`menu::Skin::new(skin, rows_face.line_height)`), which needs each role's
-/// `.fnt` actually loaded rather than only the `Default` one. That is real work
-/// and it is not what the boot path is blocked on, so it is named here and left.
-/// Nothing about it is title-specific once done - it deletes this function.
-fn font_line_height(font: &str) -> f32 {
-    match font.to_ascii_lowercase().as_str() {
-        "menu" => 22.0,
-        "title" | "small" | "ingame" | "stats" => 17.0,
-        "hud" => 25.0,
-        "hudsmall" => 10.0,
-        // "Default", and anything this build does not otherwise recognise.
-        _ => 13.0,
-    }
-}
-
-/// Raises a colour to something visible on black, keeping its hue.
-///
-/// The picker's title is `0xFF000000` in the XML because the real screen has a
-/// lit background behind it. Drawing black on black would look like a bug in
-/// this code rather than a missing background, so near-black is lifted.
-fn lighten(rgba: [f32; 4]) -> [f32; 4] {
-    let luma = 0.299 * rgba[0] + 0.587 * rgba[1] + 0.114 * rgba[2];
-    if luma < 0.15 {
-        [0.85, 0.9, 0.95, rgba[3]]
-    } else {
-        rgba
     }
 }
 

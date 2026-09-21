@@ -360,7 +360,24 @@ pub fn run(
     if frontend.is_finished()
         && let Some(race_options) = &options.race
     {
-        let loaded = race::load(race_options)?;
+        // Wipeout 2048's own front end says where it was going - a campaign
+        // event, or one of this build's two menu pages, which a capture has
+        // no menus to open and so reports and races on the options given.
+        // See `oag_ui::frontend::Launch`.
+        let loaded = match frontend.launch() {
+            Some(oag_ui::frontend::Launch::Event(name)) => {
+                info!("Launch 2048: campaign event {name:?}");
+                race::load_event(race_options, name)?
+            }
+            Some(other) => {
+                info!(
+                    "Launch 2048 asked for {other:?}, which is a menu page; a capture has no \
+                     menus, so this races the options given"
+                );
+                race::load(race_options)?
+            }
+            None => race::load(race_options)?,
+        };
         for line in &loaded.report {
             info!("{line}");
         }

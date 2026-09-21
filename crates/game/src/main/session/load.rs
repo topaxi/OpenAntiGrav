@@ -393,7 +393,11 @@ impl Session {
         // Bumped before the screen is built, so the first race of a run draws
         // with 1 rather than with the same seed a capture uses.
         self.races_launched = self.races_launched.saturating_add(1);
-        let worker = race::LoadWorker::spawn(options, label);
+        // A campaign event the front end asked for, or the menus' own race.
+        let worker = match self.pending_event.take() {
+            Some(event) => race::LoadWorker::spawn_event(options, event, label),
+            None => race::LoadWorker::spawn(options, label),
+        };
         // Spawned alongside the circuit read, for the same reason: fetching
         // this synchronously at the hand-off used to decode a full track on
         // the frame thread, measured at 2.83s for a cold PS2 one - the whole
