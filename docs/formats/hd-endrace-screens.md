@@ -1,0 +1,206 @@
+# Wipeout HD/Fury's own EndRace screens: `Results`, `Menu`, `Rewards`, `Podium`
+
+**Status: `DATA02`'s copy read widget by widget; `DATA03`/`DATA04`/`DATA05`/`DATA06`
+diffed against it.** `Data\Plugins\Frontend\Gui\EndRace_Definition.xml` - a
+named plugin, plain UTF-8, **not** `oag_tables::fexml`-shortened, the same
+divergence [`hd-frontend.md`](hd-frontend.md) already records for
+`skin.xml`/`CellMode_Definition.xml` - in five of HD's seven archives, no two
+copies alike by MD5:
+
+| Archive | Size | Screens it declares |
+| --- | --- | --- |
+| `DATA02` | 30,110 | Results, **Rewards**, Menu |
+| `DATA03` | 30,623 | Results, **Rewards**, Menu |
+| `DATA04` | 31,053 | Results, **Rewards**, Menu |
+| `DATA05` | 42,406 | Results, **Rewards**, Menu, **Podium** |
+| `DATA06` | 41,190 | Results, Menu, **Podium** - no Rewards |
+
+Every copy also carries `Kill Game Transition`, `InGame Restart Transition`,
+`EndRaceSaveGhost` and `EndRaceDeleteGhost` (transition/memory-card screens,
+not read here). Sizes match [`hd-frontend.md`](hd-frontend.md#the-end-screens-are-located-not-read)'s
+own inventory exactly. This page is the widget-by-widget reading that
+inventory was missing.
+
+`oag_assets::Archives::holder_of` serves **`DATA02`'s** copy: it walks `data`
+(`DATA00`, no copy) then `fe` (`DATA02`) before `extra` - the same precedence
+[`hd-frontend.md`](hd-frontend.md#six-skins-one-layout) documents for
+`skin.xml`. **This is this build's own mount order, not a measurement of the
+original's** - nothing here settles which copy a real PS3 loads. Confidence
+94 for the inventory table (a file list plus five direct reads); confidence
+90 for the widget table below (quoted from `DATA02`'s and `DATA06`'s copies
+directly, per the [confidence rubric](../reverse-engineering/confidence-rubric.md)'s
+"clean read of authored data" band) unless a row says otherwise.
+
+## Reading it yourself
+
+```sh
+python3 scripts/psarc.py cat \
+    'data/images/hdfury-ps3-eu-dec.iso:PS3_GAME/USRDIR/DATA02.PSARC' \
+    /data/plugins/frontend/gui/endrace_definition.xml
+```
+
+`fd`/`rg` respect `.gitignore` and return nothing under `data/`; use
+`--no-ignore`, or `/bin/ls`/`find`/`grep` directly.
+
+## `EndRace Results`: a whole-field standings grid, not a per-lap table
+
+Pulse's own `EndRace Results` ([`endrace-screens.md`](endrace-screens.md)) is
+the player's own per-lap splits. HD's is the finishing order of the **whole
+field** - `Grid{col}.{row}`, **four columns by ten rows**, not the "eight rows
+by ten columns" the inventory pass guessed before this one read the file.
+
+| Widget | Authored as | Confidence |
+| --- | --- | --- |
+| `ResultsTitle` | `idstring="ER_RES"`, `font="Title"`, inside `Item OffsetX="375" OffsetY="143"` | 95 - direct read |
+| `Line1` | `string="race complete!"` **literal**, no `idstring` at all | 95 that it is a literal placeholder; see below |
+| `GridHead1` | `<Block>`, `x="0" y="24" width="497"`, `IDString="IG_HUD_POS"` | 95 |
+| `GridHead2` | `<Block>`, `x="505" y="24" width="286"`, `IDString="IG_HUD_TIME"` | 95 |
+| `GridHead3`/`GridHead4` | `<Block>`, `x="0" y="24" width="0"`, `IDString="X"` | 95 that these are inert - `width="0"` and the idstring is the literal letter `X`, not a real label |
+| `Grid{col}.{row}` | 40 `<Text>` widgets, `col` 0-3, `row` 0-9, every one `x="0" y="0"` | 90 - the shape is measured, the positions are a runtime fill (see below) |
+| `Gridp.{row}` | `<Text>`, `IDstring="ER_PERFECT"`, `row` 0-9 | 90 - a per-row "perfect lap" indicator, direction not traced |
+| `Grid{n}.h` | `<Text>`, `n` 0-2 only, `color="0xffffffff"` (white, against every other Grid text's `0xff646464` grey) | 60 - three widgets, not four or ten; a highlighted-row variant of some subset of columns, which subset undetermined |
+| `Gridi.{row}` | `<Image>`, `row` 0-9, `src="Data\Ships\<Team>\fe\miniBW.tga"` | 90 that this is a per-row ship badge; 40 on which team, since every copy names a fixed one or two teams (`Feisar` twice in `DATA02`'s own padding rows, `Auricom`/`Harimau` in `DATA03`/`04`/`05`) regardless of who raced - a runtime fill, not real data |
+| `GridStrikeThrough` | `<Image>`, `x` 5-20, `y="391"`, differs across copies | 55 - a disqualified/eliminated-row strike, untraced |
+| `GridHighlight` | `<Image>`, `color="FEGlobals->HD_Blue"`, no `src` - a [`Fill`](../../crates/ui/src/screen.rs), `x="1" y="391" width="789" height="38"` | 90 that this is the selected/player row marker (its authored `y` sits on the grid's own bottom edge, the same "default position is a template, not a real row" shape Pulse's `tablehighlight` already is) |
+| `GridSideBarL`/`GridSideBarR`/`GridTopBar`/`GridBottomBar`/`GridBottomBlock` | plain colour fills, `x`/`y`/`width`/`height` all authored (`y="44" height="347"` on the two side bars) | 95 - the grid's own frame |
+| `Target Title` / `MedalBlock` | two widgets at the **identical** `OffsetX="1180" OffsetY="532"` | 85 that these are mutually exclusive (target display vs. medal-earned display); untraced which condition picks between them |
+| `Target0`/`Target1`/`Target2` | `<Text>`, placeholder `string="value"`, each paired with a `Hexmedal_HD.mip` icon | 90 - the three medal-target figures (gold/silver/bronze cutoffs), same idiom as `IG_HUD_TARGET` elsewhere |
+| `MedalModelGold`/`Silver`/`Bronze` | `<ImageModel>`, `Src="Data\FE\Trophies\hd_gold.vex"` etc., `StartEnabled="false"` | 90 - a 3-D trophy, not a 2-D image; `oag_ui::screen::Screens::collect_widgets` has no `"imagemodel"` arm, so none of the three is collected at all |
+| `RecordNotifyBlock` | `<Text>` group, `ER_RECORD_NOT` caption, `RecLogoSL`/`TT`/`Z` mode icons, `RecValue` | 85 - a "new record" banner, untraced trigger |
+| Loyalty block (`Item OffsetX="1180" OffsetY="368"`) | `ER_LOYSTAT` caption, two `<Block>`s (`ER_LOY`/`IG_HUD_TOTAL`), `loyalty1.1`/`loyalty1.2`/`loyalty2` placeholder text (`"834 POINTS"`/`"3745"`) | 85 - **on `Results`, not a separate `Rewards` screen the way Pulse keeps it** |
+| `DelayPostMsg` | `idstring="ONL_MSG_DELAYPOST"` | 95 - online-only |
+| `RecordsCycleButton`/`RecordsCycle` | `δ` glyph / `idstring="ER_GLOB_REC"` | 95 - online leaderboard cycling, no binding possible offline |
+| `ControlTextConfirmButton`/`ControlTextConfirm` | `FE_CONFIRM_BUTTON`/`FE_CONFIRM` | 95 - direct idstrings, same convention as Pulse |
+| `EndRaceMenuRedirect` | `<Default goto="Race End Save">` | 90 - confirm always goes through this intermediate save-transition screen, not straight to `Rewards`/`Menu` |
+
+### The grid is four columns, not eight rows - and only two of the four are real
+
+`GridHead1`..`GridHead4` are the disc's own column headers, and only the
+first two carry real idstrings (`IG_HUD_POS`, `IG_HUD_TIME`); the other two
+are the literal string `X` at `width="0"` - inert placeholders, not a gap
+this reading introduced. `Grid{col}.{row}` follows that same 4-wide, 10-tall
+shape exactly: `Grid0.0`..`Grid3.9`, forty widgets, confirmed identical in
+`DATA02` and `DATA06`. **This project's own build draws only columns 0 and
+1** (position, time) - see [`oag_ui::endrace::hd`](../../crates/ui/src/endrace/hd.rs)'s
+module doc.
+
+### Every `Grid{col}.{row}` cell is authored at `x="0" y="0"` - position is computed, not stated
+
+Unlike Pulse's own per-lap table, which authors each `lap{n}.{c}` at its own
+real `x`/`y`, none of HD's forty grid cells carries a position at all. The
+frame around them **is** measured (`GridSideBarL`'s own `y="44" height="347"`,
+inside the `Item` that offsets the whole block by `375, 368`), so the row
+geometry this project's own drawing uses is derived from that frame divided
+by a row count this file does not itself state - see the implementation doc
+for the exact number and why it is chosen rather than measured.
+
+### `Line1` carries no idstring - the headline is a runtime fill
+
+`Line1`'s `<Values string="race complete!">` has no `idstring` attribute at
+all, unlike every other headline-shaped text on this file. This project draws
+it anyway, reusing the same idstring table Pulse's own `Line1` resolves
+through (`ER_TT_COM`/`ER_SL_COM`/`ER_1STP`..`ER_8THP`/`ER_SHIP_DES`) -
+**chosen, not measured**: no capture confirms HD fills this literal
+placeholder with these exact strings, but `EndRace Menu`'s own `<Block>`
+idstrings (`ER_RACE_AGAIN`, `ER_RETURN_GRID`, etc.) are verbatim identical to
+Pulse's, which is the corroboration that this is shared engine vocabulary
+rather than a Pulse-only table.
+
+## `EndRace Rewards`: present, not drawn this pass
+
+`DATA02`/`03`/`04`/`05` all carry an `EndRace Rewards` screen; `DATA06` does
+not. Its shape is close kin to Pulse's own Rewards screen - `MedalImg`/
+`LoyaltyImg` icons, `RewardLine1` (`ER_MEDAL_AWARD`), `RewardLine2`/
+`RewardLoyaltyPoints`/`RewardLoyaltyActive` placeholder text, a `loyaltybar`
+`<Slider>` (`idstring="ER_TOT_LOY"`, `minSlide="0" maxSlide="100000"`, the
+same two bounds Pulse's own carries) - plus `BigPos` (a bare finishing-place
+figure Pulse's screen has no counterpart for). **Not read past this
+inventory, and not drawn**: this pass's own scope is Results and Menu: HD
+already draws its own loyalty total directly on the `Results` screen (the
+loyalty block above), which is not how Pulse's flow works at all, and
+untangling whether HD's `Rewards` screen is ever entered, and under what
+condition, versus `Results`' own loyalty block, is unresolved and out of
+scope here.
+
+## `EndRace Menu`: one `<Block>` per option, not a populated list
+
+| Widget | Authored as | Confidence |
+| --- | --- | --- |
+| (unnamed title text) | `idstring="FE_MENU"`, `font="Title"` | 95 |
+| `Endrace Difficulty` | `<List>`, `IDstring="ER_RACE_AGAIN"`(!), entries `Easy`/`Medium`/`Hard`, same `x="375" y="235"` as the `race_again`/`next_race` Blocks | 55 - untraced binding, same confidence Pulse's own `endrace-screens.md` gives its counterpart |
+| `next_race` | `<Block>`, `IDString="ER_NEXT_RACE"`, `x="375" y="235" width="520"` | 95 - Tournament-only, unreachable by this engine |
+| `race_again` | `<Block>`, `IDString="ER_RACE_AGAIN"`, `x="375" y="235" width="520"` | 95 |
+| `return_to_grid` | `<Block>`, `IDString="ER_RETURN_GRID"`, `x="375" y="285" width="520"` | 95 |
+| `return_to_menu` | `<Block>`, `IDString="ER_RETURN_MENU"`, `x="375" y="285" width="520"` | 95 |
+| `quit_tournament` | `<Block>`, `IDString="ER_QUIT_TOUR"`, `x="375" y="285" width="520"` | 95 - Tournament-only, unreachable |
+| `return_to_lobby` | `<Block>`, `IDString="IG_PAUSE_QUIT"`, `x="375" y="285" width="520"` | 95 - multiplayer-only, unreachable |
+| `view_again` | `<Block>`, `IDString="ER_VIEW_AGAIN"`, `x="375" y="335" width="520"` | 95 |
+| `view_MP_again` | `<Block>`, `IDString="ER_VIEW_AGAIN"`, `x="375" y="235" width="520"` | 95 - multiplayer-only, unreachable |
+| `ControlTextConfirmButton`/`ControlTextConfirm` | `FE_CONFIRM_BUTTON`/`FE_CONFIRM` | 95 |
+| `<Redirect>` table | `next_race`->`Load Next Race`, `race_again`->`InGame Restart Transition`, `return_to_grid`/`return_to_menu`->`Kill Game Transition`, `quit_tournament`/`return_to_lobby`->`Kill Game Multiplayer`, `view_again`/`view_MP_again`->`EndRace Results`, `Endrace Difficulty`->`InGame Restart Transition` | 95 - direct read |
+
+Five of these eight idstrings (`ER_NEXT_RACE`, `ER_RACE_AGAIN`,
+`ER_RETURN_GRID`, `ER_RETURN_MENU`, `ER_VIEW_AGAIN`) are **byte-identical**
+to the ones [`oag_ui::endrace::MenuOption::idstring`](../../crates/ui/src/endrace.rs)
+already returns for Pulse - not a coincidence of two titles reusing similar
+English, but the same engine-wide idstring vocabulary, which is why this
+project's build reuses `MenuOption` unchanged for HD rather than inventing a
+parallel enum. `quit_tournament`/`return_to_lobby`/`view_MP_again` have no
+`MenuOption` variant and are not drawn - Tournament and multiplayer, neither
+implemented by this engine, the same "a cell whose mode maps to nothing must
+not launch" rule [`race_mode_for_cell`](../../crates/game/src/campaign.rs)
+already applies elsewhere.
+
+There is **no ghost row on this screen at all** (`GhostLine1`/`GhostLine2`/
+`GhostTime1`/`GhostTime2`, which Pulse's own `EndRace Menu` carries, do not
+appear anywhere in `EndRace_Definition.xml`) - not a gap either build
+introduces, the disc's own HD copy simply does not author one.
+
+### `DATA06` differs only in colour and completeness, not in vocabulary
+
+Diffed directly against `DATA02`: every `<Block>` on `DATA06`'s `EndRace
+Menu` carries an extra `ActiveColor="FEGlobals->HD_Blue"` attribute (a
+selection tint `DATA02`'s copy does not author), and the backdrop `<Image>`
+is `FEGlobals->HD_transBG` rather than a literal `0xe0ffffff` - cosmetic
+differences the widget names and idstrings are identical across. `DATA03`/
+`DATA04`/`DATA05` add `RetrievingRecords` (`FE_RETREC`, an online-status
+line) and pad `Gridi.8`/`Gridi.9` with different placeholder teams
+(`Auricom`/`Harimau` plus two `Gridi.dummy10`/`dummy11` entries at
+`color="0"`, i.e. invisible) - all consistent with the "placeholder, filled
+at runtime" reading above, and none of it changes what a real race's own
+values would be.
+
+## `EndRace Podium`: a multiplayer/achievement screen, not read for drawing
+
+`DATA05` and `DATA06` only. `pod_head.1`/`pod_head.2`/`pod_head.3` - the
+would-be 1st/2nd/3rd-place headers - all three carry the **identical**
+idstring `IG_HUD_1ST`, which reads as an authoring placeholder rather than
+something this build could draw correctly (the same class of disc-authored
+bug `hd-frontend.md`'s "Japanese, Korean and TraditionalChinese all report
+their native name as Svenska" already documents, not a reading error here).
+Eight `b_b.0`..`b_b.7` panels follow, each a `badges.gtf`/`badges_fury.gtf`
+icon plus `"BADGE NAME TEST"`/`"NAME OF PLAYER X"` placeholder text - an
+achievement/challenge system with no analogue in this project's own
+`oag_race`/`Session` state. **Confidence 90 on the inventory, not attempted
+for drawing**: this screen's own data has no honest single-player mapping,
+and the brief that opened this pass named it optional, drawn only if the
+data were unambiguous - it is not.
+
+## Column/row geometry and the seam this project reads it through
+
+- [`oag_title::FrontEnd::endrace_entry`](../../crates/title/src/lib.rs) is
+  the per-title axis: Pulse keeps `Data\Plugins\PI001\GUI\EndRace_Definition.xml`,
+  HD's is `oag_hd::frontend::names::ENDRACE_DEFINITION` (this page's own
+  file). Pure/2048/Omega are `None` - not checked, not measured absent.
+- [`oag_game::endrace::load`](../../crates/game/src/endrace.rs) dispatches on
+  `title.name` exactly the way `crate::campaign::load`/`load_hd` already
+  does, and its own `load_hd` reads `EndRace Results`/`EndRace Menu` only,
+  leaving `EndRaceScreens::rewards` `None` on this title.
+- [`oag_ui::endrace::hd`](../../crates/ui/src/endrace/hd.rs) is the drawing
+  half - what draws, what does not, and the exact chosen-vs-measured split
+  for the row/column geometry this page's own tables leave open, in its own
+  module doc rather than repeated here.
+- Which copy the runtime actually loads, and whether the language picker
+  or any of the "not this pass" widgets above ever fire, are readings an
+  RPCS3 capture would settle - `just rpcs3-race`, unavailable to this lane
+  (another lane holds the emulator). See `HANDOVER.md`.
