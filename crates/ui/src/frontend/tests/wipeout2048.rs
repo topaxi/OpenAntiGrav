@@ -606,6 +606,34 @@ fn refresh_campaign_progress_colours_a_passed_marker_with_the_discs_own_green() 
 }
 
 #[test]
+fn campaign_event_state_reads_locked_open_passed_and_elite_without_driving_input() {
+    let mut frontend = boot(0);
+    frontend.set_campaign(a_gated_event());
+    let mut input = Input::new();
+    reach_the_shell(&mut frontend, &mut input);
+    assert_eq!(
+        frontend.campaign_event_state("2048 - Event 1"),
+        Some(ProgressState::Open)
+    );
+    assert_eq!(
+        frontend.campaign_event_state("2048 - Event 2"),
+        Some(ProgressState::Locked)
+    );
+    assert_eq!(frontend.campaign_event_state("no such event"), None);
+    frontend
+        .refresh_campaign_progress(|name| (name == "2048 - Event 1").then_some(EarnedTier::Pass));
+    assert_eq!(
+        frontend.campaign_event_state("2048 - Event 1"),
+        Some(ProgressState::Passed)
+    );
+    assert_eq!(
+        frontend.campaign_event_state("2048 - Event 2"),
+        Some(ProgressState::Open),
+        "Event 1's own gate is satisfied by a bare pass"
+    );
+}
+
+#[test]
 fn a_map_with_no_events_says_so_and_launches_nothing() {
     let mut frontend = boot(0);
     let mut input = Input::new();

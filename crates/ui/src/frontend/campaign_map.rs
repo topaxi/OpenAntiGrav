@@ -256,6 +256,20 @@ impl Frontend {
         self.campaign.events.get(self.campaign.selected)
     }
 
+    /// Where `name` sits right now - `None` when it names no event on the
+    /// map at all. A caller that only wants to check a save's own effect
+    /// (a ground-truth test, most plausibly) can read this directly rather
+    /// than driving the pad or the pointer to find out.
+    #[must_use]
+    pub fn campaign_event_state(&self, name: &str) -> Option<ProgressState> {
+        let index = self
+            .campaign
+            .events
+            .iter()
+            .position(|event| event.name == name)?;
+        Some(self.campaign.state_of(index))
+    }
+
     /// The pad on the map: the d-pad moves to the nearest event that way,
     /// cross or start launches the one under the cursor.
     pub(super) fn update_campaign_map(&mut self, input: &mut Input) {
