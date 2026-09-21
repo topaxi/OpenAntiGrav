@@ -16,16 +16,18 @@ use crate::race;
 use crate::render::{Renderer, VideoFormat};
 use oag_ui::frontend::Draw;
 
+mod campaign_page;
 mod endrace_page;
 mod loading;
 mod menu_page;
 mod offscreen;
 mod presented;
+use campaign_page::{campaign_kind, campaign_page};
 use endrace_page::endrace_kind;
 pub use loading::{LoadingOptions, draw_wave, loading};
 use menu_page::{
-    PreviewRequest, campaign_kind, campaign_page, draw_preview, fury_picture, menu_page,
-    open_for_previews, picker_kind, picker_page, picker_stills,
+    PreviewRequest, draw_preview, fury_picture, menu_page, open_for_previews, picker_kind,
+    picker_page, picker_stills,
 };
 use offscreen::{offscreen, read_back, write_png};
 

@@ -77,3 +77,45 @@ stray hex artifact, the undrawn flyer model, the launch path's live
 verification) rather than being duplicated in both places - this thread's
 own `## Open` above is the parsing-level items only, unchanged by the
 drawing pass.
+
+**2026-09-21, later: `Campaign Selection` itself now exists.** The
+2026-09-21 RPCS3 pass above found the real disc has a `Campaign Selection`
+screen ahead of `Grid Selection` that this build had no state for at all,
+defaulting to `Fury` and reaching this build's own base-HD-only grids by
+neither input nor screen. `oag_ui::campaign::selection::CampaignSelection`
+now models it, read off `DATA06`'s own copy of `CellMode_Definition.xml`
+(the precedence-resolved `DATA02` copy has neither this screen nor `Grid
+Selection Fury` at all - see `oag_hd::campaign::SCREEN_ENTRY`'s own doc),
+and `crate::campaign_stage::CampaignStage` opens on it for HD, slicing the
+sixteen grids into `grid0`..`grid7`/`grid8`..`grid15` per the campaign
+confirmed. `right` is measured, three RPCS3 boots, as the toggle to the
+base `Wipeout HD` campaign - see `docs/ui/campaign-screens.md`'s own
+"Wipeout HD/Fury: `Campaign Selection`" section for the full read,
+including the `~50` confidence still open on `up`/`l1`/`r1`.
+
+**Left open by this pass**:
+- **A live, interactive walk was not completed** - `Main
+  Menu` -> `RACE CAMPAIGN` -> pick a campaign -> `Cell Selection` is proven
+  by a headless `--menu-page campaign-select` capture and by model-level
+  unit tests, but not by a running session: an X11 input-delivery gap
+  under Xvfb (confirmed with a `std::fs::write` sentinel showing
+  `Session::open_campaign` is never reached despite `XSetInputFocus`
+  reporting the right window focused) stopped this pass short of it. See
+  `docs/ui/campaign-screens.md`'s own "Verification" section for exactly
+  what was tried. Whoever next has a working interactive Xvfb setup can
+  close this directly.
+- **`DATA06`'s own `Cell Selection` diverges from the `DATA02` copy this
+  build still reads it from** - an extra `bBg_x_y` background layer, and
+  `Target0/1/2 Image`/`Title` replaced by a shared `Target Title` header
+  plus per-rung `Target0/1/2 Medal` icons sourcing `Hexmedal_HD.gtf`
+  instead of the disc's own `IG_HUD_GOLD`/`SILVER`/`BRONZE` labels. Not
+  adopted this pass - `hd_cell_draw_list` still matches `DATA02`'s own
+  names, which is what stayed the safer, already-verified copy. Whoever
+  picks up `Cell Selection` next should read `DATA06`'s own shape and
+  decide whether to switch, fixing the widget-name matches this file's own
+  doc comment on `SCREEN_ENTRY` describes.
+- **`Campaign Selection`'s own medal fraction denominator is unexplained**:
+  an RPCS3 frame reads `"0 / 87"` on the Fury side on a fresh profile, and
+  this project's own parse of `DATA00`'s eight Fury grids totals 80 cells
+  (`campaign_grids_ground_truth.rs`) - a 7-cell gap. This build draws only
+  the earned numerator, no denominator, rather than guess at the 87.
