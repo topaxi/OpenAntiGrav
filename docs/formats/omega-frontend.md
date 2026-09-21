@@ -363,6 +363,19 @@ wiring (`oag-title`'s three axes, per its own module docs) the way `oag-hd`
 and `oag-pulse` have - out of scope for a docs-only sweep, and not attempted
 here.
 
+**That crate exists now** (`crates/omega`, landed 2026-09-21): `MENU_SKIN`
+re-derived independently off `data09.psarc` rather than copied from this
+page or from `oag_hd::frontend`, `BOOT_CHAIN` walked redirect by redirect the
+same way, `data09` made the archive candidate that wins the load-order
+question below by construction (chosen, not measured). `just play omega`
+boots and stops on `Language Selection`; see
+[`omega-status.md`](omega-status.md) for what draws, what does not, and why
+racing stays out of scope. This page's own open questions - which archive
+really wins a duplicate path, `campaign2048_definition.xml`'s corrupted
+prefix, `StudioLiverpool_fury.bik`'s absence - are all still open; the crate
+answers "does this project's parser and archive layer work at all", not any
+of those.
+
 ## Load order is not settled
 
 **No confidence assigned - this is the one open question HD's own equivalent
@@ -427,10 +440,11 @@ guessed at 50-60 to look decisive.
 
 ## Next steps
 
-- An `oag-omega` title crate is the real unlock - everything above is a
-  static reading with nowhere to land as code today. `oag-title`'s three-axis
-  shape (`docs/architecture/...`) plus HD's own `oag-hd::frontend` module are
-  the templates.
+- ~~An `oag-omega` title crate is the real unlock~~ - landed 2026-09-21, see
+  [`omega-status.md`](omega-status.md). Its own next steps: a `.gnf` reader
+  (small if GNF really is a header over a tiled format `oag_texture` already
+  decodes - not investigated this lane), and naming `campaign.rs`'s own hex
+  textures through the same `.gnf`-sibling report the front-end sheet gets.
 - A PS4 emulator (if one is ever added to this project's toolchain) doing for
   Omega what RPCS3 did for HD - settle load order and the boot chain's
   `Provenance` in one pass, per [ADR-0025](../architecture/adr/0025-a-boot-chain-carries-its-provenance.md).
