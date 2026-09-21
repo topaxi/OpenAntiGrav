@@ -1051,15 +1051,66 @@ per-difficulty copies really do disagree this way generally, "default" may
 not even be `medium`) needs a boot this pass did not spend on it, per its
 own budget; see [Open](#open) below.
 
-### An open cell-grid artifact, not chased
+### The stray hex outline was `Selector`, not a seventh cell - fixed 2026-09-21
 
-`ours-cell-select.png` shows a stray unfilled hex outline, unattached to
-the six-cell cluster, off to the right of the grid at roughly the screen's
-own centre. `grid0`'s own cell count (`00/06`) is one more than the five
-hexes the visible cluster shows, so this is very likely the sixth cell's
-own hex, at a `(x, y)` genuinely far from the others in the coordinate
-space `Cell::grid_coords` reads off its name - not chased to a confirmed
-reading this pass; see [Open](#open).
+**Not the sixth cell's own hex, the hypothesis this thread opened with -
+`Selector` centred on the wrong rect.** `grid0`'s six cells
+(`grid0_3_1`/`grid0_5_1`/`grid0_2_2`/`grid0_4_2`/`grid0_1_2`/`grid0_3_2`,
+read directly off the real disc's `grid_00.xml` through
+`Cell::grid_coords`) all resolve to one cohesive staggered cluster -
+`grid0_5_1` sits one column right of the selected `grid0_3_1`, exactly
+where `GridController`'s own per-column `<Item OffsetX>` places it, not
+isolated. The stray outline sat well past that cluster, over the detail
+column's own dead space, and moved with `Selector`'s own semi-transparent
+`Hexagon_HD_THICK_OUT.mip` colour (`0x3fffffff`) - confirmed by
+instrumenting the draw call directly rather than by reading the XML cold.
+
+**Root cause: `hex_rect` (`crates/ui/src/campaign.rs`) tried `Medal_{x}_{y}`
+before `Outline_{x}_{y}`, and HD's `Medal_` widget is not hex-sized.** Both
+prefixes are interchangeable on Pulse - `hex_filled.mip`/`hex_outline.mip`
+are both a plain 32x32 hex, so whichever the function found first gave the
+same rect. HD's own `Medal_{x}_{y}` sources `Hexmedal_HD.mip`, a shared
+1024x256 multi-colour atlas, not a single hex, and authors no
+`width`/`height` of its own to say otherwise - so `hex_rect` returned the
+whole atlas's size, `[470, 332, 1024, 256]` for `grid0_5_1`'s own slot, as
+"the hex's rect". `centred_selector_draw` then centred a 128x64 sprite
+inside that box, landing it near `(805, 430)` - visually detached from
+every real hex, which all sit inside `x∈[230,540], y∈[330,400]` on a
+1920x1080 capture. **HD authors a `Medal_{x}_{y}` widget for every grid
+slot in the 7x5 template, occupied or not** (`Bg_0_0`..`Bg_6_4` and
+siblings, all declared unconditionally in `CellMode_Definition.xml`), so
+this fired for every selected HD cell, not just this one - `grid0_2_2` and
+every other cell tried during the RPCS3 pass below would have shown the
+same detached cursor.
+
+Fixed by swapping `hex_rect`'s own prefix order to `["Outline_",
+"Medal_"]` - `Outline_` is always present and always single-hex-sized on
+both titles, so it is the reliable source of a hex's own rect; `Medal_`
+stays as a fallback for the same reason it was tried at all. Confidence
+95: reproduced directly (before/after capture, `data/scratch/lane-hd/
+before-cell-select.png` vs `after-cell-select.png`, this session's own
+files, not committed - game content) and pinned by
+`hex_rect_prefers_outline_over_an_oversized_medal_atlas`
+(`crates/ui/src/campaign/tests.rs`), a synthetic fixture asserting
+`hex_rect` resolves to `Outline_0_0`'s 32x32 rect rather than a
+neighbouring `Medal_0_0`'s 1024x256 one at the same slot. Not full
+confidence only because the real disc's `Selector` alpha blend was not
+independently re-verified against RPCS3 in this pass - the position fix is
+geometric and does not depend on that.
+
+**A related, not-yet-visible latent bug the same investigation found and
+left open**: `tinted_medal_draw`/`sprite_draw` feed the same unauthored
+`Medal_{x}_{y}` widgets through `image.width.unwrap_or(placed.width)` when
+an actual medal *is* drawn (`model.medal_at(x, y).is_some()`), which on HD
+means the same 1024x256 atlas rather than a cropped single-colour hex -
+untested this pass because a fresh profile earns no medals, so
+`tinted_medal_draw` was never reached for any HD cell captured. Whoever
+next drives a podium finish on an HD cell (this thread's own step 3, or a
+future pass) should check the medal glyph's own size once one exists to
+earn - if it renders oversized the same way `Selector` did, `Hexmedal_HD.mip`
+likely packs each colour as a horizontal frame `sprite_draw`'s `u`/`v`/
+`texture_width`/`texture_height` fields would need to select, not something
+`hex_rect`'s own fix touches.
 
 ## Open
 
@@ -1157,11 +1208,12 @@ reading this pass; see [Open](#open).
   copy the game reads *and* which rung `DifficultyButton` opens on.
   `scripts/rpcs3-drive.py browse`, `just rpcs3-preflight`,
   `docs/formats/hd-frontend.md`'s "How this was measured".
-- **The stray hex outline on `Cell Selection`** (see above) - almost
-  certainly `grid0`'s sixth cell at its own authored `(x, y)`, not chased
-  to a confirmed reading. `crates/tables/src/race_campaign.rs`'s
-  `Cell::grid_coords` and a look at `grid_00.xml`'s own cell names would
-  settle it in a few minutes.
+- ~~The stray hex outline on `Cell Selection`~~ **Fixed 2026-09-21** - it
+  was `Selector` centred on the wrong rect, not a seventh cell; see "The
+  stray hex outline was `Selector`, not a seventh cell" above. Left open by
+  that fix: whether `Medal_{x}_{y}`'s own oversized-atlas widget draws
+  correctly sized once a real medal exists to show it (untestable on a
+  fresh profile).
 - **The 3-D flyer model behind `Grid Selection`** is not drawn at all -
   `oag_ui` draws a flat 2-D list, and putting a `.vex` mesh behind a 2-D
   screen needs a render-side mechanism this pass did not build. Whoever
