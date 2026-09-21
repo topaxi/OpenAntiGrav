@@ -376,7 +376,14 @@ pub(crate) fn run_race(
     mut audio: audio::Audio,
     music_discs: audio::MusicDiscs,
 ) -> Result<()> {
-    let loaded = race::load(&options)?;
+    // `--event` resolves a Wipeout 2048 campaign event onto `options` before
+    // loading - see `race::load_event`'s own doc comment for what it
+    // overrides and why this is a second entry point rather than a new
+    // `race::Options` field.
+    let loaded = match &cli.event {
+        Some(name) => race::load_event(&options, name)?,
+        None => race::load(&options)?,
+    };
     for line in &loaded.report {
         info!("{line}");
     }
