@@ -29,6 +29,7 @@ mod load;
 mod mode_override;
 mod models;
 mod pads;
+mod reconcile;
 mod respawn;
 mod scene;
 mod shield_flash;

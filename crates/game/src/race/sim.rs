@@ -30,7 +30,30 @@ use super::*;
 /// Reached as `Race::sim`. Holds no renderer, audio or windowing type - see the
 /// module doc comment for the two that stand between this and a crate of its
 /// own.
-#[derive(Debug)]
+///
+/// # Why it is `Clone`
+///
+/// A reconciliation restores a whole simulation, not a selection from one.
+/// [`Race::snapshot_sim`] and [`Race::restore_sim`] are that pair, and
+/// `race/tests/reconcile.rs` is what they were added for.
+///
+/// **Whole-struct `Clone` rather than a hand-written snapshot type,
+/// deliberately.** [`Self::state_hash`] is not an oracle for whether a
+/// snapshot is complete: [`Self::rolls_armed`], [`Self::rolls_spent`],
+/// [`Self::wall_contact_ticks`], [`Self::wall_damage`],
+/// [`Self::contact_cue_cooldown`] and the three per-tick output accumulators
+/// are all outside it, each for its own recorded reason. A snapshot type that
+/// forgot one of them would pass a hash-equality test anyway, and the field it
+/// dropped would surface as a diverging race thousands of ticks later. `Clone`
+/// cannot forget a field, so the completeness is structural rather than
+/// asserted.
+///
+/// It copies the track with the race - the collision soup, the spline, the
+/// racing line, both pad lists - none of which any tick mutates. That is
+/// wasteful for a snapshot taken every tick and it is not what this is
+/// measured on yet; the handover thread records the split as the optimization
+/// to reach for when a reconcile budget exists.
+#[derive(Debug, Clone)]
 pub struct RaceSim {
     /// The simulation state.
     pub world: World,
