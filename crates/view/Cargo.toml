@@ -21,9 +21,9 @@ anyhow.workspace = true
 clap.workspace = true
 env_logger.workspace = true
 log.workspace = true
-wgpu = "30"
-winit = "0.30"
-pollster = "1"
+wgpu.workspace = true
+winit.workspace = true
+pollster.workspace = true
 bytemuck = { workspace = true, features = ["derive"] }
 
 [lints]

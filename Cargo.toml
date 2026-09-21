@@ -74,6 +74,11 @@ serde = { version = "1", features = ["derive"] }
 toml = "1"
 thiserror = "2"
 
+# GPU rendering and windowing.
+wgpu = "30"
+winit = "0.30"
+pollster = "1"
+
 # Diagnostics. Everything that used to be a bare `println!`/`eprintln!` note
 # about what the engine is doing goes through the `log` facade instead, so it
 # carries a level and can be filtered with `RUST_LOG`.

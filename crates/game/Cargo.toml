@@ -81,13 +81,13 @@ clap.workspace = true
 env_logger.workspace = true
 log.workspace = true
 bytemuck = { workspace = true, features = ["derive"] }
-wgpu = "30"
-winit = "0.30"
 # Rasterises the SVGs under `assets/icons/` into the window/taskbar icon - see
 # `oag_game::icon`. No `<text>` node in either source SVG, so the `text`
 # feature (and the fontdb/rustybuzz/ttf-parser it drags in) is off.
 resvg = { version = "0.48", default-features = false }
-pollster = "1"
+wgpu.workspace = true
+winit.workspace = true
+pollster.workspace = true
 toml.workspace = true
 # Only for `crate::pilots`' save path. `toml` above parses a pilot file into a
 # struct and throws the document away, which is exactly what must NOT happen

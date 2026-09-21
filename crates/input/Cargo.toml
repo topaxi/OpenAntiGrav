@@ -14,7 +14,7 @@ rust-version.workspace = true
 gilrs = "0.11.2"
 log.workspace = true
 oag-gameplay.workspace = true
-winit = "0.30"
+winit.workspace = true
 
 [lints]
 workspace = true
