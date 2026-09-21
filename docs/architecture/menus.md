@@ -871,6 +871,27 @@ every other sound outside it, not race state being kept alive - but it meant
 anything to invent. See `crates/game/src/audio.rs`'s `start_race_music` and
 `pause_race_music`.
 
+## Wipeout 2048 reaches these menus from two tiles of its own
+
+2048's front end is not a `MenuSkin` and is not this menu tree: it is the
+disc's own touch grids and campaign map, walked by `oag_ui::frontend`
+([2048-frontend.md](../formats/2048-frontend.md#wired-the-boot-walks-and-the-grids-draw-2026-09-21)),
+and its `SINGLE PLAYER CAMPAIGN` starts a race without ever opening a page
+here. What it has no counterpart for is the race box and RACE REMIX - the
+disc ships neither, and every other title reaches both from this tree's
+root. So, at the user's request, two tiles that **are this build's own and
+not on the disc** sit on 2048's `GameModeChoice` after the four the file
+authors: `RACEBOX` and `REMIX`, labelled with the same `OAG_MENU_RACEBOX`/
+`OAG_MENU_REMIX` ids the root page's rows are, drawn in the 122x96 text-box
+shape the disc's own game-list screen authors, at positions **chosen, not
+measured** (`oag_ui::frontend::touch::EXTRA_TILES`). A tap opens these
+menus and walks straight into the `race` or `remix` page
+(`oag_ui::menu::Menu::push`, which keeps the stack so BACK lands on the
+root), where everything on this page applies as it does on any title - the
+race box offers 2048's ten circuits and five teams at their default craft
+slot, and REMIX degrades to an ordinary race when 2048 is the only title on
+the search path, exactly as the REMIX write-up above says it does.
+
 ## A mouse and a finger
 
 **Ours, on every title, and nothing on any disc is being reproduced.** The
@@ -893,7 +914,10 @@ simulation crate. The one place the two vocabularies meet is
 `Controls::tap` - the composition root pressing start and cross for a click
 on a screen that has nothing to point at (the boot movies, `PRESS START`,
 Pure's storage warning, the results table), onto the keyboard's own latch,
-so the screen reads it exactly as it reads a key. Never in a running race:
+so the screen reads it exactly as it reads a key. 2048's touch grids and
+campaign map take the pointer themselves, the way the language picker
+does: hover selects, a click taps, and a click on a marker already
+selected launches its event - `Frontend::pointer` says which screens do. Never in a running race:
 a click is not thrust, and a race is not offered the pointer until it is
 paused or over.
 

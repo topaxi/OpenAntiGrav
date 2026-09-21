@@ -34,6 +34,7 @@ archive, pointed at a loose `.psarc` file instead.
 | Do language plugins carry a HUD font role? | **Yes.** `english/Definition.xml` names `2048HUD` -> `Data\XML\2048_hud\font\2048_hud.fnt`, contradicting a claim on `2048-hud.md`/`2048-status.md` this page corrects | 90 |
 | Do HD's own language-plugin bugs reproduce here? | **Yes, byte for byte** - the `Svenska` mixups, the mangled Russian name, and the still-labelled `Wipeout Pulse` internal id | 90 |
 | What plays the boot movie? | `data/Videos/intro.mp4` - a real MP4/ISOBMFF container, not `.bik`/`.pmf`/`.ipf` | 92 |
+| Does `just play 2048` walk it? | **Yes, since 2026-09-21** - the five declared screens, then `GameModeChoice`, `Home` and the campaign map, drawn off the disc's own widgets; see [Wired: the boot walks and the grids draw](#wired-the-boot-walks-and-the-grids-draw-2026-09-21) | - |
 | Is `front_end` wired? | **Yes, since 2026-09-20** - [ADR-0054](../architecture/adr/0054-a-touch-front-end-is-a-second-axis-not-a-menuskin-variant.md) widened `oag_title::FrontEnd::menu` to `Option` and added a `touch` axis for exactly this vocabulary. `menu` itself stays `None`, correctly - see [below](#why-front_end-stays-none), now describing why one field of `FrontEnd` is `None` rather than why the whole struct was. | - |
 
 ## Reading it yourself
@@ -543,6 +544,69 @@ HUD font role name) and a real gap of its own for the `HUDSmall` half, since
 no 2048 plugin names a distinct small-face role for it to read - out of
 scope for ADR-0054, which wires the front end far enough to expose the
 mismatch rather than to fix it.
+
+## Wired: the boot walks and the grids draw (2026-09-21)
+
+`just play 2048` (no `--race`) boots this front end now. What it does, in
+the order a player sees it, with what each part rests on:
+
+| Screen | Driven by | Drawn from | Standing |
+| --- | --- | --- | --- |
+| `Boot Connect` | left the tick it is entered: its `<UnityConBasic>` `MoveTo` goes to the same screen on success and failure, and this build has no network to check | its own white `<Image>` | authored, 92 |
+| `Boot Studio Logo` | its own `<Redirect delay="4.0">`, read off the widget, or its `forward="cross"` redirect | `StudioLogo.gtf` at its authored centred `960x128` | authored, 92; the white ground under the `<BootFlowCanvas>` is **chosen** - the canvas's triangle-grid art has no located asset |
+| `Boot Intro Movie` | its six button redirects; `AutoRedirect` when the movie ends | black plus the frame counter | **the movie's length is unknown until `oag-video` demuxes MP4**, so the screen waits for a button and says so in the log (`lane/2048-intro-mp4` owns the seam: `oag_game::movie::open` returning a `Movie` for `ftyp` is all it needs) |
+| `Load Save Bootup` | left the tick it is entered: `StartEnabled="false"` on its one redirect, armed by a save check this build has nothing to check | `icon_save.gtf`, `VITA_AUTO_MSG` | authored, 92 |
+| `TitleScreen` | its own six button redirects, all to `GameModeChoice` | `Title_Screen.gtf` centred, `BOOT_PRESS_ANY` pulsing after its `delay="1.0"`, the EU legal footer through the `DirectEmbed` include, in `NEOSANS_BOLD` at its own 22-unit line height against `NEOSANS_BOLD_LARGE`'s 37 | authored, 92; the font-role ratio is read off the two `.fnt` headers |
+| `GameModeChoice` | left/right and cross on the pad, hover and click with a pointer; two taps on a mode (the second is the tick), only `FE_SP_CAMPAIGN` confirms | the four `<TouchButton>`s: `Blue2048` squares, the icon at its texture's own size, the label under it; `Grey2048` for the three network modes; the `Blue2048` block under the white header icon | authored, 92; tile/label/icon geometry measured off `08-game-mode-grid-clean.png`, 80; the `Orange2048` cursor ring is **chosen** |
+| `Home` | the same | its five `<TouchButton>`s; each destination is in an include this build does not load, so a tap says so and stays | authored, 92 |
+| `newFEshell` (the campaign map) | d-pad to the nearest event, cross or a second click to launch; circle back to `GameModeChoice`, triangle to `Home` (the `<TouchHomeButton>`'s two targets, on buttons **chosen** - the widget names none) | `SP.xml`'s 115 events with a cell, on an even grid over the shell's own 1920x1088 `<TouchScroll>` canvas, plus a panel naming the selected event | the events, cells and canvas are authored ([2048-campaign.md](2048-campaign.md)); **the cell-to-pixel mapping is chosen, not measured** - the original's per-tier projection tables are undumped |
+| `Launch 2048` | the map's and `<TouchCampaign>`'s own `redirect` | - | the disc's own name for leaving the front end; carries the event name to `oag_game::race::load_event` |
+
+**How the screens are found.** `NEWGUI/Skin.xml` declares no screen; the
+boot follows four of the root's `<LoadXML>` includes by name
+(`oag_2048::frontend::includes::FOLLOWED`: `Definition.xml`,
+`Bootup_Definition.xml`, `Intro_Definition.xml`,
+`Legal_Line_Definition.xml`), resolving `localised="true"` to `_EU` - the
+package's own territory, `PCSF00007` - and `DirectEmbed="true"` into the
+including screen. Every `.gtf` the XML names is respelled `.gxt` once the
+name as written fails, which is every one of them on this package. The
+`--dry-run` report names each include and each image.
+
+**Two tiles the disc does not author.** At the user's request, `RACEBOX`
+and `REMIX` sit on `GameModeChoice` after the four authored tiles and the
+tick - **this build's own, not on the disc**. 2048 ships no race box and
+no `CellMode_Definition.xml` (base, patch and both DLC packages checked);
+every other title reaches this build's race box and RACE REMIX pages from
+its own front end, and these two tiles are how 2048 does. They are
+labelled with the menu tree's own `OAG_MENU_RACEBOX`/`OAG_MENU_REMIX`
+strings, drawn as the 122x96 text box the disc's own game-list screen
+authors (`10-adhoc-game-list.png`), and placed at `(16, 432)` and
+`(158, 432)` - the tick's row, bottom-left - **chosen, not measured**. A
+tap opens this build's menus and walks into the `race` or `remix` page, so
+BACK returns to the menu root. See [menus.md](../architecture/menus.md)'s
+own section on them.
+
+**Reproduce.** With `data/extracted/vita/PCSF00007` in place:
+
+```sh
+just play 2048 --until TitleScreen --press cross --ticks 1 --screenshot title.png
+just play 2048 --until GameModeChoice --press cross --ticks 1 --screenshot grid.png
+just play 2048 --until newFEshell --press cross --ticks 1 --screenshot map.png
+just play 2048 --press cross --ticks 120 --screenshot race.png   # ...taps through to 2048 - Event 1
+just play 2048                                                    # the window: X skips, mouse works
+```
+
+`crates/game/tests/vita_2048_boot_ground_truth.rs` pins the chain, the
+includes, the grid against `oag_2048::frontend::TOUCH`, the pad walk to the
+map and the event launch; `crates/ui/src/frontend/tests/wipeout2048.rs`
+does the same on a fixture with no disc.
+
+**Still open after this pass**: the intro's picture and length
+(`lane/2048-intro-mp4`); the `BootFlowCanvas` art; `Home`'s five
+destinations (`Team_`, `Community_`, `Profile_`, `Options_`,
+`Extras_Definition.xml` are read but not drawn); the campaign map's real
+projection and its city backdrop; the unlock graph (every event is offered,
+there being no save to read); the network modes.
 
 ## See also
 

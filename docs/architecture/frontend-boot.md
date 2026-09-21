@@ -1188,6 +1188,32 @@ sequence can be tested. Nothing depends on it.
 cover both movie legs - `LogoFMV` playing through and being skipped, and the
 reel's pauses, holds and redirect clearing - as well as the picker.
 
+### Wipeout 2048: a chain driven off its own redirects, then a touch front end
+
+2048's five boot screens (`frontend/wipeout2048.rs`) are not each a handler
+of their own the way every screen above is. Each is driven off its **own**
+`<Redirect>` widgets, which the reader keeps whole for the first time:
+`Redirect::delay` (the Studio Liverpool card's authored `4.0`), and the
+button on each redirect matched against the pad. A target that is the next
+chain step goes through `advance`, so the movie step still gets its player;
+`TitleScreen`'s `GameModeChoice` is fired by name, and that is where the
+chain hands over - not to `Launch Game` and this build's menus, but to the
+disc's own touch grids (`frontend/touch.rs`) and campaign map
+(`frontend/campaign_map.rs`), and finally to the disc's own `Launch 2048`,
+which carries an `oag_ui::frontend::Launch` out for the composition root:
+a campaign event for `race::load_event`, or one of this build's two own
+pages. Two screens leave the tick they are entered - the network check
+and the save check, both conditions this build has nothing to check. Read
+the whole account, with what is authored, measured and chosen on each
+screen, in [2048-frontend.md](../formats/2048-frontend.md#wired-the-boot-walks-and-the-grids-draw-2026-09-21).
+
+The other three titles' screens are unchanged by this; what they gained is
+mechanism they do not use yet: `Image::centred`, `Text::middle`, a font
+role scaled by its own `.fnt` line height (`Frontend::set_face_scales`,
+set only on a title with a touch front end), and `boot::includes` following
+a root's `<LoadXML>` list, which only a title whose root declares no screen
+needs.
+
 ## Verified, inferred, guessed
 
 **Verified against a real disc**, and asserted by
