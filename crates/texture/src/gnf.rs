@@ -122,6 +122,24 @@ pub enum Error {
         /// The four bytes found.
         found: [u8; 4],
     },
+    /// A genuinely tiled surface - [`Texture::decode`] only untiles a
+    /// linear one. See this module's own "What this does not do".
+    Tiled {
+        /// The declared [`TileMode`] index.
+        tile_mode: u8,
+    },
+    /// A [`SurfaceFormat`] [`Texture::decode`] has no block decoder for.
+    UnsupportedFormat {
+        /// The format found.
+        format: SurfaceFormat,
+    },
+    /// Pixel data ran past the end of the blob.
+    DataOutOfBounds {
+        /// Bytes the decode needed.
+        need: usize,
+        /// Bytes supplied.
+        got: usize,
+    },
 }
 
 impl fmt::Display for Error {
@@ -129,6 +147,16 @@ impl fmt::Display for Error {
         match self {
             Self::TooShort { need, got } => write!(f, "GNF needs {need} bytes, got {got}"),
             Self::BadMagic { found } => write!(f, "not a GNF: magic {found:02x?}"),
+            Self::Tiled { tile_mode } => write!(
+                f,
+                "TileMode({tile_mode}) is genuinely tiled - decode() only untiles a linear surface, see docs/formats/gnf.md"
+            ),
+            Self::UnsupportedFormat { format } => {
+                write!(f, "no block decoder for {format:?}")
+            }
+            Self::DataOutOfBounds { need, got } => {
+                write!(f, "pixel data needs {need} bytes, got {got}")
+            }
         }
     }
 }
@@ -350,11 +378,30 @@ impl Texture {
     pub fn is_linear(&self) -> bool {
         self.tile_mode.is_linear()
     }
+
+    /// Decodes this texture's base level to straight RGBA8.
+    ///
+    /// `blob` must be the bytes [`Texture::parse`] was given, since
+    /// [`Texture::data_offset`] indexes into it.
+    ///
+    /// # Errors
+    ///
+    /// [`Error::Tiled`] for every real `.gnf` this project has sampled
+    /// (see this module's own "What this does not do") - only a linear
+    /// [`TileMode`] reaches the decoder at all. [`Error::UnsupportedFormat`]
+    /// for a [`SurfaceFormat`] with no block decoder here, and
+    /// [`Error::DataOutOfBounds`] for a blob shorter than the level it
+    /// declares.
+    pub fn decode(&self, blob: &[u8]) -> Result<Vec<[u8; 4]>> {
+        decode::decode(self, blob)
+    }
 }
 
 fn u32_le(data: &[u8], at: usize) -> u32 {
     u32::from_le_bytes([data[at], data[at + 1], data[at + 2], data[at + 3]])
 }
+
+mod decode;
 
 #[cfg(test)]
 mod tests;
