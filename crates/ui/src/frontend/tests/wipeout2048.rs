@@ -53,6 +53,11 @@ const XML: &str = r#"
       </Screen>
     </Screen>
   </Screen>
+  <Screen name="teamshell">
+    <Screen name="team">
+      <TouchButton name="select_button"><Values redirect="PreviousScreen" x="822" y="432" width="122" height="96" Src="Data\FE\NewImages\Icon_Tick.gtf"></Values></TouchButton>
+    </Screen>
+  </Screen>
 </Screen>
 "#;
 
@@ -229,7 +234,7 @@ fn the_pad_walks_right_to_the_tick_and_a_network_mode_is_refused_by_note() {
 }
 
 #[test]
-fn the_shell_reaches_home_on_triangle_and_home_names_an_unloaded_screen() {
+fn the_shell_reaches_home_and_home_leads_to_team_and_back() {
     let mut frontend = boot(0);
     let mut input = Input::new();
     reach_the_grid(&mut frontend, &mut input);
@@ -238,17 +243,21 @@ fn the_shell_reaches_home_on_triangle_and_home_names_an_unloaded_screen() {
     press(&mut frontend, &mut input, Button::Triangle);
     assert!(frontend.machine().is(w2048::HOME));
     press(&mut frontend, &mut input, Button::Cross);
-    assert!(frontend.machine().is(w2048::HOME), "`team` is not loaded");
+    assert!(frontend.machine().is(w2048::TEAM), "`team` is now loaded");
     let notes = frontend.take_notes();
     assert!(
-        notes
-            .iter()
-            .any(|note| note.contains("team is a screen this build does not load")),
+        notes.iter().any(|note| note.contains("firing team")),
         "{notes:#?}"
     );
-    press(&mut frontend, &mut input, Button::Right);
-    press(&mut frontend, &mut input, Button::Cross);
-    assert!(frontend.machine().is(w2048::NEW_FE_SHELL));
+    // Circle fires `select_button`'s own `redirect="PreviousScreen"`
+    // (`Frontend::update_team`), which pops the back stack `redirect_touch`
+    // pushed on the way in, landing back on `Home` rather than on a screen
+    // name the tick never states.
+    press(&mut frontend, &mut input, Button::Circle);
+    assert!(
+        frontend.machine().is(w2048::HOME),
+        "PreviousScreen should return to Home"
+    );
 }
 
 #[test]

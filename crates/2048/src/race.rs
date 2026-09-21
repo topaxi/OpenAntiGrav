@@ -240,6 +240,19 @@ pub const HD_SHIP_DIR: &str = r"Data\art\published\hdships";
 /// nothing has been watched running.
 pub const SHIP_TYPES: [&str; 4] = ["fighter", "agility", "speed", "prototype"];
 
+/// [`SHIP_TYPES`]' own labels, as string-table ids - **confirmed on the
+/// disc**, `english/entries.xml`: `FE_SHIP_COMBAT` -> `"FIGHTER"`,
+/// `FE_SHIP_AGILITY` -> `"AGILITY"`, `FE_SHIP_SPEED` -> `"SPEED"`,
+/// `FE_SHIP_PROTO` -> `"PROTOTYPE"` - the same four words in the same order,
+/// this title's own name for the axis rather than a label invented for the
+/// front end's Team screen. Confidence 92, the disc's own string table.
+pub const SHIP_TYPE_LABELS: [&str; 4] = [
+    "FE_SHIP_COMBAT",
+    "FE_SHIP_AGILITY",
+    "FE_SHIP_SPEED",
+    "FE_SHIP_PROTO",
+];
+
 /// The five native teams, spelled exactly as `Data\Plugins\teams\Definition.xml`
 /// declares their `PI_Team` `location` - which is not [`SHIP_DIR`]'s own
 /// lowercase folder names (`feisar2048` against `Feisar2048`). Both spellings

@@ -395,3 +395,219 @@ fn the_race_box_and_remix_tiles_follow_the_authored_grid() {
     frontend.update(1.0 / 60.0, &mut input, None);
     assert_eq!(frontend.launch(), Some(&oag_ui::frontend::Launch::RaceBox));
 }
+
+/// Presses `button` for one tick and releases it for the next - the same
+/// press-and-release pair every test in this file that drives a single
+/// action uses.
+fn press_release(frontend: &mut frontend::Frontend, input: &mut Input, button: Button) {
+    input.begin_frame(button.bit());
+    frontend.update(1.0 / 60.0, input, None);
+    input.begin_frame(0);
+    frontend.update(1.0 / 60.0, input, None);
+}
+
+/// `Boot Connect` to `Home`: cross through the movie and the mode grid,
+/// triangle on the campaign shell.
+fn drive_to_home(frontend: &mut frontend::Frontend) {
+    assert!(drive_until(
+        frontend,
+        &[Button::Cross],
+        w2048::GAME_MODE_CHOICE
+    ));
+    assert!(drive_until(frontend, &[Button::Cross], w2048::NEW_FE_SHELL));
+    let mut input = Input::new();
+    press_release(frontend, &mut input, Button::Triangle);
+    assert!(frontend.machine().is(w2048::HOME), "Triangle reaches Home");
+}
+
+/// Every one of `Home`'s five destinations is now a real, loaded screen -
+/// `includes::FOLLOWED` carries all five files and `wipeout2048::STATES`
+/// carries their bare names, closing the "screen this build does not load"
+/// gap `2048s-front-end-is-read-and-not-wired.md` recorded for all five.
+#[test]
+#[ignore = "needs the extracted package under data/extracted/vita/"]
+fn homes_five_destinations_are_all_loaded_screens() {
+    let Some(source) = source() else { return };
+    let shell = shell(&source);
+    for name in [
+        w2048::TEAM,
+        w2048::PROFILE,
+        w2048::PROFILE_STATS,
+        w2048::OPTIONS,
+        w2048::OPTIONS_CAMERA,
+        w2048::OPTIONS_AUDIO,
+        w2048::OPTIONS_CONTROLS,
+        w2048::OPTIONS_PILOT,
+        w2048::SAVE_2048_OPTIONS,
+        w2048::COMMUNITY_ADHOC_CHECK,
+        w2048::EXTRAS,
+        w2048::EXTRAS_MANUAL,
+        w2048::EXTRAS_CREDITS,
+    ] {
+        assert!(
+            shell.screens.by_name(name).is_some(),
+            "{name} is loaded: {:#?}",
+            shell.report
+        );
+    }
+    let home = shell.screens.by_name(w2048::HOME).expect("Home is loaded");
+    let redirects: Vec<&str> = home
+        .touch_buttons
+        .iter()
+        .filter_map(|button| button.redirect.as_deref())
+        .collect();
+    assert_eq!(
+        redirects,
+        vec![
+            "team",
+            "communityAdhocCheck",
+            "profile",
+            "OptionsCamera",
+            "2048extras",
+            "newFEshell",
+        ],
+        "Home's own five tiles, plus its tick"
+    );
+}
+
+/// A tap on `Home`'s first tile - `Team`'s own default - reaches `team`; the
+/// pad cycles both the team and the craft slot, and Circle leaves through
+/// `select_button`'s own `redirect="PreviousScreen"`.
+#[test]
+#[ignore = "needs the extracted package under data/extracted/vita/"]
+fn the_team_screen_cycles_team_and_craft_and_leaves_the_way_it_came() {
+    let Some(source) = source() else { return };
+    let loaded = boot::load(&options(&source)).expect("the whole boot");
+    let mut frontend = loaded.frontend;
+    drive_to_home(&mut frontend);
+    let mut input = Input::new();
+    press_release(&mut frontend, &mut input, Button::Cross);
+    assert!(frontend.machine().is(w2048::TEAM));
+    assert_eq!(
+        frontend.team_choice(),
+        None,
+        "untouched: nothing has been chosen yet"
+    );
+    press_release(&mut frontend, &mut input, Button::Right);
+    press_release(&mut frontend, &mut input, Button::Down);
+    assert_eq!(
+        frontend.team_choice(),
+        Some(("Auricom2048", "4")),
+        "one Right off the default team (index 0, AG_Systems2048) lands on \
+         Auricom2048 (index 1); one Down off the default craft slot (index \
+         2, speed, suffix \"3\") lands on prototype (index 3, suffix \"4\")"
+    );
+    press_release(&mut frontend, &mut input, Button::Circle);
+    assert!(
+        frontend.machine().is(w2048::HOME),
+        "select_button's own PreviousScreen returns to Home"
+    );
+}
+
+/// `Home`'s second tile is `FE_COMMUNITY`, which redirects to
+/// `communityAdhocCheck` rather than to `community` itself - a real screen
+/// this build now loads and draws, refusing by note like `GameModeChoice`'s
+/// own network modes.
+#[test]
+#[ignore = "needs the extracted package under data/extracted/vita/"]
+fn community_is_reached_from_home_and_refuses_by_note() {
+    let Some(source) = source() else { return };
+    let loaded = boot::load(&options(&source)).expect("the whole boot");
+    let mut frontend = loaded.frontend;
+    drive_to_home(&mut frontend);
+    let mut input = Input::new();
+    press_release(&mut frontend, &mut input, Button::Right);
+    press_release(&mut frontend, &mut input, Button::Cross);
+    assert!(frontend.machine().is(w2048::COMMUNITY_ADHOC_CHECK));
+    let list = frontend.draw_list();
+    assert!(
+        list.iter().any(
+            |draw| matches!(draw, oag_ui::frontend::Draw::Text { text, .. } if text.contains("Ad-Hoc") || text.contains("Community"))
+        ),
+        "the disc's own FE_COMMUNITY_UNAVAILABLE_ADHOC text draws: {list:#?}"
+    );
+    // The screen's own tick redirects to `Home` directly - authored, not the
+    // back stack.
+    press_release(&mut frontend, &mut input, Button::Cross);
+    assert!(frontend.machine().is(w2048::HOME));
+}
+
+/// `Home`'s fourth tile jumps straight to `OptionsCamera`, never to
+/// `options` - read directly off `Definition.xml`, not a guess (see
+/// `oag_2048::frontend::states::OPTIONS_CAMERA`'s own doc). The camera
+/// choice cycles on Left/Right and Circle returns to the hub.
+#[test]
+#[ignore = "needs the extracted package under data/extracted/vita/"]
+fn options_camera_is_reached_directly_from_home_and_the_choice_cycles() {
+    let Some(source) = source() else { return };
+    let loaded = boot::load(&options(&source)).expect("the whole boot");
+    let mut frontend = loaded.frontend;
+    drive_to_home(&mut frontend);
+    let mut input = Input::new();
+    for _ in 0..3 {
+        press_release(&mut frontend, &mut input, Button::Right);
+    }
+    press_release(&mut frontend, &mut input, Button::Cross);
+    assert!(
+        frontend.machine().is(w2048::OPTIONS_CAMERA),
+        "three Rights off Team land on Options, which redirects to OptionsCamera"
+    );
+    assert_eq!(frontend.camera_choice(), None, "untouched so far");
+    press_release(&mut frontend, &mut input, Button::Right);
+    assert_eq!(
+        frontend.camera_choice(),
+        Some(2),
+        "one Right off the default index (1, Far) lands on Internal (2)"
+    );
+    press_release(&mut frontend, &mut input, Button::Circle);
+    assert!(
+        frontend.machine().is(w2048::OPTIONS),
+        "Circle returns to the hub - chosen, no widget names this button"
+    );
+}
+
+/// `Home`'s third tile, `FE_PROFILE`, redirects straight to `profile` -
+/// drawn generically, the same path `Community`/`Options` already prove.
+#[test]
+#[ignore = "needs the extracted package under data/extracted/vita/"]
+fn profile_is_reached_from_home() {
+    let Some(source) = source() else { return };
+    let loaded = boot::load(&options(&source)).expect("the whole boot");
+    let mut frontend = loaded.frontend;
+    drive_to_home(&mut frontend);
+    let mut input = Input::new();
+    for _ in 0..2 {
+        press_release(&mut frontend, &mut input, Button::Right);
+    }
+    press_release(&mut frontend, &mut input, Button::Cross);
+    assert!(frontend.machine().is(w2048::PROFILE));
+}
+
+/// `Home`'s fifth tile is `2048extras`, whose own `FE_MANUAL` tile is one
+/// tap away at `manual3D`, and that screen's own tick leaves through
+/// `redirect="PreviousScreen"` - the back stack `redirect_touch` built on
+/// the way in, not `Home` by name.
+#[test]
+#[ignore = "needs the extracted package under data/extracted/vita/"]
+fn extras_and_its_manual_are_reached_from_home_and_the_manual_leaves_the_way_it_came() {
+    let Some(source) = source() else { return };
+    let loaded = boot::load(&options(&source)).expect("the whole boot");
+    let mut frontend = loaded.frontend;
+    drive_to_home(&mut frontend);
+    let mut input = Input::new();
+    for _ in 0..4 {
+        press_release(&mut frontend, &mut input, Button::Right);
+    }
+    press_release(&mut frontend, &mut input, Button::Cross);
+    assert!(frontend.machine().is(w2048::EXTRAS));
+    // `2048extras`' own `<aTouchButton>` (AR Museum) is a typo the disc
+    // ships, not a `<TouchButton>` this parser recognises - `Manual` is the
+    // first real tile.
+    press_release(&mut frontend, &mut input, Button::Cross);
+    assert!(frontend.machine().is(w2048::EXTRAS_MANUAL));
+    press_release(&mut frontend, &mut input, Button::Cross);
+    assert!(
+        frontend.machine().is(w2048::EXTRAS),
+        "PreviousScreen pops back to 2048extras, not to Home"
+    );
+}

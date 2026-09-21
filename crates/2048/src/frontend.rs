@@ -69,6 +69,51 @@ pub mod states {
     /// **Not a screen in any `NEWGUI` file** - it is the disc's own name for
     /// leaving the front end for a race, the way Pulse's `Launch Game` is.
     pub const LAUNCH_2048: &str = "Launch 2048";
+
+    /// `Team_Definition.xml`'s `teamshell->team`, the screen
+    /// [`HOME`]'s `ER_TEAM` tile redirects to (`redirect="team"`). Fired and
+    /// looked up by this bare name, not the nested path its own standalone
+    /// parse computes - see [`super::includes`]'s module doc for why that is
+    /// safe: `Screens::by_name` matches on the flattened `name` field
+    /// regardless, and [`super::super::frontend`]'s `STATES` list is what
+    /// registers the bare string the redirect actually names.
+    pub const TEAM: &str = "team";
+    /// `Profile_Definition.xml`'s `profileshell->profile`, `HOME`'s
+    /// `FE_PROFILE` tile's `redirect`.
+    pub const PROFILE: &str = "profile";
+    /// `profile`'s own `profile_stats` sibling, one tap away either
+    /// direction.
+    pub const PROFILE_STATS: &str = "profile_stats";
+    /// `Options_Definition.xml`'s `optionsshell->options`, the settings hub -
+    /// reached from [`OPTIONS_CAMERA`]'s own tick-less back gesture, never
+    /// directly from `Home` (see that constant).
+    pub const OPTIONS: &str = "options";
+    /// **What `HOME`'s `FE_OPT_PLUS` tile actually redirects to** - not
+    /// [`OPTIONS`] itself. The disc jumps straight into the camera panel;
+    /// `options`'s own four buttons are reached from there by an unauthored
+    /// back gesture, not the other way around.
+    pub const OPTIONS_CAMERA: &str = "OptionsCamera";
+    pub const OPTIONS_AUDIO: &str = "OptionsAudio";
+    pub const OPTIONS_CONTROLS: &str = "OptionsControls";
+    pub const OPTIONS_PILOT: &str = "OptionsPilot";
+    /// `options`'s own tick: `<ProfileController task="Auto Save">` then an
+    /// unconditional `<Redirect delay="0.2">` to `Home` - a save this build
+    /// has nothing to write, so it is a timed pass-through like
+    /// [`BOOT_STUDIO_LOGO`]'s own delay.
+    pub const SAVE_2048_OPTIONS: &str = "save_2048_options";
+    /// `Community_Definition.xml`'s network-refusal screen -
+    /// `HOME`'s `FE_COMMUNITY` tile's actual `redirect`, never `community`
+    /// itself (which needs a live session this build never has and so is
+    /// never entered, the same standing `GameModeChoice`'s three network
+    /// modes carry).
+    pub const COMMUNITY_ADHOC_CHECK: &str = "communityAdhocCheck";
+    /// `Extras_Definition_EU.xml`'s `2048extrasshell->2048extras`, `HOME`'s
+    /// `FE_EXTRAS` tile's `redirect`.
+    pub const EXTRAS: &str = "2048extras";
+    /// `2048extras`'s manual viewer - one tap away, plain `Text`/`Image`.
+    pub const EXTRAS_MANUAL: &str = "manual3D";
+    /// `2048extras`'s credits reel - one tap away, plain `Text` widgets.
+    pub const EXTRAS_CREDITS: &str = "extrasCredits";
 }
 
 /// The screens the boot walks and the grids it lands on live in the root's
@@ -87,15 +132,18 @@ pub mod includes {
     /// The includes the boot follows, spelled as their `SrcRel` attributes
     /// are before any region suffix, in the order the files list them.
     ///
-    /// **The four files the boot chain, its footer and the two grids are
-    /// in, and no other.** `Skin.xml`'s five remaining includes are the in-race, end-race
-    /// and demo overlays, and `Definition.xml`'s six others (`Community_`,
-    /// `Profile_`, `Options_`, `Team_`, `Extras_`, `Unlocks_`) are sub-screens
-    /// the boot never reaches and this build does not draw. Following every
-    /// include was measured once: 46 textures into a 1024x6766 sprite sheet,
-    /// for screens nothing samples. A list, the same way
-    /// [`oag_title::FrontEnd::race_box`] names Pulse's one selection include
-    /// by file rather than following its root's whole `LoadXML` list.
+    /// **Nine files: the boot chain, its footer, the two grids and `Home`'s
+    /// five destinations.** `Skin.xml`'s five remaining includes are the
+    /// in-race, end-race and demo overlays, and `Definition.xml`'s own
+    /// `Unlocks_Definition.xml` is a sub-screen this build still does not
+    /// draw - no save to read an unlock graph from. Following every include
+    /// was measured once: 46 textures into a 1024x6766 sprite sheet, for
+    /// screens nothing samples; five more (`Team_`, `Community_`, `Profile_`,
+    /// `Options_`, `Extras_`) is the deliberate cost of drawing `Home`'s own
+    /// tiles rather than leaving every one of them a "screen not loaded"
+    /// note. A list, the same way [`oag_title::FrontEnd::race_box`] names
+    /// Pulse's one selection include by file rather than following its
+    /// root's whole `LoadXML` list.
     pub const FOLLOWED: &[&str] = &[
         "Definition.xml",
         "Bootup_Definition.xml",
@@ -104,6 +152,13 @@ pub mod includes {
         // `localised="true"`: one bare `<Text>` per territory, embedded
         // into the screen that names it.
         "Legal_Line_Definition.xml",
+        "Team_Definition.xml",
+        "Community_Definition.xml",
+        "Profile_Definition.xml",
+        "Options_Definition.xml",
+        // `localised="true"`: `Extras_Definition_EU.xml` on this package,
+        // the same territory switch `Bootup_Definition.xml` goes through.
+        "Extras_Definition.xml",
     ];
     /// The region suffix a `localised="true"` include resolves to.
     ///

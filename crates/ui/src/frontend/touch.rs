@@ -125,6 +125,39 @@ pub struct TouchState {
     /// composition root supplies them, which draws the grid as the file
     /// authors it and nothing more.
     pub extra: Vec<ExtraTile>,
+    /// Screens left through [`Frontend::redirect_touch`], most recent last -
+    /// what a `redirect="PreviousScreen"` tap pops. `Manual3D`'s own tick and
+    /// `Team_Definition.xml`'s `select_button` both author that literal
+    /// target rather than a screen name, which is Wipeout 2048's own "back"
+    /// gesture and not one this build had a stack for until `Home`'s five
+    /// destinations needed to leave the way they arrived. Never pushed by
+    /// `newFEshell`'s own pad-driven Home/GameModeChoice hop, which fires
+    /// directly and does not go through `redirect_touch` - so it never grows
+    /// on ordinary campaign play, only while a player is under `Home`.
+    pub history: Vec<String>,
+    /// `Team_Definition.xml`'s own grid: `(team index, craft-slot index)`
+    /// into [`oag_2048::race::NATIVE_TEAMS`]/`SHIP_TYPES`. `None` until the
+    /// player moves off the screen's own starting point - see
+    /// [`Frontend::team_choice`]'s own doc for why that is the contract.
+    pub team_choice: Option<(usize, usize)>,
+    /// `teamskin_touch`'s own highlighted entry. Drawn and cycled; not
+    /// wired to any setting - see `frontend::team`'s module doc.
+    pub skin_index: usize,
+    /// `OptionsCamera`'s own choice - see [`Frontend::camera_choice`].
+    pub camera_choice: Option<u8>,
+    /// `OptionsAudio`'s `Music Volume` - see [`Frontend::music_choice`].
+    pub music_choice: Option<u32>,
+    /// `OptionsAudio`'s `SFX Volume` - see [`Frontend::sfx_choice`].
+    pub sfx_choice: Option<u32>,
+    /// Which of `OptionsAudio`'s two sliders Up/Down last focused: `0` music,
+    /// `1` SFX.
+    pub audio_slider: usize,
+    /// `OptionsControls`' `Motion Sensor` list. Drawn and cycled; not wired
+    /// to any setting - see `frontend::options2048`'s module doc.
+    pub controls_index: usize,
+    /// `OptionsPilot`'s `Pilot Assist` list. Drawn and cycled; not wired to
+    /// any setting - see `frontend::options2048`'s module doc.
+    pub pilot_index: usize,
 }
 
 /// What a tap on a tile does.
@@ -301,8 +334,16 @@ impl Frontend {
         match tile.action.clone() {
             Action::Toggle(id) => {
                 // Two taps: the first chooses, the second confirms through
-                // the screen's own tick - see the module docs.
-                if self.touch.chosen_mode.as_deref() == Some(id.as_str())
+                // the screen's own tick - see the module docs. **Only on
+                // `GameModeChoice`**: every other screen this build reaches
+                // generically may carry its own label-less `Action::Redirect`
+                // tiles for an unrelated purpose - `Team_Definition.xml`'s
+                // `replay_unlock`/`replay_unlock_2` are exactly that, and
+                // without this guard a second tap on any of its toggle
+                // buttons would silently auto-fire one of them instead of
+                // simply re-choosing.
+                if current == w2048::GAME_MODE_CHOICE
+                    && self.touch.chosen_mode.as_deref() == Some(id.as_str())
                     && let Some(tick) = tiles
                         .iter()
                         .position(|t| t.label.is_none() && matches!(t.action, Action::Redirect(_)))
@@ -327,9 +368,14 @@ impl Frontend {
         }
     }
 
-    /// A tile whose tap leaves for `target`, with the two checks a target
-    /// needs on these grids.
-    fn redirect_touch(&mut self, current: &str, label: &str, target: &str) {
+    /// A tile whose tap leaves for `target`, with the checks a target needs
+    /// on these grids.
+    ///
+    /// `pub(super)` rather than private: [`super::team`] and
+    /// [`super::options2048`] both leave their own screens through this same
+    /// path rather than duplicating the `PreviousScreen`/history handling
+    /// below.
+    pub(super) fn redirect_touch(&mut self, current: &str, label: &str, target: &str) {
         // The confirm tick on the mode grid: only a chosen mode this build
         // can follow leaves. See the module docs.
         if current == w2048::GAME_MODE_CHOICE {
@@ -347,6 +393,26 @@ impl Frontend {
                 }
             }
         }
+        // `redirect="PreviousScreen"` is Wipeout 2048's own back gesture -
+        // `Team_Definition.xml`'s `select_button` and `manual3D`'s tick both
+        // author this literal target rather than a screen name. Popped from
+        // `TouchState::history` rather than looked up in the state machine:
+        // there is no `"PreviousScreen"` state to find.
+        if target == "PreviousScreen" {
+            let Some(previous) = self.touch.history.pop() else {
+                self.notes.push(format!(
+                    "{current}: {label} tapped, but nothing is on the back stack"
+                ));
+                return;
+            };
+            self.notes.push(format!(
+                "{current}: {label} tapped, returning to {previous}"
+            ));
+            self.touch.selected = 0;
+            self.on_screen_for = 0.0;
+            self.machine.fire(&previous);
+            return;
+        }
         // `Home`'s five destinations are in includes this build does not
         // load (`oag_2048::frontend::includes::FOLLOWED`), so their names
         // resolve to no state; the machine would ignore the fire silently,
@@ -359,6 +425,7 @@ impl Frontend {
         }
         self.notes
             .push(format!("{current}: {label} tapped, firing {target}"));
+        self.touch.history.push(current.to_string());
         self.touch.selected = 0;
         self.on_screen_for = 0.0;
         self.machine.fire(target);
@@ -374,7 +441,20 @@ impl Frontend {
         };
         match current.as_str() {
             w2048::NEW_FE_SHELL => return self.campaign_map_pointer(pointer),
-            w2048::GAME_MODE_CHOICE | w2048::HOME => {}
+            w2048::TEAM => return self.team_pointer(pointer),
+            w2048::OPTIONS_CAMERA
+            | w2048::OPTIONS_AUDIO
+            | w2048::OPTIONS_CONTROLS
+            | w2048::OPTIONS_PILOT => return self.options_panel_pointer(pointer),
+            w2048::GAME_MODE_CHOICE
+            | w2048::HOME
+            | w2048::PROFILE
+            | w2048::PROFILE_STATS
+            | w2048::OPTIONS
+            | w2048::COMMUNITY_ADHOC_CHECK
+            | w2048::EXTRAS
+            | w2048::EXTRAS_MANUAL
+            | w2048::EXTRAS_CREDITS => {}
             _ => return false,
         }
         if pointer.is_idle() {

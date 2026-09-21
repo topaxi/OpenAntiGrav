@@ -33,6 +33,23 @@ pub(super) const STATES: &[&str] = &[
     w2048::HOME,
     w2048::NEW_FE_SHELL,
     w2048::LAUNCH_2048,
+    // `Home`'s five destinations, registered by the bare name their own
+    // `redirect` attribute names - see `oag_2048::frontend::states::TEAM`'s
+    // own doc for why a bare name rather than the nested path each include's
+    // own standalone parse computes.
+    w2048::TEAM,
+    w2048::PROFILE,
+    w2048::PROFILE_STATS,
+    w2048::OPTIONS,
+    w2048::OPTIONS_CAMERA,
+    w2048::OPTIONS_AUDIO,
+    w2048::OPTIONS_CONTROLS,
+    w2048::OPTIONS_PILOT,
+    w2048::SAVE_2048_OPTIONS,
+    w2048::COMMUNITY_ADHOC_CHECK,
+    w2048::EXTRAS,
+    w2048::EXTRAS_MANUAL,
+    w2048::EXTRAS_CREDITS,
 ];
 
 /// The buttons a 2048 screen's redirects can name that the abstract layer
@@ -74,6 +91,16 @@ impl Frontend {
             w2048::BOOT_STUDIO_LOGO | w2048::TITLE_SCREEN => {
                 self.follow_authored_redirect(&current, input);
             }
+            // `<ProfileController task="Auto Save">` then an unconditional
+            // `<Redirect delay="0.2">` to `Home` - a save this build has
+            // nothing to write, so this is a timed pass-through like the
+            // boot chain's own screens above.
+            w2048::SAVE_2048_OPTIONS => self.follow_authored_redirect(&current, input),
+            w2048::TEAM => self.update_team(input),
+            w2048::OPTIONS_CAMERA
+            | w2048::OPTIONS_AUDIO
+            | w2048::OPTIONS_CONTROLS
+            | w2048::OPTIONS_PILOT => self.update_options_panel(input, &current),
             _ => self.update_touch(input),
         }
     }
@@ -217,10 +244,32 @@ impl Frontend {
                 out.insert(1, white);
                 out
             }
-            w2048::GAME_MODE_CHOICE | w2048::HOME => {
+            w2048::GAME_MODE_CHOICE
+            | w2048::HOME
+            | w2048::PROFILE
+            | w2048::PROFILE_STATS
+            | w2048::OPTIONS
+            | w2048::COMMUNITY_ADHOC_CHECK
+            | w2048::EXTRAS
+            | w2048::EXTRAS_MANUAL
+            | w2048::EXTRAS_CREDITS => {
                 let mut out = self.draw_screen_at(current, self.on_screen_for);
                 out.insert(1, white);
                 self.draw_touch(current, &mut out);
+                out
+            }
+            w2048::TEAM => {
+                let mut out = self.draw_screen_at(current, self.on_screen_for);
+                out.insert(1, white);
+                self.draw_team(&mut out);
+                out
+            }
+            w2048::OPTIONS_CAMERA
+            | w2048::OPTIONS_AUDIO
+            | w2048::OPTIONS_CONTROLS
+            | w2048::OPTIONS_PILOT => {
+                let mut out = vec![white];
+                self.draw_options_panel(current, &mut out);
                 out
             }
             w2048::NEW_FE_SHELL => {
