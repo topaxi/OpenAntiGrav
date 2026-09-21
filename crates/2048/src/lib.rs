@@ -51,6 +51,7 @@
 use oag_assets::{Archives, Result};
 use oag_title::{ArchiveCandidates, Platform, Title};
 
+pub mod campaign;
 pub mod frontend;
 pub mod hud;
 pub mod race;
