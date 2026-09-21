@@ -274,7 +274,13 @@ impl super::super::Scene {
         for slot in 0..(oag_render::shadow::occlusion::LAYERS as usize) {
             if self.ships.get(slot).is_none() || !active || slot >= drawn || !race.ship_active(slot)
             {
-                maps.clear(encoder, slot);
+                // Cleared once, not every frame: a layer nothing drew into
+                // since its last clear is already black, and a title that
+                // never renders these must not pay eight clears a frame for
+                // a map its hulls never sample.
+                if maps.drawn(slot) > 0 {
+                    maps.clear(encoder, slot);
+                }
                 continue;
             }
             let model = race.ship_model_matrix_of(slot);
