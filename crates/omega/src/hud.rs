@@ -59,4 +59,11 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     // had its own frame checked" - `oag_title::HudArt::shield_percent`'s own
     // doc comment.
     shield_percent: true,
+    // Placeholder, on the same "provably inert" terms as every other field
+    // in this constant - see the module doc. Not measured on Omega's own
+    // plugins; carries the four-title shared literal rather than an empty
+    // string so a future reader who does wire this up starts from the
+    // common answer rather than from nothing.
+    hud_font_role: "HUD",
+    hud_small_font_role: Some("HUDSmall"),
 };

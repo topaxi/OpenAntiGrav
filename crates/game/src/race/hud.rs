@@ -109,12 +109,37 @@ pub(super) fn load_hud(
     let languages = crate::boot::load_languages(archives, language_plugins, report);
     let strings = crate::boot::load_strings(archives, &languages, None, report);
 
-    // One role each, and no fallback to a second: both titles fill in both of
-    // these slots, so a chain of alternatives would be an unexercised guess about
-    // a disc nobody has. A source filling in neither draws in 5x7 and says so,
-    // which is the honest answer to a question its data has not been asked.
-    let font = hud_font(archives, &languages, roles::HUD, report);
-    let small_font = hud_font(archives, &languages, roles::HUD_SMALL, report);
+    // The role names are this *title's* own, through `oag_title::HudArt` -
+    // not the shared `oag_ui::language::roles::HUD`/`HUD_SMALL` literals
+    // every source used to be asked for regardless of what its own plugins
+    // actually name. That literal ask is what drew 2048's HUD in the 5x7
+    // fallback: none of its plugins fill `"HUD"`, they fill `"2048HUD"`
+    // instead, and two of its seventeen plugins (`korean`,
+    // `traditionalchinese`) carry a *leftover* `"HUD"`/`"HUDSmall"` role
+    // pointing at files 2048 does not ship - which the old literal ask could
+    // pick up ahead of the plugin the player actually chose. See
+    // `oag_title::HudArt::hud_font_role`.
+    let font = hud_font(archives, &languages, title.hud_art.hud_font_role, report);
+    // `None` is a real gap on 2048's own plugins - see
+    // `oag_title::HudArt::hud_small_font_role` - and the caption face falls
+    // back to the value face's own atlas rather than to 5x7, chosen rather
+    // than measured: a Vita3K race frame shows two on-screen sizes, but the
+    // layout's own per-widget `scale` is what draws the difference, not a
+    // second `.fnt` file this pass located.
+    let small_font = match title.hud_art.hud_small_font_role {
+        Some(role) => hud_font(archives, &languages, role, report),
+        None => {
+            // Named as "reuse", not "draw in the {role} face": `font` above
+            // may itself already be the 5x7 fallback if the value role
+            // failed to resolve or decode, and this line must not claim a
+            // face loaded when it did not.
+            report.push(
+                "HUD: this title names no caption font role; captions reuse the value face"
+                    .to_string(),
+            );
+            font.clone()
+        }
+    };
 
     crate::hud::Assets {
         layout,
