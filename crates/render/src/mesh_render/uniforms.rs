@@ -804,6 +804,9 @@ pub struct ShadowMaps<'a> {
     /// The per-craft sun-occlusion array (`crate::shadow::occlusion`), a
     /// `D2Array` view, read by a hull whose uniform names a layer.
     pub occlusion: Option<&'a wgpu::TextureView>,
+    /// The per-craft self-shadow depth array (`crate::shadow::self_shadow`),
+    /// a `D2Array` view, compared against by the same hull at the same layer.
+    pub self_shadow: Option<&'a wgpu::TextureView>,
 }
 
 impl ShadowMaps<'_> {
@@ -812,6 +815,7 @@ impl ShadowMaps<'_> {
         coverage: None,
         depth: None,
         occlusion: None,
+        self_shadow: None,
     };
 }
 

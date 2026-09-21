@@ -885,8 +885,34 @@ the same texel boundary, because the *same mask* is being sampled; and a
 craft over nothing reads the clear value, which is black on most circuits
 (white in Zone and on six named tracks).
 
-**This project draws the occlusion half and not the self-shadow half.**
-`oag_render::shadow::occlusion` renders the same map - the track's draw calls
+**This project draws both halves.** The self-shadow half is
+`oag_render::shadow::self_shadow`: a 512-texel `Depth32Float` layer per
+craft - slot 0's depth map is 512 against its occlusion map's 256 in
+`g_ShipMapSizes`, a ratio that is read even though the slot assignment is
+not - holding the craft's own opaque ranges drawn front-face-culled through
+the **same matrix** as its occlusion layer (owned by `occlusion::Maps` so the
+two cannot drift), cleared to far, compared in `mesh.wgsl` by four
+half-texel taps against `ndc.z - 0.001` - the bias and the four taps are
+this project's, the RSX's one hardware-compared `TXP` being unread past the
+instruction. Front-face culling is the original's `SET_CULL_FACE 0x404` and
+here it is the right trade, unlike the `mapped` tier's: the caster is the
+receiver, so every sunlit face compares against the hull's far side and a
+wing's underside is still nearer the sun than the fuselage under it.
+Measured on Talon's Junction at tick 4800, sun `[-0.78, 0.58, -0.24]`:
+2,019 pixels darken, every one of them on the Feisar's own hull, by a ratio
+from 0.16 to 0.999 (median 0.87) - the cockpit recess, the inner faces of
+the engine pods, the underside by the nozzle - which is the across-the-hull
+variation the occlusion tap alone could not give. At 256 texels it was
+1,401 pixels, so the map's density is a third of that count and the sun's
+own geometry is the rest: a flat hull under a 35-degree sun shadows little
+of itself, and the gate's ceiling is item (e)'s 19 % either way.
+`OAG_DUMP_SELF_SHADOW=<png>` writes the player's depth layer. One
+deviation: a craft whose occlusion layer drew nothing names no layer and so
+gets neither tap, where the original's hull always compares. Pulse PSP EU at
+tick 2100 is byte-identical before and after.
+
+The occlusion half is
+`oag_render::shadow::occlusion`, which renders the same map - the track's draw calls
 (opaque, cutout and transparent alike, as the original keys on lighting
 family and not on blend) whose bounds come within 10 units of the sun line
 through each craft, through a sun-view [`Fit`](../../crates/render/src/shadow/map.rs)
@@ -905,11 +931,8 @@ the Feisar hull at tick 4800 loses only 19 % of its brightness, so a craft
 in a tunnel reads darker but not dark - that is the scene-calibration
 question `HANDOVER.md`'s "frame too bright" thread owns, not this
 mechanism's. Ambient is untouched, as the microcode
-has it. The self-shadow term (a compared sample of the craft's own depth map)
-is left out rather than approximated: it would be a second per-craft pass
-with a comparison sampler, and on a hull under a sun it moves little; it is
-on `HANDOVER.md`. Nothing here has a strength knob: how dark the hull goes
-is the lightmap's answer, not a constant of this project's.
+has it. Nothing here has a strength knob: how dark the hull goes is the two
+maps' answer, not a constant of this project's.
 
 Tier-wise it belongs to `original`, because it is HD's own mechanism and
 consumes HD's own data; `blob` and `off` leave the hull as before, and

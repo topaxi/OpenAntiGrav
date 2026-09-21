@@ -30,9 +30,9 @@
 //! where the original clears white - what those names map to on the disc
 //! was not resolved.
 //!
-//! **Not built**: the craft's own depth map, the other factor of the
-//! original's gate. It is self-shadowing only, and it is on `HANDOVER.md`
-//! rather than approximated here.
+//! The other factor of the original's gate - the craft's own depth map, its
+//! self-shadow - is [`super::self_shadow`], owned by [`Maps`] so the two are
+//! rendered through one matrix per layer.
 //!
 //! # Shape
 //!
@@ -43,7 +43,8 @@
 
 use oag_core::math::{Mat4, Vec3};
 
-use super::map::Fit;
+use super::map::{Caster, Fit};
+use super::self_shadow;
 use crate::mesh::{DrawCall, GpuVertex};
 
 /// The maps' texel format: one channel, `0..1`, filtered. What the receiver
@@ -138,6 +139,9 @@ pub struct Maps {
     /// How many draw calls each layer's last pass drew - a cleared layer and
     /// a never-rendered one look identical otherwise.
     drawn: [usize; LAYERS as usize],
+    /// The craft's own depth map per layer, rendered through the same
+    /// matrix as its occlusion layer - see [`Self::render_self_shadow`].
+    self_shadow: self_shadow::Maps,
 }
 
 impl Maps {
@@ -283,6 +287,7 @@ impl Maps {
             binds,
             matrices: [Mat4::IDENTITY; LAYERS as usize],
             drawn: [0; LAYERS as usize],
+            self_shadow: self_shadow::Maps::new(device),
         }
     }
 
@@ -360,14 +365,43 @@ impl Maps {
         near.len()
     }
 
+    /// Renders `caster` - the craft itself, its opaque ranges - into
+    /// `layer`'s self-shadow depth map through the matrix the last
+    /// [`Self::render`] of that layer projected with, so the hull's one
+    /// projective coordinate lands on the same texel of both maps. Call it
+    /// after `render`; a layer since cleared projects through the identity
+    /// and holds nothing useful, which is harmless because no hull names a
+    /// cleared layer.
+    ///
+    /// Returns how many index ranges it drew.
+    pub fn render_self_shadow(
+        &mut self,
+        queue: &wgpu::Queue,
+        encoder: &mut wgpu::CommandEncoder,
+        layer: usize,
+        caster: &Caster<'_>,
+    ) -> usize {
+        let matrix = self.matrix(layer);
+        self.self_shadow
+            .render(queue, encoder, layer, matrix, caster)
+    }
+
     /// Clears `layer` to black without drawing, so a craft that is not
-    /// active this frame reads no sun rather than last frame's road.
+    /// active this frame reads no sun rather than last frame's road. Its
+    /// self-shadow layer clears to far with it.
+    ///
+    /// A caller that skips this while [`Self::drawn`] is zero (as the frame
+    /// does) may leave a self-shadow layer stale - which is unobservable
+    /// only as long as a hull names its layer by the *occlusion* count, the
+    /// invariant `oag-game`'s `sun_occlusion_layer` keeps. Gate a layer on
+    /// this count, never on the self-shadow's own.
     pub fn clear(&mut self, encoder: &mut wgpu::CommandEncoder, layer: usize) {
         let Some(view) = self.layer_views.get(layer) else {
             return;
         };
         self.drawn[layer] = 0;
         self.matrices[layer] = Mat4::IDENTITY;
+        self.self_shadow.clear(encoder, layer);
         encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("sun occlusion map clear"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -390,6 +424,13 @@ impl Maps {
     #[must_use]
     pub fn view(&self) -> &wgpu::TextureView {
         &self.array_view
+    }
+
+    /// The self-shadow depth maps [`Self::render_self_shadow`] fills: their
+    /// array view for the scene group, and their readback.
+    #[must_use]
+    pub fn self_shadow(&self) -> &self_shadow::Maps {
+        &self.self_shadow
     }
 
     /// The projection `layer` was last rendered with, for the receiver's own

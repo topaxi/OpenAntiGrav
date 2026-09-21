@@ -101,8 +101,11 @@ Two things worth carrying forward from doing it:
   occlusion`. `oag_render::shadow::occlusion` draws the occlusion half and
   `mesh.wgsl` gates by it (`OAG_DUMP_SUN_OCCLUSION=<png>` writes the
   player's layer; tunnel 12/255, glass floor 245/255 on Talon's Junction).
-  Open: (a) the **self-shadow half** - a compared sample of the craft's own
-  depth map, front-face-culled - is not drawn; (b) the original's **chunk
+  ~~(a) the self-shadow half~~ **built 2026-09-21**:
+  `oag_render::shadow::self_shadow`, a front-face-culled depth layer per
+  craft through the occlusion layer's own matrix, compared in `mesh.wgsl`
+  (`OAG_DUMP_SELF_SHADOW=<png>` dumps it; the Feisar's cockpit recess and
+  pod inner faces darken at tick 4800, Pulse byte-identical). Open: (b) the original's **chunk
   draw order** decides what a texel holds where geometry overlaps along the
   sun with no depth test, and is unread - this side draws in the model's
   draw order; (c) the six tracks (`17_Track`, `18_Track`, `24_Track`,

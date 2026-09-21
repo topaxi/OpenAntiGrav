@@ -288,6 +288,10 @@ override colour_is_light: f32 = 0.0;
 // coverage map's own clamped filtering sampler - see `sun_occlusion` and
 // `oag_render::shadow::occlusion`.
 @group(2) @binding(13) var sun_occlusion_tex: texture_2d_array<f32>;
+// The per-craft self-shadow depth maps, the same layer per craft, compared
+// against through the `mapped` tier's non-filtering depth sampler - see
+// `sun_occlusion` and `oag_render::shadow::self_shadow`.
+@group(2) @binding(14) var self_shadow_tex: texture_depth_2d_array;
 @group(3) @binding(0) var<uniform> anims: TexAnims;
 
 // The world matrix of each `Anim Transform` node the model carries, sampled for
@@ -582,22 +586,38 @@ fn shadow_coverage(world: vec3<f32>) -> f32 {
     return (1.0 - lit * 0.25) * scene.shadow.strength;
 }
 
-// How much sun reaches this point of a Wipeout HD hull, `0.0` to `1.0`, off
-// the road's own baked mask - the second of the two maps the original's
-// `ShadowMap` hull variant multiplies its sun by:
+// How far a Wipeout HD hull is pushed towards the sun before its depth is
+// compared against its own self-shadow map, in that map's `0..1` units - a
+// 140-unit-deep box, so this is a seventh of a unit.
 //
+// **Ours, and it can be small**: the caster pass culls front faces, so a
+// sunlit face compares against the hull's far side rather than against
+// itself, and the slope-scaled bias in `shadow::self_shadow::Maps::new`'s
+// rasteriser handles the panels seen edge-on. This is the floor under it for
+// a thin panel whose two sides nearly coincide.
+const SELF_SHADOW_BIAS: f32 = 0.001;
+
+// How much sun reaches this point of a Wipeout HD hull, `0.0` to `1.0` - the
+// product of the two maps the original's `ShadowMap` hull variant multiplies
+// its sun by:
+//
+//     TXP R0.x, f[TC0] unit1      <- directionalLight0ShadowTex, compared
 //     TXP R0.z, f[TC0] unit2      <- directionalLight0LightmapTex, projected
-//     MUL H0.w, R0.xxxx, R0.zzzz  <- times the compared own-depth-map tap
+//     MUL H0.w, R0.xxxx, R0.zzzz
 //     MAD H0.xyz, H0, H0.wwww, {constantAmbientColour}
 //
-// `docs/ghidra/functions/ps3-hdfury-eu/ship-sun-occlusion.md`. The map is
-// the track within ten units of the craft drawn from the sun as its own
-// `lightmap.a`/`colourSet.w`, over black, so a craft over nothing reads 0.
-// **The first factor - the craft's own depth map, its self-shadow - is not
-// drawn**, and reads as 1.0 here; `shadows.md` says why.
+// `docs/ghidra/functions/ps3-hdfury-eu/ship-sun-occlusion.md`. The first is
+// the craft's own depth from the sun, front faces culled, so a wing shadows
+// the fuselage under it; the second is the track within ten units of the
+// craft drawn from the sun as its own `lightmap.a`/`colourSet.w`, over black,
+// so a craft over nothing reads 0. Both project through the one matrix, as
+// the original's one `f[TC0]` does, so a texel of each is the same point of
+// the hull.
 //
 // `1.0` for every draw that names no layer, which is everything but a hull
-// under the `original` tier on a title that renders these maps.
+// under the `original` tier on a title that renders these maps - **and that
+// early return is the whole of every other title's inertness**: nothing
+// below it runs for a draw that names none.
 fn sun_occlusion(world: vec3<f32>) -> f32 {
     let layer = i32(uniforms.sun_occlusion_layer + 0.5) - 1;
     if layer < 0 {
@@ -617,7 +637,22 @@ fn sun_occlusion(world: vec3<f32>) -> f32 {
     // `textureSampleLevel` rather than `textureSample`: the layer index is
     // dynamic and this sits behind a branch, and a map with one mip has no
     // level to pick anyway.
-    return textureSampleLevel(sun_occlusion_tex, shadow_sampler, uv, layer, 0.0).r;
+    let occlusion = textureSampleLevel(sun_occlusion_tex, shadow_sampler, uv, layer, 0.0).r;
+    // The self-shadow tap: the four compared taps `shadow_coverage`'s depth
+    // mode takes, half a texel apart, and their mean. The original's is one
+    // hardware-compared `TXP`; how the RSX filters that is unread, and four
+    // is the softening this side already uses for a depth compare.
+    let texel = 1.0 / f32(textureDimensions(self_shadow_tex).x);
+    var lit = 0.0;
+    for (var i = 0; i < 4; i = i + 1) {
+        let offset = vec2<f32>(
+            f32(i % 2) * 2.0 - 1.0,
+            f32(i / 2) * 2.0 - 1.0
+        ) * texel * 0.5;
+        let nearest = textureSampleLevel(self_shadow_tex, shadow_depth_sampler, uv + offset, layer, 0);
+        lit = lit + select(0.0, 1.0, ndc.z - SELF_SHADOW_BIAS <= nearest);
+    }
+    return occlusion * lit * 0.25;
 }
 
 // The shadow term, applied to colour.

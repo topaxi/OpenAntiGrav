@@ -302,10 +302,15 @@ a sun-view box 12 units wide and 70 deep either side of the craft, writing
 term by it. Measured on Talon's Junction (autopilot, `OAG_DUMP_SUN_OCCLUSION`):
 in the grid-start tunnel at tick 2100 the map under the craft reads 12/255,
 on the glass floor at tick 4800 it reads 245/255 - the road's own answer in
-both places. The self-shadow depth term is **not** built: it would need a
-second per-craft pass and a comparison sampler, and on a single convex-ish
-hull under a sun it changes little; it is listed on `HANDOVER.md` rather than
-approximated. The clear-value exception for the six track names is not
+both places. `oag_render::shadow::self_shadow` renders the depth half the
+same way this page reads it - depth only, no colour target, front faces
+culled, cleared to far, one caster, the occlusion layer's own matrix - and
+`mesh.wgsl` multiplies the two taps as the microcode does; on the Feisar at
+tick 4800 it darkens the cockpit recess and the engine pods' inner faces and
+nothing else in the frame (`OAG_DUMP_SELF_SHADOW=<png>` writes the layer).
+What is this project's there: the four-tap compare and its bias, and that
+every craft gets slot 0's 512 texels (the depth-to-occlusion ratio above is
+read; which craft gets which slot is not). The clear-value exception for the six track names is not
 reproduced either, because what those names map to on this disc's
 environment folders was not resolved (`02_track`, `03_track` exist; `17_Track`
 and friends are manifest names of a different vocabulary).

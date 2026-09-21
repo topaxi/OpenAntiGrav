@@ -406,6 +406,10 @@ fn bind_group(
                 binding: 13,
                 resource: wgpu::BindingResource::TextureView(&kept.shadow.occlusion_view),
             },
+            wgpu::BindGroupEntry {
+                binding: 14,
+                resource: wgpu::BindingResource::TextureView(&kept.shadow.self_shadow_view),
+            },
         ],
     })
 }
@@ -488,7 +492,10 @@ pub(super) fn scene_bind_group(
             // The per-craft sun-occlusion array, binding 13 - past everything
             // above for the same reason, and in this group because a hull
             // picks its layer by a uniform field rather than by a bind group.
+            // The self-shadow depth array, binding 14, beside it for the same
+            // reason: the same hull compares against the same layer.
             shadow_entries[4],
+            shadow_entries[5],
         ],
     });
 

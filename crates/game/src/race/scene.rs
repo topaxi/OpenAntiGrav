@@ -209,9 +209,10 @@ pub struct Scene {
     /// applies live; the strength in `Scene::shadow` is what turns it on. See
     /// `oag_render::shadow::map`.
     shadow_map: std::cell::RefCell<oag_render::shadow::map::Map>,
-    /// The `original` tier's second map on Wipeout HD: per craft, the track
-    /// under it drawn from the sun as its own baked sun-occlusion mask, which
-    /// the hull's sun term is gated by. Built for every race and bound by
+    /// The `original` tier's two per-craft maps on Wipeout HD: the track
+    /// under the craft drawn from the sun as its own baked sun-occlusion mask,
+    /// and the craft's own depth from the sun, which together gate the hull's
+    /// sun term. Built for every race and bound by
     /// every drawable like [`Self::shadow_map`]; a hull that names no layer
     /// never samples it. See `oag_render::shadow::occlusion`.
     sun_occlusion: std::cell::RefCell<oag_render::shadow::occlusion::Maps>,
@@ -419,6 +420,7 @@ impl Scene {
             coverage: Some(shadow_map.view()),
             depth: Some(shadow_map.depth_view()),
             occlusion: Some(sun_occlusion.view()),
+            self_shadow: Some(sun_occlusion.self_shadow().view()),
         };
         let sky = sky_model
             .filter(|model| !model.indices.is_empty())

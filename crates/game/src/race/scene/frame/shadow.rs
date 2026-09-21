@@ -237,6 +237,10 @@ impl super::super::Scene {
 /// `Scene::dump_sun_occlusion_if_asked`.
 const DUMP_VAR: &str = "OAG_DUMP_SUN_OCCLUSION";
 
+/// The same for the player's self-shadow depth map - see
+/// `Scene::dump_sun_occlusion_if_asked`, which writes both.
+const DUMP_SELF_SHADOW_VAR: &str = "OAG_DUMP_SELF_SHADOW";
+
 /// Half the side of the cube a craft's sun-occlusion map is fitted to, in
 /// world units: the original's own fallback bbox for a ship model without one.
 const SUN_OCCLUSION_HALF_EXTENT: f32 = 6.0;
@@ -244,7 +248,7 @@ const SUN_OCCLUSION_HALF_EXTENT: f32 = 6.0;
 impl super::super::Scene {
     /// Renders each active craft's sun-occlusion map - the track within
     /// `occlusion::RADIUS` of the craft, from the sun, as its own baked mask -
-    /// and returns the projection of every layer for the scene uniform.
+    /// and its self-shadow depth map from the same box.
     ///
     /// **Wipeout HD's `original` tier, and by data rather than by name**: it
     /// needs the circuit's own sun (`light.enabled`, which only an authored
@@ -299,6 +303,10 @@ impl super::super::Scene {
                 towards_light: Vec3::from_array(self.light.direction),
             };
             maps.render(queue, encoder, slot, &fit, &track);
+            // The craft's own depth map from the same box: its opaque ranges
+            // and nothing else, so a wing shadows the fuselage and no other
+            // craft shadows either. See `oag_render::shadow::self_shadow`.
+            maps.render_self_shadow(queue, encoder, slot, &self.ships[slot].caster(model));
             if slot == 0 && std::env::var_os(DUMP_VAR).is_some() {
                 log::info!(
                     "sun occlusion layer 0: craft at {:?}, radius {:.1}, sun {:?}",
@@ -350,9 +358,11 @@ impl super::super::Scene {
     }
 
     /// Writes the player's sun-occlusion map - layer 0 - as a greyscale PNG
-    /// when [`DUMP_VAR`] names a file, for a headless capture.
+    /// when [`DUMP_VAR`] names a file, and its self-shadow depth map when
+    /// [`DUMP_SELF_SHADOW_VAR`] does (far white, the craft darker the nearer
+    /// the sun it is), for a headless capture.
     ///
-    /// The map's only other observable is a sample inside the hull's shader,
+    /// The maps' only other observable is a sample inside the hull's shader,
     /// so this is how "the craft went dark" is told apart from "the road under
     /// it is dark" - the same reason `OAG_RENDER_BENCH` exists for a different
     /// question.
@@ -361,15 +371,25 @@ impl super::super::Scene {
         device: &wgpu::Device,
         queue: &wgpu::Queue,
     ) -> anyhow::Result<()> {
-        let Ok(dump) = std::env::var(DUMP_VAR) else {
-            return Ok(());
+        let write = |dump: &str, texels: &[u8], size: u32, what: &str| -> anyhow::Result<()> {
+            let rgba: Vec<u8> = texels.iter().flat_map(|t| [*t, *t, *t, 255]).collect();
+            std::fs::write(dump, oag_texture::png::encode_rgba(size, size, &rgba))
+                .map_err(|error| anyhow::anyhow!("writing {dump}: {error}"))?;
+            println!("wrote {dump} ({what} layer 0, {size}x{size})");
+            Ok(())
         };
-        let size = oag_render::shadow::occlusion::SIZE;
-        let texels = self.sun_occlusion.borrow().read_back(device, queue, 0);
-        let rgba: Vec<u8> = texels.iter().flat_map(|t| [*t, *t, *t, 255]).collect();
-        std::fs::write(&dump, oag_texture::png::encode_rgba(size, size, &rgba))
-            .map_err(|error| anyhow::anyhow!("writing {dump}: {error}"))?;
-        println!("wrote {dump} (sun occlusion layer 0, {size}x{size})");
+        if let Ok(dump) = std::env::var(DUMP_VAR) {
+            let texels = self.sun_occlusion.borrow().read_back(device, queue, 0);
+            let size = oag_render::shadow::occlusion::SIZE;
+            write(&dump, &texels, size, "sun occlusion")?;
+        }
+        if let Ok(dump) = std::env::var(DUMP_SELF_SHADOW_VAR) {
+            let maps = self.sun_occlusion.borrow();
+            let depths = maps.self_shadow().read_back(device, queue, 0);
+            let texels: Vec<u8> = depths.iter().map(|d| (d * 255.0) as u8).collect();
+            let size = oag_render::shadow::self_shadow::SIZE;
+            write(&dump, &texels, size, "self shadow")?;
+        }
         Ok(())
     }
 
