@@ -46,6 +46,15 @@ pub enum Platform {
     /// is the same path an extracted `USRDIR` with no `UMD_DATA.BIN` already
     /// took. See `oag_2048`.
     Vita,
+    /// Sony PlayStation 4.
+    ///
+    /// **Never identified from a disc, on the same terms as [`Self::Vita`]**:
+    /// Wipeout: Omega Collection ships as a `.pkg` pair (a base package plus a
+    /// mandatory patch), decrypted and extracted to two sibling directories.
+    /// Neither is an ISO 9660 volume, so [`identify`](crate::identify) never
+    /// returns this either - it reaches `oag_assets::Layout` through the
+    /// archive candidate that matched. See `oag_omega`.
+    Ps4,
     /// Recognised as an ISO 9660 volume, but not as a console we handle.
     Unknown,
 }
@@ -57,6 +66,7 @@ impl std::fmt::Display for Platform {
             Self::Ps2 => "PS2",
             Self::Ps3 => "PS3",
             Self::Vita => "Vita",
+            Self::Ps4 => "PS4",
             Self::Unknown => "unknown",
         };
         f.write_str(s)

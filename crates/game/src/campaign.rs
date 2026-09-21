@@ -100,6 +100,9 @@ pub fn load(
     if title.name == oag_hd::TITLE.name {
         return load_hd(archives, strings, faces, grid, base, fallback_globals);
     }
+    if title.name == oag_omega::TITLE.name {
+        return load_omega(archives, strings, faces, grid, base, fallback_globals);
+    }
 
     let blob = archives
         .read_name(SCREEN_ENTRY)
@@ -180,6 +183,86 @@ fn load_hd(
     // second, shelved under the first, since that is the spelling
     // `image.src` carries at draw time. See that constant's own doc for why
     // the two differ.
+    for (widget_src, archive_path) in oag_hd::campaign::HEX_TEXTURES {
+        match archives.read_name(archive_path) {
+            Ok(blob) => blobs.push((widget_src.to_string(), blob)),
+            Err(error) => {
+                log::warn!("{archive_path}: {error:#} - the widget it is for draws nothing");
+            }
+        }
+    }
+    for src in oag_hd::campaign::OTHER_TEXTURES {
+        match archives.read_name(src) {
+            Ok(blob) => blobs.push((src.to_string(), blob)),
+            Err(error) => log::warn!("{src}: {error:#} - the widget it is for draws nothing"),
+        }
+    }
+    let mut report = Vec::new();
+    let sprites = base.extended(&blobs, &mut report);
+    for line in report {
+        log::info!("campaign sprites {line}");
+    }
+
+    Ok(Campaign {
+        grids,
+        grid_layout,
+        cell_layout,
+        sprites,
+    })
+}
+
+/// [`load`]'s Omega branch - the same shape as [`load_hd`], off
+/// [`oag_omega::campaign`]'s own entry names and nineteen grids rather than
+/// HD's sixteen (`oag_omega::campaign::GRID_COUNT`, confirmed by direct
+/// listing against `data09.psarc` rather than assumed equal to HD's).
+///
+/// **Reuses [`oag_hd::campaign::HEX_TEXTURES`]/`OTHER_TEXTURES`** rather than
+/// declaring Omega's own copies: Omega's front end is HD's `PI001` plugin
+/// carried forward (`docs/formats/omega-frontend.md`), so these are the same
+/// widget/archive-path pairs, not a new measurement. **Every one of them
+/// will report "not found" and draw nothing** - the shipped files are `.gnf`
+/// now, not `.gtf`, and this function reads by exact name the way
+/// `oag_hd::campaign`'s own texture step always has; see
+/// `crate::boot::sprites::gnf_sibling_report` for the front end's own sheet,
+/// which does name the `.gnf` sibling. Extending that same naming to this
+/// screen's own textures is future work, not attempted here - the hex grid
+/// still lays out and draws its cells with no texture rather than failing to
+/// load at all.
+fn load_omega(
+    archives: &mut oag_assets::Archives,
+    strings: &StringTable,
+    faces: FaceScales,
+    grid: [f32; 2],
+    base: &Sheet,
+    fallback_globals: &[(&str, &str)],
+) -> Result<Campaign> {
+    let blob = archives
+        .read_name(oag_omega::campaign::SCREEN_ENTRY)
+        .with_context(|| format!("reading {}", oag_omega::campaign::SCREEN_ENTRY))?;
+    let xml = String::from_utf8(blob).context("CellMode_Definition.xml is not UTF-8")?;
+    let screens = oag_ui::screen::Screens::from_xml_with_fallback_globals(&xml, fallback_globals);
+    let grid_layout = Layout::read_authored(
+        &screens,
+        "Grid Selection",
+        strings,
+        faces,
+        grid,
+        oag_omega::campaign::AUTHORED_GRID,
+    )
+    .context("Grid Selection is not on this screen")?;
+    let cell_layout = Layout::read_authored(
+        &screens,
+        "Cell Selection",
+        strings,
+        faces,
+        grid,
+        oag_omega::campaign::AUTHORED_GRID,
+    )
+    .context("Cell Selection is not on this screen")?;
+
+    let grids = read_grids(archives, oag_omega::campaign::DEFINITION_ENTRY)?;
+
+    let mut blobs = Vec::new();
     for (widget_src, archive_path) in oag_hd::campaign::HEX_TEXTURES {
         match archives.read_name(archive_path) {
             Ok(blob) => blobs.push((widget_src.to_string(), blob)),

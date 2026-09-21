@@ -1,0 +1,25 @@
+[package]
+name = "oag-omega"
+description = "What Wipeout: Omega Collection (PS4) ships: HD's PI001 front-end plugin carried forward, off a base package plus a mandatory patch"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+# A title package is tables, and this one is thin on purpose: it holds what
+# `docs/formats/omega-frontend.md` and `docs/formats/omega-status.md` measured
+# off the decrypted EU package pair and nothing else. Racing is out of scope -
+# see `race.rs`'s own doc comment - so this crate exists mainly to get the
+# front end open and the menus walkable.
+[dependencies]
+oag-assets.workspace = true
+oag-title.workspace = true
+
+[dev-dependencies]
+oag-testdata.workspace = true
+oag-hd.workspace = true
+oag-2048.workspace = true
+
+[lints]
+workspace = true

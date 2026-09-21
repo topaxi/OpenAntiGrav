@@ -377,3 +377,18 @@ screens and a comfort option HD never had. Which of the patch's four archives
 the runtime actually loads is the one question this page leaves open the same
 way HD's own six-copy question stood before an RPCS3 capture closed it - no
 PS4 emulator exists in this project's toolchain to do the same here.
+
+**[Omega status](omega-status.md)** is where that census landed as code:
+`oag-omega`, a title package off a base package plus a mandatory patch, whose
+own front-end-complete archive (`data09.psarc`) is made the *bulk* candidate
+so it wins the collision the front-end page above left open - chosen, not
+measured. `just play omega` boots the front end and stops on `Language
+Selection`, the disc's own real first screen; `--menu-page` draws this
+build's own menus, since the disc's own `Main Menu`/campaign screens are
+never parsed for an HD-idiom front end at all. The campaign schema is HD's
+own, with nineteen grids where HD has sixteen. Two things do **not** carry
+forward: the front end's images are `.gnf`, a PS4 texture container nothing
+here decodes, and the circuits are a mix of plain `.vex` and an unread
+`.final.*` family - so racing stays out of scope, and every image and font
+that will not decode is named in the boot report rather than drawn as a
+stand-in.

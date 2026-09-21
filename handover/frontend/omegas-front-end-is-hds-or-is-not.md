@@ -59,10 +59,27 @@ content against `hd-frontend.md`.
 
 ## Next Steps
 
-- An `oag-omega` title crate is the real unlock for any of this landing as
-  code - everything in `omega-frontend.md` is a static reading with nowhere
-  to attach today. `oag-hd::frontend`'s module is the template to follow:
-  `FrontEnd`/archive-candidate wiring off `oag-title`'s three axes.
+- ~~An `oag-omega` title crate is the real unlock for any of this landing as
+  code~~ - landed 2026-09-21 (`crates/omega`,
+  [`omega-status.md`](../../docs/formats/omega-status.md)). `just play omega`
+  boots and stops on `Language Selection`; `--menu-page` draws this build's
+  own main menu and the campaign grid/cell screens (nineteen grids, twelve
+  parse). What that opened rather than closed:
+  - **A `.gnf` reader** is the single highest-value follow-on now - every
+    front-end image and the campaign's hex textures are `.gnf`, confirmed
+    present under the expected stems and named by size in the boot report,
+    and nothing draws until one exists. Not attempted in the crate's own
+    lane, by its own brief's instruction.
+  - `crates/game/src/campaign.rs::load_omega` reads its hex textures by the
+    literal HD path rather than through the front end's own
+    `gnf_sibling_report`, so a missing one reports a bare "not found" instead
+    of naming the `.gnf` sibling - a small, not-yet-done follow-up.
+  - Racing stays fully out of scope: `oag_omega::race::DEFAULTS` is
+    real-but-unread placeholders, and whether `tech_de_ra\track.vex` (the
+    chosen default) even parses as a `WO Track` node was not checked past a
+    headless-capture crash that lane found and left alone (`omega-status.md`'s
+    "Racing: out of scope" section) - a title-wide capture-path gap, not
+    Omega-specific.
 - If a PS4 emulator is ever integrated into this project's tooling (`oag-trace`
   currently covers PCSX2/PPSSPP/RPCS3 only), a boot capture would settle load
   order and the boot chain's `Provenance` in the same pass RPCS3 did for HD -

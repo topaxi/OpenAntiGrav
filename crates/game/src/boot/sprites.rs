@@ -144,7 +144,19 @@ pub(super) fn load(
     for src in &srcs {
         match read_front_end_first(archives, src) {
             Ok(blob) => blobs.push((src.clone(), blob)),
-            Err(e) => report.push(format!("image {src}: {e}")),
+            Err(e) => report.push(match gnf_sibling_report(archives, src) {
+                // **Reporting only - the bytes are never decoded or handed to
+                // `Sheet::build`.** Wipeout: Omega Collection's front-end XML
+                // still spells its images `.gtf`, the way `vita_texture_name`
+                // above already documents for 2048's `.gxt`, but the shipped
+                // file is Sony's PS4 `.gnf` container - a format this
+                // project has no reader for (`docs/formats/omega-frontend.md`).
+                // Naming the honest absence by its real name, rather than
+                // the `.gtf` spelling that was never going to resolve, is
+                // what `CLAUDE.md`'s "draw nothing and say so" asks for.
+                Some(found) => found,
+                None => format!("image {src}: {e}"),
+            }),
         }
     }
 
@@ -215,4 +227,21 @@ fn vita_texture_name(name: &str) -> Option<String> {
         .strip_suffix(".gtf")
         .or_else(|| name.strip_suffix(".GTF"))?;
     Some(format!("{stem}.gxt"))
+}
+
+/// If `name`'s `.gtf` spelling failed to resolve but a `.gnf` sibling is
+/// present in the served archives, a report line naming it and its size -
+/// **never its bytes**, which are not read into anything this build decodes.
+/// `None` when there is no `.gnf` sibling either, so the caller falls back to
+/// the ordinary "not found" message.
+fn gnf_sibling_report(archives: &mut oag_assets::Archives, name: &str) -> Option<String> {
+    let stem = name
+        .strip_suffix(".gtf")
+        .or_else(|| name.strip_suffix(".GTF"))?;
+    let gnf = format!("{stem}.gnf");
+    let bytes = archives.read_name(&gnf).ok()?;
+    Some(format!(
+        "image {name}: found as {gnf} ({} bytes) - PS4 GNF container, no reader in this project, drawing nothing",
+        bytes.len()
+    ))
 }
