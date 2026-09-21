@@ -298,6 +298,94 @@ shown on whatever screen `FUN_810a19e0` builds (one caller,
 `FUN_813c8d14`, not chased). `FUN_810a19e0` itself was not renamed - not
 enough evidence yet for what screen it is.
 
+## 2026-09-21: the base tier has its own `TouchCampaign_Item`, but its screen position is not `M_X`/`M_Y`
+
+**Confidence 82 for the class, same evidence shape as the DLC pair.** The
+Fury/HD constructors' own literal source-path tag
+(`"Frontend/Items/TouchCampaignFury_Item.cpp"`/`"...HD_Item.cpp"`) has a
+sibling: `search_strings` for `Frontend/Items/` in this binary also turns up
+`"Frontend/Items/TouchCampaign_Item.cpp"` at `0x81458018`. Its only xref
+(`get_xrefs_to` on the string address) lands in a function that allocates a
+**0x180-byte** object (nearly double the DLC button's 0xec), zeroes it, sets
+a *different* vtable (`&PTR_LAB_81221a9e_1_8150e958`, distinct from both
+`0x8150ea48`/`0x8150eab4`) and tags field `+0x2c` with the string - the same
+two-call shape (a `_Construct` that only assigns the vtable and calls two
+base-class initialisers, then a `_Create` that allocates, zeroes and tags)
+the DLC pair already established. Renamed:
+
+- **`TouchCampaign_Item_Construct`** (`0x813cf478`), confidence 82.
+- **`TouchCampaign_Item_Create`** (`0x813cf498`), confidence 82.
+
+Same open item as the DLC pair: `get_xrefs_to` on either address finds no
+static caller - consistent with `.init_array` construction, not chased
+further this pass.
+
+**The object is bigger because it is not a thin tag on someone else's node -
+it carries the event's own gameplay fields directly**, unlike the DLC
+button which only points back at a shared `FE3DCanvas` node. `Frontend/
+NEWGUI/Definition.xml`'s own `<TouchCampaign>` tag is a **single** widget
+(`<Values redirect="Launch 2048" x="0" y="0">`, one instance, no per-event
+repetition) - confirming this is native code that builds one
+`TouchCampaign_Item` per `SP.xml` event at runtime, not XML-authored
+per-marker the way the DLC's `<CanvasLabel>`s nearly look but (per
+`2048-frontend.md`) are not either.
+
+**`M_BUTTONSHAPE`/`M_CANVASTWEAK_X`/`M_CANVASTWEAK_Y` are real runtime
+fields; `M_X`/`M_Y` most likely are not (confidence 75).** The runtime
+reflection/deserialisation registrations for `SP.xml`'s fields are literal
+calls of the shape `FUN_812dab08(&type_descriptor, size, offset, "field
+name", "type name", count, ...)`, one call per field, decompiled directly
+rather than inferred. `GameModeBase`'s own concrete registration function
+(`FUN_812b0e2a`, not renamed - the object's typedef could not be pinned to
+one of the four exactly, though `m_numOfLaps`'s presence points at
+`RACE_A`/`RACE_B`) registers 36 fields end to end, and it is a **complete**
+list (the decompile runs to the function's own `return`, not truncated):
+`m_buttonShape` (offset `0x19c`, type `CanvasButtonShape`) and
+`m_canvasTweak_x`/`m_canvasTweak_y` (`0x314`/`0x318`, type `int`) are both
+in it - genuine `GameModeBase` struct members the shipped executable reads.
+**`m_x`/`m_y` are not, anywhere in that list.** Corroborating evidence from
+the file itself, not just the absence: every `SP.xml` field this project has
+confirmed reaches the executable (`M_TRACKDEF`, `M_NUMOFLAPS`,
+`M_PNEXTEVENT`, `M_BUTTONSHAPE`, `M_CANVASTWEAK_X`) carries
+`parentid="366306753"` (`GameModeBase`'s own typedef id) or, for
+`M_DESCRIPTION`, `parentid="41091653"` (an uninvestigated further-base
+class) - some real typedef id in both cases. **`M_X`/`M_Y` carry
+`parentid="0"`**, a value no other confirmed-runtime field on any typedef in
+this file uses. This is not a universal "every mjolnir node has a canvas
+position" convention either: a `WeaponSetDefinition` instance (`"Rockets
+Only"`) has no `M_X`/`M_Y` at all, so the field is specific to the four event
+typedefs (the ones that also carry `M_PNEXTEVENT`/`M_PBRANCHEVENT` graph
+edges) without being part of `GameModeBase`'s own registered shape. The
+best-fitting reading: `M_X`/`M_Y` are the Mjolnir editing tool's own
+node-graph canvas position (where a level designer dragged the event's box
+in the unlock-flowchart view), not a value the shipped game ever loads -
+capped at 75 rather than higher because this is an absence proven for one
+concrete registration function among several unexamined siblings (`ZONE`,
+`ELIMINATION`, `RACE_B` each plausibly have their own), not a scan of every
+one of them.
+
+**This directly falsifies using `M_X`/`M_Y` as the base tier's screen
+position** (`docs/formats/2048-frontend.md`'s own `PITCH`/`ORIGIN` grid was
+already labelled "chosen, not measured" for other reasons; this adds a
+positive reason it could not have been the real formula even in principle).
+Cross-checked empirically too: correlating the 47 `<CanvasLabel
+linkedevent="...">` positions against their linked events' own `M_X`/`M_Y`
+(`crates/tools/examples/campaign_map_dump.rs`, this pass) finds no affine
+fit - consistent with `2048-frontend.md`'s own finding that those labels
+cluster in a 196x87 corner (a trophy-shelf badge widget), a different
+number space from whatever `TouchCampaign_Item` actually draws at.
+
+**Still open, and now the concrete next step**: what actually computes a
+`TouchCampaign_Item`'s screen position. `m_buttonShape`'s own `CanvasButtonShape`
+enum (11 distinct non-empty values measured across `SP.xml`'s 115 events) is
+the leading candidate for an anchor-table index analogous to the DLC's
+per-node-type offset table, with `m_canvasTweak_x/y` (measured range `-2..2`)
+as a small hand-authored pixel nudge on top - not confirmed this pass, no
+consuming function found for either field's struct offset. A Vita3K capture
+correlated against `m_buttonShape` groupings (not `M_X`/`M_Y`) is the
+concrete next check, in `docs/formats/2048-frontend.md`'s own campaign-map
+section.
+
 ## Open
 
 - **The screen/refresh path that dispatches the two tier functions is still
