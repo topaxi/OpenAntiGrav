@@ -86,6 +86,11 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     zone_speed_classes: None,
     // Pulse's own reference frame reads `100%`. See `oag_title::HudArt::shield_percent`.
     shield_percent: true,
+    // Measured: `Data\Plugins\PI012\Definition.xml` (English) names
+    // `<Font><Values name="HUD" ...Src="Data\FE\Fonts\PulseHud.fnt">` and
+    // `HUDSmall` -> `small.fnt`. See `oag_title::HudArt::hud_font_role`.
+    hud_font_role: "HUD",
+    hud_small_font_role: Some("HUDSmall"),
 };
 
 /// The layout constant substituted for the pickup backdrop's authored colour.

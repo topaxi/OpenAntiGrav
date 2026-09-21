@@ -399,6 +399,72 @@ pub struct HudArt {
     /// reading) for every title that has not had its own frame checked,
     /// which is every title but HD today.
     pub shield_percent: bool,
+    /// The font role this title's language plugins name for the HUD's value
+    /// face - the big lap fraction, position fraction, speed and time
+    /// readouts - as `oag_ui::language::Language::font` resolves it.
+    ///
+    /// **A sixth axis inside this one type, not a second table**: the same
+    /// disagreement [`Self::texture_extension`] exists for, one role name
+    /// lower. Four of the five titles measure the identical literal
+    /// `"HUD"` - Pulse, Pure and HD's own `Data\Plugins\*\Definition.xml`
+    /// (or `english/Definition.xml`'s equivalent) all carry
+    /// `<Font><Values name="HUD" ...>` - so `"HUD"` in each of those four
+    /// title crates is what that title's own plugin spells, not a shared
+    /// default reached for four times. 2048 is the one that disagrees: its
+    /// `english/Definition.xml` carries no `HUD` slot at all and names
+    /// `2048HUD` instead (`Data\XML\2048_hud\font\2048_hud.fnt`), confidence
+    /// 90 - see `docs/formats/2048-frontend.md`'s "The language plugins
+    /// carry a HUD font role too" section.
+    ///
+    /// **Why a per-title role rather than the shared literal every caller
+    /// used to reach for**: `oag_game::race::hud::hud_font` used to ask
+    /// every source for the literal `oag_ui::language::roles::HUD`, which
+    /// drew 2048's HUD in the 5x7 fallback - no 2048 plugin fills that
+    /// role - and had a second failure mode besides: two of 2048's
+    /// seventeen plugins (`korean`, `traditionalchinese`) carry a
+    /// *leftover* `HUD`/`HUDSmall` role pointing at files this title does
+    /// not ship (`Data\FE\Fonts\PulseHud.fnt`/`koreanHudSmall.fnt`), which a
+    /// first-match search across every loaded plugin could and did pick up
+    /// regardless of which language was asked for. Naming the role this
+    /// title's own plugin actually fills closes both: the search asks for
+    /// `2048HUD` and neither leftover plugin has ever filled that.
+    ///
+    /// This crate holds no title's data as a rule, so the value lives in
+    /// each title crate's own `ART` constant - this field is the axis, not
+    /// an answer.
+    pub hud_font_role: &'static str,
+    /// The font role this title's language plugins name for the HUD's
+    /// caption face - the labels beside [`Self::hud_font_role`]'s values -
+    /// or `None` when this title's own plugins name no distinct role for it.
+    ///
+    /// `Some("HUDSmall")` for Pulse, Pure and HD, all measured the same way
+    /// [`Self::hud_font_role`]'s doc states for their `"HUD"` row.
+    ///
+    /// **2048 is `None`, and it is a real gap rather than an oversight or a
+    /// borrowed default.** Every one of its seventeen language plugins was
+    /// read for this axis and not one carries a second `<Font>` slot for the
+    /// caption face - `2048HUD` is the entire HUD vocabulary its
+    /// `Definition.xml` authors. A Vita3K race frame
+    /// (`data/reference/2048-frontend/06-attract-mode-demo-race.png`'s
+    /// in-race captures under `docs/formats/2048-hud.md`, e.g.
+    /// `21-race2-start.png`) shows the caption text (`LAP`, `TOTAL`,
+    /// `CURRENT`, `POS`, `XP`) visibly smaller than the value text (`1/3`,
+    /// `8/8`) beside it, so the *picture* still has two sizes on screen - the
+    /// layout's own per-widget `scale` (`oag_game::hud::widget::Label::scale`)
+    /// is what draws that, not a second atlas file, since there is no second
+    /// file to draw it from.
+    ///
+    /// **Chosen, not measured**: `oag_game::race::hud::hud_font` falls back
+    /// to [`Self::hud_font_role`]'s own face when this is `None`, rather
+    /// than drawing captions in the 5x7 fallback the way an unresolved role
+    /// otherwise would. No frame has been compared glyph-for-glyph against
+    /// the original to confirm the caption face really is `2048_hud.fnt`
+    /// scaled down rather than a second, still-unlocated `.fnt` this pass
+    /// did not find - the fallback is the reading that draws *something*
+    /// recognisable rather than nothing, and it is labelled as a choice so a
+    /// later pass that does find a second file knows to correct it here
+    /// rather than to read this as already settled.
+    pub hud_small_font_role: Option<&'static str>,
 }
 
 /// The name of each rung of a title's Zone escalation ladder, as string-table

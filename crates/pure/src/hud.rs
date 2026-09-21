@@ -158,6 +158,12 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     // Unmeasured on Pure; Pulse's own reading (`true`) carries over rather
     // than guessing a change. See `oag_title::HudArt::shield_percent`.
     shield_percent: true,
+    // Measured: Pure's own plugins fill the same `HUD`/`HUDSmall` roles
+    // Pulse's do, resolving to `HUDFont.fnt`/`small.fnt` rather than
+    // Pulse's files - see `oag_ui::language::roles`' own doc table. See
+    // `oag_title::HudArt::hud_font_role`.
+    hud_font_role: "HUD",
+    hud_small_font_role: Some("HUDSmall"),
 };
 
 /// Which `<Mode3D><Model>` widget draws each weapon's own icon, indexed in

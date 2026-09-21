@@ -152,6 +152,20 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     // `(51, 509)`. See `oag_title::HudArt::shield_percent` and
     // `docs/formats/2048-hud.md`.
     shield_percent: true,
+    // **Measured, and the correction this axis exists for.** 2048's language
+    // plugins name no `HUD` role at all - `english/Definition.xml` carries
+    // `<Font><Values name="2048HUD" ...Src="Data\XML\2048_hud\font\2048_hud.fnt">`
+    // instead, confirmed across the seventeen loaded plugins. Confidence 90.
+    // See `oag_title::HudArt::hud_font_role` and
+    // `docs/formats/2048-frontend.md`'s "The language plugins carry a HUD
+    // font role too" section.
+    hud_font_role: "2048HUD",
+    // **Real gap, not a default omitted.** None of the seventeen plugins
+    // names a second `<Font>` slot for the caption face; `2048HUD` is the
+    // whole of this title's own HUD font vocabulary. `hud_font` falls back
+    // to `hud_font_role` above rather than the 5x7 glyphs - chosen, not
+    // measured. See `oag_title::HudArt::hud_small_font_role`.
+    hud_small_font_role: None,
 };
 
 /// What a layout's texture reference becomes on this title.
