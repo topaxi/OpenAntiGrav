@@ -119,3 +119,42 @@ fn pointer_back_fires_regardless_of_where_the_pointer_is() {
     };
     assert_eq!(model.pointer(&back), vec![Event::Back]);
 }
+
+#[test]
+fn each_campaign_carries_its_own_disc_entry_id() {
+    assert_eq!(Campaign::Fury.entry_id(), "FE_RC_FURY");
+    assert_eq!(Campaign::Hd.entry_id(), "FE_RC_HD");
+}
+
+#[test]
+fn the_selector_outline_sits_in_the_left_half_of_the_bracket_for_fury() {
+    let draws = selector_outline(Campaign::Fury);
+    let [x, y, width, height] = BRACKET_RECT;
+    let half = width / 2.0;
+    for draw in &draws {
+        let Draw::Fill { rect, .. } = draw else {
+            panic!("selector_outline must draw plain fills, not {draw:?}");
+        };
+        assert!(
+            rect[0] >= x && rect[0] + rect[2] <= x + half,
+            "Fury's own outline must stay within the Bracket's left half: {rect:?}"
+        );
+        assert!(rect[1] >= y && rect[1] + rect[3] <= y + height);
+    }
+}
+
+#[test]
+fn the_selector_outline_moves_to_the_right_half_for_hd() {
+    let draws = selector_outline(Campaign::Hd);
+    let [x, _y, width, _height] = BRACKET_RECT;
+    let half = width / 2.0;
+    for draw in &draws {
+        let Draw::Fill { rect, .. } = draw else {
+            panic!("selector_outline must draw plain fills, not {draw:?}");
+        };
+        assert!(
+            rect[0] >= x + half && rect[0] + rect[2] <= x + width,
+            "Hd's own outline must stay within the Bracket's right half: {rect:?}"
+        );
+    }
+}

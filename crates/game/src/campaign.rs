@@ -354,6 +354,57 @@ fn load_hd(
 /// falls back to opening straight on `Grid Selection`, the pre-this-pass
 /// behaviour, rather than refusing the whole campaign over one missing
 /// screen.
+/// `Campaign Selection`'s own four idstrings - [`oag_ui::campaign::selection::TITLE_ID`]/
+/// `SUBTITLE_ID` and both campaigns' own [`oag_ui::campaign::selection::Campaign::entry_id`] -
+/// resolved off `entries_path`'s own `DATA06` copy rather than whichever
+/// archive `oag_assets::Archives::read_name`'s precedence would otherwise
+/// serve. **The reason this exists at all**: confirmed directly against
+/// `hdfury-ps3-eu-dec.iso` that `DATA00`/`DATA01`/`DATA02`/`DATA03`/`DATA05`
+/// carry none of the four ids in their own copy of `entries_path` - only
+/// `DATA06`'s does, the same archive [`oag_hd::campaign::SELECTION_SCREEN_ARCHIVE`]
+/// already names for the screen's own layout XML. A caller merges the
+/// result into its own [`StringTable`] (`StringTable::merge`); an empty map
+/// when `entries_path`'s `DATA06` copy is missing or not UTF-8, so a
+/// caller's own `strings.get_or_id` falls back to the bare id rather than
+/// panicking.
+///
+/// **Shared by both readers of this screen** - `crate::main::session::campaign::open_campaign`
+/// (the live session) and `crate::capture::campaign_page` (`--menu-page
+/// campaign-select`) - so the two cannot resolve these four ids differently.
+/// Before this function existed, only the live path applied any overlay at
+/// all (just [`oag_ui::campaign::selection::TITLE_ID`]/`SUBTITLE_ID`, not
+/// the two entry names), so a `--menu-page campaign-select` capture showed
+/// raw ids where a player's own session showed real text - the gap this
+/// closes.
+#[must_use]
+pub fn hd_selection_string_overlay(
+    archives: &mut oag_assets::Archives,
+    entries_path: &str,
+) -> std::collections::HashMap<String, String> {
+    archives
+        .read_every_name(entries_path)
+        .into_iter()
+        .find(|(label, _)| label.ends_with(oag_hd::campaign::SELECTION_SCREEN_ARCHIVE))
+        .and_then(|(_, blob)| oag_tables::fexml::text(&blob).ok())
+        .map(|xml| {
+            let table = StringTable::from_xml(&xml);
+            [
+                oag_ui::campaign::selection::TITLE_ID,
+                oag_ui::campaign::selection::SUBTITLE_ID,
+                oag_ui::campaign::selection::Campaign::Fury.entry_id(),
+                oag_ui::campaign::selection::Campaign::Hd.entry_id(),
+            ]
+            .into_iter()
+            .filter_map(|id| {
+                table
+                    .get(id)
+                    .map(|value| (id.to_string(), value.to_string()))
+            })
+            .collect()
+        })
+        .unwrap_or_default()
+}
+
 fn load_hd_campaign_selection(
     archives: &mut oag_assets::Archives,
     strings: &StringTable,

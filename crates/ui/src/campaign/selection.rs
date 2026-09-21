@@ -99,6 +99,22 @@ impl Campaign {
             Campaign::Hd => "Grid Selection",
         }
     }
+
+    /// `campaignList`'s own `<Entry String="...">` for this campaign -
+    /// `FE_RC_FURY`/`FE_RC_HD`, `"FURY CAMPAIGN"`/`"HD CAMPAIGN"` resolved
+    /// off `DATA06`'s own `Data\Plugins\Languages\English\entries.xml`
+    /// (confirmed directly against `hdfury-ps3-eu-dec.iso`: `<entry
+    /// id="FE_RC_FURY" string="FURY CAMPAIGN">`, `<entry id="FE_RC_HD"
+    /// string="HD CAMPAIGN">`). This is the disc's own name for each entry -
+    /// see [`FURY_ENTRY_NAME_POSITION`]'s own doc for where it is actually
+    /// drawn, since the list's own authored position is off-screen by design.
+    #[must_use]
+    pub fn entry_id(self) -> &'static str {
+        match self {
+            Campaign::Fury => "FE_RC_FURY",
+            Campaign::Hd => "FE_RC_HD",
+        }
+    }
 }
 
 /// `campaignList`'s own two entries, in document order.
@@ -147,6 +163,69 @@ const HD_GOLD_MEDALS_LABEL_POSITION: (f32, f32) = (1395.0, 710.0);
 /// idstring `Grid Selection`'s own `Medals Title` resolves. Named here since
 /// both hand-placed gold-medal labels share it.
 const GOLD_MEDALS_LABEL_ID: &str = "RC_GM";
+
+/// Where this build draws `campaignList`'s own two entry names
+/// ([`Campaign::entry_id`]) - the list's own authored position
+/// (`<List name="campaignList"><Values x="159" y="-500">`) is off-screen by
+/// design (the file's own comment on that line reads `<!-- -500 for y so
+/// it's off screen!! -->`), there only to drive the widget's internal
+/// selection state, never meant to be drawn. **Chosen, not measured**: `x`
+/// reuses the same split [`FURY_GOLD_MEDALS_LABEL_POSITION`]/
+/// [`HD_GOLD_MEDALS_LABEL_POSITION`] already commit to (755/1395, half of
+/// [`BRACKET_RECT`]), and `y` sits above them, inside the Bracket, in the
+/// space the (undrawn) 3D flyer card would otherwise fill - see the module
+/// doc's "not drawn" note.
+const FURY_ENTRY_NAME_POSITION: (f32, f32) = (755.0, 610.0);
+const HD_ENTRY_NAME_POSITION: (f32, f32) = (1395.0, 610.0);
+
+/// The selected half's outline thickness and colour - [`BRACKET_RECT`] split
+/// at its own midpoint, the same split [`CampaignSelection::pointer`]'s own
+/// click targets already use. The screen authors no per-entry
+/// `Selector`/highlight widget at all, unlike `Grid Selection`/`Cell
+/// Selection`'s own `<Image name="Selector">`; the real game's equivalent is
+/// presumably the 3D flyer's own scale/emphasis animation (an RPCS3 frame
+/// shows the selected card larger and centred), which this build does not
+/// render - see the module doc's "not drawn" note. **Chosen, not measured**:
+/// a plain four-sided outline around the selected half stands in for that
+/// animation, so the choice is visible and the pointer has something to
+/// hover, without pretending to reproduce the disc's own look.
+const SELECTOR_BORDER: f32 = 6.0;
+const SELECTOR_COLOR: u32 = 0xffff_ffff;
+
+/// The selected half of [`BRACKET_RECT`], as a plain four-sided outline -
+/// see [`SELECTOR_BORDER`]'s own doc.
+fn selector_outline(selected: Campaign) -> [Draw; 4] {
+    let slot = CAMPAIGNS
+        .iter()
+        .position(|&entry| entry == selected)
+        .unwrap_or(0);
+    #[allow(clippy::cast_precision_loss, reason = "slot is 0 or 1, exact in f32")]
+    let slot = slot as f32;
+    let [x, y, width, height] = BRACKET_RECT;
+    let half = width / 2.0;
+    let rect = [x + half * slot, y, half, height];
+    let color = argb_to_rgba(SELECTOR_COLOR);
+    let [rx, ry, rw, rh] = rect;
+    let t = SELECTOR_BORDER;
+    [
+        Draw::Fill {
+            rect: [rx, ry, rw, t],
+            color,
+        },
+        Draw::Fill {
+            rect: [rx, ry + rh - t, rw, t],
+            color,
+        },
+        Draw::Fill {
+            rect: [rx, ry, t, rh],
+            color,
+        },
+        Draw::Fill {
+            rect: [rx + rw - t, ry, t, rh],
+            color,
+        },
+    ]
+}
 
 /// `Campaign Selection`'s own model: a flat two-entry list, the same shape
 /// [`super::GridSelection`]'s own pager is, stepped by `left`/`right`
@@ -283,11 +362,7 @@ impl CampaignSelection {
               counts this screen alone needs"
 )]
 pub fn draw_list(
-    // Kept for symmetry with every other screen's own `*_draw_list`, which
-    // all take their model first - nothing drawn here varies by selection
-    // yet: the two flyer models are the one thing that would, and this
-    // build draws neither (see the module doc's "not drawn" note).
-    _model: &CampaignSelection,
+    model: &CampaignSelection,
     layout: &Layout,
     skin: &Skin,
     frame: &Frame,
@@ -369,6 +444,16 @@ pub fn draw_list(
     let hand_placed = [
         (SUBTITLE_POSITION, grey, strings.get_or_id(SUBTITLE_ID)),
         (
+            FURY_ENTRY_NAME_POSITION,
+            grey,
+            strings.get_or_id(Campaign::Fury.entry_id()),
+        ),
+        (
+            HD_ENTRY_NAME_POSITION,
+            grey,
+            strings.get_or_id(Campaign::Hd.entry_id()),
+        ),
+        (
             FURY_GOLD_MEDALS_LABEL_POSITION,
             FURY_GOLD_MEDALS_LABEL_COLOR,
             strings.get_or_id(GOLD_MEDALS_LABEL_ID),
@@ -391,6 +476,11 @@ pub fn draw_list(
             wrap_width: None,
         });
     }
+
+    // The selected half's outline - see [`SELECTOR_BORDER`]'s own doc on why
+    // this is drawn rather than a `Selector` widget the screen does not
+    // author.
+    out.extend(selector_outline(model.selected()));
 
     layers.body = out;
     layers

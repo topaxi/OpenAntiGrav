@@ -624,10 +624,22 @@ pub fn run(
                     .iter()
                     .map(|(key, value)| (key.as_str(), value.as_str()))
                     .collect();
+                // `Campaign Selection`'s own four idstrings, the same
+                // `DATA06`-only overlay `crate::main::session::campaign::open_campaign`
+                // applies for a live session - without it this still shows
+                // `FE_RC_SELECT`/`FE_CAMPSEL_MODES`/`FE_RC_FURY`/`FE_RC_HD` as
+                // raw ids, since `strings` above resolves through the general
+                // precedence, which (see `oag_game::campaign::hd_selection_string_overlay`'s
+                // own doc) none of `DATA00`/`DATA01`/`DATA02`/`DATA03`/`DATA05`
+                // carry any of the four in.
+                let entries_path =
+                    crate::boot::chosen_language(&languages, options.settings.language.as_deref())
+                        .and_then(|language| language.entries.clone());
                 let list = campaign_page(
                     kind,
                     &mut archives,
                     &strings,
+                    entries_path.as_deref(),
                     faces,
                     [space.size.0, space.size.1],
                     frame,

@@ -44,6 +44,13 @@ pub(super) fn campaign_page(
     kind: CampaignKind,
     archives: &mut oag_assets::Archives,
     strings: &oag_ui::language::StringTable,
+    // **HD/Fury only, `None` on every other title.** The chosen language's
+    // own `entries.xml` path - resolves `Campaign Selection`'s own four
+    // idstrings off `DATA06`'s copy, the same overlay
+    // `crate::main::session::campaign::open_campaign` applies for a live
+    // session; see `oag_game::campaign::hd_selection_string_overlay`'s own
+    // doc for why this is not already in `strings`.
+    entries_path: Option<&str>,
     faces: oag_ui::picker::FaceScales,
     grid: [f32; 2],
     backdrop: Option<oag_ui::menu::Picture>,
@@ -78,6 +85,16 @@ pub(super) fn campaign_page(
     let footer_overlay = crate::campaign::static_footer_overlay(&campaign, &faces, measure);
     *sprites = campaign.sprites;
     let is_hd = title.name == oag_hd::TITLE.name;
+    // See `entries_path`'s own doc: HD only, and only when the chosen
+    // language actually has an `entries.xml` to overlay `DATA06`'s copy of
+    // `Campaign Selection`'s own four idstrings onto.
+    let overlaid_strings = is_hd.then_some(entries_path).flatten().map(|path| {
+        let overlay = crate::campaign::hd_selection_string_overlay(archives, path);
+        let mut merged = strings.clone();
+        merged.merge(overlay);
+        merged
+    });
+    let strings = overlaid_strings.as_ref().unwrap_or(strings);
     // **HD's own `Track Line` fold is not built here.** `CircuitNames::choose`
     // needs every copy of the track-name table across the source's own
     // archives, which this still has no ready list of - see

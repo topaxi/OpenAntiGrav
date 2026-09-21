@@ -1195,7 +1195,7 @@ disagreement on a different file) settles it:
 | `ScreenTitle` | idstring `FE_RC_SELECT` - `"CAMPAIGN SELECT"`, confirmed on an RPCS3 frame |
 | a `MiniText` at `(160, 140)` | idstring `FE_CAMPSEL_MODES` - `"CAMPAIGN MODES"`, confirmed on the same frame |
 | `Bracket` | `x="160" y="170" Width="1595" Height="780"`, the frame both flyers sit inside |
-| `campaignList` (`List`) | idstring `FE_CAMPAIGNLIST`, two `<Entry>`s: `String="FE_RC_FURY"` then `String="FE_RC_HD"` - **Fury first**, matching the measured default. Positioned `y="-500"`, off screen, the same "drives selection, never drawn" role `Grid Selection`'s own `flyerlist` already has. |
+| `campaignList` (`List`) | idstring `FE_CAMPAIGNLIST`, two `<Entry>`s: `String="FE_RC_FURY"` then `String="FE_RC_HD"` - **Fury first**, matching the measured default. The list's own `<Values>` sits at `y="-500"`, off screen (the file's own comment on that line reads `<!-- -500 for y so it's off screen!! -->`) - that position drives the widget's internal selection state only, never meant to be drawn there. **The two entries' own names are drawn anyway**, at a chosen position - see "Drawing the two entries' own names" below. |
 | `<Redirect>` | `campaignList == FE_RC_FURY -> "Grid Selection Fury"`; `== FE_RC_HD -> "Grid Selection"`; `<Default goto="To Be Done">` - a third branch that is evidence about the build (an unfinished fallback) even though nothing observed here can fire it |
 | `FuryCampaignFlyerModel` / `HDCampaignFlyerModel` (`Flyer`) | `OriginX="640"`/`"1280"` - Fury left, `Wipeout HD` right, both `Src="Data\FE\Flyers\00_flyer.vex"`. **Not the per-campaign models the disc otherwise ships** (`/data/fe/flyers/fury_campaign/flyer.vex`, `/data/fe/flyers/hd_campaign/flyer.vex`, both present in `hd-files.txt`) - this screen's own XML points both widgets at the same generic flyer regardless, so whatever tells the two apart on the real screen is not in this file. Not drawn either way - see "not drawn" below. |
 | `MedalImageFury`/`MedalImageHD` | `Hexmedal_HD.mip`, plus `FuryGoldMedalsMiniText`/`HDGoldMedalsMiniText` (idstring `RC_GM`, `"GOLD MEDALS"` - the same idstring `Grid Selection`'s own `Medals Title` already resolves) and `NumMedalsTextFury`/`NumMedalsTextHD` (idstring `RB_EVENT_TYPE` - a reused/generic idstring this build does not trust as content, the same "idstring is a placeholder slot, not the text" reading `Line{n}` already gets elsewhere in this module). An RPCS3 frame reads `"0 / 87"` on the Fury side on a fresh profile; this build's own parse of `DATA00`'s eight Fury grids totals 80 cells (`campaign_grids_ground_truth.rs`), a 7-cell gap this pass does not explain. **Not drawn as a fraction** - `selection::draw_list` shows only the earned count (`0` on a fresh profile, the same "player-progress source is optional" reading the rest of this module gives), not a denominator this build cannot derive to match the disc's own `87`. |
@@ -1218,6 +1218,64 @@ parser" precedent `BRACKET_RECT` already sets for the `Bracket` above.
 Confidence 90: every widget above is read directly off `DATA06`'s own XML,
 cross-checked against an RPCS3 frame for the two visible strings
 (`ScreenTitle`, the subtitle) and the medal fraction's numerator shape.
+
+### Drawing the two entries' own names, and the selector, 2026-09-21
+
+The first pass at this screen (above) left `campaignList`'s own two entries
+undrawn, on the same "drives selection, never drawn" reasoning `Grid
+Selection`'s own `flyerlist` genuinely earns - but that reasoning does not
+hold here: `flyerlist`'s sixteen names are redundant with the grid tiles
+already drawn from `Definition.xml` directly, where `campaignList`'s two
+entries are the *only* text on this build's screen that says which half is
+Fury and which is `Wipeout HD` at all. A player looking at the first
+headless capture saw two raw ids, a bare `0`, and one `GOLD MEDALS 0` -
+nothing naming either campaign and nothing marking which was selected.
+
+**The names**: `campaignList`'s own `<Entry String="FE_RC_FURY">`/`<Entry
+String="FE_RC_HD">` resolve, off `DATA06`'s own
+`Data\Plugins\Languages\English\entries.xml` (confirmed directly against
+`hdfury-ps3-eu-dec.iso`), to `"FURY CAMPAIGN"` and `"HD CAMPAIGN"` -
+[`oag_ui::campaign::selection::Campaign::entry_id`]. These are disc data, not
+invented: the disc's own string table names each entry, this build had just
+never drawn it. Drawn at `FURY_ENTRY_NAME_POSITION`/`HD_ENTRY_NAME_POSITION`
+(`(755, 610)`/`(1395, 610)`) - **chosen, not measured**: the list's own
+authored position is off screen by design (see the widget table above), so
+there is no authored on-screen position to read. `x` reuses the same split
+the disc's own `FuryGoldMedalsMiniText`/`HDGoldMedalsMiniText` already commit
+to (755/1395, half of `Bracket`'s own rect), and `y` sits above them, inside
+the Bracket, in the space the (undrawn) 3D flyer card would otherwise fill.
+
+**The selector**: this screen authors no `<Image name="Selector">` at all,
+unlike `Grid Selection`/`Cell Selection`'s own (`oag_ui::campaign::draw`'s
+`centred_selector_draw`) - the real game's own equivalent is presumably the
+selected 3D flyer's own scale/emphasis (an RPCS3 frame shows the selected
+card larger and centred; see the "not drawn" note above for why this build
+draws neither flyer at all). With no selector widget and no flyer to make the
+choice visible, [`oag_ui::campaign::selection::draw_list`] draws a plain
+four-sided white outline (`selector_outline`, `SELECTOR_BORDER`/`SELECTOR_COLOR`)
+around the selected half of `Bracket`'s own rect, split at its own midpoint -
+the same split `CampaignSelection::pointer`'s own click targets already use.
+**Chosen, not measured**: a stand-in for the disc's own animation, not a
+reproduction of it, so the choice is visible and the pointer has something to
+hover.
+
+**The `--menu-page` capture path resolves the same four ids the live session
+does.** Before this pass, only `crate::main::session::campaign::open_campaign`
+(the live path) overlaid `DATA06`'s own copy of `FE_RC_SELECT`/`FE_CAMPSEL_MODES`
+onto `strings` - `crate::capture::campaign_page` (`--menu-page
+campaign-select`) had no such overlay at all, so a capture showed all four
+ids (title, subtitle, both entry names) as raw text where a live session
+showed the title and subtitle resolved and the two entry names not yet drawn
+at all. Both gaps close together: `oag_game::campaign::hd_selection_string_overlay`
+is now the one place either id set is resolved (all four ids, not two), and
+both `open_campaign` and `campaign_page` call it - confirmed directly against
+`hdfury-ps3-eu-dec.iso`, screenshot below.
+
+Confidence 85 for the two entry names (a direct disc-string read, not yet
+cross-checked against an RPCS3 frame showing this build's own screen next to
+it) and confidence 50 - **chosen, not measured** - for the selector outline's
+own look, which stands in for an animation this build does not attempt to
+reproduce.
 
 ### The toggle: measured on RPCS3, `right` reaches the base campaign
 
@@ -1290,15 +1348,32 @@ titles' own flows).
 
 **Not drawn**: both `Flyer` widgets (the same "flat 2D list, not a mesh
 scene" limitation `Grid Selection`'s own `FlyerModel` already carries) and
-the medal fraction's own denominator (see the widget table above).
+the medal fraction's own denominator (see the widget table above). The
+selector is drawn, but as a chosen stand-in rather than the disc's own
+animation - see "Drawing the two entries' own names, and the selector" above.
 
 ### Verification
 
-- Headless `--menu-page campaign-select` (new arm,
-  `crates/game/src/capture/menu_page.rs`) against `hdfury-ps3-eu-dec.iso`,
-  `--size 1920x1080`: draws the screen's own title, subtitle, and both
-  campaigns' `"GOLD MEDALS" 0` reading off the real disc's `DATA06` copy.
-  Screenshot under `data/scratch/lane-hd-sel/shots/`, not committed.
+- Headless `--menu-page campaign-select` against `hdfury-ps3-eu-dec.iso`,
+  `--size 1920x1080`: draws the screen's own title, subtitle, both entries'
+  own names (`"FURY CAMPAIGN"`/`"HD CAMPAIGN"`), a white selector outline
+  around the default-selected `Fury` half, and both campaigns' `GOLD MEDALS`
+  reading - `Fury`'s own label is genuinely invisible (black text on black
+  background, the disc's own authored colour, presumably legible against the
+  undrawn flyer card in the real game; `Wipeout HD`'s own label is
+  `FEGlobals->HD_Grey` and visible). Screenshot:
+  `data/scratch/lane-hd-sel/shots/campaign-select-v4.png`, not committed.
+  Command:
+  ```sh
+  cargo run -p oag-game -- data/images/hdfury-ps3-eu-dec.iso \
+    --menu-page campaign-select --size 1920x1080 \
+    --screenshot /tmp/campaign-select.png
+  ```
+  **The disc path is a positional `[SOURCE]`, not `--race <path>`** - `--race`
+  is a bare flag ("skip the front end and go straight to a ship on a track")
+  and combining it with `--menu-page` here launches the default race instead
+  of drawing the still, the same trap `--screenshot --press cross --until`
+  fell into below for a different reason.
 - **A live, interactive walk (`Main Menu` -> `RACE CAMPAIGN` -> click a
   campaign -> `Grid Selection`/`Grid Selection Fury` -> `Cell Selection`) was
   attempted and not completed this pass** - left open, see below. Two
