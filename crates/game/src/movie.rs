@@ -38,6 +38,7 @@
 mod bink;
 #[cfg(all(target_os = "linux", feature = "native-video"))]
 mod gst;
+mod mp4;
 mod mpeg2_ps;
 mod track;
 
@@ -884,11 +885,12 @@ fn watched(watch: Watch<'_>, step: Step) {
 ///
 /// Dispatches on the blob's own magic rather than on which platform it came
 /// from - a `.PMF`'s `PSMF` header, a raw MPEG-2 program stream's pack start
-/// code, an `.IPF`'s `IPUF`, or a `.bik`'s `BIK` - because what a decode path
-/// needs to know is what the file is, not what disc it happened to come off.
-/// Wipeout HD is what makes that more than a tidy principle: its 37 `.bik`
-/// files are the first video this project reads off a console that is not the
-/// one the container was written on.
+/// code, an `.IPF`'s `IPUF`, a `.bik`'s `BIK`, or a Wipeout 2048 `.mp4`'s
+/// `ftyp` - because what a decode path needs to know is what the file is, not
+/// what disc it happened to come off. Wipeout HD is what makes that more than
+/// a tidy principle: its 37 `.bik` files are the first video this project
+/// reads off a console that is not the one the container was written on, and
+/// 2048's 26 `.mp4` files are the second.
 ///
 /// `key` identifies the source for caching. It must change when the bytes do:
 /// the callers pass the WAD name hash and the entry size (or, for a loose PS2
@@ -909,6 +911,8 @@ pub fn open(
         open_ipuf(blob, key, cache_dir, extent, how, watch)
     } else if bik::is_bink(blob) {
         bink::open(blob, key, cache_dir, extent, how, watch)
+    } else if oag_video::mp4::is_mp4(blob) {
+        mp4::open(blob, key, cache_dir, extent, how, watch)
     } else {
         let head = &blob[..blob.len().min(4)];
         bail!("{key} is not a movie container this build recognises (starts with {head:02x?})")
