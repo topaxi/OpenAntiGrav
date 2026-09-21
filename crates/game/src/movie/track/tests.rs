@@ -13,7 +13,9 @@ use super::*;
 fn atrac3plus_blocks(audio: &MovieAudio) -> &[u8] {
     match &audio.kind {
         MovieAudioKind::Atrac3Plus { blocks, .. } => blocks,
-        MovieAudioKind::Pcm(_) => panic!("expected an ATRAC3+ track"),
+        MovieAudioKind::Pcm(_) | MovieAudioKind::Container(_) => {
+            panic!("expected an ATRAC3+ track")
+        }
     }
 }
 
@@ -249,4 +251,95 @@ fn an_unmeasured_channel_count_is_silence_rather_than_a_guess() {
     let mut demuxed = pcm_demuxed(&[0; 512], &[0; 512]);
     demuxed.format.channels = 1;
     assert!(pss_audio(&demuxed, "test").is_none());
+}
+
+/// A minimal `bik::AudioTrack`, stereo 48 kHz DCT - the shape all six of the
+/// disc's real tracks measure.
+fn bink_track(id: u32) -> bik::AudioTrack {
+    bik::AudioTrack {
+        id,
+        sample_rate: 48_000,
+        flags: bik::AUD_STEREO | bik::AUD_USEDCT,
+        max_decoded_len: 4096,
+    }
+}
+
+/// A single Bink audio track names its codec without a selection note - there
+/// is nothing to choose among.
+#[test]
+fn a_single_bink_track_is_named_without_a_choice_note() {
+    let source = PathBuf::from("/cache/test.bik");
+    let audio = bink_audio(&[bink_track(0)], source.clone(), "test-key", 8.86).expect("a track");
+    assert_eq!(audio.channels(), 2);
+    assert_eq!(audio.sample_rate(), 48_000);
+    assert_eq!(audio.codec_clause(), "binkaudio_dct, track 0 of 1");
+    // No block structure - the container is what carries the framing.
+    assert_eq!(audio.block_align(), None);
+    assert_eq!(audio.block_count(), 0);
+    match &audio.kind {
+        MovieAudioKind::Container(track) => assert_eq!(track.source, source),
+        _ => panic!("expected a container track"),
+    }
+}
+
+/// Four tracks - the logo reels' own shape - picks track 0 and says so rather
+/// than measuring which one a PS3 would actually play.
+#[test]
+fn four_bink_tracks_pick_track_zero_and_say_so() {
+    let tracks: Vec<_> = (0..4).map(bink_track).collect();
+    let audio =
+        bink_audio(&tracks, PathBuf::from("/cache/reel.bik"), "reel", 8.8588).expect("a track");
+    assert_eq!(
+        audio.codec_clause(),
+        "binkaudio_dct, track 0 of 4 (chosen, not measured)"
+    );
+    // No per-block sample count exists in a Bink header, so the video's own
+    // duration stands in until the track is decoded.
+    assert!((audio.seconds() - 8.8588).abs() < 1e-9);
+}
+
+/// No tracks at all is silence, the same treatment every other unreadable
+/// track gets.
+#[test]
+fn no_bink_tracks_is_silence() {
+    assert!(bink_audio(&[], PathBuf::from("/cache/silent.bik"), "silent", 1.0).is_none());
+}
+
+/// An MP4 audio track's duration is exact, computed off the container's own
+/// `frame_count` and `frame_delta` rather than approximated - unlike Bink's,
+/// which has no equivalent field to read.
+#[test]
+fn mp4_audio_reports_its_exact_duration() {
+    let track = oag_video::mp4::AudioTrack {
+        codec: *b"mp4a",
+        sample_rate: 48_000,
+        channel_count: 2,
+        frame_count: 4_666,
+        frame_delta: 1_024,
+    };
+    let audio = mp4_audio(&track, PathBuf::from("/cache/intro.mp4"), "intro");
+    assert_eq!(audio.channels(), 2);
+    assert_eq!(audio.sample_rate(), 48_000);
+    assert_eq!(audio.codec_clause(), "aac, track 0 of 1");
+    assert!(
+        (audio.seconds() - 99.5413).abs() < 0.001,
+        "{}",
+        audio.seconds()
+    );
+}
+
+/// A codec fourcc other than `mp4a` is named rather than assumed to be AAC -
+/// this project has never seen one, but a reader that silently called
+/// anything "aac" would be inventing rather than reporting.
+#[test]
+fn an_unknown_mp4_audio_codec_is_named_rather_than_assumed() {
+    let track = oag_video::mp4::AudioTrack {
+        codec: *b"sawb",
+        sample_rate: 16_000,
+        channel_count: 1,
+        frame_count: 100,
+        frame_delta: 320,
+    };
+    let audio = mp4_audio(&track, PathBuf::from("/cache/x.mp4"), "x");
+    assert_eq!(audio.codec_clause(), "sawb, track 0 of 1");
 }
