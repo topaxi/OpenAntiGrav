@@ -214,7 +214,7 @@ impl Session {
                         );
                     } else {
                         let index = model.index();
-                        if !campaign.open_cell_selection(index) {
+                        if !campaign.open_cell_selection_at_grid_slot(index) {
                             warn!("grid {index} has no cells - staying on Grid Selection");
                         }
                     }

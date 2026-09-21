@@ -1188,7 +1188,7 @@ disagreement on a different file) settles it:
 ### The screen itself
 
 `<Screen name="Campaign Selection" type="CampaignSelection">`, read via
-[`oag_ui::campaign::selection::read`](../../crates/ui/src/campaign/selection.rs):
+[`oag_ui::campaign::selection`](../../crates/ui/src/campaign/selection.rs):
 
 | Widget | Reads |
 | --- | --- |
@@ -1198,7 +1198,22 @@ disagreement on a different file) settles it:
 | `campaignList` (`List`) | idstring `FE_CAMPAIGNLIST`, two `<Entry>`s: `String="FE_RC_FURY"` then `String="FE_RC_HD"` - **Fury first**, matching the measured default. Positioned `y="-500"`, off screen, the same "drives selection, never drawn" role `Grid Selection`'s own `flyerlist` already has. |
 | `<Redirect>` | `campaignList == FE_RC_FURY -> "Grid Selection Fury"`; `== FE_RC_HD -> "Grid Selection"`; `<Default goto="To Be Done">` - a third branch that is evidence about the build (an unfinished fallback) even though nothing observed here can fire it |
 | `FuryCampaignFlyerModel` / `HDCampaignFlyerModel` (`Flyer`) | `OriginX="640"`/`"1280"` - Fury left, `Wipeout HD` right, both `Src="Data\FE\Flyers\00_flyer.vex"`. **Not the per-campaign models the disc otherwise ships** (`/data/fe/flyers/fury_campaign/flyer.vex`, `/data/fe/flyers/hd_campaign/flyer.vex`, both present in `hd-files.txt`) - this screen's own XML points both widgets at the same generic flyer regardless, so whatever tells the two apart on the real screen is not in this file. Not drawn either way - see "not drawn" below. |
-| `MedalImageFury`/`MedalImageHD` | `Hexmedal_HD.mip`, plus `FuryGoldMedalsMiniText`/`HDGoldMedalsMiniText` (idstring `RC_GM`, `"GOLD MEDALS"` - the same idstring `Grid Selection`'s own `Medals Title` already resolves) and `NumMedalsTextFury`/`NumMedalsTextHD` (idstring `RB_EVENT_TYPE` - a reused/generic idstring this build does not trust as content, the same "idstring is a placeholder slot, not the text" reading `Line{n}` already gets elsewhere in this module). An RPCS3 frame reads `"0 / 87"` on the Fury side on a fresh profile; this build's own parse of `DATA00`'s eight Fury grids totals 80 cells (`campaign_grids_ground_truth.rs`), a 7-cell gap this pass does not explain. **Not drawn as a fraction** - [`selection::draw`] shows only the earned count (`0` on a fresh profile, the same "player-progress source is optional" reading the rest of this module gives), not a denominator this build cannot derive to match the disc's own `87`. |
+| `MedalImageFury`/`MedalImageHD` | `Hexmedal_HD.mip`, plus `FuryGoldMedalsMiniText`/`HDGoldMedalsMiniText` (idstring `RC_GM`, `"GOLD MEDALS"` - the same idstring `Grid Selection`'s own `Medals Title` already resolves) and `NumMedalsTextFury`/`NumMedalsTextHD` (idstring `RB_EVENT_TYPE` - a reused/generic idstring this build does not trust as content, the same "idstring is a placeholder slot, not the text" reading `Line{n}` already gets elsewhere in this module). An RPCS3 frame reads `"0 / 87"` on the Fury side on a fresh profile; this build's own parse of `DATA00`'s eight Fury grids totals 80 cells (`campaign_grids_ground_truth.rs`), a 7-cell gap this pass does not explain. **Not drawn as a fraction** - [`selection::draw_list`] shows only the earned count (`0` on a fresh profile, the same "player-progress source is optional" reading the rest of this module gives), not a denominator this build cannot derive to match the disc's own `87`. |
+
+**The subtitle and both `GOLD MEDALS` labels are hand-placed, not read
+through `oag_ui::screen::Screens::collect`.** All three are `<MiniText>`,
+and adding a `MiniText` arm to that parser was tried first - it made this
+build's own screen reachable, but a scratch survey
+(`rg -c "<MiniText" data/scratch/lane-hd-sel/*.xml`) found `<MiniText>` on
+`MainMenu_Definition.xml`, `RaceBox_Definition.xml`,
+`Additional_Definition.xml` and `RecordGrid_Definition.xml` too - collecting
+it generically would have started drawing widgets on every title's every
+screen this pass never measured, not only this one. Reverted; the three
+positions/colours in the table above are read directly off the file and
+kept as plain constants in `oag_ui::campaign::selection`
+(`SUBTITLE_POSITION`/`FURY_GOLD_MEDALS_LABEL_POSITION`/`HD_GOLD_MEDALS_LABEL_POSITION`),
+the same "grounded in a real, measured number, not through the generic
+parser" precedent `BRACKET_RECT` already sets for the `Bracket` above.
 
 Confidence 90: every widget above is read directly off `DATA06`'s own XML,
 cross-checked against an RPCS3 frame for the two visible strings

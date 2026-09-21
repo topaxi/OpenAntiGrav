@@ -37,10 +37,11 @@
 
 use oag_gameplay::input::{Button, Input};
 
-use crate::frontend::{Draw, Placed};
+use crate::frontend::{Align, Draw, Placed};
 use crate::language::StringTable;
 use crate::menu::{Frame, Layers, Picture, Skin};
 use crate::pointer::{Pointer, contains};
+use crate::screen::argb_to_rgba;
 
 use super::draw::{fill_draw, image_draw, text_draw};
 use super::{Event, Layout};
@@ -108,6 +109,44 @@ const CAMPAIGNS: [Campaign; 2] = [Campaign::Fury, Campaign::Hd];
 /// which has no `Bracket` arm at all (nothing else in this crate has needed
 /// one before this screen). The frame both flyers sit inside.
 const BRACKET_RECT: [f32; 4] = [160.0, 170.0, 1595.0, 780.0];
+
+/// `CAMPAIGN MODES`'s own subtitle - `<MiniText><Values x="160" y="140"
+/// idstring="FE_CAMPSEL_MODES" color="FEGlobals->HD_Grey">`.
+///
+/// **Hand-placed, not read through `screen.texts`.** Adding a `MiniText` arm
+/// to [`oag_ui::screen::Screens::collect`] was tried first and reverted:
+/// that parser is shared by every title's every screen, and a scratch
+/// survey found `<MiniText>` on `MainMenu_Definition.xml`,
+/// `RaceBox_Definition.xml`, `Additional_Definition.xml` and
+/// `RecordGrid_Definition.xml` too - collecting it generically would have
+/// started drawing widgets on screens this pass never measured, on every
+/// title, not only this one. `BRACKET_RECT` already sets the precedent for
+/// a number the parser does not reach: read directly off the file, kept as
+/// a plain constant.
+const SUBTITLE_POSITION: (f32, f32) = (160.0, 140.0);
+
+/// `FuryGoldMedalsMiniText`'s own position and colour -
+/// `<MiniText name="FuryGoldMedalsMiniText"><Values x="755" y="710"
+/// idstring="RC_GM" color="0xff000000">`. Hand-placed - see
+/// [`SUBTITLE_POSITION`]'s own doc. The colour is a literal on this one
+/// widget (black), unlike [`HD_GOLD_MEDALS_LABEL_POSITION`]'s own
+/// `FEGlobals->HD_Grey`.
+const FURY_GOLD_MEDALS_LABEL_POSITION: (f32, f32) = (755.0, 710.0);
+const FURY_GOLD_MEDALS_LABEL_COLOR: u32 = 0xff00_0000;
+
+/// `HDGoldMedalsMiniText`'s own position - `<MiniText name="HDGoldMedalsMiniText">
+/// <Values x="1395" y="710" idstring="RC_GM" color="FEGlobals->HD_Grey">`.
+/// Hand-placed - see [`SUBTITLE_POSITION`]'s own doc. Its own colour is
+/// `FEGlobals->HD_Grey`, read off `ScreenTitle`'s own already-collected
+/// `Text.color` in [`draw_list`] rather than re-resolved here - both name
+/// the same global, and `ScreenTitle` is a plain `Text`, not a `MiniText`,
+/// so it is already in `screen.texts` with the value resolved.
+const HD_GOLD_MEDALS_LABEL_POSITION: (f32, f32) = (1395.0, 710.0);
+
+/// `RC_GM`'s own idstring - `"GOLD MEDALS"` on an RPCS3 frame, the same
+/// idstring `Grid Selection`'s own `Medals Title` resolves. Named here since
+/// both hand-placed gold-medal labels share it.
+const GOLD_MEDALS_LABEL_ID: &str = "RC_GM";
 
 /// `Campaign Selection`'s own model: a flat two-entry list, the same shape
 /// [`super::GridSelection`]'s own pager is, stepped by `left`/`right`
@@ -316,6 +355,43 @@ pub fn draw_list(
         let Some(content) = content else { continue };
         out.push(text_draw(text, &content, layout));
     }
+
+    // The subtitle and the two gold-medal labels - hand-placed, not
+    // resolved through `screen.texts`; see `SUBTITLE_POSITION`'s own doc on
+    // why. `grey` is `FEGlobals->HD_Grey`'s own resolved ARGB, read off
+    // `ScreenTitle`'s already-collected `Text.color` rather than
+    // re-resolved here - both name the same global.
+    let grey = screen
+        .texts
+        .iter()
+        .find(|text| text.name.as_deref() == Some("ScreenTitle"))
+        .map_or(0xffff_ffff, |text| text.color);
+    let hand_placed = [
+        (SUBTITLE_POSITION, grey, strings.get_or_id(SUBTITLE_ID)),
+        (
+            FURY_GOLD_MEDALS_LABEL_POSITION,
+            FURY_GOLD_MEDALS_LABEL_COLOR,
+            strings.get_or_id(GOLD_MEDALS_LABEL_ID),
+        ),
+        (
+            HD_GOLD_MEDALS_LABEL_POSITION,
+            grey,
+            strings.get_or_id(GOLD_MEDALS_LABEL_ID),
+        ),
+    ];
+    for ((x, y), color, content) in hand_placed {
+        out.push(Draw::Text {
+            x,
+            y,
+            scale: 1.0,
+            color: argb_to_rgba(color),
+            border: None,
+            align: Align::Left,
+            text: content.to_string(),
+            wrap_width: None,
+        });
+    }
+
     layers.body = out;
     layers
 }

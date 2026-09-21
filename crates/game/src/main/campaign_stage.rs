@@ -279,20 +279,39 @@ impl CampaignStage {
         self.screen = Screen::Selection(model);
     }
 
-    /// Opens `Cell Selection` on `which`'s own cells - an index into
-    /// [`Self::grids`] relative to [`Self::grid_range`] (what
-    /// `GridSelection::index` returns), converted to an absolute one before
-    /// it is stored. `false` when `which` is out of range or the grid
-    /// carries no cells at all, and the caller stays on `Grid Selection`.
+    /// Opens `Cell Selection` on `which`'s own cells - an **absolute**
+    /// index into [`Self::grids`], the same contract this method has always
+    /// had (`crate::main::session::endrace::return_to_campaign` reaches a
+    /// cell this way, off `Self::grids()`'s own flat list, without ever
+    /// touching `Campaign Selection` first). `false` when `which` is out of
+    /// range or the grid carries no cells at all, and the caller stays on
+    /// whatever screen it was on.
+    ///
+    /// **Self-healing for `Self::grid_range`/`Self::active_campaign`**: a
+    /// caller that reopens `Cell Selection` directly - `return_to_campaign`
+    /// is the one that exists - never confirms `Campaign Selection`/`Grid
+    /// Selection` first, so nothing else would narrow either field to the
+    /// campaign `which` actually belongs to. Narrowing it here, on every
+    /// call, keeps [`Self::cell_grid_summary`]'s own `Event NN/MM` counter
+    /// and [`Self::back_to_grid_selection`]'s own return page correct
+    /// regardless of which caller reached this cell - see
+    /// [`Self::open_cell_selection_at_grid_slot`] for the other one, whose
+    /// own index is already relative to a narrowed range.
     pub(crate) fn open_cell_selection(&mut self, which: usize) -> bool {
-        let Some(absolute) = self.grid_range.start.checked_add(which) else {
-            return false;
-        };
-        let Some(grid) = self.grids.get(absolute) else {
+        let Some(grid) = self.grids.get(which) else {
             return false;
         };
         if grid.cells.is_empty() {
             return false;
+        }
+        if self.has_selection() {
+            let campaign = if oag_hd::campaign::FURY_GRID_RANGE.contains(&which) {
+                Campaign::Fury
+            } else {
+                Campaign::Hd
+            };
+            self.grid_range = campaign.grid_range();
+            self.active_campaign = Some(campaign);
         }
         let cells = grid.cells.clone();
         let title = &self.title;
@@ -304,9 +323,21 @@ impl CampaignStage {
                     .best_medal
                     .map(to_campaign_medal)
             }),
-            which: absolute,
+            which,
         };
         true
+    }
+
+    /// [`Self::open_cell_selection`], for `slot` relative to
+    /// [`Self::grid_range`] - what `Grid Selection`'s own
+    /// `GridSelection::index()` returns, the call site
+    /// `crate::main::session::campaign::handle_campaign`'s own `Screen::Grid`
+    /// confirm arm has.
+    pub(crate) fn open_cell_selection_at_grid_slot(&mut self, slot: usize) -> bool {
+        match self.grid_range.start.checked_add(slot) {
+            Some(absolute) => self.open_cell_selection(absolute),
+            None => false,
+        }
     }
 
     /// **HD only** - the enclosing grid's own index and count, both relative
