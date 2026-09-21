@@ -171,6 +171,21 @@ the start line and runs the simulation. What it does **not** do, and why:
   which only wires the front end far enough to expose this. See
   [2048-frontend.md](2048-frontend.md#the-language-plugins-carry-a-hud-font-role-too)
   and [2048-hud.md](2048-hud.md).
+- **2026-09-21: `--race --event "<name>"` launches a real campaign event.**
+  2048's own campaign is not a racebox grid at all - it is `Data\xml\SP.xml`,
+  a "mjolnir" typed-instance database, 288 instances across eight typedefs,
+  five named in-file by their own `type=`/`typedefid=` pairs and four
+  classified by measured field shape. `oag_tables::mjolnir` reads it,
+  `oag_2048::campaign` names 2048's own facts (its five speed classes
+  including `SUPERPHANTOM`, the `laps == 0` Speed Lap sentinel, the mode each
+  event kind maps onto), and `race::load_event` resolves an event onto
+  `race::Options` before the existing loader runs. `--event "2048 - Event 3"`
+  loads Park/Flash/2 laps/`single_race` with a full AI grid; an
+  `Elimination`-kind event loads too, since `oag_race::Mode::Eliminator` turns
+  out to be a real, implemented mode with this title's own
+  `weaponstats_Elimination_2048.xml` already wired - not the unsupported mode
+  this feature was built expecting to have to refuse. See
+  [2048-campaign.md](2048-campaign.md).
 
 ## The one axis 2048 forced into existence
 

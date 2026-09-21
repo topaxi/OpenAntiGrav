@@ -522,6 +522,9 @@ pub(crate) struct Cli {
     /// anything out.
     #[arg(long, default_value = "time_trial")]
     pub(crate) mode: String,
+    /// A Wipeout 2048 campaign event by name - see `crate::race::load_event`.
+    #[arg(long, value_name = "NAME")]
+    pub(crate) event: Option<String>,
 
     /// Development override: pin the Zone colour grade to a stage for the
     /// whole run.
