@@ -317,6 +317,10 @@ impl Frontend {
             return out;
         }
 
+        if self.in_wipeout2048() {
+            return self.draw_wipeout2048();
+        }
+
         if self.machine.is(states::SHOW_LOGO) {
             // Its widgets and nothing else, which is what `--screen "Show Logo"`
             // has been drawing all along - so the state reaching the boot order
@@ -487,74 +491,6 @@ impl Frontend {
         ]
     }
 
-    /// This build's own storage warning, at the disc's own geometry.
-    ///
-    /// **The wording is deliberately not the disc's.** Its six `MSInfo`/`MSWarning`
-    /// strings are about a Memory Stick Duo being physically removed mid-write;
-    /// this is a reimplementation on hardware where storage is assumed present, so
-    /// the screen keeps its structure, its colours, its rules and its cross gate,
-    /// and says what is actually true here instead. A product decision, recorded
-    /// in [`pure_states::MEMORY_STICK_WARNING`] so it is not "fixed" back to the
-    /// disc's strings by someone reading the XML.
-    ///
-    /// Everything geometric *is* the disc's: the two rules at y=10 and y=240, the
-    /// body at x=15 from y=30, the prompt at y=245, and the
-    /// `MSWarningColour1`/`MSWarningColour2`/`MSWarningScale` globals the screen's
-    /// own widgets reference.
-    fn draw_storage_warning(&self, out: &mut Vec<Draw>) {
-        let global = |name: &str, fallback: u32| {
-            self.screens
-                .globals
-                .get(name)
-                .and_then(|value| parse_argb(value))
-                .unwrap_or(fallback)
-        };
-        let heading = argb_to_rgba(global("MSWarningColour1", 0xFF00_AEEF));
-        let body = argb_to_rgba(global("MSWarningColour2", 0xFF00_AEEF));
-        let scale = self
-            .screens
-            .globals
-            .get("MSWarningScale")
-            .and_then(|value| value.parse::<f32>().ok())
-            .unwrap_or(1.0);
-
-        for y in [10.0, 240.0] {
-            out.push(Draw::Fill {
-                rect: [0.0, y, self.space.size.0, 1.0],
-                color: heading,
-            });
-        }
-        for (index, line) in [
-            "THIS GAME SAVES AUTOMATICALLY.",
-            "PROGRESS IS WRITTEN WHEN A RACE ENDS AND",
-            "WHEN A SETTING CHANGES.",
-        ]
-        .iter()
-        .enumerate()
-        {
-            out.push(Draw::Text {
-                x: 15.0,
-                y: 30.0 + index as f32 * 15.0,
-                scale,
-                color: body,
-                border: None,
-                align: Align::Left,
-                text: (*line).to_string(),
-                wrap_width: None,
-            });
-        }
-        out.push(Draw::Text {
-            x: 15.0,
-            y: 245.0,
-            scale,
-            color: heading,
-            border: None,
-            align: Align::Left,
-            text: "PRESS X TO CONTINUE".to_string(),
-            wrap_width: None,
-        });
-    }
-
     /// The frame counter `--overlay` puts over a movie leg.
     ///
     /// Whether the movie on this leg has a picture is the caller's to say: the
@@ -562,7 +498,7 @@ impl Frontend {
     /// so a shared flag would report the wrong one. The counter exists for the
     /// case where there is no picture at all - it is the only thing on screen
     /// then, and the only sign the leg is running rather than hung.
-    fn insert_movie_counter(&self, out: &mut Vec<Draw>, has_picture: bool) {
+    pub(super) fn insert_movie_counter(&self, out: &mut Vec<Draw>, has_picture: bool) {
         if !self.overlay {
             return;
         }
@@ -655,7 +591,7 @@ impl Frontend {
     /// reads as "settled": every pulsing widget's alpha lands on the ceiling
     /// [`pulse_alpha`] converges to, which is its own authored colour, so
     /// nothing here changes for a caller that never had a clock to give.
-    fn draw_screen_at(&self, name: &str, elapsed: f64) -> Vec<Draw> {
+    pub(super) fn draw_screen_at(&self, name: &str, elapsed: f64) -> Vec<Draw> {
         let (width, height) = self.space.size;
         let mut out = vec![Draw::Fill {
             rect: [0.0, 0.0, width, height],
@@ -678,10 +614,18 @@ impl Frontend {
             };
             let mut color = argb_to_rgba(text.color);
             color[3] *= pulse_alpha(text, elapsed);
+            let scale = text.scale * self.face_scale(&text.font);
+            // `vertalign="middle"`: half a line up from the authored `y`,
+            // which needs the face's height and so only moves once
+            // `set_face_scales` has said what it is.
+            let y = match (text.middle, self.default_line_height) {
+                (true, Some(line)) => text.y - 0.5 * line * scale,
+                _ => text.y,
+            };
             out.push(Draw::Text {
                 x: text.x,
-                y: text.y,
-                scale: text.scale,
+                y,
+                scale,
                 color,
                 border: None,
                 align: Align::parse(&text.align),
@@ -734,7 +678,14 @@ impl Frontend {
             let (scale_x, scale_y) = self.space.texture_scale();
             let w = image.width.unwrap_or(placed.width as f32 * scale_x);
             let h = image.height.unwrap_or(placed.height as f32 * scale_y);
-            let x = image.x;
+            // `Centred="true"` names the middle, not the corner - see
+            // `Image::centred`. Resolved here because `w`/`h` may be the
+            // texture's own, which the parser never had.
+            let (x, y) = if image.centred {
+                (image.x - w * 0.5, image.y - h * 0.5)
+            } else {
+                (image.x, image.y)
+            };
 
             // `U`/`V`/`TxtrWidth`/`TxtrHeight` name a sub-rect of `src`'s own
             // texture, in that texture's own pixels - not the whole thing,
@@ -751,7 +702,7 @@ impl Frontend {
             ];
 
             out.push(Draw::Sprite {
-                rect: [x, image.y, w, h],
+                rect: [x, y, w, h],
                 uv,
                 color: argb_to_rgba(image.color),
             });
@@ -994,4 +945,5 @@ fn pulse_alpha(text: &Text, elapsed: f64) -> f32 {
     settled * cycles.min(1.0)
 }
 
+mod storage_warning;
 mod transform;

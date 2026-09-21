@@ -38,6 +38,11 @@ impl Frontend {
     /// acted on. `false` means the screen has no targets: the caller may
     /// then treat a click as the press every such screen waits for.
     pub fn pointer(&mut self, pointer: &Pointer) -> bool {
+        // 2048's icon grids are the other screens with something to point
+        // at - see `frontend::touch`.
+        if self.touch_pointer(pointer) {
+            return true;
+        }
         if !self.machine.is(states::LANGUAGE_SELECTION) {
             return false;
         }

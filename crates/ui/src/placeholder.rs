@@ -12,8 +12,12 @@
 //! `menu` in for either case with another title's numbers, or with
 //! placeholder numbers dressed as measurements, would be exactly what
 //! `CLAUDE.md`'s "never invent what the assets already author" forbids -
-//! so both stay `None`, and both fall into this module rather than into a
-//! wrong picture.
+//! so both stay `None`. Since 2026-09-21 `oag_game::boot::load_shell` takes
+//! [`MENU_SKIN`] for a title whose `menu` is `None`, so 2048's boot walks
+//! its own chain and draws its own grids (`crate::frontend::touch`) with
+//! this layout standing in only for the shell's own menus, which that boot
+//! never opens; the composition root's `session::placeholder` route is what
+//! a title with *no* front end still falls into.
 //!
 //! What [`crate::menu`] draws is not disc content, though - see its own module
 //! docs: the menu *tree* (`assets/ui/menu.toml`) is this project's own, not

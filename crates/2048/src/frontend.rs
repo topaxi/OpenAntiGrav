@@ -54,6 +54,67 @@ pub mod states {
     /// this build's own boot mechanism yet. See
     /// `docs/formats/2048-frontend.md`'s "Corroborated on Vita3K" section.
     pub const GAME_MODE_CHOICE: &str = "GameModeChoice";
+    /// The five-icon row `newFEshell`'s `<TouchHomeButton>` redirects to -
+    /// team, community, profile, options, extras. See [`super::TOUCH`]'s
+    /// `home`.
+    pub const HOME: &str = "Home";
+    /// The touch shell itself: `<Screen name="newFEshell">`, whose
+    /// `<TouchScroll>` holds the persistent `<FE3DCanvas>` map and the
+    /// `<TouchCampaign>` widget - the screen the campaign is picked on, and
+    /// the one `GameModeChoice`'s confirm tick redirects to.
+    pub const NEW_FE_SHELL: &str = "newFEshell";
+    /// Where a tap on a campaign event goes: `<TouchCampaign>`'s and
+    /// `<FE3DCanvas>`'s shared `redirect="Launch 2048"`, and one of the five
+    /// boot-mode strings the executable knows by name (`game-boot.md`).
+    /// **Not a screen in any `NEWGUI` file** - it is the disc's own name for
+    /// leaving the front end for a race, the way Pulse's `Launch Game` is.
+    pub const LAUNCH_2048: &str = "Launch 2048";
+}
+
+/// The screens the boot walks and the grids it lands on live in the root's
+/// `<LoadXML>` includes, not in the root - and that is this title's shape,
+/// not a gap in the reading.
+///
+/// `NEWGUI/Skin.xml` declares eight colour globals, the inherited `HD_Colours`
+/// block and six `<LoadXML>` lines, and **no screen of its own**
+/// (`docs/formats/2048-frontend.md`, the file quoted in full). Its first
+/// include, `Definition.xml`, declares `overshell` -> `newFEshell` ->
+/// `GameModeChoice`/`Home` and pulls in two more: `Bootup_Definition.xml`
+/// (`localised="true"`, so really `Bootup_Definition_EU.xml`, holding
+/// `Boot Connect`) and `Intro_Definition.xml` (the other four boot screens,
+/// `Boot Studio Logo` through `TitleScreen`).
+pub mod includes {
+    /// The includes the boot follows, spelled as their `SrcRel` attributes
+    /// are before any region suffix, in the order the files list them.
+    ///
+    /// **The four files the boot chain, its footer and the two grids are
+    /// in, and no other.** `Skin.xml`'s five remaining includes are the in-race, end-race
+    /// and demo overlays, and `Definition.xml`'s six others (`Community_`,
+    /// `Profile_`, `Options_`, `Team_`, `Extras_`, `Unlocks_`) are sub-screens
+    /// the boot never reaches and this build does not draw. Following every
+    /// include was measured once: 46 textures into a 1024x6766 sprite sheet,
+    /// for screens nothing samples. A list, the same way
+    /// [`oag_title::FrontEnd::race_box`] names Pulse's one selection include
+    /// by file rather than following its root's whole `LoadXML` list.
+    pub const FOLLOWED: &[&str] = &[
+        "Definition.xml",
+        "Bootup_Definition.xml",
+        "Intro_Definition.xml",
+        // `TitleScreen`'s legal footer, `DirectEmbed="true"` and
+        // `localised="true"`: one bare `<Text>` per territory, embedded
+        // into the screen that names it.
+        "Legal_Line_Definition.xml",
+    ];
+    /// The region suffix a `localised="true"` include resolves to.
+    ///
+    /// **A package fact, not a choice.** `PCSF00007` - the serial under
+    /// `data/extracted/vita/PCSF00007` and the only 2048 package this
+    /// project has unpacked - is Sony's EU title id, and the EU boot file
+    /// is the one the Vita3K capture matched byte for byte
+    /// (`Legal_Line_Definition_EU.xml`'s `BOOT_LEGAL_TRADEMARK_FULL_EU`,
+    /// `2048-frontend.md`'s "Corroborated on Vita3K" section). A USA or
+    /// JP package would need its own serial mapped here; none is extracted.
+    pub const LOCALISED_SUFFIX: &str = "_EU";
 }
 
 /// Entry names this module reads.

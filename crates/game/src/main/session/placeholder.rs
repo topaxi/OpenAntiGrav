@@ -1,19 +1,20 @@
-//! Booting a title with no `MenuSkin`-shaped menu to draw - Wipeout 2048,
-//! today - straight into this build's own menus instead of refusing.
+//! Booting a title with no front end this build can walk straight into this
+//! build's own menus instead of refusing.
 //!
-//! `oag_game::boot::load_shell` still refuses such a title, by name, and stays
-//! refusing - see `oag_ui::placeholder`'s module docs for why nothing here
-//! may put a `MenuSkin` on `oag_2048::TITLE`'s front end to get past that.
-//! **This is no longer "a title with no front end at all"**, since
-//! `oag_2048::TITLE.front_end` is `Some` since [ADR-0054]: 2048's boot chain
-//! and language plugins are real and read, only its menu vocabulary is not
-//! `MenuSkin`-shaped (a touch-icon grid instead - `oag_title::FrontEnd::touch`).
-//! This module never calls `load_shell` for such a title at all: it opens the
-//! archives itself, reads only what does not need a `MenuSkin` - the roster
-//! and the circuit list, off the title's own plugin definitions - and builds
-//! the same light `Session::Shell` [`Session::open_menus`] already knows how
-//! to draw, with `oag_ui::placeholder::MENU_SKIN` standing in for a layout
-//! this title's front end does not author in a shape this build can read.
+//! **Wipeout 2048 no longer lands here** (2026-09-21): its front end is
+//! `Some` since [ADR-0054], and `oag_game::boot::load_shell` walks its
+//! declared boot chain and draws its touch grids off
+//! `oag_title::FrontEnd::touch`, with `oag_ui::placeholder::MENU_SKIN`
+//! standing in only for the `MenuSkin` the shell's *own* menus would need -
+//! see that module's docs for why nothing may put a `MenuSkin` on
+//! `oag_2048::TITLE` itself. What is left for this route is a title whose
+//! `front_end` is `None` outright, or one whose front end fills neither
+//! axis; a 2048 boot that fails for some other reason hands its error back
+//! rather than covering it with these menus. This module never calls
+//! `load_shell` for such a title at all: it opens the archives itself, reads
+//! only what does not need a `MenuSkin` - the roster and the circuit list,
+//! off the title's own plugin definitions - and builds the same light
+//! `Session::Shell` [`Session::open_menus`] already knows how to draw.
 //!
 //! [ADR-0054]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0054-a-touch-front-end-is-a-second-axis-not-a-menuskin-variant.md
 //!
@@ -82,10 +83,13 @@ impl Session {
             }
         };
         let title = opened.title;
-        if title.front_end.is_some_and(|fe| fe.menu.is_some()) {
+        if title
+            .front_end
+            .is_some_and(|fe| fe.menu.is_some() || fe.touch.is_some())
+        {
             // Not this route's case after all: whatever `windowed_error` was
-            // about, it was not a missing `MenuSkin`, and the pick goes back
-            // so the player can try another row.
+            // about, it was not a front end with nothing to draw, and the
+            // pick goes back so the player can try another row.
             self.pending = Some(pending);
             return Err(windowed_error);
         }

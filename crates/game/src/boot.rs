@@ -196,66 +196,6 @@ impl Options {
     }
 }
 
-/// A step the load has to be quick enough at for nobody to notice. Anything
-/// slower gets named in the report; anything faster would only be noise there.
-const FELT: std::time::Duration = std::time::Duration::from_millis(20);
-
-/// A stopwatch that names each step of the load as it passes.
-///
-/// The boot is the longest wait this build asks anyone to sit through and it
-/// used to be one opaque call, so "which part of it" was a question nobody
-/// could answer without a profiler. One [`Steps::lap`] per step answers it on
-/// every boot, in the report the load already prints, which is also what keeps
-/// the answer current: a step that gets slower says so rather than waiting to
-/// be re-measured.
-///
-/// Wall clock, deliberately, and this is the one place in the codebase that is
-/// allowed to be - see `docs/architecture/determinism.md`. Nothing here reaches
-/// the simulation: these are strings for a human.
-struct Steps {
-    at: std::time::Instant,
-    steps: Vec<(&'static str, std::time::Duration)>,
-}
-
-impl Steps {
-    fn new() -> Self {
-        Self {
-            at: std::time::Instant::now(),
-            steps: Vec::new(),
-        }
-    }
-
-    /// Closes the step that has been running since the last lap.
-    fn lap(&mut self, what: &'static str) {
-        let now = std::time::Instant::now();
-        self.steps.push((what, now - self.at));
-        self.at = now;
-    }
-
-    /// One line: the total, then the steps that were felt, slowest first.
-    ///
-    /// Slowest first rather than in load order because the reason to read this
-    /// line at all is "what am I waiting for", and that is the first name on it.
-    fn describe(&self, what: &str) -> String {
-        let total: std::time::Duration = self.steps.iter().map(|(_, took)| *took).sum();
-        let mut felt: Vec<_> = self
-            .steps
-            .iter()
-            .filter(|(_, took)| *took >= FELT)
-            .collect();
-        felt.sort_by_key(|(_, took)| std::cmp::Reverse(*took));
-        let named = felt
-            .iter()
-            .map(|(name, took)| format!("{name} {:.2}", took.as_secs_f32()))
-            .collect::<Vec<_>>()
-            .join(", ");
-        if named.is_empty() {
-            return format!("{what} took {:.2} s", total.as_secs_f32());
-        }
-        format!("{what} took {:.2} s - {named}", total.as_secs_f32())
-    }
-}
-
 /// Loads everything and builds the sequence.
 ///
 /// **The blocking whole**, for callers with nothing to draw while they wait: a
@@ -377,6 +317,8 @@ pub struct Shell {
     /// reads. `None` falls the menus back to [`Self::font`].
     pub menu_font: Option<oag_ui::font::Atlas>,
     pub title_font: Option<oag_ui::font::Atlas>,
+    /// Each font role's face against `Default`, see [`fonts::face_scales`].
+    pub face_scales: Vec<(String, f32)>,
     /// The screens this boot walks, in the title's own order, already filtered
     /// to the ones this pressing carries and this build can drive.
     ///
@@ -486,21 +428,13 @@ pub fn load_shell(
             title.name
         )
     })?;
-    // **A front end with no `MenuSkin`-shaped menu is refused here too, by
-    // name, the same way a title with no front end at all is refused above.**
-    // Wipeout 2048 is the first title in this state: its front end is real
-    // and walkable (`front_end.boot` below), but its menus are a touch-icon
-    // grid `oag_title::MenuSkin` was never built to hold - see ADR-0054 and
-    // `oag_title::FrontEnd::touch`. `--race` never calls this function, so a
-    // title in this state still races; only the menu-driven boot refuses.
-    let menu_skin = front_end.menu.ok_or_else(|| {
-        anyhow::anyhow!(
-            "{}'s front end draws no MenuSkin-shaped menu (see \
-             oag_title::FrontEnd::touch for what it draws instead), so there is \
-             no menu sequence to walk: race on it with --race instead",
-            title.name
-        )
-    })?;
+    // **A front end with no `MenuSkin`-shaped menu is not refused.** Wipeout
+    // 2048 is the one title in this state (ADR-0054): its boot chain walks
+    // and its screens are touch-icon grids drawn off `front_end.touch`, so
+    // the skin below is only what this build's *own* menus would draw in if
+    // they were ever opened on it - `oag_ui::placeholder`'s numbers, which
+    // belong to no disc and are never mistaken for a measurement.
+    let menu_skin = front_end.menu.unwrap_or(&oag_ui::placeholder::MENU_SKIN);
     let profile = front_end.boot;
     report.push(archives.layout.describe());
     report.push(format!("{}: boot sequence", title.name));
@@ -530,7 +464,7 @@ pub fn load_shell(
     steps.lap("languages");
     let font = load_font(&mut archives, &languages, &mut report);
     steps.lap("font");
-    let screens = load_screens(
+    let mut screens = load_screens(
         &mut archives,
         front_end.root,
         title.plugin_definition,
@@ -538,6 +472,18 @@ pub fn load_shell(
         profile.fallback_images,
         &mut report,
     )?;
+    // A touch front end's screens are in the root's includes - see
+    // `boot::includes` for why only that idiom is followed.
+    if front_end.touch.is_some() {
+        includes::follow(
+            &mut archives,
+            front_end.root,
+            &mut screens,
+            oag_2048::frontend::includes::FOLLOWED,
+            oag_2048::frontend::includes::LOCALISED_SUFFIX,
+            &mut report,
+        );
+    }
     steps.lap("screens");
     // The race box's own definition, when the title names one - parsed here,
     // ahead of the sprite sheet, so its images (`hex_bg.mip`, the bars) go
@@ -561,6 +507,20 @@ pub fn load_shell(
     steps.lap("strings");
     let menu_font = load_menu_font(&mut archives, &languages, menu_skin, &mut report);
     let title_font = load_title_font(&mut archives, &languages, menu_skin, &mut report);
+    // A touch front end's screens author more than one role and this build
+    // has one atlas; the ratio each face's line height stands to `Default`
+    // is what keeps the others the right size. Not measured for the other
+    // titles here, whose screens were matched against captures without it.
+    let face_scales = if front_end.touch.is_some() {
+        fonts::face_scales(
+            &mut archives,
+            chosen_language(&languages, options.language.as_deref()),
+            font.line_height,
+            &mut report,
+        )
+    } else {
+        Vec::new()
+    };
     steps.lap("menu and title fonts");
     let definition = title.plugin_definition;
     let documents = definitions(&mut archives, definition, &mut report);
@@ -675,6 +635,17 @@ pub fn load_shell(
             ));
         }
     }
+    // Nothing to walk is a failed boot, said by name: `Frontend::booting`
+    // indexes the first step, and a chain whose every screen is missing
+    // (a root whose includes did not read) must not get that far.
+    anyhow::ensure!(
+        !walked.is_empty(),
+        "{}: none of the boot chain's {} screens is in the front end this source \
+         served, so there is no sequence to walk - {}",
+        title.name,
+        profile.chain.len(),
+        report.join("; ")
+    );
     // Every step that plays something, in order. Pulse has one (its boot step);
     // Pure has two, and **neither is its boot step** - the reel plays on the
     // developer/publisher screen and the FMV two steps later. Keying either off
@@ -761,6 +732,7 @@ pub fn load_shell(
             ship_select,
             menu_font,
             title_font,
+            face_scales,
             walked,
             movie_name,
             second_movie_name,
@@ -1112,6 +1084,7 @@ pub fn assemble(shell: Shell, media: Media) -> Boot {
         ship_select,
         menu_font,
         title_font,
+        face_scales,
         walked,
         movie_name: _,
         second_movie_name: _,
@@ -1130,11 +1103,18 @@ pub fn assemble(shell: Shell, media: Media) -> Boot {
     // the sequence takes one of them by value. See `Boot::languages`.
     let offered = languages.clone();
 
+    // Every `Image` and every `TouchButton` icon, by the name the widget
+    // spells - the same set `sprites::load` read.
     let placements = screens
         .screens
         .iter()
-        .flat_map(|s| s.images.iter())
-        .filter_map(|image| sprites.get(&image.src).map(|p| (image.src.clone(), p)))
+        .flat_map(|s| {
+            s.images
+                .iter()
+                .map(|image| &image.src)
+                .chain(s.touch_buttons.iter().filter_map(|b| b.src.as_ref()))
+        })
+        .filter_map(|src| sprites.get(src).map(|p| (src.clone(), p)))
         .collect();
     // Both movies described the same way, each from its own container: the cached
     // frame count when there is a cache and the demuxed one when there is not,
@@ -1183,6 +1163,10 @@ pub fn assemble(shell: Shell, media: Media) -> Boot {
         placements,
     );
     frontend.set_menu_skin(menu_skin);
+    // Only where they were measured - see `load_shell`'s own gate.
+    if !face_scales.is_empty() {
+        frontend.set_face_scales(face_scales, font.line_height);
+    }
 
     // **Before `set_backdrop`, which bakes a rect out of it.** The PS2's `Skin.xml`
     // places widgets in a 640x448 grid rather than the PSP's 480x272, so every widget
@@ -1642,11 +1626,13 @@ pub fn load_strings(
 mod fonts;
 pub mod fury;
 mod images;
+mod includes;
 mod movies;
 mod provenance;
 pub(crate) mod roster;
 mod screens;
 mod sprites;
+mod steps;
 pub(crate) mod xml;
 
 use fonts::{load_font, load_menu_font, load_title_font};
@@ -1654,6 +1640,7 @@ use movies::load_movie;
 pub use movies::{DEFAULT_BOOT_MOVIE, DEVPUB_REEL, EntryRef};
 use roster::{definitions, load_circuit_names, load_teams, load_tracks, load_zone_tracks};
 use screens::{load_included_screens, load_screens, selection_layouts};
+use steps::Steps;
 use xml::expand;
 
 /// The default movie cache directory: `data/cache/movies` in a repository

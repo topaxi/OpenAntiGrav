@@ -2264,6 +2264,7 @@ dependencies = [
 name = "oag-ui"
 version = "0.1.0"
 dependencies = [
+ "oag-2048",
  "oag-assets",
  "oag-core",
  "oag-display",
