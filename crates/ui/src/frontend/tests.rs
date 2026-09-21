@@ -15,6 +15,7 @@ mod drawing;
 mod intro;
 mod pointer;
 mod screens;
+mod wipeout2048;
 
 use super::*;
 
