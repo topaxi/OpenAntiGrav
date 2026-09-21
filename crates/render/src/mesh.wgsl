@@ -8,17 +8,18 @@
 struct Uniforms {
     view_projection: mat4x4<f32>,
     model: mat4x4<f32>,
-    // Unused. Was the phase of a global texture-animation clock, back when
-    // every animated surface was assumed to scroll V at a rate chosen from a
-    // table of texture names; the authored per-material keyframe blocks
-    // replaced it (see `TexAnims` below). Kept as padding rather than removed
-    // because `UNIFORMS_SIZE` and this layout are mirrored by the asset
-    // viewer and by four other pipelines in this crate.
+    // Which layer of the per-craft sun-occlusion array this model samples,
+    // **plus one** - `0.0` for none, which is every draw but a Wipeout HD hull
+    // under the `original` tier. See `sun_occlusion` below and
+    // `oag_render::shadow::occlusion`. The slot was a global
+    // texture-animation phase before the authored per-material keyframe
+    // blocks (`TexAnims`) replaced it, and sat as padding until this; reusing
+    // it keeps the layout `UNIFORMS_SIZE` and four other pipelines mirror.
     //
     // Three trailing f32 fields rather than a vec3: WGSL aligns vec3 to 16
     // bytes, which would silently insert padding this struct's Rust mirror
     // (a flat, tightly packed repr(C)) does not have.
-    _unused: f32,
+    sun_occlusion_layer: f32,
     _pad0: f32,
     _pad1: f32,
     _pad2: f32,
@@ -163,6 +164,10 @@ struct Scene {
     zone: Zone,
     shadow: ShadowMap,
     spu_lights: SpuLights,
+    // World to each craft's sun-occlusion map's clip space, one per layer of
+    // `sun_occlusion_tex` - the `directionalLight0Proj` a Wipeout HD hull is
+    // bound. Read only by the layer `uniforms.sun_occlusion_layer` names.
+    sun_occlusion: array<mat4x4<f32>, 8>,
 };
 
 // The shadow map's projection and how hard it darkens. See
@@ -279,6 +284,10 @@ override colour_is_light: f32 = 0.0;
 // reason that binding is past the shadow map.
 @group(2) @binding(11) var zone_tex_outer: texture_2d<f32>;
 @group(2) @binding(12) var zone_scene_tex_outer: texture_2d<f32>;
+// The per-craft sun-occlusion maps, one layer per craft, read through the
+// coverage map's own clamped filtering sampler - see `sun_occlusion` and
+// `oag_render::shadow::occlusion`.
+@group(2) @binding(13) var sun_occlusion_tex: texture_2d_array<f32>;
 @group(3) @binding(0) var<uniform> anims: TexAnims;
 
 // The world matrix of each `Anim Transform` node the model carries, sampled for
@@ -571,6 +580,44 @@ fn shadow_coverage(world: vec3<f32>) -> f32 {
         lit = lit + select(0.0, 1.0, ndc.z - scene.shadow.depth_bias <= nearest);
     }
     return (1.0 - lit * 0.25) * scene.shadow.strength;
+}
+
+// How much sun reaches this point of a Wipeout HD hull, `0.0` to `1.0`, off
+// the road's own baked mask - the second of the two maps the original's
+// `ShadowMap` hull variant multiplies its sun by:
+//
+//     TXP R0.z, f[TC0] unit2      <- directionalLight0LightmapTex, projected
+//     MUL H0.w, R0.xxxx, R0.zzzz  <- times the compared own-depth-map tap
+//     MAD H0.xyz, H0, H0.wwww, {constantAmbientColour}
+//
+// `docs/ghidra/functions/ps3-hdfury-eu/ship-sun-occlusion.md`. The map is
+// the track within ten units of the craft drawn from the sun as its own
+// `lightmap.a`/`colourSet.w`, over black, so a craft over nothing reads 0.
+// **The first factor - the craft's own depth map, its self-shadow - is not
+// drawn**, and reads as 1.0 here; `shadows.md` says why.
+//
+// `1.0` for every draw that names no layer, which is everything but a hull
+// under the `original` tier on a title that renders these maps.
+fn sun_occlusion(world: vec3<f32>) -> f32 {
+    let layer = i32(uniforms.sun_occlusion_layer + 0.5) - 1;
+    if layer < 0 {
+        return 1.0;
+    }
+    let clip = scene.sun_occlusion[layer] * vec4<f32>(world, 1.0);
+    if clip.w <= 0.0 {
+        return 1.0;
+    }
+    let ndc = clip.xyz / clip.w;
+    // The same `0.5 - ndc.y * 0.5` flip `shadow_coverage` documents: the
+    // pass rasterises `ndc.y = +1` into row 0.
+    let uv = vec2<f32>(ndc.x * 0.5 + 0.5, 0.5 - ndc.y * 0.5);
+    // Off the map's own rectangle the original's clamped sample would return
+    // the border, which its black clear leaves at 0 - a craft's hull always
+    // fits its own box, so this is the box's margin and reads as no sun.
+    // `textureSampleLevel` rather than `textureSample`: the layer index is
+    // dynamic and this sits behind a branch, and a map with one mip has no
+    // level to pick anyway.
+    return textureSampleLevel(sun_occlusion_tex, shadow_sampler, uv, layer, 0.0).r;
 }
 
 // The shadow term, applied to colour.
@@ -960,7 +1007,9 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     // term being absent entirely, which is why it was removed rather than
     // left wrong. `mesh/rcs.rs` used to take only `.rgb` from the colour set
     // and this mask did not exist yet.
-    let mask = baked.a * in.sun_mask;
+    // **Times the road's mask under a craft**, `sun_occlusion` above: 1.0 on
+    // every draw that is not a hull with a map, so nothing else here moves.
+    let mask = baked.a * in.sun_mask * sun_occlusion(in.world);
     let sun_diffuse = scene.light.sun * (ndl * mask);
     // **`scene.light.ambient` and `vertex_light` are gated above** (`ambient_term`,
     // `vertex_light_term`), on `slots::NO_AMBIENT` - 251 of Anulpha Pass's 309

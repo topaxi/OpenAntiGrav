@@ -828,6 +828,7 @@ impl Pipeline {
 }
 
 pub mod map;
+pub mod occlusion;
 
 #[cfg(test)]
 mod tests;

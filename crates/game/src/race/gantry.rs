@@ -332,7 +332,7 @@ impl Gantry {
         format: wgpu::TextureFormat,
         anisotropy: Anisotropy,
         sample_count: u32,
-        shadow_map: &oag_render::shadow::map::Map,
+        shadow_maps: mesh_render::ShadowMaps<'_>,
     ) -> Result<Self> {
         let drawable = Drawable::new(
             device,
@@ -345,8 +345,7 @@ impl Gantry {
             mesh_render::TRANSPARENT_BLEND,
             mesh_render::GlowMask::Protected,
             &mesh_render::zone::StageArt::NONE,
-            Some(shadow_map.view()),
-            Some(shadow_map.depth_view()),
+            shadow_maps,
             // Scenery, like the track: it stands on the road and the road's
             // own shadow tiers reach it.
             mesh_render::ShadowReceiver::Both,

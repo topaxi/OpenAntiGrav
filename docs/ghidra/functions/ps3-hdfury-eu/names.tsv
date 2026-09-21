@@ -392,3 +392,16 @@
 0x000db090	function	Ship_SyncActiveModelPointer	80	renderer.md
 0x000dbdc8	function	Ship_ReloadModelForSkin	78	renderer.md
 0x0029ff28	function	EngineFlare_SubmitSpuLight	85	renderer.md
+0x006cdfc0	function	Job_RenderShips_Run	82	ship-sun-occlusion.md
+0x003f0950	function	Shadow_RenderShipSunOcclusionMaps	80	ship-sun-occlusion.md
+0x003ea368	function	Ship_DrawModels	78	ship-sun-occlusion.md
+0x00401ba8	function	Shadow_CompileSunOcclusionTrackRedraw	78	ship-sun-occlusion.md
+0x003e5e58	function	Shadow_AllocShipMapPool	78	ship-sun-occlusion.md
+0x003e4cc8	function	Ship_AddToRenderList	74	ship-sun-occlusion.md
+0x0076a080	data	g_ShipMapSizes	78	ship-sun-occlusion.md
+0x005a40f8	function	Rsx_SetRenderTargets	80	ship-sun-occlusion.md
+0x005c2380	function	Rsx_SetColorMask	84	ship-sun-occlusion.md
+0x005c2524	function	Rsx_SetDepthMask	84	ship-sun-occlusion.md
+0x005c36a8	function	Rsx_SetColorClearValue	84	ship-sun-occlusion.md
+0x005c3724	function	Rsx_SetZStencilClearValue	84	ship-sun-occlusion.md
+0x005c38c0	function	Rsx_ClearSurface	84	ship-sun-occlusion.md

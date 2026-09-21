@@ -92,6 +92,32 @@ Two things worth carrying forward from doing it:
   later, and that compositing pass has never been traced.
 - **HD's map size is ours too.** `shadowMapTexSize` is a real engine parameter
   and its value is unread; 1024 is a choice.
+- **HD's hull is a receiver now, and half of it is still open - 2026-09-21.**
+  [`ship-sun-occlusion.md`](../../docs/ghidra/functions/ps3-hdfury-eu/ship-sun-occlusion.md):
+  `Job RenderShips` renders the track within ten units of the sun line
+  through each craft, from the sun, through its `SunOcclusionLightmap`/
+  `SunOcclusionVertex` technique into a second per-ship map, and the hull's
+  `ShadowMap` variant multiplies its sun by `compare(own depth map) *
+  occlusion`. `oag_render::shadow::occlusion` draws the occlusion half and
+  `mesh.wgsl` gates by it (`OAG_DUMP_SUN_OCCLUSION=<png>` writes the
+  player's layer; tunnel 12/255, glass floor 245/255 on Talon's Junction).
+  Open: (a) the **self-shadow half** - a compared sample of the craft's own
+  depth map, front-face-culled - is not drawn; (b) the original's **chunk
+  draw order** decides what a texel holds where geometry overlaps along the
+  sun with no depth test, and is unread - this side draws in the model's
+  draw order; (c) the six tracks (`17_Track`, `18_Track`, `24_Track`,
+  `23_Track`, `07_Track`, `15_Track`) and Zone clear the map **white**
+  rather than black in the original, and which disc folders those names
+  are was not resolved, so this side clears black everywhere; (d) which
+  ship gets which map slot (512 down to 32 texels) is unread - every layer
+  is 256; (e) **it reads weaker than the original** because the sun is a
+  small share of the hull's light on this side: forcing the gate to zero
+  darkens the Feisar hull by 19 % at tick 4800, which is the scene
+  calibration thread's question, not this mechanism's. One trap worth the
+  reading time: a map fitted to the ship drawable's own bounding radius is
+  164 units across on an HD `Ship.vex` (its authored geometry reaches far
+  past the hull), and reads as a map of the neighbourhood - the fit is the
+  original's fallback cube instead.
 - **Nothing shadows anything but the road.** The polygon is the volume's ground
   cap, so a craft under a bridge does not darken the bridge and one craft does
   not shadow another. Whether that is worth a real stencil volume is a

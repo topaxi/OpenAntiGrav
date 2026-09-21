@@ -191,6 +191,7 @@ impl Scene {
         // first frame - which is the only frame a `--screenshot` capture
         // draws - reading an empty map at zero strength.
         self.render_shadow_map(queue, encoder, race, shadows);
+        self.render_sun_occlusion(queue, encoder, race, shadows);
         let scene = mesh_render::Scene {
             fog,
             light,
@@ -212,6 +213,7 @@ impl Scene {
             // nothing casts - see `Scene::shadow_uniform`.
             shadow: self.shadow_uniform(shadows),
             spu_lights: mesh_render::SpuLights::from_slice(&race.hd_engine_lights()),
+            sun_occlusion: self.sun_occlusion_matrices(),
         };
         // The visualiser's own tint - the showing stage's `EQ colour tint`,
         // or `None` where the file authors none (every 2048 table, and any
@@ -352,24 +354,7 @@ impl Scene {
         // time trial fields one craft.
         oag_render::perfprobe::mark("sky+track-write");
         let drawn = usize::from(race.ship_count());
-        // Slot-indexed rather than `zip`ped over `race.ship_model_matrices()`,
-        // whose filter-then-collect drops out of slot order the moment a
-        // craft below `drawn` goes inactive - see `Race::ship_active`. A
-        // tail slot past `drawn` is simply never in this range, so it keeps
-        // last frame's uniforms and is not drawn, the same as before.
-        for slot in 0..drawn {
-            if !race.ship_active(slot) {
-                continue;
-            }
-            if let Some(drawable) = self.ships.get(slot) {
-                drawable.write(
-                    queue,
-                    view_projection,
-                    race.ship_model_matrix_of(slot),
-                    prev_vp * prev.ship(slot, race),
-                );
-            }
-        }
+        self.write_hull_uniforms(queue, race, view_projection, prev_vp, &prev);
         // The flaps move in *model* space, before the ship's own matrix, so
         // this is a vertex write and not a second uniform - see
         // `Drawable::deflect_airbrakes`. Unconditional rather than

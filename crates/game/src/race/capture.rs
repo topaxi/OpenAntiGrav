@@ -890,6 +890,7 @@ pub fn capture(
     std::fs::write(&options.path, png)
         .with_context(|| format!("writing {}", options.path.display()))?;
     println!("wrote {} ({width}x{height})", options.path.display());
+    scene.dump_sun_occlusion_if_asked(&device, &queue)?;
     Ok(())
 }
 

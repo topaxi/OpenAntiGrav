@@ -244,8 +244,7 @@ fn draw(device: &wgpu::Device, queue: &wgpu::Queue, model: &Model, scene: Scene)
         mesh_render::GlowMask::Protected,
         mesh_render::Velocity::None,
         &mesh_render::zone::StageArt::NONE,
-        None,
-        None,
+        mesh_render::ShadowMaps::NONE,
         mesh_render::ShadowReceiver::Never,
     )
     .expect("building the mesh pipeline");

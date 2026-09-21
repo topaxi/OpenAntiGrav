@@ -108,9 +108,25 @@ impl Fit {
     /// swing less.
     #[must_use]
     pub fn matrix(&self) -> Mat4 {
+        self.matrix_reaching(self.radius.max(1.0) + NEAR_MARGIN)
+    }
+
+    /// [`Self::matrix`] with the box's *depth* stated by the caller: the eye
+    /// sits `reach` units towards the light from [`Self::centre`] and the far
+    /// plane the same distance beyond it, so the box spans `2 * reach` along
+    /// the light while its width stays [`Self::radius`].
+    ///
+    /// For a map whose depth is a reading rather than a fit: Wipeout HD's
+    /// per-ship sun-view box looks from 70 units up the sun with near 1 and
+    /// far 140 (`Shadow_BuildShipShadowMatrices`), which is `reach = 70`
+    /// around a craft a few units across - the sun-occlusion map needs that
+    /// depth to see the same overhead deck the original's does.
+    #[must_use]
+    pub fn matrix_reaching(&self, reach: f32) -> Mat4 {
         let radius = self.radius.max(1.0);
+        let reach = reach.max(1.0);
         let direction = self.resolved_direction();
-        let eye = self.centre + direction * (radius + NEAR_MARGIN);
+        let eye = self.centre + direction * reach;
         // Any up that is not the direction itself; the choice only rotates the
         // map's texels, which nothing reads across frames.
         let up = if direction.y.abs() > 0.99 {
@@ -124,14 +140,7 @@ impl Fit {
         // The same `directx` clip convention `camera::perspective` uses, which
         // is wgpu's: depth runs 0 to 1, and `mesh.wgsl`'s own `ndc.z` test
         // assumes it.
-        let projection = camera::orthographic(
-            -radius,
-            radius,
-            -radius,
-            radius,
-            0.0,
-            radius * 2.0 + NEAR_MARGIN * 2.0,
-        );
+        let projection = camera::orthographic(-radius, radius, -radius, radius, 0.0, reach * 2.0);
         projection * view
     }
 

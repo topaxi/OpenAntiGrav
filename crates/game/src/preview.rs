@@ -236,8 +236,7 @@ impl Preview {
             GlowMask::Protected,
             Velocity::None,
             &oag_render::mesh_render::zone::StageArt::NONE,
-            None,
-            None,
+            oag_render::mesh_render::ShadowMaps::NONE,
             ShadowReceiver::Never,
         )?;
         let uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {

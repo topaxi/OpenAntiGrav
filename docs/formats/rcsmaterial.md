@@ -359,7 +359,7 @@ PrecomputeTrackFrameData | Preprocess Visibility Fence | RenderBillBoards
 RenderModelShadowMaps | RenderSpotShadowMaps | RenderTrackReflect
 RenderTrackRefract | RenderTrackWithLights_zWriters (0x408fa8)
 RenderModelShadowsOnTrack (0x4053e0) | RenderModelAmbientShadowsOnTrack
-RenderTrackWithLights_blended (0x4074e0) | RenderShips (0x3ea368)
+RenderTrackWithLights_blended (0x4074e0) | RenderShips (0x6cdfc0: 0x3f0950 then 0x3ea368)
 ClearTrackVisibilityFlags
 ```
 

@@ -5,11 +5,12 @@
 //! `scripts/check-file-size.py`, the seam `frame/craft.rs` and
 //! `frame/attachments.rs` already set; a move, with no behaviour change.
 
-use oag_core::math::Vec3;
+use oag_core::math::{Mat4, Vec3};
 use oag_render::mesh::GpuVertex;
 use oag_render::shadow::Placement;
 
 use crate::race::Race;
+use crate::race::scene::motion::Snapshot;
 
 /// How dark a fully covered texel of the shadow map draws the track.
 ///
@@ -231,7 +232,164 @@ impl super::super::Scene {
     }
 }
 
+/// The environment variable that, naming a file, writes the player's
+/// sun-occlusion map out beside a `--screenshot` capture - see
+/// `Scene::dump_sun_occlusion_if_asked`.
+const DUMP_VAR: &str = "OAG_DUMP_SUN_OCCLUSION";
+
+/// Half the side of the cube a craft's sun-occlusion map is fitted to, in
+/// world units: the original's own fallback bbox for a ship model without one.
+const SUN_OCCLUSION_HALF_EXTENT: f32 = 6.0;
+
 impl super::super::Scene {
+    /// Renders each active craft's sun-occlusion map - the track within
+    /// `occlusion::RADIUS` of the craft, from the sun, as its own baked mask -
+    /// and returns the projection of every layer for the scene uniform.
+    ///
+    /// **Wipeout HD's `original` tier, and by data rather than by name**: it
+    /// needs the circuit's own sun (`light.enabled`, which only an authored
+    /// `.envsettings` rig sets) and a title that shadows by map rather than
+    /// by authored hull. Anywhere else every layer is cleared and no craft
+    /// names one, so the hull draws exactly as before the map existed. See
+    /// `oag_render::shadow::occlusion` and
+    /// `docs/ghidra/functions/ps3-hdfury-eu/ship-sun-occlusion.md`.
+    ///
+    /// The per-craft layer is the craft's grid slot, and
+    /// [`Self::sun_occlusion_layer`] is what turns a rendered layer into a
+    /// uniform field.
+    pub(super) fn render_sun_occlusion(
+        &self,
+        queue: &wgpu::Queue,
+        encoder: &mut wgpu::CommandEncoder,
+        race: &Race,
+        shadows: oag_display::display::Shadows,
+    ) {
+        let mut maps = self.sun_occlusion.borrow_mut();
+        let hulls = self.shadow_hulls.iter().any(Option::is_some);
+        let active = shadows == oag_display::display::Shadows::Original
+            && !hulls
+            && self.light.enabled > 0.5;
+        let drawn = usize::from(race.ship_count());
+        let track = self.track.occlusion_track();
+        for slot in 0..(oag_render::shadow::occlusion::LAYERS as usize) {
+            if self.ships.get(slot).is_none() || !active || slot >= drawn || !race.ship_active(slot)
+            {
+                maps.clear(encoder, slot);
+                continue;
+            }
+            let model = race.ship_model_matrix_of(slot);
+            // Fitted to the craft alone. The original fits the box to the
+            // ship's own bbox, or to a fixed `(-6, -6, -6)..(6, 6, 6)` cube
+            // when the model carries none (`Shadow_BuildShipShadowMatrices`);
+            // this side takes that cube plus the coverage map's own margin,
+            // so the hull's silhouette never clips its own map's edge - the
+            // edge reads as no sun. **Not the drawable's bounding radius**:
+            // an HD `Ship.vex` measures over 200 units across by that, its
+            // authored geometry reaching far past the hull, and a box that
+            // size is a map of the neighbourhood rather than of the craft.
+            let fit = oag_render::shadow::map::Fit {
+                centre: model.transform_point3(Vec3::ZERO),
+                radius: SUN_OCCLUSION_HALF_EXTENT + FIT_MARGIN,
+                towards_light: Vec3::from_array(self.light.direction),
+            };
+            maps.render(queue, encoder, slot, &fit, &track);
+            if slot == 0 && std::env::var_os(DUMP_VAR).is_some() {
+                log::info!(
+                    "sun occlusion layer 0: craft at {:?}, radius {:.1}, sun {:?}",
+                    fit.centre,
+                    fit.radius,
+                    fit.towards_light
+                );
+                for line in self
+                    .track
+                    .describe_occlusion_draws(fit.centre, fit.towards_light.normalize_or_zero())
+                {
+                    log::info!("sun occlusion layer 0: {line}");
+                }
+            }
+        }
+    }
+
+    /// Writes every active craft's model uniform for this frame, naming the
+    /// sun-occlusion layer its hull samples.
+    ///
+    /// Slot-indexed rather than `zip`ped over `race.ship_model_matrices()`,
+    /// whose filter-then-collect drops out of slot order the moment a craft
+    /// below `drawn` goes inactive - see `Race::ship_active`. A tail slot past
+    /// `drawn` is simply never in this range, so it keeps last frame's
+    /// uniforms and is not drawn, the same as before.
+    pub(super) fn write_hull_uniforms(
+        &self,
+        queue: &wgpu::Queue,
+        race: &Race,
+        view_projection: Mat4,
+        prev_vp: Mat4,
+        prev: &Snapshot,
+    ) {
+        let drawn = usize::from(race.ship_count());
+        for slot in 0..drawn {
+            if !race.ship_active(slot) {
+                continue;
+            }
+            if let Some(drawable) = self.ships.get(slot) {
+                drawable.write_hull(
+                    queue,
+                    view_projection,
+                    race.ship_model_matrix_of(slot),
+                    prev_vp * prev.ship(slot, race),
+                    self.sun_occlusion_layer(slot),
+                );
+            }
+        }
+    }
+
+    /// Writes the player's sun-occlusion map - layer 0 - as a greyscale PNG
+    /// when [`DUMP_VAR`] names a file, for a headless capture.
+    ///
+    /// The map's only other observable is a sample inside the hull's shader,
+    /// so this is how "the craft went dark" is told apart from "the road under
+    /// it is dark" - the same reason `OAG_RENDER_BENCH` exists for a different
+    /// question.
+    pub(crate) fn dump_sun_occlusion_if_asked(
+        &self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+    ) -> anyhow::Result<()> {
+        let Ok(dump) = std::env::var(DUMP_VAR) else {
+            return Ok(());
+        };
+        let size = oag_render::shadow::occlusion::SIZE;
+        let texels = self.sun_occlusion.borrow().read_back(device, queue, 0);
+        let rgba: Vec<u8> = texels.iter().flat_map(|t| [*t, *t, *t, 255]).collect();
+        std::fs::write(&dump, oag_texture::png::encode_rgba(size, size, &rgba))
+            .map_err(|error| anyhow::anyhow!("writing {dump}: {error}"))?;
+        println!("wrote {dump} (sun occlusion layer 0, {size}x{size})");
+        Ok(())
+    }
+
+    /// The scene uniform's per-layer sun-occlusion projections, as the last
+    /// [`Self::render_sun_occlusion`] left them.
+    pub(super) fn sun_occlusion_matrices(
+        &self,
+    ) -> [[[f32; 4]; 4]; oag_render::shadow::occlusion::LAYERS as usize] {
+        let maps = self.sun_occlusion.borrow();
+        std::array::from_fn(|layer| maps.matrix(layer).to_cols_array_2d())
+    }
+
+    /// Which sun-occlusion layer the craft in `slot` samples this frame:
+    /// its own, when [`Self::render_sun_occlusion`] drew anything into it -
+    /// a cleared layer counts as nothing drawn.
+    ///
+    /// A layer that drew nothing is left unnamed rather than sampled: the
+    /// original's black clear would read as no sun there, but on this side
+    /// an empty layer is far more often a craft off the circuit's authored
+    /// geometry - a synthetic track, a test fixture - than a craft over a
+    /// chasm, and "lit as before" is the honest answer for a map that has
+    /// no road in it.
+    pub(super) fn sun_occlusion_layer(&self, slot: usize) -> Option<usize> {
+        (self.sun_occlusion.borrow().drawn(slot) > 0).then_some(slot)
+    }
+
     /// The `mapped` tier's own pass: **everything** casts, into a depth map.
     ///
     /// The track goes in first and the craft after it, which is the whole

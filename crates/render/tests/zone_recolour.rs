@@ -774,8 +774,7 @@ fn draw_frame(
         stage,
         // No shadow map, no depth map and no receiver: this test draws one
         // model against nothing.
-        None,
-        None,
+        mesh_render::ShadowMaps::NONE,
         mesh_render::ShadowReceiver::Never,
     )
     .expect("building the mesh pipeline");

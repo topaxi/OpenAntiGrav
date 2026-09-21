@@ -12,8 +12,8 @@ use std::path::Path;
 use crate::camera::orbit::Orbit;
 use crate::mesh::Model;
 use crate::mesh_render::{
-    Anisotropy, Built, DEPTH_FORMAT, Depth, GlowMask, NodeAnims, TRANSPARENT_BLEND, TexAnims,
-    UNIFORMS_SIZE, Velocity, build, write_uniforms,
+    Anisotropy, Built, DEPTH_FORMAT, Depth, GlowMask, NodeAnims, ShadowMaps, TRANSPARENT_BLEND,
+    TexAnims, UNIFORMS_SIZE, Velocity, build, write_uniforms,
 };
 
 /// Makes every pixel opaque, in place, before a frame is encoded as a PNG.
@@ -167,8 +167,7 @@ pub fn capture_pixels_from(
         &crate::mesh_render::zone::StageArt::NONE,
         // And no shadow map, and nothing receiving one: this helper draws a
         // single model against nothing, which is what makes it a comparison.
-        None,
-        None,
+        ShadowMaps::NONE,
         crate::mesh_render::ShadowReceiver::Never,
     )?;
 

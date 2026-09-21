@@ -94,11 +94,10 @@ impl Drawable {
         blend: wgpu::BlendState,
         glow: mesh_render::GlowMask,
         zone: &mesh_render::zone::StageArt,
-        // The frame's shadow map and whether this model's surfaces read it -
+        // The frame's shadow maps and whether this model's surfaces read them -
         // the track's do and a craft's do not, which is Wipeout HD's own split.
         // See `mesh_render::build`.
-        shadow_map: Option<&wgpu::TextureView>,
-        shadow_depth_map: Option<&wgpu::TextureView>,
+        shadow_maps: mesh_render::ShadowMaps<'_>,
         receives_shadow: mesh_render::ShadowReceiver,
     ) -> Result<Self> {
         let mesh_render::Built {
@@ -137,8 +136,7 @@ impl Drawable {
             // `race::Scene::velocity`.
             mesh_render::Velocity::Write,
             zone,
-            shadow_map,
-            shadow_depth_map,
+            shadow_maps,
             receives_shadow,
         )?;
 
@@ -261,10 +259,25 @@ impl Drawable {
         model: Mat4,
         prev_mvp: Mat4,
     ) {
+        self.write_hull(queue, view_projection, model, prev_mvp, None);
+    }
+
+    /// [`Self::write`] for a craft: `sun_occlusion_layer` names which layer
+    /// of the frame's per-craft sun-occlusion array this hull samples - a
+    /// craft under the `original` tier on Wipeout HD - or `None`, which is
+    /// what every other drawable writes. See `oag_render::shadow::occlusion`.
+    pub(super) fn write_hull(
+        &self,
+        queue: &wgpu::Queue,
+        view_projection: Mat4,
+        model: Mat4,
+        prev_mvp: Mat4,
+        sun_occlusion_layer: Option<usize>,
+    ) {
         let uniforms = Uniforms {
             view_projection: view_projection.to_cols_array_2d(),
             model: model.to_cols_array_2d(),
-            _unused: 0.0,
+            sun_occlusion_layer: sun_occlusion_layer.map_or(0.0, |layer| layer as f32 + 1.0),
             _pad0: 0.0,
             _pad1: 0.0,
             _pad2: 0.0,
@@ -820,11 +833,10 @@ impl Drawable {
 pub(crate) struct Uniforms {
     view_projection: [[f32; 4]; 4],
     model: [[f32; 4]; 4],
-    /// Unused, and padding rather than removed - see
-    /// `mesh_render`'s own mirror of this layout. Was a global
-    /// texture-animation phase, replaced by the authored per-material
-    /// keyframe tracks in `mesh_render::TexAnims`.
-    _unused: f32,
+    /// Which layer of the per-craft sun-occlusion array this model samples,
+    /// plus one; `0.0` for none - see `mesh_render`'s own mirror of this
+    /// layout and `oag_render::shadow::occlusion`.
+    sun_occlusion_layer: f32,
     _pad0: f32,
     _pad1: f32,
     _pad2: f32,
@@ -945,3 +957,5 @@ mod tests {
         );
     }
 }
+
+mod occlusion;

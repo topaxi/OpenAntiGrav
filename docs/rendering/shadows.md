@@ -264,9 +264,17 @@ of this is already read and recorded:
 - Four distinct render jobs, and **their names bound the feature**:
   `RenderModelShadowMaps` and `RenderSpotShadowMaps` generate, then
   `RenderModelShadowsOnTrack` and `RenderModelAmbientShadowsOnTrack`
-  composite - *onto the track*. The receiver is the road, not the scene. They
-  sit at positions 4, 5, 9 and 10 of the thirteen-job frame order
-  ([`rcsmaterial.md`](../formats/rcsmaterial.md), "The frame's pass order").
+  composite - *onto the track*. They sit at positions 4, 5, 9 and 10 of the
+  thirteen-job frame order ([`rcsmaterial.md`](../formats/rcsmaterial.md),
+  "The frame's pass order"). **This page used to say "the receiver is the
+  road, not the scene" here, and that was wrong by half - read 2026-09-21**:
+  `Job RenderShips` itself opens with a second per-ship map, the track
+  within ten units of the craft drawn from the sun through its own
+  `SunOcclusionLightmap`/`SunOcclusionVertex` technique, and the hull's
+  `ShadowMap` variant gates its sun by that map times its own depth map. The
+  craft is a receiver of the road's baked shadow - see
+  [`ship-sun-occlusion.md`](../ghidra/functions/ps3-hdfury-eu/ship-sun-occlusion.md)
+  and [the hull section below](#hds-hull-is-a-receiver-too-of-the-roads-own-mask).
 - Material flags `ShadowToAlpha`, `ShadowMap`, `Spot0`..`Spot3`, with
   `ShadowToAlpha` bound to the shadow compositing pass at `0x405d48`.
 - Sampler names `shadowMapTex` `0x730df9ee` and
@@ -814,14 +822,27 @@ block #9, disassembled with
 ```
 
 One channel, sampled projectively, used directly. **Nothing in the block
-compares anything against anything**, so the texture holds shadow *coverage*
-and not depth - which is why `oag_render::shadow::map` renders casters as flat
-coverage into an `R8Unorm` target with no depth attachment, no bias and no
-comparison sampler.
+compares anything against anything**, which this page took to mean the texture
+holds shadow *coverage* and not depth - and that is why `oag_render::shadow::map`
+renders casters as flat coverage into an `R8Unorm` target with no depth
+attachment, no bias and no comparison sampler.
+
+**Corrected 2026-09-21, and the renderer's choice survives it.** The caster
+job binds the map as its *depth* target with the colour mask fully off
+(`Rsx_SetRenderTargets` with the record in the depth slot, then
+`Rsx_SetColorMask(0,0,0,0)` / `Rsx_SetDepthMask(1)`, front faces culled) -
+[`ship-sun-occlusion.md`](../ghidra/functions/ps3-hdfury-eu/ship-sun-occlusion.md).
+So the map is depth, and the absent compare instruction is the RSX doing the
+comparison inside the depth-texture sample. For a map that only ever holds
+one ship, sampled by a road that is always below it, "compared depth" and
+"coverage" give the same answer at every texel, which is why the coverage
+target stays: it is the cheaper equivalent, not a different picture. Where the
+two would differ - a hull sampling its *own* map for self-shadowing - this
+project does not draw, and says so below.
 
 | | The original's | This project's |
 | --- | --- | --- |
-| what the map holds | coverage, per the microcode | the same |
+| what the map holds | depth, rendered colour-masked-off and compared by the sampler ([`ship-sun-occlusion.md`](../ghidra/functions/ps3-hdfury-eu/ship-sun-occlusion.md)) | coverage, which is equivalent for a road under a craft |
 | who casts | models (`Job RenderModelShadowMaps`) | the craft |
 | who receives | the track surface, whose material declares `shadowMapTex` | the same, as a per-model pipeline constant |
 | the projection | `shadowMatrix`: **one orthographic map per ship**, looking from 70 units up `Lighting.Sun direction` at the ship, fitted to the ship's own bbox, near 1 / far 140 - read on 2026-09-11, [`shadow-model-maps.md`](../ghidra/functions/ps3-hdfury-eu/shadow-model-maps.md) | the same sun; one map fitted to the whole grid, which is ours |
@@ -840,6 +861,61 @@ consumed by a sampler inside another shader, so
 renders one caster, reads the texels back, and asserts coverage at the centre,
 clear texels at the border, the fitted edges within two texels, and that a
 second pass with no casters clears it.
+
+### HD's hull is a receiver too, of the road's own mask
+
+Read 2026-09-21 -
+[`ship-sun-occlusion.md`](../ghidra/functions/ps3-hdfury-eu/ship-sun-occlusion.md).
+Each ship record carries **two** maps in one sun-view box, and the second is
+the one that answers "why does a craft driving into a painted shadow stay
+lit": before `Job RenderShips` draws a hull it renders the track chunks
+within 10 units of the sun's line through that craft, from the sun, through
+the chunks' own `SunOcclusionLightmap` / `SunOcclusionVertex` technique - a
+fragment program that writes nothing but `lightmap.a` (or the colour set's
+fourth byte) - into a per-ship 256-texel-or-smaller map cleared to black. The hull's
+`ShadowMap` variant then computes
+
+```text
+sun_gate = compare(own depth map) * occlusion(that map, blue channel)
+colour   = albedo * vcol * (ambient + sun * N.L * sun_gate)
+```
+
+so a craft over a road the artists painted dark goes dark with the road, at
+the same texel boundary, because the *same mask* is being sampled; and a
+craft over nothing reads the clear value, which is black on most circuits
+(white in Zone and on six named tracks).
+
+**This project draws the occlusion half and not the self-shadow half.**
+`oag_render::shadow::occlusion` renders the same map - the track's draw calls
+(opaque, cutout and transparent alike, as the original keys on lighting
+family and not on blend) whose bounds come within 10 units of the sun line
+through each craft, through a sun-view [`Fit`](../../crates/render/src/shadow/map.rs)
+centred on that craft, 12 units wide (the original's fallback bbox cube
+plus the coverage map's margin) and 70 deep either side (the original's
+near 1 / far 140), writing `lightmap.a * sun_mask` (the two carriers
+`mesh.wgsl` already multiplies as the road's own gate) over black into one
+layer of an 8-layer `R8Unorm` array - and `mesh.wgsl` gates the hull's sun
+term, diffuse and specular, by a projective sample of its layer.
+`OAG_DUMP_SUN_OCCLUSION=<png>` beside `--screenshot` writes the player's
+layer out, which is how this was checked: Talon's Junction reads 12/255
+under the craft in the grid-start tunnel (tick 2100) and 245/255 on the
+glass floor (tick 4800). **How dark the hull then goes is bounded by how
+much of its light the sun is on this side**: with the gate forced to zero
+the Feisar hull at tick 4800 loses only 19 % of its brightness, so a craft
+in a tunnel reads darker but not dark - that is the scene-calibration
+question `HANDOVER.md`'s "frame too bright" thread owns, not this
+mechanism's. Ambient is untouched, as the microcode
+has it. The self-shadow term (a compared sample of the craft's own depth map)
+is left out rather than approximated: it would be a second per-craft pass
+with a comparison sampler, and on a hull under a sun it moves little; it is
+on `HANDOVER.md`. Nothing here has a strength knob: how dark the hull goes
+is the lightmap's answer, not a constant of this project's.
+
+Tier-wise it belongs to `original`, because it is HD's own mechanism and
+consumes HD's own data; `blob` and `off` leave the hull as before, and
+`mapped` does not use it either - that tier's depth map already shadows the
+hull geometrically, and adding the baked mask on top would double-count the
+bridge.
 6. ~~**Measure 2048**~~ - **done 2026-09-02**, and it moved the design: 2048 has
    a shadow runtime of its own, a shadow light of its own, and six occluders
    that re-proved the payload closure on a second platform.

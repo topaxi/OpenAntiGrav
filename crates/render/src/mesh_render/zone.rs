@@ -336,7 +336,7 @@ pub struct RebindResources {
 /// Bind group 2 itself, from the stage's four texture views and everything
 /// [`RebindResources`] keeps underneath them. The one assembly
 /// [`scene_bind_group`]'s initial build and [`rebind`]'s later one share, so
-/// the thirteen entries are written down exactly once.
+/// the fourteen entries are written down exactly once.
 fn bind_group(
     device: &wgpu::Device,
     fog_buffer: &wgpu::Buffer,
@@ -402,6 +402,10 @@ fn bind_group(
                 binding: 12,
                 resource: wgpu::BindingResource::TextureView(scene_outer),
             },
+            wgpu::BindGroupEntry {
+                binding: 13,
+                resource: wgpu::BindingResource::TextureView(&kept.shadow.occlusion_view),
+            },
         ],
     })
 }
@@ -424,8 +428,7 @@ pub(super) fn scene_bind_group(
     queue: &wgpu::Queue,
     anisotropy: super::Anisotropy,
     zone: &StageArt,
-    shadow_map: Option<&wgpu::TextureView>,
-    shadow_depth_map: Option<&wgpu::TextureView>,
+    shadow_maps: super::ShadowMaps<'_>,
 ) -> (
     wgpu::BindGroupLayout,
     wgpu::Buffer,
@@ -482,6 +485,10 @@ pub(super) fn scene_bind_group(
             // past the shadow map for the same reason binding 10 already is.
             zone_entries[6],
             zone_entries[7],
+            // The per-craft sun-occlusion array, binding 13 - past everything
+            // above for the same reason, and in this group because a hull
+            // picks its layer by a uniform field rather than by a bind group.
+            shadow_entries[4],
         ],
     });
 
@@ -498,7 +505,7 @@ pub(super) fn scene_bind_group(
     queue.write_buffer(&fog_buffer, 0, bytemuck::bytes_of(&super::Scene::off()));
 
     let zone_resources = resources(device, queue, anisotropy, zone);
-    let shadow = super::shadow_map::resources(device, queue, shadow_map, shadow_depth_map);
+    let shadow = super::shadow_map::resources(device, queue, shadow_maps);
     let kept = RebindResources {
         layout: layout.clone(),
         sampler: zone_resources.sampler,

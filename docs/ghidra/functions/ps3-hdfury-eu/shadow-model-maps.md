@@ -55,7 +55,12 @@ The job's run function. In order:
    field is **`Lighting.Sun direction`** - see the next function.
 2. Sets up the map target (`FUN_005c2380(ctx, 1,1,1,0)` / `FUN_005c2524`,
    colour-mask and clear shapes; the identities are not read) and sets the
-   material-state flag word `+4 |= 0x4000`.
+   material-state flag word `+4 |= 0x4000`. **Read 2026-09-21 on
+   [ship-sun-occlusion.md](ship-sun-occlusion.md)**: those are
+   `Rsx_SetColorMask` and `Rsx_SetDepthMask`, the per-ship map is bound as
+   the *depth* target with colour writes off and front faces culled, so the
+   map holds depth and the receiver's `TXP` is a compared sample - not
+   coverage, as `shadows.md` had it.
 3. Walks the ship table: count at `0xc86880 + 0x933c4`, index list at
    `+0x933c8`, records `0x1b0` bytes apart. A ship is drawn when its byte
    `+0x140` is non-zero and bit 0 of `+0xe4` is set - the same activity test

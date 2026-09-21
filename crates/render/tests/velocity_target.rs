@@ -152,8 +152,7 @@ fn the_velocity_target_carries_the_ndc_delta_halved_and_y_flipped() {
         &mesh_render::zone::StageArt::NONE,
         // No shadow map, no depth map and no receiver: this test draws one
         // model against nothing.
-        None,
-        None,
+        mesh_render::ShadowMaps::NONE,
         mesh_render::ShadowReceiver::Never,
     )
     .expect("building the mesh pipeline");

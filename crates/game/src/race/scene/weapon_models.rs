@@ -33,7 +33,7 @@ pub(super) fn build(
     sample_count: u32,
     scene_depth: mesh_render::Depth,
     zone_art: &mesh_render::zone::StageArt,
-    shadow_map: &oag_render::shadow::map::Map,
+    shadow_maps: mesh_render::ShadowMaps<'_>,
 ) -> Result<Vec<Drawable>> {
     let mut drawables = Vec::new();
     if let Some(model) = model.filter(|model| !model.indices.is_empty()) {
@@ -49,8 +49,7 @@ pub(super) fn build(
                 mesh_render::TRANSPARENT_BLEND,
                 mesh_render::GlowMask::Protected,
                 zone_art,
-                Some(shadow_map.view()),
-                Some(shadow_map.depth_view()),
+                shadow_maps,
                 mesh_render::ShadowReceiver::Mapped,
             )?);
         }
@@ -94,7 +93,7 @@ pub(super) fn build_all(
     sample_count: u32,
     scene_depth: mesh_render::Depth,
     zone_art: &mesh_render::zone::StageArt,
-    shadow_map: &oag_render::shadow::map::Map,
+    shadow_maps: mesh_render::ShadowMaps<'_>,
 ) -> Result<WeaponBodies> {
     let one = |model| {
         build(
@@ -106,7 +105,7 @@ pub(super) fn build_all(
             sample_count,
             scene_depth,
             zone_art,
-            shadow_map,
+            shadow_maps,
         )
     };
     Ok((

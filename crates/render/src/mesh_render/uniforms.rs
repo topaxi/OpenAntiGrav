@@ -16,11 +16,13 @@ use crate::mesh::Model;
 pub(super) struct Uniforms {
     view_projection: [[f32; 4]; 4],
     model: [[f32; 4]; 4],
-    /// Unused. Was the phase of a global texture-animation clock; the authored
-    /// per-material keyframe blocks in [`TexAnims`] replaced it. Kept as
-    /// padding because this layout is mirrored by `mesh.wgsl`, by four other
-    /// pipelines in this crate and by the asset viewer's own buffer sizing.
-    _unused: f32,
+    /// Which layer of the per-craft sun-occlusion array this model samples,
+    /// plus one - `0.0` for none. See `mesh.wgsl`'s `sun_occlusion` and
+    /// [`crate::shadow::occlusion`]. Was a global texture-animation phase
+    /// before [`TexAnims`] replaced it and padding after; reused so the
+    /// layout `mesh.wgsl`, four other pipelines and the asset viewer mirror
+    /// stays the same size.
+    sun_occlusion_layer: f32,
     _pad0: f32,
     _pad1: f32,
     _pad2: f32,
@@ -52,7 +54,7 @@ fn matrices(model: &Model, aspect: f32, orbit: Orbit) -> Uniforms {
     Uniforms {
         view_projection: view_projection.to_cols_array_2d(),
         model: model_matrix.to_cols_array_2d(),
-        _unused: 0.0,
+        sun_occlusion_layer: 0.0,
         _pad0: 0.0,
         _pad1: 0.0,
         _pad2: 0.0,
@@ -136,7 +138,7 @@ pub fn write_uniforms_raw(
     let uniforms = Uniforms {
         view_projection: view_projection.to_cols_array_2d(),
         model: model.to_cols_array_2d(),
-        _unused: 0.0,
+        sun_occlusion_layer: 0.0,
         _pad0: 0.0,
         _pad1: 0.0,
         _pad2: 0.0,
@@ -786,6 +788,33 @@ impl ShadowMap {
     }
 }
 
+/// The frame's shadow maps, bound together in the scene group - see
+/// `shadow_map::resources` for what stands in where one is `None`.
+///
+/// One value rather than three arguments, so a caller that draws nothing
+/// shadowed says so once ([`ShadowMaps::NONE`]) and a new map is one more
+/// field rather than one more position at eight call sites.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct ShadowMaps<'a> {
+    /// Wipeout HD's own model shadow map - the `original` tier's, coverage,
+    /// read by the track.
+    pub coverage: Option<&'a wgpu::TextureView>,
+    /// The `mapped` tier's depth map, read by everything.
+    pub depth: Option<&'a wgpu::TextureView>,
+    /// The per-craft sun-occlusion array (`crate::shadow::occlusion`), a
+    /// `D2Array` view, read by a hull whose uniform names a layer.
+    pub occlusion: Option<&'a wgpu::TextureView>,
+}
+
+impl ShadowMaps<'_> {
+    /// No maps: every binding gets its placeholder and nothing shadows.
+    pub const NONE: Self = Self {
+        coverage: None,
+        depth: None,
+        occlusion: None,
+    };
+}
+
 /// Which shadow maps a model's surfaces may read, if any.
 ///
 /// **Three states rather than a flag**, because the two tiers have different
@@ -851,6 +880,11 @@ pub struct Scene {
     /// [`super::spu_light`]. [`SpuLights::none`] for every other draw, which
     /// is the identity on the sum.
     pub spu_lights: super::SpuLights,
+    /// World to each craft's sun-occlusion map, one per layer of the array
+    /// [`crate::shadow::occlusion::Maps`] renders - the `directionalLight0Proj`
+    /// a Wipeout HD hull is bound. Only the layer a drawable's own uniform
+    /// names is read; the identity everywhere else.
+    pub sun_occlusion: [[[f32; 4]; 4]; crate::shadow::occlusion::LAYERS as usize],
 }
 
 impl Scene {
@@ -865,6 +899,8 @@ impl Scene {
             zone: Zone::default(),
             shadow: ShadowMap::off(),
             spu_lights: super::SpuLights::none(),
+            sun_occlusion: [Mat4::IDENTITY.to_cols_array_2d();
+                crate::shadow::occlusion::LAYERS as usize],
         }
     }
 }
@@ -888,6 +924,10 @@ const _: () = assert!(
 const _: () = assert!(
     std::mem::offset_of!(Scene, spu_lights).is_multiple_of(16),
     "and Scene.spu_lights, whose array is of two-vec4 records"
+);
+const _: () = assert!(
+    std::mem::offset_of!(Scene, sun_occlusion).is_multiple_of(16),
+    "and Scene.sun_occlusion, an array of mat4x4"
 );
 const _: () = assert!(
     std::mem::size_of::<Scene>().is_multiple_of(16),

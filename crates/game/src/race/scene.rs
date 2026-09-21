@@ -209,6 +209,12 @@ pub struct Scene {
     /// applies live; the strength in `Scene::shadow` is what turns it on. See
     /// `oag_render::shadow::map`.
     shadow_map: std::cell::RefCell<oag_render::shadow::map::Map>,
+    /// The `original` tier's second map on Wipeout HD: per craft, the track
+    /// under it drawn from the sun as its own baked sun-occlusion mask, which
+    /// the hull's sun term is gated by. Built for every race and bound by
+    /// every drawable like [`Self::shadow_map`]; a hull that names no layer
+    /// never samples it. See `oag_render::shadow::occlusion`.
+    sun_occlusion: std::cell::RefCell<oag_render::shadow::occlusion::Maps>,
     /// The `original` tier's geometry, one authored hull per grid slot where
     /// the craft's model carries one. CPU-side: it is projected afresh every
     /// frame against the surface under the craft, so there is nothing to
@@ -405,6 +411,15 @@ impl Scene {
         // inert, so the shadow row applies live without rebuilding a pipeline.
         // A caller that never casts pays one megabyte and a cleared pass.
         let shadow_map = oag_render::shadow::map::Map::new(device);
+        let sun_occlusion = oag_render::shadow::occlusion::Maps::new(
+            device,
+            &mesh_render::material_bind_group_layout(device),
+        );
+        let shadow_maps = mesh_render::ShadowMaps {
+            coverage: Some(shadow_map.view()),
+            depth: Some(shadow_map.depth_view()),
+            occlusion: Some(sun_occlusion.view()),
+        };
         let sky = sky_model
             .filter(|model| !model.indices.is_empty())
             .map(|model| {
@@ -419,8 +434,7 @@ impl Scene {
                     mesh_render::TRANSPARENT_BLEND,
                     mesh_render::GlowMask::Protected,
                     zone_art,
-                    Some(shadow_map.view()),
-                    Some(shadow_map.depth_view()),
+                    shadow_maps,
                     // The sky reads no map at all: it is drawn at infinity with the
                     // depth test disabled, so a shadow on it is a dark patch hanging
                     // in the air.
@@ -439,8 +453,7 @@ impl Scene {
             mesh_render::TRANSPARENT_BLEND,
             mesh_render::GlowMask::Protected,
             zone_art,
-            Some(shadow_map.view()),
-            Some(shadow_map.depth_view()),
+            shadow_maps,
             // **The one receiver of the coverage map**, which is what Wipeout
             // HD's own materials say: the track surface declares
             // `shadowMapTex` and a craft's does not. It reads the `mapped`
@@ -467,8 +480,7 @@ impl Scene {
                 mesh_render::TRANSPARENT_BLEND,
                 mesh_render::GlowMask::Protected,
                 zone_art,
-                Some(shadow_map.view()),
-                Some(shadow_map.depth_view()),
+                shadow_maps,
                 mesh_render::ShadowReceiver::Mapped,
             )?);
         }
@@ -485,8 +497,7 @@ impl Scene {
                     mesh_render::TRANSPARENT_BLEND,
                     mesh_render::GlowMask::Protected,
                     zone_art,
-                    Some(shadow_map.view()),
-                    Some(shadow_map.depth_view()),
+                    shadow_maps,
                     mesh_render::ShadowReceiver::Mapped,
                 )
             })
@@ -506,8 +517,7 @@ impl Scene {
                         mesh_render::TRANSPARENT_BLEND,
                         mesh_render::GlowMask::Protected,
                         zone_art,
-                        Some(shadow_map.view()),
-                        Some(shadow_map.depth_view()),
+                        shadow_maps,
                         mesh_render::ShadowReceiver::Mapped,
                     )
                 })
@@ -543,7 +553,7 @@ impl Scene {
                     format,
                     anisotropy,
                     sample_count,
-                    &shadow_map,
+                    shadow_maps,
                 )
             })
             .transpose()?;
@@ -718,8 +728,7 @@ impl Scene {
                         mesh_render::ADDITIVE_BLEND,
                         mesh_render::GlowMask::Protected,
                         zone_art,
-                        Some(shadow_map.view()),
-                        Some(shadow_map.depth_view()),
+                        shadow_maps,
                         mesh_render::ShadowReceiver::Mapped,
                     )?),
                     None => None,
@@ -750,8 +759,7 @@ impl Scene {
                     // mask, which is the shape of the effect a player notices.
                     mesh_render::GlowMask::Written,
                     zone_art,
-                    Some(shadow_map.view()),
-                    Some(shadow_map.depth_view()),
+                    shadow_maps,
                     mesh_render::ShadowReceiver::Mapped,
                 )?));
             }
@@ -803,8 +811,7 @@ impl Scene {
                 exhaust::BLEND,
                 mesh_render::GlowMask::Written,
                 zone_art,
-                Some(shadow_map.view()),
-                Some(shadow_map.depth_view()),
+                shadow_maps,
                 mesh_render::ShadowReceiver::Mapped,
             )?));
         }
@@ -823,8 +830,7 @@ impl Scene {
                 exhaust::BLEND,
                 mesh_render::GlowMask::Written,
                 zone_art,
-                Some(shadow_map.view()),
-                Some(shadow_map.depth_view()),
+                shadow_maps,
                 mesh_render::ShadowReceiver::Mapped,
             )?),
             None => None,
@@ -848,7 +854,7 @@ impl Scene {
             sample_count,
             scene_depth,
             zone_art,
-            &shadow_map,
+            shadow_maps,
         )?;
         // 64 is a stand-in size only, and only when the disc's own texture did not
         // decode; `load` has already reported that when it happens.
@@ -970,6 +976,7 @@ impl Scene {
             sparks,
             shadow,
             shadow_map: std::cell::RefCell::new(shadow_map),
+            sun_occlusion: std::cell::RefCell::new(sun_occlusion),
             shadow_hulls,
             scratch: std::cell::RefCell::default(),
             depth,

@@ -19,8 +19,8 @@ pub use tables::{EMISSIVES_SIZE, Emissives, NODE_ANIMS_SIZE, NodeAnims, TEX_ANIM
 use uniforms::Uniforms;
 mod velocity;
 pub use uniforms::{
-    DEPTH_FORMAT, Fog, Light, SCENE_SIZE, Scene, ShadowMap, ShadowReceiver, UNIFORMS_SIZE, Zone,
-    ZoneSet, write_uniforms, write_uniforms_raw,
+    DEPTH_FORMAT, Fog, Light, SCENE_SIZE, Scene, ShadowMap, ShadowMaps, ShadowReceiver,
+    UNIFORMS_SIZE, Zone, ZoneSet, write_uniforms, write_uniforms_raw,
 };
 pub(crate) use velocity::velocity_targets;
 pub use velocity::{VELOCITY_FORMAT, Velocity};
@@ -272,14 +272,11 @@ pub fn build(
     // The Zone stage's two textures, or [`zone::StageArt::NONE`] outside an
     // HD Zone race - see that type for why there are two.
     zone: &zone::StageArt,
-    // The frame's shadow map, or `None` for the placeholder - see
-    // `shadow_map::resources`. A `Built` binds whichever it was given for its
-    // whole life, so a caller that gains a map mid-race rebuilds rather than
-    // rebinding, the same way a Zone stage texture does.
-    shadow_map: Option<&wgpu::TextureView>,
-    // The `mapped` tier's depth map, bound beside it and read in that tier's
-    // own mode - see `ShadowMap::mode`.
-    shadow_depth_map: Option<&wgpu::TextureView>,
+    // The frame's shadow maps, or [`ShadowMaps::NONE`] for the placeholders -
+    // see `shadow_map::resources`. A `Built` binds whichever it was given for
+    // its whole life, so a caller that gains a map mid-race rebuilds rather
+    // than rebinding, the same way a Zone stage texture does.
+    shadow_maps: ShadowMaps<'_>,
     // Which maps this model's surfaces may read - see `ShadowReceiver`, which
     // carries why there are three states. A pipeline constant rather than a
     // uniform field keeps it a property of the model, like `flame_*` and
@@ -346,7 +343,9 @@ pub fn build(
         label: Some("mesh"),
         entries: &[wgpu::BindGroupLayoutEntry {
             binding: 0,
-            visibility: wgpu::ShaderStages::VERTEX,
+            // Both stages: the fragment stage reads `sun_occlusion_layer`,
+            // which picks a hull's layer of the occlusion array.
+            visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
             ty: wgpu::BindingType::Buffer {
                 ty: wgpu::BufferBindingType::Uniform,
                 has_dynamic_offset: false,
@@ -356,41 +355,7 @@ pub fn build(
         }],
     });
 
-    let texture_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-        label: Some("albedo"),
-        entries: &[
-            wgpu::BindGroupLayoutEntry {
-                binding: 0,
-                visibility: wgpu::ShaderStages::FRAGMENT,
-                ty: wgpu::BindingType::Texture {
-                    sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                    view_dimension: wgpu::TextureViewDimension::D2,
-                    multisampled: false,
-                },
-                count: None,
-            },
-            wgpu::BindGroupLayoutEntry {
-                binding: 1,
-                visibility: wgpu::ShaderStages::FRAGMENT,
-                ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
-                count: None,
-            },
-            // The lightmap shares the albedo's sampler: it is the same
-            // filtering on the same kind of texture, and a second sampler would
-            // be a second thing to keep in step for no difference in the
-            // picture.
-            wgpu::BindGroupLayoutEntry {
-                binding: 2,
-                visibility: wgpu::ShaderStages::FRAGMENT,
-                ty: wgpu::BindingType::Texture {
-                    sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                    view_dimension: wgpu::TextureViewDimension::D2,
-                    multisampled: false,
-                },
-                count: None,
-            },
-        ],
-    });
+    let texture_layout = material_bind_group_layout(device);
 
     // Bind group 2 whole - the `Scene` layout and buffer, the Zone stage's
     // four textures and the shadow map - lives in `zone.rs` now, under the
@@ -398,14 +363,8 @@ pub fn build(
     // left to grow the one binding set a Zone stage change touches. See
     // [`zone::scene_bind_group`] and [`zone::rebind`], which
     // `race::Drawable` calls on the stage-change edge.
-    let (fog_layout, fog_buffer, fog_bind, zone_vis_texture, zone_rebind) = zone::scene_bind_group(
-        device,
-        queue,
-        anisotropy,
-        zone,
-        shadow_map,
-        shadow_depth_map,
-    );
+    let (fog_layout, fog_buffer, fog_bind, zone_vis_texture, zone_rebind) =
+        zone::scene_bind_group(device, queue, anisotropy, zone, shadow_maps);
 
     // **Two bindings in one group, not two groups.** wgpu's downlevel limit is
     // four bind groups and 0 to 3 are already the uniforms, the texture, the
@@ -907,6 +866,54 @@ pub fn build(
         vertex_buffer,
         index_buffer,
         texture_binds,
+    })
+}
+
+/// Bind group 1's layout: a material's albedo, the sampler both textures
+/// share, and its lightmap - what every mesh pipeline binds per material slot.
+///
+/// A function rather than an inline descriptor because a second pipeline
+/// draws through the same bind groups: the sun-occlusion pass
+/// ([`crate::shadow::occlusion`]) takes a track drawable's own material bind
+/// groups and needs a layout equal to the one they were built against. Two
+/// layouts built from one descriptor are equal in wgpu's eyes; two written
+/// out by hand drift.
+#[must_use]
+pub fn material_bind_group_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
+    device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        label: Some("albedo"),
+        entries: &[
+            wgpu::BindGroupLayoutEntry {
+                binding: 0,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Texture {
+                    sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                    view_dimension: wgpu::TextureViewDimension::D2,
+                    multisampled: false,
+                },
+                count: None,
+            },
+            wgpu::BindGroupLayoutEntry {
+                binding: 1,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                count: None,
+            },
+            // The lightmap shares the albedo's sampler: it is the same
+            // filtering on the same kind of texture, and a second sampler would
+            // be a second thing to keep in step for no difference in the
+            // picture.
+            wgpu::BindGroupLayoutEntry {
+                binding: 2,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Texture {
+                    sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                    view_dimension: wgpu::TextureViewDimension::D2,
+                    multisampled: false,
+                },
+                count: None,
+            },
+        ],
     })
 }
 

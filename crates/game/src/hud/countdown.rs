@@ -187,8 +187,7 @@ impl Countdown {
             GlowMask::Protected,
             Velocity::None,
             &oag_render::mesh_render::zone::StageArt::NONE,
-            None,
-            None,
+            oag_render::mesh_render::ShadowMaps::NONE,
             ShadowReceiver::Never,
         )?;
 

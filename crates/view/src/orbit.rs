@@ -311,8 +311,7 @@ impl Session {
             &mesh_render::zone::StageArt::NONE,
             // And no shadow map, and nothing receiving one: a viewer shows a
             // model against nothing, which is what makes it a reference.
-            None,
-            None,
+            mesh_render::ShadowMaps::NONE,
             mesh_render::ShadowReceiver::Never,
         )?;
         let _ = placeholder_bind_group;

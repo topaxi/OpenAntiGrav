@@ -193,8 +193,7 @@ fn draw(device: &wgpu::Device, queue: &wgpu::Queue, model: &Model) -> [u8; 4] {
         &mesh_render::zone::StageArt::NONE,
         // No shadow map, no depth map and no receiver: this test draws one
         // model against nothing.
-        None,
-        None,
+        mesh_render::ShadowMaps::NONE,
         mesh_render::ShadowReceiver::Never,
     )
     .expect("building the mesh pipeline");

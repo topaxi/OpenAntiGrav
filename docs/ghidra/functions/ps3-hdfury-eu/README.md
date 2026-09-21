@@ -113,6 +113,12 @@ Two structural facts to expect, both different from every other binary here:
   orthographic box fitted to the ship's own bbox with near 1 / far 140, and
   the bias form that becomes `shadowMatrix`. Plus the lazily-initialised
   env-settings block every `Lighting.*` key registers into.
+- [ship-sun-occlusion.md](ship-sun-occlusion.md) - `Job RenderShips` is two
+  passes, and the first renders the track within ten units of each craft from
+  the sun through `SunOcclusionLightmap`/`SunOcclusionVertex` into a second
+  per-ship map; the hull's `ShadowMap` variant gates its sun by that map times
+  its own depth map. Also: the ship map pool and its size table, and that the
+  model shadow map is depth rendered colour-masked-off, not coverage.
 - [shadow-stencilvolume.md](shadow-stencilvolume.md) - the `LiveStencilShadow`
   shader technique's registration and its three named constants, the
   per-model flag bit that builds a fixed-named `shadow.stencilvolume` sibling
