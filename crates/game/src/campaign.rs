@@ -45,6 +45,20 @@ pub struct Campaign {
     /// "front end's own sheet plus this screen's own art" shape
     /// `oag_ui::picker::slideshow`'s stills already extend it with.
     pub sprites: Sheet,
+    /// **HD/Fury only.** `Campaign Selection`'s own layout, ahead of
+    /// [`Self::grid_layout`] - `None` on every other title, and on an HD
+    /// source whose `DATA06.PSARC` this pass could not read (a base,
+    /// non-Fury pressing, say). See [`load_hd`]'s own doc for where this is
+    /// read from and why it differs from [`Self::grid_layout`]'s own
+    /// archive.
+    pub selection_layout: Option<Layout>,
+    /// **HD/Fury only.** `Grid Selection Fury`'s own layout - the screen
+    /// `Campaign Selection`'s `FE_RC_FURY` entry opens, which pages
+    /// `grid8`..`grid15` (`oag_hd::campaign::FURY_GRID_RANGE`). `None` on
+    /// the same terms as [`Self::selection_layout`] - either both are
+    /// `Some` or both are `None`, since they are read off the same archive
+    /// in the same call.
+    pub grid_layout_fury: Option<Layout>,
 }
 
 /// Reads the campaign screen off `archives`, title-dispatched: Pulse's
@@ -134,6 +148,8 @@ pub fn load(
         grid_layout,
         cell_layout,
         sprites,
+        selection_layout: None,
+        grid_layout_fury: None,
     })
 }
 
@@ -177,6 +193,8 @@ fn load_hd(
     .context("Cell Selection is not on this screen")?;
 
     let grids = read_grids(archives, oag_hd::campaign::DEFINITION_ENTRY)?;
+    let (selection_layout, grid_layout_fury) =
+        load_hd_campaign_selection(archives, strings, faces, grid, fallback_globals);
 
     let mut blobs = Vec::new();
     // `HEX_TEXTURES`' own `(widget src, archive path)` pairs - read off the
@@ -208,7 +226,91 @@ fn load_hd(
         grid_layout,
         cell_layout,
         sprites,
+        selection_layout,
+        grid_layout_fury,
     })
+}
+
+/// `Campaign Selection`/`Grid Selection Fury`, read off `DATA06.PSARC`
+/// directly - by archive label, not [`oag_assets::Archives::read_name`]'s
+/// own precedence, which reaches `DATA02`'s copy of the same path and has
+/// neither screen at all. See [`oag_hd::campaign::SCREEN_ENTRY`]'s own doc
+/// for the full measurement (RPCS3's own `TTY.log` names `Grid Selection
+/// Fury` as a live screen, which only `DATA06`'s copy authors) and
+/// `docs/ui/campaign-screens.md`'s "Wipeout HD/Fury: `Campaign Selection`"
+/// section.
+///
+/// `(None, None)`, logged, when this source has no `DATA06` copy of
+/// [`oag_hd::campaign::SCREEN_ENTRY`] at all, or that copy's own XML does
+/// not carry both screens - a base, non-Fury HD pressing this project has
+/// not seen, say. [`load_hd`] still returns its own `Campaign` in that
+/// case: the base `Grid Selection`/`Cell Selection` this function does not
+/// touch are unaffected, and `crate::main::session::campaign::open_campaign`
+/// falls back to opening straight on `Grid Selection`, the pre-this-pass
+/// behaviour, rather than refusing the whole campaign over one missing
+/// screen.
+fn load_hd_campaign_selection(
+    archives: &mut oag_assets::Archives,
+    strings: &StringTable,
+    faces: FaceScales,
+    grid: [f32; 2],
+    fallback_globals: &[(&str, &str)],
+) -> (Option<Layout>, Option<Layout>) {
+    let copies = archives.read_every_name(oag_hd::campaign::SCREEN_ENTRY);
+    let Some((_, blob)) = copies
+        .into_iter()
+        .find(|(label, _)| label.ends_with(oag_hd::campaign::SELECTION_SCREEN_ARCHIVE))
+    else {
+        log::warn!(
+            "{}: no {} copy of {} - Campaign Selection stays unmodelled, RACE CAMPAIGN opens \
+             straight on the base Grid Selection",
+            oag_hd::campaign::SELECTION_SCREEN_ARCHIVE,
+            oag_hd::campaign::SELECTION_SCREEN_ARCHIVE,
+            oag_hd::campaign::SCREEN_ENTRY,
+        );
+        return (None, None);
+    };
+    let xml = match String::from_utf8(blob) {
+        Ok(xml) => xml,
+        Err(error) => {
+            log::warn!(
+                "{}'s own copy of {} is not UTF-8 ({error}) - Campaign Selection stays unmodelled",
+                oag_hd::campaign::SELECTION_SCREEN_ARCHIVE,
+                oag_hd::campaign::SCREEN_ENTRY,
+            );
+            return (None, None);
+        }
+    };
+    let screens = oag_ui::screen::Screens::from_xml_with_fallback_globals(&xml, fallback_globals);
+    let selection = Layout::read_authored(
+        &screens,
+        oag_hd::campaign::SELECTION_SCREEN,
+        strings,
+        faces,
+        grid,
+        oag_hd::campaign::AUTHORED_GRID,
+    );
+    let fury = Layout::read_authored(
+        &screens,
+        oag_hd::campaign::FURY_GRID_SCREEN,
+        strings,
+        faces,
+        grid,
+        oag_hd::campaign::AUTHORED_GRID,
+    );
+    match (selection, fury) {
+        (Some(selection), Some(fury)) => (Some(selection), Some(fury)),
+        _ => {
+            log::warn!(
+                "{}'s own copy of {} is missing {} or {} - Campaign Selection stays unmodelled",
+                oag_hd::campaign::SELECTION_SCREEN_ARCHIVE,
+                oag_hd::campaign::SCREEN_ENTRY,
+                oag_hd::campaign::SELECTION_SCREEN,
+                oag_hd::campaign::FURY_GRID_SCREEN,
+            );
+            (None, None)
+        }
+    }
 }
 
 /// [`load`]'s Omega branch - the same shape as [`load_hd`], off
@@ -288,6 +390,13 @@ fn load_omega(
         grid_layout,
         cell_layout,
         sprites,
+        // Omega's own front end is HD's `PI001` plugin carried forward, but
+        // no `Campaign Selection`/`Grid Selection Fury` has been measured on
+        // it - Omega's racing is out of scope entirely
+        // (`docs/formats/omega-status.md`), so this is left unmodelled
+        // rather than assumed to carry HD's own screen unread.
+        selection_layout: None,
+        grid_layout_fury: None,
     })
 }
 

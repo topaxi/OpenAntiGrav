@@ -88,12 +88,60 @@ pub fn entry_name(index: u8) -> String {
 /// `Data\Plugins\Frontend\Gui\CellMode_Definition.xml`, HD's counterpart to
 /// [`oag_pulse::campaign`]'s `Data\Plugins\PI001\GUI\CellMode_Definition.xml`.
 /// Present on `DATA02` (42,548 bytes) and, disagreeing, `DATA06` (59,361
-/// bytes, presumably a later build) - [`oag_assets::Archives`]'s own
-/// precedence reaches `DATA02`'s copy, undiffed against `DATA06`'s this
-/// pass. **Plain UTF-8, not dictionary-shortened** - unlike
-/// [`DEFINITION_ENTRY`], reading this needs no `oag_tables::fexml`
-/// expansion first. See `docs/ui/campaign-screens.md`'s HD section.
+/// bytes) - [`oag_assets::Archives`]'s own precedence reaches `DATA02`'s
+/// copy for `oag_game::campaign::load_hd`'s own `Grid Selection`/`Cell
+/// Selection` read.
+///
+/// **`DATA06`'s copy is a later, Fury-era build, not merely a different
+/// one - now measured, not just presumed.** It is the only copy carrying a
+/// `Campaign Selection` screen and a `Grid Selection Fury` screen at all;
+/// `DATA02`'s copy has neither, and its own `Grid Selection`'s `flyerlist`
+/// carries eight `<Entry IDString="BLANK">` placeholders where `DATA06`'s
+/// names real grids (`"grid0"`..`"grid7"`). Confirmed against a live PS3:
+/// RPCS3's own `TTY.log` prints `Grid Selection Fury` as a screen name on
+/// `hdfury-ps3-eu-dec.iso`, a name that exists nowhere in `DATA02`'s copy -
+/// see `docs/ui/campaign-screens.md`'s "Wipeout HD/Fury: `Campaign
+/// Selection`" section for the full comparison, including the one place
+/// `DATA06`'s own `Cell Selection` diverges further (a renamed target-medal
+/// row, an extra background layer) that this crate does not adopt.
+/// `oag_game::campaign::load_hd` reads `Campaign Selection`/`Grid Selection
+/// Fury` from `DATA06` directly (by archive label, not precedence) and
+/// leaves `Grid Selection`/`Cell Selection` on `DATA02`, since those two are
+/// diffed byte-for-byte equivalent between the two copies (bar two
+/// `FEGlobals->` colour names this title's own `skin.xml` resolves
+/// identically either way).
+///
+/// **Plain UTF-8, not dictionary-shortened** - unlike [`DEFINITION_ENTRY`],
+/// reading this needs no `oag_tables::fexml` expansion first. See
+/// `docs/ui/campaign-screens.md`'s HD section.
 pub const SCREEN_ENTRY: &str = r"Data\Plugins\Frontend\Gui\CellMode_Definition.xml";
+
+/// `grid0`..`grid7`, the base `Wipeout HD` campaign's own slice of
+/// [`DEFINITION_ENTRY`]'s sixteen grids - `Campaign Selection`'s
+/// `FE_RC_HD` entry redirects to `Grid Selection`, which pages exactly this
+/// range (`DATA06`'s own `flyerlist`, `"grid0"`..`"grid7"`). See
+/// `docs/ui/campaign-screens.md`'s "Wipeout HD/Fury: `Campaign Selection`"
+/// section.
+pub const HD_GRID_RANGE: std::ops::Range<usize> = 0..8;
+
+/// `grid8`..`grid15`, `Fury`'s own slice - `Campaign Selection`'s
+/// `FE_RC_FURY` entry (the measured default) redirects to `Grid Selection
+/// Fury`, which pages exactly this range. See [`HD_GRID_RANGE`]'s own doc.
+pub const FURY_GRID_RANGE: std::ops::Range<usize> = 8..16;
+
+/// The screen `Campaign Selection`/`Grid Selection Fury` are authored in -
+/// [`SCREEN_ENTRY`]'s own path, but only `DATA06`'s copy, not the
+/// precedence-resolved one. See [`SCREEN_ENTRY`]'s own doc for why.
+pub const SELECTION_SCREEN_ARCHIVE: &str = crate::archives::DATA06;
+
+/// `Campaign Selection`'s own screen name, as `DATA06`'s `CellMode_Definition.xml`
+/// authors it. See [`SCREEN_ENTRY`]'s own doc.
+pub const SELECTION_SCREEN: &str = "Campaign Selection";
+
+/// `Grid Selection Fury`'s own screen name - `Campaign Selection`'s `FE_RC_FURY`
+/// entry's own redirect target, and [`FURY_GRID_RANGE`]'s own screen. See
+/// [`SCREEN_ENTRY`]'s own doc.
+pub const FURY_GRID_SCREEN: &str = "Grid Selection Fury";
 
 /// The grid `CellMode_Definition.xml` is authored in - HD's own screen
 /// resolution, unlike Pulse's copy of the same two screen names, which
@@ -175,5 +223,13 @@ mod tests {
     fn entry_names_are_spelled_the_way_definition_xml_spells_them() {
         assert_eq!(entry_name(0), r"Data\Plugins\grids\grid_00.xml");
         assert_eq!(entry_name(15), r"Data\Plugins\grids\grid_15.xml");
+    }
+
+    #[test]
+    fn the_two_campaign_ranges_cover_all_sixteen_grids_with_no_overlap() {
+        assert_eq!(HD_GRID_RANGE, 0..8);
+        assert_eq!(FURY_GRID_RANGE, 8..16);
+        assert_eq!(HD_GRID_RANGE.end, FURY_GRID_RANGE.start);
+        assert_eq!(FURY_GRID_RANGE.end, usize::from(GRID_COUNT));
     }
 }

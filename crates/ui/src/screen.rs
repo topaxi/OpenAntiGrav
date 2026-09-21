@@ -677,7 +677,19 @@ impl Screens {
                 }
             }
             "movie" => screen.movies.push(Movie::from_node(child)),
-            "text" => {
+            // `MiniText` is HD's own smaller-font sibling of `Text` -
+            // `Data\Plugins\Frontend\Gui\CellMode_Definition.xml`'s
+            // `Campaign Selection` screen is the first this crate reads that
+            // authors any (`CAMPAIGN MODES`'s own subtitle, `GOLD MEDALS`
+            // beside each flyer). Same attribute shape on every case
+            // measured (`x`/`y`/`idstring`/`color`, no `font` of its own),
+            // so this collects it exactly like `"text"` below rather than
+            // adding a distinct field - **chosen, not measured**: whether
+            // the original actually draws it smaller than a plain `Text` is
+            // unread, and nothing downstream distinguishes the two once
+            // collected. See `docs/ui/campaign-screens.md`'s "Wipeout
+            // HD/Fury: `Campaign Selection`" section.
+            "minitext" | "text" => {
                 // Positioned at `inner`, not `offset` - HD's own
                 // `Data\Plugins\Frontend\Gui\CellMode_Definition.xml`
                 // authors a handful of labels (`Medals Title`/`Points

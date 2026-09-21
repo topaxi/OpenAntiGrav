@@ -88,6 +88,7 @@ use crate::screen::{Screen, Screens};
 pub mod draw;
 pub mod hd;
 pub mod pointer;
+pub mod selection;
 
 pub use draw::{cell_draw_list, grid_draw_list};
 

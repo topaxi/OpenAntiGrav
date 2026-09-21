@@ -591,6 +591,11 @@ pub(super) fn picker_page(
 /// Which Race Campaign screen a `--menu-page` name asks for, if either.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum CampaignKind {
+    /// **HD/Fury only.** `Campaign Selection`, ahead of `Grid` - see
+    /// `crate::campaign_stage::Screen::Selection`'s own doc. Refused on
+    /// every other title, the same way [`campaign_page`] already refuses a
+    /// source with no campaign at all.
+    Selection,
     Grid,
     Cell,
 }
@@ -598,6 +603,7 @@ pub(super) enum CampaignKind {
 #[must_use]
 pub(super) fn campaign_kind(page: &str) -> Option<CampaignKind> {
     match page {
+        "campaign-select" | "campaign_select" => Some(CampaignKind::Selection),
         "grid-select" | "grid_select" => Some(CampaignKind::Grid),
         "cell-select" | "cell_select" => Some(CampaignKind::Cell),
         _ => None,
@@ -657,6 +663,31 @@ pub(super) fn campaign_page(
     let circuit_names = oag_ui::language::CircuitNames::default();
     let layers = if is_hd {
         match kind {
+            CampaignKind::Selection => {
+                let Some(layout) = campaign.selection_layout.as_ref() else {
+                    anyhow::bail!(
+                        "this source has no Campaign Selection screen - DATA06's own copy of \
+                         {} is missing or incomplete, see oag_hd::campaign::SCREEN_ENTRY's own doc",
+                        oag_hd::campaign::SCREEN_ENTRY
+                    );
+                };
+                let model = oag_ui::campaign::selection::CampaignSelection::new();
+                // No progress source in a still - `0`/`0`, the same
+                // fresh-profile reading `GridSelection::new`'s own bare
+                // `from_grid` call gives every other number below.
+                oag_ui::campaign::selection::draw_list(
+                    &model,
+                    layout,
+                    skin,
+                    frame,
+                    strings,
+                    0,
+                    0,
+                    backdrop,
+                    false,
+                    &|src| sprites.get(src),
+                )
+            }
             CampaignKind::Grid => {
                 let model = oag_ui::campaign::GridSelection::new(
                     campaign
@@ -716,6 +747,11 @@ pub(super) fn campaign_page(
         }
     } else {
         match kind {
+            CampaignKind::Selection => {
+                anyhow::bail!(
+                    "Campaign Selection is Wipeout HD/Fury's own screen - this source has none"
+                );
+            }
             CampaignKind::Grid => {
                 let model = oag_ui::campaign::GridSelection::new(
                     campaign

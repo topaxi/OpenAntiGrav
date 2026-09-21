@@ -53,7 +53,46 @@ impl Session {
             ..oag_ui::picker::FaceScales::default()
         };
         let grid = [shell.space.size.0, shell.space.size.1];
-        let strings = shell.strings.clone();
+        let mut strings = shell.strings.clone();
+        // **HD/Fury only**: `Campaign Selection`'s own `ScreenTitle`/subtitle
+        // idstrings (`FE_RC_SELECT`/`FE_CAMPSEL_MODES`) are not in the
+        // language table `shell.strings` already carries - that table is
+        // built off whichever archive `Archives::read_name` resolves for
+        // `shell.entries`, and (the same asymmetry
+        // `oag_ui::language::StringTable::get`'s own doc records for the
+        // circuit names) only `DATA06`'s own copy of the entries file
+        // carries either id at all, since both are new to the Fury-era
+        // screen. Overlaid here rather than generally: merging the whole of
+        // `DATA06`'s copy into `strings` risks silently changing an
+        // already-resolved id elsewhere on a disagreement this pass has not
+        // audited, where this touches only the two ids this screen needs.
+        if shell.title.name == oag_hd::TITLE.name
+            && let Some(entries_path) = shell.entries.as_deref()
+        {
+            let overlay: std::collections::HashMap<String, String> = archives
+                .read_every_name(entries_path)
+                .into_iter()
+                .find(|(label, _)| label.ends_with(oag_hd::campaign::SELECTION_SCREEN_ARCHIVE))
+                .and_then(|(_, blob)| oag_tables::fexml::text(&blob).ok())
+                .map(|xml| {
+                    let fury_table = oag_ui::language::StringTable::from_xml(&xml);
+                    [
+                        oag_ui::campaign::selection::TITLE_ID,
+                        oag_ui::campaign::selection::SUBTITLE_ID,
+                    ]
+                    .into_iter()
+                    .filter_map(|id| {
+                        fury_table
+                            .get(id)
+                            .map(|value| (id.to_string(), value.to_string()))
+                    })
+                    .collect()
+                })
+                .unwrap_or_default();
+            if !overlay.is_empty() {
+                strings.merge(overlay);
+            }
+        }
         // Read out of `shell` before the mutable borrow below - `shell`
         // itself cannot survive `self.renderer_set_sprites`, the same reason
         // `strings` above is already a clone rather than a borrow.
@@ -87,6 +126,8 @@ impl Session {
                         campaign.grids,
                         campaign.grid_layout,
                         campaign.cell_layout,
+                        campaign.selection_layout,
+                        campaign.grid_layout_fury,
                         strings,
                         campaign.sprites,
                         title,
@@ -121,6 +162,7 @@ impl Session {
             return;
         };
         let mut events = match &mut campaign.screen {
+            Screen::Selection(model) => model.update(self.controls.buttons_mut()),
             Screen::Grid(model) => model.update(self.controls.buttons_mut()),
             Screen::Cell { model, .. } => model.update(self.controls.buttons_mut()),
         };
@@ -149,6 +191,13 @@ impl Session {
                 return;
             };
             match (&campaign.screen, event) {
+                // **HD only** - `Campaign Selection` ahead of `Grid
+                // Selection`. See `crate::campaign_stage`'s own module doc.
+                (Screen::Selection(model), Event::Confirmed) => {
+                    let chosen = model.selected();
+                    campaign.open_grid_selection(chosen);
+                }
+                (Screen::Selection(_), Event::Back) => stage.campaign = None,
                 (Screen::Grid(model), Event::Confirmed) => {
                     // **Chosen, not measured**: no PI001 function this
                     // project has decompiled ever refuses the transition on
@@ -169,6 +218,14 @@ impl Session {
                             warn!("grid {index} has no cells - staying on Grid Selection");
                         }
                     }
+                }
+                // **HD only, when `Campaign Selection` was read at all**:
+                // `Grid Selection`'s own `Back` returns to it rather than
+                // closing the campaign outright. Every other title, and an
+                // HD source missing `DATA06`'s own copy of the screen, keeps
+                // the pre-this-pass behaviour.
+                (Screen::Grid(_), Event::Back) if campaign.has_selection() => {
+                    campaign.open_selection();
                 }
                 (Screen::Grid(_), Event::Back) => stage.campaign = None,
                 (Screen::Cell { model, .. }, Event::Confirmed) => {
