@@ -28,10 +28,13 @@ the work in isolated worktrees.
    wait for the answer.
 
 3. **Set up the recurring check.** Invoke the `loop` skill with an interval of
-   30 minutes and a prompt that re-enters this one, so the loop survives you
-   stopping:
+   one hour and a prompt that re-enters this one, so the loop survives you
+   stopping. It used to be 30 minutes; raised to an hour on 2026-09-21 by the
+   user because iterations have become slower and longer, and a tick that
+   finds nothing finished is pure overhead - a member's own report wakes the
+   lead immediately regardless of the tick, so nothing waits on it:
 
-   > `30m Check subagent slot occupation and status. Run ListAgents and total the
+   > `1h Check subagent slot occupation and status. Run ListAgents and total the
    > running cost (sonnet 1 slot, opus 2, budget N). For each finished member:
    > verify its diff, merge into main, run the right gate, then remove its
    > worktree and branch. Only spawn a replacement when usage is under N, then
