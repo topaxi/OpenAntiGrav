@@ -217,10 +217,16 @@ impl Frontend {
                 out.insert(1, white);
                 out
             }
-            w2048::GAME_MODE_CHOICE | w2048::HOME | w2048::NEW_FE_SHELL => {
+            w2048::GAME_MODE_CHOICE | w2048::HOME => {
                 let mut out = self.draw_screen_at(current, self.on_screen_for);
                 out.insert(1, white);
                 self.draw_touch(current, &mut out);
+                out
+            }
+            w2048::NEW_FE_SHELL => {
+                let mut out = self.draw_screen_at(current, self.on_screen_for);
+                out.insert(1, white);
+                self.draw_campaign_map(&mut out);
                 out
             }
             _ => self.draw_screen_at(current, self.on_screen_for),

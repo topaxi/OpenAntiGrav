@@ -359,3 +359,167 @@ fn a_middle_aligned_text_centres_its_line_once_the_face_is_known() {
     frontend.set_face_scales(vec![("NEOSANS_BOLD".to_string(), 0.6)], 37.0);
     assert_eq!(pen(&frontend), 370.0 - 18.5);
 }
+
+fn reach_the_shell(frontend: &mut Frontend, input: &mut Input) {
+    reach_the_grid(frontend, input);
+    press(frontend, input, Button::Cross);
+    press(frontend, input, Button::Cross);
+    assert!(frontend.machine().is(w2048::NEW_FE_SHELL));
+}
+
+fn three_events() -> Vec<MapEvent> {
+    [
+        ("2048 - Event 2", 3, 5),
+        ("2048 - Event 1", 1, 5),
+        ("2049 - Event 1", 11, 9),
+    ]
+    .into_iter()
+    .map(|(name, x, y)| MapEvent {
+        name: name.to_string(),
+        x,
+        y,
+        detail: "circuit / mode".to_string(),
+    })
+    .collect()
+}
+
+#[test]
+fn the_extra_tiles_come_after_the_authored_ones_and_launch_this_builds_pages() {
+    let mut frontend = boot(0);
+    frontend.set_extra_tiles(vec![
+        ExtraTile {
+            label: "RACEBOX".to_string(),
+            launch: Launch::RaceBox,
+        },
+        ExtraTile {
+            label: "REMIX".to_string(),
+            launch: Launch::Remix,
+        },
+    ]);
+    let mut input = Input::new();
+    reach_the_grid(&mut frontend, &mut input);
+    // Three authored buttons, then the two extras: right four times lands
+    // on REMIX.
+    for _ in 0..4 {
+        press(&mut frontend, &mut input, Button::Right);
+    }
+    let list = frontend.draw_list();
+    assert!(list.iter().any(|draw| matches!(
+        draw,
+        Draw::Text { text, .. } if text == "REMIX"
+    )));
+    press(&mut frontend, &mut input, Button::Cross);
+    assert!(frontend.is_finished());
+    assert_eq!(frontend.launch(), Some(&Launch::Remix));
+}
+
+#[test]
+fn a_click_on_the_race_box_tile_asks_for_the_race_box() {
+    let mut frontend = boot(0);
+    frontend.set_extra_tiles(vec![ExtraTile {
+        label: "RACEBOX".to_string(),
+        launch: Launch::RaceBox,
+    }]);
+    let mut input = Input::new();
+    reach_the_grid(&mut frontend, &mut input);
+    let [x, y, w, h] = EXTRA_TILES[0];
+    let click = Pointer {
+        at: Some((x + w * 0.5, y + h * 0.5)),
+        moved: true,
+        clicked: true,
+        ..Pointer::default()
+    };
+    assert!(frontend.pointer(&click));
+    tick(&mut frontend, &mut input, 0);
+    assert_eq!(frontend.launch(), Some(&Launch::RaceBox));
+}
+
+#[test]
+fn the_map_opens_on_the_first_seasons_first_event_and_the_pad_walks_it() {
+    let mut frontend = boot(0);
+    frontend.set_campaign(three_events());
+    let mut input = Input::new();
+    reach_the_shell(&mut frontend, &mut input);
+    assert_eq!(
+        frontend.selected_event().map(|e| e.name.as_str()),
+        Some("2048 - Event 1")
+    );
+    press(&mut frontend, &mut input, Button::Right);
+    assert_eq!(
+        frontend.selected_event().map(|e| e.name.as_str()),
+        Some("2048 - Event 2")
+    );
+    // Nothing further right on the same row within reach: the next season
+    // is right and down, still the nearest that way.
+    press(&mut frontend, &mut input, Button::Right);
+    assert_eq!(
+        frontend.selected_event().map(|e| e.name.as_str()),
+        Some("2049 - Event 1")
+    );
+    press(&mut frontend, &mut input, Button::Left);
+    assert_eq!(
+        frontend.selected_event().map(|e| e.name.as_str()),
+        Some("2048 - Event 2")
+    );
+    press(&mut frontend, &mut input, Button::Cross);
+    assert!(frontend.is_finished());
+    assert_eq!(
+        frontend.launch(),
+        Some(&Launch::Event("2048 - Event 2".to_string()))
+    );
+}
+
+#[test]
+fn a_click_on_an_unselected_marker_selects_and_a_second_click_launches() {
+    let mut frontend = boot(0);
+    frontend.set_campaign(three_events());
+    let mut input = Input::new();
+    reach_the_shell(&mut frontend, &mut input);
+    // The markers of the first two events are in view: cell (3, 5) is at
+    // 24 + 2 * 54 = 132, 24 + 4 * 42 = 192, before scrolling. The view
+    // follows the selection, so read the marker's rect off the draw list.
+    let marker_of = |frontend: &Frontend, at: usize| {
+        let list = frontend.draw_list();
+        list.iter()
+            .filter_map(|draw| match draw {
+                Draw::Fill { rect, color } if rect[2] == 36.0 && color[3] == 1.0 => Some(*rect),
+                _ => None,
+            })
+            .nth(at)
+            .expect("a marker")
+    };
+    let second = marker_of(&frontend, 0);
+    let click = |rect: [f32; 4]| Pointer {
+        at: Some((rect[0] + 18.0, rect[1] + 18.0)),
+        moved: true,
+        clicked: true,
+        ..Pointer::default()
+    };
+    assert!(frontend.pointer(&click(second)));
+    tick(&mut frontend, &mut input, 0);
+    assert!(!frontend.is_finished());
+    assert_eq!(
+        frontend.selected_event().map(|e| e.name.as_str()),
+        Some("2048 - Event 2")
+    );
+    let again = marker_of(&frontend, 0);
+    assert!(frontend.pointer(&click(again)));
+    tick(&mut frontend, &mut input, 0);
+    assert_eq!(
+        frontend.launch(),
+        Some(&Launch::Event("2048 - Event 2".to_string()))
+    );
+}
+
+#[test]
+fn a_map_with_no_events_says_so_and_launches_nothing() {
+    let mut frontend = boot(0);
+    let mut input = Input::new();
+    reach_the_shell(&mut frontend, &mut input);
+    press(&mut frontend, &mut input, Button::Cross);
+    assert!(!frontend.is_finished());
+    assert!(frontend.draw_list().iter().any(|draw| matches!(
+        draw,
+        Draw::Text { text, .. } if text.contains("no campaign events")
+    )));
+}

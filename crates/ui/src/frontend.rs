@@ -90,12 +90,15 @@ pub use player::{FRAME_RATE, PS2_DISPLAY_ASPECT, Player};
 
 use oag_display::space::{SCREEN, Space, pillarbox_in};
 use oag_hd::frontend::states as hd_states;
-/// 2048's boot screens and touch grids: `wipeout2048.rs` drives the five
-/// screens its declared chain walks off their own redirects, `touch.rs`
-/// the two icon grids after them. See each module's own docs.
+/// 2048's boot screens, touch grids and campaign map: `wipeout2048.rs`
+/// drives the five screens its declared chain walks off their own
+/// redirects, `touch.rs` the two icon grids after them, `campaign_map.rs`
+/// the map the grids lead to. See each module's own docs.
+mod campaign_map;
 mod faces;
 mod touch;
 mod wipeout2048;
+pub use campaign_map::{CampaignMap, MapEvent};
 pub(crate) use faces::{font_line_height, lighten};
 /// The reel's frame counts and every state name: `oag_pulse::frontend`.
 ///
@@ -107,7 +110,7 @@ pub(crate) use faces::{font_line_height, lighten};
 /// [ADR-0022]: ../../../docs/architecture/adr/0022-title-packages.md
 pub use oag_pulse::frontend::{FINISH_FRAME, HOLD_SECONDS, PAUSE_FRAMES, states};
 use oag_pure::frontend::states as pure_states;
-pub use touch::TouchState;
+pub use touch::{EXTRA_TILES, ExtraTile, Launch, TouchState};
 
 /// How long `Developer Publisher Screen` takes, as the reel's own length.
 ///
@@ -411,6 +414,9 @@ pub struct Frontend {
     /// Where Wipeout 2048's touch grids are - see [`TouchState`]. Inert on
     /// every other title, which never enters a state that reads it.
     touch: TouchState,
+    /// Wipeout 2048's campaign map - see [`CampaignMap`]. Empty on every
+    /// other title.
+    campaign: CampaignMap,
     /// How much larger or smaller each font role's face is than the
     /// `Default` one this build draws every screen widget with, by the
     /// role's name in lower case - see [`Self::set_face_scales`]. Empty
@@ -568,6 +574,7 @@ impl Frontend {
             on_screen_for: 0.0,
             menu_skin: None,
             touch: TouchState::default(),
+            campaign: CampaignMap::default(),
             face_scales: Vec::new(),
             default_line_height: None,
         };

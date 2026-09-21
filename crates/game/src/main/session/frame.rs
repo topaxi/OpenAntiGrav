@@ -82,10 +82,19 @@ impl Session {
                 }
             }
             let hint_strings = strings::project_table(self.settings.language.as_deref());
+            // What Wipeout 2048's own front end asked for, if it was that
+            // title: its `Launch 2048` carries a request where every other
+            // title's `Launch Game` opens the menus and stops. See
+            // `oag_ui::frontend::Launch`.
+            let launch = match &self.stage {
+                Stage::Frontend(stage) => stage.frontend.launch().cloned(),
+                _ => None,
+            };
             if let Err(e) = self.open_menus() {
                 error!("cannot open the menus: {e:#}");
             } else {
                 println!("\n{}", hints::shell_keys(&hint_strings));
+                self.follow_launch(launch);
             }
         }
 

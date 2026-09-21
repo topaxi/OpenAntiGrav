@@ -306,3 +306,89 @@ fn a_network_mode_stays_on_the_grid_with_a_note() {
         "{notes:#?}"
     );
 }
+
+/// The map carries `SP.xml`'s own events, opens on the first season's first
+/// one, and a press launches it by its own name - the name
+/// `oag_game::race::load_event` resolves.
+#[test]
+#[ignore = "needs the extracted package under data/extracted/vita/"]
+fn a_press_on_the_map_asks_for_the_first_events_race() {
+    let Some(source) = source() else { return };
+    let loaded = boot::load(&options(&source)).expect("the whole boot");
+    let mut frontend = loaded.frontend;
+    assert!(drive_until(
+        &mut frontend,
+        &[Button::Cross],
+        w2048::NEW_FE_SHELL
+    ));
+    let events = frontend.campaign_events();
+    assert_eq!(
+        events.len(),
+        115,
+        "141 instances, 21 with no cell, 5 E3 demos"
+    );
+    assert!(events.iter().all(|event| !event.name.starts_with("MP_")));
+    let first = frontend.selected_event().expect("a selected event");
+    assert_eq!(first.name, "2048 - Event 1");
+    assert!(
+        first
+            .detail
+            .starts_with("EMPIRE CLIMB / single race / FLASH / 3 laps"),
+        "{}",
+        first.detail
+    );
+    assert!(drive_until(
+        &mut frontend,
+        &[Button::Cross],
+        w2048::LAUNCH_2048
+    ));
+    assert!(frontend.is_finished());
+    assert_eq!(
+        frontend.launch(),
+        Some(&oag_ui::frontend::Launch::Event(
+            "2048 - Event 1".to_string()
+        ))
+    );
+    // And the name resolves to a race the way `--event` does.
+    let race = oag_game::race::Options {
+        source: source.display().to_string(),
+        ..oag_game::race::Options::default()
+    };
+    let resolved = oag_game::race::load_event(&race, "2048 - Event 1").expect("the event loads");
+    assert_eq!(resolved.setup.class, "FLASH");
+}
+
+/// This build's two tiles are on the grid, after the authored four and the
+/// tick, and ask for this build's own pages.
+#[test]
+#[ignore = "needs the extracted package under data/extracted/vita/"]
+fn the_race_box_and_remix_tiles_follow_the_authored_grid() {
+    let Some(source) = source() else { return };
+    let loaded = boot::load(&options(&source)).expect("the whole boot");
+    let mut frontend = loaded.frontend;
+    assert!(drive_until(
+        &mut frontend,
+        &[Button::Cross],
+        w2048::GAME_MODE_CHOICE
+    ));
+    let list = frontend.draw_list();
+    for label in ["RACEBOX", "REMIX"] {
+        assert!(
+            list.iter().any(
+                |draw| matches!(draw, oag_ui::frontend::Draw::Text { text, .. } if text == label)
+            ),
+            "{label} is on the grid"
+        );
+    }
+    // Four tiles, the tick, then the two: five rights land on RACEBOX.
+    let mut input = Input::new();
+    for _ in 0..5 {
+        input.begin_frame(Button::Right.bit());
+        frontend.update(1.0 / 60.0, &mut input, None);
+        input.begin_frame(0);
+        frontend.update(1.0 / 60.0, &mut input, None);
+    }
+    input.begin_frame(Button::Cross.bit());
+    frontend.update(1.0 / 60.0, &mut input, None);
+    assert_eq!(frontend.launch(), Some(&oag_ui::frontend::Launch::RaceBox));
+}

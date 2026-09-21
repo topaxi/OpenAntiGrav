@@ -719,23 +719,6 @@ impl Menu {
         filled
     }
 
-    /// Jumps straight to a page, discarding the stack.
-    ///
-    /// For looking at one page without walking to it - `--menu-page` - rather
-    /// than for navigation, which is why the stack is *replaced*: a page reached
-    /// this way was not reached through anything, and pretending otherwise would
-    /// give it a back destination it never had.
-    ///
-    /// Returns whether the page exists.
-    pub fn open(&mut self, id: &str) -> bool {
-        let Some(at) = self.definition.pages.iter().position(|page| page.id == id) else {
-            return false;
-        };
-        self.stack = vec![at];
-        self.snap_focus();
-        true
-    }
-
     /// The definition, for reporting and for drawing.
     #[must_use]
     pub fn definition(&self) -> &Definition {
@@ -1052,6 +1035,7 @@ mod picture;
 pub use picture::{Backdrop, Picture};
 mod focus;
 mod frame;
+mod jump;
 mod layers;
 pub mod pointer;
 mod rows;

@@ -319,6 +319,12 @@ pub struct Shell {
     pub title_font: Option<oag_ui::font::Atlas>,
     /// Each font role's face against `Default`, see [`fonts::face_scales`].
     pub face_scales: Vec<(String, f32)>,
+    /// Wipeout 2048's campaign map, see [`campaign2048::map_events`]. Empty
+    /// on every other title.
+    pub campaign_events: Vec<oag_ui::frontend::MapEvent>,
+    /// This build's own tiles on 2048's mode grid, see
+    /// [`campaign2048::extra_tiles`]. Empty on every other title.
+    pub extra_tiles: Vec<oag_ui::frontend::ExtraTile>,
     /// The screens this boot walks, in the title's own order, already filtered
     /// to the ones this pressing carries and this build can drive.
     ///
@@ -522,14 +528,33 @@ pub fn load_shell(
         Vec::new()
     };
     steps.lap("menu and title fonts");
+    // The map the touch front end's campaign tile leads to, and the two
+    // tiles this build adds beside the authored four.
+    let (campaign_events, extra_tiles) = if front_end.touch.is_some() {
+        (
+            campaign2048::map_events(&mut archives, &strings, &mut report),
+            campaign2048::extra_tiles(options.language.as_deref()),
+        )
+    } else {
+        (Vec::new(), Vec::new())
+    };
+    steps.lap("campaign map");
     let definition = title.plugin_definition;
-    let documents = definitions(&mut archives, definition, &mut report);
+    let documents = definitions(
+        &mut archives,
+        &[
+            definition,
+            title.track_plugin_definition.unwrap_or(definition),
+        ],
+        &mut report,
+    );
     let tracks = load_tracks(&mut archives, definition, &documents, &mut report);
     let zone_tracks = load_zone_tracks(&mut archives, title.race.zone, &documents, &mut report);
     let teams = load_teams(
         &mut archives,
         (title.race.ship_dir, title.race.handling_dir),
         definition,
+        title.race.team,
         &documents,
         &mut report,
     );
@@ -733,6 +758,8 @@ pub fn load_shell(
             menu_font,
             title_font,
             face_scales,
+            campaign_events,
+            extra_tiles,
             walked,
             movie_name,
             second_movie_name,
@@ -902,67 +929,6 @@ impl MediaPlan {
     }
 }
 
-/// How far the media phase has got.
-///
-/// A snapshot handed out by value, on the same terms as
-/// [`crate::prefetch::Progress`]: the loading screen polls it from the frame
-/// loop it already has and holds no lock while it draws.
-///
-/// There is no `finished` here because [`MediaWorker::is_finished`] already
-/// answers that, and the thread is what knows - `done == total` is true for the
-/// moment between the last load returning and the thread handing back its
-/// [`Media`].
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct MediaProgress {
-    /// What [`MediaPlan::loads`] counted, or `0` before the phase starts.
-    pub total: usize,
-    /// Loads that have returned, successfully or not.
-    pub done: usize,
-    /// What is loading right now, by the entry name the plan gave.
-    pub current: Option<String>,
-    /// What that load is actually doing - see [`crate::movie::Step`].
-    ///
-    /// **This is the difference between a wait nobody notices and eighty
-    /// seconds of one.** `Some(Step::Cached)` and `Some(Step::Transcoding)` sit
-    /// under the same entry name and mean entirely different things to whoever
-    /// is looking at the screen. `None` before a load has said anything, which
-    /// includes the sound loads: [`crate::at3`] has its own cache and does not
-    /// report through this.
-    pub step: Option<crate::movie::Step>,
-}
-
-/// Names what is about to load. Overwrites rather than clears, so the label
-/// under the bar never blinks empty between two loads.
-///
-/// The step is cleared, though, and must be: it described the *previous* load,
-/// and carrying it over would caption a cache hit with the last transcode's
-/// frame counter.
-fn starting(progress: &Mutex<MediaProgress>, what: &str) {
-    let mut at = lock_media(progress);
-    at.current = Some(what.to_string());
-    at.step = None;
-}
-
-/// Counts a load that has returned, however it returned. See [`MediaPlan::loads`].
-fn loaded(progress: &Mutex<MediaProgress>) {
-    lock_media(progress).done += 1;
-}
-
-/// The callback the movie loaders report their [`crate::movie::Step`] through.
-fn watching(progress: &Mutex<MediaProgress>) -> impl Fn(crate::movie::Step) + Sync {
-    move |step| lock_media(progress).step = Some(step)
-}
-
-/// The same rule [`crate::prefetch`]'s own `lock` follows: a poisoned lock is a
-/// worker that panicked, and the last snapshot it wrote is still a true
-/// statement about what got done. Bringing the window down over it would swap a
-/// boot with no movies for no boot at all.
-fn lock_media(progress: &Mutex<MediaProgress>) -> std::sync::MutexGuard<'_, MediaProgress> {
-    progress
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner)
-}
-
 /// [`load_media`] running on a thread of its own, so a window can open first.
 ///
 /// **This is the whole reason the boot is in halves.** On a `native-video`
@@ -1085,6 +1051,8 @@ pub fn assemble(shell: Shell, media: Media) -> Boot {
         menu_font,
         title_font,
         face_scales,
+        campaign_events,
+        extra_tiles,
         walked,
         movie_name: _,
         second_movie_name: _,
@@ -1166,6 +1134,12 @@ pub fn assemble(shell: Shell, media: Media) -> Boot {
     // Only where they were measured - see `load_shell`'s own gate.
     if !face_scales.is_empty() {
         frontend.set_face_scales(face_scales, font.line_height);
+    }
+    if !campaign_events.is_empty() {
+        frontend.set_campaign(campaign_events);
+    }
+    if !extra_tiles.is_empty() {
+        frontend.set_extra_tiles(extra_tiles);
     }
 
     // **Before `set_backdrop`, which bakes a rect out of it.** The PS2's `Skin.xml`
@@ -1623,11 +1597,13 @@ pub fn load_strings(
     }
 }
 
+mod campaign2048;
 mod fonts;
 pub mod fury;
 mod images;
 mod includes;
 mod movies;
+mod progress;
 mod provenance;
 pub(crate) mod roster;
 mod screens;
@@ -1638,6 +1614,8 @@ pub(crate) mod xml;
 use fonts::{load_font, load_menu_font, load_title_font};
 use movies::load_movie;
 pub use movies::{DEFAULT_BOOT_MOVIE, DEVPUB_REEL, EntryRef};
+pub use progress::MediaProgress;
+use progress::{loaded, lock_media, starting, watching};
 use roster::{definitions, load_circuit_names, load_teams, load_tracks, load_zone_tracks};
 use screens::{load_included_screens, load_screens, selection_layouts};
 use steps::Steps;

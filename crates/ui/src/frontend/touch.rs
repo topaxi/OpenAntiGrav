@@ -15,7 +15,10 @@
 //! `(113, 123, 150)`), the icon is drawn at its texture's own size centred on
 //! the tile (a 92px-wide glyph in a 128px texture lands 90px wide on screen),
 //! and the label sits under the tile in the tile colour, its cap line 18px
-//! below the tile's bottom edge, wrapped, 22px between lines.
+//! below the tile's bottom edge, wrapped, 22px between lines. Off
+//! `10-adhoc-game-list.png`: an unlabelled button (`cross.gtf`) is a box of
+//! its authored 122x96 with the glyph centred, and a box that carries text
+//! carries it inside, white, centred.
 //!
 //! **Chosen, not measured - no confidence score**: the pad cursor. The
 //! capture shows no selected state at all (it was taken between taps), so
@@ -28,16 +31,36 @@
 //! `GameModeChoice`'s four mode tiles are `toggle="true"` with no `redirect`;
 //! a fifth, unlabelled button (`Icon_Tick.gtf`, `redirect="newFEshell"`) is
 //! the confirm. So a tap on a mode marks it and the tick leaves - the file's
-//! own shape, kept rather than folded into one tap. `Home`'s five tiles each
-//! carry their own `redirect` and leave on the tap.
+//! own shape, kept rather than folded into one tap; a second tap on the
+//! chosen mode is read as the tick, the language picker's own rule. `Home`'s
+//! five tiles each carry their own `redirect` and leave on the tap.
 //!
 //! Only `FE_SP_CAMPAIGN` can be confirmed here: the other three modes are
 //! online, ad-hoc and cross-play, and the screens behind them are network
 //! sessions this build does not have. Confirming one of those says so in a
 //! note and stays.
+//!
+//! # Two tiles the disc does not author: RACE BOX and REMIX
+//!
+//! **This build's own, not on the disc**, and the one place this module
+//! adds to what the file draws. 2048 ships no race box and no
+//! `CellMode_Definition.xml` - its front end is the campaign map and the
+//! network modes - and every other title in this project reaches this
+//! build's own race box and RACE REMIX pages (`assets/ui/menu.toml`,
+//! ADR-0034) from its own front end. So the two are appended **after** the
+//! four authored tiles, never mixed into `Screen::touch_buttons`, labelled
+//! with this project's own `OAG_MENU_RACEBOX`/`OAG_MENU_REMIX` strings (the
+//! same ids the menu tree uses), and drawn as the labelled 122x96 box the
+//! disc's own game-list screen authors for a text button - an authored
+//! shape holding an unauthored destination. **Their positions are chosen,
+//! not measured**: the bottom-left corner at `(16, 432)` and `(158, 432)`,
+//! the confirm tick's own row, where nothing the screen authors sits (the
+//! `TouchNews` widget at `(16, 432)` belongs to `newFEshell`, a different
+//! screen). See [`EXTRA_TILES`]. No disc icon exists for either, so neither
+//! draws one.
 
 use crate::pointer::{Pointer, contains};
-use crate::screen::{TouchButton, argb_to_rgba, parse_argb};
+use crate::screen::{Screen, TouchButton, argb_to_rgba, parse_argb};
 
 use super::*;
 use oag_2048::frontend::states as w2048;
@@ -53,34 +76,172 @@ const LABEL_GAP: f32 = 18.0;
 /// is 37 units tall per line; the capture's label caps are 16 units and its
 /// header caps (`scale="1.0"`, the same face) 27, so the label draws at
 /// their ratio. Measured, one capture.
-const LABEL_SCALE: f32 = 16.0 / 27.0;
+pub(super) const LABEL_SCALE: f32 = 16.0 / 27.0;
+/// How far above the cap line the `Default` face's pen sits at scale 1:
+/// the header's own `y="30"` puts its caps at 40 on the capture. Measured.
+pub(super) const PEN_ABOVE_CAPS: f32 = 10.0;
+
+/// What a confirmed tap asked the composition root for - see
+/// [`Frontend::launch`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Launch {
+    /// A campaign event by its `SP.xml` instance name: the map's own
+    /// `redirect="Launch 2048"`, resolved by `oag_game::race::load_event`.
+    Event(String),
+    /// This build's own race box - the `race` page of `assets/ui/menu.toml`.
+    RaceBox,
+    /// This build's own RACE REMIX page (ADR-0034).
+    Remix,
+}
+
+/// One of this build's own tiles on `GameModeChoice`, in the terms the
+/// composition root fills it: a label already resolved through the
+/// project's own string table, and where it goes.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ExtraTile {
+    pub label: String,
+    pub launch: Launch,
+}
+
+/// Where the two extra tiles sit, in the order [`Frontend::set_extra_tiles`]
+/// was given them. **Chosen, not measured** - see the module docs. The
+/// 122x96 is the tick's own authored size; the 20-unit gap between the two
+/// is this build's.
+pub const EXTRA_TILES: [[f32; 4]; 2] = [[16.0, 432.0, 122.0, 96.0], [158.0, 432.0, 122.0, 96.0]];
 
 /// Where the touch front end is: which tile the pad is on, which mode has
 /// been chosen, and what a confirmed tap asked the composition root for.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct TouchState {
-    /// Index into the current screen's `touch_buttons`, in document order.
+    /// Index into the current screen's [`Frontend::tiles`], in that order.
     pub selected: usize,
     /// The `idstring` of the toggle tile last tapped on `GameModeChoice`.
     pub chosen_mode: Option<String>,
-    /// The campaign event a tap on the map asked to race, once one has.
-    /// Read by the composition root through [`Frontend::launch`].
-    pub launch: Option<String>,
+    /// What a confirmed tap asked for, once one has. Read by the
+    /// composition root through [`Frontend::launch`].
+    pub launch: Option<Launch>,
+    /// This build's own tiles, see [`ExtraTile`]. Empty until the
+    /// composition root supplies them, which draws the grid as the file
+    /// authors it and nothing more.
+    pub extra: Vec<ExtraTile>,
+}
+
+/// What a tap on a tile does.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum Action {
+    /// Marks the tile chosen; the screen's tick leaves. `GameModeChoice`.
+    Toggle(String),
+    /// Leaves for a screen by name.
+    Redirect(String),
+    /// Leaves the front end with a request for the composition root.
+    Launch(Launch),
+}
+
+/// One tile as drawn and hit-tested: an authored `<TouchButton>` or one of
+/// this build's own, in one shape so the cursor cannot land on one list and
+/// the tap fire on another.
+#[derive(Debug, Clone, PartialEq)]
+struct Tile {
+    rect: [f32; 4],
+    /// The icon's texture name, as the widget spells it.
+    src: Option<String>,
+    /// The label, already resolved to text.
+    label: Option<String>,
+    /// `StringWidthLimit`.
+    wrap: Option<f32>,
+    /// Whether the label is drawn inside the box (a text button) rather
+    /// than under it (an icon tile).
+    label_inside: bool,
+    /// The icon's modulating colour.
+    color: [f32; 4],
+    action: Action,
+    /// What to say in a note about this tile.
+    name: String,
 }
 
 impl Frontend {
-    /// The campaign event the front end has asked to race, if any. `Some`
-    /// only once [`Frontend::is_finished`] is, on a title whose front end
-    /// fires `Launch 2048` rather than `Launch Game`.
+    /// What the front end has asked the composition root to open, if
+    /// anything. `Some` only once [`Frontend::is_finished`] is, on a title
+    /// whose front end fires `Launch 2048` rather than `Launch Game`.
     #[must_use]
-    pub fn launch(&self) -> Option<&str> {
-        self.touch.launch.as_deref()
+    pub fn launch(&self) -> Option<&Launch> {
+        self.touch.launch.as_ref()
     }
 
     /// The mode chosen on `GameModeChoice`, by its `idstring`.
     #[must_use]
     pub fn chosen_mode(&self) -> Option<&str> {
         self.touch.chosen_mode.as_deref()
+    }
+
+    /// Gives `GameModeChoice` this build's own tiles - see the module docs.
+    /// At most [`EXTRA_TILES`]`.len()` are placed; the rest are dropped with
+    /// a note rather than drawn on top of each other.
+    pub fn set_extra_tiles(&mut self, tiles: Vec<ExtraTile>) {
+        if tiles.len() > EXTRA_TILES.len() {
+            self.notes.push(format!(
+                "{} extra tiles offered, {} placed: only that many positions are chosen",
+                tiles.len(),
+                EXTRA_TILES.len()
+            ));
+        }
+        self.touch.extra = tiles.into_iter().take(EXTRA_TILES.len()).collect();
+    }
+
+    /// Every tile on screen `name`: the authored buttons, then this build's
+    /// own on `GameModeChoice`.
+    fn tiles(&self, name: &str) -> Vec<Tile> {
+        let Some(screen) = self.screens.by_name(name) else {
+            return Vec::new();
+        };
+        let mut tiles: Vec<Tile> = screen
+            .touch_buttons
+            .iter()
+            .map(|button| self.authored_tile(button))
+            .collect();
+        if name == w2048::GAME_MODE_CHOICE {
+            for (extra, rect) in self.touch.extra.iter().zip(EXTRA_TILES) {
+                tiles.push(Tile {
+                    rect,
+                    src: None,
+                    label: Some(extra.label.clone()),
+                    wrap: Some(rect[2] - 8.0),
+                    label_inside: true,
+                    color: [1.0; 4],
+                    action: Action::Launch(extra.launch.clone()),
+                    name: extra.label.clone(),
+                });
+            }
+        }
+        tiles
+    }
+
+    fn authored_tile(&self, button: &TouchButton) -> Tile {
+        let label = button
+            .idstring
+            .as_deref()
+            .map(|id| self.strings.get_or_id(id).to_string())
+            .or_else(|| button.string.clone());
+        let name = button
+            .idstring
+            .clone()
+            .or_else(|| button.name.clone())
+            .unwrap_or_else(|| "confirm".to_string());
+        let action = match (&button.idstring, &button.redirect) {
+            (Some(id), _) if button.toggle => Action::Toggle(id.clone()),
+            (_, Some(target)) => Action::Redirect(target.clone()),
+            _ => Action::Toggle(name.clone()),
+        };
+        Tile {
+            rect: tile_rect(button),
+            src: button.src.clone(),
+            label,
+            wrap: button.string_width_limit,
+            label_inside: false,
+            color: argb_to_rgba(button.color),
+            action,
+            name,
+        }
     }
 
     /// The pad on a touch grid.
@@ -108,11 +269,10 @@ impl Frontend {
                     return;
                 }
             }
+            self.update_campaign_map(input);
+            return;
         }
-        let count = self
-            .screens
-            .by_name(&current)
-            .map_or(0, |screen| screen.touch_buttons.len());
+        let count = self.tiles(&current).len();
         if count == 0 {
             return;
         }
@@ -130,47 +290,45 @@ impl Frontend {
         }
     }
 
-    /// A tap or a press on button `at` of screen `current`.
+    /// A tap or a press on tile `at` of screen `current`.
     fn activate_touch(&mut self, current: &str, at: usize) {
-        let Some(button) = self
-            .screens
-            .by_name(current)
-            .and_then(|screen| screen.touch_buttons.get(at))
-            .cloned()
-        else {
+        let tiles = self.tiles(current);
+        let Some(tile) = tiles.get(at) else {
             return;
         };
-        let label = button
-            .idstring
-            .clone()
-            .or_else(|| button.name.clone())
-            .unwrap_or_else(|| "confirm".to_string());
-        if button.toggle {
-            // Two taps: the first chooses, the second confirms through the
-            // screen's own tick - the language picker's rule, see the
-            // module docs.
-            if self.touch.chosen_mode.as_deref() == button.idstring.as_deref()
-                && let Some(tick) = self.screens.by_name(current).and_then(|screen| {
-                    screen
-                        .touch_buttons
+        let label = tile.name.clone();
+        match tile.action.clone() {
+            Action::Toggle(id) => {
+                // Two taps: the first chooses, the second confirms through
+                // the screen's own tick - see the module docs.
+                if self.touch.chosen_mode.as_deref() == Some(id.as_str())
+                    && let Some(tick) = tiles
                         .iter()
-                        .position(|b| !b.toggle && b.idstring.is_none() && b.redirect.is_some())
-                })
-            {
-                self.notes
-                    .push(format!("{current}: {label} chosen again, confirming"));
-                self.activate_touch(current, tick);
-                return;
+                        .position(|t| t.label.is_none() && matches!(t.action, Action::Redirect(_)))
+                {
+                    self.notes
+                        .push(format!("{current}: {label} chosen again, confirming"));
+                    self.activate_touch(current, tick);
+                    return;
+                }
+                self.touch.chosen_mode = Some(id);
+                self.notes.push(format!("{current}: {label} chosen"));
             }
-            self.touch.chosen_mode = button.idstring.clone();
-            self.notes.push(format!("{current}: {label} chosen"));
-            return;
+            Action::Redirect(target) => self.redirect_touch(current, &label, &target),
+            Action::Launch(launch) => {
+                self.notes.push(format!(
+                    "{current}: {label} tapped, firing {} for {launch:?}",
+                    w2048::LAUNCH_2048
+                ));
+                self.touch.launch = Some(launch);
+                self.machine.fire(w2048::LAUNCH_2048);
+            }
         }
-        let Some(target) = button.redirect.clone() else {
-            self.notes
-                .push(format!("{current}: {label} names no redirect"));
-            return;
-        };
+    }
+
+    /// A tile whose tap leaves for `target`, with the two checks a target
+    /// needs on these grids.
+    fn redirect_touch(&mut self, current: &str, label: &str, target: &str) {
         // The confirm tick on the mode grid: only a chosen mode this build
         // can follow leaves. See the module docs.
         if current == w2048::GAME_MODE_CHOICE {
@@ -192,7 +350,7 @@ impl Frontend {
         // load (`oag_2048::frontend::includes::FOLLOWED`), so their names
         // resolve to no state; the machine would ignore the fire silently,
         // and a tap that does nothing should at least say why.
-        if !self.machine.contains(&target) {
+        if !self.machine.contains(target) {
             self.notes.push(format!(
                 "{current}: {label} tapped, but {target} is a screen this build does not load"
             ));
@@ -202,7 +360,7 @@ impl Frontend {
             .push(format!("{current}: {label} tapped, firing {target}"));
         self.touch.selected = 0;
         self.on_screen_for = 0.0;
-        self.machine.fire(&target);
+        self.machine.fire(target);
     }
 
     /// The pointer on a touch grid: hovering selects, a click activates, a
@@ -213,11 +371,10 @@ impl Frontend {
         let Some(current) = self.machine.current().map(str::to_string) else {
             return false;
         };
-        if !matches!(
-            current.as_str(),
-            w2048::GAME_MODE_CHOICE | w2048::HOME | w2048::NEW_FE_SHELL
-        ) {
-            return false;
+        match current.as_str() {
+            w2048::NEW_FE_SHELL => return self.campaign_map_pointer(pointer),
+            w2048::GAME_MODE_CHOICE | w2048::HOME => {}
+            _ => return false,
         }
         if pointer.is_idle() {
             return true;
@@ -225,12 +382,10 @@ impl Frontend {
         let Some(at) = pointer.at else {
             return true;
         };
-        let hit = self.screens.by_name(&current).and_then(|screen| {
-            screen
-                .touch_buttons
-                .iter()
-                .position(|button| contains(tile_rect(button), at))
-        });
+        let hit = self
+            .tiles(&current)
+            .iter()
+            .position(|tile| contains(tile.rect, at));
         if pointer.moved
             && let Some(hit) = hit
         {
@@ -255,18 +410,16 @@ impl Frontend {
         let gated = self.global_colour("Grey2048");
         let cursor = self.global_colour("Orange2048");
         self.underlay_header_blocks(screen, tile, out);
-        for (at, button) in screen.touch_buttons.iter().enumerate() {
+        for (at, drawn) in self.tiles(name).iter().enumerate() {
             // The three network modes are `Grey2048` on the capture, taken
             // with no PSN session - the state this build is always in.
-            let colour = if name == w2048::GAME_MODE_CHOICE
-                && button.toggle
-                && button.idstring.as_deref() != Some("FE_SP_CAMPAIGN")
-            {
-                gated
-            } else {
-                tile
+            let colour = match &drawn.action {
+                Action::Toggle(id) if name == w2048::GAME_MODE_CHOICE && id != "FE_SP_CAMPAIGN" => {
+                    gated
+                }
+                _ => tile,
             };
-            self.draw_tile(button, colour, at == self.touch.selected, cursor, out);
+            self.draw_tile(drawn, colour, at == self.touch.selected, cursor, out);
         }
     }
 
@@ -283,12 +436,7 @@ impl Frontend {
     ///
     /// Slotted in under the images rather than appended, since the draw
     /// list is drawn in order and the glyph has to land on top.
-    fn underlay_header_blocks(
-        &self,
-        screen: &crate::screen::Screen,
-        tile: [f32; 4],
-        out: &mut Vec<Draw>,
-    ) {
+    fn underlay_header_blocks(&self, screen: &Screen, tile: [f32; 4], out: &mut Vec<Draw>) {
         let white = self
             .screens
             .globals
@@ -315,43 +463,33 @@ impl Frontend {
 
     fn draw_tile(
         &self,
-        button: &TouchButton,
-        tile: [f32; 4],
+        tile: &Tile,
+        colour: [f32; 4],
         selected: bool,
         cursor: [f32; 4],
         out: &mut Vec<Draw>,
     ) {
-        let rect = tile_rect(button);
+        let rect = tile.rect;
         // Every button is its own `Blue2048` box, labelled or not: the
         // bare `cross.gtf` back button on `10-adhoc-game-list.png` is a
         // 122x96 box - its authored size - with the glyph centred in it.
-        out.push(Draw::Fill { rect, color: tile });
+        out.push(Draw::Fill {
+            rect,
+            color: colour,
+        });
         if selected {
-            let [x, y, w, h] = rect;
-            let r = CURSOR_RING;
-            for ring in [
-                [x - r, y - r, w + 2.0 * r, r],
-                [x - r, y + h, w + 2.0 * r, r],
-                [x - r, y, r, h],
-                [x + w, y, r, h],
-            ] {
-                out.push(Draw::Fill {
-                    rect: ring,
-                    color: cursor,
-                });
-            }
+            self.draw_cursor_ring(rect, cursor, out);
         }
-        if let Some(placed) = button.src.as_deref().and_then(|src| {
+        if let Some(placed) = tile.src.as_deref().and_then(|src| {
             self.placements
                 .iter()
                 .find(|(name, _)| name == src)
                 .map(|(_, placed)| *placed)
         }) {
             // The texture's own size, centred - measured, see the module
-            // docs. `ImageSize` scales it where the widget authors one.
-            let scale = button.image_size.unwrap_or(1.0);
-            let w = placed.width as f32 * scale;
-            let h = placed.height as f32 * scale;
+            // docs.
+            let w = placed.width as f32;
+            let h = placed.height as f32;
             out.push(Draw::Sprite {
                 rect: [
                     rect[0] + (rect[2] - w) * 0.5,
@@ -365,39 +503,66 @@ impl Frontend {
                     placed.width as f32,
                     placed.height as f32,
                 ],
-                color: argb_to_rgba(button.color),
+                color: tile.color,
             });
         }
-        let label = button
-            .idstring
-            .as_deref()
-            .map(|id| self.strings.get_or_id(id).to_string())
-            .or_else(|| button.string.clone());
-        if let Some(label) = label {
-            out.push(Draw::Text {
-                x: rect[0] + rect[2] * 0.5,
-                y: rect[1] + rect[3] + LABEL_GAP - self.label_ascent(),
-                scale: LABEL_SCALE,
-                color: tile,
-                border: None,
-                align: Align::Centre,
-                text: label,
-                wrap_width: button.string_width_limit,
+        let Some(label) = &tile.label else {
+            return;
+        };
+        let (y, color) = if tile.label_inside {
+            // Centred in the box, white on the tile - the game-list
+            // screen's text buttons. The line count is the wrap's: a
+            // label wider than the box breaks once, and this face's
+            // glyphs average nine units at the label scale.
+            let lines = if tile.wrap.is_some_and(|w| label.len() as f32 * 9.0 > w) {
+                2.0
+            } else {
+                1.0
+            };
+            let line = self.default_line_height.unwrap_or(37.0) * LABEL_SCALE;
+            (
+                rect[1] + (rect[3] - lines * line) * 0.5,
+                [1.0, 1.0, 1.0, 1.0],
+            )
+        } else {
+            (
+                rect[1] + rect[3] + LABEL_GAP - PEN_ABOVE_CAPS * LABEL_SCALE,
+                colour,
+            )
+        };
+        out.push(Draw::Text {
+            x: rect[0] + rect[2] * 0.5,
+            y,
+            scale: LABEL_SCALE,
+            color,
+            border: None,
+            align: Align::Centre,
+            text: label.clone(),
+            wrap_width: tile.wrap,
+        });
+    }
+
+    /// The pad cursor: a ring outside `rect`. Chosen - see the module docs.
+    pub(super) fn draw_cursor_ring(&self, rect: [f32; 4], cursor: [f32; 4], out: &mut Vec<Draw>) {
+        let [x, y, w, h] = rect;
+        let r = CURSOR_RING;
+        for ring in [
+            [x - r, y - r, w + 2.0 * r, r],
+            [x - r, y + h, w + 2.0 * r, r],
+            [x - r, y, r, h],
+            [x + w, y, r, h],
+        ] {
+            out.push(Draw::Fill {
+                rect: ring,
+                color: cursor,
             });
         }
     }
 
-    /// How far above the cap line the `Default` face's pen sits, at the
-    /// label's scale: the header's own `y="30"` puts its caps at 40 on the
-    /// capture, ten units down at scale 1.
-    fn label_ascent(&self) -> f32 {
-        10.0 * LABEL_SCALE
-    }
-
-    /// A skin colour by its global name, or white with a note-free fallback:
-    /// the two names this reads (`Blue2048`, `Orange2048`) are declared in
+    /// A skin colour by its global name, or white: the names this reads
+    /// (`Blue2048`, `Grey2048`, `Orange2048`) are declared in
     /// `NEWGUI/Skin.xml` and resolved into every include as fallbacks.
-    fn global_colour(&self, name: &str) -> [f32; 4] {
+    pub(super) fn global_colour(&self, name: &str) -> [f32; 4] {
         self.screens
             .globals
             .get(name)

@@ -28,16 +28,26 @@ use super::expand;
 /// does not carry that path. See [`load_teams`] for what reaching for it cost.
 pub(super) fn definitions(
     archives: &mut oag_assets::Archives,
-    name: &str,
+    names: &[&str],
     report: &mut Vec<String>,
 ) -> Vec<String> {
     let mut out = Vec::new();
-    match archives
-        .read_name(name)
-        .and_then(|blob| expand(&blob).map_err(|e| oag_assets::Error::BadSpec(e.to_string())))
-    {
-        Ok(xml) => out.push(xml),
-        Err(e) => report.push(format!("{name}: {e}")),
+    // Wipeout 2048 alone names two - `PI_Team` and `PI_Track` in separate
+    // files, see `oag_title::Title::track_plugin_definition` - and every
+    // other title names the one file twice over, read once.
+    let mut seen: Vec<&str> = Vec::new();
+    for name in names {
+        if seen.iter().any(|read| read.eq_ignore_ascii_case(name)) {
+            continue;
+        }
+        seen.push(name);
+        match archives
+            .read_name(name)
+            .and_then(|blob| expand(&blob).map_err(|e| oag_assets::Error::BadSpec(e.to_string())))
+        {
+            Ok(xml) => out.push(xml),
+            Err(e) => report.push(format!("{name}: {e}")),
+        }
     }
     out.extend(archives.manifests.iter().cloned());
     out
@@ -139,15 +149,37 @@ pub(super) fn load_teams(
     archives: &mut oag_assets::Archives,
     dirs: (&str, &str),
     definition: &str,
+    default_team: &str,
     documents: &[String],
     report: &mut Vec<String>,
 ) -> Vec<crate::catalogue::Team> {
     let declared = crate::catalogue::all_teams(documents);
     let declared_count = declared.len();
-    let teams: Vec<_> = declared
-        .into_iter()
-        .filter(|team| raceable(archives, dirs, &team.id))
-        .collect();
+    // **Wipeout 2048's own roster is two levels deep**: `feisar2048` is a
+    // `PI_Team`, and its hull and `handlingstats.xml` are under
+    // `feisar2048\1`..`\4`, one numbered craft each. The title's own
+    // default team (`oag_2048::race::DEFAULT_TEAM`, `feisar2048\3`) names
+    // which slot a race flies, so a team that is not raceable by its bare id
+    // is tried at that slot and, if it is there, offered under it - the same
+    // stand-in `session::placeholder::raceable_teams` makes, for the same
+    // reason: the original's craft picker is unread, so every team flies one
+    // fixed craft until it is. No slot on a title whose default team carries
+    // none, which is every other title, where this is a no-op.
+    let craft_slot = default_team.rsplit_once('\\').map(|(_, slot)| slot);
+    let mut teams: Vec<crate::catalogue::Team> = Vec::new();
+    for mut team in declared {
+        if raceable(archives, dirs, &team.id) {
+            teams.push(team);
+            continue;
+        }
+        if let Some(slot) = craft_slot {
+            let slotted = format!("{}\\{slot}", team.id);
+            if raceable(archives, dirs, &slotted) {
+                team.id = slotted;
+                teams.push(team);
+            }
+        }
+    }
 
     if teams.len() != declared_count {
         report.push(format!(
