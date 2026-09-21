@@ -110,6 +110,10 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     // `<location>\FE\forward.vex` and `<location>\ship_FE.vex`, both
     // resolving on both pressings - see `docs/formats/race-setup.md`.
     preview_meshes: true,
+    // `Data\Plugins\PI001\GUI\EndRace_Definition.xml` - `oag_game::endrace`'s
+    // own long-standing constant, restated here now that a second title
+    // needs this axis. See `oag_title::FrontEnd::endrace_entry`.
+    endrace_entry: Some(r"Data\Plugins\PI001\GUI\EndRace_Definition.xml"),
 };
 
 /// The bulk archive's candidates, in the order they are tried.

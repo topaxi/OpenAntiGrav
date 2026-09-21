@@ -412,6 +412,33 @@ pub struct FrontEnd {
     ///
     /// [ADR-0022]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0022-title-packages.md
     pub preview_meshes: bool,
+    /// The definition file that authors the three screens a race ends on -
+    /// `EndRace Results`/`EndRace Rewards`/`EndRace Menu` - or `None` for a
+    /// title whose copy has not been read.
+    ///
+    /// **An axis for the same reason [`Self::root`] is: a second title
+    /// disagreed.** Both PSP titles keep Pulse's own numbered-plugin path,
+    /// `Data\Plugins\PI001\GUI\EndRace_Definition.xml`, dictionary-shortened
+    /// the way every PSP screen file is. Wipeout HD names its own plugin
+    /// instead, `Data\Plugins\Frontend\Gui\EndRace_Definition.xml` - plain
+    /// UTF-8, not shortened - and ships it in five of its seven archives, no
+    /// two copies alike by MD5. **Three of HD's own screen names match
+    /// Pulse's and almost none of the widgets underneath do**: HD's `EndRace
+    /// Results` is the whole field's finishing order (`Grid{col}.{row}`, a 4
+    /// column by 10 row template - two columns actually captioned, `POS` and
+    /// `TIME` - not Pulse's own per-lap table), and its `EndRace Menu` is one
+    /// `<Block>` per option shown by mode rather than a populated list. So
+    /// this field states *where the file is*, not that the two titles' own
+    /// screens share a reader - see `docs/formats/hd-endrace-screens.md` for
+    /// the widget-by-widget read and `oag_game::endrace`'s own title dispatch
+    /// for the two separate loaders this axis feeds.
+    ///
+    /// `None` for Pure, Wipeout 2048 and Omega: neither this project's own
+    /// build nor a documented pass has read whether any of the three even
+    /// ships such a screen, so `None` here is a gap, not a measurement that
+    /// one is absent - the same distinction [`Self::race_box`]'s own doc
+    /// draws for the titles it is `None` on.
+    pub endrace_entry: Option<&'static str>,
 }
 
 /// The archive names a title's releases carry, in the order they are tried.

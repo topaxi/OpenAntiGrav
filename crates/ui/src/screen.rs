@@ -707,6 +707,23 @@ impl Screens {
                     );
                 }
             }
+            // A `Block` is HD's own menu/table box - `Block_Item.cpp`
+            // (`docs/ghidra/functions/ps3-hdfury-eu/menu-blocks.md`), a
+            // bordered, filled rect the engine draws off a shared nine-patch
+            // and colours/positions per widget. That render is not
+            // reproduced here (no consumer needs the border/fill yet) - only
+            // the label a `Block` carries is, collected as a [`Text`] the
+            // same idstring-resolution pass every other text already gets
+            // (`crate::campaign::Layout::read_authored`), so a caller reading
+            // `screen.texts` finds `GridHead1`'s `IG_HUD_POS` or `EndRace
+            // Menu`'s own `race_again` beside every other label rather than
+            // needing a third widget vocabulary. Confirmed to appear nowhere
+            // on `CellMode_Definition.xml`'s own two screens (`grep -c
+            // "<Block" desktop-read, zero), so this is additive: no screen
+            // this build already draws gains a new widget from it.
+            "block" => screen
+                .texts
+                .push(self.block_from_node(child, viewport_width, inner)),
             "redirect" => screen.redirects.push(redirect_from_node(child)),
             "touchbutton" => screen
                 .touch_buttons
@@ -875,6 +892,28 @@ impl Screens {
             align: node.value("align").unwrap_or("left").to_string(),
             font: node.value("font").unwrap_or("Default").to_string(),
         }
+    }
+
+    /// A `<Block>` widget, read as a [`Text`] - see `collect_widgets`'s own
+    /// `"block"` arm for why. The one attribute a `Block` spells differently
+    /// from a `Text` is its own label colour: `TextColor`, not `color`
+    /// (which a `Block` uses for its fill instead) - so this calls
+    /// [`Self::text_from_node`] and then overrides the colour where
+    /// `TextColor` is present, rather than duplicating every other field.
+    fn block_from_node(
+        &self,
+        node: &Node,
+        viewport_width: Option<f32>,
+        offset: (f32, f32),
+    ) -> Text {
+        let mut text = self.text_from_node(node, viewport_width, offset);
+        if let Some(argb) = self
+            .resolve(node.value("TextColor").unwrap_or_default())
+            .and_then(parse_argb)
+        {
+            text.color = argb;
+        }
+        text
     }
 
     fn text_from_node(&self, node: &Node, viewport_width: Option<f32>, offset: (f32, f32)) -> Text {
