@@ -153,7 +153,7 @@ fn every_speed_lap_named_event_carries_laps_zero_and_no_other_race_event_does() 
 
 #[test]
 #[ignore = "needs the decrypted Vita package in data/extracted/vita/"]
-fn an_elimination_event_has_no_engine_mode() {
+fn an_elimination_event_maps_to_the_eliminator_mode() {
     let Some(mut archives) = open() else {
         return;
     };
@@ -164,5 +164,13 @@ fn an_elimination_event_has_no_engine_mode() {
         .find(|e| e.kind == EventKind::Elimination)
         .expect("SP.xml carries no Elimination event to test against");
 
-    assert_eq!(oag_2048::campaign::engine_mode(&elimination), None);
+    // Not "unsupported": `oag_race::Mode::Eliminator` is a real, simulated
+    // mode and `--mode eliminator` loads end to end on this title (see
+    // `oag_2048::campaign::engine_mode`'s own doc comment for the command
+    // that proved it) - the CLI help text omitting the token from its list
+    // was a stale string, not a restriction.
+    assert_eq!(
+        oag_2048::campaign::engine_mode(&elimination),
+        Some("eliminator")
+    );
 }

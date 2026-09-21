@@ -166,10 +166,8 @@ pub fn track_vex_entry(track: &Track) -> String {
     )
 }
 
-/// The `--mode` string this engine's own CLI vocabulary
-/// (`crates/game/src/main/cli.rs`: `time_trial`, `speed_lap`, `zone`,
-/// `single_race`) uses for `event`, or `None` when this engine does not run
-/// that event's mode at all yet.
+/// The mode token [`oag_race::Mode::from_name`] (`crates/race/src/mode.rs`)
+/// accepts for `event`, or `None` when this engine has no mode for it at all.
 ///
 /// - [`EventKind::Zone`] -> `"zone"`.
 /// - [`EventKind::Race`] with [`Event::laps`] `== Some(0)` -> `"speed_lap"`,
@@ -180,17 +178,25 @@ pub fn track_vex_entry(track: &Track) -> String {
 ///   maps to `"time_trial"`** - no campaign event is named or shaped like a
 ///   Time Trial; that mode exists only for a caller choosing it directly,
 ///   never resolved from this campaign.
-/// - [`EventKind::Elimination`] -> `None`. Neither `crates/race` nor this
-///   engine's `--mode` vocabulary runs an Elimination race yet - a caller
-///   asking to launch one of these 26 events should refuse by name rather
-///   than silently falling back to a race this event was never authored as.
+/// - [`EventKind::Elimination`] -> `"eliminator"`. **Checked directly, not
+///   assumed**: `oag_race::Mode::Eliminator` is a real, simulated mode
+///   (`crates/game/src/race/eliminator.rs`, `tick.rs`'s own kill-count
+///   ending), this title's own `TITLE.weapons.elimination` already names
+///   `Data\XML\weaponstats_Elimination_2048.xml`, and `cargo run -p oag-game
+///   -- <2048 source> --race --mode eliminator --track
+///   Data\art\published\environments\park\track.vex --class flash --dry-run`
+///   loads end to end (exit 0, `Elimination_HUD.xml` composes 111 sprites) -
+///   this engine's CLI help text just never lists `eliminator` alongside the
+///   other three tokens, which reads as an omission in the help string, not
+///   a real restriction, since `Mode::from_name("eliminator")` resolves it
+///   like any other token.
 #[must_use]
 pub fn engine_mode(event: &Event) -> Option<&'static str> {
     match event.kind {
         EventKind::Zone => Some("zone"),
         EventKind::Race if event.laps == Some(0) => Some("speed_lap"),
         EventKind::Race => Some("single_race"),
-        EventKind::Elimination => None,
+        EventKind::Elimination => Some("eliminator"),
     }
 }
 
@@ -245,7 +251,7 @@ mod tests {
     }
 
     #[test]
-    fn engine_mode_maps_zero_laps_to_speed_lap_and_elimination_to_none() {
+    fn engine_mode_maps_zero_laps_to_speed_lap_and_elimination_to_eliminator() {
         assert_eq!(
             engine_mode(&race_event(EventKind::Race, typedef::RACE_A, Some(0))),
             Some("speed_lap")
@@ -268,7 +274,7 @@ mod tests {
                 typedef::ELIMINATION,
                 Some(1)
             )),
-            None
+            Some("eliminator")
         );
     }
 
