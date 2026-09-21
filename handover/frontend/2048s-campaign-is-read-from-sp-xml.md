@@ -56,10 +56,28 @@ needed.
   `"GameModeFactory::OnNewInst %s: %s - %s"` is in the binary) is the
   concrete next step if this is worth resolving, since it likely names the
   concrete class per instance at construction time.
-- **`GameModeObjective`'s own semantics are unread beyond its field
-  census.** `M_OBJECTIVETYPE`'s `ObjectiveValue` enum takes five observed
-  values (`1`/`2`/`4`/`7`/empty) across 96 instances; what each ordinal
-  means was not chased.
+- **`GameModeObjective`'s own semantics: closed 2026-09-21, mostly.** See
+  `docs/formats/2048-campaign.md`'s "The objective law" section -
+  `M_OBJECTIVETYPE`'s four real ordinals (`FINISH`/`POSITION`/`KILLS`/
+  `BEAT_VALUE`) are measured against every `(pass, elite)` pair the file's
+  80 fully-authored events carry, and 2048's own medal law is genuinely
+  two-tier (no third rung `M_PSECONDARYOBJECTIVE`/`M_PTERTIARYOBJECTIVE`
+  ever authors). Still open within that: Elimination's own `BEAT_VALUE`
+  metric (confidence under 50 for any guess - `oag_race::Standing::kills`
+  does not fit the observed `25`-`100` targets), and three orphaned
+  objective instances no event ever references.
+- **The unlock graph: closed 2026-09-21.** `oag_2048::campaign::
+  unlock_gates` folds every event's own incoming `M_PNEXTEVENT`/
+  `M_PBRANCHEVENT` edge and its `M_PEVENTREQUIRED` into one prerequisite
+  name; `oag_game::records::Store::record_campaign` persists a finished
+  event under its own name; `oag_ui::frontend::Frontend::
+  refresh_campaign_progress` folds a save into the map, once at boot. See
+  `docs/formats/2048-campaign.md`'s "The unlock graph" section and
+  `crates/game/tests/vita_2048_campaign_progress_ground_truth.rs`. Still
+  chosen, not measured: whether *any* result or only a pass-or-better one
+  opens the next event - `SP.xml` does not say, and this build reads
+  `Store::campaign_medal`'s own `best_medal` (any earned tier) as the
+  gating signal.
 - **`WeaponType`'s bit layout is unread.** `WeaponSetDefinition`'s
   `M_WEAPONAVAILABLEBITS` is a raw per-instance value; which bit is which
   weapon is not decoded.

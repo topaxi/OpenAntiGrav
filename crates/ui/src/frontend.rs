@@ -100,7 +100,7 @@ mod options2048;
 mod team;
 mod touch;
 mod wipeout2048;
-pub use campaign_map::{CampaignMap, MapEvent};
+pub use campaign_map::{CampaignMap, EarnedTier, MapEvent, ProgressState};
 pub(crate) use faces::{font_line_height, lighten};
 /// The reel's frame counts and every state name: `oag_pulse::frontend`.
 ///

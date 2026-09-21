@@ -15,14 +15,18 @@ use oag_ui::language::StringTable;
 
 /// Every `SP.xml` event that has a map cell, as the map draws it.
 ///
-/// **Filtered by what the file says, not by what a player has unlocked.**
-/// The 21 instances with no `M_X`/`M_Y` are the multiplayer twins
-/// (`MP_*`, also carried by `SP.xml`) and have no cell to draw at; the five
-/// `E3_*` instances do carry cells and are left out too, by name - they are
-/// the E3 demo's races, authored in the same file, and whether the shipped
-/// game ever shows them is unmeasured, so they are named here as the one
-/// exclusion rather than drawn as campaign events. Everything else is
-/// offered: there is no save to read progress from.
+/// **Filtered by what the file says, not by a save.** The 21 instances with
+/// no `M_X`/`M_Y` are the multiplayer twins (`MP_*`, also carried by
+/// `SP.xml`) and have no cell to draw at; the five `E3_*` instances do carry
+/// cells and are left out too, by name - they are the E3 demo's races,
+/// authored in the same file, and whether the shipped game ever shows them
+/// is unmeasured, so they are named here as the one exclusion rather than
+/// drawn as campaign events. Every event past that filter gets a
+/// [`MapEvent::requires`] off `oag_2048::campaign::unlock_gates` - disc-only,
+/// same as everything else here - but this function alone never decides
+/// which are actually locked: that needs a save, which nothing in `boot`
+/// reads, so `Frontend::refresh_campaign_progress` is what a caller with one
+/// (`Session::finish_loading`) calls once these events reach the front end.
 pub(super) fn map_events(
     archives: &mut oag_assets::Archives,
     strings: &StringTable,
@@ -44,6 +48,11 @@ pub(super) fn map_events(
     };
     let doc = oag_2048::campaign::parse(&text);
     let events = oag_2048::campaign::events(&doc);
+    // Every event's own gate, by name - disc-only (no save, no `Store`), so
+    // this stays a plain read even though what unlocks a gate is not
+    // decided until `Frontend::refresh_campaign_progress` runs, later, once
+    // a save is in hand. See `oag_2048::campaign::unlock_gates`'s own doc.
+    let gates = oag_2048::campaign::unlock_gates(&doc);
     let mut out = Vec::new();
     let mut without_cell = 0usize;
     let mut demo = 0usize;
@@ -56,6 +65,10 @@ pub(super) fn map_events(
             demo += 1;
             continue;
         }
+        let requires = gates
+            .iter()
+            .find(|(name, _)| *name == event.name)
+            .and_then(|(_, gate)| gate.clone());
         let circuit = event
             .track
             .and_then(|track| oag_2048::campaign::track_for(&doc, track))
@@ -89,6 +102,7 @@ pub(super) fn map_events(
             x,
             y,
             detail,
+            requires,
         });
     }
     report.push(format!(

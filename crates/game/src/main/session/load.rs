@@ -5,7 +5,8 @@ use anyhow::Result;
 use log::{error, info, warn};
 
 use oag_game::render::VideoFormat;
-use oag_game::{audio, boot, loading, movie, prefetch, race};
+use oag_game::{audio, boot, loading, movie, prefetch, race, records};
+use oag_ui::frontend::EarnedTier;
 use oag_ui::strings;
 
 use crate::hints;
@@ -217,6 +218,26 @@ impl Session {
         if self.boot_overlay {
             loaded.frontend.set_overlay(true);
         }
+        // Wipeout 2048's own career, folded in once here rather than
+        // threaded through `boot::load_shell`/`assemble`: this is the one
+        // touch-front-end screen this build ever shows (see
+        // `docs/formats/2048-frontend.md`'s "Wired" section - a race always
+        // returns into this build's own menus, never back to `newFEshell`),
+        // so "once at boot, from the save already loaded into
+        // `self.records`" is the whole of what a player's progression needs.
+        // A no-op on every title but 2048: `campaign_events()` is empty
+        // everywhere else. See `oag_ui::frontend::campaign_map`'s own
+        // "Progression" section.
+        let title_name = loaded.title.name;
+        loaded.frontend.refresh_campaign_progress(|name| {
+            self.records
+                .campaign_medal(title_name, name)
+                .and_then(|row| row.best_medal)
+                .map(|medal| match medal {
+                    records::Medal::Gold => EarnedTier::Elite,
+                    records::Medal::Silver | records::Medal::Bronze => EarnedTier::Pass,
+                })
+        });
         // A language chosen on an earlier run skips the picker. Reported either
         // way: silently not asking is indistinguishable from a broken picker,
         // and silently asking again is indistinguishable from a setting that

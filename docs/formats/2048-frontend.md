@@ -678,9 +678,25 @@ fields, but what copies them into the position the DLC tiers' own hotspots
 actually read - `+0x15c`/`+0x160`, a different offset - is still unfound)
 and the season title card's own asset (`A·G·R·C 2048`/`2049`/`2050`, seen
 live on Vita3K, not located in either package) - there is no 3D city
-backdrop to find, confirmed from the live capture too; the unlock graph
-(every event is offered, there being no save
-to read); the network modes. `Home`'s five destinations are resolved below.
+backdrop to find, confirmed from the live capture too; the network modes.
+`Home`'s five destinations are resolved below.
+
+**Resolved 2026-09-21: the unlock graph.** Every event was offered
+regardless of the disc's own `M_PNEXTEVENT`/`M_PBRANCHEVENT`/
+`M_PEVENTREQUIRED` chain, since nothing read a save. `oag_2048::campaign::
+unlock_gates` now walks it, `oag_game::records::Store` persists a finished
+event's result under its own name (`Store::record_campaign`, the same
+sibling table Pulse/HD's own campaign cells use), and
+`oag_ui::frontend::Frontend::refresh_campaign_progress` folds that save into
+the map once at boot - a locked event draws `Grey2048` and refuses a
+launch, a passed one draws `Pass2048`/`ElitePass2048`. See
+[2048-campaign.md](2048-campaign.md)'s "The unlock graph" and "The
+objective law" sections for the measured law, and
+`oag_ui::frontend::campaign_map`'s own "Progression" section for the draw
+side. Still open: which medal tier is required to unlock the next event is
+chosen, not measured (see 2048-campaign.md's own note on this), and the map
+still lays cells out on the same chosen even grid rather than the real
+hexagonal tessellation - see this page's own campaign-map row above.
 
 ## Wired: `Home`'s five destinations draw (2026-09-21)
 

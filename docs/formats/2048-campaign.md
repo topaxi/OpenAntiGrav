@@ -209,6 +209,115 @@ from wherever it already knows is the start, the same way this project reads
 [`race-campaign.md`](race-campaign.md#two-open-questions-this-pass-did-not-resolve)'s own `PI_Grid`
 chain.
 
+**Resolved 2026-09-21: `oag_2048::campaign::unlock_gates` walks it.** Every
+event's own gate collapses to a single optional name - the event that has to
+be completed before this one opens - by folding two authored sources into
+one: an incoming `M_PNEXTEVENT`/`M_PBRANCHEVENT` edge (some other event
+names this one as its own "what comes next") and this event's own
+`M_PEVENTREQUIRED`. Measured directly against every instance in the EU
+v1.04 `SP.xml`, not assumed: no event is ever the target of more than one
+incoming chain edge, and the two events that carry *both* an incoming edge
+and their own `M_PEVENTREQUIRED` (`"2049 - Event 1"`, `"2050 - Event 1"`)
+name the identical prerequisite either way - so a single name loses no case
+this file authors. Confidence 90.
+
+Of the map's own 115 cell-bearing, non-`E3_*` events (see
+[2048-frontend.md](2048-frontend.md)'s own filter), 16 carry no gate at all
+and are open on a fresh save: `"2048 - Event 1"` and 15 side events with no
+authored prerequisite - a per-team `"* P Ship Challenge"` (five) and a
+per-track `"* - S Phantom Challenge"` (ten). `M_bForceAlwaysUnlocked` is
+authored on **no event at all** (measured: zero non-empty/non-zero
+instances across all 141), so it is not what opens these; the absence of
+any incoming edge or `M_PEVENTREQUIRED` is. `M_RankRequired` is likewise
+never authored on the numbered campaign's own events, so a player rank gate
+is not part of this title's unlock law either, at least not through this
+field.
+
+Confirmed live, not only by the field census: `crates/game/tests/
+vita_2048_campaign_progress_ground_truth.rs` boots the real package, drives
+the pad to `newFEshell`, folds an in-memory `records::Store` in through
+`oag_ui::frontend::Frontend::refresh_campaign_progress`, and checks that
+recording a bronze on `"2048 - Event 1"` is what turns `"2048 - Event 2"`
+from `Locked` to `Open` - `"2048 - Event 1"`'s own `M_PNEXTEVENT` names it.
+
+**What is still chosen, not measured: which tier unlocks the next event.**
+Nothing in `SP.xml` says whether *any* result (even one with no medal) or
+only a Pass-or-better result opens whatever names this event as a
+prerequisite. `oag_ui::frontend::Frontend::refresh_campaign_progress`'s own
+caller decides this by what it feeds the closure - today, `Session::
+finish_loading` feeds exactly `Store::campaign_medal`'s own `best_medal`,
+so a result with no medal at all (the event was left unfinished, or its own
+objective law never grades - see "The objective law" below) does not open
+anything. No confidence score: this is a design choice on top of a measured
+graph, not a reading of the graph itself.
+
+## The objective law
+
+**Measured 2026-09-21**, against every `(pass, elite)` `M_OBJECTIVETYPE`
+pair the real file's 80 fully-authored events carry -
+`oag_tables::mjolnir::campaign::Objective` reads `M_OBJECTIVETYPE`/
+`M_OBJECTIVETARGET` generically; `oag_2048::campaign::{objective_type,
+EventObjectives, EventOutcome, Tier, evaluate_tier}` give them a meaning.
+
+**Every event authors both `M_PASSOBJECTIVE` and `M_ELITEOBJECTIVE`, or
+neither - never one alone.** Measured across all 141 event instances: 80
+with both, 61 with neither (every Speed Lap, every `MP_*` template, and a
+handful of generic unlinked nodes). An event with neither authors no medal
+at all, though it can still be finished and still opens whatever names it
+as a prerequisite.
+
+`M_OBJECTIVETYPE`'s own `ObjectiveValue` ordinal, by the `(pass, elite)`
+pair it appears in and the [`EventKind`](#the-strongest-evidence-typetypedefid-is-an-in-file-name-table)
+of the 80 events that carry it:
+
+| Ordinal | Name | Meaning | Sample instances |
+| --- | --- | --- | --- |
+| `1` | `FINISH` | Boolean: met by finishing at all. The two instances that carry it (`FinishRaceAnyPosition`) author no target. | `"2048 - Event 1"`/`"2048 - Event 2"`'s own pass |
+| `4` | `POSITION` | The target is a finishing place, `1`-based; met when the player's own place is at most the target ("Nth or better", `1` = win). | `"Top5"` (target `5`), `"Win"` (target `1`), 38 `(POSITION, POSITION)` pairs across the numbered campaign |
+| `7` | `KILLS` | The target is an opponent kill count; met when the player's own count is at least the target. Small numbers only (`1` observed) - never confused with `BEAT_VALUE`'s own large Elimination targets below. | `"Kill1Opponent"` (target `1`), the elite half of `"2050 - Event 3-4"`/`"6-4"` |
+| `2` | `BEAT_VALUE` | A numeric threshold whose *metric* is not named by the type alone - picked from the event's own `EventKind`, below. | see next |
+
+`BEAT_VALUE`'s metric, read off which `EventKind` carries it and confirmed
+by the measured comparison direction (`elite` against `pass`, on every one
+of the 80 fully-authored events, no exception found either way):
+
+| `EventKind` | Metric | Direction | Confidence | Sample |
+| --- | --- | --- | --- | --- |
+| `Race` (13 instances) | Total race time, in centiseconds | Lower is better (`elite < pass` on all 13) | 80 | `"2048 - Event 3"`: pass `13000` (130 s), elite `11000` (110 s) |
+| `Zone` (10 instances) | The zone counter reached | Higher is better (`elite > pass` on all 10) | 80 | `"Zone Pass"`/`"Zone Elite"`: `10`/`20` |
+| `Elimination` (15 instances) | **Not identified** | Higher is better (`elite > pass` on all 15), but by what metric is unknown | Under 50 - not guessed |
+
+**Why Elimination's own `BEAT_VALUE` metric is left unread.** Its targets
+run `25`-`100`; `oag_race::Standing::kills` (the only per-race count this
+engine's own Eliminator mode tracks) never approaches those numbers in a
+real match, and nothing else - a damage total, a points score - is tracked
+at all. `evaluate_tier` returns `None` for this one case rather than
+grading against a metric with no evidence behind it - see that function's
+own doc comment. An Elimination event still plays and still unlocks
+whatever names it as a prerequisite once finished; it simply never carries
+a medal on this build, which is an honest, visible gap rather than a wrong
+number.
+
+Two objective instances go unused by any of the 141 event instances this
+pass checked (`"Objective - Finish"`, `"MostDamage"` - the latter authoring
+neither a type nor a target at all) and `"BeatPersonalBestLap"` (type `2`,
+target `0`) is likewise never referenced by a `RACE_A`/`RACE_B`/`ELIM`/`ZONE`
+instance's own `M_PASSOBJECTIVE`/`M_ELITEOBJECTIVE` - three orphaned
+objectives, left unread rather than guessed at.
+
+**`HardcorePass2048` is not a third medal tier.** `NEWGUI/Skin.xml`
+declares three pass-tier colour globals - `Pass2048` (green), `ElitePass2048`
+(yellow) and `HardcorePass2048` (purple) - which reads at first like a
+three-rung ladder. It is not: `M_PSECONDARYOBJECTIVE`/`M_PTERTIARYOBJECTIVE`
+are real field names in the schema (found by grepping every distinct
+`M_*OBJECTIVE*`/`M_*PASS*` field name in the raw file) but appear on **zero**
+of the 141 event instances - measured, not merely unobserved in a sample.
+2048's own authored medal law is genuinely two-tier; `HardcorePass2048`
+most plausibly names a Hardcore *difficulty* flag this pass found no
+authored data for, not a rung this build's own map or persistence ever
+needs to draw. See `oag_ui::frontend::campaign_map`'s own "Progression"
+section for where this lands in the draw code.
+
 ## `Data\xml\MP.xml` is not `SP.xml`'s schema
 
 289 instances, but only `GameModeObjective` (59 of them) is shared with
@@ -304,18 +413,26 @@ Verified against the real EU v1.04 package:
 - `--event "Nonexistent Event Name"` refuses cleanly: exit 1, `"Nonexistent
   Event Name" names no instance in Data\xml\SP.xml`.
 
+**2026-09-21: `load_event` also resolves the event's own medal law.**
+`race::Loaded::campaign_2048_event` carries the event's own name plus
+`oag_2048::campaign::event_objectives(&doc, &event)` - `None` for an event
+that authors neither `M_PASSOBJECTIVE` nor `M_ELITEOBJECTIVE` (see "The
+objective law" above) - resolved once here, at load, rather than re-parsed
+by `RaceStage::observation` at grading time. `crates/game/tests/
+vita_2048_campaign_progress_ground_truth.rs` pins `"2048 - Event 1"`'s own
+resolved pair (`FinishRaceAnyPosition`/`Win`) end to end against the real
+package.
+
 ## What is not determined
 
+- **`GameModeObjective`'s own semantics are mostly resolved - see "The
+  objective law" above.** What remains open there: Elimination's own
+  `BEAT_VALUE` metric (confidence under 50, not guessed), and three
+  orphaned objective instances (`"Objective - Finish"`, `"MostDamage"`,
+  `"BeatPersonalBestLap"`) that no event references at all.
 - **Which `GameMode_*` C++ class each of the four event typedefs
   instantiates.** See [Four more typedefs carry no name in the file at
   all](#four-more-typedefs-carry-no-name-in-the-file-at-all).
-- **`GameModeObjective`'s own semantics.** `M_OBJECTIVETYPE`'s
-  `ObjectiveValue` enum takes values `1`, `2`, `4`, `7` and one empty across
-  the 96 instances (sample names: `FinishRaceAnyPosition` at `1`,
-  `BeatPersonalBestLap`/`Zone Elite`/`Speed Pass` at `2`, `3rdOrBetter`/
-  `Top7` at `4`, `Kill1Opponent` at `7`, `MostDamage` unset) - not decoded
-  further; a guess at the ordinal-to-meaning mapping would be under 50
-  confidence.
 - **`WeaponType`'s bit layout.** `WeaponSetDefinition`'s own
   `M_WEAPONAVAILABLEBITS` is a raw value per instance (`"Rockets Only"` is
   `1`); which bit is which weapon is not chased.

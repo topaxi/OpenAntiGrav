@@ -17,8 +17,8 @@
 //! [ADR-0022]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0022-title-packages.md
 
 pub use oag_tables::mjolnir::campaign::{
-    Event, EventKind, Track, WeaponSet, events, track_for, tracks, typedef, weapon_set_for,
-    weapon_sets,
+    Event, EventKind, Objective, Track, WeaponSet, events, objective_for, objectives, track_for,
+    tracks, typedef, weapon_set_for, weapon_sets,
 };
 pub use oag_tables::mjolnir::{Document, Field, Instance, Reference, parse};
 
@@ -208,96 +208,248 @@ pub fn engine_mode(event: &Event) -> Option<&'static str> {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+/// `M_OBJECTIVETYPE`'s own `ObjectiveValue` ordinals, given a meaning here
+/// rather than in [`oag_tables::mjolnir::campaign`] - see [`Objective`]'s own
+/// doc comment for why the split falls there.
+///
+/// **Measured against every `(pass, elite)` type pair `SP.xml`'s own 80
+/// fully-authored events carry** (every event authors both objectives or
+/// neither - measured, 80 of 141 with both, 61 with neither, never one
+/// alone): `(FINISH, POSITION)` x2 (`"2048 - Event 1"`/`"2048 - Event 2"`,
+/// pass on any finish, elite on a win), `(POSITION, POSITION)` x38 (the
+/// ordinary numbered campaign, `"TopN"`/`"Win"` objectives), `(POSITION,
+/// KILLS)` x2 (`"2050 - Event 3-4"`/`"6-4"`, pass on a win, elite on a
+/// kill), `(BEAT_VALUE, BEAT_VALUE)` x13 `Race`-kind (a total race time, in
+/// centiseconds, lower is better - confirmed on every one of the 13,
+/// `elite < pass` with no exception), x10 `Zone`-kind (a zone counter,
+/// higher is better - `elite > pass`, no exception) and x15
+/// `Elimination`-kind (higher is better, `elite > pass`, no exception, but
+/// **the metric itself is not identified** - see [`evaluate_tier`]'s own
+/// doc). Confidence 85 for the four ordinals' own names; confidence 80 for
+/// `BEAT_VALUE`'s per-kind metric (Race/Zone only - Elimination's own
+/// metric is confidence under 50, so nothing is guessed there). See
+/// `docs/formats/2048-campaign.md`'s "The objective law" section for the
+/// full census this was read off.
+pub mod objective_type {
+    /// Satisfied by finishing at all - the two authored instances
+    /// (`"FinishRaceAnyPosition"`) carry no target, so nothing is compared
+    /// against a number for this type.
+    pub const FINISH: i64 = 1;
+    /// A numeric threshold whose metric is not named by the type alone -
+    /// [`super::evaluate_tier`] picks it from the event's own [`EventKind`].
+    pub const BEAT_VALUE: i64 = 2;
+    /// The target is a finishing position, `1`-based; met when the player's
+    /// own place is at most the target ("Nth or better").
+    pub const POSITION: i64 = 4;
+    /// The target is an opponent kill count; met when the player's own kill
+    /// count is at least the target.
+    pub const KILLS: i64 = 7;
+}
 
-    #[test]
-    fn eclass_ordinals_round_trip() {
-        for class in EClass::ALL {
-            assert_eq!(EClass::from_ordinal(class.ordinal()), Some(class));
+/// One resolved `M_PASSOBJECTIVE`/`M_ELITEOBJECTIVE` - [`Objective`]'s own
+/// type and target, carried apart from the [`Document`] that produced them
+/// so [`evaluate_tier`] needs no archive access at grading time.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ObjectiveRule {
+    /// See [`Objective::objective_type`].
+    pub objective_type: Option<i64>,
+    /// See [`Objective::target`].
+    pub target: Option<i64>,
+}
+
+impl From<&Objective> for ObjectiveRule {
+    fn from(objective: &Objective) -> Self {
+        Self {
+            objective_type: objective.objective_type,
+            target: objective.target,
         }
-        assert_eq!(EClass::from_ordinal(5), None);
-        assert_eq!(EClass::from_ordinal(-1), None);
-    }
-
-    #[test]
-    fn only_superphantom_has_no_four_wide_speed_class() {
-        assert_eq!(
-            EClass::Venom.speed_class(),
-            Some(oag_tables::handling::SpeedClass::Venom)
-        );
-        assert_eq!(
-            EClass::Phantom.speed_class(),
-            Some(oag_tables::handling::SpeedClass::Phantom)
-        );
-        assert_eq!(EClass::SuperPhantom.speed_class(), None);
-    }
-
-    fn race_event(kind: EventKind, typedef_id: i64, laps: Option<u32>) -> Event {
-        Event {
-            instance_id: 1,
-            typedef_id,
-            kind,
-            name: String::new(),
-            description: None,
-            track: None,
-            speed_class: None,
-            laps,
-            weapon_set: None,
-            next_event: None,
-            branch_event: None,
-            required_event: None,
-            pass_objective: None,
-            elite_objective: None,
-            x: None,
-            y: None,
-            rank_required: None,
-            force_always_unlocked: None,
-            has_ghost_capacity: false,
-        }
-    }
-
-    #[test]
-    fn engine_mode_maps_zero_laps_to_speed_lap_and_elimination_to_eliminator() {
-        assert_eq!(
-            engine_mode(&race_event(EventKind::Race, typedef::RACE_A, Some(0))),
-            Some("speed_lap")
-        );
-        assert_eq!(
-            engine_mode(&race_event(EventKind::Race, typedef::RACE_A, Some(3))),
-            Some("single_race")
-        );
-        assert_eq!(
-            engine_mode(&race_event(EventKind::Race, typedef::RACE_B, Some(5))),
-            Some("single_race")
-        );
-        assert_eq!(
-            engine_mode(&race_event(EventKind::Zone, typedef::ZONE, None)),
-            Some("zone")
-        );
-        assert_eq!(
-            engine_mode(&race_event(
-                EventKind::Elimination,
-                typedef::ELIMINATION,
-                Some(1)
-            )),
-            Some("eliminator")
-        );
-    }
-
-    #[test]
-    fn track_vex_entry_matches_default_tracks_own_spelling() {
-        let altima = Track {
-            instance_id: 1,
-            name: "Altima".to_string(),
-            track_name: "altima".to_string(),
-            display_name: "ALTIMA".to_string(),
-        };
-        assert_eq!(
-            track_vex_entry(&altima),
-            crate::race::DEFAULT_TRACK,
-            "must match oag_2048::race::DEFAULT_TRACK's own spelling exactly"
-        );
     }
 }
+
+/// An event's own pass/elite gate, resolved once at load so grading it never
+/// needs the [`Document`] again.
+///
+/// **Never partially built.** [`event_objectives`] is the only constructor
+/// and it requires both `M_PASSOBJECTIVE` and `M_ELITEOBJECTIVE` to resolve -
+/// matching the measured "both or neither" shape every one of `SP.xml`'s
+/// event instances carries (see [`objective_type`]'s own doc comment).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct EventObjectives {
+    /// [`Event::kind`] - what [`evaluate_tier`] uses to pick
+    /// [`objective_type::BEAT_VALUE`]'s own metric.
+    pub kind: EventKind,
+    /// The bar this build's own two-tier career counts as a completion -
+    /// see [`Tier::Pass`].
+    pub pass: ObjectiveRule,
+    /// The harder bar - see [`Tier::Elite`].
+    pub elite: ObjectiveRule,
+}
+
+/// Resolves `event`'s own pass/elite objective pair. `None` when it authors
+/// neither (every Speed Lap and every `MP_*`/generic-template instance -
+/// see [`objective_type`]'s own doc comment) or when a reference it does
+/// carry does not resolve inside `document`.
+#[must_use]
+pub fn event_objectives(document: &Document, event: &Event) -> Option<EventObjectives> {
+    let pass = objective_for(document, event.pass_objective?)?;
+    let elite = objective_for(document, event.elite_objective?)?;
+    Some(EventObjectives {
+        kind: event.kind,
+        pass: ObjectiveRule::from(&pass),
+        elite: ObjectiveRule::from(&elite),
+    })
+}
+
+/// What a finished (or abandoned) attempt at an event actually did - the
+/// generic shape [`evaluate_tier`] grades against an [`EventObjectives`].
+///
+/// Every field is read the way [`crate`]'s own caller already has it in
+/// hand (`oag_race::Standing`'s own place/kills, `RaceState::zone`, a total
+/// tick count) - unconditionally, the same way `RaceStage::campaign_medal`
+/// (Pulse/HD's own evaluator) always has a place and a kill count even in a
+/// mode neither means anything for. [`evaluate_tier`] is what decides which
+/// field a given event's own objective actually reads.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct EventOutcome {
+    /// Whether the attempt reached its own finish condition - gates
+    /// [`objective_type::FINISH`] and [`objective_type::POSITION`], and
+    /// [`objective_type::BEAT_VALUE`] on a [`EventKind::Race`].
+    pub finished: bool,
+    /// The player's own finishing place, `1`-based - meaningless unless
+    /// `finished` is `true`, and [`evaluate_tier`] never reads it otherwise.
+    pub place: u8,
+    /// The total race time, in centiseconds - the unit `SP.xml`'s own
+    /// `BEAT_VALUE` targets for a `Race`-kind event are authored in. `None`
+    /// unless `finished` is `true`.
+    pub finish_centiseconds: Option<i64>,
+    /// The zone counter reached so far - meaningful only on
+    /// [`EventKind::Zone`], gated on nothing else the same way Pulse's own
+    /// Zone medal is not: the counter only ever grows.
+    pub zone: u16,
+    /// Opponent kills scored so far - meaningful only for
+    /// [`objective_type::KILLS`], gated on nothing else for the same reason.
+    pub kills: u32,
+}
+
+/// Which of an event's own two authored bars an [`EventOutcome`] cleared.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Tier {
+    /// Met [`EventObjectives::pass`] but not [`EventObjectives::elite`].
+    Pass,
+    /// Met [`EventObjectives::elite`] - always the better of the two, since
+    /// [`evaluate_tier`] checks it first.
+    Elite,
+}
+
+/// The best [`Tier`] `outcome` earns against `objectives`'s own pass/elite
+/// rules, or `None` when neither is met.
+///
+/// **One case never awards a tier at all, on purpose.** An
+/// [`EventKind::Elimination`] event's own [`objective_type::BEAT_VALUE`]
+/// objective (all 15 measured instances, targets `25`-`100`) has no metric
+/// this engine can name with any confidence: `oag_race::Standing::kills`
+/// (the only per-race count 2048's own simulation tracks) never approaches
+/// those numbers in a real match, and nothing else - a damage total, a
+/// points score - is tracked at all. Confidence under 50 for any specific
+/// guess, so none is made; see `docs/formats/2048-campaign.md`'s "what is
+/// not determined" section. An Elimination event still plays and still
+/// unlocks whatever names it as a prerequisite (gated on `finished`, not on
+/// a medal - see `oag_game`'s own unlock-gate evaluator), it simply never
+/// carries a medal.
+#[must_use]
+pub fn evaluate_tier(objectives: &EventObjectives, outcome: &EventOutcome) -> Option<Tier> {
+    if objective_met(objectives.kind, objectives.elite, outcome) == Some(true) {
+        Some(Tier::Elite)
+    } else if objective_met(objectives.kind, objectives.pass, outcome) == Some(true) {
+        Some(Tier::Pass)
+    } else {
+        None
+    }
+}
+
+/// `None` means "cannot be graded" (an unfinished attempt against a rule
+/// that needs one, or a rule this function does not know how to read) -
+/// never "failed". [`evaluate_tier`] treats both the same way (no tier),
+/// but keeping them apart here is what let this function's own doc comment
+/// state the Elimination gap as "never guessed" rather than "always fails".
+fn objective_met(kind: EventKind, rule: ObjectiveRule, outcome: &EventOutcome) -> Option<bool> {
+    match rule.objective_type {
+        Some(objective_type::FINISH) => Some(outcome.finished),
+        Some(objective_type::POSITION) => {
+            if !outcome.finished {
+                return None;
+            }
+            Some(i64::from(outcome.place) <= rule.target?)
+        }
+        Some(objective_type::KILLS) => Some(i64::from(outcome.kills) >= rule.target?),
+        Some(objective_type::BEAT_VALUE) => match kind {
+            EventKind::Race => {
+                if !outcome.finished {
+                    return None;
+                }
+                Some(outcome.finish_centiseconds? <= rule.target?)
+            }
+            EventKind::Zone => Some(i64::from(outcome.zone) >= rule.target?),
+            EventKind::Elimination => None,
+        },
+        Some(_) | None => None,
+    }
+}
+
+/// The single campaign event whose completion unlocks each event, by name -
+/// `(event name, its own prerequisite's name)`, `None` for an event open
+/// from the start. **Every event in the document, not only the map's own
+/// 115 with a cell** - `MP_*`/`E3_*` instances are included here and read as
+/// gate-free, since nothing ever names one as a prerequisite either; a
+/// caller building the map (`oag_game`'s own `boot::campaign2048::map_events`)
+/// applies its own cell/`E3_*` filter afterward, the same as it always has.
+///
+/// **A single name is enough for every case `SP.xml` authors.** Measured
+/// directly: no event is ever the `M_PNEXTEVENT`/`M_PBRANCHEVENT` target of
+/// more than one other event, and the two events that carry both an
+/// incoming chain edge *and* their own `M_PEVENTREQUIRED`
+/// (`"2049 - Event 1"`, `"2050 - Event 1"`) name the identical prerequisite
+/// either way - so collapsing "what unlocks this" to one optional name
+/// loses no case this file authors, rather than being a simplification that
+/// happens to work on the sample checked. Confidence 90: structural, over
+/// every one of `SP.xml`'s own events, not a sample.
+///
+/// Of the map's own 115 cell-bearing, non-`E3_*` events, a fresh save opens
+/// 16 from the start on the EU v1.04 package: `"2048 - Event 1"` and 15 side
+/// events with no gate at all (a per-team `"* P Ship Challenge"` and a
+/// per-track `"* - S Phantom Challenge"`) - `M_bForceAlwaysUnlocked` is
+/// authored on no event at all (measured, zero non-empty/non-zero
+/// instances), so it is not what opens these; the absence of any incoming
+/// edge or `M_PEVENTREQUIRED` is. See
+/// `crates/game/tests/vita_2048_campaign_progress_ground_truth.rs`, which
+/// pins this count against the map's own filtered set rather than this
+/// function's raw one.
+#[must_use]
+pub fn unlock_gates(document: &Document) -> Vec<(String, Option<String>)> {
+    let all = events(document);
+    let mut incoming: Vec<(i64, i64)> = Vec::new();
+    for event in &all {
+        if let Some(next) = event.next_event {
+            incoming.push((event.instance_id, next.instance_id));
+        }
+        if let Some(branch) = event.branch_event {
+            incoming.push((event.instance_id, branch.instance_id));
+        }
+    }
+    all.iter()
+        .map(|event| {
+            let predecessor_id = incoming
+                .iter()
+                .find(|(_, target)| *target == event.instance_id)
+                .map(|(predecessor, _)| *predecessor)
+                .or_else(|| event.required_event.map(|r| r.instance_id));
+            let gate = predecessor_id
+                .and_then(|id| document.instance(id))
+                .map(|instance| instance.name.clone());
+            (event.name.clone(), gate)
+        })
+        .collect()
+}
+
+#[cfg(test)]
+mod tests;
