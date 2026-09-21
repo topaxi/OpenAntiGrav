@@ -225,6 +225,34 @@ its usual `(title, track, mode, class)` key - the two tables answer
 different questions ("the best result on this track/mode/class" against
 "what did this cell earn") and a campaign race contributes to both.
 
+**2026-09-21: Wipeout 2048's own `SP.xml` campaign is the same
+`[[campaign]]` table's second tenant**, keyed on `(title, event name)` the
+same way a `PI_Grid` cell is keyed on `(title, cell name)` - no schema
+change, same reasoning: 2048's own event names are unique the way a cell's
+`name` is, and a track/mode/class key would collide across the many events
+that share a circuit. `oag_2048::campaign::{event_objectives, EventOutcome,
+Tier, evaluate_tier}` (`docs/formats/2048-campaign.md`'s "The objective law"
+section) is this title's own medal law, read off `M_PASSOBJECTIVE`/
+`M_ELITEOBJECTIVE` rather than reused from `Cell_EvaluateMedal` - 2048's
+own law is genuinely two-tier (pass/elite, never a third authored rung),
+where Pulse/HD's is three-tier (bronze/silver/gold). `RaceStage::observation`
+(`crates/game/src/main/race_stage.rs`) maps `Tier::Elite` to `Medal::Gold`
+and `Tier::Pass` to `Medal::Bronze` - **chosen, not measured, no confidence
+score**: floor to floor and top to top, `Medal::Silver` never produced by
+this title. `race::load_event` resolves the event's own objectives once, at
+load (`race::Loaded::campaign_2048_event`), the same "resolved once, at
+load" shape [`RaceStage::result_key`](#the-key-resolved-once-at-load-never-re-derived)
+already follows, rather than re-parsing `SP.xml` at grading time.
+
+The map itself never re-reads `records.toml` live: `oag_ui::frontend::
+Frontend::refresh_campaign_progress` folds a `Store` snapshot in once, at
+`Session::finish_loading`, because a race on this title never returns to the
+touch front end within one process - see
+`docs/formats/2048-frontend.md`'s "Wired" section. `MapEvent::requires`
+(the unlock graph, `oag_2048::campaign::unlock_gates`) is disc-only and
+carries no dependency on this file's own schema at all; only the tier
+*earned* against a gate's own name comes from `[[campaign]]`.
+
 ## What is not built yet
 
 There is still no records **browser** - a circuit list plus every stored best
