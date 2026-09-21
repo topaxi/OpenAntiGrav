@@ -1523,10 +1523,22 @@ and its own "what is not determined" section.
   `campaign/draw.rs`, outside the lane that found and fixed the mechanism.
   `NavigationLegend`'s own `FE_CONFIRM` shrink-to-fit (`Prompt::left_bound`/
   `align_right_to`, above) is now measured against the atlas it actually
-  draws through rather than the wrong one, and **still shrinks**: `Confirm`
-  at `pulse_text.fnt`'s own native width is 91 native px against a 35px
-  gap (`FE_BACK_BUTTON`'s `x` minus `FE_CONFIRM_BUTTON`'s `x` minus one
-  glyph-width estimate minus two `GAP` constants, both chosen). The face
-  was the wrong thing to suspect for the overlap this fixed *before* this
-  atlas fix landed; now that the face is right, the suspect is `GAP`/the
-  glyph-width estimate, both still chosen rather than measured.
+  draws through rather than the wrong one - **on both paths**: the live
+  session (`crate::main::menu_stage::MenuStage`'s own `default_atlas`/
+  `default_measure`) and `--menu-page`/`capture.rs`, which had its *own*,
+  separate `measure` closure still pointed at `menu_font` and was the
+  reason the first live capture of this fix (`cellselect-usa-after2.png`)
+  showed `Confirm` at roughly a third of `Back`'s size, sitting above the
+  baseline - caught in review, not by this lane's own verification, and
+  fixed in `crate::capture::run`'s own `campaign_page` call. Measured
+  correctly now, `Confirm` **still shrinks, barely**: `pulse_text.fnt`'s
+  own native width for `"Confirm"` is 41 native px against a 35px gap
+  (`FE_BACK_BUTTON`'s `x` minus `FE_CONFIRM_BUTTON`'s `x` minus one
+  glyph-width estimate minus two `GAP` constants, all four chosen) - a
+  ~15% reduction, not the ~65% the wrong atlas produced. The face was
+  the wrong thing to suspect for the overlap this fixed *before* this
+  atlas fix landed; now that the face and the measurement are both right,
+  the remaining, much smaller shrink is `GAP`/the glyph-width estimate's
+  own numbers, still chosen rather than measured. Confirmed live,
+  `cellselect-after3-footer-crop.png` next to the reference frame:
+  `Confirm` and `Back` now match in size and sit on the same baseline.

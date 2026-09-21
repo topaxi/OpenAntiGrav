@@ -634,7 +634,16 @@ pub fn run(
                     &mut sprites,
                     &globals,
                     title,
-                    &|text| oag_ui::font::measure(menu_font.as_ref().unwrap_or(&font), text),
+                    // `Default`-role, not `menu_font.unwrap_or(&font)`: this
+                    // measures `FE_CONFIRM`'s own shrink-to-fit, and
+                    // `NavigationLegend::draw` routes that text through the
+                    // `Default`-role atlas now (`Draw::in_role`, see
+                    // `boot::fonts::face_atlas_slot`) - mirrors
+                    // `crate::main::menu_stage::MenuStage`'s own
+                    // `default_measure`, which this capture-only path has to
+                    // match by hand rather than share, having no `MenuStage`
+                    // of its own to read `default_atlas` off.
+                    &|text| oag_ui::font::measure(&font, text),
                 )?;
                 (backdrop, video_format, list, space)
             } else if let Some(kind) = endrace_kind(page) {
