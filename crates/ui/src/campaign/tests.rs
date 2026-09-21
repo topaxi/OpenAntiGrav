@@ -322,6 +322,32 @@ fn a_medalled_neighbour_clears_an_unmedalled_cells_lock() {
     );
 }
 
+/// `Line5`'s own value, plumbed the same way `medal_at`/`selected_medal`
+/// already are - a per-cell closure, `None` for a cell (or a whole source)
+/// with nothing to report, never a zero standing in for an absent record.
+#[test]
+fn selected_record_reads_the_records_closure_by_cell_name_and_defaults_to_none() {
+    let cells = vec![
+        race_cell("grid0_2_1", "16_Track"),
+        race_cell("grid0_3_1", "16_Track"),
+    ];
+    let with_no_records = CellSelection::new(cells.clone());
+    assert_eq!(with_no_records.selected_record(), None);
+
+    let mut with_records = CellSelection::with_medals_and_records(cells, &|_| None, &|name| {
+        (name == "grid0_2_1").then_some(21_050)
+    });
+    assert_eq!(with_records.selected_record(), Some(21_050));
+    let mut input = Input::new();
+    press(&mut input, Button::Right);
+    with_records.update(&mut input);
+    assert_eq!(
+        with_records.selected_record(),
+        None,
+        "grid0_3_1's own closure answer, not grid0_2_1's carried over"
+    );
+}
+
 /// A cell that explicitly authors `Locked="false"` never shows the glyph,
 /// medal or not.
 #[test]

@@ -970,6 +970,9 @@ pub fn load(options: &Options) -> Result<Loaded> {
         cannon_quad_textures: weapon_models::load_cannon_quad_textures(&mut archives, &mut report),
         shadows,
         shadow_hulls,
+        // Overwritten by `load_event` on the one path that has an event
+        // name to carry - see `Loaded::campaign_2048_event`'s own doc.
+        campaign_2048_event: None,
         report,
     })
 }

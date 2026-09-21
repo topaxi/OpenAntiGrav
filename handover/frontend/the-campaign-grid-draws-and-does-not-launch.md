@@ -40,6 +40,25 @@ half of the button-legend footer - see this thread's `Open` section, which
 replaces the two locking bullets below (struck through) with the measured
 rule now implemented.
 
+**Update, 2026-09-21, `pulse-campaign-ticker` lane: the tip ticker, the
+`Confirm`/`Back` footer legend, `Cell Help`'s static overlay and `Line5`
+(`Cell_SavedRecord`, Time Trial/Speed Lap) all now draw - and the podium walk
+closed live**, `[ai] difficulty = "novice"` (worktree-local, never committed)
+plus `--autopilot-skill ace` finishing `grid0_3_1` 1st of 8 and `Cell
+Selection` reading `Points 3/3` / `Best Gold` back. New module:
+`oag_ui::campaign::footer`, reading `Skin.xml`'s `<NavigationController>`/
+`<TextInfo>` directly off the raw parsed tree - neither tag is one
+`oag_ui::screen::Screens::collect_widgets` recognises, and even parsed,
+neither fits the per-screen widget model (a `NavigationController` picks
+prompts *per screen*; the ticker is two alternating text buffers sharing one
+clip viewport). Full detail in `docs/ui/campaign-screens.md`'s own
+2026-09-21 section. **Still open below**: the `Grid`/`Grid1` duplicate
+mystery, a live PPSSPP capture of the ticker/footer/`Cell Help` (this pass
+verified only against this build's own live behaviour, not the original's),
+the ticker's own scroll speed (chosen, not measured), and `Line8`/`Zone`/
+`Elimination`'s own saved records (no raw count anywhere in
+`oag_game::records::Record` to read).
+
 Milestone: **M7 - Shell and polish**.
 
 Read first: [`docs/ui/campaign-screens.md`](../../docs/ui/campaign-screens.md)
@@ -72,12 +91,10 @@ read), `crates/game/src/main/campaign_stage.rs` and
   entrance-animation buffer that gets swapped to the settled state, or a
   paging crossfade between four-tile pages. A PPSSPP capture across a page
   turn would likely settle it.
-- **`Cell Help`'s own text is resolved (`Main Help`/`Speed Class Help`/
-  `Event Help`) but the overlay is not drawn.** Its `Viewport`/`Animation`
-  scroll timeline (`LimitVerticalScroll="10"`) is the kind of reveal
-  `oag_ui::screen::Screens::collect_widgets` already discards elsewhere in
-  this crate; a static (non-scrolling) overlay would be the honest next
-  step, not a scripted one.
+- ~~`Cell Help`'s own text is resolved but the overlay is not drawn.~~
+  **Done, 2026-09-21** - draws as a static panel, `oag_ui::campaign::draw::cell_help_draw`.
+  Its `Viewport`/`Animation` scroll timeline is still not scripted, on
+  purpose - see `docs/ui/campaign-screens.md`'s 2026-09-21 section.
 - ~~Grid-tier locking draws every tier open.~~ **Done, 2026-09-14**, in the
   `campaign-picture` lane, once a per-cell save existed to compare
   `Grid_PointsEarned` against and `race-campaign.md`'s own later pass traced
@@ -136,22 +153,23 @@ read), `crates/game/src/main/campaign_stage.rs` and
   `Line7` all read real numbers now, fed through a `Fn(&str) ->
   Option<Medal>` closure rather than the store type itself - see
   `oag_ui::campaign::GridSummary::from_grid_with_medals`/
-  `CellSelection::with_medals`. **`Line5`/`Line8` are unchanged** - both are
-  `Cell_SavedRecord`, a saved best time/zone-count/kill-count this pass did
-  not add a store for, only the medal.
+  `CellSelection::with_medals`. ~~`Line5`/`Line8` are unchanged.~~ **`Line5`
+  done, 2026-09-21** - `CellSelection::with_medals_and_records` reads the
+  general per-track/mode/class `oag_game::records::Store` for Time Trial/
+  Speed Lap. **`Line8` still blank on purpose** (collides with `Target0`'s
+  own row) and **`Zone`/`Elimination` still have no raw count anywhere in
+  `oag_game::records::Record` to read** - see
+  `docs/ui/campaign-screens.md`'s 2026-09-21 section.
 - ~~A PPSSPP capture of the walk above~~, to move every confidence score in
   `docs/ui/campaign-screens.md` from "read off the XML and the decompile"
   to "measured against a live frame". **Done, 2026-09-14**, in the
   `campaign-ppsspp-results` lane - see `docs/ui/campaign-screens.md`'s
   "Measured against PPSSPP" section, which that lane owns; do not edit
   inside it.
-- **The scrolling tip ticker and the `Confirm`/`Back` half of the footer
-  legend still do not draw.** The ticker's own strings are located
-  (`TKR_NOTOURN`/`TKR_NOZONE`/`TKR_SONGS`/`TKR_DIST`) but not traced to a
-  widget or a scroll speed; the footer already draws `HELP`/`CHANGE
-  DIFFICULTY` through a mechanism outside `oag_ui::campaign` this pass did
-  not need to touch to add the other two. See `docs/ui/campaign-screens.md`'s
-  own `Open` entry.
+- ~~The scrolling tip ticker and the `Confirm`/`Back` half of the footer
+  legend still do not draw.~~ **Done, 2026-09-21** - `oag_ui::campaign::footer`.
+  The ticker's own scroll speed is chosen, not measured, and the
+  `Grid`/`Grid1` duplicate `GridController` question above is still open.
 - **A previous live walk's cell (`grid0_2_1`) is locked under the rule this
   pass implemented.** The "interactive play-test" bullet below drove
   through `grid0_2_1` on a fresh profile; that cell authors no `Locked`
@@ -162,11 +180,41 @@ read), `crates/game/src/main/campaign_stage.rs` and
 - ~~An interactive play-test of the new launch.~~ **Driven live, 2026-09-14**,
   in the `campaign-pointer` lane, mouse-only under Xvfb: `Cell Selection`
   confirming, `Team Selection`, an `--autopilot` race finishing and the
-  results table all confirmed by screenshot. Not fully closed: both runs
-  finished 4th of eight (this build's default `[ai] difficulty` is already
-  `ace`, the ceiling `--autopilot-skill` also offers), so `Line6`/`Line7`
-  were only seen reading the *no medal* state live, never a podium one -
-  see `docs/ui/campaign-screens.md`'s own `Open` entry for the one step
-  left (a lower `[ai] difficulty` or a threshold-medal mode cell) and why
-  this pass didn't take it.
-- **Cell Help's static overlay.**
+  results table all confirmed by screenshot. ~~Not fully closed: both runs
+  finished 4th of eight... `Line6`/`Line7` were only seen reading the *no
+  medal* state.~~ **Closed, 2026-09-21** - a worktree-local `[ai] difficulty
+  = "novice"` (never committed) plus `--autopilot-skill ace` podiumed
+  `grid0_3_1` 1st of 8; `Cell Selection` read `Points 3/3` / `Best Gold`
+  back. See `docs/ui/campaign-screens.md`'s 2026-09-21 section.
+- ~~Cell Help's static overlay.~~ **Done, 2026-09-21.**
+
+## What is still open after this pass
+
+- **The `Grid`/`Grid1` duplicate `GridController`** - still read but not
+  resolved, see above.
+- **No live PPSSPP capture of the ticker, the `Confirm`/`Back` legend or
+  `Cell Help`'s overlay** - all three were verified against this build's own
+  live behaviour under Xvfb, not against the original.
+- **The ticker's own scroll speed** is chosen (`crate::anim::MARQUEE_SPEED`
+  reused), not measured.
+- **`Line8` and `Zone`/`Elimination`'s own saved records** - `Line8` would
+  collide with `Target0`'s own row if drawn unconditionally, and neither
+  mode has a raw zone/kill count anywhere in `oag_game::records::Record` to
+  read at all; both are real gaps, not implemented this pass.
+- **This whole screen renders every label upper-case** (`SPEED CLASS` for
+  the reference's `Speed class`, and `CONFIRM` for `Confirm`) - not
+  something `oag_ui::campaign` can fix on its own. The menu/campaign
+  render path loads exactly one font atlas (`shell.title_font`); `"default"`/
+  `"small"` are scale multipliers on that same atlas, not switches to a
+  genuinely different, compact, mixed-case face, and `Draw::FacedText`'s
+  own `role` is not checked against anything today - the one alternate
+  atlas that ever loads is the `Title` role, not a body face. Fixing this
+  needs a second, correctly-sized atlas wired into the menu stage, a change
+  well outside this crate. See `docs/ui/campaign-screens.md`'s own
+  "Two defects... fixed same day" section for the full trace.
+- **`AI difficulty (Medium)` reads `CHANGE DIFFICULTY`** - a pre-existing
+  label (`DifficultyButton`'s own `string="Change Difficulty"`, predating
+  this lane) rather than the original's own template showing the current
+  rung. Left as-is on the team lead's own instruction pending the atlas fix
+  above, which would make the original's own wording legible in the first
+  place.

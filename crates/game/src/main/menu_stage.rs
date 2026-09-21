@@ -45,6 +45,16 @@ pub(crate) struct MenuStage {
     /// own, private atlas. Cheap to hold twice: [`font::Atlas`] is a small
     /// glyph table, not a GPU resource. See [`marquee::apply`].
     pub(crate) text_atlas: font::Atlas,
+    /// The `Default`-role face `oag_ui::campaign::footer`'s own prompts and
+    /// tips draw through when their own `font` routes there (see
+    /// `Draw::in_role`) - kept a second time for the same reason
+    /// [`Self::text_atlas`] is: measuring `FE_CONFIRM`'s own shrink-to-fit
+    /// width needs the atlas it will actually render in, not
+    /// [`Self::text_atlas`]'s `menu`-role one. Not `Option`: every title has
+    /// a `Default`-role atlas (`boot::load_font`'s own fallback is the
+    /// built-in 5x7 set, never nothing), so this is always something to
+    /// measure against, even on a title with no campaign screens at all.
+    pub(crate) default_atlas: font::Atlas,
     /// The disc's own frame around every page: what the screen clears to and
     /// the rules it draws. Read once, off the front-end XML this source shipped
     /// - see `menu::read_frame` - and empty for a title whose frame is unread.
@@ -235,6 +245,17 @@ impl MenuStage {
             reason = "a tick is milliseconds; f32 holds it exactly"
         )]
         self.marquee.tick(dt as f32, marquee::focus(&self.menu));
+        // The campaign footer's own ticker clock - free-running, the same
+        // "no reset on a screen change" choice the marquee's own pulse
+        // above is documented making, since nothing measured says the
+        // original restarts it either. See `CampaignStage::tick_ticker`.
+        #[expect(
+            clippy::cast_possible_truncation,
+            reason = "a tick is milliseconds; f32 holds it exactly"
+        )]
+        if let Some(campaign) = &mut self.campaign {
+            campaign.tick_ticker(dt as f32);
+        }
         // The selected row's own pulse, measured on Pulse - see
         // `oag_title::MenuSkin::selected_pulse_period_secs`. Free-running like
         // the marquee's clock is reset-on-focus-change: unconditional here
@@ -488,6 +509,11 @@ impl MenuStage {
         // both are plain 2D widget draws off `CellMode_Definition.xml`, the
         // same pass a picker's own body uses without the 3D tail.
         if let Some(campaign) = self.campaign.as_ref() {
+            // Set by the non-HD arm below, when this frame draws one at
+            // all - what the clip lookup after `flatten` searches for.
+            // HD/Fury draws no ticker of its own yet, so this stays `None`
+            // on that branch.
+            let mut ticker_draw: Option<Draw> = None;
             // Wipeout HD/Fury draws a completely different screen behind the
             // same two names - see `oag_ui::campaign::hd`'s own module doc.
             let layers = if campaign.is_hd() {
@@ -565,21 +591,51 @@ impl MenuStage {
                     }
                 }
             } else {
+                let measure = |text: &str| font::measure(&self.text_atlas, text);
+                // `FE_CONFIRM`'s own shrink-to-fit is the one thing
+                // `NavigationLegend::draw` measures - see its own doc - and
+                // it now draws through this atlas (`Draw::in_role`), not
+                // `self.text_atlas`'s `menu`-role one `measure` above still
+                // is for the ticker's own (unchanged) `small`-role tips.
+                let default_measure = |text: &str| font::measure(&self.default_atlas, text);
                 match &campaign.screen {
                     // Never built for a non-HD title - see
                     // `crate::campaign_stage::Screen::Selection`'s own doc.
                     crate::campaign_stage::Screen::Selection(_) => oag_ui::menu::Layers::default(),
-                    crate::campaign_stage::Screen::Grid(model) => oag_ui::campaign::grid_draw_list(
-                        model,
-                        campaign.grid_layout(),
-                        &self.skin,
-                        &self.frame,
-                        &campaign.strings,
-                        if frozen_race { None } else { shown },
-                        frozen_race,
-                        &|src| campaign.sprites.get(src),
-                    ),
+                    crate::campaign_stage::Screen::Grid(model) => {
+                        let ticker = campaign.ticker_draw(&campaign.grid_layout().faces, &measure);
+                        ticker_draw = ticker.clone();
+                        let footer_overlay: Vec<Draw> = ticker.into_iter().collect();
+                        oag_ui::campaign::grid_draw_list(
+                            model,
+                            campaign.grid_layout(),
+                            &self.skin,
+                            &self.frame,
+                            &campaign.strings,
+                            if frozen_race { None } else { shown },
+                            frozen_race,
+                            &|src| campaign.sprites.get(src),
+                            &footer_overlay,
+                        )
+                    }
                     crate::campaign_stage::Screen::Cell { model, .. } => {
+                        let faces = &campaign.cell_layout().faces;
+                        let mut footer_overlay = campaign.nav_legend_draw(faces, &default_measure);
+                        let ticker = campaign.ticker_draw(faces, &measure);
+                        ticker_draw = ticker.clone();
+                        footer_overlay.extend(ticker);
+                        // `Cell Help`'s own static overlay - drawn last, over
+                        // everything else, while `triangle` has it open. See
+                        // `oag_ui::campaign::draw::cell_help_draw`'s own doc
+                        // for why it is static rather than scripted.
+                        if model.help_open()
+                            && let Some(cell_help) = campaign.cell_help_layout()
+                        {
+                            footer_overlay
+                                .extend(oag_ui::campaign::cell_help_draw(cell_help, &|src| {
+                                    campaign.sprites.get(src)
+                                }));
+                        }
                         oag_ui::campaign::cell_draw_list(
                             model,
                             campaign.cell_layout(),
@@ -589,20 +645,40 @@ impl MenuStage {
                             if frozen_race { None } else { shown },
                             frozen_race,
                             &|src| campaign.sprites.get(src),
+                            &footer_overlay,
                         )
                     }
                 }
             };
+            let flat = layers.flatten();
+            // The ticker's own clip: `Renderer::render_with`'s `clip` is
+            // keyed on a draw's index in the *flattened* list
+            // (`crate::marquee`'s own row-value scroll works the same way),
+            // so this finds `ticker_draw`'s value again by equality rather
+            // than carrying an index computed before `flatten` reordered
+            // nothing - a Fury/HD frame has no ticker at all, and
+            // `ticker_draw` is `None` there, so `position` never runs.
+            let clip = ticker_draw.as_ref().and_then(|draw| {
+                let index = flat.iter().position(|d| d == draw)?;
+                let (left, right) = campaign.ticker_clip_bounds()?;
+                Some((index, left, right))
+            });
             let list: Vec<Draw> = if frozen_race {
                 std::iter::once(Draw::Fill {
                     rect: overlay_rect(self.skin.space(), viewport),
                     color: PAUSE_OVERLAY,
                 })
-                .chain(layers.flatten())
+                .chain(flat)
                 .collect()
             } else {
-                layers.flatten()
+                flat
             };
+            // The pause overlay's `Fill` above shifts every index by one -
+            // `clip` was found against the unshifted list, so it has to
+            // move with it.
+            let clip = clip.map(|(index, left, right)| {
+                (if frozen_race { index + 1 } else { index }, left, right)
+            });
             let load = if frozen_race {
                 wgpu::LoadOp::Load
             } else {
@@ -616,7 +692,7 @@ impl MenuStage {
                 view,
                 &list,
                 viewport,
-                None,
+                clip,
             );
             return Ok(());
         }

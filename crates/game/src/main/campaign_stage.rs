@@ -73,11 +73,30 @@ pub(crate) struct CampaignStage {
     /// `None` before a campaign is ever chosen this session, and on every
     /// non-HD title.
     active_campaign: Option<Campaign>,
+    /// `Cell Selection`'s own `Cell Help` overlay - see
+    /// `oag_game::campaign::Campaign::cell_help`'s own doc. Drawn as a
+    /// static (non-scrolling) panel while `CellSelection::help_open`, per
+    /// `docs/ui/campaign-screens.md`'s `Open` entry on why not the
+    /// authored `Viewport`/`Animation` scroll timeline.
+    cell_help: Option<oag_ui::campaign::Layout>,
+    /// The front-end root's own `Confirm`/`Back` legend - `None` on a
+    /// source whose `Skin.xml` this pass could not read at all (logged when
+    /// that happens, see `oag_game::campaign::read_footer`).
+    nav_legend: Option<oag_ui::campaign::footer::NavigationLegend>,
+    /// The front-end root's own scrolling tip ticker layout - content is
+    /// supplied per frame by [`Self::ticker_tips`], not carried here.
+    ticker: Option<oag_ui::campaign::footer::TickerLayout>,
+    /// Seconds since this campaign screen opened, advanced by
+    /// [`Self::tick_ticker`] - the ticker's own clock. Never reset between
+    /// `Grid Selection` and `Cell Selection`, unlike `crate::marquee::Timer`:
+    /// the original ticker is not observed to restart on a screen change
+    /// (see `docs/ui/campaign-screens.md`), so this build keeps it running.
+    ticker_elapsed: f32,
     /// Kept for the render pass, which needs to resolve a per-cell idstring
-    /// (`MSC_EVENT_SR` and friends) that neither screen's own `Layout::read`
-    /// pass can, since which one applies depends on the selected cell's
-    /// mode - read once, the same table `Layout::read` used to resolve every
-    /// fixed label.
+/// (`MSC_EVENT_SR` and friends) that neither screen's own `Layout::read`
+/// pass can, since which one applies depends on the selected cell's
+/// mode - read once, the same table `Layout::read` used to resolve every
+/// fixed label.
     pub(crate) strings: oag_ui::language::StringTable,
     /// The front end's own sprite sheet - `hex_filled.mip`/`hex_outline.mip`/
     /// `pulse_assets.mip`'s lock-and-selector sub-rects all come off it.
@@ -118,6 +137,9 @@ impl CampaignStage {
         cell_layout: oag_ui::campaign::Layout,
         selection_layout: Option<oag_ui::campaign::Layout>,
         grid_layout_fury: Option<oag_ui::campaign::Layout>,
+        cell_help: Option<oag_ui::campaign::Layout>,
+        nav_legend: Option<oag_ui::campaign::footer::NavigationLegend>,
+        ticker: Option<oag_ui::campaign::footer::TickerLayout>,
         strings: oag_ui::language::StringTable,
         sprites: oag_game::sprite::Sheet,
         title: String,
@@ -150,6 +172,10 @@ impl CampaignStage {
             grid_layout_fury,
             grid_range,
             active_campaign: None,
+            cell_help,
+            nav_legend,
+            ticker,
+            ticker_elapsed: 0.0,
             strings,
             sprites,
             screen,
@@ -157,6 +183,95 @@ impl CampaignStage {
             circuit_names,
             records,
         }
+    }
+
+    /// Advances the ticker's own clock - called once a frame from
+    /// `MenuStage::tick`, the same place `crate::marquee::Timer` (its
+    /// sibling clock for a menu row's overflowing value) is driven from.
+    pub(crate) fn tick_ticker(&mut self, dt: f32) {
+        self.ticker_elapsed += dt.max(0.0);
+    }
+
+    /// The `Confirm`/`Back` legend's own draw list, or empty when this
+    /// source's `Skin.xml` carried none - see
+    /// `oag_ui::campaign::footer::NavigationLegend::draw`.
+    #[must_use]
+    pub(crate) fn nav_legend_draw(
+        &self,
+        faces: &oag_ui::picker::FaceScales,
+        measure: &dyn Fn(&str) -> f32,
+    ) -> Vec<oag_ui::frontend::Draw> {
+        self.nav_legend
+            .as_ref()
+            .map_or_else(Vec::new, |legend| legend.draw(faces, measure))
+    }
+
+    /// The ticker's own draw at its current clock - `None` when this source
+    /// authors no ticker at all, nothing is honestly known to rotate
+    /// through yet ([`Self::ticker_tips`]), or the clock is between two
+    /// tips (see `oag_ui::campaign::footer::ticker_draw`'s own doc).
+    #[must_use]
+    pub(crate) fn ticker_draw(
+        &self,
+        faces: &oag_ui::picker::FaceScales,
+        measure: &dyn Fn(&str) -> f32,
+    ) -> Option<oag_ui::frontend::Draw> {
+        oag_ui::campaign::footer::ticker_draw(
+            self.ticker.as_ref()?,
+            self.ticker_elapsed,
+            &self.ticker_tips(),
+            faces,
+            measure,
+        )
+    }
+
+    /// The ticker's own clip window, `(left, right)` in screen space - what
+    /// a caller needs to build `Renderer::render_with`'s `clip` tuple once
+    /// it has found [`Self::ticker_draw`]'s own index in the flattened draw
+    /// list. `None` on a source with no ticker at all.
+    #[must_use]
+    pub(crate) fn ticker_clip_bounds(&self) -> Option<(f32, f32)> {
+        let [x, _, width, _] = self.ticker.as_ref()?.viewport;
+        Some((x, x + width))
+    }
+
+    /// Which tip strings the ticker honestly has to show - the `TKR_NO*`
+    /// family, the only ones on disc that carry no `%d`/`%s`/`%.2f`
+    /// template this build has a real counter for (see
+    /// `oag_ui::campaign::footer`'s own module doc for why nothing here
+    /// invents a play-time or song-count statistic instead).
+    ///
+    /// `Tournament`/`Head2Head` never launch at all in this engine
+    /// (`oag_game::campaign::race_mode_for_cell`), so `TKR_NOTOURN`/
+    /// `TKR_NOHH` are unconditionally true and always included. The other
+    /// five are gated on whether [`Self::records`] carries any row for that
+    /// mode - `oag_race::Mode::name`'s own spelling, the same string
+    /// `oag_game::records::Key::new` normalises every record's `mode` to -
+    /// which reads real save data rather than a guess, at the cost of never
+    /// re-showing a tip once its mode has been raced even once.
+    #[must_use]
+    fn ticker_tips(&self) -> Vec<String> {
+        let never_raced = |mode: &str| !self.records.rows().iter().any(|row| row.mode == mode);
+        let mut ids = vec!["TKR_NOTOURN", "TKR_NOHH"];
+        if never_raced(oag_race::Mode::SingleRace.name()) {
+            ids.push("TKR_NOSR");
+        }
+        if never_raced(oag_race::Mode::TimeTrial.name()) {
+            ids.push("TKR_NOTT");
+        }
+        if never_raced(oag_race::Mode::SpeedLap.name()) {
+            ids.push("TKR_NOSL");
+        }
+        if never_raced(oag_race::Mode::Zone.name()) {
+            ids.push("TKR_NOZONE");
+        }
+        if never_raced(oag_race::Mode::Eliminator.name()) {
+            ids.push("TKR_NOELIM");
+        }
+        ids.into_iter()
+            .filter_map(|id| self.strings.get(id))
+            .map(str::to_string)
+            .collect()
     }
 
     /// Whether this is Wipeout HD/Fury's own campaign - what
@@ -279,6 +394,11 @@ impl CampaignStage {
         self.screen = Screen::Selection(model);
     }
 
+    #[must_use]
+    pub(crate) fn cell_help_layout(&self) -> Option<&oag_ui::campaign::Layout> {
+        self.cell_help.as_ref()
+    }
+
     /// Opens `Cell Selection` on `which`'s own cells - an **absolute**
     /// index into [`Self::grids`], the same contract this method has always
     /// had (`crate::main::session::endrace::return_to_campaign` reaches a
@@ -316,16 +436,54 @@ impl CampaignStage {
         let cells = grid.cells.clone();
         let title = &self.title;
         let records = &self.records;
+        let by_name = cells.clone();
         self.screen = Screen::Cell {
-            model: oag_ui::campaign::CellSelection::with_medals(cells, &|name| {
-                records
-                    .campaign_medal(title, name)?
-                    .best_medal
-                    .map(to_campaign_medal)
-            }),
+            model: oag_ui::campaign::CellSelection::with_medals_and_records(
+                cells,
+                &|name| {
+                    records
+                        .campaign_medal(title, name)?
+                        .best_medal
+                        .map(to_campaign_medal)
+                },
+                &|name| Self::saved_record_centiseconds(&by_name, records, title, name),
+            ),
             which,
         };
         true
+    }
+
+    /// `Line5`'s own value - `Cell_SavedRecord`, in centiseconds. Read off
+    /// the general per-track/mode/class [`oag_game::records::Store`] rather
+    /// than a per-cell store this build does not keep (see
+    /// [`oag_ui::campaign::CellSelection::records`]'s own doc): a campaign
+    /// race already folds into that same table, keyed by the cell's own
+    /// track/mode/class, so it is the closest available reading of "this
+    /// cell's own saved best" without inventing a new store. **Time Trial**
+    /// reads `best_total_ticks` (a finished race's own total time, the
+    /// quantity `docs/ui/campaign-screens.md`'s own live playthrough found
+    /// under `Campaign record` after a first attempt); **Speed Lap** reads
+    /// `best_lap_ticks` (its only meaningful quantity - it never finishes).
+    /// Every other mode answers `None`: `Race`'s own record is a position,
+    /// not a time, and `Zone`/`Elimination` have no raw count anywhere in
+    /// [`oag_game::records::Record`] to read at all.
+    fn saved_record_centiseconds(
+        cells: &[race_campaign::Cell],
+        records: &oag_game::records::Store,
+        title: &str,
+        cell_name: &str,
+    ) -> Option<i64> {
+        let cell = cells.iter().find(|cell| cell.name == cell_name)?;
+        let mode = oag_game::campaign::race_mode_for_cell(cell.mode.clone())?;
+        let key =
+            oag_game::records::Key::new(title, cell.track.as_deref(), mode.name(), &cell.class);
+        let record = records.get(&key)?;
+        let ticks = match mode {
+            oag_race::Mode::TimeTrial => record.best_total_ticks,
+            oag_race::Mode::SpeedLap => record.best_lap_ticks.map(u64::from),
+            _ => None,
+        }?;
+        Some(i64::try_from(ticks * 100 / 60).unwrap_or(i64::MAX))
     }
 
     /// [`Self::open_cell_selection`], for `slot` relative to

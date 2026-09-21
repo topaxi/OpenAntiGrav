@@ -116,6 +116,10 @@ const XML: &str = r#"
 <Text name="Line3 Title" String="l3 title" font="default" x="10" y="0" color="0xff34ACC2"></Text>
 <Text name="Line3" String="l3" font="default" x="110" y="0" color="0xffffffff"></Text>
 </Item>
+<Item OffsetX="260" OffsetY="135">
+<Text name="Line5 Title" String="--7" font="default" x="10" y="0" color="0xff34ACC2"></Text>
+<Text name="Line5" String="--7" font="default" x="110" y="0" color="0xffffffff"></Text>
+</Item>
 <Item OffsetX="260" OffsetY="150">
 <Text name="Line6 Title" String="--5" font="default" x="10" y="0" color="0xff34ACC2"></Text>
 <Text name="Line6" String="--5" font="default" x="110" y="0" color="0xffffffff"></Text>
@@ -290,6 +294,7 @@ fn a_grids_title_resolves_through_the_per_grid_idstring() {
         None,
         false,
         &|_| None,
+        &[],
     );
     let texts: Vec<(String, f32, f32)> = layers
         .body
@@ -381,6 +386,7 @@ fn track_line_resolves_the_circuits_display_name() {
         None,
         false,
         &|_| None,
+        &[],
     );
     assert!(
         texts(&layers)
@@ -407,6 +413,7 @@ fn the_panels_row_labels_resolve_to_their_own_idstrings() {
         None,
         false,
         &|_| None,
+        &[],
     );
     let texts = texts(&layers);
     for label in ["Speed class", "Laps", "Weapons", "Points"] {
@@ -434,6 +441,7 @@ fn best_is_hidden_when_the_target_rows_show_instead() {
         None,
         false,
         &|_| None,
+        &[],
     );
     assert!(
         !texts(&layers).iter().any(|t| t.as_str() == "Best"),
@@ -451,8 +459,57 @@ fn best_is_hidden_when_the_target_rows_show_instead() {
         None,
         false,
         &|_| None,
+        &[],
     );
     assert!(texts(&layers).iter().any(|t| t.as_str() == "Best"));
+}
+
+/// `Line5` (`Cell_SavedRecord`) draws the selected cell's own saved record,
+/// formatted the same `M:SS.CC` way `Target0..2` already are - and stays
+/// silent for a cell with none, the same visible-absence rule every other
+/// label on this screen follows.
+#[test]
+fn line5_draws_the_selected_cells_saved_record_when_one_exists() {
+    let layout = cell_layout();
+    let with_none = CellSelection::new(vec![time_trial_cell("grid0_0_0")]);
+    let layers = cell_draw_list(
+        &with_none,
+        &layout,
+        &skin(),
+        &Frame::default(),
+        &strings(),
+        None,
+        false,
+        &|_| None,
+        &[],
+    );
+    assert!(
+        !texts(&layers).iter().any(|t| t.as_str() == "2:10.48"),
+        "{:?}",
+        texts(&layers)
+    );
+
+    let with_record = CellSelection::with_medals_and_records(
+        vec![time_trial_cell("grid0_0_0")],
+        &|_| None,
+        &|_| Some(13_048),
+    );
+    let layers = cell_draw_list(
+        &with_record,
+        &layout,
+        &skin(),
+        &Frame::default(),
+        &strings(),
+        None,
+        false,
+        &|_| None,
+        &[],
+    );
+    assert!(
+        texts(&layers).iter().any(|t| t.as_str() == "2:10.48"),
+        "{:?}",
+        texts(&layers)
+    );
 }
 
 /// The regression this pass fixes: `Selector` used to share the selected
@@ -479,6 +536,7 @@ fn the_selector_is_centred_on_the_selected_hex_not_top_left_aligned() {
         None,
         false,
         &|_| placed32(),
+        &[],
     );
     let selector_rect = layers
         .body
@@ -507,6 +565,7 @@ fn targets_are_hidden_for_race_and_shown_as_a_time_for_time_trial() {
         None,
         false,
         &|_| None,
+        &[],
     );
     assert!(
         !layers
@@ -527,6 +586,7 @@ fn targets_are_hidden_for_race_and_shown_as_a_time_for_time_trial() {
         None,
         false,
         &|_| None,
+        &[],
     );
     let texts = texts(&layers);
     assert!(texts.iter().any(|t| t.as_str() == "1:06.00"), "{texts:?}");
@@ -561,6 +621,7 @@ fn race_draws_no_target_swatch_even_though_the_sprite_resolves() {
         None,
         false,
         &|_| Some(placed),
+        &[],
     );
     let sprites: Vec<&[f32; 4]> = layers
         .body
@@ -602,6 +663,7 @@ fn an_unmedalled_cells_medal_swatch_does_not_draw() {
         None,
         false,
         &|src| src.contains("hex_filled").then_some(placed).or(placed32()),
+        &[],
     );
     // Every `Draw::Sprite`/`TiledSprite` this build can attribute to
     // `hex_filled.mip` specifically would need the UV/texture-size fields
@@ -625,6 +687,7 @@ fn an_unmedalled_cells_medal_swatch_does_not_draw() {
         None,
         false,
         &|src| src.contains("hex_filled").then_some(placed).or(placed32()),
+        &[],
     );
     let medalled_count = layers
         .body
@@ -654,6 +717,7 @@ fn a_locked_cells_lock_glyph_draws_at_its_own_authored_position() {
         None,
         false,
         &|_| placed32(),
+        &[],
     );
     let lock_rect = layers.body.iter().find_map(|draw| match draw {
         // `Lock_0_0` is authored at `Item OffsetX="4" OffsetY="4"` in this
@@ -676,6 +740,7 @@ fn a_locked_cells_lock_glyph_draws_at_its_own_authored_position() {
         None,
         false,
         &|_| placed32(),
+        &[],
     );
     assert!(
         !layers.body.iter().any(
@@ -705,6 +770,7 @@ fn the_row_divider_count_matches_the_visible_row_count() {
             None,
             false,
             &|_| None,
+            &[],
         );
         layers
             .body
@@ -734,6 +800,7 @@ fn a_cells_saved_medal_reaches_line6_and_line7() {
         None,
         false,
         &|_| None,
+        &[],
     );
     let texts = texts(&layers);
     assert!(
@@ -766,6 +833,7 @@ fn cell_selections_selector_is_also_centred_on_the_selected_hex() {
         None,
         false,
         &|_| placed32(),
+        &[],
     );
     let selector_rect = layers
         .body

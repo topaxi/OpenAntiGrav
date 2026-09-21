@@ -86,11 +86,12 @@ use crate::language::StringTable;
 use crate::screen::{Screen, Screens};
 
 pub mod draw;
+pub mod footer;
 pub mod hd;
 pub mod pointer;
 pub mod selection;
 
-pub use draw::{cell_draw_list, grid_draw_list};
+pub use draw::{cell_draw_list, cell_help_draw, grid_draw_list};
 
 #[cfg(test)]
 mod tests;
@@ -327,6 +328,17 @@ pub struct CellSelection {
     /// saved medal. All `None` when built through [`Self::new`]. See the
     /// module doc's "a player-progress source is optional".
     medals: Vec<Option<Medal>>,
+    /// Parallel to [`Self::cells`] - `records[i]` is `cells[i]`'s own saved
+    /// best, in centiseconds (`Cell_SavedRecord`, drawn as `Line5`). All
+    /// `None` when built through [`Self::new`]/[`Self::with_medals`] - see
+    /// [`Self::with_medals_and_records`]. **Time Trial/Speed Lap only**
+    /// today: the general per-track/mode/class record store
+    /// (`oag_game::records::Store`) keeps a lap/total tick count for every
+    /// mode, but Zone's zone count and Elimination's kill count have no
+    /// field there at all, so a caller building this has nothing honest to
+    /// pass for either - see `crate::main::campaign_stage::CampaignStage`'s
+    /// own construction of the closure.
+    records: Vec<Option<i64>>,
     index: usize,
     help_open: bool,
     /// **HD only.** Which of [`Cell::targets_for_difficulty`]'s three rungs
@@ -357,10 +369,24 @@ impl CellSelection {
     /// why this takes a closure rather than the store type itself.
     #[must_use]
     pub fn with_medals(cells: Vec<Cell>, medal_of: &dyn Fn(&str) -> Option<Medal>) -> Self {
+        Self::with_medals_and_records(cells, medal_of, &|_| None)
+    }
+
+    /// [`Self::with_medals`], plus `record_of` - a cell's own saved best, in
+    /// centiseconds, by `name`. See [`Self::records`]'s own doc for why this
+    /// is `None` for most cells even on a real save.
+    #[must_use]
+    pub fn with_medals_and_records(
+        cells: Vec<Cell>,
+        medal_of: &dyn Fn(&str) -> Option<Medal>,
+        record_of: &dyn Fn(&str) -> Option<i64>,
+    ) -> Self {
         let medals = cells.iter().map(|cell| medal_of(&cell.name)).collect();
+        let records = cells.iter().map(|cell| record_of(&cell.name)).collect();
         Self {
             cells,
             medals,
+            records,
             index: 0,
             help_open: false,
             difficulty: 1,
@@ -414,6 +440,13 @@ impl CellSelection {
     #[must_use]
     pub fn selected_medal(&self) -> Option<Medal> {
         self.medals.get(self.index).copied().flatten()
+    }
+
+    /// The selected cell's own saved record, in centiseconds - see
+    /// [`Self::records`]'s own doc.
+    #[must_use]
+    pub fn selected_record(&self) -> Option<i64> {
+        self.records.get(self.index).copied().flatten()
     }
 
     #[must_use]

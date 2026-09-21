@@ -173,6 +173,82 @@ fn the_two_titles_do_not_name_the_same_body_face() {
     );
 }
 
+/// **Pulse's `menu` and `small` roles have no lowercase glyph art at all -
+/// only `Default` does.** `Pulse_20.fnt` (`menu`) and `Pulse_14.fnt`
+/// (`small`/`Title`) give every lowercase ASCII letter the *identical*
+/// `(u0, v0, width, height)` box its uppercase twin has; `pulse_text.fnt`
+/// (`Default`) gives each its own, distinct box. Not a code fallback and
+/// not a folding bug in `oag_ui::font::Atlas::cell` - measured directly off
+/// the `.fnt` glyph tables, on both PSP pressings, which is why this
+/// pins the fact itself rather than trusting a picture.
+///
+/// This is the fact `crates/game/src/boot/fonts.rs`'s `face_atlas_slot` and
+/// `oag_ui::campaign::footer`'s `Draw::in_role(Some("Default"), ..)` exist
+/// for: a `"default"`-labelled widget has to draw through `Default`'s own
+/// atlas to show mixed case at all, and a `"menu"`-labelled one gains
+/// nothing from the same move, because the disc's own `menu` face was never
+/// going to draw it in anything but caps. See `docs/ui/menus-original.md`'s
+/// "Two faces, not one swapped for the other" section.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn menu_and_small_have_no_lowercase_art_and_default_does() {
+    let found = images();
+    let pulses: Vec<_> = found
+        .iter()
+        .filter(|(_, _, f)| *f == Family::Pulse)
+        .collect();
+    assert!(
+        !pulses.is_empty(),
+        "needs at least one Pulse image to pin this against"
+    );
+    for (label, image, _) in pulses {
+        let (mut archives, languages) = languages_of(image);
+        for (role, lowercase_has_own_art) in [
+            (roles::DEFAULT, true),
+            ("menu", false),
+            (roles::SMALL, false),
+        ] {
+            let Some(name) = languages.iter().find_map(|l| l.font(role)) else {
+                panic!("{label}: no plugin fills in the {role:?} slot");
+            };
+            let font = archives
+                .read_font(name)
+                .unwrap_or_else(|e| panic!("{label}: {name} named but unreadable: {e}"));
+            let by_codepoint = |cp: u16| font.glyphs.iter().find(|g| g.codepoint == cp);
+            let mut checked = 0;
+            for (lower, upper) in (b'a'..=b'z').zip(b'A'..=b'Z') {
+                let (Some(lo), Some(up)) = (
+                    by_codepoint(u16::from(lower)),
+                    by_codepoint(u16::from(upper)),
+                ) else {
+                    continue;
+                };
+                checked += 1;
+                let same_box =
+                    (lo.u0, lo.v0, lo.width, lo.height) == (up.u0, up.v0, up.width, up.height);
+                assert_eq!(
+                    same_box,
+                    !lowercase_has_own_art,
+                    "{label}: {name} (role {role:?}) - '{}' vs '{}' {}",
+                    lower as char,
+                    upper as char,
+                    if lowercase_has_own_art {
+                        "share the identical box, expected each its own"
+                    } else {
+                        "have distinct boxes, expected the identical one \
+                         a caps-only face gives both cases"
+                    }
+                );
+            }
+            assert!(
+                checked >= 20,
+                "{label}: {name} (role {role:?}) - only {checked} of 26 letter pairs \
+                 had both cases in the glyph table, too few to trust the pin"
+            );
+        }
+    }
+}
+
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn the_two_titles_fill_the_same_slots_but_for_menu_against_scroll() {

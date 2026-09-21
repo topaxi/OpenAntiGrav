@@ -118,5 +118,14 @@ pub fn load_event(options: &Options, event_name: &str) -> Result<Loaded> {
     // function's own doc comment and `Options::laps_override`'s.
     resolved.laps_override = event.laps.filter(|&laps| laps > 0);
 
-    load(&resolved)
+    let mut loaded = load(&resolved)?;
+    // Resolved here, where the parsed `Document` is already in hand, rather
+    // than re-opened later at grading time - see `Loaded::campaign_2048_event`'s
+    // own doc for why this rides on `Loaded` instead of through `Session` the
+    // way Pulse/HD's own `campaign_cell` does.
+    loaded.campaign_2048_event = Some(Campaign2048Progress {
+        name: event.name.clone(),
+        objectives: oag_2048::campaign::event_objectives(&doc, &event),
+    });
+    Ok(loaded)
 }

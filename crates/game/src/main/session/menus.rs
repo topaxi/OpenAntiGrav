@@ -5,7 +5,7 @@ use log::{error, info, warn};
 
 use oag_display::display;
 use oag_game::render::{Renderer, VideoFormat};
-use oag_game::{audio, catalogue, movie, pilots, settings};
+use oag_game::{audio, boot, catalogue, movie, pilots, settings};
 use oag_physics::SpeedClass;
 use oag_ui::{marquee, menu, strings};
 
@@ -436,10 +436,17 @@ impl Session {
         // source arrived.
         renderer.set_space(skin.space());
         // The screen title's own face, when this title names a role for it -
-        // mirrors `rows_face` above, one widget over. `None` on both PSP
-        // titles today, a no-op here; see `capture::run`'s own call for why
-        // this has to happen on both the live and the headless path.
-        renderer.set_face_atlas(&self.gpu.device, &self.gpu.queue, shell.title_font.clone());
+        // mirrors `rows_face` above, one widget over. On both PSP titles,
+        // whose chrome names no `Title` role, this slot instead carries the
+        // `Default`-role atlas so `oag_ui::campaign::footer`'s
+        // `Draw::FacedText { role: "Default", .. }` can draw its own body
+        // face beside the unchanged `menu`-role primary - see
+        // `boot::fonts::face_atlas_slot`'s own doc. See `capture::run`'s own
+        // call for why this has to happen on both the live and the headless
+        // path.
+        let (face_atlas, face_role) =
+            boot::fonts::face_atlas_slot(shell.menu_skin, &shell.font, shell.title_font.clone());
+        renderer.set_face_atlas(&self.gpu.device, &self.gpu.queue, face_atlas, face_role);
         // The Fury backdrop's clouds, uploaded once per menu stage the same
         // way the sprite sheet is; the model that flies past them is built
         // below, from the same assets.
@@ -503,6 +510,7 @@ impl Session {
                 menu: model,
                 skin,
                 text_atlas,
+                default_atlas: shell.font.clone(),
                 frame: shell.frame.clone(),
                 marquee: marquee::Timer::default(),
                 // Opening the menus is not a page change: the front end's own

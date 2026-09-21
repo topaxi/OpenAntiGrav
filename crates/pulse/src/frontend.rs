@@ -197,12 +197,19 @@ pub const MENU_SKIN: &oag_title::MenuSkin = &oag_title::MenuSkin {
     list: None,
     // `helptext0`'s own `y="50"`, 18 below the first row's `y="32"` - the same
     // 18 every other `helptext`/row pair in `MainMenu_Definition.xml` steps by.
-    // `scale` is this project's own derived ratio, not authored on either
-    // widget - see `oag_title::HelpText::scale`'s own doc for the two
-    // differently-measured numbers it comes from.
+    // `scale` used to be `13.0 / 22.0`, a ratio this project derived from two
+    // differently-measured numbers because the subtitle drew through the
+    // `menu` role's own 22px atlas, the only one the menu stage's renderer
+    // loaded. `oag-game`'s menu stage now gives that renderer a second,
+    // `Default`-role atlas beside the unchanged `menu`-role primary (see
+    // `crates/game/src/boot/fonts.rs`'s `face_atlas_slot`), and routes this
+    // widget's own `Draw::Text` to it (`oag_ui::menu::rows::draw_text_rows`).
+    // `1.0` is that face's own native size, which is the 13px
+    // `docs/ui/menus-original.md` already measured - so this needs no
+    // derived ratio any more and no longer inherits its confidence 70.
     help_text: Some(oag_title::HelpText {
         offset_y: 18.0,
-        scale: 13.0 / 22.0,
+        scale: 1.0,
         color: 0xFFFF_FFFF,
     }),
 };

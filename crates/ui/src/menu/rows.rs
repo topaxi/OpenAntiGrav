@@ -386,16 +386,18 @@ fn draw_text_rows(
     if let (Some(subtitle), Some(Some(text))) = (skin.help_text(), page.subtitles.get(selected_row))
         && (first..first + visible).contains(&selected_row)
     {
-        out.push(Draw::Text {
-            x: margin_x,
-            y: first_row_y + (selected_row - first) as f32 * row_height + subtitle.offset_y,
-            scale: subtitle.scale,
-            color: subtitle.color,
-            border: None,
-            align: Align::Left,
-            text: text.clone(),
-            wrap_width: None,
-        });
+        // `Default`-role, not the row face this column otherwise draws in -
+        // see `oag_title::HelpText::scale`'s own doc for why the atlas
+        // changed under this widget rather than its scale.
+        out.push(Draw::in_role(
+            Some(crate::language::roles::DEFAULT),
+            margin_x,
+            first_row_y + (selected_row - first) as f32 * row_height + subtitle.offset_y,
+            subtitle.scale,
+            subtitle.color,
+            Align::Left,
+            text.clone(),
+        ));
     }
 
     // Under the last row *drawn* rather than at a fixed height, so it sits with

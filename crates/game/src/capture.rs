@@ -636,6 +636,16 @@ pub fn run(
                     &mut sprites,
                     &globals,
                     title,
+                    // `Default`-role, not `menu_font.unwrap_or(&font)`: this
+                    // measures `FE_CONFIRM`'s own shrink-to-fit, and
+                    // `NavigationLegend::draw` routes that text through the
+                    // `Default`-role atlas now (`Draw::in_role`, see
+                    // `boot::fonts::face_atlas_slot`) - mirrors
+                    // `crate::main::menu_stage::MenuStage`'s own
+                    // `default_measure`, which this capture-only path has to
+                    // match by hand rather than share, having no `MenuStage`
+                    // of its own to read `default_atlas` off.
+                    &|text| oag_ui::font::measure(&font, text),
                 )?;
                 (backdrop, video_format, list, space)
             } else if let Some(kind) = endrace_kind(page) {
@@ -782,11 +792,16 @@ pub fn run(
     if let Some(assets) = &fury_backdrop {
         renderer.set_fury_backdrop(&device, &queue, &assets.clouds);
     }
-    // `None` on both PSP titles, and on any capture whose draw list never
-    // reaches `oag_ui::menu::draw_list`/`picker::draw_list` in the first
-    // place - a no-op either way, and unconditional so a menu-page capture
-    // and the live window (`session::menus`, below) build the same picture.
-    renderer.set_face_atlas(&device, &queue, title_font.clone());
+    // On both PSP titles this loads the `Default`-role atlas rather than a
+    // title role, so `oag_ui::campaign::footer`'s `Draw::FacedText` draws
+    // the same mixed-case body face here as the live window does - see
+    // `boot::fonts::face_atlas_slot`. Unconditional, so a menu-page capture
+    // and the live window (`session::menus`) build the same picture whether
+    // or not this run's draw list ever reaches `oag_ui::menu::draw_list`/
+    // `picker::draw_list`.
+    let (face_atlas, face_role) =
+        crate::boot::fonts::face_atlas_slot(menu_skin, &font, title_font.clone());
+    renderer.set_face_atlas(&device, &queue, face_atlas, face_role);
 
     if let (Some(frames), Some(wanted)) = (
         movie.as_mut().and_then(|movie| movie.frames.as_mut()),

@@ -119,8 +119,48 @@ impl Draw {
         }
     }
 
-    /// A screen title: [`Self::FacedText`] when `role` is `Some`, the plain
-    /// [`Self::Text`] this build has always emitted otherwise.
+    /// [`Self::FacedText`] when `role` is `Some`, the plain [`Self::Text`]
+    /// this build has always emitted otherwise - the general form
+    /// [`Self::title`] and `oag_ui::campaign::footer`'s own `Default`-role
+    /// prompts are each one fixed shape of. Always `border: None`
+    /// and `wrap_width: None`: every caller so far draws a single
+    /// unbordered line, the same reason [`Self::title`] never took either.
+    #[must_use]
+    pub fn in_role(
+        role: Option<&'static str>,
+        x: f32,
+        y: f32,
+        scale: f32,
+        color: [f32; 4],
+        align: crate::frontend::Align,
+        text: String,
+    ) -> Self {
+        match role {
+            None => Self::Text {
+                x,
+                y,
+                scale,
+                color,
+                border: None,
+                align,
+                text,
+                wrap_width: None,
+            },
+            Some(role) => Self::FacedText {
+                role,
+                x,
+                y,
+                scale,
+                color,
+                border: None,
+                align,
+                text,
+                wrap_width: None,
+            },
+        }
+    }
+
+    /// A screen title: [`Self::in_role`] pinned to [`crate::frontend::Align::Left`].
     ///
     /// Shared by `crate::menu::draw_list` and `crate::picker::draw_list`,
     /// whose title pushes were one `Draw::Text` literal each before this
@@ -137,28 +177,6 @@ impl Draw {
         color: [f32; 4],
         text: String,
     ) -> Self {
-        match role {
-            None => Self::Text {
-                x,
-                y,
-                scale,
-                color,
-                border: None,
-                align: crate::frontend::Align::Left,
-                text,
-                wrap_width: None,
-            },
-            Some(role) => Self::FacedText {
-                role,
-                x,
-                y,
-                scale,
-                color,
-                border: None,
-                align: crate::frontend::Align::Left,
-                text,
-                wrap_width: None,
-            },
-        }
+        Self::in_role(role, x, y, scale, color, crate::frontend::Align::Left, text)
     }
 }
