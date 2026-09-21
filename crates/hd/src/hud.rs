@@ -140,11 +140,13 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     // `talons-matched/{00,01,03}.png` read a bare number - `100`, `100`, `98` -
     // with no `%` anywhere. See `oag_title::HudArt::shield_percent`.
     shield_percent: false,
-    // lane/2048-hud-font: measured. `Data\FE\Fonts\Definition.xml`'s English
-    // plugin names `<Font><Values name="HUD" ...Src="...\PulseHud.fnt">` and
-    // `HUDSmall` -> `small.fnt` (`docs/formats/hd-frontend.md`, lines
-    // 1562-1563). See `oag_title::HudArt::hud_font_role`. Single-field edit;
-    // the rest of this file is lane 3's.
+    // lane/2048-hud-font: measured. Every language plugin's own
+    // `definition.xml` (`DATA02`/`DATA03`) names
+    // `<Font><Values name="HUD" ...Src="Data\FE\Fonts\PulseHud.fnt">` and
+    // `HUDSmall` -> `Data\FE\Fonts\small.fnt` - `docs/formats/hd-frontend.md`'s
+    // "`menu_font` is `None`, and that is a measurement" section quotes the
+    // XML directly (lines 1555-1568). See `oag_title::HudArt::hud_font_role`.
+    // Single-field edit; the rest of this file is lane 3's.
     hud_font_role: "HUD",
     hud_small_font_role: Some("HUDSmall"),
 };
