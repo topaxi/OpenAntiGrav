@@ -126,6 +126,28 @@ fn each_campaign_carries_its_own_disc_entry_id() {
     assert_eq!(Campaign::Hd.entry_id(), "FE_RC_HD");
 }
 
+/// Pins the bug the advisor caught in the first version of this screen: a
+/// left-aligned entry name at the gold-medal label's own `x` ran past the
+/// Bracket's own midpoint and was cut by [`selector_outline`]'s own border.
+/// Each name is now drawn with [`Align::Centre`] at its own half's centre, so
+/// the anchor itself sitting inside that half is what the render actually
+/// needs - the align makes the drawn extent symmetric about it.
+#[test]
+fn each_entry_names_own_anchor_sits_inside_its_own_half_of_the_bracket() {
+    let [x, _y, width, _height] = BRACKET_RECT;
+    let half = width / 2.0;
+    let (fury_x, _) = FURY_ENTRY_NAME_POSITION;
+    let (hd_x, _) = HD_ENTRY_NAME_POSITION;
+    assert!(
+        fury_x >= x && fury_x <= x + half,
+        "Fury's own entry name anchor must sit inside the Bracket's left half"
+    );
+    assert!(
+        hd_x >= x + half && hd_x <= x + width,
+        "Hd's own entry name anchor must sit inside the Bracket's right half"
+    );
+}
+
 #[test]
 fn the_selector_outline_sits_in_the_left_half_of_the_bracket_for_fury() {
     let draws = selector_outline(Campaign::Fury);

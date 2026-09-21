@@ -169,14 +169,19 @@ const GOLD_MEDALS_LABEL_ID: &str = "RC_GM";
 /// (`<List name="campaignList"><Values x="159" y="-500">`) is off-screen by
 /// design (the file's own comment on that line reads `<!-- -500 for y so
 /// it's off screen!! -->`), there only to drive the widget's internal
-/// selection state, never meant to be drawn. **Chosen, not measured**: `x`
-/// reuses the same split [`FURY_GOLD_MEDALS_LABEL_POSITION`]/
-/// [`HD_GOLD_MEDALS_LABEL_POSITION`] already commit to (755/1395, half of
-/// [`BRACKET_RECT`]), and `y` sits above them, inside the Bracket, in the
-/// space the (undrawn) 3D flyer card would otherwise fill - see the module
-/// doc's "not drawn" note.
-const FURY_ENTRY_NAME_POSITION: (f32, f32) = (755.0, 610.0);
-const HD_ENTRY_NAME_POSITION: (f32, f32) = (1395.0, 610.0);
+/// selection state, never meant to be drawn. **Chosen, not measured**: each
+/// `x` is the centre of its own half of [`BRACKET_RECT`] (the same split
+/// [`CampaignSelection::pointer`]'s own click targets and
+/// [`selector_outline`] both use), drawn with [`Align::Centre`] rather than
+/// [`FURY_GOLD_MEDALS_LABEL_POSITION`]/[`HD_GOLD_MEDALS_LABEL_POSITION`]'s
+/// own left-aligned `x` - a left-aligned name at that anchor runs past the
+/// Bracket's own midpoint and is cut by [`selector_outline`]'s own border,
+/// caught by looking at the first capture rather than measured off anything.
+/// `y` sits above the medal labels, inside the Bracket, in the space the
+/// (undrawn) 3D flyer card would otherwise fill - see the module doc's "not
+/// drawn" note.
+const FURY_ENTRY_NAME_POSITION: (f32, f32) = (558.75, 610.0);
+const HD_ENTRY_NAME_POSITION: (f32, f32) = (1356.25, 610.0);
 
 /// The selected half's outline thickness and colour - [`BRACKET_RECT`] split
 /// at its own midpoint, the same split [`CampaignSelection::pointer`]'s own
@@ -442,36 +447,45 @@ pub fn draw_list(
         .find(|text| text.name.as_deref() == Some("ScreenTitle"))
         .map_or(0xffff_ffff, |text| text.color);
     let hand_placed = [
-        (SUBTITLE_POSITION, grey, strings.get_or_id(SUBTITLE_ID)),
+        (
+            SUBTITLE_POSITION,
+            grey,
+            strings.get_or_id(SUBTITLE_ID),
+            Align::Left,
+        ),
         (
             FURY_ENTRY_NAME_POSITION,
             grey,
             strings.get_or_id(Campaign::Fury.entry_id()),
+            Align::Centre,
         ),
         (
             HD_ENTRY_NAME_POSITION,
             grey,
             strings.get_or_id(Campaign::Hd.entry_id()),
+            Align::Centre,
         ),
         (
             FURY_GOLD_MEDALS_LABEL_POSITION,
             FURY_GOLD_MEDALS_LABEL_COLOR,
             strings.get_or_id(GOLD_MEDALS_LABEL_ID),
+            Align::Left,
         ),
         (
             HD_GOLD_MEDALS_LABEL_POSITION,
             grey,
             strings.get_or_id(GOLD_MEDALS_LABEL_ID),
+            Align::Left,
         ),
     ];
-    for ((x, y), color, content) in hand_placed {
+    for ((x, y), color, content, align) in hand_placed {
         out.push(Draw::Text {
             x,
             y,
             scale: 1.0,
             color: argb_to_rgba(color),
             border: None,
-            align: Align::Left,
+            align,
             text: content.to_string(),
             wrap_width: None,
         });

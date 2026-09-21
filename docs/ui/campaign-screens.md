@@ -1238,12 +1238,19 @@ String="FE_RC_HD">` resolve, off `DATA06`'s own
 [`oag_ui::campaign::selection::Campaign::entry_id`]. These are disc data, not
 invented: the disc's own string table names each entry, this build had just
 never drawn it. Drawn at `FURY_ENTRY_NAME_POSITION`/`HD_ENTRY_NAME_POSITION`
-(`(755, 610)`/`(1395, 610)`) - **chosen, not measured**: the list's own
-authored position is off screen by design (see the widget table above), so
-there is no authored on-screen position to read. `x` reuses the same split
-the disc's own `FuryGoldMedalsMiniText`/`HDGoldMedalsMiniText` already commit
-to (755/1395, half of `Bracket`'s own rect), and `y` sits above them, inside
-the Bracket, in the space the (undrawn) 3D flyer card would otherwise fill.
+(`(558.75, 610)`/`(1356.25, 610)`), `Align::Centre` - **chosen, not
+measured**: the list's own authored position is off screen by design (see
+the widget table above), so there is no authored on-screen position to read.
+Each `x` is the centre of its own half of `Bracket`'s own rect (the same
+split `CampaignSelection::pointer`'s own click targets and
+`selector_outline` both use), and `y` sits above the gold-medal labels,
+inside the Bracket, in the space the (undrawn) 3D flyer card would otherwise
+fill. **The first version of this fix left-aligned each name at the
+gold-medal label's own `x` (755/1395)** - at that anchor `"FURY CAMPAIGN"`
+runs past the Bracket's own midpoint and is cut by `selector_outline`'s own
+border, caught by looking at the resulting capture rather than measured off
+anything; centring on each half fixes it structurally, not by nudging a
+number.
 
 **The selector**: this screen authors no `<Image name="Selector">` at all,
 unlike `Grid Selection`/`Cell Selection`'s own (`oag_ui::campaign::draw`'s
@@ -1361,8 +1368,11 @@ animation - see "Drawing the two entries' own names, and the selector" above.
   reading - `Fury`'s own label is genuinely invisible (black text on black
   background, the disc's own authored colour, presumably legible against the
   undrawn flyer card in the real game; `Wipeout HD`'s own label is
-  `FEGlobals->HD_Grey` and visible). Screenshot:
-  `data/scratch/lane-hd-sel/shots/campaign-select-v4.png`, not committed.
+  `FEGlobals->HD_Grey` and visible), each entry name centred in its own half
+  of the Bracket rather than cut by the selector border. Screenshot:
+  `data/scratch/lane-hd-sel/shots/campaign-select-v5.png`, not committed
+  (`v4` was the left-aligned version the advisor caught, kept alongside it
+  for the before/after).
   Command:
   ```sh
   cargo run -p oag-game -- data/images/hdfury-ps3-eu-dec.iso \
