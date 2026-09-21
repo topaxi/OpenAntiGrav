@@ -563,7 +563,7 @@ the order a player sees it, with what each part rests on:
 | `Load Save Bootup` | left the tick it is entered: `StartEnabled="false"` on its one redirect, armed by a save check this build has nothing to check | `icon_save.gtf`, `VITA_AUTO_MSG` | authored, 92 |
 | `TitleScreen` | its own six button redirects, all to `GameModeChoice` | `Title_Screen.gtf` centred, `BOOT_PRESS_ANY` pulsing after its `delay="1.0"`, the EU legal footer through the `DirectEmbed` include, in `NEOSANS_BOLD` at its own 22-unit line height against `NEOSANS_BOLD_LARGE`'s 37 | authored, 92; the font-role ratio is read off the two `.fnt` headers |
 | `GameModeChoice` | left/right and cross on the pad, hover and click with a pointer; two taps on a mode (the second is the tick), only `FE_SP_CAMPAIGN` confirms | the four `<TouchButton>`s: `Blue2048` squares, the icon at its texture's own size, the label under it; `Grey2048` for the three network modes; the `Blue2048` block under the white header icon | authored, 92; tile/label/icon geometry measured off `08-game-mode-grid-clean.png`, 80; the `Orange2048` cursor ring is **chosen** |
-| `Home` | the same | its five `<TouchButton>`s; each destination is in an include this build does not load, so a tap says so and stays | authored, 92 |
+| `Home` | the same | its five `<TouchButton>`s; each destination now draws - see [Wired: `Home`'s five destinations draw](#wired-homes-five-destinations-draw-2026-09-21) | authored, 92 |
 | `newFEshell` (the campaign map) | d-pad to the nearest event, cross or a second click to launch; circle back to `GameModeChoice`, triangle to `Home` (the `<TouchHomeButton>`'s two targets, on buttons **chosen** - the widget names none) | `SP.xml`'s 115 events with a cell, on an even grid over the shell's own 1920x1088 `<TouchScroll>` canvas, plus a panel naming the selected event | the events, cells and canvas are authored ([2048-campaign.md](2048-campaign.md)); **the cell-to-pixel mapping is chosen, not measured** - `M_X`/`M_Y` are real `GameModeBase` fields the executable does read, but only into a raw struct offset (`0x2c4`/`0x2c8`); the DLC tiers' own hotspots read a *different*, still-unfound cached position (`+0x15c`/`+0x160`) that something else must derive from them ([frontend-campaign-map.md](../ghidra/functions/vita-2048-eu-v104/frontend-campaign-map.md)'s 2026-09-21 section), and a live capture confirms the real map is a hexagonal tessellation, not this square grid (`data/reference/2048-frontend/README.md`'s frames `12`-`14`, gitignored) |
 | `Launch 2048` | the map's and `<TouchCampaign>`'s own `redirect` | - | the disc's own name for leaving the front end; carries the event name to `oag_game::race::load_event` |
 
@@ -607,9 +607,7 @@ map and the event launch; `crates/ui/src/frontend/tests/wipeout2048.rs`
 does the same on a fixture with no disc.
 
 **Still open after this pass**: the intro's picture and length
-(`lane/2048-intro-mp4`); the `BootFlowCanvas` art; `Home`'s five
-destinations (`Team_`, `Community_`, `Profile_`, `Options_`,
-`Extras_Definition.xml` are read but not drawn); the campaign map's real
+(`lane/2048-intro-mp4`); the `BootFlowCanvas` art; the campaign map's real
 per-event pixel anchor (2026-09-21: `M_X`/`M_Y` are real `GameModeBase`
 fields, but what copies them into the position the DLC tiers' own hotspots
 actually read - `+0x15c`/`+0x160`, a different offset - is still unfound)
@@ -617,7 +615,80 @@ and the season title card's own asset (`A·G·R·C 2048`/`2049`/`2050`, seen
 live on Vita3K, not located in either package) - there is no 3D city
 backdrop to find, confirmed from the live capture too; the unlock graph
 (every event is offered, there being no save
-to read); the network modes.
+to read); the network modes. `Home`'s five destinations are resolved below.
+
+## Wired: `Home`'s five destinations draw (2026-09-21)
+
+`includes::FOLLOWED` now carries `Team_`, `Community_`, `Profile_`,
+`Options_` and `Extras_Definition.xml` (`Extras_Definition_EU.xml` on this
+package - `localised="true"`, the same territory switch `Bootup_Definition.xml`
+already goes through), and their bare screen names are in
+`oag_ui::frontend::wipeout2048::STATES` - closing the "screen this build does
+not load" gap every one of the five tiles hit before this pass. Reproduce:
+
+```sh
+just play 2048 --until team --press cross,cross,triangle,cross --ticks 40 --screenshot team.png
+```
+
+(`--press` ORs every named button into one held mask rather than replaying a
+sequence - see the note at the end of this section - so a multi-screen walk
+through screens with conflicting Left/Right priorities has to be driven from
+a test rather than the CLI; `crates/game/tests/vita_2048_boot_ground_truth.rs`
+does this for all five.)
+
+| Screen | Driven by | Drawn from | Standing |
+| --- | --- | --- | --- |
+| `team` | Left/Right cycles the team, Up/Down the craft slot, Cross cycles the skin list, Circle fires `select_button`'s own `redirect="PreviousScreen"` | header Image/Text (authored, 92); a team x craft-slot grid built from `oag_2048::race::NATIVE_TEAMS`/`SHIP_TYPES`, labelled with the disc's own idstrings (`AG_Systems2048`/`Auricom2048`/... and `FE_SHIP_COMBAT`/`FE_SHIP_AGILITY`/`FE_SHIP_SPEED`/`FE_SHIP_PROTO`, all confirmed in `english/entries.xml`); `teamskin_touch`'s own three-entry skin list | grid tile size/gap **chosen**, bounded inside `x` 16-414 (`teamskin_touch`'s own `x="430"`) and above `y="307"` (`TeamInfo`'s own `y`) - see `crates/ui/src/frontend/team.rs`'s module doc for why `TouchTeamGrid`'s own `teamgrid/` icon set is not drawn (native-code-populated, unwired into the sprite sheet); the `<Model name="ShipModel">` preview is not drawn (no 2D-front-end-to-3D-mesh renderer seam, the same gap `oag_ui::picker::slideshow`'s own `Model` sits on) |
+| `communityAdhocCheck` | `FE_COMMUNITY`'s **real** redirect target - `Home` never reaches `community` itself, which needs a live session | authored, 92 - the `FE_COMMUNITY_UNAVAILABLE_ADHOC` text and the tick back to `Home` | refused by note, the same standing `GameModeChoice`'s three network modes carry |
+| `profile` | generic touch grid | header Image/Text, arrow buttons to `profile_stats` | authored, 92; `ProfileTouchMain`'s own stat panel and the screen's `<Model>` preview are not drawn, both on the same native-populated/no-renderer-seam grounds `team` gives |
+| `OptionsCamera`/`OptionsAudio`/`OptionsControls`/`OptionsPilot` | Left/Right steps the panel's own control, Circle returns to `options` - **chosen, no widget on any of the four names a back button** | `options`'s own header and four buttons, drawn first (nested-not-sibling screens, see below), then the panel's own new widget kind: `Touchlist` (`CameraP1`/`Pilot Assist`/`Motion Sensor`) or `TouchSlider` (`Music Volume`/`SFX Volume`), `crates/ui/src/screen/settings.rs` | Camera and the two volumes feed `Frontend::camera_choice`/`music_choice`/`sfx_choice` (`None` until touched, applied once at `Launch Game` into `settings.graphics.camera_view`/`audio.music_volume`/`sfx_volume` - see `crate::main::session::frame`); Controls and Pilot draw and cycle and reach no setting this build has. Per-entry spacing across the widget's own one rect is **chosen** the same way the team grid's is. The picker's starting index is this build's own default, not `CameraP1`'s authored `default="OPT_CLOSE"` - see `options2048`'s module doc for why threading the live setting in was left open |
+| `2048extras`, `manual3D`, `extrasCredits` | generic touch grid; `manual3D`'s own tick is `redirect="PreviousScreen"` | header Image/Text, four real tiles (`<aTouchButton>`'s own tag-name typo drops the fifth, AR Museum, exactly the way a real player's build would - it is not a `<TouchButton>`) | authored, 92; the ship-unlock and season-recap movies the brief asked about are not named by any widget here - native-code driven, the same open gap `frontend-campaign-map.md` already records for the campaign map's own hotspot buttons, so nothing is played rather than a guessed path |
+
+**Home's own hub-versus-panel shape.** `optionsshell->options`'s four
+buttons sit at `x` 95-345; `OptionsCamera`/`OptionsAudio`/`OptionsControls`/
+`OptionsPilot` are **nested inside** `options`, not siblings of it, and their
+own `Touchlist`/`TouchSlider` sit at `x` 430-940 - non-overlapping, and
+neither carries a header or a back button of its own. Contrast
+`OptionsControlsConfig`, a true sibling page one level further in that does
+carry both. `Home`'s own `FE_OPT_PLUS` tile confirms this by jumping
+straight to `OptionsCamera`, never to `options` itself - read directly off
+`Definition.xml`.
+
+**A new back gesture: `redirect="PreviousScreen"`.** `Team_Definition.xml`'s
+`select_button` and `manual3D`'s own tick both author this literal target
+rather than a screen name, and nothing in this build read it before this
+pass - the two screens were simply stuck once entered generically. Resolved
+with a small stack (`TouchState::history`, pushed by
+`Frontend::redirect_touch` on every named forward hop, popped on
+`"PreviousScreen"`), which is also what makes `Team`'s and `Extras`' own
+sub-screens return to whichever tile sent them there rather than to `Home`
+by name.
+
+**One touch-tile bug found and fixed in the same pass.** The `GameModeChoice`
+toggle's "tapped again confirms through the tick" rule (`Frontend::activate_touch`)
+used to run on every screen, matched by *shape* - a chosen toggle plus a
+label-less redirect tile - rather than by screen name. `Team_Definition.xml`'s
+own `replay_unlock`/`replay_unlock_2` (`redirect="team_unlock_video"`, no
+label) fit that shape too, so a second tap on any of `team`'s own toggle
+buttons would have silently auto-fired one of them. Guarded to
+`GameModeChoice` alone now that a second screen exercises the generic path.
+
+**What `--press` actually does, for the next reader who tries a multi-screen
+`--until`.** `crates/game/src/main/args.rs::button_mask` ORs every named
+button into **one mask**, held on even ticks and released on odd ones - it is
+not a sequence. `--press cross,cross,triangle` does not mean "cross, then
+cross, then triangle"; it means cross+triangle held together, pulsed forever.
+That is harmless exactly where the two buttons' handlers never compete for
+the same tick (Triangle is checked only inside `newFEshell`'s own top-of-function
+special case, Cross everywhere else), which is why `cross,triangle` walks
+`Boot Connect` all the way to `Home`'s first tile - but `Home`'s own
+Left/Right-vs-Cross priority (`Frontend::update_touch`: Right, then Left,
+then Cross) means adding `right` to reach a later tile makes Right win on
+*every* generic touch screen the mask is held through, including
+`GameModeChoice`, and the walk never leaves it. A multi-step walk through
+different tiles needs a test driving per-tick input
+(`crates/game/tests/vita_2048_boot_ground_truth.rs::press_release`), not a
+single `--press` mask.
 
 ## See also
 

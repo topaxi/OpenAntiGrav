@@ -26,7 +26,9 @@ use oag_gameplay::input::button_from_name;
 use oag_gameplay::input::Button;
 pub use oag_tables::fexml::{Node, parse};
 
+mod settings;
 mod touch;
+pub use settings::{TouchList, TouchListEntry, TouchSlider};
 pub use touch::{Include, TouchButton};
 
 /// Container extensions a `Movie` widget's `src` may already carry.
@@ -356,6 +358,12 @@ pub struct Screen {
     /// `TouchButton` widgets in document order - Wipeout 2048's icon tiles,
     /// see [`TouchButton`]. Empty on every other title's screens.
     pub touch_buttons: Vec<TouchButton>,
+    /// `Touchlist` widgets in document order - Wipeout 2048's settings and
+    /// skin pickers, see [`TouchList`]. Empty on every other title's screens.
+    pub touch_lists: Vec<TouchList>,
+    /// `TouchSlider` widgets in document order, see [`TouchSlider`]. Empty on
+    /// every other title's screens.
+    pub touch_sliders: Vec<TouchSlider>,
     /// Whether the screen has a `DisplayLanguages` widget, which is what makes
     /// it the language picker.
     pub display_languages: bool,
@@ -703,6 +711,12 @@ impl Screens {
             "touchbutton" => screen
                 .touch_buttons
                 .push(self.touch_button_from_node(child, inner)),
+            "touchlist" => screen
+                .touch_lists
+                .push(self.touch_list_from_node(child, inner)),
+            "touchslider" => screen
+                .touch_sliders
+                .push(self.touch_slider_from_node(child, inner)),
             "displaylanguages" => screen.display_languages = true,
             "menu" => screen.menu = Some(self.menu_from_node(child, offset)),
             "viewport" => {

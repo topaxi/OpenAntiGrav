@@ -96,6 +96,8 @@ use oag_hd::frontend::states as hd_states;
 /// the map the grids lead to. See each module's own docs.
 mod campaign_map;
 mod faces;
+mod options2048;
+mod team;
 mod touch;
 mod wipeout2048;
 pub use campaign_map::{CampaignMap, MapEvent};

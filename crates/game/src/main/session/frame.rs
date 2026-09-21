@@ -81,6 +81,38 @@ impl Session {
                     warn!("could not save the chosen language: {e:#}");
                 }
             }
+            // Wipeout 2048's own Team/Options screens, read the same "only
+            // if the player actually touched it" way the language above is -
+            // `None` on every title without a touch front end, and on this
+            // one until `Home`'s own tiles are visited at all. Applied
+            // before `open_menus` below, which is what seeds the RACE/REMIX
+            // pages' own TEAM row and the Team screen's campaign-launch
+            // team from `settings.race.team`/`variant` - after it, the row
+            // would already be built off the untouched value. See
+            // `oag_ui::frontend::team`'s and `::options2048`'s own module
+            // docs for what each of these carries and why the rest (skin,
+            // pilot assist, motion sensor) is drawn and not read here.
+            if let Stage::Frontend(stage) = &self.stage {
+                if let Some((team, variant)) = stage.frontend.team_choice() {
+                    self.settings.race.team = team.to_string();
+                    self.settings.race.variant = variant.to_string();
+                }
+                if let Some(index) = stage.frontend.camera_choice() {
+                    self.settings.graphics.camera_view = match index {
+                        0 => display::CameraView::Close,
+                        2 => display::CameraView::Internal,
+                        _ => display::CameraView::Far,
+                    };
+                }
+                if let Some(percent) = stage.frontend.music_choice() {
+                    self.settings.audio.music_volume =
+                        oag_game::audio::Volume::try_from(percent).unwrap_or_default();
+                }
+                if let Some(percent) = stage.frontend.sfx_choice() {
+                    self.settings.audio.sfx_volume =
+                        oag_game::audio::Volume::try_from(percent).unwrap_or_default();
+                }
+            }
             let hint_strings = strings::project_table(self.settings.language.as_deref());
             // What Wipeout 2048's own front end asked for, if it was that
             // title: its `Launch 2048` carries a request where every other
