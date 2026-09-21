@@ -120,11 +120,12 @@ fn read_footer(
 pub fn static_footer_overlay(
     campaign: &Campaign,
     faces: &FaceScales,
+    measure: &dyn Fn(&str) -> f32,
 ) -> Vec<oag_ui::frontend::Draw> {
     let mut overlay = campaign
         .nav_legend
         .as_ref()
-        .map_or_else(Vec::new, |legend| legend.draw(faces));
+        .map_or_else(Vec::new, |legend| legend.draw(faces, measure));
     if let Some(ticker) = &campaign.ticker {
         overlay.extend(oag_ui::campaign::footer::ticker_draw(
             ticker,

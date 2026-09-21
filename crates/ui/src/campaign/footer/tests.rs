@@ -66,7 +66,7 @@ fn the_navigation_controller_s_four_prompts_resolve_through_the_string_table() {
     let strings = StringTable::from_xml(ENTRIES);
     let legend = NavigationLegend::read(&root, &globals(), &strings)
         .expect("Skin.xml authors a NavigationController");
-    let draws = legend.draw(&FaceScales::default());
+    let draws = legend.draw(&FaceScales::default(), &|_| 100.0);
     assert_eq!(draws.len(), 4);
     let texts: Vec<&str> = draws
         .iter()
@@ -85,6 +85,45 @@ fn the_navigation_controller_s_four_prompts_resolve_through_the_string_table() {
         };
         assert!((*y - 252.0).abs() < f32::EPSILON);
     }
+}
+
+/// `Confirm` overlapping `Back`'s own button glyph at the authored,
+/// left-aligned `x="368"` was measured live
+/// (`data/scratch/lane-pulse/shots/crop-legend2-zoom.png`) - this pins the
+/// fix: `Confirm` draws right-aligned, ending a few pixels short of the
+/// back glyph's own `x="415"`, not left-aligned at its own authored start.
+#[test]
+fn confirm_ends_before_the_back_glyph_rather_than_starting_at_its_own_authored_x() {
+    let root = parse(XML);
+    let strings = StringTable::from_xml(ENTRIES);
+    let legend = NavigationLegend::read(&root, &globals(), &strings).expect("controller");
+    let draws = legend.draw(&FaceScales::default(), &|_| 100.0);
+    let Draw::Text {
+        x: confirm_x,
+        align: confirm_align,
+        ..
+    } = &draws[1]
+    else {
+        unreachable!("index 1 is FE_CONFIRM - see the fixture's own document order");
+    };
+    assert_eq!(*confirm_align, Align::Right);
+    assert!(
+        *confirm_x < 415.0,
+        "Confirm's own right edge ({confirm_x}) must end before the back glyph's x=415, \
+         or nothing was fixed"
+    );
+    // `ControlTextBack`'s own word is untouched - it had room in the live
+    // capture already, so it still starts at its own authored x.
+    let Draw::Text {
+        x: back_x,
+        align: back_align,
+        ..
+    } = &draws[3]
+    else {
+        unreachable!("index 3 is FE_BACK");
+    };
+    assert_eq!(*back_align, Align::Left);
+    assert_eq!(*back_x, 435.0);
 }
 
 #[test]
@@ -110,8 +149,8 @@ fn no_tips_draws_nothing() {
         font: "small".to_string(),
         color: [1.0, 1.0, 1.0, 1.0],
     };
-    let draws = ticker_draw(&layout, 0.0, &[], &FaceScales::default(), &|_| 100.0);
-    assert!(draws.is_empty());
+    let draw = ticker_draw(&layout, 0.0, &[], &FaceScales::default(), &|_| 100.0);
+    assert!(draw.is_none());
 }
 
 #[test]
@@ -122,9 +161,9 @@ fn one_tip_starts_flush_against_the_viewport_s_own_left_edge_at_zero_elapsed() {
         color: [1.0, 1.0, 1.0, 1.0],
     };
     let tips = vec!["Why don't you try out the Speed Lap events?".to_string()];
-    let draws = ticker_draw(&layout, 0.0, &tips, &FaceScales::default(), &|_| 100.0);
-    assert!(!draws.is_empty());
-    let Draw::Text { x, y, text, .. } = &draws[0] else {
+    let draw =
+        ticker_draw(&layout, 0.0, &tips, &FaceScales::default(), &|_| 100.0).expect("one tip");
+    let Draw::Text { x, y, text, .. } = &draw else {
         unreachable!("ticker_draw only ever emits Draw::Text");
     };
     assert_eq!(*x, 85.0);
@@ -141,13 +180,34 @@ fn scrolling_moves_the_tip_left_at_ticker_speed() {
     };
     let tips = vec!["a fixed-width tip".to_string()];
     let measure = |_: &str| 100.0;
-    let at_zero = ticker_draw(&layout, 0.0, &tips, &FaceScales::default(), &measure);
-    let at_one = ticker_draw(&layout, 1.0, &tips, &FaceScales::default(), &measure);
-    let Draw::Text { x: x0, .. } = &at_zero[0] else {
+    let at_zero = ticker_draw(&layout, 0.0, &tips, &FaceScales::default(), &measure).expect("t0");
+    let at_one = ticker_draw(&layout, 1.0, &tips, &FaceScales::default(), &measure).expect("t1");
+    let Draw::Text { x: x0, .. } = &at_zero else {
         unreachable!()
     };
-    let Draw::Text { x: x1, .. } = &at_one[0] else {
+    let Draw::Text { x: x1, .. } = &at_one else {
         unreachable!()
     };
     assert!((x0 - x1 - TICKER_SPEED).abs() < f32::EPSILON);
+}
+
+/// The clip mechanism this pass added needs an index into the *flattened*
+/// draw list, not a value out of `ticker_draw` alone - `CampaignStage::ticker_draw`
+/// (in `oag-game`) finds it by equality against the returned `Draw`, so a
+/// tip's own draw has to compare equal to itself across two calls with the
+/// same inputs for that lookup to work at all. Pins the assumption directly,
+/// since `Draw` deriving `PartialEq` is a fact this module leans on rather
+/// than states anywhere else.
+#[test]
+fn the_same_inputs_produce_an_equal_draw_for_the_index_lookup_to_find() {
+    let layout = TickerLayout {
+        viewport: [85.0, 235.0, 370.0, 32.0],
+        font: "small".to_string(),
+        color: [1.0, 1.0, 1.0, 1.0],
+    };
+    let tips = vec!["a fixed-width tip".to_string()];
+    let measure = |_: &str| 100.0;
+    let a = ticker_draw(&layout, 3.0, &tips, &FaceScales::default(), &measure);
+    let b = ticker_draw(&layout, 3.0, &tips, &FaceScales::default(), &measure);
+    assert_eq!(a, b);
 }

@@ -201,3 +201,20 @@ read), `crates/game/src/main/campaign_stage.rs` and
   collide with `Target0`'s own row if drawn unconditionally, and neither
   mode has a raw zone/kill count anywhere in `oag_game::records::Record` to
   read at all; both are real gaps, not implemented this pass.
+- **This whole screen renders every label upper-case** (`SPEED CLASS` for
+  the reference's `Speed class`, and `CONFIRM` for `Confirm`) - not
+  something `oag_ui::campaign` can fix on its own. The menu/campaign
+  render path loads exactly one font atlas (`shell.title_font`); `"default"`/
+  `"small"` are scale multipliers on that same atlas, not switches to a
+  genuinely different, compact, mixed-case face, and `Draw::FacedText`'s
+  own `role` is not checked against anything today - the one alternate
+  atlas that ever loads is the `Title` role, not a body face. Fixing this
+  needs a second, correctly-sized atlas wired into the menu stage, a change
+  well outside this crate. See `docs/ui/campaign-screens.md`'s own
+  "Two defects... fixed same day" section for the full trace.
+- **`AI difficulty (Medium)` reads `CHANGE DIFFICULTY`** - a pre-existing
+  label (`DifficultyButton`'s own `string="Change Difficulty"`, predating
+  this lane) rather than the original's own template showing the current
+  rung. Left as-is on the team lead's own instruction pending the atlas fix
+  above, which would make the original's own wording legible in the first
+  place.

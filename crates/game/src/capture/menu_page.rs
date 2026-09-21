@@ -632,6 +632,8 @@ pub(super) fn campaign_page(
     // own doc for why a still needs this too, not only the live session.
     fallback_globals: &[(&str, &str)],
     title: &'static oag_title::Title,
+    // The `Confirm`/`Back` fit-to-gap shrink's own text-width function.
+    measure: &dyn Fn(&str) -> f32,
 ) -> Result<Vec<oag_ui::frontend::Draw>> {
     let campaign = crate::campaign::load(
         archives,
@@ -643,11 +645,10 @@ pub(super) fn campaign_page(
         title,
     )
     .context("this source has no Race Campaign to show")?;
-    // No per-session state to read a tip rotation off of, the same gap
-    // `circuit_names` below already has - see
-    // `crate::campaign::static_footer_overlay`. Read before `campaign.sprites`
-    // moves out below.
-    let footer_overlay = crate::campaign::static_footer_overlay(&campaign, &faces);
+    // No per-session tip rotation, the same gap `circuit_names` below has -
+    // see `crate::campaign::static_footer_overlay`. Read before
+    // `campaign.sprites` moves out below.
+    let footer_overlay = crate::campaign::static_footer_overlay(&campaign, &faces, measure);
     *sprites = campaign.sprites;
     let is_hd = title.name == oag_hd::TITLE.name;
     // **HD's own `Track Line` fold is not built here.** `CircuitNames::choose`

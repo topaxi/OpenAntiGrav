@@ -1237,6 +1237,70 @@ ticker's own scroll speed, the `NavigationController`'s per-screen gate and
 `Cell Help`'s own animation timeline are all still open at PPSSPP, only
 closed against this build's own picture and behaviour.
 
+### Two defects, found by comparing this pass's own capture against `cellselect-grid0_3_2.png` directly, fixed same day
+
+The section above closed against this build's own live behaviour, not the
+reference frame - side by side, `PODIUM-line6-line7-gold-medal.png` showed
+two things a player sees at once that neither `oag-ui`'s own tests nor a
+solo look at the new draw caught:
+
+1. **The ticker bled past its own viewport.** `TickerLayout::read`'s
+   `[85, 235, 370, 32]` was read correctly but never enforced - `ticker_draw`
+   drew unclipped, so its text ran from screen `x=0` straight across the
+   pilot-tag tab on `Cell Selection`'s own footer. Fixed by routing the
+   ticker's own `Draw::Text` through `Renderer::render_with`'s existing
+   `clip: Option<(usize, f32, f32)>` - the same mechanism
+   `crate::marquee`'s row-value scroll already clips itself with, keyed on
+   the draw's own index in the *flattened* list rather than on `y`.
+   `ticker_draw` now returns at most one `Draw` (`Option<Draw>`, not
+   `Vec<Draw>`) rather than up to two - the earlier double-copy trick for a
+   seamless wrap only works unclipped, so the honest trade is a brief,
+   real gap at each wrap instead of a seam this build cannot clip away
+   (see `oag_ui::campaign::footer::ticker_draw`'s own doc). Confirmed live,
+   `data/scratch/lane-pulse/shots/crop-ticker-left.png`: the text now cuts
+   cleanly at the tab's own edge.
+2. **`Confirm` ran into both button glyphs beside it.** `ControlTextConfirm`
+   authors no `font=` in `Skin.xml`, and this crate's fallback (`"Default"`,
+   13px) draws through the same single loaded menu-face atlas every other
+   campaign-screen label does - wider per glyph than whatever compact face
+   authored `Confirm`'s own 47-native-pixel gap to the back button. No
+   available role fit it from either end (`crop-legend2-zoom.png`/
+   `crop-legend3-zoom.png`), so `NavigationLegend` now right-aligns
+   `Confirm` to end just short of the back glyph and shrinks its own scale
+   only if that still does not clear the confirm glyph on its other side -
+   both **chosen, not measured**, since nothing on disc says where the
+   word should end or how far it may shrink. Confirmed live,
+   `data/scratch/lane-pulse/shots/FIXED-cellselect-ticker-clipped-legend-fit.png`.
+
+**Not fixed, and now written down rather than silently left**: neither
+defect's *root cause* is reachable from this crate. This build loads
+exactly one font atlas for the whole menu/campaign path
+(`shell.title_font`/`shell.menu_font`, the boot log's own "menu font
+`Pulse_20.fnt` (role `menu`): line height 22") and `"default"`/`"small"`
+are multipliers on that one atlas, not switches to a genuinely different,
+compact, mixed-case face - `Draw::FacedText`'s own `role` is not even
+checked against anything (`crates/game/src/render.rs`'s own comment: "the
+role is what chose which atlas `set_face_atlas` loaded... nothing here
+re-checks it against `role`"), and the one alternate atlas that ever loads
+is the `Title` role, not a body face. Two consequences, both left open:
+
+- **Every label on this screen still renders upper-case** (`SPEED CLASS`,
+  `MOA THERMA WHITE`, `CONFIRM`) where the reference shows mixed case
+  (`Speed class`, `Talon's Junction White`, `Confirm`) - pre-existing,
+  present before this lane and on every `Line1`..`8`/`Title`/`Track Line`
+  label already, not only the two widgets this pass added. Fixing it needs
+  a second, correctly-sized atlas loaded for the menu stage, not a role
+  string chosen differently in `oag_ui::campaign`.
+- **`AI difficulty (Medium)` reads `CHANGE DIFFICULTY`** on this build - a
+  pre-existing label (`DifficultyButton`'s own authored `string="Change
+  Difficulty"` in `CellMode_Definition.xml`, drawn through
+  `oag_ui::campaign::draw`'s generic `_ => text.string.clone()` fallback
+  that predates this lane) rather than the original's own template showing
+  the current rung. Left as-is on the team lead's own instruction; the
+  string and its mechanism are named here for whoever picks up the atlas
+  work above, since fixing the case issue would make this one legible
+  without also fixing the missing rung substitution.
+
 ## Open
 
 - ~~The scrolling tip ticker and the button-legend footer row are still not

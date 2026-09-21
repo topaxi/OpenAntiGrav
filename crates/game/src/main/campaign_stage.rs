@@ -146,31 +146,40 @@ impl CampaignStage {
     pub(crate) fn nav_legend_draw(
         &self,
         faces: &oag_ui::picker::FaceScales,
+        measure: &dyn Fn(&str) -> f32,
     ) -> Vec<oag_ui::frontend::Draw> {
         self.nav_legend
             .as_ref()
-            .map_or_else(Vec::new, |legend| legend.draw(faces))
+            .map_or_else(Vec::new, |legend| legend.draw(faces, measure))
     }
 
-    /// The ticker's own draw list at its current clock - or empty when
-    /// this source authors no ticker at all, or nothing is honestly known
-    /// to rotate through yet ([`Self::ticker_tips`]).
+    /// The ticker's own draw at its current clock - `None` when this source
+    /// authors no ticker at all, nothing is honestly known to rotate
+    /// through yet ([`Self::ticker_tips`]), or the clock is between two
+    /// tips (see `oag_ui::campaign::footer::ticker_draw`'s own doc).
     #[must_use]
     pub(crate) fn ticker_draw(
         &self,
         faces: &oag_ui::picker::FaceScales,
         measure: &dyn Fn(&str) -> f32,
-    ) -> Vec<oag_ui::frontend::Draw> {
-        let Some(ticker) = &self.ticker else {
-            return Vec::new();
-        };
+    ) -> Option<oag_ui::frontend::Draw> {
         oag_ui::campaign::footer::ticker_draw(
-            ticker,
+            self.ticker.as_ref()?,
             self.ticker_elapsed,
             &self.ticker_tips(),
             faces,
             measure,
         )
+    }
+
+    /// The ticker's own clip window, `(left, right)` in screen space - what
+    /// a caller needs to build `Renderer::render_with`'s `clip` tuple once
+    /// it has found [`Self::ticker_draw`]'s own index in the flattened draw
+    /// list. `None` on a source with no ticker at all.
+    #[must_use]
+    pub(crate) fn ticker_clip_bounds(&self) -> Option<(f32, f32)> {
+        let [x, _, width, _] = self.ticker.as_ref()?.viewport;
+        Some((x, x + width))
     }
 
     /// Which tip strings the ticker honestly has to show - the `TKR_NO*`

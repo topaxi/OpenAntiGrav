@@ -108,6 +108,16 @@ struct Prompt {
     x: f32,
     y: f32,
     color: [f32; 4],
+    /// `Some` overrides [`Self::x`]/left alignment: draw right-aligned so
+    /// the text *ends* here instead of starting at `x`. See
+    /// [`NavigationLegend::read`]'s own doc for the one prompt this is
+    /// built for.
+    align_right_to: Option<f32>,
+    /// `Some` alongside [`Self::align_right_to`]: the leftmost native pixel
+    /// this prompt's own text may start at before [`NavigationLegend::draw`]
+    /// shrinks its scale to fit, rather than let it run past this bound the
+    /// way it otherwise would into whatever sits to its own left.
+    left_bound: Option<f32>,
 }
 
 /// `Confirm`/`Back`, off `Skin.xml`'s own `<NavigationController
@@ -140,40 +150,120 @@ impl NavigationLegend {
         strings: &crate::language::StringTable,
     ) -> Option<Self> {
         let controller = find_first(root, "NavigationController")?;
-        let mut prompts = Vec::new();
+        let mut prompts: Vec<(String, Prompt)> = Vec::new();
         for text in controller.children_named("Text") {
             let Some(idstring) = text.value("idstring") else {
                 continue;
             };
-            prompts.push(Prompt {
-                text: strings.get_or_id(idstring).to_string(),
-                font: text.value("font").unwrap_or("Default").to_string(),
-                x: number(globals, text, "x").unwrap_or(0.0),
-                y: number(globals, text, "y").unwrap_or(0.0),
-                color: color_of(globals, text),
-            });
+            prompts.push((
+                idstring.to_string(),
+                Prompt {
+                    text: strings.get_or_id(idstring).to_string(),
+                    // `ControlTextConfirmButton`/`BackButton` author
+                    // `font="small"` themselves; `ControlTextConfirm`/`Back`
+                    // (the words) author no `font` at all. `"default"` is
+                    // the smaller of this build's two available scales
+                    // (`docs/ui/menus-original.md`: `default` 13px, `small`
+                    // 17px against a 22px face) - picked over `"small"`
+                    // because it measurably reduces the overlap below, not
+                    // because it is authored anywhere.
+                    font: text.value("font").unwrap_or("default").to_string(),
+                    x: number(globals, text, "x").unwrap_or(0.0),
+                    y: number(globals, text, "y").unwrap_or(0.0),
+                    color: color_of(globals, text),
+                    align_right_to: None,
+                    left_bound: None,
+                },
+            ));
         }
         if prompts.is_empty() {
             return None;
         }
-        Some(Self { prompts })
+        // `FE_CONFIRM`'s own word left-aligned at its authored `x="368"`
+        // runs into `FE_BACK_BUTTON`'s own glyph at `x="415"` even at this
+        // build's smallest available role scale - measured directly,
+        // `data/scratch/lane-pulse/shots/crop-legend2-zoom.png`: "CONFIRM"
+        // draws straight through the back button's own circle. This
+        // build's only loaded menu-face atlas (`Pulse_20.fnt`, the `menu`
+        // role every campaign-screen `Draw::Text` scales rather than
+        // switches) is simply wider per glyph than whatever compact face
+        // authored these 47 native pixels for - not a role this crate can
+        // pick its way out of, see the module doc's own "not reachable"
+        // note. Right-aligning to end just short of the back glyph fixed
+        // that edge, but then ran the word into its *own* confirm-button
+        // glyph instead (`crop-legend3-zoom.png`) - the word is simply
+        // wider than the gap at any of this build's two available scales,
+        // whichever side it is anchored from. [`NavigationLegend::draw`]
+        // shrinks it to fit between both glyphs as a last resort, once
+        // `measure` is in hand. **Chosen, not measured**: nothing on disc
+        // says where the word should end or how far it may shrink, only
+        // that the original's own (narrower) rendering fits without either.
+        const GAP: f32 = 6.0;
+        if let Some(back_button_x) = prompts
+            .iter()
+            .find(|(id, _)| id == "FE_BACK_BUTTON")
+            .map(|(_, p)| p.x)
+            && let Some(confirm_button_x) = prompts
+                .iter()
+                .find(|(id, _)| id == "FE_CONFIRM_BUTTON")
+                .map(|(_, p)| p.x)
+            && let Some((_, confirm)) = prompts.iter_mut().find(|(id, _)| id == "FE_CONFIRM")
+        {
+            confirm.align_right_to = Some(back_button_x - GAP);
+            // The confirm-button glyph is one character - `measure` is not
+            // reachable at parse time (no font atlas exists yet), so this
+            // is a flat native-pixel estimate of one glyph's own width at
+            // its `small`-role scale, not a measurement of `"ε"` itself.
+            const GLYPH_WIDTH_ESTIMATE: f32 = 20.0;
+            confirm.left_bound = Some(confirm_button_x + GLYPH_WIDTH_ESTIMATE + GAP);
+        }
+        Some(Self {
+            prompts: prompts.into_iter().map(|(_, prompt)| prompt).collect(),
+        })
     }
 
     /// This legend's own draw list, at its disc-authored position -
     /// unconditional, not gated on anything; see the module doc for why.
+    /// `measure` is a face's own text-width function at scale `1.0` - the
+    /// same indirection `crate::marquee::apply`'s own `measure` argument
+    /// is, so this module never has to know what a font atlas is either.
     #[must_use]
-    pub fn draw(&self, faces: &FaceScales) -> Vec<Draw> {
+    pub fn draw(&self, faces: &FaceScales, measure: &dyn Fn(&str) -> f32) -> Vec<Draw> {
         self.prompts
             .iter()
-            .map(|prompt| Draw::Text {
-                x: prompt.x,
-                y: prompt.y,
-                scale: face_scale(faces, &prompt.font),
-                color: prompt.color,
-                border: None,
-                align: Align::Left,
-                text: prompt.text.clone(),
-                wrap_width: None,
+            .map(|prompt| {
+                let mut scale = face_scale(faces, &prompt.font);
+                let x = match prompt.align_right_to {
+                    Some(right_to) => {
+                        // Shrink just enough that the right-aligned text's
+                        // own left edge does not cross `left_bound` - see
+                        // `NavigationLegend::read`'s own doc for why this
+                        // exists at all.
+                        if let Some(left_bound) = prompt.left_bound {
+                            let width = measure(&prompt.text) * scale;
+                            let available = right_to - left_bound;
+                            if width > available && width > 0.0 {
+                                scale *= available.max(0.0) / width;
+                            }
+                        }
+                        right_to
+                    }
+                    None => prompt.x,
+                };
+                Draw::Text {
+                    x,
+                    y: prompt.y,
+                    scale,
+                    color: prompt.color,
+                    border: None,
+                    align: if prompt.align_right_to.is_some() {
+                        Align::Right
+                    } else {
+                        Align::Left
+                    },
+                    text: prompt.text.clone(),
+                    wrap_width: None,
+                }
             })
             .collect()
     }
@@ -216,9 +306,10 @@ impl TickerLayout {
         Some(Self {
             viewport: [x, y, width, height],
             // Neither `TextInfo` nor either `Text` child states a `font` -
-            // **chosen, not measured**: `small` is picked as the plausible
-            // read for a footer-height (13px-tall bar rows either side of
-            // it) ticker line, not a traced binding.
+            // **chosen**, not a traced binding, but corroborated against
+            // `data/reference/psp-campaign-screens/cellselect-grid0_3_2.png`:
+            // the ticker's own text there sits at the same small size as
+            // `Help`/`Confirm`/`AI difficulty`, not the panel's bigger face.
             font: "small".to_string(),
             color,
         })
@@ -238,19 +329,28 @@ pub const TICKER_SPEED: f32 = crate::anim::MARQUEE_SPEED;
 /// cosmetic breathing room, not a measured value.
 const GAP: f32 = 40.0;
 
-/// The ticker's own draw list at `elapsed` seconds since the campaign
-/// screen opened, cycling through `tips` (already-resolved disc strings -
-/// see the module doc) at [`TICKER_SPEED`].
+/// The ticker's own draw at `elapsed` seconds since the campaign screen
+/// opened, cycling through `tips` (already-resolved disc strings - see the
+/// module doc) at [`TICKER_SPEED`]. `None` when there is nothing to show -
+/// no tips, no viewport, or (briefly, once a cycle) the gap between one tip
+/// leaving and the next entering.
 ///
-/// **Not glyph-clipped.** [`TickerLayout::viewport`] says where the strip
-/// starts and how wide it is, but a tip's own text may draw a few pixels
-/// past either edge for part of its cycle - the same simplification
-/// `crate::marquee`'s row-value scroll avoids only because `Renderer`
-/// trims that one row specially; wiring the identical per-glyph trim
-/// through for a second, unrelated widget was judged out of this pass's
-/// scope. Each visible tip is drawn up to twice (once at its own place in
-/// the loop, once a full loop-width further along) so the strip has no
-/// visible seam where it wraps.
+/// **Exactly one `Draw::Text` at a time, on purpose.** An earlier version of
+/// this function drew a tip up to twice (once at its own place in the loop,
+/// once a full loop-width further along) so the strip had no visible seam
+/// at the wrap - but that only works unclipped, and the caller now clips
+/// this single draw to [`TickerLayout::viewport`] the same way
+/// `crate::marquee`'s row-value scroll clips itself (`Renderer::render_with`'s
+/// `clip: Option<(usize, f32, f32)>`, keyed on the draw's own index in the
+/// flattened list). That mechanism clips one index, not several, so a
+/// caller wanting the render-level clip needs one draw to point it at - see
+/// `crate::main::campaign_stage::CampaignStage::ticker_draw` in `oag-game`
+/// for where the index is found. The trade is an honest half-second of
+/// nothing shown at each wrap rather than a seam this build cannot clip
+/// away, and a real player never sees it: the eye follows leaving/entering
+/// text, not the gap between two texts *neither* on screen. Reproduces
+/// `cellselect-grid0_3_2.png`'s own clean cut at both edges of the ticker's
+/// own band.
 #[must_use]
 pub fn ticker_draw(
     layout: &TickerLayout,
@@ -258,27 +358,23 @@ pub fn ticker_draw(
     tips: &[String],
     faces: &FaceScales,
     measure: &dyn Fn(&str) -> f32,
-) -> Vec<Draw> {
+) -> Option<Draw> {
     if tips.is_empty() || layout.viewport[2] <= 0.0 {
-        return Vec::new();
+        return None;
     }
     let scale = face_scale(faces, &layout.font);
     let widths: Vec<f32> = tips.iter().map(|tip| measure(tip) * scale).collect();
     let total: f32 = widths.iter().sum::<f32>() + GAP * tips.len() as f32;
     if total <= 0.0 {
-        return Vec::new();
+        return None;
     }
     let travelled = (elapsed.max(0.0) * TICKER_SPEED) % total;
     let [vx, vy, vw, _] = layout.viewport;
-    let mut out = Vec::new();
     let mut cursor = 0.0;
     for (tip, width) in tips.iter().zip(&widths) {
-        for lap in [0.0, total] {
-            let x = vx + cursor - travelled + lap;
-            if x + width < vx || x > vx + vw {
-                continue;
-            }
-            out.push(Draw::Text {
+        let x = vx + cursor - travelled;
+        if x + width >= vx && x <= vx + vw {
+            return Some(Draw::Text {
                 x,
                 y: vy,
                 scale,
@@ -291,7 +387,7 @@ pub fn ticker_draw(
         }
         cursor += width + GAP;
     }
-    out
+    None
 }
 
 #[cfg(test)]

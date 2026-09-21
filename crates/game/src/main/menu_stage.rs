@@ -499,6 +499,11 @@ impl MenuStage {
         // both are plain 2D widget draws off `CellMode_Definition.xml`, the
         // same pass a picker's own body uses without the 3D tail.
         if let Some(campaign) = self.campaign.as_ref() {
+            // Set by the non-HD arm below, when this frame draws one at
+            // all - what the clip lookup after `flatten` searches for.
+            // HD/Fury draws no ticker of its own yet, so this stays `None`
+            // on that branch.
+            let mut ticker_draw: Option<Draw> = None;
             // Wipeout HD/Fury draws a completely different screen behind the
             // same two names - see `oag_ui::campaign::hd`'s own module doc.
             let layers = if campaign.is_hd() {
@@ -552,8 +557,9 @@ impl MenuStage {
                 let measure = |text: &str| font::measure(&self.text_atlas, text);
                 match &campaign.screen {
                     crate::campaign_stage::Screen::Grid(model) => {
-                        let footer_overlay =
-                            campaign.ticker_draw(&campaign.grid_layout().faces, &measure);
+                        let ticker = campaign.ticker_draw(&campaign.grid_layout().faces, &measure);
+                        ticker_draw = ticker.clone();
+                        let footer_overlay: Vec<Draw> = ticker.into_iter().collect();
                         oag_ui::campaign::grid_draw_list(
                             model,
                             campaign.grid_layout(),
@@ -568,8 +574,10 @@ impl MenuStage {
                     }
                     crate::campaign_stage::Screen::Cell { model, .. } => {
                         let faces = &campaign.cell_layout().faces;
-                        let mut footer_overlay = campaign.nav_legend_draw(faces);
-                        footer_overlay.extend(campaign.ticker_draw(faces, &measure));
+                        let mut footer_overlay = campaign.nav_legend_draw(faces, &measure);
+                        let ticker = campaign.ticker_draw(faces, &measure);
+                        ticker_draw = ticker.clone();
+                        footer_overlay.extend(ticker);
                         // `Cell Help`'s own static overlay - drawn last, over
                         // everything else, while `triangle` has it open. See
                         // `oag_ui::campaign::draw::cell_help_draw`'s own doc
@@ -596,16 +604,35 @@ impl MenuStage {
                     }
                 }
             };
+            let flat = layers.flatten();
+            // The ticker's own clip: `Renderer::render_with`'s `clip` is
+            // keyed on a draw's index in the *flattened* list
+            // (`crate::marquee`'s own row-value scroll works the same way),
+            // so this finds `ticker_draw`'s value again by equality rather
+            // than carrying an index computed before `flatten` reordered
+            // nothing - a Fury/HD frame has no ticker at all, and
+            // `ticker_draw` is `None` there, so `position` never runs.
+            let clip = ticker_draw.as_ref().and_then(|draw| {
+                let index = flat.iter().position(|d| d == draw)?;
+                let (left, right) = campaign.ticker_clip_bounds()?;
+                Some((index, left, right))
+            });
             let list: Vec<Draw> = if frozen_race {
                 std::iter::once(Draw::Fill {
                     rect: overlay_rect(self.skin.space(), viewport),
                     color: PAUSE_OVERLAY,
                 })
-                .chain(layers.flatten())
+                .chain(flat)
                 .collect()
             } else {
-                layers.flatten()
+                flat
             };
+            // The pause overlay's `Fill` above shifts every index by one -
+            // `clip` was found against the unshifted list, so it has to
+            // move with it.
+            let clip = clip.map(|(index, left, right)| {
+                (if frozen_race { index + 1 } else { index }, left, right)
+            });
             let load = if frozen_race {
                 wgpu::LoadOp::Load
             } else {
@@ -619,7 +646,7 @@ impl MenuStage {
                 view,
                 &list,
                 viewport,
-                None,
+                clip,
             );
             return Ok(());
         }
