@@ -394,15 +394,23 @@ That's wrong - `Race::tick`/`RaceSim` live in `oag-game`, and per
    structure.
 4. **Network multiplayer**: server-authoritative with client-side prediction
    and replay-based reconciliation, up to 8 players, decided per section 3 -
-   original design, not a port. Before a transport or `oag-net` exists,
+   original design, not a port. ~~Before a transport or `oag-net` exists,
    prove the shape cheaply with an **in-process loopback client/server**:
    two `RaceSim`s in one test binary, inputs passed directly (no socket),
    asserting the client's post-reconciliation `state_hash` matches the
-   server's. That's a test of the snapshot/replay/cue-suppression logic in
-   isolation from anything network-shaped, and it's buildable the moment the
-   headless-server binary (a second `[[bin]]` in `oag-game`, see section 3)
-   exists. Only after that passes does the transport and message-format
-   decision (needed before `oag-net` is created) become worth making.
+   server's.~~ **Done, 2026-09-21.** `RaceSim` derives `Clone`,
+   `Race::snapshot_sim`/`Race::restore_sim` are the pair
+   (`crates/game/src/race/reconcile.rs`), and
+   `crates/game/src/race/tests/reconcile.rs` is the loopback: a client
+   predicts wrong for forty ticks, is handed the server's authoritative
+   snapshot and the true inputs, and lands on the server's `state_hash`
+   exactly. It asserts the divergence *before* reconciling, so it cannot pass
+   vacuously as a restatement of determinism, and it covers the
+   already-correct case as a no-op. No transport, no message format and no
+   `oag-net` came with it, deliberately. **The transport and message-format
+   decision (needed before `oag-net` is created) is now the thing worth
+   making** - subject to the remote-player question below, which this did not
+   settle.
 
 ## Open
 
@@ -425,6 +433,52 @@ That's wrong - `Race::tick`/`RaceSim` live in `oag-game`, and per
   client prediction, reconciliation) section 3 describes - that one still has
   a real open design question in it (remote-player prediction, below) and
   shouldn't be written until that's resolved.
+- **A reconciliation replay re-fires every view and audio side effect, not
+  just the cues - and that is a bigger gap than section 3's cue note made it
+  sound.** Measured while building the loopback test, 2026-09-21.
+  `Race::tick` (`crates/game/src/race/tick.rs`) advances the chase camera,
+  `sparks_rng`, `shake_rng` and `stage_rng`, the exhausts, trail hits, shield
+  flashes, airbrake flaps and `boost_kick` in the same body as the
+  simulation, and pushes `sim.cues`. None of it reaches
+  `RaceSim::state_hash`, so it cannot desync a race and the loopback test is
+  unaffected - but a real client replaying forty ticks to correct a
+  misprediction would re-shake its camera and re-raise forty ticks of sound
+  every time the server contradicted it. The fix is a sim-only tick path, or
+  a suppression flag `Race::tick` honours; **the sim/view field split that
+  landed 2026-09-09 is what makes either tractable**, since the two halves
+  are already separated by type. This is the largest unscoped piece of
+  networking work currently known, and it is worth doing before the transport
+  rather than after: it changes what a client calls per tick.
+- **A remote slot's input still reaches no craft and no hash, so nothing can
+  mispredict one yet.** Measured 2026-09-21 and now held by
+  `race::tests::reconcile::a_remote_slots_input_does_not_yet_reach_the_hash`:
+  two races identical but for slot 1's stick held hard over in one hash the
+  same after sixty ticks. This is ADR-0052's own "the player step still runs
+  once" consequence, seen from the network side rather than the split-screen
+  side, and it is why the loopback test injects its misprediction on the
+  *primary* slot instead. Widening `Race::tick`'s loop bound is split
+  screen's step 2 work, and network play inherits it: **until it lands, no
+  test can exercise what a real client actually mispredicts**, which is
+  somebody else's craft. The test is written to fail loudly when the bound
+  changes.
+- **Cloning `RaceSim` copies the track along with the race.** The collision
+  soup (`Vec<TriangleSoup>`, hundreds of thousands of vertices on a real
+  circuit), the spline, the racing line, `ai_order`, both pad-volume lists
+  and the weapon table are all immutable for a race's whole life -
+  `sim.collision` is built at `Race::start` and no tick writes it - and a
+  per-tick snapshot pays for all of them. Whole-struct `Clone` was chosen
+  anyway and the reason is on the struct: `state_hash` is not a
+  snapshot-completeness oracle, so a hand-written snapshot type that dropped
+  one of the fields *outside* the hash would pass a hash-equality test and
+  diverge a race thousands of ticks later. Splitting the read-only half out
+  is the obvious optimization; **it should be taken against a measured
+  reconcile budget, which does not exist yet**, not on principle.
+- `TickClock::advance` caps catch-up at `max_ticks_per_step: 8` and
+  **discards** the surplus (`crates/core/src/tick.rs`). A reconciliation
+  burst is longer than that whenever the round trip exceeds 133 ms. The
+  loopback test loops directly and never touches the clock, so this is not a
+  bug today - it is a trap for the first client that drives a replay through
+  `TickClock` instead.
 - Transport choice for `oag-net` (framing, reliable-vs-unreliable channel
   split for inputs vs. snapshots, send rate relative to the fixed 60 Hz
   tick) - not decided, needed before the crate is created.
@@ -438,21 +492,32 @@ That's wrong - `Race::tick`/`RaceSim` live in `oag-game`, and per
   online design, purely as its own RE-and-reimplement exercise - not a
   blocker for anything here, since the two are explicitly independent per
   section 3.
-- **`docs/networking/README.md`'s "Pulse likely has no online play"
+- ~~**`docs/networking/README.md`'s "Pulse likely has no online play"
   conclusion rests on absent PRX files on disc alone, and that may not be
-  the whole story.** `sceUtilityLoadNetModule` is a real PSP API for
-  loading network modules from firmware flash0 at runtime, not from the
-  disc - a 2007-era title could use it without shipping its own net PRXs the
-  way 2005's Pure did. Neither this thread nor the review that caught the
-  `RaceSim` issue above checked `BOOT.BIN`'s own import table for
-  `sceUtilityLoadNetModule`/`sceNetInet*`/`sceNetAdhoc*` NIDs (this session
-  had no populated `data/images/`, and reproducing that check needs the
-  Ghidra bridge or a PPSSPP import dump against the real disc). Worth
-  checking before leaning on "no source to observe" as load-bearing
-  justification for the design in section 3 being unverifiable-by-RE - the
-  design stands either way (it's chosen on request, not derived from the
-  original), but the specific claim that there's nothing to observe should
-  be confirmed, not assumed.
+  the whole story.**~~ **Answered 2026-09-21, and the suspicion was right:
+  the conclusion is wrong.** No new RE was needed - the answer was already
+  in the repository. `docs/ghidra/functions/psp-pulse-usa/imports.md`
+  (confidence 99, read from `BOOT.BIN`'s own import table rather than from
+  the disc's PRX list) has `sceNetInet` 18 of 18 resolved, `sceNetAdhoc` 7
+  of 7, `sceNetApctl` 6 of 6, `sceNetAdhocctl` and `sceNetResolver` 5 each,
+  `sceNet` 4, `sceHttp` 5 of 7, `sceNetAdhocMatching` and `sceSsl` 2 each,
+  `sceWlanDrv` 1, plus the `sceNp`/`sceNpAuth`/`sceNpService` trio
+  (unresolved names only because NP uses a non-SHA-1 NID scheme). Pulse
+  links the full network stack and PSN. The PRX-absence inference broke
+  exactly where this entry guessed it would: a module loaded from firmware
+  leaves no file on the disc.
+  **One caveat, and it does not change the reading**: `imports.md` is
+  UCUS-98712 (USA) while the PRX rows in `docs/psp/pulse-disc-layout.md` are
+  UCES00465 (EU). `just resolve-imports` against the already-imported
+  `psp-pulse-eu` would close it cheaply.
+  **This does not touch section 3's design**, which is ours by decision
+  rather than for want of something to observe - reconfirmed by the user
+  2026-09-21. It does mean `docs/networking/README.md`'s confidence-90 "there
+  is no `pspnet` stack and no `libhttp`" is stale and contradicted by a
+  confidence-99 page in the same tree, and it means the ad-hoc/game-sharing
+  scope two entries up has a real subsystem behind it rather than a
+  suspected one. **Correcting that page is its own change and is not on this
+  thread's critical path.**
 - **8-way split screen is 8 full scene renders per frame**, not a cost this
   thread has estimated. Worth a frame-budget pass once the viewport work in
   section 1 exists, before committing to 8-up as a shipped configuration
@@ -488,11 +553,20 @@ That's wrong - `Race::tick`/`RaceSim` live in `oag-game`, and per
   owed. Not before M8 opens per the roadmap, but the decision itself doesn't
   need to wait for that milestone to start.
 - Decide the transport (framing, channel split, send rate) as the next open
-  question once that ADR is written.
+  question once that ADR is written. **The loopback proof that gated this is
+  done** (2026-09-21, see "Recommended order" step 4), so the only thing
+  still ahead of the transport decision is the remote-player question above.
+- Give a reconciliation replay a tick path that does not re-fire the camera,
+  the particles and the sound cues - see the Open entry added 2026-09-21.
+  Worth doing before the transport rather than after: it changes what a
+  client calls per tick, and therefore what the protocol is built on.
 - Before writing that ADR, resolve the remote-player prediction question
   flagged in section 3 (interpolation vs. rollback-with-predicted-inputs) -
   it changes the protocol shape, not just a tuning parameter.
-- Check `BOOT.BIN`'s import table for `sceUtilityLoadNetModule`/
+- ~~Check `BOOT.BIN`'s import table for `sceUtilityLoadNetModule`/
   `sceNetInet*`/`sceNetAdhoc*` NIDs to confirm or correct
   `docs/networking/README.md`'s "no online play" reading before citing it
-  further - flagged above, not yet done.
+  further.~~ **Done, 2026-09-21** - see the Open entry above.
+  `docs/ghidra/functions/psp-pulse-usa/imports.md` already had the answer and
+  it corrects the reading: the full stack is imported. What is left is
+  rewriting `docs/networking/README.md` itself, which nothing here blocks.

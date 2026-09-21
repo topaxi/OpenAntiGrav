@@ -138,6 +138,7 @@ mod load;
 mod models;
 mod options;
 mod pads;
+mod reconcile;
 mod respawn;
 mod results;
 mod scene;
