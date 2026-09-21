@@ -405,6 +405,12 @@ pub struct Header {
     /// The video track's `mdhd.duration`, in [`Self::timescale`] units -
     /// 2,986,984 on `intro.mp4`, which is 99.566 s at 30,000 Hz.
     pub duration: u64,
+    /// The video track's own `stts.sample_delta`, unreduced - 1,001 on
+    /// `intro.mp4`. Kept apart from [`Self::frame_rate`] (which divides this
+    /// and [`Self::timescale`] by their GCD) so a caller can check the third
+    /// invariant this module's own docs name - `duration == frame_count *
+    /// frame_delta` - without undoing a reduction first.
+    pub frame_delta: u32,
     /// Presentation rate as `(timescale, sample_delta)`, reduced by their
     /// GCD - `intro.mp4`'s single `stts` entry is `(30000, 1001)`, the
     /// container's own way of writing 29.97 Hz. **Not the same fraction on
@@ -669,6 +675,7 @@ pub fn parse(blob: &[u8]) -> Result<Header, Error> {
         stts_sample_count: video.stts_sum,
         timescale: video.timescale,
         duration: video.duration,
+        frame_delta: video.sample_delta,
         frame_rate: reduce(video.timescale, video.sample_delta),
         audio,
     })
