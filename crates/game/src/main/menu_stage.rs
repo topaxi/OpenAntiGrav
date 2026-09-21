@@ -235,6 +235,17 @@ impl MenuStage {
             reason = "a tick is milliseconds; f32 holds it exactly"
         )]
         self.marquee.tick(dt as f32, marquee::focus(&self.menu));
+        // The campaign footer's own ticker clock - free-running, the same
+        // "no reset on a screen change" choice the marquee's own pulse
+        // above is documented making, since nothing measured says the
+        // original restarts it either. See `CampaignStage::tick_ticker`.
+        #[expect(
+            clippy::cast_possible_truncation,
+            reason = "a tick is milliseconds; f32 holds it exactly"
+        )]
+        if let Some(campaign) = &mut self.campaign {
+            campaign.tick_ticker(dt as f32);
+        }
         // The selected row's own pulse, measured on Pulse - see
         // `oag_title::MenuSkin::selected_pulse_period_secs`. Free-running like
         // the marquee's clock is reset-on-focus-change: unconditional here
@@ -538,18 +549,39 @@ impl MenuStage {
                     }
                 }
             } else {
+                let measure = |text: &str| font::measure(&self.text_atlas, text);
                 match &campaign.screen {
-                    crate::campaign_stage::Screen::Grid(model) => oag_ui::campaign::grid_draw_list(
-                        model,
-                        campaign.grid_layout(),
-                        &self.skin,
-                        &self.frame,
-                        &campaign.strings,
-                        if frozen_race { None } else { shown },
-                        frozen_race,
-                        &|src| campaign.sprites.get(src),
-                    ),
+                    crate::campaign_stage::Screen::Grid(model) => {
+                        let footer_overlay =
+                            campaign.ticker_draw(&campaign.grid_layout().faces, &measure);
+                        oag_ui::campaign::grid_draw_list(
+                            model,
+                            campaign.grid_layout(),
+                            &self.skin,
+                            &self.frame,
+                            &campaign.strings,
+                            if frozen_race { None } else { shown },
+                            frozen_race,
+                            &|src| campaign.sprites.get(src),
+                            &footer_overlay,
+                        )
+                    }
                     crate::campaign_stage::Screen::Cell { model, .. } => {
+                        let faces = &campaign.cell_layout().faces;
+                        let mut footer_overlay = campaign.nav_legend_draw(faces);
+                        footer_overlay.extend(campaign.ticker_draw(faces, &measure));
+                        // `Cell Help`'s own static overlay - drawn last, over
+                        // everything else, while `triangle` has it open. See
+                        // `oag_ui::campaign::draw::cell_help_draw`'s own doc
+                        // for why it is static rather than scripted.
+                        if model.help_open()
+                            && let Some(cell_help) = campaign.cell_help_layout()
+                        {
+                            footer_overlay
+                                .extend(oag_ui::campaign::cell_help_draw(cell_help, &|src| {
+                                    campaign.sprites.get(src)
+                                }));
+                        }
                         oag_ui::campaign::cell_draw_list(
                             model,
                             campaign.cell_layout(),
@@ -559,6 +591,7 @@ impl MenuStage {
                             if frozen_race { None } else { shown },
                             frozen_race,
                             &|src| campaign.sprites.get(src),
+                            &footer_overlay,
                         )
                     }
                 }

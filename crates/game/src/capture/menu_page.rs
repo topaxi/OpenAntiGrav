@@ -643,6 +643,11 @@ pub(super) fn campaign_page(
         title,
     )
     .context("this source has no Race Campaign to show")?;
+    // No per-session state to read a tip rotation off of, the same gap
+    // `circuit_names` below already has - see
+    // `crate::campaign::static_footer_overlay`. Read before `campaign.sprites`
+    // moves out below.
+    let footer_overlay = crate::campaign::static_footer_overlay(&campaign, &faces);
     *sprites = campaign.sprites;
     let is_hd = title.name == oag_hd::TITLE.name;
     // **HD's own `Track Line` fold is not built here.** `CircuitNames::choose`
@@ -733,6 +738,7 @@ pub(super) fn campaign_page(
                     backdrop,
                     false,
                     &|src| sprites.get(src),
+                    &footer_overlay,
                 )
             }
             CampaignKind::Cell => {
@@ -754,6 +760,7 @@ pub(super) fn campaign_page(
                     backdrop,
                     false,
                     &|src| sprites.get(src),
+                    &footer_overlay,
                 )
             }
         }

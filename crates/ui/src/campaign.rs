@@ -86,10 +86,11 @@ use crate::language::StringTable;
 use crate::screen::{Screen, Screens};
 
 pub mod draw;
+pub mod footer;
 pub mod hd;
 pub mod pointer;
 
-pub use draw::{cell_draw_list, grid_draw_list};
+pub use draw::{cell_draw_list, cell_help_draw, grid_draw_list};
 
 #[cfg(test)]
 mod tests;
