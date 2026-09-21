@@ -1,0 +1,128 @@
+use super::*;
+use crate::mjolnir::parse;
+
+/// Four instances covering the whole typed view: a `RACE_A` event chained to
+/// a `RACE_B` one (the way `"2048 - Event 3"` really chains to
+/// `"2048 - Event 4"`), a `ZONE` event with no track/speed-class, a
+/// `TrackDefinition` and a `WeaponSetDefinition`.
+const FIXTURE: &str = r#"<mjolnir><instance instanceid="-1143582041" typedefid="-1915183557" name="2048 - Event 3" schema="0" version="0" file="SP.xml"><DATA>
+<M_DESCRIPTION name="m_description" type="char" length="64" typedefid="1380284284"><ARRAY value="2048_EVENT_3" typedefid="1380284284"/></M_DESCRIPTION>
+<M_TRACKDEF name="m_trackDef" type="TrackDefinition" length="1" typedefid="205052969"><ARRAY value="-1892961298" typedefid="205052969"/></M_TRACKDEF>
+<M_SPEEDCLASS name="m_speedClass" type="eClass" length="1" typedefid="-1934651500"><ARRAY value="1" typedefid="-1934651500"/></M_SPEEDCLASS>
+<M_NUMOFLAPS name="m_numOfLaps" type="int" length="1" typedefid="351272028"><ARRAY value="2" typedefid="351272028"/></M_NUMOFLAPS>
+<M_WEAPONSET name="m_weaponSet" type="WeaponSetDefinition" length="1" typedefid="-966434245"><ARRAY value="-692702972" typedefid="-966434245"/></M_WEAPONSET>
+<M_PNEXTEVENT name="m_pNextEvent" type="GameModeBase" length="1" typedefid="366306753"><ARRAY value="-484309551" typedefid="-1353052320"/></M_PNEXTEVENT>
+<M_PBRANCHEVENT name="m_pBranchEvent" type="GameModeBase" length="1" typedefid="366306753"><ARRAY value="890052595" typedefid="-1915183557"/></M_PBRANCHEVENT>
+<M_X name="m_x" type="int" length="1" typedefid="351272028"><ARRAY value="5" typedefid="351272028"/></M_X>
+<M_Y name="m_y" type="int" length="1" typedefid="351272028"><ARRAY value="5" typedefid="351272028"/></M_Y>
+<M_MAXGHOSTSHIPS name="m_maxGhostShips" type="int" length="1" typedefid="351272028"><ARRAY value="" typedefid="351272028"/></M_MAXGHOSTSHIPS>
+</DATA></instance>
+<instance instanceid="-484309551" typedefid="-1353052320" name="2048 - Event 4" schema="0" version="0" file="SP.xml"><DATA>
+<M_NUMOFLAPS name="m_numOfLaps" type="int" length="1" typedefid="351272028"><ARRAY value="5" typedefid="351272028"/></M_NUMOFLAPS>
+</DATA></instance>
+<instance instanceid="777" typedefid="1018671239" name="2049 - Event 3" schema="0" version="0" file="SP.xml"><DATA>
+<M_ZONETIMECOUNTER name="m_zoneTimeCounter" type="int" length="1" typedefid="351272028"><ARRAY value="1" typedefid="351272028"/></M_ZONETIMECOUNTER>
+</DATA></instance>
+<instance instanceid="-405306526" typedefid="205052969" name="Bridge" schema="0" version="0" file="SP.xml"><DATA>
+<M_TRACKNAME name="m_trackName" type="char" length="64" typedefid="1380284284"><ARRAY value="bridge" typedefid="1380284284"/></M_TRACKNAME>
+<M_DISPLAYNAME name="m_displayName" type="char" length="64" typedefid="1380284284"><ARRAY value="CAPITAL REACH" typedefid="1380284284"/></M_DISPLAYNAME>
+</DATA></instance>
+<instance instanceid="-1892961298" typedefid="205052969" name="Park" schema="0" version="0" file="SP.xml"><DATA>
+<M_TRACKNAME name="m_trackName" type="char" length="64" typedefid="1380284284"><ARRAY value="park" typedefid="1380284284"/></M_TRACKNAME>
+<M_DISPLAYNAME name="m_displayName" type="char" length="64" typedefid="1380284284"><ARRAY value="METRO PARK" typedefid="1380284284"/></M_DISPLAYNAME>
+</DATA></instance>
+<instance instanceid="-692702972" typedefid="-966434245" name="Rockets Only" schema="0" version="0" file="SP.xml"><DATA>
+<M_WEAPONAVAILABLEBITS name="m_weaponAvailableBits" type="WeaponType" length="1" typedefid="2139957613"><ARRAY value="1" typedefid="2139957613"/></M_WEAPONAVAILABLEBITS>
+</DATA></instance>
+</mjolnir>"#;
+
+#[test]
+fn events_finds_the_three_event_kinds_and_skips_tracks_and_weapon_sets() {
+    let doc = parse(FIXTURE);
+    let events = events(&doc);
+    assert_eq!(events.len(), 3);
+    assert!(events.iter().any(|e| e.name == "2048 - Event 3"));
+    assert!(events.iter().any(|e| e.name == "2048 - Event 4"));
+    assert!(events.iter().any(|e| e.name == "2049 - Event 3"));
+}
+
+#[test]
+fn an_event_carries_its_own_kind() {
+    let doc = parse(FIXTURE);
+    let events = events(&doc);
+    let race = events.iter().find(|e| e.name == "2048 - Event 3").unwrap();
+    assert_eq!(race.kind, EventKind::Race);
+    assert_eq!(race.typedef_id, typedef::RACE_A);
+
+    let zone = events.iter().find(|e| e.name == "2049 - Event 3").unwrap();
+    assert_eq!(zone.kind, EventKind::Zone);
+    assert_eq!(
+        zone.track, None,
+        "no M_TRACKDEF authored on the Zone fixture"
+    );
+    assert_eq!(zone.speed_class, None);
+}
+
+#[test]
+fn event_3_reads_the_full_field_set_measured_off_the_real_file() {
+    let doc = parse(FIXTURE);
+    let event = events(&doc)
+        .into_iter()
+        .find(|e| e.name == "2048 - Event 3")
+        .unwrap();
+
+    assert_eq!(event.description.as_deref(), Some("2048_EVENT_3"));
+    assert_eq!(event.speed_class, Some(1));
+    assert_eq!(event.laps, Some(2));
+    assert!(event.has_ghost_capacity);
+
+    let track = track_for(&doc, event.track.unwrap()).unwrap();
+    assert_eq!(track.track_name, "park");
+    assert_eq!(track.display_name, "METRO PARK");
+
+    let weapon_set = weapon_set_for(&doc, event.weapon_set.unwrap()).unwrap();
+    assert_eq!(weapon_set.name, "Rockets Only");
+    assert_eq!(weapon_set.available_bits, Some(1));
+
+    let next = event.next_event.unwrap();
+    assert_eq!(next.instance_id, -484309551);
+    assert_eq!(
+        next.typedef_id,
+        Some(typedef::RACE_B),
+        "the chain crosses race typedefs"
+    );
+
+    let branch = event.branch_event.unwrap();
+    assert_eq!(branch.instance_id, 890052595);
+    assert_eq!(branch.typedef_id, Some(typedef::RACE_A));
+
+    assert_eq!(event.x, Some(5));
+    assert_eq!(event.y, Some(5));
+}
+
+#[test]
+fn laps_zero_is_not_produced_by_this_fixture_but_the_field_still_parses_as_some_zero() {
+    // Speed Lap's own sentinel (see typedef::RACE_A's doc comment) - checked
+    // directly against a synthetic zero rather than relying on the shared
+    // fixture, since `laps: Option<u32>` must distinguish "authored zero"
+    // from "absent" the same way every other field here does.
+    let xml = r#"<mjolnir><instance instanceid="1" typedefid="-1915183557" name="Bridge Speed Lap - Flash"><DATA>
+<M_NUMOFLAPS name="m_numOfLaps" type="int" length="1" typedefid="351272028"><ARRAY value="0" typedefid="351272028"/></M_NUMOFLAPS>
+</DATA></instance></mjolnir>"#;
+    let doc = parse(xml);
+    let event = events(&doc).into_iter().next().unwrap();
+    assert_eq!(event.laps, Some(0));
+}
+
+#[test]
+fn tracks_and_weapon_sets_are_found_by_typedef_not_by_field_shape() {
+    let doc = parse(FIXTURE);
+    let tracks = tracks(&doc);
+    assert_eq!(tracks.len(), 2);
+    assert!(tracks.iter().any(|t| t.track_name == "bridge"));
+    assert!(tracks.iter().any(|t| t.track_name == "park"));
+
+    let sets = weapon_sets(&doc);
+    assert_eq!(sets.len(), 1);
+    assert_eq!(sets[0].name, "Rockets Only");
+}
