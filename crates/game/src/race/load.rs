@@ -9,6 +9,7 @@ use super::*;
 
 mod audio;
 mod cameras;
+pub mod campaign;
 mod countdown;
 mod engine_light;
 mod environment;
@@ -20,6 +21,7 @@ mod surfaces;
 mod variant;
 mod weapon_models;
 use crate::remix::craft_of;
+pub use campaign::load_event;
 use environment::{cloud_layer, hd_sky_model, psp2_sky_model};
 
 /// Loads a track, a ship and its handling out of a disc image.

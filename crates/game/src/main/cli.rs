@@ -523,6 +523,22 @@ pub(crate) struct Cli {
     #[arg(long, default_value = "time_trial")]
     pub(crate) mode: String,
 
+    /// Launch a Wipeout 2048 campaign event by its own name, e.g. `"2048 -
+    /// Event 3"` or `"Altima Speed Lap - Flash"`.
+    ///
+    /// Overrides `--track`, `--class` and `--mode` with what the event
+    /// authors in `Data\xml\SP.xml` - see `oag_2048::campaign::Event` and
+    /// `crate::race::load_event`, which this resolves through. Only
+    /// resolves against a Wipeout 2048 source; named on another title's
+    /// disc, the race is refused with the reason rather than racing
+    /// whatever `--track`/`--class`/`--mode` happened to default to.
+    ///
+    /// Names are exact - see `docs/formats/2048-campaign.md` for the full
+    /// list this build reads off the disc, since none of it may be
+    /// reproduced here.
+    #[arg(long, value_name = "NAME")]
+    pub(crate) event: Option<String>,
+
     /// Development override: pin the Zone colour grade to a stage for the
     /// whole run.
     ///

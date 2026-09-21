@@ -1950,6 +1950,8 @@ name = "oag-2048"
 version = "0.1.0"
 dependencies = [
  "oag-assets",
+ "oag-tables",
+ "oag-testdata",
  "oag-title",
 ]
 

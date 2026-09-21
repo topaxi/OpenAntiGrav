@@ -1,0 +1,340 @@
+# 2048's own campaign: the "mjolnir" typed-instance database, `Data\xml\SP.xml`
+
+**Status: partial.** Implemented in
+[`oag_tables::mjolnir`](../../crates/tables/src/mjolnir.rs) (generic reader)
+and [`oag_tables::mjolnir::campaign`](../../crates/tables/src/mjolnir/campaign.rs)
+(typed view: event kinds, `TrackDefinition`, `WeaponSetDefinition`), with the
+entry names and 2048-specific facts in
+[`oag_2048::campaign`](../../crates/2048/src/campaign.rs), per
+[ADR-0022](../architecture/adr/0022-title-packages.md). Wired into a headless
+launch: `crates/game/src/race/load/campaign.rs`'s `race::load_event` resolves
+an event by name onto `race::Options` before calling the existing `load`, and
+`oag-game --event "<name>"` drives it end to end - see
+[the launch section](#the-launch-cratesgamesrcraceloadcampaignrs) below.
+
+Wipeout 2048 has no `CellMode_Definition.xml` and no racebox
+([`race-setup.md`](race-setup.md): "2048 has no such flow at all"). Its own
+campaign - not the two DLC-gated `PI_Grid` tiers `data/plugins/grids/grid_NN.xml`
+author (`Campaign="HD"`/`Campaign="Fury"`, already reachable through
+[`oag_tables::race_campaign`](race-campaign.md) and
+[`oag_hd::campaign`](../../crates/hd/src/campaign.rs)'s own schema) - lives in
+`Data\xml\SP.xml`: 1.3 MB, single-player, discovered by extracting
+`data/xml/SP.xml` out of `PSP2/data.psarc` and finding it is not `PI_Grid`
+shaped at all.
+
+## The format: `<mjolnir><instance typedefid="..." name="...">`
+
+```xml
+<mjolnir>
+  <instance instanceid="-1143582041" typedefid="-1915183557" name="2048 - Event 3">
+    <DATA>
+      <M_TRACKDEF name="m_trackDef" type="TrackDefinition" length="1" typedefid="205052969">
+        <ARRAY value="-1892961298" typedefid="205052969"/>
+      </M_TRACKDEF>
+      <M_PNEXTEVENT name="m_pNextEvent" type="GameModeBase" length="1" typedefid="366306753">
+        <ARRAY value="-484309551" typedefid="-1353052320"/>
+      </M_PNEXTEVENT>
+      ...
+    </DATA>
+    <BASE>...</BASE>
+    <USER>...</USER>
+  </instance>
+  ...
+</mjolnir>
+```
+
+Every `<instance>` is a typed record; `typedefid` names which shape. Every
+`<M_FOO>` child under `<DATA>` is one field, itself carrying a declared
+`type=`/`typedefid=` and one or more `<ARRAY>` children holding the value(s).
+Plain UTF-8 XML, not [fexml](fexml.md)-shortened - no `<code>` dictionary -
+but read through [`oag_tables::fexml::parse`](../../crates/tables/src/fexml.rs)
+regardless, since that reader's tag/attribute scanner is format-agnostic and
+already tolerates this disc's malformed tags.
+
+### The strongest evidence: `type=`/`typedefid=` is an in-file name table
+
+Every field that references another instance carries that instance's own
+type name right on the field element - `M_TRACKDEF`'s `type="TrackDefinition"
+typedefid="205052969"` is the file *telling* a reader what `205052969` is, not
+a reader guessing from field shape. Collecting every `(typedefid, type)` pair
+across all 288 `SP.xml` instances closes the name table with no ambiguity for
+eight of the ids in play:
+
+| `typedefid` | name | instances | confidence |
+| --- | --- | --- | --- |
+| `380278911` | `GameModeObjective` | 96 | 95 |
+| `366306753` | `GameModeBase` | 0 direct (abstract base - see below) | 95 |
+| `520725191` | `WOShipModelData` | 21 | 95 |
+| `205052969` | `TrackDefinition` | 10 | 95 |
+| `-966434245` | `WeaponSetDefinition` | 20 | 95 |
+
+Confidence 95 for all five: this is the file's own authored text,
+cross-checked against every one of the dozens of fields that names each
+typedef, not a structural read. Everything else the file spells this way
+(`eClass`, `bool`, `u32`, `int`, `float`, `char`, `GameModeOptions`,
+`CanvasButtonShape`, `WOShipCreatorParams`, `ObjectiveValue`, `I_UnlockData`,
+`ActiveWeaponPads`, `WeaponType`, `ObjectiveOptions`) is a scalar or nested
+type, never itself an instance.
+
+**This corrects a hypothesis, not just fills a gap.** Before this pass read
+the field-type pairs, `-966434245`'s twenty single-field instances (each one
+`M_WEAPONAVAILABLEBITS`) were guessed to be `TrackDefinition`, reasoning "2048
+ships 20 track profiles." Two things were wrong with that guess at once: 2048
+ships **ten** circuits, not twenty (`data/plugins/tracks/Definition.xml` lists
+`square`, `park`, `tower`, `mall`, `bridge`, `arena`, `subway`, `cathedral`,
+`sol`, `altima` - exactly `205052969`'s own instance count), and the file's
+own text names `-966434245` `WeaponSetDefinition` outright - its twenty
+instances are named `"Rockets Only"`, `"Missile Only"`, `"Cannons, Missile,
+Plasma"`, and so on, weapon-loadout presets, not circuits. `205052969`'s own
+`M_TRACKNAME` field matches the plugin's ten stems exactly, confirming the
+correction from the other direction too. Anyone who read the earlier
+hypothesis should re-check against this table.
+
+### Four more typedefs carry no name in the file at all
+
+`-1915183557` (53 instances), `-1353052320` (52), `1311982788` (26) and
+`1018671239` (10) - the four concrete event shapes - are never a field's
+*declared* type anywhere in `SP.xml`. Every field that points at one of them
+(`M_PNEXTEVENT`, `M_PBRANCHEVENT`, `M_PEVENTREQUIRED`, and
+`WOShipModelData`'s own `M_PCAMPAIGNUNLOCK`) declares the abstract
+`GameModeBase` (`366306753`) as its *static* type instead - normal C++
+polymorphism, serialised. **The `<ARRAY>` element itself still carries the
+concrete pointee's own `typedefid`**: `2048 - Event 3`'s own `M_PNEXTEVENT`
+reads `<ARRAY value="-484309551" typedefid="-1353052320"/>`, naming the
+referenced instance's real shape even though the field's own declaration
+cannot. `oag_tables::mjolnir::Reference::typedef_id` recovers this for every
+edge in the event graph without a second lookup.
+
+Since nothing in the file names these four, [`EventKind`] classifies them by
+measured field shape instead, at confidence 78-82 (structural fit plus
+corroborating instance names, still short of a runtime trace):
+
+| typedef | count | distinguishing fields | instance names | `EventKind` |
+| --- | --- | --- | --- | --- |
+| `1018671239` | 10 | `M_ZONETIMECOUNTER`/`M_ZONETOADDMINES`/`M_STARTZONENUMBER`/`M_ENDZONENUMBER`/`M_NUMBEROFMINES`; `M_SPEEDCLASS` always empty | generic `"20XX - Event N"` | `Zone` |
+| `1311982788` | 26 | `M_ELIMINATENUMOFOPPONENTS`/`M_SCORETARGET`/`M_SURVIVEFORNUMOFLAPS`/`M_TIMELIMIT`/`M_BSEEKANDDESTROYTARGETID`/`M_BSOLOSCORING` | `"MPElimination"`, `"MP_Arena_Eliminator_flash"`, generic ones | `Elimination` |
+| `-1915183557` | 53 | the only typedef with a non-empty `M_MAXGHOSTSHIPS`; the only one carrying `laps == 0` (all 40 Speed Lap events) | `"<Track> Speed Lap - <Class>"` (40) plus 13 generic | `Race` |
+| `-1353052320` | 52 | no `M_MAXGHOSTSHIPS` at all; `laps` always `>= 1` | `E3_Demo_*`, `MP_*_Race_flash`, `"* Ship Challenge"` (10-lap), generic ones | `Race` |
+
+**`eboot.elf`'s own string table names six `GameMode_*` C++ classes**
+(`GameMode_ArcadeRace`, `GameMode_CheckPointRace`, `GameMode_EliminatorRace`,
+`GameMode_SpeedLapRace`, `GameMode_ZombieRace`, `GameMode_ZoneRace`), found
+with plain `strings` over `data/extracted/vita/PCSF00007/patch-v104/eboot.elf`
+(no Ghidra opened for this pass, per this lane's own scope). **None of the
+six is bound to a typedef here, and that is deliberate rather than an
+oversight**: `M_PNEXTEVENT` chains cross the two `Race` typedefs freely -
+`"2048 - Event 3"` (`-1915183557`) names `"2048 - Event 4"` (`-1353052320`)
+as its own next event - which argues against the two typedefs being a mode
+distinction at all, and confidence for any specific class-to-typedef pairing
+would sit under 50 (a guess) with the evidence gathered so far. Recorded as
+open, not resolved by the shape of the six names alone.
+
+## The event fields a caller needs to launch one
+
+[`Event`](../../crates/tables/src/mjolnir/campaign.rs) carries the subset of
+each event's ~35-40 fields a launcher needs: `track` (a reference into
+`TrackDefinition`), `speed_class` (raw `eClass` ordinal), `laps`,
+`weapon_set`, the `next_event`/`branch_event`/`required_event` unlock-graph
+edges (each a [`Reference`] carrying its own concrete typedef, per the
+section above), `pass_objective`/`elite_objective` (references into
+`GameModeObjective`, itself unread beyond its own field census - see
+[What is not determined](#what-is-not-determined)), `x`/`y` and
+`description` (an idstring like `"2048_EVENT_3"`, a language-table key this
+crate does not resolve).
+
+### `TrackDefinition` resolves to a circuit by its own `M_TRACKNAME`
+
+All ten instances, exact match against `data/plugins/tracks/Definition.xml`'s
+own `<PI_Track name="...">` stems:
+
+| `M_TRACKNAME` | `M_DISPLAYNAME` |
+| --- | --- |
+| `square` | UNITY SQUARE |
+| `mall` | QUEENS MALL |
+| `park` | METRO PARK |
+| `bridge` | CAPITAL REACH |
+| `tower` | EMPIRE CLIMB |
+| `arena` | ROCKWAY STADIUM |
+| `subway` | SUBWAY |
+| `cathedral` | DOWNTOWN |
+| `sol` | SOL |
+| `altima` | ALTIMA |
+
+`oag_2048::campaign::track_vex_entry` joins `M_TRACKNAME` into
+`Data\art\published\environments\<stem>\track.vex`, the same spelling
+[`oag_2048::race::DEFAULT_TRACK`](../../crates/2048/src/race.rs) already
+uses for `altima`. Confidence 90: the stem match is exact and every stem
+names a real archive directory, but this is convention rather than a runtime
+read of `track_plugin_definition`'s own `location=` attribute.
+
+### `eClass` is a raw `0`-`4` ordinal, and 2048 has five classes
+
+2048's native `handlingstats.xml` authors `VENOM`, `FLASH`, `RAPIER`,
+`PHANTOM`, `SUPERPHANTOM` in that document order (`data/HandlingStats/feisar2048/3/handlingstats.xml`,
+checked directly) - a fifth rung [`oag_tables::handling::SpeedClass`]
+deliberately does not carry (see [handling-stats.md](handling-stats.md)'s
+"the enum was deliberately not widened" section), so `oag_2048::campaign::EClass`
+is 2048's own five-variant type rather than a reuse.
+
+`M_SPEEDCLASS`'s ordinals `1`-`4` are measured directly, at confidence 85:
+forty `SP.xml` events are named `"<Track> Speed Lap - <Class>"`, one per
+track per class, and every one's own `M_SPEEDCLASS` agrees with its name -
+`1` on every `- Flash`, `2` on every `- Rapier`, `3` on every `- Phantom`, `4`
+on every `- Super P` (SuperPhantom) - across all ten circuits, no exception.
+**`0` (Venom) is not directly observed**: no event in either `SP.xml` or
+`MP.xml` authors `M_SPEEDCLASS="0"`, and no campaign event is named for
+Venom at all (Speed Lap events skip it entirely - only Flash/Rapier/Phantom/
+SuperPhantom get a per-track Speed Lap attraction). `0 => Venom` is
+elimination over the other four confirmed ordinals, corroborated by - not
+measured against - `handlingstats.xml`'s own document order. Confidence 70
+for that one rung; a direct `M_SPEEDCLASS="0"` observation would raise it.
+
+### `laps == 0` is Speed Lap's own sentinel
+
+Every one of the 40 `"<Track> Speed Lap - <Class>"` events carries
+`M_NUMOFLAPS` absent or `0`; every other lap-race event (the 13 remaining
+`-1915183557` instances plus all 52 of `-1353052320`) carries `1` or more.
+`oag_2048::campaign::engine_mode` reads `laps == Some(0)` as the mode
+`"speed_lap"` and leaves `Options::laps_override` unset so
+`oag_race::Mode::laps_target` answers the real count, rather than racing a
+literal zero-lap Speed Lap.
+
+## The unlock graph
+
+`M_PNEXTEVENT`/`M_PBRANCHEVENT`/`M_PEVENTREQUIRED` are the whole of the
+authored ordering; nothing in the schema authors a linear play sequence or
+names a "first" event. `oag_tables::mjolnir::campaign::events` returns
+document order only - a caller wanting campaign order has to walk the edges
+from wherever it already knows is the start, the same way this project reads
+[`race-campaign.md`](race-campaign.md#two-open-questions-this-pass-did-not-resolve)'s own `PI_Grid`
+chain.
+
+## `Data\xml\MP.xml` is not `SP.xml`'s schema
+
+289 instances, but only `GameModeObjective` (59 of them) is shared with
+`SP.xml`. The other 230 are two typedefs `SP.xml` carries none of:
+
+| `typedefid` | count | fields | names |
+| --- | --- | --- | --- |
+| `1114956821` | 210 | `M_BASEOBJECTIVE`/`M_HARDOBJECTIVE`/`M_MEDIUMOBJECTIVE`/`M_PHARDLEVEL`/`M_PMEDIUMLEVEL`/`M_PNEXTLEVEL`/`M_PAR`/`M_X`/`M_Y` | `"MP_S12_E02"` and siblings |
+| `425681076` | 20 | `M_PNEXTSEASON`/`M_PFIRSTLEVEL` | `"MP_Season_01"` and siblings |
+
+A "level" shape with three difficulty-tiered objectives and a par time,
+grouped into twenty season containers - multiplayer's own progression, not
+read further this pass. `events`/`tracks`/`weapon_sets` find nothing in an
+`MP.xml` document (they filter by `SP.xml`'s own typedef ids), rather than
+misreading one shape as another.
+
+## `Data\xml\MjolnirData.xml`: no schema, just a workspace list
+
+212 bytes:
+
+```xml
+<mjolnir version="2634955210">
+  <WORKSPACES>
+    <WORKSPACE name="SP.xml"/>
+    <WORKSPACE name="MP.xml"/>
+    <WORKSPACE name="Profile.xml"/>
+  </WORKSPACES>
+</mjolnir>
+```
+
+The editing tool's own file list, not a type table. `Profile.xml` is not in
+the base package - not chased this pass.
+
+## The `CanvasLabel linkedevent` cross-reference
+
+`data/plugins/frontend/NEWGUI/Definition.xml` (the campaign map's own front
+end, see [2048-frontend.md](2048-frontend.md)) carries **68** `<CanvasLabel>`
+elements. **47** of them carry a `linkedevent` attribute on their own
+`<Values>` child (the `Values`-as-attribute-carrier convention
+[fexml.md](fexml.md) documents), naming **45** unique event names, and
+**all 47 resolve** to an `SP.xml` instance name - zero unresolved. Measured
+with `oag_tables::fexml`/`oag_tables::mjolnir` directly (not a text search):
+walk every `CanvasLabel` node, read `.value("linkedevent")`, look each
+non-empty value up in the parsed `SP.xml` `Document`. The other 21
+`CanvasLabel`s carry no `linkedevent` at all - other UI text, not event
+tiles.
+
+## What `M_X`/`M_Y` project to on screen is not in `SP.xml`, and is left open
+
+`docs/ghidra/functions/vita-2048-eu-v104/frontend-campaign-map.md` recovered a
+scale/bias/offset table (`X scale 3.0, Y scale 2.0, X bias 55.0, Y bias
+25.0`, plus an 8-entry per-type pixel offset, into a 401x120 bounded area) -
+but that table belongs to the **DLC** `HD CAMPAIGN`/`FURY CAMPAIGN` tiers'
+own `FE3DCanvas` hotspots (`TouchCampaignHD_Item`/`TouchCampaignFury_Item`),
+an explicitly different node set from this campaign's native events. Neither
+`MjolnirData.xml`, `NEWGUI/Definition.xml` nor anything else checked this
+pass authors an equivalent projection for a native `M_X`/`M_Y` pair - the
+`CanvasLabel`'s own `Values x=".." y=".."` (front-end pixel-ish coordinates)
+and the linked event's own `M_X`/`M_Y` (campaign-grid coordinates, e.g.
+`"2048 - Event 3"` is `x="5" y="5"`) are visibly different number spaces with
+no authored formula connecting them found in the data. Left open rather than
+fitted; per this lane's own scope, no Ghidra session was opened to chase it
+further.
+
+## The launch: `crates/game/src/race/load/campaign.rs`
+
+`race::load_event(options, event_name)` resolves `event_name` against
+`SP.xml`, overrides `options.track`/`class`/`mode`/`laps_override` on a clone
+of `options`, and calls the existing `race::load` unchanged. **A second entry
+point rather than a new `Options` field** - `Options` is built exhaustively
+(every field named, no `..Default::default()`) at dozens of call sites across
+this workspace, and a new required field would have touched every one of
+them. `oag-game`'s own `--event <NAME>` flag drives it through the one call
+site that runs `--race`'s headless load
+(`crates/game/src/main/headless.rs::run_race`).
+
+Verified against the real EU v1.04 package:
+
+- `--event "2048 - Event 3" --ticks 300 --screenshot` resolves to **Park**
+  (`M_TRACKDEF` `-1892961298`, `METRO PARK`), **Flash** (`eClass` `1`), **2
+  laps**, mode **`single_race`**, a full AI grid (`Arcade_HUD.xml` loads,
+  matching the mode) - the screenshot shows the player's yellow Feisar craft
+  on Park's own start grid, opponents visible ahead.
+- `--event "2048 - Event 4-2"` (an `Elimination` event) loads
+  `Elimination_HUD.xml` and a real course end to end.
+  **`oag_race::Mode::Eliminator` is a real, implemented mode** -
+  `crates/game/src/race/eliminator.rs`, a kill-count race end in `tick.rs` -
+  and 2048's own `TITLE.weapons.elimination` already names
+  `Data\XML\weaponstats_Elimination_2048.xml`, so none of `SP.xml`'s four
+  event kinds is refused as unsupported; the CLI's own `--mode` help text
+  omitting `eliminator` from its list is a stale string, not a real
+  restriction.
+- `--event "Nonexistent Event Name"` refuses cleanly: exit 1, `"Nonexistent
+  Event Name" names no instance in Data\xml\SP.xml`.
+
+## What is not determined
+
+- **Which `GameMode_*` C++ class each of the four event typedefs
+  instantiates.** See [Four more typedefs carry no name in the file at
+  all](#four-more-typedefs-carry-no-name-in-the-file-at-all).
+- **`GameModeObjective`'s own semantics.** `M_OBJECTIVETYPE`'s
+  `ObjectiveValue` enum takes values `1`, `2`, `4`, `7` and one empty across
+  the 96 instances (sample names: `FinishRaceAnyPosition` at `1`,
+  `BeatPersonalBestLap`/`Zone Elite`/`Speed Pass` at `2`, `3rdOrBetter`/
+  `Top7` at `4`, `Kill1Opponent` at `7`, `MostDamage` unset) - not decoded
+  further; a guess at the ordinal-to-meaning mapping would be under 50
+  confidence.
+- **`WeaponType`'s bit layout.** `WeaponSetDefinition`'s own
+  `M_WEAPONAVAILABLEBITS` is a raw value per instance (`"Rockets Only"` is
+  `1`); which bit is which weapon is not chased.
+- **`WOShipCreatorParams`.** Referenced by every event's
+  `M_PGridShipCreatorParams`/`M_PPlayerShipCreatorParams`, never itself
+  seen as an instance in `SP.xml` (every observed reference is empty) -
+  its own shape is unread.
+- **The `M_X`/`M_Y` -> screen projection for a native event.** See
+  [above](#what-m_xm_y-project-to-on-screen-is-not-in-spxml-and-is-left-open).
+- **`MP.xml`'s season/level ladder.** See [above](#dataxmlmpxml-is-not-spxmls-schema).
+
+## See also
+
+- [Race campaign](race-campaign.md) - the `PI_Grid`/`PI_Cell` schema the DLC
+  `HD CAMPAIGN`/`FURY CAMPAIGN` tiers use instead, on this same title.
+- [2048 frontend](2048-frontend.md) - `NEWGUI/Definition.xml`'s own campaign
+  map screen, `FE3DCanvas`, and the `CanvasLabel linkedevent` cross-reference
+  measured above.
+- [`docs/ghidra/functions/vita-2048-eu-v104/frontend-campaign-map.md`](../ghidra/functions/vita-2048-eu-v104/frontend-campaign-map.md) -
+  the DLC tiers' own scale/bias projection, and why it does not apply here.
+- [Handling stats](handling-stats.md) - `SpeedClass`'s four-wide ladder and
+  why it was not widened for 2048's fifth rung.

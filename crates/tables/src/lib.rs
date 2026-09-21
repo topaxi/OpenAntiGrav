@@ -2,7 +2,8 @@
 //!
 //! Everything here parses a human-authored file - XML in every case so far -
 //! into numbers the engine reads: [`handling`] tunes a ship, [`weapons`] tunes
-//! a pickup, [`race_campaign`] lays out a campaign's grid, [`trackstartup`]
+//! a pickup, [`race_campaign`] lays out a campaign's grid, [`mjolnir`] is
+//! Wipeout 2048's own differently-shaped campaign database, [`trackstartup`]
 //! says what a circuit loads, [`envsettings`] and [`effectsettings`] carry
 //! the lighting and colour-grade rigs the later titles ship, [`enginelight`]
 //! is where Wipeout HD hangs each ship's engine light, and
@@ -28,6 +29,7 @@ pub mod envsettings;
 pub mod fexml;
 pub mod fury_backdrop;
 pub mod handling;
+pub mod mjolnir;
 pub mod race_campaign;
 pub mod trackstartup;
 pub mod weapons;
