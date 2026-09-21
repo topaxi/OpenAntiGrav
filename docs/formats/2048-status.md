@@ -164,9 +164,15 @@ the start line and runs the simulation. What it does **not** do, and why:
   2048's own plugins name no distinct caption role at all - confirmed across
   all seventeen, a real gap rather than an oversight - so
   `hud_small_font_role` is `None` there and `hud_font` falls back to the
-  value face for captions too, **chosen, not measured**: a Vita3K race frame
-  still shows two on-screen text sizes, but that comes from each widget's own
-  authored `scale`, not a second `.fnt` file this pass located. Verified with
+  value face for captions too. **Measured, not merely chosen**: composing
+  every root the played skin (`oag_2048::hud::skins::PLAYED`) actually reads
+  finds zero `font="HUDSmall"` widgets in any of them - every label is
+  `font="HUD"`, and the visible caption/value size split (`LapTxt` at
+  `scale=0.6` beside `Laps` at `scale=1.0`) comes entirely from each
+  widget's own authored `scale` on that one face, not a second `.fnt` this
+  pass failed to find. `font="HUDSmall"` exists in this archive, 261
+  widgets' worth, only in the three skins this title's race-manager
+  constructors never read. Verified with
   `just play 2048 --race --screenshot ...`: the boot report now reads `HUD
   font Data\XML\2048_hud\font\2048_hud.fnt (role "2048HUD")` and the
   screenshot shows the same clean sans-serif face the real Vita3K captures

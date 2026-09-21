@@ -129,10 +129,14 @@ pub(super) fn load_hud(
     let small_font = match title.hud_art.hud_small_font_role {
         Some(role) => hud_font(archives, &languages, role, report),
         None => {
-            let role = title.hud_art.hud_font_role;
-            report.push(format!(
-                "HUD: this title names no caption font role; captions draw in the {role:?} face"
-            ));
+            // Named as "reuse", not "draw in the {role} face": `font` above
+            // may itself already be the 5x7 fallback if the value role
+            // failed to resolve or decode, and this line must not claim a
+            // face loaded when it did not.
+            report.push(
+                "HUD: this title names no caption font role; captions reuse the value face"
+                    .to_string(),
+            );
             font.clone()
         }
     };

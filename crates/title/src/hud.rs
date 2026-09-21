@@ -440,30 +440,44 @@ pub struct HudArt {
     /// `Some("HUDSmall")` for Pulse, Pure and HD, all measured the same way
     /// [`Self::hud_font_role`]'s doc states for their `"HUD"` row.
     ///
-    /// **2048 is `None`, and it is a real gap rather than an oversight or a
-    /// borrowed default.** Every one of its seventeen language plugins was
-    /// read for this axis and not one carries a second `<Font>` slot for the
+    /// **2048 is `None`, and it is a real gap in the font-role vocabulary
+    /// rather than an oversight or a borrowed default - measured at two
+    /// levels, not assumed at either.** Every one of its seventeen language
+    /// plugins was read and not one carries a second `<Font>` slot for the
     /// caption face - `2048HUD` is the entire HUD vocabulary its
-    /// `Definition.xml` authors. A Vita3K race frame
+    /// `Definition.xml` authors. **And composing every one of the seven
+    /// roots the played skin (`oag_2048::hud::skins::PLAYED`) actually
+    /// carries finds zero `font="HUDSmall"` widgets in any of them** - every
+    /// label in that skin is `font="HUD"`
+    /// (`crates/game/tests/vita_2048_hud_ground_truth.rs`'s
+    /// `the_played_skins_layouts_author_no_hudsmall_widget_at_all`), so no
+    /// widget the played HUD draws will ever ask this build to resolve a
+    /// caption role in the first place - the gap costs nothing real. A
+    /// `font="HUDSmall"` role does exist in this archive, 261 widgets' worth,
+    /// but only in the three *unplayed* skins (`wo3_hud`, `2097_hud`, the
+    /// bare root) `SpArcadeRaceManager_Construct` and its siblings never
+    /// read.
+    ///
+    /// **The visible size split is measured too, and it is not a second
+    /// file.** A Vita3K race frame
     /// (`data/reference/2048-frontend/06-attract-mode-demo-race.png`'s
     /// in-race captures under `docs/formats/2048-hud.md`, e.g.
-    /// `21-race2-start.png`) shows the caption text (`LAP`, `TOTAL`,
-    /// `CURRENT`, `POS`, `XP`) visibly smaller than the value text (`1/3`,
-    /// `8/8`) beside it, so the *picture* still has two sizes on screen - the
-    /// layout's own per-widget `scale` (`oag_game::hud::widget::Label::scale`)
-    /// is what draws that, not a second atlas file, since there is no second
-    /// file to draw it from.
+    /// `21-race2-start.png`) shows caption text (`LAP`, `TOTAL`, `CURRENT`,
+    /// `POS`, `XP`) visibly smaller than the value text (`1/3`, `8/8`)
+    /// beside it, and the composed layout explains it exactly: `LapTxt`
+    /// (`"LAP"`) is authored at `scale=0.6` beside `Laps` (`"1/3"`) at
+    /// `scale=1.0`, both `font="HUD"`; `RaceXPTxt`/`RaceXP` (`"XP"`/its
+    /// value) are both `scale=0.6`, which is why that pair reads as one
+    /// size in the frame while `LAP`/`1/3` reads as two. Every widget's own
+    /// `oag_game::hud::widget::Label::scale` carries the size, on one atlas -
+    /// not a guess standing in for an unlocated second `.fnt`.
     ///
-    /// **Chosen, not measured**: `oag_game::race::hud::hud_font` falls back
-    /// to [`Self::hud_font_role`]'s own face when this is `None`, rather
-    /// than drawing captions in the 5x7 fallback the way an unresolved role
-    /// otherwise would. No frame has been compared glyph-for-glyph against
-    /// the original to confirm the caption face really is `2048_hud.fnt`
-    /// scaled down rather than a second, still-unlocated `.fnt` this pass
-    /// did not find - the fallback is the reading that draws *something*
-    /// recognisable rather than nothing, and it is labelled as a choice so a
-    /// later pass that does find a second file knows to correct it here
-    /// rather than to read this as already settled.
+    /// So `oag_game::race::hud::hud_font` falling back to
+    /// [`Self::hud_font_role`]'s own face when this is `None` is not merely
+    /// the reading that draws *something* recognisable rather than
+    /// nothing - it is the reading the played skin's own layouts already
+    /// assume, since none of them ever names a second face to fall back
+    /// *from*.
     pub hud_small_font_role: Option<&'static str>,
 }
 

@@ -272,14 +272,18 @@ shape, not by screen, and would have mis-fired on `Team`'s own
    pattern; `crates/game/src/race/hud.rs::hud_font` now asks each title for
    its own role rather than the literal `"HUD"`/`"HUDSmall"`. 2048 measures
    `"2048HUD"`/`None`. The `HUDSmall` question this item raised was checked
-   rather than assumed: all seventeen 2048 plugins name no distinct caption
-   role at all - a real gap - so the caption face falls back to the value
-   face, **chosen, not measured**, labelled as such in
-   `oag_title::HudArt::hud_small_font_role`'s own doc. Verified with
+   rather than assumed, at two levels: all seventeen 2048 plugins name no
+   distinct caption role at all, and composing every root the played skin
+   carries finds zero `font="HUDSmall"` widgets in any of them - every label
+   is `font="HUD"`, and the visible caption/value size split is `scale`
+   alone (`LapTxt` at 0.6 beside `Laps` at 1.0). So the caption face falling
+   back to the value face is **measured, not merely chosen** - labelled as
+   such in `oag_title::HudArt::hud_small_font_role`'s own doc. Verified with
    `just play 2048 --race --screenshot ...`: the boot report resolves
    `Data\XML\2048_hud\font\2048_hud.fnt (role "2048HUD")` and the screenshot
    shows the real face, not 5x7. Pulse and HD re-captured unchanged. Pinned
    by `vita_2048_hud_ground_truth.rs`'s
-   `the_resolved_hud_font_is_2048_huds_own_face_not_a_leftover_or_the_fallback`.
+   `the_resolved_hud_font_is_2048_huds_own_face_not_a_leftover_or_the_fallback`
+   and `the_played_skins_layouts_author_no_hudsmall_widget_at_all`.
    Full account: `docs/formats/2048-frontend.md`'s "Resolved 2026-09-21: the
    HUD font draws" section and `docs/formats/2048-status.md`'s HUD bullet.

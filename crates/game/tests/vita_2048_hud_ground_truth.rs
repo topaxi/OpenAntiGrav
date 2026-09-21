@@ -313,3 +313,50 @@ fn the_resolved_hud_font_is_2048_huds_own_face_not_a_leftover_or_the_fallback() 
         );
     }
 }
+
+/// **Measured, not merely chosen**: the skin this title actually plays
+/// (`oag_2048::hud::skins::PLAYED`) never authors a `font="HUDSmall"` widget
+/// anywhere across its seven roots, so `oag_title::HudArt::hud_small_font_role`
+/// being `None` for 2048 costs nothing real - no widget the played HUD draws
+/// will ever ask this build to resolve that role in the first place.
+///
+/// This is the check `oag_title::HudArt::hud_small_font_role`'s own doc
+/// promises: the visible caption/value size split
+/// (`LapTxt` at `scale=0.6` beside `Laps` at `scale=1.0`, both `font="HUD"`)
+/// comes entirely from each widget's own authored `scale`, on a single font
+/// file - not from a second, unresolved `.fnt` this build is failing to
+/// find. `font="HUDSmall"` does exist in this archive, 261 widgets' worth,
+/// but only in the three *unplayed* skins (`wo3_hud`, `2097_hud`, the bare
+/// root) this title's own race-manager constructors never read - see
+/// `oag_2048::hud::skins`' own doc comment for which skin is which.
+#[test]
+#[ignore = "needs the decrypted Vita package in data/extracted/vita/"]
+fn the_played_skins_layouts_author_no_hudsmall_widget_at_all() {
+    let Some(mut archives) = open() else {
+        return;
+    };
+    use oag_2048::hud::skins::played;
+    let played_roots = [
+        played::ARCADE,
+        played::ELIMINATION,
+        played::MP_TAG,
+        played::SPEED_LAP,
+        played::TIME_TRIAL,
+        played::ZOMBIE,
+        played::ZONE,
+    ];
+    let mut small_widgets = Vec::new();
+    for root in played_roots {
+        for label in composed(&mut archives, root).layout.labels {
+            if label.font == oag_game::hud::Font::Small {
+                small_widgets.push(format!("{root}: {}", label.name));
+            }
+        }
+    }
+    assert!(
+        small_widgets.is_empty(),
+        "the played skin does author font=\"HUDSmall\" after all: {small_widgets:?} - \
+         oag_title::HudArt::hud_small_font_role's \"real gap\" doc comment needs \
+         correcting, and hud_font's None fallback may now be visibly wrong"
+    );
+}

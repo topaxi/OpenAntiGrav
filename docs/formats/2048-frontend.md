@@ -566,20 +566,34 @@ resolves `title.hud_art.hud_font_role` instead of the literal
 | Omega | `"HUD"` (placeholder - `oag_omega::hud::ART` is provably inert, see that module's doc) | `Some("HUDSmall")` (placeholder) |
 | 2048 | `"2048HUD"` (measured, confidence 90 - the row above) | `None` (**a real gap**, not a default omitted - see below) |
 
-**`HUDSmall` on 2048 is `None` because it is a real gap, and the fallback is
-chosen, not measured.** All seventeen of 2048's language plugins were read
-for a second `<Font>` slot naming a caption face and not one carries one -
-`2048HUD` is the entirety of this title's own HUD font vocabulary.
-`hud_font` falls back to `hud_font_role`'s own face for captions rather than
-to the 5x7 glyphs a fully-unresolved role would draw. A Vita3K race frame
-(`21-race2-start.png`, cited in [2048-hud.md](2048-hud.md)) still shows two
-on-screen text sizes - `LAP`'s caption is visibly smaller than the `1/3`
-value beside it - but nothing here has confirmed that split comes from a
-second, still-unlocated `.fnt` file rather than from each widget's own
-authored `scale` (`oag_game::hud::widget::Label::scale`) shrinking the same
-atlas. The fallback is the reading that draws something recognisable rather
-than nothing; a later pass that does find a second file corrects this row
-rather than reading it as settled.
+**`HUDSmall` on 2048 is `None` because it is a real gap, measured at two
+levels rather than assumed at either.** All seventeen of 2048's language
+plugins were read for a second `<Font>` slot naming a caption face and not
+one carries one - `2048HUD` is the entirety of this title's own HUD font
+vocabulary. And composing every one of the seven roots the played skin
+(`oag_2048::hud::skins::PLAYED`) actually carries finds **zero**
+`font="HUDSmall"` widgets in any of them - every label in that skin is
+`font="HUD"`
+(`vita_2048_hud_ground_truth.rs`'s
+`the_played_skins_layouts_author_no_hudsmall_widget_at_all`) - so no widget
+the played HUD draws will ever ask this build to resolve a caption role at
+all. `font="HUDSmall"` does exist in this archive, 261 widgets' worth, only
+in the three skins (`wo3_hud`, `2097_hud`, the bare root) this title's
+race-manager constructors never read.
+
+So the visible size split is measured too, and it is not a second file. A
+Vita3K race frame (`21-race2-start.png`, cited in [2048-hud.md](2048-hud.md))
+shows `LAP`'s caption visibly smaller than the `1/3` value beside it, and
+the composed layout explains it exactly: `LapTxt` (`"LAP"`) is authored at
+`scale=0.6` beside `Laps` (`"1/3"`) at `scale=1.0`, both `font="HUD"`;
+`RaceXPTxt`/`RaceXP` (`"XP"`/its value) are both `scale=0.6`, which is why
+that pair reads as one size in the frame while `LAP`/`1/3` reads as two.
+Each widget's own `oag_game::hud::widget::Label::scale` carries the size, on
+one atlas - not a guess standing in for an unlocated second `.fnt`. So
+`hud_font` falling back to `hud_font_role`'s own face for captions is not
+merely the reading that draws something recognisable rather than nothing -
+it is the reading the played skin's own layouts already assume, since none
+of them ever names a second face to fall back *from*.
 
 Verified with `just play 2048 --race --screenshot ...`: the boot report now
 reads `HUD font Data\XML\2048_hud\font\2048_hud.fnt (role "2048HUD")` where
@@ -590,14 +604,16 @@ face - matching the caption style in the real Vita3K captures this page and
 HD were re-captured the same way and are unchanged: both still resolve
 `"HUD"`/`"HUDSmall"` to `PulseHud.fnt`/`small.fnt` as before.
 
-Pinned by
-`crates/game/tests/vita_2048_hud_ground_truth.rs`'s
+Pinned by two tests in
+`crates/game/tests/vita_2048_hud_ground_truth.rs`:
 `the_resolved_hud_font_is_2048_huds_own_face_not_a_leftover_or_the_fallback`,
-which also asserts the regression this axis closes: resolving the shared
+which also asserts the regression this axis closes - resolving the shared
 literal `"HUD"` against 2048's own plugins still finds `korean`'s leftover
 `Data\FE\Fonts\PulseHud.fnt` entry, and that entry still fails to decode
-(2048's own archive does not carry it) - so the old first-match-across-every-
-plugin behaviour is provably wrong, not merely superseded.
+(2048's own archive does not carry it), so the old first-match-across-every-
+plugin behaviour is provably wrong, not merely superseded - and
+`the_played_skins_layouts_author_no_hudsmall_widget_at_all`, which composes
+all seven played roots and asserts none of them authors `font="HUDSmall"`.
 
 ## Wired: the boot walks and the grids draw (2026-09-21)
 
