@@ -310,8 +310,9 @@ hash-images:
 # docs/formats/omega-frontend.md - so the boot chain and menu layout are the
 # same shape HD's are, walked with `Provenance::Declared` rather than
 # `Measured`: no PS4 emulator exists in this project's toolchain to watch a
-# real boot, and the boot report names which of the nine archives served
-# each front-end file.
+# real boot; `crates/omega/tests/omega_title_ground_truth.rs` names which of
+# the nine archives serves each front-end file, as a tripwire rather than a
+# log line.
 #
 # **`--screenshot` alone stops on `Language Selection`** - German is not
 # offered (its plugin's own `Definition.xml` is one of the disc's own

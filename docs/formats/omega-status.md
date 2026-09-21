@@ -75,10 +75,12 @@ four `environments2048\*` circuits (`sol`, `square`, `mall`, `subway`,
 `cathedral`) do ship a plain `track.vex`. Which environments are which was
 not surveyed exhaustively - `tech_de_ra\track.vex` is confirmed present and
 is `oag_omega::race::DEFAULTS.track`'s value, chosen for existing rather than
-measured as any kind of default, and it is **not confirmed to carry a
-readable `WO Track` node** - `just play omega --race` (or an interactive
-START once a race box exists) has not been checked against it in this lane
-past the earlier headless-capture crash below.
+measured as any kind of default. **It is confirmed to have no readable `WO
+Track` node** - a clean negative result, not a gap: `oag_render::track`'s own
+reader refused it outright (`Data\environments\tech_de_ra\track.vex has no
+WO Track node`), hit directly by the headless-capture crash below. Whether
+that is this one file, or every plain-`.vex` circuit on this title, was not
+surveyed past this one instance.
 
 **The in-race HUD has no per-mode composition this lane found.** No
 `arcade_hud.xml`/`timetrial_hud.xml`/`speedlap_hud.xml`/`zone_hud.xml` at

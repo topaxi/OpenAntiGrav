@@ -188,10 +188,13 @@ pub mod archives {
 /// `oag_hd::TITLE`'s own `DATA00` had before its RPCS3 capture confirmed it.
 /// **This is that shape of evidence again, not the capture: chosen, not
 /// measured.** `docs/formats/omega-frontend.md`'s "Load order is not
-/// settled" section is the record of what would close it, and the boot
-/// report names which archive actually served each front-end file so a
-/// future capture can correct this choice without guessing which file to
-/// re-check.
+/// settled" section is the record of what would close it;
+/// `crates/omega/tests/omega_title_ground_truth.rs`'s
+/// `data09_serves_every_front_end_file_this_crate_reads` names which archive
+/// actually serves each front-end file this crate reads, as a tripwire
+/// rather than a log line - a future capture that settles a different order
+/// fails that test by name instead of only disagreeing with a boot report
+/// nobody kept.
 ///
 /// **Also mandatory, which is deliberate.** [`oag_assets::source::Layout::resolve_on`]
 /// hard-errors when no candidate here is found, and `data09` exists only in

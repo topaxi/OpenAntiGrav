@@ -63,6 +63,31 @@ fn data09_carries_nineteen_grids() {
     );
 }
 
+/// Every front-end file this crate reads is served by `data09.psarc` -
+/// `Archives::locate` names the winning archive, so this is a tripwire
+/// rather than a log line nobody kept: a future patch, or a reordering of
+/// `oag_omega::EXTRA_CANDIDATES`, that changed which archive wins fails here
+/// by name instead of only disagreeing with a boot report.
+#[test]
+#[ignore = "needs the decrypted PS4 package pair in data/extracted/ps4/"]
+fn data09_serves_every_front_end_file_this_crate_reads() {
+    let Some(source) = source() else { return };
+    let archives = oag_omega::open(&source).expect("open the omega source");
+    for path in [
+        oag_omega::frontend::names::FRONTEND_ROOT,
+        oag_omega::campaign::SCREEN_ENTRY,
+        oag_omega::campaign::DEFINITION_ENTRY,
+        r"Data\Plugins\Frontend\Gui\MainMenu_Definition.xml",
+        r"Data\Plugins\Frontend\Gui\RaceBox_Definition.xml",
+    ] {
+        let served = archives.locate(path);
+        assert!(
+            served.is_some_and(|label| label.contains("data09.psarc")),
+            "{path} served by {served:?}, expected data09.psarc"
+        );
+    }
+}
+
 /// Neither `oag_hd` nor `oag_2048` opens Omega's own source directory as
 /// their own title - the archive-name collision the brief asked to have
 /// checked rather than argued.
