@@ -840,8 +840,14 @@ fn micro_tiled_address_against_the_oracle_pairs() {
         let word6 = u32::from_le_bytes(blob[at..at + 4].try_into().unwrap());
         let meta_offset = u32::from_le_bytes(blob[at + 4..at + 8].try_into().unwrap());
         println!(
-            "harimau_c1: word6=0x{word6:08x} meta_offset=0x{meta_offset:08x} stream_size={} data_offset={}",
-            texture.stream_size, texture.data_offset
+            "harimau_c1: word6=0x{word6:08x} meta_offset=0x{meta_offset:08x} stream_size={} data_offset={} base_array_slice={} last_array_slice={} is_pow2_pad={} base_mip={} last_mip={}",
+            texture.stream_size,
+            texture.data_offset,
+            texture.base_array_slice,
+            texture.last_array_slice,
+            texture.is_pow2_pad,
+            texture.base_mip_level,
+            texture.last_mip_level
         );
         println!("harimau_c1 1024x1024 (single mip level, tiles_x={tiles_x}): scanning row 0");
         for disk_index in 0..tiles_x as u64 {
