@@ -1504,13 +1504,20 @@ role is what chose which atlas `set_face_atlas` loaded... nothing here
 re-checks it against `role`"), and the one alternate atlas that ever loads
 is the `Title` role, not a body face. Two consequences, both left open:
 
-- **Every label on this screen still renders upper-case** (`SPEED CLASS`,
-  `MOA THERMA WHITE`, `CONFIRM`) where the reference shows mixed case
-  (`Speed class`, `Talon's Junction White`, `Confirm`) - pre-existing,
-  present before this lane and on every `Line1`..`8`/`Title`/`Track Line`
-  label already, not only the two widgets this pass added. Fixing it needs
-  a second, correctly-sized atlas loaded for the menu stage, not a role
-  string chosen differently in `oag_ui::campaign`.
+- ~~Every label on this screen still renders upper-case~~ **Fixed
+  2026-09-21**, once the atlas this note itself said was missing landed
+  (`crates/game/src/boot/fonts.rs`'s `face_atlas_slot`, a separate lane's
+  own work): `oag_ui::campaign::draw::text_draw` now picks
+  `Draw::FacedText` over the plain `Draw::Text` this note describes
+  whenever `text.font` names `"default"` - `super::footer::face_role`,
+  the identical check `NavigationLegend::draw` already made for
+  `Confirm`/`Back`, now shared rather than duplicated. `Speed
+  class`/`Line1`..`8`/`Title`/`Track Line` all author `font="default"`, so
+  every one of them picks the real face up automatically, no per-label
+  change needed. Confirmed live,
+  `data/scratch/lane-hd-sel/shots/pulse-cellselect-after-facerouting.png`
+  (`pulse-psp-eu.chd`, French: `Catégorie`/`Tours`/`Armes`/`Points`/
+  `Meilleur` all read mixed-case where they read upper-case before).
 - **`AI difficulty (Medium)` reads `CHANGE DIFFICULTY`** on this build - a
   pre-existing label (`DifficultyButton`'s own authored `string="Change
   Difficulty"` in `CellMode_Definition.xml`, drawn through
