@@ -405,3 +405,6 @@ mod decode;
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod search_tests;

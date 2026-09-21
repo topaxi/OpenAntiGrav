@@ -201,33 +201,73 @@ values for the same `TileMode`; the per-surface reduction algorithm is the
 only explanation this project has found that fits both rows, and it has not
 been reimplemented.
 
-**A calibration pass was attempted and its result was disproven, which is
-worth recording as a trap for the next contributor rather than erasing.**
-Brute-forcing the five parameters against one small oracle-paired texture
-(the `Holographic_02_GLOW.gnf` worked example above) found a configuration
-that decoded to a picture a human would call legible - a recognisable decal
-pattern, not noise. Cross-checked against AMD's own
-`EgBasedLib::SanityCheckMacroTiled` (`egbaddrlib.cpp`), that same
-configuration turned out to violate a real hardware constraint
-(`banks >= macroAspectRatio`, "this will generate macro tile height <= 1"
-otherwise) badly enough that `macro_tile_bytes` truncates to zero and the
-address space demonstrably aliases - at most half the block positions are
-distinct. The "legible picture" was two mostly-white, sparse-line-art images
-compared against each other, which is a weak control this project's own
-`gxt.md` warns about by name ("a smoothness metric was tried first and is too
-weak to use"); it was not a match. **A picture that looks right is not
-evidence by itself** - this is the concrete instance of that rule, not just
-the abstract one.
+**Two calibration passes were attempted; both are negative results, kept as
+evidence rather than erased.**
 
-**What would close this**: the true `pipe_config` (a global GPU constant,
-plausibly recoverable from a PS4 devkit's `GB_ADDR_CONFIG` register or a
-leaked/documented `libSceGnm` tile-mode table this project does not hold) and
-`m_row_size` (a DRAM row-size constant), from which
-`HwlReduceBankWidthHeight`'s reduction is deterministic and checkable against
-the pitch-padding evidence above across all 48 padded samples, not just one.
-Short of that, a real PS4 or an accurate GCN-generation emulator to render a
-known texture and compare would settle it directly, the way `docs/formats/hd-frontend.md`'s
-own boot chain was settled by three cold boots on RPCS3.
+*First pass, one texture, eyeballed - disproven.* Brute-forcing the five
+parameters against one small oracle-paired texture
+(`Holographic_02_GLOW.gnf`) found a configuration that decoded to a picture
+a human would call legible - a recognisable decal pattern, not noise.
+Cross-checked against AMD's own `EgBasedLib::SanityCheckMacroTiled`
+(`egbaddrlib.cpp`), that same configuration turned out to violate a real
+hardware constraint (`banks >= macroAspectRatio`, "this will generate macro
+tile height <= 1" otherwise) badly enough that `macro_tile_bytes` truncates
+to zero and the address space demonstrably aliases - at most half the block
+positions are distinct. The "legible picture" was two mostly-white,
+sparse-line-art images compared against each other, a weak control this
+project's own `gxt.md` warns about by name ("a smoothness metric was tried
+first and is too weak to use"); it was not a match. **A picture that looks
+right is not evidence by itself.**
+
+*Second pass, five differently-sized oracle pairs, measured -
+`crates/texture/src/gnf/search_tests.rs`.* A properly bounded search: every
+valid `pipe_config` (all 14 AMD enum values, not assumed from memory to be
+8-pipe), `num_banks` in `{2,4,8,16}`, starting `bank_width`/`bank_height`/
+`macro_tile_aspect` in `{1,2,4,8}` each, and a DRAM row-size constant in
+`{1024,2048,4096}` bytes (BC7's own 1,024-byte micro tile is already larger
+than 256 or 512, which fail `SanityCheckMacroTiled` outright for this
+format and are excluded) - 8,736 configurations that pass
+`SanityCheckMacroTiled` after `HwlReduceBankWidthHeight`'s reduction is
+applied, faithfully ported including the pre-alignment steps
+`ComputeSurfaceAlignmentsMacroTiled` runs first. Each candidate decoded
+against five team/livery-matched oracle pairs spanning 32x32 to 1024x1024,
+scored by mean absolute per-channel difference against the HD `.gtf`
+decode - the same metric `gxt.md`'s `PVRTII4BPP`/`UBC1`/`UBC3` sections use,
+where a correct match reads single digits, a wrong tiling order high tens,
+and chance around 60.
+
+**Best mean score across all five pairs: 45.21** (`pipe_config=P2,
+num_banks=2, bank_width=4, bank_height=1, macro_tile_aspect=2`), with a
+per-pair spread of 31.58 to 59.11 - uniformly in the "wrong" to "chance"
+range, no candidate close to a match on any pair. **This is a clean
+negative across the whole space the algorithm's own validity rules allow**,
+not a search that ran out of time: 8,736 is small enough that it completed
+in 69 seconds.
+
+**What this rules out, concretely**: a model where `pipe_config`/`num_banks`
+are one fixed pair, global across every BC7 surface, and `bank_width`/
+`bank_height`/`macro_tile_aspect` are whatever `HwlReduceBankWidthHeight`
+reduces them to from one fixed row-size constant - because that model
+predicts the **same** `macro_tile_pitch` for every BC7 surface (the
+reduction's inputs are `bpp`, `pipes` and `row_size` alone; none of them
+vary by surface for a fixed-bpp format), which directly contradicts the
+pitch-padding evidence above (8-block and 512+-block paddings coexist on
+files declaring the same `TileMode`). **Something the descriptor does not
+carry must select a different starting `bank_width`/`bank_height`/
+`macro_tile_aspect` per surface** - plausibly `HwlSelectTileMode`/
+`HwlOptimizeTileMode` (`siaddrlib.cpp`, named but not read in this pass)
+picking a surface-size-dependent starting row of the tile-mode table before
+`HwlReduceBankWidthHeight` ever runs, which would mean `TileMode(13)` alone
+is not even the whole story at the *selection* level, only at the
+*array-mode-and-micro-tile* level.
+
+**What would close this**: the true `pipe_config` and `HwlSelectTileMode`'s
+own surface-size-dependent selection rule (both recoverable from a PS4
+devkit's registers or a leaked/documented `libSceGnm` tile-mode table this
+project does not hold), or a real PS4 / accurate GCN-generation emulator to
+render a known texture and compare directly, the way
+`docs/formats/hd-frontend.md`'s own boot chain was settled by three cold
+boots on RPCS3.
 
 ## Implemented where
 
@@ -242,7 +282,9 @@ exact decoded fields. `crates/texture/tests/omega_gnf_pixels_ground_truth.rs`
 (`#[ignore]`d, needs the patch archives too) runs `decode` over the whole
 corpus - all nine archives, `data08`'s `Data/fe/` subtree swept in full -
 asserting it never panics and that every `Error::Tiled` names the exact
-`tile_mode` the descriptor declares.
+`tile_mode` the descriptor declares. `crates/texture/src/gnf/search_tests.rs`
+(`#[ignore]`d) is the bounded tiling-configuration search this page's
+"Tiling" section reports the negative result of.
 
 ## See also
 
