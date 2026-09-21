@@ -405,3 +405,5 @@
 0x005c36a8	function	Rsx_SetColorClearValue	84	ship-sun-occlusion.md
 0x005c3724	function	Rsx_SetZStencilClearValue	84	ship-sun-occlusion.md
 0x005c38c0	function	Rsx_ClearSurface	84	ship-sun-occlusion.md
+0x008ae898	data	PI_Cell_AttributeTable	88	race-campaign.md
+0x0001cbe0	function	SaveData_MigrateCellMedalsToHardElite	85	race-campaign.md

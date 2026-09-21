@@ -278,6 +278,60 @@ fn gold_is_the_smallest_ord_value() {
     assert!(Medal::Silver < Medal::Bronze);
 }
 
+/// A standalone fixture rather than an addition to `FIXTURE` above, since
+/// every other test there indexes `grid.cells` positionally and a fifth cell
+/// would shift them all. Mirrors `DATA00.PSARC`'s own shape for an
+/// `Elimination` cell: per-difficulty `Easy`/`Medium`/`Hard` targets (dummy
+/// `1`/`2`/`3` on every rung, per `grid8_3_2`'s own measured values) plus a
+/// `NitroElimNovice`/`Skilled`/`Elite` triple.
+const NITRO_FIXTURE: &str = r#"
+<PI_Grid name="grid8">
+  <Values RequiredPoints="0" Locked="false"></Values>
+  <PI_Cell name="grid8_3_2">
+    <Values track="88_Track" mode="Elimination" class="Flash" Weapons="on"
+            damage="on" AICount="7" skillMedium="1.8" ship="None" ShipChoice="Yes"></Values>
+    <EasyGold Target="1"></EasyGold>
+    <EasySilver Target="2"></EasySilver>
+    <EasyBronze Target="3"></EasyBronze>
+    <MediumGold Target="1"></MediumGold>
+    <MediumSilver Target="2"></MediumSilver>
+    <MediumBronze Target="3"></MediumBronze>
+    <HardGold Target="1"></HardGold>
+    <HardSilver Target="2"></HardSilver>
+    <HardBronze Target="3"></HardBronze>
+    <NitroElimNovice Target="200"></NitroElimNovice>
+    <NitroElimSkilled Target="200"></NitroElimSkilled>
+    <NitroElimElite Target="200"></NitroElimElite>
+  </PI_Cell>
+</PI_Grid>
+"#;
+
+/// [`Cell::nitro_elimination_target_for_difficulty`] reads the triple by
+/// rung, `0` novice through `2` elite - the measured shape, see the method's
+/// own doc comment for what is and is not established about how the
+/// executable turns this one number into a medal.
+#[test]
+fn nitro_elimination_target_reads_by_rung() {
+    let grid = parse(NITRO_FIXTURE).expect("parses");
+    let elim = &grid.cells[0];
+    assert_eq!(elim.nitro_elimination_targets, Some((200, 200, 200)));
+    assert_eq!(elim.nitro_elimination_target_for_difficulty(0), Some(200));
+    assert_eq!(elim.nitro_elimination_target_for_difficulty(1), Some(200));
+    assert_eq!(elim.nitro_elimination_target_for_difficulty(2), Some(200));
+}
+
+/// A cell with no `<NitroElimNovice>` at all - every cell in `FIXTURE` above
+/// - reads `None`, not a panic or a default.
+#[test]
+fn nitro_elimination_target_is_none_without_the_triple() {
+    let grid = parse(FIXTURE).expect("parses");
+    assert_eq!(grid.cells[0].nitro_elimination_targets, None);
+    assert_eq!(
+        grid.cells[0].nitro_elimination_target_for_difficulty(1),
+        None
+    );
+}
+
 #[test]
 fn mode_ordinals_match_the_executables_own_table() {
     assert_eq!(Mode::Race.ordinal(), Some(3));

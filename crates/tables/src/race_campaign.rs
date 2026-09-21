@@ -511,12 +511,59 @@ impl Cell {
         }
     }
 
+    /// The single per-rung target [`Cell::nitro_elimination_targets`]
+    /// carries, `0` easy through `2` hard (`novice`/`skilled`/`elite`, the
+    /// same rung words this title's own screens and executable use in place
+    /// of Pulse's `Easy`/`Medium`/`Hard` - see
+    /// `docs/ghidra/functions/ps3-hdfury-eu/race-campaign.md`'s medal-law
+    /// section for the `HARD(ELITE)` string this equivalence is measured
+    /// from). `None` when the cell carries no nitro triple at all.
+    ///
+    /// **This is one number, not a [`MedalTargets`] triple**, and deliberately
+    /// has no sibling that forges one - synthesizing `gold`/`silver`/`bronze`
+    /// out of a single measured value would be inventing data the disc does
+    /// not author, exactly what this project's own reverse-engineering rule
+    /// forbids. What the executable's medal law actually does with this one
+    /// number - award a single pass/fail outcome, scale a threshold three
+    /// ways at evaluate-time, or something else - is **not measured**; see
+    /// that same evidence page's "what is not determined" section. A caller
+    /// wiring an `Elimination`/`NitroBattle` cell's medal needs to answer
+    /// that question first, not assume [`Cell::evaluate_medal`] already
+    /// does - see its own doc comment.
+    #[must_use]
+    pub fn nitro_elimination_target_for_difficulty(&self, difficulty: u8) -> Option<i64> {
+        let (novice, skilled, elite) = self.nitro_elimination_targets?;
+        Some(match difficulty {
+            0 => novice,
+            1 => skilled,
+            _ => elite,
+        })
+    }
+
     /// `Cell_EvaluateMedal` (`0x088bf620`): a three-way threshold compare of
     /// `value` against this cell's own gold/silver/bronze targets. `value`
     /// is a finishing position for `Race`/`Tournament`/`Head2Head`, a time
     /// in centiseconds for `Time Trial`/`Speed Lap`, a zone count for
     /// `Zone`, or a kill count for `Elimination` - never derived here; the
     /// caller supplies whatever that mode measures.
+    ///
+    /// **On a Wipeout HD/Fury cell that also carries
+    /// [`Cell::nitro_elimination_targets`], this function's result is not
+    /// meaningful for `Elimination`/`NitroBattle`.** Its own
+    /// `gold`/`silver`/`bronze` fields (and every rung of
+    /// [`Cell::difficulty_targets`]) are authored dummy `1`/`2`/`3` on such a
+    /// cell - confirmed directly against `DATA00.PSARC`'s eight Fury grids,
+    /// see `crates/hd/tests/campaign_grids_ground_truth.rs`'s
+    /// `eliminationfamily_cells_carry_a_real_nitro_triple_and_a_dummy_flat_one`,
+    /// so this always compares `value` against that placeholder rather than
+    /// the cell's real target. What replaces it - reading
+    /// [`Cell::nitro_elimination_target_for_difficulty`] instead, and by what
+    /// rule that single number becomes a medal - is unmeasured; see that
+    /// method's own doc comment. Left unchanged here rather than guessed at,
+    /// since Pulse's own `Eliminator` cells (whose kill target lives in the
+    /// flat `gold` field, per `docs/ghidra/functions/psp-pulse-usa/race-campaign.md`)
+    /// still need this exact behaviour and are pinned by this crate's own
+    /// ground-truth tests.
     ///
     /// **The comparison direction flips for `Zone` and `Elimination`.**
     /// Every other mode wants a *lower* value than the target (`<=`: a

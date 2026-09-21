@@ -1280,6 +1280,21 @@ whether every `Elimination`/`NitroBattle` cell reads this same
 `Novice`/`Skilled`/`Elite` triple - as opposed to, say, a per-cell mix - is
 not settled by this alone.
 
+**2026-09-21, this hypothesis moved from RPCS3 corroboration to a direct
+Ghidra reading.** `EBOOT-ps3-hdfury-eu.elf`'s own `PI_Cell` attribute table
+(`0x008ae898`) lists `NitroElimElite`/`Skilled`/`Novice` as three of `PI_Cell`'s
+own fields, immediately after `EasyGold`..`EasyBronze` - not a coincidental
+string reuse. A separate save-migration string (`0x00779a98`) reads `"...to
+have HARD(ELITE) for best skill level"`, independently measuring
+`Novice`/`Skilled`/`Elite` as this title's own words for `Easy`/`Medium`/
+`Hard`, matching this capture's own `TARGET 200 (NOVICE)` -> `(SKILLED)`
+reading rather than merely being consistent with it. **Still not settled**:
+which function actually compares a race result against this triple, and
+whether it is one pass/fail number per rung or a three-tier medal ladder like
+`Gold`/`Silver`/`Bronze` - see
+`docs/ghidra/functions/ps3-hdfury-eu/race-campaign.md` for the full evidence
+and its own "what is not determined" section.
+
 - **Which archive copy of `grid_00.xml`..`grid_07.xml` the real screen
   shows by default is still not RPCS3-verified** - both attempts this pass
   landed on `Fury` instead of the base campaign; see above. This pass found

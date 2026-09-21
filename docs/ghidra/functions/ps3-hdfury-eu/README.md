@@ -152,6 +152,12 @@ Two structural facts to expect, both different from every other binary here:
   six-mip sprite, the feedback-trail post passes, and the per-screen tint. Also
   where `ShaderRegistry_RegisterPair` closes renderer.md's unpaired-shader
   question.
+- [race-campaign.md](race-campaign.md) - `PI_Cell`'s own attribute table
+  (`0x008ae898`), which puts `NitroElimNovice`/`Skilled`/`Elite` in the class's
+  own field list rather than an unrelated subsystem; the `HARD(ELITE)` save
+  migration that measures the rung-name equivalence; and why the actual medal
+  comparison consumer was not found (reflection-driven binder, no string
+  cross-reference to chase).
 
 Add a row to [`names.tsv`](names.tsv) and the page it cites in the same change:
 `scripts/apply-ghidra-names.py` refuses a row whose address and name do not

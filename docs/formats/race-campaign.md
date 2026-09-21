@@ -162,12 +162,37 @@ Lap` cell included, authored at a dummy `1` there, same as the equally dummy
 `1`/`2`/`3` the per-difficulty `Gold`/`Silver`/`Bronze` rungs carry on those
 same cells. Only `Elimination` and the HD-only `NitroBattle` mode carry
 meaningful values (e.g. `200`/`200`/`200` on an `Elimination` cell measured, or
-`20`/`15`/`12` on a `NitroBattle` one). **Confidence 0 - chosen, not
-measured**: `Cell::nitro_elimination_targets` carries the raw
-`(novice, skilled, elite)` triple and nothing here decides whether `elite`
-is this triple's gold-equivalent, or which mode's own `evaluate_medal` call
-should read this triple instead of `gold`/`silver`/`bronze` - that is a
-decompiled-HD-executable question, out of this pass's scope; see the
+`20`/`15`/`12` on a `NitroBattle` one).
+
+**2026-09-21, upgraded from "chosen, not measured" to measured, in part**: on
+`EBOOT-ps3-hdfury-eu.elf`, `PI_Cell`'s own attribute-name table
+(`0x008ae898`, read directly as memory) lists `NitroElimElite`/`Skilled`/
+`Novice` as three ordinary `PI_Cell` fields, immediately after the
+`EasyGold`..`EasyBronze` block - not a coincidental reuse of the spelling by
+an unrelated subsystem. A second, independent string
+(`0x00779a98`, in a save-data migration function) reads `"...to have
+HARD(ELITE) for best skill level"`, measuring `Novice`/`Skilled`/`Elite` as
+this title's own words for `Easy`/`Medium`/`Hard` - the same equivalence
+`docs/ui/campaign-screens.md`'s RPCS3 capture already showed on screen. See
+`docs/ghidra/functions/ps3-hdfury-eu/race-campaign.md` for the full evidence.
+
+**Still chosen, not measured**: whether `elite` is this triple's
+gold-equivalent (or whether the triple represents medal tiers at all - see
+below), and which mode's own medal-award consumer reads this triple instead
+of `gold`/`silver`/`bronze`. `PI_Cell`'s attribute binder is reflection-driven,
+so no function in the image references these three attributes' names at their
+point of use; finding the consumer needs the attribute table's own per-entry
+encoding decoded first - not reached this pass. `Cell::evaluate_medal` is
+unchanged, and its result is **not meaningful** for an `Elimination`/
+`NitroBattle` cell on Wipeout HD, since that cell's own flat
+`gold`/`silver`/`bronze` (and every rung of `difficulty_targets`) are the
+dummy `1`/`2`/`3` this section already describes.
+`Cell::nitro_elimination_target_for_difficulty` reads the one measured number
+per rung instead - deliberately not a synthesized `MedalTargets` triple, since
+this executable spells medal tiers `Gold`/`Silver`/`Bronze` and difficulty
+rungs `Easy`/`Medium`/`Hard`/`Novice`/`Skilled`/`Elite` as two distinct
+vocabularies everywhere else observed, and `NitroElim*` is spelled in the rung
+vocabulary. See that method's own doc comment for the full reasoning and the
 handover thread this measurement opened.
 
 ### Two new mode spellings, kept raw
@@ -218,9 +243,11 @@ decompiled-HD-executable question, out of this pass's scope.
 
 ### What this section does not resolve
 
-- **Which target set a mode's own `evaluate_medal` reads** when a cell
-  carries both the per-difficulty `Gold`/`Silver`/`Bronze` and
-  `NitroElimNovice`/`Skilled`/`Elite` - see above.
+- **The medal-award consumer for `Elimination`/`NitroBattle`** - which
+  function compares a kill count against `NitroElimNovice`/`Skilled`/`Elite`,
+  and by what rule one number per difficulty rung becomes a medal - see above
+  and `docs/ghidra/functions/ps3-hdfury-eu/race-campaign.md`'s "what is not
+  determined" section.
 - **Whether HD's own front end reads `grid4`'s five cells at all**, given the
   broken `<Values>` tag - see above.
 - **US and Fury-disc-only pressings were not checked.** Only the EU Fury
