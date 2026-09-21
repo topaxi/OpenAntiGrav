@@ -14,10 +14,10 @@
 //! # Why `--no-video`'s own path, not the full transcode
 //!
 //! Both movies open with [`movie::Decode::no_video`] set. `bink::open` and
-//! `mp4::open` compute [`movie::Movie::audio`] *before* branching on that flag
-//! - see their own comments on why - so this exercises exactly the route a
-//! real boot takes without also paying for `intro.mp4`'s multi-minute lossless
-//! AV1 encode or the logo reel's ~98 s one
+//! `mp4::open` compute [`movie::Movie::audio`] *before* branching on that
+//! flag (see their own comments on why), so this exercises exactly the route
+//! a real boot takes without also paying for `intro.mp4`'s multi-minute
+//! lossless AV1 encode or the logo reel's ~98 s one
 //! (`docs/formats/mp4.md`/`docs/formats/bik.md` both measure the full-length
 //! cost). The audio-only decode this test actually runs is seconds.
 
