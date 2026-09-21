@@ -426,4 +426,10 @@ mod decode;
 mod tests;
 
 #[cfg(test)]
+mod oracle_tests;
+
+#[cfg(test)]
 mod search_tests;
+
+#[cfg(test)]
+mod micro_tile_tests;
