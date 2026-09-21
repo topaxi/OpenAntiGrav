@@ -74,12 +74,15 @@ and `crates/ui/src/frontend/tests/wipeout2048.rs` (seventeen, on a fixture).
   even grid (`oag_ui::frontend::campaign_map::PITCH`/`ORIGIN`) over the
   shell's authored 1920x1088 `<TouchScroll>` canvas, plain `Blue2048`
   markers, a panel naming the selected event. **Narrowed 2026-09-21**: `M_X`/
-  `M_Y` most likely never reach the executable at all (the event class's own
-  runtime field-reflection table registers `M_BUTTONSHAPE`/
-  `M_CANVASTWEAK_X`/`_Y` but never them - `frontend-campaign-map.md`'s dated
-  section), and a live Vita3K capture confirms the real map is a hexagonal
-  tile tessellation with a season title card, not this square grid or a 3D
-  city (`data/reference/2048-frontend/README.md` frames `12`-`14`). Neither
+  `M_Y` *are* real `GameModeBase` fields the executable deserialises
+  (`0x2c4`/`0x2c8`, an earlier reading of this pass's own decompile missed
+  them - two `FUN_812dab08` registrations Ghidra never auto-stringified),
+  but the DLC tiers' own hotspots read a different, still-unfound cached
+  position (`+0x15c`/`+0x160`) that something uncaught this pass must derive
+  from them - `frontend-campaign-map.md`'s dated section. A live Vita3K
+  capture confirms the real map is a hexagonal tile tessellation with a
+  season title card, not this square grid or a 3D city
+  (`data/reference/2048-frontend/README.md` frames `12`-`14`). Neither
   the real per-event anchor nor the season card's own asset was found - the
   base tier's own `TouchCampaign_Item` class is now named
   (`frontend-campaign-map.md`) but nothing calls its constructor statically,

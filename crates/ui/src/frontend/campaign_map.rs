@@ -14,32 +14,33 @@
 //! maxscrolly="544"`, so a canvas twice the screen each way.
 //!
 //! **Chosen, not measured - no confidence score**: how a cell maps to a
-//! pixel. `M_X`/`M_Y` looked like the obvious source, but
-//! `docs/ghidra/functions/vita-2048-eu-v104/frontend-campaign-map.md`'s
-//! 2026-09-21 section found they most likely never reach the shipped
-//! executable at all - the runtime field-reflection table for the event
-//! class registers `M_BUTTONSHAPE`/`M_CANVASTWEAK_X`/`M_CANVASTWEAK_Y` at
-//! real struct offsets but never `M_X`/`M_Y`, and those two carry a
-//! `parentid` no confirmed-runtime field on any typedef in the file uses -
-//! the best-fitting reading is that they are the Mjolnir level-design tool's
-//! own node-graph canvas position, not a game-read value. A live Vita3K
-//! capture the same pass (`data/reference/2048-frontend/README.md`, frames
-//! `12`-`14`) confirms the real map is not this grid at all: a **hexagonal**
-//! tessellation of icon-on-hexagon markers (chequered flag / stopwatch,
-//! coloured by locked/passed state), with a season title card
+//! pixel. `M_X`/`M_Y` are real `GameModeBase` fields the executable does
+//! deserialise (`docs/ghidra/functions/vita-2048-eu-v104/
+//! frontend-campaign-map.md`'s 2026-09-21 section: struct offsets `0x2c4`/
+//! `0x2c8`, found after an earlier pass the same day missed two
+//! non-auto-stringified `FUN_812dab08` registrations), but they land in a
+//! *different* struct offset from the one the DLC tiers' own hotspot
+//! functions read (`+0x15c`/`+0x160`) - some unfound conversion between the
+//! two is where the real formula lives, not a bare read of `m_x`/`m_y`
+//! itself. A live Vita3K capture the same pass
+//! (`data/reference/2048-frontend/README.md`, frames `12`-`14`) confirms the
+//! real map is not this grid at all: a **hexagonal** tessellation of
+//! icon-on-hexagon markers (chequered flag / stopwatch, coloured by
+//! locked/passed state), with a season title card
 //! (`A·G·R·C 2048`/`2049`/`2050`) drawn inline on the same scrollable canvas
 //! at each season's own cluster - not a `MenuSkin`-style corner widget, and
 //! not any of the `<CanvasLabel>`s `2048-frontend.md` already accounts for.
 //! Neither the exact per-event anchor formula nor the season-card asset was
-//! recovered this pass (`M_BUTTONSHAPE`'s own `CanvasButtonShape` enum is
-//! the leading candidate for an anchor-table index, unconfirmed - no
-//! consuming function found), so this build still lays cells out on an even
-//! grid - [`PITCH`] units per cell from [`ORIGIN`], sized so the file's own
-//! `x` 1-34 and `y` 1-25 fill the authored 1920x1088 canvas - and draws each
-//! event as a plain [`MARKER`]-sized `Blue2048` square rather than a
-//! hexagon shape nothing here has a decoded source for. The city behind the
-//! real map does not exist as a 3D backdrop either way: the Vita3K capture's
-//! own tiles sit on a flat light triangle-outline background, corroborating
+//! recovered this pass (`M_BUTTONSHAPE`'s own `CanvasButtonShape` enum is a
+//! plausible icon selector, `M_CANVASTWEAK_X`/`_Y` a plausible small pixel
+//! nudge, neither confirmed - no consuming function found for either), so
+//! this build still lays cells out on an even grid - [`PITCH`] units per
+//! cell from [`ORIGIN`], sized so the file's own `x` 1-34 and `y` 1-25 fill
+//! the authored 1920x1088 canvas - and draws each event as a plain
+//! [`MARKER`]-sized `Blue2048` square rather than a hexagon shape nothing
+//! here has a decoded source for. The city behind the real map does not
+//! exist as a 3D backdrop either way: the Vita3K capture's own tiles sit on
+//! a flat light triangle-outline background, corroborating
 //! `2048-frontend.md`'s "not a real 3D scene" finding from the opposite
 //! direction. The panel under the map naming the selected event is this
 //! build's own chrome, in the skin's own colours.

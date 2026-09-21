@@ -298,7 +298,7 @@ shown on whatever screen `FUN_810a19e0` builds (one caller,
 `FUN_813c8d14`, not chased). `FUN_810a19e0` itself was not renamed - not
 enough evidence yet for what screen it is.
 
-## 2026-09-21: the base tier has its own `TouchCampaign_Item`, but its screen position is not `M_X`/`M_Y`
+## 2026-09-21: the base tier has its own `TouchCampaign_Item`; `M_X`/`M_Y` are real fields after all, one step removed from the DLC tiers' own cached position
 
 **Confidence 82 for the class, same evidence shape as the DLC pair.** The
 Fury/HD constructors' own literal source-path tag
@@ -330,61 +330,75 @@ repetition) - confirming this is native code that builds one
 per-marker the way the DLC's `<CanvasLabel>`s nearly look but (per
 `2048-frontend.md`) are not either.
 
-**`M_BUTTONSHAPE`/`M_CANVASTWEAK_X`/`M_CANVASTWEAK_Y` are real runtime
-fields; `M_X`/`M_Y` most likely are not (confidence 75).** The runtime
-reflection/deserialisation registrations for `SP.xml`'s fields are literal
-calls of the shape `FUN_812dab08(&type_descriptor, size, offset, "field
-name", "type name", count, ...)`, one call per field, decompiled directly
-rather than inferred. `GameModeBase`'s own concrete registration function
-(`FUN_812b0e2a`, not renamed - the object's typedef could not be pinned to
-one of the four exactly, though `m_numOfLaps`'s presence points at
-`RACE_A`/`RACE_B`) registers 36 fields end to end, and it is a **complete**
-list (the decompile runs to the function's own `return`, not truncated):
-`m_buttonShape` (offset `0x19c`, type `CanvasButtonShape`) and
-`m_canvasTweak_x`/`m_canvasTweak_y` (`0x314`/`0x318`, type `int`) are both
-in it - genuine `GameModeBase` struct members the shipped executable reads.
-**`m_x`/`m_y` are not, anywhere in that list.** Corroborating evidence from
-the file itself, not just the absence: every `SP.xml` field this project has
-confirmed reaches the executable (`M_TRACKDEF`, `M_NUMOFLAPS`,
-`M_PNEXTEVENT`, `M_BUTTONSHAPE`, `M_CANVASTWEAK_X`) carries
-`parentid="366306753"` (`GameModeBase`'s own typedef id) or, for
-`M_DESCRIPTION`, `parentid="41091653"` (an uninvestigated further-base
-class) - some real typedef id in both cases. **`M_X`/`M_Y` carry
-`parentid="0"`**, a value no other confirmed-runtime field on any typedef in
-this file uses. This is not a universal "every mjolnir node has a canvas
-position" convention either: a `WeaponSetDefinition` instance (`"Rockets
-Only"`) has no `M_X`/`M_Y` at all, so the field is specific to the four event
-typedefs (the ones that also carry `M_PNEXTEVENT`/`M_PBRANCHEVENT` graph
-edges) without being part of `GameModeBase`'s own registered shape. The
-best-fitting reading: `M_X`/`M_Y` are the Mjolnir editing tool's own
-node-graph canvas position (where a level designer dragged the event's box
-in the unlock-flowchart view), not a value the shipped game ever loads -
-capped at 75 rather than higher because this is an absence proven for one
-concrete registration function among several unexamined siblings (`ZONE`,
-`ELIMINATION`, `RACE_B` each plausibly have their own), not a scan of every
-one of them.
+**Correction, same pass: `m_x`/`m_y` are real runtime fields too - the
+`parentid="0"` reading above was wrong.** The first read of `FUN_812b0e2a`'s
+decompile treated two of its 36 `FUN_812dab08` calls as unnamed (the name
+and type-name arguments printed as `&DAT_814dc344`/`&DAT_814dc140` rather
+than string literals, because Ghidra's ASCII analyzer never auto-created a
+`String` data item there - both are 4 bytes including the terminator,
+below its minimum length, the same reason `search_strings` with
+`min_length=1` still found nothing for `^m_x$`/`^m_y$`). `read_memory` at
+`0x814dc344` (16 bytes) reads `"m_x\0m_y\0m_pNextE"` and at `0x814dc140`
+reads `"int\0..."` - so the two calls are:
 
-**This directly falsifies using `M_X`/`M_Y` as the base tier's screen
-position** (`docs/formats/2048-frontend.md`'s own `PITCH`/`ORIGIN` grid was
-already labelled "chosen, not measured" for other reasons; this adds a
-positive reason it could not have been the real formula even in principle).
-Cross-checked empirically too: correlating the 47 `<CanvasLabel
+```c
+FUN_812dab08(&DAT_81965950,4,0x2c4,"m_x","int",1,0,0,0);
+FUN_812dab08(&DAT_81965950,4,0x2c8,"m_y","int",1,0,0,0);
+```
+
+`m_x`/`m_y` **are** registered, at `GameModeBase` struct offsets `0x2c4`/
+`0x2c8`, type `int` - genuine fields the executable deserialises `SP.xml`
+into, the same as `m_buttonShape` (`0x19c`) and `m_canvasTweak_x`/`_y`
+(`0x314`/`0x318`). The `parentid="0"` argument is also independently
+falsified as "outside the runtime hierarchy": this same pass's own dump of
+a `WeaponSetDefinition` instance (`"Rockets Only"`) shows
+`M_WEAPONAVAILABLEBITS` carrying `parentid="0"` too, and that field is
+unquestionably read at runtime (it is the weapon-loadout bitmask). `parentid`
+most likely means "declared on this concrete typedef rather than inherited
+from a named base", not "editor-only" - the whole "Mjolnir node-graph
+canvas position" theory this section originally proposed does not survive
+this correction and is withdrawn.
+
+**So `M_X`/`M_Y` are back in play, one level removed from where the DLC
+tiers read their own cached position.** `FE3DCanvas_AddHDCampaignEventButtons`'s
+full decompile (this pass) reads a node's position from `+0x15c`/`+0x160`
+unconditionally - no sentinel guards *that* read, only the `+0x168`/`+0x16c`
+scratch cache derived from it - meaning `+0x15c`/`+0x160` are assumed
+already populated by the time this function runs. Those offsets are well
+inside `GameModeBase`'s own `0x328`-byte size (the size argument
+`m_pNextEvent`'s own registration carries) but are **not** `0x2c4`/`0x2c8` -
+i.e. `+0x15c`/`+0x160` is a second, distinct position field from the raw
+authored `m_x`/`m_y`, not the same storage read twice. The most likely shape:
+`m_x`/`m_y` are the raw authored ints, some unfound conversion step copies
+(and probably scales) them into `+0x15c`/`+0x160` at load or construction
+time, and *that* is what both the DLC tier functions and (plausibly)
+`TouchCampaign_Item` itself read. **No function that writes `+0x15c`/`+0x160`
+was found this pass** - the same kind of caller-not-found wall the DLC tier
+constructors already hit, one layer deeper. Concrete next step: search for
+writers to that offset pair, most plausibly inside `TouchCampaign_Item_Create`
+or a shared "build the campaign node list" function neither DLC function's
+caller resolved either.
+
+**The empirical falsification lower in this section still stands, for a
+different reason than first written.** Correlating the 47 `<CanvasLabel
 linkedevent="...">` positions against their linked events' own `M_X`/`M_Y`
-(`crates/tools/examples/campaign_map_dump.rs`, this pass) finds no affine
-fit - consistent with `2048-frontend.md`'s own finding that those labels
-cluster in a 196x87 corner (a trophy-shelf badge widget), a different
-number space from whatever `TouchCampaign_Item` actually draws at.
+(`crates/tools/examples/campaign_map_dump.rs`, this pass) found no affine
+fit - not because `M_X`/`M_Y` are unread, but because `<CanvasLabel>` is a
+different, unrelated widget (`2048-frontend.md`'s own trophy-shelf corner
+cluster), never a candidate for the map's own marker positions regardless of
+`m_x`/`m_y`'s runtime status.
 
-**Still open, and now the concrete next step**: what actually computes a
-`TouchCampaign_Item`'s screen position. `m_buttonShape`'s own `CanvasButtonShape`
-enum (11 distinct non-empty values measured across `SP.xml`'s 115 events) is
-the leading candidate for an anchor-table index analogous to the DLC's
-per-node-type offset table, with `m_canvasTweak_x/y` (measured range `-2..2`)
-as a small hand-authored pixel nudge on top - not confirmed this pass, no
-consuming function found for either field's struct offset. A Vita3K capture
-correlated against `m_buttonShape` groupings (not `M_X`/`M_Y`) is the
-concrete next check, in `docs/formats/2048-frontend.md`'s own campaign-map
-section.
+**Still open, and now the concrete next step**: finding what writes
+`GameModeBase+0x15c`/`+0x160` from `m_x`/`m_y` (almost certainly involving a
+scale/bias the same shape as the DLC's own per-tier table, since the DLC
+functions apply a *second* scale/bias on top of whatever this produces).
+`m_buttonShape`'s own `CanvasButtonShape` enum (11 distinct non-empty values
+measured across `SP.xml`'s 115 events) remains a plausible *icon* selector
+independent of position; `m_canvasTweak_x/y` (measured range `-2..2`) reads
+more like a small hand-authored pixel nudge on top of whatever `+0x15c`/
+`+0x160` resolves to. A Vita3K capture correlated against measured `m_x`/
+`m_y` values (not `<CanvasLabel>`) is the concrete next empirical check, in
+`docs/formats/2048-frontend.md`'s own campaign-map section.
 
 ## Open
 

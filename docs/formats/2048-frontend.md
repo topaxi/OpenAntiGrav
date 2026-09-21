@@ -564,7 +564,7 @@ the order a player sees it, with what each part rests on:
 | `TitleScreen` | its own six button redirects, all to `GameModeChoice` | `Title_Screen.gtf` centred, `BOOT_PRESS_ANY` pulsing after its `delay="1.0"`, the EU legal footer through the `DirectEmbed` include, in `NEOSANS_BOLD` at its own 22-unit line height against `NEOSANS_BOLD_LARGE`'s 37 | authored, 92; the font-role ratio is read off the two `.fnt` headers |
 | `GameModeChoice` | left/right and cross on the pad, hover and click with a pointer; two taps on a mode (the second is the tick), only `FE_SP_CAMPAIGN` confirms | the four `<TouchButton>`s: `Blue2048` squares, the icon at its texture's own size, the label under it; `Grey2048` for the three network modes; the `Blue2048` block under the white header icon | authored, 92; tile/label/icon geometry measured off `08-game-mode-grid-clean.png`, 80; the `Orange2048` cursor ring is **chosen** |
 | `Home` | the same | its five `<TouchButton>`s; each destination is in an include this build does not load, so a tap says so and stays | authored, 92 |
-| `newFEshell` (the campaign map) | d-pad to the nearest event, cross or a second click to launch; circle back to `GameModeChoice`, triangle to `Home` (the `<TouchHomeButton>`'s two targets, on buttons **chosen** - the widget names none) | `SP.xml`'s 115 events with a cell, on an even grid over the shell's own 1920x1088 `<TouchScroll>` canvas, plus a panel naming the selected event | the events, cells and canvas are authored ([2048-campaign.md](2048-campaign.md)); **the cell-to-pixel mapping is chosen, not measured** - `M_X`/`M_Y` most likely never reach the executable at all ([frontend-campaign-map.md](../ghidra/functions/vita-2048-eu-v104/frontend-campaign-map.md)'s 2026-09-21 section), and a live capture confirms the real map is a hexagonal tessellation, not this square grid (`data/reference/2048-frontend/README.md`'s frames `12`-`14`, gitignored) |
+| `newFEshell` (the campaign map) | d-pad to the nearest event, cross or a second click to launch; circle back to `GameModeChoice`, triangle to `Home` (the `<TouchHomeButton>`'s two targets, on buttons **chosen** - the widget names none) | `SP.xml`'s 115 events with a cell, on an even grid over the shell's own 1920x1088 `<TouchScroll>` canvas, plus a panel naming the selected event | the events, cells and canvas are authored ([2048-campaign.md](2048-campaign.md)); **the cell-to-pixel mapping is chosen, not measured** - `M_X`/`M_Y` are real `GameModeBase` fields the executable does read, but only into a raw struct offset (`0x2c4`/`0x2c8`); the DLC tiers' own hotspots read a *different*, still-unfound cached position (`+0x15c`/`+0x160`) that something else must derive from them ([frontend-campaign-map.md](../ghidra/functions/vita-2048-eu-v104/frontend-campaign-map.md)'s 2026-09-21 section), and a live capture confirms the real map is a hexagonal tessellation, not this square grid (`data/reference/2048-frontend/README.md`'s frames `12`-`14`, gitignored) |
 | `Launch 2048` | the map's and `<TouchCampaign>`'s own `redirect` | - | the disc's own name for leaving the front end; carries the event name to `oag_game::race::load_event` |
 
 **How the screens are found.** `NEWGUI/Skin.xml` declares no screen; the
@@ -610,11 +610,13 @@ does the same on a fixture with no disc.
 (`lane/2048-intro-mp4`); the `BootFlowCanvas` art; `Home`'s five
 destinations (`Team_`, `Community_`, `Profile_`, `Options_`,
 `Extras_Definition.xml` are read but not drawn); the campaign map's real
-per-event pixel anchor (narrowed 2026-09-21: not `M_X`/`M_Y`, `M_BUTTONSHAPE`
-is the leading candidate, unconfirmed) and the season title card's own asset
-(`A·G·R·C 2048`/`2049`/`2050`, seen live on Vita3K, not located in either
-package) - there is no 3D city backdrop to find, confirmed from the live
-capture too; the unlock graph (every event is offered, there being no save
+per-event pixel anchor (2026-09-21: `M_X`/`M_Y` are real `GameModeBase`
+fields, but what copies them into the position the DLC tiers' own hotspots
+actually read - `+0x15c`/`+0x160`, a different offset - is still unfound)
+and the season title card's own asset (`A·G·R·C 2048`/`2049`/`2050`, seen
+live on Vita3K, not located in either package) - there is no 3D city
+backdrop to find, confirmed from the live capture too; the unlock graph
+(every event is offered, there being no save
 to read); the network modes.
 
 ## See also
