@@ -1504,3 +1504,41 @@ and its own "what is not determined" section.
   what number a raw `%d` template should carry - see the two sections
   above. An RPCS3 capture of a genuinely locked tier/cell would settle
   both at once.
+- **The upper-case defect above is partially closed, 2026-09-21, from the
+  render side rather than this crate's own.** `Confirm`/`Back`
+  (`oag_ui::campaign::footer`) and the per-row subtitle
+  (`oag_title::HelpText`) now draw mixed case, through a second,
+  `Default`-role atlas the menu stage loads beside its unchanged `menu`-role
+  primary - see `docs/ui/menus-original.md`'s "Two faces, not one swapped
+  for the other" section for the full mechanism and the measured fact it
+  rests on (Pulse's `menu`/`Small` faces have no lowercase glyph art at
+  all; only `Default` does). **Still upper-case**: every `n="default"`
+  widget `oag_ui::campaign::draw::text_draw` itself draws - `Speed class`,
+  `Laps`, `Weapons`, `Points`, `Best` and their values, and by the same
+  mechanism `Change Difficulty` two bullets up. One edit closes it:
+  `text_draw`'s single `Draw::Text` literal becoming a role-aware
+  constructor (`crate::frontend::Draw::in_role`, `Some("Default")` for a
+  `"default"`-labelled `text.font`, matching what `footer.rs` and
+  `menu::rows::draw_text_rows` already do) - a change to this crate's own
+  `campaign/draw.rs`, outside the lane that found and fixed the mechanism.
+  `NavigationLegend`'s own `FE_CONFIRM` shrink-to-fit (`Prompt::left_bound`/
+  `align_right_to`, above) is now measured against the atlas it actually
+  draws through rather than the wrong one - **on both paths**: the live
+  session (`crate::main::menu_stage::MenuStage`'s own `default_atlas`/
+  `default_measure`) and `--menu-page`/`capture.rs`, which had its *own*,
+  separate `measure` closure still pointed at `menu_font` and was the
+  reason the first live capture of this fix (`cellselect-usa-after2.png`)
+  showed `Confirm` at roughly a third of `Back`'s size, sitting above the
+  baseline - caught in review, not by this lane's own verification, and
+  fixed in `crate::capture::run`'s own `campaign_page` call. Measured
+  correctly now, `Confirm` **still shrinks, barely**: `pulse_text.fnt`'s
+  own native width for `"Confirm"` is 41 native px against a 35px gap
+  (`FE_BACK_BUTTON`'s `x` minus `FE_CONFIRM_BUTTON`'s `x` minus one
+  glyph-width estimate minus two `GAP` constants, all four chosen) - a
+  ~15% reduction, not the ~65% the wrong atlas produced. The face was
+  the wrong thing to suspect for the overlap this fixed *before* this
+  atlas fix landed; now that the face and the measurement are both right,
+  the remaining, much smaller shrink is `GAP`/the glyph-width estimate's
+  own numbers, still chosen rather than measured. Confirmed live,
+  `cellselect-after3-footer-crop.png` next to the reference frame:
+  `Confirm` and `Back` now match in size and sit on the same baseline.

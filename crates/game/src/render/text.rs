@@ -20,11 +20,13 @@ use crate::loading::wrap;
 
 impl Renderer {
     /// The atlas [`Self::push_text`] and [`Self::push_wrapped_text`] read
-    /// glyphs from: [`Self::face_atlas`] for a [`Draw::FacedText`] whose role
-    /// actually loaded, [`Self::atlas`] for everything else - a `face` of
-    /// `true` with [`Self::face_atlas`] still `None` falls back to
-    /// [`Self::atlas`] too, which is what a title naming a role that failed
-    /// to read draws with, per [`Draw::FacedText`]'s own doc.
+    /// glyphs from: [`Self::face_atlas`] when `face` is `true`,
+    /// [`Self::atlas`] otherwise. The caller in [`super::render_with`]'s
+    /// `Draw::FacedText` arm has already resolved `face` against
+    /// [`Self::face_role`] by the time it gets here - a role that does not
+    /// match what is loaded, or a `face_atlas` still `None`, becomes `false`
+    /// there, which is what a title naming a role that failed to read (or
+    /// naming none at all) draws with, per [`Draw::FacedText`]'s own doc.
     ///
     /// A short-lived borrow returned fresh on every call rather than bound
     /// once across a text-drawing loop: [`Self::quads`] needs `&mut self` in

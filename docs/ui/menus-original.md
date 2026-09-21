@@ -347,6 +347,113 @@ for the full candidate table.
   selection is a colour - and no capture shows the brightness changing over
   anything but an instant.
 
+## Two faces, not one swapped for the other - measured 2026-09-21
+
+**The front end draws every label in one 22px face; the original draws each
+widget in the face its own `font=` role names, mixed case where that face has
+lowercase.** `Cell Selection`'s footer alone (`Confirm`/`Back`, both
+`ControlTextConfirm`/`ControlTextBack` in `Skin.xml`'s
+`NavigationController`, authoring no `font=` and falling to `Default`) is
+fixed as of this pass; `Grid Selection`/`Cell Selection`'s own
+`n="default"` widgets - `Speed class`/`Laps`/`Weapons`/`Points`/`Best` and
+their values - are not, because they draw through `oag_ui::campaign::draw`,
+a file this lane does not own. See `docs/ui/campaign-screens.md`'s own
+dated paragraph.
+
+### The role table
+
+Every `<Font>` slot Pulse's language plugins fill, its resolved `.fnt`, that
+face's own line height (read off the `.fnt` header, matching `Atlas::from_font`),
+and whether **the disc's own font** carries distinct lowercase glyph art -
+measured directly off each `.fnt`'s glyph table (`crates/game/tests/font_roles_ground_truth.rs`'s
+`menu_and_small_have_no_lowercase_art_and_default_does`), not inferred from a
+picture. Confidence 95 - a disc-backed test asserts it on both PSP pressings.
+
+| Role (as authored) | `.fnt` | Line height | Lowercase has its own art? |
+| --- | --- | ---: | --- |
+| `Default` | `pulse_text.fnt` | 13px | **Yes** - every lowercase ASCII letter has its own `(u0, v0, width, height)` box, distinct from its uppercase twin |
+| `menu` | `Pulse_20.fnt` | 22px | No - every lowercase letter shares the *identical* box its uppercase twin has |
+| `Small` / `Title` | `Pulse_14.fnt` | 17px | No - same as `menu` |
+| `HUD` | `PulseHud.fnt` | 25px | Not checked (HUD text is numerals and short caps labels; out of this lane's scope) |
+| `HUDSmall` | `small.fnt` | 10px | Not checked, same reason |
+
+`pulse_text.fnt` is the **only** Pulse face with real lowercase glyph art.
+This is not a code bug and not a folding decision this build made -
+`oag_ui::font::Atlas::cell` already prefers a real font's own glyph over
+folding it (see `crates/ui/src/font.rs`'s "Folding, and the letter that
+disappeared") - it is what the disc's own three menu-side faces ship. A
+`menu`- or `Small`-role widget authored in mixed case (`"Single Race"`,
+`"Time Trial"`) draws in caps on **real hardware too**, because the face it
+draws in has nothing else to draw. Confusing that with a bug is exactly how
+the previous reading of this defect over-scoped its own fix.
+
+### The fix: a second atlas, not a swapped one
+
+The menu stage's renderer bound exactly one atlas (`rows_face`, the `menu`
+role's `Pulse_20.fnt`) as its whole glyph source before this pass -
+`crates/game/src/main/session/menus.rs`'s `Renderer::new` call - with every
+other role's text drawn through it too, scaled by a ratio
+(`oag_ui::picker::FaceScales`/`crate::picker::FaceScales::face_scale`)
+that changes *size* and never *which glyphs*. Swapping which atlas is
+primary was tried and reverted in this same pass: `Grid Selection`'s own
+`Title`-role mode name (`font="Menu"`, e.g. `"GRID 1"`, `"Time Trial"`) is
+authored and drawn through `oag_ui::campaign`, a file this lane cannot
+touch, and it reads `text.font` through a match that only recognises
+`"default"`/`"small"` - anything else, including `"menu"`, draws through
+whatever the primary atlas is at scale `1.0`. Making `Default` primary would
+have made that one widget draw *through* `Default`'s own lowercase-capable
+glyphs at the old, unadjusted scale - a **new**, un-measured divergence
+(mixed case where the reference and real hardware both show caps), on a
+widget this crate cannot repair, for the sake of covered ground this crate
+also cannot repair. So the primary atlas is unchanged, and a **second**,
+`Default`-role atlas is loaded beside it - `crates/game/src/render/face.rs`'s
+`Renderer::set_face_atlas`, `crates/game/src/boot/fonts.rs`'s
+`face_atlas_slot` - the same slot Wipeout HD's chrome title already used for
+its own `Title` role (the two are mutually exclusive per title, which is
+what lets one slot serve either). `Draw::FacedText`'s own `role` is now
+checked against whichever role that slot loaded (`crates/game/src/render.rs`),
+where it used to be ignored outright.
+
+**What this reaches, today:** anything this lane owns that draws a
+`"default"`-labelled string through `Draw::in_role` -
+`oag_ui::campaign::footer`'s `Confirm`/`Back`/ticker prompts, and Pulse's own
+per-row subtitle (`oag_title::HelpText`, `helptext0`..`6`, whose `scale`
+dropped from a derived `13.0 / 22.0` to `1.0` now that it draws its own face
+rather than a scaled-down `menu` one - see that field's own doc). **What it
+does not reach:** every `n="default"` widget inside
+`Data\Plugins\PI001\GUI\CellMode_Definition.xml` that `oag_ui::campaign::draw::text_draw`
+draws - `Speed class`, `Laps`, `Weapons`, `Points`, `Best`, and their
+values - which is one edit (`text_draw`'s single `Draw::Text` literal
+becoming a role-aware constructor, mirroring `Draw::in_role`) in a file
+outside this lane's boundary.
+
+**The Layout table above still holds, re-verified rather than assumed.**
+This section's own "help text, glyph top" row (`y = 54.0`, off `helptext0`'s
+authored `y="50"`) was measured while the subtitle drew through `Pulse_20.fnt`
+scaled to `13/22` - the switch to `pulse_text.fnt` at its own native scale
+changes *which* atlas supplies that inset, so the row was re-checked rather
+than trusted: `mainmenu-pulse-after.png` (`data/scratch/lane-faces/shots/`,
+1440x816 at 3x native) puts the subtitle's own ink between capture rows
+161-191, native `y = 53.7`-`63.7` - matching the documented `54.0` top edge
+exactly. `pulse_text.fnt`'s own baked-in vertical inset happens to equal
+`Pulse_20.fnt`'s scaled one here; nothing in this table needed regenerating.
+
+**A pre-existing, separate defect, found while checking the above and not
+this lane's mechanism:** Cell Selection's `Points` value renders `0/3` as
+`OS3`, and `DifficultyButton`'s literal `string="Change Difficulty"` as
+`CHANGE JIFFICULTY` - present in this build before this pass's own changes
+(confirmed: `cellselect-usa-before.png`, captured before any commit here).
+`crates/game/src/render/text.rs`'s own `push_text` was probed directly and
+the *source* string is exactly right both times (`"0/3"`, codepoints `[48,
+47, 51]`; `"Change Difficulty"`, `D` at its correct position) - so the
+string is not the problem. The obvious next hypothesis, that `Pulse_20.fnt`
+gives `'0'`/`'O'`, `'D'`/`'J'` or `'/'`/`'S'` the same glyph box the way it
+does every lowercase/uppercase pair, is **checked and false**: all three
+pairs have distinct, unrelated `(u0, v0)` in the raw `.fnt` table. The
+actual mechanism is not identified - left as "cause unknown" rather than a
+plausible-sounding guess, for whoever picks up `oag_ui::campaign::draw`'s
+own fix above.
+
 ## Reproducing this
 
 ```sh

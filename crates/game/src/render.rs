@@ -144,6 +144,13 @@ pub struct Renderer {
     face_sampler: wgpu::Sampler,
     /// `Some` once a role has loaded; see [`Self::push_text`]'s `face`.
     face_atlas: Option<Atlas>,
+    /// The role name [`Self::face_atlas`] was loaded for - `"Title"` for
+    /// Wipeout HD's chrome, `"Default"` for Pulse's body face loaded beside
+    /// its own `menu`-role primary. A `Draw::FacedText` whose own `role`
+    /// does not match this (case-insensitively), or a `face_atlas` still
+    /// `None`, falls back to [`Self::atlas`] - see [`Self::push_text`]'s
+    /// `face` argument.
+    face_role: Option<&'static str>,
     uniform_buffer: wgpu::Buffer,
     quad_buffer: wgpu::Buffer,
     quad_capacity: usize,
@@ -388,6 +395,7 @@ impl Renderer {
             face_view,
             face_sampler,
             face_atlas: None,
+            face_role: None,
             uniform_buffer,
             quad_buffer,
             quad_capacity: INITIAL_QUADS,
@@ -723,13 +731,13 @@ impl Renderer {
                     }
                 }
                 Draw::FacedText {
-                    // The role is what chose which atlas `Self::set_face_atlas`
-                    // loaded, back when the boot sequence resolved it - nothing
-                    // here re-checks it against `role`, the same way `Draw::Text`
-                    // never carried a role to check in the first place. A title
-                    // whose chrome names a *second*, different role has no way
-                    // to draw both at once yet; none does today.
-                    role: _,
+                    // Checked against `Self::face_role`, which is the role
+                    // name `Self::set_face_atlas` loaded the slot for - a
+                    // title whose slot carries a *different* role (or no
+                    // atlas at all) falls back to the primary atlas here,
+                    // the same fallback a role that failed to load has
+                    // always drawn with. See `Self::face_role`'s own doc.
+                    role,
                     x,
                     y,
                     scale,
@@ -741,14 +749,19 @@ impl Renderer {
                 } => {
                     let border = border.unwrap_or(TRANSPARENT);
                     let bounds = clip.filter(|(at, ..)| *at == index).map(|(_, l, r)| (l, r));
+                    let use_face = self.face_atlas.is_some()
+                        && self
+                            .face_role
+                            .is_some_and(|loaded| loaded.eq_ignore_ascii_case(role));
                     match wrap_width {
                         Some(width) => {
                             self.push_wrapped_text(
-                                true, *x, *y, *scale, *color, border, *align, text, *width,
+                                use_face, *x, *y, *scale, *color, border, *align, text, *width,
                             );
                         }
-                        None => self
-                            .push_text(true, *x, *y, *scale, *color, border, *align, text, bounds),
+                        None => self.push_text(
+                            use_face, *x, *y, *scale, *color, border, *align, text, bounds,
+                        ),
                     }
                 }
             }
