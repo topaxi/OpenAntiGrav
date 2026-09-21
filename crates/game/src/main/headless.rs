@@ -8,9 +8,10 @@
 use anyhow::{Context, Result};
 use log::{info, warn};
 
-use oag_game::{audio, boot, capture, loading, prefetch, race, settings};
+use oag_game::{audio, boot, capture, loading, prefetch, race, records, settings};
 use oag_gameplay::ControlScheme;
 use oag_render::mesh_render::Anisotropy;
+use oag_ui::frontend::EarnedTier;
 use oag_ui::strings;
 
 use winit::event_loop::{ControlFlow, EventLoop};
@@ -61,6 +62,26 @@ pub(crate) fn run_windowless(
     for line in &loaded.report {
         info!("{line}");
     }
+
+    // Wipeout 2048's own career, read the same way `Session::finish_loading`
+    // does - see that function's own comment. **Read-only**, the same
+    // exception `race::CaptureOptions::previous_best` a few lines down
+    // already makes for this exact file: a capture never calls
+    // `records::save`, so reading `records::load()` here cannot write a
+    // player's own `records.toml`, only reflect what is already in it. A
+    // no-op on every title but 2048, whose `campaign_events()` is the only
+    // one ever non-empty.
+    let title_name = loaded.title.name;
+    let saved = records::load();
+    loaded.frontend.refresh_campaign_progress(|name| {
+        saved
+            .campaign_medal(title_name, name)
+            .and_then(|row| row.best_medal)
+            .map(|medal| match medal {
+                records::Medal::Gold => EarnedTier::Elite,
+                records::Medal::Silver | records::Medal::Bronze => EarnedTier::Pass,
+            })
+    });
 
     if cli.dry_run {
         return Ok(());
