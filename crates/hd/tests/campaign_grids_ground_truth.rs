@@ -29,7 +29,7 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 use oag_assets::Archives;
-use oag_tables::race_campaign::{self, Mode};
+use oag_tables::race_campaign::{self, MedalTargets, Mode};
 
 /// The decrypted PS3 image.
 const PS3_IMAGE: &str = "hdfury-ps3-eu-dec.iso";
@@ -282,5 +282,100 @@ fn skill_medium_lands_in_the_same_field_as_pulses_skill() {
     assert_eq!(
         scaled_cells, with_skill,
         "every cell with opponents should read a skill value under one of its two names"
+    );
+}
+
+/// `Elimination`/`NitroBattle` cells carry a *real* `nitro_elimination_targets`
+/// triple and a *dummy* `difficulty_targets` (every rung `1`/`2`/`3`, the same
+/// dummy shape a plain `Race` cell's *flat* `gold`/`silver`/`bronze` also
+/// happens to take since `1`/`2`/`3` reads as a real finishing position there,
+/// so this test does not compare against `Race`). `Detonator`, the one
+/// other mode on the shipped grids carrying both fields, has it the other way
+/// round: a real `difficulty_targets` (six-figure scores) and a dummy
+/// `nitro_elimination_targets` (`1`/`1`/`1`). Confirmed directly on
+/// `DATA00.PSARC`'s eight Fury grids, the only ones carrying
+/// [`Cell::nitro_elimination_targets`] at all.
+///
+/// This is the data-side half of the evidence
+/// `docs/ghidra/functions/ps3-hdfury-eu/race-campaign.md`'s medal-law section
+/// cites: on the executable's own attribute table (`0x008ae898`),
+/// `NitroElimNovice`/`Skilled`/`Elite` are `PI_Cell` attributes in their own
+/// right, immediately after `EasyGold`..`HardBronze` - so a cell authoring
+/// dummy `difficulty_targets` alongside a real nitro triple is the shape a
+/// cell that is *read* through the nitro triple rather than the flat one
+/// would take, not a coincidence of two independent XML attributes.
+#[test]
+#[ignore = "needs a decrypted PS3 disc image in data/images"]
+fn eliminationfamily_cells_carry_a_real_nitro_triple_and_a_dummy_flat_one() {
+    let Some(mut archives) = opened() else {
+        return;
+    };
+    let by_archive = read_every_grid_copy(&mut archives);
+    let fury_grids = &by_archive[oag_hd::archives::DATA00];
+
+    let dummy_flat = MedalTargets {
+        gold: 1,
+        silver: 2,
+        bronze: 3,
+    };
+    let mut checked_elimination_family = 0;
+    let mut checked_detonator = 0;
+
+    for grid in fury_grids {
+        for cell in &grid.cells {
+            let Some(dt) = &cell.difficulty_targets else {
+                continue;
+            };
+            let Some(nitro) = cell.nitro_elimination_targets else {
+                continue;
+            };
+            let flat_is_dummy = [dt.easy, dt.medium, dt.hard]
+                .iter()
+                .all(|t| *t == dummy_flat);
+            let nitro_is_dummy = nitro == (1, 1, 1);
+
+            let is_elimination_family = matches!(&cell.mode, Mode::Elimination)
+                || matches!(&cell.mode, Mode::Other(name) if name == "NitroBattle");
+            let is_detonator = matches!(&cell.mode, Mode::Other(name) if name == "Detonator");
+
+            if is_elimination_family {
+                assert!(
+                    flat_is_dummy,
+                    "{}: an Elimination/NitroBattle cell's difficulty_targets \
+                     should be dummy 1/2/3 on every rung, got {dt:?}",
+                    cell.name
+                );
+                assert!(
+                    !nitro_is_dummy,
+                    "{}: an Elimination/NitroBattle cell's nitro triple \
+                     should be real, got {nitro:?}",
+                    cell.name
+                );
+                checked_elimination_family += 1;
+            } else if is_detonator {
+                assert!(
+                    nitro_is_dummy,
+                    "{}: a Detonator cell's nitro triple should be dummy \
+                     1/1/1, got {nitro:?}",
+                    cell.name
+                );
+                assert!(
+                    !flat_is_dummy,
+                    "{}: a Detonator cell's difficulty_targets should be \
+                     real, got {dt:?}",
+                    cell.name
+                );
+                checked_detonator += 1;
+            }
+        }
+    }
+
+    assert!(
+        checked_elimination_family > 0,
+        "expected at least one Elimination/NitroBattle cell with both fields"
+    );
+    assert!(
+        checked_detonator > 0,
+        "expected at least one Detonator cell with both fields"
     );
 }

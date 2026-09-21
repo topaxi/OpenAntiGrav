@@ -42,14 +42,25 @@ this thread is the open work, not a restatement of what landed.
 
 ## Open
 
-- **Which target set a mode's own medal law reads is not measured.** A
-  per-difficulty cell carries both a per-difficulty `Gold`/`Silver`/`Bronze`
-  (dummy `1`/`2`/`3` on a non-counting mode) and a `NitroElimNovice`/
-  `Skilled`/`Elite` triple (dummy `1`/`1`/`1` on a non-counting mode, real
-  values on `Elimination`/`NitroBattle`). Nothing here decides whether
-  `evaluate_medal` should read the second triple for those two modes instead
-  of the first - that is a decompiled-HD-executable question, explicitly out
-  of this pass's scope per the driving brief.
+- **Which target set a mode's own medal law reads is partly measured now,
+  2026-09-21.** `EBOOT-ps3-hdfury-eu.elf`'s own `PI_Cell` attribute table
+  (`0x008ae898`) lists `NitroElimNovice`/`Skilled`/`Elite` as three of its own
+  fields, immediately after `EasyGold`..`EasyBronze` - confirming this is a
+  real `PI_Cell` attribute, not a coincidental string reuse from an unrelated
+  subsystem, and a second string (`0x00779a98`) measures
+  `Novice`/`Skilled`/`Elite` as this title's own words for
+  `Easy`/`Medium`/`Hard`. `Cell::nitro_elimination_target_for_difficulty` now
+  reads the measured number for a rung. **Still open**: the actual medal
+  comparison consumer was not found - `PI_Cell`'s binder is
+  reflection-driven, so nothing in the image references these attribute
+  names at their point of use, and reaching the consumer needs the
+  attribute table's own per-entry encoding decoded first. Also open: whether
+  the triple represents three medal tiers at all, or one pass/fail target
+  per rung (the disc's own vocabulary - `NitroElim*` spelled in rung words,
+  not tier words - argues for the latter, but this is not independently
+  confirmed). See `docs/ghidra/functions/ps3-hdfury-eu/race-campaign.md` for
+  the full evidence and `docs/formats/race-campaign.md`'s HD section for the
+  data-format summary.
 - **Whether HD's own front end tolerates `grid_04.xml`'s broken `<Values>`
   tag** - i.e. whether the real game shows five cells there or none - is the
   same kind of question, also not chased.
