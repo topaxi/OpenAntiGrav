@@ -60,6 +60,20 @@ fn globals() -> HashMap<String, String> {
     globals
 }
 
+/// `text`/`y`, off either variant - `ControlTextConfirm`/`ControlTextBack`
+/// author no `font=` of their own, fall to `"default"` in
+/// [`NavigationLegend::read`], and since `oag_game::boot::fonts::face_atlas_slot`
+/// this draws as [`Draw::FacedText`] rather than [`Draw::Text`] - see
+/// [`face_role`]. `ControlTextConfirmButton`/`BackButton` author
+/// `font="small"`, which still routes to [`Draw::Text`].
+fn text_and_y(draw: &Draw) -> (&str, f32) {
+    match draw {
+        Draw::Text { text, y, .. } => (text.as_str(), *y),
+        Draw::FacedText { text, y, .. } => (text.as_str(), *y),
+        _ => unreachable!("NavigationLegend::draw only ever emits Text or FacedText"),
+    }
+}
+
 #[test]
 fn the_navigation_controller_s_four_prompts_resolve_through_the_string_table() {
     let root = parse(XML);
@@ -68,22 +82,27 @@ fn the_navigation_controller_s_four_prompts_resolve_through_the_string_table() {
         .expect("Skin.xml authors a NavigationController");
     let draws = legend.draw(&FaceScales::default(), &|_| 100.0);
     assert_eq!(draws.len(), 4);
-    let texts: Vec<&str> = draws
-        .iter()
-        .map(|draw| match draw {
-            Draw::Text { text, .. } => text.as_str(),
-            _ => unreachable!("NavigationLegend::draw only ever emits Draw::Text"),
-        })
-        .collect();
+    let texts: Vec<&str> = draws.iter().map(|draw| text_and_y(draw).0).collect();
     assert_eq!(texts, ["ε", "Confirm", "γ", "Back"]);
+    // `Confirm`/`Back` (the words, `font`-less in the fixture) route to the
+    // `Default` role; their own button glyphs (`font="small"`) do not - see
+    // [`face_role`].
+    assert!(matches!(draws[0], Draw::Text { .. }), "ε is font=\"small\"");
+    assert!(
+        matches!(draws[1], Draw::FacedText { role, .. } if role == "Default"),
+        "Confirm authors no font, falls to \"default\""
+    );
+    assert!(matches!(draws[2], Draw::Text { .. }), "γ is font=\"small\"");
+    assert!(
+        matches!(draws[3], Draw::FacedText { role, .. } if role == "Default"),
+        "Back authors no font, falls to \"default\""
+    );
     // Confirm sits right after its own button glyph, Back likewise - the
     // same row the campaign screen's own HELP/CHANGE DIFFICULTY draws at
     // (`y="252"`), matching `CellMode_Definition.xml`'s own footer.
     for draw in &draws {
-        let Draw::Text { y, .. } = draw else {
-            continue;
-        };
-        assert!((*y - 252.0).abs() < f32::EPSILON);
+        let (_, y) = text_and_y(draw);
+        assert!((y - 252.0).abs() < f32::EPSILON);
     }
 }
 
@@ -98,7 +117,9 @@ fn confirm_ends_before_the_back_glyph_rather_than_starting_at_its_own_authored_x
     let strings = StringTable::from_xml(ENTRIES);
     let legend = NavigationLegend::read(&root, &globals(), &strings).expect("controller");
     let draws = legend.draw(&FaceScales::default(), &|_| 100.0);
-    let Draw::Text {
+    // `FE_CONFIRM` authors no `font=`, falls to `"default"`, and now draws
+    // as `Draw::FacedText` - see [`face_role`] and `text_and_y`'s own doc.
+    let Draw::FacedText {
         x: confirm_x,
         align: confirm_align,
         ..
@@ -113,8 +134,9 @@ fn confirm_ends_before_the_back_glyph_rather_than_starting_at_its_own_authored_x
          or nothing was fixed"
     );
     // `ControlTextBack`'s own word is untouched - it had room in the live
-    // capture already, so it still starts at its own authored x.
-    let Draw::Text {
+    // capture already, so it still starts at its own authored x. Also
+    // `FacedText` now, the same reason `FE_CONFIRM` is.
+    let Draw::FacedText {
         x: back_x,
         align: back_align,
         ..
