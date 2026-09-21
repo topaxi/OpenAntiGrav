@@ -58,9 +58,12 @@
 //!    "Block data location" section): its `word1` decodes to
 //!    `SurfaceFormat::BC7`/`ChannelType::Srgb` and its `word2` decodes to
 //!    128x64, both plausible for a livery decal, and its `word3` decodes to
-//!    a standard RGBA channel order (4,5,6,7) and `TileMode::Thin_2DThin` -
-//!    a genuinely tiled mode, which is why this module stops at
-//!    identification (see "What this does not do", below).
+//!    a standard RGBA channel order (4,5,6,7) and tile mode index 13 -
+//!    `TileMode::Thin_1DThin` (GFD-Studio's own `TileMode.cs` enum,
+//!    fetched and re-checked directly: index 13 is `Thin_1DThin`,
+//!    micro-tiled only; index **14** is `Thin_2DThin`, macro-tiled - an
+//!    earlier pass here had this off by one), which is why this module
+//!    stops at identification (see "What this does not do", below).
 //! 2. The [PlayStation GNF Image page](https://rewiki.miraheze.org/wiki/PlayStation_GNF_Image)
 //!    on the reverse-engineering wiki gives the same header/contents split
 //!    independently, naming the same three fixed values (version 2,
@@ -78,20 +81,36 @@
 //!
 //! # What this does not do
 //!
-//! **No pixel is decoded.** [`Texture::pixel_data`] hands back the stored
-//! bytes unmodified - `SurfaceFormat::Bc1`/`Bc3`/`Bc7` textures are exactly
-//! the block-compressed formats [`crate::bcn`] already decodes for PS3/Vita,
-//! but only when the data is laid out row-major; every real `.gnf` sampled
-//! so far declares a genuinely tiled [`TileMode`] (`Thin_2DThin` on the one
-//! example above), and untiling a GCN surface correctly needs the
-//! macro/micro tile, pipe and bank-swizzle configuration `shadPS4`'s
-//! `tiling.h` spends 32 [`TileMode`] entries and several more enums
-//! describing - reimplementing that from two secondary sources without a
-//! single real PS4 to render against is exactly the "stand-in that reads as
-//! legible" this project's own rule against inventing what the assets
-//! already author warns about. A future pass that finds (or proves) a
-//! **linear** (`Display_LinearAligned`/`Display_LinearGeneral`) `.gnf` could
-//! decode that one losslessly through [`crate::bcn`] directly; none has been
+//! **[`Texture::decode`] untiles a linear surface only** -
+//! `SurfaceFormat::Bc1`/`Bc3`/`Bc7` through the same block math
+//! [`crate::bcn`] already decodes for PS3/Vita, when the data is laid out
+//! row-major. Every real `.gnf` this project has sampled declares
+//! `TileMode(13)` (`Thin_1DThin`, micro-tiled only - see the correction
+//! above), never a linear one, so `decode` returns [`Error::Tiled`] for the
+//! whole real corpus today.
+//!
+//! **Micro-tile addressing is partially, not fully, measured.** AMD's
+//! `ComputeSurfaceAddrFromCoordMicroTiled` (Mesa's MIT `addrlib`,
+//! `egbaddrlib.cpp`) is a simple row-major-tiles formula with no banks,
+//! pipes or row-size unknowns - unlike the macro-tiled formula the earlier,
+//! disproven pass reached for. Implemented as a probe
+//! (`crates/texture/src/gnf/search_tests.rs`, `#[ignore]`d) and checked
+//! against real oracle-paired textures: a single-micro-tile 32x32 image
+//! decodes **exactly** (MAD 0.00), and on larger multi-tile images the
+//! first several on-disk tiles decode near-perfectly under plain row-major
+//! order before an unexplained, precisely periodic corruption sets in (a
+//! clean 2-tile-row alternation on a 1024x1024 sample, confirmed by a
+//! content-diff visualization to be tiling noise and not a remaster content
+//! change - see `docs/formats/gnf.md`'s "Tiling" section for the full
+//! diagnostic trail). That periodicity has not been explained by any tile
+//! order (row-major, column-major, Morton), byte-level shift, stride
+//! halving, or even/odd tile-row deinterleaving tried so far - so shipping
+//! this formula as `decode`'s tiled path would be exactly the "stand-in
+//! that reads as legible" this project's own rule against inventing what
+//! the assets already author warns about, even though the early evidence is
+//! strong. A future pass that finds (or proves) a **linear**
+//! (`Display_LinearAligned`/`Display_LinearGeneral`) `.gnf` could decode
+//! that one losslessly through [`crate::bcn`] directly today; none has been
 //! found among the entries `docs/formats/psarc.md` classifies "valid" so
 //! far.
 

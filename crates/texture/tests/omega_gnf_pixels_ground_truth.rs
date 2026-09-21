@@ -17,11 +17,11 @@
 //! **`decode` untiles nothing - see `docs/formats/gnf.md`'s tiling
 //! section for why.** Every valid `.gnf` `docs/formats/gnf.md`'s census
 //! found (1,407 across all nine archives) declares `TileMode(13)`
-//! ("Thin_2DThin"), genuinely macro-tiled, so every one of them is expected
-//! to fail `decode` with [`oag_texture::gnf::Error::Tiled`] - naming that
-//! outright rather than a floor on how many decode successfully is what
-//! keeps this test meaningful (and failing loudly) the day someone lands
-//! the untiler.
+//! (`Thin_1DThin` - GFD-Studio's own `TileMode.cs` enum), micro-tiled, so
+//! every one of them is expected to fail `decode` with
+//! [`oag_texture::gnf::Error::Tiled`] - naming that outright rather than a
+//! floor on how many decode successfully is what keeps this test
+//! meaningful (and failing loudly) the day someone lands the untiler.
 //!
 //! What this corpus sweep actually is a fact about:
 //!

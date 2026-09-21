@@ -76,9 +76,15 @@ Verified against `Data/art/published/hdships/harimau/Livery2/Holographic_02_GLOW
 (a real, non-zero `data03.psarc` entry - see `psarc.md`'s "valid" bucket):
 `word1` decodes to `SurfaceFormat::Bc7`/`ChannelType::Srgb`, `word2` decodes
 to 128x64, `word3`'s four channel-order fields decode to the ordinary
-Red/Green/Blue/Alpha order, and its tile mode decodes to `Thin_2DThin` - a
+Red/Green/Blue/Alpha order, and its tile mode decodes to index 13 - a
 genuinely tiled mode, not a coincidence a wrong reading could produce by
-accident.
+accident. **That index is `Thin_1DThin`, not `Thin_2DThin` as an earlier
+pass here read it** - GFD-Studio's own `TileMode.cs` enum (fetched directly
+from its GitHub source and re-checked, since this project's earlier label
+traced back to the same source without verifying the exact index) lists
+`Thin_1DThin = 0x0000000D` and `Thin_2DThin = 0x0000000E`: micro-tiled
+only, one index earlier than this page previously said. See "Tiling"
+below for how that was found and what it changes.
 
 ## Census: every valid `.gnf` across all nine Omega archives
 
@@ -91,7 +97,7 @@ location" section):
 
 | `SurfaceFormat` | `TileMode` | Count | Size range | Archives | Example |
 | --- | --- | ---: | --- | --- | --- |
-| `Bc7` | `0x0d` (`Thin_2DThin`) | 1,378 | 2x1 .. 8192x8192 | all nine | `Data/fe/images/badges.2x.gnf` |
+| `Bc7` | `0x0d` (`Thin_1DThin`) | 1,378 | 2x1 .. 8192x8192 | all nine | `Data/fe/images/badges.2x.gnf` |
 | `Bc4` | `0x0d` | 11 | 1024x512 .. 4096x2048 | patch `data08` | `data/fe/fonts/chinese.gnf` |
 | `Bc1` | `0x0d` | 4 | 4096x4096 | base `data00`, `data04` | `Grass_Patch_Red_Terrain_BC1.gnf` |
 | `Other(0x01)` | `0x0d` | 7 | 2048x1024 .. 4096x2048 | base `data00`, patch `data07` | `data/fe/fonts/chinese.gnf` |
@@ -144,7 +150,7 @@ scale, one step up for being a public spec rather than a decompilation: the
 implementation is internally consistent and spec-exact, not yet externally
 corroborated.
 
-## Tiling: why `Thin_2DThin` is not untiled
+## Tiling: why `Thin_1DThin` is not untiled
 
 **Every one of the 1,407 valid `.gnf` entries this census found declares
 `TileMode(0x0d)`.** `Texture::decode` refuses it by name
@@ -152,122 +158,151 @@ corroborated.
 same rule this project applied when the header/descriptor work first landed,
 now backed by a specific, measured reason it still applies.
 
-**The address algorithm itself is public and was read**: AMD's GCN macro-tile
-addressing (`ComputeSurfaceAddrFromCoordMacroTiled`,
-`ComputePixelIndexWithinMicroTile`, `ComputePipeFromCoord`,
-`ComputeBankFromCoord`) is documented in Mesa's MIT-licensed `addrlib`,
-specifically `src/amd/addrlib/src/r800/{egbaddrlib,siaddrlib}.cpp` - the
-GFX6/SI-generation chip family PS4's GCN 1.1 "Liverpool" GPU shares its
-tiling generation with. Not shadPS4's (GPL) code - `siaddrlib.cpp`'s
-`ComputePipeFromCoord` and `egbaddrlib.cpp`'s `ComputeBankFromCoord`,
-`ComputeSurfaceAddrFromCoordMacroTiled` and `ComputePixelIndexWithinMicroTile`
-were read and are cited here for provenance; shadPS4 was not consulted at
-all for this pass.
+### The array mode was misread by one index - and that changed everything
 
-**What the algorithm needs that a single `TileMode` index does not supply**:
-five parameters (`pipe_config`, `bank_width`, `bank_height`, `num_banks`,
-`macro_tile_aspect`) that a naive reading would expect to be a fixed row in a
-32-entry table, the way desktop GCN's own `GB_TILE_MODE0..31` registers work.
-They are not, for this format. `EgBasedLib::HwlReduceBankWidthHeight`
-(`egbaddrlib.cpp`) **reduces `bank_width`, `bank_height` and
-`macro_tile_aspect` per surface**, from `tile_size * bank_width * bank_height
-<= m_row_size` where `tile_size` depends on the surface's own
-bits-per-element and `m_row_size` is a DRAM row-size hardware constant this
-project has not recovered. A single `TileMode` index is only the *starting*
-(unreduced) configuration; the reduction is what a real driver applies before
-ever computing an address.
+The first pass at this (below, "Superseded: the macro-tile search") read
+index 13 as `Thin_2DThin`, macro-tiled, and searched that formula's
+configuration space to a clean negative. **That premise was wrong.**
+GFD-Studio's own `TileMode.cs` enum, fetched directly from its GitHub
+source rather than trusted from this project's own earlier citation of it,
+lists:
 
-**Measured, not assumed**: `crates/texture/examples/gnf_pitch_sieve.rs`
-sweeps every `Bc7`/`TileMode(13)` entry's own `pitch` field (which a real
-driver pads up to whichever `macro_tile_pitch` survives the reduction) against
-its `width`. 1,330 of 1,378 declare `pitch == width` (naturally aligned,
-uninformative), but the 48 that pad show the reduction is real and
-*surface-dependent*:
+```
+Thin_1DThin = 0x0000000D  // "Recommended for read-only non-volume textures."
+Thin_2DThin = 0x0000000E  // "Recommended for non-displayable intermediate
+                           //  render targets and read/write non-volume textures."
+```
 
-| Width (blocks) | Padded pitch (blocks) | File |
-| ---: | ---: | --- |
-| 33 | 40 | `Data/fe/NewImages/medals/Icon_Pass_medal_medium.gnf` |
-| 65 | 72 | `Data/fe/images/detonator.gnf` |
-| 15 | 16 | `Data/fe/images/infinity_symbol.gnf` |
-| 526 | 1,024 | `Data/crowd/Textures/crowd_rig_sprite_N.gnf` |
+Index 13 - what every real `.gnf` this project has found declares - is
+`Thin_1DThin`: **micro-tiled only**, one index earlier than macro-tiled
+`Thin_2DThin`. This is why the macro-tile search scored at chance: it was
+searching the right hardware family for the wrong array mode entirely.
 
-The first three round up to the next multiple of 8 - consistent with a fully
-reduced (`bank_width = 1`, small `macro_tile_aspect`) configuration on a
-small surface. The fourth rounds to a multiple of 512 - consistent with a
-much larger, unreduced (or less-reduced) macro tile pitch on a surface big
-enough that the row-size constraint never bites. **Both are `TileMode(13)`.**
-A fixed five-parameter lookup cannot produce two different `macro_tile_pitch`
-values for the same `TileMode`; the per-surface reduction algorithm is the
-only explanation this project has found that fits both rows, and it has not
-been reimplemented.
+### The micro-tile formula: strong partial confirmation, not yet a full match
 
-**Two calibration passes were attempted; both are negative results, kept as
-evidence rather than erased.**
+`EgBasedLib::ComputeSurfaceAddrFromCoordMicroTiled` (Mesa's MIT `addrlib`,
+`egbaddrlib.cpp`) is the formula for a 1D-tiled surface - no banks, no
+pipes, no row-size constant, dramatically simpler than the macro-tiled one:
+micro tiles (8x8 elements - here, 8x8 BC7 blocks, since one block is one
+128-bit "element") in plain row-major order across the surface, with
+`ComputePixelIndexWithinMicroTile`'s "Thin" (non-displayable) bit order
+inside each tile (`Lib::ComputePixelIndexWithinMicroTile`, `addrlib1.cpp`
+- `pixelBit0..5 = x0,y0,x1,y1,x2,y2`, a 6-bit interleave over the tile's
+own 8x8 grid). Implemented as a probe,
+`crates/texture/src/gnf/search_tests.rs::micro_tiled_address_against_the_oracle_pairs`
+(`#[ignore]`d), against real oracle pairs:
 
-*First pass, one texture, eyeballed - disproven.* Brute-forcing the five
-parameters against one small oracle-paired texture
-(`Holographic_02_GLOW.gnf`) found a configuration that decoded to a picture
-a human would call legible - a recognisable decal pattern, not noise.
-Cross-checked against AMD's own `EgBasedLib::SanityCheckMacroTiled`
-(`egbaddrlib.cpp`), that same configuration turned out to violate a real
-hardware constraint (`banks >= macroAspectRatio`, "this will generate macro
-tile height <= 1" otherwise) badly enough that `macro_tile_bytes` truncates
-to zero and the address space demonstrably aliases - at most half the block
-positions are distinct. The "legible picture" was two mostly-white,
-sparse-line-art images compared against each other, a weak control this
-project's own `gxt.md` warns about by name ("a smoothness metric was tried
-first and is too weak to use"); it was not a match. **A picture that looks
-right is not evidence by itself.**
+- **A single-micro-tile 32x32 image
+  (`Black_White_OnOff_Mask.gnf`) decodes exactly - MAD 0.00, bit-perfect.**
+  This is the whole intra-tile formula validated at once: BC7 block
+  decoding, the six-bit pixel index order, and the base `data_offset`, all
+  correct, on real shipped bytes.
+- On a 128x64, 8-mip-level pair (`Holographic_02_GLOW.gnf`, `icaras`
+  team), the **entire first tile row** (4 of 4 tiles wide) decodes
+  near-perfectly (MAD < 1 each). The second tile row breaks down (MAD 24.6
+  on the first tile of that row, ~78 on the rest).
+- On a 1024x1024, single-mip-level pair (`Harimau_c1_Livery.gnf`), the
+  **first 14 consecutive on-disk micro tiles** (of 32 in that row) decode
+  near-perfectly (MAD < 1 each) under plain row-major order before an
+  abrupt, sustained jump to MAD 40-90.
 
-*Second pass, five differently-sized oracle pairs, measured -
-`crates/texture/src/gnf/search_tests.rs`.* A properly bounded search: every
-valid `pipe_config` (all 14 AMD enum values, not assumed from memory to be
-8-pipe), `num_banks` in `{2,4,8,16}`, starting `bank_width`/`bank_height`/
-`macro_tile_aspect` in `{1,2,4,8}` each, and a DRAM row-size constant in
-`{1024,2048,4096}` bytes (BC7's own 1,024-byte micro tile is already larger
-than 256 or 512, which fail `SanityCheckMacroTiled` outright for this
-format and are excluded) - 8,736 configurations that pass
-`SanityCheckMacroTiled` after `HwlReduceBankWidthHeight`'s reduction is
-applied, faithfully ported including the pre-alignment steps
-`ComputeSurfaceAlignmentsMacroTiled` runs first. Each candidate decoded
-against five team/livery-matched oracle pairs spanning 32x32 to 1024x1024,
-scored by mean absolute per-channel difference against the HD `.gtf`
-decode - the same metric `gxt.md`'s `PVRTII4BPP`/`UBC1`/`UBC3` sections use,
-where a correct match reads single digits, a wrong tiling order high tens,
-and chance around 60.
+MAD under 1 across a full 1,024-texel tile is not achievable by a wrong
+decode landing on the right answer by chance - this is real, structural
+confirmation of the core formula, not a coincidence.
 
-**Best mean score across all five pairs: 45.21** (`pipe_config=P2,
-num_banks=2, bank_width=4, bank_height=1, macro_tile_aspect=2`), with a
-per-pair spread of 31.58 to 59.11 - uniformly in the "wrong" to "chance"
-range, no candidate close to a match on any pair. **This is a clean
-negative across the whole space the algorithm's own validity rules allow**,
-not a search that ran out of time: 8,736 is small enough that it completed
-in 69 seconds.
+### The unexplained part: a precise, periodic corruption - confirmed to be tiling, not content
 
-**What this rules out, concretely**: a model where `pipe_config`/`num_banks`
-are one fixed pair, global across every BC7 surface, and `bank_width`/
-`bank_height`/`macro_tile_aspect` are whatever `HwlReduceBankWidthHeight`
-reduces them to from one fixed row-size constant - because that model
-predicts the **same** `macro_tile_pitch` for every BC7 surface (the
-reduction's inputs are `bpp`, `pipes` and `row_size` alone; none of them
-vary by surface for a fixed-bpp format), which directly contradicts the
-pitch-padding evidence above (8-block and 512+-block paddings coexist on
-files declaring the same `TileMode`). **Something the descriptor does not
-carry must select a different starting `bank_width`/`bank_height`/
-`macro_tile_aspect` per surface** - plausibly `HwlSelectTileMode`/
-`HwlOptimizeTileMode` (`siaddrlib.cpp`, named but not read in this pass)
-picking a surface-size-dependent starting row of the tile-mode table before
-`HwlReduceBankWidthHeight` ever runs, which would mean `TileMode(13)` alone
-is not even the whole story at the *selection* level, only at the
-*array-mode-and-micro-tile* level.
+The 1024x1024 pair's break does **not** land on a tile-row boundary (its
+row is 32 tiles wide; the break is at tile 14), so it is a different
+symptom from the 128x64 pair's break (which lands exactly at its own
+4-tile row boundary). Per-tile-row mean brightness across the whole
+1024x1024 image (`data/scratch/drive-2026-09-21/gnf/harimau-diag/`) shows
+a precise, sustained **period-2 tile-row alternation**: rows 0, 2, 4, ...,
+30 average brightness 7-16 (real content), rows 1, 3, 5, ..., 31 average
+0.2-2.6 (near-black - either all-zero bytes, or bytes this project's own
+`bc7()` happens to decode near-black).
 
-**What would close this**: the true `pipe_config` and `HwlSelectTileMode`'s
-own surface-size-dependent selection rule (both recoverable from a PS4
-devkit's registers or a leaked/documented `libSceGnm` tile-mode table this
-project does not hold), or a real PS4 / accurate GCN-generation emulator to
-render a known texture and compare directly, the way
-`docs/formats/hd-frontend.md`'s own boot chain was settled by three cold
-boots on RPCS3.
+**Ruled out by directly comparing the decoded and oracle images
+side by side** (the content-vs-tiling test this page's own method
+elsewhere and `gxt.md`'s precedent both call for): the pattern is
+horizontal banding with a sharp, regular period, not a spatially coherent
+shape - a genuine content difference (a remaster redrawing this ship's
+sponsor decal) would show as a logo-shaped region, not an every-other-row
+stripe. This is a tiling artifact.
+
+**Hypotheses tested and ruled out, all measured**:
+
+| Hypothesis | Result |
+| --- | --- |
+| Column-major tile order | No improvement (mean MAD 46.56 vs. 42.45 baseline) |
+| Morton (Z-order) tile order | No improvement (45.89) |
+| Vertical (Y) flip | Worse (85.02) |
+| Byte-level shift, ±8 to ±512 | One partial improvement at -512B (MAD 6.62, not a clean match) |
+| Half the assumed tile-row stride | Worse (57.04 whole-image MAD vs. 48.26 baseline) |
+| Even/odd tile-row deinterleaving (all even rows, then all odd rows) | Worse (54.85) |
+| `word6` (DCC flags) | 0 - no DCC enabled |
+| `base_array_slice`/`last_array_slice` | 0/0 - not an array |
+| `is_pow2_pad` | `false` |
+| Stride by the descriptor's own `pitch` rather than raw width | Already what the code does - `pitch == width` exactly for both multi-tile pairs tested, so this made no difference for either |
+
+None explain the period-2 pattern. It remains open.
+
+### What would close this
+
+A real PS4, an accurate GCN-generation emulator, or a leaked/documented
+`libSceGnm` source for `ComputeSurfaceAddrFromCoordMicroTiled`'s exact
+tile-row indexing on this hardware, to render a known texture and compare
+directly - the way `docs/formats/hd-frontend.md`'s own boot chain was
+settled by three cold boots on RPCS3. Absent that, the next empirical step
+is sweeping the period-2 pattern's phase/parity against more oracle pairs
+of varying tile-grid width and height (odd vs. even `tiles_x`/`tiles_y`) to
+see whether the alternation is keyed to a coordinate parity this project's
+own `Texture` struct already decodes (row parity, `pitch` parity, mip
+count parity) rather than to an unrecovered hardware constant.
+
+### Superseded: the macro-tile search (kept as evidence of a real negative, not the live theory)
+
+Two calibration/search passes were run against the *macro-tiled*
+(`Thin_2DThin`) formula before the off-by-one above was found. Both
+scored at chance - now understood to be because they were searching the
+right hardware family for the wrong array mode, not because the
+methodology was flawed. Kept here rather than deleted, since a documented
+negative is still evidence (a future re-read of the tile mode enum, or a
+`Thin_2DThin` file if one ever turns up, would want to know this ground
+was already covered):
+
+*First pass, one texture, eyeballed.* Brute-forcing five macro-tile
+parameters against one small oracle-paired texture found a configuration
+that decoded to a picture a human would call legible. Cross-checked
+against AMD's own `EgBasedLib::SanityCheckMacroTiled` (`egbaddrlib.cpp`),
+that configuration turned out to violate a real hardware constraint and
+the computed address space demonstrably aliased. **A picture that looks
+right is not evidence by itself** - the same lesson `gxt.md`'s own
+"a smoothness metric was tried first and is too weak to use" records.
+
+*Second pass, five oracle pairs, measured -
+`crates/texture/src/gnf/search_tests.rs::search_the_reduced_tile_config_space_against_multi_size_oracle_pairs`.*
+A properly bounded search over all 14 AMD `pipe_config` values, `num_banks`
+in `{2,4,8,16}`, starting `bank_width`/`bank_height`/`macro_tile_aspect` in
+`{1,2,4,8}` each, and a DRAM row-size constant in `{1024,2048,4096}` bytes -
+8,736 configurations that pass `SanityCheckMacroTiled` after
+`EgBasedLib::HwlReduceBankWidthHeight`'s per-surface bank-width/height
+reduction is faithfully applied (including the pre-alignment steps
+`ComputeSurfaceAlignmentsMacroTiled` runs first), scored against five
+team/livery-matched oracle pairs by mean absolute per-channel difference -
+the same metric `gxt.md`'s `PVRTII4BPP`/`UBC1`/`UBC3` sections use, where a
+correct match reads single digits, a wrong tiling order high tens, and
+chance around 60. **Best mean score: 45.21**, per-pair spread 31.58-59.11 -
+uniformly "wrong" to "chance", no candidate close to a match, completed in
+69 seconds (not a search that ran out of budget).
+
+The pitch-padding evidence this search's own writeup used to argue for a
+per-surface *macro-tile* reduction (33 blocks wide -> pitch 40, 65 -> 72,
+15 -> 16, 526 -> 1,024, all on files declaring `TileMode(13)`) is still
+real and still measured - `crates/texture/examples/gnf_pitch_sieve.rs`'s
+output does not change - but the mechanism producing it is now understood
+to be `Thin_1DThin`'s own (much simpler) pitch alignment, not a macro-tile
+bank/pipe reduction.
 
 ## Implemented where
 
@@ -283,8 +318,9 @@ exact decoded fields. `crates/texture/tests/omega_gnf_pixels_ground_truth.rs`
 corpus - all nine archives, `data08`'s `Data/fe/` subtree swept in full -
 asserting it never panics and that every `Error::Tiled` names the exact
 `tile_mode` the descriptor declares. `crates/texture/src/gnf/search_tests.rs`
-(`#[ignore]`d) is the bounded tiling-configuration search this page's
-"Tiling" section reports the negative result of.
+(`#[ignore]`d) holds both tiling-configuration searches this page's "Tiling"
+section reports: the superseded macro-tile one, and the micro-tile one with
+its still-open periodic-corruption diagnostics.
 
 ## See also
 

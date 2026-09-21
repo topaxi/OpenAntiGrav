@@ -2,23 +2,22 @@
 //!
 //! `Texture::decode` refuses every genuinely tiled surface by name
 //! ([`Error::Tiled`]) rather than guessing at a picture - see `gnf.rs`'s own
-//! "What this does not do" and `docs/formats/gnf.md`'s tiling-calibration
-//! section for why: AMD's own address library
-//! (`EgBasedLib::HwlReduceBankWidthHeight`, `src/amd/addrlib/src/r800/egbaddrlib.cpp`
-//! in Mesa) reduces a macro-tiled surface's bank width/height/aspect
-//! *per surface*, from its bits-per-element and a DRAM row-size constant
-//! this project has not recovered, rather than the fixed lookup a single
-//! `TileMode` index would be if the reduction never fired. Measured
-//! directly: `.gnf` entries under 40 blocks wide pad their own `pitch`
-//! field to a small, size-dependent multiple (33 blocks -> 40, 65 -> 72,
-//! 15 -> 16 - each just the next multiple of 8), while a 526-block-wide one
-//! pads to 1,024 - two different `macro_tile_pitch` values on the same
-//! declared `TileMode(13)`, which only the reduction algorithm explains.
-//! Reimplementing that algorithm from Mesa's C++ without a real PS4 to
-//! render against and check the picture on is exactly the "stand-in that
-//! reads as legible" this project's rule against inventing what the assets
-//! already author exists to prevent - so it stays unimplemented, named,
-//! rather than guessed.
+//! "What this does not do" and `docs/formats/gnf.md`'s "Tiling" section for
+//! the full evidence trail. Short version: every real `.gnf` this project
+//! has sampled declares `TileMode(13)` - `Thin_1DThin` (GFD-Studio's own
+//! `TileMode.cs` enum), micro-tiled, not the macro-tiled `Thin_2DThin` (14)
+//! an earlier pass here mislabeled it as. AMD's much simpler micro-tile-only
+//! address formula (`EgBasedLib::ComputeSurfaceAddrFromCoordMicroTiled`,
+//! Mesa's MIT `addrlib`) gets strong partial confirmation against real
+//! oracle-paired textures - an exact match on an isolated single-tile
+//! image, and many consecutive correctly-decoded tiles on larger ones -
+//! but a precise, periodic corruption past that point (confirmed by a
+//! content-diff visualization to be a tiling bug, not a remaster content
+//! change) has not been explained by any tile order, byte shift or
+//! stride variant tried so far. Shipping that formula as `decode`'s tiled
+//! path anyway would be exactly the "stand-in that reads as legible" this
+//! project's rule against inventing what the assets already author exists
+//! to prevent - so it stays unimplemented, named, rather than guessed.
 
 use super::{Error, Result, SurfaceFormat, Texture};
 

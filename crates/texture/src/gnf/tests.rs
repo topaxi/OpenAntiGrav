@@ -48,9 +48,9 @@ fn the_descriptor_decodes_to_a_plausible_bc7_srgb_livery_decal() {
 #[test]
 fn the_real_sample_is_tiled_not_linear() {
     let texture = Texture::parse(&holographic_glow_head()).expect("parses");
-    // TileMode 0x0d ("Thin_2DThin") - genuinely tiled, the reason this
-    // module stops at identification. See the module's own "What this does
-    // not do".
+    // TileMode 0x0d ("Thin_1DThin" - GFD-Studio's TileMode.cs enum) -
+    // micro-tiled, not linear, the reason `decode` refuses it. See the
+    // module's own "What this does not do".
     assert_eq!(texture.tile_mode.0, 0x0d);
     assert!(!texture.is_linear());
 }
@@ -100,7 +100,7 @@ fn a_short_buffer_is_rejected_rather_than_panicking() {
 fn linear_tile_modes_are_recognised() {
     assert!(TileMode(0x08).is_linear(), "Display_LinearAligned");
     assert!(TileMode(0x1f).is_linear(), "Display_LinearGeneral");
-    assert!(!TileMode(0x0d).is_linear(), "Thin_2DThin");
+    assert!(!TileMode(0x0d).is_linear(), "Thin_1DThin");
 }
 
 #[test]
