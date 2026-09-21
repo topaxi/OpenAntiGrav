@@ -753,6 +753,31 @@ fn micro_tiled_address_against_the_oracle_pairs() {
         // Full matrix for row 1's four disk tiles (4..8) against row 1's
         // four spatial slots - is it a different permutation (serpentine,
         // transposed) rather than row 0's straightforward identity?
+        // Hypothesis: mip levels interleave by TILE-ROW rather than being
+        // fully sequential - "row 0 of every mip level, then row 1 of
+        // level 0" - which would put level 0's second tile row much later
+        // in the file than a naive sequential-mip-chain read assumes.
+        // Level 0 row 0 = 4 tiles; level 1 (64x32 = 2x1 tiles) has one row
+        // of 2 tiles; levels 2-7 (<=32x16, all <=1 tile each) contribute
+        // one tile each = 6 tiles. "Every level's row 0" = 4+2+6 = 12
+        // tiles = 12288 bytes, where level 0's row 1 would start instead.
+        for disk_index in [12u64, 13, 14, 15] {
+            let tile_texels = decode_tile(disk_index);
+            let mut best = (f64::MAX, 0u32, 0u32);
+            for slot_y in 0..2u32 {
+                for slot_x in 0..4u32 {
+                    let mad = mad_at_slot(&tile_texels, slot_x, slot_y);
+                    if mad < best.0 {
+                        best = (mad, slot_x, slot_y);
+                    }
+                }
+            }
+            println!(
+                "  mip-row-interleave hypothesis: disk tile {disk_index} -> best slot ({}, {}), MAD {:.2}",
+                best.1, best.2, best.0
+            );
+        }
+
         println!("row-1 disk tiles (4..8) x row-1 slots, full MAD matrix:");
         for disk_index in 4..8u64 {
             let tile_texels = decode_tile(disk_index);
@@ -806,6 +831,121 @@ fn micro_tiled_address_against_the_oracle_pairs() {
                     println!("  shift {shift}: slot (0,1) MAD {mad:.2} <-- candidate");
                 }
             }
+        }
+    }
+
+    // Content-diff visualization for harimau_c1: write decoded and oracle
+    // PNGs so a human (Read tool) can tell tiling noise (stripes/blocks)
+    // apart from a content difference (a logo-shaped, spatially coherent
+    // blob - exactly what a remaster would touch).
+    if let Some((_, texture, blob, truth)) = pairs.iter().find(|(p, ..)| p.contains("harimau_c1")) {
+        let decoded =
+            decode_micro_tiled(blob, texture, micro_tile_index, TileOrder::RowMajor, false);
+        let decoded_bytes: Vec<u8> = decoded.iter().flatten().copied().collect();
+        let truth_bytes: Vec<u8> = truth.iter().flatten().copied().collect();
+        std::fs::write(
+            "/tmp/gnf_harimau_decoded.png",
+            crate::png::encode_rgba(texture.width, texture.height, &decoded_bytes),
+        )
+        .unwrap();
+        std::fs::write(
+            "/tmp/gnf_harimau_truth.png",
+            crate::png::encode_rgba(texture.width, texture.height, &truth_bytes),
+        )
+        .unwrap();
+        println!("wrote /tmp/gnf_harimau_decoded.png and _truth.png");
+
+        // Hypothesis: the real tile-row stride is HALF of pitch_blocks/8
+        // (16, not 32) - test directly by re-decoding with that stride and
+        // comparing MAD against the full oracle.
+        {
+            let width_blocks = texture.width.div_ceil(4);
+            let height_blocks = texture.height.div_ceil(4);
+            let tiles_x_half = width_blocks.div_ceil(8) / 2;
+            let mut out = vec![[0u8; 4]; (texture.width * texture.height) as usize];
+            for by in 0..height_blocks {
+                for bx in 0..width_blocks {
+                    let tile_x = bx / 8;
+                    let tile_y = by / 8;
+                    let tile_index = u64::from(tile_y * tiles_x_half + tile_x);
+                    let pixel_index = micro_tile_index(bx % 8, by % 8);
+                    let element_offset = pixel_index * 128 / 8;
+                    let addr = tile_index * 1024 + u64::from(element_offset);
+                    let start = texture.data_offset + addr as usize;
+                    if let Some(block) = blob.get(start..start + 16).and_then(|s| s.try_into().ok())
+                    {
+                        let texels: [[u8; 4]; 16] = bc7(&block);
+                        for ty in 0..4usize {
+                            for tx in 0..4usize {
+                                let px = (bx * 4) as usize + tx;
+                                let py = (by * 4) as usize + ty;
+                                if px < texture.width as usize && py < texture.height as usize {
+                                    out[py * texture.width as usize + px] = texels[ty * 4 + tx];
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            let mad = mean_abs_diff(&out, truth);
+            println!("half-stride hypothesis (tiles_x={tiles_x_half}): whole-image MAD {mad:.2}");
+        }
+
+        // Hypothesis: even tile-rows and odd tile-rows are deinterlaced -
+        // all even rows first (tile_y/2 * tiles_x + tile_x), then all odd
+        // rows starting at total_tiles/2.
+        {
+            let width_blocks = texture.width.div_ceil(4);
+            let height_blocks = texture.height.div_ceil(4);
+            let tiles_x = width_blocks.div_ceil(8);
+            let tiles_y = height_blocks.div_ceil(8);
+            let half = tiles_x * (tiles_y / 2);
+            let mut out = vec![[0u8; 4]; (texture.width * texture.height) as usize];
+            for by in 0..height_blocks {
+                for bx in 0..width_blocks {
+                    let tile_x = bx / 8;
+                    let tile_y = by / 8;
+                    let tile_index: u64 = if tile_y % 2 == 0 {
+                        u64::from((tile_y / 2) * tiles_x + tile_x)
+                    } else {
+                        u64::from(half) + u64::from((tile_y / 2) * tiles_x + tile_x)
+                    };
+                    let pixel_index = micro_tile_index(bx % 8, by % 8);
+                    let element_offset = pixel_index * 128 / 8;
+                    let addr = tile_index * 1024 + u64::from(element_offset);
+                    let start = texture.data_offset + addr as usize;
+                    if let Some(block) = blob.get(start..start + 16).and_then(|s| s.try_into().ok())
+                    {
+                        let texels: [[u8; 4]; 16] = bc7(&block);
+                        for ty in 0..4usize {
+                            for tx in 0..4usize {
+                                let px = (bx * 4) as usize + tx;
+                                let py = (by * 4) as usize + ty;
+                                if px < texture.width as usize && py < texture.height as usize {
+                                    out[py * texture.width as usize + px] = texels[ty * 4 + tx];
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            let mad = mean_abs_diff(&out, truth);
+            println!("deinterlace hypothesis: whole-image MAD {mad:.2}");
+        }
+
+        // Per-tile-row mean brightness, to nail the periodicity of the
+        // black/content banding visible in the PNG.
+        for tile_row in 0..32usize {
+            let y0 = tile_row * 32;
+            let mut sum = 0u64;
+            for y in y0..(y0 + 32).min(texture.height as usize) {
+                for x in 0..texture.width as usize {
+                    let p = decoded[y * texture.width as usize + x];
+                    sum += u64::from(p[0]) + u64::from(p[1]) + u64::from(p[2]);
+                }
+            }
+            let mean = sum as f64 / (32 * texture.width as usize * 3) as f64;
+            println!("  tile row {tile_row}: mean brightness {mean:.1}");
         }
     }
 
