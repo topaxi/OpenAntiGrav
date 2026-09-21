@@ -6,9 +6,9 @@
 //! [`crate::screen::Screens::collect_widgets`] recognises at all - `
 //! NavigationController` and `TextInfo` fall through its match to the
 //! catch-all arm, children and all - which is the actual gap
-//! `docs/ui/campaign-screens.md`'s "Open" section names (see also
-//! `handover/frontend/the-menus-draw-the-discs-layout-the-chrome.md`, the
-//! sibling thread for the main menu's own copy of this footer).
+//! `docs/ui/campaign-screens.md`'s "Open" section names - the main menu's
+//! own copy of this same footer is a sibling gap, tracked in its own
+//! handover thread rather than linked from here.
 //!
 //! Read directly off the raw parsed tree (`oag_tables::fexml::parse`'s
 //! `Node`) instead of through that model, because the model has no way to
