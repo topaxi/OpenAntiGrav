@@ -264,12 +264,22 @@ shape, not by screen, and would have mis-fired on `Team`'s own
    (`hud_font` asks for role `"HUD"`/`"HUDSmall"`, 2048 names `2048HUD`, and
    two plugins' leftover `HUD`/`HUDSmall` roles point at files 2048 does not
    ship).
-5. **New, opened 2026-09-20: give `oag_title` a per-title HUD font role
-   name** (mirroring `MenuSkin::menu_font`'s "which role names the disc
-   actually uses" pattern) so `crates/game/src/race/hud.rs::hud_font` can
-   ask 2048 for `2048HUD` instead of the `"HUD"`/`"HUDSmall"` literal every
-   other title happens to share. Also decide what `HUDSmall` means on a
-   title that names no separate small face at all - falling back to
-   `2048HUD` for both sizes is a plausible reading but is not something this
-   pass measured, so it needs its own check before landing. A candidate for
-   its own thread rather than a tail on this one.
+5. ~~New, opened 2026-09-20: give `oag_title` a per-title HUD font role
+   name~~ **Done 2026-09-21, on `lane/2048-hud-font`.** `oag_title::HudArt`
+   gained `hud_font_role: &'static str` and
+   `hud_small_font_role: Option<&'static str>`, mirroring
+   `MenuSkin::menu_font`'s "which role names the disc actually uses"
+   pattern; `crates/game/src/race/hud.rs::hud_font` now asks each title for
+   its own role rather than the literal `"HUD"`/`"HUDSmall"`. 2048 measures
+   `"2048HUD"`/`None`. The `HUDSmall` question this item raised was checked
+   rather than assumed: all seventeen 2048 plugins name no distinct caption
+   role at all - a real gap - so the caption face falls back to the value
+   face, **chosen, not measured**, labelled as such in
+   `oag_title::HudArt::hud_small_font_role`'s own doc. Verified with
+   `just play 2048 --race --screenshot ...`: the boot report resolves
+   `Data\XML\2048_hud\font\2048_hud.fnt (role "2048HUD")` and the screenshot
+   shows the real face, not 5x7. Pulse and HD re-captured unchanged. Pinned
+   by `vita_2048_hud_ground_truth.rs`'s
+   `the_resolved_hud_font_is_2048_huds_own_face_not_a_leftover_or_the_fallback`.
+   Full account: `docs/formats/2048-frontend.md`'s "Resolved 2026-09-21: the
+   HUD font draws" section and `docs/formats/2048-status.md`'s HUD bullet.

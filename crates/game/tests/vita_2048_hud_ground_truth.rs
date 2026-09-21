@@ -238,3 +238,78 @@ fn the_leachbeams_four_widgets_are_authored_and_have_no_lockedon_counterpart() {
         "a LeachBeamSight*LockedOn* widget exists after all: {all_leach:?}"
     );
 }
+
+/// The role-name fix `oag_title::HudArt::hud_font_role` exists for: this
+/// title's own language plugins resolve `oag_2048::hud::ART::hud_font_role`
+/// (`"2048HUD"`) to the real, decodable HUD face - not the 5x7 fallback, and
+/// not a leftover entry from a plugin that never shipped one.
+///
+/// Regression pin for `crates/game/src/race/hud.rs::hud_font` reading the
+/// *title's own* role through `oag_title::Title::hud_art` rather than the
+/// shared `oag_ui::language::roles::HUD` literal every other title's own
+/// plugin happens to also spell. Before that change, `hud_font` asked every
+/// source for the literal `"HUD"`; none of 2048's seventeen plugins fill it
+/// except two leftovers - `korean` and `traditionalchinese`, each naming a
+/// `Data\FE\Fonts\PulseHud.fnt`/`koreanHudSmall.fnt` this title's own archive
+/// does not carry - so a first-match search across every loaded plugin
+/// (`korean` sorts ahead of `english` in `oag_2048::frontend::FRONT_END`'s
+/// alphabetised plugin list) picked up a dangling reference and fell back to
+/// 5x7 regardless of which language the player chose.
+#[test]
+#[ignore = "needs the decrypted Vita package in data/extracted/vita/"]
+fn the_resolved_hud_font_is_2048_huds_own_face_not_a_leftover_or_the_fallback() {
+    let Some(source) = source() else {
+        return;
+    };
+    let mut report = Vec::new();
+    let mut archives = oag_2048::open(&source.display().to_string()).expect("opening 2048");
+    let plugins = oag_2048::TITLE
+        .front_end
+        .expect("oag_2048::TITLE.front_end is None - see ADR-0054")
+        .language_plugins;
+    let languages = oag_game::boot::load_languages(&mut archives, plugins, &mut report);
+    assert!(
+        !languages.is_empty(),
+        "no language plugin resolved: {report:?}"
+    );
+
+    let role = oag_2048::hud::ART.hud_font_role;
+    assert_eq!(role, "2048HUD", "oag_2048::hud::ART::hud_font_role moved");
+    let name = languages
+        .iter()
+        .find_map(|language| language.font(role))
+        .unwrap_or_else(|| panic!("no plugin fills the {role:?} role"))
+        .to_string();
+    assert_eq!(
+        name, r"Data\XML\2048_hud\font\2048_hud.fnt",
+        "resolved {role:?} to {name}, not this title's own HUD face"
+    );
+    let font = archives
+        .read_font(&name)
+        .unwrap_or_else(|e| panic!("{name} named but unreadable: {e}"));
+    assert!(!font.glyphs.is_empty(), "{name} decoded to no glyphs");
+
+    // The regression this axis closes: the shared literal every other
+    // title's own plugin happens to also name is *not* this title's answer -
+    // either no plugin fills it (a source whose plugins genuinely agree with
+    // the other titles would fail this test, which is the point) or, as
+    // measured here, a leftover entry a first-match search across every
+    // loaded plugin could pick up ahead of the one the player chose.
+    let shared_literal = oag_ui::language::roles::HUD;
+    if let Some(leftover) = languages
+        .iter()
+        .find_map(|language| language.font(shared_literal))
+    {
+        assert_ne!(
+            leftover, name,
+            "{shared_literal:?} now resolves to the same file as {role:?} - \
+             this test's premise (that they diverge) no longer holds"
+        );
+        assert!(
+            archives.read_font(leftover).is_err(),
+            "{shared_literal:?} resolved to {leftover}, which decodes - the \
+             old first-match search would have drawn a real font rather than \
+             exposing the mismatch this axis exists to fix"
+        );
+    }
+}
