@@ -86,7 +86,7 @@ winit = "0.30"
 # `oag_game::icon`. No `<text>` node in either source SVG, so the `text`
 # feature (and the fontdb/rustybuzz/ttf-parser it drags in) is off.
 resvg = { version = "0.48", default-features = false }
-pollster = "0.4"
+pollster = "1"
 toml.workspace = true
 # Only for `crate::pilots`' save path. `toml` above parses a pilot file into a
 # struct and throws the document away, which is exactly what must NOT happen
@@ -95,7 +95,7 @@ toml.workspace = true
 # touched and writes the rest back byte-for-byte - see `crate::pilots`' module
 # doc.
 toml_edit = "0.25"
-dirs = "6"
+dirs = "7"
 serde.workspace = true
 thiserror.workspace = true
 # Unpacking a downloaded DLC zip into the cache, and nothing else. Deliberately
@@ -104,7 +104,7 @@ thiserror.workspace = true
 # gameplay crate acquires a decompressor. Deflate only - the packs are
 # torrentzipped, and bzip2/zstd/aes would be dependencies for formats that
 # cannot appear here.
-zip = { version = "6", default-features = false, features = ["deflate"] }
+zip = { version = "8", default-features = false, features = ["deflate"] }
 # The `perf` overlay's memory line. This workspace forbids `unsafe`
 # (`unsafe_code = "deny"` at the workspace level - see `crates/game/src/source.rs`
 # for the last place that shaped a design around it), which rules out reading a
@@ -127,9 +127,9 @@ memory-stats = { version = "1.2.0", features = ["always_use_statm"] }
 # docs/architecture/adr/0017-gstreamer-native-video.md. PS2 content always
 # uses the AV1 cache below, unaffected either way.
 [target.'cfg(target_os = "linux")'.dependencies]
-gstreamer = { version = "0.23", optional = true }
-gstreamer-app = { version = "0.23", optional = true }
-gstreamer-video = { version = "0.23", optional = true }
+gstreamer = { version = "0.25", optional = true }
+gstreamer-app = { version = "0.25", optional = true }
+gstreamer-video = { version = "0.25", optional = true }
 
 [features]
 native-video = ["dep:gstreamer", "dep:gstreamer-app", "dep:gstreamer-video"]
