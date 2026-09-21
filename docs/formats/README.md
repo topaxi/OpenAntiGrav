@@ -359,3 +359,19 @@ through `oag-formats`, which has no big-endian path, so no row gained an
 `HD Fury`. The measurement is a deliberately separate reading of the same
 layouts, which is why agreement between the two means something about the
 format rather than about one implementation.
+
+**[Omega front end](omega-frontend.md)** answers a player's own observation -
+"the Omega menu looks like HD/Fury's" - with a byte-level diff rather than a
+guess: it is not similar, it is the same `Data\Plugins\PI001\GUI\` plugin.
+Every `FEGlobals` layout number HD's own page names matches Omega's
+`skin.xml` to the digit, and this project's existing, unmodified
+`oag_ui::screen::Screens` reader parses it with no fork needed. What is new
+is not a rewrite: a fourth colour-skin block (`2048_Colours`) folds 2048's
+palette into the same switch that already chose between base-HD and Fury, one
+more `CellMode`-vocabulary branch (`Grid Selection 2048`) reaches a genuinely
+new `Campaign2048_Definition.xml` authored in **2048's own** `FE3DCanvas`/
+`CanvasLabel` vocabulary rather than HD's, and PSVR gets two new dialog
+screens and a comfort option HD never had. Which of the patch's four archives
+the runtime actually loads is the one question this page leaves open the same
+way HD's own six-copy question stood before an RPCS3 capture closed it - no
+PS4 emulator exists in this project's toolchain to do the same here.
