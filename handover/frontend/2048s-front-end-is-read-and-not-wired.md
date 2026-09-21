@@ -63,6 +63,26 @@ walks and the grids draw" section; the mechanism notes are in
 `crates/game/tests/vita_2048_boot_ground_truth.rs` (eight, on the package)
 and `crates/ui/src/frontend/tests/wipeout2048.rs` (seventeen, on a fixture).
 
+**`Home`'s five destinations draw and work, 2026-09-21, on
+`lane/2048-home-team`.** `Team_`, `Community_`, `Profile_`, `Options_` and
+`Extras_Definition.xml` are all in `oag_2048::frontend::includes::FOLLOWED`
+now, and their screens' bare names are registered, closing the "screen this
+build does not load" gap every one of `Home`'s tiles hit. Full account in
+[2048-frontend.md](../../docs/formats/2048-frontend.md)'s "Wired: `Home`'s
+five destinations draw" section: `team` draws a team x craft-slot grid built
+from `oag_2048::race`'s own roster (labelled tiles, not the disc's
+native-code-populated `teamgrid/` icons) and feeds `settings.race.team`/
+`variant`, which the existing `RaceDefaults`/`combine_variant` machinery
+already resolves for the campaign launch and the RACE BOX/REMIX pages;
+`OptionsCamera`/`OptionsAudio` wire into `settings.graphics.camera_view`/
+`audio.music_volume`/`sfx_volume`; `communityAdhocCheck`/`profile`/
+`2048extras` (+`manual3D`/`extrasCredits`) draw generically. New mechanism:
+a `redirect="PreviousScreen"` back stack, and a fix to a touch-tile bug the
+new screens exposed (`GameModeChoice`'s toggle-confirm was matching by
+shape, not by screen, and would have mis-fired on `Team`'s own
+`replay_unlock` tiles). 14 disc-backed tests in
+`crates/game/tests/vita_2048_boot_ground_truth.rs`.
+
 ## Open
 
 - **Resolved 2026-09-21: the intro plays, picture and sound.**
@@ -77,13 +97,24 @@ and `crates/ui/src/frontend/tests/wipeout2048.rs` (seventeen, on a fixture).
   projection tables (`frontend-campaign-map.md`) are undumped and the city
   backdrop, season badges and `FE3DCanvas` labels are not drawn. The unlock
   graph is not walked: every event is offered, there being no save.
-- **`Home`'s five destinations are not drawn.** `Team_`, `Community_`,
-  `Profile_`, `Options_` and `Extras_Definition.xml` are not in
-  `oag_2048::frontend::includes::FOLLOWED`; a tap on a `Home` tile says the
-  screen is not loaded and stays. `team` is the one a race needs first
-  (the craft picker - every team flies its default craft slot until it is
-  read; `boot::roster::load_teams`'s craft-slot fallback and
-  `session::placeholder::raceable_teams` make the same stand-in).
+- **Resolved 2026-09-21: `Home`'s five destinations draw.** See the top of
+  this file and `2048-frontend.md`'s own "Wired" section for the full
+  account. `team`'s own team/craft-slot picker feeds `settings.race.team`/
+  `variant`, so `boot::roster::load_teams`'s craft-slot fallback and
+  `session::placeholder::raceable_teams`'s stand-in are now only what a
+  player gets before ever opening `Home` - not for the rest of the session.
+  Still open from this pass: `TouchTeamGrid`'s own `teamgrid/` icon set is
+  not wired into the sprite sheet (drawn as labelled tiles instead); the
+  `<Model>` ship previews on `team` and `profile` are not drawn (no
+  renderer seam from a 2D front-end screen to a 3D mesh); the skin list
+  draws and cycles and is not wired to `race::Options::skin` (no measured
+  `1`/`2`/`3` -> `PI_ModelSkin` mapping); Options' Controls/Pilot lists draw
+  and cycle and reach no setting this build has; the Options picker's
+  starting value is this build's own default, not `CameraP1`'s authored one
+  (threading the live `Settings` into `Frontend::booting` touches every
+  title's boot path for a value only 2048 reads); Extras' ship-unlock and
+  season-recap movies are not named by any widget reachable here, so
+  nothing plays rather than a guess.
 - **The `BootFlowCanvas`'s triangle-grid ground has no located asset**;
   the card and the title screen draw on plain white, labelled chosen.
 - **The `TouchHomeButton` and `TouchNews` widgets are not drawn** (no

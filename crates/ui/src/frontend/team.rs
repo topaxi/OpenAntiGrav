@@ -27,9 +27,9 @@
 //! sheet (`oag_game::boot::sprites`, which only packs textures a widget's
 //! own `src` names) is its own piece of work, left for whoever measures the
 //! real grid's cell size and spacing next to it. Locked/new cell states are
-//! not drawn either, on the same grounds
-//! `handover/frontend/2048s-front-end-is-read-and-not-wired.md` already
-//! gives the campaign map: every event is offered, there being no save.
+//! not drawn either, on the same grounds the campaign map's own hotspots
+//! stand on (`docs/formats/2048-frontend.md`): every event is offered, there
+//! being no save.
 //!
 //! **Chosen, not measured**: the two rows' own geometry. One row of five
 //! team tiles and one row of four craft-slot tiles, both left-aligned under
