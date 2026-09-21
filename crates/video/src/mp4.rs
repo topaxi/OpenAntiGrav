@@ -371,6 +371,17 @@ pub struct AudioTrack {
     /// The audio track's own `stsz` sample count - 4,666 on `intro.mp4`,
     /// each sample 1,024 ticks of the track's 48,000 Hz `mdhd` timescale.
     pub frame_count: usize,
+    /// The audio track's own `stts.sample_delta` - 1,024 on `intro.mp4`,
+    /// measured off the same box the video track's
+    /// [`Header::frame_delta`] comes from, just for the `soun` `trak`
+    /// instead of the `vide` one. With [`Self::sample_rate`] as the `mdhd`
+    /// timescale the ticks are counted in, `frame_count * frame_delta /
+    /// sample_rate` is the track's exact duration with no decode at all -
+    /// AAC's fixed 1,024-samples-per-frame is what makes a tick of this
+    /// timescale the same thing as a PCM sample, which is not true of every
+    /// codec but is measured directly here rather than assumed: it is this
+    /// field's own value, not a hard-coded constant.
+    pub frame_delta: u32,
 }
 
 /// What [`parse`] read off the video track's own boxes.
@@ -606,6 +617,7 @@ fn parse_trak(blob: &[u8], trak: &RawBox) -> Result<Track, Error> {
                 sample_rate,
                 channel_count,
                 frame_count: stsz_count,
+                frame_delta: sample_delta,
             }))
         }
         _ => Ok(Track::Other),

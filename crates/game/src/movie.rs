@@ -36,6 +36,7 @@
 //! See `docs/architecture/frontend-boot.md`.
 
 mod bink;
+mod container_audio;
 #[cfg(all(target_os = "linux", feature = "native-video"))]
 mod gst;
 mod mp4;

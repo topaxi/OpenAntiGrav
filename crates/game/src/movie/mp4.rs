@@ -82,7 +82,29 @@ pub(super) fn open(
         u64::from(header.frame_rate.1),
     );
 
-    let movie = |frames: Option<FrameStore>, no_picture_reason: Option<String>| Movie {
+    // Computed before the `--no-video` branch, the same place `bink::open`
+    // unwraps its own container-hosted track - see that function's comment on
+    // why `--no-video` should not cost this file its sound.
+    //
+    // **AAC is inside the container**, the same shape `.bik`'s own audio is -
+    // see `docs/formats/bik.md#the-audio-is-inside-the-video-file`. Only
+    // `intro.mp4` of the 26 carries a track at all
+    // ([`oag_video::mp4::Header::audio`]). `ensure_source` writes the same
+    // `{key}.mp4` file `transcode` hands to `ffmpeg` for the picture -
+    // written here too so a video-cache hit does not leave the audio route
+    // with nothing to read.
+    let audio = match &header.audio {
+        None => None,
+        Some(track) => match ensure_source(cache_dir, key, "mp4", blob) {
+            Ok(source) => Some(track::mp4_audio(track, source, key)),
+            Err(e) => {
+                warn!("{key}'s audio track could not be cached for decoding: {e:#}");
+                None
+            }
+        },
+    };
+
+    let movie = move |frames: Option<FrameStore>, no_picture_reason: Option<String>| Movie {
         // A `.PMF`'s PSMF header, and there is no such thing here - see
         // `bink::open`'s own comment on the same field.
         header: None,
@@ -97,15 +119,7 @@ pub(super) fn open(
         display_aspect: (width, height),
         frames,
         no_picture_reason,
-        // **AAC is inside the container**, the same shape `.bik`'s own
-        // "the audio is inside the video file" gap is - see
-        // `docs/formats/bik.md#the-audio-is-inside-the-video-file`. Only
-        // `intro.mp4` of the 26 carries a track at all
-        // ([`oag_video::mp4::Header::audio`]), and nothing here reads it out
-        // of the container yet: playing it needs a second route through
-        // `ffmpeg` (or a demux into `MovieAudioKind`'s PCM shape) and a
-        // widened `Movie::audio`, which is its own change.
-        audio: None,
+        audio,
     };
 
     if how.no_video {
@@ -126,6 +140,20 @@ pub(super) fn open(
         Ok(frames) => Ok(movie(Some(frames), None)),
         Err(reason) => Ok(movie(None, Some(format!("{reason:#}")))),
     }
+}
+
+/// Writes `blob` under `cache_dir` as `{key}.{ext}`, unless a file already
+/// there is already the right length - see `bink::ensure_source`, which this
+/// mirrors exactly for the same reason.
+fn ensure_source(cache_dir: &Path, key: &str, ext: &str, blob: &[u8]) -> Result<PathBuf> {
+    std::fs::create_dir_all(cache_dir)
+        .with_context(|| format!("creating {}", cache_dir.display()))?;
+    let path = cache_dir.join(format!("{key}.{ext}"));
+    let already_written = std::fs::metadata(&path).is_ok_and(|m| m.len() == blob.len() as u64);
+    if !already_written {
+        std::fs::write(&path, blob).with_context(|| format!("writing {}", path.display()))?;
+    }
+    Ok(path)
 }
 
 /// Converts an MP4 file into lossless AV1 under the cache.
@@ -154,8 +182,7 @@ fn transcode(blob: &[u8], to: Conversion<'_>, frames: Frames) -> Result<FrameSto
     std::fs::create_dir_all(cache_dir)
         .with_context(|| format!("creating {}", cache_dir.display()))?;
 
-    let source = cache_dir.join(format!("{key}.mp4"));
-    std::fs::write(&source, blob).with_context(|| format!("writing {}", source.display()))?;
+    let source = ensure_source(cache_dir, key, "mp4", blob)?;
 
     run_ffmpeg(&source, &out, None, frames, watch)?;
 

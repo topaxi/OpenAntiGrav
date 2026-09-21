@@ -149,6 +149,10 @@ fn every_mp4_on_the_disc_reads_its_own_header() {
             with_audio += 1;
             assert_eq!(&audio.codec, b"mp4a", "{path}'s audio track");
             assert!(audio.sample_rate > 0 && audio.channel_count > 0, "{path}");
+            assert!(
+                audio.frame_delta > 0,
+                "{path}'s audio track declares no stts delta"
+            );
         }
     }
     let elapsed = started.elapsed();
@@ -202,6 +206,17 @@ fn intro_is_960x544_at_30000_1001_with_stereo_aac() {
     assert_eq!(audio.sample_rate, 48_000);
     assert_eq!(audio.channel_count, 2);
     assert_eq!(audio.frame_count, 4_666);
+    // 1,024 samples per AAC frame at this track's own 48,000 Hz `mdhd`
+    // timescale - see `AudioTrack::frame_delta`'s own doc for why a tick of
+    // this particular timescale is a PCM sample.
+    assert_eq!(audio.frame_delta, 1_024);
+    assert!(
+        (audio.frame_count as f64 * f64::from(audio.frame_delta) / f64::from(audio.sample_rate)
+            - 99.541)
+            .abs()
+            < 0.001,
+        "the audio track's own exact duration"
+    );
 }
 
 /// `bb2048Zone8.mp4` is the one file whose `free` box lands after `mdat`

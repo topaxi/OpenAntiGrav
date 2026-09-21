@@ -218,6 +218,7 @@ fn a_video_and_audio_track_are_told_apart_by_handler() {
     assert_eq!(audio.sample_rate, 48_000);
     assert_eq!(audio.channel_count, 2);
     assert_eq!(audio.frame_count, 4666);
+    assert_eq!(audio.frame_delta, 1024, "the soun track's own stts delta");
 }
 
 #[test]
