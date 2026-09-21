@@ -101,7 +101,10 @@ fn intro_mp4_audio_decodes_within_a_tenth_of_a_second_of_its_header() {
         .unwrap_or_else(|e| panic!("decoding intro.mp4's audio track: {e:#}"));
     assert_eq!(pcm.channels, 2);
     assert_eq!(pcm.sample_rate, 48_000);
-    assert!(!pcm.samples.is_empty(), "the decode produced no samples at all");
+    assert!(
+        !pcm.samples.is_empty(),
+        "the decode produced no samples at all"
+    );
     assert!(
         pcm.samples.iter().any(|&s| s != 0),
         "the decode is not silence - a movie with a real soundtrack should not decode to all zeros"
@@ -130,9 +133,7 @@ const LOGO_PATH: &str = "/data/fe/images/studioliverpool.bik";
 fn read_logo_reel(image: &Path) -> Vec<u8> {
     let spec = format!("{}:PS3_GAME/USRDIR/{LOGO_ARCHIVE}", image.display());
     let mut archive = oag_assets::psarc::Archive::open(&spec).expect("the archive opens");
-    archive
-        .read_path(LOGO_PATH)
-        .expect("reading the logo reel")
+    archive.read_path(LOGO_PATH).expect("reading the logo reel")
 }
 
 /// The logo reel's four Bink Audio tracks have no per-track sample count in
