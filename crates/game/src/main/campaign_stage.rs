@@ -274,16 +274,54 @@ impl CampaignStage {
         let cells = grid.cells.clone();
         let title = &self.title;
         let records = &self.records;
+        let by_name = cells.clone();
         self.screen = Screen::Cell {
-            model: oag_ui::campaign::CellSelection::with_medals(cells, &|name| {
-                records
-                    .campaign_medal(title, name)?
-                    .best_medal
-                    .map(to_campaign_medal)
-            }),
+            model: oag_ui::campaign::CellSelection::with_medals_and_records(
+                cells,
+                &|name| {
+                    records
+                        .campaign_medal(title, name)?
+                        .best_medal
+                        .map(to_campaign_medal)
+                },
+                &|name| Self::saved_record_centiseconds(&by_name, records, title, name),
+            ),
             which,
         };
         true
+    }
+
+    /// `Line5`'s own value - `Cell_SavedRecord`, in centiseconds. Read off
+    /// the general per-track/mode/class [`oag_game::records::Store`] rather
+    /// than a per-cell store this build does not keep (see
+    /// [`oag_ui::campaign::CellSelection::records`]'s own doc): a campaign
+    /// race already folds into that same table, keyed by the cell's own
+    /// track/mode/class, so it is the closest available reading of "this
+    /// cell's own saved best" without inventing a new store. **Time Trial**
+    /// reads `best_total_ticks` (a finished race's own total time, the
+    /// quantity `docs/ui/campaign-screens.md`'s own live playthrough found
+    /// under `Campaign record` after a first attempt); **Speed Lap** reads
+    /// `best_lap_ticks` (its only meaningful quantity - it never finishes).
+    /// Every other mode answers `None`: `Race`'s own record is a position,
+    /// not a time, and `Zone`/`Elimination` have no raw count anywhere in
+    /// [`oag_game::records::Record`] to read at all.
+    fn saved_record_centiseconds(
+        cells: &[race_campaign::Cell],
+        records: &oag_game::records::Store,
+        title: &str,
+        cell_name: &str,
+    ) -> Option<i64> {
+        let cell = cells.iter().find(|cell| cell.name == cell_name)?;
+        let mode = oag_game::campaign::race_mode_for_cell(cell.mode.clone())?;
+        let key =
+            oag_game::records::Key::new(title, cell.track.as_deref(), mode.name(), &cell.class);
+        let record = records.get(&key)?;
+        let ticks = match mode {
+            oag_race::Mode::TimeTrial => record.best_total_ticks,
+            oag_race::Mode::SpeedLap => record.best_lap_ticks.map(u64::from),
+            _ => None,
+        }?;
+        Some(i64::try_from(ticks * 100 / 60).unwrap_or(i64::MAX))
     }
 
     /// **HD only** - the enclosing grid's own index, grid count and

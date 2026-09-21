@@ -116,6 +116,10 @@ const XML: &str = r#"
 <Text name="Line3 Title" String="l3 title" font="default" x="10" y="0" color="0xff34ACC2"></Text>
 <Text name="Line3" String="l3" font="default" x="110" y="0" color="0xffffffff"></Text>
 </Item>
+<Item OffsetX="260" OffsetY="135">
+<Text name="Line5 Title" String="--7" font="default" x="10" y="0" color="0xff34ACC2"></Text>
+<Text name="Line5" String="--7" font="default" x="110" y="0" color="0xffffffff"></Text>
+</Item>
 <Item OffsetX="260" OffsetY="150">
 <Text name="Line6 Title" String="--5" font="default" x="10" y="0" color="0xff34ACC2"></Text>
 <Text name="Line6" String="--5" font="default" x="110" y="0" color="0xffffffff"></Text>
@@ -458,6 +462,54 @@ fn best_is_hidden_when_the_target_rows_show_instead() {
         &[],
     );
     assert!(texts(&layers).iter().any(|t| t.as_str() == "Best"));
+}
+
+/// `Line5` (`Cell_SavedRecord`) draws the selected cell's own saved record,
+/// formatted the same `M:SS.CC` way `Target0..2` already are - and stays
+/// silent for a cell with none, the same visible-absence rule every other
+/// label on this screen follows.
+#[test]
+fn line5_draws_the_selected_cells_saved_record_when_one_exists() {
+    let layout = cell_layout();
+    let with_none = CellSelection::new(vec![time_trial_cell("grid0_0_0")]);
+    let layers = cell_draw_list(
+        &with_none,
+        &layout,
+        &skin(),
+        &Frame::default(),
+        &strings(),
+        None,
+        false,
+        &|_| None,
+        &[],
+    );
+    assert!(
+        !texts(&layers).iter().any(|t| t.as_str() == "2:10.48"),
+        "{:?}",
+        texts(&layers)
+    );
+
+    let with_record = CellSelection::with_medals_and_records(
+        vec![time_trial_cell("grid0_0_0")],
+        &|_| None,
+        &|_| Some(13_048),
+    );
+    let layers = cell_draw_list(
+        &with_record,
+        &layout,
+        &skin(),
+        &Frame::default(),
+        &strings(),
+        None,
+        false,
+        &|_| None,
+        &[],
+    );
+    assert!(
+        texts(&layers).iter().any(|t| t.as_str() == "2:10.48"),
+        "{:?}",
+        texts(&layers)
+    );
 }
 
 /// The regression this pass fixes: `Selector` used to share the selected

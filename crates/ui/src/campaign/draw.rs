@@ -290,7 +290,18 @@ pub fn cell_draw_list(
                 Some(strings.get_or_id(id).to_string())
             }
             "Line3" => None,
-            "Line4" | "Line5" | "Line8" => None,
+            // `Line5`: `Cell_SavedRecord` - see `CellSelection::selected_record`'s
+            // own doc for which modes actually carry one today. `Line8`
+            // authors the identical `OffsetX="260" OffsetY="180"` Target0
+            // sits at (`CellMode_Definition.xml`), so drawing it whenever
+            // `targets_visible` would overlap that row outright; nothing
+            // traces what the original shows there instead, so it stays
+            // blank rather than guessed. `Line4` never appears in
+            // `CellSelection_PopulateDetail`'s own table at all.
+            "Line5" => model
+                .selected_record()
+                .map(|centis| target_value(centis, &cell.mode)),
+            "Line4" | "Line8" => None,
             "Line6" => Some(format!(
                 "{}/{}",
                 model.selected_medal().map_or(0, Medal::points),
