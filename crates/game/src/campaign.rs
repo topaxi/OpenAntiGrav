@@ -41,10 +41,101 @@ pub struct Campaign {
     pub grids: Vec<Grid>,
     pub grid_layout: Layout,
     pub cell_layout: Layout,
+    /// `Cell Selection`'s own `Cell Help` overlay - `triangle` toggles it
+    /// (`CellSelection::help_open`) - resolved the identical way
+    /// `cell_layout` is, off the same `CellMode_Definition.xml`. `None` on
+    /// a title whose screen definition authors no such screen (Wipeout
+    /// HD/Fury's own copy does not).
+    pub cell_help: Option<Layout>,
+    /// The shared front-end root's own `NavigationController` - `Confirm`/
+    /// `Back`, see [`oag_ui::campaign::footer::NavigationLegend`]'s own doc.
+    /// **Pulse only** - reading Wipeout HD/Fury's equivalent is a different
+    /// lane's own thread (`docs/ui/campaign-screens.md`'s `## Open` HD
+    /// section), so [`load_hd`]/[`load_omega`] leave this `None`.
+    pub nav_legend: Option<oag_ui::campaign::footer::NavigationLegend>,
+    /// The shared front-end root's own scrolling tip ticker - see
+    /// [`oag_ui::campaign::footer::TickerLayout`]'s own doc. **Pulse only**,
+    /// for the same reason [`Self::nav_legend`] is.
+    pub ticker: Option<oag_ui::campaign::footer::TickerLayout>,
     /// `base` extended with the title's own hex/other textures - the same
     /// "front end's own sheet plus this screen's own art" shape
     /// `oag_ui::picker::slideshow`'s stills already extend it with.
     pub sprites: Sheet,
+}
+
+/// [`Campaign::nav_legend`]/[`Campaign::ticker`]: both live on the front-end
+/// root (`Data\Plugins\PI001\GUI\Skin.xml`, [`oag_pulse::names::FRONTEND_ROOT`]),
+/// not on `CellMode_Definition.xml` - a second, small archive read and parse
+/// alongside the screen's own, since neither
+/// [`oag_ui::screen::Screens::collect_widgets`] nor this crate's existing
+/// `Screens` value for that file (`Shell::screens`, already merged with
+/// every `LoadXML` include) keeps the raw node tree
+/// [`oag_ui::campaign::footer`] needs. Errors are logged and treated as "not
+/// authored" rather than failing the whole campaign screen over a footer.
+fn read_footer(
+    archives: &mut oag_assets::Archives,
+    strings: &StringTable,
+    fallback_globals: &[(&str, &str)],
+) -> (
+    Option<oag_ui::campaign::footer::NavigationLegend>,
+    Option<oag_ui::campaign::footer::TickerLayout>,
+) {
+    let blob = match archives.read_name(oag_pulse::names::FRONTEND_ROOT) {
+        Ok(blob) => blob,
+        Err(error) => {
+            log::warn!(
+                "{}: {error:#} - the footer's Confirm/Back legend and tip ticker draw nothing",
+                oag_pulse::names::FRONTEND_ROOT
+            );
+            return (None, None);
+        }
+    };
+    let xml = match oag_tables::fexml::text(&blob) {
+        Ok(xml) => xml,
+        Err(error) => {
+            log::warn!(
+                "expanding {}: {error:#} - the footer's Confirm/Back legend and tip ticker draw nothing",
+                oag_pulse::names::FRONTEND_ROOT
+            );
+            return (None, None);
+        }
+    };
+    let globals =
+        oag_ui::screen::Screens::from_xml_with_fallback_globals(&xml, fallback_globals).globals;
+    let root = oag_ui::screen::parse(&xml);
+    let nav_legend = oag_ui::campaign::footer::NavigationLegend::read(&root, &globals, strings);
+    let ticker = oag_ui::campaign::footer::TickerLayout::read(&root, &globals);
+    (nav_legend, ticker)
+}
+
+/// [`Campaign::nav_legend`]/[`Campaign::ticker`]'s own draw list for a
+/// caller with no [`crate::records::Store`] to rotate the ticker's tips off
+/// of - `crate::capture::menu_page`'s `--menu-page grid-select`/
+/// `cell-select`, the same "no live session to fold through" gap this
+/// module's own `load_hd` leaves `circuit_names` with. The ticker draws its
+/// own layout but an empty rotation (nothing to show, honestly, rather than
+/// a guessed one) at a frozen `elapsed`; the `Confirm`/`Back` legend needs
+/// neither and draws in full.
+#[must_use]
+pub fn static_footer_overlay(
+    campaign: &Campaign,
+    faces: &FaceScales,
+    measure: &dyn Fn(&str) -> f32,
+) -> Vec<oag_ui::frontend::Draw> {
+    let mut overlay = campaign
+        .nav_legend
+        .as_ref()
+        .map_or_else(Vec::new, |legend| legend.draw(faces, measure));
+    if let Some(ticker) = &campaign.ticker {
+        overlay.extend(oag_ui::campaign::footer::ticker_draw(
+            ticker,
+            0.0,
+            &[],
+            faces,
+            &|_| 0.0,
+        ));
+    }
+    overlay
 }
 
 /// Reads the campaign screen off `archives`, title-dispatched: Pulse's
@@ -113,8 +204,13 @@ pub fn load(
         .context("Grid Selection is not on this screen")?;
     let cell_layout = Layout::read(&screens, "Cell Selection", strings, faces, grid)
         .context("Cell Selection is not on this screen")?;
+    // `None` rather than an error: `Cell Help`'s own overlay is a bonus
+    // screen, not one either caller has ever required to exist the way the
+    // two selection screens above are.
+    let cell_help = Layout::read(&screens, "Cell Help", strings, faces, grid);
 
     let grids = read_grids(archives, oag_pulse::campaign::DEFINITION_ENTRY)?;
+    let (nav_legend, ticker) = read_footer(archives, strings, fallback_globals);
 
     let mut blobs = Vec::new();
     for src in HEX_TEXTURES {
@@ -133,6 +229,9 @@ pub fn load(
         grids,
         grid_layout,
         cell_layout,
+        cell_help,
+        nav_legend,
+        ticker,
         sprites,
     })
 }
@@ -207,6 +306,12 @@ fn load_hd(
         grids,
         grid_layout,
         cell_layout,
+        // HD/Omega's own `Cell Help`/`NavigationController`/ticker are a
+        // different lane's own thread - see `Campaign::nav_legend`'s own
+        // doc.
+        cell_help: None,
+        nav_legend: None,
+        ticker: None,
         sprites,
     })
 }
@@ -287,6 +392,12 @@ fn load_omega(
         grids,
         grid_layout,
         cell_layout,
+        // HD/Omega's own `Cell Help`/`NavigationController`/ticker are a
+        // different lane's own thread - see `Campaign::nav_legend`'s own
+        // doc.
+        cell_help: None,
+        nav_legend: None,
+        ticker: None,
         sprites,
     })
 }

@@ -1128,17 +1128,185 @@ likely packs each colour as a horizontal frame `sprite_draw`'s `u`/`v`/
 `texture_width`/`texture_height` fields would need to select, not something
 `hex_rect`'s own fix touches.
 
+## The tip ticker, the Confirm/Back legend, `Cell Help` and a podium, 2026-09-21
+
+**All four close this pass, live-driven under Xvfb `:91` with `xdotool` on
+`pulse-psp-usa.chd`, not only `--menu-page`.** The mechanism the ticker and
+the footer legend both needed turned out to be the same gap: `Skin.xml`'s
+`<NavigationController>`/`<TextInfo>`, on `FE Screen`, both entirely
+unrecognised by `oag_ui::screen::Screens::collect_widgets` (`_ => {}` drops
+the tag and every child) and unreachable through the per-screen widget model
+even if the tag were parsed - a `NavigationController` picks *per screen*
+which prompts to show, and the ticker's own `TextInfo type="bar"` is two
+alternating text buffers sharing one clip viewport, neither of which any
+named `Screen` carries as a fact. `oag_ui::campaign::footer` (new module)
+reads both directly off the raw parsed tree instead - see its own module doc.
+
+- **The ticker.** `TickerLayout::read` finds `<Viewport
+  name="TextInfoIsAlwaysLast" OffsetX="85" OffsetY="235">` (`width="370"
+  height="32"`) and the `type="bar"` `TextInfo` inside it; `ticker_draw` is a
+  stateless continuous scroll over whatever tips the caller supplies, at
+  [`crate::anim::MARQUEE_SPEED`] (60px/s) - **chosen, not measured**: no
+  PPSSPP capture in this pass isolated two frames a known tick count apart
+  with the ticker moving, so the speed reuses this project's own existing
+  scrolling-text rate as the nearest precedent rather than a number invented
+  from nothing. **Content is never invented**: `NewsItemBarText1`/`2` carry
+  no `idstring` and no literal `string` on disc - populated at runtime by a
+  mechanism this build does not have - so `CampaignStage::ticker_tips` only
+  rotates the `TKR_NO*` family (no `%d`/`%s`/`%.2f` template), five of the
+  seven gated on whether `oag_game::records::Store` carries any row for that
+  mode (a real, save-backed "have I raced this yet"), and `TKR_NOTOURN`/
+  `TKR_NOHH` shown unconditionally since neither mode ever launches in this
+  engine at all. The sibling `type="tag"` `TextInfo` (`NewsItemTagText`,
+  fixed at `(30, 235)`) draws nothing, for the identical reason: no idstring,
+  no literal string, nothing honest to show. **Confirmed live**: a fresh
+  profile's ticker read `"YOU'VE NOT TAKEN PART IN ANY TOURNAMENTS SO
+  FAR..."` on `Grid Selection` and `"...YOU HAVEN'T TRIED OUT ANY H[EAD TO
+  HEAD RACES]"` on `Cell Selection`, both mid-scroll, matching the disc's own
+  `TKR_NOTOURN`/`TKR_NOHH` text exactly.
+- **This section corrects this page's own `## Open` entry above**: the
+  tip actually captured live on PPSSPP, `"Why don't you try out the Speed
+  Lap events?"`, is `TKR_NOSL` - read directly off `PI000/entries.xml`
+  (`Data\Plugins\PI000\entries.xml`, the EU disc's English table) - not
+  `TKR_NOTOURN` as this page previously named it. `TKR_NOTOURN`'s own text
+  is `"You've not taken part in any Tournaments so far - why not give them a
+  try in Racebox?"`, a different string; the earlier reading appears to have
+  matched the two ids by theme rather than by content. `TKR_NOZONE`/
+  `TKR_SONGS`/`TKR_DIST` were correct.
+- **`Confirm`/`Back`.** `NavigationLegend::read` finds
+  `<NavigationController name="NavigationController">`'s four `Text`
+  children (`ControlTextConfirmButton`/`Confirm`/`BackButton`/`Back`) and
+  resolves their idstrings - `FE_CONFIRM_BUTTON`/`FE_BACK_BUTTON` are `"ε"`/
+  `"γ"`, small-font glyphs for the cross/circle buttons, the same
+  private-glyph idiom `Cell Selection`'s own `HELP`/`CHANGE DIFFICULTY` row
+  already draws with a literal `β`/`δ` baked into the XML instead of an
+  idstring. Drawn unconditionally on `Cell Selection` - the one screen this
+  build shows them on, since that is the one screen the 2026-09-14 PPSSPP
+  pass measured wanting them; the original's own per-screen gate on which
+  prompts a `NavigationController` shows was not traced. **Confirmed live**:
+  `ⓧ CONFIRM  Ⓞ BACK` now draws beside `△ HELP  □ CHANGE DIFFICULTY`,
+  matching `cell-selection-grid0-default-cell.png` widget for widget.
+- **`Cell Help`'s overlay now draws**, as a **static** panel - `Main Help`/
+  `Speed Class Help`/`Event Help` (`MSC_HELP_RC_CS`/`MSC_LOAD_VENOM`/
+  `MSC_EVENT_SR`, already-resolved `screen.texts` on the `Cell Help` screen
+  `Layout::read` reaches the same way it reaches `Cell Selection`'s own) at
+  their own authored positions, no `Viewport`/`Animation` scroll timeline
+  scripted - the honest step this page's own `Open` entry already named.
+  `Speed Class Help`/`Event Help` are the disc's own literal authored text
+  regardless of the cell actually selected: no per-cell substitution for
+  either idstring is traced.
+- **Line5 (`Cell_SavedRecord`) now draws** for Time Trial (`best_total_ticks`)
+  and Speed Lap (`best_lap_ticks`), read off the general per-track/mode/class
+  `oag_game::records::Store` - a campaign race already folds into that same
+  table, keyed by the cell's own track/mode/class, so it is the closest
+  honest reading of "this cell's own saved best" without a new per-cell
+  store. **Confirmed live**: the Time Trial attempt below (`2:10.48`, no
+  medal) reappeared on `Line5` when the same cell's own panel was reopened.
+  **`Line8` stays blank on purpose**: it authors the identical
+  `OffsetX="260" OffsetY="180"` `Target0` sits at, so drawing it whenever
+  `targets_visible` would overlap that row outright, and nothing traces what
+  the original shows there instead. `Race`/`Zone`/`Elimination` also answer
+  `None` on `Line5`: `Race`'s own record is a position, not a time, and
+  `Zone`/`Elimination` have no raw zone/kill count anywhere in
+  `oag_game::records::Record` to read at all - a real gap, not one this pass
+  closed.
+- **The podium walk closes**, resolving this page's own `Open` entry below
+  about `Line6`/`Line7` never being seen reading a real medal: with a
+  worktree-local `[ai] difficulty = "novice"` (never committed - opponents
+  only; `--autopilot-skill` governs the flown craft independently and does
+  not need it), `cargo run -p oag-game -- --autopilot --autopilot-skill ace`
+  navigated `RACE CAMPAIGN` -> `GRID 1` -> `grid0_3_1` (`Single Race`,
+  `03_Track`/Moa Therma White, `Locked="false"`) -> `Team Selection` -> the
+  autopilot finished **1st of 8** at `2:16.03` (`results-*` not captured
+  separately, see `PODIUM-line6-line7-gold-medal.png`). Back on `Cell
+  Selection`, `grid0_3_1`'s own panel now reads `Points 3/3` / `Best Gold`,
+  the tier's own hex tints gold on `Grid Selection` (`Gold medals 01/08`,
+  `Total points 003/024`), and both hex-adjacent neighbours
+  (`grid0_2_1`/`grid0_4_1` in this build's own two-column zigzag) lost their
+  lock glyphs - the six-neighbour unlock rule, confirmed live for the first
+  time this pass rather than only against the glyph predicate's own unit
+  tests. **A different cell was attempted first and did not podium**:
+  `grid0_3_2` (`Time Trial`, gold `1:55.00`) finished `2:10.48` at
+  `--autopilot-skill ace` with `[ai] difficulty` irrelevant (no opponents) -
+  close but over even the bronze target (`2:03.00`), left as a genuine miss
+  rather than retried past this pass's own time budget; its own attempt is
+  what now reads back through the new `Line5` above.
+
+None of this was captured against a live PPSSPP frame this pass - the
+ticker's own scroll speed, the `NavigationController`'s per-screen gate and
+`Cell Help`'s own animation timeline are all still open at PPSSPP, only
+closed against this build's own picture and behaviour.
+
+### Two defects, found by comparing this pass's own capture against `cellselect-grid0_3_2.png` directly, fixed same day
+
+The section above closed against this build's own live behaviour, not the
+reference frame - side by side, `PODIUM-line6-line7-gold-medal.png` showed
+two things a player sees at once that neither `oag-ui`'s own tests nor a
+solo look at the new draw caught:
+
+1. **The ticker bled past its own viewport.** `TickerLayout::read`'s
+   `[85, 235, 370, 32]` was read correctly but never enforced - `ticker_draw`
+   drew unclipped, so its text ran from screen `x=0` straight across the
+   pilot-tag tab on `Cell Selection`'s own footer. Fixed by routing the
+   ticker's own `Draw::Text` through `Renderer::render_with`'s existing
+   `clip: Option<(usize, f32, f32)>` - the same mechanism
+   `crate::marquee`'s row-value scroll already clips itself with, keyed on
+   the draw's own index in the *flattened* list rather than on `y`.
+   `ticker_draw` now returns at most one `Draw` (`Option<Draw>`, not
+   `Vec<Draw>`) rather than up to two - the earlier double-copy trick for a
+   seamless wrap only works unclipped, so the honest trade is a brief,
+   real gap at each wrap instead of a seam this build cannot clip away
+   (see `oag_ui::campaign::footer::ticker_draw`'s own doc). Confirmed live,
+   `data/scratch/lane-pulse/shots/crop-ticker-left.png`: the text now cuts
+   cleanly at the tab's own edge.
+2. **`Confirm` ran into both button glyphs beside it.** `ControlTextConfirm`
+   authors no `font=` in `Skin.xml`, and this crate's fallback (`"Default"`,
+   13px) draws through the same single loaded menu-face atlas every other
+   campaign-screen label does - wider per glyph than whatever compact face
+   authored `Confirm`'s own 47-native-pixel gap to the back button. No
+   available role fit it from either end (`crop-legend2-zoom.png`/
+   `crop-legend3-zoom.png`), so `NavigationLegend` now right-aligns
+   `Confirm` to end just short of the back glyph and shrinks its own scale
+   only if that still does not clear the confirm glyph on its other side -
+   both **chosen, not measured**, since nothing on disc says where the
+   word should end or how far it may shrink. Confirmed live,
+   `data/scratch/lane-pulse/shots/FIXED-cellselect-ticker-clipped-legend-fit.png`.
+
+**Not fixed, and now written down rather than silently left**: neither
+defect's *root cause* is reachable from this crate. This build loads
+exactly one font atlas for the whole menu/campaign path
+(`shell.title_font`/`shell.menu_font`, the boot log's own "menu font
+`Pulse_20.fnt` (role `menu`): line height 22") and `"default"`/`"small"`
+are multipliers on that one atlas, not switches to a genuinely different,
+compact, mixed-case face - `Draw::FacedText`'s own `role` is not even
+checked against anything (`crates/game/src/render.rs`'s own comment: "the
+role is what chose which atlas `set_face_atlas` loaded... nothing here
+re-checks it against `role`"), and the one alternate atlas that ever loads
+is the `Title` role, not a body face. Two consequences, both left open:
+
+- **Every label on this screen still renders upper-case** (`SPEED CLASS`,
+  `MOA THERMA WHITE`, `CONFIRM`) where the reference shows mixed case
+  (`Speed class`, `Talon's Junction White`, `Confirm`) - pre-existing,
+  present before this lane and on every `Line1`..`8`/`Title`/`Track Line`
+  label already, not only the two widgets this pass added. Fixing it needs
+  a second, correctly-sized atlas loaded for the menu stage, not a role
+  string chosen differently in `oag_ui::campaign`.
+- **`AI difficulty (Medium)` reads `CHANGE DIFFICULTY`** on this build - a
+  pre-existing label (`DifficultyButton`'s own authored `string="Change
+  Difficulty"` in `CellMode_Definition.xml`, drawn through
+  `oag_ui::campaign::draw`'s generic `_ => text.string.clone()` fallback
+  that predates this lane) rather than the original's own template showing
+  the current rung. Left as-is on the team lead's own instruction; the
+  string and its mechanism are named here for whoever picks up the atlas
+  work above, since fixing the case issue would make this one legible
+  without also fixing the missing rung substitution.
+
 ## Open
 
-- **The scrolling tip ticker and the button-legend footer row are still not
-  drawn**, 2026-09-14 - see "New: a scrolling tip ticker" and "The hex
-  look"/`docs/ui/campaign-screens.md`'s own recapture note above. The
-  ticker's own strings are now located (`TKR_NOTOURN`/`TKR_NOZONE`/
-  `TKR_SONGS`/`TKR_DIST` in the disc's English table) but not traced to a
-  widget name or a scroll-speed measurement, and the `Cell Selection`
-  footer this build already draws (`HELP`/`CHANGE DIFFICULTY`, from a
-  mechanism outside `oag_ui::campaign`) is missing the `Confirm`/`Back`
-  legend the original shows beside them.
+- ~~The scrolling tip ticker and the button-legend footer row are still not
+  drawn.~~ **Both draw, 2026-09-21** - see "The tip ticker, the Confirm/Back
+  legend, `Cell Help` and a podium" above. The scroll speed itself is still
+  unmeasured against a live PPSSPP frame.
 - **A previous pass's live-walk cell (`grid0_2_1`) is now locked under this
   pass's own rule** - it authors no `Locked` attribute, which defaults to
   `true`, and has no medal or medalled neighbour on a fresh profile. The
@@ -1160,13 +1328,10 @@ likely packs each colour as a horizontal frame `sprite_draw`'s `u`/`v`/
   would settle that reading alone cannot: whether the `Grid`/`Grid1`
   duplicate reads as a crossfade or a settled state, and what the empty-hex
   fill looks like against the filled/current one on a genuinely fresh save.
-- **`Cell Help`'s own overlay is read (`Main Help`/`Speed Class Help`/
-  `Event Help`, all resolvable idstrings) but not drawn.** Its `Viewport`/
-  `Animation` timeline (`LimitVerticalScroll="10"`, `Key Time="0" Y="0"` ->
-  `Time="10" Y="-100"`) is the same kind of reveal
-  `oag_ui::screen::Screens::collect_widgets` already discards the timeline
-  of and keeps the widget for elsewhere in this crate - a static overlay
-  would be honest, an animated one is not built.
+- ~~`Cell Help`'s own overlay is read but not drawn.~~ **Draws as a static
+  panel, 2026-09-21** - see "The tip ticker..." above. Its `Viewport`/
+  `Animation` scroll timeline (`LimitVerticalScroll="10"`) is still not
+  scripted, on purpose.
 - ~~The Selector cursor's exact centering is unmeasured.~~ **Fixed
   2026-09-14.** `hex_filled.mip`/`hex_outline.mip` decode to a 32x32 4bpp
   indexed image (`Data.wad` on `pulse-psp-eu.chd`, measured directly off the
@@ -1197,20 +1362,12 @@ likely packs each colour as a horizontal frame `sprite_draw`'s `u`/`v`/
   `--autopilot-skill ace`) finished 4th of eight - this build's default
   `settings.toml` already races opponents at `ace`, the ceiling the flag
   also names, so there was no headroom left to podium without editing a
-  config outside this worktree, which this pass declined to do. **Still
-  open**: a live capture of `Line6`/`Line7` actually reading a nonzero medal
-  after a podium finish - a maintainer with a lower `[ai] difficulty` (or a
-  `Time Trial`/`Zone` cell, whose medal is a time/count threshold rather
-  than a finishing position) can close this directly:
-  `cargo run -p oag-game -- --autopilot data/images/pulse-psp-eu.chd`,
-  navigate `RACE CAMPAIGN` -> a tier -> a cell -> confirm -> `Team
-  Selection` -> confirm, let the race finish, and check the results table's
-  medal line and the cell's own `Line6`/`Line7` back on `Cell Selection`.
-  Proven by the unit/integration suite either way
-  (`crates/game/src/campaign/tests.rs`, `crates/game/src/records/tests.rs`,
-  `crates/game/src/race/tests/mode_override.rs`,
-  `crates/ui/src/campaign/tests.rs`) and by the full `just`/`just test-data`
-  gate.
+  config outside this worktree, which this pass declined to do. ~~Still
+  open: a live capture of `Line6`/`Line7` actually reading a nonzero
+  medal.~~ **Closed, 2026-09-21** - see "The tip ticker..." above: a
+  worktree-local `[ai] difficulty = "novice"` (never committed) plus
+  `--autopilot-skill ace` finished `grid0_3_1` 1st of 8, and `Cell
+  Selection` read `Points 3/3` / `Best Gold` back.
 
 ### Wipeout HD/Fury, 2026-09-21: measured on RPCS3
 

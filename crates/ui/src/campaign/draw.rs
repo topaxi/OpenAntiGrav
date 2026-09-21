@@ -18,10 +18,17 @@ use super::{CellSelection, GRIDS_PER_PAGE, GridSelection, Layout, hex_rect};
 mod tests;
 
 /// `Grid Selection`'s draw list.
+///
+/// `footer_overlay` is already-built `Draw`s to draw over everything else -
+/// the scrolling tip ticker, off [`super::footer::ticker_draw`], since that widget
+/// is authored once on the front-end root rather than per screen and this
+/// function has no reason to know `Skin.xml` exists. Empty on any caller
+/// that has not built one (every `--menu-page grid-select` capture today -
+/// see `oag_game::campaign::Campaign::ticker`'s own doc).
 #[must_use]
 #[allow(
     clippy::too_many_arguments,
-    reason = "the same eight facts a menu page or a picker takes"
+    reason = "the same eight facts a menu page or a picker takes, plus the footer overlay"
 )]
 pub fn grid_draw_list(
     model: &GridSelection,
@@ -32,6 +39,7 @@ pub fn grid_draw_list(
     backdrop: Option<Picture>,
     race_behind: bool,
     sprites: &dyn Fn(&str) -> Option<Placed>,
+    footer_overlay: &[Draw],
 ) -> Layers {
     let mut layers = Layers {
         backdrop: frame.backdrops(
@@ -52,6 +60,7 @@ pub fn grid_draw_list(
         skin.title_color(frame.ink),
         title,
     ));
+    layers.chrome.extend_from_slice(footer_overlay);
 
     let screen = &layout.screen;
     let mut out = Vec::new();
@@ -138,10 +147,16 @@ pub fn grid_draw_list(
 }
 
 /// `Cell Selection`'s draw list.
+///
+/// `footer_overlay` is [`grid_draw_list`]'s own new parameter - here it
+/// carries both the ticker and the `Confirm`/`Back` half of the button
+/// legend ([`super::footer::NavigationLegend::draw`]), since this is the one
+/// screen `docs/ui/campaign-screens.md`'s 2026-09-14 PPSSPP pass measured
+/// showing both.
 #[must_use]
 #[allow(
     clippy::too_many_arguments,
-    reason = "the same eight facts a menu page or a picker takes"
+    reason = "the same eight facts a menu page or a picker takes, plus the footer overlay"
 )]
 pub fn cell_draw_list(
     model: &CellSelection,
@@ -152,6 +167,7 @@ pub fn cell_draw_list(
     backdrop: Option<Picture>,
     race_behind: bool,
     sprites: &dyn Fn(&str) -> Option<Placed>,
+    footer_overlay: &[Draw],
 ) -> Layers {
     let mut layers = Layers {
         backdrop: frame.backdrops(
@@ -172,6 +188,7 @@ pub fn cell_draw_list(
         skin.title_color(frame.ink),
         title,
     ));
+    layers.chrome.extend_from_slice(footer_overlay);
 
     let screen = &layout.screen;
     let mut out = Vec::new();
@@ -273,7 +290,18 @@ pub fn cell_draw_list(
                 Some(strings.get_or_id(id).to_string())
             }
             "Line3" => None,
-            "Line4" | "Line5" | "Line8" => None,
+            // `Line5`: `Cell_SavedRecord` - see `CellSelection::selected_record`'s
+            // own doc for which modes actually carry one today. `Line8`
+            // authors the identical `OffsetX="260" OffsetY="180"` Target0
+            // sits at (`CellMode_Definition.xml`), so drawing it whenever
+            // `targets_visible` would overlap that row outright; nothing
+            // traces what the original shows there instead, so it stays
+            // blank rather than guessed. `Line4` never appears in
+            // `CellSelection_PopulateDetail`'s own table at all.
+            "Line5" => model
+                .selected_record()
+                .map(|centis| target_value(centis, &cell.mode)),
+            "Line4" | "Line8" => None,
             "Line6" => Some(format!(
                 "{}/{}",
                 model.selected_medal().map_or(0, Medal::points),
@@ -602,6 +630,43 @@ pub(super) fn sprite_draw(image: &Image, placed: Placed, x: f32, y: f32, argb: u
         ],
         color,
     }
+}
+
+/// `Cell Help`'s own overlay, drawn as a **static** panel - every widget on
+/// that screen at its own authored position, with no animation at all. The
+/// disc's own copy scrolls a `Viewport`/`Animation` timeline
+/// (`LimitVerticalScroll="10"`) that would let `Main Help`/`Speed Class
+/// Help`/`Event Help` slide up past each other; `oag_ui::screen::Screens::
+/// collect_widgets` already discards a timeline like that everywhere else in
+/// this crate and keeps the widget, so drawing the three stacked at their
+/// own `y` (all near the panel's own top, since nothing here shifts them
+/// down to make room) is the honest next step rather than a scripted one -
+/// see `docs/ui/campaign-screens.md`'s own `[Open]` entry. `Speed Class
+/// Help`/`Event Help` are the disc's own literal authored text
+/// (`MSC_LOAD_VENOM`/`MSC_EVENT_SR`) regardless of the cell actually
+/// selected - no per-cell substitution for either idstring is traced (see
+/// `docs/ghidra/functions/psp-pulse-usa/race-campaign.md`), so this build
+/// does not invent one.
+#[must_use]
+pub fn cell_help_draw(layout: &Layout, sprites: &dyn Fn(&str) -> Option<Placed>) -> Vec<Draw> {
+    let screen = &layout.screen;
+    let mut out = Vec::new();
+    for fill in &screen.fills {
+        out.push(fill_draw(fill));
+    }
+    for image in &screen.images {
+        let Some(placed) = sprites(&image.src) else {
+            continue;
+        };
+        out.push(image_draw(image, placed));
+    }
+    for text in &screen.texts {
+        let Some(content) = text.string.as_deref() else {
+            continue;
+        };
+        out.push(text_draw(text, content, layout));
+    }
+    out
 }
 
 pub(super) fn text_draw(text: &Text, content: &str, layout: &Layout) -> Draw {

@@ -634,6 +634,7 @@ pub fn run(
                     &mut sprites,
                     &globals,
                     title,
+                    &|text| oag_ui::font::measure(menu_font.as_ref().unwrap_or(&font), text),
                 )?;
                 (backdrop, video_format, list, space)
             } else if let Some(kind) = endrace_kind(page) {
