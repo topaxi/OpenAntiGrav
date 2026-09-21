@@ -54,10 +54,11 @@
 //! disc's own game-list screen authors for a text button - an authored
 //! shape holding an unauthored destination. **Their positions are chosen,
 //! not measured**: the bottom-left corner at `(16, 432)` and `(158, 432)`,
-//! the confirm tick's own row, where nothing the screen authors sits (the
-//! `TouchNews` widget at `(16, 432)` belongs to `newFEshell`, a different
-//! screen). See [`EXTRA_TILES`]. No disc icon exists for either, so neither
-//! draws one.
+//! the confirm tick's own row, where nothing drawn sits. The parent shell
+//! (`GameModeChoice` is nested inside `newFEshell`) authors a `<TouchNews>`
+//! at `(16, 432)`, but that widget carries no size and this build draws
+//! nothing for it, so the rect is empty in the picture. See
+//! [`EXTRA_TILES`]. No disc icon exists for either, so neither draws one.
 
 use crate::pointer::{Pointer, contains};
 use crate::screen::{Screen, TouchButton, argb_to_rgba, parse_argb};
