@@ -48,9 +48,9 @@ fn the_descriptor_decodes_to_a_plausible_bc7_srgb_livery_decal() {
 #[test]
 fn the_real_sample_is_tiled_not_linear() {
     let texture = Texture::parse(&holographic_glow_head()).expect("parses");
-    // TileMode 0x0d ("Thin_2DThin") - genuinely tiled, the reason this
-    // module stops at identification. See the module's own "What this does
-    // not do".
+    // TileMode 0x0d ("Thin_1DThin" - GFD-Studio's TileMode.cs enum) -
+    // micro-tiled, not linear, the reason `decode` refuses it. See the
+    // module's own "What this does not do".
     assert_eq!(texture.tile_mode.0, 0x0d);
     assert!(!texture.is_linear());
 }
@@ -100,5 +100,71 @@ fn a_short_buffer_is_rejected_rather_than_panicking() {
 fn linear_tile_modes_are_recognised() {
     assert!(TileMode(0x08).is_linear(), "Display_LinearAligned");
     assert!(TileMode(0x1f).is_linear(), "Display_LinearGeneral");
-    assert!(!TileMode(0x0d).is_linear(), "Thin_2DThin");
+    assert!(!TileMode(0x0d).is_linear(), "Thin_1DThin");
+}
+
+#[test]
+fn decode_refuses_the_tiled_real_sample_by_name() {
+    let texture = Texture::parse(&holographic_glow_head()).expect("parses");
+    assert_eq!(
+        texture.decode(&holographic_glow_head()),
+        Err(Error::Tiled { tile_mode: 0x0d })
+    );
+}
+
+/// A minimal synthetic single-block `.gnf`: linear, BC7, 4x4 - small enough
+/// to hand-build a fixture for, unlike every real sample this project has
+/// found (all genuinely tiled). Exercises the one path `Texture::decode`
+/// actually walks.
+fn linear_bc7_4x4(block: [u8; 16]) -> Vec<u8> {
+    let descriptor_len = 36;
+    let contents_len = 8 + descriptor_len;
+    let mut bytes = vec![0u8; HEADER_LEN + contents_len + 16];
+    bytes[0..4].copy_from_slice(b"GNF ");
+    bytes[4..8].copy_from_slice(&(contents_len as u32).to_le_bytes());
+    bytes[8] = 0x02; // version
+    bytes[9] = 0x01; // texture count
+    bytes[10] = 0x08; // alignment
+    let stream_size = (HEADER_LEN + contents_len + 16) as u32;
+    bytes[12..16].copy_from_slice(&stream_size.to_le_bytes());
+    let at = 16;
+    let word1 = 0x29u32 << 20; // SurfaceFormat::Bc7
+    let word2 = 3u32 | (3u32 << 14); // (width-1) | (height-1)<<14 -> 4x4
+    let word3 = 0x08u32 << 20; // TileMode::LINEAR_ALIGNED
+    bytes[at + 4..at + 8].copy_from_slice(&word1.to_le_bytes());
+    bytes[at + 8..at + 12].copy_from_slice(&word2.to_le_bytes());
+    bytes[at + 12..at + 16].copy_from_slice(&word3.to_le_bytes());
+    let data_offset = HEADER_LEN + contents_len;
+    bytes[data_offset..data_offset + 16].copy_from_slice(&block);
+    bytes
+}
+
+#[test]
+fn decode_untiles_a_linear_bc7_surface() {
+    // An all-zero BC7 block is the spec's own reserved encoding, decoded as
+    // opaque black by this project's own `bcn::bc7` - see that module's
+    // doc. Picked here because its expected output needs no BC7 knowledge
+    // to state, unlike a real encoded block.
+    let bytes = linear_bc7_4x4([0u8; 16]);
+    let texture = Texture::parse(&bytes).expect("parses");
+    assert!(texture.is_linear());
+    assert_eq!(texture.surface_format, SurfaceFormat::Bc7);
+    let rgba = texture.decode(&bytes).expect("decodes");
+    assert_eq!(rgba, vec![[0, 0, 0, 255]; 16]);
+}
+
+#[test]
+fn decode_reports_an_unsupported_format_by_name() {
+    let mut bytes = linear_bc7_4x4([0u8; 16]);
+    // Rewrite word1 to a format this module does not name: `SurfaceFormat::Other`.
+    let at = 16;
+    let word1 = 0x3fu32 << 20;
+    bytes[at + 4..at + 8].copy_from_slice(&word1.to_le_bytes());
+    let texture = Texture::parse(&bytes).expect("parses");
+    assert_eq!(
+        texture.decode(&bytes),
+        Err(Error::UnsupportedFormat {
+            format: SurfaceFormat::Other(0x3f)
+        })
+    );
 }

@@ -8,6 +8,15 @@
 //! module. Moved out of `gtf::decode` on 2026-08-26 when `gxt` needed the
 //! same BC2 (`Dxt23`) math and duplicating forty-odd lines of bit arithmetic
 //! was the alternative.
+//!
+//! [`bc7`] is BC7/BPTC, added for [`crate::gnf`] on 2026-09-21 - the only
+//! caller, since neither `.gtf` nor `.gxt` ships a BC7 surface. It lives
+//! here rather than inside `gnf` itself because the block format is the
+//! same hardware standard this module already holds the rest of, not
+//! something GNF's own container defines.
+
+mod bc7;
+pub(crate) use bc7::bc7;
 
 /// A `R5G6B5` endpoint expanded to RGB8, replicating the high bits into the low
 /// ones so that white stays white.
