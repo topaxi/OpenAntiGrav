@@ -62,17 +62,19 @@
 //!   something this build could draw correctly, and its badge panels are an
 //!   achievement/online system with no analogue here.
 //! - **`Line1`'s own placeholder ("race complete!", a literal `string=`, no
-//!   `idstring=` at all) is not drawn verbatim.** This module substitutes
-//!   [`super::draw::headline_text`] - the same idstring table
-//!   [`super::results_draw_list`] resolves `Line1` through on Pulse
-//!   (`ER_TT_COM`/`ER_1STP`../`ER_SHIP_DES`) - on the reasoning that a
-//!   literal placeholder string is exactly what a runtime fill-in looks like
-//!   from the file, and these idstrings are shared engine-wide vocabulary,
-//!   not a Pulse-only table (`EndRace Menu`'s own Blocks already carry
-//!   idstrings identical to [`super::MenuOption::idstring`]'s Pulse-derived
-//!   table, which is the corroboration). **Chosen, not measured**: no
-//!   capture confirms HD fills this exact placeholder with these exact
-//!   strings.
+//!   `idstring=` at all) is not drawn verbatim.** [`hd_headline_text`]
+//!   substitutes an idstring instead, reusing
+//!   [`super::draw::headline_text`]'s table for `TimeTrial`/`SpeedLap`/
+//!   `NoPosition` - **measured**, not chosen: `ER_TT_COM`/`ER_SL_COM`/
+//!   `ER_SHIP_DES` are confirmed present, verbatim, in `DATA02`'s own
+//!   `Data\Plugins\Languages\English\entries.xml` (the same table
+//!   `EndRace Menu`'s own Blocks already corroborate for their five shared
+//!   idstrings). `Headline::Position` is the one variant that table is
+//!   wrong for: HD's own ordinal idstrings are `ER_1PLACE`..`ER_8PLACE`, not
+//!   Pulse's `ER_1STP`..`ER_8STP` - see [`hd_headline_text`]'s own doc.
+//!   Still **chosen, not measured, that HD fills this exact placeholder with
+//!   an idstring lookup at all** - no capture confirms the mechanism, only
+//!   the vocabulary a mechanism would draw from.
 //! - **Online-only widgets never draw**: `DelayPostMsg` (`ONL_MSG_DELAYPOST`)
 //!   and the leaderboard cycle button (`RecordsCycleButton`/`RecordsCycle`,
 //!   `ER_GLOB_REC`) would resolve to real text with nothing behind them in
@@ -85,7 +87,7 @@ use crate::screen::{Screen, Text, argb_to_rgba};
 
 use super::draw::{fill_draw, format_ticks, headline_text, image_draw, text_draw};
 use super::pointer::Target;
-use super::{EndRaceMenu, FieldResults, Layout};
+use super::{EndRaceMenu, FieldResults, Headline, Layout};
 
 #[cfg(test)]
 mod tests;
@@ -126,6 +128,26 @@ fn grid_slot(name: &str) -> Option<(usize, usize)> {
     Some((col, row))
 }
 
+/// `Line1`'s own resolved text on HD - [`headline_text`] for every variant
+/// but [`Headline::Position`], which HD's own English table names
+/// differently from Pulse's: `ER_1PLACE`..`ER_8PLACE` (`"1ST PLACE"`), not
+/// Pulse's `ER_1STP`..`ER_8STP` (`"1ST PLACE!"`, with the exclamation mark).
+/// **Measured**, not assumed: read directly off `DATA02`'s own
+/// `Data\Plugins\Languages\English\entries.xml` (confidence 95 - a direct
+/// grep of the shipped table), which is also what confirms
+/// [`Headline::TimeTrial`]/`SpeedLap`/`NoPosition`'s own idstrings
+/// (`ER_TT_COM`/`ER_SL_COM`/`ER_SHIP_DES`) really are shared verbatim
+/// between the two titles, not merely similar English - see the module doc.
+fn hd_headline_text(headline: Headline, strings: &StringTable) -> Option<String> {
+    if let Headline::Position(place) = headline {
+        if !(1..=8).contains(&place) {
+            return None;
+        }
+        return Some(strings.get_or_id(&format!("ER_{place}PLACE")).to_string());
+    }
+    headline_text(headline, strings)
+}
+
 /// A `Grid{col}.{row}` cell's own content - column `0` is place, column `1`
 /// is the finish time, columns `2`/`3` are the disc's own inert `X`
 /// placeholders (see the module doc) and never draw.
@@ -140,6 +162,19 @@ fn grid_cell_text(col: usize, row: usize, model: &FieldResults) -> Option<String
         ),
         _ => None,
     }
+}
+
+/// A `Grid{col}.{row}` cell's own `x` - column 0 and 1's real, measured
+/// position (`GridHead1`'s/`GridHead2`'s own `x`, read off the screen at
+/// draw time rather than hand-transcribed), `None` for columns 2/3, which
+/// never draw at all (see the module doc).
+fn column_x(screen: &Screen, col: usize) -> Option<f32> {
+    let name = match col {
+        0 => "GridHead1",
+        1 => "GridHead2",
+        _ => return None,
+    };
+    find_text(screen, name).map(|text| text.x)
 }
 
 /// `EndRace Results`' draw list: the title, the headline, and the field's
@@ -205,20 +240,41 @@ pub fn hd_results_draw_list(
     }
     for text in &screen.texts {
         let name = text.name.as_deref().unwrap_or("");
-        let content = if let Some((col, row)) = grid_slot(name) {
-            grid_cell_text(col, row, model)
-        } else {
-            match name {
-                "Line1" => headline_text(model.headline, strings),
-                // Online-only - see the module doc.
-                "DelayPostMsg" | "RecordsCycleButton" | "RecordsCycle" => None,
-                // `Gridp.{row}` (`ER_PERFECT`) - not modelled, see the module
-                // doc. Everything else (`ResultsTitle`, `GridHead1`/`2`,
-                // `ControlTextConfirmButton`/`ControlTextConfirm`) already
-                // carries its own resolved text.
-                _ if name.starts_with("Gridp.") => None,
-                _ => text.string.clone(),
-            }
+        if let Some((col, row)) = grid_slot(name) {
+            // Every `Grid{col}.{row}` cell is authored at `x="0" y="0"` (see
+            // the module doc) - the position drawn here is computed, not the
+            // widget's own parsed one, the same override
+            // [`hd_results_draw_list`]'s own `GridHighlight` handling makes
+            // for the same reason.
+            let Some(content) = grid_cell_text(col, row, model) else {
+                continue;
+            };
+            let Some(column_x) = column_x(screen, col) else {
+                continue;
+            };
+            let mut positioned = text.clone();
+            positioned.x = column_x;
+            positioned.y = row_y(row);
+            out.push(text_draw(&positioned, &content, layout));
+            continue;
+        }
+        let content = match name {
+            "Line1" => hd_headline_text(model.headline, strings),
+            // Online-only - see the module doc.
+            "DelayPostMsg" | "RecordsCycleButton" | "RecordsCycle" => None,
+            // The Target/medal block and the loyalty block - real
+            // literal/idstring text this build chose not to draw this
+            // pass (see the module doc), which would otherwise leak
+            // through the generic fallback arm below exactly the way
+            // `ER_PERFECT` would if `Gridp.{row}` were not excluded too.
+            "Target Title" | "Target0" | "Target1" | "Target2" | "loyalty1.1" | "loyalty1.2"
+            | "loyalty2" => None,
+            // `Gridp.{row}` (`ER_PERFECT`) - not modelled, see the module
+            // doc. Everything else (`ResultsTitle`, `GridHead1`/`2`,
+            // `ControlTextConfirmButton`/`ControlTextConfirm`) already
+            // carries its own resolved text.
+            _ if name.starts_with("Gridp.") => None,
+            _ => text.string.clone(),
         };
         let Some(content) = content else { continue };
         out.push(text_draw(text, &content, layout));

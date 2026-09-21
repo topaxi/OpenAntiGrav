@@ -23,6 +23,16 @@ const XML: &str = r#"
 <Text name="Gridp.0"><Values IDstring="ER_PERFECT" x="0" y="0"></Values></Text>
 </Item>
 <Text name="Line1"><Values string="race complete!" x="586" y="50"></Values></Text>
+<Text name="Target Title" OffsetX="1180" OffsetY="532">
+<Values idstring="IG_HUD_TARGET" x="50" y="65"></Values>
+<Item OffsetX="50" OffsetY="105">
+<Text name="Target0"><Values string="value" x="80" y="0"></Values></Text>
+</Item>
+</Text>
+<Item OffsetX="1180" OffsetY="368">
+<Text name="loyalty1.1"><Values string="834 POINTS" x="39" y="72"></Values></Text>
+<Text name="loyalty2"><Values string="3745" x="352" y="115"></Values></Text>
+</Item>
 </Screen>
 <Screen type="EndRace Menu" name="EndRace Menu">
 <Block name="race_again"><Values IDString="ER_RACE_AGAIN" x="375" y="235" width="520"></Values></Block>
@@ -39,6 +49,8 @@ fn strings() -> StringTable {
 <Entry ID="IG_HUD_TIME" String="TIME"></Entry>
 <Entry ID="ER_PERFECT" String="PERFECT"></Entry>
 <Entry ID="ER_TT_COM" String="TIME TRIAL COMPLETE!"></Entry>
+<Entry ID="ER_1PLACE" String="1ST PLACE"></Entry>
+<Entry ID="ER_1STP" String="1ST PLACE!"></Entry>
 <Entry ID="ER_RACE_AGAIN" String="RACE AGAIN"></Entry>
 <Entry ID="ER_RETURN_GRID" String="RETURN TO GRID"></Entry>
 <Entry ID="ER_RETURN_MENU" String="RETURN TO MENU"></Entry>
@@ -171,6 +183,15 @@ fn results_draws_only_the_two_captioned_columns_and_the_resolved_headline() {
         !texts.contains(&"race complete!".to_string()),
         "the XML's own placeholder must not leak through unsubstituted"
     );
+    // The cell's own authored position (`x="0" y="0"`) must never reach the
+    // screen - every Grid{col}.{row} cell is repositioned onto its real,
+    // computed column/row, the bug this test would have missed had it only
+    // checked the text content above.
+    let place_draw = layers.body.iter().find_map(|draw| match draw {
+        Draw::Text { x, y, text, .. } if text == "1" => Some((*x, *y)),
+        _ => None,
+    });
+    assert_eq!(place_draw, Some((375.0, row_y(0))), "{:?}", layers.body);
 }
 
 /// `GridHighlight` repositions onto the player's own row rather than
@@ -237,6 +258,49 @@ fn menu_draws_only_the_options_the_model_actually_lists() {
     assert!(
         !texts.contains(&"VIEW RESULTS AGAIN".to_string()),
         "on the screen but not in the model's own option list: {texts:?}"
+    );
+}
+
+/// `Line1`'s own resolved text for a finishing position uses HD's own
+/// `ER_{n}PLACE` idstring, not Pulse's `ER_{n}STP` - a real, measured
+/// divergence between the two titles' string tables (see
+/// [`hd_headline_text`]'s own doc), and the placeholder/target/loyalty
+/// widgets this build chose not to draw never leak through the generic
+/// fallback arm.
+#[test]
+fn results_uses_hds_own_place_idstring_and_never_leaks_the_target_or_loyalty_placeholders() {
+    let model = FieldResults {
+        headline: Headline::Position(1),
+        rows: vec![FieldRow {
+            place: 1,
+            time_ticks: Some(60),
+            player: true,
+        }],
+    };
+    let strings = strings();
+    let layers = hd_results_draw_list(
+        &model,
+        &results_layout(),
+        &skin(),
+        &Frame::default(),
+        &strings,
+        None,
+        false,
+        &|_| None,
+    );
+    let texts = texts(&layers);
+    assert!(texts.contains(&"1ST PLACE".to_string()), "{texts:?}");
+    assert!(
+        !texts.contains(&"1ST PLACE!".to_string()),
+        "Pulse's own ER_1STP text must not draw on HD: {texts:?}"
+    );
+    assert!(
+        !texts.contains(&"value".to_string()),
+        "Target0's own literal placeholder must not leak through: {texts:?}"
+    );
+    assert!(
+        !texts.contains(&"834 POINTS".to_string()) && !texts.contains(&"3745".to_string()),
+        "the loyalty block's own literal placeholders must not leak through: {texts:?}"
     );
 }
 

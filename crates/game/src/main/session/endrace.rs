@@ -8,8 +8,8 @@ use log::warn;
 use oag_ui::endrace::{Event, MenuOption};
 
 use crate::race_stage::endrace::{
-    EndRaceRuntime, LoyaltyInputs, ResultsModel, headline, loyalty_award, menu_options,
-    to_campaign_medal,
+    EndRaceRuntime, LoyaltyInputs, ResultsModel, hd_field_rows, headline, loyalty_award,
+    menu_options, to_campaign_medal,
 };
 use crate::stage::Stage;
 
@@ -187,29 +187,9 @@ impl Session {
         };
 
         let results = if is_hd {
-            // The whole field's own finishing order - `Race::results`'s own
-            // `Board`, already ordered by place and already carrying the
-            // player's own row, off the same feed `scoreboard::Overlay`
-            // draws when no `EndRace_Definition.xml` is read at all. `Some`
-            // here: `build_endrace` only ever reaches this point once
-            // `stage.race.finished()`, and `Race::capture_results` takes the
-            // board on that same tick.
-            let rows = board
-                .map(|board| {
-                    board
-                        .rows
-                        .iter()
-                        .map(|row| oag_ui::endrace::FieldRow {
-                            place: row.place,
-                            time_ticks: row.finish_tick,
-                            player: row.player,
-                        })
-                        .collect()
-                })
-                .unwrap_or_default();
             ResultsModel::Hd(oag_ui::endrace::FieldResults {
                 headline: headline(mode, observation.place),
-                rows,
+                rows: hd_field_rows(board.as_ref()),
             })
         } else {
             ResultsModel::Pulse(oag_ui::endrace::Results {
