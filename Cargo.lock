@@ -2054,6 +2054,7 @@ dependencies = [
  "oag-gameplay",
  "oag-hd",
  "oag-input",
+ "oag-omega",
  "oag-physics",
  "oag-pulse",
  "oag-pure",
@@ -2117,6 +2118,17 @@ dependencies = [
  "log",
  "oag-gameplay",
  "winit",
+]
+
+[[package]]
+name = "oag-omega"
+version = "0.1.0"
+dependencies = [
+ "oag-2048",
+ "oag-assets",
+ "oag-hd",
+ "oag-testdata",
+ "oag-title",
 ]
 
 [[package]]

@@ -56,6 +56,7 @@ Older pages, and [`goals.md`](../overview/goals.md)'s scope table, use
 | `oag-pulse` | `crates/pulse` | Wipeout Pulse's tables: what that title ships. |
 | `oag-pure` | `crates/pure` | Wipeout Pure's tables, in the same shape. |
 | `oag-hd` | `crates/hd` | Wipeout HD / Fury's, in the same shape - and the release that forced `ArchiveCandidates::extra`, a *set* of archives all of which mount, because HD ships seven and they do not split by kind. |
+| `oag-omega` | `crates/omega` | Wipeout: Omega Collection's, on PS4 - HD's own `PI001` front-end plugin carried forward, off a base package plus a mandatory patch. Racing is out of scope: the patch's `data09.psarc` carries the complete front end and no circuits at all. |
 | `oag-game` | `crates/game` | The composition root. Boots the front end; see [front-end boot](frontend-boot.md). A thin binary over a library, so the boot sequence can be tested without a GPU. |
 
 ## Crates that do not exist yet

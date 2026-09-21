@@ -288,10 +288,11 @@ impl MusicDiscs {
                 return discs;
             }
             // **The same "recorded and then done with" as PS3's, one step
-            // earlier**: Wipeout 2048's music is unlocated, so there is not
-            // even a soundtrack to pair, and there is no second release of it
-            // to pair against either.
-            Platform::Vita | Platform::Unknown => return discs,
+            // earlier**: Wipeout 2048's and Omega's music are both unlocated
+            // (`oag_2048::TITLE`/`oag_omega::TITLE` both carry `music: None`),
+            // so there is not even a soundtrack to pair, and there is no second
+            // release of either to pair against.
+            Platform::Vita | Platform::Ps4 | Platform::Unknown => return discs,
         }
 
         // The booted disc's own soundtrack is what a candidate has to match,
@@ -355,7 +356,7 @@ impl MusicDiscs {
             Platform::Psp => self.psp.as_deref().map(|at| (at, Platform::Psp)),
             Platform::Ps2 => self.ps2.as_deref().map(|at| (at, Platform::Ps2)),
             Platform::Ps3 => self.ps3.as_deref().map(|at| (at, Platform::Ps3)),
-            Platform::Vita | Platform::Unknown => None,
+            Platform::Vita | Platform::Ps4 | Platform::Unknown => None,
         })
     }
 }
@@ -1419,9 +1420,10 @@ impl Soundtrack {
         let tracks = match platform {
             Platform::Ps2 => ps2_soundtrack(source)?,
             Platform::Psp | Platform::Ps3 => archived_soundtrack(source)?,
-            // Wipeout 2048's music is unlocated - `oag_2048::TITLE` carries
-            // `music: None` - so there is nothing here to read yet.
-            Platform::Vita | Platform::Unknown => None,
+            // Wipeout 2048's and Omega's music are both unlocated -
+            // `oag_2048::TITLE`/`oag_omega::TITLE` both carry `music: None` -
+            // so there is nothing here to read yet.
+            Platform::Vita | Platform::Ps4 | Platform::Unknown => None,
         };
         Ok(tracks.map(|tracks| Self { tracks }))
     }
