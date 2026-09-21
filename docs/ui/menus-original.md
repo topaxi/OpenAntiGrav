@@ -427,6 +427,33 @@ values - which is one edit (`text_draw`'s single `Draw::Text` literal
 becoming a role-aware constructor, mirroring `Draw::in_role`) in a file
 outside this lane's boundary.
 
+**The Layout table above still holds, re-verified rather than assumed.**
+This section's own "help text, glyph top" row (`y = 54.0`, off `helptext0`'s
+authored `y="50"`) was measured while the subtitle drew through `Pulse_20.fnt`
+scaled to `13/22` - the switch to `pulse_text.fnt` at its own native scale
+changes *which* atlas supplies that inset, so the row was re-checked rather
+than trusted: `mainmenu-pulse-after.png` (`data/scratch/lane-faces/shots/`,
+1440x816 at 3x native) puts the subtitle's own ink between capture rows
+161-191, native `y = 53.7`-`63.7` - matching the documented `54.0` top edge
+exactly. `pulse_text.fnt`'s own baked-in vertical inset happens to equal
+`Pulse_20.fnt`'s scaled one here; nothing in this table needed regenerating.
+
+**A pre-existing, separate defect, found while checking the above and not
+this lane's mechanism:** Cell Selection's `Points` value renders `0/3` as
+`OS3`, and `DifficultyButton`'s literal `string="Change Difficulty"` as
+`CHANGE JIFFICULTY` - present in this build before this pass's own changes
+(confirmed: `cellselect-usa-before.png`, captured before any commit here).
+`crates/game/src/render/text.rs`'s own `push_text` was probed directly and
+the *source* string is exactly right both times (`"0/3"`, codepoints `[48,
+47, 51]`; `"Change Difficulty"`, `D` at its correct position) - so the
+string is not the problem. The obvious next hypothesis, that `Pulse_20.fnt`
+gives `'0'`/`'O'`, `'D'`/`'J'` or `'/'`/`'S'` the same glyph box the way it
+does every lowercase/uppercase pair, is **checked and false**: all three
+pairs have distinct, unrelated `(u0, v0)` in the raw `.fnt` table. The
+actual mechanism is not identified - left as "cause unknown" rather than a
+plausible-sounding guess, for whoever picks up `oag_ui::campaign::draw`'s
+own fix above.
+
 ## Reproducing this
 
 ```sh

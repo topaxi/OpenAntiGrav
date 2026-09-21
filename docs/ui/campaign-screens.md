@@ -1521,3 +1521,12 @@ and its own "what is not determined" section.
   `"default"`-labelled `text.font`, matching what `footer.rs` and
   `menu::rows::draw_text_rows` already do) - a change to this crate's own
   `campaign/draw.rs`, outside the lane that found and fixed the mechanism.
+  `NavigationLegend`'s own `FE_CONFIRM` shrink-to-fit (`Prompt::left_bound`/
+  `align_right_to`, above) is now measured against the atlas it actually
+  draws through rather than the wrong one, and **still shrinks**: `Confirm`
+  at `pulse_text.fnt`'s own native width is 91 native px against a 35px
+  gap (`FE_BACK_BUTTON`'s `x` minus `FE_CONFIRM_BUTTON`'s `x` minus one
+  glyph-width estimate minus two `GAP` constants, both chosen). The face
+  was the wrong thing to suspect for the overlap this fixed *before* this
+  atlas fix landed; now that the face is right, the suspect is `GAP`/the
+  glyph-width estimate, both still chosen rather than measured.

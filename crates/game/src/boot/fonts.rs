@@ -188,22 +188,31 @@ pub(super) fn load_title_font(
 ///
 /// **A title whose chrome names a `Title` role (Wipeout HD) keeps exactly
 /// what it always loaded there** - `title_font` unchanged, `Some("Title")`
-/// (or whichever string the skin names). **A title that does not (both PSP
-/// titles today) gets its own `Default`-role atlas in the slot instead** -
-/// the one Pulse face with real lowercase glyph art. `Pulse_20.fnt` (the
-/// `menu` role primary this never touches) and `Pulse_14.fnt` (`Small`/
-/// `Title`) both give every lowercase codepoint the *identical*
-/// `(u0, v0, width, height)` box as its uppercase twin - measured off both
-/// pressings, not a code fallback - while `pulse_text.fnt` (`Default`) does
-/// not. See `docs/ui/menus-original.md`'s "Two faces, not one swapped for
-/// the other" section.
+/// (or whichever string the skin names). **Every other title - both PSP
+/// titles, 2048, Omega - gets its own `Default`-role atlas in the slot
+/// instead.** On Pulse that atlas is the one Pulse face with real lowercase
+/// glyph art: `Pulse_20.fnt` (the `menu` role primary this never touches)
+/// and `Pulse_14.fnt` (`Small`/`Title`) both give every lowercase codepoint
+/// the *identical* `(u0, v0, width, height)` box as its uppercase twin -
+/// measured off both pressings, not a code fallback - while `pulse_text.fnt`
+/// (`Default`) does not. See `docs/ui/menus-original.md`'s "Two faces, not
+/// one swapped for the other" section.
 ///
-/// The two are mutually exclusive on every title measured so far
-/// (`oag_pulse`/`oag_pure::frontend::MENU_SKIN::title_font` are both `None`,
-/// `oag_hd`'s is the only `Some`) - which is what lets one slot serve either
-/// without a title ever needing both in the same frame. A title that grows
-/// a second, genuinely simultaneous role will need a second slot, not a
-/// change here.
+/// **A no-op everywhere but Pulse and Pure today.** 2048 and Omega both use
+/// Wipeout HD's own `Title`-role chrome (`oag_hd::frontend::MENU_SKIN`
+/// carried forward), so they never reach this arm at all; Pure's own
+/// campaign-free menus never construct a `Draw::FacedText { role: "Default",
+/// .. }` to match it. Loading the atlas anyway costs one clone of an
+/// already-decoded `Atlas` and is not gated on a title, on purpose - a
+/// future title's own `Default`-labelled draw finds the slot already filled
+/// rather than needing this function taught about it.
+///
+/// The `Title`/`Default` pair is mutually exclusive on every title measured
+/// so far (`oag_pulse`/`oag_pure::frontend::MENU_SKIN::title_font` are both
+/// `None`, `oag_hd`'s is the only `Some`, and 2048/Omega carry HD's) - which
+/// is what lets one slot serve either without a title ever needing both in
+/// the same frame. A title that grows a second, genuinely simultaneous role
+/// will need a second slot, not a change here.
 #[must_use]
 pub fn face_atlas_slot(
     skin: &oag_title::MenuSkin,
