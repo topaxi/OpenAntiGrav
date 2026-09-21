@@ -27,10 +27,18 @@ pub use oag_tables::mjolnir::{Document, Field, Instance, Reference, parse};
 /// census.
 pub const SP_XML: &str = r"Data\xml\SP.xml";
 
-/// The multiplayer twin, same schema, 289 instances measured (one more than
-/// `SP.xml`) - not otherwise probed this pass; every function in this module
-/// works on either file's [`Document`] equally, since the schema does not
-/// differ between them.
+/// **Not `SP.xml`'s schema.** 289 instances measured, but only
+/// [`typedef::GAME_MODE_OBJECTIVE`] (59 of them) is shared; the other 230
+/// are two typedefs `SP.xml` carries none of - `1114956821` x210, a
+/// "level" shape (`M_BASEOBJECTIVE`/`M_HARDOBJECTIVE`/`M_MEDIUMOBJECTIVE`/
+/// `M_PNEXTLEVEL`/`M_PAR`/`M_X`/`M_Y`, names like `"MP_S12_E02"`) and
+/// `425681076` x20, a season container (`M_PNEXTSEASON`/`M_PFIRSTLEVEL`,
+/// names like `"MP_Season_01"`). Neither is named in-file the way
+/// [`super::typedef`]'s table is, and neither is read by any function in
+/// this module - [`events`]/[`tracks`]/[`weapon_sets`] filter by `SP.xml`'s
+/// own typedef ids and simply find nothing in an `MP.xml` [`Document`],
+/// rather than misreading one shape as another. Left for a pass that wants
+/// the multiplayer season ladder specifically.
 pub const MP_XML: &str = r"Data\xml\MP.xml";
 
 /// `Data\xml\MjolnirData.xml`, 212 bytes: the editing tool's own
