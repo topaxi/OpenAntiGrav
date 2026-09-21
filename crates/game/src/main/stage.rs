@@ -424,6 +424,7 @@ impl Stage {
             clouds,
             shadows,
             shadow_hulls,
+            campaign_2048_event,
             ..
         } = loaded;
         // Read before `setup` moves into `race::Race::start` below - `mode`
@@ -556,6 +557,11 @@ impl Stage {
             // which drain `Session::campaign_cell` into here. Never known
             // here: this function has no `Session` to read it from.
             campaign_cell: None,
+            // Known here, unlike `campaign_cell` above: `load_event` already
+            // resolved it onto `Loaded` itself, since it has the parsed
+            // `SP.xml` `Document` in hand at exactly that point - see
+            // `race::Loaded::campaign_2048_event`'s own doc.
+            campaign_2048_event,
             // Built lazily once the race finishes - see
             // `crate::main::session::endrace` and `RaceStage::endrace`'s own
             // doc. Never known here for the same reason `campaign_cell`

@@ -18,11 +18,13 @@ use super::{Document, Instance, Reference};
 pub mod typedef {
     /// `GameModeObjective`, confidence 95 (named in-file). 96 instances:
     /// pass/elite objectives an event's own [`super::super::Field`] pair
-    /// (`M_PASSOBJECTIVE`/`M_ELITEOBJECTIVE`) points at. Not otherwise typed
-    /// by this module - `M_OBJECTIVETYPE`'s own `ObjectiveValue` enum values
-    /// (`1`, `2`, `4`, `7`, and one empty, measured across the 96) are
-    /// unresolved and not worth a guess; see [`super::super`]'s own doc
-    /// comment's "do not chase" list.
+    /// (`M_PASSOBJECTIVE`/`M_ELITEOBJECTIVE`) points at - see [`Objective`],
+    /// which reads `M_OBJECTIVETYPE`/`M_OBJECTIVETARGET` as raw numbers.
+    /// **What each `ObjectiveValue` ordinal (`1`, `2`, `4`, `7`, and one
+    /// empty, measured across the 96) means is not this module's to say** -
+    /// that is `oag_2048::campaign`'s own reading, measured against 2048's
+    /// particular `(pass, elite)` type pairs per event kind; see
+    /// `docs/formats/2048-campaign.md`'s "The objective law" section.
     pub const GAME_MODE_OBJECTIVE: i64 = 380278911;
     /// `GameModeBase`, confidence 95 (named in-file, as the abstract static
     /// type of every polymorphic reference field). No instance in `SP.xml`
@@ -385,6 +387,69 @@ pub fn weapon_sets(document: &Document) -> Vec<WeaponSet> {
 #[must_use]
 pub fn weapon_set_for(document: &Document, reference: Reference) -> Option<WeaponSet> {
     WeaponSet::from_instance(document.instance(reference.instance_id)?)
+}
+
+/// One `GameModeObjective`: what [`Event::pass_objective`]/
+/// [`Event::elite_objective`] point at.
+///
+/// **Names only, no decoding of what the ordinal or the target mean** - per
+/// this module's own split with `oag_2048::campaign`, which is where
+/// `M_OBJECTIVETYPE`'s own `1`/`2`/`4`/`7` ordinals are given a meaning,
+/// against 2048's own measured `(pass, elite)` type pairs per
+/// [`EventKind`]. See `docs/formats/2048-campaign.md`'s "The objective law"
+/// section for the census this was read off.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Objective {
+    /// This instance's own `instanceid`.
+    pub instance_id: i64,
+    /// The instance's own `name=`, e.g. `"FinishRaceAnyPosition"`,
+    /// `"Top5"`, `"2048 - Event 3 Pass"`.
+    pub name: String,
+    /// `M_OBJECTIVETYPE`'s raw `ObjectiveValue` ordinal. `None` on the one
+    /// measured instance (`"MostDamage"`) that authors no type at all.
+    pub objective_type: Option<i64>,
+    /// `M_OBJECTIVETARGET`. `None` both for a type that authors no target at
+    /// all (the `FINISH` type's own instances leave it empty) and for an
+    /// absent field.
+    pub target: Option<i64>,
+}
+
+impl Objective {
+    /// Builds an [`Objective`] from an [`Instance`] of
+    /// [`typedef::GAME_MODE_OBJECTIVE`]. `None` for any other typedef.
+    #[must_use]
+    pub fn from_instance(instance: &Instance) -> Option<Self> {
+        if instance.typedef_id != typedef::GAME_MODE_OBJECTIVE {
+            return None;
+        }
+        Some(Self {
+            instance_id: instance.instance_id,
+            name: instance.name.clone(),
+            objective_type: instance
+                .field("M_OBJECTIVETYPE")
+                .and_then(super::Field::int),
+            target: instance
+                .field("M_OBJECTIVETARGET")
+                .and_then(super::Field::int),
+        })
+    }
+}
+
+/// Every [`Objective`] in a document, in document order.
+#[must_use]
+pub fn objectives(document: &Document) -> Vec<Objective> {
+    document
+        .instances
+        .iter()
+        .filter_map(Objective::from_instance)
+        .collect()
+}
+
+/// [`Event::pass_objective`]/[`Event::elite_objective`] resolved against
+/// their own document.
+#[must_use]
+pub fn objective_for(document: &Document, reference: Reference) -> Option<Objective> {
+    Objective::from_instance(document.instance(reference.instance_id)?)
 }
 
 #[cfg(test)]

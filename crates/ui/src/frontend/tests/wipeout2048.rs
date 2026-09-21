@@ -16,6 +16,8 @@ const XML: &str = r#"
   <Variable global="Orange2048"><Values String="0xffdd580b"></Values></Variable>
   <Variable global="White2048"><Values String="0xffe1e4eb"></Values></Variable>
   <Variable global="Grey2048"><Values String="0xff717b96"></Values></Variable>
+  <Variable global="Pass2048"><Values String="0xff018400"></Values></Variable>
+  <Variable global="ElitePass2048"><Values String="0xfffef502"></Values></Variable>
   <Screen name="Boot Connect">
     <Image><Values x="0" y="0" width="960" height="544" Color="0xffffffff"></Values></Image>
   </Screen>
@@ -388,8 +390,32 @@ fn three_events() -> Vec<MapEvent> {
         x,
         y,
         detail: "circuit / mode".to_string(),
+        requires: None,
     })
     .collect()
+}
+
+/// Two chained events - `"2048 - Event 2"` gated on `"2048 - Event 1"` -
+/// for the locked/open/passed/elite tests below. Kept apart from
+/// [`three_events`] so every test written against that fixture keeps
+/// exercising an all-open map, the same shape it always has.
+fn a_gated_event() -> Vec<MapEvent> {
+    vec![
+        MapEvent {
+            name: "2048 - Event 1".to_string(),
+            x: 1,
+            y: 5,
+            detail: "circuit / mode".to_string(),
+            requires: None,
+        },
+        MapEvent {
+            name: "2048 - Event 2".to_string(),
+            x: 3,
+            y: 5,
+            detail: "circuit / mode".to_string(),
+            requires: Some("2048 - Event 1".to_string()),
+        },
+    ]
 }
 
 #[test]
@@ -517,6 +543,65 @@ fn a_click_on_an_unselected_marker_selects_and_a_second_click_launches() {
     assert_eq!(
         frontend.launch(),
         Some(&Launch::Event("2048 - Event 2".to_string()))
+    );
+}
+
+#[test]
+fn a_gated_event_with_nothing_earned_yet_refuses_a_launch() {
+    let mut frontend = boot(0);
+    frontend.set_campaign(a_gated_event());
+    let mut input = Input::new();
+    reach_the_shell(&mut frontend, &mut input);
+    press(&mut frontend, &mut input, Button::Right);
+    assert_eq!(
+        frontend.selected_event().map(|e| e.name.as_str()),
+        Some("2048 - Event 2")
+    );
+    press(&mut frontend, &mut input, Button::Cross);
+    assert!(
+        !frontend.is_finished(),
+        "a locked event must refuse to launch"
+    );
+    let notes = frontend.take_notes();
+    assert!(
+        notes.iter().any(|note| note.contains("is locked")),
+        "{notes:#?}"
+    );
+}
+
+#[test]
+fn refresh_campaign_progress_opens_a_gated_event_once_its_own_gate_is_passed() {
+    let mut frontend = boot(0);
+    frontend.set_campaign(a_gated_event());
+    let mut input = Input::new();
+    reach_the_shell(&mut frontend, &mut input);
+    frontend
+        .refresh_campaign_progress(|name| (name == "2048 - Event 1").then_some(EarnedTier::Pass));
+    press(&mut frontend, &mut input, Button::Right);
+    press(&mut frontend, &mut input, Button::Cross);
+    assert_eq!(
+        frontend.launch(),
+        Some(&Launch::Event("2048 - Event 2".to_string())),
+        "Event 1 was passed, so Event 2's own gate is now open"
+    );
+}
+
+#[test]
+fn refresh_campaign_progress_colours_a_passed_marker_with_the_discs_own_green() {
+    let mut frontend = boot(0);
+    frontend.set_campaign(a_gated_event());
+    let mut input = Input::new();
+    reach_the_shell(&mut frontend, &mut input);
+    frontend
+        .refresh_campaign_progress(|name| (name == "2048 - Event 1").then_some(EarnedTier::Elite));
+    let pass_green = frontend.global_colour("Pass2048");
+    let elite_yellow = frontend.global_colour("ElitePass2048");
+    assert_ne!(pass_green, elite_yellow, "the fixture must tell them apart");
+    let list = frontend.draw_list();
+    assert!(
+        list.iter()
+            .any(|draw| matches!(draw, Draw::Fill { color, .. } if *color == elite_yellow)),
+        "Event 1's own marker should draw in ElitePass2048"
     );
 }
 

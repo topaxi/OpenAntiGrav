@@ -668,6 +668,13 @@ impl Session {
                         observation.campaign_medal,
                     );
                 }
+                if let Some(progress) = stage.campaign_2048_event.as_ref() {
+                    self.records.record_campaign(
+                        &key.title,
+                        &progress.name,
+                        observation.campaign_medal,
+                    );
+                }
                 self.records.record(key, observation);
                 if let Err(e) = records::save(&self.records) {
                     error!("could not save race records: {e:#}");

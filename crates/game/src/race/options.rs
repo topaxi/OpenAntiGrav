@@ -768,8 +768,38 @@ pub struct Loaded {
     /// no `Dynamic Shadow Occluder` casts no `original` shadow rather than
     /// borrowing another team's. See [`crate::race::shadow::hulls`].
     pub shadow_hulls: Vec<Option<oag_vex::shadow_occluder::Occluder>>,
+    /// The Wipeout 2048 campaign event this load resolved, if
+    /// [`load_event`](super::load_event) is what built it - `None` for every
+    /// other title and for an ordinary `--race`/menu launch on 2048 itself.
+    ///
+    /// Carried on [`Loaded`] rather than threaded through [`Session`] the way
+    /// `campaign_cell` is (Pulse/HD's own grid launch): `load_event` already
+    /// has the parsed `SP.xml` `Document` in hand to resolve
+    /// [`Campaign2048Progress::objectives`], and a second `Document` parse
+    /// at grading time would cost an archive read `RaceStage::observation`
+    /// has no business making. See `crates/game/src/race/load/campaign.rs`.
+    ///
+    /// [`Session`]: crate::main::session::Session
+    pub campaign_2048_event: Option<Campaign2048Progress>,
     /// Lines worth printing once, describing what was found.
     pub report: Vec<String>,
+}
+
+/// What [`load_event`](super::load_event) resolved for [`RaceStage`] to
+/// grade the race against, once it finishes - see [`Loaded::campaign_2048_event`].
+///
+/// [`RaceStage`]: crate::main::stage::RaceStage
+#[derive(Debug, Clone)]
+pub struct Campaign2048Progress {
+    /// The `SP.xml` instance name - the key
+    /// [`oag_game::records::Store::record_campaign`] persists a medal under,
+    /// the same way Pulse/HD's own launch persists one under a cell's name.
+    pub name: String,
+    /// The event's own pass/elite bars, when it authors them - `None` for a
+    /// Speed Lap or a generic template event, which never carries a medal
+    /// but still opens whatever names it as a prerequisite once finished.
+    /// See `oag_2048::campaign::event_objectives`.
+    pub objectives: Option<oag_2048::campaign::EventObjectives>,
 }
 
 /// [`Setup::headless`]: the disc-free minimum, for the headless-sim binary.

@@ -75,6 +75,13 @@ pub(crate) struct RaceStage {
     /// `docs/ghidra/functions/psp-pulse-usa/race-campaign.md`'s "how a
     /// campaign event launches". Read by [`RaceStage::observation`] alone.
     pub(crate) campaign_cell: Option<oag_tables::race_campaign::Cell>,
+    /// The Wipeout 2048 campaign event this race was launched against, or
+    /// `None` for every other title and for an ordinary `--race`/menu
+    /// launch on 2048 itself. Resolved by `race::load_event` onto
+    /// [`race::Loaded::campaign_2048_event`] and carried straight through -
+    /// see that field's own doc for why this rides on `Loaded` rather than
+    /// through `Session` the way [`Self::campaign_cell`] does.
+    pub(crate) campaign_2048_event: Option<race::Campaign2048Progress>,
     /// The EndRace flow (`Results` -> `Rewards`/`Menu`) once the race has
     /// finished and this title carries `EndRace_Definition.xml` - `None`
     /// until then, and forever `None` on a title that does not (or on an
@@ -214,7 +221,40 @@ impl RaceStage {
             ),
             tick: standing.finish_tick.unwrap_or(self.race.sim.world.tick),
             best_lap_ticks: standing.best_lap_ticks,
-            campaign_medal: self.campaign_medal(finished, standing.best_lap_ticks),
+            campaign_medal: self
+                .campaign_medal(finished, standing.best_lap_ticks)
+                .or_else(|| self.campaign_2048_medal(finished)),
+        }
+    }
+
+    /// [`Self::campaign_medal`]'s own counterpart for
+    /// [`Self::campaign_2048_event`] - Wipeout 2048's own two-tier
+    /// pass/elite law (`oag_2048::campaign::evaluate_tier`) rather than
+    /// Pulse/HD's three-tier `Cell_EvaluateMedal`.
+    ///
+    /// **`Tier::Elite` maps to `Medal::Gold`, `Tier::Pass` to
+    /// `Medal::Bronze` - chosen, not measured, no confidence score.** 2048's
+    /// own objective law never authors a middle tier (measured - see
+    /// `oag_2048::campaign::objective_type`'s own doc comment), so
+    /// `Medal::Silver` is never produced by this function; floor maps to
+    /// floor and top to top rather than squashing the two into adjacent
+    /// rungs. See `docs/architecture/persistence.md`'s own 2048 paragraph.
+    fn campaign_2048_medal(&self, finished: bool) -> Option<oag_game::records::Medal> {
+        let progress = self.campaign_2048_event.as_ref()?;
+        let objectives = progress.objectives.as_ref()?;
+        let standing = self.race.player_standing();
+        let outcome = oag_2048::campaign::EventOutcome {
+            finished,
+            place: self.race.player_place(),
+            finish_centiseconds: finished.then(|| {
+                ticks_to_centiseconds(standing.finish_tick.unwrap_or(self.race.sim.world.tick))
+            }),
+            zone: self.race.sim.world.primary_race().zone,
+            kills: standing.kills,
+        };
+        match oag_2048::campaign::evaluate_tier(objectives, &outcome)? {
+            oag_2048::campaign::Tier::Elite => Some(oag_game::records::Medal::Gold),
+            oag_2048::campaign::Tier::Pass => Some(oag_game::records::Medal::Bronze),
         }
     }
 

@@ -13,12 +13,26 @@ const FIXTURE: &str = r#"<mjolnir><instance instanceid="-1143582041" typedefid="
 <M_WEAPONSET name="m_weaponSet" type="WeaponSetDefinition" length="1" typedefid="-966434245"><ARRAY value="-692702972" typedefid="-966434245"/></M_WEAPONSET>
 <M_PNEXTEVENT name="m_pNextEvent" type="GameModeBase" length="1" typedefid="366306753"><ARRAY value="-484309551" typedefid="-1353052320"/></M_PNEXTEVENT>
 <M_PBRANCHEVENT name="m_pBranchEvent" type="GameModeBase" length="1" typedefid="366306753"><ARRAY value="890052595" typedefid="-1915183557"/></M_PBRANCHEVENT>
+<M_PASSOBJECTIVE name="m_passObjective" type="GameModeObjective" length="1" typedefid="380278911"><ARRAY value="13000" typedefid="380278911"/></M_PASSOBJECTIVE>
+<M_ELITEOBJECTIVE name="m_eliteObjective" type="GameModeObjective" length="1" typedefid="380278911"><ARRAY value="11000" typedefid="380278911"/></M_ELITEOBJECTIVE>
 <M_X name="m_x" type="int" length="1" typedefid="351272028"><ARRAY value="5" typedefid="351272028"/></M_X>
 <M_Y name="m_y" type="int" length="1" typedefid="351272028"><ARRAY value="5" typedefid="351272028"/></M_Y>
 <M_MAXGHOSTSHIPS name="m_maxGhostShips" type="int" length="1" typedefid="351272028"><ARRAY value="" typedefid="351272028"/></M_MAXGHOSTSHIPS>
 </DATA></instance>
 <instance instanceid="-484309551" typedefid="-1353052320" name="2048 - Event 4" schema="0" version="0" file="SP.xml"><DATA>
 <M_NUMOFLAPS name="m_numOfLaps" type="int" length="1" typedefid="351272028"><ARRAY value="5" typedefid="351272028"/></M_NUMOFLAPS>
+</DATA></instance>
+<instance instanceid="13000" typedefid="380278911" name="2048 - Event 3 Pass" schema="0" version="0" file="SP.xml"><DATA>
+<M_OBJECTIVETYPE name="m_ObjectiveType" type="ObjectiveValue" length="1" typedefid="-66037811"><ARRAY value="2" typedefid="-66037811"/></M_OBJECTIVETYPE>
+<M_OBJECTIVETARGET name="m_ObjectiveTarget" type="u32" length="1" typedefid="-1854316044"><ARRAY value="13000" typedefid="-1854316044"/></M_OBJECTIVETARGET>
+</DATA></instance>
+<instance instanceid="11000" typedefid="380278911" name="2048 - Event 3 Elite" schema="0" version="0" file="SP.xml"><DATA>
+<M_OBJECTIVETYPE name="m_ObjectiveType" type="ObjectiveValue" length="1" typedefid="-66037811"><ARRAY value="2" typedefid="-66037811"/></M_OBJECTIVETYPE>
+<M_OBJECTIVETARGET name="m_ObjectiveTarget" type="u32" length="1" typedefid="-1854316044"><ARRAY value="11000" typedefid="-1854316044"/></M_OBJECTIVETARGET>
+</DATA></instance>
+<instance instanceid="1" typedefid="380278911" name="MostDamage" schema="0" version="0" file="SP.xml"><DATA>
+<M_OBJECTIVETYPE name="m_ObjectiveType" type="ObjectiveValue" length="1" typedefid="-66037811"><ARRAY value="" typedefid="-66037811"/></M_OBJECTIVETYPE>
+<M_OBJECTIVETARGET name="m_ObjectiveTarget" type="u32" length="1" typedefid="-1854316044"><ARRAY value="" typedefid="-1854316044"/></M_OBJECTIVETARGET>
 </DATA></instance>
 <instance instanceid="777" typedefid="1018671239" name="2049 - Event 3" schema="0" version="0" file="SP.xml"><DATA>
 <M_ZONETIMECOUNTER name="m_zoneTimeCounter" type="int" length="1" typedefid="351272028"><ARRAY value="1" typedefid="351272028"/></M_ZONETIMECOUNTER>
@@ -112,6 +126,35 @@ fn laps_zero_is_not_produced_by_this_fixture_but_the_field_still_parses_as_some_
     let doc = parse(xml);
     let event = events(&doc).into_iter().next().unwrap();
     assert_eq!(event.laps, Some(0));
+}
+
+#[test]
+fn an_events_pass_and_elite_objectives_resolve_to_their_own_type_and_target() {
+    let doc = parse(FIXTURE);
+    let event = events(&doc)
+        .into_iter()
+        .find(|e| e.name == "2048 - Event 3")
+        .unwrap();
+
+    let pass = objective_for(&doc, event.pass_objective.unwrap()).unwrap();
+    assert_eq!(pass.name, "2048 - Event 3 Pass");
+    assert_eq!(pass.objective_type, Some(2));
+    assert_eq!(pass.target, Some(13000));
+
+    let elite = objective_for(&doc, event.elite_objective.unwrap()).unwrap();
+    assert_eq!(elite.name, "2048 - Event 3 Elite");
+    assert_eq!(elite.objective_type, Some(2));
+    assert_eq!(elite.target, Some(11000));
+}
+
+#[test]
+fn an_objective_with_no_authored_type_or_target_reads_as_none_not_zero() {
+    let doc = parse(FIXTURE);
+    let most_damage = doc.instance(1).unwrap();
+    let objective = Objective::from_instance(most_damage).unwrap();
+    assert_eq!(objective.name, "MostDamage");
+    assert_eq!(objective.objective_type, None);
+    assert_eq!(objective.target, None);
 }
 
 #[test]

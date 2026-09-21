@@ -37,17 +37,44 @@
 //! this build still lays cells out on an even grid - [`PITCH`] units per
 //! cell from [`ORIGIN`], sized so the file's own `x` 1-34 and `y` 1-25 fill
 //! the authored 1920x1088 canvas - and draws each event as a plain
-//! [`MARKER`]-sized `Blue2048` square rather than a hexagon shape nothing
-//! here has a decoded source for. The city behind the real map does not
+//! [`MARKER`]-sized square, coloured by its own progress (see this module's
+//! "Progression" section below) rather than a hexagon shape nothing here has
+//! a decoded source for. The city behind the real map does not
 //! exist as a 3D backdrop either way: the Vita3K capture's own tiles sit on
 //! a flat light triangle-outline background, corroborating
 //! `2048-frontend.md`'s "not a real 3D scene" finding from the opposite
 //! direction. The panel under the map naming the selected event is this
 //! build's own chrome, in the skin's own colours.
 //!
-//! Every event is offered, whatever the unlock graph says: there is no save
-//! to read progress from, and hiding events behind a graph nothing walks
-//! would be inventing a locked state.
+//! # Progression: locked, open, passed, elite
+//!
+//! **Resolved 2026-09-21.** [`MapEvent::requires`] is authored data - the
+//! single event `oag_2048::campaign::unlock_gates` names as this one's own
+//! prerequisite, folding its `M_PNEXTEVENT`/`M_PBRANCHEVENT` chain edge and
+//! its `M_PEVENTREQUIRED` field into one name (see that function's own doc
+//! for why one name is enough for every case `SP.xml` authors). What tier a
+//! finished attempt at an event earned is not authored here at all - a
+//! player's own save, read by whatever calls
+//! [`Frontend::refresh_campaign_progress`] once at boot (this crate carries
+//! no persistence of its own, and must not: nothing gameplay- or
+//! session-facing may depend on `oag-ui`, so the medal lookup arrives as a
+//! plain closure rather than a `Store` reference). [`ProgressState`] folds
+//! the two together: an event whose own [`MapEvent::requires`] has not been
+//! passed draws [`ProgressState::Locked`] and refuses a launch
+//! ([`Frontend::launch_selected_event`]); everything open from the start, or
+//! opened by a since-passed prerequisite, draws [`ProgressState::Open`],
+//! [`ProgressState::Passed`] or [`ProgressState::Elite`] off whatever the
+//! closure answers for its own name.
+//!
+//! The four colours this draws with are the disc's own -
+//! `Skin.xml`'s `Grey2048`/`Blue2048`/`Pass2048`/`ElitePass2048` globals,
+//! already reachable through [`Frontend::global_colour`] - never an invented
+//! palette. `HardcorePass2048`, the fifth global that file declares, is not
+//! used: nothing in `SP.xml` authors a third objective tier alongside
+//! `M_PASSOBJECTIVE`/`M_ELITEOBJECTIVE` (measured - see
+//! `oag_2048::campaign::objective_type`'s own doc comment), so that colour
+//! most plausibly belongs to a Hardcore *difficulty* flag this pass found no
+//! authored data for, not a rung this map ever needs to draw.
 
 use crate::pointer::{Pointer, contains};
 
@@ -77,6 +104,40 @@ pub struct MapEvent {
     /// What to say about it: the circuit's display name, the kind, the
     /// class and the laps, already resolved to text by the caller.
     pub detail: String,
+    /// The single other event whose completion opens this one -
+    /// `oag_2048::campaign::unlock_gates`'s own name for it, `None` for an
+    /// event open from the start. Authored data, read once at boot; see
+    /// this module's own "Progression" section.
+    pub requires: Option<String>,
+}
+
+/// A finished attempt's own two-tier result - this crate's copy of
+/// `oag_2048::campaign::Tier`, kept separate so `oag-ui` never depends on
+/// `oag_2048` or `oag_game::records`. See
+/// [`Frontend::refresh_campaign_progress`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EarnedTier {
+    /// Cleared the event's own pass bar.
+    Pass,
+    /// Cleared the harder elite bar.
+    Elite,
+}
+
+/// Where an event sits once its own gate and a player's own save have both
+/// been folded in - see this module's own "Progression" section.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum ProgressState {
+    /// [`MapEvent::requires`] names an event that has not been passed yet.
+    /// Refuses a launch.
+    Locked,
+    /// Open, not yet finished with at least a pass. The starting state for
+    /// an event with no gate, before any progress has been read in at all.
+    #[default]
+    Open,
+    /// Finished with at least [`EarnedTier::Pass`].
+    Passed,
+    /// Finished with [`EarnedTier::Elite`].
+    Elite,
 }
 
 /// Where the map is: which event the cursor is on and how far the view has
@@ -84,6 +145,12 @@ pub struct MapEvent {
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct CampaignMap {
     events: Vec<MapEvent>,
+    /// [`EarnedTier`] per event, indexed the same as `events` - `None`
+    /// until [`Frontend::refresh_campaign_progress`] runs, and for every
+    /// event a save has no result for yet. Absence here reads exactly like
+    /// "never played", which is correct both before the first refresh and
+    /// after it.
+    earned: Vec<Option<EarnedTier>>,
     selected: usize,
     scroll: (f32, f32),
 }
@@ -110,6 +177,33 @@ impl CampaignMap {
             (y + h * 0.5 - view.1 * 0.5).clamp(0.0, (CANVAS.1 - view.1).max(0.0)),
         );
     }
+
+    /// [`ProgressState`] for the event at `index` - `Locked` when
+    /// [`MapEvent::requires`] names an event that has not been passed yet
+    /// (an unknown name, e.g. one filtered out of the map entirely, reads as
+    /// not passed rather than as open by default - see this module's own
+    /// "Never invent" rule), the tier `earned` carries otherwise.
+    fn state_of(&self, index: usize) -> ProgressState {
+        let Some(event) = self.events.get(index) else {
+            return ProgressState::Locked;
+        };
+        let open = event.requires.as_deref().is_none_or(|gate| {
+            self.events
+                .iter()
+                .position(|other| other.name == gate)
+                .and_then(|at| self.earned.get(at).copied())
+                .flatten()
+                .is_some()
+        });
+        if !open {
+            return ProgressState::Locked;
+        }
+        match self.earned.get(index).copied().flatten() {
+            Some(EarnedTier::Elite) => ProgressState::Elite,
+            Some(EarnedTier::Pass) => ProgressState::Passed,
+            None => ProgressState::Open,
+        }
+    }
 }
 
 impl Frontend {
@@ -118,14 +212,36 @@ impl Frontend {
     /// one - the first season's first event by name, which is a reading of
     /// the names and not of the unlock graph - and on the first event
     /// otherwise.
+    ///
+    /// Every event reads [`ProgressState::Open`] or [`ProgressState::Locked`]
+    /// (off its own [`MapEvent::requires`] alone, nothing earned yet) until
+    /// [`Self::refresh_campaign_progress`] is called - a caller with a save
+    /// to read should call it once, straight after this.
     pub fn set_campaign(&mut self, events: Vec<MapEvent>) {
         self.campaign.selected = events
             .iter()
             .position(|event| event.name == "2048 - Event 1")
             .unwrap_or(0);
+        self.campaign.earned = vec![None; events.len()];
         self.campaign.events = events;
         self.campaign.scroll = (0.0, 0.0);
         self.campaign.follow(self.space.size);
+    }
+
+    /// Folds a player's own save into the map: `earned(name)` is asked once
+    /// per event and answers the tier that event's own best-ever result
+    /// earned, or `None` for one never finished with at least a pass.
+    ///
+    /// A plain closure rather than a `Store` reference, on purpose - see
+    /// this module's own "Progression" section for why `oag-ui` cannot
+    /// depend on `oag_game::records` at all.
+    pub fn refresh_campaign_progress(&mut self, earned: impl Fn(&str) -> Option<EarnedTier>) {
+        self.campaign.earned = self
+            .campaign
+            .events
+            .iter()
+            .map(|event| earned(&event.name))
+            .collect();
     }
 
     /// The events on the map, in the order they were given.
@@ -196,6 +312,17 @@ impl Frontend {
         let Some(event) = self.campaign.events.get(self.campaign.selected) else {
             return;
         };
+        if matches!(
+            self.campaign.state_of(self.campaign.selected),
+            ProgressState::Locked
+        ) {
+            self.notes.push(format!(
+                "{}: {:?} is locked, refusing to launch",
+                w2048::NEW_FE_SHELL,
+                event.name
+            ));
+            return;
+        }
         self.notes.push(format!(
             "{}: {:?} tapped, firing {}",
             w2048::NEW_FE_SHELL,
@@ -244,9 +371,15 @@ impl Frontend {
     }
 
     /// The map: every marker in view, the cursor ring, and the panel.
+    ///
+    /// Each marker's own colour is one of the disc's own four -
+    /// [`ProgressState::Locked`] draws `Grey2048`, [`ProgressState::Open`]
+    /// the same `Blue2048` this always drew, [`ProgressState::Passed`]
+    /// `Pass2048` and [`ProgressState::Elite`] `ElitePass2048` - see this
+    /// module's own "Progression" section for why no fifth colour is drawn.
     pub(super) fn draw_campaign_map(&self, out: &mut Vec<Draw>) {
         let (width, height) = self.space.size;
-        let tile = self.global_colour("Blue2048");
+        let open = self.global_colour("Blue2048");
         let cursor = self.global_colour("Orange2048");
         let (sx, sy) = self.campaign.scroll;
         for (at, event) in self.campaign.events.iter().enumerate() {
@@ -255,7 +388,13 @@ impl Frontend {
             if rect[0] + w < 0.0 || rect[1] + h < 0.0 || rect[0] > width || rect[1] > height {
                 continue;
             }
-            out.push(Draw::Fill { rect, color: tile });
+            let color = match self.campaign.state_of(at) {
+                ProgressState::Locked => self.global_colour("Grey2048"),
+                ProgressState::Open => open,
+                ProgressState::Passed => self.global_colour("Pass2048"),
+                ProgressState::Elite => self.global_colour("ElitePass2048"),
+            };
+            out.push(Draw::Fill { rect, color });
             if at == self.campaign.selected {
                 self.draw_cursor_ring(rect, cursor, out);
             }
@@ -265,7 +404,7 @@ impl Frontend {
                 x: width * 0.5,
                 y: height * 0.5,
                 scale: LABEL_SCALE,
-                color: tile,
+                color: open,
                 border: None,
                 align: Align::Centre,
                 text: "no campaign events were loaded".to_string(),
@@ -275,7 +414,7 @@ impl Frontend {
         };
         out.push(Draw::Fill {
             rect: PANEL,
-            color: tile,
+            color: open,
         });
         let line = self.default_line_height.unwrap_or(37.0) * LABEL_SCALE;
         let top = PANEL[1] + 12.0 - PEN_ABOVE_CAPS * LABEL_SCALE;
