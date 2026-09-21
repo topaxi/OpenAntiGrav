@@ -669,19 +669,51 @@ pub fn cell_help_draw(layout: &Layout, sprites: &dyn Fn(&str) -> Option<Placed>)
     out
 }
 
+/// **Routes through the `Default`-role atlas when `text.font` names it** -
+/// `super::footer::face_role`, the same check `NavigationLegend::draw`
+/// already makes for the `Confirm`/`Back` prompts, now meaningful here too:
+/// lane 7's own `Default`-role atlas (`crates/game/src/boot/fonts.rs`'s
+/// `face_atlas_slot`) is a real, second, mixed-case-capable face, not the
+/// upper-case-only menu atlas every campaign-screen label drew through
+/// before it landed. `Speed Class`/`Line1`..`8`/`Title`/`Track Line` all
+/// author `font="default"` and reach this function, so they pick it up for
+/// free. **Not [`Draw::in_role`]**: that helper always hardcodes
+/// `wrap_width: None`, which would silently drop the wrap width a
+/// `widthlimited="true"` text (`Required`/`Required Previous` on HD) still
+/// needs - this preserves `text.wrap_width` on either face instead.
 pub(super) fn text_draw(text: &Text, content: &str, layout: &Layout) -> Draw {
-    Draw::Text {
-        x: text.x,
-        y: text.y,
-        scale: text.scale * layout.face_scale(&text.font),
-        color: argb_to_rgba(text.color),
-        border: None,
-        align: match text.align.to_ascii_lowercase().as_str() {
-            "right" => Align::Right,
-            "centre" | "center" => Align::Centre,
-            _ => Align::Left,
+    let x = text.x;
+    let y = text.y;
+    let scale = text.scale * layout.face_scale(&text.font);
+    let color = argb_to_rgba(text.color);
+    let align = match text.align.to_ascii_lowercase().as_str() {
+        "right" => Align::Right,
+        "centre" | "center" => Align::Centre,
+        _ => Align::Left,
+    };
+    let content = content.to_string();
+    let wrap_width = text.wrap_width;
+    match super::footer::face_role(&text.font) {
+        Some(role) => Draw::FacedText {
+            role,
+            x,
+            y,
+            scale,
+            color,
+            border: None,
+            align,
+            text: content,
+            wrap_width,
         },
-        text: content.to_string(),
-        wrap_width: text.wrap_width,
+        None => Draw::Text {
+            x,
+            y,
+            scale,
+            color,
+            border: None,
+            align,
+            text: content,
+            wrap_width,
+        },
     }
 }

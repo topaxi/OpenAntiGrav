@@ -1,9 +1,19 @@
-//! The Race Campaign's two screens, over the menu stage - the same shape
+//! The Race Campaign's screens, over the menu stage - the same shape
 //! [`crate::picker_stage`] holds the race box's two in. See
 //! `oag_ui::campaign` for the model and the drawing, and
 //! `crate::session::campaign` for the flow that opens and closes one.
+//!
+//! **HD/Fury adds a third screen ahead of the other two**: `Campaign
+//! Selection`, picking between the base `Wipeout HD` campaign
+//! (`grid0`..`grid7`) and `Fury` (`grid8`..`grid15`) before either ever pages
+//! a grid tier. Every other title never builds [`Screen::Selection`] at all -
+//! `CampaignStage::new` opens straight on [`Screen::Grid`] the way it always
+//! has when [`CampaignStage::has_selection`] is `false`. See
+//! `docs/ui/campaign-screens.md`'s "Wipeout HD/Fury: `Campaign Selection`"
+//! section.
 
 use oag_tables::race_campaign;
+use oag_ui::campaign::selection::{Campaign, CampaignSelection};
 
 /// `oag_game::records::Medal` restated as `oag_tables::race_campaign::Medal`.
 /// The two are duplicated on purpose, not shared, per `records.rs`'s own
@@ -16,12 +26,17 @@ fn to_campaign_medal(medal: oag_game::records::Medal) -> race_campaign::Medal {
     }
 }
 
-/// One open campaign screen: `Grid Selection`, or `Cell Selection` over one
-/// of its tiers.
+/// One open campaign screen: `Campaign Selection` (HD only), `Grid
+/// Selection`, or `Cell Selection` over one of its tiers.
 pub(crate) enum Screen {
+    /// **HD only** - see the module doc. Never built for any other title.
+    Selection(CampaignSelection),
     Grid(oag_ui::campaign::GridSelection),
-    /// `which` is the [`CampaignStage::grids`] index the player drilled into -
-    /// what `Event::Back` on `Cell Selection` returns `Grid Selection` to.
+    /// `which` is the absolute [`CampaignStage::grids`] index the player
+    /// drilled into - what `Event::Back` on `Cell Selection` returns `Grid
+    /// Selection` to. Absolute, not relative to
+    /// [`CampaignStage::grid_range`], so `CampaignStage::grids().get(which)`
+    /// always works regardless of which campaign (if any) is open.
     Cell {
         model: oag_ui::campaign::CellSelection,
         which: usize,
@@ -38,6 +53,26 @@ pub(crate) struct CampaignStage {
     grids: Vec<race_campaign::Grid>,
     grid_layout: oag_ui::campaign::Layout,
     cell_layout: oag_ui::campaign::Layout,
+    /// **HD only**, both `Some` or both `None` together - see
+    /// `oag_game::campaign::Campaign`'s own field docs for why they can be
+    /// absent even on an HD source.
+    selection_layout: Option<oag_ui::campaign::Layout>,
+    grid_layout_fury: Option<oag_ui::campaign::Layout>,
+    /// Which slice of [`Self::grids`] the current [`Screen::Grid`]/
+    /// [`Screen::Cell`] pages - `0..grids.len()` (every grid) on every title
+    /// but HD once a campaign is chosen, when it narrows to that campaign's
+    /// own eight via [`Self::open_grid_selection`]. Meaningless while
+    /// [`Self::screen`] is [`Screen::Selection`], and reset back to the
+    /// whole list only by [`Self::new`] itself - `open_grid_selection` is
+    /// the only other writer, and it always narrows.
+    grid_range: std::ops::Range<usize>,
+    /// **HD only.** Which campaign [`Self::grid_range`] currently reflects,
+    /// for [`Self::grid_layout`]'s own choice between
+    /// [`Self::grid_layout_fury`] and [`Self::grid_layout`], and for
+    /// [`Self::open_selection`] to restore the right entry on the way back.
+    /// `None` before a campaign is ever chosen this session, and on every
+    /// non-HD title.
+    active_campaign: Option<Campaign>,
     /// `Cell Selection`'s own `Cell Help` overlay - see
     /// `oag_game::campaign::Campaign::cell_help`'s own doc. Drawn as a
     /// static (non-scrolling) panel while `CellSelection::help_open`, per
@@ -100,6 +135,8 @@ impl CampaignStage {
         grids: Vec<race_campaign::Grid>,
         grid_layout: oag_ui::campaign::Layout,
         cell_layout: oag_ui::campaign::Layout,
+        selection_layout: Option<oag_ui::campaign::Layout>,
+        grid_layout_fury: Option<oag_ui::campaign::Layout>,
         cell_help: Option<oag_ui::campaign::Layout>,
         nav_legend: Option<oag_ui::campaign::footer::NavigationLegend>,
         ticker: Option<oag_ui::campaign::footer::TickerLayout>,
@@ -109,23 +146,39 @@ impl CampaignStage {
         circuit_names: oag_ui::language::CircuitNames,
         records: oag_game::records::Store,
     ) -> Self {
-        let model = oag_ui::campaign::GridSelection::new(
-            grids
-                .iter()
-                .map(|grid| Self::grid_summary(grid, &title, &records))
-                .collect(),
-        );
+        let grid_range = 0..grids.len();
+        // `Campaign Selection` is HD's own screen ahead of `Grid
+        // Selection` - only opened on it when both halves of the pair
+        // actually read (see `Self::has_selection`'s own doc); every other
+        // title, and an HD source missing `DATA06`'s own copy, opens
+        // straight on `Grid Selection` over every grid, the pre-this-pass
+        // behaviour.
+        let screen = if selection_layout.is_some() && grid_layout_fury.is_some() {
+            Screen::Selection(CampaignSelection::new())
+        } else {
+            let model = oag_ui::campaign::GridSelection::new(
+                grids
+                    .iter()
+                    .map(|grid| Self::grid_summary(grid, &title, &records))
+                    .collect(),
+            );
+            Screen::Grid(model)
+        };
         Self {
             grids,
             grid_layout,
             cell_layout,
+            selection_layout,
+            grid_layout_fury,
+            grid_range,
+            active_campaign: None,
             cell_help,
             nav_legend,
             ticker,
             ticker_elapsed: 0.0,
             strings,
             sprites,
-            screen: Screen::Grid(model),
+            screen,
             title,
             circuit_names,
             records,
@@ -229,6 +282,20 @@ impl CampaignStage {
         self.title == oag_hd::TITLE.name
     }
 
+    /// Whether `Campaign Selection` was read at all - see
+    /// [`oag_game::campaign::Campaign::selection_layout`]'s own doc for the
+    /// one case (a source missing `DATA06`'s own copy of the screen) where
+    /// this is `false` on an otherwise-HD source.
+    #[must_use]
+    pub(crate) fn has_selection(&self) -> bool {
+        self.selection_layout.is_some() && self.grid_layout_fury.is_some()
+    }
+
+    #[must_use]
+    pub(crate) fn selection_layout(&self) -> Option<&oag_ui::campaign::Layout> {
+        self.selection_layout.as_ref()
+    }
+
     #[must_use]
     pub(crate) fn circuit_names(&self) -> &oag_ui::language::CircuitNames {
         &self.circuit_names
@@ -255,9 +322,40 @@ impl CampaignStage {
         &self.grids
     }
 
+    /// Each campaign's own earned-gold-medal count, for `Campaign
+    /// Selection`'s own `NumMedalsTextFury`/`NumMedalsTextHD` -
+    /// `(fury, hd)`. `0` on a fresh profile, the same "player-progress
+    /// source is optional" reading [`Self::grid_summary`] already gives
+    /// every other number on these screens.
+    #[must_use]
+    pub(crate) fn campaign_gold_medals(&self) -> (u32, u32) {
+        let sum = |range: std::ops::Range<usize>| {
+            self.grids
+                .get(range)
+                .unwrap_or(&[])
+                .iter()
+                .map(|grid| Self::grid_summary(grid, &self.title, &self.records).gold_medals)
+                .sum()
+        };
+        (
+            sum(oag_hd::campaign::FURY_GRID_RANGE),
+            sum(oag_hd::campaign::HD_GRID_RANGE),
+        )
+    }
+
+    /// [`Self::grid_layout`]'s own choice between the base layout and
+    /// [`Self::grid_layout_fury`] - the base one whenever
+    /// [`Self::active_campaign`] is not `Fury`, which covers both "no
+    /// campaign chosen yet" (every non-HD title, and `Screen::Selection`
+    /// itself never reads this) and "the base `Wipeout HD` campaign was
+    /// chosen".
     #[must_use]
     pub(crate) fn grid_layout(&self) -> &oag_ui::campaign::Layout {
-        &self.grid_layout
+        if self.active_campaign == Some(Campaign::Fury) {
+            self.grid_layout_fury.as_ref().unwrap_or(&self.grid_layout)
+        } else {
+            &self.grid_layout
+        }
     }
 
     #[must_use]
@@ -265,20 +363,75 @@ impl CampaignStage {
         &self.cell_layout
     }
 
+    /// **HD only.** Opens `campaign`'s own `Grid Selection`/`Grid Selection
+    /// Fury`, narrowing [`Self::grid_range`] to that campaign's own eight
+    /// grids - `Campaign Selection`'s own `Event::Confirmed`.
+    pub(crate) fn open_grid_selection(&mut self, campaign: Campaign) {
+        self.grid_range = campaign.grid_range();
+        self.active_campaign = Some(campaign);
+        let model = oag_ui::campaign::GridSelection::new(
+            self.grids
+                .get(self.grid_range.clone())
+                .unwrap_or(&[])
+                .iter()
+                .map(|grid| Self::grid_summary(grid, &self.title, &self.records))
+                .collect(),
+        );
+        self.screen = Screen::Grid(model);
+    }
+
+    /// **HD only.** Returns to `Campaign Selection` - `Grid Selection`'s own
+    /// `Event::Back`, when [`Self::has_selection`]. Restores whichever
+    /// campaign [`Self::active_campaign`] already names, rather than
+    /// resetting to the screen's own default `Fury` entry, so backing out of
+    /// a chosen `Wipeout HD` lands on `Campaign Selection` still showing
+    /// `Wipeout HD` selected.
+    pub(crate) fn open_selection(&mut self) {
+        let model = match self.active_campaign {
+            Some(campaign) => CampaignSelection::at(campaign),
+            None => CampaignSelection::new(),
+        };
+        self.screen = Screen::Selection(model);
+    }
+
     #[must_use]
     pub(crate) fn cell_help_layout(&self) -> Option<&oag_ui::campaign::Layout> {
         self.cell_help.as_ref()
     }
 
-    /// Opens `Cell Selection` on `which`'s own cells. `false` when `which`
-    /// is out of range or the grid carries no cells at all, and the caller
-    /// stays on `Grid Selection`.
+    /// Opens `Cell Selection` on `which`'s own cells - an **absolute**
+    /// index into [`Self::grids`], the same contract this method has always
+    /// had (`crate::main::session::endrace::return_to_campaign` reaches a
+    /// cell this way, off `Self::grids()`'s own flat list, without ever
+    /// touching `Campaign Selection` first). `false` when `which` is out of
+    /// range or the grid carries no cells at all, and the caller stays on
+    /// whatever screen it was on.
+    ///
+    /// **Self-healing for `Self::grid_range`/`Self::active_campaign`**: a
+    /// caller that reopens `Cell Selection` directly - `return_to_campaign`
+    /// is the one that exists - never confirms `Campaign Selection`/`Grid
+    /// Selection` first, so nothing else would narrow either field to the
+    /// campaign `which` actually belongs to. Narrowing it here, on every
+    /// call, keeps [`Self::cell_grid_summary`]'s own `Event NN/MM` counter
+    /// and [`Self::back_to_grid_selection`]'s own return page correct
+    /// regardless of which caller reached this cell - see
+    /// [`Self::open_cell_selection_at_grid_slot`] for the other one, whose
+    /// own index is already relative to a narrowed range.
     pub(crate) fn open_cell_selection(&mut self, which: usize) -> bool {
         let Some(grid) = self.grids.get(which) else {
             return false;
         };
         if grid.cells.is_empty() {
             return false;
+        }
+        if self.has_selection() {
+            let campaign = if oag_hd::campaign::FURY_GRID_RANGE.contains(&which) {
+                Campaign::Fury
+            } else {
+                Campaign::Hd
+            };
+            self.grid_range = campaign.grid_range();
+            self.active_campaign = Some(campaign);
         }
         let cells = grid.cells.clone();
         let title = &self.title;
@@ -333,10 +486,25 @@ impl CampaignStage {
         Some(i64::try_from(ticks * 100 / 60).unwrap_or(i64::MAX))
     }
 
-    /// **HD only** - the enclosing grid's own index, grid count and
-    /// [`oag_ui::campaign::GridSummary`], for `oag_ui::campaign::hd::hd_cell_draw_list`'s
-    /// own `EventNum`/`EPoints` counters. `None` off `Grid Selection` itself,
-    /// since there is no "enclosing grid" there.
+    /// [`Self::open_cell_selection`], for `slot` relative to
+    /// [`Self::grid_range`] - what `Grid Selection`'s own
+    /// `GridSelection::index()` returns, the call site
+    /// `crate::main::session::campaign::handle_campaign`'s own `Screen::Grid`
+    /// confirm arm has.
+    pub(crate) fn open_cell_selection_at_grid_slot(&mut self, slot: usize) -> bool {
+        match self.grid_range.start.checked_add(slot) {
+            Some(absolute) => self.open_cell_selection(absolute),
+            None => false,
+        }
+    }
+
+    /// **HD only** - the enclosing grid's own index and count, both relative
+    /// to [`Self::grid_range`] (so `Cell Selection`'s own `EventNum`/
+    /// `GridNum` reads `"Event 01/08"` on a Fury cell, not `"Event
+    /// 09/16"`), plus its [`oag_ui::campaign::GridSummary`], for
+    /// `oag_ui::campaign::hd::hd_cell_draw_list`'s own counters. `None` off
+    /// `Grid Selection`/`Campaign Selection`, since there is no "enclosing
+    /// grid" there.
     #[must_use]
     pub(crate) fn cell_grid_summary(
         &self,
@@ -346,8 +514,8 @@ impl CampaignStage {
         };
         let grid = self.grids.get(*which)?;
         Some((
-            *which,
-            self.grids.len(),
+            which.saturating_sub(self.grid_range.start),
+            self.grid_range.len(),
             Self::grid_summary(grid, &self.title, &self.records),
         ))
     }
@@ -356,11 +524,18 @@ impl CampaignStage {
     /// from.
     pub(crate) fn back_to_grid_selection(&mut self) {
         let index = match &self.screen {
-            Screen::Cell { which, .. } => *which,
+            Screen::Cell { which, .. } => which.saturating_sub(self.grid_range.start),
             Screen::Grid(model) => model.index(),
+            // `Cell Selection`'s own `DefaultPrevious` never names
+            // `Campaign Selection`, so this arm is unreached in practice -
+            // kept exhaustive rather than panicking on a screen shape this
+            // function was never meant to see.
+            Screen::Selection(_) => 0,
         };
         let mut model = oag_ui::campaign::GridSelection::new(
             self.grids
+                .get(self.grid_range.clone())
+                .unwrap_or(&[])
                 .iter()
                 .map(|grid| Self::grid_summary(grid, &self.title, &self.records))
                 .collect(),

@@ -518,6 +518,33 @@ impl MenuStage {
             // same two names - see `oag_ui::campaign::hd`'s own module doc.
             let layers = if campaign.is_hd() {
                 match &campaign.screen {
+                    // **HD only** - `Campaign Selection` ahead of `Grid
+                    // Selection`. See `crate::campaign_stage`'s own module
+                    // doc. `selection_layout` is `None` only when
+                    // `Screen::Selection` itself could never have been
+                    // built (`CampaignStage::new`'s own invariant), so the
+                    // fallback below is never actually reached - kept
+                    // rather than a panic in a render path regardless.
+                    crate::campaign_stage::Screen::Selection(model) => {
+                        match campaign.selection_layout() {
+                            Some(layout) => {
+                                let (fury_gold, hd_gold) = campaign.campaign_gold_medals();
+                                oag_ui::campaign::selection::draw_list(
+                                    model,
+                                    layout,
+                                    &self.skin,
+                                    &self.frame,
+                                    &campaign.strings,
+                                    fury_gold,
+                                    hd_gold,
+                                    if frozen_race { None } else { shown },
+                                    frozen_race,
+                                    &|src| campaign.sprites.get(src),
+                                )
+                            }
+                            None => oag_ui::menu::Layers::default(),
+                        }
+                    }
                     crate::campaign_stage::Screen::Grid(model) => {
                         oag_ui::campaign::hd::hd_grid_draw_list(
                             model,
@@ -572,6 +599,9 @@ impl MenuStage {
                 // is for the ticker's own (unchanged) `small`-role tips.
                 let default_measure = |text: &str| font::measure(&self.default_atlas, text);
                 match &campaign.screen {
+                    // Never built for a non-HD title - see
+                    // `crate::campaign_stage::Screen::Selection`'s own doc.
+                    crate::campaign_stage::Screen::Selection(_) => oag_ui::menu::Layers::default(),
                     crate::campaign_stage::Screen::Grid(model) => {
                         let ticker = campaign.ticker_draw(&campaign.grid_layout().faces, &measure);
                         ticker_draw = ticker.clone();

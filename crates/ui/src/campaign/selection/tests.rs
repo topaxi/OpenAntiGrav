@@ -1,0 +1,182 @@
+//! `CampaignSelection`'s own stepping/confirm/pointer behaviour, on the same
+//! synthetic-fixture terms `crates/ui/src/campaign/tests.rs` already gives
+//! `GridSelection`/`CellSelection`. See the module doc for the RPCS3
+//! measurements this model is built from.
+
+use super::*;
+use crate::pointer::Pointer;
+use oag_gameplay::input::{Button, Input};
+
+fn press(input: &mut Input, button: Button) {
+    input.begin_frame(0);
+    input.begin_frame(1 << button as u32);
+}
+
+fn hover(at: (f32, f32)) -> Pointer {
+    Pointer {
+        at: Some(at),
+        moved: true,
+        ..Pointer::default()
+    }
+}
+
+fn click(at: (f32, f32)) -> Pointer {
+    Pointer {
+        at: Some(at),
+        moved: true,
+        clicked: true,
+        ..Pointer::default()
+    }
+}
+
+#[test]
+fn the_default_selection_is_fury_matching_the_measured_default() {
+    let model = CampaignSelection::new();
+    assert_eq!(model.selected(), Campaign::Fury);
+}
+
+#[test]
+fn right_moves_from_fury_to_the_base_hd_campaign() {
+    let mut model = CampaignSelection::new();
+    let mut input = Input::default();
+    press(&mut input, Button::Right);
+    let events = model.update(&mut input);
+    assert_eq!(events, vec![Event::Moved]);
+    assert_eq!(model.selected(), Campaign::Hd);
+}
+
+#[test]
+fn left_at_fury_is_a_no_op_clamped_not_wrapping() {
+    let mut model = CampaignSelection::new();
+    let mut input = Input::default();
+    press(&mut input, Button::Left);
+    model.update(&mut input);
+    assert_eq!(
+        model.selected(),
+        Campaign::Fury,
+        "left at the list's own first entry must not wrap to Hd - measured on RPCS3"
+    );
+}
+
+#[test]
+fn right_at_hd_is_also_clamped() {
+    let mut model = CampaignSelection::new();
+    let mut input = Input::default();
+    press(&mut input, Button::Right);
+    model.update(&mut input);
+    assert_eq!(model.selected(), Campaign::Hd);
+    let mut input = Input::default();
+    press(&mut input, Button::Right);
+    model.update(&mut input);
+    assert_eq!(model.selected(), Campaign::Hd, "no third entry to move to");
+}
+
+#[test]
+fn cross_confirms_and_circle_backs_out() {
+    let mut model = CampaignSelection::new();
+    let mut input = Input::default();
+    press(&mut input, Button::Cross);
+    assert_eq!(model.update(&mut input), vec![Event::Confirmed]);
+
+    let mut input = Input::default();
+    press(&mut input, Button::Circle);
+    assert_eq!(model.update(&mut input), vec![Event::Back]);
+}
+
+#[test]
+fn each_campaign_grid_range_and_screen_name_matches_the_disc() {
+    assert_eq!(
+        Campaign::Fury.grid_range(),
+        oag_hd::campaign::FURY_GRID_RANGE
+    );
+    assert_eq!(Campaign::Fury.grid_screen_name(), "Grid Selection Fury");
+    assert_eq!(Campaign::Hd.grid_range(), oag_hd::campaign::HD_GRID_RANGE);
+    assert_eq!(Campaign::Hd.grid_screen_name(), "Grid Selection");
+}
+
+#[test]
+fn a_click_on_the_right_half_selects_hd_then_confirms_on_a_second_click() {
+    let mut model = CampaignSelection::new();
+    let right_half = (1500.0, 500.0);
+    assert_eq!(model.pointer(&hover(right_half)), vec![Event::Moved]);
+    assert_eq!(model.selected(), Campaign::Hd);
+    assert_eq!(model.pointer(&click(right_half)), vec![Event::Confirmed]);
+}
+
+#[test]
+fn a_click_on_the_already_selected_left_half_confirms_fury_directly() {
+    let mut model = CampaignSelection::new();
+    let left_half = (400.0, 500.0);
+    assert_eq!(model.pointer(&click(left_half)), vec![Event::Confirmed]);
+}
+
+#[test]
+fn pointer_back_fires_regardless_of_where_the_pointer_is() {
+    let mut model = CampaignSelection::new();
+    let back = Pointer {
+        back: true,
+        ..Pointer::default()
+    };
+    assert_eq!(model.pointer(&back), vec![Event::Back]);
+}
+
+#[test]
+fn each_campaign_carries_its_own_disc_entry_id() {
+    assert_eq!(Campaign::Fury.entry_id(), "FE_RC_FURY");
+    assert_eq!(Campaign::Hd.entry_id(), "FE_RC_HD");
+}
+
+/// Pins the bug the advisor caught in the first version of this screen: a
+/// left-aligned entry name at the gold-medal label's own `x` ran past the
+/// Bracket's own midpoint and was cut by [`selector_outline`]'s own border.
+/// Each name is now drawn with [`Align::Centre`] at its own half's centre, so
+/// the anchor itself sitting inside that half is what the render actually
+/// needs - the align makes the drawn extent symmetric about it.
+#[test]
+fn each_entry_names_own_anchor_sits_inside_its_own_half_of_the_bracket() {
+    let [x, _y, width, _height] = BRACKET_RECT;
+    let half = width / 2.0;
+    let (fury_x, _) = FURY_ENTRY_NAME_POSITION;
+    let (hd_x, _) = HD_ENTRY_NAME_POSITION;
+    assert!(
+        fury_x >= x && fury_x <= x + half,
+        "Fury's own entry name anchor must sit inside the Bracket's left half"
+    );
+    assert!(
+        hd_x >= x + half && hd_x <= x + width,
+        "Hd's own entry name anchor must sit inside the Bracket's right half"
+    );
+}
+
+#[test]
+fn the_selector_outline_sits_in_the_left_half_of_the_bracket_for_fury() {
+    let draws = selector_outline(Campaign::Fury);
+    let [x, y, width, height] = BRACKET_RECT;
+    let half = width / 2.0;
+    for draw in &draws {
+        let Draw::Fill { rect, .. } = draw else {
+            panic!("selector_outline must draw plain fills, not {draw:?}");
+        };
+        assert!(
+            rect[0] >= x && rect[0] + rect[2] <= x + half,
+            "Fury's own outline must stay within the Bracket's left half: {rect:?}"
+        );
+        assert!(rect[1] >= y && rect[1] + rect[3] <= y + height);
+    }
+}
+
+#[test]
+fn the_selector_outline_moves_to_the_right_half_for_hd() {
+    let draws = selector_outline(Campaign::Hd);
+    let [x, _y, width, _height] = BRACKET_RECT;
+    let half = width / 2.0;
+    for draw in &draws {
+        let Draw::Fill { rect, .. } = draw else {
+            panic!("selector_outline must draw plain fills, not {draw:?}");
+        };
+        assert!(
+            rect[0] >= x + half && rect[0] + rect[2] <= x + width,
+            "Hd's own outline must stay within the Bracket's right half: {rect:?}"
+        );
+    }
+}

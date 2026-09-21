@@ -131,6 +131,17 @@ pub(super) fn campaign_pointer(
     // functions, not Pulse's `oag_ui::campaign::pointer`.
     if campaign.is_hd() {
         return match &campaign.screen {
+            // `CampaignSelection::pointer` computes its own two click
+            // targets internally (from the screen's own measured `Bracket`
+            // rect - see `oag_ui::campaign::selection`'s own module doc), so
+            // no external target list is needed - only the same "re-borrow
+            // mutably once matched" step `Grid`/`Cell` also take below.
+            crate::campaign_stage::Screen::Selection(_) => {
+                let crate::campaign_stage::Screen::Selection(model) = &mut campaign.screen else {
+                    unreachable!("just matched Screen::Selection above")
+                };
+                model.pointer(pointer)
+            }
             crate::campaign_stage::Screen::Grid(_) => {
                 let targets =
                     oag_ui::campaign::hd::hd_grid_targets(campaign.grid_layout(), &|src| {
@@ -157,6 +168,9 @@ pub(super) fn campaign_pointer(
         };
     }
     let targets = match &campaign.screen {
+        // Never built for a non-HD title - see
+        // `crate::campaign_stage::Screen::Selection`'s own doc.
+        crate::campaign_stage::Screen::Selection(_) => Vec::new(),
         crate::campaign_stage::Screen::Grid(model) => {
             oag_ui::campaign::pointer::grid_targets(model, campaign.grid_layout(), &|src| {
                 campaign.sprites.get(src)
@@ -169,6 +183,7 @@ pub(super) fn campaign_pointer(
         }
     };
     match &mut campaign.screen {
+        crate::campaign_stage::Screen::Selection(_) => Vec::new(),
         crate::campaign_stage::Screen::Grid(model) => model.pointer(pointer, &targets),
         crate::campaign_stage::Screen::Cell { model, .. } => model.pointer(pointer, &targets),
     }

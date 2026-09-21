@@ -1128,6 +1128,311 @@ likely packs each colour as a horizontal frame `sprite_draw`'s `u`/`v`/
 `texture_width`/`texture_height` fields would need to select, not something
 `hex_rect`'s own fix touches.
 
+## Wipeout HD/Fury: `Campaign Selection`, 2026-09-21
+
+**Modelled and driven, off the disc's own XML.** The 2026-09-21 RPCS3 pass
+under "Open" below found the screen exists and defaults to `Fury`, but left
+its own widgets unread and its toggle to the base `Wipeout HD` campaign
+unmeasured. This pass read the screen directly, confirmed the toggle on
+RPCS3, and wired `oag_ui::campaign::selection` + `crate::campaign_stage`
+ahead of `Grid Selection` for HD only - Pulse's flow is untouched, and its
+own ground-truth tests still pin a straight `RACE CAMPAIGN` -> `Grid
+Selection` boot.
+
+### Where the screen actually lives: `DATA06`, not the archive this build already reads from
+
+`oag_hd::campaign::SCREEN_ENTRY`'s own doc already recorded two disagreeing
+copies of `CellMode_Definition.xml` - `DATA02` (42,548 bytes, the one
+`oag_assets::Archives::read_name`'s precedence reaches) and `DATA06` (59,361
+bytes, "presumably a later build", undiffed until now. Reading both off
+`hdfury-ps3-eu-dec.iso` directly (`archives.read_every_name`, the same
+"choose the copy that actually carries what's needed" idiom
+`oag_game::boot::load_circuit_names` already uses for the same kind of
+disagreement on a different file) settles it:
+
+- **`DATA02`'s copy has no `Campaign Selection` screen at all**, and its own
+  `Grid Selection`'s `flyerlist` carries eight `<Entry IDString="BLANK">`
+  placeholders rather than real grid names - consistent with being the
+  pre-Fury base game's own copy.
+- **`DATA06`'s copy has all four screens**: `Campaign Selection`, `Grid
+  Selection` (real `<Entry String="grid0">`..`"grid7">`), `Grid Selection
+  Fury` (`"grid8">`..`"grid15">`), `Cell Selection` - confirmed structurally
+  (`Screens::collect` reaches all four by name off this file, including
+  through the two-top-level-`<Screen>` shape `Campaign Selection` and the
+  anonymous wrapper around the other three sit in) and empirically: RPCS3's
+  own `TTY.log` prints `Switching Screen "Campaign Selection" to "Grid
+  Selection Fury"` on this exact disc, a screen name that only exists in
+  `DATA06`'s copy. **The running PS3 reads `DATA06`'s copy of this file**,
+  which is measured, not chosen.
+- **`DATA06`'s own `Grid Selection` (base) is otherwise widget-identical to
+  `DATA02`'s** - same widget names, same positions, same sizes, diffed
+  line-by-line. The only differences are two `FEGlobals->` colour
+  indirections in place of `DATA02`'s literal/differently-named ones
+  (`TitleColor` vs `HD_Grey`, which `crates/ui/src/menu/skin.rs`'s own doc
+  already records as agreeing on this title, both `0xFF646464`; a literal
+  `0xffdedede` vs `FEGlobals->HD_LightGrey`) and the real `flyerlist` entries
+  noted above, which this build never draws (`y="-500"`, authored off
+  screen). So this pass reads `Campaign Selection` and `Grid Selection Fury`
+  from `DATA06` and leaves the already-verified `Grid Selection`/`Cell
+  Selection` on `DATA02`, unchanged - **chosen, not measured**, on the safe
+  side of a real, larger divergence: `DATA06`'s own `Cell Selection` also
+  differs from `DATA02`'s (an extra `bBg_x_y` background layer under the hex
+  grid; `Target0/1/2 Image` + `Target0/1/2 Title` replaced by one shared
+  `Target Title` header and per-rung `Target0/1/2 Medal` icons sourcing
+  `Hexmedal_HD.gtf`, dropping the disc's own `IG_HUD_GOLD`/`SILVER`/`BRONZE`
+  per-target labels `DATA02`'s copy still carries in favour of a colour-coded
+  medal glyph; plus new `GridTopBar`/`chooserace Arrow`/`NextPoints
+  Arrow`/`Track Reverse` widgets) - none of that is adopted this pass, and
+  `hd_cell_draw_list` still matches `DATA02`'s own names. Left open below.
+
+### The screen itself
+
+`<Screen name="Campaign Selection" type="CampaignSelection">`, read via
+[`oag_ui::campaign::selection`](../../crates/ui/src/campaign/selection.rs):
+
+| Widget | Reads |
+| --- | --- |
+| `ScreenTitle` | idstring `FE_RC_SELECT` - `"CAMPAIGN SELECT"`, confirmed on an RPCS3 frame |
+| a `MiniText` at `(160, 140)` | idstring `FE_CAMPSEL_MODES` - `"CAMPAIGN MODES"`, confirmed on the same frame |
+| `Bracket` | `x="160" y="170" Width="1595" Height="780"`, the frame both flyers sit inside |
+| `campaignList` (`List`) | idstring `FE_CAMPAIGNLIST`, two `<Entry>`s: `String="FE_RC_FURY"` then `String="FE_RC_HD"` - **Fury first**, matching the measured default. The list's own `<Values>` sits at `y="-500"`, off screen (the file's own comment on that line reads `<!-- -500 for y so it's off screen!! -->`) - that position drives the widget's internal selection state only, never meant to be drawn there. **The two entries' own names are drawn anyway**, at a chosen position - see "Drawing the two entries' own names" below. |
+| `<Redirect>` | `campaignList == FE_RC_FURY -> "Grid Selection Fury"`; `== FE_RC_HD -> "Grid Selection"`; `<Default goto="To Be Done">` - a third branch that is evidence about the build (an unfinished fallback) even though nothing observed here can fire it |
+| `FuryCampaignFlyerModel` / `HDCampaignFlyerModel` (`Flyer`) | `OriginX="640"`/`"1280"` - Fury left, `Wipeout HD` right, both `Src="Data\FE\Flyers\00_flyer.vex"`. **Not the per-campaign models the disc otherwise ships** (`/data/fe/flyers/fury_campaign/flyer.vex`, `/data/fe/flyers/hd_campaign/flyer.vex`, both present in `hd-files.txt`) - this screen's own XML points both widgets at the same generic flyer regardless, so whatever tells the two apart on the real screen is not in this file. Not drawn either way - see "not drawn" below. |
+| `MedalImageFury`/`MedalImageHD` | `Hexmedal_HD.mip`, plus `FuryGoldMedalsMiniText`/`HDGoldMedalsMiniText` (idstring `RC_GM`, `"GOLD MEDALS"` - the same idstring `Grid Selection`'s own `Medals Title` already resolves) and `NumMedalsTextFury`/`NumMedalsTextHD` (idstring `RB_EVENT_TYPE` - a reused/generic idstring this build does not trust as content, the same "idstring is a placeholder slot, not the text" reading `Line{n}` already gets elsewhere in this module). An RPCS3 frame reads `"0 / 87"` on the Fury side on a fresh profile; this build's own parse of `DATA00`'s eight Fury grids totals 80 cells (`campaign_grids_ground_truth.rs`), a 7-cell gap this pass does not explain. **Not drawn as a fraction** - `selection::draw_list` shows only the earned count (`0` on a fresh profile, the same "player-progress source is optional" reading the rest of this module gives), not a denominator this build cannot derive to match the disc's own `87`. |
+
+**The subtitle and both `GOLD MEDALS` labels are hand-placed, not read
+through `oag_ui::screen::Screens::collect`.** All three are `<MiniText>`,
+and adding a `MiniText` arm to that parser was tried first - it made this
+build's own screen reachable, but a scratch survey
+(`rg -c "<MiniText" data/scratch/lane-hd-sel/*.xml`) found `<MiniText>` on
+`MainMenu_Definition.xml`, `RaceBox_Definition.xml`,
+`Additional_Definition.xml` and `RecordGrid_Definition.xml` too - collecting
+it generically would have started drawing widgets on every title's every
+screen this pass never measured, not only this one. Reverted; the three
+positions/colours in the table above are read directly off the file and
+kept as plain constants in `oag_ui::campaign::selection`
+(`SUBTITLE_POSITION`/`FURY_GOLD_MEDALS_LABEL_POSITION`/`HD_GOLD_MEDALS_LABEL_POSITION`),
+the same "grounded in a real, measured number, not through the generic
+parser" precedent `BRACKET_RECT` already sets for the `Bracket` above.
+
+Confidence 90: every widget above is read directly off `DATA06`'s own XML,
+cross-checked against an RPCS3 frame for the two visible strings
+(`ScreenTitle`, the subtitle) and the medal fraction's numerator shape.
+
+### Drawing the two entries' own names, and the selector, 2026-09-21
+
+The first pass at this screen (above) left `campaignList`'s own two entries
+undrawn, on the same "drives selection, never drawn" reasoning `Grid
+Selection`'s own `flyerlist` genuinely earns - but that reasoning does not
+hold here: `flyerlist`'s sixteen names are redundant with the grid tiles
+already drawn from `Definition.xml` directly, where `campaignList`'s two
+entries are the *only* text on this build's screen that says which half is
+Fury and which is `Wipeout HD` at all. A player looking at the first
+headless capture saw two raw ids, a bare `0`, and one `GOLD MEDALS 0` -
+nothing naming either campaign and nothing marking which was selected.
+
+**The names**: `campaignList`'s own `<Entry String="FE_RC_FURY">`/`<Entry
+String="FE_RC_HD">` resolve, off `DATA06`'s own
+`Data\Plugins\Languages\English\entries.xml` (confirmed directly against
+`hdfury-ps3-eu-dec.iso`), to `"FURY CAMPAIGN"` and `"HD CAMPAIGN"` -
+[`oag_ui::campaign::selection::Campaign::entry_id`]. These are disc data, not
+invented: the disc's own string table names each entry, this build had just
+never drawn it. Drawn at `FURY_ENTRY_NAME_POSITION`/`HD_ENTRY_NAME_POSITION`
+(`(558.75, 610)`/`(1356.25, 610)`), `Align::Centre` - **chosen, not
+measured**: the list's own authored position is off screen by design (see
+the widget table above), so there is no authored on-screen position to read.
+Each `x` is the centre of its own half of `Bracket`'s own rect (the same
+split `CampaignSelection::pointer`'s own click targets and
+`selector_outline` both use), and `y` sits above the gold-medal labels,
+inside the Bracket, in the space the (undrawn) 3D flyer card would otherwise
+fill. **The first version of this fix left-aligned each name at the
+gold-medal label's own `x` (755/1395)** - at that anchor `"FURY CAMPAIGN"`
+runs past the Bracket's own midpoint and is cut by `selector_outline`'s own
+border, caught by looking at the resulting capture rather than measured off
+anything; centring on each half fixes it structurally, not by nudging a
+number.
+
+**The selector**: this screen authors no `<Image name="Selector">` at all,
+unlike `Grid Selection`/`Cell Selection`'s own (`oag_ui::campaign::draw`'s
+`centred_selector_draw`) - the real game's own equivalent is presumably the
+selected 3D flyer's own scale/emphasis (an RPCS3 frame shows the selected
+card larger and centred; see the "not drawn" note above for why this build
+draws neither flyer at all). With no selector widget and no flyer to make the
+choice visible, [`oag_ui::campaign::selection::draw_list`] draws a plain
+four-sided white outline (`selector_outline`, `SELECTOR_BORDER`/`SELECTOR_COLOR`)
+around the selected half of `Bracket`'s own rect, split at its own midpoint -
+the same split `CampaignSelection::pointer`'s own click targets already use.
+**Chosen, not measured**: a stand-in for the disc's own animation, not a
+reproduction of it, so the choice is visible and the pointer has something to
+hover.
+
+**The `--menu-page` capture path resolves the same four ids the live session
+does.** Before this pass, only `crate::main::session::campaign::open_campaign`
+(the live path) overlaid `DATA06`'s own copy of `FE_RC_SELECT`/`FE_CAMPSEL_MODES`
+onto `strings` - `crate::capture::campaign_page` (`--menu-page
+campaign-select`) had no such overlay at all, so a capture showed all four
+ids (title, subtitle, both entry names) as raw text where a live session
+showed the title and subtitle resolved and the two entry names not yet drawn
+at all. Both gaps close together: `oag_game::campaign::hd_selection_string_overlay`
+is now the one place either id set is resolved (all four ids, not two), and
+both `open_campaign` and `campaign_page` call it - confirmed directly against
+`hdfury-ps3-eu-dec.iso`, screenshot below.
+
+Confidence 85 for the two entry names (a direct disc-string read, not yet
+cross-checked against an RPCS3 frame showing this build's own screen next to
+it) and confidence 50 - **chosen, not measured** - for the selector outline's
+own look, which stands in for an animation this build does not attempt to
+reproduce.
+
+### The toggle: measured on RPCS3, `right` reaches the base campaign
+
+Three RPCS3 boots this pass, Xvfb `:77`, own `--config` copy under
+`data/scratch/lane-hd-sel/` (not committed - game content), `just
+rpcs3-preflight` clean beforehand:
+
+1. **Boot 1** (`data/scratch/lane-hd-sel/drive-campaign-selection.py`): at
+   `Campaign Selection` with no prior d-pad input (matching the earlier
+   pass's own default-Fury finding), `left` then confirm still lands on
+   `Grid Selection Fury` - consistent with `left` being a no-op at the
+   list's own first entry. `right` then confirm lands on `Grid Selection`
+   (the base campaign) - the first direct measurement of a path to it.
+   `up`/`l1`/`r1` then confirm also land on `Grid Selection`, but this run
+   never returned the list to `Fury` between attempts, so those three are
+   **confounded by whatever `right` already left selected** and are not
+   independent evidence of their own - see boot 3.
+2. **Boot 2** (fresh boot, same script's shape): `right` then confirm lands
+   on `Grid Selection` again - reproduces boot 1's own finding on a
+   completely separate boot, the same two-boots-agree bar the original
+   Fury-default finding was held to.
+3. **Boot 3** (`data/scratch/lane-hd-sel/drive-persistence-check.py`),
+   built to settle the boot-1 confound directly: `right` -> confirm ->
+   `Grid Selection` -> `circle` (back, two presses needed - the first was
+   dropped, matching `RACE_WALK`'s own doc comment on ~9fps dropped presses
+   here) -> back at `Campaign Selection` -> confirm with **no further d-pad
+   input at all** -> `Grid Selection` again, not `Fury`. The selection
+   persists across a back-and-return within one boot; it is not reset on
+   re-entry. This is what makes boot 1's `up`/`l1`/`r1` results
+   explainable without those three being toggles of their own, and it is
+   also what makes `right` itself trustworthy as *the* toggle rather than a
+   coincidence of a screen that resets to a random entry.
+
+**Confidence 85 that `right` is the toggle to the base `Wipeout HD`
+campaign** (three boots, two independent reproductions of `right` and one
+dedicated persistence check, all consistent, all reading the state-machine's
+own `TTY.log` screen name rather than an eyeballed frame). **Confidence ~50,
+not independently isolated, that `left`/`up`/`down`/`l1`/`r1` are true
+no-ops rather than a second working toggle that happens to leave a two-entry
+list looking unchanged** - `down`'s own no-op reading carries over from the
+earlier pass, `left`'s is boot 1's own clean (unconfounded) result, but
+`up`/`l1`/`r1` were only ever tested against an already-persisted selection
+and would need their own boot 1-style clean run from a reset `Fury` default
+to rule out being a second, redundant toggle direction.
+
+### What is modelled, and what is not
+
+[`oag_ui::campaign::selection::CampaignSelection`](../../crates/ui/src/campaign/selection.rs)
+is a flat two-entry list - `Fury` then `Hd`, matching `campaignList`'s own
+document order and the measured default - stepped by `left`/`right` (pad) or
+a click on one of two invented halves of the screen's own `Bracket` rect
+(left half Fury, right half `Wipeout HD`, the same "grounded in a real rect,
+not a free-standing invention" idiom `oag_ui::campaign::hd::hd_grid_targets`
+already uses for `Grid Selection`'s own confirm region) - two-tap, hover
+selects and a second click on the already-selected half confirms, the same
+idiom every other campaign screen in this crate uses. `Up`/`down` are left
+unbound pending the confidence-~50 question above rather than guessed at.
+
+Confirming opens `Grid Selection` (`Wipeout HD`, `grid0`..`grid7`) or `Grid
+Selection Fury` (`grid8`..`grid15`) - `crate::campaign_stage::CampaignStage`
+slices the sixteen grids [`read_grids`](../../crates/game/src/campaign.rs)
+already reads whole at `grid0`/`grid8`, the same split
+`crates/hd/src/campaign.rs`'s own module doc already documents by grid-name
+convention, not a new measurement. `Back` on either `Grid Selection` screen
+now returns to `Campaign Selection` rather than closing the campaign outright
+- the previous, pre-this-pass behaviour, kept for Pulse and Omega (neither
+ever builds a `Selection` screen, so their own `Back` still closes the
+campaign the way it always has - `crates/ui/src/campaign/tests.rs` pins both
+titles' own flows).
+
+**Not drawn**: both `Flyer` widgets (the same "flat 2D list, not a mesh
+scene" limitation `Grid Selection`'s own `FlyerModel` already carries) and
+the medal fraction's own denominator (see the widget table above). The
+selector is drawn, but as a chosen stand-in rather than the disc's own
+animation - see "Drawing the two entries' own names, and the selector" above.
+
+### Verification
+
+- Headless `--menu-page campaign-select` against `hdfury-ps3-eu-dec.iso`,
+  `--size 1920x1080`: draws the screen's own title, subtitle, both entries'
+  own names (`"FURY CAMPAIGN"`/`"HD CAMPAIGN"`), a white selector outline
+  around the default-selected `Fury` half, and both campaigns' `GOLD MEDALS`
+  reading - `Fury`'s own label is genuinely invisible (black text on black
+  background, the disc's own authored colour, presumably legible against the
+  undrawn flyer card in the real game; `Wipeout HD`'s own label is
+  `FEGlobals->HD_Grey` and visible), each entry name centred in its own half
+  of the Bracket rather than cut by the selector border. Screenshot:
+  `data/scratch/lane-hd-sel/shots/campaign-select-v5.png`, not committed
+  (`v4` was the left-aligned version the advisor caught, kept alongside it
+  for the before/after).
+  Command:
+  ```sh
+  cargo run -p oag-game -- data/images/hdfury-ps3-eu-dec.iso \
+    --menu-page campaign-select --size 1920x1080 \
+    --screenshot /tmp/campaign-select.png
+  ```
+  **The disc path is a positional `[SOURCE]`, not `--race <path>`** - `--race`
+  is a bare flag ("skip the front end and go straight to a ship on a track")
+  and combining it with `--menu-page` here launches the default race instead
+  of drawing the still, the same trap `--screenshot --press cross --until`
+  fell into below for a different reason.
+- **A live, interactive walk (`Main Menu` -> `RACE CAMPAIGN` -> click a
+  campaign -> `Grid Selection`/`Grid Selection Fury` -> `Cell Selection`) was
+  attempted and not completed this pass** - left open, see below. Two
+  approaches were tried, both under Xvfb `:93`:
+  - `xdotool` mouse/keyboard against a windowed `cargo run`, with an
+    explicit `XSetInputFocus` (python-xlib) beyond `xdotool
+    windowfocus`/`windowactivate` - the same fix `docs/architecture/menus.md`'s
+    own 2026-08-19 finding needed. `XGetInputFocus` confirmed the right
+    window held focus, but a `std::fs::write` sentinel placed at the top of
+    `Session::open_campaign` (the live handler `RACE CAMPAIGN`'s own action
+    fires) never appeared on disk across several tries, meaning the
+    synthetic key never actually reached the app's own input handling
+    despite X reporting the correct window focused - a deeper winit/Xvfb
+    input-delivery gap than the focus fix alone, not chased further.
+  - `--screenshot --press cross --until "Team Selection"` (headless,
+    no X11 at all): this does **not** test menu navigation the way it looks
+    like it would - a `--screenshot` capture with no `--menu-page` reaches
+    the boot chain's own `"Launch Game"` state in 3 ticks and launches
+    **this build's own hard-coded default race** from there
+    (`talons_junction`, logged as `"Wipeout HD's own default"`), the same
+    "spends what is left of the ticks on the race the front end hands off
+    to" behaviour `--ticks`'s own `--help` text names - it never touches
+    `Main Menu`'s own row list at all, so `--press`/`--until` here proved
+    nothing about `RACE CAMPAIGN` specifically. The same `open_campaign`
+    sentinel confirmed this: absent here too.
+  - Both attempts' own sentinel/log evidence is in
+    `data/scratch/lane-hd-sel/live-walk/` and `data/scratch/lane-hd-sel/cascade-full.log`,
+    not committed. **Left for whoever next has a working interactive Xvfb
+    setup** - the headless `--menu-page` capture above and the RPCS3
+    measurements are what this pass leans on instead, and neither exercises
+    `crate::main::session::campaign::open_campaign`/`CampaignStage`'s own
+    live wiring end to end. Everything downstream of `open_campaign`
+    (`handle_campaign`'s new `Screen::Selection` arms,
+    `CampaignStage::open_grid_selection`/`open_selection`) is proven only by
+    `crates/ui/src/campaign/selection/tests.rs`'s own model-level tests and
+    by reading the code, not by a running session.
+- `crates/hd/tests/campaign_selection_ground_truth.rs` (new, `#[ignore]`d,
+  needs `data/images/`, checked as raw text rather than through
+  `oag_ui::screen::Screens` to avoid a dev-dependency cycle - that crate
+  already depends on `oag-hd`): pins `DATA02`'s own copy has neither new
+  screen, `DATA06`'s own copy carries all four in document order,
+  `campaignList`'s two entries read `FE_RC_FURY` before `FE_RC_HD`, and
+  `Grid Selection`/`Grid Selection Fury`'s own `flyerlist` grid names match
+  the 0/8 and 8/16 split `oag_hd::campaign::HD_GRID_RANGE`/`FURY_GRID_RANGE`
+  and `crate::campaign_stage` assume.
+- `crates/ui/src/campaign/selection/tests.rs` (new): the model's own
+  stepping/confirm/pointer behaviour against a synthetic fixture, the same
+  shape `crates/ui/src/campaign/tests.rs` already gives `GridSelection`.
+
 ## The tip ticker, the Confirm/Back legend, `Cell Help` and a podium, 2026-09-21
 
 **All four close this pass, live-driven under Xvfb `:91` with `xdotool` on
@@ -1284,13 +1589,20 @@ role is what chose which atlas `set_face_atlas` loaded... nothing here
 re-checks it against `role`"), and the one alternate atlas that ever loads
 is the `Title` role, not a body face. Two consequences, both left open:
 
-- **Every label on this screen still renders upper-case** (`SPEED CLASS`,
-  `MOA THERMA WHITE`, `CONFIRM`) where the reference shows mixed case
-  (`Speed class`, `Talon's Junction White`, `Confirm`) - pre-existing,
-  present before this lane and on every `Line1`..`8`/`Title`/`Track Line`
-  label already, not only the two widgets this pass added. Fixing it needs
-  a second, correctly-sized atlas loaded for the menu stage, not a role
-  string chosen differently in `oag_ui::campaign`.
+- ~~Every label on this screen still renders upper-case~~ **Fixed
+  2026-09-21**, once the atlas this note itself said was missing landed
+  (`crates/game/src/boot/fonts.rs`'s `face_atlas_slot`, a separate lane's
+  own work): `oag_ui::campaign::draw::text_draw` now picks
+  `Draw::FacedText` over the plain `Draw::Text` this note describes
+  whenever `text.font` names `"default"` - `super::footer::face_role`,
+  the identical check `NavigationLegend::draw` already made for
+  `Confirm`/`Back`, now shared rather than duplicated. `Speed
+  class`/`Line1`..`8`/`Title`/`Track Line` all author `font="default"`, so
+  every one of them picks the real face up automatically, no per-label
+  change needed. Confirmed live,
+  `data/scratch/lane-hd-sel/shots/pulse-cellselect-after-facerouting.png`
+  (`pulse-psp-eu.chd`, French: `Catégorie`/`Tours`/`Armes`/`Points`/
+  `Meilleur` all read mixed-case where they read upper-case before).
 - **`AI difficulty (Medium)` reads `CHANGE DIFFICULTY`** on this build - a
   pre-existing label (`DifficultyButton`'s own authored `string="Change
   Difficulty"` in `CellMode_Definition.xml`, drawn through
@@ -1392,23 +1704,23 @@ rpcs3-preflight` OK beforehand):
    on the exact same `grid8` cell again - `down` is not the toggle between
    the two campaigns, or there is no toggle reachable this way at all.
 
-**This build's own `oag_hd`/`oag_ui::campaign` has no `Campaign Selection`
-state whatsoever** - it goes straight to whichever grid
-`oag_assets::Archives::read_name` precedence resolves (`DATA02`'s `grid0`),
-so there is today no path in this build to `Fury`'s own campaign, and the
-original "which archive copy does the real screen show" question is
-**still not settled for `grid0` specifically** - both boots this pass spent
-landed on `Fury` instead. Screenshots:
+~~This build's own `oag_hd`/`oag_ui::campaign` has no `Campaign Selection`
+state whatsoever~~ - **Modelled and driven, 2026-09-21**, see
+"Wipeout HD/Fury: `Campaign Selection`, 2026-09-21" above:
+`oag_ui::campaign::selection` reads the screen off `DATA06`'s own copy of
+`CellMode_Definition.xml` (the precedence-resolved `DATA02` copy this
+build otherwise reads has no such screen at all), `right` on the pad is
+measured, three separate RPCS3 boots, as the toggle to the base `Wipeout
+HD` campaign, and `crate::campaign_stage::CampaignStage` now opens on it
+for HD, slicing the sixteen grids into `grid0`..`grid7`/`grid8`..`grid15`
+per the confirmed entry. Screenshots:
 `data/scratch/lane-hd/rpcs3-grid0-3-2/01-down.png` (`grid8`, `NOVICE`
 rung), `02-triangle.png` (`SKILLED` rung, same cell) - this session's own
-worktree, not committed (game content). **Left open, higher-value than the
-original question**: whoever picks this up next should find whether
-`Campaign Selection`'s other entry (the base `Wipeout HD` campaign) is
-reachable at all in this Fury-branded disc, and if so, wire this build's
-own front end to model the screen rather than skipping straight to a grid.
-Confidence 85 on "the screen exists and defaults to Fury" (two independent
-boots, consistent); confidence 0 (unmeasured) on whether the base campaign
-is reachable by any input from there.
+worktree, not committed (game content). Confidence 85 on "the screen exists
+and defaults to Fury" (two independent boots, consistent); confidence 85 on
+`right` reaching the base campaign and confidence ~50 on `up`/`l1`/`r1`
+being no-ops rather than a redundant second toggle - see the new section's
+own "The toggle" subsection for the three-boot breakdown.
 
 **A second, unplanned finding directly relevant to priority 4's own
 question** (which target triple `Elimination`/`NitroBattle` reads):

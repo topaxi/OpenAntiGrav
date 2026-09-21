@@ -90,7 +90,13 @@ fn face_scale(faces: &FaceScales, font: &str) -> f32 {
 /// role this crate picked rather than one this build has verified drawing
 /// through - see `docs/ui/menus-original.md`'s "Two faces, not one swapped
 /// for the other" section.
-fn face_role(font: &str) -> Option<&'static str> {
+///
+/// `pub(super)`, not private: [`super::draw::text_draw`] routes `Grid
+/// Selection`/`Cell Selection`'s own body text through the identical check,
+/// once lane 7's own `Default`-role atlas made that mean something (see
+/// `docs/ui/campaign-screens.md`'s "Every label on this screen still
+/// renders upper-case" note, closed by that atlas landing).
+pub(super) fn face_role(font: &str) -> Option<&'static str> {
     font.eq_ignore_ascii_case("default")
         .then_some(crate::language::roles::DEFAULT)
 }

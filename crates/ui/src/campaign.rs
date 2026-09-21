@@ -89,6 +89,7 @@ pub mod draw;
 pub mod footer;
 pub mod hd;
 pub mod pointer;
+pub mod selection;
 
 pub use draw::{cell_draw_list, cell_help_draw, grid_draw_list};
 
