@@ -23,7 +23,7 @@ nothing read.
 | What is in the logo reel? | The Studio Liverpool ident, 8.86 s of it | 94 |
 | Is a pure-Rust decoder available? | One exists and its **licence excludes it** | - |
 | Does the game draw one? | **Yes.** `Studio Logo` plays the reel on HD's own boot | - |
-| Is the audio played? | **No.** Measured, not decoded - see [below](#the-audio-is-inside-the-video-file) |
+| Is the audio played? | **Yes**, since 2026-09-21 - track 0 of however many, through a second `ffmpeg` route - see [below](#the-audio-is-inside-the-video-file) |
 | Is any of this verified under an emulator? | **No.** Nothing on this page is | - |
 
 ## Reading it yourself
@@ -197,31 +197,49 @@ pixels. The ground-truth test caps itself at 4 frames for that reason.
 
 ## The audio is inside the video file
 
-Six of the 37 files carry audio, and **none of it is played**. The tracks are
-measured - count, rate, channels, codec, all asserted on the disc - and the
-decode is not built.
+**Played, since 2026-09-21.** Six of the 37 files carry audio - count, rate,
+channels, codec, all asserted on the disc - and `crate::movie::track`'s third
+`MovieAudioKind`, `Container`, is what plays it: rather than holding codec
+blocks the way ATRAC3+ does, it holds a path to the same `{key}.bik` file
+`bink::transcode` already writes for `ffmpeg` to read the picture out of, and
+`crate::movie::container_audio::decode` shells out a second time with
+`-map 0:a:<n>` to pull the audio stream out of the same container instead of a
+bespoke wrapper. The boot report on `just play hd` now reads:
 
-The reason is structural rather than an omission. In a `.PMF` the ATRAC3+ sits
-*beside* the video and `oag_game::movie::MovieAudio` is shaped for that: it
-holds codec blocks and an `at3::Format` and decodes through `crate::at3`. Bink's
-audio is inside the same container, so playing it needs a second route through
-`ffmpeg` and a widened `Movie::audio`, which is a change to a shared type and to
-`boot::load_movie_sound`'s report.
+```text
+audio: 2 channel(s) at 48000 Hz, binkaudio_dct, track 0 of 4 (chosen, not measured), decoded to 8.88s
+audio: Studio Logo's own track, 8.88 s, clocking the picture
+```
 
-**The reason it was deferred has since changed, and this paragraph is the
-correction rather than the original.** It was left out on the grounds that
-nothing would consume it - HD's front end was not wired, so no HD movie played
-and there was no playhead for a track to pace against. That stopped being true
-in the same session:
-[ADR-0025](../architecture/adr/0025-a-boot-chain-carries-its-provenance.md)
-wired the front end, and `Studio Logo` now plays the reel on screen. So the
-blocker today is only the shape of `Movie::audio`, and the boot reports
-`audio: Studio Logo plays silently` where it would otherwise name a track.
+where it used to read `audio: Studio Logo plays silently`.
+
+**Track 0, and said so.** The two logo reels are the only files with more
+than one track (four each), and this project has found no HD language/region
+rule that picks among them - nothing has measured which of the four a PS3
+actually plays. `MovieAudio::codec_clause` says `(chosen, not measured)`
+whenever a file has more than one track, so that fact travels with the report
+rather than reading as a measurement. [`ContainerTrack::seconds`] is also an
+approximation for Bink specifically, and says so in its own doc: the header
+carries no audio sample count at all, only a per-track sample rate and the
+largest single decoded frame's byte size, so the *video* track's own measured
+duration stands in until the audio is actually decoded - `MovieAudio::decode`
+then reports the real one.
+
+The reason it took this shape is structural rather than an omission. In a
+`.PMF` the ATRAC3+ sits *beside* the video and `oag_game::movie::MovieAudio`
+was originally shaped for only that: undecoded codec blocks plus an
+`at3::Format`, decoded through `crate::at3`. Bink's audio sits *inside* the
+same container the picture does, so playing it needed a third shape for
+`MovieAudioKind` and a second `ffmpeg` route (`crate::movie::container_audio`)
+rather than a new codec case down `crate::at3`'s existing one.
 
 The [ADR-0019](../architecture/adr/0019-atrac3plus-out-of-process.md)
-consequence applies whenever it is built - a movie clocked by its own sound is a
-playhead two consumers pace against rather than one - and it now has a real
-consumer to be got wrong for.
+consequence applies now that this is wired - a movie clocked by its own sound
+is a playhead two consumers pace against rather than one - and
+`oag_ui::frontend::Player`'s pacing against the reel's audio clock is exactly
+that consumer.
+
+[`ContainerTrack::seconds`]: https://github.com/topaxi/OpenAntiGrav/blob/main/crates/game/src/movie/container_audio.rs
 
 ## Playing one
 

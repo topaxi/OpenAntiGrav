@@ -14,8 +14,9 @@ the original.
 | `pure.svg` | Wipeout Pure's | the measured selected ink `#16AED1` and `MenuHighLightArrowColor` `#ED4796`, the pink of its own `ArrowSelect` |
 | `hd.svg` | Wipeout HD / Fury's | `HD_Blue` `#8AC0CA`, `HD_Grey` `#666666`, `HD_White`, and the cut-and-landing corner of `Block_Render`'s tab |
 | `2048.svg` | Wipeout 2048's placeholder screen | its flat orange-on-white front end, `#F26522` and `#111111` |
+| `omega.svg` | Wipeout: Omega Collection's front end | `DesignColor` `#5FDBF6` and `MenuHighLightArrowColor` `#ED4796`, both read off Omega's own `skin.xml` |
 
-All five share one geometry: a 24x32 box with the hotspot at the top-left
+All six share one geometry: a 24x32 box with the hotspot at the top-left
 corner `(0, 0)`, which is where `oag_game::cursor` anchors the sprite. They
 are rasterised at boot through the same `resvg` path the window icon takes,
 and drawn as a sprite by the frame loop rather than handed to the window

@@ -65,12 +65,11 @@ and `crates/ui/src/frontend/tests/wipeout2048.rs` (seventeen, on a fixture).
 
 ## Open
 
-- **The intro movie is black and waits for a button.** `oag_game::movie::open`
-  does not know `ftyp`, so `Boot Intro Movie`'s plan has `frames == 0` and
-  the screen holds for one of its six authored buttons with a note saying
-  why. `lane/2048-intro-mp4` owns the seam - a `Movie` back from
-  `movie::open` for the MP4 blob is all the front end needs; nothing on the
-  boot side is waiting on anything else.
+- **Resolved 2026-09-21: the intro plays, picture and sound.**
+  `oag_video::mp4` reads the container ([mp4.md](../../docs/formats/mp4.md)),
+  `movie::open` returns a `Movie` for `ftyp`, and the AAC track plays through
+  `MovieAudioKind::Container`. The screen paces the 99.57 s picture and fires
+  its `AutoRedirect` at the end, or leaves on any of its six buttons.
 - **The campaign map's cell-to-pixel mapping is chosen, not measured.** An
   even grid (`oag_ui::frontend::campaign_map::PITCH`/`ORIGIN`) over the
   shell's authored 1920x1088 `<TouchScroll>` canvas, plain `Blue2048`

@@ -243,10 +243,11 @@ fn the_pad_walks_from_boot_connect_to_the_campaign_shell() {
 
     // Nothing pressed: the network check and the card's own delay.
     assert!(drive_until(&mut frontend, &[], w2048::BOOT_INTRO_MOVIE));
-    // The movie's length is unknown with no demuxer, so it waits.
+    // The intro is 99.57 s (`docs/formats/mp4.md`), longer than the 60 s
+    // `drive_until` allows, so with nothing pressed it is still playing.
     assert!(
         !drive_until(&mut frontend, &[], w2048::TITLE_SCREEN),
-        "with no button the intro screen never leaves on its own"
+        "with no button the intro screen has not run out inside 60 s"
     );
     assert!(drive_until(
         &mut frontend,
@@ -267,9 +268,11 @@ fn the_pad_walks_from_boot_connect_to_the_campaign_shell() {
     assert_eq!(frontend.chosen_mode(), Some("FE_SP_CAMPAIGN"));
     assert!(!frontend.is_finished(), "no event has been tapped yet");
     let notes = frontend.take_notes();
+    // `oag_video::mp4` reads the intro's length now, so the screen paces the
+    // picture instead of waiting on a button with a note saying it cannot.
     assert!(
-        notes.iter().any(|note| note.contains("length is unknown")),
-        "the missing demuxer is said, not hidden: {notes:#?}"
+        !notes.iter().any(|note| note.contains("length is unknown")),
+        "the MP4 demuxer is present, so the intro's length is known: {notes:#?}"
     );
 }
 

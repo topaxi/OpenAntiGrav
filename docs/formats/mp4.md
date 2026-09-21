@@ -25,7 +25,7 @@ unread.
 | What is in `intro.mp4`? | A leaf on wet tarmac, held for several seconds near the start | 90 |
 | Is a pure-Rust H.264 decoder available? | No permissively-licensed one exists to speak of | - |
 | Does the game draw one? | Plays through `movie::open`'s existing dispatch; boot wiring is a separate lane's work | - |
-| Is the audio played? | **No.** Measured, not decoded - see [below](#the-audio-is-inside-the-container-too) | - |
+| Is the audio played? | **Yes**, since 2026-09-21 - exact duration, no approximation - see [below](#the-audio-is-inside-the-container-too) | - |
 | Is any of this verified under an emulator? | **No.** Nothing on this page is | - |
 
 ## Reading it yourself
@@ -218,18 +218,38 @@ same as every other movie this project caches.
 
 ## The audio is inside the container too
 
-Only `intro.mp4` of the 26 carries an audio track, and **it is not played**.
-The track is measured - codec fourcc, sample rate, channel count, frame
-count, all asserted against the real file - and the decode is not built.
+Only `intro.mp4` of the 26 carries an audio track, and **it is played, since
+2026-09-21**. `crate::movie::track`'s third `MovieAudioKind`, `Container`, is
+the same route `bik.md`'s own "the audio is inside the video file" section
+describes: rather than holding codec blocks, it holds a path to the same
+`{key}.mp4` file `mp4::transcode` already writes for `ffmpeg` to read the
+picture out of, and `crate::movie::container_audio::decode` shells out a
+second time with `-map 0:a:0` to pull the AAC stream out of the same
+container. `just play 2048`'s boot report now reads:
 
-The reason is the same structural one `bik.md`'s own "the audio is inside the
-video file" section names: `oag_game::movie::MovieAudio` is shaped for a
-`.PMF`'s ATRAC3+-*beside*-the-video layout, and this container's AAC track -
-like Bink's - sits *inside* the same file the picture does. Playing it needs a
-second route through `ffmpeg` (or a demux into `MovieAudioKind`'s existing PCM
-shape) and a widened `Movie::audio`, which is its own change, not this one -
-`crates/game/src/movie/mp4.rs` leaves `Movie::audio` `None` and says so in a
-comment rather than reporting a track that plays silently.
+```text
+audio: 2 channel(s) at 48000 Hz, aac, track 0 of 1, decoded to 99.54s
+audio: Boot Intro Movie's own track, 99.54 s, clocking the picture
+```
+
+where it used to read `audio: Boot Intro Movie plays silently`.
+
+**Its duration is exact, not approximated.** `oag_video::mp4::AudioTrack`
+gained a `frame_delta` field - the audio `trak`'s own `stts.sample_delta`,
+1,024 on `intro.mp4` - alongside the `frame_count` it already carried, so
+`frame_count * frame_delta / sample_rate` is the track's real length with no
+decode at all. That is a genuine difference from Bink, which carries no
+equivalent field: `docs/formats/bik.md`'s own audio section explains why
+[`ContainerTrack::seconds`] falls back to the *video's* own duration there
+instead.
+
+The reason this took a third `MovieAudioKind` rather than reusing ATRAC3+'s is
+the same structural one `bik.md` states: `oag_game::movie::MovieAudio` was
+originally shaped for a `.PMF`'s ATRAC3+-*beside*-the-video layout, and this
+container's AAC track sits *inside* the same file the picture does, the same
+as Bink's.
+
+[`ContainerTrack::seconds`]: https://github.com/topaxi/OpenAntiGrav/blob/main/crates/game/src/movie/container_audio.rs
 
 ## Playing one
 

@@ -13,6 +13,7 @@ members = [
   "crates/gameplay",
   "crates/hd",
   "crates/input",
+  "crates/omega",
   "crates/physics",
   "crates/pulse",
   "crates/pure",
@@ -50,6 +51,7 @@ oag-formats = { path = "crates/formats" }
 oag-gameplay = { path = "crates/gameplay" }
 oag-hd = { path = "crates/hd" }
 oag-input = { path = "crates/input" }
+oag-omega = { path = "crates/omega" }
 oag-physics = { path = "crates/physics" }
 oag-pulse = { path = "crates/pulse" }
 oag-pure = { path = "crates/pure" }
@@ -71,6 +73,11 @@ anyhow = "1"
 serde = { version = "1", features = ["derive"] }
 toml = "1"
 thiserror = "2"
+
+# GPU rendering and windowing.
+wgpu = "30"
+winit = "0.30"
+pollster = "1"
 
 # Diagnostics. Everything that used to be a bare `println!`/`eprintln!` note
 # about what the engine is doing goes through the `log` facade instead, so it

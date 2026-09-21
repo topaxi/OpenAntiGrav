@@ -85,6 +85,23 @@ pub fn open_source(source: &str, packs: Vec<Pack>, pure_packs: Vec<Pack>) -> Res
         });
     }
 
+    // **Tried before Pulse, on the same rule as 2048's and HD's above.**
+    // Omega shares no archive name with any of the other three either: its
+    // bulk candidate is `uroot/data09.psarc`, a tail neither Pulse/Pure's
+    // `Data.wad`/`FE.wad`, HD's `PS3_GAME/USRDIR/DATA0*.PSARC` nor 2048's
+    // `PSP2/data.psarc` can match - `crates/omega/tests/
+    // omega_title_ground_truth.rs`'s `hd_and_2048_both_refuse_the_omega_source`
+    // and `omega_refuses_hd_and_2048_sources` run this both ways rather than
+    // arguing it. Ordered after 2048 and HD only because there is nothing to
+    // order by - all three directory-sourced titles are equally cheap to
+    // refuse, so this just keeps the newest addition last.
+    if let Ok(archives) = oag_omega::open(source) {
+        return Ok(Opened {
+            archives,
+            title: oag_omega::TITLE,
+        });
+    }
+
     match oag_pulse::open_with_packs(source, packs) {
         Err(Error::WrongTitle { title, .. }) if title == "Wipeout Pure" => {
             oag_pure::open_with_packs(source, pure_packs).map(|archives| Opened {

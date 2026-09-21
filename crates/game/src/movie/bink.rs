@@ -88,7 +88,30 @@ pub(super) fn open(
         u64::from(header.frame_rate.1),
     );
 
-    let movie = |frames: Option<FrameStore>, no_picture_reason: Option<String>| Movie {
+    // Computed before the `--no-video` branch, the same place a `.PMF`'s own
+    // audio is unwrapped in `super::open_psmf`: `--no-video` costs a Bink file
+    // nothing here (the whole blob is already in hand, unlike the WAD-addressed
+    // PSP path that peeks only a header), so there is no reason its sound
+    // should be silenced along with its picture.
+    //
+    // **Bink's audio is inside the video file**, where ATRAC3+ sits beside it
+    // in a `.PMF` and the PS2's PCM sits beside it in a `.PSS`. `ensure_source`
+    // writes the same `{key}.bik` file `transcode` hands to `ffmpeg` for the
+    // picture - written here too because a video-cache hit would otherwise
+    // skip that write and leave the audio route with no file to read.
+    let audio = if header.audio.is_empty() {
+        None
+    } else {
+        match ensure_source(cache_dir, key, "bik", blob) {
+            Ok(source) => track::bink_audio(&header.audio, source, key, header.seconds()),
+            Err(e) => {
+                warn!("{key}'s audio track could not be cached for decoding: {e:#}");
+                None
+            }
+        }
+    };
+
+    let movie = move |frames: Option<FrameStore>, no_picture_reason: Option<String>| Movie {
         // A `.PMF`'s PSMF header, and there is no such thing here: the field is
         // that container's, not "the movie's header". What this file declares
         // is on the `Movie` itself.
@@ -103,17 +126,7 @@ pub(super) fn open(
         display_aspect: (width, height),
         frames,
         no_picture_reason,
-        // **Bink's audio is inside the video file**, where ATRAC3+ sits beside
-        // it in a `.PMF` and the PS2's PCM sits beside it in a `.PSS`.
-        // `MovieAudio` no longer assumes either shape - it holds an undecoded
-        // ATRAC3+ block stream or already-decoded PCM, see
-        // `crate::movie::track::MovieAudioKind` - but nothing here reads
-        // Bink's own audio out of the container yet. Six of the disc's 37
-        // files have a track - the two logo reels carry four each - and
-        // playing one needs a second route through `ffmpeg`, which is its own
-        // change. Until then a `.bik` is silent and says so here rather than
-        // looking like a file with no track.
-        audio: None,
+        audio,
     };
 
     if how.no_video {
@@ -134,6 +147,28 @@ pub(super) fn open(
         Ok(frames) => Ok(movie(Some(frames), None)),
         Err(reason) => Ok(movie(None, Some(format!("{reason:#}")))),
     }
+}
+
+/// Writes `blob` under `cache_dir` as `{key}.{ext}`, unless a file already
+/// there is already the right length - the same trust model
+/// [`super::cached`] applies to the video cache, extended to the source file
+/// a container-hosted audio track reads back.
+///
+/// Needed because [`transcode`]'s own write of this file only happens on a
+/// video-cache **miss**: a movie whose picture is already cached would
+/// otherwise leave a track with nothing on disk to decode. Writing it here
+/// unconditionally (well, unconditionally on there being a track worth
+/// reading at all) means the audio route never depends on whether the video
+/// route happened to run this time.
+fn ensure_source(cache_dir: &Path, key: &str, ext: &str, blob: &[u8]) -> Result<PathBuf> {
+    std::fs::create_dir_all(cache_dir)
+        .with_context(|| format!("creating {}", cache_dir.display()))?;
+    let path = cache_dir.join(format!("{key}.{ext}"));
+    let already_written = std::fs::metadata(&path).is_ok_and(|m| m.len() == blob.len() as u64);
+    if !already_written {
+        std::fs::write(&path, blob).with_context(|| format!("writing {}", path.display()))?;
+    }
+    Ok(path)
 }
 
 /// Converts a Bink file into lossless AV1 under the cache.
@@ -162,8 +197,7 @@ fn transcode(blob: &[u8], to: Conversion<'_>, frames: Frames) -> Result<FrameSto
     std::fs::create_dir_all(cache_dir)
         .with_context(|| format!("creating {}", cache_dir.display()))?;
 
-    let source = cache_dir.join(format!("{key}.bik"));
-    std::fs::write(&source, blob).with_context(|| format!("writing {}", source.display()))?;
+    let source = ensure_source(cache_dir, key, "bik", blob)?;
 
     run_ffmpeg(&source, &out, None, frames, watch)?;
 

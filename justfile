@@ -298,6 +298,50 @@ hash-images:
 # `.rcsmodel`'s geometry and `.gtf` (HD's own PS3 texture container) are both
 # read - see docs/formats/hd-status.md.
 #
+# `omega`/`omega-collection`/`omega-ps4-eu` swaps in Wipeout: Omega
+# Collection:
+#
+#     just play omega
+#
+# **Ships as a base `.pkg` plus a mandatory day-one patch**, two sibling
+# directories the recipe reads together (`data/extracted/ps4/omega-eu` and
+# `-patch`); the recipe names the extraction step if the patch is missing.
+# Its front end is HD's own `PI001` plugin carried forward - see
+# docs/formats/omega-frontend.md - so the boot chain and menu layout are the
+# same shape HD's are, walked with `Provenance::Declared` rather than
+# `Measured`: no PS4 emulator exists in this project's toolchain to watch a
+# real boot; `crates/omega/tests/omega_title_ground_truth.rs` names which of
+# the nine archives serves each front-end file, as a tripwire rather than a
+# log line.
+#
+# **`--screenshot` alone stops on `Language Selection`** - German is not
+# offered (its plugin's own `Definition.xml` is one of the disc's own
+# all-zero copies, `docs/formats/omega-frontend.md`'s census already found
+# this for every title), so the picker is shown and the sequence waits for a
+# choice the same way it would for a real player. `--menu-page main` draws
+# this build's own reimplemented main menu instead - the disc's own `Main
+# Menu` screen is never parsed for an HD-idiom front end at all, on HD's own
+# terms (`crates/game/src/boot/includes.rs`'s module doc): only a title whose
+# `FrontEnd::touch` is `Some` (2048) has its `LoadXML` includes followed.
+# `--menu-page grid-select`/`cell-select` draw the campaign screens off
+# Omega's own nineteen grids (`oag_omega::campaign::GRID_COUNT`, HD has
+# sixteen) - twelve of nineteen parse this lane, the rest failing per-row
+# the same tolerant way a bad HD grid already does.
+#
+# **Racing is out of scope.** Omega's `.gnf` textures have no reader in this
+# project and its circuit files are a mix of plain `.vex` and an unread
+# `.final.*` family; `oag_title::RaceDefaults`'s otherwise-mandatory fields
+# are real-but-unread placeholders (`crates/omega/src/race.rs`). Starting a
+# race from the menus already reports the failure by name and returns to the
+# menu rather than crashing - the same generic recovery every title's own
+# bad load takes (`Session::finish_race_loading`) - so nothing Omega-specific
+# was added for that. The one crash this lane found is not Omega-specific
+# either: `--screenshot --press start,cross` (any title) skips straight
+# through to a race hand-off once the front end finishes, and an unparseable
+# default circuit takes the whole process down rather than reporting and
+# stopping - a pre-existing gap in the headless capture path, out of scope
+# here. See docs/formats/omega-status.md for what reads and what does not.
+#
 # RACE REMIX itself - track from one title, craft from another, picked live
 # ([ADR-0034](docs/architecture/adr/0034-a-race-may-open-two-titles-at-once.md)) -
 # is not a `play` keyword: it needs no source of its own, only a normal boot
@@ -349,6 +393,29 @@ play *ARGS:
                     echo "docs/formats/2048-status.md and data/README.md." >&2
                 else
                     echo "No 2048 package at all under data/images/; this recipe" >&2
+                    echo "reads your own copy and none is shipped. See data/README.md." >&2
+                fi
+                exit 1
+            fi
+            args=("$src" "${args[@]:1}")
+            ;;
+        omega|omega-collection|omega-ps4-eu)
+            src="data/extracted/ps4"
+            # Omega ships as a base `.pkg` plus a mandatory day-one patch, two
+            # sibling directories under `$src` - `omega-eu` and
+            # `omega-eu-patch`. The patch is not optional: its own
+            # `uroot/data09.psarc` is the only archive carrying a `skin.xml`
+            # at all (`crates/omega/src/lib.rs`'s own `DATA_CANDIDATES` doc),
+            # so a base-only extract refuses to open rather than booting a
+            # front end with no menu XML in it.
+            if [ ! -f "$src/omega-eu-patch/uroot/data09.psarc" ]; then
+                echo "$src/omega-eu-patch/uroot/data09.psarc is missing." >&2
+                if [ -f "data/images/omega-ps4-eu.pkg" ] || [ -f "data/images/omega-ps4-eu-patch.pkg" ]; then
+                    echo "The package(s) are there but not extracted. Decrypt and" >&2
+                    echo "unpack both into $src/omega-eu and $src/omega-eu-patch -" >&2
+                    echo "see docs/reverse-engineering/source-images.md and data/README.md." >&2
+                else
+                    echo "No Omega package at all under data/images/; this recipe" >&2
                     echo "reads your own copy and none is shipped. See data/README.md." >&2
                 fi
                 exit 1

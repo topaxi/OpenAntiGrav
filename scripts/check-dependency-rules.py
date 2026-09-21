@@ -43,6 +43,7 @@ GAMEPLAY_CRATES = {
     "oag-core",
     "oag-gameplay",
     "oag-hd",
+    "oag-omega",
     "oag-physics",
     "oag-pulse",
     "oag-pure",

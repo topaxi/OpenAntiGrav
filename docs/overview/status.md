@@ -39,7 +39,7 @@ assets author": `authored` and `read` are both short of a runtime consumer.
 | [M5 - Full race](roadmap.md#m5---full-race) | An eight-ship race indistinguishable from the original, per-tick trace in tolerance | 🟨 **in progress** - eight-craft grid built and AI drives; full-race trace parity not yet claimed |
 | [M6 - Rendering fidelity](roadmap.md#m6---rendering-fidelity) | A still frame is hard to tell from a PPSSPP frame at the same pose; every departure written down | 🟨 **in progress** - bloom, colour grading, motion blur not yet ported |
 | [M7 - Shell and polish](roadmap.md#m7---shell-and-polish) | Pulse is feature complete, start to finish, on both asset paths | 🟨 **in progress** - shell exists and navigates, not yet feature-complete |
-| [M8 - Beyond Pulse](roadmap.md#m8---beyond-pulse) | A second title boots and plays on the same engine | 🟨 **in progress** - Pure boots to a Time Trial; HD/Fury and 2048 race and draw textured; Race Remix backend verified; Omega is RE-only |
+| [M8 - Beyond Pulse](roadmap.md#m8---beyond-pulse) | A second title boots and plays on the same engine | 🟨 **in progress** - Pure boots to a Time Trial; HD/Fury and 2048 race and draw textured; Race Remix backend verified; Omega's front end boots and its campaign screens draw, racing out of scope ([omega-status.md](../formats/omega-status.md)) |
 
 ## 1. Weapons
 

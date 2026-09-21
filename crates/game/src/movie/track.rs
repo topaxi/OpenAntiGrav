@@ -7,12 +7,13 @@
 //! path, made at the same time the PS2 path stopped reporting `None`
 //! unconditionally.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use anyhow::Result;
 use log::warn;
-use oag_video::{pmf, pss};
+use oag_video::{bik, pmf, pss};
 
+use super::container_audio::{self, ContainerTrack};
 use crate::at3;
 
 /// Bytes of sub-header on every audio PES payload in a `.PMF`.
@@ -60,8 +61,8 @@ const ATRAC3PLUS_SYNC: [u8; 2] = [0x0f, 0xd0];
 /// rather than decoding noise.
 const ATRAC3PLUS_FRAME_HEADER_LEN: usize = 8;
 
-/// What [`MovieAudio`] actually holds - the two shapes a track has come in so
-/// far, and the "how to get to PCM" that differs between them.
+/// What [`MovieAudio`] actually holds - the three shapes a track has come in
+/// so far, and the "how to get to PCM" that differs between them.
 enum MovieAudioKind {
     /// ATRAC3+ blocks, headers off, back to back - exactly what
     /// [`crate::at3::riff`] wants for its `data` chunk. Decoded through
@@ -74,6 +75,10 @@ enum MovieAudioKind {
     /// hold until playback wants it, the same as the ATRAC3+ blocks are held
     /// undecoded until then.
     Pcm(Vec<i16>),
+    /// An audio stream that lives inside its own video container - Bink's or
+    /// MP4's - rather than beside it. See [`ContainerTrack`] and
+    /// [`container_audio::decode`].
+    Container(ContainerTrack),
 }
 
 /// A movie's audio track, held until playback wants it decoded.
@@ -111,6 +116,9 @@ impl std::fmt::Debug for MovieAudio {
             MovieAudioKind::Pcm(samples) => out
                 .field("codec", &"pcm16")
                 .field("samples", &samples.len()),
+            MovieAudioKind::Container(track) => out
+                .field("codec", &track.descriptor)
+                .field("source", &track.source),
         }
         .finish()
     }
@@ -129,18 +137,19 @@ impl MovieAudio {
         self.sample_rate
     }
 
-    /// Bytes per ATRAC3+ block. `None` for a PS2 PCM track, which has no
-    /// block structure of its own to report.
+    /// Bytes per ATRAC3+ block. `None` for anything that is not ATRAC3+ -
+    /// a PS2 PCM track or a container-hosted one - which have no such block
+    /// structure to report.
     #[must_use]
     pub fn block_align(&self) -> Option<u16> {
         match &self.kind {
             MovieAudioKind::Atrac3Plus { block_align, .. } => Some(*block_align),
-            MovieAudioKind::Pcm(_) => None,
+            MovieAudioKind::Pcm(_) | MovieAudioKind::Container(_) => None,
         }
     }
 
-    /// How many whole ATRAC3+ blocks the track holds. Zero for a PCM track,
-    /// which is not blocked at all.
+    /// How many whole ATRAC3+ blocks the track holds. Zero for a PCM or
+    /// container-hosted track, neither of which is blocked that way.
     #[must_use]
     pub fn block_count(&self) -> usize {
         match &self.kind {
@@ -148,7 +157,7 @@ impl MovieAudio {
                 blocks,
                 block_align,
             } => blocks.len() / usize::from(*block_align).max(1),
-            MovieAudioKind::Pcm(_) => 0,
+            MovieAudioKind::Pcm(_) | MovieAudioKind::Container(_) => 0,
         }
     }
 
@@ -160,16 +169,22 @@ impl MovieAudio {
     /// the end of a whole number of them: `Intro.PMF` declares 40.04 s and its
     /// 865 blocks are 40.17 s. The difference is padding, not a demux that ran
     /// long. A PCM track has no such block granularity - its sample count is
-    /// exactly what `oag_video::pss` demuxed.
+    /// exactly what `oag_video::pss` demuxed. See [`ContainerTrack::seconds`]
+    /// for what a container-hosted track reports and how exact it is.
     #[must_use]
     pub fn seconds(&self) -> f64 {
-        let samples = match &self.kind {
+        match &self.kind {
             MovieAudioKind::Atrac3Plus { .. } => {
                 self.block_count() as f64 * f64::from(at3::SAMPLES_PER_BLOCK)
+                    / f64::from(self.sample_rate.max(1))
             }
-            MovieAudioKind::Pcm(samples) => samples.len() as f64 / f64::from(self.channels.max(1)),
-        };
-        samples / f64::from(self.sample_rate.max(1))
+            MovieAudioKind::Pcm(samples) => {
+                samples.len() as f64
+                    / f64::from(self.channels.max(1))
+                    / f64::from(self.sample_rate.max(1))
+            }
+            MovieAudioKind::Container(track) => track.seconds,
+        }
     }
 
     /// The clause [`crate::boot::load_movie_sound`]'s boot report inserts to
@@ -183,13 +198,17 @@ impl MovieAudio {
                 )
             }
             MovieAudioKind::Pcm(_) => "16-bit PCM, no compression to decode".to_string(),
+            MovieAudioKind::Container(track) => track.descriptor.clone(),
         }
     }
 
     /// Decodes the track to interleaved PCM.
     ///
     /// The ATRAC3+ case shells out to `ffmpeg` and the cache; the PCM case is
-    /// already decoded (there is no codec) and this just clones it.
+    /// already decoded (there is no codec) and this just clones it; the
+    /// container case shells out to `ffmpeg` the same way ATRAC3+ does, but
+    /// pointed at the container's own cached file instead of a wrapper this
+    /// project builds - see [`container_audio::decode`].
     ///
     /// # Errors
     ///
@@ -210,6 +229,9 @@ impl MovieAudio {
                 },
                 cache_dir,
             ),
+            MovieAudioKind::Container(track) => {
+                container_audio::decode(track, self.channels, self.sample_rate, cache_dir)
+            }
             MovieAudioKind::Pcm(samples) => Ok(at3::Pcm {
                 samples: samples.clone(),
                 channels: self.channels,
@@ -373,6 +395,92 @@ pub(super) fn pss_audio(demuxed: &pss::Demuxed, key: &str) -> Option<MovieAudio>
         sample_rate: demuxed.format.sample_rate,
         kind: MovieAudioKind::Pcm(samples),
     })
+}
+
+/// Picks and describes a Bink file's own audio track, `None` if it declares
+/// none.
+///
+/// `source` is the cached copy of the container's own bytes -
+/// [`super::bink::open`] ensures it exists (writing it if a video-cache hit
+/// skipped the write `super::bink::transcode` would otherwise have done)
+/// before calling this.
+///
+/// **Track 0, and said so whenever there is a choice.**
+/// [`oag_video::bik::Header::audio`] carries the file's own track order, and
+/// this build has found no HD language/region rule that picks among several -
+/// the two logo reels are the only files with more than one (four each), and
+/// nothing in this project has measured which of the four a PS3 actually
+/// plays. Track 0 is a choice, not a measurement, and [`MovieAudio::codec_clause`]
+/// says so on every file that has more than one; a file with exactly one
+/// track has no such choice to report.
+pub(super) fn bink_audio(
+    tracks: &[bik::AudioTrack],
+    source: PathBuf,
+    key: &str,
+    video_seconds: f64,
+) -> Option<MovieAudio> {
+    let chosen = tracks.first()?;
+    let codec = if chosen.is_dct() {
+        "binkaudio_dct"
+    } else {
+        "binkaudio_rdft"
+    };
+    let descriptor = if tracks.len() > 1 {
+        format!(
+            "{codec}, track 0 of {} (chosen, not measured)",
+            tracks.len()
+        )
+    } else {
+        format!("{codec}, track 0 of 1")
+    };
+    Some(MovieAudio {
+        channels: chosen.channels(),
+        sample_rate: chosen.sample_rate,
+        kind: MovieAudioKind::Container(ContainerTrack {
+            key: key.to_string(),
+            source,
+            stream_index: 0,
+            descriptor,
+            // No per-block sample count is in a Bink header at all - see
+            // `ContainerTrack::seconds`'s own doc for why the video's own
+            // duration stands in for the audio's until it is decoded.
+            seconds: video_seconds,
+        }),
+    })
+}
+
+/// Describes an MP4 file's own audio track.
+///
+/// `source` is the cached copy of the container's own bytes -
+/// [`super::mp4::open`] ensures it exists the same way [`bink_audio`]'s
+/// caller does. Unlike a Bink file, only one of the 26 shipped MP4s carries a
+/// track at all, so there is no track to choose among and no note to add.
+pub(super) fn mp4_audio(
+    track: &oag_video::mp4::AudioTrack,
+    source: PathBuf,
+    key: &str,
+) -> MovieAudio {
+    let codec = if &track.codec == b"mp4a" {
+        "aac".to_string()
+    } else {
+        String::from_utf8_lossy(&track.codec).into_owned()
+    };
+    // Exact, unlike Bink's approximation: `AudioTrack::frame_delta`'s own doc
+    // is the evidence that a tick of this track's own `mdhd` timescale is a
+    // PCM sample here.
+    let seconds = track.frame_count as f64 * f64::from(track.frame_delta)
+        / f64::from(track.sample_rate.max(1));
+    MovieAudio {
+        channels: track.channel_count,
+        sample_rate: track.sample_rate,
+        kind: MovieAudioKind::Container(ContainerTrack {
+            key: key.to_string(),
+            source,
+            stream_index: 0,
+            descriptor: format!("{codec}, track 0 of 1"),
+            seconds,
+        }),
+    }
 }
 
 #[cfg(test)]
