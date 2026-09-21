@@ -45,6 +45,16 @@ pub(crate) struct MenuStage {
     /// own, private atlas. Cheap to hold twice: [`font::Atlas`] is a small
     /// glyph table, not a GPU resource. See [`marquee::apply`].
     pub(crate) text_atlas: font::Atlas,
+    /// The `Default`-role face `oag_ui::campaign::footer`'s own prompts and
+    /// tips draw through when their own `font` routes there (see
+    /// `Draw::in_role`) - kept a second time for the same reason
+    /// [`Self::text_atlas`] is: measuring `FE_CONFIRM`'s own shrink-to-fit
+    /// width needs the atlas it will actually render in, not
+    /// [`Self::text_atlas`]'s `menu`-role one. Not `Option`: every title has
+    /// a `Default`-role atlas (`boot::load_font`'s own fallback is the
+    /// built-in 5x7 set, never nothing), so this is always something to
+    /// measure against, even on a title with no campaign screens at all.
+    pub(crate) default_atlas: font::Atlas,
     /// The disc's own frame around every page: what the screen clears to and
     /// the rules it draws. Read once, off the front-end XML this source shipped
     /// - see `menu::read_frame` - and empty for a title whose frame is unread.
@@ -555,6 +565,12 @@ impl MenuStage {
                 }
             } else {
                 let measure = |text: &str| font::measure(&self.text_atlas, text);
+                // `FE_CONFIRM`'s own shrink-to-fit is the one thing
+                // `NavigationLegend::draw` measures - see its own doc - and
+                // it now draws through this atlas (`Draw::in_role`), not
+                // `self.text_atlas`'s `menu`-role one `measure` above still
+                // is for the ticker's own (unchanged) `small`-role tips.
+                let default_measure = |text: &str| font::measure(&self.default_atlas, text);
                 match &campaign.screen {
                     crate::campaign_stage::Screen::Grid(model) => {
                         let ticker = campaign.ticker_draw(&campaign.grid_layout().faces, &measure);
@@ -574,7 +590,7 @@ impl MenuStage {
                     }
                     crate::campaign_stage::Screen::Cell { model, .. } => {
                         let faces = &campaign.cell_layout().faces;
-                        let mut footer_overlay = campaign.nav_legend_draw(faces, &measure);
+                        let mut footer_overlay = campaign.nav_legend_draw(faces, &default_measure);
                         let ticker = campaign.ticker_draw(faces, &measure);
                         ticker_draw = ticker.clone();
                         footer_overlay.extend(ticker);

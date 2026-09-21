@@ -181,6 +181,41 @@ pub(super) fn load_title_font(
     }
 }
 
+/// The atlas and role name [`crate::render::Renderer::set_face_atlas`]
+/// should load into the menu stage's secondary slot, given this title's
+/// [`oag_title::MenuSkin`] and its own `Default`-role atlas and
+/// already-resolved `Title`-role one.
+///
+/// **A title whose chrome names a `Title` role (Wipeout HD) keeps exactly
+/// what it always loaded there** - `title_font` unchanged, `Some("Title")`
+/// (or whichever string the skin names). **A title that does not (both PSP
+/// titles today) gets its own `Default`-role atlas in the slot instead** -
+/// the one Pulse face with real lowercase glyph art. `Pulse_20.fnt` (the
+/// `menu` role primary this never touches) and `Pulse_14.fnt` (`Small`/
+/// `Title`) both give every lowercase codepoint the *identical*
+/// `(u0, v0, width, height)` box as its uppercase twin - measured off both
+/// pressings, not a code fallback - while `pulse_text.fnt` (`Default`) does
+/// not. See `docs/ui/menus-original.md`'s "Two faces, not one swapped for
+/// the other" section.
+///
+/// The two are mutually exclusive on every title measured so far
+/// (`oag_pulse`/`oag_pure::frontend::MENU_SKIN::title_font` are both `None`,
+/// `oag_hd`'s is the only `Some`) - which is what lets one slot serve either
+/// without a title ever needing both in the same frame. A title that grows
+/// a second, genuinely simultaneous role will need a second slot, not a
+/// change here.
+#[must_use]
+pub fn face_atlas_slot(
+    skin: &oag_title::MenuSkin,
+    font: &oag_ui::font::Atlas,
+    title_font: Option<oag_ui::font::Atlas>,
+) -> (Option<oag_ui::font::Atlas>, Option<&'static str>) {
+    match skin.title_font {
+        Some(role) => (title_font, Some(role)),
+        None => (Some(font.clone()), Some(oag_ui::language::roles::DEFAULT)),
+    }
+}
+
 /// Every font role the chosen language declares, with its face's line height
 /// as a ratio of the `Default` role's - what [`oag_ui::frontend::Frontend::set_face_scales`]
 /// takes.

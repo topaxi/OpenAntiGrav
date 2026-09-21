@@ -387,14 +387,23 @@ pub struct HelpText {
     /// [`MenuSkin::space`]. `18.0` on Pulse.
     pub offset_y: f32,
     /// The subtitle face's scale, as a multiple of [`MenuSkin::menu_scale`]
-    /// rather than an absolute size - the row face and the help-text face are
-    /// two different widgets and neither authors a `scale` relative to the
-    /// other, so this is a ratio this project derived, not one either widget
-    /// states. **Confidence 70**, lower than the rest of this type: derived
-    /// from `docs/ui/menus-original.md`'s row face (22px, `font="menu"`) and
-    /// its own note that the authored y=50 draws "the 13-pixel help text" -
-    /// `13.0 / 22.0`, two numbers measured by different methods (one authored,
-    /// one read off ink) rather than a single ruler on both.
+    /// rather than an absolute size.
+    ///
+    /// **`1.0` on Pulse, confidence 90** since the caller routes this
+    /// widget's own draw to its own `Default`-role atlas rather than the
+    /// row face's - `oag_ui::menu::rows::draw_text_rows` via a second atlas
+    /// `oag-game`'s menu stage loads beside its `menu`-role primary (see
+    /// `crates/game/src/boot/fonts.rs`'s `face_atlas_slot`). Before that,
+    /// this field carried a derived `13.0 / 22.0` at confidence 70: the row
+    /// face and the help-text face are two different widgets and neither
+    /// authors a `scale` relative to the other, so it was two numbers
+    /// measured by different methods (`docs/ui/menus-original.md`'s row
+    /// face, 22px, `font="menu"`; and its own note that the authored y=50
+    /// draws "the 13-pixel help text") rather than a single ruler on both.
+    /// A title whose menu stage has no second atlas for this role falls
+    /// back to drawing it through the row face at whatever this states, so
+    /// `1.0` on such a title would be the *old* bug, not this fix - a title
+    /// adding this field has to add the routing too, not just the number.
     pub scale: f32,
     /// The subtitle's ink colour. `0xFFFFFFFF` on Pulse - `helptext0`'s own
     /// `color="0xffffffff"`, authored rather than measured, the one part of

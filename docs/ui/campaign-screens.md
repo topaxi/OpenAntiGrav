@@ -1504,3 +1504,20 @@ and its own "what is not determined" section.
   what number a raw `%d` template should carry - see the two sections
   above. An RPCS3 capture of a genuinely locked tier/cell would settle
   both at once.
+- **The upper-case defect above is partially closed, 2026-09-21, from the
+  render side rather than this crate's own.** `Confirm`/`Back`
+  (`oag_ui::campaign::footer`) and the per-row subtitle
+  (`oag_title::HelpText`) now draw mixed case, through a second,
+  `Default`-role atlas the menu stage loads beside its unchanged `menu`-role
+  primary - see `docs/ui/menus-original.md`'s "Two faces, not one swapped
+  for the other" section for the full mechanism and the measured fact it
+  rests on (Pulse's `menu`/`Small` faces have no lowercase glyph art at
+  all; only `Default` does). **Still upper-case**: every `n="default"`
+  widget `oag_ui::campaign::draw::text_draw` itself draws - `Speed class`,
+  `Laps`, `Weapons`, `Points`, `Best` and their values, and by the same
+  mechanism `Change Difficulty` two bullets up. One edit closes it:
+  `text_draw`'s single `Draw::Text` literal becoming a role-aware
+  constructor (`crate::frontend::Draw::in_role`, `Some("Default")` for a
+  `"default"`-labelled `text.font`, matching what `footer.rs` and
+  `menu::rows::draw_text_rows` already do) - a change to this crate's own
+  `campaign/draw.rs`, outside the lane that found and fixed the mechanism.

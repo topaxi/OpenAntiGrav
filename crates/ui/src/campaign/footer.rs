@@ -68,10 +68,31 @@ fn number(globals: &HashMap<String, String>, node: &Node, name: &str) -> Option<
 
 fn face_scale(faces: &FaceScales, font: &str) -> f32 {
     match font.to_ascii_lowercase().as_str() {
-        "default" => faces.default,
+        // `1.0`, not `faces.default` (a ratio against the `menu` role,
+        // 13/22): a `"default"`-labelled prompt now draws through its own
+        // `Default`-role atlas at that face's own native size, the same
+        // fix `oag_title::HelpText::scale`'s own doc gives for the
+        // identical shape one widget over - see [`face_role`].
+        "default" => 1.0,
         "small" => faces.small,
         _ => 1.0,
     }
+}
+
+/// The role a `font` value routes a [`Draw::in_role`] call to - `Default`
+/// alone, for now: it is the one Pulse face this build ever loads a second,
+/// real atlas for (see `crates/game/src/boot/fonts.rs`'s `face_atlas_slot`),
+/// because it is the one Pulse face with real lowercase glyph art -
+/// `Pulse_20.fnt`/`Pulse_14.fnt` (`menu`/`small`) give every lowercase
+/// codepoint the identical box its uppercase twin has, measured off both
+/// pressings. Routing a `"small"`-labelled prompt the same way would change
+/// nothing it draws (`Pulse_14` has no lowercase to gain) and would be a
+/// role this crate picked rather than one this build has verified drawing
+/// through - see `docs/ui/menus-original.md`'s "Two faces, not one swapped
+/// for the other" section.
+fn face_role(font: &str) -> Option<&'static str> {
+    font.eq_ignore_ascii_case("default")
+        .then_some(crate::language::roles::DEFAULT)
 }
 
 /// Depth-first search for the first descendant (or `node` itself) named
@@ -250,20 +271,19 @@ impl NavigationLegend {
                     }
                     None => prompt.x,
                 };
-                Draw::Text {
+                Draw::in_role(
+                    face_role(&prompt.font),
                     x,
-                    y: prompt.y,
+                    prompt.y,
                     scale,
-                    color: prompt.color,
-                    border: None,
-                    align: if prompt.align_right_to.is_some() {
+                    prompt.color,
+                    if prompt.align_right_to.is_some() {
                         Align::Right
                     } else {
                         Align::Left
                     },
-                    text: prompt.text.clone(),
-                    wrap_width: None,
-                }
+                    prompt.text.clone(),
+                )
             })
             .collect()
     }
@@ -374,16 +394,15 @@ pub fn ticker_draw(
     for (tip, width) in tips.iter().zip(&widths) {
         let x = vx + cursor - travelled;
         if x + width >= vx && x <= vx + vw {
-            return Some(Draw::Text {
+            return Some(Draw::in_role(
+                face_role(&layout.font),
                 x,
-                y: vy,
+                vy,
                 scale,
-                color: layout.color,
-                border: None,
-                align: Align::Left,
-                text: tip.clone(),
-                wrap_width: None,
-            });
+                layout.color,
+                Align::Left,
+                tip.clone(),
+            ));
         }
         cursor += width + GAP;
     }

@@ -1598,7 +1598,7 @@ pub fn load_strings(
 }
 
 mod campaign2048;
-mod fonts;
+pub mod fonts;
 pub mod fury;
 mod images;
 mod includes;
