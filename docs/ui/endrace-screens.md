@@ -16,8 +16,11 @@ layout, draw, pointer), [`oag_game::endrace`](../../crates/game/src/endrace.rs)
 This build's own results table
 ([`oag_game::scoreboard`](../../crates/game/src/scoreboard.rs)) stays as the
 fallback for a title with no `EndRace_Definition.xml`, or whose read fails -
-see that crate's own module doc. Pure and HD were not checked for this file
-this pass; neither is assumed to carry it.
+see that crate's own module doc. Pure was not checked for this file this
+pass; it is not assumed to carry it. **Wipeout HD/Fury's own copy is now
+read and drawn** - see ["Wipeout HD/Fury: `Results`/`Menu`, off a completely
+different file"](#wipeout-hdfury-results-menu-off-a-completely-different-file)
+below.
 
 ## Why this draws inside `Stage::Race`, not `Stage::Menu`
 
@@ -209,3 +212,136 @@ still.
   chrome might carry** were not investigated - out of scope for this pass,
   which is about the three `EndRace` screens specifically, not the shared
   `FE Screen` frame around them.
+
+## Wipeout HD/Fury: `Results`/`Menu`, off a completely different file
+
+**Added 2026-09-21.** `Data\Plugins\Frontend\Gui\EndRace_Definition.xml` - a
+named plugin, plain UTF-8, five of seven archives - is HD's own copy, at a
+different path, a different authored resolution (1920x1080) and an almost
+entirely different widget vocabulary from Pulse's file this page otherwise
+describes. [`docs/formats/hd-endrace-screens.md`](../formats/hd-endrace-screens.md)
+is the reading half; this section is the picture half plus what live
+verification found, the same split the rest of this page keeps.
+Implemented in [`oag_ui::endrace::hd`](../../crates/ui/src/endrace/hd.rs)
+(model reuse, draw, pointer), `oag_game::endrace::load_hd`, and the
+title-dispatched `ResultsModel` in
+[`crate::race_stage::endrace`](../../crates/game/src/main/race_stage/endrace.rs).
+`oag_title::FrontEnd::endrace_entry` is the per-title axis both titles now
+go through.
+
+### What draws
+
+`EndRace Results` - title, headline, and the whole field's own standings
+grid (position and finish time, one row per craft, the player's own row
+highlighted); `EndRace Menu` - the applicable `race_again`/`return_to_grid`/
+`return_to_menu`/`view_again` options, each at its own authored `<Block>`
+position. `EndRace Rewards` and `EndRace Podium` are read (see the formats
+page) but not drawn this pass - out of scope, and `Podium`'s three
+`pod_head.{1,2,3}` widgets sharing one idstring reads as an authoring
+placeholder rather than something this build could draw correctly anyway.
+Full "what does and does not draw, and why" is
+[`oag_ui::endrace::hd`](../../crates/ui/src/endrace/hd.rs)'s own module doc.
+
+### Two real bugs, found by looking rather than by reading
+
+Live verification (`--menu-page endrace-results`/`endrace-menu` against
+`hdfury-ps3-eu-dec.iso`) surfaced two bugs the unit tests - built off a
+synthetic fixture - could not have caught, both fixed in the same pass:
+
+1. **`Line1`'s headline drew the literal idstring `ER_1STP`, unresolved.**
+   HD's own English table (`Data\Plugins\Languages\English\entries.xml`,
+   measured directly) names a finishing position `ER_1PLACE`..`ER_8PLACE`,
+   not Pulse's `ER_1STP`..`ER_8STP` - a real, measured divergence between
+   the two titles, even though the three other headline idstrings
+   (`ER_TT_COM`/`ER_SL_COM`/`ER_SHIP_DES`) and every `EndRace Menu` Block's
+   own idstring are byte-identical between them. `hd_headline_text` now
+   branches on this.
+2. **The Target/medal block and the loyalty block - both explicitly "not
+   drawn this pass" in the module doc - were leaking through anyway**: the
+   generic text-drawing fallback only excluded `Gridp.{row}`/online-only
+   widgets by name, so `Target0`'s own literal `"value"` and
+   `loyalty1.1`/`loyalty2`'s own `"834 POINTS"`/`"3745"` placeholders drew
+   unconditionally. Excluded explicitly now.
+
+A third issue found the same way, not a logic bug but a missing override:
+every `Grid{col}.{row}` cell's own authored position is `x="0" y="0"` (see
+the formats page), and the first pass called the generic text-drawing
+helper with that unmodified position - so the position/time text existed in
+the draw list but sat invisibly at the origin. Cells are now repositioned
+the same way `GridHighlight` already was, reading column `x` off
+`GridHead1`/`GridHead2` at draw time rather than a hand-transcribed
+constant.
+
+All three are covered by new tests: `oag_ui`'s own unit tests (a miniature
+XML fixture) and
+[`crates/hd/tests/endrace_screens_ground_truth.rs`](../../crates/hd/tests/endrace_screens_ground_truth.rs),
+which asserts the `ER_{n}PLACE`-not-`ER_{n}STP` divergence directly against
+the disc's own string table - the test that would have caught bug 1 before
+a screenshot did.
+
+### Captures
+
+`--menu-page endrace-results`/`endrace-menu`, `hdfury-ps3-eu-dec.iso`,
+`--track Data\Environments\Talons_Junction --mode single_race` (a
+synthetic two-craft field - no live `Session`/`RaceStage` behind a
+`--menu-page` capture, the same gap Pulse's own capture above has). Kept
+under `data/scratch/lane-hd-endrace/shots/` (gitignored - game content).
+`POS`/`TIME` headers, `1ST PLACE`, and the player's own row (`1`, `3.11.76`)
+all draw at their own real positions; the applicable `EndRace Menu` options
+(`RACE AGAIN`/`RETURN TO GRID`/`VIEW RESULTS AGAIN`) draw at their own
+stacked `y`s with none of the unimplemented Tournament/multiplayer options
+leaking through. Pulse's own `endrace-results` capture
+(`pulse-psp-eu.chd`) was re-taken after this pass's changes and is
+digit-for-digit identical to this page's own reference numbers above -
+`RÉSULTATS`/`CONTRE-LA-MONTRE TERMINÉ!`/`1.32.48`/`0.49.33`/`0.49.93`/
+`3.11.76` (this machine's own source has no English table, the same
+"German, not missing" situation the Live section above records for
+Pulse).
+
+**The disc-backed end-to-end path is verified without a GPU or a live
+race**, in
+[`crates/game/tests/hd_endrace_ground_truth.rs`](../../crates/game/tests/hd_endrace_ground_truth.rs):
+a real HD single race, autopiloted to its own finish (headless simulation,
+~18 s wall clock), its real `Board`, `EndRace_Definition.xml` read off the
+same disc, and `hd_results_draw_list` fed both - the player's own place
+lands in the drawn field. See that file's own module doc for why it stops
+short of `EndRaceRuntime` (GPU-touching glue with its own fast unit tests,
+`race_stage::endrace::tests::hd_field_rows_*`).
+
+### Live: menus and a race launch, 2026-09-21 - not to a finished race
+
+Driven under Xvfb `:94`, mouse-only, with `xdotool` and an isolated
+`XDG_CONFIG_HOME` (`window_size` overridden to `1200x680` inside the
+1280x720 screen, the same reason Pulse's own 2026-09-14 walk above does
+it). **`WAYLAND_DISPLAY` has to be unset** or the window renders into an
+invisible Wayland session while every capture tool points at Xvfb -
+`docs/architecture/menus.md`'s own "DISPLAY against GRAPHICS" section
+documents the identical symptom (black screenshots) and fix for Pulse;
+this is the same fix confirmed a second time, on HD.
+
+With that fixed: `Main Menu` (a real `<HorizMenu>` strip, 41-63 FPS) ->
+click `RACE CAMPAIGN` -> `Grid Selection` (a real point-cloud flyer,
+`Event 01`) -> click the flyer -> `Cell Selection` (`VINETA K`, Single
+Race, 3 laps) -> click the selected hex -> `LOADING... VINETA K` -> race
+scene built in **53.7 s**, first frame presented **5.2 s** after that.
+Menus render fast and mouse-driven navigation works exactly as it does on
+Pulse and on HD's own campaign screens
+(`docs/ui/campaign-screens.md`'s 2026-09-21 entry, which reached the same
+"race genuinely started" point by an identical route). **The race itself
+was not driven to a finished `EndRace Results`**: at ~5 s/frame, a
+multi-hundred-tick race would take hours of wall clock in this sandbox -
+independently confirmed by two lanes now (the campaign-screens.md entry's
+own `race scene built in 107.6s` / `741ms-8056ms per frame`, and this
+pass's `53.7s` / `5.2s`), consistent with a rendering-path limitation
+specific to a full race scene under this sandbox's display stack rather
+than either lane's own code. The disc-backed ground-truth test above is
+this pass's substitute end-to-end check; a live capture through to
+`EndRace Results` is real hardware's job:
+
+```sh
+DISPLAY=:1 WAYLAND_DISPLAY= XDG_CONFIG_HOME=<isolated> \
+    cargo run --release -p oag-game -- data/images/hdfury-ps3-eu-dec.iso --autopilot
+# xdotool click through Main Menu -> RACE CAMPAIGN -> Grid Selection (click the
+# flyer) -> Cell Selection (click the selected hex) -> let the race run to the
+# flag -> screenshot EndRace Results, click Menu, screenshot EndRace Menu
+```

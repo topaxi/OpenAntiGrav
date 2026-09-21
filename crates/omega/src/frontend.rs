@@ -161,6 +161,10 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     // See this module's own "What is not here" section.
     race_box: None,
     preview_meshes: false,
+    // Not checked this pass - a gap, not a measurement that Omega ships no
+    // such screen. Racing is out of this title's scope anyway - see the
+    // module doc. See `oag_title::FrontEnd::endrace_entry`.
+    endrace_entry: None,
 };
 
 /// Screen names, spelled exactly as `data09.psarc`'s `skin.xml` spells them -

@@ -667,6 +667,7 @@ pub fn run(
                     frame,
                     &menu_frame,
                     &mut sprites,
+                    title,
                 )?;
                 (backdrop, video_format, list, space)
             } else {
