@@ -405,7 +405,7 @@ entries resolves to a real `entries.xml` in the same directory (17 checked,
 17 present) - the per-language string tables this project's Pulse/HD reader
 already expects.
 
-## Movies are MP4 - a container this project does not read
+## Movies are MP4 - read since 2026-09-21
 
 **Confidence 92.** `data/Videos/intro.mp4` opens `66 74 79 70 6d 70 34 32`
 (`ftyp` `mp42`) - a standard ISO Base Media File Format (MPEG-4 Part 14)
@@ -414,13 +414,18 @@ files ship in the base package, all under `data/Videos/`: `intro.mp4`,
 `2048Movie.mp4`/`2049Movie.mp4`/`2050Movie.mp4` (season recaps),
 `bb2048.mp4`/`bb2048Zone8.mp4`, and twenty `shipunlocks/<Team>2048_<variant>.mp4`
 clips (one per team per craft class). `oag-video` (`crates/video`) reads
-`pmf`/`ipf`/`bik` and writes `ivf`/`av1`; it has no MP4 demuxer.
-**This is a new format for this project**, per this codebase's own
+`pmf`/`ipf`/`bik` and writes `ivf`/`av1`; **`mp4` joined them 2026-09-21**, a
+fourth read-only container beside the three `oag-video` already carried, per
+this codebase's own
 [format-crates-split](../architecture/adr/0050-format-crates-split-by-format-family.md)
-boundary - MP4/ISOBMFF demuxing would be a fourth read-only container beside
-the three `oag-video` already carries, not a fix to any of them. Not
-implemented this pass; the magic and the count above are what a reader would
-need to target.
+boundary. All 26 files parse; `intro.mp4` is 960x544 H.264 at 30000/1001 fps
+(2,984 frames, 99.57 s) with a stereo 48 kHz AAC track (4,666 frames) - the
+numbers this section's own confidence score was measured against, now
+independently reproduced off the container alone with no H.264 or AAC decode.
+`movie::open` plays it through the same AV1-cache pipeline `.bik` uses, with
+no change to its own signature. See [mp4.md](mp4.md) for the container's
+layout, the three-invariant survey and the box-order finding (`moov` is
+always last, but `bb2048Zone8.mp4` alone swaps `free` after `mdat`).
 
 ## What the executable sweep did not reach
 
