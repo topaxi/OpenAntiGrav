@@ -112,3 +112,8 @@
 0x088bb770	function	BackgroundController_UpdateImages	80	../psp-pure-eu/title-screen.md
 0x088ba694	function	Animation_ParseValuesOrKey	80	../psp-pure-eu/title-screen.md
 0x088cb0cc	function	Movie_ParseAttributes	85	../psp-pure-eu/movie-localised-suffix.md
+
+# The dev/pub reel's hold duration (2026-09-23), same investigation as
+# pure-eu's own: byte-identical past relocated call targets. See
+# ../psp-pure-eu/devpub-reel-hold.md.
+0x0894b678	function	DevPubReel_UpdateFrameHolds	92	../psp-pure-eu/devpub-reel-hold.md

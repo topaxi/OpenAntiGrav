@@ -141,3 +141,9 @@
 0x088b9f28	function	Animation_ParseValuesOrKey	80	title-screen.md
 0x088b9854	function	Animation_ConstructFromNode	80	title-screen.md
 0x088ca968	function	Movie_ParseAttributes	85	movie-localised-suffix.md
+
+# The dev/pub reel's hold duration (2026-09-23): a live PPSSPP breakpoint
+# during a real cold boot confirmed both the call path and the 2.0s span
+# directly. See devpub-reel-hold.md; the sibling init function and the
+# pause/resume callees stay unnamed pending their own independent read.
+0x0894b1f0	function	DevPubReel_UpdateFrameHolds	92	devpub-reel-hold.md

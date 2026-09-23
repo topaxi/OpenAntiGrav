@@ -48,9 +48,15 @@ pub mod states {
     /// **The frame holds are Pure's own.** `144`, `231` and `260` appear as three
     /// `li` immediates in Pure's `BOOT.BIN`, the only such site in the binary,
     /// each beginning an identical pause-and-reload block - so this title
-    /// implements the pause logic itself rather than inheriting it. The hold
-    /// *duration* is loaded from a global rather than an immediate, so
-    /// `oag_pulse::frontend::HOLD_SECONDS` remains Pulse's measurement.
+    /// implements the pause logic itself rather than inheriting it. **The hold
+    /// *duration* is measured too, not imported (2026-09-23):** the block reads
+    /// a global, but that global is a running clock sampled to compute elapsed
+    /// time, not the duration itself - the duration is a `2.0` built as a raw
+    /// float immediate, identically on both pressings, and a live PPSSPP
+    /// breakpoint measured the actual held span at 1.9965 s. So
+    /// `oag_pulse::frontend::HOLD_SECONDS` is confirmed for Pure independently,
+    /// not merely reused from Pulse's own measurement. See
+    /// `docs/ghidra/functions/psp-pure-eu/devpub-reel-hold.md`.
     ///
     /// An earlier reading recorded here had the cards as engine-drawn teletyped
     /// text. That was wrong, and wrong from reasoning about a screenshot's
