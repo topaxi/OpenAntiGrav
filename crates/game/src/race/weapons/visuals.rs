@@ -233,12 +233,12 @@ impl Race {
     /// Plays the explosion a weapon that just went off authored - its own,
     /// not another weapon's.
     ///
-    /// **Recovered for the Rocket, the Missile and the Mine; deliberately
-    /// silent for the Bomb.** See [`Race::blast_for`] for the map and the
-    /// reading behind each arm - the Bomb draws nothing here because its own
-    /// teardown, a distinct function from the Mine's, has not been read, not
-    /// because it has stopped exploding: the damage and impulse in
-    /// `oag_gameplay::projectile::blast` still land.
+    /// **Recovered for the Rocket, the Missile, the Mine and the Bomb.** See
+    /// [`Race::blast_for`] for the map and the reading behind each arm.
+    /// `orientation` is the frozen pose a laid charge detonated with
+    /// ([`oag_gameplay::projectile::mine::frozen_pose`]) - unused by every
+    /// arm but the Bomb's, which needs it to place its own two `.vex`
+    /// models; see [`Self::spawn_bomb_blast_model`].
     ///
     /// Nothing is drawn when the effect did not load, or when [`blast_for`]
     /// says this kind has none. That is deliberate and it is the rule for
@@ -250,7 +250,7 @@ impl Race {
     /// separate eight-billboard smoke trail, all invented; until 2026-08-26
     /// it drew the *Rocket's* `TRACK_BLAST_EFFECT`/`CRAFT_BLAST_EFFECT` for
     /// every kind of impact, mine and missile included, because [`blast_for`]
-    /// took no `kind` at all.
+    /// took no `kind` at all; until 2026-09-23 a Bomb drew nothing at all.
     ///
     /// [`RaceView::sparks`] is deliberately not reused for it: that system
     /// re-anchors to the hull every tick, so a burst ignited at an impact
@@ -263,6 +263,7 @@ impl Race {
         kind: oag_tables::weapons::Weapon,
         point: Vec3,
         struck: Option<usize>,
+        orientation: Quat,
     ) {
         let Some((name, at)) = self.blast_for(kind, point, struck) else {
             return;
@@ -276,6 +277,13 @@ impl Race {
         // independently of this effect stage.
         if kind == oag_tables::weapons::Weapon::Plasma {
             self.spawn_plasma_blast_model(at);
+        }
+        // The Bomb's own two-model detonation - `BOMB_SMOKERING_EFFECT`
+        // below is one third of it, the psys smoke ring; the hemisphere and
+        // the shockwave are their own `.vex` models, on `bomb_blast`'s own
+        // render-side pool, the same shape as the Plasma's own three above.
+        if kind == oag_tables::weapons::Weapon::Bomb {
+            self.spawn_bomb_blast_model(at, orientation);
         }
         let Some(effect) = self.view.effects.get(name).cloned() else {
             return;
@@ -321,13 +329,18 @@ impl Race {
     ///   [`PLASMA_LIGHTNING_EXPAND_EFFECT`] instead** - a different
     ///   executable's own file, read 2026-09-17; see that constant's doc
     ///   comment.
-    /// - **`Bomb`, and everything else**: `None`. The Bomb's own teardown -
-    ///   a distinct function from the Mine's, per its own separate pool
-    ///   cursor - is not chased, so whether it reaches `Mine_SpawnExplosion`
-    ///   too or an equivalent of its own naming `WO_BOMB_SMOKERING` is open.
-    ///   Guessing here - playing the Mine's file, or the Rocket's, which is
-    ///   what this did for every kind before 2026-08-26 - is exactly the
-    ///   invention `CLAUDE.md` forbids.
+    /// - **`Bomb`**: [`BOMB_SMOKERING_EFFECT`] always, whatever it struck -
+    ///   `Bomb_Detonate` (`0x088640c8`) calls `BombBlast_Construct`
+    ///   unconditionally on `play_visual`, which every caller in this
+    ///   engine's own fuse/trip paths sets. That is one third of the
+    ///   detonation: the other two are `explosion_hemisphere.vex` and
+    ///   `Bomb_Shockwave.vex`, their own `.vex` models this function cannot
+    ///   carry - [`Self::ignite_blast`]'s own Bomb branch spawns those into
+    ///   `bomb_blast`'s render-side pool alongside this effect. See
+    ///   `docs/ghidra/functions/psp-pulse-usa/mine.md#2026-09-23-the-blasts-own-per-tick-animator-read`.
+    /// - **Everything else**: `None`. Guessing here - playing the Mine's
+    ///   file, or the Rocket's, which is what this did for every kind before
+    ///   2026-08-26 - is exactly the invention `CLAUDE.md` forbids.
     pub(in crate::race) fn blast_for(
         &self,
         kind: oag_tables::weapons::Weapon,
@@ -349,6 +362,7 @@ impl Race {
             }),
             oag_tables::weapons::Weapon::Missile => Some((MISSILE_EXPLO_EFFECT, point)),
             oag_tables::weapons::Weapon::Mine => Some((MINE_EXPLO_EFFECT, point)),
+            oag_tables::weapons::Weapon::Bomb => Some((BOMB_SMOKERING_EFFECT, point)),
             oag_tables::weapons::Weapon::Cannon if struck.is_none() => {
                 Some((CANNON_SPARKS_EFFECT, point))
             }

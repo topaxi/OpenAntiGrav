@@ -510,6 +510,10 @@ pub const WEAPON_MODELS: &oag_title::weapons::WeaponModels = &oag_title::weapons
         sphere: r"Data\Weapons\HD_plasma_sphere.vex",
         halo: r"Data\Weapons\HD_plasma_halo.vex",
     }),
+    // HD's own Bomb detonation is unread - see
+    // `docs/ghidra/functions/psp-pulse-usa/mine.md`'s own note on what this
+    // substitutes.
+    bomb_blast_pulse: None,
     // Named, not wired - see `oag_game::race::load::weapon_models`'s own doc
     // comment for what placing this would need and where reading it stopped.
     leachbeam_ball: Some(r"Data\Weapons\hd_leachbeam_ball_bloomring.vex"),

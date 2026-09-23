@@ -13,25 +13,22 @@ mod craft;
 use craft::{cockpit_shield_visible, hd_flame_transform, shell_visible};
 
 impl Scene {
-    /// Draws one frame into `view`.
-    ///
-    /// One render pass with one clear: a second pass would either wipe the first's
-    /// colour or need its own decision about the depth buffer.
+    /// Draws one frame into `view`. One render pass with one clear: a
+    /// second pass would either wipe the first's colour or need its own
+    /// decision about the depth buffer.
     ///
     /// `cull` is `[graphics] frustum_culling` - **on** by default, see that
     /// setting's own doc comment for the measurement behind that default and
     /// for the cost the test itself carries.
     ///
     /// Returns what the track's frustum culling did, for the performance
-    /// overlay - see [`SceneStats`].
-    ///
-    /// `camera_jitter` is the jitter sequence's length, or `None` for no
-    /// jitter at all. **Not a bool, because the length is a property of what is
-    /// resolving the frames** - a temporal upscaler magnifying by two wants
-    /// four times the phases it wants at native. `--camera-jitter` on its own,
-    /// with nothing reconstructing from it, is a worse picture and passes
+    /// overlay - see [`SceneStats`]. `camera_jitter` is the jitter
+    /// sequence's length, or `None` for no jitter at all. **Not a bool,
+    /// because the length is a property of what is resolving the frames** -
+    /// a temporal upscaler magnifying by two wants four times the phases it
+    /// wants at native. `--camera-jitter` on its own, with nothing
+    /// reconstructing from it, is a worse picture and passes
     /// [`oag_render::jitter::DEFAULT_PHASES`]. See [`Scene::jittered`].
-    ///
     /// `timestamps`, `blur_timestamps` and `hd_bloom_timestamps` bracket this
     /// pass, the motion-blur chain and the HD/Fury bloom chain, `Some` only on
     /// the window's own frame loop - see [`oag_render::timing::PassTimer`].
@@ -40,7 +37,6 @@ impl Scene {
     /// presentation size whatever the scale is, so folding them in would put a
     /// fixed cost into a budget that exists to be divided by a moving one. See
     /// [dynamic-resolution.md](../../../../../docs/rendering/dynamic-resolution.md).
-    ///
     /// `zone_spectrum` is a live audio spectrum, each band `0.0..=1.0` -
     /// `oag_audio::Output::spectrum`'s own snapshot, read by the caller once
     /// a frame. Empty outside a Zone race or with nothing to draw it into is
@@ -426,6 +422,8 @@ impl Scene {
         let (rocket_matrices, ball_matrices, mine_matrices, bomb_matrices, cannon_matrices) =
             self.write_weapon_models(race, &prev, queue, view_projection, prev_vp);
         let plasma_blast_active = self.write_plasma_blasts(race, queue, view_projection);
+        let (bomb_hemisphere_active, bomb_shockwave_active) =
+            self.write_bomb_blasts(race, queue, view_projection);
         // Same model matrix as the ship: the original parents the plume to the
         // craft, not to the flare - see `Loaded::boost_model`. Skipped while
         // hidden rather than written and left undrawn, since there is nothing
@@ -836,6 +834,12 @@ impl Scene {
             stats.add(drawable.draw(&mut pass, None, None, None, None));
         }
         self.draw_plasma_blasts(&plasma_blast_active, &mut pass, &mut stats);
+        self.draw_bomb_blasts(
+            &bomb_hemisphere_active,
+            &bomb_shockwave_active,
+            &mut pass,
+            &mut stats,
+        );
         // After the ships, so the hulls' depth is already in the buffer: a
         // plume's own blend pipeline writes no depth, the same reasoning as
         // the flares below. One draw per boosting craft, gated on the same

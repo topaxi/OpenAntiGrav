@@ -95,6 +95,9 @@ pub const TITLE: &Title = &Title {
             hemisphere1: r"Data\Weapons\pulse_plasma_hemisphere1.vex",
         }),
         plasma_blast_hd: None,
+        // Pure's Bomb authors no `timetodie` at all and never detonates -
+        // see `oag_tables::weapons::BombStats::timetodie`.
+        bomb_blast_pulse: None,
         leachbeam_ball: None,
     },
 };

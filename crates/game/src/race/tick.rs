@@ -267,6 +267,15 @@ impl Race {
         // only way to see one is to compare this counter before and after.
         let bounces_before: [u8; oag_gameplay::projectile::MAX_PROJECTILES] =
             std::array::from_fn(|slot| self.sim.world.projectiles.slots[slot].bounces);
+        // Read before the step too, for `ignite_blast`'s Bomb arm below: a
+        // detonated slot resets to `Projectile::default()` inside `step`
+        // (`Quat::IDENTITY`), so the frozen pose a laid Bomb detonated with
+        // has to be read before that happens - the same before/after shape
+        // `bounces_before` already takes, and `impacts` is slot-indexed the
+        // same way. Read for every slot rather than gated on `kind ==
+        // Bomb`, since nothing here is on the determinism-hashed path.
+        let orientations_before: [Quat; oag_gameplay::projectile::MAX_PROJECTILES] =
+            std::array::from_fn(|slot| self.sim.world.projectiles.slots[slot].orientation);
         let impacts = oag_gameplay::projectile::step(
             &mut self.sim.world,
             self.sim.dt,
@@ -284,7 +293,11 @@ impl Race {
         // After `projectile::step`, so a flare rides where its rocket
         // actually ended the tick rather than a tick behind it.
         self.advance_projectile_flares();
-        for impact in impacts.iter().flatten() {
+        for (slot, impact) in impacts
+            .iter()
+            .enumerate()
+            .filter_map(|(slot, impact)| impact.as_ref().map(|impact| (slot, impact)))
+        {
             // Eliminator's own kill attribution - see `crate::race::eliminator`.
             // A direct hit only: a blast's own splash damage against a craft
             // it did not directly strike is not credited, which this project
@@ -292,7 +305,12 @@ impl Race {
             if let Some(struck) = impact.struck {
                 self.sim.last_damager[struck as usize] = Some(impact.owner);
             }
-            self.ignite_blast(impact.kind, impact.point, impact.struck.map(usize::from));
+            self.ignite_blast(
+                impact.kind,
+                impact.point,
+                impact.struck.map(usize::from),
+                orientations_before[slot],
+            );
             // `Plasma_SweepCraftHit` (`0x0886afb8`) plays `PLASMAHITSHIP` on a
             // craft hit and clears the bolt's own emitter before
             // `Plasmas_Update`'s pass-two teardown would otherwise play
@@ -322,6 +340,8 @@ impl Race {
         // one-tick order `advance_projectile_flares` above takes relative to
         // a freshly-placed flare. See `blast_models` module doc comment.
         self.advance_plasma_blast_models(self.sim.dt);
+        // Same one-tick order, for the Bomb's own hemisphere/shockwave pool.
+        self.advance_bomb_blast_models(self.sim.dt);
         self.ignite_missile_bounces(&bounces_before);
         // After the craft have moved, so a flare sits on this tick's nozzle
         // rather than the last one's.

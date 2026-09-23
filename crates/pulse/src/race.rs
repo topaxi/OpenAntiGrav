@@ -319,6 +319,12 @@ pub const WEAPON_MODELS: &oag_title::weapons::WeaponModels = &oag_title::weapons
         hemisphere1: r"Data\Weapons\pulse_plasma_hemisphere1.vex",
     }),
     plasma_blast_hd: None,
+    // `BombBlast_Construct`'s own load order - see
+    // `docs/ghidra/functions/psp-pulse-usa/mine.md`.
+    bomb_blast_pulse: Some(oag_title::weapons::PulseBombBlast {
+        hemisphere: r"Data\Weapons\explosion_hemisphere.vex",
+        shockwave: r"Data\Weapons\Bomb_Shockwave.vex",
+    }),
     leachbeam_ball: None,
 };
 

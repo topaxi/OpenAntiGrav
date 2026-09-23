@@ -862,6 +862,7 @@
 0x088643d0	function	Bomb_ApplyBlast	85	mine.md
 0x088640c8	function	Bomb_Detonate	88	mine.md
 0x08872078	function	BombBlast_Construct	90	mine.md
+0x0887250c	function	BombBlast_Update	85	mine.md
 0x0886ad60	function	Plasma_HitCraft	88	plasma.md
 0x0886ae08	function	Plasma_ApplyBlastForce	88	plasma.md
 0x0886afb8	function	Plasma_SweepCraftHit	82	plasma.md

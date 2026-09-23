@@ -122,6 +122,7 @@ mod absorb;
 mod access;
 mod assets;
 mod blast_models;
+mod bomb_blast;
 mod camera;
 mod capture;
 mod drawable;

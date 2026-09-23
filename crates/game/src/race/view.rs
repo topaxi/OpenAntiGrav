@@ -246,6 +246,10 @@ pub struct RaceView {
     /// comment for why this lives here rather than in `World`, and
     /// [`Race::spawn_plasma_blast_model`] for what fills a slot.
     pub(super) plasma_blasts: [Option<blast_models::PlasmaBlast>; blast_models::PLASMA_BLAST_SLOTS],
+    /// The Bomb's own render-side detonation instances, one per
+    /// [`bomb_blast::BOMB_BLAST_SLOTS`] - see that module's own doc comment,
+    /// and [`Race::spawn_bomb_blast_model`] for what fills a slot.
+    pub(super) bomb_blasts: [Option<bomb_blast::BombBlast>; bomb_blast::BOMB_BLAST_SLOTS],
     /// The stage's generator, deliberately **not** `world.rng` - see
     /// [`Self::exhaust_rng`].
     pub(super) stage_rng: Rng,

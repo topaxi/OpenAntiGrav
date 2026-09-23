@@ -58,21 +58,23 @@ pub(super) fn build(
 }
 
 /// Builds every weapon's own drawable pool in one call - the Rocket's, the
-/// Mine's, the Bomb's, the Cannon round's and the Plasma blast's three -
-/// each with [`build`], on `Scene::new`'s own terms.
+/// Mine's, the Bomb's, the Cannon round's, the Plasma blast's three and the
+/// Bomb blast's two - each with [`build`], on `Scene::new`'s own terms.
 ///
 /// One function rather than one `let` per kind in `scene.rs`, for the same
 /// line-budget reason [`super::super::load::weapon_models::load_bodies`]
 /// exists on the loading side.
 /// [`build_all`]'s own return: one drawable pool per kind, the Plasma's own
 /// (the bolt's head included) grouped as [`blast_models::PlasmaBlastDrawables`]
-/// already are.
+/// already are, and the Bomb's own two grouped as
+/// [`bomb_blast::BombBlastDrawables`].
 type WeaponBodies = (
     Vec<Drawable>,
     Vec<Drawable>,
     Vec<Drawable>,
     Vec<Drawable>,
     blast_models::PlasmaBlastDrawables,
+    bomb_blast::BombBlastDrawables,
 );
 
 /// [`Scene::write_weapon_models`]'s own return: one matrix list per kind, in
@@ -88,6 +90,7 @@ pub(super) fn build_all(
     bomb_model: Option<Model>,
     cannon_model: Option<Model>,
     plasma_blast_models: blast_models::PlasmaBlastModels,
+    bomb_blast_models: bomb_blast::BombBlastModels,
     format: wgpu::TextureFormat,
     anisotropy: Anisotropy,
     sample_count: u32,
@@ -114,6 +117,7 @@ pub(super) fn build_all(
         one(bomb_model)?,
         one(cannon_model)?,
         blast_models::PlasmaBlastDrawables::build(plasma_blast_models, one)?,
+        bomb_blast::BombBlastDrawables::build(bomb_blast_models, one)?,
     ))
 }
 
@@ -281,6 +285,81 @@ impl super::Scene {
                 if let Some(drawable) = pool.get(slot) {
                     stats.add(drawable.draw(pass, None, None, None, None));
                 }
+            }
+        }
+    }
+}
+
+impl super::Scene {
+    /// Writes this tick's transform onto every live Bomb blast's two
+    /// drawables, and hands back which slots are live *and visible*, per
+    /// model - the same sparse shape [`Self::write_plasma_blasts`] takes,
+    /// two arrays rather than one because the hemisphere and the shockwave
+    /// hide on two different schedules (`bomb_blast::HEMISPHERE_HIDE_AT_SECONDS`
+    /// against the whole object's own retire).
+    ///
+    /// **No per-tick anim-time scrub, unlike the Plasma's.**
+    /// `BombBlast_Update` scales the basis directly rather than scrubbing a
+    /// baked node animation - see `bomb_blast`'s own module doc comment - so
+    /// a plain [`Drawable::write`] carries the whole picture.
+    pub(super) fn write_bomb_blasts(
+        &self,
+        race: &Race,
+        queue: &wgpu::Queue,
+        view_projection: Mat4,
+    ) -> (
+        [bool; bomb_blast::BOMB_BLAST_SLOTS],
+        [bool; bomb_blast::BOMB_BLAST_SLOTS],
+    ) {
+        let draws = race.bomb_blast_draws();
+        let mut hemisphere_active = [false; bomb_blast::BOMB_BLAST_SLOTS];
+        let mut shockwave_active = [false; bomb_blast::BOMB_BLAST_SLOTS];
+        for (slot, draw) in draws.iter().enumerate() {
+            let Some(draw) = draw else { continue };
+            if let (true, Some(drawable)) = (
+                draw.hemisphere_visible,
+                self.bomb_blast.hemisphere.get(slot),
+            ) {
+                let mvp = view_projection * draw.hemisphere_matrix;
+                drawable.write(queue, view_projection, draw.hemisphere_matrix, mvp);
+                hemisphere_active[slot] = true;
+            }
+            if let (true, Some(drawable)) =
+                (draw.shockwave_visible, self.bomb_blast.shockwave.get(slot))
+            {
+                let mvp = view_projection * draw.shockwave_matrix;
+                drawable.write(queue, view_projection, draw.shockwave_matrix, mvp);
+                shockwave_active[slot] = true;
+            }
+        }
+        (hemisphere_active, shockwave_active)
+    }
+
+    /// Draws every live Bomb blast's two models - the two arrays are
+    /// [`Self::write_bomb_blasts`]'s own return.
+    pub(super) fn draw_bomb_blasts(
+        &self,
+        hemisphere_active: &[bool; bomb_blast::BOMB_BLAST_SLOTS],
+        shockwave_active: &[bool; bomb_blast::BOMB_BLAST_SLOTS],
+        pass: &mut wgpu::RenderPass<'_>,
+        stats: &mut SceneStats,
+    ) {
+        for (slot, _) in hemisphere_active
+            .iter()
+            .enumerate()
+            .filter(|(_, live)| **live)
+        {
+            if let Some(drawable) = self.bomb_blast.hemisphere.get(slot) {
+                stats.add(drawable.draw(pass, None, None, None, None));
+            }
+        }
+        for (slot, _) in shockwave_active
+            .iter()
+            .enumerate()
+            .filter(|(_, live)| **live)
+        {
+            if let Some(drawable) = self.bomb_blast.shockwave.get(slot) {
+                stats.add(drawable.draw(pass, None, None, None, None));
             }
         }
     }
