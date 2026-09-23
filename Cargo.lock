@@ -2049,6 +2049,7 @@ dependencies = [
  "oag-race",
  "oag-rcs",
  "oag-render",
+ "oag-replay",
  "oag-tables",
  "oag-testdata",
  "oag-texture",

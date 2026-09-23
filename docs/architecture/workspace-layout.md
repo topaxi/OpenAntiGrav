@@ -50,6 +50,7 @@ Older pages, and [`goals.md`](../overview/goals.md)'s scope table, use
 | `oag-race` | `crates/race` | Race rules, lap timing, track progress. |
 | `oag-ai` | `crates/ai` | Opponent behaviour: a line-following driver that emits ship controls. Depends on `oag-core` and `oag-physics` only. |
 | `oag-gameplay` | `crates/gameplay` | The `World` struct and the input snapshot the simulation consumes. |
+| `oag-replay` | `crates/replay` | Replays: the per-slot input stream as the truth, a state hash a second to catch a desync, and a ghost lap's pose track. Created when M7 opened, per [ADR-0055](adr/0055-replays-are-inputs-and-a-ghost-is-poses.md). In `GAMEPLAY_CRATES`: it depends on `oag-core` and `oag-gameplay` and nothing that draws. |
 | `oag-audio` | `crates/audio` | The mixer and playback device; see [ADR-0018](adr/0018-audio-mixer-architecture.md). |
 | `oag-ui` | `crates/ui` | The front end: boot movies, menus, the HUD's font, the strings a screen draws. Extracted from `oag-game` the same way `oag-display` was; `oag-game`'s own `render.rs` rasterises the `Draw` list it emits. Classified in `NOT_TITLE_PACKAGES` rather than `GAMEPLAY_CRATES` - menus draw, so it may link a renderer, which is exactly what nothing gameplay-side may ever do. |
 | `oag-title` | `crates/title` | The engine-side *types* a title package fills in. Tables, no data. |
@@ -68,7 +69,6 @@ crate created before its shape is understood tends to get the wrong shape.
 | --- | --- | --- |
 | `oag-weapons` | M5 | Pickups, projectiles, damage. **Not created; the work landed elsewhere** - see below. |
 | `oag-ui` | M5 | HUD and menus. |
-| `oag-replay` | M7 | Input recording and playback. |
 | `oag-net` | M8 | Multiplayer. |
 
 **`oag-weapons` is a plan this project did not follow, and the reason is the

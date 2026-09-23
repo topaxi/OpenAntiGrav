@@ -139,6 +139,7 @@ mod models;
 mod options;
 mod pads;
 mod reconcile;
+mod replay;
 mod respawn;
 mod results;
 mod scene;
@@ -168,6 +169,7 @@ pub use held_buttons::HeldButtons;
 pub use hud::hud_layout;
 pub use load::{load, load_event};
 pub use options::{CameraOverride, Campaign2048Progress, Loaded, Options, PoseRequest, Setup};
+pub use replay::Ghost;
 pub use scene::Scene;
 pub use sim::RaceSim;
 pub use spline::{Spline, circuit_length};
@@ -536,6 +538,10 @@ pub struct Race {
     /// here reaches [`RaceSim::state_hash`], and nothing above it may be reached
     /// *from* here - see [`view`] for the argument.
     view: RaceView,
+    /// The recording of this race, if one was asked for, and the ghost it
+    /// races against, if any. Neither reaches [`RaceSim::state_hash`] - see
+    /// [`replay`].
+    replay: replay::ReplayState,
 }
 
 /// How fast the kick opens, per second, as an exponential approach.
