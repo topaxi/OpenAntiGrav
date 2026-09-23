@@ -751,6 +751,8 @@ pub fn load(options: &Options) -> Result<Loaded> {
     // the player's contacts alone - so this takes slot 0's locators rather than
     // carrying eight sets nothing reads.
     let collision_fx = liveries[0].collision_fx.clone();
+    let absorb_burst = super::absorb::absorb_burst_for(craft_title);
+    let absorb_anchors = super::absorb::anchors(absorb_burst, &liveries);
 
     // One loop for all of them, and one report line each: adding an effect
     // is adding its name to `RACE_EFFECTS` and a trigger, never a loader.
@@ -908,6 +910,8 @@ pub fn load(options: &Options) -> Result<Loaded> {
                 oag_render::shield::PULSE_PALETTE
             },
             hd_plasma_blast: craft_title.weapon_models.plasma_blast_hd.is_some(),
+            absorb_burst,
+            absorb_anchors,
             collision,
             handling,
             airbrake_graphics,

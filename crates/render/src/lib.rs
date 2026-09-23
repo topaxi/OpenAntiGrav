@@ -41,6 +41,7 @@ pub mod cloud;
 pub mod collision;
 pub mod exhaust;
 pub mod gantry;
+pub mod hull_overlay;
 pub mod jitter;
 pub mod loading;
 pub mod mesh;

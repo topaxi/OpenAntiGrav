@@ -209,3 +209,29 @@ fn a_zero_interval_emitter_does_not_spin() {
         "a zero interval should emit, not go silent"
     );
 }
+
+/// The HD capture that drew no absorb burst: a stage kept busy by running
+/// one-shot bursts refuses [`Stage::attach`], and a riding burst must still
+/// get a slot - by recycling a burst, never an attached instance.
+#[test]
+fn a_riding_burst_plays_on_a_stage_too_busy_to_attach() {
+    let mut stage = Stage::new();
+    let burst = effect("burst", false, 4.0);
+    let forever = effect("forever", true, 10.0);
+    let flare = stage.attach(&forever, Vec3::ZERO, 1.0).expect("attach");
+    for _ in 0..MAX_INSTANCES {
+        assert!(stage.play(&burst, Vec3::ZERO, 1.0).is_some());
+    }
+    assert!(
+        stage.attach(&forever, Vec3::ZERO, 1.0).is_none(),
+        "the fixture is meant to leave the stage too busy to attach"
+    );
+    let riding = stage
+        .play_riding(&burst, Vec3::ZERO, 1.0)
+        .expect("a riding burst was refused");
+    assert!(stage.is_playing(riding) && stage.is_emitting(riding));
+    stage.follow(riding, Vec3::X);
+    assert!(stage.is_playing(flare), "the riding burst evicted a flare");
+    stage.detach(riding);
+    assert!(!stage.is_playing(riding));
+}

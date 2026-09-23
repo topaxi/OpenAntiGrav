@@ -1001,6 +1001,13 @@ impl System {
         self.particles.iter().filter(|p| p.alive()).count()
     }
 
+    /// Whether any emitter is still running - the part of an effect that
+    /// reads its anchor. Particles already out live on without it.
+    #[must_use]
+    pub fn is_emitting(&self) -> bool {
+        self.emitters.iter().any(|state| state.active)
+    }
+
     /// Whether anything is still emitting or alive.
     #[must_use]
     pub fn is_running(&self) -> bool {
@@ -1186,11 +1193,17 @@ impl Library {
 /// [`System`], not a bigger one: `WO_ROCKET_EXPLO` alone schedules about 150
 /// concurrent particles and four of its seven emitters author a `2000` cap
 /// that never binds, so two explosions sharing a pool would evict each
-/// other's particles rather than queue. Twenty-four covers what a race
+/// other's particles rather than queue. Twenty-four covered what a race
 /// actually puts on screen - one engine flare per craft on a source that
 /// authors one (eight), a handful of rockets in flight each carrying a
 /// flare, plus their detonations - at about 500 KB of pool.
-pub const MAX_INSTANCES: usize = 24;
+///
+/// **Thirty-two since the absorb burst landed, chosen, not measured.** One
+/// absorb alone starts up to ten instances on Pulse (one per `Ship Collision
+/// Fx` node, `oag_game::race::absorb`), each alive about a second, which
+/// against twenty-four would have recycled the detonations the old count was
+/// sized for. About 670 KB of pool.
+pub const MAX_INSTANCES: usize = 32;
 
 /// Instances [`Stage::attach`] refuses to take, so a detonation always has
 /// somewhere to play.
@@ -1922,6 +1935,8 @@ impl Pipeline {
         }
     }
 }
+
+mod riding;
 
 #[cfg(test)]
 mod tests;

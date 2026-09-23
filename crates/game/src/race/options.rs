@@ -409,6 +409,13 @@ pub struct Setup {
     /// branch on rather than re-deriving which title is live from anywhere
     /// else.
     pub hd_plasma_blast: bool,
+    /// How this title staggers `WO_WEAPON_ABSORB` over a hull, or `None` on a
+    /// title whose absorb path is unread. See `race::absorb`.
+    pub absorb_burst: Option<super::absorb::AbsorbBurst>,
+    /// Each slot's absorb locators in its hull's model space, in the order
+    /// the original collects them: the `Ship Collision Fx` set on Pulse and
+    /// Pure, the `absorb` set on HD.
+    pub absorb_anchors: Vec<Vec<Vec3>>,
     /// Every collidable triangle of the track.
     pub collision: CollisionWorld,
     /// The force law's parameter set for one team in one speed class.

@@ -58,6 +58,8 @@ impl Race {
             hd_trail,
             shield_palette,
             hd_plasma_blast,
+            absorb_burst,
+            absorb_anchors,
             ..
         } = setup;
 
@@ -422,6 +424,11 @@ impl Race {
                 leach_beam_rng: Rng::new(LEACH_BEAM_SEED),
                 plasma_blasts: [None; blast_models::PLASMA_BLAST_SLOTS],
                 hd_plasma_blast,
+                absorb_burst,
+                absorb_anchors,
+                absorb_bursts: Vec::new(),
+                absorb_started: 0,
+                absorb_overlay: [None; MAX_SHIPS],
                 stage_rng: Rng::new(STAGE_SEED),
                 sparks_ignitions: 0,
                 sparks_rng: Rng::new(SPARKS_SEED),

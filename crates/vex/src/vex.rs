@@ -86,11 +86,11 @@ pub const CLASS_MESH: u32 = 0x125;
 /// Version 6 only; [`classes::for_version`] is what a decoder should ask.
 pub const CLASS_TEXTURE: u32 = 0x3c1;
 
-/// The six collision class IDs, defined in [`classes`] beside the tables that
-/// select them and re-exported here so every `CLASS_*` name lives in one place.
+/// The collision and absorb class IDs, defined in [`classes`] beside the tables
+/// that select them and re-exported here so every `CLASS_*` name is in one place.
 pub use classes::{
-    CLASS_CAGE_COLLISION, CLASS_FLOOR_COLLISION, CLASS_MAG_FLOOR_COLLISION, CLASS_RESET_COLLISION,
-    CLASS_TRACK_WALL_COLLISION, CLASS_WALL_COLLISION,
+    CLASS_ABSORB, CLASS_CAGE_COLLISION, CLASS_FLOOR_COLLISION, CLASS_MAG_FLOOR_COLLISION,
+    CLASS_RESET_COLLISION, CLASS_TRACK_WALL_COLLISION, CLASS_WALL_COLLISION,
 };
 
 /// Class ID of a `WO Track` node: the AI spline graph, decoded by

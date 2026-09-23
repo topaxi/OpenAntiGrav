@@ -959,3 +959,4 @@ mod tests {
 }
 
 mod occlusion;
+mod overlay;

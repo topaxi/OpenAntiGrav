@@ -56,6 +56,7 @@ use oag_vex::vex;
 
 use crate::race::{boost_entry_name, ps2_texture_set, ship_entry_name};
 
+mod absorb;
 pub(crate) mod engine_light;
 mod flare;
 pub(crate) mod ship_skin;
@@ -102,6 +103,12 @@ pub struct Livery {
     /// different models, so a locator set belongs to the one it was authored
     /// on.
     pub collision_fx: Vec<SparkAnchor>,
+    /// Wipeout HD's `absorb` locators, model space, where its absorb burst
+    /// plays - empty on every source that has no such class. See [`absorb`].
+    pub absorb: Vec<Vec3>,
+    /// The hull redrawn under `absorb_surface.mip` for the second after an
+    /// absorb - see [`absorb::overlay`]. `None` wherever it is not built.
+    pub absorb_overlay: Option<Model>,
     /// The plume's own authored texture-transform animation.
     ///
     /// **Per team, and this is not a formality.** Eight per-team plumes sampled
@@ -182,6 +189,9 @@ pub struct LoadContext<'a> {
     pub flare: &'a oag_title::flare::Flare,
     /// Which level of detail to build each model at.
     pub lod: mesh::Lod,
+    /// Whether to build the absorb hull overlay - Pulse's alone, and only
+    /// while `oag_render::hull_overlay::DRAWN` says so. See [`absorb::overlay`].
+    pub hull_overlay: bool,
 }
 
 /// Loads one [`Livery`] per entry of `teams`, in that order.
@@ -227,6 +237,8 @@ pub fn load(
                 hull: source.hull.clone(),
                 nozzle: source.nozzle,
                 collision_fx: source.collision_fx.clone(),
+                absorb: source.absorb.clone(),
+                absorb_overlay: source.absorb_overlay.clone(),
                 boost: source.boost.clone(),
                 boost_uv: source.boost_uv.clone(),
                 flare: source.flare.clone(),
@@ -264,6 +276,8 @@ pub fn load(
                     hull: player.hull.clone(),
                     nozzle: player.nozzle,
                     collision_fx: player.collision_fx.clone(),
+                    absorb: player.absorb.clone(),
+                    absorb_overlay: player.absorb_overlay.clone(),
                     boost: player.boost.clone(),
                     boost_uv: player.boost_uv.clone(),
                     flare: player.flare.clone(),
@@ -338,6 +352,8 @@ fn one(
                     hull: mesh::Model::none(&hull_name),
                     nozzle: None,
                     collision_fx: Vec::new(),
+                    absorb: Vec::new(),
+                    absorb_overlay: None,
                     boost: None,
                     boost_uv: None,
                     flare: None,
@@ -358,6 +374,7 @@ fn one(
             ));
         }
         let (nozzle, nozzle_axis, collision_fx) = locators(archives, &hull_name, &blob, report);
+        let absorb = absorb::locators(archives, &hull_name, &blob, report);
         let engine_light =
             engine_light::load(archives, team, ships.dir, ctx.flare, nozzle_axis, report);
         // **The plume comes from here too on this title.** HD ships no
@@ -369,6 +386,8 @@ fn one(
             team: team.to_string(),
             nozzle,
             collision_fx,
+            absorb,
+            absorb_overlay: None,
             hull,
             boost: lit.boost,
             flare: lit.always,
@@ -416,11 +435,14 @@ fn one(
     // branch alone so a fourth source is answered by its own axis and not by
     // which decoder its hull happened to take.
     let lit = authored_flare(archives, team, ships.dir, ctx.flare, nozzle, report);
+    let absorb_overlay = absorb::overlay(archives, &hull, &blob, ctx.hull_overlay, report);
     Ok(Livery {
         team: team.to_string(),
         hull,
         nozzle,
         collision_fx,
+        absorb: Vec::new(),
+        absorb_overlay,
         boost,
         boost_uv,
         flare: lit.always,

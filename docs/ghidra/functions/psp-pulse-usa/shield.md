@@ -763,13 +763,75 @@ complete xref list) and the silence (both gates on
 **Ported**: `Race::eliminator_lap_health_refill` adds
 `LAP_REFILL_FRACTION` (`0.2`) of the maximum through `oag_physics::damage::add`
 on the racing gate and raises `Cue::Absorb`; the absorb handler's own `ABSORB`
-is raised on the same cue. The ten staggered `WO_WEAPON_ABSORB` bursts are
-**not drawn yet** - the effect is in the psys inventory and the trigger is
-now recovered, so it is the stagger and the per-node anchoring that wait, not
-the reading. One departure, stated on the port: it refills every craft's lap,
+is raised on the same cue. **The staggered `WO_WEAPON_ABSORB` burst is drawn
+as of 2026-09-23**: both paths call `Race::play_absorb_feedback`
+(`oag_game::race::absorb`), which raises the cue and attaches one instance per
+`Ship Collision Fx` node on the stagger below. One departure, stated on the port: it refills every craft's lap,
 not the player's alone, so a field of opponents that the player never shoots
 does not wear itself down; `slot` is what to narrow if that is the wrong
 call.
+
+### Which ten nodes, and what the stagger does (2026-09-23)
+
+The previous pass stopped at "the craft's fx nodes". Read to the end:
+
+```c
+void Ship_PlayAbsorbFeedback(Entity *e) {                          // 0x08840640
+    if (FUN_0883e37c() && e->fx_count /* +0xca8 */ != 0) {
+        Sound_Play(1.0, e->emitter /* +0x50 */, bank, 0, "ABSORB", 0);
+        for (i = 0; e->fx[i] /* +0xc80 */ && i < 10; i++) {
+            DAT_08abf564 = (float)i * 0.1f;
+            ShipCollisionFx_Trigger(1.0, e->fx[i], 2, 0);
+        }
+    }
+}
+```
+
+- **The list is the hull's `Ship Collision Fx` nodes.**
+  `Ship_GatherCollisionFxNodes` (`0x0883ea50`, renamed from `FUN_0883ea50`)
+  zeroes the ten words at `+0xc80` and calls `Vex_CollectNodesOfType`
+  (`0x08a6d79c`, renamed from `FUN_08a6d79c`) on the live hull root at
+  `+0x8b0`. It stores the count at `+0xca8`. `Vex_CollectNodesOfType` is a
+  pre-order walk (first child `+0x10`, next sibling `+0xc`) that keeps every
+  node whose type word `+4` matches the query's, up to the cap. The query's type is
+  `FUN_08a6ba70`. That is the derived-class token which
+  `FUN_08924bf0`, the `0x3d0` `Ship Collision Fx` registration, installs
+  second, after the generic base token `FUN_08a6ba64` that 25 other
+  registrations share. `FUN_08a6ba70` has only five callers, all in
+  `Ship Collision Fx` code. `Ship_DispatchCollisionFx` reads the same
+  `+0xc80` list as those instances
+  ([contact-response.md](contact-response.md)). The absorb therefore plays
+  on every node the collision sparks pick the nearest of: six on Assegai.
+  The list is re-gathered by `FUN_0883eae8`/`FUN_0883eb68` whenever the live
+  hull at `+0x8b0` is swapped between the two models at `+0x8b4`/`+0x8b8`.
+  Confidence **85**.
+- **The gate:** `+0xca8 != 0`, so a hull with no nodes gets **no sound
+  either**. `FUN_0883e37c` is a display-mask test (`FUN_0891e908(g_display)
+  & FUN_0897bc08(...)`) that was not read further. The port raises the cue
+  regardless, as it did before, and only the picture waits on the node
+  count. This is recorded as a difference, not fixed.
+- **`DAT_08abf564` is a start delay.** Its only reader is
+  `PsysNode_Start_q` (`0x08916200`, renamed from `FUN_08916200`, 65). That is
+  the particle-node set-up `ShipCollisionFx_Trigger`'s spawn reaches, and it
+  moves a positive value into the node's `+0xb8` and zeroes the global.
+  `PsysNode_Update` (`0x08915cdc`, renamed from `FUN_08915cdc`, 80) subtracts
+  the frame's `dt` from `+0xb8` while it is positive. Only after that does it
+  compose the node's world matrix from its parent (the locator) and run
+  `ParticleSystem_Update`. So node `i` starts `i * 0.1` s late and then rides
+  the hull. Confidence **80** for the delay, **65** for `PsysNode_Start_q`'s
+  role as a whole (only this branch of a long set-up was followed).
+- **Severity is not set** for kind 2 (see `ShipCollisionFx_Trigger` on
+  [contact-response.md](contact-response.md)), so the effect plays as
+  authored.
+
+The port is `oag_game::race::absorb::PULSE_ABSORB_BURST`. It plays one
+`WO_WEAPON_ABSORB` per locator through `psys::Stage::play_riding`, follows
+the locator while the emitters run, and lets go after. `crates/game/tests/absorb_ground_truth.rs` pins six
+bursts on Assegai, the second starting a tenth of a second in. Pure's twin
+(`FUN_08925e20`) loops eight times, per
+[`psp-pure-usa/rocket-and-collision-fx.md`](../psp-pure-usa/rocket-and-collision-fx.md).
+HD's is a different mechanism on a different node class; see
+[`ps3-hdfury-eu/absorb-feedback.md`](../ps3-hdfury-eu/absorb-feedback.md).
 
 ## What is not verified
 
@@ -781,10 +843,15 @@ call.
 - **`weapon_kind`'s nine cases are unmapped.** They select telemetry buckets
   and nothing else here; naming them wants the weapon table, which is
   unstarted.
-- **The absorb-spark burst is not drawn**: ten `WO_WEAPON_ABSORB` instances
-  staggered 0.1 s over the craft's fx nodes, trigger recovered above.
+- ~~**The absorb-spark burst is not drawn**~~ - drawn 2026-09-23. See
+  "Which ten nodes, and what the stagger does" above. Nothing here has been
+  compared against a capture of the original's absorb.
 
 ## History
+
+- 2026-09-23: **the absorb burst's node list and delay read**:
+  `Ship_GatherCollisionFxNodes`, `Vex_CollectNodesOfType`, `PsysNode_Start_q`
+  and `PsysNode_Update` are named. The burst is drawn.
 
 - 2026-09-16: **`ArcadeRace_Update` / `ArcadeRace_UpdateRacing` named** -
   the reader of the destroyed bit that ends a single race for the player,

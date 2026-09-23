@@ -326,6 +326,7 @@ impl Race {
         // After the craft have moved, so a flare sits on this tick's nozzle
         // rather than the last one's.
         self.advance_engine_flares();
+        self.advance_absorb_bursts();
         self.view
             .stage
             .advance(self.sim.dt, &mut self.view.stage_rng);

@@ -150,6 +150,8 @@ fn setup(handling: Handling) -> Setup {
         shield_palette: oag_render::shield::PULSE_PALETTE,
         // Pulse's own mechanism, same reasoning as `shield_palette` above.
         hd_plasma_blast: false,
+        absorb_burst: None,
+        absorb_anchors: Vec::new(),
         trail_sparks: false,
         spark_anchors: Vec::new(),
         collision: CollisionWorld::new(),
