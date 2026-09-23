@@ -490,21 +490,28 @@ pub struct Graphics {
     /// measured in a frame-accurate capture, so it animates either way.
     /// Whether the recovered bloom post-process runs.
     ///
-    /// **Defaults off, and the reason is honesty rather than taste.** The
-    /// passes are a faithful port - every constant is read out of `BOOT.BIN`,
-    /// see `oag_render::post::bloom` - but the *magnitude* reaching the picture
-    /// is not yet calibrated: measured on one boost frame it quadruples the
-    /// blown-out area (4,381 to 17,578 fully white pixels) and erases the
-    /// craft, where the original's shows the hull plainly with the plume as two
-    /// distinct wing spikes.
+    /// **On by default, because the original always runs it.** A read
+    /// watchpoint only `Bloom_Draw` trips counted it once per race frame, 121
+    /// of 121; nothing in the executable switches it off. Every constant of
+    /// the passes is read out of `BOOT.BIN` - see `oag_render::post::bloom`.
     ///
-    /// The suspect is how much the glow mask accumulates rather than the bloom
-    /// arithmetic: `oag_render::exhaust::BLEND` weights alpha `SrcAlpha`/`One`,
-    /// so overlapping plume fins build the mask to saturation, while the
-    /// original's `GU_FIX 0xffffff` destination factor carries **no alpha**,
-    /// which would make it a replace. That is a PSP blend-semantics question
-    /// this project has not settled. Until it is, defaulting this on would ship
-    /// a known-wrong picture to make a recovered subsystem visible.
+    /// **It stayed off until the mask it reads was measured**, and that was
+    /// the right call: the plume wrote the mask through an additive alpha
+    /// blend and quadrupled a boost frame's blown-out area. The original's
+    /// mask is the GE stencil, read out of EDRAM on a live race, and nothing
+    /// blends it: `4` under every opaque batch, a `_GLOW` texture's own byte
+    /// under its batches, nothing under the plume. Stamped that way
+    /// (`mesh_render::GlowMask::Stamped`), a racing frame on Talon's Junction
+    /// moves from 2,911 fully white pixels to 6,888, almost all of it the
+    /// exhaust ribbon, and its mean luma from 110 to 115. See
+    /// `docs/rendering/glow-mask.md`.
+    ///
+    /// **Pulse on the PSP only.** The pass runs over a mask stamped the
+    /// measured way, which a Pure or PS2 source does not write, so there it
+    /// draws nothing whatever this says. Wipeout HD's own chain reads this
+    /// switch too, as `Glow::Drawn` or `Glow::Suppressed`. A settings file
+    /// that already says `bloom = false` keeps saying it: a default only
+    /// fills a missing key.
     #[serde(default = "default_bloom")]
     pub bloom: bool,
     /// How much crossing a speed pad widens the field of view for a moment.
@@ -561,9 +568,9 @@ fn default_camera_view() -> oag_display::display::CameraView {
     oag_display::display::CameraView::default()
 }
 
-/// See [`Graphics::bloom`]: **off** until its magnitude is calibrated.
+/// See [`Graphics::bloom`]: **on**, as the original always runs it.
 fn default_bloom() -> bool {
-    false
+    true
 }
 
 impl Default for Graphics {

@@ -85,8 +85,8 @@ table above:
 On `16_Track`, `pass_mask & 0x80` is set on 214 of 2,079 batches over 21
 textures, and every one of the 21 is named `_GLOW`; no batch sets `0x40`
 (`crates/vex/examples/light_rig_probe.rs`). On Assegai's hull it is one of
-14 batches, the blink lights. The 2026-08-10 census on `bloom.md` counted `0x40` alone and found
-none, which is why the mask looked unused.
+14 batches, the blink lights. The 2026-08-10 census on `bloom.md` counted
+`0x40` alone and found none, which is why the mask looked unused.
 
 Two effect writers sit outside the mesh path: the exhaust ribbon stamps its
 ramp (`Trail_BuildStateList`, REPLACE), which is the 0 behind an idle
@@ -96,6 +96,41 @@ plume **does not** write the mask.
 
 ## What this changes in the port
 
-See `oag_render::mesh_render::GlowMask` and `Graphics::bloom`. What the port
-reproduces, and what it chose, is recorded there and in
-[`bloom.md`](../ghidra/functions/psp-pulse-usa/bloom.md).
+2026-09-23, on Pulse off a PSP disc only (`race::load::pulse_psp`):
+
+- **`mesh_render::GlowMask::Stamped`.** Every `.vex` model the race draws -
+  the track, the sky, the pads, the hulls, the plumes and the shields - is
+  `Model::stamps_glow`, and its opaque and cutout pipelines write
+  `GpuVertex::glow` into alpha: rules 1 and 2 above, per batch, through
+  `oag_render::mesh::glow`. Its blended pipeline writes colour only, which is
+  rule 3 and takes the plume and the shield out of the mask.
+- **The `_GLOW` decals draw.** They are cutouts on the `0x10` reference,
+  coplanar with the wall they light, and `Gfx_BuildBatchStateList` gives
+  that reference a `GEQUAL` depth test. Ours tested `Less`, so every one tied
+  with its wall and was discarded: the neon strips, the lit panels and the
+  banner letters drew neither their colour nor their mask. The cutout
+  pipeline for that reference now tests `LessEqual`
+  (`mesh_render::cutout::depth_compare`). On a Pure and a PS2 start frame the
+  change moves no pixel.
+- **The bloom is on by default** (`Graphics::bloom`) and runs only over a
+  stamped mask, so a Pure or PS2 race draws none.
+- `OAG_DUMP_GLOW_MASK=<png>` writes a `--screenshot`'s mask for this
+  comparison. Talon's Junction on the grid: ours reads `4` over 107,644 of
+  130,560 pixels at 480 x 272, with the strips, the banner, the panels and
+  the blink lights where the original has them
+  (`~/.cache/oag/drive/reports/pulse-bloom/mask-orig-vs-ours.png`).
+
+What is not reproduced:
+
+- **Transparent batches with the glow bits do not stamp** - see
+  `GlowMask::Stamped`. 20 pixels of the measured frame, the start-line laser.
+- **The HUD writes alpha into our target**, where the original's mask reads
+  `4` under it. The race draws the bloom before it composites the HUD, and a
+  crop of the countdown widget shows no halo with the bloom on.
+- **The absorb overlay's mask is patchy where the original's is solid.**
+  Read out of EDRAM 0.42 s into a live absorb, the original stamps `255`
+  over the whole overlaid hull, with holes only at the canopy and the rear,
+  and its colour at that moment is still almost the plain hull: the white
+  blob a player sees is the bloom of that mask. Ours leaves whole hull
+  triangles unstamped. Drawing the overlay two-sided did not change it, so
+  it is not culling; which triangles they are, and why, is open.

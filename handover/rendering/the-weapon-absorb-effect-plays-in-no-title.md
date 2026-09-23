@@ -68,15 +68,28 @@ Screenshots from the 2026-09-23 lane are in
     and not the same team as ours;
   - ours reads bluer than the original's white-lavender. Exposure and bloom
     are the first suspects, and nothing has been measured.
-- **Pulse: ours reads much weaker than the original's absorb.** At 0.11 s
-  the original's hull is already near-white and blooms past its own
-  silhouette. At the peak it is a white blob. Ours shows a blue-white sheen
-  near the peak, and with bloom on it glows at the edges only. The overlay's
-  GE state is reproduced, so the causes are outside the module:
-  - `Graphics::bloom` defaults off (magnitude uncalibrated), and the full
-    glow mask the overlay writes only shows through the bloom;
-  - our hull base is darker navy than PPSSPP's vivid blue, so the bright
-    pass `rgb * mask` has less to work with.
+- **Pulse: ours reads weaker than the original's absorb, much less so since
+  2026-09-23 (later still).** Three causes found and fixed, all measured on
+  PPSSPP (see [scene-light.md](../../docs/ghidra/functions/psp-pulse-usa/scene-light.md)
+  and [glow-mask.md](../../docs/rendering/glow-mask.md)):
+  - the hull is lit by the circuit's own `AmbientLight`/`DirectionalLight`
+    through the GE, not by our stand-in and an invented grey, so its blue is
+    PPSSPP's now (`mesh_render::HullLights`);
+  - the bloom is on by default for Pulse PSP: the original runs it every
+    frame, and the mask it reads is stamped as the GE stencil stamps it
+    (`GlowMask::Stamped`), which also takes the plume out of it;
+  - the `_GLOW` decals draw at all (`GEQUAL` on the `0x10` cutouts).
+  Frames: `~/.cache/oag/drive/reports/pulse-bloom/compare-absorb-bloom.png`
+  (original above, ours below). **What is left**: at the peak the original is
+  a white blob and ours whitens the upper hull and the wings. An EDRAM read
+  0.42 s into a live absorb shows why: the original's overlay stamps `255`
+  over the **whole** overlaid hull and its colour there is still nearly the
+  plain hull, so the blob is the bloom; ours leaves whole hull triangles
+  unstamped (`vram-absorb-*.png`, `absorb-mask-t730.png` in the same
+  directory). Not culling - a two-sided overlay changed nothing. Next
+  suspects: which of our hull triangles carry colour `0` in
+  `hull_overlay::overlaid_meshes` (the vertex-count mesh match), and the
+  dark ring our rear hull draws that the original's does not.
 - **Pulse overlay residuals, labelled in the module:**
   - `LessEqual` stands in for `EQUAL`;
   - the colour test runs on the texel rather than the modulated fragment;
@@ -120,11 +133,13 @@ Screenshots from the 2026-09-23 lane are in
    `just play hd --race --give mine --input-script <absorb.inputs>`. The
    method (private `XDG_CONFIG_HOME`/`XDG_CACHE_HOME`, own GDB port, the
    craft array at `0x0098d7c0`) is in absorb-feedback.md, "Live on RPCS3".
-2. Pulse brightness gap: render `bloom-t430.png` against
-   `original-ppsspp-07.png` once `Graphics::bloom` is calibrated. Check the
-   hull base colour against PPSSPP's first; that is a lighting question, not
-   the overlay's. Probe scripts (`probe.py`, `absorb_break.py`) and the
-   inputs are in `~/.cache/oag/drive/reports/pulse-absorb-probe/`.
+2. Pulse absorb peak: find the hull triangles the overlay leaves unstamped
+   (`OAG_DUMP_GLOW_MASK=<png>` on a `--screenshot` at the peak; compare
+   against `vram-absorb-fb0-alpha.png`, the original's, in
+   `~/.cache/oag/drive/reports/pulse-bloom/`). The absorb inputs are
+   `absorb-post-go.inputs` in the same directory, beside the probe scripts:
+   700 ticks of nothing, then circle - the absorb after GO, as the
+   reference frames were taken.
 3. Pulse HUD: the energy bar's absorb flash (`Hud_UpdateEnergyBar`,
    `+0xf4 = 0xff`, 8 Hz blink off `+0x1dc`). About an hour, with the
    original's frames as the reference.

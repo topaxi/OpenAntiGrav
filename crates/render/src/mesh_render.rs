@@ -230,19 +230,19 @@ pub enum Depth {
 /// Whether a model's draws may write the scene target's alpha channel, which
 /// [`crate::post::bloom`] reads as its glow mask.
 ///
-/// The original decides this **per draw path**, not per material, and the two
-/// paths disagree: `FUN_089307b4`'s batch group calls
-/// `Bloom_SetPixelMask(g_bloom, 0)`, masking alpha off, while the path the
-/// boost plume actually takes - `Mesh_CompileGeometryPass` (`0x0890d0cc`) with
-/// state from `Gfx_BuildBatchStateList` (`0x0891f890`) - opens every channel
-/// with an unconditional `Gu_PixelMask(0)` at the top of its state list. So a
-/// hull and a track surface leave the mask alone and the plume writes it, and
-/// that difference is a reading of the two functions rather than a look
-/// choice. See `docs/ghidra/functions/psp-pulse-usa/bloom.md`.
+/// **The original writes that channel only through the GE stencil**, which
+/// keeps its value in the framebuffer's alpha and never blends it. What a
+/// surface stamps is decided per batch - `pass_mask & 0xc0` and the blend
+/// class, in `Gfx_BuildBatchStateList` (`0x0891f890`) - and was measured out
+/// of EDRAM on a live race: see `docs/rendering/glow-mask.md` and
+/// [`Self::Stamped`]. An earlier reading here, that the plume's draw path
+/// writes the mask and a hull's does not, took `Gu_PixelMask(0)` for a write;
+/// opening the channel writes nothing without a stencil op.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GlowMask {
-    /// Colour only - the default, and what every authored batch measured on
-    /// the disc gets.
+    /// Colour only - the default wherever the original's stencil stamp has
+    /// not been measured. A Pulse PSP model is [`Self::Stamped`] instead,
+    /// whatever its caller asks - see [`Model::stamps_glow`].
     Protected,
     /// Alpha reaches the target, so this model's fragments feed the bloom.
     Written,
