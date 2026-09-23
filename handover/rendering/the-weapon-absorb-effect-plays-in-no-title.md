@@ -43,14 +43,26 @@ Screenshots from the 2026-09-23 lane are in
   writes. None of that is read. On HD the user's report is therefore only
   half answered.
 - **Nothing has been compared against the original's own absorb.** A PPSSPP
-  capture of a Pulse absorb is the check that matters. Two things need it:
-  the burst's look at speed (world-space streaks trail the craft) and the
-  overlay's `vmmul` operand order. Break at `Gu_SetMatrix(3, sp+0xd0)`,
-  `0x0890e754`, and read the twelve words. Run PPSSPP silent (`[Sound]
-  Enable = False`).
-- **Overlay choices, labelled in the module:** `LessEqual` in place of
-  `EQUAL`; every hull mesh, because the per-mesh `+0x79` gate's writer is
-  unread; deflected airbrake flaps keep their stowed overlay.
+  capture of a Pulse absorb is the check that matters. It would settle three
+  things: the burst's look at speed (world-space streaks trail the craft),
+  the overlay's `vmmul` operand order, and **whether the overlay draws in
+  play at all**. A 2026-09-23 probe on a silent private instance did not
+  reach the overlay. Neither `0x0890f288` nor `Mesh_DrawBatchSet` executed
+  in 60 s of racing, and stamping `craft+0x878` did not reach
+  `Gu_SetMatrix(3)` at `0x0890e754`. The draw paths look record-time, so
+  the next probe has to catch a display-list record. See
+  [cannon-quake-leachbeam.md](../../docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md),
+  "2026-09-23". Two traps it hit, recorded here for whoever retries:
+  - `a0` at `0x08849618` (the object `psp-drive.py` calls the craft) is not
+    the entity whose held weapon is `*(entity+0x4c)+0x1bc`; its own `+0x1bc`
+    is a float. The eight entities `FUN_088418e0` updates sat
+    `0x2a000`-`0x35000` apart, and the last of them was `0xfc0` below that
+    object, which is the unconfirmed guess for the player's. The probe hung
+    before it could check.
+  - `import -window root` on the Xvfb display captured black frames.
+- **Overlay choice, labelled in the module:** `LessEqual` in place of
+  `EQUAL`. The per-mesh gate is read: only a mesh named `...ship...` takes
+  the overlay, which is `shipShape` on every Pulse team.
 - **The LeachBeam's `leachbeam_surface.mip` overlay** would ride the same
   module, but its fade source (`**(float**)(state+0x4c)`) is unread, so it
   is not wired.
