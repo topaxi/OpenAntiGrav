@@ -706,9 +706,12 @@ drawing half, and `crate::menu_stage::MenuStage::render` wires it in next to
 `axis_preview`'s own chain.
 
 **`--menu-page records --screenshot` now shows the table too, not only
-MODE/TRACK/BACK.** `crates/game/src/capture/menu_page.rs` calls the same
+MODE/TRACK/BACK.** `crates/game/src/capture/menu_page.rs`'s own
+`records_draws(model, skin, title, tracks, records)` calls the same
 `scoreboard::records_table`, supplying a track lookup over its own
-boot-survey `tracks` list in place of `Shell::tracks_for` - the one
+boot-survey `tracks` list in place of `Shell::tracks_for`, and draws the
+result through `oag_ui::prompt::record_row_draw` the same way
+`MenuStage::render` does - the one
 difference is that a capture's list carries no distinct Zone tracks, so a
 capture with `race.mode` seeded to `zone` resolves no track and draws no
 table rather than one built against the wrong list (see that function's own

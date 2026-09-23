@@ -874,11 +874,13 @@ mod tests {
         definition.drop_rows_picked_on_screen(oag_pulse::TITLE);
         let mut model = oag_ui::menu::Menu::new(definition);
 
-        // Basilico Black: a real pair from `Data\Plugins\PI001\Definition.xml`
+        // Basilico White: a real pair from `Data\Plugins\PI001\Definition.xml`
         // where the reversed id (`17_Track`) shares its base id's own
-        // directory (`01_Track`) - `Track::entry_name`'s `Reversed` branch,
-        // not the identity case a track named after its own directory would
-        // pass even with the branch broken.
+        // directory (`01_Track`, Basilico Black - the two ids' own names come
+        // from `entries.xml`, not from this file, and do not track which one
+        // carries `Reversed`) - `Track::entry_name`'s `Reversed` branch, not
+        // the identity case a track named after its own directory would pass
+        // even with the branch broken.
         let track = crate::catalogue::Track {
             id: "17_Track".to_string(),
             location: r"Data\Environments\01_Track".to_string(),
@@ -888,7 +890,7 @@ mod tests {
         let tracks = [track.clone()];
         model.supply(
             oag_ui::menu::ValueSource::Tracks,
-            &[oag_ui::menu::Choice::labelled(&track.id, "BASILICO BLACK")],
+            &[oag_ui::menu::Choice::labelled(&track.id, "BASILICO WHITE")],
         );
         model.supply(
             oag_ui::menu::ValueSource::RaceModes,
