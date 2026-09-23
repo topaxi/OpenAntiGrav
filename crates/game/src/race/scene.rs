@@ -834,22 +834,10 @@ impl Scene {
             )?),
             None => None,
         };
-        // The absorb hull overlay: the hull again, unshadowed, tested
-        // `LessEqual` against its own depth - see `absorb_overlay`.
-        let overlay = |l: &crate::livery::Livery| l.absorb_overlay.clone();
+        let absorb_overlay = slots.absorb_overlays()?;
+        let shell = |l: &crate::livery::Livery| l.absorb_shell.clone();
         let never = mesh_render::ShadowReceiver::Never;
-        let absorb_overlay = slots.drawables(
-            overlay,
-            oag_render::hull_overlay::BLEND,
-            mesh_render::Depth::Overlay,
-            never,
-        )?;
-        let absorb_shell = slots.drawables(
-            |l| l.absorb_shell.clone(),
-            exhaust::BLEND,
-            scene_depth,
-            never,
-        )?;
+        let absorb_shell = slots.drawables(shell, exhaust::BLEND, scene_depth, never)?;
         // One per projectile slot: the Rocket's, the Mine's, the Bomb's, the
         // Cannon round's and the Plasma blast's, all built the same way - see
         // `weapon_models::build_all`. A laid mine's hull is opaque too - a
