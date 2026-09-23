@@ -1498,22 +1498,30 @@ Read for the weapon-absorb build (`oag_render::hull_overlay`,
   on Assegai only `shipShape` can take the overlay: not the airbrakes, the
   canopy, or the glow and LOD meshes. Confidence **75**: `FUN_089737ac` is
   read as a substring test from its call shape, not decompiled.
-- **A live probe did not reach the draw (inconclusive).** On PPSSPP v1.20.4,
-  in a single race on this project's own silent instance (debugger `47831`),
-  neither the per-entity dispatch `0x0890f288` nor `Mesh_DrawBatchSet` hit a
-  breakpoint in 60 s of racing. `HullOverlay_AbsorbWindowActive` was never
-  called either. After writing `craft+0x878 = +0x830 - 0.5` on the first
+- **A controlled live probe finds the gate never evaluated in play.** On
+  PPSSPP v1.20.4, in a single race on this project's own silent instance
+  (debugger `47831`), one run armed breakpoints on the per-craft update
+  `FUN_088418e0` (the control) and on `HullOverlay_AbsorbWindowActive`
+  together. It collected 60 hits, all on the update (7-8 per craft across
+  the eight craft) and none on the gate. Both overlay draw paths call that
+  gate for any mesh that could take the overlay. A second run, without a
+  control, saw neither `0x0890f288` nor `Mesh_DrawBatchSet` hit in 60 s. After writing `craft+0x878 = +0x830 - 0.5` on the first
   craft updated (the store read `-10.0` before the write, which is
   `Craft_Construct_q`'s initial value), `HullOverlay_Submit`'s
   `Gu_SetMatrix(3, ...)` at `0x0890e754` was not reached within 10 s. Both
   draw paths look like record-time functions whose lists are replayed
-  without re-entering them. If so, a probe has to catch the record, not a
-  frame, and the `vmmul` order above is still unmeasured. **Whether the
-  original shows this overlay in play is therefore not confirmed by a
-  capture.** Only the absorb feedback's burst has the report of someone who
-  plays the original behind it.
+  without re-entering them. That does not rescue the overlay: a list
+  recorded at load, with the stamp at `-10`, holds no overlay and a frozen
+  `Gu_Color`, so it could not animate. **Nothing shows the original drawing
+  this overlay in play**, and the `vmmul` order above is still unmeasured.
+  The probe that would change that: give all eight entities a weapon
+  (`*(entity+0x4c)+0x1bc = 1`; only the player absorbs on circle), then
+  break on the stamp store `0x088455ac` as the control and on `0x0883e904`.
+  If the stamp hits and the gate does not, the overlay is dead code in play.
+  If both hit, turn it on.
 
-**Built**, as `oag_render::hull_overlay`. The port and what it chose are in
+**Built, and off by default** (`oag_render::hull_overlay::DRAWN = false`,
+because of the probe above), as `oag_render::hull_overlay`. The port and what it chose are in
 that module's own doc comment. The depth test is `LessEqual` with no write,
 standing in for `EQUAL`. ~~Every hull mesh is overlaid, since the `+0x79`
 byte is unread~~ - read the same day (above): only a mesh named `...ship...`

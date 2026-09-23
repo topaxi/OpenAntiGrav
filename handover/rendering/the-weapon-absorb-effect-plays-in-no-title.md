@@ -1,4 +1,4 @@
-# The weapon-absorb effect: burst drawn on Pulse, Pure and HD, hull overlay drawn on Pulse
+# The weapon-absorb effect: burst drawn on Pulse, Pure and HD, Pulse's hull overlay read and built but off
 
 2026-09-17. The user, who plays the originals, reported: "the weapon absorb
 animation/effect also does not animate/play in any title (the sfx plays
@@ -19,9 +19,12 @@ though)."
     [absorb-feedback.md](../../docs/ghidra/functions/ps3-hdfury-eu/absorb-feedback.md).
   - `crates/game/tests/absorb_ground_truth.rs` pins the stagger on Pulse and
     on HD.
-- **The hull overlay, Pulse only.** `oag_render::hull_overlay` draws
+- **The hull overlay, Pulse only: built and switched off**
+  (`oag_render::hull_overlay::DRAWN = false`). When on, it draws
   `absorb_surface.mip` projected top-down over the hull for one second after
-  a pickup absorb, on a `0 -> 1 -> 0` grey-alpha pulse, additive. The writer,
+  a pickup absorb, on a `0 -> 1 -> 0` grey-alpha pulse, additive. It is off
+  because a controlled PPSSPP probe never saw the original evaluate the
+  overlay's gate in play; see Open. The writer,
   projection and constants are in
   [cannon-quake-leachbeam.md](../../docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md),
   "2026-09-23". A lap refill does not light the hull; the original's stamp
@@ -46,11 +49,12 @@ Screenshots from the 2026-09-23 lane are in
   capture of a Pulse absorb is the check that matters. It would settle three
   things: the burst's look at speed (world-space streaks trail the craft),
   the overlay's `vmmul` operand order, and **whether the overlay draws in
-  play at all**. A 2026-09-23 probe on a silent private instance did not
-  reach the overlay. Neither `0x0890f288` nor `Mesh_DrawBatchSet` executed
-  in 60 s of racing, and stamping `craft+0x878` did not reach
-  `Gu_SetMatrix(3)` at `0x0890e754`. The draw paths look record-time, so
-  the next probe has to catch a display-list record. See
+  play at all**. A 2026-09-23 controlled probe on a silent private
+  instance collected 60 hits of the per-craft update and **0** of
+  `HullOverlay_AbsorbWindowActive`. Stamping `craft+0x878` did not reach
+  `Gu_SetMatrix(3)` at `0x0890e754`. That is why `DRAWN` is false. The probe
+  that decides it: a real absorb, with the stamp store `0x088455ac` as the
+  control and `0x0883e904` as the test. See
   [cannon-quake-leachbeam.md](../../docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md),
   "2026-09-23". Two traps it hit, recorded here for whoever retries:
   - `a0` at `0x08849618` (the object `psp-drive.py` calls the craft) is not

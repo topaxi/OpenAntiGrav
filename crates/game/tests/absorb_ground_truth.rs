@@ -158,32 +158,37 @@ fn hd_plays_three_mirrored_pairs_on_its_absorb_locators() {
     );
 }
 
-/// Pulse's hull overlay: built for the grid's hulls, started by a pickup
-/// absorb, and run for its one-second window - the pulse climbing one frame's
-/// `2 * dt` a tick to `2.0`, and gone after.
+/// Pulse's hull overlay: its projection resolves on the disc's own hull, and
+/// the pulse a pickup absorb starts runs its one-second window - climbing one
+/// frame's `2 * dt` a tick to `2.0`, and gone after.
+///
+/// **The overlay is not drawn** (`oag_render::hull_overlay::DRAWN` is false,
+/// see its doc comment for the probe behind that), so this proves the path on
+/// disc data rather than a picture: the one batch scale and the one mesh
+/// named for the ship, on Assegai, and the race's own pulse state.
 #[test]
 #[ignore = "needs data/images/pulse-psp-usa.chd"]
 fn pulse_lights_the_hull_for_one_second_after_a_pickup_absorb() {
+    let Some(image) = oag_testdata::image("data/images/pulse-psp-usa.chd") else {
+        return;
+    };
+    let mut archives =
+        oag_assets::Archives::open(&image.to_string_lossy(), oag_pulse::TITLE).expect("archives");
+    let blob = archives
+        .read_name(r"Data\Ships\Assegai\Ship.vex")
+        .expect("Assegai's hull");
+    let hull = oag_render::mesh::build(r"Data\Ships\Assegai\Ship.vex", &blob).expect("the hull");
+    assert!(
+        oag_render::hull_overlay::projection_scale(&blob).is_some(),
+        "Assegai's mesh batches share no one scale to project from"
+    );
+    let ships = oag_render::hull_overlay::ship_meshes(&hull, &blob)
+        .expect("the hull's node ranges map back to its file");
+    assert_eq!(ships.len(), 1, "Assegai names one mesh for the ship");
+
     let Some(loaded) = single_race("data/images/pulse-psp-usa.chd", Some("Assegai")) else {
         return;
     };
-    let overlays = loaded
-        .report
-        .iter()
-        .filter(|line| line.contains("absorb overlay over"))
-        .count();
-    assert!(
-        overlays >= 1,
-        "no hull reported an absorb overlay - the texture or the scale did not resolve"
-    );
-    assert!(
-        !loaded
-            .report
-            .iter()
-            .any(|line| line.contains("no absorb overlay")),
-        "a Pulse PSP hull built no overlay - more than one batch scale, meshes that \
-         do not map back to its file, or no mesh named for the ship"
-    );
     let mut race = race::Race::start(loaded.setup);
     for _ in 0..WARM_UP_TICKS {
         race.tick(&PlayerInputs::single(throttle(0)));

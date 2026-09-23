@@ -50,6 +50,22 @@ use oag_vex::vex;
 
 use crate::mesh::{Model, ModelTexture};
 
+/// Whether a race draws the overlay at all: **off**, deliberately.
+///
+/// Everything below is read and built, but no capture shows the original
+/// drawing it in play. A live probe on PPSSPP counted 60 hits of the per-craft
+/// update (`FUN_088418e0`) and none of `HullOverlay_AbsorbWindowActive`, the
+/// gate both overlay draw paths call for any mesh that could take it. The
+/// dispatch looks like a display-list *record*, and a list recorded at load,
+/// with the absorb stamp at its initial `-10`, holds no overlay and a frozen
+/// colour. Drawing a sheen the original may never show would be the
+/// plausible-looking stand-in this project refuses. The probe that would flip
+/// this: a real absorb, with the stamp store (`0x088455ac`) as the control
+/// and `0x0883e904` as the test - see
+/// `docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md`,
+/// "2026-09-23".
+pub const DRAWN: bool = false;
+
 /// `DAT_08abf4a4`: texture repeats per GE input unit, on both axes.
 pub const REPEAT: f32 = 10.0;
 

@@ -189,8 +189,8 @@ pub struct LoadContext<'a> {
     pub flare: &'a oag_title::flare::Flare,
     /// Which level of detail to build each model at.
     pub lod: mesh::Lod,
-    /// Whether to build the absorb hull overlay - Pulse's alone, the only
-    /// title whose overlay draw is read. See [`absorb::overlay`].
+    /// Whether to build the absorb hull overlay - Pulse's alone, and only
+    /// while `oag_render::hull_overlay::DRAWN` says so. See [`absorb::overlay`].
     pub hull_overlay: bool,
 }
 

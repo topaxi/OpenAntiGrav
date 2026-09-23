@@ -116,8 +116,23 @@ system is a child of the locator, the burst rides the hull. Confidence **80**.
 
 ## Ported
 
+**Four callers**, the same set Pulse's twin has (read on this binary with
+`get_function_callers`):
+
+- `0x000d9d60`: `FUN_000d9b18` of a stats-table value, indexed by
+  `g_GameState+0xdc`, times `DAT_008a8db4`, then the feedback. It has the
+  shape of Pulse's `Ship_RefillLapShield` (a skill-indexed maximum times
+  `0.2`), so it reads as the lap-refill twin, which is why the port fires HD's
+  burst from the Eliminator refill too. `FUN_000d9b18` and the constant were
+  not read; confidence **65** for the identification.
+- `0x000d9cf8`: `FUN_000d9b18()`, the feedback, then a store of `5` into
+  the craft's `+0x5edc` object's `+0x204`. Not placed.
+- `0x000d9688`: a network message handler on `'B'` and `'Q'`, as on Pulse.
+- `0x000e9160`: not read. By elimination it is the pickup absorb handler.
+
 `oag_game::race::absorb::HD_ABSORB_BURST` (`MirroredPairs { stagger: 0.2 }`)
-plays one attached `WO_WEAPON_ABSORB` per slot, on the pairs above. The
+plays one `WO_WEAPON_ABSORB` per slot on the pairs above, through
+`psys::Stage::play_riding`, which follows the locator while it emits. The
 `absorb` locators come from `Locators.vex` through
 `oag_vex::vex::CLASS_ABSORB` and `livery::absorb`. A hull with fewer than six
 plays nothing, which is the original's own gate. Detonator and Zone therefore
