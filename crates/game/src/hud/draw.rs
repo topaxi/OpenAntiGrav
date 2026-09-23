@@ -147,10 +147,10 @@ pub(super) fn text_for(
         // shield/>` is a few hundred units. HD's three frames
         // (`talons-matched/{00,01,03}.png`) all read a bare number instead -
         // `100`, `100`, `98` - so [`oag_title::HudArt::shield_percent`] carries
-        // which.
+        // which, and HD's executable truncates rather than rounds.
         "ShieldBarText" => Some(match shield_percent {
             true => format!("{:.0}%", readout.shield_fraction() * 100.0),
-            false => format!("{:.0}", readout.shield_fraction() * 100.0),
+            false => super::runtime::shield_digits(readout),
         }),
         // **Drawn nothing, not always-on.** `HUD_pickups.xml`'s
         // `PickupDamageTxt`/`PickupAbsorbTxt` (idstring `MSC_DAMAGE`/
@@ -824,6 +824,9 @@ pub fn draw_list(cx: &Context<'_>, readout: &Readout) -> Frame {
             continue;
         }
         drawn_once.push(sprite.name.as_str());
+        let tinted = super::runtime::tinted(cx, readout, sprite);
+        let fill = super::runtime::shield_fill(cx, readout, sprite);
+        let sprite = tinted.as_ref().unwrap_or(sprite);
         let drawn = match bar_fraction(&sprite.name, readout) {
             // A bar at zero is not drawn at all: a zero-width quad is a
             // degenerate triangle pair, and asking the rasteriser to do nothing
@@ -857,7 +860,11 @@ pub fn draw_list(cx: &Context<'_>, readout: &Readout) -> Frame {
             },
         };
         frame.sprites.extend(drawn);
+        frame.sprites.extend(fill);
     }
+    frame
+        .sprites
+        .extend(super::runtime::arc_sprites(cx, readout));
 
     // The lock-on reticle, over the bars and under the text - it is the only
     // HUD sprite anchored on the *world* rather than on the screen, so it moves
@@ -935,7 +942,7 @@ pub fn draw_list(cx: &Context<'_>, readout: &Readout) -> Frame {
             // so it takes it unconverted rather than through `top_edge`.
             y: placed.map_or_else(|| top_edge(label, line_height), |(_, text)| text[1]),
             scale: label.scale,
-            color: label.color,
+            color: super::runtime::colour(cx, readout, &label.name).unwrap_or(label.color),
             // The layout's own `BorderColor`, which is what makes the HUD fonts'
             // baked outline visible as an outline rather than as more glyph. The
             // 57 widgets that name none still get one - the original draws it -

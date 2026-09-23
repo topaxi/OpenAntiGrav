@@ -164,6 +164,7 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     // `oag_title::HudArt::hud_font_role`.
     hud_font_role: "HUD",
     hud_small_font_role: Some("HUDSmall"),
+    runtime: None,
 };
 
 /// Which `<Mode3D><Model>` widget draws each weapon's own icon, indexed in

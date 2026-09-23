@@ -119,6 +119,7 @@ const TITLE: &Title = &Title {
         // about any language plugin's own font roles.
         hud_font_role: "HUD",
         hud_small_font_role: Some("HUDSmall"),
+        runtime: None,
     },
     // Unread here for the fourth and fifth time, and the same reason both
     // times: an archive is found by name, and what is inside one is nothing

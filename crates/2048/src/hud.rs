@@ -166,6 +166,7 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     // to `hud_font_role` above rather than the 5x7 glyphs - chosen, not
     // measured. See `oag_title::HudArt::hud_small_font_role`.
     hud_small_font_role: None,
+    runtime: None,
 };
 
 /// What a layout's texture reference becomes on this title.

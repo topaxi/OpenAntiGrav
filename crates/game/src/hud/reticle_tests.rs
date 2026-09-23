@@ -196,6 +196,7 @@ static HD_ART: oag_title::HudArt = oag_title::HudArt {
     shield_percent: false,
     hud_font_role: "HUD",
     hud_small_font_role: Some("HUDSmall"),
+    runtime: None,
 };
 
 fn hd_sheet() -> crate::sprite::Sheet {
@@ -261,6 +262,7 @@ static HD_LEACH_ART: oag_title::HudArt = oag_title::HudArt {
     shield_percent: false,
     hud_font_role: "HUD",
     hud_small_font_role: Some("HUDSmall"),
+    runtime: None,
 };
 
 fn hd_leach_sheet() -> crate::sprite::Sheet {
@@ -960,6 +962,7 @@ fn an_unread_sight_dialect_draws_nothing() {
         shield_percent: true,
         hud_font_role: "HUD",
         hud_small_font_role: Some("HUDSmall"),
+        runtime: None,
     };
 
     let layout = Layout::from_xml(SIGHTS);

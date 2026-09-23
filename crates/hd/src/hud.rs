@@ -149,6 +149,47 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     // Single-field edit; the rest of this file is lane 3's.
     hud_font_role: "HUD",
     hud_small_font_role: Some("HUDSmall"),
+    runtime: Some(RUNTIME),
+};
+
+/// What HD's per-tick HUD update writes over the layout, read off the
+/// executable: `Hud_UpdateShieldReadout` (`0x000866c8`),
+/// `Hud_UpdateLapCounter` (`0x00096ef0`) and `Hud_UpdatePositionCounter`
+/// (`0x00096088`), all three called every tick from `Hud_Update`. Every value
+/// below is a direct read; the evidence, the branch table and the addresses
+/// are on [`hud-readouts.md`].
+///
+/// - `0x1664FF` is built branch-free from `0xFF166500 + 0x00FFFFFF` when a
+///   mode byte is clear - the same "HD blue" `zone_hud.xml` authors on its
+///   own `DamageBar`. The fill and the number both take it, opaque, which is
+///   why the number reads blue and not the translucent red
+///   `HUD_damage_indicator.xml` authors for it. Confidence 82.
+/// - `20` and `8` are the floats at `0x008a7678` and `0x008a7704`: the
+///   readout flashes at or under 20 % (or through a post-hit second), and a
+///   flash phase is on while `floor(t * 8)` is even.
+/// - The two arcs carry no colour write at all: their yellow is baked into
+///   `HUD_Components.gtf`, and the runtime only shows and hides segments.
+///   `8` is the position function's own literal, not the field size.
+///
+/// [`hud-readouts.md`]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/ghidra/functions/ps3-hdfury-eu/hud-readouts.md
+pub const RUNTIME: &oag_title::hud::RuntimeHud = &oag_title::hud::RuntimeHud {
+    shield: oag_title::hud::ShieldReadout {
+        fill: "DamageBar",
+        background: "DamageBarBg",
+        text: "ShieldBarText",
+        rgb: 0x0016_64FF,
+        warning_rgb: 0x00FF_0000,
+        critical_percent: 20,
+        phases_per_second: 8,
+    },
+    lap_arc: oag_title::hud::SegmentArc {
+        prefix: "LapBar",
+        segments: 7,
+    },
+    place_arc: oag_title::hud::SegmentArc {
+        prefix: "PosBar",
+        segments: 8,
+    },
 };
 
 /// The sprite widgets HD draws whenever its HUD is up.
@@ -184,15 +225,11 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
 /// widgets below are all in a state this capture does not vary:
 ///
 /// - `LapBar0`-`LapBar6` and `PosBar0`-`PosBar7`, the progress arcs around the
-///   two panels. They are lit per lap and per place and the tint that lights
-///   them is not authored - every one is white in the layout and yellow in the
-///   frame - so what drives them is unread.
-/// - `DamageBar`, which carries **the same rect and the same source rectangle**
-///   as `DamageBarBg` and differs only in colour. That is this dialect's own
-///   "at most one of these is live" idiom, the one `oag_game::hud` records for
-///   `TotalTime`/`Position` and the thirteen weapon icons - so it is a second
-///   *state* of the shield readout, not a bar over a background, and cropping
-///   it the way Pulse's `ShieldBar` is cropped would be an invention.
+///   two panels, and `DamageBar`, the shield hexagon's fill. All three are
+///   shown, cropped or recoloured every tick by the executable, so they are
+///   drawn by [`RUNTIME`]'s rules rather than from this list. The arcs' yellow
+///   is the atlas's own, not a tint: an earlier reading here called the
+///   segments white in the layout, which sampled the atlas upside down.
 /// - `Lap1Image`-`Lap4Image`, the per-lap time rows, which appear as laps are
 ///   set - their labels are authored as empty strings.
 /// - `FrameLeft`/`Middle`/`Right` and their four numbered copies, the info-text
