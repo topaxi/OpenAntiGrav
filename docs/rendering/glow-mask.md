@@ -88,9 +88,14 @@ textures, and every one of the 21 is named `_GLOW`; no batch sets `0x40`
 14 batches, the blink lights. The 2026-08-10 census on `bloom.md` counted
 `0x40` alone and found none, which is why the mask looked unused.
 
-Two effect writers sit outside the mesh path: the exhaust ribbon stamps its
+Three effect writers sit outside the mesh path. The exhaust ribbon stamps its
 ramp (`Trail_BuildStateList`, REPLACE), which is the 0 behind an idle
-nozzle, and the absorb overlay stamps `0xff` (`Gfx_BuildBatchStateList(0x282)`).
+nozzle. Both hull overlays, absorb and LeachBeam, stamp `0xff`
+(`Gfx_BuildBatchStateList(0x282)`). The LeachBeam ribbon stamps `0x28` on
+every fragment, transparent texels included (`LeachBeam_SubmitStrip`, REPLACE
+with the alpha test off). That last one is read statically, not measured out
+of EDRAM - see
+[cannon-quake-leachbeam.md](../ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md).
 The PSP boost plume's batches are `0x1232`: transparent, no `0xc0`, so the
 plume **does not** write the mask.
 

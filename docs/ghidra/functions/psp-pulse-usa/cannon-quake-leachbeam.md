@@ -46,6 +46,8 @@ produced it and the one that replaces it.
 | `0x08873090` | `LeachBeam_MarkDisconnected` | 80 (new 2026-09-08) |
 | `0x088730a4` | `LeachBeam_LingerExpired` | 80 (new 2026-09-08) |
 | `0x08873068` | `LeachBeam_UnlockedExpired` | 78 (new 2026-09-08) |
+| `0x088734d0` | `LeachBeam_KeepInTrack` | 72 (new 2026-09-23) |
+| `0x08873328` | `LeachBeam_ReaimChain` | 70 (new 2026-09-23) |
 | `0x0883f228` | `Ship_ApplyPendingWeaponRepair` | 85 (new 2026-09-08) |
 | `0x08853a80` | `Ai_Update` | 85 (new 2026-09-08) |
 | `0x0885077c` | `WeaponAi_Construct` | 85 (new 2026-09-08) |
@@ -2196,6 +2198,9 @@ invisible at both attachment points under the additive blend and only the
 middle of the arc ever shows. Confidence **85**, a direct read of the two
 branches that override the computed `iVar6`.
 
+**Corrected 2026-09-23 - see "2026-09-23: the ribbon re-read" below: both
+strips share one chain displaced along both axes, and they widen along the
+camera's `x` and `y`, not along the displacement.** The original text:
 **The geometry is two crossed strips, not one flat ribbon.** `LeachBeam_Advance`
 (`0x08873fa0`) writes each chain point twice - once at `param_2 + i*0x10`
 (consumed by the `i*0x30` vertex pair, displaced along one axis) and once
@@ -2232,7 +2237,8 @@ reads of literals and a decompiled loop; the exact re-roll *cadence* is not
 reproduced - see below.
 
 **What is buildable and what stays chosen**, for
-`crates/render/src/beam.rs`:
+`crates/render/src/beam.rs` (**superseded 2026-09-23**: nothing in the
+geometry is chosen any more, see below):
 
 - Recovered and built: the segment-count formula, the half-width (`1.0`),
   the base colour (opaque white), the disconnect fade (`0.5` s linear, already
@@ -2270,11 +2276,138 @@ reproduced - see below.
   into - `**(float **)(pool + owner * 4 + 0x44)`, i.e. offset zero of the owner's
   own entity - is not identified. A HUD or audio amplitude is the obvious guess
   and it is only a guess.
-- **Which two axes the crossed strips displace along**, and **whether the
-  ribbon feeds the bloom glow mask** - both above, neither chased this pass.
+- ~~**Which two axes the crossed strips displace along**, and **whether the
+  ribbon feeds the bloom glow mask**~~ - both closed 2026-09-23, see "the
+  ribbon re-read" below: the shooter's node rows, and yes (`0x28`).
 - **`FUN_08872c78` and `0x08872b68`**, the LeachBeam node's two other vtable
   slots found alongside `LeachBeam_BuildStrip` in `DAT_08acb048` - not
   inspected; plausibly construct/destruct or an update method.
+
+### 2026-09-23: the ribbon re-read, and measured in play
+
+**Prompted by a from-play report** that of every weapon effect the
+LeachBeam was the furthest from the original. A capture settled it: the
+original draws a crisp, jagged lightning arc and lights the firing craft's
+whole hull, pulsing; this build drew a soft, nearly straight smear and no
+hull light at all. Re-reading `LeachBeam_Advance`, `LeachBeam_BuildStrip`,
+`LeachBeam_InitLocked` and `LeachBeam_SubmitStrip` whole showed that three
+readings in the 2026-09-17 section above were wrong. The corrections, and the
+functions they come from:
+
+**1. The strips widen along the camera, not along the displacement.**
+`LeachBeam_BuildStrip` transforms each chain point (`instance+0x170 +
+i*0x10`) through the matrix on top of the stack (`Math_TransformVec4` against
+`param_2 + depth*0x40 + 0x1410`), then sets the view and model matrices to
+identity (`Gu_SetMatrix(1/2, &DAT_08a907a0)`). Pair `i` gets `(x - w, y, z)`
+and `(x + w, y, z)`; pair `segments + 1 + i` gets `(x, y - w, z)` and
+`(x, y + w, z)`, with `w = instance+0xe4 = 1.0`. So the two strips are the
+same chain widened along **view-space `x` and `y`**: a cross section that
+faces the camera, the same trick the Cannon's bolt uses. Confidence **88**:
+the six stores per pair are a direct read.
+
+**2. Every chain point is pushed along both axes, and the push travels.**
+`LeachBeam_Advance` builds two axes from the shooter's own node matrix
+(`*(node+0x30)`, rows `+0x00` and `+0x10`): `A = normalize(step x -up)` and
+`B = normalize(step x right)` (`vcrsp.t`, with the usual zero-length guard).
+For chain point `i + 1`, `i` in `0..segments`:
+
+```c
+a  = (i + cursor) % segments;                 // cursor = instance+0xa8
+b  = (i + (int)(counter * 0.5)) % segments;   // counter = instance+0x130
+k  = (2*pi / segments) * ((6.0 / range) * min(distance, range));
+p  = origin + (i + 1) * step
+   + A * sin((a + 1) * k) * amp[ceil(a / 3.0)]
+   + B * sin((b + 1) * k) * amp[ceil(b / 3.0)] * 0.5;
+```
+
+`k` works out near `2*pi / 6` whatever the length, so the arc kinks about
+once every six segments. The scroll phase `instance+0x1180` plays no part in
+the geometry. `counter` counts ticks modulo `2 * segments` and `cursor` is
+`counter % segments`, so the pattern moves one segment a tick toward the
+shooter. `ceil(a / 3.0)` reaches `12` for a full-length beam, one entry past
+the twelve-entry table, so the original reads `instance+0xe4`, the
+half-width `1.0`. Confidence **85**.
+
+**3. The texture repeats per segment and scrolls.** `LeachBeam_InitLocked`
+zero-fills each `0x30`-byte pair and writes `u = (pair & 1)` on both
+vertices, `v = 0` on the first and `v = 1` on the second. So `u` flips at
+every chain point along the beam and `v` runs across it.
+`LeachBeam_SubmitStrip` sets `Gu_TexWrap(0, 0)` (repeat) and
+`Gu_TexOffset(instance+0x1180, instance+0x1184)`: the phase advances
+`rate * dt * 2` a tick, so the band slides two repeats a second. Confidence
+**88**.
+
+**Smaller corrections.**
+
+- The alpha taper zeroes points `0` and `segments - 1`, not the last point.
+  After its loop, `LeachBeam_BuildStrip` overwrites pair `segments` with the
+  first strip's last vertex and the second strip's first vertex, a
+  zero-area bridge. So the first strip stops at point `segments - 1`, and
+  only the second reaches the target, at full alpha. Confidence **85**.
+- Depth writes are **off**: `Gu_DepthMask(1)` masks them, per the hull
+  overlay's own 2026-09-23 correction. Culling and lighting are disabled.
+- **The ribbon writes the glow mask.** `Bloom_SetGlowMaskWritable(g_bloom,
+  1)`, `Gu_PixelMask(0)`, then `Gu_StencilFunc(GU_ALWAYS, DAT_08ab1078,
+  0xff)` and `Gu_StencilOp(KEEP, KEEP, REPLACE)`. `DAT_08ab1078` reads
+  `0x28`, so every ribbon fragment stamps `40` into the mask. The alpha test
+  is off, so transparent texels stamp too. Confidence **80**.
+- **The one-bucket re-roll is a fixed bucket, and only for short beams**:
+  `ceil((segments - 1) / 3.0) + 1`, applied only when it is under `12`. A
+  beam of 34 or more segments re-rolls nothing. Confidence **85**.
+- **The origin offset is not the player's.** `LeachBeam_Advance` moves the
+  origin `-3.0` (`DAT_08ab1080`) along the shooter's up when the node's byte
+  `+0x6d` is set. Measured live: that byte reads `0` on the player's craft
+  (`InitLocked`'s seventh argument, `t2`), so the player's beam starts at
+  the craft's origin. Which craft set it was not read.
+
+**`WO_LEACHBEAM_ENERGY` travels.** Inside the pulse block,
+`Psys_Spawn_q(..., instance+0xf0, ...)` spawns the effect on the matrix at
+`instance+0xf0`. That matrix is then copied from the target's. In the same
+tick's chain loop, `LeachBeam_Advance` writes the undisplaced point
+`origin + (segments - 1 - cursor) * step` into its translation row
+(`instance+0x120`). So the effect appears one segment short of the target
+and walks back to the shooter one segment a tick. The previous instance's
+handle (`instance+0xec`) goes to `FUN_088f3298` first. Confidence **82**.
+
+**The two new names.** Both are read from single decompiles:
+
+| Address | Name | Confidence | What it does |
+| --- | --- | --- | --- |
+| `0x088734d0` | `LeachBeam_KeepInTrack` | 72 | For each chain point: `AiTrack_LocatePosition(100.0, *(instance+0x168), ...)` gives the track frame there. If the point is below the road, or within `2.0` of either edge (`half_width - 2.0` each side), it calls the function below. |
+| `0x08873328` | `LeachBeam_ReaimChain` | 70 | Pulls the point back inside the tube, then rewrites the step to `(target - point) / remaining`, so the rest of the chain re-aims at the target. |
+
+Together they bend the arc to stay inside the track where the straight line
+would cut a corner. **Not built** - see `oag_render::beam`'s own module doc.
+The two confidences stop short of the 85s above: the plane tests are read,
+but which `AiTrack_LocatePosition` output fields are the edges was inferred
+from how they are used.
+
+#### Measured in play (PPSSPP v1.20.4, UCUS98712)
+
+Private muted instance, single race / Venom / Talon's Junction / Assegai,
+player eighth on the grid. `+0x1bc = 10` was written on the player's weapon
+record during the countdown. The player sat still and fired `square` on the
+tick `entity+0x860` bit 0 set (lock confirmed). Logged, non-halting
+watchpoints, armed just after one `LeachBeam_InitLocked` breakpoint hit:
+
+| Watch | Hits | Reading |
+| --- | --- | --- |
+| `0x08b3bfa4` read (ribbon texture, `LeachBeam_BuildStrip` `0x08873ab4`) | 166 in 2.70 s | 60 Hz |
+| `instance+0x130` write (`0x088748f4`/`0x08874908`) | 2 x 163 | the counter steps every frame |
+| `instance+0xec` write (`0x088743f8`/`0x088744b8`) | 7 x 2 | the ENERGY re-spawn, every cursor wrap |
+| `instance+0x138` write (`LeachBeam_MarkPulse`, `0x0887331c`) | 2, 1.17 s apart | the pulse strength re-arms at most once a second |
+| `instance+0x144` write (`0x08873098`) | 1 | disconnect, 0.5 s before the last frame |
+| shooter weapon record `+0` write (`0x08866eac`, `LeachBeam_UpdatePool`) | 162 | every frame, **through the linger** |
+| `0x08af2804` read (`HullOverlay_SubmitLeachBeamBatched`, `0x0890e150`) | 1,617 | the LeachBeam hull overlay draws in play, on the firing craft, for the whole beam |
+
+This closes the "LeachBeam overlay's fade source ... not yet seen live"
+item above: the overlay is drawn, and its fade is the pulse strength.
+Confidence **90** for the overlay drawing (a read of its only texture from
+its only reader), **85** for the cadences.
+
+**Built** in `oag_render::beam` (the ribbon, the ENERGY walk) and
+`oag_game::race::scene::absorb_overlay` (the LeachBeam half of the hull
+overlay pair).
 
 ### 2026-09-17: the two hand-built quads' geometry, read - and drawn
 
