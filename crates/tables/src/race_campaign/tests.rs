@@ -278,6 +278,73 @@ fn gold_is_the_smallest_ord_value() {
     assert!(Medal::Silver < Medal::Bronze);
 }
 
+/// A second, small grid - `gridW`, matching `FIXTURE`'s own `<Unlock
+/// Grid="GridW"/>` row - so [`grid_points_met`] below has two real `Grid`s
+/// to pick between by name rather than a single-grid fixture that could
+/// pass by only ever finding `grids[0]`.
+const SMALL_GRID_FIXTURE: &str = r#"
+<PI_Grid name="gridW">
+  <Values RequiredPoints="5" Locked="false"></Values>
+  <PI_Cell name="gridW_1_1">
+    <Values track="11_Track" mode="Race" class="Venom" Weapons="on" damage="on"
+            AICount="7" skill="1.75" laps="3" ship="None" ShipChoice="Yes"></Values>
+    <Gold Target="1"></Gold>
+    <Silver Target="2"></Silver>
+    <Bronze Target="3"></Bronze>
+  </PI_Cell>
+  <PI_Cell name="gridW_2_1">
+    <Values track="12_Track" mode="Race" class="Venom" Weapons="on" damage="on"
+            AICount="7" skill="1.75" laps="3" ship="None" ShipChoice="Yes"></Values>
+    <Gold Target="1"></Gold>
+    <Silver Target="2"></Silver>
+    <Bronze Target="3"></Bronze>
+  </PI_Cell>
+</PI_Grid>
+"#;
+
+#[test]
+fn points_earned_sums_medal_points_by_cell_name() {
+    let grid = parse(SMALL_GRID_FIXTURE).expect("parses");
+    let gold_first = |name: &str| (name == "gridW_1_1").then_some(Medal::Gold);
+    assert_eq!(grid.points_earned(&gold_first), 3);
+    let none = |_: &str| None;
+    assert_eq!(grid.points_earned(&none), 0);
+    let both_silver = |_: &str| Some(Medal::Silver);
+    assert_eq!(grid.points_earned(&both_silver), 4);
+}
+
+/// `Unlock_GridPointsMet`'s own case-insensitive name match - `"GridW"`, the
+/// mixed case an `<Unlock Grid="...">` row authors, against `gridW`'s own
+/// lowercase `name` - and its threshold, against `SMALL_GRID_FIXTURE`'s
+/// `RequiredPoints="5"` (max `6`, two Venom `Race` cells).
+#[test]
+fn grid_points_met_matches_the_named_grid_case_insensitively() {
+    let grids = vec![
+        parse(FIXTURE).expect("parses"),
+        parse(SMALL_GRID_FIXTURE).expect("parses"),
+    ];
+    let gold_everything = |_: &str| Some(Medal::Gold);
+    assert!(grid_points_met(&grids, "GridW", &gold_everything));
+    assert!(grid_points_met(&grids, "gridw", &gold_everything));
+    let none = |_: &str| None;
+    assert!(!grid_points_met(&grids, "GridW", &none));
+}
+
+#[test]
+fn grid_points_met_is_false_for_an_unknown_grid_name() {
+    let grids = vec![parse(FIXTURE).expect("parses")];
+    let gold_everything = |_: &str| Some(Medal::Gold);
+    assert!(!grid_points_met(&grids, "GridQ", &gold_everything));
+}
+
+#[test]
+fn grid_points_met_fails_below_the_threshold() {
+    let grids = vec![parse(SMALL_GRID_FIXTURE).expect("parses")];
+    // Only one of gridW's two cells medalled: 3 points < 5 required.
+    let one_gold = |name: &str| (name == "gridW_1_1").then_some(Medal::Gold);
+    assert!(!grid_points_met(&grids, "gridW", &one_gold));
+}
+
 /// A standalone fixture rather than an addition to `FIXTURE` above, since
 /// every other test there indexes `grid.cells` positionally and a fifth cell
 /// would shift them all. Mirrors `DATA00.PSARC`'s own shape for an

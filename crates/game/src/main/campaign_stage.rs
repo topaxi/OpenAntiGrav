@@ -322,6 +322,44 @@ impl CampaignStage {
         &self.grids
     }
 
+    /// Whether the grid at absolute index `which` (into [`Self::grids`]) is
+    /// unlocked - what `crate::main::session::campaign::handle_campaign`
+    /// gates `Grid Selection`'s own Confirm on.
+    ///
+    /// **The recovered law, not `GridSelection::tier_shows_lock`'s own
+    /// display shortcut.** That glyph rule always compares against the
+    /// immediately preceding tile; this instead reimplements
+    /// `Unlock_GridPointsMet` (`oag_tables::race_campaign::grid_points_met`)
+    /// against the grid's own authored `<Unlock Grid="...">` name, which
+    /// only happens to be the previous tile on all sixteen shipped grids -
+    /// see `docs/ghidra/functions/psp-pulse-usa/race-campaign.md`'s "Grid0..
+    /// Grid14: what the gate actually evaluates" and "the tier unlock rule"
+    /// sections for why the two predicates cannot disagree on shipped data.
+    /// `grid.points_earned(medal_of) > 0` is included alongside `!grid.locked`
+    /// for the identical reason `GridSelection_PopulateTiles` clears the
+    /// glyph unconditionally once a grid has scored any points of its own.
+    /// A grid with no `<Unlock Grid="...">` row at all (`grid0`, the one
+    /// grid shipped `Locked="false"`) is always unlocked.
+    #[must_use]
+    pub(crate) fn grid_is_unlocked(&self, which: usize) -> bool {
+        let Some(grid) = self.grids.get(which) else {
+            return false;
+        };
+        let medal_of = |cell_name: &str| {
+            self.records
+                .campaign_medal(&self.title, cell_name)?
+                .best_medal
+                .map(to_campaign_medal)
+        };
+        if !grid.locked || grid.points_earned(&medal_of) > 0 {
+            return true;
+        }
+        match grid.unlock_grid.as_deref() {
+            Some(target) => race_campaign::grid_points_met(&self.grids, target, &medal_of),
+            None => true,
+        }
+    }
+
     /// Each campaign's own earned-gold-medal count, for `Campaign
     /// Selection`'s own `NumMedalsTextFury`/`NumMedalsTextHD` -
     /// `(fury, hd)`. `0` on a fresh profile, the same "player-progress

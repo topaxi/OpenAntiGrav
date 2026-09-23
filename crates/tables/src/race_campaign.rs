@@ -29,15 +29,17 @@
 //! [`Cell::evaluate_medal`] reimplements `Cell_EvaluateMedal` - the
 //! three-way threshold compare against a cell's own targets, direction
 //! flipped for `Zone`/`Elimination` - and [`Medal::points`] reimplements
-//! `Cell_MedalPoints`. Both are properties of the law the disc's own code
-//! applies to this data, not of the file, so they live beside the type they
-//! evaluate. What they do **not** do is decide *which* cell a race was run
-//! against, or *what value* a finished race actually scored - that mapping
-//! (a race's result onto a campaign cell's mode-specific value) and the
-//! unlock-points comparison across a whole grid are still a caller's job;
-//! see `crates/game/src/records.rs` for where a race's own outcome is
-//! captured and `docs/architecture/persistence.md` for what is and is not
-//! wired yet. [`oag_pulse::campaign`](../../oag_pulse/campaign/index.html)
+//! `Cell_MedalPoints`. [`grid_points_met`] reimplements `Unlock_GridPointsMet`
+//! on top of them: a named grid's own [`Grid::points_earned`] against its
+//! own `required_points`. All three are properties of the law the disc's
+//! own code applies to this data, not of the file, so they live beside the
+//! type they evaluate. What they do **not** do is decide *which* cell a
+//! race was run against, or *what value* a finished race actually scored -
+//! that mapping (a race's result onto a campaign cell's mode-specific
+//! value) is still a caller's job; see `crates/game/src/records.rs` for
+//! where a race's own outcome is captured and
+//! `docs/architecture/persistence.md` for what is and is not wired yet.
+//! [`oag_pulse::campaign`](../../oag_pulse/campaign/index.html)
 //! carries the sixteen entry names, per [ADR-0022] - a file's *shape* lives
 //! here, what a title *ships* lives there.
 //!
@@ -64,6 +66,9 @@ use std::fmt;
 
 use crate::fexml::{self, Node};
 use crate::handling::SpeedClass;
+
+mod unlock;
+pub use unlock::grid_points_met;
 
 /// The nine modes `g_mode_name_table` (`0x08ab062c`) names, in ordinal order,
 /// plus a raw catch-all for a spelling that table has no entry for.
@@ -271,14 +276,18 @@ pub struct Grid {
     /// `<Unlock Grid="..."/>` naming it. `0` on `grid15`, which renders as
     /// `FE_NA` rather than a number.
     pub required_points: u32,
-    /// The `Locked` byte. **No consumer of it was traced** - see
-    /// `race-campaign.md#what-is-not-determined`. Recorded, not interpreted.
+    /// The `Locked` byte - the tier's *static default*, drives the lock
+    /// glyph and, in this engine, the Confirm gate, together with
+    /// [`Self::points_earned`]/[`grid_points_met`] - see
+    /// `docs/ghidra/functions/psp-pulse-usa/race-campaign.md`'s "Unlock
+    /// rules, cell and tier".
     pub locked: bool,
     /// `Group="1"` marks `grid12`..`grid15` on the shipped disc; absent
     /// elsewhere. Consumer not traced.
     pub group: Option<u32>,
-    /// The `<Unlock Grid="..."/>` child, when present. `grid1` onwards name
-    /// the grid before it; `grid0` names none.
+    /// The `<Unlock Grid="..."/>` child, when present - the `target` a
+    /// caller passes to [`grid_points_met`]. `grid1` onwards name the grid
+    /// before it; `grid0` names none.
     pub unlock_grid: Option<String>,
     /// This grid's cells, in document order.
     pub cells: Vec<Cell>,

@@ -311,8 +311,17 @@ setting rather than the cell's own figure. Neither invents a number the
 disc does not author - both are documented gaps this engine already had
 before the campaign could reach them, now visibly reached.
 
-**Still not implemented: `Tournament`'s per-leg state and `Head2Head` at
-all** (no `oag_race::Mode` variant exists for the latter - see
-`oag_game::campaign::race_mode_for_cell`'s own doc), and grid-tier locking
-(`Unlock_GridPointsMet`) - see the `campaign` handover threads for the scope
-reasoning on both.
+**Still not implemented: `Head2Head` at all** - no `oag_race::Mode` variant
+exists for it, see `oag_game::campaign::race_mode_for_cell`'s own doc.
+`Tournament`'s own per-leg state is wired (`docs/gameplay/race-modes.md#tournament`).
+
+**2026-09-23: grid-tier locking (`Unlock_GridPointsMet`) is wired too.**
+`oag_tables::race_campaign::grid_points_met` reimplements the named-grid
+comparison directly - `Unlock_GridName`'s target, matched case-insensitively,
+against that grid's own `points_earned` and `required_points` - and
+`CampaignStage::grid_is_unlocked` (`crates/game/src/main/campaign_stage.rs`)
+is what `Session::handle_campaign` gates `Grid Selection`'s own Confirm on,
+in place of the display-only lock-glyph shortcut it used to reuse for the
+purpose. See [race-campaign.md](../formats/race-campaign.md) and
+`docs/ghidra/functions/psp-pulse-usa/race-campaign.md`'s "Grid0..Grid14:
+what the gate actually evaluates".

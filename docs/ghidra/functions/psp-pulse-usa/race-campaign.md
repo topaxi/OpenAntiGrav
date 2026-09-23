@@ -77,9 +77,13 @@ any of the sixteen grid files - `PI_Track`/`PI_TeamModel` rows were not
 re-checked for one, so "nothing depends on grid15" is a reading of the grid
 files alone.
 
-**The `Locked` column above is reported, not interpreted.** `Locked` is parsed
-onto a `PI_Grid` at `+0xa0` and onto a `PI_Cell` at `+0xb9`, and **no consumer
-of either byte was traced this pass**. It is not `Definition_IsUnlocked`, which
+**The `Locked` column above is reported, not interpreted, as of this
+pass.** `Locked` is parsed onto a `PI_Grid` at `+0xa0` and onto a `PI_Cell`
+at `+0xb9`, and **no consumer of either byte was traced this pass**. **A
+later pass, 2026-09-14, did find one for each - see ["Unlock rules, cell and
+tier"](#unlock-rules-cell-and-tier) below, which supersedes the "is open"
+sentence a few lines down (not the offsets or the `Definition_IsUnlocked`
+negative result, both still correct).** It is not `Definition_IsUnlocked`, which
 reads the hard-hidden byte at `+0x99` and the `<Unlock>` list at `+0x9c`; and it
 is not `FUN_0888e5e4`, the function both screens call into `screen + 0xd8`,
 which compares the definition's source path at `+0x94` against `"ms:"` and
