@@ -61,6 +61,19 @@ pub const CLASS_CAGE_COLLISION: u32 = 0x3e7;
 /// `crates/game/tests/hd_trackwall_ground_truth.rs`.
 pub const CLASS_TRACK_WALL_COLLISION: u32 = 0x3ed;
 
+/// Class ID of an `absorb` node: where Wipeout HD plays `WO_WEAPON_ABSORB`
+/// when a craft absorbs a pickup.
+///
+/// **From HD's executable, not from a Pulse table.** `FUN_002d8bb8` in
+/// `/hdfury/EBOOT-ps3-hdfury-eu.elf` registers class `0x3ee` against
+/// `ShipAbsorbNode_Importer.h`, and `FUN_002d8e58`, the node's own
+/// constructor, stamps the type token the absorb feedback's node collector
+/// matches on. 37 of the 39 `Locators.vex` on the HD disc author six,
+/// `Absorb_1`..`Absorb_6`; Detonator's and Zone's author none. Confidence 85;
+/// see
+/// `docs/ghidra/functions/ps3-hdfury-eu/absorb-feedback.md`.
+pub const CLASS_ABSORB: u32 = 0x3ee;
+
 /// One format version's class-ID assignments.
 ///
 /// `None` means the ID has not been recovered for that version. A decoder
@@ -105,6 +118,9 @@ pub struct Classes {
     pub engine_flare: Option<u32>,
     /// The collision-spark locator on a ship.
     pub ship_collision_fx: Option<u32>,
+    /// The locator Wipeout HD plays its weapon-absorb burst at - see
+    /// [`CLASS_ABSORB`].
+    pub absorb: Option<u32>,
 }
 
 /// The table used by every file Pulse ships except one.
@@ -140,6 +156,9 @@ pub const V6: Classes = Classes {
     airbrake: Some(super::CLASS_AIRBRAKE),
     engine_flare: Some(super::CLASS_ENGINE_FLARE),
     ship_collision_fx: Some(super::CLASS_SHIP_COLLISION_FX),
+    // Version 6 for the same reason `track_wall_collision` is: HD's own
+    // registration, not a Pulse table entry, and no Pulse file authors one.
+    absorb: Some(CLASS_ABSORB),
 };
 
 /// The table Pure's 156 version-4 files use, and Pulse's one legacy
@@ -311,6 +330,7 @@ pub const V4: Classes = Classes {
     airbrake: Some(0x377),
     engine_flare: Some(0x371),
     ship_collision_fx: Some(0x382),
+    absorb: None,
 };
 
 /// The table Pure's 15 version-3 files use.
@@ -344,6 +364,7 @@ pub const V3: Classes = Classes {
     airbrake: None,
     engine_flare: None,
     ship_collision_fx: None,
+    absorb: None,
 };
 
 /// The class table for a file's version word, or `None` for a version this

@@ -192,8 +192,8 @@ impl Race {
     /// [`LAP_REFILL_FRACTION`] of the skill-indexed maximum through
     /// `Ship_AddShield`'s clamp, then plays the absorb feedback -
     /// `Ship_PlayAbsorbFeedback` (`0x08840640`), the `ABSORB` cue and the
-    /// staggered `WO_WEAPON_ABSORB` bursts. The cue is raised here; the
-    /// bursts are not yet drawn. See
+    /// staggered `WO_WEAPON_ABSORB` bursts, both through
+    /// [`Race::play_absorb_feedback`]. See
     /// `docs/ghidra/functions/psp-pulse-usa/shield.md`.
     ///
     /// The original's `last_crossings != 0` gate - the grid-exit crossing
@@ -220,9 +220,6 @@ impl Race {
             &dimensions,
             dimensions.shield * LAP_REFILL_FRACTION,
         );
-        self.sim.cues.push(crate::audio::sfx::CueEvent::new(
-            crate::audio::sfx::Cue::Absorb,
-            slot,
-        ));
+        self.play_absorb_feedback(slot);
     }
 }

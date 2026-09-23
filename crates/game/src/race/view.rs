@@ -102,6 +102,16 @@ pub struct RaceView {
     /// ease rather than Pulse's baked anim-time scrub. See
     /// `options::Setup::hd_plasma_blast`.
     pub(super) hd_plasma_blast: bool,
+    /// See `Setup::absorb_burst`.
+    pub(super) absorb_burst: Option<super::absorb::AbsorbBurst>,
+    /// See `Setup::absorb_anchors`.
+    pub(super) absorb_anchors: Vec<Vec<Vec3>>,
+    /// Every absorb burst scheduled or still playing - see
+    /// `Race::advance_absorb_bursts`.
+    pub(super) absorb_bursts: Vec<super::absorb::PendingAbsorb>,
+    /// How many of them have started, ever - a count the tests read, since
+    /// the stage's own is shared with every other effect in the race.
+    pub(super) absorb_started: u32,
     /// Origin-to-nozzle distance per craft, world units - the trail-hit reach.
     pub(super) hull_reach: [f32; MAX_SHIPS],
     /// `--trail-sparks`: see [`Race::force_trail_sparks`].

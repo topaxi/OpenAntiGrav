@@ -70,6 +70,8 @@ impl Setup {
             // Nothing draws on this constructor, Pulse's mechanism included -
             // see `shield_palette` above for the same reasoning.
             hd_plasma_blast: false,
+            absorb_burst: None,
+            absorb_anchors: Vec::new(),
             collision: CollisionWorld::new(),
             handling: Handling::ZERO,
             // Zero travel at zero speed: the flaps neither open nor move.

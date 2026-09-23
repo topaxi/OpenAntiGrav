@@ -118,6 +118,7 @@ use oag_tables::handling;
 use oag_vex::track::{AiTrack, Sample, StartPosition};
 use oag_vex::vex;
 
+mod absorb;
 mod access;
 mod assets;
 mod blast_models;
@@ -154,6 +155,10 @@ mod weapons;
 mod worker;
 pub mod zone_grade;
 
+pub use absorb::{
+    ABSORB_EFFECT, AbsorbBurst, HD_ABSORB_BURST, PULSE_ABSORB_BURST, PURE_ABSORB_BURST,
+    absorb_burst_for,
+};
 pub use assets::{boost_entry_name, shield_entry_names, ship_entry_name};
 pub use blast_models::PlasmaBlastModels;
 pub use camera::chase_params;

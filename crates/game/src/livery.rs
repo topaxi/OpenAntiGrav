@@ -56,6 +56,7 @@ use oag_vex::vex;
 
 use crate::race::{boost_entry_name, ps2_texture_set, ship_entry_name};
 
+mod absorb;
 pub(crate) mod engine_light;
 mod flare;
 pub(crate) mod ship_skin;
@@ -102,6 +103,9 @@ pub struct Livery {
     /// different models, so a locator set belongs to the one it was authored
     /// on.
     pub collision_fx: Vec<SparkAnchor>,
+    /// Wipeout HD's `absorb` locators, model space, where its absorb burst
+    /// plays - empty on every source that has no such class. See [`absorb`].
+    pub absorb: Vec<Vec3>,
     /// The plume's own authored texture-transform animation.
     ///
     /// **Per team, and this is not a formality.** Eight per-team plumes sampled
@@ -227,6 +231,7 @@ pub fn load(
                 hull: source.hull.clone(),
                 nozzle: source.nozzle,
                 collision_fx: source.collision_fx.clone(),
+                absorb: source.absorb.clone(),
                 boost: source.boost.clone(),
                 boost_uv: source.boost_uv.clone(),
                 flare: source.flare.clone(),
@@ -264,6 +269,7 @@ pub fn load(
                     hull: player.hull.clone(),
                     nozzle: player.nozzle,
                     collision_fx: player.collision_fx.clone(),
+                    absorb: player.absorb.clone(),
                     boost: player.boost.clone(),
                     boost_uv: player.boost_uv.clone(),
                     flare: player.flare.clone(),
@@ -338,6 +344,7 @@ fn one(
                     hull: mesh::Model::none(&hull_name),
                     nozzle: None,
                     collision_fx: Vec::new(),
+                    absorb: Vec::new(),
                     boost: None,
                     boost_uv: None,
                     flare: None,
@@ -358,6 +365,7 @@ fn one(
             ));
         }
         let (nozzle, nozzle_axis, collision_fx) = locators(archives, &hull_name, &blob, report);
+        let absorb = absorb::locators(archives, &hull_name, &blob, report);
         let engine_light =
             engine_light::load(archives, team, ships.dir, ctx.flare, nozzle_axis, report);
         // **The plume comes from here too on this title.** HD ships no
@@ -369,6 +377,7 @@ fn one(
             team: team.to_string(),
             nozzle,
             collision_fx,
+            absorb,
             hull,
             boost: lit.boost,
             flare: lit.always,
@@ -421,6 +430,7 @@ fn one(
         hull,
         nozzle,
         collision_fx,
+        absorb: Vec::new(),
         boost,
         boost_uv,
         flare: lit.always,

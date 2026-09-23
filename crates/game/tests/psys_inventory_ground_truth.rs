@@ -130,12 +130,10 @@ const NO_TRIGGER_RECOVERED: &[(&str, &str)] = &[
          bomb's detonation plays this smoke ring, `WO_MINE_EXPLO` (now \
          wired for the Mine itself) at a larger scale, or both, is open.",
     ),
-    (
-        "WO_WEAPON_ABSORB",
-        "the Shield absorbs a pickup already (`spend_pickup`), but nothing \
-         has been read that ties this effect to that path rather than to the \
-         Leach Beam or to a shield hit.",
-    ),
+    // **Not `WO_WEAPON_ABSORB`** - wired 2026-09-23, off
+    // `Ship_PlayAbsorbFeedback` (`0x08840640`), which both absorb paths call:
+    // one instance per `Ship Collision Fx` node, staggered 0.1 s. See
+    // `oag_game::race::absorb` and `docs/ghidra/functions/psp-pulse-usa/shield.md`.
     (
         "WO_RAIN",
         "an environment effect. Which track places it, where, and how many, \
@@ -213,9 +211,10 @@ const PSP_WIRED: &[&str] = &[
     "WO_MISSILE_EXPLO",
     "WO_MISSILE_BOUNCE",
     "WO_MINE_EXPLO",
+    "WO_WEAPON_ABSORB",
 ];
 
-/// The PS2 carries all eight of the PSP's plus its own engine flare.
+/// The PS2 carries all nine of the PSP's plus its own engine flare.
 const PS2_WIRED: &[&str] = &[
     "WO_SHIP_COLL_SPARK_DAMAGE",
     "WO_ROCKET_FLARE",
@@ -225,6 +224,7 @@ const PS2_WIRED: &[&str] = &[
     "WO_MISSILE_EXPLO",
     "WO_MISSILE_BOUNCE",
     "WO_MINE_EXPLO",
+    "WO_WEAPON_ABSORB",
     "WO_SHIP_ENGINEFLARE",
 ];
 
@@ -379,7 +379,7 @@ fn the_ps2_port_s_own_effects_are_accounted_for_too() {
 
 /// Wipeout HD/Fury, and deliberately **not** the three-bucket sweep above.
 ///
-/// HD authors 82 distinct particle systems and 21 are wired (`RACE_EFFECTS`'
+/// HD authors 82 distinct particle systems and 22 are wired (`RACE_EFFECTS`'
 /// current length - up from 11 when this comment was first written; Plasma,
 /// Shuriken and Quake landed since, so recompute from the source rather than
 /// trusting a number here) - the weapon table alone (Detonator, Nitro,
