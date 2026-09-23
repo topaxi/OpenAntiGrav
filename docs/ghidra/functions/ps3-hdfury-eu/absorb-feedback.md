@@ -233,7 +233,7 @@ node's local matrix.
   replaced by `vsel(identity row 3, splat(7.0), mask)`, show it, and hide the
   external one. The mask is `*(0x008a8c20) + 0x20`, and `*(0x008a8c20)` is
   `0x00c47730`, in `.bss`, so no static read gives which lane takes the
-  `7.0`.
+  `7.0`. Read live below: it is `z`.
 - **`g_PhysicsHalfStep` set**: both paths run, and the net result is the
   external shell shown at identity and the cockpit one hidden.
 
@@ -296,6 +296,46 @@ occurs in 92 of them: every `absorbeffect`, every `shipshield` and the three
 nothing to write, and `FUN_003ea368` stays unnamed. Confidence **85** for the
 negative.
 
+### Live on RPCS3, 2026-09-23
+
+Two boots of a Campaign race on Talon's Junction, stock RPCS3 `rpcs3-bin`
+under `PPU Decoder: Recompiler (LLVM)`, audio `"Null"`, a private
+config/cache copy, GDB on its own port. No breakpoints were needed: the GDB
+stub pauses the target, and the craft array at `0x0098d7c0` gives the eight
+crafts. The player's craft is the one with `craft+0x7a60 == 0`; on these boots
+that was entry 7, not entry 0.
+
+- **Before any absorb**, every craft read `fade 0`, `target 0`, `rate 0.15`
+  (the load value), `timer` far negative, and both shell nodes had bit `4`
+  clear at `+0x34`.
+- **The settings block** read the `.data` defaults: `+0x54 = 0.2`,
+  `+0x58 = 1.0`, `+0x6c = 1.0`.
+- **The cockpit shell's mask** at `*(0x008a8c20) + 0x20` is
+  `(0, 0, 0xffffffff, 0)`. `*(0x008a8c20)` read `0x00c47730`. So the
+  cockpit shell sits at `(0, 0, 7.0)` in the craft's frame.
+- **Writing `1.0` into `craft+0x7a5c`**, which is `Ship_PlayAbsorbFeedback`'s
+  own store, then sampling every ~0.12 s of game time: `target` went to `1.0`
+  and `rate` to `0.1`, and the fade rose `0.27, 0.52, 0.69, 0.79, 0.85, 0.90,
+  0.93, 0.95` while the timer ran out. After that `target` was `0`, `rate`
+  stayed `0.1`, and the fade fell `0.78, 0.46, 0.27, ... 0.012, 0.008`. The
+  external shell node's bit `4` was set from the first sample and cleared at
+  the first sample at or below `0.01`. The cockpit shell stayed hidden
+  throughout (`craft+0x5f42 == 0`, chase camera).
+- **The step rate follows the frame rate.** The emulator ran at about
+  35 fps. Successive ratios of `1 - fade` were whole powers of `0.9`: 3, 4 or
+  5 steps per sample, one per frame. The truncating step count gives one step
+  per frame at any rate below 120 fps. That is 60 steps a second on a PS3 at
+  60 fps, and the port's 60 Hz tick matches it.
+- **The picture.** The player's hull goes pale white-lavender over its whole
+  surface while the fade is up, and returns to its livery as it falls. The
+  frames are in `~/.cache/oag/drive/reports/hd-absorb-overlay/original-rpcs3-*`.
+  They were taken during the pre-race flyby, which the race walk ended on.
+
+This confirms the timer, the target, the rate, the hide threshold and which
+node is shown. Confidence on those rises to **90**. What it does not exercise
+is a real absorb reaching `Ship_PlayAbsorbFeedback`; that store is read
+statically above.
+
 ### Ported
 
 `oag_render::absorb_shell` reproduces the four floats and their tick.
@@ -308,8 +348,10 @@ outside all of `Ship_PlayAbsorbFeedback`'s branches.
 
 ## Open
 
-- **The cockpit shell** (`vr_absorbinternal_cockpit`) is not drawn: its
-  `7.0` offset lane comes from the `.bss` mask above. The player's external
+- **The cockpit shell** (`vr_absorbinternal_cockpit`) is not drawn. Its
+  placement is now measured (`(0, 0, 7.0)`, above), but the meaning of
+  `craft+0x5f42` as "camera inside the hull" is still inferred, and the
+  cockpit model's one chunk carries no vertex declaration. The player's external
   shell is not drawn while the camera is inside the hull either, which is
   what the original does.
 - **Who fills `FUN_003ea368`'s record table**, and what `entry+0xec` is, is

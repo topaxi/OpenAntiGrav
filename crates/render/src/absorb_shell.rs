@@ -38,8 +38,13 @@
 //!   the original the target is chosen in a later stage of the frame than the
 //!   relaxation, so this may lead it by one tick. Chosen, not measured.
 //! - **The cockpit shell is not drawn.** Its local transform is the identity
-//!   with a `7.0` in a lane selected by a mask in `.bss` (`*(0x008a8c20) +
-//!   0x20`), which no static read gives. See the doc page.
+//!   moved to `(0, 0, 7.0)` (the `.bss` lane mask at `*(0x008a8c20) + 0x20`,
+//!   read live), but what `craft+0x5f42` means is inferred and the cockpit
+//!   model's chunk carries no vertex declaration. See the doc page.
+//!
+//! The timer, target, rate and hide threshold were confirmed live on RPCS3
+//! by writing `craft+0x7a5c` and sampling the four floats; see the doc page's
+//! "Live on RPCS3".
 
 /// What `Ship_PlayAbsorbFeedback` stores into the timer, `settings+0x58` at
 /// `0x008c1638`. Seconds.
