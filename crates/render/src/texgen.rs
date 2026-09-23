@@ -189,6 +189,7 @@ mod tests {
             sun_mask: 1.0,
             slots: crate::mesh::slots::DEFAULT,
             specular_exponent: crate::mesh::DEFAULT_SPECULAR_EXPONENT,
+            glow: 0.0,
         }
     }
 

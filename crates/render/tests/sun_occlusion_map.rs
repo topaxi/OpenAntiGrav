@@ -29,6 +29,7 @@ fn vertex(position: [f32; 3], lightmap_texcoord: [f32; 2], sun_mask: f32, slots:
         sun_mask,
         slots,
         specular_exponent: oag_render::mesh::DEFAULT_SPECULAR_EXPONENT,
+        glow: 0.0,
     }
 }
 

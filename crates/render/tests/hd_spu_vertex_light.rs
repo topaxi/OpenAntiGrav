@@ -47,6 +47,7 @@ fn vertex(position: [f32; 3]) -> GpuVertex {
         // not `EMISSIVE`, which would replace the sum with `1.0` outright.
         slots: slots::DEFAULT | slots::NO_AMBIENT,
         specular_exponent: oag_render::mesh::DEFAULT_SPECULAR_EXPONENT,
+        glow: 0.0,
     }
 }
 
@@ -92,6 +93,7 @@ fn model() -> Model {
         material_variants: Vec::new(),
         material_anim: Vec::new(),
         vertex_colour_is_light: false,
+        stamps_glow: false,
         flame: None,
         absorb_shell: false,
         alpha_test_ref: None,

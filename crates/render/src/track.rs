@@ -171,6 +171,7 @@ pub fn build_model(label: &str, ai: &AiTrack) -> Model {
         material_anim: Vec::new(),
 
         vertex_colour_is_light: false,
+        stamps_glow: false,
 
         flame: None,
         absorb_shell: false,
@@ -238,6 +239,7 @@ fn strip(
             sun_mask: 1.0,
             slots: crate::mesh::slots::DEFAULT,
             specular_exponent: crate::mesh::DEFAULT_SPECULAR_EXPONENT,
+            glow: 0.0,
         });
         vertices.push(GpuVertex {
             position: edges_of(s, right, lift),
@@ -251,6 +253,7 @@ fn strip(
             sun_mask: 1.0,
             slots: crate::mesh::slots::DEFAULT,
             specular_exponent: crate::mesh::DEFAULT_SPECULAR_EXPONENT,
+            glow: 0.0,
         });
     }
     for i in 0..samples.len() as u32 - 1 {

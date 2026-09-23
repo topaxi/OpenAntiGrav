@@ -78,6 +78,7 @@ fn vertex(lit: f32, position: [f32; 3]) -> GpuVertex {
         // into the glow table.
         slots: slots::DEFAULT | slots::EMISSIVE | slots::ADD_SECOND | GLOW_SLOT,
         specular_exponent: oag_render::mesh::DEFAULT_SPECULAR_EXPONENT,
+        glow: 0.0,
     }
 }
 
@@ -135,6 +136,7 @@ fn model(lit: f32) -> Model {
         material_variants: Vec::new(),
         material_anim: Vec::new(),
         vertex_colour_is_light: false,
+        stamps_glow: false,
         flame: None,
         absorb_shell: false,
         alpha_test_ref: None,

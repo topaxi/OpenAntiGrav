@@ -20,11 +20,11 @@ use crate::mesh_render::{
 ///
 /// **The alpha channel of a rendered frame is not coverage; it is the bloom
 /// mask.** `mesh_render::GlowMask::Protected` binds `ColorWrites::COLOR`, so
-/// scene geometry does not write alpha at all and the channel keeps whatever
-/// the pass cleared it to - zero - while the handful of models bound
-/// `GlowMask::Written` mark themselves for `post::bloom`, whose `fs_bright`
-/// reads exactly that (`texel.rgb * texel.a`). The window never presents the
-/// channel, so nothing on screen depends on it.
+/// such geometry leaves the channel at the pass's clear - zero - while a
+/// `Stamped` model (every `.vex` model of a Pulse PSP race) writes its batch's
+/// stamp, `4` under an ordinary surface, and a `Written` one its own alpha.
+/// `post::bloom`'s `fs_bright` reads exactly that (`texel.rgb * texel.a`). The
+/// window never presents the channel, so nothing on screen depends on it.
 ///
 /// A PNG does present it. Encoding a race frame straight from the readback
 /// buffer therefore writes a **fully transparent image**: correct bytes, and
@@ -38,6 +38,36 @@ pub fn make_opaque(pixels: &mut [u8]) {
     for pixel in pixels.as_chunks_mut::<4>().0 {
         pixel[3] = 0xff;
     }
+}
+
+/// The environment variable that asks [`dump_glow_mask_if_asked`] for a PNG
+/// of a frame's glow mask, and names the path.
+pub const DUMP_GLOW_MASK_VAR: &str = "OAG_DUMP_GLOW_MASK";
+
+/// Writes the frame's alpha channel - the bloom's glow mask - as a greyscale
+/// PNG when [`DUMP_GLOW_MASK_VAR`] names a path, before [`make_opaque`]
+/// erases it. The comparison `docs/rendering/glow-mask.md` makes against the
+/// original's EDRAM needs exactly this channel.
+///
+/// # Errors
+///
+/// A path that cannot be written.
+pub fn dump_glow_mask_if_asked(width: u32, height: u32, pixels: &[u8]) -> anyhow::Result<()> {
+    let Some(path) = std::env::var_os(DUMP_GLOW_MASK_VAR) else {
+        return Ok(());
+    };
+    let grey: Vec<u8> = pixels
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .flat_map(|p| [p[3], p[3], p[3], 0xff])
+        .collect();
+    std::fs::write(&path, oag_texture::png::encode_rgba(width, height, &grey))?;
+    println!(
+        "wrote the glow mask to {}",
+        std::path::Path::new(&path).display()
+    );
+    Ok(())
 }
 
 /// Renders one frame of `model` to a PNG from a given orbit angle.

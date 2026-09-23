@@ -732,7 +732,8 @@ answer to [exhaust.md](exhaust.md)'s missing-multiplier question. It is not.
 ### A trap: `model+0xb0` holds two lists and the obvious one is the wrong one
 
 - `model+0xb0 + 0x00`, capacity `0x94`, built by
-  `SceneLight_BuildLightingList_q` (`0x0887a4f0`): `0x17000001`
+  `SceneLight_BuildLightingList` (`0x0887a4f0`, read live on
+  [scene-light.md](scene-light.md)): `0x17000001`
   **LIGHTINGENABLE = 1**, ambient colour/alpha, light enables, light positions,
   per-light colours.
 - `model+0xb0 + 0xd0`, capacity `0x20`, built by `SceneLight_Rebuild`
@@ -1162,7 +1163,7 @@ previous pass on this subsystem got wrong.
 | `0x0887a268` | function | `SceneLight_CallMaterialList` | 78 |
 | `0x0887a230` | function | `SceneLight_CallLightingList` | 78 |
 | `0x08879b14` | function | `SceneLight_Rebuild` | 75 |
-| `0x0887a4f0` | function | `SceneLight_BuildLightingList_q` | 68 |
+| `0x0887a4f0` | function | `SceneLight_BuildLightingList` | 88, since 2026-09-23 - see [scene-light.md](scene-light.md) |
 | `0x08912358` | function | `Vex_UpdateLightLists_q` | 65 |
 | `0x0887a018` | function | `SceneLight_InitLists_q` | 65 |
 | `0x08abf500` | data | `g_envmap_light_basis_angle_x` | 90 |
@@ -1177,7 +1178,9 @@ literal switch from state index to GE enable command - which makes every other
 [exhaust.md](exhaust.md) a read rather than an SDK recollection.
 
 The three `_q` names are the three whose *bodies* are decoded but whose role is
-partly inferred: `SceneLight_BuildLightingList_q`'s list contents are fully read
+partly inferred: `SceneLight_BuildLightingList`'s list contents are fully read
+(and since 2026-09-23 matched to the disc live, which lifts it to 88 - see
+[scene-light.md](scene-light.md))
 while its return value's meaning (an accumulated light colour) is not,
 `Vex_UpdateLightLists_q` writes both light lists correctly but its trigger was
 never read, and `SceneLight_InitLists_q` only writes bare `RET`s and a flag.

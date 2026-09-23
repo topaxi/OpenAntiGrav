@@ -27,8 +27,8 @@ unfound. So, as with
 | Placement is the node's transform chain, not the payload | **85** |
 | `Dynamic Point Light` `0x3c2` is never authored anywhere on the PSP disc | **90** |
 | `PointLight` has no `Vex_RegisterClass` call site on either binary - authored but never handled | **90** (exhaustive: all 46 sites read, both binaries) |
-| `AmbientLight`'s decoded colour never reaches the one global its only two known consumers read - confirmed inert | **live-verified** |
-| `DirectionalLight` is live-verified collected into a 4-entry list at track load, matching real authored data exactly - the reader is still unfound | **live-verified (collection); reader not recovered** |
+| `AmbientLight`'s decoded colour never reaches the one global its only two known consumers read | **live-verified** - but see the next row |
+| `AmbientLight` and `DirectionalLight` both reach the GE as a hull's hardware lights, colour `x255` truncated times a per-craft scale, direction = the node matrix's row 2 (2026-09-23, [scene-light.md](../ghidra/functions/psp-pulse-usa/scene-light.md)) | **live-verified**, 90 |
 
 Validated by `crates/vex/tests/lighting_ground_truth.rs` against every
 `.vex` file in the PSP disc's `Data.wad` (1142 entries, `just test-data`).

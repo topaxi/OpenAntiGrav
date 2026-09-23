@@ -194,7 +194,8 @@ impl Scene {
         self.render_sun_occlusion(queue, encoder, race, shadows);
         let scene = mesh_render::Scene {
             fog,
-            light,
+            // Pulse's hull lights reach the craft alone - see `ship_scene`.
+            light: light.without_hull(),
             // The flame surface's scroll clock - `time`, engine parameter slot
             // 0 on the original. The same `seconds` the texture and node
             // animation ride, so `--anim-seconds` pins all three at once and a
@@ -268,6 +269,7 @@ impl Scene {
         // in range; see `race::engine_light`, "Who receives it".
         let ship_scene = mesh_render::Scene {
             zone: mesh_render::Zone::default(),
+            light,
             ..scene
         };
         for drawable in self.ships.iter() {
@@ -932,8 +934,8 @@ impl Scene {
             );
             stats.hd_bloom_encoded = true;
         } else if let Some(bloom) = &self.bloom {
-            // The recovered post-process, reading the alpha channel the ribbon
-            // and the flare stamped and adding a blurred copy of the masked
+            // The recovered post-process, reading the alpha channel the scene
+            // stamped (`GlowMask::Stamped`) and adding a blurred copy of the masked
             // colour back over the frame. `view` is the resolved image in both
             // the MSAA and the single-sample case, which is why this runs on
             // it rather than on `attachment_view`. See `oag_render::post::bloom` -

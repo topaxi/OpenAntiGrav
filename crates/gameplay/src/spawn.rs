@@ -459,6 +459,7 @@ mod tests {
             racing_line: 0.0,
             section_id: 0,
             flags: 0,
+            light_scale: [0xff; 4],
         }
     }
 

@@ -261,6 +261,14 @@ That is the same `pass_mask` u16 [`mesh-draw.md`](mesh-draw.md) already
 decodes for the blend classes, so **the flag is readable from shipped data
 today**. Confidence 85.
 
+> **Corrected 2026-09-23.** The census below counted `0x40` alone. The
+> writers are `pass_mask & 0xc0`, and `0x80` is set on every `_GLOW`
+> texture's batches - 214 of `16_Track`'s 2,079. They stamp the texture's
+> own glow byte through the stencil, and every other opaque batch stamps a
+> base value of `4`. Read live out of EDRAM on
+> [`glow-mask.md`](../../../rendering/glow-mask.md). The paragraphs below are
+> kept as the record.
+
 **And a census says no shipped mesh uses it at all.** Measured through
 `oag_vex::vex::mesh_batches` on the European disc, over the four tracks
 whose `Data\Environments\<n>_Track\track.vex` resolves plus a ship and its
@@ -311,11 +319,13 @@ the channel is defended by default and opened deliberately.
   ribbon's stepped ramp, base `intensity * 0.5 * 0.9`, lands in alpha. The
   writer [`exhaust.md`](exhaust.md) used to call inert.
 - **`ExhaustFlare_BuildDisplayList` (`0x08904c60`)** - also `Gu_PixelMask(0)`,
-  and its list disables `STENCIL_TEST`, so what reaches alpha is the
-  **fragment's own alpha**: the flare's flickered `rand_int(200, 255)`. So the
-  nozzle sprite is a strong glow source in its own right, not only through the
-  ribbon. **New**, and it means the boost's bloom has two exhaust
-  contributors rather than one.
+  and its list disables `STENCIL_TEST`. ~~So what reaches alpha is the
+  fragment's own alpha~~ **Corrected 2026-09-23: nothing reaches alpha.** The
+  GE writes the framebuffer's alpha only through a stencil op, and with the
+  test disabled it keeps the old value; the blend never touches it (PPSSPP's
+  `DrawSinglePixel` and `ConvertBlendState`, and the live EDRAM read: `0`
+  behind an idle nozzle, the ribbon's own ramp). The flare is not a glow
+  source. See [`glow-mask.md`](../../../rendering/glow-mask.md).
 - **`FUN_088731c4`** - a scrolling additive ribbon, below.
 
 ### `FUN_088731c4`: a second glow-writing ribbon, and it is authored
@@ -355,7 +365,10 @@ and that it feeds the bloom.
 - **Which class `FUN_088739b0` belongs to**, via its `Vex_RegisterClass`
   caller and then a `--nodes` count over a track. That name is what would say
   whether this is the ribbon a player recognises.
-- **Where `Bloom_Draw` is called from.** The constructor is on the
+- ~~**Where `Bloom_Draw` is called from.**~~ **Whether it runs: settled
+  2026-09-23** - once per race frame, 121 of 121 frames counted by a read
+  watchpoint only it trips. See [`glow-mask.md`](../../../rendering/glow-mask.md).
+  The dispatch itself is still unread: The constructor is on the
   `Game_MainLoop` path and the singleton is plainly live - sixteen call sites
   null-check it every frame - but the draw itself is dispatched **through the
   method table** and still has no direct xref. "It runs every race frame" is
@@ -501,11 +514,13 @@ Everything a reimplementation needs is above, and none of it requires
 hardware:
 
 1. render the scene to an offscreen **`Rgba8` colour target whose alpha is a
-   dedicated glow buffer** - `GU_PSM_8888`, so 8 bits. Ordinary mesh batches
-   must leave alpha alone (measured: 0 of 6,923 authored batches open it).
-   The writers are the three found above - **the exhaust ribbon's stepped
-   ramp, the flare quad's own flickered alpha, and the scrolling ribbon
-   class** - so a port that wires only the first will under-glow the nozzle;
+   dedicated glow buffer** - `GU_PSM_8888`, so 8 bits. ~~Ordinary mesh
+   batches must leave alpha alone~~ **Corrected 2026-09-23**: every opaque
+   batch stamps `4`, a `pass_mask & 0xc0` batch its texture's glow byte, a
+   transparent batch nothing, and the writers outside the mesh path are the
+   exhaust ribbon's ramp and the scrolling ribbon class - not the flare, and
+   not the plume. Measured out of EDRAM on
+   [`glow-mask.md`](../../../rendering/glow-mask.md);
 2. bright pass to a half-resolution target, `rgb * a`;
 3. 11-tap horizontal then vertical blur with the recovered weights, additive,
    gain `1.85` per axis;

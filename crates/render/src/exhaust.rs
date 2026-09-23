@@ -1276,10 +1276,10 @@ impl Pipeline {
         // a write. Acting on it makes the flare's own alpha accumulate under
         // `BLEND` (`SrcAlpha`/`One`) across a quad that is `6.5` world units
         // wide during a boost, saturating the mask over most of the lower frame
-        // and blowing the whole picture out - measured 2026-08-10. Until the
-        // flare's contribution is read rather than inferred, only the ribbon
-        // feeds the bloom. See `crate::post::bloom` and
-        // `docs/ghidra/functions/psp-pulse-usa/bloom.md`.
+        // and blowing the whole picture out - measured 2026-08-10. **Now read:
+        // the flare writes no mask.** Its list disables the stencil test, and
+        // the GE writes alpha only through a stencil op - see
+        // `docs/rendering/glow-mask.md`. Only the ribbon feeds the bloom.
         let pipeline = build_pipeline(
             "exhaust",
             BLEND,

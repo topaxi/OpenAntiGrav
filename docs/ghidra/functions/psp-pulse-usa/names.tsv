@@ -432,7 +432,7 @@
 0x0887a268	function	SceneLight_CallMaterialList	78	mesh-draw.md
 0x0887a230	function	SceneLight_CallLightingList	78	mesh-draw.md
 0x08879b14	function	SceneLight_Rebuild	75	mesh-draw.md
-0x0887a4f0	function	SceneLight_BuildLightingList	68	mesh-draw.md
+0x0887a4f0	function	SceneLight_BuildLightingList	88	scene-light.md
 0x08912358	function	Vex_UpdateLightLists	65	mesh-draw.md
 0x0887a018	function	SceneLight_InitLists	65	mesh-draw.md
 0x08840c74	function	Craft_Construct	65	camera.md
@@ -1056,3 +1056,6 @@
 0x08916200	function	PsysNode_Start	65	shield.md
 0x08915cdc	function	PsysNode_Update	80	shield.md
 0x08844ec4	function	Ship_AbsorbHeldPickup	85	cannon-quake-leachbeam.md
+0x0883e444	function	Craft_ApplyHullLightScale	85	scene-light.md
+0x0887c11c	function	Spline_AccumulateLightScale	85	scene-light.md
+0x0887c7e8	function	Spline_SampleSegment	75	scene-light.md

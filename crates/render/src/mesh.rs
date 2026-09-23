@@ -90,68 +90,7 @@ pub fn is_blink_light_texture(label: &str) -> bool {
 }
 
 #[cfg(test)]
-mod blink_texture_tests {
-    use super::{ANIMATED_TEXTURES, animated_v_cycles, is_blink_light_texture};
-
-    #[test]
-    fn matches_the_shared_blink_texture_however_it_is_cased() {
-        assert!(is_blink_light_texture("colours_flashing_GLOW.tga"));
-        assert!(is_blink_light_texture("COLOURS_FLASHING_GLOW.TGA"));
-    }
-
-    #[test]
-    fn excludes_unrelated_textures() {
-        assert!(!is_blink_light_texture("engine_general.tga"));
-        assert!(!is_blink_light_texture("texture1.tga"));
-    }
-
-    #[test]
-    fn the_blink_palette_animates_through_the_table_too() {
-        assert_eq!(animated_v_cycles("colours_flashing_GLOW.tga"), Some(2.0));
-    }
-
-    #[test]
-    fn track_entries_are_matched_case_insensitively() {
-        assert!(animated_v_cycles("col_display7_GLOW.tga").is_some());
-        assert!(animated_v_cycles("07_Pulse_light_BLEND_GLOW.TGA").is_some());
-        assert!(animated_v_cycles("rf_cyclegrad3_GLOW.tga").is_some());
-    }
-
-    /// The static sponsor art that a `_GLOW`/`_ADD` suffix rule would have
-    /// swept up. Each of these is a real texture on a real circuit.
-    #[test]
-    fn static_art_never_animates() {
-        for label in [
-            "hub_banner_GLOW.tga",
-            "col_banners2_ADD.tga",
-            "FEISAR3_GLOW.tga",
-            "Harimau_Glow.tga",
-            "billboard1.tga",
-            "banner2.tga",
-            "tunnelanim_sb.tga",
-            "flicker1nonalpha_GLOW.tga",
-            "Plasma_scroll_ADD_GLOW.tga",
-            "SL_stripwindows_shinemap.tga",
-        ] {
-            assert_eq!(animated_v_cycles(label), None, "{label} must not animate");
-        }
-    }
-
-    /// `col_display7_GLOW` is a prefix of `col_display7_BLEND_GLOW` in neither
-    /// direction, but both contain `col_display7`, so the longest-match rule is
-    /// what keeps a future shorter entry from swallowing a longer one.
-    #[test]
-    fn the_longest_matching_entry_wins() {
-        let table_keys: Vec<&str> = ANIMATED_TEXTURES.iter().map(|&(n, _)| n).collect();
-        assert!(table_keys.contains(&"col_display7_glow"));
-        assert!(table_keys.contains(&"col_display7_blend_glow"));
-        assert_eq!(
-            animated_v_cycles("col_display7_BLEND_GLOW.tga"),
-            Some(2.0),
-            "matched by the more specific entry"
-        );
-    }
-}
+mod blink_texture_tests;
 
 /// A model flattened into one vertex and one index buffer.
 ///
@@ -258,6 +197,13 @@ pub struct Model {
     /// over-fired onto every other model including the sky cube. `model_probe`
     /// is what caught the first half.
     pub vertex_colour_is_light: bool,
+    /// Whether this model's draws stamp the bloom's glow mask the way the
+    /// original's stencil does - see `mesh_render::GlowMask::Stamped`, which
+    /// a drawable of this model is built with whatever its caller asked for.
+    ///
+    /// Set by a race loader for Pulse on the PSP, the one source measured;
+    /// `false` everywhere else, and for a model cloned into another effect.
+    pub stamps_glow: bool,
     /// Wipeout HD's engine-flare shading, for the one model that is one, and
     /// `None` for every other model of every title. See [`Flame`].
     pub flame: Option<Flame>,
@@ -349,6 +295,7 @@ impl Model {
             material_anim: Vec::new(),
 
             vertex_colour_is_light: false,
+            stamps_glow: false,
 
             flame: None,
             absorb_shell: false,
@@ -577,6 +524,7 @@ fn build_class(
     };
 
     let nodes = vex::nodes(data).context("walking the node tree")?;
+    let glow_bytes = glow::texture_bytes(data);
 
     // `Lod::Single` skips every node under a two-child `LodGroup`'s second
     // child - see `Lod`'s own doc comment for why this is an invented
@@ -755,11 +703,13 @@ fn build_class(
                 // material index -> texture ordinal -> a texture we decoded. Any
                 // link in that chain can be missing, and a missing one draws
                 // untextured rather than borrowing a neighbour's skin.
-                let texture = materials
+                let material_texture = materials
                     .get(usize::from(batch.material_index))
                     .copied()
                     .flatten()
-                    .map(|m| m.texture as usize)
+                    .map(|m| m.texture);
+                let texture = material_texture
+                    .map(|t| t as usize)
                     .filter(|&t| textures.get(t).is_some_and(Option::is_some));
                 // The material's own authored track, deduplicated into
                 // `anim_tracks`. `0` means "no transform", so a real track is
@@ -813,6 +763,7 @@ fn build_class(
                         sun_mask: 1.0,
                         slots: crate::mesh::slots::DEFAULT,
                         specular_exponent: crate::mesh::DEFAULT_SPECULAR_EXPONENT,
+                        glow: glow::batch_value(&batch, material_texture, &glow_bytes),
                     });
                 }
                 for tri in batch.triangles() {
@@ -960,6 +911,7 @@ fn build_class(
         material_anim: Vec::new(),
 
         vertex_colour_is_light: false,
+        stamps_glow: false,
 
         flame: None,
         absorb_shell: false,
@@ -990,6 +942,7 @@ pub use model_texture::{BlockFormat, ModelTexture, Texels, TextureSlots};
 mod flame;
 pub mod groups;
 pub use flame::Flame;
+pub mod glow;
 mod merge;
 mod order;
 pub use merge::merge;

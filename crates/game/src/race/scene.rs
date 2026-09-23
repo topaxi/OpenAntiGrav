@@ -451,6 +451,7 @@ impl Scene {
                 )
             })
             .transpose()?;
+        let measured_mask = track_model.stamps_glow; // see `bloom` below
         let track = Drawable::new(
             device,
             queue,
@@ -761,11 +762,11 @@ impl Scene {
                     sample_count,
                     scene_depth,
                     exhaust::BLEND,
-                    // **The plume feeds the bloom.** Its draw path in the
-                    // original opens the alpha channel unconditionally, unlike
-                    // the hull's - see `mesh_render::GlowMask`. Without this the
-                    // boost's brightest surface contributes nothing to the glow
-                    // mask, which is the shape of the effect a player notices.
+                    // **`Written` reaches the PS2 plume alone**, whose `0xc0`
+                    // batches stamp the stencil. A Pulse PSP plume stamps as
+                    // measured instead (`Model::stamps_glow` overrides this):
+                    // transparent and without `0xc0`, it writes no mask at all.
+                    // See `mesh_render::GlowMask` and docs/rendering/glow-mask.md.
                     mesh_render::GlowMask::Written,
                     zone_art,
                     shadow_maps,
@@ -792,12 +793,12 @@ impl Scene {
         // blend, and the shell's whole look is a bright surface over the hull
         // rather than a surface that occludes it.
         //
-        // **Glow-mask written, like the plume and unlike the hull.** A raised
-        // shield is one of the brightest things in the frame and the effect a
-        // player is meant to notice; leaving it out of the mask would keep it
-        // out of the bloom, which is where most of its presence comes from.
-        // Unlike the plume, that is a reading rather than a recovered draw
-        // path - the shell's own GE state has not been read.
+        // **`Written` is a reading, not a recovered draw path**, and on Pulse
+        // PSP it does not apply: the shell is `Model::stamps_glow` there, so its
+        // own batches decide, and a transparent batch without `0xc0` writes no
+        // mask - the stencil rule measured on docs/rendering/glow-mask.md.
+        // Other sources keep it in the mask, as a shield is one of the frame's
+        // brightest things; the shell's own GE state has not been read.
         let slots = per_slot::Build {
             device,
             queue,
@@ -907,11 +908,11 @@ impl Scene {
             sample_count,
             mesh_render::Velocity::Write,
         ));
-        // A failure here is reported and dropped rather than propagated: a race
-        // without a bloom is a dimmer race, not a broken one. The HD chain
-        // replaces this pass outright - its read gate consumes the same glow
-        // mask as one of its two terms - so the two never run together.
-        let bloom = match (bloom_enabled && hd.is_none())
+        // A failure here is reported and dropped: a race without a bloom is
+        // dimmer, not broken. The HD chain replaces this pass outright, and it
+        // runs only over a mask stamped as Pulse PSP's is measured to be -
+        // Pure's and the PS2's are not (docs/rendering/glow-mask.md).
+        let bloom = match (bloom_enabled && hd.is_none() && measured_mask)
             .then(|| oag_render::post::bloom::Bloom::new(device, format))
             .transpose()
         {

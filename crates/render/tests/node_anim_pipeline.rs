@@ -34,6 +34,7 @@ fn moving_quad(xform: u32) -> Model {
         sun_mask: 1.0,
         slots: oag_render::mesh::slots::DEFAULT,
         specular_exponent: oag_render::mesh::DEFAULT_SPECULAR_EXPONENT,
+        glow: 0.0,
     };
     // Two keys, one second apart: `z` runs 0 to 3 over 60 frames.
     let translation = vex::AnimChannel {
@@ -88,6 +89,7 @@ fn moving_quad(xform: u32) -> Model {
         material_anim: Vec::new(),
 
         vertex_colour_is_light: false,
+        stamps_glow: false,
 
         flame: None,
         absorb_shell: false,
@@ -238,6 +240,7 @@ fn the_texture_table_scrolls_a_surface() {
         sun_mask: 1.0,
         slots: oag_render::mesh::slots::DEFAULT,
         specular_exponent: oag_render::mesh::DEFAULT_SPECULAR_EXPONENT,
+        glow: 0.0,
     };
     let mut model = moving_quad(0);
     model.vertices = vec![

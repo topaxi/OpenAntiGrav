@@ -117,7 +117,7 @@ pub struct RenderProfile {
     /// **An enhancement of this project's, off by default.** Neither PSP
     /// build renders motion blur, so on is a divergence a player opts into -
     /// the same footing as FSR 1 and SMAA, unlike the recovered bloom
-    /// (`Graphics::bloom`) whose default is about calibration. It is also the
+    /// (`Graphics::bloom`), on by default because the original runs it. It is also the
     /// first consumer of the reprojection infrastructure temporal
     /// anti-aliasing needs, which is most of why it exists - see
     /// `oag_render::post::motion_blur`, `docs/rendering/motion-blur.md` and

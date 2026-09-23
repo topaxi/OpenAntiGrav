@@ -164,6 +164,7 @@ pub fn build(label: &str, blob: &[u8], rotation_degrees: f32) -> Result<Model> {
                 sun_mask: 1.0,
                 slots: crate::mesh::slots::DEFAULT,
                 specular_exponent: crate::mesh::DEFAULT_SPECULAR_EXPONENT,
+                glow: 0.0,
             });
         }
         let start = indices.len() as u32;
@@ -207,6 +208,7 @@ pub fn build(label: &str, blob: &[u8], rotation_degrees: f32) -> Result<Model> {
         material_anim: Vec::new(),
 
         vertex_colour_is_light: false,
+        stamps_glow: false,
 
         flame: None,
         absorb_shell: false,

@@ -105,6 +105,7 @@ fn model_of(draws: Vec<DrawCall>) -> Model {
         material_anim: Vec::new(),
 
         vertex_colour_is_light: false,
+        stamps_glow: false,
 
         flame: None,
         absorb_shell: false,
@@ -218,6 +219,7 @@ fn padding_draws_the_neighbours_but_not_what_they_see() {
         racing_line: 0.0,
         section_id,
         flags: 0,
+        light_scale: [0xff; 4],
     };
     let track = AiTrack {
         version: 0x105,
@@ -282,6 +284,7 @@ fn swap_fixture() -> (TrackPvs, SwapConflicts) {
         sun_mask: 1.0,
         slots: crate::mesh::slots::DEFAULT,
         specular_exponent: crate::mesh::DEFAULT_SPECULAR_EXPONENT,
+        glow: 0.0,
     };
     model.indices.clear();
     for (draw, base_x) in [(0usize, 100.0f32), (1, 0.0), (2, 0.0), (3, 0.0)] {

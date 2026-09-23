@@ -7,6 +7,22 @@ against `/pulse/BOOT-psp-pulse-usa.BIN`. Opened to settle the M6 roadmap item on
 whose payloads [`docs/formats/lighting.md`](../../../formats/lighting.md)
 decodes from shipped data alone. This page is the handler-recovery half.
 
+> **Corrected 2026-09-23: both lights reach the GE, and the consumer is
+> `SceneLight_BuildLightingList`** (USA `0x0887a4f0`, EU `0x0887a34c`). It
+> reads `+0x3c`/`+0x54` (`AmbientLight`) and `+0x40`/`+0x7c`
+> (`DirectionalLight`) off the object at `model+0xac`, a light context
+> `World_CollectMarkerLists` also fills, not off the world pointer this
+> page's ninth pass watched. That is why the watch counted zero. Read live on
+> the USA disc, the player's hull list holds `16_Track`'s ambient and all
+> three directional lights, colour for colour: see
+> [`scene-light.md`](../psp-pulse-usa/scene-light.md). So "`AmbientLight`'s
+> colour never reaches the render path" and "`DirectionalLight`'s reader is
+> unfound" below are both wrong for hulls. `Mesh_ApplyMaterialLighting` is
+> USA's `Mesh_SetBatchLighting`, and the branch this page calls the "prelit /
+> material-colour path" is the one that replays the light list. The flat
+> global triple `Mesh_ApplyShinemapReflection_q` reads is a separate consumer
+> and that reading stands. The passes are kept as the record.
+
 ## Registration: two of three classes have a `Vex_RegisterClass` site, one does not
 
 All 46 `Vex_RegisterClass` call sites were enumerated on both binaries (via

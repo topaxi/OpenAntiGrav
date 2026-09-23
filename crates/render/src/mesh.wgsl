@@ -95,6 +95,11 @@ struct Light {
     specular_scale: f32,
     prelit_power: vec3<f32>,
     _lpad2: f32,
+    // Pulse's GE light list for a hull - `mesh_render::HullLights`. `.w` of
+    // the ambient is the switch, `.w` of each direction that light's enable.
+    hull_ambient: vec4<f32>,
+    hull_direction: array<vec4<f32>, 4>,
+    hull_diffuse: array<vec4<f32>, 4>,
 };
 
 // One of the two colour groups a Zone stage authors - `mesh_render::ZoneSet`.
@@ -347,7 +352,7 @@ struct VertexInput {
     @location(7) xform: u32,
     // HD's sun-occlusion mask - see `oag_render::mesh::GpuVertex::sun_mask`.
     // Not carried by `colour.a`, which is already the boost plume's baked
-    // falloff on other titles and the bloom glow mask on this one.
+    // falloff on other titles and part of a `Written` model's glow mask.
     @location(8) sun_mask: f32,
     // Which texture this surface's colour and coverage come from - see
     // `oag_render::mesh::slots`, whose bit layout this file decodes and which
@@ -358,6 +363,9 @@ struct VertexInput {
     // This material's specular exponent, resolved per material - see
     // `oag_render::mesh::vertex::GpuVertex::specular_exponent`.
     @location(10) specular_exponent: f32,
+    // What this surface stamps into the bloom's glow mask - see
+    // `oag_render::mesh::GpuVertex::glow` and `glow_stamp` below.
+    @location(11) glow: f32,
 };
 
 struct VertexOutput {
@@ -390,6 +398,8 @@ struct VertexOutput {
     // computed per vertex and interpolated exactly as the original's
     // `SpuVertexColours` stream is. Zero wherever no list is bound.
     @location(12) spu_light: vec3<f32>,
+    // `VertexInput::glow`, flat: a batch stamps one value.
+    @location(13) @interpolate(flat) glow: f32,
 };
 
 // **Wipeout HD's `EdgeGeom` light loop, per vertex.** Read off the SPU job's
@@ -458,6 +468,25 @@ fn vs_main(in: VertexInput) -> VertexOutput {
     let turned = node * vec4<f32>(in.normal, 0.0);
     out.normal = (uniforms.model * turned).xyz;
     out.colour = in.colour;
+    out.lit = in.lit;
+    out.glow = in.glow;
+    // **Pulse's hull, lit the way the GE lights it**: per vertex, the circuit's
+    // own ambient plus each directional light's `N . L`, clamped to `0..1` and
+    // carried to the fragment as the vertex colour the texel is modulated by.
+    // The material is white, so nothing else multiplies it. It replaces both
+    // the stand-in rig and the grey an uncoloured vertex otherwise carries,
+    // which is why `lit` is cleared. See `mesh_render::HullLights` and
+    // docs/ghidra/functions/psp-pulse-usa/scene-light.md.
+    if scene.light.hull_ambient.w > 0.5 && in.lit > 0.5 {
+        let n = normalize(out.normal);
+        var sum = scene.light.hull_ambient.rgb;
+        for (var i = 0u; i < 4u; i = i + 1u) {
+            let l = scene.light.hull_direction[i];
+            sum = sum + scene.light.hull_diffuse[i].rgb * max(dot(n, l.xyz), 0.0) * l.w;
+        }
+        out.colour = vec4<f32>(clamp(sum, vec3<f32>(0.0), vec3<f32>(1.0)), in.colour.a);
+        out.lit = 0.0;
+    }
     // Not run through the texture-animation transform below: an animated
     // surface scrolls its diffuse across itself, while its patch in the
     // circuit's lightmap atlas stays where the bake put it.
@@ -471,7 +500,6 @@ fn vs_main(in: VertexInput) -> VertexOutput {
     // 0 to +1, which runs the other way on purpose.
     let anim = anims.transform[in.anim];
     out.texcoord = in.texcoord * anim.xy + anim.zw;
-    out.lit = in.lit;
     out.world = world.xyz;
     out.view_depth = out.clip.w;
     out.sun_mask = in.sun_mask;
@@ -1441,6 +1469,19 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     return mix(mix(shaded_or_sheen, flame, flame_shading), absorb, absorb_shading);
 }
 
+// **Whether this model stamps the bloom's glow mask** - 1.0 only for a
+// drawable built with `mesh_render::GlowMask::Stamped`. The original writes
+// that channel through the GE stencil, never through the blend, so an opaque
+// surface stamps a constant the batch names rather than its own alpha - see
+// `oag_render::mesh::glow` and docs/rendering/glow-mask.md.
+override glow_stamp: f32 = 0.0;
+
+// The opaque and cutout pipelines' alpha: `1.0` as it always was, or the
+// batch's stamp where the model stamps.
+fn stamped_alpha(in: VertexOutput) -> f32 {
+    return mix(1.0, in.glow, glow_stamp);
+}
+
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let shaded = lit_texel(in);
@@ -1451,7 +1492,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     // exactly. `fs_main_blend` below is the one that actually reads it.
     return vec4<f32>(
         fogged(shadowed(shaded.rgb, in.world), in.world, in.view_depth),
-        1.0
+        stamped_alpha(in)
     );
 }
 
@@ -1547,7 +1588,7 @@ fn fs_main_alpha_test(in: VertexOutput) -> @location(0) vec4<f32> {
     }
     return vec4<f32>(
         fogged(shadowed(shaded.rgb, in.world), in.world, in.view_depth),
-        1.0
+        stamped_alpha(in)
     );
 }
 
@@ -1563,7 +1604,7 @@ fn fs_main_velocity(in: VertexOutput) -> MrtOutput {
     return MrtOutput(
         vec4<f32>(
             fogged(shadowed(shaded.rgb, in.world), in.world, in.view_depth),
-            1.0
+            stamped_alpha(in)
         ),
         velocity_of(in),
     );
@@ -1578,7 +1619,7 @@ fn fs_main_alpha_test_velocity(in: VertexOutput) -> MrtOutput {
     return MrtOutput(
         vec4<f32>(
             fogged(shadowed(shaded.rgb, in.world), in.world, in.view_depth),
-            1.0
+            stamped_alpha(in)
         ),
         velocity_of(in),
     );

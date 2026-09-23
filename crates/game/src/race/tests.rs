@@ -69,6 +69,7 @@ fn model(slots: usize, decoded: usize) -> Model {
         material_anim: Vec::new(),
 
         vertex_colour_is_light: false,
+        stamps_glow: false,
 
         flame: None,
         absorb_shell: false,

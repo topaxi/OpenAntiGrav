@@ -16,6 +16,7 @@ mod environment;
 mod geometry;
 mod global;
 mod pads;
+mod pulse_psp;
 mod roster;
 mod surfaces;
 mod variant;
@@ -887,7 +888,8 @@ pub fn load(options: &Options) -> Result<Loaded> {
         }
     });
 
-    Ok(Loaded {
+    let pulse_psp = vex_geometry && pulse_psp::is_pulse_psp(title, &archives);
+    let mut loaded = Loaded {
         title,
         setup: Setup {
             mode: options.mode,
@@ -978,5 +980,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         // name to carry - see `Loaded::campaign_2048_event`'s own doc.
         campaign_2048_event: None,
         report,
-    })
+    };
+    pulse_psp::finish(&mut loaded, pulse_psp, &track_blob);
+    Ok(loaded)
 }

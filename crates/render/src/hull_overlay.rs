@@ -315,6 +315,8 @@ pub fn build(
     model.anim_tracks.clear();
     model.emissive.clear();
     model.vertex_colour_is_light = false;
+    // The overlay's own stencil stamp is `BLEND`'s, not the hull's batches'.
+    model.stamps_glow = false;
     model.flame = None;
     model
 }

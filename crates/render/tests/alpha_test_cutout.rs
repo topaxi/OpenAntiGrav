@@ -53,6 +53,7 @@ fn vertex(position: [f32; 3]) -> GpuVertex {
         // `zone_recolour.rs` uses it.
         slots: slots::DEFAULT | slots::EMISSIVE,
         specular_exponent: oag_render::mesh::DEFAULT_SPECULAR_EXPONENT,
+        glow: 0.0,
     }
 }
 
@@ -89,6 +90,7 @@ fn model(albedo: Arc<ModelTexture>, reference: Option<f32>) -> Model {
         material_variants: Vec::new(),
         material_anim: Vec::new(),
         vertex_colour_is_light: false,
+        stamps_glow: false,
         flame: None,
         absorb_shell: false,
         alpha_test_ref: reference,

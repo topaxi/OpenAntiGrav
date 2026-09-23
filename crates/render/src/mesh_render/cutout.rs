@@ -83,6 +83,36 @@ pub fn pipelines(
     out
 }
 
+/// The reference `Gfx_BuildBatchStateList` pairs with a `GEQUAL` depth test,
+/// `0x10`: a batch whose `header_flags & 0x20` is set gets both from the
+/// same branch - see [`depth_compare`].
+pub const DECAL_REFERENCE: f32 = 16.0 / 255.0;
+
+/// The depth test one cutout pipeline draws with.
+///
+/// **A `0x10` cutout passes on equal depth.** `Gfx_BuildBatchStateList`
+/// (`0x0891f890`) sets `Gu_DepthFunc(7)` - `GEQUAL` on the PSP's reversed
+/// depth range, `LessEqual` here - and `Gu_AlphaFunc(GREATER, 0x10)` in one
+/// branch, taken for `header_flags & 0x20`; every other cutout gets
+/// `Gu_DepthFunc(6)`, `GREATER`, which is the scene's `Less`. These are the
+/// circuits' `_GLOW` overlays, authored coplanar with the wall they light: 174
+/// of `16_Track`'s 270 cutout batches. Under `Less` every one of their
+/// fragments ties with the wall and is discarded, so neither their colour nor
+/// their glow-mask stamp ever reached the frame. Read on the PSP executable;
+/// Pure and the PS2 port author the same pattern and are not read. See
+/// `docs/rendering/glow-mask.md`.
+#[must_use]
+pub fn depth_compare(
+    reference: Option<f32>,
+    scene: wgpu::CompareFunction,
+) -> wgpu::CompareFunction {
+    if reference == Some(DECAL_REFERENCE) && scene == wgpu::CompareFunction::Less {
+        wgpu::CompareFunction::LessEqual
+    } else {
+        scene
+    }
+}
+
 /// The pipelines one [`Model::alpha_tested_draws`](crate::mesh::Model) is
 /// submitted through.
 ///
@@ -117,5 +147,20 @@ impl<'a> CutoutPipelines<'a> {
             .iter()
             .find(|(seen, _)| *seen == reference)
             .map_or(self.default, |(_, pipeline)| pipeline)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn only_the_decal_reference_passes_on_equal_depth() {
+        use wgpu::CompareFunction::{Always, Less, LessEqual};
+        assert_eq!(depth_compare(Some(DECAL_REFERENCE), Less), LessEqual);
+        assert_eq!(depth_compare(Some(f32::from(0x7f_u8) / 255.0), Less), Less);
+        assert_eq!(depth_compare(Some(0.0), Less), Less);
+        assert_eq!(depth_compare(None, Less), Less);
+        assert_eq!(depth_compare(Some(DECAL_REFERENCE), Always), Always);
     }
 }

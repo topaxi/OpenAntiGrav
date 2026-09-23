@@ -9,11 +9,13 @@ use anyhow::Result;
 use crate::mesh::{GpuVertex, Model};
 
 mod blend;
+mod hull_lights;
 mod spu_light;
 mod tables;
 mod uniforms;
 
 pub use blend::{ADDITIVE_BLEND, TRANSPARENT_BLEND, TransparentPipelines};
+pub use hull_lights::{HULL_LIGHTS, HullLights, ge_channel};
 pub use spu_light::{MAX_SPU_LIGHTS, RGBE_ROUND_TRIP, SpuLight, SpuLights};
 pub use tables::{EMISSIVES_SIZE, Emissives, NODE_ANIMS_SIZE, NodeAnims, TEX_ANIMS_SIZE, TexAnims};
 use uniforms::Uniforms;
@@ -30,7 +32,7 @@ pub use velocity::{VELOCITY_FORMAT, Velocity};
 /// size ceiling - see [`crate::capture`] for both functions' own docs.
 pub use crate::capture::{capture_from, capture_pixels_from};
 
-mod cutout;
+pub mod cutout;
 pub use cutout::CutoutPipelines;
 
 mod target;
@@ -228,22 +230,34 @@ pub enum Depth {
 /// Whether a model's draws may write the scene target's alpha channel, which
 /// [`crate::post::bloom`] reads as its glow mask.
 ///
-/// The original decides this **per draw path**, not per material, and the two
-/// paths disagree: `FUN_089307b4`'s batch group calls
-/// `Bloom_SetPixelMask(g_bloom, 0)`, masking alpha off, while the path the
-/// boost plume actually takes - `Mesh_CompileGeometryPass` (`0x0890d0cc`) with
-/// state from `Gfx_BuildBatchStateList` (`0x0891f890`) - opens every channel
-/// with an unconditional `Gu_PixelMask(0)` at the top of its state list. So a
-/// hull and a track surface leave the mask alone and the plume writes it, and
-/// that difference is a reading of the two functions rather than a look
-/// choice. See `docs/ghidra/functions/psp-pulse-usa/bloom.md`.
+/// **The original writes that channel only through the GE stencil**, which
+/// keeps its value in the framebuffer's alpha and never blends it. What a
+/// surface stamps is decided per batch - `pass_mask & 0xc0` and the blend
+/// class, in `Gfx_BuildBatchStateList` (`0x0891f890`) - and was measured out
+/// of EDRAM on a live race: see `docs/rendering/glow-mask.md` and
+/// [`Self::Stamped`]. An earlier reading here, that the plume's draw path
+/// writes the mask and a hull's does not, took `Gu_PixelMask(0)` for a write;
+/// opening the channel writes nothing without a stencil op.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GlowMask {
-    /// Colour only - the default, and what every authored batch measured on
-    /// the disc gets.
+    /// Colour only - the default wherever the original's stencil stamp has
+    /// not been measured. A Pulse PSP model is [`Self::Stamped`] instead,
+    /// whatever its caller asks - see [`Model::stamps_glow`].
     Protected,
     /// Alpha reaches the target, so this model's fragments feed the bloom.
     Written,
+    /// **The original's own stencil stamp, per batch.** Every opaque and
+    /// alpha-tested draw writes the constant its batch names -
+    /// [`crate::mesh::GpuVertex::glow`], read by `crate::mesh::glow` - in
+    /// place of its alpha, and transparent draws leave the mask alone. That
+    /// is Pulse on the PSP, measured out of EDRAM; see
+    /// `docs/rendering/glow-mask.md`.
+    ///
+    /// **Transparent batches with the glow bits do not stamp here**, where
+    /// the original stamps their texture's byte too. A blend state cannot
+    /// write a constant alpha while the colour blend reads the texel's own;
+    /// the measured grid frame had 20 such pixels, the start-line laser.
+    Stamped,
 }
 
 impl GlowMask {
@@ -252,7 +266,17 @@ impl GlowMask {
     pub fn writes(self) -> wgpu::ColorWrites {
         match self {
             Self::Protected => wgpu::ColorWrites::COLOR,
-            Self::Written => wgpu::ColorWrites::ALL,
+            Self::Written | Self::Stamped => wgpu::ColorWrites::ALL,
+        }
+    }
+
+    /// The colour write mask for this choice's **blended** pipeline, where
+    /// [`Self::Stamped`] writes colour only - see that variant.
+    #[must_use]
+    pub fn blend_writes(self) -> wgpu::ColorWrites {
+        match self {
+            Self::Stamped => wgpu::ColorWrites::COLOR,
+            other => other.writes(),
         }
     }
 }
@@ -327,6 +351,17 @@ pub fn build(
     // the recovered PSP reference - stands. See `mesh::rcs::cutout`.
     if let Some(reference) = model.alpha_test_ref {
         constants.push(("alpha_test_ref", f64::from(reference)));
+    }
+    // A model that stamps the mask stamps it whatever the call site asked -
+    // see [`Model::stamps_glow`]. That is also what stops the PSP plume and
+    // shield writing it: their batches are transparent without the glow bits.
+    let glow = if model.stamps_glow {
+        GlowMask::Stamped
+    } else {
+        glow
+    };
+    if glow == GlowMask::Stamped {
+        constants.push(("glow_stamp", 1.0));
     }
     if receives_shadow != ShadowReceiver::Never {
         constants.push(("receives_shadow", receives_shadow.constant()));
@@ -490,7 +525,7 @@ pub fn build(
                 attributes: &wgpu::vertex_attr_array![
                     0 => Float32x3, 1 => Float32x3, 2 => Float32x4, 3 => Float32x2,
                     4 => Float32, 5 => Uint32, 6 => Float32x2, 7 => Uint32, 8 => Float32,
-                    9 => Uint32, 10 => Float32
+                    9 => Uint32, 10 => Float32, 11 => Float32
                 ],
             })],
             compilation_options: Default::default(),
@@ -562,7 +597,7 @@ pub fn build(
                     attributes: &wgpu::vertex_attr_array![
                         0 => Float32x3, 1 => Float32x3, 2 => Float32x4, 3 => Float32x2,
                         4 => Float32, 5 => Uint32, 6 => Float32x2, 7 => Uint32, 8 => Float32,
-                        9 => Uint32, 10 => Float32
+                        9 => Uint32, 10 => Float32, 11 => Float32
                     ],
                 })],
                 compilation_options: Default::default(),
@@ -595,7 +630,7 @@ pub fn build(
             depth_stencil: Some(wgpu::DepthStencilState {
                 format: DEPTH_FORMAT,
                 depth_write_enabled: Some(depth_write),
-                depth_compare: Some(depth_compare),
+                depth_compare: Some(cutout::depth_compare(reference, depth_compare)),
                 stencil: Default::default(),
                 bias: Default::default(),
             }),
@@ -651,7 +686,7 @@ pub fn build(
                     attributes: &wgpu::vertex_attr_array![
                         0 => Float32x3, 1 => Float32x3, 2 => Float32x4, 3 => Float32x2,
                         4 => Float32, 5 => Uint32, 6 => Float32x2, 7 => Uint32, 8 => Float32,
-                        9 => Uint32, 10 => Float32
+                        9 => Uint32, 10 => Float32, 11 => Float32
                     ],
                 })],
                 compilation_options: Default::default(),
@@ -669,7 +704,7 @@ pub fn build(
                         blend,
                         // Alpha is the bloom's glow mask - see [`GlowMask`] for
                         // which draw paths are allowed to write it and why.
-                        write_mask: glow.writes(),
+                        write_mask: glow.blend_writes(),
                     },
                     velocity.target(true),
                 ),
