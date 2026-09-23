@@ -158,8 +158,9 @@ pub fn model(archives: &mut oag_assets::Archives, entry: &str) -> Result<Model> 
             entry,
             &blob,
             Some(&external),
-            oag_render::mesh::Lod::Both,
+            oag_render::mesh::Lod::default(),
         )
+        .map(|model| model.for_fixed_view(oag_render::mesh::Lod::default()))
         .with_context(|| format!("decoding the preview mesh {entry} with its texture set"));
     }
     Ok(model)

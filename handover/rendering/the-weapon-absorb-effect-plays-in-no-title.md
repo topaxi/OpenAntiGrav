@@ -80,16 +80,15 @@ Screenshots from the 2026-09-23 lane are in
     (`GlowMask::Stamped`), which also takes the plume out of it;
   - the `_GLOW` decals draw at all (`GEQUAL` on the `0x10` cutouts).
   Frames: `~/.cache/oag/drive/reports/pulse-bloom/compare-absorb-bloom.png`
-  (original above, ours below). **What is left is the LOD setting.** Under
-  `lod = "both"` (the default, and the user's) the peak whitens only the
-  upper hull; under `lod = "single"` it is a white blob like the original's
-  (`compare-absorb-bloom-lod-single.png`). An EDRAM read 0.42 s into a live
-  absorb shows the original's overlay stamping `255` over the whole hull;
-  ours, under `Both`, leaves whole triangles unstamped - most likely where
-  the hull's `lodShape` (which the overlay leaves out) sits in front of
-  `shipShape`, not measured - and `Both` also draws a dark ring round our
-  rear hull the original does not have (`lod-both-vs-single-absorb.png`). So `Lod::Both`'s "exactly as
-  the original does" is wrong for the player's hull near the camera. See
+  (original above, ours below). **The LOD gap is closed (2026-09-23).**
+  Under the old `lod = "both"` default the peak whitened only the upper
+  hull, the overlay's mask had holes where the hull's `lodShape` sat in
+  front of `shipShape`, and a dark ring ran round the rear hull; drawing
+  tier 0 alone gave the original's white blob
+  (`compare-absorb-bloom-lod-single.png`, `lod-both-vs-single-absorb.png`).
+  The original draws only tier 0 up close and switches tiers per frame
+  (`LodGroup_SelectChild`, `docs/formats/vex.md`), which main now does, so
+  the player's hull stays on tier 0. See
   [glow-mask.md](../../docs/rendering/glow-mask.md), "What is not reproduced".
 - **Pulse overlay residuals, labelled in the module:**
   - `LessEqual` stands in for `EQUAL`;
@@ -134,12 +133,12 @@ Screenshots from the 2026-09-23 lane are in
    `just play hd --race --give mine --input-script <absorb.inputs>`. The
    method (private `XDG_CONFIG_HOME`/`XDG_CACHE_HOME`, own GDB port, the
    craft array at `0x0098d7c0`) is in absorb-feedback.md, "Live on RPCS3".
-2. Pulse hull LOD: read which of `LodGroup`'s children the original draws
-   for the player's hull, and when (the switch distance is authored). Under
-   `Lod::Both` the coarse `lodShape` darkens our rear hull and breaks the
-   absorb overlay's mask; `Lod::Single` matches the original at the grid.
-   Frames and the absorb inputs (`absorb-post-go.inputs`, 700 ticks of
-   nothing then circle) are in `~/.cache/oag/drive/reports/pulse-bloom/`.
+2. ~~Pulse hull LOD: read which of `LodGroup`'s children the original
+   draws for the player's hull, and when.~~ **Done 2026-09-23:**
+   `LodGroup_SelectChild` switches per frame at the authored distance (30
+   units on a craft), the player's hull never reaches it, and main switches
+   the same way - `docs/formats/vex.md`. Re-check the absorb peak at player
+   size with bloom on to confirm the white blob in a normal race.
 3. Pulse HUD: the energy bar's absorb flash (`Hud_UpdateEnergyBar`,
    `+0xf4 = 0xff`, 8 Hz blink off `+0x1dc`). About an hour, with the
    original's frames as the reference.

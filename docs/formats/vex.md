@@ -333,9 +333,10 @@ way `TRANSPARENT_BLEND` and `ALPHA_TEST_THRESHOLD` above are labelled as
 invented rather than recovered.
 
 **Implemented first as `oag_render::mesh::Lod`, superseded by the per-frame
-switch below** (`both`/`single`; until
-2026-09-23 a `[graphics] lod` settings key defaulting to `both`, now
-`single` with no key - see the section below): a load-time choice, not a live
+switch below** (`both`/`single`, a `[graphics] lod` settings key
+defaulting to `both` until 2026-09-23; today the variants are
+`original`/`high`/`maximum` plus the `both` diagnostic, and the setting is
+the per-title `model_detail` - see the sections below): a load-time choice, not a live
 switch, and deliberately not named after quality or distance - neither exists
 here. `single` measured 3,643 fewer triangles on `16_Track` (exactly the sum
 of every tier-1 subtree's own triangle count) and was visually indistinguishable
@@ -353,8 +354,8 @@ and not yet built.
 **Confidence 80 that the original draws only tier 0 within the switch
 distance; this contradicts the "both tiers, always" conclusion above for
 what reaches the screen.** Two pixel comparisons against PPSSPP frames of
-the US disc, each set against this engine under `lod = "both"` and
-`lod = "single"` on current `main`:
+the US disc, each set against this engine under the then-current
+`lod = "both"` and `lod = "single"` settings on `main` that day:
 
 - **The player's hull** (`Ship.vex`'s own `LodGroup`: `shipShape` and its
   siblings under tier 0, `lodShape` under tier 1). The original's frame at

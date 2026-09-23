@@ -108,7 +108,7 @@ fn sweep(image: &Path, minimum: usize) {
                 continue;
             };
             measured += 1;
-            let model = mesh::build_with_textures(&entry, &blob, None, Lod::Both)
+            let model = mesh::build_with_textures(&entry, &blob, None, Lod::default())
                 .expect("decoding track.vex");
             let pvs = TrackPvs::parse(&blob).expect("parsing sections");
 

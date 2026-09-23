@@ -127,22 +127,22 @@ What is not reproduced:
 - **The HUD writes alpha into our target**, where the original's mask reads
   `4` under it. The race draws the bloom before it composites the HUD, and a
   crop of the countdown widget shows no halo with the bloom on.
-- **The absorb overlay's mask is patchy under `lod = "both"`, and solid under
-  `"single"`.** Read out of EDRAM 0.42 s into a live absorb, the original
-  stamps `255` over the whole overlaid hull, with holes only at the canopy
-  and the rear, and its colour at that moment is still almost the plain
-  hull: the white blob a player sees is the bloom of that mask. Under
-  `Lod::Both`, the default, ours also draws the hull's `lodShape`, which the
-  overlay leaves out - the likely mechanism, not measured, is its coarser
-  triangles sitting in front of `shipShape`, failing the overlay's
-  `LessEqual` and leaving whole triangles unstamped - and it draws the dark
-  ring round our rear hull that the original has no trace of. Under `Lod::Single` the mask comes out solid,
-  the ring goes, and the peak is a white blob like the original's
+- **Resolved 2026-09-23: the absorb overlay's mask was patchy because we
+  drew both `LodGroup` tiers.** Read out of EDRAM 0.42 s into a live absorb,
+  the original stamps `255` over the whole overlaid hull, with holes only at
+  the canopy and the rear, and its colour at that moment is still almost the
+  plain hull: the white blob a player sees is the bloom of that mask. Under
+  the then-default `lod = "both"` ours also drew the hull's `lodShape`,
+  which the overlay leaves out - likely, not measured, its coarser triangles
+  sat in front of `shipShape`, failed the overlay's `LessEqual` and left
+  whole triangles unstamped - and it drew a dark ring round the rear hull
+  the original has no trace of. Drawing tier 0 alone made the mask solid,
+  took the ring away and gave the original's white blob
   (`~/.cache/oag/drive/reports/pulse-bloom/lod-both-vs-single-absorb.png`,
-  `compare-absorb-bloom-lod-single.png`). So `Lod::Both`'s "exactly as the
-  original does" does not hold for the player's hull near the camera.
-  Measured 2026-09-23: the original draws tier 0 only up close, on the hull
-  and on a track `LodGroup` - see `docs/formats/vex.md`, "the running
-  original does not draw tier 1 up close". The same day the tiers became a
-  per-frame switch, which keeps the player's hull on tier 0 at every chase
-  distance - "implemented - the switch runs every frame", same page.
+  `compare-absorb-bloom-lod-single.png`). The original draws only tier 0 up
+  close (`docs/formats/vex.md`, "the running original does not draw tier 1
+  up close"), and since the same day the tiers switch per frame the way
+  `LodGroup_SelectChild` does, which keeps the player's hull on tier 0 at
+  every chase distance - "implemented - the switch runs every frame", same
+  page. The settings key is gone; `--lod both` still shows the old picture
+  as a diagnostic.

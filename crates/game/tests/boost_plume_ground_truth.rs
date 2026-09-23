@@ -158,7 +158,7 @@ fn every_psp_teams_boost_plume_decodes_with_two_meshes_and_its_texture() {
         let blob = archives
             .read_name(&name)
             .unwrap_or_else(|e| panic!("reading {name}: {e}"));
-        let model = mesh::build_with_textures(&name, &blob, None, mesh::Lod::Both)
+        let model = mesh::build_with_textures(&name, &blob, None, mesh::Lod::default())
             .unwrap_or_else(|e| panic!("decoding {name}: {e}"));
         println!(
             "{name}: {} mesh(es), {} triangle(s), {} texture slot(s), \
@@ -221,7 +221,7 @@ fn every_psp_teams_boost_plume_vertex_alpha_is_bimodal() {
         let blob = archives
             .read_name(&name)
             .unwrap_or_else(|e| panic!("reading {name}: {e}"));
-        let model = mesh::build_with_textures(&name, &blob, None, mesh::Lod::Both)
+        let model = mesh::build_with_textures(&name, &blob, None, mesh::Lod::default())
             .unwrap_or_else(|e| panic!("decoding {name}: {e}"));
 
         let (mut zero, mut one, mut other) = (0usize, 0usize, Vec::new());
@@ -597,7 +597,7 @@ fn every_ps2_teams_boost_plume_hangs_two_meshes_off_two_animated_anchors() {
             let blob = archives
                 .read_name(&name)
                 .unwrap_or_else(|e| panic!("reading {name}: {e}"));
-            let model = mesh::build_with_textures(&name, &blob, None, mesh::Lod::Both)
+            let model = mesh::build_with_textures(&name, &blob, None, mesh::Lod::default())
                 .unwrap_or_else(|e| panic!("decoding {name}: {e}"));
 
             assert_eq!(
@@ -694,7 +694,7 @@ fn every_ps2_teams_boost_plume_is_skinned_by_the_entry_before_it() {
             let blob = archives
                 .read_name(&name)
                 .unwrap_or_else(|e| panic!("reading {name}: {e}"));
-            let bare = mesh::build_with_textures(&name, &blob, None, mesh::Lod::Both)
+            let bare = mesh::build_with_textures(&name, &blob, None, mesh::Lod::default())
                 .unwrap_or_else(|e| panic!("decoding {name}: {e}"));
 
             // The gate `livery::plume` takes this branch on. A PS2 model
@@ -723,7 +723,7 @@ fn every_ps2_teams_boost_plume_is_skinned_by_the_entry_before_it() {
                 bare.textures.len()
             );
 
-            let skinned = mesh::build_with_textures(&name, &blob, Some(&set), mesh::Lod::Both)
+            let skinned = mesh::build_with_textures(&name, &blob, Some(&set), mesh::Lod::default())
                 .unwrap_or_else(|e| panic!("re-skinning {name}: {e}"));
             assert!(
                 skinned.textures.iter().all(Option::is_some),
@@ -778,7 +778,7 @@ fn every_ps2_teams_boost_plume_is_authored_opaque_and_glow_masked() {
             let blob = archives
                 .read_name(&name)
                 .unwrap_or_else(|e| panic!("reading {name}: {e}"));
-            let model = mesh::build_with_textures(&name, &blob, None, mesh::Lod::Both)
+            let model = mesh::build_with_textures(&name, &blob, None, mesh::Lod::default())
                 .unwrap_or_else(|e| panic!("decoding {name}: {e}"));
             assert!(
                 model.transparent_draws.is_empty() && model.alpha_tested_draws.is_empty(),

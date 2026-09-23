@@ -269,8 +269,8 @@ pub struct Model {
     /// `(tint, rate)` pairs and the shader's table stays small.
     pub emissive: Vec<Emissive>,
     /// The authored `LodGroup`s and which child each node sits under, for the
-    /// per-frame switch - see [`LodGroups`]. Empty unless built from one
-    /// `.vex` with a [`Lod`] other than [`Lod::Both`].
+    /// per-frame switch - see [`LodGroups`]. Empty on a model built with the
+    /// [`Lod::Both`] diagnostic, and after [`Model::for_fixed_view`].
     pub lod_groups: LodGroups,
 }
 
@@ -358,12 +358,15 @@ pub fn load(spec: &str, name: &str) -> Result<Model> {
     build(name, &data)
 }
 
-/// Flattens every mesh in a `.vex` into one buffer pair.
+/// Flattens every mesh in a `.vex` into one buffer pair, keeping only the
+/// finest tier of every authored `LodGroup`.
 ///
-/// Builds no [`LodGroups`] table, so every tier of an authored `LodGroup`
-/// draws at once ([`Lod::Both`]) - see [`build_with_textures`] for the switch.
+/// For a model with no race camera to switch it - a front-end preview, a HUD
+/// model, a probe: [`Model::for_fixed_view`] drops the coarse tiers, which is
+/// what the original shows up close. A race model that switches per frame
+/// comes from [`build_with_textures`] instead.
 pub fn build(label: &str, data: &[u8]) -> Result<Model> {
-    build_with_textures(label, data, None, Lod::Both)
+    Ok(build_with_textures(label, data, None, Lod::default())?.for_fixed_view(Lod::default()))
 }
 
 /// As [`build`], with an external texture set replacing the embedded one, and
@@ -469,7 +472,8 @@ fn build_optional_class(
     let Ok(classes) = vex::classes_of(data) else {
         // Let `build_class` produce the real complaint about the file rather
         // than swallowing it as "authors none".
-        return build_class(label, data, external, Lod::Both, pick);
+        return build_class(label, data, external, Lod::default(), pick)
+            .map(|model| model.for_fixed_view(Lod::default()));
     };
     let Some(id) = pick(classes) else {
         return Ok(Model::none(label));
@@ -494,7 +498,10 @@ fn build_optional_class(
         return Ok(Model::none(label));
     }
 
-    build_class(label, data, external, Lod::Both, pick)
+    // No race camera switches these models per frame, so they keep the
+    // finest tier of any `LodGroup` they sit under, as the track model does
+    // up close. Chosen, not measured: none has been seen under a group.
+    Ok(build_class(label, data, external, Lod::default(), pick)?.for_fixed_view(Lod::default()))
 }
 
 /// Flattens every node of one class into one buffer pair.
