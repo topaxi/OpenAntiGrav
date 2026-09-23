@@ -261,6 +261,14 @@ That is the same `pass_mask` u16 [`mesh-draw.md`](mesh-draw.md) already
 decodes for the blend classes, so **the flag is readable from shipped data
 today**. Confidence 85.
 
+> **Corrected 2026-09-23.** The census below counted `0x40` alone. The
+> writers are `pass_mask & 0xc0`, and `0x80` is set on every `_GLOW`
+> texture's batches - 214 of `16_Track`'s 2,079. They stamp the texture's
+> own glow byte through the stencil, and every other opaque batch stamps a
+> base value of `4`. Read live out of EDRAM on
+> [`glow-mask.md`](../../../rendering/glow-mask.md). The paragraphs below are
+> kept as the record.
+
 **And a census says no shipped mesh uses it at all.** Measured through
 `oag_vex::vex::mesh_batches` on the European disc, over the four tracks
 whose `Data\Environments\<n>_Track\track.vex` resolves plus a ship and its
@@ -355,7 +363,10 @@ and that it feeds the bloom.
 - **Which class `FUN_088739b0` belongs to**, via its `Vex_RegisterClass`
   caller and then a `--nodes` count over a track. That name is what would say
   whether this is the ribbon a player recognises.
-- **Where `Bloom_Draw` is called from.** The constructor is on the
+- ~~**Where `Bloom_Draw` is called from.**~~ **Whether it runs: settled
+  2026-09-23** - once per race frame, 121 of 121 frames counted by a read
+  watchpoint only it trips. See [`glow-mask.md`](../../../rendering/glow-mask.md).
+  The dispatch itself is still unread: The constructor is on the
   `Game_MainLoop` path and the singleton is plainly live - sixteen call sites
   null-check it every frame - but the draw itself is dispatched **through the
   method table** and still has no direct xref. "It runs every race frame" is

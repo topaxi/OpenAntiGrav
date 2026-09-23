@@ -22,6 +22,7 @@ fn point(section_id: u8) -> SplinePoint {
         racing_line: 0.0,
         section_id,
         flags: 0,
+        light_scale: [0xff; 4],
     }
 }
 

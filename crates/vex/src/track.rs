@@ -212,6 +212,17 @@ pub struct SplinePoint {
     pub section_id: u8,
     /// Flags, OR-accumulated across the four control points of a segment.
     pub flags: u8,
+    /// The hull light scales a craft over this point is drawn with: ambient,
+    /// directional, and the two point-light classes, `0..=255`, at `+0x62`.
+    ///
+    /// Blended along the spline into `craft+0xb52..+0xb55` (`FUN_0887c7e8`,
+    /// `FUN_0887c11c`), copied to the hull model's `+0x44..+0x47` every frame
+    /// (`FUN_0883e444`), and multiplied into that model's GE light colours by
+    /// `SceneLight_BuildLightingList`. `0xff` on every point of a track older
+    /// than version `0x103`, as the original forces, and on the short points
+    /// of version [`SHORT_POINT_VERSION`] onwards, whose layout moves these
+    /// bytes and has not been read. See `docs/formats/track.md`.
+    pub light_scale: [u8; 4],
 }
 
 impl SplinePoint {
@@ -251,6 +262,9 @@ pub struct Sample {
     pub section_id: u8,
     /// Flags OR-ed across the four control points of the segment.
     pub flags: u8,
+    /// [`SplinePoint::light_scale`] blended the original's way - see
+    /// [`blend_light_scale`].
+    pub light_scale: [u8; 4],
 }
 
 /// One spline path: a run of control points between two junctions.
@@ -368,8 +382,28 @@ impl Path {
             racing_line: blend1(|p| p.racing_line),
             section_id: p[1].section_id,
             flags: p.iter().fold(0, |acc, point| acc | point.flags),
+            light_scale: blend_light_scale(&w, &p),
         })
     }
+}
+
+/// [`SplinePoint::light_scale`] blended over a segment's four control points,
+/// in the original's own integer arithmetic.
+///
+/// `FUN_0887c11c` adds `(byte * trunc(weight * 255)) >> 8` per point into a
+/// `u8`, so the sum truncates twice and wraps rather than saturating, and a
+/// run of `0xff` points reads back a little under `0xff`. The four weights
+/// are [`basis`]'s.
+#[must_use]
+pub fn blend_light_scale(weights: &[f32; 4], points: &[&SplinePoint; 4]) -> [u8; 4] {
+    let mut out = [0u8; 4];
+    for (weight, point) in weights.iter().zip(points) {
+        let scaled = (weight * 255.0) as u32;
+        for (acc, byte) in out.iter_mut().zip(point.light_scale) {
+            *acc = acc.wrapping_add(((u32::from(byte) * scaled) >> 8) as u8);
+        }
+    }
+    out
 }
 
 /// The uniform cubic B-spline basis, weights for four control points.
@@ -717,8 +751,23 @@ fn point_at(order: ByteOrder, payload: &[u8], at: usize, version: u32) -> Spline
         racing_line: f32_at(order, payload, at + 0x54),
         section_id: payload[at + section_at],
         flags: payload[at + section_at + 1],
+        light_scale: if (LIGHT_SCALE_VERSION..SHORT_POINT_VERSION).contains(&version) {
+            [
+                payload[at + 0x62],
+                payload[at + 0x63],
+                payload[at + 0x64],
+                payload[at + 0x65],
+            ]
+        } else {
+            [0xff; 4]
+        },
     }
 }
+
+/// The first spline version whose authored [`SplinePoint::light_scale`] the
+/// original reads; older points are forced to `0xff` (`FUN_0887c7e8`'s tail,
+/// a compare against `0x103`).
+pub const LIGHT_SCALE_VERSION: u32 = 0x103;
 
 fn vec3_at(order: ByteOrder, payload: &[u8], at: usize) -> [f32; 3] {
     [

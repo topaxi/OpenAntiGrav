@@ -489,3 +489,20 @@ fn the_old_stride_does_not_fit_a_0x107_payload() {
     assert_eq!(payload.len(), fixed + 7 * POINT_LEN_SHORT);
     assert!(fixed + 7 * POINT_LEN > payload.len());
 }
+
+#[test]
+fn a_run_of_full_light_blends_to_just_under_full_the_way_the_original_truncates() {
+    let track = parse(&build(0x105, &[1])).expect("parse");
+    let mut point = track.paths[0].points[0];
+    point.light_scale = [255, 127, 0, 255];
+    let four = [&point; 4];
+    // At t = 0 the weights are 1/6, 2/3, 1/6, 0: trunc(x255) gives 42, 170,
+    // 42, 0, and each product is shifted right by eight before the sum.
+    assert_eq!(blend_light_scale(&basis(0.0), &four), [251, 124, 0, 251]);
+}
+
+#[test]
+fn a_track_older_than_0x103_reads_full_light_whatever_its_bytes_say() {
+    let track = parse(&build(0x102, &[1])).expect("parse");
+    assert_eq!(track.paths[0].points[0].light_scale, [0xff; 4]);
+}

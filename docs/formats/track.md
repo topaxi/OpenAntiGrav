@@ -392,7 +392,8 @@ struct SplinePt {             // 0x70 bytes
     u8    unk_0x5e[2];
     u8    section_id;         // +0x60 links to the `section` node index
     u8    flags;              // +0x61 OR-accumulated across four control points
-    u8    unk_0x62[5];
+    u8    light_scale[4];     // +0x62 hull light scales, 2026-09-23 - see below
+    u8    unk_0x66;
     u8    dist_to_prev;       // +0x67 overwritten at load
     u8    unk_0x68[8];        // zeroed at load before version 0x104
 };
@@ -910,7 +911,18 @@ until something proves otherwise.
 - What reads the reserved block, and what `Path.max_spacing` is used for.
 - ~~`SplinePt` `+0x40`~~ - **answered**: the normalised arc position the lap
   counter runs on, see above. Still open: `+0x58` (always `0x10`),
-  `+0x5c`-`+0x5f`, `+0x62`-`+0x66`, `+0x68`-`+0x6f`.
+  `+0x5c`-`+0x5f`, `+0x66`, `+0x68`-`+0x6f`.
+- ~~`+0x62`-`+0x65`~~ - **answered 2026-09-23**: four light scales,
+  ambient, directional and two point-light classes, `0..=255`.
+  `Spline_SampleSegment` (`0x0887c7e8`) blends them at a craft with the
+  B-spline weights (`(byte * trunc(w * 255)) >> 8`, summed into a `u8`), and
+  `Craft_ApplyHullLightScale` copies the result into the hull model, whose
+  GE lights they scale. Forced to `0xff` below version `0x103`. On
+  `16_Track` 455 of 862 points read `255` and 231 read `127` (the tunnels).
+  Read live (the player on the grid carries `250`); see
+  [scene-light.md](../ghidra/functions/psp-pulse-usa/scene-light.md).
+  Decoded as `oag_vex::track::SplinePoint::light_scale`. The version
+  `0x107` short point moves these bytes and is not read.
 - ~~Which lateral direction is "left".~~ **Answered**: `lateral` points to the
   driver's **right**. `Start Position`'s row 0 is the craft's left axis and
   `dot(row0, lateral)` is `-1.000` on all 40 track files, so the widths stored as

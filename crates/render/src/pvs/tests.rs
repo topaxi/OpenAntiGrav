@@ -218,6 +218,7 @@ fn padding_draws_the_neighbours_but_not_what_they_see() {
         racing_line: 0.0,
         section_id,
         flags: 0,
+        light_scale: [0xff; 4],
     };
     let track = AiTrack {
         version: 0x105,
