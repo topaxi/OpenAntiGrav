@@ -374,6 +374,17 @@ impl LodGroups {
         Some((usize::from(member.group), member.child))
     }
 
+    /// Group `group`'s `d = -z * fov_degrees / 65` - the number
+    /// [`Self::child_at`] compares against the authored distances. `0` for a
+    /// group the model does not have.
+    #[must_use]
+    pub fn scaled_depth(&self, group: usize, model_view: Mat4, fov_degrees: f32) -> f32 {
+        self.groups.get(group).map_or(0.0, |g| {
+            let z = model_view.transform_point3(Vec3::from(g.position)).z;
+            -z * fov_degrees / REFERENCE_FOV_DEGREES
+        })
+    }
+
     /// **`LodGroup_SelectChild`**: which child of group `group` the original
     /// enables with the model at `model_view` (view matrix times model
     /// matrix) and the field of view at `fov_degrees`, vertical, in the
@@ -395,8 +406,7 @@ impl LodGroups {
         let Some(g) = self.groups.get(group) else {
             return 0;
         };
-        let z = model_view.transform_point3(Vec3::from(g.position)).z;
-        let d = -z * fov_degrees / REFERENCE_FOV_DEGREES;
+        let d = self.scaled_depth(group, model_view, fov_degrees);
         let scale = detail.scale();
         let reached = g
             .distances

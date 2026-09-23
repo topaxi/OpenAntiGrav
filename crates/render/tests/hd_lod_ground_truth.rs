@@ -1,5 +1,5 @@
-//! What a `LodGroup`'s child count reads as on Wipeout HD, and why the fix for
-//! it changes no picture yet.
+//! What Wipeout HD's `LodGroup`s hold, and why the per-frame switch changes
+//! no HD picture.
 //!
 //! **`#[ignore]`d and never run in CI.** It needs game content, which this
 //! project does not ship. See
@@ -14,34 +14,23 @@
 //!
 //! # Why this exists
 //!
-//! `mesh::build_with_textures` read a `LodGroup`'s `child_count` with
-//! `u32::from_le_bytes` until 2026-08-18. On a PS3 `.vex` that turns every count
-//! into itself shifted 24 bits left, the `== 2` test never matched, and
-//! **`Lod::Single` would have been silently a no-op on every HD model.** The
-//! failure direction was the safe one - a user who chose
-//! `graphics.lod = "single"` would have got `Both`'s picture rather than a hole
-//! in the track - which is exactly why nothing caught it.
+//! The child count was read with `u32::from_le_bytes` until 2026-08-18. On a
+//! PS3 `.vex` that turns every count into itself shifted 24 bits left, and a
+//! build-time skip keyed on `== 2` would silently never have fired. The
+//! distribution is asserted below rather than described, because the first
+//! draft of that work claimed all 64 read `2` and that was an assumption
+//! dressed as a measurement: **48 declare one child and 16 declare two**.
 //!
-//! **How much the fix buys is smaller than "64 groups" suggests, and this file
-//! is where that was found.** The skip only ever fires on a *two*-child group,
-//! and HD's 64 split **48 declaring one child and 16 declaring two**. So even
-//! read the right way round, three quarters of them would not have skipped
-//! anything. The distribution is asserted below rather than described, because
-//! the first draft of this work claimed all 64 read `2` and that was an
-//! assumption dressed as a measurement.
-//!
-//! **The fix changes no rendered picture today, and that is asserted here rather
-//! than assumed.** HD keeps its render geometry in `.rcsmodel`, not in the
-//! `.vex`, so all six of the files carrying a `LodGroup` fail
-//! `build_with_textures` with "decoding batches" long before the skip is
-//! reached. The correctness fix lands now because the read is wrong now; the
-//! test that it *matters* is the one below that will start failing the day
-//! `.rcsmodel` geometry reaches this builder, which is the point at which
-//! someone should come back and measure the triangle counts.
+//! **The switch hides nothing on HD, and that is asserted here rather than
+//! assumed.** `mesh::rcs` tags HD geometry with the same `LodGroups` table the
+//! PSP builder does (chosen, not measured - HD's own switch code is unread),
+//! but no HD group holds a second tier in its tree: the 16 that declare two
+//! children hold one, and 44 of the rest hold none. So every node under a group
+//! is under its finest child, which is the one the switch always keeps.
 
 use std::path::{Path, PathBuf};
 
-use oag_render::mesh::{self, Lod};
+use oag_render::mesh;
 use oag_vex::vex;
 
 /// The decrypted PS3 image.
@@ -55,8 +44,8 @@ const EXPECTED_LOD_GROUPS: usize = 64;
 
 /// How those 64 split by declared child count: 48 name one child, 16 name two.
 ///
-/// Only the 16 are reachable by [`Lod::Single`] at all, so this is the size of
-/// what the byte-order fix makes possible rather than a curiosity.
+/// Only the 16 could ever switch at all - and none does, see
+/// [`EXPECTED_HELD`].
 const EXPECTED_CHILD_COUNTS: &[(u32, usize)] = &[(1, 48), (2, 16)];
 
 /// Files carrying at least one.
@@ -157,10 +146,10 @@ fn every_hd_lod_group_declares_a_small_child_count_read_the_files_own_way() {
         println!("child count {count}: {nodes} node(s)");
     }
     assert_eq!(seen, EXPECTED_LOD_GROUPS, "LodGroup payloads long enough");
-    // The distribution, not just the range. `Lod::Single` fires only on a
-    // two-child group, so this is what says how much of the disc the fix can
-    // reach - and pinning it stops "HD's LodGroups declare 2" being restated as
-    // a fact about all 64 when it is a fact about 16.
+    // The distribution, not just the range. Only a two-child group can
+    // switch, so this is what says how much of the disc a switch could reach -
+    // and pinning it stops "HD's LodGroups declare 2" being restated as a fact
+    // about all 64 when it is a fact about 16.
     let measured: Vec<(u32, usize)> = counts.into_iter().collect();
     assert_eq!(
         measured, EXPECTED_CHILD_COUNTS,
@@ -168,23 +157,49 @@ fn every_hd_lod_group_declares_a_small_child_count_read_the_files_own_way() {
     );
 }
 
+/// How many node-tree children HD's 64 groups actually hold, against what
+/// their payloads declare: `(declared, held)` -> groups.
+///
+/// **No HD group holds a second tier.** The 16 that declare two children are
+/// the four `talons_junction/start_grid*.vex` files' four groups each, sitting
+/// at the positions and switch distances Pulse's `16_Track` groups do - and
+/// each holds one child. 44 of the rest hold none at all.
+const EXPECTED_HELD: &[((u32, usize), usize)] = &[((1, 0), 44), ((1, 1), 4), ((2, 1), 16)];
+
 #[test]
 #[ignore = "needs a decrypted PS3 disc image under data/images"]
-fn no_hd_lod_group_file_reaches_the_mesh_builder_yet() {
+fn no_hd_lod_group_holds_a_second_tier_so_the_switch_hides_nothing() {
     let Some(image) = image() else {
         return;
     };
-    // The honest scope of the byte-order fix. **When this test starts failing,
-    // that is the good news**: it means HD geometry now builds, and the thing to
-    // do is replace it with a triangle-count comparison of `Lod::Both` against
-    // `Lod::Single` on whichever file started working - checking that `Single`
-    // is smaller and, crucially, not empty.
+    let mut held: std::collections::BTreeMap<(u32, usize), usize> =
+        std::collections::BTreeMap::new();
     for (path, blob) in lod_group_files(&image) {
-        let built = mesh::build_with_textures(&path, &blob, None, Lod::Original);
-        assert!(
-            built.is_err(),
-            "{path} now builds a mesh from its .vex, so `Lod::Single` can finally change an \
-             HD picture - measure it and rewrite this test"
-        );
+        let nodes = vex::nodes(&blob).expect("the tree walks");
+        let classes = vex::classes_of(&blob).expect("a class table");
+        let lod_group = classes.lod_group.expect("version 6 numbers LodGroup");
+        let order = vex::byte_order(&blob);
+        for (i, node) in (nodes.iter().enumerate()).filter(|(_, n)| n.class_id == lod_group) {
+            let declared = order.u32(&blob[node.payload()], CHILD_COUNT_AT);
+            let children = nodes.iter().filter(|n| n.parent == Some(i)).count();
+            *held.entry((declared, children)).or_default() += 1;
+        }
+        // The switch's own table agrees: every node under a group is under
+        // its finest child, so no frame can hide any of it.
+        let anchors = vex::anim_anchors(&blob, &nodes);
+        let anchor_world = vex::anchor_world(&blob, &nodes, 0.0);
+        let groups = mesh::LodGroups::collect(&blob, &nodes, classes, &anchors, &anchor_world);
+        for g in 0..groups.len() {
+            assert!(
+                groups
+                    .distances(g)
+                    .iter()
+                    .all(|d| d.is_finite() && *d > 0.0),
+                "{path}: group {g} switch distances {:?}",
+                groups.distances(g)
+            );
+        }
     }
+    let measured: Vec<_> = held.into_iter().collect();
+    assert_eq!(measured, EXPECTED_HELD, "(declared, held) -> groups");
 }

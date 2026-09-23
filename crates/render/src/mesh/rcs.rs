@@ -697,6 +697,12 @@ fn build_with_options(
 
     let mut out = Model::none(label);
     out.anim_nodes = anim_nodes;
+    // The same per-frame switch the PSP builder tags for, keyed by the same
+    // node indices `emit` stamps on each draw - chosen for HD, not measured:
+    // its own switch code is unread. It hides nothing on the HD disc, whose
+    // groups hold at most one child each (`hd_lod_ground_truth.rs`). See
+    // `super::LodGroups`.
+    out.lod_groups = super::LodGroups::collect(data, &nodes, classes, &anchors, &anchor_world);
     let mut report = Report::default();
     let MaterialSetup {
         textures: skins,
