@@ -504,7 +504,13 @@ impl Audio {
                 Cue::ShurikenTravel,
                 Cue::ShurikenTravel.radius(),
                 |p| p.kind == Some(oag_tables::weapons::Weapon::Shuriken),
-                |p| craft.get(usize::from(p.owner)).copied().flatten().map(|(pos, _)| pos),
+                |p| {
+                    craft
+                        .get(usize::from(p.owner))
+                        .copied()
+                        .flatten()
+                        .map(|(pos, _)| pos)
+                },
             );
 
             // `~LEACHATTACH`, held for as long as a **locked** beam instance

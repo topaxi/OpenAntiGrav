@@ -259,6 +259,14 @@ impl Race {
         ) else {
             return false;
         };
+        // `LEACH`, the same locked-arm-only cue `Race::spend_pickup`'s own
+        // LeachBeam case pushes - an opponent only ever fires this weapon
+        // with a lock (this function's own gate, above), so there is no
+        // unlocked arm to reach here at all.
+        self.sim.cues.push(crate::audio::sfx::CueEvent::new(
+            crate::audio::sfx::Cue::Leach,
+            slot,
+        ));
         self.sim.world.leach_beam = Some(oag_gameplay::projectile::leach_beam::Beam::locked(
             slot as u8, target, &stats,
         ));

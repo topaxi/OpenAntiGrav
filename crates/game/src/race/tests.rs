@@ -461,31 +461,6 @@ fn one_rocket_table() -> oag_tables::weapons::WeaponStats {
     .expect("the fixture table must parse")
 }
 
-/// Both the Mine's and the Plasma's own stats blocks in one table - what
-/// `every_cue_has_something_that_raises_it` needs to fire either weapon from a
-/// single `setup.weapons`, since a race holds only one table at a time. Same
-/// numbers [`one_mine_table`] and [`one_plasma_table`] each already use on
-/// their own.
-fn mine_and_plasma_table() -> oag_tables::weapons::WeaponStats {
-    oag_tables::weapons::parse(
-        r#"<WeaponStats>
-             <Weapon type="Global"><Stats slowdown_limit="0"/></Weapon>
-             <Weapon type="Mine"><Stats absorb="17" blastforce="18" blastradius="19"
-               damage="20" slowdown_time="0.5" timetodie="3"
-               trigger_radius="2"/></Weapon>
-             <Weapon type="Plasma"><Stats absorb="21" blastforce="22" blastradius="23"
-               charge_time="3" damage="24" slowdown_time="25" venomspeed="650"
-               flashspeed="750" rapierspeed="850" phantomspeed="950"
-               launchSpeed="26"/></Weapon>
-             <Pickupodds class="Venom">
-               <Weapon type="Mine"><Stats ai="1" back="1" front="1" human="1"/></Weapon>
-               <Weapon type="Plasma"><Stats ai="1" back="1" front="1" human="1"/></Weapon>
-             </Pickupodds>
-           </WeaponStats>"#,
-    )
-    .expect("the fixture table must parse")
-}
-
 /// The Mine's own fixture, for the tests about the drop path and its cue.
 /// Invented numbers, all distinct from the Rocket fixture's.
 fn one_mine_table() -> oag_tables::weapons::WeaponStats {
@@ -568,6 +543,86 @@ fn one_shuriken_table() -> oag_tables::weapons::WeaponStats {
                flashspeed="600" rapierspeed="700" phantomspeed="800"
                launchSpeed="38" fuse="0.5"/></Weapon>
              <Pickupodds class="Venom">
+               <Weapon type="Shuriken"><Stats ai="1" back="1" front="1" human="1"/></Weapon>
+             </Pickupodds>
+           </WeaponStats>"#,
+    )
+    .expect("the fixture table must parse")
+}
+
+/// The Cannon's own fixture. Invented numbers, all distinct from every other
+/// weapon's fixture here. `rate="10"` fires a round every tenth of a second -
+/// `CannonStats::rate` is the file's own reciprocal, so this is fast enough
+/// that a handful of held-fire ticks reaches a round without a hundred-tick
+/// test.
+fn one_cannon_table() -> oag_tables::weapons::WeaponStats {
+    oag_tables::weapons::parse(
+        r#"<WeaponStats>
+             <Weapon type="Global"><Stats slowdown_limit="0"/></Weapon>
+             <Weapon type="Cannon"><Stats absorb="51" rounds="5" rate="10"
+               damage_per_bullet="52" slowdown_time="53"/></Weapon>
+             <Pickupodds class="Venom">
+               <Weapon type="Cannon"><Stats ai="1" back="1" front="1" human="1"/></Weapon>
+             </Pickupodds>
+           </WeaponStats>"#,
+    )
+    .expect("the fixture table must parse")
+}
+
+/// The Quake's own fixture. Invented numbers, all distinct from every other
+/// weapon's fixture here. `radius="200"` is wide on purpose: this is what
+/// decides whether the wave's own hit test reaches a craft at all, and these
+/// tests place one within a few tens of units rather than measuring a real
+/// circuit's own spread.
+fn one_quake_table() -> oag_tables::weapons::WeaponStats {
+    oag_tables::weapons::parse(
+        r#"<WeaponStats>
+             <Weapon type="Global"><Stats slowdown_limit="0"/></Weapon>
+             <Weapon type="Quake"><Stats absorb="61" damage="62" radius="200"
+               slowdown_time="63"/></Weapon>
+             <Pickupodds class="Venom">
+               <Weapon type="Quake"><Stats ai="1" back="1" front="1" human="1"/></Weapon>
+             </Pickupodds>
+           </WeaponStats>"#,
+    )
+    .expect("the fixture table must parse")
+}
+
+/// Every weapon [`every_cue_has_something_that_raises_it`]'s own wall fixture
+/// exercises in one race - what that test needs, since a race holds only one
+/// table at a time. Same numbers each weapon's own single-weapon fixture
+/// above already uses.
+fn wall_fixture_weapons_table() -> oag_tables::weapons::WeaponStats {
+    oag_tables::weapons::parse(
+        r#"<WeaponStats>
+             <Weapon type="Global"><Stats slowdown_limit="0"/></Weapon>
+             <Weapon type="Mine"><Stats absorb="17" blastforce="18" blastradius="19"
+               damage="20" slowdown_time="0.5" timetodie="3"
+               trigger_radius="2"/></Weapon>
+             <Weapon type="Plasma"><Stats absorb="21" blastforce="22" blastradius="23"
+               charge_time="3" damage="24" slowdown_time="25" venomspeed="650"
+               flashspeed="750" rapierspeed="850" phantomspeed="950"
+               launchSpeed="26"/></Weapon>
+             <Weapon type="Rocket"><Stats absorb="11" blastforce="12" blastradius="13"
+               damage="14" slowdown_time="15" venomspeed="600" flashspeed="700"
+               rapierspeed="800" phantomspeed="900" launchSpeed="16" spread="0.2"/></Weapon>
+             <Weapon type="Missile"><Stats absorb="23" blastforce="10"
+                blastradius="8" damage="12" slowdown_time="0.5" launchSpeed="200"
+                lock_min_dist="10" lock_max_dist="400" venomspeed="800"
+                flashspeed="800" rapierspeed="800" phantomspeed="800"/></Weapon>
+             <Weapon type="Cannon"><Stats absorb="51" rounds="5" rate="10"
+               damage_per_bullet="52" slowdown_time="53"/></Weapon>
+             <Weapon type="Shuriken"><Stats absorb="31" rhicochetForce="32"
+               blastForce="33" blastradius="34" rhicochetdamage="35"
+               blastdamage="36" slowdown_time="37" venomspeed="500"
+               flashspeed="600" rapierspeed="700" phantomspeed="800"
+               launchSpeed="38" fuse="0.5"/></Weapon>
+             <Pickupodds class="Venom">
+               <Weapon type="Mine"><Stats ai="1" back="1" front="1" human="1"/></Weapon>
+               <Weapon type="Plasma"><Stats ai="1" back="1" front="1" human="1"/></Weapon>
+               <Weapon type="Rocket"><Stats ai="1" back="1" front="1" human="1"/></Weapon>
+               <Weapon type="Missile"><Stats ai="1" back="1" front="1" human="1"/></Weapon>
+               <Weapon type="Cannon"><Stats ai="1" back="1" front="1" human="1"/></Weapon>
                <Weapon type="Shuriken"><Stats ai="1" back="1" front="1" human="1"/></Weapon>
              </Pickupodds>
            </WeaponStats>"#,

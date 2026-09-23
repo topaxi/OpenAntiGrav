@@ -155,13 +155,25 @@ fn every_cue_names_a_bank_and_a_string() {
     // not also be fired as a one-shot from the drain loop. The first three
     // are ones the original opens with an out-parameter and keeps -
     // `~ENGINE` at `flare+0x7c`, `~SHIELD` at `entity+0x54`, `~BLOWUP` at
-    // `craft+0xcac`. `PlasmaTravel` is held too, but per *projectile* slot
-    // rather than as a single race-wide handle - see
-    // `SfxVoices::plasma_travel`'s own doc comment.
+    // `craft+0xcac`. `PlasmaTravel`, `RocketTravel`, `MissileTravel` and
+    // `ShurikenTravel` are held too, but per *projectile* slot rather than
+    // as a single race-wide handle - see `TravelVoices`'s own doc comment.
+    // `LeachAttach` is held once for the whole race, on
+    // `SfxVoices::leach_attach`, since the LeachBeam is a world-wide single
+    // instance rather than a projectile slot.
     let held: Vec<Cue> = Cue::ALL.into_iter().filter(|c| c.held()).collect();
     assert_eq!(
         held,
-        vec![Cue::Engine, Cue::Shield, Cue::Blowup, Cue::PlasmaTravel]
+        vec![
+            Cue::Engine,
+            Cue::Shield,
+            Cue::Blowup,
+            Cue::PlasmaTravel,
+            Cue::RocketTravel,
+            Cue::MissileTravel,
+            Cue::LeachAttach,
+            Cue::ShurikenTravel,
+        ]
     );
 }
 

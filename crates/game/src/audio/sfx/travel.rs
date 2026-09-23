@@ -49,6 +49,7 @@ impl TravelVoices {
     /// gone inactive is nowhere to keep sounding from. `radius` is
     /// [`Cue::radius`], read once by the caller rather than per slot since it
     /// does not vary by projectile.
+    #[allow(clippy::too_many_arguments)]
     pub(super) fn tick(
         &mut self,
         mixer: &mut Mixer,

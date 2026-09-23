@@ -324,12 +324,33 @@ impl Race {
             // `docs/ghidra/functions/psp-pulse-usa/plasma.md`'s "a craft hit
             // is the third ending" section and `crate::audio::sfx::Cue::PlasmaHitShip`'s
             // own doc comment.
-            if impact.kind == oag_tables::weapons::Weapon::Plasma {
-                let cue = if impact.struck.is_some() {
-                    crate::audio::sfx::Cue::PlasmaHitShip
-                } else {
-                    crate::audio::sfx::Cue::PlasmaHitWall
-                };
+            //
+            // The Rocket and the Cannon share the same wall/craft split, each
+            // off its own pair of cues - see `Cue::RocketHitWall`/
+            // `Cue::RocketHitShip` and `Cue::CannonHitWall`/`Cue::CannonHitShip`
+            // for the evidence and, for both, why a `struck: None` reaching
+            // here can never be their own weapon's flight-time reap: neither
+            // one's timeout path in `oag_gameplay::projectile::flight` writes
+            // an `Impact` at all, so every entry this loop sees for either
+            // kind is a real wall or craft hit.
+            use oag_tables::weapons::Weapon;
+            let hit_cues = match impact.kind {
+                Weapon::Plasma => Some((
+                    crate::audio::sfx::Cue::PlasmaHitWall,
+                    crate::audio::sfx::Cue::PlasmaHitShip,
+                )),
+                Weapon::Rocket => Some((
+                    crate::audio::sfx::Cue::RocketHitWall,
+                    crate::audio::sfx::Cue::RocketHitShip,
+                )),
+                Weapon::Cannon => Some((
+                    crate::audio::sfx::Cue::CannonHitWall,
+                    crate::audio::sfx::Cue::CannonHitShip,
+                )),
+                _ => None,
+            };
+            if let Some((wall, ship)) = hit_cues {
+                let cue = if impact.struck.is_some() { ship } else { wall };
                 self.sim
                     .cues
                     .push(crate::audio::sfx::CueEvent::at_point(cue, impact.point));
@@ -343,6 +364,39 @@ impl Race {
         // Same one-tick order, for the Bomb's own hemisphere/shockwave pool.
         self.advance_bomb_blast_models(self.sim.dt);
         self.ignite_missile_bounces(&bounces_before);
+        // The same `bounces_before`/after edge the visual bounce above reads,
+        // for the two weapons' own bounce cues - `Cue::MissileHitWall`
+        // (`MISSILEEXPWALL`, on every bounce, not the projectile's final
+        // ending - see that variant's own doc comment) and `Cue::ShurikenHit`
+        // (`SHURIKENHIT`, `Shuriken_Bounce`, confidence 88).
+        // `weapons::bounced_this_tick` already gates on the weapon, so a
+        // stray nonzero `bounces` on some other kind never fires either cue.
+        for (slot, projectile) in self.sim.world.projectiles.slots.iter().enumerate() {
+            if !weapons::bounced_this_tick(
+                projectile.kind,
+                bounces_before[slot],
+                projectile.bounces,
+            ) {
+                continue;
+            }
+            match projectile.kind {
+                Some(oag_tables::weapons::Weapon::Missile) => {
+                    self.sim.cues.push(crate::audio::sfx::CueEvent::at_point(
+                        crate::audio::sfx::Cue::MissileHitWall,
+                        projectile.position,
+                    ));
+                }
+                // Rides the firing craft's own emitter, not the blade's - see
+                // `Cue::ShurikenHit`'s own doc comment.
+                Some(oag_tables::weapons::Weapon::Shuriken) => {
+                    self.sim.cues.push(crate::audio::sfx::CueEvent::new(
+                        crate::audio::sfx::Cue::ShurikenHit,
+                        usize::from(projectile.owner),
+                    ));
+                }
+                _ => {}
+            }
+        }
         // After the craft have moved, so a flare sits on this tick's nozzle
         // rather than the last one's.
         self.advance_engine_flares();

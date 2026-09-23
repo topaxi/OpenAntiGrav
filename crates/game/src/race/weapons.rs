@@ -15,15 +15,21 @@ mod disruptor;
 mod reticle;
 mod single_instance;
 mod visuals;
-// Only reached through `crate::race::weapons::<name>` by
-// `race/tests/weapons.rs`, which asserts each pure gate without a disc -
+// `bounced_this_tick` reaches beyond this module now: `crate::race::tick`'s
+// own sibling loop needs it too, for `Cue::MissileHitWall` and
+// `Cue::ShurikenHit`, the same `bounces_before`/after edge
+// `Race::ignite_missile_bounces` already reads for the visual. Not
+// `#[cfg(test)]` any more for that reason - production code calls through
+// this path, not only `race/tests/weapons.rs`.
+pub(super) use visuals::bounced_this_tick;
+// The remaining four are only reached through `crate::race::weapons::<name>`
+// by `race/tests/weapons.rs`, which asserts each pure gate without a disc -
 // see the doc comments on `visuals::flare_effect_for` and its neighbours.
 // `#[cfg(test)]` because nothing in a non-test build calls through this
 // path: `visuals.rs` reaches all three directly by their bare names.
 #[cfg(test)]
 pub(super) use visuals::{
-    bounce_effect_for, bounced_this_tick, flare_effect_for, missile_flare_anchors,
-    plasma_flare_scale,
+    bounce_effect_for, flare_effect_for, missile_flare_anchors, plasma_flare_scale,
 };
 
 /// The far plane the reticle's own projection uses.
@@ -420,10 +426,20 @@ impl Race {
                     // and clears the fire bit *before* it branches on
                     // `craft+0x16c`, and the no-lock arm builds a real
                     // instance that simply expires. The player has fired.
+                    //
+                    // `LEACH` only fires on the locked arm - see `Cue::Leach`'s
+                    // own doc comment for why the unlocked/fizzle case is not
+                    // confirmed as the same cue.
                     self.sim.world.leach_beam = Some(match self.sight_target() {
-                        Some(target) => oag_gameplay::projectile::leach_beam::Beam::locked(
-                            slot as u8, target, &stats,
-                        ),
+                        Some(target) => {
+                            self.sim.cues.push(crate::audio::sfx::CueEvent::new(
+                                crate::audio::sfx::Cue::Leach,
+                                slot,
+                            ));
+                            oag_gameplay::projectile::leach_beam::Beam::locked(
+                                slot as u8, target, &stats,
+                            )
+                        }
                         None => {
                             oag_gameplay::projectile::leach_beam::Beam::unlocked(slot as u8, &stats)
                         }
@@ -750,13 +766,21 @@ impl Race {
         // A full array drops this round and not the countdown, the same
         // rule `Race::lay_mines` follows: the round has already been
         // spent, so a Cannon held by a craft in a saturated pool simply
-        // stops putting anything in the air until a slot frees up.
-        self.sim.world.projectiles.spawn(
+        // stops putting anything in the air until a slot frees up. The cue
+        // follows the same gate - a round that never left plays nothing -
+        // see `Cue::Cannon`'s own doc comment for why this is the push site
+        // rather than `spend_pickup`'s own Cannon arm, which never fires.
+        if self.sim.world.projectiles.spawn(
             oag_tables::weapons::Weapon::Cannon,
             position,
             velocity,
             slot as u8,
-        );
+        ) {
+            self.sim.cues.push(crate::audio::sfx::CueEvent::new(
+                crate::audio::sfx::Cue::Cannon,
+                slot,
+            ));
+        }
     }
 
     /// Locks a target if there is one and puts one missile in the air for `slot`.
@@ -842,13 +866,25 @@ impl Race {
         // `target` is passed through as it comes, `None` included: that is the
         // original's null pointer, and `Missile_Update` skips its whole guidance
         // block on it rather than treating it as an error.
-        self.sim.world.projectiles.spawn_guided(
+        let fired = self.sim.world.projectiles.spawn_guided(
             oag_tables::weapons::Weapon::Missile,
             position,
             velocity,
             slot as u8,
             target,
             launch_kmh,
-        )
+        );
+        // Both `Race::spend_pickup`'s player press and
+        // `Race::fire_opponent_missile` reach here, so pushing the cue in
+        // this one place - only when something actually left the rail -
+        // covers both, matching `Missile_Init`'s own single call site. See
+        // `Cue::Missile`'s own doc comment.
+        if fired {
+            self.sim.cues.push(crate::audio::sfx::CueEvent::new(
+                crate::audio::sfx::Cue::Missile,
+                slot,
+            ));
+        }
+        fired
     }
 }
