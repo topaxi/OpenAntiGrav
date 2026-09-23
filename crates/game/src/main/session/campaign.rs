@@ -188,24 +188,24 @@ impl Session {
                 }
                 (Screen::Selection(_), Event::Back) => stage.campaign = None,
                 (Screen::Grid(model), Event::Confirmed) => {
-                    // **Chosen, not measured**: no PI001 function this
-                    // project has decompiled ever refuses the transition on
-                    // `PI_Grid.Locked` - a live capture measured that
-                    // confirming a locked tile does nothing, so this reuses
-                    // the tier's own lock-glyph predicate to reproduce that,
-                    // rather than a mechanism traced from the executable.
-                    // See `docs/ghidra/functions/psp-pulse-usa/race-campaign.md`'s
+                    // The gate itself is the recovered `Unlock_GridPointsMet`
+                    // law (`CampaignStage::grid_is_unlocked`), not the
+                    // display-only lock-glyph shortcut `model.selected_is_locked`
+                    // still draws with. **Chosen, not measured** is narrower
+                    // than it used to be: no PI001 function this project has
+                    // decompiled ever refuses the transition on `PI_Grid.Locked`
+                    // - a live capture measured that confirming a locked tile
+                    // does nothing - so *that* refusal is still a choice, but
+                    // *what it refuses on* is the disc's own law. See
+                    // `docs/ghidra/functions/psp-pulse-usa/race-campaign.md`'s
                     // "Unlock rules, cell and tier".
-                    if model.selected_is_locked() {
+                    let index = model.index();
+                    if !campaign.grid_is_unlocked(index) {
                         log::info!(
-                            "grid {} is locked - Confirm does nothing, chosen not measured",
-                            model.index()
+                            "grid {index} is locked - Confirm does nothing, chosen not measured"
                         );
-                    } else {
-                        let index = model.index();
-                        if !campaign.open_cell_selection_at_grid_slot(index) {
-                            warn!("grid {index} has no cells - staying on Grid Selection");
-                        }
+                    } else if !campaign.open_cell_selection_at_grid_slot(index) {
+                        warn!("grid {index} has no cells - staying on Grid Selection");
                     }
                 }
                 // **HD only, when `Campaign Selection` was read at all**:

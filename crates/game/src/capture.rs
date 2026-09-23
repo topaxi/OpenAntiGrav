@@ -638,6 +638,10 @@ pub fn run(
                 let entries_path =
                     crate::boot::chosen_language(&languages, options.settings.language.as_deref())
                         .and_then(|language| language.entries.clone());
+                // Read-only, the same `crate::records::load()` call the
+                // `records` `--menu-page` arm above already makes - see
+                // `campaign_page`'s own `records` parameter doc.
+                let records = crate::records::load();
                 let list = campaign_page(
                     kind,
                     &mut archives,
@@ -661,6 +665,7 @@ pub fn run(
                     // match by hand rather than share, having no `MenuStage`
                     // of its own to read `default_atlas` off.
                     &|text| oag_ui::font::measure(&font, text),
+                    &records,
                 )?;
                 (backdrop, video_format, list, space)
             } else if let Some(kind) = endrace_kind(page) {

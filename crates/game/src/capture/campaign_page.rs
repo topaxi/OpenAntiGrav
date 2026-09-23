@@ -30,6 +30,20 @@ pub(super) fn campaign_kind(page: &str) -> Option<CampaignKind> {
     }
 }
 
+/// [`crate::records::Medal`] restated as [`oag_tables::race_campaign::Medal`],
+/// the same duplicated-on-purpose conversion `crate::campaign_stage::to_campaign_medal`
+/// makes for the live session, redone here rather than shared: that one
+/// lives in the `oag-game` *binary* crate (`main.rs`'s own `mod campaign_stage`),
+/// this file in the *library* crate `pub mod capture` is built from, and
+/// nothing crosses that split.
+fn to_campaign_medal(medal: crate::records::Medal) -> oag_tables::race_campaign::Medal {
+    match medal {
+        crate::records::Medal::Gold => oag_tables::race_campaign::Medal::Gold,
+        crate::records::Medal::Silver => oag_tables::race_campaign::Medal::Silver,
+        crate::records::Medal::Bronze => oag_tables::race_campaign::Medal::Bronze,
+    }
+}
+
 /// Draws `Campaign Selection`, `Grid Selection` on its first tier, or `Cell
 /// Selection` on that tier's own cells - the same shape
 /// [`super::menu_page::picker_page`] draws the race box's two screens in,
@@ -68,6 +82,16 @@ pub(super) fn campaign_page(
     title: &'static oag_title::Title,
     // The `Confirm`/`Back` fit-to-gap shrink's own text-width function.
     measure: &dyn Fn(&str) -> f32,
+    // Read-only, off whatever `<config dir>/oag/records.toml` already holds -
+    // the same "read, never write" rule the `records` `--menu-page` and
+    // `race::CaptureOptions::previous_best` both already follow, applied
+    // here so a locked/unlocked grid or cell in this still matches what a
+    // live session (`crate::main::campaign_stage::CampaignStage`) would show
+    // for the same file, rather than always drawing the fresh-profile
+    // reading `GridSummary::from_grid`/`CellSelection::new` give on their
+    // own. A capture with no file, or a title/cell this machine has never
+    // raced under, draws exactly the fresh-profile numbers either way.
+    records: &crate::records::Store,
 ) -> Result<Vec<oag_ui::frontend::Draw>> {
     let campaign = crate::campaign::load(
         archives,
@@ -85,6 +109,14 @@ pub(super) fn campaign_page(
     let footer_overlay = crate::campaign::static_footer_overlay(&campaign, &faces, measure);
     *sprites = campaign.sprites;
     let is_hd = title.name == oag_hd::TITLE.name;
+    // A cell's own best saved medal, by `name` - see `records`' own doc
+    // above for why this reads the real file rather than always `None`.
+    let medal_of = |cell_name: &str| {
+        records
+            .campaign_medal(title.name, cell_name)?
+            .best_medal
+            .map(to_campaign_medal)
+    };
     // See `entries_path`'s own doc: HD only, and only when the chosen
     // language actually has an `entries.xml` to overlay `DATA06`'s copy of
     // `Campaign Selection`'s own four idstrings onto.
@@ -137,7 +169,9 @@ pub(super) fn campaign_page(
                     campaign
                         .grids
                         .iter()
-                        .map(oag_ui::campaign::GridSummary::from_grid)
+                        .map(|grid| {
+                            oag_ui::campaign::GridSummary::from_grid_with_medals(grid, &medal_of)
+                        })
                         .collect(),
                 );
                 oag_ui::campaign::hd::hd_grid_draw_list(
@@ -160,7 +194,7 @@ pub(super) fn campaign_page(
                 // this module follows.
                 let grid = campaign.grids.first();
                 let cells = grid.map(|grid| grid.cells.clone()).unwrap_or_default();
-                let model = oag_ui::campaign::CellSelection::new(cells);
+                let model = oag_ui::campaign::CellSelection::with_medals(cells, &medal_of);
                 let grid_summary = grid.map_or(
                     oag_ui::campaign::GridSummary {
                         name: String::new(),
@@ -171,7 +205,7 @@ pub(super) fn campaign_page(
                         points_earned: 0,
                         locked: false,
                     },
-                    oag_ui::campaign::GridSummary::from_grid,
+                    |grid| oag_ui::campaign::GridSummary::from_grid_with_medals(grid, &medal_of),
                 );
                 oag_ui::campaign::hd::hd_cell_draw_list(
                     &model,
@@ -201,7 +235,9 @@ pub(super) fn campaign_page(
                     campaign
                         .grids
                         .iter()
-                        .map(oag_ui::campaign::GridSummary::from_grid)
+                        .map(|grid| {
+                            oag_ui::campaign::GridSummary::from_grid_with_medals(grid, &medal_of)
+                        })
                         .collect(),
                 );
                 oag_ui::campaign::grid_draw_list(
@@ -225,7 +261,7 @@ pub(super) fn campaign_page(
                     .first()
                     .map(|grid| grid.cells.clone())
                     .unwrap_or_default();
-                let model = oag_ui::campaign::CellSelection::new(cells);
+                let model = oag_ui::campaign::CellSelection::with_medals(cells, &medal_of);
                 oag_ui::campaign::cell_draw_list(
                     &model,
                     &campaign.cell_layout,

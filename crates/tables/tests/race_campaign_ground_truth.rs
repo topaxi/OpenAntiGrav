@@ -297,3 +297,45 @@ fn group_marks_exactly_the_last_four_grids() {
         assert_eq!(grid.group, expected, "{}: Group", grid.name);
     }
 }
+
+/// `Unlock_GridPointsMet` against the real disc data: `grid0`'s own eight
+/// cells, fully golded, sum to 24 points against its authored
+/// `RequiredPoints="12"` - so `grid1`'s own `<Unlock Grid="Grid0">` row is
+/// met - while nothing golded, or a medal on the *wrong* grid, is not. This
+/// exercises the comparison itself on the genuine authored numbers, not an
+/// invented fixture - see `crates/tables/src/race_campaign/tests.rs` for the
+/// unit-level coverage of the function's own edge cases.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn grid_points_met_reproduces_the_unlock_ladder_on_real_data() {
+    let Some(mut archive) = self::archive() else {
+        return;
+    };
+
+    let grids = read_all_grids(&mut archive);
+    assert_eq!(grids[0].required_points, 12);
+    assert_eq!(grids[0].cells.len(), 8);
+
+    let none = |_: &str| None;
+    assert!(!race_campaign::grid_points_met(&grids, "Grid0", &none));
+
+    let gold_in_grid0 = |name: &str| {
+        grids[0]
+            .cells
+            .iter()
+            .any(|cell| cell.name == name)
+            .then_some(race_campaign::Medal::Gold)
+    };
+    assert!(race_campaign::grid_points_met(
+        &grids,
+        "Grid0",
+        &gold_in_grid0
+    ));
+    // A medal on grid0's own cells does not satisfy grid1's unlock row -
+    // the comparison is per named grid, not "any medal anywhere".
+    assert!(!race_campaign::grid_points_met(
+        &grids,
+        "Grid1",
+        &gold_in_grid0
+    ));
+}
