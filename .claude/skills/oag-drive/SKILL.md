@@ -118,11 +118,17 @@ put a 16-core machine at load average 40 with six concurrent `nextest`
 processes. Wrap every gate invocation in a shared lock:
 
 ```sh
-flock "$HOME/.cache/oag/gate.lock" just
-flock "$HOME/.cache/oag/gate.lock" env OAG_REQUIRE_GAME_DATA=1 just test-data
+flock -o "$HOME/.cache/oag/gate.lock" just
+flock -o "$HOME/.cache/oag/gate.lock" env OAG_REQUIRE_GAME_DATA=1 just test-data
 ```
 
-Three things about this that are easy to get wrong:
+Four things about this that are easy to get wrong:
+
+- **Always pass `-o`.** It makes `flock` close its own lock descriptor
+  before running the command, so no child process inherits it; `flock`
+  still holds the lock and releases it when the command exits. Without it,
+  the `sccache` server a gate spawns keeps the lock after the gate is over -
+  see below.
 
 - **The lockfile must live outside every worktree** so all members contend on
   one inode. A path inside the repo gives each worktree its own lock and
@@ -142,11 +148,14 @@ with the lock's file descriptor open, and that server outlives the `just`
 by its idle timeout (ten minutes by default), holding the lock the whole
 time. `lsof "$HOME/.cache/oag/gate.lock"` shows it - a line for `sccache`
 beside the waiting `flock`s. This is most of the "the gate may sit for
-minutes" folklore above. Fix: start the server *outside* any lock before
-the first gate (`sccache --start-server` from the lead's own shell), and if
-a stale one is holding the lock, `sccache --stop-server` then start it
-again outside - the waiting gate proceeds within seconds. Do not tell
-members to kill it themselves; the lead owns the lock's health.
+minutes" folklore above. **The fix is `flock -o`**, adopted 2026-09-23 after
+it recurred: the old fix - start the server outside any lock before the
+first gate - only lasts until that server idles out and the next gate
+spawns a fresh one inside the lock, which is what happened. If a stale
+server is still holding the lock anyway (a gate started without `-o`),
+`sccache --stop-server` then `sccache --start-server` from the lead's own
+shell - the waiting gate proceeds within seconds. Do not tell members to
+kill it themselves; the lead owns the lock's health.
 
 **Do not solve this with a dedicated gate-runner member** - it costs one of
 four slots and needs cross-agent request/response plumbing invented for
@@ -199,7 +208,7 @@ Members inherit none of your context. Every brief needs:
 5. **The hard rules** that apply (see below).
 6. **The gate and the current baseline failure count**, so a member can tell its
    own breakage from inherited red. State the exact expected failures by name.
-   **Give them the `flock`-wrapped commands, not the bare ones** (see
+   **Give them the `flock -o`-wrapped commands, not the bare ones** (see
    "Serialise gates with `flock`"), and say in the brief that the gate may sit
    for minutes before it starts because another member holds the lock - that is
    correct behaviour, not a hang, and they must wait it out rather than
