@@ -847,20 +847,47 @@ opaque content lands a `335x80` box entirely inside the `480`-wide crop.
 
 Byte-identical on both pressings (`pure-psp-usa.chd`, `pure-psp-eu.chd`), same
 hash, same 66,576-byte entry (512x128, 8bpp indexed: `512*128 + 256*4 palette
-+ 16 header`). Recorded as `oag_pure::hashes::TITLE_LOGO`, consulted through
-`oag_pure::frontend::FALLBACK_IMAGES` - the last stand-in of its kind on this
-title, `FALLBACK_GLOBALS` having been emptied once the style skin was found. Confidence **85**: a
-visual match to a captured frame, a crop that agrees with the widget's own
-authored `TxtrWidth`/`TxtrHeight`, and agreement across both pressings - short
-of 90 because the runtime mechanism that assigns hash `3af18d90` to
-`TitleFrame` specifically is still unread (Ghidra territory, not taken this
-pass). `crates/game/tests/pure_boot_ground_truth.rs`'s
-`title_screens_own_wordmark_gets_the_measured_texture` pins the rect and the
-decoded size against both real discs.
++ 16 header`). Recorded as `oag_pure::hashes::TITLE_LOGO`.
+
+**2026-09-23: `entry 537 is the USA pressing's own value - the EU pressing draws entry 535 instead, a real bug, not a documentation gap.`**
+The runtime mechanism this section's own confidence cap named as unread is
+now read: `TitleScreen_AssignWordmarkTexture`
+(`docs/ghidra/functions/psp-pure-eu/title-screen.md`) builds a texture name at
+runtime by concatenating `Data\FE\Images\FMV_last_frame` with a literal,
+**per-pressing** suffix baked into each disc's own executable - `_EU.mip` on
+the EU binary, `_US.mip` on the USA one. `oag_formats::wad::hash_name` on each
+full name lands exactly on this section's own two colourways: `_US.mip` hashes
+to `3af18d90` (entry 537, the orange-over-white picture this section already
+matched against a USA capture) and `_EU.mip` hashes to `b6677aab` (entry 535,
+blue "wipEout" over orange "pure" - the *other* colourway this section
+described but never assigned to a screen). A breakpoint on the EU function
+fires on a real `pure-psp-eu.chd` boot under PPSSPP, and the settled `Title
+Screen` on that same boot shows blue-over-orange - confirming the EU pressing
+never drew entry 537 at all. `oag_pure::hashes::TITLE_LOGO_EU` records the EU
+value; `oag_pure::frontend::title_frame_src` resolves the right one from the
+disc's own serial (`oag_assets::Layout::serial`, added for exactly this),
+consulted by `oag_game::boot::load_shell` rather than carried in the static
+`FALLBACK_IMAGES` table `BackgroundTopRightImage` still uses, since this is
+the one fallback whose own correct value is not the same on both pressings.
+Confidence **90**, both regions - short of higher only because which field the
+widget's own *draw* call reads from is not itself traced (the assignment is,
+via a live breakpoint and a settled-frame capture on each pressing).
+`crates/game/tests/pure_boot_ground_truth.rs`'s
+`title_screens_own_wordmark_gets_the_measured_texture` now pins a **different**
+expected hash per pressing rather than one shared value, which is what let the
+bug through in the first place: both entries pass the rect-and-512x128 shape
+check equally, so nothing before this asserted the right *content* per disc.
+
+A third region variant sits on the disc unwired: entry 536 (`3f313472`,
+byte-identical in decoded content to entry 535) hashes to
+`Data\FE\Images\FMV_last_frame_JAP.mip`. No Japanese-region Pure disc is in
+this project's corpus, so which pressing's own executable actually names that
+suffix is unread, and nothing consumes it.
 
 `FE Screen->BackgroundImage`/`BackgroundTopRightImage` are the same shape of
 gap. The scan below, run again and sized for these two, resolved one and ruled
-out every candidate for the other.
+out every candidate for the other - and 2026-09-23 read the mechanism behind
+both, below.
 
 ### `FE Screen`'s corner logo, `BackgroundTopRightImage`
 
@@ -895,15 +922,42 @@ checked by hash. Byte-identical on both pressings (`pure-psp-usa.chd` entry
 27, `pure-psp-eu.chd` entry 28 - same hash, different index). Cropping a real
 `Main Menu` capture to the widget's own rect (`x=252 y=3 width=256 height=32`,
 doubled for the `2x` capture) reproduces the texture exactly: same katakana
-text, same swoosh logo, same layout, same cyan ink. Confidence **85**, the
-same basis as `TITLE_LOGO`: an exact visual match to a real captured frame and
-agreement across both pressings, short of 90 because the runtime mechanism
-that assigns this hash to this widget is still unread. Recorded as
-`oag_pure::hashes::MENU_TOPRIGHT_LOGO`, wired through `FALLBACK_IMAGES` the
-same way `TITLE_LOGO` is.
+text, same swoosh logo, same layout, same cyan ink. Recorded as
+`oag_pure::hashes::MENU_TOPRIGHT_LOGO`, wired through `FALLBACK_IMAGES`.
+
+**2026-09-23: the runtime mechanism is read, and it is a declared global, not
+a hash at all.** `BackgroundController_UpdateImages`
+(`docs/ghidra/functions/psp-pure-eu/title-screen.md`) resolves
+`BackgroundTopRightImage`'s texture every frame from a declared
+`FEGlobals->BackgroundTopRightTexture` global - the same `FEGlobals->Name`
+indirection `FrameLineColor`/`TitleColor` already go through for colours,
+just carrying a WAD path string instead of an ARGB one.
+`Data\Skins\Default\Skin.xml` (the activated style skin - see
+`docs/formats/race-setup.md`) declares it:
+
+```xml
+<Variable global="BackgroundTopRightTexture">
+    <Values String="Data\Skins\Default\Images\default_texture.mip"></Values>
+</Variable>
+```
+
+`oag_formats::wad::hash_name` on that literal lands exactly on `7ba78aca` -
+the value this section already found by content scan. **`FALLBACK_IMAGES`
+now resolves the global directly** (`"FEGlobals->BackgroundTopRightTexture"`,
+followed through `Screens::resolve` the same way a colour attribute already
+is) rather than hard-coding the hash - the value was re-derivable from the
+skin's own declared string, and `CLAUDE.md`'s "never invent what the assets
+already author" section is explicit that a re-derivable value should not be
+hand-transcribed even when, as here, the transcription happened to be
+correct. `oag_pure::hashes::MENU_TOPRIGHT_LOGO` is kept only as the evidence
+trail for the hash agreement, not as what the code consults any more.
+Confidence **95**: an exact visual match to a real captured frame, agreement
+across both pressings, and now the exact declared global and its literal
+value read directly rather than inferred from content alone.
 `crates/game/tests/pure_boot_ground_truth.rs`'s
 `fe_screens_own_corner_logo_gets_the_measured_texture` pins the rect and the
-decoded size against both real discs.
+decoded size against both real discs, now against the resolved literal name
+rather than a bare hash spec.
 
 **`BackgroundImage` is not.** Every full-screen-shaped candidate above was
 checked against a real `Main Menu` capture - PPSSPP v1.20.4 under Xvfb
@@ -923,11 +977,70 @@ That is what `oag_title::MenuSkin::background` (`0xFFFFFFFF`, already measured
 existing behaviour is correct as it stands; nothing in `FALLBACK_IMAGES` was
 added for `BackgroundImage`, on purpose - adding one of the three ruled-out
 candidates anyway would be a guess dressed as a measurement, exactly what that
-table's own doc comment says it will not hold. Whether the real disc ever
-draws a picture here (a different profile, a different theme, an entrance
-animation this capture missed) is still open; what this pass adds is that
+table's own doc comment says it will not hold. What this pass added was that
 **none of the 361 decoded textures on this disc is it**, checked against one
-real capture.
+real capture - not why.
+
+**2026-09-23: the why is read, and it closes the open question.**
+`BackgroundController_UpdateImages` resolves `BackgroundImage` from a declared
+`FEGlobals->BackgroundTexture` global, the same mechanism
+`BackgroundTopRightImage` resolves from above - and `Data\Skins\Default\
+Skin.xml` declares it as the **empty string**:
+
+```xml
+<Variable global="BackgroundTexture">
+    <Values String=""></Values>
+</Variable>
+```
+
+The updater's own code treats an empty resolved string as an explicit
+"no texture" branch, not a failed lookup falling through to nothing by
+accident. So the open question above - "whether the real disc ever draws a
+picture here" - is answered for this skin: **no, by its own declaration**,
+not merely by absence from a 361-texture scan. `FALLBACK_IMAGES` now names
+`BackgroundImage` explicitly (`"FEGlobals->BackgroundTexture"`) so a widget
+that resolves to nothing does so because the disc says so, not because the
+table happens not to mention it - `crates/game/tests/pure_boot_ground_truth.rs`'s
+`fe_screens_backdrop_resolves_its_declared_empty_global` pins that the widget
+carries no `src` on both real discs. Whether some *other* skin this project
+has not seen activated declares a non-empty value is still open - only
+`Data\Skins\Default` was read.
+
+### `Title Screen`'s `<Animation><Key TextureWidth="...">` reveal - the struct is read, the renderer is not
+
+`Title Screen->Viewport` wraps thirteen `<Animation>` elements, one per frame
+line, bracket segment or textured patch, each carrying two or three
+`<Key Time="..." TextureWidth="...">` entries and no other authored attribute.
+Read via `Animation_ParseValuesOrKey`/`Animation_ConstructFromNode`
+(`docs/ghidra/functions/psp-pure-eu/title-screen.md`): `<Key>` is a shared,
+0x20-byte struct with seven fields - `Time`, `X`, `Y`, `TextureWidth`,
+`TextureHeight`, `ScaleX`, `Scaley` (the disc's own spelling) - the same
+struct `hud.rs`'s own `<Animation><Key>` reading already covers for `X`/`Y`
+as a travel on Pulse's HUD icons; `Title Screen` is the case that authors
+`TextureWidth` instead.
+
+**The authoring convention, confirmed across all thirteen:** every `<Key>`
+brackets `TextureWidth` between `-<width>` (the wrapped widget's own `width`/
+`TxtrWidth`, negated) at an early `Time` and `0` at the final `Time`, several
+holding the negative value through an intermediate `Time` before a fast snap
+to `0` at the end (e.g. `TitleAnim13`: `-3` at `0`, `-3` at `0.63`, `0` at
+`0.65`) - a hold-then-reveal shape, not a uniform ramp from the first `Time`
+to the last.
+
+**What is not read: how `TextureWidth` maps to a rendered pixel.** Whether the
+widget's displayed width grows from `0` to its authored full width, whether
+`TextureWidth` crops a texture-space sample instead of the render rect, and
+which screen edge stays anchored, are none of them confirmed by a read of an
+update or draw call - the object's own real leading vtable (C++ ABI offset
+`+0x00`) was not located this pass; the `+0x3c` table this reading did locate
+is a parse-time "which function reads this XML child tag" table, not a
+runtime behaviour vtable. **`oag_ui::screen::Screens::collect_widgets` still
+discards the `<Key>` timeline and draws every widget at its final, fully
+revealed state** - a defensible simplification given the render mapping is
+genuinely unread, not an oversight, and not something to guess at: `CLAUDE.md`
+is explicit that a plausible-looking stand-in is worse than an honest gap.
+See `docs/ghidra/functions/psp-pure-eu/title-screen.md`'s own "Next steps" for
+where this picks back up.
 
 ### The language plugin id space is Pure's own, not Pulse's
 

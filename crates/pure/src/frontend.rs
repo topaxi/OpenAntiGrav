@@ -130,16 +130,17 @@ pub mod states {
     /// (`FETextures.mip`) - and one `<BackgroundController>` wrapping a
     /// `BackgroundImage` and a `BackgroundTopRightImage`, **neither naming a
     /// `src`**, the same class of gap as `Title Screen`'s own missing wordmark
-    /// texture, `TitleFrame`. `BackgroundTopRightImage` is resolved the same
-    /// way `TitleFrame` was, by content scan against a captured frame -
-    /// `hashes::MENU_TOPRIGHT_LOGO`, filled through [`FALLBACK_IMAGES`].
-    /// `BackgroundImage` stays a genuine gap, but **not for want of looking**:
-    /// the same scan checked every full-screen-shaped candidate against a real
-    /// `Main Menu` capture and none matched - the capture's own background is
-    /// flat white with nothing drawn on it, which is what
-    /// [`crate::MENU_SKIN`]'s `background` field already carries as a plain
-    /// colour fill. See `docs/formats/pure-status.md` for the scan and
-    /// [`super::FRONT_END`]'s own `menu_frame`.
+    /// texture, `TitleFrame`. Both resolve through a declared `FEGlobals->`
+    /// global now that `BackgroundController_UpdateImages`
+    /// (`docs/ghidra/functions/psp-pure-eu/title-screen.md`) is read -
+    /// `hashes::MENU_TOPRIGHT_LOGO`'s doc comment has the mechanism and the
+    /// literal `Data\Skins\Default\Skin.xml` declares, filled through
+    /// [`FALLBACK_IMAGES`]. `BackgroundImage` resolves through the same
+    /// global-lookup mechanism to the empty string that same skin declares for
+    /// it - a measured "no texture" rather than an unlooked-for gap, which is
+    /// what [`crate::MENU_SKIN`]'s `background` field's own flat white colour
+    /// fill was already standing in for. See `docs/formats/pure-status.md` for
+    /// the scan and [`super::FRONT_END`]'s own `menu_frame`.
     pub const FE_SCREEN: &str = "FE Screen";
 }
 
@@ -169,37 +170,75 @@ pub mod states {
 pub const FALLBACK_GLOBALS: &[(&str, &str)] = &[];
 
 /// `Image` widgets Pure's own `Skin.xml` gives no `src` at all, matched by
-/// name to a content-scan hash - the same "assigned programmatically on the
+/// name to a fallback `src` - the same "assigned programmatically on the
 /// original" gap [`FALLBACK_GLOBALS`] fills for a colour, but for a texture.
 ///
-/// **Two entries today.** `Title Screen->TitleFrame`, the "wipEout pure"
-/// wordmark - see [`crate::hashes::TITLE_LOGO`] for the scan that found it and
-/// the evidence it is the right one. `FE Screen->BackgroundTopRightImage`, the
-/// "ワイプアウト" wordmark beside the swoosh logo - see
-/// [`crate::hashes::MENU_TOPRIGHT_LOGO`] for the same scan run again, sized
-/// for a full-screen backdrop, which is what found this one too.
+/// **`TitleFrame` is deliberately absent from this table.** Unlike the other
+/// two entries, its own real `src` is not the same on both pressings -
+/// `Screen_ConstructTitleScreen` bakes a different, region-suffixed literal
+/// into each disc's own executable (see [`crate::hashes::TITLE_LOGO`] and
+/// [`crate::hashes::TITLE_LOGO_EU`]) - so a single static entry in this table
+/// would be right for one pressing and silently wrong for the other, the
+/// exact bug [`title_frame_src`] exists to fix. Callers building a full
+/// fallback list for Pure append that function's own result to this table;
+/// `oag_game::boot::load_shell` is the one that does it.
 ///
-/// `FE Screen->BackgroundImage` is the same shape of gap and stays out of
-/// this table, **not for want of trying**: the scan that found the two
-/// entries above also filtered its 361 decoded textures to every
-/// `480x272`/`512x256`/`512x512`-shaped candidate (a full-screen backdrop,
-/// allowing for PSP power-of-two padding) and checked each against a real
-/// `Main Menu` capture. None matched - the capture's own background is flat
-/// white with nothing drawn on it at all, to the pixel (`magick ... -format
-/// "%[fx:mean...]"` over the open area reads exactly `255,255,255`), which is
-/// already what [`crate::MENU_SKIN`]'s `background` field supplies as a plain
-/// colour fill. Adding a candidate here anyway would be a guess dressed as a
-/// measurement, which is exactly what this table exists not to hold - see
-/// `docs/formats/pure-status.md` for the scan and every candidate it ruled
-/// out.
+/// **`FE Screen->BackgroundTopRightImage`, the "ワイプアウト" wordmark beside
+/// the swoosh logo, resolves through the disc's own declared global** rather
+/// than a hard-coded hash: `Data\Skins\Default\Skin.xml` declares
+/// `<Variable global="BackgroundTopRightTexture">` with a real WAD path as its
+/// value, the same `FEGlobals->Name` indirection `FrameLineColor` and
+/// `TitleColor` already go through - see [`crate::hashes::MENU_TOPRIGHT_LOGO`]
+/// for the mechanism read and the hash agreement that confirms it.
+///
+/// **`FE Screen->BackgroundImage` resolves the same way, to nothing.** The
+/// same skin declares `<Variable global="BackgroundTexture">` with an empty
+/// string, which is why this table names it explicitly rather than relying on
+/// the widget silently having no fallback at all: an empty resolved global is
+/// a measured "no texture here", not an unlooked-for gap. This is also what
+/// [`crate::MENU_SKIN`]'s `background` field's own flat white colour fill was
+/// already standing in for, now with the mechanism behind the emptiness read
+/// rather than only the effect measured against a captured frame.
 ///
 /// Consulted by `oag-game`'s own front-end XML loader the same way
 /// `fallback_globals` is: only where a widget's own XML leaves `src` unset,
-/// and a real `src` always wins.
+/// resolved through `Screens::resolve` exactly like a colour attribute is (so
+/// a `FEGlobals->Name` entry here is followed to its declared value, and a
+/// plain `hash:`/name entry passes through unchanged) - and a real `src`
+/// always wins over any of this.
 pub const FALLBACK_IMAGES: &[(&str, &str)] = &[
-    ("TitleFrame", "hash:3af18d90"),
-    ("BackgroundTopRightImage", "hash:7ba78aca"),
+    (
+        "BackgroundTopRightImage",
+        "FEGlobals->BackgroundTopRightTexture",
+    ),
+    ("BackgroundImage", "FEGlobals->BackgroundTexture"),
 ];
+
+/// `Title Screen->TitleFrame`'s own fallback `src`, for the pressing `serial`
+/// names - the one entry [`FALLBACK_IMAGES`] cannot hold as a single static
+/// value. See [`crate::hashes::TITLE_LOGO`]/[`TITLE_LOGO_EU`] for the
+/// evidence: `Screen_ConstructTitleScreen` loads a literal,
+/// region-suffixed name baked into each pressing's own executable, and the
+/// two pressings' own values decode to genuinely different pictures (a
+/// different wordmark colourway), not the same texture under two names.
+///
+/// `serial` is the disc's own `AAAA-NNNNN` normalised serial
+/// ([`oag_assets::Layout::serial`]) - `None` (an extracted directory, which
+/// carries no serial to read) defaults to the EU value, per this project's
+/// own "prefer EU over USA" convention for a source that cannot say which
+/// pressing it is. A serial this project has not measured falls back to the
+/// same default rather than guessing at a third, unread, suffix.
+///
+/// [`TITLE_LOGO_EU`]: crate::hashes::TITLE_LOGO_EU
+#[must_use]
+pub fn title_frame_src(serial: Option<&str>) -> (&'static str, &'static str) {
+    match serial {
+        // Pure's own USA serial - see `oag_pure::tests` for where this is
+        // measured against the disc rather than assumed.
+        Some("UCUS-98612") => ("TitleFrame", "hash:3af18d90"),
+        _ => ("TitleFrame", "hash:b6677aab"),
+    }
+}
 
 /// How Pure lays its menus out, as far as its own disc states it.
 ///

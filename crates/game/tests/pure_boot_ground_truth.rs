@@ -647,18 +647,30 @@ fn title_screens_frame_lines_keep_their_own_rects_and_share_one_colour() {
 
 /// `TitleFrame`, the "wipEout pure" wordmark - see
 /// `docs/formats/pure-status.md#the-title-screen-wordmark-titleframe` for how
-/// entry 537 of `Data.wad` was found and matched against a real captured
-/// frame.
+/// entries 535 (EU) and 537 (USA) of `Data.wad` were found and matched
+/// against real captured frames of each pressing.
 ///
 /// **The disc's own XML gives this widget no `src` at all**, so this is
-/// exactly the case [`oag_pure::frontend::FALLBACK_IMAGES`] exists for: this
+/// exactly the case [`oag_pure::frontend::title_frame_src`] exists for: this
 /// test pins that the fallback resolves on both pressings, at the widget's own
-/// authored rect, to a texture that actually decodes - not just that a string
-/// made it into `Screen::images`.
+/// authored rect, to a texture that actually decodes - **and that the two
+/// pressings resolve to their own, different, hash** rather than one pressing
+/// silently drawing the other's wordmark colourway. That is the bug
+/// `Screen_ConstructTitleScreen`'s own reading found:
+/// `docs/ghidra/functions/psp-pure-eu/title-screen.md`.
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn title_screens_own_wordmark_gets_the_measured_texture() {
     for (label, image) in images() {
+        // Each pressing's executable bakes in its own literal, region-suffixed
+        // texture name - see `oag_pure::frontend::title_frame_src`'s own doc
+        // comment. A pressing this match does not name would silently fall
+        // through to the EU default and this assertion would catch it.
+        let expected_src = match label {
+            "pure-psp-usa" => "hash:3af18d90",
+            "pure-psp-eu" => "hash:b6677aab",
+            other => panic!("no expected TitleFrame src recorded for {other}"),
+        };
         let loaded = load(&image);
         let screen = loaded
             .frontend
@@ -672,7 +684,7 @@ fn title_screens_own_wordmark_gets_the_measured_texture() {
             .unwrap_or_else(|| {
                 panic!("{label}: TitleFrame did not resolve through the fallback table")
             });
-        assert_eq!(title_frame.src, "hash:3af18d90");
+        assert_eq!(title_frame.src, expected_src, "{label}");
         assert_eq!((title_frame.x, title_frame.y), (0.0, 76.0));
         assert_eq!(
             (title_frame.width, title_frame.height),
@@ -681,7 +693,7 @@ fn title_screens_own_wordmark_gets_the_measured_texture() {
         let placed = loaded
             .sprites
             .get(&title_frame.src)
-            .unwrap_or_else(|| panic!("{label}: hash:3af18d90 must decode as a texture"));
+            .unwrap_or_else(|| panic!("{label}: {expected_src} must decode as a texture"));
         assert_eq!(
             (placed.width, placed.height),
             (512, 128),
@@ -694,16 +706,23 @@ fn title_screens_own_wordmark_gets_the_measured_texture() {
 /// logo - see
 /// `docs/formats/pure-status.md#fe-screens-corner-logo-backgroundtoprightimage`
 /// for how entry 27 of `Data.wad` was found and matched against a real
-/// captured `Main Menu` frame.
+/// captured `Main Menu` frame, and
+/// `docs/ghidra/functions/psp-pure-eu/title-screen.md` for the runtime
+/// mechanism read since: a declared `FEGlobals->BackgroundTopRightTexture`
+/// global, not a hard-coded hash.
 ///
 /// The same shape of test as [`title_screens_own_wordmark_gets_the_measured_texture`]:
 /// this widget's own `Skin.xml` gives it no `src` either, so
 /// [`oag_pure::frontend::FALLBACK_IMAGES`] is what fills it, and this test
 /// pins that the fallback resolves on both pressings, at the widget's own
-/// authored rect, to a texture that actually decodes.
+/// authored rect, to a texture that actually decodes. **The resolved `src` is
+/// now the literal WAD path `Data\Skins\Default\Skin.xml` itself declares**,
+/// not a `hash:` spec - `oag_pure::hashes::MENU_TOPRIGHT_LOGO` records the
+/// hash that literal name resolves to, for the evidence trail alone.
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn fe_screens_own_corner_logo_gets_the_measured_texture() {
+    const EXPECTED_SRC: &str = r"Data\Skins\Default\Images\default_texture.mip";
     for (label, image) in images() {
         let loaded = load(&image);
         let screen = loaded
@@ -720,7 +739,7 @@ fn fe_screens_own_corner_logo_gets_the_measured_texture() {
                     "{label}: BackgroundTopRightImage did not resolve through the fallback table"
                 )
             });
-        assert_eq!(corner_logo.src, "hash:7ba78aca");
+        assert_eq!(corner_logo.src, EXPECTED_SRC, "{label}");
         assert_eq!((corner_logo.x, corner_logo.y), (252.0, 3.0));
         assert_eq!(
             (corner_logo.width, corner_logo.height),
@@ -729,11 +748,37 @@ fn fe_screens_own_corner_logo_gets_the_measured_texture() {
         let placed = loaded
             .sprites
             .get(&corner_logo.src)
-            .unwrap_or_else(|| panic!("{label}: hash:7ba78aca must decode as a texture"));
+            .unwrap_or_else(|| panic!("{label}: {EXPECTED_SRC} must decode as a texture"));
         assert_eq!(
             (placed.width, placed.height),
             (256, 32),
             "{label}: already a power of two on both axes, unlike TitleFrame's padded crop"
+        );
+    }
+}
+
+/// `BackgroundImage` resolves through the same `FEGlobals->` mechanism as
+/// [`fe_screens_own_corner_logo_gets_the_measured_texture`], to the empty
+/// string `Data\Skins\Default\Skin.xml` declares for `BackgroundTexture` -
+/// genuinely no texture, not an unresolved fallback. Pins that the widget
+/// carries no `src` at all (so nothing downstream tries to decode `""` as a
+/// texture) rather than silently dropping the whole widget.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn fe_screens_backdrop_resolves_its_declared_empty_global() {
+    for (label, image) in images() {
+        let loaded = load(&image);
+        let screen = loaded
+            .frontend
+            .screens()
+            .by_name("FE Screen")
+            .unwrap_or_else(|| panic!("{label}: FE Screen"));
+        assert!(
+            screen
+                .images
+                .iter()
+                .all(|image| image.name.as_deref() != Some("BackgroundImage")),
+            "{label}: BackgroundImage should resolve to no `src` at all, not a texture"
         );
     }
 }

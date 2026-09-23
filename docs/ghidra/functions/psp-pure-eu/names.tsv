@@ -136,3 +136,7 @@
 0x0884f204	function	Bomb_ApplyHit	77	weapons.md
 0x0884eff8	function	BombPool_Detonate	77	weapons.md
 0x08b11060	data	WeaponStats_Table	79	weapons.md
+0x08952554	function	TitleScreen_AssignWordmarkTexture	90	title-screen.md
+0x088bb004	function	BackgroundController_UpdateImages	80	title-screen.md
+0x088b9f28	function	Animation_ParseValuesOrKey	80	title-screen.md
+0x088b9854	function	Animation_ConstructFromNode	80	title-screen.md

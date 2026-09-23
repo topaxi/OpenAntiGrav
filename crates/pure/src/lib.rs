@@ -198,42 +198,65 @@ pub mod race;
 /// `CLAUDE.md` forbid below 50 confidence. Mirrors `oag_pulse::hashes`, which
 /// this module's own doc comment there explains at more length.
 pub mod hashes {
-    /// `Title Screen->TitleFrame`'s own wordmark texture: orange "wipEout" over
-    /// a white-outlined "pure", `512x128`, 8bpp indexed.
+    /// `Title Screen->TitleFrame`'s own wordmark texture **on the USA
+    /// pressing**: orange "wipEout" over a white-outlined "pure", `512x128`,
+    /// 8bpp indexed.
     ///
     /// **`TitleFrame` names no `src` in `Skin.xml` at all** - `<?This is the
     /// Title screen backdrop?> <Image name="TitleFrame" StartEnabled="false">
     /// <Values width="480" x="0" y="76" height="128" TxtrWidth="480"
-    /// TxtrHeight="128">`, assigned programmatically on the original. Found by
-    /// a full image-content scan rather than a name guess: every entry across
-    /// `Data.wad`, `FE.wad` and `FEData.wad` that decodes as a `.mip` was
-    /// checked by eye against a real captured `Title Screen` frame. See
-    /// `docs/formats/pure-status.md` for the scan and every other candidate it
-    /// ruled out.
+    /// TxtrHeight="128">`. **The runtime mechanism is now read, not just
+    /// content-matched**: `Screen_ConstructTitleScreen`
+    /// (`docs/ghidra/functions/psp-pure-eu/title-screen.md`) finds the
+    /// `TitleFrame` element by path and loads a texture by a literal,
+    /// **region-suffixed** name it builds at runtime by concatenating
+    /// `Data\FE\Images\FMV_last_frame` with a per-pressing suffix baked into
+    /// that pressing's own executable: `_EU`, `_US` or `_JAP`. A breakpoint
+    /// on that function fires on a real `pure-psp-eu.chd` boot under
+    /// PPSSPP, confirming the call is live rather than dead code.
     ///
-    /// **Entry 537 of `Data.wad`, `Data.wad`-only** - not in `FE.wad` or
-    /// `FEData.wad`, checked by hash across all three. Two siblings sit next to
-    /// it at the same size, entries 535/536 (`b6677aab`/`3f313472`,
-    /// byte-identical to each other): a second colourway of the same wordmark,
-    /// blue "wipEout" over orange "pure" rather than this one's orange over
-    /// white. Which screen draws the other colourway, if any does, is unread.
+    /// **This constant is the USA pressing's own value**, `Data.wad` entry
+    /// 537 (`Data\FE\Images\FMV_last_frame_US.mip`, hashed with
+    /// [`oag_formats::wad::hash_name`]) - confirmed against a live PPSSPP
+    /// capture of `pure-psp-usa.chd`'s `Title Screen`: orange "wipEout" over a
+    /// white-outlined "pure". See [`TITLE_LOGO_EU`] for the EU pressing's own,
+    /// **different**, value - the two are not interchangeable, and using this
+    /// one unconditionally is the bug `oag_pure::frontend::title_frame_src`
+    /// exists to fix.
     ///
-    /// **`TxtrWidth="480"` against a `512`-wide physical texture is the
+    /// **`TxtrWidth="480"` against a `512`-wide physical texture is a
     /// corroborating measurement, not a coincidence.** PSP textures are
     /// commonly padded to a power of two; the widget's own declared sample
     /// width crops the rightmost 32 columns, which are opaque white and carry
     /// no ink - trimming the decoded picture to its own opaque content lands a
     /// `335x80` box entirely inside the `480`-wide crop, with room to spare on
-    /// both sides.
+    /// both sides. Applies equally to the EU value.
     ///
-    /// Byte-identical on both pressings (`pure-psp-usa.chd` and
-    /// `pure-psp-eu.chd`), at the same hash. Confidence **85**: an exact visual
-    /// match to a real captured frame, a size and crop that agree with the
-    /// widget's own authored `TxtrWidth`/`TxtrHeight`, and agreement across
-    /// both pressings - short of 90 because the runtime mechanism that assigns
-    /// this hash to this widget is still unread (Ghidra territory, not taken
-    /// this pass).
+    /// Confidence **95**: the literal name is read directly out of the USA
+    /// executable, its hash lands exactly on this pre-existing content-scan
+    /// find, the construction call is confirmed live under a real emulator,
+    /// and the resulting picture matches a real captured frame of this exact
+    /// pressing. See `docs/formats/pure-status.md`'s "The Title screen
+    /// wordmark" section.
     pub const TITLE_LOGO: u32 = 0x3af1_8d90;
+
+    /// `Title Screen->TitleFrame`'s own wordmark texture **on the EU
+    /// pressing**: blue "wipEout" over orange "pure" - a different colourway
+    /// from [`TITLE_LOGO`]'s USA one, `512x128`, 8bpp indexed, `Data.wad`
+    /// entry 535 (`Data\FE\Images\FMV_last_frame_EU.mip`).
+    ///
+    /// Same mechanism, same confidence basis and the same **95** as
+    /// [`TITLE_LOGO`] - see that constant's own doc comment for the full
+    /// chain. Confirmed against a live PPSSPP capture of `pure-psp-eu.chd`'s
+    /// `Title Screen`, breakpointed at the construction call: blue "wipEout"
+    /// over orange "pure", not the USA pressing's orange-over-white.
+    ///
+    /// A third region variant exists on the disc but is not wired anywhere -
+    /// `Data.wad` entry 536 (`3f313472`, byte-identical in content to this
+    /// one), whose hash matches `Data\FE\Images\FMV_last_frame_JAP.mip`. No
+    /// disc this project has names a Japanese-region SKU, so which pressing's
+    /// executable actually names that suffix is unread.
+    pub const TITLE_LOGO_EU: u32 = 0xb667_7aab;
 
     /// `FE Screen->BackgroundTopRightImage`'s own texture: the "ワイプアウト"
     /// katakana wordmark beside the swoosh/arrow logo, `256x32`, 8bpp indexed.
@@ -241,26 +264,40 @@ pub mod hashes {
     /// **Names no `src` either** - `<Image name="BackgroundTopRightImage">
     /// <Values x="252" y="3" width="256" height="32" U="0" V="0"
     /// TxtrWidth="256" TxtrHeight="32">`, nested in the same
-    /// `<BackgroundController>` as [`TITLE_LOGO`]'s sibling gap,
-    /// `BackgroundImage`. Found the same way: a full image-content scan of
-    /// `Data.wad`/`FE.wad`/`FEData.wad`, filtered this time to the shape a
-    /// full-screen backdrop or a `256x32` corner graphic would decode as,
-    /// checked by eye against a real captured `Main Menu` frame. See
-    /// `docs/formats/pure-status.md` for the scan and the sibling
-    /// `BackgroundImage` gap it did **not** resolve.
+    /// `<BackgroundController>` as `TITLE_LOGO`'s sibling gap,
+    /// `BackgroundImage`.
+    ///
+    /// **The runtime mechanism is now read.** Unlike `TitleFrame`,
+    /// `BackgroundTopRightImage`'s texture is not a literal baked into the
+    /// executable: `BackgroundController_UpdateImages`
+    /// (`docs/ghidra/functions/psp-pure-eu/title-screen.md`) resolves it every
+    /// frame through a declared `FEGlobals->BackgroundTopRightTexture` global,
+    /// the same indirection `FrameLineColor`/`TitleColor` already go through
+    /// for colours - just carrying a WAD path string instead of an ARGB one.
+    /// `Data\Skins\Default\Skin.xml` declares it as
+    /// `Data\Skins\Default\Images\default_texture.mip`, which hashes to
+    /// exactly this constant.
+    ///
+    /// This constant is kept only as the evidence trail for that hash; the
+    /// front end itself now resolves the global directly (see
+    /// [`crate::frontend::FALLBACK_IMAGES`]) rather than hard-coding it,
+    /// since the value is re-derivable from the skin's own declared string
+    /// and hand-transcribing a re-derivable value is exactly what
+    /// `CLAUDE.md`'s "never invent what the assets already author" section
+    /// warns against.
     ///
     /// **Entry 27 of `Data.wad`, `Data.wad`-only** - not in `FE.wad` or
-    /// `FEData.wad`, checked by hash across all three, the same shape as
-    /// `TITLE_LOGO`'s own evidence. `9,232` bytes matches `256*32 + 256*4`
-    /// palette `+ 16` header exactly, with no padding to account for -
-    /// `256x32` is already a power of two on both axes, unlike `TitleFrame`'s
-    /// `512`-wide crop of a `480`-wide widget.
+    /// `FEData.wad`, checked by hash across all three. `9,232` bytes matches
+    /// `256*32 + 256*4` palette `+ 16` header exactly, with no padding to
+    /// account for - `256x32` is already a power of two on both axes, unlike
+    /// `TitleFrame`'s `512`-wide crop of a `480`-wide widget.
     ///
     /// Byte-identical on both pressings (`pure-psp-usa.chd` and
-    /// `pure-psp-eu.chd`), at the same hash. Confidence **85**, the same basis
-    /// as `TITLE_LOGO`: an exact visual match to a real captured frame and
-    /// agreement across both pressings, short of 90 because the runtime
-    /// mechanism that assigns this hash to this widget is still unread.
+    /// `pure-psp-eu.chd`), at the same hash - consistent with the same global
+    /// declaration on both, since `Data\Skins\Default\Skin.xml` is identical
+    /// on both pressings. Confidence **95**: an exact visual match to a real
+    /// captured frame, agreement across both pressings, and now the exact
+    /// declared global and its literal value read directly.
     pub const MENU_TOPRIGHT_LOGO: u32 = 0x7ba7_8aca;
 }
 

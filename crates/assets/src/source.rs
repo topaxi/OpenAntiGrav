@@ -74,7 +74,8 @@ pub struct Layout {
     /// twice at scales differing by exactly two - and no `.pob` header word
     /// distinguishes them. See that type for the corpus evidence and why a
     /// per-file heuristic is unsafe. A second such case would be worth
-    /// looking at hard before adding it.
+    /// looking at hard before adding it - see [`Self::serial`] below for the
+    /// one that turned up.
     pub platform: Platform,
     /// The bulk archive: tracks, ships, handling, and on the PSP the movies,
     /// screens and string tables too.
@@ -87,6 +88,23 @@ pub struct Layout {
     /// [`ArchiveCandidates::extra`](oag_title::ArchiveCandidates::extra) for why
     /// a third role exists and why it is a set rather than alternatives.
     pub extra: Vec<String>,
+    /// The disc's own serial, normalised to `AAAA-NNNNN`, when `source` is a
+    /// disc image. `None` for a directory source, which carries no
+    /// `UMD_DATA.BIN`/`SYSTEM.CNF` to read one out of - see [`survey`].
+    ///
+    /// **The second exception [`Self::platform`]'s own doc predicted.** Wipeout
+    /// Pure's `Title Screen->TitleFrame` (the "wipEout pure" wordmark) is
+    /// assigned a texture by a literal, region-suffixed name baked into each
+    /// pressing's own executable at compile time - `FMV_last_frame_EU.mip` on
+    /// the EU disc, `FMV_last_frame_US.mip` on the USA one - and **both
+    /// pressings ship both textures, byte-identical, in the same shared
+    /// `Data.wad`**, so nothing in the archive's own data says which one a
+    /// given disc actually draws. See `docs/formats/pure-status.md`'s "The
+    /// Title screen wordmark" section and
+    /// `docs/ghidra/functions/psp-pure-eu/title-screen.md`. Consulted by
+    /// `oag_pure::frontend`'s per-pressing `TITLE_FRAME_EU`/`TITLE_FRAME_USA`
+    /// through `oag_game::boot::load_shell`.
+    pub serial: Option<String>,
 }
 
 impl Layout {
@@ -115,7 +133,7 @@ impl Layout {
         source: &str,
         title: &Title,
     ) -> Result<(Self, Option<Arc<Mutex<DiscImage>>>)> {
-        let (mut platform, files, disc) = survey(source, title)?;
+        let (mut platform, files, disc, serial) = survey(source, title)?;
 
         let data = pick(source, &files, title.archives.data).ok_or_else(|| Error::NoArchive {
             looked_in: source.to_string(),
@@ -139,6 +157,7 @@ impl Layout {
                 data: data.0,
                 fe: fe.map(|(spec, _)| spec),
                 extra,
+                serial,
             },
             disc,
         ))
@@ -688,7 +707,7 @@ fn survey(source: &str, title: &Title) -> Result<Surveyed> {
         // way on every filesystem, rather than in readdir order.
         files.sort();
         let platform = platform_of(&files);
-        return Ok((platform, files, None));
+        return Ok((platform, files, None, None));
     }
 
     let disc = Arc::new(Mutex::new(DiscImage::open(source)?));
@@ -709,12 +728,18 @@ fn survey(source: &str, title: &Title) -> Result<Surveyed> {
     // list it just built and the CHD hunk it warmed - so every archive mounted
     // behind it paid for the walk again. `Archives::open_with_packs` mounts two
     // on a Pulse disc and eight on a Wipeout HD one.
-    Ok((info.platform, files, Some(disc)))
+    Ok((info.platform, files, Some(disc), info.serial))
 }
 
-/// What [`survey`] found: the platform, the files, and the disc image it walked
-/// them out of - `None` for a directory source, which has no image to share.
-type Surveyed = (Platform, Vec<String>, Option<Arc<Mutex<DiscImage>>>);
+/// What [`survey`] found: the platform, the files, the disc image it walked
+/// them out of - `None` for a directory source, which has no image to share -
+/// and the disc's own serial, `None` for the same reason. See [`Layout::serial`].
+type Surveyed = (
+    Platform,
+    Vec<String>,
+    Option<Arc<Mutex<DiscImage>>>,
+    Option<String>,
+);
 
 /// Every file under `dir`, as paths relative to the walk's root.
 ///

@@ -615,19 +615,37 @@ impl Screens {
         );
         match child.name.to_ascii_lowercase().as_str() {
             "image" => {
-                match child.value("src").or_else(|| {
-                    // A widget whose XML gives no `src` at all is assigned one
-                    // programmatically on the original - matched here by its own
-                    // `name` attribute against a title's own measured table. A
-                    // widget this table does not name, and that carries no
-                    // `color` either, falls through to `fill_from_node` below and
-                    // is dropped exactly as it always was.
-                    let name = child.attr("name")?;
-                    fallback_images
-                        .iter()
-                        .find(|(widget, _)| *widget == name)
-                        .map(|(_, src)| *src)
-                }) {
+                match child
+                    .value("src")
+                    .or_else(|| {
+                        // A widget whose XML gives no `src` at all is assigned one
+                        // programmatically on the original - matched here by its own
+                        // `name` attribute against a title's own measured table. A
+                        // widget this table does not name, and that carries no
+                        // `color` either, falls through to `fill_from_node` below and
+                        // is dropped exactly as it always was.
+                        //
+                        // The table's own value takes a `FEGlobals->Name` spelling on
+                        // `BackgroundImage`/`BackgroundTopRightImage`: Pure's active
+                        // style skin (`Data\Skins\Default\Skin.xml`) declares both as
+                        // real `<Variable global="...">`s - `BackgroundTexture` (a real
+                        // string global, not a colour) resolves through `Screens::resolve`
+                        // the same as `FrameLineColor` already does, rather than being a
+                        // hard-coded hash. See `oag_pure::frontend::FALLBACK_IMAGES`.
+                        let name = child.attr("name")?;
+                        fallback_images
+                            .iter()
+                            .find(|(widget, _)| *widget == name)
+                            .map(|(_, src)| *src)
+                    })
+                    // A resolved `FEGlobals->` global can itself be the empty
+                    // string - `BackgroundTexture` is authored `""` on `Main
+                    // Menu`'s own skin, meaning genuinely no texture there,
+                    // not a lookup failure - so this is filtered the same as
+                    // "no src at all" below rather than passed to a WAD lookup.
+                    .and_then(|src| self.resolve(src))
+                    .filter(|src| !src.is_empty())
+                {
                     // A `src` names a texture; a bare colour is a [`Fill`].
                     // Positioned at `inner` (its own `OffsetX`/`OffsetY`
                     // folded in), not `offset` - the same choice `"text"`

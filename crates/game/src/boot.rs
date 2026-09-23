@@ -470,12 +470,28 @@ pub fn load_shell(
     steps.lap("languages");
     let font = load_font(&mut archives, &languages, &mut report);
     steps.lap("font");
+    // **`TitleFrame` is appended here, not carried in `profile.fallback_images`
+    // itself.** Its own real `src` differs by pressing - `Screen_
+    // ConstructTitleScreen` bakes a different, region-suffixed literal into
+    // each disc's own executable (`docs/ghidra/functions/psp-pure-eu/
+    // title-screen.md`) - and `BootProfile.fallback_images` is one `&'static`
+    // table shared by every source a title opens, with no room for that axis.
+    // Every other title's own table is empty, so this is additive rather than
+    // a behaviour change for them; see `oag_pure::frontend::title_frame_src`'s
+    // own doc comment for why the fallback is EU rather than a guess when the
+    // serial cannot be read at all.
+    let mut fallback_images = profile.fallback_images.to_vec();
+    if title.name == "Wipeout Pure" {
+        fallback_images.push(oag_pure::frontend::title_frame_src(
+            archives.layout.serial.as_deref(),
+        ));
+    }
     let mut screens = load_screens(
         &mut archives,
         front_end.root,
         title.plugin_definition,
         profile.fallback_globals,
-        profile.fallback_images,
+        &fallback_images,
         &mut report,
     )?;
     // A touch front end's screens are in the root's includes - see

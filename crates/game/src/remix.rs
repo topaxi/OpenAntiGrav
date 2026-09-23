@@ -25,7 +25,16 @@ use oag_title::Title;
 use oag_ui::menu;
 
 /// A race's track and craft source, together.
+///
+/// `Single`'s own [`Opened`] costs the same as `Split`'s: one of the two
+/// fields, not both - `Split` is twice the size, not a mismatch clippy's
+/// default threshold should read as suspicious. `oag_assets::Layout` gaining
+/// a `serial` field is what pushed this over the lint's own limit; boxing
+/// either field would only move the cost from this enum onto every match
+/// site instead of removing it, for a type this crate opens at most twice per
+/// race and never in a hot loop.
 #[derive(Debug)]
+#[allow(clippy::large_enum_variant)]
 pub enum Remix {
     /// Track and craft load from the same opened source - today's behaviour,
     /// and the only case before Race Remix existed.
