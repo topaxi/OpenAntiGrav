@@ -154,6 +154,24 @@ fn a_pure_races_load_report_names_no_boost_model_as_a_title_fact_not_a_fault() {
             "{label}: no positive boost-absence line in the report: {:#?}",
             loaded.report
         );
+        // The "already correct, already measured" claim in pure-status.md and
+        // exhaust-sound.md rests on the always-on flare quad actually being
+        // the one drawn - pin the two preconditions `frame.rs` gates it on,
+        // not just the boost model's own absence.
+        assert!(
+            loaded.liveries[0].nozzle.is_some(),
+            "{label}: no Engine Flare locator on the player's own hull, so \
+             nothing carries the boost-driven growth this checks for"
+        );
+        assert!(
+            loaded
+                .report
+                .iter()
+                .any(|line| line.contains("grabbedEngineFlare")),
+            "{label}: the flare sprite texture did not load, so the quad this \
+             title's boost term drives would draw untextured or not at all: {:#?}",
+            loaded.report
+        );
     }
 }
 

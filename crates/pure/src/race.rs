@@ -68,9 +68,10 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     // `Data.wad` on either pressing, at confidence 93 -
     // `docs/ghidra/functions/psp-pure-usa/ship-models.md`. The always-on
     // `Engine Flare` billboard still grows when boosting - Pure's own
-    // `Exhaust_Update` counterpart carries the identical `boost_timer * 8.0`
-    // half-size term on both pressings, same page - it just has no separate
-    // model to reveal alongside it.
+    // `Exhaust_Update` carries the identical `boost_timer * 8.0` half-size
+    // term on both pressings (confidence 88,
+    // `docs/ghidra/functions/psp-pure-usa/exhaust-sound.md`) - it just has no
+    // separate model to reveal alongside it.
     boost: None,
     sounds: SOUND_BANKS,
     zone_announcer: Some(ZONE_ANNOUNCER),
@@ -190,15 +191,15 @@ pub const ZONE_ANNOUNCER: &oag_title::ZoneAnnouncer = &oag_title::ZoneAnnouncer 
 ///    `docs/ghidra/functions/psp-pulse-usa/exhaust.md` documents the plume
 ///    riding. Pure's carries `engine_flare` and no node naming `boost` at all.
 ///
-/// **Not determined: whether Pure's boost is visually inert.** The asset is
-/// absent; the *effect* need not be. Pure carries
-/// `Data\Tex\EngineFlare\grabbedEngineFlare128x64x8.mip` and
-/// `Data\Tex\engineFlare\Engine_noise.mip`, the same two Pulse does, plus a
-/// Pure-only `Data\Tex\EngineFlare\vr_engine_noise.mip` - so a boost that
-/// brightens or widens the existing `engine_flare` billboard in code would leave
-/// nothing for any of the three axes above to find. The draw path has not been
-/// read. What is settled is only that **there is no file to look for**, so
-/// nothing downstream should keep reporting one as missing.
+/// **Settled 2026-09-23: Pure's boost is not visually inert.** The asset is
+/// absent; the *effect* is not. Pure's own `Exhaust_Update` and
+/// `Exhaust_UpdateEngineSound` (`docs/ghidra/functions/psp-pure-usa/exhaust-sound.md`,
+/// confidence 88, both pressings) carry Pulse's identical
+/// `half_size = ((i * 0.6 + 0.4) * 2.5 + boost_timer * 8.0)` term and `0.8s`
+/// arm bit for bit, so the always-on `engine_flare` billboard grows on boost
+/// exactly as Pulse's does - `oag_render::exhaust::Exhaust` already
+/// reproduces it, title-agnostically. Only the separate `<Team>boost.vex`
+/// plume mesh never existed.
 pub mod ships {
     /// The hull every mode draws, `%s\Ship.vex` at `0x08a7a5f4`.
     ///

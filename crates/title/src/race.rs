@@ -34,20 +34,18 @@
 //! - **Shared vocabulary.** `Data\Ships\<Team>\Ship.vex` resolves on both
 //!   discs, so the hull's file name is not a title fact and a field for it would
 //!   be a table with one value in it.
-//! - **The boost plume sat here too, as "unrecovered, not different" - it no
-//!   longer does.** Pulse composes a per-team `shipboost.vex` (confidence 85,
-//!   `psp-pulse-usa/exhaust.md`); Pure's executable authors no standalone
-//!   boost model at all, measured rather than merely unfound (confidence 93,
-//!   `psp-pure-usa/ship-models.md`); HD's plume is a third shape again, a
-//!   subtree of `engineflare.vex` (`docs/rendering/trail-ribbon.md`). Three
-//!   titles measured and no hole, the bar [`ZoneCraft`] cleared below, so this
-//!   is [`ShipPaths::boost`] now, on the same precedent: it was excluded while
-//!   Pulse and Pure were measured and HD was
-//!   not, because two measurements and a hole is the shape being refused. HD's
-//!   was then measured - `/data/ships/zone/ship.vex`, off the manifest the
-//!   `oag_hd::names::MODE_SHIPS` roster already listed - and with three titles
-//!   and no hole it became [`ZoneCraft`]. The bar moved because the evidence
-//!   did, not because the design changed its mind.
+//! - **The boost plume sat here too, as "unrecovered, not different" - it no longer does.** Pulse
+//!   composes a per-team `shipboost.vex` (confidence 82, its `Engine Flare` constructor,
+//!   `psp-pulse-usa/exhaust.md`); Pure's executable authors no standalone boost model at all,
+//!   measured rather than merely unfound (confidence 93, `psp-pure-usa/ship-models.md`); HD's
+//!   plume is a third shape again, a subtree of `engineflare.vex`
+//!   (`docs/rendering/trail-ribbon.md`). Three titles measured and no hole, the bar [`ZoneCraft`]
+//!   cleared below, so this is [`ShipPaths::boost`] now, on the precedent **the Zone hull already
+//!   set**: it was excluded while Pulse and Pure were measured and HD was not, because two
+//!   measurements and a hole is the shape being refused. HD's was then measured -
+//!   `/data/ships/zone/ship.vex`, off the manifest the `oag_hd::names::MODE_SHIPS` roster already
+//!   listed - and with three titles and no hole it became [`ZoneCraft`]. The bar moved because the
+//!   evidence did, not because the design changed its mind.
 //! - **Absent by construction.** Pure ships no loading-screen wave and no `.mip`
 //!   HUD atlas at all. An axis that is `Some` for one title and `None` for the
 //!   other is the same one-example design in a different disguise.

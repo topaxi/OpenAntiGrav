@@ -285,20 +285,26 @@ name at all**, whatever a pack happens to carry.
 start-line speed on an AI stat sheet, not a pickup. `HUD_Perfect Boost!` is a Zone-mode
 HUD message, beside `HUD_Perfect Zone!` and `HUD_New Zone Record`.
 
-### Not determined: whether Pure's boost is visually inert
+### Settled 2026-09-23: Pure's boost is not visually inert
 
-The *asset* is absent. The *effect* need not be. Pure carries
+The *asset* is absent. The *effect* is not. Pure carries
 `Data\Tex\EngineFlare\grabbedEngineFlare128x64x8.mip` and
 `Data\Tex\engineFlare\Engine_noise.mip` - the same two literals Pulse's binary
 names, at `0x08a84c80` and `0x08a889e4` there - plus a Pure-only
 `Data\Tex\EngineFlare\vr_engine_noise.mip`, and all three resolve on both Pure
-pressings. A boost that brightens, widens or recolours the existing
-`engine_flare` billboard in code would leave nothing for any of the four rows
-above to find.
+pressings.
 
-The flare's own draw path has not been read on Pure. What is settled is only
-that **there is no file to look for**, so nothing downstream should keep
-reporting a Pure boost model as missing.
+The flare's own draw path has now been read: `Exhaust_Update` and
+`Exhaust_UpdateEngineSound` (confidence 88, both pressings, decompiled in
+full - see
+[exhaust-sound.md](exhaust-sound.md)'s "The visual half" section) carry
+Pulse's identical `half_size = ((i * 0.6 + 0.4) * 2.5 + boost_timer * 8.0)`
+term and `0.8s` speed-pad arm bit for bit, so the always-on `engine_flare`
+billboard brightens and widens on boost exactly as Pulse's does. What is
+settled is that **there is no separate file to look for**, and the effect
+that would have needed one already exists through the shared billboard - so
+nothing downstream should report a Pure boost model as missing, and nothing
+needed drawing that was not already drawn.
 
 ### Not determined: what `WO_SHIP_ENGINEFLARE` is doing in one hull
 

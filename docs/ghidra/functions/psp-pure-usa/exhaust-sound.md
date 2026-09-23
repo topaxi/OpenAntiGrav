@@ -127,10 +127,26 @@ reading, on both pressings, and this engine's existing generic
 `crates/game/src/race/pads.rs`) already reproduces Pure's boost visual
 correctly - nothing to implement, only to cite.
 
+**The caller is confirmed, not just plausible.** `get_function_xrefs
+0x0886b340` (eu) names exactly one caller, `FUN_0892c66c` - decompiled, it is
+the speed-pad crossing check itself: it tracks the pad id under the craft
+(`FUN_08849fec`), and on a *new* id calls `FUN_0886b340` (the `0.8f` arm)
+before anything else. So the arm fires exactly on the edge Pulse's own
+`Ship_ApplySpeedupPad` fires it from, not merely a function that happens to
+write the right constant.
+
+**The same Zone-selector expression forces `engine_on` in two independent
+places.** `FUN_0892c66c` itself sets a flag (`DAT_00054e70 = 1`) under
+`DAT_00281cb3 == 0 && _DAT_00053534 == 6`, and `Exhaust_UpdateEngineSound`
+forces `engine_on` true under the identical expression - the same Zone-mode
+selector `docs/ghidra/functions/psp-pulse-usa/zone-mode.md` establishes for
+Pulse. Reading no further than "it forces the flare on in Zone mode" here;
+what consumes `DAT_00054e70` is not chased.
+
 **Confidence 88** for this section: decompiled in full on both pressings, four
 independent literal constants matching Pulse's bit for bit (`0.6`, `0.4`,
-`2.5`, `8.0`, the `0.75..1.25`/`200..255` rand ranges, and the `0.8` arm), no
-runtime leg for either binary.
+`2.5`, `8.0`, the `0.75..1.25`/`200..255` rand ranges, and the `0.8` arm), the
+one caller confirmed rather than assumed, no runtime leg for either binary.
 
 ## Confidence
 

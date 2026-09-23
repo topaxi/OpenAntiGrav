@@ -519,9 +519,9 @@ changing in this engine - see
 `None` on HD (its plume is a subtree of `engineflare.vex`, not a standalone
 model - see [trail-ribbon.md](../rendering/trail-ribbon.md)), and `None` on
 2048/Omega (unread). `oag_game::race::assets::boost_entry_name` returns
-`Option<String>` accordingly, and the load report now says "this title names
-no standalone boost-plume model" for Pure rather than the misleading
-"not in the archive set" it used to.
+`Option<String>` accordingly, and the load report now says "names no
+standalone boost-plume model" for Pure rather than the misleading "not in the
+archive set" it used to.
 
 ## Handling stats: the schema holds, the parser does not
 
