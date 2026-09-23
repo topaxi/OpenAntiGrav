@@ -74,6 +74,34 @@ fn render(sound: std::sync::Arc<oag_audio::Sound>) -> (f32, f32) {
     (peak, rms)
 }
 
+/// **Correction, verified against a real disc rather than `oag-wad sounds`
+/// alone.** The handover thread that wired `Cue::CannonHitShip` read
+/// `CANNONEXPLSHIP` as an empty, zero-waveform cue off `oag-wad sounds`'
+/// own listing - true of `cue_sounds`, the direct command run alone, but
+/// `Banks::load` resolves through `Bank::cue_tree_sounds` instead, the same
+/// child-cue walk that lets Wipeout HD's `.COLLISIONS` resolve through
+/// `c_CShipShip`/`c_CShipWall` - see `oag_formats::sblk::child`.
+/// `CANNONEXPLSHIP`'s own single command is one such reference, and the
+/// tree walk finds a real waveform on the other end of it on every Pulse and
+/// PS2 disc measured here. So the cue is not silent after all; nothing here
+/// needs an exception for it any more.
+///
+/// Cues Pure's own `weapons.bnk` does not carry at all, because Pure ships
+/// none of the three weapons that name them (the Cannon, the LeachBeam and
+/// the Shuriken). `pure-psp-usa.chd` and `pure-psp-eu.chd`'s own weapon bank
+/// was read with `oag-wad sounds` and carries no `CANNON*`, `LEACH*` or
+/// `SHURIKEN*` entry of any kind; Pure's own weapon in their place is the
+/// Disruptor.
+const NOT_ON_PURE: [Cue; 7] = [
+    Cue::Cannon,
+    Cue::CannonHitWall,
+    Cue::CannonHitShip,
+    Cue::Leach,
+    Cue::LeachAttach,
+    Cue::ShurikenHit,
+    Cue::ShurikenTravel,
+];
+
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn every_wired_cue_resolves_on_every_psp_and_ps2_disc() {
@@ -89,8 +117,18 @@ fn every_wired_cue_resolves_on_every_psp_and_ps2_disc() {
             println!("  {line}");
         }
 
+        let on_pure = label.starts_with("Pure");
         let mut rng = oag_core::Rng::new(1);
         for cue in Cue::ALL {
+            if on_pure && NOT_ON_PURE.contains(&cue) {
+                assert!(
+                    banks.pick(cue, &mut rng).is_none(),
+                    "{label}: {} loaded, but Pure ships no weapon that names it - \
+                     NOT_ON_PURE is stale",
+                    cue.name()
+                );
+                continue;
+            }
             let Some((sound, looping)) = banks.pick(cue, &mut rng) else {
                 panic!("{label}: {} did not load", cue.name());
             };
@@ -140,7 +178,8 @@ fn every_wired_cue_resolves_on_every_psp_and_ps2_disc() {
     assert!(ran > 0, "no disc image was present");
 }
 
-/// Wipeout HD loads thirteen of the fourteen cues, and says why it misses the fourteenth.
+/// Wipeout HD loads every cue this port fires but one, and says why it
+/// misses that one.
 ///
 /// Pinned as a *list* rather than a count, because the interesting part is
 /// which one and for which reason. `~ENGINE` does not exist on HD at all: its
@@ -182,9 +221,20 @@ fn every_wired_cue_resolves_on_every_psp_and_ps2_disc() {
 /// comments cite `psp-pulse-usa` evidence alone, confidence 90 for the *PSP*
 /// trigger; nothing here has looked at HD's own Plasma dispatch to confirm it
 /// fires the same four cues at the same moments.
+///
+/// **The Rocket's, the Missile's, the Cannon's, `QUAKEHIT`'s, the LeachBeam's
+/// and the Shuriken's fourteen cues are the newest addition, and every one
+/// of them resolves on HD's own `weapons.bnk` with no per-title work at
+/// all** - `CANNONEXPLSHIP` included, at 8 waveforms; see
+/// `every_wired_cue_resolves_on_every_psp_and_ps2_disc`'s own doc comment
+/// for the correction that cue's reading needed once this test ran against a
+/// real disc rather than `oag-wad sounds` alone. Bank presence only, the
+/// same caveat as every addition above: each cue's own doc comment in
+/// `crate::audio::sfx::Cue` cites `psp-pulse-usa` evidence alone, and
+/// nothing here has looked at HD's own dispatch for any of the six weapons.
 #[test]
 #[ignore = "needs a disc image in data/images/"]
-fn wipeout_hd_loads_the_thirteen_cues_it_has_and_reports_the_one_it_does_not() {
+fn wipeout_hd_loads_every_cue_but_one_and_reports_the_miss() {
     let path = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../..")
         .join("data/images/hdfury-ps3-eu-dec.iso");
@@ -237,6 +287,20 @@ fn wipeout_hd_loads_the_thirteen_cues_it_has_and_reports_the_one_it_does_not() {
             "~PLASMATVL",
             "PLASMAHITWALL",
             "PLASMAHITSHIP",
+            "~ROCKETTVL",
+            "ROCKEXPLWALL",
+            "ROCKEXPLSHIP",
+            "MISSILE",
+            "~MISSILETVL",
+            "MISSILEEXPWALL",
+            "CANNON",
+            "CANNONEXPLWALL",
+            "CANNONEXPLSHIP",
+            "QUAKEHIT",
+            "LEACH",
+            "~LEACHATTACH",
+            "SHURIKENHIT",
+            "~SHURIKENTRAVEL",
         ],
         "HD's loadable cue set changed"
     );
@@ -290,7 +354,7 @@ fn wipeout_hd_loads_the_thirteen_cues_it_has_and_reports_the_one_it_does_not() {
 
 /// Structural checks - the bank names these cues, in this order, at these
 /// indices - are `hd_title_ground_truth.rs`'s job. This is the layer above,
-/// on the same terms as [`wipeout_hd_loads_the_thirteen_cues_it_has_and_reports_the_one_it_does_not`]:
+/// on the same terms as [`wipeout_hd_loads_every_cue_but_one_and_reports_the_miss`]:
 /// that a cue reported as loaded actually decodes to a waveform, not a report
 /// line that reads well and a silent voice.
 #[test]
@@ -391,7 +455,7 @@ fn the_decoded_cues_are_audio_and_not_silence() {
     let banks = banks(&path, false);
     let mut rng = oag_core::Rng::new(2);
     for cue in Cue::ALL {
-        let (sound, _) = banks.pick(cue, &mut rng).expect("cue");
+        let (sound, looping) = banks.pick(cue, &mut rng).expect("cue");
         let seconds = sound.seconds();
         let (peak, rms) = render(std::sync::Arc::clone(&sound));
         println!(
@@ -404,12 +468,15 @@ fn the_decoded_cues_are_audio_and_not_silence() {
             "{} decoded to {seconds:.4}s, which is not a sound",
             cue.name()
         );
-        // Every effect on either disc is under three seconds; a cue that came
-        // back longer would have resolved to a span running past its own
-        // waveform into its neighbours.
+        // Every one-shot effect on either disc is under three seconds; a cue
+        // that came back longer would have resolved to a span running past
+        // its own waveform into its neighbours. A held loop is exempt: it is
+        // meant to be heard for as long as its holder lives, not once, and
+        // `~SHURIKENTRAVEL`'s own 6.4s waveform is the longest of them -
+        // still one clean span, just a longer one.
         assert!(
-            seconds < 3.0,
-            "{} decoded to {seconds:.2}s, longer than any effect on the disc",
+            looping || seconds < 3.0,
+            "{} decoded to {seconds:.2}s, longer than any one-shot effect on the disc",
             cue.name()
         );
         // The check the whole chain reduces to: samples reached the output.
