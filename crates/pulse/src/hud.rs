@@ -94,6 +94,7 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     // role rather than one plugin id). See `oag_title::HudArt::hud_font_role`.
     hud_font_role: "HUD",
     hud_small_font_role: Some("HUDSmall"),
+    runtime: None,
 };
 
 /// The layout constant substituted for the pickup backdrop's authored colour.

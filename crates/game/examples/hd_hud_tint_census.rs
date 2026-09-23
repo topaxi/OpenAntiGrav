@@ -6,6 +6,10 @@
 //! declares (which would silently resolve to white today) versus a literal
 //! colour already baked into the widget.
 //!
+//! **Answered since 2026-09-23**: none do - the colours are written at runtime,
+//! read off the executable in
+//! `docs/ghidra/functions/ps3-hdfury-eu/hud-readouts.md`.
+//!
 //! ```sh
 //! cargo run -q -p oag-game --example hd_hud_tint_census -- data/images/hdfury-ps3-eu-dec.iso
 //! ```

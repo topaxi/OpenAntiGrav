@@ -407,3 +407,8 @@
 0x005c38c0	function	Rsx_ClearSurface	84	ship-sun-occlusion.md
 0x008ae898	data	PI_Cell_AttributeTable	88	race-campaign.md
 0x0001cbe0	function	SaveData_MigrateCellMedalsToHardElite	85	race-campaign.md
+0x0009e3d0	function	Hud_Update	72	hud-readouts.md
+0x000866c8	function	Hud_UpdateShieldReadout	82	hud-readouts.md
+0x00096ef0	function	Hud_UpdateLapCounter	80	hud-readouts.md
+0x00096088	function	Hud_UpdatePositionCounter	78	hud-readouts.md
+0x00200468	function	Text_SetColour	72	hud-readouts.md

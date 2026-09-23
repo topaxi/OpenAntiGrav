@@ -398,6 +398,10 @@ pub struct HudArt {
     /// `speed_unit` is - it has to be a title fact instead. `true` (Pulse's
     /// reading) for every title that has not had its own frame checked,
     /// which is every title but HD today.
+    ///
+    /// HD's is read off its executable too since 2026-09-23:
+    /// `Hud_UpdateShieldReadout` builds the digits by hand and appends
+    /// nothing (`docs/ghidra/functions/ps3-hdfury-eu/hud-readouts.md`).
     pub shield_percent: bool,
     /// The font role this title's language plugins name for the HUD's value
     /// face - the big lap fraction, position fraction, speed and time
@@ -479,6 +483,66 @@ pub struct HudArt {
     /// assume, since none of them ever names a second face to fall back
     /// *from*.
     pub hud_small_font_role: Option<&'static str>,
+    /// What this title's per-tick HUD update writes over its layout: the
+    /// shield readout's runtime colours and fill, and which segments of the
+    /// lap and place arcs are up. See [`RuntimeHud`].
+    ///
+    /// `None` for every title whose executable has not been read for it -
+    /// every title but HD, whose `Hud_UpdateShieldReadout`,
+    /// `Hud_UpdateLapCounter` and `Hud_UpdatePositionCounter` are what
+    /// `oag_hd::hud::RUNTIME` carries. Pulse's own shield rule is a
+    /// different shape and lives on `oag_game::hud::Readout::shield_forced_red`.
+    pub runtime: Option<&'static RuntimeHud>,
+}
+
+/// The widgets a title's HUD update recolours, crops or shows at runtime,
+/// and the values it does it with - the layout authors none of them.
+///
+/// The values are the executable's; the rules that apply them live in
+/// `oag_game::hud::runtime`, and this type holds nothing a rule could not
+/// name.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RuntimeHud {
+    /// The shield readout.
+    pub shield: ShieldReadout,
+    /// The lap arc: segment `k` is up while `k >= laps - lap`, so the last
+    /// `segments - (laps - lap)` are up and one more lights as each lap
+    /// starts. Nothing is up on a race with no lap count.
+    pub lap_arc: SegmentArc,
+    /// The place arc: segment `k` is up while `k <= segments - place`, so
+    /// last place shows one and first place shows all of them. `segments`
+    /// is the executable's own literal, not the field size.
+    pub place_arc: SegmentArc,
+}
+
+/// A shield readout made of a background, a fill cropped from the top, and
+/// a number, recoloured every tick.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ShieldReadout {
+    /// The fill widget, cropped to the shield fraction with its bottom edge
+    /// fixed.
+    pub fill: &'static str,
+    /// The background widget under it, which flashes [`Self::warning_rgb`].
+    pub background: &'static str,
+    /// The number, drawn in the fill's colour.
+    pub text: &'static str,
+    /// The fill's and the number's colour, `0xRRGGBB`, drawn opaque.
+    pub rgb: u32,
+    /// The background's colour on a flash's "on" phase, `0xRRGGBB`.
+    pub warning_rgb: u32,
+    /// At or under this many percent the readout flashes.
+    pub critical_percent: u32,
+    /// Flash phases per second: a phase is on when `floor(t * this)` is even.
+    pub phases_per_second: u32,
+}
+
+/// A ring of numbered segment widgets, `<prefix>0` .. `<prefix><segments - 1>`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SegmentArc {
+    /// The widget-name prefix the segment number is appended to.
+    pub prefix: &'static str,
+    /// How many segments the ring has.
+    pub segments: u32,
 }
 
 /// The name of each rung of a title's Zone escalation ladder, as string-table

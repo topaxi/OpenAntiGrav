@@ -51,6 +51,7 @@ pub mod countdown;
 mod draw;
 mod lap_splits;
 mod overlay;
+mod runtime;
 mod sight_draw;
 mod widget;
 
@@ -587,6 +588,9 @@ pub struct Readout {
     /// `false` on [`Self::blank`], the same as every other "nothing has run
     /// yet" field.
     pub shield_flashing: bool,
+    /// The race's mode. Read by a title's runtime HUD rules, which the
+    /// original keys on its own mode id - see `hud::runtime`.
+    pub mode: oag_race::Mode,
 }
 
 /// What [`Readout::speed_full_kmh`] defaults to.

@@ -167,6 +167,7 @@ impl Race {
             // target" would cut off.
             sight: Some(self.view.sight),
             shield_flashing: self.view.shield_flash_timer > 0.0,
+            mode: self.sim.world.mode(),
         }
     }
 
