@@ -63,14 +63,28 @@ fn positions(blob: &[u8]) -> Vec<Vec3> {
 /// `DAT_08af2800`, which `HullOverlay_DrawAbsorb` binds.
 pub const OVERLAY_TEXTURE: &str = r"Data\Tex\Weapons\absorb_surface.mip";
 
-/// The hull redrawn for the absorb overlay - `oag_render::hull_overlay` - or
-/// `None`, reported, when `wanted` is false (every title but Pulse), when the
-/// texture does not resolve, or when the hull's batches share no one scale
-/// (every PS2 hull).
+/// The LeachBeam hull overlay's texture, the other half of the same pair:
+/// string at `0x08a8839c`, loaded by `Texture_LoadEffectSurfaces` into
+/// `DAT_08af2804`, which `HullOverlay_SubmitLeachBeamBatched` (`0x0890e140`)
+/// binds - measured reading it about ten times a frame for the whole life of
+/// a beam. See `docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md`.
+pub const LEACH_OVERLAY_TEXTURE: &str = r"Data\Tex\Weapons\leachbeam_surface.mip";
+
+/// Which of the two hull overlays [`overlay`] builds: its texture entry and
+/// the word the load report names it by.
+pub(super) const ABSORB: (&str, &str) = (OVERLAY_TEXTURE, "absorb");
+/// See [`ABSORB`].
+pub(super) const LEACH: (&str, &str) = (LEACH_OVERLAY_TEXTURE, "LeachBeam");
+
+/// The hull redrawn under one of the two hull-overlay textures -
+/// `oag_render::hull_overlay`, [`ABSORB`] or [`LEACH`] - or `None`, reported,
+/// when `wanted` is false (every title but Pulse), when the texture does not
+/// resolve, or when the hull's batches share no one scale (every PS2 hull).
 pub(super) fn overlay(
     archives: &mut oag_assets::Archives,
     hull: &oag_render::mesh::Model,
     blob: &[u8],
+    (entry, what): (&str, &str),
     wanted: bool,
     report: &mut Vec<String>,
 ) -> Option<oag_render::mesh::Model> {
@@ -82,24 +96,24 @@ pub(super) fn overlay(
     let Some((scale, ships)) = projection else {
         report.push(format!(
             "{}: no one batch scale to project from, or meshes that do not map back \
-             to the file - no absorb overlay",
+             to the file - no {what} overlay",
             hull.label
         ));
         return None;
     };
     if ships.is_empty() {
         report.push(format!(
-            "{}: no list-0 mesh to overlay - no absorb overlay",
+            "{}: no list-0 mesh to overlay - no {what} overlay",
             hull.label
         ));
         return None;
     }
-    let texture = oag_pulse::read_image(archives, OVERLAY_TEXTURE)
+    let texture = oag_pulse::read_image(archives, entry)
         .ok()
         .and_then(|blob| oag_texture::texture::Texture::parse(&blob).ok());
     let Some(texture) = texture else {
         report.push(format!(
-            "{OVERLAY_TEXTURE}: not readable - no absorb overlay on {}",
+            "{entry}: not readable - no {what} overlay on {}",
             hull.label
         ));
         return None;
@@ -107,14 +121,14 @@ pub(super) fn overlay(
     let mut texels = texture.to_rgba();
     oag_render::hull_overlay::glow_texels(&mut texels);
     let texture = oag_render::mesh::ModelTexture::rgba8(
-        OVERLAY_TEXTURE.to_string(),
+        entry.to_string(),
         u32::from(texture.width),
         u32::from(texture.height),
         texels,
         None,
     );
     report.push(format!(
-        "{}: absorb overlay over {} mesh(es), projected at batch scale {scale}",
+        "{}: {what} overlay over {} mesh(es), projected at batch scale {scale}",
         hull.label,
         ships.len()
     ));

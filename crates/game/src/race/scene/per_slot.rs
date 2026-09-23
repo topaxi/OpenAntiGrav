@@ -31,6 +31,18 @@ impl Build<'_> {
         )
     }
 
+    /// The LeachBeam hull overlay per slot: the same drawable shape as
+    /// [`Self::absorb_overlays`] under `leachbeam_surface.mip` - one draw
+    /// routine, `HullOverlay_Submit`, serves both - see `leach_overlay`.
+    pub(super) fn leach_overlays(&self) -> Result<Vec<Option<Drawable>>> {
+        self.drawables(
+            |l| l.leach_overlay.clone(),
+            oag_render::hull_overlay::BLEND,
+            mesh_render::Depth::Overlay,
+            mesh_render::ShadowReceiver::Never,
+        )
+    }
+
     /// One drawable per slot from the model `pick` takes out of that slot's
     /// livery, blended with `blend` and written into the glow mask;
     /// `None` for a slot with no model or an empty one. A grid wider than the
