@@ -3,11 +3,9 @@
 //!
 //! Generalised out of the shape [`super::Cue::PlasmaTravel`] first built
 //! directly into `Audio::race_tick`, the day the Rocket, the Missile and the
-//! Shuriken each needed their own copy of it - see
-//! `handover/audio/pulses-weapon-cues-are-read-and-mostly-unwired.md`'s own
-//! implementation note. A bolt is neither one craft nor the whole race: more
-//! than one can be in the air together, and a slot index is the only stable
-//! handle a `Copy` world snapshot gives a projectile - see
+//! Shuriken each needed their own copy of it. A bolt is neither one craft nor
+//! the whole race: more than one can be in the air together, and a slot index
+//! is the only stable handle a `Copy` world snapshot gives a projectile - see
 //! [`super::SfxVoices::plasma_travel`]'s own doc comment for the fuller
 //! argument, which still applies unchanged.
 //!

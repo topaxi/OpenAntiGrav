@@ -515,6 +515,21 @@ the neighbouring pointers resolve correctly to `"MISSILEEXPWALL"` and
 `"MISSILEEXPSHIP"`. Confidence 60 that this is a copy-paste in the original
 rather than a misread. Not load-bearing: nothing here plays a cue on that path.
 
+**2026-09-23: `MISSILE`, `~MISSILETVL` and `MISSILEEXPWALL` wired.**
+`Cue::Missile`, `Cue::MissileTravel` and `Cue::MissileHitWall` are in
+`crates/game/src/audio/sfx/cue.rs`. `Cue::Missile` fires from
+`Race::fire_missile`, the one call site both the player's press and an
+opponent's own shot reach, on a **chosen** emitter - this section's own
+`Missile_Init` reading names the two cues but not either call's emitter
+argument. `Cue::MissileHitWall` fires on **every bounce**, the same edge
+`WO_MISSILE_BOUNCE` already plays on above - not the final ending, which this
+by-catch's own `SHURIKENEXPL` reading is why it stays unwired.
+`MISSILEEXPSHIP` also stays unwired: no call site was found. `~MISSILETVL`'s
+own radius is not stated here, so `Cue::MissileTravel` chooses `600.0`,
+reusing the Rocket's own measured figure rather than
+`oag_audio::Emitter::CRAFT_RADIUS` - see `rocket-visuals.md`'s "Audio, in
+passing".
+
 ## The two flare anchors orbit the missile's own flight line
 
 **Recovered 2026-08-26, confidence 80, and it corrects a wrong framing this

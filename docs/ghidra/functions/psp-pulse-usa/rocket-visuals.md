@@ -367,6 +367,16 @@ the mine/bomb sweep followed later the same day.
 by the string at `0x08a7c0d0`: **`~ROCKETTVL`**. The neighbouring `~PLASMATVL`
 confirms the `<WEAPON>TVL` - travel - pattern.
 
+**2026-09-23: wired.** `Cue::RocketTravel` (held, per projectile slot, the
+measured `600.0` radius) and `Cue::RocketHitWall`/`Cue::RocketHitShip` (off
+`Impact::struck`, on the same bolt emitter) are in
+`crates/game/src/audio/sfx/cue.rs`. The 5.0 s pool-reap timeout this page's
+own "What a rocket hit spends" section leaves silent turned out not to need
+disambiguating: `crates/gameplay/src/projectile/flight.rs`'s own Rocket
+timeout branch resets the slot without writing an `Impact` at all, so the
+port's own impacts loop never sees a `struck: None` from that path - only
+from a real wall hit.
+
 ## Runtime verification
 
 Done with `scripts/psp-fire-weapon.py`, written for this page, against PPSSPP
