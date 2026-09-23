@@ -57,6 +57,12 @@ pub(crate) fn run_windowless(
         (false, Some(name)) => {
             warn!("this source does not offer {name:?}, so the picker is shown");
         }
+        // A fresh run with no settings language yet: on HD alone, this screen
+        // never presents to a player, so it must not be the one this build
+        // waits on - see `Frontend::skip_never_shown_picker`.
+        (false, None) if loaded.frontend.skip_never_shown_picker(loaded.title) => {
+            info!("HD's own language picker never presents to a player; defaulting to English");
+        }
         _ => {}
     }
     for line in &loaded.report {

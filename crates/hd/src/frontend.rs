@@ -21,14 +21,20 @@
 //! `just rpcs3-bootchain`, kept under `data/reference/hd-boot-chain/`. See
 //! [`hd-frontend.md`].
 //!
-//! **Two things that capture did not settle, and they are not this field's.**
-//! [`states::LANGUAGE_SELECTION`] is *entered* on every boot, but no frame of it
-//! was ever caught - `LanguageAutoRedirect` is a sufficient explanation on a
-//! console whose XMB already answers the question, so whether the picker is ever
-//! shown to a player is open. And RPCS3 is an emulator, not a PS3, which is why
-//! [`hd-frontend.md`] scores the chain 85 rather than higher. `Provenance` is
-//! deliberately two-valued and grades neither of those; ADR-0025 rejected a
-//! confidence number in the type and put it on the docs page instead.
+//! **One thing that capture did not settle, and it is not this field's - it
+//! has since been answered on the docs page, not in the type.**
+//! [`states::LANGUAGE_SELECTION`] is *entered* on every boot; whether a frame
+//! of it is ever *shown* was open until four more RPCS3 boots crossed system
+//! language against savedata and found `LanguageAutoRedirect` firing within
+//! 2-296 ms regardless of either - not "a console whose XMB already answers
+//! the question", which was the working hypothesis and is now falsified: a
+//! system language with no shipped plugin left the screen exactly as fast.
+//! See [`hd-frontend.md`]'s "what the capture did not settle, and what a
+//! later one did". RPCS3 being an emulator, not a PS3, is still why that
+//! score tops out at 85 rather than higher, same as the chain order below.
+//! `Provenance` is deliberately two-valued and grades neither; ADR-0025
+//! rejected a confidence number in the type and put both scores on the docs
+//! page instead.
 //!
 //! [ADR-0025]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0025-a-boot-chain-carries-its-provenance.md
 //!
