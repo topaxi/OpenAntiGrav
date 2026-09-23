@@ -1,7 +1,7 @@
 # Persistence: what survives a restart, and where it lives
 
-This is a map of the three files this project writes to a player's own
-machine, not inside the repository or the disc image. All three live under
+This is a map of the files this project writes to a player's own
+machine, not inside the repository or the disc image. All of them live under
 `<config dir>/oag/` - `dirs::config_dir()`'s answer, which is
 `$XDG_CONFIG_HOME/oag` (or `~/.config/oag`) on Linux, `~/Library/Application
 Support/oag` on macOS, and `%APPDATA%\oag` on Windows.
@@ -11,6 +11,7 @@ Support/oag` on macOS, and `%APPDATA%\oag` on Windows.
 | `settings.toml` | `crates/game/src/settings.rs` | Display, graphics, audio, controls, and the last-picked race options - one row per key, rewritten canonically every run. |
 | `pilots/*.toml` | `crates/game/src/pilots.rs` | Player-authored AI opponents - one file per pilot, hand-editable, never rewritten wholesale. |
 | `records.toml` | `crates/game/src/records.rs` | Best lap, best total time and the last result, per circuit/mode/class. This page. |
+| `ghosts/<title>/<mode>/<class>/<track>.oagr` | `crates/game/src/ghosts.rs` | The best lap raced as a ghost in Time Trial and Speed Lap, one replay file per `records.toml` key, written only when a lap beats it. See [ADR-0055](adr/0055-replays-are-inputs-and-a-ghost-is-poses.md). |
 
 Read `settings.rs`'s and `pilots.rs`'s own module docs first if you have not -
 `records.rs` follows the first's file shape and diverges from both on error

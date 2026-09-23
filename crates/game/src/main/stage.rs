@@ -425,6 +425,7 @@ impl Stage {
             shadows,
             shadow_hulls,
             campaign_2048_event,
+            ghost_static,
             ..
         } = loaded;
         // Read before `setup` moves into `race::Race::start` below - `mode`
@@ -452,7 +453,7 @@ impl Stage {
             setup.mode.name(),
             &setup.class,
         );
-        let scene = race::Scene::new(
+        let mut scene = race::Scene::new(
             &gpu.device,
             &gpu.queue,
             track_model,
@@ -490,6 +491,15 @@ impl Stage {
             shadows,
             shadow_hulls,
         )?;
+        // Time Trial and Speed Lap race a ghost - see `oag_game::ghosts`.
+        scene.prepare_ghost(
+            &gpu.device,
+            &gpu.queue,
+            gpu.config.format,
+            setup.mode,
+            &liveries,
+            ghost_static.as_ref(),
+        );
         // Against the **surface** format, like every other renderer here, because
         // the HUD is composited into the offscreen target which shares it.
         let overlay = oag_game::hud::Overlay::new(&gpu.device, &gpu.queue, gpu.config.format, &hud)
@@ -521,6 +531,7 @@ impl Stage {
         // Read before `Race::start` takes `setup` - `--autopilot-skill`'s
         // fallback when the flag was not given.
         let difficulty = setup.difficulty;
+        let (mode, seed) = (setup.mode, setup.seed);
         let mut race = race::Race::start(setup);
         race.set_boost_fov_kick(settings.graphics.boost_fov_kick);
         // The reticle projects through the same field the picture is drawn at.
@@ -543,6 +554,14 @@ impl Stage {
                 race.set_autopilot_tuning(skill.tune(&oag_ai::Tuning::default()));
             }
         }
+        crate::race_stage::ghost::arm(
+            &mut race,
+            &result_key,
+            mode,
+            liveries.first().map_or("", |l| l.team.as_str()),
+            seed,
+            oag_game::ghosts::race_options(scheme, difficulty, autopilot, None),
+        );
         Ok(Box::new(RaceStage {
             scene,
             race,

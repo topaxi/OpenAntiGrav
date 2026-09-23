@@ -13,6 +13,7 @@ mod absorb_shell;
 mod beam;
 mod clouds;
 mod frame;
+mod ghost;
 mod hd_chain;
 mod motion;
 mod per_slot;
@@ -334,6 +335,8 @@ pub struct Scene {
     msaa: oag_display::display::Msaa,
     /// Where the far plane goes, from the track's own extent.
     far: f32,
+    /// The ghost ship - see [`ghost`].
+    ghost: ghost::Ghosts,
 }
 
 impl Scene {
@@ -990,6 +993,7 @@ impl Scene {
             attachment_views,
             msaa,
             far,
+            ghost: ghost::Ghosts::default(),
         })
     }
 }

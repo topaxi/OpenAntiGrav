@@ -964,8 +964,13 @@ change how this list should be read:
       which also records the cheaper association rule that was tried first and
       lost background scenery, and why our own batch granularity - not the
       authored data - is what caps the saving
-- [ ] `MeshNode_Ghost` `0x3d4` - ghost rendering. Needs replay data, so it lands
-      with replay in M7 if that comes first
+- [x] `MeshNode_Ghost` `0x3d4` - ghost rendering, landed with M7's replay.
+      Three passes (depth lay, a `k`-weighted cross-fade of the unlit hull, the
+      `staticglow.mip` static stamped into the glow mask) and the proximity law
+      (nothing inside 5 units, a ramp to half weight at 15, then `0.55`), read
+      statically on [ghost.md](../ghidra/functions/psp-pulse-usa/ghost.md) and
+      drawn by `oag_render::ghost`. Not yet compared against a capture of the
+      original; the static's screen-space projection is confidence 60
 - [x] **Frustum culling.** Not an authored class - a plain engine technique.
       `DrawCall` now carries its own world-space bounding sphere
       (`mesh::Bounds`), tested per frame against the camera's view frustum
@@ -1262,7 +1267,16 @@ recipe and its three traps.
       HDR, VRR, temporal upscaling and Steam Input are still open -
       [modern features](modern-features.md).
 - [ ] Save data
-- [ ] Replay
+- [~] Replay. **The format and the ghost are in**
+      ([ADR-0055](../architecture/adr/0055-replays-are-inputs-and-a-ghost-is-poses.md),
+      `oag-replay`): a run is recorded as its per-slot input stream plus a state
+      hash a second, re-drives bit for bit on Pulse, Pure, HD and 2048, and
+      reports a changed input at the next stored hash
+      (`crates/game/tests/replay_ground_truth.rs`). Time Trial and Speed Lap
+      race a best-lap ghost drawn from poses, saved under
+      `<config dir>/oag/ghosts/`. **Still open:** a full-race replay viewer
+      (the same file serves it; the ADR sketches the whole-race pose track it
+      wants), an in-game ghost on/off option (Pulse's `Ghost Ship Visible`)
 - [ ] PS2 asset path at parity with PSP
 - [~] Modern features: ultrawide, unlocked frame rate, HDR, VRR, dynamic
       resolution, upscaling, Steam Input, optional ahead-of-time FMV upscaling -

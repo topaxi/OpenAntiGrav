@@ -107,7 +107,7 @@ here plays it yet, per CLAUDE.md's "draw nothing and say so" rule.
 | Campaign grids/medals | 🟩 built - `evaluate_medal` on `Cell` ([race-campaign.md](../formats/race-campaign.md#the-medal-law-implemented-on-cell-evaluate_medal)) | ⬜ `?` | 📖 read - same schema, extended, split across four archives ([race-campaign.md](../formats/race-campaign.md#wipeout-hd-and-fury-the-same-schema-extended-split-across-four-archives)) |
 | Unlocks | 📖 read - `Unlock_GridPointsMet` and `Grid0..Grid10` gating named, not wired ([race-campaign.md](../formats/race-campaign.md), [race-modes.md](../gameplay/race-modes.md)) | ⬜ `?` | ⬜ `?` |
 | Records (best lap/time) | 🟩 built - `records.toml`/`records.rs`, per (title, track, mode, class) ([persistence.md](../architecture/persistence.md)) | 🟩 built - same mechanism, title-keyed | ➖ n/a |
-| Ghosts | ⬜ `?` - not investigated | ⬜ `?` | ⬜ `?` |
+| Ghosts | 🟩 built - best-lap ghost in Time Trial and Speed Lap, recorded as a replay ([ADR-0055](../architecture/adr/0055-replays-are-inputs-and-a-ghost-is-poses.md)); drawn with `MeshNode_Ghost`'s three passes and proximity law, read statically ([ghost.md](../ghidra/functions/psp-pulse-usa/ghost.md)), not yet compared against a capture | 🟩 built - same mechanism; Pulse's look, chosen not measured (Pure's ghost not read) | 🟩 built - same mechanism, Pulse's look chosen not measured; replay reproduces on HD and 2048 ([replay_ground_truth.rs](../../crates/game/tests/replay_ground_truth.rs)) |
 
 ## 3. Front end
 

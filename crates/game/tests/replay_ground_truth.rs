@@ -145,9 +145,29 @@ fn verify(title: &str, replay: &Replay) -> Result<u64, oag_replay::Desync> {
 }
 
 fn round_trip(title: &str) {
-    let Some((race, replay)) = record(title) else {
+    let Some((mut race, replay)) = record(title) else {
         return;
     };
+    // The file a session saves as a ghost: cut at the end of the best lap,
+    // and still a replay that re-drives to the last tick it kept.
+    let ghost = race.take_new_best_ghost().expect("a lap was completed");
+    let info = ghost
+        .header
+        .ghost
+        .expect("the ghost's lap is in the header");
+    assert_eq!(
+        ghost.ticks(),
+        info.start_tick + u64::from(info.lap_ticks),
+        "{title}: cut at the end of its lap"
+    );
+    assert_eq!(
+        verify(
+            title,
+            &Replay::from_bytes(&ghost.to_bytes()).expect("reads")
+        ),
+        Ok(ghost.ticks()),
+        "{title}: a saved ghost file's inputs reproduce up to its lap's end"
+    );
     let bytes = replay.to_bytes();
     let read = Replay::from_bytes(&bytes).expect("reads back");
     assert_eq!(read, replay, "{title}: the file round-trips");

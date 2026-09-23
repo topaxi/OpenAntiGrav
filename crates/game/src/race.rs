@@ -169,7 +169,7 @@ pub use held_buttons::HeldButtons;
 pub use hud::hud_layout;
 pub use load::{load, load_event};
 pub use options::{CameraOverride, Campaign2048Progress, Loaded, Options, PoseRequest, Setup};
-pub use replay::Ghost;
+pub use replay::{Ghost, GhostCapture};
 pub use scene::Scene;
 pub use sim::RaceSim;
 pub use spline::{Spline, circuit_length};

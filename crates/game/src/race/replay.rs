@@ -269,3 +269,87 @@ impl Recording {
         self.base += drop as u64;
     }
 }
+
+/// What a headless capture does with ghosts: race one read from a file, and
+/// write the run's best lap to another. `oag-game`'s `--ghost` and
+/// `--record-ghost` fill this.
+#[derive(Debug, Clone, Default)]
+pub struct GhostCapture {
+    /// The replay file whose ghost lap to race.
+    pub race: Option<std::path::PathBuf>,
+    /// Where to write the run's best lap, and the header to record under.
+    pub record: Option<(std::path::PathBuf, Header)>,
+}
+
+impl GhostCapture {
+    /// Before the first tick: loads the ghost to race and starts recording.
+    ///
+    /// # Errors
+    ///
+    /// A ghost file that will not read or carries no lap - named on the
+    /// command line, so a failure is the caller's to see, not to skip.
+    pub fn arm(&self, race: &mut Race) -> Result<()> {
+        if let Some(path) = &self.race {
+            let bytes =
+                std::fs::read(path).with_context(|| format!("reading {}", path.display()))?;
+            let replay = Replay::from_bytes(&bytes)
+                .with_context(|| format!("reading the ghost in {}", path.display()))?;
+            let lap = replay
+                .ghost
+                .with_context(|| format!("{} carries no ghost lap", path.display()))?;
+            println!(
+                "racing the ghost in {}: {} ticks, {}",
+                path.display(),
+                lap.lap_ticks,
+                replay.header.team
+            );
+            race.set_ghost(Ghost {
+                lap,
+                team: replay.header.team,
+            });
+        }
+        if let Some((_, header)) = &self.record {
+            race.start_recording(header.clone());
+        }
+        Ok(())
+    }
+
+    /// After the last tick: writes the run's best lap, if it set one.
+    ///
+    /// # Errors
+    ///
+    /// A file that cannot be written.
+    pub fn finish(&self, race: &mut Race) -> Result<()> {
+        if self.race.is_some() {
+            match race.ghost_pose() {
+                Some((pose, _)) => {
+                    let distance = (race.ship().physics.body.position - pose.position).length();
+                    let fade = oag_render::ghost::fade(distance);
+                    println!(
+                        "ghost: {distance:.1} units from the player, weight {:.3}, glow {}",
+                        fade.weight, fade.glow
+                    );
+                }
+                None => println!("ghost: not on the circuit at this tick"),
+            }
+        }
+        let Some((path, _)) = &self.record else {
+            return Ok(());
+        };
+        let Some(replay) = race.take_new_best_ghost() else {
+            println!("--record-ghost: no lap completed, nothing written");
+            return Ok(());
+        };
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        std::fs::write(path, replay.to_bytes())
+            .with_context(|| format!("writing {}", path.display()))?;
+        println!(
+            "--record-ghost: a lap of {} ticks written to {}",
+            replay.ghost.as_ref().map_or(0, |lap| lap.lap_ticks),
+            path.display()
+        );
+        Ok(())
+    }
+}

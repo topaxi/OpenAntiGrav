@@ -7,6 +7,9 @@
 use super::*;
 use log::warn;
 
+mod tick;
+use tick::advance_one_tick;
+
 /// What a headless capture should do before it draws.
 #[derive(Debug, Clone)]
 pub struct CaptureOptions {
@@ -228,6 +231,9 @@ pub struct CaptureOptions {
     /// save data on every `--screenshot` run would be a third one nobody
     /// asked for.
     pub previous_best: Option<crate::records::Record>,
+    /// `--ghost` and `--record-ghost`: a ghost to race and a file for the
+    /// run's own best lap. See [`GhostCapture`].
+    pub ghost: GhostCapture,
     /// The screen filter the profile names, resolved by the caller through
     /// `crate::screen::Catalogue`, and how much of it shows.
     ///
@@ -312,6 +318,7 @@ pub fn capture(
         trail_shape,
         cannon_quad_textures,
         clouds,
+        ghost_static,
         ..
     } = loaded;
     let mode = setup.mode;
@@ -335,6 +342,7 @@ pub fn capture(
         }
     }
 
+    options.ghost.arm(&mut race)?;
     let mut held = HeldButtons::new(options.held);
     // A motion blur capture holds the **last** tick back: every velocity is a
     // delta against the previous tick, so the primer frame below has to be
@@ -441,6 +449,14 @@ pub fn capture(
         shadows,
         shadow_hulls,
     )?;
+    scene.prepare_ghost(
+        &device,
+        &queue,
+        format,
+        mode,
+        &liveries,
+        ghost_static.as_ref(),
+    );
 
     let target = device.create_texture(&wgpu::TextureDescriptor {
         label: Some("race capture"),
@@ -578,6 +594,7 @@ pub fn capture(
         queue.submit(Some(primer.finish()));
         advance_one_tick(&mut race, &mut held, audio, options, tick);
     }
+    options.ghost.finish(&mut race)?;
     if let Some(age) = options.pose_boost {
         race.force_boost_state(age, options.pose_intensity, options.pose_speed);
     }
@@ -913,65 +930,6 @@ fn zone_spectrum(options: &CaptureOptions, audio: &crate::audio::Audio) -> [f32;
         })
     } else {
         audio.output().spectrum().levels()
-    }
-}
-
-/// One simulation tick of a capture: `tick`'s input, the race step, and the
-/// audio that rides it.
-///
-/// Extracted from the tick loop so a motion blur capture can defer exactly
-/// one tick past the primer render without duplicating the input logic -
-/// a second copy of the script/pulse arithmetic is how the two would drift.
-fn advance_one_tick(
-    race: &mut Race,
-    held: &mut HeldButtons,
-    audio: &mut crate::audio::Audio,
-    options: &CaptureOptions,
-    tick: u32,
-) {
-    held.advance(
-        options.input_script.as_ref(),
-        options.pressed,
-        options.held,
-        tick,
-    );
-    let snapshot = held.snapshot();
-    // Before the tick, so `spend_pickup` can fire it on this tick's edge.
-    if let Some(weapon) = options.give
-        && race.sim.world.ships[0].pickup.weapon.is_none()
-    {
-        race.sim.world.ships[0].pickup.weapon = Some(weapon);
-    }
-    race.tick(&oag_gameplay::PlayerInputs::single(snapshot));
-    // The race's own voices, on the tick that raised them - the same call
-    // the windowed loop makes immediately after `Race::tick` in
-    // `main::session::frame`. Without it a `--dump-audio` capture of a race
-    // carried the music and nothing else: no engines, no collisions, no
-    // speech, and the cues piled up undrained in the race. The dump is the
-    // only end-to-end evidence a headless run has that a sound was made at
-    // all, so a capture that silently held only half the mix is worse than
-    // no capture.
-    audio.race_tick(race);
-    // Beside the race step and not outside the loop, for the reason the
-    // exhaust and the chase camera are advanced from inside `Race::tick`:
-    // what a capture produces has to be a function of the tick count and
-    // nothing else, or the same command line gives a different file on a
-    // slower machine.
-    audio.tick();
-    // The same two calls `main::session::frame` makes, so that a headless
-    // capture is a usable instrument and not only a picture. `--tap-audio`
-    // needs them in particular: the recording is written from whichever loop
-    // is running, and this one is the only loop a machine with no window has.
-    audio.output().report_health();
-    audio.output().flush_tap();
-    if options.log_every > 0
-        && race
-            .sim
-            .world
-            .tick
-            .is_multiple_of(u64::from(options.log_every))
-    {
-        println!("{}", describe(&race.telemetry()));
     }
 }
 

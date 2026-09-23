@@ -169,9 +169,11 @@ lap becomes the ghost from the next lap on, drawn as the player's own hull.
 This is Pulse's own behaviour (its two lap buffers swap at the line; see
 ghost.md, "best lap, restarting at the line").
 
-**Saved automatically when it beats the stored file**, at the two places
-`records.toml` is already written (the finish transition and leaving the
-race; see [persistence.md](../persistence.md)). Pulse asks first
+**Saved automatically when it beats the stored file**, on the tick the lap
+completes and again on leaving the race (the second of the two places
+`records.toml` is written; see [persistence.md](../persistence.md)). Speed
+Lap never finishes, so waiting for the finish would lose its laps, and a lap
+set before a crash should survive the crash. Pulse asks first
 (`SAVE GHOST`). This engine has no end-race menu row for that yet, and a best
 lap nobody saved is the worse failure. Chosen, not measured.
 
@@ -189,11 +191,14 @@ per track and class across Time Trial, Speed Lap and Free Play. This engine
 keeps one per mode, so a ghost's time is always the `best_lap_ticks` of the
 `records.toml` row it sits beside. With a shared ghost, a Speed Lap lap
 could be raced in Time Trial under a best lap the Time Trial row never
-recorded. Chosen, not measured, and a one-line change to `ghost_path` if
+recorded. Chosen, not measured, and a one-line change to `oag_game::ghosts::path_in` if
 sharing turns out to be what players want.
 
 The ghost's hull is the **recorded team's**, which may differ from the
-player's. It is loaded alongside the grid when the two differ.
+player's. Nothing extra is loaded for it: every team a title declares is
+already on the grid's liveries, so the ghost borrows the hull drawable of the
+slot flying its team. A team the grid does not carry is drawn as the
+player's hull, and the log says so once.
 
 ### The ghost is not in the world
 
