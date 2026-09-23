@@ -140,8 +140,8 @@ pub struct Scene {
     /// `ShipShield_Update` takes on `craft+0x6d`. `None` on a source that does
     /// not carry `Data\Weapons\vr_shield_cockpit.vex`.
     shield_cockpit: Option<Drawable>,
-    /// The absorb hull overlay per slot - see [`absorb_overlay`].
-    absorb_overlay: Vec<Option<Drawable>>,
+    /// The absorb, then the LeachBeam hull overlay per slot - see [`absorb_overlay`].
+    absorb_overlay: [Vec<Option<Drawable>>; 2],
     /// HD's absorb shell per slot - see [`absorb_shell`].
     absorb_shell: Vec<Option<Drawable>>,
     /// One drawable per projectile slot, for rockets drawn as their own
@@ -837,7 +837,7 @@ impl Scene {
             )?),
             None => None,
         };
-        let absorb_overlay = slots.absorb_overlays()?;
+        let absorb_overlay = [slots.absorb_overlays()?, slots.leach_overlays()?];
         let shell = |l: &crate::livery::Livery| l.absorb_shell.clone();
         let never = mesh_render::ShadowReceiver::Never;
         let absorb_shell = slots.drawables(shell, exhaust::BLEND, scene_depth, never)?;

@@ -239,6 +239,12 @@
 0x00141e70	function	MissileManager_Construct	85	weapons.md
 0x001483a0	function	QuakeManager_Construct	85	weapons.md
 0x0013d520	function	LeachBeamManager_Construct	85	weapons.md
+0x00153fb0	function	LeachBeam_Construct	85	weapons.md
+0x00114448	function	LeachBall_LoadModel	85	weapons.md
+0x00114b40	function	LeachBeam_SpawnLaunchEffect	82	weapons.md
+0x001148c0	function	LeachBeam_SpawnHitTargetEffect	82	weapons.md
+0x00114708	function	LeachBeam_SpawnBreakEffect	78	weapons.md
+0x00114c78	function	LeachBall_Advance	70	weapons.md
 0x00113288	function	EMPManager_Construct	85	weapons.md
 0x00118dc0	function	LightBarrierManager_Construct	85	weapons.md
 0x0025a8b0	function	TrackSelectionScreen_RegisterType	82	track-selection-screen.md

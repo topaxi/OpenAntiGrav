@@ -66,12 +66,17 @@ The executable's own load-path strings name every model above
   their materials' own back-face cull (the Rocket, Bomb and ball set state
   bit 4) until that is a rotation. Found, not fixed - it moves every
   weapon's picture on both titles.
-- **LeachBeam's ball is named, not placed.** What positions
-  `hd_leachbeam_ball_bloomring` each tick was not read this session -
-  reading stopped before opening any LeachBeam-specific function on
-  `/ps3-hdfury-eu/EBOOT.elf`. No address to cite yet; the next session
-  starts from `weapons.md`'s own LeachBeam section if one exists, or from a
-  fresh string/xref sweep for `leachbeam`.
+- **LeachBeam's ball: placement read 2026-09-23, not wired.**
+  `LeachBall_Advance` (`0x00114c78`) carries `hd_leachbeam_ball_bloomring`
+  along the beam, one trip per drain, spawning `WO_LEACHBEAM_ABSORB` at each
+  arrival. `LAUNCH`/`HIT_TARGET`/`BREAK` each have a named spawner. None of
+  the three spawners has a caller found, so their triggers are open. See
+  `docs/ghidra/functions/ps3-hdfury-eu/weapons.md`, "2026-09-23: the
+  LeachBeam's own HD pieces". Next: find the spawners' callers through the
+  vtable at `0x00864af8` (entries are OPD addresses), then read
+  `_opd_FUN_00116308` (a point along the beam at a fraction) and the two strip
+  objects. After that, wire the ball on `oag_render::mesh::rcs` the way the
+  Plasma ball is.
 - **Cannon's own round body model is wired** (`hd_muzzleflash.vex`, shared
   spelling with Pulse's own naming quirk); the two hand-drawn quad textures
   and the three Cannon effects are `cannon-quads`'s own lane, not touched

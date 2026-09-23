@@ -109,6 +109,8 @@ pub struct Livery {
     /// The hull redrawn under `absorb_surface.mip` for the second after an
     /// absorb - see [`absorb::overlay`]. `None` wherever it is not built.
     pub absorb_overlay: Option<Model>,
+    /// The same under [`absorb::LEACH`], while this craft's LeachBeam pulses.
+    pub leach_overlay: Option<Model>,
     /// HD's `AbsorbEffect` shell - see [`absorb::shell`]. `None` elsewhere.
     pub absorb_shell: Option<Model>,
     /// The plume's own authored texture-transform animation.
@@ -241,6 +243,7 @@ pub fn load(
                 collision_fx: source.collision_fx.clone(),
                 absorb: source.absorb.clone(),
                 absorb_overlay: source.absorb_overlay.clone(),
+                leach_overlay: source.leach_overlay.clone(),
                 absorb_shell: source.absorb_shell.clone(),
                 boost: source.boost.clone(),
                 boost_uv: source.boost_uv.clone(),
@@ -281,6 +284,7 @@ pub fn load(
                     collision_fx: player.collision_fx.clone(),
                     absorb: player.absorb.clone(),
                     absorb_overlay: player.absorb_overlay.clone(),
+                    leach_overlay: player.leach_overlay.clone(),
                     absorb_shell: player.absorb_shell.clone(),
                     boost: player.boost.clone(),
                     boost_uv: player.boost_uv.clone(),
@@ -358,6 +362,7 @@ fn one(
                     collision_fx: Vec::new(),
                     absorb: Vec::new(),
                     absorb_overlay: None,
+                    leach_overlay: None,
                     absorb_shell: None,
                     boost: None,
                     boost_uv: None,
@@ -393,6 +398,7 @@ fn one(
             collision_fx,
             absorb,
             absorb_overlay: None,
+            leach_overlay: None,
             absorb_shell: absorb::shell(archives, team, ships.dir, ctx.absorb_shell, report),
             hull,
             boost: lit.boost,
@@ -441,7 +447,8 @@ fn one(
     // branch alone so a fourth source is answered by its own axis and not by
     // which decoder its hull happened to take.
     let lit = authored_flare(archives, team, ships.dir, ctx.flare, nozzle, report);
-    let absorb_overlay = absorb::overlay(archives, &hull, &blob, ctx.hull_overlay, report);
+    let [absorb_overlay, leach_overlay] = [absorb::ABSORB, absorb::LEACH]
+        .map(|which| absorb::overlay(archives, &hull, &blob, which, ctx.hull_overlay, report));
     Ok(Livery {
         team: team.to_string(),
         hull,
@@ -449,6 +456,7 @@ fn one(
         collision_fx,
         absorb: Vec::new(),
         absorb_overlay,
+        leach_overlay,
         absorb_shell: None,
         boost,
         boost_uv,

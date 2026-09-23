@@ -377,3 +377,59 @@ all four functions below carry in their `.opd` entries.
 
 No names are applied: the constructors sit at 70-75 and would carry `_q`,
 and the trigger that would make them useful is the missing half.
+
+## 2026-09-23: the LeachBeam's own HD pieces, read, not wired
+
+A bounded read, done after Pulse's ribbon was rebuilt
+([cannon-quake-leachbeam.md](../psp-pulse-usa/cannon-quake-leachbeam.md),
+"2026-09-23: the ribbon re-read"). **HD's LeachBeam is not Pulse's ribbon
+repainted.** It adds a model that travels along the beam and five effects
+of its own. Nothing below is wired: this engine still draws Pulse's ribbon
+and Pulse's two effects on HD. Every function here sits below `0x32d5e0`, so
+Ghidra's TOC `0x008ad4d8` is right for all of them
+([memory.md](memory.md)).
+
+| Address | Name | Confidence | Evidence |
+| --- | --- | --- | --- |
+| `0x00153fb0` | `LeachBeam_Construct` | 85 | Stamps `"LeachBeam.cpp"` (`0x007857b8`, TOC slot `0x008ab224`) and installs vtable `0x00864af8`. Called from `LeachBeamManager_Construct` on the one `0xc9c0`-byte beam object. |
+| `0x00114448` | `LeachBall_LoadModel` | 85 | Loads `Data\Weapons\hd_leachbeam_ball_bloomring.vex` (`0x007833e0`, slot `0x008a9c54`) through `_opd_FUN_002c1ec8` into `*param_1`. |
+| `0x00114b40` | `LeachBeam_SpawnLaunchEffect` | 82 | Spawns `WO_LEACHBEAM_LAUNCH` (slot `-0x385c`), fourcc `0x454c424c`, on the matrix it is handed. |
+| `0x001148c0` | `LeachBeam_SpawnHitTargetEffect` | 82 | Spawns `WO_LEACHBEAM_HIT_TARGET` (slot `-0x3864`), fourcc `0x5448424c`, on a non-null matrix. |
+| `0x00114708` | `LeachBeam_SpawnBreakEffect` | 78 | Spawns `WO_LEACHBEAM_BREAK` (slot `-0x3868`, fourcc `0x4542424c`) when `_opd_FUN_00116308`, sampled at the ball's progress `+0x24`, returns true. |
+| `0x00114c78` | `LeachBall_Advance` | 70 | See below. |
+
+**The ball travels, and every arrival is a drain.** `LeachBall_Advance`
+accumulates time at `+0x1c` against a period at `+0x20`. The period is
+remapped (`_opd_FUN_002a3718`) from the magnitude of `param_4[4]`, clamped
+between `DAT_008a9c88` and `DAT_008a9c8c`. Each time the accumulator passes
+the period it wraps, calls `0x0013c8e8` on the beam, and spawns
+`WO_LEACHBEAM_ABSORB` (fourcc `0x4541424c`) at `*(beam + 0x6944) + 0x1d0`.
+Then it stores `+0x24 = accumulator / period` and asks
+`_opd_FUN_00116308(+0x24, ...)` for a point along the beam at that fraction.
+That point goes into the ball model node at `+0xc0` (its matrix at `+0xd0`).
+So on HD the energy is a **model** carried along the beam, one trip per
+drain - the part Pulse does with `WO_LEACHBEAM_ENERGY` walking the chain.
+Confidence **70**: the loop and the spawn are direct reads. That
+`0x0013c8e8` is the drain, and that `+0x1d0` is the shooter's matrix, come
+from the Pulse analogue rather than a read of either.
+
+**The beam object holds four balls and two strips.** `0x00153218` (called
+from `LeachBeamManager_Construct`) initialises two `0x63d0`-byte strip
+objects at `+0x50` and `+0x6420` (`_opd_FUN_00115770`; their constructors
+`0x001153c0`/`0x00115cc0` take colour `0xffffff00`). It also builds four ball
+models at `+0xc820 + 0x30/0x60/0x90/0xc0` through `0x001145b0`. Neither the
+strips' geometry nor their draw was read.
+
+**The rest of HD's LeachBeam vocabulary, located and not read.**
+`%s\leacheffect.vex` (`0x00782298`), loaded per team by
+`Ship_ReloadModelForSkin` (`0x000dc154`), is HD's per-hull effect: the
+analogue of Pulse's `leachbeam_surface.mip` hull overlay. `LeachFader` and
+`LeachScroller` (`0x007b32a0`/`0x007b32c0`) are its shader parameter names.
+`leachbeam_triangle` (`0x0079c200`), `WO_SHIP_SPARK_DAMAGE_LEACHBEAM`
+(`0x0079bdb8`) and the `LEACHFAIL` cue (`0x007857d8`) are also located.
+`WO_LEACHBEAM_CHARGING` has a TOC slot (`0x008a9bd4`). The disc's
+`WO_LEACHBEAM_EMIT`/`_HITSHELL`/`_BALL_SPARKS`/`_CHARGING_SPARKS`/`_ENERGY_SPRAY`
+have no string in the executable, so nothing in the code names them. None
+of the three spawners above had a caller found by `bl` or `get_xrefs_to`,
+so they are reached through a function pointer. Their triggers are **not
+recovered**, and that is why nothing here is wired.
