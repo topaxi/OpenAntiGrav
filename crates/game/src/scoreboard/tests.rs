@@ -462,6 +462,25 @@ mod records_table_tests {
     const TRACK: &str = r"data\environments\16_track\track.vex";
 
     #[test]
+    fn held_text_reads_the_row_a_setting_names() {
+        let model = fixture_menu("records");
+        assert_eq!(
+            held_text(&model, "race.mode").as_deref(),
+            Some("time_trial")
+        );
+        assert_eq!(held_text(&model, "race.track").as_deref(), Some("16_Track"));
+    }
+
+    /// A setting no row on this page edits - the guard [`records_table`]
+    /// relies on to draw nothing rather than a stale key built from a row
+    /// that is not there.
+    #[test]
+    fn held_text_is_none_for_a_setting_no_row_edits() {
+        let model = fixture_menu("records");
+        assert_eq!(held_text(&model, "race.class"), None);
+    }
+
+    #[test]
     fn none_off_any_page_but_records() {
         let model = fixture_menu("race");
         let store = records::Store::default();

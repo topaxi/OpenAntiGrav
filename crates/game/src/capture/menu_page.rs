@@ -257,19 +257,6 @@ pub(super) fn menu_page(
     // draws this line through too; see `crate::pilots::axis_preview_for`'s
     // own doc.
     let axis_preview = crate::pilots::axis_preview_for(&model, Some(strings));
-    // The RECORDS page's own live per-class table - `None` off any page but
-    // RECORDS. `crate::scoreboard::records_table` is the one function the
-    // live session draws this through too; see its own doc for why the track
-    // lookup here (this capture's own boot-survey `tracks`, with no distinct
-    // Zone list) can differ from `Shell::tracks_for(mode)` without the two
-    // pages disagreeing about anything they both can answer.
-    let records_table =
-        crate::scoreboard::records_table(&model, title, records, |_mode, track_id| {
-            tracks
-                .iter()
-                .find(|track| track.id == track_id)
-                .map(crate::catalogue::Track::entry_name)
-        });
 
     // A modal prompt over the page, when one was asked for.
     //
@@ -313,11 +300,7 @@ pub(super) fn menu_page(
         if let Some(text) = &axis_preview {
             list.push(oag_ui::prompt::axis_preview_draw(&model, skin, text));
         }
-        if let Some(rows) = &records_table {
-            list.extend(rows.iter().enumerate().flat_map(|(index, (label, value))| {
-                oag_ui::prompt::record_row_draw(&model, skin, index, label, value)
-            }));
-        }
+        list.extend(records_draws(&model, skin, title, tracks, records));
         list.extend(prompt_draws(kind, &name, strings, skin)?);
         return Ok(list);
     }
@@ -326,11 +309,7 @@ pub(super) fn menu_page(
         if let Some(text) = &axis_preview {
             list.push(oag_ui::prompt::axis_preview_draw(&model, skin, text));
         }
-        if let Some(rows) = &records_table {
-            list.extend(rows.iter().enumerate().flat_map(|(index, (label, value))| {
-                oag_ui::prompt::record_row_draw(&model, skin, index, label, value)
-            }));
-        }
+        list.extend(records_draws(&model, skin, title, tracks, records));
         return Ok(list);
     };
     // The same arithmetic the live stage runs, through the same easing, so what
@@ -345,6 +324,41 @@ pub(super) fn menu_page(
     Ok(layers
         .zoomed(shape.origin, shape.in_scale + (1.0 - shape.in_scale) * t, t)
         .flatten())
+}
+
+/// The RECORDS page's own live per-class table, as draws - empty off any
+/// page but RECORDS, or while `model`'s own MODE/TRACK rows have not
+/// resolved a track this capture's `tracks` list carries.
+///
+/// `crate::scoreboard::records_table` is the one function the live session
+/// draws this same table through - see its own doc for why the track lookup
+/// here (this capture's own boot-survey `tracks`, with no distinct Zone
+/// list) can differ from `Shell::tracks_for(mode)` without the two pages
+/// ever disagreeing about anything they both can answer. `oag_ui::prompt::
+/// record_row_draw` is the same drawing half `crate::menu_stage::MenuStage::
+/// render` calls for the live session, so a row's position here matches a
+/// live one for the same `model` state (`Menu::visible_rows`, `Menu::scroll`).
+fn records_draws(
+    model: &oag_ui::menu::Menu,
+    skin: &oag_ui::menu::Skin,
+    title: &'static oag_title::Title,
+    tracks: &[crate::catalogue::Track],
+    records: &crate::records::Store,
+) -> Vec<oag_ui::frontend::Draw> {
+    let Some(rows) = crate::scoreboard::records_table(model, title, records, |_mode, track_id| {
+        tracks
+            .iter()
+            .find(|track| track.id == track_id)
+            .map(crate::catalogue::Track::entry_name)
+    }) else {
+        return Vec::new();
+    };
+    rows.iter()
+        .enumerate()
+        .flat_map(|(index, (label, value))| {
+            oag_ui::prompt::record_row_draw(model, skin, index, label, value)
+        })
+        .collect()
 }
 
 /// One prompt's draws, for `--menu-prompt`.
@@ -843,5 +857,138 @@ mod tests {
         let error = prompt_draws("qwerty", "winston", &strings, &skin)
             .expect_err("an unknown prompt has to be an error, not an empty picture");
         assert!(format!("{error:#}").contains("qwerty"));
+    }
+
+    /// [`records_draws`] end to end, on the real built-in RECORDS page and a
+    /// `catalogue::Track` whose `entry_name()` needs the `Reversed="True"`
+    /// branch resolved - the exact closure `menu_page`'s own caller passes,
+    /// pinned here so deleting either the closure or the
+    /// `oag_ui::prompt::record_row_draw` call fails a test rather than only
+    /// a screenshot nobody re-reads on every change.
+    #[test]
+    fn records_draws_builds_one_row_per_class_below_the_pages_own_rows() {
+        let strings = oag_ui::language::StringTable::default();
+        let mut definition = oag_ui::menu::Definition::parse(oag_ui::menu::BUILT_IN, &strings)
+            .expect("the built-in menu definition parses");
+        definition.drop_unavailable_race_variant(oag_pulse::TITLE);
+        definition.drop_rows_picked_on_screen(oag_pulse::TITLE);
+        let mut model = oag_ui::menu::Menu::new(definition);
+
+        // Basilico Black: a real pair from `Data\Plugins\PI001\Definition.xml`
+        // where the reversed id (`17_Track`) shares its base id's own
+        // directory (`01_Track`) - `Track::entry_name`'s `Reversed` branch,
+        // not the identity case a track named after its own directory would
+        // pass even with the branch broken.
+        let track = crate::catalogue::Track {
+            id: "17_Track".to_string(),
+            location: r"Data\Environments\01_Track".to_string(),
+            reversed: true,
+            available_in_zone: true,
+        };
+        let tracks = [track.clone()];
+        model.supply(
+            oag_ui::menu::ValueSource::Tracks,
+            &[oag_ui::menu::Choice::labelled(&track.id, "BASILICO BLACK")],
+        );
+        model.supply(
+            oag_ui::menu::ValueSource::RaceModes,
+            &oag_ui::menu::mode_choices(&strings),
+        );
+        model.seed(
+            "race.mode",
+            &oag_ui::menu::Value::Text("single_race".to_string()),
+        );
+        model.seed("race.track", &oag_ui::menu::Value::Text(track.id.clone()));
+        model.open("records");
+        model.settle();
+
+        let skin = oag_ui::menu::Skin::new(
+            oag_pulse::FRONT_END.menu.unwrap(),
+            oag_display::space::Space::PSP,
+            22.0,
+        );
+        let frame = oag_ui::menu::Frame::default();
+        model.set_visible_rows(oag_ui::menu::visible_rows(&skin, &frame, false));
+
+        // One class raced (a real time), one never touched (a dash) - both
+        // outcomes `class_table` produces, so a regression that lost either
+        // path fails here.
+        let mut store = crate::records::Store::default();
+        store.record(
+            crate::records::Key::new(
+                oag_pulse::TITLE.name,
+                Some(&track.entry_name()),
+                "single_race",
+                "venom",
+            ),
+            crate::records::Observation {
+                finished: true,
+                place: Some(1),
+                laps_completed: 3,
+                tick: 6042,
+                best_lap_ticks: Some(1987),
+                campaign_medal: None,
+            },
+        );
+
+        let table_draws = records_draws(&model, &skin, oag_pulse::TITLE, &tracks, &store);
+        let texts: Vec<&str> = table_draws
+            .iter()
+            .filter_map(|draw| match draw {
+                oag_ui::frontend::Draw::Text { text, .. } => Some(text.as_str()),
+                _ => None,
+            })
+            .collect();
+        assert!(
+            texts.contains(
+                &crate::hud::format_lap_time(6042, crate::hud::Precision::Hundredths).as_str()
+            ),
+            "no row shows Venom's real total time: {texts:?}"
+        );
+        assert!(
+            texts.contains(&"-"),
+            "no row shows a dash for a class this store never saw: {texts:?}"
+        );
+
+        // Below the page's own rows, not overlapping them: the first table
+        // row's `y` has to be past the BACK row's, the same ordering
+        // `MenuStage::render`'s own live chain draws in.
+        let back_y = layers_text_y(&model, &skin, &frame, "BACK")
+            .expect("the built-in RECORDS page carries a BACK row");
+        let first_table_y = table_draws
+            .iter()
+            .filter_map(|draw| match draw {
+                oag_ui::frontend::Draw::Text { y, .. } => Some(*y),
+                _ => None,
+            })
+            .fold(f32::INFINITY, f32::min);
+        assert!(
+            first_table_y > back_y,
+            "the table's first row ({first_table_y}) does not sit below BACK ({back_y})"
+        );
+    }
+
+    /// `BACK`'s own drawn `y`, off the ordinary row draw list - the same one
+    /// `menu_page` builds, with no bindings and a trivial `measure` since
+    /// this test only reads a position, never a wrapped width.
+    fn layers_text_y(
+        model: &oag_ui::menu::Menu,
+        skin: &oag_ui::menu::Skin,
+        frame: &oag_ui::menu::Frame,
+        label: &str,
+    ) -> Option<f32> {
+        let layers = oag_ui::menu::draw_list(
+            model,
+            skin,
+            &|_| Vec::new(),
+            &|text: &str| text.len() as f32 * 8.0,
+            None,
+            frame,
+            false,
+        );
+        layers.flatten().into_iter().find_map(|draw| match draw {
+            oag_ui::frontend::Draw::Text { text, y, .. } if text == label => Some(y),
+            _ => None,
+        })
     }
 }

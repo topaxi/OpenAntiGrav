@@ -724,10 +724,15 @@ disc's own French label set was current: "RETOUR") all correct, and four
 class rows (VENOM/FLASH/RAPIER/PHANTOM) drawn below them, nothing
 overlapping the footer bar. The machine's own real `records.toml` and
 `settings.toml` were used unmodified - not seeded - so every class row read
-`-`: the settings file's own `race.track` (`01_Track`, Basilico Black) has
-never been raced under `single_race`, its current `race.mode`. That is the
-honest result for this machine's own data, per `CLAUDE.md`'s do-not-invent
-rule, and the same machine's `records.toml` does carry real times for other
+`-`: the settings file's own `race.track` is `01_Track` (Basilico Black),
+whose `Data\Plugins\PI001\Definition.xml` entry carries no `Reversed`
+attribute - confirmed by extracting the entry with `oag-wad cat --expand`
+rather than assumed from the id - so `Track::entry_name` resolves it to
+`Data\Environments\01_Track\track.vex`, and no `[[records]]` row on this
+machine names that path at all (`grep -in 01_track records.toml` matches
+nothing). That is the honest result for this machine's own data under its
+current `race.mode` (`single_race`), per `CLAUDE.md`'s do-not-invent rule,
+and the same machine's `records.toml` does carry real times for other
 track/mode pairs (`03_Track`/`single_race`, for one) - not captured here to
 avoid editing the real `settings.toml` just to pick a different row for a
 screenshot.
