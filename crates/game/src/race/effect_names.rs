@@ -239,11 +239,21 @@ pub const MISSILE_BOUNCE_EFFECT: &str = "WO_MISSILE_BOUNCE";
 /// string argument confirmed by a direct memory read to be `"WO_MINE_EXPLO"`.
 /// See `docs/ghidra/functions/psp-pulse-usa/mine.md#mine_spawnexplosion-plays-wo_mine_explo`.
 ///
-/// **The Bomb is not this.** Its own teardown is a distinct function - the
-/// pool cursor mine.md reads is `+0xc4`/cap 32 against the Mine's
-/// `+0x164`/`+0x64` - and whether it reaches this same spawner or its own is
-/// unchased; see [`Race::blast_for`].
+/// **The Bomb is not this.** Its own teardown, `Bomb_Detonate`, is a
+/// distinct function reached from a distinct pool cursor
+/// (`+0xc4`/cap 32 against the Mine's `+0x164`/`+0x64`) and it plays its own
+/// three-piece detonation, not this file - see [`BOMB_SMOKERING_EFFECT`] and
+/// [`Race::blast_for`].
 pub const MINE_EXPLO_EFFECT: &str = "WO_MINE_EXPLO";
+
+/// The smoke ring one third of the Bomb's own detonation plays -
+/// `BombBlast_Construct` (`0x08872078`, confidence 90) spawns it by name at
+/// the blast's own basis, alongside two `.vex` models
+/// ([`bomb_blast::BombBlastModels`]) this engine's generic
+/// [`oag_render::psys::Stage`] cannot carry. See
+/// `docs/ghidra/functions/psp-pulse-usa/mine.md#2026-09-15-the-bombs-teardown-read---its-own-blast-not-the-mines`
+/// for the fourcc tag (`'BOSM'`) and the read this plays back.
+pub const BOMB_SMOKERING_EFFECT: &str = "WO_BOMB_SMOKERING";
 
 /// How far below a struck craft's centre its blast is drawn, in world units.
 ///

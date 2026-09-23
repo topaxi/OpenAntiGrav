@@ -474,9 +474,10 @@ fn a_hull_blast_sits_under_the_craft_and_a_track_blast_where_it_struck() {
     assert_ne!(TRACK_BLAST_EFFECT, CRAFT_BLAST_EFFECT);
 }
 
-/// A Missile and a Mine each play their own single explosion file, whatever
-/// they hit - and a Bomb plays nothing, because its own teardown (a distinct
-/// function from the Mine's) has not been read.
+/// A Missile, a Mine and a Bomb each play their own single explosion file,
+/// whatever they hit - the Bomb's own smoke ring, through this same lookup;
+/// its other two pieces are `ignite_blast`'s own Bomb-only branch, not this
+/// function's return.
 ///
 /// **Regression test for the blast-side twin of the flare bug.** Before
 /// 2026-08-26, `blast_for` took no `kind` at all, so *every* impact - mine
@@ -514,9 +515,11 @@ fn each_weapon_plays_only_its_own_recovered_explosion() {
     );
     assert_eq!(
         race.blast_for(Weapon::Bomb, point, None),
-        None,
-        "the Bomb's own teardown is unread - drawing nothing beats \
-         borrowing the Mine's or the Rocket's"
+        Some((BOMB_SMOKERING_EFFECT, point)),
+        "the Bomb's own smoke ring (BombBlast_Construct), at the impact \
+         point - one third of the detonation; the other two are the \
+         hemisphere and shockwave `.vex` models `ignite_blast` spawns \
+         separately, see `bomb_blast`"
     );
     // The Plasma's detonation is its own authored file, not the bolt's
     // riding flare replayed at the impact - the same distinction the Rocket's

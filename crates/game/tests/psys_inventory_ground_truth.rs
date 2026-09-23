@@ -120,16 +120,11 @@ const NO_TRIGGER_RECOVERED: &[(&str, &str)] = &[
     ),
     ("WO_REPULSER", "the Repulser is not built."),
     ("WO_REPULSER_BLAST", "the Repulser is not built."),
-    (
-        "WO_BOMB_SMOKERING",
-        "the Bomb is built and detonates, the same way the Mine does - but \
-         its teardown is a distinct function from the Mine's own \
-         `MinePool_Update` (a separate pool cursor, `+0xc4`/cap 32 against the \
-         Mine's `+0x164`/`+0x64`, per `mine.md`), and that function is \
-         unread. The disc authors no separate `WO_BOMB_EXPLO`; whether a \
-         bomb's detonation plays this smoke ring, `WO_MINE_EXPLO` (now \
-         wired for the Mine itself) at a larger scale, or both, is open.",
-    ),
+    // **Not `WO_BOMB_SMOKERING`** - wired 2026-09-23, off `Bomb_Detonate`
+    // (`0x088640c8`) -> `BombBlast_Construct` (`0x08872078`), read in full
+    // alongside the two `.vex` models the same detonation loads - see
+    // `oag_game::race::bomb_blast` and
+    // `docs/ghidra/functions/psp-pulse-usa/mine.md`.
     // **Not `WO_WEAPON_ABSORB`** - wired 2026-09-23, off
     // `Ship_PlayAbsorbFeedback` (`0x08840640`), which both absorb paths call:
     // one instance per `Ship Collision Fx` node, staggered 0.1 s. See

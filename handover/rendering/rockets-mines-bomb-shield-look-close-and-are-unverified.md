@@ -18,13 +18,18 @@ checks these first rather than rediscovering them:
   chosen not measured (`mine::frozen_pose`); whether the caltrop's axis
   agrees with `Body::orientation` is unmeasured; `MINERADAR` is unwired
   (per-projectile held voice).
-- **Bomb**: `Pulse_Bomb.vex` draws; the detonation is **read and not built**
-  (`Bomb_Detonate` -> `BombBlast_Construct`: `explosion_hemisphere.vex` +
-  `WO_BOMB_SMOKERING` + `Bomb_Shockwave.vex` one unit below, ramp constants
-  on [mine.md](../../docs/ghidra/functions/psp-pulse-usa/mine.md));
-  `Race::blast_for(Bomb, ..)` returns `None`, so a bomb detonates with **no
-  visual at all** - an honest absence, and the largest gap of the four.
-  `BOMBLAUNCH`/`~BOMBRADAR` have no recovered trigger.
+- **Bomb**: `Pulse_Bomb.vex` draws at rest; the detonation - `Bomb_Detonate`
+  -> `BombBlast_Construct`/`BombBlast_Update`: `explosion_hemisphere.vex` +
+  `WO_BOMB_SMOKERING` + `Bomb_Shockwave.vex`, both models eased per
+  `BombBlast_Update`'s own three ramps - **built 2026-09-23**
+  (`oag_game::race::bomb_blast`; see
+  [mine.md](../../docs/ghidra/functions/psp-pulse-usa/mine.md#2026-09-23-the-blasts-own-per-tick-animator-read)
+  for the full read, landed the same session). The shockwave's own recovered
+  alpha fade is not wired (`bomb_blast`'s own module doc comment says why),
+  the basis crosses this engine's `Vec3::Y` and the frozen orientation's
+  forward axis rather than the executable's own unlocated rear-emitter row
+  (chosen, not measured, same footing `mine::frozen_pose` already carries),
+  and `BOMBLAUNCH`/`~BOMBRADAR` still have no recovered trigger.
 - **Shield**: PSP law recovered; HD's own colours/constants landed 2026-09-16
   but the steady-state colour's source is untraced
   (`hds-shield-hit-flash-is-amber-and-the-target-colour-is-a-parameter.md`);

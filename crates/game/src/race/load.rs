@@ -341,8 +341,14 @@ pub fn load(options: &Options) -> Result<Loaded> {
         &mut report,
     );
     let wm = craft_title.weapon_models; // every weapon's own body, per title
-    let (rocket_model, mine_model, bomb_model, cannon_model, plasma_blast_models) =
-        weapon_models::load_bodies(&mut archives, wm, &mut report);
+    let (
+        rocket_model,
+        mine_model,
+        bomb_model,
+        cannon_model,
+        plasma_blast_models,
+        bomb_blast_models,
+    ) = weapon_models::load_bodies(&mut archives, wm, &mut report);
     // The cockpit half of the shield, on the same terms and for the same
     // reason: not per team, not per track, one entry for every craft in the
     // game. The shell beside it *is* per team and loads with the livery above.
@@ -960,6 +966,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         mine_model,
         bomb_model,
         plasma_blast_models,
+        bomb_blast_models,
         shield_cockpit,
         countdown_model,
         visibility,

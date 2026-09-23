@@ -632,6 +632,9 @@ pub struct Loaded {
     /// The Plasma's own detonation: a halo and two hemispheres, each `None`
     /// on the same terms as [`Self::rocket_model`] - see `blast_models`.
     pub plasma_blast_models: blast_models::PlasmaBlastModels,
+    /// The Bomb's own detonation: a hemisphere and a shockwave, `None` on
+    /// every title but Pulse - see `bomb_blast`.
+    pub bomb_blast_models: bomb_blast::BombBlastModels,
     /// The sphere a fired Shield shows from **inside** the cockpit, drawn
     /// instead of the per-team shell when the camera is in the craft.
     ///
