@@ -450,6 +450,7 @@ impl Race {
                 sight: sight::Sight::default(),
                 sight_state: sight::State::Absent,
                 sight_fov: oag_display::display::Fov::AUTHORED,
+                model_detail: oag_render::mesh::ModelDetail::default(),
                 boost_kick: 0.0,
                 boost_fov_kick: oag_display::display::BoostFovKick::DEFAULT,
                 flaps: [0.0, 0.0],

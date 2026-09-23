@@ -43,6 +43,7 @@ fn model(slots: usize, decoded: usize) -> Model {
     Model {
         airbrakes: [None, None],
         node_vertex_ranges: Vec::new(),
+        lod_groups: Default::default(),
         label: "Ship.vex".to_string(),
         vertices: Vec::new(),
         indices: vec![0; 6],

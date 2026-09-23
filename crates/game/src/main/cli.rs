@@ -699,14 +699,11 @@ pub(crate) struct Cli {
     #[arg(long)]
     pub(crate) anisotropy: Option<Anisotropy>,
 
-    /// What an authored `LodGroup` draws: `both` children, the way the original
-    /// does, or only the higher-detail `single` one.
-    ///
-    /// Overrides `[graphics] lod` in the settings file (`settings::path`) for
-    /// this run only; the file on disk is not changed. Here for the same reason
-    /// `--anisotropy` is: `both` means two differently-tessellated copies of the
-    /// same surface occupy the same space, and two captures differing only by
-    /// this flag are how you see what that costs.
+    /// How an authored `LodGroup` switches: `original`, `high` or `maximum`
+    /// override `[render_profiles.<title>] model_detail` for this run only
+    /// (the file on disk is not changed); `both` draws every child at once,
+    /// coarse over fine, a diagnostic of where the coarse tier sits that the
+    /// original never shows. See `oag_render::mesh::Lod`.
     #[arg(long)]
     pub(crate) lod: Option<oag_render::mesh::Lod>,
 

@@ -39,4 +39,5 @@ workspace = true
 
 [dev-dependencies]
 oag-tables.workspace = true
+oag-pure.workspace = true
 oag-testdata.workspace = true

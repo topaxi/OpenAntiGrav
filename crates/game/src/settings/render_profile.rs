@@ -174,6 +174,22 @@ pub struct RenderProfile {
     /// authored. See [`oag_display::display::FilterStrength`].
     #[serde(default)]
     pub screen_filter_strength: oag_display::display::FilterStrength,
+    /// How far out an authored `LodGroup` switches to its coarser tiers:
+    /// `original`, `high` or `maximum`.
+    ///
+    /// **`original` is the recovered rule and the default** -
+    /// `LodGroup_SelectChild`'s per-frame switch at the distances the disc
+    /// authors (`docs/formats/vex.md`, "the switch is found"). `high` doubles
+    /// every distance and `maximum` never switches; both are this project's
+    /// own, chosen rather than measured. One multiplier on the authored
+    /// distances, so the rule itself stays the one source of truth - see
+    /// [`oag_render::mesh::ModelDetail`].
+    ///
+    /// Per title because it is render-cost-sensitive the way
+    /// [`Self::msaa`] is: the coarse tier is where a full grid's triangle
+    /// count goes down. Read fresh every frame, so the row applies live.
+    #[serde(default)]
+    pub model_detail: oag_render::mesh::ModelDetail,
 }
 
 /// See [`RenderProfile::screen_filter`]: `off`.
@@ -200,6 +216,7 @@ impl Default for RenderProfile {
             shadows: oag_display::display::Shadows::default(),
             screen_filter: default_screen_filter(),
             screen_filter_strength: oag_display::display::FilterStrength::default(),
+            model_detail: oag_render::mesh::ModelDetail::default(),
         }
     }
 }
@@ -230,7 +247,7 @@ pub(super) fn ensure_known_titles(settings: &mut Settings) {
 /// hold", because the struct answers that. What needs it is the sweep that
 /// checks every menu seed lands in a table the settings file actually writes.
 #[cfg(test)]
-pub(super) const PROFILE_KEYS: [&str; 10] = [
+pub(super) const PROFILE_KEYS: [&str; 11] = [
     "render_scale",
     "target_fps",
     "minimum_resolution",
@@ -241,6 +258,7 @@ pub(super) const PROFILE_KEYS: [&str; 10] = [
     "shadows",
     "screen_filter",
     "screen_filter_strength",
+    "model_detail",
 ];
 
 /// The keys that used to live flat in `[graphics]` and now live in one

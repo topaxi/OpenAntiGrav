@@ -63,6 +63,7 @@ fn model(albedo: Arc<ModelTexture>, reference: Option<f32>) -> Model {
     Model {
         airbrakes: [None, None],
         node_vertex_ranges: Vec::new(),
+        lod_groups: Default::default(),
         label: "alpha test cutout quad".into(),
         indices: vec![0, 1, 2],
         draws: Vec::new(),

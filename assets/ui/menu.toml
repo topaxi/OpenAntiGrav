@@ -918,6 +918,20 @@ string_id = "OAG_GRAPHICS_SHADOWS"
 setting = "graphics.shadows"
 values = ["off", "blob", "original", "mapped"]
 
+# How far out an authored `LodGroup` switches to its coarser tiers. `original`
+# is the recovered rule - `LodGroup_SelectChild`'s per-frame switch at the
+# distances the disc authors, 30 units on a Pulse craft - and the default.
+# `high` doubles every distance and `maximum` never switches; both are this
+# project's own, chosen rather than measured. One multiplier on the authored
+# distances, not a second code path. See `docs/formats/vex.md`, "the switch is
+# found". Applies live: the session hands the preset to the race every frame.
+[[page.entry]]
+kind = "choice"
+label = "MODEL DETAIL"
+string_id = "OAG_GRAPHICS_MODEL_DETAIL"
+setting = "graphics.model_detail"
+values = ["original", "high", "maximum"]
+
 # A simulation of the display the title ran on, drawn over the finished frame
 # - menus, HUD and all - just before brightness and gamma. The list is
 # supplied at runtime: `off`, the presets built into the binary (the PSP's

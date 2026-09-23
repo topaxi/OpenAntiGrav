@@ -133,6 +133,7 @@ impl Scene {
     pub(super) fn draw_ghost(
         &self,
         race: &Race,
+        eye: oag_render::mesh::LodEye,
         pass: &mut wgpu::RenderPass<'_>,
         stats: &mut SceneStats,
     ) {
@@ -149,7 +150,7 @@ impl Scene {
         let distance = (race.ship().physics.body.position - now.position).length();
         let drawn = pipeline.draw(
             pass,
-            &drawable.ghost_hull(),
+            &drawable.ghost_hull(Race::ghost_model_matrix(&now), eye),
             oag_render::ghost::fade(distance),
         );
         stats.draws_submitted += drawn;

@@ -95,6 +95,7 @@ fn moving_quad(xform: u32) -> Model {
         absorb_shell: false,
         alpha_test_ref: None,
         node_vertex_ranges: Vec::new(),
+        lod_groups: Default::default(),
         emissive: Vec::new(),
         anim_nodes: vec![AnimNode {
             transform: Motion::Vex(Box::new(vex::AnimTransform {

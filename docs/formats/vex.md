@@ -200,7 +200,7 @@ orthonormal, and composing them puts 482 meshes into a recognisable track whose
 outline matches the independently decoded spline. Not higher because nothing has
 been run under an emulator.
 
-## `LodGroup`: authored, but never switched at runtime
+## `LodGroup`: authored tiers, switched per frame by view depth
 
 Class `0x2ee`, one of the two field-having classes in the scene table alongside
 `Transform` (`docs/formats/vex.md:103` lists it under Scene). 11 instances on
@@ -332,7 +332,8 @@ recovered feature - it should be labelled as such wherever it lands, the same
 way `TRANSPARENT_BLEND` and `ALPHA_TEST_THRESHOLD` above are labelled as
 invented rather than recovered.
 
-**Implemented as `oag_render::mesh::Lod`** (`both`/`single`; until
+**Implemented first as `oag_render::mesh::Lod`, superseded by the per-frame
+switch below** (`both`/`single`; until
 2026-09-23 a `[graphics] lod` settings key defaulting to `both`, now
 `single` with no key - see the section below): a load-time choice, not a live
 switch, and deliberately not named after quality or distance - neither exists
@@ -427,6 +428,99 @@ picture up close and `both` is not, the opposite of what its doc said. So
 `single` became the default the same day and the `[graphics] lod` settings
 key was removed; `--lod both` on `oag-game` and `oag-view` keeps the coarse
 tier reachable as a diagnostic.
+
+### 2026-09-23: implemented - the switch runs every frame
+
+`single` was superseded the same evening by the switch itself. Every model
+built from one `.vex` now keeps all of its tiers, plus an
+`oag_render::mesh::LodGroups` table: each group's payload position (`+0x40`)
+carried into model space through the group node's world matrix, its
+`child_count - 1` switch distances (from `+0x60`), and which group and child
+every scene-tree node sits under. `LodGroups::child_at` is
+`LodGroup_SelectChild`'s arithmetic and the only copy of it; each drawn
+instance holds its own `LodSwitch`, so eight craft sharing one model switch
+at eight distances.
+
+Each frame the race scene switches the circuit and every craft in play,
+**the player's own included** - the original's function does not know whose
+hull it is on - from the unjittered view matrix and the vertical field of
+view the projection is built from, in degrees (`Race::vertical_fov`, which
+includes the recovered speed widen). The ghost switches at its own pose.
+Anything nobody switches keeps its finest tier: the shadow casters, the
+weapon models, `oag-view` (it has no race camera), a `mesh::merge`.
+
+**What this project chose rather than measured:**
+
+- The player's `[render_profiles.<title>] model_detail` multiplies every
+  authored distance: `original` x1 (the measured rule, the default), `high`
+  x2, `maximum` never switches. `oag-game --lod` takes the same three plus
+  `both`.
+- The field fed to the rule is the one the picture is drawn at, so a player
+  who widens `graphics.fov`, or a window narrower than the authored aspect,
+  switches sooner - the rule's own `fov / 65` term extended past the PSP's
+  fixed screen.
+- The shadow caster keeps the finest tier rather than switching per shadow
+  pass.
+
+**Per title.** The payload layout reads the same everywhere it was checked,
+and `crates/render/tests/lod_switch_ground_truth.rs` pins what it reads - the
+distances and group counts below at **confidence 90** each, read off every
+file through the same offsets the PSP function reads and asserted exactly,
+not 95 only because the offsets themselves are the PSP's:
+
+| Title | Craft switch distance | Circuits | Switch code |
+| --- | --- | --- | --- |
+| Pulse PSP | 30.0 on all eight | 55 groups on 12 circuits, 20.0 to 812.8 | read, confidence 85 |
+| Pulse PS2 | 35.0, Goteki 32.05 | 40 groups on 16 circuits, 20.0 to 760.0 | not read - chosen |
+| Pure | 50.0 on all six reachable | not surveyed | not read - chosen |
+| HD / Fury | no craft group | 64 groups, none holds a second tier | not read - chosen |
+| 2048 | no craft group | 16 groups, all childless | not read, nothing to switch |
+
+The PS2 values sit at the same offset and are different numbers, which reads
+as the port re-authoring them rather than moving the field (confidence 60 -
+the alternative, that the PS2 build's own switch reads elsewhere, is
+unexcluded while its code is unread). The same `65` is used for every title -
+chosen, since only the PSP function was read. No group anywhere is nested
+under another (confidence 90, asserted on every file above).
+
+**HD and 2048 have nothing to switch** (confidence 90 for both counts,
+`crates/render/tests/hd_lod_ground_truth.rs` for HD's). HD's 64 groups are in
+six files. The four `talons_junction/start_grid*.vex` carry eight each: four
+that declare two children but hold one, at the positions and distances
+Pulse's `16_Track` groups use, one that declares and holds one, and three
+that hold none. The two `03_track` files carry 16 each, declaring one and
+holding none. Why a group that declares two holds one is unread - a coarse
+tier dropped in the port is the obvious reading, at confidence 50. Since no
+HD group holds a second child in its tree, every node under one is under its
+finest child and the switch can hide nothing. `mesh::rcs` builds the table
+regardless of `--lod`, so the proof is that census and not a picture
+comparison. 2048 authors 16 groups in one file of its 1,059
+(`DLC1/environments/Moa_Therma/track_reversed.vex`), all childless. HD's craft level of detail lives in a separate file beside the
+hull instead (`ship_lod.vex`, see [`hd-status.md`](hd-status.md)), which
+nothing here switches to yet.
+
+**Checked on Pulse PSP (US), headless, `--no-audio`**, frames under
+`~/.cache/oag/drive/reports/lod-switch/`:
+
+- Opponents on the grid, far chase camera: slot 7 at `d = 31.4` draws its
+  `lodShape`; the same tick from the close camera puts it at `d = 28.6` and
+  it draws full detail (`a-snap-slot7-far-d31-over-close-d29.png`). Every
+  other opponent is past 46 and coarse (`a-grid-opponents-original-over-maximum.png`).
+- The player's own hull: `d = 13.35` under the far chase camera at rest,
+  `10.6` under the close one, `15.8` at 147 units a second when the speed
+  widen has the field at 71 degrees. The depth itself stays at 14.5 units;
+  reaching 30 would take a field of about 135 degrees, a forward speed of
+  1,000 units a second, so the player's hull does not switch in either chase
+  view at any speed a craft reaches.
+- The grid frame differs from `maximum` only inside the opponents' box
+  (`562x101+162+343`): the grandstand and everything else on the circuit is
+  unchanged, every circuit group being inside its distance there.
+- The `16_Track` grandstand group (switch `118.9`) seen from the grid looking
+  back: at `d = 139.7` it draws tier 1 (`d-g7-grandstand-d140-original-over-maximum.png`),
+  at `d = 84` the frame matches `maximum` pixel for pixel (`c-g7-91u-*.png`).
+
+No frame of the original has yet been taken of an opponent between 30 and 60
+units, which is the check that would move the switch's confidence past 85.
 
 ## Vertex format
 

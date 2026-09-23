@@ -444,6 +444,7 @@ pub fn run(
                 msaa: render_profile.msaa,
                 motion_blur: render_profile.motion_blur,
                 shadows: render_profile.shadows,
+                model_detail: render_profile.model_detail,
                 // The front-end capture path never poses a ship, so there is
                 // nothing for a forced boost state to be aged relative to.
                 pose_boost: None,

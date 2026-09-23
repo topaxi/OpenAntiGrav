@@ -168,13 +168,12 @@ struct Cli {
     #[arg(long, default_value_t = Anisotropy::default())]
     anisotropy: Anisotropy,
 
-    /// What `--mesh` does with an authored `LodGroup`: keep only the
-    /// higher-detail `single` child, which is what the original shows up
-    /// close, or draw `both`, coarse tier included.
-    ///
-    /// Not a quality setting. `both` puts two differently-tessellated copies
-    /// of the same surface in the same space; it is here to see where the
-    /// coarse tier sits - see [`mesh::Lod`].
+    /// What `--mesh` does with an authored `LodGroup`. With no race camera to
+    /// switch by, `original`, `high` and `maximum` all draw the finest child -
+    /// what the original shows up close - and differ only in `oag-game`.
+    /// `both` draws every child at once, two differently-tessellated copies of
+    /// one surface in one space, to see where the coarse tier sits - see
+    /// [`mesh::Lod`] and [`mesh::Model::for_fixed_view`].
     #[arg(long, default_value_t = mesh::Lod::default())]
     lod: mesh::Lod,
 
@@ -713,7 +712,7 @@ fn main() -> Result<()> {
             Some((model, _)) => ps3_mesh::with_pads(&cli.archive, name, &data, model),
             None => mesh::build_with_textures(name, &data, external.as_ref(), cli.lod)?,
         };
-        let model = inspect(model, &data, &cli);
+        let model = inspect(model.for_fixed_view(cli.lod), &data, &cli);
         println!(
             "{}: {} meshes, {} vertices, {} triangles, radius {:.2}",
             model.label,

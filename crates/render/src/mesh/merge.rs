@@ -54,6 +54,7 @@ pub fn merge(label: &str, models: Vec<Model>) -> Model {
         anim_nodes: Vec::new(),
         emissive: Vec::new(),
         node_vertex_ranges: Vec::new(),
+        lod_groups: Default::default(),
     };
 
     for model in models {
@@ -126,11 +127,24 @@ pub fn merge(label: &str, models: Vec<Model>) -> Model {
             moving: d.moving,
             alpha_test_ref: d.alpha_test_ref,
         };
-        out.draws.extend(model.draws.into_iter().map(rebase));
-        out.alpha_tested_draws
-            .extend(model.alpha_tested_draws.into_iter().map(rebase));
-        out.transparent_draws
-            .extend(model.transparent_draws.into_iter().map(rebase));
+        // A source's `LodGroups` table is keyed by its own node indices, which
+        // are ambiguous once merged, so the merge keeps each source's finest
+        // tier and carries no table - the picture a caller with no camera to
+        // switch by draws anyway. See `Lod`.
+        let groups = &model.lod_groups;
+        let nearest = |d: &DrawCall| groups.shows_nearest(d);
+        out.draws
+            .extend(model.draws.into_iter().filter(nearest).map(rebase));
+        out.alpha_tested_draws.extend(
+            (model.alpha_tested_draws.into_iter())
+                .filter(nearest)
+                .map(rebase),
+        );
+        out.transparent_draws.extend(
+            (model.transparent_draws.into_iter())
+                .filter(nearest)
+                .map(rebase),
+        );
         out.textures.extend(model.textures);
         // **The first source that authors one wins**, and a second, differing
         // one is dropped rather than averaged: the reference is a pipeline
@@ -175,6 +189,7 @@ mod merge_tests {
         Model {
             airbrakes: [None, None],
             node_vertex_ranges: Vec::new(),
+            lod_groups: Default::default(),
             label: label.to_string(),
             vertices: (0..vertices)
                 .map(|k| GpuVertex {

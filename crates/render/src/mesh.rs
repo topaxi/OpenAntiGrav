@@ -268,6 +268,10 @@ pub struct Model {
     /// circuit's animated materials collapse to a handful of distinct
     /// `(tint, rate)` pairs and the shader's table stays small.
     pub emissive: Vec<Emissive>,
+    /// The authored `LodGroup`s and which child each node sits under, for the
+    /// per-frame switch - see [`LodGroups`]. Empty unless built from one
+    /// `.vex` with a [`Lod`] other than [`Lod::Both`].
+    pub lod_groups: LodGroups,
 }
 
 impl Model {
@@ -308,12 +312,13 @@ impl Model {
             node_vertex_ranges: Vec::new(),
             anim_nodes: Vec::new(),
             emissive: Vec::new(),
+            lod_groups: LodGroups::default(),
         }
     }
 }
 
 mod lod;
-pub use lod::Lod;
+pub use lod::{Lod, LodEye, LodGroups, LodSwitch, ModelDetail, REFERENCE_FOV_DEGREES};
 
 mod anim_track;
 pub use anim_track::AnimTrack;
@@ -355,8 +360,8 @@ pub fn load(spec: &str, name: &str) -> Result<Model> {
 
 /// Flattens every mesh in a `.vex` into one buffer pair.
 ///
-/// Draws every child of an authored `LodGroup`, matching the original's own
-/// behaviour - see [`build_with_textures`] to choose [`Lod::Single`] instead.
+/// Builds no [`LodGroups`] table, so every tier of an authored `LodGroup`
+/// draws at once ([`Lod::Both`]) - see [`build_with_textures`] for the switch.
 pub fn build(label: &str, data: &[u8]) -> Result<Model> {
     build_with_textures(label, data, None, Lod::Both)
 }
@@ -526,54 +531,6 @@ fn build_class(
     let nodes = vex::nodes(data).context("walking the node tree")?;
     let glow_bytes = glow::texture_bytes(data);
 
-    // `Lod::Single` skips every node under a two-child `LodGroup`'s second
-    // child - see `Lod`'s own doc comment for why this is an invented
-    // divergence rather than a recovered one. Built as a mark-and-skip set
-    // over the whole tree up front, the same shape a mesh's own descendants
-    // would need if this ever grows past direct children.
-    let skip: std::collections::HashSet<usize> = if lod == Lod::Single {
-        let mut children: Vec<Vec<usize>> = vec![Vec::new(); nodes.len()];
-        for (i, node) in nodes.iter().enumerate() {
-            if let Some(p) = node.parent {
-                children[p].push(i);
-            }
-        }
-        fn mark(children: &[Vec<usize>], root: usize, out: &mut std::collections::HashSet<usize>) {
-            out.insert(root);
-            for &child in &children[root] {
-                mark(children, child, out);
-            }
-        }
-        let mut skip = std::collections::HashSet::new();
-        // `None` for a version whose `LodGroup` id is unrecovered, and then
-        // nothing is skipped - which is `Lod::Both`, the safe direction. Matching
-        // version 6's `0x2ee` against a version-4 file would be the unsafe one:
-        // that number is some *other* class there, so the skip would delete real
-        // geometry rather than a level of detail.
-        for (i, node) in nodes.iter().enumerate() {
-            if Some(node.class_id) != classes.lod_group {
-                continue;
-            }
-            let payload = &data[node.payload()];
-            if payload.len() < 0x54 {
-                continue;
-            }
-            // In the file's own order, not the host's: HD writes this `u32`
-            // big-endian, where a little-endian read turns 2 into 0x0200_0000
-            // and the skip silently never fires. That direction is `Lod::Both`,
-            // so it draws both levels rather than deleting geometry - which is
-            // why it went unnoticed and why it is still wrong.
-            if vex::byte_order(data).u32(payload, 0x50) == 2
-                && let Some(&second) = children[i].get(1)
-            {
-                mark(&children, second, &mut skip);
-            }
-        }
-        skip
-    } else {
-        std::collections::HashSet::new()
-    };
-
     // Positional: materials name a texture by its ordinal among the `Texture`
     // nodes, so an entry this build cannot decode has to stay in place as `None`
     // rather than shift every later index.
@@ -630,6 +587,11 @@ fn build_class(
     // vertices are in anchor space, and a bounding sphere has to be in the
     // space the frustum test is done in.
     let anchor_world = vex::anchor_world(data, &nodes, 0.0);
+    // Every tier is built; which one draws is chosen per frame. See `Lod`.
+    let lod_groups = match lod {
+        Lod::Both => LodGroups::default(),
+        _ => LodGroups::collect(data, &nodes, classes, &anchors, &anchor_world),
+    };
 
     let mut vertices: Vec<GpuVertex> = Vec::new();
     let mut indices: Vec<u32> = Vec::new();
@@ -644,7 +606,7 @@ fn build_class(
     for (index, node) in nodes
         .iter()
         .enumerate()
-        .filter(|(i, n)| n.class_id == class_id && !skip.contains(i))
+        .filter(|(_, n)| n.class_id == class_id)
     {
         let payload = &data[node.payload()];
         let anim_node::Placement {
@@ -835,8 +797,8 @@ fn build_class(
         if let Some(brake) = node.parent
             && nodes
                 .get(brake)
-                // Version-keyed for the same reason the `LodGroup` check above
-                // is: `None` leaves a ship with no recovered flaps rather than
+                // Version-keyed, as `LodGroups::collect` is and for the same
+                // reason: `None` leaves a ship with no recovered flaps rather than
                 // mounting whatever version 4 happens to number `0x3c0`.
                 .is_some_and(|n| Some(n.class_id) == classes.airbrake)
             && let Some(hinge) = nodes[brake].parent
@@ -922,6 +884,7 @@ fn build_class(
         airbrakes,
         anim_tracks,
         node_vertex_ranges,
+        lod_groups,
     };
     // The order the original's render queue dispatches these in, and the last
     // thing done to the lists: `pvs::DrawSections` is built from them and is

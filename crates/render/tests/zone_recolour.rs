@@ -62,6 +62,7 @@ fn model(albedo: Arc<ModelTexture>, lit: f32) -> Model {
     Model {
         airbrakes: [None, None],
         node_vertex_ranges: Vec::new(),
+        lod_groups: Default::default(),
         label: "zone recolour test quad".into(),
         indices: vec![0, 1, 2],
         draws: vec![DrawCall {
