@@ -31,12 +31,15 @@ use super::*;
 /// kind in the game, which is why this loads once and [`super::super::Scene`]
 /// clones it per projectile slot. `fallback` names what a caller falls back
 /// to when this returns `None`, for the report line alone - a billboard for
-/// every kind wired so far.
+/// every kind wired so far. `cull` asks for [`cull_as_authored`] on a PS3
+/// model, which only a caller whose own placement matrix is a rotation may
+/// ask for - see that function.
 pub(super) fn load(
     archives: &mut oag_assets::Archives,
     entry: &str,
     fallback: &str,
     lod: mesh::Lod,
+    cull: bool,
     report: &mut Vec<String>,
 ) -> Option<Model> {
     let blob = match archives.read_name(entry) {
@@ -68,10 +71,12 @@ pub(super) fn load(
             &mut |path| archives.read_name(path).ok(),
             |c| c.mesh,
         ) {
-            Ok((model, built)) => {
+            Ok((mut model, built)) => {
+                let culled = cull && cull_as_authored(&mut model, &geometry);
                 report.push(format!(
-                    "{entry}: {} - {fallback} is this model, not a billboard",
-                    built.describe()
+                    "{entry}: {}{} - {fallback} is this model, not a billboard",
+                    built.describe(),
+                    if culled { ", back faces culled" } else { "" }
                 ));
                 Some(model)
             }
@@ -98,6 +103,57 @@ pub(super) fn load(
     }
 }
 
+/// Marks every draw of a PS3 weapon model back-face culled when **every**
+/// material its `.rcsmodel` carries sets state bit 4, and says whether it
+/// did.
+///
+/// **Bit 4 is `NV4097_SET_CULL_FACE_ENABLE`, read, not guessed.**
+/// `Material_ApplyRenderState` (`0x005d8f68`) writes `state >> 4 & 1` to RSX
+/// method `0x183c`, which RPCS3's own `gcm_enums.h` names
+/// `NV4097_SET_CULL_FACE_ENABLE`; the cull face itself is left at `GL_BACK`
+/// outside the ship-shadow pass. See
+/// `docs/ghidra/functions/ps3-hdfury-eu/material-state.md`. `mesh::rcs`
+/// does not carry the bit per draw yet, so this applies it per model, and
+/// only where the answer is the same for every material; a mixed model keeps
+/// drawing both faces rather than being half-applied. Measured on HD's own
+/// weapon models: the Plasma's ring, sphere, halo and ball, the Rocket and
+/// the Bomb qualify; the Mine and the Cannon round do not.
+///
+/// **Only the Plasma's explosion asks for it.** Culling is only right under a
+/// placement matrix that is a rotation, and `Race::projectile_model_matrices`,
+/// which places the Rocket, the Mine, the Bomb and the bolt's head, builds
+/// `side = forward x reference`, `up = side x forward`, a reflection
+/// (determinant `-1`): culled, those models would show their inside. That
+/// reflection is its own finding, not fixed here.
+///
+/// This matters for the Plasma's own explosion in particular: its sphere
+/// and ring are each authored as **two** shells, one wound outward and one
+/// inward, and the halo as one disc facing `-Z` - which only reads as the
+/// original's picture once the back faces go. See `plasma.md`'s 2026-09-23
+/// section.
+fn cull_as_authored(model: &mut Model, geometry: &[u8]) -> bool {
+    const CULL_FACE_ENABLE: u32 = 1 << 4;
+    let Ok(parsed) = oag_rcs::rcsmodel::Model::parse(geometry) else {
+        return false;
+    };
+    let culled = !parsed.materials.is_empty()
+        && parsed
+            .materials
+            .iter()
+            .all(|m| m.state & CULL_FACE_ENABLE != 0);
+    if culled {
+        for draw in model
+            .draws
+            .iter_mut()
+            .chain(model.alpha_tested_draws.iter_mut())
+            .chain(model.transparent_draws.iter_mut())
+        {
+            draw.culled = true;
+        }
+    }
+    culled
+}
+
 /// [`load`], but the entry itself is `None` on this title's own table -
 /// a title fact, not a load failure, so this says nothing and returns
 /// `None` rather than a report line for a field that was never going to
@@ -107,9 +163,10 @@ fn load_optional(
     entry: Option<&str>,
     fallback: &str,
     lod: mesh::Lod,
+    cull: bool,
     report: &mut Vec<String>,
 ) -> Option<Model> {
-    load(archives, entry?, fallback, lod, report)
+    load(archives, entry?, fallback, lod, cull, report)
 }
 
 /// Every weapon's own body model, on [`load`]'s own terms - the Rocket's,
@@ -208,7 +265,9 @@ pub(super) fn load_bodies(
     lod: mesh::Lod,
     report: &mut Vec<String>,
 ) -> WeaponBodies {
-    let mut one = |entry, fallback| load_optional(archives, entry, fallback, lod, report);
+    // `cull` is `true` for HD's explosion trio alone - see `cull_as_authored`.
+    let mut one =
+        |entry, fallback, cull| load_optional(archives, entry, fallback, lod, cull, report);
     // **Pulse's halo/hemisphere2/hemisphere1 trio and HD's ring/sphere/halo
     // trio share one container by load-order position, not by name.**
     // `blast_models::PlasmaBlastModels`'s own field names stay Pulse's -
@@ -222,16 +281,16 @@ pub(super) fn load_bodies(
     // own doc comment for the ordinal mapping this reuses.
     let plasma_blast = if let Some(hd) = models.plasma_blast_hd {
         blast_models::PlasmaBlastModels {
-            halo: one(Some(hd.ring), "a plasma blast ring"),
-            hemisphere2: one(Some(hd.sphere), "a plasma blast sphere"),
-            hemisphere1: one(Some(hd.halo), "a plasma blast halo"),
+            halo: one(Some(hd.ring), "a plasma blast ring", true),
+            hemisphere2: one(Some(hd.sphere), "a plasma blast sphere", true),
+            hemisphere1: one(Some(hd.halo), "a plasma blast halo", true),
             ball: None, // overwritten below
         }
     } else if let Some(pulse) = models.plasma_blast_pulse {
         blast_models::PlasmaBlastModels {
-            halo: one(Some(pulse.halo), "a plasma blast halo"),
-            hemisphere2: one(Some(pulse.hemisphere2), "a plasma blast hemisphere"),
-            hemisphere1: one(Some(pulse.hemisphere1), "a plasma blast hemisphere"),
+            halo: one(Some(pulse.halo), "a plasma blast halo", false),
+            hemisphere2: one(Some(pulse.hemisphere2), "a plasma blast hemisphere", false),
+            hemisphere1: one(Some(pulse.hemisphere1), "a plasma blast hemisphere", false),
             ball: None, // overwritten below
         }
     } else {
@@ -239,31 +298,17 @@ pub(super) fn load_bodies(
     };
     // The bolt's own head, HD only - see `PlasmaBlastModels::ball`'s own doc
     // comment for why it rides in this container.
-    let ball = one(models.plasma_ball, "a plasma bolt");
+    let ball = one(models.plasma_ball, "a plasma bolt", false);
     let bodies = (
-        one(models.rocket, "a rocket"),
-        one(models.mine, "a laid mine"),
-        one(models.bomb, "a laid bomb"),
-        one(models.cannon, "a cannon round"),
+        one(models.rocket, "a rocket", false),
+        one(models.mine, "a laid mine", false),
+        one(models.bomb, "a laid bomb", false),
+        one(models.cannon, "a cannon round", false),
         blast_models::PlasmaBlastModels {
             ball,
             ..plasma_blast
         },
     );
-    // See `blast_models::HD_BLAST_MODELS_DRAWN`'s own doc comment: the three
-    // models above load and their ease still runs, but the draw itself is
-    // gated off until the scale composition is understood - a report line
-    // rather than a silent no-op, so the load report says why an HD Plasma
-    // detonation looks the way it does. After `one`'s last use, since that
-    // closure holds its own mutable borrow of `report`.
-    if models.plasma_blast_hd.is_some() && !blast_models::HD_BLAST_MODELS_DRAWN {
-        report.push(
-            "HD plasma explosion models loaded, not drawn: the recovered \
-             scale ease produces a screen-filling sphere - see plasma.md's \
-             2026-09-17 \"the picture is oversized\" section"
-                .to_string(),
-        );
-    }
     if models.plasma_ball.is_some() && !blast_models::HD_PLASMA_BALL_DRAWN {
         report.push(
             "HD_plasma_ball loaded, not drawn: it resolves through this \

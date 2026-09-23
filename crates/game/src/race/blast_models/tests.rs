@@ -96,3 +96,21 @@ fn the_billboard_basis_is_orthonormal_and_handles_straight_up() {
     assert!(overhead.x_axis.truncate().is_finite());
     assert!((overhead.x_axis.truncate().length() - 1.0).abs() < 1e-5);
 }
+
+/// HD's disc basis points `Z` away from the viewer, keeps the billboard's own
+/// up and position, and stays a rotation - a reflection would flip every
+/// triangle's winding and the back-face cull `cull_as_authored` turns on
+/// would then hide exactly the faces the original shows.
+#[test]
+fn the_hd_basis_faces_away_from_the_camera_without_mirroring() {
+    let position = Vec3::new(2.0, 0.0, 0.0);
+    let camera = Vec3::new(2.0, 0.0, -10.0);
+    let billboard = billboard_matrix(position, camera);
+    let hd = facing_away(billboard);
+
+    let towards_camera = (camera - position).normalize();
+    assert!(hd.z_axis.truncate().dot(towards_camera) < -0.999);
+    assert_eq!(hd.y_axis, billboard.y_axis);
+    assert_eq!(hd.w_axis, billboard.w_axis);
+    assert!((hd.determinant() - 1.0).abs() < 1e-5);
+}

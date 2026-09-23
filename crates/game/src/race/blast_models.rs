@@ -85,24 +85,7 @@ pub(super) const HD_BLAST_LIFETIME_SECONDS: f32 = 3.5;
 /// show for it.
 pub(super) const HD_BLAST_HIDE_AT_SECONDS: f32 = 1.3;
 
-/// **`false` until the scale composition is understood.** The recovered ease
-/// above is real (confidence 88 on the numbers, confirmed again 2026-09-17)
-/// but produces a picture no player would call faithful: `HD_plasma_ring`'s
-/// own target (100.0) grows a sphere that fills most of the frame within a
-/// fraction of a second, and once the chase camera is inside it the whole
-/// view tints solid grey/purple for the rest of the blast's life - worse
-/// than the billboard fallback it would otherwise replace. `CLAUDE.md`'s
-/// rule for a picture the read does not yet produce is to draw nothing and
-/// say so, not ship a regression, so [`Race::plasma_blast_draws`] gates the
-/// whole trio on this constant while leaving every other Plasma line (the
-/// bolt's own head, both `WO_PLASMA_LIGHTNING_EXPAND`/`_COLLAPSE` triggers,
-/// the age/ease tracking itself) running unaffected. See plasma.md's
-/// 2026-09-17 "Observed, not yet explained: the picture is oversized"
-/// section for the evidence and the open question. Flip this back to `true`
-/// once a reading explains the scale.
-pub(super) const HD_BLAST_MODELS_DRAWN: bool = false;
-
-/// **`false` for the same reason, a different cause.** `HD_plasma_ball`
+/// **`false`: the bolt's head has no shader path yet.** `HD_plasma_ball`
 /// loads and reports a real triangle count and a resolved material, but
 /// that material resolves through `mesh::rcs`'s one shared lit shader path
 /// (`mesh.wgsl`) - already documented (`docs/formats/rcsmaterial.md`) as
@@ -128,6 +111,15 @@ pub(super) const HD_PLASMA_BALL_DRAWN: bool = false;
 /// initialiser); the *targets* are HD's own and not Omega's - see plasma.md's
 /// closing hedge on why the PS4's `rcsmodel` re-exports are suspected to
 /// carry a different base scale, unverified.
+///
+/// **A uniform scale on metres-sized models, and the picture is meant to be
+/// that big.** The ring and halo are discs of radius 8.8 and 9.0, the sphere
+/// a ball of radius 4.1, so at 60 Hz the sphere is a 29-metre bubble within
+/// a quarter of a second and the ring a disc of several hundred metres by
+/// 1.3 s. It read as a screen-filling grey sphere on 2026-09-17 because the
+/// back faces were drawn - each shell is authored twice, once each way, and
+/// the material culls - not because the scale was wrong. See plasma.md's
+/// 2026-09-23 section and `load::weapon_models::cull_as_authored`.
 pub(super) const HD_BLAST_TARGETS: [f32; 3] = [100.0, 7.1, 7.0];
 /// See [`HD_BLAST_TARGETS`].
 pub(super) const HD_BLAST_RATES: [f32; 3] = [0.01, 0.3, 0.2];
@@ -218,11 +210,11 @@ pub(super) struct PlasmaBlast {
     /// its two siblings drive the picture instead - see this module's own
     /// doc comment.
     ///
-    /// **Starts at `0.0`, chosen not measured.** `WeaponExplosions_Reset`
-    /// seeds each `cur` from `*0x00994070+n`, a value this session did not
-    /// resolve; zero draws the explosion growing in from nothing rather than
-    /// snapping to some unread starting size, and is the same "absent
-    /// evidence, visible absence" call `CLAUDE.md` asks for elsewhere.
+    /// **Starts at `0.0`, read.** `WeaponExplosions_Reset` seeds each `cur`
+    /// from `0x00994070 + 4n`, which sits in `.bss` with no static writer -
+    /// the only other reference to it is a read. Confidence 80: a runtime
+    /// write through a computed pointer is not ruled out. See plasma.md's
+    /// 2026-09-23 section.
     pub(super) hd_ease: [f32; 3],
 }
 
@@ -346,9 +338,17 @@ impl Race {
     /// stated substitute for that unresolved vector math. **Chosen, not
     /// measured; no confidence score**, the same footing
     /// [`weapons::visuals::advance_quake_visual`] already gives its own
-    /// unread orientation term. HD's own `WeaponExplosions_Start` fits a
-    /// basis to the track surface instead (`FUN_000a97f0`, unread this
-    /// session) - the billboard stands in for that too, on the same terms.
+    /// unread orientation term.
+    ///
+    /// **On HD the basis is read, and is two different ones.**
+    /// `WeaponExplosions_Start` gives the ring and the halo a per-viewport
+    /// camera-facing basis with `Z` pointing away from the viewer - which
+    /// [`facing_away`] reproduces - and the sphere the track-fitted basis
+    /// `FUN_000a97f0` returns, unread past its call. The sphere takes the
+    /// same camera-facing basis here as a stated substitute for that fit:
+    /// it is round, so only where its texture's seam falls differs.
+    /// **Chosen, not measured.** Each model is then scaled uniformly by its
+    /// own `cur` - read, confidence 90, see plasma.md's 2026-09-23 section.
     #[must_use]
     pub(in crate::race) fn plasma_blast_draws(
         &self,
@@ -356,19 +356,12 @@ impl Race {
     ) -> [Option<PlasmaBlastDraw>; PLASMA_BLAST_SLOTS] {
         let hd = self.view.hd_plasma_blast;
         std::array::from_fn(|slot| {
-            self.view.plasma_blasts[slot].and_then(|blast| {
-                // See `HD_BLAST_MODELS_DRAWN`'s own doc comment: the bolt's
-                // own head, both `WO_PLASMA_LIGHTNING_*` triggers and this
-                // blast's own age/ease tracking all run regardless - only
-                // the ring/sphere/halo trio's own draw is gated off.
-                if hd && !HD_BLAST_MODELS_DRAWN {
-                    return None;
-                }
+            self.view.plasma_blasts[slot].map(|blast| {
                 let matrix = billboard_matrix(blast.position, camera_position);
-                Some(if hd {
+                if hd {
                     let visible = blast.age < HD_BLAST_HIDE_AT_SECONDS;
                     PlasmaBlastDraw {
-                        matrix,
+                        matrix: facing_away(matrix),
                         halo_seconds: 0.0,
                         hemisphere2_seconds: 0.0,
                         hemisphere1_seconds: 0.0,
@@ -382,7 +375,7 @@ impl Race {
                         hemisphere1_seconds: blast.age * PLASMA_BLAST_HEMISPHERE1_ANIM_RATE,
                         hd_scale: None,
                     }
-                })
+                }
             })
         })
     }
@@ -411,6 +404,37 @@ fn billboard_matrix(position: Vec3, camera_position: Vec3) -> Mat4 {
         up.extend(0.0),
         forward.extend(0.0),
         position.extend(1.0),
+    )
+}
+
+/// `billboard_matrix`'s basis rebuilt the way Wipeout HD builds its own for
+/// the two discs: `Z` pointing **away** from the camera, the billboard's up
+/// kept, and `X = Y x Z` - a rotation, where `billboard_matrix` itself is a
+/// reflection (its `right = forward x up`, `up = right x forward` gives a
+/// determinant of `-1`). The handedness matters once back faces are culled:
+/// a reflection reverses every triangle's winding on screen, so the cull
+/// would hide exactly the faces the original draws.
+///
+/// The cross product is the original's too: `Start` rebuilds the first row
+/// from the other two (`0x001281b4`..`0x001281cc`, a `vperm`/`vmaddfp`/
+/// `vnmsubfp` cross).
+///
+/// `WeaponExplosions_Start` (`0x00127cd0`) writes each viewport's basis with
+/// its third row the **negated** vector it read out of that viewport's camera
+/// matrix (`vsubfp` from zero at `0x001280e8`), and the halo is authored as a
+/// single-sided disc whose normals all point down `-Z` under a material that
+/// culls back faces - so the only orientation in which the original can show
+/// it at all is `-Z` towards the viewer. Confidence 80: which camera column
+/// the vector is was not traced element by element, and the disc's own
+/// authoring is what settles the sign. See plasma.md's 2026-09-23 section.
+fn facing_away(matrix: Mat4) -> Mat4 {
+    let up = matrix.y_axis.truncate();
+    let away = -matrix.z_axis.truncate();
+    Mat4::from_cols(
+        up.cross(away).extend(0.0),
+        matrix.y_axis,
+        away.extend(0.0),
+        matrix.w_axis,
     )
 }
 

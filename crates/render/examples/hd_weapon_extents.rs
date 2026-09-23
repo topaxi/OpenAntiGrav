@@ -87,6 +87,37 @@ fn main() -> anyhow::Result<()> {
                 hi[a] = hi[a].max(v.position[a]);
             }
         }
+        // Winding against the authored normals: `agree` counts triangles whose
+        // `(b - a) x (c - a)` points the same way as their vertices' own
+        // normals, and `outward` those whose normal points away from the
+        // model's origin. `mean_normal` is the authored normals' average.
+        let (mut agree, mut outward, mut total) = (0usize, 0usize, 0usize);
+        let mut mean_normal = [0f32; 3];
+        for v in &model.vertices {
+            for a in 0..3 {
+                mean_normal[a] += v.normal[a] / model.vertices.len() as f32;
+            }
+        }
+        for tri in model.indices.as_chunks::<3>().0 {
+            let [a, b, c] = tri.map(|i| model.vertices[i as usize]);
+            let e1 = [0, 1, 2].map(|k| b.position[k] - a.position[k]);
+            let e2 = [0, 1, 2].map(|k| c.position[k] - a.position[k]);
+            let n = [
+                e1[1] * e2[2] - e1[2] * e2[1],
+                e1[2] * e2[0] - e1[0] * e2[2],
+                e1[0] * e2[1] - e1[1] * e2[0],
+            ];
+            let authored = [0, 1, 2].map(|k| a.normal[k] + b.normal[k] + c.normal[k]);
+            let centre = [0, 1, 2].map(|k| a.position[k] + b.position[k] + c.position[k]);
+            let dot = |p: [f32; 3], q: [f32; 3]| p[0] * q[0] + p[1] * q[1] + p[2] * q[2];
+            total += 1;
+            agree += usize::from(dot(n, authored) > 0.0);
+            outward += usize::from(dot(n, centre) > 0.0);
+        }
+        println!(
+            "  winding: {agree} of {total} triangles agree with authored normals, \
+             {outward} face away from the origin; mean authored normal {mean_normal:?}"
+        );
         for (list, draws) in [
             ("opaque", &model.draws),
             ("cutout", &model.alpha_tested_draws),
@@ -94,12 +125,13 @@ fn main() -> anyhow::Result<()> {
         ] {
             for d in draws {
                 println!(
-                    "  {list} draw: {} tris, texture {:?}, blend {:?}, authored {:?}",
+                    "  {list} draw: {} tris, texture {:?}, blend {:?}, authored {:?}, culled {}",
                     d.range.len() / 3,
                     d.texture,
                     d.blend,
                     d.blend_state
-                        .map(|s| (s.color.src_factor, s.color.dst_factor))
+                        .map(|s| (s.color.src_factor, s.color.dst_factor)),
+                    d.culled
                 );
             }
         }
