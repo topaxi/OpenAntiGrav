@@ -95,6 +95,11 @@ struct Light {
     specular_scale: f32,
     prelit_power: vec3<f32>,
     _lpad2: f32,
+    // Pulse's GE light list for a hull - `mesh_render::HullLights`. `.w` of
+    // the ambient is the switch, `.w` of each direction that light's enable.
+    hull_ambient: vec4<f32>,
+    hull_direction: array<vec4<f32>, 4>,
+    hull_diffuse: array<vec4<f32>, 4>,
 };
 
 // One of the two colour groups a Zone stage authors - `mesh_render::ZoneSet`.
@@ -458,6 +463,24 @@ fn vs_main(in: VertexInput) -> VertexOutput {
     let turned = node * vec4<f32>(in.normal, 0.0);
     out.normal = (uniforms.model * turned).xyz;
     out.colour = in.colour;
+    out.lit = in.lit;
+    // **Pulse's hull, lit the way the GE lights it**: per vertex, the circuit's
+    // own ambient plus each directional light's `N . L`, clamped to `0..1` and
+    // carried to the fragment as the vertex colour the texel is modulated by.
+    // The material is white, so nothing else multiplies it. It replaces both
+    // the stand-in rig and the grey an uncoloured vertex otherwise carries,
+    // which is why `lit` is cleared. See `mesh_render::HullLights` and
+    // docs/ghidra/functions/psp-pulse-usa/scene-light.md.
+    if scene.light.hull_ambient.w > 0.5 && in.lit > 0.5 {
+        let n = normalize(out.normal);
+        var sum = scene.light.hull_ambient.rgb;
+        for (var i = 0u; i < 4u; i = i + 1u) {
+            let l = scene.light.hull_direction[i];
+            sum = sum + scene.light.hull_diffuse[i].rgb * max(dot(n, l.xyz), 0.0) * l.w;
+        }
+        out.colour = vec4<f32>(clamp(sum, vec3<f32>(0.0), vec3<f32>(1.0)), in.colour.a);
+        out.lit = 0.0;
+    }
     // Not run through the texture-animation transform below: an animated
     // surface scrolls its diffuse across itself, while its patch in the
     // circuit's lightmap atlas stays where the bake put it.
@@ -471,7 +494,6 @@ fn vs_main(in: VertexInput) -> VertexOutput {
     // 0 to +1, which runs the other way on purpose.
     let anim = anims.transform[in.anim];
     out.texcoord = in.texcoord * anim.xy + anim.zw;
-    out.lit = in.lit;
     out.world = world.xyz;
     out.view_depth = out.clip.w;
     out.sun_mask = in.sun_mask;

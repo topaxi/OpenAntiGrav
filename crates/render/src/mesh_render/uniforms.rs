@@ -406,9 +406,23 @@ pub struct Light {
     /// prelit term.
     pub prelit_power: [f32; 3],
     _pad2: f32,
+    /// Pulse's GE light list for a craft's hull, or [`super::HullLights::OFF`].
+    /// Read by `vs_main` alone, and only for a lit vertex - see
+    /// [`super::HullLights`].
+    pub hull: super::HullLights,
 }
 
 impl Light {
+    /// This rig with [`Self::hull`] switched off, for every draw that is not a
+    /// craft's hull.
+    #[must_use]
+    pub fn without_hull(self) -> Self {
+        Self {
+            hull: super::HullLights::OFF,
+            ..self
+        }
+    }
+
     /// The stand-in rig: what every title but HD binds.
     ///
     /// A value rather than an unbound group, for the reason [`Fog::off`] is
@@ -426,6 +440,7 @@ impl Light {
             specular_scale: 0.0,
             prelit_power: [1.0; 3],
             _pad2: 0.0,
+            hull: super::HullLights::OFF,
         }
     }
 
@@ -465,6 +480,7 @@ impl Light {
             // authors 1.0 to 2.0).
             prelit_power: std::array::from_fn(|i| prelit_power[i].max(1e-3)),
             _pad2: 0.0,
+            hull: super::HullLights::OFF,
         }
     }
 }

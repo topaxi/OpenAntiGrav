@@ -9,11 +9,13 @@ use anyhow::Result;
 use crate::mesh::{GpuVertex, Model};
 
 mod blend;
+mod hull_lights;
 mod spu_light;
 mod tables;
 mod uniforms;
 
 pub use blend::{ADDITIVE_BLEND, TRANSPARENT_BLEND, TransparentPipelines};
+pub use hull_lights::{HULL_LIGHTS, HullLights, ge_channel};
 pub use spu_light::{MAX_SPU_LIGHTS, RGBE_ROUND_TRIP, SpuLight, SpuLights};
 pub use tables::{EMISSIVES_SIZE, Emissives, NODE_ANIMS_SIZE, NodeAnims, TEX_ANIMS_SIZE, TexAnims};
 use uniforms::Uniforms;
