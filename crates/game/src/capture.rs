@@ -685,6 +685,15 @@ pub fn run(
                 )?;
                 (backdrop, video_format, list, space)
             } else {
+                // Read-only, off whatever `<config dir>/oag/records.toml`
+                // already holds - the same "read, never write" rule
+                // `race::CaptureOptions::previous_best` follows a few lines
+                // above this arm's own sibling, and for the same reason:
+                // this still shows a player their own stored times, never a
+                // seeded or invented one. A capture with no file, or one
+                // this machine has never raced under, draws every class's
+                // `-` placeholder rather than a shorter table.
+                let records = crate::records::load();
                 let list = menu_page(
                     &options.settings,
                     options.anisotropy,
@@ -695,6 +704,7 @@ pub fn run(
                     &languages,
                     &strings,
                     &options.music_discs,
+                    &records,
                     frame,
                     // The face the rows are drawn in, not the front end's
                     // default: the pitch comes off its line height, so reading

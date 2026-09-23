@@ -670,7 +670,7 @@ shadow copy of `race.track`/`race.mode` would need its own
 reader-visible benefit.
 
 **Which of `best_lap_ticks`/`best_total_ticks` fills the time column depends
-on the mode**, off `records_page::show_total`: Speed Lap and Zone never
+on the mode**, off `scoreboard::show_total`: Speed Lap and Zone never
 finish a race at all - `oag_game::records`'s own module doc names both by
 name for why `Record::best_total_ticks` is permanently `None` there - so
 their column reads the best single lap instead. Every other mode reads the
@@ -692,35 +692,45 @@ room a page reserves - the exact AI-PILOTS-preview-on-the-footer mismatch
 this page's own "The general fix has landed" paragraph above already
 records paying for once.
 
-`crates/game/src/main/records_page.rs` is the module: `records_page::
-table_for` is the pure half (page-id guard, row resolution, the per-class
-lookup), split from `records_page::build_table` for the same reason
-`pilots::axis_preview_for` is split from its own page - `build_table` is
-unit-tested with a hand-built class list and `Store`, with no `Shell` and no
-`'static oag_title::Title` to fabricate. `oag_ui::prompt::record_row_draw`
-is the drawing half, and `crate::menu_stage::MenuStage::render` wires it in
-next to `axis_preview`'s own chain.
+The pure resolution behind the table lives in `oag_game::scoreboard`, not in
+the `main` binary: `scoreboard::records_table` is the page-id guard, row
+resolution and per-class lookup together, and `scoreboard::class_table`/
+`scoreboard::show_total`/`scoreboard::speed_class_choices` are its own
+pieces, each unit-tested with a hand-built class list, `Menu` fixture and
+`Store` - no `Shell`, no `'static oag_title::Title` boot and no window to
+fabricate. `crates/game/src/main/records_page.rs` is now a thin wrapper: its
+`table_for` supplies `records_table` with the one thing that differs for the
+live session, a track lookup drawn from `Shell::tracks_for(mode)` (which
+carries a distinct Zone list). `oag_ui::prompt::record_row_draw` is the
+drawing half, and `crate::menu_stage::MenuStage::render` wires it in next to
+`axis_preview`'s own chain.
 
-**`--menu-page records` is not wired to show the table** - only the MODE
-and TRACK rows, since `crates/game/src/capture/menu_page.rs` builds its own
-draw list independently of `MenuStage::render` and nothing there calls
-`records_page::table_for`. The live session is the only path that draws it,
-and it is unreached by any headless capture tool: `--screenshot`'s own
-sequence capture (`crates/game/src/capture.rs`) always hands `Launch Game`
-off to a race rather than opening `oag_ui::menu` at all - `--menu-page` is
-the *only* way this codebase draws one of our own pages without a window,
-and it draws one page statically, with no `Menu::update` and no per-frame
-computed content. So `--menu-page records --screenshot` is what was
-actually captured and read back (title, MODE, TRACK, BACK all correct,
-nothing overlapping the footer); **the live per-class table itself has not
-been seen on screen**, in this build or any other sandbox run of this
-thread - it needs a real window, which per this project's own prior
-findings on this exact machine (`docs/architecture/menus.md`'s own
-"Independently verified on a live capture" paragraph above, and this
-thread's own "Still open" section before this change) is unconfirmable
-headless here. Verifying it is `oag-game data/images/pulse-psp-eu.chd
---press start,cross` (reaches the real Main Menu, no `--screenshot`), then
-navigating MAIN -> RECORDS and reading the table on screen.
+**`--menu-page records --screenshot` now shows the table too, not only
+MODE/TRACK/BACK.** `crates/game/src/capture/menu_page.rs` calls the same
+`scoreboard::records_table`, supplying a track lookup over its own
+boot-survey `tracks` list in place of `Shell::tracks_for` - the one
+difference is that a capture's list carries no distinct Zone tracks, so a
+capture with `race.mode` seeded to `zone` resolves no track and draws no
+table rather than one built against the wrong list (see that function's own
+doc). The store itself is read the same "read-only, off whatever `<config
+dir>/oag/records.toml` already holds" way `race::CaptureOptions::previous_best`
+already reads it for a race capture, loaded once in `capture.rs` right
+before the call rather than inside `menu_page` itself, so the function stays
+testable against a hand-built `Store`.
+
+Captured and read back off `pulse-psp-eu.chd` with `--menu-page records
+--screenshot --no-audio`: title "RACE RECORDS", MODE/CIRCUIT/BACK (this
+disc's own French label set was current: "RETOUR") all correct, and four
+class rows (VENOM/FLASH/RAPIER/PHANTOM) drawn below them, nothing
+overlapping the footer bar. The machine's own real `records.toml` and
+`settings.toml` were used unmodified - not seeded - so every class row read
+`-`: the settings file's own `race.track` (`01_Track`, Basilico Black) has
+never been raced under `single_race`, its current `race.mode`. That is the
+honest result for this machine's own data, per `CLAUDE.md`'s do-not-invent
+rule, and the same machine's `records.toml` does carry real times for other
+track/mode pairs (`03_Track`/`single_race`, for one) - not captured here to
+avoid editing the real `settings.toml` just to pick a different row for a
+screenshot.
 
 ## A per-row subtitle
 

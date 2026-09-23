@@ -306,3 +306,203 @@ fn both_lines_together_still_fit_the_screen() {
     assert!(texts.contains(&"PERSONAL BEST LAP 0.48.33 - NEW!".to_string()));
     assert!(texts.contains(&"BEST MEDAL BRONZE".to_string()));
 }
+
+#[test]
+fn show_total_is_false_only_for_speed_lap_and_zone() {
+    for mode in oag_race::Mode::ALL {
+        let expected = !matches!(mode, oag_race::Mode::SpeedLap | oag_race::Mode::Zone);
+        assert_eq!(show_total(mode), expected, "{mode:?}");
+    }
+}
+
+const CLASS_TABLE_TRACK: &str = r"data\environments\16_track\track.vex";
+
+fn class_table_observation(
+    finished: bool,
+    tick: u64,
+    best_lap_ticks: Option<u32>,
+) -> records::Observation {
+    records::Observation {
+        finished,
+        place: Some(1),
+        laps_completed: 3,
+        tick,
+        best_lap_ticks,
+        campaign_medal: None,
+    }
+}
+
+/// A finished mode (Time Trial here) reads `best_total_ticks`: recorded for
+/// the class that raced, a dash for the class that never has.
+#[test]
+fn class_table_reads_the_total_for_a_finished_mode() {
+    let mut store = records::Store::default();
+    store.record(
+        records::Key::new(
+            "wipeout pulse",
+            Some(CLASS_TABLE_TRACK),
+            "time_trial",
+            "venom",
+        ),
+        class_table_observation(true, 6042, Some(1987)),
+    );
+    let classes = [
+        menu::Choice::labelled("venom", "VENOM"),
+        menu::Choice::labelled("flash", "FLASH"),
+    ];
+    let table = class_table(
+        "wipeout pulse",
+        CLASS_TABLE_TRACK,
+        oag_race::Mode::TimeTrial,
+        &classes,
+        &store,
+    );
+    assert_eq!(
+        table,
+        vec![
+            (
+                "VENOM".to_string(),
+                format_lap_time(6042, Precision::Hundredths)
+            ),
+            ("FLASH".to_string(), "-".to_string()),
+        ]
+    );
+}
+
+/// Speed Lap never finishes - `records`'s own module doc names it by name -
+/// so its column is the best *lap*, not the (permanently absent) total.
+#[test]
+fn class_table_reads_the_lap_for_speed_lap() {
+    let mut store = records::Store::default();
+    store.record(
+        records::Key::new(
+            "wipeout pulse",
+            Some(CLASS_TABLE_TRACK),
+            "speed_lap",
+            "venom",
+        ),
+        class_table_observation(false, 5000, Some(1987)),
+    );
+    let classes = [menu::Choice::labelled("venom", "VENOM")];
+    let table = class_table(
+        "wipeout pulse",
+        CLASS_TABLE_TRACK,
+        oag_race::Mode::SpeedLap,
+        &classes,
+        &store,
+    );
+    assert_eq!(
+        table,
+        vec![(
+            "VENOM".to_string(),
+            format_lap_time(1987, Precision::Hundredths)
+        )]
+    );
+}
+
+/// A row this store has never seen at all draws a dash, the same "no time"
+/// convention [`draw_list`] already uses for a craft that never crossed.
+#[test]
+fn class_table_draws_a_dash_for_a_class_never_raced() {
+    let store = records::Store::default();
+    let classes = [menu::Choice::labelled("phantom", "PHANTOM")];
+    let table = class_table(
+        "wipeout pulse",
+        CLASS_TABLE_TRACK,
+        oag_race::Mode::TimeTrial,
+        &classes,
+        &store,
+    );
+    assert_eq!(table, vec![("PHANTOM".to_string(), "-".to_string())]);
+}
+
+mod records_table_tests {
+    use oag_ui::language::StringTable;
+
+    use super::*;
+
+    /// A minimal two-row page - MODE and TRACK, exactly what the RECORDS
+    /// page's own definition carries - so [`records_table`] can be
+    /// exercised with no real window, GPU or disc. The same fixture shape
+    /// `pilots::tests::fixture_menu_on_axis` uses for the AI PILOTS page.
+    fn fixture_menu(page_id: &str) -> menu::Menu {
+        let text = format!(
+            "version = 1\n\
+             root = \"{page_id}\"\n\
+             [[page]]\n\
+             id = \"{page_id}\"\n\
+             [[page.entry]]\n\
+             kind = \"choice\"\n\
+             label = \"MODE\"\n\
+             setting = \"race.mode\"\n\
+             values_from = \"race_modes\"\n\
+             [[page.entry]]\n\
+             kind = \"choice\"\n\
+             label = \"TRACK\"\n\
+             setting = \"race.track\"\n\
+             values_from = \"tracks\"\n"
+        );
+        let strings = StringTable::default();
+        let definition = menu::Definition::parse(&text, &strings).expect("a tiny valid definition");
+        let mut model = menu::Menu::new(definition);
+        model.supply(
+            menu::ValueSource::RaceModes,
+            &[
+                menu::Choice::labelled("time_trial", "TIME TRIAL"),
+                menu::Choice::labelled("speed_lap", "SPEED LAP"),
+            ],
+        );
+        model.supply(
+            menu::ValueSource::Tracks,
+            &[menu::Choice::labelled("16_Track", "TALON'S JUNCTION")],
+        );
+        model
+    }
+
+    const TRACK: &str = r"data\environments\16_track\track.vex";
+
+    #[test]
+    fn none_off_any_page_but_records() {
+        let model = fixture_menu("race");
+        let store = records::Store::default();
+        assert!(
+            records_table(&model, oag_pulse::TITLE, &store, |_, _| Some(
+                TRACK.to_string()
+            ))
+            .is_none()
+        );
+    }
+
+    /// Mirrors what a capture whose track lookup has no Zone list sees when
+    /// `race.mode` is seeded to `zone`: no table, not one built from the
+    /// wrong list - see [`records_table`]'s own doc.
+    #[test]
+    fn none_when_track_entry_cannot_resolve_the_held_track() {
+        let model = fixture_menu("records");
+        let store = records::Store::default();
+        assert!(records_table(&model, oag_pulse::TITLE, &store, |_, _| None).is_none());
+    }
+
+    #[test]
+    fn builds_one_row_per_class_off_the_held_mode_and_track() {
+        let model = fixture_menu("records");
+        let mut store = records::Store::default();
+        store.record(
+            records::Key::new("wipeout pulse", Some(TRACK), "time_trial", "venom"),
+            class_table_observation(true, 6042, Some(1987)),
+        );
+        let table = records_table(&model, oag_pulse::TITLE, &store, |_, _| {
+            Some(TRACK.to_string())
+        })
+        .expect("MODE and TRACK are both held on this fixture's records page");
+        let (_, venom_time) = table
+            .iter()
+            .find(|(label, _)| label == "VENOM")
+            .expect("Pulse's ladder ships Venom");
+        assert_eq!(*venom_time, format_lap_time(6042, Precision::Hundredths));
+        assert!(
+            table.iter().any(|(_, value)| value == "-"),
+            "a class this store never saw should still draw a dash, not be left out: {table:?}"
+        );
+    }
+}

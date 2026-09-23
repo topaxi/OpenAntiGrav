@@ -30,6 +30,11 @@ pub(super) fn menu_page(
     languages: &[oag_ui::language::Language],
     strings: &oag_ui::language::StringTable,
     music_discs: &crate::audio::MusicDiscs,
+    // The RECORDS page's own store, read the same read-only way
+    // `race::CaptureOptions::previous_best` is - see the call site in
+    // `capture.rs`. Taken rather than loaded in here so this function stays
+    // testable on a hand-built `Store` with no real `<config dir>` involved.
+    records: &crate::records::Store,
     backdrop: Option<oag_ui::menu::Picture>,
     skin: &oag_ui::menu::Skin,
     // The width of a string in the face the entries are drawn in, which a
@@ -252,6 +257,19 @@ pub(super) fn menu_page(
     // draws this line through too; see `crate::pilots::axis_preview_for`'s
     // own doc.
     let axis_preview = crate::pilots::axis_preview_for(&model, Some(strings));
+    // The RECORDS page's own live per-class table - `None` off any page but
+    // RECORDS. `crate::scoreboard::records_table` is the one function the
+    // live session draws this through too; see its own doc for why the track
+    // lookup here (this capture's own boot-survey `tracks`, with no distinct
+    // Zone list) can differ from `Shell::tracks_for(mode)` without the two
+    // pages disagreeing about anything they both can answer.
+    let records_table =
+        crate::scoreboard::records_table(&model, title, records, |_mode, track_id| {
+            tracks
+                .iter()
+                .find(|track| track.id == track_id)
+                .map(crate::catalogue::Track::entry_name)
+        });
 
     // A modal prompt over the page, when one was asked for.
     //
@@ -295,6 +313,11 @@ pub(super) fn menu_page(
         if let Some(text) = &axis_preview {
             list.push(oag_ui::prompt::axis_preview_draw(&model, skin, text));
         }
+        if let Some(rows) = &records_table {
+            list.extend(rows.iter().enumerate().flat_map(|(index, (label, value))| {
+                oag_ui::prompt::record_row_draw(&model, skin, index, label, value)
+            }));
+        }
         list.extend(prompt_draws(kind, &name, strings, skin)?);
         return Ok(list);
     }
@@ -303,13 +326,18 @@ pub(super) fn menu_page(
         if let Some(text) = &axis_preview {
             list.push(oag_ui::prompt::axis_preview_draw(&model, skin, text));
         }
+        if let Some(rows) = &records_table {
+            list.extend(rows.iter().enumerate().flat_map(|(index, (label, value))| {
+                oag_ui::prompt::record_row_draw(&model, skin, index, label, value)
+            }));
+        }
         return Ok(list);
     };
     // The same arithmetic the live stage runs, through the same easing, so what
     // this draws is a frame of the real transition rather than a picture of one.
-    // No axis-preview line here, matching `MenuStage::render`'s own gate:
-    // the row list is a zoomed, mid-tween picture at this point, and the
-    // preview's position is computed against the still one.
+    // No axis-preview line and no records table here, matching
+    // `MenuStage::render`'s own gate: the row list is a zoomed, mid-tween
+    // picture at this point, and both are positioned against the still one.
     let shape = oag_ui::menu::Transition::default();
     let mut tween = oag_ui::anim::Tween::new(1.0);
     tween.advance(phase.clamp(0.0, 1.0));

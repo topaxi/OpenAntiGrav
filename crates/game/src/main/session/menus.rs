@@ -6,7 +6,6 @@ use log::{error, info, warn};
 use oag_display::display;
 use oag_game::render::{Renderer, VideoFormat};
 use oag_game::{audio, boot, catalogue, movie, pilots, settings};
-use oag_physics::SpeedClass;
 use oag_ui::{marquee, menu, strings};
 
 use crate::frontend_stage::HeldFrame;
@@ -17,44 +16,16 @@ use crate::window::monitor_names;
 
 use super::{Session, remix_menu};
 
-/// The speed classes one title offers, in the shape [`menu::Menu::supply`]
-/// wants.
-///
-/// **The value is lowercase and the label is the disc's own spelling.** The
-/// value is what a settings file already holds (`race.class` defaults to
-/// `"venom"`) and what `SpeedClass::from_name` parses case-insensitively, so
-/// lowercasing keeps every existing settings file working; the label is the
-/// `<Class name="...">` the title actually authors, so what a reviewer reads
-/// on screen is what the file says.
-///
-/// A title whose ladder is unread (`speed_classes: None`, Wipeout 2048 today)
-/// falls back to `SpeedClass::ALL`, which is this build's own list rather than
-/// some other title's measurement. That is the same rule
-/// `oag_title::MenuSkin::row_extra_leading` follows for an unmeasured leading,
-/// and it is why the fallback is spelled here, at the caller, instead of being
-/// a default inside the title package.
-///
-/// **Confined to `oag_title::SpeedClasses::is_offered_outside_remix`, not
-/// `selectable()` alone.** A Pure boot's own ladder carries `VECTOR`, and this
-/// build can race it - but only RACE REMIX offers it, by a 2026-09-05
-/// maintainer decision. See that function's doc comment and
-/// `docs/architecture/menus.md` for why offering it here too would diverge
-/// wider than asked, even though it is what Pure's own front end does.
-///
-/// `pub(crate)` rather than private: `crate::records_page` reuses this
-/// verbatim for the RECORDS page's own per-class rows, so the two pages
-/// cannot silently disagree about which classes exist - see that module's
-/// own doc.
-pub(crate) fn speed_class_choices(title: &'static oag_title::Title) -> Vec<menu::Choice> {
-    let named: Vec<&'static str> = match title.race.speed_classes {
-        Some(ladder) => ladder
-            .selectable()
-            .filter(|name| oag_title::SpeedClasses::is_offered_outside_remix(name))
-            .collect(),
-        None => SpeedClass::ALL.iter().map(|class| class.as_str()).collect(),
-    };
-    to_choices(named)
-}
+/// Moved to `oag_game::scoreboard::speed_class_choices`, re-exported here
+/// under its own name so every call site in this module (and
+/// `crate::records_page`, which names this exact path in its own doc)
+/// keeps working unchanged. It moved because `crate::capture::menu_page` -
+/// the `--menu-page records` still - needs the identical list for the
+/// RECORDS page's own per-class table, and this binary's `session` module is
+/// not reachable from the library crate that lives in. See that function's
+/// own doc for the full reasoning, including the `oag_title::SpeedClasses::
+/// is_offered_outside_remix` confinement.
+pub(crate) use oag_game::scoreboard::speed_class_choices;
 
 /// [`speed_class_choices`]' shared tail, so the per-title row and RACE REMIX's
 /// union spell a class exactly the same way.
