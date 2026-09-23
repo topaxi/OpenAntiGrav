@@ -404,11 +404,44 @@ pub mod names {
     /// each within resampling noise. See
     /// [`crate::frontend::states::DEVELOPER_PUBLISHER`].
     ///
-    /// **This name is one of four, and picking it unconditionally is a known
-    /// bug.** See [`INTRO_MOVIE_CUTS`]: `oag_game::screen::Movie::entry_name`
-    /// appends `_US.PMF` to every `localised="true"` widget on every source, so a
-    /// European pressing is currently shown the American card.
+    /// **This name is one of four** - see [`INTRO_MOVIE_CUTS`] for the other
+    /// three. Picking this one unconditionally was a known bug (a European
+    /// pressing shown the American card); the fix is [`intro_movie`], which
+    /// [`oag_game::boot::load_shell`] calls with
+    /// [`crate::frontend::localised_movie_region`] of the source's own serial.
+    /// `Movie_ParseAttributes` (`docs/ghidra/functions/psp-pure-eu/
+    /// movie-localised-suffix.md`) settles that each pressing bakes exactly
+    /// one such suffix into its own executable, the same shape of fix
+    /// `TitleFrame`'s wordmark already needed.
     pub const INTRO_MOVIE: &str = r"Data\Movies\IntroMovieP1_US.PMF";
+
+    /// [`INTRO_MOVIE_CUTS`]'s entry for `region` (`"EU"`/`"US"`/`"JAP"`/`"KO"`),
+    /// falling back to the `"EU"` cut for a region this table does not carry -
+    /// this project's own convention, and the same fallback
+    /// [`crate::frontend::title_frame_src`] and
+    /// [`crate::frontend::localised_movie_region`] both take.
+    ///
+    /// # Panics
+    ///
+    /// Never in practice: [`INTRO_MOVIE_CUTS`] always carries an `"EU"` row.
+    #[must_use]
+    pub fn intro_movie(region: &str) -> &'static str {
+        cut(INTRO_MOVIE_CUTS, region)
+    }
+
+    /// The same lookup as [`intro_movie`], over [`FMV_INTRO_MOVIE_CUTS`].
+    #[must_use]
+    pub fn fmv_intro_movie(region: &str) -> &'static str {
+        cut(FMV_INTRO_MOVIE_CUTS, region)
+    }
+
+    fn cut(cuts: &[(&str, &'static str)], region: &str) -> &'static str {
+        cuts.iter()
+            .find(|(code, _)| *code == region)
+            .or_else(|| cuts.iter().find(|(code, _)| *code == "EU"))
+            .map(|(_, name)| *name)
+            .expect("both cut tables carry an EU row")
+    }
 
     /// Every regional cut of the dev/pub reel, by the name that resolves it.
     ///

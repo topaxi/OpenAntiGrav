@@ -137,6 +137,7 @@ pub(super) fn load_screens(
     plugin_definition: &str,
     fallback_globals: &[(&str, &str)],
     fallback_images: &[(&str, &str)],
+    movie_region: &str,
     report: &mut Vec<String>,
 ) -> Result<Screens> {
     let style = style_skin_globals(archives, plugin_definition, root, report);
@@ -181,7 +182,7 @@ pub(super) fn load_screens(
             report.push(format!(
                 "  screen {:?} plays {}",
                 screen.name,
-                movie.entry_name()
+                movie.entry_name(movie_region)
             ));
         }
     }

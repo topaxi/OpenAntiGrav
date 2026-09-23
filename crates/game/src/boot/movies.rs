@@ -45,6 +45,36 @@ pub const DEFAULT_BOOT_MOVIE: &str = pulse::names::INTRO_MOVIE;
 /// See `docs/architecture/frontend-boot.md`.
 pub const DEVPUB_REEL: &str = pulse::names::DEVPUB_REEL;
 
+/// The region `oag_ui::screen::Movie::entry_name` resolves a `localised`
+/// widget with - `oag_ui::screen::DEFAULT_REGION` off every title but Pure,
+/// `oag_pure::frontend::localised_movie_region` of the serial on Pure. See
+/// `docs/ghidra/functions/psp-pure-eu/movie-localised-suffix.md`.
+pub(super) fn resolve_movie_region(title: &oag_title::Title, serial: Option<&str>) -> &'static str {
+    if title.name == "Wipeout Pure" {
+        oag_pure::frontend::localised_movie_region(serial)
+    } else {
+        oag_ui::screen::DEFAULT_REGION
+    }
+}
+
+/// Substitutes Pure's own pressing-correct cut for its two declared boot
+/// movies, leaving every other title's untouched. See
+/// [`resolve_movie_region`]'s own doc for why one table cannot hold this.
+pub(super) fn resolve_pure_movie_region(
+    title: &oag_title::Title,
+    movie_region: &str,
+    first: Option<&'static str>,
+    second: Option<&'static str>,
+) -> (Option<&'static str>, Option<&'static str>) {
+    if title.name != "Wipeout Pure" {
+        return (first, second);
+    }
+    (
+        first.map(|_| oag_pure::names::intro_movie(movie_region)),
+        second.map(|_| oag_pure::names::fmv_intro_movie(movie_region)),
+    )
+}
+
 /// How an archive entry was asked for.
 ///
 /// A WAD directory stores only the hash of each name, and three of the disc's

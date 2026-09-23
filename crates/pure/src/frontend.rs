@@ -240,6 +240,30 @@ pub fn title_frame_src(serial: Option<&str>) -> (&'static str, &'static str) {
     }
 }
 
+/// Which of [`crate::names::INTRO_MOVIE_CUTS`]/[`crate::names::FMV_INTRO_MOVIE_CUTS`]
+/// a pressing's own executable resolves a `localised="true"` `<Movie>` widget
+/// to - the same shape of fix [`title_frame_src`] is, on the same evidence
+/// class.
+///
+/// `Movie_ParseAttributes` (`docs/ghidra/functions/psp-pure-eu/
+/// movie-localised-suffix.md`) appends a single literal suffix - `"_EU"` on
+/// the EU binary, `"_US"` on the USA one - to every `localised="true"`
+/// widget's resolved name, read directly off both executables' own memory.
+/// Neither binary's string table names the other's suffix, or `_JAP`/`_KO` at
+/// all: there is no runtime language read here, just which executable is
+/// running, exactly the mechanism `TitleFrame`'s wordmark already settled.
+///
+/// `serial` is [`oag_assets::Layout::serial`]; `None` or an unmeasured serial
+/// default to `"EU"`, the same convention [`title_frame_src`] takes.
+#[must_use]
+pub fn localised_movie_region(serial: Option<&str>) -> &'static str {
+    match serial {
+        // Pure's own USA serial - see `oag_pure::tests`.
+        Some("UCUS-98612") => "US",
+        _ => "EU",
+    }
+}
+
 /// How Pure lays its menus out, as far as its own disc states it.
 ///
 /// **Deliberately thinner than Pulse's, and thin in the places Pure is

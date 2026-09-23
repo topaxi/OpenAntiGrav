@@ -884,6 +884,58 @@ byte-identical in decoded content to entry 535) hashes to
 this project's corpus, so which pressing's own executable actually names that
 suffix is unread, and nothing consumes it.
 
+### The dev/pub reel and second boot movie's own region suffix
+
+The same shape of bug as `TitleFrame`'s, on the same evidence class, and it
+closed the same way. `oag_pure::names::INTRO_MOVIE_CUTS`/
+`FMV_INTRO_MOVIE_CUTS` (2026-09-08's content scan) already had all four
+regional cuts of both boot movies named and hash-verified against real
+`Data.wad` entries, but the runtime mechanism that picks one per pressing was
+unread - `Movie::entry_name` (`crates/ui/src/screen.rs`) appended a hardcoded
+`_US` suffix to every `localised="true"` `<Movie>` widget regardless of which
+disc was booted, so `pure-psp-eu.chd` showed the American dev/pub card
+("SONY COMPUTER ENTERTAINMENT AMERICA PRESENTS") instead of its own European
+one.
+
+**2026-09-23: the mechanism is read, and it is `TitleScreen_AssignWordmarkTexture`'s
+own shape.** `Movie_ParseAttributes`
+(`docs/ghidra/functions/psp-pure-eu/movie-localised-suffix.md`) appends a
+single literal suffix to a `localised="true"` widget's resolved name -
+`"_EU"` on the EU binary, `"_US"` on the USA one, read directly off both
+executables' own memory - and neither binary's string table names the other's
+suffix, or `_JAP`/`_KO`, at all. There is no runtime language read, no region
+enum: which cut plays is decided by which executable is running, exactly
+`TitleFrame`'s own finding.
+
+`oag_pure::frontend::localised_movie_region` resolves the pressing's own
+region from its serial (`oag_assets::Layout::serial`, `None` or an
+unmeasured serial defaulting to `"EU"`, the same convention
+`title_frame_src` takes), and `Movie::entry_name` now takes that region as a
+parameter instead of hardcoding one. `oag_game::boot::load_shell` resolves it
+once per source and threads it through both the front-end report and the
+two boot-movie names `oag_pure::frontend::BOOT_PROFILE.chain` declares -
+`oag_pure::names::intro_movie`/`fmv_intro_movie` look the resolved region up
+in the same `*_CUTS` tables the 2026-09-08 scan built.
+
+**Verified two ways.** `crates/game/tests/pure_boot_ground_truth.rs`'s
+`each_pressing_resolves_its_own_cut` loads both real discs and confirms each
+one's own cut resolves rather than falling back; and a headless
+`oag-game --reel --screenshot` capture of `pure-psp-eu.chd` at the dev/pub
+reel's own frame 144 reads "SONY COMPUTER ENTERTAINMENT EUROPE PRESENTS",
+not "AMERICA" - screenshot under
+`~/.cache/oag/drive/reports/pure-movie-region/`. The two pressings' own
+`WoFMVNew` cut also turned out **not** to share a frame count the way the
+2026-08-10 measurement (taken off the `_US` entry loaded from both discs,
+before this fix) assumed: the EU cut is 2901 frames against the USA cut's
+2848, both 480x272.
+
+Confidence **85** for the mechanism itself (unambiguous decompile, identical
+structure cross-binary, hashes agree with already-verified entries) - short of
+`TitleFrame`'s 90 because no live breakpoint confirms `Movie_ParseAttributes`
+firing during a real boot, only the static read and the resulting screenshot.
+The fix built on top of it is measured directly, both by the ground-truth
+test and the screenshot.
+
 `FE Screen->BackgroundImage`/`BackgroundTopRightImage` are the same shape of
 gap. The scan below, run again and sized for these two, resolved one and ruled
 out every candidate for the other - and 2026-09-23 read the mechanism behind

@@ -43,6 +43,13 @@ pub use touch::{Include, TouchButton};
 /// all.
 pub const MOVIE_EXTENSIONS: [&str; 4] = [".pmf", ".pss", ".ipf", ".bik"];
 
+/// [`Movie::entry_name`]'s `region` for a caller with no pressing to read one
+/// off - this project's own "prefer EU over USA" convention, restated here
+/// because this is a generic widget type with no per-title serial to consult.
+/// Only Pure's own boot resolves a real one; every other title's widgets are
+/// never `localised`, so this default is never actually exercised there.
+pub const DEFAULT_REGION: &str = "EU";
+
 fn has_movie_extension(src: &str) -> bool {
     let lower = src.to_ascii_lowercase();
     MOVIE_EXTENSIONS.iter().any(|ext| lower.ends_with(ext))
@@ -72,9 +79,23 @@ impl Movie {
     /// The archive entry name, assembled the way the widget assembles it.
     ///
     /// `Movie_ParseAttributes` appends `.PMF` when `localised` is absent, and
-    /// `_US.PMF` otherwise. The PSP intro's `src` is `Data\Movies\Intro`, which
-    /// is why the filename never turned up in a string search of the
-    /// executable.
+    /// `"_{region}.PMF"` otherwise. The PSP intro's `src` is
+    /// `Data\Movies\Intro`, which is why the filename never turned up in a
+    /// string search of the executable.
+    ///
+    /// **`region` is not read from this widget or this disc - it names which
+    /// pressing's executable is running.** `Movie_ParseAttributes` bakes
+    /// exactly one literal suffix into each pressing's own binary (`"_EU"` on
+    /// the EU build, `"_US"` on the USA one - see
+    /// `docs/ghidra/functions/psp-pure-eu/movie-localised-suffix.md`), the same
+    /// mechanism `oag_pure::frontend::title_frame_src` already resolves for
+    /// `TitleFrame`'s wordmark. A caller that cannot say which pressing it has
+    /// passes `"EU"`, this project's own default for an unresolved source; a
+    /// caller that can (Pure's own boot, keyed off
+    /// [`oag_assets::Layout::serial`]) passes
+    /// `oag_pure::frontend::localised_movie_region`'s result instead. Ignored
+    /// entirely when `localised` is false - most titles' widgets, which carry
+    /// no region axis at all.
     ///
     /// **The PS2 build diverges, and its own XML is the evidence**: its `src`
     /// values are `Data\Movies\Intro.pss` and `Data\Movies\Backdrop.ipf`,
@@ -85,12 +106,12 @@ impl Movie {
     /// that already names its container is taken as it stands. See
     /// [`MOVIE_EXTENSIONS`].
     #[must_use]
-    pub fn entry_name(&self) -> String {
+    pub fn entry_name(&self, region: &str) -> String {
         if has_movie_extension(&self.src) {
             return self.src.clone();
         }
         if self.localised {
-            format!("{}_US.PMF", self.src)
+            format!("{}_{region}.PMF", self.src)
         } else {
             format!("{}.PMF", self.src)
         }

@@ -140,3 +140,4 @@
 0x088bb004	function	BackgroundController_UpdateImages	80	title-screen.md
 0x088b9f28	function	Animation_ParseValuesOrKey	80	title-screen.md
 0x088b9854	function	Animation_ConstructFromNode	80	title-screen.md
+0x088ca968	function	Movie_ParseAttributes	85	movie-localised-suffix.md

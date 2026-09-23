@@ -332,9 +332,16 @@ fn the_logo_step_and_the_logo_widget_both_name_a_bik() {
     // `entry_name` leaves a `src` that already names its container alone, which
     // is what `MOVIE_EXTENSIONS` gaining `.bik` bought: appending `.PMF` here
     // would ask for `StudioLiverpool_fury.bik.PMF`, which is nothing at all.
-    assert!(widget.entry_name().to_ascii_lowercase().ends_with(".bik"));
+    // HD's widget already names its own container, so the region argument is
+    // never consulted - `oag_ui::screen::DEFAULT_REGION` stands in for it.
+    assert!(
+        widget
+            .entry_name(oag_ui::screen::DEFAULT_REGION)
+            .to_ascii_lowercase()
+            .ends_with(".bik")
+    );
 
-    for name in [named, &widget.entry_name()] {
+    for name in [named, &widget.entry_name(oag_ui::screen::DEFAULT_REGION)] {
         let blob = archives.read_name(name).expect("the reel reads");
         let header = oag_video::bik::parse(&blob).expect("and parses");
         assert_eq!((header.width, header.height), (1920, 1080));

@@ -136,9 +136,15 @@ fn the_front_end_root_names_the_intro_movie() {
     let Some(loaded) = load() else { return };
     let screens = loaded.frontend.screens();
 
+    // Pulse's own widgets are never `localised`, so the region argument is
+    // never consulted here.
     let movies: Vec<String> = screens
         .with_movies()
-        .flat_map(|s| s.movies.iter().map(oag_ui::screen::Movie::entry_name))
+        .flat_map(|s| {
+            s.movies
+                .iter()
+                .map(|m| m.entry_name(oag_ui::screen::DEFAULT_REGION))
+        })
         .collect();
 
     assert!(
