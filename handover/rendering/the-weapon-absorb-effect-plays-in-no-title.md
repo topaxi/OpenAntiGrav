@@ -1,4 +1,4 @@
-# The weapon-absorb effect: burst on Pulse, Pure and HD, HD's absorb shell drawn, Pulse's hull overlay built but off
+# The weapon-absorb effect: burst on Pulse, Pure and HD, HD's absorb shell drawn, Pulse's hull overlay drawn
 
 2026-09-17. The user, who plays the originals, reported: "the weapon absorb
 animation/effect also does not animate/play in any title (the sfx plays
@@ -19,20 +19,32 @@ though)."
     [absorb-feedback.md](../../docs/ghidra/functions/ps3-hdfury-eu/absorb-feedback.md).
   - `crates/game/tests/absorb_ground_truth.rs` pins the stagger on Pulse and
     on HD.
-- **The hull overlay, Pulse only: built and switched off**
-  (`oag_render::hull_overlay::DRAWN = false`). When on, it draws
-  `absorb_surface.mip` projected top-down over the hull for one second after
-  a pickup absorb, on a `0 -> 1 -> 0` grey-alpha pulse, additive. It is off
-  because a controlled PPSSPP probe never saw the original evaluate the
-  overlay's gate in play; see Open. The writer,
-  projection and constants are in
+- **The hull overlay, Pulse only: drawn** (`oag_render::hull_overlay::DRAWN
+  = true`, later on 2026-09-23). A real absorb on PPSSPP, instrumented with
+  logged watchpoints, showed the stamp store, `HullOverlay_AbsorbFade` and
+  `HullOverlay_Submit` firing together for exactly one second. The matrix
+  handed to `Gu_SetMatrix(3)` was read live and confirms `u = 10x`,
+  `v = -10z - 1.5p`. The earlier "never evaluated" probe was void: PPSSPP
+  fires only the last of two execution breakpoints, and the HUD calls the
+  gate every frame. The same run corrected the port in two ways:
+  - it covers every list-0 hull mesh of the first level of detail, not only
+    `shipShape`;
+  - it writes the bloom glow mask whole, as the original's stencil
+    `REPLACE 0xff` does.
+
+  Evidence is in
   [cannon-quake-leachbeam.md](../../docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md),
-  "2026-09-23". A lap refill does not light the hull; the original's stamp
-  is the absorb handler's alone.
+  "2026-09-23 (later)". A lap refill does not light the hull; the
+  original's stamp belongs to the absorb handler alone
+  (`Ship_AbsorbHeldPickup`).
 
 Screenshots from the 2026-09-23 lane are in
-`~/.cache/oag/drive/reports/weapon-absorb/`. For Pulse, compare
-`pulse-overlay-t430-crop.png` with `pulse-control-t430-crop.png`.
+`~/.cache/oag/drive/reports/weapon-absorb/`. The original's own absorb
+(PPSSPP, Talon's Junction, Assegai, stationary on the grid) is at
+`~/.cache/oag/drive/reports/pulse-absorb-probe/original-ppsspp-01..14.png`,
+0.11-1.09 s into the window. Ours at the same moments is next to it:
+`glow-t*.png` has bloom off and `bloom-t*.png` has it on, and
+`compare-sequence-*.png` shows the original above ours.
 
 ## Open
 
@@ -56,31 +68,45 @@ Screenshots from the 2026-09-23 lane are in
     and not the same team as ours;
   - ours reads bluer than the original's white-lavender. Exposure and bloom
     are the first suspects, and nothing has been measured.
-- **Nothing has been compared against the original's own absorb.** A PPSSPP
-  capture of a Pulse absorb is the check that matters. It would settle three
-  things: the burst's look at speed (world-space streaks trail the craft),
-  the overlay's `vmmul` operand order, and **whether the overlay draws in
-  play at all**. A 2026-09-23 controlled probe on a silent private
-  instance collected 60 hits of the per-craft update and **0** of
-  `HullOverlay_AbsorbWindowActive`. Stamping `craft+0x878` did not reach
-  `Gu_SetMatrix(3)` at `0x0890e754`. That is why `DRAWN` is false. The probe
-  that decides it: a real absorb, with the stamp store `0x088455ac` as the
-  control and `0x0883e904` as the test. See
-  [cannon-quake-leachbeam.md](../../docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md),
-  "2026-09-23". Two traps it hit, recorded here for whoever retries:
-  - `a0` at `0x08849618` (the object `psp-drive.py` calls the craft) is not
-    the entity whose held weapon is `*(entity+0x4c)+0x1bc`; its own `+0x1bc`
-    is a float. The eight entities `FUN_088418e0` updates sat
-    `0x2a000`-`0x35000` apart, and the last of them was `0xfc0` below that
-    object, which is the unconfirmed guess for the player's. The probe hung
-    before it could check.
-  - `import -window root` on the Xvfb display captured black frames.
+- **Pulse: ours reads much weaker than the original's absorb.** At 0.11 s
+  the original's hull is already near-white and blooms past its own
+  silhouette. At the peak it is a white blob. Ours shows a blue-white sheen
+  near the peak, and with bloom on it glows at the edges only. The overlay's
+  GE state is reproduced, so the causes are outside the module:
+  - `Graphics::bloom` defaults off (magnitude uncalibrated), and the full
+    glow mask the overlay writes only shows through the bloom;
+  - our hull base is darker navy than PPSSPP's vivid blue, so the bright
+    pass `rgb * mask` has less to work with.
+- **Pulse overlay residuals, labelled in the module:**
+  - `LessEqual` stands in for `EQUAL`;
+  - the colour test runs on the texel rather than the modulated fragment;
+  - `self_illuminatedShape`/`glowingShape` take the fade where the original
+    uses their own vertex colour;
+  - both of `glowingShape`'s list-0 batches are overlaid, where the
+    original was seen to submit one;
+  - the airbrakes project from model space rather than their own local
+    coordinates.
+- **Pulse HUD: the energy bar flashes white during the absorb window**
+  (`Hud_UpdateEnergyBar` calls `HullOverlay_AbsorbWindowActive` on the
+  player every frame: alpha `0xff` into widget `+0xf4`, and a blink at
+  8 Hz). Visible in the original's frames. Ours stays cyan. Not built.
+- **Pulse burst look:** in the original it reads as short crackles on the
+  hull, and ours reads as long streaks. Not investigated.
+- **AI absorbs light the hull too.** Seen live: an AI craft absorbed on its
+  own, and `HullOverlay_Submit` ran for its one-second window. Our
+  `absorb_overlay` already draws per slot, so no change is needed, unless an
+  AI absorb path in ours skips `play_absorb_feedback`.
 - **Overlay choice, labelled in the module:** `LessEqual` in place of
   `EQUAL`. The per-mesh gate is read: only a mesh named `...ship...` takes
   the overlay, which is `shipShape` on every Pulse team.
-- **The LeachBeam's `leachbeam_surface.mip` overlay** would ride the same
-  module, but its fade source (`**(float**)(state+0x4c)`) is unread, so it
-  is not wired.
+- **The LeachBeam's `leachbeam_surface.mip` overlay: fade source read
+  statically, not wired.** It is the firing craft's weapon record `+0`,
+  which `LeachBeam_UpdatePool` writes each tick with
+  `LeachBeam_PulseStrength`, gated on `DAT_08b317ac == 2` ("a beam is
+  live"). Confidence 75: the pool's `+0x44` slots are identified by the
+  destructor, not by their writer. Not seen live: firing a LeachBeam through
+  `psp-fire-weapon.py` halts PPSSPP. See cannon-quake-leachbeam.md,
+  "2026-09-23 (later)".
 - **The PS2 port**: the burst plays through Pulse's schedule. The overlay is
   not built, because PS2 hull batches are VIF and have no GE input
   coordinates to project, and its own draw is unread.
@@ -94,6 +120,15 @@ Screenshots from the 2026-09-23 lane are in
    `just play hd --race --give mine --input-script <absorb.inputs>`. The
    method (private `XDG_CONFIG_HOME`/`XDG_CACHE_HOME`, own GDB port, the
    craft array at `0x0098d7c0`) is in absorb-feedback.md, "Live on RPCS3".
-2. Take a PPSSPP capture of a Pulse absorb (`scripts/psp-drive.py`, `--give`
-   routes) and compare it frame by frame with
-   `just play pulse-psp-usa --race --give mine --input-script <script>`.
+2. Pulse brightness gap: render `bloom-t430.png` against
+   `original-ppsspp-07.png` once `Graphics::bloom` is calibrated. Check the
+   hull base colour against PPSSPP's first; that is a lighting question, not
+   the overlay's. Probe scripts (`probe.py`, `absorb_break.py`) and the
+   inputs are in `~/.cache/oag/drive/reports/pulse-absorb-probe/`.
+3. Pulse HUD: the energy bar's absorb flash (`Hud_UpdateEnergyBar`,
+   `+0xf4 = 0xff`, 8 Hz blink off `+0x1dc`). About an hour, with the
+   original's frames as the reference.
+4. Wire the LeachBeam overlay onto the firing craft, faded by its beam's
+   pulse strength. Before that, confirm the record `+0` write live. It
+   needs a way to fire a LeachBeam that does not halt PPSSPP, or an AI
+   LeachBeam caught with a write watch on every record's `+0`.

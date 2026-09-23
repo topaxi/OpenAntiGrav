@@ -1055,3 +1055,4 @@
 0x08a6d79c	function	Vex_CollectNodesOfType	85	shield.md
 0x08916200	function	PsysNode_Start	65	shield.md
 0x08915cdc	function	PsysNode_Update	80	shield.md
+0x08844ec4	function	Ship_AbsorbHeldPickup	85	cannon-quake-leachbeam.md

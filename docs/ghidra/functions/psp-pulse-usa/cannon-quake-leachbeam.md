@@ -1307,7 +1307,9 @@ Both sites gate identically:
   at the live instance's own float, or null when there is none" field would
   have, and the natural candidate is the active `LeachBeam` instance's own
   age or `LeachBeam_PulseStrength` - not confirmed by a write site this
-  pass.
+  pass. **Found 2026-09-23 (later)**: it is the firing craft's weapon record
+  `+0`, written with `LeachBeam_PulseStrength`, and `DAT_08b317ac == 2` means
+  "a beam is live". See "The LeachBeam overlay's fade source" below.
 - **Absorb**: `HullOverlay_AbsorbWindowActive(state)` (`0x0883e904`, renamed
   from `FUN_0883e904`) **and** `HullOverlay_AbsorbFade(state) > 0.0`
   (`0x0883e950`, renamed from `FUN_0883e950`). Both read the identical pair
@@ -1534,9 +1536,14 @@ below** (`oag_render::hull_overlay::DRAWN = true`), as
 `oag_render::hull_overlay`. The port and what it chose are in
 that module's own doc comment. The depth test is `LessEqual` with no write,
 standing in for `EQUAL`. ~~Every hull mesh is overlaid, since the `+0x79`
-byte is unread~~ - read the same day (above): only a mesh named `...ship...`
-takes it, and the port follows that. All five of the hull's lists go through the additive
-pipeline, and the colour-bearing glow meshes take the tint like the rest.
+byte is unread~~ ~~- read the same day (above): only a mesh named
+`...ship...` takes it, and the port follows that~~ - **measured later the
+same day**: the race path overlays every list-0 mesh of the first level of
+detail, and the port follows that (`hull_overlay::overlaid_meshes`). ~~All
+five of the hull's lists go through the additive pipeline~~ - the overlay
+now draws through its own blend, `hull_overlay::BLEND`, which writes the
+glow mask the way the stencil does. The colour-bearing glow meshes take the
+tint like the rest.
 The LeachBeam half (`leachbeam_surface.mip`) would ride the same module,
 but its fade source (`**(float**)(state+0x4c)`) is unread, so it is **not
 wired**.
@@ -1559,7 +1566,11 @@ stationary on the grid after the countdown, with the chase camera.
   is `*(craft + 0x4c)`.
 - **The absorb.** The weapon was granted by writing `0` into the record's
   `+0x1bc` (a memory write while stepping), and circle was then pressed
-  through `input.buttons.press`. The absorb handler `FUN_08844ec4` ran on
+  through `input.buttons.press`. The absorb handler
+  `Ship_AbsorbHeldPickup` (`0x08844ec4`, renamed from `FUN_08844ec4` in this
+  pass; confidence 85: it reads the controller's absorb byte, adds the held
+  pickup's shield value, clears the slot, stamps `+0x878` and calls
+  `Ship_PlayAbsorbFeedback`, all read in its decompile and seen live) ran on
   that real input: the slot went back to `-1` and the stamp was written.
 - **The organic control.** An AI craft absorbed on its own during the
   baseline (nothing was cheated for it), and the same draw-side signal
@@ -1663,6 +1674,46 @@ including the airbrakes. The HUD energy bar is white instead of cyan.
 write, for the original's `EQUAL` with writes on) remains chosen: a frame
 cannot tell the two apart on an unmoving coplanar redraw.
 
+**The port, against these frames.** `oag_render::hull_overlay` was changed
+to match what this run measured. Two changes:
+- the mesh set is every list-0 mesh of the first level of detail;
+- the overlay has its own blend, which writes the full glow mask the stencil
+  writes.
+
+Ours was captured on the same grid, team and circuit (`--race --mode
+single_race --give mine`, one circle on tick 400). Frames are `glow-t*.png`
+(bloom off, the default) and `bloom-t*.png` (`[graphics] bloom = true`),
+and `compare-sequence-*.png` puts them under the original's. **Ours reads
+much weaker than the original.** With bloom off, which is
+`Graphics::bloom`'s uncalibrated default, the glow mask reaches nothing,
+and only the `a^2`-weighted texture shows: a blue-white sheen near the peak.
+With bloom on, the hull glows at the edges but does not blow out. Our base
+hull is also a darker navy than PPSSPP's vivid blue, and the bloom's bright
+pass is `rgb * mask`, so a darker hull blooms less. Neither cause is in
+this module, so nothing here was tuned toward the picture.
+
+**The LeachBeam overlay's fade source (static, confidence 75).**
+`Mesh_DrawBatchSet` gates the LeachBeam half on `DAT_08b317ac == 2` and on
+`**(float **)(craft + 0x4c) > 0`. `craft+0x4c` is the craft's weapon record
+(`world + 0x70 + i * 0x1f0`, the same record whose `+0x1bc` is the held
+weapon), so the value is that record's `+0`. Two functions touch it:
+- `Weapon_FireLeachBeam` (`0x08866658`) sets `DAT_08b317ac = 2`.
+  `LeachBeam_UpdatePool` clears it when a beam retires. So `2` means "a beam
+  is live", not a race mode.
+- `LeachBeam_UpdatePool` writes `LeachBeam_PulseStrength(beam)` every tick
+  through `**(float **)(pool + 0x44 + beam[+0x40] * 4)`. `beam+0x40` is the
+  firing craft's index (`Weapon_FireLeachBeam`'s third argument). Only the
+  pool's destructor `FUN_088664e0` shows what those `+0x44` slots are: it
+  decrements a count at `+0x1e0` of each one. A 0x1f0-byte record with a
+  count at `+0x1e0` is the weapon record, but that is inferred; the slots'
+  writer was not read.
+
+**So the LeachBeam overlay lights the firing craft's hull, faded by its own
+beam's pulse strength.** A 45 s write watch on every record's `+0` logged
+nothing, because no LeachBeam fired in that window. That is a zero without
+the scenario behind it. Firing one through `psp-fire-weapon.py` halts
+PPSSPP, so the live check is still open. Not wired.
+
 ### Open
 
 - ~~**The LeachBeam ribbon's own texture is still unlocated**~~ - found
@@ -1689,11 +1740,11 @@ cannot tell the two apart on an unmoving coplanar redraw.
   "2026-09-17: the hull overlay pair, read in full" above. Its type, size
   and writer are open; only two of its fields (`+0x4c`, `+0x830`/`+0x878`)
   are read, both through their consumers rather than a constructor.
-- **The LeachBeam overlay's own fade source is unidentified.** The gate
-  reads `**(float**)(state+0x4c)`, a double pointer dereference into
-  whatever live float that slot names - plausibly the active `LeachBeam`
-  instance's own age or `LeachBeam_PulseStrength`, not confirmed by a write
-  site.
+- ~~**The LeachBeam overlay's own fade source is unidentified.**~~ Read
+  2026-09-23 (later), statically: the firing craft's weapon record `+0`,
+  written each tick by `LeachBeam_UpdatePool` with
+  `LeachBeam_PulseStrength`. See "The LeachBeam overlay's fade source" in
+  the "2026-09-23 (later)" section. Not yet seen live, and not wired.
 - ~~`Gfx_BuildBatchStateList`'s `0x282` flag word is undecoded~~ - decoded
   2026-09-17, same pass: `GU_BLEND` on, additive (`exhaust::BLEND`'s own
   equation), `GU_CULL_FACE` on, depth write on, `GU_ALPHA_TEST`/
