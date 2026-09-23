@@ -198,7 +198,10 @@ impl Session {
                 total_ticks: observation.tick,
             })
         };
-        let menu = oag_ui::endrace::EndRaceMenu::new(menu_options(campaign), new_best_lap_ticks);
+        let menu = oag_ui::endrace::EndRaceMenu::new(
+            menu_options(campaign, self.tournament_has_next_leg()),
+            new_best_lap_ticks,
+        );
 
         match EndRaceRuntime::new(
             &self.gpu.device,
@@ -314,9 +317,7 @@ impl Session {
             }
             MenuOption::ReturnToGrid => self.return_to_campaign(),
             MenuOption::ReturnToMenu => self.leave_finished_race(),
-            // Not offered by `crate::race_stage::endrace::menu_options` -
-            // this engine implements no Tournament mode.
-            MenuOption::NextRace => {}
+            MenuOption::NextRace => self.advance_tournament_leg(),
         }
     }
 
@@ -363,6 +364,12 @@ impl Session {
     /// live race - see that function's own doc on why a *finished* race is
     /// discarded rather than parked.
     fn leave_finished_race(&mut self) {
+        // Whether the tournament just finished its last leg or is being
+        // abandoned early, there is nothing to carry past this point - see
+        // `Session::tournament`'s own doc for why this engine parks no
+        // save/resume state the way the original's `Tournament_SaveProgress`
+        // does.
+        self.abandon_tournament();
         self.audio.pause_race_music();
         self.audio.stop_race_sfx();
         if let Err(error) = self.open_menus() {

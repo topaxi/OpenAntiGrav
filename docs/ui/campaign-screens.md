@@ -5,11 +5,12 @@ the real 236-cell campaign, and confirming a cell launches it.** The player
 can page through all sixteen grid tiers, drill into a tier's own hex grid,
 and see a selected cell's detail panel - track, class, laps, weapons,
 points, medal, and (where the disc shows them) the three medal targets.
-Confirming a cell in one of the five modes this engine implements
-(`Race`/`Time Trial`/`Speed Lap`/`Zone`/`Elimination`) opens `Team
-Selection` and launches the cell's own race; a cell in one of the four this
-engine does not (`Tournament`/`Head2Head`/`Custom Grid`/`AI Race`) logs why
-and stays on `Cell Selection`. See "Confirming a cell launches" below and
+Confirming a cell in one of the six modes this engine implements
+(`Race`/`Time Trial`/`Speed Lap`/`Zone`/`Elimination`/`Tournament`) opens
+`Team Selection` and launches the cell's own race (a Tournament cell opens
+its own first leg - see `docs/gameplay/race-modes.md#tournament`); a cell in
+one of the three this engine does not (`Head2Head`/`Custom Grid`/`AI Race`)
+logs why and stays on `Cell Selection`. See "Confirming a cell launches" below and
 `docs/architecture/persistence.md` for the medal it earns and where it is
 kept. **Both screens answer a mouse and a finger too, since 2026-09-14** -
 hovering a tier tile or a hex selects it, a second click on the selection
@@ -213,11 +214,11 @@ the previous reading backwards: a `Race` cell reads `"SINGLE RACE"`, not the
 raw enum spelling, and `Track Line` reads the circuit's display name, not
 the raw `NN_Track` id. `oag_ui::campaign::draw::cell_title` mirrors
 `crate::menu::mode_label`'s own `MSC_EVENT_*`-head-before-the-colon reading
-for the five modes this engine implements, plus `MSC_EVENT_TOURN`/`_HTH`
-for `Tournament`/`Head2Head` (present on disc, resolved the identical way,
-but unmeasured against a live frame - no capture reaches either mode);
-`Custom Grid`/`AI Race`/an HD `Other` mode still fall back to the raw
-spelling, since neither authors an `MSC_EVENT_*` entry at all.
+for the six modes this engine implements, plus `MSC_EVENT_HTH` for
+`Head2Head` (present on disc, resolved the identical way, but unmeasured
+against a live frame - no capture reaches that mode). `Custom Grid`/`AI
+Race`/an HD `Other` mode still fall back to the raw spelling, since neither
+authors an `MSC_EVENT_*` entry at all.
 `draw::track_line` calls `strings.get_or_id(&cell.track)` directly - Pulse's
 single copy of the string table needs no `CircuitNames` fold to reach it,
 unlike Wipeout HD's (see `oag_ui::language::CircuitNames`'s own doc).

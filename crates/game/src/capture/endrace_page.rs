@@ -16,7 +16,15 @@ use crate::capture::menu_page::open_for_previews;
 pub(super) enum EndRaceKind {
     Results,
     Rewards,
-    Menu,
+    /// `tournament_next_leg` swaps `RACE AGAIN` for `ER_NEXT_RACE` - see
+    /// `crate::race_stage::endrace::menu_options`'s own doc for when this
+    /// engine actually does that. A capture-only knob: nothing about the
+    /// row's own drawing changes, only which option this synthetic model
+    /// picks, so a Tournament leg's own `EndRace Menu` can be looked at
+    /// without driving a real tournament leg to a finish.
+    Menu {
+        tournament_next_leg: bool,
+    },
 }
 
 #[must_use]
@@ -24,7 +32,12 @@ pub(super) fn endrace_kind(page: &str) -> Option<EndRaceKind> {
     match page {
         "endrace-results" | "endrace_results" => Some(EndRaceKind::Results),
         "endrace-rewards" | "endrace_rewards" => Some(EndRaceKind::Rewards),
-        "endrace-menu" | "endrace_menu" => Some(EndRaceKind::Menu),
+        "endrace-menu" | "endrace_menu" => Some(EndRaceKind::Menu {
+            tournament_next_leg: false,
+        }),
+        "endrace-menu-tournament" | "endrace_menu_tournament" => Some(EndRaceKind::Menu {
+            tournament_next_leg: true,
+        }),
         _ => None,
     }
 }
@@ -213,11 +226,23 @@ fn endrace_page(
                 &|src| sprites.get(src),
             )
         }
-        EndRaceKind::Menu => {
+        EndRaceKind::Menu {
+            tournament_next_leg,
+        } => {
+            // The same list `crate::race_stage::endrace::menu_options`
+            // builds in the binary crate this library cannot reach from
+            // here - reproduced rather than shared, since a `--menu-page`
+            // capture has no `Session` behind it either. See that
+            // function's own doc for the redirect this mirrors.
+            let second_row = if tournament_next_leg {
+                oag_ui::endrace::MenuOption::NextRace
+            } else {
+                oag_ui::endrace::MenuOption::RaceAgain
+            };
             let model = oag_ui::endrace::EndRaceMenu::new(
                 vec![
                     oag_ui::endrace::MenuOption::ReturnToGrid,
-                    oag_ui::endrace::MenuOption::RaceAgain,
+                    second_row,
                     oag_ui::endrace::MenuOption::ViewResultsAgain,
                 ],
                 Some(seconds_to_ticks(49.34)),
@@ -295,7 +320,11 @@ fn hd_endrace_page(
         EndRaceKind::Rewards => anyhow::bail!(
             "this title's EndRace Rewards is not read by this build - endrace-results/endrace-menu only"
         ),
-        EndRaceKind::Menu => {
+        // Tournament is Pulse-only in this build so far - `tournament_next_leg`
+        // never reaches this arm true, but the field still has to be bound.
+        EndRaceKind::Menu {
+            tournament_next_leg: _,
+        } => {
             let model = oag_ui::endrace::EndRaceMenu::new(
                 vec![
                     oag_ui::endrace::MenuOption::ReturnToGrid,

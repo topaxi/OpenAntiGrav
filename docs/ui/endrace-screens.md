@@ -115,7 +115,13 @@ constant's doc for why.
 project holds (`docs/ui/campaign-screens.md`'s "After a campaign race,
 measured": `grid0_3_2`, Time Trial, 3 laps, no medal) rather than a real
 race's own outcome - a `--menu-page` capture has no `Session`/`RaceStage`
-behind it to read one from. Kept at `/tmp/oag-drive/endrace/endrace-{results,rewards,menu}.png`
+behind it to read one from. `endrace-menu-tournament` is a fourth page name,
+Pulse only: the identical `EndRace Menu`, but with `ER_NEXT_RACE` in place
+of `RACE AGAIN` - the row a Tournament cell's own non-last leg offers, per
+[`race-modes.md#tournament`](../gameplay/race-modes.md#tournament); a
+capture-only knob, since driving a real tournament leg to a finish is not
+(`docs/ghidra/functions/psp-pulse-usa/tournament.md`'s own "live
+verification" names the autopilot cost this would take). Kept at `/tmp/oag-drive/endrace/endrace-{results,rewards,menu}.png`
 (not committed - game content). Digit-for-digit against the reference
 frames' own seconds figures except the last centisecond on two of three
 splits (`1.32.48` vs `1.32.49`, `0.49.33` vs `0.49.34`) - an accepted,

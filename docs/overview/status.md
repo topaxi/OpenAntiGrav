@@ -103,7 +103,7 @@ here plays it yet, per CLAUDE.md's "draw nothing and say so" rule.
 | Single race | ✅ verified - eight-craft grid within 2.40 units of the original ([race-modes.md](../gameplay/race-modes.md#single-race), [race_ground_truth.rs](../../crates/game/tests/race_ground_truth.rs)) | ⬜ `?` | ⬜ `?` |
 | Eliminator | 🟩 built - [race-modes.md](../gameplay/race-modes.md#eliminator), kill attribution chosen not measured | ➖ n/a | ⬜ `?` |
 | Head-to-head | 📖 read, not implemented - `race_mode_for_cell` refuses it ([race-modes.md](../gameplay/race-modes.md#tournament)) | ⬜ `?` | ⬜ `?` |
-| Tournament | 📖 read, not implemented - full scoring law recovered ([tournament.md](../ghidra/functions/psp-pulse-usa/tournament.md)) | ⬜ `?` | ⬜ `?` |
+| Tournament | 🟩 built - legs, points and standings-rank medal wired; save/resume and the authored standings table out of scope ([race-modes.md](../gameplay/race-modes.md#tournament)) | ⬜ `?` | ⬜ `?` |
 | Campaign grids/medals | 🟩 built - `evaluate_medal` on `Cell` ([race-campaign.md](../formats/race-campaign.md#the-medal-law-implemented-on-cell-evaluate_medal)) | ⬜ `?` | 📖 read - same schema, extended, split across four archives ([race-campaign.md](../formats/race-campaign.md#wipeout-hd-and-fury-the-same-schema-extended-split-across-four-archives)) |
 | Unlocks | 📖 read - `Unlock_GridPointsMet` and `Grid0..Grid10` gating named, not wired ([race-campaign.md](../formats/race-campaign.md), [race-modes.md](../gameplay/race-modes.md)) | ⬜ `?` | ⬜ `?` |
 | Records (best lap/time) | 🟩 built - `records.toml`/`records.rs`, per (title, track, mode, class) ([persistence.md](../architecture/persistence.md)) | 🟩 built - same mechanism, title-keyed | ➖ n/a |

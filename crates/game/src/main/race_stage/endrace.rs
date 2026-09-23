@@ -269,7 +269,13 @@ pub(crate) fn headline(mode: oag_race::Mode, place: Option<u8>) -> Headline {
     match mode {
         oag_race::Mode::TimeTrial => Headline::TimeTrial,
         oag_race::Mode::SpeedLap => Headline::SpeedLap,
-        oag_race::Mode::SingleRace => match place {
+        // A leg's own headline is its own finishing place - the final
+        // standings rank is a `Rewards`/medal fact, not this screen's, per
+        // `tournament.md`'s own "the medal-eligible value is the final
+        // standings rank... not the last leg's own finishing position"
+        // distinction: that distinction is about what earns the medal, not
+        // about what this headline reports.
+        oag_race::Mode::SingleRace | oag_race::Mode::Tournament => match place {
             Some(place) => Headline::Position(place),
             None => Headline::NoPosition,
         },
@@ -282,18 +288,29 @@ pub(crate) fn headline(mode: oag_race::Mode, place: Option<u8>) -> Headline {
 
 /// `EndRace Menu`'s own option list for this run - see
 /// `docs/formats/endrace-screens.md`'s numbered populate list.
-/// `ER_NEXT_RACE`/`ER_SAVE_QUIT` (mid-Tournament) never appear: this engine
-/// implements no Tournament mode. `ER_SAVE_GHOST`/`MSC_DEL_DATA` never
-/// appear either - see `oag_ui::endrace`'s own module doc for why.
+/// `ER_SAVE_QUIT` (mid-Tournament save-and-quit) never appears: this engine
+/// implements no `Tournament_SaveProgress`/`_LoadProgress` -
+/// `Session::tournament`'s own doc says why. `ER_SAVE_GHOST`/`MSC_DEL_DATA`
+/// never appear either - see `oag_ui::endrace`'s own module doc for why.
+///
+/// **`tournament_next_leg`**: `true` on every leg but a Tournament cell's
+/// own last one, offering `ER_NEXT_RACE` in place of `RACE AGAIN` - the
+/// last leg "instead resolves to the ordinary `EndRace Menu` options",
+/// per `docs/gameplay/race-modes.md#tournament`. `false` for every
+/// non-Tournament race, and for a Tournament's own last leg.
 #[must_use]
-pub(crate) fn menu_options(campaign: bool) -> Vec<MenuOption> {
+pub(crate) fn menu_options(campaign: bool, tournament_next_leg: bool) -> Vec<MenuOption> {
     vec![
         if campaign {
             MenuOption::ReturnToGrid
         } else {
             MenuOption::ReturnToMenu
         },
-        MenuOption::RaceAgain,
+        if tournament_next_leg {
+            MenuOption::NextRace
+        } else {
+            MenuOption::RaceAgain
+        },
         MenuOption::ViewResultsAgain,
     ]
 }
@@ -386,7 +403,9 @@ pub(crate) struct LoyaltyInputs {
 #[must_use]
 pub(crate) fn loyalty_award(inputs: LoyaltyInputs) -> u32 {
     let (lap_rate, perfect_lap_rate) = match inputs.mode {
-        oag_race::Mode::SingleRace => (15, 25),
+        // The same branch the original's own decompile puts Head2Head in
+        // too - see this function's own doc comment.
+        oag_race::Mode::SingleRace | oag_race::Mode::Tournament => (15, 25),
         oag_race::Mode::TimeTrial | oag_race::Mode::SpeedLap => (30, 50),
         oag_race::Mode::Zone | oag_race::Mode::Eliminator => (10, 20),
     };
@@ -400,7 +419,10 @@ pub(crate) fn loyalty_award(inputs: LoyaltyInputs) -> u32 {
     let zone_term = inputs.zones * 10 + inputs.perfect_zones * 20;
 
     let mut multiplier = 1;
-    if inputs.mode == oag_race::Mode::SingleRace {
+    if matches!(
+        inputs.mode,
+        oag_race::Mode::SingleRace | oag_race::Mode::Tournament
+    ) {
         multiplier = match inputs.difficulty {
             Some(0) => 2,
             Some(1) => 3,

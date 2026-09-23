@@ -149,6 +149,7 @@ mod spline;
 mod start;
 mod telemetry;
 mod tick;
+pub mod tournament;
 mod view;
 mod visibility;
 mod weapons;
