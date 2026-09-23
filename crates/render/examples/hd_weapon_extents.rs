@@ -94,8 +94,8 @@ fn main() -> anyhow::Result<()> {
         let (mut agree, mut outward, mut total) = (0usize, 0usize, 0usize);
         let mut mean_normal = [0f32; 3];
         for v in &model.vertices {
-            for a in 0..3 {
-                mean_normal[a] += v.normal[a] / model.vertices.len() as f32;
+            for (sum, n) in mean_normal.iter_mut().zip(v.normal) {
+                *sum += n / model.vertices.len() as f32;
             }
         }
         for tri in model.indices.as_chunks::<3>().0 {
