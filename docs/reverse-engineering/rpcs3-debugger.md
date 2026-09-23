@@ -205,11 +205,12 @@ over several real seconds. Two consequences:
 The workaround is a fixed-interval grab alongside the screen-keyed one -
 `rpcs3-drive.py bootchain --film N`. It is not a full fix: a root-window grab
 itself costs 1.5-3 s, so a screen up for less than that can still fall between
-two frames, which is exactly what happened to `Language Selection`. Concluding
-"the screen never displays" from a film that missed it would be reading absence
-of evidence as evidence, and
-[hd-frontend.md](../formats/hd-frontend.md#what-the-capture-did-not-settle)
-records it as unanswered rather than answered.
+two frames, which is exactly what happened to `Language Selection` in the
+original three cold boots - concluding "the screen never displays" from a
+film that missed it would have been reading absence of evidence as evidence.
+What settled it instead was timing the screen off `RPCS3.log`'s own
+`sys_tty_write` lines rather than a root-window grab at all; see
+[hd-frontend.md](../formats/hd-frontend.md#what-the-capture-did-not-settle-and-what-a-later-one-did).
 
 **Ordering, by contrast, is trustworthy.** Bursts preserve write order, so the
 *sequence* of `Switching Screen` lines is sound even when their timings are not

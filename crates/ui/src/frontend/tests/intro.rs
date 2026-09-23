@@ -372,3 +372,46 @@ fn the_overlay_still_defaults_on_when_the_reel_has_no_picture() {
         "no picture decoded, so the counter is the only sign the leg is running: {draws:#?}"
     );
 }
+
+/// `skip_never_shown_picker` on a fresh HD boot: no settings language yet,
+/// and the picker must still never wait on a player - see
+/// `docs/formats/hd-frontend.md#is-the-language-picker-ever-shown` for the
+/// four RPCS3 boots this defaults on.
+#[test]
+fn skip_never_shown_picker_defaults_hd_to_english_with_no_input() {
+    let mut frontend = hd(20, true);
+    assert!(frontend.machine().is(states::LANGUAGE_SELECTION));
+
+    assert!(frontend.skip_never_shown_picker(oag_hd::TITLE));
+
+    let mut input = Input::new();
+    input.begin_frame(0);
+    frontend.update(FRAME, &mut input, None);
+    assert!(
+        frontend.machine().is(hd_states::STUDIO_LOGO),
+        "the redirect must fire on its own frame, with no button ever pressed"
+    );
+    assert_eq!(frontend.chosen(), Some("English"));
+}
+
+/// The escape hatch is HD's alone: Pure's own picker (ADR-0023's own reason
+/// to exist) must keep waiting on a player exactly as before.
+#[test]
+fn skip_never_shown_picker_is_a_no_op_off_hd() {
+    let mut frontend = frontend(300);
+    let mut input = Input::new();
+    input.begin_frame(Button::Start.bit());
+    frontend.update(FRAME, &mut input, None);
+    input.begin_frame(0);
+    frontend.update(FRAME, &mut input, None);
+    assert!(frontend.machine().is(states::LANGUAGE_SELECTION));
+
+    assert!(!frontend.skip_never_shown_picker(oag_pure::TITLE));
+
+    input.begin_frame(0);
+    frontend.update(FRAME, &mut input, None);
+    assert!(
+        frontend.machine().is(states::LANGUAGE_SELECTION),
+        "no title but HD gets the default - Pure's picker still waits"
+    );
+}

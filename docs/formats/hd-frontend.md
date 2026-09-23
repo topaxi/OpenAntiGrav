@@ -110,7 +110,7 @@ Two findings, and the first is the disc's own bug rather than a reading error:
 | Are any `FEGlobals` referenced but undeclared? | **None, in any of the six** | 90 |
 | Declared boot chain | Eight screens then `Main Menu`, quoted below | 80 |
 | Runtime boot order | **The same order.** Three cold boots on RPCS3, 2026-09-05 | 85 |
-| Is the language picker ever *shown*? | **Unanswered.** It is entered every boot; no frame of it has been caught | - |
+| Is the language picker ever *shown*? | **No evidence of it presenting.** `LanguageAutoRedirect` fired within 2-296 ms on all four RPCS3 boots tried, regardless of system language matching a shipped plugin or a save already existing | 85 (mechanism), 75 (never presents) |
 | Does the executable agree on the first screen? | **Yes.** `0x000186f0` returns `"Language Selection"` by default | 70 |
 
 ## Reading it yourself
@@ -601,21 +601,89 @@ says so too.
 `data/reference/hd-boot-chain/cold-01/02-firstplay.png` is the screen: *"ARE YOU
 NEW TO WIPEOUT? ... Choosing YES below will enable the Pilot Assist option."*
 
-#### What the capture did **not** settle
+#### What the capture did **not** settle, and what a later one did
 
-**No frame of `Language Selection` was ever caught.** cold-02's 1.5-second film
-runs `Sony Computer Entertainment presents` (11.77 s) -> black (14.97 s) -> the
-Studio Liverpool reel already playing (20.01 s). `TTY.log` names the picker
-being entered on every boot, so the *state* runs - but whether it ever
-**presents a frame to a player** is open, and the picker's own
-`LanguageAutoRedirect` is a sufficient explanation for it not doing so on a
-console whose XMB has already answered. `RPCS3.log` shows the English language
-plugin loaded before the picker is entered, which is consistent with that.
+**No frame of `Language Selection` was ever caught in the original three
+cold boots.** cold-02's 1.5-second film runs `Sony Computer Entertainment
+presents` (11.77 s) -> black (14.97 s) -> the Studio Liverpool reel already
+playing (20.01 s). `TTY.log` names the picker being entered on every boot, so
+the *state* runs - but whether it ever **presents a frame to a player** was
+open, and the picker's own `LanguageAutoRedirect` was a sufficient
+explanation for it not doing so on a console whose XMB has already answered
+*if* the redirect keyed off the system language. That specific mechanism is
+now falsified - see below - but the broader "does a frame ever draw" question
+carries a lower score than the mechanism does, for the reason given there.
 
-So: "does the picker run" is answered at the state-machine level and **not** at
-the level of what a player sees. `Provenance` is two-valued by design and grades
-neither this nor the emulator caveat; [ADR-0025] rejected a confidence number in
-the type and put the rubric score here, where it can carry its evidence.
+**2026-09-23: four RPCS3 boots, crossing system language against savedata,
+all leave the screen in 2-296 ms - the redirect does not key off either.**
+The handover thread this closes (`is-hds-language-picker-ever-shown-to-a-player.md`)
+asked for exactly this: set the PS3 system language to one HD ships no plugin
+for, and see whether `Language Selection` stops there instead of leaving in
+the same frame it does under a shipped language. It was tried on **two**
+axes at once, because a first pass conflated them - the first attempt reused
+the RPCS3 profile this project already boots with, whose
+`dev_hdd0/home/00000001/savedata/BCES00664-AUTO-` skips `FirstPlay` (see the
+capture above), and the picker's own `<Menu name="Language" ... save="true">`
+means a previously-recorded choice is at least as plausible an explanation
+for an instant exit as an unconditional redirect is. Both axes needed
+splitting apart to tell them apart:
+
+| Run | System language | Savedata | `Language Selection` entered | Left for `PreFMVConnect` | Dwell |
+| --- | --- | --- | ---: | ---: | ---: |
+| 1 | English (US) (`american` plugin ships) | present | - | - | same TTY.log burst |
+| 2 | Polish (no plugin ships) | present | - | - | same TTY.log burst |
+| 3 | English (US) | **none** (fresh profile) | 36.305750 s | 36.602016 s | **296 ms** |
+| 4 | Polish | **none** (fresh profile) | 6.138388 s | 6.140439 s | **2 ms** |
+
+Runs 3 and 4 are the falsifying pair: a genuinely fresh
+`dev_hdd0/home/00000001` (no `savedata` directory at all, not one moved aside
+and restored - built by giving RPCS3 its own isolated profile, `dev_flash`
+firmware and `dev_hdd0/game` symlinked read-only from the real one so nothing
+needed reinstalling), timestamped off `RPCS3.log`'s own `sys_tty_write` lines
+rather than this driving script's poll loop. English, which matches a shipped
+plugin, and Polish, which matches none, both leave within a few hundred
+milliseconds of entering - **the same behaviour under both settings**, which
+is exactly what the thread named as what would falsify "the redirect keys off
+the system language". It does not. Runs 1 and 2, on the shared profile with a
+save present, agree with runs 3 and 4 rather than explaining them: the "a
+saved choice already answers it" hypothesis predicts runs 3-4 would differ
+from 1-2, and they do not.
+
+**A second, independent line in the same logs closes the string-table half of
+the question too.** Before `Language Selection` is even entered, both runs
+load exactly the same plugin - `RPCS3.log`: `` "Created Plugin from
+\"Data\Plugins\languages\English\"" `` at 0:00:34.136 (English config) and
+0:00:03.638 (Polish config), word for word, in both. Nothing in either run
+ever created a second language plugin afterward, through `Studio Logo` and
+into `EpilepsyWarning`. So English is not a fallback picked *because* Polish
+has no plugin - it is what loads regardless, before the system language could
+matter at all.
+
+**Confidence 85** for the mechanism - `LanguageAutoRedirect` fires with no
+measured dependency on system language or savedata - the same band and the
+same reasoning [runtime boot order](#the-capture-that-made-this-an-order-rather-than-a-reading)
+already carries: RPCS3 is not a PS3, and there is no second pressing or
+platform to corroborate against, but this is now *four* independent boots
+crossing two variables rather than three repeats of one. **Confidence 75**,
+separately, for "so no frame is ever presented to a player" - 296 ms is still
+upward of a dozen frames at 60 Hz, long enough that a frame *could* have
+drawn even though nothing here could act on it, so this is an inference from
+the dwell time rather than a direct capture. [ADR-0025] rejected a confidence
+number in `Provenance` itself and put the rubric score here, on the page,
+which is where both numbers above live rather than in the type.
+
+**This build had the corresponding gap, now fixed.** `oag_ui::frontend::Frontend`
+already skipped the picker when `settings.toml` named a language RPCS3's
+save-analogue would have (`Frontend::preselect_language`), but a genuinely
+first run - no settings language yet - fell through to the interactive
+Up/Down/Cross path, which is exactly the screen the measurement above says
+the original never presents on *any* run, first or not.
+`Frontend::skip_never_shown_picker` closes that: on HD alone, with no
+settings language yet, it defaults straight to `"English"` - the plugin both
+matched and unmatched runs actually loaded - rather than waiting on a player.
+Wired into both boot paths (`crates/game/src/main/session/load.rs`,
+`crates/game/src/main/headless.rs`), tested in
+`crates/ui/src/frontend/tests/intro.rs`.
 
 #### Two `TTY.log` screen names that are not boot steps
 
@@ -672,9 +740,11 @@ coming to `skin.xml` fresh will meet the fork before they meet the measurement:
   Selection -> PreFMVConnect -> Studio Logo -> EpilepsyWarning -> ...`,
   confidence 85, three boots.
 
-  **The screen being entered is not the screen being shown**, and only the
-  first of those is measured - see "what the capture did not settle" above. No
-  frame of the picker has ever been caught.
+  **The screen being entered is not the screen being shown.** Both are now
+  measured: entry, on these three boots at confidence 85; presenting, at the
+  same confidence for the mechanism and 75 for the inference that no frame
+  draws - see [what the capture did not settle, and what a later one
+  did](#what-the-capture-did-not-settle-and-what-a-later-one-did).
 
 ### Two chain families - and only one of them is reachable
 

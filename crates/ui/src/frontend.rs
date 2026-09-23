@@ -946,6 +946,31 @@ impl Frontend {
         self.auto_confirm = true;
         true
     }
+
+    /// HD's own `Language Selection` never presents to a player - the caller's
+    /// escape hatch for the one case [`Self::preselect_language`] cannot cover:
+    /// a run with no settings language yet, on the one title this is measured
+    /// for.
+    ///
+    /// Four RPCS3 boots (English matched a shipped plugin, Polish matched
+    /// none; each repeated with and without a save already on the profile)
+    /// all left `Language Selection` for `PreFMVConnect` within 2-296 ms of
+    /// entering it through the screen's own unconditional
+    /// `LanguageAutoRedirect` - see
+    /// `docs/formats/hd-frontend.md#is-the-language-picker-ever-shown`. A
+    /// fresh run choosing nothing yet must not be the one case this build
+    /// waits at a screen the original never does, so this defaults straight
+    /// to `"English"`, which is what HD's own bootstrap plugin load resolved
+    /// to in both matched and unmatched conditions before the screen was even
+    /// entered.
+    ///
+    /// A no-op, returning `false`, on every title but HD, and on an HD source
+    /// that does not offer `"English"` (unmeasured elsewhere - not invented
+    /// here, the same refusal [`Self::preselect_language`] already makes for
+    /// a name this source does not carry).
+    pub fn skip_never_shown_picker(&mut self, title: &oag_title::Title) -> bool {
+        title.name == oag_hd::TITLE.name && self.preselect_language("English")
+    }
 }
 
 #[cfg(test)]
