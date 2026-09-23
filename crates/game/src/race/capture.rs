@@ -885,6 +885,7 @@ pub fn capture(
     // A screenshot is opaque. The frame's alpha channel is the bloom mask and
     // not coverage - see `oag_render::capture::make_opaque` - so encoding it
     // straight from the readback writes a fully transparent PNG.
+    oag_render::capture::dump_glow_mask_if_asked(width, height, &pixels)?;
     oag_render::capture::make_opaque(&mut pixels);
     let png = oag_texture::png::encode_rgba(width, height, &pixels);
     std::fs::write(&options.path, png)

@@ -40,6 +40,36 @@ pub fn make_opaque(pixels: &mut [u8]) {
     }
 }
 
+/// The environment variable that asks [`dump_glow_mask_if_asked`] for a PNG
+/// of a frame's glow mask, and names the path.
+pub const DUMP_GLOW_MASK_VAR: &str = "OAG_DUMP_GLOW_MASK";
+
+/// Writes the frame's alpha channel - the bloom's glow mask - as a greyscale
+/// PNG when [`DUMP_GLOW_MASK_VAR`] names a path, before [`make_opaque`]
+/// erases it. The comparison `docs/rendering/glow-mask.md` makes against the
+/// original's EDRAM needs exactly this channel.
+///
+/// # Errors
+///
+/// A path that cannot be written.
+pub fn dump_glow_mask_if_asked(width: u32, height: u32, pixels: &[u8]) -> anyhow::Result<()> {
+    let Some(path) = std::env::var_os(DUMP_GLOW_MASK_VAR) else {
+        return Ok(());
+    };
+    let grey: Vec<u8> = pixels
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .flat_map(|p| [p[3], p[3], p[3], 0xff])
+        .collect();
+    std::fs::write(&path, oag_texture::png::encode_rgba(width, height, &grey))?;
+    println!(
+        "wrote the glow mask to {}",
+        std::path::Path::new(&path).display()
+    );
+    Ok(())
+}
+
 /// Renders one frame of `model` to a PNG from a given orbit angle.
 ///
 /// `pitch` near zero looks along the ground; near `PI / 2` looks straight down,

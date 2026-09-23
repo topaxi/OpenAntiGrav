@@ -363,6 +363,9 @@ struct VertexInput {
     // This material's specular exponent, resolved per material - see
     // `oag_render::mesh::vertex::GpuVertex::specular_exponent`.
     @location(10) specular_exponent: f32,
+    // What this surface stamps into the bloom's glow mask - see
+    // `oag_render::mesh::GpuVertex::glow` and `glow_stamp` below.
+    @location(11) glow: f32,
 };
 
 struct VertexOutput {
@@ -395,6 +398,8 @@ struct VertexOutput {
     // computed per vertex and interpolated exactly as the original's
     // `SpuVertexColours` stream is. Zero wherever no list is bound.
     @location(12) spu_light: vec3<f32>,
+    // `VertexInput::glow`, flat: a batch stamps one value.
+    @location(13) @interpolate(flat) glow: f32,
 };
 
 // **Wipeout HD's `EdgeGeom` light loop, per vertex.** Read off the SPU job's
@@ -464,6 +469,7 @@ fn vs_main(in: VertexInput) -> VertexOutput {
     out.normal = (uniforms.model * turned).xyz;
     out.colour = in.colour;
     out.lit = in.lit;
+    out.glow = in.glow;
     // **Pulse's hull, lit the way the GE lights it**: per vertex, the circuit's
     // own ambient plus each directional light's `N . L`, clamped to `0..1` and
     // carried to the fragment as the vertex colour the texel is modulated by.
@@ -1463,6 +1469,19 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     return mix(mix(shaded_or_sheen, flame, flame_shading), absorb, absorb_shading);
 }
 
+// **Whether this model stamps the bloom's glow mask** - 1.0 only for a
+// drawable built with `mesh_render::GlowMask::Stamped`. The original writes
+// that channel through the GE stencil, never through the blend, so an opaque
+// surface stamps a constant the batch names rather than its own alpha - see
+// `oag_render::mesh::glow` and docs/rendering/glow-mask.md.
+override glow_stamp: f32 = 0.0;
+
+// The opaque and cutout pipelines' alpha: `1.0` as it always was, or the
+// batch's stamp where the model stamps.
+fn stamped_alpha(in: VertexOutput) -> f32 {
+    return mix(1.0, in.glow, glow_stamp);
+}
+
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let shaded = lit_texel(in);
@@ -1473,7 +1492,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     // exactly. `fs_main_blend` below is the one that actually reads it.
     return vec4<f32>(
         fogged(shadowed(shaded.rgb, in.world), in.world, in.view_depth),
-        1.0
+        stamped_alpha(in)
     );
 }
 
@@ -1569,7 +1588,7 @@ fn fs_main_alpha_test(in: VertexOutput) -> @location(0) vec4<f32> {
     }
     return vec4<f32>(
         fogged(shadowed(shaded.rgb, in.world), in.world, in.view_depth),
-        1.0
+        stamped_alpha(in)
     );
 }
 
@@ -1585,7 +1604,7 @@ fn fs_main_velocity(in: VertexOutput) -> MrtOutput {
     return MrtOutput(
         vec4<f32>(
             fogged(shadowed(shaded.rgb, in.world), in.world, in.view_depth),
-            1.0
+            stamped_alpha(in)
         ),
         velocity_of(in),
     );
@@ -1600,7 +1619,7 @@ fn fs_main_alpha_test_velocity(in: VertexOutput) -> MrtOutput {
     return MrtOutput(
         vec4<f32>(
             fogged(shadowed(shaded.rgb, in.world), in.world, in.view_depth),
-            1.0
+            stamped_alpha(in)
         ),
         velocity_of(in),
     );

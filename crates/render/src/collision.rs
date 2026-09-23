@@ -290,6 +290,7 @@ pub fn build_model(
         material_anim: Vec::new(),
 
         vertex_colour_is_light: false,
+        stamps_glow: false,
 
         flame: None,
         absorb_shell: false,
@@ -386,6 +387,7 @@ fn vertex(position: [f32; 3], normal: [f32; 3], colour: [f32; 4], lit: f32) -> G
         sun_mask: 1.0,
         slots: crate::mesh::slots::DEFAULT,
         specular_exponent: crate::mesh::DEFAULT_SPECULAR_EXPONENT,
+        glow: 0.0,
     }
 }
 

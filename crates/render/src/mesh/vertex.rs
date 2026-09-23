@@ -116,6 +116,15 @@ pub struct GpuVertex {
     /// stays a defensible middle value in all three cases: the commonest of
     /// the disc's own round numbers, not this project's invention.
     pub specular_exponent: f32,
+    /// The value this surface stamps into the bloom's glow mask, `0..=1`,
+    /// where its drawable is built with `mesh_render::GlowMask::Stamped`.
+    ///
+    /// The original writes the mask through the stencil, never through the
+    /// blend, so a surface writes a **constant** rather than its own alpha:
+    /// `crate::mesh::glow` reads which one off the batch and its texture. See
+    /// `docs/rendering/glow-mask.md`. `0.0` on every surface nothing reads it
+    /// for. Last, for the reason [`Self::lightmap_texcoord`] gives.
+    pub glow: f32,
 }
 
 /// [`GpuVertex::specular_exponent`]'s fallback - every title but Wipeout HD,

@@ -565,6 +565,7 @@ fn emit(
             // `1.0` here leaves that gate untouched.
             sun_mask: light.map(|&[.., m]| finite(m)).unwrap_or(1.0),
             specular_exponent: surface.specular_exponent,
+            glow: 0.0,
         });
     }
     let centre = centre / points.len() as f32;

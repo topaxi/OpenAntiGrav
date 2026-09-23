@@ -45,6 +45,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         );
     }
     glow_census(&blob)?;
+    depth_census(&blob)?;
     if let Some(node) = oag_vex::track::find_node(&blob, &nodes) {
         let track = oag_vex::track::parse(&blob[node.payload()])?;
         println!("track version {:#x}", track.version);
@@ -123,5 +124,36 @@ fn glow_census(blob: &[u8]) -> Result<(), Box<dyn std::error::Error>> {
             "bits {bits:#04x} texture {texture} {name}: {n} batches ({transparent} transparent) head {head:02x?}"
         );
     }
+    Ok(())
+}
+
+/// Census of `header_flags & 0x20` - the GEQUAL depth test
+/// `Gfx_BuildBatchStateList` gives a batch - by blend class.
+fn depth_census(blob: &[u8]) -> Result<(), Box<dyn std::error::Error>> {
+    let classes = vex::classes_of(blob)?;
+    let nodes = vex::nodes(blob)?;
+    let mut counts = std::collections::BTreeMap::<(&str, bool, bool), usize>::new();
+    for node in nodes.iter().filter(|n| Some(n.class_id) == classes.mesh) {
+        let payload = &blob[node.payload()];
+        for list in 0..2u8 {
+            for batch in vex::mesh_batches(payload, list)? {
+                let class = if batch.is_transparent() {
+                    "transparent"
+                } else if batch.is_alpha_tested() {
+                    "cutout"
+                } else {
+                    "opaque"
+                };
+                *counts
+                    .entry((
+                        class,
+                        batch.header_flags & 0x20 != 0,
+                        batch.header_flags & 0x10 != 0,
+                    ))
+                    .or_default() += 1;
+            }
+        }
+    }
+    println!("(class, header&0x20, header&0x10) -> batches: {counts:?}");
     Ok(())
 }

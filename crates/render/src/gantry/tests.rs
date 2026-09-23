@@ -113,6 +113,7 @@ fn two_draws(a: f32, b: f32) -> Model {
         sun_mask: 1.0,
         slots: 0,
         specular_exponent: crate::mesh::DEFAULT_SPECULAR_EXPONENT,
+        glow: 0.0,
     };
     let mut model = Model::none("two draws");
     model.vertices = vec![
@@ -215,6 +216,7 @@ fn textured_draws(placeholder_label: &str) -> Model {
         sun_mask: 1.0,
         slots: 0,
         specular_exponent: crate::mesh::DEFAULT_SPECULAR_EXPONENT,
+        glow: 0.0,
     };
     let mut model = Model::none("placeholder + art");
     model.vertices = vec![vertex(), vertex(), vertex(), vertex(), vertex(), vertex()];

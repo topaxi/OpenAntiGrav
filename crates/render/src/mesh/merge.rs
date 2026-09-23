@@ -42,6 +42,7 @@ pub fn merge(label: &str, models: Vec<Model>) -> Model {
         material_anim: Vec::new(),
 
         vertex_colour_is_light: false,
+        stamps_glow: false,
 
         flame: None,
         absorb_shell: false,
@@ -188,6 +189,7 @@ mod merge_tests {
                     sun_mask: 1.0,
                     slots: slots::DEFAULT,
                     specular_exponent: crate::mesh::DEFAULT_SPECULAR_EXPONENT,
+                    glow: 0.0,
                 })
                 .collect(),
             indices: (0..vertices as u32).collect(),
@@ -217,6 +219,7 @@ mod merge_tests {
             material_anim: Vec::new(),
 
             vertex_colour_is_light: false,
+            stamps_glow: false,
 
             flame: None,
             absorb_shell: false,

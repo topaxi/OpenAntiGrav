@@ -27,6 +27,7 @@ fn vertex(position: [f32; 3]) -> GpuVertex {
         sun_mask: 1.0,
         slots: oag_render::mesh::slots::DEFAULT,
         specular_exponent: oag_render::mesh::DEFAULT_SPECULAR_EXPONENT,
+        glow: 0.0,
     }
 }
 
@@ -64,6 +65,7 @@ fn triangle_model() -> Model {
         material_variants: Vec::new(),
         material_anim: Vec::new(),
         vertex_colour_is_light: false,
+        stamps_glow: false,
         flame: None,
         absorb_shell: false,
         alpha_test_ref: None,

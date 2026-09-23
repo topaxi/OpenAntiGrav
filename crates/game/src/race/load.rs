@@ -16,6 +16,7 @@ mod environment;
 mod geometry;
 mod global;
 mod pads;
+mod pulse_psp;
 mod roster;
 mod surfaces;
 mod variant;
@@ -446,7 +447,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
     // first two. Every one of them reports what it found and substitutes
     // nothing for what it did not - see `environment::staging`.
     let environment::Staging {
-        mut light,
+        light,
         authored_fog,
         hd_bloom,
         zone_grade,
@@ -472,18 +473,6 @@ pub fn load(options: &Options) -> Result<Loaded> {
         Vec::new()
     } else {
         let nodes = oag_vex::vex::nodes(&track_blob).unwrap_or_default();
-        // Pulse on the PSP lights its hulls with the circuit's own light nodes -
-        // see `mesh_render::HullLights`. Measured on no other title or port.
-        if title.name == oag_pulse::TITLE.name
-            && archives.layout.platform == oag_assets::Platform::Psp
-            && let Some(hull) = mesh_render::HullLights::from_track(&track_blob, &nodes, 255)
-        {
-            report.push(format!(
-                "hull lights: ambient {:?}, {:?}",
-                hull.ambient, hull.diffuse
-            ));
-            light.hull = hull;
-        }
         let volumes = oag_vex::fog::volumes(&track_blob, &nodes);
         report.push(match volumes.first() {
             None => "the track authors no fogCube; the race is unfogged".to_string(),
@@ -899,7 +888,8 @@ pub fn load(options: &Options) -> Result<Loaded> {
         }
     });
 
-    Ok(Loaded {
+    let pulse_psp = vex_geometry && pulse_psp::is_pulse_psp(title, &archives);
+    let mut loaded = Loaded {
         title,
         setup: Setup {
             mode: options.mode,
@@ -990,5 +980,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         // name to carry - see `Loaded::campaign_2048_event`'s own doc.
         campaign_2048_event: None,
         report,
-    })
+    };
+    pulse_psp::finish(&mut loaded, pulse_psp, &track_blob);
+    Ok(loaded)
 }

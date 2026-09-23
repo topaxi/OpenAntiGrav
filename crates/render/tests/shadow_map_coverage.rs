@@ -27,6 +27,7 @@ fn vertex(position: [f32; 3]) -> GpuVertex {
         sun_mask: 1.0,
         slots: oag_render::mesh::slots::DEFAULT,
         specular_exponent: oag_render::mesh::DEFAULT_SPECULAR_EXPONENT,
+        glow: 0.0,
     }
 }
 
