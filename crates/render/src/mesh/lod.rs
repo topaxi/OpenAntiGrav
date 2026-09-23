@@ -6,48 +6,39 @@
 /// Whether [`super::build_with_textures`] draws every child of an authored
 /// `LodGroup` (class `0x2ee`), or only the first.
 ///
-/// **This is not a quality tier and it does not switch by distance.** The
-/// original PSP binary never does either: it registers the class but never
-/// reads its `child_count` or switch-distance fields, and its generic tree
-/// walker draws every child of every node unconditionally, always, with no
-/// live re-evaluation against the camera - see `docs/formats/vex.md`,
-/// "`LodGroup`: authored, but never switched at runtime". Ten of the eleven
-/// `LodGroup` instances on `16_Track` carry two children with real,
-/// differently-detailed mesh geometry in both, so [`Self::Both`] (matching
-/// the original) means genuinely overlapping duplicate geometry, not a
-/// "higher quality" picture. [`Self::Single`] is a one-time choice made when
-/// the model is built, not a live switch: it keeps the higher-detail tier and
-/// permanently discards the other, removing that duplication at the cost of
-/// no longer matching the original.
+/// **[`Self::Single`] is what the original shows, and the default.** PPSSPP
+/// frames of the player's hull and of a `16_Track` grandstand `LodGroup`,
+/// both well inside the authored switch distance, match `Single` detail for
+/// detail; [`Self::Both`] lays the coarse tier over the fine one - a dark
+/// ring round the rear hull, flat panels and seams over the grandstand's
+/// grass. See `docs/formats/vex.md`, "the running original does not draw
+/// tier 1 up close" (confidence 80). The static read above that section -
+/// no code in the PSP binary ever selects a tier - is what `Both` was built
+/// on, and the pixels contradict it for what reaches the screen.
 ///
-/// **2026-09-23: the pixels contradict the static read.** A PPSSPP frame of
-/// the player's hull and one of a `16_Track` grandstand `LodGroup`, both well
-/// inside the authored switch distance, match [`Self::Single`] and not
-/// [`Self::Both`] - see `docs/formats/vex.md`, "the running original does not
-/// draw tier 1 up close". So `Both` is the unfaithful picture near the camera,
-/// despite its variant doc below.
+/// Not a quality tier and not a live switch: `Single` is decided when the
+/// model is built and keeps the higher-detail first child. Whether the
+/// original swaps to the coarse tier beyond the authored switch distance is
+/// not read; a real distance switch would need `Model` to carry per-node
+/// bounds and the render loop to re-check them every frame.
 ///
-/// A real distance-based switch (the original's authored switch-distance
-/// value, re-checked against the camera every frame) would need `Model` to
-/// carry per-node bounds and the render loop to re-evaluate them each frame -
-/// the same live-camera mechanism the roadmap's unimplemented frustum-culling
-/// entry needs, and not yet built.
+/// There is no settings-file key for this since 2026-09-23 - a player gets
+/// `Single`. `Both` stays reachable from `oag-game --lod both` and
+/// `oag-view --lod both`, a diagnostic view of the coarse tier.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Lod {
-    /// Draw every child of every `LodGroup`, exactly as the original does -
-    /// including the duplicate geometry that results.
-    #[default]
+    /// Draw every child of every `LodGroup`, coarse tier included - a
+    /// diagnostic view; the original does not draw this up close.
     Both,
     /// Draw only the first child of a two-child `LodGroup` - the
     /// higher-triangle-count tier in all ten measured cases - and skip the
-    /// rest. A permanent, load-time choice, not a live switch. Removes real
-    /// duplicate geometry the original always draws twice, at the cost of no
-    /// longer matching it.
+    /// rest. What the original shows within the authored switch distance.
+    #[default]
     Single,
 }
 
 impl Lod {
-    /// The spelling used in a settings file and on a menu row.
+    /// The spelling used on the `--lod` command-line flag.
     #[must_use]
     pub fn name(self) -> &'static str {
         match self {
@@ -56,7 +47,7 @@ impl Lod {
         }
     }
 
-    /// Every mode, for the menus and for error messages.
+    /// Every mode, for error messages.
     pub const ALL: [Self; 2] = [Self::Both, Self::Single];
 }
 

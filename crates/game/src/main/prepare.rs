@@ -140,7 +140,7 @@ impl Pending {
             opponent_teams,
             ribbon: self.cli.ribbon,
             collision: self.cli.collision,
-            lod: self.cli.lod.unwrap_or(self.settings.graphics.lod),
+            lod: self.cli.lod.unwrap_or_default(),
             // **From the settings here, not only in the menu path.** `--race`
             // bypasses the menus entirely, and a difficulty wired only into
             // `LaunchRace` would be silently ignored by the flag most testing

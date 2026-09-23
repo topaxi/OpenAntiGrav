@@ -51,7 +51,6 @@ use std::path::PathBuf;
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 
-use oag_render::mesh::Lod;
 use oag_render::mesh_render::Anisotropy;
 
 mod controls;
@@ -79,17 +78,6 @@ enum AnisotropyDef {
     X8,
     #[serde(rename = "16x")]
     X16,
-}
-
-/// Mirrors [`Lod`] for serde, the same way [`AnisotropyDef`] mirrors
-/// `Anisotropy` - a type this crate does not own, so it cannot derive here.
-#[derive(Serialize, Deserialize)]
-#[serde(remote = "Lod")]
-enum LodDef {
-    #[serde(rename = "both")]
-    Both,
-    #[serde(rename = "single")]
-    Single,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -445,16 +433,6 @@ pub struct Graphics {
     /// `docs/architecture/adr/0011-authored-pvs-before-frustum-culling.md`.
     #[serde(default = "default_pvs_culling")]
     pub pvs_culling: bool,
-    /// Whether a track draws every child of an authored `LodGroup`, or only
-    /// the higher-detail first one. Not a quality tier and not distance-based,
-    /// see [`Lod`] for why. `both` matches the original, duplicate geometry
-    /// included; `single` is a load-time choice that removes it.
-    ///
-    /// Defaults to `both`: this changes what is drawn, unlike a texture filter
-    /// or an overlay, so the out-of-the-box behaviour matches the original
-    /// rather than opting a player into a divergence they did not ask for.
-    #[serde(with = "LodDef", default)]
-    pub lod: Lod,
     /// Whether trackside surfaces animate, or stay frozen at their authored
     /// texture coordinates.
     ///
@@ -582,7 +560,6 @@ impl Default for Graphics {
             perf_overlay: crate::perf::Overlay::default(),
             frustum_culling: default_frustum_culling(),
             pvs_culling: default_pvs_culling(),
-            lod: Lod::default(),
             bloom: default_bloom(),
             boost_fov_kick: default_boost_fov_kick(),
             camera_view: default_camera_view(),
@@ -823,7 +800,6 @@ pub fn menu_seeds(
             "graphics.perf_overlay",
             text(&settings.graphics.perf_overlay.to_string()),
         ),
-        ("graphics.lod", text(&settings.graphics.lod.to_string())),
         (
             "graphics.boost_fov_kick",
             text(&settings.graphics.boost_fov_kick.to_string()),

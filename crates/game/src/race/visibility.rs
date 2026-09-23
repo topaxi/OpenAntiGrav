@@ -9,7 +9,7 @@ use super::*;
 /// What one frame's frustum culling did, for the performance overlay.
 ///
 /// Plain counts rather than anything richer: the point is to show the effect
-/// of `[graphics] lod` and frustum culling is having, not to profile the
+/// of `--lod` and frustum culling is having, not to profile the
 /// renderer.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct SceneStats {

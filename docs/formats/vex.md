@@ -332,8 +332,9 @@ recovered feature - it should be labelled as such wherever it lands, the same
 way `TRANSPARENT_BLEND` and `ALPHA_TEST_THRESHOLD` above are labelled as
 invented rather than recovered.
 
-**Implemented as `oag_render::mesh::Lod`** (`both`/`single`, `[graphics] lod`
-in the settings file, defaulting to `both`): a load-time choice, not a live
+**Implemented as `oag_render::mesh::Lod`** (`both`/`single`; until
+2026-09-23 a `[graphics] lod` settings key defaulting to `both`, now
+`single` with no key - see the section below): a load-time choice, not a live
 switch, and deliberately not named after quality or distance - neither exists
 here. `single` measured 3,643 fewer triangles on `16_Track` (exactly the sum
 of every tier-1 subtree's own triangle count) and was visually indistinguishable
@@ -383,7 +384,10 @@ coincide in bounds and differ only in triangle count, so a distance switch
 and "tier 0 always" look alike at that range.
 
 **What this means for `oag_render::mesh::Lod`:** `single` is the faithful
-picture up close and `both` is not, the opposite of what its doc said.
+picture up close and `both` is not, the opposite of what its doc said. So
+`single` became the default the same day and the `[graphics] lod` settings
+key was removed; `--lod both` on `oag-game` and `oag-view` keeps the coarse
+tier reachable as a diagnostic.
 
 ## Vertex format
 

@@ -168,14 +168,13 @@ struct Cli {
     #[arg(long, default_value_t = Anisotropy::default())]
     anisotropy: Anisotropy,
 
-    /// What `--mesh` does with an authored `LodGroup`: draw `both` children the
-    /// way the original does, or keep only the higher-detail `single` one.
+    /// What `--mesh` does with an authored `LodGroup`: keep only the
+    /// higher-detail `single` child, which is what the original shows up
+    /// close, or draw `both`, coarse tier included.
     ///
-    /// Not a quality setting. `both` is what the original draws and it means
-    /// two differently-tessellated copies of the same surface occupy the same
-    /// space; `single` is this project's own choice and removes that. Seeing
-    /// the two side by side is the only way to judge what the duplication costs
-    /// - see [`mesh::Lod`].
+    /// Not a quality setting. `both` puts two differently-tessellated copies
+    /// of the same surface in the same space; it is here to see where the
+    /// coarse tier sits - see [`mesh::Lod`].
     #[arg(long, default_value_t = mesh::Lod::default())]
     lod: mesh::Lod,
 

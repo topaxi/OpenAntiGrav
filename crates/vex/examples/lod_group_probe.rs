@@ -64,6 +64,26 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 nodes[child].name,
                 meshes.join(" ")
             );
+            for (i, n) in nodes.iter().enumerate() {
+                if i != child && !descends_from(&nodes, i, child) {
+                    continue;
+                }
+                let header = &blob[n.offset..n.offset + n.header_size];
+                println!(
+                    "    node #{i} class {:#x} depth {} header {:02x?} attrs {:?}",
+                    n.class_id,
+                    n.depth,
+                    &header[..header.len().min(16)],
+                    vex::node_attributes(&blob, n)
+                );
+                let payload = &blob[n.payload()];
+                if n.class_id == vex::CLASS_TRANSFORM && payload.len() >= 64 {
+                    let m: Vec<f32> = (0..16).map(|k| f32_at(payload, k * 4)).collect();
+                    println!("      matrix {m:?} tail {:02x?}", &payload[64..payload.len().min(96)]);
+                } else {
+                    println!("      payload head {:02x?}", &payload[..payload.len().min(48)]);
+                }
+            }
         }
     }
     Ok(())

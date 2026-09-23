@@ -36,7 +36,7 @@
 //! [`Bindings::to_pairs`] and [`Bindings::from_pairs`] round-trip through
 //! `oag_game::settings::Controls::bindings`, a `BTreeMap<String, String>` -
 //! this crate depends on nothing serde-shaped, the same reason
-//! `oag_game::settings`'s `AnisotropyDef`/`LodDef` mirror types they do not
+//! `oag_game::settings`'s `AnisotropyDef` mirror type does for one it does not
 //! own rather than deriving here. Every one of [`crate::keys::candidates`]'s
 //! eighteen names is always written, complete, the same convention
 //! `settings::load`'s own doc comment states for the rest of the file - so a

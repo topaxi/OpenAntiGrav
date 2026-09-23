@@ -37,6 +37,22 @@ fn an_older_settings_file_gains_the_race_table() {
     assert_eq!(settings.race.class, "venom");
 }
 
+/// `[graphics] lod` was removed on 2026-09-23 (`oag_render::mesh::Lod`'s own
+/// doc says why), and every file written before then carries it - either
+/// spelling must still load, and the next save must drop the key.
+#[test]
+fn a_leftover_lod_key_loads_and_is_not_written_back() {
+    for value in ["both", "single"] {
+        let settings: Settings = toml::from_str(&format!("[graphics]\nlod = \"{value}\""))
+            .expect("a file with the removed key still parses");
+        let written = toml::to_string(&settings).expect("serialise");
+        assert!(
+            !written.contains("lod ="),
+            "the removed key came back on save:\n{written}"
+        );
+    }
+}
+
 /// The pacing defaults, asserted from both directions: what a fresh
 /// `Display` holds and what an empty file loads as.
 #[test]

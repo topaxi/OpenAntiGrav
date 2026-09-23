@@ -56,7 +56,7 @@ pub struct Controls {
     /// crate already depends on serde and [`Bindings`] deliberately does
     /// not, per its own module doc, so the table this file persists is the
     /// same shape [`AnisotropyDef`](super::AnisotropyDef) and
-    /// [`LodDef`](super::LodDef) are, a type this crate owns standing in for
+    /// `LodDef` was before `[graphics] lod` went, a type this crate owns standing in for
     /// one it does not derive on.
     ///
     /// **Complete on every write, one row per candidate key, `"none"` for a

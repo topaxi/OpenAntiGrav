@@ -110,7 +110,7 @@ pub enum Overlay {
     /// actually has one to give it.
     ///
     /// Its own tier rather than folded into `Pacing`, since the extra lines
-    /// name renderer- and process-internal things (`[graphics] lod`, frustum
+    /// name renderer- and process-internal things (`--lod`, frustum
     /// culling, resident memory) most players reaching for `pacing` are not
     /// asking about.
     Dev,
@@ -706,7 +706,7 @@ pub fn draw_list(
             stats.p99_ms, stats.worst_ms
         ));
     }
-    // The scene's own numbers, so `[graphics] lod` and frustum culling have
+    // The scene's own numbers, so `--lod` and frustum culling have
     // something on screen to show they did anything at all - a stage with no
     // scene (the front end, the menus) passes `None` rather than a stats
     // value of all zeroes, which would read as "nothing is ever drawn". Only

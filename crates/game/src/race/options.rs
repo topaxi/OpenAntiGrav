@@ -308,7 +308,7 @@ impl Default for Options {
             zone_stage: None,
             ribbon: false,
             collision: false,
-            lod: mesh::Lod::Both,
+            lod: mesh::Lod::default(),
             opponents: false,
             trail_sparks: false,
             seed: None,
