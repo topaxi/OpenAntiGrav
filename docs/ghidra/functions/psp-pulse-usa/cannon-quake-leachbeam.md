@@ -1488,10 +1488,36 @@ Read for the weapon-absorb build (`oag_render::hull_overlay`,
   dump of `Data\Ships\Assegai\Ship.vex`. Every Assegai mesh batch
   shares one scale, `37.088448`.
 
+- **The per-mesh gate is the mesh's name.** `Mesh_InitFromPayload` sets
+  `mesh+0x79` (`0x0890ec30..4c`) from a match of the mesh's own name against
+  the literal `"ship"` at `0x08a883c4`, via `FUN_089737ac`. The neighbouring
+  literals `"track"`/`"TRACK"`/`"Track"` set `+0x78` the same way. It sets
+  `mesh+0x74` (`0x0890ec28`) to the first node in the mesh's list at `+8`
+  whose type token is `FUN_08a6bfc0`'s. That is the craft-entity class token
+  `Race_CreatePlayer`, `Race_SpawnAiRacer` and `Craft_Construct_q` use. So
+  on Assegai only `shipShape` can take the overlay: not the airbrakes, the
+  canopy, or the glow and LOD meshes. Confidence **75**: `FUN_089737ac` is
+  read as a substring test from its call shape, not decompiled.
+- **A live probe did not reach the draw (inconclusive).** On PPSSPP v1.20.4,
+  in a single race on this project's own silent instance (debugger `47831`),
+  neither the per-entity dispatch `0x0890f288` nor `Mesh_DrawBatchSet` hit a
+  breakpoint in 60 s of racing. `HullOverlay_AbsorbWindowActive` was never
+  called either. After writing `craft+0x878 = +0x830 - 0.5` on the first
+  craft updated (the store read `-10.0` before the write, which is
+  `Craft_Construct_q`'s initial value), `HullOverlay_Submit`'s
+  `Gu_SetMatrix(3, ...)` at `0x0890e754` was not reached within 10 s. Both
+  draw paths look like record-time functions whose lists are replayed
+  without re-entering them. If so, a probe has to catch the record, not a
+  frame, and the `vmmul` order above is still unmeasured. **Whether the
+  original shows this overlay in play is therefore not confirmed by a
+  capture.** Only the absorb feedback's burst has the report of someone who
+  plays the original behind it.
+
 **Built**, as `oag_render::hull_overlay`. The port and what it chose are in
 that module's own doc comment. The depth test is `LessEqual` with no write,
-standing in for `EQUAL`. Every hull mesh is overlaid, since the `+0x79`
-byte is unread. All five of the hull's lists go through the additive
+standing in for `EQUAL`. ~~Every hull mesh is overlaid, since the `+0x79`
+byte is unread~~ - read the same day (above): only a mesh named `...ship...`
+takes it, and the port follows that. All five of the hull's lists go through the additive
 pipeline, and the colour-bearing glow meshes take the tint like the rest.
 The LeachBeam half (`leachbeam_surface.mip`) would ride the same module,
 but its fade source (`**(float**)(state+0x4c)`) is unread, so it is **not

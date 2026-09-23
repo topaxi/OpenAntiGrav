@@ -77,13 +77,23 @@ pub(super) fn overlay(
     if !wanted {
         return None;
     }
-    let Some(scale) = oag_render::hull_overlay::projection_scale(blob) else {
+    let projection = oag_render::hull_overlay::projection_scale(blob)
+        .zip(oag_render::hull_overlay::ship_meshes(hull, blob));
+    let Some((scale, ships)) = projection else {
         report.push(format!(
-            "{}: no one batch scale to project from - no absorb overlay",
+            "{}: no one batch scale to project from, or meshes that do not map back \
+             to the file - no absorb overlay",
             hull.label
         ));
         return None;
     };
+    if ships.is_empty() {
+        report.push(format!(
+            "{}: no mesh named for the ship - no absorb overlay",
+            hull.label
+        ));
+        return None;
+    }
     let texture = oag_pulse::read_image(archives, OVERLAY_TEXTURE)
         .ok()
         .and_then(|blob| oag_texture::texture::Texture::parse(&blob).ok());
@@ -102,13 +112,14 @@ pub(super) fn overlay(
         None,
     );
     report.push(format!(
-        "{}: absorb overlay over {} triangle(s), projected at batch scale {scale}",
+        "{}: absorb overlay over {} ship mesh(es), projected at batch scale {scale}",
         hull.label,
-        hull.indices.len() / 3
+        ships.len()
     ));
     Some(oag_render::hull_overlay::build(
         hull,
         scale,
+        &ships,
         std::sync::Arc::new(texture),
     ))
 }

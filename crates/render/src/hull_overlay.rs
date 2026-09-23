@@ -33,13 +33,15 @@
 //!   surface the hull already drew. This draws every batch through the
 //!   renderer's blended pipeline, which tests `LessEqual` and never writes
 //!   depth. Chosen, not measured.
-//! - **Which meshes**: the original also gates each mesh on a per-mesh byte
-//!   (`mesh+0x79`) whose writer is unread. This overlays every batch of the
-//!   hull.
-//! - **The airbrake flaps' projection source**: their vertices are the hull's
-//!   baked positions taken back through the hinge ([`crate::mesh::Flap::hinge`]),
-//!   which is exact for a stowed flap. A deflected flap's overlay stays
-//!   stowed. Chosen, not measured.
+//!
+//! # Which meshes
+//!
+//! Only a mesh whose own name contains `ship` - `Mesh_InitFromPayload` sets
+//! the per-mesh byte the draw gates on (`mesh+0x79`) from exactly that match
+//! against the literal at `0x08a883c4`. On Assegai that is `shipShape` alone:
+//! not the airbrakes, the canopy or the glow meshes. The other meshes stay in
+//! the model, coloured transparent black, which an additive blend adds
+//! nothing for - see [`ship_meshes`].
 
 use std::sync::Arc;
 
@@ -113,31 +115,64 @@ pub fn projection_scale(blob: &[u8]) -> Option<f32> {
     scale
 }
 
-/// The overlay model for `hull`: the same vertices and triangles, every one
-/// textured with `texture` through the projection, unlit and white so the
-/// per-frame tint is the whole colour.
+/// The vertex ranges of `hull` that belong to a mesh named `...ship...`,
+/// or `None` when `hull`'s per-node ranges cannot be matched back to the
+/// file's mesh nodes.
+///
+/// The ranges skip nodes the build left out (a `LodGroup`'s other child), so
+/// they are matched to the file's mesh nodes in order by vertex count.
+#[must_use]
+pub fn ship_meshes(hull: &Model, blob: &[u8]) -> Option<Vec<std::ops::Range<u32>>> {
+    let mesh = vex::classes_of(blob).ok()?.mesh?;
+    let nodes = vex::nodes(blob).ok()?;
+    let mut meshes = nodes
+        .iter()
+        .filter(|node| node.class_id == mesh)
+        .map(|node| {
+            let start = node.offset + node.header_size;
+            let payload = blob.get(start..start + node.data_size)?;
+            let count: usize = [0u8, 1u8]
+                .into_iter()
+                .filter_map(|list| vex::mesh_batches(payload, list).ok())
+                .flatten()
+                .map(|batch| batch.vertices.len())
+                .sum();
+            Some((node.name.clone().unwrap_or_default(), count))
+        })
+        .collect::<Option<Vec<_>>>()?
+        .into_iter();
+    let mut ships = Vec::new();
+    for range in &hull.node_vertex_ranges {
+        let len = (range.end - range.start) as usize;
+        let (name, _) = meshes.find(|(_, count)| *count == len)?;
+        if name.contains("ship") {
+            ships.push(range.clone());
+        }
+    }
+    Some(ships)
+}
+
+/// The overlay model for `hull`: the same vertices and triangles, textured
+/// with `texture` through the projection, unlit and white so the per-frame
+/// tint is the whole colour - on `ships` (see [`ship_meshes`]), and
+/// transparent black everywhere else.
 ///
 /// `scale` is [`projection_scale`] of the file `hull` was built from. The
 /// texture coordinates carry no [`scroll`]; the caller adds it per frame.
 #[must_use]
-pub fn build(hull: &Model, scale: f32, texture: Arc<ModelTexture>) -> Model {
+pub fn build(
+    hull: &Model,
+    scale: f32,
+    ships: &[std::ops::Range<u32>],
+    texture: Arc<ModelTexture>,
+) -> Model {
     let mut model = hull.clone();
     model.label = format!("{} (absorb overlay)", hull.label);
-    let hinges: Vec<_> = hull
-        .airbrakes
-        .iter()
-        .flatten()
-        .map(|flap| (flap.vertices.clone(), flap.hinge.inverse()))
-        .collect();
     for (index, vertex) in model.vertices.iter_mut().enumerate() {
-        let baked = Vec3::from_array(vertex.position);
-        let local = hinges
-            .iter()
-            .find(|(range, _)| range.contains(&(index as u32)))
-            .map_or(baked, |(_, unhinge)| unhinge.transform_point3(baked));
-        let input = local / scale;
+        let input = Vec3::from_array(vertex.position) / scale;
         vertex.texcoord = [REPEAT * input.x, -REPEAT * input.z];
-        vertex.colour = [1.0; 4];
+        let lit = ships.iter().any(|range| range.contains(&(index as u32)));
+        vertex.colour = if lit { [1.0; 4] } else { [0.0; 4] };
         vertex.lit = 0.0;
         vertex.anim = 0;
     }

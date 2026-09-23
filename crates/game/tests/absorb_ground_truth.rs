@@ -180,8 +180,9 @@ fn pulse_lights_the_hull_for_one_second_after_a_pickup_absorb() {
         !loaded
             .report
             .iter()
-            .any(|line| line.contains("no one batch scale")),
-        "a Pulse PSP hull has batches at more than one scale"
+            .any(|line| line.contains("no absorb overlay")),
+        "a Pulse PSP hull built no overlay - more than one batch scale, meshes that \
+         do not map back to its file, or no mesh named for the ship"
     );
     let mut race = race::Race::start(loaded.setup);
     for _ in 0..WARM_UP_TICKS {
