@@ -220,6 +220,6 @@ impl Race {
             &dimensions,
             dimensions.shield * LAP_REFILL_FRACTION,
         );
-        self.play_absorb_feedback(slot);
+        self.play_absorb_feedback(slot, false);
     }
 }

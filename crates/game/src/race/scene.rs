@@ -8,11 +8,13 @@
 use super::*;
 use log::warn;
 
+mod absorb_overlay;
 mod beam;
 mod clouds;
 mod frame;
 mod hd_chain;
 mod motion;
+mod per_slot;
 mod queries;
 mod scratch;
 mod weapon_models;
@@ -138,6 +140,8 @@ pub struct Scene {
     /// `ShipShield_Update` takes on `craft+0x6d`. `None` on a source that does
     /// not carry `Data\Weapons\vr_shield_cockpit.vex`.
     shield_cockpit: Option<Drawable>,
+    /// The absorb hull overlay per slot - see [`absorb_overlay`].
+    absorb_overlay: Vec<Option<Drawable>>,
     /// One drawable per projectile slot, for rockets drawn as their own model.
     ///
     /// **Empty** when `Data\Weapons\Rocket.vex` did not load, and the sprite
@@ -791,32 +795,21 @@ impl Scene {
         // out of the bloom, which is where most of its presence comes from.
         // Unlike the plume, that is a reading rather than a recovered draw
         // path - the shell's own GE state has not been read.
-        let mut shield = Vec::new();
-        for slot in 0..GRID_SLOTS as usize {
-            let livery = &liveries[slot.min(liveries.len().saturating_sub(1))];
-            let Some(model) = livery
-                .shield
-                .as_ref()
-                .filter(|model| !model.indices.is_empty())
-            else {
-                shield.push(None);
-                continue;
-            };
-            shield.push(Some(Drawable::new(
-                device,
-                queue,
-                model.clone(),
-                format,
-                anisotropy,
-                sample_count,
-                scene_depth,
-                exhaust::BLEND,
-                mesh_render::GlowMask::Written,
-                zone_art,
-                shadow_maps,
-                mesh_render::ShadowReceiver::Mapped,
-            )?));
-        }
+        let slots = per_slot::Build {
+            device,
+            queue,
+            liveries,
+            format,
+            anisotropy,
+            sample_count,
+            zone_art,
+            shadow_maps,
+        };
+        let shield = slots.drawables(
+            |l| l.shield.clone(),
+            scene_depth,
+            mesh_render::ShadowReceiver::Mapped,
+        )?;
         // The cockpit sphere, on the shell's own pipeline: same additive blend,
         // same glow mask, same argument. One rather than eight - a craft whose
         // camera is inside it is the player's, and there is one of those.
@@ -837,6 +830,11 @@ impl Scene {
             )?),
             None => None,
         };
+        // The absorb hull overlay: the hull again, unshadowed, tested
+        // `LessEqual` against its own depth - see `absorb_overlay`.
+        let overlay = |l: &crate::livery::Livery| l.absorb_overlay.clone();
+        let never = mesh_render::ShadowReceiver::Never;
+        let absorb_overlay = slots.drawables(overlay, mesh_render::Depth::Overlay, never)?;
         // One per projectile slot: the Rocket's, the Mine's, the Bomb's, the
         // Cannon round's and the Plasma blast's, all built the same way - see
         // `weapon_models::build_all`. A laid mine's hull is opaque too - a
@@ -956,6 +954,7 @@ impl Scene {
             flares,
             shield,
             shield_cockpit,
+            absorb_overlay,
             rockets,
             mines,
             bombs,

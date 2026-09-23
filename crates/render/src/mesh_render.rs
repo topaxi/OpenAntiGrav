@@ -201,6 +201,10 @@ pub enum Depth {
     Scene,
     /// The sky: occludes nothing and is occluded by everything.
     Sky,
+    /// A second pass over geometry already drawn - the absorb hull overlay,
+    /// `crate::hull_overlay`: test `LessEqual` so a coplanar redraw passes,
+    /// write nothing. The original tests `EQUAL`; this is the chosen stand-in.
+    Overlay,
 }
 
 /// Builds the pipeline, geometry and texture bindings for `model`.
@@ -288,6 +292,7 @@ pub fn build(
     let (depth_write, depth_compare) = match depth {
         Depth::Scene => (true, wgpu::CompareFunction::Less),
         Depth::Sky => (false, wgpu::CompareFunction::Always),
+        Depth::Overlay => (false, wgpu::CompareFunction::LessEqual),
     };
 
     let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {

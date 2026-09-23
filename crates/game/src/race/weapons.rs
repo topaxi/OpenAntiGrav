@@ -530,7 +530,7 @@ impl Race {
             // Eliminator, which returned above: the `ABSORB` cue, then the
             // `WO_WEAPON_ABSORB` burst staggered over the hull's locators.
             // See `race::absorb` and `docs/ghidra/functions/psp-pulse-usa/shield.md`.
-            self.play_absorb_feedback(slot);
+            self.play_absorb_feedback(slot, true);
         }
         // `Held::take` rather than a direct write - see its doc comment for
         // why an absorb mid-drop has to clear more than the visible weapon.

@@ -1447,18 +1447,6 @@ impl Stage {
         self.instance(playing).is_some()
     }
 
-    /// Whether an attached instance's emitters are still running - see
-    /// [`System::is_emitting`]. `false` on a stale handle.
-    ///
-    /// What an owner that follows a one-shot effect asks before
-    /// [`Self::detach`]: once nothing emits, following moves nothing, and the
-    /// slot can go back to the stage while the last particles finish.
-    #[must_use]
-    pub fn is_emitting(&self, playing: Playing) -> bool {
-        self.instance(playing)
-            .is_some_and(|instance| instance.system.is_emitting())
-    }
-
     fn free_slot(&self) -> Option<usize> {
         self.instances.iter().position(|instance| !instance.busy())
     }
@@ -1947,6 +1935,8 @@ impl Pipeline {
         }
     }
 }
+
+mod riding;
 
 #[cfg(test)]
 mod tests;

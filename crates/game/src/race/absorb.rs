@@ -158,7 +158,16 @@ impl Race {
     ///
     /// The cue is raised unconditionally, as it was before the burst existed;
     /// only the picture depends on the hull carrying locators.
-    pub(super) fn play_absorb_feedback(&mut self, slot: usize) {
+    ///
+    /// `pickup` is the absorb handler's own call, which also starts the hull
+    /// overlay: `FUN_08844ec4` stores the craft's clock into `+0x878` just
+    /// before it calls the feedback (`0x088455ac..b4`), and the Eliminator's
+    /// `Ship_RefillLapShield` does not - so a lap refill bursts and never
+    /// lights the hull. See `oag_render::hull_overlay`.
+    pub(super) fn play_absorb_feedback(&mut self, slot: usize, pickup: bool) {
+        if pickup && let Some(elapsed) = self.view.absorb_overlay.get_mut(slot) {
+            *elapsed = Some(0.0);
+        }
         self.sim.cues.push(crate::audio::sfx::CueEvent::new(
             crate::audio::sfx::Cue::Absorb,
             slot,
@@ -183,6 +192,13 @@ impl Race {
     /// Before `Stage::advance`, so a burst started this tick emits this tick
     /// from where its locator is now.
     pub(super) fn advance_absorb_bursts(&mut self) {
+        // The craft's own clock, `+0x830 += dt` in `FUN_088418e0`, read
+        // against the stamp; past the window there is nothing left to draw.
+        for elapsed in &mut self.view.absorb_overlay {
+            *elapsed = elapsed
+                .map(|seconds| seconds + self.sim.dt)
+                .filter(|seconds| *seconds <= oag_render::hull_overlay::WINDOW);
+        }
         if self.view.absorb_bursts.is_empty() {
             return;
         }
@@ -210,14 +226,14 @@ impl Race {
             }
             let at = model_matrix_of(ship).transform_point3(*local);
             match burst.playing {
-                // Attached rather than fired: the original parents the system
-                // to the locator, so the emitters ride the hull for as long as
-                // they run. A stage with no room left draws nothing.
+                // Riding rather than fired: the original parents the system to
+                // the locator, so the emitters ride the hull for as long as
+                // they run. Only a stage with every slot attached refuses it.
                 None => {
                     let Some(effect) = effect.as_ref() else {
                         return false;
                     };
-                    burst.playing = self.view.stage.attach(effect, at, 1.0);
+                    burst.playing = self.view.stage.play_riding(effect, at, 1.0);
                     self.view.absorb_started += u32::from(burst.playing.is_some());
                     burst.playing.is_some()
                 }
@@ -234,6 +250,18 @@ impl Race {
             }
         });
         self.view.absorb_bursts = bursts;
+    }
+
+    /// The hull overlay's pulse on `slot` this tick - see
+    /// [`oag_render::hull_overlay::pulse`] - or `None` when it draws nothing.
+    #[must_use]
+    pub fn absorb_overlay_pulse(&self, slot: usize) -> Option<f32> {
+        self.view
+            .absorb_overlay
+            .get(slot)
+            .copied()
+            .flatten()
+            .and_then(oag_render::hull_overlay::pulse)
     }
 
     /// How many absorb bursts have ever started, for tests.

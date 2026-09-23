@@ -428,6 +428,7 @@ impl Race {
                 absorb_anchors,
                 absorb_bursts: Vec::new(),
                 absorb_started: 0,
+                absorb_overlay: [None; MAX_SHIPS],
                 stage_rng: Rng::new(STAGE_SEED),
                 sparks_ignitions: 0,
                 sparks_rng: Rng::new(SPARKS_SEED),

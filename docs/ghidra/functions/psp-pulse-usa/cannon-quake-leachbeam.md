@@ -1254,7 +1254,7 @@ texture paths in `.rodata`~~ was also wrong: a third string,
 why the `(?i)leach` search here (spelled "leach") missed it - the disc spells
 it "lee**ch**".
 
-Neither hull overlay is drawn by this engine, and both are honest absences
+~~Neither hull overlay is drawn by this engine~~ (the absorb one is, as of 2026-09-23 - see below), and both are honest absences
 rather than stand-ins.
 
 ### 2026-09-17: the hull overlay pair, read in full - both textures, one draw routine
@@ -1365,14 +1365,20 @@ picture for both overlays:**
 2. **Depth test and fog are per-sub-mesh, not fixed for the whole overlay.**
    `Gu_DepthMask`/`Gu_DepthFunc` branch on bit `1` of the sub-mesh's own
    flags word (`*param_4`, the mask argument threaded through from the
-   caller): set, depth write on and `LEQUAL`; clear, depth write off and
-   `LESS`. `Fog_Disable` unless the sub-mesh's own material flags
+   caller): ~~set, depth write on and `LEQUAL`; clear, depth write off and
+   `LESS`~~ **corrected 2026-09-23**: `sceGuDepthMask(1)` *disables* writes
+   and the function codes are the PSP's own (`2` `EQUAL`, `6` `GREATER`), so
+   bit `1` clear - a batch in list A only - draws with `EQUAL` and writes on,
+   exactly over the surface the hull drew, and bit `1` set - a list-B batch -
+   with the engine's ordinary test (`6`) and writes off. See "2026-09-23"
+   below. `Fog_Disable` unless the sub-mesh's own material flags
    (`*(byte*)(entity->something+0xc) & 8`) ask for it, in which case
    `0x0891eac0` (not read this pass) is called instead. Confidence **80** -
    read at instruction level, but what the two states mean for a given
    sub-mesh (which ones set which bit) was not traced back to the model
    data.
-3. **The texture is bound in `GU_TEXTURE_MATRIX` UV mode, not the mesh's own
+3. **~~Rotating~~ - corrected 2026-09-23, see below: a fixed quarter turn.
+   The texture is bound in `GU_TEXTURE_MATRIX` UV mode, not the mesh's own
    baked UVs**, confirmed independently by `mesh-draw.md`'s own existing
    `Gu_TexMapMode` table (`0x0890e584`/`0x0890e76c`, both inside this
    function - mode `(1,0,0)` on entry, restored to `(0,0,0)` on exit). A
@@ -1413,7 +1419,7 @@ picture for both overlays:**
    a guess; the untaken branches (a title or draw call passing a different
    flag word) were not chased.
 
-**Still neither overlay is drawn by this engine**, but the read is now
+~~**Still neither overlay is drawn by this engine**~~ (the absorb one is drawn as of 2026-09-23 - see below), but the read is now
 complete enough to build from: geometry reuse (the model's own hull
 sub-meshes, gated per sub-mesh by a bitmask), the grey-alpha tint, the
 rotating `GU_TEXTURE_MATRIX` UV projection, the additive blend (recovered,
@@ -1429,6 +1435,67 @@ the unidentified `state+0x830`/`+0x878` pair. That trigger substitution
 would be **chosen, not measured** - the same split every other module in
 this codebase draws between a recovered draw and a chosen wire-up (see
 `oag_render::exhaust`'s own module doc comment for the shape).
+
+### 2026-09-23: the absorb overlay's writer, its projection, and two corrections
+
+Read for the weapon-absorb build (`oag_render::hull_overlay`,
+`oag_game::race::absorb`).
+
+- **The writer.** `+0x830` is the craft's own clock: `FUN_088418e0`, the
+  per-craft update, opens with `lwc1 f13,0x830(a0); add.s f13,f13,f12;
+  swc1 f13,0x830(a0)` (`0x088418e4..04`), with `f12` the frame's `dt`.
+  `+0x878` has two writers, `Craft_Construct_q` (initialising it) and the
+  absorb handler `FUN_08844ec4` at `0x088455ac..b4`: `lwc1 f12,0x830(s0)`
+  then `swc1 f12,0x878(s0)` in the delay slot of the branch that skips
+  `Ship_PlayAbsorbFeedback`. The overlay therefore starts on every
+  **pickup** absorb, and `Ship_RefillLapShield`, which calls the feedback
+  without that store, lights no hull. The "shared state object" above is
+  the craft: the per-entity dispatch at `0x0890f288` reads it from
+  `mesh+0x74` and gates on `mesh+0x79 != 0`, a per-mesh byte whose writer
+  was not read. Confidence **88** for the stamp and the clock (direct
+  instruction reads).
+- **The projection is a fixed quarter turn, not a rotation.** The matrix
+  code is `lv.s S000 <- pi/2; vcst.s S002, 2/PI; vmul.s S003, S002, S000;
+  vcos.s S010, S003; vsin.s S012, S003`. `2/PI * pi/2 = 1`, and the VFPU's
+  `vsin`/`vcos` take quarter turns, so this is `cos 90 = 0`, `sin 90 = 1`
+  every frame. "A live, per-frame VFPU time register" above was wrong:
+  `vcst` index 5 is the constant `2/PI`. The rows `(1,0,0,0)`,
+  `(0,cos,sin,0)`, `(0,-sin,cos,0)`, `(0,0,0,1)` are multiplied (`vmmul.q
+  E000, E100, E200`) by a second matrix with rows `(10,0,0,0)`, `(0,10,0,0)`,
+  `(0,0,0,1)`, `(0,-1.5p,1,1)`. `10` is `DAT_08abf4a4` (`00002041`, one
+  reader, no writer), `p` is the unfolded fade this function receives, and
+  the last column is zeroed before `Gu_SetMatrix(3, ...)` (`0x0890e754`).
+  Taking the `E`-operand product as `A * B` on the memory rows, a vertex
+  `(x, y, z)` projects to `(s, t, q) = (10x, -10z - 1.5p, 1)`. The other
+  operand order gives `q = 10y - 1.5p`, a perspective divide that means
+  nothing for a hull, which is why this reading is taken. **The operand order
+  is an inference, not a measurement**: reading the twelve words handed to
+  `Gu_SetMatrix` at `0x0890e754` during an absorb would settle it. The
+  projection source is `GU_POSITION`. `Gu_TexProjMapMode`'s only caller,
+  `FUN_0890dc64`, passes `0`, and the GE init zeroes the same context word,
+  so `(x, y, z)` are the vertex's GE input coordinates: the `.vex`'s own
+  `s16 / 32768`, before its batch scale. Result: a top-down planar
+  projection, 10 repeats per input unit, sliding 3 repeats along the
+  craft's length over the second. Confidence **70** for the projection as a
+  whole, **85** for the constants.
+- **The primary colour reaches the fragment on the hull proper.**
+  `HullOverlay_Submit` disables lighting (`Gu_Disable(10)`), which on the GE
+  takes a vertex's own colour where the vertex format has one. Assegai's
+  `shipShape`, airbrake and canopy batches are vertex type `0x0121` with no
+  colour bits, so they take `Gu_Color`'s `(a, a, a, a)`. Only
+  `self_illuminatedShape` and `glowingShape` (type `0x013d`, colour bits
+  `7`) would take their own vertex colour. Measured with a throwaway batch
+  dump of `Data\Ships\Assegai\Ship.vex`. Every Assegai mesh batch
+  shares one scale, `37.088448`.
+
+**Built**, as `oag_render::hull_overlay`. The port and what it chose are in
+that module's own doc comment. The depth test is `LessEqual` with no write,
+standing in for `EQUAL`. Every hull mesh is overlaid, since the `+0x79`
+byte is unread. All five of the hull's lists go through the additive
+pipeline, and the colour-bearing glow meshes take the tint like the rest.
+The LeachBeam half (`leachbeam_surface.mip`) would ride the same module,
+but its fade source (`**(float**)(state+0x4c)`) is unread, so it is **not
+wired**.
 
 ### Open
 
@@ -1449,7 +1516,10 @@ this codebase draws between a recovered draw and a chosen wire-up (see
 - ~~The base speed `Cannon_Init` reads (`0x00060af4`) is unread, and so is
   whatever a Cannon round's collision does on a hit.~~ Both read 2026-09-09 -
   see "`Cannon_UpdateRound` read" under the Cannon section above.
-- **The hull overlay pair's shared state object is unidentified** - see
+- ~~**The hull overlay pair's shared state object is unidentified**~~ - for
+  the absorb half it is the craft entity itself (`+0x830` its clock,
+  `+0x878` the absorb stamp); see "2026-09-23" above. The LeachBeam half's
+  `+0x4c` pointer is still unread - see
   "2026-09-17: the hull overlay pair, read in full" above. Its type, size
   and writer are open; only two of its fields (`+0x4c`, `+0x830`/`+0x878`)
   are read, both through their consumers rather than a constructor.

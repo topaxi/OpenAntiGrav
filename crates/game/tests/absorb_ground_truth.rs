@@ -157,3 +157,54 @@ fn hd_plays_three_mirrored_pairs_on_its_absorb_locators() {
         "Feisar carries six absorb locators"
     );
 }
+
+/// Pulse's hull overlay: built for the grid's hulls, started by a pickup
+/// absorb, and run for its one-second window - the pulse climbing one frame's
+/// `2 * dt` a tick to `2.0`, and gone after.
+#[test]
+#[ignore = "needs data/images/pulse-psp-usa.chd"]
+fn pulse_lights_the_hull_for_one_second_after_a_pickup_absorb() {
+    let Some(loaded) = single_race("data/images/pulse-psp-usa.chd", Some("Assegai")) else {
+        return;
+    };
+    let overlays = loaded
+        .report
+        .iter()
+        .filter(|line| line.contains("absorb overlay over"))
+        .count();
+    assert!(
+        overlays >= 1,
+        "no hull reported an absorb overlay - the texture or the scale did not resolve"
+    );
+    assert!(
+        !loaded
+            .report
+            .iter()
+            .any(|line| line.contains("no one batch scale")),
+        "a Pulse PSP hull has batches at more than one scale"
+    );
+    let mut race = race::Race::start(loaded.setup);
+    for _ in 0..WARM_UP_TICKS {
+        race.tick(&PlayerInputs::single(throttle(0)));
+    }
+    assert_eq!(race.absorb_overlay_pulse(0), None, "lit before any absorb");
+    race.sim.world.ships[0].pickup.weapon = Some(Weapon::Mine);
+    race.tick(&PlayerInputs::single(throttle(Button::Circle.bit())));
+    let mut pulses = vec![race.absorb_overlay_pulse(0)];
+    for _ in 0..70 {
+        race.tick(&PlayerInputs::single(throttle(0)));
+        pulses.push(race.absorb_overlay_pulse(0));
+    }
+    println!("pulse per tick after the absorb: {pulses:?}");
+    let lit = pulses.iter().filter(|pulse| pulse.is_some()).count();
+    assert!(
+        (58..=61).contains(&lit),
+        "the overlay was lit for {lit} ticks, not one second"
+    );
+    let peak = pulses.iter().flatten().copied().fold(0.0f32, f32::max);
+    assert!(
+        peak > 1.9,
+        "the pulse never reached the end of its window ({peak})"
+    );
+    assert_eq!(pulses[70], None, "still lit past the window");
+}

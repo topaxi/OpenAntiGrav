@@ -112,6 +112,9 @@ pub struct RaceView {
     /// How many of them have started, ever - a count the tests read, since
     /// the stage's own is shared with every other effect in the race.
     pub(super) absorb_started: u32,
+    /// Seconds since each craft's last pickup absorb, `None` once past the
+    /// hull overlay's window - `craft+0x830 - craft+0x878` in the original.
+    pub(super) absorb_overlay: [Option<f32>; MAX_SHIPS],
     /// Origin-to-nozzle distance per craft, world units - the trail-hit reach.
     pub(super) hull_reach: [f32; MAX_SHIPS],
     /// `--trail-sparks`: see [`Race::force_trail_sparks`].
