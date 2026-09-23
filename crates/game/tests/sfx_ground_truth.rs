@@ -78,13 +78,15 @@ fn render(sound: std::sync::Arc<oag_audio::Sound>) -> (f32, f32) {
 /// alone.** The handover thread that wired `Cue::CannonHitShip` read
 /// `CANNONEXPLSHIP` as an empty, zero-waveform cue off `oag-wad sounds`'
 /// own listing - true of `cue_sounds`, the direct command run alone, but
-/// `Banks::load` resolves through `Bank::cue_tree_sounds` instead, the same
-/// child-cue walk that lets Wipeout HD's `.COLLISIONS` resolve through
-/// `c_CShipShip`/`c_CShipWall` - see `oag_formats::sblk::child`.
-/// `CANNONEXPLSHIP`'s own single command is one such reference, and the
-/// tree walk finds a real waveform on the other end of it on every Pulse and
-/// PS2 disc measured here. So the cue is not silent after all; nothing here
-/// needs an exception for it any more.
+/// `Banks::load` resolves through `Bank::cue_tree_sounds` instead.
+/// `CANNONEXPLSHIP` owns exactly one command in `Data.wad`'s weapon bank,
+/// opcode `0x05` (one of `oag_formats::sblk::child::CHILD_OPCODES`), whose
+/// record indexes cue 37 - `CANNONEXPLWALL` - directly: read straight off
+/// `Bank::cue_children`/`Bank::resolve_child` against a real disc, not
+/// inferred from the waveform count alone. So a craft hit plays the same
+/// nine waveforms a wall hit does, by the disc's own construction, and the
+/// cue is not silent after all; nothing here needs an exception for it any
+/// more.
 ///
 /// Cues Pure's own `weapons.bnk` does not carry at all, because Pure ships
 /// none of the three weapons that name them (the Cannon, the LeachBeam and

@@ -467,7 +467,12 @@ emitter - `CANNON`'s own call site names no argument. The wall/craft split
 reads `Impact::struck`, the same field the Rocket's own pair already routes
 on; a round that outlives its own flight time is silent by construction, the
 same reasoning `rocket-visuals.md`'s "Audio, in passing" note gives for the
-Rocket's timeout.
+Rocket's timeout. **`CANNONEXPLSHIP` itself is a child reference, not an
+empty cue**: read against a real disc, its one command is opcode `0x05`
+indexing `CANNONEXPLWALL` directly - see
+`crates/formats/src/sblk/child.rs`'s `cue_tree_sounds` doc comment - so a
+craft hit plays the wall cue's own nine waveforms rather than a set of its
+own.
 
 ### What draws a Cannon round: two textures and three quads, and not a particle effect at all
 

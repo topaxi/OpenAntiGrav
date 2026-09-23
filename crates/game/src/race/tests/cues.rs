@@ -601,9 +601,10 @@ fn a_rocket_that_hits_a_craft_raises_rockethitship_and_not_rockethitwall() {
 }
 
 /// The same split again, for the Cannon - see `Cue::CannonHitShip`'s own
-/// doc comment. `CANNONEXPLSHIP` binds no waveform in `Data.wad`'s weapon
-/// bank, but the cue still has to be *raised* here; whether anything audible
-/// comes out the other end is `Banks::pick`'s question, not this one's.
+/// doc comment for why the cue still has to be *raised* here even though
+/// `CANNONEXPLSHIP` plays `CANNONEXPLWALL`'s own waveforms rather than any
+/// of its own: which waveforms come out the other end is `Banks::pick`'s
+/// question, not this one's.
 #[test]
 fn a_cannon_round_that_hits_a_craft_raises_cannonhitship_and_not_cannonhitwall() {
     let raised = cannon_hits_a_craft();

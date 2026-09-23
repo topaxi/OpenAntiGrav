@@ -363,14 +363,21 @@ pub enum Cue {
     ///
     /// `RocketPool_Update`'s teardown pass plays `ROCKEXPLWALL` (flag `0x10`)
     /// on the same bolt emitter [`Self::RocketTravel`] plays from - never
-    /// reallocated - for a wall/track hit; confidence 90. **The 5.0 s
-    /// pool-reap timeout is not this edge**: `crates/gameplay/src/projectile/flight.rs`'s
-    /// own Rocket-timeout branch (`kind == Weapon::Rocket && age >
-    /// rocket::LIFETIME_SECONDS`) resets the slot and `continue`s *without*
-    /// writing an `Impact` at all, so no `struck: None` from a timeout ever
-    /// reaches this port's own impacts loop - every one it sees there is a
-    /// real wall hit. Placed at the impact point
-    /// ([`super::Placement::Point`]), same reasoning as [`Self::PlasmaHitWall`].
+    /// reallocated - for a wall/track hit; confidence 90. **This port's own
+    /// 5.0 s pool-reap timeout never reaches this edge**:
+    /// `crates/gameplay/src/projectile/flight.rs`'s own Rocket-timeout branch
+    /// (`kind == Weapon::Rocket && age > rocket::LIFETIME_SECONDS`) resets
+    /// the slot and `continue`s *without* writing an `Impact` at all, so no
+    /// `struck: None` from a timeout ever reaches this port's own impacts
+    /// loop - every one it sees there is a real wall hit, settling which cue
+    /// *this port's* reap plays (none) without needing to disambiguate one
+    /// from a wall hit. **What the original itself plays on that same
+    /// timeout is still unread**: `rocket-visuals.md`'s "What a rocket hit
+    /// spends" section says the teardown branches on the round's own
+    /// `0x10`/`0x20` flags and a reap sets neither, but does not say what -
+    /// if anything - a timed-out rocket's teardown call otherwise plays.
+    /// Placed at the impact point ([`super::Placement::Point`]), same
+    /// reasoning as [`Self::PlasmaHitWall`].
     RocketHitWall,
     /// A Rocket bolt ending on a struck craft.
     ///
@@ -445,9 +452,14 @@ pub enum Cue {
     CannonHitWall,
     /// A Cannon round ending on a struck craft.
     ///
-    /// The same despawn pass's `0x20` branch. **`CANNONEXPLSHIP` binds zero
-    /// waveforms in `Data.wad`'s weapon bank** - wiring this is still
-    /// correct, it is simply inaudible until a bank supplies one.
+    /// The same despawn pass's `0x20` branch. **`CANNONEXPLSHIP` plays
+    /// `CANNONEXPLWALL`'s own nine waveforms, verified rather than assumed
+    /// empty**: it owns exactly one command in `Data.wad`'s weapon bank,
+    /// opcode `0x05` - one of [`oag_formats::sblk::child::CHILD_OPCODES`] -
+    /// whose record indexes cue 37, `CANNONEXPLWALL`, directly. So a craft
+    /// hit sounds like a wall hit, by the disc's own construction. See
+    /// `crates/formats/src/sblk/child.rs`'s own `cue_tree_sounds` doc
+    /// comment for the mechanism.
     CannonHitShip,
     /// The Quake's travelling wave reaching a craft, once.
     ///
@@ -495,13 +507,14 @@ pub enum Cue {
     LeachAttach,
     /// A Shuriken glancing off a wall.
     ///
-    /// `Shuriken_Bounce` (`0x088778ac`, confidence 88) plays `SHURIKENHIT`
-    /// through the blade's own `travel_voice` handle - the same one
-    /// [`Self::ShurikenTravel`] opened - on every bounce, matching the
-    /// already-built `WO_SHURIKEN_BOUNCE` visual's edge; see
-    /// `crate::race::weapons::visuals::bounced_this_tick`, which already
-    /// accepts `Weapon::Shuriken`. **Placed on the firing craft**, the same
-    /// reading as [`Self::ShurikenTravel`] below.
+    /// `Shuriken_Bounce` (`0x088778ac`, confidence 88) plays `SHURIKENHIT` on
+    /// every bounce, matching the already-built `WO_SHURIKEN_BOUNCE`
+    /// visual's edge; see `crate::race::weapons::visuals::bounced_this_tick`,
+    /// which already accepts `Weapon::Shuriken`. The call's own argument is
+    /// `s->travel_voice` - the same handle [`Self::ShurikenTravel`] opened -
+    /// which the page reads but does not itself resolve to an emitter
+    /// identity. **Placed on the firing craft: chosen, not measured**, the
+    /// same reasoning as [`Self::ShurikenTravel`] below.
     ShurikenHit,
     /// The Shuriken's own travel loop, from throw to whatever ends it.
     ///
@@ -509,12 +522,16 @@ pub enum Cue {
     /// `craft->emitter` directly - the same emitter
     /// [`super::Placement::Craft`] already reads for `.COLLISIONS`,
     /// `ABSORB`, `~SHIELD` and `MINELAUNCH` - rather than allocating a
-    /// bolt-owned one the way `Rocket_Init`/`Missile_Init` do. **So this
-    /// rides the firing craft, not the blade**, at confidence 88 rather
-    /// than as a chosen placement: a blade thrown by a craft that has since
-    /// gone inactive is heard from nowhere, the same silent drop
-    /// [`super::place`] already gives any craft-placed cue on an empty
-    /// slot.
+    /// bolt-owned one the way `Rocket_Init`/`Missile_Init` do. **What the
+    /// page does not show is the `~SHURIKENTRAVEL` play call's own emitter
+    /// argument** - only that no bolt-owned `SoundEmitter_Init` exists to
+    /// supply one. So riding the firing craft rather than the blade is
+    /// **chosen, not measured, and carries no confidence score** - the
+    /// absence of a bolt-owned emitter is what rules the alternative out,
+    /// not a read of this cue's own call site. A blade thrown by a craft
+    /// that has since gone inactive is heard from nowhere either way, the
+    /// same silent drop [`super::place`] already gives any craft-placed cue
+    /// on an empty slot.
     ShurikenTravel,
 }
 

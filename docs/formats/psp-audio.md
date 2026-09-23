@@ -1331,6 +1331,20 @@ of HD's `~SHIELD` waveforms decode now, where two used to be silently dropped.
 `~ROCKLOCK`, above, is the sharper version of the same proof - a cue that
 could not load at all until the second codec did.
 
+**2026-09-23: fourteen more cues wired, and HD now loads 27 of 28.** The
+Rocket, the Missile, the Cannon, `QUAKEHIT`, the LeachBeam and the Shuriken's
+cues joined `oag_game::audio::sfx::Cue::ALL`, and every one of them resolves
+on HD's own `weapons.bnk` with no per-title work at all - the same bank
+presence caveat as `MINELAUNCH` and the Plasma's four above, not a confirmed
+HD trigger. `~ENGINE` is still the sole miss, for the reason already given.
+`CANNONEXPLSHIP` is among the fourteen and is worth naming specifically: on
+Pulse and PS2 it turns out to be a **child reference** to `CANNONEXPLWALL`
+(one command, opcode `0x05`, indexing cue 37 directly) rather than an empty
+cue, read against a real disc and pinned in
+`crates/game/tests/sfx_weapon_ground_truth.rs`'s
+`cannonexplship_is_a_child_reference_to_cannonexplwall`; whether HD's own
+`CANNONEXPLSHIP` (8 waveforms there) is the same shape was not checked.
+
 ### HD's cue edges are Pulse's, and that is an assumption
 
 Worth stating plainly, because the rest of this page is measurement. The cue
