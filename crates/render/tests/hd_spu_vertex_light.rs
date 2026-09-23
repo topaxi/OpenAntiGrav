@@ -66,6 +66,7 @@ fn model() -> Model {
     Model {
         airbrakes: [None, None],
         node_vertex_ranges: Vec::new(),
+        lod_groups: Default::default(),
         label: "hd spu vertex light quad".into(),
         indices: vec![0, 1, 2],
         draws: vec![DrawCall {

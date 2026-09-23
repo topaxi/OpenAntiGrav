@@ -38,6 +38,7 @@ fn triangle_model() -> Model {
     Model {
         airbrakes: [None, None],
         node_vertex_ranges: Vec::new(),
+        lod_groups: Default::default(),
         label: "velocity_target test triangle".into(),
         indices: vec![0, 1, 2],
         draws: vec![DrawCall {

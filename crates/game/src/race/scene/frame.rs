@@ -357,6 +357,8 @@ impl Scene {
         oag_render::perfprobe::mark("sky+track-write");
         let drawn = usize::from(race.ship_count());
         self.write_hull_uniforms(queue, race, view_projection, prev_vp, &prev);
+        let lod_eye = race.lod_eye(aspect, fov);
+        self.select_lod(race, lod_eye);
         // The flaps move in *model* space, before the ship's own matrix, so
         // this is a vertex write and not a second uniform - see
         // `Drawable::deflect_airbrakes`. Unconditional rather than
@@ -915,7 +917,7 @@ impl Scene {
         self.draw_beam(&mut pass);
         self.clouds.borrow().draw(&mut pass);
         self.weapon_quads.borrow().draw(&mut pass);
-        self.draw_ghost(race, &mut pass, &mut stats);
+        self.draw_ghost(race, lod_eye, &mut pass, &mut stats);
         // The scene pass has to close before the bloom can sample what it drew,
         // so this ends the borrow rather than waiting for the scope to.
         drop(pass);
@@ -988,6 +990,7 @@ impl Scene {
 
 mod attachments;
 mod beam;
+mod lod;
 mod particles;
 mod shadow;
 pub(super) use attachments::{depth_texture, msaa_color_texture};

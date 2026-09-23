@@ -381,6 +381,9 @@ pub struct RaceView {
     /// widened theirs sits off the craft it is supposed to be over. Defaults to
     /// [`oag_display::display::Fov::AUTHORED`], which is the identity.
     pub(super) sight_fov: oag_display::display::Fov,
+    /// How far out the authored `LodGroup`s switch to their coarser tiers.
+    /// `[render_profiles.<title>] model_detail`; see [`Race::lod_eye`].
+    pub(super) model_detail: oag_render::mesh::ModelDetail,
     /// The results table, taken on the tick the race reached its finish
     /// condition, and `None` before that.
     ///

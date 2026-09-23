@@ -305,6 +305,7 @@ impl Session {
                 let stats = self.suspended_race.as_mut().map(|parked| {
                     let spectrum = self.audio.output().spectrum().levels();
                     let zone_spectrum = self.zone_hold.advance(&spectrum).to_vec();
+                    parked.race.set_model_detail(render_profile.model_detail);
                     parked.render(
                         &self.gpu,
                         &mut encoder,
@@ -355,6 +356,8 @@ impl Session {
                 // frame, not one per drawable that reads it.
                 let spectrum = self.audio.output().spectrum().levels();
                 let zone_spectrum = self.zone_hold.advance(&spectrum).to_vec();
+                // Every frame, so the MODEL DETAIL row applies live.
+                stage.race.set_model_detail(render_profile.model_detail);
                 let stats = stage.render(
                     &self.gpu,
                     &mut encoder,

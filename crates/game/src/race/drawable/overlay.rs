@@ -40,6 +40,7 @@ impl Drawable {
             .iter()
             .chain(&self.model.alpha_tested_draws)
             .chain(&self.model.transparent_draws)
+            .filter(|draw| self.lod_shows(draw))
         {
             // Two-sidedness stays the batch's own: the plume's `0x20` is set
             // on both discs, so nothing here is culled, and a future model

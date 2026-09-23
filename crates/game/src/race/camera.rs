@@ -305,6 +305,35 @@ impl Race {
     /// depending on the tick's speed and has to be re-taken.
     #[must_use]
     pub fn projection(&self, aspect: f32, far: f32, setting: oag_display::display::Fov) -> Mat4 {
+        oag_render::camera::projection(self.vertical_fov(aspect, setting), aspect, 1.0, far)
+    }
+
+    /// The camera the per-frame `LodGroup` switch runs from this frame: the
+    /// unjittered view, the field [`Self::projection`] is built from in
+    /// degrees, and the player's preset. See `oag_render::mesh::LodEye`.
+    #[must_use]
+    pub fn lod_eye(
+        &self,
+        aspect: f32,
+        setting: oag_display::display::Fov,
+    ) -> oag_render::mesh::LodEye {
+        oag_render::mesh::LodEye {
+            view: self.view(),
+            fov_degrees: self.vertical_fov(aspect, setting).to_degrees(),
+            detail: self.view.model_detail,
+        }
+    }
+
+    /// The vertical field of view, in radians, that [`Self::projection`] is
+    /// built from - every term that doc lists, composed in its order.
+    ///
+    /// Its own function so the per-frame `LodGroup` switch reads the same
+    /// field the picture is drawn at: `LodGroup_SelectChild` scales a
+    /// group's depth by `g_camera_fov_degrees / 65`, which at the default
+    /// setting and the authored aspect is this value in degrees. See
+    /// `oag_render::mesh::LodGroups::child_at`.
+    #[must_use]
+    pub fn vertical_fov(&self, aspect: f32, setting: oag_display::display::Fov) -> f32 {
         // An overridden fov stands in for the authored one and still passes
         // through the player's setting, whose default is identity; it exists to
         // match a captured frame's own field exactly, so it must sit at the
@@ -355,7 +384,6 @@ impl Race {
             let widen = 1.0 + self.view.boost_kick * self.view.boost_fov_kick.gain();
             2.0 * ((authored * 0.5).tan() * widen).atan()
         };
-        let fov = oag_render::camera::fit_vertical_fov(kicked, AUTHORED_ASPECT, aspect);
-        oag_render::camera::projection(fov, aspect, 1.0, far)
+        oag_render::camera::fit_vertical_fov(kicked, AUTHORED_ASPECT, aspect)
     }
 }

@@ -2184,6 +2184,7 @@ dependencies = [
  "oag-core",
  "oag-formats",
  "oag-pulse",
+ "oag-pure",
  "oag-rcs",
  "oag-tables",
  "oag-testdata",

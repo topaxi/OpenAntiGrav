@@ -70,6 +70,10 @@ pub(super) struct Drawable {
     /// does not - a shadow map of a craft's glow would darken the road under
     /// its own light.
     opaque_ranges: Vec<std::ops::Range<u32>>,
+    /// This instance's per-frame `LodGroup` choice - see [`Self::select_lod`].
+    /// Starts on every group's finest child, which a drawable nobody
+    /// switches keeps.
+    lod: oag_render::mesh::LodSwitch,
 }
 
 impl std::fmt::Debug for Drawable {
@@ -166,10 +170,15 @@ impl Drawable {
             .draws
             .iter()
             .chain(model.alpha_tested_draws.iter())
+            // The finest `LodGroup` tier only: the caster is built once, and
+            // a switch per shadow pass is not what it is for - chosen, not
+            // measured.
+            .filter(|draw| model.lod_groups.shows_nearest(draw))
             .map(|draw| draw.range.clone())
             .collect();
         Ok(Self {
             opaque_ranges,
+            lod: oag_render::mesh::LodSwitch::new(&model.lod_groups),
             model,
             pipeline,
             alpha_test_pipeline,
@@ -561,6 +570,19 @@ impl Drawable {
         }
     }
 
+    /// Chooses this frame's child of each authored `LodGroup` for the
+    /// instance at `model` seen from `eye` - `LodGroup_SelectChild`'s rule,
+    /// see `oag_render::mesh::LodGroups::child_at`. Free on a model with no
+    /// group, which is every drawable but a circuit and a hull.
+    pub(super) fn select_lod(&self, model: Mat4, eye: oag_render::mesh::LodEye) {
+        self.lod.select(&self.model.lod_groups, model, eye);
+    }
+
+    /// Whether `draw` is in the `LodGroup` child this frame enables.
+    fn lod_shows(&self, draw: &DrawCall) -> bool {
+        self.lod.shows(&self.model.lod_groups, draw)
+    }
+
     /// Draws every list, in pipeline order, and reports what it submitted.
     ///
     /// `frustum` is `None` for the ship and the collision overlay: both draw a
@@ -605,6 +627,10 @@ impl Drawable {
         pass.set_index_buffer(self.indices.slice(..), wgpu::IndexFormat::Uint32);
         // Slot 0 is the white fallback, so a texture index of n binds slot n + 1.
         for (index, draw) in self.model.draws.iter().enumerate() {
+            // A tier the switch has off is not culled, it is not there.
+            if !self.lod_shows(draw) {
+                continue;
+            }
             if !visible(draw, DrawSections::at(opaque, index), set, chunks, frustum) {
                 stats.draws_culled += 1;
                 continue;
@@ -653,6 +679,9 @@ impl Drawable {
         };
         let mut cutout_set: Option<&wgpu::RenderPipeline> = None;
         for (index, draw) in self.model.alpha_tested_draws.iter().enumerate() {
+            if !self.lod_shows(draw) {
+                continue;
+            }
             if !visible(
                 draw,
                 DrawSections::at(alpha_tested, index),
@@ -707,6 +736,9 @@ impl Drawable {
         };
         let mut current: Option<&wgpu::RenderPipeline> = None;
         for (index, draw) in self.model.transparent_draws.iter().enumerate() {
+            if !self.lod_shows(draw) {
+                continue;
+            }
             if !visible(
                 draw,
                 DrawSections::at(transparent, index),
@@ -780,7 +812,15 @@ impl Drawable {
     /// This hull's geometry and materials, for the ghost ship's pipeline to
     /// draw through - every list, since the original's ghost state overrides
     /// every batch's own. See `oag_render::ghost`.
-    pub(super) fn ghost_hull(&self) -> oag_render::ghost::Hull<'_> {
+    ///
+    /// The `LodGroup` child is the ghost's own, from `model` and `eye`, not
+    /// the grid slot's whose hull this borrows: the ghost is its own craft
+    /// at its own distance.
+    pub(super) fn ghost_hull(
+        &self,
+        at: Mat4,
+        eye: oag_render::mesh::LodEye,
+    ) -> oag_render::ghost::Hull<'_> {
         let model = &self.model;
         oag_render::ghost::Hull {
             vertices: &self.vertices,
@@ -789,6 +829,7 @@ impl Drawable {
             draws: (model.draws.iter())
                 .chain(&model.alpha_tested_draws)
                 .chain(&model.transparent_draws)
+                .filter(|draw| model.lod_groups.shows_at(draw, at, eye))
                 .map(|draw| (draw.range.clone(), draw.texture))
                 .collect(),
         }

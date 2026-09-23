@@ -202,6 +202,9 @@ pub struct CaptureOptions {
     /// compared against itself off. Unlike the blur it needs no primer frame -
     /// a blob is placed from the tick's own pose, with no history.
     pub shadows: oag_display::display::Shadows,
+    /// How far out authored `LodGroup`s switch in the captured frame -
+    /// `[render_profiles.<title>] model_detail`, or `--lod`'s preset.
+    pub model_detail: oag_render::mesh::ModelDetail,
     /// Replaces the live audio spectrum with a fixed synthetic ramp before
     /// the frame is drawn. `--zone-spectrum-test`.
     ///
@@ -328,6 +331,7 @@ pub fn capture(
     let mut race = Race::start(setup);
     race.set_boost_fov_kick(options.boost_fov_kick);
     race.set_sight_fov(options.fov);
+    race.set_model_detail(options.model_detail);
     race.set_sight_screen(hud.space.size);
     race.set_camera_view(options.camera_view);
     race.set_control_scheme(options.scheme);

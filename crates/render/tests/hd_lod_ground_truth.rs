@@ -180,7 +180,7 @@ fn no_hd_lod_group_file_reaches_the_mesh_builder_yet() {
     // `Lod::Single` on whichever file started working - checking that `Single`
     // is smaller and, crucially, not empty.
     for (path, blob) in lod_group_files(&image) {
-        let built = mesh::build_with_textures(&path, &blob, None, Lod::Single);
+        let built = mesh::build_with_textures(&path, &blob, None, Lod::Original);
         assert!(
             built.is_err(),
             "{path} now builds a mesh from its .vex, so `Lod::Single` can finally change an \

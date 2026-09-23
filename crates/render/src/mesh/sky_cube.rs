@@ -219,6 +219,7 @@ pub fn build(label: &str, blob: &[u8], rotation_degrees: f32) -> Result<Model> {
         airbrakes: [None, None],
         anim_tracks: Vec::new(),
         node_vertex_ranges: Vec::new(),
+        lod_groups: Default::default(),
         anim_nodes: Vec::new(),
         emissive: Vec::new(),
     })

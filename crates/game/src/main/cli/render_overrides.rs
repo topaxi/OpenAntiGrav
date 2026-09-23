@@ -5,8 +5,8 @@ use super::Cli;
 
 impl Cli {
     /// Applies `--render-scale`, `--upscaler`, `--anti-aliasing`,
-    /// `--motion-blur`, `--shadows` and `--screen-filter` to one render
-    /// profile.
+    /// `--motion-blur`, `--shadows`, `--screen-filter` and `--lod`'s preset
+    /// to one render profile.
     ///
     /// **One function because there are two callers and they disagreed.**
     /// `main.rs` applies these by walking `settings.render_profiles`, which is
@@ -41,6 +41,11 @@ impl Cli {
         }
         if let Some(screen_filter) = &self.screen_filter {
             profile.screen_filter = screen_filter.clone();
+        }
+        // `--lod both` is a build-time diagnostic with no preset; see
+        // `oag_render::mesh::Lod`.
+        if let Some(detail) = self.lod.and_then(oag_render::mesh::Lod::detail) {
+            profile.model_detail = detail;
         }
     }
 }

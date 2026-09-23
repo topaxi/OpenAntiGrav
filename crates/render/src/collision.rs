@@ -276,6 +276,7 @@ pub fn build_model(
     Model {
         airbrakes: [None, None],
         node_vertex_ranges: Vec::new(),
+        lod_groups: Default::default(),
         label: label.to_string(),
         vertices,
         indices,

@@ -53,6 +53,14 @@ impl Race {
         self.view.sight_fov = fov;
     }
 
+    /// How far out the authored `LodGroup`s switch to their coarser tiers -
+    /// `[render_profiles.<title>] model_detail`. Render-only, cheap and
+    /// idempotent like [`Self::set_sight_fov`], so the frame loop sets it
+    /// every frame and the menu row applies live.
+    pub fn set_model_detail(&mut self, detail: oag_render::mesh::ModelDetail) {
+        self.view.model_detail = detail;
+    }
+
     /// Which grid the lock-on reticle's coordinates are in.
     ///
     /// The title's own HUD space - `oag_game::hud::Assets::space` - because the
