@@ -76,6 +76,11 @@ pub struct WeaponModels {
     /// track, not a renamed copy of it. See
     /// `docs/ghidra/functions/ps3-hdfury-eu/plasma.md`.
     pub plasma_blast_hd: Option<HdPlasmaBlast>,
+    /// Pulse's own Bomb detonation: a hemisphere and a shockwave, each eased
+    /// by a per-tick `cur += (target - cur) * rate` scale ramp of its own -
+    /// see `oag_game::race::bomb_blast`. `None` on every other title: HD's
+    /// own Bomb detonation is unread and Pure's Bomb authors no fuse at all.
+    pub bomb_blast_pulse: Option<PulseBombBlast>,
     /// The LeachBeam's own ball, at the drawing end of the beam.
     ///
     /// **Named, not wired.** What places this model each tick has not been
@@ -99,6 +104,7 @@ impl WeaponModels {
         plasma_ball: None,
         plasma_blast_pulse: None,
         plasma_blast_hd: None,
+        bomb_blast_pulse: None,
         leachbeam_ball: None,
     };
 }
@@ -126,4 +132,16 @@ pub struct HdPlasmaBlast {
     pub sphere: &'static str,
     /// `Data\Weapons\HD_plasma_halo.vex`, target scale 7.0, rate 0.2.
     pub halo: &'static str,
+}
+
+/// Pulse's own Bomb-blast pair, in `BombBlast_Construct`'s load order - see
+/// [`WeaponModels::bomb_blast_pulse`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PulseBombBlast {
+    /// `Data\Weapons\explosion_hemisphere.vex`, uniform scale 2.0 -> 4.0,
+    /// rate 0.1, hidden past 1.55s.
+    pub hemisphere: &'static str,
+    /// `Data\Weapons\Bomb_Shockwave.vex`, radial scale 0.0 -> 12.0, rate
+    /// 0.075, gated to start after 0.1s.
+    pub shockwave: &'static str,
 }

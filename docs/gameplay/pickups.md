@@ -62,7 +62,7 @@ This subsystem is unusually mixed, so the split comes before anything else.
 | **A Bomb press lays exactly one**, where a Mine press lays a cluster | **recovered** | 88 |
 | **That a bomb is static**, like a mine - its spawn direction is recovered and any speed is not | **ours** | - |
 | **A bomb's fuse is its own `timetodie`** - `Bomb_AdvanceFuse` counts age up against `<Bomb>+0xe4`, which `WeaponStats_ParseBomb` fills from `timetodie` | **recovered** (2026-09-15) | 85 |
-| **A bomb's layer is exempt from tripping it for `0.5 s` only**, then it is a target like anyone; the blast is `damage` and `slowdown_time` on the tripper plus a linear-falloff impulse on everyone inside `blastradius`; a Quake wave detonates it; the detonation is `explosion_hemisphere.vex` + `WO_BOMB_SMOKERING` + `Bomb_Shockwave.vex` with `BOMBEXPL` | **recovered, not built** | 85 |
+| **A bomb's layer is exempt from tripping it for `0.5 s` only**, then it is a target like anyone; the blast is `damage` and `slowdown_time` on the tripper plus a linear-falloff impulse on everyone inside `blastradius`; a Quake wave detonates it; the detonation is `explosion_hemisphere.vex` + `WO_BOMB_SMOKERING` + `Bomb_Shockwave.vex` with `BOMBEXPL` | **recovered, built 2026-09-23** | 85 |
 | **The blast's impulse falls off linearly** over `blastradius`; the damage does not | **recovered** | 82 |
 | `<Plasma>`: the Rocket's block less `spread`, at measured offsets `+0x9c`..`+0xc4` | **recovered** | 92 |
 | **A Plasma press puts exactly one in the air**, where a Rocket puts three | **recovered** | 88 |
@@ -910,9 +910,17 @@ the original does: the stamp is unconditional and the grant is not.
 - **The Bomb's `damageradius`.** Authored, the only second radius any weapon
   has, and no consumer found - so it is decoded nowhere and spent nowhere. See
   `oag_tables::weapons::BombStats`.
-- **A mine or a bomb draws nothing.** `Pulse_Mine.vex` and `Pulse_Bomb.vex` are
-  both named and located and no renderer reads either, so a laid charge is
-  invisible.
+- ~~**A mine or a bomb draws nothing.**~~ **Closed.** `Pulse_Mine.vex` and
+  `Pulse_Bomb.vex` both draw at their landed pose (`mine.md`'s 2026-09-05
+  section), and as of 2026-09-23 the Bomb's own detonation draws too -
+  `explosion_hemisphere.vex` and `Bomb_Shockwave.vex` on their own render
+  pool (`oag_game::race::bomb_blast`) plus `WO_BOMB_SMOKERING`, off
+  `Bomb_Detonate`/`BombBlast_Update`. See
+  [mine.md](../ghidra/functions/psp-pulse-usa/mine.md#2026-09-23-the-blasts-own-per-tick-animator-read).
+  The recovered shockwave alpha fade is not wired - see that section's own
+  hedge - and the Mine's own detonation still plays only `WO_MINE_EXPLO`
+  with no accompanying `.vex` model, which is a smaller gap than the Bomb's
+  own used to be.
 - **The pad's ready-to-collect colour cycle.** `WeaponPad_UpdateRefreshTimer`
   (`0x0892c034`) packs a grey into `pad+0x6c` while cooling down and cross-fades
   a small colour table once it is collectable. Observed, not implemented, so a

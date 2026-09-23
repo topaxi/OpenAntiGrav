@@ -423,6 +423,7 @@ impl Race {
                 leach_beam_ribbon: None,
                 leach_beam_rng: Rng::new(LEACH_BEAM_SEED),
                 plasma_blasts: [None; blast_models::PLASMA_BLAST_SLOTS],
+                bomb_blasts: [None; bomb_blast::BOMB_BLAST_SLOTS],
                 hd_plasma_blast,
                 absorb_burst,
                 absorb_anchors,

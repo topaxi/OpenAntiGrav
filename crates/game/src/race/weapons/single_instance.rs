@@ -95,7 +95,15 @@ impl Race {
         for (slot, point) in tripped {
             self.sim.world.projectiles.slots[slot] =
                 oag_gameplay::projectile::Projectile::default();
-            self.ignite_blast(oag_tables::weapons::Weapon::Mine, point, None);
+            // Identity: only a Mine reaches this filter above, and
+            // `ignite_blast`'s `orientation` is unused by every arm but the
+            // Bomb's.
+            self.ignite_blast(
+                oag_tables::weapons::Weapon::Mine,
+                point,
+                None,
+                Quat::IDENTITY,
+            );
         }
         self.sim.world.quake = Some(wave);
     }

@@ -67,9 +67,8 @@ pub struct Scene {
     /// after covers it - see [`Scene::render`] for why it is not scaled to the
     /// far plane instead.
     sky: Option<Drawable>,
-    /// The track's `Speedup Pad` geometry, drawn with the track.
-    ///
-    /// Same pipeline, same textures, same fog, same world matrix as
+    /// The track's `Speedup Pad` geometry, drawn with the track. Same
+    /// pipeline, same textures, same fog, same world matrix as
     /// [`Self::track`]; separate only because a pad belongs to no visibility
     /// `section`, so it is offered frustum culling but not the PVS. `None` when
     /// the track authors none.
@@ -80,9 +79,8 @@ pub struct Scene {
     /// geometry authors - see `race::gantry`. `None` on a circuit that
     /// authors no mount, which draws no gantry rather than a placed guess.
     gantry: Option<gantry::Gantry>,
-    /// The track's authored visibility partition, when it decoded.
-    ///
-    /// `None` for a track with no `section` nodes - every Pure track - and the
+    /// The track's authored visibility partition, when it decoded. `None`
+    /// for a track with no `section` nodes - every Pure track - and the
     /// first tier is then skipped entirely rather than approximated.
     visibility: Option<TrackVisibility>,
     /// One drawable per craft, the player's first.
@@ -101,10 +99,10 @@ pub struct Scene {
     /// since the original parents the plume to the craft rather than to the
     /// flare.
     ///
-    /// Eight copies of the mesh for the same reason [`Self::ships`] holds eight:
-    /// a `Drawable` owns the uniform buffer its model matrix and its UV transform
-    /// are written into, and two craft boosting at once need two of each. Empty
-    /// rather than `Option<Vec<_>>` so the no-plume source and the iteration read
+    /// Eight copies for the same reason [`Self::ships`] holds eight: a
+    /// `Drawable` owns the uniform buffer its model matrix and UV transform
+    /// write into, and two craft boosting at once need two. Empty rather
+    /// than `Option<Vec<_>>` so the no-plume source and the iteration read
     /// the same way `ships` does.
     boost: Vec<Option<Drawable>>,
     /// One always-on engine flame per craft, for a title that authors its flare
@@ -146,9 +144,8 @@ pub struct Scene {
     absorb_overlay: Vec<Option<Drawable>>,
     /// HD's absorb shell per slot - see [`absorb_shell`].
     absorb_shell: Vec<Option<Drawable>>,
-    /// One drawable per projectile slot, for rockets drawn as their own model.
-    ///
-    /// **Empty** when `Data\Weapons\Rocket.vex` did not load, and the sprite
+    /// One drawable per projectile slot, for rockets drawn as their own
+    /// model. **Empty** when `Data\Weapons\Rocket.vex` did not load, and the sprite
     /// fallback in [`Race::projectile_sprites`] carries the whole effect then.
     /// Sized to `MAX_PROJECTILES` and clone-per-slot for the same reason
     /// [`Self::ships`] is clone-per-craft: a `Drawable` owns the uniform buffer
@@ -162,14 +159,15 @@ pub struct Scene {
     /// The Bomb's own, one size up from the Mine's model, same terms.
     bombs: Vec<Drawable>,
     /// A Cannon round's own, same terms: empty when
-    /// `Data\Weapons\pulse_muzzleflash.vex` did not load, and a round then
-    /// draws as nothing rather than as an invented stand-in.
+    /// `Data\Weapons\pulse_muzzleflash.vex` did not load - a round then
+    /// draws as nothing rather than an invented stand-in.
     cannon_rounds: Vec<Drawable>,
     /// The Plasma's own drawables - the blast's three plus the bolt's own
-    /// head, [`blast_models::PlasmaBlastDrawables::ball`]. See
-    /// [`blast_models::PlasmaBlastModels`]'s own doc comment for why the
-    /// bolt rides in this container rather than a field of its own.
+    /// head, [`blast_models::PlasmaBlastDrawables::ball`]; see that type's
+    /// own doc comment for why the bolt rides in this container.
     plasma_blast: blast_models::PlasmaBlastDrawables,
+    /// The Bomb's own - a hemisphere and a shockwave; see [`bomb_blast::BombBlastDrawables`].
+    bomb_blast: bomb_blast::BombBlastDrawables,
     /// Each slot's own plume's authored texture-transform keyframes, sampled
     /// per frame and applied to that plume's authored UVs - the recovered
     /// mechanism (`TEXMAPMODE` 0 plus the animated `TEXOFFSET` u-scroll; see
@@ -365,6 +363,7 @@ impl Scene {
         bomb_model: Option<Model>,
         cannon_model: Option<Model>,
         plasma_blast_models: blast_models::PlasmaBlastModels,
+        bomb_blast_models: bomb_blast::BombBlastModels,
         shield_cockpit: Option<Model>,
         flare: Option<FlareTexture>,
         leach_beam_texture: Option<FlareTexture>,
@@ -842,27 +841,28 @@ impl Scene {
         let shell = |l: &crate::livery::Livery| l.absorb_shell.clone();
         let never = mesh_render::ShadowReceiver::Never;
         let absorb_shell = slots.drawables(shell, exhaust::BLEND, scene_depth, never)?;
-        // One per projectile slot: the Rocket's, the Mine's, the Bomb's, the
-        // Cannon round's and the Plasma blast's, all built the same way - see
-        // `weapon_models::build_all`. A laid mine's hull is opaque too - a
-        // painted shell, not a glow - so every one takes the ordinary
-        // transparent blend and protected glow mask the ships take, and any
-        // flare stays in the additive pass with the exhaust where it belongs.
-        let (rockets, mines, bombs, cannon_rounds, plasma_blast) = weapon_models::build_all(
-            device,
-            queue,
-            rocket_model,
-            mine_model,
-            bomb_model,
-            cannon_model,
-            plasma_blast_models,
-            format,
-            anisotropy,
-            sample_count,
-            scene_depth,
-            zone_art,
-            shadow_maps,
-        )?;
+        // One per projectile slot - the Rocket's, the Mine's, the Bomb's,
+        // the Cannon round's, the Plasma blast's and the Bomb blast's -
+        // built the same way, see `weapon_models::build_all`. A laid mine's
+        // hull is opaque too, so every one takes the ordinary transparent
+        // blend and protected glow mask the ships take.
+        let (rockets, mines, bombs, cannon_rounds, plasma_blast, bomb_blast) =
+            weapon_models::build_all(
+                device,
+                queue,
+                rocket_model,
+                mine_model,
+                bomb_model,
+                cannon_model,
+                plasma_blast_models,
+                bomb_blast_models,
+                format,
+                anisotropy,
+                sample_count,
+                scene_depth,
+                zone_art,
+                shadow_maps,
+            )?;
         // 64 is a stand-in size only, and only when the disc's own texture did not
         // decode; `load` has already reported that when it happens.
         let flare = flare.unwrap_or_else(|| FlareTexture::placeholder(64));
@@ -968,6 +968,7 @@ impl Scene {
             bombs,
             cannon_rounds,
             plasma_blast,
+            bomb_blast,
             boost_uv_transforms,
             collision,
             sky,

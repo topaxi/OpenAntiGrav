@@ -168,16 +168,17 @@ fn load_optional(
 }
 
 /// Every weapon's own body model, on [`load`]'s own terms - the Rocket's,
-/// the Mine's, the Bomb's, the Cannon round's and the Plasma blast's three -
-/// the bolt's own head included, riding inside the last element rather than
-/// a sixth of its own; see [`blast_models::PlasmaBlastModels`]'s own doc
-/// comment for why.
+/// the Mine's, the Bomb's, the Cannon round's, the Plasma blast's three - the
+/// bolt's own head included, riding inside the last element rather than a
+/// sixth of its own; see [`blast_models::PlasmaBlastModels`]'s own doc
+/// comment for why - and the Bomb blast's own two.
 pub(super) type WeaponBodies = (
     Option<Model>,
     Option<Model>,
     Option<Model>,
     Option<Model>,
     blast_models::PlasmaBlastModels,
+    bomb_blast::BombBlastModels,
 );
 
 /// Loads one of the Cannon round's two hand-built quads' textures.
@@ -295,6 +296,17 @@ pub(super) fn load_bodies(
     // The bolt's own head, HD only - see `PlasmaBlastModels::ball`'s own doc
     // comment for why it rides in this container.
     let ball = one(models.plasma_ball, "a plasma bolt", false);
+    // Pulse-only, `None` on every other title's own table - see
+    // `WeaponModels::bomb_blast_pulse`'s own doc comment.
+    let bomb_blast =
+        models
+            .bomb_blast_pulse
+            .map_or(bomb_blast::BombBlastModels::default(), |pulse| {
+                bomb_blast::BombBlastModels {
+                    hemisphere: one(Some(pulse.hemisphere), "a bomb blast hemisphere", false),
+                    shockwave: one(Some(pulse.shockwave), "a bomb blast shockwave", false),
+                }
+            });
     let bodies = (
         one(models.rocket, "a rocket", false),
         one(models.mine, "a laid mine", false),
@@ -304,6 +316,7 @@ pub(super) fn load_bodies(
             ball,
             ..plasma_blast
         },
+        bomb_blast,
     );
     if models.plasma_ball.is_some() && !blast_models::HD_PLASMA_BALL_DRAWN {
         report.push(

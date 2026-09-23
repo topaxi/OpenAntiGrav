@@ -34,6 +34,7 @@ because they are one weapon in two sizes. See
 | `0x088643d0` | `Bomb_ApplyBlast` | 85 (new 2026-09-15) |
 | `0x088640c8` | `Bomb_Detonate` | 88 (new 2026-09-15) |
 | `0x08872078` | `BombBlast_Construct` | 90 (new 2026-09-15) |
+| `0x0887250c` | `BombBlast_Update` | 85 (new 2026-09-23) |
 
 **The addresses on this page are real, not image-relative.** Ghidra renders this
 program's `jal` targets and `lui`/`addiu` operands in the `0x0886xxxx` region as
@@ -866,17 +867,18 @@ section above left open - it is **neither** `WO_MINE_EXPLO` rescaled **nor**
    0, 0)` at the same basis (string at `0x08a7cbc8`);
 3. `Vex_LoadModel(..., "Data\Weapons\Bomb_Shockwave.vex", ...)` (`+0xd8`,
    string at `0x08a7cbdc`) at a **second** copy of the basis whose position
-   is pulled back by `1.0` (`DAT_08ab1070`) along the basis's second row -
-   the shockwave sits one unit below the hemisphere.
+   is pulled back by `1.0` (`DAT_08ab1070`) along the basis's own row index
+   `1` (0-based) - **read 2026-09-23, and it is the direction row, not the
+   orthogonalised-up row**; see below.
 
-Its ramp constants, unread as to meaning: `+0xdc 2.0`, `+0xe0 4.0`, `+0xe4
-0.1`, `+0xe8 0`, `+0xec 12.0`, `+0xf0 0.075`, `+0xf4 1.0`, `+0xf8 0`,
-`+0xfc = DAT_08ab1074 (0.1)`; vtable `0x08acafd8`. The per-tick animator that
-spends them is the next thing to read before drawing any of this. **The
-`Bomb_Shockwave.vex` string the handover thread found at `0x08a7c190` next to
-the plasma models is a second copy**; the one this constructor loads is at
-`0x08a7cbdc`, in the Bomb blast's own `.rodata` group with the alloc tag
-`"file"` at `0x08a7cb98`.
+Its ramp constants, read 2026-09-23 (was "unread as to meaning"): `+0xdc
+2.0`, `+0xe0 4.0`, `+0xe4 0.1`, `+0xe8 0`, `+0xec 12.0`, `+0xf0 0.075`, `+0xf4
+1.0`, `+0xf8 0`, `+0xfc = DAT_08ab1074 (0.1)`; vtable `0x08acafd8`. See
+[the per-tick animator, below](#2026-09-23-the-blasts-own-per-tick-animator-read).
+**The `Bomb_Shockwave.vex` string the handover thread found at `0x08a7c190`
+next to the plasma models is a second copy**; the one this constructor loads
+is at `0x08a7cbdc`, in the Bomb blast's own `.rodata` group with the alloc
+tag `"file"` at `0x08a7cb98`.
 
 **What this changes for the engine, none of it done here:** the Bomb's fuse
 label moves from "by analogy" to recovered; its layer-exemption is `0.5 s`,
@@ -885,6 +887,107 @@ and a linear-falloff impulse on everyone inside `blastradius`; its detonation
 draws a hemisphere model, a smoke-ring `.pob` and a shockwave model, and plays
 `BOMBEXPL`; and a Quake wave detonates it. `MINE_EXPLO_EFFECT` reused for the
 Bomb would be a stand-in, and so would be `WO_BOMB_SMOKERING` on its own.
+
+## 2026-09-23: the blast's own per-tick animator, read
+
+The stretch item the section above named and left for later: what
+`BombBlast`'s own vtable Update slot does with the nine ramp constants and
+the two child objects. Found the same way `plasma.md`'s own vtable read
+was - `inspect_memory_content` on `0x08acafd8` lists seven `(0, address)`
+pairs, six in the `0x0892xxxx`/`0x0894xxxx` shared-object ranges and one,
+`0x0887250c`, inside this weapon's own module range. `decompile_function` on
+it decompiles cleanly with nothing unreachable in its main body. Confidence
+**85** - a direct decompile, and every field it touches was already named by
+`BombBlast_Construct`'s own writes (below), which line up exactly.
+
+**Renamed `BombBlast_Update` (`0x0887250c`, 85).** Signature `(dt, blast)`,
+called once a tick through the vtable, same shape as `PlasmaBlast_Update`.
+
+**The basis math, resolved from `Bomb_Detonate`'s own preamble.** The
+"orthonormal basis from the bomb's `+0x60` direction against the world up"
+line above was written from a structural read; the arithmetic is now decoded
+in full, and it is ordinary Gram-Schmidt against a reference vector, the same
+shape `docs/ghidra/functions/psp-pulse-usa/plasma.md`'s own basis-build
+independently uses:
+
+```c
+dir   = normalize(bomb->0x60);              // the bomb's own frozen direction
+up    = normalize(WORLD_UP - dir * dot(dir, WORLD_UP));  // Gram-Schmidt against world up
+right = cross(dir, up);
+basis = { row0: right, row1: dir, row2: up, row3: bomb->0xb0 (position, w=1.0) };
+```
+
+`WORLD_UP` is the vec4 at `0x08a907c0`, read directly: `(0.0, 0.0, 1.0,
+0.0)` - **not this engine's own world-up axis**, see the porting note below
+for why the literal constant carries over unchanged. **Row index `1` (the
+`dir` row) is what `BombBlast_Update`'s pull-back reads** -
+`vscl_q(basis.row1, DAT_08ab1070) ` then `shockwave.position -=` that -
+which corrects the section above's looser "along the basis's second row":
+the row read is the direction row itself, not the orthogonalised-up row, and
+`DAT_08ab1070` reads `1.0` directly (confirmed by memory inspection).
+
+**"One unit below" is the right plain-language description after all -
+settled from the meshes, not from `bomb->0x60`'s own unread semantics.**
+`oag-view --mesh` on both `.vex` files (2026-09-23, same session) shows
+`explosion_hemisphere.vex` as a dome resting pole-up and `Bomb_Shockwave.vex`
+as a ring lying flat, each on its own local `Y` - so whichever real-world
+direction `bomb->0x60` carries on the original's own entity, the basis's
+row `1` is the slot both authored models expect their own vertical axis to
+occupy. That is a measured fact about the assets, independent of what
+`+0x60` itself turns out to mean; see `Bomb_Detonate`'s own "chosen, not
+measured" note for the part that is still a substitution.
+
+**Per tick, sub-stepped in fixed `1/60 s` increments** (`dt / 0.016666668`
+iterations, each stepping every ramp once) - which is this project's own
+tick rate exactly, so a 60 Hz port takes one sub-step per tick with no loop
+needed:
+
+- **The hemisphere's own uniform scale**, `+0xdc` easing toward `+0xe0` at
+  rate `+0xe4` (`2.0 -> 4.0` at `0.1`/tick) - applied to all three basis
+  rows before the transform is written onto the hemisphere object at `+0xd4`
+  via `FUN_08945284` (an already-shared "set local transform" call, not
+  itself chased here).
+- **The shockwave's own radial-only scale**, `+0xe8` easing toward `+0xec`
+  at rate `+0xf0` (`0.0 -> 12.0` at `0.075`/tick), **gated to start only
+  once `age > 0.1 s`** (the `if (0.1 < age)` guard wrapping this ease
+  alone). Applied to basis rows `0` and `2` (`right` and the orthogonalised
+  `up`) and **not** row `1` (`dir`) - the shockwave grows in the plane
+  perpendicular to the bomb's own direction and keeps its extent along that
+  direction fixed, which is the "ring" shape its name predicts.
+- **The shockwave's own fading alpha**, `+0xf4` easing toward `+0xf8` at
+  rate `+0xfc` (`1.0 -> 0.0` at `0.1`/tick, `DAT_08ab1074`), packed
+  `alpha*255` into an opaque-white ARGB word (`0xffffff` RGB) and applied
+  through `Image_SetVertexColours` on the shockwave object at `+0xd8` -
+  already a named engine call, not chased further.
+- **The hemisphere hides at `age > 1.55 s`** (a node-flag clear on `+0xd4`,
+  bits `0x2`/`0x4`) and **the whole blast object is torn down at `age > 4.0
+  s`** - the shockwave's own flag clear plus the same
+  `g_pending_destroy_count`/`FUN_08944a38` release path `PlasmaBlast_Update`
+  uses at its own, shorter, `1.5 s`. **`4.0 s` is `BombBlast`'s own total
+  lifetime**, corroborated by `+0xd0`'s own doc comment above this session's
+  read as "age" and nothing else in the function writing it.
+- The smoke-ring (`WO_BOMB_SMOKERING`) is spawned once, at construction, at
+  the hemisphere's own unscaled basis - `BombBlast_Update` never touches it
+  again; its own authored particle behaviour is the entirety of its motion,
+  the same as every other `Data\Psys\*.POB` effect this engine already
+  plays through `oag_render::psys::Stage`.
+
+**Porting note, chosen rather than measured**: `WORLD_UP` above needs no
+axis swap at all - `Rocket_HitCraft`'s own `y - 2.5` drop
+([rocket-visuals.md](rocket-visuals.md), ported as `CRAFT_BLAST_DROP`
+subtracted along `Vec3::Y`) already establishes this engine's world axes
+agree with the executable's own with no translation, so `(0.0, 0.0, 1.0)`
+carries over as `Vec3::Z` directly - a horizontal reference, not an up
+vector, which is what the meshes above say it has to be too. `dir` itself
+substitutes the frozen craft orientation's **up** axis
+(`orientation * Vec3::Y`) for the unlocated rear-emitter's own `+0x60` row,
+on the same footing `mine::frozen_pose`'s own doc comment already states -
+no new confidence score, carried forward from that existing hedge. (An
+earlier pass of this note read `dir` as the craft's *forward* axis crossed
+against `Vec3::Y`, matching `blast_models::billboard_matrix`'s own column
+convention rather than these two meshes' own authored vertical axis; caught
+by comparing a rendered capture against the `oag-view --mesh` screenshots
+above, not by re-reading this page.)
 
 ## 2026-09-16: the fuse and the trip spend differently, and the pool is named
 
