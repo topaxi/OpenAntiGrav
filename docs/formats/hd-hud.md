@@ -963,6 +963,16 @@ the same state (`just play hd --race --mode single_race --team feisar
 --ticks 30`) draws the same five and the same one, a full blue hexagon and a
 blue `100`.
 
+**A second mode agrees, independently.** `data/shots/hd_zone_hud_original_zone8.png`,
+a Zone frame of the running original (Zone mode's id is not one of the five
+white ones), shows both brackets **red above and blue below** with a blue `42`
+over them - the fill cropped from the top to 42 %, drawn over a background on
+a flash's red phase, and the number in the fill's colour. This build now draws
+Zone the same way: `zone_hud.xml`'s `DamageBar` shares its `DamageBarBg`'s
+source rectangle, so the same rule reaches it. (That the Zone HUD's update runs
+with bit `0x02` of `hud+0x44` set is read off this frame, not off the
+executable.)
+
 **Chosen, not read:** where in its cycle a flash starts (the original keeps a
 flash timer of its own; this build phases off the race clock), and that a
 place of zero draws no place arc (the original never meets one). **Not
