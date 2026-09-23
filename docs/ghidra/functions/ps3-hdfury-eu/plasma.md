@@ -424,8 +424,9 @@ explosion's vtable `0x00863ef8`, and what schedules slot 5 was not followed -
 
 These are large, and they are what the disc authors: the sphere is a
 29-metre bubble the chase camera can easily be inside, and both discs are
-screen-facing additive layers whose size mostly decides how far across the
-screen their texture is spread. **The same disc authors the Missile's
+screen-facing additive layers (the ring's texture nearly black, so it adds
+little) whose size mostly decides how far across the screen their texture
+is spread. **The same disc authors the Missile's
 explosion at a comparable size with no code involved** -
 `HD_missile_explosion.vex`'s `Anim Transform` keys scale its three main mesh
 nodes from 1 to 18 over its first second (radius 6.4 -> 116 m), and its
@@ -436,28 +437,71 @@ title's own authoring convention, not an arithmetic slip in one reading.
 reading that `cur` might compose against a base scale is retired. What the
 engine got wrong is below.
 
-### Why the engine's picture read as a grey screen
+### Why the engine's picture read as a grey screen: the back faces
 
-1. **The ring's texture is almost black** (mean RGB 8.9) and it is additive:
-   drawn right, a 479 m ring adds almost nothing on its own. It is not the
-   grey fill.
-2. **The sphere is alpha-blended, not additive**, and its texture's lower
-   half is grey noise at mid alpha (`plasma_1024x1024.gtf`: 40% of all texels at
-   alpha 64..127, 36% at 128..191). Drawn with static UVs from inside a
-   29-metre sphere, that half covers the frame in translucent grey - the
-   picture the gate was put in for. The original scrolls UVs on this model
-   (`FUN_002c1b30` on `age`, plus whatever `plasmasphere_glow`'s shader does
-   with its `noise.gtf` second sampler); neither is played by this engine,
-   where `mesh::rcs`'s report says the second texture is "loaded but not
-   drawn (role unread)".
-3. The engine places the sphere on the camera billboard rather than the
-   track basis, which rotates its UV seam relative to the original - minor
-   next to (2).
+`Material_ApplyRenderState` (`0x005d8f68`, see
+[material-state.md](material-state.md)) writes `state >> 4 & 1` to RSX
+method `0x183c`, which RPCS3's own `rpcs3/Emu/RSX/gcm_enums.h` names
+`NV4097_SET_CULL_FACE_ENABLE` (and `0xa74`, the other register that page
+left unidentified, `NV4097_SET_DEPTH_TEST_ENABLE`). The cull face is
+`GL_BACK` outside the ship-shadow pass
+([ship-sun-occlusion.md](ship-sun-occlusion.md)). All three explosion
+materials are state `0x39`: blended, **culled**. Confidence **90** - a
+decompiled register write, named from the emulator's own header.
 
-The gate on the draw therefore stays, **re-attributed**: not "the scale is
-unexplained", but "the sphere's material (UV scroll and its `noise.gtf`
-second sampler) is not played, and without it the correctly-sized sphere
-fills the frame with its unscrolled grey half".
+And the geometry is built for culling, measured by `hd_weapon_extents` (each
+triangle's `(b - a) x (c - a)` against its vertices' authored normals, all
+agreeing, and against the direction from the model's origin):
+
+| model | shells |
+| --- | --- |
+| `HD_plasma_sphere` | two meshes of 760 triangles, one wound outward and one inward |
+| `HD_plasma_ring` | two discs of 256 triangles, one facing `+Z`, one `-Z` |
+| `HD_plasma_halo` | **one** disc of 320 triangles, every normal `-Z` |
+
+This engine drew every HD `.rcsmodel` draw unculled (`mesh::rcs` sets
+`DrawCall::culled = false` throughout), so the sphere drew all four layers
+along any line of sight instead of two, and from inside it both shells
+instead of the inner one - which is what turned the frame grey. The fix is
+`oag_game::race::load::weapon_models::cull_as_authored`, applied to the
+three explosion models only.
+
+**The halo settles the discs' orientation.** A single-sided `-Z` disc under
+a culling material can only ever be seen with `-Z` towards the viewer, so
+the basis's `Z` must point away from the camera - which is what `Start`'s
+`vsubfp` from zero reads as, if the camera vector it negates is the view
+direction. That corroborates the confidence-80 reading above from the data
+side. `oag_game`'s shared `billboard_matrix` points `Z` at the camera **and
+is a reflection** (`right = forward x up`, `up = right x forward`, determinant
+`-1`), which under culling would hide exactly the faces the original draws;
+HD's discs now take `blast_models::facing_away`, a right-handed basis with
+`X = Y x Z` like `Start`'s own cross at `0x001281b4`..`0x001281cc`.
+
+Screenshots of the result, several frames across one blast's life from the
+chase camera (a single shot from the grid at 45 m; and a single shot at speed
+that the craft flies through at about 0.17 s):
+`~/.cache/oag/drive/reports/hd-weapon-detonations/final-grid/` and
+`.../final-flythrough/` (`contact.png` in each). A purple, translucent dome
+round a white core that grows and goes at 1.3 s; flying through it tints the
+upper frame for a few frames and no more.
+
+**Still not played, and each a visible difference from the original:**
+
+1. `UV_offset`. `WeaponExplosions_Construct` (`0x00128ab0`) looks up the
+   shader constant named `UV_offset` (string at `0x00783d00`, through the TOC
+   slot `0x008aa304`) on each of the three models and binds it
+   (`FUN_00677018`) to `_opd_FUN_002c11c8(model) = node + 0xc0` of the
+   model's first node of class `PTR_PTR_008b3988`; `Draw` then sets anim time
+   `age` on the tree (`_opd_FUN_002c1b30`, a walk calling slot `+0x40` on the
+   three anim node classes). What `node + 0xc0` holds on that class was not
+   read. None of the three materials carries an Edge curve of its own
+   (`mesh::rcs::curve_track`'s sweep found `weapons/reticule_missile` alone
+   among weapons), so the scroll, if it is one, is the node's.
+2. The sphere's second sampler (`noise.gtf`), which `mesh::rcs` loads and
+   does not draw ("role unread").
+3. The sphere's basis: the original gives it the track fit `FUN_000a97f0`
+   returns, this engine the camera-facing one. Round, so only its texture
+   seam moves.
 
 ### How to falsify this
 
