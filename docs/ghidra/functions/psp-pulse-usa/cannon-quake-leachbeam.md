@@ -1468,16 +1468,17 @@ Read for the weapon-absorb build (`oag_render::hull_overlay`,
   Taking the `E`-operand product as `A * B` on the memory rows, a vertex
   `(x, y, z)` projects to `(s, t, q) = (10x, -10z - 1.5p, 1)`. The other
   operand order gives `q = 10y - 1.5p`, a perspective divide that means
-  nothing for a hull, which is why this reading is taken. **The operand order
-  is an inference, not a measurement**: reading the twelve words handed to
-  `Gu_SetMatrix` at `0x0890e754` during an absorb would settle it. The
+  nothing for a hull, which is why this reading is taken. ~~**The operand order
+  is an inference, not a measurement**~~ - **measured the same day**: the
+  matrix handed to `Gu_SetMatrix` at `0x0890e754` during a real absorb gives
+  exactly this projection; see "2026-09-23 (later)" below. The
   projection source is `GU_POSITION`. `Gu_TexProjMapMode`'s only caller,
   `FUN_0890dc64`, passes `0`, and the GE init zeroes the same context word,
   so `(x, y, z)` are the vertex's GE input coordinates: the `.vex`'s own
   `s16 / 32768`, before its batch scale. Result: a top-down planar
   projection, 10 repeats per input unit, sliding 3 repeats along the
-  craft's length over the second. Confidence **70** for the projection as a
-  whole, **85** for the constants.
+  craft's length over the second. Confidence ~~**70**~~ **90** for the
+  projection as a whole (measured live, below), **85** for the constants.
 - **The primary colour reaches the fragment on the hull proper.**
   `HullOverlay_Submit` disables lighting (`Gu_Disable(10)`), which on the GE
   takes a vertex's own colour where the vertex format has one. Assegai's
@@ -1488,7 +1489,10 @@ Read for the weapon-absorb build (`oag_render::hull_overlay`,
   dump of `Data\Ships\Assegai\Ship.vex`. Every Assegai mesh batch
   shares one scale, `37.088448`.
 
-- **The per-mesh gate is the mesh's name.** `Mesh_InitFromPayload` sets
+- **The per-mesh gate is the mesh's name** - **but only on the per-entity
+  path, and the race does not take it**; see "2026-09-23 (later)" below: in
+  play the overlay covers every mesh in the hull's batch set, measured.
+  `Mesh_InitFromPayload` sets
   `mesh+0x79` (`0x0890ec30..4c`) from a match of the mesh's own name against
   the literal `"ship"` at `0x08a883c4`, via `FUN_089737ac`. The neighbouring
   literals `"track"`/`"TRACK"`/`"Track"` set `+0x78` the same way. It sets
@@ -1498,7 +1502,12 @@ Read for the weapon-absorb build (`oag_render::hull_overlay`,
   on Assegai only `shipShape` can take the overlay: not the airbrakes, the
   canopy, or the glow and LOD meshes. Confidence **75**: `FUN_089737ac` is
   read as a substring test from its call shape, not decompiled.
-- **A controlled live probe finds the gate never evaluated in play.** On
+- ~~**A controlled live probe finds the gate never evaluated in play.**~~
+  **Voided** - that run armed two execution breakpoints at once, and PPSSPP
+  v1.20.4 only fires the most recently added one (see
+  [ppsspp-debugger.md](../../../reverse-engineering/ppsspp-debugger.md#only-the-most-recently-added-execution-breakpoint-fires)).
+  The HUD alone calls the gate every frame, so a live race can never log
+  zero hits of it. See "2026-09-23 (later)" below. The original text: On
   PPSSPP v1.20.4, in a single race on this project's own silent instance
   (debugger `47831`), one run armed breakpoints on the per-craft update
   `FUN_088418e0` (the control) and on `HullOverlay_AbsorbWindowActive`
@@ -1520,8 +1529,9 @@ Read for the weapon-absorb build (`oag_render::hull_overlay`,
   If the stamp hits and the gate does not, the overlay is dead code in play.
   If both hit, turn it on.
 
-**Built, and off by default** (`oag_render::hull_overlay::DRAWN = false`,
-because of the probe above), as `oag_render::hull_overlay`. The port and what it chose are in
+**Built** ~~**and off by default**~~ - **on since "2026-09-23 (later)"
+below** (`oag_render::hull_overlay::DRAWN = true`), as
+`oag_render::hull_overlay`. The port and what it chose are in
 that module's own doc comment. The depth test is `LessEqual` with no write,
 standing in for `EQUAL`. ~~Every hull mesh is overlaid, since the `+0x79`
 byte is unread~~ - read the same day (above): only a mesh named `...ship...`
@@ -1530,6 +1540,128 @@ pipeline, and the colour-bearing glow meshes take the tint like the rest.
 The LeachBeam half (`leachbeam_surface.mip`) would ride the same module,
 but its fade source (`**(float**)(state+0x4c)`) is unread, so it is **not
 wired**.
+
+### 2026-09-23 (later): a real absorb draws the overlay in play
+
+A second probe, on a real absorb, settles it: **the original draws the
+absorb hull overlay in play, for exactly the one-second window.** The same
+run measured the texture matrix, and it found that the in-race draw path
+does not use the name gate above.
+
+**Setup.** PPSSPP v1.20.4, `UCUS98712`, on a private silent instance
+(Xvfb `:133`, debugger `47833`, `[Sound] Enable = False`,
+`SDL_AUDIODRIVER=dummy`). Single race, Venom, Talon's Junction, Assegai, the
+profile's own choices (`psp-drive.py menu --single-race`). The player sat
+stationary on the grid after the countdown, with the chase camera.
+- **The player's craft** is `*(g_race_manager + 0x2c0)`. That is the object
+  `Hud_UpdateEnergyBar` hands to the gate every frame. It is not
+  `Ship_UpdateCraft`'s `a0`, the trap the first probe hit. Its weapon record
+  is `*(craft + 0x4c)`.
+- **The absorb.** The weapon was granted by writing `0` into the record's
+  `+0x1bc` (a memory write while stepping), and circle was then pressed
+  through `input.buttons.press`. The absorb handler `FUN_08844ec4` ran on
+  that real input: the slot went back to `-1` and the stamp was written.
+- **The organic control.** An AI craft absorbed on its own during the
+  baseline (nothing was cheated for it), and the same draw-side signal
+  appeared for it, also for 0.97 s.
+
+**Instrument: logged memory watchpoints only** (`enabled: False, log:
+True`, which does not halt). Execution breakpoints were not used for the
+timing, because two cannot coexist.
+- **Read and write on `player + 0x878`.** The write is the control: it logged
+  one `Write32` at `PC 0x088455b4`, which is the stamp store. Reads at
+  `0x0883e908` are `HullOverlay_AbsorbWindowActive`. **That PC cannot tell a
+  draw from the HUD**, because `Hud_UpdateEnergyBar` (`0x0881c740`) calls it
+  every frame. They logged continuously from the moment of arming, which
+  proves the instrument and the address. Reads at `0x0883e954` are
+  `HullOverlay_AbsorbFade`, whose only callers are the two draw paths. They
+  are the test.
+- **Read on `0x08abf4a4`**, the `10`. Its only reader is `HullOverlay_Submit`
+  at `0x0890e670`, just before `Gu_SetMatrix(3)`. It is a second test
+  signal, with no halt.
+
+**Result**, in the log from the absorb onward:
+
+| Signal | PC | Count | Span |
+| --- | --- | --- | --- |
+| stamp store on `player+0x878` | `0x088455b4` | 1 | `30:23.215` |
+| `AbsorbFade` reads `player+0x878` | `0x0883e954` | 120 | `30:23.230`-`30:24.215` |
+| `Submit` reads the `10` | `0x0890e670` | 649 | `30:23.247`-`30:24.215` (11 a frame) |
+| gate from the HUD (+ draws) | `0x0883e908` | 844 | continuous |
+
+Nothing was read at `0x0883e954` or `0x0890e670` in the baseline before the
+absorb, except the AI's own window. Both stop within a frame of the second
+elapsing. **So the stamp, the Fade gate and the Submit draw fire together,
+for one second, and nothing else starts or stops them.** Confidence **95**.
+
+**The texture matrix, measured.** One halting breakpoint was armed alone at
+`0x0890e754`, and the absorb was triggered with circle held and released
+(`input.buttons.send`), not `press`. It was read at the first frame of the
+window (`p = 0.0334`):
+
+```text
+A (sp+0x50): (1,0,0,0) (0,-0,1,0) (0,-1,-0,0) (0,0,0,1)     // the quarter turn
+B (sp+0x90): (10,0,0,0) (0,10,0,0) (0,0,0,1) (0,-0.050171,1,1)   // -1.5p = -0.0502
+handed to Gu_SetMatrix(3) (sp+0xd0):
+             (10,0,0,-) (0,0,0,-) (0,-10,0,-) (0,-0.050171,1,-)
+```
+
+Read as the GE's column vectors, that is `s = 10x`, `t = -10z - 1.5p`,
+`q = 1`: **the projection this page inferred above, now measured.**
+Confidence **90**.
+
+**The in-race path is `Mesh_DrawBatchSet`, not the per-entity one.** A lone
+breakpoint on `HullOverlay_Submit`'s entry during the player's absorb gave
+`ra = 0x0890e134` on every hit. That is `HullOverlay_SubmitAbsorbBatched`,
+called from `Mesh_DrawBatchSet` (`0x0893074c`). That function gates only on
+its batch set's `+0xc0` (the craft), the window and the fade. It then
+submits **every entry of the set** (`+0x74` entries of `0x28` bytes at
+`+0x78`, the mesh at `+4`, the batch at `+8`). It never reads the per-mesh
+`+0x79` name byte. The mesh objects of eleven submits in one frame, read
+back through `*(mesh+0x48) + 0x10`:
+
+| Mesh object | Name | Submits a frame | `+0x79` |
+| --- | --- | --- | --- |
+| `09b907d0` | `shipShape` | 5 | 1 |
+| `09b92820` | `Airbrake_RightShape` | 2 | 0 |
+| `09b92ac0` | `Airbrake_LeftShape` | 2 | 0 |
+| `09b92e20` | `self_illuminatedShape` | 1 | 0 |
+| `09b92fd0` | `glowingShape` | 1, later in the frame | 0 |
+
+The batch counts match the file: `shipShape` has five list-0 batches, each
+airbrake two, `self_illuminatedShape` one. `glowingShape` has two list-0
+batches, and one of them is overlaid. Which one was not established; the
+late submit suggests a second batch set. **Not overlaid:** `canopyShape`
+(its one batch is in list 1) and `lodShape` (under the `LodGroup`'s second
+child). **So on the race path every drawn list-0 hull mesh takes the
+overlay, not only the one named for the ship.** Confidence **85** for
+Assegai, which was measured directly. The rule for other teams is inferred
+from it. `mesh+0x79` still gates the per-entity path at `0x0890f288`, which
+this race never reached.
+
+**The overlay stamps the glow mask at full strength.**
+`Gfx_BuildBatchStateList(0x282)` takes its `param_2 & 0xc0` branch (`0x80`).
+It calls `0x08811914` with `(1, 0xff, 0xff)`, which emits GE command `0xDC`
+(stencil test: `ALWAYS`, ref `0xff`). It calls `0x08811948` with `(0, 0, 2)`,
+which emits `0xDD` (stencil op `KEEP, KEEP, REPLACE`). The command bytes
+were read at instruction level. With `Gu_PixelMask(0)` opening alpha, every
+overlay fragment that passes the alpha test (`GREATER 0`) and the colour
+test (not black) writes **`0xff`** into the bloom's glow mask. That value
+does not depend on the fade. The original's frames show it: at the peak the
+hull blooms into a white blob wider than its own silhouette (see the
+screenshots below). Confidence **85**.
+
+**Frames.** PPSSPP's own screenshot key (`g` in this profile's
+`controls.ini`, sent with `xdotool` to the window after `windowmove 0 0`)
+saved fourteen frames 0.11-1.09 s into the window. They are
+`original-ppsspp-01.png`..`-14.png` under
+`~/.cache/oag/drive/reports/pulse-absorb-probe/`, and none are in the repo.
+The peak frame (`-07`, about 0.56 s) is near-white across the whole hull,
+including the airbrakes. The HUD energy bar is white instead of cyan.
+
+**Still not measured.** The depth test the port uses (`LessEqual` with no
+write, for the original's `EQUAL` with writes on) remains chosen: a frame
+cannot tell the two apart on an unmoving coplanar redraw.
 
 ### Open
 

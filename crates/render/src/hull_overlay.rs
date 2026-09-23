@@ -50,21 +50,22 @@ use oag_vex::vex;
 
 use crate::mesh::{Model, ModelTexture};
 
-/// Whether a race draws the overlay at all: **off**, deliberately.
+/// Whether a race draws the overlay at all: **on**, because the original
+/// draws it in play.
 ///
-/// Everything below is read and built, but no capture shows the original
-/// drawing it in play. A live probe on PPSSPP counted 60 hits of the per-craft
-/// update (`FUN_088418e0`) and none of `HullOverlay_AbsorbWindowActive`, the
-/// gate both overlay draw paths call for any mesh that could take it. The
-/// dispatch looks like a display-list *record*, and a list recorded at load,
-/// with the absorb stamp at its initial `-10`, holds no overlay and a frozen
-/// colour. Drawing a sheen the original may never show would be the
-/// plausible-looking stand-in this project refuses. The probe that would flip
-/// this: a real absorb, with the stamp store (`0x088455ac`) as the control
-/// and `0x0883e904` as the test - see
+/// Measured on PPSSPP with a real absorb on Talon's Junction, Assegai
+/// (2026-09-23, second probe). Logged, non-halting watchpoints caught the
+/// absorb handler's stamp store (`PC 0x088455b4`). They then caught
+/// `HullOverlay_AbsorbFade` reading the player's stamp (`0x0883e954`) and
+/// `HullOverlay_Submit` reading the `10` (`0x0890e670`, 11 times a frame).
+/// Both ran for exactly the one-second window and stopped. The matrix handed
+/// to `Gu_SetMatrix(3)` was read at `0x0890e754` and gives the projection
+/// below: `u = 10x`, `v = -10z - 1.5p`. The earlier probe that switched this
+/// off had two execution breakpoints armed at once, and PPSSPP v1.20.4 only
+/// fires the last one added. See
 /// `docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md`,
-/// "2026-09-23".
-pub const DRAWN: bool = false;
+/// "2026-09-23 (later)".
+pub const DRAWN: bool = true;
 
 /// `DAT_08abf4a4`: texture repeats per GE input unit, on both axes.
 pub const REPEAT: f32 = 10.0;
