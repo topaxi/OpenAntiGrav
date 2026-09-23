@@ -108,3 +108,6 @@
 0x0884f420	function	Bomb_ApplyHit	82	weapons.md
 0x0884f214	function	BombPool_Detonate	82	weapons.md
 0x08b177a0	data	WeaponStats_Table	84	weapons.md
+0x08952c00	function	TitleScreen_AssignWordmarkTexture	90	../psp-pure-eu/title-screen.md
+0x088bb770	function	BackgroundController_UpdateImages	80	../psp-pure-eu/title-screen.md
+0x088ba694	function	Animation_ParseValuesOrKey	80	../psp-pure-eu/title-screen.md

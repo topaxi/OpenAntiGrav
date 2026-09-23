@@ -746,6 +746,7 @@ mod tests {
             data: "image.chd:PSP_GAME/USRDIR/Data.wad".to_string(),
             fe: Some("image.chd:PSP_GAME/USRDIR/FE.wad".to_string()),
             extra: Vec::new(),
+            serial: None,
         };
         assert_eq!(
             archive_specs(&layout),
@@ -781,6 +782,7 @@ mod tests {
             data: "image.chd:54748/WADS2.WAD".to_string(),
             fe: Some("image.chd:54748/WADSP.WAD".to_string()),
             extra: Vec::new(),
+            serial: None,
         };
         assert_eq!(
             archive_specs(&layout),

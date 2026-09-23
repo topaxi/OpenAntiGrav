@@ -1,4 +1,4 @@
-# Pure's `Title Screen` logo wordmark is found; `FE Screen`'s own backdrop is not
+# Pure's `Title Screen`/`FE Screen` runtime mechanism is read; the reveal timeline is not
 
 Comparing `oag-game`'s own render against the real PPSSPP capture: the big "WipEout"/"pure" logo (`TitleFrame`, `x=0 y=76 width=480 height=128`, `StartEnabled="false"`) never gets a `src` in `Skin.xml` at all - it is set programmatically on the original, the same way Pulse's own dangling globals are, and finding it needs either Ghidra (where `TitleFrame`'s texture gets assigned) or a full image-content scan of `Data.wad`/`FE.wad`, not a name guess - one guess (`Data\FE\Images\Logo.mip`, hash `be900df4`) did resolve to a real entry but at 2064 bytes is far too small to be a 480x128 texture, so it was not pursued.
 
@@ -22,13 +22,73 @@ Wired through a new `fallback_images` axis - `oag_title::BootProfile::fallback_i
 
 `BackgroundTopRightImage` matched: entry 27 of `Data.wad` (hash `7ba78aca`, `256x32`, `Data.wad`-only, byte-identical on both pressings) decodes to the "ワイプアウト" katakana wordmark beside the swoosh/arrow logo - cropping the real capture to the widget's own rect reproduces it exactly. Wired through `FALLBACK_IMAGES` the same way `TitleFrame` is, confidence 85, pinned by a new test (`fe_screens_own_corner_logo_gets_the_measured_texture`, same file). `BackgroundImage` did not match anything: the three full-screen candidates (a track-background render already ruled out for `TitleFrame`'s own scan, a blue speed-line loading-screen-shaped texture, and a `512x512` card bearing "A-G RACING"/a barcode/a world map) all show content nowhere on the real `Main Menu`, whose background is flat white to the pixel (`255,255,255`, sampled directly) - which is exactly what `MenuSkin::background` already supplies. Nothing added to `FALLBACK_IMAGES` for it; a genuine negative, not an unlooked-for gap any more. Full candidate table: `docs/formats/pure-status.md`'s "`FE Screen`'s corner logo, `BackgroundTopRightImage`" section.
 
+**2026-09-23: the runtime mechanism for all three is read, one real bug found and fixed, one hard-coded hash replaced with the real mechanism, and the reveal timeline's own struct mapped (its consumer still isn't).**
+Full evidence: `docs/ghidra/functions/psp-pure-eu/title-screen.md`; the
+corrections to each finding above: `docs/formats/pure-status.md`'s own
+"2026-09-23" paragraphs under "The Title screen wordmark", "`FE Screen`'s
+corner logo" and the new "`<Animation><Key TextureWidth="...">` reveal"
+section.
+
+- **`TitleFrame` was a real, live bug, not just an unread mechanism**: the EU
+  pressing's own executable loads a different, region-suffixed texture name
+  than the USA one (`FMV_last_frame_EU.mip` against `_US.mip`), and this
+  build's `FALLBACK_IMAGES` hard-coded the USA hash regardless of which disc
+  was open - so the EU disc was drawing the USA pressing's own wordmark
+  colourway. Confirmed both ways: hashing each literal name lands exactly on
+  two hashes this project already had from its own content scan, and a live
+  PPSSPP breakpoint plus a settled-screen capture on `pure-psp-eu.chd` shows
+  the EU-only blue-over-orange colourway. Fixed: `oag_assets::Layout` gained
+  a `serial` field (the second exception its own doc predicted, after
+  `ColourScale`), `oag_pure::frontend::title_frame_src` picks the right hash
+  from it, and `oag_game::boot::load_shell` is the one caller that appends it
+  - `BootProfile.fallback_images` itself is untouched, and unchanged for
+  every other title.
+- **`BackgroundTopRightImage`/`BackgroundImage` both resolve through a
+  declared `FEGlobals->` global**, not a hash at all -
+  `BackgroundController_UpdateImages` reads `BackgroundTopRightTexture`
+  (`Data\Skins\Default\Images\default_texture.mip`, hashing to the value this
+  project already had) and `BackgroundTexture` (the **empty string**, which
+  the code treats as an explicit "no texture" branch) every frame.
+  `FALLBACK_IMAGES` now resolves both globals directly rather than
+  hard-coding the one hash that happened to be right.
+- **The reveal timeline's own struct is mapped, its consumer is not.**
+  `<Animation><Key>` is a shared 0x20-byte struct (`Time`/`X`/`Y`/
+  `TextureWidth`/`TextureHeight`/`ScaleX`/`Scaley`) - the same one `hud.rs`'s
+  `X`/`Y`-as-travel reading already uses, for a different pair of fields.
+  Every `<Key>` on `Title Screen` brackets `TextureWidth` between
+  `-<width>` and `0`, confirmed across all thirteen `<Animation>`s - a
+  genuine reveal-authoring convention, not a guess. **Not implemented**:
+  which function reads a `Key`'s interpolated `TextureWidth` and what it does
+  to the render is unread - the `+0x3c` table this pass found is a
+  parse-time "which function reads this XML tag" table, not the object's own
+  runtime behaviour vtable (offset `+0x00`, not located). `Screens::collect_widgets`
+  still discards the timeline and draws each widget at its final state,
+  which is the honest choice while the render mapping stays unread rather
+  than a plausible-looking guess.
+
 ## Open
 
-- `BackgroundImage` (`FE Screen`, `Main Menu`'s own backdrop) is checked and ruled negative against one real capture, not resolved. Colour is measured (white), and none of the 361 decoded textures on the disc is a match for what a real `Main Menu` shows - but whether the disc's engine assigns a texture there under some other profile or theme this capture never took (a different save, a different language, an in-progress career) is unread.
-- Whether an `<Animation>`'s `<Key Time="..." TextureWidth="...">` timeline is a reveal to model, or safe to discard and draw a widget's final state statically (what this build now does), is unread
-- The runtime mechanism that assigns hash `3af18d90` to `TitleFrame`, or `7ba78aca` to `BackgroundTopRightImage`, specifically - which function, and whether it is a lookup table or a literal - is still unread. Ghidra territory, not taken either pass.
+- Which function is `Animation`'s real leading vtable's `Update`/`Draw` slot,
+  and what it does with an interpolated `TextureWidth` - crop vs scale,
+  which edge anchors. See `docs/ghidra/functions/psp-pure-eu/title-screen.md`'s
+  own "Next steps".
+- `Data.wad` entry 536 (`Data\FE\Images\FMV_last_frame_JAP.mip` by hash) is
+  unwired - no Japanese-region Pure disc is in this project's corpus.
+- Whether some skin *other than* `Data\Skins\Default` (none seen activated on
+  either disc this project holds) declares a non-empty `BackgroundTexture` is
+  unread - only the one active skin was.
 
 ## Next Steps
 
-- `BackgroundImage`: no further content-scan is likely to help - the scan is exhausted against this disc's own 361 textures. Ghidra is the remaining path: find where `BackgroundController`'s children get their `src` assigned at runtime (the same function that would answer `TitleFrame`'s and `BackgroundTopRightImage`'s own open mechanism questions above), and read whether `BackgroundImage` gets one at all or is deliberately left blank on this disc.
-- Before wiring the reveal itself: read what `<Key Time="..." TextureWidth="...">` means on a widget that already draws elsewhere (`hud.rs`'s own `<Animation><Key>` reading is `x`/`y` as travel, a different attribute, so it does not settle this one) - Ghidra or a captured real-hardware/PPSSPP frame of `Title Screen` mid-reveal would
+- Find `Animation`'s real object vtable (offset `+0x00` in the C++ ABI
+  sense): a breakpoint on whatever calls `Animation_ParseValuesOrKey`'s own
+  caller (the generic "walk an element's children by tag" loop, not yet
+  identified) would find where the parsed `Key`/`Animation` objects go next,
+  which is more likely to reach `Update`/`Draw` than the `+0x3c` parse table
+  this pass found instead.
+- Once read: implement the reveal in `oag_ui::screen`, verified against a
+  PPSSPP capture of `Title Screen` mid-reveal (not just its settled state) -
+  breakpoint-driven per-frame reads, not timed screenshots racing a 0.7s
+  window; a first attempt at timed screenshots this pass landed on frames
+  already fully revealed, which is why this is called out rather than
+  assumed easy.

@@ -162,6 +162,7 @@ fn mounted(
             data: spec.clone(),
             fe: None,
             extra: Vec::new(),
+            serial: None,
         },
         data: Container::open(&spec).expect("the test archive"),
         fe: None,
