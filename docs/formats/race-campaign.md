@@ -10,9 +10,14 @@ format fact, the sixteen names it ships are a title fact.
 This is the schema half of
 [`docs/ghidra/functions/psp-pulse-usa/race-campaign.md`](../ghidra/functions/psp-pulse-usa/race-campaign.md),
 which carries the decompiled law. As of 2026-09-09 the medal evaluator and
-its points table are also implemented here, on the type they evaluate - see
-below - but the unlock-points comparison across a whole grid, and picking
-*which* cell a race is run against, are not.
+its points table are implemented here, on the type they evaluate - see
+below. **2026-09-23: the unlock-points comparison across a whole grid
+(`Unlock_GridPointsMet`) is too** - see
+["The unlock gate, implemented"](#the-unlock-gate-implemented-grid_points_met)
+below. Picking *which* cell a race is run against, and what value that race
+actually scored, is `crate::main::session::campaign::launch_campaign_cell`'s
+job (`oag_game`) - see `docs/architecture/persistence.md`'s "A campaign cell
+now reaches `Observation::campaign_medal` for real".
 
 ## What is on disc
 
@@ -72,18 +77,43 @@ checks only the exact value `0`, but no mode here ever legitimately measures
 a negative position, time, zone count or kill count, so the wider guard
 changes no real value the original could produce.
 
-## What this module still does not implement
+## The unlock gate, implemented: `grid_points_met`
 
-The unlock-points comparison across a whole grid (`Unlock_GridPointsMet`),
-and - more importantly for wiring a race - **picking which cell a real race
-was run against, and what value that race actually scored in
-`evaluate_medal`'s own terms.** Neither the launch path (which globals
-`Cell Selection` writes, per the `campaign` handover thread's own "Next
-Steps") nor the mapping from `oag_race::Mode`/`crate::catalogue::Track` back
-onto a `Cell` was traced this pass. `crates/game/src/records.rs` carries the
-persistence half - a `Medal` and its points, additive on the existing
-per-circuit/mode/class row - and documents exactly where it is, and is not,
-fed yet; see `docs/architecture/persistence.md`.
+`oag_tables::race_campaign::grid_points_met(grids, target, medal_of)`
+reimplements `Unlock_GridPointsMet` (`0x0888ebd8`) directly: find the grid
+among `grids` whose own `name` matches `target` case-insensitively - `Grid0`
+in an `<Unlock Grid="Grid0"/>` row against `grid0` in `grid_00.xml` - and pass
+when that grid's own `Grid::points_earned` (`Grid_PointsEarned`, the sum of
+`medal_of`'s answer per cell, converted to points) reaches its own
+`required_points`. `target` is read straight off the disc's own
+`Grid::unlock_grid`, never a hand-typed table. Unit-tested against an
+invented fixture in `crates/tables/src/race_campaign/tests.rs` and against
+the real disc's own `grid0`/`grid1` pair in
+`crates/tables/tests/race_campaign_ground_truth.rs`
+(`grid_points_met_reproduces_the_unlock_ladder_on_real_data`).
+
+**Not implemented: `Unlock_GridName`'s own `asSelected` reading** - the
+literal string a caller's own currently-selected grid, rather than a name -
+since no `<Unlock Grid="...">` row on any of the sixteen shipped grids
+authors it. See that function's own doc comment.
+
+`oag_game::main::campaign_stage::CampaignStage::grid_is_unlocked` is the
+caller: it is what `Session::handle_campaign` gates `Grid Selection`'s own
+Confirm on, in place of the display-only lock-glyph shortcut
+(`GridSelection::tier_shows_lock`, `GridSelection_PopulateTiles`'s own
+"previous tile" comparison) that mechanism used to reuse. The two predicates
+cannot disagree on the shipped disc - every grid from `grid1` on names
+exactly the tile before it - but `grid_points_met` is the recovered law
+itself, not a shortcut that happens to reproduce it; see
+`docs/ghidra/functions/psp-pulse-usa/race-campaign.md`'s "the tier unlock
+rule" for why the two are only equivalent by construction on this data.
+
+Picking *which* cell a real race was run against, and what value that race
+actually scored in `evaluate_medal`'s own terms, is
+`crate::main::session::campaign::launch_campaign_cell` and
+`RaceStage::observation`'s job (`oag_game`) - see
+`docs/architecture/persistence.md`'s "A campaign cell now reaches
+`Observation::campaign_medal` for real" for the full per-mode mapping.
 
 ## Wipeout HD and Fury: the same schema, extended, split across four archives
 
@@ -257,9 +287,12 @@ decompiled-HD-executable question, out of this pass's scope.
 
 ## Two open questions this pass did not resolve
 
-- **`Status`/`Locked` on a cell, `Locked`/`Group` on a grid** are parsed (all
-  four fields exist on the types) but no consumer of any of them was traced by
-  the Ghidra pass, so nothing here interprets them either - see the parent
-  page's "What is not determined" section.
+- **`Status` on a cell, `Group` on a grid** are parsed but no consumer of
+  either was traced by the Ghidra pass, so nothing here interprets them
+  either - see the parent page's "What is not determined" section.
+  **`Locked`, on both `PI_Cell` and `PI_Grid`, is no longer in this list** -
+  the parent page's "Unlock rules, cell and tier" section settled a real
+  consumer for each (the lock glyph, and this engine's own Confirm gate,
+  `grid_points_met`/`CampaignStage::grid_is_unlocked`), at confidence 82-85.
 - **Only the USA PSP pressing and the EU PS3 Fury pressing are validated.**
   EU PSP, PS2 and Pure were not checked for `Data\Plugins\grids` at all.
