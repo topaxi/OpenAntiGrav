@@ -435,9 +435,9 @@ title's own authoring convention, not an arithmetic slip in one reading.
 
 **So the 2026-09-17 "oversized" picture is not a scale error**, and the
 reading that `cur` might compose against a base scale is retired. What the
-engine got wrong is below.
+engine was drawing differently is below.
 
-### Why the engine's picture read as a grey screen: the back faces
+### What the engine drew differently: the back faces and the basis
 
 `Material_ApplyRenderState` (`0x005d8f68`, see
 [material-state.md](material-state.md)) writes `state >> 4 & 1` to RSX
@@ -462,9 +462,17 @@ agreeing, and against the direction from the model's origin):
 This engine drew every HD `.rcsmodel` draw unculled (`mesh::rcs` sets
 `DrawCall::culled = false` throughout), so the sphere drew all four layers
 along any line of sight instead of two, and from inside it both shells
-instead of the inner one - which is what turned the frame grey. The fix is
-`oag_game::race::load::weapon_models::cull_as_authored`, applied to the
-three explosion models only.
+instead of the inner one. `oag_game::race::load::weapon_models::cull_as_authored`
+now culls the three explosion models as authored.
+
+**This is the authored state, not a demonstrated cure for the 2026-09-17
+frame.** That solid-grey frame was not reproduced on this tree, culled or
+not: a matched pair under continuous fire (a new bolt every charge, several
+blasts overlapping - `rapid-fire/unculled/` against `rapid-fire/culled/`,
+same ticks) differs only in detail, and both fill the frame with purple. That
+is several 29-metre blasts on top of one another, which a player holding one
+pickup does not see. The 09-17 frame was taken with the reflected basis below
+and before this pass, and what it was is left there.
 
 **The halo settles the discs' orientation.** A single-sided `-Z` disc under
 a culling material can only ever be seen with `-Z` towards the viewer, so
@@ -477,13 +485,47 @@ is a reflection** (`right = forward x up`, `up = right x forward`, determinant
 HD's discs now take `blast_models::facing_away`, a right-handed basis with
 `X = Y x Z` like `Start`'s own cross at `0x001281b4`..`0x001281cc`.
 
+**Checked by pixels, not by eye.** With the ring and sphere forced to scale 0
+(a temporary edit, reverted), the halo alone changes 125,422 pixels at tick
+190 and 93,471 at 215 against all three at 0 - and **exactly** the same
+pixels, to the same summed difference, culled and unculled. So under this
+basis every halo triangle the engine rasterises is a front face: the `-Z`
+sign and the engine's counter-clockwise front face agree with the original's
+data. Had either been wrong the culled halo would have vanished.
+
 Screenshots of the result, several frames across one blast's life from the
-chase camera (a single shot from the grid at 45 m; and a single shot at speed
-that the craft flies through at about 0.17 s):
-`~/.cache/oag/drive/reports/hd-weapon-detonations/final-grid/` and
-`.../final-flythrough/` (`contact.png` in each). A purple, translucent dome
-round a white core that grows and goes at 1.3 s; flying through it tints the
-upper frame for a few frames and no more.
+chase camera: a single shot from the grid, detonating 45 m ahead, and a single
+shot at speed that the craft flies through at about 0.17 s. Kept (not in the
+tree) under `~/.cache/oag/drive/reports/hd-weapon-detonations/`
+(`final-grid/`, `final-flythrough/`, `rapid-fire/`, `halo-check/`, a
+`contact.png` in each). A purple, translucent dome round a white core that
+grows and goes at 1.3 s; flying through it tints the upper frame for a few
+frames and no more. To regenerate them, write two input scripts (the
+`scripts/input_script.py` format):
+
+```text
+# grid.inputs - one shot from the grid
+100 none
+2 square
+1000 none
+
+# one-shot.inputs - one shot at speed
+400 none
+2 square
+1000 none
+```
+
+and for each tick `T` of interest (`170 180 190 200 215 230 245 260` for the
+first, `462 466 470 474 480 490 510 534` for the second):
+
+```sh
+./target/debug/oag-game data/images/hdfury-ps3-eu-dec.iso --race \
+    --mode single_race --autopilot --give plasma \
+    --input-script grid.inputs --ticks T --screenshot out/tT.png
+```
+
+Deterministic, so one run per frame. The continuous-fire pair used a script
+of `1 square` / `1 none` repeated, at `330 360 ... 540`.
 
 **Still not played, and each a visible difference from the original:**
 

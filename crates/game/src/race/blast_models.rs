@@ -116,10 +116,10 @@ pub(super) const HD_PLASMA_BALL_DRAWN: bool = false;
 /// that big.** The ring and halo are discs of radius 8.8 and 9.0, the sphere
 /// a ball of radius 4.1, so at 60 Hz the sphere is a 29-metre bubble within
 /// a quarter of a second and the ring a disc of several hundred metres by
-/// 1.3 s. It read as a screen-filling grey sphere on 2026-09-17 because the
-/// back faces were drawn - each shell is authored twice, once each way, and
-/// the material culls - not because the scale was wrong. See plasma.md's
-/// 2026-09-23 section and `load::weapon_models::cull_as_authored`.
+/// 1.3 s. The scale was not what made the 2026-09-17 picture wrong; the
+/// trio now also culls as its materials say (each shell is authored twice,
+/// once each way) and the discs take HD's own right-handed basis. See
+/// plasma.md's 2026-09-23 section and `load::weapon_models::cull_as_authored`.
 pub(super) const HD_BLAST_TARGETS: [f32; 3] = [100.0, 7.1, 7.0];
 /// See [`HD_BLAST_TARGETS`].
 pub(super) const HD_BLAST_RATES: [f32; 3] = [0.01, 0.3, 0.2];

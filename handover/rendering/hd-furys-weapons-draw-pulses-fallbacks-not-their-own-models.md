@@ -42,12 +42,14 @@ The executable's own load-path strings name every model above
 ## Open
 
 - **The Plasma explosion draws (2026-09-23); three things of it still
-  do not.** The 2026-09-17 "oversized" picture was the back faces, not the
-  scale: the ring/sphere/halo are discs and a ball of radius 8.8/4.1/9.0 m,
-  `cur` is a plain uniform scale (select mask `0x00769cd0`), each shell is
-  authored twice (one each way) under material state bit 4 =
-  `NV4097_SET_CULL_FACE_ENABLE`, and this engine drew HD models unculled.
-  See plasma.md's 2026-09-23 section. Not played yet: (1) the `UV_offset`
+  do not.** The scale is not the error: the ring/sphere/halo are discs and
+  a ball of radius 8.8/4.1/9.0 m and `cur` is a plain uniform scale (select
+  mask `0x00769cd0`). Each shell is authored twice (one each way) under
+  material state bit 4 = `NV4097_SET_CULL_FACE_ENABLE`, which this engine now
+  honours for the trio, on HD's own right-handed basis (halo checked by
+  pixel diff). The 09-17 solid-grey frame was **not reproduced** on this tree
+  either way; under continuous fire several overlapping blasts still fill the
+  frame purple, culled or not. See plasma.md's 2026-09-23 section. Not played yet: (1) the `UV_offset`
   binding `WeaponExplosions_Construct` makes to `node + 0xc0` of each model's
   first `PTR_PTR_008b3988`-class node, driven by `age` through
   `_opd_FUN_002c1b30` - what that field holds is unread; (2) the sphere's
@@ -103,7 +105,9 @@ The executable's own load-path strings name every model above
 4. ~~Settle the Plasma explosion's scale~~ **Done 2026-09-23**, the gate
    is gone. Next on it: read what `node + 0xc0` is on the
    `PTR_PTR_008b3988` node class (the `UV_offset` source), then the sphere's
-   `noise.gtf` role.
+   `noise.gtf` role. Compare against a real RPCS3 capture of one detonation
+   when the held-weapon slot is known - no capture of the original's blast
+   exists yet.
 5. Make `Race::projectile_model_matrices` a rotation (`side = up x forward`
    or equivalent) and then honour state bit 4 for every HD weapon model via
    `load::weapon_models::cull_as_authored`'s `cull` flag - check the Rocket
