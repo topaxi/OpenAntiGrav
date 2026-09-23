@@ -42,9 +42,7 @@ impl Cli {
         if let Some(screen_filter) = &self.screen_filter {
             profile.screen_filter = screen_filter.clone();
         }
-        // `--lod both` is a build-time diagnostic with no preset; see
-        // `oag_render::mesh::Lod`.
-        if let Some(detail) = self.lod.and_then(oag_render::mesh::Lod::detail) {
+        if let Some(detail) = self.lod {
             profile.model_detail = detail;
         }
     }

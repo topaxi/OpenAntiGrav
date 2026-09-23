@@ -145,11 +145,6 @@ fn the_child_index_never_passes_the_last_child() {
 fn every_name_round_trips() {
     for detail in ModelDetail::ALL {
         assert_eq!(detail.name().parse::<ModelDetail>(), Ok(detail));
-        assert_eq!(Lod::from(detail).detail(), Some(detail));
     }
-    for lod in Lod::ALL {
-        assert_eq!(lod.name().parse::<Lod>(), Ok(lod));
-    }
-    assert_eq!(Lod::Both.detail(), None);
-    assert_eq!(Lod::default().detail(), Some(ModelDetail::default()));
+    assert_eq!(ModelDetail::default(), ModelDetail::Original);
 }

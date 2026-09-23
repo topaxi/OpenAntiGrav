@@ -184,10 +184,6 @@ pub struct Options {
     /// made of - the same view `oag-view --collision` draws, wireframe and
     /// Cage-excluded, on top of whichever track model was chosen above.
     pub collision: bool,
-    /// How ship and track models are built for an authored `LodGroup`:
-    /// every tier plus the table the per-frame switch reads, or - `both` -
-    /// every tier drawn at once. `--lod`; see [`mesh::Lod`].
-    pub lod: mesh::Lod,
     /// Force the rest of the grid to spawn even though `mode` says nothing
     /// races there.
     ///
@@ -309,7 +305,6 @@ impl Default for Options {
             zone_stage: None,
             ribbon: false,
             collision: false,
-            lod: mesh::Lod::default(),
             opponents: false,
             trail_sparks: false,
             seed: None,

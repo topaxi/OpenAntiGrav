@@ -51,7 +51,7 @@ fn census(archives: &mut oag_assets::Archives, name: &str) -> (usize, usize, usi
     let blob = archives
         .read_name(name)
         .unwrap_or_else(|e| panic!("reading {name}: {e}"));
-    let model = mesh::build_with_textures(name, &blob, None, mesh::Lod::default())
+    let model = mesh::build_with_textures(name, &blob, None)
         .unwrap_or_else(|e| panic!("decoding {name}: {e}"));
     let mut counts = (0, 0, 0, 0);
     for draw in &model.transparent_draws {
@@ -143,8 +143,7 @@ fn most_batches_are_culled_but_not_all_of_them() {
         r"Data\Environments\16_Track\track.vex",
     ] {
         let blob = archives.read_name(name).expect("reading");
-        let model =
-            mesh::build_with_textures(name, &blob, None, mesh::Lod::default()).expect("decode");
+        let model = mesh::build_with_textures(name, &blob, None).expect("decode");
         let culled = model.transparent_draws.iter().filter(|d| d.culled).count();
         let two_sided = model.transparent_draws.len() - culled;
         println!("{name}: {culled} culled / {two_sided} two-sided transparent draw(s)");
@@ -159,7 +158,7 @@ fn most_batches_are_culled_but_not_all_of_them() {
     // global setting: every one of its batches is two-sided.
     let name = r"Data\Ships\Assegai\shipboost.vex";
     let blob = archives.read_name(name).expect("reading");
-    let model = mesh::build_with_textures(name, &blob, None, mesh::Lod::default()).expect("decode");
+    let model = mesh::build_with_textures(name, &blob, None).expect("decode");
     assert!(
         model.transparent_draws.iter().all(|d| !d.culled),
         "{name}: the boost plume is two-sided in the original; culling it would halve it"

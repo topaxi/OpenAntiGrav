@@ -154,14 +154,12 @@ pub fn model(archives: &mut oag_assets::Archives, entry: &str) -> Result<Model> 
         && model.textures.iter().all(Option::is_none)
         && let Some(external) = crate::race::ps2_texture_set(archives, entry)
     {
-        return oag_render::mesh::build_with_textures(
-            entry,
-            &blob,
-            Some(&external),
-            oag_render::mesh::Lod::default(),
-        )
-        .map(|model| model.for_fixed_view(oag_render::mesh::Lod::default()))
-        .with_context(|| format!("decoding the preview mesh {entry} with its texture set"));
+        return oag_render::mesh::build_with_textures(entry, &blob, Some(&external))
+            .map(|mut model| {
+                model.keep_nearest();
+                model
+            })
+            .with_context(|| format!("decoding the preview mesh {entry} with its texture set"));
     }
     Ok(model)
 }

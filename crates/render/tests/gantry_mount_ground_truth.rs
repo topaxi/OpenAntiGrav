@@ -29,7 +29,7 @@ use std::path::PathBuf;
 
 use oag_core::math::{Mat4, Vec3};
 use oag_render::gantry::{self, BACKPLATE_TEXTURE, SLOT8_TEXTURE};
-use oag_render::mesh::{self, Lod};
+use oag_render::mesh;
 use oag_vex::vex;
 
 /// The gantry model slot 8 names on every circuit that authors a manifest.
@@ -66,8 +66,7 @@ fn every_circuit_authors_the_same_gantry_mount() {
     // The model first: its own board plane is what a mount's basis has to be
     // matched against, and it is the same file on every circuit.
     let blob = archives.read_name(GANTRY).expect("the gantry model");
-    let model =
-        mesh::build_with_textures(GANTRY, &blob, None, Lod::default()).expect("decoding it");
+    let model = mesh::build_with_textures(GANTRY, &blob, None).expect("decoding it");
     println!(
         "{GANTRY}: {} tri, radius {:.2}, centre {:?}",
         model.indices.len() / 3,
@@ -131,8 +130,7 @@ fn every_circuit_authors_the_same_gantry_mount() {
         let Ok(blob) = archives.read_name(&entry) else {
             continue;
         };
-        let track =
-            mesh::build_with_textures(&entry, &blob, None, Lod::default()).expect("decoding");
+        let track = mesh::build_with_textures(&entry, &blob, None).expect("decoding");
         let backplate = gantry::surface(&track, BACKPLATE_TEXTURE);
         let stub = gantry::surface(&track, SLOT8_TEXTURE);
         let Some(mount) = backplate.or(stub) else {

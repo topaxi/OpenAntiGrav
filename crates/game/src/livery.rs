@@ -189,8 +189,6 @@ pub struct LoadContext<'a> {
     /// This title's own engine-flare mechanism - geometry, a sprite, or
     /// unread. See [`oag_title::flare::Flare`].
     pub flare: &'a oag_title::flare::Flare,
-    /// Which level of detail to build each model at.
-    pub lod: mesh::Lod,
     /// Whether to build the absorb hull overlay - Pulse's alone, and only
     /// while `oag_render::hull_overlay::DRAWN` says so. See [`absorb::overlay`].
     pub hull_overlay: bool,
@@ -405,11 +403,11 @@ fn one(
             // beside it, under the same stem Pulse uses, for all eight teams and
             // Zone. `shell` takes the same external-geometry branch this hull
             // just took. See `crate::race::shield_entry_names`.
-            shield: shell(archives, team, ships.dir, ctx.lod, report),
+            shield: shell(archives, team, ships.dir, report),
             engine_light,
         });
     }
-    let mut hull = mesh::build_with_textures(&hull_name, &blob, None, ctx.lod)?;
+    let mut hull = mesh::build_with_textures(&hull_name, &blob, None)?;
     // The PS2 signature: `Texture` nodes exist (the model wants textures) but
     // every one is missing (its embedded block was empty). Only then is the
     // directory-position heuristic worth trying - see `ps2_texture_set`.
@@ -417,7 +415,7 @@ fn one(
         && hull.textures.iter().all(Option::is_none)
         && let Some(external) = ps2_texture_set(archives, &hull_name)
     {
-        hull = mesh::build_with_textures(&hull_name, &blob, Some(&external), ctx.lod)?;
+        hull = mesh::build_with_textures(&hull_name, &blob, Some(&external))?;
     }
     // **After the PS2 rebuild above, never before it.** That branch replaces
     // `hull` wholesale, so a skin applied earlier would be thrown away with
@@ -436,8 +434,8 @@ fn one(
     let engine_light =
         engine_light::load(archives, team, ships.dir, ctx.flare, nozzle_axis, report);
 
-    let (boost, boost_uv) = plume(archives, team, ships, ctx.mode, ctx.lod, report);
-    let shield = shell(archives, team, ships.dir, ctx.lod, report);
+    let (boost, boost_uv) = plume(archives, team, ships, ctx.mode, report);
+    let shield = shell(archives, team, ships.dir, report);
     // Nothing on a title whose flare is a sprite, which is every source that
     // reaches this branch today - the match is here rather than at the PS3
     // branch alone so a fourth source is answered by its own axis and not by
@@ -689,13 +687,12 @@ fn collision_fx_locators(ship_blob: &[u8]) -> Vec<SparkAnchor> {
 fn shield_model(
     archives: &mut oag_assets::Archives,
     name: &str,
-    lod: mesh::Lod,
 ) -> Result<(Model, String), String> {
     let blob = archives
         .read_name(name)
         .map_err(|_| format!("{name}: not in the archive set"))?;
     if !mesh::geometry_is_external(&blob) {
-        let model = mesh::build_with_textures(name, &blob, None, lod)
+        let model = mesh::build_with_textures(name, &blob, None)
             .map_err(|error| format!("{name}: {} bytes, does not parse ({error})", blob.len()))?;
         let note = format!("{} triangle(s)", model.indices.len() / 3);
         return Ok((model, note));
@@ -745,7 +742,6 @@ fn shell(
     archives: &mut oag_assets::Archives,
     team: &str,
     ship_dir: &str,
-    lod: mesh::Lod,
     report: &mut Vec<String>,
 ) -> Option<Model> {
     let names = crate::race::shield_entry_names(ship_dir, team);
@@ -755,7 +751,7 @@ fn shell(
         } else {
             "shared - this source carries no per-team shell"
         };
-        match shield_model(archives, name, lod) {
+        match shield_model(archives, name) {
             Ok((model, note)) => {
                 report.push(format!("{name}: {note} - the shield shell, {provenance}"));
                 return Some(model);
@@ -783,11 +779,10 @@ fn shell(
 /// whose confidence-70 note this is a second consumer for.
 pub(crate) fn cockpit_shield(
     archives: &mut oag_assets::Archives,
-    lod: mesh::Lod,
     report: &mut Vec<String>,
 ) -> Option<Model> {
     let name = oag_pulse::race::COCKPIT_SHIELD;
-    match shield_model(archives, name, lod) {
+    match shield_model(archives, name) {
         Ok((model, note)) => {
             report.push(format!(
                 "{name}: {note} - the shield seen from inside the cockpit"
@@ -806,7 +801,6 @@ fn plume(
     team: &str,
     ships: oag_title::race::ShipPaths,
     mode: Mode,
-    lod: mesh::Lod,
     report: &mut Vec<String>,
 ) -> (Option<Model>, Option<vex::TexTransform>) {
     let Some(boost_name) = boost_entry_name(ships, team, mode) else {
@@ -819,7 +813,7 @@ fn plume(
         ));
         return (None, None);
     };
-    let mut model = match mesh::build_with_textures(&boost_name, &blob, None, lod) {
+    let mut model = match mesh::build_with_textures(&boost_name, &blob, None) {
         Ok(model) => model,
         Err(error) => {
             report.push(format!(
@@ -841,7 +835,7 @@ fn plume(
     // entirely, and it must stay narrow enough never to overwrite a model that
     // already decoded on its own. See `ps2_texture_set`.
     if !model.textures.is_empty() && model.textures.iter().all(Option::is_none) {
-        ps2_skin(archives, &boost_name, &blob, lod, &mut model, report);
+        ps2_skin(archives, &boost_name, &blob, &mut model, report);
     }
     // The authored u-scroll: the keyframe block after each mesh's material
     // array, which the engine lerps per frame and feeds the GE as
@@ -897,7 +891,6 @@ fn ps2_skin(
     archives: &mut oag_assets::Archives,
     name: &str,
     blob: &[u8],
-    lod: mesh::Lod,
     model: &mut mesh::Model,
     report: &mut Vec<String>,
 ) {
@@ -911,7 +904,7 @@ fn ps2_skin(
     };
     let found = external.entry_count();
     let decoded = external.decoded_count();
-    match mesh::build_with_textures(name, blob, Some(&external), lod) {
+    match mesh::build_with_textures(name, blob, Some(&external)) {
         Ok(rebuilt) => {
             *model = rebuilt;
             report.push(format!(

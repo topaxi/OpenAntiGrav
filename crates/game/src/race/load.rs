@@ -342,15 +342,12 @@ pub fn load(options: &Options) -> Result<Loaded> {
     );
     let wm = craft_title.weapon_models; // every weapon's own body, per title
     let (rocket_model, mine_model, bomb_model, cannon_model, plasma_blast_models) =
-        weapon_models::load_bodies(&mut archives, wm, options.lod, &mut report);
+        weapon_models::load_bodies(&mut archives, wm, &mut report);
     // The cockpit half of the shield, on the same terms and for the same
     // reason: not per team, not per track, one entry for every craft in the
     // game. The shell beside it *is* per team and loads with the livery above.
-    let shield_cockpit = crate::livery::cockpit_shield(
-        craft_of(&mut craft, &mut archives),
-        options.lod,
-        &mut report,
-    );
+    let shield_cockpit =
+        crate::livery::cockpit_shield(craft_of(&mut craft, &mut archives), &mut report);
 
     // Shared with the sky and the pads below: all three are node classes inside
     // the same track file, and a material in any of them names a texture by its
@@ -424,7 +421,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
     } else if ribbon {
         track_render::build_model(&label, &ai)
     } else {
-        let mut track_model = mesh::build_with_textures(&track, &track_blob, None, options.lod)?;
+        let mut track_model = mesh::build_with_textures(&track, &track_blob, None)?;
         // Same PS2 signature and the same directory-position heuristic as the
         // ship above. Checked separately for tracks specifically (not just
         // assumed from the ship result): the entry directly before a track's
@@ -436,8 +433,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
             && track_model.textures.iter().all(Option::is_none)
             && let Some(external) = ps2_texture_set(&mut archives, &track)
         {
-            track_model =
-                mesh::build_with_textures(&track, &track_blob, Some(&external), options.lod)?;
+            track_model = mesh::build_with_textures(&track, &track_blob, Some(&external))?;
             ps2_track_textures = Some(external);
         }
         track_model
@@ -674,7 +670,6 @@ pub fn load(options: &Options) -> Result<Loaded> {
                 model,
                 &track_model,
                 start_position.as_ref(),
-                options.lod,
                 &mut report,
             );
         }

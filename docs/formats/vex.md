@@ -334,9 +334,9 @@ invented rather than recovered.
 
 **Implemented first as `oag_render::mesh::Lod`, superseded by the per-frame
 switch below** (`both`/`single`, a `[graphics] lod` settings key
-defaulting to `both` until 2026-09-23; today the variants are
-`original`/`high`/`maximum` plus the `both` diagnostic, and the setting is
-the per-title `model_detail` - see the sections below): a load-time choice, not a live
+defaulting to `both` until 2026-09-23; the type and the both-tiers view
+are gone, and the setting is the per-title `model_detail` - see the
+sections below): a load-time choice, not a live
 switch, and deliberately not named after quality or distance - neither exists
 here. `single` measured 3,643 fewer triangles on `16_Track` (exactly the sum
 of every tier-1 subtree's own triangle count) and was visually indistinguishable
@@ -424,11 +424,12 @@ almost every opponent more than 30 units ahead draws as its coarse
 track scenery draws its coarse tier. Up close, only tier 0 shows, which is
 what the two frames above measured.
 
-**What this means for `oag_render::mesh::Lod`:** `single` is the faithful
-picture up close and `both` is not, the opposite of what its doc said. So
-`single` became the default the same day and the `[graphics] lod` settings
-key was removed; `--lod both` on `oag-game` and `oag-view` keeps the coarse
-tier reachable as a diagnostic.
+**What this meant for the old `oag_render::mesh::Lod`:** `single` was the
+faithful picture up close and `both` was not, the opposite of what its doc
+said. `single` became the default the same day and the `[graphics] lod`
+settings key was removed; once the per-frame switch landed, the `Lod` type
+and its both-tiers view were removed too - every build carries all tiers
+and the table, and a fixed view calls `Model::keep_nearest`.
 
 ### 2026-09-23: implemented - the switch runs every frame
 
@@ -454,8 +455,8 @@ weapon models, `oag-view` (it has no race camera), a `mesh::merge`.
 
 - The player's `[render_profiles.<title>] model_detail` multiplies every
   authored distance: `original` x1 (the measured rule, the default), `high`
-  x2, `maximum` never switches. `oag-game --lod` takes the same three plus
-  `both`.
+  x2, `maximum` never switches. `oag-game --lod` takes the same three, for
+  one run.
 - The field fed to the rule is the one the picture is drawn at, so a player
   who widens `graphics.fov`, or a window narrower than the authored aspect,
   switches sooner - the rule's own `fov / 65` term extended past the PSP's

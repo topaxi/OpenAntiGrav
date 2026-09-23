@@ -38,7 +38,6 @@ pub(super) fn load(
     archives: &mut oag_assets::Archives,
     entry: &str,
     fallback: &str,
-    lod: mesh::Lod,
     cull: bool,
     report: &mut Vec<String>,
 ) -> Option<Model> {
@@ -86,7 +85,7 @@ pub(super) fn load(
             }
         };
     }
-    match mesh::build_with_textures(entry, &blob, None, lod) {
+    match mesh::build_with_textures(entry, &blob, None) {
         Ok(model) => {
             report.push(format!(
                 "{entry}: {} triangle(s), radius {:.2} - {fallback} is this model, \
@@ -162,11 +161,10 @@ fn load_optional(
     archives: &mut oag_assets::Archives,
     entry: Option<&str>,
     fallback: &str,
-    lod: mesh::Lod,
     cull: bool,
     report: &mut Vec<String>,
 ) -> Option<Model> {
-    load(archives, entry?, fallback, lod, cull, report)
+    load(archives, entry?, fallback, cull, report)
 }
 
 /// Every weapon's own body model, on [`load`]'s own terms - the Rocket's,
@@ -262,12 +260,10 @@ pub(super) fn load_cannon_quad_textures(
 pub(super) fn load_bodies(
     archives: &mut oag_assets::Archives,
     models: &oag_title::weapons::WeaponModels,
-    lod: mesh::Lod,
     report: &mut Vec<String>,
 ) -> WeaponBodies {
     // `cull` is `true` for HD's explosion trio alone - see `cull_as_authored`.
-    let mut one =
-        |entry, fallback, cull| load_optional(archives, entry, fallback, lod, cull, report);
+    let mut one = |entry, fallback, cull| load_optional(archives, entry, fallback, cull, report);
     // **Pulse's halo/hemisphere2/hemisphere1 trio and HD's ring/sphere/halo
     // trio share one container by load-order position, not by name.**
     // `blast_models::PlasmaBlastModels`'s own field names stay Pulse's -

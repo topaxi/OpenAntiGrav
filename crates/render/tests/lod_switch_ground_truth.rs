@@ -21,7 +21,7 @@
 
 use std::path::PathBuf;
 
-use oag_render::mesh::{self, Lod, Model};
+use oag_render::mesh::{self, Model};
 use oag_vex::vex;
 
 fn image(name: &str) -> Option<PathBuf> {
@@ -35,7 +35,7 @@ fn ships(archives: &mut oag_assets::Archives) -> Vec<(String, Vec<u8>, Model)> {
         .filter_map(|team| {
             let name = oag_pulse::race::ships::entry_name(team, "Ship");
             let blob = archives.read_name(&name).ok()?;
-            let model = mesh::build_with_textures(&name, &blob, None, Lod::Original)
+            let model = mesh::build_with_textures(&name, &blob, None)
                 .unwrap_or_else(|e| panic!("{name}: {e}"));
             Some((name, blob, model))
         })
@@ -48,7 +48,7 @@ fn tracks(archives: &mut oag_assets::Archives) -> Vec<(String, Vec<u8>, Model)> 
         .filter_map(|n| {
             let name = format!(r"Data\Environments\{n:02}_Track\track.vex");
             let blob = archives.read_name(&name).ok()?;
-            let model = mesh::build_with_textures(&name, &blob, None, Lod::Original)
+            let model = mesh::build_with_textures(&name, &blob, None)
                 .unwrap_or_else(|e| panic!("{name}: {e}"));
             Some((name, blob, model))
         })
@@ -202,7 +202,7 @@ fn talons_junction_switches_between_119_and_424_units() {
     let mut archives = oag_pulse::open(&image.display().to_string()).expect("the disc opens");
     let name = oag_pulse::race::DEFAULT_TRACK;
     let blob = archives.read_name(name).expect("the track reads");
-    let model = mesh::build_with_textures(name, &blob, None, Lod::Original).expect("it builds");
+    let model = mesh::build_with_textures(name, &blob, None).expect("it builds");
     assert_eq!(
         model.lod_groups.len(),
         11,
@@ -214,10 +214,16 @@ fn talons_junction_switches_between_119_and_424_units() {
     let hi = distances.iter().copied().fold(f32::MIN, f32::max);
     assert!((lo - 118.9).abs() < 0.05, "{lo}");
     assert!((hi - 424.0).abs() < 0.05, "{hi}");
-    // Both builds carry the same geometry; `Both` just carries no table.
-    let both = mesh::build_with_textures(name, &blob, None, Lod::Both).expect("it builds");
-    assert!(both.lod_groups.is_empty());
-    assert_eq!(both.indices.len(), model.indices.len());
+    // A fixed view drops the coarse tiers' draws and the table; the
+    // geometry buffer is untouched.
+    let mut near = model.clone();
+    near.keep_nearest();
+    assert!(near.lod_groups.is_empty());
+    assert_eq!(near.indices.len(), model.indices.len());
+    assert!(
+        near.draws.len() < model.draws.len(),
+        "the coarse tiers' draws are gone"
+    );
 }
 
 /// Pure's six reachable hulls carry the same shape, switching at 50 units.

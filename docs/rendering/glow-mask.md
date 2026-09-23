@@ -144,5 +144,4 @@ What is not reproduced:
   up close"), and since the same day the tiers switch per frame the way
   `LodGroup_SelectChild` does, which keeps the player's hull on tier 0 at
   every chase distance - "implemented - the switch runs every frame", same
-  page. The settings key is gone; `--lod both` still shows the old picture
-  as a diagnostic.
+  page. The old setting and its both-tiers view are gone.

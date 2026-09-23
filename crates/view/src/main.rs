@@ -168,15 +168,6 @@ struct Cli {
     #[arg(long, default_value_t = Anisotropy::default())]
     anisotropy: Anisotropy,
 
-    /// What `--mesh` does with an authored `LodGroup`. With no race camera to
-    /// switch by, `original`, `high` and `maximum` all draw the finest child -
-    /// what the original shows up close - and differ only in `oag-game`.
-    /// `both` draws every child at once, two differently-tessellated copies of
-    /// one surface in one space, to see where the coarse tier sits - see
-    /// [`mesh::Lod`] and [`mesh::Model::for_fixed_view`].
-    #[arg(long, default_value_t = mesh::Lod::default())]
-    lod: mesh::Lod,
-
     /// Print every node of a `.vex` file - class, name, size, tree position -
     /// and exit, drawing nothing.
     ///
@@ -710,9 +701,13 @@ fn main() -> Result<()> {
             .inspect(|(_, report)| println!("{}", report.describe()));
         let model = match ps3 {
             Some((model, _)) => ps3_mesh::with_pads(&cli.archive, name, &data, model),
-            None => mesh::build_with_textures(name, &data, external.as_ref(), cli.lod)?,
+            None => mesh::build_with_textures(name, &data, external.as_ref())?,
         };
-        let model = inspect(model.for_fixed_view(cli.lod), &data, &cli);
+        // No race camera switches a viewed model: it shows the finest
+        // `LodGroup` tier, what the original shows up close.
+        let mut model = model;
+        model.keep_nearest();
+        let model = inspect(model, &data, &cli);
         println!(
             "{}: {} meshes, {} vertices, {} triangles, radius {:.2}",
             model.label,

@@ -944,7 +944,7 @@ change how this list should be read:
       craft each frame - opponents past 30 units draw their `lodShape`, the
       player's hull never passes it in either chase view. A per-title
       `model_detail` setting scales the distances (`original` measured,
-      `high`/`maximum` chosen); `--lod both` stays as a diagnostic. PS2,
+      `high`/`maximum` chosen; `oag-game --lod` overrides it for a run). PS2,
       Pure and HD reuse the rule unread; HD's and 2048's groups hold no
       second tier. See [`vex.md`](../formats/vex.md), "implemented - the
       switch runs every frame"

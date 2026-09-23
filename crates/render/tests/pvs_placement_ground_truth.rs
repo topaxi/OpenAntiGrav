@@ -44,7 +44,7 @@
 
 use std::path::{Path, PathBuf};
 
-use oag_render::mesh::{self, Lod};
+use oag_render::mesh;
 use oag_render::pvs::{DrawSections, SectionPadding, SwapConflicts, UNPLACED, VisibleSet};
 use oag_vex::pvs::TrackPvs;
 use oag_vex::{track, vex};
@@ -108,8 +108,7 @@ fn sweep(image: &Path, minimum: usize) {
                 continue;
             };
             measured += 1;
-            let model = mesh::build_with_textures(&entry, &blob, None, Lod::default())
-                .expect("decoding track.vex");
+            let model = mesh::build_with_textures(&entry, &blob, None).expect("decoding track.vex");
             let pvs = TrackPvs::parse(&blob).expect("parsing sections");
 
             let nodes = vex::nodes(&blob).expect("walking the tree");

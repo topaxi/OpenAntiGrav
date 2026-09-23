@@ -269,8 +269,8 @@ pub struct Model {
     /// `(tint, rate)` pairs and the shader's table stays small.
     pub emissive: Vec<Emissive>,
     /// The authored `LodGroup`s and which child each node sits under, for the
-    /// per-frame switch - see [`LodGroups`]. Empty on a model built with the
-    /// [`Lod::Both`] diagnostic, and after [`Model::for_fixed_view`].
+    /// per-frame switch - see [`LodGroups`]. Empty after
+    /// [`Model::keep_nearest`].
     pub lod_groups: LodGroups,
 }
 
@@ -318,7 +318,7 @@ impl Model {
 }
 
 mod lod;
-pub use lod::{Lod, LodEye, LodGroups, LodSwitch, ModelDetail, REFERENCE_FOV_DEGREES};
+pub use lod::{LodEye, LodGroups, LodSwitch, ModelDetail, REFERENCE_FOV_DEGREES};
 
 mod anim_track;
 pub use anim_track::AnimTrack;
@@ -362,15 +362,18 @@ pub fn load(spec: &str, name: &str) -> Result<Model> {
 /// finest tier of every authored `LodGroup`.
 ///
 /// For a model with no race camera to switch it - a front-end preview, a HUD
-/// model, a probe: [`Model::for_fixed_view`] drops the coarse tiers, which is
+/// model, a probe: [`Model::keep_nearest`] drops the coarse tiers, which is
 /// what the original shows up close. A race model that switches per frame
 /// comes from [`build_with_textures`] instead.
 pub fn build(label: &str, data: &[u8]) -> Result<Model> {
-    Ok(build_with_textures(label, data, None, Lod::default())?.for_fixed_view(Lod::default()))
+    let mut model = build_with_textures(label, data, None)?;
+    model.keep_nearest();
+    Ok(model)
 }
 
 /// As [`build`], with an external texture set replacing the embedded one, and
-/// a choice of [`Lod`] behaviour.
+/// every `LodGroup` tier kept with the [`LodGroups`] table the per-frame
+/// switch reads - a race model, switched per drawn instance by [`LodSwitch`].
 ///
 /// PS2 models need the texture set: their embedded texture block is empty by
 /// design, so there is nothing for a material to resolve to unless the set is
@@ -380,9 +383,8 @@ pub fn build_with_textures(
     label: &str,
     data: &[u8],
     external: Option<&Ps2TextureSet>,
-    lod: Lod,
 ) -> Result<Model> {
-    build_class(label, data, external, lod, |c| c.mesh)
+    build_class(label, data, external, |c| c.mesh)
 }
 
 /// The track's sky, as a model in its own right.
@@ -472,8 +474,10 @@ fn build_optional_class(
     let Ok(classes) = vex::classes_of(data) else {
         // Let `build_class` produce the real complaint about the file rather
         // than swallowing it as "authors none".
-        return build_class(label, data, external, Lod::default(), pick)
-            .map(|model| model.for_fixed_view(Lod::default()));
+        return build_class(label, data, external, pick).map(|mut model| {
+            model.keep_nearest();
+            model
+        });
     };
     let Some(id) = pick(classes) else {
         return Ok(Model::none(label));
@@ -501,7 +505,9 @@ fn build_optional_class(
     // No race camera switches these models per frame, so they keep the
     // finest tier of any `LodGroup` they sit under, as the track model does
     // up close. Chosen, not measured: none has been seen under a group.
-    Ok(build_class(label, data, external, Lod::default(), pick)?.for_fixed_view(Lod::default()))
+    let mut model = build_class(label, data, external, pick)?;
+    model.keep_nearest();
+    Ok(model)
 }
 
 /// Flattens every node of one class into one buffer pair.
@@ -512,7 +518,6 @@ fn build_class(
     label: &str,
     data: &[u8],
     external: Option<&Ps2TextureSet>,
-    lod: Lod,
     pick: fn(vex::classes::Classes) -> Option<u32>,
 ) -> Result<Model> {
     if !vex::has_magic(data) {
@@ -594,11 +599,8 @@ fn build_class(
     // vertices are in anchor space, and a bounding sphere has to be in the
     // space the frustum test is done in.
     let anchor_world = vex::anchor_world(data, &nodes, 0.0);
-    // Every tier is built; which one draws is chosen per frame. See `Lod`.
-    let lod_groups = match lod {
-        Lod::Both => LodGroups::default(),
-        _ => LodGroups::collect(data, &nodes, classes, &anchors, &anchor_world),
-    };
+    // Every tier is built; which one draws is chosen per frame. See `lod`.
+    let lod_groups = LodGroups::collect(data, &nodes, classes, &anchors, &anchor_world);
 
     let mut vertices: Vec<GpuVertex> = Vec::new();
     let mut indices: Vec<u32> = Vec::new();

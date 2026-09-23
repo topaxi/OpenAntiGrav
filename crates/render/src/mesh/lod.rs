@@ -1,10 +1,7 @@
 //! An authored `LodGroup`'s tiers, and the per-frame switch between them.
 //!
-//! Four pieces:
+//! Three pieces:
 //!
-//! - [`Lod`] is how a model is **built**: every tier kept and switched per
-//!   frame at one of three [`ModelDetail`] presets, or every tier drawn at
-//!   once as a diagnostic.
 //! - [`ModelDetail`] is the player's `[render_profiles.<title>] model_detail`
 //!   setting: one multiplier on the authored switch distances.
 //! - [`LodGroups`] is what a built [`super::Model`] carries: each group's
@@ -125,96 +122,6 @@ impl From<ModelDetail> for String {
     }
 }
 
-/// How [`super::build_with_textures`] treats an authored `LodGroup`
-/// (class `0x2ee` on Pulse), and what `--lod` on `oag-game` and `oag-view`
-/// takes.
-///
-/// Every variant but [`Self::Both`] builds the same model - every tier in
-/// the buffer, and a [`LodGroups`] table beside it - and differs only in the
-/// [`ModelDetail`] a caller switches it at. [`Self::Both`] builds no table,
-/// so every tier draws at once, the coarse over the fine: a diagnostic view
-/// of where the coarse tier sits, which the original never shows. **Only the
-/// `.vex` builder reads it**: `mesh::rcs` (Wipeout HD) builds the table
-/// whatever this says, which changes nothing there because no HD group holds
-/// a second tier (`crates/render/tests/hd_lod_ground_truth.rs`).
-///
-/// A consumer that never calls [`LodSwitch::select`] gets the finest tier
-/// ([`LodSwitch::new`], [`LodGroups::shows_nearest`]) - what the original
-/// shows up close, confirmed against PPSSPP frames of the player's hull and
-/// a `16_Track` grandstand (`docs/formats/vex.md`, "the running original
-/// does not draw tier 1 up close").
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum Lod {
-    /// The recovered switch at the authored distances. The default.
-    #[default]
-    Original,
-    /// The switch at twice the authored distances - chosen, not measured.
-    High,
-    /// The finest tier always - chosen, not measured.
-    Maximum,
-    /// Every tier at once, coarse over fine - a diagnostic.
-    Both,
-}
-
-impl Lod {
-    /// The spelling used on the `--lod` command-line flag.
-    #[must_use]
-    pub fn name(self) -> &'static str {
-        match self {
-            Self::Both => "both",
-            Self::Original => "original",
-            Self::High => "high",
-            Self::Maximum => "maximum",
-        }
-    }
-
-    /// Every mode, for error messages.
-    pub const ALL: [Self; 4] = [Self::Original, Self::High, Self::Maximum, Self::Both];
-
-    /// The switch preset this mode draws at, or `None` for [`Self::Both`],
-    /// which switches nothing.
-    #[must_use]
-    pub fn detail(self) -> Option<ModelDetail> {
-        match self {
-            Self::Original => Some(ModelDetail::Original),
-            Self::High => Some(ModelDetail::High),
-            Self::Maximum => Some(ModelDetail::Maximum),
-            Self::Both => None,
-        }
-    }
-}
-
-impl From<ModelDetail> for Lod {
-    fn from(detail: ModelDetail) -> Self {
-        match detail {
-            ModelDetail::Original => Self::Original,
-            ModelDetail::High => Self::High,
-            ModelDetail::Maximum => Self::Maximum,
-        }
-    }
-}
-
-impl std::str::FromStr for Lod {
-    type Err = String;
-
-    fn from_str(text: &str) -> Result<Self, Self::Err> {
-        Self::ALL
-            .into_iter()
-            .find(|lod| lod.name().eq_ignore_ascii_case(text))
-            .ok_or_else(|| {
-                format!(
-                    "{text:?} is not a level-of-detail mode; try original, high, maximum or both"
-                )
-            })
-    }
-}
-
-impl std::fmt::Display for Lod {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(self.name())
-    }
-}
-
 /// One authored `LodGroup`, as the switch needs it.
 #[derive(Debug, Clone, PartialEq)]
 struct Group {
@@ -240,8 +147,8 @@ struct Member {
 /// model's scene-tree nodes sits under - keyed by the node index a
 /// [`DrawCall::node`] carries.
 ///
-/// Empty on a model built with [`Lod::Both`], on any model with no
-/// `LodGroup`, and on every model that is not one `.vex` (a ribbon, a
+/// Empty on any model with no `LodGroup`, after
+/// [`super::Model::keep_nearest`], and on every model that is not one `.vex` (a ribbon, a
 /// collision overlay, a [`super::merge`]). An empty table shows every draw.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct LodGroups {
@@ -434,7 +341,7 @@ impl LodGroups {
 
     /// Whether `draw` is in the finest tier of whatever group it sits under,
     /// or under none - the picture a caller with no camera to switch by
-    /// draws. See [`Lod`].
+    /// draws - see [`super::Model::keep_nearest`].
     #[must_use]
     pub fn shows_nearest(&self, draw: &DrawCall) -> bool {
         self.member_of(draw).is_none_or(|(_, child)| child == 0)
@@ -521,16 +428,6 @@ impl super::Model {
         ] {
             list.retain(|draw| groups.shows_nearest(draw));
         }
-    }
-
-    /// [`Self::keep_nearest`] unless `lod` is [`Lod::Both`], which keeps
-    /// every tier: what a viewer with no race camera draws under `--lod`.
-    #[must_use]
-    pub fn for_fixed_view(mut self, lod: Lod) -> Self {
-        if lod != Lod::Both {
-            self.keep_nearest();
-        }
-        self
     }
 }
 

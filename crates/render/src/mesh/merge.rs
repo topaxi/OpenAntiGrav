@@ -130,7 +130,7 @@ pub fn merge(label: &str, models: Vec<Model>) -> Model {
         // A source's `LodGroups` table is keyed by its own node indices, which
         // are ambiguous once merged, so the merge keeps each source's finest
         // tier and carries no table - the picture a caller with no camera to
-        // switch by draws anyway. See `Lod`.
+        // switch by draws anyway. See `mesh::lod`.
         let groups = &model.lod_groups;
         let nearest = |d: &DrawCall| groups.shows_nearest(d);
         out.draws

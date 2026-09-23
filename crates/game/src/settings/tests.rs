@@ -37,8 +37,8 @@ fn an_older_settings_file_gains_the_race_table() {
     assert_eq!(settings.race.class, "venom");
 }
 
-/// `[graphics] lod` was removed on 2026-09-23 (`oag_render::mesh::Lod`'s own
-/// doc says why), and every file written before then carries it - either
+/// `[graphics] lod` was removed on 2026-09-23 (`docs/formats/vex.md`'s
+/// `LodGroup` section says why), and every file written before then carries it - either
 /// spelling must still load, and the next save must drop the key.
 #[test]
 fn a_leftover_lod_key_loads_and_is_not_written_back() {

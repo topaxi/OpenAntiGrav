@@ -168,7 +168,6 @@ pub(super) fn grid(
             race: craft_title.race,
             mode: options.mode,
             flare: craft_title.flare,
-            lod: options.lod,
             hull_overlay: oag_render::hull_overlay::DRAWN
                 && craft_title.name == oag_pulse::TITLE.name,
             absorb_shell: craft_title.name == oag_hd::TITLE.name,

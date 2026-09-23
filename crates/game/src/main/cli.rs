@@ -699,13 +699,12 @@ pub(crate) struct Cli {
     #[arg(long)]
     pub(crate) anisotropy: Option<Anisotropy>,
 
-    /// How an authored `LodGroup` switches: `original`, `high` or `maximum`
-    /// override `[render_profiles.<title>] model_detail` for this run only
-    /// (the file on disk is not changed); `both` draws every child at once,
-    /// coarse over fine, a diagnostic of where the coarse tier sits that the
-    /// original never shows. See `oag_render::mesh::Lod`.
+    /// How far out an authored `LodGroup` switches to its coarser tiers:
+    /// `original`, `high` or `maximum`, overriding
+    /// `[render_profiles.<title>] model_detail` for this run only (the file
+    /// on disk is not changed). See `oag_render::mesh::ModelDetail`.
     #[arg(long)]
-    pub(crate) lod: Option<oag_render::mesh::Lod>,
+    pub(crate) lod: Option<oag_render::mesh::ModelDetail>,
 
     /// Whether the track's authored visibility set culls this run: `true` or
     /// `false`.

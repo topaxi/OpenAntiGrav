@@ -93,7 +93,7 @@ fn main() -> anyhow::Result<()> {
             }
             let external = mesh::geometry_is_external(&blob);
             println!("geometry_is_external: {external}");
-            match mesh::build_with_textures(track, &blob, None, mesh::Lod::default()) {
+            match mesh::build_with_textures(track, &blob, None) {
                 Ok(model) => println!(
                     "build_with_textures OK: {} triangle(s), radius {:.2}, {} texture(s)",
                     model.indices.len() / 3,

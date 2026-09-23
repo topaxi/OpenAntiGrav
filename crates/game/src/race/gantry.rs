@@ -88,7 +88,6 @@ pub(super) fn place(
     name: &str,
     track_model: &Model,
     start: Option<&StartPosition>,
-    lod: mesh::Lod,
     report: &mut Vec<String>,
 ) -> Option<Placed> {
     let Some(mount) = oag_render::gantry::mount(track_model) else {
@@ -107,7 +106,7 @@ pub(super) fn place(
         );
         return None;
     };
-    let model = match load(archives, name, lod) {
+    let model = match load(archives, name) {
         Ok(model) => model,
         Err(e) => {
             report.push(format!("no start gantry: {name} did not load ({e})"));
@@ -196,12 +195,12 @@ fn place_bounds(model: &mut Model, matrix: Mat4) {
 /// `Data\Environments\321_Go\321Go_StartFinish.vex`. HD's PSARC paths really
 /// are `/`-joined, so the authored spelling is tried first and unchanged; the
 /// PSP spelling is a fallback rather than a rewrite.
-fn load(archives: &mut oag_assets::Archives, name: &str, lod: mesh::Lod) -> Result<Model> {
+fn load(archives: &mut oag_assets::Archives, name: &str) -> Result<Model> {
     let trimmed = name.trim_start_matches(['/', '\\']);
     let mut error = None;
     for candidate in [name, &trimmed.replace('/', "\\"), trimmed] {
         match archives.read_name(candidate) {
-            Ok(blob) => return build(archives, name, candidate, &blob, lod),
+            Ok(blob) => return build(archives, name, candidate, &blob),
             Err(e) => error = error.or(Some(e)),
         }
     }
@@ -226,10 +225,9 @@ fn build(
     name: &str,
     candidate: &str,
     blob: &[u8],
-    lod: mesh::Lod,
 ) -> Result<Model> {
     if !mesh::geometry_is_external(blob) {
-        return mesh::build_with_textures(name, blob, None, lod);
+        return mesh::build_with_textures(name, blob, None);
     }
     let sibling = mesh::rcs::sibling_name(candidate)
         .with_context(|| format!("{name}: a PS3 .vex with no .rcsmodel spelling"))?;
