@@ -941,6 +941,52 @@ gap. The scan below, run again and sized for these two, resolved one and ruled
 out every candidate for the other - and 2026-09-23 read the mechanism behind
 both, below.
 
+### The dev/pub reel's hold duration is measured, not imported
+
+The frame holds themselves - pause at frames 144 and 231, finish at 260 - were
+already known to be Pure's own, from three `li` immediates unique in the
+3.6 MiB binary (see [pure-boot.md](../architecture/pure-boot.md)). What was
+open was the hold's *duration*: the code samples a global clock, and an
+earlier reading of that read the clock sample as the duration itself, leaving
+`oag_pulse::frontend::HOLD_SECONDS = 2.0` recorded as "imported" from Pulse's
+own measurement rather than confirmed for Pure.
+
+**It is confirmed, and it is `2.0`, identically on both pressings.** The
+global the earlier reading flagged is a running "current time" the function
+samples twice - once to record when a hold starts, again every frame after to
+compute elapsed time - and neither read is the duration. The duration is what
+elapsed time is compared *against*, and that comparison builds `2.0` as a raw
+IEEE-754 bit pattern (`lui a0,0x4000` / `mtc1 a0,f14`) at the identical offset
+in both binaries' `DevPubReel_UpdateFrameHolds` (`0x0894b1f0` EU / `0x0894b678`
+USA) - the same three pause-frame immediates the handover thread already
+found, now inside a fully read function rather than a partially read one. See
+[`devpub-reel-hold.md`](../ghidra/functions/psp-pure-eu/devpub-reel-hold.md)
+for the disassembly.
+
+**Live-confirmed on top of the static read**, closing the thread's other open
+question - whether the function is actually reached from the boot sequence,
+previously "the only candidate ... inference rather than a traced call path".
+A PPSSPP breakpoint on the frame-144 pause call fired 1.70s of wall clock
+after confirming English on a true cold boot of `pure-psp-eu.chd`, consistent
+with the disc reaching `Developer Publisher Screen` through the documented
+chain; a second breakpoint on the matching resume call measured the actual
+held span off the PSP's own emulated cycle counter, independent of wall-clock
+jitter: **443,220,048 ticks at 222,000,000 Hz = 1.9965s**, against the
+immediate's own `2.0` - the 0.0035s shortfall is under one 60Hz frame
+(`1/60 = 0.0167s`).
+
+No code changed: `oag_pulse::frontend::HOLD_SECONDS` was already the right
+value for Pure, just unconfirmed. What changed is confidence and the doc
+comments that called it "imported" - see `oag_pure::frontend::states::
+DEVELOPER_PUBLISHER`'s own doc comment and `pure-boot.md`. Confidence **92**:
+identical structure and constant across both pressings, plus two independent
+live measurements (the call-path timing and the tick-counted span) agreeing
+with the static read - short of higher only because the function this hold
+logic lives inside was reached through a breakpoint rather than a full
+call-graph trace back to a named screen-dispatch table, and because no JAP or
+KO Pure disc exists in this project's corpus to check a third pressing bakes
+the same constant.
+
 ### `FE Screen`'s corner logo, `BackgroundTopRightImage`
 
 `FE Screen->BackgroundController` wraps two more `src`-less images, the same

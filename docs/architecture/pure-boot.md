@@ -154,10 +154,19 @@ The arithmetic agrees: 260 frames at 29.97 fps is 8.68 s, plus two 2-second
 holds is **12.68 s**, against a measured 11-12.5 s. Plain playback without holds
 would be 8.68 s, which the measurement rules out.
 
-What is **not** established: the hold *duration*. Pure loads it from a global
-rather than an immediate, so `HOLD_SECONDS = 2.0` remains Pulse's measurement,
-imported. A 0.1 s re-film of the first plateau would settle it - about 22
-consecutive identical samples for a 2 s hold, at most 2 for none.
+**The hold duration is now measured directly, not imported (2026-09-23).** The
+earlier reading here mistook a global read inside the pause logic for the
+duration itself - it is a running clock the function samples to compute
+*elapsed* time, not the value elapsed time is compared against. The actual
+threshold builds `2.0` as a raw IEEE-754 bit pattern (`lui a0,0x4000` / `mtc1
+a0,f14`), identically on both pressings, and a live PPSSPP breakpoint measured
+the held span at 443,220,048 PSP-clock ticks - 1.9965 s at 222 MHz, against
+the immediate's own 2.0. `oag_pulse::frontend::HOLD_SECONDS = 2.0` was already
+the right value for Pure; it is now confirmed independently rather than
+borrowed. See
+[`devpub-reel-hold.md`](../ghidra/functions/psp-pure-eu/devpub-reel-hold.md)
+and
+[pure-status.md](../formats/pure-status.md#the-devpub-reels-hold-duration-is-measured-not-imported).
 
 The four regional cuts are named in `oag_pure::names::INTRO_MOVIE_CUTS`; see
 [the localisation note](#the-regional-cuts-and-a-real-bug) below.
@@ -270,12 +279,17 @@ matched frame-for-frame against the decoded video; `MemoryStickWarning` gating o
 cross; `FMV Intro` playing `WoFMVNew` and reaching `Title Screen` by itself; both
 pressings carrying every regional cut of both movies at the sizes tabled above;
 both movies being 480x272 with identical PSMF stream descriptors; the frame-hold
-constants 144/231/260 existing in Pure's own `BOOT.BIN`.
+constants 144/231/260 existing in Pure's own `BOOT.BIN`; **and, since
+2026-09-23, the hold duration itself** - a `2.0` immediate built identically on
+both pressings, live-confirmed by a PPSSPP breakpoint measuring the actual held
+span at 1.9965 s - and that `DevPubReel_UpdateFrameHolds` is reached from a
+real boot, by a breakpoint firing 1.70 s after the language picker's own
+confirm press. See
+[`devpub-reel-hold.md`](../ghidra/functions/psp-pure-eu/devpub-reel-hold.md).
 
-**Inferred**: that the hold *duration* is Pulse's measured 2.0 s (Pure loads it
-from a global, so the value has not been read out of this title); that the
-pause site found in Pure's binary is the one this screen reaches, it being the
-only such site rather than a traced call path.
+**Inferred**: nothing remains in this category for the dev/pub reel's hold -
+see Verified above. What is still inferred elsewhere on this page is unrelated
+to it (the button/destination split at `Title Screen`, below).
 
 **Not established**: where the original goes from `Title Screen` (the *button*
 is measured - see above - but its `Default goto` names a screen this build does
