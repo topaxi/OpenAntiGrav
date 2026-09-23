@@ -34,16 +34,26 @@
 //! all read off `BombBlast_Update`'s own decompilation, corroborated against
 //! `BombBlast_Construct`'s own writes of the same offsets. See `mine.md`.
 //!
+//! **The basis's column order is a measured fact, not a choice** - see
+//! [`bomb_blast_basis`]'s own doc comment: `oag-view --mesh` on both `.vex`
+//! files shows a dome resting pole-up and a ring lying flat, both on their
+//! own local `Y`, so `dir` has to sit in this basis's own `Y` column for
+//! either model to draw upright. An earlier version of this basis put `dir`
+//! in `Z` (mirroring `blast_models::billboard_matrix`'s own column order for
+//! a camera-facing basis) and scaled the wrong pair of axes on the shockwave
+//! as a direct consequence - caught by comparing a rendered capture against
+//! these two mesh views, not by re-reading the decompile.
+//!
 //! **Substituted, chosen rather than measured, no confidence score - carried
-//! from [`oag_gameplay::projectile::mine::frozen_pose`]'s own hedge:** the
-//! basis this engine builds crosses the frozen craft orientation's own
-//! forward axis (`orientation * Vec3::NEG_Z`) against this engine's world up
-//! (`Vec3::Y`), in place of the unlocated rear-emitter's own `+0x60` row
-//! crossed against the executable's own `(0, 0, 1)` reference vector. Both
-//! substitutions are the same "PSP asset space to this engine's own space"
-//! translation every other ported basis in this codebase already makes (see
-//! `blast_models::billboard_matrix`'s own `Vec3::Y` reference), not a fresh
-//! reading of either constant.
+//! from [`oag_gameplay::projectile::mine::frozen_pose`]'s own hedge:** what
+//! `dir` itself *is*. The basis crosses the frozen craft orientation's own
+//! up axis (`orientation * Vec3::Y`) against the executable's own `(0, 0,
+//! 1)` reference vector (`Vec3::Z` directly - see `bomb_blast_basis`'s own
+//! doc comment for why no "PSP space to this engine's space" translation is
+//! needed here), in place of the unlocated rear-emitter's own `+0x60` row
+//! crossed against that same reference. Which real-world axis `+0x60`
+//! carries on the original's own bomb entity is not established; only which
+//! *slot* of the basis the authored models expect it to fill is.
 //!
 //! **Not wired: the shockwave's own fading alpha.** `BombBlast_Update`
 //! writes a white, fading vertex colour onto the shockwave's own submeshes
@@ -206,9 +216,14 @@ impl Race {
         let Some(slot) = self.view.bomb_blasts.iter().position(Option::is_none) else {
             return;
         };
-        let dir = (orientation * Vec3::NEG_Z)
-            .try_normalize()
-            .unwrap_or(Vec3::NEG_Z);
+        // `Vec3::Y`, not `NEG_Z`: `oag-view --mesh` on both `.vex` files
+        // shows a dome resting pole-up and a ring lying flat, both on their
+        // own local Y - see this module's own doc comment for why that
+        // settles which axis this substitutes for the unlocated
+        // `entity+0x60` row, and `mine::frozen_pose`'s own hedge for why the
+        // substitution itself (the frozen craft orientation standing in for
+        // the rear emitter's own transform) carries no confidence score.
+        let dir = (orientation * Vec3::Y).try_normalize().unwrap_or(Vec3::Y);
         self.view.bomb_blasts[slot] = Some(BombBlast {
             position,
             dir,
@@ -254,10 +269,12 @@ impl Race {
                     hemisphere_matrix: basis
                         * Mat4::from_scale(Vec3::splat(blast.hemisphere_scale)),
                     hemisphere_visible: blast.age < HEMISPHERE_HIDE_AT_SECONDS,
-                    // Row 0 (`right`) and row 2 (`up`) scale; row 1 (`dir`)
-                    // does not - see this module's own doc comment on the
-                    // column mapping. A flat ring growing in the plane
-                    // perpendicular to its own `dir`.
+                    // Row 0 (`right`) and row 2 (the orthogonalised
+                    // reference) scale; row 1 (`dir`, this basis's own `Y`
+                    // column) does not - see [`bomb_blast_basis`]'s own doc
+                    // comment for the column order this depends on. A flat
+                    // ring growing in the plane perpendicular to its own
+                    // `dir`, i.e. staying level while it widens.
                     shockwave_matrix: shockwave_basis
                         * Mat4::from_scale(Vec3::new(
                             blast.shockwave_scale,
@@ -271,24 +288,44 @@ impl Race {
     }
 }
 
-/// An orthonormal basis at `position` facing `dir` - the same cross-product
-/// shape [`blast_models::billboard_matrix`] builds for a camera-facing
-/// billboard, reused here for a *direction*-facing one instead. Columns are
-/// `(right, up, dir, position)`, matching every other placement matrix in
-/// this codebase - see this module's own doc comment for why `dir` takes the
-/// executable's own row-1 reading rather than a literal row transcription.
+/// An orthonormal basis at `position` with `dir` as its own local `Y` axis -
+/// the shape `Bomb_Detonate`'s own preamble builds (Gram-Schmidt-orthogonalise
+/// a reference vector against `dir`, then cross for the third axis), not
+/// [`blast_models::billboard_matrix`]'s camera-facing shape, though the
+/// arithmetic step is the same.
+///
+/// **Columns are `(right, dir, reference, position)` - `dir` in the `Y`
+/// slot, not `Z`.** Read off `oag-view --mesh` on both `.vex` files: the
+/// hemisphere is a dome resting pole-up on its own local `Y`, and the
+/// shockwave is a ring lying flat with its face normal on the same axis -
+/// so whatever `entity+0x60` truly is on the original's own bomb entity,
+/// **this basis's `Y` column is the slot both authored models expect their
+/// own "up" to sit in**, a measured fact about the assets rather than a
+/// choice about the basis. Putting `dir` in `Y` is therefore required by the
+/// meshes, independently of the earlier, since-corrected reading that put it
+/// in `Z` to match [`blast_models::billboard_matrix`]'s own column order -
+/// that version scaled the wrong pair of axes on the shockwave (see the
+/// `Y`-only-unscaled comment at its own call site) until this reading caught
+/// it against the rendered meshes.
+///
+/// `reference` is `Vec3::Z` - `DAT_08a907c0`, read directly as `(0, 0, 1,
+/// 0)` - not a translated "world up": `CRAFT_BLAST_DROP`'s own `y - 2.5`
+/// (`Rocket_HitCraft`) already establishes this engine's world axes agree
+/// with the executable's own without a swap, so the literal constant is
+/// usable as `Vec3::Z` as-is. See this module's own doc comment for what is
+/// chosen instead: which real-world direction `dir` substitutes for.
 fn bomb_blast_basis(position: Vec3, dir: Vec3) -> Mat4 {
-    let reference = if dir.dot(Vec3::Y).abs() > 0.999 {
+    let world_reference = Vec3::Z;
+    let reference = if dir.dot(world_reference).abs() > 0.999 {
         dir.any_orthonormal_vector()
     } else {
-        Vec3::Y
+        (world_reference - dir * dir.dot(world_reference)).normalize_or_zero()
     };
-    let right = dir.cross(reference).normalize_or_zero();
-    let up = right.cross(dir);
+    let right = dir.cross(reference);
     Mat4::from_cols(
         right.extend(0.0),
-        up.extend(0.0),
         dir.extend(0.0),
+        reference.extend(0.0),
         position.extend(1.0),
     )
 }

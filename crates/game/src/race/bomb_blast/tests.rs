@@ -143,30 +143,33 @@ fn the_shockwave_alpha_ease_fades_from_opaque_to_nothing() {
     );
 }
 
-/// The direction-facing basis is orthonormal and puts the object's own
-/// position in the matrix's translation column, for an ordinary direction
-/// and for the straight-up degenerate case this shares with
-/// `blast_models::billboard_matrix`.
+/// The basis is orthonormal, puts `dir` in its own `Y` column (the slot
+/// both `.vex` files' own vertical axis expects - see [`bomb_blast_basis`]'s
+/// own doc comment) and the object's position in the translation column,
+/// for the ordinary case (a bomb resting upright) and for the degenerate
+/// case where `dir` is parallel to the reference vector.
 #[test]
-fn the_basis_is_orthonormal_and_handles_a_straight_up_direction() {
+fn the_basis_is_orthonormal_and_puts_dir_in_the_y_column() {
     let position = Vec3::new(2.0, 0.0, 0.0);
-    let dir = Vec3::new(0.0, 0.0, -1.0);
+    let dir = Vec3::Y;
     let matrix = bomb_blast_basis(position, dir);
 
     let right = matrix.x_axis.truncate();
     let up = matrix.y_axis.truncate();
-    let forward = matrix.z_axis.truncate();
+    let reference = matrix.z_axis.truncate();
     assert!((right.length() - 1.0).abs() < 1e-5);
     assert!((up.length() - 1.0).abs() < 1e-5);
-    assert!((forward.length() - 1.0).abs() < 1e-5);
+    assert!((reference.length() - 1.0).abs() < 1e-5);
     assert!(right.dot(up).abs() < 1e-5);
-    assert!(right.dot(forward).abs() < 1e-5);
-    assert!(up.dot(forward).abs() < 1e-5);
+    assert!(right.dot(reference).abs() < 1e-5);
+    assert!(up.dot(reference).abs() < 1e-5);
+    assert_eq!(up, dir, "dir occupies the basis's own Y column");
     assert_eq!(matrix.w_axis.truncate(), position);
 
-    // A bomb frozen pointing straight up: the `Vec3::Y` reference degenerates
-    // and the fallback must still produce a finite, orthonormal basis.
-    let overhead = bomb_blast_basis(Vec3::ZERO, Vec3::Y);
+    // A bomb frozen pointing along the world reference axis itself (`Z`):
+    // the Gram-Schmidt step degenerates and the fallback must still produce
+    // a finite, orthonormal basis.
+    let overhead = bomb_blast_basis(Vec3::ZERO, Vec3::Z);
     assert!(overhead.x_axis.truncate().is_finite());
     assert!((overhead.x_axis.truncate().length() - 1.0).abs() < 1e-5);
 }

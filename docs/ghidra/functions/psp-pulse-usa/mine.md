@@ -918,18 +918,24 @@ basis = { row0: right, row1: dir, row2: up, row3: bomb->0xb0 (position, w=1.0) }
 ```
 
 `WORLD_UP` is the vec4 at `0x08a907c0`, read directly: `(0.0, 0.0, 1.0,
-0.0)` - this executable's own up axis for this subsystem, not necessarily
-this project's `Vec3::Y`; see the porting note below. **Row index `1` (the
+0.0)` - **not this engine's own world-up axis**, see the porting note below
+for why the literal constant carries over unchanged. **Row index `1` (the
 `dir` row) is what `BombBlast_Update`'s pull-back reads** -
 `vscl_q(basis.row1, DAT_08ab1070) ` then `shockwave.position -=` that -
 which corrects the section above's looser "along the basis's second row":
 the row read is the direction row itself, not the orthogonalised-up row, and
 `DAT_08ab1070` reads `1.0` directly (confirmed by memory inspection).
-Whether "one unit below" is still the right plain-language description
-depends on which way `bomb->0x60` itself points, which this page does not
-independently pin down - see `Bomb_Detonate`'s own "chosen, not measured"
-note on what this project substitutes for `+0x60`, carried into the render
-port below.
+
+**"One unit below" is the right plain-language description after all -
+settled from the meshes, not from `bomb->0x60`'s own unread semantics.**
+`oag-view --mesh` on both `.vex` files (2026-09-23, same session) shows
+`explosion_hemisphere.vex` as a dome resting pole-up and `Bomb_Shockwave.vex`
+as a ring lying flat, each on its own local `Y` - so whichever real-world
+direction `bomb->0x60` carries on the original's own entity, the basis's
+row `1` is the slot both authored models expect their own vertical axis to
+occupy. That is a measured fact about the assets, independent of what
+`+0x60` itself turns out to mean; see `Bomb_Detonate`'s own "chosen, not
+measured" note for the part that is still a substitution.
 
 **Per tick, sub-stepped in fixed `1/60 s` increments** (`dt / 0.016666668`
 iterations, each stepping every ramp once) - which is this project's own
@@ -966,16 +972,22 @@ needed:
   the same as every other `Data\Psys\*.POB` effect this engine already
   plays through `oag_render::psys::Stage`.
 
-**Porting note, chosen rather than measured**: `WORLD_UP` above is this
-executable's own reference vector for the Gram-Schmidt step, and this
-engine substitutes `Vec3::Y` for it - the same "PSP asset space to this
-engine's Y-up world" translation every other ported basis in this codebase
-already makes (e.g. `billboard_matrix`'s own `Vec3::Y` reference in
-`blast_models.rs`), not a fresh reading of this specific constant. `dir`
-itself substitutes the frozen craft orientation's forward axis for the
-unlocated rear-emitter's own `+0x60` row, on the same footing
-`mine::frozen_pose`'s own doc comment already states - no new confidence
-score, carried forward from that existing hedge.
+**Porting note, chosen rather than measured**: `WORLD_UP` above needs no
+axis swap at all - `Rocket_HitCraft`'s own `y - 2.5` drop
+([rocket-visuals.md](rocket-visuals.md), ported as `CRAFT_BLAST_DROP`
+subtracted along `Vec3::Y`) already establishes this engine's world axes
+agree with the executable's own with no translation, so `(0.0, 0.0, 1.0)`
+carries over as `Vec3::Z` directly - a horizontal reference, not an up
+vector, which is what the meshes above say it has to be too. `dir` itself
+substitutes the frozen craft orientation's **up** axis
+(`orientation * Vec3::Y`) for the unlocated rear-emitter's own `+0x60` row,
+on the same footing `mine::frozen_pose`'s own doc comment already states -
+no new confidence score, carried forward from that existing hedge. (An
+earlier pass of this note read `dir` as the craft's *forward* axis crossed
+against `Vec3::Y`, matching `blast_models::billboard_matrix`'s own column
+convention rather than these two meshes' own authored vertical axis; caught
+by comparing a rendered capture against the `oag-view --mesh` screenshots
+above, not by re-reading this page.)
 
 ## 2026-09-16: the fuse and the trip spend differently, and the pool is named
 
