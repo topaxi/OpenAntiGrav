@@ -138,9 +138,15 @@ with no combination or inversion in between.
   step: touches the pipeline, the WGSL, and how `mesh::rcs::surface` decides
   blend state, not just the format crate.
 - `0x183c` and `0xa74`, the two other `Rsx_SetMethod` call sites in
-  `Material_ApplyRenderState`, are unidentified registers gated on state
-  bits 4 and (`uVar1 >> 7 & 1 & uVar2 >> 3 & 1`) respectively - the second
-  combines a caller-supplied flag with **state bit 3**, not bit 7. Neither
+  `Material_ApplyRenderState`, gated on state bits 4 and (`uVar1 >> 7 & 1 &
+  uVar2 >> 3 & 1`) respectively - the second combines a caller-supplied flag
+  with **state bit 3**, not bit 7. **Named 2026-09-23 from RPCS3's own
+  `rpcs3/Emu/RSX/gcm_enums.h`: `0x183c` is `NV4097_SET_CULL_FACE_ENABLE`
+  and `0xa74` is `NV4097_SET_DEPTH_TEST_ENABLE`** (confidence 90), so state
+  bit 4 is back-face culling and bit 3 depth testing. `oag_render::mesh::rcs`
+  honours neither yet; the Plasma explosion's three models are the first
+  consumers, per model, in `oag_game::race::load::weapon_models::cull_as_authored`;
+  see [plasma.md](plasma.md)'s 2026-09-23 section. Neither
   was chased; bit 7's own question (alpha-to-coverage, confidence 55 in
   rcsmodel.md) is untouched by this pass and still needs its own RSX-write
   reading.

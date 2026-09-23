@@ -338,3 +338,220 @@ understood. The load report now says so explicitly on an HD source: "HD
 plasma explosion models loaded, not drawn: the recovered scale ease
 produces a screen-filling sphere - see plasma.md's 2026-09-17 'the picture
 is oversized' section."
+
+## 2026-09-23: the scale reading holds; the three models are simply that big
+
+The open question above - "a base-scale mismatch between `cur` as a literal
+uniform scale and what the original composes it against" - was put to the
+models and to `WeaponExplosions_Draw` directly. **Nothing composes against
+`cur`: it is a uniform scale on an orthonormal basis, onto a model whose
+authored radius is several metres.** Read on the `ps3-hdfury-eu` database
+the bridge serves as `/hdfury/EBOOT-ps3-hdfury-eu.elf` (language
+`PowerPC:BE:64:A2ALT-32addr`, 26,100 functions - the pre-`lvlx` import, so
+every vector sequence below was checked against `llvm-objdump
+--triple=powerpc64` rather than taken from the decompile).
+
+### The models' own extents
+
+Measured by `crates/render/examples/hd_weapon_extents.rs`, which builds each
+`.vex`/`.rcsmodel` pair through `mesh::rcs::build` - the exact path
+`oag_game`'s weapon loader takes - and walks the `.vex` node tree with
+`oag_vex::vex::world_transforms_at` at eight times from 0 to 3 s:
+
+| model | shape | model-space radius | node transforms | material, authored blend | texture |
+| --- | --- | ---: | --- | --- | --- |
+| `HD_plasma_ring` | flat disc in XY, `z = 0.0156` | 8.82 | identity at every sampled time | `hd_plasmaring_glow`, `SrcAlpha, One` (additive) | `plasma_ring.gtf` 256x256, mean RGB 8.9 of 255 |
+| `HD_plasma_sphere` | sphere | 4.06 | identity at every sampled time | `plasmasphere_glow`, `SrcAlpha, OneMinusSrcAlpha`, second sampler `noise.gtf` | `plasma_1024x1024.gtf` |
+| `HD_plasma_halo` | flat disc in XY | 8.98 | identity at every sampled time | `hd_plasmahalo_glow`, `SrcAlpha, One` (additive) | `plasma_halo.gtf` 256x512, mean RGB 25.6 |
+
+**The ring is not ~14x smaller than the other two**, which is what a
+composition error behind the `100.0` would have needed; its radius is the
+halo's to within 2%. And no node in any of the three carries a scale, static
+or keyed, so there is no authored factor for `cur` to multiply against
+either. Confidence **95** on the extents (a direct parse, the same builder
+the race draws with).
+
+### What `cur` feeds: a uniform scale, by the select mask
+
+`WeaponExplosions_Draw` (`0x001270b8`), per model: splat `cur` to all four
+lanes, `vmaddfp` it into the basis' three rows, then `vsel` each scaled row
+against the unscaled one under the 16-byte mask `*PTR_DAT_008aa280` =
+`*0x00769cd0` = `{0, 0, 0, 0xffffffff}` - so X, Y and Z of every row take the
+scaled value and only W keeps the original. The translation row (`+0x30`) is
+copied unscaled. The result goes to `_opd_FUN_00327500(node, &matrix, 0)`,
+which is a plain 64-byte copy into `node + 0x80` plus a dirty-bit update on
+`node + 0x34` and its children - no normalisation, no second factor. Then
+`_opd_FUN_002c1b30(age, node)`, which walks the node tree calling a virtual
+(slot `+0x40`) on the three `Anim Transform`-family classes
+(`PTR_PTR_008b3984`/`88`/`8c`) - an anim-time set, which the static identity
+transforms above make a no-op for the geometry. **Confidence 90** that the
+world scale of each model is exactly `cur` times its authored geometry.
+
+`cur` starts at `0`: `WeaponExplosions_Reset` (`0x00126dc0`) seeds it from
+`0x00994070`, which is `.bss` and has no static writer (its only other
+reference, from `0x00433090`, is a read).
+
+### The basis: a billboard for the two discs, the track for the sphere
+
+`WeaponExplosions_Start` (`0x00127cd0`), past the `FUN_000a97f0` call the
+decompiler cuts off at (Ghidra marks it non-returning; the disassembly from
+`0x00128028` on continues): per viewport it copies the track-fitted basis
+into `+0xd0 + v * 0x40`, then **replaces its third row with the negated,
+normalised per-viewport vector** it pulled out of that viewport's camera
+matrix (`PTR_DAT_008aa2bc + v * 0x40`) at the top of the function, removes
+that direction from the second row and renormalises it (Gram-Schmidt), and
+rebuilds the first as their cross product (`0x001280a0`..`0x001281ec`). So
+the ring and halo, which `Draw` places with the per-viewport basis, lie in
+the plane facing that viewport's camera, "up" kept as close to the track's
+up as that allows. The sphere uses the shared, unmodified track basis at
+`+0x90`. Confidence **80** on the camera vector being the view direction
+rather than the eye-to-blast direction: which column of the camera matrix
+the first loop extracts was not traced element by element.
+
+### What that composes to, on screen
+
+`1` world unit is one metre (`oag_game::race::spline`'s own note, from the
+HUD's `speed * 3.6` km/h factor). At a 60 Hz `Draw` rate - **assumed, not
+read**: `Draw` is called from `0x00127468`, which is slot 5 of the
+explosion's vtable `0x00863ef8`, and what schedules slot 5 was not followed -
+`cur = target * (1 - (1 - rate)^n)` gives:
+
+| age | ring radius | sphere radius | halo radius |
+| ---: | ---: | ---: | ---: |
+| 0.1 s | 52 m | 25 m | 46 m |
+| 0.5 s | 230 m | 29 m | 63 m |
+| 1.3 s (hidden) | 479 m | 29 m | 63 m |
+
+These are large, and they are what the disc authors: the sphere is a
+29-metre bubble the chase camera can easily be inside, and both discs are
+screen-facing additive layers (the ring's texture nearly black, so it adds
+little) whose size mostly decides how far across the screen their texture
+is spread. **The same disc authors the Missile's
+explosion at a comparable size with no code involved** -
+`HD_missile_explosion.vex`'s `Anim Transform` keys scale its three main mesh
+nodes from 1 to 18 over its first second (radius 6.4 -> 116 m), and its
+fourth, pre-scaled `0.0977`, to 44 - so a 100-metre-class detonation is the
+title's own authoring convention, not an arithmetic slip in one reading.
+
+**So the 2026-09-17 "oversized" picture is not a scale error**, and the
+reading that `cur` might compose against a base scale is retired. What the
+engine was drawing differently is below.
+
+### What the engine drew differently: the back faces and the basis
+
+`Material_ApplyRenderState` (`0x005d8f68`, see
+[material-state.md](material-state.md)) writes `state >> 4 & 1` to RSX
+method `0x183c`, which RPCS3's own `rpcs3/Emu/RSX/gcm_enums.h` names
+`NV4097_SET_CULL_FACE_ENABLE` (and `0xa74`, the other register that page
+left unidentified, `NV4097_SET_DEPTH_TEST_ENABLE`). The cull face is
+`GL_BACK` outside the ship-shadow pass
+([ship-sun-occlusion.md](ship-sun-occlusion.md)). All three explosion
+materials are state `0x39`: blended, **culled**. Confidence **90** - a
+decompiled register write, named from the emulator's own header.
+
+And the geometry is built for culling, measured by `hd_weapon_extents` (each
+triangle's `(b - a) x (c - a)` against its vertices' authored normals, all
+agreeing, and against the direction from the model's origin):
+
+| model | shells |
+| --- | --- |
+| `HD_plasma_sphere` | two meshes of 760 triangles, one wound outward and one inward |
+| `HD_plasma_ring` | two discs of 256 triangles, one facing `+Z`, one `-Z` |
+| `HD_plasma_halo` | **one** disc of 320 triangles, every normal `-Z` |
+
+This engine drew every HD `.rcsmodel` draw unculled (`mesh::rcs` sets
+`DrawCall::culled = false` throughout), so the sphere drew all four layers
+along any line of sight instead of two, and from inside it both shells
+instead of the inner one. `oag_game::race::load::weapon_models::cull_as_authored`
+now culls the three explosion models as authored.
+
+**This is the authored state, not a demonstrated cure for the 2026-09-17
+frame.** That solid-grey frame was not reproduced on this tree, culled or
+not: a matched pair under continuous fire (a new bolt every charge, several
+blasts overlapping - `rapid-fire/unculled/` against `rapid-fire/culled/`,
+same ticks) differs only in detail, and both fill the frame with purple. That
+is several 29-metre blasts on top of one another, which a player holding one
+pickup does not see. The 09-17 frame was taken with the reflected basis below
+and before this pass, and what it was is left there.
+
+**The halo settles the discs' orientation.** A single-sided `-Z` disc under
+a culling material can only ever be seen with `-Z` towards the viewer, so
+the basis's `Z` must point away from the camera - which is what `Start`'s
+`vsubfp` from zero reads as, if the camera vector it negates is the view
+direction. That corroborates the confidence-80 reading above from the data
+side. `oag_game`'s shared `billboard_matrix` points `Z` at the camera **and
+is a reflection** (`right = forward x up`, `up = right x forward`, determinant
+`-1`), which under culling would hide exactly the faces the original draws;
+HD's discs now take `blast_models::facing_away`, a right-handed basis with
+`X = Y x Z` like `Start`'s own cross at `0x001281b4`..`0x001281cc`.
+
+**Checked by pixels, not by eye.** With the ring and sphere forced to scale 0
+(a temporary edit, reverted), the halo alone changes 125,422 pixels at tick
+190 and 93,471 at 215 against all three at 0 - and **exactly** the same
+pixels, to the same summed difference, culled and unculled. So under this
+basis every halo triangle the engine rasterises is a front face: the `-Z`
+sign and the engine's counter-clockwise front face agree with the original's
+data. Had either been wrong the culled halo would have vanished.
+
+Screenshots of the result, several frames across one blast's life from the
+chase camera: a single shot from the grid, detonating 45 m ahead, and a single
+shot at speed that the craft flies through at about 0.17 s. Kept (not in the
+tree) under `~/.cache/oag/drive/reports/hd-weapon-detonations/`
+(`final-grid/`, `final-flythrough/`, `rapid-fire/`, `halo-check/`, a
+`contact.png` in each). A purple, translucent dome round a white core that
+grows and goes at 1.3 s; flying through it tints the upper frame for a few
+frames and no more. To regenerate them, write two input scripts (the
+`scripts/input_script.py` format):
+
+```text
+# grid.inputs - one shot from the grid
+100 none
+2 square
+1000 none
+
+# one-shot.inputs - one shot at speed
+400 none
+2 square
+1000 none
+```
+
+and for each tick `T` of interest (`170 180 190 200 215 230 245 260` for the
+first, `462 466 470 474 480 490 510 534` for the second):
+
+```sh
+./target/debug/oag-game data/images/hdfury-ps3-eu-dec.iso --race \
+    --mode single_race --autopilot --give plasma \
+    --input-script grid.inputs --ticks T --screenshot out/tT.png
+```
+
+Deterministic, so one run per frame. The continuous-fire pair used a script
+of `1 square` / `1 none` repeated, at `330 360 ... 540`.
+
+**Still not played, and each a visible difference from the original:**
+
+1. `UV_offset`. `WeaponExplosions_Construct` (`0x00128ab0`) looks up the
+   shader constant named `UV_offset` (string at `0x00783d00`, through the TOC
+   slot `0x008aa304`) on each of the three models and binds it
+   (`FUN_00677018`) to `_opd_FUN_002c11c8(model) = node + 0xc0` of the
+   model's first node of class `PTR_PTR_008b3988`; `Draw` then sets anim time
+   `age` on the tree (`_opd_FUN_002c1b30`, a walk calling slot `+0x40` on the
+   three anim node classes). What `node + 0xc0` holds on that class was not
+   read. None of the three materials carries an Edge curve of its own
+   (`mesh::rcs::curve_track`'s sweep found `weapons/reticule_missile` alone
+   among weapons), so the scroll, if it is one, is the node's.
+2. The sphere's second sampler (`noise.gtf`), which `mesh::rcs` loads and
+   does not draw ("role unread").
+3. The sphere's basis: the original gives it the track fit `FUN_000a97f0`
+   returns, this engine the camera-facing one. Round, so only its texture
+   seam moves.
+
+### How to falsify this
+
+A live `Z0` breakpoint (interpreter only, see
+[rpcs3-debugger.md](../../../reverse-engineering/rpcs3-debugger.md)) on
+`Draw`'s three `bl 0x327500` sites - `0x0012722c`, `0x00127310`,
+`0x001273f4` - reading `+0x50` (age), `+0x60`/`+0x6c`/`+0x78` (`cur`) and the
+row lengths of the matrix at `r4`. The prediction is row length = `cur` =
+`target * (1 - (1 - rate)^n)` with `n` the number of `Draw` calls since
+`Start`; a live row length that differs from `cur`, or a `cur` that grows at
+half this rate (a 30 Hz slot 5), would overturn the table above.

@@ -29,7 +29,7 @@ dump was taken with `scripts/psarc.py list` over all seven PSARCs):
 
 | weapon | models | HD-only effects |
 | --- | --- | --- |
-| ~~Plasma~~ **bolt done; blast gated** | `HD_plasma_ball` (the **bolt head**, drawn), `HD_plasma_ring`/`_sphere`/`_halo` (the explosion, ramps read: targets 100/7.1/7.0, rates 0.01/0.3/0.2, windows 1.7/1.3/1.3 s, 3.5 s life, [ps3-hdfury-eu/plasma.md](../../docs/ghidra/functions/ps3-hdfury-eu/plasma.md) - **loaded and tracked, draw gated off, `HD_BLAST_MODELS_DRAWN = false`, see Open**) | `WO_PLASMA_CHARGING`, `WO_PLASMA_LAUNCH` still unwired; `WO_PLASMA_LIGHTNING_EXPAND`/`_COLLAPSE` wired and confirmed against the disc's own `.pob` internal name field, not just the fourcc |
+| ~~Plasma~~ **bolt done; blast drawn** | `HD_plasma_ball` (the **bolt head**, loaded, not drawn - `HD_PLASMA_BALL_DRAWN`), `HD_plasma_ring`/`_sphere`/`_halo` (the explosion, ramps read: targets 100/7.1/7.0, rates 0.01/0.3/0.2, windows 1.7/1.3/1.3 s, 3.5 s life, [ps3-hdfury-eu/plasma.md](../../docs/ghidra/functions/ps3-hdfury-eu/plasma.md) - **drawn since 2026-09-23, culled as authored and on HD's own right-handed basis; the scale was right all along**) | `WO_PLASMA_CHARGING`, `WO_PLASMA_LAUNCH` still unwired; `WO_PLASMA_LIGHTNING_EXPAND`/`_COLLAPSE` wired and confirmed against the disc's own `.pob` internal name field, not just the fourcc |
 | ~~Rocket / ~~Missile | ~~`hd_Rocket`~~ **model wired**, `HD_missile_ball_bloomring`, `HD_missile_explosion` still open | `WO_MISSILE_LAUNCH` |
 | ~~Mine / ~~Bomb | ~~`HD_Mine`~~, ~~`HD_Bomb`~~ **models wired**; `HD_Mine_halo`, `HD_bomb_*` (halo, sphere, sphere_white, sphere_bloomring, shockwaves), `bomb_shockwave` still open | `WO_BOMB_RAYS`, `WO_BOMB_SHOCKWAVE_FLASH`, `WO_BOMB_EXPLO_DETONATOR` |
 | Cannon | `hd_muzzleflash` **round body wired**, own to `cannon-quads`; `detonator_cannonbolt` (Fury) still open | `WO_CANNON_MUZZLEFLASH`, `WO_CANNON_HOTSPOT`, `WO_CANNON_SPARKS_DETONATOR` - `cannon-quads`'s lane |
@@ -41,23 +41,31 @@ The executable's own load-path strings name every model above
 
 ## Open
 
-- **The Plasma explosion is oversized on screen** - `HD_plasma_ring`'s own
-  target scale (100.0) produces a sphere that fills most of the frame at
-  normal chase-camera distance. The number is read at confidence 88 and the
-  loader confirms every one of the three models resolves a real material
-  (not the "no material" flat-shading gap the shield shell has), so this is
-  not a missing-material artifact - likeliest a base-scale mismatch between
-  a literal `cur`-as-uniform-scale reading and what the original composes
-  it against. See plasma.md's own 2026-09-17 section and the screenshot at
-  `/home/topaxi/.cache/oag/drive/reports/hd-weapon-models-screenshots/t200-detonation.png`.
-  Left as an open finding, not corrected on a guess. **Gated off before
-  merge, same day**: the chase camera sits inside the sphere for real spans
-  of the blast's life, tinting the whole frame - a regression, not a
-  faithful oversized picture. `blast_models::HD_BLAST_MODELS_DRAWN =
-  false` stops the trio's *draw* only; the bolt's head, both
-  `WO_PLASMA_LIGHTNING_*` triggers and the trio's own age/ease tracking are
-  unaffected, and the load report says why on an HD source. See plasma.md's
-  own addendum.
+- **The Plasma explosion draws (2026-09-23); three things of it still
+  do not.** The scale is not the error: the ring/sphere/halo are discs and
+  a ball of radius 8.8/4.1/9.0 m and `cur` is a plain uniform scale (select
+  mask `0x00769cd0`). Each shell is authored twice (one each way) under
+  material state bit 4 = `NV4097_SET_CULL_FACE_ENABLE`, which this engine now
+  honours for the trio, on HD's own right-handed basis (halo checked by
+  pixel diff). The 09-17 solid-grey frame was **not reproduced** on this tree
+  either way; under continuous fire several overlapping blasts still fill the
+  frame purple, culled or not. See plasma.md's 2026-09-23 section. Not played yet: (1) the `UV_offset`
+  binding `WeaponExplosions_Construct` makes to `node + 0xc0` of each model's
+  first `PTR_PTR_008b3988`-class node, driven by `age` through
+  `_opd_FUN_002c1b30` - what that field holds is unread; (2) the sphere's
+  `noise.gtf` second sampler; (3) the sphere's track-fitted basis
+  (`FUN_000a97f0`), for which the camera-facing one stands in. The live
+  RPCS3 check that would falsify the scale reading (Z0 on `Draw`'s three
+  `bl 0x327500` sites) was **not run**: getting a Plasma detonation in front
+  of the player on the emulator needs the held-weapon slot, which is unread.
+- **Every other weapon model is placed with a reflection.**
+  `Race::projectile_model_matrices` (`crates/game/src/race/weapons/visuals.rs`)
+  builds `side = forward x reference`, `up = side x forward`, determinant
+  `-1`, and so does `blast_models::billboard_matrix` (Pulse's blast). The
+  Rocket, Mine, Bomb and bolt head therefore draw mirrored, and cannot take
+  their materials' own back-face cull (the Rocket, Bomb and ball set state
+  bit 4) until that is a rotation. Found, not fixed - it moves every
+  weapon's picture on both titles.
 - **LeachBeam's ball is named, not placed.** What positions
   `hd_leachbeam_ball_bloomring` each tick was not read this session -
   reading stopped before opening any LeachBeam-specific function on
@@ -68,10 +76,15 @@ The executable's own load-path strings name every model above
   spelling with Pulse's own naming quirk); the two hand-drawn quad textures
   and the three Cannon effects are `cannon-quads`'s own lane, not touched
   here.
-- Missile's own explosion pair (`HD_missile_ball_bloomring`,
-  `HD_missile_explosion`) and the Bomb's five-model detonation
-  (`HD_Mine_halo`, `HD_bomb_*`) are named on the executable's own strings
-  but neither their load order nor their per-tick placement was read.
+- **Missile (2026-09-23, read, not wired):** `HD_missile_ball_bloomring` is
+  the flying missile's head (`Missile.cpp` constructor `0x0011ccc8`), not an
+  explosion model; `HD_missile_explosion` loads in `0x00154cf0` (from
+  `MissileManager_Construct`), binds `UV_offset` and `Shockwave_scalar`, and
+  grows by its own keyed `Anim Transform` (1 -> 18x). What starts it is
+  unread - see weapons.md's 2026-09-23 section for every address.
+- The Bomb's five-model detonation (`HD_Mine_halo`, `HD_bomb_*`) is named
+  on the executable's own strings but neither its load order nor its
+  per-tick placement was read.
 - `0x00121418` (`Plasma_PostUpdate`'s visual placement) suggests a
   velocity-plus-carried-normal basis for the bolt, not velocity alone, but
   is not resolved past confidence ~55 - stays unrenamed per `CLAUDE.md`'s
@@ -94,7 +107,13 @@ The executable's own load-path strings name every model above
 3. Rocket/Missile/Mine/Bomb **bodies** are wired; their own further
    detonation models (Missile's pair, the Bomb's five) and effects remain,
    by the same per-title path, only as their triggers are read.
-4. Settle the Plasma explosion's scale, then flip
-   `blast_models::HD_BLAST_MODELS_DRAWN` back to `true` - currently gated
-   off (draw only; the trigger/age logic still runs) because the recovered
-   scale reads as a regression, not a faithful picture. See "Open" above.
+4. ~~Settle the Plasma explosion's scale~~ **Done 2026-09-23**, the gate
+   is gone. Next on it: read what `node + 0xc0` is on the
+   `PTR_PTR_008b3988` node class (the `UV_offset` source), then the sphere's
+   `noise.gtf` role. Compare against a real RPCS3 capture of one detonation
+   when the held-weapon slot is known - no capture of the original's blast
+   exists yet.
+5. Make `Race::projectile_model_matrices` a rotation (`side = up x forward`
+   or equivalent) and then honour state bit 4 for every HD weapon model via
+   `load::weapon_models::cull_as_authored`'s `cull` flag - check the Rocket
+   and Bomb pictures before and after.

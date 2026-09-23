@@ -336,3 +336,44 @@ happens to sit in the linked address range after that tag's own functions
 end - exactly what this page's six ruled-out addresses turned out to be.
 Treat every bucketed address as a lead to verify by decompiling it, never as
 a name to apply from the bucket alone.
+
+## 2026-09-23: where the Missile's two HD models load, and what is not read
+
+A bounded read for the Missile's two HD-only models, done after the Plasma
+explosion landed ([plasma.md](plasma.md)'s 2026-09-23 section). **Neither
+is wired; no trigger was read.** Everything is through the TOC `0x008ad4d8`
+all four functions below carry in their `.opd` entries.
+
+- **`HD_missile_ball_bloomring` is the flying Missile's own head, not part
+  of its explosion.** Its `.vex` path (`0x007836c0`) is TOC slot `-0x3624`
+  (`0x008a9eb4`), loaded by `0x0011ccc8` (OPD `0x00876010`) - a constructor
+  that stamps `"Missile.cpp"` (`PTR_s_Missile_cpp_008a9eac`) into the object
+  and keeps the model node at `param_1[0x70]`. `0x0011cfa8` (OPD
+  `0x00876018`) is its twin, the same load at `0x0011d0a0`/`0x0011d144`.
+  Confidence 75 that this is the per-missile object: the source-file string
+  and a per-object model are what say so; its caller was not followed. Its
+  material is named `hd_leachbeam_ball_glow` / `hd_leachbeam_bloomring` on
+  the disc - the LeachBeam ball shares it.
+- **`HD_missile_explosion` belongs to class "Z" of
+  [renderer.md](renderer.md)'s `SortRoot` note**: `0x00154cf0` (OPD
+  `0x00877a08`, called from `MissileManager_Construct` at `0x00142114` and
+  from `0x00141a88`) and its twin `0x00155088` load TOC slot `-0x2240`
+  (`0x00785828`) into `param_1[0x61]`, then bind **two** named shader
+  constants on it through `FUN_00677018` to `_opd_FUN_002c11c8(model)`:
+  `UV_offset` (`0x00785880`) and `Shockwave_scalar` (`0x00785890`). The same
+  binding shape `WeaponExplosions_Construct` uses for the Plasma trio.
+  The vtable is `0x00864b38`; slot 5 is `0x00155420` (OPD `0x00877a18`),
+  which only writes the per-viewport matrix at `this + 0xf0 + v * 0x40` into
+  the model node at `this + 0x184` - no scale ease of its own, unlike the
+  Plasma's `Draw`. The growth is the model's: its `Anim Transform` nodes key
+  scale 1 -> 18 over the first second (and a `0.0977`-scaled node to 44),
+  measured by `crates/render/examples/hd_weapon_extents.rs`. Slot 3 is the
+  generic `0x00327050`. Confidence 70 on the class reading.
+- **What starts it is not read**: no function that writes `this + 0xf0` or
+  sets the object's anim time was found in this pass. The next step is the
+  Missile's hit path - `MissileManager`'s per-tick walker, the way
+  `PlasmaManager_Update` led to `WeaponExplosions_Start` - and an xref sweep
+  for loads of the manager's own member that holds the "Z" object.
+
+No names are applied: the constructors sit at 70-75 and would carry `_q`,
+and the trigger that would make them useful is the missing half.
