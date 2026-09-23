@@ -10,11 +10,16 @@ impl super::super::Scene {
     /// or [`Race::leach_beam_ribbon_vertices`] is empty (no locked beam this
     /// tick) - either way `Pipeline::draw` then draws nothing.
     ///
-    /// World-space already, unlike every other pipeline this frame uploads,
-    /// so it needs no `right`/`up` camera basis.
+    /// Reads the camera's own right and up out of the view matrix, the same
+    /// way `frame.rs` does for its sprites: `LeachBeam_BuildStrip` widens its
+    /// two strips along view-space `x` and `y`.
     pub(super) fn upload_beam(&self, race: &Race, queue: &wgpu::Queue, vp: &[[f32; 4]; 4]) {
         if let Some(beam) = &self.beam {
-            let vertices = race.leach_beam_ribbon_vertices();
+            let camera = race.view();
+            let right =
+                oag_core::math::Vec3::new(camera.x_axis.x, camera.y_axis.x, camera.z_axis.x);
+            let up = oag_core::math::Vec3::new(camera.x_axis.y, camera.y_axis.y, camera.z_axis.y);
+            let vertices = race.leach_beam_ribbon_vertices(right, up);
             beam.borrow_mut().upload(queue, vp, &vertices);
         }
     }

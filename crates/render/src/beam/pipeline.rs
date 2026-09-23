@@ -15,6 +15,23 @@ use crate::mesh::GpuVertex;
 
 use super::MAX_VERTICES;
 
+/// `Gu_BlendFunc(GU_ADD, GU_SRC_ALPHA, GU_FIX, 0, 0xffffff)` with the source
+/// alpha already folded into the colour by `beam.wgsl`, and the glow mask
+/// written the way `Gu_StencilOp(KEEP, KEEP, REPLACE)` writes it: the
+/// fragment's alpha replaces what is there. See [`super::GLOW_MASK`].
+pub const BLEND: wgpu::BlendState = wgpu::BlendState {
+    color: wgpu::BlendComponent {
+        src_factor: wgpu::BlendFactor::One,
+        dst_factor: wgpu::BlendFactor::One,
+        operation: wgpu::BlendOperation::Add,
+    },
+    alpha: wgpu::BlendComponent {
+        src_factor: wgpu::BlendFactor::One,
+        dst_factor: wgpu::BlendFactor::Zero,
+        operation: wgpu::BlendOperation::Add,
+    },
+};
+
 #[derive(Debug)]
 pub struct Pipeline {
     pipeline: wgpu::RenderPipeline,
@@ -88,6 +105,11 @@ impl Pipeline {
             immediate_size: 0,
         });
 
+        let constants: Vec<(&str, f64)> = crate::mesh_render::linear_constants(format)
+            .iter()
+            .copied()
+            .chain([("glow_mask", f64::from(super::GLOW_MASK))])
+            .collect();
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("beam"),
             layout: Some(&pipeline_layout),
@@ -113,14 +135,17 @@ impl Pipeline {
                 targets: &{
                     let mut targets = vec![Some(wgpu::ColorTargetState {
                         format,
-                        blend: Some(crate::exhaust::BLEND),
-                        write_mask: wgpu::ColorWrites::COLOR,
+                        blend: Some(BLEND),
+                        // Alpha open: `Gu_PixelMask(0)` and
+                        // `Bloom_SetGlowMaskWritable(g_bloom, 1)` right before
+                        // the stencil write.
+                        write_mask: wgpu::ColorWrites::ALL,
                     })];
                     targets.extend(velocity.target(true));
                     targets
                 },
                 compilation_options: wgpu::PipelineCompilationOptions {
-                    constants: crate::mesh_render::linear_constants(format),
+                    constants: &constants,
                     ..Default::default()
                 },
             }),
@@ -136,8 +161,11 @@ impl Pipeline {
             },
             depth_stencil: Some(wgpu::DepthStencilState {
                 format: crate::mesh_render::DEPTH_FORMAT,
+                // `Gu_DepthMask(1)` masks depth writes off, and
+                // `Gu_DepthFunc(6)` is the PSP's reversed-depth spelling of an
+                // ordinary less-or-equal test.
                 depth_write_enabled: Some(false),
-                depth_compare: Some(wgpu::CompareFunction::Less),
+                depth_compare: Some(wgpu::CompareFunction::LessEqual),
                 stencil: Default::default(),
                 bias: Default::default(),
             }),

@@ -13,6 +13,10 @@ struct Uniforms {
 // `exhaust.wgsl`'s own copy of this override for why the decode exists.
 override linear_out: f32 = 0.0;
 
+// What the ribbon stamps into the glow mask - `beam::GLOW_MASK`, the stencil
+// reference `LeachBeam_SubmitStrip` writes with `REPLACE`.
+override glow_mask: f32 = 0.0;
+
 @group(0) @binding(0) var<uniform> uniforms: Uniforms;
 @group(1) @binding(0) var beam_texture: texture_2d<f32>;
 @group(1) @binding(1) var beam_sampler: sampler;
@@ -49,9 +53,10 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let texel = textureSample(beam_texture, beam_sampler, in.texcoord);
     let rgb = texel.rgb * in.colour.rgb;
     let decoded = mix(rgb, pow(rgb, vec3<f32>(2.2)), linear_out);
-    // The pipeline's blend state does the `* alpha` and the additive `+ dst` -
-    // see `Pipeline::new`'s citation of `exhaust::BLEND`. This returns the
-    // unpremultiplied colour and the alpha it should be weighted by, the same
-    // contract `exhaust.wgsl`'s `fs_main` follows.
-    return vec4<f32>(decoded, texel.a * in.colour.a);
+    // `GU_ADD, GU_SRC_ALPHA, GU_FIX(0xffffff)`: the colour is weighted by the
+    // fragment's alpha here, so the alpha channel is free to carry the glow
+    // stamp the stencil writes - `beam::pipeline::BLEND` adds the colour and
+    // replaces the alpha.
+    let weight = texel.a * in.colour.a;
+    return vec4<f32>(decoded * weight, glow_mask);
 }

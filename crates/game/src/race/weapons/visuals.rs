@@ -13,33 +13,14 @@ pub(in crate::race) use flares::*;
 use super::*;
 
 impl Race {
-    /// Keeps the LeachBeam's two authored effects on the two craft the disc
-    /// hangs them on: [`LEACHBEAM_CHARGING_EFFECT`] on whoever is *holding* one
-    /// and [`LEACHBEAM_ENERGY_EFFECT`] on whoever a link is currently draining -
-    /// plus, since 2026-09-17, the beam's own ribbon between them.
+    /// Keeps [`LEACHBEAM_CHARGING_EFFECT`] on the player while they hold a
+    /// LeachBeam - the disc's own `Data\Psys\*.POB`, played through the same
+    /// [`psys::Stage`] every other weapon's are, with its trigger read out of
+    /// the executable (see [`LEACHBEAM_CHARGING_EFFECT`]).
     ///
-    /// Both effects are the disc's own `Data\Psys\*.POB` files, played through
-    /// the same [`psys::Stage`] every other weapon's are, with triggers read
-    /// out of the executable rather than guessed - see
-    /// [`LEACHBEAM_CHARGING_EFFECT`] and [`LEACHBEAM_ENERGY_EFFECT`] for the
-    /// function and address behind each.
-    ///
-    /// **The beam's own body is drawn now.** `LeachBeam_Advance` (`0x08873fa0`)
-    /// builds it as a segmented ribbon between the two craft -
-    /// `ceil((6.0 / range) * min(distance, range) * 6.0)` segments - and
-    /// `LeachBeam_BuildStrip`/`LeachBeam_SubmitStrip` (`0x088739b0`/
-    /// `0x088731c4`) draw it textured with
-    /// `Data\Weapons\Textures\pulse_leechbeam1_ADD.mip`, additively blended
-    /// (the same blend as [`oag_render::exhaust::BLEND`]), white, fading to
-    /// nothing over the disconnect linger and tapered to zero alpha at both
-    /// ends. The earlier reading here - that the texture was unlocated and the
-    /// draw call unfollowed - was wrong on both counts; see
-    /// `docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md`'s
-    /// "2026-09-17: the LeachBeam ribbon's own texture" section for the
-    /// evidence chain, and [`oag_render::beam`] for what is built from it. The
-    /// two perpendicular displacement axes the original crosses the strip
-    /// along are **chosen, not measured** - this engine has no per-craft node
-    /// basis to read them from the way the original's scene graph does.
+    /// The beam's other effect, [`LEACHBEAM_ENERGY_EFFECT`], rides the ribbon
+    /// rather than a craft, so it is driven from
+    /// [`Self::advance_leach_beam_ribbon`].
     pub(in crate::race) fn advance_leach_beam_visual(&mut self) {
         // The charge: up exactly while slot 0 holds a LeachBeam, which is the
         // whole of `FUN_0883f540`'s own gate. Nothing chosen here.
@@ -64,52 +45,46 @@ impl Race {
             }
             (None, None) | (Some(None), None) => {}
         }
-
-        // The energy: on the victim, and only while the link is actually
-        // draining. A disconnected beam in its linger window draws nothing,
-        // matching the original clearing the link before the pool retires it.
-        let connected = self
-            .sim
-            .world
-            .leach_beam
-            .filter(oag_gameplay::projectile::leach_beam::Beam::connected);
-        let Some(beam) = connected else {
-            if let Some(playing) = self.view.leach_beam_effect.take() {
-                self.view.stage.detach(playing);
-            }
-            return;
-        };
-        let target = self.sim.world.ships[beam.target as usize]
-            .physics
-            .body
-            .position;
-        match (
-            self.view.effects.get(LEACHBEAM_ENERGY_EFFECT).cloned(),
-            self.view.leach_beam_effect,
-        ) {
-            (Some(effect), None) => {
-                self.view.leach_beam_effect = self.view.stage.attach(&effect, target, 1.0);
-            }
-            (Some(_), Some(playing)) => self.view.stage.follow(playing, target),
-            (None, _) => {}
-        }
     }
 
-    /// Keeps [`RaceView::leach_beam_ribbon`] alive for exactly as long as a
-    /// *locked* beam exists - through its disconnect linger, where it fades
-    /// rather than vanishing, matching `LeachBeam_BuildStrip`'s own alpha
-    /// write. An [`oag_gameplay::projectile::leach_beam::Kind::Unlocked`]
-    /// beam draws no ribbon, the same as its two effects above.
+    /// One tick of `LeachBeam_Advance`'s presentation half for as long as a
+    /// *locked* beam exists - through its disconnect linger too, which the
+    /// original also advances (measured: the ribbon's cursor steps and the
+    /// firing craft's pulse strength is written on every frame of the linger).
+    /// An [`oag_gameplay::projectile::leach_beam::Kind::Unlocked`] beam draws
+    /// nothing.
     ///
-    /// Split from [`Self::advance_leach_beam_visual`] because that function
-    /// returns early once a beam stops being [`Beam::connected`], and the
-    /// ribbon needs to keep advancing past that point for the fade.
+    /// Advances [`RaceView::leach_beam_ribbon`] (see [`oag_render::beam`]) and
+    /// keeps [`LEACHBEAM_ENERGY_EFFECT`] on it: **re-spawned every time the
+    /// ribbon's cursor wraps** - the pulse block that also plays
+    /// `LEACHENERGY` - one segment short of the target, then walked back
+    /// toward the shooter one chain point a tick, which is where
+    /// `LeachBeam_Advance` writes the effect's own matrix. The previous
+    /// instance is detached at each re-spawn so its particles finish where
+    /// they are; the original hands its handle to `FUN_088f3298`, whose effect
+    /// on live particles was not read, so the detach is **chosen, not
+    /// measured**.
     pub(in crate::race) fn advance_leach_beam_ribbon(&mut self) {
         let locked = self
             .sim
             .world
             .leach_beam
             .filter(|beam| beam.kind == oag_gameplay::projectile::leach_beam::Kind::Locked);
+        let Some(beam) = locked else {
+            self.view.leach_beam_ribbon = None;
+            if let Some(playing) = self.view.leach_beam_effect.take() {
+                self.view.stage.detach(playing);
+            }
+            return;
+        };
+        let owner = self.sim.world.ships[beam.owner as usize]
+            .physics
+            .body
+            .position;
+        let target = self.sim.world.ships[beam.target as usize]
+            .physics
+            .body
+            .position;
         let dt = self.sim.dt;
         // Split the two fields rather than borrowing `self.view` twice at
         // once - the same idiom `Race::force_trail_sparks`'s own
@@ -118,23 +93,53 @@ impl Race {
             &mut self.view.leach_beam_ribbon,
             &mut self.view.leach_beam_rng,
         );
-        match (locked.is_some(), ribbon.as_mut()) {
-            (true, Some(ribbon)) => ribbon.advance(dt, rng),
-            (true, None) => *ribbon = Some(oag_render::beam::Ribbon::new(rng)),
-            (false, _) => *ribbon = None,
+        let ribbon = ribbon.get_or_insert_with(|| oag_render::beam::Ribbon::new(rng));
+        let pulsed = ribbon.advance(dt, (target - owner).length(), beam.range, rng);
+        let at = ribbon.energy_point(owner, target, beam.range);
+
+        let effect = self.view.effects.get(LEACHBEAM_ENERGY_EFFECT).cloned();
+        match (effect, self.view.leach_beam_effect, at) {
+            (Some(effect), playing, Some(at)) if pulsed || playing.is_none() => {
+                if let Some(playing) = playing {
+                    self.view.stage.detach(playing);
+                }
+                self.view.leach_beam_effect = self.view.stage.attach(&effect, at, 1.0);
+            }
+            (_, Some(playing), Some(at)) => self.view.stage.follow(playing, at),
+            _ => {}
         }
+    }
+
+    /// The firing craft's LeachBeam hull-overlay pulse on `slot` this tick, or
+    /// `None` when it draws nothing: `Mesh_DrawBatchSet` gates
+    /// `HullOverlay_SubmitLeachBeamBatched` on a live beam
+    /// (`DAT_08b317ac == 2`) and on the craft's weapon record `+0` being
+    /// positive, and `LeachBeam_UpdatePool` writes that `+0` with
+    /// `LeachBeam_PulseStrength` every tick - measured in play, linger
+    /// included. See [`oag_render::beam::Ribbon::pulse_strength`].
+    #[must_use]
+    pub fn leach_overlay_pulse(&self, slot: usize) -> Option<f32> {
+        let beam = self.sim.world.leach_beam?;
+        if usize::from(beam.owner) != slot {
+            return None;
+        }
+        self.view.leach_beam_ribbon.as_ref()?.pulse_strength()
     }
 
     /// The ribbon's geometry for this frame, or empty when there is no
     /// locked beam to draw - see [`oag_render::beam::build`].
     ///
-    /// `alpha` is the link's own coverage: `1.0` while connected, and while
-    /// disconnected a linear fade to `0.0` over
-    /// [`oag_gameplay::projectile::leach_beam::DISCONNECT_LINGER_SECONDS`] -
-    /// `LeachBeam_BuildStrip`'s own recovered alpha write, read at
-    /// instruction level (see the docs page this module cites).
+    /// `camera_right`/`camera_up` are the view's own world-space axes, which
+    /// the two strips are widened along. `alpha` is the link's own coverage:
+    /// `1.0` while connected, and while disconnected a linear fade to `0.0`
+    /// over [`oag_gameplay::projectile::leach_beam::DISCONNECT_LINGER_SECONDS`] -
+    /// `LeachBeam_BuildStrip`'s own recovered alpha write.
     #[must_use]
-    pub(in crate::race) fn leach_beam_ribbon_vertices(&self) -> Vec<oag_render::mesh::GpuVertex> {
+    pub(in crate::race) fn leach_beam_ribbon_vertices(
+        &self,
+        camera_right: oag_core::math::Vec3,
+        camera_up: oag_core::math::Vec3,
+    ) -> Vec<oag_render::mesh::GpuVertex> {
         use oag_gameplay::projectile::leach_beam::{DISCONNECT_LINGER_SECONDS, Kind};
 
         let (Some(beam), Some(ribbon)) = (self.sim.world.leach_beam, &self.view.leach_beam_ribbon)
@@ -150,15 +155,26 @@ impl Race {
                 (1.0 - (beam.age - disconnected_at) / DISCONNECT_LINGER_SECONDS).clamp(0.0, 1.0)
             }
         };
-        let owner = self.sim.world.ships[beam.owner as usize]
-            .physics
-            .body
-            .position;
-        let target = self.sim.world.ships[beam.target as usize]
-            .physics
-            .body
-            .position;
-        oag_render::beam::build(ribbon, owner, target, beam.range, alpha)
+        let shooter = &self.sim.world.ships[beam.owner as usize];
+        // The shooter's node basis: the drawn hull's own rotation, the body's
+        // orientation with its visual roll - `drawable::model_matrix_of`
+        // without the model-space yaw and scale.
+        let rotation = shooter.physics.body.orientation
+            * oag_render::roll::rotation(oag_core::math::Vec3::NEG_Z, shooter.physics.roll_phase);
+        let frame = oag_render::beam::Frame {
+            owner: shooter.physics.body.position,
+            target: self.sim.world.ships[beam.target as usize]
+                .physics
+                .body
+                .position,
+            owner_right: rotation * oag_core::math::Vec3::X,
+            owner_up: rotation * oag_core::math::Vec3::Y,
+            camera_right,
+            camera_up,
+            range: beam.range,
+            alpha,
+        };
+        oag_render::beam::build(ribbon, &frame)
     }
 
     /// Keeps [`QUAKE_EFFECT`] and its own transform riding the travelling
