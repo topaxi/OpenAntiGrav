@@ -153,7 +153,7 @@ only.
 | Hover/suspension | ✅ verified | [force-balance-ground-truth.md](../physics/force-balance-ground-truth.md) |
 | Steering/pitch | ✅ verified | [engine.md](../ghidra/functions/psp-pulse-usa/engine.md), [cornering-ground-truth.md](../physics/cornering-ground-truth.md) |
 | Airbrakes | ✅ verified | [airbrake_flaps_ground_truth.rs](../../crates/render/tests/airbrake_flaps_ground_truth.rs) |
-| Sideshift | ⬜ `?` | not investigated |
+| Sideshift | 🟨 partial | built - `advance_sideshift` ([airbrake.rs](../../crates/physics/src/airbrake.rs)) wired to input in [controls.rs](../../crates/gameplay/src/controls.rs); the veteran double-tap is PPSSPP-captured at runtime, confidence 95 for the timer/velocity fields ([input-bindings.md#confirmed-at-runtime-the-veteran-double-tap-captured-off-a-real-ppsspp-session](../ghidra/functions/psp-pulse-usa/input-bindings.md#confirmed-at-runtime-the-veteran-double-tap-captured-off-a-real-ppsspp-session)); gap: the novice flick has no runtime capture at all, and the veteran gesture's displacement magnitude (only its sign/rough size) is unconfirmed |
 | Barrel roll | ✅ verified | [ai_roll_ground_truth.rs](../../crates/game/tests/ai_roll_ground_truth.rs) |
 | Wall/collision response | ✅ verified | [wall_collision_ground_truth.rs](../../crates/game/tests/wall_collision_ground_truth.rs), `crates/physics/src/wall.rs` |
 | Respawn/stall rescue | ✅ verified | [stall_rescue_ground_truth.rs](../../crates/game/tests/stall_rescue_ground_truth.rs), [off_track_rescue_ground_truth.rs](../../crates/game/tests/off_track_rescue_ground_truth.rs) |
