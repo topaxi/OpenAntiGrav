@@ -644,6 +644,12 @@ impl Session {
             // field of the same `self` - ending the first borrow before this
             // runs is what lets the second start. See `Session::escape`,
             // which draws the same borrow apart the same way.
+            // A ghost is written on the tick a lap beats it, not only at the
+            // finish: Speed Lap never finishes, and a lap set before a crash
+            // should survive it. A no-op on every tick without a new best.
+            if let Stage::Race(stage) = &mut self.stage {
+                crate::race_stage::ghost::save(&mut stage.race, &stage.result_key);
+            }
             if let Stage::Race(stage) = &mut self.stage
                 && stage.race.finished()
                 && !stage.result_saved

@@ -48,6 +48,10 @@ GAMEPLAY_CRATES = {
     "oag-pulse",
     "oag-pure",
     "oag-race",
+    # A replay is what the simulation consumed and what it arrived at, so it
+    # sits on the simulation's side of the line; the ghost it carries is poses,
+    # drawn by the composition root. ADR-0055.
+    "oag-replay",
     "oag-title",
 }
 FORBIDDEN_FOR_GAMEPLAY = {"oag-render", "oag-audio", "oag-input", "winit", "wgpu"}

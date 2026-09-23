@@ -68,6 +68,8 @@ oag-gameplay.workspace = true
 oag-input.workspace = true
 oag-physics.workspace = true
 oag-race.workspace = true
+# Recording a run and racing its ghost - see `race::replay` and ADR-0055.
+oag-replay.workspace = true
 oag-render.workspace = true
 # The front end: boot movies, menus, the HUD's font, the strings a screen
 # draws. `render.rs` rasterises the `Draw` list this crate emits.

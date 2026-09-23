@@ -117,6 +117,9 @@ impl Session {
         // `stage` and `self.records` are different fields of the same
         // `self`, so the first has to stop being borrowed before the second
         // can be.
+        if let Stage::Race(stage) = &mut self.stage {
+            crate::race_stage::ghost::save(&mut stage.race, &stage.result_key);
+        }
         if let Stage::Race(stage) = &mut self.stage
             && !stage.result_saved
         {

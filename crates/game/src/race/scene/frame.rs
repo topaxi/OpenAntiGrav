@@ -419,6 +419,7 @@ impl Scene {
         }
         self.write_absorb_overlays(race, queue, view_projection, prev_vp, &prev, recoloured);
         self.write_absorb_shells(race, queue, view_projection, prev_vp, &prev, recoloured);
+        self.write_ghost(race, queue, view_projection, prev_vp);
         oag_render::perfprobe::mark("ship+shield-write");
         let (rocket_matrices, ball_matrices, mine_matrices, bomb_matrices, cannon_matrices) =
             self.write_weapon_models(race, &prev, queue, view_projection, prev_vp);
@@ -914,6 +915,7 @@ impl Scene {
         self.draw_beam(&mut pass);
         self.clouds.borrow().draw(&mut pass);
         self.weapon_quads.borrow().draw(&mut pass);
+        self.draw_ghost(race, &mut pass, &mut stats);
         // The scene pass has to close before the bloom can sample what it drew,
         // so this ends the borrow rather than waiting for the scope to.
         drop(pass);

@@ -1,0 +1,25 @@
+[package]
+name = "oag-replay"
+description = "Replay recording and playback: the input stream as the truth, periodic state hashes to catch a desync, and a ghost's pose track"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+# A gameplay-side crate: it stores what the simulation consumed and what it
+# arrived at, and nothing a renderer, a mixer or a device owns. `oag-gameplay`
+# for the snapshot type it records, `oag-core` for the pose's math types.
+# `serde`/`toml` for the header, which is text on purpose - see the ADR.
+# Listed in `scripts/check-dependency-rules.py`'s GAMEPLAY_CRATES, so a
+# renderer dependency here fails the gate. See
+# docs/architecture/adr/0055-replays-are-inputs-and-a-ghost-is-poses.md.
+[dependencies]
+oag-core.workspace = true
+oag-gameplay.workspace = true
+serde.workspace = true
+toml.workspace = true
+thiserror.workspace = true
+
+[lints]
+workspace = true

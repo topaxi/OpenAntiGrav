@@ -751,6 +751,10 @@ pub struct Loaded {
     /// says so; both entries resolve on a real disc, so a `None` here is a
     /// decode failure or a missing archive set, not an unauthored asset.
     pub cannon_quad_textures: (Option<FlareTexture>, Option<FlareTexture>),
+    /// The ghost ship's static, `oag_render::ghost::STATIC_TEXTURE_ENTRY`,
+    /// when it decodes. `None` draws the ghost without its third pass, and
+    /// the load report says why.
+    pub ghost_static: Option<FlareTexture>,
     /// The LeachBeam ribbon's own texture, off the disc, when it decodes -
     /// see `assets::leach_beam_texture`.
     ///

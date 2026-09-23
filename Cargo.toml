@@ -20,6 +20,7 @@ members = [
   "crates/race",
   "crates/rcs",
   "crates/render",
+  "crates/replay",
   "crates/tables",
   "crates/testdata",
   "crates/texture",
@@ -58,6 +59,7 @@ oag-pure = { path = "crates/pure" }
 oag-race = { path = "crates/race" }
 oag-rcs = { path = "crates/rcs" }
 oag-render = { path = "crates/render" }
+oag-replay = { path = "crates/replay" }
 oag-testdata = { path = "crates/testdata" }
 oag-tables = { path = "crates/tables" }
 oag-texture = { path = "crates/texture" }

@@ -776,6 +776,23 @@ impl Drawable {
     pub(super) fn draw_additive(&self, pass: &mut wgpu::RenderPass<'_>) -> SceneStats {
         self.draw_every_list(pass, &self.additive_pipeline)
     }
+
+    /// This hull's geometry and materials, for the ghost ship's pipeline to
+    /// draw through - every list, since the original's ghost state overrides
+    /// every batch's own. See `oag_render::ghost`.
+    pub(super) fn ghost_hull(&self) -> oag_render::ghost::Hull<'_> {
+        let model = &self.model;
+        oag_render::ghost::Hull {
+            vertices: &self.vertices,
+            indices: &self.indices,
+            textures: &self.textures,
+            draws: (model.draws.iter())
+                .chain(&model.alpha_tested_draws)
+                .chain(&model.transparent_draws)
+                .map(|draw| (draw.range.clone(), draw.texture))
+                .collect(),
+        }
+    }
 }
 
 /// Uniforms shared with `oag-render`'s `mesh.wgsl`.

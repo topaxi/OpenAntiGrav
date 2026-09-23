@@ -469,14 +469,27 @@ pub(crate) fn run_race(
         // fallback order matters - read here only to look a row up, never to
         // write one back. See `race::CaptureOptions::previous_best`'s own doc
         // for why this capture never calls `oag_game::records::save`.
-        let previous_best = oag_game::records::load()
-            .get(&oag_game::records::Key::new(
-                loaded.title.name,
-                options.track.as_deref().or(Some(loaded.title.race.track)),
-                loaded.setup.mode.name(),
-                &loaded.setup.class,
-            ))
-            .cloned();
+        let key = oag_game::records::Key::new(
+            loaded.title.name,
+            options.track.as_deref().or(Some(loaded.title.race.track)),
+            loaded.setup.mode.name(),
+            &loaded.setup.class,
+        );
+        let previous_best = oag_game::records::load().get(&key).cloned();
+        let ghost = race::GhostCapture {
+            race: cli.ghost.ghost.clone(),
+            record: cli.ghost.record_ghost.clone().map(|path| {
+                let team = loaded.liveries.first().map_or("", |l| l.team.as_str());
+                let mut header = oag_game::ghosts::header(&key, team, loaded.setup.seed);
+                header.options = oag_game::ghosts::race_options(
+                    scheme,
+                    loaded.setup.difficulty,
+                    cli.autopilot,
+                    give_weapon(cli.give.as_deref()).ok().flatten(),
+                );
+                (path, header)
+            }),
+        };
         race::capture(
             loaded,
             &race::CaptureOptions {
@@ -520,6 +533,7 @@ pub(crate) fn run_race(
                 }),
                 zone_spectrum_test: cli.zone_spectrum_test,
                 previous_best,
+                ghost,
                 // Resolved here rather than in `race::capture`, which has no
                 // config directory in hand: the same catalogue the window
                 // reads, so a `--presented` capture shows the same preset.

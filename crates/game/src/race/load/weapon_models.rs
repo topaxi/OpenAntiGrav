@@ -320,3 +320,20 @@ pub(super) fn load_bodies(
     }
     bodies
 }
+
+/// The ghost ship's static texture, `oag_render::ghost::STATIC_TEXTURE_ENTRY`.
+///
+/// Read on every title: Pulse's `Data.wad` carries it (entry 945 on the USA
+/// pressing, see `docs/ghidra/functions/psp-pulse-usa/ghost.md`), and a source
+/// without it is reported and drawn without the ghost's third pass.
+pub(super) fn load_ghost_static(
+    archives: &mut oag_assets::Archives,
+    report: &mut Vec<String>,
+) -> Option<FlareTexture> {
+    load_flare_texture(
+        archives,
+        oag_render::ghost::STATIC_TEXTURE_ENTRY,
+        "the ghost ship's static",
+        report,
+    )
+}

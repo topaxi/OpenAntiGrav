@@ -2049,6 +2049,7 @@ dependencies = [
  "oag-race",
  "oag-rcs",
  "oag-render",
+ "oag-replay",
  "oag-tables",
  "oag-testdata",
  "oag-texture",
@@ -2192,6 +2193,17 @@ dependencies = [
  "serde",
  "toml",
  "wgpu",
+]
+
+[[package]]
+name = "oag-replay"
+version = "0.1.0"
+dependencies = [
+ "oag-core",
+ "oag-gameplay",
+ "serde",
+ "thiserror 2.0.19",
+ "toml",
 ]
 
 [[package]]

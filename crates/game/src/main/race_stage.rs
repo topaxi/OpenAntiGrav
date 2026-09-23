@@ -8,6 +8,8 @@ use crate::gpu::Gpu;
 
 #[path = "race_stage/endrace.rs"]
 pub(crate) mod endrace;
+#[path = "race_stage/ghost.rs"]
+pub(crate) mod ghost;
 
 /// A race, and everything only it needs.
 pub(crate) struct RaceStage {

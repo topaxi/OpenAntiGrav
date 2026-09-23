@@ -463,6 +463,8 @@ pub fn run(
                 // the one capture path that does.
                 zone_spectrum_test: false,
                 previous_best,
+                // No flag for it on this path; see `main/headless.rs`.
+                ghost: race::GhostCapture::default(),
                 screen_filter:
                     crate::screen::Catalogue::load(crate::screen::Catalogue::directory())
                         .get(&render_profile.screen_filter)

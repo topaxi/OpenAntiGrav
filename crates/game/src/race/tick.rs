@@ -764,6 +764,11 @@ impl Race {
                 .advance(effect, self.sim.dt, anchor, up, &mut self.view.sparks_rng);
         }
 
+        // Last, after every write this tick makes: the recording stores the
+        // inputs this tick was handed and the state it arrived at, and reads
+        // the player's lap edge the rules above just produced. A no-op unless
+        // `start_recording` was called - see `race::replay`.
+        self.record_tick(inputs);
         evaluated
     }
 }
