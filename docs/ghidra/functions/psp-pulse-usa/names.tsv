@@ -1080,3 +1080,4 @@
 0x088382b8	function	Ghost_LoadFromSave	82	ghost.md
 0x08947cc8	function	Savedata_StartGhostLoad	65	ghost.md
 0x0894983c	function	Savedata_HashGhostKey	75	ghost.md
+0x0890be68	function	LodGroup_SelectChild	85	../../../formats/vex.md

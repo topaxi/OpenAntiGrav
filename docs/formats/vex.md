@@ -383,6 +383,45 @@ authored switch distance, is **not read**. Beyond it, tier 0 and tier 1
 coincide in bounds and differ only in triangle count, so a distance switch
 and "tier 0 always" look alike at that range.
 
+### 2026-09-23, later: the switch is found - `LodGroup_SelectChild`
+
+**Confidence 85. The original does select a tier every frame, by view
+depth.** The "no LOD-tier-selection code anywhere" reading above rested on
+`LodGroup`'s method table read one slot off. The table at `&DAT_08ad160c`
+holds function pointers at `+0x0c`, `+0x14`, ... in 8-byte steps (the batch
+set's own table, `&DAT_08ad292c`, confirms the layout: its `+0x44` is
+`Mesh_DrawBatchSet`). `LodGroup`'s `+0x34` is **`0x0890be68`**, a
+`LodGroup`-only function, named here `LodGroup_SelectChild`:
+
+1. It transforms the node's authored position (its payload, reached through
+   `node+0x54`) by the node's world matrix and then the view matrix
+   (`DAT_08b32d00`), and takes the view-space depth `z`.
+2. It scales that depth by the field of view: `d = -z * g_camera_fov_degrees
+   / 65.0`.
+3. It walks the payload's `child_count - 1` switch distances (the pointer at
+   payload `+0x54`, relocated at load, is what the "12-byte magic" above
+   is) and picks the child index equal to how many of them `d` reaches.
+4. It sets bit `0x4` in the chosen child's flags word (`node+0x2c`) and
+   clears it on every other child.
+
+The geometry side agrees: `Mesh_BuildModelDrawData` (`0x08912018`) finds
+every `LodGroup` (its class tag `0x08a6ba58`, registered by `FUN_0890c028`)
+and compiles each child's meshes into a batch set of its own, and
+`FUN_0892e7ec` keeps any mesh with a `LodGroup` ancestor out of the model's
+main batch set. So each tier is drawn only through its own child's subtree,
+and only the child `LodGroup_SelectChild` enabled that frame is shown.
+Not 90: bit `0x4` is read as "draw this subtree" from its use here, not from
+the walker that tests it.
+
+**The distances in practice.** `16_Track`'s groups switch at `118.9` to
+`424.0` units; every racing craft's own `lodGroup1` switches at **`30.0`**
+(`Data\Ships\Assegai\Ship.vex` and `Qirex`, via
+`crates/vex/examples/lod_group_probe.rs`). So tier 1 is in constant use:
+almost every opponent more than 30 units ahead draws as its coarse
+`lodShape` (315 triangles on Assegai against tier 0's 1,130), and distant
+track scenery draws its coarse tier. Up close, only tier 0 shows, which is
+what the two frames above measured.
+
 **What this means for `oag_render::mesh::Lod`:** `single` is the faithful
 picture up close and `both` is not, the opposite of what its doc said. So
 `single` became the default the same day and the `[graphics] lod` settings
