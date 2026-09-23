@@ -76,10 +76,15 @@ The executable's own load-path strings name every model above
   spelling with Pulse's own naming quirk); the two hand-drawn quad textures
   and the three Cannon effects are `cannon-quads`'s own lane, not touched
   here.
-- Missile's own explosion pair (`HD_missile_ball_bloomring`,
-  `HD_missile_explosion`) and the Bomb's five-model detonation
-  (`HD_Mine_halo`, `HD_bomb_*`) are named on the executable's own strings
-  but neither their load order nor their per-tick placement was read.
+- **Missile (2026-09-23, read, not wired):** `HD_missile_ball_bloomring` is
+  the flying missile's head (`Missile.cpp` constructor `0x0011ccc8`), not an
+  explosion model; `HD_missile_explosion` loads in `0x00154cf0` (from
+  `MissileManager_Construct`), binds `UV_offset` and `Shockwave_scalar`, and
+  grows by its own keyed `Anim Transform` (1 -> 18x). What starts it is
+  unread - see weapons.md's 2026-09-23 section for every address.
+- The Bomb's five-model detonation (`HD_Mine_halo`, `HD_bomb_*`) is named
+  on the executable's own strings but neither its load order nor its
+  per-tick placement was read.
 - `0x00121418` (`Plasma_PostUpdate`'s visual placement) suggests a
   velocity-plus-carried-normal basis for the bolt, not velocity alone, but
   is not resolved past confidence ~55 - stays unrenamed per `CLAUDE.md`'s
