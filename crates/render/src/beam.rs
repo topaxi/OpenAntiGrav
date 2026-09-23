@@ -1,14 +1,14 @@
-//! The LeachBeam's own ribbon: the segmented energy strip drawn between the
-//! holder and the craft it has locked onto.
+//! The LeachBeam's own ribbon: the jagged energy arc drawn between the holder
+//! and the craft it has locked onto.
 //!
 //! Recovered from `LeachBeam_Advance` (`0x08873fa0`), `LeachBeam_InitLocked`
-//! (`0x08873d3c`), `LeachBeam_Construct` (`0x08872aa0`), `LeachBeam_LoadTexture`
-//! (`0x088730d4`), `LeachBeam_BuildStrip` (`0x088739b0`) and
-//! `LeachBeam_SubmitStrip` (`0x088731c4`). Addresses, evidence and a
-//! confidence score per claim are in
-//! `docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md`'s
-//! "2026-09-17: the LeachBeam ribbon's own texture" section; this module
-//! implements what that page describes and cites it rather than restating it.
+//! (`0x08873d3c`), `LeachBeam_LoadTexture` (`0x088730d4`),
+//! `LeachBeam_BuildStrip` (`0x088739b0`), `LeachBeam_SubmitStrip`
+//! (`0x088731c4`) and `LeachBeam_MarkPulse` (`0x088732f8`). Addresses,
+//! evidence and a confidence score per claim are in
+//! `docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md`, "2026-09-23:
+//! the ribbon re-read, and measured in play"; this module implements what that
+//! section describes and cites it rather than restating it.
 //!
 //! # Two halves, the same split [`crate::exhaust`] uses
 //!
@@ -16,46 +16,43 @@
 //! them at all: testable on a machine with no graphics driver. [`Pipeline`] is
 //! the other half, and owns everything GPU-shaped.
 //!
+//! # The picture, in one paragraph
+//!
+//! A chain of `segment_count` points runs from the shooter to the target. Every
+//! point but the first is pushed off the straight line along **two** axes read
+//! off the shooter's own orientation - the first at full amplitude, the second
+//! at half - by a sine whose phase is indexed by a per-tick cursor, so the kinks
+//! travel down the beam toward the shooter one segment a tick. Two strips are
+//! built over that one chain, one widened along the **camera's** right and one
+//! along its up, so the arc reads as a line from every angle. The texture's `u`
+//! flips `0`/`1` at every chain point, so the static band repeats once per
+//! segment, and slides along `u` at two repeats a second.
+//!
 //! # What is recovered and what is chosen
 //!
-//! **Recovered**: the segment-count formula
-//! (`ceil((6.0/range)*min(distance,range)*6.0)`, already ported to
-//! `crates/render/src/exhaust.rs`... no - see
-//! `oag_gameplay::projectile::leach_beam` for the weapon's own numbers, this
-//! crate only draws), the strip half-width ([`HALF_WIDTH`], `1.0` world unit),
-//! the amplitude range ([`AMPLITUDE_MAX`], `[0.0, 2.0]`) and bucket span
-//! ([`AMPLITUDE_BUCKET_SPAN`], `3` segments share one value), the base colour
-//! (opaque white), the disconnect fade (linear over
-//! [`oag_gameplay::projectile::leach_beam::DISCONNECT_LINGER_SECONDS`]), the
-//! zero-alpha taper at both chain endpoints, the crossed-double-strip
-//! structure (two ribbons sharing one spine, submitted as one triangle strip),
-//! and the blend - identical to [`crate::exhaust::BLEND`]
-//! (`Gu_BlendFunc(GU_ADD, GU_SRC_ALPHA, GU_FIX, 0, 0xffffff)`, the same call
-//! `exhaust::BLEND`'s own doc comment cites, so this reuses that constant
-//! rather than re-deriving it).
+//! **Recovered**: every number and every rule above, plus the strip
+//! half-width ([`HALF_WIDTH`]), the amplitude table ([`AMPLITUDE_BUCKETS`]
+//! draws in `[0, `[`AMPLITUDE_MAX`]`]`, [`AMPLITUDE_BUCKET_SPAN`] segments a
+//! bucket, and the thirteenth entry the index reaches), the one-bucket re-roll
+//! at each pulse, the pulse itself (the cursor wrapping to zero) and the pulse
+//! strength that re-arms at most once a second, the endpoint taper and the
+//! disconnect fade, the blend and the glow-mask stamp ([`GLOW_MASK`]).
+//! Measured in play on PPSSPP too: the cursor steps every frame at 60 Hz, the
+//! `WO_LEACHBEAM_ENERGY` respawn fires on every wrap, and the pulse strength
+//! re-arms about once a second.
 //!
-//! **Chosen, no confidence score, and why**:
+//! **Not built**: `LeachBeam_Advance` passes every chain point through
+//! `FUN_088734d0`, which locates it on the track (`AiTrack_LocatePosition`)
+//! and, when it has left the tube - below the road, or within `2.0` of either
+//! edge - re-aims the rest of the chain at the target through
+//! `FUN_08873328`. So the original's arc bends to stay inside the track where
+//! the straight line would cut a corner. This module draws the straight-line
+//! arc; on a straight, the two agree.
 //!
-//! - **The two axes the strips displace along.** The original crosses them
-//!   along two axes read off the craft's own scene-graph node basis, which
-//!   this engine's [`oag_gameplay::world::Ship`] has no equivalent of - it
-//!   carries a physics body, not a `.vex` node chain. [`build`] instead picks
-//!   an arbitrary pair perpendicular to the owner-target line and to each
-//!   other, stable for a given direction so the ribbon does not swim as the
-//!   beam turns.
-//! - **The amplitude re-roll cadence.** The original re-rolls one bucket
-//!   whenever the ribbon's own scroll cursor wraps, "roughly once a second" -
-//!   the same cursor `oag_gameplay::projectile::leach_beam`'s own doc comment
-//!   already declines to model, because reproducing it needs render geometry
-//!   the simulation crate must not carry. [`Ribbon::advance`] re-rolls one
-//!   bucket on a fixed one-second timer instead, off its own `rng` - never
-//!   `World::rng`, the same rule [`crate::exhaust::Exhaust::advance`]'s own
-//!   `rng` parameter follows.
-//!
-//! Nothing here is invented in place of unread data: the picture drawn is
-//! `Data\Weapons\Textures\pulse_leechbeam1_ADD.mip`, the disc's own texture,
-//! and every number that shapes the strip but the two above is a recovered
-//! constant.
+//! **Chosen, no confidence score**: nothing in the geometry. The shooter's
+//! basis is the drawn hull's own rotation (the physics body's orientation and
+//! its visual roll), which is this engine's equivalent of the scene-graph node
+//! the original reads.
 
 use oag_core::{Rng, math::Vec3};
 
@@ -78,55 +75,74 @@ pub const AMPLITUDE_MAX: f32 = 2.0;
 /// `DAT_08a7cc00`, read directly as `0x40400000` = `3.0`. Confidence **90**.
 pub const AMPLITUDE_BUCKET_SPAN: f32 = 3.0;
 
-/// Seconds between amplitude bucket re-rolls. **Chosen, not measured** - see
-/// the module doc comment's second bullet.
-pub const AMPLITUDE_REROLL_SECONDS: f32 = 1.0;
+/// The second displacement axis' share of its bucket - the literal `0.5`
+/// `LeachBeam_Advance` multiplies it by. Confidence **85**.
+pub const SECOND_AXIS_SCALE: f32 = 0.5;
 
 /// The scroll phase's own rate: `LeachBeam_InitLocked` sets `instance+0x1188`
 /// (the rate) to `1.0`, and `LeachBeam_Advance` advances the phase by
-/// `rate * dt * 2.0` every tick before wrapping it into `[0, 1)`. Folding the
-/// recovered `2.0` into this constant keeps [`Ribbon::advance`] a single
-/// multiply. Confidence **80**: the rate field's own use beyond this one
-/// tick's advance was not chased, so a title that changes it would not be
-/// caught by this constant.
+/// `rate * dt * 2.0` every tick before wrapping it into `[0, 1)`.
+/// `LeachBeam_SubmitStrip` hands the phase to `Gu_TexOffset` as the `u`
+/// offset. Confidence **85**.
 pub const SCROLL_RATE: f32 = 2.0;
 
+/// Seconds the pulse strength stays live after a pulse, and the shortest gap
+/// between two pulses - `LeachBeam_MarkPulse`'s `> 1.0` and
+/// `LeachBeam_PulseStrength`'s `<= 1.0`. Confidence **85**.
+pub const PULSE_SECONDS: f32 = 1.0;
+
+/// What the ribbon stamps into the glow mask: `LeachBeam_SubmitStrip`'s
+/// `Gu_StencilFunc(GU_ALWAYS, DAT_08ab1078, 0xff)` with
+/// `Gu_StencilOp(KEEP, KEEP, REPLACE)`, and `DAT_08ab1078` reads `0x28`. The
+/// PSP's stencil is the framebuffer's alpha byte, which is what
+/// [`crate::post::bloom`] reads. Confidence **80**: the value and the op are
+/// direct reads; that every fragment of the strip writes it, transparent
+/// texels included, follows from the alpha test being off in the same
+/// function.
+pub const GLOW_MASK: f32 = 40.0 / 255.0;
+
 /// Segments a beam this long draws, from `LeachBeam_Advance`'s own formula.
-/// Confidence **90** - already ported once, in
-/// `docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md`'s
-/// `LeachBeam_Advance` reading.
+/// Confidence **90**.
 #[must_use]
 pub fn segment_count(distance: f32, range: f32) -> u32 {
     if range <= 0.0 {
         return 1;
     }
-    let clamped = distance.min(range);
-    (((6.0 / range) * clamped * 6.0).ceil() as u32).max(1)
+    (((6.0 / range) * distance.min(range) * 6.0).ceil() as u32).max(1)
 }
 
-/// Generous headroom over the largest `segment_count` a `250`-unit
-/// (Race-table) or authored range can reach: at `distance >= range` the
-/// formula is range-independent and caps at `36`. `40` leaves margin for a
-/// title that authors a shorter range without changing this constant.
+/// Generous headroom over the largest `segment_count` can reach: at
+/// `distance >= range` the formula is range-independent and caps at `36`.
 pub const MAX_SEGMENTS: u32 = 40;
 
-/// Vertices [`build`] can ever emit: two crossed strips, `segments + 1`
-/// pairs each.
+/// Vertices [`build`] can ever emit: two strips of `segments + 1` pairs -
+/// `LeachBeam_SubmitStrip`'s own `(segment_count * 2 + 2) * 2`.
 pub const MAX_VERTICES: usize = 4 * (MAX_SEGMENTS as usize + 1);
 
-/// The ribbon's own render-side state: the amplitude table and the scroll
-/// phase, neither of which [`oag_gameplay::projectile::leach_beam::Beam`]
-/// carries - see the module doc comment's "chosen" section for why.
+/// The ribbon's own render-side state: the amplitude table, the scroll phase,
+/// the per-tick cursor and the pulse clock, none of which
+/// [`oag_gameplay::projectile::leach_beam::Beam`] carries - the simulation
+/// must not hold render geometry, and this state is driven by it.
 #[derive(Debug, Clone)]
 pub struct Ribbon {
-    amplitudes: [f32; AMPLITUDE_BUCKETS],
-    /// `0..1`, wrapped every tick - the original's `instance+0x1180`.
+    /// Twelve draws, then the thirteenth entry the displacement index reaches:
+    /// `ceil(35 / 3) = 12` for a full-range beam, which in the original reads
+    /// one float past the table - `instance+0xe4`, the half-width. Kept as a
+    /// real entry here so the read is in bounds and the value the original
+    /// sees.
+    amplitudes: [f32; AMPLITUDE_BUCKETS + 1],
+    /// `0..1`, `instance+0x1180`.
     scroll_phase: f32,
-    /// Seconds until the next single-bucket re-roll.
-    reroll_timer: f32,
-    /// Which bucket the next re-roll touches - round-robin, since the
-    /// original's own cursor-driven index is not reproduced (see module doc).
-    next_bucket: usize,
+    /// `instance+0x130`: counts ticks modulo twice the segment count.
+    counter: u32,
+    /// `instance+0xa8`: the counter modulo the segment count.
+    cursor: u32,
+    /// The cursor and counter the current geometry was built with.
+    drawn: (u32, u32),
+    /// `instance+0x134`, the beam's age as the ribbon sees it.
+    age: f32,
+    /// `instance+0x138`, initialised to `-1.0` by `LeachBeam_InitLocked`.
+    last_pulse: f32,
 }
 
 impl Ribbon {
@@ -134,109 +150,179 @@ impl Ribbon {
     /// `LeachBeam_InitLocked`'s own construction-time loop.
     #[must_use]
     pub fn new(rng: &mut Rng) -> Self {
-        let mut amplitudes = [0.0; AMPLITUDE_BUCKETS];
-        for amplitude in &mut amplitudes {
+        let mut amplitudes = [HALF_WIDTH; AMPLITUDE_BUCKETS + 1];
+        for amplitude in &mut amplitudes[..AMPLITUDE_BUCKETS] {
             *amplitude = rng.next_f32() * AMPLITUDE_MAX;
         }
         Self {
             amplitudes,
             scroll_phase: 0.0,
-            reroll_timer: AMPLITUDE_REROLL_SECONDS,
-            next_bucket: 0,
+            counter: 0,
+            cursor: 0,
+            drawn: (0, 0),
+            age: 0.0,
+            last_pulse: -1.0,
         }
     }
 
-    /// One tick: scrolls the wiggle and, on the chosen cadence, re-rolls one
-    /// amplitude bucket. `rng` is render-side, never `World::rng` - see the
-    /// module doc comment.
-    pub fn advance(&mut self, dt: f32, rng: &mut Rng) {
+    /// One tick of `LeachBeam_Advance`, with the two craft `distance` apart.
+    ///
+    /// Returns whether this tick ran the **pulse block** - the cursor sitting
+    /// at zero - which is where the original re-spawns
+    /// `WO_LEACHBEAM_ENERGY` and plays `LEACHENERGY`. The pulse strength
+    /// ([`Self::pulse_strength`]) re-arms inside the same block, but only once
+    /// a second has passed since it last did. `rng` is render-side, never
+    /// `World::rng`.
+    pub fn advance(&mut self, dt: f32, distance: f32, range: f32, rng: &mut Rng) -> bool {
         self.scroll_phase = (self.scroll_phase + dt * SCROLL_RATE).rem_euclid(1.0);
-        self.reroll_timer -= dt;
-        if self.reroll_timer <= 0.0 {
-            self.reroll_timer += AMPLITUDE_REROLL_SECONDS;
-            self.amplitudes[self.next_bucket] = rng.next_f32() * AMPLITUDE_MAX;
-            self.next_bucket = (self.next_bucket + 1) % AMPLITUDE_BUCKETS;
+        self.age += dt;
+        let segments = segment_count(distance, range).min(MAX_SEGMENTS);
+        let pulsed = self.cursor == 0;
+        if pulsed {
+            if self.age - self.last_pulse > PULSE_SECONDS {
+                self.last_pulse = self.age;
+            }
+            let bucket = ((segments - 1) as f32 / AMPLITUDE_BUCKET_SPAN).ceil() as usize + 1;
+            if bucket < AMPLITUDE_BUCKETS {
+                self.amplitudes[bucket] = rng.next_f32() * AMPLITUDE_MAX;
+            }
         }
+        self.drawn = (self.cursor, self.counter);
+        self.counter = (self.counter + 1) % (2 * segments);
+        self.cursor = self.counter % segments;
+        pulsed
+    }
+
+    /// `LeachBeam_PulseStrength` (`0x08873020`): twice the seconds since the
+    /// last pulse inside the one-second window, else zero. Written each tick to
+    /// the firing craft's weapon record, where the hull overlay reads it - see
+    /// [`crate::hull_overlay::pulse`], the same shape.
+    #[must_use]
+    pub fn pulse_strength(&self) -> Option<f32> {
+        crate::hull_overlay::pulse(self.age - self.last_pulse)
+    }
+
+    /// Where `WO_LEACHBEAM_ENERGY` sits this tick: the undisplaced chain point
+    /// `segment_count - 1 - cursor`, which `LeachBeam_Advance` writes into the
+    /// effect's own matrix (`instance+0x120`) - so the effect starts one
+    /// segment short of the target at each pulse and walks back to the
+    /// shooter one segment a tick. `None` when the cursor is past the chain,
+    /// where the original's match never fires and the effect stays put.
+    #[must_use]
+    pub fn energy_point(&self, owner: Vec3, target: Vec3, range: f32) -> Option<Vec3> {
+        let separation = target - owner;
+        let segments = segment_count(separation.length(), range).min(MAX_SEGMENTS);
+        let index = segments.checked_sub(1)?.checked_sub(self.drawn.0)?;
+        Some(owner + separation / segments as f32 * index as f32)
     }
 }
 
-/// A stable pair of axes perpendicular to `forward` and to each other.
-///
-/// **Chosen, not measured** - see the module doc comment. `Vec3::Y` is the
-/// reference axis unless `forward` runs nearly parallel to it, in which case
-/// `Vec3::X` takes over, so the pair never degenerates for a beam fired
-/// straight up or down.
-fn cross_axes(forward: Vec3) -> (Vec3, Vec3) {
-    let reference = if forward.y.abs() > 0.95 {
-        Vec3::X
-    } else {
-        Vec3::Y
-    };
-    let a = forward.cross(reference).normalize_or_zero();
-    let b = forward.cross(a).normalize_or_zero();
-    (a, b)
+/// Everything [`build`] needs besides the ribbon.
+#[derive(Debug, Clone, Copy)]
+pub struct Frame {
+    /// The shooter's node origin.
+    pub owner: Vec3,
+    /// The target's node origin.
+    pub target: Vec3,
+    /// The shooter's own right and up axes - rows 0 and 1 of the node matrix
+    /// `LeachBeam_Advance` reads.
+    pub owner_right: Vec3,
+    pub owner_up: Vec3,
+    /// The camera's world-space right and up: `LeachBeam_BuildStrip` widens
+    /// its two strips along view-space `x` and `y`.
+    pub camera_right: Vec3,
+    pub camera_up: Vec3,
+    /// [`oag_gameplay::projectile::leach_beam::Beam::range`].
+    pub range: f32,
+    /// The link's coverage: `1.0` while connected, the disconnect fade after.
+    pub alpha: f32,
 }
 
-/// Builds the ribbon's geometry for one tick, as a flat vertex list ready for
-/// [`Pipeline::upload`] - one `GU_TRIANGLE_STRIP`-shaped `TriangleStrip`, the
-/// same primitive `LeachBeam_SubmitStrip` draws.
+/// The chain `LeachBeam_Advance` writes to `instance+0x170`: the shooter's
+/// origin, then `segments` displaced points ending at the target.
+fn chain(ribbon: &Ribbon, frame: &Frame, segments: u32) -> Vec<Vec3> {
+    let separation = frame.target - frame.owner;
+    let step = separation / segments as f32;
+    let span = (6.0 / frame.range) * separation.length().min(frame.range);
+    let angular_step = std::f32::consts::TAU / segments as f32 * span;
+    let axis_a = step.cross(-frame.owner_up).normalize_or_zero();
+    let axis_b = step.cross(frame.owner_right).normalize_or_zero();
+    let (cursor, counter) = ribbon.drawn;
+    let amplitude = |index: u32| {
+        let bucket = (index as f32 / AMPLITUDE_BUCKET_SPAN).ceil() as usize;
+        ribbon.amplitudes[bucket.min(AMPLITUDE_BUCKETS)]
+    };
+
+    let mut points = Vec::with_capacity(segments as usize + 1);
+    points.push(frame.owner);
+    let mut base = frame.owner;
+    for i in 0..segments {
+        base += step;
+        let a = (i + cursor) % segments;
+        let b = (i + counter / 2) % segments;
+        let push_a = ((a + 1) as f32 * angular_step).sin() * amplitude(a);
+        let push_b = ((b + 1) as f32 * angular_step).sin() * amplitude(b) * SECOND_AXIS_SCALE;
+        points.push(base + axis_a * push_a + axis_b * push_b);
+    }
+    points
+}
+
+/// Builds the ribbon's geometry for one frame, as a flat vertex list ready for
+/// [`Pipeline::upload`] - one triangle strip, the same primitive
+/// `LeachBeam_SubmitStrip` draws, laid out exactly as `LeachBeam_BuildStrip`
+/// lays out its own GE vertex array.
 ///
-/// `owner`/`target` are the two craft's current world positions, `range` is
-/// [`oag_gameplay::projectile::leach_beam::Beam::range`], and `alpha` is the
-/// link's own coverage this tick - `1.0` while connected, ramping to `0.0`
-/// over the disconnect linger, computed by the caller from
-/// [`oag_gameplay::projectile::leach_beam::Beam::disconnected_at`] the same
-/// way `LeachBeam_BuildStrip`'s own alpha branch does.
+/// Pair `i` (`0..=segments`) is chain point `i` widened along the camera's
+/// right; pair `segments + 1 + i` the same point widened along its up. Pair
+/// `segments` is then overwritten into a zero-area bridge between the two
+/// strips, so the first strip stops at point `segments - 1`. Alpha is zero at
+/// points `0` and `segments - 1` - not at `segments`, which only the second
+/// strip draws, at full alpha.
 ///
-/// Empty when the two craft coincide (nothing to draw a direction from) or
-/// `range` is non-positive.
+/// Empty when the two craft coincide or `range` is non-positive.
 #[must_use]
-pub fn build(ribbon: &Ribbon, owner: Vec3, target: Vec3, range: f32, alpha: f32) -> Vec<GpuVertex> {
-    let separation = target - owner;
-    let distance = separation.length();
-    if distance < 1e-4 {
+pub fn build(ribbon: &Ribbon, frame: &Frame) -> Vec<GpuVertex> {
+    let distance = (frame.target - frame.owner).length();
+    if distance < 1e-4 || frame.range <= 0.0 {
         return Vec::new();
     }
-    let forward = separation / distance;
-    let segments = segment_count(distance, range).min(MAX_SEGMENTS) as usize;
-    let (axis_a, axis_b) = cross_axes(forward);
+    let segments = segment_count(distance, frame.range).min(MAX_SEGMENTS);
+    let points = chain(ribbon, frame, segments);
+    let n = segments as usize;
 
-    let mut vertices = Vec::with_capacity(4 * (segments + 1));
-    for axis in [axis_a, axis_b] {
-        for i in 0..=segments {
-            let t = i as f32 / segments as f32;
-            let base = owner + separation * t;
-            let bucket = ((i as f32) / AMPLITUDE_BUCKET_SPAN).ceil() as usize;
-            let amplitude = ribbon.amplitudes[bucket.min(AMPLITUDE_BUCKETS - 1)];
-            let angular_step = std::f32::consts::TAU / segments as f32 * ribbon.scroll_phase;
-            let wiggle = ((i as f32 + 1.0) * angular_step).sin() * amplitude;
-            let point = base + axis * wiggle;
-
-            // The original forces both chain endpoints to alpha zero
-            // regardless of the connected/disconnected branch - see the
-            // "colour write is the disconnect fade" evidence on the docs
-            // page. Under the additive blend this hides the seam where the
-            // two crossed strips meet in one triangle strip.
-            let vertex_alpha = if i == 0 || i == segments { 0.0 } else { alpha };
-            let colour = [1.0, 1.0, 1.0, vertex_alpha];
-
-            vertices.push(rib_vertex(point - axis * HALF_WIDTH, colour, 0.0, t));
-            vertices.push(rib_vertex(point + axis * HALF_WIDTH, colour, 1.0, t));
+    let mut vertices = vec![bytemuck::Zeroable::zeroed(); 4 * (n + 1)];
+    for (strip, across) in [frame.camera_right, frame.camera_up]
+        .into_iter()
+        .enumerate()
+    {
+        for (i, point) in points.iter().enumerate() {
+            let pair = strip * (n + 1) + i;
+            let alpha = if i == 0 || i == n - 1 {
+                0.0
+            } else {
+                frame.alpha
+            };
+            let u = (pair & 1) as f32 + ribbon.scroll_phase;
+            let colour = [1.0, 1.0, 1.0, alpha];
+            vertices[2 * pair] = rib_vertex(*point - across * HALF_WIDTH, colour, [u, 0.0]);
+            vertices[2 * pair + 1] = rib_vertex(*point + across * HALF_WIDTH, colour, [u, 1.0]);
         }
     }
+    // The bridge: pair `segments` takes the last drawn vertex of the first
+    // strip and the first vertex of the second, so every triangle through it
+    // has zero area.
+    vertices[2 * n].position = vertices[2 * n - 1].position;
+    vertices[2 * n + 1].position = vertices[2 * n + 2].position;
     vertices
 }
 
-/// One ribbon vertex. `u` is the UV column `LeachBeam_InitLocked`'s
-/// alternating zero-fill leaves at each rail (`0.0`/`1.0`, across the strip's
-/// width); `v` runs `0..1` along the chain, this build's own choice of how to
-/// fill the coordinate the original's own displacement writer left alone.
-fn rib_vertex(p: Vec3, colour: [f32; 4], u: f32, v: f32) -> GpuVertex {
+/// One ribbon vertex.
+fn rib_vertex(p: Vec3, colour: [f32; 4], texcoord: [f32; 2]) -> GpuVertex {
     GpuVertex {
         position: p.to_array(),
         normal: [0.0, 0.0, 1.0],
         colour,
-        texcoord: [u, v],
+        texcoord,
         lit: 0.0,
         ..bytemuck::Zeroable::zeroed()
     }

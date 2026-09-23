@@ -1,20 +1,35 @@
-//! The absorb hull overlay's drawables: one per craft, the hull redrawn under
-//! `absorb_surface.mip` for the second after that craft absorbs a pickup.
+//! The two hull overlays' drawables, one of each per craft: the hull redrawn
+//! under `absorb_surface.mip` for the second after that craft absorbs a
+//! pickup, and under `leachbeam_surface.mip` while that craft's own LeachBeam
+//! pulses.
 //!
-//! The picture is `oag_render::hull_overlay`'s; this is only the per-frame
-//! half - where it is written, when it is drawn - kept out of `frame.rs`
-//! under the 1,000-line rule.
+//! The picture is `oag_render::hull_overlay`'s - one draw routine,
+//! `HullOverlay_Submit`, serves both, and only the texture and the pulse
+//! differ; this is only the per-frame half - where they are written, when
+//! they are drawn - kept out of `frame.rs` under the 1,000-line rule.
 
 use super::*;
 
+/// Which overlay a pass is over.
+#[derive(Clone, Copy)]
+enum Overlay {
+    Absorb,
+    LeachBeam,
+}
+
 impl Scene {
-    /// The slots whose overlay draws this frame, with its pulse.
-    fn absorb_overlays<'a>(
+    /// The slots whose `which` overlay draws this frame, with its pulse.
+    fn hull_overlays<'a>(
         &'a self,
         race: &'a Race,
+        which: Overlay,
     ) -> impl Iterator<Item = (usize, &'a Drawable, f32)> + 'a {
         let drawn = usize::from(race.ship_count());
-        self.absorb_overlay
+        let drawables = match which {
+            Overlay::Absorb => &self.absorb_overlay[0],
+            Overlay::LeachBeam => &self.absorb_overlay[1],
+        };
+        drawables
             .iter()
             .enumerate()
             .take(drawn)
@@ -23,7 +38,11 @@ impl Scene {
                 if !race.ship_active(slot) || (slot == 0 && !race.draws_own_ship()) {
                     return None;
                 }
-                Some((slot, overlay, race.absorb_overlay_pulse(slot)?))
+                let pulse = match which {
+                    Overlay::Absorb => race.absorb_overlay_pulse(slot),
+                    Overlay::LeachBeam => race.leach_overlay_pulse(slot),
+                };
+                Some((slot, overlay, pulse?))
             })
     }
 
@@ -40,20 +59,22 @@ impl Scene {
         prev: &motion::Snapshot,
         scratch: &mut Vec<mesh::GpuVertex>,
     ) {
-        for (slot, overlay, pulse) in self.absorb_overlays(race) {
-            overlay.write(
-                queue,
-                view_projection,
-                race.ship_model_matrix_of(slot),
-                prev_vp * prev.ship(slot, race),
-            );
-            let a = oag_render::hull_overlay::alpha(pulse);
-            overlay.write_overlay(
-                queue,
-                oag_render::hull_overlay::tint(a),
-                oag_render::hull_overlay::scroll(pulse),
-                scratch,
-            );
+        for which in [Overlay::Absorb, Overlay::LeachBeam] {
+            for (slot, overlay, pulse) in self.hull_overlays(race, which) {
+                overlay.write(
+                    queue,
+                    view_projection,
+                    race.ship_model_matrix_of(slot),
+                    prev_vp * prev.ship(slot, race),
+                );
+                let a = oag_render::hull_overlay::alpha(pulse);
+                overlay.write_overlay(
+                    queue,
+                    oag_render::hull_overlay::tint(a),
+                    oag_render::hull_overlay::scroll(pulse),
+                    scratch,
+                );
+            }
         }
     }
 
@@ -65,8 +86,10 @@ impl Scene {
         pass: &mut wgpu::RenderPass<'_>,
         stats: &mut SceneStats,
     ) {
-        for (_, overlay, _) in self.absorb_overlays(race) {
-            stats.add(overlay.draw_overlay(pass));
+        for which in [Overlay::Absorb, Overlay::LeachBeam] {
+            for (_, overlay, _) in self.hull_overlays(race, which) {
+                stats.add(overlay.draw_overlay(pass));
+            }
         }
     }
 }

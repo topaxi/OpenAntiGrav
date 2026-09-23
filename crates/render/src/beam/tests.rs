@@ -1,8 +1,28 @@
 use super::*;
 use oag_core::math::Vec3;
 
+const DT: f32 = 1.0 / 60.0;
+
 fn rng() -> Rng {
     Rng::new(1)
+}
+
+/// A beam fired down `-Z` by an upright craft, seen by a camera behind it.
+fn frame(target: Vec3) -> Frame {
+    Frame {
+        owner: Vec3::ZERO,
+        target,
+        owner_right: Vec3::X,
+        owner_up: Vec3::Y,
+        camera_right: Vec3::X,
+        camera_up: Vec3::Y,
+        range: 250.0,
+        alpha: 1.0,
+    }
+}
+
+fn position(vertex: &GpuVertex) -> Vec3 {
+    Vec3::from_array(vertex.position)
 }
 
 #[test]
@@ -24,124 +44,242 @@ fn a_non_positive_range_does_not_divide_by_zero() {
 #[test]
 fn coincident_craft_draw_nothing() {
     let ribbon = Ribbon::new(&mut rng());
-    let vertices = build(&ribbon, Vec3::ZERO, Vec3::ZERO, 250.0, 1.0);
-    assert!(vertices.is_empty());
+    assert!(build(&ribbon, &frame(Vec3::ZERO)).is_empty());
 }
 
 #[test]
-fn the_strip_is_two_crossed_ribbons_of_matching_length() {
+fn the_vertex_count_is_submit_strips_own() {
     let ribbon = Ribbon::new(&mut rng());
-    let owner = Vec3::new(0.0, 0.0, 0.0);
-    let target = Vec3::new(100.0, 0.0, 0.0);
-    let range = 250.0;
-    let vertices = build(&ribbon, owner, target, range, 1.0);
-
-    let segments = segment_count((target - owner).length(), range) as usize;
-    // Two strips, `segments + 1` pairs each - `LeachBeam_SubmitStrip`'s own
-    // `(segment_count*2+2)*2` vertex count.
-    assert_eq!(vertices.len(), 4 * (segments + 1));
+    let target = Vec3::new(0.0, 0.0, -100.0);
+    let segments = segment_count(100.0, 250.0) as usize;
+    let vertices = build(&ribbon, &frame(target));
+    // `(segment_count * 2 + 2) * 2`.
+    assert_eq!(vertices.len(), (segments * 2 + 2) * 2);
     assert!(vertices.len() <= MAX_VERTICES);
 }
 
 #[test]
-fn both_chain_endpoints_are_alpha_zero_on_every_strip() {
+fn the_two_strips_widen_along_the_cameras_right_and_up() {
     let ribbon = Ribbon::new(&mut rng());
-    let owner = Vec3::new(0.0, 0.0, 0.0);
-    let target = Vec3::new(300.0, 0.0, 0.0);
-    let vertices = build(&ribbon, owner, target, 250.0, 1.0);
-    let segments = segment_count((target - owner).length(), 250.0) as usize;
-    let pairs_per_strip = segments + 1;
-
-    for strip in 0..2 {
-        let base = strip * pairs_per_strip * 2;
-        // First pair of this strip.
-        assert_eq!(vertices[base].colour[3], 0.0);
-        assert_eq!(vertices[base + 1].colour[3], 0.0);
-        // Last pair of this strip.
-        let last = base + (pairs_per_strip - 1) * 2;
-        assert_eq!(vertices[last].colour[3], 0.0);
-        assert_eq!(vertices[last + 1].colour[3], 0.0);
-    }
-}
-
-#[test]
-fn interior_vertices_carry_the_callers_alpha() {
-    let ribbon = Ribbon::new(&mut rng());
-    let owner = Vec3::new(0.0, 0.0, 0.0);
-    let target = Vec3::new(300.0, 0.0, 0.0);
-    let vertices = build(&ribbon, owner, target, 250.0, 0.42);
-    let segments = segment_count((target - owner).length(), 250.0) as usize;
+    let vertices = build(&ribbon, &frame(Vec3::new(0.0, 0.0, -100.0)));
+    let segments = segment_count(100.0, 250.0) as usize;
+    // Pair 1 of the first strip, and pair 1 of the second.
+    let first = position(&vertices[3]) - position(&vertices[2]);
+    let second = 2 * (segments + 2);
+    let second = position(&vertices[second + 1]) - position(&vertices[second]);
     assert!(
-        segments > 2,
-        "need an interior segment for this to test anything"
+        (first - Vec3::X * 2.0 * HALF_WIDTH).length() < 1e-4,
+        "{first}"
     );
-    // Index 2/3 is the second pair of the first strip - interior when
-    // `segments > 1`.
-    assert_eq!(vertices[2].colour[3], 0.42);
-    assert_eq!(vertices[3].colour[3], 0.42);
+    assert!(
+        (second - Vec3::Y * 2.0 * HALF_WIDTH).length() < 1e-4,
+        "{second}"
+    );
 }
 
 #[test]
-fn the_two_rails_of_a_pair_straddle_the_spine_by_the_half_width() {
+fn both_strips_share_one_displaced_chain() {
     let ribbon = Ribbon::new(&mut rng());
-    let owner = Vec3::new(0.0, 0.0, 0.0);
-    let target = Vec3::new(100.0, 0.0, 0.0);
-    let vertices = build(&ribbon, owner, target, 250.0, 1.0);
-    // A pair's two rails are `2 * HALF_WIDTH` apart, whatever the wiggle did
-    // to the shared centre.
-    let a = Vec3::from_array(vertices[0].position);
-    let b = Vec3::from_array(vertices[1].position);
-    assert!(((a - b).length() - 2.0 * HALF_WIDTH).abs() < 1e-4);
-}
-
-#[test]
-fn a_beam_fired_in_any_direction_still_builds_two_finite_axes() {
-    // The straight-up case is the one `cross_axes` has a special branch for.
-    let ribbon = Ribbon::new(&mut rng());
-    let owner = Vec3::new(0.0, 0.0, 0.0);
-    let target = Vec3::new(0.0, 100.0, 0.0);
-    let vertices = build(&ribbon, owner, target, 250.0, 1.0);
-    assert!(!vertices.is_empty());
-    for vertex in &vertices {
-        for component in vertex.position {
-            assert!(component.is_finite());
-        }
+    let vertices = build(&ribbon, &frame(Vec3::new(0.0, 0.0, -100.0)));
+    let segments = segment_count(100.0, 250.0) as usize;
+    for i in 0..segments.saturating_sub(1) {
+        let a = (position(&vertices[2 * i]) + position(&vertices[2 * i + 1])) / 2.0;
+        let pair = segments + 1 + i;
+        let b = (position(&vertices[2 * pair]) + position(&vertices[2 * pair + 1])) / 2.0;
+        assert!((a - b).length() < 1e-4, "point {i}: {a} vs {b}");
     }
 }
 
 #[test]
-fn advance_wraps_the_scroll_phase_into_zero_one() {
-    let mut ribbon = Ribbon::new(&mut rng());
+fn the_chain_is_displaced_off_the_straight_line_but_starts_on_the_shooter() {
+    let ribbon = Ribbon::new(&mut rng());
+    let vertices = build(&ribbon, &frame(Vec3::new(0.0, 0.0, -250.0)));
+    let segments = segment_count(250.0, 250.0) as usize;
+    let centre =
+        |pair: usize| (position(&vertices[2 * pair]) + position(&vertices[2 * pair + 1])) / 2.0;
+    assert!(centre(0).length() < 1e-4);
+    // Off the Z axis somewhere, and never by more than the two amplitudes
+    // together allow.
+    let offsets: Vec<f32> = (1..segments)
+        .map(|i| centre(i).truncate().length())
+        .collect();
+    assert!(offsets.iter().any(|&d| d > 0.05), "{offsets:?}");
+    let bound = AMPLITUDE_MAX * (1.0 + SECOND_AXIS_SCALE) + 1e-3;
+    assert!(offsets.iter().all(|&d| d <= bound), "{offsets:?}");
+}
+
+#[test]
+fn alpha_is_zero_at_the_first_and_second_to_last_points_and_full_at_the_target() {
+    let ribbon = Ribbon::new(&mut rng());
+    let mut f = frame(Vec3::new(0.0, 0.0, -300.0));
+    f.alpha = 0.42;
+    let vertices = build(&ribbon, &f);
+    let n = segment_count(300.0, 250.0) as usize;
+    let alpha = |pair: usize| vertices[2 * pair].colour[3];
+    for strip in 0..2 {
+        let base = strip * (n + 1);
+        assert_eq!(alpha(base), 0.0);
+        assert_eq!(alpha(base + 1), 0.42);
+        assert_eq!(alpha(base + n - 1), 0.0);
+    }
+    // Only the second strip reaches the last point, at the caller's alpha.
+    assert_eq!(alpha(2 * n + 1), 0.42);
+}
+
+#[test]
+fn the_bridge_between_the_strips_has_zero_area() {
+    let ribbon = Ribbon::new(&mut rng());
+    let vertices = build(&ribbon, &frame(Vec3::new(0.0, 0.0, -100.0)));
+    let n = segment_count(100.0, 250.0) as usize;
+    assert_eq!(vertices[2 * n].position, vertices[2 * n - 1].position);
+    assert_eq!(vertices[2 * n + 1].position, vertices[2 * n + 2].position);
+}
+
+#[test]
+fn u_flips_every_pair_and_v_runs_across_the_strip() {
+    let ribbon = Ribbon::new(&mut rng());
+    let vertices = build(&ribbon, &frame(Vec3::new(0.0, 0.0, -100.0)));
+    for (pair, rails) in vertices.chunks(2).enumerate() {
+        let u = (pair & 1) as f32;
+        assert_eq!(rails[0].texcoord, [u, 0.0], "pair {pair}");
+        assert_eq!(rails[1].texcoord, [u, 1.0], "pair {pair}");
+    }
+}
+
+#[test]
+fn the_scroll_phase_slides_u_and_stays_in_zero_one() {
     let mut r = rng();
+    let mut ribbon = Ribbon::new(&mut r);
     for _ in 0..1000 {
-        ribbon.advance(1.0 / 60.0, &mut r);
+        ribbon.advance(DT, 100.0, 250.0, &mut r);
         assert!((0.0..1.0).contains(&ribbon.scroll_phase));
     }
+    let vertices = build(&ribbon, &frame(Vec3::new(0.0, 0.0, -100.0)));
+    assert_eq!(vertices[0].texcoord[0], ribbon.scroll_phase);
 }
 
 #[test]
-fn advance_rerolls_every_bucket_at_least_once_given_enough_time() {
+fn the_kinks_travel_one_segment_a_tick() {
+    let mut r = rng();
+    let mut ribbon = Ribbon::new(&mut r);
+    let f = frame(Vec3::new(0.0, 0.0, -250.0));
+    // Past the first pulse, whose re-roll would change a bucket under us.
+    ribbon.advance(DT, 250.0, 250.0, &mut r);
+    ribbon.advance(DT, 250.0, 250.0, &mut r);
+    let before = build(&ribbon, &f);
+    ribbon.advance(DT, 250.0, 250.0, &mut r);
+    let after = build(&ribbon, &f);
+    // The first axis is `X` for this frame: point `i + 1`'s push last tick is
+    // point `i`'s now, less the step between them.
+    let push =
+        |v: &[GpuVertex], i: usize| (position(&v[2 * i]).x + position(&v[2 * i + 1]).x) / 2.0;
+    for i in 1..30 {
+        assert!(
+            (push(&after, i) - push(&before, i + 1)).abs() < 1e-4,
+            "point {i}"
+        );
+    }
+}
+
+#[test]
+fn the_pulse_block_runs_every_wrap_and_rearms_the_strength_once_a_second() {
+    let mut r = rng();
+    let mut ribbon = Ribbon::new(&mut r);
+    let segments = segment_count(50.0, 250.0);
+    let mut pulses = Vec::new();
+    let mut rearmed = Vec::new();
+    let mut last = ribbon.last_pulse;
+    for tick in 0..240 {
+        if ribbon.advance(DT, 50.0, 250.0, &mut r) {
+            pulses.push(tick);
+        }
+        if ribbon.last_pulse != last {
+            rearmed.push(tick);
+            last = ribbon.last_pulse;
+        }
+    }
+    assert_eq!(pulses[0], 0, "the first tick is a pulse");
+    assert!(
+        pulses.windows(2).all(|w| w[1] - w[0] == segments),
+        "{pulses:?}"
+    );
+    assert_eq!(rearmed[0], 0);
+    for w in rearmed.windows(2) {
+        assert!(w[1] - w[0] > 60, "{rearmed:?}");
+        assert!(w[1] - w[0] <= 60 + segments, "{rearmed:?}");
+    }
+}
+
+#[test]
+fn the_pulse_strength_is_the_hull_overlays_own_ramp() {
+    let mut r = rng();
+    let mut ribbon = Ribbon::new(&mut r);
+    // The pulse tick itself draws nothing (`fade > 0` gate).
+    ribbon.advance(DT, 50.0, 250.0, &mut r);
+    assert_eq!(ribbon.pulse_strength(), None);
+    for _ in 0..30 {
+        ribbon.advance(DT, 50.0, 250.0, &mut r);
+    }
+    let strength = ribbon.pulse_strength().expect("inside the window");
+    assert!((strength - 1.0).abs() < 1e-3, "{strength}");
+}
+
+#[test]
+fn the_energy_point_walks_from_the_target_to_the_shooter() {
+    let mut r = rng();
+    let mut ribbon = Ribbon::new(&mut r);
+    let target = Vec3::new(0.0, 0.0, -50.0);
+    let segments = segment_count(50.0, 250.0);
+    let step = 50.0 / segments as f32;
+    let mut seen = Vec::new();
+    for _ in 0..segments {
+        ribbon.advance(DT, 50.0, 250.0, &mut r);
+        seen.push(-ribbon.energy_point(Vec3::ZERO, target, 250.0).unwrap().z);
+    }
+    assert!((seen[0] - (50.0 - step)).abs() < 1e-3, "{seen:?}");
+    assert!(seen.last().unwrap().abs() < 1e-3, "{seen:?}");
+    assert!(seen.windows(2).all(|w| w[1] < w[0]), "{seen:?}");
+}
+
+#[test]
+fn only_a_short_beam_rerolls_and_only_one_fixed_bucket() {
     let mut r = rng();
     let mut ribbon = Ribbon::new(&mut r);
     let before = ribbon.amplitudes;
-    // Continuing the same stream rather than a fresh `Rng::new(1)` - two
-    // instances seeded alike would replay construction's own draws and make
-    // every reroll land on the value it is replacing, passing this test for
-    // the wrong reason.
-    //
-    // AMPLITUDE_BUCKETS seconds at a one-second cadence covers every bucket
-    // once, with a tick of slack for the timer's own rounding.
-    let ticks = ((AMPLITUDE_BUCKETS as f32 + 1.0) / (1.0 / 60.0)) as u32;
-    for _ in 0..ticks {
-        ribbon.advance(1.0 / 60.0, &mut r);
+    // Full range: 36 segments, bucket `ceil(35 / 3) + 1 = 13` is past the
+    // table, so the original re-rolls nothing.
+    for _ in 0..200 {
+        ribbon.advance(DT, 250.0, 250.0, &mut r);
     }
-    assert_ne!(before, ribbon.amplitudes);
+    assert_eq!(before, ribbon.amplitudes);
+    // Thirty segments: bucket `ceil(29 / 3) + 1 = 11`, and only it.
+    let distance = 29.5 / 36.0 * 250.0;
+    assert_eq!(segment_count(distance, 250.0), 30);
+    for _ in 0..200 {
+        ribbon.advance(DT, distance, 250.0, &mut r);
+    }
+    for (i, (was, now)) in before.iter().zip(ribbon.amplitudes).enumerate() {
+        assert_eq!(*was != now, i == 11, "bucket {i}");
+    }
 }
 
 #[test]
-fn amplitude_draws_stay_in_the_recovered_range() {
+fn amplitude_draws_stay_in_the_recovered_range_and_the_extra_entry_is_the_half_width() {
     let ribbon = Ribbon::new(&mut rng());
-    for amplitude in ribbon.amplitudes {
-        assert!((0.0..=AMPLITUDE_MAX).contains(&amplitude));
+    for amplitude in &ribbon.amplitudes[..AMPLITUDE_BUCKETS] {
+        assert!((0.0..=AMPLITUDE_MAX).contains(amplitude));
+    }
+    assert_eq!(ribbon.amplitudes[AMPLITUDE_BUCKETS], HALF_WIDTH);
+}
+
+#[test]
+fn a_beam_fired_along_the_shooters_own_axes_still_builds_finite_geometry() {
+    // The step parallel to `up` makes the first axis degenerate - the
+    // original's own zero-length guard - and nothing may go non-finite.
+    let ribbon = Ribbon::new(&mut rng());
+    for target in [Vec3::new(0.0, 100.0, 0.0), Vec3::new(100.0, 0.0, 0.0)] {
+        let vertices = build(&ribbon, &frame(target));
+        assert!(!vertices.is_empty());
+        assert!(vertices.iter().flat_map(|v| v.position).all(f32::is_finite));
     }
 }
