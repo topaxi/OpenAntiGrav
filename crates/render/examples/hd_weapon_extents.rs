@@ -1,5 +1,8 @@
-//! Prints the model-space extents of HD's weapon detonation models, as built
-//! by `mesh::rcs::build` - the path `oag_game`'s weapon loader takes.
+//! Prints the model-space extents, node scales over time, materials, authored
+//! blends and texture statistics of HD's weapon detonation models, as built
+//! by `mesh::rcs::build` - the path `oag_game`'s weapon loader takes. Set
+//! `OAG_EXTENTS_PNG_DIR` to also write each texture out as a PNG. See
+//! `docs/ghidra/functions/ps3-hdfury-eu/plasma.md`, 2026-09-23.
 //!
 //! ```sh
 //! cargo run -p oag-render --example hd_weapon_extents
