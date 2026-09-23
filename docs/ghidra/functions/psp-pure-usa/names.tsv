@@ -111,3 +111,4 @@
 0x08952c00	function	TitleScreen_AssignWordmarkTexture	90	../psp-pure-eu/title-screen.md
 0x088bb770	function	BackgroundController_UpdateImages	80	../psp-pure-eu/title-screen.md
 0x088ba694	function	Animation_ParseValuesOrKey	80	../psp-pure-eu/title-screen.md
+0x088cb0cc	function	Movie_ParseAttributes	85	../psp-pure-eu/movie-localised-suffix.md

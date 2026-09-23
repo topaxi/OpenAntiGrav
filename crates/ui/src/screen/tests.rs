@@ -125,12 +125,12 @@ fn a_screen_keeps_every_movie_widget_it_declares() {
 "#,
     );
     let screen = screens.by_name("Intro Screen").unwrap();
-    let names: Vec<String> = screen.movies.iter().map(Movie::entry_name).collect();
+    let names: Vec<String> = screen.movies.iter().map(|m| m.entry_name("EU")).collect();
     assert_eq!(
         names,
         vec![
-            r"Data\Movies\IntroMovieP1_US.PMF",
-            r"Data\Movies\WoFMVNew_US.PMF",
+            r"Data\Movies\IntroMovieP1_EU.PMF",
+            r"Data\Movies\WoFMVNew_EU.PMF",
             r"Data\Movies\Profile_part1.PMF",
         ],
         "document order, and none of them dropped"
@@ -140,7 +140,7 @@ fn a_screen_keeps_every_movie_widget_it_declares() {
     let found = screen
         .movies
         .iter()
-        .find(|m| m.entry_name() == r"Data\Movies\WoFMVNew_US.PMF")
+        .find(|m| m.entry_name("EU") == r"Data\Movies\WoFMVNew_EU.PMF")
         .expect("the second boot movie's widget");
     assert!(found.sound);
     assert!(
@@ -154,13 +154,20 @@ fn a_screen_keeps_every_movie_widget_it_declares() {
 fn the_movie_filename_is_built_from_src() {
     let screens = Screens::from_xml(SAMPLE);
     let movie = screens.by_name("LogoFMV").unwrap().movies[0].clone();
-    assert_eq!(movie.entry_name(), r"Data\Movies\Intro.PMF");
+    // `region` is ignored entirely when the widget is not `localised`.
+    assert_eq!(movie.entry_name("EU"), r"Data\Movies\Intro.PMF");
+    assert_eq!(movie.entry_name("US"), r"Data\Movies\Intro.PMF");
 
     let localised = Movie {
         localised: true,
         ..movie
     };
-    assert_eq!(localised.entry_name(), r"Data\Movies\Intro_US.PMF");
+    // A `localised` widget takes whichever region the caller resolved -
+    // `Movie_ParseAttributes` bakes exactly one such suffix per pressing's own
+    // executable rather than reading one at runtime. See
+    // `docs/ghidra/functions/psp-pure-eu/movie-localised-suffix.md`.
+    assert_eq!(localised.entry_name("EU"), r"Data\Movies\Intro_EU.PMF");
+    assert_eq!(localised.entry_name("US"), r"Data\Movies\Intro_US.PMF");
 }
 
 #[test]
@@ -176,13 +183,13 @@ fn a_ps2_src_already_names_its_container() {
             src: src.to_string(),
             ..template.clone()
         };
-        assert_eq!(movie.entry_name(), src);
+        assert_eq!(movie.entry_name("EU"), src);
         // `localised` must not reintroduce the suffix either.
         let localised = Movie {
             localised: true,
             ..movie
         };
-        assert_eq!(localised.entry_name(), src);
+        assert_eq!(localised.entry_name("EU"), src);
     }
 }
 
@@ -193,7 +200,7 @@ fn an_extensionless_src_still_gets_the_psp_suffix() {
     let screens = Screens::from_xml(SAMPLE);
     let movie = screens.by_name("LogoFMV").unwrap().movies[0].clone();
     assert!(!has_movie_extension(&movie.src));
-    assert_eq!(movie.entry_name(), r"Data\Movies\Intro.PMF");
+    assert_eq!(movie.entry_name("EU"), r"Data\Movies\Intro.PMF");
 }
 
 #[test]

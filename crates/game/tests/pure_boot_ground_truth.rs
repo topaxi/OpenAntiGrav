@@ -20,12 +20,16 @@
 //! # Both pressings, not one
 //!
 //! `boot_ground_truth.rs` reads a single Pulse image. This one runs everything
-//! over **both** Pure pressings, because the movie entry names are USA-shaped by
-//! construction: `Movie::entry_name` appends `_US.PMF` for every `localised`
-//! widget on every source. Whether the EU disc really carries `_US`-suffixed
-//! movies is a measurement, and
-//! [`the_two_pressings_name_their_movies_the_same_way`] is the canary that keeps
-//! it one - it fails with the name it could not find.
+//! over **both** Pure pressings, because each pressing's own executable bakes a
+//! different, region-suffixed literal into every `localised="true"` `<Movie>`
+//! widget's resolved name - `Movie_ParseAttributes`, on the same evidence class
+//! `docs/ghidra/functions/psp-pure-eu/title-screen.md` already found for
+//! `TitleFrame`'s wordmark; see
+//! `docs/ghidra/functions/psp-pure-eu/movie-localised-suffix.md`.
+//! `oag_pure::frontend::localised_movie_region` resolves which suffix a
+//! source's own serial takes, and [`each_pressing_resolves_its_own_cut`] is the
+//! canary that keeps it - it fails with the name it could not find rather than
+//! leaving a pressing silently picture-less.
 //!
 //! It runs with `no_video`, so it never invokes `ffmpeg` and never writes a
 //! cache. What is tested is the sequencing and the data, not the transcode.
@@ -61,6 +65,14 @@ fn images() -> Vec<(&'static str, PathBuf)> {
         }
     }
     found
+}
+
+/// Which region a labelled image resolves its `localised` movies to,
+/// restated by label rather than read back off a loaded `Boot` -
+/// `oag_pure::frontend::localised_movie_region`'s own match on the serial,
+/// mirrored here because `images()` already names the pressing.
+fn expected_region(label: &str) -> &'static str {
+    if label == "pure-psp-usa" { "US" } else { "EU" }
 }
 
 /// A default boot of one pressing, with **no `movie` override**.
@@ -121,7 +133,7 @@ fn the_developer_publisher_screen_plays_the_reel() {
             loaded.movie.is_some(),
             "{label}: the reel is on the boot path and has to load"
         );
-        let named = format!("{}: ", oag_pure::names::INTRO_MOVIE);
+        let named = format!("{}: ", oag_pure::names::intro_movie(expected_region(label)));
         assert!(
             loaded.report.iter().any(|line| line.starts_with(&named)),
             "{label}: the report names the reel it opened; report was {:#?}",
@@ -276,26 +288,40 @@ fn pures_second_boot_movie_is_the_one_the_disc_plays() {
             loaded.after_language_movie.is_some(),
             "{label}: the FMV Intro screen exists, so its movie has to load"
         );
+        let region = expected_region(label);
         assert!(
             loaded
                 .report
                 .iter()
-                .any(|line| line.contains("WoFMVNew_US.PMF")),
+                .any(|line| line.contains(oag_pure::names::fmv_intro_movie(region))),
             "{label}: the report names the second movie; was {:#?}",
             loaded.report
         );
         let movie = loaded.after_language_movie.as_ref().unwrap();
-        // Measured 2026-08-10 by extracting both movies from both pressings and
-        // reading their PSMF stream descriptors: 480x272, byte-identical
-        // descriptors, and `WoFMVNew_US.PMF` byte-identical across regions.
+        // Measured 2026-08-10 by extracting `WoFMVNew_US.PMF` from both
+        // pressings and reading its PSMF stream descriptor: 480x272,
+        // byte-identical, 2848 frames - before the region-suffix fix, when
+        // both discs loaded that one entry regardless of pressing.
+        //
+        // **2026-09-23, re-measured through each pressing's own resolved
+        // cut**: the EU disc's `WoFMVNew_EU.PMF` is still 480x272 but decodes
+        // to 2901 frames, not 2848 - the two cuts share a frame size but not a
+        // duration, most likely the EU cut's own regional card holding the
+        // screen longer. `frame_count` is asserted per region rather than
+        // assumed shared for this reason.
         assert_eq!(
             (movie.width, movie.height),
             (480, 272),
             "{label}: measured geometry"
         );
+        let expected_frames = match region {
+            "US" => 2848,
+            // Measured 2026-09-23 off `pure-psp-eu.chd`'s own `WoFMVNew_EU.PMF`.
+            _ => 2901,
+        };
         assert_eq!(
-            movie.frame_count, 2848,
-            "{label}: 2848 frames, which the disc's own FMVFrameCount global calls 2847"
+            movie.frame_count, expected_frames,
+            "{label}: measured frame count for the {region} cut"
         );
     }
 }
@@ -309,6 +335,7 @@ fn pures_second_movie_declares_sound() {
         // movie carries `sound="true"`, which is what makes wiring its own track
         // correct rather than a guess. `no_video` means nothing was decoded, so
         // the PCM itself is absent here by construction.
+        let region = expected_region(label);
         let widget = loaded
             .frontend
             .screens()
@@ -316,8 +343,8 @@ fn pures_second_movie_declares_sound() {
             .flat_map(|screen| screen.movies.iter())
             .find(|movie| {
                 movie
-                    .entry_name()
-                    .eq_ignore_ascii_case(oag_pure::names::FMV_INTRO_MOVIE)
+                    .entry_name(region)
+                    .eq_ignore_ascii_case(oag_pure::names::fmv_intro_movie(region))
             })
             .unwrap_or_else(|| panic!("{label}: no widget names the second boot movie"));
         assert!(
@@ -342,10 +369,12 @@ fn pure_ships_no_menu_backdrop() {
 
 #[test]
 #[ignore = "needs a disc image in data/images/"]
-fn the_two_pressings_name_their_movies_the_same_way() {
-    // The canary for `Movie::entry_name`'s unconditional `_US.PMF`. If the EU
-    // pressing ever spells its movies differently, this fails with the name it
-    // could not find rather than leaving the EU boot silently picture-less.
+fn each_pressing_resolves_its_own_cut() {
+    // The canary for the region-suffix fix: `Movie::entry_name` used to append
+    // an unconditional `_US`, so the EU disc's own `_EU.PMF` entries were never
+    // asked for at all. If a pressing's own resolved cut ever stops existing,
+    // this fails with the name it could not find rather than leaving that
+    // pressing's boot silently picture-less.
     let found = images();
     if found.len() < 2 {
         println!("skipping: needs both Pure pressings");
@@ -353,11 +382,12 @@ fn the_two_pressings_name_their_movies_the_same_way() {
     }
     for (label, image) in found {
         let loaded = load(&image);
+        let region = expected_region(label);
         assert!(
             loaded.after_language_movie.is_some(),
             "{label}: {} did not resolve on this pressing; the localisation suffix rule \
              is what to re-measure, not the boot sequence",
-            oag_pure::names::FMV_INTRO_MOVIE
+            oag_pure::names::fmv_intro_movie(region)
         );
     }
 }

@@ -87,6 +87,7 @@ fn the_media_plan_counts_two_loads_per_movie_and_one_backdrop() {
     let nothing = MediaPlan {
         movie_name: None,
         second_movie_name: None,
+        movie_region: oag_ui::screen::DEFAULT_REGION,
         menu_backdrop: None,
     };
     assert_eq!(nothing.loads(), 0, "nothing named is nothing to count");

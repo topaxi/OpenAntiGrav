@@ -339,6 +339,8 @@ pub struct Shell {
     pub movie_name: Option<String>,
     /// The chain's second movie, on the same terms.
     pub second_movie_name: Option<&'static str>,
+    /// See [`resolve_movie_region`].
+    pub movie_region: &'static str,
     /// Which leg the sequence boots into, carried for [`assemble`].
     pub leg: oag_ui::frontend::Leg,
     /// What to print. [`assemble`] appends its own.
@@ -352,6 +354,7 @@ impl Shell {
         MediaPlan {
             movie_name: self.movie_name.clone(),
             second_movie_name: self.second_movie_name,
+            movie_region: self.movie_region,
             menu_backdrop: self.profile.menu_backdrop,
         }
     }
@@ -486,12 +489,14 @@ pub fn load_shell(
             archives.layout.serial.as_deref(),
         ));
     }
+    let movie_region = resolve_movie_region(title, archives.layout.serial.as_deref());
     let mut screens = load_screens(
         &mut archives,
         front_end.root,
         title.plugin_definition,
         profile.fallback_globals,
         &fallback_images,
+        movie_region,
         &mut report,
     )?;
     // A touch front end's screens are in the root's includes - see
@@ -697,15 +702,18 @@ pub fn load_shell(
         .copied()
         .filter(|step| step.movie.is_some())
         .collect();
+    let (default_movie_name, second_movie_name) = resolve_pure_movie_region(
+        title,
+        movie_region,
+        playing.first().and_then(|step| step.movie),
+        playing.get(1).and_then(|step| step.movie),
+    );
     // `--movie` overrides whichever movie the sequence draws first, so the flag
     // stays a preview tool on a title whose own boot screen is silent.
-    let movie_name = options.movie.clone().or_else(|| {
-        playing
-            .first()
-            .and_then(|step| step.movie)
-            .map(str::to_string)
-    });
-    let second_movie_name = playing.get(1).and_then(|step| step.movie);
+    let movie_name = options
+        .movie
+        .clone()
+        .or_else(|| default_movie_name.map(str::to_string));
     // The grid this source authors in, needed before the front end is built so
     // that a boot with no movie falls back to the *source's* shape rather than
     // to the PSP's. `frontend.set_space` takes the same value.
@@ -779,6 +787,7 @@ pub fn load_shell(
             walked,
             movie_name,
             second_movie_name,
+            movie_region,
             leg: options.leg,
             report,
         },
@@ -839,10 +848,12 @@ pub fn load_media(
     // Straight after the movie, so its report lines stay together, and while
     // `screens` is still in hand: the widget that decides whether this movie is
     // heard at all is in that XML.
+    let region = plan.movie_region;
     let movie_sound = match &plan.movie_name {
         Some(name) => {
             starting(progress, &format!("{name} (sound)"));
-            let sound = load_movie_sound(movie.as_ref(), screens, name, options, &mut report);
+            let sound =
+                load_movie_sound(movie.as_ref(), screens, name, region, options, &mut report);
             loaded(progress);
             sound
         }
@@ -888,6 +899,7 @@ pub fn load_media(
                 after_language_movie.as_ref(),
                 screens,
                 name,
+                region,
                 options,
                 &mut report,
             );
@@ -921,6 +933,8 @@ pub fn load_media(
 pub struct MediaPlan {
     pub movie_name: Option<String>,
     pub second_movie_name: Option<&'static str>,
+    /// See [`Shell::movie_region`].
+    pub movie_region: &'static str,
     pub menu_backdrop: Option<&'static str>,
 }
 
@@ -1072,6 +1086,7 @@ pub fn assemble(shell: Shell, media: Media) -> Boot {
         walked,
         movie_name: _,
         second_movie_name: _,
+        movie_region: _,
         leg: _,
         mut report,
     } = shell;
@@ -1338,6 +1353,7 @@ fn load_movie_sound(
     movie: Option<&Movie>,
     screens: &Screens,
     movie_name: &str,
+    movie_region: &str,
     options: &Options,
     report: &mut Vec<String>,
 ) -> Option<crate::at3::Pcm> {
@@ -1369,7 +1385,12 @@ fn load_movie_sound(
     let silent = screens
         .with_movies()
         .flat_map(|screen| screen.movies.iter())
-        .any(|widget| widget.entry_name().eq_ignore_ascii_case(movie_name) && !widget.sound);
+        .any(|widget| {
+            widget
+                .entry_name(movie_region)
+                .eq_ignore_ascii_case(movie_name)
+                && !widget.sound
+        });
     if silent {
         report.push(format!(
             "  audio: {} channel(s) at {} Hz, muted - the widget playing it is sound=\"false\"",
@@ -1628,8 +1649,8 @@ mod steps;
 pub(crate) mod xml;
 
 use fonts::{load_font, load_menu_font, load_title_font};
-use movies::load_movie;
 pub use movies::{DEFAULT_BOOT_MOVIE, DEVPUB_REEL, EntryRef};
+use movies::{load_movie, resolve_movie_region, resolve_pure_movie_region};
 pub use progress::MediaProgress;
 use progress::{loaded, lock_media, starting, watching};
 use roster::{definitions, load_circuit_names, load_teams, load_tracks, load_zone_tracks};
