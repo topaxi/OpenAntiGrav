@@ -171,6 +171,7 @@ pub(super) fn grid(
             lod: options.lod,
             hull_overlay: oag_render::hull_overlay::DRAWN
                 && craft_title.name == oag_pulse::TITLE.name,
+            absorb_shell: craft_title.name == oag_hd::TITLE.name,
         },
         hull_variant,
         skin.as_deref(),

@@ -34,6 +34,7 @@
 //!   `ShipState::roll_phase` and the rotation built from it, read by both the
 //!   ship's own transform and the internal camera's up vector.
 
+pub mod absorb_shell;
 pub mod beam;
 pub mod camera;
 pub mod capture;

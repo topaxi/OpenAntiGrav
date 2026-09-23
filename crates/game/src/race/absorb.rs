@@ -164,9 +164,17 @@ impl Race {
     /// before it calls the feedback (`0x088455ac..b4`), and the Eliminator's
     /// `Ship_RefillLapShield` does not - so a lap refill bursts and never
     /// lights the hull. See `oag_render::hull_overlay`.
+    ///
+    /// HD's shell timer is stamped on **every** call, the lap refill included:
+    /// `FUN_000d9398` stores `craft+0x7a5c` after all of its branches. It only
+    /// draws on a craft whose livery loaded a shell, so the stamp is harmless
+    /// on every other title.
     pub(super) fn play_absorb_feedback(&mut self, slot: usize, pickup: bool) {
         if pickup && let Some(elapsed) = self.view.absorb_overlay.get_mut(slot) {
             *elapsed = Some(0.0);
+        }
+        if let Some(shell) = self.view.absorb_shell.get_mut(slot) {
+            shell.stamp();
         }
         self.sim.cues.push(crate::audio::sfx::CueEvent::new(
             crate::audio::sfx::Cue::Absorb,
@@ -198,6 +206,9 @@ impl Race {
             *elapsed = elapsed
                 .map(|seconds| seconds + self.sim.dt)
                 .filter(|seconds| *seconds <= oag_render::hull_overlay::WINDOW);
+        }
+        for shell in &mut self.view.absorb_shell {
+            shell.advance(self.sim.dt);
         }
         if self.view.absorb_bursts.is_empty() {
             return;
@@ -262,6 +273,14 @@ impl Race {
             .copied()
             .flatten()
             .and_then(oag_render::hull_overlay::pulse)
+    }
+
+    /// HD's absorb shell fade on `slot` this tick - the `ShieldColour` its
+    /// material reads - or `None` while the original hides the shell. See
+    /// [`oag_render::absorb_shell::AbsorbShell::fader`].
+    #[must_use]
+    pub fn absorb_shell_fader(&self, slot: usize) -> Option<f32> {
+        self.view.absorb_shell.get(slot)?.fader()
     }
 
     /// How many absorb bursts have ever started, for tests.

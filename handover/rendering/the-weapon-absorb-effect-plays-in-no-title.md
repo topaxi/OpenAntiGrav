@@ -1,10 +1,10 @@
-# The weapon-absorb effect: burst drawn on Pulse, Pure and HD, Pulse's hull overlay read and built but off
+# The weapon-absorb effect: burst on Pulse, Pure and HD, HD's absorb shell drawn, Pulse's hull overlay built but off
 
 2026-09-17. The user, who plays the originals, reported: "the weapon absorb
 animation/effect also does not animate/play in any title (the sfx plays
 though)."
 
-**2026-09-23: built, with two halves still missing on HD.**
+**2026-09-23: built. HD's absorb shell followed later the same day; its cockpit twin is still missing.**
 
 - **The burst.** `oag_game::race::absorb` fires `WO_WEAPON_ABSORB` on the
   title's own stagger, and it rides the locators. Both absorb paths call
@@ -36,15 +36,26 @@ Screenshots from the 2026-09-23 lane are in
 
 ## Open
 
-- **HD's burst is authored faint.** HD's own `wo_weapon_absorb.pob` has
-  0.06 units/tick streaks, 5-tick lives and alpha that peaks at 120 on a
-  0.37-alpha palette, and it plays exactly that. HD's prominent absorb
-  picture is almost certainly its **overlay**: each team's
-  `absorbeffect.vex`/`.rcsmodel` shell with a `*_hd_absorbinternal` material,
-  driven by the `AbsorbFader`/`AbsorbScroller` render parameters, and
-  plausibly timed by `craft+0x7a5c = 1.0`, which `Ship_PlayAbsorbFeedback`
-  writes. None of that is read. On HD the user's report is therefore only
-  half answered.
+- **HD's absorb shell: drawn since 2026-09-23 (later).** Every team's
+  `AbsorbEffect.vex`/`.rcsmodel` is drawn over the hull with
+  `hd_absorbinternal`'s own fragment program, its vertex alpha scaled by the
+  fade at `craft+0x7a50`. That fade relaxes a tenth of the way to `1.0` per
+  frame while the one-second timer at `+0x7a5c` runs, then back to `0`,
+  hidden at `0.01`. It was read on the EBOOT (`ShipAbsorbShell_Load`/`Show`/
+  `Step`/`Update`) and confirmed live on RPCS3 by writing the timer. See
+  [absorb-feedback.md](../../docs/ghidra/functions/ps3-hdfury-eu/absorb-feedback.md),
+  "The absorb shell". Frames: `~/.cache/oag/drive/reports/hd-absorb-overlay/`
+  (`hd-t*.png` against `hd-control-t*.png`, and the original's
+  `original-rpcs3-*.png`). **The brief's `AbsorbFader`/`AbsorbScroller` lead
+  was wrong**: no file on the disc declares either, and the shell reads
+  `ShieldColour`.
+  Still open on HD:
+  - the cockpit shell (`vr_absorbinternal_cockpit`, placed at `(0, 0, 7)`,
+    measured live) is not drawn;
+  - the reference frames are the pre-race flyby, not a real absorb in play,
+    and not the same team as ours;
+  - ours reads bluer than the original's white-lavender. Exposure and bloom
+    are the first suspects, and nothing has been measured.
 - **Nothing has been compared against the original's own absorb.** A PPSSPP
   capture of a Pulse absorb is the check that matters. It would settle three
   things: the burst's look at speed (world-space streaks trail the craft),
@@ -78,9 +89,11 @@ Screenshots from the 2026-09-23 lane are in
 
 ## Next Steps
 
-1. HD overlay: read how `absorbeffect.rcsmodel` is drawn, and who writes
-   `AbsorbFader`/`AbsorbScroller`. Start from `craft+0x7a5c`'s readers in
-   `/hdfury/EBOOT-ps3-hdfury-eu.elf`.
+1. HD: a real in-play absorb on RPCS3 (give the player a pickup and press
+   circle), with the chase camera, to compare against
+   `just play hd --race --give mine --input-script <absorb.inputs>`. The
+   method (private `XDG_CONFIG_HOME`/`XDG_CACHE_HOME`, own GDB port, the
+   craft array at `0x0098d7c0`) is in absorb-feedback.md, "Live on RPCS3".
 2. Take a PPSSPP capture of a Pulse absorb (`scripts/psp-drive.py`, `--give`
    routes) and compare it frame by frame with
    `just play pulse-psp-usa --race --give mine --input-script <script>`.

@@ -96,8 +96,8 @@ craft->0x7a5c = settings->0x58;
   So the pairs start at `0.0`, `0.2` and `0.4` s: the wingtips first, then
   each pair nearer the centreline.
 - `settings->0x58` at `0x008c1638` is `1.0`. It is written to `craft+0x7a5c`
-  on every call, which reads as the timer for HD's own absorb overlay (see
-  Open). That is an inference from the store, not a read of its consumer.
+  on every call. That is the absorb shell's timer; its consumers are read in
+  "The absorb shell" below.
 
 Confidence **80** for the pair structure and the gates, which is a direct
 decompile. **70** for the delay semantics: the global is written before each
@@ -138,15 +138,225 @@ plays one `WO_WEAPON_ABSORB` per slot on the pairs above, through
 plays nothing, which is the original's own gate. Detonator and Zone therefore
 play no burst.
 
+## The absorb shell: `AbsorbEffect.vex`, faded by `ShieldColour` off `craft+0x7a5c`
+
+2026-09-23, later. The burst above is authored faint on HD. The prominent
+absorb picture is a second model per team, drawn over the hull. It is **not**
+driven by `AbsorbFader`/`AbsorbScroller`; see the negative result below.
+
+```
+ShipAbsorbShell_Load     @ 0x000dba30  (was .opd.FUN_000dba30) loads both shells
+ShipAbsorbShell_Show     @ 0x000db6f8  (was .opd.FUN_000db6f8) shows one, hides the other
+ShipAbsorbShell_Step     @ 0x000cef50  (was .opd.FUN_000cef50) relax + timer decay
+ShipAbsorbShell_Update_q @ 0x000db990  (was .opd.FUN_000db990) target + visibility
+```
+
+### `ShipAbsorbShell_Load` (`0x000dba30`): two nodes, one parameter
+
+Called from `FUN_000ddd58` (`0x000df788`) and `FUN_000dfd90` (`0x000e17c4`).
+It clears `craft+0x7a40`/`+0x7a44`, hashes the string at TOC `0x008a8ed4`
+(`0x00782148`, **`ShieldColour`**), and then builds two scene nodes the same
+way: allocate `0x2080` bytes, link the node under the craft
+(`FUN_003238f8(craft, node)`), load the file (`FUN_002c1ec8`, then
+`FUN_002c0890`), clear the node's bit `4` at `+0x34` (hidden), and bind the
+model's `ShieldColour` parameter to `&craft+0x7a50`
+(`FUN_00677008`/`FUN_00677018(..., ~hash, craft+0x7a50)`).
+
+| Node | Path | Format string |
+| --- | --- | --- |
+| `craft+0x7a40` | `Data\Weapons\vr_absorbinternal_cockpit.vex` | `0x00782158` `%s\vr_absorbinternal_cockpit.vex` with `0x00782180` `Data\Weapons` |
+| `craft+0x7a44` | `<team dir>\AbsorbEffect.vex` | `0x00782190` `%s\AbsorbEffect.vex` with `*(craft+0x6298)+0x1b4` |
+
+Between the two loads it sets `+0x7a58 = 0.15` (TOC `0x008a8ee0`, the value
+itself) and zeroes `+0x7a50`, `+0x7a54` and `+0x7a5c`. The strings are read
+with a throwaway ELF reader over the decrypted `EBOOT.elf`. Confidence **85**.
+
+### The four floats at `craft+0x7a50`
+
+| Offset | Role | Written by |
+| --- | --- | --- |
+| `+0x7a50` | the fade, the value `ShieldColour` reads | `ShipAbsorbShell_Step` |
+| `+0x7a54` | its target | `ShipAbsorbShell_Update_q`, and the inline copy in `FUN_000e41b0` |
+| `+0x7a58` | the rate, the share of the gap closed per step | the same |
+| `+0x7a5c` | the timer, seconds | `Ship_PlayAbsorbFeedback` (`1.0`, above), `ShipAbsorbShell_Step` |
+
+### `ShipAbsorbShell_Step` (`0x000cef50`): relax, then count down
+
+```c
+n = (int)(dt * 59.999996f);        // DAT_008a8ab8 = 0x426fffff, fctiwz truncates
+for (i = 0; i < n; i++) fade += (target - fade) * rate;
+timer -= dt;
+```
+
+Its OPD has no reference anywhere in the image (a word scan for `0x008744b8`
+finds none). The live copy is **inlined in `FUN_000eadb8`** at
+`0x000ebff0..0x000ec05c`, identical instruction for instruction, with `f26` as
+`dt`, cross-checked with `llvm-objdump`. At exactly `dt = 1/60` the `f32`
+product rounds to `1.0`, so a 60 Hz tick is one step. Confidence **80**.
+
+### `ShipAbsorbShell_Update_q` (`0x000db990`) and the head of `FUN_000e41b0`
+
+The same body twice: `ShipAbsorbShell_Update_q`'s OPD is also unreferenced,
+and `FUN_000e41b0` (whose OPD sits in the vtable word at `0x008635a4`) opens
+with it inline.
+
+```c
+if (timer > 0.0) {                   // DAT_008a8b00 = 0.0
+    rate   = 0.1;                    // DAT_008a8abc
+    target = settings->0x6c;         // 0x008c164c = 1.0
+    ShipAbsorbShell_Show(craft);
+} else {
+    target = 0.0;
+    if (fade <= 0.01)                // DAT_008a8afc
+        hide both shells;            // +0x34 &= ~4 on +0x7a40 and +0x7a44
+    else
+        ShipAbsorbShell_Show(craft);
+}
+```
+
+So the rate is `0.1` whenever it matters. The initial `0.15` is only ever
+used while target and fade are both zero. Confidence **70**; the `_q` is for
+the name, since the stand-alone function is dead and the reading is off its
+inline twin.
+
+### `ShipAbsorbShell_Show` (`0x000db6f8`): the external shell or the cockpit one
+
+Ghidra's decompile of this function stops at its first `bl 0x00327500`, so
+this is read off `llvm-objdump -d --mcpu=pwr6 --start-address=0xdb6f8
+--stop-address=0xdb990` instead. `FUN_00327500(node, matrix, 0)` installs a
+node's local matrix.
+
+- **`g_PhysicsHalfStep` (`0x008a8c24`) clear and `craft+0x5f42 == 0`**: hide
+  the cockpit shell, give the external shell the identity matrix
+  (`*(0x008a8c88)` = `0x00769d70`, four identity rows), show it (`|= 4`).
+- **`craft+0x5f42 != 0`**: give the cockpit shell the identity with row 3
+  replaced by `vsel(identity row 3, splat(7.0), mask)`, show it, and hide the
+  external one. The mask is `*(0x008a8c20) + 0x20`, and `*(0x008a8c20)` is
+  `0x00c47730`, in `.bss`, so no static read gives which lane takes the
+  `7.0`. Read live below: it is `z`.
+- **`g_PhysicsHalfStep` set**: both paths run, and the net result is the
+  external shell shown at identity and the cockpit one hidden.
+
+`FUN_000e41b0` shows the same flag's meaning: with `craft+0x5f42` set it hides
+`craft+0x6adc` and `craft+0x6af4` and shows the cockpit shell, which reads as
+"the camera is inside the hull". Confidence **75** for the external branch,
+**55** for the cockpit one's placement.
+
+### The material: `hd_absorbinternal.rcsmaterial`
+
+Every team's `absorbeffect.rcsmodel` in `DATA02`/`DATA03`/`DATA06` names one
+mesh (Feisar's is `Feisar_LeachEffectShape`, 12,977 triangles) and one
+material, `data/weapons/materials/hd_absorbinternal.rcsmaterial`, texture
+`data/weapons/textures/hd_absorbinternal.gtf`, factor pair
+`0x0302`/`0x0001` (`SrcAlpha`/`One`), and **one** parameter: `0xaaf53119`,
+authored `1.0`. `0xaaf53119` is `~crc32("ShieldColour")`. The chunk declares
+`position`, `normal`, `VertexColour1` and `Uv2`. Detonator's `DATA00`
+`absorbeffect` is an opaque `nitro_emissive_outlines` with no `ShieldColour`.
+
+Disassembled with `scripts/ps3-microcode.py`:
+
+```text
+vertex block #1
+   5  MUL R0.w, v[2].wwww, c[208].xxxx   <- VertexColour1.w * ShieldColour (c464)
+  10  MOV o[TC2], R0                     <- (world xyz, that product)
+   0  MOV o[TC0].w, v[3].xxxx            <- Uv2
+   1  MOV o[TC1].w, v[3].yyyy
+
+fragment block #1
+@0x00  MOV R0.y, f[TC1].wwww
+@0x01  MOV R0.z, {time}
+@0x03  MOV R0.x, f[TC0].wwww
+@0x04  TEX R0.w, R0 unit0                <- the texture's ALPHA
+@0x05  MAD R1.xy, R0.wwww, {0.5}, R0     <- uv + 0.5 * alpha
+@0x07  MAD R1.xy, R0.zzzz, {5}, R1       <- + 5 * time, both axes
+@0x09  MOV H0.w, f[TC2]                  <- the output alpha
+@0x0a  TEX H0.xyz, R1 unit0 END          <- the output colour
+```
+
+`0.5` and `5` are literals in the code, not patched parameters; only `time`
+(`0x906b67ba`) is patched. The fogged blocks (#2 to #9) add
+`fogColour`/`globalAlphaScaler` around the same arithmetic. The texture's RGB
+is a horizontal blue band and its alpha is cloud noise, so the picture is a
+blue band sweeping over the shell, broken up by the noise. Confidence **90**
+for the program, which is read instruction by instruction.
+
+### Negative result: `AbsorbFader`/`AbsorbScroller` drive nothing on this disc
+
+`FUN_003ea368` (and its one-entity twin `FUN_003eb890`) is where those names
+live. For each entry of a `0x1b0`-byte record table at `0x00c86880`, it
+redraws the model at `entry+0xec` under the `RigidBody` class hash, and
+patches four material parameters by hash before each chunk: `AbsorbFader` =
+`entry+0x10c > 0`, `AbsorbScroller` = `1 - entry+0x10c`, `LeachFader` and
+`LeachScroller` likewise off `entry+0x110` (`0x003eaeb4..0x003eb190`).
+But **no `.rcsmodel` or `.rcsmaterial` on the disc declares any of the four
+hashes**: `0x15f4afa4`, `0x264f29d1`, `0x71c91ea7` and `0x81bf4404` occur in
+0 of the 2,275 files, swept byte for byte over every archive. `ShieldColour`
+occurs in 92 of them: every `absorbeffect`, every `shipshield` and the three
+`vr_*_cockpit` models. So on this disc the fader and scroller patch finds
+nothing to write, and `FUN_003ea368` stays unnamed. Confidence **85** for the
+negative.
+
+### Live on RPCS3, 2026-09-23
+
+Two boots of a Campaign race on Talon's Junction, stock RPCS3 `rpcs3-bin`
+under `PPU Decoder: Recompiler (LLVM)`, audio `"Null"`, a private
+config/cache copy, GDB on its own port. No breakpoints were needed: the GDB
+stub pauses the target, and the craft array at `0x0098d7c0` gives the eight
+crafts. The player's craft is the one with `craft+0x7a60 == 0`; on these boots
+that was entry 7, not entry 0.
+
+- **Before any absorb**, every craft read `fade 0`, `target 0`, `rate 0.15`
+  (the load value), `timer` far negative, and both shell nodes had bit `4`
+  clear at `+0x34`.
+- **The settings block** read the `.data` defaults: `+0x54 = 0.2`,
+  `+0x58 = 1.0`, `+0x6c = 1.0`.
+- **The cockpit shell's mask** at `*(0x008a8c20) + 0x20` is
+  `(0, 0, 0xffffffff, 0)`. `*(0x008a8c20)` read `0x00c47730`. So the
+  cockpit shell sits at `(0, 0, 7.0)` in the craft's frame.
+- **Writing `1.0` into `craft+0x7a5c`**, which is `Ship_PlayAbsorbFeedback`'s
+  own store, then sampling every ~0.12 s of game time: `target` went to `1.0`
+  and `rate` to `0.1`, and the fade rose `0.27, 0.52, 0.69, 0.79, 0.85, 0.90,
+  0.93, 0.95` while the timer ran out. After that `target` was `0`, `rate`
+  stayed `0.1`, and the fade fell `0.78, 0.46, 0.27, ... 0.012, 0.008`. The
+  external shell node's bit `4` was set from the first sample and cleared at
+  the first sample at or below `0.01`. The cockpit shell stayed hidden
+  throughout (`craft+0x5f42 == 0`, chase camera).
+- **The step rate follows the frame rate.** The emulator ran at about
+  35 fps. Successive ratios of `1 - fade` were whole powers of `0.9`: 3, 4 or
+  5 steps per sample, one per frame. The truncating step count gives one step
+  per frame at any rate below 120 fps. That is 60 steps a second on a PS3 at
+  60 fps, and the port's 60 Hz tick matches it.
+- **The picture.** The player's hull goes pale white-lavender over its whole
+  surface while the fade is up, and returns to its livery as it falls. The
+  frames are in `~/.cache/oag/drive/reports/hd-absorb-overlay/original-rpcs3-*`.
+  They were taken during the pre-race flyby, which the race walk ended on.
+
+This confirms the timer, the target, the rate, the hide threshold and which
+node is shown. Confidence on those rises to **90**. What it does not exercise
+is a real absorb reaching `Ship_PlayAbsorbFeedback`; that store is read
+statically above.
+
+### Ported
+
+`oag_render::absorb_shell` reproduces the four floats and their tick.
+`oag_game::livery::absorb::shell` loads each team's `AbsorbEffect` pair and
+refuses any whose materials do not all declare `ShieldColour` and blend
+`SrcAlpha`/`One`. `mesh.wgsl`'s `absorb_shading` path is fragment block #1.
+The fade reaches it as the vertex alpha. Every `play_absorb_feedback` restarts
+the timer, the Eliminator's lap refill included, because the store sits
+outside all of `Ship_PlayAbsorbFeedback`'s branches.
+
 ## Open
 
-- **HD's absorb overlay.** Every team also ships `absorbeffect.vex` with its
-  `.rcsmodel` (a single mesh named like `Feisar_LeachEffectShape`) and a
-  `*_hd_absorbinternal` material. `AbsorbFader`/`AbsorbScroller` are among
-  the render parameters [`renderer.md`](renderer.md) lists. This is the PS3
-  counterpart of Pulse's `absorb_surface.mip` hull overlay, and none of it is
-  read: not the model's draw, not the two parameters' writers, and not whether
-  `craft+0x7a5c` drives them.
+- **The cockpit shell** (`vr_absorbinternal_cockpit`) is not drawn. Its
+  placement is now measured (`(0, 0, 7.0)`, above), but the meaning of
+  `craft+0x5f42` as "camera inside the hull" is still inferred, and the
+  cockpit model's one chunk carries no vertex declaration. The player's external
+  shell is not drawn while the camera is inside the hull either, which is
+  what the original does.
+- **Who fills `FUN_003ea368`'s record table**, and what `entry+0xec` is, is
+  unread. It does not matter for any picture while no material declares the
+  four parameters.
 - **The visibility gate**: per-viewport, and `FUN_002d4c20` was not read.
 - **The remote-craft branch**, `craft+0x628c != 0`: it plays the sound and no
   burst. Nothing here reaches a remote craft.

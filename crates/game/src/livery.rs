@@ -109,6 +109,8 @@ pub struct Livery {
     /// The hull redrawn under `absorb_surface.mip` for the second after an
     /// absorb - see [`absorb::overlay`]. `None` wherever it is not built.
     pub absorb_overlay: Option<Model>,
+    /// HD's `AbsorbEffect` shell - see [`absorb::shell`]. `None` elsewhere.
+    pub absorb_shell: Option<Model>,
     /// The plume's own authored texture-transform animation.
     ///
     /// **Per team, and this is not a formality.** Eight per-team plumes sampled
@@ -192,6 +194,8 @@ pub struct LoadContext<'a> {
     /// Whether to build the absorb hull overlay - Pulse's alone, and only
     /// while `oag_render::hull_overlay::DRAWN` says so. See [`absorb::overlay`].
     pub hull_overlay: bool,
+    /// Whether to load HD's absorb shell. See [`absorb::shell`].
+    pub absorb_shell: bool,
 }
 
 /// Loads one [`Livery`] per entry of `teams`, in that order.
@@ -239,6 +243,7 @@ pub fn load(
                 collision_fx: source.collision_fx.clone(),
                 absorb: source.absorb.clone(),
                 absorb_overlay: source.absorb_overlay.clone(),
+                absorb_shell: source.absorb_shell.clone(),
                 boost: source.boost.clone(),
                 boost_uv: source.boost_uv.clone(),
                 flare: source.flare.clone(),
@@ -278,6 +283,7 @@ pub fn load(
                     collision_fx: player.collision_fx.clone(),
                     absorb: player.absorb.clone(),
                     absorb_overlay: player.absorb_overlay.clone(),
+                    absorb_shell: player.absorb_shell.clone(),
                     boost: player.boost.clone(),
                     boost_uv: player.boost_uv.clone(),
                     flare: player.flare.clone(),
@@ -354,6 +360,7 @@ fn one(
                     collision_fx: Vec::new(),
                     absorb: Vec::new(),
                     absorb_overlay: None,
+                    absorb_shell: None,
                     boost: None,
                     boost_uv: None,
                     flare: None,
@@ -388,6 +395,7 @@ fn one(
             collision_fx,
             absorb,
             absorb_overlay: None,
+            absorb_shell: absorb::shell(archives, team, ships.dir, ctx.absorb_shell, report),
             hull,
             boost: lit.boost,
             flare: lit.always,
@@ -443,6 +451,7 @@ fn one(
         collision_fx,
         absorb: Vec::new(),
         absorb_overlay,
+        absorb_shell: None,
         boost,
         boost_uv,
         flare: lit.always,

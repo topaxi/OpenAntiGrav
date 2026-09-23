@@ -214,3 +214,54 @@ fn pulse_lights_the_hull_for_one_second_after_a_pickup_absorb() {
     );
     assert_eq!(pulses[70], None, "still lit past the window");
 }
+
+/// Wipeout HD's absorb shell: every team on the grid loads its own
+/// `AbsorbEffect` pair through the `hd_absorbinternal` gate, and an absorb
+/// fades it in over the one-second timer and out after, hidden once the fade
+/// is at or below `0.01` - see `oag_render::absorb_shell`.
+///
+/// A loader that read the wrong stem, or a gate that stopped recognising the
+/// material, reports no shell and fails the count here rather than drawing
+/// nothing quietly.
+#[test]
+#[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
+fn hd_fades_the_absorb_shell_in_over_the_timer_and_out_after() {
+    let Some(loaded) = single_race("data/images/hdfury-ps3-eu-dec.iso", Some("Feisar")) else {
+        return;
+    };
+    let shells = loaded
+        .report
+        .iter()
+        .filter(|line| line.contains("AbsorbEffect.vex") && line.contains("the absorb shell"))
+        .count();
+    assert!(
+        shells >= 8,
+        "only {shells} team(s) loaded an absorb shell - every base-game team ships one"
+    );
+    let mut race = race::Race::start(loaded.setup);
+    for _ in 0..WARM_UP_TICKS {
+        race.tick(&PlayerInputs::single(throttle(0)));
+    }
+    assert_eq!(race.absorb_shell_fader(0), None, "shown before any absorb");
+    race.sim.world.ships[0].pickup.weapon = Some(Weapon::Mine);
+    race.tick(&PlayerInputs::single(throttle(Button::Circle.bit())));
+    let mut fades = vec![race.absorb_shell_fader(0)];
+    for _ in 0..150 {
+        race.tick(&PlayerInputs::single(throttle(0)));
+        fades.push(race.absorb_shell_fader(0));
+    }
+    println!("fade per tick after the absorb: {fades:?}");
+    assert_eq!(
+        fades[0],
+        Some(0.1),
+        "the first tick closes a tenth of the gap"
+    );
+    let shown = fades.iter().filter(|fade| fade.is_some()).count();
+    assert!(
+        (100..=108).contains(&shown),
+        "the shell was shown for {shown} ticks, not the second plus the fade-out"
+    );
+    let peak = fades.iter().flatten().copied().fold(0.0f32, f32::max);
+    assert!(peak > 0.99, "the fade never reached its target ({peak})");
+    assert_eq!(fades[150], None, "still shown long after the fade-out");
+}
