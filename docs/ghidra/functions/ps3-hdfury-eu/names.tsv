@@ -417,3 +417,7 @@
 0x002d8d10	function	ShipAbsorbNode_SpawnBurst	80	absorb-feedback.md
 0x002d8bb8	function	ShipAbsorbNode_RegisterClass	88	absorb-feedback.md
 0x002d8e58	function	ShipAbsorbNode_Construct	88	absorb-feedback.md
+0x000dba30	function	ShipAbsorbShell_Load	85	absorb-feedback.md
+0x000db6f8	function	ShipAbsorbShell_Show	75	absorb-feedback.md
+0x000cef50	function	ShipAbsorbShell_Step	80	absorb-feedback.md
+0x000db990	function	ShipAbsorbShell_Update	65	absorb-feedback.md

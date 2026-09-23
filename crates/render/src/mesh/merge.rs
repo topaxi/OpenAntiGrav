@@ -44,6 +44,7 @@ pub fn merge(label: &str, models: Vec<Model>) -> Model {
         vertex_colour_is_light: false,
 
         flame: None,
+        absorb_shell: false,
         alpha_test_ref: None,
         centre: [0.0; 3],
         radius: 1.0,
@@ -218,6 +219,7 @@ mod merge_tests {
             vertex_colour_is_light: false,
 
             flame: None,
+            absorb_shell: false,
             alpha_test_ref: None,
             centre: [0.0; 3],
             radius: 1.0,

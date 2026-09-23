@@ -342,6 +342,11 @@ pub fn build(
             ("flame_speed", f64::from(flame.scroll_speed)),
         ]);
     }
+    // HD's absorb shell program, whose two numbers are literals in its own
+    // microcode rather than material parameters - see `crate::absorb_shell`.
+    if model.absorb_shell {
+        constants.push(("absorb_shading", 1.0));
+    }
     let constants = constants.as_slice();
 
     let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {

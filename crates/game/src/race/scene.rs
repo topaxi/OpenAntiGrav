@@ -9,6 +9,7 @@ use super::*;
 use log::warn;
 
 mod absorb_overlay;
+mod absorb_shell;
 mod beam;
 mod clouds;
 mod frame;
@@ -142,6 +143,8 @@ pub struct Scene {
     shield_cockpit: Option<Drawable>,
     /// The absorb hull overlay per slot - see [`absorb_overlay`].
     absorb_overlay: Vec<Option<Drawable>>,
+    /// HD's absorb shell per slot - see [`absorb_shell`].
+    absorb_shell: Vec<Option<Drawable>>,
     /// One drawable per projectile slot, for rockets drawn as their own model.
     ///
     /// **Empty** when `Data\Weapons\Rocket.vex` did not load, and the sprite
@@ -835,6 +838,7 @@ impl Scene {
         let overlay = |l: &crate::livery::Livery| l.absorb_overlay.clone();
         let never = mesh_render::ShadowReceiver::Never;
         let absorb_overlay = slots.drawables(overlay, mesh_render::Depth::Overlay, never)?;
+        let absorb_shell = slots.drawables(|l| l.absorb_shell.clone(), scene_depth, never)?;
         // One per projectile slot: the Rocket's, the Mine's, the Bomb's, the
         // Cannon round's and the Plasma blast's, all built the same way - see
         // `weapon_models::build_all`. A laid mine's hull is opaque too - a
@@ -955,6 +959,7 @@ impl Scene {
             shield,
             shield_cockpit,
             absorb_overlay,
+            absorb_shell,
             rockets,
             mines,
             bombs,

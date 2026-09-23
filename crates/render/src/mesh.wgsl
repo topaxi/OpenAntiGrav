@@ -226,6 +226,14 @@ override flame_colour_scale: f32 = 0.0;
 // into the noise tap's `v`. 2.0 on all fourteen craft.
 override flame_speed: f32 = 0.0;
 
+// **Wipeout HD's absorb shell program** (`hd_absorbinternal.rcsmaterial`), off
+// by default and on only for a team's `AbsorbEffect` model - see
+// `oag_render::absorb_shell` and
+// docs/ghidra/functions/ps3-hdfury-eu/absorb-feedback.md. Its `0.5` and `5.0`
+// are literals in the microcode, not material parameters, so this is a flag
+// rather than a parameter set.
+override absorb_shading: f32 = 0.0;
+
 
 // **Whether `in.colour` is a baked light rather than a tint** - 1.0 only for a
 // Wipeout HD `.rcsmodel`, set from `Model::vertex_colour_is_light`. HD's
@@ -1406,7 +1414,31 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     // `authored`'s ambient/prelit/sun sum, so running both would shade it
     // twice.
     let shaded_or_sheen = select(shaded, sheen, ramp_sheen);
-    return mix(shaded_or_sheen, flame, flame_shading);
+
+    // **The absorb shell, when this model is one.** Fragment block #1 of
+    // `hd_absorbinternal.rcsmaterial`, which the fogged blocks repeat before
+    // their fog lerp (`fogged` below does that part):
+    //
+    //     @0x04  TEX R0.w, (u, v) unit0             <- the ALPHA is the offset
+    //     @0x05  MAD R1.xy, R0.w, 0.5, (u, v)
+    //     @0x07  MAD R1.xy, time, 5.0, R1           <- both axes, 5 per second
+    //     @0x09  MOV H0.w, f[TC2]                   <- VertexColour1.w * ShieldColour
+    //     @0x0a  TEX H0.xyz, R1 unit0
+    //
+    // So the colour is the texture sampled at its own alpha-displaced, clock-
+    // scrolled coordinate, and the alpha is the vertex ramp times the fade the
+    // caller writes into it. `texel.a` does not reach the output. Not decoded
+    // on the linear target, for the reason the flame gives: the program
+    // applies no transfer function.
+    let absorb_offset = textureSample(albedo, albedo_sampler, in.texcoord).a * 0.5
+        + 5.0 * scene.time.x;
+    let absorb_rgb = textureSample(
+        albedo,
+        albedo_sampler,
+        in.texcoord + vec2<f32>(absorb_offset, absorb_offset),
+    ).rgb;
+    let absorb = vec4<f32>(absorb_rgb, in.colour.a);
+    return mix(mix(shaded_or_sheen, flame, flame_shading), absorb, absorb_shading);
 }
 
 @fragment

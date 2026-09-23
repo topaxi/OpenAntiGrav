@@ -261,6 +261,9 @@ pub struct Model {
     /// Wipeout HD's engine-flare shading, for the one model that is one, and
     /// `None` for every other model of every title. See [`Flame`].
     pub flame: Option<Flame>,
+    /// Wipeout HD's absorb shell program (`hd_absorbinternal`), for the one
+    /// model that is one. See [`crate::absorb_shell`].
+    pub absorb_shell: bool,
     /// The alpha-test reference [`Self::alpha_tested_draws`] is compared
     /// against, when the model's own materials author one.
     ///
@@ -348,6 +351,7 @@ impl Model {
             vertex_colour_is_light: false,
 
             flame: None,
+            absorb_shell: false,
             alpha_test_ref: None,
             centre: [0.0; 3],
             radius: 0.0,
@@ -958,6 +962,7 @@ fn build_class(
         vertex_colour_is_light: false,
 
         flame: None,
+        absorb_shell: false,
         alpha_test_ref: None,
         centre,
         radius,

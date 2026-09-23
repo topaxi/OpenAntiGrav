@@ -136,6 +136,7 @@ fn model(lit: f32) -> Model {
         material_anim: Vec::new(),
         vertex_colour_is_light: false,
         flame: None,
+        absorb_shell: false,
         alpha_test_ref: None,
         centre: [0.0, 0.0, 0.5],
         radius: 2.0,

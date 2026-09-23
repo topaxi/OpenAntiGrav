@@ -115,6 +115,9 @@ pub struct RaceView {
     /// Seconds since each craft's last pickup absorb, `None` once past the
     /// hull overlay's window - `craft+0x830 - craft+0x878` in the original.
     pub(super) absorb_overlay: [Option<f32>; MAX_SHIPS],
+    /// HD's absorb shell fade per craft, `craft+0x7a50..+0x7a5c` - see
+    /// `oag_render::absorb_shell`.
+    pub(super) absorb_shell: [oag_render::absorb_shell::AbsorbShell; MAX_SHIPS],
     /// Origin-to-nozzle distance per craft, world units - the trail-hit reach.
     pub(super) hull_reach: [f32; MAX_SHIPS],
     /// `--trail-sparks`: see [`Race::force_trail_sparks`].

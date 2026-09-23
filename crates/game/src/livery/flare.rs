@@ -217,10 +217,13 @@ fn shading(model: &mut Model, geometry: &[u8], report: &mut Vec<String>) {
 /// constant 1.0. Left there the flame draws at the texture's own alpha
 /// everywhere and has no shape at all.
 ///
-/// **Model-scoped, and only this model's.** Nothing else is remapped: this is
-/// one material whose program was read, not a change to what the colour set
-/// means in general.
-fn alpha_ramp(model: &mut Model) {
+/// **Model-scoped, and only for a model whose program was read.** Nothing
+/// else is remapped: this is not a change to what the colour set means in
+/// general. The second such program is HD's absorb shell,
+/// `hd_absorbinternal`, whose vertex block #1 writes `o[TC2].w =
+/// VertexColour1.w * ShieldColour` and whose fragment block moves `f[TC2]` into
+/// `H0.w` the same way - see [`super::absorb::shell`].
+pub(super) fn alpha_ramp(model: &mut Model) {
     for vertex in &mut model.vertices {
         vertex.colour[3] = vertex.sun_mask;
         // Unmasked, which is `sun_mask`'s own default for a chunk with no

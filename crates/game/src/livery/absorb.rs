@@ -123,3 +123,86 @@ pub(super) fn overlay(
         std::sync::Arc::new(texture),
     ))
 }
+
+/// The stem `ShipAbsorbShell_Load` (`0x000dba30`) formats under the team's own
+/// directory: `"%s\\AbsorbEffect.vex"`, the literal at `0x00782190`.
+pub const SHELL_STEM: &str = "AbsorbEffect";
+
+/// Wipeout HD's absorb shell for one team - see [`oag_render::absorb_shell`] -
+/// or `None`, reported, when `wanted` is false (every title but HD), when the
+/// pair does not resolve or build, or when its material is not the program
+/// that module reproduces.
+///
+/// **The material gate is all or nothing**, the flame's rule: every material
+/// the model names must declare `ShieldColour` and blend `SrcAlpha`/`One`,
+/// which is `hd_absorbinternal` on every team of the base game. Detonator's
+/// shell is an opaque `nitro_emissive_outlines` with no `ShieldColour`, so it
+/// is refused rather than drawn as something it is not.
+pub(super) fn shell(
+    archives: &mut oag_assets::Archives,
+    team: &str,
+    ship_dir: &str,
+    wanted: bool,
+    report: &mut Vec<String>,
+) -> Option<oag_render::mesh::Model> {
+    if !wanted {
+        return None;
+    }
+    let name = oag_pulse::race::ships::entry_name_in(ship_dir, team, SHELL_STEM);
+    let pair = archives.read_name(&name).ok().and_then(|blob| {
+        let sibling = oag_render::mesh::rcs::sibling_name(&name)?;
+        Some((blob, archives.read_name(&sibling).ok()?))
+    });
+    let Some((blob, geometry)) = pair else {
+        report.push(format!("{name}: no .vex/.rcsmodel pair - no absorb shell"));
+        return None;
+    };
+    let built = oag_render::mesh::rcs::build(
+        &name,
+        &blob,
+        &geometry,
+        &mut |path| archives.read_name(path).ok(),
+        |c| c.mesh,
+    );
+    let (mut model, built) = match built {
+        Ok(pair) => pair,
+        Err(error) => {
+            report.push(format!(
+                "{name}: does not build ({error}) - no absorb shell"
+            ));
+            return None;
+        }
+    };
+    let materials = oag_rcs::rcsmodel::Model::parse(&geometry)
+        .map(|parsed| parsed.materials)
+        .unwrap_or_default();
+    let is_shell = |m: &oag_rcs::rcsmodel::Material| {
+        m.blend() == ADDITIVE
+            && m.parameters
+                .iter()
+                .any(|p| p.hash == oag_render::absorb_shell::SHIELD_COLOUR)
+    };
+    if materials.is_empty() || !materials.iter().all(is_shell) || model.indices.is_empty() {
+        let names: Vec<&str> = materials.iter().map(|m| m.name.as_str()).collect();
+        report.push(format!(
+            "{name}: its material ({}) is not the additive ShieldColour program - no \
+             absorb shell on this craft",
+            names.join(", ")
+        ));
+        return None;
+    }
+    super::flare::alpha_ramp(&mut model);
+    model.absorb_shell = true;
+    report.push(format!(
+        "{name}: {} - the absorb shell, faded by ShieldColour off the absorb timer \
+         (oag_render::absorb_shell)",
+        built.describe()
+    ));
+    Some(model)
+}
+
+/// `hd_absorbinternal`'s factor pair, `0x0302`/`0x0001`.
+const ADDITIVE: oag_rcs::rcsmodel::Blend = oag_rcs::rcsmodel::Blend::Factors {
+    src: oag_rcs::rcsmodel::Factor::SrcAlpha,
+    dst: oag_rcs::rcsmodel::Factor::One,
+};

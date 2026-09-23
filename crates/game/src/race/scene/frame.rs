@@ -416,6 +416,7 @@ impl Scene {
             sphere.tint(queue, state.colour(), recoloured);
         }
         self.write_absorb_overlays(race, queue, view_projection, prev_vp, &prev, recoloured);
+        self.write_absorb_shells(race, queue, view_projection, prev_vp, &prev, recoloured);
         oag_render::perfprobe::mark("ship+shield-write");
         let (rocket_matrices, ball_matrices, mine_matrices, bomb_matrices, cannon_matrices) =
             self.write_weapon_models(race, &prev, queue, view_projection, prev_vp);
@@ -897,6 +898,7 @@ impl Scene {
             stats.add(sphere.draw(&mut pass, None, None, None, None));
         }
         self.draw_absorb_overlays(race, &mut pass, &mut stats);
+        self.draw_absorb_shells(race, &mut pass, &mut stats);
         if let Some(collision) = &self.collision {
             stats.add(collision.draw(&mut pass, None, None, None, None));
         }

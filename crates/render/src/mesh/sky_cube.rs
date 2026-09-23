@@ -209,6 +209,7 @@ pub fn build(label: &str, blob: &[u8], rotation_degrees: f32) -> Result<Model> {
         vertex_colour_is_light: false,
 
         flame: None,
+        absorb_shell: false,
         alpha_test_ref: None,
         centre: [0.0; 3],
         radius: HALF_EXTENT * 3.0f32.sqrt(),
