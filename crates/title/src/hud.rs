@@ -398,6 +398,10 @@ pub struct HudArt {
     /// `speed_unit` is - it has to be a title fact instead. `true` (Pulse's
     /// reading) for every title that has not had its own frame checked,
     /// which is every title but HD today.
+    ///
+    /// HD's is read off its executable too since 2026-09-23:
+    /// `Hud_UpdateShieldReadout` builds the digits by hand and appends
+    /// nothing (`docs/ghidra/functions/ps3-hdfury-eu/hud-readouts.md`).
     pub shield_percent: bool,
     /// The font role this title's language plugins name for the HUD's value
     /// face - the big lap fraction, position fraction, speed and time

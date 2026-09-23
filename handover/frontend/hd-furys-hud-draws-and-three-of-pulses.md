@@ -69,36 +69,51 @@ where it was:
 - **Per-lap time rows**: untouched by this pass. All three new frames are lap
   1, so none of them can settle the still-open per-lap-rows question below.
 
+**2026-09-23, the executable pass - three of the four tint questions closed.**
+Full writeup: [hd-hud.md#the-executable-writes-the-shield-the-number-and-the-arcs](../../docs/formats/hd-hud.md#the-executable-writes-the-shield-the-number-and-the-arcs);
+addresses and constants on [hud-readouts.md](../../docs/ghidra/functions/ps3-hdfury-eu/hud-readouts.md).
+Found from the widget names: `Hud_BindWidgets` stores `DamageBar`/`DamageBarBg`/
+`ShieldBarText`/`LapBar*`/`PosBar*` at fixed HUD offsets, and a byte-offset search
+leaves one reader of each set - `Hud_UpdateShieldReadout` (`0x000866c8`),
+`Hud_UpdateLapCounter` (`0x00096ef0`), `Hud_UpdatePositionCounter` (`0x00096088`),
+all dispatched every tick by `Hud_Update` (`0x0009e3d0`). What they write, now
+drawn by `oag_game::hud::runtime` off `oag_title::HudArt::runtime`:
+
+- `DamageBar` is the fill, cropped from the top to the shield fraction, opaque
+  `0x1664FF` (white in Eliminator/Detonator modes). `ShieldBarText` takes the same
+  colour, truncated digits, no `%`. `DamageBarBg` is white, flashing `0xFFFF0000`
+  at <= 20 % or for a second after a hit, 8 phases/s; the number blinks with it.
+- The arcs are only shown/hidden: `LapBar_k` while `k >= laps - lap`,
+  `PosBar_k` while `k <= 8 - place`. **Their yellow is baked in the atlas** - the
+  old "pure white" probe read the `.gtf` upside down; `hd_hud_bar_pixels` is fixed.
+  The frames agree once re-read: 8th shows one `PosBar`, 7th two, lap 1/3 five.
+- Duplicate `DamageBar` in `arcade_hud.xml`: the fill is taken as the one sharing
+  `DamageBarBg`'s source rectangle - an inference (the name resolver
+  `0x0067e6d0` was not read); `hd_hud_runtime_ground_truth.rs` pins that exactly
+  one matches in each hexagon layout.
+
 ## Open
 
-- `DamageBar` and the lap arcs are missing their runtime tints. Sharper now
-  than "no frame shows them lit at a known state" - two do, and one
-  (`PosBar0`-`7`) gives an actual place-keyed count - but the colour itself is
-  still unread and still needs the Ghidra bridge. `arcade_hud.xml` also
-  composes two same-named `DamageBar` widgets - resolve which one before
-  wiring it.
-- `ShieldBarText` draws a consistent blue (~`#2C6BE7`) at both 100% and 98%
-  shield, never the authored translucent red at either level checked. Whether
-  it ever draws red (a lower, still-unchecked threshold) or the disc's own
-  `0x1664FF` is the runtime substitute are both open; a frame at low/critical
-  shield or the Ghidra bridge would settle either.
+- **The shield readout's third flash condition** (`0x000cf490` / `ship+0x6958`,
+  "within one second of a ship event") is unread and never fires here.
+- **Post-hit window arming differs slightly**: HD arms on a drop of the
+  *truncated whole* percent; this build reuses Pulse's `shield_flashing`, which
+  arms on any drop. Flash phase origin is chosen (race clock), not HD's own timer.
+- **No low-shield or post-hit frame of the original** has been compared yet - the
+  flash is implemented from the executable only.
+- **`0x0067e6d0`'s traversal order** (which `DamageBar` it binds) is unread.
 - The per-lap rows still draw on no reference frame at all - none of the three
-  new captures completes a lap. Confidence 70 against this page's usual 90
-  stands; see `hd-hud.md`'s per-lap-history section for exactly what a
-  two-or-more-lap capture would settle.
+  captures completes a lap. Confidence 70 stands; see `hd-hud.md`'s per-lap
+  section.
 
 ## Next Steps
 
-- Take the Ghidra bridge and find what writes `DamageBarBg`'s tint, the
-  lap-arc colours, and `ShieldBarText`'s colour - three related "which widget
-  gets a runtime colour override" questions now with frame evidence for each,
-  and (per the note above) still nobody has spent a pass on the executable
-  side of any of them.
-- Get a capture of the running original at low/critical shield to check
-  whether `ShieldBarText` ever draws red.
-- Get a capture with a different total lap count, or past lap 1, to separate
-  `LapBar0`-`6`'s "total laps" and "current lap" readings.
+- Capture the original at <= 20 % shield (`just rpcs3-race`, drive into walls)
+  to check the red `DamageBarBg` flash and the blinking number against this build.
+- Read what event `ship+0x6a80` timestamps (writers near `0x000e93c0`) to wire
+  the third flash condition.
 - Get a capture with two or more laps completed on a mode that shows
   `Lap1Image`-`Lap4Image` (time trial, default skin) to check the digit-per-row
-  reading and the "invisible until completed" gate against a real frame.
+  reading and the "invisible until completed" gate against a real frame. The
+  same capture checks `LapBar` lighting one more segment per lap.
 - Whoever next holds `crates/2048`'s HUD reading: `HUD_lap_times.xml` ships in the `2048_hud` skin's archive but no played-race root loads it (`SpeedLap_TimeTrial_HUD.xml` loads `HUD_lap_counters.xml`/`HUD_target_time_total.xml` instead) - confirm that stays true once `oag_2048::hud::ALWAYS_ON` (currently empty) gets filled in, rather than assuming this cluster is reachable there. Separately: 2048's *unplayed* `wo3_hud`/`2097_hud`/bare-root skins do author `PickupDamageTxt`/`PickupAbsorbTxt`/`PositionTxt2` (checked directly, 2026-09-13) - moot today since nothing composes those skins, but worth knowing before assuming this thread's `None` fix needs revisiting there.
