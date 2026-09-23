@@ -774,49 +774,7 @@ impl Drawable {
     /// being empty there, so calling it for both titles changes nothing on
     /// PSP.
     pub(super) fn draw_additive(&self, pass: &mut wgpu::RenderPass<'_>) -> SceneStats {
-        let mut stats = SceneStats::default();
-        let mut binds = oag_render::perfprobe::Binds::default();
-        let mut last_bound: Option<usize> = None;
-        if self.model.indices.is_empty() {
-            return stats;
-        }
-        pass.set_bind_group(0, &self.uniform_bind, &[]);
-        pass.set_bind_group(2, &self.fog_bind, &[]);
-        pass.set_bind_group(3, &self.anim_bind, &[]);
-        pass.set_vertex_buffer(0, self.vertices.slice(..));
-        pass.set_index_buffer(self.indices.slice(..), wgpu::IndexFormat::Uint32);
-        let mut current: Option<&wgpu::RenderPipeline> = None;
-        for draw in self
-            .model
-            .draws
-            .iter()
-            .chain(&self.model.alpha_tested_draws)
-            .chain(&self.model.transparent_draws)
-        {
-            // Two-sidedness stays the batch's own: the plume's `0x20` is set
-            // on both discs, so nothing here is culled, and a future model
-            // that sets it differently should still be obeyed.
-            let pipeline = &self.additive_pipeline[usize::from(draw.culled)];
-            if !current.is_some_and(|set| std::ptr::eq(set, pipeline)) {
-                oag_render::perfprobe::pipeline_set();
-                pass.set_pipeline(pipeline);
-                current = Some(pipeline);
-            }
-            stats.draws_submitted += 1;
-            stats.triangles += (draw.range.end - draw.range.start) / 3;
-            let slot = draw
-                .texture
-                .map_or(0, |t| t + 1)
-                .min(self.textures.len() - 1);
-            binds.record(slot);
-            // Elided when unchanged, as above.
-            if last_bound != Some(slot) {
-                pass.set_bind_group(1, &self.textures[slot], &[]);
-                last_bound = Some(slot);
-            }
-            pass.draw_indexed(draw.range.clone(), 0, 0..1);
-        }
-        stats
+        self.draw_every_list(pass, &self.additive_pipeline)
     }
 }
 

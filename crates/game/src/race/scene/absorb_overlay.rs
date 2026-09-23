@@ -28,7 +28,8 @@ impl Scene {
     }
 
     /// Writes every live overlay's pose, tint and scroll: the craft's own
-    /// matrix, `(a, a, a, a)` from [`oag_render::hull_overlay::alpha`], and
+    /// matrix, [`oag_render::hull_overlay::tint`] of
+    /// [`oag_render::hull_overlay::alpha`], and
     /// the texture coordinates slid by [`oag_render::hull_overlay::scroll`].
     pub(super) fn write_absorb_overlays(
         &self,
@@ -49,7 +50,7 @@ impl Scene {
             let a = oag_render::hull_overlay::alpha(pulse);
             overlay.write_overlay(
                 queue,
-                [a; 4],
+                oag_render::hull_overlay::tint(a),
                 oag_render::hull_overlay::scroll(pulse),
                 scratch,
             );
@@ -65,7 +66,7 @@ impl Scene {
         stats: &mut SceneStats,
     ) {
         for (_, overlay, _) in self.absorb_overlays(race) {
-            stats.add(overlay.draw_additive(pass));
+            stats.add(overlay.draw_overlay(pass));
         }
     }
 }
