@@ -19,13 +19,26 @@ pub(super) struct Build<'a> {
 }
 
 impl Build<'_> {
+    /// The absorb hull overlay per slot: the hull again, unshadowed, tested
+    /// `LessEqual` against its own depth, through
+    /// [`oag_render::hull_overlay::BLEND`] - see `absorb_overlay`.
+    pub(super) fn absorb_overlays(&self) -> Result<Vec<Option<Drawable>>> {
+        self.drawables(
+            |l| l.absorb_overlay.clone(),
+            oag_render::hull_overlay::BLEND,
+            mesh_render::Depth::Overlay,
+            mesh_render::ShadowReceiver::Never,
+        )
+    }
+
     /// One drawable per slot from the model `pick` takes out of that slot's
-    /// livery, additive (`exhaust::BLEND`) and written into the glow mask;
+    /// livery, blended with `blend` and written into the glow mask;
     /// `None` for a slot with no model or an empty one. A grid wider than the
     /// liveries repeats the last, as the hulls do.
     pub(super) fn drawables(
         &self,
         pick: impl Fn(&crate::livery::Livery) -> Option<Model>,
+        blend: wgpu::BlendState,
         depth: mesh_render::Depth,
         receiver: mesh_render::ShadowReceiver,
     ) -> Result<Vec<Option<Drawable>>> {
@@ -43,7 +56,7 @@ impl Build<'_> {
                     self.anisotropy,
                     self.sample_count,
                     depth,
-                    exhaust::BLEND,
+                    blend,
                     mesh_render::GlowMask::Written,
                     self.zone_art,
                     self.shadow_maps,

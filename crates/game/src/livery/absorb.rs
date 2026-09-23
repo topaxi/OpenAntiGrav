@@ -78,7 +78,7 @@ pub(super) fn overlay(
         return None;
     }
     let projection = oag_render::hull_overlay::projection_scale(blob)
-        .zip(oag_render::hull_overlay::ship_meshes(hull, blob));
+        .zip(oag_render::hull_overlay::overlaid_meshes(hull, blob));
     let Some((scale, ships)) = projection else {
         report.push(format!(
             "{}: no one batch scale to project from, or meshes that do not map back \
@@ -89,7 +89,7 @@ pub(super) fn overlay(
     };
     if ships.is_empty() {
         report.push(format!(
-            "{}: no mesh named for the ship - no absorb overlay",
+            "{}: no list-0 mesh to overlay - no absorb overlay",
             hull.label
         ));
         return None;
@@ -104,15 +104,17 @@ pub(super) fn overlay(
         ));
         return None;
     };
+    let mut texels = texture.to_rgba();
+    oag_render::hull_overlay::glow_texels(&mut texels);
     let texture = oag_render::mesh::ModelTexture::rgba8(
         OVERLAY_TEXTURE.to_string(),
         u32::from(texture.width),
         u32::from(texture.height),
-        texture.to_rgba(),
+        texels,
         None,
     );
     report.push(format!(
-        "{}: absorb overlay over {} ship mesh(es), projected at batch scale {scale}",
+        "{}: absorb overlay over {} mesh(es), projected at batch scale {scale}",
         hull.label,
         ships.len()
     ));

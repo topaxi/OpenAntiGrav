@@ -162,10 +162,10 @@ fn hd_plays_three_mirrored_pairs_on_its_absorb_locators() {
 /// the pulse a pickup absorb starts runs its one-second window - climbing one
 /// frame's `2 * dt` a tick to `2.0`, and gone after.
 ///
-/// **The overlay is not drawn** (`oag_render::hull_overlay::DRAWN` is false,
-/// see its doc comment for the probe behind that), so this proves the path on
-/// disc data rather than a picture: the one batch scale and the one mesh
-/// named for the ship, on Assegai, and the race's own pulse state.
+/// The picture itself was compared by eye against a PPSSPP capture of a real
+/// absorb (see `oag_render::hull_overlay::DRAWN`). This proves the path on
+/// disc data: the one batch scale and the five meshes the original was seen
+/// to overlay, on Assegai, and the race's own pulse state.
 #[test]
 #[ignore = "needs data/images/pulse-psp-usa.chd"]
 fn pulse_lights_the_hull_for_one_second_after_a_pickup_absorb() {
@@ -182,13 +182,26 @@ fn pulse_lights_the_hull_for_one_second_after_a_pickup_absorb() {
         oag_render::hull_overlay::projection_scale(&blob).is_some(),
         "Assegai's mesh batches share no one scale to project from"
     );
-    let ships = oag_render::hull_overlay::ship_meshes(&hull, &blob)
+    let overlaid = oag_render::hull_overlay::overlaid_meshes(&hull, &blob)
         .expect("the hull's node ranges map back to its file");
-    assert_eq!(ships.len(), 1, "Assegai names one mesh for the ship");
+    // Measured on PPSSPP: shipShape, both airbrakes, self_illuminatedShape and
+    // glowingShape took the overlay; canopyShape (list 1) and lodShape did not.
+    assert_eq!(
+        overlaid.len(),
+        5,
+        "Assegai overlays five meshes in the original"
+    );
 
     let Some(loaded) = single_race("data/images/pulse-psp-usa.chd", Some("Assegai")) else {
         return;
     };
+    assert!(
+        loaded
+            .report
+            .iter()
+            .any(|line| line.contains("Assegai") && line.contains("absorb overlay over")),
+        "the race built no absorb overlay for Assegai"
+    );
     let mut race = race::Race::start(loaded.setup);
     for _ in 0..WARM_UP_TICKS {
         race.tick(&PlayerInputs::single(throttle(0)));

@@ -1599,3 +1599,43 @@ residency flag, a last-uploaded timestamp, a handle passed to the display
 list) - watch *that* object's fields with a non-halting read watchpoint
 instead of halting on the function that touches it.
 the watch missed something, not that nothing happened.
+
+## Five traps from the absorb-overlay probe (2026-09-23)
+
+Measured on PPSSPP v1.20.4, `UCUS98712`, while settling whether Pulse draws
+its absorb hull overlay in play. The probe itself is in
+[`cannon-quake-leachbeam.md`](../ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md),
+"2026-09-23 (later)".
+
+- **Two armed execution breakpoints already voided one conclusion.** An
+  earlier run armed the per-craft update and the absorb gate together, and
+  it logged 60 hits of the update and none of the gate. That result went
+  into the docs as "the gate is never evaluated in play". It was the trap
+  [above](#only-the-most-recently-added-execution-breakpoint-fires): the HUD
+  calls that gate every frame. **To test whether code runs, watch a
+  constant only that code reads.** A logged, non-halting read watchpoint on
+  `0x08abf4a4` (a `10.0` whose only reader is `HullOverlay_Submit`) counted
+  that function's executions at full speed, with no execution breakpoint
+  at all. The log's `PC=` names the reader.
+- **`input.buttons.press` never replies if a breakpoint halts the CPU inside
+  its duration.** The reply comes when the press ends, and a stopped CPU
+  never gets there. The client times out, and the CPU is left stepping with
+  the breakpoint still armed. Send `input.buttons.send` with the button
+  held, then again with it released: both reply at once.
+- **A button held for twenty seconds registered no rising edge.** It was
+  `hold(circle=True)`, with no release until the run timed out, and the
+  absorb never happened. The same hold released after 0.15-0.2 s absorbed
+  every time. Not explained. Release a held button promptly.
+- **PPSSPP's own screenshot key beats `import -window root`.** The
+  profile's `controls.ini` binds it (`Screenshot = 1-35`, keyboard `g`).
+  Move the window onto the Xvfb canvas with `xdotool windowmove <id> 0 0`,
+  then send `xdotool key --window <id> g`. PNGs land in
+  `PSP/SCREENSHOT/` under the instance's own memory stick. They were real
+  frames every time, where `import` had given black ones. Each shot carries
+  the "saved" toast of the one before it, top centre.
+- **A race left alone ends in the attract demo, and the player object goes
+  stale.** Minutes after the field finishes, `InGame` stays the state name
+  but the screen is a demo with other craft. Absorbs silently stop working
+  because the craft pointer read earlier no longer drives anything.
+  `psp-drive.py restart` brings back a live grid. Re-read
+  `*(g_race_manager + 0x2c0)` after it, because the craft is reallocated.
