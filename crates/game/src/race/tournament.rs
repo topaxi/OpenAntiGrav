@@ -1,9 +1,8 @@
 //! Carries a Tournament cell's own leg list and running standings across a
-//! leg boundary - the piece
-//! `handover/gameplay/tournament-scoring-is-read-and-the-mode-is-next.md`
-//! flags as "genuinely new shape, not an extension of an existing field":
-//! every other mode resets fresh per race because every one of them ends
-//! there, and Tournament is the first that does not.
+//! leg boundary - a genuinely new shape, not an extension of an existing
+//! field: every other mode resets fresh per race because every one of them
+//! ends there, and Tournament is the first that does not. The law it carries
+//! is `docs/ghidra/functions/psp-pulse-usa/tournament.md`'s.
 //!
 //! The points law itself is [`oag_race::tournament`]'s; this module is only
 //! the game-layer bookkeeping that owns it across the several separate
