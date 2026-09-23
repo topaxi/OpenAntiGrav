@@ -141,4 +141,6 @@ What is not reproduced:
   (`~/.cache/oag/drive/reports/pulse-bloom/lod-both-vs-single-absorb.png`,
   `compare-absorb-bloom-lod-single.png`). So `Lod::Both`'s "exactly as the
   original does" does not hold for the player's hull near the camera.
-  Which LOD the original draws there, and when, is not read.
+  Measured 2026-09-23: the original draws tier 0 only up close, on the hull
+  and on a track `LodGroup` - see `docs/formats/vex.md`, "the running
+  original does not draw tier 1 up close".

@@ -20,6 +20,13 @@
 /// permanently discards the other, removing that duplication at the cost of
 /// no longer matching the original.
 ///
+/// **2026-09-23: the pixels contradict the static read.** A PPSSPP frame of
+/// the player's hull and one of a `16_Track` grandstand `LodGroup`, both well
+/// inside the authored switch distance, match [`Self::Single`] and not
+/// [`Self::Both`] - see `docs/formats/vex.md`, "the running original does not
+/// draw tier 1 up close". So `Both` is the unfaithful picture near the camera,
+/// despite its variant doc below.
+///
 /// A real distance-based switch (the original's authored switch-distance
 /// value, re-checked against the camera every frame) would need `Model` to
 /// carry per-node bounds and the render loop to re-evaluate them each frame -

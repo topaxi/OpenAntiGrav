@@ -346,6 +346,45 @@ carry per-node bounds and the render loop to re-check them against the camera
 every frame - the same live mechanism the frustum-culling entry below needs,
 and not yet built.
 
+### 2026-09-23: the running original does not draw tier 1 up close
+
+**Confidence 80 that the original draws only tier 0 within the switch
+distance; this contradicts the "both tiers, always" conclusion above for
+what reaches the screen.** Two pixel comparisons against PPSSPP frames of
+the US disc, each set against this engine under `lod = "both"` and
+`lod = "single"` on current `main`:
+
+- **The player's hull** (`Ship.vex`'s own `LodGroup`: `shipShape` and its
+  siblings under tier 0, `lodShape` under tier 1). The original's frame at
+  the `16_Track` grid, close camera, matches `single` detail for detail -
+  the `8D` decal, the panel lines, a clean rear. `both` draws the coarse
+  `lodShape` over it, darkening the rear in a ring and hiding the decal. The
+  pose is matched to the grid slot, not to the pixel.
+- **A track `LodGroup`** on `16_Track`'s grandstand, well inside every
+  authored switch distance (`118.9` to `424.0` units, from
+  `crates/vex/examples/lod_group_probe.rs`). The original shows tier 0's
+  mottled grass texture; `both` lays tier 1's flat panels and seams over it;
+  `single` matches the original. The pose is approximate: the original frame
+  is from the absorb probe's grid run, its camera a few units off ours.
+
+Frames: `~/.cache/oag/drive/reports/lod-measure/hull-orig-both-single.png`
+(original, `both`, `single` left to right) and `grass3.png` (top to bottom),
+from `data/lod-measure/` and the absorb probe's PPSSPP screenshots
+`UCUS98712_00001`/`00014`.
+
+So the "no LOD-tier-selection code anywhere" reading above is wrong for
+what the player sees, or wrong about which path draws: the section itself
+flags `Vex_LoadModel`'s root-node dispatch as only partly read, and the
+craft's draw replays a list `Mesh_DrawBatchSet` recorded at load
+(`docs/ghidra/functions/psp-pulse-usa/scene-light.md`). Which of those
+drops tier 1, and whether the original ever draws tier 1 beyond the
+authored switch distance, is **not read**. Beyond it, tier 0 and tier 1
+coincide in bounds and differ only in triangle count, so a distance switch
+and "tier 0 always" look alike at that range.
+
+**What this means for `oag_render::mesh::Lod`:** `single` is the faithful
+picture up close and `both` is not, the opposite of what its doc said.
+
 ## Vertex format
 
 The GU vertex type at batch `+0x0a` selects the layout. On **PSP**, position is
