@@ -463,7 +463,10 @@ weapon models, `oag-view` (it has no race camera), a `mesh::merge`.
   pass.
 
 **Per title.** The payload layout reads the same everywhere it was checked,
-and `crates/render/tests/lod_switch_ground_truth.rs` pins what it reads:
+and `crates/render/tests/lod_switch_ground_truth.rs` pins what it reads - the
+distances and group counts below at **confidence 90** each, read off every
+file through the same offsets the PSP function reads and asserted exactly,
+not 95 only because the offsets themselves are the PSP's:
 
 | Title | Craft switch distance | Circuits | Switch code |
 | --- | --- | --- | --- |
@@ -473,19 +476,26 @@ and `crates/render/tests/lod_switch_ground_truth.rs` pins what it reads:
 | HD / Fury | no craft group | 64 groups, none holds a second tier | not read - chosen |
 | 2048 | no craft group | 16 groups, all childless | not read, nothing to switch |
 
-The PS2 build re-authored its craft distances at the same offset rather than
-moving them, and the same `65` is used for every title - chosen, since only
-the PSP function was read. No group anywhere is nested under another.
+The PS2 values sit at the same offset and are different numbers, which reads
+as the port re-authoring them rather than moving the field (confidence 60 -
+the alternative, that the PS2 build's own switch reads elsewhere, is
+unexcluded while its code is unread). The same `65` is used for every title -
+chosen, since only the PSP function was read. No group anywhere is nested
+under another (confidence 90, asserted on every file above).
 
-**HD and 2048 have nothing to switch.** HD's 64 groups are in six files: the
-four `talons_junction/start_grid*.vex` carry four each that declare two
-children but hold one (same positions and distances as Pulse's `16_Track`
-groups - the coarse tier was dropped, not the group), and the two `03_track`
-files carry 16 each that declare one and hold none. `mesh::rcs` tags HD
-geometry with the same table, and it hides nothing; a race-grid capture with
-`--lod original` against `--lod both` differs in 0 pixels. 2048 authors 16
-groups in one file of its 1,059 (`DLC1/environments/Moa_Therma/track_reversed.vex`),
-all childless. HD's craft level of detail lives in a separate file beside the
+**HD and 2048 have nothing to switch** (confidence 90 for both counts,
+`crates/render/tests/hd_lod_ground_truth.rs` for HD's). HD's 64 groups are in
+six files. The four `talons_junction/start_grid*.vex` carry eight each: four
+that declare two children but hold one, at the positions and distances
+Pulse's `16_Track` groups use, one that declares and holds one, and three
+that hold none. The two `03_track` files carry 16 each, declaring one and
+holding none. Why a group that declares two holds one is unread - a coarse
+tier dropped in the port is the obvious reading, at confidence 50. Since no
+HD group holds a second child in its tree, every node under one is under its
+finest child and the switch can hide nothing. `mesh::rcs` builds the table
+regardless of `--lod`, so the proof is that census and not a picture
+comparison. 2048 authors 16 groups in one file of its 1,059
+(`DLC1/environments/Moa_Therma/track_reversed.vex`), all childless. HD's craft level of detail lives in a separate file beside the
 hull instead (`ship_lod.vex`, see [`hd-status.md`](hd-status.md)), which
 nothing here switches to yet.
 

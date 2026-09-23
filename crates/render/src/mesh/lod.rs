@@ -133,7 +133,10 @@ impl From<ModelDetail> for String {
 /// the buffer, and a [`LodGroups`] table beside it - and differs only in the
 /// [`ModelDetail`] a caller switches it at. [`Self::Both`] builds no table,
 /// so every tier draws at once, the coarse over the fine: a diagnostic view
-/// of where the coarse tier sits, which the original never shows.
+/// of where the coarse tier sits, which the original never shows. **Only the
+/// `.vex` builder reads it**: `mesh::rcs` (Wipeout HD) builds the table
+/// whatever this says, which changes nothing there because no HD group holds
+/// a second tier (`crates/render/tests/hd_lod_ground_truth.rs`).
 ///
 /// A consumer that never calls [`LodSwitch::select`] gets the finest tier
 /// ([`LodSwitch::new`], [`LodGroups::shows_nearest`]) - what the original
