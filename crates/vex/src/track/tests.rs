@@ -136,7 +136,8 @@ fn the_reserved_block_exists_only_from_version_0x101() {
 
     let old = parse(&build(0x100, &[3, 2])).expect("parse 0x100");
     let new = parse(&build(0x105, &[3, 2])).expect("parse 0x105");
-    assert_eq!(old.paths, new.paths);
+    // Below `0x103` the light scales read full whatever the bytes say.
+    assert_eq!(without_light_scale(&old.paths), without_light_scale(&new.paths));
     assert_eq!(new.encoded_len(), old.encoded_len() + RESERVED_LEN);
 }
 
@@ -474,9 +475,8 @@ fn version_0x107_shortens_the_control_point() {
 fn the_short_record_decodes_the_same_values_as_the_long_one() {
     let long = parse(&build(0x106, &[4, 3])).expect("0x106 parses");
     let short = parse(&build(SHORT_POINT_VERSION, &[4, 3])).expect("0x107 parses");
-    for (a, b) in long.paths.iter().zip(&short.paths) {
-        assert_eq!(a.points, b.points);
-    }
+    // The short record's light scales are not read, and read full.
+    assert_eq!(without_light_scale(&long.paths), without_light_scale(&short.paths));
     assert!(short.encoded_len() < long.encoded_len());
 }
 
@@ -505,4 +505,21 @@ fn a_run_of_full_light_blends_to_just_under_full_the_way_the_original_truncates(
 fn a_track_older_than_0x103_reads_full_light_whatever_its_bytes_say() {
     let track = parse(&build(0x102, &[1])).expect("parse");
     assert_eq!(track.paths[0].points[0].light_scale, [0xff; 4]);
+}
+
+/// Every point with its light scales cleared, for comparing two layouts that
+/// carry them differently.
+fn without_light_scale(paths: &[Path]) -> Vec<Vec<SplinePoint>> {
+    paths
+        .iter()
+        .map(|path| {
+            path.points
+                .iter()
+                .map(|p| SplinePoint {
+                    light_scale: [0; 4],
+                    ..*p
+                })
+                .collect()
+        })
+        .collect()
 }
