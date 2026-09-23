@@ -239,6 +239,7 @@ impl RaceDefaults {
         ShipPaths {
             dir: self.guest_dir_for(team).unwrap_or(self.ship_dir),
             zone: self.zone_craft,
+            boost: self.boost,
         }
     }
 

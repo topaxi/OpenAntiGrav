@@ -514,7 +514,15 @@ pub fn ship_entry_name(
     )
 }
 
-/// The boost plume that goes with [`ship_entry_name`]'s hull.
+/// The boost plume that goes with [`ship_entry_name`]'s hull, or `None` when
+/// this title's own package names no standalone boost model at all.
+///
+/// **`None` is a title fact, not a lookup failure.** [`oag_title::race::ShipPaths::boost`]
+/// is `Some` only where a title's own executable composes a per-team boost
+/// path - Pulse - and `None` everywhere else, Pure's measured absent
+/// (`docs/ghidra/functions/psp-pure-usa/ship-models.md`) included. A caller
+/// that gets `None` back should say "this title has none", never "not
+/// found" - see `livery::plume`, the one caller today.
 ///
 /// **Zone mode has its own plume file and this used to load the wrong one.**
 /// `ship_entry_name` switches the hull between `Ship.vex` and `Zone.vex` on
@@ -528,16 +536,31 @@ pub fn ship_entry_name(
 /// team that was checked" is not a reason to keep loading the wrong file, and
 /// the caller's missing-entry path already handles a set that does not carry
 /// one.
+///
+/// **The Zone fallback reads `paths.boost` now, not a hardcoded Pulse
+/// constant.** [`oag_title::race::ZoneCraft::boost`] returns `None` for
+/// [`oag_title::race::ZoneCraft::OwnShip`]/[`oag_title::race::ZoneCraft::PlayerShip`]
+/// meaning "whatever a non-Zone race would have used" - which is this title's
+/// own [`oag_title::race::ShipPaths::boost`], not necessarily Pulse's
+/// `shipboost`. A title with a dedicated Zone ship directory and no ordinary
+/// boost model either - Pure - now correctly resolves to `None` in Zone mode
+/// too, instead of composing a `shipboost.vex` path under a ship directory
+/// that never carried one.
 #[must_use]
-pub fn boost_entry_name(paths: oag_title::race::ShipPaths, team: &str, mode: Mode) -> String {
+pub fn boost_entry_name(
+    paths: oag_title::race::ShipPaths,
+    team: &str,
+    mode: Mode,
+) -> Option<String> {
     if mode != Mode::Zone {
-        return ships::entry_name_in(paths.dir, team, ships::BOOST);
+        return Some(ships::entry_name_in(paths.dir, team, paths.boost?));
     }
-    ships::entry_name_in(
+    let stem = paths.zone.boost().or(paths.boost)?;
+    Some(ships::entry_name_in(
         paths.dir,
         paths.zone.directory(team),
-        paths.zone.boost().unwrap_or(ships::BOOST),
-    )
+        stem,
+    ))
 }
 
 /// The shield shells a craft can draw, best first.

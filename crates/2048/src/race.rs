@@ -44,6 +44,10 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     handling_dir: HANDLING_DIR,
     zone: oag_title::ZoneCircuit::SameCircuit,
     zone_craft: oag_title::ZoneCraft::PlayerShip,
+    // Unread: this title's own boost-plume path (if it authors a standalone
+    // one at all, off either roster) has not been searched for. `None` here
+    // is silence, not the measured absence Pure's own row records.
+    boost: None,
     sounds: SOUND_BANKS,
     zone_announcer: Some(ZONE_ANNOUNCER),
     // Unread on this title: `data.psarc` is not extracted in this tree, so

@@ -58,6 +58,9 @@ const TITLE: &Title = &Title {
             hull: "Zone",
             boost: "Zoneboost",
         },
+        // Unread here too: resolving archives has nothing to do with which
+        // boost model a race would load.
+        boost: None,
         // Unread here too, and named after nothing on any disc so that a test
         // which started reading it would fail loudly rather than resolve.
         sounds: &oag_title::SoundBanks {

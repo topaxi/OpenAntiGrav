@@ -42,6 +42,14 @@
 0x0886b924	function	ExhaustFlare_Init	82	exhaust-sound.md
 0x0881f67c	function	HudSight_UpdateTone	82	lockon-sound.md
 
+# The visual half of the same exhaust story (2026-09-23): decompiled in full,
+# matching Pulse's psp-pulse-usa/exhaust.md bit for bit on four independent
+# literal constants, and cross-checked identical on psp-pure-eu - see
+# exhaust-sound.md's "The visual half" section.
+0x0886bc6c	function	Exhaust_Update	88	exhaust-sound.md
+0x0886b274	function	Exhaust_UpdateEngineSound	88	exhaust-sound.md
+0x0886b548	function	ExhaustFlare_OnSpeedupPad	88	exhaust-sound.md
+
 # DLC download completion check (2026-09-15), byte-identical to psp-pure-eu's
 # own at a different address - see the shared write-up in that binary's own
 # directory, ../psp-pure-eu/dlc-download-check.md.

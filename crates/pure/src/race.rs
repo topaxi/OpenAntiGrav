@@ -63,6 +63,15 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     // here too.
     zone: oag_title::ZoneCircuit::Separate(ZONE_TRACKS, false),
     zone_craft: oag_title::ZoneCraft::OwnShip(ZONE_TEAM),
+    // Measured absent, not merely unfound: Pure's own executable composes no
+    // boost-plume path template and no candidate name resolves against
+    // `Data.wad` on either pressing, at confidence 93 -
+    // `docs/ghidra/functions/psp-pure-usa/ship-models.md`. The always-on
+    // `Engine Flare` billboard still grows when boosting - Pure's own
+    // `Exhaust_Update` counterpart carries the identical `boost_timer * 8.0`
+    // half-size term on both pressings, same page - it just has no separate
+    // model to reveal alongside it.
+    boost: None,
     sounds: SOUND_BANKS,
     zone_announcer: Some(ZONE_ANNOUNCER),
     // Pure's own `speech_zone.bnk` was listed alongside Pulse's and HD's -
