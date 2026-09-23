@@ -1051,3 +1051,7 @@
 0x0890e120	function	HullOverlay_SubmitAbsorbBatched	85	cannon-quake-leachbeam.md
 0x0883e904	function	HullOverlay_AbsorbWindowActive	85	cannon-quake-leachbeam.md
 0x0883e950	function	HullOverlay_AbsorbFade	85	cannon-quake-leachbeam.md
+0x0883ea50	function	Ship_GatherCollisionFxNodes	85	shield.md
+0x08a6d79c	function	Vex_CollectNodesOfType	85	shield.md
+0x08916200	function	PsysNode_Start	65	shield.md
+0x08915cdc	function	PsysNode_Update	80	shield.md

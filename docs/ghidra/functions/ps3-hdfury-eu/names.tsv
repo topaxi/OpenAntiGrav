@@ -412,3 +412,8 @@
 0x00096ef0	function	Hud_UpdateLapCounter	80	hud-readouts.md
 0x00096088	function	Hud_UpdatePositionCounter	78	hud-readouts.md
 0x00200468	function	Text_SetColour	72	hud-readouts.md
+0x000d9398	function	Ship_PlayAbsorbFeedback	80	absorb-feedback.md
+0x000d2f58	function	Ship_GatherAbsorbNodes	85	absorb-feedback.md
+0x002d8d10	function	ShipAbsorbNode_SpawnBurst	80	absorb-feedback.md
+0x002d8bb8	function	ShipAbsorbNode_RegisterClass	88	absorb-feedback.md
+0x002d8e58	function	ShipAbsorbNode_Construct	88	absorb-feedback.md
