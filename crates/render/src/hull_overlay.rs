@@ -57,6 +57,11 @@
 //!   place of `Gu_Color`, so the original's overlay on them does not fade.
 //!   Chosen, not measured. So is overlaying both of `glowingShape`'s list-0
 //!   batches, where the original was seen to submit one of the two.
+//! - **No fog.** `HullOverlay_Submit` calls `Fog_Disable` unless the mesh's
+//!   material has flag `& 8` (the `0x0891eac0` branch, not followed). The
+//!   race never writes the overlay's scene uniform, so it keeps `Fog::off`.
+//!   That matters because [`BLEND`] adds the fragment at full weight, so a
+//!   fog lerp would add fog colour on every overlaid pixel.
 //! - **The airbrakes project from model space.** The GE projects each
 //!   batch's own input coordinates, and the airbrake meshes sit under
 //!   locator transforms, so their pattern in the original is offset from

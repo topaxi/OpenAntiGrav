@@ -1710,7 +1710,11 @@ weapon), so the value is that record's `+0`. Two functions touch it:
 
 **So the LeachBeam overlay lights the firing craft's hull, faded by its own
 beam's pulse strength.** A 45 s write watch on every record's `+0` logged
-nothing, because no LeachBeam fired in that window. That is a zero without
+nothing, because no LeachBeam fired in that window. One record's `+0` read
+`0.5006` throughout, with `DAT_08b317ac == 0`. That fits a pulse strength
+left over from an earlier beam: `LeachBeam_UpdatePool` stops writing when
+the beam retires, and nothing clears the slot. The `== 2` gate is what keeps
+a stale value from drawing. That is a zero without
 the scenario behind it. Firing one through `psp-fire-weapon.py` halts
 PPSSPP, so the live check is still open. Not wired.
 
