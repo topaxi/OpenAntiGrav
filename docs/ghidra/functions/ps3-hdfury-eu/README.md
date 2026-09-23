@@ -88,6 +88,10 @@ Two structural facts to expect, both different from every other binary here:
   two separate per-tick updates (Missile, LeachBeam), the shared `0.5` s hold
   time that disagrees with the PSP's `0.8`, and the LeachBeam's four-widget
   reveal that is not a simple all-or-nothing.
+- [hud-readouts.md](hud-readouts.md) - `Hud_Update` and the three per-tick
+  updates behind the shield hexagon (its `0x1664FF` fill cropped from the top,
+  the 20 % and post-hit red flash), the lap arc and the position arc, whose
+  yellow is the atlas's own.
 - [mode-manager.md](mode-manager.md) - `ModeManager.cpp`: the sibling mode
   hierarchy, and the one place a C++ constructor pair could be told apart.
 - [race-manager.md](race-manager.md) - `RaceManager.cpp`: the singleton holder
