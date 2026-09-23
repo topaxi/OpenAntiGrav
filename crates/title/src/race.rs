@@ -34,17 +34,18 @@
 //! - **Shared vocabulary.** `Data\Ships\<Team>\Ship.vex` resolves on both
 //!   discs, so the hull's file name is not a title fact and a field for it would
 //!   be a table with one value in it.
-//! - **Unrecovered, not different.** The boost plume is on Pure somewhere; what
-//!   that disc calls it is unread. A field would be a `None` designed from one
-//!   example, which is the failure [ADR-0009] named and [ADR-0022] does not
-//!   license. **The Zone hull was on this list until 2026-08-19 and has come
-//!   off it**, which is worth reading as a worked example rather than a
-//!   correction: it was excluded while Pulse and Pure were measured and HD was
-//!   not, because two measurements and a hole is the shape being refused. HD's
-//!   was then measured - `/data/ships/zone/ship.vex`, off the manifest the
-//!   `oag_hd::names::MODE_SHIPS` roster already listed - and with three titles
-//!   and no hole it became [`ZoneCraft`]. The bar moved because the evidence
-//!   did, not because the design changed its mind.
+//! - **The boost plume sat here too, as "unrecovered, not different" - it no longer does.** Pulse
+//!   composes a per-team `shipboost.vex` (confidence 82, its `Engine Flare` constructor,
+//!   `psp-pulse-usa/exhaust.md`); Pure's executable authors no standalone boost model at all,
+//!   measured rather than merely unfound (confidence 93, `psp-pure-usa/ship-models.md`); HD's
+//!   plume is a third shape again, a subtree of `engineflare.vex`
+//!   (`docs/rendering/trail-ribbon.md`). Three titles measured and no hole, the bar [`ZoneCraft`]
+//!   cleared below, so this is [`ShipPaths::boost`] now, on the precedent **the Zone hull already
+//!   set**: it was excluded while Pulse and Pure were measured and HD was not, because two
+//!   measurements and a hole is the shape being refused. HD's was then measured -
+//!   `/data/ships/zone/ship.vex`, off the manifest the `oag_hd::names::MODE_SHIPS` roster already
+//!   listed - and with three titles and no hole it became [`ZoneCraft`]. The bar moved because the
+//!   evidence did, not because the design changed its mind.
 //! - **Absent by construction.** Pure ships no loading-screen wave and no `.mip`
 //!   HUD atlas at all. An axis that is `Some` for one title and `None` for the
 //!   other is the same one-example design in a different disguise.
@@ -73,16 +74,18 @@ pub const SHIP_DIR: &str = r"Data\Ships";
 
 /// Where one title keeps the models a craft is made of.
 ///
-/// The two fields travel together everywhere - a hull path is
+/// The fields travel together everywhere - a hull path is
 /// `dir\<team>\<stem>.vex` and [`ZoneCraft`] is what decides the team and the
-/// stem on a Zone run - so they are one value rather than two parameters
-/// threaded side by side through six functions.
+/// stem on a Zone run - so they are one value rather than parameters threaded
+/// side by side through six functions.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ShipPaths {
     /// See [`RaceDefaults::ship_dir`].
     pub dir: &'static str,
     /// See [`RaceDefaults::zone_craft`].
     pub zone: ZoneCraft,
+    /// See [`RaceDefaults::boost`].
+    pub boost: Option<&'static str>,
 }
 
 mod announcer;
@@ -144,6 +147,20 @@ pub struct RaceDefaults {
     pub zone: ZoneCircuit,
     /// Where this title keeps the craft a Zone race flies. See [`ZoneCraft`].
     pub zone_craft: ZoneCraft,
+    /// The non-Zone boost plume's model stem, under [`Self::ship_dir`] beside
+    /// the hull - `Some("shipboost")` on Pulse, `None` where this title's own
+    /// executable names no such standalone model.
+    ///
+    /// **`None` is not one shape.** Pure's is measured absent (confidence 93,
+    /// `psp-pure-usa/ship-models.md`). HD's is not a claim HD has no plume -
+    /// `EF_Boost` is a subtree of `engineflare.vex` rather than a `.vex` of
+    /// its own, so it never had a stem to name here; `flare::per_team` loads
+    /// it, untouched by this field. 2048's and Omega's is neither of those:
+    /// simply unread, [`Self::zone_announcer`]'s own rule below.
+    ///
+    /// [`ZoneCraft::boost`] is this field's Zone-mode sibling - see that
+    /// method's own doc for how the two combine.
+    pub boost: Option<&'static str>,
     /// Which `.bnk` each of this title's race cues is looked up in. See
     /// [`SoundBanks`].
     pub sounds: &'static SoundBanks,
@@ -472,6 +489,7 @@ impl RaceDefaults {
         ShipPaths {
             dir: self.ship_dir,
             zone: self.zone_craft,
+            boost: self.boost,
         }
     }
 }
@@ -664,6 +682,9 @@ impl ZoneCraft {
     }
 
     /// The boost plume's model stem, on the same terms as [`Self::hull`].
+    ///
+    /// `None` on [`Self::OwnShip`]/[`Self::PlayerShip`] means "whatever a
+    /// non-Zone race used" ([`ShipPaths::boost`]), not "no plume in Zone".
     #[must_use]
     pub fn boost(self) -> Option<&'static str> {
         match self {

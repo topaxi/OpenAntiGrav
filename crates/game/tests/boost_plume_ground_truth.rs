@@ -272,6 +272,34 @@ fn the_four_dlc_teams_have_no_boost_plume_on_the_disc_alone() {
     }
 }
 
+/// Pulse names a standalone boost model, unlike Pure - see
+/// `pure_race_ground_truth.rs`'s sibling assertion for the other half of this
+/// pairing. Regression for `oag_title::race::ShipPaths::boost` reaching
+/// `livery::plume` correctly through the *full* load path: a title with the
+/// seat filled must still find and draw its plume, not just report that the
+/// seat exists.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn pulses_load_report_still_finds_its_boost_plume() {
+    let Some(image) = image() else {
+        return;
+    };
+    let loaded = oag_game::race::load(&oag_game::race::Options {
+        source: image.display().to_string(),
+        class: "VENOM".to_string(),
+        ..oag_game::race::Options::default()
+    })
+    .expect("loading the race");
+    assert!(
+        loaded
+            .report
+            .iter()
+            .any(|line| line.contains("drawn additively while the plume is up")),
+        "no boost plume line in the report: {:#?}",
+        loaded.report
+    );
+}
+
 /// Pins the finding in `docs/ghidra/functions/psp-pulse-usa/mesh-draw.md`:
 /// every PSP team's `shipboost.vex` batches take `Mesh_SetBatchDrawState`'s
 /// pure-additive (`Batch::is_additive_blend`) branch, never the "replace"

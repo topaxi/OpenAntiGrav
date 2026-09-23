@@ -809,7 +809,10 @@ fn plume(
     lod: mesh::Lod,
     report: &mut Vec<String>,
 ) -> (Option<Model>, Option<vex::TexTransform>) {
-    let boost_name = boost_entry_name(ships, team, mode);
+    let Some(boost_name) = boost_entry_name(ships, team, mode) else {
+        report.push(format!("{team}: names no standalone boost-plume model"));
+        return (None, None);
+    };
     let Ok(blob) = archives.read_name(&boost_name) else {
         report.push(format!(
             "{boost_name}: not in the archive set - no boost plume for this team"

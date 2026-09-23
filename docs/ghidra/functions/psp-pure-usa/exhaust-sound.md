@@ -1,7 +1,16 @@
-# Pure's `ExhaustFlare_Init` opens the same `~ENGINE` voice Pulse's does
+# Pure's `ExhaustFlare_Init` opens the same `~ENGINE` voice Pulse's does, and its `Exhaust_Update` grows the flare on boost too
 
 **Binary:** `pure-psp` `BOOT.BIN`, image base `0x08804000`.
 **Status:** decompilation only, no PPSSPP leg for either title.
+
+**2026-09-23 update: the visual half is now read too, settling whether Pure's
+boost is visually inert.** Pure's own `Exhaust_Update` (the sibling this
+page's "What is not verified" section flagged as unread) carries the identical
+`half_size = ((i * 0.6 + 0.4) * 2.5 + boost_timer * 8.0)` term Pulse's own
+`exhaust.md` documents, bit-for-bit, on both pressings. So the always-on
+`Engine Flare` billboard **does** grow while boosting on Pure, exactly as it
+does on Pulse - it is only the separate `<Team>boost.vex` plume mesh that
+Pure never had (`ship-models.md`). See "The visual half" section below.
 
 Answers `oag_game::audio::sfx::Cue::Engine`. Structurally different from the
 other `Cue` variants this project has chased: `Engine` is not a one-shot
@@ -65,25 +74,100 @@ authored value carried forward, not a coincidental read.
 **Renamed `ExhaustFlare_Init`, matching Pulse's own name for its
 counterpart** (`FUN_0886b924` -> `ExhaustFlare_Init`).
 
+## The visual half: `Exhaust_UpdateEngineSound` and `Exhaust_Update`, both found (2026-09-23)
+
+Answers this page's own "not verified" bullet below, and the open rendering
+question of whether Pure's always-on `Engine Flare` billboard does anything
+visible when boosting, given it has no separate plume mesh to reveal - see
+`docs/formats/pure-status.md`. Found by walking forward from
+`ExhaustFlare_Init` (`0x0886b924` usa / `0x0886b71c` eu) to the two sibling
+functions immediately after it in `.text` - the same "adjacent in source
+order" pattern that placed `ExhaustFlare_Init` itself, `get_xrefs_to` still
+being unusable for a locator string like `~ENGINE`'s neighbour `Engine Flare`
+(the known relocation defect, "Technique" section of `ship-models.md`).
+
+**`Exhaust_UpdateEngineSound`** - `0x0886b274` (usa), `0x0886b06c` (eu),
+`xref_count` 1 each, called from the sibling below. Decompiled in full on
+both pressings, byte-identical to Pulse's own reading
+(`docs/ghidra/functions/psp-pulse-usa/exhaust.md`): `engine_on` sets when
+`thrust > 0 || boost_timer > 0.2`, pitch lags toward `base + speed_kmh * 5.0`
+at rate `0x3c23d70a` (`0.01`, the same literal `ExhaustFlare_Init` seeds), and
+the function's only write to `boost_timer` is `boost_timer = max(0,
+boost_timer - dt)` - a pure decay, never an arm.
+
+**`Exhaust_Update`** - `0x0886bc6c` (usa), `0x0886ba6c` (eu), `xref_count` 0
+on both (called only through a vtable slot, same as Pulse's). Decompiled in
+full: three staggered layer-alpha ramps at `i = 0, 0.25, 0.5`, then
+
+```c
+*(float *)(param_2 + 0x1a8) =
+     (*(float *)(param_2 + 0x1a0) * 0.6 + 0.4) * 2.5 + *(float *)(param_2 + 0x19c) * 8.0;
+fVar5 = (float)FUN_0882f70c(0x3f400000, 0x3fa00000);  // rand(0.75, 1.25)
+*(float *)(param_2 + 0x1a8) = *(float *)(param_2 + 0x1a8) * fVar5;
+iVar3 = FUN_0882f5ac(200, 0xff);                      // rand_int(200, 255)
+*(int *)(param_2 + 0x1ac) = iVar3 * 0x1000000 + 0xffffff;
+```
+
+identical on the usa pressing down to the literal hex, `+0x1a0` being the
+intensity `i` and `+0x19c` being `boost_timer` - the same field
+`Exhaust_UpdateEngineSound` only ever decays. This is Pulse's own
+`half_size = ((i * 0.6 + 0.4) * 2.5 + boost_timer * 8.0)` and colour-alpha
+formula (`exhaust.md`), reproduced bit for bit, both pressings.
+
+**The writer, closing the loop.** `search_strings("SPEEDUPPAD")` (the sound
+cue Pulse's `ExhaustFlare_OnSpeedupPad` plays from the same branch) lands on
+`0x08a490b8` (usa) / `0x08a475b8` (eu); `get_xrefs_to` on that address - a
+code reference, unaffected by the data-in-data relocation defect - returns
+exactly one function each: `0x0886b548` (usa), `0x0886b340` (eu). Both open
+with `*(undefined4 *)(param_1 + 0x19c) = 0x3f4ccccd;` - **`0.8f`**, the exact
+bit pattern `oag_render::exhaust::BOOST_SECONDS` already carries, read off
+Pulse. So the arm, the decay and the visual term all match Pulse's own
+reading, on both pressings, and this engine's existing generic
+`oag_render::exhaust::Exhaust` (title-agnostic, wired unconditionally in
+`crates/game/src/race/pads.rs`) already reproduces Pure's boost visual
+correctly - nothing to implement, only to cite.
+
+**The caller is confirmed, not just plausible.** `get_function_xrefs
+0x0886b340` (eu) names exactly one caller, `FUN_0892c66c` - decompiled, it is
+the speed-pad crossing check itself: it tracks the pad id under the craft
+(`FUN_08849fec`), and on a *new* id calls `FUN_0886b340` (the `0.8f` arm)
+before anything else. So the arm fires exactly on the edge Pulse's own
+`Ship_ApplySpeedupPad` fires it from, not merely a function that happens to
+write the right constant.
+
+**The same Zone-selector expression forces `engine_on` in two independent
+places.** `FUN_0892c66c` itself sets a flag (`DAT_00054e70 = 1`) under
+`DAT_00281cb3 == 0 && _DAT_00053534 == 6`, and `Exhaust_UpdateEngineSound`
+forces `engine_on` true under the identical expression - the same Zone-mode
+selector `docs/ghidra/functions/psp-pulse-usa/zone-mode.md` establishes for
+Pulse. Reading no further than "it forces the flare on in Zone mode" here;
+what consumes `DAT_00054e70` is not chased.
+
+**Confidence 88** for this section: decompiled in full on both pressings, four
+independent literal constants matching Pulse's bit for bit (`0.6`, `0.4`,
+`2.5`, `8.0`, the `0.75..1.25`/`200..255` rand ranges, and the `0.8` arm), the
+one caller confirmed rather than assumed, no runtime leg for either binary.
+
 ## Confidence
 
-**82**: decompilation only (no runtime leg, no verified caller - blocked on
-the `jal` wart), but corroborated by an independently-recovered Pulse
-function of matching shape *and* two exactly-matching literal constants,
-not merely a structural echo - the same evidence class `Sound_Play`'s own
-rename earned, and stronger on the constants than any other cue this thread
-has found so far.
+**82** for `ExhaustFlare_Init`: decompilation only (no runtime leg, no
+verified caller - blocked on the `jal` wart), but corroborated by an
+independently-recovered Pulse function of matching shape *and* two
+exactly-matching literal constants, not merely a structural echo - the same
+evidence class `Sound_Play`'s own rename earned, and stronger on the
+constants than any other cue this thread has found so far.
 
 ## What is not verified
 
 - **`ExhaustFlare_Init`'s own caller**, blocked on the `jal` wart.
-- **Whether Pure's `Exhaust_UpdateEngineSound` counterpart writes the same
-  per-tick pitch/volume behaviour** - this page confirms only the voice's
-  *opening*, not the ongoing per-tick write `exhaust.md` documents in detail
-  for Pulse. A separate pass would be needed to find and read it.
-- **Runtime verification.** No PPSSPP leg for either binary.
+- **Runtime verification.** No PPSSPP leg for either binary, for any function
+  on this page.
 
 ## History
 
 - **2026-09-04.** Written answering `every-sfx-trigger-is-a-pulse-reading-applied.md`'s
   `Engine` cue for Pure.
+- **2026-09-23.** Added `Exhaust_UpdateEngineSound`, `Exhaust_Update` and
+  `ExhaustFlare_OnSpeedupPad`, closing the "not verified" bullet on the
+  sound-update sibling and the open question on whether Pure's boost visual
+  is inert (`docs/formats/pure-status.md`).

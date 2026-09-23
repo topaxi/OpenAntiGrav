@@ -333,6 +333,8 @@ const DEFAULTS: RaceDefaults = RaceDefaults {
     handling_dir: r"Data\HandlingStats",
     zone: ZoneCircuit::Prefixed("zone_"),
     zone_craft: ZoneCraft::PlayerShip,
+    // Not exercised by any test in this file.
+    boost: None,
     sounds: &SOUNDS,
     zone_announcer: None,
     zone_class_announcer: None,

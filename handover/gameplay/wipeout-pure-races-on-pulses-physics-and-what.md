@@ -20,10 +20,22 @@ Its HUD atlas (it has none - the HUD is `.vex` models off `Data\HUD\*.vex`, a wh
 - The overlap between the fifteen triple-chained anchors and `exhaust.md`'s ten pre-existing IDs is unestablished.
 - **What selects `Phantom.vex` is now mostly read, 2026-09-08.** The call site (`FUN_08927dac` on `psp-pure-usa`, `FUN_08927694` on `psp-pure-eu`, structurally identical) reads one flag byte out of a synced ad-hoc-multiplayer network object (`"NetObjectGlobalsStructure"`, confirmed by `FUN_0889dcec`'s own `sceNetAdhoc*` calls and log strings) - not a speed-class comparison. **What is still open is narrower now**: every function on the trail is a receive/apply path; nothing found yet writes the byte on the local player's own slot before it is broadcast. Full chain, confidence and the field-registration cross-check: `docs/ghidra/functions/psp-pure-usa/ship-models.md`. Nothing should be wired to a speed-class comparison on the strength of the name alone - that was already true and is now measured, not assumed.
 - **What `VR` is.** The prefix names a whole alternate presentation set (`Data\Weapons\vr_bomb.vex`, `Data\Tex\vr_env.tga`, `Data\Tex\EngineFlare\vr_engine_noise.mip`, a per-team `VR\Textures\`), on ten of the eleven locations. No path that selects it has been read.
-- **Whether Pure's boost is visually inert.** The asset is absent; the effect need not be. Pure carries `grabbedEngineFlare128x64x8.mip` exactly as Pulse does, so a boost that brightens the existing `engine_flare` billboard in code would leave nothing for any of the four probes above to find. The flare's draw path is unread on Pure.
 - **`Data\Psys\WO_SHIP_ENGINEFLARE.POB` resolves to nothing**, on either pressing, while all 26 `Data\Psys\WO_*.POB` literals the binary itself lists do. `Data\Ships\Feisar\Ship.vex` (and its two Phantom siblings) name it in a `Name` attribute and no other team's hull does. Authoring leftover or a name the code rewrites - unread.
+
+**Whether Pure's boost is visually inert is settled, 2026-09-23: it is not.**
+Pure's own `Exhaust_Update`/`Exhaust_UpdateEngineSound` pair (found by walking
+forward from `ExhaustFlare_Init`) carries the identical `half_size` growth
+term and `0.8s` arm Pulse's `exhaust.md` documents, bit for bit on both
+pressings - confidence 88,
+`docs/ghidra/functions/psp-pure-usa/exhaust-sound.md`'s "The visual half"
+section. `oag_render::exhaust::Exhaust` already implements this
+title-agnostically, so the always-on flare already grows on boost for Pure;
+nothing needed changing. `race::assets::boost_entry_name` reporting a
+missing boost model on every Pure race - the `crates/game` half of this
+finding - is fixed the same day: `oag_title::race::ShipPaths::boost` is the
+title axis, `None` on Pure, and the load report now says so rather than
+naming a fault.
 
 ## Next Steps
 
 - **If picked up again: find the *send*-side write to `DAT_08b174fc + 0x90 + slot` on `psp-pure-usa`.** All four writers named by `get_xrefs_to 0x08b174fc` are now read (`ship-models.md`), and all four are receive/apply paths for the synced `NetObjectGlobalsStructure` - none of them decides whether *this* player has Phantom unlocked. Look for whatever populates the local player's own copy of that structure before `FUN_08901f8c`'s sync fires - `Unlock Phantom Class` (`0x08a7c848`) or an unlock-flags struct is the more promising lead than another network-object function at this point. **A dead end already checked**: `FUN_08804bf8`/`FUN_08804c38` (the array get/set helpers the Phantom check and the sync callbacks both use) are generic - 50+ unrelated callers across the whole engine - so tracing *their* other callers does not narrow this; the local-write site needs either a direct byte-write search around `+0x90` or a PPSSPP capture of an actual ad-hoc session, not more static xref-walking of these two helpers.
-- Stopping `oag_game::race::load` reporting a Pure boost model as missing is split out - it is `crates/game`, not this lane. See `handover/rendering/pure-boost-entry-name-is-pulses-on-every-title.md`.

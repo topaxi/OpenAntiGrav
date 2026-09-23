@@ -16,7 +16,7 @@ fn the_boost_plume_follows_the_hull_its_mode_selects() {
     let craft = oag_pulse::race::DEFAULTS.ships();
     for mode in [Mode::TimeTrial, Mode::SpeedLap, Mode::Zone] {
         let hull = ship_entry_name(craft, "Feisar", mode, None);
-        let plume = boost_entry_name(craft, "Feisar", mode);
+        let plume = boost_entry_name(craft, "Feisar", mode).expect("Pulse ships one");
         let stem = if mode == Mode::Zone { "Zone" } else { "ship" };
         assert!(
             plume.contains(stem),
@@ -25,12 +25,24 @@ fn the_boost_plume_follows_the_hull_its_mode_selects() {
     }
     assert_eq!(
         boost_entry_name(craft, "Feisar", Mode::Zone),
-        r"Data\Ships\Feisar\Zoneboost.vex"
+        Some(r"Data\Ships\Feisar\Zoneboost.vex".to_string())
     );
     assert_eq!(
         boost_entry_name(craft, "Feisar", Mode::TimeTrial),
-        r"Data\Ships\Feisar\shipboost.vex"
+        Some(r"Data\Ships\Feisar\shipboost.vex".to_string())
     );
+}
+
+/// Pure ships a dedicated Zone ship directory (`ZoneCraft::OwnShip`) and no
+/// standalone boost model at all - so `boost_entry_name` must answer `None`
+/// in Zone mode too, not fall back to Pulse's `shipboost` stem under a ship
+/// directory that never carried one. Regression for the bug `assets.rs`'s own
+/// doc comment on the Zone fallback describes.
+#[test]
+fn a_title_with_no_ordinary_boost_model_has_none_in_zone_mode_either() {
+    let craft = oag_pure::race::DEFAULTS.ships();
+    assert_eq!(boost_entry_name(craft, "Feisar", Mode::TimeTrial), None);
+    assert_eq!(boost_entry_name(craft, "Feisar", Mode::Zone), None);
 }
 
 /// `hull_variant` swaps the file stem inside the team's own directory, and

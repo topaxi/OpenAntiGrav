@@ -66,6 +66,9 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     // Same reasoning as `zone` above: `PlayerShip` is the one `ZoneCraft`
     // variant that names no model stem or directory. Not a finding.
     zone_craft: oag_title::ZoneCraft::PlayerShip,
+    // Not searched for this lane, on the same footing as everything else in
+    // this module doc's opening paragraph: `None` is silence, not a finding.
+    boost: None,
     sounds: SOUND_BANKS,
     zone_announcer: None,
     zone_class_announcer: None,

@@ -499,10 +499,29 @@ this page listed as unrecovered. Pulse composes its plume from `%s\%sboost.vex`
 (`0x08a84ccc` on `psp-pulse-usa`); Pure's whole 3.6 MiB executable holds two
 strings matching `boost` case-insensitively and neither is a path, no declared
 location answers to `shipboost.vex` on either pressing, and no Pure hull carries
-the `boost_flare` anchor nodes Pulse's do. Confidence **93**. What is *not*
-determined is whether Pure's boost is visually inert - the engine-flare
-billboard is present and its draw path is unread. Full evidence on
+the `boost_flare` anchor nodes Pulse's do. Confidence **93**. Full evidence on
 [ship-models.md](../ghidra/functions/psp-pure-usa/ship-models.md).
+
+**Not visually inert, though.** Pure's own executable carries an
+`Exhaust_Update` and `Exhaust_UpdateEngineSound` pair structurally and
+literally identical to Pulse's (confidence 88, decompiled in full on both
+pressings) - same `half_size = ((i * 0.6 + 0.4) * 2.5 + boost_timer * 8.0)`
+term, same `0.8s` arm on a speed pad. So the always-on `Engine Flare`
+billboard still grows and re-randomises on boost; it is only the separate
+`<Team>boost.vex` plume mesh that never existed. `oag_render::exhaust::Exhaust`
+already implements this generically and unconditionally, so nothing needed
+changing in this engine - see
+[exhaust-sound.md](../ghidra/functions/psp-pure-usa/exhaust-sound.md)'s
+"The visual half" section for the addresses on both pressings.
+
+`oag_title::race::RaceDefaults::boost` is the seat this axis now lives in:
+`Some("shipboost")` on Pulse, `None` on Pure (measured absent, as above),
+`None` on HD (its plume is a subtree of `engineflare.vex`, not a standalone
+model - see [trail-ribbon.md](../rendering/trail-ribbon.md)), and `None` on
+2048/Omega (unread). `oag_game::race::assets::boost_entry_name` returns
+`Option<String>` accordingly, and the load report now says "names no
+standalone boost-plume model" for Pure rather than the misleading "not in the
+archive set" it used to.
 
 ## Handling stats: the schema holds, the parser does not
 

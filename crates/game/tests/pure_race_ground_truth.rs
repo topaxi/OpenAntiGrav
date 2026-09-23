@@ -126,6 +126,55 @@ fn a_pure_source_opens_as_pure_and_loads_its_default_circuit() {
     }
 }
 
+/// Pure ships no standalone boost-plume model at all
+/// (`docs/ghidra/functions/psp-pure-usa/ship-models.md`), so the load report
+/// must say so as a title fact and never as a fault - see
+/// `race_ground_truth.rs`'s `pulses_load_report_still_finds_its_boost_plume`
+/// for the title that does have one. Asserts both halves: the fault-line
+/// phrasing is gone, and the positive line is there in its place - silence
+/// would pass a report that dropped the note by accident.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn a_pure_races_load_report_names_no_boost_model_as_a_title_fact_not_a_fault() {
+    for (label, image) in images() {
+        let loaded = load(&image, oag_pure::race::DEFAULT_TRACK);
+        assert!(
+            loaded
+                .report
+                .iter()
+                .all(|line| !line.contains("no boost plume for this team")),
+            "{label}: a fault-line boost report survived: {:#?}",
+            loaded.report
+        );
+        assert!(
+            loaded
+                .report
+                .iter()
+                .any(|line| line.contains("names no standalone boost-plume model")),
+            "{label}: no positive boost-absence line in the report: {:#?}",
+            loaded.report
+        );
+        // The "already correct, already measured" claim in pure-status.md and
+        // exhaust-sound.md rests on the always-on flare quad actually being
+        // the one drawn - pin the two preconditions `frame.rs` gates it on,
+        // not just the boost model's own absence.
+        assert!(
+            loaded.liveries[0].nozzle.is_some(),
+            "{label}: no Engine Flare locator on the player's own hull, so \
+             nothing carries the boost-driven growth this checks for"
+        );
+        assert!(
+            loaded
+                .report
+                .iter()
+                .any(|line| line.contains("grabbedEngineFlare")),
+            "{label}: the flare sprite texture did not load, so the quad this \
+             title's boost term drives would draw untextured or not at all: {:#?}",
+            loaded.report
+        );
+    }
+}
+
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn every_pure_circuit_decodes_geometry_collision_and_a_spline() {

@@ -28,6 +28,11 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
         hull: ships::ZONE_HULL,
         boost: ships::ZONE_BOOST,
     },
+    // The one title with a standalone plume: `%s\%sboost.vex`, recovered at
+    // `docs/ghidra/functions/psp-pulse-usa/exhaust.md`. `ships::BOOST` stays
+    // where it is - see that constant's own doc comment - this just reads it
+    // into the axis every other title answers `None` on.
+    boost: Some(ships::BOOST),
     sounds: SOUND_BANKS,
     zone_announcer: Some(ZONE_ANNOUNCER),
     // Pulse's own `speech_zone.bnk` was listed alongside Pure's and HD's -

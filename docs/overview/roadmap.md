@@ -1318,7 +1318,9 @@ paths.
 
 - [ ] Networking
 - [x] **Wipeout Pure: intro to menu into a Time Trial** (2026-08-12)
-- [ ] Wipeout Pure: its own physics, HUD, boost plume, Zone mode, reset volumes
+- [ ] Wipeout Pure: its own physics, HUD, Zone mode, reset volumes - boost
+      plume settled (2026-09-23): none exists, and the engine flare already
+      grows on boost correctly, see the section below
 - [~] Wipeout HD / Fury - **a race drives and draws textured** (2026-08-18).
       Its disc opens, its archives read, and `--race` drives Talon's Junction
       on its own collision soup with an eight-team grid, geometry and `.gtf`
@@ -1367,10 +1369,17 @@ for the element Pure authors nowhere, and `race::load` reports it by name. No la
 time on Pure means anything yet, and no test pretends otherwise.
 
 **Known gaps, every one of them reported rather than silent**: no reset volumes
-(a craft that leaves the circuit stays off it), no boost plume, no HUD atlas
-(Pure's HUD is `.vex` models rather than a `.mip`), no loading-screen wave, no
-sky, no visibility sections. Each is a class id or an entry name that is
-*unrecovered* rather than absent, which is what the second row above covers.
+(a craft that leaves the circuit stays off it), no HUD atlas (Pure's HUD is
+`.vex` models rather than a `.mip`), no loading-screen wave, no sky, no
+visibility sections. Each is a class id or an entry name that is *unrecovered*
+rather than absent, which is what the second row above covers.
+
+**The boost plume is settled, not a gap.** Pure ships no standalone
+`shipboost.vex`-shaped asset at all (measured, confidence 93,
+[pure-status.md](../formats/pure-status.md)), and the always-on engine flare
+still grows on boost through the same generic `oag_render::exhaust::Exhaust`
+Pulse uses - also measured against Pure's own executable, same page. Nothing
+missing and nothing to build.
 
 **Speedup and weapon pads are no longer on this list.** `vex::classes::V4`
 recovered both ids 2026-08-13 (see `docs/formats/pure-status.md`), and
